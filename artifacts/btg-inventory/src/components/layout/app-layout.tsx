@@ -8,11 +8,15 @@ import {
   ShoppingCart, 
   Map as MapIcon, 
   FileText,
+  Receipt,
+  ListChecks,
+  Users as UsersIcon,
   LogOut,
   User as UserIcon,
   ChevronsUpDown
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useRole } from "@/hooks/use-role";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,21 +26,46 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const NAV_ITEMS = [
-  { href: "/dashboard", label: "Painel", icon: LayoutDashboard },
-  { href: "/products", label: "Catálogo", icon: Package },
-  { href: "/skus", label: "Estoque de SKUs", icon: Tags },
-  { href: "/movements", label: "Movimentações", icon: ArrowRightLeft },
-  { href: "/orders", label: "Pedidos", icon: ShoppingCart },
-  { href: "/warehouse", label: "Mapa do Armazém", icon: MapIcon },
-  { href: "/reports", label: "Relatórios", icon: FileText },
+type NavItem = { href: string; label: string; icon: typeof LayoutDashboard };
+type NavSection = { title: string; items: NavItem[] };
+
+const INTERNO_SECTIONS: NavSection[] = [
+  {
+    title: "Operações",
+    items: [
+      { href: "/dashboard", label: "Painel", icon: LayoutDashboard },
+      { href: "/products", label: "Catálogo", icon: Package },
+      { href: "/skus", label: "Estoque de SKUs", icon: Tags },
+      { href: "/movements", label: "Movimentações", icon: ArrowRightLeft },
+      { href: "/orders", label: "Pedidos", icon: ShoppingCart },
+      { href: "/warehouse", label: "Mapa do Armazém", icon: MapIcon },
+      { href: "/reports", label: "Relatórios", icon: FileText },
+    ],
+  },
+  {
+    title: "Cobrança",
+    items: [
+      { href: "/faturamento", label: "Faturamento", icon: Receipt },
+      { href: "/tabela-precos", label: "Tabela de Preços", icon: ListChecks },
+      { href: "/usuarios", label: "Usuários", icon: UsersIcon },
+    ],
+  },
+];
+
+const CLIENTE_SECTIONS: NavSection[] = [
+  {
+    title: "Cobrança",
+    items: [{ href: "/minhas-faturas", label: "Minhas Faturas", icon: Receipt }],
+  },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { user } = useUser();
+  const { role } = useRole();
   const { signOut } = useClerk();
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const sections = role === "cliente" ? CLIENTE_SECTIONS : INTERNO_SECTIONS;
 
   return (
     <div className="flex min-h-[100dvh] w-full bg-background text-foreground font-sans">
@@ -47,26 +76,30 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
         
         <nav className="flex-1 py-4 flex flex-col gap-1 px-2 overflow-y-auto">
-          <div className="px-2 mb-2 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider">Operações</div>
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const active = location.startsWith(item.href);
-            return (
-              <Link 
-                key={item.href} 
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
-                  active 
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground" 
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {item.label}
-              </Link>
-            )
-          })}
+          {sections.map((section) => (
+            <div key={section.title} className="mb-2">
+              <div className="px-2 mb-2 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider">{section.title}</div>
+              {section.items.map((item) => {
+                const Icon = item.icon;
+                const active = location.startsWith(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
+                      active
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         <div className="p-3 border-t border-sidebar-border">

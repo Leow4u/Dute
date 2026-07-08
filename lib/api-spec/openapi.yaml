@@ -511,6 +511,274 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ImportResult" }
 
+  # ──────────────── BILLING ────────────────
+  /billing/me:
+    get:
+      operationId: getBillingMe
+      tags: [billing]
+      summary: Get current user role
+      responses:
+        "200":
+          description: Current user role
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BillingMe" }
+
+  /billing/price-list:
+    get:
+      operationId: listPriceList
+      tags: [billing]
+      summary: List price list (LPU) items
+      responses:
+        "200":
+          description: Price list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/PriceListItem" }
+    post:
+      operationId: createPriceListItem
+      tags: [billing]
+      summary: Create price list item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PriceListInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PriceListItem" }
+
+  /billing/price-list/{id}:
+    patch:
+      operationId: updatePriceListItem
+      tags: [billing]
+      summary: Update price list item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PriceListPatch" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PriceListItem" }
+    delete:
+      operationId: deletePriceListItem
+      tags: [billing]
+      summary: Delete price list item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /billing/config:
+    get:
+      operationId: getBillingConfig
+      tags: [billing]
+      summary: Get billing config
+      responses:
+        "200":
+          description: Config
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BillingConfig" }
+    patch:
+      operationId: updateBillingConfig
+      tags: [billing]
+      summary: Update billing config
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BillingConfigPatch" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BillingConfig" }
+
+  /billing/periods:
+    get:
+      operationId: listBillingPeriods
+      tags: [billing]
+      summary: List billing periods
+      responses:
+        "200":
+          description: Periods
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/PeriodSummary" }
+
+  /billing/periods/{competencia}:
+    get:
+      operationId: getBillingPeriod
+      tags: [billing]
+      summary: Get billing period detail (live or frozen)
+      parameters:
+        - name: competencia
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Period detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PeriodResult" }
+
+  /billing/periods/{competencia}/manual:
+    put:
+      operationId: saveBillingManual
+      tags: [billing]
+      summary: Save manual quantities for a period
+      parameters:
+        - name: competencia
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ManualInput" }
+      responses:
+        "200":
+          description: Updated period detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PeriodResult" }
+
+  /billing/periods/{competencia}/emit:
+    post:
+      operationId: emitBillingInvoice
+      tags: [billing]
+      summary: Emit invoice (freeze, PDF, email)
+      parameters:
+        - name: competencia
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Emit result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EmitResult" }
+
+  /billing/periods/{competencia}/pay:
+    post:
+      operationId: payBillingInvoice
+      tags: [billing]
+      summary: Mark invoice as paid
+      parameters:
+        - name: competencia
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Updated period detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PeriodResult" }
+
+  /billing/me/current:
+    get:
+      operationId: getBillingMeCurrent
+      tags: [billing]
+      summary: Current month cost for the client portal
+      responses:
+        "200":
+          description: Current period detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PeriodResult" }
+
+  /billing/me/invoices:
+    get:
+      operationId: listMyInvoices
+      tags: [billing]
+      summary: List issued invoices for the client portal
+      responses:
+        "200":
+          description: Invoices
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/PeriodSummary" }
+
+  /billing/users:
+    get:
+      operationId: listBillingUsers
+      tags: [billing]
+      summary: List users and roles
+      responses:
+        "200":
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/BillingUser" }
+
+  /billing/users/{id}/role:
+    patch:
+      operationId: updateUserRole
+      tags: [billing]
+      summary: Set a user's role
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RoleInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BillingUser" }
+
 components:
   schemas:
     HealthStatus:
@@ -825,3 +1093,165 @@ components:
         errors:
           type: array
           items: { type: string }
+
+    # ──────── Billing ────────
+    BillingMe:
+      type: object
+      required: [role]
+      properties:
+        role: { type: string }
+
+    PriceListItem:
+      type: object
+      required: [id, grupo, item, valor_unit, ordem, ativo]
+      properties:
+        id: { type: integer }
+        grupo: { type: string }
+        item: { type: string }
+        unidade: { type: ["string", "null"] }
+        valor_unit: { type: number }
+        auto_source: { type: ["string", "null"] }
+        ordem: { type: integer }
+        ativo: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    PriceListInput:
+      type: object
+      required: [grupo, item, valor_unit]
+      properties:
+        grupo: { type: string }
+        item: { type: string }
+        unidade: { type: string }
+        valor_unit: { type: number }
+        auto_source: { type: string }
+        ordem: { type: integer }
+        ativo: { type: boolean }
+
+    PriceListPatch:
+      type: object
+      properties:
+        grupo: { type: string }
+        item: { type: string }
+        unidade: { type: string }
+        valor_unit: { type: number }
+        auto_source: { type: string }
+        ordem: { type: integer }
+        ativo: { type: boolean }
+
+    BillingConfig:
+      type: object
+      required: [id, ad_valorem_rate]
+      properties:
+        id: { type: integer }
+        ad_valorem_rate: { type: number }
+        cliente_nome: { type: ["string", "null"] }
+        cliente_email: { type: ["string", "null"] }
+        updated_at: { type: string, format: date-time }
+
+    BillingConfigPatch:
+      type: object
+      properties:
+        ad_valorem_rate: { type: number }
+        cliente_nome: { type: string }
+        cliente_email: { type: string }
+
+    LineItem:
+      type: object
+      required: [grupo, item, qtde, valor_unit, total, auto]
+      properties:
+        price_list_id: { type: ["integer", "null"] }
+        grupo: { type: string }
+        item: { type: string }
+        unidade: { type: ["string", "null"] }
+        qtde: { type: number }
+        valor_unit: { type: number }
+        total: { type: number }
+        auto: { type: boolean }
+        auto_source: { type: ["string", "null"] }
+        observacao: { type: ["string", "null"] }
+
+    GroupResult:
+      type: object
+      required: [grupo, label, emoji, ordem, total, itens]
+      properties:
+        grupo: { type: string }
+        label: { type: string }
+        emoji: { type: string }
+        ordem: { type: integer }
+        total: { type: number }
+        itens:
+          type: array
+          items: { $ref: "#/components/schemas/LineItem" }
+
+    PeriodResult:
+      type: object
+      required: [competencia, status, custo_estoque, ad_valorem_rate, grupos, total]
+      properties:
+        competencia: { type: string }
+        status: { type: string }
+        custo_estoque: { type: number }
+        ad_valorem_rate: { type: number }
+        grupos:
+          type: array
+          items: { $ref: "#/components/schemas/GroupResult" }
+        total: { type: number }
+        emitido_em: { type: ["string", "null"] }
+        email_enviado_em: { type: ["string", "null"] }
+        pago_em: { type: ["string", "null"] }
+
+    PeriodSummary:
+      type: object
+      required: [competencia, status, total]
+      properties:
+        competencia: { type: string }
+        status: { type: string }
+        total: { type: number }
+        emitido_em: { type: ["string", "null"] }
+        email_enviado_em: { type: ["string", "null"] }
+        pago_em: { type: ["string", "null"] }
+
+    ManualItemInput:
+      type: object
+      required: [price_list_id, qtde]
+      properties:
+        price_list_id: { type: integer }
+        qtde: { type: number }
+        observacao: { type: ["string", "null"] }
+
+    ManualInput:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ManualItemInput" }
+
+    EmailStatus:
+      type: object
+      required: [sent]
+      properties:
+        sent: { type: boolean }
+        error: { type: ["string", "null"] }
+
+    EmitResult:
+      type: object
+      required: [period, email]
+      properties:
+        period: { $ref: "#/components/schemas/PeriodResult" }
+        email: { $ref: "#/components/schemas/EmailStatus" }
+
+    BillingUser:
+      type: object
+      required: [id, nome, role]
+      properties:
+        id: { type: string }
+        nome: { type: string }
+        email: { type: ["string", "null"] }
+        role: { type: string }
+
+    RoleInput:
+      type: object
+      required: [role]
+      properties:
+        role: { type: string }

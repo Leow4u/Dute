@@ -748,3 +748,390 @@ export const BulkImportResponse = zod.object({
 })
 
 
+/**
+ * @summary Get current user role
+ */
+export const GetBillingMeResponse = zod.object({
+  "role": zod.string()
+})
+
+
+/**
+ * @summary List price list (LPU) items
+ */
+export const ListPriceListResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "grupo": zod.string(),
+  "item": zod.string(),
+  "unidade": zod.string().nullish(),
+  "valor_unit": zod.number(),
+  "auto_source": zod.string().nullish(),
+  "ordem": zod.number(),
+  "ativo": zod.boolean(),
+  "created_at": zod.coerce.date().optional(),
+  "updated_at": zod.coerce.date().optional()
+}))
+})
+
+
+/**
+ * @summary Create price list item
+ */
+export const CreatePriceListItemBody = zod.object({
+  "grupo": zod.string(),
+  "item": zod.string(),
+  "unidade": zod.string().optional(),
+  "valor_unit": zod.number(),
+  "auto_source": zod.string().optional(),
+  "ordem": zod.number().optional(),
+  "ativo": zod.boolean().optional()
+})
+
+export const CreatePriceListItemResponse = zod.object({
+  "id": zod.number(),
+  "grupo": zod.string(),
+  "item": zod.string(),
+  "unidade": zod.string().nullish(),
+  "valor_unit": zod.number(),
+  "auto_source": zod.string().nullish(),
+  "ordem": zod.number(),
+  "ativo": zod.boolean(),
+  "created_at": zod.coerce.date().optional(),
+  "updated_at": zod.coerce.date().optional()
+})
+
+
+/**
+ * @summary Update price list item
+ */
+export const UpdatePriceListItemParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdatePriceListItemBody = zod.object({
+  "grupo": zod.string().optional(),
+  "item": zod.string().optional(),
+  "unidade": zod.string().optional(),
+  "valor_unit": zod.number().optional(),
+  "auto_source": zod.string().optional(),
+  "ordem": zod.number().optional(),
+  "ativo": zod.boolean().optional()
+})
+
+export const UpdatePriceListItemResponse = zod.object({
+  "id": zod.number(),
+  "grupo": zod.string(),
+  "item": zod.string(),
+  "unidade": zod.string().nullish(),
+  "valor_unit": zod.number(),
+  "auto_source": zod.string().nullish(),
+  "ordem": zod.number(),
+  "ativo": zod.boolean(),
+  "created_at": zod.coerce.date().optional(),
+  "updated_at": zod.coerce.date().optional()
+})
+
+
+/**
+ * @summary Delete price list item
+ */
+export const DeletePriceListItemParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeletePriceListItemResponse = zod.void()
+
+
+/**
+ * @summary Get billing config
+ */
+export const GetBillingConfigResponse = zod.object({
+  "id": zod.number(),
+  "ad_valorem_rate": zod.number(),
+  "cliente_nome": zod.string().nullish(),
+  "cliente_email": zod.string().nullish(),
+  "updated_at": zod.coerce.date().optional()
+})
+
+
+/**
+ * @summary Update billing config
+ */
+export const UpdateBillingConfigBody = zod.object({
+  "ad_valorem_rate": zod.number().optional(),
+  "cliente_nome": zod.string().optional(),
+  "cliente_email": zod.string().optional()
+})
+
+export const UpdateBillingConfigResponse = zod.object({
+  "id": zod.number(),
+  "ad_valorem_rate": zod.number(),
+  "cliente_nome": zod.string().nullish(),
+  "cliente_email": zod.string().nullish(),
+  "updated_at": zod.coerce.date().optional()
+})
+
+
+/**
+ * @summary List billing periods
+ */
+export const ListBillingPeriodsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "competencia": zod.string(),
+  "status": zod.string(),
+  "total": zod.number(),
+  "emitido_em": zod.string().nullish(),
+  "email_enviado_em": zod.string().nullish(),
+  "pago_em": zod.string().nullish()
+}))
+})
+
+
+/**
+ * @summary Get billing period detail (live or frozen)
+ */
+export const GetBillingPeriodParams = zod.object({
+  "competencia": zod.coerce.string()
+})
+
+export const GetBillingPeriodResponse = zod.object({
+  "competencia": zod.string(),
+  "status": zod.string(),
+  "custo_estoque": zod.number(),
+  "ad_valorem_rate": zod.number(),
+  "grupos": zod.array(zod.object({
+  "grupo": zod.string(),
+  "label": zod.string(),
+  "emoji": zod.string(),
+  "ordem": zod.number(),
+  "total": zod.number(),
+  "itens": zod.array(zod.object({
+  "price_list_id": zod.number().nullish(),
+  "grupo": zod.string(),
+  "item": zod.string(),
+  "unidade": zod.string().nullish(),
+  "qtde": zod.number(),
+  "valor_unit": zod.number(),
+  "total": zod.number(),
+  "auto": zod.boolean(),
+  "auto_source": zod.string().nullish(),
+  "observacao": zod.string().nullish()
+}))
+})),
+  "total": zod.number(),
+  "emitido_em": zod.string().nullish(),
+  "email_enviado_em": zod.string().nullish(),
+  "pago_em": zod.string().nullish()
+})
+
+
+/**
+ * @summary Save manual quantities for a period
+ */
+export const SaveBillingManualParams = zod.object({
+  "competencia": zod.coerce.string()
+})
+
+export const SaveBillingManualBody = zod.object({
+  "items": zod.array(zod.object({
+  "price_list_id": zod.number(),
+  "qtde": zod.number(),
+  "observacao": zod.string().nullish()
+}))
+})
+
+export const SaveBillingManualResponse = zod.object({
+  "competencia": zod.string(),
+  "status": zod.string(),
+  "custo_estoque": zod.number(),
+  "ad_valorem_rate": zod.number(),
+  "grupos": zod.array(zod.object({
+  "grupo": zod.string(),
+  "label": zod.string(),
+  "emoji": zod.string(),
+  "ordem": zod.number(),
+  "total": zod.number(),
+  "itens": zod.array(zod.object({
+  "price_list_id": zod.number().nullish(),
+  "grupo": zod.string(),
+  "item": zod.string(),
+  "unidade": zod.string().nullish(),
+  "qtde": zod.number(),
+  "valor_unit": zod.number(),
+  "total": zod.number(),
+  "auto": zod.boolean(),
+  "auto_source": zod.string().nullish(),
+  "observacao": zod.string().nullish()
+}))
+})),
+  "total": zod.number(),
+  "emitido_em": zod.string().nullish(),
+  "email_enviado_em": zod.string().nullish(),
+  "pago_em": zod.string().nullish()
+})
+
+
+/**
+ * @summary Emit invoice (freeze, PDF, email)
+ */
+export const EmitBillingInvoiceParams = zod.object({
+  "competencia": zod.coerce.string()
+})
+
+export const EmitBillingInvoiceResponse = zod.object({
+  "period": zod.object({
+  "competencia": zod.string(),
+  "status": zod.string(),
+  "custo_estoque": zod.number(),
+  "ad_valorem_rate": zod.number(),
+  "grupos": zod.array(zod.object({
+  "grupo": zod.string(),
+  "label": zod.string(),
+  "emoji": zod.string(),
+  "ordem": zod.number(),
+  "total": zod.number(),
+  "itens": zod.array(zod.object({
+  "price_list_id": zod.number().nullish(),
+  "grupo": zod.string(),
+  "item": zod.string(),
+  "unidade": zod.string().nullish(),
+  "qtde": zod.number(),
+  "valor_unit": zod.number(),
+  "total": zod.number(),
+  "auto": zod.boolean(),
+  "auto_source": zod.string().nullish(),
+  "observacao": zod.string().nullish()
+}))
+})),
+  "total": zod.number(),
+  "emitido_em": zod.string().nullish(),
+  "email_enviado_em": zod.string().nullish(),
+  "pago_em": zod.string().nullish()
+}),
+  "email": zod.object({
+  "sent": zod.boolean(),
+  "error": zod.string().nullish()
+})
+})
+
+
+/**
+ * @summary Mark invoice as paid
+ */
+export const PayBillingInvoiceParams = zod.object({
+  "competencia": zod.coerce.string()
+})
+
+export const PayBillingInvoiceResponse = zod.object({
+  "competencia": zod.string(),
+  "status": zod.string(),
+  "custo_estoque": zod.number(),
+  "ad_valorem_rate": zod.number(),
+  "grupos": zod.array(zod.object({
+  "grupo": zod.string(),
+  "label": zod.string(),
+  "emoji": zod.string(),
+  "ordem": zod.number(),
+  "total": zod.number(),
+  "itens": zod.array(zod.object({
+  "price_list_id": zod.number().nullish(),
+  "grupo": zod.string(),
+  "item": zod.string(),
+  "unidade": zod.string().nullish(),
+  "qtde": zod.number(),
+  "valor_unit": zod.number(),
+  "total": zod.number(),
+  "auto": zod.boolean(),
+  "auto_source": zod.string().nullish(),
+  "observacao": zod.string().nullish()
+}))
+})),
+  "total": zod.number(),
+  "emitido_em": zod.string().nullish(),
+  "email_enviado_em": zod.string().nullish(),
+  "pago_em": zod.string().nullish()
+})
+
+
+/**
+ * @summary Current month cost for the client portal
+ */
+export const GetBillingMeCurrentResponse = zod.object({
+  "competencia": zod.string(),
+  "status": zod.string(),
+  "custo_estoque": zod.number(),
+  "ad_valorem_rate": zod.number(),
+  "grupos": zod.array(zod.object({
+  "grupo": zod.string(),
+  "label": zod.string(),
+  "emoji": zod.string(),
+  "ordem": zod.number(),
+  "total": zod.number(),
+  "itens": zod.array(zod.object({
+  "price_list_id": zod.number().nullish(),
+  "grupo": zod.string(),
+  "item": zod.string(),
+  "unidade": zod.string().nullish(),
+  "qtde": zod.number(),
+  "valor_unit": zod.number(),
+  "total": zod.number(),
+  "auto": zod.boolean(),
+  "auto_source": zod.string().nullish(),
+  "observacao": zod.string().nullish()
+}))
+})),
+  "total": zod.number(),
+  "emitido_em": zod.string().nullish(),
+  "email_enviado_em": zod.string().nullish(),
+  "pago_em": zod.string().nullish()
+})
+
+
+/**
+ * @summary List issued invoices for the client portal
+ */
+export const ListMyInvoicesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "competencia": zod.string(),
+  "status": zod.string(),
+  "total": zod.number(),
+  "emitido_em": zod.string().nullish(),
+  "email_enviado_em": zod.string().nullish(),
+  "pago_em": zod.string().nullish()
+}))
+})
+
+
+/**
+ * @summary List users and roles
+ */
+export const ListBillingUsersResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string(),
+  "nome": zod.string(),
+  "email": zod.string().nullish(),
+  "role": zod.string()
+}))
+})
+
+
+/**
+ * @summary Set a user's role
+ */
+export const UpdateUserRoleParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const UpdateUserRoleBody = zod.object({
+  "role": zod.string()
+})
+
+export const UpdateUserRoleResponse = zod.object({
+  "id": zod.string(),
+  "nome": zod.string(),
+  "email": zod.string().nullish(),
+  "role": zod.string()
+})
+
+

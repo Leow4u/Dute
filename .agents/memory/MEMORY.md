@@ -1,1 +1,2 @@
 - [BTG Inventory Stack](btg-inventory-stack.md) — Clerk+Express+Drizzle+React+Vite; Orval looseObject fix; DB build required before server typecheck
+- [BTG Billing Module](btg-billing.md) — single-client by design; fail-closed roles; atomic invoice emit; pdf-lib + Resend (non-fatal email)

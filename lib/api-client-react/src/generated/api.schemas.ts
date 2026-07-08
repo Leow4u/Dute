@@ -288,6 +288,148 @@ export interface ImportResult {
   errors?: string[];
 }
 
+export interface BillingMe {
+  role: string;
+}
+
+export interface PriceListItem {
+  id: number;
+  grupo: string;
+  item: string;
+  /** @nullable */
+  unidade?: string | null;
+  valor_unit: number;
+  /** @nullable */
+  auto_source?: string | null;
+  ordem: number;
+  ativo: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface PriceListInput {
+  grupo: string;
+  item: string;
+  unidade?: string;
+  valor_unit: number;
+  auto_source?: string;
+  ordem?: number;
+  ativo?: boolean;
+}
+
+export interface PriceListPatch {
+  grupo?: string;
+  item?: string;
+  unidade?: string;
+  valor_unit?: number;
+  auto_source?: string;
+  ordem?: number;
+  ativo?: boolean;
+}
+
+export interface BillingConfig {
+  id: number;
+  ad_valorem_rate: number;
+  /** @nullable */
+  cliente_nome?: string | null;
+  /** @nullable */
+  cliente_email?: string | null;
+  updated_at?: string;
+}
+
+export interface BillingConfigPatch {
+  ad_valorem_rate?: number;
+  cliente_nome?: string;
+  cliente_email?: string;
+}
+
+export interface LineItem {
+  /** @nullable */
+  price_list_id?: number | null;
+  grupo: string;
+  item: string;
+  /** @nullable */
+  unidade?: string | null;
+  qtde: number;
+  valor_unit: number;
+  total: number;
+  auto: boolean;
+  /** @nullable */
+  auto_source?: string | null;
+  /** @nullable */
+  observacao?: string | null;
+}
+
+export interface GroupResult {
+  grupo: string;
+  label: string;
+  emoji: string;
+  ordem: number;
+  total: number;
+  itens: LineItem[];
+}
+
+export interface PeriodResult {
+  competencia: string;
+  status: string;
+  custo_estoque: number;
+  ad_valorem_rate: number;
+  grupos: GroupResult[];
+  total: number;
+  /** @nullable */
+  emitido_em?: string | null;
+  /** @nullable */
+  email_enviado_em?: string | null;
+  /** @nullable */
+  pago_em?: string | null;
+}
+
+export interface PeriodSummary {
+  competencia: string;
+  status: string;
+  total: number;
+  /** @nullable */
+  emitido_em?: string | null;
+  /** @nullable */
+  email_enviado_em?: string | null;
+  /** @nullable */
+  pago_em?: string | null;
+}
+
+export interface ManualItemInput {
+  price_list_id: number;
+  qtde: number;
+  /** @nullable */
+  observacao?: string | null;
+}
+
+export interface ManualInput {
+  items: ManualItemInput[];
+}
+
+export interface EmailStatus {
+  sent: boolean;
+  /** @nullable */
+  error?: string | null;
+}
+
+export interface EmitResult {
+  period: PeriodResult;
+  email: EmailStatus;
+}
+
+export interface BillingUser {
+  id: string;
+  nome: string;
+  /** @nullable */
+  email?: string | null;
+  role: string;
+}
+
+export interface RoleInput {
+  role: string;
+}
+
 export type ListProductsParams = {
 categoria?: string;
 grupo?: string;
@@ -366,5 +508,21 @@ export const ExportReportType = {
 export type ExportReport200 = {
   data: AnyRecord[];
   count: number;
+};
+
+export type ListPriceList200 = {
+  items: PriceListItem[];
+};
+
+export type ListBillingPeriods200 = {
+  items: PeriodSummary[];
+};
+
+export type ListMyInvoices200 = {
+  items: PeriodSummary[];
+};
+
+export type ListBillingUsers200 = {
+  items: BillingUser[];
 };
 

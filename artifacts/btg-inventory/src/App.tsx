@@ -17,7 +17,12 @@ import Movements from './pages/movements';
 import Orders from './pages/orders';
 import Warehouse from './pages/warehouse';
 import Reports from './pages/reports';
+import Billing from './pages/billing';
+import PriceList from './pages/price-list';
+import Users from './pages/users';
+import MyInvoices from './pages/my-invoices';
 import NotFound from './pages/not-found';
+import { useRole } from './hooks/use-role';
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -113,11 +118,17 @@ function ClerkQueryClientCacheInvalidator() {
   return null;
 }
 
+function RoleHome() {
+  const { role, isLoaded } = useRole();
+  if (!isLoaded) return null;
+  return <Redirect to={role === "cliente" ? "/minhas-faturas" : "/dashboard"} />;
+}
+
 function HomeRedirect() {
   return (
     <>
       <Show when="signed-in">
-        <Redirect to="/dashboard" />
+        <RoleHome />
       </Show>
       <Show when="signed-out">
         <Redirect to="/sign-in" />
@@ -126,15 +137,24 @@ function HomeRedirect() {
   );
 }
 
-function ProtectedRoute({ component: Component, ...rest }: any) {
+function RoleGate({ requireRole, children }: { requireRole?: "interno" | "cliente"; children: React.ReactNode }) {
+  const { role, isLoaded } = useRole();
+  if (!isLoaded) return null;
+  if (requireRole && role !== requireRole) return <Redirect to="/" />;
+  return <>{children}</>;
+}
+
+function ProtectedRoute({ component: Component, requireRole, ...rest }: any) {
   return (
     <Route {...rest}>
       {(params) => (
         <>
           <Show when="signed-in">
-            <AppLayout>
-              <Component params={params} />
-            </AppLayout>
+            <RoleGate requireRole={requireRole}>
+              <AppLayout>
+                <Component params={params} />
+              </AppLayout>
+            </RoleGate>
           </Show>
           <Show when="signed-out">
             <Redirect to="/sign-in" />
@@ -185,14 +205,19 @@ function ClerkProviderWithRoutes() {
             <Route path="/sign-in/*?" component={SignInPage} />
             <Route path="/sign-up/*?" component={SignUpPage} />
             
-            <ProtectedRoute path="/dashboard" component={Dashboard} />
-            <ProtectedRoute path="/products" component={Products} />
-            <ProtectedRoute path="/skus" component={Skus} />
-            <ProtectedRoute path="/movements" component={Movements} />
-            <ProtectedRoute path="/orders" component={Orders} />
-            <ProtectedRoute path="/warehouse" component={Warehouse} />
-            <ProtectedRoute path="/reports" component={Reports} />
-            
+            <ProtectedRoute path="/dashboard" component={Dashboard} requireRole="interno" />
+            <ProtectedRoute path="/products" component={Products} requireRole="interno" />
+            <ProtectedRoute path="/skus" component={Skus} requireRole="interno" />
+            <ProtectedRoute path="/movements" component={Movements} requireRole="interno" />
+            <ProtectedRoute path="/orders" component={Orders} requireRole="interno" />
+            <ProtectedRoute path="/warehouse" component={Warehouse} requireRole="interno" />
+            <ProtectedRoute path="/reports" component={Reports} requireRole="interno" />
+            <ProtectedRoute path="/faturamento" component={Billing} requireRole="interno" />
+            <ProtectedRoute path="/tabela-precos" component={PriceList} requireRole="interno" />
+            <ProtectedRoute path="/usuarios" component={Users} requireRole="interno" />
+
+            <ProtectedRoute path="/minhas-faturas" component={MyInvoices} />
+
             <Route component={NotFound} />
           </Switch>
           <Toaster />
