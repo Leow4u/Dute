@@ -3,13 +3,30 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: BTG Pactual Inventory Management API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: products
+    description: Product catalog operations
+  - name: skus
+    description: SKU and warehouse location operations
+  - name: movements
+    description: Stock movement (kardex) operations
+  - name: orders
+    description: Order management operations
+  - name: dashboard
+    description: Dashboard and summary stats
+  - name: warehouse
+    description: Warehouse map and addressing
+  - name: reports
+    description: Reports and data export
+  - name: import
+    description: Bulk data import
+
 paths:
   /healthz:
     get:
@@ -24,6 +41,476 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ──────────────── PRODUCTS ────────────────
+  /products:
+    get:
+      operationId: listProducts
+      tags: [products]
+      summary: List products
+      parameters:
+        - name: categoria
+          in: query
+          schema: { type: string }
+        - name: grupo
+          in: query
+          schema: { type: string }
+        - name: genero
+          in: query
+          schema: { type: string }
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: List of products
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Product" }
+                  total: { type: integer }
+    post:
+      operationId: createProduct
+      tags: [products]
+      summary: Create product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+
+  /products/stats:
+    get:
+      operationId: getProductStats
+      tags: [products]
+      summary: Get product stats grouped by category
+      responses:
+        "200":
+          description: Stats by category
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CategoryStat" }
+
+  /products/{id}:
+    get:
+      operationId: getProduct
+      tags: [products]
+      summary: Get product by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Product
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+        "404":
+          description: Not found
+    patch:
+      operationId: updateProduct
+      tags: [products]
+      summary: Update product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductPatch" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+    delete:
+      operationId: deleteProduct
+      tags: [products]
+      summary: Delete product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  # ──────────────── SKUs ────────────────
+  /skus:
+    get:
+      operationId: listSkus
+      tags: [skus]
+      summary: List SKUs
+      parameters:
+        - name: cod_cliente
+          in: query
+          schema: { type: string }
+        - name: rua
+          in: query
+          schema: { type: string }
+        - name: prateleira
+          in: query
+          schema: { type: string }
+        - name: estoque_tipo
+          in: query
+          schema: { type: string }
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 200 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: List of SKUs
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Sku" }
+                  total: { type: integer }
+    post:
+      operationId: createSku
+      tags: [skus]
+      summary: Create SKU
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkuInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sku" }
+
+  /skus/{id}:
+    get:
+      operationId: getSku
+      tags: [skus]
+      summary: Get SKU by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: SKU
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sku" }
+        "404":
+          description: Not found
+    patch:
+      operationId: updateSku
+      tags: [skus]
+      summary: Update SKU
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkuPatch" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sku" }
+    delete:
+      operationId: deleteSku
+      tags: [skus]
+      summary: Delete SKU
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  # ──────────────── MOVEMENTS ────────────────
+  /movements:
+    get:
+      operationId: listMovements
+      tags: [movements]
+      summary: List movements (kardex)
+      parameters:
+        - name: cod_sku
+          in: query
+          schema: { type: string }
+        - name: tipo_mov
+          in: query
+          schema: { type: string }
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date }
+        - name: responsavel
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: List of movements
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Movement" }
+                  total: { type: integer }
+    post:
+      operationId: createMovement
+      tags: [movements]
+      summary: Create movement (updates SKU stock)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MovementInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Movement" }
+
+  # ──────────────── ORDERS ────────────────
+  /orders:
+    get:
+      operationId: listOrders
+      tags: [orders]
+      summary: List orders
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: num_pedido
+          in: query
+          schema: { type: string }
+        - name: solicitante
+          in: query
+          schema: { type: string }
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: List of orders
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Order" }
+                  total: { type: integer }
+    post:
+      operationId: createOrder
+      tags: [orders]
+      summary: Create order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrderInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+
+  /orders/{id}:
+    get:
+      operationId: getOrder
+      tags: [orders]
+      summary: Get order by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+    patch:
+      operationId: updateOrder
+      tags: [orders]
+      summary: Update order status/details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrderPatch" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+    delete:
+      operationId: deleteOrder
+      tags: [orders]
+      summary: Delete order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  # ──────────────── DASHBOARD ────────────────
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [dashboard]
+      summary: Get dashboard summary
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardSummary" }
+
+  # ──────────────── WAREHOUSE MAP ────────────────
+  /warehouse/map:
+    get:
+      operationId: getWarehouseMap
+      tags: [warehouse]
+      summary: Get warehouse map grouped by rua and prateleira
+      responses:
+        "200":
+          description: Warehouse map
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/WarehouseRua" }
+
+  # ──────────────── REPORTS ────────────────
+  /reports/export:
+    get:
+      operationId: exportReport
+      tags: [reports]
+      summary: Export data as JSON for download
+      parameters:
+        - name: type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [products, skus, movements, orders]
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Export data
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, count]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/AnyRecord" }
+                  count: { type: integer }
+
+  # ──────────────── IMPORT ────────────────
+  /import/bulk:
+    post:
+      operationId: bulkImport
+      tags: [import]
+      summary: Bulk import products and SKUs from parsed data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BulkImportData" }
+      responses:
+        "200":
+          description: Import result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportResult" }
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +521,307 @@ components:
       required:
         - status
 
+    # ──────── Product ────────
+    Product:
+      type: object
+      required: [id, cod_cliente, produto]
+      properties:
+        id: { type: integer }
+        cod_cliente: { type: string }
+        genero: { type: ["string", "null"] }
+        categoria: { type: ["string", "null"] }
+        grupo: { type: ["string", "null"] }
+        produto: { type: string }
+        cor: { type: ["string", "null"] }
+        tamanho: { type: ["string", "null"] }
+        preco_unit: { type: ["number", "null"] }
+        estoque_btg: { type: integer }
+        custo_total: { type: ["number", "null"] }
+        num_skus: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    ProductInput:
+      type: object
+      required: [cod_cliente, produto]
+      properties:
+        cod_cliente: { type: string }
+        genero: { type: string }
+        categoria: { type: string }
+        grupo: { type: string }
+        produto: { type: string }
+        cor: { type: string }
+        tamanho: { type: string }
+        preco_unit: { type: number }
+
+    ProductPatch:
+      type: object
+      properties:
+        cod_cliente: { type: string }
+        genero: { type: string }
+        categoria: { type: string }
+        grupo: { type: string }
+        produto: { type: string }
+        cor: { type: string }
+        tamanho: { type: string }
+        preco_unit: { type: number }
+
+    CategoryStat:
+      type: object
+      required: [categoria, total_produtos, total_pecas, custo_total]
+      properties:
+        categoria: { type: string }
+        total_produtos: { type: integer }
+        total_pecas: { type: integer }
+        custo_total: { type: number }
+        pct_estoque: { type: number }
+
+    # ──────── SKU ────────
+    Sku:
+      type: object
+      required: [id, cod_btg, cod_cliente, produto]
+      properties:
+        id: { type: integer }
+        cod_btg: { type: string }
+        estoque_tipo: { type: ["string", "null"] }
+        cod_cliente: { type: string }
+        product_id: { type: ["integer", "null"] }
+        genero: { type: ["string", "null"] }
+        categoria: { type: ["string", "null"] }
+        produto: { type: string }
+        cor: { type: ["string", "null"] }
+        tamanho: { type: ["string", "null"] }
+        estoque_atual: { type: integer }
+        estado: { type: ["string", "null"] }
+        rua: { type: ["string", "null"] }
+        prateleira: { type: ["string", "null"] }
+        caixa: { type: ["string", "null"] }
+        endereco: { type: ["string", "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    SkuInput:
+      type: object
+      required: [cod_btg, cod_cliente, produto]
+      properties:
+        cod_btg: { type: string }
+        estoque_tipo: { type: string }
+        cod_cliente: { type: string }
+        product_id: { type: integer }
+        genero: { type: string }
+        categoria: { type: string }
+        produto: { type: string }
+        cor: { type: string }
+        tamanho: { type: string }
+        estoque_atual: { type: integer }
+        estado: { type: string }
+        rua: { type: string }
+        prateleira: { type: string }
+        caixa: { type: string }
+        endereco: { type: string }
+
+    SkuPatch:
+      type: object
+      properties:
+        cod_btg: { type: string }
+        estoque_tipo: { type: string }
+        cod_cliente: { type: string }
+        product_id: { type: integer }
+        genero: { type: string }
+        categoria: { type: string }
+        produto: { type: string }
+        cor: { type: string }
+        tamanho: { type: string }
+        estoque_atual: { type: integer }
+        estado: { type: string }
+        rua: { type: string }
+        prateleira: { type: string }
+        caixa: { type: string }
+        endereco: { type: string }
+
+    # ──────── Movement ────────
+    Movement:
+      type: object
+      required: [id, data, tipo_mov, cod_sku, produto, qtde, sinal]
+      properties:
+        id: { type: integer }
+        data: { type: string, format: date }
+        tipo_mov: { type: string }
+        cod_sku: { type: string }
+        produto: { type: string }
+        qtde: { type: integer }
+        sinal: { type: integer }
+        estoque_tipo: { type: ["string", "null"] }
+        origem: { type: ["string", "null"] }
+        destino: { type: ["string", "null"] }
+        evento_ref: { type: ["string", "null"] }
+        doc_nf: { type: ["string", "null"] }
+        responsavel: { type: ["string", "null"] }
+        caixa_origem: { type: ["string", "null"] }
+        estoque_resultante: { type: ["integer", "null"] }
+        created_at: { type: string, format: date-time }
+
+    MovementInput:
+      type: object
+      required: [data, tipo_mov, cod_sku, produto, qtde, sinal]
+      properties:
+        data: { type: string, format: date }
+        tipo_mov: { type: string }
+        cod_sku: { type: string }
+        produto: { type: string }
+        qtde: { type: integer }
+        sinal: { type: integer }
+        estoque_tipo: { type: string }
+        origem: { type: string }
+        destino: { type: string }
+        evento_ref: { type: string }
+        doc_nf: { type: string }
+        responsavel: { type: string }
+        caixa_origem: { type: string }
+
+    # ──────── Order ────────
+    Order:
+      type: object
+      required: [id, num_pedido, cod_cliente, produto, qtd_solic, status]
+      properties:
+        id: { type: integer }
+        num_pedido: { type: string }
+        data_solic: { type: ["string", "null"], format: date }
+        canal: { type: ["string", "null"] }
+        solicitante: { type: ["string", "null"] }
+        cod_cliente: { type: string }
+        produto: { type: string }
+        qtd_solic: { type: integer }
+        qtd_sep: { type: ["integer", "null"] }
+        estoque: { type: ["string", "null"] }
+        status: { type: string }
+        data_exped: { type: ["string", "null"], format: date }
+        nf: { type: ["string", "null"] }
+        po_btg: { type: ["string", "null"] }
+        obs: { type: ["string", "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    OrderInput:
+      type: object
+      required: [num_pedido, cod_cliente, produto, qtd_solic]
+      properties:
+        num_pedido: { type: string }
+        data_solic: { type: string, format: date }
+        canal: { type: string }
+        solicitante: { type: string }
+        cod_cliente: { type: string }
+        produto: { type: string }
+        qtd_solic: { type: integer }
+        qtd_sep: { type: integer }
+        estoque: { type: string }
+        status: { type: string }
+        data_exped: { type: string, format: date }
+        nf: { type: string }
+        po_btg: { type: string }
+        obs: { type: string }
+
+    OrderPatch:
+      type: object
+      properties:
+        num_pedido: { type: string }
+        data_solic: { type: string, format: date }
+        canal: { type: string }
+        solicitante: { type: string }
+        cod_cliente: { type: string }
+        produto: { type: string }
+        qtd_solic: { type: integer }
+        qtd_sep: { type: integer }
+        estoque: { type: string }
+        status: { type: string }
+        data_exped: { type: string, format: date }
+        nf: { type: string }
+        po_btg: { type: string }
+        obs: { type: string }
+
+    # ──────── Dashboard ────────
+    DashboardSummary:
+      type: object
+      required: [total_produtos, total_pecas, total_skus, custo_total, ad_valorem, recent_movements, by_category, order_status_counts]
+      properties:
+        total_produtos: { type: integer }
+        total_pecas: { type: integer }
+        total_skus: { type: integer }
+        custo_total: { type: number }
+        ad_valorem: { type: number }
+        recent_movements:
+          type: array
+          items: { $ref: "#/components/schemas/Movement" }
+        by_category:
+          type: array
+          items: { $ref: "#/components/schemas/CategoryStat" }
+        order_status_counts:
+          type: array
+          items:
+            type: object
+            required: [status, count]
+            properties:
+              status: { type: string }
+              count: { type: integer }
+
+    # ──────── Warehouse ────────
+    WarehouseRua:
+      type: object
+      required: [rua, prateleiras, total_skus, total_caixas, total_pecas]
+      properties:
+        rua: { type: string }
+        total_skus: { type: integer }
+        total_caixas: { type: integer }
+        total_pecas: { type: integer }
+        prateleiras:
+          type: array
+          items:
+            type: object
+            required: [prateleira, caixas]
+            properties:
+              prateleira: { type: string }
+              caixas:
+                type: array
+                items:
+                  type: object
+                  required: [caixa, skus]
+                  properties:
+                    caixa: { type: string }
+                    skus:
+                      type: array
+                      items: { $ref: "#/components/schemas/Sku" }
+
+    # ──────── Generic record (avoids zod.looseObject which is Zod v4 only) ────────
+    AnyRecord:
+      type: object
+      additionalProperties: true
+
+    # ──────── Import ────────
+    BulkImportData:
+      type: object
+      required: [products, skus, movements, orders]
+      properties:
+        products:
+          type: array
+          items: { $ref: "#/components/schemas/ProductInput" }
+        skus:
+          type: array
+          items: { $ref: "#/components/schemas/SkuInput" }
+        movements:
+          type: array
+          items: { $ref: "#/components/schemas/MovementInput" }
+        orders:
+          type: array
+          items: { $ref: "#/components/schemas/OrderInput" }
+
+    ImportResult:
+      type: object
+      required: [products_imported, skus_imported, movements_imported, orders_imported]
+      properties:
+        products_imported: { type: integer }
+        skus_imported: { type: integer }
+        movements_imported: { type: integer }
+        orders_imported: { type: integer }
+        errors:
+          type: array
+          items: { type: string }

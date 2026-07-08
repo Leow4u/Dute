@@ -1,0 +1,1 @@
+- [BTG Inventory Stack](btg-inventory-stack.md) — Clerk+Express+Drizzle+React+Vite; Orval looseObject fix; DB build required before server typecheck
