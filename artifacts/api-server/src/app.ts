@@ -19,7 +19,7 @@ app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 
 const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
   ? process.env.CORS_ALLOWED_ORIGINS.split(",").map((s) => s.trim())
-  : [process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : ""];
+  : ["http://localhost:5173", "http://127.0.0.1:5173"];
 
 app.use(
   cors({
@@ -27,11 +27,19 @@ app.use(
     origin: (origin, cb) => {
       // Allow requests with no origin (server-to-server, curl)
       if (!origin) return cb(null, true);
-      if (allowedOrigins.some((o) => origin === o || origin.endsWith(`.${o.replace(/^https?:\/\//, "")}`))) {
+      if (
+        allowedOrigins.some(
+          (o) =>
+            origin === o ||
+            origin.endsWith(`.${o.replace(/^https?:\/\//, "")}`),
+        )
+      ) {
         return cb(null, true);
       }
-      // In development, allow any replit domain
-      if (process.env.NODE_ENV === "development" && origin.includes("replit")) {
+      if (
+        process.env.NODE_ENV !== "production" &&
+        /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
+      ) {
         return cb(null, true);
       }
       cb(new Error("CORS: origin not allowed"));
