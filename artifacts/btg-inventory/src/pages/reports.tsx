@@ -24,7 +24,7 @@ export default function Reports() {
       
       const response = await fetch(`/api/reports/export?${params.toString()}`);
       
-      if (!response.ok) throw new Error("Export failed");
+      if (!response.ok) throw new Error("Falha na exportação");
       
       const data = await response.json();
       
@@ -38,7 +38,7 @@ export default function Reports() {
         // Very basic CSV converter
         const items = data.data || [];
         if (items.length === 0) {
-          toast({ title: "No data to export" });
+          toast({ title: "Nenhum dado para exportar" });
           setIsExporting(false);
           return;
         }
@@ -60,9 +60,9 @@ export default function Reports() {
         document.body.removeChild(link);
       }
       
-      toast({ title: "Export completed successfully" });
+      toast({ title: "Exportação concluída com sucesso" });
     } catch (err) {
-      toast({ title: "Export failed", variant: "destructive" });
+      toast({ title: "Falha na exportação", variant: "destructive" });
     } finally {
       setIsExporting(false);
     }
@@ -71,39 +71,39 @@ export default function Reports() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-primary">Data Export & Reports</h1>
-        <p className="text-sm text-muted-foreground mt-1">Generate and download data extracts for offline analysis.</p>
+        <h1 className="text-2xl font-bold tracking-tight text-primary">Exportação de Dados e Relatórios</h1>
+        <p className="text-sm text-muted-foreground mt-1">Gere e baixe extrações de dados para análise offline.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <Card className="border-border shadow-sm">
           <CardHeader className="bg-gray-50/50 border-b border-border">
-            <CardTitle className="text-lg">Custom Export</CardTitle>
-            <CardDescription>Select dataset and timeframe to export.</CardDescription>
+            <CardTitle className="text-lg">Exportação Personalizada</CardTitle>
+            <CardDescription>Selecione o conjunto de dados e o período para exportar.</CardDescription>
           </CardHeader>
           <CardContent className="pt-6 space-y-4">
             <div className="space-y-2">
-              <Label>Dataset</Label>
+              <Label>Conjunto de Dados</Label>
               <Select value={type} onValueChange={setType}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="products">Products Master Catalog</SelectItem>
-                  <SelectItem value="skus">SKUs & Locations</SelectItem>
-                  <SelectItem value="movements">Kardex Movements</SelectItem>
-                  <SelectItem value="orders">Orders History</SelectItem>
+                  <SelectItem value="products">Catálogo Mestre de Produtos</SelectItem>
+                  <SelectItem value="skus">SKUs e Localizações</SelectItem>
+                  <SelectItem value="movements">Movimentações Kardex</SelectItem>
+                  <SelectItem value="orders">Histórico de Pedidos</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             
             <div className="space-y-2">
-              <Label>Date From (Optional)</Label>
+              <Label>Data Inicial (Opcional)</Label>
               <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
             </div>
             
             <div className="space-y-2">
-              <Label>Date To (Optional)</Label>
+              <Label>Data Final (Opcional)</Label>
               <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
             </div>
             
@@ -129,31 +129,31 @@ export default function Reports() {
 
         <Card className="border-border shadow-sm">
           <CardHeader className="bg-gray-50/50 border-b border-border">
-            <CardTitle className="text-lg">Quick Reports</CardTitle>
-            <CardDescription>Pre-configured standard exports.</CardDescription>
+            <CardTitle className="text-lg">Relatórios Rápidos</CardTitle>
+            <CardDescription>Exportações padrão pré-configuradas.</CardDescription>
           </CardHeader>
           <CardContent className="pt-6 flex flex-col gap-3">
             <Button variant="outline" className="justify-start text-left h-12" onClick={() => { setType('products'); handleExport('csv'); }}>
               <Download className="mr-3 h-4 w-4 text-muted-foreground" />
               <div>
-                <div className="font-semibold text-sm">Full Inventory Valuation</div>
-                <div className="text-xs text-muted-foreground font-normal">All products with total cost</div>
+                <div className="font-semibold text-sm">Valoração Completa do Estoque</div>
+                <div className="text-xs text-muted-foreground font-normal">Todos os produtos com custo total</div>
               </div>
             </Button>
             
             <Button variant="outline" className="justify-start text-left h-12" onClick={() => { setType('movements'); handleExport('csv'); }}>
               <Download className="mr-3 h-4 w-4 text-muted-foreground" />
               <div>
-                <div className="font-semibold text-sm">All Time Movements</div>
-                <div className="text-xs text-muted-foreground font-normal">Complete kardex log</div>
+                <div className="font-semibold text-sm">Todas as Movimentações</div>
+                <div className="text-xs text-muted-foreground font-normal">Registro kardex completo</div>
               </div>
             </Button>
             
             <Button variant="outline" className="justify-start text-left h-12" onClick={() => { setType('skus'); handleExport('csv'); }}>
               <Download className="mr-3 h-4 w-4 text-muted-foreground" />
               <div>
-                <div className="font-semibold text-sm">Warehouse Locations map</div>
-                <div className="text-xs text-muted-foreground font-normal">SKUs with Rua/Prat/Caixa</div>
+                <div className="font-semibold text-sm">Mapa de Localizações do Armazém</div>
+                <div className="text-xs text-muted-foreground font-normal">SKUs com Rua/Prat/Caixa</div>
               </div>
             </Button>
           </CardContent>

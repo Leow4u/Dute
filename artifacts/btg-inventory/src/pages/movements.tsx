@@ -16,11 +16,11 @@ import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@clerk/react";
 
 const movementSchema = z.object({
-  data: z.string().min(1, "Required"),
-  tipo_mov: z.string().min(1, "Required"),
-  cod_sku: z.string().min(1, "Required"),
-  produto: z.string().min(1, "Required"),
-  qtde: z.coerce.number().min(1, "Quantity must be at least 1"),
+  data: z.string().min(1, "Obrigatório"),
+  tipo_mov: z.string().min(1, "Obrigatório"),
+  cod_sku: z.string().min(1, "Obrigatório"),
+  produto: z.string().min(1, "Obrigatório"),
+  qtde: z.coerce.number().min(1, "A quantidade deve ser no mínimo 1"),
   sinal: z.coerce.number(),
   origem: z.string().optional(),
   destino: z.string().optional(),
@@ -53,8 +53,8 @@ export default function Movements() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-primary">Kardex Log</h1>
-          <p className="text-sm text-muted-foreground mt-1">Immutable ledger of all inventory inbound and outbound operations.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-primary">Registro Kardex</h1>
+          <p className="text-sm text-muted-foreground mt-1">Livro-razão imutável de todas as operações de entrada e saída de estoque.</p>
         </div>
         <MovementModal />
       </div>
@@ -65,7 +65,7 @@ export default function Movements() {
             <div className="relative w-full sm:w-96">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input 
-                placeholder="Search by SKU code..." 
+                placeholder="Buscar por código do SKU..." 
                 className="pl-9 h-9 text-sm bg-white"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -73,7 +73,7 @@ export default function Movements() {
             </div>
             <div className="flex gap-2 w-full sm:w-auto">
               <Button variant="outline" size="sm" className="h-9">
-                <Filter className="mr-2 h-4 w-4" /> Filters
+                <Filter className="mr-2 h-4 w-4" /> Filtros
               </Button>
             </div>
           </div>
@@ -83,24 +83,24 @@ export default function Movements() {
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-muted-foreground uppercase bg-gray-50/80 border-b border-border">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Date</th>
-                  <th className="px-4 py-3 font-medium">Type</th>
+                  <th className="px-4 py-3 font-medium">Data</th>
+                  <th className="px-4 py-3 font-medium">Tipo</th>
                   <th className="px-4 py-3 font-medium">Cod. SKU</th>
-                  <th className="px-4 py-3 font-medium">Product</th>
-                  <th className="px-4 py-3 font-medium text-right">Qty</th>
-                  <th className="px-4 py-3 font-medium text-center">Path (Orig &rarr; Dest)</th>
+                  <th className="px-4 py-3 font-medium">Produto</th>
+                  <th className="px-4 py-3 font-medium text-right">Qtde</th>
+                  <th className="px-4 py-3 font-medium text-center">Trajeto (Orig &rarr; Dest)</th>
                   <th className="px-4 py-3 font-medium">Doc/NF</th>
-                  <th className="px-4 py-3 font-medium">Operator</th>
+                  <th className="px-4 py-3 font-medium">Operador</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Loading movements...</td>
+                    <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Carregando movimentações...</td>
                   </tr>
                 ) : data?.items?.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">No movements found.</td>
+                    <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Nenhuma movimentação encontrada.</td>
                   </tr>
                 ) : (
                   data?.items?.map((mov) => {
@@ -142,7 +142,7 @@ export default function Movements() {
           
           <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-gray-50/50">
             <div className="text-xs text-muted-foreground">
-              Showing <span className="font-medium">{data?.items?.length || 0}</span> of <span className="font-medium">{data?.total || 0}</span> movements
+              Exibindo <span className="font-medium">{data?.items?.length || 0}</span> de <span className="font-medium">{data?.total || 0}</span> movimentações
             </div>
             <div className="flex gap-2">
               <Button 
@@ -151,7 +151,7 @@ export default function Movements() {
                 onClick={() => setPage(p => Math.max(0, p - 1))}
                 disabled={page === 0 || isLoading}
               >
-                Previous
+                Anterior
               </Button>
               <Button 
                 variant="outline" 
@@ -159,7 +159,7 @@ export default function Movements() {
                 onClick={() => setPage(p => p + 1)}
                 disabled={!data || data.items.length < limit || isLoading}
               >
-                Next
+                Próximo
               </Button>
             </div>
           </div>
@@ -187,7 +187,7 @@ function MovementModal() {
       sinal: 1,
       origem: "",
       destino: "ESTOQUE_BTG",
-      responsavel: user?.fullName || "System",
+      responsavel: user?.fullName || "Sistema",
       doc_nf: "",
     }
   });
@@ -206,12 +206,12 @@ function MovementModal() {
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListMovementsQueryKey() });
-          toast({ title: "Movement logged successfully" });
+          toast({ title: "Movimentação registrada com sucesso" });
           setOpen(false);
           reset();
         },
         onError: () => {
-          toast({ title: "Error logging movement", variant: "destructive" });
+          toast({ title: "Erro ao registrar movimentação", variant: "destructive" });
         }
       }
     );
@@ -221,17 +221,17 @@ function MovementModal() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button className="bg-primary hover:bg-primary/90 text-white shadow-sm h-9">
-          <Plus className="mr-2 h-4 w-4" /> Log Movement
+          <Plus className="mr-2 h-4 w-4" /> Registrar Movimentação
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Log Inventory Movement</DialogTitle>
+          <DialogTitle>Registrar Movimentação de Estoque</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2 col-span-2">
-              <Label htmlFor="tipo_mov">Movement Type *</Label>
+              <Label htmlFor="tipo_mov">Tipo de Movimentação *</Label>
               <Controller
                 control={control}
                 name="tipo_mov"
@@ -252,7 +252,7 @@ function MovementModal() {
                     defaultValue={field.value}
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select type" />
+                      <SelectValue placeholder="Selecione o tipo" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="ENTRADA">Entrada (+)</SelectItem>
@@ -272,39 +272,39 @@ function MovementModal() {
               {errors.cod_sku && <span className="text-xs text-destructive">{errors.cod_sku.message}</span>}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="qtde">Quantity *</Label>
+              <Label htmlFor="qtde">Quantidade *</Label>
               <Input id="qtde" type="number" min="1" {...register("qtde")} />
               {errors.qtde && <span className="text-xs text-destructive">{errors.qtde.message}</span>}
             </div>
             
             <div className="space-y-2 col-span-2">
-              <Label htmlFor="produto">Product Name *</Label>
+              <Label htmlFor="produto">Nome do Produto *</Label>
               <Input id="produto" {...register("produto")} />
               {errors.produto && <span className="text-xs text-destructive">{errors.produto.message}</span>}
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="origem">Origin</Label>
+              <Label htmlFor="origem">Origem</Label>
               <Input id="origem" {...register("origem")} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="destino">Destination</Label>
+              <Label htmlFor="destino">Destino</Label>
               <Input id="destino" {...register("destino")} />
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="doc_nf">Document / NF</Label>
+              <Label htmlFor="doc_nf">Documento / NF</Label>
               <Input id="doc_nf" {...register("doc_nf")} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="data">Date</Label>
+              <Label htmlFor="data">Data</Label>
               <Input id="data" type="datetime-local" {...register("data")} />
             </div>
           </div>
           <DialogFooter className="pt-4">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
             <Button type="submit" disabled={createMovement.isPending}>
-              {createMovement.isPending ? "Saving..." : "Log Movement"}
+              {createMovement.isPending ? "Salvando..." : "Registrar Movimentação"}
             </Button>
           </DialogFooter>
         </form>

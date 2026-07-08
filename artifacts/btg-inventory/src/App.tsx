@@ -157,14 +157,14 @@ function ClerkProviderWithRoutes() {
       localization={{
         signIn: {
           start: {
-            title: "Welcome back",
-            subtitle: "Sign in to access your account",
+            title: "Bem-vindo de volta",
+            subtitle: "Entre para acessar sua conta",
           },
         },
         signUp: {
           start: {
-            title: "Create your account",
-            subtitle: "Get started today",
+            title: "Crie sua conta",
+            subtitle: "Comece agora mesmo",
           },
         },
       }}

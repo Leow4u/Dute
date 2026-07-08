@@ -23,11 +23,11 @@ export default function Warehouse() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-primary">Warehouse Map</h1>
-          <p className="text-sm text-muted-foreground mt-1">Physical distribution of SKUs.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-primary">Mapa do Armazém</h1>
+          <p className="text-sm text-muted-foreground mt-1">Distribuição física dos SKUs.</p>
         </div>
         <div className="p-8 text-center bg-gray-50 border border-border rounded-lg text-muted-foreground">
-          No location data assigned to any SKUs yet.
+          Nenhum dado de localização atribuído a SKUs ainda.
         </div>
       </div>
     );
@@ -36,8 +36,8 @@ export default function Warehouse() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-primary">Warehouse Map</h1>
-        <p className="text-sm text-muted-foreground mt-1">Hierarchical view of physical storage (Rua &rarr; Prateleira &rarr; Caixa).</p>
+        <h1 className="text-2xl font-bold tracking-tight text-primary">Mapa do Armazém</h1>
+        <p className="text-sm text-muted-foreground mt-1">Visão hierárquica do armazenamento físico (Rua &rarr; Prateleira &rarr; Caixa).</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -47,11 +47,11 @@ export default function Warehouse() {
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-2">
                   <MapPin className="h-5 w-5 text-sidebar-primary" />
-                  <CardTitle className="text-lg">Aisle (Rua) {rua.rua}</CardTitle>
+                  <CardTitle className="text-lg">Rua {rua.rua}</CardTitle>
                 </div>
                 <div className="text-right">
                   <div className="text-2xl font-bold text-sidebar-primary-foreground">{rua.total_pecas.toLocaleString('pt-BR')}</div>
-                  <div className="text-xs text-sidebar-foreground/70 uppercase font-semibold">Total Pcs</div>
+                  <div className="text-xs text-sidebar-foreground/70 uppercase font-semibold">Total Peças</div>
                 </div>
               </div>
               <div className="flex gap-4 mt-4 pt-4 border-t border-sidebar-border/50 text-xs">
@@ -68,9 +68,9 @@ export default function Warehouse() {
                       <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-gray-50">
                         <div className="flex items-center gap-2 text-sm font-semibold text-gray-800">
                           <PackageOpen className="h-4 w-4 text-muted-foreground" />
-                          Shelf (Prat) {prat.prateleira}
+                          Prateleira {prat.prateleira}
                           <Badge variant="secondary" className="ml-2 bg-blue-50 text-blue-700 font-normal">
-                            {prat.caixas.length} boxes
+                            {prat.caixas.length} caixas
                           </Badge>
                         </div>
                       </AccordionTrigger>
@@ -80,7 +80,7 @@ export default function Warehouse() {
                             <div key={cx.caixa} className="p-3 pl-10 hover:bg-gray-50/50 transition-colors">
                               <div className="flex items-center gap-2 mb-2">
                                 <Box className="h-3.5 w-3.5 text-primary" />
-                                <span className="font-semibold text-xs text-gray-900">Box {cx.caixa}</span>
+                                <span className="font-semibold text-xs text-gray-900">Caixa {cx.caixa}</span>
                               </div>
                               <div className="space-y-1">
                                 {cx.skus.map((sku) => (
@@ -89,7 +89,7 @@ export default function Warehouse() {
                                       {sku.cod_btg}
                                     </span>
                                     <span className="font-bold text-gray-700 bg-white px-1.5 py-0.5 rounded shadow-sm">
-                                      {sku.estoque_atual} pcs
+                                      {sku.estoque_atual} peças
                                     </span>
                                   </div>
                                 ))}

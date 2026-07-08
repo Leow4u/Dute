@@ -22,7 +22,7 @@ export default function Dashboard() {
 
   if (error || !data) {
     return <div className="p-4 bg-destructive/10 text-destructive rounded-md border border-destructive/20">
-      Failed to load dashboard data. Please try again.
+      Falha ao carregar os dados do painel. Tente novamente.
     </div>;
   }
 
@@ -33,14 +33,14 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-primary">Operations Center</h1>
-        <p className="text-sm text-muted-foreground mt-1">Real-time overview of warehouse inventory and movements.</p>
+        <h1 className="text-2xl font-bold tracking-tight text-primary">Central de Operações</h1>
+        <p className="text-sm text-muted-foreground mt-1">Visão em tempo real do estoque e das movimentações do armazém.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card className="border-l-4 border-l-primary shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Total Products</CardTitle>
+            <CardTitle className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Total de Produtos</CardTitle>
             <Package className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
@@ -50,7 +50,7 @@ export default function Dashboard() {
         
         <Card className="border-l-4 border-l-blue-500 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Total SKUs</CardTitle>
+            <CardTitle className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Total de SKUs</CardTitle>
             <Tags className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
@@ -60,7 +60,7 @@ export default function Dashboard() {
 
         <Card className="border-l-4 border-l-amber-500 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Total Pieces</CardTitle>
+            <CardTitle className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Total de Peças</CardTitle>
             <ArrowRightLeft className="h-4 w-4 text-amber-500" />
           </CardHeader>
           <CardContent>
@@ -70,7 +70,7 @@ export default function Dashboard() {
 
         <Card className="border-l-4 border-l-emerald-600 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Total Cost</CardTitle>
+            <CardTitle className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Custo Total</CardTitle>
             <DollarSign className="h-4 w-4 text-emerald-600" />
           </CardHeader>
           <CardContent>
@@ -92,7 +92,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="shadow-sm border-border">
           <CardHeader className="border-b border-border/50 bg-gray-50/50">
-            <CardTitle className="text-sm font-bold uppercase tracking-wider text-gray-700">Inventory by Category</CardTitle>
+            <CardTitle className="text-sm font-bold uppercase tracking-wider text-gray-700">Estoque por Categoria</CardTitle>
           </CardHeader>
           <CardContent className="pt-6">
             <div className="h-[300px] w-full">
@@ -111,18 +111,18 @@ export default function Dashboard() {
 
         <Card className="shadow-sm border-border">
           <CardHeader className="border-b border-border/50 bg-gray-50/50 flex flex-row items-center justify-between">
-            <CardTitle className="text-sm font-bold uppercase tracking-wider text-gray-700">Recent Movements</CardTitle>
+            <CardTitle className="text-sm font-bold uppercase tracking-wider text-gray-700">Movimentações Recentes</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
                 <thead className="text-xs text-muted-foreground uppercase bg-gray-50/80 border-b border-border">
                   <tr>
-                    <th className="px-4 py-3 font-medium">Date</th>
-                    <th className="px-4 py-3 font-medium">Type</th>
+                    <th className="px-4 py-3 font-medium">Data</th>
+                    <th className="px-4 py-3 font-medium">Tipo</th>
                     <th className="px-4 py-3 font-medium">SKU</th>
-                    <th className="px-4 py-3 font-medium">Product</th>
-                    <th className="px-4 py-3 font-medium text-right">Qty</th>
+                    <th className="px-4 py-3 font-medium">Produto</th>
+                    <th className="px-4 py-3 font-medium text-right">Qtde</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -144,7 +144,7 @@ export default function Dashboard() {
                   {data.recent_movements.length === 0 && (
                     <tr>
                       <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                        No recent movements
+                        Nenhuma movimentação recente
                       </td>
                     </tr>
                   )}
@@ -158,7 +158,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="shadow-sm border-border">
           <CardHeader className="border-b border-border/50 bg-gray-50/50">
-            <CardTitle className="text-sm font-bold uppercase tracking-wider text-gray-700">Order Status</CardTitle>
+            <CardTitle className="text-sm font-bold uppercase tracking-wider text-gray-700">Status dos Pedidos</CardTitle>
           </CardHeader>
           <CardContent className="pt-6">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -170,7 +170,7 @@ export default function Dashboard() {
               ))}
               {data.order_status_counts.length === 0 && (
                 <div className="col-span-full text-center text-muted-foreground py-8">
-                  No orders found
+                  Nenhum pedido encontrado
                 </div>
               )}
             </div>

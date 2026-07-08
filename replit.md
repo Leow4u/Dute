@@ -34,7 +34,9 @@ _Describe the high-level user-facing capabilities of this app once they exist._
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- **Idioma:** Todo o sistema (interface, textos, mensagens, rótulos) deve ser 100% em Português do Brasil (PT-BR).
+- **Repositório oficial:** GitHub `Leow4u/Dute` (remote `origin`, branch `main`) é o repositório oficial do projeto.
+- **Push automático:** Ao concluir cada tarefa, commitar e dar push automaticamente para o Dute (`origin/main`), sem precisar pedir toda vez.
 
 ## Gotchas
 
