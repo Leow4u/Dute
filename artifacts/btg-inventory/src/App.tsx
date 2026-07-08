@@ -1,6 +1,7 @@
 import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
+import { ptBR } from '@clerk/localizations';
 import { Switch, Route, useLocation, Router as WouterRouter, Redirect } from 'wouter';
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
@@ -155,14 +156,19 @@ function ClerkProviderWithRoutes() {
       signInUrl={`${basePath}/sign-in`}
       signUpUrl={`${basePath}/sign-up`}
       localization={{
+        ...ptBR,
         signIn: {
+          ...ptBR.signIn,
           start: {
+            ...ptBR.signIn?.start,
             title: "Bem-vindo de volta",
             subtitle: "Entre para acessar sua conta",
           },
         },
         signUp: {
+          ...ptBR.signUp,
           start: {
+            ...ptBR.signUp?.start,
             title: "Crie sua conta",
             subtitle: "Comece agora mesmo",
           },

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -21,7 +21,10 @@ export const skusTable = pgTable("skus", {
   endereco: text("endereco"),
   created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (table) => [
+  // Estoque/custo dos produtos são derivados via join skus.cod_cliente = products.cod_cliente
+  index("skus_cod_cliente_idx").on(table.cod_cliente),
+]);
 
 export const insertSkuSchema = createInsertSchema(skusTable).omit({
   id: true,
