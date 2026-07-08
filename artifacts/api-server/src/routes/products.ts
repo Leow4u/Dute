@@ -1,7 +1,13 @@
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
-import { db, productsTable } from "@workspace/db";
+import { db, productsTable, skusTable } from "@workspace/db";
 import { eq, ilike, and, sql, desc } from "drizzle-orm";
+
+// Estoque e custo são derivados dos SKUs em tempo de leitura (fonte da verdade:
+// skus.estoque_atual, atualizado pelas movimentações). custo = preço unit. × estoque.
+const estoqueBtgSql = sql<number>`coalesce(sum(${skusTable.estoque_atual}), 0)::int`;
+const numSkusSql = sql<number>`count(${skusTable.id})::int`;
+const custoTotalSql = sql<number>`coalesce(${productsTable.preco_unit}::float8 * coalesce(sum(${skusTable.estoque_atual}), 0), 0)`;
 
 const router = Router();
 
@@ -26,8 +32,25 @@ router.get("/", requireAuth, async (req: any, res: any) => {
     }
     const where = conditions.length > 0 ? and(...conditions) : undefined;
     const [items, countResult] = await Promise.all([
-      db.select().from(productsTable)
+      db.select({
+        id: productsTable.id,
+        cod_cliente: productsTable.cod_cliente,
+        genero: productsTable.genero,
+        categoria: productsTable.categoria,
+        grupo: productsTable.grupo,
+        produto: productsTable.produto,
+        cor: productsTable.cor,
+        tamanho: productsTable.tamanho,
+        preco_unit: sql<number | null>`${productsTable.preco_unit}::float8`,
+        estoque_btg: estoqueBtgSql,
+        num_skus: numSkusSql,
+        custo_total: custoTotalSql,
+        created_at: productsTable.created_at,
+        updated_at: productsTable.updated_at,
+      }).from(productsTable)
+        .leftJoin(skusTable, eq(skusTable.cod_cliente, productsTable.cod_cliente))
         .where(where)
+        .groupBy(productsTable.id)
         .orderBy(productsTable.cod_cliente)
         .limit(Number(limit))
         .offset(Number(offset)),
@@ -43,17 +66,19 @@ router.get("/", requireAuth, async (req: any, res: any) => {
 // GET /api/products/stats
 router.get("/stats", requireAuth, async (req: any, res: any) => {
   try {
-    const totalPecas = await db.select({ total: sql<number>`sum(estoque_btg)::int` }).from(productsTable);
+    const totalRow = await db.select({ total: sql<number>`coalesce(sum(${skusTable.estoque_atual}), 0)::int` }).from(skusTable);
+    const total = totalRow[0].total;
     const stats = await db.select({
       categoria: productsTable.categoria,
-      total_produtos: sql<number>`count(*)::int`,
-      total_pecas: sql<number>`sum(estoque_btg)::int`,
-      custo_total: sql<number>`coalesce(sum(custo_total::numeric), 0)`,
-      pct_estoque: sql<number>`round(sum(estoque_btg)::numeric / nullif(${totalPecas[0].total}, 0) * 100, 2)`,
+      total_produtos: sql<number>`count(distinct ${productsTable.id})::int`,
+      total_pecas: sql<number>`coalesce(sum(${skusTable.estoque_atual}), 0)::int`,
+      custo_total: sql<number>`coalesce(sum(${productsTable.preco_unit}::float8 * ${skusTable.estoque_atual}), 0)`,
+      pct_estoque: sql<number>`round(coalesce(sum(${skusTable.estoque_atual}), 0)::numeric / nullif(${total}, 0) * 100, 2)`,
     })
       .from(productsTable)
+      .leftJoin(skusTable, eq(skusTable.cod_cliente, productsTable.cod_cliente))
       .groupBy(productsTable.categoria)
-      .orderBy(desc(sql`sum(estoque_btg)`));
+      .orderBy(desc(sql`sum(${skusTable.estoque_atual})`));
     res.json(stats);
   } catch (err) {
     req.log.error(err);
@@ -65,7 +90,25 @@ router.get("/stats", requireAuth, async (req: any, res: any) => {
 router.get("/:id", requireAuth, async (req: any, res: any) => {
   try {
     const id = Number(req.params.id);
-    const [product] = await db.select().from(productsTable).where(eq(productsTable.id, id));
+    const [product] = await db.select({
+      id: productsTable.id,
+      cod_cliente: productsTable.cod_cliente,
+      genero: productsTable.genero,
+      categoria: productsTable.categoria,
+      grupo: productsTable.grupo,
+      produto: productsTable.produto,
+      cor: productsTable.cor,
+      tamanho: productsTable.tamanho,
+      preco_unit: sql<number | null>`${productsTable.preco_unit}::float8`,
+      estoque_btg: estoqueBtgSql,
+      num_skus: numSkusSql,
+      custo_total: custoTotalSql,
+      created_at: productsTable.created_at,
+      updated_at: productsTable.updated_at,
+    }).from(productsTable)
+      .leftJoin(skusTable, eq(skusTable.cod_cliente, productsTable.cod_cliente))
+      .where(eq(productsTable.id, id))
+      .groupBy(productsTable.id);
     if (!product) return res.status(404).json({ error: "Not found" });
     res.json(product);
   } catch (err) {

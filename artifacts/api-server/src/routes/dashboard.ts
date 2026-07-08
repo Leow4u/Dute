@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db, productsTable, skusTable, movementsTable, ordersTable } from "@workspace/db";
-import { sql, desc } from "drizzle-orm";
+import { sql, desc, eq } from "drizzle-orm";
 
 const router = Router();
 
@@ -22,10 +22,11 @@ router.get("/", requireAuth, async (req: any, res: any) => {
       orderStatusCounts,
     ] = await Promise.all([
       db.select({
-        total_produtos: sql<number>`count(*)::int`,
-        total_pecas: sql<number>`coalesce(sum(estoque_btg), 0)::int`,
-        custo_total: sql<number>`coalesce(sum(custo_total::numeric), 0)`,
-      }).from(productsTable),
+        total_produtos: sql<number>`count(distinct ${productsTable.id})::int`,
+        total_pecas: sql<number>`coalesce(sum(${skusTable.estoque_atual}), 0)::int`,
+        custo_total: sql<number>`coalesce(sum(${productsTable.preco_unit}::float8 * ${skusTable.estoque_atual}), 0)`,
+      }).from(productsTable)
+        .leftJoin(skusTable, eq(skusTable.cod_cliente, productsTable.cod_cliente)),
 
       db.select({
         total_skus: sql<number>`count(*)::int`,
@@ -33,13 +34,14 @@ router.get("/", requireAuth, async (req: any, res: any) => {
 
       db.select({
         categoria: productsTable.categoria,
-        total_produtos: sql<number>`count(*)::int`,
-        total_pecas: sql<number>`coalesce(sum(estoque_btg), 0)::int`,
-        custo_total: sql<number>`coalesce(sum(custo_total::numeric), 0)`,
+        total_produtos: sql<number>`count(distinct ${productsTable.id})::int`,
+        total_pecas: sql<number>`coalesce(sum(${skusTable.estoque_atual}), 0)::int`,
+        custo_total: sql<number>`coalesce(sum(${productsTable.preco_unit}::float8 * ${skusTable.estoque_atual}), 0)`,
         pct_estoque: sql<number>`0`,
       }).from(productsTable)
+        .leftJoin(skusTable, eq(skusTable.cod_cliente, productsTable.cod_cliente))
         .groupBy(productsTable.categoria)
-        .orderBy(desc(sql`sum(estoque_btg)`))
+        .orderBy(desc(sql`sum(${skusTable.estoque_atual})`))
         .limit(10),
 
       db.select().from(movementsTable)
