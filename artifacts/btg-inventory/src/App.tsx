@@ -1,36 +1,46 @@
-import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser } from '@clerk/react';
-import { publishableKeyFromHost } from '@clerk/react/internal';
-import { shadcn } from '@clerk/themes';
-import { ptBR } from '@clerk/localizations';
-import { Switch, Route, useLocation, Router as WouterRouter, Redirect } from 'wouter';
+import { ClerkProvider, SignIn, SignUp, Show, useClerk } from "@clerk/react";
+import { publishableKeyFromHost } from "@clerk/react/internal";
+import { shadcn } from "@clerk/themes";
+import { ptBR } from "@clerk/localizations";
+import {
+  Switch,
+  Route,
+  useLocation,
+  Router as WouterRouter,
+  Redirect,
+} from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
-import { Toaster } from '@/components/ui/toaster';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { Toaster } from "@/components/ui/toaster";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
-import AppLayout from './components/layout/app-layout';
-import Dashboard from './pages/dashboard';
-import Products from './pages/products';
-import Skus from './pages/skus';
-import Movements from './pages/movements';
-import Orders from './pages/orders';
-import Warehouse from './pages/warehouse';
-import Reports from './pages/reports';
-import Billing from './pages/billing';
-import PriceList from './pages/price-list';
-import Users from './pages/users';
-import MyInvoices from './pages/my-invoices';
-import NotFound from './pages/not-found';
-import { useRole } from './hooks/use-role';
+import AppLayout from "./components/layout/app-layout";
+import Dashboard from "./pages/dashboard";
+import Products from "./pages/products";
+import Skus from "./pages/skus";
+import Movements from "./pages/movements";
+import Orders from "./pages/orders";
+import Warehouse from "./pages/warehouse";
+import Reports from "./pages/reports";
+import Billing from "./pages/billing";
+import PriceList from "./pages/price-list";
+import Users from "./pages/users";
+import MyInvoices from "./pages/my-invoices";
+import NotFound from "./pages/not-found";
+import { useRole } from "./hooks/use-role";
+import { isDemoMode } from "./lib/demo-mode";
 
-const clerkPubKey = publishableKeyFromHost(
-  window.location.hostname,
-  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
-);
+const clerkPubKey = isDemoMode
+  ? undefined
+  : publishableKeyFromHost(
+      window.location.hostname,
+      import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
+    );
 
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+const activeClerkPubKey = clerkPubKey ?? "";
 
 function stripBase(path: string): string {
   return basePath && path.startsWith(basePath)
@@ -38,8 +48,8 @@ function stripBase(path: string): string {
     : path;
 }
 
-if (!clerkPubKey) {
-  throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY in .env file');
+if (!isDemoMode && !clerkPubKey) {
+  throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY in .env file");
 }
 
 const clerkAppearance = {
@@ -64,7 +74,8 @@ const clerkAppearance = {
   },
   elements: {
     rootBox: "w-full flex justify-center",
-    cardBox: "bg-white rounded-md shadow-lg border border-gray-200 w-[440px] max-w-full overflow-hidden",
+    cardBox:
+      "bg-white rounded-md shadow-lg border border-gray-200 w-[440px] max-w-full overflow-hidden",
     card: "!shadow-none !border-0 !bg-transparent !rounded-none",
     footer: "!shadow-none !border-0 !bg-transparent !rounded-none",
     headerTitle: "text-xl font-bold text-gray-900 tracking-tight",
@@ -83,7 +94,11 @@ const clerkAppearance = {
 function SignInPage() {
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-gray-50 px-4">
-      <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} />
+      <SignIn
+        routing="path"
+        path={`${basePath}/sign-in`}
+        signUpUrl={`${basePath}/sign-up`}
+      />
     </div>
   );
 }
@@ -91,7 +106,11 @@ function SignInPage() {
 function SignUpPage() {
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-gray-50 px-4">
-      <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} />
+      <SignUp
+        routing="path"
+        path={`${basePath}/sign-up`}
+        signInUrl={`${basePath}/sign-in`}
+      />
     </div>
   );
 }
@@ -121,7 +140,9 @@ function ClerkQueryClientCacheInvalidator() {
 function RoleHome() {
   const { role, isLoaded } = useRole();
   if (!isLoaded) return null;
-  return <Redirect to={role === "cliente" ? "/minhas-faturas" : "/dashboard"} />;
+  return (
+    <Redirect to={role === "cliente" ? "/minhas-faturas" : "/dashboard"} />
+  );
 }
 
 function HomeRedirect() {
@@ -137,7 +158,13 @@ function HomeRedirect() {
   );
 }
 
-function RoleGate({ requireRole, children }: { requireRole?: "interno" | "cliente"; children: React.ReactNode }) {
+function RoleGate({
+  requireRole,
+  children,
+}: {
+  requireRole?: "interno" | "cliente";
+  children: React.ReactNode;
+}) {
   const { role, isLoaded } = useRole();
   if (!isLoaded) return null;
   if (requireRole && role !== requireRole) return <Redirect to="/" />;
@@ -170,7 +197,7 @@ function ClerkProviderWithRoutes() {
 
   return (
     <ClerkProvider
-      publishableKey={clerkPubKey}
+      publishableKey={activeClerkPubKey}
       proxyUrl={clerkProxyUrl}
       appearance={clerkAppearance}
       signInUrl={`${basePath}/sign-in`}
@@ -204,17 +231,57 @@ function ClerkProviderWithRoutes() {
             <Route path="/" component={HomeRedirect} />
             <Route path="/sign-in/*?" component={SignInPage} />
             <Route path="/sign-up/*?" component={SignUpPage} />
-            
-            <ProtectedRoute path="/dashboard" component={Dashboard} requireRole="interno" />
-            <ProtectedRoute path="/products" component={Products} requireRole="interno" />
-            <ProtectedRoute path="/skus" component={Skus} requireRole="interno" />
-            <ProtectedRoute path="/movements" component={Movements} requireRole="interno" />
-            <ProtectedRoute path="/orders" component={Orders} requireRole="interno" />
-            <ProtectedRoute path="/warehouse" component={Warehouse} requireRole="interno" />
-            <ProtectedRoute path="/reports" component={Reports} requireRole="interno" />
-            <ProtectedRoute path="/faturamento" component={Billing} requireRole="interno" />
-            <ProtectedRoute path="/tabela-precos" component={PriceList} requireRole="interno" />
-            <ProtectedRoute path="/usuarios" component={Users} requireRole="interno" />
+
+            <ProtectedRoute
+              path="/dashboard"
+              component={Dashboard}
+              requireRole="interno"
+            />
+            <ProtectedRoute
+              path="/products"
+              component={Products}
+              requireRole="interno"
+            />
+            <ProtectedRoute
+              path="/skus"
+              component={Skus}
+              requireRole="interno"
+            />
+            <ProtectedRoute
+              path="/movements"
+              component={Movements}
+              requireRole="interno"
+            />
+            <ProtectedRoute
+              path="/orders"
+              component={Orders}
+              requireRole="interno"
+            />
+            <ProtectedRoute
+              path="/warehouse"
+              component={Warehouse}
+              requireRole="interno"
+            />
+            <ProtectedRoute
+              path="/reports"
+              component={Reports}
+              requireRole="interno"
+            />
+            <ProtectedRoute
+              path="/faturamento"
+              component={Billing}
+              requireRole="interno"
+            />
+            <ProtectedRoute
+              path="/tabela-precos"
+              component={PriceList}
+              requireRole="interno"
+            />
+            <ProtectedRoute
+              path="/usuarios"
+              component={Users}
+              requireRole="interno"
+            />
 
             <ProtectedRoute path="/minhas-faturas" component={MyInvoices} />
 
@@ -227,10 +294,81 @@ function ClerkProviderWithRoutes() {
   );
 }
 
+function DemoRoutes() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Switch>
+          <Route path="/">
+            <Redirect to="/dashboard" />
+          </Route>
+          <Route path="/dashboard">
+            <AppLayout>
+              <Dashboard />
+            </AppLayout>
+          </Route>
+          <Route path="/products">
+            <AppLayout>
+              <Products />
+            </AppLayout>
+          </Route>
+          <Route path="/skus">
+            <AppLayout>
+              <Skus />
+            </AppLayout>
+          </Route>
+          <Route path="/movements">
+            <AppLayout>
+              <Movements />
+            </AppLayout>
+          </Route>
+          <Route path="/orders">
+            <AppLayout>
+              <Orders />
+            </AppLayout>
+          </Route>
+          <Route path="/warehouse">
+            <AppLayout>
+              <Warehouse />
+            </AppLayout>
+          </Route>
+          <Route path="/reports">
+            <AppLayout>
+              <Reports />
+            </AppLayout>
+          </Route>
+          <Route path="/faturamento">
+            <AppLayout>
+              <Billing />
+            </AppLayout>
+          </Route>
+          <Route path="/tabela-precos">
+            <AppLayout>
+              <PriceList />
+            </AppLayout>
+          </Route>
+          <Route path="/usuarios">
+            <AppLayout>
+              <Users />
+            </AppLayout>
+          </Route>
+          <Route path="/minhas-faturas">
+            <AppLayout>
+              <MyInvoices />
+            </AppLayout>
+          </Route>
+          <Route component={NotFound} />
+        </Switch>
+        <Toaster />
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+}
+
 function App() {
   return (
     <WouterRouter base={basePath}>
-      <ClerkProviderWithRoutes />
+      {isDemoMode ? <DemoRoutes /> : <ClerkProviderWithRoutes />}
     </WouterRouter>
   );
 }

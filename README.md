@@ -26,6 +26,21 @@ pnpm --filter @workspace/btg-inventory run dev
 
 Por padrão, a API sobe na porta `5000` e o frontend na porta `5173`. É possível sobrescrever com `PORT` e `BASE_PATH` no ambiente.
 
+Para uma visualização estática sem banco, backend ou login real:
+
+```powershell
+$env:VITE_DEMO_MODE="true"
+pnpm --filter @workspace/btg-inventory run dev
+```
+
+Para build de demo publicado em GitHub Pages:
+
+```powershell
+$env:VITE_DEMO_MODE="true"
+$env:BASE_PATH="/Dute/"
+pnpm --filter @workspace/btg-inventory run build
+```
+
 ## Mapa técnico
 
 - `artifacts/btg-inventory`: frontend React/Vite em PT-BR.

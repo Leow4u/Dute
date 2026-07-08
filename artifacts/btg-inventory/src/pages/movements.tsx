@@ -1,19 +1,42 @@
 import { useState, useMemo } from "react";
-import { useListMovements, useCreateMovement, getListMovementsQueryKey } from "@workspace/api-client-react";
+import {
+  useListMovements,
+  useCreateMovement,
+  getListMovementsQueryKey,
+} from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Filter, ArrowDownRight, ArrowUpRight } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import {
+  Search,
+  Plus,
+  Filter,
+  ArrowDownRight,
+  ArrowUpRight,
+} from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
-import { useUser } from "@clerk/react";
+import { useAppUser } from "@/lib/auth";
 
 const movementSchema = z.object({
   data: z.string().min(1, "Obrigatório"),
@@ -46,15 +69,28 @@ export default function Movements() {
 
   const { data, isLoading } = useListMovements(
     { cod_sku: debouncedSearch || undefined, limit, offset: page * limit },
-    { query: { queryKey: getListMovementsQueryKey({ cod_sku: debouncedSearch || undefined, limit, offset: page * limit }) } }
+    {
+      query: {
+        queryKey: getListMovementsQueryKey({
+          cod_sku: debouncedSearch || undefined,
+          limit,
+          offset: page * limit,
+        }),
+      },
+    },
   );
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-primary">Registro Kardex</h1>
-          <p className="text-sm text-muted-foreground mt-1">Livro-razão imutável de todas as operações de entrada e saída de estoque.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-primary">
+            Registro Kardex
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Livro-razão imutável de todas as operações de entrada e saída de
+            estoque.
+          </p>
         </div>
         <MovementModal />
       </div>
@@ -64,8 +100,8 @@ export default function Movements() {
           <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
             <div className="relative w-full sm:w-96">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="Buscar por código do SKU..." 
+              <Input
+                placeholder="Buscar por código do SKU..."
                 className="pl-9 h-9 text-sm bg-white"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -88,7 +124,9 @@ export default function Movements() {
                   <th className="px-4 py-3 font-medium">Cod. SKU</th>
                   <th className="px-4 py-3 font-medium">Produto</th>
                   <th className="px-4 py-3 font-medium text-right">Qtde</th>
-                  <th className="px-4 py-3 font-medium text-center">Trajeto (Orig &rarr; Dest)</th>
+                  <th className="px-4 py-3 font-medium text-center">
+                    Trajeto (Orig &rarr; Dest)
+                  </th>
                   <th className="px-4 py-3 font-medium">Doc/NF</th>
                   <th className="px-4 py-3 font-medium">Operador</th>
                 </tr>
@@ -96,67 +134,121 @@ export default function Movements() {
               <tbody className="divide-y divide-border">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Carregando movimentações...</td>
+                    <td
+                      colSpan={8}
+                      className="px-4 py-8 text-center text-muted-foreground"
+                    >
+                      Carregando movimentações...
+                    </td>
                   </tr>
                 ) : data?.items?.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Nenhuma movimentação encontrada.</td>
+                    <td
+                      colSpan={8}
+                      className="px-4 py-8 text-center text-muted-foreground"
+                    >
+                      Nenhuma movimentação encontrada.
+                    </td>
                   </tr>
                 ) : (
                   data?.items?.map((mov) => {
                     const isPositive = mov.sinal > 0;
                     return (
-                      <tr key={mov.id} className="hover:bg-gray-50/80 transition-colors">
+                      <tr
+                        key={mov.id}
+                        className="hover:bg-gray-50/80 transition-colors"
+                      >
                         <td className="px-4 py-2 whitespace-nowrap text-muted-foreground">
-                          {new Date(mov.data).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                          {new Date(mov.data).toLocaleString("pt-BR", {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                          })}
                         </td>
                         <td className="px-4 py-2 whitespace-nowrap">
-                          <Badge variant="outline" className={isPositive ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-rose-50 text-rose-700 border-rose-200"}>
+                          <Badge
+                            variant="outline"
+                            className={
+                              isPositive
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : "bg-rose-50 text-rose-700 border-rose-200"
+                            }
+                          >
                             {mov.tipo_mov}
                           </Badge>
                         </td>
-                        <td className="px-4 py-2 font-mono text-xs text-primary font-bold">{mov.cod_sku}</td>
-                        <td className="px-4 py-2 truncate max-w-[150px] font-medium" title={mov.produto}>{mov.produto}</td>
+                        <td className="px-4 py-2 font-mono text-xs text-primary font-bold">
+                          {mov.cod_sku}
+                        </td>
+                        <td
+                          className="px-4 py-2 truncate max-w-[150px] font-medium"
+                          title={mov.produto}
+                        >
+                          {mov.produto}
+                        </td>
                         <td className="px-4 py-2 text-right">
-                          <div className={`flex items-center justify-end gap-1 font-bold ${isPositive ? 'text-emerald-600' : 'text-rose-600'}`}>
-                            {isPositive ? <ArrowDownRight className="h-3 w-3" /> : <ArrowUpRight className="h-3 w-3" />}
-                            {isPositive ? '+' : '-'}{mov.qtde}
+                          <div
+                            className={`flex items-center justify-end gap-1 font-bold ${isPositive ? "text-emerald-600" : "text-rose-600"}`}
+                          >
+                            {isPositive ? (
+                              <ArrowDownRight className="h-3 w-3" />
+                            ) : (
+                              <ArrowUpRight className="h-3 w-3" />
+                            )}
+                            {isPositive ? "+" : "-"}
+                            {mov.qtde}
                           </div>
                         </td>
                         <td className="px-4 py-2 text-center text-xs text-muted-foreground">
                           <div className="flex items-center justify-center gap-2">
-                            <span className="truncate max-w-[80px]" title={mov.origem || "-"}>{mov.origem || "-"}</span>
+                            <span
+                              className="truncate max-w-[80px]"
+                              title={mov.origem || "-"}
+                            >
+                              {mov.origem || "-"}
+                            </span>
                             <span className="text-gray-300">&rarr;</span>
-                            <span className="truncate max-w-[80px]" title={mov.destino || "-"}>{mov.destino || "-"}</span>
+                            <span
+                              className="truncate max-w-[80px]"
+                              title={mov.destino || "-"}
+                            >
+                              {mov.destino || "-"}
+                            </span>
                           </div>
                         </td>
-                        <td className="px-4 py-2 text-xs text-muted-foreground">{mov.doc_nf || "-"}</td>
-                        <td className="px-4 py-2 text-xs font-medium text-gray-700">{mov.responsavel || "-"}</td>
+                        <td className="px-4 py-2 text-xs text-muted-foreground">
+                          {mov.doc_nf || "-"}
+                        </td>
+                        <td className="px-4 py-2 text-xs font-medium text-gray-700">
+                          {mov.responsavel || "-"}
+                        </td>
                       </tr>
-                    )
+                    );
                   })
                 )}
               </tbody>
             </table>
           </div>
-          
+
           <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-gray-50/50">
             <div className="text-xs text-muted-foreground">
-              Exibindo <span className="font-medium">{data?.items?.length || 0}</span> de <span className="font-medium">{data?.total || 0}</span> movimentações
+              Exibindo{" "}
+              <span className="font-medium">{data?.items?.length || 0}</span> de{" "}
+              <span className="font-medium">{data?.total || 0}</span>{" "}
+              movimentações
             </div>
             <div className="flex gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setPage(p => Math.max(0, p - 1))}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={page === 0 || isLoading}
               >
                 Anterior
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setPage(p => p + 1)}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => p + 1)}
                 disabled={!data || data.items.length < limit || isLoading}
               >
                 Próximo
@@ -174,9 +266,17 @@ function MovementModal() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const createMovement = useCreateMovement();
-  const { user } = useUser();
+  const { user } = useAppUser();
 
-  const { register, handleSubmit, formState: { errors }, reset, control, watch, setValue } = useForm<MovementFormValues>({
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    reset,
+    control,
+    watch,
+    setValue,
+  } = useForm<MovementFormValues>({
     resolver: zodResolver(movementSchema),
     defaultValues: {
       data: new Date().toISOString().slice(0, 16),
@@ -189,15 +289,16 @@ function MovementModal() {
       destino: "ESTOQUE_BTG",
       responsavel: user?.fullName || "Sistema",
       doc_nf: "",
-    }
+    },
   });
 
   const tipo_mov = watch("tipo_mov");
 
   const onSubmit = (data: MovementFormValues) => {
     // Ensure sinal matches tipo_mov logic
-    data.sinal = data.tipo_mov === "ENTRADA" || data.tipo_mov === "DEVOLUCAO" ? 1 : -1;
-    
+    data.sinal =
+      data.tipo_mov === "ENTRADA" || data.tipo_mov === "DEVOLUCAO" ? 1 : -1;
+
     // Ensure date is properly formatted as ISO
     data.data = new Date(data.data).toISOString();
 
@@ -205,15 +306,20 @@ function MovementModal() {
       { data },
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListMovementsQueryKey() });
+          queryClient.invalidateQueries({
+            queryKey: getListMovementsQueryKey(),
+          });
           toast({ title: "Movimentação registrada com sucesso" });
           setOpen(false);
           reset();
         },
         onError: () => {
-          toast({ title: "Erro ao registrar movimentação", variant: "destructive" });
-        }
-      }
+          toast({
+            title: "Erro ao registrar movimentação",
+            variant: "destructive",
+          });
+        },
+      },
     );
   };
 
@@ -236,7 +342,7 @@ function MovementModal() {
                 control={control}
                 name="tipo_mov"
                 render={({ field }) => (
-                  <Select 
+                  <Select
                     onValueChange={(val) => {
                       field.onChange(val);
                       if (val === "ENTRADA" || val === "DEVOLUCAO") {
@@ -248,7 +354,7 @@ function MovementModal() {
                         setValue("origem", "ESTOQUE_BTG");
                         setValue("destino", "CLIENTE");
                       }
-                    }} 
+                    }}
                     defaultValue={field.value}
                   >
                     <SelectTrigger className="w-full">
@@ -257,32 +363,48 @@ function MovementModal() {
                     <SelectContent>
                       <SelectItem value="ENTRADA">Entrada (+)</SelectItem>
                       <SelectItem value="SAIDA">Saída (-)</SelectItem>
-                      <SelectItem value="AJUSTE_ENTRADA">Ajuste Positivo (+)</SelectItem>
-                      <SelectItem value="AJUSTE_SAIDA">Ajuste Negativo (-)</SelectItem>
+                      <SelectItem value="AJUSTE_ENTRADA">
+                        Ajuste Positivo (+)
+                      </SelectItem>
+                      <SelectItem value="AJUSTE_SAIDA">
+                        Ajuste Negativo (-)
+                      </SelectItem>
                       <SelectItem value="DEVOLUCAO">Devolução (+)</SelectItem>
                     </SelectContent>
                   </Select>
                 )}
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="cod_sku">Cod. SKU *</Label>
               <Input id="cod_sku" {...register("cod_sku")} />
-              {errors.cod_sku && <span className="text-xs text-destructive">{errors.cod_sku.message}</span>}
+              {errors.cod_sku && (
+                <span className="text-xs text-destructive">
+                  {errors.cod_sku.message}
+                </span>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="qtde">Quantidade *</Label>
               <Input id="qtde" type="number" min="1" {...register("qtde")} />
-              {errors.qtde && <span className="text-xs text-destructive">{errors.qtde.message}</span>}
+              {errors.qtde && (
+                <span className="text-xs text-destructive">
+                  {errors.qtde.message}
+                </span>
+              )}
             </div>
-            
+
             <div className="space-y-2 col-span-2">
               <Label htmlFor="produto">Nome do Produto *</Label>
               <Input id="produto" {...register("produto")} />
-              {errors.produto && <span className="text-xs text-destructive">{errors.produto.message}</span>}
+              {errors.produto && (
+                <span className="text-xs text-destructive">
+                  {errors.produto.message}
+                </span>
+              )}
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="origem">Origem</Label>
               <Input id="origem" {...register("origem")} />
@@ -291,7 +413,7 @@ function MovementModal() {
               <Label htmlFor="destino">Destino</Label>
               <Input id="destino" {...register("destino")} />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="doc_nf">Documento / NF</Label>
               <Input id="doc_nf" {...register("doc_nf")} />
@@ -302,9 +424,17 @@ function MovementModal() {
             </div>
           </div>
           <DialogFooter className="pt-4">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(false)}
+            >
+              Cancelar
+            </Button>
             <Button type="submit" disabled={createMovement.isPending}>
-              {createMovement.isPending ? "Salvando..." : "Registrar Movimentação"}
+              {createMovement.isPending
+                ? "Salvando..."
+                : "Registrar Movimentação"}
             </Button>
           </DialogFooter>
         </form>
