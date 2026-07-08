@@ -24,7 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useAppClerk, useAppUser } from "@/lib/auth";
+import { useAppAuth, useAppUser } from "@/lib/auth";
 
 type NavItem = { href: string; label: string; icon: typeof LayoutDashboard };
 type NavSection = { title: string; items: NavItem[] };
@@ -65,7 +65,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { user } = useAppUser();
   const { role } = useRole();
-  const { signOut } = useAppClerk();
+  const { signOut } = useAppAuth();
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const sections = role === "cliente" ? CLIENTE_SECTIONS : INTERNO_SECTIONS;
 

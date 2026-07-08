@@ -1,0 +1,17 @@
+{
+  "hosting": {
+    "site": "dute-f7480",
+    "public": "artifacts/btg-inventory/dist/public",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  }
+}

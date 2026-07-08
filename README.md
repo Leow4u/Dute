@@ -4,7 +4,12 @@ Sistema de inventário, armazenagem, movimentações e cobrança para a operaç�
 
 ## Estado do projeto
 
-Este repositório é agora a fonte principal de trabalho local/GitHub. A estrutura herdada do Replit foi reduzida para manter apenas o app, a API, os contratos e os dados de referência necessários.
+O projeto agora usa somente o frontend React/Vite criado inicialmente. Backend, banco e autenticação legados foram substituídos por serviços Google Cloud/Firebase:
+
+- Firebase Hosting para publicar o app.
+- Firebase Authentication para login.
+- Cloud Firestore em `southamerica-east1` para dados operacionais.
+- Firestore Security Rules para controle de acesso.
 
 ## Como rodar localmente
 
@@ -12,43 +17,46 @@ Pré-requisitos:
 
 1. Node.js compatível com o projeto.
 2. PNPM.
-3. PostgreSQL acessível via `DATABASE_URL`.
-4. Variáveis do Clerk configuradas quando autenticação for usada.
+3. `.env.local` com as variáveis `VITE_FIREBASE_*`.
 
 Comandos principais:
 
 ```powershell
 pnpm install
 pnpm run typecheck
-pnpm --filter @workspace/api-server run dev
 pnpm --filter @workspace/btg-inventory run dev
 ```
 
-Por padrão, a API sobe na porta `5000` e o frontend na porta `5173`. É possível sobrescrever com `PORT` e `BASE_PATH` no ambiente.
-
-Para uma visualização estática sem banco, backend ou login real:
+Para uma visualização estática sem login real:
 
 ```powershell
 $env:VITE_DEMO_MODE="true"
 pnpm --filter @workspace/btg-inventory run dev
 ```
 
-Para build de demo publicado em GitHub Pages:
+Para gerar o build de produção:
 
 ```powershell
-$env:VITE_DEMO_MODE="true"
-$env:BASE_PATH="/Dute/"
 pnpm --filter @workspace/btg-inventory run build
 ```
+
+## Deploy
+
+O projeto Firebase padrão é `dute-f7480`, e o Hosting site configurado é `dute-f7480`.
+
+```powershell
+npx firebase-tools deploy --only hosting,firestore --project dute-f7480
+```
+
+O domínio planejado é `app.dutelog.com.br`; a conexão final do domínio exige criar o domínio no Firebase Hosting e apontar os registros DNS na Hostinger.
 
 ## Mapa técnico
 
 - `artifacts/btg-inventory`: frontend React/Vite em PT-BR.
-- `artifacts/api-server`: API Express.
-- `lib/db`: schema Drizzle/PostgreSQL.
-- `lib/api-spec`: contrato OpenAPI.
-- `lib/api-client-react`: cliente React gerado por Orval.
-- `lib/api-zod`: schemas e tipos gerados para validação.
+- `artifacts/btg-inventory/src/lib/firebase.ts`: inicialização Firebase.
+- `artifacts/btg-inventory/src/lib/auth.tsx`: autenticação e perfil do usuário.
+- `artifacts/btg-inventory/src/lib/cloud-api.ts`: ponte Firestore para as chamadas que as telas já usam.
+- `lib/api-client-react`: hooks e tipos usados pelas telas existentes.
 - `attached_assets`: planilhas e imagens de referência importadas no início do projeto.
 - `.agents/memory`: notas técnicas úteis sobre decisões já tomadas.
 
@@ -101,53 +109,3 @@ A camada tecnológica da Dute amplia o serviço físico para uma operação digi
 O aplicativo de gestão de ativos e inventário cria uma base operacional para que clientes acompanhem mobiliário, equipamentos, localização, armazenagem e movimentações.
 
 Essa frente aumenta a recorrência e o potencial de relacionamento contínuo com os clientes, abrindo espaço para evolução em direção a uma plataforma SaaS B2B de workplace e asset management.
-
-## Modelo turnkey 4.0
-
-O conceito TurnKey 4.0 representa a responsabilidade completa pela entrega: do projeto à obra, da mudança ao armazenamento, com um único fornecedor coordenando todas as etapas.
-
-Esse modelo reduz risco, simplifica a governança do projeto e gera valor por meio de orquestração, cronograma, previsibilidade, qualidade e mitigação de falhas entre fornecedores.
-
-## Estrutura operacional
-
-A Dute possui uma estrutura multidisciplinar, combinando competências de arquitetura, engenharia, logística, tecnologia e gestão de projetos.
-
-Essa composição permite executar projetos simultâneos com equipes dedicadas a planejamento, obra, operação logística e suporte digital, sustentando o posicionamento de entrega integrada com padrão de qualidade consistente.
-
-## Fontes de receita
-
-As principais fontes de receita vêm de contratos de serviços corporativos, incluindo:
-
-1. Honorários de arquitetura e consultoria workplace.
-2. Execução de obras e projetos design & build.
-3. Gerenciamento de projetos.
-4. Mudanças corporativas e relocation.
-5. Armazenagem de bens corporativos.
-6. Gestão de ativos e inventário digital.
-
-A camada de gestão de ativos sugere potencial de receita recorrente por licenciamento, assinatura ou modelo SaaS associado à operação física.
-
-## Diferenciais competitivos
-
-Os principais diferenciais da Dute são:
-
-1. Integração entre arquitetura, construção, logística e tecnologia.
-2. Modelo turnkey com responsabilidade fim a fim.
-3. Capacidade de reduzir a complexidade operacional do cliente.
-4. Experiência em workplace e escritórios do futuro.
-5. Abordagem humanizada, com imersão no contexto do cliente.
-6. Potencial de recorrência por meio da gestão digital de ativos.
-
-## Posicionamento de marca
-
-A Dute se posiciona como uma empresa líder em soluções integradas para ambientes corporativos, indo além de um escritório tradicional de arquitetura ou de uma operação isolada de logística.
-
-A narrativa da marca gira em torno de transformar o jeito de trabalhar, combinando espaço físico, execução operacional, tecnologia e inteligência aplicada ao ambiente corporativo.
-
-## Tese estratégica
-
-Do ponto de vista estratégico, a Dute opera hoje em um modelo intensivo em serviços especializados e execução física, com tecnologia como camada de diferenciação e expansão.
-
-Existe espaço para digitalizar mais etapas do ciclo de vida dos projetos, incluindo briefing, simulação de layouts, gestão de cronogramas, automação de inventário, integrações com ERPs, facilities management e agentes corporativos.
-
-A evolução natural da empresa pode transformar o aplicativo de ativos em uma plataforma recorrente de workplace e asset management, conectada ao modelo TurnKey AI-Native e ao histórico operacional da Dute.

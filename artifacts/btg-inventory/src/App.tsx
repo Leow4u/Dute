@@ -1,7 +1,10 @@
-import { ClerkProvider, SignIn, SignUp, Show, useClerk } from "@clerk/react";
-import { publishableKeyFromHost } from "@clerk/react/internal";
-import { shadcn } from "@clerk/themes";
-import { ptBR } from "@clerk/localizations";
+import {
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  updateProfile,
+} from "firebase/auth";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import {
   Switch,
   Route,
@@ -9,11 +12,14 @@ import {
   Router as WouterRouter,
   Redirect,
 } from "wouter";
-import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import AppLayout from "./components/layout/app-layout";
 import Dashboard from "./pages/dashboard";
@@ -30,109 +36,298 @@ import MyInvoices from "./pages/my-invoices";
 import NotFound from "./pages/not-found";
 import { useRole } from "./hooks/use-role";
 import { isDemoMode } from "./lib/demo-mode";
+import {
+  AuthProvider,
+  inferRoleFromEmail,
+  useAppUser,
+} from "./lib/auth";
+import { firebaseAuth, firebaseConfigError, firestore } from "./lib/firebase";
+import { queryClient } from "./lib/queryClient";
 
-const clerkPubKey = isDemoMode
-  ? undefined
-  : publishableKeyFromHost(
-      window.location.hostname,
-      import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
-    );
-
-const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
-const activeClerkPubKey = clerkPubKey ?? "";
 
-function stripBase(path: string): string {
-  return basePath && path.startsWith(basePath)
-    ? path.slice(basePath.length) || "/"
-    : path;
-}
-
-if (!isDemoMode && !clerkPubKey) {
-  throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY in .env file");
-}
-
-const clerkAppearance = {
-  theme: shadcn,
-  cssLayerName: "clerk",
-  options: {
-    logoPlacement: "inside" as const,
-    logoLinkUrl: basePath || "/",
-    logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
-  },
-  variables: {
-    colorPrimary: "hsl(212, 98%, 18%)",
-    colorForeground: "hsl(222, 47%, 11%)",
-    colorMutedForeground: "hsl(215, 16%, 47%)",
-    colorDanger: "hsl(0, 84%, 60%)",
-    colorBackground: "hsl(0, 0%, 100%)",
-    colorInput: "hsl(0, 0%, 100%)",
-    colorInputForeground: "hsl(222, 47%, 11%)",
-    colorNeutral: "hsl(214, 32%, 91%)",
-    fontFamily: "'Plus Jakarta Sans', sans-serif",
-    borderRadius: "0.25rem",
-  },
-  elements: {
-    rootBox: "w-full flex justify-center",
-    cardBox:
-      "bg-white rounded-md shadow-lg border border-gray-200 w-[440px] max-w-full overflow-hidden",
-    card: "!shadow-none !border-0 !bg-transparent !rounded-none",
-    footer: "!shadow-none !border-0 !bg-transparent !rounded-none",
-    headerTitle: "text-xl font-bold text-gray-900 tracking-tight",
-    headerSubtitle: "text-sm text-gray-500",
-    socialButtonsBlockButtonText: "font-medium",
-    formFieldLabel: "text-sm font-medium text-gray-700",
-    footerActionLink: "font-semibold text-primary hover:text-primary/90",
-    footerActionText: "text-sm text-gray-500",
-    dividerText: "text-xs text-gray-400 font-medium",
-    identityPreviewEditButton: "text-primary",
-    formFieldSuccessText: "text-success text-sm",
-    alertText: "text-sm",
-  },
+type AuthFormState = {
+  nome: string;
+  email: string;
+  senha: string;
+  error: string | null;
+  loading: boolean;
 };
 
-function SignInPage() {
+const initialAuthState: AuthFormState = {
+  nome: "",
+  email: "",
+  senha: "",
+  error: null,
+  loading: false,
+};
+
+function AuthShell({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
+}) {
+  const logoPath = `${window.location.origin}${basePath}/logo.svg`;
+
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-gray-50 px-4">
-      <SignIn
-        routing="path"
-        path={`${basePath}/sign-in`}
-        signUpUrl={`${basePath}/sign-up`}
-      />
+    <div className="flex min-h-[100dvh] items-center justify-center bg-gray-50 px-4 py-10">
+      <div className="w-full max-w-[420px] rounded-md border border-gray-200 bg-white p-6 shadow-lg">
+        <div className="mb-6 flex flex-col items-center gap-3 text-center">
+          <img src={logoPath} alt="BTG" className="h-8" />
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-gray-900">
+              {title}
+            </h1>
+            <p className="mt-1 text-sm text-gray-500">{subtitle}</p>
+          </div>
+        </div>
+        {firebaseConfigError ? (
+          <Alert variant="destructive" className="mb-4">
+            <AlertDescription>{firebaseConfigError}</AlertDescription>
+          </Alert>
+        ) : null}
+        {children}
+      </div>
     </div>
+  );
+}
+
+function SignInPage() {
+  const [, setLocation] = useLocation();
+  const { user, isLoaded } = useAppUser();
+  const [form, setForm] = useState<AuthFormState>(initialAuthState);
+
+  if (isLoaded && user) return <Redirect to="/" />;
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!firebaseAuth) return;
+
+    setForm((current) => ({ ...current, loading: true, error: null }));
+    try {
+      await signInWithEmailAndPassword(
+        firebaseAuth,
+        form.email.trim(),
+        form.senha,
+      );
+      setLocation("/");
+    } catch (error) {
+      setForm((current) => ({
+        ...current,
+        loading: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Não foi possível entrar.",
+      }));
+    }
+  }
+
+  async function resetPassword() {
+    if (!firebaseAuth || !form.email.trim()) return;
+    await sendPasswordResetEmail(firebaseAuth, form.email.trim());
+    setForm((current) => ({
+      ...current,
+      error: "E-mail de recuperação enviado.",
+    }));
+  }
+
+  return (
+    <AuthShell
+      title="Bem-vindo de volta"
+      subtitle="Entre para acessar o estoque BTG"
+    >
+      <form onSubmit={submit} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="email">E-mail</Label>
+          <Input
+            id="email"
+            type="email"
+            autoComplete="email"
+            value={form.email}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, email: event.target.value }))
+            }
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="senha">Senha</Label>
+          <Input
+            id="senha"
+            type="password"
+            autoComplete="current-password"
+            value={form.senha}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, senha: event.target.value }))
+            }
+            required
+          />
+        </div>
+        {form.error ? (
+          <Alert
+            variant={
+              form.error.includes("recuperação") ? "default" : "destructive"
+            }
+          >
+            <AlertDescription>{form.error}</AlertDescription>
+          </Alert>
+        ) : null}
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={form.loading || Boolean(firebaseConfigError)}
+        >
+          {form.loading ? "Entrando..." : "Entrar"}
+        </Button>
+      </form>
+      <div className="mt-4 flex items-center justify-between text-sm">
+        <button
+          type="button"
+          className="font-medium text-primary hover:underline"
+          onClick={resetPassword}
+        >
+          Esqueci minha senha
+        </button>
+        <button
+          type="button"
+          className="font-medium text-primary hover:underline"
+          onClick={() => setLocation("/sign-up")}
+        >
+          Criar conta
+        </button>
+      </div>
+    </AuthShell>
   );
 }
 
 function SignUpPage() {
+  const [, setLocation] = useLocation();
+  const { user, isLoaded } = useAppUser();
+  const [form, setForm] = useState<AuthFormState>(initialAuthState);
+
+  if (isLoaded && user) return <Redirect to="/" />;
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!firebaseAuth || !firestore) return;
+
+    setForm((current) => ({ ...current, loading: true, error: null }));
+    try {
+      const credential = await createUserWithEmailAndPassword(
+        firebaseAuth,
+        form.email.trim(),
+        form.senha,
+      );
+      await updateProfile(credential.user, { displayName: form.nome.trim() });
+
+      await setDoc(doc(firestore, "users", credential.user.uid), {
+        nome: form.nome.trim(),
+        email: form.email.trim(),
+        role: inferRoleFromEmail(form.email),
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
+      });
+
+      setLocation("/");
+    } catch (error) {
+      setForm((current) => ({
+        ...current,
+        loading: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Não foi possível criar a conta.",
+      }));
+    }
+  }
+
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-gray-50 px-4">
-      <SignUp
-        routing="path"
-        path={`${basePath}/sign-up`}
-        signInUrl={`${basePath}/sign-in`}
-      />
-    </div>
+    <AuthShell title="Crie sua conta" subtitle="Acesse o sistema Dute BTG">
+      <form onSubmit={submit} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="nome">Nome</Label>
+          <Input
+            id="nome"
+            autoComplete="name"
+            value={form.nome}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, nome: event.target.value }))
+            }
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="email-signup">E-mail</Label>
+          <Input
+            id="email-signup"
+            type="email"
+            autoComplete="email"
+            value={form.email}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, email: event.target.value }))
+            }
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="senha-signup">Senha</Label>
+          <Input
+            id="senha-signup"
+            type="password"
+            autoComplete="new-password"
+            minLength={6}
+            value={form.senha}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, senha: event.target.value }))
+            }
+            required
+          />
+        </div>
+        {form.error ? (
+          <Alert variant="destructive">
+            <AlertDescription>{form.error}</AlertDescription>
+          </Alert>
+        ) : null}
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={form.loading || Boolean(firebaseConfigError)}
+        >
+          {form.loading ? "Criando..." : "Criar conta"}
+        </Button>
+      </form>
+      <button
+        type="button"
+        className="mt-4 w-full text-sm font-medium text-primary hover:underline"
+        onClick={() => setLocation("/sign-in")}
+      >
+        Já tenho conta
+      </button>
+    </AuthShell>
   );
 }
 
-function ClerkQueryClientCacheInvalidator() {
-  const { addListener } = useClerk();
+function QueryClientCacheInvalidator() {
+  const { user, isLoaded } = useAppUser();
   const queryClientInstance = useQueryClient();
   const prevUserIdRef = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
-    const unsubscribe = addListener(({ user }) => {
-      const userId = user?.id ?? null;
-      if (
-        prevUserIdRef.current !== undefined &&
-        prevUserIdRef.current !== userId
-      ) {
-        queryClientInstance.clear();
-      }
-      prevUserIdRef.current = userId;
-    });
-    return unsubscribe;
-  }, [addListener, queryClientInstance]);
+    if (!isLoaded) return;
+    const userId = user?.uid ?? null;
+    if (
+      prevUserIdRef.current !== undefined &&
+      prevUserIdRef.current !== userId
+    ) {
+      queryClientInstance.clear();
+    }
+    prevUserIdRef.current = userId;
+  }, [isLoaded, queryClientInstance, user?.uid]);
 
   return null;
 }
@@ -146,16 +341,10 @@ function RoleHome() {
 }
 
 function HomeRedirect() {
-  return (
-    <>
-      <Show when="signed-in">
-        <RoleHome />
-      </Show>
-      <Show when="signed-out">
-        <Redirect to="/sign-in" />
-      </Show>
-    </>
-  );
+  const { user, isLoaded } = useAppUser();
+  if (!isLoaded) return null;
+  if (!user) return <Redirect to="/sign-in" />;
+  return <RoleHome />;
 }
 
 function RoleGate({
@@ -172,60 +361,30 @@ function RoleGate({
 }
 
 function ProtectedRoute({ component: Component, requireRole, ...rest }: any) {
+  const { user, isLoaded } = useAppUser();
+
   return (
     <Route {...rest}>
-      {(params) => (
-        <>
-          <Show when="signed-in">
-            <RoleGate requireRole={requireRole}>
-              <AppLayout>
-                <Component params={params} />
-              </AppLayout>
-            </RoleGate>
-          </Show>
-          <Show when="signed-out">
-            <Redirect to="/sign-in" />
-          </Show>
-        </>
-      )}
+      {(params) => {
+        if (!isLoaded) return null;
+        if (!user) return <Redirect to="/sign-in" />;
+        return (
+          <RoleGate requireRole={requireRole}>
+            <AppLayout>
+              <Component params={params} />
+            </AppLayout>
+          </RoleGate>
+        );
+      }}
     </Route>
   );
 }
 
-function ClerkProviderWithRoutes() {
-  const [, setLocation] = useLocation();
-
+function AppRoutes() {
   return (
-    <ClerkProvider
-      publishableKey={activeClerkPubKey}
-      proxyUrl={clerkProxyUrl}
-      appearance={clerkAppearance}
-      signInUrl={`${basePath}/sign-in`}
-      signUpUrl={`${basePath}/sign-up`}
-      localization={{
-        ...ptBR,
-        signIn: {
-          ...ptBR.signIn,
-          start: {
-            ...ptBR.signIn?.start,
-            title: "Bem-vindo de volta",
-            subtitle: "Entre para acessar sua conta",
-          },
-        },
-        signUp: {
-          ...ptBR.signUp,
-          start: {
-            ...ptBR.signUp?.start,
-            title: "Crie sua conta",
-            subtitle: "Comece agora mesmo",
-          },
-        },
-      }}
-      routerPush={(to) => setLocation(stripBase(to))}
-      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
-    >
+    <AuthProvider>
       <QueryClientProvider client={queryClient}>
-        <ClerkQueryClientCacheInvalidator />
+        <QueryClientCacheInvalidator />
         <TooltipProvider>
           <Switch>
             <Route path="/" component={HomeRedirect} />
@@ -290,7 +449,7 @@ function ClerkProviderWithRoutes() {
           <Toaster />
         </TooltipProvider>
       </QueryClientProvider>
-    </ClerkProvider>
+    </AuthProvider>
   );
 }
 
@@ -368,7 +527,7 @@ function DemoRoutes() {
 function App() {
   return (
     <WouterRouter base={basePath}>
-      {isDemoMode ? <DemoRoutes /> : <ClerkProviderWithRoutes />}
+      {isDemoMode ? <DemoRoutes /> : <AppRoutes />}
     </WouterRouter>
   );
 }

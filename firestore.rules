@@ -1,0 +1,45 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isDuteEmail() {
+      return signedIn()
+        && request.auth.token.email is string
+        && request.auth.token.email.matches('.*@dutelog\\.com\\.br$');
+    }
+
+    function userDoc() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function isInternal() {
+      return signedIn()
+        && exists(userDoc())
+        && get(userDoc()).data.role == 'interno';
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn() && (request.auth.uid == userId || isInternal());
+      allow create: if signedIn()
+        && request.auth.uid == userId
+        && (
+          request.resource.data.role == 'cliente'
+          || (request.resource.data.role == 'interno' && isDuteEmail())
+        );
+      allow update, delete: if isInternal();
+    }
+
+    match /billing_periods/{periodId} {
+      allow read: if signedIn();
+      allow write: if isInternal();
+    }
+
+    match /{document=**} {
+      allow read, write: if isInternal();
+    }
+  }
+}
