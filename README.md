@@ -19,6 +19,8 @@ Pré-requisitos:
 2. PNPM.
 3. `.env.local` com as variáveis `VITE_FIREBASE_*`.
 
+O `vite.config.ts` do app BTG lê esse arquivo na raiz do repositório, mesmo com o frontend dentro de `artifacts/btg-inventory`.
+
 Comandos principais:
 
 ```powershell
