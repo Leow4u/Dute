@@ -90,13 +90,17 @@ function AuthShell({
   subtitle: string;
   children: React.ReactNode;
 }) {
-  const logoPath = `${window.location.origin}${basePath}/logo.svg`;
+  const logoPath = `${basePath}/dutelog-logo.png`;
 
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-gray-50 px-4 py-10">
       <div className="w-full max-w-[420px] rounded-md border border-gray-200 bg-white p-6 shadow-lg">
         <div className="mb-6 flex flex-col items-center gap-3 text-center">
-          <img src={logoPath} alt="BTG" className="h-8" />
+          <img
+            src={logoPath}
+            alt="Dutelog Soluções Logísticas"
+            className="h-12 w-auto max-w-[260px] object-contain"
+          />
           <div>
             <h1 className="text-xl font-bold tracking-tight text-gray-900">
               {title}

@@ -74,13 +74,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <aside className="w-64 flex-shrink-0 bg-sidebar border-r border-sidebar-border flex flex-col hidden md:flex">
         <div className="h-14 flex items-center px-4 border-b border-sidebar-border bg-sidebar gap-3">
           <img
-            src={`${basePath}/logo.svg`}
-            alt="BTG"
-            className="h-6 brightness-0 invert"
+            src={`${basePath}/dutelog-logo-light.png`}
+            alt="Dutelog Soluções Logísticas"
+            className="h-8 w-auto max-w-[168px] object-contain"
           />
-          <span className="font-bold text-sidebar-foreground tracking-tight text-sm uppercase">
-            Estoque
-          </span>
         </div>
 
         <nav className="flex-1 py-4 flex flex-col gap-1 px-2 overflow-y-auto">
@@ -153,10 +150,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-background">
         <header className="h-14 border-b border-border bg-card flex items-center px-6 shrink-0 z-10 sticky top-0 md:hidden">
-          <img src={`${basePath}/logo.svg`} alt="BTG" className="h-6 mr-3" />
-          <span className="font-bold text-primary tracking-tight text-sm uppercase">
-            Estoque
-          </span>
+          <img
+            src={`${basePath}/dutelog-logo.png`}
+            alt="Dutelog Soluções Logísticas"
+            className="h-8 w-auto max-w-[168px] object-contain"
+          />
         </header>
         <div className="flex-1 overflow-auto bg-gray-50/50">
           <div className="mx-auto max-w-[1600px] p-4 md:p-6 lg:p-8">
