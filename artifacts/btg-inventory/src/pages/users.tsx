@@ -70,7 +70,7 @@ function makeInviteToken() {
 }
 
 function inviteLink(token: string) {
-  return `${window.location.origin}/sign-up?invite=${token}`;
+  return `${window.location.origin}/convite?invite=${token}`;
 }
 
 async function copyInvite(token: string) {

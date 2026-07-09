@@ -539,6 +539,7 @@ function AppRoutes() {
           <Switch>
             <Route path="/" component={HomeRedirect} />
             <Route path="/sign-in/*?" component={SignInPage} />
+            <Route path="/convite/*?" component={SignUpPage} />
             <Route path="/sign-up/*?" component={SignUpPage} />
 
             <ProtectedRoute
