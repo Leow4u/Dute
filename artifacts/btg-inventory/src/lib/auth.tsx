@@ -14,8 +14,6 @@ import {
 import {
   doc,
   getDoc,
-  serverTimestamp,
-  setDoc,
 } from "firebase/firestore";
 
 import { demoUser, isDemoMode } from "./demo-mode";
@@ -39,19 +37,15 @@ type AuthContextValue = {
   firebaseUser: User | null;
   user: AppUser | null;
   isLoaded: boolean;
+  accessDenied: boolean;
 };
 
 const AuthContext = createContext<AuthContextValue>({
   firebaseUser: null,
   user: null,
   isLoaded: false,
+  accessDenied: false,
 });
-
-export function inferRoleFromEmail(email: string | null | undefined): Role {
-  return email?.toLowerCase().endsWith("@dutelog.com.br")
-    ? "interno"
-    : "cliente";
-}
 
 function toAppUser(firebaseUser: User, role: Role): AppUser {
   return {
@@ -68,9 +62,8 @@ function toAppUser(firebaseUser: User, role: Role): AppUser {
   };
 }
 
-async function loadOrCreateProfile(firebaseUser: User): Promise<Role> {
-  if (!firestore) return inferRoleFromEmail(firebaseUser.email);
-
+async function loadProfile(firebaseUser: User): Promise<Role | null> {
+  if (!firestore) return null;
   const ref = doc(firestore, "users", firebaseUser.uid);
   const snapshot = await getDoc(ref);
 
@@ -79,19 +72,7 @@ async function loadOrCreateProfile(firebaseUser: User): Promise<Role> {
     return role === "cliente" ? "cliente" : "interno";
   }
 
-  const role = inferRoleFromEmail(firebaseUser.email);
-  await setDoc(ref, {
-    nome:
-      firebaseUser.displayName ||
-      firebaseUser.email?.split("@")[0] ||
-      "Usuário",
-    email: firebaseUser.email || "",
-    role,
-    created_at: serverTimestamp(),
-    updated_at: serverTimestamp(),
-  });
-
-  return role;
+  return null;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -99,6 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     firebaseUser: null,
     user: null,
     isLoaded: isDemoMode,
+    accessDenied: false,
   });
 
   useEffect(() => {
@@ -107,26 +89,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         firebaseUser: null,
         user: demoUser,
         isLoaded: true,
+        accessDenied: false,
       });
       return;
     }
 
-    if (!firebaseAuth) {
-      setState({ firebaseUser: null, user: null, isLoaded: true });
+    const auth = firebaseAuth;
+
+    if (!auth) {
+      setState({
+        firebaseUser: null,
+        user: null,
+        isLoaded: true,
+        accessDenied: false,
+      });
       return;
     }
 
-    return onAuthStateChanged(firebaseAuth, async (firebaseUser) => {
+    return onAuthStateChanged(auth, async (firebaseUser) => {
       if (!firebaseUser) {
-        setState({ firebaseUser: null, user: null, isLoaded: true });
+        setState({
+          firebaseUser: null,
+          user: null,
+          isLoaded: true,
+          accessDenied: false,
+        });
         return;
       }
 
-      const role = await loadOrCreateProfile(firebaseUser);
+      const role = await loadProfile(firebaseUser);
+      if (!role) {
+        setState({
+          firebaseUser,
+          user: null,
+          isLoaded: true,
+          accessDenied: true,
+        });
+        return;
+      }
+
       setState({
         firebaseUser,
         user: toAppUser(firebaseUser, role),
         isLoaded: true,
+        accessDenied: false,
       });
     });
   }, []);

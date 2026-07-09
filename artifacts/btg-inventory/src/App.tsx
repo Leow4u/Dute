@@ -1,10 +1,17 @@
 import {
   createUserWithEmailAndPassword,
+  deleteUser,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   updateProfile,
 } from "firebase/auth";
-import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  serverTimestamp,
+  writeBatch,
+  type DocumentData,
+} from "firebase/firestore";
 import {
   Switch,
   Route,
@@ -38,7 +45,6 @@ import { useRole } from "./hooks/use-role";
 import { isDemoMode } from "./lib/demo-mode";
 import {
   AuthProvider,
-  inferRoleFromEmail,
   useAppUser,
 } from "./lib/auth";
 import { firebaseAuth, firebaseConfigError, firestore } from "./lib/firebase";
@@ -53,6 +59,19 @@ type AuthFormState = {
   error: string | null;
   loading: boolean;
 };
+
+type InviteState =
+  | { status: "loading" }
+  | { status: "missing" | "invalid" | "used" }
+  | {
+      status: "ready";
+      token: string;
+      data: {
+        email: string;
+        nome?: string;
+        role: "interno" | "cliente";
+      };
+    };
 
 const initialAuthState: AuthFormState = {
   nome: "",
@@ -98,7 +117,7 @@ function AuthShell({
 
 function SignInPage() {
   const [, setLocation] = useLocation();
-  const { user, isLoaded } = useAppUser();
+  const { user, isLoaded, accessDenied } = useAppUser();
   const [form, setForm] = useState<AuthFormState>(initialAuthState);
 
   if (isLoaded && user) return <Redirect to="/" />;
@@ -114,7 +133,7 @@ function SignInPage() {
         form.email.trim(),
         form.senha,
       );
-      setLocation("/");
+      window.location.assign(basePath || "/");
     } catch (error) {
       setForm((current) => ({
         ...current,
@@ -177,6 +196,13 @@ function SignInPage() {
             <AlertDescription>{form.error}</AlertDescription>
           </Alert>
         ) : null}
+        {accessDenied ? (
+          <Alert variant="destructive">
+            <AlertDescription>
+              Seu e-mail ainda não tem convite ativo para acessar o sistema.
+            </AlertDescription>
+          </Alert>
+        ) : null}
         <Button
           type="submit"
           className="w-full"
@@ -193,13 +219,7 @@ function SignInPage() {
         >
           Esqueci minha senha
         </button>
-        <button
-          type="button"
-          className="font-medium text-primary hover:underline"
-          onClick={() => setLocation("/sign-up")}
-        >
-          Criar conta
-        </button>
+        <span className="text-muted-foreground">Acesso apenas por convite</span>
       </div>
     </AuthShell>
   );
@@ -209,32 +229,119 @@ function SignUpPage() {
   const [, setLocation] = useLocation();
   const { user, isLoaded } = useAppUser();
   const [form, setForm] = useState<AuthFormState>(initialAuthState);
+  const [invite, setInvite] = useState<InviteState>({ status: "loading" });
 
   if (isLoaded && user) return <Redirect to="/" />;
 
+  useEffect(() => {
+    let active = true;
+
+    async function loadInvite() {
+      const token = new URLSearchParams(window.location.search).get("invite");
+      if (!token) {
+        if (active) setInvite({ status: "missing" });
+        return;
+      }
+
+      if (!firestore) {
+        if (active) setInvite({ status: "invalid" });
+        return;
+      }
+
+      const snapshot = await getDoc(doc(firestore, "invites", token));
+      if (!snapshot.exists()) {
+        if (active) setInvite({ status: "invalid" });
+        return;
+      }
+
+      const data = snapshot.data() as DocumentData;
+      if (data.status !== "pending") {
+        if (active) setInvite({ status: "used" });
+        return;
+      }
+
+      const role = data.role === "interno" ? "interno" : "cliente";
+      const email = String(data.email ?? "").trim().toLowerCase();
+      if (!email) {
+        if (active) setInvite({ status: "invalid" });
+        return;
+      }
+
+      if (active) {
+        setInvite({
+          status: "ready",
+          token,
+          data: {
+            email,
+            nome: data.nome,
+            role,
+          },
+        });
+        setForm((current) => ({
+          ...current,
+          nome: String(data.nome ?? ""),
+          email,
+        }));
+      }
+    }
+
+    loadInvite().catch(() => {
+      if (active) setInvite({ status: "invalid" });
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!firebaseAuth || !firestore) return;
+    if (!firebaseAuth || !firestore || invite.status !== "ready") return;
 
     setForm((current) => ({ ...current, loading: true, error: null }));
+    let createdNewUser = false;
     try {
-      const credential = await createUserWithEmailAndPassword(
-        firebaseAuth,
-        form.email.trim(),
-        form.senha,
-      );
-      await updateProfile(credential.user, { displayName: form.nome.trim() });
+      let credential;
+      try {
+        credential = await createUserWithEmailAndPassword(
+          firebaseAuth,
+          invite.data.email,
+          form.senha,
+        );
+        createdNewUser = true;
+        await updateProfile(credential.user, { displayName: form.nome.trim() });
+      } catch (error) {
+        if ((error as { code?: string }).code !== "auth/email-already-in-use") {
+          throw error;
+        }
+        credential = await signInWithEmailAndPassword(
+          firebaseAuth,
+          invite.data.email,
+          form.senha,
+        );
+      }
 
-      await setDoc(doc(firestore, "users", credential.user.uid), {
+      const batch = writeBatch(firestore);
+      batch.set(doc(firestore, "users", credential.user.uid), {
         nome: form.nome.trim(),
-        email: form.email.trim(),
-        role: inferRoleFromEmail(form.email),
+        email: invite.data.email,
+        role: invite.data.role,
+        invite_id: invite.token,
         created_at: serverTimestamp(),
         updated_at: serverTimestamp(),
       });
+      batch.update(doc(firestore, "invites", invite.token), {
+        status: "used",
+        used_by: credential.user.uid,
+        used_at: serverTimestamp(),
+      });
+      await batch.commit();
 
       setLocation("/");
     } catch (error) {
+      if (createdNewUser && firebaseAuth.currentUser) {
+        await deleteUser(firebaseAuth.currentUser).catch(() => undefined);
+      }
       setForm((current) => ({
         ...current,
         loading: false,
@@ -246,8 +353,43 @@ function SignUpPage() {
     }
   }
 
+  if (invite.status === "loading") {
+    return (
+      <AuthShell title="Validando convite" subtitle="Aguarde um instante">
+        <div className="text-center text-sm text-muted-foreground">
+          Conferindo seu convite...
+        </div>
+      </AuthShell>
+    );
+  }
+
+  if (invite.status !== "ready") {
+    const message =
+      invite.status === "used"
+        ? "Este convite já foi usado."
+        : invite.status === "missing"
+          ? "Este cadastro só funciona por link de convite."
+          : "Convite inválido ou não encontrado.";
+
+    return (
+      <AuthShell title="Convite necessário" subtitle="Acesso controlado pela Dute">
+        <Alert variant="destructive">
+          <AlertDescription>{message}</AlertDescription>
+        </Alert>
+        <Button
+          type="button"
+          variant="outline"
+          className="mt-4 w-full"
+          onClick={() => setLocation("/sign-in")}
+        >
+          Voltar para login
+        </Button>
+      </AuthShell>
+    );
+  }
+
   return (
-    <AuthShell title="Crie sua conta" subtitle="Acesse o sistema Dute BTG">
+    <AuthShell title="Aceitar convite" subtitle="Crie sua senha para acessar">
       <form onSubmit={submit} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="nome">Nome</Label>
@@ -268,11 +410,15 @@ function SignUpPage() {
             type="email"
             autoComplete="email"
             value={form.email}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, email: event.target.value }))
-            }
+            readOnly
             required
           />
+        </div>
+        <div className="rounded-md border border-border bg-gray-50 px-3 py-2 text-sm text-muted-foreground">
+          Perfil do convite:{" "}
+          <span className="font-medium text-foreground">
+            {invite.data.role === "interno" ? "Interno Dutelog" : "Cliente"}
+          </span>
         </div>
         <div className="space-y-2">
           <Label htmlFor="senha-signup">Senha</Label>
@@ -298,7 +444,7 @@ function SignUpPage() {
           className="w-full"
           disabled={form.loading || Boolean(firebaseConfigError)}
         >
-          {form.loading ? "Criando..." : "Criar conta"}
+          {form.loading ? "Criando..." : "Aceitar convite"}
         </Button>
       </form>
       <button

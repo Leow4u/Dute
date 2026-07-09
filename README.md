@@ -7,7 +7,7 @@ Sistema de inventário, armazenagem, movimentações e cobrança para a operaç�
 O projeto agora usa somente o frontend React/Vite criado inicialmente. Backend, banco e autenticação legados foram substituídos por serviços Google Cloud/Firebase:
 
 - Firebase Hosting para publicar o app.
-- Firebase Authentication para login.
+- Firebase Authentication com login por e-mail/senha e cadastro apenas por convite.
 - Cloud Firestore em `southamerica-east1` para dados operacionais.
 - Firestore Security Rules para controle de acesso.
 
@@ -49,6 +49,17 @@ npx firebase-tools deploy --only hosting,firestore --project dute-f7480
 ```
 
 O domínio planejado é `app.dutelog.com.br`; a conexão final do domínio exige criar o domínio no Firebase Hosting e apontar os registros DNS na Hostinger.
+
+## Acesso por convite
+
+O login é fechado. Usuários não criam conta publicamente.
+
+1. Um usuário interno acessa `Usuários & Acessos`.
+2. Cria um convite com nome, e-mail e perfil (`interno` ou `cliente`).
+3. O sistema copia um link `/sign-up?invite=...`.
+4. O convidado cria senha usando esse link.
+
+As regras do Firestore só permitem criar perfil quando existe convite pendente para o e-mail autenticado.
 
 ## Mapa técnico
 

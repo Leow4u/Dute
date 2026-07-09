@@ -6,35 +6,62 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isDuteEmail() {
-      return signedIn()
-        && request.auth.token.email is string
-        && request.auth.token.email.matches('.*@dutelog\\.com\\.br$');
-    }
-
     function userDoc() {
       return /databases/$(database)/documents/users/$(request.auth.uid);
     }
 
+    function hasProfile() {
+      return signedIn() && exists(userDoc());
+    }
+
     function isInternal() {
+      return hasProfile() && get(userDoc()).data.role == 'interno';
+    }
+
+    function inviteDoc(inviteId) {
+      return /databases/$(database)/documents/invites/$(inviteId);
+    }
+
+    function inviteIsPendingForUser(inviteId) {
       return signedIn()
-        && exists(userDoc())
-        && get(userDoc()).data.role == 'interno';
+        && inviteId is string
+        && exists(inviteDoc(inviteId))
+        && get(inviteDoc(inviteId)).data.status == 'pending'
+        && get(inviteDoc(inviteId)).data.email == request.auth.token.email;
     }
 
     match /users/{userId} {
       allow read: if signedIn() && (request.auth.uid == userId || isInternal());
       allow create: if signedIn()
         && request.auth.uid == userId
-        && (
-          request.resource.data.role == 'cliente'
-          || (request.resource.data.role == 'interno' && isDuteEmail())
-        );
+        && inviteIsPendingForUser(request.resource.data.invite_id)
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.role == get(inviteDoc(request.resource.data.invite_id)).data.role
+        && request.resource.data.role in ['interno', 'cliente'];
       allow update, delete: if isInternal();
     }
 
+    match /invites/{inviteId} {
+      allow get: if true;
+      allow list: if isInternal();
+      allow create: if isInternal()
+        && request.resource.data.email is string
+        && request.resource.data.role in ['interno', 'cliente']
+        && request.resource.data.status == 'pending';
+      allow update: if isInternal()
+        || (
+          signedIn()
+          && resource.data.status == 'pending'
+          && resource.data.email == request.auth.token.email
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'used_by', 'used_at'])
+          && request.resource.data.status == 'used'
+          && request.resource.data.used_by == request.auth.uid
+        );
+      allow delete: if isInternal();
+    }
+
     match /billing_periods/{periodId} {
-      allow read: if signedIn();
+      allow read: if hasProfile();
       allow write: if isInternal();
     }
 
