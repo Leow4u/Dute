@@ -10,7 +10,6 @@ import {
   getDoc,
   serverTimestamp,
   writeBatch,
-  type DocumentData,
 } from "firebase/firestore";
 import {
   Switch,
@@ -47,7 +46,12 @@ import {
   AuthProvider,
   useAppUser,
 } from "./lib/auth";
-import { firebaseAuth, firebaseConfigError, firestore } from "./lib/firebase";
+import {
+  firebaseApp,
+  firebaseAuth,
+  firebaseConfigError,
+  firestore,
+} from "./lib/firebase";
 import { queryClient } from "./lib/queryClient";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -73,6 +77,13 @@ type InviteState =
       };
     };
 
+type InviteData = {
+  email?: string;
+  nome?: string;
+  role?: string;
+  status?: string;
+};
+
 const initialAuthState: AuthFormState = {
   nome: "",
   email: "",
@@ -80,6 +91,64 @@ const initialAuthState: AuthFormState = {
   error: null,
   loading: false,
 };
+
+function getRestString(
+  fields: Record<string, { stringValue?: string }> | undefined,
+  key: string,
+) {
+  const value = fields?.[key]?.stringValue;
+  return typeof value === "string" ? value : undefined;
+}
+
+async function fetchInviteViaRest(token: string): Promise<InviteData | null> {
+  const projectId = firebaseApp?.options.projectId;
+  const apiKey = firebaseApp?.options.apiKey;
+  if (!projectId || !apiKey) throw new Error("Firebase config unavailable");
+
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 10000);
+
+  try {
+    const response = await fetch(
+      `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(
+        projectId,
+      )}/databases/(default)/documents/invites/${encodeURIComponent(
+        token,
+      )}?key=${encodeURIComponent(apiKey)}`,
+      { signal: controller.signal },
+    );
+
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(`Invite lookup failed: ${response.status}`);
+
+    const payload = (await response.json()) as {
+      fields?: Record<string, { stringValue?: string }>;
+    };
+
+    return {
+      email: getRestString(payload.fields, "email"),
+      nome: getRestString(payload.fields, "nome"),
+      role: getRestString(payload.fields, "role"),
+      status: getRestString(payload.fields, "status"),
+    };
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+async function fetchInviteViaSdk(token: string): Promise<InviteData | null> {
+  if (!firestore) return null;
+  const snapshot = await getDoc(doc(firestore, "invites", token));
+  return snapshot.exists() ? (snapshot.data() as InviteData) : null;
+}
+
+async function fetchInvite(token: string): Promise<InviteData | null> {
+  try {
+    return await fetchInviteViaRest(token);
+  } catch {
+    return fetchInviteViaSdk(token);
+  }
+}
 
 function AuthShell({
   title,
@@ -247,18 +316,12 @@ function SignUpPage() {
         return;
       }
 
-      if (!firestore) {
+      const data = await fetchInvite(token);
+      if (!data) {
         if (active) setInvite({ status: "invalid" });
         return;
       }
 
-      const snapshot = await getDoc(doc(firestore, "invites", token));
-      if (!snapshot.exists()) {
-        if (active) setInvite({ status: "invalid" });
-        return;
-      }
-
-      const data = snapshot.data() as DocumentData;
       if (data.status !== "pending") {
         if (active) setInvite({ status: "used" });
         return;
