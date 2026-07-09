@@ -225,7 +225,7 @@ function ProductModal({ product }: { product?: any }) {
             <Edit className="h-4 w-4" />
           </Button>
         ) : (
-          <Button className="bg-primary hover:bg-primary/90 text-white shadow-sm h-9">
+          <Button>
             <Plus className="mr-2 h-4 w-4" /> Adicionar Produto
           </Button>
         )}

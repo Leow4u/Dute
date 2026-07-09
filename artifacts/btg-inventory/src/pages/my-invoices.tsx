@@ -24,12 +24,12 @@ export default function MyInvoices() {
 
       {/* Custo do mês corrente */}
       <Card className="overflow-hidden">
-        <div className="bg-primary text-primary-foreground p-6 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
+        <div className="p-6 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
           <div>
             <div className="text-sm opacity-80">Custo estimado — {competenciaLabel(currentCompetencia())}</div>
-            <div className="text-3xl font-bold mt-1">{fmtBRL(current?.total || 0)}</div>
+            <div className="text-3xl font-semibold text-foreground mt-1">{fmtBRL(current?.total || 0)}</div>
           </div>
-          <Badge variant="outline" className="bg-white/10 text-white border-white/20 w-fit">Prévia do mês em andamento</Badge>
+          <Badge variant="outline" className="w-fit border-primary/20 bg-white/70 text-primary">Prévia do mês em andamento</Badge>
         </div>
         <CardContent className="p-0">
           {isLoading ? (

@@ -70,20 +70,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const sections = role === "cliente" ? CLIENTE_SECTIONS : INTERNO_SECTIONS;
 
   return (
-    <div className="flex min-h-[100dvh] w-full bg-background text-foreground font-sans">
-      <aside className="w-64 flex-shrink-0 bg-sidebar border-r border-sidebar-border flex flex-col hidden md:flex">
-        <div className="h-14 flex items-center px-4 border-b border-sidebar-border bg-sidebar gap-3">
+    <div className="app-atmosphere flex min-h-[100dvh] w-full text-foreground font-sans">
+      <aside className="hidden w-72 flex-shrink-0 border-r border-sidebar-border bg-sidebar/80 backdrop-blur-[40px] md:flex flex-col">
+        <div className="h-20 flex items-center px-6 border-b border-sidebar-border/70 gap-3">
           <img
-            src={`${basePath}/dutelog-logo-light.png`}
+            src={`${basePath}/dutelog-logo.png`}
             alt="Dutelog Soluções Logísticas"
-            className="h-8 w-auto max-w-[168px] object-contain"
+            className="h-10 w-auto max-w-[180px] object-contain"
           />
         </div>
 
-        <nav className="flex-1 py-4 flex flex-col gap-1 px-2 overflow-y-auto">
+        <nav className="flex-1 py-6 flex flex-col gap-2 px-4 overflow-y-auto">
           {sections.map((section) => (
-            <div key={section.title} className="mb-2">
-              <div className="px-2 mb-2 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider">
+            <div key={section.title} className="mb-4">
+              <div className="px-3 mb-3 text-xs font-medium text-sidebar-foreground/50 uppercase tracking-normal">
                 {section.title}
               </div>
               {section.items.map((item) => {
@@ -94,10 +94,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
+                      "flex items-center gap-3 rounded-[18px] px-4 py-3 text-sm font-medium transition-[background-color,color,box-shadow,transform] duration-200 ease-out",
                       active
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-[0_8px_24px_rgba(15,23,42,.04)]"
+                        : "text-sidebar-foreground/70 hover:bg-white/70 hover:text-sidebar-foreground",
                     )}
                   >
                     <Icon className="h-4 w-4" />
@@ -109,10 +109,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
 
-        <div className="p-3 border-t border-sidebar-border">
+        <div className="p-4 border-t border-sidebar-border/70">
           <DropdownMenu>
-            <DropdownMenuTrigger className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md hover:bg-sidebar-accent transition-colors outline-none text-sidebar-foreground/80 hover:text-sidebar-foreground">
-              <div className="h-8 w-8 rounded-full bg-sidebar-accent border border-sidebar-border flex items-center justify-center overflow-hidden">
+            <DropdownMenuTrigger className="w-full flex items-center gap-3 rounded-[20px] px-3 py-3 text-sm font-medium transition-colors duration-200 outline-none text-sidebar-foreground/80 hover:bg-white/70 hover:text-sidebar-foreground">
+              <div className="h-9 w-9 rounded-full bg-sidebar-accent border border-sidebar-border flex items-center justify-center overflow-hidden">
                 {user?.imageUrl ? (
                   <img
                     src={user.imageUrl}
@@ -148,16 +148,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-background">
-        <header className="h-14 border-b border-border bg-card flex items-center px-6 shrink-0 z-10 sticky top-0 md:hidden">
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <header className="h-16 border-b border-border/70 bg-white/72 backdrop-blur-[40px] flex items-center px-6 shrink-0 z-10 sticky top-0 md:hidden">
           <img
             src={`${basePath}/dutelog-logo.png`}
             alt="Dutelog Soluções Logísticas"
             className="h-8 w-auto max-w-[168px] object-contain"
           />
         </header>
-        <div className="flex-1 overflow-auto bg-gray-50/50">
-          <div className="mx-auto max-w-[1600px] p-4 md:p-6 lg:p-8">
+        <div className="flex-1 overflow-auto">
+          <div className="mx-auto max-w-[1600px] p-5 md:p-8 lg:p-10">
             {children}
           </div>
         </div>

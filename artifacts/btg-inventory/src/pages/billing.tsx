@@ -150,12 +150,12 @@ export default function Billing() {
             <div className="text-xs text-muted-foreground mt-1">Taxa: {fmtNum((data?.ad_valorem_rate || 0) * 100)}%</div>
           </CardContent>
         </Card>
-        <Card className="bg-primary text-primary-foreground">
+        <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium opacity-80">Total do mês</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total do mês</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{fmtBRL(data?.total || 0)}</div>
+            <div className="text-2xl font-semibold text-foreground">{fmtBRL(data?.total || 0)}</div>
           </CardContent>
         </Card>
       </div>

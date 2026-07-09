@@ -38,7 +38,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <Card className="border-l-4 border-l-primary shadow-sm">
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Total de Produtos</CardTitle>
             <Package className="h-4 w-4 text-primary" />
@@ -48,40 +48,40 @@ export default function Dashboard() {
           </CardContent>
         </Card>
         
-        <Card className="border-l-4 border-l-blue-500 shadow-sm">
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Total de SKUs</CardTitle>
-            <Tags className="h-4 w-4 text-blue-500" />
+            <Tags className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{data.total_skus.toLocaleString('pt-BR')}</div>
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-amber-500 shadow-sm">
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Total de Peças</CardTitle>
-            <ArrowRightLeft className="h-4 w-4 text-amber-500" />
+            <ArrowRightLeft className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{data.total_pecas.toLocaleString('pt-BR')}</div>
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-emerald-600 shadow-sm">
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Custo Total</CardTitle>
-            <DollarSign className="h-4 w-4 text-emerald-600" />
+            <DollarSign className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(data.custo_total)}</div>
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-purple-500 shadow-sm">
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Ad Valorem</CardTitle>
-            <Activity className="h-4 w-4 text-purple-500" />
+            <Activity className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(data.ad_valorem)}</div>
@@ -90,8 +90,8 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="shadow-sm border-border">
-          <CardHeader className="border-b border-border/50 bg-gray-50/50">
+        <Card>
+          <CardHeader className="border-b border-border/60 bg-white/35">
             <CardTitle className="text-sm font-bold uppercase tracking-wider text-gray-700">Estoque por Categoria</CardTitle>
           </CardHeader>
           <CardContent className="pt-6">
@@ -101,16 +101,16 @@ export default function Dashboard() {
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                   <XAxis dataKey="categoria" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#6b7280'}} />
                   <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#6b7280'}} />
-                  <RechartsTooltip cursor={{fill: '#f3f4f6'}} contentStyle={{borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'}} />
-                  <Bar dataKey="total_pecas" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} maxBarSize={50} />
+                  <RechartsTooltip cursor={{fill: 'rgba(241,244,248,.72)'}} contentStyle={{borderRadius: '16px', border: '1px solid #E8EBEF', boxShadow: '0 18px 60px rgba(15,23,42,.05)'}} />
+                  <Bar dataKey="total_pecas" fill="hsl(var(--primary))" radius={[10, 10, 0, 0]} maxBarSize={50} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm border-border">
-          <CardHeader className="border-b border-border/50 bg-gray-50/50 flex flex-row items-center justify-between">
+        <Card>
+          <CardHeader className="border-b border-border/60 bg-white/35 flex flex-row items-center justify-between">
             <CardTitle className="text-sm font-bold uppercase tracking-wider text-gray-700">Movimentações Recentes</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -156,14 +156,14 @@ export default function Dashboard() {
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="shadow-sm border-border">
-          <CardHeader className="border-b border-border/50 bg-gray-50/50">
+        <Card>
+          <CardHeader className="border-b border-border/60 bg-white/35">
             <CardTitle className="text-sm font-bold uppercase tracking-wider text-gray-700">Status dos Pedidos</CardTitle>
           </CardHeader>
           <CardContent className="pt-6">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {data.order_status_counts.map((stat) => (
-                <div key={stat.status} className="p-4 rounded-lg border border-border bg-card text-center">
+                <div key={stat.status} className="soft-panel rounded-[18px] p-4 text-center">
                   <div className="text-3xl font-bold mb-1 text-primary">{stat.count}</div>
                   <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">{stat.status}</div>
                 </div>

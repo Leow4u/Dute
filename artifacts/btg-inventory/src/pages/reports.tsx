@@ -76,8 +76,8 @@ export default function Reports() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <Card className="border-border shadow-sm">
-          <CardHeader className="bg-gray-50/50 border-b border-border">
+        <Card>
+          <CardHeader className="bg-white/35 border-b border-border/60">
             <CardTitle className="text-lg">Exportação Personalizada</CardTitle>
             <CardDescription>Selecione o conjunto de dados e o período para exportar.</CardDescription>
           </CardHeader>
@@ -117,7 +117,7 @@ export default function Reports() {
                 <FileSpreadsheet className="h-4 w-4" /> CSV
               </Button>
               <Button 
-                className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90"
+                className="w-full flex items-center justify-center gap-2"
                 onClick={() => handleExport('json')}
                 disabled={isExporting}
               >
@@ -127,8 +127,8 @@ export default function Reports() {
           </CardContent>
         </Card>
 
-        <Card className="border-border shadow-sm">
-          <CardHeader className="bg-gray-50/50 border-b border-border">
+        <Card>
+          <CardHeader className="bg-white/35 border-b border-border/60">
             <CardTitle className="text-lg">Relatórios Rápidos</CardTitle>
             <CardDescription>Exportações padrão pré-configuradas.</CardDescription>
           </CardHeader>

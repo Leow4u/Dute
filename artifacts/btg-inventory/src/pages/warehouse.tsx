@@ -55,9 +55,9 @@ export default function Warehouse() {
                 </div>
               </div>
               <div className="flex gap-4 mt-4 pt-4 border-t border-sidebar-border/50 text-xs">
-                <div><span className="font-bold text-white">{rua.total_skus}</span> SKUs</div>
-                <div><span className="font-bold text-white">{rua.total_caixas}</span> Caixas</div>
-                <div><span className="font-bold text-white">{rua.prateleiras.length}</span> Prateleiras</div>
+                <div><span className="font-bold text-foreground">{rua.total_skus}</span> SKUs</div>
+                <div><span className="font-bold text-foreground">{rua.total_caixas}</span> Caixas</div>
+                <div><span className="font-bold text-foreground">{rua.prateleiras.length}</span> Prateleiras</div>
               </div>
             </CardHeader>
             <ScrollArea className="flex-1 bg-gray-50/30">
