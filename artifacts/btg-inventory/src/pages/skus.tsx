@@ -104,56 +104,68 @@ export default function Skus() {
                     <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Nenhum SKU encontrado.</td>
                   </tr>
                 ) : (
-                  data?.items?.map((sku) => (
-                    <tr key={sku.id} className="hover:bg-gray-50/80 transition-colors">
-                      <td className="px-4 py-2 font-mono text-xs text-primary font-bold">{sku.cod_btg}</td>
-                      <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{sku.cod_cliente}</td>
-                      <td className="px-4 py-2">
-                        <div className="font-medium text-gray-900 truncate max-w-[200px]" title={sku.produto}>{sku.produto}</div>
-                        <div className="text-xs text-muted-foreground mt-0.5">
-                          {sku.categoria && `${sku.categoria} • `}
-                          {sku.cor || "-"} / {sku.tamanho || "-"}
-                        </div>
-                      </td>
-                      <td className="px-4 py-2 text-center">
-                        <Badge variant="outline" className="font-normal text-xs bg-gray-50">
-                          {sku.estoque_tipo || "N/A"}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-2 text-center">
-                        <Badge variant="secondary" className={
-                          sku.estado === 'NOVO' ? 'bg-emerald-50 text-emerald-700' :
-                          sku.estado === 'AVARIADO' ? 'bg-rose-50 text-rose-700' :
-                          'bg-amber-50 text-amber-700'
-                        }>
-                          {sku.estado || "N/A"}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-2">
-                        {sku.rua || sku.prateleira || sku.caixa ? (
-                          <div className="flex items-center gap-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 px-2 py-1 rounded w-fit border border-indigo-100">
-                            <MapPin className="h-3 w-3" />
-                            {sku.rua ? `R${sku.rua}` : ''} 
-                            {sku.prateleira ? ` P${sku.prateleira}` : ''} 
-                            {sku.caixa ? ` C${sku.caixa}` : ''}
+                  data?.items?.map((sku) => {
+                    const reserved = Number((sku as any).estoque_reservado ?? 0);
+                    const current = Number(sku.estoque_atual ?? 0);
+                    const available = Number(
+                      (sku as any).estoque_disponivel ?? Math.max(0, current - reserved),
+                    );
+
+                    return (
+                      <tr key={sku.id} className="hover:bg-gray-50/80 transition-colors">
+                        <td className="px-4 py-2 font-mono text-xs text-primary font-bold">{sku.cod_btg}</td>
+                        <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{sku.cod_cliente}</td>
+                        <td className="px-4 py-2">
+                          <div className="font-medium text-gray-900 truncate max-w-[200px]" title={sku.produto}>{sku.produto}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {sku.categoria && `${sku.categoria} • `}
+                            {sku.cor || "-"} / {sku.tamanho || "-"}
                           </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground italic">Não atribuída</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2 text-right">
-                        <span className={`font-bold ${sku.estoque_atual === 0 ? 'text-rose-500' : 'text-gray-900'}`}>
-                          {sku.estoque_atual?.toLocaleString('pt-BR') || 0}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <SkuModal sku={sku} />
-                          <DeleteSkuButton id={sku.id} cod_btg={sku.cod_btg} />
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="px-4 py-2 text-center">
+                          <Badge variant="outline" className="font-normal text-xs bg-gray-50">
+                            {sku.estoque_tipo || "N/A"}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-2 text-center">
+                          <Badge variant="secondary" className={
+                            sku.estado === 'NOVO' ? 'bg-emerald-50 text-emerald-700' :
+                            sku.estado === 'AVARIADO' ? 'bg-rose-50 text-rose-700' :
+                            'bg-amber-50 text-amber-700'
+                          }>
+                            {sku.estado || "N/A"}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-2">
+                          {sku.rua || sku.prateleira || sku.caixa ? (
+                            <div className="flex items-center gap-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 px-2 py-1 rounded w-fit border border-indigo-100">
+                              <MapPin className="h-3 w-3" />
+                              {sku.rua ? `R${sku.rua}` : ''}
+                              {sku.prateleira ? ` P${sku.prateleira}` : ''}
+                              {sku.caixa ? ` C${sku.caixa}` : ''}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">Não atribuída</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-right">
+                          <div className={`font-semibold ${current === 0 ? 'text-rose-500' : 'text-gray-900'}`}>
+                            {current.toLocaleString('pt-BR')}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            disp. {available.toLocaleString('pt-BR')}
+                            {reserved > 0 ? ` · res. ${reserved.toLocaleString('pt-BR')}` : ""}
+                          </div>
+                        </td>
+                        <td className="px-4 py-2 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <SkuModal sku={sku} />
+                            <DeleteSkuButton id={sku.id} cod_btg={sku.cod_btg} />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

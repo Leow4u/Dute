@@ -38,6 +38,8 @@ import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
 
+const POSITIVE_MOVEMENTS = new Set(["ENTRADA", "DEVOLUCAO", "AJUSTE_ENTRADA"]);
+
 const movementSchema = z.object({
   data: z.string().min(1, "Obrigatório"),
   tipo_mov: z.string().min(1, "Obrigatório"),
@@ -127,6 +129,7 @@ export default function Movements() {
                   <th className="px-4 py-3 font-medium text-center">
                     Trajeto (Orig &rarr; Dest)
                   </th>
+                  <th className="px-4 py-3 font-medium text-right">Saldo</th>
                   <th className="px-4 py-3 font-medium">Doc/NF</th>
                   <th className="px-4 py-3 font-medium">Operador</th>
                 </tr>
@@ -135,7 +138,7 @@ export default function Movements() {
                 {isLoading ? (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={9}
                       className="px-4 py-8 text-center text-muted-foreground"
                     >
                       Carregando movimentações...
@@ -144,7 +147,7 @@ export default function Movements() {
                 ) : data?.items?.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={9}
                       className="px-4 py-8 text-center text-muted-foreground"
                     >
                       Nenhuma movimentação encontrada.
@@ -214,6 +217,9 @@ export default function Movements() {
                               {mov.destino || "-"}
                             </span>
                           </div>
+                        </td>
+                        <td className="px-4 py-2 text-right font-mono text-xs text-muted-foreground">
+                          {mov.estoque_resultante?.toLocaleString("pt-BR") ?? "-"}
                         </td>
                         <td className="px-4 py-2 text-xs text-muted-foreground">
                           {mov.doc_nf || "-"}
@@ -293,11 +299,11 @@ function MovementModal() {
   });
 
   const tipo_mov = watch("tipo_mov");
+  const isPositiveMovement = POSITIVE_MOVEMENTS.has(tipo_mov);
 
   const onSubmit = (data: MovementFormValues) => {
     // Ensure sinal matches tipo_mov logic
-    data.sinal =
-      data.tipo_mov === "ENTRADA" || data.tipo_mov === "DEVOLUCAO" ? 1 : -1;
+    data.sinal = POSITIVE_MOVEMENTS.has(data.tipo_mov) ? 1 : -1;
 
     // Ensure date is properly formatted as ISO
     data.data = new Date(data.data).toISOString();
@@ -306,16 +312,18 @@ function MovementModal() {
       { data },
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({
-            queryKey: getListMovementsQueryKey(),
-          });
+          queryClient.invalidateQueries();
           toast({ title: "Movimentação registrada com sucesso" });
           setOpen(false);
           reset();
         },
-        onError: () => {
+        onError: (error) => {
           toast({
             title: "Erro ao registrar movimentação",
+            description:
+              error instanceof Error
+                ? error.message.replace(/^HTTP \d+[^:]*:\s*/, "")
+                : undefined,
             variant: "destructive",
           });
         },
@@ -387,7 +395,12 @@ function MovementModal() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="qtde">Quantidade *</Label>
-              <Input id="qtde" type="number" min="1" {...register("qtde")} />
+              <div className="relative">
+                <Input id="qtde" type="number" min="1" {...register("qtde")} />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                  {isPositiveMovement ? "entra" : "sai"}
+                </span>
+              </div>
               {errors.qtde && (
                 <span className="text-xs text-destructive">
                   {errors.qtde.message}

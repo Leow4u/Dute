@@ -1,5 +1,4 @@
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -10,6 +9,7 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
 } from "firebase/firestore";
 
 import { firestore } from "./firebase";
@@ -17,6 +17,15 @@ import { isDemoMode } from "./demo-mode";
 
 type AnyRecord = Record<string, any>;
 type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
+
+class RouteError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
 
 const collectionNames = {
   products: "products",
@@ -137,6 +146,159 @@ async function updateItem(name: string, id: string | number, data: AnyRecord) {
 async function deleteItem(name: string, id: string | number) {
   const ref = await findDocRef(name, id);
   await deleteDoc(ref);
+}
+
+function movementSign(tipo: unknown, fallback: unknown): 1 | -1 {
+  const normalized = String(tipo ?? "").toUpperCase();
+  if (["ENTRADA", "DEVOLUCAO", "AJUSTE_ENTRADA"].includes(normalized)) return 1;
+  if (["SAIDA", "EXPEDICAO", "AJUSTE_SAIDA"].includes(normalized)) return -1;
+  return Number(fallback ?? 0) >= 0 ? 1 : -1;
+}
+
+async function findSkuByCode(codSku: string) {
+  if (!firestore) throw new Error("Firestore não configurado.");
+
+  const direct = await getDoc(doc(firestore, collectionNames.skus, codSku));
+  if (direct.exists()) return direct;
+
+  const byBtg = await getDocs(
+    query(collection(firestore, collectionNames.skus), where("cod_btg", "==", codSku)),
+  );
+  if (!byBtg.empty) return byBtg.docs[0];
+
+  const byId = await getDocs(
+    query(collection(firestore, collectionNames.skus), where("id", "==", Number(codSku))),
+  );
+  if (!byId.empty) return byId.docs[0];
+
+  return null;
+}
+
+async function syncProductAggregate(
+  batch: ReturnType<typeof writeBatch>,
+  skuData: AnyRecord,
+  updatedSkuDocId: string,
+  updatedStock: number,
+) {
+  if (!firestore) throw new Error("Firestore não configurado.");
+
+  const codCliente = String(skuData.cod_cliente ?? "").trim();
+  if (!codCliente) return;
+
+  const skuSnapshot = await getDocs(
+    query(collection(firestore, collectionNames.skus), where("cod_cliente", "==", codCliente)),
+  );
+
+  let estoqueBtg = 0;
+  let numSkus = 0;
+  for (const skuDoc of skuSnapshot.docs) {
+    const data = skuDoc.data() as AnyRecord;
+    const estoque =
+      skuDoc.id === updatedSkuDocId
+        ? updatedStock
+        : Number(data.estoque_atual ?? 0);
+    estoqueBtg += estoque;
+    numSkus += 1;
+  }
+
+  const productSnapshot = await getDocs(
+    query(collection(firestore, collectionNames.products), where("cod_cliente", "==", codCliente)),
+  );
+
+  const existingProduct = productSnapshot.docs[0];
+  const productData = existingProduct?.data() as AnyRecord | undefined;
+  const precoUnit = Number(productData?.preco_unit ?? skuData.preco_unit ?? 0);
+  const aggregate = {
+    cod_cliente: codCliente,
+    produto: productData?.produto ?? skuData.produto ?? "",
+    genero: productData?.genero ?? skuData.genero ?? "",
+    categoria: productData?.categoria ?? skuData.categoria ?? "",
+    grupo: productData?.grupo ?? skuData.grupo ?? "",
+    cor: productData?.cor ?? skuData.cor ?? "",
+    tamanho: productData?.tamanho ?? skuData.tamanho ?? "",
+    preco_unit: precoUnit,
+    estoque_btg: estoqueBtg,
+    num_skus: numSkus,
+    custo_total: estoqueBtg * precoUnit,
+    updated_at: serverTimestamp(),
+  };
+
+  if (existingProduct) {
+    batch.update(existingProduct.ref, aggregate);
+    return;
+  }
+
+  const productId = Date.now();
+  batch.set(doc(firestore, collectionNames.products, String(productId)), {
+    ...aggregate,
+    id: productId,
+    created_at: serverTimestamp(),
+  });
+}
+
+async function createMovement(data: AnyRecord) {
+  if (!firestore) throw new Error("Firestore não configurado.");
+
+  const codSku = String(data.cod_sku ?? "").trim();
+  if (!codSku) throw new RouteError("Informe o código do SKU.", 400);
+
+  const skuSnapshot = await findSkuByCode(codSku);
+  if (!skuSnapshot?.exists()) {
+    throw new RouteError(`SKU não encontrado: ${codSku}`, 404);
+  }
+
+  const skuData = skuSnapshot.data() as AnyRecord;
+  const quantity = Number(data.qtde ?? 0);
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    throw new RouteError("A quantidade da movimentação deve ser maior que zero.", 400);
+  }
+
+  const sign = movementSign(data.tipo_mov, data.sinal);
+  const previousStock = Number(skuData.estoque_atual ?? 0);
+  const nextStock = previousStock + sign * quantity;
+  if (nextStock < 0) {
+    throw new RouteError(
+      `Estoque insuficiente para ${codSku}. Disponível: ${previousStock}, solicitado: ${quantity}.`,
+      409,
+    );
+  }
+
+  const reserved = Number(skuData.estoque_reservado ?? 0);
+  const movementId = Date.now();
+  const now = new Date().toISOString();
+  const payload = {
+    ...data,
+    id: movementId,
+    data: toIso(data.data) || now,
+    cod_sku: skuData.cod_btg ?? codSku,
+    cod_cliente: skuData.cod_cliente ?? data.cod_cliente ?? "",
+    produto: skuData.produto ?? data.produto ?? "",
+    qtde: quantity,
+    sinal: sign,
+    estoque_tipo: data.estoque_tipo ?? skuData.estoque_tipo ?? "",
+    estoque_anterior: previousStock,
+    estoque_resultante: nextStock,
+    saldo_delta: sign * quantity,
+    created_at: serverTimestamp(),
+    updated_at: serverTimestamp(),
+  };
+
+  const batch = writeBatch(firestore);
+  batch.set(doc(firestore, collectionNames.movements, String(movementId)), payload);
+  batch.update(skuSnapshot.ref, {
+    estoque_atual: nextStock,
+    estoque_disponivel: Math.max(0, nextStock - reserved),
+    ultimo_movimento_em: payload.data,
+    updated_at: serverTimestamp(),
+  });
+  await syncProductAggregate(batch, skuData, skuSnapshot.id, nextStock);
+  await batch.commit();
+
+  return {
+    ...payload,
+    created_at: undefined,
+    updated_at: undefined,
+  };
 }
 
 function categoryStats(products: AnyRecord[]) {
@@ -327,7 +489,12 @@ async function route(pathname: string, method: HttpMethod, searchParams: URLSear
 
   for (const [regex, name, filters, searchFields] of listRoutes) {
     if (regex.test(pathname) && method === "GET") {
-      return json(filterAndPage(await readAll(name), searchParams, filters, searchFields));
+      const rows = await readAll(name);
+      const orderedRows =
+        name === collectionNames.movements
+          ? rows.sort((a, b) => toIso(b.data).localeCompare(toIso(a.data)))
+          : rows;
+      return json(filterAndPage(orderedRows, searchParams, filters, searchFields));
     }
   }
 
@@ -481,7 +648,7 @@ export function installCloudApi() {
               ? error.message
               : "Erro ao acessar o Firebase.",
         },
-        500,
+        error instanceof RouteError ? error.status : 500,
       );
     }
   };
