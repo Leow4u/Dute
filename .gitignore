@@ -5,6 +5,7 @@ dist
 tmp
 out-tsc
 *.tsbuildinfo
+functions/lib
 .expo
 .expo-shared
 
@@ -31,6 +32,7 @@ node_modules
 /.env
 /.env.*
 !/.env.example
+/.secrets/
 /.firebase/
 /.sass-cache
 /connect.lock

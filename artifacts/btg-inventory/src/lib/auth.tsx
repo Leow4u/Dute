@@ -14,10 +14,13 @@ import {
 import {
   doc,
   getDoc,
+  onSnapshot,
+  type DocumentSnapshot,
+  type Unsubscribe,
 } from "firebase/firestore";
 
-import { demoUser, isDemoMode } from "./demo-mode";
 import { firebaseAuth, firestore } from "./firebase";
+import { normalizeProfileRole, type ProfileRole } from "./modules";
 
 export type Role = "interno" | "cliente";
 
@@ -29,7 +32,8 @@ export type AppUser = {
     emailAddress: string;
   };
   publicMetadata: {
-    role: Role;
+    role: ProfileRole;
+    customer_code?: string;
   };
 };
 
@@ -47,10 +51,17 @@ const AuthContext = createContext<AuthContextValue>({
   accessDenied: false,
 });
 
-function toAppUser(firebaseUser: User, role: Role): AppUser {
+type ProfileData = {
+  role: ProfileRole;
+  customer_code?: string;
+  nome?: string;
+};
+
+function toAppUser(firebaseUser: User, profile: ProfileData): AppUser {
   return {
     uid: firebaseUser.uid,
     fullName:
+      profile.nome ||
       firebaseUser.displayName ||
       firebaseUser.email?.split("@")[0] ||
       "Usuário",
@@ -58,43 +69,50 @@ function toAppUser(firebaseUser: User, role: Role): AppUser {
     primaryEmailAddress: {
       emailAddress: firebaseUser.email || "",
     },
-    publicMetadata: { role },
+    publicMetadata: {
+      role: profile.role,
+      customer_code: profile.customer_code,
+    },
   };
 }
 
-async function loadProfile(firebaseUser: User): Promise<Role | null> {
+function profileFromSnapshot(snapshot: DocumentSnapshot): ProfileData | null {
+  if (!snapshot.exists()) return null;
+
+  const data = snapshot.data() as {
+    role?: unknown;
+    customer_code?: unknown;
+    nome?: unknown;
+  };
+  const role = normalizeProfileRole(data.role);
+  if (!role) return null;
+
+  return {
+    role,
+    customer_code:
+      typeof data.customer_code === "string" ? data.customer_code : undefined,
+    nome: typeof data.nome === "string" ? data.nome : undefined,
+  };
+}
+
+async function loadProfile(firebaseUser: User): Promise<ProfileData | null> {
   if (!firestore) return null;
   const ref = doc(firestore, "users", firebaseUser.uid);
   const snapshot = await getDoc(ref);
-
-  if (snapshot.exists()) {
-    const role = snapshot.data().role;
-    return role === "cliente" ? "cliente" : "interno";
-  }
-
-  return null;
+  return profileFromSnapshot(snapshot);
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthContextValue>({
     firebaseUser: null,
     user: null,
-    isLoaded: isDemoMode,
+    isLoaded: false,
     accessDenied: false,
   });
 
   useEffect(() => {
-    if (isDemoMode) {
-      setState({
-        firebaseUser: null,
-        user: demoUser,
-        isLoaded: true,
-        accessDenied: false,
-      });
-      return;
-    }
-
     const auth = firebaseAuth;
+    let unsubscribeProfile: Unsubscribe | undefined;
 
     if (!auth) {
       setState({
@@ -106,7 +124,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    return onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+      unsubscribeProfile?.();
+      unsubscribeProfile = undefined;
+
       if (!firebaseUser) {
         setState({
           firebaseUser: null,
@@ -118,7 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const role = await loadProfile(firebaseUser);
-      if (!role) {
+      if (!role || !firestore) {
         setState({
           firebaseUser,
           user: null,
@@ -134,7 +155,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoaded: true,
         accessDenied: false,
       });
+
+      unsubscribeProfile = onSnapshot(
+        doc(firestore, "users", firebaseUser.uid),
+        (snapshot) => {
+          const profile = profileFromSnapshot(snapshot);
+          if (!profile) {
+            setState({
+              firebaseUser,
+              user: null,
+              isLoaded: true,
+              accessDenied: true,
+            });
+            return;
+          }
+
+          setState({
+            firebaseUser,
+            user: toAppUser(firebaseUser, profile),
+            isLoaded: true,
+            accessDenied: false,
+          });
+        },
+      );
     });
+
+    return () => {
+      unsubscribeProfile?.();
+      unsubscribeAuth();
+    };
   }, []);
 
   const value = useMemo(() => state, [state]);

@@ -228,16 +228,24 @@
     @apply border-border;
   }
   html {
+    height: 100%;
+    overflow: hidden;
     background: #FAFAF8;
   }
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    height: 100%;
     min-height: 100dvh;
+    overflow: hidden;
     background:
       radial-gradient(circle at top left, rgba(237, 245, 242, .9) 0%, rgba(237, 245, 242, 0) 35%),
       radial-gradient(circle at bottom left, rgba(245, 242, 233, .85) 0%, rgba(245, 242, 233, 0) 40%),
       radial-gradient(circle at top right, rgba(238, 244, 248, .85) 0%, rgba(238, 244, 248, 0) 30%),
       #FAFAF8;
+  }
+  #root {
+    height: 100dvh;
+    overflow: hidden;
   }
   h1,
   h2,

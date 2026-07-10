@@ -1,108 +1,631 @@
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useGetDashboard } from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Package, Tags, ArrowRightLeft, DollarSign, Activity } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from "recharts";
+import {
+  AlertTriangle,
+  ArrowRight,
+  Bot,
+  Boxes,
+  ClipboardList,
+  Package,
+  Radar,
+  Receipt,
+  ShieldCheck,
+  Sparkles,
+  Truck,
+  Warehouse,
+} from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip as RechartsTooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { Link } from "wouter";
+
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
+
+type AnyRecord = Record<string, any>;
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.message ?? "Falha ao carregar dados.");
+  }
+  return response.json() as Promise<T>;
+}
+
+function toNumber(value: unknown, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function formatNumber(value: unknown) {
+  return toNumber(value).toLocaleString("pt-BR");
+}
+
+function formatCurrency(value: unknown) {
+  return toNumber(value).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    maximumFractionDigits: 0,
+  });
+}
+
+function formatDate(value: unknown) {
+  if (!value) return "Sem data";
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) return "Sem data";
+  return date.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function statusTone(value: number) {
+  if (value > 0) return "attention";
+  return "stable";
+}
+
+function normalizeText(value: unknown) {
+  return String(value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function toList(value: unknown): AnyRecord[] {
+  if (Array.isArray(value)) return value as AnyRecord[];
+  if (value && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>).map(([key, raw]) => {
+      if (raw && typeof raw === "object") return { key, ...(raw as AnyRecord) };
+      return { key, value: raw };
+    });
+  }
+  return [];
+}
+
+function firstMetric(metrics: AnyRecord | undefined, fallback: number, ...keys: string[]) {
+  for (const key of keys) {
+    const parsed = toNumber(metrics?.[key], Number.NaN);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
+
+function isTerminalStatus(value: unknown) {
+  return [
+    "completed",
+    "delivered",
+    "received",
+    "closed",
+    "cancelled",
+    "canceled",
+    "resolved",
+    "concluido",
+    "concluida",
+    "encerrado",
+    "encerrada",
+  ].includes(normalizeText(value));
+}
+
+function isOpenRequestStatus(value: unknown) {
+  return [
+    "open",
+    "aberta",
+    "aberto",
+    "submitted",
+    "enviada",
+    "enviado",
+    "pending",
+    "pendente",
+    "em analise",
+  ].includes(normalizeText(value));
+}
+
+function isDueSoon(value: unknown) {
+  if (!value) return false;
+  const dueTime = new Date(String(value)).getTime();
+  if (Number.isNaN(dueTime)) return false;
+  return dueTime - Date.now() <= 4 * 60 * 60 * 1000;
+}
+
+function queueLabel(queue: AnyRecord) {
+  const key = String(queue.label ?? queue.name ?? queue.key ?? "Fila");
+  const aliases: Record<string, string> = {
+    receiving: "Recebimento",
+    inbound: "Recebimento",
+    putaway: "Putaway",
+    picking: "Picking",
+    packing: "Packing",
+    expedition: "Expedição",
+    shipping: "Expedição",
+  };
+  return aliases[normalizeText(key)] ?? key;
+}
+
+function MetricCard({
+  title,
+  value,
+  caption,
+  icon: Icon,
+  tone = "stable",
+}: {
+  title: string;
+  value: string;
+  caption: string;
+  icon: typeof Package;
+  tone?: "stable" | "attention" | "critical";
+}) {
+  return (
+    <Card className={cn(tone === "critical" && "border-destructive/20", tone === "attention" && "border-primary/25")}>
+      <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
+        <div>
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            {title}
+          </CardTitle>
+          <div className="mt-2 text-2xl font-semibold text-foreground">{value}</div>
+        </div>
+        <div className="flex size-10 items-center justify-center rounded-[16px] border border-border bg-white/65">
+          <Icon className="size-4 text-primary" />
+        </div>
+      </CardHeader>
+      <CardContent className="pt-0 text-sm text-muted-foreground">
+        {caption}
+      </CardContent>
+    </Card>
+  );
+}
+
+function WorkstreamCard({
+  title,
+  value,
+  total,
+  href,
+  icon: Icon,
+  description,
+}: {
+  title: string;
+  value: number;
+  total: number;
+  href: string;
+  icon: typeof Package;
+  description: string;
+}) {
+  const progress = total > 0 ? Math.min(100, Math.round((value / total) * 100)) : 0;
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-4 pt-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-[16px] border border-border bg-white/65">
+              <Icon className="size-4 text-primary" />
+            </div>
+            <div>
+              <div className="text-sm font-medium text-foreground">{title}</div>
+              <div className="text-xs text-muted-foreground">{description}</div>
+            </div>
+          </div>
+          <Badge variant="outline">{formatNumber(value)}</Badge>
+        </div>
+        <Progress value={progress} className="h-2" />
+        <Button asChild variant="outline" size="sm" className="w-full justify-between">
+          <Link href={href}>
+            Abrir módulo
+            <ArrowRight data-icon="inline-end" />
+          </Link>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function LoadingState() {
+  return (
+    <div className="flex flex-col gap-6">
+      <Skeleton className="h-36 rounded-[28px]" />
+      <div className="grid gap-4 md:grid-cols-4">
+        {[0, 1, 2, 3].map((item) => (
+          <Skeleton key={item} className="h-32 rounded-[24px]" />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function Dashboard() {
-  const { data, isLoading, error } = useGetDashboard();
+  const dashboard = useGetDashboard();
+  const ai = useQuery({
+    queryKey: ["ai-overview"],
+    queryFn: () => fetchJson<AnyRecord>("/api/ai/overview"),
+    refetchInterval: 30000,
+  });
+  const wms = useQuery({
+    queryKey: ["warehouse-ops"],
+    queryFn: () => fetchJson<AnyRecord>("/api/warehouse/ops"),
+    refetchInterval: 30000,
+  });
+  const requests = useQuery({
+    queryKey: ["customer-requests", "control-tower"],
+    queryFn: () => fetchJson<{ items?: AnyRecord[] }>("/api/customer-requests?limit=80"),
+    refetchInterval: 30000,
+  });
 
-  if (isLoading) {
-    return <div className="space-y-6 animate-pulse">
-      <div className="h-8 w-64 bg-gray-200 rounded"></div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        {[1,2,3,4,5].map(i => <div key={i} className="h-32 bg-gray-200 rounded-xl"></div>)}
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="h-96 bg-gray-200 rounded-xl"></div>
-        <div className="h-96 bg-gray-200 rounded-xl"></div>
-      </div>
-    </div>;
-  }
+  const derived = useMemo(() => {
+    const data = dashboard.data as AnyRecord | undefined;
+    const metrics = (wms.data?.metrics ?? {}) as AnyRecord;
+    const queues = toList(wms.data?.queues);
+    const queueSummaries = queues.map((queue) => {
+      const tasks = toList(queue.tasks ?? queue.items);
+      const activeTasks = tasks.filter((task) => !isTerminalStatus(task.status));
+      const pending = toNumber(queue.pending, activeTasks.length);
+      const completedToday = toNumber(queue.completed_today ?? queue.completedToday);
+      const baseTotal = pending + completedToday;
 
-  if (error || !data) {
-    return <div className="p-4 bg-destructive/10 text-destructive rounded-md border border-destructive/20">
-      Falha ao carregar os dados do painel. Tente novamente.
-    </div>;
-  }
+      return {
+        key: String(queue.key ?? queue.name ?? "fila"),
+        label: queueLabel(queue),
+        pending,
+        inProgress: toNumber(queue.in_progress ?? queue.inProgress),
+        completedToday,
+        dueSoon: activeTasks.filter((task) => isDueSoon(task.due_at)).length,
+        blocked: activeTasks.filter(
+          (task) => Boolean(task.blocked_reason) || toNumber(task.exception_count) > 0,
+        ).length,
+        progress:
+          baseTotal > 0
+            ? Math.min(100, Math.round((completedToday / baseTotal) * 100))
+            : toNumber(queue.utilization),
+        nextAction:
+          queue.next_action ??
+          queue.nextAction ??
+          activeTasks[0]?.next_action ??
+          "Manter fila monitorada e priorizar a próxima tarefa com SLA curto.",
+        tasks: activeTasks,
+      };
+    });
+    const queueTasks = queueSummaries.flatMap((queue) =>
+      queue.tasks.map((task) => ({ ...task, queue: queue.label })),
+    );
+    const alerts = [
+      ...(Array.isArray(wms.data?.alerts) ? wms.data.alerts : []),
+      ...(Array.isArray(ai.data?.inbox) ? ai.data.inbox : []),
+    ];
+    const requestRows = requests.data?.items ?? [];
+    const openRequests = requestRows.filter((request) => isOpenRequestStatus(request.status));
+    const criticalAlerts = alerts.filter((alert: AnyRecord) =>
+      ["critical", "critico", "crítico", "high", "alta"].includes(
+        normalizeText(alert.severity ?? alert.priority),
+      ),
+    );
+    const blockedTasks = queueTasks.filter((task: AnyRecord) =>
+      Boolean(task.blocked_reason) || toNumber(task.exception_count) > 0,
+    );
+    const inferredPending = queueSummaries.reduce((sum, queue) => sum + queue.pending, 0);
+    const inferredThroughput = queueSummaries.reduce(
+      (sum, queue) => sum + queue.completedToday,
+      0,
+    );
 
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-  };
+    return {
+      data,
+      queueSummaries,
+      queueTasks,
+      alerts,
+      requestRows,
+      openRequests,
+      criticalAlerts,
+      blockedTasks,
+      wmsPending: firstMetric(metrics, inferredPending, "pending_total", "pendingTotal"),
+      throughputToday: firstMetric(
+        metrics,
+        inferredThroughput,
+        "throughput_today",
+        "throughputToday",
+      ),
+      dueSoon: firstMetric(
+        metrics,
+        queueSummaries.reduce((sum, queue) => sum + queue.dueSoon, 0),
+        "due_soon",
+        "dueSoon",
+      ),
+      agentOpen: toNumber(ai.data?.snapshot?.open_insights, alerts.length),
+      inventoryValue: toNumber(data?.custo_total ?? ai.data?.snapshot?.inventory_value),
+      pieces: toNumber(data?.total_pecas ?? ai.data?.snapshot?.total_pieces),
+      skuTotal: toNumber(data?.total_skus),
+      categoryRows: Array.isArray(data?.by_category) ? data.by_category : [],
+      recentMovements: Array.isArray(data?.recent_movements) ? data.recent_movements : [],
+    };
+  }, [ai.data, dashboard.data, requests.data, wms.data]);
+
+  if (dashboard.isLoading && !dashboard.data) return <LoadingState />;
+
+  const operationalHealth =
+    derived.criticalAlerts.length > 0
+      ? "Crítico"
+      : derived.blockedTasks.length > 0 || derived.openRequests.length > 0
+        ? "Atenção"
+        : "Estável";
+  const sourceIssues = [
+    dashboard.error || !dashboard.data ? "estoque" : null,
+    ai.isError ? "IA" : null,
+    wms.isError ? "WMS" : null,
+    requests.isError ? "solicitações" : null,
+  ].filter((item): item is string => Boolean(item));
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-primary">Central de Operações</h1>
-        <p className="text-sm text-muted-foreground mt-1">Visão em tempo real do estoque e das movimentações do armazém.</p>
+    <div className="flex flex-col gap-6">
+      <section className="glass-surface overflow-hidden rounded-[28px] p-6 md:p-7">
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+          <div className="max-w-3xl">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
+                Torre de Controle
+              </Badge>
+              <Badge
+                variant="outline"
+                className={cn(
+                  operationalHealth === "Crítico" && "border-destructive/20 bg-destructive/10 text-destructive",
+                  operationalHealth === "Atenção" && "border-primary/20 bg-primary/10 text-primary",
+                )}
+              >
+                {operationalHealth}
+              </Badge>
+            </div>
+            <h1 className="mt-4 text-3xl font-semibold tracking-normal text-foreground md:text-4xl">
+              Comando operacional Dutelog
+            </h1>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground md:text-base">
+              Estoque, WMS físico, solicitações, faturamento e sinais do Agent Dute em uma visão de decisão.
+            </p>
+          </div>
+          <div className="grid gap-3 text-sm sm:grid-cols-3 xl:min-w-[520px]">
+            <div className="rounded-[22px] border border-border bg-white/55 p-4">
+              <div className="text-muted-foreground">Valor monitorado</div>
+              <div className="mt-2 text-xl font-semibold">{formatCurrency(derived.inventoryValue)}</div>
+            </div>
+            <div className="rounded-[22px] border border-border bg-white/55 p-4">
+              <div className="text-muted-foreground">Peças</div>
+              <div className="mt-2 text-xl font-semibold">{formatNumber(derived.pieces)}</div>
+            </div>
+            <div className="rounded-[22px] border border-border bg-white/55 p-4">
+              <div className="text-muted-foreground">Último evento</div>
+              <div className="mt-2 text-xl font-semibold">{formatDate(ai.data?.snapshot?.last_event_at)}</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {sourceIssues.length > 0 ? (
+        <Alert className="border-amber-200 bg-amber-50/80 text-amber-900">
+          <AlertTriangle className="size-4" />
+          <AlertTitle>Dados parciais na Torre de Controle</AlertTitle>
+          <AlertDescription>
+            Fonte(s) em fallback: {sourceIssues.join(", ")}. A tela mantém a operação
+            visível com os dados disponíveis.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <MetricCard
+          title="SKUs ativos"
+          value={formatNumber(derived.skuTotal)}
+          caption="Catálogo operacional importado da base BTG."
+          icon={Boxes}
+        />
+        <MetricCard
+          title="Solicitações abertas"
+          value={formatNumber(derived.openRequests.length)}
+          caption="Entradas que aguardam decisão ou execução."
+          icon={ClipboardList}
+          tone={statusTone(derived.openRequests.length)}
+        />
+        <MetricCard
+          title="WMS pendente"
+          value={formatNumber(derived.wmsPending)}
+          caption={`${formatNumber(derived.throughputToday)} tarefa(s) concluídas hoje.`}
+          icon={Warehouse}
+          tone={statusTone(derived.wmsPending)}
+        />
+        <MetricCard
+          title="Alertas IA"
+          value={formatNumber(derived.agentOpen)}
+          caption="Sinais abertos no Agent Dute."
+          icon={Bot}
+          tone={statusTone(derived.agentOpen)}
+        />
+        <MetricCard
+          title="Bloqueios físicos"
+          value={formatNumber(derived.blockedTasks.length)}
+          caption="Tarefas com exceção, avaria ou divergência."
+          icon={ShieldCheck}
+          tone={derived.blockedTasks.length ? "critical" : "stable"}
+        />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <Card>
+        <CardHeader className="border-b border-border/60">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <CardTitle className="text-base">Filas e próximos passos</CardTitle>
+              <CardDescription>
+                Leitura WMS por frente com ação sugerida para o turno.
+              </CardDescription>
+            </div>
+            <Badge variant="outline">{formatNumber(derived.dueSoon)} SLA próximo</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-3 pt-5 md:grid-cols-2 xl:grid-cols-5">
+          {derived.queueSummaries.length > 0 ? (
+            derived.queueSummaries.map((queue) => (
+              <div
+                key={queue.key}
+                className="flex min-h-[190px] flex-col rounded-[20px] border border-border bg-white/55 p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-foreground">{queue.label}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {formatNumber(queue.inProgress)} em execução
+                    </div>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className={cn(queue.blocked > 0 && "border-destructive/20 bg-destructive/10 text-destructive")}
+                  >
+                    {formatNumber(queue.pending)}
+                  </Badge>
+                </div>
+                <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
+                  <div className="rounded-[14px] bg-white/65 p-2">
+                    <div className="font-semibold text-foreground">{formatNumber(queue.dueSoon)}</div>
+                    <div className="text-muted-foreground">SLA</div>
+                  </div>
+                  <div className="rounded-[14px] bg-white/65 p-2">
+                    <div className="font-semibold text-foreground">{formatNumber(queue.blocked)}</div>
+                    <div className="text-muted-foreground">risco</div>
+                  </div>
+                  <div className="rounded-[14px] bg-white/65 p-2">
+                    <div className="font-semibold text-foreground">
+                      {formatNumber(queue.completedToday)}
+                    </div>
+                    <div className="text-muted-foreground">hoje</div>
+                  </div>
+                </div>
+                <Progress value={queue.progress} className="mt-4 h-2" />
+                <p className="mt-4 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                  {String(queue.nextAction)}
+                </p>
+              </div>
+            ))
+          ) : (
+            <div className="rounded-[18px] border border-border bg-white/55 p-5 text-sm text-muted-foreground md:col-span-2 xl:col-span-5">
+              Nenhuma fila WMS disponível nesta leitura.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 xl:grid-cols-[1.1fr_.9fr]">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Total de Produtos</CardTitle>
-            <Package className="h-4 w-4 text-primary" />
+          <CardHeader className="border-b border-border/60">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <CardTitle className="text-base">Radar de decisão</CardTitle>
+                <CardDescription>
+                  O que precisa de atenção antes de virar gargalo.
+                </CardDescription>
+              </div>
+              <Radar className="size-5 text-primary" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{data.total_produtos.toLocaleString('pt-BR')}</div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Total de SKUs</CardTitle>
-            <Tags className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{data.total_skus.toLocaleString('pt-BR')}</div>
+          <CardContent className="space-y-3 pt-5">
+            {[...derived.criticalAlerts, ...derived.blockedTasks, ...derived.openRequests]
+              .slice(0, 8)
+              .map((item: AnyRecord, index) => (
+                <div
+                  key={item.id ?? index}
+                  className="flex items-start justify-between gap-4 rounded-[18px] border border-border bg-white/55 p-4"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-foreground">
+                      {item.title ?? item.message ?? item.description ?? item.reference ?? item.protocol ?? "Ponto de atenção"}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {item.queue ?? item.entity_type ?? item.type ?? item.status ?? "Operação"}
+                    </div>
+                  </div>
+                  <Badge variant="outline">{item.severity ?? item.priority ?? item.status ?? "aberto"}</Badge>
+                </div>
+              ))}
+            {!derived.criticalAlerts.length && !derived.blockedTasks.length && !derived.openRequests.length ? (
+              <div className="rounded-[18px] border border-border bg-white/55 p-5 text-sm text-muted-foreground">
+                Nenhum risco operacional aberto agora.
+              </div>
+            ) : null}
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Total de Peças</CardTitle>
-            <ArrowRightLeft className="h-4 w-4 text-primary" />
+          <CardHeader className="border-b border-border/60">
+            <CardTitle className="text-base">Módulos críticos</CardTitle>
+            <CardDescription>
+              Entradas rápidas para cada frente operacional.
+            </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{data.total_pecas.toLocaleString('pt-BR')}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Custo Total</CardTitle>
-            <DollarSign className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(data.custo_total)}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Ad Valorem</CardTitle>
-            <Activity className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(data.ad_valorem)}</div>
+          <CardContent className="grid gap-3 pt-5">
+            <WorkstreamCard
+              title="Solicitações"
+              description="Triagem e aprovação"
+              value={derived.openRequests.length}
+              total={Math.max(1, derived.requestRows.length)}
+              href="/solicitacoes"
+              icon={ClipboardList}
+            />
+            <WorkstreamCard
+              title="WMS físico"
+              description="Fila de armazém"
+              value={derived.wmsPending}
+              total={Math.max(1, derived.queueTasks.length)}
+              href="/wms"
+              icon={Truck}
+            />
+            <WorkstreamCard
+              title="Agent Dute"
+              description="Memória e decisões"
+              value={derived.agentOpen}
+              total={Math.max(1, derived.alerts.length)}
+              href="/agente"
+              icon={Sparkles}
+            />
+            <WorkstreamCard
+              title="Faturamento"
+              description="Competência e cobrança"
+              value={toNumber((dashboard.data as AnyRecord).ad_valorem)}
+              total={Math.max(1, toNumber((dashboard.data as AnyRecord).custo_total))}
+              href="/faturamento"
+              icon={Receipt}
+            />
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid gap-4 xl:grid-cols-[.9fr_1.1fr]">
         <Card>
-          <CardHeader className="border-b border-border/60 bg-white/35">
-            <CardTitle className="text-sm font-bold uppercase tracking-wider text-gray-700">Estoque por Categoria</CardTitle>
+          <CardHeader className="border-b border-border/60">
+            <CardTitle className="text-base">Estoque por categoria</CardTitle>
+            <CardDescription>
+              Distribuição física por quantidade.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="pt-6">
-            <div className="h-[300px] w-full">
+          <CardContent className="pt-5">
+            <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data.by_category} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                  <XAxis dataKey="categoria" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#6b7280'}} />
-                  <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#6b7280'}} />
-                  <RechartsTooltip cursor={{fill: 'rgba(241,244,248,.72)'}} contentStyle={{borderRadius: '16px', border: '1px solid #E8EBEF', boxShadow: '0 18px 60px rgba(15,23,42,.05)'}} />
-                  <Bar dataKey="total_pecas" fill="hsl(var(--primary))" radius={[10, 10, 0, 0]} maxBarSize={50} />
+                <BarChart data={derived.categoryRows.slice(0, 12)} margin={{ top: 10, right: 12, left: -18, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E8EBEF" />
+                  <XAxis dataKey="categoria" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#64748B" }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#64748B" }} />
+                  <RechartsTooltip cursor={{ fill: "rgba(241,244,248,.72)" }} contentStyle={{ borderRadius: 16, border: "1px solid #E8EBEF", boxShadow: "0 18px 60px rgba(15,23,42,.05)" }} />
+                  <Bar dataKey="total_pecas" fill="hsl(var(--primary))" radius={[10, 10, 0, 0]} maxBarSize={44} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -110,69 +633,41 @@ export default function Dashboard() {
         </Card>
 
         <Card>
-          <CardHeader className="border-b border-border/60 bg-white/35 flex flex-row items-center justify-between">
-            <CardTitle className="text-sm font-bold uppercase tracking-wider text-gray-700">Movimentações Recentes</CardTitle>
+          <CardHeader className="border-b border-border/60">
+            <CardTitle className="text-base">Movimentos recentes</CardTitle>
+            <CardDescription>
+              Livro de estoque com últimas entradas e saídas.
+            </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs text-muted-foreground uppercase bg-gray-50/80 border-b border-border">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-border bg-white/45 text-xs text-muted-foreground">
                   <tr>
                     <th className="px-4 py-3 font-medium">Data</th>
                     <th className="px-4 py-3 font-medium">Tipo</th>
                     <th className="px-4 py-3 font-medium">SKU</th>
                     <th className="px-4 py-3 font-medium">Produto</th>
-                    <th className="px-4 py-3 font-medium text-right">Qtde</th>
+                    <th className="px-4 py-3 text-right font-medium">Qtde</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {data.recent_movements.slice(0, 7).map((mov) => (
-                    <tr key={mov.id} className="hover:bg-gray-50/80 transition-colors">
-                      <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">{new Date(mov.data).toLocaleDateString('pt-BR')}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <Badge variant="outline" className={mov.sinal > 0 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-rose-50 text-rose-700 border-rose-200"}>
-                          {mov.tipo_mov}
-                        </Badge>
+                  {derived.recentMovements.slice(0, 8).map((movement: AnyRecord) => (
+                    <tr key={movement.id} className="hover:bg-white/55">
+                      <td className="px-4 py-3 text-muted-foreground">{formatDate(movement.data)}</td>
+                      <td className="px-4 py-3">
+                        <Badge variant="outline">{movement.tipo_mov}</Badge>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap font-mono text-xs">{mov.cod_sku}</td>
-                      <td className="px-4 py-3 truncate max-w-[200px]" title={mov.produto}>{mov.produto}</td>
-                      <td className={`px-4 py-3 whitespace-nowrap text-right font-medium ${mov.sinal > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {mov.sinal > 0 ? '+' : '-'}{mov.qtde}
+                      <td className="px-4 py-3 font-mono text-xs">{movement.cod_sku}</td>
+                      <td className="max-w-[240px] truncate px-4 py-3">{movement.produto}</td>
+                      <td className="px-4 py-3 text-right font-medium">
+                        {movement.sinal > 0 ? "+" : "-"}
+                        {formatNumber(movement.qtde)}
                       </td>
                     </tr>
                   ))}
-                  {data.recent_movements.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                        Nenhuma movimentação recente
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader className="border-b border-border/60 bg-white/35">
-            <CardTitle className="text-sm font-bold uppercase tracking-wider text-gray-700">Status dos Pedidos</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-6">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {data.order_status_counts.map((stat) => (
-                <div key={stat.status} className="soft-panel rounded-[18px] p-4 text-center">
-                  <div className="text-3xl font-bold mb-1 text-primary">{stat.count}</div>
-                  <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">{stat.status}</div>
-                </div>
-              ))}
-              {data.order_status_counts.length === 0 && (
-                <div className="col-span-full text-center text-muted-foreground py-8">
-                  Nenhum pedido encontrado
-                </div>
-              )}
             </div>
           </CardContent>
         </Card>

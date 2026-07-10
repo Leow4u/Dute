@@ -38,10 +38,24 @@ import Reports from "./pages/reports";
 import Billing from "./pages/billing";
 import PriceList from "./pages/price-list";
 import Users from "./pages/users";
+import Settings from "./pages/settings";
 import MyInvoices from "./pages/my-invoices";
+import AiControl from "./pages/ai-control";
+import AgentKnowledge from "./pages/agent-knowledge";
+import {
+  ClienteAgenteOperacional,
+  ClienteAssistente,
+  ClienteDocumentos,
+  ClienteEstoque,
+  ClienteFaturas,
+  ClienteInicio,
+  ClientePedidos,
+  ClienteSolicitacoes,
+} from "./pages/client";
+import CustomerRequests from "./pages/customer-requests";
+import WarehouseOps, { type WarehouseOpsModuleKey } from "./pages/warehouse-ops";
 import NotFound from "./pages/not-found";
 import { useRole } from "./hooks/use-role";
-import { isDemoMode } from "./lib/demo-mode";
 import {
   AuthProvider,
   useAppUser,
@@ -52,7 +66,17 @@ import {
   firebaseConfigError,
   firestore,
 } from "./lib/firebase";
+import {
+  canAccessModule,
+  getHomePathForAppRole,
+  getRouteAppRoles,
+  getRouteProfileRoles,
+  normalizeProfileRole,
+  type CurrentAppRole as AppRole,
+  type ProfileRole,
+} from "./lib/modules";
 import { queryClient } from "./lib/queryClient";
+import { RealtimeSyncBridge } from "./lib/realtime-sync";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -73,7 +97,8 @@ type InviteState =
       data: {
         email: string;
         nome?: string;
-        role: "interno" | "cliente";
+        role: ProfileRole;
+        customer_code?: string;
       };
     };
 
@@ -82,6 +107,7 @@ type InviteData = {
   nome?: string;
   role?: string;
   status?: string;
+  customer_code?: string;
 };
 
 const initialAuthState: AuthFormState = {
@@ -91,6 +117,24 @@ const initialAuthState: AuthFormState = {
   error: null,
   loading: false,
 };
+
+function normalizeInviteRole(role: unknown): ProfileRole | null {
+  return normalizeProfileRole(role);
+}
+
+function appRole(role: ProfileRole): AppRole {
+  return role === "cliente" ? "cliente" : "interno";
+}
+
+function roleLabel(role: ProfileRole) {
+  if (role === "owner") return "owner Dutelog";
+  if (role === "admin") return "admin Dutelog";
+  if (role === "wms") return "operação WMS";
+  if (role === "financeiro") return "financeiro";
+  if (role === "suporte") return "suporte";
+  if (role === "interno") return "interno Dutelog";
+  return "cliente";
+}
 
 function getRestString(
   fields: Record<string, { stringValue?: string }> | undefined,
@@ -130,6 +174,7 @@ async function fetchInviteViaRest(token: string): Promise<InviteData | null> {
       nome: getRestString(payload.fields, "nome"),
       role: getRestString(payload.fields, "role"),
       status: getRestString(payload.fields, "status"),
+      customer_code: getRestString(payload.fields, "customer_code"),
     };
   } finally {
     window.clearTimeout(timeout);
@@ -162,7 +207,7 @@ function AuthShell({
   const logoPath = `${basePath}/dutelog-logo.png`;
 
   return (
-    <div className="app-atmosphere flex min-h-[100dvh] items-center justify-center px-4 py-10">
+    <div className="app-atmosphere flex h-[100dvh] items-center justify-center overflow-auto overscroll-contain px-4 py-10">
       <div className="glass-surface w-full max-w-[440px] rounded-[28px] p-7">
         <div className="mb-7 flex flex-col items-center gap-4 text-center">
           <img
@@ -327,9 +372,11 @@ function SignUpPage() {
         return;
       }
 
-      const role = data.role === "interno" ? "interno" : "cliente";
+      const role = normalizeInviteRole(data.role);
       const email = String(data.email ?? "").trim().toLowerCase();
-      if (!email) {
+      const customerCode =
+        data.customer_code ?? (role === "cliente" ? "BTG Pactual" : "Dutelog");
+      if (!email || !role) {
         if (active) setInvite({ status: "invalid" });
         return;
       }
@@ -342,6 +389,7 @@ function SignUpPage() {
             email,
             nome: data.nome,
             role,
+            customer_code: customerCode,
           },
         });
         setForm((current) => ({
@@ -393,6 +441,7 @@ function SignUpPage() {
         nome: form.nome.trim(),
         email: invite.data.email,
         role: invite.data.role,
+        customer_code: invite.data.customer_code,
         invite_id: invite.token,
         created_at: serverTimestamp(),
         updated_at: serverTimestamp(),
@@ -403,6 +452,29 @@ function SignUpPage() {
         used_at: serverTimestamp(),
       });
       await batch.commit();
+      await fetch("/api/ai/events", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: "access.invite_accepted",
+          title: "Convite aceito",
+          description: `${form.nome.trim()} ativou acesso como ${
+            roleLabel(invite.data.role)
+          }.`,
+          severity: "info",
+          entity_type: "usuario",
+          entity_id: credential.user.uid,
+          customer_code:
+            invite.data.customer_code ??
+            (appRole(invite.data.role) === "cliente" ? "BTG Pactual" : "Dutelog"),
+          payload: {
+            email: invite.data.email,
+            role: invite.data.role,
+            customer_code: invite.data.customer_code,
+            invite_id: invite.token,
+          },
+        }),
+      }).catch(() => undefined);
 
       setLocation("/");
     } catch (error) {
@@ -484,7 +556,7 @@ function SignUpPage() {
         <div className="soft-panel rounded-[16px] px-4 py-3 text-sm text-muted-foreground">
           Perfil do convite:{" "}
           <span className="font-medium text-foreground">
-            {invite.data.role === "interno" ? "Interno Dutelog" : "Cliente"}
+            {roleLabel(invite.data.role)}
           </span>
         </div>
         <div className="space-y-2">
@@ -548,9 +620,7 @@ function QueryClientCacheInvalidator() {
 function RoleHome() {
   const { role, isLoaded } = useRole();
   if (!isLoaded) return null;
-  return (
-    <Redirect to={role === "cliente" ? "/minhas-faturas" : "/dashboard"} />
-  );
+  return <Redirect to={getHomePathForAppRole(role)} />;
 }
 
 function HomeRedirect() {
@@ -561,19 +631,96 @@ function HomeRedirect() {
 }
 
 function RoleGate({
-  requireRole,
+  appRoles,
+  profileRoles,
   children,
 }: {
-  requireRole?: "interno" | "cliente";
+  appRoles: AppRole[];
+  profileRoles: ProfileRole[];
   children: React.ReactNode;
 }) {
   const { role, isLoaded } = useRole();
+  const { user } = useAppUser();
   if (!isLoaded) return null;
-  if (requireRole && role !== requireRole) return <Redirect to="/" />;
+  if (!role || !appRoles.includes(role)) return <Redirect to="/" />;
+  if (!canAccessModule(user?.publicMetadata.role, profileRoles)) {
+    return <Redirect to="/" />;
+  }
   return <>{children}</>;
 }
 
-function ProtectedRoute({ component: Component, requireRole, ...rest }: any) {
+type ProtectedRouteConfig = {
+  path: string;
+  component: React.ComponentType<any>;
+  appRoles: AppRole[];
+  profileRoles: ProfileRole[];
+};
+
+function protectedRoute(
+  path: string,
+  component: React.ComponentType<any>,
+): ProtectedRouteConfig {
+  return {
+    path,
+    component,
+    appRoles: getRouteAppRoles(path),
+    profileRoles: getRouteProfileRoles(path),
+  };
+}
+
+function WmsModuleScreen({ module }: { module: WarehouseOpsModuleKey }) {
+  return <WarehouseOps initialModule={module} />;
+}
+
+const WmsReceiving = () => <WmsModuleScreen module="receiving" />;
+const WmsQuality = () => <WmsModuleScreen module="quality" />;
+const WmsPutaway = () => <WmsModuleScreen module="putaway" />;
+const WmsPicking = () => <WmsModuleScreen module="picking" />;
+const WmsPacking = () => <WmsModuleScreen module="packing" />;
+const WmsExpedition = () => <WmsModuleScreen module="expedition" />;
+const WmsExceptions = () => <WmsModuleScreen module="exceptions" />;
+const WmsHomeRedirect = () => <Redirect to="/wms/recebimento" />;
+
+const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
+  protectedRoute("/dashboard", Dashboard),
+  protectedRoute("/reports", Reports),
+  protectedRoute("/solicitacoes", CustomerRequests),
+  protectedRoute("/wms/recebimento", WmsReceiving),
+  protectedRoute("/wms/qualidade", WmsQuality),
+  protectedRoute("/wms/putaway", WmsPutaway),
+  protectedRoute("/wms/picking", WmsPicking),
+  protectedRoute("/wms/packing", WmsPacking),
+  protectedRoute("/wms/expedicao", WmsExpedition),
+  protectedRoute("/wms/excecoes", WmsExceptions),
+  protectedRoute("/wms", WmsHomeRedirect),
+  protectedRoute("/warehouse", Warehouse),
+  protectedRoute("/products", Products),
+  protectedRoute("/skus", Skus),
+  protectedRoute("/movements", Movements),
+  protectedRoute("/orders", Orders),
+  protectedRoute("/faturamento", Billing),
+  protectedRoute("/tabela-precos", PriceList),
+  protectedRoute("/agente", AiControl),
+  protectedRoute("/agente/conhecimento", AgentKnowledge),
+  protectedRoute("/usuarios", Users),
+  protectedRoute("/configuracoes", Settings),
+  protectedRoute("/portal", ClienteInicio),
+  protectedRoute("/portal/estoque", ClienteEstoque),
+  protectedRoute("/portal/solicitacoes", ClienteSolicitacoes),
+  protectedRoute("/portal/pedidos", ClientePedidos),
+  protectedRoute("/portal/faturas", ClienteFaturas),
+  protectedRoute("/portal/documentos", ClienteDocumentos),
+  protectedRoute("/portal/agente/operacional", ClienteAgenteOperacional),
+  protectedRoute("/portal/agente", ClienteAssistente),
+  protectedRoute("/minhas-faturas", MyInvoices),
+];
+
+function ProtectedRoute({
+  component: Component,
+  appRoles,
+  profileRoles,
+  ...rest
+}: any) {
   const { user, isLoaded } = useAppUser();
 
   return (
@@ -582,7 +729,7 @@ function ProtectedRoute({ component: Component, requireRole, ...rest }: any) {
         if (!isLoaded) return null;
         if (!user) return <Redirect to="/sign-in" />;
         return (
-          <RoleGate requireRole={requireRole}>
+          <RoleGate appRoles={appRoles} profileRoles={profileRoles}>
             <AppLayout>
               <Component params={params} />
             </AppLayout>
@@ -598,6 +745,7 @@ function AppRoutes() {
     <AuthProvider>
       <QueryClientProvider client={queryClient}>
         <QueryClientCacheInvalidator />
+        <RealtimeSyncBridge />
         <TooltipProvider>
           <Switch>
             <Route path="/" component={HomeRedirect} />
@@ -605,58 +753,9 @@ function AppRoutes() {
             <Route path="/convite/*?" component={SignUpPage} />
             <Route path="/sign-up/*?" component={SignUpPage} />
 
-            <ProtectedRoute
-              path="/dashboard"
-              component={Dashboard}
-              requireRole="interno"
-            />
-            <ProtectedRoute
-              path="/products"
-              component={Products}
-              requireRole="interno"
-            />
-            <ProtectedRoute
-              path="/skus"
-              component={Skus}
-              requireRole="interno"
-            />
-            <ProtectedRoute
-              path="/movements"
-              component={Movements}
-              requireRole="interno"
-            />
-            <ProtectedRoute
-              path="/orders"
-              component={Orders}
-              requireRole="interno"
-            />
-            <ProtectedRoute
-              path="/warehouse"
-              component={Warehouse}
-              requireRole="interno"
-            />
-            <ProtectedRoute
-              path="/reports"
-              component={Reports}
-              requireRole="interno"
-            />
-            <ProtectedRoute
-              path="/faturamento"
-              component={Billing}
-              requireRole="interno"
-            />
-            <ProtectedRoute
-              path="/tabela-precos"
-              component={PriceList}
-              requireRole="interno"
-            />
-            <ProtectedRoute
-              path="/usuarios"
-              component={Users}
-              requireRole="interno"
-            />
-
-            <ProtectedRoute path="/minhas-faturas" component={MyInvoices} />
+            {PROTECTED_ROUTES.map((route) => (
+              <ProtectedRoute key={route.path} {...route} />
+            ))}
 
             <Route component={NotFound} />
           </Switch>
@@ -667,81 +766,10 @@ function AppRoutes() {
   );
 }
 
-function DemoRoutes() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Switch>
-          <Route path="/">
-            <Redirect to="/dashboard" />
-          </Route>
-          <Route path="/dashboard">
-            <AppLayout>
-              <Dashboard />
-            </AppLayout>
-          </Route>
-          <Route path="/products">
-            <AppLayout>
-              <Products />
-            </AppLayout>
-          </Route>
-          <Route path="/skus">
-            <AppLayout>
-              <Skus />
-            </AppLayout>
-          </Route>
-          <Route path="/movements">
-            <AppLayout>
-              <Movements />
-            </AppLayout>
-          </Route>
-          <Route path="/orders">
-            <AppLayout>
-              <Orders />
-            </AppLayout>
-          </Route>
-          <Route path="/warehouse">
-            <AppLayout>
-              <Warehouse />
-            </AppLayout>
-          </Route>
-          <Route path="/reports">
-            <AppLayout>
-              <Reports />
-            </AppLayout>
-          </Route>
-          <Route path="/faturamento">
-            <AppLayout>
-              <Billing />
-            </AppLayout>
-          </Route>
-          <Route path="/tabela-precos">
-            <AppLayout>
-              <PriceList />
-            </AppLayout>
-          </Route>
-          <Route path="/usuarios">
-            <AppLayout>
-              <Users />
-            </AppLayout>
-          </Route>
-          <Route path="/minhas-faturas">
-            <AppLayout>
-              <MyInvoices />
-            </AppLayout>
-          </Route>
-          <Route component={NotFound} />
-        </Switch>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
-  );
-}
-
 function App() {
   return (
     <WouterRouter base={basePath}>
-      {isDemoMode ? <DemoRoutes /> : <AppRoutes />}
+      <AppRoutes />
     </WouterRouter>
   );
 }

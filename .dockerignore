@@ -1,0 +1,14 @@
+.git
+.firebase
+.secrets
+node_modules
+artifacts/btg-inventory/node_modules
+artifacts/btg-inventory/src
+artifacts/btg-inventory/public
+attached_assets
+tmp
+functions
+lib
+docs
+agents
+*.log
