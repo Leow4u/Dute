@@ -7,6 +7,7 @@ import { vertexAI } from "@genkit-ai/google-genai";
 
 import {
   advanceWarehouseTaskTransaction,
+  createInventoryMovementTransaction,
   createCustomerRequestTransaction,
   decideCustomerRequestTransaction,
   emitImmutableEvent,
@@ -127,6 +128,22 @@ const AdvanceWarehouseTaskSchema = z.object({
   note: z.string().optional(),
   expected_status: z.string().trim().min(1).optional(),
   idempotency_key: z.string().optional(),
+});
+
+const InventoryMovementSchema = z.object({
+  data: z.string().optional(),
+  tipo_mov: z.string().trim().min(1),
+  cod_sku: z.string().trim().min(1),
+  produto: z.string().trim().optional(),
+  qtde: z.number().positive(),
+  origem: z.string().trim().optional(),
+  destino: z.string().trim().optional(),
+  doc_nf: z.string().trim().optional(),
+  motivo: z.string().trim().min(3),
+  idempotency_key: z.string().trim().min(1),
+  customer_code: z.string().trim().optional(),
+  client_item_code: z.string().trim().optional(),
+  unit_cost: z.number().nonnegative().optional(),
 });
 
 const WarehouseExceptionSchema = z.object({
@@ -293,6 +310,15 @@ async function getProfile(request: CallableRequest<unknown>): Promise<Profile> {
 function requireInternal(profile: Profile) {
   if (!["owner", "admin", "interno", "wms", "financeiro", "suporte"].includes(profile.role)) {
     throw new HttpsError("permission-denied", "Ação permitida somente para a operação Dutelog.");
+  }
+}
+
+function requireWarehouseWrite(profile: Profile) {
+  if (!["owner", "admin", "interno", "wms"].includes(profile.role)) {
+    throw new HttpsError(
+      "permission-denied",
+      "Ação permitida somente para administração ou operação de armazém.",
+    );
   }
 }
 
@@ -1141,6 +1167,47 @@ export const advanceWarehouseTask = onCall(async (request) => {
   requireInternal(profile);
   return advanceWarehouseTaskFlow(
     AdvanceWarehouseTaskSchema.parse(request.data ?? {}),
+    profile,
+  );
+});
+
+export const createInventoryMovement = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  const input = InventoryMovementSchema.parse(request.data ?? {});
+  const positiveTypes = new Set(["ENTRADA", "DEVOLUCAO", "AJUSTE_ENTRADA"]);
+  const type = positiveTypes.has(input.tipo_mov.toUpperCase())
+    ? "ENTRADA"
+    : "SAIDA";
+  const locationId =
+    type === "ENTRADA"
+      ? input.destino || input.origem
+      : input.origem || input.destino;
+  if (!locationId) {
+    throw new HttpsError(
+      "invalid-argument",
+      type === "ENTRADA"
+        ? "Informe o local de destino da entrada."
+        : "Informe o local de origem da saída.",
+    );
+  }
+  const customer_code = requireCustomerScope(profile, input.customer_code);
+  return createInventoryMovementTransaction(
+    db,
+    {
+      type,
+      quantity: input.qtde,
+      customer_code,
+      sku_code: input.cod_sku,
+      client_item_code: input.client_item_code,
+      product_name: input.produto,
+      location_id: locationId,
+      unit_cost: input.unit_cost,
+      reason: input.motivo,
+      reference: input.doc_nf,
+      occurred_at: input.data,
+      idempotency_key: input.idempotency_key,
+    },
     profile,
   );
 });

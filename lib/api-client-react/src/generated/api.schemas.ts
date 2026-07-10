@@ -172,6 +172,8 @@ export interface MovementInput {
   doc_nf?: string;
   responsavel?: string;
   caixa_origem?: string;
+  motivo: string;
+  idempotency_key: string;
 }
 
 export interface Order {

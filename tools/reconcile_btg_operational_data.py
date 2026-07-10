@@ -111,6 +111,21 @@ def load_live_firestore(
     }
 
 
+def load_inventory_control(
+    *, project_id: str, database: str, access_token: str
+) -> dict[str, Any] | None:
+    documents = importer.fetch_collection_raw(
+        "system_controls",
+        project_id=project_id,
+        database=database,
+        access_token=access_token,
+    )
+    for document in documents:
+        if str(document.get("name", "")).rsplit("/", 1)[-1] == "inventory":
+            return decode_firestore_document(document)
+    return None
+
+
 def _distinct(rows: Iterable[dict[str, Any]], field: str) -> list[str]:
     return sorted(
         {
@@ -589,6 +604,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--backup", type=Path)
     parser.add_argument("--confirm")
+    parser.add_argument("--reconciliation-id")
     return parser
 
 
@@ -605,6 +621,8 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--backup deve apontar para um arquivo que ainda não existe")
         if args.skip_firestore or args.firestore_json:
             parser.error("--apply exige reconciliação ao vivo com o Firestore")
+        if not args.reconciliation_id:
+            parser.error("--apply exige --reconciliation-id")
 
     if not args.inventory_xlsx.exists():
         print(
@@ -658,6 +676,22 @@ def main(argv: list[str] | None = None) -> int:
             database=args.database,
         )
         access_token = importer.token()
+        control = load_inventory_control(
+            project_id=args.project_id,
+            database=args.database,
+            access_token=access_token,
+        )
+        if not control:
+            parser.error("controle system_controls/inventory não encontrado")
+        if not (
+            control.get("imports_frozen") is True
+            and control.get("movements_frozen") is True
+            and control.get("reconciliation_status") == "running"
+            and control.get("reconciliation_id") == args.reconciliation_id
+        ):
+            parser.error(
+                "a reconciliação não possui congelamento ativo com o mesmo reconciliation_id"
+            )
         backup = importer.create_backup(
             args.backup,
             importer.INVENTORY_COLLECTIONS,

@@ -75,6 +75,14 @@ function functionRoute(pathname: string, method: string): FunctionRoute | null {
     };
   }
 
+  if (method === "POST" && pathname === "/api/movements") {
+    return {
+      name: "createInventoryMovement",
+      status: 201,
+      payload: async (_pathname, init) => readJsonBody(init),
+    };
+  }
+
   if (method === "POST" && pathname === "/api/agent-dute/chat") {
     return {
       name: "chatWithAgentDute",
@@ -131,7 +139,19 @@ export async function callFunctionsApi(
 ) {
   if (!firebaseApp) return null;
   const route = functionRoute(pathname, method);
-  if (!route) return null;
+  if (!route) {
+    if (method !== "GET" && import.meta.env.VITE_API_MODE === "functions") {
+      return response(
+        {
+          message:
+            "Esta alteração exige uma Cloud Function autorizada e não possui rota de backend.",
+          code: "FUNCTION_ROUTE_REQUIRED",
+        },
+        501,
+      );
+    }
+    return null;
+  }
 
   try {
     const callable = httpsCallable(getFunctions(firebaseApp, "southamerica-east1"), route.name);

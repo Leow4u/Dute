@@ -51,6 +51,7 @@ const movementSchema = z.object({
   destino: z.string().optional(),
   responsavel: z.string().optional(),
   doc_nf: z.string().optional(),
+  motivo: z.string().trim().min(3, "Informe o motivo da movimentação"),
 });
 
 type MovementFormValues = z.infer<typeof movementSchema>;
@@ -295,6 +296,7 @@ function MovementModal() {
       destino: "ESTOQUE_BTG",
       responsavel: user?.fullName || "Sistema",
       doc_nf: "",
+      motivo: "",
     },
   });
 
@@ -308,8 +310,13 @@ function MovementModal() {
     // Ensure date is properly formatted as ISO
     data.data = new Date(data.data).toISOString();
 
+    const payload = {
+      ...data,
+      idempotency_key: crypto.randomUUID(),
+    };
+
     createMovement.mutate(
-      { data },
+      { data: payload },
       {
         onSuccess: () => {
           queryClient.invalidateQueries();
@@ -382,6 +389,19 @@ function MovementModal() {
                   </Select>
                 )}
               />
+            </div>
+            <div className="space-y-2 col-span-2">
+              <Label htmlFor="motivo">Motivo *</Label>
+              <Input
+                id="motivo"
+                placeholder="Ex.: ajuste após contagem física"
+                {...register("motivo")}
+              />
+              {errors.motivo && (
+                <p className="text-sm text-destructive">
+                  {errors.motivo.message}
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">

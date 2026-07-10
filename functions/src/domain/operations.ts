@@ -32,6 +32,7 @@ const collections = {
   clientInventory: "client_inventory",
   clientOrderTracking: "client_order_tracking",
   clientRequestStatus: "client_request_status",
+  systemControls: "system_controls",
 } as const;
 
 export type OperationalActor = {
@@ -79,6 +80,21 @@ export type AdvanceOperationalTaskInput = {
   note?: string;
   expected_status?: string;
   idempotency_key?: string;
+};
+
+export type CreateInventoryMovementInput = {
+  type: "ENTRADA" | "SAIDA";
+  quantity: number;
+  customer_code: string;
+  sku_code: string;
+  client_item_code?: string;
+  product_name?: string;
+  location_id: string;
+  unit_cost?: number;
+  reason: string;
+  reference?: string;
+  occurred_at?: string;
+  idempotency_key: string;
 };
 
 export type OperationalEventInput = {
@@ -362,6 +378,31 @@ async function readRows(
   }));
 }
 
+async function assertInventoryOperationsEnabled(
+  transaction: Transaction,
+  db: Firestore,
+) {
+  const snapshot = await transaction.get(
+    db.collection(collections.systemControls).doc("inventory"),
+  );
+  if (!snapshot.exists) return;
+
+  const control = snapshot.data() ?? {};
+  if (
+    control.movements_frozen === true ||
+    control.reconciliation_status === "running"
+  ) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Movimentações de estoque estão temporariamente bloqueadas para reconciliação.",
+      {
+        code: "INVENTORY_RECONCILIATION_IN_PROGRESS",
+        reconciliation_id: control.reconciliation_id ?? null,
+      },
+    );
+  }
+}
+
 function exactBalanceQuery(
   db: Firestore,
   customerCode: string,
@@ -589,6 +630,198 @@ function createMovement(
   );
 }
 
+export async function createInventoryMovementTransaction(
+  db: Firestore,
+  input: CreateInventoryMovementInput,
+  actor: OperationalActor,
+) {
+  const quantity = requiredPositive(input.quantity, "Quantidade");
+  const customerCode = text(input.customer_code);
+  const skuCode = text(input.sku_code);
+  const locationId = text(input.location_id);
+  const reason = text(input.reason);
+  if (!customerCode || !skuCode || !locationId || !reason) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Cliente, SKU, local e motivo são obrigatórios.",
+    );
+  }
+
+  const occurredAt = input.occurred_at ?? new Date().toISOString();
+  const operationId = `op_inventory_${digest({
+    customer: customerCode,
+    nonce: input.idempotency_key,
+  })}`;
+  const inputHash = digest(input, 64);
+  const operationRef = db.collection(collections.operations).doc(operationId);
+
+  return db.runTransaction(async (transaction) => {
+    const operationSnapshot = await transaction.get(operationRef);
+    const previous = operationResult<Record<string, unknown>>(
+      operationSnapshot,
+      inputHash,
+    );
+    if (previous) return previous;
+
+    await assertInventoryOperationsEnabled(transaction, db);
+
+    const balanceRows = await readRows(
+      transaction,
+      exactBalanceQuery(db, customerCode, skuCode, locationId),
+    );
+    if (balanceRows.length > 1) {
+      throw new HttpsError(
+        "failed-precondition",
+        `Mais de um saldo existe para SKU ${skuCode} no local ${locationId}.`,
+      );
+    }
+
+    const balanceRow = balanceRows[0];
+    const beforeOnHand = number(balanceRow?.data.qty_on_hand);
+    const beforeReserved = number(balanceRow?.data.qty_reserved);
+    const available = beforeOnHand - beforeReserved;
+    if (input.type === "SAIDA" && available < quantity) {
+      throw new HttpsError(
+        "failed-precondition",
+        `Saldo disponível insuficiente para ${skuCode}: ${available}.`,
+      );
+    }
+
+    const delta = input.type === "ENTRADA" ? quantity : -quantity;
+    const afterOnHand = beforeOnHand + delta;
+    const balanceId =
+      balanceRow?.id ??
+      safeDocId(`bal_${customerCode}__${skuCode}__${locationId}`);
+    const balancePayload = compact({
+      id: balanceId,
+      customer_code: customerCode,
+      sku_code: skuCode,
+      client_item_code:
+        text(input.client_item_code) ||
+        text(balanceRow?.data.client_item_code) ||
+        undefined,
+      product_name:
+        text(input.product_name) ||
+        text(balanceRow?.data.product_name) ||
+        skuCode,
+      location_id: locationId,
+      unit_cost: number(input.unit_cost || balanceRow?.data.unit_cost),
+      qty_on_hand: afterOnHand,
+      qty_reserved: beforeReserved,
+      qty_available: afterOnHand - beforeReserved,
+      status: afterOnHand > 0 ? "available" : "empty",
+      source: "functions_inventory_movement",
+      updated_at: FieldValue.serverTimestamp(),
+    });
+
+    if (balanceRow) {
+      transaction.update(balanceRow.ref, balancePayload);
+    } else {
+      if (input.type !== "ENTRADA") {
+        throw new HttpsError(
+          "failed-precondition",
+          `Saldo não encontrado para SKU ${skuCode} no local ${locationId}.`,
+        );
+      }
+      transaction.create(
+        db.collection(collections.stockBalances).doc(balanceId),
+        {
+          ...balancePayload,
+          id: balanceId,
+          created_at: FieldValue.serverTimestamp(),
+        },
+      );
+    }
+
+    const ledgerId = movementId(operationId, "manual");
+    createMovement(
+      transaction,
+      db,
+      ledgerId,
+      {
+        type: input.type,
+        quantity,
+        customerCode,
+        skuCode,
+        clientItemCode: text(input.client_item_code) || undefined,
+        productName: text(input.product_name) || undefined,
+        locationId,
+        beforeQty: beforeOnHand,
+        afterQty: afterOnHand,
+        source: "functions_manual_inventory",
+        occurredAt,
+        entity: {
+          reason,
+          reference: text(input.reference) || undefined,
+          operational_operation_id: operationId,
+        },
+      },
+      actor,
+    );
+
+    updateClientInventory(transaction, db, {
+      customerCode,
+      skuCode,
+      clientItemCode: text(input.client_item_code) || undefined,
+      productName: text(input.product_name) || undefined,
+      unitCost: number(input.unit_cost || balanceRow?.data.unit_cost),
+      onHandDelta: delta,
+    });
+
+    const event = createEvent(
+      transaction,
+      db,
+      operationEventId(operationId, "inventory_moved"),
+      {
+        type:
+          input.type === "ENTRADA"
+            ? "inventory.received"
+            : "inventory.shipped",
+        title:
+          input.type === "ENTRADA"
+            ? "Entrada manual de estoque"
+            : "Saída manual de estoque",
+        description: `${quantity} unidade(s) de ${skuCode}. ${reason}`,
+        severity: "attention",
+        entity_type: "movimentacao",
+        entity_id: ledgerId,
+        customer_code: customerCode,
+        payload: {
+          movement_id: ledgerId,
+          sku_code: skuCode,
+          location_id: locationId,
+          quantity,
+          before_qty: beforeOnHand,
+          after_qty: afterOnHand,
+          reason,
+          reference: text(input.reference) || undefined,
+        },
+      },
+      actor,
+    );
+
+    const result = {
+      ok: true,
+      id: ledgerId,
+      movement_id: ledgerId,
+      stock_balance_id: balanceId,
+      qty_before: beforeOnHand,
+      qty_after: afterOnHand,
+      events: [event],
+    };
+    createOperationReceipt(
+      transaction,
+      operationRef,
+      inputHash,
+      "inventory.movement",
+      ledgerId,
+      actor,
+      result,
+    );
+    return result;
+  });
+}
+
 export async function emitImmutableEvent(
   db: Firestore,
   input: OperationalEventInput,
@@ -790,6 +1023,8 @@ export async function decideCustomerRequestTransaction(
       inputHash,
     );
     if (previous) return previous;
+
+    await assertInventoryOperationsEnabled(transaction, db);
 
     const requestSnapshot = await transaction.get(requestRef);
     if (!requestSnapshot.exists) {
@@ -1380,6 +1615,8 @@ export async function advanceWarehouseTaskTransaction(
       inputHash,
     );
     if (previous) return previous;
+
+    await assertInventoryOperationsEnabled(transaction, db);
 
     const taskSnapshot = await transaction.get(taskRef);
     if (!taskSnapshot.exists) {

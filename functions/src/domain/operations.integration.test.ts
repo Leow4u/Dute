@@ -6,6 +6,7 @@ import { getFirestore, type Firestore } from "firebase-admin/firestore";
 
 import {
   advanceWarehouseTaskTransaction,
+  createInventoryMovementTransaction,
   createCustomerRequestTransaction,
   decideCustomerRequestTransaction,
   type OperationalActor,
@@ -279,5 +280,62 @@ describe("fluxo WMS transacional", () => {
       .get();
     assert.equal(movements.size, 1);
     assert.equal(movements.docs[0]?.data().tipo_mov, "ENTRADA");
+  });
+});
+
+describe("ledger manual e congelamento", () => {
+  it("é idempotente e bloqueia novas mutações durante reconciliação", async () => {
+    await clearFirestore();
+    await db.collection("stock_balances").doc("manual-balance").set({
+      id: "manual-balance",
+      customer_code: "BTG Pactual",
+      sku_code: "BTG-MANUAL-1",
+      client_item_code: "ITEM-MANUAL-1",
+      product_name: "Produto de teste do ledger",
+      location_id: "LOC-MANUAL",
+      qty_on_hand: 5,
+      qty_reserved: 0,
+      qty_available: 5,
+      unit_cost: 10,
+    });
+
+    const input = {
+      type: "ENTRADA" as const,
+      quantity: 2,
+      customer_code: "BTG Pactual",
+      sku_code: "BTG-MANUAL-1",
+      client_item_code: "ITEM-MANUAL-1",
+      product_name: "Produto de teste do ledger",
+      location_id: "LOC-MANUAL",
+      unit_cost: 10,
+      reason: "Ajuste após contagem física",
+      idempotency_key: "manual-entry-1",
+    };
+    const created = await createInventoryMovementTransaction(db, input, actor);
+    const repeated = await createInventoryMovementTransaction(db, input, actor);
+    assert.deepEqual(repeated, created);
+
+    const balance = await db.collection("stock_balances").doc("manual-balance").get();
+    assert.equal(balance.data()?.qty_on_hand, 7);
+    const ledger = await db
+      .collection("movements")
+      .where("sku_code", "==", "BTG-MANUAL-1")
+      .get();
+    assert.equal(ledger.size, 1);
+
+    await db.collection("system_controls").doc("inventory").set({
+      movements_frozen: true,
+      imports_frozen: true,
+      reconciliation_status: "running",
+      reconciliation_id: "reconcile-test",
+    });
+    await assert.rejects(
+      createInventoryMovementTransaction(
+        db,
+        { ...input, idempotency_key: "manual-entry-2" },
+        actor,
+      ),
+      /temporariamente bloqueadas/,
+    );
   });
 });

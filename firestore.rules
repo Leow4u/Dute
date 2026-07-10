@@ -107,9 +107,8 @@ service cloud.firestore {
     }
 
     function isOwnProjection() {
-      return resource.data.keys().hasAll(['customer_code', 'published_at'])
-        && isOwnCustomerCode(resource.data.customer_code)
-        && resource.data.published_at != null;
+      return resource.data.keys().hasAll(['customer_code'])
+        && isOwnCustomerCode(resource.data.customer_code);
     }
 
     function optionalStringField(field) {
@@ -611,8 +610,7 @@ service cloud.firestore {
 
     match /events/{eventId} {
       allow read: if canReadObservability() || canFinanceReadEvent();
-      allow create: if canCreateEvent(eventId);
-      allow update, delete: if false;
+      allow create, update, delete: if false;
     }
 
     match /ai_agent_inbox/{inboxId} {
@@ -690,9 +688,7 @@ service cloud.firestore {
 
     match /customer_requests/{requestId} {
       allow read: if canReadOperations();
-      allow create: if canCoordinateOperations();
-      allow update: if canCoordinateOperations();
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /client_request_status/{requestId} {
@@ -702,9 +698,7 @@ service cloud.firestore {
 
     match /orders/{orderId} {
       allow read: if canReadOperations();
-      allow create: if canCoordinateOperations();
-      allow update: if canCoordinateOperations() || safeWmsOrderUpdate();
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /client_order_tracking/{orderId} {
@@ -714,22 +708,12 @@ service cloud.firestore {
 
     match /order_items/{itemId} {
       allow read: if canReadOperations();
-      allow create: if canCoordinateOperations();
-      allow update: if canCoordinateOperations() || safeWmsOrderItemUpdate();
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /stock_balances/{balanceId} {
       allow read: if canReadOperations();
-      allow create: if isPrivileged() || (isWms() && doesNotPublishOnCreate());
-      allow update: if isPrivileged()
-        || (
-          isWms()
-          && preservesCustomerCode()
-          && publicationFieldsUntouched()
-        )
-        || safeCoordinatorBalanceUpdate();
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /client_inventory/{inventoryId} {
@@ -739,14 +723,7 @@ service cloud.firestore {
 
     match /movements/{movementId} {
       allow read: if canReadOperations();
-      allow create: if isPrivileged() || (isWms() && doesNotPublishOnCreate());
-      allow update: if isPrivileged()
-        || (
-          isWms()
-          && preservesCustomerCode()
-          && publicationFieldsUntouched()
-        );
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /locations/{locationId} {
@@ -763,163 +740,92 @@ service cloud.firestore {
 
     match /stock_reservations/{reservationId} {
       allow read: if canReadOperations();
-      allow create: if canCoordinateOperations();
-      allow update: if canCoordinateOperations()
-        || (
-          isWms()
-          && preservesCustomerCode()
-          && publicationFieldsUntouched()
-        );
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /inbound_receipts/{receiptId} {
       allow read: if canReadOperations();
-      allow create: if canCreateWarehouseRecord();
-      allow update: if canUpdateWarehouseRecord();
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /inbound_items/{itemId} {
       allow read: if canReadOperations();
-      allow create: if canCreateWarehouseRecord();
-      allow update: if canUpdateWarehouseRecord();
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /putaway_tasks/{taskId} {
       allow read: if canReadOperations();
-      allow create: if canCreateWarehouseRecord();
-      allow update: if canUpdateWarehouseRecord();
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /quality_exceptions/{exceptionId} {
       allow read: if canReadOperations();
-      allow create: if isPrivileged() || (isWms() && doesNotPublishOnCreate());
-      allow update: if canCoordinateOperations()
-        || (
-          isWms()
-          && preservesCustomerCode()
-          && publicationFieldsUntouched()
-        );
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /pick_tasks/{taskId} {
       allow read: if canReadOperations();
-      allow create: if canCreateWarehouseRecord();
-      allow update: if canUpdateWarehouseRecord();
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /pick_lines/{lineId} {
       allow read: if canReadOperations();
-      allow create: if canCreateWarehouseRecord();
-      allow update: if canUpdateWarehouseRecord();
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /pack_tasks/{taskId} {
       allow read: if canReadOperations();
-      allow create: if canCreateWarehouseRecord();
-      allow update: if canUpdateWarehouseRecord();
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /packages/{packageId} {
       allow read: if canReadOperations();
-      allow create: if isPrivileged() || (isWms() && doesNotPublishOnCreate());
-      allow update: if isPrivileged()
-        || (
-          isWms()
-          && preservesCustomerCode()
-          && publicationFieldsUntouched()
-        );
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /package_items/{itemId} {
       allow read: if canReadOperations();
-      allow create: if isPrivileged() || (isWms() && doesNotPublishOnCreate());
-      allow update: if isPrivileged()
-        || (
-          isWms()
-          && preservesCustomerCode()
-          && publicationFieldsUntouched()
-        );
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /shipments/{shipmentId} {
       allow read: if canReadOperations();
-      allow create: if canCreateWarehouseRecord();
-      allow update: if canUpdateWarehouseRecord();
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /shipment_items/{itemId} {
       allow read: if canReadOperations();
-      allow create: if isPrivileged() || (isWms() && doesNotPublishOnCreate());
-      allow update: if isPrivileged()
-        || (
-          isWms()
-          && preservesCustomerCode()
-          && publicationFieldsUntouched()
-        );
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /delivery_proofs/{proofId} {
       allow read: if canReadOperations();
-      allow create: if isPrivileged() || (isWms() && doesNotPublishOnCreate());
-      allow update: if isPrivileged()
-        || (
-          isWms()
-          && preservesCustomerCode()
-          && publicationFieldsUntouched()
-        );
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /returns/{returnId} {
       allow read: if canReadOperations();
-      allow create: if canCreateWarehouseRecord();
-      allow update: if canUpdateWarehouseRecord();
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /return_items/{itemId} {
       allow read: if canReadOperations();
-      allow create: if canCreateWarehouseRecord();
-      allow update: if canUpdateWarehouseRecord();
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /cycle_counts/{countId} {
       allow read: if canReadOperations();
-      allow create: if canCreateWarehouseRecord();
-      allow update: if canUpdateWarehouseRecord();
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /cycle_count_lines/{lineId} {
       allow read: if canReadOperations();
-      allow create: if canCreateWarehouseRecord();
-      allow update: if canUpdateWarehouseRecord();
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /stock_adjustments/{adjustmentId} {
       allow read: if canReadOperations();
-      allow create: if isPrivileged() || (isWms() && doesNotPublishOnCreate());
-      allow update: if isPrivileged()
-        || (
-          isWms()
-          && preservesCustomerCode()
-          && publicationFieldsUntouched()
-        );
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /documents/{documentId} {

@@ -1250,6 +1250,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     expected_confirmation = confirmation_phrase(args.project_id, args.database)
     if args.apply:
+        parser.error(
+            "--apply foi congelado para o importador legado; "
+            "use tools/reconcile_btg_operational_data.py com controle de reconciliação ativo"
+        )
         if args.backup is None:
             parser.error("--apply exige --backup apontando para um arquivo novo")
         if args.confirm != expected_confirmation:
