@@ -116,7 +116,7 @@ export function ClienteAgenteOperacional() {
                         Estoque
                       </p>
                       <p className="mt-2 text-sm font-medium">
-                        {formatNumber(inventory.total_skus)} SKU(s)
+                        {formatNumber(inventory.total_skus)} item(ns)
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {formatNumber(lowStock)} item(ns) em baixa cobertura
@@ -153,7 +153,7 @@ export function ClienteAgenteOperacional() {
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-muted-foreground">Estoque</span>
                       <span className="font-medium">
-                        {formatNumber(inventory.total_skus)} SKU(s)
+                        {formatNumber(inventory.total_skus)} item(ns)
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-3">

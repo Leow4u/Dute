@@ -49,12 +49,12 @@ type ChatView = "prompt" | "conversation";
 const chatQueryKey = ["agent-dute-chat"] as const;
 
 const promptShortcuts = [
-  "Me mostre o que merece atenção hoje",
-  "Consultar status de pedido",
-  "Analisar divergência de estoque",
-  "Resumir movimentações do dia",
-  "Ver riscos da operação",
-  "Quais faturas devo acompanhar?",
+  "O que precisa da minha atenção hoje?",
+  "Onde está meu pedido?",
+  "Quais produtos estão acabando?",
+  "O que entrou ou saiu do estoque?",
+  "Tenho alguma entrega para acompanhar?",
+  "Há alguma fatura perto do vencimento?",
 ];
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -390,7 +390,7 @@ export function ClienteAssistente() {
                         setView("prompt");
                       }}
                     >
-                      Nova pergunta
+                      Nova conversa
                     </Button>
                   </div>
                 </header>
@@ -473,7 +473,7 @@ export function ClienteAssistente() {
                   Agent Dute · {customerCode}
                 </p>
                 <h1 className="text-4xl font-medium tracking-normal text-foreground md:text-5xl">
-                  Como posso ajudar na operação hoje?
+                  O que você precisa acompanhar hoje?
                 </h1>
               </div>
 

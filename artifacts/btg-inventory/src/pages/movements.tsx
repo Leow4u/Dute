@@ -1,20 +1,22 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  type Movement,
   useListMovements,
   useCreateMovement,
   getListMovementsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
-  Search,
+  Activity,
   Plus,
-  Filter,
   ArrowDownRight,
   ArrowUpRight,
+  ClipboardList,
+  PackagePlus,
+  PackageMinus,
 } from "lucide-react";
 import {
   Dialog,
@@ -37,6 +39,17 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
+import {
+  formatStockNumber,
+  StockBadge,
+  StockFilterChip,
+  StockMetricCard,
+  StockMetricsGrid,
+  StockPageShell,
+  StockTableCard,
+  StockTablePagination,
+  StockToolbar,
+} from "@/components/stock/stock-workbench";
 
 const POSITIVE_MOVEMENTS = new Set(["ENTRADA", "DEVOLUCAO", "AJUSTE_ENTRADA"]);
 
@@ -59,70 +72,140 @@ type MovementFormValues = z.infer<typeof movementSchema>;
 export default function Movements() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("todos");
   const [page, setPage] = useState(0);
+  const [cursors, setCursors] = useState<string[]>([]);
   const limit = 50;
 
-  useMemo(() => {
+  useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(search);
       setPage(0);
+      setCursors([]);
     }, 500);
     return () => clearTimeout(timer);
   }, [search]);
 
-  const { data, isLoading } = useListMovements(
-    { cod_sku: debouncedSearch || undefined, limit, offset: page * limit },
-    {
-      query: {
-        queryKey: getListMovementsQueryKey({
-          cod_sku: debouncedSearch || undefined,
-          limit,
-          offset: page * limit,
-        }),
-      },
+  useEffect(() => {
+    setPage(0);
+    setCursors([]);
+  }, [typeFilter]);
+
+  const listParams = {
+    cod_sku: debouncedSearch || undefined,
+    tipo_mov: typeFilter === "todos" ? undefined : typeFilter,
+    limit,
+    offset: page * limit,
+  };
+
+  const { data, isLoading } = useListMovements(listParams, {
+    query: {
+      queryKey: getListMovementsQueryKey(listParams),
     },
-  );
+  });
+
+  // Keep cursor stack in sync when server returns next_cursor (extra field).
+  useEffect(() => {
+    const next = (data as { next_cursor?: string } | undefined)?.next_cursor;
+    if (!next || page < cursors.length) return;
+    setCursors((prev) => (prev[page] === next ? prev : [...prev.slice(0, page), next]));
+  }, [data, page, cursors]);
+
+  const movements = data?.items ?? [];
+  const total = data?.total || 0;
+  const hasMore =
+    Boolean((data as { has_more?: boolean } | undefined)?.has_more) ||
+    (page + 1) * limit < total;
+  const stats = useMemo(() => {
+    return movements.reduce(
+      (acc, mov) => {
+        const quantity = Number(mov.qtde ?? 0);
+        if (mov.sinal > 0) {
+          acc.entries += 1;
+          acc.entryQuantity += quantity;
+        } else {
+          acc.exits += 1;
+          acc.exitQuantity += quantity;
+        }
+        if (mov.tipo_mov?.includes("AJUSTE")) acc.adjustments += 1;
+        return acc;
+      },
+      { entries: 0, exits: 0, adjustments: 0, entryQuantity: 0, exitQuantity: 0 },
+    );
+  }, [movements]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-primary">
-            Registro Kardex
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Livro-razão imutável de todas as operações de entrada e saída de
-            estoque.
-          </p>
-        </div>
-        <MovementModal />
-      </div>
+    <StockPageShell
+      eyebrow="Estoque"
+      title="Movimentações"
+      description="Ledger operacional append-only: toda entrada, saída, devolução e ajuste deve deixar rastro, motivo, operador e documento. Esta é a fonte para explicar divergências."
+      icon={<Activity className="h-6 w-6" />}
+      actions={<MovementModal />}
+      meta={
+        <>
+          <StockBadge>Kardex</StockBadge>
+          <StockBadge>Mutação crítica via função</StockBadge>
+        </>
+      }
+    >
+      <StockMetricsGrid>
+        <StockMetricCard
+          label="Movimentos"
+          value={formatStockNumber(data?.total ?? 0)}
+          hint="Eventos registrados no ledger operacional."
+          icon={<ClipboardList className="h-5 w-5" />}
+          tone="blue"
+        />
+        <StockMetricCard
+          label="Entradas"
+          value={formatStockNumber(stats.entryQuantity)}
+          hint={`${formatStockNumber(stats.entries)} evento(s) positivo(s) nesta página.`}
+          icon={<PackagePlus className="h-5 w-5" />}
+        />
+        <StockMetricCard
+          label="Saídas"
+          value={formatStockNumber(stats.exitQuantity)}
+          hint={`${formatStockNumber(stats.exits)} evento(s) negativo(s) nesta página.`}
+          icon={<PackageMinus className="h-5 w-5" />}
+        />
+        <StockMetricCard
+          label="Ajustes"
+          value={formatStockNumber(stats.adjustments)}
+          hint="Eventos manuais que exigem motivo e rastreabilidade."
+          icon={<Activity className="h-5 w-5" />}
+          tone={stats.adjustments ? "amber" : "default"}
+        />
+      </StockMetricsGrid>
 
-      <Card className="border-border shadow-sm">
-        <CardHeader className="bg-gray-50/50 border-b border-border py-4">
-          <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-            <div className="relative w-full sm:w-96">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por código do SKU..."
-                className="pl-9 h-9 text-sm bg-white"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-            <div className="flex gap-2 w-full sm:w-auto">
-              <Button variant="outline" size="sm" className="h-9">
-                <Filter className="mr-2 h-4 w-4" /> Filtros
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
+      <StockToolbar
+        search={search}
+        onSearchChange={setSearch}
+        placeholder="Buscar por SKU interno da movimentação"
+        resultText="Para corrigir divergência, registre ajuste com motivo. Não edite saldo direto fora do ledger."
+      >
+        <StockFilterChip active={typeFilter === "todos"} onClick={() => setTypeFilter("todos")}>
+          Todos
+        </StockFilterChip>
+        <StockFilterChip active={typeFilter === "ENTRADA"} onClick={() => setTypeFilter("ENTRADA")}>
+          Entrada
+        </StockFilterChip>
+        <StockFilterChip active={typeFilter === "SAIDA"} onClick={() => setTypeFilter("SAIDA")}>
+          Saída
+        </StockFilterChip>
+        <StockFilterChip active={typeFilter === "AJUSTE_ENTRADA"} onClick={() => setTypeFilter("AJUSTE_ENTRADA")}>
+          Ajuste +
+        </StockFilterChip>
+        <StockFilterChip active={typeFilter === "AJUSTE_SAIDA"} onClick={() => setTypeFilter("AJUSTE_SAIDA")}>
+          Ajuste -
+        </StockFilterChip>
+      </StockToolbar>
+
+      <StockTableCard>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-              <thead className="text-xs text-muted-foreground uppercase bg-gray-50/80 border-b border-border">
+              <thead className="text-xs text-muted-foreground uppercase border-b border-border/80 bg-white/55">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Data</th>
+                  <th className="px-5 py-4 font-medium">Data</th>
                   <th className="px-4 py-3 font-medium">Tipo</th>
                   <th className="px-4 py-3 font-medium">Cod. SKU</th>
                   <th className="px-4 py-3 font-medium">Produto</th>
@@ -155,14 +238,14 @@ export default function Movements() {
                     </td>
                   </tr>
                 ) : (
-                  data?.items?.map((mov) => {
+                  movements.map((mov: Movement) => {
                     const isPositive = mov.sinal > 0;
                     return (
                       <tr
                         key={mov.id}
                         className="hover:bg-gray-50/80 transition-colors"
                       >
-                        <td className="px-4 py-2 whitespace-nowrap text-muted-foreground">
+                        <td className="px-5 py-3 whitespace-nowrap text-muted-foreground">
                           {new Date(mov.data).toLocaleString("pt-BR", {
                             dateStyle: "short",
                             timeStyle: "short",
@@ -236,35 +319,21 @@ export default function Movements() {
             </table>
           </div>
 
-          <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-gray-50/50">
-            <div className="text-xs text-muted-foreground">
-              Exibindo{" "}
-              <span className="font-medium">{data?.items?.length || 0}</span> de{" "}
-              <span className="font-medium">{data?.total || 0}</span>{" "}
-              movimentações
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-                disabled={page === 0 || isLoading}
-              >
-                Anterior
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => p + 1)}
-                disabled={!data || data.items.length < limit || isLoading}
-              >
-                Próximo
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+          <StockTablePagination
+            page={page}
+            isLoading={isLoading}
+            count={data?.items?.length || 0}
+            total={total}
+            limit={limit}
+            label="movimentações"
+            onPrevious={() => setPage((p) => Math.max(0, p - 1))}
+            onNext={() => {
+              if (!hasMore) return;
+              setPage((p) => p + 1);
+            }}
+          />
+      </StockTableCard>
+    </StockPageShell>
   );
 }
 

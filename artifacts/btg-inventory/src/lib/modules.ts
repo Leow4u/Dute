@@ -1,7 +1,9 @@
 import {
+  Activity,
   ArrowDownToLine,
   ArrowRightLeft,
   BarChart3,
+  Building2,
   Boxes,
   BrainCircuit,
   ClipboardList,
@@ -13,9 +15,11 @@ import {
   Map as MapIcon,
   PackageCheck,
   PackageOpen,
+  PackagePlus,
   PackageSearch,
   PackageX,
   Receipt,
+  RotateCcw,
   ShoppingCart,
   Tags,
   Truck,
@@ -82,6 +86,7 @@ export const OPERATIONS_ROLES: ProfileRole[] = [
   "wms",
   "suporte",
 ];
+export const SUPPORT_ROLES: ProfileRole[] = ["owner", "admin", "suporte"];
 
 export function normalizeProfileRole(role: unknown): ProfileRole | null {
   return role === "owner" ||
@@ -133,6 +138,13 @@ export const INTERNAL_MODULES: ModuleSection[] = [
         description: "Memória, recomendações e rastreabilidade Genkit.",
         icon: "agent",
         roles: INTERNAL_ROLES,
+      },
+      {
+        href: "/suporte",
+        label: "Suporte",
+        description: "Saúde, incidentes, eventos e rotina de produção.",
+        icon: "reports",
+        roles: SUPPORT_ROLES,
       },
     ],
   },
@@ -222,6 +234,13 @@ export const INTERNAL_MODULES: ModuleSection[] = [
     title: "Administração",
     items: [
       {
+        href: "/clientes",
+        label: "Clientes",
+        description: "Contas, portal e isolamento por contrato.",
+        icon: "admin",
+        roles: ACCESS_ADMIN_ROLES,
+      },
+      {
         href: "/usuarios",
         label: "Usuários e Acessos",
         description: "Convites, papéis e vínculo com clientes.",
@@ -252,16 +271,16 @@ export const CLIENT_MODULES: ModuleSection[] = [
         roles: ["cliente"],
       },
       {
-        href: "/portal/solicitacoes",
-        label: "Solicitações",
-        description: "Abertura e acompanhamento.",
+        href: "/portal/recebimentos",
+        label: "Recebimentos",
+        description: "Avisos de entregas dos fornecedores.",
         icon: "requests",
         roles: ["cliente"],
       },
       {
         href: "/portal/pedidos",
-        label: "Pedidos e Entregas",
-        description: "WMS físico, volumes, expedição e entrega.",
+        label: "Pedidos",
+        description: "Acompanhamento da separação até a entrega.",
         icon: "orders",
         roles: ["cliente"],
       },
@@ -445,6 +464,20 @@ export const APP_MODULES: AppModule[] = [
         roles: WMS_ROLES,
       }),
       navRoute({
+        id: "wms-returns",
+        label: "Devoluções",
+        href: "/wms/devolucoes",
+        icon: RotateCcw,
+        roles: WMS_ROLES,
+      }),
+      navRoute({
+        id: "wms-inventory",
+        label: "Inventário",
+        href: "/wms/inventario",
+        icon: ListChecks,
+        roles: WMS_ROLES,
+      }),
+      navRoute({
         id: "wms-exceptions",
         label: "Exceções",
         href: "/wms/excecoes",
@@ -530,6 +563,7 @@ export const APP_MODULES: AppModule[] = [
       navRoute({
         id: "documents-library",
         label: "Documentos",
+        href: "/documentos",
         icon: FileText,
         roles: INTERNAL_ROLES,
       }),
@@ -559,12 +593,35 @@ export const APP_MODULES: AppModule[] = [
     ],
   }),
   appModule({
+    id: "support",
+    label: "Suporte",
+    audience: "internal",
+    icon: Activity,
+    roles: SUPPORT_ROLES,
+    routes: [
+      navRoute({
+        id: "support-observability",
+        label: "Observabilidade",
+        href: "/suporte",
+        icon: Activity,
+        roles: SUPPORT_ROLES,
+      }),
+    ],
+  }),
+  appModule({
     id: "admin",
     label: "Administração",
     audience: "internal",
     icon: Users,
     roles: ACCESS_ADMIN_ROLES,
     routes: [
+      navRoute({
+        id: "admin-customers",
+        label: "Clientes",
+        href: "/clientes",
+        icon: Building2,
+        roles: ACCESS_ADMIN_ROLES,
+      }),
       navRoute({
         id: "admin-users",
         label: "Usuários e acessos",
@@ -609,30 +666,30 @@ export const APP_MODULES: AppModule[] = [
   }),
   appModule({
     id: "client-requests",
-    label: "Solicitações",
+    label: "Recebimentos",
     audience: "client",
     icon: Inbox,
     roles: CLIENT_ROLES,
     routes: [
       navRoute({
         id: "client-request-list",
-        label: "Solicitações",
-        href: "/portal/solicitacoes",
-        icon: ClipboardList,
+        label: "Recebimentos",
+        href: "/portal/recebimentos",
+        icon: PackagePlus,
         roles: CLIENT_ROLES,
       }),
     ],
   }),
   appModule({
     id: "client-orders",
-    label: "Pedidos/Entregas",
+    label: "Pedidos",
     audience: "client",
     icon: Truck,
     roles: CLIENT_ROLES,
     routes: [
       navRoute({
         id: "client-orders-deliveries",
-        label: "Pedidos/Entregas",
+        label: "Pedidos",
         href: "/portal/pedidos",
         icon: Truck,
         roles: CLIENT_ROLES,
@@ -680,18 +737,11 @@ export const APP_MODULES: AppModule[] = [
     routes: [
       navRoute({
         id: "client-assistant-chat",
-        label: "Chat",
+        label: "Agent Dute",
         href: "/portal/agente",
         icon: BrainCircuit,
         roles: CLIENT_ROLES,
         exact: true,
-      }),
-      navRoute({
-        id: "client-assistant-operational",
-        label: "Operacional",
-        href: "/portal/agente/operacional",
-        icon: BarChart3,
-        roles: CLIENT_ROLES,
       }),
     ],
   }),

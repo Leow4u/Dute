@@ -15,6 +15,8 @@ import {
   FileWarning,
   Layers3,
   ListChecks,
+  Archive,
+  MailCheck,
   MapPin,
   PackageSearch,
   Radio,
@@ -32,6 +34,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -105,6 +108,34 @@ type AiOverview = {
   events: AiEvent[];
   memory: AiMemory[];
   sources: string[];
+};
+
+type OperationalNotification = {
+  id: string;
+  status?: "draft" | "approved" | "sent" | "archived" | string;
+  channel?: string | null;
+  audience?: "client" | "internal" | string | null;
+  topic?: string | null;
+  customer_code?: string | null;
+  title?: string | null;
+  subject?: string | null;
+  body?: string | null;
+  recipients?: string[] | null;
+  subject_sent?: string | null;
+  body_sent?: string | null;
+  email_delivery?: {
+    mode?: string | null;
+    status?: string | null;
+    sent_external?: boolean | null;
+    from?: string | null;
+    reply_to?: string | null;
+    message?: string | null;
+  } | null;
+  recommended_action?: string | null;
+  trigger_event_type?: string | null;
+  severity?: EventSeverity | string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 type WarehouseTask = {
@@ -295,6 +326,38 @@ function formatDate(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Sem data";
   return dateFormatter.format(date);
+}
+
+function notificationStatusLabel(status?: string | null) {
+  const labels: Record<string, string> = {
+    draft: "Rascunho",
+    approved: "Aprovada",
+    sent: "Enviada",
+    archived: "Arquivada",
+  };
+  return labels[String(status ?? "draft")] ?? String(status ?? "Rascunho");
+}
+
+function notificationStatusClass(status?: string | null) {
+  if (status === "sent") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "approved") return "border-blue-200 bg-blue-50 text-blue-700";
+  if (status === "archived") return "border-slate-200 bg-slate-50 text-slate-500";
+  return "border-amber-200 bg-amber-50 text-amber-800";
+}
+
+type NotificationDecisionAction = "approve" | "archive" | "mark-sent";
+type NotificationDecisionPayload = {
+  recipients?: string[];
+  subject?: string;
+  body?: string;
+  note?: string;
+};
+
+function splitRecipientDraft(value: string) {
+  return value
+    .split(/[,;\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function severityClass(severity?: EventSeverity) {
@@ -1378,6 +1441,252 @@ function SuggestedDecisionsPanel({
   );
 }
 
+function OperationalNotificationsCard({
+  notifications,
+  isLoading,
+  isSyncing,
+  isDeciding,
+  onSync,
+  onDecide,
+}: {
+  notifications: OperationalNotification[];
+  isLoading: boolean;
+  isSyncing: boolean;
+  isDeciding: boolean;
+  onSync: () => void;
+  onDecide: (
+    id: string,
+    action: NotificationDecisionAction,
+    payload?: NotificationDecisionPayload,
+  ) => void;
+}) {
+  const [deliveryDrafts, setDeliveryDrafts] = useState<
+    Record<string, { recipients: string; subject: string; body: string }>
+  >({});
+  const visibleNotifications = notifications
+    .filter((item) => item.status !== "archived")
+    .slice(0, 6);
+
+  const deliveryDraftFor = (item: OperationalNotification) =>
+    deliveryDrafts[item.id] ?? {
+      recipients: item.recipients?.join(", ") ?? "",
+      subject: item.subject_sent ?? item.subject ?? item.title ?? "",
+      body: item.body_sent ?? item.body ?? "",
+    };
+  const updateDeliveryDraft = (
+    item: OperationalNotification,
+    field: "recipients" | "subject" | "body",
+    value: string,
+  ) => {
+    const current = deliveryDraftFor(item);
+    setDeliveryDrafts((previous) => ({
+      ...previous,
+      [item.id]: { ...current, [field]: value },
+    }));
+  };
+
+  return (
+    <Card>
+      <CardHeader className="border-b border-border/60">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="text-base">
+              Notificações do Agent Dute
+            </CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Mensagens preparadas a partir dos eventos reais do WMS.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onSync}
+            disabled={isSyncing}
+          >
+            <RefreshCw className={cn("h-4 w-4", isSyncing && "animate-spin")} />
+            Sincronizar
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3 pt-5">
+        {isLoading ? (
+          <div className="rounded-[20px] border border-border bg-white/58 p-4 text-sm text-muted-foreground">
+            Carregando notificações operacionais...
+          </div>
+        ) : visibleNotifications.length === 0 ? (
+          <div className="rounded-[20px] border border-dashed border-border bg-white/45 p-6 text-center">
+            <MailCheck className="mx-auto h-5 w-5 text-muted-foreground" />
+            <p className="mt-3 text-sm font-medium text-foreground">
+              Nenhuma mensagem pendente
+            </p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Sincronize o ledger para o Agent Dute preparar rascunhos quando
+              houver eventos comunicáveis.
+            </p>
+          </div>
+        ) : (
+          visibleNotifications.map((item) => {
+            const deliveryDraft = deliveryDraftFor(item);
+            const recipients = splitRecipientDraft(deliveryDraft.recipients);
+            const canSend =
+              recipients.length > 0 &&
+              deliveryDraft.subject.trim().length > 2 &&
+              deliveryDraft.body.trim().length > 2;
+            return (
+              <div
+                key={item.id}
+                className="rounded-[20px] border border-border bg-white/58 p-4 shadow-[0_8px_24px_rgba(15,23,42,.04)] backdrop-blur-[32px]"
+              >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge
+                      variant="outline"
+                      className={notificationStatusClass(item.status)}
+                    >
+                      {notificationStatusLabel(item.status)}
+                    </Badge>
+                    <Badge variant="outline" className="bg-white/70">
+                      {item.audience === "client" ? "Cliente" : "Interno"}
+                    </Badge>
+                  </div>
+                  <p className="mt-3 text-sm font-medium text-foreground">
+                    {item.subject || item.title || "Notificação operacional"}
+                  </p>
+                  <p className="mt-2 whitespace-pre-line text-xs leading-5 text-muted-foreground">
+                    {item.body || "Mensagem ainda sem conteúdo preparado."}
+                  </p>
+                </div>
+                <MailCheck className="mt-1 h-4 w-4 shrink-0 text-primary" />
+              </div>
+              <div className="mt-4 rounded-2xl border border-border bg-white/50 p-3 text-xs leading-5 text-muted-foreground">
+                <span className="font-medium text-foreground">Origem:</span>{" "}
+                {item.trigger_event_type || "evento operacional"} ·{" "}
+                {item.customer_code || "BTG Pactual"}
+              </div>
+              {item.status === "approved" ? (
+                <div className="mt-4 space-y-3 rounded-2xl border border-blue-100 bg-blue-50/35 p-3">
+                  <div>
+                    <Label
+                      htmlFor={`notification-recipients-${item.id}`}
+                      className="text-xs text-muted-foreground"
+                    >
+                      Destinatários
+                    </Label>
+                    <Input
+                      id={`notification-recipients-${item.id}`}
+                      value={deliveryDraft.recipients}
+                      onChange={(event) =>
+                        updateDeliveryDraft(
+                          item,
+                          "recipients",
+                          event.target.value,
+                        )
+                      }
+                      placeholder="email@cliente.com.br, copia@dutelog.com.br"
+                      className="mt-1 h-10 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <Label
+                      htmlFor={`notification-subject-${item.id}`}
+                      className="text-xs text-muted-foreground"
+                    >
+                      Assunto final
+                    </Label>
+                    <Input
+                      id={`notification-subject-${item.id}`}
+                      value={deliveryDraft.subject}
+                      onChange={(event) =>
+                        updateDeliveryDraft(item, "subject", event.target.value)
+                      }
+                      className="mt-1 h-10 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <Label
+                      htmlFor={`notification-body-${item.id}`}
+                      className="text-xs text-muted-foreground"
+                    >
+                      Mensagem final aprovada
+                    </Label>
+                    <Textarea
+                      id={`notification-body-${item.id}`}
+                      value={deliveryDraft.body}
+                      onChange={(event) =>
+                        updateDeliveryDraft(item, "body", event.target.value)
+                      }
+                      className="mt-1 min-h-28 text-sm"
+                    />
+                  </div>
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    O Agent Dute só registra ou envia depois desta revisão
+                    humana. Sem destinatário válido, o envio fica bloqueado.
+                  </p>
+                </div>
+              ) : null}
+              {item.status === "sent" ? (
+                <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50/45 p-3 text-xs leading-5 text-emerald-800">
+                  {item.email_delivery?.sent_external
+                    ? "E-mail transacional enviado pelo provedor configurado."
+                    : "Envio registrado em modo auditado. Configure o provedor para disparo externo real."}
+                  {item.recipients?.length ? (
+                    <span className="mt-1 block text-emerald-700/80">
+                      Destinatários: {item.recipients.join(", ")}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                {item.status === "draft" ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onDecide(item.id, "approve")}
+                    disabled={isDeciding}
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    Aprovar
+                  </Button>
+                ) : null}
+                {item.status === "approved" ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      onDecide(item.id, "mark-sent", {
+                        recipients,
+                        subject: deliveryDraft.subject.trim(),
+                        body: deliveryDraft.body.trim(),
+                      })
+                    }
+                    disabled={isDeciding || !canSend}
+                  >
+                    <Send className="h-4 w-4" />
+                    Enviar / registrar
+                  </Button>
+                ) : null}
+                {item.status !== "sent" ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => onDecide(item.id, "archive")}
+                    disabled={isDeciding}
+                  >
+                    <Archive className="h-4 w-4" />
+                    Arquivar
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+            );
+          })
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function PhysicalWmsRiskPanel({ risks }: { risks: PhysicalWmsRisk[] }) {
   return (
     <Card>
@@ -1543,20 +1852,23 @@ export default function AiControl() {
   const overview = useQuery({
     queryKey: ["ai-overview"],
     queryFn: () => fetchJson<AiOverview>("/api/ai/overview"),
-    refetchInterval: 30000,
+    refetchInterval: 120_000,
+    refetchOnWindowFocus: false,
   });
 
   const foundation = useQuery({
     queryKey: ["operational-foundation"],
     queryFn: () =>
       fetchJson<OperationalFoundationSnapshot>("/api/operational/foundation"),
-    refetchInterval: 30000,
+    refetchInterval: 120_000,
+    refetchOnWindowFocus: false,
   });
 
   const warehouseOps = useQuery({
     queryKey: ["warehouse-ops"],
     queryFn: () => fetchJson<WarehouseOpsResponse>("/api/warehouse/ops"),
-    refetchInterval: 30000,
+    refetchInterval: 120_000,
+    refetchOnWindowFocus: false,
     retry: 1,
   });
 
@@ -1566,7 +1878,19 @@ export default function AiControl() {
       fetchJson<ListResponse<CustomerRequest>>(
         "/api/customer-requests?limit=200",
       ),
-    refetchInterval: 30000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+
+  const notifications = useQuery({
+    queryKey: ["agent-operational-notifications"],
+    queryFn: () =>
+      fetchJson<ListResponse<OperationalNotification>>(
+        "/api/agent-dute/notifications?limit=20",
+      ),
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: false,
     retry: 1,
   });
 
@@ -1630,6 +1954,61 @@ export default function AiControl() {
     onError: () => {
       toast({
         title: "Erro ao preparar fundação operacional",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const syncNotifications = useMutation({
+    mutationFn: async () =>
+      fetchJson<{
+        scanned: number;
+        candidates: number;
+        created: number;
+      }>("/api/agent-dute/notifications/sync", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ customer_code: "BTG Pactual", limit: 250 }),
+      }),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ["agent-operational-notifications"] });
+      qc.invalidateQueries({ queryKey: ["ai-overview"] });
+      toast({
+        title: "Notificações sincronizadas",
+        description: `${numberFormatter.format(result.created)} rascunho(s) novo(s) a partir de ${numberFormatter.format(result.scanned)} evento(s).`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Erro ao sincronizar notificações",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const decideNotification = useMutation({
+    mutationFn: async ({
+      id,
+      action,
+      payload,
+    }: {
+      id: string;
+      action: NotificationDecisionAction;
+      payload?: NotificationDecisionPayload;
+    }) =>
+      fetchJson(`/api/agent-dute/notifications/${encodeURIComponent(id)}/${action}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload ?? {}),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["agent-operational-notifications"] });
+      qc.invalidateQueries({ queryKey: ["ai-overview"] });
+      toast({ title: "Notificação atualizada" });
+    },
+    onError: () => {
+      toast({
+        title: "Erro ao atualizar notificação",
         variant: "destructive",
       });
     },
@@ -1714,12 +2093,14 @@ export default function AiControl() {
               foundation.refetch();
               warehouseOps.refetch();
               customerRequests.refetch();
+              notifications.refetch();
             }}
             disabled={
               overview.isFetching ||
               foundation.isFetching ||
               warehouseOps.isFetching ||
-              customerRequests.isFetching
+              customerRequests.isFetching ||
+              notifications.isFetching
             }
           >
             <RefreshCw
@@ -1728,7 +2109,8 @@ export default function AiControl() {
                 (overview.isFetching ||
                   foundation.isFetching ||
                   warehouseOps.isFetching ||
-                  customerRequests.isFetching) &&
+                  customerRequests.isFetching ||
+                  notifications.isFetching) &&
                   "animate-spin",
               )}
             />
@@ -2279,6 +2661,17 @@ export default function AiControl() {
         </Card>
 
         <div className="space-y-6">
+          <OperationalNotificationsCard
+            notifications={notifications.data?.items ?? []}
+            isLoading={notifications.isLoading}
+            isSyncing={syncNotifications.isPending}
+            isDeciding={decideNotification.isPending}
+            onSync={() => syncNotifications.mutate()}
+            onDecide={(id, action, payload) =>
+              decideNotification.mutate({ id, action, payload })
+            }
+          />
+
           <Card>
             <CardHeader className="border-b border-border/60">
               <CardTitle className="text-base">Radar do Agent Dute</CardTitle>

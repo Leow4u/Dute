@@ -23,6 +23,7 @@ import {
   ModulePanel,
   StatusBadge,
   firstNumber,
+  firstText,
   formatDate,
   formatMoney,
   formatNumber,
@@ -31,12 +32,38 @@ import {
   getInvoices,
 } from "./shared";
 
+function invoiceGroups(invoice: Record<string, unknown>) {
+  const groups = Array.isArray(invoice.groups)
+    ? invoice.groups
+    : Array.isArray(invoice.grupos)
+      ? invoice.grupos
+      : [];
+  if (groups.length > 0) return groups as Record<string, unknown>[];
+
+  const lines = Array.isArray(invoice.lines)
+    ? invoice.lines
+    : Array.isArray(invoice.linhas)
+      ? invoice.linhas
+      : [];
+  const grouped = new Map<string, { grupo: string; total: number; count: number }>();
+  for (const line of lines as Record<string, unknown>[]) {
+    const grupo = firstText(line.grupo, "Serviços") ?? "Serviços";
+    const current = grouped.get(grupo) ?? { grupo, total: 0, count: 0 };
+    current.total += firstNumber(line.total);
+    current.count += 1;
+    grouped.set(grupo, current);
+  }
+  return [...grouped.values()] as Record<string, unknown>[];
+}
+
 export function ClienteFaturas() {
   return (
     <ClientDataBoundary>
       {(overview) => {
         const billing = getBilling(overview);
         const invoices = getInvoices(overview);
+        const currentInvoice = invoices[0] as Record<string, unknown> | undefined;
+        const groups = currentInvoice ? invoiceGroups(currentInvoice) : [];
         const totalInvoices = invoices.reduce(
           (sum, invoice) => sum + firstNumber(invoice.total),
           0,
@@ -52,90 +79,112 @@ export function ClienteFaturas() {
           invoices.filter((invoice) =>
             String(invoice.status ?? "").toLowerCase().includes("abert"),
           ).length;
+        const hasBilling = invoices.length > 0 || openTotal > 0 || overdueTotal > 0;
 
         return (
           <ClientModuleShell
             overview={overview}
-            eyebrow="Modulo financeiro"
+            eyebrow="Serviços Dutelog"
             title="Faturas"
-            description="Resumo de cobrancas, competencias recentes e valores em aberto para acompanhamento financeiro."
+            description="Acompanhe as cobranças pelos serviços logísticos prestados no período."
             icon={DollarSign}
           >
-            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <MetricCard
-                label="Total em aberto"
-                value={formatMoney(openTotal)}
-                description="Valor corrente informado para a conta"
-                icon={DollarSign}
-                tone={overdueTotal > 0 ? "danger" : "info"}
+            {!hasBilling ? (
+              <EmptyModuleState
+                title="Nenhuma fatura disponível"
+                description="A competência atual ainda não foi publicada. Quando houver uma cobrança, o detalhamento e o vencimento aparecerão aqui."
+                icon={CheckCircle2}
               />
-              <MetricCard
-                label="Faturas abertas"
-                value={formatNumber(openCount)}
-                description="Documentos aguardando baixa"
-                icon={FileCheck2}
-                tone="neutral"
-              />
-              <MetricCard
-                label="Vencidas"
-                value={formatMoney(overdueTotal)}
-                description="Valor marcado como vencido"
-                icon={AlertTriangle}
-                tone={overdueTotal > 0 ? "danger" : "success"}
-              />
-              <MetricCard
-                label="Vencem em breve"
-                value={formatNumber(firstNumber(billing.due_soon_count))}
-                description="Competencias proximas ao vencimento"
-                icon={Clock3}
-                tone="warning"
-              />
-            </section>
+            ) : (
+              <>
+                <section className="grid gap-4 md:grid-cols-3">
+                  <MetricCard
+                    label="Total em aberto"
+                    value={formatMoney(openTotal)}
+                    description={`${formatNumber(openCount)} fatura(s)`}
+                    icon={DollarSign}
+                    tone={overdueTotal > 0 ? "danger" : "info"}
+                  />
+                  <MetricCard
+                    label="Valor vencido"
+                    value={formatMoney(overdueTotal)}
+                    description={overdueTotal > 0 ? "Requer atenção" : "Nenhum valor vencido"}
+                    icon={AlertTriangle}
+                    tone={overdueTotal > 0 ? "danger" : "success"}
+                  />
+                  <MetricCard
+                    label="Vencem em breve"
+                    value={formatNumber(firstNumber(billing.due_soon_count))}
+                    description="Próximas do vencimento"
+                    icon={Clock3}
+                    tone="neutral"
+                  />
+                </section>
 
-            <ModulePanel
-              title="Historico de faturas"
-              description="Competencias retornadas pelo endpoint do cliente"
-              icon={FileCheck2}
-            >
-              {invoices.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Competencia</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                      <TableHead>Vencimento</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {invoices.slice(0, 12).map((invoice, index) => (
-                      <TableRow
-                        key={`${invoice.id ?? invoice.competencia ?? invoice.month ?? "invoice"}-${index}`}
-                      >
-                        <TableCell className="font-medium">
-                          {formatPeriod(invoice.competencia ?? invoice.month)}
-                        </TableCell>
-                        <TableCell>
-                          <StatusBadge status={invoice.status} />
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {formatMoney(invoice.total)}
-                        </TableCell>
-                        <TableCell>
-                          {formatDate(invoice.due_date ?? invoice.vencimento)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <EmptyModuleState
-                  title="Nenhuma fatura retornada"
-                  description="O historico financeiro sera exibido quando houver documentos disponiveis."
-                  icon={CheckCircle2}
-                />
-              )}
-            </ModulePanel>
+                {groups.length > 0 ? (
+                  <ModulePanel
+                    title="Composição da cobrança"
+                    description="Serviços logísticos incluídos na fatura mais recente"
+                    icon={DollarSign}
+                  >
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      {groups.slice(0, 6).map((group, index) => {
+                        const itemCount = Array.isArray(group.itens)
+                          ? group.itens.length
+                          : firstNumber(group.count);
+                        return (
+                          <div
+                            key={`${group.grupo ?? group.label ?? "grupo"}-${index}`}
+                            className="rounded-[18px] border border-border bg-white/70 p-4"
+                          >
+                            <div className="text-sm text-muted-foreground">
+                              {firstText(group.label, group.grupo, "Serviço")}
+                            </div>
+                            <div className="mt-2 text-xl font-semibold text-foreground">
+                              {formatMoney(group.total)}
+                            </div>
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              {formatNumber(itemCount)} linha(s) de serviço
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </ModulePanel>
+                ) : null}
+
+                <ModulePanel
+                  title="Histórico de faturas"
+                  description="Competências publicadas para a sua conta"
+                  icon={FileCheck2}
+                >
+                  <div className="overflow-auto rounded-2xl border border-border bg-white/35">
+                    <Table className="min-w-[680px]">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Competência</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Total</TableHead>
+                          <TableHead>Vencimento</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {invoices.slice(0, 12).map((invoice, index) => (
+                          <TableRow key={`${invoice.id ?? invoice.competencia ?? invoice.month ?? "invoice"}-${index}`}>
+                            <TableCell className="font-medium">
+                              {formatPeriod(invoice.competencia ?? invoice.month)}
+                            </TableCell>
+                            <TableCell><StatusBadge status={invoice.status} /></TableCell>
+                            <TableCell className="text-right">{formatMoney(invoice.total)}</TableCell>
+                            <TableCell>{formatDate(invoice.due_date ?? invoice.vencimento)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </ModulePanel>
+              </>
+            )}
           </ClientModuleShell>
         );
       }}

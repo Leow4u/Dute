@@ -14,6 +14,7 @@ import {
   Minus,
   Package,
   PackageCheck,
+  PackagePlus,
   Plus,
   RotateCcw,
   Search,
@@ -48,10 +49,10 @@ import {
   clientOverviewQueryKey,
   createClientRequest,
   firstText,
-  formatMoney,
   formatNumber,
   getInventoryItems,
   inventoryItemAvailable,
+  inventoryItemClientCode,
   inventoryItemName,
   inventoryItemReserved,
   inventoryItemSku,
@@ -71,6 +72,7 @@ type ProductAction = "restock" | "archive";
 type StockProduct = {
   key: string;
   sku: string;
+  clientCode: string;
   clientItemCode?: string | null;
   name: string;
   category: string;
@@ -404,7 +406,7 @@ export function ClienteEstoque() {
           requestMutation.mutate({
             type: "retirada",
             priority: "normal",
-            title: `Pedido do estoque com ${formatNumber(cartLines.length)} SKU(s)`,
+            title: `Pedido do estoque com ${formatNumber(cartLines.length)} item(ns)`,
             description: [
               `Pedido montado no estoque para ${destination.trim()}`,
               notes.trim(),
@@ -420,34 +422,36 @@ export function ClienteEstoque() {
         return (
           <ClientModuleShell
             overview={overview}
-            eyebrow="Modulo de estoque"
+            eyebrow="Estoque armazenado"
             title="Estoque"
-            description="Vitrine operacional para consultar disponibilidade e montar pedidos em tempo real."
+            description="Consulte a disponibilidade dos seus produtos e monte pedidos de abastecimento."
             icon={Box}
             className="max-w-[1720px]"
           >
-            <MarketplaceToolbar
-              searchTerm={searchTerm}
-              stockFilter={stockFilter}
-              categoryFilter={categoryFilter}
-              categories={categories}
-              sortMode={sortMode}
-              viewMode={viewMode}
-              cartQuantity={cartQuantity}
-              cartOpen={cartOpen}
-              visibleCount={sortedProducts.length}
-              hasActiveFilters={hasActiveFilters}
-              onSearchChange={updateSearch}
-              onStockFilterChange={updateStockFilter}
-              onCategoryFilterChange={updateCategoryFilter}
-              onSortModeChange={updateSortMode}
-              onViewModeChange={setViewMode}
-              onClearFilters={clearCatalogFilters}
-              onCartToggle={() => {
-                setCartOpen((current) => !current);
-                setSelectedProductKey(null);
-              }}
-            />
+            {products.length > 0 ? (
+              <MarketplaceToolbar
+                searchTerm={searchTerm}
+                stockFilter={stockFilter}
+                categoryFilter={categoryFilter}
+                categories={categories}
+                sortMode={sortMode}
+                viewMode={viewMode}
+                cartQuantity={cartQuantity}
+                cartOpen={cartOpen}
+                visibleCount={sortedProducts.length}
+                hasActiveFilters={hasActiveFilters}
+                onSearchChange={updateSearch}
+                onStockFilterChange={updateStockFilter}
+                onCategoryFilterChange={updateCategoryFilter}
+                onSortModeChange={updateSortMode}
+                onViewModeChange={setViewMode}
+                onClearFilters={clearCatalogFilters}
+                onCartToggle={() => {
+                  setCartOpen((current) => !current);
+                  setSelectedProductKey(null);
+                }}
+              />
+            ) : null}
 
             <section className="min-h-0 flex-1 overflow-x-hidden">
               <div className="min-w-0 space-y-4 overflow-x-hidden">
@@ -491,9 +495,8 @@ export function ClienteEstoque() {
                     />
                   )
                 ) : (
-                  <EmptyModuleState
-                    title="Estoque nao encontrado"
-                    description="O endpoint ainda nao retornou itens para esta conta."
+                  <OpeningInventoryState
+                    onNotifyDelivery={() => navigate("/portal/recebimentos")}
                   />
                 )}
                 {sortedProducts.length > 0 ? (
@@ -538,6 +541,11 @@ export function ClienteEstoque() {
                   product={selectedProduct}
                   cart={cart}
                   draftQuantity={getDraftQuantity(selectedProduct)}
+                  previewQuantity={draftPreviewQuantityForProduct(
+                    selectedProduct,
+                    cart,
+                    draftQuantities,
+                  )}
                   isPending={productActionMutation.isPending}
                   onClose={() => setSelectedProductKey(null)}
                   onDraftQuantityChange={(quantity) =>
@@ -553,6 +561,35 @@ export function ClienteEstoque() {
         );
       }}
     </ClientDataBoundary>
+  );
+}
+
+function OpeningInventoryState({
+  onNotifyDelivery,
+}: {
+  onNotifyDelivery: () => void;
+}) {
+  return (
+    <div className="flex min-h-[360px] flex-col items-center justify-center rounded-[24px] border border-dashed border-border bg-white/45 px-6 py-12 text-center">
+      <span className="flex h-14 w-14 items-center justify-center rounded-[20px] border border-border bg-white text-primary">
+        <Package className="h-6 w-6" aria-hidden="true" />
+      </span>
+      <h2 className="mt-5 text-lg font-semibold text-foreground">
+        Inventário inicial em andamento
+      </h2>
+      <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
+        A Dutelog está contando e cadastrando os produtos. Os saldos aparecerão aqui somente depois da conferência física.
+      </p>
+      <Button
+        type="button"
+        variant="secondary"
+        className="mt-6 rounded-2xl"
+        onClick={onNotifyDelivery}
+      >
+        <PackagePlus className="h-4 w-4" />
+        Avisar uma entrega
+      </Button>
+    </div>
   );
 }
 
@@ -604,8 +641,8 @@ function MarketplaceToolbar({
           <Input
             value={searchTerm}
             onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="Buscar produto, SKU ou categoria"
-            aria-label="Buscar produto, SKU ou categoria"
+            placeholder="Buscar produto, cod. cliente ou categoria"
+            aria-label="Buscar produto, cod. cliente ou categoria"
             className="h-11 rounded-[18px] border-border bg-white/80 pl-11 text-sm"
           />
         </div>
@@ -823,30 +860,38 @@ function StockList({
       <Table className="min-w-[1120px]">
         <TableHeader className="sticky top-0 z-10 bg-white/95 backdrop-blur-[24px]">
           <TableRow>
-            <TableHead className="w-[120px]">SKU</TableHead>
+            <TableHead className="w-[140px]">Cod. cliente</TableHead>
             <TableHead className="min-w-[360px]">Produto</TableHead>
             <TableHead className="w-[150px]">Categoria</TableHead>
             <TableHead className="text-right">Disponivel</TableHead>
             <TableHead className="text-right">Reservado</TableHead>
-            <TableHead className="text-right">Custo unit.</TableHead>
-            <TableHead className="text-right">Valor total</TableHead>
             <TableHead className="w-[270px] text-right">Pedido</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {products.map((product) => {
             const liveAvailable = liveAvailableForProduct(product, cart);
+            const previewQuantity = draftPreviewQuantityForProduct(
+              product,
+              cart,
+              draftQuantities,
+            );
+            const displayedAvailable = displayedAvailableForProduct(
+              product,
+              cart,
+              draftQuantities,
+            );
             const draftQuantity = draftQuantityForProduct(
               product,
               cart,
               draftQuantities,
             );
-            const status = productStatus(product, liveAvailable);
+            const status = productStatus(product, displayedAvailable);
 
             return (
               <TableRow key={product.key}>
                 <TableCell className="font-medium text-foreground">
-                  {product.sku}
+                  {product.clientCode}
                 </TableCell>
                 <TableCell>
                   <button
@@ -864,22 +909,28 @@ function StockList({
                         {formatNumber(cart[product.key])} selecionado(s)
                       </span>
                     ) : null}
+                    {previewQuantity > 0 ? (
+                      <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] text-primary">
+                        {formatNumber(previewQuantity)} em edicao
+                      </span>
+                    ) : null}
                   </div>
                 </TableCell>
                 <TableCell className="text-muted-foreground">
                   {product.category}
                 </TableCell>
-                <TableCell className="text-right font-semibold text-foreground">
-                  {formatNumber(liveAvailable)}
+                <TableCell className="text-right">
+                  <p className="font-semibold text-foreground">
+                    {formatNumber(displayedAvailable)}
+                  </p>
+                  {previewQuantity > 0 ? (
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      restara de {formatNumber(liveAvailable)}
+                    </p>
+                  ) : null}
                 </TableCell>
                 <TableCell className="text-right text-muted-foreground">
                   {formatNumber(product.reserved)}
-                </TableCell>
-                <TableCell className="text-right text-muted-foreground">
-                  {formatMoney(productUnitValue(product))}
-                </TableCell>
-                <TableCell className="text-right font-medium">
-                  {formatMoney(product.value)}
                 </TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-2">
@@ -905,7 +956,7 @@ function StockList({
                           }
                         >
                           <ShoppingCart className="h-4 w-4" />
-                          Selecionar
+                          Adicionar
                         </Button>
                       </>
                     ) : (
@@ -984,12 +1035,22 @@ function StockCardGrid({
     >
       {products.map((product) => {
         const liveAvailable = liveAvailableForProduct(product, cart);
+        const previewQuantity = draftPreviewQuantityForProduct(
+          product,
+          cart,
+          draftQuantities,
+        );
+        const displayedAvailable = displayedAvailableForProduct(
+          product,
+          cart,
+          draftQuantities,
+        );
         const draftQuantity = draftQuantityForProduct(
           product,
           cart,
           draftQuantities,
         );
-        const status = productStatus(product, liveAvailable);
+        const status = productStatus(product, displayedAvailable);
 
         return (
           <article
@@ -1002,7 +1063,7 @@ function StockCardGrid({
             <div className="flex min-h-[202px] flex-1 flex-col gap-3 p-3.5">
               <div className="min-w-0">
                 <p className="truncate text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
-                  {product.sku}
+                  {product.clientCode}
                 </p>
                 <button
                   type="button"
@@ -1024,17 +1085,27 @@ function StockCardGrid({
                       {formatNumber(cart[product.key])} selecionado(s)
                     </span>
                   ) : null}
+                  {previewQuantity > 0 ? (
+                    <span className="shrink-0 rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary">
+                      {formatNumber(previewQuantity)} em edicao
+                    </span>
+                  ) : null}
                 </div>
               </div>
 
               <div className="flex items-end justify-between gap-3 border-y border-border/70 py-2.5">
                 <div>
                   <p className="text-[11px] text-muted-foreground">
-                    Disponível
+                    {previewQuantity > 0 ? "Restara" : "Disponivel"}
                   </p>
                   <p className="mt-1 text-xl font-semibold leading-none text-foreground">
-                    {formatNumber(liveAvailable)}
+                    {formatNumber(displayedAvailable)}
                   </p>
+                  {previewQuantity > 0 ? (
+                    <p className="mt-1 text-[10px] leading-4 text-muted-foreground">
+                      de {formatNumber(liveAvailable)} disp.
+                    </p>
+                  ) : null}
                 </div>
                 <p className="text-right text-[11px] leading-4 text-muted-foreground">
                   Saldo para
@@ -1045,15 +1116,15 @@ function StockCardGrid({
 
               <div className="grid grid-cols-2 gap-2 text-[11px]">
                 <div>
-                  <p className="text-muted-foreground">Custo unit.</p>
+                  <p className="text-muted-foreground">Total fisico</p>
                   <p className="mt-0.5 font-medium text-foreground">
-                    {formatMoney(productUnitValue(product))}
+                    {formatNumber(product.total)}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-muted-foreground">Valor do saldo</p>
+                  <p className="text-muted-foreground">Reservado</p>
                   <p className="mt-0.5 font-medium text-foreground">
-                    {formatMoney(product.value)}
+                    {formatNumber(product.reserved)}
                   </p>
                 </div>
               </div>
@@ -1078,7 +1149,7 @@ function StockCardGrid({
                       onClick={() => onAdd(product)}
                     >
                       <ShoppingCart className="h-3.5 w-3.5" />
-                      Selecionar
+                      Adicionar
                     </Button>
                   </div>
                 ) : (
@@ -1129,10 +1200,7 @@ function CartPanel({
   onSubmit: () => void;
 }) {
   const totalQuantity = lines.reduce((sum, line) => sum + line.quantity, 0);
-  const estimatedValue = lines.reduce(
-    (sum, line) => sum + productUnitValue(line.product) * line.quantity,
-    0,
-  );
+  const selectedSkuCount = lines.length;
 
   return (
     <ModulePanel
@@ -1163,7 +1231,7 @@ function CartPanel({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-xs text-muted-foreground">
-                      {line.product.sku}
+                      {line.product.clientCode}
                     </p>
                     <p className="mt-1 line-clamp-2 font-medium leading-5">
                       {line.product.name}
@@ -1209,12 +1277,12 @@ function CartPanel({
 
         <div className="grid gap-3 rounded-[20px] bg-white/45 p-4 text-sm">
           <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Itens</span>
-            <strong>{formatNumber(totalQuantity)}</strong>
+            <span className="text-muted-foreground">Itens no pedido</span>
+            <strong>{formatNumber(selectedSkuCount)}</strong>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Valor dos itens</span>
-            <strong>{formatMoney(estimatedValue)}</strong>
+            <span className="text-muted-foreground">Pecas selecionadas</span>
+            <strong>{formatNumber(totalQuantity)}</strong>
           </div>
         </div>
 
@@ -1271,6 +1339,7 @@ function ProductDetailPanel({
   product,
   cart,
   draftQuantity,
+  previewQuantity,
   isPending,
   onClose,
   onDraftQuantityChange,
@@ -1281,6 +1350,7 @@ function ProductDetailPanel({
   product: StockProduct;
   cart: Record<string, number>;
   draftQuantity: number;
+  previewQuantity: number;
   isPending: boolean;
   onClose: () => void;
   onDraftQuantityChange: (quantity: number) => void;
@@ -1289,8 +1359,8 @@ function ProductDetailPanel({
   onArchive: () => void;
 }) {
   const liveAvailable = liveAvailableForProduct(product, cart);
-  const status = productStatus(product, liveAvailable);
-  const unitValue = productUnitValue(product);
+  const displayedAvailable = Math.max(0, liveAvailable - previewQuantity);
+  const status = productStatus(product, displayedAvailable);
 
   return (
     <ModulePanel
@@ -1315,7 +1385,7 @@ function ProductDetailPanel({
 
         <div>
           <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
-            {product.sku}
+            {product.clientCode}
           </p>
           <h2 className="mt-1 text-xl font-semibold leading-7 text-foreground">
             {product.name}
@@ -1329,16 +1399,34 @@ function ProductDetailPanel({
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <StockFact label="Disponivel" value={formatNumber(liveAvailable)} />
+          <StockFact
+            label={previewQuantity > 0 ? "Restara" : "Disponivel"}
+            value={
+              previewQuantity > 0
+                ? `${formatNumber(displayedAvailable)} de ${formatNumber(
+                    liveAvailable,
+                  )}`
+                : formatNumber(displayedAvailable)
+            }
+          />
           <StockFact label="Reservado" value={formatNumber(product.reserved)} />
-          <StockFact label="Valor total" value={formatMoney(product.value)} />
-          <StockFact label="Valor unit." value={formatMoney(unitValue)} />
+          <StockFact label="Total fisico" value={formatNumber(product.total)} />
+          <StockFact
+            label="No pedido"
+            value={formatNumber(cart[product.key] ?? 0)}
+          />
+          {previewQuantity > 0 ? (
+            <StockFact
+              label="Selecionando agora"
+              value={formatNumber(previewQuantity)}
+            />
+          ) : null}
         </div>
 
         <div className="rounded-[22px] border border-primary/15 bg-primary/10 p-4 text-sm leading-6 text-primary">
           <div className="flex items-start gap-3">
             <Sparkles className="mt-1 h-4 w-4 shrink-0" aria-hidden="true" />
-            <p>{agentDuteSignal(product, liveAvailable)}</p>
+            <p>{agentDuteSignal(product, displayedAvailable)}</p>
           </div>
         </div>
 
@@ -1357,7 +1445,7 @@ function ProductDetailPanel({
               onClick={onAdd}
             >
               <ShoppingCart className="h-4 w-4" />
-              Selecionar para o pedido
+              Adicionar ao pedido
             </Button>
           </div>
         ) : (
@@ -1700,11 +1788,13 @@ function groupInventoryProducts(items: InventoryItem[]) {
     const sku = inventoryItemSku(item);
     const name = inventoryItemName(item);
     const category = firstText(item.category, item.categoria, "Sem categoria")!;
-    const clientItemCode = firstText(item.client_item_code) ?? null;
+    const clientCode = inventoryItemClientCode(item);
+    const clientItemCode = firstText(item.client_item_code, item.cod_cliente) ?? null;
     const key = [sku, clientItemCode ?? "", name, category].join("::");
     const current = grouped.get(key) ?? {
       key,
       sku,
+      clientCode,
       clientItemCode,
       name,
       category,
@@ -1772,7 +1862,12 @@ function filterProducts({
 
     if (!query) return true;
     return normalizeSlug(
-      [product.sku, product.clientItemCode, product.name, product.category]
+      [
+        product.clientCode,
+        product.clientItemCode,
+        product.name,
+        product.category,
+      ]
         .filter(Boolean)
         .join(" "),
     ).includes(query);
@@ -1890,7 +1985,7 @@ function buildReplenishmentRequest(
     priority: "normal",
     title: `Reposicao solicitada: ${product.name}`,
     description: [
-      `Cliente solicitou reposicao com fornecedor para o SKU ${product.sku}.`,
+      `Cliente solicitou reposicao com fornecedor para o cod. cliente ${product.clientCode}.`,
       "Produto aparece sem saldo disponivel na vitrine do portal.",
       "A Dutelog deve acompanhar a previsao de chegada e conferencia.",
     ].join(" "),
@@ -1916,7 +2011,7 @@ function buildArchiveRequest(
     priority: "normal",
     title: `Arquivar produto sem estoque: ${product.name}`,
     description: [
-      `Cliente solicitou arquivamento do SKU ${product.sku}.`,
+      `Cliente solicitou arquivamento do cod. cliente ${product.clientCode}.`,
       "A acao deve apenas ocultar/descontinuar o produto para novos pedidos.",
       "Nao deletar cadastro, historico, contrato, movimentacoes ou documentos.",
     ].join(" "),
@@ -1929,6 +2024,27 @@ function liveAvailableForProduct(
   cart: Record<string, number>,
 ) {
   return Math.max(0, product.available - (cart[product.key] ?? 0));
+}
+
+function draftPreviewQuantityForProduct(
+  product: StockProduct,
+  cart: Record<string, number>,
+  draftQuantities: Record<string, number>,
+) {
+  if (!(product.key in draftQuantities)) return 0;
+  return draftQuantityForProduct(product, cart, draftQuantities);
+}
+
+function displayedAvailableForProduct(
+  product: StockProduct,
+  cart: Record<string, number>,
+  draftQuantities: Record<string, number>,
+) {
+  return Math.max(
+    0,
+    liveAvailableForProduct(product, cart) -
+      draftPreviewQuantityForProduct(product, cart, draftQuantities),
+  );
 }
 
 function liveAvailableForLine(product: StockProduct, line: CartLine) {
@@ -1975,11 +2091,6 @@ function agentDuteSignal(product: StockProduct, liveAvailable: number) {
   }
 
   return "Saldo disponivel para abastecimento. Ao selecionar o item, o portal desconta a quantidade exibida ate o envio da solicitacao.";
-}
-
-function productUnitValue(product: StockProduct) {
-  const basis = product.total || product.available;
-  return basis > 0 ? product.value / basis : 0;
 }
 
 function clampQuantity(quantity: number, max: number) {

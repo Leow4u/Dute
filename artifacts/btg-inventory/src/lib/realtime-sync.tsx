@@ -20,13 +20,12 @@ const CUSTOMER_AUTHORIZED_COLLECTIONS = [
   "client_request_status",
   "client_invoices",
   "client_documents",
-  "agent_conversations",
-  "agent_messages",
 ] as const;
 
 type RealtimeTarget = {
   collectionName: string;
   customerField?: "customer_code" | "cod_cliente";
+  userField?: "user_id";
 };
 
 const CUSTOMER_REALTIME_TARGETS: readonly RealtimeTarget[] = [
@@ -34,55 +33,121 @@ const CUSTOMER_REALTIME_TARGETS: readonly RealtimeTarget[] = [
     collectionName,
     customerField: "customer_code" as const,
   })),
+  {
+    collectionName: "agent_conversations",
+    customerField: "customer_code",
+    userField: "user_id",
+  },
+  {
+    collectionName: "agent_messages",
+    customerField: "customer_code",
+    userField: "user_id",
+  },
 ];
 
-const INTERNAL_OPERATION_COLLECTIONS = [
-  "products",
-  "skus",
-  "stock_balances",
-  "movements",
-  "customers",
-  "customer_accounts",
+/** Hot subset only — never subscribe to append-only ledgers (movements/events) or full catalogs. */
+const INTERNAL_HOT_COLLECTIONS = [
   "customer_requests",
-  "locations",
-  "orders",
-  "order_items",
-  "stock_reservations",
-  "billing_periods",
-  "billing_price_list",
-  "billing_manual",
-  "billing_config",
-  "events",
-  "ai_agent_inbox",
-  "ai_agent_memory",
-  "ai_agent_knowledge",
-  "ai_agent_knowledge_chunks",
-  "ai_agent_knowledge_files",
-  "ai_agent_knowledge_file_chunks",
-  "users",
   "inbound_receipts",
-  "inbound_items",
   "putaway_tasks",
-  "quality_exceptions",
   "pick_tasks",
-  "pick_lines",
   "pack_tasks",
-  "packages",
-  "package_items",
   "shipments",
-  "shipment_items",
-  "delivery_proofs",
+  "quality_exceptions",
+  "returns",
+  "ai_agent_inbox",
+  "billing_periods",
   "documents",
-  ...CUSTOMER_AUTHORIZED_COLLECTIONS,
+  "ops_aggregates",
 ] as const;
 
-const ACCESS_ADMIN_COLLECTIONS = ["invites"] as const;
+const INTERNAL_USER_SCOPED_TARGETS: readonly RealtimeTarget[] = [
+  { collectionName: "agent_conversations", userField: "user_id" },
+  { collectionName: "agent_messages", userField: "user_id" },
+];
+
+const ACCESS_ADMIN_COLLECTIONS = ["invites", "users"] as const;
+
+const COLLECTION_QUERY_KEYS: Record<string, readonly (readonly string[])[]> = {
+  products: [
+    ["/api/products"],
+    ["/api/dashboard"],
+    ["warehouse-ops"],
+    ["ai-overview"],
+    ["operational-foundation"],
+  ],
+  skus: [
+    ["/api/skus"],
+    ["/api/dashboard"],
+    ["warehouse-ops"],
+    ["ai-overview"],
+    ["operational-foundation"],
+  ],
+  stock_balances: [
+    ["stock-balances"],
+    ["warehouse-ops"],
+    ["ai-overview"],
+    ["/api/dashboard"],
+    ["client-portal-overview"],
+    ["operational-foundation"],
+  ],
+  movements: [["/api/movements"], ["/api/dashboard"], ["warehouse-ops"], ["ai-overview"]],
+  orders: [
+    ["/api/orders"],
+    ["warehouse-ops"],
+    ["ai-overview"],
+    ["/api/dashboard"],
+    ["client-portal-overview"],
+  ],
+  order_items: [["/api/orders"], ["warehouse-ops"]],
+  stock_reservations: [["warehouse-ops"], ["stock-balances"]],
+  customer_requests: [
+    ["customer-requests"],
+    ["warehouse-ops"],
+    ["ai-overview"],
+    ["support-customer-requests"],
+  ],
+  customers: [["admin-customers"], ["documents-customers"], ["support-customers"]],
+  customer_accounts: [["admin-customer-accounts"]],
+  locations: [["warehouse-ops"], ["operational-foundation"]],
+  inbound_receipts: [["warehouse-ops"], ["ai-overview"], ["operational-foundation"]],
+  inbound_items: [["warehouse-ops"]],
+  putaway_tasks: [["warehouse-ops"], ["ai-overview"]],
+  pick_tasks: [["warehouse-ops"], ["ai-overview"]],
+  pick_lines: [["warehouse-ops"]],
+  pack_tasks: [["warehouse-ops"], ["ai-overview"]],
+  shipments: [["warehouse-ops"], ["ai-overview"], ["operational-foundation"]],
+  quality_exceptions: [["warehouse-ops"], ["warehouse-exceptions"]],
+  returns: [["warehouse-ops"], ["returns-pending"]],
+  billing_periods: [["/api/billing/periods"], ["ai-overview"], ["client-portal-overview"]],
+  billing_price_list: [["/api/price-list"], ["/api/billing/config"]],
+  billing_manual: [["/api/billing/periods"]],
+  billing_config: [["/api/billing/config"]],
+  events: [["ai-overview"], ["warehouse-ops"]],
+  ai_agent_inbox: [["ai-overview"], ["warehouse-ops"], ["support-ai-overview"]],
+  ai_agent_memory: [["ai-overview"]],
+  ai_agent_knowledge: [["agent-knowledge-documents"], ["ai-overview"]],
+  ai_agent_knowledge_chunks: [["agent-knowledge-documents"]],
+  ai_agent_knowledge_files: [["agent-knowledge-files"], ["ai-overview"]],
+  documents: [["operational-documents"], ["ai-overview"]],
+  ops_aggregates: [["/api/dashboard"], ["ai-overview"]],
+  client_inventory: [["client-portal-overview"], ["client-portal-wms"]],
+  client_order_tracking: [["client-portal-overview"], ["client-portal-wms"]],
+  client_request_status: [["client-portal-overview"]],
+  client_invoices: [["client-portal-overview"]],
+  client_documents: [["client-portal-overview"]],
+  agent_conversations: [["agent-dute-chat"]],
+  agent_messages: [["agent-dute-chat"], ["agent-operational-notifications"]],
+  operational_notifications: [["agent-operational-notifications"]],
+  invites: [["invites"]],
+  users: [["/api/billing/users"], ["invites"]],
+};
 
 function uniqueTargets(targets: readonly RealtimeTarget[]) {
   const byKey = new Map<string, RealtimeTarget>();
   for (const target of targets) {
     byKey.set(
-      `${target.collectionName}:${target.customerField ?? "all"}`,
+      `${target.collectionName}:${target.customerField ?? "all"}:${target.userField ?? "all"}`,
       target,
     );
   }
@@ -100,13 +165,37 @@ function isCustomer(role?: string) {
 function buildRealtimeQuery(
   target: RealtimeTarget,
   customerCode: string,
+  userId: string,
 ): Query<DocumentData> | null {
   if (!firestore) return null;
 
   const ref = collection(firestore, target.collectionName);
-  if (!target.customerField) return ref;
+  const filters = [];
 
-  return query(ref, where(target.customerField, "==", customerCode));
+  if (target.customerField) {
+    filters.push(where(target.customerField, "==", customerCode));
+  }
+  if (target.userField) {
+    filters.push(where(target.userField, "==", userId));
+  }
+
+  return filters.length ? query(ref, ...filters) : ref;
+}
+
+function invalidateForCollections(
+  queryClient: ReturnType<typeof useQueryClient>,
+  collections: Set<string>,
+) {
+  const seen = new Set<string>();
+  for (const collectionName of collections) {
+    const keys = COLLECTION_QUERY_KEYS[collectionName] ?? [];
+    for (const key of keys) {
+      const token = key.join("::");
+      if (seen.has(token)) continue;
+      seen.add(token);
+      void queryClient.invalidateQueries({ queryKey: [...key] });
+    }
+  }
 }
 
 export function RealtimeSyncBridge() {
@@ -125,17 +214,22 @@ export function RealtimeSyncBridge() {
     if (!isLoaded || !user || !firestore) return;
 
     const role = user.publicMetadata.role;
+    if (!role) return;
+
     const customerCode =
       user.publicMetadata.customer_code || DEFAULT_CUSTOMER_CODE;
     const customer = isCustomer(role);
     const targets = customer
       ? uniqueTargets(CUSTOMER_REALTIME_TARGETS)
-      : uniqueTargets(
-          [
-            ...INTERNAL_OPERATION_COLLECTIONS,
-            ...(isAccessAdmin(role) ? ACCESS_ADMIN_COLLECTIONS : []),
-          ].map((collectionName) => ({ collectionName })),
-        );
+      : uniqueTargets([
+          ...INTERNAL_HOT_COLLECTIONS.map((collectionName) => ({
+            collectionName,
+          })),
+          ...INTERNAL_USER_SCOPED_TARGETS,
+          ...(isAccessAdmin(role) ? ACCESS_ADMIN_COLLECTIONS : []).map(
+            (collectionName) => ({ collectionName }),
+          ),
+        ]);
 
     function scheduleInvalidation(collectionName: string) {
       changedCollectionsRef.current.add(collectionName);
@@ -143,14 +237,19 @@ export function RealtimeSyncBridge() {
       if (timerRef.current) return;
       timerRef.current = window.setTimeout(() => {
         timerRef.current = null;
+        const changed = new Set(changedCollectionsRef.current);
         changedCollectionsRef.current.clear();
-        void queryClient.invalidateQueries();
+        invalidateForCollections(queryClient, changed);
       }, 350);
     }
 
     const unsubscribers = targets
       .map((target) => {
-        const realtimeQuery = buildRealtimeQuery(target, customerCode);
+        const realtimeQuery = buildRealtimeQuery(
+          target,
+          customerCode,
+          user.uid,
+        );
 
         if (!realtimeQuery) return null;
 

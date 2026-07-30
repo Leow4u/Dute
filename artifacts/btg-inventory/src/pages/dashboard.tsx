@@ -7,11 +7,13 @@ import {
   Bot,
   Boxes,
   ClipboardList,
+  Gauge,
   Package,
   Radar,
   Receipt,
   ShieldCheck,
   Sparkles,
+  TimerReset,
   Truck,
   Warehouse,
 } from "lucide-react";
@@ -176,22 +178,59 @@ function MetricCard({
   tone?: "stable" | "attention" | "critical";
 }) {
   return (
-    <Card className={cn(tone === "critical" && "border-destructive/20", tone === "attention" && "border-primary/25")}>
-      <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
-        <div>
+    <Card
+      className={cn(
+        "min-h-[136px]",
+        tone === "critical" && "border-destructive/20",
+        tone === "attention" && "border-primary/25",
+      )}
+    >
+      <CardContent className="flex h-full flex-col justify-between gap-4 p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
           <CardTitle className="text-sm font-medium text-muted-foreground">
             {title}
           </CardTitle>
-          <div className="mt-2 text-2xl font-semibold text-foreground">{value}</div>
+            <div className="mt-2 text-2xl font-semibold text-foreground">
+              {value}
+            </div>
+          </div>
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-border bg-white/65">
+            <Icon className="size-4 text-primary" />
+          </div>
         </div>
-        <div className="flex size-10 items-center justify-center rounded-[16px] border border-border bg-white/65">
-          <Icon className="size-4 text-primary" />
-        </div>
-      </CardHeader>
-      <CardContent className="pt-0 text-sm text-muted-foreground">
-        {caption}
+        <p className="text-sm leading-5 text-muted-foreground">{caption}</p>
       </CardContent>
     </Card>
+  );
+}
+
+function ControlSignal({
+  label,
+  value,
+  caption,
+  icon: Icon,
+}: {
+  label: string;
+  value: string;
+  caption: string;
+  icon: typeof Package;
+}) {
+  return (
+    <div className="rounded-[20px] border border-border bg-white/58 p-4 shadow-[0_8px_24px_rgba(15,23,42,.03)] backdrop-blur-[32px]">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium uppercase text-muted-foreground">
+            {label}
+          </p>
+          <p className="mt-2 text-xl font-semibold text-foreground">{value}</p>
+        </div>
+        <div className="flex size-9 items-center justify-center rounded-[14px] border border-border bg-white/70">
+          <Icon className="size-4 text-primary" />
+        </div>
+      </div>
+      <p className="mt-3 text-xs leading-5 text-muted-foreground">{caption}</p>
+    </div>
   );
 }
 
@@ -256,17 +295,20 @@ export default function Dashboard() {
   const ai = useQuery({
     queryKey: ["ai-overview"],
     queryFn: () => fetchJson<AnyRecord>("/api/ai/overview"),
-    refetchInterval: 30000,
+    refetchInterval: 120_000,
+    refetchOnWindowFocus: false,
   });
   const wms = useQuery({
     queryKey: ["warehouse-ops"],
     queryFn: () => fetchJson<AnyRecord>("/api/warehouse/ops"),
-    refetchInterval: 30000,
+    refetchInterval: 120_000,
+    refetchOnWindowFocus: false,
   });
   const requests = useQuery({
     queryKey: ["customer-requests", "control-tower"],
     queryFn: () => fetchJson<{ items?: AnyRecord[] }>("/api/customer-requests?limit=80"),
-    refetchInterval: 30000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: false,
   });
 
   const derived = useMemo(() => {
@@ -372,46 +414,124 @@ export default function Dashboard() {
   ].filter((item): item is string => Boolean(item));
 
   return (
-    <div className="flex flex-col gap-6">
-      <section className="glass-surface overflow-hidden rounded-[28px] p-6 md:p-7">
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-          <div className="max-w-3xl">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
-                Torre de Controle
-              </Badge>
-              <Badge
-                variant="outline"
-                className={cn(
-                  operationalHealth === "Crítico" && "border-destructive/20 bg-destructive/10 text-destructive",
-                  operationalHealth === "Atenção" && "border-primary/20 bg-primary/10 text-primary",
-                )}
-              >
-                {operationalHealth}
-              </Badge>
+    <div className="flex flex-col gap-5">
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_430px]">
+        <div className="glass-surface rounded-[28px] p-6 md:p-7">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-3xl">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className="border-primary/20 bg-primary/10 text-primary"
+                >
+                  Torre de Controle
+                </Badge>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    operationalHealth === "Crítico" &&
+                      "border-destructive/20 bg-destructive/10 text-destructive",
+                    operationalHealth === "Atenção" &&
+                      "border-amber-200 bg-amber-50 text-amber-800",
+                    operationalHealth === "Estável" &&
+                      "border-emerald-200 bg-emerald-50 text-emerald-700",
+                  )}
+                >
+                  {operationalHealth}
+                </Badge>
+              </div>
+              <h1 className="mt-4 text-2xl font-semibold tracking-normal text-foreground md:text-3xl">
+                Comando operacional Dutelog
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+                Visão de turno para estoque, WMS físico, solicitações,
+                faturamento e sinais do Agent Dute.
+              </p>
             </div>
-            <h1 className="mt-4 text-3xl font-semibold tracking-normal text-foreground md:text-4xl">
-              Comando operacional Dutelog
-            </h1>
-            <p className="mt-3 text-sm leading-6 text-muted-foreground md:text-base">
-              Estoque, WMS físico, solicitações, faturamento e sinais do Agent Dute em uma visão de decisão.
-            </p>
+            <Button asChild variant="outline" className="shrink-0 justify-between">
+              <Link href="/wms">
+                Abrir bancada WMS
+                <ArrowRight data-icon="inline-end" />
+              </Link>
+            </Button>
           </div>
-          <div className="grid gap-3 text-sm sm:grid-cols-3 xl:min-w-[520px]">
-            <div className="rounded-[22px] border border-border bg-white/55 p-4">
-              <div className="text-muted-foreground">Valor monitorado</div>
-              <div className="mt-2 text-xl font-semibold">{formatCurrency(derived.inventoryValue)}</div>
-            </div>
-            <div className="rounded-[22px] border border-border bg-white/55 p-4">
-              <div className="text-muted-foreground">Peças</div>
-              <div className="mt-2 text-xl font-semibold">{formatNumber(derived.pieces)}</div>
-            </div>
-            <div className="rounded-[22px] border border-border bg-white/55 p-4">
-              <div className="text-muted-foreground">Último evento</div>
-              <div className="mt-2 text-xl font-semibold">{formatDate(ai.data?.snapshot?.last_event_at)}</div>
-            </div>
+
+          <div className="mt-6 grid gap-3 md:grid-cols-3">
+            <ControlSignal
+              label="Valor monitorado"
+              value={formatCurrency(derived.inventoryValue)}
+              caption="Base de custo consolidada para decisão."
+              icon={Gauge}
+            />
+            <ControlSignal
+              label="Peças no radar"
+              value={formatNumber(derived.pieces)}
+              caption={`${formatNumber(derived.skuTotal)} SKU(s) ativos no catálogo.`}
+              icon={Boxes}
+            />
+            <ControlSignal
+              label="Último evento"
+              value={formatDate(ai.data?.snapshot?.last_event_at)}
+              caption="Atualização operacional mais recente."
+              icon={TimerReset}
+            />
           </div>
         </div>
+
+        <Card className="border-primary/15 bg-primary/5">
+          <CardHeader className="pb-3">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <CardTitle className="text-base">Próxima decisão</CardTitle>
+                <CardDescription>
+                  O que mais importa para destravar a operação agora.
+                </CardDescription>
+              </div>
+              <Radar className="size-5 text-primary" />
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-[20px] border border-border bg-white/65 p-4">
+              <p className="text-sm font-semibold text-foreground">
+                {derived.criticalAlerts.length > 0
+                  ? "Revisar alerta crítico do Agent Dute"
+                  : derived.blockedTasks.length > 0
+                    ? "Tratar bloqueio físico no WMS"
+                    : derived.openRequests.length > 0
+                      ? "Priorizar solicitação aberta"
+                      : "Manter fila WMS monitorada"}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                {derived.criticalAlerts[0]?.message ??
+                  derived.criticalAlerts[0]?.title ??
+                  (derived.blockedTasks[0] as AnyRecord | undefined)
+                    ?.blocked_reason ??
+                  derived.openRequests[0]?.description ??
+                  "Nenhum gargalo crítico identificado nesta leitura."}
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center text-xs">
+              <div className="rounded-[16px] border border-border bg-white/58 p-3">
+                <div className="text-lg font-semibold text-foreground">
+                  {formatNumber(derived.dueSoon)}
+                </div>
+                <div className="text-muted-foreground">SLA</div>
+              </div>
+              <div className="rounded-[16px] border border-border bg-white/58 p-3">
+                <div className="text-lg font-semibold text-foreground">
+                  {formatNumber(derived.blockedTasks.length)}
+                </div>
+                <div className="text-muted-foreground">bloq.</div>
+              </div>
+              <div className="rounded-[16px] border border-border bg-white/58 p-3">
+                <div className="text-lg font-semibold text-foreground">
+                  {formatNumber(derived.agentOpen)}
+                </div>
+                <div className="text-muted-foreground">IA</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </section>
 
       {sourceIssues.length > 0 ? (
@@ -464,35 +584,52 @@ export default function Dashboard() {
 
       <Card>
         <CardHeader className="border-b border-border/60">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <CardTitle className="text-base">Filas e próximos passos</CardTitle>
               <CardDescription>
-                Leitura WMS por frente com ação sugerida para o turno.
+                Leitura por frente para Rafael e Manoel priorizarem o turno.
               </CardDescription>
             </div>
-            <Badge variant="outline">{formatNumber(derived.dueSoon)} SLA próximo</Badge>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="outline">{formatNumber(derived.dueSoon)} SLA próximo</Badge>
+              <Badge variant="outline">
+                {formatNumber(derived.throughputToday)} concluída(s) hoje
+              </Badge>
+            </div>
           </div>
         </CardHeader>
-        <CardContent className="grid gap-3 pt-5 md:grid-cols-2 xl:grid-cols-5">
+        <CardContent className="grid gap-3 pt-5 md:grid-cols-2 2xl:grid-cols-5">
           {derived.queueSummaries.length > 0 ? (
             derived.queueSummaries.map((queue) => (
               <div
                 key={queue.key}
-                className="flex min-h-[190px] flex-col rounded-[20px] border border-border bg-white/55 p-4"
+                className={cn(
+                  "flex min-h-[178px] flex-col rounded-[20px] border border-border bg-white/58 p-4 transition-colors duration-200",
+                  queue.blocked > 0 && "border-destructive/20 bg-destructive/5",
+                  queue.dueSoon > 0 && !queue.blocked && "border-amber-200 bg-amber-50/45",
+                )}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="text-sm font-semibold text-foreground">{queue.label}</div>
+                    <div className="text-sm font-semibold text-foreground">
+                      {queue.label}
+                    </div>
                     <div className="mt-1 text-xs text-muted-foreground">
                       {formatNumber(queue.inProgress)} em execução
                     </div>
                   </div>
                   <Badge
                     variant="outline"
-                    className={cn(queue.blocked > 0 && "border-destructive/20 bg-destructive/10 text-destructive")}
+                    className={cn(
+                      queue.blocked > 0 &&
+                        "border-destructive/20 bg-destructive/10 text-destructive",
+                      queue.dueSoon > 0 &&
+                        !queue.blocked &&
+                        "border-amber-200 bg-amber-50 text-amber-800",
+                    )}
                   >
-                    {formatNumber(queue.pending)}
+                    {formatNumber(queue.pending)} pend.
                   </Badge>
                 </div>
                 <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
@@ -515,10 +652,16 @@ export default function Dashboard() {
                 <p className="mt-4 line-clamp-2 text-xs leading-5 text-muted-foreground">
                   {String(queue.nextAction)}
                 </p>
+                <Button asChild variant="ghost" size="sm" className="mt-auto justify-between px-0 pt-4">
+                  <Link href="/wms">
+                    Ir para fila
+                    <ArrowRight data-icon="inline-end" />
+                  </Link>
+                </Button>
               </div>
             ))
           ) : (
-            <div className="rounded-[18px] border border-border bg-white/55 p-5 text-sm text-muted-foreground md:col-span-2 xl:col-span-5">
+            <div className="rounded-[18px] border border-border bg-white/55 p-5 text-sm text-muted-foreground md:col-span-2 2xl:col-span-5">
               Nenhuma fila WMS disponível nesta leitura.
             </div>
           )}
@@ -600,8 +743,8 @@ export default function Dashboard() {
             <WorkstreamCard
               title="Faturamento"
               description="Competência e cobrança"
-              value={toNumber((dashboard.data as AnyRecord).ad_valorem)}
-              total={Math.max(1, toNumber((dashboard.data as AnyRecord).custo_total))}
+              value={toNumber(derived.data?.ad_valorem)}
+              total={Math.max(1, toNumber(derived.data?.custo_total))}
               href="/faturamento"
               icon={Receipt}
             />

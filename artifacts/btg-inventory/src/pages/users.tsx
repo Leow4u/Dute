@@ -7,10 +7,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   collection,
-  doc,
   getDocs,
-  serverTimestamp,
-  setDoc,
 } from "firebase/firestore";
 import { Copy, Plus } from "lucide-react";
 
@@ -36,7 +33,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { firestore } from "@/lib/firebase";
-import { useAppUser } from "@/lib/auth";
 import { normalizeProfileRole, type ProfileRole } from "@/lib/modules";
 
 type InviteRole = ProfileRole;
@@ -106,7 +102,6 @@ async function copyInvite(token: string) {
 export default function Users() {
   const qc = useQueryClient();
   const { toast } = useToast();
-  const { user } = useAppUser();
   const { data, isLoading } = useListBillingUsers();
   const update = useUpdateUserRole();
   const [form, setForm] = useState<InviteForm>(initialInviteForm);
@@ -129,35 +124,23 @@ export default function Users() {
       const email = input.email.trim().toLowerCase();
       const customerCode = isClientRole(input.role) ? "BTG Pactual" : "Dutelog";
 
-      await setDoc(doc(firestore, "invites", token), {
-        nome: input.nome.trim(),
-        email,
-        role: input.role,
-        customer_code: customerCode,
-        status: "pending",
-        created_by: user?.uid ?? null,
-        created_at: serverTimestamp(),
-      });
-
-      await fetch("/api/ai/events", {
+      const response = await fetch("/api/invites", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          type: "access.invite_created",
-          title: "Convite de acesso criado",
-          description: `${roleLabel(input.role)} convidado: ${email}`,
-          severity: "info",
-          entity_type: "convite",
-          entity_id: token,
+          token,
+          nome: input.nome.trim(),
+          email,
+          role: input.role,
           customer_code: customerCode,
-          payload: {
-            nome: input.nome.trim(),
-            email,
-            role: input.role,
-            customer_code: customerCode,
-          },
         }),
-      }).catch(() => undefined);
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as {
+          message?: string;
+        };
+        throw new Error(payload.message || "Não foi possível criar o convite.");
+      }
 
       return token;
     },

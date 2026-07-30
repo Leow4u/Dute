@@ -2,15 +2,12 @@ import {
   createUserWithEmailAndPassword,
   deleteUser,
   sendPasswordResetEmail,
+  signOut,
   signInWithEmailAndPassword,
   updateProfile,
 } from "firebase/auth";
-import {
-  doc,
-  getDoc,
-  serverTimestamp,
-  writeBatch,
-} from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
+import { doc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import {
   Switch,
   Route,
@@ -19,7 +16,7 @@ import {
   Redirect,
 } from "wouter";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
@@ -28,38 +25,54 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import AppLayout from "./components/layout/app-layout";
-import Dashboard from "./pages/dashboard";
-import Products from "./pages/products";
-import Skus from "./pages/skus";
-import Movements from "./pages/movements";
-import Orders from "./pages/orders";
-import Warehouse from "./pages/warehouse";
-import Reports from "./pages/reports";
-import Billing from "./pages/billing";
-import PriceList from "./pages/price-list";
-import Users from "./pages/users";
-import Settings from "./pages/settings";
-import MyInvoices from "./pages/my-invoices";
-import AiControl from "./pages/ai-control";
-import AgentKnowledge from "./pages/agent-knowledge";
-import {
-  ClienteAgenteOperacional,
-  ClienteAssistente,
-  ClienteDocumentos,
-  ClienteEstoque,
-  ClienteFaturas,
-  ClienteInicio,
-  ClientePedidos,
-  ClienteSolicitacoes,
-} from "./pages/client";
-import CustomerRequests from "./pages/customer-requests";
-import WarehouseOps, { type WarehouseOpsModuleKey } from "./pages/warehouse-ops";
+import type { WarehouseOpsModuleKey } from "./pages/warehouse-ops";
 import NotFound from "./pages/not-found";
+
+const LandingPage = lazy(() => import("./pages/landing"));
+const Dashboard = lazy(() => import("./pages/dashboard"));
+const Products = lazy(() => import("./pages/products"));
+const Skus = lazy(() => import("./pages/skus"));
+const Movements = lazy(() => import("./pages/movements"));
+const Orders = lazy(() => import("./pages/orders"));
+const Warehouse = lazy(() => import("./pages/warehouse"));
+const Reports = lazy(() => import("./pages/reports"));
+const Billing = lazy(() => import("./pages/billing"));
+const PriceList = lazy(() => import("./pages/price-list"));
+const Users = lazy(() => import("./pages/users"));
+const Customers = lazy(() => import("./pages/customers"));
+const Documents = lazy(() => import("./pages/documents"));
+const Settings = lazy(() => import("./pages/settings"));
+const MyInvoices = lazy(() => import("./pages/my-invoices"));
+const AiControl = lazy(() => import("./pages/ai-control"));
+const AgentKnowledge = lazy(() => import("./pages/agent-knowledge"));
+const Support = lazy(() => import("./pages/support"));
+const CustomerRequests = lazy(() => import("./pages/customer-requests"));
+const WarehouseOps = lazy(() => import("./pages/warehouse-ops"));
+const WmsInventoryPage = lazy(() => import("./pages/wms-inventory"));
+const WmsReturnsPage = lazy(() => import("./pages/wms-returns"));
+const ClienteAssistente = lazy(() =>
+  import("./pages/client").then((m) => ({ default: m.ClienteAssistente })),
+);
+const ClienteDocumentos = lazy(() =>
+  import("./pages/client").then((m) => ({ default: m.ClienteDocumentos })),
+);
+const ClienteEstoque = lazy(() =>
+  import("./pages/client").then((m) => ({ default: m.ClienteEstoque })),
+);
+const ClienteFaturas = lazy(() =>
+  import("./pages/client").then((m) => ({ default: m.ClienteFaturas })),
+);
+const ClienteInicio = lazy(() =>
+  import("./pages/client").then((m) => ({ default: m.ClienteInicio })),
+);
+const ClientePedidos = lazy(() =>
+  import("./pages/client").then((m) => ({ default: m.ClientePedidos })),
+);
+const ClienteSolicitacoes = lazy(() =>
+  import("./pages/client").then((m) => ({ default: m.ClienteSolicitacoes })),
+);
 import { useRole } from "./hooks/use-role";
-import {
-  AuthProvider,
-  useAppUser,
-} from "./lib/auth";
+import { AuthProvider, useAppUser } from "./lib/auth";
 import {
   firebaseApp,
   firebaseAuth,
@@ -163,7 +176,8 @@ async function fetchInviteViaRest(token: string): Promise<InviteData | null> {
     );
 
     if (response.status === 404) return null;
-    if (!response.ok) throw new Error(`Invite lookup failed: ${response.status}`);
+    if (!response.ok)
+      throw new Error(`Invite lookup failed: ${response.status}`);
 
     const payload = (await response.json()) as {
       fields?: Record<string, { stringValue?: string }>;
@@ -188,6 +202,18 @@ async function fetchInviteViaSdk(token: string): Promise<InviteData | null> {
 }
 
 async function fetchInvite(token: string): Promise<InviteData | null> {
+  try {
+    if (firebaseApp) {
+      const lookup = httpsCallable<{ token: string }, InviteData>(
+        getFunctions(firebaseApp, "southamerica-east1"),
+        "lookupInvite",
+      );
+      const result = await lookup({ token });
+      return result.data;
+    }
+  } catch {
+    // Keep the REST/SDK fallback for an older deployment during rollout.
+  }
   try {
     return await fetchInviteViaRest(token);
   } catch {
@@ -257,9 +283,7 @@ function SignInPage() {
         ...current,
         loading: false,
         error:
-          error instanceof Error
-            ? error.message
-            : "Não foi possível entrar.",
+          error instanceof Error ? error.message : "Não foi possível entrar.",
       }));
     }
   }
@@ -349,8 +373,6 @@ function SignUpPage() {
   const [form, setForm] = useState<AuthFormState>(initialAuthState);
   const [invite, setInvite] = useState<InviteState>({ status: "loading" });
 
-  if (isLoaded && user) return <Redirect to="/" />;
-
   useEffect(() => {
     let active = true;
 
@@ -373,7 +395,9 @@ function SignUpPage() {
       }
 
       const role = normalizeInviteRole(data.role);
-      const email = String(data.email ?? "").trim().toLowerCase();
+      const email = String(data.email ?? "")
+        .trim()
+        .toLowerCase();
       const customerCode =
         data.customer_code ?? (role === "cliente" ? "BTG Pactual" : "Dutelog");
       if (!email || !role) {
@@ -458,15 +482,17 @@ function SignUpPage() {
         body: JSON.stringify({
           type: "access.invite_accepted",
           title: "Convite aceito",
-          description: `${form.nome.trim()} ativou acesso como ${
-            roleLabel(invite.data.role)
-          }.`,
+          description: `${form.nome.trim()} ativou acesso como ${roleLabel(
+            invite.data.role,
+          )}.`,
           severity: "info",
           entity_type: "usuario",
           entity_id: credential.user.uid,
           customer_code:
             invite.data.customer_code ??
-            (appRole(invite.data.role) === "cliente" ? "BTG Pactual" : "Dutelog"),
+            (appRole(invite.data.role) === "cliente"
+              ? "BTG Pactual"
+              : "Dutelog"),
           payload: {
             email: invite.data.email,
             role: invite.data.role,
@@ -492,6 +518,66 @@ function SignUpPage() {
     }
   }
 
+  if (isLoaded && user) {
+    return (
+      <AuthShell
+        title="Você já está conectado"
+        subtitle="Saia da conta atual para aceitar este convite"
+      >
+        <Alert>
+          <AlertDescription>
+            Esta janela está conectada como{" "}
+            <span className="font-medium text-foreground">
+              {user.primaryEmailAddress.emailAddress || "usuário autenticado"}
+            </span>
+            . O convite deve ser aceito pela conta da pessoa convidada.
+          </AlertDescription>
+        </Alert>
+        {form.error ? (
+          <Alert variant="destructive" className="mt-4">
+            <AlertDescription>{form.error}</AlertDescription>
+          </Alert>
+        ) : null}
+        <div className="mt-4 grid gap-3">
+          <Button
+            type="button"
+            disabled={form.loading || !firebaseAuth}
+            onClick={async () => {
+              if (!firebaseAuth) return;
+              setForm((current) => ({
+                ...current,
+                loading: true,
+                error: null,
+              }));
+              try {
+                await signOut(firebaseAuth);
+                setForm((current) => ({ ...current, loading: false }));
+              } catch (error) {
+                setForm((current) => ({
+                  ...current,
+                  loading: false,
+                  error:
+                    error instanceof Error
+                      ? error.message
+                      : "Não foi possível sair da conta atual.",
+                }));
+              }
+            }}
+          >
+            {form.loading ? "Saindo..." : "Sair e continuar com o convite"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setLocation("/")}
+          >
+            Voltar ao sistema
+          </Button>
+        </div>
+      </AuthShell>
+    );
+  }
+
   if (invite.status === "loading") {
     return (
       <AuthShell title="Validando convite" subtitle="Aguarde um instante">
@@ -511,7 +597,10 @@ function SignUpPage() {
           : "Convite inválido ou não encontrado.";
 
     return (
-      <AuthShell title="Convite necessário" subtitle="Acesso controlado pela Dute">
+      <AuthShell
+        title="Convite necessário"
+        subtitle="Acesso controlado pela Dute"
+      >
         <Alert variant="destructive">
           <AlertDescription>{message}</AlertDescription>
         </Alert>
@@ -626,7 +715,7 @@ function RoleHome() {
 function HomeRedirect() {
   const { user, isLoaded } = useAppUser();
   if (!isLoaded) return null;
-  if (!user) return <Redirect to="/sign-in" />;
+  if (!user) return <LandingPage />;
   return <RoleHome />;
 }
 
@@ -669,7 +758,9 @@ function protectedRoute(
 }
 
 function WmsModuleScreen({ module }: { module: WarehouseOpsModuleKey }) {
-  return <WarehouseOps initialModule={module} />;
+  // Force remount when the WMS module changes so shared WarehouseOps state
+  // never leaks between Recebimento / Putaway / etc.
+  return <WarehouseOps key={module} initialModule={module} />;
 }
 
 const WmsReceiving = () => <WmsModuleScreen module="receiving" />;
@@ -680,6 +771,8 @@ const WmsPacking = () => <WmsModuleScreen module="packing" />;
 const WmsExpedition = () => <WmsModuleScreen module="expedition" />;
 const WmsExceptions = () => <WmsModuleScreen module="exceptions" />;
 const WmsHomeRedirect = () => <Redirect to="/wms/recebimento" />;
+const ClientRequestsRedirect = () => <Redirect to="/portal/recebimentos" />;
+const ClientAgentRedirect = () => <Redirect to="/portal/agente" />;
 
 const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/dashboard", Dashboard),
@@ -691,6 +784,8 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/wms/picking", WmsPicking),
   protectedRoute("/wms/packing", WmsPacking),
   protectedRoute("/wms/expedicao", WmsExpedition),
+  protectedRoute("/wms/devolucoes", WmsReturnsPage),
+  protectedRoute("/wms/inventario", WmsInventoryPage),
   protectedRoute("/wms/excecoes", WmsExceptions),
   protectedRoute("/wms", WmsHomeRedirect),
   protectedRoute("/warehouse", Warehouse),
@@ -702,15 +797,19 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/tabela-precos", PriceList),
   protectedRoute("/agente", AiControl),
   protectedRoute("/agente/conhecimento", AgentKnowledge),
+  protectedRoute("/suporte", Support),
+  protectedRoute("/documentos", Documents),
+  protectedRoute("/clientes", Customers),
   protectedRoute("/usuarios", Users),
   protectedRoute("/configuracoes", Settings),
   protectedRoute("/portal", ClienteInicio),
   protectedRoute("/portal/estoque", ClienteEstoque),
-  protectedRoute("/portal/solicitacoes", ClienteSolicitacoes),
+  protectedRoute("/portal/recebimentos", ClienteSolicitacoes),
+  protectedRoute("/portal/solicitacoes", ClientRequestsRedirect),
   protectedRoute("/portal/pedidos", ClientePedidos),
   protectedRoute("/portal/faturas", ClienteFaturas),
   protectedRoute("/portal/documentos", ClienteDocumentos),
-  protectedRoute("/portal/agente/operacional", ClienteAgenteOperacional),
+  protectedRoute("/portal/agente/operacional", ClientAgentRedirect),
   protectedRoute("/portal/agente", ClienteAssistente),
   protectedRoute("/minhas-faturas", MyInvoices),
 ];
@@ -731,7 +830,15 @@ function ProtectedRoute({
         return (
           <RoleGate appRoles={appRoles} profileRoles={profileRoles}>
             <AppLayout>
-              <Component params={params} />
+              <Suspense
+                fallback={
+                  <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
+                    Carregando...
+                  </div>
+                }
+              >
+                <Component params={params} />
+              </Suspense>
             </AppLayout>
           </RoleGate>
         );
@@ -747,18 +854,26 @@ function AppRoutes() {
         <QueryClientCacheInvalidator />
         <RealtimeSyncBridge />
         <TooltipProvider>
-          <Switch>
-            <Route path="/" component={HomeRedirect} />
-            <Route path="/sign-in/*?" component={SignInPage} />
-            <Route path="/convite/*?" component={SignUpPage} />
-            <Route path="/sign-up/*?" component={SignUpPage} />
+          <Suspense
+            fallback={
+              <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+                Carregando...
+              </div>
+            }
+          >
+            <Switch>
+              <Route path="/" component={HomeRedirect} />
+              <Route path="/sign-in/*?" component={SignInPage} />
+              <Route path="/convite/*?" component={SignUpPage} />
+              <Route path="/sign-up/*?" component={SignUpPage} />
 
-            {PROTECTED_ROUTES.map((route) => (
-              <ProtectedRoute key={route.path} {...route} />
-            ))}
+              {PROTECTED_ROUTES.map((route) => (
+                <ProtectedRoute key={route.path} {...route} />
+              ))}
 
-            <Route component={NotFound} />
-          </Switch>
+              <Route component={NotFound} />
+            </Switch>
+          </Suspense>
           <Toaster />
         </TooltipProvider>
       </QueryClientProvider>

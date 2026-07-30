@@ -81,6 +81,7 @@ export type InventoryItem = {
   sku?: string;
   cod_sku?: string;
   client_item_code?: string;
+  cod_cliente?: string;
   product_name?: string;
   name?: string;
   produto?: string;
@@ -97,6 +98,7 @@ export type InventoryItem = {
   value?: Numberish;
   total_value?: Numberish;
   total_cost?: Numberish;
+  unit_cost?: Numberish;
   location_id?: string;
   location?: string;
   localizacao?: string;
@@ -139,7 +141,11 @@ export type Order = {
   status?: string;
   canal?: string;
   channel?: string;
+  sku_code?: string;
+  sku?: string;
   cod_sku?: string;
+  client_item_code?: string;
+  cod_cliente?: string;
   produto?: string;
   product?: string;
   product_name?: string;
@@ -166,6 +172,8 @@ export type ClientRequestItemObject = {
   sku_code?: string | null;
   sku?: string | null;
   cod_sku?: string | null;
+  client_item_code?: string | null;
+  cod_cliente?: string | null;
   product_name?: string | null;
   product?: string | null;
   name?: string | null;
@@ -196,6 +204,9 @@ export type ClientRequestItem = string | ClientRequestItemObject;
 export type ClientRequest = {
   id?: string;
   customer_code?: string;
+  supplier?: string;
+  invoice_number?: string;
+  attachment_count?: Numberish;
   protocol?: string;
   protocolo?: string;
   title?: string;
@@ -393,9 +404,24 @@ export type CreateClientRequestItem = {
   sku_code?: string | null;
   client_item_code?: string | null;
   product_name?: string | null;
+  product_registration?: "existing" | "new" | "unknown";
   location_id?: string | null;
+  category?: string | null;
+  barcode?: string | null;
+  brand?: string | null;
+  size?: string | null;
+  color?: string | null;
+  unit_cost?: number | null;
   quantity: number;
   notes?: string | null;
+};
+
+export type ClientRequestAttachment = {
+  file_name: string;
+  file_url: string;
+  storage_path: string;
+  content_type: string;
+  size_bytes: number;
 };
 
 export type CreateClientRequestPayload = {
@@ -405,6 +431,9 @@ export type CreateClientRequestPayload = {
   description?: string;
   destination?: string;
   due_at?: string;
+  supplier?: string;
+  invoice_number?: string;
+  attachments?: ClientRequestAttachment[];
   items: CreateClientRequestItem[];
 };
 
@@ -492,7 +521,7 @@ export function ClientModuleShell({
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs leading-5 text-muted-foreground md:max-w-sm md:justify-end md:pt-2 md:text-right">
             <span className="font-medium text-foreground">{customerName}</span>
-            {customerCode ? <span>Cod. {customerCode}</span> : null}
+            {customerCode ? <span>Conta {customerCode}</span> : null}
             <span>Atualizado {formatDate(overview.updated_at)}</span>
           </div>
         </header>
@@ -550,11 +579,11 @@ function ClientModuleError({
       <div className="mx-auto max-h-full max-w-3xl overflow-auto overscroll-contain">
         <Alert variant="destructive" className="bg-white">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Portal indisponivel</AlertTitle>
+        <AlertTitle>Portal indisponível</AlertTitle>
           <AlertDescription className="space-y-4">
             <p>
               {error.message ||
-                "Nao foi possivel carregar os dados do cliente."}
+                "Não foi possível carregar os dados do cliente."}
             </p>
             <Button
               type="button"
@@ -758,7 +787,7 @@ export function formatDate(value?: string | null) {
 
 export function formatPeriod(value?: string | null) {
   const text = firstText(value);
-  if (!text) return "Sem competencia";
+  if (!text) return "Sem competência";
   const match = /^(\d{4})-(\d{2})$/.exec(text);
   if (!match) return text;
   return `${match[2]}/${match[1]}`;
@@ -1064,6 +1093,12 @@ export function inventoryItemSku(item: InventoryItem) {
   );
 }
 
+export function inventoryItemClientCode(item: InventoryItem) {
+  return (
+    firstText(item.client_item_code, item.cod_cliente) ?? "Sem cod. cliente"
+  );
+}
+
 export function inventoryItemName(item: InventoryItem) {
   return (
     firstText(item.product_name, item.name, item.produto) ?? "Produto sem nome"
@@ -1130,7 +1165,8 @@ export function orderProduct(order: Order) {
       order.product_name,
       order.product,
       order.produto,
-      order.cod_sku,
+      order.client_item_code,
+      order.cod_cliente,
     ) ?? "Itens do pedido"
   );
 }

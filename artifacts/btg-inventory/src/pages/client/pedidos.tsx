@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -63,6 +64,8 @@ type OrderWithTracking = Order & {
   destination?: string | null;
   sku?: string | null;
   sku_code?: string | null;
+  client_item_code?: string | null;
+  cod_cliente?: string | null;
 };
 
 type PublishedWmsRecord = {
@@ -90,7 +93,7 @@ type TrackingEvent = {
 type TrackingItem = {
   id: string;
   product: string;
-  sku?: string;
+  clientCode?: string;
   quantity?: number;
   picked?: number;
 };
@@ -140,6 +143,9 @@ const IN_PROGRESS_STATUSES = new Set([
   "in_progress",
   "em-execucao",
   "approved",
+  "separating",
+  "separated",
+  "checking",
   "packing",
   "ready",
   "ready-to-pack",
@@ -205,57 +211,75 @@ export function ClientePedidos() {
         return (
           <ClientModuleShell
             overview={overview}
-            eyebrow="Modulo de pedidos"
-            title="Pedidos/Entregas"
-            description="Tracking dos pedidos feitos pelo cliente, da solicitacao ate a entrega."
+            eyebrow="Abastecimento da loja"
+            title="Pedidos"
+            description="Acompanhe cada pedido desde o recebimento pela Dutelog até a entrega."
             icon={PackageCheck}
           >
-            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <MetricCard
-                label="Abertos"
-                value={formatNumber(open)}
-                description="Pedidos aguardando conclusao"
-                icon={Clock3}
-                tone="warning"
-              />
-              <MetricCard
-                label="Recebidos"
-                value={formatNumber(pending)}
-                description="Pedidos enviados pelo portal"
-                icon={PackageOpen}
-                tone="neutral"
-              />
-              <MetricCard
-                label="Em operacao"
-                value={formatNumber(inProgress)}
-                description="Separacao, conferencia ou packing"
-                icon={PackageCheck}
-                tone="info"
-              />
-              <MetricCard
-                label="Expedidos"
-                value={formatNumber(shipped)}
-                description="Pedidos enviados ou entregues"
-                icon={Truck}
-                tone="success"
-              />
-            </section>
-
-            {selectedTracking ? (
+            {trackingItems.length === 0 ? (
+              <NoOrdersState />
+            ) : selectedTracking ? (
               <TrackingDetail
                 item={selectedTracking}
                 onBack={() => setSelectedTrackingId(null)}
               />
             ) : (
-              <TrackingList
-                items={trackingItems}
-                onSelect={setSelectedTrackingId}
-              />
+              <>
+                <section className="grid gap-4 md:grid-cols-3">
+                  <MetricCard
+                    label="Em aberto"
+                    value={formatNumber(open)}
+                    description={`${formatNumber(pending)} recebido(s) pela Dutelog`}
+                    icon={Clock3}
+                    tone="neutral"
+                  />
+                  <MetricCard
+                    label="Em preparação"
+                    value={formatNumber(inProgress)}
+                    description="Separação ou conferência"
+                    icon={PackageCheck}
+                    tone="info"
+                  />
+                  <MetricCard
+                    label="Enviados"
+                    value={formatNumber(shipped)}
+                    description="Em rota ou entregues"
+                    icon={Truck}
+                    tone="success"
+                  />
+                </section>
+                <TrackingList
+                  items={trackingItems}
+                  onSelect={setSelectedTrackingId}
+                />
+              </>
             )}
           </ClientModuleShell>
         );
       }}
     </ClientDataBoundary>
+  );
+}
+
+function NoOrdersState() {
+  return (
+    <div className="flex min-h-[340px] flex-col items-center justify-center rounded-[24px] border border-dashed border-border bg-white/45 px-6 py-12 text-center">
+      <span className="flex h-14 w-14 items-center justify-center rounded-[20px] border border-border bg-white text-muted-foreground">
+        <CheckCircle2 className="h-6 w-6" aria-hidden="true" />
+      </span>
+      <h2 className="mt-5 text-lg font-semibold text-foreground">
+        Nenhum pedido em acompanhamento
+      </h2>
+      <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
+        Os pedidos são montados no Estoque. Depois do envio, o acompanhamento completo aparece nesta página.
+      </p>
+      <Button asChild variant="secondary" className="mt-6 rounded-2xl">
+        <Link href="/portal/estoque">
+          <PackageOpen className="h-4 w-4" />
+          Ir para o estoque
+        </Link>
+      </Button>
+    </div>
   );
 }
 
@@ -268,8 +292,8 @@ function TrackingList({
 }) {
   return (
     <ModulePanel
-      title="Tracking de pedidos"
-      description="Clique em um pedido para abrir o acompanhamento detalhado"
+      title="Acompanhamento dos pedidos"
+      description="Selecione um pedido para ver itens e atualizações"
       icon={ClipboardList}
     >
       {items.length > 0 ? (
@@ -282,7 +306,7 @@ function TrackingList({
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Linhas</TableHead>
                 <TableHead className="text-right">Unidades</TableHead>
-                <TableHead>Atualizacao</TableHead>
+                <TableHead>Atualização</TableHead>
                 <TableHead className="w-[72px]" />
               </TableRow>
             </TableHeader>
@@ -308,7 +332,7 @@ function TrackingList({
                     {item.title}
                   </TableCell>
                   <TableCell>
-                    <StatusBadge status={item.status} />
+                    <StatusBadge status={statusText(item.status)} />
                   </TableCell>
                   <TableCell className="text-right">
                     {formatNumber(item.lineCount)}
@@ -326,11 +350,7 @@ function TrackingList({
           </Table>
         </div>
       ) : (
-        <EmptyModuleState
-          title="Nenhum pedido encontrado"
-          description="Pedidos montados no estoque aparecerao aqui para acompanhamento."
-          icon={CheckCircle2}
-        />
+        <NoOrdersState />
       )}
     </ModulePanel>
   );
@@ -345,8 +365,8 @@ function TrackingDetail({
 }) {
   return (
     <ModulePanel
-      title={`Tracking ${item.reference}`}
-      description="Visao detalhada do pedido e das etapas operacionais"
+      title={`Pedido ${item.reference}`}
+      description="Itens, destino e atualizações publicadas pela Dutelog"
       icon={Truck}
     >
       <div className="space-y-6">
@@ -379,16 +399,16 @@ function TrackingDetail({
           />
           <DetailFact
             label="Destino"
-            value={item.destination ?? "Destino aguardando confirmacao"}
+            value={item.destination ?? "Destino aguardando confirmação"}
             icon={Truck}
           />
         </div>
 
         <div className="rounded-[24px] border border-border bg-white/55 p-5">
           <div>
-            <h3 className="font-semibold">Estados publicados</h3>
+            <h3 className="font-semibold">Etapas do pedido</h3>
             <p className="text-sm text-muted-foreground">
-              Situacao registrada em cada etapa operacional vinculada ao pedido.
+              Situação mais recente em cada etapa do atendimento.
             </p>
           </div>
           {item.states.length > 0 ? (
@@ -405,9 +425,9 @@ function TrackingDetail({
                 >
                   <div className="flex items-start justify-between gap-3">
                     <p className="text-sm font-medium text-foreground">
-                      {state.source}
+                      {clientStageLabel(state.source)}
                     </p>
-                    <StatusBadge status={state.status} />
+                    <StatusBadge status={statusText(state.status)} />
                   </div>
                   <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
                     <span>{formatDate(state.date)}</span>
@@ -426,7 +446,7 @@ function TrackingDetail({
         </div>
 
         <div className="rounded-[24px] border border-border bg-white/55 p-5">
-          <h3 className="font-semibold">Eventos WMS</h3>
+          <h3 className="font-semibold">Atualizações da Dutelog</h3>
           {item.events.length > 0 ? (
             <div className="mt-4 space-y-3">
               {item.events.map((event) => (
@@ -444,11 +464,11 @@ function TrackingDetail({
                           {event.title}
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {event.source} | {formatDate(event.date)}
+                          {clientStageLabel(event.source)} · {formatDate(event.date)}
                         </p>
                       </div>
                       {event.status ? (
-                        <StatusBadge status={event.status} />
+                        <StatusBadge status={statusText(event.status)} />
                       ) : null}
                     </div>
                     {event.description ? (
@@ -517,8 +537,10 @@ function OrderItemRow({ item }: { item: TrackingItem }) {
   return (
     <div className="flex flex-col gap-3 rounded-2xl border border-border bg-white/60 p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
-        {item.sku ? (
-          <p className="text-xs text-muted-foreground">{item.sku}</p>
+        {item.clientCode ? (
+          <p className="text-xs text-muted-foreground">
+            Cod. cliente {item.clientCode}
+          </p>
         ) : null}
         <p className="mt-1 truncate font-medium text-foreground">
           {item.product}
@@ -915,7 +937,7 @@ function buildItems(group: TrackingGroup) {
           `order-item-${index}`,
         ) ?? `order-item-${index}`,
       product: orderProduct(order),
-      sku: firstText(order.sku_code, order.sku, order.cod_sku),
+      clientCode: firstText(order.client_item_code, order.cod_cliente),
       quantity: optionalNumber(
         order.requested_qty,
         order.qtd_solic,
@@ -950,7 +972,7 @@ function buildItems(group: TrackingGroup) {
             item.produto,
             "Item do pedido",
           ) ?? "Item do pedido",
-        sku: firstText(item.sku_code, item.sku, item.cod_sku),
+        clientCode: firstText(item.client_item_code, item.cod_cliente),
         quantity: optionalNumber(
           item.quantity,
           item.qty,
@@ -1209,8 +1231,34 @@ function hasCurrentStatus(item: TrackingRecord, statuses: Set<string>) {
 }
 
 function statusText(status?: string | null) {
-  if (!status) return "Em acompanhamento";
-  return status;
+  const normalized = normalizeSlug(status);
+  if (!normalized) return "Recebido";
+  if (["cancelled", "canceled", "cancelado", "rejected", "rejeitado"].includes(normalized)) {
+    return "Cancelado";
+  }
+  if (["delivered", "entregue", "completed", "complete", "concluido", "concluida"].includes(normalized)) {
+    return "Entregue";
+  }
+  if (["shipped", "dispatched", "expedido", "expedida", "em-rota", "out-for-delivery"].includes(normalized)) {
+    return "Saiu para entrega";
+  }
+  if (["checking", "conferencia", "conferindo", "packing", "packed", "embalagem"].includes(normalized)) {
+    return "Conferindo";
+  }
+  if (["picking", "separacao", "separando", "in-progress", "em-execucao", "approved", "aprovado"].includes(normalized)) {
+    return "Separando";
+  }
+  return "Recebido";
+}
+
+function clientStageLabel(source: string) {
+  const normalized = normalizeSlug(source);
+  if (normalized.includes("pick")) return "Separação";
+  if (normalized.includes("pack") || normalized.includes("confer")) return "Conferência";
+  if (normalized.includes("exped") || normalized.includes("shipment")) return "Entrega";
+  if (normalized.includes("document")) return "Comprovante";
+  if (normalized.includes("volume")) return "Volumes";
+  return "Pedido";
 }
 
 function dateValue(value?: string | null) {

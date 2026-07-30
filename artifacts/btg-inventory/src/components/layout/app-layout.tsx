@@ -4,11 +4,13 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronsUpDown,
+  Download,
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
   User as UserIcon,
+  WifiOff,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -34,6 +36,7 @@ import {
   type ModuleRoute,
 } from "@/lib/modules";
 import { useAppAuth, useAppUser, type AppUser } from "@/lib/auth";
+import { usePwaInstall } from "@/lib/pwa-install";
 
 type AccountMenuProps = {
   basePath: string;
@@ -64,6 +67,8 @@ function AccountMenu({
   signOut,
   user,
 }: AccountMenuProps) {
+  const { isInstalled } = usePwaInstall();
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -107,6 +112,17 @@ function AccountMenu({
             Configuração
           </Link>
         </DropdownMenuItem>
+        {!isInstalled ? (
+          <DropdownMenuItem asChild>
+            <Link
+              href="/configuracoes#aplicativo"
+              className="cursor-pointer"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Instalar aplicativo
+            </Link>
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={() => signOut({ redirectUrl: basePath || "/" })}
@@ -128,10 +144,26 @@ function SidebarAccountFooter({
 }: AccountMenuProps) {
   const email = user?.primaryEmailAddress?.emailAddress || "Sem e-mail";
   const name = user?.fullName || "Usuário";
+  const { isInstalled } = usePwaInstall();
 
   if (compact) {
     return (
       <div className="flex flex-col items-center gap-2">
+        {!isInstalled ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link
+                href="/configuracoes#aplicativo"
+                className="flex h-11 w-11 items-center justify-center rounded-xl text-sidebar-foreground/60 outline-none transition-colors duration-200 hover:bg-white/70 hover:text-sidebar-foreground"
+              >
+                <Download className="h-4 w-4" />
+                <span className="sr-only">Instalar aplicativo</span>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="right">Instalar aplicativo</TooltipContent>
+          </Tooltip>
+        ) : null}
+
         <Tooltip>
           <TooltipTrigger asChild>
             <Link
@@ -178,6 +210,16 @@ function SidebarAccountFooter({
 
   return (
     <div className="space-y-3">
+      {!isInstalled ? (
+        <Link
+          href="/configuracoes#aplicativo"
+          className="flex min-h-10 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-sidebar-foreground/70 outline-none transition-colors duration-200 hover:bg-white/70 hover:text-sidebar-foreground"
+        >
+          <Download className="h-4 w-4 shrink-0" />
+          <span>Instalar aplicativo</span>
+        </Link>
+      ) : null}
+
       <Link
         href="/configuracoes"
         className="flex min-h-10 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-sidebar-foreground/70 outline-none transition-colors duration-200 hover:bg-white/70 hover:text-sidebar-foreground"
@@ -523,6 +565,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { user } = useAppUser();
   const { signOut } = useAppAuth();
+  const { isOnline } = usePwaInstall();
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const modules = getNavigationForProfileRole(user?.publicMetadata.role);
   const activeModule = getActiveModule(modules, location);
@@ -664,8 +707,23 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             alt="Dutelog Soluções Logísticas"
             className="h-8 w-auto max-w-[168px] object-contain"
           />
-          <AccountMenu basePath={basePath} signOut={signOut} user={user} />
+          <AccountMenu
+            basePath={basePath}
+            compact
+            signOut={signOut}
+            user={user}
+          />
         </header>
+        {!isOnline ? (
+          <div
+            role="status"
+            className="flex shrink-0 items-center justify-center gap-2 border-b border-amber-200 bg-amber-50/95 px-4 py-2 text-center text-xs font-medium text-amber-900"
+          >
+            <WifiOff className="h-4 w-4 shrink-0" />
+            Sem conexão. Consultas podem estar desatualizadas e movimentações
+            permanecem bloqueadas até a internet voltar.
+          </div>
+        ) : null}
         <MobileModuleNav
           activeModule={activeModule}
           location={location}

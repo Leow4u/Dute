@@ -1,0 +1,1902 @@
+/** Task detail panel and physical-flow section helpers. */
+
+import { useEffect, useMemo, useState } from "react";
+import {
+  Activity,
+  AlertTriangle,
+  Ban,
+  Box,
+  CheckCircle2,
+  ClipboardCheck,
+  Clock3,
+  FileWarning,
+  Forklift,
+  Hash,
+  ListChecks,
+  MapPin,
+  MessageSquareWarning,
+  PackageCheck,
+  PackageOpen,
+  PackageSearch,
+  PlayCircle,
+  RefreshCw,
+  Route,
+  ShieldAlert,
+  Sparkles,
+  Truck,
+  UserRound,
+  Warehouse as WarehouseIcon,
+  type LucideIcon,
+} from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
+import {
+  type AdvanceOperationPayload,
+  type LineConfirmationMap,
+  type LineResolution,
+  type LineResolutionCounts,
+  type NormalizedQueue,
+  type OpsAlert,
+  type PackingCheckRow,
+  type TaskQueueEntry,
+  type WarehouseTask,
+  type WarehouseTaskItem,
+  type WarehouseTaskTimelineEvent,
+  LINE_RESOLUTION_COPY,
+  QUEUE_OPERATOR_COPY,
+  alertClass,
+  buildLineExceptionNote,
+  buildPackingOperation,
+  buildPickingOperation,
+  canAdvanceTask,
+  canRegisterException,
+  coerceNumber,
+  coerceText,
+  formatDate,
+  formatDeltaUnits,
+  formatNumber,
+  formatUnits,
+  getAdvanceGate,
+  getLineResolution,
+  getLineResolutionCounts,
+  getPackingCheckRows,
+  getPhysicalLineRows,
+  getQueueAction,
+  getTaskTitle,
+  hasPhysicalIssue,
+  inferLineResolution,
+  isDueSoon,
+  isTerminalTask,
+  lineConfirmationKey,
+  normalizeStatus,
+  packageLabel,
+  priorityClass,
+  priorityLabel,
+  statusClass,
+  statusLabel,
+  sumPackingQuantity,
+  timelineDate,
+  toQueueKey,
+} from "@/lib/warehouse-ops/model";
+import { ReceivingConferenceSection } from "@/features/warehouse-ops/receiving";
+
+function DetailField({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-[16px] border border-border bg-white/55 px-3 py-2">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Icon className="size-3.5 shrink-0 text-primary" />
+        <span>{label}</span>
+      </div>
+      <div className="mt-1 truncate text-sm font-medium text-foreground">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function LineResolutionControls({
+  value,
+  onChange,
+}: {
+  value: LineResolution;
+  onChange: (resolution: LineResolution) => void;
+}) {
+  const options: Array<{
+    value: Exclude<LineResolution, "pending">;
+    icon: LucideIcon;
+  }> = [
+    { value: "confirmed", icon: CheckCircle2 },
+    { value: "shortage", icon: AlertTriangle },
+    { value: "damaged", icon: Ban },
+  ];
+
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      {options.map((option) => {
+        const Icon = option.icon;
+        const isActive = value === option.value;
+        const copy = LINE_RESOLUTION_COPY[option.value];
+
+        return (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={isActive}
+            className={cn(
+              "flex min-h-9 items-center justify-center gap-1.5 rounded-[14px] border px-2 text-xs font-medium transition-[background-color,border-color,color,box-shadow]",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+              isActive
+                ? `${copy.className} shadow-[0_8px_24px_rgba(15,23,42,.04)]`
+                : "border-border bg-white/70 text-muted-foreground hover:bg-white",
+            )}
+            onClick={() => onChange(isActive ? "pending" : option.value)}
+          >
+            <Icon className="size-3.5 shrink-0" />
+            <span className="truncate">{copy.shortLabel}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ExecutionLineRowCard({
+  taskId,
+  row,
+  resolution,
+  onResolutionChange,
+}: {
+  taskId: string;
+  row: PackingCheckRow;
+  resolution: LineResolution;
+  onResolutionChange: (rowId: string, resolution: LineResolution) => void;
+}) {
+  const copy = LINE_RESOLUTION_COPY[resolution];
+  const hasIssue = resolution === "shortage" || resolution === "damaged";
+
+  return (
+    <div
+      className={cn(
+        "rounded-[16px] border border-border bg-white/65 px-3 py-3",
+        resolution === "confirmed" && "border-primary/20 bg-primary/5",
+        hasIssue && "border-amber-200 bg-amber-50/70",
+        resolution === "damaged" && "border-destructive/20 bg-destructive/10",
+      )}
+    >
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium uppercase text-muted-foreground">
+                {row.label}
+              </span>
+              <Badge variant="outline" className={copy.className}>
+                {copy.label}
+              </Badge>
+              {row.status ? (
+                <Badge variant="outline" className={statusClass(row.status)}>
+                  {statusLabel(row.status)}
+                </Badge>
+              ) : null}
+            </div>
+            <div className="mt-1 truncate text-sm font-semibold text-foreground">
+              {row.title}
+            </div>
+            <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
+              {row.code ? <span>{row.code}</span> : null}
+              {row.location ? <span>{row.location}</span> : null}
+              <span>{copy.description}</span>
+            </div>
+          </div>
+
+          <div className="w-full lg:w-[280px]">
+            <LineResolutionControls
+              value={resolution}
+              onChange={(nextResolution) =>
+                onResolutionChange(row.id, nextResolution)
+              }
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-2 text-xs sm:grid-cols-3">
+          <div className="rounded-[14px] border border-border bg-white/70 px-3 py-2">
+            <div className="text-muted-foreground">Esperado</div>
+            <div className="mt-1 font-medium text-foreground">
+              {formatUnits(row.expectedQuantity)}
+            </div>
+          </div>
+          <div className="rounded-[14px] border border-border bg-white/70 px-3 py-2">
+            <div className="text-muted-foreground">Físico lido</div>
+            <div className="mt-1 font-medium text-foreground">
+              {formatUnits(row.packedQuantity)}
+            </div>
+          </div>
+          <div className="rounded-[14px] border border-border bg-white/70 px-3 py-2">
+            <div className="text-muted-foreground">Diferença</div>
+            <div
+              className={cn(
+                "mt-1 font-medium",
+                hasIssue || row.hasDivergence ? "text-destructive" : "text-foreground",
+              )}
+            >
+              {formatDeltaUnits(row.delta)}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OperatorMicrocopy({
+  queue,
+  counts,
+}: {
+  queue: NormalizedQueue;
+  counts: LineResolutionCounts;
+}) {
+  const copy = QUEUE_OPERATOR_COPY[queue.key];
+
+  return (
+    <div className="rounded-[18px] border border-border bg-white/55 px-4 py-3">
+      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+        <ClipboardCheck className="size-3.5 text-primary" />
+        {copy.title}
+      </div>
+      <p className="mt-2 text-sm leading-6 text-foreground">{copy.body}</p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        {copy.steps.map((step, index) => (
+          <div
+            key={step}
+            className="rounded-[14px] border border-border bg-white/65 px-3 py-2 text-xs leading-5 text-muted-foreground"
+          >
+            <span className="font-medium text-foreground">{index + 1}. </span>
+            {step}
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 rounded-[14px] border border-primary/15 bg-primary/5 px-3 py-2 text-xs leading-5 text-muted-foreground">
+        Confirmação local: {formatNumber(counts.confirmed)} de{" "}
+        {formatNumber(counts.total)} linha(s) OK; falta/avaria segura o avanço
+        até registrar exceção.
+      </div>
+    </div>
+  );
+}
+
+function PhysicalLineChecklist({
+  task,
+  lineConfirmations,
+  registeringExceptionId,
+  onLineConfirmationChange,
+  onOpenException,
+}: {
+  task: WarehouseTask;
+  lineConfirmations: LineConfirmationMap;
+  registeringExceptionId?: string;
+  onLineConfirmationChange: (
+    taskId: string,
+    rowId: string,
+    resolution: LineResolution,
+  ) => void;
+  onOpenException: (task: WarehouseTask, suggestedNote?: string) => void;
+}) {
+  const rows = getPhysicalLineRows(task);
+  const counts = getLineResolutionCounts(task.id, rows, lineConfirmations);
+  const hasIssue = hasPhysicalIssue(counts);
+  const canRegister = canRegisterException(task);
+  const isRegistering = registeringExceptionId === task.id;
+  const issueNote = buildLineExceptionNote(task, rows, lineConfirmations);
+
+  return (
+    <div className="rounded-[22px] border border-border bg-white/45 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-border bg-white/70">
+            <ListChecks className="size-4 text-primary" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-foreground">
+              Conferência física por linha
+            </div>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Marque OK, falta ou avaria enquanto conta no endereço.
+            </p>
+          </div>
+        </div>
+        {hasIssue ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="w-full shrink-0 sm:w-auto"
+            onClick={() => onOpenException(task, issueNote)}
+            disabled={!canRegister || isRegistering}
+          >
+            {isRegistering ? (
+              <RefreshCw data-icon="inline-start" className="animate-spin" />
+            ) : (
+              <MessageSquareWarning data-icon="inline-start" />
+            )}
+            Enviar evidência
+          </Button>
+        ) : null}
+      </div>
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-4">
+        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+          <div className="text-xs text-muted-foreground">Linhas</div>
+          <div className="mt-1 text-sm font-semibold text-foreground">
+            {formatNumber(counts.total)}
+          </div>
+        </div>
+        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+          <div className="text-xs text-muted-foreground">OK físico</div>
+          <div className="mt-1 text-sm font-semibold text-primary">
+            {formatNumber(counts.confirmed)}
+          </div>
+        </div>
+        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+          <div className="text-xs text-muted-foreground">Falta</div>
+          <div className="mt-1 text-sm font-semibold text-amber-800">
+            {formatNumber(counts.shortage)}
+          </div>
+        </div>
+        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+          <div className="text-xs text-muted-foreground">Avaria</div>
+          <div className="mt-1 text-sm font-semibold text-destructive">
+            {formatNumber(counts.damaged)}
+          </div>
+        </div>
+      </div>
+
+      {hasIssue ? (
+        <Alert className="mt-4 border-amber-200 bg-amber-50 text-amber-900">
+          <AlertTriangle className="size-4" />
+          <AlertTitle>Segurar etapa antes de avançar</AlertTitle>
+          <AlertDescription>
+            Há falta ou avaria marcada na conferência local. Registre a exceção
+            para anexar evidência operacional à IA.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      <div className="mt-4 flex flex-col gap-2">
+        {rows.map((row) => (
+          <ExecutionLineRowCard
+            key={row.id}
+            taskId={task.id}
+            row={row}
+            resolution={getLineResolution(task.id, row, lineConfirmations)}
+            onResolutionChange={(rowId, resolution) =>
+              onLineConfirmationChange(task.id, rowId, resolution)
+            }
+          />
+        ))}
+
+        {rows.length > 8 ? (
+          <div className="rounded-[16px] border border-border bg-white/55 px-3 py-2 text-xs text-muted-foreground">
+            + {formatNumber(rows.length - 8)} linha(s) no payload.
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function PutawayDetailSection({
+  task,
+  operation,
+  onOperationChange,
+}: {
+  task: WarehouseTask;
+  operation: AdvanceOperationPayload;
+  onOperationChange: (operation: AdvanceOperationPayload) => void;
+}) {
+  const updateOperation = (patch: AdvanceOperationPayload) =>
+    onOperationChange({ ...operation, ...patch });
+  const firstItem = task.items?.[0];
+  const quantity = coerceNumber(
+    Number(
+      operation.quantity ??
+        task.quantity ??
+        task.total_units ??
+        firstItem?.quantity ??
+        firstItem?.expected_quantity ??
+        0,
+    ),
+  );
+  const sourceLocation =
+    coerceText(
+      operation.source_location_id,
+      task.source_location_id,
+      firstItem?.source_location_id,
+    ) || "RECEBIMENTO";
+  const destinationLocation = coerceText(
+    operation.destination_location_id,
+    operation.location_id,
+    task.destination_location_id,
+    task.location,
+    firstItem?.destination_location_id,
+    firstItem?.location,
+  );
+  const sku = coerceText(task.sku_code, task.sku, firstItem?.sku_code, firstItem?.sku);
+  const clientCode = coerceText(firstItem?.client_item_code);
+  const productName = coerceText(firstItem?.product_name, firstItem?.name, task.title);
+  const sameAddress =
+    sourceLocation.length > 0 &&
+    destinationLocation.length > 0 &&
+    sourceLocation.toUpperCase() === destinationLocation.toUpperCase();
+
+  return (
+    <div className="rounded-[22px] border border-primary/20 bg-primary/5 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-primary/20 bg-white/75">
+            <Forklift className="size-4 text-primary" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-foreground">
+              Endereçamento físico
+            </div>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Guarde a mercadoria conferida no endereço final. Esta etapa move o
+              saldo interno, sem alterar o total disponível do cliente.
+            </p>
+          </div>
+        </div>
+        <Badge variant="outline" className="border-primary/20 bg-white/70 text-primary">
+          transferência interna
+        </Badge>
+      </div>
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+          <div className="text-xs text-muted-foreground">Produto</div>
+          <div className="mt-1 line-clamp-2 text-sm font-semibold text-foreground">
+            {productName || "Produto a identificar"}
+          </div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            {clientCode || sku || "Código pendente"}
+          </div>
+        </div>
+        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+          <div className="text-xs text-muted-foreground">Quantidade</div>
+          <div className="mt-1 text-lg font-semibold text-foreground">
+            {formatUnits(quantity)}
+          </div>
+        </div>
+        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+          <div className="text-xs text-muted-foreground">Status</div>
+          <Badge variant="outline" className={cn("mt-1", statusClass(task.status))}>
+            {statusLabel(task.status)}
+          </Badge>
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-[18px] border border-border bg-white/70 p-3">
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <MapPin className="size-4 text-primary" />
+          Origem e destino
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_130px]">
+          <div className="space-y-1.5">
+            <Label htmlFor={`${task.id}-putaway-source`}>Origem</Label>
+            <Input
+              id={`${task.id}-putaway-source`}
+              value={sourceLocation}
+              onChange={(event) =>
+                updateOperation({ source_location_id: event.target.value })
+              }
+              placeholder="RECEBIMENTO"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`${task.id}-putaway-destination`}>
+              Endereço final
+            </Label>
+            <Input
+              id={`${task.id}-putaway-destination`}
+              value={destinationLocation}
+              onChange={(event) =>
+                updateOperation({
+                  destination_location_id: event.target.value,
+                  location_id: event.target.value,
+                })
+              }
+              placeholder="Ex.: Rua A · Prat 12 · C-113"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`${task.id}-putaway-qty`}>Qtd.</Label>
+            <Input
+              id={`${task.id}-putaway-qty`}
+              type="number"
+              min="1"
+              value={String(quantity || "")}
+              onChange={(event) =>
+                updateOperation({
+                  quantity: Math.max(1, Number(event.target.value) || 1),
+                })
+              }
+            />
+          </div>
+        </div>
+      </div>
+
+      {sameAddress ? (
+        <Alert className="mt-4 border-amber-200 bg-amber-50 text-amber-900">
+          <AlertTriangle className="size-4" />
+          <AlertTitle>Endereço repetido</AlertTitle>
+          <AlertDescription>
+            O destino precisa ser diferente da origem para concluir a guarda.
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <Alert className="mt-4 border-primary/20 bg-primary/10">
+          <CheckCircle2 className="size-4" />
+          <AlertTitle>Pronto para guardar</AlertTitle>
+          <AlertDescription>
+            Ao avançar, o sistema registra saída da origem, entrada no destino e
+            mantém a trilha operacional para auditoria.
+          </AlertDescription>
+        </Alert>
+      )}
+    </div>
+  );
+}
+
+function PickingDetailSection({
+  task,
+  lineConfirmations,
+  registeringExceptionId,
+  onLineConfirmationChange,
+  onOpenException,
+}: {
+  task: WarehouseTask;
+  lineConfirmations: LineConfirmationMap;
+  registeringExceptionId?: string;
+  onLineConfirmationChange: (
+    taskId: string,
+    rowId: string,
+    resolution: LineResolution,
+  ) => void;
+  onOpenException: (task: WarehouseTask, suggestedNote?: string) => void;
+}) {
+  const rows = getPhysicalLineRows(task, "line");
+  const counts = getLineResolutionCounts(task.id, rows, lineConfirmations);
+  const totalExpected = rows.reduce(
+    (sum, row) => sum + coerceNumber(row.expectedQuantity),
+    0,
+  );
+  const uniqueLocations = Array.from(
+    new Set(rows.map((row) => coerceText(row.location)).filter(Boolean)),
+  );
+  const canRegister = canRegisterException(task);
+  const isRegistering = registeringExceptionId === task.id;
+  const issueNote = buildLineExceptionNote(task, rows, lineConfirmations);
+  const isReady =
+    counts.total > 0 && counts.pending === 0 && !hasPhysicalIssue(counts);
+
+  return (
+    <div className="rounded-[22px] border border-primary/20 bg-primary/5 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-primary/20 bg-white/75">
+            <PackageSearch className="size-4 text-primary" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-foreground">
+              Separação física do pedido
+            </div>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Confirme endereço e quantidade por linha antes de enviar para
+              Packing. Falta ou avaria precisa virar exceção.
+            </p>
+          </div>
+        </div>
+        <Badge
+          variant="outline"
+          className={
+            isReady
+              ? "border-primary/20 bg-white/70 text-primary"
+              : "border-amber-200 bg-amber-50 text-amber-800"
+          }
+        >
+          {isReady ? "pronto para packing" : "conferir linhas"}
+        </Badge>
+      </div>
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-4">
+        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+          <div className="text-xs text-muted-foreground">Linhas</div>
+          <div className="mt-1 text-sm font-semibold text-foreground">
+            {formatNumber(counts.confirmed)} / {formatNumber(counts.total)}
+          </div>
+        </div>
+        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+          <div className="text-xs text-muted-foreground">Quantidade</div>
+          <div className="mt-1 text-sm font-semibold text-foreground">
+            {formatUnits(totalExpected)}
+          </div>
+        </div>
+        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+          <div className="text-xs text-muted-foreground">Endereços</div>
+          <div className="mt-1 text-sm font-semibold text-foreground">
+            {formatNumber(uniqueLocations.length)}
+          </div>
+        </div>
+        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+          <div className="text-xs text-muted-foreground">Divergências</div>
+          <div
+            className={cn(
+              "mt-1 text-sm font-semibold",
+              hasPhysicalIssue(counts) ? "text-destructive" : "text-foreground",
+            )}
+          >
+            {formatNumber(counts.shortage + counts.damaged)}
+          </div>
+        </div>
+      </div>
+
+      {hasPhysicalIssue(counts) ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="mt-4 w-full"
+          onClick={() => onOpenException(task, issueNote)}
+          disabled={!canRegister || isRegistering}
+        >
+          {isRegistering ? (
+            <RefreshCw data-icon="inline-start" className="animate-spin" />
+          ) : (
+            <MessageSquareWarning data-icon="inline-start" />
+          )}
+          Registrar falta/avaria da separação
+        </Button>
+      ) : (
+        <Alert className="mt-4 border-primary/20 bg-primary/10">
+          <CheckCircle2 className="size-4" />
+          <AlertTitle>Separação sem exceção marcada</AlertTitle>
+          <AlertDescription>
+            Quando todas as linhas estiverem OK, o avanço cria o Packing do
+            pedido e mantém as reservas vinculadas até a entrega.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <div className="mt-4 flex flex-col gap-2">
+        {rows.map((row) => (
+          <ExecutionLineRowCard
+            key={row.id}
+            taskId={task.id}
+            row={row}
+            resolution={getLineResolution(task.id, row, lineConfirmations)}
+            onResolutionChange={(rowId, resolution) =>
+              onLineConfirmationChange(task.id, rowId, resolution)
+            }
+          />
+        ))}
+
+        {rows.length > 12 ? (
+          <div className="rounded-[16px] border border-border bg-white/55 px-3 py-2 text-xs text-muted-foreground">
+            + {formatNumber(rows.length - 12)} linha(s) no pedido.
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function PackingDetailSection({
+  task,
+  operation,
+  onOperationChange,
+  lineConfirmations,
+  registeringExceptionId,
+  onLineConfirmationChange,
+  onOpenException,
+}: {
+  task: WarehouseTask;
+  operation: AdvanceOperationPayload;
+  onOperationChange: (operation: AdvanceOperationPayload) => void;
+  lineConfirmations: LineConfirmationMap;
+  registeringExceptionId?: string;
+  onLineConfirmationChange: (
+    taskId: string,
+    rowId: string,
+    resolution: LineResolution,
+  ) => void;
+  onOpenException: (task: WarehouseTask, suggestedNote?: string) => void;
+}) {
+  const updateOperation = (patch: AdvanceOperationPayload) =>
+    onOperationChange({ ...operation, ...patch });
+  const rows = getPhysicalLineRows(task, "volume");
+  const counts = getLineResolutionCounts(task.id, rows, lineConfirmations);
+  const totalExpected = sumPackingQuantity(rows, "expectedQuantity");
+  const totalPacked = sumPackingQuantity(rows, "packedQuantity");
+  const exceptions = coerceNumber(task.exception_count);
+  const physicalIssues = counts.shortage + counts.damaged;
+  const hasDivergence =
+    physicalIssues > 0 || exceptions > 0 || Boolean(task.blocked_reason);
+  const canRegister = canRegisterException(task);
+  const isRegistering = registeringExceptionId === task.id;
+  const isReadyToSeal =
+    counts.total > 0 &&
+    counts.pending === 0 &&
+    !hasPhysicalIssue(counts) &&
+    !task.blocked_reason;
+  const issueNote = buildLineExceptionNote(task, rows, lineConfirmations);
+  const divergenceLabel = hasDivergence
+    ? physicalIssues > 0
+      ? `${formatNumber(physicalIssues)} linha(s)`
+      : exceptions > 0
+        ? `${formatNumber(exceptions)} exceç.`
+        : "bloqueio"
+    : "sem divergência";
+
+  return (
+    <div className="rounded-[22px] border border-primary/20 bg-primary/5 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-primary/20 bg-white/70">
+            <PackageCheck className="size-4 text-primary" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-foreground">
+              Fechamento físico do packing
+            </div>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Confira linha, volume, lacre e divergência antes de liberar saída.
+            </p>
+          </div>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant={hasDivergence ? "default" : "outline"}
+          className="w-full shrink-0 sm:w-auto"
+          onClick={() => onOpenException(task, issueNote)}
+          disabled={!canRegister || isRegistering}
+        >
+          {isRegistering ? (
+            <RefreshCw data-icon="inline-start" className="animate-spin" />
+          ) : (
+            <MessageSquareWarning data-icon="inline-start" />
+          )}
+          {isRegistering ? "Registrando" : "Registrar falta/avaria"}
+        </Button>
+      </div>
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-4">
+        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+          <div className="text-xs text-muted-foreground">Volumes</div>
+          <div className="mt-1 text-sm font-semibold text-foreground">
+            {formatNumber(rows.length)}
+          </div>
+        </div>
+        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+          <div className="text-xs text-muted-foreground">OK físico</div>
+          <div className="mt-1 text-sm font-semibold text-foreground">
+            {formatNumber(counts.confirmed)} / {formatNumber(counts.total)}
+          </div>
+        </div>
+        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+          <div className="text-xs text-muted-foreground">Status</div>
+          <Badge variant="outline" className={cn("mt-1", statusClass(task.status))}>
+            {statusLabel(task.status)}
+          </Badge>
+        </div>
+        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+          <div className="text-xs text-muted-foreground">Divergência</div>
+          <div
+            className={cn(
+              "mt-1 text-sm font-semibold",
+              hasDivergence ? "text-destructive" : "text-foreground",
+            )}
+          >
+            {divergenceLabel}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+        <div className="rounded-[16px] border border-border bg-white/60 px-3 py-2">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <PackageOpen className="size-3.5 text-primary" />
+            Físico lido
+          </div>
+          <div className="mt-1 text-sm font-medium text-foreground">
+            {formatUnits(totalPacked)} / {formatUnits(totalExpected)}
+          </div>
+        </div>
+        <div className="rounded-[16px] border border-border bg-white/60 px-3 py-2">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <ShieldAlert className="size-3.5 text-primary" />
+            Lacre
+          </div>
+          <div className="mt-1 text-sm font-medium text-foreground">
+            {isReadyToSeal ? "Pode lacrar" : "Manter volume aberto"}
+          </div>
+        </div>
+        <div className="rounded-[16px] border border-border bg-white/60 px-3 py-2">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Truck className="size-3.5 text-primary" />
+            Expedição
+          </div>
+          <div className="mt-1 text-sm font-medium text-foreground">
+            {isReadyToSeal ? "Pronto para staging" : "Aguardando conferência"}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-[18px] border border-border bg-white/65 p-3">
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <ShieldAlert className="size-4 text-primary" />
+          Dados do volume
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div className="space-y-1.5">
+            <Label htmlFor={`${task.id}-volume-label`}>Volume</Label>
+            <Input
+              id={`${task.id}-volume-label`}
+              value={coerceText(operation.volume_label)}
+              onChange={(event) =>
+                updateOperation({ volume_label: event.target.value })
+              }
+              placeholder="Volume 1"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`${task.id}-seal-code`}>Lacre</Label>
+            <Input
+              id={`${task.id}-seal-code`}
+              value={coerceText(operation.seal_code)}
+              onChange={(event) =>
+                updateOperation({ seal_code: event.target.value })
+              }
+              placeholder="Informe o lacre"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`${task.id}-package-count`}>Qtd. volumes</Label>
+            <Input
+              id={`${task.id}-package-count`}
+              type="number"
+              min="1"
+              value={String(coerceNumber(Number(operation.package_count ?? 1), 1) || 1)}
+              onChange={(event) =>
+                updateOperation({
+                  package_count: Math.max(1, Number(event.target.value) || 1),
+                })
+              }
+            />
+          </div>
+        </div>
+        <div className="mt-3 space-y-1.5">
+          <Label htmlFor={`${task.id}-package-notes`}>Observação</Label>
+          <Input
+            id={`${task.id}-package-notes`}
+            value={coerceText(operation.package_notes)}
+            onChange={(event) =>
+              updateOperation({ package_notes: event.target.value })
+            }
+            placeholder="Ex.: conferido com Rafael, volume íntegro"
+          />
+        </div>
+      </div>
+
+      {hasDivergence ? (
+        <Alert className="mt-4 border-amber-200 bg-amber-50 text-amber-900">
+          <AlertTriangle className="size-4" />
+          <AlertTitle>Divergência em packing</AlertTitle>
+          <AlertDescription>
+            {task.blocked_reason ||
+              (exceptions > 0
+                ? `${formatNumber(exceptions)} exceção(ões) vinculada(s) à tarefa.`
+                : "Há diferença entre quantidade esperada e quantidade embalada.")}
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <Alert className="mt-4 border-primary/20 bg-primary/10">
+          <CheckCircle2 className="size-4" />
+          <AlertTitle>Volume sem exceção marcada</AlertTitle>
+          <AlertDescription>
+            Quando todas as linhas estiverem OK, lacre o volume e siga para
+            expedição.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <div className="mt-4 flex flex-col gap-2">
+        {rows.map((row) => (
+          <ExecutionLineRowCard
+            key={row.id}
+            taskId={task.id}
+            row={row}
+            resolution={getLineResolution(task.id, row, lineConfirmations)}
+            onResolutionChange={(rowId, resolution) =>
+              onLineConfirmationChange(task.id, rowId, resolution)
+            }
+          />
+        ))}
+
+        {rows.length > 8 ? (
+          <div className="rounded-[16px] border border-border bg-white/55 px-3 py-2 text-xs text-muted-foreground">
+            + {formatNumber(rows.length - 8)} volume(s) no payload.
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function ExpeditionReadinessSection({
+  task,
+  operation,
+  onOperationChange,
+  lineConfirmations,
+  registeringExceptionId,
+  onLineConfirmationChange,
+  onOpenException,
+}: {
+  task: WarehouseTask;
+  operation: AdvanceOperationPayload;
+  onOperationChange: (operation: AdvanceOperationPayload) => void;
+  lineConfirmations: LineConfirmationMap;
+  registeringExceptionId?: string;
+  onLineConfirmationChange: (
+    taskId: string,
+    rowId: string,
+    resolution: LineResolution,
+  ) => void;
+  onOpenException: (task: WarehouseTask, suggestedNote?: string) => void;
+}) {
+  const updateOperation = (patch: AdvanceOperationPayload) =>
+    onOperationChange({ ...operation, ...patch });
+  const rows = getPhysicalLineRows(task, "volume");
+  const counts = getLineResolutionCounts(task.id, rows, lineConfirmations);
+  const exceptions = coerceNumber(task.exception_count);
+  const hasIssue =
+    hasPhysicalIssue(counts) || exceptions > 0 || Boolean(task.blocked_reason);
+  const isReadyToDispatch =
+    counts.total > 0 && counts.pending === 0 && !hasIssue;
+  const canRegister = canRegisterException(task);
+  const isRegistering = registeringExceptionId === task.id;
+  const issueNote = buildLineExceptionNote(task, rows, lineConfirmations);
+  const steps = [
+    {
+      label: "Volumes no staging",
+      value: `${formatNumber(counts.confirmed)} / ${formatNumber(counts.total)}`,
+      done: counts.total > 0 && counts.pending === 0,
+    },
+    {
+      label: "Romaneio sem bloqueio",
+      value: task.blocked_reason ? "bloqueado" : "liberado",
+      done: !task.blocked_reason && exceptions === 0,
+    },
+    {
+      label: "Coleta",
+      value: isReadyToDispatch ? "pode baixar saída" : "segurar doca",
+      done: isReadyToDispatch,
+    },
+  ];
+
+  return (
+    <div className="rounded-[22px] border border-border bg-white/45 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-border bg-white/70">
+            <Truck className="size-4 text-primary" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-foreground">
+              Expedição física
+            </div>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Valide volume, staging, romaneio e coleta antes da baixa.
+            </p>
+          </div>
+        </div>
+        <Badge
+          variant="outline"
+          className={
+            isReadyToDispatch
+              ? "border-primary/20 bg-primary/10 text-primary"
+              : "border-amber-200 bg-amber-50 text-amber-800"
+          }
+        >
+          {isReadyToDispatch ? "pronta para saída" : "segurar na doca"}
+        </Badge>
+      </div>
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+        {steps.map((step) => (
+          <div
+            key={step.label}
+            className={cn(
+              "rounded-[16px] border px-3 py-2",
+              step.done
+                ? "border-primary/20 bg-primary/5"
+                : "border-border bg-white/65",
+            )}
+          >
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              {step.done ? (
+                <CheckCircle2 className="size-3.5 text-primary" />
+              ) : (
+                <Clock3 className="size-3.5 text-amber-800" />
+              )}
+              {step.label}
+            </div>
+            <div className="mt-1 text-sm font-medium text-foreground">
+              {step.value}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 rounded-[18px] border border-border bg-white/65 p-3">
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <Truck className="size-4 text-primary" />
+          Dados da expedição
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div className="space-y-1.5">
+            <Label htmlFor={`${task.id}-carrier`}>Coleta / responsável</Label>
+            <Input
+              id={`${task.id}-carrier`}
+              value={coerceText(operation.carrier)}
+              onChange={(event) =>
+                updateOperation({ carrier: event.target.value })
+              }
+              placeholder="Dutelog"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`${task.id}-driver`}>Motorista</Label>
+            <Input
+              id={`${task.id}-driver`}
+              value={coerceText(operation.driver_name)}
+              onChange={(event) =>
+                updateOperation({ driver_name: event.target.value })
+              }
+              placeholder="Nome do motorista"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`${task.id}-vehicle`}>Veículo</Label>
+            <Input
+              id={`${task.id}-vehicle`}
+              value={coerceText(operation.vehicle_plate)}
+              onChange={(event) =>
+                updateOperation({ vehicle_plate: event.target.value })
+              }
+              placeholder="Placa ou identificação"
+            />
+          </div>
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor={`${task.id}-proof`}>Comprovante</Label>
+            <Input
+              id={`${task.id}-proof`}
+              value={coerceText(operation.proof_reference)}
+              onChange={(event) =>
+                updateOperation({ proof_reference: event.target.value })
+              }
+              placeholder="Canhoto, protocolo ou link"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`${task.id}-delivery-notes`}>Observação</Label>
+            <Input
+              id={`${task.id}-delivery-notes`}
+              value={coerceText(operation.delivery_notes)}
+              onChange={(event) =>
+                updateOperation({ delivery_notes: event.target.value })
+              }
+              placeholder="Ex.: entregue na loja BTG"
+            />
+          </div>
+        </div>
+      </div>
+
+      {hasIssue ? (
+        <Alert className="mt-4 border-amber-200 bg-amber-50 text-amber-900">
+          <AlertTriangle className="size-4" />
+          <AlertTitle>Saída ainda não liberada</AlertTitle>
+          <AlertDescription>
+            Resolva falta, avaria, exceção ou bloqueio antes de baixar a coleta.
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <Alert className="mt-4 border-primary/20 bg-primary/10">
+          <CheckCircle2 className="size-4" />
+          <AlertTitle>Checklist de expedição limpo</AlertTitle>
+          <AlertDescription>
+            Volumes conferidos e sem sinal de bloqueio. Confirme coleta no WMS.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {hasPhysicalIssue(counts) ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="mt-4 w-full"
+          onClick={() => onOpenException(task, issueNote)}
+          disabled={!canRegister || isRegistering}
+        >
+          {isRegistering ? (
+            <RefreshCw data-icon="inline-start" className="animate-spin" />
+          ) : (
+            <MessageSquareWarning data-icon="inline-start" />
+          )}
+          Enviar evidência de saída
+        </Button>
+      ) : null}
+
+      <div className="mt-4 flex flex-col gap-2">
+        {rows.map((row) => (
+          <ExecutionLineRowCard
+            key={row.id}
+            taskId={task.id}
+            row={row}
+            resolution={getLineResolution(task.id, row, lineConfirmations)}
+            onResolutionChange={(rowId, resolution) =>
+              onLineConfirmationChange(task.id, rowId, resolution)
+            }
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TaskAiEvidencePanel({
+  task,
+  queue,
+  alerts,
+}: {
+  task: WarehouseTask;
+  queue: NormalizedQueue;
+  alerts: OpsAlert[];
+}) {
+  const relatedAlerts = alerts.filter(
+    (alert) => alert.task_id === task.id || toQueueKey(alert.queue) === queue.key,
+  );
+  const latestTimelineEvent = [...(task.timeline ?? [])].sort((a, b) => {
+    const timeA = timelineDate(a) ? new Date(timelineDate(a) ?? "").getTime() : 0;
+    const timeB = timelineDate(b) ? new Date(timelineDate(b) ?? "").getTime() : 0;
+    return timeB - timeA;
+  })[0];
+  const exceptions = coerceNumber(task.exception_count);
+  const primaryAlert = relatedAlerts[0];
+  const evidenceItems = [
+    {
+      label: "Sinal IA",
+      value: primaryAlert?.title ?? "Sem alerta direto",
+      caption:
+        primaryAlert?.action ||
+        primaryAlert?.message ||
+        "A fila segue monitorada por prioridade, SLA e exceções.",
+      className: primaryAlert
+        ? alertClass(primaryAlert.severity)
+        : "border-border bg-white/65 text-muted-foreground",
+    },
+    {
+      label: "SLA físico",
+      value: isDueSoon(task.due_at) ? "risco próximo" : "sem risco 4h",
+      caption: `Prazo: ${formatDate(task.due_at)}`,
+      className: isDueSoon(task.due_at)
+        ? "border-amber-200 bg-amber-50 text-amber-800"
+        : "border-primary/20 bg-primary/10 text-primary",
+    },
+    {
+      label: "Memória operacional",
+      value:
+        exceptions > 0
+          ? `${formatNumber(exceptions)} exceç.`
+          : latestTimelineEvent?.title || "sem evento recente",
+      caption:
+        latestTimelineEvent?.description ||
+        "Use a confirmação local para alimentar uma exceção quando houver divergência.",
+      className:
+        exceptions > 0 || task.blocked_reason
+          ? "border-destructive/20 bg-destructive/10 text-destructive"
+          : "border-border bg-white/65 text-muted-foreground",
+    },
+  ];
+
+  return (
+    <div className="rounded-[18px] border border-primary/20 bg-primary/5 px-4 py-3">
+      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+        <Sparkles className="size-3.5 text-primary" />
+        Evidências da IA
+      </div>
+      <div className="mt-3 grid gap-2">
+        {evidenceItems.map((item) => (
+          <div
+            key={item.label}
+            className={cn("rounded-[14px] border px-3 py-2", item.className)}
+          >
+            <div className="text-xs font-medium">{item.label}</div>
+            <div className="mt-1 text-sm font-semibold">{item.value}</div>
+            <p className="mt-1 line-clamp-2 text-xs leading-5 opacity-80">
+              {item.caption}
+            </p>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-xs leading-5 text-muted-foreground">
+        A IA prioriza e recomenda; a confirmação física continua sendo a fonte
+        de verdade da etapa.
+      </p>
+    </div>
+  );
+}
+
+function CustomerVisibilityPanel({
+  task,
+  queue,
+  counts,
+}: {
+  task: WarehouseTask;
+  queue: NormalizedQueue;
+  counts: LineResolutionCounts;
+}) {
+  const exceptions = coerceNumber(task.exception_count);
+  const hasIssue =
+    hasPhysicalIssue(counts) || Boolean(task.blocked_reason) || exceptions > 0;
+  const visibleState = hasIssue
+    ? "Aguardando resolução"
+    : isTerminalTask(task)
+      ? "Etapa concluída"
+      : "Em operação";
+  const evidenceCopy =
+    counts.total > 0
+      ? `${formatNumber(counts.confirmed)} de ${formatNumber(
+          counts.total,
+        )} linha(s) OK no físico`
+      : "Sem leitura linha a linha";
+
+  return (
+    <div className="rounded-[18px] border border-border bg-white/55 px-4 py-3">
+      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+        <UserRound className="size-3.5 text-primary" />
+        Visão cliente-operador
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        <div className="rounded-[14px] border border-border bg-white/65 px-3 py-2">
+          <div className="text-xs text-muted-foreground">Portal cliente</div>
+          <div className="mt-1 text-sm font-semibold text-foreground">
+            {visibleState}
+          </div>
+        </div>
+        <div className="rounded-[14px] border border-border bg-white/65 px-3 py-2">
+          <div className="text-xs text-muted-foreground">Fila física</div>
+          <div className="mt-1 text-sm font-semibold text-foreground">
+            {queue.label}
+          </div>
+        </div>
+        <div className="rounded-[14px] border border-border bg-white/65 px-3 py-2">
+          <div className="text-xs text-muted-foreground">Evidência</div>
+          <div
+            className={cn(
+              "mt-1 text-sm font-semibold",
+              hasIssue ? "text-destructive" : "text-foreground",
+            )}
+          >
+            {evidenceCopy}
+          </div>
+        </div>
+      </div>
+      <p className="mt-3 text-xs leading-5 text-muted-foreground">
+        A IA pode destacar risco, mas o avanço para o cliente depende da
+        conferência física e da exceção registrada quando houver falta ou avaria.
+      </p>
+    </div>
+  );
+}
+
+function TaskItemsList({ items }: { items: WarehouseTaskItem[] }) {
+  if (!items.length) {
+    return (
+      <div className="rounded-[18px] border border-border bg-white/45 px-4 py-3 text-sm text-muted-foreground">
+        Sem itens detalhados no payload da tarefa.
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      {items.slice(0, 8).map((item, index) => {
+        const title =
+          item.name ||
+          item.product_name ||
+          item.description ||
+          item.sku ||
+          item.sku_code ||
+          `Item ${index + 1}`;
+        const quantity =
+          item.quantity ??
+          item.expected_quantity ??
+          item.picked_quantity ??
+          item.packed_quantity ??
+          item.qty_packed;
+
+        return (
+          <div
+            key={item.id || `${title}:${index}`}
+            className="rounded-[16px] border border-border bg-white/55 px-3 py-2"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium text-foreground">
+                  {title}
+                </div>
+                <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                  {item.sku || item.sku_code ? (
+                    <span>{item.sku || item.sku_code}</span>
+                  ) : null}
+                  {item.location ? <span>{item.location}</span> : null}
+                  {item.status ? <span>{item.status}</span> : null}
+                </div>
+              </div>
+              <Badge variant="outline" className="shrink-0">
+                {typeof quantity === "number" ? `${formatNumber(quantity)} un.` : "qtde aberta"}
+              </Badge>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function TaskTimeline({ timeline }: { timeline: WarehouseTaskTimelineEvent[] }) {
+  if (!timeline.length) {
+    return (
+      <div className="rounded-[18px] border border-border bg-white/45 px-4 py-3 text-sm text-muted-foreground">
+        Sem timeline operacional para esta tarefa.
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {timeline.slice(0, 8).map((event, index) => (
+        <div key={event.id || `${event.title}:${index}`} className="flex gap-3">
+          <div className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10">
+            <Activity className="size-3.5 text-primary" />
+          </div>
+          <div className="min-w-0 flex-1 rounded-[16px] border border-border bg-white/55 px-3 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="truncate text-sm font-medium text-foreground">
+                {event.title || event.status || "Evento operacional"}
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {formatDate(timelineDate(event), "Sem data")}
+              </span>
+            </div>
+            {event.description ? (
+              <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                {event.description}
+              </p>
+            ) : null}
+            {event.actor ? (
+              <div className="mt-2 text-xs text-muted-foreground">
+                Responsável: {event.actor}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+
+export function TaskDetailPanel({
+  entry,
+  alerts,
+  lineConfirmations,
+  advancingTaskId,
+  registeringExceptionId,
+  onLineConfirmationChange,
+  onAdvance,
+  onOpenException,
+}: {
+  entry?: TaskQueueEntry;
+  alerts: OpsAlert[];
+  lineConfirmations: LineConfirmationMap;
+  advancingTaskId?: string;
+  registeringExceptionId?: string;
+  onLineConfirmationChange: (
+    taskId: string,
+    rowId: string,
+    resolution: LineResolution,
+  ) => void;
+  onAdvance: (
+    id: string,
+    operation?: AdvanceOperationPayload,
+    note?: string,
+  ) => void;
+  onOpenException: (task: WarehouseTask, suggestedNote?: string) => void;
+}) {
+  const activeTask = entry?.task;
+  const [packingOperation, setPackingOperation] =
+    useState<AdvanceOperationPayload>({
+      package_count: 1,
+      volume_label: "Volume 1",
+      seal_code: "",
+      package_notes: "",
+    });
+  const [shippingOperation, setShippingOperation] =
+    useState<AdvanceOperationPayload>({
+      carrier: "Dutelog",
+      driver_name: "",
+      vehicle_plate: "",
+      proof_reference: "",
+      delivery_notes: "",
+    });
+  const [putawayOperation, setPutawayOperation] =
+    useState<AdvanceOperationPayload>({
+      source_location_id: "RECEBIMENTO",
+      destination_location_id: "",
+      location_id: "",
+      quantity: undefined,
+    });
+  const [receivingAdvanceNote, setReceivingAdvanceNote] = useState("");
+
+  useEffect(() => {
+    if (!activeTask) return;
+    const firstItem = activeTask.items?.[0];
+    setReceivingAdvanceNote("");
+    setPackingOperation({
+      package_count: coerceNumber(activeTask.package_count, 1) || 1,
+      volume_label: coerceText(activeTask.volume_label) || "Volume 1",
+      seal_code: coerceText(activeTask.seal_code),
+      package_notes: coerceText(activeTask.package_notes),
+    });
+    setShippingOperation({
+      carrier: coerceText(activeTask.carrier) || "Dutelog",
+      driver_name: coerceText(activeTask.driver_name),
+      vehicle_plate: coerceText(activeTask.vehicle_plate),
+      proof_reference: coerceText(activeTask.proof_reference),
+      delivery_notes: coerceText(activeTask.delivery_notes),
+    });
+    const destinationLocation = coerceText(
+      activeTask.destination_location_id,
+      activeTask.location,
+      firstItem?.destination_location_id,
+      firstItem?.location,
+    );
+    setPutawayOperation({
+      source_location_id:
+        coerceText(activeTask.source_location_id, firstItem?.source_location_id) ||
+        "RECEBIMENTO",
+      destination_location_id: destinationLocation,
+      location_id: destinationLocation,
+      quantity:
+        coerceNumber(
+          activeTask.quantity ??
+            activeTask.total_units ??
+            firstItem?.quantity ??
+            firstItem?.expected_quantity,
+        ) || undefined,
+    });
+  }, [activeTask?.id]);
+
+  if (!entry) {
+    return (
+      <Card className="min-w-0 xl:sticky xl:top-6">
+        <CardContent className="pt-6">
+          <Empty className="min-h-[420px] border border-border bg-white/35">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <ListChecks className="size-5" />
+              </EmptyMedia>
+              <EmptyTitle className="text-base">Nenhuma tarefa selecionada</EmptyTitle>
+              <EmptyDescription>
+                As filas carregadas não têm tarefas para detalhar.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const { task, queue } = entry;
+  const title = getTaskTitle(task);
+  const exceptions = coerceNumber(task.exception_count);
+  const canAdvance = canAdvanceTask(task);
+  const canRegister = canRegisterException(task);
+  const isReceiving = queue.key === "receiving";
+  const isPutaway = queue.key === "putaway";
+  const isPicking = queue.key === "picking";
+  const isPacking = queue.key === "packing";
+  const isExpedition = queue.key === "expedition";
+  const executionRows = getPhysicalLineRows(
+    task,
+    isPacking || isExpedition ? "volume" : "line",
+  );
+  const lineCounts = getLineResolutionCounts(
+    task.id,
+    executionRows,
+    lineConfirmations,
+  );
+  const advanceGate = getAdvanceGate(queue, task, lineCounts);
+  const status = normalizeStatus(task.status);
+  const receivingDivergenceRows = isReceiving
+    ? (task.items ?? []).filter((item) => {
+        const difference =
+          typeof item.difference_qty === "number"
+            ? item.difference_qty
+            : typeof item.received_qty === "number" ||
+                typeof item.picked_quantity === "number"
+              ? coerceNumber(item.received_qty ?? item.picked_quantity) -
+                coerceNumber(item.expected_quantity ?? item.quantity)
+              : 0;
+        const conferenceStatus = normalizeStatus(item.conference_status);
+        return (
+          difference !== 0 ||
+          normalizeStatus(item.status) === "divergence" ||
+          ["short", "over", "divergent"].includes(conferenceStatus)
+        );
+      })
+    : [];
+  const requiresReceivingJustification =
+    isReceiving && status === "checking" && receivingDivergenceRows.length > 0;
+  const pickingOperation = isPicking
+    ? buildPickingOperation(task, lineConfirmations)
+    : undefined;
+  const packingAdvanceOperation = isPacking
+    ? buildPackingOperation(task, lineConfirmations, packingOperation)
+    : undefined;
+  const operationForAdvance = isPacking
+    ? packingAdvanceOperation
+    : isPutaway
+      ? putawayOperation
+      : isPicking
+        ? pickingOperation
+        : isExpedition
+          ? shippingOperation
+          : undefined;
+  const putawaySource =
+    coerceText(putawayOperation.source_location_id) || "RECEBIMENTO";
+  const putawayDestination = coerceText(
+    putawayOperation.destination_location_id,
+    putawayOperation.location_id,
+  );
+  const operationBlockReason =
+    isPacking && status === "in_progress" && !coerceText(packingOperation.seal_code)
+      ? "Informe o lacre do volume antes de fechar o packing."
+      : isPutaway && status === "in_progress" && !putawayDestination
+        ? "Informe o endereço final antes de concluir a guarda."
+        : isPutaway &&
+            status === "in_progress" &&
+            putawaySource.toUpperCase() === putawayDestination.toUpperCase()
+          ? "O endereço final precisa ser diferente da origem."
+          : isExpedition &&
+              status === "ready_to_dispatch" &&
+              !coerceText(shippingOperation.carrier)
+            ? "Informe o responsável pela coleta antes de confirmar a saída."
+            : isExpedition &&
+                status === "ready_to_dispatch" &&
+                !coerceText(shippingOperation.driver_name)
+              ? "Informe o motorista antes de confirmar a saída."
+              : isExpedition &&
+                  status === "ready_to_dispatch" &&
+                  !coerceText(shippingOperation.vehicle_plate)
+                ? "Informe a placa ou identificação do veículo antes de confirmar a saída."
+            : isExpedition &&
+                status === "dispatched" &&
+                !coerceText(shippingOperation.proof_reference)
+              ? "Informe o comprovante de entrega antes de encerrar o pedido."
+              : isExpedition &&
+                  status === "dispatched" &&
+                  !coerceText(shippingOperation.delivery_notes)
+                ? "Informe a observação de entrega antes de encerrar o pedido."
+              : requiresReceivingJustification &&
+                  receivingAdvanceNote.trim().length < 12
+                ? "Justifique a divergência física antes de concluir o recebimento."
+                : "";
+  const canSubmitAdvance = advanceGate.canAdvance && !operationBlockReason;
+  const advanceNote = requiresReceivingJustification
+    ? receivingAdvanceNote.trim()
+    : undefined;
+  const showGenericExceptionAction = canRegister && !isPacking && !isExpedition;
+  const hasVisibleAction =
+    canAdvance ||
+    showGenericExceptionAction ||
+    ((isPacking || isExpedition) && canRegister);
+
+  return (
+    <Card className="min-w-0 xl:sticky xl:top-6">
+      <CardHeader className="border-b border-border/60">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
+                {queue.label}
+              </Badge>
+              <Badge variant="outline" className={priorityClass(task.priority)}>
+                {priorityLabel(task.priority)}
+              </Badge>
+              <Badge variant="outline" className={statusClass(task.status)}>
+                {statusLabel(task.status)}
+              </Badge>
+            </div>
+            <CardTitle className="mt-3 line-clamp-2 text-lg">{title}</CardTitle>
+            <CardDescription className="mt-2 line-clamp-2">
+              {task.notes || queue.description}
+            </CardDescription>
+          </div>
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-[18px] border border-border bg-white/70">
+            <queue.icon className="size-5 text-primary" />
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent className="flex flex-col gap-5 pt-5">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <DetailField icon={Hash} label="Referência" value={task.reference || task.id} />
+          <DetailField
+            icon={Box}
+            label="SKU / item"
+            value={task.sku || "SKU a definir"}
+          />
+          <DetailField
+            icon={ClipboardCheck}
+            label="Quantidade"
+            value={
+              typeof task.quantity === "number"
+                ? `${formatNumber(task.quantity)} un.`
+                : "Qtde aberta"
+            }
+          />
+          <DetailField
+            icon={MapPin}
+            label="Endereço"
+            value={task.location || "Sem endereço"}
+          />
+          <DetailField
+            icon={UserRound}
+            label="Responsável"
+            value={task.assignee || "Sem operador"}
+          />
+          <DetailField
+            icon={Clock3}
+            label="Prazo"
+            value={formatDate(task.due_at)}
+          />
+        </div>
+
+        {task.customer || task.customer_request_id || exceptions > 0 ? (
+          <div className="grid gap-3 sm:grid-cols-3">
+            {task.customer ? (
+              <DetailField icon={WarehouseIcon} label="Cliente" value={task.customer} />
+            ) : null}
+            {task.customer_request_id ? (
+              <DetailField
+                icon={FileWarning}
+                label="Solicitação"
+                value={task.customer_request_id}
+              />
+            ) : null}
+            {exceptions > 0 ? (
+              <DetailField
+                icon={MessageSquareWarning}
+                label="Exceções"
+                value={formatNumber(exceptions)}
+              />
+            ) : null}
+          </div>
+        ) : null}
+
+        {task.blocked_reason ? (
+          <Alert className="border-destructive/20 bg-destructive/10 text-destructive">
+            <Ban className="size-4" />
+            <AlertTitle>Tarefa bloqueada</AlertTitle>
+            <AlertDescription>{task.blocked_reason}</AlertDescription>
+          </Alert>
+        ) : null}
+
+        <TaskAiEvidencePanel task={task} queue={queue} alerts={alerts} />
+
+        <CustomerVisibilityPanel task={task} queue={queue} counts={lineCounts} />
+
+        <OperatorMicrocopy queue={queue} counts={lineCounts} />
+
+        {canAdvance && advanceGate.blockedReason ? (
+          <Alert className="border-amber-200 bg-amber-50 text-amber-900">
+            <AlertTriangle className="size-4" />
+            <AlertTitle>Conferência física pendente</AlertTitle>
+            <AlertDescription>{advanceGate.blockedReason}</AlertDescription>
+          </Alert>
+        ) : null}
+
+        {canAdvance && !advanceGate.blockedReason && operationBlockReason ? (
+          <Alert className="border-amber-200 bg-amber-50 text-amber-900">
+            <AlertTriangle className="size-4" />
+            <AlertTitle>Dados operacionais pendentes</AlertTitle>
+            <AlertDescription>{operationBlockReason}</AlertDescription>
+          </Alert>
+        ) : null}
+
+        {requiresReceivingJustification ? (
+          <div className="rounded-[18px] border border-amber-200 bg-amber-50/55 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-semibold text-amber-950">
+                  Justificativa para concluir com divergência
+                </div>
+                <p className="mt-1 text-xs leading-5 text-amber-900">
+                  {receivingDivergenceRows.length} linha(s) têm falta ou sobra. Esta nota fica na trilha operacional antes de liberar saldo.
+                </p>
+              </div>
+              <Badge variant="outline" className="border-amber-300 bg-white/70 text-amber-900">
+                obrigatório
+              </Badge>
+            </div>
+            <Textarea
+              className="mt-3 min-h-20 bg-white/85"
+              value={receivingAdvanceNote}
+              onChange={(event) => setReceivingAdvanceNote(event.target.value)}
+              placeholder="Ex.: NF entregue com falta física em 2 linhas; liberar estoque apenas da quantidade conferida e manter exceção para tratativa com fornecedor."
+            />
+          </div>
+        ) : null}
+
+        {isReceiving ? (
+          <>
+            <ReceivingConferenceSection task={task} />
+            <PhysicalLineChecklist
+              task={task}
+              lineConfirmations={lineConfirmations}
+              registeringExceptionId={registeringExceptionId}
+              onLineConfirmationChange={onLineConfirmationChange}
+              onOpenException={onOpenException}
+            />
+          </>
+        ) : isPacking ? (
+          <PackingDetailSection
+            task={task}
+            operation={packingOperation}
+            onOperationChange={setPackingOperation}
+            lineConfirmations={lineConfirmations}
+            registeringExceptionId={registeringExceptionId}
+            onLineConfirmationChange={onLineConfirmationChange}
+            onOpenException={onOpenException}
+          />
+        ) : isPutaway ? (
+          <PutawayDetailSection
+            task={task}
+            operation={putawayOperation}
+            onOperationChange={setPutawayOperation}
+          />
+        ) : isPicking ? (
+          <PickingDetailSection
+            task={task}
+            lineConfirmations={lineConfirmations}
+            registeringExceptionId={registeringExceptionId}
+            onLineConfirmationChange={onLineConfirmationChange}
+            onOpenException={onOpenException}
+          />
+        ) : isExpedition ? (
+          <ExpeditionReadinessSection
+            task={task}
+            operation={shippingOperation}
+            onOperationChange={setShippingOperation}
+            lineConfirmations={lineConfirmations}
+            registeringExceptionId={registeringExceptionId}
+            onLineConfirmationChange={onLineConfirmationChange}
+            onOpenException={onOpenException}
+          />
+        ) : (
+          <PhysicalLineChecklist
+            task={task}
+            lineConfirmations={lineConfirmations}
+            registeringExceptionId={registeringExceptionId}
+            onLineConfirmationChange={onLineConfirmationChange}
+            onOpenException={onOpenException}
+          />
+        )}
+
+        <div className="rounded-[18px] border border-border bg-white/55 px-4 py-3">
+          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <Route className="size-3.5 text-primary" />
+            Próxima ação da fila
+          </div>
+          <p className="mt-2 text-sm leading-6 text-foreground">
+            {task.next_action || getQueueAction(queue)}
+          </p>
+        </div>
+
+        {canAdvance || showGenericExceptionAction || !hasVisibleAction ? (
+          <div className="flex flex-col gap-3 sm:flex-row">
+            {canAdvance ? (
+              <Button
+                type="button"
+                className="w-full sm:flex-1"
+                onClick={() => onAdvance(task.id, operationForAdvance, advanceNote)}
+                disabled={advancingTaskId === task.id || !canSubmitAdvance}
+              >
+                {advancingTaskId === task.id ? (
+                  <RefreshCw data-icon="inline-start" className="animate-spin" />
+                ) : (
+                  <PlayCircle data-icon="inline-start" />
+                )}
+                {advancingTaskId === task.id ? "Avançando" : advanceGate.label}
+              </Button>
+            ) : null}
+            {showGenericExceptionAction ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full sm:flex-1"
+                onClick={() => onOpenException(task)}
+                disabled={registeringExceptionId === task.id}
+              >
+                {registeringExceptionId === task.id ? (
+                  <RefreshCw data-icon="inline-start" className="animate-spin" />
+                ) : (
+                  <MessageSquareWarning data-icon="inline-start" />
+                )}
+                Registrar exceção
+              </Button>
+            ) : null}
+            {!hasVisibleAction ? (
+              <div className="w-full rounded-[18px] border border-border bg-white/55 px-4 py-3 text-sm text-muted-foreground">
+                Nenhuma ação disponível para o status atual.
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Activity className="size-4 text-primary" />
+            Timeline
+          </div>
+          <TaskTimeline timeline={task.timeline ?? []} />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
