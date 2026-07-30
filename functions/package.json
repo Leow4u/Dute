@@ -10,10 +10,10 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "pnpm run test:unit",
-    "test:unit": "pnpm run build && node --test lib/billing.test.js",
-    "test:integration": "pnpm run build && firebase emulators:exec --project demo-dute-operations --only firestore \"node --test --test-concurrency=1 lib/domain/operations.integration.test.js lib/firestore.rules.test.js\"",
-    "test:critical": "pnpm run test:unit && pnpm run test:integration"
+    "test": "npm run test:unit",
+    "test:unit": "npm run build && node --test lib/billing.test.js",
+    "test:integration": "npm run build && firebase emulators:exec --project demo-dute-operations --only firestore \"node --test --test-concurrency=1 lib/domain/operations.integration.test.js lib/firestore.rules.test.js\"",
+    "test:critical": "npm run test:unit && npm run test:integration"
   },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.0.0",
