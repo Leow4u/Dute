@@ -30,6 +30,8 @@ jobs:
       - name: Typecheck workspace
         working-directory: .
         run: pnpm run typecheck
+      - name: Frontend unit tests
+        run: pnpm run test
 
   functions-unit:
     runs-on: ubuntu-latest

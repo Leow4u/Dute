@@ -25,6 +25,16 @@ import {
 import { firebaseAuth, firestore } from "./firebase";
 import { callFunctionsApi } from "./functions-api";
 import {
+  type CursorOrderValue,
+  decodeOrderValue,
+  encodeOrderValue,
+  fromBase64,
+  nextCompetencia,
+  pageWindow,
+  prefixRangeEnd,
+  toBase64,
+} from "./list-pagination";
+import {
   DEFAULT_CUSTOMER,
   buildDerivedCustomerAccounts,
   buildDerivedInboundReceipts,
@@ -742,41 +752,6 @@ type ReadPagedOptions = {
   hardCap?: number;
 };
 
-/** base64 seguro para UTF-8 (btoa cru quebra em acento/emoji). */
-function toBase64(value: string): string {
-  const bytes = new TextEncoder().encode(value);
-  let binary = "";
-  bytes.forEach((byte) => {
-    binary += String.fromCharCode(byte);
-  });
-  return btoa(binary);
-}
-
-function fromBase64(value: string): string {
-  const binary = atob(value);
-  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-  return new TextDecoder().decode(bytes);
-}
-
-/**
- * Timestamp não sobrevive a JSON.stringify/parse — precisa de envelope
- * tipado para o startAfter continuar comparando na mesma escala.
- */
-type CursorOrderValue = { t: "ts"; s: number; n: number } | { t: "v"; v: unknown };
-
-function encodeOrderValue(value: unknown): CursorOrderValue {
-  if (value instanceof Timestamp) {
-    return { t: "ts", s: value.seconds, n: value.nanoseconds };
-  }
-  return { t: "v", v: value ?? null };
-}
-
-function decodeOrderValue(encoded?: CursorOrderValue): unknown {
-  if (!encoded) return undefined;
-  if (encoded.t === "ts") return new Timestamp(encoded.s, encoded.n);
-  return encoded.v;
-}
-
 /**
  * O shim roda no mesmo contexto JS das páginas, então o snapshot da última
  * linha da página pode ser reaproveitado — startAfter(snapshot) é a forma
@@ -886,7 +861,7 @@ async function readPaged(
   }
   if (prefixField) {
     constraints.push(where(prefixField, ">=", searchTerm));
-    constraints.push(where(prefixField, "<", `${searchTerm}`));
+    constraints.push(where(prefixField, "<", prefixRangeEnd(searchTerm)));
     constraints.push(orderBy(prefixField, "asc"));
   } else if (!orderByIsFiltered) {
     constraints.push(orderBy(options.orderByField, direction));
@@ -983,7 +958,7 @@ async function readPaged(
       );
       if (prefixField) {
         countConstraints.push(where(prefixField, ">=", searchTerm));
-        countConstraints.push(where(prefixField, "<", `${searchTerm}`));
+        countConstraints.push(where(prefixField, "<", prefixRangeEnd(searchTerm)));
       }
       const countSnap = await getCountFromServer(
         query(collection(firestore, name), ...countConstraints),
@@ -1027,7 +1002,7 @@ function filterAndPageExtended(
   // filterAndPage já aplica offset/limit vindos de params — cortar de novo
   // aqui pularia offset duas vezes e devolveria página vazia.
   const paged = filterAndPage(source, params, [], applied?.searchFields ?? []);
-  const sliced = paged.items.slice(0, pageSize);
+  const sliced = pageWindow(paged.items, 0, pageSize);
   return {
     items: sliced,
     total: paged.total,
@@ -2446,18 +2421,6 @@ function sameBillingCompetencia(value: unknown, competencia: string) {
   return toIso(value).startsWith(competencia);
 }
 
-/** Primeiro instante da competência seguinte, para o limite superior da faixa. */
-function nextCompetencia(competencia: string) {
-  const [yearText, monthText] = String(competencia).split("-");
-  const year = Number(yearText);
-  const month = Number(monthText);
-  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
-    return `${competencia}￿`;
-  }
-  const nextMonth = month === 12 ? 1 : month + 1;
-  const nextYear = month === 12 ? year + 1 : year;
-  return `${nextYear}-${String(nextMonth).padStart(2, "0")}`;
-}
 
 /**
  * Movimentos da competência por faixa de data no servidor. Ler "os N mais
