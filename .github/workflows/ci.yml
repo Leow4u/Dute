@@ -24,7 +24,11 @@ jobs:
       - name: Install workspace
         working-directory: .
         run: pnpm install --frozen-lockfile
-      - name: Typecheck inventory app
+      # O typecheck do root roda tsc --build primeiro, gerando os .d.ts de
+      # lib/api-client-react que o app referencia — sem isso o checkout limpo
+      # do CI falha com TS6305 e uma cascata de implicit any.
+      - name: Typecheck workspace
+        working-directory: .
         run: pnpm run typecheck
 
   functions-unit:
