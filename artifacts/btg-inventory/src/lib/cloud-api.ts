@@ -1,7 +1,9 @@
 import {
+  Timestamp,
   collection,
   deleteDoc,
   doc,
+  documentId,
   getCountFromServer,
   getDoc,
   getDocs,
@@ -104,6 +106,10 @@ const OPS_TASK_READ_CAP = 500;
 const RECENT_MOVEMENTS_CAP = 300;
 const RECENT_EVENTS_CAP = 80;
 const EXPORT_HARD_CAP = 5000;
+/** Teto por consulta escopada em um cliente (portal). */
+const PORTAL_READ_CAP = 500;
+/** Teto do histórico de chat carregado de uma vez. */
+const CHAT_HISTORY_CAP = 100;
 
 type EventSeverity = "info" | "attention" | "critical";
 type EventInput = {
@@ -683,11 +689,6 @@ async function emitEvent(input: EventInput) {
   return event;
 }
 
-async function readAll(name: string): Promise<AnyRecord[]> {
-  if (!firestore) return [];
-  const snapshot = await getDocs(collection(firestore, name));
-  return snapshot.docs.map(normalizeDoc);
-}
 
 /** Capped collection read — never downloads unbounded history. */
 async function readLimited(
@@ -731,35 +732,94 @@ type ReadPagedOptions = {
   equalityFilters?: Array<{ field: string; value: string }>;
   /** Soft search fields applied in memory after the Firestore page (narrow pages only). */
   searchFields?: string[];
+  /** Campo com busca por prefixo no servidor (faixa >= termo, < termo+sentinela). */
+  prefixSearchField?: string;
+  /** Campos filtrados em memória depois da página — invalidam o total exato. */
+  inMemoryFilterFields?: string[];
   params: URLSearchParams;
   /** Max page size when client omits limit. */
   defaultLimit?: number;
   hardCap?: number;
 };
 
-function encodeCursor(snapshot: DocumentSnapshot): string {
-  return btoa(
-    JSON.stringify({
-      id: snapshot.id,
-      values: snapshot.data() ?? {},
-    }),
-  );
+/** base64 seguro para UTF-8 (btoa cru quebra em acento/emoji). */
+function toBase64(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
 }
 
-function decodeCursorOrderValue(
+function fromBase64(value: string): string {
+  const binary = atob(value);
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+/**
+ * Timestamp não sobrevive a JSON.stringify/parse — precisa de envelope
+ * tipado para o startAfter continuar comparando na mesma escala.
+ */
+type CursorOrderValue = { t: "ts"; s: number; n: number } | { t: "v"; v: unknown };
+
+function encodeOrderValue(value: unknown): CursorOrderValue {
+  if (value instanceof Timestamp) {
+    return { t: "ts", s: value.seconds, n: value.nanoseconds };
+  }
+  return { t: "v", v: value ?? null };
+}
+
+function decodeOrderValue(encoded?: CursorOrderValue): unknown {
+  if (!encoded) return undefined;
+  if (encoded.t === "ts") return new Timestamp(encoded.s, encoded.n);
+  return encoded.v;
+}
+
+/**
+ * O shim roda no mesmo contexto JS das páginas, então o snapshot da última
+ * linha da página pode ser reaproveitado — startAfter(snapshot) é a forma
+ * canônica e resolve tipos e empates sozinha. O envelope serializado fica
+ * como fallback para quando o cache não tem o token (reload, aba nova).
+ */
+const cursorSnapshotCache = new Map<string, DocumentSnapshot>();
+const CURSOR_CACHE_LIMIT = 64;
+
+function rememberCursorSnapshot(token: string, snapshot: DocumentSnapshot) {
+  if (cursorSnapshotCache.size >= CURSOR_CACHE_LIMIT) {
+    const oldest = cursorSnapshotCache.keys().next().value;
+    if (oldest) cursorSnapshotCache.delete(oldest);
+  }
+  cursorSnapshotCache.set(token, snapshot);
+}
+
+function encodeCursor(snapshot: DocumentSnapshot, orderByField: string): string {
+  const data = snapshot.data() as AnyRecord | undefined;
+  const token = toBase64(
+    JSON.stringify({
+      id: snapshot.id,
+      o: encodeOrderValue(data?.[orderByField]),
+    }),
+  );
+  rememberCursorSnapshot(token, snapshot);
+  return token;
+}
+
+function decodeCursor(
   cursor: string,
-  orderByField: string,
-): { orderValue: unknown; id: string } | null {
+): { snapshot?: DocumentSnapshot; id: string; orderValue: unknown } | null {
+  const cached = cursorSnapshotCache.get(cursor);
+  if (cached) {
+    return { snapshot: cached, id: cached.id, orderValue: undefined };
+  }
   try {
-    const parsed = JSON.parse(atob(cursor)) as {
+    const parsed = JSON.parse(fromBase64(cursor)) as {
       id?: string;
-      values?: AnyRecord;
+      o?: CursorOrderValue;
     };
     if (!parsed?.id) return null;
-    return {
-      id: parsed.id,
-      orderValue: parsed.values?.[orderByField],
-    };
+    return { id: parsed.id, orderValue: decodeOrderValue(parsed.o) };
   } catch {
     return null;
   }
@@ -800,13 +860,40 @@ async function readPaged(
   const cursorParam = options.params.get("cursor");
   const direction = options.direction ?? "desc";
 
+  const activeFilters = (options.equalityFilters ?? []).filter(
+    (filter) => filter.value,
+  );
+  // Firestore rejeita orderBy no mesmo campo de um filtro de igualdade — e a
+  // ordenação seria irrelevante, já que todos os resultados têm o mesmo valor.
+  const orderByIsFiltered = activeFilters.some(
+    (filter) => filter.field === options.orderByField,
+  );
+
+  const searchTerm = (options.params.get("search") ?? "").trim();
+  // Busca por prefixo no servidor: sem isso, `search` só encontra o que já
+  // está na página baixada — digitar um código antigo devolvia zero linhas.
+  // A faixa exige que a primeira ordenação seja o próprio campo do range.
+  const prefixField =
+    searchTerm && options.prefixSearchField && !orderByIsFiltered
+      ? options.prefixSearchField
+      : undefined;
+  const effectiveOrderField = prefixField ?? options.orderByField;
+  const effectiveDirection: "asc" | "desc" = prefixField ? "asc" : direction;
+
   const constraints: QueryConstraint[] = [];
-  for (const filter of options.equalityFilters ?? []) {
-    if (filter.value) {
-      constraints.push(where(filter.field, "==", filter.value));
-    }
+  for (const filter of activeFilters) {
+    constraints.push(where(filter.field, "==", filter.value));
   }
-  constraints.push(orderBy(options.orderByField, direction));
+  if (prefixField) {
+    constraints.push(where(prefixField, ">=", searchTerm));
+    constraints.push(where(prefixField, "<", `${searchTerm}`));
+    constraints.push(orderBy(prefixField, "asc"));
+  } else if (!orderByIsFiltered) {
+    constraints.push(orderBy(options.orderByField, direction));
+  }
+  // Desempate estável: sem ele, startAfter pula todas as linhas que
+  // compartilham o valor de ordenação na fronteira da página.
+  constraints.push(orderBy(documentId(), effectiveDirection));
 
   // Offset best-effort for shallow pages only (avoids full-collection scan).
   const fetchCount =
@@ -815,9 +902,15 @@ async function readPaged(
       : pageSize + 1;
 
   if (cursorParam) {
-    const decoded = decodeCursorOrderValue(cursorParam, options.orderByField);
-    if (decoded?.orderValue != null) {
-      constraints.push(startAfter(decoded.orderValue));
+    const decoded = decodeCursor(cursorParam);
+    if (decoded?.snapshot) {
+      constraints.push(startAfter(decoded.snapshot));
+    } else if (decoded) {
+      constraints.push(
+        orderByIsFiltered
+          ? startAfter(decoded.id)
+          : startAfter(decoded.orderValue ?? null, decoded.id),
+      );
     }
   }
 
@@ -834,7 +927,12 @@ async function readPaged(
       error,
     );
     const rows = await readLimited(name, hardCap, options.orderByField, direction);
-    return filterAndPageExtended(rows, options.params, pageSize, offset);
+    // O fallback precisa reaplicar os filtros que a query teria feito no
+    // servidor; sem isso a lista volta sem filtro nenhum e parece dado errado.
+    return filterAndPageExtended(rows, options.params, pageSize, offset, {
+      equalityFilters: activeFilters,
+      searchFields: options.searchFields,
+    });
   }
 
   let docs = snapshot.docs;
@@ -846,10 +944,11 @@ async function readPaged(
   const pageDocs = hasMore ? docs.slice(0, pageSize) : docs;
   let items = pageDocs.map(normalizeDoc);
 
-  const search = options.params.get("search");
-  if (search && options.searchFields?.length) {
+  // Com prefixo no servidor a página já vem filtrada; reaplicar em memória
+  // sobre os demais campos só descartaria linhas válidas.
+  if (searchTerm && !prefixField && options.searchFields?.length) {
     items = items.filter((row) =>
-      options.searchFields!.some((field) => includes(row[field], search)),
+      options.searchFields!.some((field) => includes(row[field], searchTerm)),
     );
   }
 
@@ -863,15 +962,29 @@ async function readPaged(
   }
 
   const lastDoc = pageDocs[pageDocs.length - 1];
-  const nextCursor = hasMore && lastDoc ? encodeCursor(lastDoc) : undefined;
+  const nextCursor =
+    hasMore && lastDoc ? encodeCursor(lastDoc, effectiveOrderField) : undefined;
 
-  // total: exact count only for small equality-filtered sets; else estimate.
+  // Total real na primeira página (getCountFromServer é agregação indexada,
+  // não baixa documentos). Só vale quando nada é filtrado em memória depois:
+  // senão o contador reportaria a coleção inteira sob uma lista já reduzida.
+  const narrowedInMemory =
+    Boolean(from) ||
+    Boolean(to) ||
+    (Boolean(searchTerm) && !prefixField) ||
+    (options.inMemoryFilterFields ?? []).some((field) =>
+      Boolean(options.params.get(field)),
+    );
   let total = offset + items.length + (hasMore ? 1 : 0);
   try {
-    if ((options.equalityFilters ?? []).length > 0 && offset === 0 && !cursorParam) {
-      const countConstraints: QueryConstraint[] = (
-        options.equalityFilters ?? []
-      ).map((filter) => where(filter.field, "==", filter.value));
+    if (offset === 0 && !cursorParam && !narrowedInMemory) {
+      const countConstraints: QueryConstraint[] = activeFilters.map((filter) =>
+        where(filter.field, "==", filter.value),
+      );
+      if (prefixField) {
+        countConstraints.push(where(prefixField, ">=", searchTerm));
+        countConstraints.push(where(prefixField, "<", `${searchTerm}`));
+      }
       const countSnap = await getCountFromServer(
         query(collection(firestore, name), ...countConstraints),
       );
@@ -894,13 +1007,26 @@ function filterAndPageExtended(
   params: URLSearchParams,
   pageSize: number,
   offset: number,
+  applied?: {
+    equalityFilters?: Array<{ field: string; value: string }>;
+    searchFields?: string[];
+  },
 ): {
   items: AnyRecord[];
   total: number;
   has_more: boolean;
   next_cursor?: string;
 } {
-  const paged = filterAndPage(rows, params, [], []);
+  // Igualdade exata para os campos que a query faria no servidor.
+  let source = rows;
+  for (const filter of applied?.equalityFilters ?? []) {
+    source = source.filter(
+      (row) => String(row[filter.field] ?? "") === filter.value,
+    );
+  }
+  // filterAndPage já aplica offset/limit vindos de params — cortar de novo
+  // aqui pularia offset duas vezes e devolveria página vazia.
+  const paged = filterAndPage(source, params, [], applied?.searchFields ?? []);
   const sliced = paged.items.slice(0, pageSize);
   return {
     items: sliced,
@@ -913,10 +1039,20 @@ async function readWhereEqual(
   name: string,
   field: string,
   value: string | number | boolean,
+  options: { maxDocs?: number; orderByField?: string; direction?: "asc" | "desc" } = {},
 ): Promise<AnyRecord[]> {
   if (!firestore) return [];
+  const constraints: QueryConstraint[] = [where(field, "==", value)];
+  if (options.orderByField) {
+    constraints.push(orderBy(options.orderByField, options.direction ?? "desc"));
+  }
+  constraints.push(
+    fsLimit(
+      Math.max(1, Math.min(options.maxDocs ?? PORTAL_READ_CAP, CATALOG_READ_CAP)),
+    ),
+  );
   const snapshot = await getDocs(
-    query(collection(firestore, name), where(field, "==", value)),
+    query(collection(firestore, name), ...constraints),
   );
   return snapshot.docs.map(normalizeDoc);
 }
@@ -925,11 +1061,23 @@ async function readOptionalWhereEqual(
   name: string,
   field: string,
   value: string | number | boolean,
+  options: { maxDocs?: number; orderByField?: string; direction?: "asc" | "desc" } = {},
 ): Promise<AnyRecord[]> {
   try {
-    return await readWhereEqual(name, field, value);
+    return await readWhereEqual(name, field, value, options);
   } catch (error) {
     console.warn(`[portal] ${name} não pôde ser carregado.`, error);
+    // orderBy exige índice composto; sem ele, cai para a leitura só com
+    // igualdade e limite (ainda limitada, nunca coleção inteira).
+    if (options.orderByField) {
+      try {
+        return await readWhereEqual(name, field, value, {
+          maxDocs: options.maxDocs,
+        });
+      } catch {
+        return [];
+      }
+    }
     return [];
   }
 }
@@ -1074,98 +1222,7 @@ function movementSign(tipo: unknown, fallback: unknown): 1 | -1 {
   return Number(fallback ?? 0) >= 0 ? 1 : -1;
 }
 
-async function findSkuByCode(codSku: string) {
-  if (!firestore) throw new Error("Firestore não configurado.");
 
-  const direct = await getDoc(doc(firestore, collectionNames.skus, codSku));
-  if (direct.exists()) return direct;
-
-  const byBtg = await getDocs(
-    query(
-      collection(firestore, collectionNames.skus),
-      where("cod_btg", "==", codSku),
-    ),
-  );
-  if (!byBtg.empty) return byBtg.docs[0];
-
-  const byId = await getDocs(
-    query(
-      collection(firestore, collectionNames.skus),
-      where("id", "==", Number(codSku)),
-    ),
-  );
-  if (!byId.empty) return byId.docs[0];
-
-  return null;
-}
-
-async function syncProductAggregate(
-  batch: ReturnType<typeof writeBatch>,
-  skuData: AnyRecord,
-  updatedSkuDocId: string,
-  updatedStock: number,
-) {
-  if (!firestore) throw new Error("Firestore não configurado.");
-
-  const codCliente = String(skuData.cod_cliente ?? "").trim();
-  if (!codCliente) return;
-
-  const skuSnapshot = await getDocs(
-    query(
-      collection(firestore, collectionNames.skus),
-      where("cod_cliente", "==", codCliente),
-    ),
-  );
-
-  let estoqueBtg = 0;
-  let numSkus = 0;
-  for (const skuDoc of skuSnapshot.docs) {
-    const data = skuDoc.data() as AnyRecord;
-    const estoque =
-      skuDoc.id === updatedSkuDocId
-        ? updatedStock
-        : Number(data.estoque_atual ?? 0);
-    estoqueBtg += estoque;
-    numSkus += 1;
-  }
-
-  const productSnapshot = await getDocs(
-    query(
-      collection(firestore, collectionNames.products),
-      where("cod_cliente", "==", codCliente),
-    ),
-  );
-
-  const existingProduct = productSnapshot.docs[0];
-  const productData = existingProduct?.data() as AnyRecord | undefined;
-  const precoUnit = Number(productData?.preco_unit ?? skuData.preco_unit ?? 0);
-  const aggregate = {
-    cod_cliente: codCliente,
-    produto: productData?.produto ?? skuData.produto ?? "",
-    genero: productData?.genero ?? skuData.genero ?? "",
-    categoria: productData?.categoria ?? skuData.categoria ?? "",
-    grupo: productData?.grupo ?? skuData.grupo ?? "",
-    cor: productData?.cor ?? skuData.cor ?? "",
-    tamanho: productData?.tamanho ?? skuData.tamanho ?? "",
-    preco_unit: precoUnit,
-    estoque_btg: estoqueBtg,
-    num_skus: numSkus,
-    custo_total: estoqueBtg * precoUnit,
-    updated_at: serverTimestamp(),
-  };
-
-  if (existingProduct) {
-    batch.update(existingProduct.ref, aggregate);
-    return;
-  }
-
-  const productId = Date.now();
-  batch.set(doc(firestore, collectionNames.products, String(productId)), {
-    ...aggregate,
-    id: productId,
-    created_at: serverTimestamp(),
-  });
-}
 
 function categoryStats(products: AnyRecord[]) {
   const byCategory = new Map<
@@ -1339,32 +1396,39 @@ async function getClientOverview() {
       ? [
           Promise.resolve([]),
           Promise.resolve([]),
-          readWhereEqual(
+          // readOptional*: um índice ainda em construção não pode derrubar
+          // as cinco seções do portal.
+          readOptionalWhereEqual(
             collectionNames.clientInventory,
             "customer_code",
             customerCode,
+            { maxDocs: CATALOG_READ_CAP, orderByField: "sku_code", direction: "asc" },
           ),
           readOptionalWhereEqual(
             collectionNames.clientOrderTracking,
             "customer_code",
             customerCode,
+            { maxDocs: PORTAL_READ_CAP, orderByField: "updated_at" },
           ),
           Promise.resolve([]),
           readOptionalWhereEqual(
             collectionNames.clientRequestStatus,
             "customer_code",
             customerCode,
+            { maxDocs: PORTAL_READ_CAP, orderByField: "updated_at" },
           ),
           readOptionalWhereEqual(
             collectionNames.clientInvoices,
             "customer_code",
             customerCode,
+            { maxDocs: PORTAL_READ_CAP, orderByField: "competencia" },
           ),
           Promise.resolve([]),
           readOptionalWhereEqual(
             collectionNames.clientDocuments,
             "customer_code",
             customerCode,
+            { maxDocs: PORTAL_READ_CAP, orderByField: "created_at" },
           ),
         ]
       : [
@@ -1621,14 +1685,43 @@ async function getAgentDuteChat(conversationId?: string) {
       conversation: { id, customer_code: customerCode, status: "active" },
       messages: [],
     };
-  const messageSnapshot = await getDocs(
-    query(
-      collection(firestore, collectionNames.agentMessages),
-      where("conversation_id", "==", id),
-      where("customer_code", "==", customerCode),
-      where("user_id", "==", profile.uid),
-    ),
-  );
+  // Histórico limitado às mensagens mais recentes: uma conversa cresce sem
+  // limite e a tela só mostra o fim dela.
+  const messagesRef = collection(firestore, collectionNames.agentMessages);
+  const scopeConstraints: QueryConstraint[] = [
+    where("conversation_id", "==", id),
+    where("customer_code", "==", customerCode),
+    where("user_id", "==", profile.uid),
+  ];
+  let messageSnapshot;
+  try {
+    messageSnapshot = await getDocs(
+      query(
+        messagesRef,
+        ...scopeConstraints,
+        orderBy("created_at_iso", "desc"),
+        fsLimit(CHAT_HISTORY_CAP),
+      ),
+    );
+  } catch (error) {
+    console.warn(
+      "[agent-dute] histórico sem índice composto; reduzindo o escopo mas mantendo a ordem.",
+      error,
+    );
+    // Manter o orderBy é essencial: sem ele o Firestore devolve os 100
+    // menores por __name__, e como os ids têm prefixo por papel
+    // (msg_agent_* < msg_user_*) o usuário perderia as próprias mensagens.
+    // customer_code é redundante aqui — user_id já isola o dono.
+    messageSnapshot = await getDocs(
+      query(
+        messagesRef,
+        where("conversation_id", "==", id),
+        where("user_id", "==", profile.uid),
+        orderBy("created_at_iso", "desc"),
+        fsLimit(CHAT_HISTORY_CAP),
+      ),
+    );
+  }
   const messages = messageSnapshot.docs
     .map(normalizeDoc)
     .sort((left, right) =>
@@ -2353,6 +2446,67 @@ function sameBillingCompetencia(value: unknown, competencia: string) {
   return toIso(value).startsWith(competencia);
 }
 
+/** Primeiro instante da competência seguinte, para o limite superior da faixa. */
+function nextCompetencia(competencia: string) {
+  const [yearText, monthText] = String(competencia).split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return `${competencia}￿`;
+  }
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+  return `${nextYear}-${String(nextMonth).padStart(2, "0")}`;
+}
+
+/**
+ * Movimentos da competência por faixa de data no servidor. Ler "os N mais
+ * recentes e filtrar em memória" subcontava faturas silenciosamente sempre que
+ * o mês tinha mais que N movimentos — ou era anterior aos N últimos.
+ * O campo `data` é string ISO nos dois caminhos de escrita (Functions e
+ * importador), então a comparação lexicográfica é válida.
+ */
+async function readMovementsForCompetencia(
+  competencia: string,
+  cap = EXPORT_HARD_CAP,
+): Promise<{ items: AnyRecord[]; truncated: boolean }> {
+  if (!firestore) return { items: [], truncated: false };
+  try {
+    const snapshot = await getDocs(
+      query(
+        collection(firestore, collectionNames.movements),
+        where("data", ">=", competencia),
+        where("data", "<", nextCompetencia(competencia)),
+        orderBy("data", "desc"),
+        fsLimit(cap + 1),
+      ),
+    );
+    const rows = snapshot.docs.map(normalizeDoc);
+    const truncated = rows.length > cap;
+    return { items: truncated ? rows.slice(0, cap) : rows, truncated };
+  } catch (error) {
+    console.warn(
+      "[billing] consulta por faixa de competência falhou; usando leitura recente limitada.",
+      error,
+    );
+    const rows = await readLimited(
+      collectionNames.movements,
+      cap,
+      "data",
+      "desc",
+    );
+    return {
+      items: rows.filter((movement) =>
+        sameBillingCompetencia(
+          movement.occurred_at ?? movement.data ?? movement.created_at,
+          competencia,
+        ),
+      ),
+      truncated: rows.length >= cap,
+    };
+  }
+}
+
 function billingUsageNumber(value: unknown) {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
@@ -2394,7 +2548,7 @@ async function getBillingEvidence(competencia: string) {
     periodSnapshot,
     operationalSnapshot,
   ] = await Promise.all([
-    readLimited(collectionNames.movements, EXPORT_HARD_CAP, "data", "desc"),
+    readMovementsForCompetencia(competencia),
     readLimited(collectionNames.inboundReceipts, OPS_TASK_READ_CAP, "created_at", "desc"),
     readLimited(collectionNames.orders, OPS_TASK_READ_CAP, "data_solic", "desc"),
     readLimited(collectionNames.shipments, OPS_TASK_READ_CAP, "created_at", "desc"),
@@ -2411,7 +2565,7 @@ async function getBillingEvidence(competencia: string) {
     ),
   ]);
 
-  const allMovementsInPeriod = movements.filter((movement) =>
+  const allMovementsInPeriod = movements.items.filter((movement) =>
     sameBillingCompetencia(
       movement.occurred_at ?? movement.data ?? movement.created_at,
       competencia,
@@ -2525,11 +2679,16 @@ async function getBillingEvidence(competencia: string) {
     missing.push("Sem documento financeiro vinculado à competência.");
   if (!relevantEvents.some((event) => String(event.type).startsWith("billing.")))
     missing.push("Sem evento de faturamento registrado para a competência.");
+  if (movements.truncated)
+    missing.push(
+      `Competência excede ${EXPORT_HARD_CAP} movimentos: os totais abaixo estão truncados e não devem ser usados para faturar.`,
+    );
 
   return {
     competencia,
     status: period?.status ?? "aberto",
     generated_at: new Date().toISOString(),
+    movements_truncated: movements.truncated,
     metrics: {
       movements: evidenceMetrics.movements,
       incoming_pieces: evidenceMetrics.incomingPieces,
@@ -2612,7 +2771,7 @@ async function getBillingPeriod(competencia: string) {
   ] = await Promise.all([
     readLimited(collectionNames.products, CATALOG_READ_CAP),
     readLimited(collectionNames.clientInventory, CATALOG_READ_CAP),
-    readLimited(collectionNames.movements, RECENT_MOVEMENTS_CAP, "data", "desc"),
+    readMovementsForCompetencia(competencia),
     readLimited(collectionNames.priceList, 500, "item", "asc"),
     getDoc(doc(firestore, collectionNames.manual, competencia)),
     getDoc(
@@ -2643,7 +2802,9 @@ async function getBillingPeriod(competencia: string) {
     : {};
   const snapshotMode = String(operationalData.mode ?? "");
   const snapshotUsage = (operationalData.usage ?? {}) as AnyRecord;
-  const allMovementsInPeriod = movements.filter((movement) =>
+  // A faixa já veio filtrada pelo servidor; a checagem em memória cobre
+  // apenas registros legados cujo `data` diverge de `occurred_at`.
+  const allMovementsInPeriod = movements.items.filter((movement) =>
     sameBillingCompetencia(
       movement.occurred_at ?? movement.data ?? movement.created_at,
       competencia,
@@ -2776,6 +2937,8 @@ async function getBillingPeriod(competencia: string) {
     email_enviado_em: saved.email_enviado_em ?? null,
     pago_em: saved.pago_em ?? null,
     operational_snapshot_at: operationalData.created_at_iso ?? null,
+    // Sinaliza faturamento sobre base incompleta em vez de subcontar em silêncio.
+    movements_truncated: movements.truncated,
   };
 }
 
@@ -3134,6 +3297,8 @@ async function route(
     direction?: "asc" | "desc";
     equalityFilterFields?: string[];
     hardCap?: number;
+    /** Campo com índice que suporta busca por prefixo no servidor. */
+    prefixSearchField?: string;
   };
 
   const listRoutes: ListRouteConfig[] = [
@@ -3214,6 +3379,7 @@ async function route(
       searchFields: ["cod_sku", "produto", "doc_nf"],
       orderByField: "data",
       equalityFilterFields: ["cod_sku", "tipo_mov"],
+      prefixSearchField: "cod_sku",
       hardCap: 500,
     },
     {
@@ -3342,6 +3508,11 @@ async function route(
         direction: routeConfig.direction,
         equalityFilters: preferredFilters,
         searchFields: routeConfig.searchFields,
+        prefixSearchField: routeConfig.prefixSearchField,
+        // Filtros da rota que sobram para a memória invalidam o total exato.
+        inMemoryFilterFields: routeConfig.filters.filter(
+          (field) => !preferredFilters.some((filter) => filter.field === field),
+        ),
         params: searchParams,
         hardCap: routeConfig.hardCap,
       });

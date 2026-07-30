@@ -1,10 +1,42 @@
 {
   "indexes": [
     {
+      "collectionGroup": "customers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "customer_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customer_code", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "customer_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "customer_requests",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "customer_code", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "customer_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "created_at", "order": "DESCENDING" }
       ]
     },
@@ -18,27 +50,51 @@
       ]
     },
     {
-      "collectionGroup": "orders",
+      "collectionGroup": "operational_notifications",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "customer_code", "order": "ASCENDING" },
-        { "fieldPath": "data_solic", "order": "DESCENDING" }
+        { "fieldPath": "created_at", "order": "DESCENDING" }
       ]
     },
     {
-      "collectionGroup": "orders",
+      "collectionGroup": "operational_notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "categoria", "order": "ASCENDING" },
+        { "fieldPath": "produto", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "skus",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "cod_cliente", "order": "ASCENDING" },
-        { "fieldPath": "data_solic", "order": "DESCENDING" }
+        { "fieldPath": "cod_btg", "order": "ASCENDING" }
       ]
     },
     {
-      "collectionGroup": "stock_balances",
+      "collectionGroup": "locations",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "customer_code", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" }
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "label", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "locations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "warehouse_code", "order": "ASCENDING" },
+        { "fieldPath": "label", "order": "ASCENDING" }
       ]
     },
     {
@@ -47,6 +103,223 @@
       "fields": [
         { "fieldPath": "customer_code", "order": "ASCENDING" },
         { "fieldPath": "sku_code", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "stock_balances",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "sku_code", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "movements",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "cod_sku", "order": "ASCENDING" },
+        { "fieldPath": "data", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "movements",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tipo_mov", "order": "ASCENDING" },
+        { "fieldPath": "data", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "inbound_receipts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customer_code", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "inbound_receipts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "returns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customer_code", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "returns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "return_items",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customer_code", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "return_items",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "return_items",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "return_id", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "quality_exceptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customer_code", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "quality_exceptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "putaway_tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customer_code", "order": "ASCENDING" },
+        { "fieldPath": "updated_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "putaway_tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "updated_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "data_solic", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customer_code", "order": "ASCENDING" },
+        { "fieldPath": "data_solic", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "order_items",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customer_code", "order": "ASCENDING" },
+        { "fieldPath": "order_number", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "order_items",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "order_number", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pick_tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customer_code", "order": "ASCENDING" },
+        { "fieldPath": "updated_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pick_tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "updated_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pack_tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customer_code", "order": "ASCENDING" },
+        { "fieldPath": "updated_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pack_tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "updated_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "shipments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customer_code", "order": "ASCENDING" },
+        { "fieldPath": "updated_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "shipments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "updated_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "documents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customer_code", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "documents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "entity_type", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "documents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customer_code", "order": "ASCENDING" },
+        { "fieldPath": "entity_type", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
       ]
     },
     {
@@ -67,15 +340,6 @@
       ]
     },
     {
-      "collectionGroup": "documents",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "customer_code", "order": "ASCENDING" },
-        { "fieldPath": "entity_type", "order": "ASCENDING" },
-        { "fieldPath": "created_at", "order": "DESCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "events",
       "queryScope": "COLLECTION",
       "fields": [
@@ -84,19 +348,53 @@
       ]
     },
     {
-      "collectionGroup": "movements",
+      "collectionGroup": "client_inventory",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "cod_sku", "order": "ASCENDING" },
-        { "fieldPath": "data", "order": "DESCENDING" }
+        { "fieldPath": "customer_code", "order": "ASCENDING" },
+        { "fieldPath": "sku_code", "order": "ASCENDING" }
       ]
     },
     {
-      "collectionGroup": "movements",
+      "collectionGroup": "client_order_tracking",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "tipo_mov", "order": "ASCENDING" },
-        { "fieldPath": "data", "order": "DESCENDING" }
+        { "fieldPath": "customer_code", "order": "ASCENDING" },
+        { "fieldPath": "updated_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "client_request_status",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customer_code", "order": "ASCENDING" },
+        { "fieldPath": "updated_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "client_invoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customer_code", "order": "ASCENDING" },
+        { "fieldPath": "competencia", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "client_documents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customer_code", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "agent_messages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "conversation_id", "order": "ASCENDING" },
+        { "fieldPath": "customer_code", "order": "ASCENDING" },
+        { "fieldPath": "user_id", "order": "ASCENDING" },
+        { "fieldPath": "created_at_iso", "order": "DESCENDING" }
       ]
     }
   ],

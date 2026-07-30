@@ -900,14 +900,14 @@ export default function CustomerRequests() {
     queryKey,
     queryFn: () =>
       fetchJson<ListResponse>("/api/customer-requests?limit=200"),
-    refetchInterval: 30000,
+    refetchInterval: 120_000,
   });
 
   const stockBalances = useQuery({
     queryKey: stockBalancesQueryKey,
     queryFn: () =>
       fetchJson<StockBalanceResponse>("/api/stock-balances?limit=500"),
-    refetchInterval: 30000,
+    refetchInterval: 120_000,
     retry: 1,
   });
 

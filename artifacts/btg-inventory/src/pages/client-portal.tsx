@@ -3313,7 +3313,7 @@ export default function ClientPortal() {
   const overview = useQuery({
     queryKey: overviewQueryKey,
     queryFn: () => fetchJson<ClientOverview>("/api/client/overview"),
-    refetchInterval: 30000,
+    refetchInterval: 120_000,
   });
 
   const wmsOverview = useQuery({
@@ -3326,7 +3326,7 @@ export default function ClientPortal() {
         return undefined;
       }
     },
-    refetchInterval: 30000,
+    refetchInterval: 120_000,
   });
 
   const createRequest = useMutation({

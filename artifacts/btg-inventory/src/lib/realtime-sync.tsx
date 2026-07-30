@@ -2,11 +2,14 @@ import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   collection,
+  limit as fsLimit,
   onSnapshot,
+  orderBy,
   query,
   where,
   type DocumentData,
   type Query,
+  type QueryConstraint,
 } from "firebase/firestore";
 
 import { useAppUser } from "./auth";
@@ -26,6 +29,13 @@ type RealtimeTarget = {
   collectionName: string;
   customerField?: "customer_code" | "cod_cliente";
   userField?: "user_id";
+  /**
+   * Sinal de mudança: assina só o documento alterado mais recentemente em vez
+   * da coleção inteira. O snapshot inicial passa a custar 1 leitura no lugar
+   * de N, e qualquer escrita nova (todas carimbam updated_at) chega ao topo e
+   * dispara a invalidação.
+   */
+  changeSignalOnly?: boolean;
 };
 
 const CUSTOMER_REALTIME_TARGETS: readonly RealtimeTarget[] = [
@@ -60,6 +70,31 @@ const INTERNAL_HOT_COLLECTIONS = [
   "documents",
   "ops_aggregates",
 ] as const;
+
+/**
+ * firestore.rules restringe as coleções operacionais a canReadOperations()
+ * (owner/admin/interno/wms/suporte). Assinar o que o papel não pode ler só
+ * gera erro de permissão no console e nenhum evento.
+ */
+const OPERATIONS_ONLY_COLLECTIONS = new Set<string>([
+  "customer_requests",
+  "inbound_receipts",
+  "putaway_tasks",
+  "pick_tasks",
+  "pack_tasks",
+  "shipments",
+  "quality_exceptions",
+  "returns",
+]);
+
+function internalHotCollectionsForRole(role: string) {
+  if (role === "financeiro") {
+    return INTERNAL_HOT_COLLECTIONS.filter(
+      (collectionName) => !OPERATIONS_ONLY_COLLECTIONS.has(collectionName),
+    );
+  }
+  return [...INTERNAL_HOT_COLLECTIONS];
+}
 
 const INTERNAL_USER_SCOPED_TARGETS: readonly RealtimeTarget[] = [
   { collectionName: "agent_conversations", userField: "user_id" },
@@ -130,7 +165,9 @@ const COLLECTION_QUERY_KEYS: Record<string, readonly (readonly string[])[]> = {
   ai_agent_knowledge_chunks: [["agent-knowledge-documents"]],
   ai_agent_knowledge_files: [["agent-knowledge-files"], ["ai-overview"]],
   documents: [["operational-documents"], ["ai-overview"]],
-  ops_aggregates: [["/api/dashboard"], ["ai-overview"]],
+  // Só o dashboard (leitura de 1 doc). Ligar ai-overview aqui fazia cada
+  // movimentação de estoque disparar um refetch de ~5 mil documentos.
+  ops_aggregates: [["/api/dashboard"]],
   client_inventory: [["client-portal-overview"], ["client-portal-wms"]],
   client_order_tracking: [["client-portal-overview"], ["client-portal-wms"]],
   client_request_status: [["client-portal-overview"]],
@@ -170,13 +207,19 @@ function buildRealtimeQuery(
   if (!firestore) return null;
 
   const ref = collection(firestore, target.collectionName);
-  const filters = [];
+  const filters: QueryConstraint[] = [];
 
   if (target.customerField) {
     filters.push(where(target.customerField, "==", customerCode));
   }
   if (target.userField) {
     filters.push(where(target.userField, "==", userId));
+  }
+
+  // Sem filtros, orderBy de campo único usa o índice automático — não exige
+  // índice composto declarado.
+  if (target.changeSignalOnly && !filters.length) {
+    return query(ref, orderBy("updated_at", "desc"), fsLimit(1));
   }
 
   return filters.length ? query(ref, ...filters) : ref;
@@ -222,8 +265,9 @@ export function RealtimeSyncBridge() {
     const targets = customer
       ? uniqueTargets(CUSTOMER_REALTIME_TARGETS)
       : uniqueTargets([
-          ...INTERNAL_HOT_COLLECTIONS.map((collectionName) => ({
+          ...internalHotCollectionsForRole(role).map((collectionName) => ({
             collectionName,
+            changeSignalOnly: true,
           })),
           ...INTERNAL_USER_SCOPED_TARGETS,
           ...(isAccessAdmin(role) ? ACCESS_ADMIN_COLLECTIONS : []).map(

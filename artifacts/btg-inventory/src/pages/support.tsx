@@ -194,28 +194,28 @@ export default function Support() {
   const health = useQuery({
     queryKey: ["support-health"],
     queryFn: () => fetchJson<{ ok?: boolean }>("/api/healthz"),
-    refetchInterval: 30000,
+    refetchInterval: 120_000,
   });
   const ai = useQuery({
     queryKey: ["support-ai-overview"],
     queryFn: () => fetchJson<AiOverview>("/api/ai/overview"),
-    refetchInterval: 30000,
+    refetchInterval: 120_000,
   });
   const wms = useQuery({
     queryKey: ["support-warehouse-ops"],
     queryFn: () => fetchJson<AnyRecord>("/api/warehouse/ops"),
-    refetchInterval: 30000,
+    refetchInterval: 120_000,
   });
   const requests = useQuery({
     queryKey: ["support-customer-requests"],
     queryFn: () =>
       fetchJson<ListResponse<AnyRecord>>("/api/customer-requests?limit=100"),
-    refetchInterval: 30000,
+    refetchInterval: 120_000,
   });
   const customers = useQuery({
     queryKey: ["support-customers"],
     queryFn: () => fetchJson<ListResponse<AnyRecord>>("/api/customers?limit=100"),
-    refetchInterval: 60000,
+    refetchInterval: 120_000,
   });
 
   const derived = useMemo(() => {

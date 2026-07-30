@@ -219,6 +219,8 @@ type StockTablePaginationProps = {
   onPrevious: () => void;
   onNext: () => void;
   label: string;
+  /** Preferir o has_more do servidor: `count` já vem pós-filtro em memória. */
+  hasMore?: boolean;
 };
 
 export function StockTablePagination({
@@ -230,7 +232,9 @@ export function StockTablePagination({
   onPrevious,
   onNext,
   label,
+  hasMore,
 }: StockTablePaginationProps) {
+  const canGoNext = hasMore ?? count >= limit;
   return (
     <div className="flex flex-col gap-3 border-t border-border/80 bg-white/55 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
       <p className="text-sm text-muted-foreground">
@@ -250,7 +254,7 @@ export function StockTablePagination({
           variant="outline"
           size="sm"
           onClick={onNext}
-          disabled={count < limit || isLoading}
+          disabled={!canGoNext || isLoading}
         >
           Próximo
         </Button>

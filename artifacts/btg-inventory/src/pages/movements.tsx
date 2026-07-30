@@ -91,11 +91,17 @@ export default function Movements() {
     setCursors([]);
   }, [typeFilter]);
 
+  // `search` faz match parcial na página; `cod_sku` é filtro de igualdade no
+  // servidor. Mandar a caixa de busca como cod_sku transformava qualquer
+  // digitação parcial em zero resultados.
+  // `search` faz busca por prefixo de cod_sku no servidor (readPaged).
+  // O offset segue junto do cursor apenas como base da estimativa de total.
   const listParams = {
-    cod_sku: debouncedSearch || undefined,
+    search: debouncedSearch || undefined,
     tipo_mov: typeFilter === "todos" ? undefined : typeFilter,
     limit,
     offset: page * limit,
+    ...(page > 0 && cursors[page - 1] ? { cursor: cursors[page - 1] } : {}),
   };
 
   const { data, isLoading } = useListMovements(listParams, {
@@ -325,6 +331,7 @@ export default function Movements() {
             count={data?.items?.length || 0}
             total={total}
             limit={limit}
+            hasMore={hasMore}
             label="movimentações"
             onPrevious={() => setPage((p) => Math.max(0, p - 1))}
             onNext={() => {
@@ -388,7 +395,16 @@ function MovementModal() {
       { data: payload },
       {
         onSuccess: () => {
-          queryClient.invalidateQueries();
+          // Escopado ao que uma movimentação realmente altera: invalidar tudo
+          // dispara refetch de todas as telas em cache de uma vez.
+          for (const key of [
+            ["/api/movements"],
+            ["/api/dashboard"],
+            ["stock-balances"],
+            ["/api/skus"],
+          ]) {
+            queryClient.invalidateQueries({ queryKey: key });
+          }
           toast({ title: "Movimentação registrada com sucesso" });
           setOpen(false);
           reset();

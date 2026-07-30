@@ -5979,6 +5979,9 @@ export const saveBillingManual = onCall(async (request) => {
           }),
           created_by: profile.uid,
           created_at: FieldValue.serverTimestamp(),
+          // updated_at é obrigatório: o sinal de realtime ordena por ele e
+          // documentos sem o campo ficam invisíveis para a assinatura.
+          updated_at: FieldValue.serverTimestamp(),
         });
       } else {
         const period = periodSnapshot.data() ?? {};
