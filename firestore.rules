@@ -567,8 +567,7 @@ service cloud.firestore {
         && request.resource.data.role == get(inviteDoc(request.resource.data.invite_id)).data.role
         && validProfileRole(request.resource.data.role)
         && invitedCustomerScopeIsValid(request.resource.data.invite_id);
-      allow update: if canManageAccess() && safeUserRoleUpdate();
-      allow delete: if isOwner() && request.auth.uid != userId;
+      allow update, delete: if false;
     }
 
     match /invites/{inviteId} {
@@ -578,14 +577,13 @@ service cloud.firestore {
           && resource.data.email == request.auth.token.email
         );
       allow list: if canManageAccess();
-      allow create: if canManageAccess() && safeInviteCreateFields();
-      allow update: if safeInviteAdminUpdate() || safeInviteAcceptUpdate();
-      allow delete: if canManageAccess();
+      allow create, delete: if false;
+      allow update: if safeInviteAcceptUpdate();
     }
 
     match /billing_periods/{periodId} {
       allow read: if canReadBilling();
-      allow create, update, delete: if canWriteBilling();
+      allow create, update, delete: if false;
     }
 
     match /client_invoices/{invoiceId} {
@@ -595,17 +593,22 @@ service cloud.firestore {
 
     match /billing_price_list/{priceId} {
       allow read: if canReadBilling();
-      allow create, update, delete: if canWriteBilling();
+      allow create, update, delete: if false;
     }
 
     match /billing_manual/{manualId} {
       allow read: if canReadBilling();
-      allow create, update, delete: if canWriteBilling();
+      allow create, update, delete: if false;
+    }
+
+    match /billing_operational_snapshots/{snapshotId} {
+      allow read: if canReadBilling();
+      allow create, update, delete: if false;
     }
 
     match /billing_config/{configId} {
       allow read: if canReadBilling();
-      allow create, update, delete: if canWriteBilling();
+      allow create, update, delete: if false;
     }
 
     match /events/{eventId} {
@@ -620,8 +623,17 @@ service cloud.firestore {
           && resource.data.keys().hasAll(['entity_type'])
           && resource.data.entity_type in ['fatura', 'billing', 'invoice']
         );
-      allow create, delete: if isPrivileged();
-      allow update: if canCoordinateOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /operational_notifications/{notificationId} {
+      allow read: if canReadObservability()
+        || (
+          isOwnProjection()
+          && resource.data.keys().hasAll(['status'])
+          && resource.data.status in ['approved', 'sent']
+        );
+      allow create, update, delete: if false;
     }
 
     match /ai_agent_memory/{memoryId} {
@@ -664,26 +676,22 @@ service cloud.firestore {
 
     match /products/{productId} {
       allow read: if canReadOperations();
-      allow create, update: if canCoordinateOperations();
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /skus/{skuId} {
       allow read: if canReadOperations();
-      allow create, update: if canCoordinateOperations();
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /customers/{customerId} {
       allow read: if canReadOperations();
-      allow create, update: if canCoordinateOperations();
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /customer_accounts/{accountId} {
       allow read: if canReadOperations();
-      allow create, update: if canCoordinateOperations();
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /customer_requests/{requestId} {
@@ -726,16 +734,14 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /ops_aggregates/{aggregateId} {
+      allow read: if canReadOperations() || isFinance() || isCustomer();
+      allow create, update, delete: if false;
+    }
+
     match /locations/{locationId} {
       allow read: if canReadOperations();
-      allow create: if isPrivileged() || (isWms() && doesNotPublishOnCreate());
-      allow update: if isPrivileged()
-        || (
-          isWms()
-          && preservesCustomerCode()
-          && publicationFieldsUntouched()
-        );
-      allow delete: if isPrivileged();
+      allow create, update, delete: if false;
     }
 
     match /stock_reservations/{reservationId} {
@@ -814,6 +820,16 @@ service cloud.firestore {
     }
 
     match /cycle_counts/{countId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /opening_inventory_sessions/{sessionId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /opening_inventory_lines/{lineId} {
       allow read: if canReadOperations();
       allow create, update, delete: if false;
     }

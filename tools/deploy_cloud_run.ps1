@@ -12,8 +12,14 @@ $Root = Split-Path $PSScriptRoot -Parent
 $PublicDir = Join-Path $Root "artifacts\btg-inventory\dist\public"
 $StageDir = Join-Path $Root "tmp\cloud-run-src"
 
-if (-not (Test-Path $PublicDir)) {
-  throw "Build nao encontrado em $PublicDir. Rode pnpm --filter @workspace/btg-inventory run build."
+if (-not $SkipBuild) {
+  Write-Host "Gerando build do frontend..."
+  & pnpm --filter "@workspace/btg-inventory" run build
+  if ($LASTEXITCODE -ne 0) {
+    throw "Falha ao gerar build do frontend."
+  }
+} elseif (-not (Test-Path $PublicDir)) {
+  throw "Build nao encontrado em $PublicDir. Rode sem -SkipBuild ou gere pnpm --filter @workspace/btg-inventory run build."
 }
 
 $Stamp = Get-Date -Format "yyyyMMddHHmmss"
@@ -72,9 +78,7 @@ Copy-Item -LiteralPath (Join-Path $Root "Dockerfile") -Destination (Join-Path $S
 Copy-Item -LiteralPath (Join-Path $Root "deploy\cloud-run\nginx.conf") -Destination (Join-Path $StageDir "deploy\cloud-run\nginx.conf") -Force
 Copy-Item -LiteralPath $PublicDir -Destination (Join-Path $StageDir "artifacts\btg-inventory\dist\public") -Recurse -Force
 
-if (-not $SkipBuild) {
-  Invoke-Gcloud builds submit $StageDir --tag $Image --project $ProjectId
-}
+Invoke-Gcloud builds submit $StageDir --tag $Image --project $ProjectId
 
 Invoke-Gcloud run deploy $Service `
   --image $Image `

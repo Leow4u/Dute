@@ -34,6 +34,14 @@ service firebase.storage {
       allow read, write: if isInternal();
     }
 
+    match /operational-documents/{allPaths=**} {
+      allow read, write: if isInternal();
+    }
+
+    match /product-photos/{allPaths=**} {
+      allow read, write: if isInternal();
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }
