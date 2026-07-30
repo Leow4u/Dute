@@ -3525,6 +3525,16 @@ async function route(
         if (value) items = items.filter((row) => includes(row[field], value));
       }
 
+      // "Excluir" arquiva o registro (mutateManagedEntity action=archive);
+      // sem esconder aqui, o item continua aparecendo na lista para sempre.
+      // Filtro em memória de propósito: um where() excluiria também os
+      // documentos legados que não têm o campo.
+      if (searchParams.get("include_archived") !== "true") {
+        items = items.filter(
+          (row) => row.archived !== true && row.status !== "archived",
+        );
+      }
+
       return json({
         items,
         total: result.total,
