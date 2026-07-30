@@ -29,6 +29,12 @@ SKU_CLIENT_ITEM_OVERRIDES = {
     "BTG-1033": "A.01.0802.004.P",
     "BTG-1034": "A.01.0802.004.M",
 }
+BALANCE_SOURCE = os.environ.get("BTG_BALANCE_SOURCE", "movements").strip().lower()
+CLIENT_SCOPED_SKUS = {
+    sku.strip()
+    for sku in os.environ.get("BTG_CLIENT_SCOPED_SKUS", "BTG-1043").split(",")
+    if sku.strip()
+}
 HTTP_TIMEOUT_SECONDS = 60
 ROOT = Path(__file__).resolve().parents[1]
 REAL_INVENTORY_XLSX = Path(
@@ -141,11 +147,17 @@ def stable_id(prefix: str, *parts: Any) -> str:
     return f"{prefix}_{readable}_{digest}"
 
 
-def client_inventory_id(customer_code: str, sku_code: Any) -> str:
+def client_inventory_id(
+    customer_code: str,
+    sku_code: Any,
+    client_item_code: Any = None,
+) -> str:
+    sku = key_text(sku_code)
+    scope = f"__{key_text(client_item_code)}" if sku in CLIENT_SCOPED_SKUS else ""
     return re.sub(
         r"[^A-Za-z0-9_.-]",
         "_",
-        f"cinv_{customer_code}__{key_text(sku_code)}",
+        f"cinv_{customer_code}__{sku}{scope}",
     )[:900]
 
 
@@ -154,6 +166,11 @@ def location_id_from_sku(sku: dict[str, Any]) -> str:
     prateleira = sku.get("prateleira") or "Sem prateleira"
     caixa = sku.get("caixa") or sku.get("endereco") or "Sem caixa"
     return f"loc_{slug(rua)}_{slug(prateleira)}_{slug(caixa)}"
+
+
+def location_id_from_movement(movement: dict[str, Any]) -> str:
+    box = movement.get("caixa_origem") or movement.get("origem") or "Sem caixa"
+    return f"loc_mov_{slug(movement.get('cod_sku'))}_{slug(box)}"
 
 
 def row_dict(headers: list[str], row: tuple[Any, ...]) -> dict[str, Any]:
@@ -265,11 +282,78 @@ def load_inventory_physical(
                 }
             )
 
+        sku_rows_by_code_for_movements: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for sku in skus:
+            sku_rows_by_code_for_movements[key_text(sku.get("cod_btg"))].append(sku)
+        movement_box_counters: Counter[tuple[str, str]] = Counter()
+
         movements: list[dict[str, Any]] = []
         for row in sheet_rows(wb["Movimentações"], 5, include_source_row=True):
             cod_sku = key_text(row.get("CÓD. SKU"))
             if not cod_sku:
                 continue
+            candidates = sku_rows_by_code_for_movements.get(cod_sku, [])
+            box = key_text(row.get("CAIXA ORIGEM"))
+            normalized_box = box.lower()
+            exact_candidates = [
+                sku
+                for sku in candidates
+                if normalized_box
+                and normalized_box
+                in {
+                    key_text(sku.get("caixa")).lower(),
+                    key_text(sku.get("endereco")).lower(),
+                }
+            ]
+            match_pool = exact_candidates or candidates
+            chosen_sku: dict[str, Any] | None = None
+            mapping_status = "missing_sku"
+            if len(match_pool) == 1:
+                chosen_sku = match_pool[0]
+                mapping_status = (
+                    "matched_by_box" if exact_candidates else "matched_by_sku"
+                )
+            elif match_pool:
+                client_codes = {
+                    key_text(sku.get("cod_cliente"))
+                    for sku in match_pool
+                    if sku.get("cod_cliente")
+                }
+                if len(client_codes) == 1:
+                    counter_key = (cod_sku, normalized_box or "__sem_caixa__")
+                    chosen_sku = sorted(
+                        match_pool,
+                        key=lambda sku: (
+                            key_text(sku.get("endereco")),
+                            integer(sku.get("source_row")),
+                        ),
+                    )[movement_box_counters[counter_key] % len(match_pool)]
+                    movement_box_counters[counter_key] += 1
+                    mapping_status = "distributed_same_client"
+                elif cod_sku in CLIENT_SCOPED_SKUS and exact_candidates:
+                    chosen_sku = sorted(
+                        exact_candidates,
+                        key=lambda sku: integer(sku.get("source_row")),
+                    )[0]
+                    mapping_status = "matched_by_box_client_scoped"
+                else:
+                    mapping_status = "ambiguous_sku"
+
+            client_item_code = (
+                key_text(chosen_sku.get("cod_cliente")) if chosen_sku else None
+            )
+            use_reconciled_location = (
+                mapping_status == "distributed_same_client"
+                and not exact_candidates
+                and bool(box)
+            )
+            location_id = (
+                location_id_from_movement(
+                    {"cod_sku": cod_sku, "caixa_origem": box, "origem": row.get("ORIGEM")}
+                )
+                if use_reconciled_location or not chosen_sku
+                else location_id_from_sku(chosen_sku)
+            )
             movements.append(
                 {
                     "source_row": row["__source_row"],
@@ -279,6 +363,15 @@ def load_inventory_physical(
                     "cod_sku": cod_sku,
                     "sku_code": cod_sku,
                     "produto": row.get("PRODUTO"),
+                    "client_item_code": client_item_code,
+                    "cod_cliente": client_item_code,
+                    "location_id": location_id,
+                    "movement_mapping_status": mapping_status,
+                    "movement_mapping_source_row": (
+                        integer(chosen_sku.get("source_row")) if chosen_sku else None
+                    ),
+                    "categoria": chosen_sku.get("categoria") if chosen_sku else None,
+                    "unit_cost": number(chosen_sku.get("unit_cost")) if chosen_sku else 0,
                     "qtde": integer(row.get("QTDE")),
                     "sinal": integer(row.get("SINAL (±)")),
                     "estoque_tipo": row.get("ESTOQUE"),
@@ -444,49 +537,74 @@ def build_inventory_documents(
 
     skus: list[dict[str, Any]] = []
     for cod_btg, rows in sku_rows_by_code.items():
-        first = rows[0]
         client_codes = sorted(
             {key_text(row.get("cod_cliente")) for row in rows if row.get("cod_cliente")}
         )
-        client_code = client_codes[0] if len(client_codes) == 1 else None
-        product = product_by_code.get(client_code or "", {})
-        quantity = sum(integer(row.get("estoque_atual")) for row in rows)
-        total_cost = sum(number(row.get("total_cost")) for row in rows)
-        unit_cost = number(first.get("unit_cost"), number(product.get("preco_unit")))
-        locations = sorted({location_id_from_sku(row) for row in rows})
-        skus.append(
-            _managed(
-                {
-                    "id": stable_id("sku", DEFAULT_CUSTOMER, cod_btg),
-                    "customer_code": DEFAULT_CUSTOMER,
-                    "sku_code": cod_btg,
-                    "cod_btg": cod_btg,
-                    "estoque_tipo": first.get("estoque_tipo"),
-                    "client_item_code": client_code,
-                    "client_item_codes": client_codes,
-                    "cod_cliente": client_code,
-                    "genero": first.get("genero"),
-                    "categoria": first.get("categoria"),
-                    "produto": first.get("produto"),
-                    "cor": first.get("cor"),
-                    "tamanho": first.get("tamanho"),
-                    "estoque_atual": quantity,
-                    "estado": first.get("estado"),
-                    "rua": first.get("rua"),
-                    "prateleira": first.get("prateleira"),
-                    "caixa": first.get("caixa"),
-                    "endereco": first.get("endereco"),
-                    "location_ids": locations,
-                    "location_count": len(locations),
-                    "physical_row_count": len(rows),
-                    "source_rows": sorted(integer(row["source_row"]) for row in rows),
-                    "preco_unit": unit_cost,
-                    "unit_cost": unit_cost,
-                    "total_cost": total_cost,
-                    "source": "Inventário_BTG_Consolidado.xlsx :: SKUs",
-                }
+        grouped_rows: dict[str | None, list[dict[str, Any]]] = {}
+        if len(client_codes) > 1:
+            grouped_rows = {
+                client_code: [
+                    row
+                    for row in rows
+                    if key_text(row.get("cod_cliente")) == client_code
+                ]
+                for client_code in client_codes
+            }
+        else:
+            grouped_rows = {client_codes[0] if client_codes else None: rows}
+        for client_code, group_rows in grouped_rows.items():
+            first = group_rows[0]
+            product = product_by_code.get(client_code or "", {})
+            quantity = sum(integer(row.get("estoque_atual")) for row in group_rows)
+            total_cost = sum(number(row.get("total_cost")) for row in group_rows)
+            unit_cost = number(first.get("unit_cost"), number(product.get("preco_unit")))
+            locations = sorted({location_id_from_sku(row) for row in group_rows})
+            is_client_scoped = len(client_codes) > 1
+            skus.append(
+                _managed(
+                    {
+                        "id": stable_id(
+                            "sku",
+                            DEFAULT_CUSTOMER,
+                            cod_btg,
+                            client_code if is_client_scoped else "",
+                        ),
+                        "customer_code": DEFAULT_CUSTOMER,
+                        "sku_code": cod_btg,
+                        "cod_btg": cod_btg,
+                        "estoque_tipo": first.get("estoque_tipo"),
+                        "client_item_code": client_code,
+                        "client_item_codes": (
+                            [client_code] if client_code else client_codes
+                        ),
+                        "cod_cliente": client_code,
+                        "genero": first.get("genero"),
+                        "categoria": first.get("categoria"),
+                        "produto": first.get("produto"),
+                        "cor": first.get("cor"),
+                        "tamanho": first.get("tamanho"),
+                        "estoque_atual": quantity,
+                        "estado": first.get("estado"),
+                        "rua": first.get("rua"),
+                        "prateleira": first.get("prateleira"),
+                        "caixa": first.get("caixa"),
+                        "endereco": first.get("endereco"),
+                        "location_ids": locations,
+                        "location_count": len(locations),
+                        "physical_row_count": len(group_rows),
+                        "source_rows": sorted(
+                            integer(row["source_row"]) for row in group_rows
+                        ),
+                        "preco_unit": unit_cost,
+                        "unit_cost": unit_cost,
+                        "total_cost": total_cost,
+                        "identity_scope": (
+                            "client_item_code" if is_client_scoped else "sku_code"
+                        ),
+                        "source": "Inventário_BTG_Consolidado.xlsx :: SKUs",
+                    }
+                )
             )
-        )
 
     locations_by_id: dict[str, dict[str, Any]] = {}
     location_skus: dict[str, set[str]] = defaultdict(set)
@@ -522,6 +640,63 @@ def build_inventory_documents(
             )
         ].append(sku)
 
+    movement_balance_rows: dict[tuple[str, str, str], dict[str, Any]] = {}
+    if BALANCE_SOURCE == "movements":
+        sku_metadata: dict[tuple[str, str], dict[str, Any]] = {}
+        for sku in physical["skus"]:
+            sku_metadata.setdefault(
+                (key_text(sku.get("cod_btg")), key_text(sku.get("cod_cliente"))),
+                sku,
+            )
+        for movement in physical["movements"]:
+            quantity_delta = integer(movement.get("sinal"))
+            if quantity_delta == 0:
+                continue
+            cod_btg = key_text(movement.get("cod_sku"))
+            cod_cliente = key_text(movement.get("cod_cliente"))
+            location_id = key_text(movement.get("location_id")) or location_id_from_movement(movement)
+            metadata = sku_metadata.get((cod_btg, cod_cliente), {})
+            bucket = movement_balance_rows.setdefault(
+                (cod_btg, cod_cliente, location_id),
+                {
+                    "sku_code": cod_btg,
+                    "client_item_code": cod_cliente or None,
+                    "product_name": movement.get("produto")
+                    or metadata.get("produto")
+                    or cod_btg,
+                    "category": movement.get("categoria") or metadata.get("categoria"),
+                    "condition": metadata.get("estado"),
+                    "location_id": location_id,
+                    "unit_cost": number(movement.get("unit_cost"), number(metadata.get("unit_cost"))),
+                    "qty_on_hand": 0,
+                    "source_rows": [],
+                    "movement_mapping_statuses": set(),
+                },
+            )
+            bucket["qty_on_hand"] += quantity_delta
+            bucket["source_rows"].append(integer(movement.get("source_row")))
+            bucket["movement_mapping_statuses"].add(
+                key_text(movement.get("movement_mapping_status")) or "unknown"
+            )
+
+            if location_id not in locations_by_id:
+                box = movement.get("caixa_origem") or location_id.replace("loc_mov_", "")
+                locations_by_id[location_id] = {
+                    "id": location_id,
+                    "customer_code": DEFAULT_CUSTOMER,
+                    "warehouse_code": WAREHOUSE_CODE,
+                    "aisle": "Reconciliação",
+                    "shelf": "Movimentações",
+                    "bin": box,
+                    "label": f"Movimentações · {box}",
+                    "qty_on_hand": 0,
+                    "status": "active",
+                    "source": "Inventário_BTG_Consolidado.xlsx :: Movimentações",
+                }
+            locations_by_id[location_id]["qty_on_hand"] += quantity_delta
+            location_skus[location_id].add(cod_btg)
+            location_rows[location_id].append(integer(movement.get("source_row")))
+
     locations: list[dict[str, Any]] = []
     for location_id, location in locations_by_id.items():
         locations.append(
@@ -536,72 +711,173 @@ def build_inventory_documents(
         )
 
     stock_balances: list[dict[str, Any]] = []
-    for (cod_btg, cod_cliente, location_id), rows in balance_rows.items():
-        first = rows[0]
-        quantity = sum(integer(row.get("estoque_atual")) for row in rows)
-        reserved = sum(integer(row.get("estoque_reservado")) for row in rows)
-        total_cost = sum(number(row.get("total_cost")) for row in rows)
-        unit_cost = number(first.get("unit_cost"))
-        stock_balances.append(
-            _managed(
-                {
-                    "id": stable_id(
-                        "balance",
-                        DEFAULT_CUSTOMER,
-                        cod_btg,
-                        cod_cliente,
-                        location_id,
-                    ),
-                    "customer_code": DEFAULT_CUSTOMER,
-                    "warehouse_code": WAREHOUSE_CODE,
-                    "sku_code": cod_btg,
-                    "client_item_code": cod_cliente or None,
-                    "product_name": first.get("produto"),
-                    "category": first.get("categoria"),
-                    "condition": first.get("estado"),
-                    "location_id": location_id,
-                    "location_label": locations_by_id[location_id]["label"],
-                    "qty_on_hand": quantity,
-                    "qty_reserved": reserved,
-                    "qty_available": max(0, quantity - reserved),
-                    "unit_cost": unit_cost,
-                    "total_cost": total_cost,
-                    "source": "Inventário_BTG_Consolidado.xlsx :: SKUs",
-                    "status": "available" if quantity > 0 else "empty",
-                    "physical_row_count": len(rows),
-                    "source_rows": sorted(integer(row["source_row"]) for row in rows),
-                }
+    if BALANCE_SOURCE == "movements":
+        for (cod_btg, cod_cliente, location_id), bucket in movement_balance_rows.items():
+            quantity = integer(bucket.get("qty_on_hand"))
+            unit_cost = number(bucket.get("unit_cost"))
+            stock_balances.append(
+                _managed(
+                    {
+                        "id": stable_id(
+                            "balance",
+                            DEFAULT_CUSTOMER,
+                            cod_btg,
+                            cod_cliente,
+                            location_id,
+                        ),
+                        "customer_code": DEFAULT_CUSTOMER,
+                        "warehouse_code": WAREHOUSE_CODE,
+                        "sku_code": cod_btg,
+                        "client_item_code": cod_cliente or None,
+                        "product_name": bucket.get("product_name"),
+                        "category": bucket.get("category"),
+                        "condition": bucket.get("condition"),
+                        "location_id": location_id,
+                        "location_label": locations_by_id[location_id]["label"],
+                        "qty_on_hand": quantity,
+                        "qty_reserved": 0,
+                        "qty_available": quantity,
+                        "unit_cost": unit_cost,
+                        "total_cost": quantity * unit_cost,
+                        "source": "Inventário_BTG_Consolidado.xlsx :: Movimentações",
+                        "balance_source": "movements",
+                        "status": "available" if quantity > 0 else "empty",
+                        "physical_row_count": len(bucket.get("source_rows", [])),
+                        "source_rows": sorted(bucket.get("source_rows", [])),
+                        "movement_mapping_statuses": sorted(
+                            bucket.get("movement_mapping_statuses", set())
+                        ),
+                    }
+                )
             )
-        )
+    else:
+        for (cod_btg, cod_cliente, location_id), rows in balance_rows.items():
+            first = rows[0]
+            quantity = sum(integer(row.get("estoque_atual")) for row in rows)
+            reserved = sum(integer(row.get("estoque_reservado")) for row in rows)
+            total_cost = sum(number(row.get("total_cost")) for row in rows)
+            unit_cost = number(first.get("unit_cost"))
+            stock_balances.append(
+                _managed(
+                    {
+                        "id": stable_id(
+                            "balance",
+                            DEFAULT_CUSTOMER,
+                            cod_btg,
+                            cod_cliente,
+                            location_id,
+                        ),
+                        "customer_code": DEFAULT_CUSTOMER,
+                        "warehouse_code": WAREHOUSE_CODE,
+                        "sku_code": cod_btg,
+                        "client_item_code": cod_cliente or None,
+                        "product_name": first.get("produto"),
+                        "category": first.get("categoria"),
+                        "condition": first.get("estado"),
+                        "location_id": location_id,
+                        "location_label": locations_by_id[location_id]["label"],
+                        "qty_on_hand": quantity,
+                        "qty_reserved": reserved,
+                        "qty_available": max(0, quantity - reserved),
+                        "unit_cost": unit_cost,
+                        "total_cost": total_cost,
+                        "source": "Inventário_BTG_Consolidado.xlsx :: SKUs",
+                        "balance_source": "skus",
+                        "status": "available" if quantity > 0 else "empty",
+                        "physical_row_count": len(rows),
+                        "source_rows": sorted(integer(row["source_row"]) for row in rows),
+                    }
+                )
+            )
 
     client_inventory: list[dict[str, Any]] = []
-    for sku in skus:
-        quantity = integer(sku.get("estoque_atual"))
-        unit_cost = number(sku.get("unit_cost"), number(sku.get("preco_unit")))
-        client_inventory.append(
-            _managed(
-                {
-                    "id": client_inventory_id(
-                        DEFAULT_CUSTOMER,
-                        sku.get("sku_code"),
-                    ),
-                    "customer_code": DEFAULT_CUSTOMER,
-                    "sku_code": sku.get("sku_code"),
-                    "client_item_code": sku.get("client_item_code"),
-                    "product_name": sku.get("produto") or sku.get("sku_code"),
-                    "category": sku.get("categoria") or "Sem categoria",
-                    "condition": sku.get("estado"),
-                    "qty_on_hand": quantity,
-                    "qty_reserved": 0,
-                    "qty_available": quantity,
-                    "unit_cost": unit_cost,
-                    "total_cost": quantity * unit_cost,
-                    "status": "active" if quantity > 0 else "empty",
-                    "source": "Inventário_BTG_Consolidado.xlsx :: SKUs",
-                    "published_at": datetime.now(timezone.utc).isoformat(),
-                }
+    if BALANCE_SOURCE == "movements":
+        projection_by_sku: dict[tuple[str, str], dict[str, Any]] = {}
+        for balance in stock_balances:
+            sku_code = key_text(balance.get("sku_code"))
+            client_code = key_text(balance.get("client_item_code"))
+            key = (
+                sku_code,
+                client_code if sku_code in CLIENT_SCOPED_SKUS else "",
             )
-        )
+            current = projection_by_sku.setdefault(
+                key,
+                {
+                    "sku_code": sku_code,
+                    "client_item_code": client_code or None,
+                    "product_name": balance.get("product_name") or sku_code,
+                    "category": balance.get("category") or "Sem categoria",
+                    "condition": balance.get("condition"),
+                    "qty_on_hand": 0,
+                    "qty_reserved": 0,
+                    "unit_cost": number(balance.get("unit_cost")),
+                    "source_rows": [],
+                },
+            )
+            current["qty_on_hand"] += integer(balance.get("qty_on_hand"))
+            current["qty_reserved"] += integer(balance.get("qty_reserved"))
+            current["source_rows"].extend(balance.get("source_rows", []))
+        for projection in projection_by_sku.values():
+            quantity = integer(projection.get("qty_on_hand"))
+            reserved = integer(projection.get("qty_reserved"))
+            unit_cost = number(projection.get("unit_cost"))
+            client_inventory.append(
+                _managed(
+                    {
+                        "id": client_inventory_id(
+                            DEFAULT_CUSTOMER,
+                            projection.get("sku_code"),
+                            projection.get("client_item_code"),
+                        ),
+                        "customer_code": DEFAULT_CUSTOMER,
+                        "sku_code": projection.get("sku_code"),
+                        "client_item_code": projection.get("client_item_code"),
+                        "product_name": projection.get("product_name"),
+                        "category": projection.get("category"),
+                        "condition": projection.get("condition"),
+                        "qty_on_hand": quantity,
+                        "qty_reserved": reserved,
+                        "qty_available": quantity - reserved,
+                        "unit_cost": unit_cost,
+                        "total_cost": quantity * unit_cost,
+                        "status": "active" if quantity > 0 else "empty",
+                        "source": "Inventário_BTG_Consolidado.xlsx :: Movimentações",
+                        "balance_source": "movements",
+                        "source_rows": sorted(set(projection.get("source_rows", []))),
+                        "published_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+            )
+    else:
+        for sku in skus:
+            quantity = integer(sku.get("estoque_atual"))
+            unit_cost = number(sku.get("unit_cost"), number(sku.get("preco_unit")))
+            client_inventory.append(
+                _managed(
+                    {
+                        "id": client_inventory_id(
+                            DEFAULT_CUSTOMER,
+                            sku.get("sku_code"),
+                            sku.get("client_item_code"),
+                        ),
+                        "customer_code": DEFAULT_CUSTOMER,
+                        "sku_code": sku.get("sku_code"),
+                        "client_item_code": sku.get("client_item_code"),
+                        "product_name": sku.get("produto") or sku.get("sku_code"),
+                        "category": sku.get("categoria") or "Sem categoria",
+                        "condition": sku.get("estado"),
+                        "qty_on_hand": quantity,
+                        "qty_reserved": 0,
+                        "qty_available": quantity,
+                        "unit_cost": unit_cost,
+                        "total_cost": quantity * unit_cost,
+                        "status": "active" if quantity > 0 else "empty",
+                        "source": "Inventário_BTG_Consolidado.xlsx :: SKUs",
+                        "balance_source": "skus",
+                        "published_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+            )
 
     orders_by_number: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for order in physical["orders"]:
@@ -1121,6 +1397,10 @@ def build_stale_inventory_deletes(
         for collection in exact_collections
     }
     deletes: list[dict[str, Any]] = []
+    desired_historical = {
+        collection: {key_text(row["id"]) for row in inventory[collection]}
+        for collection in ("movements", "orders")
+    }
     for collection in (*exact_collections, "movements", "orders"):
         for document in backup.get("collections", {}).get(collection, []):
             name = key_text(document.get("name"))
@@ -1130,9 +1410,19 @@ def build_stale_inventory_deletes(
             if collection in exact_collections:
                 stale = document_id not in desired[collection]
             else:
-                # Importações legadas usavam IDs numéricos. Movimentos/pedidos
-                # operacionais novos (mov_*/ord_*) são preservados.
-                stale = document_id.isdigit()
+                fields = document.get("fields", {})
+                managed_by = ""
+                if isinstance(fields, dict):
+                    managed_by = key_text(
+                        fields.get("managed_by", {}).get("stringValue")
+                    )
+                # Documentos operacionais criados pelo sistema não pertencem ao
+                # importador. Já histórico importado antigo deve acompanhar o
+                # conjunto desejado para não duplicar o ledger.
+                stale = document_id.isdigit() or (
+                    managed_by == MANAGED_BY
+                    and document_id not in desired_historical[collection]
+                )
             if not stale:
                 continue
             write: dict[str, Any] = {"delete": name}
@@ -1291,6 +1581,7 @@ def main(argv: list[str] | None = None) -> int:
         "database": args.database,
         "as_of": args.as_of.isoformat(),
         "customer_code": DEFAULT_CUSTOMER,
+        "balance_source": BALANCE_SOURCE,
         "physical_rows": {
             collection: len(rows) for collection, rows in physical.items()
         },
@@ -1304,6 +1595,14 @@ def main(argv: list[str] | None = None) -> int:
             "ignored_future_periods": billing["ignored_future_periods"],
         },
         "mapping": source_mapping_summary(physical),
+        "projected_balances": {
+            "stock_balances_qty_on_hand": sum(
+                integer(row.get("qty_on_hand")) for row in inventory["stock_balances"]
+            ),
+            "client_inventory_qty_on_hand": sum(
+                integer(row.get("qty_on_hand")) for row in inventory["client_inventory"]
+            ),
+        },
         "planned_writes": len(writes),
         "confirmation_required": expected_confirmation,
         "backup": None,

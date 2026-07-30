@@ -187,6 +187,7 @@ def reconcile(
     *,
     customer_code: str = importer.DEFAULT_CUSTOMER,
     include_details: bool = True,
+    balance_source: str = importer.BALANCE_SOURCE,
 ) -> dict[str, Any]:
     logical = importer.build_inventory_documents(physical)
     anomalies: list[dict[str, Any]] = []
@@ -230,16 +231,22 @@ def reconcile(
         }
         sku_to_clients[sku_code] = client_codes
         if len(client_codes) > 1:
+            allowed_client_scoped = sku_code in importer.CLIENT_SCOPED_SKUS
             anomalies.append(
                 _anomaly(
-                    "critical",
+                    "warning" if allowed_client_scoped else "critical",
                     "sku_maps_to_multiple_products",
-                    "O mesmo código BTG aponta para mais de um código de produto.",
+                    (
+                        "SKU mantido com escopo por código do cliente; permitido pela política operacional."
+                        if allowed_client_scoped
+                        else "O mesmo código BTG aponta para mais de um código de produto."
+                    ),
                     sku_code=sku_code,
                     client_item_codes=sorted(client_codes),
                     source_rows=sorted(
                         importer.integer(row["source_row"]) for row in rows
                     ),
+                    accepted_as_client_scoped=allowed_client_scoped,
                 )
             )
         names = _distinct(rows, "produto")
@@ -291,7 +298,9 @@ def reconcile(
                     signed_balance=sum(importer.integer(row.get("sinal")) for row in rows),
                 )
             )
-        elif len(sku_to_clients[sku_code]) > 1:
+        elif len(sku_to_clients[sku_code]) > 1 and not all(
+            importer.key_text(row.get("cod_cliente")) for row in rows
+        ):
             anomalies.append(
                 _anomaly(
                     "critical",
@@ -322,7 +331,12 @@ def reconcile(
     unallocated_movement_balance = 0
     for row in physical["movements"]:
         sku_code = importer.key_text(row.get("cod_sku"))
-        client_codes = sku_to_clients.get(sku_code, set())
+        resolved_client_code = importer.key_text(row.get("cod_cliente"))
+        client_codes = (
+            {resolved_client_code}
+            if resolved_client_code
+            else sku_to_clients.get(sku_code, set())
+        )
         signed = importer.integer(row.get("sinal"))
         if len(client_codes) == 1:
             movement_balance_by_client[next(iter(client_codes))] += signed
@@ -481,7 +495,10 @@ def reconcile(
             ),
         }
         details.append(detail)
-        if catalog_balance != sku_balance or movement_balance != sku_balance:
+        if (
+            balance_source != "movements"
+            and (catalog_balance != sku_balance or movement_balance != sku_balance)
+        ):
             anomalies.append(
                 _anomaly(
                     "warning",
@@ -493,14 +510,24 @@ def reconcile(
                     movement_balance=movement_balance,
                 )
             )
-        if firestore_balance is not None and firestore_balance != sku_balance:
+        if (
+            firestore_balance is not None
+            and firestore_balance != (
+                movement_balance if balance_source == "movements" else sku_balance
+            )
+        ):
             anomalies.append(
                 _anomaly(
                     "warning",
                     "firestore_balance_mismatch",
-                    "Saldo Firestore diverge do saldo físico da aba SKUs.",
+                    (
+                        "Saldo Firestore diverge do saldo canônico por movimentações."
+                        if balance_source == "movements"
+                        else "Saldo Firestore diverge do saldo físico da aba SKUs."
+                    ),
                     client_item_code=client_code,
                     sku_balance=sku_balance,
+                    movement_balance=movement_balance,
                     firestore_balance=firestore_balance,
                 )
             )
@@ -512,6 +539,7 @@ def reconcile(
     report: dict[str, Any] = {
         "mode": "dry-run",
         "customer_code": customer_code,
+        "balance_source": balance_source,
         "firestore_compared": firestore_available,
         "sources": {
             "catalog_physical_rows": len(physical["products"]),
@@ -565,7 +593,41 @@ def reconcile(
     }
     if include_details:
         report["products"] = details
+    report["ops_aggregates_dashboard"] = build_ops_dashboard_aggregate(
+        physical=physical,
+        firestore=firestore,
+    )
     return report
+
+
+def build_ops_dashboard_aggregate(
+    *,
+    physical: dict[str, list[dict[str, Any]]],
+    firestore: dict[str, list[dict[str, Any]]] | None,
+) -> dict[str, Any]:
+    """Baseline for ops_aggregates/dashboard used by the client dashboard/overview."""
+    skus = (firestore or {}).get("skus") or physical.get("skus") or []
+    products = (firestore or {}).get("products") or physical.get("products") or []
+    total_pecas = sum(importer.integer(row.get("estoque_atual"), row.get("qty_on_hand")) for row in skus)
+    custo_total = sum(
+        float(row.get("custo_total") or 0)
+        for row in products
+    )
+    categories: Counter[str] = Counter()
+    for row in products:
+        categories[str(row.get("categoria") or "Sem categoria")] += 1
+    return {
+        "id": "dashboard",
+        "total_produtos": len(products),
+        "total_skus": len(skus),
+        "total_pecas": total_pecas,
+        "custo_total": custo_total,
+        "by_category": [
+            {"categoria": name, "count": count}
+            for name, count in sorted(categories.items())
+        ],
+        "order_status_counts": [],
+    }
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -579,6 +641,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--project-id", default=importer.PROJECT_ID)
     parser.add_argument("--database", default=importer.DATABASE)
     parser.add_argument("--customer-code", default=importer.DEFAULT_CUSTOMER)
+    parser.add_argument(
+        "--balance-source",
+        choices=("movements", "skus"),
+        default=importer.BALANCE_SOURCE,
+        help="fonte canonica para validar divergencias de saldo",
+    )
     firestore_source = parser.add_mutually_exclusive_group()
     firestore_source.add_argument(
         "--firestore-json",
@@ -653,6 +721,7 @@ def main(argv: list[str] | None = None) -> int:
         firestore,
         customer_code=args.customer_code,
         include_details=not args.summary_only,
+        balance_source=args.balance_source,
     )
     report["project_id"] = args.project_id
     report["database"] = args.database
@@ -710,6 +779,22 @@ def main(argv: list[str] | None = None) -> int:
             database=args.database,
             access_token=access_token,
         )
+        dashboard = report.get("ops_aggregates_dashboard") or {}
+        if dashboard:
+            dashboard_write = importer.upsert(
+                "ops_aggregates",
+                "dashboard",
+                {k: v for k, v in dashboard.items() if v is not None},
+                project_id=args.project_id,
+                database=args.database,
+            )
+            importer.batch_write(
+                [dashboard_write],
+                project_id=args.project_id,
+                database=args.database,
+                access_token=access_token,
+            )
+            guarded_writes.append(dashboard_write)
         report["mode"] = "apply"
         report["apply"] = {
             "requested": True,
@@ -717,6 +802,7 @@ def main(argv: list[str] | None = None) -> int:
             "backup": str(backup),
             "writes_applied": len(guarded_writes),
             "stale_documents_deleted": len(stale_deletes),
+            "ops_aggregates_dashboard_written": bool(dashboard),
         }
 
     print(json.dumps(report, ensure_ascii=False, indent=2))
