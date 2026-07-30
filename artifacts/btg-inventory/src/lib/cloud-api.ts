@@ -2,20 +2,26 @@ import {
   collection,
   deleteDoc,
   doc,
+  getCountFromServer,
   getDoc,
   getDocs,
   increment,
+  limit as fsLimit,
+  orderBy,
   query,
   runTransaction,
   serverTimestamp,
   setDoc,
+  startAfter,
   updateDoc,
   where,
   writeBatch,
+  type DocumentSnapshot,
+  type QueryConstraint,
 } from "firebase/firestore";
 
 import { firebaseAuth, firestore } from "./firebase";
-import { callFunctionsApi, shouldUseFunctionsApi } from "./functions-api";
+import { callFunctionsApi } from "./functions-api";
 import {
   DEFAULT_CUSTOMER,
   buildDerivedCustomerAccounts,
@@ -57,6 +63,8 @@ const collectionNames = {
   clientDocuments: "client_documents",
   inboundReceipts: "inbound_receipts",
   inboundItems: "inbound_items",
+  returns: "returns",
+  returnItems: "return_items",
   putawayTasks: "putaway_tasks",
   qualityExceptions: "quality_exceptions",
   orderItems: "order_items",
@@ -74,9 +82,11 @@ const collectionNames = {
   priceList: "billing_price_list",
   periods: "billing_periods",
   manual: "billing_manual",
+  billingOperationalSnapshots: "billing_operational_snapshots",
   users: "users",
   events: "events",
   agentInbox: "ai_agent_inbox",
+  operationalNotifications: "operational_notifications",
   agentMemory: "ai_agent_memory",
   agentKnowledge: "ai_agent_knowledge",
   agentKnowledgeChunks: "ai_agent_knowledge_chunks",
@@ -84,7 +94,16 @@ const collectionNames = {
   agentKnowledgeFileChunks: "ai_agent_knowledge_file_chunks",
   agentConversations: "agent_conversations",
   agentMessages: "agent_messages",
+  opsAggregates: "ops_aggregates",
 };
+
+const DEFAULT_LIST_LIMIT = 50;
+const HARD_LIST_CAP = 200;
+const CATALOG_READ_CAP = 2000;
+const OPS_TASK_READ_CAP = 500;
+const RECENT_MOVEMENTS_CAP = 300;
+const RECENT_EVENTS_CAP = 80;
+const EXPORT_HARD_CAP = 5000;
 
 type EventSeverity = "info" | "attention" | "critical";
 type EventInput = {
@@ -155,7 +174,9 @@ function toIso(value: unknown): string {
     "seconds" in value &&
     typeof (value as { seconds: number }).seconds === "number"
   ) {
-    return new Date((value as { seconds: number }).seconds * 1000).toISOString();
+    return new Date(
+      (value as { seconds: number }).seconds * 1000,
+    ).toISOString();
   }
   return "";
 }
@@ -207,7 +228,11 @@ function optionalString(value: unknown) {
 function normalizeRequestItems(data: AnyRecord, fallbackDescription = "") {
   const rawItems = Array.isArray(data.items) ? data.items : [];
   const fallbackQuantity = positiveNumber(
-    data.quantity ?? data.qty ?? data.qtd_solic ?? data.expected_qty ?? data.total_units,
+    data.quantity ??
+      data.qty ??
+      data.qtd_solic ??
+      data.expected_qty ??
+      data.total_units,
   );
   const fallbackItems =
     rawItems.length || (!fallbackQuantity && !data.sku_code && !data.cod_sku)
@@ -224,7 +249,9 @@ function normalizeRequestItems(data: AnyRecord, fallbackDescription = "") {
           item.qty_expected ??
           fallbackQuantity,
       );
-      const skuCode = optionalString(item.sku_code ?? item.cod_sku ?? item.cod_btg);
+      const skuCode = optionalString(
+        item.sku_code ?? item.cod_sku ?? item.cod_btg,
+      );
       const clientItemCode = optionalString(
         item.client_item_code ?? item.cod_cliente ?? item.product_code,
       );
@@ -236,9 +263,13 @@ function normalizeRequestItems(data: AnyRecord, fallbackDescription = "") {
         sku_code: skuCode,
         client_item_code: clientItemCode,
         product_name: productName,
-        location_id: optionalString(item.location_id ?? item.location ?? item.endereco),
+        location_id: optionalString(
+          item.location_id ?? item.location ?? item.endereco,
+        ),
         condition: optionalString(item.condition ?? item.estado),
-        unit_cost: Number(item.unit_cost ?? item.preco_unit ?? item.custo_unit ?? 0),
+        unit_cost: Number(
+          item.unit_cost ?? item.preco_unit ?? item.custo_unit ?? 0,
+        ),
         quantity,
         notes: optionalString(item.notes ?? item.observacao),
       };
@@ -258,7 +289,9 @@ function requestItemSummary(items: AnyRecord[], fallback: string) {
       `${Number(item.quantity ?? 0) || "-"}x ${item.product_name || item.sku_code || "item"}`.trim(),
     )
     .join(", ");
-  return items.length > 3 ? `${summary} +${items.length - 3} item(ns)` : summary;
+  return items.length > 3
+    ? `${summary} +${items.length - 3} item(ns)`
+    : summary;
 }
 
 function findBalanceForRequestItem(
@@ -270,12 +303,15 @@ function findBalanceForRequestItem(
     const sameCustomer =
       String(balance.customer_code ?? DEFAULT_CUSTOMER.code) === customerCode;
     const sameSku =
-      item.sku_code && String(balance.sku_code ?? balance.cod_sku ?? "") === item.sku_code;
+      item.sku_code &&
+      String(balance.sku_code ?? balance.cod_sku ?? "") === item.sku_code;
     const sameClientItem =
       item.client_item_code &&
-      String(balance.client_item_code ?? balance.cod_cliente ?? "") === item.client_item_code;
+      String(balance.client_item_code ?? balance.cod_cliente ?? "") ===
+        item.client_item_code;
     const sameLocation =
-      !item.location_id || String(balance.location_id ?? "") === item.location_id;
+      !item.location_id ||
+      String(balance.location_id ?? "") === item.location_id;
     return sameCustomer && sameLocation && (sameSku || sameClientItem);
   });
 }
@@ -283,7 +319,13 @@ function findBalanceForRequestItem(
 function stockBalanceKey(row: AnyRecord) {
   return [
     String(row.customer_code ?? row.cod_cliente ?? DEFAULT_CUSTOMER.code),
-    String(row.sku_code ?? row.cod_sku ?? row.cod_btg ?? row.client_item_code ?? "sku"),
+    String(
+      row.sku_code ??
+        row.cod_sku ??
+        row.cod_btg ??
+        row.client_item_code ??
+        "sku",
+    ),
     String(row.location_id ?? row.location ?? "RECEBIMENTO"),
   ]
     .map(safeDocId)
@@ -421,13 +463,19 @@ function entityMetaForWrite(
     entity_type: entityType,
     entity_id: id,
     customer_code: String(
-      data.customer_code ?? before?.customer_code ?? data.cod_cliente ?? before?.cod_cliente ?? "",
+      data.customer_code ??
+        before?.customer_code ??
+        data.cod_cliente ??
+        before?.cod_cliente ??
+        "",
     ).trim(),
     payload: compactPayload({
       before_status: before?.status,
       after_status: data.status,
       changed_fields:
-        action === "updated" ? Object.keys(data).filter((key) => key !== "updated_at") : undefined,
+        action === "updated"
+          ? Object.keys(data).filter((key) => key !== "updated_at")
+          : undefined,
     }),
   };
 
@@ -440,7 +488,9 @@ function entityMetaForWrite(
           : action === "deleted"
             ? "Produto removido"
             : "Produto atualizado",
-      description: String(data.produto ?? before?.produto ?? data.cod_cliente ?? id),
+      description: String(
+        data.produto ?? before?.produto ?? data.cod_cliente ?? id,
+      ),
     };
   }
 
@@ -453,16 +503,20 @@ function entityMetaForWrite(
           : action === "deleted"
             ? "SKU removido"
             : "SKU atualizado",
-      description: `${data.cod_btg ?? before?.cod_btg ?? id} - ${data.produto ?? before?.produto ?? ""}`.trim(),
+      description:
+        `${data.cod_btg ?? before?.cod_btg ?? id} - ${data.produto ?? before?.produto ?? ""}`.trim(),
     };
   }
 
   if (name === collectionNames.orders) {
-    const statusChanged = before?.status && data.status && before.status !== data.status;
+    const statusChanged =
+      before?.status && data.status && before.status !== data.status;
     const status = String(data.status ?? before?.status ?? "").toUpperCase();
     return {
       ...common,
-      title: statusChanged ? "Status de pedido atualizado" : "Pedido atualizado",
+      title: statusChanged
+        ? "Status de pedido atualizado"
+        : "Pedido atualizado",
       description: `${data.num_pedido ?? before?.num_pedido ?? id}${status ? ` - ${status}` : ""}`,
       severity: OPEN_ORDER_STATUSES.has(status) ? "attention" : "info",
       payload: compactPayload({
@@ -490,7 +544,10 @@ function entityMetaForWrite(
   if (name === collectionNames.users) {
     return {
       ...common,
-      title: action === "updated" ? "Perfil de acesso atualizado" : "Usuário atualizado",
+      title:
+        action === "updated"
+          ? "Perfil de acesso atualizado"
+          : "Usuário atualizado",
       description: String(data.email ?? before?.email ?? id),
       severity: "attention",
       payload: compactPayload({
@@ -513,7 +570,11 @@ function agentInsightForEvent(event: AnyRecord) {
   if (severity === "info" && !type.startsWith("order.")) return null;
 
   const priority =
-    severity === "critical" ? "critical" : severity === "attention" ? "high" : "normal";
+    severity === "critical"
+      ? "critical"
+      : severity === "attention"
+        ? "high"
+        : "normal";
 
   return {
     id: `insight_${event.id}`,
@@ -586,9 +647,7 @@ async function updateAgentMemory(event: AnyRecord) {
 async function emitEvent(input: EventInput) {
   if (!firestore) return null;
 
-  const id = input.dedupe_key
-    ? safeDocId(input.dedupe_key)
-    : newDocId("evt");
+  const id = input.dedupe_key ? safeDocId(input.dedupe_key) : newDocId("evt");
   const event = {
     id,
     type: input.type,
@@ -612,9 +671,13 @@ async function emitEvent(input: EventInput) {
 
   const insight = agentInsightForEvent(event);
   if (insight) {
-    await setDoc(doc(firestore, collectionNames.agentInbox, insight.id), insight, {
-      merge: true,
-    }).catch(() => undefined);
+    await setDoc(
+      doc(firestore, collectionNames.agentInbox, insight.id),
+      insight,
+      {
+        merge: true,
+      },
+    ).catch(() => undefined);
   }
   await updateAgentMemory(event).catch(() => undefined);
   return event;
@@ -624,6 +687,226 @@ async function readAll(name: string): Promise<AnyRecord[]> {
   if (!firestore) return [];
   const snapshot = await getDocs(collection(firestore, name));
   return snapshot.docs.map(normalizeDoc);
+}
+
+/** Capped collection read — never downloads unbounded history. */
+async function readLimited(
+  name: string,
+  maxDocs: number,
+  orderField?: string,
+  direction: "asc" | "desc" = "desc",
+): Promise<AnyRecord[]> {
+  if (!firestore) return [];
+  const constraints: QueryConstraint[] = [];
+  if (orderField) constraints.push(orderBy(orderField, direction));
+  constraints.push(fsLimit(Math.max(1, Math.min(maxDocs, 5000))));
+  const snapshot = await getDocs(query(collection(firestore, name), ...constraints));
+  return snapshot.docs.map(normalizeDoc);
+}
+
+async function readCollectionCount(name: string): Promise<number> {
+  if (!firestore) return 0;
+  try {
+    const snapshot = await getCountFromServer(collection(firestore, name));
+    return snapshot.data().count;
+  } catch {
+    return 0;
+  }
+}
+
+async function readOpsAggregate(id: string): Promise<AnyRecord | null> {
+  if (!firestore) return null;
+  try {
+    const snapshot = await getDoc(doc(firestore, collectionNames.opsAggregates, id));
+    if (!snapshot.exists()) return null;
+    return normalizeDoc(snapshot);
+  } catch {
+    return null;
+  }
+}
+
+type ReadPagedOptions = {
+  orderByField: string;
+  direction?: "asc" | "desc";
+  equalityFilters?: Array<{ field: string; value: string }>;
+  /** Soft search fields applied in memory after the Firestore page (narrow pages only). */
+  searchFields?: string[];
+  params: URLSearchParams;
+  /** Max page size when client omits limit. */
+  defaultLimit?: number;
+  hardCap?: number;
+};
+
+function encodeCursor(snapshot: DocumentSnapshot): string {
+  return btoa(
+    JSON.stringify({
+      id: snapshot.id,
+      values: snapshot.data() ?? {},
+    }),
+  );
+}
+
+function decodeCursorOrderValue(
+  cursor: string,
+  orderByField: string,
+): { orderValue: unknown; id: string } | null {
+  try {
+    const parsed = JSON.parse(atob(cursor)) as {
+      id?: string;
+      values?: AnyRecord;
+    };
+    if (!parsed?.id) return null;
+    return {
+      id: parsed.id,
+      orderValue: parsed.values?.[orderByField],
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Pushes limit/orderBy/equality filters into Firestore. Text search and
+ * date range still apply in memory on the fetched page only (not the whole
+ * collection). Returns has_more / next_cursor for cursor pagination.
+ */
+async function readPaged(
+  name: string,
+  options: ReadPagedOptions,
+): Promise<{
+  items: AnyRecord[];
+  total: number;
+  has_more: boolean;
+  next_cursor?: string;
+}> {
+  if (!firestore) {
+    return { items: [], total: 0, has_more: false };
+  }
+
+  const hardCap = options.hardCap ?? HARD_LIST_CAP;
+  const requestedLimit = Number(
+    options.params.get("limit") ?? options.defaultLimit ?? DEFAULT_LIST_LIMIT,
+  );
+  const pageSize = Math.max(
+    1,
+    Math.min(
+      Number.isFinite(requestedLimit) && requestedLimit > 0
+        ? requestedLimit
+        : DEFAULT_LIST_LIMIT,
+      hardCap,
+    ),
+  );
+  const offset = Math.max(0, Number(options.params.get("offset") ?? 0) || 0);
+  const cursorParam = options.params.get("cursor");
+  const direction = options.direction ?? "desc";
+
+  const constraints: QueryConstraint[] = [];
+  for (const filter of options.equalityFilters ?? []) {
+    if (filter.value) {
+      constraints.push(where(filter.field, "==", filter.value));
+    }
+  }
+  constraints.push(orderBy(options.orderByField, direction));
+
+  // Offset best-effort for shallow pages only (avoids full-collection scan).
+  const fetchCount =
+    !cursorParam && offset > 0
+      ? Math.min(offset + pageSize + 1, hardCap + 1)
+      : pageSize + 1;
+
+  if (cursorParam) {
+    const decoded = decodeCursorOrderValue(cursorParam, options.orderByField);
+    if (decoded?.orderValue != null) {
+      constraints.push(startAfter(decoded.orderValue));
+    }
+  }
+
+  constraints.push(fsLimit(fetchCount));
+
+  let snapshot;
+  try {
+    snapshot = await getDocs(
+      query(collection(firestore, name), ...constraints),
+    );
+  } catch (error) {
+    console.warn(
+      `[readPaged] query failed for ${name}, falling back to capped scan.`,
+      error,
+    );
+    const rows = await readLimited(name, hardCap, options.orderByField, direction);
+    return filterAndPageExtended(rows, options.params, pageSize, offset);
+  }
+
+  let docs = snapshot.docs;
+  if (!cursorParam && offset > 0) {
+    docs = docs.slice(offset);
+  }
+
+  const hasMore = docs.length > pageSize;
+  const pageDocs = hasMore ? docs.slice(0, pageSize) : docs;
+  let items = pageDocs.map(normalizeDoc);
+
+  const search = options.params.get("search");
+  if (search && options.searchFields?.length) {
+    items = items.filter((row) =>
+      options.searchFields!.some((field) => includes(row[field], search)),
+    );
+  }
+
+  const from = options.params.get("date_from");
+  const to = options.params.get("date_to");
+  if (from) {
+    items = items.filter((row) => toIso(row.data ?? row.data_solic) >= from);
+  }
+  if (to) {
+    items = items.filter((row) => toIso(row.data ?? row.data_solic) <= to);
+  }
+
+  const lastDoc = pageDocs[pageDocs.length - 1];
+  const nextCursor = hasMore && lastDoc ? encodeCursor(lastDoc) : undefined;
+
+  // total: exact count only for small equality-filtered sets; else estimate.
+  let total = offset + items.length + (hasMore ? 1 : 0);
+  try {
+    if ((options.equalityFilters ?? []).length > 0 && offset === 0 && !cursorParam) {
+      const countConstraints: QueryConstraint[] = (
+        options.equalityFilters ?? []
+      ).map((filter) => where(filter.field, "==", filter.value));
+      const countSnap = await getCountFromServer(
+        query(collection(firestore, name), ...countConstraints),
+      );
+      total = countSnap.data().count;
+    }
+  } catch {
+    // keep estimate
+  }
+
+  return {
+    items,
+    total,
+    has_more: hasMore,
+    next_cursor: nextCursor,
+  };
+}
+
+function filterAndPageExtended(
+  rows: AnyRecord[],
+  params: URLSearchParams,
+  pageSize: number,
+  offset: number,
+): {
+  items: AnyRecord[];
+  total: number;
+  has_more: boolean;
+  next_cursor?: string;
+} {
+  const paged = filterAndPage(rows, params, [], []);
+  const sliced = paged.items.slice(0, pageSize);
+  return {
+    items: sliced,
+    total: paged.total,
+    has_more: offset + sliced.length < paged.total,
+  };
 }
 
 async function readWhereEqual(
@@ -636,6 +919,19 @@ async function readWhereEqual(
     query(collection(firestore, name), where(field, "==", value)),
   );
   return snapshot.docs.map(normalizeDoc);
+}
+
+async function readOptionalWhereEqual(
+  name: string,
+  field: string,
+  value: string | number | boolean,
+): Promise<AnyRecord[]> {
+  try {
+    return await readWhereEqual(name, field, value);
+  } catch (error) {
+    console.warn(`[portal] ${name} não pôde ser carregado.`, error);
+    return [];
+  }
 }
 
 async function findDocRef(name: string, id: string | number) {
@@ -654,7 +950,9 @@ async function findDocRef(name: string, id: string | number) {
 }
 
 function includes(value: unknown, needle: string): boolean {
-  return String(value ?? "").toLowerCase().includes(needle.toLowerCase());
+  return String(value ?? "")
+    .toLowerCase()
+    .includes(needle.toLowerCase());
 }
 
 function filterAndPage(
@@ -679,8 +977,10 @@ function filterAndPage(
 
   const from = params.get("date_from");
   const to = params.get("date_to");
-  if (from) result = result.filter((row) => toIso(row.data ?? row.data_solic) >= from);
-  if (to) result = result.filter((row) => toIso(row.data ?? row.data_solic) <= to);
+  if (from)
+    result = result.filter((row) => toIso(row.data ?? row.data_solic) >= from);
+  if (to)
+    result = result.filter((row) => toIso(row.data ?? row.data_solic) <= to);
 
   const total = result.length;
   const offset = Number(params.get("offset") ?? 0);
@@ -722,7 +1022,9 @@ async function createItem(
 async function updateItem(name: string, id: string | number, data: AnyRecord) {
   const ref = await findDocRef(name, id);
   const beforeSnapshot = await getDoc(ref);
-  const before = beforeSnapshot.exists() ? (beforeSnapshot.data() as AnyRecord) : {};
+  const before = beforeSnapshot.exists()
+    ? (beforeSnapshot.data() as AnyRecord)
+    : {};
   await updateDoc(ref, { ...data, updated_at: serverTimestamp() });
   const snapshot = await getDoc(ref);
   const updated = normalizeDoc(snapshot);
@@ -747,7 +1049,9 @@ async function updateItem(name: string, id: string | number, data: AnyRecord) {
 async function deleteItem(name: string, id: string | number) {
   const ref = await findDocRef(name, id);
   const beforeSnapshot = await getDoc(ref);
-  const before = beforeSnapshot.exists() ? normalizeDoc(beforeSnapshot) : { id };
+  const before = beforeSnapshot.exists()
+    ? normalizeDoc(beforeSnapshot)
+    : { id };
   await deleteDoc(ref);
   const meta = entityMetaForWrite(name, "deleted", before, id, before);
   await emitEvent({
@@ -777,12 +1081,18 @@ async function findSkuByCode(codSku: string) {
   if (direct.exists()) return direct;
 
   const byBtg = await getDocs(
-    query(collection(firestore, collectionNames.skus), where("cod_btg", "==", codSku)),
+    query(
+      collection(firestore, collectionNames.skus),
+      where("cod_btg", "==", codSku),
+    ),
   );
   if (!byBtg.empty) return byBtg.docs[0];
 
   const byId = await getDocs(
-    query(collection(firestore, collectionNames.skus), where("id", "==", Number(codSku))),
+    query(
+      collection(firestore, collectionNames.skus),
+      where("id", "==", Number(codSku)),
+    ),
   );
   if (!byId.empty) return byId.docs[0];
 
@@ -801,7 +1111,10 @@ async function syncProductAggregate(
   if (!codCliente) return;
 
   const skuSnapshot = await getDocs(
-    query(collection(firestore, collectionNames.skus), where("cod_cliente", "==", codCliente)),
+    query(
+      collection(firestore, collectionNames.skus),
+      where("cod_cliente", "==", codCliente),
+    ),
   );
 
   let estoqueBtg = 0;
@@ -817,7 +1130,10 @@ async function syncProductAggregate(
   }
 
   const productSnapshot = await getDocs(
-    query(collection(firestore, collectionNames.products), where("cod_cliente", "==", codCliente)),
+    query(
+      collection(firestore, collectionNames.products),
+      where("cod_cliente", "==", codCliente),
+    ),
   );
 
   const existingProduct = productSnapshot.docs[0];
@@ -851,126 +1167,18 @@ async function syncProductAggregate(
   });
 }
 
-async function createMovement(data: AnyRecord) {
-  if (!firestore) throw new Error("Firestore não configurado.");
-
-  const codSku = String(data.cod_sku ?? "").trim();
-  if (!codSku) throw new RouteError("Informe o código do SKU.", 400);
-
-  const skuSnapshot = await findSkuByCode(codSku);
-  if (!skuSnapshot?.exists()) {
-    throw new RouteError(`SKU não encontrado: ${codSku}`, 404);
-  }
-
-  const skuData = skuSnapshot.data() as AnyRecord;
-  const quantity = Number(data.qtde ?? 0);
-  if (!Number.isFinite(quantity) || quantity <= 0) {
-    throw new RouteError("A quantidade da movimentação deve ser maior que zero.", 400);
-  }
-
-  const sign = movementSign(data.tipo_mov, data.sinal);
-  const previousStock = Number(skuData.estoque_atual ?? 0);
-  const nextStock = previousStock + sign * quantity;
-  if (nextStock < 0) {
-    throw new RouteError(
-      `Estoque insuficiente para ${codSku}. Disponível: ${previousStock}, solicitado: ${quantity}.`,
-      409,
-    );
-  }
-
-  const reserved = Number(skuData.estoque_reservado ?? 0);
-  const movementId = Date.now();
-  const now = new Date().toISOString();
-  const payload: AnyRecord = {
-    ...data,
-    id: movementId,
-    data: toIso(data.data) || now,
-    cod_sku: skuData.cod_btg ?? codSku,
-    cod_cliente: skuData.cod_cliente ?? data.cod_cliente ?? "",
-    produto: skuData.produto ?? data.produto ?? "",
-    qtde: quantity,
-    sinal: sign,
-    estoque_tipo: data.estoque_tipo ?? skuData.estoque_tipo ?? "",
-    estoque_anterior: previousStock,
-    estoque_resultante: nextStock,
-    saldo_delta: sign * quantity,
-    created_at: serverTimestamp(),
-    updated_at: serverTimestamp(),
-  };
-
-  const batch = writeBatch(firestore);
-  batch.set(doc(firestore, collectionNames.movements, String(movementId)), payload);
-  batch.update(skuSnapshot.ref, {
-    estoque_atual: nextStock,
-    estoque_disponivel: Math.max(0, nextStock - reserved),
-    ultimo_movimento_em: payload.data,
-    updated_at: serverTimestamp(),
-  });
-  const [stockBalance] = buildDerivedStockBalances([
-    {
-      ...skuData,
-      cod_btg: payload.cod_sku,
-      cod_cliente: payload.cod_cliente,
-      produto: payload.produto,
-      estoque_atual: nextStock,
-      estoque_reservado: reserved,
-    },
-  ]);
-  if (stockBalance) {
-    batch.set(
-      doc(firestore, collectionNames.stockBalances, safeDocId(String(stockBalance.id))),
-      { ...stockBalance, updated_at: serverTimestamp() },
-      { merge: true },
-    );
-  }
-  await syncProductAggregate(batch, skuData, skuSnapshot.id, nextStock);
-  await batch.commit();
-
-  const movementType = String(payload.tipo_mov ?? "").toUpperCase();
-  const eventType = movementType.includes("AJUSTE")
-    ? "inventory.adjusted"
-    : sign > 0
-      ? "inventory.received"
-      : "inventory.shipped";
-  await emitEvent({
-    type: eventType,
-    title:
-      eventType === "inventory.received"
-        ? "Produto recebido no estoque"
-        : eventType === "inventory.shipped"
-          ? "Produto saiu do estoque"
-          : "Estoque ajustado",
-    description: `${quantity.toLocaleString("pt-BR")} un. de ${payload.produto || payload.cod_sku}`,
-    severity: nextStock === 0 ? "attention" : "info",
-    entity_type: "movimentacao",
-    entity_id: movementId,
-    customer_code: String(payload.cod_cliente ?? ""),
-    payload: compactPayload({
-      cod_sku: payload.cod_sku,
-      tipo_mov: payload.tipo_mov,
-      doc_nf: payload.doc_nf,
-      origem: payload.origem,
-      destino: payload.destino,
-      previous_stock: previousStock,
-      next_stock: nextStock,
-      quantity,
-    }),
-    occurred_at: payload.data,
-  });
-
-  return {
-    ...payload,
-    created_at: undefined,
-    updated_at: undefined,
-  };
-}
-
 function categoryStats(products: AnyRecord[]) {
-  const byCategory = new Map<string, { categoria: string; total_pecas: number; custo_total: number }>();
+  const byCategory = new Map<
+    string,
+    { categoria: string; total_pecas: number; custo_total: number }
+  >();
   for (const product of products) {
     const categoria = product.categoria || "Sem categoria";
-    const current =
-      byCategory.get(categoria) ?? { categoria, total_pecas: 0, custo_total: 0 };
+    const current = byCategory.get(categoria) ?? {
+      categoria,
+      total_pecas: 0,
+      custo_total: 0,
+    };
     current.total_pecas += Number(product.estoque_btg ?? 0);
     current.custo_total += Number(product.custo_total ?? 0);
     byCategory.set(categoria, current);
@@ -979,38 +1187,44 @@ function categoryStats(products: AnyRecord[]) {
 }
 
 async function getDashboard() {
-  const [products, skus, movements, orders] = await Promise.all([
-    readAll(collectionNames.products),
-    readAll(collectionNames.skus),
-    readAll(collectionNames.movements),
-    readAll(collectionNames.orders),
-  ]);
+  const [aggregate, productCount, skuCount, orderCount, recentMovements] =
+    await Promise.all([
+      readOpsAggregate("dashboard"),
+      readCollectionCount(collectionNames.products),
+      readCollectionCount(collectionNames.skus),
+      readCollectionCount(collectionNames.orders),
+      readLimited(collectionNames.movements, 10, "data", "desc"),
+    ]);
 
-  const orderStatus = new Map<string, number>();
-  for (const order of orders) {
-    const status = order.status || "SEM_STATUS";
-    orderStatus.set(status, (orderStatus.get(status) ?? 0) + 1);
-  }
+  const totalPecas = Number(
+    aggregate?.total_pecas ?? aggregate?.totalPecas ?? 0,
+  );
+  const custoTotal = Number(
+    aggregate?.custo_total ?? aggregate?.custoTotal ?? 0,
+  );
+  const byCategory = Array.isArray(aggregate?.by_category)
+    ? aggregate.by_category
+    : [];
+  const orderStatusCounts = Array.isArray(aggregate?.order_status_counts)
+    ? aggregate.order_status_counts
+    : [];
 
   return {
-    total_produtos: products.length,
-    total_skus: skus.length,
-    total_pecas: skus.reduce((sum, sku) => sum + Number(sku.estoque_atual ?? 0), 0),
-    custo_total: products.reduce((sum, product) => sum + Number(product.custo_total ?? 0), 0),
-    ad_valorem: products.reduce((sum, product) => sum + Number(product.custo_total ?? 0), 0) * 0.005,
-    recent_movements: movements
-      .sort((a, b) => toIso(b.data).localeCompare(toIso(a.data)))
-      .slice(0, 10),
-    by_category: categoryStats(products),
-    order_status_counts: [...orderStatus.entries()].map(([status, count]) => ({
-      status,
-      count,
-    })),
+    total_produtos: Number(aggregate?.total_produtos ?? productCount),
+    total_skus: Number(aggregate?.total_skus ?? skuCount),
+    total_pecas: totalPecas,
+    custo_total: custoTotal,
+    ad_valorem: custoTotal * 0.005,
+    recent_movements: recentMovements,
+    by_category: byCategory,
+    order_status_counts: orderStatusCounts.length
+      ? orderStatusCounts
+      : [{ status: "TOTAL", count: orderCount }],
   };
 }
 
 async function getWarehouseMap() {
-  const skus = await readAll(collectionNames.skus);
+  const skus = await readLimited(collectionNames.skus, CATALOG_READ_CAP);
   const ruas = new Map<string, AnyRecord>();
 
   for (const sku of skus) {
@@ -1019,14 +1233,22 @@ async function getWarehouseMap() {
     const caixa = sku.caixa || "Sem caixa";
 
     if (!ruas.has(rua)) {
-      ruas.set(rua, { rua, total_pecas: 0, total_skus: 0, total_caixas: 0, prateleiras: [] });
+      ruas.set(rua, {
+        rua,
+        total_pecas: 0,
+        total_skus: 0,
+        total_caixas: 0,
+        prateleiras: [],
+      });
     }
 
     const ruaData = ruas.get(rua)!;
     ruaData.total_pecas += Number(sku.estoque_atual ?? 0);
     ruaData.total_skus += 1;
 
-    let shelf = ruaData.prateleiras.find((item: AnyRecord) => item.prateleira === prateleira);
+    let shelf = ruaData.prateleiras.find(
+      (item: AnyRecord) => item.prateleira === prateleira,
+    );
     if (!shelf) {
       shelf = { prateleira, caixas: [] };
       ruaData.prateleiras.push(shelf);
@@ -1050,14 +1272,26 @@ async function getCurrentProfile() {
     throw new RouteError("Faça login para continuar.", 401);
   }
 
-  const snapshot = await getDoc(doc(firestore, collectionNames.users, user.uid));
+  const snapshot = await getDoc(
+    doc(firestore, collectionNames.users, user.uid),
+  );
   if (!snapshot.exists()) {
     throw new RouteError("Usuário sem perfil ativo.", 403);
   }
 
   const profile = snapshot.data() as AnyRecord;
   const role = String(profile.role ?? "");
-  if (!["owner", "admin", "interno", "wms", "financeiro", "suporte", "cliente"].includes(role)) {
+  if (
+    ![
+      "owner",
+      "admin",
+      "interno",
+      "wms",
+      "financeiro",
+      "suporte",
+      "cliente",
+    ].includes(role)
+  ) {
     throw new RouteError("Perfil sem papel válido.", 403);
   }
 
@@ -1081,7 +1315,9 @@ function matchesCustomer(row: AnyRecord, customerCode: string) {
 function progressForOrder(order: AnyRecord) {
   const requested = Number(order.qtd_solic ?? order.requested_qty ?? 0);
   const picked = Number(order.qtd_sep ?? order.picked_qty ?? 0);
-  return requested > 0 ? Math.min(100, Math.round((picked / requested) * 100)) : 0;
+  return requested > 0
+    ? Math.min(100, Math.round((picked / requested) * 100))
+    : 0;
 }
 
 async function getClientOverview() {
@@ -1103,24 +1339,44 @@ async function getClientOverview() {
       ? [
           Promise.resolve([]),
           Promise.resolve([]),
-          readWhereEqual(collectionNames.clientInventory, "customer_code", customerCode),
-          readWhereEqual(collectionNames.clientOrderTracking, "customer_code", customerCode),
+          readWhereEqual(
+            collectionNames.clientInventory,
+            "customer_code",
+            customerCode,
+          ),
+          readOptionalWhereEqual(
+            collectionNames.clientOrderTracking,
+            "customer_code",
+            customerCode,
+          ),
           Promise.resolve([]),
-          readWhereEqual(collectionNames.clientRequestStatus, "customer_code", customerCode),
-          readWhereEqual(collectionNames.clientInvoices, "customer_code", customerCode).catch(() => []),
+          readOptionalWhereEqual(
+            collectionNames.clientRequestStatus,
+            "customer_code",
+            customerCode,
+          ),
+          readOptionalWhereEqual(
+            collectionNames.clientInvoices,
+            "customer_code",
+            customerCode,
+          ),
           Promise.resolve([]),
-          readWhereEqual(collectionNames.clientDocuments, "customer_code", customerCode).catch(() => []),
+          readOptionalWhereEqual(
+            collectionNames.clientDocuments,
+            "customer_code",
+            customerCode,
+          ),
         ]
       : [
-          readAll(collectionNames.products),
-          readAll(collectionNames.skus),
-          readAll(collectionNames.stockBalances),
-          readAll(collectionNames.orders),
+          readLimited(collectionNames.products, CATALOG_READ_CAP),
+          readLimited(collectionNames.skus, CATALOG_READ_CAP),
+          readLimited(collectionNames.stockBalances, CATALOG_READ_CAP),
+          readLimited(collectionNames.orders, OPS_TASK_READ_CAP, "data_solic", "desc"),
           Promise.resolve([]),
-          readAll(collectionNames.customerRequests),
-          readAll(collectionNames.periods),
-          readAll(collectionNames.agentInbox),
-          readAll(collectionNames.documents),
+          readLimited(collectionNames.customerRequests, OPS_TASK_READ_CAP, "created_at", "desc"),
+          readLimited(collectionNames.periods, 120, "competencia", "desc"),
+          readLimited(collectionNames.agentInbox, 100, "created_at", "desc"),
+          readLimited(collectionNames.documents, OPS_TASK_READ_CAP, "created_at", "desc"),
         ],
   )) as AnyRecord[][];
   const orders = [
@@ -1211,7 +1467,9 @@ async function getClientOverview() {
     OPEN_ORDER_STATUSES.has(String(order.status ?? "").toUpperCase()),
   );
   const currentPeriod = new Date().toISOString().slice(0, 7);
-  const currentInvoice = periods.find((period) => period.competencia === currentPeriod);
+  const currentInvoice = periods.find(
+    (period) => period.competencia === currentPeriod,
+  );
   const openInvoices = periods.filter((period) =>
     ["aberto", "emitido"].includes(String(period.status ?? "").toLowerCase()),
   );
@@ -1234,13 +1492,20 @@ async function getClientOverview() {
       qtd_sep: Number(order.qtd_sep ?? order.picked_qty ?? 0),
       progress: progressForOrder(order),
       canal: order.canal ?? order.channel ?? "",
-      requested_at: toIso(order.requested_at ?? order.data_solic ?? order.created_at),
-      data_solic: toIso(order.requested_at ?? order.data_solic ?? order.created_at),
+      requested_at: toIso(
+        order.requested_at ?? order.data_solic ?? order.created_at,
+      ),
+      data_solic: toIso(
+        order.requested_at ?? order.data_solic ?? order.created_at,
+      ),
       status_label: order.status_label,
       destination: order.destination,
       timeline: Array.isArray(order.timeline) ? order.timeline : [],
     }));
-  const recentRequests = sortByDateDesc(customerRequests, "created_at").slice(0, 8);
+  const recentRequests = sortByDateDesc(customerRequests, "created_at").slice(
+    0,
+    8,
+  );
   const invoiceItems = sortByDateDesc(periods, "competencia").slice(0, 6);
   const alertItems = sortByDateDesc(customerAlerts, "created_at").slice(0, 6);
 
@@ -1255,7 +1520,8 @@ async function getClientOverview() {
       total_skus: balances.length || skus.length,
       total_pieces: totalPieces,
       available_pieces: balances.reduce<number>(
-        (sum, item) => sum + Number(item.qty_available ?? item.qty_on_hand ?? 0),
+        (sum, item) =>
+          sum + Number(item.qty_available ?? item.qty_on_hand ?? 0),
         0,
       ),
       reserved_pieces: balances.reduce<number>(
@@ -1296,27 +1562,36 @@ async function getClientOverview() {
         (order) => String(order.status ?? "").toUpperCase() === "SEPARACAO",
       ).length,
       shipped: customerOrders.filter((order) =>
-        ["FATURADO", "ENTREGUE"].includes(String(order.status ?? "").toUpperCase()),
+        ["FATURADO", "ENTREGUE"].includes(
+          String(order.status ?? "").toUpperCase(),
+        ),
       ).length,
       recent: recentOrders,
     },
     requests: {
-      open: customerRequests.filter((request) => request.status !== "closed").length,
+      open: customerRequests.filter((request) => request.status !== "closed")
+        .length,
       pending: customerRequests.filter((request) =>
-        ["open", "pending", "submitted"].includes(String(request.status ?? "").toLowerCase()),
+        ["open", "pending", "submitted"].includes(
+          String(request.status ?? "").toLowerCase(),
+        ),
       ).length,
       recent: recentRequests,
     },
     metrics: {
       total_products:
         products.length ||
-        new Set(balances.map((item) => item.client_item_code).filter(Boolean)).size,
+        new Set(balances.map((item) => item.client_item_code).filter(Boolean))
+          .size,
       total_skus: balances.length || skus.length,
       total_pieces: totalPieces,
       inventory_value: inventoryValue,
       open_orders: openOrders.length,
-      open_requests: customerRequests.filter((request) => request.status !== "closed").length,
-      open_alerts: customerAlerts.filter((item) => item.status !== "resolved").length,
+      open_requests: customerRequests.filter(
+        (request) => request.status !== "closed",
+      ).length,
+      open_alerts: customerAlerts.filter((item) => item.status !== "resolved")
+        .length,
       documents: customerDocuments.length,
       current_invoice_total: Number(currentInvoice?.total ?? 0),
     },
@@ -1329,42 +1604,37 @@ async function getClientOverview() {
   };
 }
 
-function defaultAgentConversationId(profile: Awaited<ReturnType<typeof getCurrentProfile>>) {
+function defaultAgentConversationId(
+  profile: Awaited<ReturnType<typeof getCurrentProfile>>,
+) {
   return safeDocId(`chat_${profile.customer_code}_${profile.uid}`);
-}
-
-function localAgentDuteReply(message: string, overview: Awaited<ReturnType<typeof getClientOverview>>) {
-  const metrics = overview.metrics ?? {};
-  const openRequests = Number(metrics.open_requests ?? overview.requests?.open ?? 0);
-  const openOrders = Number(metrics.open_orders ?? overview.orders?.open ?? 0);
-  const openAlerts = Number(metrics.open_alerts ?? 0);
-  const totalPieces = Number(metrics.total_pieces ?? overview.inventory?.total_pieces ?? 0);
-  const totalSkus = Number(metrics.total_skus ?? overview.inventory?.total_skus ?? 0);
-
-  return [
-    "Estou consultando os dados reais disponíveis no Dute-BTG para este cliente.",
-    "",
-    `Resumo atual de ${overview.customer?.code ?? DEFAULT_CUSTOMER.code}:`,
-    `- ${totalSkus.toLocaleString("pt-BR")} SKU(s) com saldo registrado.`,
-    `- ${totalPieces.toLocaleString("pt-BR")} peça(s) totais no estoque consolidado.`,
-    `- ${openRequests.toLocaleString("pt-BR")} solicitação(ões) aberta(s).`,
-    `- ${openOrders.toLocaleString("pt-BR")} pedido(s) aberto(s).`,
-    `- ${openAlerts.toLocaleString("pt-BR")} alerta(s) ativo(s).`,
-    "",
-    "Ainda não vou inventar informação fora dessas fontes. Para aprofundar, me envie o SKU, pedido, fatura, documento ou solicitação específica.",
-    "",
-    `Pergunta recebida: ${message}`,
-  ].join("\n");
 }
 
 async function getAgentDuteChat(conversationId?: string) {
   const profile = await getCurrentProfile();
   const customerCode = String(profile.customer_code || DEFAULT_CUSTOMER.code);
-  const id = conversationId ? safeDocId(conversationId) : defaultAgentConversationId(profile);
-  const messages = (await readWhereEqual(collectionNames.agentMessages, "customer_code", customerCode))
-    .filter((message) => String(message.conversation_id) === id)
+  const id = conversationId
+    ? safeDocId(conversationId)
+    : defaultAgentConversationId(profile);
+  if (!firestore)
+    return {
+      conversation: { id, customer_code: customerCode, status: "active" },
+      messages: [],
+    };
+  const messageSnapshot = await getDocs(
+    query(
+      collection(firestore, collectionNames.agentMessages),
+      where("conversation_id", "==", id),
+      where("customer_code", "==", customerCode),
+      where("user_id", "==", profile.uid),
+    ),
+  );
+  const messages = messageSnapshot.docs
+    .map(normalizeDoc)
     .sort((left, right) =>
-      String(left.created_at_iso ?? "").localeCompare(String(right.created_at_iso ?? "")),
+      String(left.created_at_iso ?? "").localeCompare(
+        String(right.created_at_iso ?? ""),
+      ),
     )
     .map((message) => ({
       id: String(message.id ?? message._docId),
@@ -1382,564 +1652,6 @@ async function getAgentDuteChat(conversationId?: string) {
     },
     messages,
   };
-}
-
-async function chatWithAgentDute(data: AnyRecord) {
-  if (!firestore) throw new Error("Firestore não configurado.");
-  const profile = await getCurrentProfile();
-  const customerCode = String(profile.customer_code || DEFAULT_CUSTOMER.code);
-  const message = String(data.message ?? "").trim();
-  if (!message) throw new RouteError("Digite uma mensagem para o Agent Dute.", 400);
-
-  const conversationId = data.conversation_id
-    ? safeDocId(String(data.conversation_id))
-    : defaultAgentConversationId(profile);
-  const now = new Date().toISOString();
-  const overview = await getClientOverview();
-  const reply = localAgentDuteReply(message, overview);
-  const userMessageId = newDocId("msg_user");
-  const assistantMessageId = newDocId("msg_agent");
-  const existing = await getAgentDuteChat(conversationId);
-
-  const batch = writeBatch(firestore);
-  batch.set(
-    doc(firestore, collectionNames.agentConversations, conversationId),
-    compactPayload({
-      id: conversationId,
-      customer_code: customerCode,
-      user_id: profile.uid,
-      user_email: profile.email,
-      user_name: profile.name,
-      title: message.slice(0, 90),
-      status: "active",
-      last_message_at: now,
-      updated_at: serverTimestamp(),
-      created_at: existing.messages.length ? undefined : serverTimestamp(),
-    }),
-    { merge: true },
-  );
-  batch.set(doc(firestore, collectionNames.agentMessages, userMessageId), {
-    id: userMessageId,
-    conversation_id: conversationId,
-    customer_code: customerCode,
-    user_id: profile.uid,
-    role: "user",
-    content: message,
-    created_at_iso: now,
-    created_at: serverTimestamp(),
-    source: "portal_cliente",
-  });
-  batch.set(doc(firestore, collectionNames.agentMessages, assistantMessageId), {
-    id: assistantMessageId,
-    conversation_id: conversationId,
-    customer_code: customerCode,
-    user_id: profile.uid,
-    role: "assistant",
-    content: reply,
-    created_at_iso: now,
-    created_at: serverTimestamp(),
-    source: "local_operational_context",
-  });
-  await batch.commit();
-
-  await emitEvent({
-    type: "customer.message_sent",
-    title: "Mensagem enviada ao Agent Dute",
-    description: message.slice(0, 180),
-    severity: "info",
-    entity_type: "agent_conversation",
-    entity_id: conversationId,
-    customer_code: customerCode,
-    payload: {
-      conversation_id: conversationId,
-      user_message_id: userMessageId,
-      assistant_message_id: assistantMessageId,
-      assistant_source: "local_operational_context",
-    },
-  });
-
-  return {
-    conversation: {
-      id: conversationId,
-      customer_code: customerCode,
-      status: "active",
-      last_message_at: now,
-    },
-    messages: [
-      {
-        id: userMessageId,
-        role: "user",
-        content: message,
-        created_at: now,
-        source: "portal_cliente",
-      },
-      {
-        id: assistantMessageId,
-        role: "assistant",
-        content: reply,
-        created_at: now,
-        source: "local_operational_context",
-      },
-    ],
-  };
-}
-
-async function createCustomerRequest(data: AnyRecord) {
-  if (!firestore) throw new Error("Firestore não configurado.");
-  const profile = await getCurrentProfile();
-  const customerCode = String(profile.customer_code || DEFAULT_CUSTOMER.code);
-  const id = newDocId("creq");
-  const description = String(data.description ?? "").trim();
-  const items = normalizeRequestItems(data, description).map((item) =>
-    compactPayload(item),
-  );
-  const requestType = String(data.type ?? "solicitacao").toLowerCase();
-  const isOperationalWithdrawal =
-    requestType.includes("retirada") || requestType.includes("ajuste");
-
-  if (!description && !items.length) {
-    throw new RouteError("Descreva a solicitação ou escolha um item.", 400);
-  }
-
-  if (
-    isOperationalWithdrawal &&
-    (!items.length || items.some((item) => !item.sku_code || Number(item.quantity ?? 0) <= 0))
-  ) {
-    throw new RouteError("Escolha um SKU e uma quantidade maior que zero.", 400);
-  }
-
-  const request = compactPayload({
-    id,
-    customer_code: customerCode,
-    type: String(data.type ?? "solicitacao"),
-    priority: String(data.priority ?? "normal"),
-    title: String(data.title ?? data.type ?? "Solicitação do cliente"),
-    description,
-    destination: optionalString(data.destination ?? data.destino),
-    due_at: optionalString(data.due_at ?? data.deadline),
-    items,
-    item_count: items.length,
-    quantity_total: itemQuantityTotal(items),
-    status: "open",
-    requested_by: {
-      uid: profile.uid ?? null,
-      name: profile.name ?? "Sistema",
-      email: profile.email ?? null,
-    },
-    created_at: serverTimestamp(),
-    updated_at: serverTimestamp(),
-  });
-
-  await setDoc(doc(firestore, collectionNames.customerRequests, id), request);
-  await emitEvent({
-    type: "portal.request_created",
-    title: "Solicitação criada no portal",
-    description: request.description || requestItemSummary(items, request.title),
-    severity: request.priority === "alta" || request.priority === "urgente" ? "attention" : "info",
-    entity_type: "solicitacao_cliente",
-    entity_id: id,
-    customer_code: customerCode,
-    payload: compactPayload({
-      type: request.type,
-      priority: request.priority,
-      item_count: items.length,
-      quantity_total: request.quantity_total,
-      first_sku: items[0]?.sku_code,
-      requested_by: profile.email,
-    }),
-  });
-
-  return { ...request, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
-}
-
-async function transitionCustomerRequest(id: string, action: "approve" | "reject" | "close") {
-  if (!firestore) throw new Error("Firestore não configurado.");
-  const db = firestore;
-  const ref = doc(db, collectionNames.customerRequests, id);
-  const snapshot = await getDoc(ref);
-  if (!snapshot.exists()) throw new RouteError("Solicitação não encontrada.", 404);
-
-  const request: AnyRecord = { id, ...(snapshot.data() as AnyRecord) };
-  const customerCode = String(request.customer_code ?? DEFAULT_CUSTOMER.code);
-  const now = new Date().toISOString();
-  const nextStatus =
-    action === "approve" ? "approved" : action === "reject" ? "rejected" : "closed";
-  const requestType = String(request.type ?? "").toLowerCase();
-  const description = String(request.description ?? request.title ?? id);
-  const items = normalizeRequestItems(request, description).map((item) =>
-    compactPayload(item),
-  );
-  const quantityTotal = itemQuantityTotal(items);
-  const isOutbound = requestType.includes("retirada") || requestType.includes("ajuste");
-  const isInbound = requestType.includes("receb");
-  let balanceRows: AnyRecord[] = [];
-  const createdEntities: AnyRecord = {};
-
-  if (action === "approve" && isOutbound) {
-    if (!items.length || items.some((item) => !item.sku_code || Number(item.quantity ?? 0) <= 0)) {
-      throw new RouteError("Solicitação de retirada precisa de SKU e quantidade.", 400);
-    }
-    const savedBalances = await readWhereEqual(
-      collectionNames.stockBalances,
-      "customer_code",
-      customerCode,
-    );
-    balanceRows = savedBalances.length
-      ? savedBalances
-      : buildDerivedStockBalances(await readAll(collectionNames.skus)).filter(
-          (balance) => String(balance.customer_code ?? DEFAULT_CUSTOMER.code) === customerCode,
-        );
-  }
-
-  await runTransaction(db, async (transaction) => {
-    const currentSnapshot = await transaction.get(ref);
-    if (!currentSnapshot.exists()) {
-      throw new RouteError("Solicitação não encontrada.", 404);
-    }
-
-    const current = currentSnapshot.data() as AnyRecord;
-    const currentStatus = String(current.status ?? "open").toLowerCase();
-    if (["approved", "rejected", "closed"].includes(currentStatus) && action !== "close") {
-      throw new RouteError("Solicitação já foi decidida.", 409);
-    }
-
-    const baseId = safeDocId(id);
-    const statusPayload: AnyRecord = {
-      status: nextStatus,
-      decided_by: currentActor(),
-      decided_at: serverTimestamp(),
-      updated_at: serverTimestamp(),
-    };
-
-    if (action === "approve" && isOutbound) {
-      const orderId = `ord_${baseId}`;
-      const orderNumber = `SOL-${baseId.slice(-8).toUpperCase()}`;
-      const pickId = `pick_${safeDocId(orderId)}`;
-      const productSummary = requestItemSummary(items, description);
-      const reservationGroups = new Map<
-        string,
-        {
-          ref: ReturnType<typeof doc>;
-          balance: AnyRecord;
-          quantity: number;
-        }
-      >();
-
-      for (const item of items) {
-        const balance = findBalanceForRequestItem(balanceRows, item, customerCode);
-        if (!balance) {
-          throw new RouteError(`Saldo não encontrado para ${item.sku_code}.`, 400);
-        }
-        const balanceDocId = safeDocId(String(balance._docId ?? balance.id));
-        const currentGroup = reservationGroups.get(balanceDocId) ?? {
-          ref: doc(db, collectionNames.stockBalances, balanceDocId),
-          balance,
-          quantity: 0,
-        };
-        currentGroup.quantity += Number(item.quantity ?? 0);
-        reservationGroups.set(balanceDocId, currentGroup);
-      }
-
-      for (const [balanceDocId, group] of reservationGroups) {
-        const balanceSnapshot = await transaction.get(group.ref);
-        const balanceData = balanceSnapshot.exists()
-          ? (balanceSnapshot.data() as AnyRecord)
-          : group.balance;
-        const qtyOnHand = Number(balanceData.qty_on_hand ?? group.balance.qty_on_hand ?? 0);
-        const qtyReserved = Number(balanceData.qty_reserved ?? group.balance.qty_reserved ?? 0);
-        const qtyAvailable = Number(
-          balanceData.qty_available ?? Math.max(0, qtyOnHand - qtyReserved),
-        );
-
-        if (group.quantity > qtyAvailable) {
-          throw new RouteError(
-            `Saldo insuficiente para ${balanceData.sku_code ?? balanceDocId}. Disponível: ${qtyAvailable}.`,
-            409,
-          );
-        }
-
-        transaction.set(
-          group.ref,
-          {
-            ...compactPayload(group.balance),
-            id: group.balance.id ?? balanceDocId,
-            qty_reserved: qtyReserved + group.quantity,
-            qty_available: Math.max(0, qtyAvailable - group.quantity),
-            updated_at: serverTimestamp(),
-          },
-          { merge: true },
-        );
-      }
-
-      transaction.set(
-        doc(db, collectionNames.orders, orderId),
-        {
-          id: orderId,
-          customer_code: customerCode,
-          cod_cliente: customerCode,
-          num_pedido: orderNumber,
-          canal: "Portal do cliente",
-          produto: productSummary,
-          qtd_solic: quantityTotal,
-          qtd_sep: 0,
-          status: "PENDENTE",
-          item_count: items.length,
-          customer_request_id: id,
-          destination: request.destination ?? null,
-          data_solic: now,
-          created_at: serverTimestamp(),
-          updated_at: serverTimestamp(),
-        },
-        { merge: true },
-      );
-
-      transaction.set(
-        doc(db, collectionNames.pickTasks, pickId),
-        {
-          id: pickId,
-          customer_code: customerCode,
-          order_id: orderId,
-          order_number: orderNumber,
-          status: "planned",
-          priority: request.priority ?? "normal",
-          total_lines: items.length,
-          total_units: quantityTotal,
-          picked_units: 0,
-          source: "customer_request",
-          customer_request_id: id,
-          created_at: serverTimestamp(),
-          updated_at: serverTimestamp(),
-        },
-        { merge: true },
-      );
-
-      items.forEach((item, index) => {
-        const lineNumber = index + 1;
-        const lineId = `${safeDocId(orderId)}_${String(lineNumber).padStart(2, "0")}`;
-        const itemPayload = {
-          customer_code: customerCode,
-          order_id: orderId,
-          order_number: orderNumber,
-          line_number: lineNumber,
-          sku_code: item.sku_code,
-          client_item_code: item.client_item_code ?? null,
-          product_name: item.product_name ?? item.sku_code,
-          location_id: item.location_id ?? null,
-          requested_qty: Number(item.quantity ?? 0),
-          allocated_qty: Number(item.quantity ?? 0),
-          picked_qty: 0,
-          status: "open",
-          source: "customer_request",
-          customer_request_id: id,
-          created_at: serverTimestamp(),
-          updated_at: serverTimestamp(),
-        };
-
-        transaction.set(
-          doc(db, collectionNames.orderItems, `oit_${lineId}`),
-          { id: `oit_${lineId}`, ...itemPayload },
-          { merge: true },
-        );
-        transaction.set(
-          doc(db, collectionNames.stockReservations, `res_${lineId}`),
-          {
-            id: `res_${lineId}`,
-            ...itemPayload,
-            reserved_qty: Number(item.quantity ?? 0),
-            status: "reserved",
-          },
-          { merge: true },
-        );
-        transaction.set(
-          doc(db, collectionNames.pickLines, `pli_${lineId}`),
-          {
-            id: `pli_${lineId}`,
-            customer_code: customerCode,
-            pick_task_id: pickId,
-            order_id: orderId,
-            order_number: orderNumber,
-            line_number: lineNumber,
-            sku_code: item.sku_code,
-            client_item_code: item.client_item_code ?? null,
-            product_name: item.product_name ?? item.sku_code,
-            location_id: item.location_id ?? null,
-            qty_to_pick: Number(item.quantity ?? 0),
-            qty_picked: 0,
-            status: "open",
-            created_at: serverTimestamp(),
-            updated_at: serverTimestamp(),
-          },
-          { merge: true },
-        );
-      });
-
-      Object.assign(createdEntities, {
-        order_id: orderId,
-        order_number: orderNumber,
-        pick_task_id: pickId,
-        item_count: items.length,
-        quantity_total: quantityTotal,
-      });
-    } else if (action === "approve" && isInbound) {
-      if (!items.length) {
-        throw new RouteError("Solicitação de recebimento precisa de ao menos um item.", 400);
-      }
-      const inboundId = `inb_${baseId}`;
-      const receiptNumber = `SOL-${baseId.slice(-8).toUpperCase()}`;
-      transaction.set(
-        doc(db, collectionNames.inboundReceipts, inboundId),
-        {
-          id: inboundId,
-          customer_code: customerCode,
-          receipt_number: receiptNumber,
-          status: "created",
-          item_count: items.length,
-          qty_expected: quantityTotal,
-          qty_received: 0,
-          customer_request_id: id,
-          source: "customer_request",
-          created_at: serverTimestamp(),
-          updated_at: serverTimestamp(),
-        },
-        { merge: true },
-      );
-
-      items.forEach((item, index) => {
-        const lineNumber = index + 1;
-        const lineId = `${safeDocId(inboundId)}_${String(lineNumber).padStart(2, "0")}`;
-        transaction.set(
-          doc(db, collectionNames.inboundItems, `inbi_${lineId}`),
-          {
-            id: `inbi_${lineId}`,
-            customer_code: customerCode,
-            receipt_id: inboundId,
-            receipt_number: receiptNumber,
-            line_number: lineNumber,
-            sku_code: item.sku_code ?? null,
-            client_item_code: item.client_item_code ?? null,
-            product_name: item.product_name ?? item.sku_code ?? "Item recebido",
-            expected_qty: Number(item.quantity ?? 0),
-            received_qty: 0,
-            status: "expected",
-            source: "customer_request",
-            customer_request_id: id,
-            created_at: serverTimestamp(),
-            updated_at: serverTimestamp(),
-          },
-          { merge: true },
-        );
-      });
-
-      Object.assign(createdEntities, {
-        inbound_id: inboundId,
-        receipt_number: receiptNumber,
-        item_count: items.length,
-        quantity_total: quantityTotal,
-      });
-    }
-
-    if (Object.keys(createdEntities).length) {
-      statusPayload.created_entities = createdEntities;
-      statusPayload.item_count = items.length;
-      statusPayload.quantity_total = quantityTotal;
-    }
-
-    transaction.set(ref, statusPayload, { merge: true });
-  });
-
-  const eventType =
-    action === "approve"
-      ? "customer_request.approved"
-      : action === "reject"
-        ? "customer_request.rejected"
-        : "customer_request.closed";
-  await emitEvent({
-    type: eventType,
-    title:
-      action === "approve"
-        ? "Solicitação aprovada"
-        : action === "reject"
-          ? "Solicitação rejeitada"
-          : "Solicitação encerrada",
-    description: String(request.description ?? request.title ?? id),
-    severity: action === "approve" ? "attention" : "info",
-    entity_type: "solicitacao_cliente",
-    entity_id: id,
-    customer_code: customerCode,
-    payload: compactPayload({
-      action,
-      type: request.type,
-      priority: request.priority,
-      item_count: items.length,
-      quantity_total: quantityTotal,
-      ...createdEntities,
-    }),
-  });
-
-  if (createdEntities.order_id) {
-    await emitEvent({
-      type: "order.created",
-      title: "Pedido criado a partir do portal",
-      description: String(request.description ?? request.title ?? id),
-      severity: "attention",
-      entity_type: "pedido",
-      entity_id: createdEntities.order_id,
-      customer_code: customerCode,
-      payload: compactPayload({
-        customer_request_id: id,
-        pick_task_id: createdEntities.pick_task_id,
-        item_count: createdEntities.item_count,
-        quantity_total: createdEntities.quantity_total,
-      }),
-    });
-    await emitEvent({
-      type: "stock.reserved",
-      title: "Estoque reservado para pedido",
-      description: requestItemSummary(items, description),
-      severity: "attention",
-      entity_type: "reserva_estoque",
-      entity_id: createdEntities.order_id,
-      customer_code: customerCode,
-      payload: compactPayload({
-        customer_request_id: id,
-        order_id: createdEntities.order_id,
-        quantity_total: createdEntities.quantity_total,
-      }),
-    });
-    await emitEvent({
-      type: "picking.created",
-      title: "Picking criado a partir do portal",
-      description: requestItemSummary(items, description),
-      severity: "attention",
-      entity_type: "tarefa_picking",
-      entity_id: createdEntities.pick_task_id,
-      customer_code: customerCode,
-      payload: compactPayload({
-        customer_request_id: id,
-        order_id: createdEntities.order_id,
-        item_count: createdEntities.item_count,
-      }),
-    });
-  }
-
-  if (createdEntities.inbound_id) {
-    await emitEvent({
-      type: "inbound.created",
-      title: "Recebimento criado a partir do portal",
-      description: String(request.description ?? request.title ?? id),
-      severity: "attention",
-      entity_type: "recebimento",
-      entity_id: createdEntities.inbound_id,
-      customer_code: customerCode,
-      payload: compactPayload({
-        customer_request_id: id,
-        item_count: createdEntities.item_count,
-        quantity_total: createdEntities.quantity_total,
-      }),
-    });
-  }
-
-  return { ok: true, id, status: nextStatus, ...createdEntities };
 }
 
 function laneTask(input: {
@@ -2006,22 +1718,22 @@ async function getWarehouseOps() {
     shipments,
     inbox,
   ] = (await Promise.all([
-    readAll(collectionNames.skus),
-    readAll(collectionNames.movements),
-    readAll(collectionNames.orders),
-    readAll(collectionNames.locations),
-    readAll(collectionNames.stockBalances),
-    readAll(collectionNames.inboundReceipts),
-    readAll(collectionNames.inboundItems),
-    readAll(collectionNames.putawayTasks),
-    readAll(collectionNames.qualityExceptions),
-    readAll(collectionNames.orderItems),
-    readAll(collectionNames.stockReservations),
-    readAll(collectionNames.pickTasks),
-    readAll(collectionNames.pickLines),
-    readAll(collectionNames.packTasks),
-    readAll(collectionNames.shipments),
-    readAll(collectionNames.agentInbox),
+    readLimited(collectionNames.skus, CATALOG_READ_CAP),
+    readLimited(collectionNames.movements, RECENT_MOVEMENTS_CAP, "data", "desc"),
+    readLimited(collectionNames.orders, OPS_TASK_READ_CAP, "data_solic", "desc"),
+    readLimited(collectionNames.locations, CATALOG_READ_CAP),
+    readLimited(collectionNames.stockBalances, CATALOG_READ_CAP),
+    readLimited(collectionNames.inboundReceipts, OPS_TASK_READ_CAP, "created_at", "desc"),
+    readLimited(collectionNames.inboundItems, OPS_TASK_READ_CAP),
+    readLimited(collectionNames.putawayTasks, OPS_TASK_READ_CAP, "updated_at", "desc"),
+    readLimited(collectionNames.qualityExceptions, OPS_TASK_READ_CAP, "created_at", "desc"),
+    readLimited(collectionNames.orderItems, OPS_TASK_READ_CAP),
+    readLimited(collectionNames.stockReservations, OPS_TASK_READ_CAP),
+    readLimited(collectionNames.pickTasks, OPS_TASK_READ_CAP, "updated_at", "desc"),
+    readLimited(collectionNames.pickLines, OPS_TASK_READ_CAP),
+    readLimited(collectionNames.packTasks, OPS_TASK_READ_CAP, "updated_at", "desc"),
+    readLimited(collectionNames.shipments, OPS_TASK_READ_CAP, "updated_at", "desc"),
+    readLimited(collectionNames.agentInbox, 100, "created_at", "desc"),
   ])) as AnyRecord[][];
 
   const locations: AnyRecord[] = savedLocations.length
@@ -2043,7 +1755,9 @@ async function getWarehouseOps() {
     ? shipments
     : orders
         .filter((order) =>
-          ["FATURADO", "ENTREGUE"].includes(String(order.status ?? "").toUpperCase()),
+          ["FATURADO", "ENTREGUE"].includes(
+            String(order.status ?? "").toUpperCase(),
+          ),
         )
         .map((order) => ({
           id: `ship_${safeDocId(String(order.id ?? order.num_pedido))}`,
@@ -2058,21 +1772,16 @@ async function getWarehouseOps() {
           total_units: Number(order.qtd_sep ?? order.qtd_solic ?? 0),
           source: "derived_from_orders",
         }));
-  const derivedPutawayTasks: AnyRecord[] = putawayTasks.length
-    ? putawayTasks
-    : locations.slice(0, 12).map((location) => ({
-        id: `put_${safeDocId(String(location.id))}`,
-        customer_code: location.customer_code ?? DEFAULT_CUSTOMER.code,
-        location_id: location.id,
-        status: "completed",
-        title: location.label ?? `${location.aisle}/${location.shelf}/${location.bin}`,
-        total_units: Number(location.qty_on_hand ?? 0),
-        source: "derived_from_locations",
-      }));
+  const derivedPutawayTasks: AnyRecord[] = putawayTasks;
   const inboundItemsByReceipt = groupByField(inboundItems, "receipt_id");
   const pickLinesByTask = groupByField(pickLines, "pick_task_id");
   const orderItemsByOrder = groupByField(orderItems, "order_id");
   const reservationsByOrder = groupByField(stockReservations, "order_id");
+
+  const isHistoricalMovementReceipt = (receipt: AnyRecord) =>
+    String(receipt.source ?? "").toLowerCase() === "derived_from_movements";
+  const isHistoricalLocationPutaway = (task: AnyRecord) =>
+    String(task.source ?? "").toLowerCase() === "derived_from_locations";
 
   const exceptionCountFor = (...ids: Array<string | undefined>) => {
     const idSet = new Set(ids.filter(Boolean).map(String));
@@ -2089,8 +1798,11 @@ async function getWarehouseOps() {
     ).length;
   };
 
-  const timelineForTask = (task: AnyRecord, createdTitle: string): AnyRecord[] =>
-    ([
+  const timelineForTask = (
+    task: AnyRecord,
+    createdTitle: string,
+  ): AnyRecord[] =>
+    [
       task.created_at || task.received_at
         ? {
             id: `${task.id}_created`,
@@ -2107,16 +1819,23 @@ async function getWarehouseOps() {
             occurred_at: toIso(task.updated_at),
           }
         : null,
-    ].filter(Boolean) as AnyRecord[]);
+    ].filter(Boolean) as AnyRecord[];
 
   const receivingItemsFor = (receipt: AnyRecord) =>
     (inboundItemsByReceipt.get(String(receipt.id)) ?? []).map((item) => ({
       id: item.id,
       sku: item.sku_code,
+      sku_code: item.sku_code,
+      client_item_code: item.client_item_code,
       name: item.product_name,
+      product_name: item.product_name,
       quantity: Number(item.expected_qty ?? item.quantity ?? 0),
       expected_quantity: Number(item.expected_qty ?? item.quantity ?? 0),
       picked_quantity: Number(item.received_qty ?? 0),
+      received_qty: Number(item.received_qty ?? 0),
+      difference_qty: Number(item.difference_qty ?? 0),
+      conference_status: item.conference_status,
+      unit_cost: Number(item.unit_cost ?? 0),
       status: item.status,
       location: item.location_id,
     }));
@@ -2129,7 +1848,10 @@ async function getWarehouseOps() {
     return lines.map((line) => ({
       id: line.id,
       sku: line.sku_code,
+      sku_code: line.sku_code,
+      client_item_code: line.client_item_code,
       name: line.product_name,
+      product_name: line.product_name,
       quantity: Number(line.qty_to_pick ?? line.requested_qty ?? 0),
       expected_quantity: Number(line.qty_to_pick ?? line.requested_qty ?? 0),
       picked_quantity: Number(line.qty_picked ?? line.picked_qty ?? 0),
@@ -2143,13 +1865,19 @@ async function getWarehouseOps() {
       id: "receiving",
       title: "Receiving",
       description: "Entradas por NF/remessa",
-      items: derivedReceipts.map((receipt) => {
+      items: derivedReceipts.filter((receipt) => !isHistoricalMovementReceipt(receipt)).map((receipt) => {
         const receiptItems = receivingItemsFor(receipt);
         const expectedUnits = receiptItems.length
-          ? receiptItems.reduce((sum, item) => sum + Number(item.expected_quantity ?? 0), 0)
+          ? receiptItems.reduce(
+              (sum, item) => sum + Number(item.expected_quantity ?? 0),
+              0,
+            )
           : Number(receipt.qty_expected ?? receipt.qty_received ?? 0);
         const receivedUnits = receiptItems.length
-          ? receiptItems.reduce((sum, item) => sum + Number(item.picked_quantity ?? 0), 0)
+          ? receiptItems.reduce(
+              (sum, item) => sum + Number(item.picked_quantity ?? 0),
+              0,
+            )
           : Number(receipt.qty_received ?? 0);
         const exceptions = exceptionCountFor(
           String(receipt.id),
@@ -2169,7 +1897,9 @@ async function getWarehouseOps() {
           items: receiptItems,
           timeline: timelineForTask(receipt, "Recebimento criado"),
           exception_count: exceptions,
-          blocked_reason: exceptions ? "Há divergência de recebimento para tratar." : undefined,
+          blocked_reason: exceptions
+            ? "Há divergência de recebimento para tratar."
+            : undefined,
           customer_request_id: receipt.customer_request_id,
           inbound_id: String(receipt.id),
         });
@@ -2179,22 +1909,47 @@ async function getWarehouseOps() {
       id: "putaway",
       title: "Putaway",
       description: "Guarda e endereçamento",
-      items: derivedPutawayTasks.map((task) =>
-        laneTask({
+      items: derivedPutawayTasks.filter((task) => !isHistoricalLocationPutaway(task)).map((task) => {
+        const quantity = Number(task.quantity ?? task.total_units ?? 0);
+        const destinationLocation = String(
+          task.destination_location_id ?? task.location_id ?? "",
+        );
+        const sourceLocation = String(task.source_location_id ?? "RECEBIMENTO");
+        return laneTask({
           id: String(task.id),
           type: "putaway",
-          title: String(task.title ?? task.location_id ?? task.id),
-          subtitle: String(task.location_id ?? "Endereço físico"),
+          title: String(
+            task.title ?? task.product_name ?? task.location_id ?? task.id,
+          ),
+          subtitle: String(
+            destinationLocation || sourceLocation || "Endereço físico",
+          ),
           status: String(task.status ?? "planned"),
           customer_code: task.customer_code,
-          units: Number(task.total_units ?? 0),
+          units: quantity,
           source: task.source,
           updated_at: task.updated_at,
-          location: String(task.location_id ?? ""),
+          location: destinationLocation,
+          items: [
+            {
+              id: `${task.id}:putaway`,
+              sku: task.sku_code ?? task.sku,
+              sku_code: task.sku_code ?? task.sku,
+              client_item_code: task.client_item_code,
+              name: task.product_name ?? task.title,
+              product_name: task.product_name ?? task.title,
+              quantity,
+              expected_quantity: quantity,
+              status: task.status,
+              location: destinationLocation,
+              source_location_id: sourceLocation,
+              destination_location_id: destinationLocation,
+            },
+          ],
           timeline: timelineForTask(task, "Putaway criado"),
           exception_count: exceptionCountFor(String(task.id)),
-        }),
-      ),
+        });
+      }),
     },
     {
       id: "picking",
@@ -2202,12 +1957,19 @@ async function getWarehouseOps() {
       description: "Separação por pedido",
       items: derivedPickTasks.map((task) => {
         const taskItems = pickingItemsFor(task);
-        const reserved = reservationsByOrder.get(String(task.order_id ?? "")) ?? [];
+        const reserved =
+          reservationsByOrder.get(String(task.order_id ?? "")) ?? [];
         const totalUnits = taskItems.length
-          ? taskItems.reduce((sum, item) => sum + Number(item.expected_quantity ?? 0), 0)
+          ? taskItems.reduce(
+              (sum, item) => sum + Number(item.expected_quantity ?? 0),
+              0,
+            )
           : Number(task.total_units ?? 0);
         const pickedUnits = taskItems.length
-          ? taskItems.reduce((sum, item) => sum + Number(item.picked_quantity ?? 0), 0)
+          ? taskItems.reduce(
+              (sum, item) => sum + Number(item.picked_quantity ?? 0),
+              0,
+            )
           : Number(task.picked_units ?? 0);
         const exceptions = exceptionCountFor(
           String(task.id),
@@ -2232,12 +1994,11 @@ async function getWarehouseOps() {
           order_id: task.order_id,
           location: taskItems[0]?.location,
           due_at: task.due_at,
-          blocked_reason:
-            exceptions
-              ? "Há exceção aberta para este picking."
-              : reserved.length && !taskItems.length
-                ? "Reserva existe, mas nenhuma linha de picking foi criada."
-                : undefined,
+          blocked_reason: exceptions
+            ? "Há exceção aberta para este picking."
+            : reserved.length && !taskItems.length
+              ? "Reserva existe, mas nenhuma linha de picking foi criada."
+              : undefined,
         });
       }),
     },
@@ -2257,7 +2018,10 @@ async function getWarehouseOps() {
           source: task.source,
           updated_at: task.updated_at,
           timeline: timelineForTask(task, "Packing criado"),
-          exception_count: exceptionCountFor(String(task.id), String(task.order_id ?? "")),
+          exception_count: exceptionCountFor(
+            String(task.id),
+            String(task.order_id ?? ""),
+          ),
           order_id: task.order_id,
         }),
       ),
@@ -2279,7 +2043,10 @@ async function getWarehouseOps() {
           updated_at: task.updated_at,
           location: String(task.destination ?? ""),
           timeline: timelineForTask(task, "Expedição criada"),
-          exception_count: exceptionCountFor(String(task.id), String(task.order_id ?? "")),
+          exception_count: exceptionCountFor(
+            String(task.id),
+            String(task.order_id ?? ""),
+          ),
           order_id: task.order_id,
         }),
       ),
@@ -2324,18 +2091,24 @@ async function getWarehouseOps() {
           reference: task.id,
           sku: task.items[0]?.sku ?? task.subtitle,
           customer: task.customer_code,
-          location: task.location || task.items[0]?.location || (task.type === "putaway" ? task.subtitle : undefined),
+          location:
+            task.location ||
+            task.items[0]?.location ||
+            (task.type === "putaway" ? task.subtitle : undefined),
           quantity: task.units,
           priority: task.priority,
           status: task.status,
           due_at: task.due_at || task.updated_at || undefined,
           next_action:
-            task.status === "completed" || task.status === "delivered" || task.status === "received"
+            task.status === "completed" ||
+            task.status === "delivered" ||
+            task.status === "received"
               ? "Fluxo registrado. Acompanhar documentação e billing."
               : "Avançar para a próxima etapa operacional.",
           notes: task.blocked_reason
             ? task.blocked_reason
-            : task.source === "derived_from_orders" || task.source === "derived_from_skus"
+            : task.source === "derived_from_orders" ||
+                task.source === "derived_from_skus"
               ? "Tarefa derivada dos dados atuais até virar operação nativa."
               : task.items.length
                 ? `${task.items.length} linha(s) operacionais vinculadas.`
@@ -2347,9 +2120,13 @@ async function getWarehouseOps() {
           customer_request_id: task.customer_request_id,
           can_advance:
             !String(task.source ?? "").startsWith("derived_from_") &&
-            !["completed", "delivered", "received"].includes(String(task.status)),
+            !["completed", "delivered", "received"].includes(
+              String(task.status),
+            ),
           progress:
-            task.status === "completed" || task.status === "delivered" || task.status === "received"
+            task.status === "completed" ||
+            task.status === "delivered" ||
+            task.status === "received"
               ? 100
               : task.status === "in_progress" || task.status === "dispatched"
                 ? 55
@@ -2361,18 +2138,27 @@ async function getWarehouseOps() {
             key: queueKey,
             name: lane.title,
             pending: tasks.filter(
-              (task) => !["completed", "delivered", "received"].includes(String(task.status)),
+              (task) =>
+                !["completed", "delivered", "received"].includes(
+                  String(task.status),
+                ),
             ).length,
             in_progress: tasks.filter((task) =>
-              ["in_progress", "checking", "dispatched"].includes(String(task.status)),
+              ["in_progress", "checking", "dispatched"].includes(
+                String(task.status),
+              ),
             ).length,
             completed_today: tasks.filter((task) =>
-              ["completed", "delivered", "received"].includes(String(task.status)),
+              ["completed", "delivered", "received"].includes(
+                String(task.status),
+              ),
             ).length,
             sla_minutes: 180,
             utilization: tasks.length
               ? (tasks.filter((task) =>
-                  ["completed", "delivered", "received"].includes(String(task.status)),
+                  ["completed", "delivered", "received"].includes(
+                    String(task.status),
+                  ),
                 ).length /
                   tasks.length) *
                 100
@@ -2395,604 +2181,6 @@ async function getWarehouseOps() {
   };
 }
 
-function nextTaskStatus(type: string, status: string) {
-  const normalized = status.toLowerCase();
-  const flows: Record<string, string[]> = {
-    receiving: ["created", "checking", "received"],
-    putaway: ["planned", "in_progress", "completed"],
-    picking: ["planned", "in_progress", "completed"],
-    packing: ["ready", "in_progress", "completed"],
-    shipping: ["ready_to_dispatch", "dispatched", "delivered"],
-  };
-  const flow = flows[type] ?? ["planned", "in_progress", "completed"];
-  const index = flow.indexOf(normalized);
-  return flow[Math.min(index < 0 ? 1 : index + 1, flow.length - 1)];
-}
-
-async function registerWarehouseException(taskUid: string, data: AnyRecord = {}) {
-  if (!firestore) throw new Error("Firestore não configurado.");
-  const db = firestore;
-  const [type, ...idParts] = taskUid.split(":");
-  const id = idParts.join(":");
-  if (!type || !id) throw new RouteError("Tarefa inválida.", 400);
-
-  const name = warehouseTaskCollection(type);
-  if (!name) throw new RouteError("Tipo de tarefa não suportado.", 400);
-
-  const ref = doc(db, name, safeDocId(id));
-  const snapshot = await getDoc(ref);
-  if (!snapshot.exists()) {
-    throw new RouteError("Tarefa operacional não encontrada.", 404);
-  }
-
-  const task = snapshot.data() as AnyRecord;
-  const note =
-    optionalString(data.note ?? data.description ?? data.reason) ??
-    optionalString(task.blocked_reason) ??
-    "Exceção registrada na bancada WMS.";
-  const severity: EventSeverity =
-    data.severity === "critical" || task.priority === "critical" || task.blocked_reason
-      ? "critical"
-      : "attention";
-  const exceptionId = newDocId("wex");
-  const customerCode = String(task.customer_code ?? task.customer ?? DEFAULT_CUSTOMER.code);
-  const batch = writeBatch(db);
-
-  batch.set(
-    doc(db, collectionNames.qualityExceptions, safeDocId(exceptionId)),
-    compactPayload({
-      id: exceptionId,
-      task_uid: taskUid,
-      task_type: type,
-      task_id: id,
-      task_collection: name,
-      customer_code: customerCode,
-      order_id: task.order_id,
-      order_number: task.order_number,
-      receipt_id: type === "receiving" ? id : task.receipt_id,
-      reference: task.reference ?? task.order_number ?? task.receipt_number,
-      note,
-      severity,
-      status: "open",
-      source: data.source ?? "warehouse_ops",
-      payload: data.payload ?? {},
-      created_by: currentActor(),
-      created_at: serverTimestamp(),
-      updated_at: serverTimestamp(),
-    }),
-  );
-
-  batch.set(
-    ref,
-    {
-      exception_count: Number(task.exception_count ?? 0) + 1,
-      blocked_reason: note,
-      last_exception_id: exceptionId,
-      updated_at: serverTimestamp(),
-    },
-    { merge: true },
-  );
-
-  await batch.commit();
-
-  const event = await emitEvent({
-    type: `${type}.exception_found`,
-    title: "Exceção operacional registrada",
-    description: note,
-    severity,
-    entity_type: collectionLabel(name),
-    entity_id: id,
-    customer_code: customerCode,
-    payload: compactPayload({
-      exception_id: exceptionId,
-      task_uid: taskUid,
-      status: task.status,
-      order_id: task.order_id,
-      receipt_id: type === "receiving" ? id : task.receipt_id,
-      customer_request_id: task.customer_request_id,
-    }),
-  });
-
-  return {
-    ok: true,
-    exception_id: exceptionId,
-    event_id: event?.id,
-    task_uid: taskUid,
-  };
-}
-
-async function advanceWarehouseTask(taskUid: string) {
-  if (!firestore) throw new Error("Firestore não configurado.");
-  const db = firestore;
-  const [type, ...idParts] = taskUid.split(":");
-  const id = idParts.join(":");
-  if (!type || !id) throw new RouteError("Tarefa inválida.", 400);
-
-  const name = warehouseTaskCollection(type);
-  if (!name) throw new RouteError("Tipo de tarefa não suportado.", 400);
-
-  const ref = doc(db, name, safeDocId(id));
-  const snapshot = await getDoc(ref);
-  if (!snapshot.exists()) {
-    throw new RouteError("Tarefa operacional não encontrada.", 404);
-  }
-  const before = snapshot.data() as AnyRecord;
-  if (isTerminalWarehouseTask(type, before.status)) {
-    throw new RouteError("Tarefa operacional já finalizada.", 409);
-  }
-  const nextStatus = nextTaskStatus(type, String(before.status ?? ""));
-  const batch = writeBatch(db);
-  const createdEntities: AnyRecord = {};
-  const lineUpdates: AnyRecord = {};
-  let stockConsumed = 0;
-
-  batch.set(
-    ref,
-    {
-      id,
-      status: nextStatus,
-      advanced_by: currentActor(),
-      advanced_at: serverTimestamp(),
-      updated_at: serverTimestamp(),
-    },
-    { merge: true },
-  );
-
-  if (type === "receiving" && nextStatus === "received") {
-    const customerCode = String(before.customer_code ?? DEFAULT_CUSTOMER.code);
-    const [items, balancesForCustomer] = await Promise.all([
-      readWhereEqual(collectionNames.inboundItems, "receipt_id", id),
-      readWhereEqual(collectionNames.stockBalances, "customer_code", customerCode),
-    ]);
-    const balanceStates = new Map<
-      string,
-      {
-        balance: AnyRecord;
-        qtyOnHand: number;
-        qtyReserved: number;
-      }
-    >();
-    const receivedQty = items.reduce(
-      (sum, item) => sum + Number(item.expected_qty ?? item.received_qty ?? 0),
-      0,
-    );
-
-    for (const item of items) {
-      const quantity = Number(item.expected_qty ?? item.received_qty ?? 0);
-      const locationId = optionalString(
-        item.location_id ?? before.location_id ?? before.receiving_location,
-      ) ?? "RECEBIMENTO";
-      const stockItem: AnyRecord = {
-        ...item,
-        location_id: locationId,
-      };
-      const matchedBalance =
-        findBalanceForRequestItem(balancesForCustomer, stockItem, customerCode) ??
-        findBalanceForRequestItem(
-          balancesForCustomer,
-          { ...stockItem, location_id: undefined },
-          customerCode,
-        );
-      const balanceDocId = safeDocId(
-        String(matchedBalance?._docId ?? matchedBalance?.id ?? stockBalanceDocId(customerCode, stockItem)),
-      );
-      const state =
-        balanceStates.get(balanceDocId) ??
-        {
-          balance: matchedBalance ?? {},
-          qtyOnHand: Number(matchedBalance?.qty_on_hand ?? 0),
-          qtyReserved: Number(matchedBalance?.qty_reserved ?? 0),
-        };
-      const beforeQty = state.qtyOnHand;
-      const afterQty = beforeQty + quantity;
-      state.qtyOnHand = afterQty;
-      balanceStates.set(balanceDocId, state);
-
-      batch.set(
-        doc(db, collectionNames.inboundItems, safeDocId(String(item._docId ?? item.id))),
-        {
-          received_qty: quantity,
-          location_id: locationId,
-          status: "received",
-          updated_at: serverTimestamp(),
-        },
-        { merge: true },
-      );
-
-      if (quantity > 0) {
-        batch.set(
-          doc(db, collectionNames.stockBalances, balanceDocId),
-          compactPayload({
-            ...state.balance,
-            id: state.balance.id ?? balanceDocId,
-            customer_code: customerCode,
-            sku_code: stockItem.sku_code ?? state.balance.sku_code,
-            client_item_code: stockItem.client_item_code ?? state.balance.client_item_code,
-            product_name: stockItem.product_name ?? state.balance.product_name,
-            location_id: locationId,
-            qty_on_hand: afterQty,
-            qty_reserved: state.qtyReserved,
-            qty_available: Math.max(0, afterQty - state.qtyReserved),
-            unit_cost: Number(stockItem.unit_cost ?? state.balance.unit_cost ?? 0),
-            status: afterQty > 0 ? "available" : "empty",
-            source: "wms_receiving",
-            updated_at: serverTimestamp(),
-          }),
-          { merge: true },
-        );
-
-        const movement = buildMovementPayload({
-          type: "ENTRADA",
-          sign: 1,
-          quantity,
-          item: stockItem,
-          customerCode,
-          productName: stockItem.product_name,
-          beforeQty,
-          afterQty,
-          source: "wms_receiving",
-          entity: {
-            receipt_id: id,
-            receipt_number: before.receipt_number,
-            inbound_item_id: item.id,
-            destino: locationId,
-          },
-        });
-        batch.set(doc(db, collectionNames.movements, safeDocId(String(movement.id))), movement);
-      }
-    }
-
-    batch.set(
-      ref,
-      {
-        item_count: items.length || Number(before.item_count ?? 0),
-        qty_received: receivedQty || Number(before.qty_received ?? 0),
-        received_at: serverTimestamp(),
-      },
-      { merge: true },
-    );
-    lineUpdates.received_lines = items.length;
-    lineUpdates.received_qty = receivedQty;
-  }
-
-  if (type === "picking" && nextStatus === "completed") {
-    const orderId = String(before.order_id ?? "").trim();
-    const [pickLinesForTask, orderItemsForOrder, reservationsForOrder] = await Promise.all([
-      readWhereEqual(collectionNames.pickLines, "pick_task_id", id),
-      orderId ? readWhereEqual(collectionNames.orderItems, "order_id", orderId) : Promise.resolve([]),
-      orderId
-        ? readWhereEqual(collectionNames.stockReservations, "order_id", orderId)
-        : Promise.resolve([]),
-    ]);
-    const pickedUnits = pickLinesForTask.length
-      ? pickLinesForTask.reduce((sum, line) => sum + Number(line.qty_to_pick ?? 0), 0)
-      : Number(before.total_units ?? 0);
-
-    for (const line of pickLinesForTask) {
-      batch.set(
-        doc(db, collectionNames.pickLines, safeDocId(String(line._docId ?? line.id))),
-        {
-          qty_picked: Number(line.qty_to_pick ?? line.qty_picked ?? 0),
-          status: "completed",
-          updated_at: serverTimestamp(),
-        },
-        { merge: true },
-      );
-    }
-
-    for (const item of orderItemsForOrder) {
-      batch.set(
-        doc(db, collectionNames.orderItems, safeDocId(String(item._docId ?? item.id))),
-        {
-          picked_qty: Number(item.requested_qty ?? item.allocated_qty ?? item.picked_qty ?? 0),
-          status: "picked",
-          updated_at: serverTimestamp(),
-        },
-        { merge: true },
-      );
-    }
-
-    for (const reservation of reservationsForOrder) {
-      batch.set(
-        doc(db, collectionNames.stockReservations, safeDocId(String(reservation._docId ?? reservation.id))),
-        {
-          status: "picked",
-          picked_qty: Number(reservation.reserved_qty ?? reservation.requested_qty ?? 0),
-          updated_at: serverTimestamp(),
-        },
-        { merge: true },
-      );
-    }
-
-    if (orderId) {
-      const packId = `pack_${safeDocId(orderId)}`;
-      batch.set(
-        doc(db, collectionNames.orders, safeDocId(orderId)),
-        {
-          status: "SEPARACAO",
-          qtd_sep: pickedUnits,
-          updated_at: serverTimestamp(),
-        },
-        { merge: true },
-      );
-      batch.set(
-        doc(db, collectionNames.packTasks, packId),
-        {
-          id: packId,
-          customer_code: before.customer_code ?? DEFAULT_CUSTOMER.code,
-          order_id: orderId,
-          order_number: before.order_number ?? null,
-          status: "ready",
-          picked_units: pickedUnits,
-          packed_units: 0,
-          package_count: 0,
-          source: "picking_completed",
-          customer_request_id: before.customer_request_id ?? null,
-          created_at: serverTimestamp(),
-          updated_at: serverTimestamp(),
-        },
-        { merge: true },
-      );
-      createdEntities.pack_task_id = packId;
-    }
-
-    batch.set(ref, { picked_units: pickedUnits }, { merge: true });
-    lineUpdates.picked_lines = pickLinesForTask.length;
-    lineUpdates.picked_units = pickedUnits;
-  }
-
-  if (type === "packing" && nextStatus === "completed") {
-    const orderId = String(before.order_id ?? "").trim();
-    const packedUnits = Number(before.picked_units ?? before.packed_units ?? before.total_units ?? 0);
-    const packageId = `pkg_${safeDocId(id)}_001`;
-    const orderItemsForOrder = orderId
-      ? await readWhereEqual(collectionNames.orderItems, "order_id", orderId)
-      : [];
-    batch.set(
-      doc(db, collectionNames.packages, packageId),
-      {
-        id: packageId,
-        customer_code: before.customer_code ?? DEFAULT_CUSTOMER.code,
-        pack_task_id: id,
-        order_id: orderId || null,
-        order_number: before.order_number ?? null,
-        status: "packed",
-        volume_number: 1,
-        packed_units: packedUnits,
-        created_at: serverTimestamp(),
-        updated_at: serverTimestamp(),
-      },
-      { merge: true },
-    );
-
-    let shipmentId = "";
-    if (orderId) {
-      shipmentId = `ship_${safeDocId(orderId)}`;
-      batch.set(
-        doc(db, collectionNames.shipments, shipmentId),
-        {
-          id: shipmentId,
-          customer_code: before.customer_code ?? DEFAULT_CUSTOMER.code,
-          order_id: orderId,
-          order_number: before.order_number ?? null,
-          status: "ready_to_dispatch",
-          destination: before.destination ?? "Destino a confirmar",
-          total_units: packedUnits,
-          source: "packing_completed",
-          created_at: serverTimestamp(),
-          updated_at: serverTimestamp(),
-        },
-        { merge: true },
-      );
-      createdEntities.package_id = packageId;
-      createdEntities.shipment_id = shipmentId;
-    }
-
-    orderItemsForOrder.forEach((item, index) => {
-      const quantity = Number(item.picked_qty ?? item.allocated_qty ?? item.requested_qty ?? 0);
-      if (quantity <= 0) return;
-      const lineNumber = Number(item.line_number ?? index + 1);
-      const lineId = `${safeDocId(packageId)}_${String(lineNumber).padStart(2, "0")}`;
-      const linePayload = compactPayload({
-        customer_code: before.customer_code ?? DEFAULT_CUSTOMER.code,
-        order_id: orderId,
-        order_number: before.order_number ?? item.order_number,
-        package_id: packageId,
-        shipment_id: shipmentId || undefined,
-        line_number: lineNumber,
-        sku_code: item.sku_code,
-        client_item_code: item.client_item_code,
-        product_name: item.product_name,
-        qty_packed: quantity,
-        status: "packed",
-        created_at: serverTimestamp(),
-        updated_at: serverTimestamp(),
-      });
-      batch.set(
-        doc(db, collectionNames.packageItems, `pki_${lineId}`),
-        { id: `pki_${lineId}`, ...linePayload },
-        { merge: true },
-      );
-      if (shipmentId) {
-        batch.set(
-          doc(db, collectionNames.shipmentItems, `shi_${safeDocId(shipmentId)}_${String(lineNumber).padStart(2, "0")}`),
-          {
-            id: `shi_${safeDocId(shipmentId)}_${String(lineNumber).padStart(2, "0")}`,
-            ...linePayload,
-            status: "ready_to_dispatch",
-          },
-          { merge: true },
-        );
-      }
-    });
-
-    batch.set(
-      ref,
-      {
-        packed_units: packedUnits,
-        package_count: Math.max(1, Number(before.package_count ?? 1)),
-      },
-      { merge: true },
-    );
-    lineUpdates.packed_units = packedUnits;
-  }
-
-  if (type === "shipping" && nextStatus === "delivered") {
-    const orderId = String(before.order_id ?? "").trim();
-    if (orderId) {
-      const [reservationsForOrder, balancesForCustomer] = await Promise.all([
-        readWhereEqual(collectionNames.stockReservations, "order_id", orderId),
-        readWhereEqual(
-          collectionNames.stockBalances,
-          "customer_code",
-          String(before.customer_code ?? DEFAULT_CUSTOMER.code),
-        ),
-      ]);
-
-      for (const reservation of reservationsForOrder) {
-        if (String(reservation.status ?? "") === "consumed") continue;
-        const quantity = Number(reservation.reserved_qty ?? reservation.requested_qty ?? 0);
-        if (quantity <= 0) continue;
-
-        const balance = findBalanceForRequestItem(
-          balancesForCustomer,
-          {
-            sku_code: reservation.sku_code,
-            client_item_code: reservation.client_item_code,
-            location_id: reservation.location_id,
-          },
-          String(before.customer_code ?? DEFAULT_CUSTOMER.code),
-        );
-
-        if (balance) {
-          const previousOnHand = Number(balance.qty_on_hand ?? 0);
-          const nextOnHand = Math.max(0, previousOnHand - quantity);
-          const nextReserved = Math.max(0, Number(balance.qty_reserved ?? 0) - quantity);
-          batch.set(
-            doc(db, collectionNames.stockBalances, safeDocId(String(balance._docId ?? balance.id))),
-            {
-              qty_on_hand: nextOnHand,
-              qty_reserved: nextReserved,
-              qty_available: Math.max(0, nextOnHand - nextReserved),
-              status: nextOnHand > 0 ? "available" : "empty",
-              updated_at: serverTimestamp(),
-            },
-            { merge: true },
-          );
-          const movement = buildMovementPayload({
-            type: "SAIDA",
-            sign: -1,
-            quantity,
-            item: reservation,
-            customerCode: String(before.customer_code ?? DEFAULT_CUSTOMER.code),
-            productName: reservation.product_name,
-            beforeQty: previousOnHand,
-            afterQty: nextOnHand,
-            source: "wms_shipping",
-            entity: {
-              order_id: orderId,
-              order_number: before.order_number,
-              shipment_id: id,
-              origem: reservation.location_id,
-              destino: before.destination,
-            },
-          });
-          batch.set(doc(db, collectionNames.movements, safeDocId(String(movement.id))), movement);
-        }
-
-        batch.set(
-          doc(db, collectionNames.stockReservations, safeDocId(String(reservation._docId ?? reservation.id))),
-          {
-            status: "consumed",
-            consumed_qty: quantity,
-            consumed_at: serverTimestamp(),
-            updated_at: serverTimestamp(),
-          },
-          { merge: true },
-        );
-        stockConsumed += quantity;
-      }
-
-      batch.set(
-        doc(db, collectionNames.orders, safeDocId(orderId)),
-        {
-          status: "ENTREGUE",
-          delivered_at: serverTimestamp(),
-          updated_at: serverTimestamp(),
-        },
-        { merge: true },
-      );
-    }
-
-    batch.set(ref, { delivered_at: serverTimestamp() }, { merge: true });
-  }
-
-  await batch.commit();
-
-  const eventTypeByTask: Record<string, string> = {
-    receiving: nextStatus === "received" ? "inbound.checked" : "inbound.created",
-    putaway: nextStatus === "completed" ? "putaway.completed" : "putaway.created",
-    picking: nextStatus === "completed" ? "picking.completed" : "picking.started",
-    packing: nextStatus === "completed" ? "packing.completed" : "packing.started",
-    shipping: nextStatus === "delivered" ? "shipment.delivered" : "shipment.dispatched",
-  };
-
-  await emitEvent({
-    type: eventTypeByTask[type] ?? `${type}.advanced`,
-    title: "Tarefa operacional avançada",
-    description: `${type} ${id} avançou para ${nextStatus}`,
-    severity: nextStatus === "completed" || nextStatus === "delivered" || nextStatus === "received" ? "info" : "attention",
-    entity_type: collectionLabel(name),
-    entity_id: id,
-    customer_code: before.customer_code ?? DEFAULT_CUSTOMER.code,
-    payload: compactPayload({
-      before_status: before.status,
-      after_status: nextStatus,
-      type,
-      ...lineUpdates,
-      ...createdEntities,
-      stock_consumed: stockConsumed || undefined,
-    }),
-  });
-
-  if (createdEntities.pack_task_id) {
-    await emitEvent({
-      type: "packing.created",
-      title: "Packing criado após picking",
-      description: `${before.order_number ?? before.order_id ?? id} pronto para conferência.`,
-      severity: "attention",
-      entity_type: "tarefa_packing",
-      entity_id: createdEntities.pack_task_id,
-      customer_code: before.customer_code ?? DEFAULT_CUSTOMER.code,
-      payload: compactPayload({
-        pick_task_id: id,
-        order_id: before.order_id,
-        picked_units: lineUpdates.picked_units,
-      }),
-    });
-  }
-
-  if (createdEntities.shipment_id) {
-    await emitEvent({
-      type: "shipment.created",
-      title: "Expedição criada após packing",
-      description: `${before.order_number ?? before.order_id ?? id} pronto para despacho.`,
-      severity: "attention",
-      entity_type: "expedicao",
-      entity_id: createdEntities.shipment_id,
-      customer_code: before.customer_code ?? DEFAULT_CUSTOMER.code,
-      payload: compactPayload({
-        pack_task_id: id,
-        package_id: createdEntities.package_id,
-        order_id: before.order_id,
-        packed_units: lineUpdates.packed_units,
-      }),
-    });
-  }
-
-  return { ok: true, task_uid: taskUid, status: nextStatus, ...createdEntities };
-}
-
 async function readOperationalFoundationInput() {
   const [
     customers,
@@ -3010,20 +2198,20 @@ async function readOperationalFoundationInput() {
     orders,
     users,
   ] = await Promise.all([
-    readAll(collectionNames.customers),
-    readAll(collectionNames.customerAccounts),
-    readAll(collectionNames.locations),
-    readAll(collectionNames.stockBalances),
-    readAll(collectionNames.inboundReceipts),
-    readAll(collectionNames.orderItems),
-    readAll(collectionNames.pickTasks),
-    readAll(collectionNames.packTasks),
-    readAll(collectionNames.shipments),
-    readAll(collectionNames.documents),
-    readAll(collectionNames.skus),
-    readAll(collectionNames.movements),
-    readAll(collectionNames.orders),
-    readAll(collectionNames.users),
+    readLimited(collectionNames.customers, 500),
+    readLimited(collectionNames.customerAccounts, 500),
+    readLimited(collectionNames.locations, CATALOG_READ_CAP),
+    readLimited(collectionNames.stockBalances, CATALOG_READ_CAP),
+    readLimited(collectionNames.inboundReceipts, OPS_TASK_READ_CAP, "created_at", "desc"),
+    readLimited(collectionNames.orderItems, OPS_TASK_READ_CAP),
+    readLimited(collectionNames.pickTasks, OPS_TASK_READ_CAP, "updated_at", "desc"),
+    readLimited(collectionNames.packTasks, OPS_TASK_READ_CAP, "updated_at", "desc"),
+    readLimited(collectionNames.shipments, OPS_TASK_READ_CAP, "updated_at", "desc"),
+    readLimited(collectionNames.documents, OPS_TASK_READ_CAP, "created_at", "desc"),
+    readLimited(collectionNames.skus, CATALOG_READ_CAP),
+    readLimited(collectionNames.movements, RECENT_MOVEMENTS_CAP, "data", "desc"),
+    readLimited(collectionNames.orders, OPS_TASK_READ_CAP, "data_solic", "desc"),
+    readLimited(collectionNames.users, 200),
   ]);
 
   return {
@@ -3045,7 +2233,9 @@ async function readOperationalFoundationInput() {
 }
 
 async function getOperationalFoundation() {
-  return buildOperationalFoundationSnapshot(await readOperationalFoundationInput());
+  return buildOperationalFoundationSnapshot(
+    await readOperationalFoundationInput(),
+  );
 }
 
 async function commitOperationalRecords(name: string, records: AnyRecord[]) {
@@ -3057,7 +2247,9 @@ async function commitOperationalRecords(name: string, records: AnyRecord[]) {
   let batches = 0;
 
   for (const record of records) {
-    const id = safeDocId(String(record._docId ?? record.id ?? newDocId("sync")));
+    const id = safeDocId(
+      String(record._docId ?? record.id ?? newDocId("sync")),
+    );
     batch.set(
       doc(firestore, name, id),
       {
@@ -3105,7 +2297,10 @@ async function syncRealOperationalFoundation() {
 
   const writes = await Promise.all([
     commitOperationalRecords(collectionNames.customers, [customer]),
-    commitOperationalRecords(collectionNames.customerAccounts, customerAccounts),
+    commitOperationalRecords(
+      collectionNames.customerAccounts,
+      customerAccounts,
+    ),
     commitOperationalRecords(collectionNames.locations, locations),
     commitOperationalRecords(collectionNames.stockBalances, stockBalances),
     commitOperationalRecords(collectionNames.inboundReceipts, inboundReceipts),
@@ -3154,37 +2349,391 @@ async function getBillingConfig() {
   };
 }
 
+function sameBillingCompetencia(value: unknown, competencia: string) {
+  return toIso(value).startsWith(competencia);
+}
+
+function billingUsageNumber(value: unknown) {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+function billablePostCutoverDirection(
+  movement: AnyRecord,
+  direction: "incoming" | "outgoing",
+) {
+  const source = String(movement.source ?? "").trim().toLowerCase();
+  return direction === "incoming"
+    ? source === "wms_receiving"
+    : source === "wms_shipping";
+}
+
+function billingEvidenceEventMatch(event: AnyRecord, competencia: string) {
+  const payload = (event.payload ?? {}) as AnyRecord;
+  const type = String(event.type ?? "");
+  const entityType = String(event.entity_type ?? "");
+  const entityId = String(event.entity_id ?? "");
+  return (
+    payload.competencia === competencia ||
+    (entityType === "fatura" && entityId === competencia) ||
+    type.startsWith("billing.") ||
+    sameBillingCompetencia(event.occurred_at ?? event.created_at, competencia)
+  );
+}
+
+async function getBillingEvidence(competencia: string) {
+  if (!firestore) throw new Error("Firestore não configurado.");
+  const [
+    movements,
+    inbound,
+    orders,
+    shipments,
+    documents,
+    events,
+    manualSnapshot,
+    periodSnapshot,
+    operationalSnapshot,
+  ] = await Promise.all([
+    readLimited(collectionNames.movements, EXPORT_HARD_CAP, "data", "desc"),
+    readLimited(collectionNames.inboundReceipts, OPS_TASK_READ_CAP, "created_at", "desc"),
+    readLimited(collectionNames.orders, OPS_TASK_READ_CAP, "data_solic", "desc"),
+    readLimited(collectionNames.shipments, OPS_TASK_READ_CAP, "created_at", "desc"),
+    readLimited(collectionNames.documents, OPS_TASK_READ_CAP, "created_at", "desc"),
+    readLimited(collectionNames.events, RECENT_EVENTS_CAP, "occurred_at", "desc"),
+    getDoc(doc(firestore, collectionNames.manual, competencia)),
+    getDoc(doc(firestore, collectionNames.periods, competencia)),
+    getDoc(
+      doc(
+        firestore,
+        collectionNames.billingOperationalSnapshots,
+        competencia,
+      ),
+    ),
+  ]);
+
+  const allMovementsInPeriod = movements.filter((movement) =>
+    sameBillingCompetencia(
+      movement.occurred_at ?? movement.data ?? movement.created_at,
+      competencia,
+    ),
+  );
+  const operationalData = operationalSnapshot.exists()
+    ? operationalSnapshot.data()
+    : {};
+  const snapshotMode = String(operationalData.mode ?? "");
+  const snapshotUsage = (operationalData.usage ?? {}) as AnyRecord;
+  const movementsInPeriod = operationalSnapshot.exists()
+    ? allMovementsInPeriod.filter(
+        (movement) =>
+          billablePostCutoverDirection(movement, "incoming") ||
+          billablePostCutoverDirection(movement, "outgoing"),
+      )
+    : allMovementsInPeriod;
+  const inboundInPeriod = inbound.filter((receipt) =>
+    sameBillingCompetencia(
+      receipt.received_at ?? receipt.created_at ?? receipt.updated_at,
+      competencia,
+    ),
+  );
+  const ordersInPeriod = orders.filter((order) =>
+    sameBillingCompetencia(
+      order.delivered_at ??
+        order.dispatched_at ??
+        order.created_at ??
+        order.data_solic,
+      competencia,
+    ),
+  );
+  const shipmentsInPeriod = shipments.filter((shipment) =>
+    sameBillingCompetencia(
+      shipment.dispatched_at ?? shipment.delivered_at ?? shipment.created_at,
+      competencia,
+    ),
+  );
+  const billingDocuments = documents.filter((document) => {
+    const entityType = String(document.entity_type ?? document.type ?? "");
+    const entityId = String(document.entity_id ?? document.competencia ?? "");
+    const payload = (document.payload ?? {}) as AnyRecord;
+    return (
+      entityId === competencia ||
+      payload.competencia === competencia ||
+      entityType.includes("fatura") ||
+      entityType.includes("billing")
+    );
+  });
+  const relevantEvents = sortByDateDesc(
+    events.filter((event) => billingEvidenceEventMatch(event, competencia)),
+    "occurred_at",
+  ).slice(0, 30);
+
+  const incomingPieces = movementsInPeriod
+    .filter(
+      (movement) =>
+        operationalSnapshot.exists()
+          ? billablePostCutoverDirection(movement, "incoming")
+          : Number(movement.sinal ?? movement.sign ?? 0) > 0 ||
+            String(movement.tipo_mov ?? "").toUpperCase() === "ENTRADA",
+    )
+    .reduce(
+      (sum, movement) =>
+        sum + Math.abs(Number(movement.qtde ?? movement.quantity ?? 0)),
+      0,
+    );
+  const outgoingPieces = movementsInPeriod
+    .filter(
+      (movement) =>
+        operationalSnapshot.exists()
+          ? billablePostCutoverDirection(movement, "outgoing")
+          : Number(movement.sinal ?? movement.sign ?? 0) < 0 ||
+            String(movement.tipo_mov ?? "").toUpperCase() === "SAIDA",
+    )
+    .reduce(
+      (sum, movement) =>
+        sum + Math.abs(Number(movement.qtde ?? movement.quantity ?? 0)),
+      0,
+    );
+  const manualItems = manualSnapshot.exists()
+    ? ((manualSnapshot.data()?.items ?? []) as AnyRecord[])
+    : [];
+  const period = periodSnapshot.exists() ? periodSnapshot.data() : {};
+  const evidenceMetrics =
+    snapshotMode === "replace"
+      ? {
+          movements: billingUsageNumber(snapshotUsage.movimentacoes),
+          incomingPieces: billingUsageNumber(snapshotUsage.entradas_pecas),
+          outgoingPieces: billingUsageNumber(snapshotUsage.saidas_pecas),
+        }
+      : snapshotMode === "baseline"
+        ? {
+            movements:
+              billingUsageNumber(snapshotUsage.movimentacoes) +
+              movementsInPeriod.length,
+            incomingPieces:
+              billingUsageNumber(snapshotUsage.entradas_pecas) + incomingPieces,
+            outgoingPieces:
+              billingUsageNumber(snapshotUsage.saidas_pecas) + outgoingPieces,
+          }
+        : {
+            movements: movementsInPeriod.length,
+            incomingPieces,
+            outgoingPieces,
+          };
+  const missing: string[] = [];
+  if (!evidenceMetrics.movements && !operationalSnapshot.exists())
+    missing.push("Sem movimentação operacional vinculada ao mês.");
+  if (!billingDocuments.length)
+    missing.push("Sem documento financeiro vinculado à competência.");
+  if (!relevantEvents.some((event) => String(event.type).startsWith("billing.")))
+    missing.push("Sem evento de faturamento registrado para a competência.");
+
+  return {
+    competencia,
+    status: period?.status ?? "aberto",
+    generated_at: new Date().toISOString(),
+    metrics: {
+      movements: evidenceMetrics.movements,
+      incoming_pieces: evidenceMetrics.incomingPieces,
+      outgoing_pieces: evidenceMetrics.outgoingPieces,
+      inbound_receipts: inboundInPeriod.length,
+      orders: ordersInPeriod.length,
+      shipments: shipmentsInPeriod.length,
+      documents: billingDocuments.length,
+      manual_items: manualItems.length,
+      events: relevantEvents.length,
+    },
+    readiness: {
+      ok: missing.length === 0,
+      missing,
+    },
+    documents: billingDocuments.slice(0, 12).map((document) => ({
+      id: document.id,
+      file_name: document.file_name ?? document.title ?? document.id,
+      type: document.document_type ?? document.entity_type ?? "documento",
+      entity_id: document.entity_id ?? null,
+      created_at: toIso(document.created_at ?? document.uploaded_at),
+    })),
+    events: relevantEvents.map((event) => ({
+      id: event.id,
+      type: event.type,
+      title: event.title,
+      description: event.description,
+      severity: event.severity,
+      occurred_at: toIso(event.occurred_at ?? event.created_at),
+      entity_type: event.entity_type,
+      entity_id: event.entity_id,
+    })),
+    sources: [
+      "movements",
+      "inbound_receipts",
+      "orders",
+      "shipments",
+      "documents",
+      "events",
+      "billing_manual",
+      "billing_periods",
+      "billing_operational_snapshots",
+    ],
+  };
+}
+
 async function getBillingPeriod(competencia: string) {
   if (!firestore) throw new Error("Firestore não configurado.");
   const periodRef = doc(firestore, collectionNames.periods, competencia);
   const periodSnapshot = await getDoc(periodRef);
   const saved = periodSnapshot.exists() ? periodSnapshot.data() : {};
+  const invoiceSnapshot = saved.invoice_snapshot as AnyRecord | undefined;
+  if (
+    invoiceSnapshot?.status === "emitido" &&
+    Array.isArray(invoiceSnapshot.grupos) &&
+    Number.isFinite(Number(invoiceSnapshot.total))
+  ) {
+    return {
+      competencia,
+      status: saved.status ?? "emitido",
+      custo_estoque: billingUsageNumber(invoiceSnapshot.custo_estoque),
+      ad_valorem_rate: billingUsageNumber(invoiceSnapshot.ad_valorem_rate),
+      grupos: invoiceSnapshot.grupos,
+      total: Number(invoiceSnapshot.total),
+      total_cents: Number(invoiceSnapshot.total_cents ?? 0),
+      emitido_em: saved.emitido_em ?? invoiceSnapshot.issued_at ?? null,
+      email_enviado_em: saved.email_enviado_em ?? null,
+      pago_em: saved.pago_em ?? null,
+    };
+  }
   const config = await getBillingConfig();
-  const [products, movements, priceList, manualSnapshot] = await Promise.all([
-    readAll(collectionNames.products),
-    readAll(collectionNames.movements),
-    readAll(collectionNames.priceList),
+  const [
+    products,
+    inventory,
+    movements,
+    priceList,
+    manualSnapshot,
+    operationalSnapshot,
+    inventoryControlSnapshot,
+  ] = await Promise.all([
+    readLimited(collectionNames.products, CATALOG_READ_CAP),
+    readLimited(collectionNames.clientInventory, CATALOG_READ_CAP),
+    readLimited(collectionNames.movements, RECENT_MOVEMENTS_CAP, "data", "desc"),
+    readLimited(collectionNames.priceList, 500, "item", "asc"),
     getDoc(doc(firestore, collectionNames.manual, competencia)),
+    getDoc(
+      doc(
+        firestore,
+        collectionNames.billingOperationalSnapshots,
+        competencia,
+      ),
+    ),
+    getDoc(doc(firestore, "system_controls", "inventory")),
   ]);
 
-  const manual = manualSnapshot.exists() ? manualSnapshot.data().items ?? [] : [];
-  const custoEstoque = products.reduce((sum, product) => sum + Number(product.custo_total ?? 0), 0);
-  const saidas = movements
-    .filter((mov) => toIso(mov.data).startsWith(competencia))
-    .filter((mov) => Number(mov.sinal ?? 0) < 0)
-    .reduce((sum, mov) => sum + Number(mov.qtde ?? 0), 0);
+  const manual = manualSnapshot.exists()
+    ? (manualSnapshot.data().items ?? [])
+    : [];
+  const productInventoryValue = products.reduce(
+    (sum, product) => sum + Number(product.custo_total ?? 0),
+    0,
+  );
+  const liveInventoryValue = inventory.length
+    ? inventory.reduce(
+        (sum, item) => sum + Number(item.total_cost ?? item.custo_total ?? 0),
+        0,
+      )
+    : productInventoryValue;
+  const operationalData = operationalSnapshot.exists()
+    ? operationalSnapshot.data()
+    : {};
+  const snapshotMode = String(operationalData.mode ?? "");
+  const snapshotUsage = (operationalData.usage ?? {}) as AnyRecord;
+  const allMovementsInPeriod = movements.filter((movement) =>
+    sameBillingCompetencia(
+      movement.occurred_at ?? movement.data ?? movement.created_at,
+      competencia,
+    ),
+  );
+  const billableMovements = operationalSnapshot.exists()
+    ? allMovementsInPeriod.filter(
+        (movement) =>
+          billablePostCutoverDirection(movement, "incoming") ||
+          billablePostCutoverDirection(movement, "outgoing"),
+      )
+    : allMovementsInPeriod;
+  const incomingPieces = billableMovements
+    .filter((movement) =>
+      operationalSnapshot.exists()
+        ? billablePostCutoverDirection(movement, "incoming")
+        : Number(movement.sinal ?? movement.sign ?? 0) > 0 ||
+          String(movement.tipo_mov ?? "").toUpperCase() === "ENTRADA",
+    )
+    .reduce(
+      (sum, movement) =>
+        sum + Math.abs(Number(movement.qtde ?? movement.quantity ?? 0)),
+      0,
+    );
+  const outgoingPieces = billableMovements
+    .filter((movement) =>
+      operationalSnapshot.exists()
+        ? billablePostCutoverDirection(movement, "outgoing")
+        : Number(movement.sinal ?? movement.sign ?? 0) < 0 ||
+          String(movement.tipo_mov ?? "").toUpperCase() === "SAIDA",
+    )
+    .reduce(
+      (sum, movement) =>
+        sum + Math.abs(Number(movement.qtde ?? movement.quantity ?? 0)),
+      0,
+    );
+  const currentUsage = {
+    custo_estoque: liveInventoryValue,
+    entradas_pecas: incomingPieces,
+    saidas_pecas: outgoingPieces,
+    movimentacoes: billableMovements.length,
+  };
+  const inventoryControl = inventoryControlSnapshot.exists()
+    ? inventoryControlSnapshot.data()
+    : {};
+  const openingInventoryInProgress =
+    inventoryControl.opening_inventory_required === true ||
+    inventoryControl.stock_initialized === false;
+  const usage =
+    snapshotMode === "replace"
+      ? {
+          custo_estoque: billingUsageNumber(snapshotUsage.custo_estoque),
+          entradas_pecas: billingUsageNumber(snapshotUsage.entradas_pecas),
+          saidas_pecas: billingUsageNumber(snapshotUsage.saidas_pecas),
+          movimentacoes: billingUsageNumber(snapshotUsage.movimentacoes),
+        }
+      : snapshotMode === "baseline"
+        ? {
+            custo_estoque: openingInventoryInProgress
+              ? billingUsageNumber(snapshotUsage.custo_estoque)
+              : currentUsage.custo_estoque,
+            entradas_pecas:
+              billingUsageNumber(snapshotUsage.entradas_pecas) +
+              currentUsage.entradas_pecas,
+            saidas_pecas:
+              billingUsageNumber(snapshotUsage.saidas_pecas) +
+              currentUsage.saidas_pecas,
+            movimentacoes:
+              billingUsageNumber(snapshotUsage.movimentacoes) +
+              currentUsage.movimentacoes,
+          }
+        : currentUsage;
+  const automaticQuantities: Record<string, number> = {
+    ad_valorem: usage.custo_estoque,
+    mov_entrada_pecas: usage.entradas_pecas,
+    mov_saida_pecas: usage.saidas_pecas,
+    mov_count: usage.movimentacoes,
+  };
 
   const itens = priceList
     .filter((item) => item.ativo !== false)
     .map((item) => {
-      const manualItem = manual.find((entry: AnyRecord) => entry.price_list_id === item.id);
+      const manualItem = manual.find(
+        (entry: AnyRecord) =>
+          String(entry.price_list_id) === String(item.id),
+      );
       const autoSource = item.auto_source;
-      const qtde =
-        autoSource === "ad_valorem"
-          ? custoEstoque
-          : autoSource === "mov_saida_pecas"
-            ? saidas
-            : Number(manualItem?.qtde ?? 0);
+      const qtde = autoSource
+        ? billingUsageNumber(automaticQuantities[String(autoSource)])
+        : Number(manualItem?.qtde ?? 0);
       const valorUnit =
         autoSource === "ad_valorem"
           ? Number(config.ad_valorem_rate ?? 0.005)
@@ -3219,18 +2768,21 @@ async function getBillingPeriod(competencia: string) {
   return {
     competencia,
     status: saved.status ?? "aberto",
-    custo_estoque: custoEstoque,
+    custo_estoque: usage.custo_estoque,
     ad_valorem_rate: Number(config.ad_valorem_rate ?? 0.005),
     grupos: [...gruposMap.values()],
     total: [...gruposMap.values()].reduce((sum, group) => sum + group.total, 0),
     emitido_em: saved.emitido_em ?? null,
     email_enviado_em: saved.email_enviado_em ?? null,
     pago_em: saved.pago_em ?? null,
+    operational_snapshot_at: operationalData.created_at_iso ?? null,
   };
 }
 
 function sortByDateDesc(items: AnyRecord[], field: string) {
-  return [...items].sort((a, b) => toIso(b[field]).localeCompare(toIso(a[field])));
+  return [...items].sort((a, b) =>
+    toIso(b[field]).localeCompare(toIso(a[field])),
+  );
 }
 
 function eventView(event: AnyRecord) {
@@ -3312,14 +2864,19 @@ function deriveAgentInsights({
   const missingCostProducts = products.filter(
     (product) =>
       Number(product.estoque_btg ?? 0) > 0 &&
-      (Number(product.preco_unit ?? 0) <= 0 || Number(product.custo_total ?? 0) <= 0),
+      (Number(product.preco_unit ?? 0) <= 0 ||
+        Number(product.custo_total ?? 0) <= 0),
   );
   const openOrders = orders.filter((order) =>
     OPEN_ORDER_STATUSES.has(String(order.status ?? "").toUpperCase()),
   );
-  const zeroStockSkus = skus.filter((sku) => Number(sku.estoque_atual ?? 0) <= 0);
+  const zeroStockSkus = skus.filter(
+    (sku) => Number(sku.estoque_atual ?? 0) <= 0,
+  );
   const currentPeriod = new Date().toISOString().slice(0, 7);
-  const currentBilling = periods.find((period) => period.competencia === currentPeriod);
+  const currentBilling = periods.find(
+    (period) => period.competencia === currentPeriod,
+  );
   const latestMovement = sortByDateDesc(movements, "data")[0];
 
   return [
@@ -3379,7 +2936,8 @@ function deriveAgentInsights({
       ? {
           id: "derived_no_movements",
           title: "Sem movimentações registradas",
-          message: "Ainda não encontrei movimentações para montar histórico operacional.",
+          message:
+            "Ainda não encontrei movimentações para montar histórico operacional.",
           priority: "normal",
           status: "open",
           entity_type: "movimentacao",
@@ -3392,31 +2950,45 @@ function deriveAgentInsights({
 }
 
 async function getAiOverview() {
-  const [products, skus, movements, orders, periods, events, inbox, memory, knowledge] =
-    await Promise.all([
-      readAll(collectionNames.products),
-      readAll(collectionNames.skus),
-      readAll(collectionNames.movements),
-      readAll(collectionNames.orders),
-      readAll(collectionNames.periods),
-      readAll(collectionNames.events),
-      readAll(collectionNames.agentInbox),
-      readAll(collectionNames.agentMemory),
-      readAll(collectionNames.agentKnowledge),
-    ]);
+  const [
+    aggregate,
+    products,
+    skus,
+    movements,
+    orders,
+    periods,
+    events,
+    inbox,
+    memory,
+    knowledge,
+  ] = await Promise.all([
+    readOpsAggregate("dashboard"),
+    readLimited(collectionNames.products, CATALOG_READ_CAP),
+    readLimited(collectionNames.skus, CATALOG_READ_CAP),
+    readLimited(collectionNames.movements, RECENT_MOVEMENTS_CAP, "data", "desc"),
+    readLimited(collectionNames.orders, OPS_TASK_READ_CAP, "data_solic", "desc"),
+    readLimited(collectionNames.periods, 120, "competencia", "desc"),
+    readLimited(collectionNames.events, RECENT_EVENTS_CAP, "occurred_at", "desc"),
+    readLimited(collectionNames.agentInbox, 100, "created_at", "desc"),
+    readLimited(collectionNames.agentMemory, 50, "updated_at", "desc"),
+    readLimited(collectionNames.agentKnowledge, 50, "updated_at", "desc"),
+  ]);
 
-  const inventoryValue = products.reduce(
-    (sum, product) => sum + Number(product.custo_total ?? 0),
-    0,
+  const inventoryValue = Number(
+    aggregate?.custo_total ??
+      products.reduce((sum, product) => sum + Number(product.custo_total ?? 0), 0),
   );
-  const totalPieces = skus.reduce(
-    (sum, sku) => sum + Number(sku.estoque_atual ?? 0),
-    0,
+  const totalPieces = Number(
+    aggregate?.total_pecas ??
+      skus.reduce((sum, sku) => sum + Number(sku.estoque_atual ?? 0), 0),
   );
+  const productCount = Number(aggregate?.total_produtos ?? products.length);
+  const skuCount = Number(aggregate?.total_skus ?? skus.length);
   const missingCostCount = products.filter(
     (product) =>
       Number(product.estoque_btg ?? 0) > 0 &&
-      (Number(product.preco_unit ?? 0) <= 0 || Number(product.custo_total ?? 0) <= 0),
+      (Number(product.preco_unit ?? 0) <= 0 ||
+        Number(product.custo_total ?? 0) <= 0),
   ).length;
   const openOrderCount = orders.filter((order) =>
     OPEN_ORDER_STATUSES.has(String(order.status ?? "").toUpperCase()),
@@ -3425,7 +2997,9 @@ async function getAiOverview() {
   const derivedTimeline = sortByDateDesc(movements, "data")
     .slice(0, 12)
     .map(derivedEventFromMovement);
-  const timeline = actualEvents.length ? actualEvents.slice(0, 80) : derivedTimeline;
+  const timeline = actualEvents.length
+    ? actualEvents.slice(0, 80)
+    : derivedTimeline;
   const persistentInsights = sortByDateDesc(
     inbox.filter((item) => item.status !== "resolved").map(insightView),
     "created_at",
@@ -3445,17 +3019,21 @@ async function getAiOverview() {
       scope_type: "cliente",
       scope_id: "BTG Pactual",
       title: "BTG Pactual",
-      event_count: movements.length + orders.length + periods.length + events.length,
+      event_count:
+        movements.length + orders.length + periods.length + events.length,
       last_event_title: latestEvent?.title ?? "Base importada",
       last_event_at: latestEvent?.occurred_at ?? toIso(latestMovement?.data),
-      summary: `${products.length.toLocaleString("pt-BR")} produto(s), ${skus.length.toLocaleString("pt-BR")} SKU(s), ${totalPieces.toLocaleString("pt-BR")} peça(s) em acompanhamento.`,
+      summary: `${productCount.toLocaleString("pt-BR")} produto(s), ${skuCount.toLocaleString("pt-BR")} SKU(s), ${totalPieces.toLocaleString("pt-BR")} peça(s) em acompanhamento.`,
     },
     {
       id: "derived_inventory",
       scope_type: "estoque",
       scope_id: "BTG",
       title: "Estoque BTG",
-      event_count: movements.length + events.filter((event) => String(event.type).startsWith("inventory.")).length,
+      event_count:
+        movements.length +
+        events.filter((event) => String(event.type).startsWith("inventory."))
+          .length,
       last_event_title: latestMovement
         ? `${latestMovement.tipo_mov} - ${latestMovement.cod_sku}`
         : "Sem movimentação",
@@ -3465,7 +3043,10 @@ async function getAiOverview() {
         currency: "BRL",
       })}.`,
     },
-    ...sortByDateDesc(knowledge.map(knowledgeMemoryView), "last_event_at").slice(0, 12),
+    ...sortByDateDesc(
+      knowledge.map(knowledgeMemoryView),
+      "last_event_at",
+    ).slice(0, 12),
     ...sortByDateDesc(memory.map(memoryView), "updated_at").slice(0, 18),
   ];
 
@@ -3497,7 +3078,12 @@ async function getAiOverview() {
   };
 }
 
-async function route(pathname: string, method: HttpMethod, searchParams: URLSearchParams, init?: RequestInit) {
+async function route(
+  pathname: string,
+  method: HttpMethod,
+  searchParams: URLSearchParams,
+  init?: RequestInit,
+) {
   if (!firestore) return json({ message: "Firebase não configurado." }, 503);
 
   if (pathname === "/api/healthz") return json({ ok: true });
@@ -3508,110 +3094,272 @@ async function route(pathname: string, method: HttpMethod, searchParams: URLSear
   if (pathname === "/api/operational/foundation" && method === "GET") {
     return json(await getOperationalFoundation());
   }
-  if (pathname === "/api/operational/sync-real-foundation" && method === "POST") {
+  if (
+    pathname === "/api/operational/sync-real-foundation" &&
+    method === "POST"
+  ) {
     return json(await syncRealOperationalFoundation(), 201);
   }
   if (pathname === "/api/client/overview" && method === "GET") {
     return json(await getClientOverview());
   }
   if (pathname === "/api/agent-dute/chat" && method === "GET") {
-    return json(await getAgentDuteChat(searchParams.get("conversation_id") ?? undefined));
-  }
-  if (pathname === "/api/agent-dute/chat" && method === "POST") {
-    return json(await chatWithAgentDute(await readBody(init)), 201);
-  }
-  if (pathname === "/api/client/requests" && method === "POST") {
-    return json(await createCustomerRequest(await readBody(init)), 201);
-  }
-  const requestActionMatch = pathname.match(/^\/api\/customer-requests\/([^/]+)\/(approve|reject|close)$/);
-  if (requestActionMatch && method === "POST") {
     return json(
-      await transitionCustomerRequest(
-        decodeURIComponent(requestActionMatch[1]),
-        requestActionMatch[2] as "approve" | "reject" | "close",
-      ),
+      await getAgentDuteChat(searchParams.get("conversation_id") ?? undefined),
     );
   }
   if (pathname === "/api/warehouse/ops" && method === "GET") {
     return json(await getWarehouseOps());
   }
-  const advanceTaskMatch = pathname.match(/^\/api\/warehouse\/tasks\/([^/]+)\/advance$/);
-  if (advanceTaskMatch && method === "POST") {
-    return json(await advanceWarehouseTask(decodeURIComponent(advanceTaskMatch[1])));
-  }
-  const exceptionTaskMatch = pathname.match(/^\/api\/warehouse\/tasks\/([^/]+)\/exception$/);
-  if (exceptionTaskMatch && method === "POST") {
-    return json(
-      await registerWarehouseException(
-        decodeURIComponent(exceptionTaskMatch[1]),
-        await readBody(init),
-      ),
-      201,
-    );
-  }
-  if (pathname === "/api/ai/events" && method === "POST") {
-    const body = await readBody(init);
-    const event = await emitEvent({
-      type: String(body.type ?? "operator.note"),
-      title: String(body.title ?? "Anotação operacional"),
-      description: String(body.description ?? ""),
-      severity: (body.severity as EventSeverity) ?? "info",
-      entity_type: body.entity_type,
-      entity_id: body.entity_id,
-      customer_code: body.customer_code,
-      customer_name: body.customer_name,
-      payload: body.payload ?? {},
-      source: body.source ?? "manual",
-    });
-    return json(event, 201);
-  }
 
-  const inboxMatch = pathname.match(/^\/api\/ai\/inbox\/([^/]+)$/);
-  if (inboxMatch && (method === "PATCH" || method === "PUT")) {
-    const body = await readBody(init);
-    const id = decodeURIComponent(inboxMatch[1]);
-    await updateDoc(doc(firestore, collectionNames.agentInbox, id), {
-      status: body.status ?? "resolved",
-      resolved_by: currentActor(),
-      resolved_at: serverTimestamp(),
-      updated_at: serverTimestamp(),
-    });
-    return json({ ok: true });
-  }
 
   if (pathname === "/api/products/stats") {
-    return json(categoryStats(await readAll(collectionNames.products)));
+    const aggregate = await readOpsAggregate("dashboard");
+    if (Array.isArray(aggregate?.by_category) && aggregate.by_category.length) {
+      return json(aggregate.by_category);
+    }
+    return json(
+      categoryStats(
+        await readLimited(collectionNames.products, CATALOG_READ_CAP),
+      ),
+    );
   }
 
-  const listRoutes: Array<[RegExp, string, string[], string[]]> = [
-    [/^\/api\/customers$/, collectionNames.customers, ["status"], ["code", "name"]],
-    [/^\/api\/customer-accounts$/, collectionNames.customerAccounts, ["customer_code", "status"], ["email", "name", "user_id"]],
-    [/^\/api\/customer-requests$/, collectionNames.customerRequests, ["customer_code", "status", "priority"], ["title", "description", "type"]],
-    [/^\/api\/products$/, collectionNames.products, ["categoria", "grupo", "genero"], ["cod_cliente", "produto", "categoria", "grupo"]],
-    [/^\/api\/skus$/, collectionNames.skus, ["cod_cliente", "rua", "prateleira", "estoque_tipo"], ["cod_btg", "cod_cliente", "produto"]],
-    [/^\/api\/locations$/, collectionNames.locations, ["warehouse_code", "aisle", "shelf", "status"], ["label", "aisle", "shelf", "bin"]],
-    [/^\/api\/stock-balances$/, collectionNames.stockBalances, ["customer_code", "sku_code", "location_id", "status"], ["sku_code", "client_item_code", "product_name", "location_id"]],
-    [/^\/api\/movements$/, collectionNames.movements, ["cod_sku", "tipo_mov", "responsavel"], ["cod_sku", "produto", "doc_nf"]],
-    [/^\/api\/inbound$/, collectionNames.inboundReceipts, ["customer_code", "status"], ["receipt_number"]],
-    [/^\/api\/putaway\/tasks$/, collectionNames.putawayTasks, ["customer_code", "status", "location_id"], ["location_id", "title"]],
-    [/^\/api\/orders$/, collectionNames.orders, ["status", "num_pedido", "solicitante"], ["num_pedido", "produto", "solicitante"]],
-    [/^\/api\/order-items$/, collectionNames.orderItems, ["customer_code", "status", "order_number"], ["order_number", "sku_code", "product_name"]],
-    [/^\/api\/picking\/tasks$/, collectionNames.pickTasks, ["customer_code", "status", "order_number"], ["order_number", "assigned_to"]],
-    [/^\/api\/packing\/tasks$/, collectionNames.packTasks, ["customer_code", "status", "order_number"], ["order_number"]],
-    [/^\/api\/shipments$/, collectionNames.shipments, ["customer_code", "status"], ["order_number", "destination"]],
-    [/^\/api\/documents$/, collectionNames.documents, ["customer_code", "entity_type"], ["file_name", "entity_id"]],
-    [/^\/api\/billing\/price-list$/, collectionNames.priceList, [], ["item", "grupo"]],
-    [/^\/api\/billing\/users$/, collectionNames.users, [], ["nome", "email"]],
+  type ListRouteConfig = {
+    regex: RegExp;
+    name: string;
+    filters: string[];
+    searchFields: string[];
+    orderByField: string;
+    direction?: "asc" | "desc";
+    equalityFilterFields?: string[];
+    hardCap?: number;
+  };
+
+  const listRoutes: ListRouteConfig[] = [
+    {
+      regex: /^\/api\/customers$/,
+      name: collectionNames.customers,
+      filters: ["status"],
+      searchFields: ["code", "name"],
+      orderByField: "name",
+      direction: "asc",
+      equalityFilterFields: ["status"],
+      hardCap: 500,
+    },
+    {
+      regex: /^\/api\/customer-accounts$/,
+      name: collectionNames.customerAccounts,
+      filters: ["customer_code", "status"],
+      searchFields: ["email", "name", "user_id"],
+      orderByField: "created_at",
+      equalityFilterFields: ["customer_code", "status"],
+    },
+    {
+      regex: /^\/api\/customer-requests$/,
+      name: collectionNames.customerRequests,
+      filters: ["customer_code", "status", "priority"],
+      searchFields: ["title", "description", "type"],
+      orderByField: "created_at",
+      equalityFilterFields: ["customer_code", "status"],
+    },
+    {
+      regex: /^\/api\/agent-dute\/notifications$/,
+      name: collectionNames.operationalNotifications,
+      filters: ["customer_code", "status", "audience", "topic"],
+      searchFields: ["title", "subject", "body", "trigger_event_type"],
+      orderByField: "created_at",
+      equalityFilterFields: ["customer_code", "status"],
+    },
+    {
+      regex: /^\/api\/products$/,
+      name: collectionNames.products,
+      filters: ["categoria", "grupo", "genero"],
+      searchFields: ["cod_cliente", "produto", "categoria", "grupo"],
+      orderByField: "produto",
+      equalityFilterFields: ["categoria"],
+      hardCap: CATALOG_READ_CAP,
+    },
+    {
+      regex: /^\/api\/skus$/,
+      name: collectionNames.skus,
+      filters: ["cod_cliente", "rua", "prateleira", "estoque_tipo"],
+      searchFields: ["cod_btg", "cod_cliente", "produto"],
+      orderByField: "cod_btg",
+      equalityFilterFields: ["cod_cliente"],
+      hardCap: CATALOG_READ_CAP,
+    },
+    {
+      regex: /^\/api\/locations$/,
+      name: collectionNames.locations,
+      filters: ["warehouse_code", "aisle", "shelf", "status"],
+      searchFields: ["label", "aisle", "shelf", "bin"],
+      orderByField: "label",
+      equalityFilterFields: ["status", "warehouse_code"],
+      hardCap: CATALOG_READ_CAP,
+    },
+    {
+      regex: /^\/api\/stock-balances$/,
+      name: collectionNames.stockBalances,
+      filters: ["customer_code", "sku_code", "location_id", "status"],
+      searchFields: ["sku_code", "client_item_code", "product_name", "location_id"],
+      orderByField: "sku_code",
+      equalityFilterFields: ["customer_code", "status", "sku_code"],
+      hardCap: CATALOG_READ_CAP,
+    },
+    {
+      regex: /^\/api\/movements$/,
+      name: collectionNames.movements,
+      filters: ["cod_sku", "tipo_mov", "responsavel"],
+      searchFields: ["cod_sku", "produto", "doc_nf"],
+      orderByField: "data",
+      equalityFilterFields: ["cod_sku", "tipo_mov"],
+      hardCap: 500,
+    },
+    {
+      regex: /^\/api\/inbound$/,
+      name: collectionNames.inboundReceipts,
+      filters: ["customer_code", "status"],
+      searchFields: ["receipt_number"],
+      orderByField: "created_at",
+      equalityFilterFields: ["customer_code", "status"],
+    },
+    {
+      regex: /^\/api\/returns$/,
+      name: collectionNames.returns,
+      filters: ["customer_code", "status"],
+      searchFields: ["reference", "source"],
+      orderByField: "created_at",
+      equalityFilterFields: ["customer_code", "status"],
+    },
+    {
+      regex: /^\/api\/return-items$/,
+      name: collectionNames.returnItems,
+      filters: ["customer_code", "status", "return_id"],
+      searchFields: ["sku_code", "client_item_code", "product_name"],
+      orderByField: "created_at",
+      equalityFilterFields: ["customer_code", "status", "return_id"],
+    },
+    {
+      regex: /^\/api\/quality-exceptions$/,
+      name: collectionNames.qualityExceptions,
+      filters: ["customer_code", "status", "severity", "task_type"],
+      searchFields: ["note", "reference", "task_uid"],
+      orderByField: "created_at",
+      equalityFilterFields: ["customer_code", "status"],
+    },
+    {
+      regex: /^\/api\/putaway\/tasks$/,
+      name: collectionNames.putawayTasks,
+      filters: ["customer_code", "status", "location_id"],
+      searchFields: ["location_id", "title"],
+      orderByField: "updated_at",
+      equalityFilterFields: ["customer_code", "status"],
+    },
+    {
+      regex: /^\/api\/orders$/,
+      name: collectionNames.orders,
+      filters: ["status", "num_pedido", "solicitante"],
+      searchFields: ["num_pedido", "produto", "solicitante"],
+      orderByField: "data_solic",
+      equalityFilterFields: ["status"],
+    },
+    {
+      regex: /^\/api\/order-items$/,
+      name: collectionNames.orderItems,
+      filters: ["customer_code", "status", "order_number"],
+      searchFields: ["order_number", "sku_code", "product_name"],
+      orderByField: "order_number",
+      equalityFilterFields: ["customer_code", "status", "order_number"],
+    },
+    {
+      regex: /^\/api\/picking\/tasks$/,
+      name: collectionNames.pickTasks,
+      filters: ["customer_code", "status", "order_number"],
+      searchFields: ["order_number", "assigned_to"],
+      orderByField: "updated_at",
+      equalityFilterFields: ["customer_code", "status"],
+    },
+    {
+      regex: /^\/api\/packing\/tasks$/,
+      name: collectionNames.packTasks,
+      filters: ["customer_code", "status", "order_number"],
+      searchFields: ["order_number"],
+      orderByField: "updated_at",
+      equalityFilterFields: ["customer_code", "status"],
+    },
+    {
+      regex: /^\/api\/shipments$/,
+      name: collectionNames.shipments,
+      filters: ["customer_code", "status"],
+      searchFields: ["order_number", "destination"],
+      orderByField: "updated_at",
+      equalityFilterFields: ["customer_code", "status"],
+    },
+    {
+      regex: /^\/api\/documents$/,
+      name: collectionNames.documents,
+      filters: ["customer_code", "entity_type"],
+      searchFields: ["file_name", "entity_id"],
+      orderByField: "created_at",
+      equalityFilterFields: ["customer_code", "entity_type"],
+    },
+    {
+      regex: /^\/api\/billing\/price-list$/,
+      name: collectionNames.priceList,
+      filters: [],
+      searchFields: ["item", "grupo"],
+      orderByField: "item",
+      hardCap: 500,
+    },
+    {
+      regex: /^\/api\/billing\/users$/,
+      name: collectionNames.users,
+      filters: [],
+      searchFields: ["nome", "email"],
+      orderByField: "email",
+      hardCap: 500,
+    },
   ];
 
-  for (const [regex, name, filters, searchFields] of listRoutes) {
-    if (regex.test(pathname) && method === "GET") {
-      const rows = await readAll(name);
-      const orderedRows =
-        name === collectionNames.movements
-          ? rows.sort((a, b) => toIso(b.data).localeCompare(toIso(a.data)))
-          : rows;
-      return json(filterAndPage(orderedRows, searchParams, filters, searchFields));
+  for (const routeConfig of listRoutes) {
+    if (routeConfig.regex.test(pathname) && method === "GET") {
+      const equalityFilters = (routeConfig.equalityFilterFields ?? [])
+        .map((field) => {
+          const value = searchParams.get(field);
+          return value ? { field, value } : null;
+        })
+        .filter(Boolean) as Array<{ field: string; value: string }>;
+
+      // Prefer a single equality filter that matches declared composite indexes.
+      const preferredFilters =
+        equalityFilters.length <= 1
+          ? equalityFilters
+          : equalityFilters.slice(0, 1);
+
+      const result = await readPaged(routeConfig.name, {
+        orderByField: routeConfig.orderByField,
+        direction: routeConfig.direction,
+        equalityFilters: preferredFilters,
+        searchFields: routeConfig.searchFields,
+        params: searchParams,
+        hardCap: routeConfig.hardCap,
+      });
+
+      // Apply remaining non-equality filters in memory on the page only.
+      let items = result.items;
+      for (const field of routeConfig.filters) {
+        if (preferredFilters.some((f) => f.field === field)) continue;
+        const value = searchParams.get(field);
+        if (value) items = items.filter((row) => includes(row[field], value));
+      }
+
+      return json({
+        items,
+        total: result.total,
+        has_more: result.has_more,
+        next_cursor: result.next_cursor,
+      });
     }
   }
 
@@ -3619,13 +3367,26 @@ async function route(pathname: string, method: HttpMethod, searchParams: URLSear
 
   if (pathname === "/api/reports/export") {
     const type = searchParams.get("type");
+    if (!type) {
+      return json(
+        { message: "Informe type=orders|movements|products e filtros." },
+        400,
+      );
+    }
     const name =
       type === "orders"
         ? collectionNames.orders
         : type === "movements"
           ? collectionNames.movements
           : collectionNames.products;
-    return json({ generated_at: new Date().toISOString(), data: await readAll(name) });
+    const orderField =
+      type === "orders" ? "data_solic" : type === "movements" ? "data" : "produto";
+    return json({
+      generated_at: new Date().toISOString(),
+      capped: true,
+      limit: EXPORT_HARD_CAP,
+      data: await readLimited(name, EXPORT_HARD_CAP, orderField, "desc"),
+    });
   }
 
   if (pathname === "/api/billing/me") {
@@ -3633,85 +3394,30 @@ async function route(pathname: string, method: HttpMethod, searchParams: URLSear
     return json({ cliente_nome: config.cliente_nome, role: "cliente" });
   }
 
-  if (pathname === "/api/billing/config") {
-    if (method === "GET") return json(await getBillingConfig());
-    const body = await readBody(init);
-    await setDoc(doc(firestore, "billing_config", "default"), {
-      ...body,
-      updated_at: serverTimestamp(),
-    }, { merge: true });
+  if (pathname === "/api/billing/config" && method === "GET") {
     return json(await getBillingConfig());
   }
 
   if (pathname === "/api/billing/periods" && method === "GET") {
-    const periods = await readAll(collectionNames.periods);
+    const periods = await readLimited(
+      collectionNames.periods,
+      120,
+      "competencia",
+      "desc",
+    );
     return json({ items: periods });
   }
 
-  const periodMatch = pathname.match(/^\/api\/billing\/periods\/([^/]+)(?:\/([^/]+))?$/);
+  const periodMatch = pathname.match(
+    /^\/api\/billing\/periods\/([^/]+)(?:\/([^/]+))?$/,
+  );
   if (periodMatch) {
     const competencia = decodeURIComponent(periodMatch[1]);
     const action = periodMatch[2];
-    if (!action && method === "GET") return json(await getBillingPeriod(competencia));
-    if (action === "manual" && method === "PUT") {
-      const body = await readBody(init);
-      await setDoc(doc(firestore, collectionNames.manual, competencia), {
-        items: body.items ?? [],
-        updated_at: serverTimestamp(),
-      });
-      await emitEvent({
-        type: "billing.manual_quantities_saved",
-        title: "Quantidades manuais do faturamento salvas",
-        description: `Competência ${competencia}`,
-        entity_type: "fatura",
-        entity_id: competencia,
-        customer_code: "BTG Pactual",
-        payload: { competencia, items_count: (body.items ?? []).length },
-      });
+    if (action === "evidence" && method === "GET")
+      return json(await getBillingEvidence(competencia));
+    if (!action && method === "GET")
       return json(await getBillingPeriod(competencia));
-    }
-    if (action === "emit" && method === "POST") {
-      const period = await getBillingPeriod(competencia);
-      await setDoc(doc(firestore, collectionNames.periods, competencia), {
-        competencia,
-        status: "emitido",
-        total: period.total,
-        emitido_em: new Date().toISOString(),
-        updated_at: serverTimestamp(),
-      }, { merge: true });
-      await emitEvent({
-        type: "billing.invoice_emitted",
-        title: "Fatura emitida",
-        description: `Fatura de ${competencia} emitida no valor de ${period.total.toLocaleString("pt-BR", {
-          style: "currency",
-          currency: "BRL",
-        })}`,
-        severity: "attention",
-        entity_type: "fatura",
-        entity_id: competencia,
-        customer_code: "BTG Pactual",
-        payload: { competencia, total: period.total },
-      });
-      return json({ ok: true, email: { sent: false } });
-    }
-    if (action === "pay" && method === "POST") {
-      await setDoc(doc(firestore, collectionNames.periods, competencia), {
-        competencia,
-        status: "pago",
-        pago_em: new Date().toISOString(),
-        updated_at: serverTimestamp(),
-      }, { merge: true });
-      await emitEvent({
-        type: "billing.invoice_paid",
-        title: "Fatura marcada como paga",
-        description: `Competência ${competencia}`,
-        entity_type: "fatura",
-        entity_id: competencia,
-        customer_code: "BTG Pactual",
-        payload: { competencia },
-      });
-      return json(await getBillingPeriod(competencia));
-    }
   }
 
   if (pathname === "/api/billing/me/current") {
@@ -3719,7 +3425,14 @@ async function route(pathname: string, method: HttpMethod, searchParams: URLSear
   }
 
   if (pathname === "/api/billing/me/invoices") {
-    return json({ items: await readAll(collectionNames.periods) });
+    return json({
+      items: await readLimited(
+        collectionNames.periods,
+        120,
+        "competencia",
+        "desc",
+      ),
+    });
   }
 
   if (pathname === "/api/import" && method === "POST") {
@@ -3755,9 +3468,9 @@ async function route(pathname: string, method: HttpMethod, searchParams: URLSear
     return json({ ok: true, inserted, errors: [] });
   }
 
+  // customers, customer-accounts, documents, products, skus e price-list são
+  // mutados exclusivamente via Cloud Functions (mutateManagedEntity).
   const operationalEntityCollections: Record<string, string> = {
-    customers: collectionNames.customers,
-    "customer-accounts": collectionNames.customerAccounts,
     "customer-requests": collectionNames.customerRequests,
     locations: collectionNames.locations,
     "stock-balances": collectionNames.stockBalances,
@@ -3767,47 +3480,43 @@ async function route(pathname: string, method: HttpMethod, searchParams: URLSear
     "picking/tasks": collectionNames.pickTasks,
     "packing/tasks": collectionNames.packTasks,
     shipments: collectionNames.shipments,
-    documents: collectionNames.documents,
   };
-  const operationalEntityMatch = pathname.match(/^\/api\/(customers|customer-accounts|customer-requests|locations|stock-balances|inbound|putaway\/tasks|order-items|picking\/tasks|packing\/tasks|shipments|documents)(?:\/([^/]+))?$/);
+  const operationalEntityMatch = pathname.match(
+    /^\/api\/(customer-requests|locations|stock-balances|inbound|putaway\/tasks|order-items|picking\/tasks|packing\/tasks|shipments)(?:\/([^/]+))?$/,
+  );
   if (operationalEntityMatch) {
     const name = operationalEntityCollections[operationalEntityMatch[1]];
     const id = operationalEntityMatch[2];
 
-    if (method === "POST") return json(await createItem(name, await readBody(init)), 201);
-    if (id && (method === "PATCH" || method === "PUT")) return json(await updateItem(name, id, await readBody(init)));
+    if (method === "POST")
+      return json(await createItem(name, await readBody(init)), 201);
+    if (id && (method === "PATCH" || method === "PUT"))
+      return json(await updateItem(name, id, await readBody(init)));
     if (id && method === "DELETE") {
       await deleteItem(name, id);
       return json(null, 204);
     }
   }
 
-  const entityMatch = pathname.match(/^\/api\/(products|skus|orders|billing\/price-list|billing\/users)(?:\/([^/]+))?$/);
+  const entityMatch = pathname.match(
+    /^\/api\/(orders|billing\/users)(?:\/([^/]+))?$/,
+  );
   if (entityMatch) {
     const segment = entityMatch[1];
     const id = entityMatch[2];
     const name =
-      segment === "billing/price-list"
-        ? collectionNames.priceList
-        : segment === "billing/users"
-          ? collectionNames.users
-          : collectionNames[segment as "products" | "skus" | "orders"];
+      segment === "billing/users"
+        ? collectionNames.users
+        : collectionNames.orders;
 
-    if (method === "POST") return json(await createItem(name, await readBody(init)), 201);
-    if (id && (method === "PATCH" || method === "PUT")) return json(await updateItem(name, id, await readBody(init)));
+    if (method === "POST")
+      return json(await createItem(name, await readBody(init)), 201);
+    if (id && (method === "PATCH" || method === "PUT"))
+      return json(await updateItem(name, id, await readBody(init)));
     if (id && method === "DELETE") {
       await deleteItem(name, id);
       return json(null, 204);
     }
-  }
-
-  const roleMatch = pathname.match(/^\/api\/billing\/users\/([^/]+)\/role$/);
-  if (roleMatch && method === "PATCH") {
-    return json(await updateItem(collectionNames.users, roleMatch[1], await readBody(init)));
-  }
-
-  if (pathname === "/api/movements" && method === "POST") {
-    return json(await createMovement(await readBody(init)), 201);
   }
 
   return json({ message: "Rota Firebase não implementada", pathname }, 404);
@@ -3830,11 +3539,17 @@ export function installCloudApi() {
     if (!url.pathname.startsWith("/api/")) return originalFetch(input, init);
 
     try {
-      const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase() as HttpMethod;
-      if (shouldUseFunctionsApi(url.pathname, method)) {
-        const functionsResponse = await callFunctionsApi(url.pathname, method, init);
-        if (functionsResponse) return functionsResponse;
-      }
+      const method = (
+        init?.method ?? (input instanceof Request ? input.method : "GET")
+      ).toUpperCase() as HttpMethod;
+      // Rotas com backend em Cloud Functions são sempre atendidas por ele;
+      // não existe fallback client-side para mutações do ledger.
+      const functionsResponse = await callFunctionsApi(
+        url.pathname,
+        method,
+        init,
+      );
+      if (functionsResponse) return functionsResponse;
 
       return await route(url.pathname, method, url.searchParams, init);
     } catch (error) {
