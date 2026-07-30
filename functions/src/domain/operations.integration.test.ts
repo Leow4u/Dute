@@ -6,9 +6,18 @@ import { getFirestore, type Firestore } from "firebase-admin/firestore";
 
 import {
   advanceWarehouseTaskTransaction,
+  completeOpeningInventorySessionTransaction,
+  createInboundReceiptTransaction,
+  createOpeningInventorySessionTransaction,
+  createReturnReceiptTransaction,
   createInventoryMovementTransaction,
   createCustomerRequestTransaction,
   decideCustomerRequestTransaction,
+  openingInventorySessionDocumentId,
+  recordCycleCountTransaction,
+  removeOpeningInventoryLineTransaction,
+  setReturnDispositionTransaction,
+  updateInboundReceiptConferenceTransaction,
   type OperationalActor,
 } from "./operations.js";
 
@@ -34,16 +43,57 @@ async function clearFirestore() {
   assert.equal(response.ok, true, await response.text());
 }
 
-async function advance(taskUid: string, expectedStatus: string) {
+async function advance(
+  taskUid: string,
+  expectedStatus: string,
+  operation?: Record<string, unknown>,
+) {
   return advanceWarehouseTaskTransaction(
     db,
     {
       task_uid: taskUid,
       expected_status: expectedStatus,
-      idempotency_key: `${taskUid}:${expectedStatus}`,
+      operation,
+      idempotency_key: `${taskUid}:${expectedStatus}:${JSON.stringify(operation ?? {})}`,
     },
     actor,
   );
+}
+
+type OpeningCountInput = Parameters<typeof recordCycleCountTransaction>[1];
+
+function openingCountInput(
+  sessionId: string,
+  overrides: Partial<OpeningCountInput> = {},
+): OpeningCountInput {
+  return {
+    mode: "opening",
+    session_id: sessionId,
+    customer_code: "BTG Pactual",
+    sku_code: "SKU-OPEN-001",
+    client_item_code: "CLIENTE-OPEN-001",
+    product_name: "Camiseta institucional de teste",
+    product_registration: "new",
+    category: "VESTUARIO",
+    barcode: "7890000000001",
+    brand: "Dutelog Teste",
+    size: "M",
+    color: "Azul",
+    photo_urls: [
+      "https://storage.googleapis.com/demo-dute-operations/product-photos/camiseta-institucional.jpg",
+    ],
+    photo_storage_paths: [
+      "customers/BTG_Pactual/product-photos/camiseta-institucional.jpg",
+    ],
+    location_id: "RUA-A/PRAT-01/CX-001",
+    counted_qty: 12,
+    unit_cost: 34.9,
+    reason: "Inventário físico de abertura",
+    reference: "ABERTURA-001",
+    occurred_at: "2026-07-22T12:00:00.000Z",
+    idempotency_key: "opening-count-1",
+    ...overrides,
+  };
 }
 
 before(async () => {
@@ -147,28 +197,18 @@ describe("fluxo WMS transacional", () => {
       [3, 3],
     );
 
-    const competingRequest = await createCustomerRequestTransaction(
-      db,
-      {
-        type: "retirada",
-        priority: "normal",
-        title: "Pedido concorrente",
-        customer_code: "BTG Pactual",
-        idempotency_key: "request-outbound-2",
-        items: [{ sku_code: "BTG-TEST-1", quantity: 2 }],
-      },
-      { ...actor, role: "cliente", uid: "client-1" },
-    );
     await assert.rejects(
-      decideCustomerRequestTransaction(
+      createCustomerRequestTransaction(
         db,
         {
-          request_id: String(competingRequest.id),
-          action: "approve",
-          expected_status: "open",
-          idempotency_key: "approve-outbound-2",
+          type: "retirada",
+          priority: "normal",
+          title: "Pedido concorrente",
+          customer_code: "BTG Pactual",
+          idempotency_key: "request-outbound-2",
+          items: [{ sku_code: "BTG-TEST-1", quantity: 2 }],
         },
-        actor,
+        { ...actor, role: "cliente", uid: "client-1" },
       ),
       /Saldo insuficiente/,
     );
@@ -176,19 +216,96 @@ describe("fluxo WMS transacional", () => {
     const pickTaskId = String(approved.pick_task_id);
     const orderId = String(approved.order_id);
     await advance(`picking:${pickTaskId}`, "planned");
+    await assert.rejects(
+      advance(`picking:${pickTaskId}`, "in_progress"),
+      /conferência física/,
+    );
+    const pickLines = await db
+      .collection("pick_lines")
+      .where("pick_task_id", "==", pickTaskId)
+      .get();
     const picking = (await advance(
       `picking:${pickTaskId}`,
       "in_progress",
+      {
+        picking_lines: pickLines.docs.map((document) => ({
+          pick_line_id: document.id,
+          qty_picked: Number(document.data().qty_to_pick),
+          status: "confirmed",
+        })),
+      },
     )) as Record<string, unknown>;
     const packTaskId = String(picking.pack_task_id);
     await advance(`packing:${packTaskId}`, "ready");
+    await assert.rejects(
+      advance(`packing:${packTaskId}`, "in_progress"),
+      /lacre/,
+    );
+    await assert.rejects(
+      advance(`packing:${packTaskId}`, "in_progress", {
+        volume_label: "Volume 1",
+        seal_code: "LACRE-001",
+        package_count: 1,
+      }),
+      /conferência física/,
+    );
+    const orderItemsForPacking = await db
+      .collection("order_items")
+      .where("order_id", "==", orderId)
+      .get();
     const packing = (await advance(
       `packing:${packTaskId}`,
       "in_progress",
+      {
+        volume_label: "Volume 1",
+        seal_code: "LACRE-001",
+        package_count: 1,
+        packing_lines: orderItemsForPacking.docs.map((document) => ({
+          order_item_id: document.id,
+          qty_packed: Number(
+            document.data().picked_qty || document.data().allocated_qty,
+          ),
+          status: "confirmed",
+        })),
+      },
     )) as Record<string, unknown>;
     const shipmentId = String(packing.shipment_id);
-    await advance(`shipping:${shipmentId}`, "ready_to_dispatch");
-    await advance(`shipping:${shipmentId}`, "dispatched");
+    await assert.rejects(
+      advance(`shipping:${shipmentId}`, "ready_to_dispatch"),
+      /responsável pela coleta/,
+    );
+    await assert.rejects(
+      advance(`shipping:${shipmentId}`, "ready_to_dispatch", {
+        carrier: "Dutelog",
+      }),
+      /motorista/,
+    );
+    await assert.rejects(
+      advance(`shipping:${shipmentId}`, "ready_to_dispatch", {
+        carrier: "Dutelog",
+        driver_name: "Rafael",
+      }),
+      /placa/,
+    );
+    await advance(`shipping:${shipmentId}`, "ready_to_dispatch", {
+      carrier: "Dutelog",
+      driver_name: "Rafael",
+      vehicle_plate: "DUTE-001",
+    });
+    await assert.rejects(
+      advance(`shipping:${shipmentId}`, "dispatched"),
+      /comprovante de entrega/,
+    );
+    await assert.rejects(
+      advance(`shipping:${shipmentId}`, "dispatched", {
+        proof_reference: "PROTOCOLO-ENTREGA-001",
+      }),
+      /observação de entrega/,
+    );
+    await advance(`shipping:${shipmentId}`, "dispatched", {
+      proof_reference: "PROTOCOLO-ENTREGA-001",
+      delivery_notes: "Entregue na loja BTG",
+    });
 
     const balances = await db
       .collection("stock_balances")
@@ -214,6 +331,10 @@ describe("fluxo WMS transacional", () => {
       .doc(orderId)
       .get();
     assert.equal(tracking.data()?.status, "delivered");
+    assert.equal(tracking.data()?.seal_code, "LACRE-001");
+    assert.equal(tracking.data()?.carrier, "Dutelog");
+    assert.equal(tracking.data()?.proof_reference, "PROTOCOLO-ENTREGA-001");
+    assert.equal(tracking.data()?.delivery_notes, "Entregue na loja BTG");
     assert.equal(Array.isArray(tracking.data()?.timeline), true);
     assert.equal((tracking.data()?.timeline as unknown[]).length, 7);
 
@@ -226,7 +347,123 @@ describe("fluxo WMS transacional", () => {
     assert.equal(projection.data()?.qty_available, 1);
   });
 
+  it("permite somente uma reserva quando duas aprovações concorrem pelo mesmo saldo", async () => {
+    await clearFirestore();
+    await db.collection("stock_balances").doc("concurrent-balance").set({
+      id: "concurrent-balance",
+      customer_code: "BTG Pactual",
+      sku_code: "BTG-CONCURRENT-1",
+      client_item_code: "ITEM-CONCURRENT-1",
+      product_name: "Produto concorrente de teste",
+      location_id: "LOC-CONCURRENT",
+      qty_on_hand: 5,
+      qty_reserved: 0,
+      qty_available: 5,
+      unit_cost: 10,
+    });
+
+    const requestInput = (nonce: string) => ({
+      type: "retirada",
+      priority: "normal",
+      title: `Pedido concorrente ${nonce}`,
+      customer_code: "BTG Pactual",
+      idempotency_key: nonce,
+      items: [{ sku_code: "BTG-CONCURRENT-1", quantity: 5 }],
+    });
+    const creations = await Promise.allSettled([
+      createCustomerRequestTransaction(
+        db,
+        requestInput("concurrent-request-1"),
+        { ...actor, role: "cliente", uid: "client-1" },
+      ),
+      createCustomerRequestTransaction(
+        db,
+        requestInput("concurrent-request-2"),
+        { ...actor, role: "cliente", uid: "client-1" },
+      ),
+    ]);
+    assert.equal(
+      creations.filter((item) => item.status === "fulfilled").length,
+      1,
+    );
+    assert.equal(
+      creations.filter((item) => item.status === "rejected").length,
+      1,
+    );
+    const rejected = creations.find((item) => item.status === "rejected");
+    assert.match(String(rejected?.reason), /Saldo insuficiente/);
+    const successful = creations.find(
+      (item): item is PromiseFulfilledResult<Record<string, unknown>> =>
+        item.status === "fulfilled",
+    );
+    assert.ok(successful);
+    await decideCustomerRequestTransaction(
+      db,
+      {
+        request_id: String(successful.value.id),
+        action: "approve",
+        expected_status: "open",
+        idempotency_key: "concurrent-approve-winner",
+      },
+      actor,
+    );
+
+    const balance = await db
+      .collection("stock_balances")
+      .doc("concurrent-balance")
+      .get();
+    assert.equal(balance.data()?.qty_reserved, 5);
+    assert.equal(balance.data()?.qty_available, 0);
+    assert.equal((await db.collection("orders").get()).size, 1);
+    assert.equal((await db.collection("stock_reservations").get()).size, 1);
+  });
+
   it("somente confirma entrada no estoque ao concluir o recebimento", async () => {
+    await clearFirestore();
+    await Promise.all([
+      db.collection("products").doc("ITEM-1").set({
+        id: "ITEM-1",
+        customer_code: "BTG Pactual",
+        cod_cliente: "ITEM-1",
+        produto: "Produto real de teste transacional",
+        preco_unit: 12.5,
+        status: "active",
+      }),
+      db.collection("skus").doc("BTG-TEST-1").set({
+        id: "BTG-TEST-1",
+        customer_code: "BTG Pactual",
+        cod_cliente: "ITEM-1",
+        cod_btg: "BTG-TEST-1",
+        sku_code: "BTG-TEST-1",
+        produto: "Produto real de teste transacional",
+        preco_unit: 12.5,
+        status: "active",
+      }),
+      db.collection("stock_balances").doc("receiving-balance").set({
+        id: "receiving-balance",
+        customer_code: "BTG Pactual",
+        sku_code: "BTG-TEST-1",
+        client_item_code: "ITEM-1",
+        product_name: "Produto real de teste transacional",
+        location_id: "LOC-A",
+        qty_on_hand: 1,
+        qty_reserved: 0,
+        qty_available: 1,
+        unit_cost: 12.5,
+      }),
+      db.collection("client_inventory").doc("cinv_BTG_Pactual__BTG-TEST-1").set({
+        id: "cinv_BTG_Pactual__BTG-TEST-1",
+        customer_code: "BTG Pactual",
+        sku_code: "BTG-TEST-1",
+        client_item_code: "ITEM-1",
+        product_name: "Produto real de teste transacional",
+        qty_on_hand: 1,
+        qty_reserved: 0,
+        qty_available: 1,
+        unit_cost: 12.5,
+        total_cost: 12.5,
+      }),
+    ]);
     const created = await createCustomerRequestTransaction(
       db,
       {
@@ -234,12 +471,30 @@ describe("fluxo WMS transacional", () => {
         priority: "normal",
         title: "Aviso de fornecedor",
         customer_code: "BTG Pactual",
+        supplier: "Fornecedor homologado",
+        invoice_number: "NF-CLIENTE-001",
+        attachments: [
+          {
+            file_name: "nota-fiscal.pdf",
+            file_url:
+              "https://storage.googleapis.com/demo-dute-operations/recebimentos/nota-fiscal.pdf",
+            storage_path:
+              "customers/BTG_Pactual/recebimentos/nota-fiscal.pdf",
+            content_type: "application/pdf",
+            size_bytes: 2048,
+          },
+        ],
         idempotency_key: "request-inbound-1",
         items: [
           {
             sku_code: "BTG-TEST-1",
             client_item_code: "ITEM-1",
             product_name: "Produto real de teste transacional",
+            product_registration: "existing",
+            category: "VESTUARIO",
+            brand: "Marca contratada",
+            size: "M",
+            color: "Azul",
             unit_cost: 12.5,
             quantity: 2,
           },
@@ -247,6 +502,15 @@ describe("fluxo WMS transacional", () => {
       },
       { ...actor, role: "cliente", uid: "client-1" },
     );
+    const requestSnapshot = await db
+      .collection("customer_requests")
+      .doc(String(created.id))
+      .get();
+    assert.equal(requestSnapshot.data()?.supplier, "Fornecedor homologado");
+    assert.equal(requestSnapshot.data()?.invoice_number, "NF-CLIENTE-001");
+    assert.equal(requestSnapshot.data()?.attachment_count, 1);
+    assert.equal(requestSnapshot.data()?.attachments?.[0]?.file_name, "nota-fiscal.pdf");
+
     const approved = (await decideCustomerRequestTransaction(
       db,
       {
@@ -259,6 +523,14 @@ describe("fluxo WMS transacional", () => {
     )) as Record<string, unknown>;
     const inboundId = String(approved.inbound_id);
 
+    const inboundReceipt = await db
+      .collection("inbound_receipts")
+      .doc(inboundId)
+      .get();
+    assert.equal(inboundReceipt.data()?.supplier, "Fornecedor homologado");
+    assert.equal(inboundReceipt.data()?.invoice_number, "NF-CLIENTE-001");
+    assert.equal(inboundReceipt.data()?.attachment_count, 1);
+
     const before = await db
       .collection("client_inventory")
       .doc("cinv_BTG_Pactual__BTG-TEST-1")
@@ -266,6 +538,29 @@ describe("fluxo WMS transacional", () => {
     assert.equal(before.data()?.qty_on_hand, 1);
 
     await advance(`receiving:${inboundId}`, "created");
+    const inboundItems = await db
+      .collection("inbound_items")
+      .where("receipt_id", "==", inboundId)
+      .get();
+    assert.equal(inboundItems.size, 1);
+    assert.equal(inboundItems.docs[0]?.data().product_registration, "existing");
+    assert.equal(inboundItems.docs[0]?.data().category, "VESTUARIO");
+    assert.equal(inboundItems.docs[0]?.data().brand, "Marca contratada");
+    await updateInboundReceiptConferenceTransaction(
+      db,
+      {
+        receipt_id: inboundId,
+        expected_status: "checking",
+        idempotency_key: "conference-inbound-1",
+        lines: inboundItems.docs.map((document) => ({
+          inbound_item_id: document.id,
+          received_qty: Number(document.data().expected_qty),
+          location_id: "LOC-A",
+          unit_cost: 12.5,
+        })),
+      },
+      actor,
+    );
     await advance(`receiving:${inboundId}`, "checking");
 
     const after = await db
@@ -281,9 +576,1108 @@ describe("fluxo WMS transacional", () => {
     assert.equal(movements.size, 1);
     assert.equal(movements.docs[0]?.data().tipo_mov, "ENTRADA");
   });
+
+  it("cadastra produto e SKU novos no recebimento avulso sem antecipar o saldo", async () => {
+    await clearFirestore();
+
+    const input = {
+      customer_code: "BTG Pactual",
+      supplier: "Fornecedor de teste",
+      invoice_number: "NF-AVULSA-001",
+      notes: "Mercadoria entregue sem aviso prévio do cliente.",
+      received_at: "2026-07-22T13:00:00.000Z",
+      idempotency_key: "unplanned-receipt-new-product-1",
+      items: [
+        {
+          sku_code: " sku-receb-001 ",
+          client_item_code: " rec-éxterno-001 ",
+          product_name: "Jaqueta institucional recebida",
+          product_registration: "new" as const,
+          category: "VESTUARIO",
+          brand: "Marca de teste",
+          size: "G",
+          color: "Preto",
+          photo_urls: [
+            "https://storage.googleapis.com/demo-dute-operations/product-photos/jaqueta-recebida.jpg",
+          ],
+          photo_storage_paths: [
+            "customers/BTG_Pactual/product-photos/jaqueta-recebida.jpg",
+          ],
+          unit_cost: 89.9,
+          quantity: 7,
+        },
+      ],
+    };
+
+    const created = await createInboundReceiptTransaction(db, input, actor);
+    const repeated = await createInboundReceiptTransaction(db, input, actor);
+    assert.deepEqual(repeated, created);
+    assert.equal(created.status, "created");
+    assert.equal(created.item_count, 1);
+    assert.equal(created.quantity_total, 7);
+
+    const productBeforeConference = await db
+      .collection("products")
+      .doc("REC-EXTERNO-001")
+      .get();
+    const skuBeforeConference = await db
+      .collection("skus")
+      .doc("SKU-RECEB-001")
+      .get();
+    assert.equal(productBeforeConference.exists, true);
+    assert.equal(productBeforeConference.data()?.cod_cliente, "REC-EXTERNO-001");
+    assert.equal(productBeforeConference.data()?.cod_cliente_key, "REC-EXTERNO-001");
+    assert.equal(productBeforeConference.data()?.estoque_btg, 0);
+    assert.equal(skuBeforeConference.exists, true);
+    assert.equal(skuBeforeConference.data()?.sku_code, "SKU-RECEB-001");
+    assert.equal(skuBeforeConference.data()?.estoque_atual, 0);
+    assert.equal(skuBeforeConference.data()?.estoque_disponivel, 0);
+    assert.equal((await db.collection("stock_balances").get()).size, 0);
+    assert.equal((await db.collection("client_inventory").get()).size, 0);
+    assert.equal((await db.collection("movements").get()).size, 0);
+
+    const receiptId = String(created.receipt_id);
+    await advance(`receiving:${receiptId}`, "created");
+    const inboundItems = await db
+      .collection("inbound_items")
+      .where("receipt_id", "==", receiptId)
+      .get();
+    assert.equal(inboundItems.size, 1);
+    assert.equal(inboundItems.docs[0]?.data().sku_code, "SKU-RECEB-001");
+    assert.equal(
+      inboundItems.docs[0]?.data().client_item_code,
+      "REC-EXTERNO-001",
+    );
+
+    await updateInboundReceiptConferenceTransaction(
+      db,
+      {
+        receipt_id: receiptId,
+        expected_status: "checking",
+        idempotency_key: "unplanned-receipt-new-product-conference-1",
+        lines: [
+          {
+            inbound_item_id: inboundItems.docs[0]!.id,
+            received_qty: 7,
+            location_id: "RECEBIMENTO",
+            unit_cost: 89.9,
+          },
+        ],
+      },
+      actor,
+    );
+
+    assert.equal((await db.collection("stock_balances").get()).size, 0);
+    assert.equal((await db.collection("client_inventory").get()).size, 0);
+    assert.equal((await db.collection("movements").get()).size, 0);
+    assert.equal(
+      (await db.collection("products").doc("REC-EXTERNO-001").get()).data()
+        ?.estoque_btg,
+      0,
+    );
+
+    await advance(`receiving:${receiptId}`, "checking");
+
+    const balances = await db
+      .collection("stock_balances")
+      .where("sku_code", "==", "SKU-RECEB-001")
+      .get();
+    const projections = await db
+      .collection("client_inventory")
+      .where("sku_code", "==", "SKU-RECEB-001")
+      .get();
+    const movements = await db
+      .collection("movements")
+      .where("receipt_id", "==", receiptId)
+      .get();
+    const productAfterReceipt = await db
+      .collection("products")
+      .doc("REC-EXTERNO-001")
+      .get();
+    const skuAfterReceipt = await db
+      .collection("skus")
+      .doc("SKU-RECEB-001")
+      .get();
+
+    assert.equal(balances.size, 1);
+    assert.equal(balances.docs[0]?.data().qty_on_hand, 7);
+    assert.equal(balances.docs[0]?.data().qty_available, 7);
+    assert.equal(balances.docs[0]?.data().unit_cost, 89.9);
+    assert.equal(projections.size, 1);
+    assert.equal(projections.docs[0]?.data().qty_on_hand, 7);
+    assert.equal(projections.docs[0]?.data().qty_available, 7);
+    assert.ok(
+      Math.abs(Number(projections.docs[0]?.data().total_cost) - 629.3) < 1e-9,
+    );
+    assert.equal(movements.size, 1);
+    assert.equal(movements.docs[0]?.data().tipo_mov, "ENTRADA");
+    assert.equal(movements.docs[0]?.data().source, "wms_receiving");
+    assert.equal(productAfterReceipt.data()?.estoque_btg, 7);
+    assert.equal(skuAfterReceipt.data()?.estoque_atual, 7);
+    assert.equal(skuAfterReceipt.data()?.estoque_disponivel, 7);
+    assert.equal((await db.collection("products").get()).size, 1);
+    assert.equal((await db.collection("skus").get()).size, 1);
+  });
+});
+
+describe("inventário de abertura transacional", () => {
+  it("cria e retoma uma única sessão a partir do Firestore vazio", async () => {
+    await clearFirestore();
+
+    const input = {
+      customer_code: "BTG Pactual",
+      reference: "INVENTARIO-ABERTURA-2026",
+      notes: "Contagem física inicial do galpão.",
+      idempotency_key: "opening-session-start-1",
+    };
+    const created = await createOpeningInventorySessionTransaction(
+      db,
+      input,
+      actor,
+    );
+    const repeated = await createOpeningInventorySessionTransaction(
+      db,
+      input,
+      actor,
+    );
+    const resumed = await createOpeningInventorySessionTransaction(
+      db,
+      {
+        ...input,
+        idempotency_key: "opening-session-resume-1",
+      },
+      actor,
+    );
+
+    assert.deepEqual(repeated, created);
+    assert.equal(created.session_id, openingInventorySessionDocumentId("BTG Pactual"));
+    assert.equal(created.status, "open");
+    assert.equal(created.resumed, false);
+    assert.equal(resumed.session_id, created.session_id);
+    assert.equal(resumed.status, "open");
+    assert.equal(resumed.resumed, true);
+    assert.equal(resumed.line_count, 0);
+    assert.equal(resumed.unit_count, 0);
+
+    const sessions = await db.collection("opening_inventory_sessions").get();
+    assert.equal(sessions.size, 1);
+    assert.equal(sessions.docs[0]?.data().customer_code, "BTG Pactual");
+    assert.equal(sessions.docs[0]?.data().reference, "INVENTARIO-ABERTURA-2026");
+    assert.equal(sessions.docs[0]?.data().status, "open");
+
+    const startedEvents = await db
+      .collection("events")
+      .where("type", "==", "inventory.opening_started")
+      .get();
+    assert.equal(startedEvents.size, 1);
+
+    await assert.rejects(
+      completeOpeningInventorySessionTransaction(
+        db,
+        {
+          customer_code: "BTG Pactual",
+          session_id: String(created.session_id),
+          idempotency_key: "opening-session-empty-complete",
+        },
+        actor,
+      ),
+      /ao menos um produto/,
+    );
+  });
+
+  it("cadastra produto, SKU, saldo e projeções sem duplicar o ledger na reexecução", async () => {
+    await clearFirestore();
+
+    const session = await createOpeningInventorySessionTransaction(
+      db,
+      {
+        customer_code: "BTG Pactual",
+        reference: "INVENTARIO-ABERTURA-2026",
+        idempotency_key: "opening-session-product-test",
+      },
+      actor,
+    );
+    const input = openingCountInput(String(session.session_id));
+    const created = await recordCycleCountTransaction(db, input, actor);
+
+    const movementBefore = await db
+      .collection("movements")
+      .doc(String(created.movement_id))
+      .get();
+    const linesBefore = await db
+      .collection("opening_inventory_lines")
+      .where("session_id", "==", session.session_id)
+      .get();
+    const projectionBefore = await db
+      .collection("client_inventory")
+      .where("sku_code", "==", input.sku_code)
+      .get();
+    assert.equal(linesBefore.size, 1);
+    assert.equal(projectionBefore.size, 1);
+
+    const repeated = await recordCycleCountTransaction(db, input, actor);
+    assert.deepEqual(repeated, created);
+    assert.equal(created.mode, "opening");
+    assert.equal(created.qty_before, 0);
+    assert.equal(created.qty_counted, 12);
+    assert.equal(created.qty_available, 12);
+    assert.equal(created.adjustment_delta, 12);
+    assert.equal(created.adjustment_type, "ENTRADA");
+
+    const products = await db
+      .collection("products")
+      .where("cod_cliente", "==", input.client_item_code)
+      .get();
+    const skus = await db
+      .collection("skus")
+      .where("sku_code", "==", input.sku_code)
+      .get();
+    const balances = await db
+      .collection("stock_balances")
+      .where("sku_code", "==", input.sku_code)
+      .get();
+    const movements = await db
+      .collection("movements")
+      .where("sku_code", "==", input.sku_code)
+      .get();
+    const lines = await db
+      .collection("opening_inventory_lines")
+      .where("session_id", "==", session.session_id)
+      .get();
+    const cycleCounts = await db
+      .collection("cycle_counts")
+      .where("opening_inventory_session_id", "==", session.session_id)
+      .get();
+    const projections = await db
+      .collection("client_inventory")
+      .where("sku_code", "==", input.sku_code)
+      .get();
+
+    assert.equal(products.size, 1);
+    assert.equal(products.docs[0]?.data().produto, input.product_name);
+    assert.equal(products.docs[0]?.data().category, input.category);
+    assert.equal(products.docs[0]?.data().preco_unit, input.unit_cost);
+    assert.deepEqual(products.docs[0]?.data().photo_urls, input.photo_urls);
+    assert.equal(products.docs[0]?.data().estoque_btg, input.counted_qty);
+
+    assert.equal(skus.size, 1);
+    assert.equal(skus.docs[0]?.data().cod_cliente, input.client_item_code);
+    assert.equal(skus.docs[0]?.data().cod_btg, input.sku_code);
+    assert.equal(skus.docs[0]?.data().estoque_atual, input.counted_qty);
+    assert.equal(skus.docs[0]?.data().estoque_disponivel, input.counted_qty);
+
+    assert.equal(balances.size, 1);
+    assert.equal(balances.docs[0]?.data().qty_on_hand, input.counted_qty);
+    assert.equal(balances.docs[0]?.data().qty_reserved, 0);
+    assert.equal(balances.docs[0]?.data().qty_available, input.counted_qty);
+    assert.equal(balances.docs[0]?.data().unit_cost, input.unit_cost);
+    assert.deepEqual(balances.docs[0]?.data().photo_urls, input.photo_urls);
+
+    assert.equal(movements.size, 1);
+    assert.equal(movements.docs[0]?.data().tipo_mov, "ENTRADA");
+    assert.equal(movements.docs[0]?.data().quantity, input.counted_qty);
+    assert.equal(movements.docs[0]?.data().qty_before, 0);
+    assert.equal(movements.docs[0]?.data().qty_after, input.counted_qty);
+    assert.equal(
+      movements.docs[0]?.data().source,
+      "functions_opening_inventory",
+    );
+
+    assert.equal(lines.size, 1);
+    assert.equal(lines.docs[0]?.data().status, "counted");
+    assert.equal(lines.docs[0]?.data().product_registration, "new");
+    assert.equal(lines.docs[0]?.data().location_id, input.location_id);
+    assert.equal(lines.docs[0]?.data().unit_cost, input.unit_cost);
+    assert.deepEqual(lines.docs[0]?.data().photo_urls, input.photo_urls);
+    assert.deepEqual(
+      lines.docs[0]?.data().photo_storage_paths,
+      input.photo_storage_paths,
+    );
+
+    assert.equal(cycleCounts.size, 1);
+    assert.equal(cycleCounts.docs[0]?.data().mode, "opening");
+    assert.equal(cycleCounts.docs[0]?.data().adjustment_delta, 12);
+
+    assert.equal(projections.size, 1);
+    assert.equal(projections.docs[0]?.data().qty_on_hand, 12);
+    assert.equal(projections.docs[0]?.data().qty_available, 12);
+    assert.equal(projections.docs[0]?.data().unit_cost, 34.9);
+    assert.ok(
+      Math.abs(Number(projections.docs[0]?.data().total_cost) - 418.8) < 1e-9,
+    );
+    assert.deepEqual(projections.docs[0]?.data().photo_urls, input.photo_urls);
+
+    const persistedSession = await db
+      .collection("opening_inventory_sessions")
+      .doc(String(session.session_id))
+      .get();
+    assert.equal(persistedSession.data()?.line_count, 1);
+    assert.equal(persistedSession.data()?.unit_count, 12);
+    assert.ok(
+      Math.abs(Number(persistedSession.data()?.total_cost) - 418.8) < 1e-9,
+    );
+
+    const movementAfter = await db
+      .collection("movements")
+      .doc(String(created.movement_id))
+      .get();
+    const lineAfter = await db
+      .collection("opening_inventory_lines")
+      .doc(String(linesBefore.docs[0]?.id))
+      .get();
+    const projectionAfter = await db
+      .collection("client_inventory")
+      .doc(String(projectionBefore.docs[0]?.id))
+      .get();
+    assert.equal(
+      movementAfter.updateTime?.toMillis(),
+      movementBefore.updateTime?.toMillis(),
+    );
+    assert.equal(
+      lineAfter.updateTime?.toMillis(),
+      linesBefore.docs[0]?.updateTime?.toMillis(),
+    );
+    assert.equal(
+      projectionAfter.updateTime?.toMillis(),
+      projectionBefore.docs[0]?.updateTime?.toMillis(),
+    );
+    assert.equal(balances.docs[0]?.data().location_id, input.location_id);
+  });
+
+  it("remove uma linha com reversão auditável e permite relançar a contagem", async () => {
+    await clearFirestore();
+
+    const session = await createOpeningInventorySessionTransaction(
+      db,
+      {
+        customer_code: "BTG Pactual",
+        reference: "INVENTARIO-ABERTURA-CORRECAO",
+        idempotency_key: "opening-session-remove-line-test",
+      },
+      actor,
+    );
+    const sessionId = String(session.session_id);
+    const firstInput = openingCountInput(sessionId, {
+      counted_qty: 12,
+      unit_cost: 34.9,
+      idempotency_key: "opening-count-before-removal",
+    });
+    const firstCount = await recordCycleCountTransaction(db, firstInput, actor);
+    const openingLinesBefore = await db
+      .collection("opening_inventory_lines")
+      .where("session_id", "==", sessionId)
+      .get();
+    assert.equal(openingLinesBefore.size, 1);
+    const openingLineId = openingLinesBefore.docs[0]!.id;
+
+    const removalInput = {
+      customer_code: "BTG Pactual",
+      session_id: sessionId,
+      opening_line_id: openingLineId,
+      idempotency_key: "opening-remove-line-1",
+    };
+    const removed = await removeOpeningInventoryLineTransaction(
+      db,
+      removalInput,
+      actor,
+    );
+    const repeatedRemoval = await removeOpeningInventoryLineTransaction(
+      db,
+      removalInput,
+      actor,
+    );
+    assert.deepEqual(repeatedRemoval, removed);
+    assert.equal(removed.status, "removed");
+    assert.equal(removed.quantity_removed, 12);
+
+    assert.equal(
+      (
+        await db
+          .collection("opening_inventory_lines")
+          .doc(openingLineId)
+          .get()
+      ).exists,
+      false,
+    );
+    assert.equal((await db.collection("stock_balances").get()).size, 0);
+    assert.equal((await db.collection("client_inventory").get()).size, 0);
+    assert.equal((await db.collection("products").get()).size, 0);
+    assert.equal((await db.collection("skus").get()).size, 0);
+
+    const reversedCount = await db
+      .collection("cycle_counts")
+      .doc(String(firstCount.cycle_count_id))
+      .get();
+    assert.equal(reversedCount.data()?.status, "reversed");
+    assert.equal(
+      reversedCount.data()?.reversal_operation_id,
+      String(
+        (
+          await db
+            .collection("operational_operations")
+            .where("kind", "==", "inventory.opening_line.remove")
+            .limit(1)
+            .get()
+        ).docs[0]?.id,
+      ),
+    );
+
+    const movementsAfterRemoval = await db
+      .collection("movements")
+      .where("sku_code", "==", "SKU-OPEN-001")
+      .get();
+    assert.equal(movementsAfterRemoval.size, 2);
+    assert.deepEqual(
+      movementsAfterRemoval.docs
+        .map((document) => document.data().tipo_mov)
+        .sort(),
+      ["ENTRADA", "SAIDA"],
+    );
+    const reversal = movementsAfterRemoval.docs.find(
+      (document) =>
+        document.data().source === "functions_opening_inventory_reversal",
+    );
+    assert.ok(reversal);
+    assert.equal(reversal.data().quantity, 12);
+    assert.equal(
+      reversal.data().reversed_movement_id,
+      String(firstCount.movement_id),
+    );
+
+    const sessionAfterRemoval = await db
+      .collection("opening_inventory_sessions")
+      .doc(sessionId)
+      .get();
+    assert.equal(sessionAfterRemoval.data()?.status, "open");
+    assert.equal(sessionAfterRemoval.data()?.line_count, 0);
+    assert.equal(sessionAfterRemoval.data()?.unit_count, 0);
+    assert.ok(Math.abs(Number(sessionAfterRemoval.data()?.total_cost)) < 1e-9);
+    assert.equal(
+      (
+        await db
+          .collection("events")
+          .where("type", "==", "inventory.opening_line_removed")
+          .get()
+      ).size,
+      1,
+    );
+
+    const relaunchedInput = openingCountInput(sessionId, {
+      counted_qty: 9,
+      unit_cost: 36.5,
+      reference: "ABERTURA-001-CORRIGIDA",
+      idempotency_key: "opening-count-after-removal",
+    });
+    const relaunched = await recordCycleCountTransaction(
+      db,
+      relaunchedInput,
+      actor,
+    );
+    assert.equal(relaunched.qty_counted, 9);
+    assert.equal(relaunched.adjustment_delta, 9);
+
+    const openingLinesAfter = await db
+      .collection("opening_inventory_lines")
+      .where("session_id", "==", sessionId)
+      .get();
+    const balancesAfter = await db
+      .collection("stock_balances")
+      .where("sku_code", "==", "SKU-OPEN-001")
+      .get();
+    const movementsAfterRelaunch = await db
+      .collection("movements")
+      .where("sku_code", "==", "SKU-OPEN-001")
+      .get();
+    const sessionAfterRelaunch = await db
+      .collection("opening_inventory_sessions")
+      .doc(sessionId)
+      .get();
+    assert.equal(openingLinesAfter.size, 1);
+    assert.equal(openingLinesAfter.docs[0]?.data().counted_qty, 9);
+    assert.equal(balancesAfter.size, 1);
+    assert.equal(balancesAfter.docs[0]?.data().qty_on_hand, 9);
+    assert.equal(balancesAfter.docs[0]?.data().qty_available, 9);
+    assert.equal(movementsAfterRelaunch.size, 3);
+    assert.equal(sessionAfterRelaunch.data()?.line_count, 1);
+    assert.equal(sessionAfterRelaunch.data()?.unit_count, 9);
+    assert.ok(
+      Math.abs(Number(sessionAfterRelaunch.data()?.total_cost) - 328.5) < 1e-9,
+    );
+  });
+
+  it("bloqueia pedido de saída enquanto o inventário de abertura é obrigatório", async () => {
+    await clearFirestore();
+
+    await createOpeningInventorySessionTransaction(
+      db,
+      {
+        customer_code: "BTG Pactual",
+        reference: "INVENTARIO-ABERTURA-BLOQUEIO",
+        idempotency_key: "opening-session-outbound-block-test",
+      },
+      actor,
+    );
+    await db.collection("stock_balances").doc("opening-block-balance").set({
+      id: "opening-block-balance",
+      customer_code: "BTG Pactual",
+      sku_code: "SKU-BLOCK-001",
+      client_item_code: "CLIENTE-BLOCK-001",
+      product_name: "Produto com saldo ainda não publicado",
+      location_id: "RUA-B/PRAT-02/CX-001",
+      qty_on_hand: 20,
+      qty_reserved: 0,
+      qty_available: 20,
+      unit_cost: 10,
+    });
+
+    await assert.rejects(
+      createCustomerRequestTransaction(
+        db,
+        {
+          type: "retirada",
+          priority: "normal",
+          title: "Pedido antes do fechamento da abertura",
+          destination: "Loja BTG",
+          customer_code: "BTG Pactual",
+          idempotency_key: "outbound-during-opening-required",
+          items: [
+            {
+              sku_code: "SKU-BLOCK-001",
+              client_item_code: "CLIENTE-BLOCK-001",
+              product_name: "Produto com saldo ainda não publicado",
+              quantity: 1,
+            },
+          ],
+        },
+        { ...actor, role: "cliente", uid: "client-opening-block" },
+      ),
+      /inventário de abertura/,
+    );
+
+    const inventoryControl = await db
+      .collection("system_controls")
+      .doc("inventory")
+      .get();
+    assert.equal(inventoryControl.data()?.stock_initialized, false);
+    assert.equal(inventoryControl.data()?.opening_inventory_required, true);
+    assert.equal((await db.collection("customer_requests").get()).size, 0);
+    assert.equal((await db.collection("orders").get()).size, 0);
+    assert.equal((await db.collection("stock_reservations").get()).size, 0);
+  });
+
+  it("normaliza códigos sem diferenciar caixa ou acentos e impede duplicidade", async () => {
+    await clearFirestore();
+
+    const session = await createOpeningInventorySessionTransaction(
+      db,
+      {
+        customer_code: "BTG Pactual",
+        reference: "INVENTARIO-ABERTURA-NORMALIZACAO",
+        idempotency_key: "opening-session-normalization-test",
+      },
+      actor,
+    );
+    const sessionId = String(session.session_id);
+    await recordCycleCountTransaction(
+      db,
+      openingCountInput(sessionId, {
+        sku_code: " sku-ábc-001 ",
+        client_item_code: " cód-clíente-001 ",
+        location_id: "RUA-C/PRAT-01/CX-001",
+        idempotency_key: "opening-normalized-first-count",
+      }),
+      actor,
+    );
+
+    const product = await db
+      .collection("products")
+      .doc("COD-CLIENTE-001")
+      .get();
+    const sku = await db.collection("skus").doc("SKU-ABC-001").get();
+    assert.equal(product.exists, true);
+    assert.equal(product.data()?.cod_cliente, "COD-CLIENTE-001");
+    assert.equal(product.data()?.cod_cliente_key, "COD-CLIENTE-001");
+    assert.equal(sku.exists, true);
+    assert.equal(sku.data()?.sku_code, "SKU-ABC-001");
+    assert.equal(sku.data()?.sku_code_key, "SKU-ABC-001");
+
+    await assert.rejects(
+      recordCycleCountTransaction(
+        db,
+        openingCountInput(sessionId, {
+          sku_code: "SKU-ABC-001",
+          client_item_code: "COD-CLIENTE-001",
+          location_id: "RUA-C/PRAT-01/CX-002",
+          idempotency_key: "opening-normalized-duplicate-count",
+        }),
+        actor,
+      ),
+      /já existe/,
+    );
+    await assert.rejects(
+      recordCycleCountTransaction(
+        db,
+        openingCountInput(sessionId, {
+          sku_code: "sku-abc-002",
+          client_item_code: "CÓD-CLIENTE-001",
+          location_id: "RUA-C/PRAT-01/CX-003",
+          product_registration: "existing",
+          idempotency_key: "opening-normalized-client-conflict",
+        }),
+        actor,
+      ),
+      /já está vinculado ao SKU SKU-ABC-001/,
+    );
+
+    assert.equal((await db.collection("products").get()).size, 1);
+    assert.equal((await db.collection("skus").get()).size, 1);
+    assert.equal((await db.collection("stock_balances").get()).size, 1);
+    assert.equal((await db.collection("opening_inventory_lines").get()).size, 1);
+    assert.equal((await db.collection("movements").get()).size, 1);
+  });
+
+  it("impede códigos duplicados e encerra a sessão de forma idempotente", async () => {
+    await clearFirestore();
+
+    const session = await createOpeningInventorySessionTransaction(
+      db,
+      {
+        customer_code: "BTG Pactual",
+        reference: "INVENTARIO-ABERTURA-2026",
+        idempotency_key: "opening-session-constraints-test",
+      },
+      actor,
+    );
+    const sessionId = String(session.session_id);
+    const firstInput = openingCountInput(sessionId);
+    const firstCount = await recordCycleCountTransaction(db, firstInput, actor);
+
+    await assert.rejects(
+      recordCycleCountTransaction(
+        db,
+        openingCountInput(sessionId, {
+          sku_code: "SKU-OPEN-002",
+          location_id: "RUA-A/PRAT-01/CX-002",
+          idempotency_key: "opening-duplicate-client-code",
+        }),
+        actor,
+      ),
+      /já está vinculado ao SKU/,
+    );
+    await assert.rejects(
+      recordCycleCountTransaction(
+        db,
+        openingCountInput(sessionId, {
+          client_item_code: "CLIENTE-OPEN-002",
+          location_id: "RUA-A/PRAT-01/CX-003",
+          idempotency_key: "opening-duplicate-sku-code",
+        }),
+        actor,
+      ),
+      /já está vinculado ao Cod\. cliente/,
+    );
+    await assert.rejects(
+      recordCycleCountTransaction(
+        db,
+        openingCountInput(sessionId, {
+          idempotency_key: "opening-duplicate-line",
+        }),
+        actor,
+      ),
+      /já foi contado neste inventário de abertura/,
+    );
+
+    assert.equal((await db.collection("products").get()).size, 1);
+    assert.equal((await db.collection("skus").get()).size, 1);
+    assert.equal((await db.collection("stock_balances").get()).size, 1);
+    assert.equal((await db.collection("movements").get()).size, 1);
+    assert.equal((await db.collection("opening_inventory_lines").get()).size, 1);
+    assert.equal((await db.collection("client_inventory").get()).size, 1);
+
+    const completeInput = {
+      customer_code: "BTG Pactual",
+      session_id: sessionId,
+      notes: "Inventário físico conferido e encerrado.",
+      idempotency_key: "opening-session-complete-1",
+    };
+    const completed = await completeOpeningInventorySessionTransaction(
+      db,
+      completeInput,
+      actor,
+    );
+    const repeatedCompletion = await completeOpeningInventorySessionTransaction(
+      db,
+      completeInput,
+      actor,
+    );
+    assert.deepEqual(repeatedCompletion, completed);
+    assert.equal(completed.status, "completed");
+    assert.equal(completed.line_count, 1);
+    assert.equal(completed.unit_count, 12);
+    assert.ok(Math.abs(Number(completed.total_cost) - 418.8) < 1e-9);
+
+    const persistedSession = await db
+      .collection("opening_inventory_sessions")
+      .doc(sessionId)
+      .get();
+    assert.equal(persistedSession.data()?.status, "completed");
+    assert.equal(
+      persistedSession.data()?.completion_notes,
+      "Inventário físico conferido e encerrado.",
+    );
+
+    const repeatedCount = await recordCycleCountTransaction(
+      db,
+      firstInput,
+      actor,
+    );
+    assert.deepEqual(repeatedCount, firstCount);
+    await assert.rejects(
+      createOpeningInventorySessionTransaction(
+        db,
+        {
+          customer_code: "BTG Pactual",
+          idempotency_key: "opening-session-after-completion",
+        },
+        actor,
+      ),
+      /já foi concluído/,
+    );
+    await assert.rejects(
+      recordCycleCountTransaction(
+        db,
+        openingCountInput(sessionId, {
+          sku_code: "SKU-OPEN-003",
+          client_item_code: "CLIENTE-OPEN-003",
+          location_id: "RUA-A/PRAT-01/CX-004",
+          idempotency_key: "opening-count-after-completion",
+        }),
+        actor,
+      ),
+      /não está ativo/,
+    );
+
+    assert.equal((await db.collection("opening_inventory_sessions").get()).size, 1);
+    assert.equal((await db.collection("opening_inventory_lines").get()).size, 1);
+    assert.equal((await db.collection("movements").get()).size, 1);
+    assert.equal((await db.collection("client_inventory").get()).size, 1);
+    assert.equal((await db.collection("operational_operations").get()).size, 3);
+
+    const completedEvents = await db
+      .collection("events")
+      .where("type", "==", "inventory.opening_completed")
+      .get();
+    assert.equal(completedEvents.size, 1);
+  });
 });
 
 describe("ledger manual e congelamento", () => {
+  it("registra inventário cíclico transacional sem romper reservas", async () => {
+    await clearFirestore();
+    await db.collection("stock_balances").doc("cycle-balance").set({
+      id: "cycle-balance",
+      customer_code: "BTG Pactual",
+      sku_code: "BTG-CYCLE-1",
+      client_item_code: "ITEM-CYCLE-1",
+      product_name: "Produto de teste inventário cíclico",
+      category: "TESTE",
+      location_id: "LOC-CYCLE",
+      qty_on_hand: 10,
+      qty_reserved: 2,
+      qty_available: 8,
+      unit_cost: 7,
+    });
+    await db
+      .collection("client_inventory")
+      .doc("cinv_BTG_Pactual__BTG-CYCLE-1")
+      .set({
+        id: "cinv_BTG_Pactual__BTG-CYCLE-1",
+        customer_code: "BTG Pactual",
+        sku_code: "BTG-CYCLE-1",
+        client_item_code: "ITEM-CYCLE-1",
+        product_name: "Produto de teste inventário cíclico",
+        category: "TESTE",
+        qty_on_hand: 10,
+        qty_reserved: 2,
+        qty_available: 8,
+        unit_cost: 7,
+        total_cost: 70,
+      });
+
+    await assert.rejects(
+      recordCycleCountTransaction(
+        db,
+        {
+          customer_code: "BTG Pactual",
+          sku_code: "BTG-CYCLE-1",
+          client_item_code: "ITEM-CYCLE-1",
+          product_name: "Produto de teste inventário cíclico",
+          category: "TESTE",
+          location_id: "LOC-CYCLE",
+          counted_qty: 1,
+          unit_cost: 7,
+          reason: "Teste de bloqueio por reserva ativa",
+          idempotency_key: "cycle-count-reserved-block",
+        },
+        actor,
+      ),
+      /menor que a reserva ativa/,
+    );
+
+    const input = {
+      customer_code: "BTG Pactual",
+      sku_code: "BTG-CYCLE-1",
+      client_item_code: "ITEM-CYCLE-1",
+      product_name: "Produto de teste inventário cíclico",
+      category: "TESTE",
+      location_id: "LOC-CYCLE",
+      counted_qty: 8,
+      unit_cost: 7,
+      reason: "Contagem cíclica da rua de teste",
+      reference: "AUD-001",
+      idempotency_key: "cycle-count-valid-1",
+    };
+    const created = await recordCycleCountTransaction(db, input, actor);
+    const repeated = await recordCycleCountTransaction(db, input, actor);
+    assert.deepEqual(repeated, created);
+    assert.equal(created.adjustment_delta, -2);
+    assert.equal(created.adjustment_type, "SAIDA");
+
+    const balance = await db.collection("stock_balances").doc("cycle-balance").get();
+    assert.equal(balance.data()?.qty_on_hand, 8);
+    assert.equal(balance.data()?.qty_reserved, 2);
+    assert.equal(balance.data()?.qty_available, 6);
+
+    const projection = await db
+      .collection("client_inventory")
+      .doc("cinv_BTG_Pactual__BTG-CYCLE-1")
+      .get();
+    assert.equal(projection.data()?.qty_on_hand, 8);
+    assert.equal(projection.data()?.qty_reserved, 2);
+    assert.equal(projection.data()?.qty_available, 6);
+
+    const movements = await db
+      .collection("movements")
+      .where("sku_code", "==", "BTG-CYCLE-1")
+      .get();
+    assert.equal(movements.size, 1);
+    assert.equal(movements.docs[0]?.data().tipo_mov, "SAIDA");
+    assert.equal(movements.docs[0]?.data().source, "functions_cycle_count");
+
+    const counts = await db
+      .collection("cycle_counts")
+      .where("sku_code", "==", "BTG-CYCLE-1")
+      .get();
+    assert.equal(counts.size, 1);
+    assert.equal(counts.docs[0]?.data().adjustment_delta, -2);
+
+    const events = await db
+      .collection("events")
+      .where("type", "==", "inventory.adjusted")
+      .get();
+    assert.equal(events.size, 1);
+  });
+
+  it("registra devolução e só lança estoque após disposição disponível", async () => {
+    await clearFirestore();
+    await db.collection("products").doc("ITEM-RETURN-1").set({
+      id: "ITEM-RETURN-1",
+      customer_code: "BTG Pactual",
+      cod_cliente: "ITEM-RETURN-1",
+      produto: "Produto de teste devolução",
+      preco_unit: 12,
+      status: "active",
+    });
+    await db.collection("skus").doc("BTG-RETURN-1").set({
+      id: "BTG-RETURN-1",
+      customer_code: "BTG Pactual",
+      cod_cliente: "ITEM-RETURN-1",
+      cod_btg: "BTG-RETURN-1",
+      sku_code: "BTG-RETURN-1",
+      produto: "Produto de teste devolução",
+      preco_unit: 12,
+      status: "active",
+    });
+
+    await assert.rejects(
+      createReturnReceiptTransaction(
+        db,
+        {
+          customer_code: "BTG Pactual",
+          source: "Loja BTG",
+          reference: "RET-BLOCK",
+          idempotency_key: "return-unknown-product",
+          items: [
+            {
+              sku_code: "BTG-UNKNOWN",
+              client_item_code: "ITEM-UNKNOWN",
+              product_name: "Produto inexistente",
+              quantity: 1,
+            },
+          ],
+        },
+        actor,
+      ),
+      /não existe no cadastro/,
+    );
+
+    const input = {
+      customer_code: "BTG Pactual",
+      source: "Loja BTG",
+      reference: "RET-001",
+      notes: "Retorno da loja física",
+      idempotency_key: "return-create-valid-1",
+      items: [
+        {
+          sku_code: "BTG-RETURN-1",
+          client_item_code: "ITEM-RETURN-1",
+          product_name: "Produto de teste devolução",
+          quantity: 3,
+          unit_cost: 12,
+        },
+      ],
+    };
+    const created = await createReturnReceiptTransaction(db, input, actor);
+    const repeated = await createReturnReceiptTransaction(db, input, actor);
+    assert.deepEqual(repeated, created);
+    assert.equal(created.qty_total, 3);
+    const returnItemIds = created.return_item_ids as string[] | undefined;
+    const itemId = String(returnItemIds?.[0] ?? "");
+    assert.ok(itemId);
+
+    const movementsBefore = await db.collection("movements").get();
+    assert.equal(movementsBefore.size, 0);
+    const balancesBefore = await db.collection("stock_balances").get();
+    assert.equal(balancesBefore.size, 0);
+
+    const dispositionInput = {
+      return_item_id: itemId,
+      disposition: "available" as const,
+      location_id: "DEVOLUCAO",
+      unit_cost: 12,
+      notes: "Produto íntegro voltou ao saldo.",
+      expected_status: "pending_disposition",
+      idempotency_key: "return-disposition-valid-1",
+    };
+    const disposition = await setReturnDispositionTransaction(
+      db,
+      dispositionInput,
+      actor,
+    );
+    const repeatedDisposition = await setReturnDispositionTransaction(
+      db,
+      dispositionInput,
+      actor,
+    );
+    assert.deepEqual(repeatedDisposition, disposition);
+    assert.equal(disposition.disposition, "available");
+    assert.equal(disposition.return_status, "completed");
+    assert.equal(disposition.qty_pending_disposition, 0);
+
+    const completedReturn = await db
+      .collection("returns")
+      .doc(String(created.return_id))
+      .get();
+    assert.equal(completedReturn.data()?.status, "completed");
+    assert.equal(completedReturn.data()?.qty_pending_disposition, 0);
+
+    const balances = await db
+      .collection("stock_balances")
+      .where("sku_code", "==", "BTG-RETURN-1")
+      .get();
+    assert.equal(balances.size, 1);
+    assert.equal(balances.docs[0]?.data().qty_on_hand, 3);
+    assert.equal(balances.docs[0]?.data().qty_available, 3);
+
+    const projection = await db
+      .collection("client_inventory")
+      .doc("cinv_BTG_Pactual__BTG-RETURN-1")
+      .get();
+    assert.equal(projection.data()?.qty_on_hand, 3);
+    assert.equal(projection.data()?.total_cost, 36);
+
+    const movements = await db
+      .collection("movements")
+      .where("sku_code", "==", "BTG-RETURN-1")
+      .get();
+    assert.equal(movements.size, 1);
+    assert.equal(movements.docs[0]?.data().tipo_mov, "ENTRADA");
+    assert.equal(
+      movements.docs[0]?.data().source,
+      "functions_return_disposition",
+    );
+
+    await assert.rejects(
+      setReturnDispositionTransaction(
+        db,
+        {
+          ...dispositionInput,
+          idempotency_key: "return-disposition-blocked-second",
+        },
+        actor,
+      ),
+      /já possui disposição/,
+    );
+
+    const damagedReturn = await createReturnReceiptTransaction(
+      db,
+      {
+        customer_code: "BTG Pactual",
+        source: "Loja BTG",
+        reference: "RET-AVARIA-001",
+        idempotency_key: "return-create-damaged-1",
+        items: [
+          {
+            sku_code: "BTG-RETURN-1",
+            client_item_code: "ITEM-RETURN-1",
+            product_name: "Produto de teste devolução",
+            quantity: 1,
+            unit_cost: 12,
+          },
+        ],
+      },
+      actor,
+    );
+    const damagedItemId = String(
+      (damagedReturn.return_item_ids as string[] | undefined)?.[0] ?? "",
+    );
+    assert.ok(damagedItemId);
+
+    await assert.rejects(
+      setReturnDispositionTransaction(
+        db,
+        {
+          return_item_id: damagedItemId,
+          disposition: "damaged",
+          expected_status: "pending_disposition",
+          idempotency_key: "return-disposition-damaged-no-notes",
+        },
+        actor,
+      ),
+      /nota da triagem/,
+    );
+
+    const damagedDisposition = await setReturnDispositionTransaction(
+      db,
+      {
+        return_item_id: damagedItemId,
+        disposition: "damaged",
+        notes: "Peça retornou com avaria visível na conferência.",
+        expected_status: "pending_disposition",
+        idempotency_key: "return-disposition-damaged-valid",
+      },
+      actor,
+    );
+    assert.equal(damagedDisposition.return_status, "completed");
+    assert.equal(damagedDisposition.movement_id, undefined);
+
+    const movementsAfterDamaged = await db
+      .collection("movements")
+      .where("sku_code", "==", "BTG-RETURN-1")
+      .get();
+    assert.equal(movementsAfterDamaged.size, 1);
+  });
+
   it("é idempotente e bloqueia novas mutações durante reconciliação", async () => {
     await clearFirestore();
     await db.collection("stock_balances").doc("manual-balance").set({
@@ -315,7 +1709,10 @@ describe("ledger manual e congelamento", () => {
     const repeated = await createInventoryMovementTransaction(db, input, actor);
     assert.deepEqual(repeated, created);
 
-    const balance = await db.collection("stock_balances").doc("manual-balance").get();
+    const balance = await db
+      .collection("stock_balances")
+      .doc("manual-balance")
+      .get();
     assert.equal(balance.data()?.qty_on_hand, 7);
     const ledger = await db
       .collection("movements")
@@ -337,5 +1734,376 @@ describe("ledger manual e congelamento", () => {
       ),
       /temporariamente bloqueadas/,
     );
+  });
+});
+
+describe("integridade de reservas e agregados de catálogo", () => {
+  it("rejeitar solicitação de retirada libera a reserva e restaura o estoque", async () => {
+    await db.collection("system_controls").doc("inventory").delete();
+    await Promise.all([
+      db.collection("stock_balances").doc("balance-rej").set({
+        id: "balance-rej",
+        customer_code: "BTG Pactual",
+        sku_code: "SKU-REJ-1",
+        client_item_code: "ITEM-REJ-1",
+        product_name: "Produto de teste de rejeição",
+        location_id: "LOC-REJ",
+        qty_on_hand: 8,
+        qty_reserved: 0,
+        qty_available: 8,
+        unit_cost: 10,
+      }),
+      db.collection("skus").doc("SKU-REJ-1").set({
+        id: "SKU-REJ-1",
+        cod_btg: "SKU-REJ-1",
+        sku_code: "SKU-REJ-1",
+        sku_code_key: "SKU-REJ-1",
+        cod_cliente: "ITEM-REJ-1",
+        cod_cliente_key: "ITEM-REJ-1",
+        estoque_atual: 8,
+        estoque_reservado: 0,
+        estoque_disponivel: 8,
+        custo_total: 80,
+      }),
+      db.collection("products").doc("ITEM-REJ-1").set({
+        id: "ITEM-REJ-1",
+        cod_cliente: "ITEM-REJ-1",
+        cod_cliente_key: "ITEM-REJ-1",
+        estoque_btg: 8,
+        custo_total: 80,
+      }),
+    ]);
+
+    const created = await createCustomerRequestTransaction(
+      db,
+      {
+        type: "retirada",
+        priority: "normal",
+        title: "Retirada que será rejeitada",
+        customer_code: "BTG Pactual",
+        idempotency_key: "request-reject-1",
+        items: [
+          {
+            sku_code: "SKU-REJ-1",
+            client_item_code: "ITEM-REJ-1",
+            product_name: "Produto de teste de rejeição",
+            unit_cost: 10,
+            quantity: 5,
+          },
+        ],
+      },
+      { ...actor, role: "cliente", uid: "client-rej" },
+    );
+    const requestId = String(created.id);
+
+    const reservedBalance = await db
+      .collection("stock_balances")
+      .doc("balance-rej")
+      .get();
+    assert.equal(reservedBalance.data()?.qty_reserved, 5);
+    assert.equal(reservedBalance.data()?.qty_available, 3);
+    const reservedSku = await db.collection("skus").doc("SKU-REJ-1").get();
+    assert.equal(reservedSku.data()?.estoque_reservado, 5);
+    assert.equal(reservedSku.data()?.estoque_disponivel, 3);
+
+    const rejected = (await decideCustomerRequestTransaction(
+      db,
+      {
+        request_id: requestId,
+        action: "reject",
+        reason: "Sem janela de expedição",
+        expected_status: "open",
+        idempotency_key: "reject-outbound-1",
+      },
+      actor,
+    )) as Record<string, unknown>;
+    assert.equal(rejected.status, "rejected");
+
+    const balanceAfter = await db
+      .collection("stock_balances")
+      .doc("balance-rej")
+      .get();
+    assert.equal(balanceAfter.data()?.qty_reserved, 0);
+    assert.equal(balanceAfter.data()?.qty_available, 8);
+
+    const reservations = await db
+      .collection("stock_reservations")
+      .where("customer_request_id", "==", requestId)
+      .get();
+    assert.ok(reservations.size > 0);
+    for (const document of reservations.docs) {
+      assert.equal(document.data().status, "released");
+    }
+
+    const requestAfter = await db
+      .collection("customer_requests")
+      .doc(requestId)
+      .get();
+    assert.equal(requestAfter.data()?.stock_reservation_status, "released");
+
+    const projection = await db
+      .collection("client_inventory")
+      .where("customer_code", "==", "BTG Pactual")
+      .where("sku_code", "==", "SKU-REJ-1")
+      .get();
+    assert.equal(projection.size, 1);
+    assert.equal(projection.docs[0].data().qty_reserved, 0);
+    assert.equal(projection.docs[0].data().qty_available, 8);
+
+    const skuAfter = await db.collection("skus").doc("SKU-REJ-1").get();
+    assert.equal(skuAfter.data()?.estoque_reservado, 0);
+    assert.equal(skuAfter.data()?.estoque_disponivel, 8);
+
+    // O estoque liberado precisa estar utilizável de novo: uma nova
+    // retirada pelo total volta a reservar sem erro de saldo.
+    const recreated = await createCustomerRequestTransaction(
+      db,
+      {
+        type: "retirada",
+        priority: "normal",
+        title: "Retirada total após liberação",
+        customer_code: "BTG Pactual",
+        idempotency_key: "request-reject-2",
+        items: [
+          {
+            sku_code: "SKU-REJ-1",
+            client_item_code: "ITEM-REJ-1",
+            product_name: "Produto de teste de rejeição",
+            unit_cost: 10,
+            quantity: 8,
+          },
+        ],
+      },
+      { ...actor, role: "cliente", uid: "client-rej" },
+    );
+    assert.equal(recreated.reserved_quantity, 8);
+  });
+
+  it("inventário cíclico sem divergência preserva a projeção agregada multi-localização", async () => {
+    await Promise.all([
+      db.collection("stock_balances").doc("balance-cyc-a").set({
+        id: "balance-cyc-a",
+        customer_code: "BTG Pactual",
+        sku_code: "SKU-CYC-1",
+        client_item_code: "ITEM-CYC-1",
+        product_name: "Produto multi-localização",
+        location_id: "LOC-CYC-A",
+        qty_on_hand: 10,
+        qty_reserved: 0,
+        qty_available: 10,
+        unit_cost: 20,
+      }),
+      db.collection("stock_balances").doc("balance-cyc-b").set({
+        id: "balance-cyc-b",
+        customer_code: "BTG Pactual",
+        sku_code: "SKU-CYC-1",
+        client_item_code: "ITEM-CYC-1",
+        product_name: "Produto multi-localização",
+        location_id: "LOC-CYC-B",
+        qty_on_hand: 5,
+        qty_reserved: 0,
+        qty_available: 5,
+        unit_cost: 20,
+      }),
+    ]);
+
+    const counted = (await recordCycleCountTransaction(
+      db,
+      {
+        mode: "cycle",
+        customer_code: "BTG Pactual",
+        sku_code: "SKU-CYC-1",
+        client_item_code: "ITEM-CYC-1",
+        location_id: "LOC-CYC-A",
+        counted_qty: 10,
+        reason: "Contagem cíclica de rotina",
+        idempotency_key: "cycle-nodiv-1",
+      },
+      actor,
+    )) as Record<string, unknown>;
+    assert.equal(counted.adjustment_delta, 0);
+
+    const projection = await db
+      .collection("client_inventory")
+      .where("customer_code", "==", "BTG Pactual")
+      .where("sku_code", "==", "SKU-CYC-1")
+      .get();
+    assert.equal(projection.size, 1);
+    assert.equal(projection.docs[0].data().qty_on_hand, 15);
+    assert.equal(projection.docs[0].data().qty_available, 15);
+  });
+
+  it("movimentos manuais e ajustes cíclicos mantêm os agregados de skus/products", async () => {
+    await Promise.all([
+      db.collection("stock_balances").doc("balance-agg").set({
+        id: "balance-agg",
+        customer_code: "BTG Pactual",
+        sku_code: "SKU-AGG-1",
+        client_item_code: "ITEM-AGG-1",
+        product_name: "Produto com agregados",
+        location_id: "LOC-AGG",
+        qty_on_hand: 10,
+        qty_reserved: 0,
+        qty_available: 10,
+        unit_cost: 10,
+      }),
+      db.collection("skus").doc("SKU-AGG-1").set({
+        id: "SKU-AGG-1",
+        cod_btg: "SKU-AGG-1",
+        sku_code: "SKU-AGG-1",
+        sku_code_key: "SKU-AGG-1",
+        cod_cliente: "ITEM-AGG-1",
+        cod_cliente_key: "ITEM-AGG-1",
+        estoque_atual: 10,
+        estoque_reservado: 0,
+        estoque_disponivel: 10,
+        custo_total: 100,
+      }),
+      db.collection("products").doc("ITEM-AGG-1").set({
+        id: "ITEM-AGG-1",
+        cod_cliente: "ITEM-AGG-1",
+        cod_cliente_key: "ITEM-AGG-1",
+        estoque_btg: 10,
+        custo_total: 100,
+      }),
+    ]);
+
+    await createInventoryMovementTransaction(
+      db,
+      {
+        type: "ENTRADA",
+        quantity: 5,
+        customer_code: "BTG Pactual",
+        sku_code: "SKU-AGG-1",
+        client_item_code: "ITEM-AGG-1",
+        product_name: "Produto com agregados",
+        location_id: "LOC-AGG",
+        unit_cost: 10,
+        reason: "Entrada manual para teste de agregados",
+        idempotency_key: "agg-entry-1",
+      },
+      actor,
+    );
+    let sku = await db.collection("skus").doc("SKU-AGG-1").get();
+    let product = await db.collection("products").doc("ITEM-AGG-1").get();
+    assert.equal(sku.data()?.estoque_atual, 15);
+    assert.equal(sku.data()?.estoque_disponivel, 15);
+    assert.equal(sku.data()?.custo_total, 150);
+    assert.equal(product.data()?.estoque_btg, 15);
+    assert.equal(product.data()?.custo_total, 150);
+
+    await createInventoryMovementTransaction(
+      db,
+      {
+        type: "SAIDA",
+        quantity: 3,
+        customer_code: "BTG Pactual",
+        sku_code: "SKU-AGG-1",
+        client_item_code: "ITEM-AGG-1",
+        product_name: "Produto com agregados",
+        location_id: "LOC-AGG",
+        unit_cost: 10,
+        reason: "Saída manual para teste de agregados",
+        idempotency_key: "agg-exit-1",
+      },
+      actor,
+    );
+    sku = await db.collection("skus").doc("SKU-AGG-1").get();
+    product = await db.collection("products").doc("ITEM-AGG-1").get();
+    assert.equal(sku.data()?.estoque_atual, 12);
+    assert.equal(sku.data()?.estoque_disponivel, 12);
+    assert.equal(sku.data()?.custo_total, 120);
+    assert.equal(product.data()?.estoque_btg, 12);
+    assert.equal(product.data()?.custo_total, 120);
+
+    const adjusted = (await recordCycleCountTransaction(
+      db,
+      {
+        mode: "cycle",
+        customer_code: "BTG Pactual",
+        sku_code: "SKU-AGG-1",
+        client_item_code: "ITEM-AGG-1",
+        location_id: "LOC-AGG",
+        counted_qty: 10,
+        unit_cost: 10,
+        reason: "Ajuste cíclico para teste de agregados",
+        idempotency_key: "agg-cycle-1",
+      },
+      actor,
+    )) as Record<string, unknown>;
+    assert.equal(adjusted.adjustment_delta, -2);
+
+    sku = await db.collection("skus").doc("SKU-AGG-1").get();
+    product = await db.collection("products").doc("ITEM-AGG-1").get();
+    assert.equal(sku.data()?.estoque_atual, 10);
+    assert.equal(sku.data()?.estoque_disponivel, 10);
+    assert.equal(sku.data()?.custo_total, 100);
+    assert.equal(product.data()?.estoque_btg, 10);
+    assert.equal(product.data()?.custo_total, 100);
+  });
+
+  it("resolve catálogo importado (id stable_id, sem *_key) pelos campos crus", async () => {
+    await Promise.all([
+      db.collection("stock_balances").doc("balance-leg").set({
+        id: "balance-leg",
+        customer_code: "BTG Pactual",
+        sku_code: "SKU-LEG-1",
+        client_item_code: "ITEM-LEG-1",
+        product_name: "Produto importado legado",
+        location_id: "LOC-LEG",
+        qty_on_hand: 4,
+        qty_reserved: 0,
+        qty_available: 4,
+        unit_cost: 25,
+      }),
+      // Formato do tools/import_btg_firestore.py: id hash, só campos crus.
+      db.collection("skus").doc("sku_legado_0a1b2c3d4e5f6a7b").set({
+        id: "sku_legado_0a1b2c3d4e5f6a7b",
+        cod_btg: "SKU-LEG-1",
+        sku_code: "SKU-LEG-1",
+        cod_cliente: "ITEM-LEG-1",
+        estoque_atual: 4,
+        estoque_reservado: 0,
+        estoque_disponivel: 4,
+        custo_total: 100,
+      }),
+      db.collection("products").doc("product_legado_9f8e7d6c5b4a3f2e").set({
+        id: "product_legado_9f8e7d6c5b4a3f2e",
+        cod_cliente: "ITEM-LEG-1",
+        estoque_btg: 4,
+        custo_total: 100,
+      }),
+    ]);
+
+    await createInventoryMovementTransaction(
+      db,
+      {
+        type: "ENTRADA",
+        quantity: 2,
+        customer_code: "BTG Pactual",
+        sku_code: "SKU-LEG-1",
+        client_item_code: "ITEM-LEG-1",
+        product_name: "Produto importado legado",
+        location_id: "LOC-LEG",
+        unit_cost: 25,
+        reason: "Entrada em catálogo importado",
+        idempotency_key: "leg-entry-1",
+      },
+      actor,
+    );
+
+    const sku = await db
+      .collection("skus")
+      .doc("sku_legado_0a1b2c3d4e5f6a7b")
+      .get();
+    const product = await db
+      .collection("products")
+      .doc("product_legado_9f8e7d6c5b4a3f2e")
+      .get();
+    assert.equal(sku.data()?.estoque_atual, 6);
+    assert.equal(sku.data()?.estoque_disponivel, 6);
+    assert.equal(sku.data()?.custo_total, 150);
+    assert.equal(product.data()?.estoque_btg, 6);
+    assert.equal(product.data()?.custo_total, 150);
   });
 });

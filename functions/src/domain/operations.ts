@@ -4,6 +4,7 @@ import {
   FieldValue,
   type DocumentData,
   type DocumentReference,
+  type DocumentSnapshot,
   type Firestore,
   type Query,
   type Transaction,
@@ -21,18 +22,27 @@ const collections = {
   stockReservations: "stock_reservations",
   pickTasks: "pick_tasks",
   pickLines: "pick_lines",
+  putawayTasks: "putaway_tasks",
   inboundReceipts: "inbound_receipts",
   inboundItems: "inbound_items",
+  returns: "returns",
+  returnItems: "return_items",
   packTasks: "pack_tasks",
   packages: "packages",
   packageItems: "package_items",
   shipments: "shipments",
   shipmentItems: "shipment_items",
   movements: "movements",
+  cycleCounts: "cycle_counts",
+  openingInventorySessions: "opening_inventory_sessions",
+  openingInventoryLines: "opening_inventory_lines",
   clientInventory: "client_inventory",
+  products: "products",
+  skus: "skus",
   clientOrderTracking: "client_order_tracking",
   clientRequestStatus: "client_request_status",
   systemControls: "system_controls",
+  opsAggregates: "ops_aggregates",
 } as const;
 
 export type OperationalActor = {
@@ -48,8 +58,16 @@ export type OperationalRequestItem = {
   sku_code?: string;
   client_item_code?: string;
   product_name?: string;
+  product_registration?: "existing" | "new" | string;
   location_id?: string;
   condition?: string;
+  category?: string;
+  barcode?: string;
+  brand?: string;
+  size?: string;
+  color?: string;
+  photo_urls?: string[];
+  photo_storage_paths?: string[];
   unit_cost?: number;
   quantity: number;
   notes?: string;
@@ -62,9 +80,64 @@ export type CreateOperationalRequestInput = {
   description?: string;
   destination?: string;
   due_at?: string;
+  supplier?: string;
+  invoice_number?: string;
+  attachments?: Array<{
+    file_name: string;
+    file_url: string;
+    storage_path: string;
+    content_type: string;
+    size_bytes: number;
+  }>;
   customer_code: string;
   idempotency_key: string;
   items: OperationalRequestItem[];
+};
+
+export type CreateInboundReceiptInput = {
+  customer_code: string;
+  supplier?: string;
+  invoice_number?: string;
+  reference?: string;
+  notes?: string;
+  priority?: string;
+  received_at?: string;
+  idempotency_key: string;
+  items: OperationalRequestItem[];
+};
+
+export type UpdateInboundReceiptConferenceInput = {
+  receipt_id: string;
+  expected_status?: string;
+  idempotency_key: string;
+  lines: Array<{
+    inbound_item_id: string;
+    received_qty: number;
+    location_id?: string;
+    unit_cost?: number;
+    notes?: string;
+  }>;
+};
+
+export type CreateReturnReceiptInput = {
+  customer_code: string;
+  source?: string;
+  reference?: string;
+  notes?: string;
+  received_at?: string;
+  idempotency_key: string;
+  items: OperationalRequestItem[];
+};
+
+export type SetReturnDispositionInput = {
+  return_item_id: string;
+  disposition: "available" | "damaged" | "quarantine" | "discard";
+  location_id?: string;
+  unit_cost?: number;
+  notes?: string;
+  expected_status?: string;
+  occurred_at?: string;
+  idempotency_key: string;
 };
 
 export type DecideOperationalRequestInput = {
@@ -80,6 +153,33 @@ export type AdvanceOperationalTaskInput = {
   note?: string;
   expected_status?: string;
   idempotency_key?: string;
+  operation?: {
+    picking_lines?: Array<{
+      pick_line_id: string;
+      qty_picked: number;
+      status?: string;
+      notes?: string;
+    }>;
+    packing_lines?: Array<{
+      order_item_id: string;
+      qty_packed: number;
+      status?: string;
+      notes?: string;
+    }>;
+    package_count?: number;
+    volume_label?: string;
+    seal_code?: string;
+    package_notes?: string;
+    carrier?: string;
+    driver_name?: string;
+    vehicle_plate?: string;
+    proof_reference?: string;
+    delivery_notes?: string;
+    source_location_id?: string;
+    destination_location_id?: string;
+    location_id?: string;
+    quantity?: number;
+  };
 };
 
 export type CreateInventoryMovementInput = {
@@ -94,6 +194,51 @@ export type CreateInventoryMovementInput = {
   reason: string;
   reference?: string;
   occurred_at?: string;
+  idempotency_key: string;
+};
+
+export type RecordCycleCountInput = {
+  mode?: "cycle" | "opening";
+  session_id?: string;
+  customer_code: string;
+  sku_code: string;
+  client_item_code?: string;
+  product_name?: string;
+  product_registration?: "existing" | "new" | string;
+  category?: string;
+  barcode?: string;
+  brand?: string;
+  size?: string;
+  color?: string;
+  photo_urls?: string[];
+  photo_storage_paths?: string[];
+  location_id: string;
+  counted_qty: number;
+  unit_cost?: number;
+  reason: string;
+  reference?: string;
+  occurred_at?: string;
+  idempotency_key: string;
+};
+
+export type CreateOpeningInventorySessionInput = {
+  customer_code: string;
+  reference?: string;
+  notes?: string;
+  idempotency_key: string;
+};
+
+export type CompleteOpeningInventorySessionInput = {
+  customer_code: string;
+  session_id: string;
+  notes?: string;
+  idempotency_key: string;
+};
+
+export type RemoveOpeningInventoryLineInput = {
+  customer_code: string;
+  session_id: string;
+  opening_line_id: string;
   idempotency_key: string;
 };
 
@@ -139,6 +284,7 @@ type StockAllocation = {
   item: OperationalRequestItem;
   clientLineNumber: number;
   row: Row;
+  reservationRow?: Row;
   locationId: string;
   quantity: number;
 };
@@ -205,15 +351,34 @@ function text(value: unknown) {
   return String(value ?? "").trim();
 }
 
+function normalizedIdentity(value: unknown) {
+  return text(value)
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
+
 function number(value: unknown) {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function stringList(value: unknown, limit = 8) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => text(item))
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
 function requiredPositive(value: unknown, label: string) {
   const parsed = number(value);
   if (parsed <= 0) {
-    throw new HttpsError("invalid-argument", `${label} deve ser maior que zero.`);
+    throw new HttpsError(
+      "invalid-argument",
+      `${label} deve ser maior que zero.`,
+    );
   }
   return parsed;
 }
@@ -230,9 +395,14 @@ function itemSummary(items: OperationalRequestItem[], fallback: string) {
   if (!items.length) return fallback;
   const summary = items
     .slice(0, 3)
-    .map((item) => `${item.quantity}x ${item.product_name ?? item.sku_code ?? "item"}`)
+    .map(
+      (item) =>
+        `${item.quantity}x ${item.product_name ?? item.sku_code ?? "item"}`,
+    )
     .join(", ");
-  return items.length > 3 ? `${summary} +${items.length - 3} item(ns)` : summary;
+  return items.length > 3
+    ? `${summary} +${items.length - 3} item(ns)`
+    : summary;
 }
 
 function eventSummary(
@@ -326,7 +496,10 @@ function movementId(operationId: string, suffix: string) {
   return `mov_${digest({ operationId, suffix })}`;
 }
 
-function operationResult<T>(snapshot: DocumentData, inputHash: string): T | undefined {
+function operationResult<T>(
+  snapshot: DocumentData,
+  inputHash: string,
+): T | undefined {
   if (!snapshot.exists) return undefined;
   const data = asRecord(snapshot.data());
   if (data.input_hash !== inputHash) {
@@ -360,7 +533,7 @@ function createOperationReceipt(
     input_hash: inputHash,
     status: "completed",
     actor: actorPayload(actor),
-    result,
+    result: compactValue(result),
     created_at: FieldValue.serverTimestamp(),
     completed_at: FieldValue.serverTimestamp(),
   });
@@ -385,7 +558,7 @@ async function assertInventoryOperationsEnabled(
   const snapshot = await transaction.get(
     db.collection(collections.systemControls).doc("inventory"),
   );
-  if (!snapshot.exists) return;
+  if (!snapshot.exists) return {};
 
   const control = snapshot.data() ?? {};
   if (
@@ -401,6 +574,7 @@ async function assertInventoryOperationsEnabled(
       },
     );
   }
+  return control;
 }
 
 function exactBalanceQuery(
@@ -448,8 +622,36 @@ function balanceKey(customerCode: string, skuCode: string, locationId: string) {
   return `${customerCode}\u0000${skuCode}\u0000${locationId}`;
 }
 
-function clientInventoryId(customerCode: string, skuCode: string) {
-  return safeDocId(`cinv_${customerCode}__${skuCode}`);
+const CLIENT_SCOPED_SKUS = new Set(["BTG-1043"]);
+
+function clientScopedInventoryId(
+  customerCode: string,
+  skuCode: string,
+  clientItemCode?: string,
+) {
+  const scope =
+    clientItemCode && CLIENT_SCOPED_SKUS.has(skuCode)
+      ? `__${clientItemCode}`
+      : "";
+  return safeDocId(`cinv_${customerCode}__${skuCode}${scope}`);
+}
+
+/**
+ * A projeção client_inventory de um SKU escopado (CLIENT_SCOPED_SKUS) é
+ * mantida por variante de cod_cliente. Somas agregadas destinadas a um doc
+ * escopado devem considerar apenas os saldos daquela variante — nunca as
+ * variantes irmãs que compartilham o mesmo SKU.
+ */
+function variantScopedBalanceRows(
+  rows: Row[],
+  skuCode: string,
+  clientItemCode?: string,
+) {
+  if (!clientItemCode || !CLIENT_SCOPED_SKUS.has(skuCode)) return rows;
+  const variantKey = normalizedIdentity(clientItemCode);
+  return rows.filter(
+    (row) => normalizedIdentity(row.data.client_item_code) === variantKey,
+  );
 }
 
 function clientTimelineEntry(
@@ -475,6 +677,11 @@ function updateClientInventory(
     clientItemCode?: string;
     productName?: string;
     category?: string;
+    barcode?: string;
+    brand?: string;
+    size?: string;
+    color?: string;
+    photoUrls?: string[];
     unitCost?: number;
     onHandDelta?: number;
     reservedDelta?: number;
@@ -485,7 +692,13 @@ function updateClientInventory(
   const unitCost = number(input.unitCost);
   const ref = db
     .collection(collections.clientInventory)
-    .doc(clientInventoryId(input.customerCode, input.skuCode));
+    .doc(
+      clientScopedInventoryId(
+        input.customerCode,
+        input.skuCode,
+        input.clientItemCode,
+      ),
+    );
   transaction.set(
     ref,
     compact({
@@ -495,6 +708,12 @@ function updateClientInventory(
       client_item_code: input.clientItemCode,
       product_name: input.productName ?? input.skuCode,
       category: input.category,
+      barcode: input.barcode,
+      brand: input.brand,
+      size: input.size,
+      color: input.color,
+      photo_urls: input.photoUrls?.length ? input.photoUrls : undefined,
+      primary_photo_url: input.photoUrls?.[0],
       unit_cost: unitCost || undefined,
       qty_on_hand: onHandDelta ? FieldValue.increment(onHandDelta) : undefined,
       qty_reserved: reservedDelta
@@ -526,6 +745,11 @@ function setClientInventorySnapshot(
     clientItemCode?: string;
     productName?: string;
     category?: string;
+    barcode?: string;
+    brand?: string;
+    size?: string;
+    color?: string;
+    photoUrls?: string[];
     unitCost?: number;
     qtyOnHand: number;
     qtyReserved: number;
@@ -533,7 +757,13 @@ function setClientInventorySnapshot(
 ) {
   const ref = db
     .collection(collections.clientInventory)
-    .doc(clientInventoryId(input.customerCode, input.skuCode));
+    .doc(
+      clientScopedInventoryId(
+        input.customerCode,
+        input.skuCode,
+        input.clientItemCode,
+      ),
+    );
   const unitCost = number(input.unitCost);
   transaction.set(
     ref,
@@ -544,6 +774,12 @@ function setClientInventorySnapshot(
       client_item_code: input.clientItemCode,
       product_name: input.productName ?? input.skuCode,
       category: input.category,
+      barcode: input.barcode,
+      brand: input.brand,
+      size: input.size,
+      color: input.color,
+      photo_urls: input.photoUrls?.length ? input.photoUrls : undefined,
+      primary_photo_url: input.photoUrls?.[0],
       unit_cost: unitCost,
       qty_on_hand: input.qtyOnHand,
       qty_reserved: input.qtyReserved,
@@ -556,6 +792,128 @@ function setClientInventorySnapshot(
     }),
     { merge: true },
   );
+}
+
+type CatalogAggregateTarget = {
+  productRef?: DocumentReference<DocumentData>;
+  skuRef?: DocumentReference<DocumentData>;
+};
+
+/**
+ * Localiza os documentos de catálogo (products/skus) cujos agregados de
+ * estoque (estoque_atual, estoque_disponivel, estoque_reservado, estoque_btg,
+ * custo_total) devem acompanhar o ledger. Precisa rodar na fase de leitura da
+ * transação (antes de qualquer write). Docs inexistentes são ignorados — os
+ * agregados só são mantidos para itens já cadastrados.
+ */
+async function resolveCatalogAggregateTargets(
+  transaction: Transaction,
+  db: Firestore,
+  skuCode: string,
+  clientItemCode?: string,
+): Promise<CatalogAggregateTarget> {
+  const normalizedSku = normalizedIdentity(skuCode);
+  if (!normalizedSku) return {};
+  const rawSku = text(skuCode);
+  const skuDirectRef = db.collection(collections.skus).doc(safeDocId(normalizedSku));
+  const clientKey = normalizedIdentity(clientItemCode ?? "");
+  const rawClient = text(clientItemCode ?? "");
+  const productDirectRef = clientKey
+    ? db.collection(collections.products).doc(safeDocId(clientKey))
+    : undefined;
+  // Mesmas consultas de identidade usadas por mutateManagedEntity em
+  // index.ts: docs importados (tools/import_btg_firestore.py) têm ids
+  // stable_id() e só carregam cod_btg/sku_code/cod_cliente crus, sem os
+  // campos *_key normalizados.
+  const skuQueries = [
+    db.collection(collections.skus).where("sku_code_key", "==", normalizedSku),
+    db.collection(collections.skus).where("cod_btg", "==", rawSku),
+    db.collection(collections.skus).where("sku_code", "==", rawSku),
+  ];
+  const productQueries = clientKey
+    ? [
+        db
+          .collection(collections.products)
+          .where("cod_cliente_key", "==", clientKey),
+        db.collection(collections.products).where("cod_cliente", "==", rawClient),
+      ]
+    : [];
+  const [skuSnapshot, productSnapshot, skuRowSets, productRowSets] =
+    await Promise.all([
+      transaction.get(skuDirectRef),
+      productDirectRef
+        ? transaction.get(productDirectRef)
+        : Promise.resolve(undefined),
+      Promise.all(
+        skuQueries.map((query) => readRows(transaction, query.limit(2))),
+      ),
+      Promise.all(
+        productQueries.map((query) => readRows(transaction, query.limit(2))),
+      ),
+    ]);
+  const skuRowRef = skuRowSets.find((rows) => rows.length > 0)?.[0]?.ref;
+  const productRowRef = productRowSets.find((rows) => rows.length > 0)?.[0]?.ref;
+  return {
+    skuRef: skuSnapshot.exists ? skuDirectRef : skuRowRef,
+    productRef: productSnapshot?.exists ? productDirectRef : productRowRef,
+  };
+}
+
+/**
+ * Aplica deltas de estoque nos agregados de catálogo dentro da mesma
+ * transação que mutou o ledger, mantendo skus.estoque_atual/estoque_reservado/
+ * estoque_disponivel/custo_total e products.estoque_btg/custo_total coerentes
+ * com stock_balances.
+ */
+function applyCatalogStockAggregates(
+  transaction: Transaction,
+  target: CatalogAggregateTarget,
+  delta: { onHand?: number; reserved?: number; cost?: number },
+) {
+  const onHand = number(delta.onHand);
+  const reserved = number(delta.reserved);
+  const cost = number(delta.cost);
+  if (!onHand && !reserved && !cost) return;
+  if (target.skuRef) {
+    transaction.update(
+      target.skuRef,
+      compact({
+        estoque_atual: onHand ? FieldValue.increment(onHand) : undefined,
+        estoque_reservado: reserved ? FieldValue.increment(reserved) : undefined,
+        estoque_disponivel:
+          onHand - reserved
+            ? FieldValue.increment(onHand - reserved)
+            : undefined,
+        custo_total: cost ? FieldValue.increment(cost) : undefined,
+        updated_at: FieldValue.serverTimestamp(),
+      }),
+    );
+  }
+  if (target.productRef) {
+    transaction.update(
+      target.productRef,
+      compact({
+        estoque_btg: onHand ? FieldValue.increment(onHand) : undefined,
+        custo_total: cost ? FieldValue.increment(cost) : undefined,
+        updated_at: FieldValue.serverTimestamp(),
+      }),
+    );
+  }
+
+  // Keep the dashboard rollup in sync with ledger deltas (Admin SDK path).
+  const aggregateDb = target.skuRef?.firestore ?? target.productRef?.firestore;
+  if (aggregateDb && (onHand || cost)) {
+    transaction.set(
+      aggregateDb.collection(collections.opsAggregates).doc("dashboard"),
+      compact({
+        id: "dashboard",
+        total_pecas: onHand ? FieldValue.increment(onHand) : undefined,
+        custo_total: cost ? FieldValue.increment(cost) : undefined,
+        updated_at: FieldValue.serverTimestamp(),
+      }),
+      { merge: true },
+    );
+  }
 }
 
 function updateClientTracking(
@@ -603,7 +961,8 @@ function createMovement(
       id,
       data: input.occurredAt,
       occurred_at: input.occurredAt,
-      type: input.type === "ENTRADA" ? "inventory.received" : "inventory.shipped",
+      type:
+        input.type === "ENTRADA" ? "inventory.received" : "inventory.shipped",
       tipo_mov: input.type,
       sign,
       sinal: sign,
@@ -635,9 +994,15 @@ export async function createInventoryMovementTransaction(
   input: CreateInventoryMovementInput,
   actor: OperationalActor,
 ) {
+  if (input.type !== "ENTRADA" && input.type !== "SAIDA") {
+    throw new HttpsError(
+      "invalid-argument",
+      "Tipo de movimentação inválido. Use ENTRADA ou SAIDA.",
+    );
+  }
   const quantity = requiredPositive(input.quantity, "Quantidade");
   const customerCode = text(input.customer_code);
-  const skuCode = text(input.sku_code);
+  const skuCode = normalizedIdentity(input.sku_code);
   const locationId = text(input.location_id);
   const reason = text(input.reason);
   if (!customerCode || !skuCode || !locationId || !reason) {
@@ -686,6 +1051,15 @@ export async function createInventoryMovementTransaction(
         `Saldo disponível insuficiente para ${skuCode}: ${available}.`,
       );
     }
+
+    const catalogTargets = await resolveCatalogAggregateTargets(
+      transaction,
+      db,
+      skuCode,
+      text(input.client_item_code) ||
+        text(balanceRow?.data.client_item_code) ||
+        undefined,
+    );
 
     const delta = input.type === "ENTRADA" ? quantity : -quantity;
     const afterOnHand = beforeOnHand + delta;
@@ -767,6 +1141,10 @@ export async function createInventoryMovementTransaction(
       unitCost: number(input.unit_cost || balanceRow?.data.unit_cost),
       onHandDelta: delta,
     });
+    applyCatalogStockAggregates(transaction, catalogTargets, {
+      onHand: delta,
+      cost: delta * number(input.unit_cost || balanceRow?.data.unit_cost),
+    });
 
     const event = createEvent(
       transaction,
@@ -774,9 +1152,7 @@ export async function createInventoryMovementTransaction(
       operationEventId(operationId, "inventory_moved"),
       {
         type:
-          input.type === "ENTRADA"
-            ? "inventory.received"
-            : "inventory.shipped",
+          input.type === "ENTRADA" ? "inventory.received" : "inventory.shipped",
         title:
           input.type === "ENTRADA"
             ? "Entrada manual de estoque"
@@ -800,7 +1176,7 @@ export async function createInventoryMovementTransaction(
       actor,
     );
 
-    const result = {
+    const result = compact({
       ok: true,
       id: ledgerId,
       movement_id: ledgerId,
@@ -808,13 +1184,1797 @@ export async function createInventoryMovementTransaction(
       qty_before: beforeOnHand,
       qty_after: afterOnHand,
       events: [event],
-    };
+    });
     createOperationReceipt(
       transaction,
       operationRef,
       inputHash,
       "inventory.movement",
       ledgerId,
+      actor,
+      result,
+    );
+    return result;
+  });
+}
+
+export function openingInventorySessionDocumentId(customerCode: string) {
+  return safeDocId(`opening_${customerCode}`);
+}
+
+export async function createOpeningInventorySessionTransaction(
+  db: Firestore,
+  input: CreateOpeningInventorySessionInput,
+  actor: OperationalActor,
+) {
+  const customerCode = text(input.customer_code);
+  if (!customerCode) {
+    throw new HttpsError("invalid-argument", "Cliente é obrigatório.");
+  }
+
+  const sessionId = openingInventorySessionDocumentId(customerCode);
+  const operationId = `op_opening_inventory_start_${digest({
+    customer: customerCode,
+    nonce: input.idempotency_key,
+  })}`;
+  const inputHash = digest(input, 64);
+  const operationRef = db.collection(collections.operations).doc(operationId);
+  const sessionRef = db
+    .collection(collections.openingInventorySessions)
+    .doc(sessionId);
+
+  return db.runTransaction(async (transaction) => {
+    const [operationSnapshot, sessionSnapshot] = await Promise.all([
+      transaction.get(operationRef),
+      transaction.get(sessionRef),
+    ]);
+    const previous = operationResult<Record<string, unknown>>(
+      operationSnapshot,
+      inputHash,
+    );
+    if (previous) return previous;
+
+    await assertInventoryOperationsEnabled(transaction, db);
+
+    if (sessionSnapshot.exists) {
+      const session = asRecord(sessionSnapshot.data());
+      if (text(session.status) === "completed") {
+        throw new HttpsError(
+          "failed-precondition",
+          "O inventário de abertura deste cliente já foi concluído.",
+        );
+      }
+      const result = {
+        ok: true,
+        id: sessionId,
+        session_id: sessionId,
+        status: "open",
+        line_count: number(session.line_count),
+        unit_count: number(session.unit_count),
+        total_cost: number(session.total_cost),
+        resumed: true,
+        events: [],
+      };
+      createOperationReceipt(
+        transaction,
+        operationRef,
+        inputHash,
+        "inventory.opening.start",
+        sessionId,
+        actor,
+        result,
+      );
+      return result;
+    }
+
+    const occurredAt = new Date().toISOString();
+    transaction.create(
+      sessionRef,
+      compact({
+        id: sessionId,
+        customer_code: customerCode,
+        status: "open",
+        reference: text(input.reference) || undefined,
+        notes: text(input.notes) || undefined,
+        line_count: 0,
+        unit_count: 0,
+        total_cost: 0,
+        source: "functions_opening_inventory",
+        actor: actorPayload(actor),
+        started_at: occurredAt,
+        created_at: FieldValue.serverTimestamp(),
+        updated_at: FieldValue.serverTimestamp(),
+      }),
+    );
+    transaction.set(
+      db.collection(collections.systemControls).doc("inventory"),
+      {
+        stock_initialized: false,
+        opening_inventory_required: true,
+        opening_inventory_session_id: sessionId,
+        updated_at: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    const event = createEvent(
+      transaction,
+      db,
+      operationEventId(operationId, "opening_inventory_started"),
+      {
+        type: "inventory.opening_started",
+        title: "Inventário de abertura iniciado",
+        description: `Contagem inicial de ${customerCode} aberta pela operação.`,
+        severity: "info",
+        entity_type: "opening_inventory_session",
+        entity_id: sessionId,
+        customer_code: customerCode,
+        payload: {
+          reference: text(input.reference) || undefined,
+        },
+      },
+      actor,
+    );
+    const result = {
+      ok: true,
+      id: sessionId,
+      session_id: sessionId,
+      status: "open",
+      line_count: 0,
+      unit_count: 0,
+      total_cost: 0,
+      resumed: false,
+      events: [event],
+    };
+    createOperationReceipt(
+      transaction,
+      operationRef,
+      inputHash,
+      "inventory.opening.start",
+      sessionId,
+      actor,
+      result,
+    );
+    return result;
+  });
+}
+
+export async function completeOpeningInventorySessionTransaction(
+  db: Firestore,
+  input: CompleteOpeningInventorySessionInput,
+  actor: OperationalActor,
+) {
+  const customerCode = text(input.customer_code);
+  const sessionId = safeDocId(input.session_id);
+  if (!customerCode || !sessionId) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Cliente e sessão de inventário são obrigatórios.",
+    );
+  }
+  if (sessionId !== openingInventorySessionDocumentId(customerCode)) {
+    throw new HttpsError(
+      "permission-denied",
+      "A sessão não pertence ao cliente informado.",
+    );
+  }
+
+  const operationId = `op_opening_inventory_complete_${digest({
+    customer: customerCode,
+    session: sessionId,
+    nonce: input.idempotency_key,
+  })}`;
+  const inputHash = digest(input, 64);
+  const operationRef = db.collection(collections.operations).doc(operationId);
+  const sessionRef = db
+    .collection(collections.openingInventorySessions)
+    .doc(sessionId);
+
+  return db.runTransaction(async (transaction) => {
+    const [operationSnapshot, sessionSnapshot] = await Promise.all([
+      transaction.get(operationRef),
+      transaction.get(sessionRef),
+    ]);
+    const previous = operationResult<Record<string, unknown>>(
+      operationSnapshot,
+      inputHash,
+    );
+    if (previous) return previous;
+    await assertInventoryOperationsEnabled(transaction, db);
+
+    if (!sessionSnapshot.exists) {
+      throw new HttpsError(
+        "not-found",
+        "Inventário de abertura não iniciado.",
+      );
+    }
+    const session = asRecord(sessionSnapshot.data());
+    const status = text(session.status);
+    if (status === "completed") {
+      throw new HttpsError(
+        "failed-precondition",
+        "O inventário de abertura já foi concluído.",
+      );
+    }
+    if (number(session.line_count) < 1) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Registre ao menos um produto antes de concluir o inventário de abertura.",
+      );
+    }
+
+    const occurredAt = new Date().toISOString();
+    transaction.update(
+      sessionRef,
+      compact({
+        status: "completed",
+        completion_notes: text(input.notes) || undefined,
+        completed_by: actorPayload(actor),
+        completed_at: occurredAt,
+        updated_at: FieldValue.serverTimestamp(),
+      }),
+    );
+    transaction.set(
+      db.collection(collections.systemControls).doc("inventory"),
+      {
+        stock_initialized: true,
+        opening_inventory_required: false,
+        opening_inventory_session_id: sessionId,
+        opening_inventory_completed_at: occurredAt,
+        updated_at: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    const event = createEvent(
+      transaction,
+      db,
+      operationEventId(operationId, "opening_inventory_completed"),
+      {
+        type: "inventory.opening_completed",
+        title: "Inventário de abertura concluído",
+        description: `${number(session.line_count)} produto(s) e ${number(
+          session.unit_count,
+        )} unidade(s) publicados no estoque.`,
+        severity: "info",
+        entity_type: "opening_inventory_session",
+        entity_id: sessionId,
+        customer_code: customerCode,
+        payload: {
+          line_count: number(session.line_count),
+          unit_count: number(session.unit_count),
+          total_cost: number(session.total_cost),
+        },
+      },
+      actor,
+    );
+    const result = {
+      ok: true,
+      id: sessionId,
+      session_id: sessionId,
+      status: "completed",
+      line_count: number(session.line_count),
+      unit_count: number(session.unit_count),
+      total_cost: number(session.total_cost),
+      events: [event],
+    };
+    createOperationReceipt(
+      transaction,
+      operationRef,
+      inputHash,
+      "inventory.opening.complete",
+      sessionId,
+      actor,
+      result,
+    );
+    return result;
+  });
+}
+
+export async function recordCycleCountTransaction(
+  db: Firestore,
+  input: RecordCycleCountInput,
+  actor: OperationalActor,
+) {
+  const mode = input.mode === "opening" ? "opening" : "cycle";
+  const customerCode = text(input.customer_code);
+  const skuCode = normalizedIdentity(input.sku_code);
+  const locationId = text(input.location_id);
+  const reason = text(input.reason);
+  const countedQty = number(input.counted_qty);
+  if (!customerCode || !skuCode || !locationId || !reason) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Cliente, SKU, local e motivo da contagem são obrigatórios.",
+    );
+  }
+  if (countedQty < 0) {
+    throw new HttpsError(
+      "invalid-argument",
+      "A contagem física não pode ser negativa.",
+    );
+  }
+
+  const sessionId =
+    mode === "opening" ? safeDocId(text(input.session_id)) : undefined;
+  if (
+    mode === "opening" &&
+    (!sessionId || sessionId !== openingInventorySessionDocumentId(customerCode))
+  ) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Inicie o inventário de abertura deste cliente antes de registrar a contagem.",
+    );
+  }
+
+  const occurredAt = input.occurred_at ?? new Date().toISOString();
+  const operationId = `op_${mode === "opening" ? "opening_inventory" : "cycle_count"}_${digest({
+    customer: customerCode,
+    sku: skuCode,
+    location: locationId,
+    session: sessionId,
+    nonce: input.idempotency_key,
+  })}`;
+  const inputHash = digest(input, 64);
+  const operationRef = db.collection(collections.operations).doc(operationId);
+
+  return db.runTransaction(async (transaction) => {
+    const operationSnapshot = await transaction.get(operationRef);
+    const previous = operationResult<Record<string, unknown>>(
+      operationSnapshot,
+      inputHash,
+    );
+    if (previous) return previous;
+
+    await assertInventoryOperationsEnabled(transaction, db);
+
+    let openingSessionRef: DocumentReference<DocumentData> | undefined;
+    let openingLineRef: DocumentReference<DocumentData> | undefined;
+    let productRows: Row[] = [];
+    let skuRows: Row[] = [];
+    let productCodeSnapshot: DocumentSnapshot<DocumentData> | undefined;
+    let skuCodeSnapshot: DocumentSnapshot<DocumentData> | undefined;
+    if (mode === "opening" && sessionId) {
+      openingSessionRef = db
+        .collection(collections.openingInventorySessions)
+        .doc(sessionId);
+      openingLineRef = db
+        .collection(collections.openingInventoryLines)
+        .doc(
+          safeDocId(
+            `line_${digest({ sessionId, customerCode, skuCode, locationId }, 48)}`,
+          ),
+        );
+      const lookupClientCode = normalizedIdentity(input.client_item_code || skuCode);
+      const [
+        sessionSnapshot,
+        lineSnapshot,
+        foundProducts,
+        foundSkus,
+        productSnapshot,
+        skuSnapshot,
+      ] =
+        await Promise.all([
+          transaction.get(openingSessionRef),
+          transaction.get(openingLineRef),
+          readRows(
+            transaction,
+            db
+              .collection(collections.products)
+              .where("cod_cliente_key", "==", lookupClientCode),
+          ),
+          readRows(
+            transaction,
+            db
+              .collection(collections.skus)
+              .where("cod_cliente_key", "==", lookupClientCode),
+          ),
+          transaction.get(
+            db.collection(collections.products).doc(safeDocId(lookupClientCode)),
+          ),
+          transaction.get(db.collection(collections.skus).doc(safeDocId(skuCode))),
+        ]);
+      if (!sessionSnapshot.exists || text(sessionSnapshot.data()?.status) !== "open") {
+        throw new HttpsError(
+          "failed-precondition",
+          "O inventário de abertura não está ativo.",
+        );
+      }
+      if (text(sessionSnapshot.data()?.customer_code) !== customerCode) {
+        throw new HttpsError(
+          "permission-denied",
+          "A sessão de inventário pertence a outro cliente.",
+        );
+      }
+      if (lineSnapshot.exists) {
+        throw new HttpsError(
+          "already-exists",
+          `O SKU ${skuCode} no local ${locationId} já foi contado neste inventário de abertura.`,
+        );
+      }
+      productRows = foundProducts;
+      skuRows = foundSkus;
+      productCodeSnapshot = productSnapshot;
+      skuCodeSnapshot = skuSnapshot;
+    }
+
+    const balanceRows = await readRows(
+      transaction,
+      exactBalanceQuery(db, customerCode, skuCode, locationId),
+    );
+    if (balanceRows.length > 1) {
+      throw new HttpsError(
+        "failed-precondition",
+        `Mais de um saldo existe para SKU ${skuCode} no local ${locationId}.`,
+      );
+    }
+    if (!balanceRows.length && mode !== "opening") {
+      throw new HttpsError(
+        "not-found",
+        `Saldo não encontrado para SKU ${skuCode} no local ${locationId}. Cadastre o recebimento antes do inventário cíclico.`,
+      );
+    }
+
+    const balanceRow =
+      balanceRows[0] ??
+      ({
+        id: `bal_${digest({ customerCode, skuCode, locationId }, 48)}`,
+        ref: db
+          .collection(collections.stockBalances)
+          .doc(`bal_${digest({ customerCode, skuCode, locationId }, 48)}`),
+        data: {},
+      } satisfies Row);
+    const beforeOnHand = number(balanceRow.data.qty_on_hand);
+    const beforeReserved = number(balanceRow.data.qty_reserved);
+    if (mode === "opening" && (beforeOnHand !== 0 || beforeReserved !== 0)) {
+      throw new HttpsError(
+        "failed-precondition",
+        `O SKU ${skuCode} no local ${locationId} já possui saldo. Use inventário cíclico para corrigir uma posição existente.`,
+      );
+    }
+    if (countedQty < beforeReserved) {
+      throw new HttpsError(
+        "failed-precondition",
+        `A contagem física (${countedQty}) é menor que a reserva ativa (${beforeReserved}). Resolva as reservas antes de ajustar o saldo.`,
+      );
+    }
+
+    // Leituras adicionais (obrigatoriamente antes de qualquer write):
+    // sem divergência, a projeção do cliente precisa dos saldos de TODAS as
+    // localizações do SKU; com ajuste em modo cíclico, os agregados de
+    // catálogo precisam ser localizados.
+    const projectedDelta = countedQty - beforeOnHand;
+    let cycleCatalogTargets: CatalogAggregateTarget = {};
+    let aggregateBalanceRows: Row[] = [];
+    if (projectedDelta === 0) {
+      aggregateBalanceRows = await readRows(
+        transaction,
+        skuBalancesQuery(db, customerCode, skuCode),
+      );
+    } else if (mode === "cycle") {
+      cycleCatalogTargets = await resolveCatalogAggregateTargets(
+        transaction,
+        db,
+        skuCode,
+        normalizedIdentity(input.client_item_code) ||
+          normalizedIdentity(balanceRow.data.client_item_code) ||
+          undefined,
+      );
+    }
+
+    const requestedClientItemCode = normalizedIdentity(
+      input.client_item_code || skuCode,
+    );
+    const wantsNewProduct = text(input.product_registration) === "new";
+    if (mode === "opening") {
+      const existingSkuCodes = new Set(
+        skuRows
+          .map((row) =>
+            text(row.data.cod_btg || row.data.sku_code || row.data.cod_sku),
+          )
+          .filter(Boolean),
+      );
+      const catalogExists =
+        productRows.length > 0 ||
+        skuRows.length > 0 ||
+        Boolean(productCodeSnapshot?.exists) ||
+        Boolean(skuCodeSnapshot?.exists);
+      if (productRows.length > 1 || skuRows.length > 1) {
+        throw new HttpsError(
+          "failed-precondition",
+          `O Cod. cliente ${requestedClientItemCode} possui cadastro duplicado. Corrija o catálogo antes de contar o item.`,
+        );
+      }
+      if (existingSkuCodes.size > 0 && !existingSkuCodes.has(skuCode)) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Cod. cliente ${requestedClientItemCode} já está vinculado ao SKU ${[
+            ...existingSkuCodes,
+          ].join(", ")}. Use o cadastro existente.`,
+        );
+      }
+      if (skuCodeSnapshot?.exists) {
+        const skuData = skuCodeSnapshot.data() ?? {};
+        const mappedClientCode = text(
+          skuData.cod_cliente || skuData.client_item_code,
+        );
+        if (mappedClientCode && mappedClientCode !== requestedClientItemCode) {
+          throw new HttpsError(
+            "failed-precondition",
+            `SKU ${skuCode} já está vinculado ao Cod. cliente ${mappedClientCode}.`,
+          );
+        }
+      }
+      if (wantsNewProduct && catalogExists) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Cod. cliente ${requestedClientItemCode} ou SKU ${skuCode} já existe. Use o cadastro encontrado para evitar duplicidade.`,
+        );
+      }
+      if (!wantsNewProduct && !catalogExists) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Produto não encontrado. Marque ${requestedClientItemCode} como novo produto e complete o cadastro.`,
+        );
+      }
+      if (
+        !wantsNewProduct &&
+        (productRows.length === 0 && !productCodeSnapshot?.exists ||
+          (skuRows.length === 0 && !skuCodeSnapshot?.exists))
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          `O cadastro de ${requestedClientItemCode} está incompleto. Corrija produto e SKU antes de lançar saldo.`,
+        );
+      }
+      if (wantsNewProduct) {
+        if (!text(input.product_name) || !text(input.category)) {
+          throw new HttpsError(
+            "invalid-argument",
+            "Produto novo exige descrição e categoria.",
+          );
+        }
+        if (number(input.unit_cost) <= 0) {
+          throw new HttpsError(
+            "invalid-argument",
+            "Produto novo exige custo unitário maior que zero.",
+          );
+        }
+        if (!stringList(input.photo_urls).length) {
+          throw new HttpsError(
+            "invalid-argument",
+            "Produto novo exige ao menos uma foto.",
+          );
+        }
+      }
+    }
+
+    const delta = countedQty - beforeOnHand;
+    const movementType = delta >= 0 ? "ENTRADA" : "SAIDA";
+    const adjustmentQty = Math.abs(delta);
+    const catalogProduct =
+      productRows[0]?.data ?? productCodeSnapshot?.data() ?? {};
+    const catalogSku = skuRows[0]?.data ?? skuCodeSnapshot?.data() ?? {};
+    const unitCost = number(
+      input.unit_cost ||
+        balanceRow.data.unit_cost ||
+        catalogSku.preco_unit ||
+        catalogSku.unit_cost ||
+        catalogProduct.preco_unit ||
+        catalogProduct.unit_cost,
+    );
+    if (mode === "opening" && unitCost <= 0) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Todo produto do inventário de abertura precisa de custo unitário maior que zero.",
+      );
+    }
+    const clientItemCode =
+      normalizedIdentity(input.client_item_code) ||
+      normalizedIdentity(balanceRow.data.client_item_code) ||
+      normalizedIdentity(catalogSku.cod_cliente) ||
+      normalizedIdentity(catalogProduct.cod_cliente) ||
+      undefined;
+    const productName =
+      text(input.product_name) ||
+      text(balanceRow.data.product_name) ||
+      text(catalogSku.produto || catalogSku.product_name) ||
+      text(catalogProduct.produto || catalogProduct.product_name) ||
+      skuCode;
+    const category =
+      text(input.category) ||
+      text(balanceRow.data.category) ||
+      text(catalogSku.category || catalogSku.categoria) ||
+      text(catalogProduct.category || catalogProduct.categoria) ||
+      undefined;
+    const barcode =
+      text(input.barcode) ||
+      text(balanceRow.data.barcode) ||
+      text(catalogSku.barcode || catalogProduct.barcode) ||
+      undefined;
+    const brand =
+      text(input.brand) ||
+      text(balanceRow.data.brand) ||
+      text(catalogSku.brand || catalogSku.marca || catalogProduct.brand || catalogProduct.marca) ||
+      undefined;
+    const size =
+      text(input.size) ||
+      text(balanceRow.data.size) ||
+      text(catalogSku.size || catalogSku.tamanho || catalogProduct.size || catalogProduct.tamanho) ||
+      undefined;
+    const color =
+      text(input.color) ||
+      text(balanceRow.data.color) ||
+      text(catalogSku.color || catalogSku.cor || catalogProduct.color || catalogProduct.cor) ||
+      undefined;
+    const photoUrls =
+      stringList(input.photo_urls).length > 0
+        ? stringList(input.photo_urls)
+        : stringList(
+            balanceRow.data.photo_urls ||
+              catalogSku.photo_urls ||
+              catalogProduct.photo_urls,
+          );
+    const photoStoragePaths = stringList(input.photo_storage_paths);
+    const source =
+      mode === "opening" ? "functions_opening_inventory" : "functions_cycle_count";
+    const cycleCountId = `${mode === "opening" ? "oic" : "cc"}_${digest({
+      operationId,
+      customerCode,
+      skuCode,
+      locationId,
+    })}`;
+    const movementIdValue =
+      adjustmentQty > 0 ? movementId(operationId, "cycle_count") : undefined;
+
+    if (mode === "opening" && openingSessionRef && openingLineRef) {
+      const catalogPayload = compact({
+        customer_code: customerCode,
+        cod_cliente: clientItemCode,
+        cod_cliente_key: normalizedIdentity(clientItemCode),
+        produto: productName,
+        category,
+        categoria: category,
+        barcode,
+        brand,
+        marca: brand,
+        size,
+        tamanho: size,
+        color,
+        cor: color,
+        photo_urls: photoUrls.length ? photoUrls : undefined,
+        primary_photo_url: photoUrls[0],
+        photo_storage_paths: photoStoragePaths.length
+          ? photoStoragePaths
+          : undefined,
+        preco_unit: unitCost,
+        unit_cost: unitCost,
+        status: "active",
+        archived: false,
+        source,
+        opening_inventory_session_id: sessionId,
+        updated_by: actorPayload(actor),
+        updated_at: FieldValue.serverTimestamp(),
+      });
+      if (wantsNewProduct) {
+        const productId = safeDocId(clientItemCode || skuCode);
+        const skuId = safeDocId(skuCode);
+        transaction.create(db.collection(collections.products).doc(productId), {
+          id: clientItemCode || skuCode,
+          ...catalogPayload,
+          estoque_btg: countedQty,
+          num_skus: 1,
+          custo_total: countedQty * unitCost,
+          created_by: actorPayload(actor),
+          created_at: FieldValue.serverTimestamp(),
+        });
+        transaction.create(db.collection(collections.skus).doc(skuId), {
+          id: skuCode,
+          ...catalogPayload,
+          cod_btg: skuCode,
+          sku_code: skuCode,
+          sku_code_key: normalizedIdentity(skuCode),
+          estoque_atual: countedQty,
+          estoque_reservado: 0,
+          estoque_disponivel: countedQty,
+          custo_total: countedQty * unitCost,
+          created_by: actorPayload(actor),
+          created_at: FieldValue.serverTimestamp(),
+        });
+      } else {
+        transaction.set(
+          productRows[0]?.ref ??
+            db
+              .collection(collections.products)
+              .doc(safeDocId(requestedClientItemCode)),
+          {
+            ...catalogPayload,
+            estoque_btg: FieldValue.increment(countedQty),
+            custo_total: FieldValue.increment(countedQty * unitCost),
+          },
+          { merge: true },
+        );
+        const existingSkuRef =
+          skuRows[0]?.ref ??
+          db.collection(collections.skus).doc(safeDocId(skuCode));
+        transaction.set(
+          existingSkuRef,
+          compact({
+            ...catalogPayload,
+            cod_btg: skuCode,
+            sku_code: skuCode,
+            sku_code_key: normalizedIdentity(skuCode),
+            estoque_atual: FieldValue.increment(countedQty),
+            estoque_disponivel: FieldValue.increment(countedQty),
+            custo_total: FieldValue.increment(countedQty * unitCost),
+          }),
+          { merge: true },
+        );
+      }
+
+      transaction.create(
+        openingLineRef,
+        compact({
+          id: openingLineRef.id,
+          session_id: sessionId,
+          customer_code: customerCode,
+          sku_code: skuCode,
+          client_item_code: clientItemCode,
+          product_name: productName,
+          product_registration: wantsNewProduct ? "new" : "existing",
+          category,
+          barcode,
+          brand,
+          size,
+          color,
+          photo_urls: photoUrls.length ? photoUrls : undefined,
+          photo_storage_paths: photoStoragePaths.length
+            ? photoStoragePaths
+            : undefined,
+          location_id: locationId,
+          counted_qty: countedQty,
+          unit_cost: unitCost,
+          total_cost: countedQty * unitCost,
+          cycle_count_id: cycleCountId,
+          movement_id: movementIdValue,
+          status: "counted",
+          actor: actorPayload(actor),
+          occurred_at: occurredAt,
+          created_at: FieldValue.serverTimestamp(),
+          updated_at: FieldValue.serverTimestamp(),
+        }),
+      );
+      transaction.update(openingSessionRef, {
+        line_count: FieldValue.increment(1),
+        unit_count: FieldValue.increment(countedQty),
+        total_cost: FieldValue.increment(countedQty * unitCost),
+        last_counted_at: occurredAt,
+        updated_at: FieldValue.serverTimestamp(),
+      });
+    }
+
+    transaction.set(
+      balanceRow.ref,
+      compact({
+        id: balanceRow.id,
+        customer_code: customerCode,
+        sku_code: skuCode,
+        client_item_code: clientItemCode,
+        product_name: productName,
+        location_id: locationId,
+        category,
+        barcode,
+        brand,
+        size,
+        color,
+        photo_urls: photoUrls.length ? photoUrls : undefined,
+        primary_photo_url: photoUrls[0],
+        qty_on_hand: countedQty,
+        qty_reserved: beforeReserved,
+        qty_available: countedQty - beforeReserved,
+        unit_cost: unitCost,
+        status: countedQty > 0 ? "available" : "empty",
+        source,
+        opening_inventory_session_id: sessionId,
+        last_cycle_count_id: cycleCountId,
+        last_cycle_count_at: occurredAt,
+        created_at:
+          mode === "opening" && !Object.keys(balanceRow.data).length
+            ? FieldValue.serverTimestamp()
+            : undefined,
+        updated_at: FieldValue.serverTimestamp(),
+      }),
+      { merge: true },
+    );
+
+    transaction.create(
+      db.collection(collections.cycleCounts).doc(cycleCountId),
+      compact({
+        id: cycleCountId,
+        customer_code: customerCode,
+        sku_code: skuCode,
+        client_item_code: clientItemCode,
+        product_name: productName,
+        category,
+        barcode,
+        brand,
+        size,
+        color,
+        photo_urls: photoUrls.length ? photoUrls : undefined,
+        photo_storage_paths: photoStoragePaths.length
+          ? photoStoragePaths
+          : undefined,
+        location_id: locationId,
+        mode,
+        opening_inventory_session_id: sessionId,
+        counted_qty: countedQty,
+        qty_before: beforeOnHand,
+        qty_reserved: beforeReserved,
+        qty_available_after: countedQty - beforeReserved,
+        adjustment_qty: adjustmentQty,
+        adjustment_delta: delta,
+        adjustment_type: delta === 0 ? "SEM_DIVERGENCIA" : movementType,
+        unit_cost: unitCost || undefined,
+        reason,
+        reference: text(input.reference) || undefined,
+        movement_id: movementIdValue,
+        status: "completed",
+        source,
+        actor: actorPayload(actor),
+        occurred_at: occurredAt,
+        created_at: FieldValue.serverTimestamp(),
+      }),
+    );
+
+    if (adjustmentQty > 0 && movementIdValue) {
+      createMovement(
+        transaction,
+        db,
+        movementIdValue,
+        {
+          type: movementType,
+          quantity: adjustmentQty,
+          customerCode,
+          skuCode,
+          clientItemCode,
+            productName,
+            locationId,
+            beforeQty: beforeOnHand,
+            afterQty: countedQty,
+            source,
+            occurredAt,
+            entity: {
+              reason,
+              reference: text(input.reference) || undefined,
+              cycle_count_id: cycleCountId,
+              opening_inventory_session_id: sessionId,
+              operational_operation_id: operationId,
+            },
+        },
+        actor,
+      );
+
+      updateClientInventory(transaction, db, {
+        customerCode,
+        skuCode,
+        clientItemCode,
+        productName,
+        category,
+        barcode,
+        brand,
+        size,
+        color,
+        photoUrls,
+        unitCost,
+        onHandDelta: delta,
+      });
+      if (mode === "cycle") {
+        applyCatalogStockAggregates(transaction, cycleCatalogTargets, {
+          onHand: delta,
+          cost: delta * unitCost,
+        });
+      }
+    } else {
+      // Sem divergência nada mudou no ledger; a projeção do cliente é
+      // por SKU (todas as localizações), então o snapshot precisa somar os
+      // saldos agregados — nunca os números de uma única localização.
+      const projectionRows = variantScopedBalanceRows(
+        aggregateBalanceRows,
+        skuCode,
+        clientItemCode,
+      );
+      const aggregateOnHand = projectionRows.reduce(
+        (total, row) => total + number(row.data.qty_on_hand),
+        0,
+      );
+      const aggregateReserved = projectionRows.reduce(
+        (total, row) => total + number(row.data.qty_reserved),
+        0,
+      );
+      setClientInventorySnapshot(transaction, db, {
+        customerCode,
+        skuCode,
+        clientItemCode,
+        productName,
+        category,
+        barcode,
+        brand,
+        size,
+        color,
+        photoUrls,
+        unitCost,
+        qtyOnHand: aggregateOnHand,
+        qtyReserved: aggregateReserved,
+      });
+    }
+
+    const event = createEvent(
+      transaction,
+      db,
+      operationEventId(operationId, "inventory_adjusted"),
+      {
+        type:
+          mode === "opening"
+            ? "inventory.opening_counted"
+            : "inventory.adjusted",
+        title:
+          mode === "opening"
+            ? "Produto contado no inventário de abertura"
+            : delta === 0
+            ? "Inventário cíclico sem divergência"
+            : "Inventário cíclico ajustado",
+        description:
+          mode === "opening"
+            ? `${productName} publicado com ${countedQty} unidade(s) no local ${locationId}.`
+            : delta === 0
+            ? `${skuCode} conferido no local ${locationId} sem diferença.`
+            : `${skuCode} ajustado em ${delta > 0 ? "+" : ""}${delta} unidade(s) no local ${locationId}.`,
+        severity:
+          mode === "opening" || delta === 0 ? "info" : "attention",
+        entity_type:
+          mode === "opening" ? "opening_inventory_line" : "cycle_count",
+        entity_id: cycleCountId,
+        customer_code: customerCode,
+        payload: {
+          cycle_count_id: cycleCountId,
+          movement_id: movementIdValue,
+          sku_code: skuCode,
+          client_item_code: clientItemCode,
+          product_name: productName,
+          mode,
+          opening_inventory_session_id: sessionId,
+          location_id: locationId,
+          counted_qty: countedQty,
+          qty_before: beforeOnHand,
+          qty_reserved: beforeReserved,
+          adjustment_delta: delta,
+          adjustment_qty: adjustmentQty,
+          reason,
+          reference: text(input.reference) || undefined,
+        },
+      },
+      actor,
+    );
+
+    const result = compact({
+      ok: true,
+      id: cycleCountId,
+      cycle_count_id: cycleCountId,
+      movement_id: movementIdValue,
+      stock_balance_id: balanceRow.id,
+      qty_before: beforeOnHand,
+      qty_counted: countedQty,
+      qty_reserved: beforeReserved,
+      qty_available: countedQty - beforeReserved,
+      adjustment_delta: delta,
+      adjustment_qty: adjustmentQty,
+      adjustment_type: delta === 0 ? "SEM_DIVERGENCIA" : movementType,
+      mode,
+      opening_inventory_session_id: sessionId,
+      events: [event],
+    });
+    createOperationReceipt(
+      transaction,
+      operationRef,
+      inputHash,
+      mode === "opening" ? "inventory.opening_count" : "inventory.cycle_count",
+      cycleCountId,
+      actor,
+      result,
+    );
+    return result;
+  });
+}
+
+export async function removeOpeningInventoryLineTransaction(
+  db: Firestore,
+  input: RemoveOpeningInventoryLineInput,
+  actor: OperationalActor,
+) {
+  const customerCode = text(input.customer_code);
+  const sessionId = safeDocId(input.session_id);
+  const openingLineId = safeDocId(input.opening_line_id);
+  if (!customerCode || !sessionId || !openingLineId) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Cliente, sessão e linha do inventário são obrigatórios.",
+    );
+  }
+  if (sessionId !== openingInventorySessionDocumentId(customerCode)) {
+    throw new HttpsError(
+      "permission-denied",
+      "A sessão não pertence ao cliente informado.",
+    );
+  }
+
+  const operationId = `op_opening_inventory_remove_${digest({
+    customer: customerCode,
+    session: sessionId,
+    line: openingLineId,
+    nonce: input.idempotency_key,
+  })}`;
+  const inputHash = digest(input, 64);
+  const operationRef = db.collection(collections.operations).doc(operationId);
+  const sessionRef = db
+    .collection(collections.openingInventorySessions)
+    .doc(sessionId);
+  const lineRef = db
+    .collection(collections.openingInventoryLines)
+    .doc(openingLineId);
+
+  return db.runTransaction(async (transaction) => {
+    const [operationSnapshot, sessionSnapshot, lineSnapshot] =
+      await Promise.all([
+        transaction.get(operationRef),
+        transaction.get(sessionRef),
+        transaction.get(lineRef),
+      ]);
+    const previous = operationResult<Record<string, unknown>>(
+      operationSnapshot,
+      inputHash,
+    );
+    if (previous) return previous;
+    await assertInventoryOperationsEnabled(transaction, db);
+
+    if (!sessionSnapshot.exists || text(sessionSnapshot.data()?.status) !== "open") {
+      throw new HttpsError(
+        "failed-precondition",
+        "A linha só pode ser corrigida enquanto o inventário de abertura estiver ativo.",
+      );
+    }
+    if (!lineSnapshot.exists) {
+      throw new HttpsError("not-found", "Linha do inventário não encontrada.");
+    }
+
+    const line = lineSnapshot.data() ?? {};
+    if (
+      text(line.session_id) !== sessionId ||
+      text(line.customer_code) !== customerCode
+    ) {
+      throw new HttpsError(
+        "permission-denied",
+        "A linha não pertence à sessão informada.",
+      );
+    }
+
+    const skuCode = normalizedIdentity(line.sku_code);
+    const clientItemCode = normalizedIdentity(line.client_item_code || skuCode);
+    const locationId = text(line.location_id);
+    const countedQty = number(line.counted_qty);
+    const unitCost = number(line.unit_cost);
+    const cycleCountId = safeDocId(text(line.cycle_count_id));
+    const originalMovementId = safeDocId(text(line.movement_id));
+    if (!skuCode || !clientItemCode || !locationId || !cycleCountId) {
+      throw new HttpsError(
+        "failed-precondition",
+        "A linha não possui identidade operacional suficiente para ser corrigida.",
+      );
+    }
+
+    const productRef = db
+      .collection(collections.products)
+      .doc(safeDocId(clientItemCode));
+    const skuRef = db.collection(collections.skus).doc(safeDocId(skuCode));
+    const projectionRef = db
+      .collection(collections.clientInventory)
+      .doc(clientScopedInventoryId(customerCode, skuCode, clientItemCode));
+    const cycleCountRef = db
+      .collection(collections.cycleCounts)
+      .doc(cycleCountId);
+    const allOpeningLinesQuery = db
+      .collection(collections.openingInventoryLines)
+      .where("session_id", "==", sessionId);
+    const [balanceRows, productSnapshot, skuSnapshot, projectionSnapshot, cycleSnapshot, openingLines] =
+      await Promise.all([
+        readRows(transaction, skuBalancesQuery(db, customerCode, skuCode)),
+        transaction.get(productRef),
+        transaction.get(skuRef),
+        transaction.get(projectionRef),
+        transaction.get(cycleCountRef),
+        readRows(transaction, allOpeningLinesQuery),
+      ]);
+
+    const targetBalances = balanceRows.filter(
+      (row) => text(row.data.location_id) === locationId,
+    );
+    const balance = assertSingleBalance(targetBalances, skuCode, locationId);
+    const balanceOnHand = number(balance.data.qty_on_hand);
+    const balanceReserved = number(balance.data.qty_reserved);
+    if (
+      balanceOnHand !== countedQty ||
+      balanceReserved !== 0 ||
+      text(balance.data.last_cycle_count_id) !== cycleCountId
+    ) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Este saldo já recebeu outra movimentação ou reserva. Faça um inventário cíclico em vez de remover a linha de abertura.",
+      );
+    }
+
+    const otherActiveLines = openingLines.filter(
+      (row) =>
+        row.id !== openingLineId &&
+        normalizedIdentity(row.data.sku_code) === skuCode &&
+        text(row.data.status || "counted") === "counted",
+    );
+    const aggregateOnHand = balanceRows.reduce(
+      (total, row) => total + number(row.data.qty_on_hand),
+      0,
+    );
+    const aggregateReserved = balanceRows.reduce(
+      (total, row) => total + number(row.data.qty_reserved),
+      0,
+    );
+    const nextOnHand = aggregateOnHand - countedQty;
+    if (nextOnHand < 0 || aggregateReserved > nextOnHand) {
+      throw new HttpsError(
+        "failed-precondition",
+        "A correção deixaria o saldo inconsistente. Revise as movimentações antes de continuar.",
+      );
+    }
+
+    transaction.delete(balance.ref);
+    transaction.delete(lineRef);
+    if (cycleSnapshot.exists) {
+      transaction.update(cycleCountRef, {
+        status: "reversed",
+        reversed_by: actorPayload(actor),
+        reversed_at: FieldValue.serverTimestamp(),
+        reversal_operation_id: operationId,
+      });
+    }
+
+    if (countedQty > 0) {
+      createMovement(
+        transaction,
+        db,
+        movementId(operationId, "opening_inventory_reversal"),
+        {
+          type: "SAIDA",
+          quantity: countedQty,
+          customerCode,
+          skuCode,
+          clientItemCode,
+          productName: text(line.product_name) || skuCode,
+          locationId,
+          beforeQty: countedQty,
+          afterQty: 0,
+          source: "functions_opening_inventory_reversal",
+          occurredAt: new Date().toISOString(),
+          entity: {
+            reason: "Correção de linha do inventário de abertura",
+            opening_inventory_session_id: sessionId,
+            opening_inventory_line_id: openingLineId,
+            reversed_cycle_count_id: cycleCountId,
+            reversed_movement_id: originalMovementId || undefined,
+            operational_operation_id: operationId,
+          },
+        },
+        actor,
+      );
+    }
+
+    const product = productSnapshot.data() ?? {};
+    const sku = skuSnapshot.data() ?? {};
+    const removeOpeningCatalog =
+      nextOnHand === 0 &&
+      otherActiveLines.length === 0 &&
+      (text(product.opening_inventory_session_id) === sessionId ||
+        text(sku.opening_inventory_session_id) === sessionId);
+    if (removeOpeningCatalog) {
+      if (productSnapshot.exists) transaction.delete(productRef);
+      if (skuSnapshot.exists) transaction.delete(skuRef);
+    } else {
+      if (productSnapshot.exists) {
+        transaction.update(productRef, {
+          estoque_btg: Math.max(0, number(product.estoque_btg) - countedQty),
+          custo_total: Math.max(
+            0,
+            number(product.custo_total) - countedQty * unitCost,
+          ),
+          updated_at: FieldValue.serverTimestamp(),
+        });
+      }
+      if (skuSnapshot.exists) {
+        transaction.update(skuRef, {
+          estoque_atual: nextOnHand,
+          estoque_reservado: aggregateReserved,
+          estoque_disponivel: nextOnHand - aggregateReserved,
+          custo_total: Math.max(
+            0,
+            number(sku.custo_total) - countedQty * unitCost,
+          ),
+          updated_at: FieldValue.serverTimestamp(),
+        });
+      }
+    }
+
+    if (nextOnHand === 0 && aggregateReserved === 0) {
+      if (projectionSnapshot.exists) transaction.delete(projectionRef);
+    } else {
+      setClientInventorySnapshot(transaction, db, {
+        customerCode,
+        skuCode,
+        clientItemCode,
+        productName: text(line.product_name) || skuCode,
+        category: text(line.category) || undefined,
+        barcode: text(line.barcode) || undefined,
+        brand: text(line.brand) || undefined,
+        size: text(line.size) || undefined,
+        color: text(line.color) || undefined,
+        photoUrls: stringList(line.photo_urls),
+        unitCost,
+        qtyOnHand: nextOnHand,
+        qtyReserved: aggregateReserved,
+      });
+    }
+
+    transaction.update(sessionRef, {
+      line_count: FieldValue.increment(-1),
+      unit_count: FieldValue.increment(-countedQty),
+      total_cost: FieldValue.increment(-(countedQty * unitCost)),
+      updated_at: FieldValue.serverTimestamp(),
+    });
+    const event = createEvent(
+      transaction,
+      db,
+      operationEventId(operationId, "opening_inventory_line_removed"),
+      {
+        type: "inventory.opening_line_removed",
+        title: "Linha removida do inventário de abertura",
+        description: `${text(line.product_name) || skuCode}: ${countedQty} unidade(s) retiradas para correção e novo lançamento.`,
+        severity: "attention",
+        entity_type: "opening_inventory_line",
+        entity_id: openingLineId,
+        customer_code: customerCode,
+        payload: {
+          sku_code: skuCode,
+          client_item_code: clientItemCode,
+          location_id: locationId,
+          counted_qty: countedQty,
+          reversed_cycle_count_id: cycleCountId,
+          reversed_movement_id: originalMovementId || undefined,
+        },
+      },
+      actor,
+    );
+    const result = {
+      ok: true,
+      id: openingLineId,
+      opening_line_id: openingLineId,
+      status: "removed",
+      sku_code: skuCode,
+      client_item_code: clientItemCode,
+      quantity_removed: countedQty,
+      events: [event],
+    };
+    createOperationReceipt(
+      transaction,
+      operationRef,
+      inputHash,
+      "inventory.opening_line.remove",
+      openingLineId,
+      actor,
+      result,
+    );
+    return result;
+  });
+}
+
+export async function createReturnReceiptTransaction(
+  db: Firestore,
+  input: CreateReturnReceiptInput,
+  actor: OperationalActor,
+) {
+  const customerCode = text(input.customer_code);
+  if (!customerCode) {
+    throw new HttpsError("invalid-argument", "Cliente é obrigatório.");
+  }
+  if (!input.items.length) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Devolução precisa de ao menos uma linha.",
+    );
+  }
+
+  const normalizedItems = input.items.map((item, index) => {
+    const clientItemCode = normalizedIdentity(
+      item.client_item_code || item.sku_code,
+    );
+    const skuCode = normalizedIdentity(item.sku_code || item.client_item_code);
+    const productName = text(item.product_name || clientItemCode || skuCode);
+    const quantity = requiredPositive(
+      item.quantity,
+      `Quantidade da linha ${index + 1}`,
+    );
+    if (!skuCode || !clientItemCode || !productName) {
+      throw new HttpsError(
+        "invalid-argument",
+        `Linha ${index + 1} precisa de Cod. cliente, SKU e descrição do produto.`,
+      );
+    }
+    return {
+      ...item,
+      line_number: number(item.line_number) || index + 1,
+      sku_code: skuCode,
+      client_item_code: clientItemCode,
+      product_name: productName,
+      condition: text(item.condition) || "return_received",
+      unit_cost: number(item.unit_cost),
+      quantity,
+      notes: text(item.notes) || undefined,
+    };
+  });
+
+  const clientCodeSeen = new Map<string, number>();
+  for (const item of normalizedItems) {
+    const key = normalizedIdentity(item.client_item_code);
+    const previousLine = clientCodeSeen.get(key);
+    if (previousLine) {
+      throw new HttpsError(
+        "invalid-argument",
+        `Cod. cliente ${item.client_item_code} repetido nas linhas ${previousLine} e ${item.line_number}. Some a quantidade em uma única linha.`,
+      );
+    }
+    clientCodeSeen.set(key, item.line_number);
+  }
+
+  const occurredAt = input.received_at ?? new Date().toISOString();
+  const operationId = `op_return_create_${digest({
+    customer: customerCode,
+    nonce: input.idempotency_key,
+  })}`;
+  const returnId = `ret_${digest({ customer: customerCode, nonce: input.idempotency_key })}`;
+  const inputHash = digest(input, 64);
+  const operationRef = db.collection(collections.operations).doc(operationId);
+  const returnRef = db.collection(collections.returns).doc(returnId);
+  const quantityTotal = normalizedItems.reduce(
+    (sum, item) => sum + item.quantity,
+    0,
+  );
+
+  return db.runTransaction(async (transaction) => {
+    const operationSnapshot = await transaction.get(operationRef);
+    const previous = operationResult<Record<string, unknown>>(
+      operationSnapshot,
+      inputHash,
+    );
+    if (previous) return previous;
+
+    await assertInventoryOperationsEnabled(transaction, db);
+
+    for (const item of normalizedItems) {
+      const clientCode = text(item.client_item_code);
+      const declaredSku = text(item.sku_code);
+      const [skuRows, productRows, skuCodeSnapshot] = await Promise.all([
+        readRows(
+          transaction,
+          db.collection(collections.skus).where("cod_cliente", "==", clientCode),
+        ),
+        readRows(
+          transaction,
+          db
+            .collection(collections.products)
+            .where("cod_cliente", "==", clientCode),
+        ),
+        transaction.get(db.collection(collections.skus).doc(safeDocId(declaredSku))),
+      ]);
+      const existingSkuCodes = new Set(
+        skuRows
+          .map((row) => text(row.data.cod_btg || row.data.sku_code || row.data.cod_sku))
+          .filter(Boolean),
+      );
+      if (!skuRows.length && !productRows.length && !skuCodeSnapshot.exists) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Cod. cliente ${clientCode} não existe no cadastro. Cadastre o produto pelo Recebimento antes de registrar devolução.`,
+        );
+      }
+      if (existingSkuCodes.size > 0 && !existingSkuCodes.has(declaredSku)) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Cod. cliente ${clientCode} já existe com SKU ${[...existingSkuCodes].join(", ")}. Use o SKU cadastrado para evitar duplicidade.`,
+        );
+      }
+      if (skuCodeSnapshot.exists) {
+        const skuData = skuCodeSnapshot.data() ?? {};
+        const skuClientCode = text(skuData.cod_cliente || skuData.client_item_code);
+        if (skuClientCode && skuClientCode !== clientCode) {
+          throw new HttpsError(
+            "failed-precondition",
+            `SKU ${declaredSku} pertence ao Cod. cliente ${skuClientCode}. Revise antes de registrar a devolução.`,
+          );
+        }
+      }
+    }
+
+    transaction.create(
+      returnRef,
+      compact({
+        id: returnId,
+        customer_code: customerCode,
+        source: text(input.source) || "cliente",
+        reference: text(input.reference) || undefined,
+        notes: text(input.notes) || undefined,
+        status: "received",
+        item_count: normalizedItems.length,
+        qty_total: quantityTotal,
+        qty_pending_disposition: quantityTotal,
+        received_at: occurredAt,
+        created_by: actorPayload(actor),
+        created_at: FieldValue.serverTimestamp(),
+        updated_at: FieldValue.serverTimestamp(),
+      }),
+    );
+
+    const returnItemIds = normalizedItems.map((item, index) => {
+      const lineNumber = index + 1;
+      const itemId = `reti_${safeDocId(returnId)}_${String(lineNumber).padStart(2, "0")}`;
+      transaction.create(
+        db.collection(collections.returnItems).doc(itemId),
+        compact({
+          id: itemId,
+          return_id: returnId,
+          customer_code: customerCode,
+          line_number: lineNumber,
+          sku_code: item.sku_code,
+          client_item_code: item.client_item_code,
+          product_name: item.product_name,
+          quantity: item.quantity,
+          unit_cost: item.unit_cost || undefined,
+          condition: item.condition,
+          notes: item.notes,
+          status: "pending_disposition",
+          disposition: "pending",
+          source: "wms_return",
+          received_at: occurredAt,
+          created_at: FieldValue.serverTimestamp(),
+          updated_at: FieldValue.serverTimestamp(),
+        }),
+      );
+      return itemId;
+    });
+
+    const event = createEvent(
+      transaction,
+      db,
+      operationEventId(operationId, "return_received"),
+      {
+        type: "return.received",
+        title: "Devolução recebida para triagem",
+        description:
+          text(input.notes) ||
+          `${normalizedItems.length} linha(s), ${quantityTotal} unidade(s) aguardando disposição física.`,
+        severity: "attention",
+        entity_type: "return",
+        entity_id: returnId,
+        customer_code: customerCode,
+        payload: {
+          return_id: returnId,
+          reference: text(input.reference) || undefined,
+          source: text(input.source) || "cliente",
+          item_count: normalizedItems.length,
+          qty_total: quantityTotal,
+          items: normalizedItems.map((item) => ({
+            sku_code: item.sku_code,
+            client_item_code: item.client_item_code,
+            product_name: item.product_name,
+            quantity: item.quantity,
+          })),
+        },
+      },
+      actor,
+    );
+
+    const result = {
+      ok: true,
+      id: returnId,
+      return_id: returnId,
+      return_item_ids: returnItemIds,
+      status: "received",
+      item_count: normalizedItems.length,
+      qty_total: quantityTotal,
+      events: [event],
+    };
+    createOperationReceipt(
+      transaction,
+      operationRef,
+      inputHash,
+      "return.create",
+      returnId,
+      actor,
+      result,
+    );
+    return result;
+  });
+}
+
+export async function setReturnDispositionTransaction(
+  db: Firestore,
+  input: SetReturnDispositionInput,
+  actor: OperationalActor,
+) {
+  const returnItemId = text(input.return_item_id);
+  const disposition = text(input.disposition) as SetReturnDispositionInput["disposition"];
+  if (
+    !returnItemId ||
+    !["available", "damaged", "quarantine", "discard"].includes(disposition)
+  ) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Item de devolução e disposição válida são obrigatórios.",
+    );
+  }
+  const locationId = text(input.location_id);
+  if (disposition === "available" && !locationId) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Informe o endereço físico para devolver o item ao estoque disponível.",
+    );
+  }
+  if (disposition !== "available" && !text(input.notes)) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Informe a nota da triagem para avaria, quarentena ou descarte.",
+    );
+  }
+
+  const occurredAt = input.occurred_at ?? new Date().toISOString();
+  const operationId = `op_return_disposition_${digest({
+    returnItemId,
+    nonce: input.idempotency_key,
+  })}`;
+  const inputHash = digest(input, 64);
+  const operationRef = db.collection(collections.operations).doc(operationId);
+  const returnItemRef = db.collection(collections.returnItems).doc(returnItemId);
+
+  return db.runTransaction(async (transaction) => {
+    const operationSnapshot = await transaction.get(operationRef);
+    const previous = operationResult<Record<string, unknown>>(
+      operationSnapshot,
+      inputHash,
+    );
+    if (previous) return previous;
+
+    await assertInventoryOperationsEnabled(transaction, db);
+
+    const returnItemSnapshot = await transaction.get(returnItemRef);
+    if (!returnItemSnapshot.exists) {
+      throw new HttpsError("not-found", "Item de devolução não encontrado.");
+    }
+    const item = returnItemSnapshot.data() ?? {};
+    const status = text(item.status);
+    if (status === "disposition_set" || text(item.disposition) !== "pending") {
+      throw new HttpsError(
+        "failed-precondition",
+        "Este item de devolução já possui disposição registrada.",
+      );
+    }
+    if (input.expected_status && status !== input.expected_status) {
+      throw new HttpsError(
+        "failed-precondition",
+        `Item está em ${status || "status aberto"}, esperado ${input.expected_status}. Atualize a tela antes de continuar.`,
+      );
+    }
+
+    const returnId = text(item.return_id);
+    const returnRef = db.collection(collections.returns).doc(returnId);
+    const returnSnapshot = await transaction.get(returnRef);
+    if (!returnSnapshot.exists) {
+      throw new HttpsError("failed-precondition", "Cabeçalho da devolução não encontrado.");
+    }
+    const rawPendingDisposition = number(
+      returnSnapshot.data()?.qty_pending_disposition,
+    );
+
+    const customerCode = text(item.customer_code);
+    const skuCode = text(item.sku_code);
+    const clientItemCode = text(item.client_item_code) || undefined;
+    const productName = text(item.product_name) || skuCode;
+    const quantity = requiredPositive(item.quantity, "Quantidade devolvida");
+    const currentPendingDisposition =
+      rawPendingDisposition > 0 ? rawPendingDisposition : quantity;
+    const unitCost = number(input.unit_cost || item.unit_cost);
+    let movementIdValue: string | undefined;
+    let stockBalanceId: string | undefined;
+    let beforeOnHand = 0;
+    let afterOnHand = 0;
+
+    if (disposition === "available") {
+      const balanceRows = await readRows(
+        transaction,
+        exactBalanceQuery(db, customerCode, skuCode, locationId),
+      );
+      if (balanceRows.length > 1) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Mais de um saldo existe para SKU ${skuCode} no local ${locationId}.`,
+        );
+      }
+      const balanceRow = balanceRows[0];
+      const returnCatalogTargets = await resolveCatalogAggregateTargets(
+        transaction,
+        db,
+        skuCode,
+        clientItemCode,
+      );
+      beforeOnHand = number(balanceRow?.data.qty_on_hand);
+      const beforeReserved = number(balanceRow?.data.qty_reserved);
+      afterOnHand = beforeOnHand + quantity;
+      stockBalanceId =
+        balanceRow?.id ?? safeDocId(`bal_${customerCode}__${skuCode}__${locationId}`);
+      const balancePayload = compact({
+        id: stockBalanceId,
+        customer_code: customerCode,
+        sku_code: skuCode,
+        client_item_code: clientItemCode,
+        product_name: productName,
+        location_id: locationId,
+        unit_cost: unitCost || number(balanceRow?.data.unit_cost) || undefined,
+        qty_on_hand: afterOnHand,
+        qty_reserved: beforeReserved,
+        qty_available: afterOnHand - beforeReserved,
+        status: "available",
+        source: "functions_return_disposition",
+        updated_at: FieldValue.serverTimestamp(),
+      });
+      if (balanceRow) {
+        transaction.update(balanceRow.ref, balancePayload);
+      } else {
+        transaction.create(db.collection(collections.stockBalances).doc(stockBalanceId), {
+          ...balancePayload,
+          created_at: FieldValue.serverTimestamp(),
+        });
+      }
+
+      movementIdValue = movementId(operationId, "return_available");
+      createMovement(
+        transaction,
+        db,
+        movementIdValue,
+        {
+          type: "ENTRADA",
+          quantity,
+          customerCode,
+          skuCode,
+          clientItemCode,
+          productName,
+          locationId,
+          beforeQty: beforeOnHand,
+          afterQty: afterOnHand,
+          source: "functions_return_disposition",
+          occurredAt,
+          entity: {
+            return_id: returnId,
+            return_item_id: returnItemId,
+            disposition,
+            operational_operation_id: operationId,
+          },
+        },
+        actor,
+      );
+      updateClientInventory(transaction, db, {
+        customerCode,
+        skuCode,
+        clientItemCode,
+        productName,
+        unitCost,
+        onHandDelta: quantity,
+      });
+      applyCatalogStockAggregates(transaction, returnCatalogTargets, {
+        onHand: quantity,
+        cost: quantity * unitCost,
+      });
+    }
+
+    transaction.update(returnItemRef, compact({
+      disposition,
+      status: "disposition_set",
+      location_id: disposition === "available" ? locationId : undefined,
+      unit_cost: unitCost || undefined,
+      movement_id: movementIdValue,
+      stock_balance_id: stockBalanceId,
+      disposition_notes: text(input.notes) || undefined,
+      disposition_by: actorPayload(actor),
+      disposition_at: occurredAt,
+      updated_at: FieldValue.serverTimestamp(),
+    }));
+    const nextPendingDisposition = Math.max(
+      0,
+      currentPendingDisposition - quantity,
+    );
+    transaction.update(returnRef, compact({
+      status: nextPendingDisposition === 0 ? "completed" : "in_disposition",
+      last_disposition: disposition,
+      last_disposition_at: occurredAt,
+      qty_pending_disposition: nextPendingDisposition,
+      completed_at:
+        nextPendingDisposition === 0 ? FieldValue.serverTimestamp() : undefined,
+      updated_at: FieldValue.serverTimestamp(),
+    }));
+
+    const dispositionLabel =
+      disposition === "available"
+        ? "voltou para disponível"
+        : disposition === "damaged"
+          ? "avaria"
+          : disposition === "quarantine"
+            ? "quarentena"
+            : "descarte";
+    const event = createEvent(
+      transaction,
+      db,
+      operationEventId(operationId, "return_disposition"),
+      {
+        type: "return.disposition_set",
+        title: "Disposição de devolução registrada",
+        description: `${productName} (${quantity} un.) ${dispositionLabel}.`,
+        severity: disposition === "available" ? "info" : "attention",
+        entity_type: "return_item",
+        entity_id: returnItemId,
+        customer_code: customerCode,
+        payload: {
+          return_id: returnId,
+          return_item_id: returnItemId,
+          return_status:
+            nextPendingDisposition === 0 ? "completed" : "in_disposition",
+          disposition,
+          sku_code: skuCode,
+          client_item_code: clientItemCode,
+          product_name: productName,
+          quantity,
+          location_id: locationId || undefined,
+          movement_id: movementIdValue,
+          stock_balance_id: stockBalanceId,
+          qty_before: disposition === "available" ? beforeOnHand : undefined,
+          qty_after: disposition === "available" ? afterOnHand : undefined,
+          qty_pending_disposition: nextPendingDisposition,
+          notes: text(input.notes) || undefined,
+        },
+      },
+      actor,
+    );
+
+    const result = {
+      ok: true,
+      id: returnItemId,
+      return_item_id: returnItemId,
+      return_id: returnId,
+      disposition,
+      movement_id: movementIdValue,
+      stock_balance_id: stockBalanceId,
+      qty_before: disposition === "available" ? beforeOnHand : undefined,
+      qty_after: disposition === "available" ? afterOnHand : undefined,
+      return_status:
+        nextPendingDisposition === 0 ? "completed" : "in_disposition",
+      qty_pending_disposition: nextPendingDisposition,
+      events: [event],
+    };
+    createOperationReceipt(
+      transaction,
+      operationRef,
+      inputHash,
+      "return.disposition",
+      returnItemId,
       actor,
       result,
     );
@@ -862,8 +3022,12 @@ export async function createCustomerRequestTransaction(
   const inputHash = digest(input, 64);
   const operationRef = db.collection(collections.operations).doc(operationId);
   const requestRef = db.collection(collections.customerRequests).doc(requestId);
-  const total = input.items.reduce((sum, item) => sum + number(item.quantity), 0);
+  const total = input.items.reduce(
+    (sum, item) => sum + number(item.quantity),
+    0,
+  );
   const description = input.description ?? "";
+  const kind = requestType(input.type);
   const eventId = operationEventId(operationId, "request_created");
 
   return db.runTransaction(async (transaction) => {
@@ -874,11 +3038,157 @@ export async function createCustomerRequestTransaction(
     );
     if (previous) return previous;
 
+    const reservedBalances = new Map<
+      string,
+      { row: Row; quantity: number; qtyOnHand: number; qtyReserved: number }
+    >();
+    const allocations: StockAllocation[] = [];
+    const balanceRowsBySku = new Map<string, Row[]>();
+    const requestCatalogTargets = new Map<string, CatalogAggregateTarget>();
+
+    if (kind.outbound) {
+      const inventoryControl = await assertInventoryOperationsEnabled(
+        transaction,
+        db,
+      );
+      if (
+        inventoryControl.stock_initialized === false ||
+        inventoryControl.opening_inventory_required === true
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          "O estoque ainda está em inventário de abertura. Pedidos serão liberados após a conferência final da Dutelog.",
+          { code: "OPENING_INVENTORY_REQUIRED" },
+        );
+      }
+
+      if (!input.items.length) {
+        throw new HttpsError(
+          "invalid-argument",
+          "Pedido do estoque precisa de ao menos um item.",
+        );
+      }
+
+      const uniqueSkus = [
+        ...new Set(input.items.map((item) => text(item.sku_code))),
+      ];
+      if (uniqueSkus.some((skuCode) => !skuCode)) {
+        throw new HttpsError(
+          "invalid-argument",
+          "Cada item do pedido deve informar sku_code.",
+        );
+      }
+
+      for (const skuCode of uniqueSkus) {
+        const rows = await readRows(
+          transaction,
+          skuBalancesQuery(db, input.customer_code, skuCode),
+        );
+        const locationIds = rows.map((row) => text(row.data.location_id));
+        if (locationIds.some((locationId) => !locationId)) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Há saldo interno do SKU ${skuCode} sem localização física.`,
+          );
+        }
+        if (new Set(locationIds).size !== locationIds.length) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Há saldos físicos duplicados para o SKU ${skuCode}.`,
+          );
+        }
+        balanceRowsBySku.set(
+          skuCode,
+          rows.sort((left, right) =>
+            text(left.data.location_id).localeCompare(
+              text(right.data.location_id),
+            ),
+          ),
+        );
+      }
+
+      for (const skuCode of uniqueSkus) {
+        const sourceItem = input.items.find(
+          (item) => text(item.sku_code) === skuCode,
+        );
+        const sourceRow = balanceRowsBySku.get(skuCode)?.[0];
+        requestCatalogTargets.set(
+          skuCode,
+          await resolveCatalogAggregateTargets(
+            transaction,
+            db,
+            skuCode,
+            text(sourceItem?.client_item_code) ||
+              text(sourceRow?.data.client_item_code) ||
+              undefined,
+          ),
+        );
+      }
+
+      input.items.forEach((item, itemIndex) => {
+        const skuCode = text(item.sku_code);
+        const requestedLocation = text(item.location_id);
+        const candidateRows = (balanceRowsBySku.get(skuCode) ?? []).filter(
+          (row) =>
+            !requestedLocation ||
+            text(row.data.location_id) === requestedLocation,
+        );
+        let remaining = number(item.quantity);
+        let availableTotal = 0;
+
+        for (const row of candidateRows) {
+          const locationId = text(row.data.location_id);
+          const key = balanceKey(input.customer_code, skuCode, locationId);
+          const existing = reservedBalances.get(key);
+          const qtyOnHand = existing?.qtyOnHand ?? number(row.data.qty_on_hand);
+          const qtyReserved =
+            existing?.qtyReserved ?? number(row.data.qty_reserved);
+          const alreadyAllocated = existing?.quantity ?? 0;
+          const available = qtyOnHand - qtyReserved - alreadyAllocated;
+          if (qtyOnHand < 0 || qtyReserved < 0 || qtyReserved > qtyOnHand) {
+            throw new HttpsError(
+              "failed-precondition",
+              `Saldo interno inconsistente para o SKU ${skuCode}.`,
+            );
+          }
+          availableTotal += Math.max(0, available);
+          if (remaining <= 0 || available <= 0) continue;
+          const allocated = Math.min(remaining, available);
+          reservedBalances.set(key, {
+            row,
+            quantity: alreadyAllocated + allocated,
+            qtyOnHand,
+            qtyReserved,
+          });
+          allocations.push({
+            item,
+            clientLineNumber: number(item.line_number) || itemIndex + 1,
+            row,
+            locationId,
+            quantity: allocated,
+          });
+          remaining -= allocated;
+        }
+
+        if (remaining > 0) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Saldo insuficiente para o SKU ${skuCode}. Disponível: ${availableTotal}; solicitado: ${item.quantity}.`,
+          );
+        }
+      });
+    }
+
     const event = eventSummary(eventId, {
       type: "portal.request_created",
-      title: "Solicitação criada no portal",
-      description: description || itemSummary(input.items, input.title ?? input.type),
-      severity:
+      title: kind.outbound
+        ? "Pedido criado no portal com estoque reservado"
+        : "Solicitação criada no portal",
+      description:
+        description || itemSummary(input.items, input.title ?? input.type),
+      severity: kind.outbound
+        ? "attention"
+        :
         input.priority === "alta" || input.priority === "urgente"
           ? "attention"
           : "info",
@@ -891,8 +3201,92 @@ export async function createCustomerRequestTransaction(
       status: "open",
       item_count: input.items.length,
       quantity_total: total,
+      reserved_quantity: kind.outbound ? total : 0,
       events: [event],
     };
+
+    if (kind.outbound) {
+      for (const balance of reservedBalances.values()) {
+        const nextReserved = balance.qtyReserved + balance.quantity;
+        transaction.update(balance.row.ref, {
+          qty_reserved: nextReserved,
+          qty_available: balance.qtyOnHand - nextReserved,
+          updated_at: FieldValue.serverTimestamp(),
+        });
+      }
+
+      const reservedBySku = new Map<
+        string,
+        OperationalRequestItem & { quantity: number }
+      >();
+      for (const item of input.items) {
+        const skuCode = text(item.sku_code);
+        const current = reservedBySku.get(skuCode);
+        reservedBySku.set(skuCode, {
+          ...(current ?? item),
+          quantity: number(current?.quantity) + number(item.quantity),
+        });
+      }
+      for (const [skuCode, item] of reservedBySku) {
+        const skuRows = variantScopedBalanceRows(
+          balanceRowsBySku.get(skuCode) ?? [],
+          skuCode,
+          text(item.client_item_code) || undefined,
+        );
+        const qtyOnHand = skuRows.reduce(
+          (sum, row) => sum + number(row.data.qty_on_hand),
+          0,
+        );
+        const qtyReserved =
+          skuRows.reduce((sum, row) => sum + number(row.data.qty_reserved), 0) +
+          item.quantity;
+        const source = skuRows[0]?.data ?? {};
+        setClientInventorySnapshot(transaction, db, {
+          customerCode: input.customer_code,
+          skuCode,
+          clientItemCode:
+            item.client_item_code ?? text(source.client_item_code) ?? undefined,
+          productName:
+            item.product_name ?? text(source.product_name) ?? undefined,
+          category: text(source.category) || undefined,
+          unitCost: number(item.unit_cost) || number(source.unit_cost),
+          qtyOnHand,
+          qtyReserved,
+        });
+        applyCatalogStockAggregates(
+          transaction,
+          requestCatalogTargets.get(skuCode) ?? {},
+          { reserved: item.quantity },
+        );
+      }
+
+      allocations.forEach((allocation, index) => {
+        const item = allocation.item;
+        const reservationId = `res_${safeDocId(requestId)}_${String(index + 1).padStart(2, "0")}`;
+        transaction.create(
+          db.collection(collections.stockReservations).doc(reservationId),
+          compact({
+            id: reservationId,
+            customer_code: input.customer_code,
+            customer_request_id: requestId,
+            line_number: index + 1,
+            client_line_number: allocation.clientLineNumber,
+            sku_code: item.sku_code,
+            client_item_code: item.client_item_code,
+            product_name: item.product_name ?? item.sku_code,
+            unit_cost: item.unit_cost,
+            location_id: allocation.locationId,
+            requested_qty: allocation.quantity,
+            allocated_qty: allocation.quantity,
+            reserved_qty: allocation.quantity,
+            status: "reserved",
+            source: "customer_request",
+            created_at: FieldValue.serverTimestamp(),
+            updated_at: FieldValue.serverTimestamp(),
+          }),
+        );
+      });
+    }
 
     transaction.create(
       requestRef,
@@ -905,12 +3299,18 @@ export async function createCustomerRequestTransaction(
         description,
         destination: input.destination,
         due_at: input.due_at,
+        supplier: input.supplier,
+        invoice_number: input.invoice_number,
+        attachments: input.attachments,
+        attachment_count: input.attachments?.length,
         items: input.items.map((item, index) =>
           compact({ ...item, line_number: item.line_number ?? index + 1 }),
         ),
         item_count: input.items.length,
         quantity_total: total,
         status: "open",
+        stock_reservation_status: kind.outbound ? "reserved" : undefined,
+        reserved_quantity_total: kind.outbound ? total : undefined,
         requested_by: actorPayload(actor),
         source: "firebase_functions",
         idempotency_hash: digest(input.idempotency_key),
@@ -929,10 +3329,17 @@ export async function createCustomerRequestTransaction(
         description,
         destination: input.destination,
         due_at: input.due_at,
+        supplier: input.supplier,
+        invoice_number: input.invoice_number,
+        attachments: input.attachments,
+        attachment_count: input.attachments?.length,
         item_count: input.items.length,
         quantity_total: total,
         status: "open",
-        operational_status: "awaiting_review",
+        operational_status: kind.outbound
+          ? "reserved_awaiting_review"
+          : "awaiting_review",
+        reserved_quantity_total: kind.outbound ? total : undefined,
         requested_by_name: actor.name ?? actor.email,
         published_at: FieldValue.serverTimestamp(),
         created_at: FieldValue.serverTimestamp(),
@@ -946,7 +3353,8 @@ export async function createCustomerRequestTransaction(
       {
         type: event.type,
         title: "Solicitação criada no portal",
-        description: description || itemSummary(input.items, input.title ?? input.type),
+        description:
+          description || itemSummary(input.items, input.title ?? input.type),
         severity: event.severity,
         entity_type: event.entity_type,
         entity_id: requestId,
@@ -954,7 +3362,11 @@ export async function createCustomerRequestTransaction(
         payload: {
           item_count: input.items.length,
           quantity_total: total,
+          reserved_quantity_total: kind.outbound ? total : undefined,
           request_type: input.type,
+          supplier: input.supplier,
+          invoice_number: input.invoice_number,
+          attachment_count: input.attachments?.length ?? 0,
         },
       },
       actor,
@@ -972,6 +3384,619 @@ export async function createCustomerRequestTransaction(
   });
 }
 
+export async function createInboundReceiptTransaction(
+  db: Firestore,
+  input: CreateInboundReceiptInput,
+  actor: OperationalActor,
+) {
+  if (!input.items.length) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Recebimento precisa de ao menos uma linha.",
+    );
+  }
+
+  const normalizedItems = input.items.map((item, index) => {
+    const clientItemCode = normalizedIdentity(
+      item.client_item_code || item.sku_code,
+    );
+    const skuCode = normalizedIdentity(item.sku_code || item.client_item_code);
+    const productName = text(item.product_name || clientItemCode || skuCode);
+    const quantity = requiredPositive(
+      item.quantity,
+      `Quantidade da linha ${index + 1}`,
+    );
+    if (!skuCode || !productName) {
+      throw new HttpsError(
+        "invalid-argument",
+        `Linha ${index + 1} precisa de código do cliente ou SKU e descrição do produto.`,
+      );
+    }
+    return {
+      ...item,
+      line_number: number(item.line_number) || index + 1,
+      sku_code: skuCode,
+      client_item_code: clientItemCode || skuCode,
+      product_name: productName,
+      product_registration: text(item.product_registration),
+      category: text(item.category) || undefined,
+      barcode: text(item.barcode) || undefined,
+      brand: text(item.brand) || undefined,
+      size: text(item.size) || undefined,
+      color: text(item.color) || undefined,
+      photo_urls: stringList(item.photo_urls),
+      photo_storage_paths: stringList(item.photo_storage_paths),
+      location_id: text(item.location_id) || "RECEBIMENTO",
+      unit_cost: number(item.unit_cost),
+      quantity,
+      notes: text(item.notes) || undefined,
+    };
+  });
+
+  const clientCodeSeen = new Map<string, number>();
+  const skuCodeSeen = new Map<string, number>();
+  for (const item of normalizedItems) {
+    const key = normalizedIdentity(item.client_item_code);
+    if (!key) continue;
+    const previousLine = clientCodeSeen.get(key);
+    if (previousLine) {
+      throw new HttpsError(
+        "invalid-argument",
+        `Cod. cliente ${item.client_item_code} repetido nas linhas ${previousLine} e ${item.line_number}. Use uma única linha para o mesmo produto.`,
+      );
+    }
+    clientCodeSeen.set(key, item.line_number);
+
+    const skuKey = normalizedIdentity(item.sku_code);
+    const previousSkuLine = skuCodeSeen.get(skuKey);
+    if (previousSkuLine) {
+      throw new HttpsError(
+        "invalid-argument",
+        `SKU ${item.sku_code} repetido nas linhas ${previousSkuLine} e ${item.line_number}. Use uma única linha para o mesmo produto.`,
+      );
+    }
+    skuCodeSeen.set(skuKey, item.line_number);
+  }
+
+  const nonce = input.idempotency_key;
+  const receiptId = `inb_avulso_${digest({
+    customer: input.customer_code,
+    nonce,
+  })}`;
+  const operationId = `op_inbound_create_${digest({
+    customer: input.customer_code,
+    nonce,
+  })}`;
+  const inputHash = digest(input, 64);
+  const operationRef = db.collection(collections.operations).doc(operationId);
+  const receiptRef = db.collection(collections.inboundReceipts).doc(receiptId);
+  const receiptNumber = `AVL-${receiptId.slice(-8).toUpperCase()}`;
+  const quantityTotal = normalizedItems.reduce(
+    (sum, item) => sum + item.quantity,
+    0,
+  );
+  const occurredAt = input.received_at || new Date().toISOString();
+
+  return db.runTransaction(async (transaction) => {
+    const operationSnapshot = await transaction.get(operationRef);
+    const previous = operationResult<Record<string, unknown>>(
+      operationSnapshot,
+      inputHash,
+    );
+    if (previous) return previous;
+
+    await assertInventoryOperationsEnabled(transaction, db);
+
+    const catalogChecks = await Promise.all(
+      normalizedItems.map(async (item) => {
+        const clientCode = normalizedIdentity(item.client_item_code);
+        const declaredSku = normalizedIdentity(item.sku_code);
+        const productRef = db
+          .collection(collections.products)
+          .doc(safeDocId(clientCode));
+        const skuRef = db
+          .collection(collections.skus)
+          .doc(safeDocId(declaredSku));
+        const [skuRows, productRows, productCodeSnapshot, skuCodeSnapshot] =
+          await Promise.all([
+            readRows(
+              transaction,
+            db
+              .collection(collections.skus)
+                .where("cod_cliente_key", "==", clientCode),
+            ),
+            readRows(
+              transaction,
+            db
+              .collection(collections.products)
+                .where("cod_cliente_key", "==", clientCode),
+            ),
+            transaction.get(productRef),
+            transaction.get(skuRef),
+          ]);
+        return {
+          item,
+          clientCode,
+          declaredSku,
+          productRef,
+          skuRef,
+          skuRows,
+          productRows,
+          productCodeSnapshot,
+          skuCodeSnapshot,
+          wantsNewProduct: text(item.product_registration) === "new",
+        };
+      }),
+    );
+
+    for (const check of catalogChecks) {
+      const {
+        item,
+        clientCode,
+        declaredSku,
+        skuRows,
+        productRows,
+        productCodeSnapshot,
+        skuCodeSnapshot,
+        wantsNewProduct,
+      } = check;
+      const existingSkuCodes = new Set(
+        [
+          ...skuRows.map((row) =>
+            normalizedIdentity(
+              row.data.cod_btg || row.data.sku_code || row.data.cod_sku,
+            ),
+          ),
+          normalizedIdentity(
+            skuCodeSnapshot.data()?.cod_btg ||
+              skuCodeSnapshot.data()?.sku_code ||
+              skuCodeSnapshot.data()?.cod_sku,
+          ),
+        ].filter(Boolean),
+      );
+
+      if (wantsNewProduct) {
+        if (!text(item.category)) {
+          throw new HttpsError(
+            "invalid-argument",
+            `Linha ${item.line_number}: produto novo exige categoria.`,
+          );
+        }
+        if (number(item.unit_cost) <= 0) {
+          throw new HttpsError(
+            "invalid-argument",
+            `Linha ${item.line_number}: produto novo exige custo unitário maior que zero.`,
+          );
+        }
+        if (!stringList(item.photo_urls).length) {
+          throw new HttpsError(
+            "invalid-argument",
+            `Linha ${item.line_number}: produto novo exige ao menos uma foto.`,
+          );
+        }
+      }
+
+      if (existingSkuCodes.size > 0 && !existingSkuCodes.has(declaredSku)) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Cod. cliente ${clientCode} já existe no cadastro com SKU ${[
+            ...existingSkuCodes,
+          ].join(", ")}. Use o cadastro existente para evitar SKU duplicado.`,
+        );
+      }
+
+      if (skuCodeSnapshot.exists) {
+        const skuData = skuCodeSnapshot.data() ?? {};
+        const skuClientCode = text(skuData.cod_cliente || skuData.client_item_code);
+        if (skuClientCode && skuClientCode !== clientCode) {
+          throw new HttpsError(
+            "failed-precondition",
+            `SKU ${declaredSku} já está vinculado ao Cod. cliente ${skuClientCode}. Revise o cadastro antes de receber este item.`,
+          );
+        }
+      }
+
+      if (
+        wantsNewProduct &&
+        (productRows.length > 0 ||
+          skuRows.length > 0 ||
+          productCodeSnapshot.exists ||
+          skuCodeSnapshot.exists)
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Cod. cliente ${clientCode} já existe no cadastro. Use o produto existente para evitar SKU duplicado.`,
+        );
+      }
+
+      if (
+        !wantsNewProduct &&
+        productRows.length === 0 &&
+        skuRows.length === 0 &&
+        !productCodeSnapshot.exists &&
+        !skuCodeSnapshot.exists
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Cod. cliente ${clientCode} não existe no cadastro. Marque a linha como novo produto antes de criar a conferência.`,
+        );
+      }
+
+      if (
+        (productRows.length > 0 || productCodeSnapshot.exists) &&
+        existingSkuCodes.size === 0
+      ) {
+        const productName = text(
+          productRows[0]?.data.produto ||
+            productRows[0]?.data.product_name ||
+            productRows[0]?.data.name ||
+            productCodeSnapshot.data()?.produto ||
+            productCodeSnapshot.data()?.product_name ||
+            productCodeSnapshot.data()?.name,
+        );
+        const sameName =
+          !productName ||
+          normalizedIdentity(productName) === normalizedIdentity(item.product_name);
+        if (!sameName) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Cod. cliente ${clientCode} já existe no cadastro de produto como ${productName}. Revise antes de criar novo SKU.`,
+          );
+        }
+      }
+
+    }
+
+    for (const check of catalogChecks) {
+      const {
+        item,
+        clientCode,
+        declaredSku,
+        productRef,
+        skuRef,
+        productRows,
+        skuRows,
+        productCodeSnapshot,
+        skuCodeSnapshot,
+        wantsNewProduct,
+      } = check;
+      if (
+        wantsNewProduct &&
+        productRows.length === 0 &&
+        skuRows.length === 0 &&
+        !productCodeSnapshot.exists &&
+        !skuCodeSnapshot.exists
+      ) {
+        const baseCatalogPayload = compact({
+          customer_code: input.customer_code,
+          cod_cliente: clientCode,
+          cod_cliente_key: normalizedIdentity(clientCode),
+          produto: item.product_name,
+          category: item.category,
+          categoria: item.category,
+          barcode: item.barcode,
+          brand: item.brand,
+          marca: item.brand,
+          size: item.size,
+          tamanho: item.size,
+          color: item.color,
+          cor: item.color,
+          photo_urls: item.photo_urls?.length ? item.photo_urls : undefined,
+          primary_photo_url: item.photo_urls?.[0],
+          photo_storage_paths: item.photo_storage_paths?.length
+            ? item.photo_storage_paths
+            : undefined,
+          preco_unit: item.unit_cost,
+          unit_cost: item.unit_cost,
+          status: "active",
+          archived: false,
+          source: "wms_unplanned_receipt",
+          source_receipt_id: receiptId,
+          created_by: actorPayload(actor),
+          created_at: FieldValue.serverTimestamp(),
+          updated_at: FieldValue.serverTimestamp(),
+        });
+        transaction.create(productRef, {
+          id: clientCode,
+          ...baseCatalogPayload,
+          estoque_btg: 0,
+          num_skus: 1,
+          custo_total: 0,
+        });
+        transaction.create(skuRef, {
+          id: declaredSku,
+          ...baseCatalogPayload,
+          cod_btg: declaredSku,
+          sku_code: declaredSku,
+          sku_code_key: normalizedIdentity(declaredSku),
+          estoque_atual: 0,
+          estoque_reservado: 0,
+          estoque_disponivel: 0,
+        });
+      }
+    }
+
+    transaction.create(
+      receiptRef,
+      compact({
+        id: receiptId,
+        customer_code: input.customer_code,
+        receipt_number: receiptNumber,
+        status: "created",
+        priority: input.priority || "normal",
+        supplier: input.supplier,
+        invoice_number: input.invoice_number,
+        reference: input.reference || input.invoice_number,
+        notes: input.notes,
+        item_count: normalizedItems.length,
+        qty_expected: quantityTotal,
+        qty_received: 0,
+        source: "wms_unplanned_receipt",
+        received_at: occurredAt,
+        created_by: actorPayload(actor),
+        created_at: FieldValue.serverTimestamp(),
+        updated_at: FieldValue.serverTimestamp(),
+      }),
+    );
+
+    normalizedItems.forEach((item, index) => {
+      const lineNumber = index + 1;
+      const itemId = `inbi_${safeDocId(receiptId)}_${String(lineNumber).padStart(2, "0")}`;
+      transaction.create(
+        db.collection(collections.inboundItems).doc(itemId),
+        compact({
+          id: itemId,
+          customer_code: input.customer_code,
+          receipt_id: receiptId,
+          receipt_number: receiptNumber,
+          line_number: lineNumber,
+          sku_code: item.sku_code,
+          client_item_code: item.client_item_code,
+          product_name: item.product_name,
+          category: item.category,
+          barcode: item.barcode,
+          brand: item.brand,
+          size: item.size,
+          color: item.color,
+          photo_urls: item.photo_urls?.length ? item.photo_urls : undefined,
+          photo_storage_paths: item.photo_storage_paths?.length
+            ? item.photo_storage_paths
+            : undefined,
+          location_id: item.location_id,
+          unit_cost: item.unit_cost,
+          product_registration: item.product_registration,
+          expected_qty: item.quantity,
+          received_qty: 0,
+          status: "expected",
+          notes: item.notes,
+          source: "wms_unplanned_receipt",
+          created_at: FieldValue.serverTimestamp(),
+          updated_at: FieldValue.serverTimestamp(),
+        }),
+      );
+    });
+
+    const event = createEvent(
+      transaction,
+      db,
+      operationEventId(operationId, "inbound_created"),
+      {
+        type: "inbound.created",
+        title: "Recebimento avulso registrado no WMS",
+        description:
+          input.notes ||
+          `${normalizedItems.length} linha(s), ${quantityTotal} unidade(s) aguardando conferência.`,
+        severity: "attention",
+        entity_type: "recebimento",
+        entity_id: receiptId,
+        customer_code: input.customer_code,
+        payload: {
+          receipt_number: receiptNumber,
+          supplier: input.supplier,
+          invoice_number: input.invoice_number,
+          quantity_total: quantityTotal,
+          source: "wms_unplanned_receipt",
+        },
+      },
+      actor,
+    );
+
+    const result = {
+      ok: true,
+      id: receiptId,
+      receipt_id: receiptId,
+      receipt_number: receiptNumber,
+      status: "created",
+      item_count: normalizedItems.length,
+      quantity_total: quantityTotal,
+      events: [event],
+    };
+    createOperationReceipt(
+      transaction,
+      operationRef,
+      inputHash,
+      "inbound_receipt.create",
+      receiptId,
+      actor,
+      result,
+    );
+    return result;
+  });
+}
+
+export async function updateInboundReceiptConferenceTransaction(
+  db: Firestore,
+  input: UpdateInboundReceiptConferenceInput,
+  actor: OperationalActor,
+) {
+  const receiptId = safeDocId(input.receipt_id);
+  if (!input.lines.length) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Informe ao menos uma linha conferida.",
+    );
+  }
+  const operationId = `op_inbound_conference_${digest({
+    receiptId,
+    nonce: input.idempotency_key,
+  })}`;
+  const inputHash = digest({ ...input, receipt_id: receiptId }, 64);
+  const operationRef = db.collection(collections.operations).doc(operationId);
+  const receiptRef = db.collection(collections.inboundReceipts).doc(receiptId);
+
+  return db.runTransaction(async (transaction) => {
+    const operationSnapshot = await transaction.get(operationRef);
+    const previous = operationResult<Record<string, unknown>>(
+      operationSnapshot,
+      inputHash,
+    );
+    if (previous) return previous;
+
+    await assertInventoryOperationsEnabled(transaction, db);
+
+    const receiptSnapshot = await transaction.get(receiptRef);
+    if (!receiptSnapshot.exists) {
+      throw new HttpsError("not-found", "Recebimento não encontrado.");
+    }
+    const receipt = asRecord(receiptSnapshot.data());
+    const currentStatus = text(receipt.status || "created").toLowerCase();
+    if (input.expected_status && currentStatus !== input.expected_status) {
+      throw new HttpsError(
+        "failed-precondition",
+        `Status divergente: esperado ${input.expected_status}, encontrado ${currentStatus}.`,
+      );
+    }
+    if (!["created", "checking"].includes(currentStatus)) {
+      throw new HttpsError(
+        "failed-precondition",
+        `Recebimento em ${currentStatus} não aceita nova conferência.`,
+      );
+    }
+
+    const rows = await readRows(
+      transaction,
+      db.collection(collections.inboundItems).where("receipt_id", "==", receiptId),
+    );
+    if (!rows.length) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Recebimento não possui linhas para conferir.",
+      );
+    }
+    const rowsById = new Map(rows.map((row) => [row.id, row]));
+    let receivedTotal = 0;
+    let expectedTotal = 0;
+    let differenceTotal = 0;
+    let divergenceCount = 0;
+
+    for (const line of input.lines) {
+      const row = rowsById.get(safeDocId(line.inbound_item_id));
+      if (!row) {
+        throw new HttpsError(
+          "not-found",
+          `Linha ${line.inbound_item_id} não pertence ao recebimento.`,
+        );
+      }
+      const receivedQty = number(line.received_qty);
+      if (receivedQty < 0) {
+        throw new HttpsError(
+          "invalid-argument",
+          "Quantidade conferida não pode ser negativa.",
+        );
+      }
+      const expectedQty = number(row.data.expected_qty);
+      const differenceQty = receivedQty - expectedQty;
+      const conferenceStatus =
+        differenceQty === 0 ? "ok" : differenceQty < 0 ? "short" : "over";
+      expectedTotal += expectedQty;
+      receivedTotal += receivedQty;
+      differenceTotal += differenceQty;
+      if (differenceQty !== 0) divergenceCount += 1;
+      transaction.update(
+        row.ref,
+        compact({
+          expected_qty: expectedQty,
+          received_qty: receivedQty,
+          difference_qty: differenceQty,
+          conference_status: conferenceStatus,
+          location_id: text(line.location_id) || row.data.location_id,
+          unit_cost:
+            line.unit_cost === undefined
+              ? row.data.unit_cost
+              : number(line.unit_cost),
+          status:
+            differenceQty === 0
+              ? "checked"
+              : "divergence",
+          conference_notes: text(line.notes) || undefined,
+          checked_by: actorPayload(actor),
+          checked_at: FieldValue.serverTimestamp(),
+          updated_at: FieldValue.serverTimestamp(),
+        }),
+      );
+    }
+
+    transaction.update(receiptRef, {
+      status: "checking",
+      qty_expected: expectedTotal || number(receipt.qty_expected),
+      qty_received: receivedTotal,
+      qty_difference: differenceTotal,
+      divergence_count: divergenceCount,
+      conference_status: divergenceCount ? "divergent" : "ok",
+      checked_by: actorPayload(actor),
+      checked_at: FieldValue.serverTimestamp(),
+      updated_at: FieldValue.serverTimestamp(),
+    });
+
+    const event = createEvent(
+      transaction,
+      db,
+      operationEventId(operationId, "conference_saved"),
+      {
+        type: "inbound.conference_saved",
+        title: "Conferência de recebimento salva",
+        description: `${input.lines.length} linha(s) conferida(s), ${receivedTotal} unidade(s) contada(s), ${divergenceCount} divergência(s).`,
+        severity: "attention",
+        entity_type: "recebimento",
+        entity_id: receiptId,
+        customer_code: text(receipt.customer_code) || undefined,
+        payload: {
+          receipt_number: receipt.receipt_number,
+          line_count: input.lines.length,
+          expected_qty: expectedTotal || number(receipt.qty_expected),
+          received_qty: receivedTotal,
+          difference_qty: differenceTotal,
+          divergence_count: divergenceCount,
+        },
+      },
+      actor,
+    );
+
+    const result = {
+      ok: true,
+      id: receiptId,
+      receipt_id: receiptId,
+      status: "checking",
+      checked_lines: input.lines.length,
+      expected_quantity: expectedTotal || number(receipt.qty_expected),
+      received_quantity: receivedTotal,
+      difference_quantity: differenceTotal,
+      divergence_count: divergenceCount,
+      events: [event],
+    };
+    createOperationReceipt(
+      transaction,
+      operationRef,
+      inputHash,
+      "inbound_receipt.conference",
+      receiptId,
+      actor,
+      result,
+    );
+    return result;
+  });
+}
+
 function normalizeStoredItems(request: Record<string, unknown>) {
   const raw = Array.isArray(request.items) ? request.items : [];
   return raw.map((value, index): OperationalRequestItem => {
@@ -981,10 +4006,21 @@ function normalizeStoredItems(request: Record<string, unknown>) {
       sku_code: text(item.sku_code) || undefined,
       client_item_code: text(item.client_item_code) || undefined,
       product_name: text(item.product_name) || undefined,
+      product_registration: text(item.product_registration) || undefined,
       location_id: text(item.location_id) || undefined,
       condition: text(item.condition) || undefined,
+      category: text(item.category) || undefined,
+      barcode: text(item.barcode) || undefined,
+      brand: text(item.brand) || undefined,
+      size: text(item.size) || undefined,
+      color: text(item.color) || undefined,
+      photo_urls: stringList(item.photo_urls),
+      photo_storage_paths: stringList(item.photo_storage_paths),
       unit_cost: number(item.unit_cost),
-      quantity: requiredPositive(item.quantity, `Quantidade da linha ${index + 1}`),
+      quantity: requiredPositive(
+        item.quantity,
+        `Quantidade da linha ${index + 1}`,
+      ),
       notes: text(item.notes) || undefined,
     };
   });
@@ -1003,9 +4039,13 @@ export async function decideCustomerRequestTransaction(
       "expected_status é obrigatório para decidir a solicitação.",
     );
   }
-  const operationNonce = input.idempotency_key ?? `${input.action}:${expectedStatus}`;
+  const operationNonce =
+    input.idempotency_key ?? `${input.action}:${expectedStatus}`;
   const operationId = `op_decision_${digest({ requestId, operationNonce })}`;
-  const inputHash = digest({ ...input, request_id: requestId, expected_status: expectedStatus }, 64);
+  const inputHash = digest(
+    { ...input, request_id: requestId, expected_status: expectedStatus },
+    64,
+  );
   const operationRef = db.collection(collections.operations).doc(operationId);
   const requestRef = db.collection(collections.customerRequests).doc(requestId);
   const occurredAt = new Date().toISOString();
@@ -1067,8 +4107,20 @@ export async function decideCustomerRequestTransaction(
     >();
     const allocations: StockAllocation[] = [];
     const balanceRowsBySku = new Map<string, Row[]>();
+    const decisionCatalogTargets = new Map<string, CatalogAggregateTarget>();
+    let preReservedRows: Row[] = [];
+    let releaseReservationRows: Row[] = [];
+    const releaseBalancesBySku = new Map<string, Row[]>();
 
     if (input.action === "approve" && kind.outbound) {
+      preReservedRows = await readRows(
+        transaction,
+        db
+          .collection(collections.stockReservations)
+          .where("customer_request_id", "==", requestId)
+          .where("status", "==", "reserved"),
+      );
+
       if (!items.length) {
         throw new HttpsError(
           "invalid-argument",
@@ -1082,7 +4134,17 @@ export async function decideCustomerRequestTransaction(
           "Cada item de retirada deve informar sku_code.",
         );
       }
-      for (const skuCode of uniqueSkus) {
+
+      const skusToLoad = preReservedRows.length
+        ? [
+            ...new Set(
+              preReservedRows
+                .map((row) => text(row.data.sku_code))
+                .filter(Boolean),
+            ),
+          ]
+        : uniqueSkus;
+      for (const skuCode of skusToLoad) {
         const rows = await readRows(
           transaction,
           skuBalancesQuery(db, customerCode, skuCode),
@@ -1103,61 +4165,142 @@ export async function decideCustomerRequestTransaction(
         balanceRowsBySku.set(
           skuCode,
           rows.sort((left, right) =>
-            text(left.data.location_id).localeCompare(text(right.data.location_id)),
+            text(left.data.location_id).localeCompare(
+              text(right.data.location_id),
+            ),
           ),
         );
       }
 
-      items.forEach((item, itemIndex) => {
-        const skuCode = text(item.sku_code);
-        const requestedLocation = text(item.location_id);
-        const candidateRows = (balanceRowsBySku.get(skuCode) ?? []).filter(
-          (row) =>
-            !requestedLocation || text(row.data.location_id) === requestedLocation,
-        );
-        let remaining = item.quantity;
-        let availableTotal = 0;
-
-        for (const row of candidateRows) {
-          const locationId = text(row.data.location_id);
-          const key = balanceKey(customerCode, skuCode, locationId);
-          const existing = reservedBalances.get(key);
-          const qtyOnHand = existing?.qtyOnHand ?? number(row.data.qty_on_hand);
-          const qtyReserved = existing?.qtyReserved ?? number(row.data.qty_reserved);
-          const alreadyAllocated = existing?.quantity ?? 0;
-          const available = qtyOnHand - qtyReserved - alreadyAllocated;
-          if (qtyOnHand < 0 || qtyReserved < 0 || qtyReserved > qtyOnHand) {
-            throw new HttpsError(
-              "failed-precondition",
-              `Saldo interno inconsistente para o SKU ${skuCode}.`,
-            );
-          }
-          availableTotal += Math.max(0, available);
-          if (remaining <= 0 || available <= 0) continue;
-          const allocated = Math.min(remaining, available);
-          reservedBalances.set(key, {
-            row,
-            quantity: alreadyAllocated + allocated,
-            qtyOnHand,
-            qtyReserved,
-          });
-          allocations.push({
-            item,
-            clientLineNumber: number(item.line_number) || itemIndex + 1,
-            row,
-            locationId,
-            quantity: allocated,
-          });
-          remaining -= allocated;
-        }
-
-        if (remaining > 0) {
-          throw new HttpsError(
-            "failed-precondition",
-            `Saldo insuficiente para o SKU ${skuCode}. Disponível: ${availableTotal}; solicitado: ${item.quantity}.`,
+      if (!preReservedRows.length) {
+        for (const skuCode of skusToLoad) {
+          const sourceItem = items.find(
+            (item) => text(item.sku_code) === skuCode,
+          );
+          const sourceRow = balanceRowsBySku.get(skuCode)?.[0];
+          decisionCatalogTargets.set(
+            skuCode,
+            await resolveCatalogAggregateTargets(
+              transaction,
+              db,
+              skuCode,
+              text(sourceItem?.client_item_code) ||
+                text(sourceRow?.data.client_item_code) ||
+                undefined,
+            ),
           );
         }
-      });
+      }
+
+      if (preReservedRows.length) {
+        let reservedTotal = 0;
+        preReservedRows.forEach((reservation, index) => {
+          const skuCode = text(reservation.data.sku_code);
+          const locationId = text(reservation.data.location_id);
+          const quantity = number(
+            reservation.data.reserved_qty ??
+              reservation.data.allocated_qty ??
+              reservation.data.requested_qty,
+          );
+          if (!skuCode || !locationId || quantity <= 0) {
+            throw new HttpsError(
+              "failed-precondition",
+              `Reserva ${reservation.id} não possui SKU, localização e quantidade válidos.`,
+            );
+          }
+          const balanceRow = (balanceRowsBySku.get(skuCode) ?? []).find(
+            (row) => text(row.data.location_id) === locationId,
+          );
+          if (!balanceRow) {
+            throw new HttpsError(
+              "failed-precondition",
+              `Saldo físico da reserva ${reservation.id} não foi encontrado.`,
+            );
+          }
+          reservedTotal += quantity;
+          allocations.push({
+            item: {
+              line_number:
+                number(reservation.data.client_line_number) || index + 1,
+              sku_code: skuCode,
+              client_item_code:
+                text(reservation.data.client_item_code) || undefined,
+              product_name: text(reservation.data.product_name) || skuCode,
+              location_id: locationId,
+              unit_cost: number(reservation.data.unit_cost),
+              quantity,
+              notes: text(reservation.data.notes) || undefined,
+            },
+            clientLineNumber:
+              number(reservation.data.client_line_number) || index + 1,
+            row: balanceRow,
+            reservationRow: reservation,
+            locationId,
+            quantity,
+          });
+        });
+
+        if (reservedTotal < total) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Reserva insuficiente para a solicitação. Reservado: ${reservedTotal}; solicitado: ${total}.`,
+          );
+        }
+      } else {
+        items.forEach((item, itemIndex) => {
+          const skuCode = text(item.sku_code);
+          const requestedLocation = text(item.location_id);
+          const candidateRows = (balanceRowsBySku.get(skuCode) ?? []).filter(
+            (row) =>
+              !requestedLocation ||
+              text(row.data.location_id) === requestedLocation,
+          );
+          let remaining = item.quantity;
+          let availableTotal = 0;
+
+          for (const row of candidateRows) {
+            const locationId = text(row.data.location_id);
+            const key = balanceKey(customerCode, skuCode, locationId);
+            const existing = reservedBalances.get(key);
+            const qtyOnHand =
+              existing?.qtyOnHand ?? number(row.data.qty_on_hand);
+            const qtyReserved =
+              existing?.qtyReserved ?? number(row.data.qty_reserved);
+            const alreadyAllocated = existing?.quantity ?? 0;
+            const available = qtyOnHand - qtyReserved - alreadyAllocated;
+            if (qtyOnHand < 0 || qtyReserved < 0 || qtyReserved > qtyOnHand) {
+              throw new HttpsError(
+                "failed-precondition",
+                `Saldo interno inconsistente para o SKU ${skuCode}.`,
+              );
+            }
+            availableTotal += Math.max(0, available);
+            if (remaining <= 0 || available <= 0) continue;
+            const allocated = Math.min(remaining, available);
+            reservedBalances.set(key, {
+              row,
+              quantity: alreadyAllocated + allocated,
+              qtyOnHand,
+              qtyReserved,
+            });
+            allocations.push({
+              item,
+              clientLineNumber: number(item.line_number) || itemIndex + 1,
+              row,
+              locationId,
+              quantity: allocated,
+            });
+            remaining -= allocated;
+          }
+
+          if (remaining > 0) {
+            throw new HttpsError(
+              "failed-precondition",
+              `Saldo insuficiente para o SKU ${skuCode}. Disponível: ${availableTotal}; solicitado: ${item.quantity}.`,
+            );
+          }
+        });
+      }
     }
 
     if (input.action === "approve" && kind.inbound) {
@@ -1165,6 +4308,42 @@ export async function decideCustomerRequestTransaction(
         throw new HttpsError(
           "invalid-argument",
           "Solicitação de recebimento precisa de itens com sku_code.",
+        );
+      }
+    }
+
+    if (input.action === "reject" && kind.outbound) {
+      releaseReservationRows = await readRows(
+        transaction,
+        db
+          .collection(collections.stockReservations)
+          .where("customer_request_id", "==", requestId)
+          .where("status", "==", "reserved"),
+      );
+      const releaseSkus = [
+        ...new Set(
+          releaseReservationRows
+            .map((row) => text(row.data.sku_code))
+            .filter(Boolean),
+        ),
+      ];
+      for (const skuCode of releaseSkus) {
+        const rows = await readRows(
+          transaction,
+          skuBalancesQuery(db, customerCode, skuCode),
+        );
+        releaseBalancesBySku.set(skuCode, rows);
+        const sourceRow = releaseReservationRows.find(
+          (row) => text(row.data.sku_code) === skuCode,
+        );
+        decisionCatalogTargets.set(
+          skuCode,
+          await resolveCatalogAggregateTargets(
+            transaction,
+            db,
+            skuCode,
+            text(sourceRow?.data.client_item_code) || undefined,
+          ),
         );
       }
     }
@@ -1184,7 +4363,10 @@ export async function decideCustomerRequestTransaction(
           updated_at: FieldValue.serverTimestamp(),
         });
       }
-      const reservedBySku = new Map<string, OperationalRequestItem & { quantity: number }>();
+      const reservedBySku = new Map<
+        string,
+        OperationalRequestItem & { quantity: number }
+      >();
       for (const item of items) {
         const skuCode = text(item.sku_code);
         const current = reservedBySku.get(skuCode);
@@ -1194,16 +4376,18 @@ export async function decideCustomerRequestTransaction(
         });
       }
       for (const [skuCode, item] of reservedBySku) {
-        const skuRows = balanceRowsBySku.get(skuCode) ?? [];
+        const skuRows = variantScopedBalanceRows(
+          balanceRowsBySku.get(skuCode) ?? [],
+          skuCode,
+          text(item.client_item_code) || undefined,
+        );
         const qtyOnHand = skuRows.reduce(
           (sum, row) => sum + number(row.data.qty_on_hand),
           0,
         );
         const qtyReserved =
-          skuRows.reduce(
-            (sum, row) => sum + number(row.data.qty_reserved),
-            0,
-          ) + item.quantity;
+          skuRows.reduce((sum, row) => sum + number(row.data.qty_reserved), 0) +
+          (preReservedRows.length ? 0 : item.quantity);
         const source = skuRows[0]?.data ?? {};
         setClientInventorySnapshot(transaction, db, {
           customerCode,
@@ -1217,6 +4401,13 @@ export async function decideCustomerRequestTransaction(
           qtyOnHand,
           qtyReserved,
         });
+        if (!preReservedRows.length) {
+          applyCatalogStockAggregates(
+            transaction,
+            decisionCatalogTargets.get(skuCode) ?? {},
+            { reserved: item.quantity },
+          );
+        }
       }
 
       transaction.create(db.collection(collections.orders).doc(orderId), {
@@ -1281,15 +4472,24 @@ export async function decideCustomerRequestTransaction(
           db.collection(collections.orderItems).doc(`oit_${lineId}`),
           { id: `oit_${lineId}`, ...common },
         );
-        transaction.create(
-          db.collection(collections.stockReservations).doc(`res_${lineId}`),
-          {
-            id: `res_${lineId}`,
+        if (allocation.reservationRow) {
+          transaction.update(allocation.reservationRow.ref, {
             ...common,
             reserved_qty: allocation.quantity,
             status: "reserved",
-          },
-        );
+            updated_at: FieldValue.serverTimestamp(),
+          });
+        } else {
+          transaction.create(
+            db.collection(collections.stockReservations).doc(`res_${lineId}`),
+            {
+              id: `res_${lineId}`,
+              ...common,
+              reserved_qty: allocation.quantity,
+              status: "reserved",
+            },
+          );
+        }
         transaction.create(
           db.collection(collections.pickLines).doc(`pli_${lineId}`),
           compact({
@@ -1347,7 +4547,10 @@ export async function decideCustomerRequestTransaction(
             entity_type: "pedido",
             entity_id: orderId,
             customer_code: customerCode,
-            payload: { customer_request_id: requestId, pick_task_id: pickTaskId },
+            payload: {
+              customer_request_id: requestId,
+              pick_task_id: pickTaskId,
+            },
           },
         ],
         [
@@ -1393,19 +4596,30 @@ export async function decideCustomerRequestTransaction(
     if (input.action === "approve" && kind.inbound) {
       const inboundId = `inb_${requestId}`;
       const receiptNumber = `SOL-${requestId.slice(-8).toUpperCase()}`;
-      transaction.create(db.collection(collections.inboundReceipts).doc(inboundId), {
-        id: inboundId,
-        customer_code: customerCode,
-        receipt_number: receiptNumber,
-        status: "created",
-        item_count: items.length,
-        qty_expected: total,
-        qty_received: 0,
-        customer_request_id: requestId,
-        source: "customer_request",
-        created_at: FieldValue.serverTimestamp(),
-        updated_at: FieldValue.serverTimestamp(),
-      });
+      transaction.create(
+        db.collection(collections.inboundReceipts).doc(inboundId),
+        compact({
+          id: inboundId,
+          customer_code: customerCode,
+          receipt_number: receiptNumber,
+          status: "created",
+          priority: request.priority ?? "normal",
+          supplier: request.supplier,
+          invoice_number: request.invoice_number,
+          reference: request.invoice_number ?? request.title,
+          notes: request.description,
+          expected_at: request.due_at,
+          attachments: request.attachments,
+          attachment_count: request.attachment_count,
+          item_count: items.length,
+          qty_expected: total,
+          qty_received: 0,
+          customer_request_id: requestId,
+          source: "customer_request",
+          created_at: FieldValue.serverTimestamp(),
+          updated_at: FieldValue.serverTimestamp(),
+        }),
+      );
       items.forEach((item, index) => {
         const lineNumber = index + 1;
         const itemId = `inbi_${safeDocId(inboundId)}_${String(lineNumber).padStart(2, "0")}`;
@@ -1420,6 +4634,16 @@ export async function decideCustomerRequestTransaction(
             sku_code: item.sku_code,
             client_item_code: item.client_item_code,
             product_name: item.product_name ?? item.sku_code,
+            product_registration: item.product_registration,
+            category: item.category,
+            barcode: item.barcode,
+            brand: item.brand,
+            size: item.size,
+            color: item.color,
+            photo_urls: item.photo_urls?.length ? item.photo_urls : undefined,
+            photo_storage_paths: item.photo_storage_paths?.length
+              ? item.photo_storage_paths
+              : undefined,
             location_id: item.location_id,
             unit_cost: item.unit_cost,
             expected_qty: item.quantity,
@@ -1451,7 +4675,154 @@ export async function decideCustomerRequestTransaction(
             entity_type: "recebimento",
             entity_id: inboundId,
             customer_code: customerCode,
-            payload: { customer_request_id: requestId, quantity_total: total },
+            payload: {
+              customer_request_id: requestId,
+              quantity_total: total,
+              supplier: request.supplier,
+              invoice_number: request.invoice_number,
+              attachment_count: number(request.attachment_count),
+            },
+          },
+          actor,
+        ),
+      );
+    }
+
+    let releasedQtyTotal = 0;
+    if (
+      input.action === "reject" &&
+      kind.outbound &&
+      releaseReservationRows.length
+    ) {
+      const releaseByBalance = new Map<string, { row: Row; quantity: number }>();
+      const releasedBySku = new Map<
+        string,
+        {
+          quantity: number;
+          clientItemCode?: string;
+          productName?: string;
+          unitCost?: number;
+        }
+      >();
+      for (const reservation of releaseReservationRows) {
+        const skuCode = text(reservation.data.sku_code);
+        const locationId = text(reservation.data.location_id);
+        const quantity = number(
+          reservation.data.reserved_qty ??
+            reservation.data.allocated_qty ??
+            reservation.data.requested_qty,
+        );
+        if (!skuCode || !locationId || quantity <= 0) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Reserva ${reservation.id} não possui SKU, localização e quantidade válidos para liberação.`,
+          );
+        }
+        const balanceRow = (releaseBalancesBySku.get(skuCode) ?? []).find(
+          (row) => text(row.data.location_id) === locationId,
+        );
+        if (!balanceRow) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Saldo físico da reserva ${reservation.id} não foi encontrado para liberação.`,
+          );
+        }
+        const key = balanceKey(customerCode, skuCode, locationId);
+        const entry = releaseByBalance.get(key) ?? {
+          row: balanceRow,
+          quantity: 0,
+        };
+        entry.quantity += quantity;
+        releaseByBalance.set(key, entry);
+        const skuEntry = releasedBySku.get(skuCode) ?? {
+          quantity: 0,
+          clientItemCode: text(reservation.data.client_item_code) || undefined,
+          productName: text(reservation.data.product_name) || undefined,
+          unitCost: number(reservation.data.unit_cost) || undefined,
+        };
+        skuEntry.quantity += quantity;
+        releasedBySku.set(skuCode, skuEntry);
+        releasedQtyTotal += quantity;
+        transaction.update(reservation.ref, {
+          status: "released",
+          released_qty: quantity,
+          release_reason: "customer_request_rejected",
+          released_by: actorPayload(actor),
+          released_at: FieldValue.serverTimestamp(),
+          updated_at: FieldValue.serverTimestamp(),
+        });
+      }
+      for (const entry of releaseByBalance.values()) {
+        const qtyOnHand = number(entry.row.data.qty_on_hand);
+        const qtyReserved = number(entry.row.data.qty_reserved);
+        const nextReserved = qtyReserved - entry.quantity;
+        if (nextReserved < 0) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Reserva registrada (${qtyReserved}) é menor que a liberação (${entry.quantity}) no saldo ${entry.row.id}. Faça uma reconciliação antes de rejeitar.`,
+          );
+        }
+        transaction.update(entry.row.ref, {
+          qty_reserved: nextReserved,
+          qty_available: qtyOnHand - nextReserved,
+          updated_at: FieldValue.serverTimestamp(),
+        });
+      }
+      for (const [skuCode, released] of releasedBySku) {
+        const skuRows = variantScopedBalanceRows(
+          releaseBalancesBySku.get(skuCode) ?? [],
+          skuCode,
+          released.clientItemCode,
+        );
+        const qtyOnHand = skuRows.reduce(
+          (sum, row) => sum + number(row.data.qty_on_hand),
+          0,
+        );
+        const qtyReservedAfter = Math.max(
+          0,
+          skuRows.reduce(
+            (sum, row) => sum + number(row.data.qty_reserved),
+            0,
+          ) - released.quantity,
+        );
+        const source = skuRows[0]?.data ?? {};
+        setClientInventorySnapshot(transaction, db, {
+          customerCode,
+          skuCode,
+          clientItemCode:
+            released.clientItemCode ??
+            (text(source.client_item_code) || undefined),
+          productName:
+            released.productName ?? (text(source.product_name) || undefined),
+          category: text(source.category) || undefined,
+          unitCost: released.unitCost || number(source.unit_cost),
+          qtyOnHand,
+          qtyReserved: qtyReservedAfter,
+        });
+        applyCatalogStockAggregates(
+          transaction,
+          decisionCatalogTargets.get(skuCode) ?? {},
+          { reserved: -released.quantity },
+        );
+      }
+      events.push(
+        createEvent(
+          transaction,
+          db,
+          operationEventId(operationId, "stock_released"),
+          {
+            type: "stock.reservation_released",
+            title: "Reserva de estoque liberada",
+            description: `${releasedQtyTotal} unidade(s) liberada(s) após rejeição da solicitação.`,
+            severity: "info",
+            entity_type: "reserva_estoque",
+            entity_id: requestId,
+            customer_code: customerCode,
+            payload: {
+              customer_request_id: requestId,
+              released_qty_total: releasedQtyTotal,
+              reservation_count: releaseReservationRows.length,
+            },
           },
           actor,
         ),
@@ -1492,12 +4863,14 @@ export async function decideCustomerRequestTransaction(
         decided_at: FieldValue.serverTimestamp(),
         updated_at: FieldValue.serverTimestamp(),
         created_entities: Object.keys(created).length ? created : undefined,
-        operational_status:
-          created.pick_task_id
-            ? "picking_planned"
-            : created.inbound_id
-              ? "receiving_created"
-              : undefined,
+        stock_reservation_status:
+          releasedQtyTotal > 0 ? "released" : undefined,
+        released_quantity_total: releasedQtyTotal || undefined,
+        operational_status: created.pick_task_id
+          ? "picking_planned"
+          : created.inbound_id
+            ? "receiving_created"
+            : undefined,
       }),
     );
     transaction.set(
@@ -1505,12 +4878,11 @@ export async function decideCustomerRequestTransaction(
       compact({
         customer_code: customerCode,
         status: nextStatus,
-        operational_status:
-          created.pick_task_id
-            ? "picking_planned"
-            : created.inbound_id
-              ? "receiving_created"
-              : nextStatus,
+        operational_status: created.pick_task_id
+          ? "picking_planned"
+          : created.inbound_id
+            ? "receiving_created"
+            : nextStatus,
         decision_reason: input.reason,
         published_at: FieldValue.serverTimestamp(),
         updated_at: FieldValue.serverTimestamp(),
@@ -1539,6 +4911,7 @@ export async function decideCustomerRequestTransaction(
 
 const taskCollections: Record<string, string> = {
   receiving: collections.inboundReceipts,
+  putaway: collections.putawayTasks,
   picking: collections.pickTasks,
   packing: collections.packTasks,
   shipping: collections.shipments,
@@ -1546,6 +4919,7 @@ const taskCollections: Record<string, string> = {
 
 const taskFlows: Record<string, string[]> = {
   receiving: ["created", "checking", "received"],
+  putaway: ["planned", "in_progress", "completed"],
   picking: ["planned", "in_progress", "completed"],
   packing: ["ready", "in_progress", "completed"],
   shipping: ["ready_to_dispatch", "dispatched", "delivered"],
@@ -1578,9 +4952,13 @@ function taskParts(taskUid: string) {
 function completionEvent(type: string, status: string) {
   const mapping: Record<string, Record<string, string>> = {
     receiving: { checking: "inbound.checking", received: "inbound.checked" },
+    putaway: { in_progress: "putaway.started", completed: "putaway.completed" },
     picking: { in_progress: "picking.started", completed: "picking.completed" },
     packing: { in_progress: "packing.started", completed: "packing.completed" },
-    shipping: { dispatched: "shipment.dispatched", delivered: "shipment.delivered" },
+    shipping: {
+      dispatched: "shipment.dispatched",
+      delivered: "shipment.delivered",
+    },
   };
   return mapping[type]?.[status] ?? `${type}.advanced`;
 }
@@ -1634,9 +5012,18 @@ export async function advanceWarehouseTaskTransaction(
     const customerCode = text(task.customer_code) || "BTG Pactual";
     const orderId = text(task.order_id);
     const requestId = text(task.customer_request_id);
+    const operation = input.operation ?? {};
 
     let inboundItems: Row[] = [];
     let pickLines: Row[] = [];
+    let pickingConfirmationsById = new Map<
+      string,
+      { qty_picked?: number; status?: string; notes?: string }
+    >();
+    let packingConfirmationsById = new Map<
+      string,
+      { qty_packed?: number; status?: string; notes?: string }
+    >();
     let orderItems: Row[] = [];
     let reservations: Row[] = [];
     let shipmentItems: Row[] = [];
@@ -1644,19 +5031,30 @@ export async function advanceWarehouseTaskTransaction(
     let orderRow: Row | undefined;
     let requestRow: Row | undefined;
     const balanceStates = new Map<string, BalanceState>();
+    const taskCatalogTargets = new Map<string, CatalogAggregateTarget>();
 
     if (requestId) {
       const snapshot = await transaction.get(
         db.collection(collections.customerRequests).doc(requestId),
       );
       if (snapshot.exists) {
-        requestRow = { id: snapshot.id, ref: snapshot.ref, data: snapshot.data() ?? {} };
+        requestRow = {
+          id: snapshot.id,
+          ref: snapshot.ref,
+          data: snapshot.data() ?? {},
+        };
       }
     }
     if (orderId) {
-      const snapshot = await transaction.get(db.collection(collections.orders).doc(orderId));
+      const snapshot = await transaction.get(
+        db.collection(collections.orders).doc(orderId),
+      );
       if (snapshot.exists) {
-        orderRow = { id: snapshot.id, ref: snapshot.ref, data: snapshot.data() ?? {} };
+        orderRow = {
+          id: snapshot.id,
+          ref: snapshot.ref,
+          data: snapshot.data() ?? {},
+        };
       }
     }
 
@@ -1675,30 +5073,66 @@ export async function advanceWarehouseTaskTransaction(
       for (const row of inboundItems) {
         const skuCode = text(row.data.sku_code);
         const locationId =
-          text(row.data.location_id || task.location_id || task.receiving_location) ||
-          "RECEBIMENTO";
+          text(
+            row.data.location_id || task.location_id || task.receiving_location,
+          ) || "RECEBIMENTO";
         if (!skuCode) {
           throw new HttpsError(
             "failed-precondition",
             `Linha ${row.id} não possui sku_code.`,
           );
         }
-        keys.set(balanceKey(customerCode, skuCode, locationId), { skuCode, locationId });
+        keys.set(balanceKey(customerCode, skuCode, locationId), {
+          skuCode,
+          locationId,
+        });
+      }
+      const uncheckedRows = inboundItems.filter((row) => {
+        const status = text(row.data.status);
+        return (
+          status !== "checked" &&
+          status !== "divergence" &&
+          !row.data.checked_at
+        );
+      });
+      if (uncheckedRows.length > 0) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Salve a conferência física de ${uncheckedRows.length} linha(s) antes de concluir a entrada.`,
+        );
+      }
+      const divergentRows = inboundItems.filter((row) => {
+        const differenceQty =
+          row.data.difference_qty === undefined
+            ? number(row.data.received_qty) - number(row.data.expected_qty)
+            : number(row.data.difference_qty);
+        return (
+          differenceQty !== 0 ||
+          text(row.data.status) === "divergence" ||
+          text(row.data.conference_status) === "short" ||
+          text(row.data.conference_status) === "over"
+        );
+      });
+      if (divergentRows.length > 0 && !text(input.note)) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Recebimento possui ${divergentRows.length} linha(s) com divergência. Informe a justificativa operacional antes de concluir.`,
+        );
       }
       for (const [key, value] of keys) {
         const rows = await readRows(
           transaction,
           exactBalanceQuery(db, customerCode, value.skuCode, value.locationId),
         );
-        if (rows.length > 1) assertSingleBalance(rows, value.skuCode, value.locationId);
-        const row =
-          rows[0] ?? {
-            id: `bal_${digest({ customerCode, ...value })}`,
-            ref: db
-              .collection(collections.stockBalances)
-              .doc(`bal_${digest({ customerCode, ...value })}`),
-            data: {},
-          };
+        if (rows.length > 1)
+          assertSingleBalance(rows, value.skuCode, value.locationId);
+        const row = rows[0] ?? {
+          id: `bal_${digest({ customerCode, ...value })}`,
+          ref: db
+            .collection(collections.stockBalances)
+            .doc(`bal_${digest({ customerCode, ...value })}`),
+          data: {},
+        };
         const qtyOnHand = number(row.data.qty_on_hand);
         const qtyReserved = number(row.data.qty_reserved);
         if (qtyOnHand < 0 || qtyReserved < 0 || qtyReserved > qtyOnHand) {
@@ -1715,11 +5149,35 @@ export async function advanceWarehouseTaskTransaction(
           qtyReserved,
         });
       }
+      const receivingCatalogSkus = new Map<string, string | undefined>();
+      for (const row of inboundItems) {
+        const skuCode = text(row.data.sku_code);
+        if (!receivingCatalogSkus.has(skuCode)) {
+          receivingCatalogSkus.set(
+            skuCode,
+            text(row.data.client_item_code) || undefined,
+          );
+        }
+      }
+      for (const [skuCode, clientItemCode] of receivingCatalogSkus) {
+        taskCatalogTargets.set(
+          skuCode,
+          await resolveCatalogAggregateTargets(
+            transaction,
+            db,
+            skuCode,
+            clientItemCode,
+          ),
+        );
+      }
     }
 
     if (type === "picking" && targetStatus === "completed") {
       if (!orderId || !orderRow) {
-        throw new HttpsError("failed-precondition", "Picking sem pedido válido.");
+        throw new HttpsError(
+          "failed-precondition",
+          "Picking sem pedido válido.",
+        );
       }
       pickLines = await readRows(
         transaction,
@@ -1731,7 +5189,9 @@ export async function advanceWarehouseTaskTransaction(
       );
       reservations = await readRows(
         transaction,
-        db.collection(collections.stockReservations).where("order_id", "==", orderId),
+        db
+          .collection(collections.stockReservations)
+          .where("order_id", "==", orderId),
       );
       if (!pickLines.length || !orderItems.length || !reservations.length) {
         throw new HttpsError(
@@ -1739,18 +5199,125 @@ export async function advanceWarehouseTaskTransaction(
           "Picking não possui linhas e reservas consistentes.",
         );
       }
+      const pickingConfirmations = Array.isArray(operation.picking_lines)
+        ? operation.picking_lines
+        : [];
+      if (!pickingConfirmations.length) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Informe a conferência física das linhas antes de concluir o picking.",
+        );
+      }
+      pickingConfirmationsById = new Map(
+        pickingConfirmations.map((line) => [text(line.pick_line_id), line]),
+      );
+      for (const row of pickLines) {
+        const confirmation = pickingConfirmationsById.get(row.id);
+        if (!confirmation) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Linha ${row.id} não foi conferida fisicamente.`,
+          );
+        }
+        const expectedQty = requiredPositive(
+          row.data.qty_to_pick,
+          `Quantidade de ${row.id}`,
+        );
+        const pickedQty = requiredPositive(
+          confirmation.qty_picked,
+          `Quantidade física de ${row.id}`,
+        );
+        const confirmationStatus = text(confirmation.status || "confirmed");
+        if (!["confirmed", "ok", "picked", "completed"].includes(confirmationStatus)) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Linha ${row.id} não está OK para concluir o picking.`,
+          );
+        }
+        if (pickedQty !== expectedQty) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Linha ${row.id} tem ${pickedQty} unidade(s) físicas, mas esperava ${expectedQty}. Registre exceção antes de concluir.`,
+          );
+        }
+      }
     }
 
     if (type === "packing" && targetStatus === "completed") {
       if (!orderId || !orderRow) {
-        throw new HttpsError("failed-precondition", "Packing sem pedido válido.");
+        throw new HttpsError(
+          "failed-precondition",
+          "Packing sem pedido válido.",
+        );
       }
       orderItems = await readRows(
         transaction,
         db.collection(collections.orderItems).where("order_id", "==", orderId),
       );
       if (!orderItems.length) {
-        throw new HttpsError("failed-precondition", "Packing não possui itens separados.");
+        throw new HttpsError(
+          "failed-precondition",
+          "Packing não possui itens separados.",
+        );
+      }
+      const notPicked = orderItems.filter(
+        (row) =>
+          text(row.data.status) !== "picked" &&
+          number(row.data.picked_qty) <= 0,
+      );
+      if (notPicked.length > 0) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Packing possui ${notPicked.length} item(ns) ainda não separados fisicamente.`,
+        );
+      }
+      if (!text(operation.seal_code || task.seal_code)) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Informe o lacre do volume antes de fechar o packing.",
+        );
+      }
+      const packingConfirmations = Array.isArray(operation.packing_lines)
+        ? operation.packing_lines
+        : [];
+      if (!packingConfirmations.length) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Informe a conferência física das linhas antes de fechar o packing.",
+        );
+      }
+      packingConfirmationsById = new Map(
+        packingConfirmations.map((line) => [text(line.order_item_id), line]),
+      );
+      for (const row of orderItems) {
+        const confirmation = packingConfirmationsById.get(row.id);
+        if (!confirmation) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Item ${row.id} não foi conferido fisicamente no packing.`,
+          );
+        }
+        const expectedQty = requiredPositive(
+          row.data.picked_qty || row.data.allocated_qty,
+          `Quantidade separada de ${row.id}`,
+        );
+        const packedQty = requiredPositive(
+          confirmation.qty_packed,
+          `Quantidade embalada de ${row.id}`,
+        );
+        const confirmationStatus = text(confirmation.status || "confirmed");
+        if (!["confirmed", "ok", "packed", "completed"].includes(confirmationStatus)) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Item ${row.id} não está OK para concluir o packing.`,
+          );
+        }
+        if (packedQty !== expectedQty) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Item ${row.id} tem ${packedQty} unidade(s) embaladas, mas esperava ${expectedQty}. Registre exceção antes de concluir.`,
+          );
+        }
       }
     }
 
@@ -1759,7 +5326,10 @@ export async function advanceWarehouseTaskTransaction(
       (targetStatus === "dispatched" || targetStatus === "delivered")
     ) {
       if (!orderId || !orderRow) {
-        throw new HttpsError("failed-precondition", "Expedição sem pedido válido.");
+        throw new HttpsError(
+          "failed-precondition",
+          "Expedição sem pedido válido.",
+        );
       }
       shipmentItems = await readRows(
         transaction,
@@ -1769,12 +5339,84 @@ export async function advanceWarehouseTaskTransaction(
         transaction,
         db.collection(collections.packages).where("order_id", "==", orderId),
       );
+      if (!shipmentItems.length || !packages.length) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Expedição precisa de itens e volumes gerados pelo packing.",
+        );
+      }
+      const shippedUnits = shipmentItems.reduce(
+        (sum, row) =>
+          sum + number(row.data.qty_shipped || row.data.qty_packed),
+        0,
+      );
+      const packageUnits = packages.reduce(
+        (sum, row) => sum + number(row.data.packed_units),
+        0,
+      );
+      const expectedUnits = number(task.total_units);
+      if (expectedUnits > 0 && shippedUnits !== expectedUnits) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Expedição possui ${shippedUnits} unidade(s), mas esperava ${expectedUnits}.`,
+        );
+      }
+      if (expectedUnits > 0 && packageUnits !== expectedUnits) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Volumes possuem ${packageUnits} unidade(s), mas a expedição esperava ${expectedUnits}.`,
+        );
+      }
+      if (targetStatus === "dispatched" && !text(operation.carrier || task.carrier)) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Informe o responsável pela coleta antes de confirmar a saída.",
+        );
+      }
+      if (
+        targetStatus === "dispatched" &&
+        !text(operation.driver_name || task.driver_name)
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Informe o motorista antes de confirmar a saída.",
+        );
+      }
+      if (
+        targetStatus === "dispatched" &&
+        !text(operation.vehicle_plate || task.vehicle_plate)
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Informe a placa ou identificação do veículo antes de confirmar a saída.",
+        );
+      }
+      if (
+        targetStatus === "delivered" &&
+        !text(operation.proof_reference || task.proof_reference)
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Informe o comprovante de entrega antes de encerrar o pedido.",
+        );
+      }
+      if (
+        targetStatus === "delivered" &&
+        !text(operation.delivery_notes || task.delivery_notes)
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Informe a observação de entrega antes de encerrar o pedido.",
+        );
+      }
     }
 
     if (type === "shipping" && targetStatus === "delivered") {
       reservations = await readRows(
         transaction,
-        db.collection(collections.stockReservations).where("order_id", "==", orderId),
+        db
+          .collection(collections.stockReservations)
+          .where("order_id", "==", orderId),
       );
       if (!reservations.length) {
         throw new HttpsError(
@@ -1798,13 +5440,21 @@ export async function advanceWarehouseTaskTransaction(
             `Reserva ${reservation.id} não possui SKU e localização.`,
           );
         }
-        keys.set(balanceKey(customerCode, skuCode, locationId), { skuCode, locationId });
+        keys.set(balanceKey(customerCode, skuCode, locationId), {
+          skuCode,
+          locationId,
+        });
       }
       for (const [key, value] of keys) {
         const row = assertSingleBalance(
           await readRows(
             transaction,
-            exactBalanceQuery(db, customerCode, value.skuCode, value.locationId),
+            exactBalanceQuery(
+              db,
+              customerCode,
+              value.skuCode,
+              value.locationId,
+            ),
           ),
           value.skuCode,
           value.locationId,
@@ -1816,6 +5466,32 @@ export async function advanceWarehouseTaskTransaction(
           qtyOnHand: number(row.data.qty_on_hand),
           qtyReserved: number(row.data.qty_reserved),
         });
+      }
+      const consumedCatalogSkus = new Map<string, string | undefined>();
+      for (const reservation of reservations) {
+        const skuCode = text(reservation.data.sku_code);
+        const locationId = text(reservation.data.location_id);
+        const balanceState = balanceStates.get(
+          balanceKey(customerCode, skuCode, locationId),
+        );
+        const clientItemCode =
+          text(reservation.data.client_item_code) ||
+          text(balanceState?.row.data.client_item_code) ||
+          undefined;
+        if (!consumedCatalogSkus.get(skuCode)) {
+          consumedCatalogSkus.set(skuCode, clientItemCode);
+        }
+      }
+      for (const [skuCode, clientItemCode] of consumedCatalogSkus) {
+        taskCatalogTargets.set(
+          skuCode,
+          await resolveCatalogAggregateTargets(
+            transaction,
+            db,
+            skuCode,
+            clientItemCode,
+          ),
+        );
       }
     }
 
@@ -1831,28 +5507,233 @@ export async function advanceWarehouseTaskTransaction(
     const effects: Record<string, unknown> = {};
     const events: OperationalEventSummary[] = [];
 
+    if (type === "putaway" && targetStatus === "completed") {
+      const skuCode = text(task.sku_code || task.sku);
+      const sourceLocationId =
+        text(operation.source_location_id || task.source_location_id) ||
+        "RECEBIMENTO";
+      const destinationLocationId = text(
+        operation.destination_location_id ||
+          operation.location_id ||
+          task.destination_location_id ||
+          task.location_id,
+      );
+      const quantity = requiredPositive(
+        operation.quantity || task.quantity || task.total_units,
+        "Quantidade da guarda",
+      );
+      if (!skuCode) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Putaway sem SKU definido para movimentar.",
+        );
+      }
+      if (!destinationLocationId) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Informe o endereço final antes de concluir o putaway.",
+        );
+      }
+      if (sourceLocationId === destinationLocationId) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Endereço de origem e destino não podem ser iguais.",
+        );
+      }
+
+      const sourceBalance = assertSingleBalance(
+        await readRows(
+          transaction,
+          exactBalanceQuery(db, customerCode, skuCode, sourceLocationId),
+        ),
+        skuCode,
+        sourceLocationId,
+      );
+      const destinationRows = await readRows(
+        transaction,
+        exactBalanceQuery(db, customerCode, skuCode, destinationLocationId),
+      );
+      if (destinationRows.length > 1) {
+        assertSingleBalance(destinationRows, skuCode, destinationLocationId);
+      }
+      const destinationBalance =
+        destinationRows[0] ?? {
+          id: `bal_${digest({
+            customerCode,
+            skuCode,
+            locationId: destinationLocationId,
+          })}`,
+          ref: db
+            .collection(collections.stockBalances)
+            .doc(
+              `bal_${digest({
+                customerCode,
+                skuCode,
+                locationId: destinationLocationId,
+              })}`,
+            ),
+          data: {},
+        };
+      const sourceOnHand = number(sourceBalance.data.qty_on_hand);
+      const sourceReserved = number(sourceBalance.data.qty_reserved);
+      const sourceAvailable = sourceOnHand - sourceReserved;
+      if (sourceAvailable < quantity) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Origem ${sourceLocationId} possui ${sourceAvailable} unidade(s) disponíveis para putaway, mas a tarefa exige ${quantity}.`,
+        );
+      }
+      const destinationOnHand = number(destinationBalance.data.qty_on_hand);
+      const destinationReserved = number(destinationBalance.data.qty_reserved);
+      const sourceAfter = sourceOnHand - quantity;
+      const destinationAfter = destinationOnHand + quantity;
+      const clientItemCode =
+        text(task.client_item_code || sourceBalance.data.client_item_code) ||
+        undefined;
+      const productName =
+        text(task.product_name || sourceBalance.data.product_name) || skuCode;
+      const unitCost = number(task.unit_cost || sourceBalance.data.unit_cost);
+
+      transaction.update(sourceBalance.ref, {
+        qty_on_hand: sourceAfter,
+        qty_available: sourceAfter - sourceReserved,
+        status: sourceAfter > 0 ? "available" : "empty",
+        updated_at: FieldValue.serverTimestamp(),
+      });
+      const destinationPayload = compact({
+        customer_code: customerCode,
+        sku_code: skuCode,
+        client_item_code: clientItemCode,
+        product_name: productName,
+        location_id: destinationLocationId,
+        unit_cost: unitCost || undefined,
+        qty_on_hand: destinationAfter,
+        qty_reserved: destinationReserved,
+        qty_available: destinationAfter - destinationReserved,
+        status: "available",
+        source: "wms_putaway",
+        updated_at: FieldValue.serverTimestamp(),
+      });
+      if (Object.keys(destinationBalance.data).length) {
+        transaction.update(destinationBalance.ref, destinationPayload);
+      } else {
+        transaction.create(
+          destinationBalance.ref,
+          compact({
+            id: destinationBalance.id,
+            ...destinationPayload,
+            created_at: FieldValue.serverTimestamp(),
+          }),
+        );
+      }
+      createMovement(
+        transaction,
+        db,
+        movementId(operationId, "putaway_out"),
+        {
+          type: "SAIDA",
+          quantity,
+          customerCode,
+          skuCode,
+          clientItemCode,
+          productName,
+          locationId: sourceLocationId,
+          beforeQty: sourceOnHand,
+          afterQty: sourceAfter,
+          source: "wms_putaway",
+          occurredAt,
+          entity: {
+            putaway_task_id: id,
+            origem: sourceLocationId,
+            destino: destinationLocationId,
+            movement_kind: "putaway_transfer_out",
+          },
+        },
+        actor,
+      );
+      createMovement(
+        transaction,
+        db,
+        movementId(operationId, "putaway_in"),
+        {
+          type: "ENTRADA",
+          quantity,
+          customerCode,
+          skuCode,
+          clientItemCode,
+          productName,
+          locationId: destinationLocationId,
+          beforeQty: destinationOnHand,
+          afterQty: destinationAfter,
+          source: "wms_putaway",
+          occurredAt,
+          entity: {
+            putaway_task_id: id,
+            origem: sourceLocationId,
+            destino: destinationLocationId,
+            movement_kind: "putaway_transfer_in",
+          },
+        },
+        actor,
+      );
+      Object.assign(taskUpdate, {
+        source_location_id: sourceLocationId,
+        destination_location_id: destinationLocationId,
+        location_id: destinationLocationId,
+        quantity,
+        total_units: quantity,
+        putaway_completed_at: FieldValue.serverTimestamp(),
+      });
+      effects.putaway_qty = quantity;
+      effects.source_location_id = sourceLocationId;
+      effects.destination_location_id = destinationLocationId;
+    }
+
     if (type === "receiving" && targetStatus === "received") {
       let receivedQty = 0;
+      let putawayTasksCreated = 0;
       const receivedBySku = new Map<
         string,
         {
           quantity: number;
           clientItemCode?: string;
           productName?: string;
+          category?: string;
+          barcode?: string;
+          brand?: string;
+          size?: string;
+          color?: string;
+          photoUrls?: string[];
+          productRegistration?: string;
           unitCost?: number;
         }
       >();
       for (const row of inboundItems) {
-        const expectedQty = requiredPositive(row.data.expected_qty, `Quantidade de ${row.id}`);
-        const recordedQty = number(row.data.received_qty);
-        const quantity = recordedQty > 0 ? recordedQty : expectedQty;
+        const expectedQty = requiredPositive(
+          row.data.expected_qty,
+          `Quantidade de ${row.id}`,
+        );
+        const rowStatus = text(row.data.status);
+        const wasConferenced =
+          rowStatus === "checked" ||
+          rowStatus === "divergence" ||
+          Boolean(row.data.checked_at);
+        const quantity = wasConferenced
+          ? number(row.data.received_qty)
+          : expectedQty;
         const skuCode = text(row.data.sku_code);
         const locationId =
-          text(row.data.location_id || task.location_id || task.receiving_location) ||
-          "RECEBIMENTO";
-        const state = balanceStates.get(balanceKey(customerCode, skuCode, locationId));
+          text(
+            row.data.location_id || task.location_id || task.receiving_location,
+          ) || "RECEBIMENTO";
+        const state = balanceStates.get(
+          balanceKey(customerCode, skuCode, locationId),
+        );
         if (!state) {
-          throw new HttpsError("internal", "Estado de saldo ausente no recebimento.");
+          throw new HttpsError(
+            "internal",
+            "Estado de saldo ausente no recebimento.",
+          );
         }
         const beforeQty = state.qtyOnHand;
         state.qtyOnHand += quantity;
@@ -1861,6 +5742,13 @@ export async function advanceWarehouseTaskTransaction(
           quantity: 0,
           clientItemCode: text(row.data.client_item_code) || undefined,
           productName: text(row.data.product_name) || undefined,
+          category: text(row.data.category) || undefined,
+          barcode: text(row.data.barcode) || undefined,
+          brand: text(row.data.brand) || undefined,
+          size: text(row.data.size) || undefined,
+          color: text(row.data.color) || undefined,
+          photoUrls: stringList(row.data.photo_urls),
+          productRegistration: text(row.data.product_registration) || undefined,
           unitCost: number(row.data.unit_cost),
         };
         projected.quantity += quantity;
@@ -1872,6 +5760,46 @@ export async function advanceWarehouseTaskTransaction(
           received_at: FieldValue.serverTimestamp(),
           updated_at: FieldValue.serverTimestamp(),
         });
+        if (quantity <= 0) {
+          continue;
+        }
+        if (locationId.toUpperCase() === "RECEBIMENTO") {
+          const putawayTaskId = `put_${digest({
+            receiptId: id,
+            inboundItemId: row.id,
+            skuCode,
+            locationId,
+          })}`;
+          transaction.set(
+            db.collection(collections.putawayTasks).doc(putawayTaskId),
+            compact({
+              id: putawayTaskId,
+              customer_code: customerCode,
+              receipt_id: id,
+              receipt_number: task.receipt_number,
+              inbound_item_id: row.id,
+              sku_code: skuCode,
+              client_item_code: text(row.data.client_item_code) || undefined,
+              product_name: text(row.data.product_name) || undefined,
+              source_location_id: locationId,
+              location_id: text(row.data.destination_location_id) || undefined,
+              destination_location_id:
+                text(row.data.destination_location_id) || undefined,
+              quantity,
+              total_units: quantity,
+              status: "planned",
+              priority: "normal",
+              title: `Guardar ${text(row.data.product_name) || skuCode}`,
+              next_action: "Informar endereco final e concluir guarda.",
+              source: "wms_receiving",
+              created_from_operation_id: operationId,
+              created_at: FieldValue.serverTimestamp(),
+              updated_at: FieldValue.serverTimestamp(),
+            }),
+            { merge: true },
+          );
+          putawayTasksCreated += 1;
+        }
         createMovement(
           transaction,
           db,
@@ -1902,15 +5830,30 @@ export async function advanceWarehouseTaskTransaction(
         const sourceItem = inboundItems.find(
           (row) =>
             text(row.data.sku_code) === state.skuCode &&
-            (text(row.data.location_id || task.location_id || task.receiving_location) ||
-              "RECEBIMENTO") === state.locationId,
+            (text(
+              row.data.location_id ||
+                task.location_id ||
+                task.receiving_location,
+            ) || "RECEBIMENTO") === state.locationId,
         );
         const balancePayload = compact({
           customer_code: customerCode,
           sku_code: state.skuCode,
           client_item_code:
-            state.row.data.client_item_code ?? sourceItem?.data.client_item_code,
-          product_name: state.row.data.product_name ?? sourceItem?.data.product_name,
+            state.row.data.client_item_code ??
+            sourceItem?.data.client_item_code,
+          product_name:
+            state.row.data.product_name ?? sourceItem?.data.product_name,
+          category: state.row.data.category ?? sourceItem?.data.category,
+          barcode: state.row.data.barcode ?? sourceItem?.data.barcode,
+          brand: state.row.data.brand ?? sourceItem?.data.brand,
+          size: state.row.data.size ?? sourceItem?.data.size,
+          color: state.row.data.color ?? sourceItem?.data.color,
+          photo_urls:
+            state.row.data.photo_urls ?? sourceItem?.data.photo_urls,
+          primary_photo_url:
+            state.row.data.primary_photo_url ??
+            stringList(sourceItem?.data.photo_urls)[0],
           location_id: state.locationId,
           qty_on_hand: state.qtyOnHand,
           qty_reserved: state.qtyReserved,
@@ -1939,9 +5882,72 @@ export async function advanceWarehouseTaskTransaction(
           skuCode,
           clientItemCode: projected.clientItemCode,
           productName: projected.productName,
+          category: projected.category,
+          barcode: projected.barcode,
+          brand: projected.brand,
+          size: projected.size,
+          color: projected.color,
+          photoUrls: projected.photoUrls,
           unitCost: projected.unitCost,
           onHandDelta: projected.quantity,
         });
+        if (
+          projected.productRegistration === "new" &&
+          projected.clientItemCode
+        ) {
+          // Ids e identidades normalizados: precisam bater com os docs
+          // criados por createInboundReceiptTransaction e ser encontráveis
+          // por resolveCatalogAggregateTargets nas baixas futuras.
+          const normalizedClientCode = normalizedIdentity(
+            projected.clientItemCode,
+          );
+          const normalizedSkuCode = normalizedIdentity(skuCode);
+          transaction.set(
+            db
+              .collection(collections.products)
+              .doc(safeDocId(normalizedClientCode)),
+            {
+              id: normalizedClientCode,
+              customer_code: customerCode,
+              cod_cliente: normalizedClientCode,
+              cod_cliente_key: normalizedClientCode,
+              estoque_btg: FieldValue.increment(projected.quantity),
+              custo_total: FieldValue.increment(
+                projected.quantity * number(projected.unitCost),
+              ),
+              updated_at: FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          );
+          transaction.set(
+            db.collection(collections.skus).doc(safeDocId(normalizedSkuCode)),
+            {
+              id: normalizedSkuCode,
+              customer_code: customerCode,
+              cod_btg: normalizedSkuCode,
+              sku_code: normalizedSkuCode,
+              sku_code_key: normalizedSkuCode,
+              cod_cliente: normalizedClientCode,
+              cod_cliente_key: normalizedClientCode,
+              estoque_atual: FieldValue.increment(projected.quantity),
+              estoque_disponivel: FieldValue.increment(projected.quantity),
+              custo_total: FieldValue.increment(
+                projected.quantity * number(projected.unitCost),
+              ),
+              updated_at: FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          );
+        } else {
+          applyCatalogStockAggregates(
+            transaction,
+            taskCatalogTargets.get(skuCode) ?? {},
+            {
+              onHand: projected.quantity,
+              cost: projected.quantity * number(projected.unitCost),
+            },
+          );
+        }
       }
       Object.assign(taskUpdate, {
         qty_received: receivedQty,
@@ -1949,6 +5955,7 @@ export async function advanceWarehouseTaskTransaction(
       });
       effects.received_lines = inboundItems.length;
       effects.received_qty = receivedQty;
+      effects.putaway_tasks_created = putawayTasksCreated || undefined;
       events.push(
         createEvent(
           transaction,
@@ -1962,7 +5969,10 @@ export async function advanceWarehouseTaskTransaction(
             entity_type: "recebimento",
             entity_id: id,
             customer_code: customerCode,
-            payload: { received_qty: receivedQty, movement_count: inboundItems.length },
+            payload: {
+              received_qty: receivedQty,
+              movement_count: inboundItems.length,
+            },
           },
           actor,
         ),
@@ -1989,7 +5999,9 @@ export async function advanceWarehouseTaskTransaction(
 
     if (type === "picking" && targetStatus === "completed") {
       const pickedUnits = pickLines.reduce(
-        (sum, row) => sum + requiredPositive(row.data.qty_to_pick, `Quantidade de ${row.id}`),
+        (sum, row) =>
+          sum +
+          requiredPositive(row.data.qty_to_pick, `Quantidade de ${row.id}`),
         0,
       );
       const reservedUnits = reservations.reduce(
@@ -2008,12 +6020,19 @@ export async function advanceWarehouseTaskTransaction(
         );
       }
       for (const row of pickLines) {
-        transaction.update(row.ref, {
-          qty_picked: number(row.data.qty_to_pick),
-          status: "completed",
-          picked_at: FieldValue.serverTimestamp(),
-          updated_at: FieldValue.serverTimestamp(),
-        });
+        const confirmation = pickingConfirmationsById.get(row.id);
+        const pickedQty = number(confirmation?.qty_picked || row.data.qty_to_pick);
+        transaction.update(
+          row.ref,
+          compact({
+            qty_picked: pickedQty,
+            status: "completed",
+            physical_status: "confirmed",
+            physical_notes: text(confirmation?.notes) || undefined,
+            picked_at: FieldValue.serverTimestamp(),
+            updated_at: FieldValue.serverTimestamp(),
+          }),
+        );
       }
       for (const row of orderItems) {
         transaction.update(row.ref, {
@@ -2066,8 +6085,11 @@ export async function advanceWarehouseTaskTransaction(
         });
       }
       taskUpdate.picked_units = pickedUnits;
+      taskUpdate.physical_line_count = pickLines.length;
+      taskUpdate.picking_confirmed_at = FieldValue.serverTimestamp();
       created.pack_task_id = packTaskId;
       effects.picked_lines = pickLines.length;
+      effects.physical_lines_confirmed = pickLines.length;
       effects.picked_units = pickedUnits;
       events.push(
         createEvent(
@@ -2082,7 +6104,11 @@ export async function advanceWarehouseTaskTransaction(
             entity_type: "tarefa_packing",
             entity_id: packTaskId,
             customer_code: customerCode,
-            payload: { pick_task_id: id, order_id: orderId, picked_units: pickedUnits },
+            payload: {
+              pick_task_id: id,
+              order_id: orderId,
+              picked_units: pickedUnits,
+            },
           },
           actor,
         ),
@@ -2091,16 +6117,26 @@ export async function advanceWarehouseTaskTransaction(
 
     if (type === "packing" && targetStatus === "completed") {
       const packedUnits = orderItems.reduce(
-        (sum, row) => sum + number(row.data.picked_qty || row.data.allocated_qty),
+        (sum, row) =>
+          sum + number(row.data.picked_qty || row.data.allocated_qty),
         0,
       );
       if (packedUnits <= 0) {
-        throw new HttpsError("failed-precondition", "Packing não possui quantidade separada.");
+        throw new HttpsError(
+          "failed-precondition",
+          "Packing não possui quantidade separada.",
+        );
       }
       const packageId = `pkg_${safeDocId(id)}_001`;
       const shipmentId = `ship_${safeDocId(orderId)}`;
-      const orderNumber = task.order_number ?? orderRow?.data.order_number ?? null;
-      const destination = task.destination ?? orderRow?.data.destination ?? "Destino a confirmar";
+      const orderNumber =
+        task.order_number ?? orderRow?.data.order_number ?? null;
+      const destination =
+        task.destination ?? orderRow?.data.destination ?? "Destino a confirmar";
+      const packageCount = Math.max(1, number(operation.package_count) || 1);
+      const volumeLabel = text(operation.volume_label) || "Volume 1";
+      const sealCode = text(operation.seal_code || task.seal_code);
+      const packageNotes = text(operation.package_notes);
       transaction.create(db.collection(collections.packages).doc(packageId), {
         id: packageId,
         customer_code: customerCode,
@@ -2109,7 +6145,12 @@ export async function advanceWarehouseTaskTransaction(
         order_number: orderNumber,
         status: "packed",
         volume_number: 1,
+        volume_label: volumeLabel,
+        seal_code: sealCode,
+        package_notes: packageNotes || null,
         packed_units: packedUnits,
+        package_count: packageCount,
+        closed_by: actorPayload(actor),
         created_at: FieldValue.serverTimestamp(),
         updated_at: FieldValue.serverTimestamp(),
       });
@@ -2121,7 +6162,9 @@ export async function advanceWarehouseTaskTransaction(
         status: "ready_to_dispatch",
         destination,
         total_units: packedUnits,
-        package_count: 1,
+        package_count: packageCount,
+        volume_label: volumeLabel,
+        seal_code: sealCode,
         source: "packing_completed",
         customer_request_id: requestId || null,
         created_at: FieldValue.serverTimestamp(),
@@ -2130,7 +6173,12 @@ export async function advanceWarehouseTaskTransaction(
       orderItems.forEach((row, index) => {
         const quantity = number(row.data.picked_qty || row.data.allocated_qty);
         if (quantity <= 0) return;
-        const line = String(number(row.data.line_number) || index + 1).padStart(2, "0");
+        const confirmation = packingConfirmationsById.get(row.id);
+        const packedQty = number(confirmation?.qty_packed || quantity);
+        const line = String(number(row.data.line_number) || index + 1).padStart(
+          2,
+          "0",
+        );
         const common = compact({
           customer_code: customerCode,
           order_id: orderId,
@@ -2140,37 +6188,50 @@ export async function advanceWarehouseTaskTransaction(
           client_item_code: row.data.client_item_code,
           product_name: row.data.product_name,
           location_id: row.data.location_id,
-          qty_packed: quantity,
+          qty_packed: packedQty,
           created_at: FieldValue.serverTimestamp(),
           updated_at: FieldValue.serverTimestamp(),
         });
         const packageItemId = `pki_${safeDocId(packageId)}_${line}`;
         const shipmentItemId = `shi_${safeDocId(shipmentId)}_${line}`;
-        transaction.update(row.ref, {
+        transaction.update(row.ref, compact({
           status: "packed",
-          packed_qty: quantity,
+          packed_qty: packedQty,
+          packing_physical_status: "confirmed",
+          packing_physical_notes: text(confirmation?.notes) || undefined,
           packed_at: FieldValue.serverTimestamp(),
           updated_at: FieldValue.serverTimestamp(),
-        });
-        transaction.create(db.collection(collections.packageItems).doc(packageItemId), {
-          id: packageItemId,
-          package_id: packageId,
-          shipment_id: shipmentId,
-          status: "packed",
-          ...common,
-        });
-        transaction.create(db.collection(collections.shipmentItems).doc(shipmentItemId), {
-          id: shipmentItemId,
-          package_id: packageId,
-          shipment_id: shipmentId,
-          status: "ready_to_dispatch",
-          qty_shipped: quantity,
-          ...common,
-        });
+        }));
+        transaction.create(
+          db.collection(collections.packageItems).doc(packageItemId),
+          {
+            id: packageItemId,
+            package_id: packageId,
+            shipment_id: shipmentId,
+            status: "packed",
+            ...common,
+          },
+        );
+        transaction.create(
+          db.collection(collections.shipmentItems).doc(shipmentItemId),
+          {
+            id: shipmentItemId,
+            package_id: packageId,
+            shipment_id: shipmentId,
+            status: "ready_to_dispatch",
+            qty_shipped: packedQty,
+            ...common,
+          },
+        );
       });
       Object.assign(taskUpdate, {
         packed_units: packedUnits,
-        package_count: 1,
+        package_count: packageCount,
+        volume_label: volumeLabel,
+        seal_code: sealCode,
+        package_notes: packageNotes || undefined,
+        physical_line_count: orderItems.length,
+        packing_confirmed_at: FieldValue.serverTimestamp(),
         completed_at: FieldValue.serverTimestamp(),
       });
       if (orderRow) {
@@ -2186,8 +6247,12 @@ export async function advanceWarehouseTaskTransaction(
           updated_at: FieldValue.serverTimestamp(),
         });
       }
-      Object.assign(created, { package_id: packageId, shipment_id: shipmentId });
+      Object.assign(created, {
+        package_id: packageId,
+        shipment_id: shipmentId,
+      });
       effects.packed_units = packedUnits;
+      effects.physical_lines_confirmed = orderItems.length;
       events.push(
         createEvent(
           transaction,
@@ -2201,7 +6266,13 @@ export async function advanceWarehouseTaskTransaction(
             entity_type: "expedicao",
             entity_id: shipmentId,
             customer_code: customerCode,
-            payload: { pack_task_id: id, package_id: packageId, packed_units: packedUnits },
+            payload: {
+              pack_task_id: id,
+              package_id: packageId,
+              packed_units: packedUnits,
+              package_count: packageCount,
+              seal_code: sealCode,
+            },
           },
           actor,
         ),
@@ -2209,10 +6280,21 @@ export async function advanceWarehouseTaskTransaction(
     }
 
     if (type === "shipping" && targetStatus === "dispatched") {
-      Object.assign(taskUpdate, { dispatched_at: FieldValue.serverTimestamp() });
+      const carrier = text(operation.carrier || task.carrier);
+      const driverName = text(operation.driver_name || task.driver_name);
+      const vehiclePlate = text(operation.vehicle_plate || task.vehicle_plate);
+      Object.assign(taskUpdate, {
+        carrier,
+        driver_name: driverName || undefined,
+        vehicle_plate: vehiclePlate || undefined,
+        dispatched_at: FieldValue.serverTimestamp(),
+      });
       for (const row of shipmentItems) {
         transaction.update(row.ref, {
           status: "dispatched",
+          carrier,
+          driver_name: driverName || undefined,
+          vehicle_plate: vehiclePlate || undefined,
           dispatched_at: FieldValue.serverTimestamp(),
           updated_at: FieldValue.serverTimestamp(),
         });
@@ -2220,6 +6302,9 @@ export async function advanceWarehouseTaskTransaction(
       for (const row of packages) {
         transaction.update(row.ref, {
           status: "dispatched",
+          carrier,
+          driver_name: driverName || undefined,
+          vehicle_plate: vehiclePlate || undefined,
           dispatched_at: FieldValue.serverTimestamp(),
           updated_at: FieldValue.serverTimestamp(),
         });
@@ -2241,6 +6326,8 @@ export async function advanceWarehouseTaskTransaction(
     }
 
     if (type === "shipping" && targetStatus === "delivered") {
+      const proofReference = text(operation.proof_reference || task.proof_reference);
+      const deliveryNotes = text(operation.delivery_notes || task.delivery_notes);
       const reservationTotal = reservations.reduce(
         (sum, row) =>
           sum +
@@ -2280,8 +6367,14 @@ export async function advanceWarehouseTaskTransaction(
         );
         const skuCode = text(row.data.sku_code);
         const locationId = text(row.data.location_id);
-        const state = balanceStates.get(balanceKey(customerCode, skuCode, locationId));
-        if (!state) throw new HttpsError("internal", "Estado de saldo ausente na expedição.");
+        const state = balanceStates.get(
+          balanceKey(customerCode, skuCode, locationId),
+        );
+        if (!state)
+          throw new HttpsError(
+            "internal",
+            "Estado de saldo ausente na expedição.",
+          );
         if (state.qtyReserved < quantity || state.qtyOnHand < quantity) {
           throw new HttpsError(
             "failed-precondition",
@@ -2353,11 +6446,22 @@ export async function advanceWarehouseTaskTransaction(
           onHandDelta: -projected.quantity,
           reservedDelta: -projected.quantity,
         });
+        applyCatalogStockAggregates(
+          transaction,
+          taskCatalogTargets.get(skuCode) ?? {},
+          {
+            onHand: -projected.quantity,
+            reserved: -projected.quantity,
+            cost: -projected.quantity * number(projected.unitCost),
+          },
+        );
       }
       for (const row of shipmentItems) {
         transaction.update(row.ref, {
           status: "delivered",
           qty_delivered: number(row.data.qty_shipped || row.data.qty_packed),
+          proof_reference: proofReference,
+          delivery_notes: deliveryNotes || undefined,
           delivered_at: FieldValue.serverTimestamp(),
           updated_at: FieldValue.serverTimestamp(),
         });
@@ -2365,6 +6469,7 @@ export async function advanceWarehouseTaskTransaction(
       for (const row of packages) {
         transaction.update(row.ref, {
           status: "delivered",
+          proof_reference: proofReference,
           delivered_at: FieldValue.serverTimestamp(),
           updated_at: FieldValue.serverTimestamp(),
         });
@@ -2396,8 +6501,13 @@ export async function advanceWarehouseTaskTransaction(
         );
       }
       Object.assign(taskUpdate, { delivered_at: FieldValue.serverTimestamp() });
+      Object.assign(taskUpdate, {
+        proof_reference: proofReference,
+        delivery_notes: deliveryNotes || undefined,
+      });
       effects.stock_consumed = consumedQty;
       effects.movement_count = reservations.length;
+      effects.proof_reference = proofReference;
       events.push(
         createEvent(
           transaction,
@@ -2411,7 +6521,10 @@ export async function advanceWarehouseTaskTransaction(
             entity_type: "expedicao",
             entity_id: id,
             customer_code: customerCode,
-            payload: { stock_consumed: consumedQty, movement_count: reservations.length },
+            payload: {
+              stock_consumed: consumedQty,
+              movement_count: reservations.length,
+            },
           },
           actor,
         ),
@@ -2419,50 +6532,84 @@ export async function advanceWarehouseTaskTransaction(
     }
 
     if (orderId) {
-      const trackingByStep: Record<
-        string,
-        { status: string; label: string }
-      > = {
-        "picking:in_progress": {
-          status: "separating",
-          label: "Em separação",
-        },
-        "picking:completed": {
-          status: "separated",
-          label: "Separação concluída",
-        },
-        "packing:in_progress": {
-          status: "checking",
-          label: "Em conferência",
-        },
-        "packing:completed": {
-          status: "ready_to_dispatch",
-          label: "Pronto para expedição",
-        },
-        "shipping:dispatched": {
-          status: "dispatched",
-          label: "Saiu para entrega",
-        },
-        "shipping:delivered": {
-          status: "delivered",
-          label: "Entregue",
-        },
-      };
+      const trackingByStep: Record<string, { status: string; label: string }> =
+        {
+          "picking:in_progress": {
+            status: "separating",
+            label: "Em separação",
+          },
+          "picking:completed": {
+            status: "separated",
+            label: "Separação concluída",
+          },
+          "packing:in_progress": {
+            status: "checking",
+            label: "Em conferência",
+          },
+          "packing:completed": {
+            status: "ready_to_dispatch",
+            label: "Pronto para expedição",
+          },
+          "shipping:dispatched": {
+            status: "dispatched",
+            label: "Saiu para entrega",
+          },
+          "shipping:delivered": {
+            status: "delivered",
+            label: "Entregue",
+          },
+        };
       const tracking = trackingByStep[`${type}:${targetStatus}`];
       if (tracking) {
-        updateClientTracking(transaction, db, orderId, {
+        const trackingPayload = compact({
           customer_code: customerCode,
           order_number: task.order_number ?? orderRow?.data.order_number,
           status: tracking.status,
           status_label: tracking.label,
           destination: task.destination ?? orderRow?.data.destination,
+          package_count:
+            type === "packing" && targetStatus === "completed"
+              ? taskUpdate.package_count
+              : task.package_count,
+          seal_code:
+            type === "packing" && targetStatus === "completed"
+              ? taskUpdate.seal_code
+              : task.seal_code,
+          carrier:
+            type === "shipping" && targetStatus === "dispatched"
+              ? taskUpdate.carrier
+              : task.carrier,
+          driver_name:
+            type === "shipping" && targetStatus === "dispatched"
+              ? taskUpdate.driver_name
+              : task.driver_name,
+          vehicle_plate:
+            type === "shipping" && targetStatus === "dispatched"
+              ? taskUpdate.vehicle_plate
+              : task.vehicle_plate,
+          proof_reference:
+            type === "shipping" && targetStatus === "delivered"
+              ? taskUpdate.proof_reference
+              : task.proof_reference,
+          delivery_notes:
+            type === "shipping" && targetStatus === "delivered"
+              ? taskUpdate.delivery_notes
+              : task.delivery_notes,
           timeline: FieldValue.arrayUnion(
-            clientTimelineEntry(tracking.status, tracking.label, actor, occurredAt),
+            clientTimelineEntry(
+              tracking.status,
+              tracking.label,
+              actor,
+              occurredAt,
+            ),
           ),
           dispatched_at:
             tracking.status === "dispatched" ? occurredAt : undefined,
           delivered_at:
             tracking.status === "delivered" ? occurredAt : undefined,
+        });
+        updateClientTracking(transaction, db, orderId, {
+          ...trackingPayload,
         });
         if (requestRow) {
           transaction.set(

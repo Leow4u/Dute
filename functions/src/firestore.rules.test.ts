@@ -92,6 +92,38 @@ async function seed() {
       qty_available: 5,
       published_at: new Date(),
     });
+    await setDoc(doc(database, "products", "product-a"), {
+      id: "product-a",
+      customer_code: CUSTOMER_A,
+      cod_cliente: "BTG-TEST-1",
+      produto: "Produto real de teste",
+      status: "active",
+    });
+    await setDoc(doc(database, "billing_config", "default"), {
+      ad_valorem_rate: 0.005,
+      cliente_nome: CUSTOMER_A,
+    });
+    await setDoc(
+      doc(database, "billing_operational_snapshots", "2026-07"),
+      {
+        customer_code: CUSTOMER_A,
+        competencia: "2026-07",
+        mode: "baseline",
+        usage: { custo_estoque: 1000, entradas_pecas: 10 },
+      },
+    );
+    await setDoc(doc(database, "ai_agent_inbox", "alert-a"), {
+      status: "open",
+      entity_type: "estoque",
+      customer_code: CUSTOMER_A,
+    });
+    await setDoc(doc(database, "invites", "invite-a"), {
+      email: "invited@example.com",
+      role: "cliente",
+      customer_code: CUSTOMER_A,
+      status: "pending",
+      created_by: "owner-a",
+    });
   });
 }
 
@@ -151,6 +183,62 @@ describe("ledger e mutações críticas", () => {
       setDoc(doc(database, "pick_tasks", "pick-browser"), {
         customer_code: CUSTOMER_A,
         status: "planned",
+      }),
+    );
+  });
+
+  it("bloqueia catálogo, faturamento, alertas e RBAC fora das Cloud Functions", async () => {
+    const database = testEnvironment
+      .authenticatedContext("owner-a", { email: "owner-a@example.com" })
+      .firestore();
+
+    await assertFails(
+      updateDoc(doc(database, "products", "product-a"), {
+        produto: "Alteração direta indevida",
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(database, "billing_config", "default"), {
+        ad_valorem_rate: 0.9,
+      }),
+    );
+    await assertSucceeds(
+      getDoc(
+        doc(database, "billing_operational_snapshots", "2026-07"),
+      ),
+    );
+    await assertFails(
+      updateDoc(
+        doc(database, "billing_operational_snapshots", "2026-07"),
+        { mode: "replace" },
+      ),
+    );
+    await assertFails(
+      updateDoc(doc(database, "ai_agent_inbox", "alert-a"), {
+        status: "resolved",
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(database, "users", "ops-a"), { role: "owner" }),
+    );
+    await assertFails(
+      setDoc(doc(database, "invites", "browser-invite"), {
+        email: "browser@example.com",
+        role: "owner",
+        status: "pending",
+      }),
+    );
+  });
+
+  it("mantém somente a aceitação do próprio convite disponível antes do perfil", async () => {
+    const database = testEnvironment
+      .authenticatedContext("invited-user", { email: "invited@example.com" })
+      .firestore();
+    await assertSucceeds(
+      updateDoc(doc(database, "invites", "invite-a"), {
+        status: "used",
+        used_by: "invited-user",
+        used_at: new Date(),
       }),
     );
   });
