@@ -853,7 +853,14 @@ service cloud.firestore {
     }
 
     match /client_documents/{documentId} {
-      allow read: if canReadDocumentInternally() || isOwnProjection();
+      // isOwnProjection() confere apenas customer_code — sem checar
+      // visibilidade, arquivar um documento nao revogava o acesso do cliente.
+      allow read: if canReadDocumentInternally()
+        || (
+          isOwnProjection()
+          && resource.data.keys().hasAll(['customer_visible'])
+          && resource.data.customer_visible == true
+        );
       allow create, update, delete: if false;
     }
 

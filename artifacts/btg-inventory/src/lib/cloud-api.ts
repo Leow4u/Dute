@@ -1444,8 +1444,11 @@ async function getClientOverview() {
   const customerAlerts = inbox.filter((item) =>
     matchesCustomer(item, customerCode),
   );
-  const customerDocuments = documents.filter((item) =>
-    matchesCustomer(item, customerCode),
+  // Defesa em profundidade: a regra já barra a leitura de arquivados, mas a
+  // tela não deve renderizar projeção obsoleta se algo escapar.
+  const customerDocuments = documents.filter(
+    (item) =>
+      matchesCustomer(item, customerCode) && item.customer_visible !== false,
   );
 
   const totalPieces = balances.reduce<number>(

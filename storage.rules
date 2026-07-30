@@ -30,16 +30,24 @@ service firebase.storage {
         ];
     }
 
-    match /agent-knowledge/{allPaths=**} {
-      allow read, write: if isInternal();
+    function canWritePhotos() {
+      return hasProfile()
+        && profileRole() in ['owner', 'admin', 'interno', 'wms'];
     }
 
-    match /operational-documents/{allPaths=**} {
-      allow read, write: if isInternal();
-    }
-
+    // Unico prefixo tocado pelo SDK do browser
+    // (features/warehouse-ops/shared.ts -> uploadBytes).
+    // operational-documents e agent-knowledge nao passam por estas regras:
+    // upload via signed URL v4, download via token do Storage e leitura
+    // server-side pelo Admin SDK. Conceder acesso a eles aqui so ampliaria
+    // superficie sem habilitar nenhum fluxo real.
     match /product-photos/{allPaths=**} {
-      allow read, write: if isInternal();
+      allow read: if isInternal();
+      allow create: if canWritePhotos()
+        && request.resource.size < 15 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      // write inclui delete: nenhum fluxo do produto apaga ou sobrescreve foto.
+      allow update, delete: if false;
     }
 
     match /{allPaths=**} {

@@ -3872,17 +3872,6 @@ function managedWritePayload(
 
   if (input.resource === "documents") {
     const data = allowedFields(input.data, DOCUMENT_WRITE_FIELDS);
-    if (input.action === "archive") {
-      return {
-        status: "archived",
-        archived: true,
-        customer_visible: false,
-        visibility: "internal",
-        archived_by: profile.uid,
-        archived_at: FieldValue.serverTimestamp(),
-        updated_at: FieldValue.serverTimestamp(),
-      };
-    }
 
     const beforeCustomerCode = String(before.customer_code ?? "").trim();
     const requestedCustomerCode = String(
@@ -3904,12 +3893,43 @@ function managedWritePayload(
       data.entity_type ?? before.entity_type ?? "operacional",
     ).trim();
 
+    // Arquivar grava customer_visible/visibility — exatamente os campos que
+    // publicationFieldsUntouched() proíbe o wms de tocar. Sem esta checagem o
+    // caminho de arquivamento saía antes das guardas de papel e despublicava
+    // um documento do portal pelo Admin SDK, contornando as regras.
+    if (input.action === "archive") {
+      const wasPublished =
+        before.customer_visible === true ||
+        String(before.visibility ?? "") === "client";
+      if (isWms && wasPublished) {
+        throw new HttpsError(
+          "permission-denied",
+          "WMS nao pode arquivar um documento publicado para o cliente.",
+        );
+      }
+      if (isFinance && !isBillingDoc(beforeEntityType)) {
+        throw new HttpsError(
+          "permission-denied",
+          "Financeiro so pode arquivar documentos de faturamento.",
+        );
+      }
+      return {
+        status: "archived",
+        archived: true,
+        customer_visible: false,
+        visibility: "internal",
+        archived_by: profile.uid,
+        archived_at: FieldValue.serverTimestamp(),
+        updated_at: FieldValue.serverTimestamp(),
+      };
+    }
+
     // Mirror firestore.rules: wms cannot change customer_code or publication fields.
     if (isWms) {
       if (
         input.action === "update" &&
-        beforeCustomerCode &&
-        requestedCustomerCode !== beforeCustomerCode
+        data.customer_code !== undefined &&
+        String(data.customer_code).trim() !== beforeCustomerCode
       ) {
         throw new HttpsError(
           "permission-denied",
@@ -3947,8 +3967,8 @@ function managedWritePayload(
       }
       if (
         input.action === "update" &&
-        beforeCustomerCode &&
-        requestedCustomerCode !== beforeCustomerCode
+        data.customer_code !== undefined &&
+        String(data.customer_code).trim() !== beforeCustomerCode
       ) {
         throw new HttpsError(
           "permission-denied",
@@ -4430,6 +4450,12 @@ export const mutateManagedEntity = onCall(async (request) => {
             archived: true,
             customer_visible: false,
             visibility: "internal",
+            // merge:true preservaria o link de download da projeção anterior;
+            // arquivar precisa revogar o conteúdo, não só marcar o status.
+            file_url: FieldValue.delete(),
+            external_url: FieldValue.delete(),
+            storage_path: FieldValue.delete(),
+            content_excerpt: FieldValue.delete(),
             updated_at: FieldValue.serverTimestamp(),
           },
           { merge: true },

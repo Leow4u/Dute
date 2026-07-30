@@ -16,7 +16,15 @@ import {
   Redirect,
 } from "wouter";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import {
+  Component,
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
@@ -25,8 +33,40 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import AppLayout from "./components/layout/app-layout";
-import type { WarehouseOpsModuleKey } from "./pages/warehouse-ops";
+import type { WarehouseOpsModuleKey } from "./lib/warehouse-ops/model";
 import NotFound from "./pages/not-found";
+
+/**
+ * Um deploy troca o hash de todos os chunks. Com registerType "autoUpdate" +
+ * skipWaiting, uma aba aberta desde antes do deploy pede um chunk que não
+ * existe mais ao navegar — o import dinâmico rejeita, passa por cima do
+ * Suspense e a tela fica branca. Aqui isso vira um convite a recarregar.
+ */
+class ChunkErrorBoundary extends Component<
+  { children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+        <p>
+          Nao foi possivel carregar esta tela. Uma nova versao pode ter sido
+          publicada.
+        </p>
+        <Button type="button" onClick={() => window.location.reload()}>
+          Recarregar
+        </Button>
+      </div>
+    );
+  }
+}
 
 const LandingPage = lazy(() => import("./pages/landing"));
 const Dashboard = lazy(() => import("./pages/dashboard"));
@@ -830,15 +870,17 @@ function ProtectedRoute({
         return (
           <RoleGate appRoles={appRoles} profileRoles={profileRoles}>
             <AppLayout>
-              <Suspense
-                fallback={
-                  <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
-                    Carregando...
-                  </div>
-                }
-              >
-                <Component params={params} />
-              </Suspense>
+              <ChunkErrorBoundary>
+                <Suspense
+                  fallback={
+                    <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
+                      Carregando...
+                    </div>
+                  }
+                >
+                  <Component params={params} />
+                </Suspense>
+              </ChunkErrorBoundary>
             </AppLayout>
           </RoleGate>
         );
@@ -854,26 +896,28 @@ function AppRoutes() {
         <QueryClientCacheInvalidator />
         <RealtimeSyncBridge />
         <TooltipProvider>
-          <Suspense
-            fallback={
-              <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
-                Carregando...
-              </div>
-            }
-          >
-            <Switch>
-              <Route path="/" component={HomeRedirect} />
-              <Route path="/sign-in/*?" component={SignInPage} />
-              <Route path="/convite/*?" component={SignUpPage} />
-              <Route path="/sign-up/*?" component={SignUpPage} />
+          <ChunkErrorBoundary>
+            <Suspense
+              fallback={
+                <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+                  Carregando...
+                </div>
+              }
+            >
+              <Switch>
+                <Route path="/" component={HomeRedirect} />
+                <Route path="/sign-in/*?" component={SignInPage} />
+                <Route path="/convite/*?" component={SignUpPage} />
+                <Route path="/sign-up/*?" component={SignUpPage} />
 
-              {PROTECTED_ROUTES.map((route) => (
-                <ProtectedRoute key={route.path} {...route} />
-              ))}
+                {PROTECTED_ROUTES.map((route) => (
+                  <ProtectedRoute key={route.path} {...route} />
+                ))}
 
-              <Route component={NotFound} />
-            </Switch>
-          </Suspense>
+                <Route component={NotFound} />
+              </Switch>
+            </Suspense>
+          </ChunkErrorBoundary>
           <Toaster />
         </TooltipProvider>
       </QueryClientProvider>
