@@ -219,7 +219,6 @@ export default function Skus() {
                   <th className="px-5 py-4 font-medium">Cod. cliente</th>
                   <th className="px-4 py-4 font-medium">SKU interno</th>
                   <th className="px-4 py-3 font-medium">Detalhes do Produto</th>
-                  <th className="px-4 py-3 font-medium text-center">Tipo</th>
                   <th className="px-4 py-3 font-medium text-center">Status</th>
                   <th className="px-4 py-3 font-medium">Localização</th>
                   <th className="px-4 py-3 font-medium text-right">Estoque Atual</th>
@@ -229,11 +228,11 @@ export default function Skus() {
               <tbody className="divide-y divide-border">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Carregando SKUs...</td>
+                    <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Carregando SKUs...</td>
                   </tr>
                 ) : data?.items?.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Nenhum SKU encontrado.</td>
+                    <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Nenhum SKU encontrado.</td>
                   </tr>
                 ) : (
                   filteredSkus.map((sku: Sku) => {
@@ -256,20 +255,18 @@ export default function Skus() {
                             {sku.cor || "-"} / {sku.tamanho || "-"}
                           </div>
                         </td>
-                        <td className="px-4 py-2 text-center">
-                          <Badge variant="outline" className="font-normal text-xs bg-gray-50">
-                            {sku.estoque_tipo || "N/A"}
-                          </Badge>
-                        </td>
+                        {/* Coluna "Tipo" (estoque_tipo) removida: era campo
+                            exclusivo da planilha Excel — o fluxo nativo nunca
+                            o preenche e o histórico foi zerado no go-live.
+                            Status sem estado legado = OK (saldo saudável). */}
                         <td className="px-4 py-2 text-center">
                           <Badge variant="secondary" className={
                             current <= 0 ? 'bg-rose-50 text-rose-700' :
                             isLow ? 'bg-amber-50 text-amber-700' :
-                            sku.estado === 'NOVO' ? 'bg-primary/10 text-primary' :
                             sku.estado === 'AVARIADO' ? 'bg-rose-50 text-rose-700' :
-                            'bg-amber-50 text-amber-700'
+                            'bg-primary/10 text-primary'
                           }>
-                            {current <= 0 ? "ZERADO" : isLow ? "BAIXO" : sku.estado || "N/A"}
+                            {current <= 0 ? "ZERADO" : isLow ? "BAIXO" : sku.estado || "OK"}
                           </Badge>
                         </td>
                         <td className="px-4 py-2">
