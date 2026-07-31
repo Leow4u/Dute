@@ -176,3 +176,52 @@ Durante a preparação dos testes, o papel de `financeiro@dutelog.com.br` (Fláv
 2. **Convite e alteração de papel convivem na mesma tela** com mecanismos distintos, tornando fácil alterar um usuário existente quando a intenção era criar outro.
 
 > Neste caso a troca foi deliberada, para permitir a auditoria das visões. Reverter para `financeiro` ao final.
+
+---
+
+## Anexo C — Visão do coordenador (papel `interno`), verificada em produção
+
+Percorrida em 30/07 com a conta de teste no papel `interno` — a visão do Manoel, coordenador do Rafael.
+
+### Achado principal: coordenador e operador veem exatamente o mesmo menu
+
+| Módulo | `owner` | **`interno`** | **`wms`** | `financeiro` | `suporte` |
+|---|:---:|:---:|:---:|:---:|:---:|
+| Torre de Controle | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Solicitações | ✅ | ✅ | ✅ | — | ✅ |
+| WMS | ✅ | ✅ | ✅ | — | ✅ |
+| Estoque | ✅ | ✅ | ✅ | — | ✅ |
+| Faturamento | ✅ | — | — | ✅ | — |
+| Documentos | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Agent Dute | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Suporte | ✅ | — | — | — | ✅ |
+| Administração | ✅ | — | — | — | — |
+
+As colunas `interno` e `wms` são **idênticas**. O coordenador não tem nenhuma superfície própria — nada que diga "estas são as decisões que dependem de você".
+
+### Mas no backend eles são diferentes
+
+O `interno` tem dois poderes exclusivos que o `wms` não tem:
+
+| Capacidade | Onde é imposta | `interno` | `wms` |
+|---|---|:---:|:---:|
+| Aprovar/rejeitar solicitações (`decideCustomerRequest`) | `requireOperationsCoordinator` (index.ts:1264) | ✅ | ❌ |
+| Criar/editar produtos e SKUs (`mutateManagedEntity`) | `requireCatalogWrite` (index.ts:1255) | ✅ | ❌ |
+| Escrever em coleções operacionais | `canCoordinateOperations()` (firestore.rules:69) | ✅ | ❌ |
+
+### O problema: a interface não reflete nada disso
+
+Nenhuma página do app consulta o papel do usuário para habilitar ou esconder ações — `grep` por `useRole`/`role ===` em `src/pages/*.tsx` não retorna **nenhum** resultado.
+
+Consequência prática: o Rafael (operador) vê o botão **"Adicionar Produto"**, clica, preenche o formulário inteiro — e recebe `"Erro ao criar produto"` (products.tsx:275), uma mensagem genérica que não explica que **ele não tem permissão**. O trabalho é perdido e a causa fica obscura.
+
+**Correção sugerida:** esconder ou desabilitar ações que o papel não pode executar, e quando o servidor negar, exibir a mensagem real (`permission-denied` já vem com texto explicativo das Cloud Functions — hoje é descartada pelo `onError`).
+
+### Inconsistência: regras e menu discordam sobre Faturamento
+
+- `firestore.rules` → `canReadBilling()` **inclui** `interno`
+- `modules.ts` → `FINANCE_ROLES` **exclui** `interno`
+
+Verificado em produção: a rota `/faturamento` redireciona o coordenador para `/dashboard`, mas `GET /api/billing/periods/2026-07` responde **200 com os dados completos**.
+
+Não é falha de segurança (a leitura é intencionalmente permitida), mas é indefinição de produto: **o coordenador deve ou não acompanhar o faturamento?** As duas camadas precisam concordar.
