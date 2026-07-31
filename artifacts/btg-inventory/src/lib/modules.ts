@@ -52,6 +52,26 @@ export const OPERATIONS_ROLES: ProfileRole[] = [
 ];
 export const SUPPORT_ROLES: ProfileRole[] = ["owner", "admin", "suporte"];
 
+/**
+ * Poda da escala real (31/07/2026): o operador wms vive na bancada WMS.
+ * Torre de Controle, Triagem de solicitações e Catálogo são superfícies de
+ * coordenação — fora do menu (e das rotas) do operador. A consulta física
+ * dele é a aba Estoque da própria bancada.
+ */
+export const TOWER_NAV_ROLES: ProfileRole[] = [
+  "owner",
+  "admin",
+  "interno",
+  "financeiro",
+  "suporte",
+];
+export const COORDINATION_NAV_ROLES: ProfileRole[] = [
+  "owner",
+  "admin",
+  "interno",
+  "suporte",
+];
+
 export function normalizeProfileRole(role: unknown): ProfileRole | null {
   return role === "owner" ||
     role === "admin" ||
@@ -139,14 +159,14 @@ export const APP_MODULES: AppModule[] = [
     label: "Torre de Controle",
     audience: "internal",
     icon: LayoutDashboard,
-    roles: INTERNAL_ROLES,
+    roles: TOWER_NAV_ROLES,
     routes: [
       navRoute({
         id: "control-overview",
         label: "Visão geral",
         href: "/dashboard",
         icon: LayoutDashboard,
-        roles: INTERNAL_ROLES,
+        roles: TOWER_NAV_ROLES,
         exact: true,
       }),
       navRoute({
@@ -154,21 +174,21 @@ export const APP_MODULES: AppModule[] = [
         label: "Relatórios",
         href: "/reports",
         icon: BarChart3,
-        roles: INTERNAL_ROLES,
+        roles: TOWER_NAV_ROLES,
       }),
       navRoute({
         id: "ai-agent-panel",
         label: "Agent Dute",
         href: "/agente",
         icon: BrainCircuit,
-        roles: INTERNAL_ROLES,
+        roles: TOWER_NAV_ROLES,
       }),
       navRoute({
         id: "ai-agent-knowledge",
         label: "Conhecimento",
         href: "/agente/conhecimento",
         icon: FileText,
-        roles: INTERNAL_ROLES,
+        roles: TOWER_NAV_ROLES,
       }),
       navRoute({
         id: "support-observability",
@@ -184,14 +204,14 @@ export const APP_MODULES: AppModule[] = [
     label: "Solicitações",
     audience: "internal",
     icon: Inbox,
-    roles: OPERATIONS_ROLES,
+    roles: COORDINATION_NAV_ROLES,
     routes: [
       navRoute({
         id: "request-triage",
         label: "Triagem",
         href: "/solicitacoes",
         icon: ClipboardList,
-        roles: OPERATIONS_ROLES,
+        roles: COORDINATION_NAV_ROLES,
       }),
     ],
   }),
@@ -220,7 +240,7 @@ export const APP_MODULES: AppModule[] = [
     label: "Estoque",
     audience: "internal",
     icon: PackageSearch,
-    roles: WMS_ROLES,
+    roles: COORDINATION_NAV_ROLES,
     routes: [
       // Produtos e SKUs eram duas visões do mesmo catálogo; o Mapa do
       // armazém é um pivô da coluna Localização. Viraram abas de /catalogo.
@@ -229,21 +249,21 @@ export const APP_MODULES: AppModule[] = [
         label: "Catálogo",
         href: "/catalogo",
         icon: PackageSearch,
-        roles: WMS_ROLES,
+        roles: COORDINATION_NAV_ROLES,
       }),
       navRoute({
         id: "inventory-movements",
         label: "Movimentações",
         href: "/movements",
         icon: ArrowRightLeft,
-        roles: WMS_ROLES,
+        roles: COORDINATION_NAV_ROLES,
       }),
       navRoute({
         id: "inventory-orders",
         label: "Pedidos",
         href: "/orders",
         icon: ShoppingCart,
-        roles: OPERATIONS_ROLES,
+        roles: COORDINATION_NAV_ROLES,
       }),
     ],
   }),
@@ -337,16 +357,18 @@ export const APP_MODULES: AppModule[] = [
       }),
     ],
   }),
+  // "Avisar chegada" fala a língua do fluxo real: a Cristiane comprou,
+  // manda entregar no galpão e avisa; o Rafael recebe e confere.
   appModule({
     id: "client-requests",
-    label: "Recebimentos",
+    label: "Avisar chegada",
     audience: "client",
     icon: Inbox,
     roles: CLIENT_ROLES,
     routes: [
       navRoute({
         id: "client-request-list",
-        label: "Recebimentos",
+        label: "Avisar chegada",
         href: "/portal/recebimentos",
         icon: PackagePlus,
         roles: CLIENT_ROLES,

@@ -1340,8 +1340,7 @@ export default function WarehouseOps({
                 Bancada WMS Dutelog
               </h1>
               <p className="mt-1 text-sm text-muted-foreground">
-                Operação BTG em Recebimento, Qualidade, Putaway, Picking,
-                Packing, Expedição e Exceções.
+                Receba, confira e libere para o estoque BTG.
               </p>
             </div>
           </div>
@@ -1381,8 +1380,7 @@ export default function WarehouseOps({
               Bancada WMS Dutelog
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Operação BTG em Recebimento, Qualidade, Putaway, Picking,
-              Packing, Expedição e Exceções.
+              Receba, confira e libere para o estoque BTG.
             </p>
           </div>
         </div>

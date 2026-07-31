@@ -102,6 +102,8 @@ export type InventoryItem = {
   location_id?: string;
   location?: string;
   localizacao?: string;
+  primary_photo_url?: string | null;
+  photo_urls?: string[];
 };
 
 export type BillingSummary = {
@@ -1131,6 +1133,13 @@ export function inventoryItemReserved(item: InventoryItem) {
 
 export function inventoryItemValue(item: InventoryItem) {
   return firstNumber(item.total_value, item.total_cost, item.value);
+}
+
+export function inventoryItemPhoto(item: InventoryItem) {
+  const primary = item.primary_photo_url;
+  if (typeof primary === "string" && primary.trim()) return primary;
+  const first = item.photo_urls?.[0];
+  return typeof first === "string" && first.trim() ? first : null;
 }
 
 export function categoryLabel(category: InventoryCategory) {

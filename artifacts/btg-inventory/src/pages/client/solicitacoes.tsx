@@ -50,8 +50,8 @@ export function ClienteSolicitacoes() {
           <ClientModuleShell
             overview={overview}
             eyebrow="Entregas de fornecedores"
-            title="Recebimentos"
-            description="Avise o que está a caminho. O estoque só muda depois da conferência física da Dutelog."
+            title="Avisar chegada"
+            description="Comprou algo novo? Avise o que está a caminho do galpão. O estoque só muda depois da conferência física da Dutelog."
             icon={PackagePlus}
           >
             {creating ? (

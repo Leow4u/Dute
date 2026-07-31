@@ -1530,6 +1530,10 @@ async function getClientOverview() {
       total_value: Number(item.total_cost ?? 0),
       total_cost: Number(item.total_cost ?? 0),
       unit_cost: Number(item.unit_cost ?? 0),
+      // Fotos tiradas pelo operador na entrada/contagem — a projeção já as
+      // carrega; sem repassá-las o portal só conseguia mostrar placeholder.
+      primary_photo_url: item.primary_photo_url ?? item.photo_urls?.[0] ?? null,
+      photo_urls: Array.isArray(item.photo_urls) ? item.photo_urls : [],
     }));
   const topItems = stockItems.slice(0, 8);
 

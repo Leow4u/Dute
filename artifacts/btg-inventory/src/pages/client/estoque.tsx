@@ -55,9 +55,11 @@ import {
   inventoryItemClientCode,
   inventoryItemName,
   inventoryItemReserved,
+  inventoryItemPhoto,
   inventoryItemSku,
   inventoryItemTotal,
   inventoryItemValue,
+  formatMoney,
   normalizeSlug,
   type CreateClientRequestItem,
   type CreateClientRequestPayload,
@@ -80,6 +82,7 @@ type StockProduct = {
   reserved: number;
   total: number;
   value: number;
+  photoUrl: string | null;
   sources: InventoryItem[];
 };
 
@@ -424,7 +427,7 @@ export function ClienteEstoque() {
             overview={overview}
             eyebrow="Estoque armazenado"
             title="Estoque"
-            description="Consulte a disponibilidade dos seus produtos e monte pedidos de abastecimento."
+            description="Seus produtos armazenados na Dutelog: disponibilidade, valor de custo e pedidos de abastecimento. Os valores mostram o custo do material que você já adquiriu — pedir aqui não gera compra nem cobrança."
             icon={Box}
             className="max-w-[1720px]"
           >
@@ -710,17 +713,38 @@ function MarketplaceToolbar({
           ))}
         </div>
 
+        {/* Poucas categorias (vestuário, mobiliário...) merecem chips à
+            vista, não um dropdown; acima de 6 volta o seletor compacto. */}
+        {categories.length <= 6 ? (
+          <div
+            role="group"
+            aria-label="Filtrar por categoria"
+            className="-mx-1 flex min-w-0 items-center gap-2 overflow-x-auto px-1 pb-1 xl:pb-0"
+          >
+            {categories.map((category) => (
+              <FilterChip
+                key={category.value}
+                active={categoryFilter === category.value}
+                label={`${category.label} (${formatNumber(category.count)})`}
+                onClick={() => onCategoryFilterChange(category.value)}
+              />
+            ))}
+          </div>
+        ) : null}
+
         <div className="flex flex-wrap items-center gap-2">
-          <CatalogSelect
-            ariaLabel="Filtrar por categoria"
-            icon={SlidersHorizontal}
-            value={categoryFilter}
-            onChange={onCategoryFilterChange}
-            options={categories.map((category) => ({
-              value: category.value,
-              label: `${category.label} (${formatNumber(category.count)})`,
-            }))}
-          />
+          {categories.length > 6 ? (
+            <CatalogSelect
+              ariaLabel="Filtrar por categoria"
+              icon={SlidersHorizontal}
+              value={categoryFilter}
+              onChange={onCategoryFilterChange}
+              options={categories.map((category) => ({
+                value: category.value,
+                label: `${category.label} (${formatNumber(category.count)})`,
+              }))}
+            />
+          ) : null}
           <CatalogSelect
             ariaLabel="Ordenar produtos"
             icon={ArrowDownWideNarrow}
@@ -865,6 +889,7 @@ function StockList({
             <TableHead className="w-[150px]">Categoria</TableHead>
             <TableHead className="text-right">Disponivel</TableHead>
             <TableHead className="text-right">Reservado</TableHead>
+            <TableHead className="text-right">Valor em estoque</TableHead>
             <TableHead className="w-[270px] text-right">Pedido</TableHead>
           </TableRow>
         </TableHeader>
@@ -931,6 +956,12 @@ function StockList({
                 </TableCell>
                 <TableCell className="text-right text-muted-foreground">
                   {formatNumber(product.reserved)}
+                </TableCell>
+                <TableCell
+                  className="text-right text-muted-foreground"
+                  title="Custo do material que você já adquiriu — não é preço de venda."
+                >
+                  {formatMoney(product.value)}
                 </TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-2">
@@ -1125,6 +1156,17 @@ function StockCardGrid({
                   <p className="text-muted-foreground">Reservado</p>
                   <p className="mt-0.5 font-medium text-foreground">
                     {formatNumber(product.reserved)}
+                  </p>
+                </div>
+                <div className="col-span-2">
+                  <p
+                    className="text-muted-foreground"
+                    title="Custo do material que você já adquiriu — não é preço de venda."
+                  >
+                    Valor em estoque
+                  </p>
+                  <p className="mt-0.5 font-medium text-foreground">
+                    {formatMoney(product.value)}
                   </p>
                 </div>
               </div>
@@ -1412,6 +1454,10 @@ function ProductDetailPanel({
           <StockFact label="Reservado" value={formatNumber(product.reserved)} />
           <StockFact label="Total fisico" value={formatNumber(product.total)} />
           <StockFact
+            label="Valor em estoque (custo)"
+            value={formatMoney(product.value)}
+          />
+          <StockFact
             label="No pedido"
             value={formatNumber(cart[product.key] ?? 0)}
           />
@@ -1472,6 +1518,38 @@ function ProductVisual({
   compact?: boolean;
 }) {
   const initials = product.category.slice(0, 2).toUpperCase();
+
+  // Foto real tirada pelo operador na entrada; sem foto, mantém o
+  // placeholder atual.
+  if (product.photoUrl) {
+    return (
+      <div
+        className={cn(
+          "relative overflow-hidden border-b border-border bg-[#F7F7F5]",
+          large ? "rounded-[24px] border border-border" : "",
+        )}
+      >
+        <img
+          src={product.photoUrl}
+          alt={product.name}
+          loading="lazy"
+          className={cn(
+            "w-full object-cover",
+            large
+              ? "min-h-[260px] max-h-[320px]"
+              : compact
+                ? "h-[104px]"
+                : "h-[170px]",
+          )}
+        />
+        <div
+          className={cn("absolute", compact ? "left-3 top-3" : "left-4 top-4")}
+        >
+          <StockBadge status={status} compact={compact} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -1685,7 +1763,7 @@ function FilterChip({
   onClick,
 }: {
   active: boolean;
-  icon: LucideIcon;
+  icon?: LucideIcon;
   label: string;
   onClick: () => void;
 }) {
@@ -1701,7 +1779,7 @@ function FilterChip({
           : "border-border bg-white/60 text-muted-foreground hover:bg-white",
       )}
     >
-      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+      {Icon ? <Icon className="h-3.5 w-3.5" aria-hidden="true" /> : null}
       {label}
     </button>
   );
@@ -1802,6 +1880,7 @@ function groupInventoryProducts(items: InventoryItem[]) {
       reserved: 0,
       total: 0,
       value: 0,
+      photoUrl: null,
       sources: [],
     };
 
@@ -1809,6 +1888,7 @@ function groupInventoryProducts(items: InventoryItem[]) {
     current.reserved += inventoryItemReserved(item);
     current.total += inventoryItemTotal(item);
     current.value += inventoryItemValue(item);
+    current.photoUrl = current.photoUrl ?? inventoryItemPhoto(item);
     current.sources.push(item);
     grouped.set(key, current);
   }
