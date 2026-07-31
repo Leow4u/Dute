@@ -425,6 +425,9 @@ export const APP_MODULES: AppModule[] = [
  * deep link (atalhos salvos, links compartilhados entre operadores).
  */
 export const WMS_DEEP_LINK_PATHS = [
+  "/wms/receber",
+  "/wms/pedidos",
+  "/wms/contagem",
   "/wms/recebimento",
   "/wms/qualidade",
   "/wms/putaway",

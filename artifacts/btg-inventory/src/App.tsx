@@ -11,6 +11,7 @@ import { doc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import {
   Switch,
   Route,
+  Link,
   useLocation,
   Router as WouterRouter,
   Redirect,
@@ -85,6 +86,8 @@ const Support = lazy(() => import("./pages/support"));
 const CustomerRequests = lazy(() => import("./pages/customer-requests"));
 const WarehouseOps = lazy(() => import("./pages/warehouse-ops"));
 const WmsInventoryPage = lazy(() => import("./pages/wms-inventory"));
+const WmsPedidos = lazy(() => import("./pages/wms-pedidos"));
+const Skus = lazy(() => import("./pages/skus"));
 const WmsReturnsPage = lazy(() => import("./pages/wms-returns"));
 const ClienteAssistente = lazy(() =>
   import("./pages/client").then((m) => ({ default: m.ClienteAssistente })),
@@ -866,21 +869,17 @@ function protectedRoute(
 }
 
 /**
- * Régua de etapas da bancada. O colapso do menu WMS (auditoria de UX)
- * removeu os 10 itens laterais assumindo um seletor interno que NÃO existia
- * — o menu era a única troca de etapa. Esta régua devolve a navegação,
- * no mesmo padrão de abas do Catálogo e do Faturamento.
+ * Bancada em 3 abas — o dia a dia do operador numa operação de 150 m²:
+ * o que tem (Estoque), o que chegou (Receber), o que a Cristiane pediu
+ * (Pedidos). As etapas enterprise (putaway/picking/packing/expedição/
+ * qualidade/exceções) continuam roteáveis por URL como telas de exceção,
+ * fora da régua. A contagem (abertura/cíclica) vive em /wms/contagem,
+ * alcançada pelo botão dentro da própria régua.
  */
 const WMS_STAGES: Array<{ label: string; path: string; match?: string[] }> = [
-  { label: "Recebimento", path: "/wms", match: ["/wms", "/wms/recebimento"] },
-  { label: "Qualidade", path: "/wms/qualidade" },
-  { label: "Putaway", path: "/wms/putaway" },
-  { label: "Picking", path: "/wms/picking" },
-  { label: "Packing", path: "/wms/packing" },
-  { label: "Expedição", path: "/wms/expedicao" },
-  { label: "Devoluções", path: "/wms/devolucoes" },
-  { label: "Inventário", path: "/wms/inventario" },
-  { label: "Exceções", path: "/wms/excecoes" },
+  { label: "Estoque", path: "/wms", match: ["/wms", "/wms/contagem"] },
+  { label: "Receber", path: "/wms/receber", match: ["/wms/receber", "/wms/recebimento"] },
+  { label: "Pedidos", path: "/wms/pedidos" },
 ];
 
 function WmsStageTabs() {
@@ -891,55 +890,74 @@ function WmsStageTabs() {
     )?.path ?? "/wms";
 
   return (
-    <Tabs value={active} onValueChange={(value) => navigate(value)}>
-      <TabsList className="h-auto flex-wrap">
-        {WMS_STAGES.map((stage) => (
-          <TabsTrigger key={stage.path} value={stage.path}>
-            {stage.label}
-          </TabsTrigger>
-        ))}
-      </TabsList>
-    </Tabs>
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <Tabs value={active} onValueChange={(value) => navigate(value)}>
+        <TabsList className="h-auto flex-wrap">
+          {WMS_STAGES.map((stage) => (
+            <TabsTrigger key={stage.path} value={stage.path}>
+              {stage.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+      {location === "/wms" || location === "/wms/contagem" ? (
+        <Button asChild type="button" variant="outline" size="sm">
+          <Link href="/wms/contagem">Contagem de estoque</Link>
+        </Button>
+      ) : null}
+    </div>
   );
 }
 
 function WmsModuleScreen({ module }: { module: WarehouseOpsModuleKey }) {
   // Force remount when the WMS module changes so shared WarehouseOps state
   // never leaks between Recebimento / Putaway / etc.
-  return (
-    <div className="space-y-6">
-      <WmsStageTabs />
-      <WarehouseOps key={module} initialModule={module} />
-    </div>
-  );
+  return <WarehouseOps key={module} initialModule={module} />;
 }
 
-// Devoluções e Inventário são páginas próprias, mas fazem parte da mesma
-// bancada — recebem a mesma régua de etapas.
-const WmsReturnsScreen = () => (
+// Aba Estoque: a lista física dos pallets (mesma tela de SKUs e saldos).
+const WmsStockScreen = () => (
   <div className="space-y-6">
     <WmsStageTabs />
-    <WmsReturnsPage />
+    <Skus />
   </div>
 );
 
-const WmsInventoryScreen = () => (
+// Aba Receber: o centro de recebimento existente.
+const WmsReceiveScreen = () => (
+  <div className="space-y-6">
+    <WmsStageTabs />
+    <WarehouseOps key="receiving" initialModule="receiving" />
+  </div>
+);
+
+// Aba Pedidos: fila única separar → enviar → entregar.
+const WmsOrdersScreen = () => (
+  <div className="space-y-6">
+    <WmsStageTabs />
+    <WmsPedidos />
+  </div>
+);
+
+// Contagem (abertura + cíclica) — alcançada pelo botão da aba Estoque.
+const WmsCountScreen = () => (
   <div className="space-y-6">
     <WmsStageTabs />
     <WmsInventoryPage />
   </div>
 );
 
-const WmsReceiving = () => <WmsModuleScreen module="receiving" />;
+const WmsReceiveRedirect = () => <Redirect to="/wms/receber" />;
+const WmsCountRedirect = () => <Redirect to="/wms/contagem" />;
+
+// Telas por etapa (exceções e casos avançados) — fora da régua, mas vivas
+// por URL. "Tratar exceção" nos cartões de Pedidos aponta para cá.
 const WmsQuality = () => <WmsModuleScreen module="quality" />;
 const WmsPutaway = () => <WmsModuleScreen module="putaway" />;
 const WmsPicking = () => <WmsModuleScreen module="picking" />;
 const WmsPacking = () => <WmsModuleScreen module="packing" />;
 const WmsExpedition = () => <WmsModuleScreen module="expedition" />;
 const WmsExceptions = () => <WmsModuleScreen module="exceptions" />;
-// /wms é a bancada em si (o seletor interno troca de etapa); não é mais
-// um redirect para /wms/recebimento.
-const WmsBench = () => <WmsModuleScreen module="receiving" />;
 const ClientRequestsRedirect = () => <Redirect to="/portal/recebimentos" />;
 const ClientAgentRedirect = () => <Redirect to="/portal/agente" />;
 const ClientInvoicesRedirect = () => <Redirect to="/portal/faturas" />;
@@ -954,16 +972,19 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/dashboard", Dashboard),
   protectedRoute("/reports", Reports),
   protectedRoute("/solicitacoes", CustomerRequests),
-  protectedRoute("/wms/recebimento", WmsReceiving),
+  protectedRoute("/wms/receber", WmsReceiveScreen),
+  protectedRoute("/wms/pedidos", WmsOrdersScreen),
+  protectedRoute("/wms/contagem", WmsCountScreen),
+  protectedRoute("/wms/recebimento", WmsReceiveRedirect),
+  protectedRoute("/wms/inventario", WmsCountRedirect),
   protectedRoute("/wms/qualidade", WmsQuality),
   protectedRoute("/wms/putaway", WmsPutaway),
   protectedRoute("/wms/picking", WmsPicking),
   protectedRoute("/wms/packing", WmsPacking),
   protectedRoute("/wms/expedicao", WmsExpedition),
-  protectedRoute("/wms/devolucoes", WmsReturnsScreen),
-  protectedRoute("/wms/inventario", WmsInventoryScreen),
+  protectedRoute("/wms/devolucoes", WmsReturnsPage),
   protectedRoute("/wms/excecoes", WmsExceptions),
-  protectedRoute("/wms", WmsBench),
+  protectedRoute("/wms", WmsStockScreen),
   protectedRoute("/catalogo", Catalog),
   protectedRoute("/catalogo/saldos", Catalog),
   protectedRoute("/catalogo/mapa", Catalog),

@@ -2116,6 +2116,19 @@ async function getWarehouseOps() {
           units: Number(task.packed_units ?? 0),
           source: task.source,
           updated_at: task.updated_at,
+          // A conclusão do packing exige packing_lines com o id de cada
+          // order_item; a bancada simplificada monta o payload daqui.
+          items: (orderItemsByOrder.get(String(task.order_id ?? "")) ?? []).map(
+            (line) => ({
+              id: line.id,
+              sku: line.sku_code,
+              sku_code: line.sku_code,
+              name: line.product_name,
+              product_name: line.product_name,
+              quantity: Number(line.requested_qty ?? 0),
+              picked_quantity: Number(line.picked_qty ?? 0),
+            }),
+          ),
           timeline: timelineForTask(task, "Packing criado"),
           exception_count: exceptionCountFor(
             String(task.id),
