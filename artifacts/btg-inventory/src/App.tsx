@@ -25,6 +25,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
@@ -864,11 +865,70 @@ function protectedRoute(
   };
 }
 
+/**
+ * Régua de etapas da bancada. O colapso do menu WMS (auditoria de UX)
+ * removeu os 10 itens laterais assumindo um seletor interno que NÃO existia
+ * — o menu era a única troca de etapa. Esta régua devolve a navegação,
+ * no mesmo padrão de abas do Catálogo e do Faturamento.
+ */
+const WMS_STAGES: Array<{ label: string; path: string; match?: string[] }> = [
+  { label: "Recebimento", path: "/wms", match: ["/wms", "/wms/recebimento"] },
+  { label: "Qualidade", path: "/wms/qualidade" },
+  { label: "Putaway", path: "/wms/putaway" },
+  { label: "Picking", path: "/wms/picking" },
+  { label: "Packing", path: "/wms/packing" },
+  { label: "Expedição", path: "/wms/expedicao" },
+  { label: "Devoluções", path: "/wms/devolucoes" },
+  { label: "Inventário", path: "/wms/inventario" },
+  { label: "Exceções", path: "/wms/excecoes" },
+];
+
+function WmsStageTabs() {
+  const [location, navigate] = useLocation();
+  const active =
+    WMS_STAGES.find((stage) =>
+      (stage.match ?? [stage.path]).some((path) => location === path),
+    )?.path ?? "/wms";
+
+  return (
+    <Tabs value={active} onValueChange={(value) => navigate(value)}>
+      <TabsList className="h-auto flex-wrap">
+        {WMS_STAGES.map((stage) => (
+          <TabsTrigger key={stage.path} value={stage.path}>
+            {stage.label}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
+  );
+}
+
 function WmsModuleScreen({ module }: { module: WarehouseOpsModuleKey }) {
   // Force remount when the WMS module changes so shared WarehouseOps state
   // never leaks between Recebimento / Putaway / etc.
-  return <WarehouseOps key={module} initialModule={module} />;
+  return (
+    <div className="space-y-6">
+      <WmsStageTabs />
+      <WarehouseOps key={module} initialModule={module} />
+    </div>
+  );
 }
+
+// Devoluções e Inventário são páginas próprias, mas fazem parte da mesma
+// bancada — recebem a mesma régua de etapas.
+const WmsReturnsScreen = () => (
+  <div className="space-y-6">
+    <WmsStageTabs />
+    <WmsReturnsPage />
+  </div>
+);
+
+const WmsInventoryScreen = () => (
+  <div className="space-y-6">
+    <WmsStageTabs />
+    <WmsInventoryPage />
+  </div>
+);
 
 const WmsReceiving = () => <WmsModuleScreen module="receiving" />;
 const WmsQuality = () => <WmsModuleScreen module="quality" />;
@@ -900,8 +960,8 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/wms/picking", WmsPicking),
   protectedRoute("/wms/packing", WmsPacking),
   protectedRoute("/wms/expedicao", WmsExpedition),
-  protectedRoute("/wms/devolucoes", WmsReturnsPage),
-  protectedRoute("/wms/inventario", WmsInventoryPage),
+  protectedRoute("/wms/devolucoes", WmsReturnsScreen),
+  protectedRoute("/wms/inventario", WmsInventoryScreen),
   protectedRoute("/wms/excecoes", WmsExceptions),
   protectedRoute("/wms", WmsBench),
   protectedRoute("/catalogo", Catalog),
