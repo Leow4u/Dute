@@ -2106,4 +2106,68 @@ describe("integridade de reservas e agregados de catálogo", () => {
     assert.equal(product.data()?.estoque_btg, 6);
     assert.equal(product.data()?.custo_total, 150);
   });
+
+  it("recontagem de produto arquivado reativa o cadastro em vez de acusar duplicidade", async () => {
+    await clearFirestore();
+
+    const session = await createOpeningInventorySessionTransaction(
+      db,
+      {
+        customer_code: "BTG Pactual",
+        reference: "INVENTARIO-ABERTURA-REATIVACAO",
+        idempotency_key: "opening-session-reactivation-test",
+      },
+      actor,
+    );
+
+    // Cenário real de 31/07: conta o item, remove a linha para corrigir e,
+    // no meio, o admin "deleta" pelo Catálogo — que apenas ARQUIVA o
+    // cadastro. A recontagem como produto novo não pode virar beco sem
+    // saída ("já existe").
+    await recordCycleCountTransaction(
+      db,
+      openingCountInput(String(session.session_id)),
+      actor,
+    );
+    const linhas = await db
+      .collection("opening_inventory_lines")
+      .where("session_id", "==", String(session.session_id))
+      .get();
+    assert.equal(linhas.size, 1);
+    await removeOpeningInventoryLineTransaction(
+      db,
+      {
+        customer_code: "BTG Pactual",
+        session_id: String(session.session_id),
+        opening_line_id: String(linhas.docs[0]!.id),
+        idempotency_key: "remove-line-reactivation-test",
+      },
+      actor,
+    );
+    const input = openingCountInput(String(session.session_id));
+    await db.collection("products").doc(input.client_item_code!).set(
+      { archived: true, status: "archived" },
+      { merge: true },
+    );
+    await db.collection("skus").doc(input.sku_code).set(
+      { archived: true, status: "archived" },
+      { merge: true },
+    );
+
+    const recontagem = await recordCycleCountTransaction(db, {
+      ...input,
+      idempotency_key: "opening-count-reactivation-retry",
+    }, actor);
+    assert.equal(recontagem.qty_counted, 12);
+
+    const produto = await db
+      .collection("products")
+      .doc(input.client_item_code!)
+      .get();
+    const sku = await db.collection("skus").doc(input.sku_code).get();
+    assert.equal(produto.data()?.archived, false);
+    assert.equal(produto.data()?.status, "active");
+    assert.equal(sku.data()?.archived, false);
+    assert.equal(sku.data()?.status, "active");
+  });
 });

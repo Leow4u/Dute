@@ -1678,6 +1678,28 @@ export async function recordCycleCountTransaction(
         skuRows.length > 0 ||
         Boolean(productCodeSnapshot?.exists) ||
         Boolean(skuCodeSnapshot?.exists);
+      // Cadastro ARQUIVADO não conta como duplicidade: a exclusão pelo
+      // Catálogo só arquiva o cartão, e a busca do formulário esconde
+      // arquivados — sem isto o operador ficava num beco sem saída
+      // ("não encontrado" na busca + "já existe" no envio). Recontar um
+      // arquivado é reativação legítima: o catalogPayload já grava
+      // archived: false / status: active.
+      const rowIsArchived = (row: { data: Record<string, unknown> }) =>
+        row.data.archived === true || text(row.data.status) === "archived";
+      const snapshotIsArchived = (
+        snapshot: typeof productCodeSnapshot,
+      ) => {
+        if (!snapshot?.exists) return false;
+        const data = snapshot.data() ?? {};
+        return data.archived === true || text(data.status) === "archived";
+      };
+      const catalogActiveExists =
+        productRows.some((row) => !rowIsArchived(row)) ||
+        skuRows.some((row) => !rowIsArchived(row)) ||
+        (Boolean(productCodeSnapshot?.exists) &&
+          !snapshotIsArchived(productCodeSnapshot)) ||
+        (Boolean(skuCodeSnapshot?.exists) &&
+          !snapshotIsArchived(skuCodeSnapshot));
       if (productRows.length > 1 || skuRows.length > 1) {
         throw new HttpsError(
           "failed-precondition",
@@ -1704,7 +1726,7 @@ export async function recordCycleCountTransaction(
           );
         }
       }
-      if (wantsNewProduct && catalogExists) {
+      if (wantsNewProduct && catalogActiveExists) {
         throw new HttpsError(
           "failed-precondition",
           `Cod. cliente ${requestedClientItemCode} ou SKU ${skuCode} já existe. Use o cadastro encontrado para evitar duplicidade.`,
@@ -1858,7 +1880,11 @@ export async function recordCycleCountTransaction(
       if (wantsNewProduct) {
         const productId = safeDocId(clientItemCode || skuCode);
         const skuId = safeDocId(skuCode);
-        transaction.create(db.collection(collections.products).doc(productId), {
+        // set (sem merge) em vez de create: a guarda catalogActiveExists já
+        // barrou duplicidade ATIVA — se o doc existe aqui, está arquivado, e
+        // recontar como novo é reativação com reset limpo (sem herdar
+        // agregados velhos do cadastro arquivado).
+        transaction.set(db.collection(collections.products).doc(productId), {
           id: clientItemCode || skuCode,
           ...catalogPayload,
           estoque_btg: countedQty,
@@ -1867,7 +1893,7 @@ export async function recordCycleCountTransaction(
           created_by: actorPayload(actor),
           created_at: FieldValue.serverTimestamp(),
         });
-        transaction.create(db.collection(collections.skus).doc(skuId), {
+        transaction.set(db.collection(collections.skus).doc(skuId), {
           id: skuCode,
           ...catalogPayload,
           cod_btg: skuCode,
