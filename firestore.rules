@@ -349,12 +349,13 @@ service cloud.firestore {
       return !isCustomer() || isOwnCustomerCode(data.customer_code);
     }
 
+    // Mesmo motivo de canReadOwnMessage(): checagem de formato na leitura
+    // impede a consulta de lista. Mantida em safeConversationCreate().
     function canReadOwnConversation() {
       return canUseAgentChat()
         && resource.data.keys().hasAll(['user_id', 'customer_code'])
         && resource.data.user_id == request.auth.uid
-        && hasOwnChatCustomerScope(resource.data)
-        && safeConversationFields(resource.data);
+        && hasOwnChatCustomerScope(resource.data);
     }
 
     function safeConversationCreate(conversationId) {
@@ -416,12 +417,17 @@ service cloud.firestore {
       ).data;
     }
 
+    // Leitura valida apenas o que a consulta consegue provar: dono e cliente.
+    // safeMessageFields() checa o FORMATO do documento — condicao que uma
+    // query de lista nao tem como demonstrar, entao exigi-la aqui derrubava
+    // o listener em tempo real do chat (a resposta do agente so aparecia
+    // apos recarregar). O formato continua imposto na escrita, que e onde
+    // ele de fato protege.
     function canReadOwnMessage() {
       return canUseAgentChat()
         && resource.data.keys().hasAll(['user_id', 'customer_code'])
         && resource.data.user_id == request.auth.uid
-        && hasOwnChatCustomerScope(resource.data)
-        && safeMessageFields(resource.data);
+        && hasOwnChatCustomerScope(resource.data);
     }
 
     function safeMessageCreate(messageId) {

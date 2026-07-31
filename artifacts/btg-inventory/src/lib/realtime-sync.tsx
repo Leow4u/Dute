@@ -87,13 +87,22 @@ const OPERATIONS_ONLY_COLLECTIONS = new Set<string>([
   "returns",
 ]);
 
+/**
+ * canReadBilling() = owner/admin/interno/financeiro/suporte — sem `wms`.
+ * Verificado em produção: a sessão wms registrava permission-denied contínuo
+ * em billing_periods.
+ */
+const BILLING_ONLY_COLLECTIONS = new Set<string>(["billing_periods"]);
+
 function internalHotCollectionsForRole(role: string) {
+  const blocked = new Set<string>();
   if (role === "financeiro") {
-    return INTERNAL_HOT_COLLECTIONS.filter(
-      (collectionName) => !OPERATIONS_ONLY_COLLECTIONS.has(collectionName),
-    );
+    for (const name of OPERATIONS_ONLY_COLLECTIONS) blocked.add(name);
   }
-  return [...INTERNAL_HOT_COLLECTIONS];
+  if (role === "wms") {
+    for (const name of BILLING_ONLY_COLLECTIONS) blocked.add(name);
+  }
+  return INTERNAL_HOT_COLLECTIONS.filter((name) => !blocked.has(name));
 }
 
 const INTERNAL_USER_SCOPED_TARGETS: readonly RealtimeTarget[] = [

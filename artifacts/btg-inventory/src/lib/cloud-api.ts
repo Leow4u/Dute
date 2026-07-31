@@ -1010,14 +1010,30 @@ function filterAndPageExtended(
   };
 }
 
+type WhereEqualOptions = {
+  maxDocs?: number;
+  orderByField?: string;
+  direction?: "asc" | "desc";
+  /**
+   * Igualdades extras que a REGRA do Firestore exige. Não é filtro cosmético:
+   * uma consulta de lista só é aceita se conseguir provar que todo resultado
+   * satisfaz a regra de leitura — sem repetir a condição aqui, o Firestore
+   * nega a consulta inteira com permission-denied.
+   */
+  extraEquals?: Array<{ field: string; value: string | number | boolean }>;
+};
+
 async function readWhereEqual(
   name: string,
   field: string,
   value: string | number | boolean,
-  options: { maxDocs?: number; orderByField?: string; direction?: "asc" | "desc" } = {},
+  options: WhereEqualOptions = {},
 ): Promise<AnyRecord[]> {
   if (!firestore) return [];
   const constraints: QueryConstraint[] = [where(field, "==", value)];
+  for (const extra of options.extraEquals ?? []) {
+    constraints.push(where(extra.field, "==", extra.value));
+  }
   if (options.orderByField) {
     constraints.push(orderBy(options.orderByField, options.direction ?? "desc"));
   }
@@ -1036,7 +1052,7 @@ async function readOptionalWhereEqual(
   name: string,
   field: string,
   value: string | number | boolean,
-  options: { maxDocs?: number; orderByField?: string; direction?: "asc" | "desc" } = {},
+  options: WhereEqualOptions = {},
 ): Promise<AnyRecord[]> {
   try {
     return await readWhereEqual(name, field, value, options);
@@ -1044,10 +1060,12 @@ async function readOptionalWhereEqual(
     console.warn(`[portal] ${name} não pôde ser carregado.`, error);
     // orderBy exige índice composto; sem ele, cai para a leitura só com
     // igualdade e limite (ainda limitada, nunca coleção inteira).
+    // extraEquals é preservado: sem ele a regra nega a consulta de novo.
     if (options.orderByField) {
       try {
         return await readWhereEqual(name, field, value, {
           maxDocs: options.maxDocs,
+          extraEquals: options.extraEquals,
         });
       } catch {
         return [];
@@ -1403,7 +1421,13 @@ async function getClientOverview() {
             collectionNames.clientDocuments,
             "customer_code",
             customerCode,
-            { maxDocs: PORTAL_READ_CAP, orderByField: "created_at" },
+            {
+              maxDocs: PORTAL_READ_CAP,
+              orderByField: "created_at",
+              // A regra exige customer_visible == true; a consulta precisa
+              // declarar isso ou o Firestore nega a lista inteira.
+              extraEquals: [{ field: "customer_visible", value: true }],
+            },
           ),
         ]
       : [

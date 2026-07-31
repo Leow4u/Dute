@@ -99,6 +99,41 @@ async function seed() {
       produto: "Produto real de teste",
       status: "active",
     });
+    // Documentos do cliente: um visível e um arquivado (invisível).
+    await setDoc(doc(database, "client_documents", "doc-visivel"), {
+      customer_code: CUSTOMER_A,
+      title: "NF de entrada",
+      customer_visible: true,
+      created_at: new Date(),
+    });
+    await setDoc(doc(database, "client_documents", "doc-arquivado"), {
+      customer_code: CUSTOMER_A,
+      title: "Documento arquivado",
+      customer_visible: false,
+      status: "archived",
+      created_at: new Date(),
+    });
+    // Chat do agente pertencente ao client-a.
+    await setDoc(doc(database, "agent_conversations", "conv-a"), {
+      id: "conv-a",
+      customer_code: CUSTOMER_A,
+      user_id: "client-a",
+      status: "active",
+      created_at_iso: new Date().toISOString(),
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
+    await setDoc(doc(database, "agent_messages", "msg-a"), {
+      id: "msg-a",
+      conversation_id: "conv-a",
+      customer_code: CUSTOMER_A,
+      user_id: "client-a",
+      role: "user",
+      content: "Onde esta meu pedido?",
+      created_at_iso: new Date().toISOString(),
+      created_at: new Date(),
+      source: "portal",
+    });
     await setDoc(doc(database, "billing_config", "default"), {
       ad_valorem_rate: 0.005,
       cliente_nome: CUSTOMER_A,
@@ -274,5 +309,123 @@ describe("isolamento entre clientes", () => {
         qty_available: 1000,
       }),
     );
+  });
+});
+
+describe("leitura em lista do portal do cliente", () => {
+  it("lista documentos visíveis quando a consulta declara customer_visible", async () => {
+    const database = testEnvironment
+      .authenticatedContext("client-a", { email: "client-a@example.com" })
+      .firestore();
+    // A consulta precisa repetir a condição da regra; sem isso o Firestore
+    // nega a lista inteira (regressão observada em produção em 30/07).
+    const visiveis = await assertSucceeds(
+      getDocs(
+        query(
+          collection(database, "client_documents"),
+          where("customer_code", "==", CUSTOMER_A),
+          where("customer_visible", "==", true),
+        ),
+      ),
+    );
+    assert.equal(visiveis.size, 1);
+    assert.equal(visiveis.docs[0].id, "doc-visivel");
+  });
+
+  it("nega a lista de documentos sem o filtro de visibilidade", async () => {
+    const database = testEnvironment
+      .authenticatedContext("client-a", { email: "client-a@example.com" })
+      .firestore();
+    await assertFails(
+      getDocs(
+        query(
+          collection(database, "client_documents"),
+          where("customer_code", "==", CUSTOMER_A),
+        ),
+      ),
+    );
+  });
+
+  it("não entrega documento arquivado nem pelo id direto", async () => {
+    const database = testEnvironment
+      .authenticatedContext("client-a", { email: "client-a@example.com" })
+      .firestore();
+    await assertFails(
+      getDoc(doc(database, "client_documents", "doc-arquivado")),
+    );
+  });
+
+  it("cliente de outro contrato não lê documentos alheios", async () => {
+    const database = testEnvironment
+      .authenticatedContext("client-b", { email: "client-b@example.com" })
+      .firestore();
+    await assertFails(
+      getDocs(
+        query(
+          collection(database, "client_documents"),
+          where("customer_code", "==", CUSTOMER_A),
+          where("customer_visible", "==", true),
+        ),
+      ),
+    );
+  });
+});
+
+describe("chat do Agent Dute em tempo real", () => {
+  it("dono lista as próprias mensagens da conversa", async () => {
+    const database = testEnvironment
+      .authenticatedContext("client-a", { email: "client-a@example.com" })
+      .firestore();
+    // É a mesma consulta do listener em tempo real; antes ela era negada
+    // porque a regra de leitura exigia o formato dos campos.
+    const mensagens = await assertSucceeds(
+      getDocs(
+        query(
+          collection(database, "agent_messages"),
+          where("customer_code", "==", CUSTOMER_A),
+          where("user_id", "==", "client-a"),
+        ),
+      ),
+    );
+    assert.equal(mensagens.size, 1);
+  });
+
+  it("dono lista as próprias conversas", async () => {
+    const database = testEnvironment
+      .authenticatedContext("client-a", { email: "client-a@example.com" })
+      .firestore();
+    const conversas = await assertSucceeds(
+      getDocs(
+        query(
+          collection(database, "agent_conversations"),
+          where("customer_code", "==", CUSTOMER_A),
+          where("user_id", "==", "client-a"),
+        ),
+      ),
+    );
+    assert.equal(conversas.size, 1);
+  });
+
+  it("outro usuário não lê a conversa alheia", async () => {
+    const database = testEnvironment
+      .authenticatedContext("client-b", { email: "client-b@example.com" })
+      .firestore();
+    await assertFails(getDoc(doc(database, "agent_messages", "msg-a")));
+    await assertFails(
+      getDocs(
+        query(
+          collection(database, "agent_messages"),
+          where("customer_code", "==", CUSTOMER_A),
+          where("user_id", "==", "client-a"),
+        ),
+      ),
+    );
+  });
+
+  it("wms não lê billing_periods (motivo do listener removido)", async () => {
+    const database = testEnvironment
+      .authenticatedContext("wms-a", { email: "wms-a@example.com" })
+      .firestore();
+    await assertFails(getDocs(collection(database, "billing_periods")));
   });
 });
