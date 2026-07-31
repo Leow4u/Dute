@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "btg-inventory",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--config", "vite.config.ts"],
+      "cwd": "artifacts/btg-inventory",
+      "port": 5173
+    }
+  ]
+}

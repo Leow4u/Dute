@@ -68,7 +68,6 @@ class ChunkErrorBoundary extends Component<
   }
 }
 
-const LandingPage = lazy(() => import("./pages/landing"));
 const Dashboard = lazy(() => import("./pages/dashboard"));
 const Products = lazy(() => import("./pages/products"));
 const Skus = lazy(() => import("./pages/skus"));
@@ -261,6 +260,14 @@ async function fetchInvite(token: string): Promise<InviteData | null> {
   }
 }
 
+/**
+ * Capa do app: é a porta de entrada de app.dutelog.com.br.
+ *
+ * Split-screen — formulário à esquerda, painel visual à direita. Nenhuma
+ * informação operacional aparece antes da autenticação: esta página é
+ * pública, e dado de cliente não se expõe em página pública. A imagem do
+ * painel é arte abstrata de armazém gerada para a marca, sem dado algum.
+ */
 function AuthShell({
   title,
   subtitle,
@@ -270,31 +277,82 @@ function AuthShell({
   subtitle: string;
   children: React.ReactNode;
 }) {
-  const logoPath = `${basePath}/dutelog-logo.png`;
+  // Só a marca (símbolo) no formulário: o wordmark completo já vive na
+  // imagem do painel, e repeti-lo aqui seria marca dupla.
+  const markPath = `${basePath}/dutelog-mark-64.png`;
+  const visualPath = `${basePath}/auth-visual.jpg`;
+  const year = new Date().getFullYear();
 
   return (
-    <div className="app-atmosphere flex h-[100dvh] items-center justify-center overflow-auto overscroll-contain px-4 py-10">
-      <div className="glass-surface w-full max-w-[440px] rounded-[28px] p-7">
-        <div className="mb-7 flex flex-col items-center gap-4 text-center">
+    <div className="auth-cover relative grid min-h-[100dvh] overflow-auto overscroll-contain lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+      {/* Coluna do formulário */}
+      <div className="relative flex min-h-[100dvh] flex-col px-6 py-7 sm:px-12 lg:min-h-0">
+        <div
+          aria-hidden
+          className="auth-glow pointer-events-none absolute inset-x-0 top-0 h-[420px] lg:hidden"
+        />
+
+        <header className="relative">
           <img
-            src={logoPath}
-            alt="Dutelog Soluções Logísticas"
-            className="h-12 w-auto max-w-[260px] object-contain"
+            src={markPath}
+            alt="Dutelog"
+            className="h-9 w-9 object-contain"
           />
-          <div>
-            <h1 className="text-xl font-semibold tracking-normal text-foreground">
-              {title}
-            </h1>
-            <p className="mt-1 text-sm text-gray-500">{subtitle}</p>
+        </header>
+
+        <main className="relative flex flex-1 items-center py-10">
+          <div className="mx-auto w-full max-w-[420px]">
+            <h1 className="auth-title text-[28px]">{title}</h1>
+            <p className="mt-2 text-[14px] leading-relaxed text-[var(--auth-muted)]">
+              {subtitle}
+            </p>
+
+            <div className="auth-card mt-8 rounded-2xl p-6 sm:p-7">
+              {firebaseConfigError ? (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertDescription>{firebaseConfigError}</AlertDescription>
+                </Alert>
+              ) : null}
+              {children}
+            </div>
           </div>
-        </div>
-        {firebaseConfigError ? (
-          <Alert variant="destructive" className="mb-4">
-            <AlertDescription>{firebaseConfigError}</AlertDescription>
-          </Alert>
-        ) : null}
-        {children}
+        </main>
+
+        <footer className="relative">
+          <p className="text-[12px] text-[var(--auth-muted)]">
+            © {year} Dutelog Soluções Logísticas
+          </p>
+        </footer>
       </div>
+
+      {/* Painel visual — some no mobile; o formulário é o protagonista lá. */}
+      <aside
+        aria-hidden
+        className="relative hidden overflow-hidden lg:block"
+      >
+        <img
+          src={visualPath}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+        {/* Véus: integram a imagem ao canvas e garantem contraste do selo. */}
+        <div className="absolute inset-0 bg-gradient-to-r from-[var(--auth-canvas)] via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[var(--auth-canvas)]/90 via-transparent to-[var(--auth-canvas)]/30" />
+        <div className="auth-grid absolute inset-0 opacity-60" />
+
+        <figure className="absolute inset-x-10 bottom-10">
+          <blockquote className="auth-panel-quote max-w-[440px] text-[19px] leading-snug">
+            Cada peça que entra, muda de endereço ou sai vira um registro
+            auditável.
+          </blockquote>
+          <figcaption className="mt-4 flex items-center gap-2.5">
+            <span className="h-px w-7 bg-[var(--auth-accent)]" />
+            <span className="text-[12px] uppercase tracking-[0.14em] text-[var(--auth-muted)]">
+              Armazenagem · Inventário · Controle
+            </span>
+          </figcaption>
+        </figure>
+      </aside>
     </div>
   );
 }
@@ -339,8 +397,8 @@ function SignInPage() {
 
   return (
     <AuthShell
-      title="Bem-vindo de volta"
-      subtitle="Entre para acessar o estoque BTG"
+      title="Plataforma de armazenagem"
+      subtitle="Acesse com seu e-mail corporativo para continuar."
     >
       <form onSubmit={submit} className="space-y-4">
         <div className="space-y-2">
@@ -393,15 +451,15 @@ function SignInPage() {
           {form.loading ? "Entrando..." : "Entrar"}
         </Button>
       </form>
-      <div className="mt-4 flex items-center justify-between text-sm">
+      <div className="mt-5 flex items-center justify-between border-t border-[var(--auth-line)] pt-4 text-[13px]">
         <button
           type="button"
-          className="font-medium text-primary hover:underline"
+          className="font-medium text-[var(--auth-accent)] transition-opacity hover:opacity-80"
           onClick={resetPassword}
         >
           Esqueci minha senha
         </button>
-        <span className="text-muted-foreground">Acesso apenas por convite</span>
+        <span className="text-[var(--auth-muted)]">Acesso por convite</span>
       </div>
     </AuthShell>
   );
@@ -755,7 +813,7 @@ function RoleHome() {
 function HomeRedirect() {
   const { user, isLoaded } = useAppUser();
   if (!isLoaded) return null;
-  if (!user) return <LandingPage />;
+  if (!user) return <SignInPage />;
   return <RoleHome />;
 }
 
