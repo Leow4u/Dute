@@ -78,6 +78,17 @@ service cloud.firestore {
       return hasAnyRole(['owner', 'admin', 'interno', 'financeiro', 'suporte']);
     }
 
+    /**
+     * O cálculo da fatura precisa das fontes operacionais (catálogo, estoque
+     * publicado e ledger) além das coleções billing_*. Sem isto o financeiro
+     * recebia permission-denied e a tela exibia R$ 0,00 como se o mês não
+     * tivesse movimento — erro silencioso em cima de dinheiro.
+     * Somente leitura: faturar não altera operação.
+     */
+    function canReadForBilling() {
+      return canReadOperations() || isFinance();
+    }
+
     function canWriteBilling() {
       return isPrivileged() || isFinance();
     }
@@ -681,7 +692,7 @@ service cloud.firestore {
     }
 
     match /products/{productId} {
-      allow read: if canReadOperations();
+      allow read: if canReadForBilling();
       allow create, update, delete: if false;
     }
 
@@ -731,12 +742,12 @@ service cloud.firestore {
     }
 
     match /client_inventory/{inventoryId} {
-      allow read: if canReadOperations() || isOwnProjection();
+      allow read: if canReadForBilling() || isOwnProjection();
       allow create, update, delete: if false;
     }
 
     match /movements/{movementId} {
-      allow read: if canReadOperations();
+      allow read: if canReadForBilling();
       allow create, update, delete: if false;
     }
 
@@ -879,6 +890,16 @@ service cloud.firestore {
         );
       allow create, update: if canCoordinateOperations() || isWms();
       allow delete: if isPrivileged();
+    }
+
+    // Estado operacional (congelamento, inventário de abertura). Consultado
+    // pelo cálculo da fatura e pelas telas de operação. Nunca existiu regra
+    // para esta coleção: a leitura caía no deny final e derrubava toda a
+    // chamada, exibindo R$ 0,00 no lugar de um erro. Escrita segue apenas
+    // via Cloud Functions (Admin SDK).
+    match /system_controls/{controlId} {
+      allow read: if canReadForBilling();
+      allow create, update, delete: if false;
     }
 
     match /{document=**} {

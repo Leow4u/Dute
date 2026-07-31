@@ -134,6 +134,17 @@ async function seed() {
       created_at: new Date(),
       source: "portal",
     });
+    await setDoc(doc(database, "system_controls", "inventory"), {
+      movements_frozen: false,
+      opening_inventory_required: true,
+      stock_initialized: false,
+    });
+    await setDoc(doc(database, "billing_price_list", "1"), {
+      item: "Ad Valorem sobre estoque",
+      auto_source: "ad_valorem",
+      valor_unit: 0,
+      ativo: true,
+    });
     await setDoc(doc(database, "billing_config", "default"), {
       ad_valorem_rate: 0.005,
       cliente_nome: CUSTOMER_A,
@@ -427,5 +438,64 @@ describe("chat do Agent Dute em tempo real", () => {
       .authenticatedContext("wms-a", { email: "wms-a@example.com" })
       .firestore();
     await assertFails(getDocs(collection(database, "billing_periods")));
+  });
+});
+
+describe("financeiro consegue calcular a fatura", () => {
+  // getBillingPeriod lê estas seis fontes num Promise.all: se qualquer uma
+  // negar, a chamada inteira falha e a tela mostra R$ 0,00 como se o mês
+  // não tivesse movimento.
+  const fontesDaFatura = [
+    "products",
+    "client_inventory",
+    "movements",
+    "billing_price_list",
+    "billing_manual",
+    "system_controls",
+  ] as const;
+
+  it("lê todas as fontes que o cálculo da fatura exige", async () => {
+    const database = testEnvironment
+      .authenticatedContext("finance-a", { email: "finance-a@example.com" })
+      .firestore();
+    for (const fonte of fontesDaFatura) {
+      await assertSucceeds(getDocs(collection(database, fonte)));
+    }
+  });
+
+  it("lê o estado operacional que define o modo de apuração", async () => {
+    const database = testEnvironment
+      .authenticatedContext("finance-a", { email: "finance-a@example.com" })
+      .firestore();
+    const controle = await assertSucceeds(
+      getDoc(doc(database, "system_controls", "inventory")),
+    );
+    assert.equal(controle.data()?.opening_inventory_required, true);
+  });
+
+  it("continua sem poder escrever na operação", async () => {
+    const database = testEnvironment
+      .authenticatedContext("finance-a", { email: "finance-a@example.com" })
+      .firestore();
+    await assertFails(
+      updateDoc(doc(database, "system_controls", "inventory"), {
+        movements_frozen: true,
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(database, "movements", "movement-a"), { quantity: 999 }),
+    );
+    await assertFails(
+      updateDoc(doc(database, "products", "product-a"), { produto: "hack" }),
+    );
+  });
+
+  it("cliente não alcança as fontes internas de faturamento", async () => {
+    const database = testEnvironment
+      .authenticatedContext("client-a", { email: "client-a@example.com" })
+      .firestore();
+    await assertFails(getDocs(collection(database, "movements")));
+    await assertFails(getDocs(collection(database, "products")));
+    await assertFails(getDoc(doc(database, "system_controls", "inventory")));
   });
 });
