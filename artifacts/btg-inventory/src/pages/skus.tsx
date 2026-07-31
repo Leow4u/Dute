@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { type Sku, useListSkus, useCreateSku, useUpdateSku, useDeleteSku, getListSkusQueryKey } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -64,6 +64,68 @@ export default function Skus() {
   );
 
   const skus = data?.items ?? [];
+
+  // Endereço mora no SALDO (stock_balances.location_id) — é lá que a
+  // contagem de abertura grava rua/prateleira/caixa. Os campos rua/
+  // prateleira/caixa do catálogo são herança da planilha e ficam como
+  // fallback para dados importados.
+  const balancesQuery = useQuery({
+    queryKey: ["stock-balances", "skus-screen"],
+    queryFn: async () => {
+      const response = await fetch("/api/stock-balances?limit=1000");
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      return (await response.json()) as {
+        items?: Array<{
+          sku_code?: string;
+          client_item_code?: string;
+          location_id?: string;
+        }>;
+      };
+    },
+    refetchInterval: 120_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const balancesBySku = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const balance of balancesQuery.data?.items ?? []) {
+      const location = String(balance.location_id ?? "").trim();
+      if (!location) continue;
+      for (const key of [balance.sku_code, balance.client_item_code]) {
+        const normalized = String(key ?? "").trim();
+        if (!normalized) continue;
+        const list = map.get(normalized) ?? [];
+        if (!list.includes(location)) list.push(location);
+        map.set(normalized, list);
+      }
+    }
+    return map;
+  }, [balancesQuery.data]);
+
+  const locationsForSku = (sku: {
+    cod_btg?: string | null;
+    cod_cliente?: string | null;
+    rua?: string | null;
+    prateleira?: string | null;
+    caixa?: string | null;
+    endereco?: string | null;
+  }) => {
+    const fromBalances =
+      balancesBySku.get(String(sku.cod_btg ?? "").trim()) ??
+      balancesBySku.get(String(sku.cod_cliente ?? "").trim()) ??
+      [];
+    if (fromBalances.length) return fromBalances;
+    const legacy =
+      sku.endereco ||
+      [
+        sku.rua && "R" + sku.rua,
+        sku.prateleira && "P" + sku.prateleira,
+        sku.caixa && "C" + sku.caixa,
+      ]
+        .filter(Boolean)
+        .join(" ");
+    return legacy ? [legacy] : [];
+  };
   const stats = useMemo(() => {
     return skus.reduce(
       (acc, sku) => {
@@ -75,16 +137,16 @@ export default function Skus() {
         acc.reserved += reserved;
         if (current <= 0) acc.zero += 1;
         if (current > 0 && current <= 10) acc.low += 1;
-        if (!sku.rua && !sku.prateleira && !sku.caixa && !sku.endereco) acc.noLocation += 1;
+        if (!locationsForSku(sku).length) acc.noLocation += 1;
         return acc;
       },
       { physical: 0, available: 0, reserved: 0, low: 0, zero: 0, noLocation: 0 },
     );
-  }, [skus]);
+  }, [skus, balancesBySku]);
 
   const filteredSkus = skus.filter((sku) => {
     const current = Number(sku.estoque_atual ?? 0);
-    const hasLocation = Boolean(sku.rua || sku.prateleira || sku.caixa || sku.endereco);
+    const hasLocation = locationsForSku(sku).length > 0;
     if (quickFilter === "baixo") return current > 0 && current <= 10;
     if (quickFilter === "zerado") return current <= 0;
     if (quickFilter === "sem-local") return !hasLocation;
@@ -181,7 +243,7 @@ export default function Skus() {
                       (sku as any).estoque_disponivel ?? Math.max(0, current - reserved),
                     );
                     const isLow = current > 0 && current <= 10;
-                    const noLocation = !sku.rua && !sku.prateleira && !sku.caixa && !sku.endereco;
+                    const noLocation = !locationsForSku(sku).length;
 
                     return (
                       <tr key={sku.id} className="hover:bg-gray-50/80 transition-colors">
@@ -211,10 +273,16 @@ export default function Skus() {
                           </Badge>
                         </td>
                         <td className="px-4 py-2">
-                          {sku.rua || sku.prateleira || sku.caixa || sku.endereco ? (
-                            <div className="flex items-center gap-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 px-2 py-1 rounded w-fit border border-indigo-100">
+                          {locationsForSku(sku).length ? (
+                            <div
+                              className="flex items-center gap-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 px-2 py-1 rounded w-fit border border-indigo-100"
+                              title={locationsForSku(sku).join(" · ")}
+                            >
                               <MapPin className="h-3 w-3" />
-                              {sku.endereco || `${sku.rua ? `R${sku.rua}` : ''}${sku.prateleira ? ` P${sku.prateleira}` : ''}${sku.caixa ? ` C${sku.caixa}` : ''}`}
+                              {locationsForSku(sku)[0]}
+                              {locationsForSku(sku).length > 1
+                                ? " +" + (locationsForSku(sku).length - 1)
+                                : ""}
                             </div>
                           ) : (
                             <span className="text-xs text-amber-700">Sem endereço</span>
