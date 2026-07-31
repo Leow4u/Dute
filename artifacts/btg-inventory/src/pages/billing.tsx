@@ -299,7 +299,7 @@ export default function Billing() {
           </div>
         </CardHeader>
         <CardContent className="space-y-5 p-5">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 md:grid-cols-3">
             {[
               {
                 label: "Entradas",
@@ -319,12 +319,8 @@ export default function Billing() {
                 detail: "Notas, comprovantes ou vínculos financeiros",
                 icon: FileText,
               },
-              {
-                label: "Eventos",
-                value: fmtNum(evidence?.metrics.events ?? 0),
-                detail: "Memória operacional do Agent Dute",
-                icon: ClipboardList,
-              },
+              // O contador de eventos tem dono (Agent Dute) — aparecia em 4
+              // telas; aqui não sustenta a decisão de emitir.
             ].map((item) => (
               <div
                 key={item.label}

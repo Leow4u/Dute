@@ -69,19 +69,15 @@ class ChunkErrorBoundary extends Component<
 }
 
 const Dashboard = lazy(() => import("./pages/dashboard"));
-const Products = lazy(() => import("./pages/products"));
-const Skus = lazy(() => import("./pages/skus"));
+const Catalog = lazy(() => import("./pages/catalog"));
 const Movements = lazy(() => import("./pages/movements"));
 const Orders = lazy(() => import("./pages/orders"));
-const Warehouse = lazy(() => import("./pages/warehouse"));
 const Reports = lazy(() => import("./pages/reports"));
-const Billing = lazy(() => import("./pages/billing"));
-const PriceList = lazy(() => import("./pages/price-list"));
+const BillingHub = lazy(() => import("./pages/billing-hub"));
 const Users = lazy(() => import("./pages/users"));
 const Customers = lazy(() => import("./pages/customers"));
 const Documents = lazy(() => import("./pages/documents"));
 const Settings = lazy(() => import("./pages/settings"));
-const MyInvoices = lazy(() => import("./pages/my-invoices"));
 const AiControl = lazy(() => import("./pages/ai-control"));
 const AgentKnowledge = lazy(() => import("./pages/agent-knowledge"));
 const Support = lazy(() => import("./pages/support"));
@@ -121,6 +117,7 @@ import {
 import {
   canAccessModule,
   getHomePathForAppRole,
+  getHomePathForProfile,
   getRouteAppRoles,
   getRouteProfileRoles,
   normalizeProfileRole,
@@ -806,8 +803,20 @@ function QueryClientCacheInvalidator() {
 
 function RoleHome() {
   const { role, isLoaded } = useRole();
+  const { user } = useAppUser();
   if (!isLoaded) return null;
-  return <Redirect to={getHomePathForAppRole(role)} />;
+  const profileRole = user?.publicMetadata.role;
+  // Papel do perfil decide a aterrissagem (wms → bancada, financeiro →
+  // faturamento); o appRole agregado fica de fallback.
+  return (
+    <Redirect
+      to={
+        profileRole
+          ? getHomePathForProfile(profileRole)
+          : getHomePathForAppRole(role)
+      }
+    />
+  );
 }
 
 function HomeRedirect() {
@@ -868,9 +877,18 @@ const WmsPicking = () => <WmsModuleScreen module="picking" />;
 const WmsPacking = () => <WmsModuleScreen module="packing" />;
 const WmsExpedition = () => <WmsModuleScreen module="expedition" />;
 const WmsExceptions = () => <WmsModuleScreen module="exceptions" />;
-const WmsHomeRedirect = () => <Redirect to="/wms/recebimento" />;
+// /wms é a bancada em si (o seletor interno troca de etapa); não é mais
+// um redirect para /wms/recebimento.
+const WmsBench = () => <WmsModuleScreen module="receiving" />;
 const ClientRequestsRedirect = () => <Redirect to="/portal/recebimentos" />;
 const ClientAgentRedirect = () => <Redirect to="/portal/agente" />;
+const ClientInvoicesRedirect = () => <Redirect to="/portal/faturas" />;
+// Fusões de tela (Catálogo e Faturamento): as rotas antigas redirecionam
+// para a aba equivalente, preservando links salvos.
+const ProductsRedirect = () => <Redirect to="/catalogo" />;
+const SkusRedirect = () => <Redirect to="/catalogo/saldos" />;
+const WarehouseMapRedirect = () => <Redirect to="/catalogo/mapa" />;
+const PriceListRedirect = () => <Redirect to="/faturamento/tabela" />;
 
 const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/dashboard", Dashboard),
@@ -885,14 +903,18 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/wms/devolucoes", WmsReturnsPage),
   protectedRoute("/wms/inventario", WmsInventoryPage),
   protectedRoute("/wms/excecoes", WmsExceptions),
-  protectedRoute("/wms", WmsHomeRedirect),
-  protectedRoute("/warehouse", Warehouse),
-  protectedRoute("/products", Products),
-  protectedRoute("/skus", Skus),
+  protectedRoute("/wms", WmsBench),
+  protectedRoute("/catalogo", Catalog),
+  protectedRoute("/catalogo/saldos", Catalog),
+  protectedRoute("/catalogo/mapa", Catalog),
+  protectedRoute("/warehouse", WarehouseMapRedirect),
+  protectedRoute("/products", ProductsRedirect),
+  protectedRoute("/skus", SkusRedirect),
   protectedRoute("/movements", Movements),
   protectedRoute("/orders", Orders),
-  protectedRoute("/faturamento", Billing),
-  protectedRoute("/tabela-precos", PriceList),
+  protectedRoute("/faturamento", BillingHub),
+  protectedRoute("/faturamento/tabela", BillingHub),
+  protectedRoute("/tabela-precos", PriceListRedirect),
   protectedRoute("/agente", AiControl),
   protectedRoute("/agente/conhecimento", AgentKnowledge),
   protectedRoute("/suporte", Support),
@@ -909,7 +931,8 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/portal/documentos", ClienteDocumentos),
   protectedRoute("/portal/agente/operacional", ClientAgentRedirect),
   protectedRoute("/portal/agente", ClienteAssistente),
-  protectedRoute("/minhas-faturas", MyInvoices),
+  // Tela antiga de faturas; /portal/faturas é a dona. Redirect preserva links salvos.
+  protectedRoute("/minhas-faturas", ClientInvoicesRedirect),
 ];
 
 function ProtectedRoute({

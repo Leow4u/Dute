@@ -8,6 +8,8 @@ import { AlertTriangle, ArrowRight, Boxes, ClipboardCheck, Edit, Layers, MapPin,
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useForm } from "react-hook-form";
+import { useAppUser } from "@/lib/auth";
+import { canWriteCatalog, humanApiError } from "@/lib/permissions";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
@@ -39,6 +41,9 @@ const skuSchema = z.object({
 type SkuFormValues = z.infer<typeof skuSchema>;
 
 export default function Skus() {
+  // Espelho do requireCatalogWrite do servidor (mesma regra de Produtos).
+  const { user } = useAppUser();
+  const catalogWriter = canWriteCatalog(user?.publicMetadata.role);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [quickFilter, setQuickFilter] = useState("todos");
@@ -92,7 +97,7 @@ export default function Skus() {
       title="SKUs e saldos"
       description="Visão física para Rafael e Manoel conferirem disponibilidade real, reserva, condição e endereço de armazenagem. Toda diferença precisa nascer de ledger, não de edição solta."
       icon={<Layers className="h-6 w-6" />}
-      actions={<SkuModal />}
+      actions={catalogWriter ? <SkuModal /> : undefined}
       meta={
         <>
           <StockBadge>Operação interna</StockBadge>
@@ -100,14 +105,9 @@ export default function Skus() {
         </>
       }
     >
+      {/* "SKUs carregados" era contagem técnica da página, não decisão de
+          estoque — o total já aparece na paginação da tabela. */}
       <StockMetricsGrid>
-        <StockMetricCard
-          label="SKUs carregados"
-          value={formatStockNumber(data?.total ?? 0)}
-          hint="Linhas físicas monitoradas na base operacional."
-          icon={<PackageCheck className="h-5 w-5" />}
-          tone="blue"
-        />
         <StockMetricCard
           label="Saldo físico"
           value={formatStockNumber(stats.physical)}
@@ -230,10 +230,14 @@ export default function Skus() {
                           </div>
                         </td>
                         <td className="px-4 py-2 text-center">
-                          <div className="flex items-center justify-center gap-2">
-                            <SkuModal sku={sku} />
-                            <DeleteSkuButton id={sku.id} cod_btg={sku.cod_btg} />
-                          </div>
+                          {catalogWriter ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <SkuModal sku={sku} />
+                              <DeleteSkuButton id={sku.id} cod_btg={sku.cod_btg} />
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
                         </td>
                       </tr>
                     );
@@ -292,8 +296,12 @@ function SkuModal({ sku }: { sku?: any }) {
             toast({ title: "SKU atualizado com sucesso" });
             setOpen(false);
           },
-          onError: () => {
-            toast({ title: "Erro ao atualizar SKU", variant: "destructive" });
+          onError: (error) => {
+            toast({
+              title: "Erro ao atualizar SKU",
+              description: humanApiError(error, "Tente novamente em instantes."),
+              variant: "destructive",
+            });
           }
         }
       );
@@ -307,8 +315,12 @@ function SkuModal({ sku }: { sku?: any }) {
             setOpen(false);
             reset();
           },
-          onError: () => {
-            toast({ title: "Erro ao criar SKU", variant: "destructive" });
+          onError: (error) => {
+            toast({
+              title: "Erro ao criar SKU",
+              description: humanApiError(error, "Tente novamente em instantes."),
+              variant: "destructive",
+            });
           }
         }
       );
@@ -456,8 +468,12 @@ function DeleteSkuButton({ id, cod_btg }: { id: number, cod_btg: string }) {
           toast({ title: "SKU excluído" });
           setOpen(false);
         },
-        onError: () => {
-          toast({ title: "Erro ao excluir SKU", variant: "destructive" });
+        onError: (error) => {
+          toast({
+            title: "Erro ao excluir SKU",
+            description: humanApiError(error, "Tente novamente em instantes."),
+            variant: "destructive",
+          });
         }
       }
     );

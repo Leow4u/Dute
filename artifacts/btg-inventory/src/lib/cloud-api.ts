@@ -1437,7 +1437,11 @@ async function getClientOverview() {
           readLimited(collectionNames.orders, OPS_TASK_READ_CAP, "data_solic", "desc"),
           Promise.resolve([]),
           readLimited(collectionNames.customerRequests, OPS_TASK_READ_CAP, "created_at", "desc"),
-          readLimited(collectionNames.periods, 120, "competencia", "desc"),
+          // Tolerante: papéis internos sem canReadBilling (coordenador) não
+          // derrubam a prévia do portal por causa do sinal de faturamento.
+          readLimited(collectionNames.periods, 120, "competencia", "desc").catch(
+            () => [] as AnyRecord[],
+          ),
           readLimited(collectionNames.agentInbox, 100, "created_at", "desc"),
           readLimited(collectionNames.documents, OPS_TASK_READ_CAP, "created_at", "desc"),
         ],
@@ -3120,7 +3124,12 @@ async function getAiOverview() {
     readLimited(collectionNames.skus, CATALOG_READ_CAP),
     readLimited(collectionNames.movements, RECENT_MOVEMENTS_CAP, "data", "desc"),
     readLimited(collectionNames.orders, OPS_TASK_READ_CAP, "data_solic", "desc"),
-    readLimited(collectionNames.periods, 120, "competencia", "desc"),
+    // Papéis sem canReadBilling (ex.: coordenador, por decisão de produto)
+    // recebem permission-denied aqui; a visão geral segue de pé sem o sinal
+    // de faturamento em vez de morrer no Promise.all.
+    readLimited(collectionNames.periods, 120, "competencia", "desc").catch(
+      () => [] as AnyRecord[],
+    ),
     readLimited(collectionNames.events, RECENT_EVENTS_CAP, "occurred_at", "desc"),
     readLimited(collectionNames.agentInbox, 100, "created_at", "desc"),
     readLimited(collectionNames.agentMemory, 50, "updated_at", "desc"),

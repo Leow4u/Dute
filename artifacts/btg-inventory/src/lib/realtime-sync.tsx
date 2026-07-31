@@ -88,18 +88,20 @@ const OPERATIONS_ONLY_COLLECTIONS = new Set<string>([
 ]);
 
 /**
- * canReadBilling() = owner/admin/interno/financeiro/suporte — sem `wms`.
- * Verificado em produção: a sessão wms registrava permission-denied contínuo
- * em billing_periods.
+ * canReadBilling() = owner/admin/financeiro/suporte. `wms` nunca leu;
+ * `interno` saiu por decisão de produto (30/07/2026): o coordenador não
+ * acompanha faturamento. Assinar sem permissão só gera permission-denied
+ * contínuo no console — verificado em produção na sessão wms.
  */
 const BILLING_ONLY_COLLECTIONS = new Set<string>(["billing_periods"]);
+const BILLING_REALTIME_ROLES = new Set(["owner", "admin", "financeiro", "suporte"]);
 
 function internalHotCollectionsForRole(role: string) {
   const blocked = new Set<string>();
   if (role === "financeiro") {
     for (const name of OPERATIONS_ONLY_COLLECTIONS) blocked.add(name);
   }
-  if (role === "wms") {
+  if (!BILLING_REALTIME_ROLES.has(role)) {
     for (const name of BILLING_ONLY_COLLECTIONS) blocked.add(name);
   }
   return INTERNAL_HOT_COLLECTIONS.filter((name) => !blocked.has(name));

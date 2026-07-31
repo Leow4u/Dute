@@ -74,8 +74,12 @@ service cloud.firestore {
       return hasAnyRole(['owner', 'admin', 'interno', 'wms', 'suporte']);
     }
 
+    // Decisão de produto (30/07/2026): o coordenador operacional (interno)
+    // NÃO acompanha faturamento — papel some da lista. As telas do interno
+    // que tocavam billing em Promise.all foram tornadas tolerantes antes
+    // desta mudança (getAiOverview / getClientOverview em cloud-api.ts).
     function canReadBilling() {
-      return hasAnyRole(['owner', 'admin', 'interno', 'financeiro', 'suporte']);
+      return hasAnyRole(['owner', 'admin', 'financeiro', 'suporte']);
     }
 
     /**

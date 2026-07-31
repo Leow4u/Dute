@@ -1437,7 +1437,10 @@ export default function WarehouseOps({
         />
       ) : (
         <>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          {/* Só o que muda a próxima ação do turno: carga, urgência e
+              bloqueio. Vazão de hoje é histórico; alertas IA têm dono
+              (Agent Dute, onde existe a ação de resolver). */}
+          <div className="grid gap-4 md:grid-cols-3">
             <MetricCard
               title="Pendências totais"
               value={formatNumber(metrics.pendingTotal)}
@@ -1455,18 +1458,6 @@ export default function WarehouseOps({
               value={formatNumber(metrics.critical)}
               caption="Bloqueios, prioridade crítica e exceções ativas."
               icon={AlertTriangle}
-            />
-            <MetricCard
-              title="Avançadas hoje"
-              value={formatNumber(metrics.throughputToday)}
-              caption={`SLA médio: ${formatSla(metrics.avgSlaMinutes)}.`}
-              icon={CheckCircle2}
-            />
-            <MetricCard
-              title="Alertas IA"
-              value={formatNumber(metrics.agentAlerts)}
-              caption="Sinais ativos no painel operacional do agente."
-              icon={Sparkles}
             />
           </div>
 

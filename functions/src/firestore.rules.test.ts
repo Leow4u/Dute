@@ -499,3 +499,34 @@ describe("financeiro consegue calcular a fatura", () => {
     await assertFails(getDoc(doc(database, "system_controls", "inventory")));
   });
 });
+
+describe("coordenador fora do faturamento (decisão de produto 30/07)", () => {
+  it("interno não lê coleções de faturamento", async () => {
+    const database = testEnvironment
+      .authenticatedContext("ops-a", { email: "ops-a@example.com" })
+      .firestore();
+    await assertFails(getDocs(collection(database, "billing_periods")));
+    await assertFails(getDocs(collection(database, "billing_price_list")));
+    await assertFails(getDocs(collection(database, "billing_manual")));
+  });
+
+  it("interno segue lendo o operacional que coordena", async () => {
+    const database = testEnvironment
+      .authenticatedContext("ops-a", { email: "ops-a@example.com" })
+      .firestore();
+    await assertSucceeds(getDocs(collection(database, "products")));
+    await assertSucceeds(getDocs(collection(database, "movements")));
+    await assertSucceeds(
+      getDoc(doc(database, "system_controls", "inventory")),
+    );
+  });
+
+  it("suporte e financeiro mantêm a leitura de faturamento", async () => {
+    for (const uid of ["finance-a"]) {
+      const database = testEnvironment
+        .authenticatedContext(uid, { email: `${uid}@example.com` })
+        .firestore();
+      await assertSucceeds(getDocs(collection(database, "billing_periods")));
+    }
+  });
+});

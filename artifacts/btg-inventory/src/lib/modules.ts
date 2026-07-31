@@ -1,27 +1,18 @@
 import {
   Activity,
-  ArrowDownToLine,
   ArrowRightLeft,
   BarChart3,
   Building2,
-  Boxes,
   BrainCircuit,
   ClipboardList,
   FileText,
   Home,
   Inbox,
   LayoutDashboard,
-  ListChecks,
-  Map as MapIcon,
-  PackageCheck,
-  PackageOpen,
   PackagePlus,
   PackageSearch,
-  PackageX,
   Receipt,
-  RotateCcw,
   ShoppingCart,
-  Tags,
   Truck,
   Users,
   Warehouse,
@@ -39,33 +30,6 @@ export type ProfileRole =
 
 export type AppRole = "interno" | "cliente";
 export type CurrentAppRole = AppRole;
-
-export type ModuleIcon =
-  | "tower"
-  | "requests"
-  | "wms"
-  | "inventory"
-  | "billing"
-  | "documents"
-  | "agent"
-  | "admin"
-  | "orders"
-  | "warehouse"
-  | "reports";
-
-export type ModuleNavItem = {
-  href: string;
-  label: string;
-  description?: string;
-  icon: ModuleIcon;
-  roles: ProfileRole[];
-};
-
-export type ModuleSection = {
-  id: string;
-  title: string;
-  items: ModuleNavItem[];
-};
 
 export const INTERNAL_ROLES: ProfileRole[] = [
   "owner",
@@ -111,214 +75,6 @@ export function canAccessModule(
 ) {
   if (!allowedRoles?.length) return Boolean(role);
   return Boolean(role && allowedRoles.includes(role));
-}
-
-export const INTERNAL_MODULES: ModuleSection[] = [
-  {
-    id: "control",
-    title: "Comando",
-    items: [
-      {
-        href: "/dashboard",
-        label: "Torre de Controle",
-        description: "Riscos, SLAs, IA e operação em tempo real.",
-        icon: "tower",
-        roles: INTERNAL_ROLES,
-      },
-      {
-        href: "/solicitacoes",
-        label: "Solicitações",
-        description: "Triagem e aprovação do portal do cliente.",
-        icon: "requests",
-        roles: OPERATIONS_ROLES,
-      },
-      {
-        href: "/agente",
-        label: "Agent Dute",
-        description: "Memória, recomendações e rastreabilidade Genkit.",
-        icon: "agent",
-        roles: INTERNAL_ROLES,
-      },
-      {
-        href: "/suporte",
-        label: "Suporte",
-        description: "Saúde, incidentes, eventos e rotina de produção.",
-        icon: "reports",
-        roles: SUPPORT_ROLES,
-      },
-    ],
-  },
-  {
-    id: "wms",
-    title: "WMS",
-    items: [
-      {
-        href: "/wms",
-        label: "Operação Física",
-        description: "Recebimento, qualidade, picking, packing e expedição.",
-        icon: "wms",
-        roles: WMS_ROLES,
-      },
-      {
-        href: "/warehouse",
-        label: "Mapa do Armazém",
-        description: "Endereços, ruas e posições físicas.",
-        icon: "warehouse",
-        roles: WMS_ROLES,
-      },
-    ],
-  },
-  {
-    id: "inventory",
-    title: "Estoque",
-    items: [
-      {
-        href: "/products",
-        label: "Produtos",
-        description: "Cadastro consolidado e custo por item.",
-        icon: "inventory",
-        roles: INTERNAL_ROLES,
-      },
-      {
-        href: "/skus",
-        label: "SKUs e Saldos",
-        description: "Saldo, posição e disponibilidade.",
-        icon: "inventory",
-        roles: INTERNAL_ROLES,
-      },
-      {
-        href: "/movements",
-        label: "Movimentações",
-        description: "Livro de estoque e rastreabilidade física.",
-        icon: "inventory",
-        roles: INTERNAL_ROLES,
-      },
-      {
-        href: "/orders",
-        label: "Pedidos",
-        description: "Pedidos operacionais ligados ao WMS.",
-        icon: "orders",
-        roles: OPERATIONS_ROLES,
-      },
-      {
-        href: "/reports",
-        label: "Relatórios",
-        description: "Exportações e visões analíticas.",
-        icon: "reports",
-        roles: INTERNAL_ROLES,
-      },
-    ],
-  },
-  {
-    id: "finance",
-    title: "Financeiro",
-    items: [
-      {
-        href: "/faturamento",
-        label: "Faturamento",
-        description: "Competências, serviços e cobrança.",
-        icon: "billing",
-        roles: FINANCE_ROLES,
-      },
-      {
-        href: "/tabela-precos",
-        label: "Tabela de Preços",
-        description: "Regras comerciais de armazenagem e operação.",
-        icon: "billing",
-        roles: FINANCE_ROLES,
-      },
-    ],
-  },
-  {
-    id: "admin",
-    title: "Administração",
-    items: [
-      {
-        href: "/clientes",
-        label: "Clientes",
-        description: "Contas, portal e isolamento por contrato.",
-        icon: "admin",
-        roles: ACCESS_ADMIN_ROLES,
-      },
-      {
-        href: "/usuarios",
-        label: "Usuários e Acessos",
-        description: "Convites, papéis e vínculo com clientes.",
-        icon: "admin",
-        roles: ACCESS_ADMIN_ROLES,
-      },
-    ],
-  },
-];
-
-export const CLIENT_MODULES: ModuleSection[] = [
-  {
-    id: "client",
-    title: "Portal do Cliente",
-    items: [
-      {
-        href: "/portal",
-        label: "Início",
-        description: "Resumo do contrato e próximos passos.",
-        icon: "tower",
-        roles: ["cliente"],
-      },
-      {
-        href: "/portal/estoque",
-        label: "Estoque",
-        description: "SKUs, saldos e itens críticos.",
-        icon: "inventory",
-        roles: ["cliente"],
-      },
-      {
-        href: "/portal/recebimentos",
-        label: "Recebimentos",
-        description: "Avisos de entregas dos fornecedores.",
-        icon: "requests",
-        roles: ["cliente"],
-      },
-      {
-        href: "/portal/pedidos",
-        label: "Pedidos",
-        description: "Acompanhamento da separação até a entrega.",
-        icon: "orders",
-        roles: ["cliente"],
-      },
-      {
-        href: "/portal/faturas",
-        label: "Faturas",
-        description: "Competências e valores.",
-        icon: "billing",
-        roles: ["cliente"],
-      },
-      {
-        href: "/portal/documentos",
-        label: "Documentos",
-        description: "Notas, comprovantes e romaneios.",
-        icon: "documents",
-        roles: ["cliente"],
-      },
-      {
-        href: "/portal/agente",
-        label: "Chat Agent Dute",
-        description: "Conversa com o agente operacional.",
-        icon: "agent",
-        roles: ["cliente"],
-      },
-    ],
-  },
-];
-
-export function visibleSections(
-  sections: ModuleSection[],
-  role: ProfileRole | null | undefined,
-) {
-  return sections
-    .map((section) => ({
-      ...section,
-      items: section.items.filter((item) => canAccessModule(role, item.roles)),
-    }))
-    .filter((section) => section.items.length > 0);
 }
 
 export type ModuleAudience = "internal" | "client";
@@ -374,6 +130,10 @@ function appModule(
 }
 
 export const APP_MODULES: AppModule[] = [
+  // "Como está a operação agora?" tem um lugar só. Torre de Controle reúne
+  // as antigas 3 telas de situação (Dashboard, Agent Dute Operacional,
+  // Suporte/Observabilidade) que buscavam os mesmos endpoints e repetiam os
+  // mesmos contadores em réguas próprias.
   appModule({
     id: "control-tower",
     label: "Torre de Controle",
@@ -395,6 +155,27 @@ export const APP_MODULES: AppModule[] = [
         href: "/reports",
         icon: BarChart3,
         roles: INTERNAL_ROLES,
+      }),
+      navRoute({
+        id: "ai-agent-panel",
+        label: "Agent Dute",
+        href: "/agente",
+        icon: BrainCircuit,
+        roles: INTERNAL_ROLES,
+      }),
+      navRoute({
+        id: "ai-agent-knowledge",
+        label: "Conhecimento",
+        href: "/agente/conhecimento",
+        icon: FileText,
+        roles: INTERNAL_ROLES,
+      }),
+      navRoute({
+        id: "support-observability",
+        label: "Observabilidade",
+        href: "/suporte",
+        icon: Activity,
+        roles: SUPPORT_ROLES,
       }),
     ],
   }),
@@ -420,75 +201,16 @@ export const APP_MODULES: AppModule[] = [
     audience: "internal",
     icon: Warehouse,
     roles: WMS_ROLES,
+    // As etapas (Recebimento, Putaway, Picking...) são módulos internos da
+    // mesma bancada — a tela troca de etapa pelo seletor próprio. Um único
+    // item de menu; os deep links /wms/<etapa> seguem válidos via
+    // WMS_DEEP_LINK_PATHS.
     routes: [
       navRoute({
-        id: "wms-receiving",
-        label: "Recebimento",
-        href: "/wms/recebimento",
-        icon: ArrowDownToLine,
-        roles: WMS_ROLES,
-      }),
-      navRoute({
-        id: "wms-quality",
-        label: "Qualidade",
-        href: "/wms/qualidade",
-        icon: ClipboardList,
-        roles: WMS_ROLES,
-      }),
-      navRoute({
-        id: "wms-putaway",
-        label: "Putaway",
-        href: "/wms/putaway",
-        icon: MapIcon,
-        roles: WMS_ROLES,
-      }),
-      navRoute({
-        id: "wms-picking",
-        label: "Picking",
-        href: "/wms/picking",
-        icon: PackageOpen,
-        roles: WMS_ROLES,
-      }),
-      navRoute({
-        id: "wms-packing",
-        label: "Packing",
-        href: "/wms/packing",
-        icon: PackageCheck,
-        roles: WMS_ROLES,
-      }),
-      navRoute({
-        id: "wms-shipping",
-        label: "Expedição",
-        href: "/wms/expedicao",
-        icon: Truck,
-        roles: WMS_ROLES,
-      }),
-      navRoute({
-        id: "wms-returns",
-        label: "Devoluções",
-        href: "/wms/devolucoes",
-        icon: RotateCcw,
-        roles: WMS_ROLES,
-      }),
-      navRoute({
-        id: "wms-inventory",
-        label: "Inventário",
-        href: "/wms/inventario",
-        icon: ListChecks,
-        roles: WMS_ROLES,
-      }),
-      navRoute({
-        id: "wms-exceptions",
-        label: "Exceções",
-        href: "/wms/excecoes",
-        icon: PackageX,
-        roles: WMS_ROLES,
-      }),
-      navRoute({
-        id: "wms-map",
-        label: "Mapa do armazém",
-        href: "/warehouse",
-        icon: Boxes,
+        id: "wms-bench",
+        label: "WMS",
+        href: "/wms",
+        icon: Warehouse,
         roles: WMS_ROLES,
       }),
     ],
@@ -500,18 +222,13 @@ export const APP_MODULES: AppModule[] = [
     icon: PackageSearch,
     roles: WMS_ROLES,
     routes: [
+      // Produtos e SKUs eram duas visões do mesmo catálogo; o Mapa do
+      // armazém é um pivô da coluna Localização. Viraram abas de /catalogo.
       navRoute({
-        id: "inventory-products",
-        label: "Produtos",
-        href: "/products",
+        id: "inventory-catalog",
+        label: "Catálogo",
+        href: "/catalogo",
         icon: PackageSearch,
-        roles: WMS_ROLES,
-      }),
-      navRoute({
-        id: "inventory-skus",
-        label: "SKUs e saldos",
-        href: "/skus",
-        icon: Tags,
         roles: WMS_ROLES,
       }),
       navRoute({
@@ -537,18 +254,13 @@ export const APP_MODULES: AppModule[] = [
     icon: Receipt,
     roles: FINANCE_ROLES,
     routes: [
+      // A Tabela de preços é a configuração que a competência executa;
+      // virou aba de /faturamento.
       navRoute({
-        id: "billing-periods",
+        id: "billing-hub",
         label: "Faturamento",
         href: "/faturamento",
         icon: Receipt,
-        roles: FINANCE_ROLES,
-      }),
-      navRoute({
-        id: "billing-price-list",
-        label: "Tabela de preços",
-        href: "/tabela-precos",
-        icon: ListChecks,
         roles: FINANCE_ROLES,
       }),
     ],
@@ -566,45 +278,6 @@ export const APP_MODULES: AppModule[] = [
         href: "/documentos",
         icon: FileText,
         roles: INTERNAL_ROLES,
-      }),
-    ],
-  }),
-  appModule({
-    id: "ai-agent",
-    label: "Agent Dute",
-    audience: "internal",
-    icon: BrainCircuit,
-    roles: INTERNAL_ROLES,
-    routes: [
-      navRoute({
-        id: "ai-agent-panel",
-        label: "Operacional",
-        href: "/agente",
-        icon: BrainCircuit,
-        roles: INTERNAL_ROLES,
-      }),
-      navRoute({
-        id: "ai-agent-knowledge",
-        label: "Conhecimento",
-        href: "/agente/conhecimento",
-        icon: FileText,
-        roles: INTERNAL_ROLES,
-      }),
-    ],
-  }),
-  appModule({
-    id: "support",
-    label: "Suporte",
-    audience: "internal",
-    icon: Activity,
-    roles: SUPPORT_ROLES,
-    routes: [
-      navRoute({
-        id: "support-observability",
-        label: "Observabilidade",
-        href: "/suporte",
-        icon: Activity,
-        roles: SUPPORT_ROLES,
       }),
     ],
   }),
@@ -747,6 +420,52 @@ export const APP_MODULES: AppModule[] = [
   }),
 ];
 
+/**
+ * Etapas da bancada WMS que saíram do menu mas continuam roteáveis como
+ * deep link (atalhos salvos, links compartilhados entre operadores).
+ */
+export const WMS_DEEP_LINK_PATHS = [
+  "/wms/recebimento",
+  "/wms/qualidade",
+  "/wms/putaway",
+  "/wms/picking",
+  "/wms/packing",
+  "/wms/expedicao",
+  "/wms/devolucoes",
+  "/wms/inventario",
+  "/wms/excecoes",
+  "/warehouse",
+] as const;
+
+const WMS_DEEP_LINK_APP_ROLES = Object.fromEntries(
+  WMS_DEEP_LINK_PATHS.map((path) => [path, currentAppRolesFor(WMS_ROLES)]),
+);
+
+const WMS_DEEP_LINK_PROFILE_ROLES = Object.fromEntries(
+  WMS_DEEP_LINK_PATHS.map((path) => [path, WMS_ROLES]),
+);
+
+/**
+ * Abas das telas fundidas + rotas antigas que agora redirecionam para elas.
+ * Precisam de entrada própria porque não constam como rota de menu.
+ */
+const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
+  { path: "/catalogo/saldos", roles: WMS_ROLES },
+  { path: "/catalogo/mapa", roles: WMS_ROLES },
+  { path: "/products", roles: WMS_ROLES },
+  { path: "/skus", roles: WMS_ROLES },
+  { path: "/faturamento/tabela", roles: FINANCE_ROLES },
+  { path: "/tabela-precos", roles: FINANCE_ROLES },
+];
+
+const MERGED_SCREEN_APP_ROLES = Object.fromEntries(
+  MERGED_SCREEN_PATHS.map(({ path, roles }) => [path, currentAppRolesFor(roles)]),
+);
+
+const MERGED_SCREEN_PROFILE_ROLES = Object.fromEntries(
+  MERGED_SCREEN_PATHS.map(({ path, roles }) => [path, roles]),
+);
+
 const ROUTE_APP_ROLES = APP_MODULES.reduce<Record<string, CurrentAppRole[]>>(
   (acc, module) => {
     module.routes.forEach((route) => {
@@ -757,6 +476,8 @@ const ROUTE_APP_ROLES = APP_MODULES.reduce<Record<string, CurrentAppRole[]>>(
     return acc;
   },
   {
+    ...WMS_DEEP_LINK_APP_ROLES,
+    ...MERGED_SCREEN_APP_ROLES,
     "/wms": currentAppRolesFor(WMS_ROLES),
     "/minhas-faturas": ["cliente"],
     "/configuracoes": ["interno", "cliente"],
@@ -773,6 +494,8 @@ const ROUTE_PROFILE_ROLES = APP_MODULES.reduce<Record<string, ProfileRole[]>>(
     return acc;
   },
   {
+    ...WMS_DEEP_LINK_PROFILE_ROLES,
+    ...MERGED_SCREEN_PROFILE_ROLES,
     "/wms": WMS_ROLES,
     "/minhas-faturas": ["cliente"],
     "/configuracoes": [...INTERNAL_ROLES, "cliente"],
@@ -787,6 +510,18 @@ export function normalizePath(path: string): string {
 
 export function getHomePathForAppRole(role: AppRole | null | undefined) {
   return role === "cliente" ? "/portal" : "/dashboard";
+}
+
+/**
+ * Aterrissagem por papel do perfil: cada pessoa cai na tela onde trabalha,
+ * não num dashboard genérico. O operador WMS abre a bancada; o financeiro,
+ * a competência do mês.
+ */
+export function getHomePathForProfile(role: ProfileRole | null | undefined) {
+  if (role === "cliente") return "/portal";
+  if (role === "wms") return "/wms";
+  if (role === "financeiro") return "/faturamento";
+  return "/dashboard";
 }
 
 export function getRouteAppRoles(path: string): AppRole[] {

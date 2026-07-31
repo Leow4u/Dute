@@ -28,6 +28,11 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import {
+  GenkitFlowBoard,
+  OperationalFoundationCard,
+  buildRuntimeFlows,
+} from "@/features/agent-telemetry";
 import { cn } from "@/lib/utils";
 
 type AnyRecord = Record<string, any>;
@@ -595,6 +600,20 @@ export default function Support() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Telemetria de desenvolvimento (Genkit + malha Firestore): status de
+          implementação pertence à Observabilidade, não às telas de turno.
+          Blocos movidos da tela Agent Dute. */}
+      <GenkitFlowBoard
+        flows={buildRuntimeFlows(
+          derived.events.map((event) => ({
+            type: String(event.type ?? ""),
+            title: String(event.title ?? ""),
+            occurred_at: (event.occurred_at as string | null) ?? null,
+          })),
+        )}
+      />
+      <OperationalFoundationCard />
     </div>
   );
 }

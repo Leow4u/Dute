@@ -8,6 +8,8 @@ import { AlertTriangle, Boxes, CircleDollarSign, Edit, PackageSearch, Plus, Tags
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useForm } from "react-hook-form";
+import { useAppUser } from "@/lib/auth";
+import { canWriteCatalog, humanApiError } from "@/lib/permissions";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
@@ -38,6 +40,11 @@ const productSchema = z.object({
 type ProductFormValues = z.infer<typeof productSchema>;
 
 export default function Products() {
+  // Espelho do requireCatalogWrite do servidor: quem não pode criar/editar
+  // não vê o botão — antes o wms preenchia o formulário inteiro para
+  // receber um "Erro ao criar produto" sem explicação.
+  const { user } = useAppUser();
+  const catalogWriter = canWriteCatalog(user?.publicMetadata.role);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("todos");
@@ -94,7 +101,7 @@ export default function Products() {
       title="Produtos"
       description="Catálogo mestre do BTG. Aqui o código do cliente, descrição, custo unitário e saldo consolidado precisam ficar limpos antes de qualquer movimentação."
       icon={<PackageSearch className="h-6 w-6" />}
-      actions={<ProductModal />}
+      actions={catalogWriter ? <ProductModal /> : undefined}
       meta={
         <>
           <StockBadge>BTG Pactual</StockBadge>
@@ -102,6 +109,8 @@ export default function Products() {
         </>
       }
     >
+      {/* "Peças na página" era soma do recorte visível — número que muda ao
+          paginar e não sustenta decisão nenhuma. */}
       <StockMetricsGrid>
         <StockMetricCard
           label="Produtos cadastrados"
@@ -109,12 +118,6 @@ export default function Products() {
           hint="Registros mestres disponíveis para a operação."
           icon={<Tags className="h-5 w-5" />}
           tone="blue"
-        />
-        <StockMetricCard
-          label="Peças na página"
-          value={formatStockNumber(pagePieces)}
-          hint="Saldo agregado dos produtos carregados agora."
-          icon={<Boxes className="h-5 w-5" />}
         />
         <StockMetricCard
           label="Valor carregado"
@@ -196,10 +199,14 @@ export default function Products() {
                       <td className="px-4 py-2 text-right font-medium">{formatStockNumber(product.estoque_btg)}</td>
                       <td className="px-4 py-2 text-right font-medium text-foreground">{formatStockMoney(product.custo_total)}</td>
                       <td className="px-4 py-2 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <ProductModal product={product} />
-                          <DeleteProductButton id={product.id} cod_cliente={product.cod_cliente} />
-                        </div>
+                        {catalogWriter ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <ProductModal product={product} />
+                            <DeleteProductButton id={product.id} cod_cliente={product.cod_cliente} />
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -256,8 +263,12 @@ function ProductModal({ product }: { product?: any }) {
             toast({ title: "Produto atualizado com sucesso" });
             setOpen(false);
           },
-          onError: () => {
-            toast({ title: "Erro ao atualizar produto", variant: "destructive" });
+          onError: (error) => {
+            toast({
+              title: "Erro ao atualizar produto",
+              description: humanApiError(error, "Tente novamente em instantes."),
+              variant: "destructive",
+            });
           }
         }
       );
@@ -271,8 +282,12 @@ function ProductModal({ product }: { product?: any }) {
             setOpen(false);
             reset();
           },
-          onError: () => {
-            toast({ title: "Erro ao criar produto", variant: "destructive" });
+          onError: (error) => {
+            toast({
+              title: "Erro ao criar produto",
+              description: humanApiError(error, "Tente novamente em instantes."),
+              variant: "destructive",
+            });
           }
         }
       );
@@ -360,8 +375,12 @@ function DeleteProductButton({ id, cod_cliente }: { id: number, cod_cliente: str
           toast({ title: "Produto excluído" });
           setOpen(false);
         },
-        onError: () => {
-          toast({ title: "Erro ao excluir produto", variant: "destructive" });
+        onError: (error) => {
+          toast({
+            title: "Erro ao excluir produto",
+            description: humanApiError(error, "Tente novamente em instantes."),
+            variant: "destructive",
+          });
         }
       }
     );

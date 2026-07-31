@@ -39,6 +39,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { useAppUser } from "@/lib/auth";
+import { canDecideRequests, humanApiError } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
 type CustomerRequest = {
@@ -886,6 +888,11 @@ function mergeTransitionOverlay(
 }
 
 export default function CustomerRequests() {
+  // requireOperationsCoordinator no servidor: aprovar/rejeitar é do
+  // coordenador (interno) e da administração. O operador vê a fila, mas não
+  // vê botões que o backend recusaria.
+  const { user } = useAppUser();
+  const requestDecider = canDecideRequests(user?.publicMetadata.role);
   const qc = useQueryClient();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
@@ -972,7 +979,7 @@ export default function CustomerRequests() {
     onError: (error) => {
       toast({
         title: "Erro ao atualizar solicitação",
-        description: error instanceof Error ? error.message : undefined,
+        description: humanApiError(error, "Tente novamente em instantes."),
         variant: "destructive",
       });
     },
@@ -1131,36 +1138,18 @@ export default function CustomerRequests() {
         </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      {/* Regra da auditoria de UX: só indicadores que mudam a decisão de
+          triagem. Aprovadas/rejeitadas/encerradas são histórico — estão na
+          fila com o filtro de status; saldo validado e recebimentos são
+          consequência da aprovação, não insumo dela. */}
+      <div className="grid gap-4 md:grid-cols-3">
         <SummaryCard title="Abertas" value={openCount} icon={Clock3} />
-        <SummaryCard title="Aprovadas" value={approvedCount} icon={CheckCircle2} />
-        <SummaryCard title="Rejeitadas" value={rejectedCount} icon={XCircle} />
-        <SummaryCard title="Encerradas" value={closedCount} icon={Archive} />
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <OperationalImpactCard
-          title="Saldo validado"
-          value={operationalImpact.stockReadyCount}
-          caption={`${formatQuantity(
-            operationalImpact.unitsToReserve,
-          )} peça(s) prontas para reserva.`}
-          icon={ShieldCheck}
-          tone="success"
-        />
         <OperationalImpactCard
           title="Bloqueios de aprovação"
           value={operationalImpact.stockBlockedCount}
           caption="Retiradas com saldo insuficiente, ausente ou dados incompletos."
           icon={AlertTriangle}
           tone="danger"
-        />
-        <OperationalImpactCard
-          title="Recebimentos a criar"
-          value={operationalImpact.inboundCount}
-          caption="Aprovação gera entrada para conferência WMS."
-          icon={PackageSearch}
-          tone="info"
         />
         <OperationalImpactCard
           title="Dados pendentes"
@@ -1319,19 +1308,25 @@ export default function CustomerRequests() {
                           {formatDate(item.created_at)}
                         </TableCell>
                         <TableCell className="text-right">
-                          <RequestActions
-                            request={item}
-                            activeAction={activeAction}
-                            isMutating={transition.isPending}
-                            balanceValidation={balanceValidation}
-                            onAction={(action) =>
-                              transition.mutate({
-                                id: item.id,
-                                action,
-                                expectedStatus: normalizeStatus(item.status),
-                              })
-                            }
-                          />
+                          {requestDecider ? (
+                            <RequestActions
+                              request={item}
+                              activeAction={activeAction}
+                              isMutating={transition.isPending}
+                              balanceValidation={balanceValidation}
+                              onAction={(action) =>
+                                transition.mutate({
+                                  id: item.id,
+                                  action,
+                                  expectedStatus: normalizeStatus(item.status),
+                                })
+                              }
+                            />
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              Decisão da coordenação
+                            </span>
+                          )}
                         </TableCell>
                       </TableRow>
                     );
