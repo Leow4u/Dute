@@ -16,7 +16,6 @@ import { useToast } from "@/hooks/use-toast";
 import {
   formatStockMoney,
   formatStockNumber,
-  StockBadge,
   StockFilterChip,
   StockMetricCard,
   StockMetricsGrid,
@@ -99,15 +98,8 @@ export default function Products() {
     <StockPageShell
       eyebrow="Estoque"
       title="Produtos"
-      description="Catálogo mestre do BTG. Aqui o código do cliente, descrição, custo unitário e saldo consolidado precisam ficar limpos antes de qualquer movimentação."
       icon={<PackageSearch className="h-6 w-6" />}
       actions={catalogWriter ? <ProductModal /> : undefined}
-      meta={
-        <>
-          <StockBadge>BTG Pactual</StockBadge>
-          <StockBadge>Fonte: sistema operacional</StockBadge>
-        </>
-      }
     >
       {/* "Peças na página" era soma do recorte visível — número que muda ao
           paginar e não sustenta decisão nenhuma. */}
@@ -115,20 +107,17 @@ export default function Products() {
         <StockMetricCard
           label="Produtos cadastrados"
           value={formatStockNumber(data?.total ?? 0)}
-          hint="Registros mestres disponíveis para a operação."
           icon={<Tags className="h-5 w-5" />}
           tone="blue"
         />
         <StockMetricCard
           label="Valor carregado"
           value={formatStockMoney(pageCost)}
-          hint="Custo total dos produtos visíveis nesta consulta."
           icon={<CircleDollarSign className="h-5 w-5" />}
         />
         <StockMetricCard
           label="Sem custo válido"
           value={formatStockNumber(missingCost)}
-          hint="Itens com saldo, mas sem custo unitário preenchido."
           icon={<AlertTriangle className="h-5 w-5" />}
           tone={missingCost ? "amber" : "default"}
         />
@@ -138,7 +127,7 @@ export default function Products() {
         search={search}
         onSearchChange={setSearch}
         placeholder="Buscar por cod. cliente, produto, categoria, cor ou tamanho"
-        resultText={`${formatStockNumber(filteredProducts.length)} produto(s) exibido(s) nesta página. Use o cadastro apenas para corrigir mestre de produto; saldo nasce nas movimentações.`}
+        resultText={`${formatStockNumber(filteredProducts.length)} produto(s) nesta página`}
       >
         <StockFilterChip
           active={categoryFilter === "todos"}

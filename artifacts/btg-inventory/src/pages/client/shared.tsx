@@ -475,9 +475,9 @@ export function ClientDataBoundary({ children }: ClientDataBoundaryProps) {
 
 type ClientModuleShellProps = {
   overview: ClientOverview;
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
-  description: string;
+  description?: string;
   icon: LucideIcon;
   children: ReactNode;
   className?: string;
@@ -516,12 +516,14 @@ export function ClientModuleShell({
               <h1 className="text-2xl font-semibold tracking-normal text-foreground md:text-[2rem] md:leading-tight">
                 {title}
               </h1>
-              <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-                {description}
-              </p>
+              {description ? (
+                <p className="max-w-3xl text-sm leading-6 text-foreground/70">
+                  {description}
+                </p>
+              ) : null}
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs leading-5 text-muted-foreground md:max-w-sm md:justify-end md:pt-2 md:text-right">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs leading-5 text-foreground/65 md:max-w-sm md:justify-end md:pt-2 md:text-right">
             <span className="font-medium text-foreground">{customerName}</span>
             {customerCode ? <span>Conta {customerCode}</span> : null}
             <span>Atualizado {formatDate(overview.updated_at)}</span>
@@ -627,9 +629,6 @@ export function ModulePanel({
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 space-y-1">
             <CardTitle className="text-base">{title}</CardTitle>
-            {description ? (
-              <CardDescription>{description}</CardDescription>
-            ) : null}
           </div>
           {Icon ? (
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-white/70 text-muted-foreground">
@@ -667,10 +666,10 @@ export function MetricCard({
   tone = "neutral",
 }: MetricCardProps) {
   return (
-    <Card className="min-h-[132px]">
-      <CardContent className="flex h-full flex-col justify-between gap-4 p-5 md:p-5">
+    <Card className="min-h-[120px]">
+      <CardContent className="flex h-full flex-col justify-between gap-3 p-5 md:p-5">
         <div className="flex items-center justify-between gap-4">
-          <p className="text-sm font-medium text-muted-foreground">{label}</p>
+          <p className="text-sm font-medium text-foreground/70">{label}</p>
           <div
             className={cn(
               "flex h-10 w-10 items-center justify-center rounded-2xl border",
@@ -685,7 +684,7 @@ export function MetricCard({
             {value}
           </div>
           {description ? (
-            <p className="text-xs leading-5 text-muted-foreground">
+            <p className="text-xs leading-5 text-foreground/65">
               {description}
             </p>
           ) : null}

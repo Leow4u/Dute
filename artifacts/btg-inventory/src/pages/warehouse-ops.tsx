@@ -42,7 +42,6 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -188,14 +187,14 @@ function MetricCard({
 }: {
   title: string;
   value: string;
-  caption: string;
+  caption?: string;
   icon: LucideIcon;
 }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
         <div className="min-w-0">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
+          <CardTitle className="text-sm font-medium text-foreground/70">
             {title}
           </CardTitle>
           <div className="mt-3 truncate text-2xl font-semibold text-foreground">
@@ -203,12 +202,14 @@ function MetricCard({
           </div>
         </div>
         <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-border bg-white/70">
-          <Icon className="size-4 text-muted-foreground" />
+          <Icon className="size-4 text-primary" aria-hidden="true" />
         </div>
       </CardHeader>
-      <CardContent className="pt-0">
-        <p className="text-xs leading-5 text-muted-foreground">{caption}</p>
-      </CardContent>
+      {caption ? (
+        <CardContent className="pt-0">
+          <p className="text-xs leading-5 text-foreground/65">{caption}</p>
+        </CardContent>
+      ) : null}
     </Card>
   );
 }
@@ -246,9 +247,6 @@ function WmsModuleSnapshot({
             </div>
             <div className="min-w-0">
               <CardTitle className="text-lg">{module.label}</CardTitle>
-              <CardDescription className="mt-1">
-                {module.description}
-              </CardDescription>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -270,19 +268,19 @@ function WmsModuleSnapshot({
       </CardHeader>
       <CardContent className="grid gap-3 p-4 md:grid-cols-[repeat(4,minmax(0,1fr))] xl:grid-cols-[repeat(4,minmax(0,1fr))_minmax(260px,1.3fr)]">
         <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
-          <div className="text-xs text-muted-foreground">Pend.</div>
+          <div className="text-xs text-foreground/70">Pendentes</div>
           <div className="mt-1 text-lg font-semibold text-foreground">
             {formatNumber(pending)}
           </div>
         </div>
         <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
-          <div className="text-xs text-muted-foreground">Exec.</div>
+          <div className="text-xs text-foreground/70">Em execução</div>
           <div className="mt-1 text-lg font-semibold text-foreground">
             {formatNumber(inProgress)}
           </div>
         </div>
         <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
-          <div className="text-xs text-muted-foreground">Exceç.</div>
+          <div className="text-xs text-foreground/70">Exceções</div>
           <div
             className={cn(
               "mt-1 text-lg font-semibold",
@@ -395,9 +393,6 @@ function QueueSlaCard({
             </div>
             <div className="min-w-0">
               <CardTitle className="truncate text-base">{queue.label}</CardTitle>
-              <CardDescription className="mt-1">
-                SLA alvo {formatSla(queue.slaMinutes)}
-              </CardDescription>
             </div>
           </div>
           <Badge variant="outline" className={cn("shrink-0", slaState.className)}>
@@ -411,19 +406,19 @@ function QueueSlaCard({
             <div className="text-lg font-semibold text-foreground">
               {formatNumber(queue.pending)}
             </div>
-            <div className="text-xs text-muted-foreground">pend.</div>
+            <div className="text-xs text-foreground/70">Pendentes</div>
           </div>
           <div className="rounded-[16px] border border-border bg-white/55 px-3 py-2">
             <div className="text-lg font-semibold text-foreground">
               {formatNumber(queue.blockedCount)}
             </div>
-            <div className="text-xs text-muted-foreground">bloq.</div>
+            <div className="text-xs text-foreground/70">Bloqueios</div>
           </div>
           <div className="rounded-[16px] border border-border bg-white/55 px-3 py-2">
             <div className="text-lg font-semibold text-foreground">
               {formatNumber(queue.exceptionCount)}
             </div>
-            <div className="text-xs text-muted-foreground">exceç.</div>
+            <div className="text-xs text-foreground/70">Exceções</div>
           </div>
         </div>
 
@@ -467,8 +462,7 @@ function PhysicalFlowMap({
   selectedTaskId,
   onSelectTask,
   flowKeys = FOCUS_QUEUE_KEYS,
-  title = "Fluxo físico cliente-operador",
-  description = "Recebimento, Putaway, Picking, Packing e Expedição.",
+  title = "Fluxo físico",
 }: {
   queues: NormalizedQueue[];
   alerts: OpsAlert[];
@@ -476,7 +470,6 @@ function PhysicalFlowMap({
   onSelectTask: (taskId: string) => void;
   flowKeys?: QueueKey[];
   title?: string;
-  description?: string;
 }) {
   const flowQueues = flowKeys.flatMap((key) => {
     const queue = queues.find((item) => item.key === key);
@@ -502,16 +495,13 @@ function PhysicalFlowMap({
             <CardTitle className="text-base">
               {title}
             </CardTitle>
-            <CardDescription className="mt-1">
-              {description}
-            </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
             <Badge
               variant="outline"
               className="border-border bg-white/70 text-muted-foreground"
             >
-              {formatNumber(pendingTotal)} pend.
+              {formatNumber(pendingTotal)} pendentes
             </Badge>
             <Badge
               variant="outline"
@@ -584,13 +574,13 @@ function PhysicalFlowMap({
                       <div className="font-semibold text-foreground">
                         {formatNumber(queue.pending)}
                       </div>
-                      <div className="text-muted-foreground">pend.</div>
+                      <div className="text-foreground/70">Pendentes</div>
                     </div>
                     <div className="rounded-[14px] border border-border bg-white/65 px-2 py-2">
                       <div className="font-semibold text-foreground">
                         {formatNumber(queue.inProgress)}
                       </div>
-                      <div className="text-muted-foreground">exec.</div>
+                      <div className="text-foreground/70">Em execução</div>
                     </div>
                     <div className="rounded-[14px] border border-border bg-white/65 px-2 py-2">
                       <div
@@ -601,7 +591,7 @@ function PhysicalFlowMap({
                       >
                         {formatNumber(queue.blockedCount)}
                       </div>
-                      <div className="text-muted-foreground">bloq.</div>
+                      <div className="text-foreground/70">Bloqueios</div>
                     </div>
                   </div>
 
@@ -674,7 +664,7 @@ function TaskListItem({
             ) : null}
             {exceptions > 0 ? (
               <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">
-                {formatNumber(exceptions)} exceç.
+                {formatNumber(exceptions)} exceções
               </Badge>
             ) : null}
           </div>
@@ -770,13 +760,10 @@ function QueueCard({
                   </Badge>
                 ) : null}
               </div>
-              <CardDescription className="mt-1 line-clamp-2">
-                {queue.description}
-              </CardDescription>
             </div>
           </div>
           <Badge variant="outline" className="shrink-0">
-            {formatNumber(queue.pending)} pend.
+            {formatNumber(queue.pending)} pendentes
           </Badge>
         </div>
 
@@ -785,19 +772,19 @@ function QueueCard({
             <div className="text-lg font-semibold text-foreground">
               {formatNumber(queue.inProgress)}
             </div>
-            <div className="text-xs text-muted-foreground">exec.</div>
+            <div className="text-xs text-foreground/70">Em execução</div>
           </div>
           <div>
             <div className="text-lg font-semibold text-foreground">
               {formatNumber(queue.blockedCount)}
             </div>
-            <div className="text-xs text-muted-foreground">bloq.</div>
+            <div className="text-xs text-foreground/70">Bloqueios</div>
           </div>
           <div>
             <div className="text-lg font-semibold text-foreground">
               {formatNumber(queue.completedToday)}
             </div>
-            <div className="text-xs text-muted-foreground">hoje</div>
+            <div className="text-xs text-foreground/70">Hoje</div>
           </div>
           <div>
             <div className="text-lg font-semibold text-foreground">
@@ -866,9 +853,6 @@ function BlockedTasksPanel({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <CardTitle className="text-base">Tarefas bloqueadas</CardTitle>
-            <CardDescription className="mt-1">
-              Itens que precisam de decisão antes do próximo avanço.
-            </CardDescription>
           </div>
           <Badge
             variant="outline"
@@ -950,9 +934,6 @@ function AgentAlertsPanel({
             </div>
             <div className="min-w-0">
               <CardTitle className="text-base">Alertas do agente</CardTitle>
-              <CardDescription className="mt-1">
-                Riscos, bloqueios e recomendações operacionais.
-              </CardDescription>
             </div>
           </div>
           <Badge variant="outline" className="shrink-0">
@@ -1315,9 +1296,6 @@ export default function WarehouseOps({
             <h1 className="text-2xl font-semibold tracking-normal text-foreground">
               Inventário do estoque
             </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Inicie o saldo físico, revise as contagens e faça conferências periódicas.
-            </p>
           </div>
         </div>
         <CycleCountWorkspace />
@@ -1337,11 +1315,8 @@ export default function WarehouseOps({
             </div>
             <div className="min-w-0">
               <h1 className="text-2xl font-semibold tracking-normal text-foreground">
-                Bancada WMS Dutelog
+                Bancada WMS
               </h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Receba, confira e libere para o estoque BTG.
-              </p>
             </div>
           </div>
         </div>
@@ -1377,17 +1352,11 @@ export default function WarehouseOps({
           </div>
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold tracking-normal text-foreground">
-              Bancada WMS Dutelog
+              Bancada WMS
             </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Receba, confira e libere para o estoque BTG.
-            </p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
-            WMS operacional
-          </Badge>
           {blockedEntries.length > 0 ? (
             <Badge
               variant="outline"
@@ -1442,19 +1411,16 @@ export default function WarehouseOps({
             <MetricCard
               title="Pendências totais"
               value={formatNumber(metrics.pendingTotal)}
-              caption="Tarefas abertas somadas nas filas WMS."
               icon={ClipboardCheck}
             />
             <MetricCard
               title="Prazo próximo"
               value={formatNumber(metrics.dueSoon)}
-              caption="Itens vencidos ou com SLA nas próximas 4 horas."
               icon={Clock3}
             />
             <MetricCard
               title="Críticos"
               value={formatNumber(metrics.critical)}
-              caption="Bloqueios, prioridade crítica e exceções ativas."
               icon={AlertTriangle}
             />
           </div>
@@ -1475,7 +1441,6 @@ export default function WarehouseOps({
               onSelectTask={setSelectedTaskId}
               flowKeys={activeModule.queueKeys}
               title={`${activeModule.label} WMS`}
-              description={activeModule.description}
             />
           ) : null}
 

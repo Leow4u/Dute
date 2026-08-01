@@ -198,17 +198,14 @@ function summarizeFlows(flows: GenkitFlowRuntime[]) {
 function FoundationStat({
   label,
   value,
-  caption,
 }: {
   label: string;
   value: string;
-  caption: string;
 }) {
   return (
     <div className="rounded-[18px] border border-border bg-white/58 px-4 py-3 shadow-[0_8px_24px_rgba(15,23,42,.04)] backdrop-blur-[32px]">
-      <div className="text-xs font-medium text-muted-foreground">{label}</div>
+      <div className="text-xs font-medium text-foreground/70">{label}</div>
       <div className="mt-2 text-xl font-semibold text-foreground">{value}</div>
-      <div className="mt-1 text-xs text-muted-foreground">{caption}</div>
     </div>
   );
 }

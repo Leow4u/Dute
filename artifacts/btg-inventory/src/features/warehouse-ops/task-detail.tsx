@@ -1662,9 +1662,11 @@ export function TaskDetailPanel({
               </Badge>
             </div>
             <CardTitle className="mt-3 line-clamp-2 text-lg">{title}</CardTitle>
-            <CardDescription className="mt-2 line-clamp-2">
-              {task.notes || queue.description}
-            </CardDescription>
+            {task.notes ? (
+              <CardDescription className="mt-2 line-clamp-2">
+                {task.notes}
+              </CardDescription>
+            ) : null}
           </div>
           <div className="flex size-11 shrink-0 items-center justify-center rounded-[18px] border border-border bg-white/70">
             <queue.icon className="size-5 text-primary" />

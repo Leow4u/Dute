@@ -14,10 +14,6 @@ export default function WmsInventoryPage() {
           <h1 className="text-2xl font-semibold tracking-normal text-foreground">
             Inventário do estoque
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Inicie o saldo físico, revise as contagens e faça conferências
-            periódicas.
-          </p>
         </div>
       </div>
       <CycleCountWorkspace />

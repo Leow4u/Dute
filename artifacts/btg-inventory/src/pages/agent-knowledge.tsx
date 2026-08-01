@@ -557,9 +557,6 @@ export default function AgentKnowledge() {
               <h1 className="text-2xl font-semibold tracking-normal text-foreground">
                 Conhecimento
               </h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Base operacional que o Agent Dute consulta para contratos, propostas e regras do cliente.
-              </p>
             </div>
           </div>
         </div>
@@ -737,9 +734,6 @@ export default function AgentKnowledge() {
               <UploadCloud className="h-4 w-4 text-primary" />
               Anexar conhecimento
             </CardTitle>
-            <CardDescription>
-              Arquivos reais entram na base operacional do Agent Dute.
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={submit} className="space-y-4">

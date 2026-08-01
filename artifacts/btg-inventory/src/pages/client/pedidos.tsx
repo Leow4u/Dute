@@ -211,9 +211,7 @@ export function ClientePedidos() {
         return (
           <ClientModuleShell
             overview={overview}
-            eyebrow="Abastecimento da loja"
             title="Pedidos"
-            description="Acompanhe cada pedido desde o recebimento pela Dutelog até a entrega."
             icon={PackageCheck}
           >
             {trackingItems.length === 0 ? (

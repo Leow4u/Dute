@@ -1122,9 +1122,6 @@ export default function CustomerRequests() {
             <h1 className="text-2xl font-semibold tracking-normal text-foreground">
               Solicitações do cliente
             </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Triagem interna para transformar pedidos do portal em operação WMS.
-            </p>
           </div>
         </div>
         <Button
@@ -1147,14 +1144,12 @@ export default function CustomerRequests() {
         <OperationalImpactCard
           title="Bloqueios de aprovação"
           value={operationalImpact.stockBlockedCount}
-          caption="Retiradas com saldo insuficiente, ausente ou dados incompletos."
           icon={AlertTriangle}
           tone="danger"
         />
         <OperationalImpactCard
           title="Dados pendentes"
           value={operationalImpact.dataWarningCount}
-          caption="Linhas abertas com quantity_total ou items faltando."
           icon={FileWarning}
           tone="warning"
         />
@@ -1466,13 +1461,11 @@ function BalanceValidationPanel({
 function OperationalImpactCard({
   title,
   value,
-  caption,
   icon: Icon,
   tone,
 }: {
   title: string;
   value: number;
-  caption: string;
   icon: LucideIcon;
   tone: "success" | "warning" | "danger" | "info";
 }) {
@@ -1480,7 +1473,7 @@ function OperationalImpactCard({
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
         <div className="min-w-0">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
+          <CardTitle className="text-sm font-medium text-foreground/70">
             {title}
           </CardTitle>
           <div className="mt-3 truncate text-2xl font-semibold text-foreground">
@@ -1496,9 +1489,6 @@ function OperationalImpactCard({
           <Icon className="size-4" />
         </div>
       </CardHeader>
-      <CardContent className="pt-0">
-        <p className="text-xs leading-5 text-muted-foreground">{caption}</p>
-      </CardContent>
     </Card>
   );
 }

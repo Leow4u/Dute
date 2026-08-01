@@ -14,9 +14,6 @@ export default function WmsReturnsPage() {
           <h1 className="text-2xl font-semibold tracking-normal text-foreground">
             Devoluções
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Registre retornos, faça a triagem e defina a disposição física.
-          </p>
         </div>
       </div>
       <ReturnWorkspace />

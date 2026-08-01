@@ -326,10 +326,6 @@ export default function Customers() {
             <h1 className="text-3xl font-semibold tracking-normal text-slate-900">
               Clientes
             </h1>
-            <p className="mt-1 max-w-3xl text-sm text-slate-500">
-              Governanca de contas, portal e isolamento operacional. BTG segue
-              como cliente inicial; novos contratos entram separados por codigo.
-            </p>
           </div>
         </div>
         <div className="grid grid-cols-3 gap-3 text-sm">

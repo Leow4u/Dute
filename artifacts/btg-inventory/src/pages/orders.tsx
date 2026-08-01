@@ -9,7 +9,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import {
   formatStockNumber,
-  StockBadge,
   StockFilterChip,
   StockMetricCard,
   StockMetricsGrid,
@@ -65,40 +64,29 @@ export default function Orders() {
     <StockPageShell
       eyebrow="Estoque"
       title="Pedidos"
-      description="Fila operacional dos pedidos da Cristiane para abastecimento da loja física. A operação atualiza status e progresso; o cliente acompanha no portal."
       icon={<Truck className="h-6 w-6" />}
-      meta={
-        <>
-          <StockBadge>Tracking WMS</StockBadge>
-          <StockBadge>Visível ao cliente</StockBadge>
-        </>
-      }
     >
       <StockMetricsGrid>
         <StockMetricCard
           label="Pedidos / linhas"
           value={formatStockNumber(data?.total ?? 0)}
-          hint="Linhas de pedido retornadas nesta consulta operacional."
           icon={<ClipboardList className="h-5 w-5" />}
           tone="blue"
         />
         <StockMetricCard
           label="Itens solicitados"
           value={formatStockNumber(stats.items)}
-          hint={`${formatStockNumber(stats.separated)} peça(s) já separada(s).`}
           icon={<Boxes className="h-5 w-5" />}
         />
         <StockMetricCard
           label="Em aberto"
           value={formatStockNumber(stats.pending + stats.picking)}
-          hint={`${formatStockNumber(stats.pending)} pendente(s), ${formatStockNumber(stats.picking)} em separação.`}
           icon={<PackageCheck className="h-5 w-5" />}
           tone={stats.pending + stats.picking ? "amber" : "default"}
         />
         <StockMetricCard
           label="Concluídos"
           value={formatStockNumber(stats.done)}
-          hint="Entregues ou faturados nesta página."
           icon={<CheckCircle2 className="h-5 w-5" />}
         />
       </StockMetricsGrid>
@@ -107,7 +95,6 @@ export default function Orders() {
         search={search}
         onSearchChange={setSearch}
         placeholder="Buscar por número do pedido"
-        resultText="Use esta fila para atualizar o status operacional. A baixa efetiva do estoque deve permanecer transacional."
       >
         <StockFilterChip active={!statusFilter} onClick={() => setStatus("all")}>
           Todos

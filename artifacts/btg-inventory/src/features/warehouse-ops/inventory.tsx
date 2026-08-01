@@ -504,9 +504,6 @@ export function OpeningInventoryWorkspace() {
               </div>
               <div>
                 <CardTitle>Inventário de abertura</CardTitle>
-                <CardDescription className="mt-1">
-                  Cadastre, fotografe e conte cada produto para iniciar o estoque sem planilha.
-                </CardDescription>
               </div>
             </div>
             {session?.status === "not_started" ? (
@@ -816,7 +813,6 @@ export function OpeningInventoryWorkspace() {
         <Card className="rounded-[24px] border-border/80 bg-white/72 shadow-[0_18px_60px_rgba(15,23,42,.05)]">
           <CardHeader>
             <CardTitle className="text-base">Progresso da abertura</CardTitle>
-            <CardDescription>Totais confirmados nesta sessão.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
@@ -1179,10 +1175,6 @@ export function ExistingCycleCountWorkspace() {
               </div>
               <div>
                 <CardTitle>Inventário cíclico</CardTitle>
-                <CardDescription className="mt-1">
-                  Conte fisicamente um SKU por endereço. O ajuste só é feito pela
-                  Cloud Function depois da confirmação.
-                </CardDescription>
               </div>
             </div>
             <Badge variant="outline" className="w-fit border-primary/20 bg-primary/10 text-primary">
@@ -1338,9 +1330,6 @@ export function ExistingCycleCountWorkspace() {
         <Card className="rounded-[24px] border-border/80 bg-white/72 shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]">
           <CardHeader>
             <CardTitle className="text-base">Regra operacional</CardTitle>
-            <CardDescription>
-              Inventário cíclico corrige divergência de produto existente.
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
             <div className="rounded-[18px] border border-border bg-white/55 p-3">

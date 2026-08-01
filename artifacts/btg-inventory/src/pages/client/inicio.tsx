@@ -92,9 +92,7 @@ export function ClienteInicio() {
         return (
           <ClientModuleShell
             overview={overview}
-            eyebrow="Portal do cliente"
             title="Início"
-            description="Consulte o estoque, peça itens para a loja ou avise uma entrega de fornecedor."
             icon={Activity}
           >
             <section className="rounded-[24px] border border-border bg-white/68 p-5 shadow-[0_8px_24px_rgba(15,23,42,.04)] backdrop-blur-[40px] md:p-6">
@@ -131,7 +129,7 @@ export function ClienteInicio() {
                 href="/portal/estoque"
                 icon={Box}
                 title="Pedir itens do estoque"
-                description="Consulte a disponibilidade e monte o pedido de abastecimento da loja."
+                description="Monte o pedido de abastecimento da loja."
                 meta={
                   stockReady
                     ? `${formatNumber(availablePieces)} peça(s) disponíveis`
@@ -160,7 +158,6 @@ export function ClienteInicio() {
                 <MetricCard
                   label="Pedidos em aberto"
                   value={formatNumber(openOrders)}
-                  description="Acompanhe separação e entrega"
                   icon={PackageCheck}
                   tone="neutral"
                 />
@@ -177,11 +174,7 @@ export function ClienteInicio() {
             {activities.length > 0 || alerts.length > 0 ? (
               <section className="grid gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,.75fr)]">
                 {activities.length > 0 ? (
-                  <ModulePanel
-                    title="Atividade recente"
-                    description="Últimas atualizações visíveis para a sua conta"
-                    icon={Truck}
-                  >
+                  <ModulePanel title="Atividade recente" icon={Truck}>
                     <div className="divide-y divide-border/70">
                       {activities.map((item) => (
                         <div
@@ -214,11 +207,7 @@ export function ClienteInicio() {
                 )}
 
                 {alerts.length > 0 ? (
-                  <ModulePanel
-                    title="Pontos de atenção"
-                    description="Alertas relevantes para sua operação"
-                    icon={AlertTriangle}
-                  >
+                  <ModulePanel title="Pontos de atenção" icon={AlertTriangle}>
                     <div className="space-y-3">
                       {alerts.slice(0, 4).map((alert, index) => (
                         <div

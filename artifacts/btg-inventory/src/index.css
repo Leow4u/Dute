@@ -373,7 +373,7 @@
   --auth-line: rgba(255, 255, 255, 0.08);
   --auth-line-strong: rgba(255, 255, 255, 0.16);
   --auth-text: #f7f8f8;
-  --auth-muted: #8a8f98;
+  --auth-muted: #a3a8b0;
   --auth-accent: #3f8cff;
 
   background-color: var(--auth-canvas);

@@ -662,15 +662,8 @@ export default function Documents() {
             <h1 className="text-[34px] font-semibold tracking-normal text-foreground">
               Documentos operacionais
             </h1>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              NFs, romaneios, comprovantes, fotos e evidências vinculadas ao WMS,
-              pedidos, faturas e exceções.
-            </p>
           </div>
         </div>
-        <Badge variant="outline" className="w-fit rounded-full px-4 py-2">
-          Base controlada por Function
-        </Badge>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-7">

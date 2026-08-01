@@ -275,7 +275,7 @@ function AuthShell({
   children,
 }: {
   title: string;
-  subtitle: string;
+  subtitle?: string;
   children: React.ReactNode;
 }) {
   // Só a marca (símbolo) no formulário: o wordmark completo já vive na
@@ -304,11 +304,15 @@ function AuthShell({
         <main className="relative flex flex-1 items-center py-10">
           <div className="mx-auto w-full max-w-[420px]">
             <h1 className="auth-title text-[28px]">{title}</h1>
-            <p className="mt-2 text-[14px] leading-relaxed text-[var(--auth-muted)]">
-              {subtitle}
-            </p>
+            {subtitle ? (
+              <p className="mt-2 text-[14px] leading-relaxed text-[var(--auth-muted)]">
+                {subtitle}
+              </p>
+            ) : null}
 
-            <div className="auth-card mt-8 rounded-2xl p-6 sm:p-7">
+            <div
+              className={`auth-card rounded-2xl p-6 sm:p-7 ${subtitle ? "mt-8" : "mt-6"}`}
+            >
               {firebaseConfigError ? (
                 <Alert variant="destructive" className="mb-4">
                   <AlertDescription>{firebaseConfigError}</AlertDescription>
@@ -341,18 +345,6 @@ function AuthShell({
         <div className="absolute inset-0 bg-gradient-to-t from-[var(--auth-canvas)]/90 via-transparent to-[var(--auth-canvas)]/30" />
         <div className="auth-grid absolute inset-0 opacity-60" />
 
-        <figure className="absolute inset-x-10 bottom-10">
-          <blockquote className="auth-panel-quote max-w-[440px] text-[19px] leading-snug">
-            Cada peça que entra, muda de endereço ou sai vira um registro
-            auditável.
-          </blockquote>
-          <figcaption className="mt-4 flex items-center gap-2.5">
-            <span className="h-px w-7 bg-[var(--auth-accent)]" />
-            <span className="text-[12px] uppercase tracking-[0.14em] text-[var(--auth-muted)]">
-              Armazenagem · Inventário · Controle
-            </span>
-          </figcaption>
-        </figure>
       </aside>
     </div>
   );
@@ -397,10 +389,7 @@ function SignInPage() {
   }
 
   return (
-    <AuthShell
-      title="Plataforma de armazenagem"
-      subtitle="Acesse com seu e-mail corporativo para continuar."
-    >
+    <AuthShell title="Entrar">
       <form onSubmit={submit} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="email">E-mail</Label>
@@ -460,7 +449,9 @@ function SignInPage() {
         >
           Esqueci minha senha
         </button>
-        <span className="text-[var(--auth-muted)]">Acesso por convite</span>
+        <span className="text-[var(--auth-muted)]" title="Contas criadas apenas com link de convite">
+          Acesso por convite
+        </span>
       </div>
     </AuthShell>
   );

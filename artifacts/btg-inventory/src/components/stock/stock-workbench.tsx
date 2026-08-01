@@ -23,11 +23,9 @@ export function formatStockMoney(value: unknown) {
 
 type StockPageShellProps = {
   icon: ReactNode;
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
-  description: string;
   actions?: ReactNode;
-  meta?: ReactNode;
   children: ReactNode;
 };
 
@@ -35,9 +33,7 @@ export function StockPageShell({
   icon,
   eyebrow,
   title,
-  description,
   actions,
-  meta,
   children,
 }: StockPageShellProps) {
   return (
@@ -48,39 +44,27 @@ export function StockPageShell({
             {icon}
           </div>
           <div>
-            <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              {eyebrow}
-            </div>
+            {eyebrow ? (
+              <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-foreground/60">
+                {eyebrow}
+              </div>
+            ) : null}
             <h1 className="text-3xl font-semibold tracking-normal text-foreground">
               {title}
             </h1>
-            <p className="mt-2 max-w-3xl text-base leading-7 text-muted-foreground">
-              {description}
-            </p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          {meta ? <div className="flex flex-wrap gap-2">{meta}</div> : null}
-          {actions}
-        </div>
+        {actions ? <div className="flex flex-wrap items-center gap-3">{actions}</div> : null}
       </header>
       {children}
     </div>
   );
 }
 
-export function StockBadge({ children }: { children: ReactNode }) {
-  return (
-    <span className="rounded-full border border-border bg-white/70 px-3 py-1 text-xs font-medium text-muted-foreground shadow-[0_8px_24px_rgba(15,23,42,.03)]">
-      {children}
-    </span>
-  );
-}
-
 type StockMetricCardProps = {
   label: string;
   value: ReactNode;
-  hint: string;
+  hint?: string;
   icon?: ReactNode;
   tone?: "default" | "blue" | "amber" | "rose";
 };
@@ -103,7 +87,7 @@ export function StockMetricCard({
     <div className="rounded-[24px] border border-white/55 bg-white/72 p-6 shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-muted-foreground">{label}</p>
+          <p className="text-sm font-medium text-foreground/70">{label}</p>
           <div className="mt-4 text-3xl font-semibold tracking-normal text-foreground">
             {value}
           </div>
@@ -119,7 +103,9 @@ export function StockMetricCard({
           </div>
         ) : null}
       </div>
-      <p className="mt-3 text-sm leading-6 text-muted-foreground">{hint}</p>
+      {hint ? (
+        <p className="mt-3 text-sm leading-6 text-foreground/65">{hint}</p>
+      ) : null}
     </div>
   );
 }

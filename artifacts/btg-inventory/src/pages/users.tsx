@@ -180,10 +180,6 @@ export default function Users() {
         <h1 className="text-2xl font-bold tracking-tight text-primary">
           Usuários & Acessos
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Convide funcionários da Dutelog e clientes. O cadastro só funciona
-          pelo link de convite.
-        </p>
       </div>
 
       <Card>

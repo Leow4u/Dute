@@ -20,7 +20,6 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -211,11 +210,8 @@ export default function Reports() {
             </div>
             <div className="min-w-0">
               <h1 className="text-xl font-semibold text-foreground md:text-2xl">
-                Exportação de Dados e Relatórios
+                Relatórios e exportação
               </h1>
-              <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
-                Monte pacotes de dados BTG para auditoria, fechamento e análise offline sem sair da rotina operacional.
-              </p>
             </div>
           </div>
 
@@ -238,9 +234,6 @@ export default function Reports() {
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
               <div>
                 <CardTitle className="text-lg">Montar exportação</CardTitle>
-                <CardDescription className="mt-1">
-                  Escolha o conjunto de dados e limite o período quando a análise pedir recorte.
-                </CardDescription>
               </div>
               <Badge variant="outline" className="w-fit gap-1.5">
                 <Clock3 className="size-3.5 text-primary" />
@@ -324,9 +317,6 @@ export default function Reports() {
               </div>
               <div>
                 <CardTitle className="text-lg">Prévia do pacote</CardTitle>
-                <CardDescription className="mt-1">
-                  O arquivo será gerado a partir do endpoint atual de exportação.
-                </CardDescription>
               </div>
             </div>
           </CardHeader>
@@ -334,9 +324,6 @@ export default function Reports() {
           <CardContent className="flex flex-col gap-5 pt-5 md:pt-6">
             <div>
               <div className="text-sm font-semibold text-foreground">{selectedReport.label}</div>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                {selectedReport.description}
-              </p>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">

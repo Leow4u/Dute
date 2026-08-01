@@ -84,9 +84,7 @@ export function ClienteFaturas() {
         return (
           <ClientModuleShell
             overview={overview}
-            eyebrow="Serviços Dutelog"
             title="Faturas"
-            description="Acompanhe as cobranças pelos serviços logísticos prestados no período."
             icon={DollarSign}
           >
             {!hasBilling ? (

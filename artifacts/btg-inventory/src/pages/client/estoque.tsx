@@ -425,9 +425,7 @@ export function ClienteEstoque() {
         return (
           <ClientModuleShell
             overview={overview}
-            eyebrow="Estoque armazenado"
             title="Estoque"
-            description="Seus produtos armazenados na Dutelog: disponibilidade, valor de custo e pedidos de abastecimento. Os valores mostram o custo do material que você já adquiriu — pedir aqui não gera compra nem cobrança."
             icon={Box}
             className="max-w-[1720px]"
           >

@@ -40,9 +40,7 @@ export function ClienteDocumentos() {
         return (
           <ClientModuleShell
             overview={overview}
-            eyebrow="Arquivos da operação"
             title="Documentos"
-            description="Notas, comprovantes e arquivos publicados pela Dutelog."
             icon={FileCheck2}
           >
             {documents.length === 0 ? (

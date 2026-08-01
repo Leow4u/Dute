@@ -241,10 +241,6 @@ export function ExceptionWorkspace() {
               </div>
               <div>
                 <CardTitle>Exceções operacionais</CardTitle>
-                <CardDescription className="mt-1">
-                  Faltas, avarias, divergências e bloqueios que precisam de
-                  tratativa antes de seguir o fluxo físico.
-                </CardDescription>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -341,9 +337,6 @@ export function ExceptionWorkspace() {
         <Card className="rounded-[24px] border-border/80 bg-white/72 shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]">
           <CardHeader>
             <CardTitle className="text-base">Tratativa</CardTitle>
-            <CardDescription>
-              Registre a decisão para liberar a operação.
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {selectedException ? (
@@ -433,7 +426,6 @@ export function ExceptionWorkspace() {
           <Card className="rounded-[24px] border-border/80 bg-white/72 shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]">
             <CardHeader>
               <CardTitle className="text-base">Recentes</CardTitle>
-              <CardDescription>Últimas exceções tratadas.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
               {recentlyClosed.map((exception) => (
@@ -749,10 +741,6 @@ export function ReturnWorkspace() {
               </div>
               <div>
                 <CardTitle>Devoluções</CardTitle>
-                <CardDescription className="mt-1">
-                  Registre retorno da loja e decida se volta para disponível,
-                  quarentena, avaria ou descarte.
-                </CardDescription>
               </div>
             </div>
             <Badge variant="outline" className="w-fit border-primary/20 bg-primary/10 text-primary">
@@ -966,9 +954,6 @@ export function ReturnWorkspace() {
         <Card className="rounded-[24px] border-border/80 bg-white/72 shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]">
           <CardHeader>
             <CardTitle className="text-base">Disposição física</CardTitle>
-            <CardDescription>
-              Decida o destino do item após contar e inspecionar.
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {visibleReturnLines.length ? (

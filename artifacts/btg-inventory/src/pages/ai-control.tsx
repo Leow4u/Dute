@@ -1034,14 +1034,14 @@ function MetricCard({
 }: {
   title: string;
   value: string;
-  caption: string;
+  caption?: string;
   icon: LucideIcon;
 }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between pb-3">
         <div>
-          <CardTitle className="text-sm font-medium text-muted-foreground">
+          <CardTitle className="text-sm font-medium text-foreground/70">
             {title}
           </CardTitle>
           <div className="mt-3 text-2xl font-semibold text-foreground">
@@ -1049,12 +1049,14 @@ function MetricCard({
           </div>
         </div>
         <div className="flex h-10 w-10 items-center justify-center rounded-[16px] border border-border bg-white/70">
-          <Icon className="h-4 w-4 text-muted-foreground" />
+          <Icon className="h-4 w-4 text-primary" aria-hidden="true" />
         </div>
       </CardHeader>
-      <CardContent className="pt-0">
-        <p className="text-xs text-muted-foreground">{caption}</p>
-      </CardContent>
+      {caption ? (
+        <CardContent className="pt-0">
+          <p className="text-xs text-foreground/65">{caption}</p>
+        </CardContent>
+      ) : null}
     </Card>
   );
 }
@@ -1090,9 +1092,6 @@ function SuggestedDecisionsPanel({
           </div>
           <div>
             <CardTitle className="text-base">Decisões sugeridas</CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Recomendações acionáveis antes de o Agent Dute avançar a operação.
-            </p>
           </div>
         </div>
       </CardHeader>
@@ -1194,9 +1193,6 @@ function OperationalNotificationsCard({
             <CardTitle className="text-base">
               Notificações do Agent Dute
             </CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Mensagens preparadas a partir dos eventos reais do WMS.
-            </p>
           </div>
           <Button
             variant="outline"
@@ -1399,9 +1395,6 @@ function PhysicalWmsRiskPanel({ risks }: { risks: PhysicalWmsRisk[] }) {
             </div>
             <div>
               <CardTitle className="text-base">Risco de WMS físico</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Guardrails para não avançar baixa, reserva ou expedição sem evidência física.
-              </p>
             </div>
           </div>
           <Badge variant="outline" className="border-slate-200 bg-white/70">
@@ -1470,9 +1463,6 @@ function EventTraceabilityPanel({ events }: { events: AiEvent[] }) {
           </div>
           <div>
             <CardTitle className="text-base">Rastreabilidade por evento</CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
-              IDs, entidade, fonte e payload para auditoria do que a IA viu.
-            </p>
           </div>
         </div>
       </CardHeader>
@@ -1748,10 +1738,6 @@ export default function AiControl() {
               <h1 className="text-2xl font-semibold tracking-normal text-foreground">
                 Agent Dute
               </h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Memória viva de eventos, solicitações, estoque, pedidos e
-                faturamento, incluindo contratos e propostas comerciais reais.
-              </p>
             </div>
           </div>
         </div>
@@ -1800,23 +1786,16 @@ export default function AiControl() {
         <MetricCard
           title="Eventos no ledger"
           value={numberFormatter.format(snapshot.total_events)}
-          caption={
-            snapshot.derived_events
-              ? `${snapshot.derived_events} evento(s) derivados dos dados existentes`
-              : "Eventos reais gravados a partir das ações do sistema"
-          }
           icon={Database}
         />
         <MetricCard
           title="Radar aberto"
           value={numberFormatter.format(snapshot.open_insights)}
-          caption="Alertas e tarefas que o Agent Dute está acompanhando"
           icon={Bell}
         />
         <MetricCard
           title="Valor monitorado"
           value={moneyFormatter.format(snapshot.inventory_value)}
-          caption={`${numberFormatter.format(snapshot.total_pieces)} peça(s) em estoque`}
           icon={Sparkles}
         />
         <MetricCard
@@ -1824,7 +1803,6 @@ export default function AiControl() {
           value={numberFormatter.format(
             snapshot.missing_costs + snapshot.open_orders,
           )}
-          caption={`${snapshot.missing_costs} custo(s) pendente(s), ${snapshot.open_orders} pedido(s) aberto(s)`}
           icon={AlertTriangle}
         />
       </div>
@@ -1842,9 +1820,6 @@ export default function AiControl() {
                 <CardTitle className="text-base">
                   Eventos recentes por entidade
                 </CardTitle>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Entidades com atividade mais nova no ledger do Agent Dute.
-                </p>
               </div>
             </div>
           </CardHeader>
@@ -1920,9 +1895,6 @@ export default function AiControl() {
               </div>
               <div>
                 <CardTitle className="text-base">Memória por cliente</CardTitle>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Contexto persistente que o Agent Dute associa a cada cliente.
-                </p>
               </div>
             </div>
           </CardHeader>
@@ -1975,10 +1947,6 @@ export default function AiControl() {
                 <CardTitle className="text-base">
                   Próximos riscos operacionais
                 </CardTitle>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Sinais abertos do Agent Dute cruzados com filas WMS e
-                  solicitações.
-                </p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -2062,9 +2030,6 @@ export default function AiControl() {
               <CardTitle className="text-base">
                 Linha do tempo operacional
               </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                O que a IA viu acontecer no sistema.
-              </p>
             </div>
           </CardHeader>
           <CardContent className="pt-6">

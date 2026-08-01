@@ -24,7 +24,6 @@ export default function Warehouse() {
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-primary">Mapa do Armazém</h1>
-          <p className="text-sm text-muted-foreground mt-1">Distribuição física dos SKUs.</p>
         </div>
         <div className="p-8 text-center bg-gray-50 border border-border rounded-lg text-muted-foreground">
           Nenhum dado de localização atribuído a SKUs ainda.
@@ -37,7 +36,6 @@ export default function Warehouse() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-primary">Mapa do Armazém</h1>
-        <p className="text-sm text-muted-foreground mt-1">Visão hierárquica do armazenamento físico (Rua &rarr; Prateleira &rarr; Caixa).</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-6">

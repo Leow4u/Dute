@@ -140,13 +140,11 @@ function formatDate(value: unknown) {
 }
 
 function MetricCard({
-  caption,
   icon: Icon,
   tone = "stable",
   title,
   value,
 }: {
-  caption: string;
   icon: typeof Activity;
   tone?: "stable" | "attention" | "critical";
   title: string;
@@ -166,7 +164,6 @@ function MetricCard({
           <div className="mt-2 text-2xl font-semibold text-slate-900">
             {value}
           </div>
-          <div className="mt-2 text-xs text-slate-500">{caption}</div>
         </div>
         <div
           className={cn(
@@ -325,10 +322,6 @@ export default function Support() {
             <h1 className="text-3xl font-semibold tracking-normal text-slate-900">
               Suporte e Observabilidade
             </h1>
-            <p className="mt-1 max-w-3xl text-sm text-slate-500">
-              Saúde do sistema, incidentes, eventos críticos e rotina diária de
-              produção. Toda ocorrência registrada entra no ledger do Agent Dute.
-            </p>
           </div>
         </div>
         <Button

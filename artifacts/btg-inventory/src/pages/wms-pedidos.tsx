@@ -362,10 +362,6 @@ export default function WmsPedidos() {
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <CardTitle className="text-base">Pedidos da Cristiane</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Separe, envie e confirme a entrega. A baixa do estoque acontece
-                na confirmação da entrega.
-              </p>
             </div>
             <Button
               type="button"

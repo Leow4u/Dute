@@ -70,9 +70,6 @@ export default function Settings() {
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-foreground">
           Configuração
         </h1>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Dados do acesso autenticado no portal Dutelog.
-        </p>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -84,7 +81,6 @@ export default function Settings() {
               </div>
               <div>
                 <CardTitle className="text-base">Usuário</CardTitle>
-                <CardDescription>Identidade usada nesta sessão.</CardDescription>
               </div>
             </div>
           </CardHeader>
@@ -116,7 +112,6 @@ export default function Settings() {
               </div>
               <div>
                 <CardTitle className="text-base">Permissão</CardTitle>
-                <CardDescription>Perfil aplicado ao sistema.</CardDescription>
               </div>
             </div>
           </CardHeader>
@@ -142,9 +137,6 @@ export default function Settings() {
               </div>
               <div>
                 <CardTitle className="text-base">Aplicativo no celular</CardTitle>
-                <CardDescription>
-                  Acesso direto ao inventário e à câmera do aparelho.
-                </CardDescription>
               </div>
             </div>
             <Badge variant={isInstalled ? "default" : "secondary"}>

@@ -34,7 +34,6 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -173,33 +172,35 @@ function MetricCard({
 }: {
   title: string;
   value: string;
-  caption: string;
+  caption?: string;
   icon: typeof Package;
   tone?: "stable" | "attention" | "critical";
 }) {
   return (
     <Card
       className={cn(
-        "min-h-[136px]",
+        "min-h-[120px]",
         tone === "critical" && "border-destructive/20",
         tone === "attention" && "border-primary/25",
       )}
     >
-      <CardContent className="flex h-full flex-col justify-between gap-4 p-5">
+      <CardContent className="flex h-full flex-col justify-between gap-3 p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            {title}
-          </CardTitle>
+            <CardTitle className="text-sm font-medium text-foreground/70">
+              {title}
+            </CardTitle>
             <div className="mt-2 text-2xl font-semibold text-foreground">
               {value}
             </div>
           </div>
           <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-border bg-white/65">
-            <Icon className="size-4 text-primary" />
+            <Icon className="size-4 text-primary" aria-hidden="true" />
           </div>
         </div>
-        <p className="text-sm leading-5 text-muted-foreground">{caption}</p>
+        {caption ? (
+          <p className="text-sm leading-5 text-foreground/65">{caption}</p>
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -213,23 +214,25 @@ function ControlSignal({
 }: {
   label: string;
   value: string;
-  caption: string;
+  caption?: string;
   icon: typeof Package;
 }) {
   return (
     <div className="rounded-[20px] border border-border bg-white/58 p-4 shadow-[0_8px_24px_rgba(15,23,42,.03)] backdrop-blur-[32px]">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-medium uppercase text-muted-foreground">
+          <p className="text-xs font-medium uppercase tracking-wide text-foreground/70">
             {label}
           </p>
           <p className="mt-2 text-xl font-semibold text-foreground">{value}</p>
+          {caption ? (
+            <p className="mt-1 text-sm leading-5 text-foreground/65">{caption}</p>
+          ) : null}
         </div>
         <div className="flex size-9 items-center justify-center rounded-[14px] border border-border bg-white/70">
-          <Icon className="size-4 text-primary" />
+          <Icon className="size-4 text-primary" aria-hidden="true" />
         </div>
       </div>
-      <p className="mt-3 text-xs leading-5 text-muted-foreground">{caption}</p>
     </div>
   );
 }
@@ -240,14 +243,12 @@ function WorkstreamCard({
   total,
   href,
   icon: Icon,
-  description,
 }: {
   title: string;
   value: number;
   total: number;
   href: string;
   icon: typeof Package;
-  description: string;
 }) {
   const progress = total > 0 ? Math.min(100, Math.round((value / total) * 100)) : 0;
   return (
@@ -256,12 +257,9 @@ function WorkstreamCard({
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-[16px] border border-border bg-white/65">
-              <Icon className="size-4 text-primary" />
+              <Icon className="size-4 text-primary" aria-hidden="true" />
             </div>
-            <div>
-              <div className="text-sm font-medium text-foreground">{title}</div>
-              <div className="text-xs text-muted-foreground">{description}</div>
-            </div>
+            <div className="text-sm font-medium text-foreground">{title}</div>
           </div>
           <Badge variant="outline">{formatNumber(value)}</Badge>
         </div>
@@ -413,6 +411,14 @@ export default function Dashboard() {
     requests.isError ? "solicitações" : null,
   ].filter((item): item is string => Boolean(item));
 
+  const defaultQueueAction =
+    "Manter fila monitorada e priorizar a próxima tarefa com SLA curto.";
+  const allQueuesStable =
+    derived.queueSummaries.length > 0 &&
+    derived.queueSummaries.every(
+      (queue) => queue.pending === 0 && queue.blocked === 0 && queue.dueSoon === 0,
+    );
+
   return (
     <div className="flex flex-col gap-5">
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_430px]">
@@ -420,12 +426,6 @@ export default function Dashboard() {
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-3xl">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge
-                  variant="outline"
-                  className="border-primary/20 bg-primary/10 text-primary"
-                >
-                  Torre de Controle
-                </Badge>
                 <Badge
                   variant="outline"
                   className={cn(
@@ -441,12 +441,8 @@ export default function Dashboard() {
                 </Badge>
               </div>
               <h1 className="mt-4 text-2xl font-semibold tracking-normal text-foreground md:text-3xl">
-                Comando operacional Dutelog
+                Comando operacional
               </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-                Visão de turno para estoque, WMS físico, solicitações,
-                faturamento e sinais do Agent Dute.
-              </p>
             </div>
             <Button asChild variant="outline" className="shrink-0 justify-between">
               <Link href="/wms">
@@ -460,19 +456,17 @@ export default function Dashboard() {
             <ControlSignal
               label="Valor monitorado"
               value={formatCurrency(derived.inventoryValue)}
-              caption="Base de custo consolidada para decisão."
               icon={Gauge}
             />
             <ControlSignal
               label="Peças no radar"
               value={formatNumber(derived.pieces)}
-              caption={`${formatNumber(derived.skuTotal)} SKU(s) ativos no catálogo.`}
+              caption={`${formatNumber(derived.skuTotal)} SKUs ativos`}
               icon={Boxes}
             />
             <ControlSignal
               label="Último evento"
               value={formatDate(ai.data?.snapshot?.last_event_at)}
-              caption="Atualização operacional mais recente."
               icon={TimerReset}
             />
           </div>
@@ -481,13 +475,8 @@ export default function Dashboard() {
         <Card className="border-primary/15 bg-primary/5">
           <CardHeader className="pb-3">
             <div className="flex items-start justify-between gap-4">
-              <div>
-                <CardTitle className="text-base">Próxima decisão</CardTitle>
-                <CardDescription>
-                  O que mais importa para destravar a operação agora.
-                </CardDescription>
-              </div>
-              <Radar className="size-5 text-primary" />
+              <CardTitle className="text-base">Próxima decisão</CardTitle>
+              <Radar className="size-5 text-primary" aria-hidden="true" />
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -515,19 +504,19 @@ export default function Dashboard() {
                 <div className="text-lg font-semibold text-foreground">
                   {formatNumber(derived.dueSoon)}
                 </div>
-                <div className="text-muted-foreground">SLA</div>
+                <div className="text-foreground/70">SLA próximo</div>
               </div>
               <div className="rounded-[16px] border border-border bg-white/58 p-3">
                 <div className="text-lg font-semibold text-foreground">
                   {formatNumber(derived.blockedTasks.length)}
                 </div>
-                <div className="text-muted-foreground">bloq.</div>
+                <div className="text-foreground/70">Bloqueios</div>
               </div>
               <div className="rounded-[16px] border border-border bg-white/58 p-3">
                 <div className="text-lg font-semibold text-foreground">
                   {formatNumber(derived.agentOpen)}
                 </div>
-                <div className="text-muted-foreground">IA</div>
+                <div className="text-foreground/70">Alertas IA</div>
               </div>
             </div>
           </CardContent>
@@ -549,34 +538,30 @@ export default function Dashboard() {
         <MetricCard
           title="SKUs ativos"
           value={formatNumber(derived.skuTotal)}
-          caption="Catálogo operacional importado da base BTG."
           icon={Boxes}
         />
         <MetricCard
           title="Solicitações abertas"
           value={formatNumber(derived.openRequests.length)}
-          caption="Entradas que aguardam decisão ou execução."
           icon={ClipboardList}
           tone={statusTone(derived.openRequests.length)}
         />
         <MetricCard
           title="WMS pendente"
           value={formatNumber(derived.wmsPending)}
-          caption={`${formatNumber(derived.throughputToday)} tarefa(s) concluídas hoje.`}
+          caption={`${formatNumber(derived.throughputToday)} concluídas hoje`}
           icon={Warehouse}
           tone={statusTone(derived.wmsPending)}
         />
         <MetricCard
           title="Alertas IA"
           value={formatNumber(derived.agentOpen)}
-          caption="Sinais abertos no Agent Dute."
           icon={Bot}
           tone={statusTone(derived.agentOpen)}
         />
         <MetricCard
           title="Bloqueios físicos"
           value={formatNumber(derived.blockedTasks.length)}
-          caption="Tarefas com exceção, avaria ou divergência."
           icon={ShieldCheck}
           tone={derived.blockedTasks.length ? "critical" : "stable"}
         />
@@ -584,24 +569,32 @@ export default function Dashboard() {
 
       <Card>
         <CardHeader className="border-b border-border/60">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <CardTitle className="text-base">Filas e próximos passos</CardTitle>
-              <CardDescription>
-                Leitura por frente para Rafael e Manoel priorizarem o turno.
-              </CardDescription>
-            </div>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <CardTitle className="text-base">Filas WMS</CardTitle>
             <div className="flex flex-wrap gap-2">
               <Badge variant="outline">{formatNumber(derived.dueSoon)} SLA próximo</Badge>
               <Badge variant="outline">
-                {formatNumber(derived.throughputToday)} concluída(s) hoje
+                {formatNumber(derived.throughputToday)} concluídas hoje
               </Badge>
             </div>
           </div>
         </CardHeader>
         <CardContent className="grid gap-3 pt-5 md:grid-cols-2 2xl:grid-cols-5">
-          {derived.queueSummaries.length > 0 ? (
-            derived.queueSummaries.map((queue) => (
+          {derived.queueSummaries.length === 0 ? (
+            <div className="rounded-[18px] border border-border bg-white/55 p-5 text-sm text-foreground/70 md:col-span-2 2xl:col-span-5">
+              Nenhuma fila WMS disponível nesta leitura.
+            </div>
+          ) : allQueuesStable ? (
+            <div className="rounded-[18px] border border-emerald-200 bg-emerald-50/45 p-5 text-sm text-foreground/80 md:col-span-2 2xl:col-span-5">
+              Operação estável — nenhuma pendência nas filas WMS.
+            </div>
+          ) : (
+            derived.queueSummaries.map((queue) => {
+              const nextAction = String(queue.nextAction);
+              const showNextAction =
+                nextAction.length > 0 && nextAction !== defaultQueueAction;
+
+              return (
               <div
                 key={queue.key}
                 className={cn(
@@ -615,7 +608,7 @@ export default function Dashboard() {
                     <div className="text-sm font-semibold text-foreground">
                       {queue.label}
                     </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
+                    <div className="mt-1 text-xs text-foreground/70">
                       {formatNumber(queue.inProgress)} em execução
                     </div>
                   </div>
@@ -629,29 +622,31 @@ export default function Dashboard() {
                         "border-amber-200 bg-amber-50 text-amber-800",
                     )}
                   >
-                    {formatNumber(queue.pending)} pend.
+                    {formatNumber(queue.pending)} pendentes
                   </Badge>
                 </div>
                 <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
                   <div className="rounded-[14px] bg-white/65 p-2">
                     <div className="font-semibold text-foreground">{formatNumber(queue.dueSoon)}</div>
-                    <div className="text-muted-foreground">SLA</div>
+                    <div className="text-foreground/70">SLA</div>
                   </div>
                   <div className="rounded-[14px] bg-white/65 p-2">
                     <div className="font-semibold text-foreground">{formatNumber(queue.blocked)}</div>
-                    <div className="text-muted-foreground">risco</div>
+                    <div className="text-foreground/70">Exceções</div>
                   </div>
                   <div className="rounded-[14px] bg-white/65 p-2">
                     <div className="font-semibold text-foreground">
                       {formatNumber(queue.completedToday)}
                     </div>
-                    <div className="text-muted-foreground">hoje</div>
+                    <div className="text-foreground/70">Hoje</div>
                   </div>
                 </div>
                 <Progress value={queue.progress} className="mt-4 h-2" />
-                <p className="mt-4 line-clamp-2 text-xs leading-5 text-muted-foreground">
-                  {String(queue.nextAction)}
-                </p>
+                {showNextAction ? (
+                  <p className="mt-4 line-clamp-2 text-xs leading-5 text-foreground/70">
+                    {nextAction}
+                  </p>
+                ) : null}
                 <Button asChild variant="ghost" size="sm" className="mt-auto justify-between px-0 pt-4">
                   <Link href="/wms">
                     Ir para fila
@@ -659,11 +654,8 @@ export default function Dashboard() {
                   </Link>
                 </Button>
               </div>
-            ))
-          ) : (
-            <div className="rounded-[18px] border border-border bg-white/55 p-5 text-sm text-muted-foreground md:col-span-2 2xl:col-span-5">
-              Nenhuma fila WMS disponível nesta leitura.
-            </div>
+              );
+            })
           )}
         </CardContent>
       </Card>
@@ -672,13 +664,8 @@ export default function Dashboard() {
         <Card>
           <CardHeader className="border-b border-border/60">
             <div className="flex items-start justify-between gap-4">
-              <div>
-                <CardTitle className="text-base">Radar de decisão</CardTitle>
-                <CardDescription>
-                  O que precisa de atenção antes de virar gargalo.
-                </CardDescription>
-              </div>
-              <Radar className="size-5 text-primary" />
+              <CardTitle className="text-base">Radar de decisão</CardTitle>
+              <Radar className="size-5 text-primary" aria-hidden="true" />
             </div>
           </CardHeader>
           <CardContent className="space-y-3 pt-5">
@@ -711,14 +698,10 @@ export default function Dashboard() {
         <Card>
           <CardHeader className="border-b border-border/60">
             <CardTitle className="text-base">Módulos críticos</CardTitle>
-            <CardDescription>
-              Entradas rápidas para cada frente operacional.
-            </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 pt-5">
             <WorkstreamCard
               title="Solicitações"
-              description="Triagem e aprovação"
               value={derived.openRequests.length}
               total={Math.max(1, derived.requestRows.length)}
               href="/solicitacoes"
@@ -726,7 +709,6 @@ export default function Dashboard() {
             />
             <WorkstreamCard
               title="WMS físico"
-              description="Fila de armazém"
               value={derived.wmsPending}
               total={Math.max(1, derived.queueTasks.length)}
               href="/wms"
@@ -734,7 +716,6 @@ export default function Dashboard() {
             />
             <WorkstreamCard
               title="Agent Dute"
-              description="Memória e decisões"
               value={derived.agentOpen}
               total={Math.max(1, derived.alerts.length)}
               href="/agente"
@@ -742,7 +723,6 @@ export default function Dashboard() {
             />
             <WorkstreamCard
               title="Faturamento"
-              description="Competência e cobrança"
               value={toNumber(derived.data?.ad_valorem)}
               total={Math.max(1, toNumber(derived.data?.custo_total))}
               href="/faturamento"
@@ -756,9 +736,6 @@ export default function Dashboard() {
         <Card>
           <CardHeader className="border-b border-border/60">
             <CardTitle className="text-base">Estoque por categoria</CardTitle>
-            <CardDescription>
-              Distribuição física por quantidade.
-            </CardDescription>
           </CardHeader>
           <CardContent className="pt-5">
             <div className="h-[300px]">
@@ -778,9 +755,6 @@ export default function Dashboard() {
         <Card>
           <CardHeader className="border-b border-border/60">
             <CardTitle className="text-base">Movimentos recentes</CardTitle>
-            <CardDescription>
-              Livro de estoque com últimas entradas e saídas.
-            </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">

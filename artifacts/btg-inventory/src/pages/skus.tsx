@@ -16,7 +16,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import {
   formatStockNumber,
-  StockBadge,
   StockFilterChip,
   StockMetricCard,
   StockMetricsGrid,
@@ -157,15 +156,8 @@ export default function Skus() {
     <StockPageShell
       eyebrow="Estoque"
       title="SKUs e saldos"
-      description="Visão física para Rafael e Manoel conferirem disponibilidade real, reserva, condição e endereço de armazenagem. Toda diferença precisa nascer de ledger, não de edição solta."
       icon={<Layers className="h-6 w-6" />}
       actions={catalogWriter ? <SkuModal /> : undefined}
-      meta={
-        <>
-          <StockBadge>Operação interna</StockBadge>
-          <StockBadge>Cod. cliente como referência</StockBadge>
-        </>
-      }
     >
       {/* "SKUs carregados" era contagem técnica da página, não decisão de
           estoque — o total já aparece na paginação da tabela. */}
@@ -173,19 +165,16 @@ export default function Skus() {
         <StockMetricCard
           label="Saldo físico"
           value={formatStockNumber(stats.physical)}
-          hint="Total físico dos SKUs carregados nesta consulta."
           icon={<Boxes className="h-5 w-5" />}
         />
         <StockMetricCard
           label="Disponível"
           value={formatStockNumber(stats.available)}
-          hint={`${formatStockNumber(stats.reserved)} peça(s) reservada(s) nesta página.`}
           icon={<PackageCheck className="h-5 w-5" />}
         />
         <StockMetricCard
           label="Atenção"
           value={formatStockNumber(stats.low + stats.zero + stats.noLocation)}
-          hint="Baixo estoque, zerado ou sem endereço definido."
           icon={<AlertTriangle className="h-5 w-5" />}
           tone={stats.low + stats.zero + stats.noLocation ? "amber" : "default"}
         />
@@ -408,9 +397,6 @@ function SkuModal({ sku }: { sku?: any }) {
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Editar cadastro mestre" : "Novo cadastro mestre de SKU"}</DialogTitle>
-          <p className="text-sm leading-6 text-muted-foreground">
-            Registre aqui somente a identidade e os atributos do produto. Este cadastro não altera saldo nem endereço físico.
-          </p>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 py-4">
           <div className="space-y-4">

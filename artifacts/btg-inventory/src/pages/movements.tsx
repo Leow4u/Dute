@@ -41,7 +41,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
 import {
   formatStockNumber,
-  StockBadge,
   StockFilterChip,
   StockMetricCard,
   StockMetricsGrid,
@@ -144,40 +143,29 @@ export default function Movements() {
     <StockPageShell
       eyebrow="Estoque"
       title="Movimentações"
-      description="Ledger operacional append-only: toda entrada, saída, devolução e ajuste deve deixar rastro, motivo, operador e documento. Esta é a fonte para explicar divergências."
       icon={<Activity className="h-6 w-6" />}
       actions={<MovementModal />}
-      meta={
-        <>
-          <StockBadge>Kardex</StockBadge>
-          <StockBadge>Mutação crítica via função</StockBadge>
-        </>
-      }
     >
       <StockMetricsGrid>
         <StockMetricCard
           label="Movimentos"
           value={formatStockNumber(data?.total ?? 0)}
-          hint="Eventos registrados no ledger operacional."
           icon={<ClipboardList className="h-5 w-5" />}
           tone="blue"
         />
         <StockMetricCard
           label="Entradas"
           value={formatStockNumber(stats.entryQuantity)}
-          hint={`${formatStockNumber(stats.entries)} evento(s) positivo(s) nesta página.`}
           icon={<PackagePlus className="h-5 w-5" />}
         />
         <StockMetricCard
           label="Saídas"
           value={formatStockNumber(stats.exitQuantity)}
-          hint={`${formatStockNumber(stats.exits)} evento(s) negativo(s) nesta página.`}
           icon={<PackageMinus className="h-5 w-5" />}
         />
         <StockMetricCard
           label="Ajustes"
           value={formatStockNumber(stats.adjustments)}
-          hint="Eventos manuais que exigem motivo e rastreabilidade."
           icon={<Activity className="h-5 w-5" />}
           tone={stats.adjustments ? "amber" : "default"}
         />
@@ -187,7 +175,6 @@ export default function Movements() {
         search={search}
         onSearchChange={setSearch}
         placeholder="Buscar por SKU interno da movimentação"
-        resultText="Para corrigir divergência, registre ajuste com motivo. Não edite saldo direto fora do ledger."
       >
         <StockFilterChip active={typeFilter === "todos"} onClick={() => setTypeFilter("todos")}>
           Todos

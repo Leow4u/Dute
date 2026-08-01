@@ -295,9 +295,6 @@ export function ReceivingCommandCenter({
             </div>
             <div className="min-w-0">
               <CardTitle className="text-xl">Entrada no galpão</CardTitle>
-              <CardDescription className="mt-1">
-                Registre o que chegou, confira o físico e só então libere para estoque.
-              </CardDescription>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -547,9 +544,6 @@ export function ReceivingTaskDetailCard({
               ) : null}
             </div>
             <CardTitle className="mt-3 text-xl">{getTaskTitle(task)}</CardTitle>
-            <CardDescription className="mt-1">
-              Confira as quantidades físicas. Estoque só muda após concluir a entrada.
-            </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
             {canRegister ? (

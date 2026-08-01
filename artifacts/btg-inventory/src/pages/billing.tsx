@@ -189,9 +189,6 @@ export default function Billing() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-primary">Faturamento Mensal</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Calcule, revise e emita a fatura de armazenagem e logística do cliente.
-          </p>
         </div>
         <div className="flex items-center gap-2">
           <Input
@@ -278,9 +275,6 @@ export default function Billing() {
                 <Activity className="h-4 w-4 text-blue-500" />
                 Evidências da competência
               </CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Rastro operacional usado para revisar a cobrança antes da emissão.
-              </p>
             </div>
             <Badge
               variant="outline"
