@@ -2043,11 +2043,10 @@ function allocateCartLine(product: StockProduct, quantity: number) {
     allocations.push({
       sku_code: product.sku,
       client_item_code:
-        firstText(source.client_item_code, product.clientItemCode) ?? null,
+        firstText(source.client_item_code, product.clientItemCode) ?? undefined,
       product_name: product.name,
-      location_id: source.location_id ?? null,
+      location_id: source.location_id ?? undefined,
       quantity: allocatedQuantity,
-      notes: null,
     });
     remaining -= allocatedQuantity;
   }

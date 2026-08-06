@@ -119,7 +119,21 @@ const collectionNames = {
   customerAccounts: "customer_accounts",
 } as const;
 
-const RequestItemSchema = z.object({
+function stripNullFields<T extends Record<string, unknown>>(value: T): T {
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [
+      key,
+      entry === null ? undefined : entry,
+    ]),
+  ) as T;
+}
+
+const RequestItemSchema = z.preprocess(
+  (value) =>
+    value && typeof value === "object" && !Array.isArray(value)
+      ? stripNullFields(value as Record<string, unknown>)
+      : value,
+  z.object({
   line_number: z.number().optional(),
   sku_code: z.string().optional(),
   client_item_code: z.string().optional(),
@@ -137,7 +151,8 @@ const RequestItemSchema = z.object({
   unit_cost: z.number().optional(),
   quantity: z.number().positive(),
   notes: z.string().optional(),
-});
+  }),
+);
 
 const EventInputSchema = z.object({
   type: z.string().min(1),
