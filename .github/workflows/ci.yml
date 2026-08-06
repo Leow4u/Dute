@@ -73,3 +73,73 @@ jobs:
         run: npm install -g firebase-tools
       - name: Integration + rules tests
         run: npm run test:integration
+
+  deploy-frontend:
+    name: Deploy frontend (Cloud Run)
+    runs-on: ubuntu-latest
+    needs: [frontend-typecheck]
+    if: github.event_name == 'push'
+    concurrency:
+      group: deploy-frontend-production
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PROJECT_ID: dute-btg
+      REGION: southamerica-east1
+      SERVICE: dute-btg-app
+      REPOSITORY: dute-btg
+      WORKLOAD_IDENTITY_PROVIDER: projects/912453685006/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+      GCP_SERVICE_ACCOUNT: github-actions-deploy@dute-btg.iam.gserviceaccount.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install and build frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter "@workspace/btg-inventory" run build
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build image and deploy to Cloud Run
+        run: |
+          set -euo pipefail
+          STAGE_DIR="${RUNNER_TEMP}/cloud-run-src"
+          mkdir -p "${STAGE_DIR}/deploy/cloud-run"
+          mkdir -p "${STAGE_DIR}/artifacts/btg-inventory/dist"
+          cp Dockerfile "${STAGE_DIR}/"
+          cp deploy/cloud-run/nginx.conf "${STAGE_DIR}/deploy/cloud-run/"
+          cp -r artifacts/btg-inventory/dist/public "${STAGE_DIR}/artifacts/btg-inventory/dist/"
+
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+          IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${SERVICE}:${SHORT_SHA}"
+
+          gcloud config set project "${PROJECT_ID}"
+          gcloud builds submit "${STAGE_DIR}" --tag "${IMAGE}" --project "${PROJECT_ID}"
+          gcloud run deploy "${SERVICE}" \
+            --image "${IMAGE}" \
+            --region "${REGION}" \
+            --platform managed \
+            --allow-unauthenticated \
+            --project "${PROJECT_ID}"
+
+          gcloud run services describe "${SERVICE}" \
+            --region "${REGION}" \
+            --project "${PROJECT_ID}" \
+            --format "value(status.url)"
