@@ -1134,6 +1134,19 @@ export function inventoryItemValue(item: InventoryItem) {
   return firstNumber(item.total_value, item.total_cost, item.value);
 }
 
+export function inventoryTotalValue(
+  inventory: InventorySummary,
+  items: InventoryItem[] = [],
+) {
+  const fromSummary = firstNumber(
+    inventory.total_value,
+    inventory.inventory_value,
+    inventory.custo_total,
+  );
+  if (fromSummary > 0) return fromSummary;
+  return items.reduce((sum, item) => sum + inventoryItemValue(item), 0);
+}
+
 export function inventoryItemPhoto(item: InventoryItem) {
   const primary = item.primary_photo_url;
   if (typeof primary === "string" && primary.trim()) return primary;

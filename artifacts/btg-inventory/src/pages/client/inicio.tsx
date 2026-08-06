@@ -30,6 +30,7 @@ import {
   getInventoryItems,
   getOrders,
   getRequests,
+  inventoryTotalValue,
   orderDate,
   orderProduct,
   orderReference,
@@ -66,6 +67,7 @@ export function ClienteInicio() {
         const stockReady = inventoryItems.length > 0 || availablePieces > 0;
         const openOrders = firstNumber(overview.orders?.open, orders.length);
         const openInvoices = firstNumber(billing.open_count);
+        const inventoryValue = inventoryTotalValue(inventory, inventoryItems);
 
         const activities: ActivityItem[] = sortByDateDesc(
           [
@@ -147,13 +149,20 @@ export function ClienteInicio() {
             </section>
 
             {stockReady || openOrders > 0 || openInvoices > 0 ? (
-              <section className="grid gap-4 md:grid-cols-3">
+              <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <MetricCard
                   label="Peças disponíveis"
                   value={formatNumber(availablePieces)}
                   description={`${formatNumber(firstNumber(inventory.reserved_pieces))} reservada(s) em pedidos`}
                   icon={Box}
                   tone="info"
+                />
+                <MetricCard
+                  label="Valor do estoque"
+                  value={formatMoney(inventoryValue)}
+                  description="Custo total dos saldos disponíveis"
+                  icon={DollarSign}
+                  tone="success"
                 />
                 <MetricCard
                   label="Pedidos em aberto"
