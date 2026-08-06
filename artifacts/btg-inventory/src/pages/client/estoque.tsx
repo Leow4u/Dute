@@ -2151,8 +2151,8 @@ function agentDuteSignal(product: StockProduct, liveAvailable: number) {
 
 function clampQuantity(quantity: number, max: number) {
   if (max <= 0) return 0;
-  const parsed = Math.floor(Number.isFinite(quantity) ? quantity : 1);
-  return Math.min(max, Math.max(1, parsed));
+  const parsed = Math.floor(Number.isFinite(quantity) ? quantity : 0);
+  return Math.min(max, Math.max(0, parsed));
 }
 
 function invalidateClientData(queryClient: ReturnType<typeof useQueryClient>) {
