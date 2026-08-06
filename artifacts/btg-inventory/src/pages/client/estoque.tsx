@@ -283,7 +283,7 @@ export function ClienteEstoque() {
         function getDraftQuantity(product: StockProduct) {
           const max = liveAvailableForProduct(product, cart);
           if (max <= 0) return 0;
-          return clampQuantity(draftQuantities[product.key] ?? 1, max);
+          return clampQuantity(draftQuantities[product.key] ?? 0, max);
         }
 
         function updateDraftQuantity(product: StockProduct, quantity: number) {
@@ -300,9 +300,8 @@ export function ClienteEstoque() {
 
           if (quantity <= 0) {
             toast({
-              title: "Sem saldo disponivel",
-              description:
-                "Todo o saldo deste produto ja foi selecionado ou esta indisponivel.",
+              title: "Informe a quantidade",
+              description: "Use +/− ou digite quantas pecas deseja pedir.",
               variant: "destructive",
             });
             return;
@@ -320,7 +319,7 @@ export function ClienteEstoque() {
           });
           setDraftQuantities((current) => ({
             ...current,
-            [product.key]: 1,
+            [product.key]: 0,
           }));
           setSelectedProductKey(null);
         }
@@ -465,7 +464,6 @@ export function ClienteEstoque() {
                         draftQuantities={draftQuantities}
                         onDraftQuantityChange={updateDraftQuantity}
                         onAdd={addDraftToCart}
-                        onAddOne={addSingleToCart}
                         onDetails={(product) => {
                           setSelectedProductKey(product.key);
                           setCartOpen(false);
@@ -542,11 +540,6 @@ export function ClienteEstoque() {
                   product={selectedProduct}
                   cart={cart}
                   draftQuantity={getDraftQuantity(selectedProduct)}
-                  previewQuantity={draftPreviewQuantityForProduct(
-                    selectedProduct,
-                    cart,
-                    draftQuantities,
-                  )}
                   isPending={productActionMutation.isPending}
                   onClose={() => setSelectedProductKey(null)}
                   onDraftQuantityChange={(quantity) =>
@@ -862,7 +855,6 @@ function StockList({
   draftQuantities,
   onDraftQuantityChange,
   onAdd,
-  onAddOne,
   onDetails,
   onReplenish,
   onArchive,
@@ -872,7 +864,6 @@ function StockList({
   draftQuantities: Record<string, number>;
   onDraftQuantityChange: (product: StockProduct, quantity: number) => void;
   onAdd: (product: StockProduct) => void;
-  onAddOne: (product: StockProduct) => void;
   onDetails: (product: StockProduct) => void;
   onReplenish: (product: StockProduct) => void;
   onArchive: (product: StockProduct) => void;
@@ -894,22 +885,12 @@ function StockList({
         <TableBody>
           {products.map((product) => {
             const liveAvailable = liveAvailableForProduct(product, cart);
-            const previewQuantity = draftPreviewQuantityForProduct(
-              product,
-              cart,
-              draftQuantities,
-            );
-            const displayedAvailable = displayedAvailableForProduct(
-              product,
-              cart,
-              draftQuantities,
-            );
             const draftQuantity = draftQuantityForProduct(
               product,
               cart,
               draftQuantities,
             );
-            const status = productStatus(product, displayedAvailable);
+            const status = productStatus(product, liveAvailable);
 
             return (
               <TableRow key={product.key}>
@@ -929,12 +910,7 @@ function StockList({
                     <StockBadge status={status} />
                     {cart[product.key] ? (
                       <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] text-primary">
-                        {formatNumber(cart[product.key])} selecionado(s)
-                      </span>
-                    ) : null}
-                    {previewQuantity > 0 ? (
-                      <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] text-primary">
-                        {formatNumber(previewQuantity)} em edicao
+                        {formatNumber(cart[product.key])} no pedido
                       </span>
                     ) : null}
                   </div>
@@ -944,11 +920,12 @@ function StockList({
                 </TableCell>
                 <TableCell className="text-right">
                   <p className="font-semibold text-foreground">
-                    {formatNumber(displayedAvailable)}
+                    {formatNumber(liveAvailable)}
                   </p>
-                  {previewQuantity > 0 ? (
-                    <p className="mt-1 text-[11px] text-muted-foreground">
-                      restara de {formatNumber(liveAvailable)}
+                  {draftQuantity > 0 ? (
+                    <p className="mt-1 text-[11px] text-primary">
+                      Pedindo {formatNumber(draftQuantity)} · Sobra{" "}
+                      {formatNumber(Math.max(0, liveAvailable - draftQuantity))}
                     </p>
                   ) : null}
                 </TableCell>
@@ -976,13 +953,9 @@ function StockList({
                         <Button
                           type="button"
                           size="sm"
-                          disabled={liveAvailable <= 0}
+                          disabled={liveAvailable <= 0 || draftQuantity <= 0}
                           className="cursor-pointer"
-                          onClick={() =>
-                            draftQuantity > 1
-                              ? onAdd(product)
-                              : onAddOne(product)
-                          }
+                          onClick={() => onAdd(product)}
                         >
                           <ShoppingCart className="h-4 w-4" />
                           Adicionar
@@ -1064,22 +1037,12 @@ function StockCardGrid({
     >
       {products.map((product) => {
         const liveAvailable = liveAvailableForProduct(product, cart);
-        const previewQuantity = draftPreviewQuantityForProduct(
-          product,
-          cart,
-          draftQuantities,
-        );
-        const displayedAvailable = displayedAvailableForProduct(
-          product,
-          cart,
-          draftQuantities,
-        );
         const draftQuantity = draftQuantityForProduct(
           product,
           cart,
           draftQuantities,
         );
-        const status = productStatus(product, displayedAvailable);
+        const status = productStatus(product, liveAvailable);
 
         return (
           <article
@@ -1111,63 +1074,19 @@ function StockCardGrid({
                   </span>
                   {cart[product.key] ? (
                     <span className="shrink-0 rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary">
-                      {formatNumber(cart[product.key])} selecionado(s)
-                    </span>
-                  ) : null}
-                  {previewQuantity > 0 ? (
-                    <span className="shrink-0 rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary">
-                      {formatNumber(previewQuantity)} em edicao
+                      {formatNumber(cart[product.key])} no pedido
                     </span>
                   ) : null}
                 </div>
               </div>
 
-              <div className="flex items-end justify-between gap-3 border-y border-border/70 py-2.5">
-                <div>
-                  <p className="text-[11px] text-muted-foreground">
-                    {previewQuantity > 0 ? "Restara" : "Disponivel"}
-                  </p>
-                  <p className="mt-1 text-xl font-semibold leading-none text-foreground">
-                    {formatNumber(displayedAvailable)}
-                  </p>
-                  {previewQuantity > 0 ? (
-                    <p className="mt-1 text-[10px] leading-4 text-muted-foreground">
-                      de {formatNumber(liveAvailable)} disp.
-                    </p>
-                  ) : null}
-                </div>
-                <p className="text-right text-[11px] leading-4 text-muted-foreground">
-                  Saldo para
-                  <br />
-                  pedido
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 text-[11px]">
-                <div>
-                  <p className="text-muted-foreground">Total fisico</p>
-                  <p className="mt-0.5 font-medium text-foreground">
-                    {formatNumber(product.total)}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-muted-foreground">Reservado</p>
-                  <p className="mt-0.5 font-medium text-foreground">
-                    {formatNumber(product.reserved)}
-                  </p>
-                </div>
-                <div className="col-span-2">
-                  <p
-                    className="text-muted-foreground"
-                    title="Custo do material que você já adquiriu — não é preço de venda."
-                  >
-                    Valor em estoque
-                  </p>
-                  <p className="mt-0.5 font-medium text-foreground">
-                    {formatMoney(product.value)}
-                  </p>
-                </div>
-              </div>
+              <StockOrderSummary
+                availableForOrder={liveAvailable}
+                draftQuantity={draftQuantity}
+                reserved={product.reserved}
+                stockValue={product.value}
+                physicalTotal={product.total}
+              />
 
               <div className="mt-auto">
                 {product.available > 0 ? (
@@ -1185,7 +1104,7 @@ function StockCardGrid({
                       type="button"
                       size="sm"
                       className="min-w-0 flex-1 cursor-pointer gap-1 px-2 text-[11px]"
-                      disabled={liveAvailable <= 0}
+                      disabled={liveAvailable <= 0 || draftQuantity <= 0}
                       onClick={() => onAdd(product)}
                     >
                       <ShoppingCart className="h-3.5 w-3.5" />
@@ -1379,7 +1298,6 @@ function ProductDetailPanel({
   product,
   cart,
   draftQuantity,
-  previewQuantity,
   isPending,
   onClose,
   onDraftQuantityChange,
@@ -1390,7 +1308,6 @@ function ProductDetailPanel({
   product: StockProduct;
   cart: Record<string, number>;
   draftQuantity: number;
-  previewQuantity: number;
   isPending: boolean;
   onClose: () => void;
   onDraftQuantityChange: (quantity: number) => void;
@@ -1399,8 +1316,9 @@ function ProductDetailPanel({
   onArchive: () => void;
 }) {
   const liveAvailable = liveAvailableForProduct(product, cart);
-  const displayedAvailable = Math.max(0, liveAvailable - previewQuantity);
-  const status = productStatus(product, displayedAvailable);
+  const remaining = Math.max(0, liveAvailable - draftQuantity);
+  const status = productStatus(product, liveAvailable);
+  const showPhysicalTotal = product.total > liveAvailable;
 
   return (
     <ModulePanel
@@ -1440,29 +1358,40 @@ function ProductDetailPanel({
 
         <div className="grid grid-cols-2 gap-3">
           <StockFact
-            label={previewQuantity > 0 ? "Restara" : "Disponivel"}
-            value={
-              previewQuantity > 0
-                ? `${formatNumber(displayedAvailable)} de ${formatNumber(
-                    liveAvailable,
-                  )}`
-                : formatNumber(displayedAvailable)
-            }
+            label="Disponivel para pedido"
+            value={formatNumber(liveAvailable)}
           />
-          <StockFact label="Reservado" value={formatNumber(product.reserved)} />
-          <StockFact label="Total fisico" value={formatNumber(product.total)} />
+          {draftQuantity > 0 ? (
+            <StockFact
+              label="Sobra apos este pedido"
+              value={formatNumber(remaining)}
+            />
+          ) : (
+            <StockFact
+              label="No pedido"
+              value={formatNumber(cart[product.key] ?? 0)}
+            />
+          )}
+          {product.reserved > 0 ? (
+            <StockFact
+              label="Reservado"
+              value={formatNumber(product.reserved)}
+            />
+          ) : null}
+          {showPhysicalTotal ? (
+            <StockFact
+              label="Total fisico"
+              value={formatNumber(product.total)}
+            />
+          ) : null}
           <StockFact
             label="Valor em estoque (custo)"
             value={formatMoney(product.value)}
           />
-          <StockFact
-            label="No pedido"
-            value={formatNumber(cart[product.key] ?? 0)}
-          />
-          {previewQuantity > 0 ? (
+          {draftQuantity > 0 ? (
             <StockFact
-              label="Selecionando agora"
-              value={formatNumber(previewQuantity)}
+              label="Quantidade selecionada"
+              value={formatNumber(draftQuantity)}
             />
           ) : null}
         </div>
@@ -1470,7 +1399,7 @@ function ProductDetailPanel({
         <div className="rounded-[22px] border border-primary/15 bg-primary/10 p-4 text-sm leading-6 text-primary">
           <div className="flex items-start gap-3">
             <Sparkles className="mt-1 h-4 w-4 shrink-0" aria-hidden="true" />
-            <p>{agentDuteSignal(product, displayedAvailable)}</p>
+            <p>{agentDuteSignal(product, liveAvailable)}</p>
           </div>
         </div>
 
@@ -1485,7 +1414,7 @@ function ProductDetailPanel({
             <Button
               type="button"
               className="w-full cursor-pointer"
-              disabled={liveAvailable <= 0}
+              disabled={liveAvailable <= 0 || draftQuantity <= 0}
               onClick={onAdd}
             >
               <ShoppingCart className="h-4 w-4" />
@@ -1650,14 +1579,21 @@ function QuantityStepper({
       </button>
       <Input
         type="number"
-        min={normalizedMax <= 0 ? 0 : 1}
+        min={0}
         max={normalizedMax}
         value={normalizedValue}
-        onChange={(event) => onChange(Number(event.target.value))}
+        onChange={(event) => {
+          const raw = event.target.value;
+          if (raw === "") {
+            onChange(0);
+            return;
+          }
+          onChange(Number(raw));
+        }}
         aria-label={`Quantidade de ${label}`}
         className={cn(
           "border-0 bg-transparent px-1 text-center shadow-none focus-visible:ring-0",
-          compact ? "h-8 w-9 text-xs" : "h-9 w-16",
+          compact ? "h-8 w-11 text-xs" : "h-9 w-20",
         )}
       />
       <button
@@ -1780,6 +1716,70 @@ function FilterChip({
       {Icon ? <Icon className="h-3.5 w-3.5" aria-hidden="true" /> : null}
       {label}
     </button>
+  );
+}
+
+function StockOrderSummary({
+  availableForOrder,
+  draftQuantity,
+  reserved,
+  stockValue,
+  physicalTotal,
+}: {
+  availableForOrder: number;
+  draftQuantity: number;
+  reserved: number;
+  stockValue: number;
+  physicalTotal: number;
+}) {
+  const remaining = Math.max(0, availableForOrder - draftQuantity);
+  const showPhysicalTotal = physicalTotal > availableForOrder;
+
+  return (
+    <div className="space-y-2 border-y border-border/70 py-2.5">
+      <div>
+        <p className="text-[11px] text-muted-foreground">Disponivel para pedido</p>
+        <p className="mt-1 text-xl font-semibold leading-none text-foreground">
+          {formatNumber(availableForOrder)}
+        </p>
+        {draftQuantity > 0 ? (
+          <p className="mt-1.5 text-[11px] leading-4 text-primary">
+            Pedindo {formatNumber(draftQuantity)} · Sobra {formatNumber(remaining)}
+          </p>
+        ) : null}
+      </div>
+      {(reserved > 0 || showPhysicalTotal) && (
+        <div className="grid grid-cols-2 gap-2 text-[11px]">
+          {reserved > 0 ? (
+            <div>
+              <p className="text-muted-foreground">Reservado</p>
+              <p className="mt-0.5 font-medium text-foreground">
+                {formatNumber(reserved)}
+              </p>
+            </div>
+          ) : null}
+          {showPhysicalTotal ? (
+            <div className={reserved > 0 ? "text-right" : ""}>
+              <p className="text-muted-foreground">Total fisico</p>
+              <p className="mt-0.5 font-medium text-foreground">
+                {formatNumber(physicalTotal)}
+              </p>
+            </div>
+          ) : null}
+        </div>
+      )}
+      <div className="text-[11px]">
+        <p
+          className="text-muted-foreground"
+          title="Custo do material que voce ja adquiriu — nao e preco de venda."
+        >
+          Valor em estoque
+        </p>
+        <p className="mt-0.5 font-medium text-foreground">
+          {formatMoney(stockValue)}
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -2103,27 +2103,6 @@ function liveAvailableForProduct(
   return Math.max(0, product.available - (cart[product.key] ?? 0));
 }
 
-function draftPreviewQuantityForProduct(
-  product: StockProduct,
-  cart: Record<string, number>,
-  draftQuantities: Record<string, number>,
-) {
-  if (!(product.key in draftQuantities)) return 0;
-  return draftQuantityForProduct(product, cart, draftQuantities);
-}
-
-function displayedAvailableForProduct(
-  product: StockProduct,
-  cart: Record<string, number>,
-  draftQuantities: Record<string, number>,
-) {
-  return Math.max(
-    0,
-    liveAvailableForProduct(product, cart) -
-      draftPreviewQuantityForProduct(product, cart, draftQuantities),
-  );
-}
-
 function liveAvailableForLine(product: StockProduct, line: CartLine) {
   return Math.max(0, product.available - line.quantity);
 }
@@ -2135,7 +2114,7 @@ function draftQuantityForProduct(
 ) {
   const max = liveAvailableForProduct(product, cart);
   if (max <= 0) return 0;
-  return clampQuantity(draftQuantities[product.key] ?? 1, max);
+  return clampQuantity(draftQuantities[product.key] ?? 0, max);
 }
 
 function productStatus(product: StockProduct, liveAvailable: number) {
@@ -2167,7 +2146,7 @@ function agentDuteSignal(product: StockProduct, liveAvailable: number) {
     return "Baixo estoque identificado pelo Agent Dute. Vale acompanhar reposicao antes de montar novos pedidos grandes.";
   }
 
-  return "Saldo disponivel para abastecimento. Ao selecionar o item, o portal desconta a quantidade exibida ate o envio da solicitacao.";
+  return "Saldo disponivel para abastecimento. Escolha a quantidade e clique em Adicionar para incluir no pedido.";
 }
 
 function clampQuantity(quantity: number, max: number) {
