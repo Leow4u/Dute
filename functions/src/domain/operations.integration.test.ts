@@ -75,6 +75,8 @@ function openingCountInput(
     product_name: "Camiseta institucional de teste",
     product_registration: "new",
     category: "VESTUARIO",
+    genero: "Masculino",
+    grupo: "VESTUÁRIO",
     barcode: "7890000000001",
     brand: "Dutelog Teste",
     size: "M",
@@ -856,6 +858,8 @@ describe("inventário de abertura transacional", () => {
     assert.equal(products.size, 1);
     assert.equal(products.docs[0]?.data().produto, input.product_name);
     assert.equal(products.docs[0]?.data().category, input.category);
+    assert.equal(products.docs[0]?.data().genero, input.genero);
+    assert.equal(products.docs[0]?.data().grupo, input.grupo);
     assert.equal(products.docs[0]?.data().preco_unit, input.unit_cost);
     assert.deepEqual(products.docs[0]?.data().photo_urls, input.photo_urls);
     assert.equal(products.docs[0]?.data().estoque_btg, input.counted_qty);

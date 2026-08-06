@@ -44,6 +44,13 @@ import {
 } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
@@ -77,6 +84,12 @@ import {
   sourcePhotos,
   sourceText,
 } from "@/features/warehouse-ops/receiving";
+import {
+  CATALOG_GENEROS,
+  CATALOG_GRUPOS,
+  inferGeneroFromClientCode,
+  inferGrupoFromProduto,
+} from "@/lib/catalog-taxonomy";
 
 export type CycleCountResult = {
   ok?: boolean;
@@ -97,6 +110,8 @@ export type OpeningInventoryLine = {
   sku_code?: string;
   product_name?: string;
   category?: string;
+  genero?: string;
+  grupo?: string;
   location_id?: string;
   counted_qty?: number;
   unit_cost?: number;
@@ -156,6 +171,8 @@ export function OpeningInventoryWorkspace() {
   const [skuCode, setSkuCode] = useState("");
   const [productName, setProductName] = useState("");
   const [category, setCategory] = useState("");
+  const [genero, setGenero] = useState("");
+  const [grupo, setGrupo] = useState("");
   const [barcode, setBarcode] = useState("");
   const [brand, setBrand] = useState("");
   const [size, setSize] = useState("");
@@ -171,6 +188,20 @@ export function OpeningInventoryWorkspace() {
     useState<ProductLookupItem>();
   const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
   const [lineToRemove, setLineToRemove] = useState<OpeningInventoryLine>();
+
+  useEffect(() => {
+    const suggested = inferGeneroFromClientCode(clientCode);
+    if (suggested) {
+      setGenero((current) => current || suggested);
+    }
+  }, [clientCode]);
+
+  useEffect(() => {
+    const suggested = inferGrupoFromProduto(productName);
+    if (suggested) {
+      setGrupo((current) => current || suggested);
+    }
+  }, [productName]);
 
   const sessionQuery = useQuery<OpeningInventorySession>({
     queryKey: ["opening-inventory-session"],
@@ -274,9 +305,12 @@ export function OpeningInventoryWorkspace() {
   const newProductComplete =
     Boolean(productName.trim()) &&
     Boolean(category.trim()) &&
+    Boolean(genero.trim()) &&
+    Boolean(grupo.trim()) &&
     Number.isFinite(parsedCost) &&
     parsedCost > 0 &&
     photos.length > 0;
+  const taxonomyComplete = Boolean(genero.trim()) && Boolean(grupo.trim());
   const selectedProductCost =
     Number.isFinite(parsedCost) && parsedCost > 0
       ? parsedCost
@@ -291,6 +325,7 @@ export function OpeningInventoryWorkspace() {
     Number.isFinite(parsedCount) &&
     parsedCount >= 0 &&
     !photoUploading &&
+    taxonomyComplete &&
     ((Boolean(selectedProduct?.hasSku) && selectedProductCost > 0) ||
       (createNew && newProductComplete)) &&
     !(selectedProduct && createNew);
@@ -373,6 +408,14 @@ export function OpeningInventoryWorkspace() {
             category.trim() ||
             sourceText(selectedProduct?.source ?? {}, "category", "categoria") ||
             undefined,
+          genero:
+            genero.trim() ||
+            sourceText(selectedProduct?.source ?? {}, "genero") ||
+            undefined,
+          grupo:
+            grupo.trim() ||
+            sourceText(selectedProduct?.source ?? {}, "grupo") ||
+            undefined,
           barcode: barcode.trim() || undefined,
           brand: brand.trim() || undefined,
           size: size.trim() || undefined,
@@ -403,6 +446,8 @@ export function OpeningInventoryWorkspace() {
       setSkuCode("");
       setProductName("");
       setCategory("");
+      setGenero("");
+      setGrupo("");
       setBarcode("");
       setBrand("");
       setSize("");
@@ -461,6 +506,16 @@ export function OpeningInventoryWorkspace() {
     setSkuCode(product.skuCode);
     setProductName(product.productName);
     setCategory(sourceText(product.source, "category", "categoria"));
+    setGenero(
+      sourceText(product.source, "genero") ||
+        inferGeneroFromClientCode(product.clientCode) ||
+        "",
+    );
+    setGrupo(
+      sourceText(product.source, "grupo") ||
+        inferGrupoFromProduto(product.productName) ||
+        "",
+    );
     setBarcode(sourceText(product.source, "barcode"));
     setBrand(sourceText(product.source, "brand", "marca"));
     setSize(sourceText(product.source, "size", "tamanho"));
@@ -704,15 +759,48 @@ export function OpeningInventoryWorkspace() {
                 </Alert>
               ) : null}
 
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="space-y-2">
                   <Label>Categoria</Label>
                   <Input value={category} onChange={(event) => setCategory(event.target.value)} placeholder="Obrigatória para novo" />
                 </div>
                 <div className="space-y-2">
+                  <Label>Gênero</Label>
+                  <Select value={genero || undefined} onValueChange={setGenero}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o gênero" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CATALOG_GENEROS.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Grupo</Label>
+                  <Select value={grupo || undefined} onValueChange={setGrupo}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o grupo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CATALOG_GRUPOS.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
                   <Label>Marca</Label>
                   <Input value={brand} onChange={(event) => setBrand(event.target.value)} placeholder="Marca" />
                 </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="space-y-2">
                   <Label>Tamanho</Label>
                   <Input value={size} onChange={(event) => setSize(event.target.value)} placeholder="Tamanho" />

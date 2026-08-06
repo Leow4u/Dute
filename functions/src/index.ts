@@ -299,6 +299,8 @@ const CycleCountSchema = z.object({
   product_name: z.string().trim().optional(),
   product_registration: z.enum(["existing", "new"]).optional(),
   category: z.string().trim().optional(),
+  genero: z.string().trim().max(80).optional(),
+  grupo: z.string().trim().max(120).optional(),
   barcode: z.string().trim().max(120).optional(),
   brand: z.string().trim().max(120).optional(),
   size: z.string().trim().max(80).optional(),

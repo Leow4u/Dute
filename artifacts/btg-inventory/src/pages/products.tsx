@@ -14,6 +14,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
 import {
+  formatCatalogGenero,
+  catalogGeneroBadgeClass,
+} from "@/lib/catalog-taxonomy";
+import {
   formatStockMoney,
   formatStockNumber,
   StockFilterChip,
@@ -155,6 +159,7 @@ export default function Products() {
                 <tr>
                   <th className="px-5 py-4 font-medium">Cod. cliente</th>
                   <th className="px-5 py-4 font-medium">Produto</th>
+                  <th className="px-4 py-3 font-medium">Gênero</th>
                   <th className="px-4 py-3 font-medium">Categoria / Grupo</th>
                   <th className="px-4 py-3 font-medium">Cor / Tamanho</th>
                   <th className="px-4 py-3 font-medium text-right">Preço Unit.</th>
@@ -166,17 +171,25 @@ export default function Products() {
               <tbody className="divide-y divide-border">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Carregando produtos...</td>
+                    <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">Carregando produtos...</td>
                   </tr>
                 ) : data?.items?.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Nenhum produto encontrado.</td>
+                    <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">Nenhum produto encontrado.</td>
                   </tr>
                 ) : (
                   filteredProducts.map((product: Product) => (
                     <tr key={product.id} className="hover:bg-white/70 transition-colors">
                       <td className="px-5 py-3 font-mono text-xs text-primary font-semibold">{product.cod_cliente}</td>
                       <td className="px-5 py-3 font-medium max-w-[280px] truncate" title={product.produto}>{product.produto}</td>
+                      <td className="px-4 py-2">
+                        <Badge
+                          variant="outline"
+                          className={`font-normal ${catalogGeneroBadgeClass(product.genero)}`}
+                        >
+                          {formatCatalogGenero(product.genero)}
+                        </Badge>
+                      </td>
                       <td className="px-4 py-2 text-xs">
                         {product.categoria && <Badge variant="secondary" className="mr-1 mb-1 font-normal bg-primary/10 text-primary">{product.categoria}</Badge>}
                         {product.grupo && <Badge variant="outline" className="font-normal text-gray-600">{product.grupo}</Badge>}

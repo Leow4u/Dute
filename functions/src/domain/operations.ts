@@ -206,6 +206,8 @@ export type RecordCycleCountInput = {
   product_name?: string;
   product_registration?: "existing" | "new" | string;
   category?: string;
+  genero?: string;
+  grupo?: string;
   barcode?: string;
   brand?: string;
   size?: string;
@@ -1749,10 +1751,15 @@ export async function recordCycleCountTransaction(
         );
       }
       if (wantsNewProduct) {
-        if (!text(input.product_name) || !text(input.category)) {
+        if (
+          !text(input.product_name) ||
+          !text(input.category) ||
+          !text(input.genero) ||
+          !text(input.grupo)
+        ) {
           throw new HttpsError(
             "invalid-argument",
-            "Produto novo exige descrição e categoria.",
+            "Produto novo exige descrição, categoria, gênero e grupo.",
           );
         }
         if (number(input.unit_cost) <= 0) {
@@ -1767,6 +1774,12 @@ export async function recordCycleCountTransaction(
             "Produto novo exige ao menos uma foto.",
           );
         }
+      }
+      if (!text(input.genero) || !text(input.grupo)) {
+        throw new HttpsError(
+          "invalid-argument",
+          "Inventário de abertura exige gênero e grupo do produto.",
+        );
       }
     }
 
@@ -1807,6 +1820,16 @@ export async function recordCycleCountTransaction(
       text(balanceRow.data.category) ||
       text(catalogSku.category || catalogSku.categoria) ||
       text(catalogProduct.category || catalogProduct.categoria) ||
+      undefined;
+    const genero =
+      text(input.genero) ||
+      text(balanceRow.data.genero) ||
+      text(catalogSku.genero || catalogProduct.genero) ||
+      undefined;
+    const grupo =
+      text(input.grupo) ||
+      text(balanceRow.data.grupo) ||
+      text(catalogSku.grupo || catalogProduct.grupo) ||
       undefined;
     const barcode =
       text(input.barcode) ||
@@ -1856,6 +1879,8 @@ export async function recordCycleCountTransaction(
         produto: productName,
         category,
         categoria: category,
+        genero,
+        grupo,
         barcode,
         brand,
         marca: brand,
@@ -1948,6 +1973,8 @@ export async function recordCycleCountTransaction(
           product_name: productName,
           product_registration: wantsNewProduct ? "new" : "existing",
           category,
+          genero,
+          grupo,
           barcode,
           brand,
           size,
