@@ -144,11 +144,13 @@ function MetricCard({
   tone = "stable",
   title,
   value,
+  caption,
 }: {
   icon: typeof Activity;
   tone?: "stable" | "attention" | "critical";
   title: string;
   value: string;
+  caption?: string;
 }) {
   return (
     <Card
@@ -164,6 +166,9 @@ function MetricCard({
           <div className="mt-2 text-2xl font-semibold text-slate-900">
             {value}
           </div>
+          {caption ? (
+            <div className="mt-1 text-xs text-slate-400">{caption}</div>
+          ) : null}
         </div>
         <div
           className={cn(
