@@ -123,9 +123,6 @@ export default function PriceList() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-primary">Tabela de Preços (LPU) & Configurações</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Gerencie os serviços cobráveis, seus valores unitários e os parâmetros de faturamento.
-        </p>
       </div>
 
       {/* Configurações */}

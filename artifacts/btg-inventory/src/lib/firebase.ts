@@ -3,8 +3,6 @@ import { getAuth, type Auth } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 
-import { isDemoMode } from "./demo-mode";
-
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -19,12 +17,12 @@ const missingConfig = Object.entries(firebaseConfig)
   .map(([key]) => key);
 
 export const firebaseConfigError =
-  !isDemoMode && missingConfig.length > 0
+  missingConfig.length > 0
     ? `Firebase não configurado: ${missingConfig.join(", ")}`
     : null;
 
 export const firebaseApp: FirebaseApp | null =
-  !firebaseConfigError && !isDemoMode
+  !firebaseConfigError
     ? getApps()[0] ?? initializeApp(firebaseConfig)
     : null;
 

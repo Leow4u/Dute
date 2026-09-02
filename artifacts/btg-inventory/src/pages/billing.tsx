@@ -19,8 +19,57 @@ import {
   AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, Send, CheckCircle2, Save, Zap } from "lucide-react";
+import {
+  Activity,
+  AlertTriangle,
+  CheckCircle2,
+  ClipboardList,
+  FileText,
+  PackageOpen,
+  Save,
+  Send,
+  Truck,
+  Zap,
+} from "lucide-react";
 import { API_BASE, GRUPOS, STATUS_META, fmtBRL, fmtNum, currentCompetencia, competenciaLabel } from "@/lib/billing-format";
+
+type BillingEvidence = {
+  generated_at: string;
+  status: string;
+  metrics: {
+    movements: number;
+    incoming_pieces: number;
+    outgoing_pieces: number;
+    inbound_receipts: number;
+    orders: number;
+    shipments: number;
+    documents: number;
+    manual_items: number;
+    events: number;
+  };
+  readiness: {
+    ok: boolean;
+    missing: string[];
+  };
+  documents: Array<{
+    id: string;
+    file_name: string;
+    type: string;
+    entity_id: string | null;
+    created_at: string;
+  }>;
+  events: Array<{
+    id: string;
+    type: string;
+    title: string;
+    description?: string;
+    severity?: string;
+    occurred_at: string;
+    entity_type?: string;
+    entity_id?: string;
+  }>;
+  sources: string[];
+};
 
 export default function Billing() {
   const [competencia, setCompetencia] = useState(currentCompetencia());
@@ -29,6 +78,8 @@ export default function Billing() {
 
   const { data, isLoading } = useGetBillingPeriod(competencia);
   const { data: periodsData } = useListBillingPeriods();
+  const [evidence, setEvidence] = useState<BillingEvidence | null>(null);
+  const [evidenceLoading, setEvidenceLoading] = useState(false);
 
   const [qty, setQty] = useState<Record<number, string>>({});
   const [obs, setObs] = useState<Record<number, string>>({});
@@ -50,6 +101,28 @@ export default function Billing() {
     setQty(q);
     setObs(o);
   }, [data]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setEvidenceLoading(true);
+    fetch(`${API_BASE}/billing/periods/${competencia}/evidence`, {
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error("Falha ao carregar evidências.");
+        return response.json() as Promise<BillingEvidence>;
+      })
+      .then((payload) => setEvidence(payload))
+      .catch((error) => {
+        if ((error as { name?: string }).name !== "AbortError") {
+          setEvidence(null);
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setEvidenceLoading(false);
+      });
+    return () => controller.abort();
+  }, [competencia]);
 
   const save = useSaveBillingManual();
   const emit = useEmitBillingInvoice();
@@ -116,9 +189,6 @@ export default function Billing() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-primary">Faturamento Mensal</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Calcule, revise e emita a fatura de armazenagem e logística do cliente.
-          </p>
         </div>
         <div className="flex items-center gap-2">
           <Input
@@ -196,6 +266,149 @@ export default function Billing() {
           </Button>
         )}
       </div>
+
+      <Card className="overflow-hidden border-blue-100 bg-white/80">
+        <CardHeader className="border-b bg-blue-50/40">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Activity className="h-4 w-4 text-blue-500" />
+                Evidências da competência
+              </CardTitle>
+            </div>
+            <Badge
+              variant="outline"
+              className={
+                evidence?.readiness.ok
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border-amber-200 bg-amber-50 text-amber-700"
+              }
+            >
+              {evidenceLoading
+                ? "Conferindo..."
+                : evidence?.readiness.ok
+                  ? "Pronto para revisão"
+                  : "Revisar evidências"}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-5 p-5">
+          <div className="grid gap-3 md:grid-cols-3">
+            {[
+              {
+                label: "Entradas",
+                value: fmtNum(evidence?.metrics.incoming_pieces ?? 0),
+                detail: `${fmtNum(evidence?.metrics.inbound_receipts ?? 0)} recebimento(s)`,
+                icon: PackageOpen,
+              },
+              {
+                label: "Saídas",
+                value: fmtNum(evidence?.metrics.outgoing_pieces ?? 0),
+                detail: `${fmtNum(evidence?.metrics.orders ?? 0)} pedido(s) no mês`,
+                icon: Truck,
+              },
+              {
+                label: "Documentos",
+                value: fmtNum(evidence?.metrics.documents ?? 0),
+                detail: "Notas, comprovantes ou vínculos financeiros",
+                icon: FileText,
+              },
+              // O contador de eventos tem dono (Agent Dute) — aparecia em 4
+              // telas; aqui não sustenta a decisão de emitir.
+            ].map((item) => (
+              <div
+                key={item.label}
+                className="rounded-[20px] border border-slate-100 bg-white/75 p-4 shadow-[0_8px_24px_rgba(15,23,42,.04)]"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm text-muted-foreground">{item.label}</span>
+                  <span className="rounded-full border border-blue-100 bg-blue-50 p-2 text-blue-500">
+                    <item.icon className="h-4 w-4" />
+                  </span>
+                </div>
+                <div className="mt-3 text-2xl font-semibold text-foreground">
+                  {item.value}
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">{item.detail}</div>
+              </div>
+            ))}
+          </div>
+
+          {evidence?.readiness.missing.length ? (
+            <div className="rounded-[18px] border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-800">
+              <div className="mb-2 flex items-center gap-2 font-medium">
+                <AlertTriangle className="h-4 w-4" />
+                Pontos para validar antes de emitir
+              </div>
+              <ul className="space-y-1">
+                {evidence.readiness.missing.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          <div className="grid gap-4 xl:grid-cols-[1fr_1.2fr]">
+            <div className="rounded-[20px] border border-slate-100 bg-white/70 p-4">
+              <div className="mb-3 text-sm font-medium text-foreground">
+                Documentos vinculados
+              </div>
+              {evidence?.documents.length ? (
+                <div className="space-y-2">
+                  {evidence.documents.map((document) => (
+                    <div
+                      key={document.id}
+                      className="flex items-center justify-between gap-3 rounded-[14px] border border-slate-100 px-3 py-2 text-sm"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate font-medium">{document.file_name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {document.type}
+                        </div>
+                      </div>
+                      <Badge variant="outline">{document.entity_id ?? "doc"}</Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-[14px] border border-dashed p-4 text-sm text-muted-foreground">
+                  Nenhum documento financeiro vinculado a esta competência.
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-[20px] border border-slate-100 bg-white/70 p-4">
+              <div className="mb-3 text-sm font-medium text-foreground">
+                Eventos recentes da cobrança
+              </div>
+              {evidence?.events.length ? (
+                <div className="space-y-2">
+                  {evidence.events.slice(0, 6).map((event) => (
+                    <div
+                      key={event.id}
+                      className="rounded-[14px] border border-slate-100 px-3 py-2 text-sm"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-medium">{event.title}</span>
+                        <Badge variant="outline">{event.type}</Badge>
+                      </div>
+                      {event.description ? (
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {event.description}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-[14px] border border-dashed p-4 text-sm text-muted-foreground">
+                  Nenhum evento encontrado para a competência.
+                </div>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Grade de linhas */}
       <Card>

@@ -5,6 +5,10 @@ dist
 tmp
 out-tsc
 *.tsbuildinfo
+__pycache__/
+*.pyc
+firestore-debug.log
+functions/lib
 .expo
 .expo-shared
 
@@ -31,6 +35,8 @@ node_modules
 /.env
 /.env.*
 !/.env.example
+/.secrets/
+/.backups/
 /.firebase/
 /.sass-cache
 /connect.lock
@@ -51,3 +57,9 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Saídas geradas e rascunhos locais (não pertencem ao produto)
+graphify-out/
+landing_code.txt
+make_landing.js
+write_landing.js

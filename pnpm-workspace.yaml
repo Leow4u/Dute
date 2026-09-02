@@ -2,6 +2,7 @@ minimumReleaseAge: 1440
 
 packages:
   - artifacts/*
+  - functions
   - lib/*
   - lib/integrations/*
 
@@ -29,6 +30,11 @@ catalog:
   zod: ^3.25.76
 
 autoInstallPeers: false
+
+packageExtensions:
+  "@hookform/resolvers@3.10.0":
+    peerDependencies:
+      zod: ^3.25.0
 
 onlyBuiltDependencies:
   - "@swc/core"

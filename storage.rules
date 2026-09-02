@@ -1,0 +1,57 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return /databases/(default)/documents/users/$(request.auth.uid);
+    }
+
+    function hasProfile() {
+      return signedIn() && firestore.exists(userDoc());
+    }
+
+    function profileRole() {
+      return firestore.get(userDoc()).data.role;
+    }
+
+    function isInternal() {
+      return hasProfile()
+        && profileRole() in [
+          'owner',
+          'admin',
+          'interno',
+          'wms',
+          'financeiro',
+          'suporte'
+        ];
+    }
+
+    function canWritePhotos() {
+      return hasProfile()
+        && profileRole() in ['owner', 'admin', 'interno', 'wms'];
+    }
+
+    // Unico prefixo tocado pelo SDK do browser
+    // (features/warehouse-ops/shared.ts -> uploadBytes).
+    // operational-documents e agent-knowledge nao passam por estas regras:
+    // upload via signed URL v4, download via token do Storage e leitura
+    // server-side pelo Admin SDK. Conceder acesso a eles aqui so ampliaria
+    // superficie sem habilitar nenhum fluxo real.
+    match /product-photos/{allPaths=**} {
+      allow read: if isInternal();
+      allow create: if canWritePhotos()
+        && request.resource.size < 15 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      // write inclui delete: nenhum fluxo do produto apaga ou sobrescreve foto.
+      allow update, delete: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

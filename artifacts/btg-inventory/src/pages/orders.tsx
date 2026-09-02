@@ -1,13 +1,22 @@
-import { useState, useMemo } from "react";
-import { useListOrders, useUpdateOrder, getListOrdersQueryKey } from "@workspace/api-client-react";
+import { useEffect, useMemo, useState } from "react";
+import { type Order, useListOrders, useUpdateOrder, getListOrdersQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, Filter, Box } from "lucide-react";
+import { Boxes, CheckCircle2, ClipboardList, PackageCheck, Truck } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import {
+  formatStockNumber,
+  StockFilterChip,
+  StockMetricCard,
+  StockMetricsGrid,
+  StockPageShell,
+  StockTableCard,
+  StockTablePagination,
+  StockToolbar,
+} from "@/components/stock/stock-workbench";
 
 export default function Orders() {
   const [search, setSearch] = useState("");
@@ -16,7 +25,7 @@ export default function Orders() {
   const [page, setPage] = useState(0);
   const limit = 50;
 
-  useMemo(() => {
+  useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(search);
       setPage(0);
@@ -29,50 +38,87 @@ export default function Orders() {
     { query: { queryKey: getListOrdersQueryKey({ num_pedido: debouncedSearch || undefined, status: statusFilter || undefined, limit, offset: page * limit }) } }
   );
 
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-primary">Gestão de Pedidos</h1>
-          <p className="text-sm text-muted-foreground mt-1">Acompanhe as operações de separação, embalagem e expedição.</p>
-        </div>
-      </div>
+  const orders = data?.items ?? [];
+  const stats = useMemo(() => {
+    return orders.reduce(
+      (acc, order) => {
+        const requested = Number(order.qtd_solic ?? 0);
+        const separated = Number(order.qtd_sep ?? 0);
+        acc.items += requested;
+        acc.separated += separated;
+        if (order.status === "PENDENTE") acc.pending += 1;
+        if (order.status === "SEPARACAO") acc.picking += 1;
+        if (order.status === "ENTREGUE" || order.status === "FATURADO") acc.done += 1;
+        return acc;
+      },
+      { items: 0, separated: 0, pending: 0, picking: 0, done: 0 },
+    );
+  }, [orders]);
 
-      <Card className="border-border shadow-sm">
-        <CardHeader className="bg-gray-50/50 border-b border-border py-4">
-          <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-            <div className="relative w-full sm:w-96">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="Buscar número do pedido..." 
-                className="pl-9 h-9 text-sm bg-white"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-            <div className="flex gap-2 w-full sm:w-auto items-center">
-              <Select value={statusFilter} onValueChange={(val) => { setStatusFilter(val === "all" ? "" : val); setPage(0); }}>
-                <SelectTrigger className="w-[180px] h-9 bg-white">
-                  <SelectValue placeholder="Todos os Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os Status</SelectItem>
-                  <SelectItem value="PENDENTE">Pendente</SelectItem>
-                  <SelectItem value="SEPARACAO">Separação</SelectItem>
-                  <SelectItem value="FATURADO">Faturado</SelectItem>
-                  <SelectItem value="ENTREGUE">Entregue</SelectItem>
-                  <SelectItem value="CANCELADO">Cancelado</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
+  const setStatus = (status: string) => {
+    setStatusFilter(status === "all" ? "" : status);
+    setPage(0);
+  };
+
+  return (
+    <StockPageShell
+      eyebrow="Estoque"
+      title="Pedidos"
+      icon={<Truck className="h-6 w-6" />}
+    >
+      <StockMetricsGrid>
+        <StockMetricCard
+          label="Pedidos / linhas"
+          value={formatStockNumber(data?.total ?? 0)}
+          icon={<ClipboardList className="h-5 w-5" />}
+          tone="blue"
+        />
+        <StockMetricCard
+          label="Itens solicitados"
+          value={formatStockNumber(stats.items)}
+          icon={<Boxes className="h-5 w-5" />}
+        />
+        <StockMetricCard
+          label="Em aberto"
+          value={formatStockNumber(stats.pending + stats.picking)}
+          icon={<PackageCheck className="h-5 w-5" />}
+          tone={stats.pending + stats.picking ? "amber" : "default"}
+        />
+        <StockMetricCard
+          label="Concluídos"
+          value={formatStockNumber(stats.done)}
+          icon={<CheckCircle2 className="h-5 w-5" />}
+        />
+      </StockMetricsGrid>
+
+      <StockToolbar
+        search={search}
+        onSearchChange={setSearch}
+        placeholder="Buscar por número do pedido"
+      >
+        <StockFilterChip active={!statusFilter} onClick={() => setStatus("all")}>
+          Todos
+        </StockFilterChip>
+        <StockFilterChip active={statusFilter === "PENDENTE"} onClick={() => setStatus("PENDENTE")}>
+          Pendente
+        </StockFilterChip>
+        <StockFilterChip active={statusFilter === "SEPARACAO"} onClick={() => setStatus("SEPARACAO")}>
+          Separação
+        </StockFilterChip>
+        <StockFilterChip active={statusFilter === "ENTREGUE"} onClick={() => setStatus("ENTREGUE")}>
+          Entregue
+        </StockFilterChip>
+        <StockFilterChip active={statusFilter === "CANCELADO"} onClick={() => setStatus("CANCELADO")}>
+          Cancelado
+        </StockFilterChip>
+      </StockToolbar>
+
+      <StockTableCard>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-              <thead className="text-xs text-muted-foreground uppercase bg-gray-50/80 border-b border-border">
+              <thead className="text-xs text-muted-foreground uppercase border-b border-border/80 bg-white/55">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Nº Pedido</th>
+                  <th className="px-5 py-4 font-medium">Nº Pedido</th>
                   <th className="px-4 py-3 font-medium">Data</th>
                   <th className="px-4 py-3 font-medium">Cliente / Canal</th>
                   <th className="px-4 py-3 font-medium">Produto</th>
@@ -91,11 +137,11 @@ export default function Orders() {
                     <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Nenhum pedido encontrado.</td>
                   </tr>
                 ) : (
-                  data?.items?.map((order) => {
+                  orders.map((order: Order) => {
                     const progress = order.qtd_solic > 0 ? ((order.qtd_sep || 0) / order.qtd_solic) * 100 : 0;
                     return (
                       <tr key={order.id} className="hover:bg-gray-50/80 transition-colors">
-                        <td className="px-4 py-3 font-mono text-xs text-primary font-bold">#{order.num_pedido}</td>
+                        <td className="px-5 py-3 font-mono text-xs text-primary font-bold">#{order.num_pedido}</td>
                         <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
                           {order.data_solic ? new Date(order.data_solic).toLocaleDateString('pt-BR') : "-"}
                         </td>
@@ -110,12 +156,7 @@ export default function Orders() {
                               <span className="font-medium text-gray-700">{order.qtd_sep || 0} / {order.qtd_solic}</span>
                               <span className="text-muted-foreground">{Math.round(progress)}%</span>
                             </div>
-                            <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full rounded-full ${progress === 100 ? 'bg-emerald-500' : 'bg-primary'}`}
-                                style={{ width: `${progress}%` }}
-                              />
-                            </div>
+                            <Progress value={progress} className="h-1.5 bg-primary/10" />
                           </div>
                         </td>
                         <td className="px-4 py-3 text-center">
@@ -139,32 +180,18 @@ export default function Orders() {
             </table>
           </div>
           
-          <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-gray-50/50">
-            <div className="text-xs text-muted-foreground">
-              Exibindo <span className="font-medium">{data?.items?.length || 0}</span> de <span className="font-medium">{data?.total || 0}</span> pedidos
-            </div>
-            <div className="flex gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setPage(p => Math.max(0, p - 1))}
-                disabled={page === 0 || isLoading}
-              >
-                Anterior
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setPage(p => p + 1)}
-                disabled={!data || data.items.length < limit || isLoading}
-              >
-                Próximo
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+          <StockTablePagination
+            page={page}
+            isLoading={isLoading}
+            count={data?.items?.length || 0}
+            total={data?.total || 0}
+            limit={limit}
+            label="pedidos"
+            onPrevious={() => setPage((p) => Math.max(0, p - 1))}
+            onNext={() => setPage((p) => p + 1)}
+          />
+      </StockTableCard>
+    </StockPageShell>
   );
 }
 

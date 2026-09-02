@@ -4,12 +4,12 @@ Sistema de inventário, armazenagem, movimentações e cobrança para a operaç�
 
 ## Estado do projeto
 
-O projeto agora usa somente o frontend React/Vite criado inicialmente. Backend, banco e autenticação legados foram substituídos por serviços Google Cloud/Firebase:
+O projeto agora usa somente o frontend React/Vite criado inicialmente. A hospedagem de produção deve ficar no Google Cloud, sem Firebase Hosting:
 
-- Firebase Hosting para publicar o app.
-- Firebase Authentication com login por e-mail/senha e cadastro apenas por convite.
-- Cloud Firestore em `southamerica-east1` para dados operacionais.
-- Firestore Security Rules para controle de acesso.
+- Cloud Run para publicar o app em container.
+- Artifact Registry para armazenar imagens.
+- Cloud Build para gerar a imagem de produção.
+- Firebase Authentication e Cloud Firestore ainda são dependências atuais de login/dados e devem ser migradas com controle, sem apagar dados reais.
 
 ## Como rodar localmente
 
@@ -29,13 +29,6 @@ pnpm run typecheck
 pnpm --filter @workspace/btg-inventory run dev
 ```
 
-Para uma visualização estática sem login real:
-
-```powershell
-$env:VITE_DEMO_MODE="true"
-pnpm --filter @workspace/btg-inventory run dev
-```
-
 Para gerar o build de produção:
 
 ```powershell
@@ -44,13 +37,36 @@ pnpm --filter @workspace/btg-inventory run build
 
 ## Deploy
 
-O projeto Firebase padrão é `dute-f7480`, e o Hosting site configurado é `dute-f7480`.
+O projeto Google Cloud padrão é `dute-btg`.
+O único endereço oficial de produção é `https://app.dutelog.com.br`.
+O app é publicado no Cloud Run pelo container descrito em `Dockerfile`.
 
 ```powershell
-npx firebase-tools deploy --only hosting,firestore --project dute-f7480
+pnpm --filter @workspace/btg-inventory run build
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\deploy_cloud_run.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\setup_cloud_run_load_balancer.ps1
 ```
 
-O domínio planejado é `app.dutelog.com.br`; a conexão final do domínio exige criar o domínio no Firebase Hosting e apontar os registros DNS na Hostinger.
+### Guardrail de produção
+
+Deploy concluído no Cloud Run não significa produção saudável enquanto `https://app.dutelog.com.br` não responder com o app.
+Não use Firebase Hosting como URL de produção ou fallback operacional.
+Antes de trocar DNS, preserve e-mail, SPF, Microsoft, Google verification, MX, DKIM e DMARC.
+
+O Load Balancer HTTPS de produção usa:
+
+- Cloud Run service: `dute-btg-app`
+- Região: `southamerica-east1`
+- IP global: `8.232.54.179`
+- Certificado gerenciado: `dute-btg-app-cert`
+
+Para apontar `app.dutelog.com.br` para o Google Cloud Load Balancer:
+
+```powershell
+$env:HOSTINGER_API_TOKEN = "cole-o-token-aqui"
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\point_hostinger_app_to_gclb.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\point_hostinger_app_to_gclb.ps1 -Apply
+```
 
 ## Acesso por convite
 
@@ -66,7 +82,7 @@ As regras do Firestore só permitem criar perfil quando existe convite pendente 
 ## Mapa técnico
 
 - `artifacts/btg-inventory`: frontend React/Vite em PT-BR.
-- `artifacts/btg-inventory/src/lib/firebase.ts`: inicialização Firebase.
+- `artifacts/btg-inventory/src/lib/firebase.ts`: inicialização atual de Auth/Firestore.
 - `artifacts/btg-inventory/src/lib/auth.tsx`: autenticação e perfil do usuário.
 - `artifacts/btg-inventory/src/lib/cloud-api.ts`: ponte Firestore para as chamadas que as telas já usam.
 - `lib/api-client-react`: hooks e tipos usados pelas telas existentes.

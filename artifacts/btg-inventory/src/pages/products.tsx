@@ -1,17 +1,33 @@
-import { useState, useMemo } from "react";
-import { useListProducts, useCreateProduct, useUpdateProduct, useDeleteProduct, getListProductsQueryKey } from "@workspace/api-client-react";
+import { useEffect, useMemo, useState } from "react";
+import { type Product, useListProducts, useCreateProduct, useUpdateProduct, useDeleteProduct, getListProductsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Edit, Trash2, Filter } from "lucide-react";
+import { AlertTriangle, Boxes, CircleDollarSign, Edit, PackageSearch, Plus, Tags, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useForm } from "react-hook-form";
+import { useAppUser } from "@/lib/auth";
+import { canWriteCatalog, humanApiError } from "@/lib/permissions";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
+import {
+  formatCatalogGenero,
+  catalogGeneroBadgeClass,
+} from "@/lib/catalog-taxonomy";
+import {
+  formatStockMoney,
+  formatStockNumber,
+  StockFilterChip,
+  StockMetricCard,
+  StockMetricsGrid,
+  StockPageShell,
+  StockTableCard,
+  StockTablePagination,
+  StockToolbar,
+} from "@/components/stock/stock-workbench";
 
 const productSchema = z.object({
   cod_cliente: z.string().min(1, "Obrigatório"),
@@ -27,13 +43,18 @@ const productSchema = z.object({
 type ProductFormValues = z.infer<typeof productSchema>;
 
 export default function Products() {
+  // Espelho do requireCatalogWrite do servidor: quem não pode criar/editar
+  // não vê o botão — antes o wms preenchia o formulário inteiro para
+  // receber um "Erro ao criar produto" sem explicação.
+  const { user } = useAppUser();
+  const catalogWriter = canWriteCatalog(user?.publicMetadata.role);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("todos");
   const [page, setPage] = useState(0);
   const limit = 50;
 
-  // Simple debounce for search
-  useMemo(() => {
+  useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(search);
       setPage(0);
@@ -46,51 +67,103 @@ export default function Products() {
     { query: { queryKey: getListProductsQueryKey({ search: debouncedSearch || undefined, limit, offset: page * limit }) } }
   );
 
-  const formatCurrency = (val?: number | null) => {
-    if (val === null || val === undefined) return "-";
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-  };
+  const products = data?.items ?? [];
+  const categoryOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    products.forEach((product) => {
+      const category = product.categoria?.trim() || "Sem categoria";
+      counts.set(category, (counts.get(category) ?? 0) + 1);
+    });
+    return [...counts.entries()]
+      .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+      .slice(0, 8);
+  }, [products]);
+
+  const filteredProducts =
+    categoryFilter === "todos"
+      ? products
+      : products.filter(
+          (product) => (product.categoria?.trim() || "Sem categoria") === categoryFilter,
+        );
+
+  const pageCost = products.reduce(
+    (total, product) => total + Number(product.custo_total ?? 0),
+    0,
+  );
+  const pagePieces = products.reduce(
+    (total, product) => total + Number(product.estoque_btg ?? 0),
+    0,
+  );
+  const missingCost = products.filter(
+    (product) => Number(product.estoque_btg ?? 0) > 0 && Number(product.preco_unit ?? 0) <= 0,
+  ).length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-primary">Catálogo de Produtos</h1>
-          <p className="text-sm text-muted-foreground mt-1">Gerencie as definições mestras de produtos e visualize o estoque agregado.</p>
-        </div>
-        <ProductModal />
-      </div>
+    <StockPageShell
+      eyebrow="Estoque"
+      title="Produtos"
+      icon={<PackageSearch className="h-6 w-6" />}
+      actions={catalogWriter ? <ProductModal /> : undefined}
+    >
+      {/* "Peças na página" era soma do recorte visível — número que muda ao
+          paginar e não sustenta decisão nenhuma. */}
+      <StockMetricsGrid>
+        <StockMetricCard
+          label="Produtos cadastrados"
+          value={formatStockNumber(data?.total ?? 0)}
+          icon={<Tags className="h-5 w-5" />}
+          tone="blue"
+        />
+        <StockMetricCard
+          label="Valor carregado"
+          value={formatStockMoney(pageCost)}
+          icon={<CircleDollarSign className="h-5 w-5" />}
+        />
+        <StockMetricCard
+          label="Sem custo válido"
+          value={formatStockNumber(missingCost)}
+          icon={<AlertTriangle className="h-5 w-5" />}
+          tone={missingCost ? "amber" : "default"}
+        />
+      </StockMetricsGrid>
 
-      <Card className="border-border shadow-sm">
-        <CardHeader className="bg-gray-50/50 border-b border-border py-4">
-          <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-            <div className="relative w-full sm:w-96">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="Buscar produtos por código, nome, categoria..." 
-                className="pl-9 h-9 text-sm bg-white"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-            <div className="flex gap-2 w-full sm:w-auto">
-              <Button variant="outline" size="sm" className="h-9">
-                <Filter className="mr-2 h-4 w-4" /> Filtrar
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
+      <StockToolbar
+        search={search}
+        onSearchChange={setSearch}
+        placeholder="Buscar por cod. cliente, produto, categoria, cor ou tamanho"
+        resultText={`${formatStockNumber(filteredProducts.length)} produto(s) nesta página`}
+      >
+        <StockFilterChip
+          active={categoryFilter === "todos"}
+          onClick={() => setCategoryFilter("todos")}
+          count={products.length}
+        >
+          Todas categorias
+        </StockFilterChip>
+        {categoryOptions.map(([category, count]) => (
+          <StockFilterChip
+            key={category}
+            active={categoryFilter === category}
+            onClick={() => setCategoryFilter(category)}
+            count={count}
+          >
+            {category}
+          </StockFilterChip>
+        ))}
+      </StockToolbar>
+
+      <StockTableCard>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-              <thead className="text-xs text-muted-foreground uppercase bg-gray-50/80 border-b border-border">
+              <thead className="text-xs text-muted-foreground uppercase border-b border-border/80 bg-white/55">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Cod. Cliente</th>
-                  <th className="px-4 py-3 font-medium">Nome do Produto</th>
+                  <th className="px-5 py-4 font-medium">Cod. cliente</th>
+                  <th className="px-5 py-4 font-medium">Produto</th>
+                  <th className="px-4 py-3 font-medium">Gênero</th>
                   <th className="px-4 py-3 font-medium">Categoria / Grupo</th>
                   <th className="px-4 py-3 font-medium">Cor / Tamanho</th>
                   <th className="px-4 py-3 font-medium text-right">Preço Unit.</th>
-                  <th className="px-4 py-3 font-medium text-right">Estoque BTG</th>
+                  <th className="px-4 py-3 font-medium text-right">Saldo físico</th>
                   <th className="px-4 py-3 font-medium text-right">Custo Total</th>
                   <th className="px-4 py-3 font-medium text-center">Ações</th>
                 </tr>
@@ -98,32 +171,44 @@ export default function Products() {
               <tbody className="divide-y divide-border">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Carregando produtos...</td>
+                    <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">Carregando produtos...</td>
                   </tr>
                 ) : data?.items?.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Nenhum produto encontrado.</td>
+                    <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">Nenhum produto encontrado.</td>
                   </tr>
                 ) : (
-                  data?.items?.map((product) => (
-                    <tr key={product.id} className="hover:bg-gray-50/80 transition-colors">
-                      <td className="px-4 py-2 font-mono text-xs text-primary font-semibold">{product.cod_cliente}</td>
-                      <td className="px-4 py-2 font-medium max-w-[200px] truncate" title={product.produto}>{product.produto}</td>
+                  filteredProducts.map((product: Product) => (
+                    <tr key={product.id} className="hover:bg-white/70 transition-colors">
+                      <td className="px-5 py-3 font-mono text-xs text-primary font-semibold">{product.cod_cliente}</td>
+                      <td className="px-5 py-3 font-medium max-w-[280px] truncate" title={product.produto}>{product.produto}</td>
+                      <td className="px-4 py-2">
+                        <Badge
+                          variant="outline"
+                          className={`font-normal ${catalogGeneroBadgeClass(product.genero)}`}
+                        >
+                          {formatCatalogGenero(product.genero)}
+                        </Badge>
+                      </td>
                       <td className="px-4 py-2 text-xs">
-                        {product.categoria && <Badge variant="secondary" className="mr-1 mb-1 font-normal bg-blue-50 text-blue-700">{product.categoria}</Badge>}
+                        {product.categoria && <Badge variant="secondary" className="mr-1 mb-1 font-normal bg-primary/10 text-primary">{product.categoria}</Badge>}
                         {product.grupo && <Badge variant="outline" className="font-normal text-gray-600">{product.grupo}</Badge>}
                       </td>
                       <td className="px-4 py-2 text-xs text-muted-foreground">
                         {product.cor || "-"} / {product.tamanho || "-"}
                       </td>
-                      <td className="px-4 py-2 text-right text-muted-foreground">{formatCurrency(product.preco_unit)}</td>
-                      <td className="px-4 py-2 text-right font-medium">{product.estoque_btg?.toLocaleString('pt-BR') || 0}</td>
-                      <td className="px-4 py-2 text-right font-medium text-emerald-600">{formatCurrency(product.custo_total)}</td>
+                      <td className="px-4 py-2 text-right text-muted-foreground">{formatStockMoney(product.preco_unit)}</td>
+                      <td className="px-4 py-2 text-right font-medium">{formatStockNumber(product.estoque_btg)}</td>
+                      <td className="px-4 py-2 text-right font-medium text-foreground">{formatStockMoney(product.custo_total)}</td>
                       <td className="px-4 py-2 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <ProductModal product={product} />
-                          <DeleteProductButton id={product.id} cod_cliente={product.cod_cliente} />
-                        </div>
+                        {catalogWriter ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <ProductModal product={product} />
+                            <DeleteProductButton id={product.id} cod_cliente={product.cod_cliente} />
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -132,32 +217,18 @@ export default function Products() {
             </table>
           </div>
           
-          <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-gray-50/50">
-            <div className="text-xs text-muted-foreground">
-              Exibindo <span className="font-medium">{data?.items?.length || 0}</span> de <span className="font-medium">{data?.total || 0}</span> produtos
-            </div>
-            <div className="flex gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setPage(p => Math.max(0, p - 1))}
-                disabled={page === 0 || isLoading}
-              >
-                Anterior
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setPage(p => p + 1)}
-                disabled={!data || data.items.length < limit || isLoading}
-              >
-                Próximo
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+          <StockTablePagination
+            page={page}
+            isLoading={isLoading}
+            count={data?.items?.length || 0}
+            total={data?.total || 0}
+            limit={limit}
+            label="produtos"
+            onPrevious={() => setPage((p) => Math.max(0, p - 1))}
+            onNext={() => setPage((p) => p + 1)}
+          />
+      </StockTableCard>
+    </StockPageShell>
   );
 }
 
@@ -194,8 +265,12 @@ function ProductModal({ product }: { product?: any }) {
             toast({ title: "Produto atualizado com sucesso" });
             setOpen(false);
           },
-          onError: () => {
-            toast({ title: "Erro ao atualizar produto", variant: "destructive" });
+          onError: (error) => {
+            toast({
+              title: "Erro ao atualizar produto",
+              description: humanApiError(error, "Tente novamente em instantes."),
+              variant: "destructive",
+            });
           }
         }
       );
@@ -209,8 +284,12 @@ function ProductModal({ product }: { product?: any }) {
             setOpen(false);
             reset();
           },
-          onError: () => {
-            toast({ title: "Erro ao criar produto", variant: "destructive" });
+          onError: (error) => {
+            toast({
+              title: "Erro ao criar produto",
+              description: humanApiError(error, "Tente novamente em instantes."),
+              variant: "destructive",
+            });
           }
         }
       );
@@ -298,8 +377,12 @@ function DeleteProductButton({ id, cod_cliente }: { id: number, cod_cliente: str
           toast({ title: "Produto excluído" });
           setOpen(false);
         },
-        onError: () => {
-          toast({ title: "Erro ao excluir produto", variant: "destructive" });
+        onError: (error) => {
+          toast({
+            title: "Erro ao excluir produto",
+            description: humanApiError(error, "Tente novamente em instantes."),
+            variant: "destructive",
+          });
         }
       }
     );

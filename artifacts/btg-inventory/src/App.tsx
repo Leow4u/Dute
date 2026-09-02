@@ -2,24 +2,31 @@ import {
   createUserWithEmailAndPassword,
   deleteUser,
   sendPasswordResetEmail,
+  signOut,
   signInWithEmailAndPassword,
   updateProfile,
 } from "firebase/auth";
-import {
-  doc,
-  getDoc,
-  serverTimestamp,
-  writeBatch,
-} from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
+import { doc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import {
   Switch,
   Route,
+  Link,
   useLocation,
   Router as WouterRouter,
   Redirect,
 } from "wouter";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import {
+  Component,
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
@@ -28,31 +35,101 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import AppLayout from "./components/layout/app-layout";
-import Dashboard from "./pages/dashboard";
-import Products from "./pages/products";
-import Skus from "./pages/skus";
-import Movements from "./pages/movements";
-import Orders from "./pages/orders";
-import Warehouse from "./pages/warehouse";
-import Reports from "./pages/reports";
-import Billing from "./pages/billing";
-import PriceList from "./pages/price-list";
-import Users from "./pages/users";
-import MyInvoices from "./pages/my-invoices";
+import type { WarehouseOpsModuleKey } from "./lib/warehouse-ops/model";
 import NotFound from "./pages/not-found";
+
+/**
+ * Um deploy troca o hash de todos os chunks. Com registerType "autoUpdate" +
+ * skipWaiting, uma aba aberta desde antes do deploy pede um chunk que não
+ * existe mais ao navegar — o import dinâmico rejeita, passa por cima do
+ * Suspense e a tela fica branca. Aqui isso vira um convite a recarregar.
+ */
+class ChunkErrorBoundary extends Component<
+  { children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+        <p>
+          Nao foi possivel carregar esta tela. Uma nova versao pode ter sido
+          publicada.
+        </p>
+        <Button type="button" onClick={() => window.location.reload()}>
+          Recarregar
+        </Button>
+      </div>
+    );
+  }
+}
+
+const Dashboard = lazy(() => import("./pages/dashboard"));
+const Catalog = lazy(() => import("./pages/catalog"));
+const Movements = lazy(() => import("./pages/movements"));
+const Orders = lazy(() => import("./pages/orders"));
+const Reports = lazy(() => import("./pages/reports"));
+const BillingHub = lazy(() => import("./pages/billing-hub"));
+const Users = lazy(() => import("./pages/users"));
+const Customers = lazy(() => import("./pages/customers"));
+const Documents = lazy(() => import("./pages/documents"));
+const Settings = lazy(() => import("./pages/settings"));
+const AiControl = lazy(() => import("./pages/ai-control"));
+const AgentKnowledge = lazy(() => import("./pages/agent-knowledge"));
+const Support = lazy(() => import("./pages/support"));
+const CustomerRequests = lazy(() => import("./pages/customer-requests"));
+const WarehouseOps = lazy(() => import("./pages/warehouse-ops"));
+const WmsInventoryPage = lazy(() => import("./pages/wms-inventory"));
+const WmsPedidos = lazy(() => import("./pages/wms-pedidos"));
+const Skus = lazy(() => import("./pages/skus"));
+const WmsReturnsPage = lazy(() => import("./pages/wms-returns"));
+const ClienteAssistente = lazy(() =>
+  import("./pages/client").then((m) => ({ default: m.ClienteAssistente })),
+);
+const ClienteDocumentos = lazy(() =>
+  import("./pages/client").then((m) => ({ default: m.ClienteDocumentos })),
+);
+const ClienteEstoque = lazy(() =>
+  import("./pages/client").then((m) => ({ default: m.ClienteEstoque })),
+);
+const ClienteFaturas = lazy(() =>
+  import("./pages/client").then((m) => ({ default: m.ClienteFaturas })),
+);
+const ClienteInicio = lazy(() =>
+  import("./pages/client").then((m) => ({ default: m.ClienteInicio })),
+);
+const ClientePedidos = lazy(() =>
+  import("./pages/client").then((m) => ({ default: m.ClientePedidos })),
+);
+const ClienteSolicitacoes = lazy(() =>
+  import("./pages/client").then((m) => ({ default: m.ClienteSolicitacoes })),
+);
 import { useRole } from "./hooks/use-role";
-import { isDemoMode } from "./lib/demo-mode";
-import {
-  AuthProvider,
-  useAppUser,
-} from "./lib/auth";
+import { AuthProvider, useAppUser } from "./lib/auth";
 import {
   firebaseApp,
   firebaseAuth,
   firebaseConfigError,
   firestore,
 } from "./lib/firebase";
+import {
+  canAccessModule,
+  getHomePathForAppRole,
+  getHomePathForProfile,
+  getRouteAppRoles,
+  getRouteProfileRoles,
+  normalizeProfileRole,
+  type CurrentAppRole as AppRole,
+  type ProfileRole,
+} from "./lib/modules";
 import { queryClient } from "./lib/queryClient";
+import { RealtimeSyncBridge } from "./lib/realtime-sync";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -73,7 +150,8 @@ type InviteState =
       data: {
         email: string;
         nome?: string;
-        role: "interno" | "cliente";
+        role: ProfileRole;
+        customer_code?: string;
       };
     };
 
@@ -82,6 +160,7 @@ type InviteData = {
   nome?: string;
   role?: string;
   status?: string;
+  customer_code?: string;
 };
 
 const initialAuthState: AuthFormState = {
@@ -91,6 +170,24 @@ const initialAuthState: AuthFormState = {
   error: null,
   loading: false,
 };
+
+function normalizeInviteRole(role: unknown): ProfileRole | null {
+  return normalizeProfileRole(role);
+}
+
+function appRole(role: ProfileRole): AppRole {
+  return role === "cliente" ? "cliente" : "interno";
+}
+
+function roleLabel(role: ProfileRole) {
+  if (role === "owner") return "owner Dutelog";
+  if (role === "admin") return "admin Dutelog";
+  if (role === "wms") return "operação WMS";
+  if (role === "financeiro") return "financeiro";
+  if (role === "suporte") return "suporte";
+  if (role === "interno") return "interno Dutelog";
+  return "cliente";
+}
 
 function getRestString(
   fields: Record<string, { stringValue?: string }> | undefined,
@@ -119,7 +216,8 @@ async function fetchInviteViaRest(token: string): Promise<InviteData | null> {
     );
 
     if (response.status === 404) return null;
-    if (!response.ok) throw new Error(`Invite lookup failed: ${response.status}`);
+    if (!response.ok)
+      throw new Error(`Invite lookup failed: ${response.status}`);
 
     const payload = (await response.json()) as {
       fields?: Record<string, { stringValue?: string }>;
@@ -130,6 +228,7 @@ async function fetchInviteViaRest(token: string): Promise<InviteData | null> {
       nome: getRestString(payload.fields, "nome"),
       role: getRestString(payload.fields, "role"),
       status: getRestString(payload.fields, "status"),
+      customer_code: getRestString(payload.fields, "customer_code"),
     };
   } finally {
     window.clearTimeout(timeout);
@@ -144,46 +243,109 @@ async function fetchInviteViaSdk(token: string): Promise<InviteData | null> {
 
 async function fetchInvite(token: string): Promise<InviteData | null> {
   try {
+    if (firebaseApp) {
+      const lookup = httpsCallable<{ token: string }, InviteData>(
+        getFunctions(firebaseApp, "southamerica-east1"),
+        "lookupInvite",
+      );
+      const result = await lookup({ token });
+      return result.data;
+    }
+  } catch {
+    // Keep the REST/SDK fallback for an older deployment during rollout.
+  }
+  try {
     return await fetchInviteViaRest(token);
   } catch {
     return fetchInviteViaSdk(token);
   }
 }
 
+/**
+ * Capa do app: é a porta de entrada de app.dutelog.com.br.
+ *
+ * Split-screen — formulário à esquerda, painel visual à direita. Nenhuma
+ * informação operacional aparece antes da autenticação: esta página é
+ * pública, e dado de cliente não se expõe em página pública. A imagem do
+ * painel é arte abstrata de armazém gerada para a marca, sem dado algum.
+ */
 function AuthShell({
   title,
   subtitle,
   children,
 }: {
   title: string;
-  subtitle: string;
+  subtitle?: string;
   children: React.ReactNode;
 }) {
-  const logoPath = `${basePath}/dutelog-logo.png`;
+  // Só a marca (símbolo) no formulário: o wordmark completo já vive na
+  // imagem do painel, e repeti-lo aqui seria marca dupla.
+  const markPath = `${basePath}/dutelog-mark-64.png`;
+  const visualPath = `${basePath}/auth-visual.jpg`;
+  const year = new Date().getFullYear();
 
   return (
-    <div className="app-atmosphere flex min-h-[100dvh] items-center justify-center px-4 py-10">
-      <div className="glass-surface w-full max-w-[440px] rounded-[28px] p-7">
-        <div className="mb-7 flex flex-col items-center gap-4 text-center">
+    <div className="auth-cover relative grid min-h-[100dvh] overflow-auto overscroll-contain lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+      {/* Coluna do formulário */}
+      <div className="relative flex min-h-[100dvh] flex-col px-6 py-7 sm:px-12 lg:min-h-0">
+        <div
+          aria-hidden
+          className="auth-glow pointer-events-none absolute inset-x-0 top-0 h-[420px] lg:hidden"
+        />
+
+        <header className="relative">
           <img
-            src={logoPath}
-            alt="Dutelog Soluções Logísticas"
-            className="h-12 w-auto max-w-[260px] object-contain"
+            src={markPath}
+            alt="Dutelog"
+            className="h-9 w-9 object-contain"
           />
-          <div>
-            <h1 className="text-xl font-semibold tracking-normal text-foreground">
-              {title}
-            </h1>
-            <p className="mt-1 text-sm text-gray-500">{subtitle}</p>
+        </header>
+
+        <main className="relative flex flex-1 items-center py-10">
+          <div className="mx-auto w-full max-w-[420px]">
+            <h1 className="auth-title text-[28px]">{title}</h1>
+            {subtitle ? (
+              <p className="mt-2 text-[14px] leading-relaxed text-[var(--auth-muted)]">
+                {subtitle}
+              </p>
+            ) : null}
+
+            <div
+              className={`auth-card rounded-2xl p-6 sm:p-7 ${subtitle ? "mt-8" : "mt-6"}`}
+            >
+              {firebaseConfigError ? (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertDescription>{firebaseConfigError}</AlertDescription>
+                </Alert>
+              ) : null}
+              {children}
+            </div>
           </div>
-        </div>
-        {firebaseConfigError ? (
-          <Alert variant="destructive" className="mb-4">
-            <AlertDescription>{firebaseConfigError}</AlertDescription>
-          </Alert>
-        ) : null}
-        {children}
+        </main>
+
+        <footer className="relative">
+          <p className="text-[12px] text-[var(--auth-muted)]">
+            © {year} Dutelog Soluções Logísticas
+          </p>
+        </footer>
       </div>
+
+      {/* Painel visual — some no mobile; o formulário é o protagonista lá. */}
+      <aside
+        aria-hidden
+        className="relative hidden overflow-hidden lg:block"
+      >
+        <img
+          src={visualPath}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+        {/* Véus: integram a imagem ao canvas e garantem contraste do selo. */}
+        <div className="absolute inset-0 bg-gradient-to-r from-[var(--auth-canvas)] via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[var(--auth-canvas)]/90 via-transparent to-[var(--auth-canvas)]/30" />
+        <div className="auth-grid absolute inset-0 opacity-60" />
+
+      </aside>
     </div>
   );
 }
@@ -212,9 +374,7 @@ function SignInPage() {
         ...current,
         loading: false,
         error:
-          error instanceof Error
-            ? error.message
-            : "Não foi possível entrar.",
+          error instanceof Error ? error.message : "Não foi possível entrar.",
       }));
     }
   }
@@ -229,10 +389,7 @@ function SignInPage() {
   }
 
   return (
-    <AuthShell
-      title="Bem-vindo de volta"
-      subtitle="Entre para acessar o estoque BTG"
-    >
+    <AuthShell title="Entrar">
       <form onSubmit={submit} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="email">E-mail</Label>
@@ -284,15 +441,17 @@ function SignInPage() {
           {form.loading ? "Entrando..." : "Entrar"}
         </Button>
       </form>
-      <div className="mt-4 flex items-center justify-between text-sm">
+      <div className="mt-5 flex items-center justify-between border-t border-[var(--auth-line)] pt-4 text-[13px]">
         <button
           type="button"
-          className="font-medium text-primary hover:underline"
+          className="font-medium text-[var(--auth-accent)] transition-opacity hover:opacity-80"
           onClick={resetPassword}
         >
           Esqueci minha senha
         </button>
-        <span className="text-muted-foreground">Acesso apenas por convite</span>
+        <span className="text-[var(--auth-muted)]" title="Contas criadas apenas com link de convite">
+          Acesso por convite
+        </span>
       </div>
     </AuthShell>
   );
@@ -303,8 +462,6 @@ function SignUpPage() {
   const { user, isLoaded } = useAppUser();
   const [form, setForm] = useState<AuthFormState>(initialAuthState);
   const [invite, setInvite] = useState<InviteState>({ status: "loading" });
-
-  if (isLoaded && user) return <Redirect to="/" />;
 
   useEffect(() => {
     let active = true;
@@ -327,9 +484,13 @@ function SignUpPage() {
         return;
       }
 
-      const role = data.role === "interno" ? "interno" : "cliente";
-      const email = String(data.email ?? "").trim().toLowerCase();
-      if (!email) {
+      const role = normalizeInviteRole(data.role);
+      const email = String(data.email ?? "")
+        .trim()
+        .toLowerCase();
+      const customerCode =
+        data.customer_code ?? (role === "cliente" ? "BTG Pactual" : "Dutelog");
+      if (!email || !role) {
         if (active) setInvite({ status: "invalid" });
         return;
       }
@@ -342,6 +503,7 @@ function SignUpPage() {
             email,
             nome: data.nome,
             role,
+            customer_code: customerCode,
           },
         });
         setForm((current) => ({
@@ -393,6 +555,7 @@ function SignUpPage() {
         nome: form.nome.trim(),
         email: invite.data.email,
         role: invite.data.role,
+        customer_code: invite.data.customer_code,
         invite_id: invite.token,
         created_at: serverTimestamp(),
         updated_at: serverTimestamp(),
@@ -403,6 +566,31 @@ function SignUpPage() {
         used_at: serverTimestamp(),
       });
       await batch.commit();
+      await fetch("/api/ai/events", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: "access.invite_accepted",
+          title: "Convite aceito",
+          description: `${form.nome.trim()} ativou acesso como ${roleLabel(
+            invite.data.role,
+          )}.`,
+          severity: "info",
+          entity_type: "usuario",
+          entity_id: credential.user.uid,
+          customer_code:
+            invite.data.customer_code ??
+            (appRole(invite.data.role) === "cliente"
+              ? "BTG Pactual"
+              : "Dutelog"),
+          payload: {
+            email: invite.data.email,
+            role: invite.data.role,
+            customer_code: invite.data.customer_code,
+            invite_id: invite.token,
+          },
+        }),
+      }).catch(() => undefined);
 
       setLocation("/");
     } catch (error) {
@@ -418,6 +606,66 @@ function SignUpPage() {
             : "Não foi possível criar a conta.",
       }));
     }
+  }
+
+  if (isLoaded && user) {
+    return (
+      <AuthShell
+        title="Você já está conectado"
+        subtitle="Saia da conta atual para aceitar este convite"
+      >
+        <Alert>
+          <AlertDescription>
+            Esta janela está conectada como{" "}
+            <span className="font-medium text-foreground">
+              {user.primaryEmailAddress.emailAddress || "usuário autenticado"}
+            </span>
+            . O convite deve ser aceito pela conta da pessoa convidada.
+          </AlertDescription>
+        </Alert>
+        {form.error ? (
+          <Alert variant="destructive" className="mt-4">
+            <AlertDescription>{form.error}</AlertDescription>
+          </Alert>
+        ) : null}
+        <div className="mt-4 grid gap-3">
+          <Button
+            type="button"
+            disabled={form.loading || !firebaseAuth}
+            onClick={async () => {
+              if (!firebaseAuth) return;
+              setForm((current) => ({
+                ...current,
+                loading: true,
+                error: null,
+              }));
+              try {
+                await signOut(firebaseAuth);
+                setForm((current) => ({ ...current, loading: false }));
+              } catch (error) {
+                setForm((current) => ({
+                  ...current,
+                  loading: false,
+                  error:
+                    error instanceof Error
+                      ? error.message
+                      : "Não foi possível sair da conta atual.",
+                }));
+              }
+            }}
+          >
+            {form.loading ? "Saindo..." : "Sair e continuar com o convite"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setLocation("/")}
+          >
+            Voltar ao sistema
+          </Button>
+        </div>
+      </AuthShell>
+    );
   }
 
   if (invite.status === "loading") {
@@ -439,7 +687,10 @@ function SignUpPage() {
           : "Convite inválido ou não encontrado.";
 
     return (
-      <AuthShell title="Convite necessário" subtitle="Acesso controlado pela Dute">
+      <AuthShell
+        title="Convite necessário"
+        subtitle="Acesso controlado pela Dute"
+      >
         <Alert variant="destructive">
           <AlertDescription>{message}</AlertDescription>
         </Alert>
@@ -484,7 +735,7 @@ function SignUpPage() {
         <div className="soft-panel rounded-[16px] px-4 py-3 text-sm text-muted-foreground">
           Perfil do convite:{" "}
           <span className="font-medium text-foreground">
-            {invite.data.role === "interno" ? "Interno Dutelog" : "Cliente"}
+            {roleLabel(invite.data.role)}
           </span>
         </div>
         <div className="space-y-2">
@@ -547,33 +798,221 @@ function QueryClientCacheInvalidator() {
 
 function RoleHome() {
   const { role, isLoaded } = useRole();
+  const { user } = useAppUser();
   if (!isLoaded) return null;
+  const profileRole = user?.publicMetadata.role;
+  // Papel do perfil decide a aterrissagem (wms → bancada, financeiro →
+  // faturamento); o appRole agregado fica de fallback.
   return (
-    <Redirect to={role === "cliente" ? "/minhas-faturas" : "/dashboard"} />
+    <Redirect
+      to={
+        profileRole
+          ? getHomePathForProfile(profileRole)
+          : getHomePathForAppRole(role)
+      }
+    />
   );
 }
 
 function HomeRedirect() {
   const { user, isLoaded } = useAppUser();
   if (!isLoaded) return null;
-  if (!user) return <Redirect to="/sign-in" />;
+  if (!user) return <SignInPage />;
   return <RoleHome />;
 }
 
 function RoleGate({
-  requireRole,
+  appRoles,
+  profileRoles,
   children,
 }: {
-  requireRole?: "interno" | "cliente";
+  appRoles: AppRole[];
+  profileRoles: ProfileRole[];
   children: React.ReactNode;
 }) {
   const { role, isLoaded } = useRole();
+  const { user } = useAppUser();
   if (!isLoaded) return null;
-  if (requireRole && role !== requireRole) return <Redirect to="/" />;
+  if (!role || !appRoles.includes(role)) return <Redirect to="/" />;
+  if (!canAccessModule(user?.publicMetadata.role, profileRoles)) {
+    return <Redirect to="/" />;
+  }
   return <>{children}</>;
 }
 
-function ProtectedRoute({ component: Component, requireRole, ...rest }: any) {
+type ProtectedRouteConfig = {
+  path: string;
+  component: React.ComponentType<any>;
+  appRoles: AppRole[];
+  profileRoles: ProfileRole[];
+};
+
+function protectedRoute(
+  path: string,
+  component: React.ComponentType<any>,
+): ProtectedRouteConfig {
+  return {
+    path,
+    component,
+    appRoles: getRouteAppRoles(path),
+    profileRoles: getRouteProfileRoles(path),
+  };
+}
+
+/**
+ * Bancada em 3 abas — o dia a dia do operador numa operação de 150 m²:
+ * o que tem (Estoque), o que chegou (Receber), o que a Cristiane pediu
+ * (Pedidos). As etapas enterprise (putaway/picking/packing/expedição/
+ * qualidade/exceções) continuam roteáveis por URL como telas de exceção,
+ * fora da régua. A contagem (abertura/cíclica) vive em /wms/contagem,
+ * alcançada pelo botão dentro da própria régua.
+ */
+const WMS_STAGES: Array<{ label: string; path: string; match?: string[] }> = [
+  { label: "Estoque", path: "/wms", match: ["/wms", "/wms/contagem"] },
+  { label: "Receber", path: "/wms/receber", match: ["/wms/receber", "/wms/recebimento"] },
+  { label: "Pedidos", path: "/wms/pedidos" },
+];
+
+function WmsStageTabs() {
+  const [location, navigate] = useLocation();
+  const active =
+    WMS_STAGES.find((stage) =>
+      (stage.match ?? [stage.path]).some((path) => location === path),
+    )?.path ?? "/wms";
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <Tabs value={active} onValueChange={(value) => navigate(value)}>
+        <TabsList className="h-auto flex-wrap">
+          {WMS_STAGES.map((stage) => (
+            <TabsTrigger key={stage.path} value={stage.path}>
+              {stage.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+      {location === "/wms" || location === "/wms/contagem" ? (
+        <Button asChild type="button" variant="outline" size="sm">
+          <Link href="/wms/contagem">Contagem de estoque</Link>
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+function WmsModuleScreen({ module }: { module: WarehouseOpsModuleKey }) {
+  // Force remount when the WMS module changes so shared WarehouseOps state
+  // never leaks between Recebimento / Putaway / etc.
+  return <WarehouseOps key={module} initialModule={module} />;
+}
+
+// Aba Estoque: a lista física dos pallets (mesma tela de SKUs e saldos).
+const WmsStockScreen = () => (
+  <div className="space-y-6">
+    <WmsStageTabs />
+    <Skus />
+  </div>
+);
+
+// Aba Receber: o centro de recebimento existente.
+const WmsReceiveScreen = () => (
+  <div className="space-y-6">
+    <WmsStageTabs />
+    <WarehouseOps key="receiving" initialModule="receiving" />
+  </div>
+);
+
+// Aba Pedidos: fila única separar → enviar → entregar.
+const WmsOrdersScreen = () => (
+  <div className="space-y-6">
+    <WmsStageTabs />
+    <WmsPedidos />
+  </div>
+);
+
+// Contagem (abertura + cíclica) — alcançada pelo botão da aba Estoque.
+const WmsCountScreen = () => (
+  <div className="space-y-6">
+    <WmsStageTabs />
+    <WmsInventoryPage />
+  </div>
+);
+
+const WmsReceiveRedirect = () => <Redirect to="/wms/receber" />;
+const WmsCountRedirect = () => <Redirect to="/wms/contagem" />;
+
+// Telas por etapa (exceções e casos avançados) — fora da régua, mas vivas
+// por URL. "Tratar exceção" nos cartões de Pedidos aponta para cá.
+const WmsQuality = () => <WmsModuleScreen module="quality" />;
+const WmsPutaway = () => <WmsModuleScreen module="putaway" />;
+const WmsPicking = () => <WmsModuleScreen module="picking" />;
+const WmsPacking = () => <WmsModuleScreen module="packing" />;
+const WmsExpedition = () => <WmsModuleScreen module="expedition" />;
+const WmsExceptions = () => <WmsModuleScreen module="exceptions" />;
+const ClientRequestsRedirect = () => <Redirect to="/portal/recebimentos" />;
+const ClientAgentRedirect = () => <Redirect to="/portal/agente" />;
+const ClientInvoicesRedirect = () => <Redirect to="/portal/faturas" />;
+// Fusões de tela (Catálogo e Faturamento): as rotas antigas redirecionam
+// para a aba equivalente, preservando links salvos.
+const ProductsRedirect = () => <Redirect to="/catalogo" />;
+const SkusRedirect = () => <Redirect to="/catalogo/saldos" />;
+const WarehouseMapRedirect = () => <Redirect to="/catalogo/mapa" />;
+const PriceListRedirect = () => <Redirect to="/faturamento/tabela" />;
+
+const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
+  protectedRoute("/dashboard", Dashboard),
+  protectedRoute("/reports", Reports),
+  protectedRoute("/solicitacoes", CustomerRequests),
+  protectedRoute("/wms/receber", WmsReceiveScreen),
+  protectedRoute("/wms/pedidos", WmsOrdersScreen),
+  protectedRoute("/wms/contagem", WmsCountScreen),
+  protectedRoute("/wms/recebimento", WmsReceiveRedirect),
+  protectedRoute("/wms/inventario", WmsCountRedirect),
+  protectedRoute("/wms/qualidade", WmsQuality),
+  protectedRoute("/wms/putaway", WmsPutaway),
+  protectedRoute("/wms/picking", WmsPicking),
+  protectedRoute("/wms/packing", WmsPacking),
+  protectedRoute("/wms/expedicao", WmsExpedition),
+  protectedRoute("/wms/devolucoes", WmsReturnsPage),
+  protectedRoute("/wms/excecoes", WmsExceptions),
+  protectedRoute("/wms", WmsStockScreen),
+  protectedRoute("/catalogo", Catalog),
+  protectedRoute("/catalogo/saldos", Catalog),
+  protectedRoute("/catalogo/mapa", Catalog),
+  protectedRoute("/warehouse", WarehouseMapRedirect),
+  protectedRoute("/products", ProductsRedirect),
+  protectedRoute("/skus", SkusRedirect),
+  protectedRoute("/movements", Movements),
+  protectedRoute("/orders", Orders),
+  protectedRoute("/faturamento", BillingHub),
+  protectedRoute("/faturamento/tabela", BillingHub),
+  protectedRoute("/tabela-precos", PriceListRedirect),
+  protectedRoute("/agente", AiControl),
+  protectedRoute("/agente/conhecimento", AgentKnowledge),
+  protectedRoute("/suporte", Support),
+  protectedRoute("/documentos", Documents),
+  protectedRoute("/clientes", Customers),
+  protectedRoute("/usuarios", Users),
+  protectedRoute("/configuracoes", Settings),
+  protectedRoute("/portal", ClienteInicio),
+  protectedRoute("/portal/estoque", ClienteEstoque),
+  protectedRoute("/portal/recebimentos", ClienteSolicitacoes),
+  protectedRoute("/portal/solicitacoes", ClientRequestsRedirect),
+  protectedRoute("/portal/pedidos", ClientePedidos),
+  protectedRoute("/portal/faturas", ClienteFaturas),
+  protectedRoute("/portal/documentos", ClienteDocumentos),
+  protectedRoute("/portal/agente/operacional", ClientAgentRedirect),
+  protectedRoute("/portal/agente", ClienteAssistente),
+  // Tela antiga de faturas; /portal/faturas é a dona. Redirect preserva links salvos.
+  protectedRoute("/minhas-faturas", ClientInvoicesRedirect),
+];
+
+function ProtectedRoute({
+  component: Component,
+  appRoles,
+  profileRoles,
+  ...rest
+}: any) {
   const { user, isLoaded } = useAppUser();
 
   return (
@@ -582,9 +1021,19 @@ function ProtectedRoute({ component: Component, requireRole, ...rest }: any) {
         if (!isLoaded) return null;
         if (!user) return <Redirect to="/sign-in" />;
         return (
-          <RoleGate requireRole={requireRole}>
+          <RoleGate appRoles={appRoles} profileRoles={profileRoles}>
             <AppLayout>
-              <Component params={params} />
+              <ChunkErrorBoundary>
+                <Suspense
+                  fallback={
+                    <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
+                      Carregando...
+                    </div>
+                  }
+                >
+                  <Component params={params} />
+                </Suspense>
+              </ChunkErrorBoundary>
             </AppLayout>
           </RoleGate>
         );
@@ -598,68 +1047,30 @@ function AppRoutes() {
     <AuthProvider>
       <QueryClientProvider client={queryClient}>
         <QueryClientCacheInvalidator />
+        <RealtimeSyncBridge />
         <TooltipProvider>
-          <Switch>
-            <Route path="/" component={HomeRedirect} />
-            <Route path="/sign-in/*?" component={SignInPage} />
-            <Route path="/convite/*?" component={SignUpPage} />
-            <Route path="/sign-up/*?" component={SignUpPage} />
+          <ChunkErrorBoundary>
+            <Suspense
+              fallback={
+                <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+                  Carregando...
+                </div>
+              }
+            >
+              <Switch>
+                <Route path="/" component={HomeRedirect} />
+                <Route path="/sign-in/*?" component={SignInPage} />
+                <Route path="/convite/*?" component={SignUpPage} />
+                <Route path="/sign-up/*?" component={SignUpPage} />
 
-            <ProtectedRoute
-              path="/dashboard"
-              component={Dashboard}
-              requireRole="interno"
-            />
-            <ProtectedRoute
-              path="/products"
-              component={Products}
-              requireRole="interno"
-            />
-            <ProtectedRoute
-              path="/skus"
-              component={Skus}
-              requireRole="interno"
-            />
-            <ProtectedRoute
-              path="/movements"
-              component={Movements}
-              requireRole="interno"
-            />
-            <ProtectedRoute
-              path="/orders"
-              component={Orders}
-              requireRole="interno"
-            />
-            <ProtectedRoute
-              path="/warehouse"
-              component={Warehouse}
-              requireRole="interno"
-            />
-            <ProtectedRoute
-              path="/reports"
-              component={Reports}
-              requireRole="interno"
-            />
-            <ProtectedRoute
-              path="/faturamento"
-              component={Billing}
-              requireRole="interno"
-            />
-            <ProtectedRoute
-              path="/tabela-precos"
-              component={PriceList}
-              requireRole="interno"
-            />
-            <ProtectedRoute
-              path="/usuarios"
-              component={Users}
-              requireRole="interno"
-            />
+                {PROTECTED_ROUTES.map((route) => (
+                  <ProtectedRoute key={route.path} {...route} />
+                ))}
 
-            <ProtectedRoute path="/minhas-faturas" component={MyInvoices} />
-
-            <Route component={NotFound} />
-          </Switch>
+                <Route component={NotFound} />
+              </Switch>
+            </Suspense>
+          </ChunkErrorBoundary>
           <Toaster />
         </TooltipProvider>
       </QueryClientProvider>
@@ -667,81 +1078,10 @@ function AppRoutes() {
   );
 }
 
-function DemoRoutes() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Switch>
-          <Route path="/">
-            <Redirect to="/dashboard" />
-          </Route>
-          <Route path="/dashboard">
-            <AppLayout>
-              <Dashboard />
-            </AppLayout>
-          </Route>
-          <Route path="/products">
-            <AppLayout>
-              <Products />
-            </AppLayout>
-          </Route>
-          <Route path="/skus">
-            <AppLayout>
-              <Skus />
-            </AppLayout>
-          </Route>
-          <Route path="/movements">
-            <AppLayout>
-              <Movements />
-            </AppLayout>
-          </Route>
-          <Route path="/orders">
-            <AppLayout>
-              <Orders />
-            </AppLayout>
-          </Route>
-          <Route path="/warehouse">
-            <AppLayout>
-              <Warehouse />
-            </AppLayout>
-          </Route>
-          <Route path="/reports">
-            <AppLayout>
-              <Reports />
-            </AppLayout>
-          </Route>
-          <Route path="/faturamento">
-            <AppLayout>
-              <Billing />
-            </AppLayout>
-          </Route>
-          <Route path="/tabela-precos">
-            <AppLayout>
-              <PriceList />
-            </AppLayout>
-          </Route>
-          <Route path="/usuarios">
-            <AppLayout>
-              <Users />
-            </AppLayout>
-          </Route>
-          <Route path="/minhas-faturas">
-            <AppLayout>
-              <MyInvoices />
-            </AppLayout>
-          </Route>
-          <Route component={NotFound} />
-        </Switch>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
-  );
-}
-
 function App() {
   return (
     <WouterRouter base={basePath}>
-      {isDemoMode ? <DemoRoutes /> : <AppRoutes />}
+      <AppRoutes />
     </WouterRouter>
   );
 }

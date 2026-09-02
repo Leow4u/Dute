@@ -7,10 +7,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   collection,
-  doc,
   getDocs,
-  serverTimestamp,
-  setDoc,
 } from "firebase/firestore";
 import { Copy, Plus } from "lucide-react";
 
@@ -36,15 +33,40 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { firestore } from "@/lib/firebase";
-import { useAppUser } from "@/lib/auth";
+import { normalizeProfileRole, type ProfileRole } from "@/lib/modules";
 
-type InviteRole = "interno" | "cliente";
+type InviteRole = ProfileRole;
+
+const ACCESS_ROLE_OPTIONS: Array<{ value: InviteRole; label: string }> = [
+  { value: "cliente", label: "Cliente" },
+  { value: "interno", label: "Interno Dutelog" },
+  { value: "wms", label: "Operação WMS" },
+  { value: "financeiro", label: "Financeiro" },
+  { value: "suporte", label: "Suporte" },
+];
+
+function roleLabel(role: unknown) {
+  const normalized = normalizeProfileRole(role);
+  if (normalized === "owner") return "Owner Dutelog";
+  if (normalized === "admin") return "Admin Dutelog";
+  if (normalized === "wms") return "Operação WMS";
+  if (normalized === "financeiro") return "Financeiro";
+  if (normalized === "suporte") return "Suporte";
+  if (normalized === "interno") return "Interno Dutelog";
+  if (normalized === "cliente") return "Cliente";
+  return "Sem perfil";
+}
+
+function isClientRole(role: unknown) {
+  return normalizeProfileRole(role) === "cliente";
+}
 
 type Invite = {
   id: string;
   nome?: string;
   email: string;
   role: InviteRole;
+  customer_code?: string;
   status: "pending" | "used";
   used_by?: string;
 };
@@ -80,7 +102,6 @@ async function copyInvite(token: string) {
 export default function Users() {
   const qc = useQueryClient();
   const { toast } = useToast();
-  const { user } = useAppUser();
   const { data, isLoading } = useListBillingUsers();
   const update = useUpdateUserRole();
   const [form, setForm] = useState<InviteForm>(initialInviteForm);
@@ -101,15 +122,25 @@ export default function Users() {
       if (!firestore) throw new Error("Firestore não configurado.");
       const token = makeInviteToken();
       const email = input.email.trim().toLowerCase();
+      const customerCode = isClientRole(input.role) ? "BTG Pactual" : "Dutelog";
 
-      await setDoc(doc(firestore, "invites", token), {
-        nome: input.nome.trim(),
-        email,
-        role: input.role,
-        status: "pending",
-        created_by: user?.uid ?? null,
-        created_at: serverTimestamp(),
+      const response = await fetch("/api/invites", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          token,
+          nome: input.nome.trim(),
+          email,
+          role: input.role,
+          customer_code: customerCode,
+        }),
       });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as {
+          message?: string;
+        };
+        throw new Error(payload.message || "Não foi possível criar o convite.");
+      }
 
       return token;
     },
@@ -149,10 +180,6 @@ export default function Users() {
         <h1 className="text-2xl font-bold tracking-tight text-primary">
           Usuários & Acessos
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Convide funcionários da Dutelog e clientes. O cadastro só funciona
-          pelo link de convite.
-        </p>
       </div>
 
       <Card>
@@ -206,8 +233,11 @@ export default function Users() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="interno">Interno Dutelog</SelectItem>
-                  <SelectItem value="cliente">Cliente</SelectItem>
+                  {ACCESS_ROLE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -323,10 +353,11 @@ export default function Users() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="interno">
-                            Interno Dutelog
-                          </SelectItem>
-                          <SelectItem value="cliente">Cliente</SelectItem>
+                          {ACCESS_ROLE_OPTIONS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </TableCell>
@@ -341,17 +372,24 @@ export default function Users() {
   );
 }
 
-function RoleBadge({ role }: { role: InviteRole }) {
+function RoleBadge({ role }: { role: unknown }) {
+  const normalized = normalizeProfileRole(role);
+  const className =
+    normalized === "cliente"
+      ? "bg-blue-50 text-blue-700 border-blue-100"
+      : normalized === "financeiro"
+        ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+        : normalized === "wms"
+          ? "bg-amber-50 text-amber-700 border-amber-100"
+          : normalized === "suporte"
+            ? "bg-sky-50 text-sky-700 border-sky-100"
+            : normalized === "owner" || normalized === "admin"
+              ? "bg-slate-100 text-slate-800 border-slate-200"
+              : "bg-slate-50 text-slate-600 border-slate-100";
+
   return (
-    <Badge
-      variant="outline"
-      className={
-        role === "cliente"
-          ? "bg-purple-100 text-purple-800 border-purple-200"
-          : "bg-slate-100 text-slate-800 border-slate-200"
-      }
-    >
-      {role === "cliente" ? "Cliente" : "Interno Dutelog"}
+    <Badge variant="outline" className={className}>
+      {roleLabel(role)}
     </Badge>
   );
 }

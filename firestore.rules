@@ -14,8 +14,235 @@ service cloud.firestore {
       return signedIn() && exists(userDoc());
     }
 
-    function isInternal() {
-      return hasProfile() && get(userDoc()).data.role == 'interno';
+    function validProfileRole(role) {
+      return role in ['owner', 'admin', 'interno', 'wms', 'financeiro', 'suporte', 'cliente'];
+    }
+
+    function profileRole() {
+      return get(userDoc()).data.role;
+    }
+
+    function hasRole(role) {
+      return hasProfile() && profileRole() == role;
+    }
+
+    function hasAnyRole(roles) {
+      return hasProfile() && profileRole() in roles;
+    }
+
+    function isOwner() {
+      return hasRole('owner');
+    }
+
+    function isAccessAdmin() {
+      return hasRole('admin');
+    }
+
+    function isPrivileged() {
+      return hasAnyRole(['owner', 'admin']);
+    }
+
+    function isOperationsCoordinator() {
+      return hasRole('interno');
+    }
+
+    function isWms() {
+      return hasRole('wms');
+    }
+
+    function isFinance() {
+      return hasRole('financeiro');
+    }
+
+    function isSupport() {
+      return hasRole('suporte');
+    }
+
+    function isCustomer() {
+      return hasRole('cliente');
+    }
+
+    function canManageAccess() {
+      return isPrivileged();
+    }
+
+    function canCoordinateOperations() {
+      return isPrivileged() || isOperationsCoordinator();
+    }
+
+    function canReadOperations() {
+      return hasAnyRole(['owner', 'admin', 'interno', 'wms', 'suporte']);
+    }
+
+    // Decisão de produto (30/07/2026): o coordenador operacional (interno)
+    // NÃO acompanha faturamento — papel some da lista. As telas do interno
+    // que tocavam billing em Promise.all foram tornadas tolerantes antes
+    // desta mudança (getAiOverview / getClientOverview em cloud-api.ts).
+    function canReadBilling() {
+      return hasAnyRole(['owner', 'admin', 'financeiro', 'suporte']);
+    }
+
+    /**
+     * O cálculo da fatura precisa das fontes operacionais (catálogo, estoque
+     * publicado e ledger) além das coleções billing_*. Sem isto o financeiro
+     * recebia permission-denied e a tela exibia R$ 0,00 como se o mês não
+     * tivesse movimento — erro silencioso em cima de dinheiro.
+     * Somente leitura: faturar não altera operação.
+     */
+    function canReadForBilling() {
+      return canReadOperations() || isFinance();
+    }
+
+    function canWriteBilling() {
+      return isPrivileged() || isFinance();
+    }
+
+    function canReadObservability() {
+      return hasAnyRole(['owner', 'admin', 'interno', 'wms', 'suporte']);
+    }
+
+    function canUseAgentChat() {
+      return hasAnyRole(['owner', 'admin', 'interno', 'wms', 'suporte', 'cliente']);
+    }
+
+    function hasCustomerScope() {
+      return isCustomer()
+        && get(userDoc()).data.keys().hasAll(['customer_code'])
+        && get(userDoc()).data.customer_code is string;
+    }
+
+    function profileCustomerCode() {
+      return get(userDoc()).data.customer_code;
+    }
+
+    function isOwnCustomerCode(customerCode) {
+      return hasCustomerScope()
+        && customerCode is string
+        && customerCode == profileCustomerCode();
+    }
+
+    function isOwnProjection() {
+      return resource.data.keys().hasAll(['customer_code'])
+        && isOwnCustomerCode(resource.data.customer_code);
+    }
+
+    function optionalStringField(field) {
+      return !request.resource.data.keys().hasAny([field])
+        || request.resource.data[field] == null
+        || request.resource.data[field] is string;
+    }
+
+    function publicationFieldsUntouched() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'customer_visible',
+        'visibility',
+        'published_at'
+      ]);
+    }
+
+    function doesNotPublishOnCreate() {
+      return !request.resource.data.keys().hasAny([
+        'customer_visible',
+        'visibility',
+        'published_at'
+      ]);
+    }
+
+    function preservesCustomerCode() {
+      return (
+          !resource.data.keys().hasAny(['customer_code'])
+          && !request.resource.data.keys().hasAny(['customer_code'])
+        )
+        || (
+          resource.data.keys().hasAll(['customer_code'])
+          && request.resource.data.keys().hasAll(['customer_code'])
+          && request.resource.data.customer_code == resource.data.customer_code
+        );
+    }
+
+    function validInviteRoleForManager(role) {
+      return role in ['interno', 'wms', 'financeiro', 'suporte', 'cliente']
+        || (isOwner() && role in ['owner', 'admin']);
+    }
+
+    function safeUserCreateFields() {
+      return request.resource.data.keys().hasOnly([
+          'nome',
+          'email',
+          'role',
+          'customer_code',
+          'invite_id',
+          'created_at',
+          'updated_at'
+        ])
+        && request.resource.data.nome is string
+        && request.resource.data.email is string;
+    }
+
+    function safeUserRoleUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'role',
+          'updated_at'
+        ])
+        && validProfileRole(request.resource.data.role)
+        && (
+          isOwner()
+          || (
+            isAccessAdmin()
+            && !(resource.data.role in ['owner', 'admin'])
+            && request.resource.data.role in ['interno', 'wms', 'financeiro', 'suporte', 'cliente']
+          )
+        );
+    }
+
+    function safeInviteCreateFields() {
+      return request.resource.data.keys().hasOnly([
+          'nome',
+          'email',
+          'role',
+          'customer_code',
+          'status',
+          'created_by',
+          'created_at'
+        ])
+        && request.resource.data.email is string
+        && request.resource.data.status == 'pending'
+        && request.resource.data.created_by == request.auth.uid
+        && validInviteRoleForManager(request.resource.data.role)
+        && (
+          !request.resource.data.keys().hasAny(['nome'])
+          || request.resource.data.nome is string
+        )
+        && (
+          request.resource.data.role != 'cliente'
+          || (
+            request.resource.data.keys().hasAll(['customer_code'])
+            && request.resource.data.customer_code is string
+          )
+        );
+    }
+
+    function safeInviteAdminUpdate() {
+      return canManageAccess()
+        && resource.data.status == 'pending'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'updated_at'
+        ])
+        && request.resource.data.status == 'revoked';
+    }
+
+    function safeInviteAcceptUpdate() {
+      return signedIn()
+        && resource.data.status == 'pending'
+        && resource.data.email == request.auth.token.email
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'used_by',
+          'used_at'
+        ])
+        && request.resource.data.status == 'used'
+        && request.resource.data.used_by == request.auth.uid;
     }
 
     function inviteDoc(inviteId) {
@@ -30,43 +257,657 @@ service cloud.firestore {
         && get(inviteDoc(inviteId)).data.email == request.auth.token.email;
     }
 
+    function invitedCustomerScopeIsValid(inviteId) {
+      return (
+          request.resource.data.role == 'cliente'
+          && get(inviteDoc(inviteId)).data.keys().hasAll(['customer_code'])
+          && get(inviteDoc(inviteId)).data.customer_code is string
+          && request.resource.data.keys().hasAll(['customer_code'])
+          && request.resource.data.customer_code == get(inviteDoc(inviteId)).data.customer_code
+        )
+        || (
+          request.resource.data.role != 'cliente'
+          && (
+            !request.resource.data.keys().hasAny(['customer_code'])
+            || (
+              get(inviteDoc(inviteId)).data.keys().hasAll(['customer_code'])
+              && request.resource.data.customer_code == get(inviteDoc(inviteId)).data.customer_code
+            )
+          )
+        );
+    }
+
+    function validEventCreate(eventId) {
+      return request.resource.data.keys().hasOnly([
+          'id',
+          'type',
+          'title',
+          'description',
+          'severity',
+          'entity_type',
+          'entity_id',
+          'customer_code',
+          'customer_name',
+          'payload',
+          'source',
+          'actor',
+          'occurred_at',
+          'created_at'
+        ])
+        && request.resource.data.type is string
+        && request.resource.data.title is string
+        && request.resource.data.severity in ['info', 'attention', 'critical']
+        && request.resource.data.source is string
+        && request.resource.data.occurred_at is string
+        && request.resource.data.created_at == request.time
+        && request.resource.data.actor is map
+        && request.resource.data.actor.keys().hasAll(['uid'])
+        && request.resource.data.actor.uid == request.auth.uid
+        && (
+          !request.resource.data.keys().hasAny(['id'])
+          || request.resource.data.id == eventId
+        )
+        && optionalStringField('customer_code');
+    }
+
+    function isWmsEventType(eventType) {
+      return eventType.matches('^(inbound|receiving|putaway|picking|packing|shipment|shipping|inventory|warehouse|tarefa_picking|linha_picking|tarefa_packing|volume|item_volume|expedicao|item_expedicao|comprovante_entrega|movimentacao|saldo_estoque|localizacao|excecao_qualidade)[.].*');
+    }
+
+    function isBillingEventType(eventType) {
+      return eventType.matches('^billing[.].*');
+    }
+
+    function isSupportEventType(eventType) {
+      return eventType.matches('^(support|incident|monitoring)[.].*')
+        || eventType == 'operator.note';
+    }
+
+    function canCreateEvent(eventId) {
+      return validEventCreate(eventId)
+        && (
+          isPrivileged()
+          || isOperationsCoordinator()
+          || (isWms() && isWmsEventType(request.resource.data.type))
+          || (isFinance() && isBillingEventType(request.resource.data.type))
+          || (isSupport() && isSupportEventType(request.resource.data.type))
+          || (
+            isOwnCustomerCode(request.resource.data.customer_code)
+            && request.resource.data.type in ['portal.request_created', 'customer.message_sent']
+          )
+        );
+    }
+
+    function canFinanceReadEvent() {
+      return isFinance()
+        && resource.data.keys().hasAll(['type'])
+        && resource.data.type is string
+        && isBillingEventType(resource.data.type);
+    }
+
+    function safeConversationFields(data) {
+      return data.keys().hasOnly([
+        'id',
+        'customer_code',
+        'user_id',
+        'user_email',
+        'user_name',
+        'title',
+        'status',
+        'last_message_at',
+        'created_at',
+        'updated_at'
+      ]);
+    }
+
+    function hasOwnChatCustomerScope(data) {
+      return !isCustomer() || isOwnCustomerCode(data.customer_code);
+    }
+
+    // Mesmo motivo de canReadOwnMessage(): checagem de formato na leitura
+    // impede a consulta de lista. Mantida em safeConversationCreate().
+    function canReadOwnConversation() {
+      return canUseAgentChat()
+        && resource.data.keys().hasAll(['user_id', 'customer_code'])
+        && resource.data.user_id == request.auth.uid
+        && hasOwnChatCustomerScope(resource.data);
+    }
+
+    function safeConversationCreate(conversationId) {
+      return canUseAgentChat()
+        && safeConversationFields(request.resource.data)
+        && request.resource.data.keys().hasAll([
+          'id',
+          'customer_code',
+          'user_id',
+          'title',
+          'status',
+          'created_at',
+          'updated_at'
+        ])
+        && request.resource.data.id == conversationId
+        && request.resource.data.customer_code is string
+        && request.resource.data.user_id == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.status == 'active'
+        && request.resource.data.created_at == request.time
+        && request.resource.data.updated_at == request.time
+        && hasOwnChatCustomerScope(request.resource.data);
+    }
+
+    function safeConversationUpdate() {
+      return canUseAgentChat()
+        && resource.data.user_id == request.auth.uid
+        && request.resource.data.user_id == resource.data.user_id
+        && request.resource.data.customer_code == resource.data.customer_code
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.status in ['active', 'closed']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'title',
+          'status',
+          'last_message_at',
+          'updated_at'
+        ])
+        && hasOwnChatCustomerScope(request.resource.data)
+        && safeConversationFields(request.resource.data);
+    }
+
+    function safeMessageFields(data) {
+      return data.keys().hasOnly([
+        'id',
+        'conversation_id',
+        'customer_code',
+        'user_id',
+        'role',
+        'content',
+        'created_at_iso',
+        'created_at',
+        'source'
+      ]);
+    }
+
+    function conversationAfter(conversationId) {
+      return getAfter(
+        /databases/$(database)/documents/agent_conversations/$(conversationId)
+      ).data;
+    }
+
+    // Leitura valida apenas o que a consulta consegue provar: dono e cliente.
+    // safeMessageFields() checa o FORMATO do documento — condicao que uma
+    // query de lista nao tem como demonstrar, entao exigi-la aqui derrubava
+    // o listener em tempo real do chat (a resposta do agente so aparecia
+    // apos recarregar). O formato continua imposto na escrita, que e onde
+    // ele de fato protege.
+    function canReadOwnMessage() {
+      return canUseAgentChat()
+        && resource.data.keys().hasAll(['user_id', 'customer_code'])
+        && resource.data.user_id == request.auth.uid
+        && hasOwnChatCustomerScope(resource.data);
+    }
+
+    function safeMessageCreate(messageId) {
+      return canUseAgentChat()
+        && safeMessageFields(request.resource.data)
+        && request.resource.data.keys().hasAll([
+          'id',
+          'conversation_id',
+          'customer_code',
+          'user_id',
+          'role',
+          'content',
+          'created_at',
+          'source'
+        ])
+        && request.resource.data.id == messageId
+        && request.resource.data.conversation_id is string
+        && request.resource.data.customer_code is string
+        && request.resource.data.user_id == request.auth.uid
+        && request.resource.data.role == 'user'
+        && request.resource.data.content is string
+        && request.resource.data.source is string
+        && request.resource.data.created_at == request.time
+        && hasOwnChatCustomerScope(request.resource.data)
+        && conversationAfter(request.resource.data.conversation_id).user_id == request.auth.uid
+        && conversationAfter(request.resource.data.conversation_id).customer_code == request.resource.data.customer_code;
+    }
+
+    function safeWmsOrderUpdate() {
+      return isWms()
+        && preservesCustomerCode()
+        && publicationFieldsUntouched()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'qtd_sep',
+          'picked_qty',
+          'packed_qty',
+          'shipment_id',
+          'dispatched_at',
+          'delivered_at',
+          'updated_at'
+        ]);
+    }
+
+    function safeWmsOrderItemUpdate() {
+      return isWms()
+        && preservesCustomerCode()
+        && publicationFieldsUntouched()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'allocated_qty',
+          'picked_qty',
+          'packed_qty',
+          'shipped_qty',
+          'updated_at'
+        ]);
+    }
+
+    function safeCoordinatorBalanceUpdate() {
+      return isOperationsCoordinator()
+        && preservesCustomerCode()
+        && publicationFieldsUntouched()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'qty_reserved',
+          'qty_available',
+          'reserved_qty',
+          'available_qty',
+          'updated_at'
+        ]);
+    }
+
+    function safeCoordinatorTaskUpdate() {
+      return isOperationsCoordinator()
+        && preservesCustomerCode()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'assigned_to',
+          'priority',
+          'due_at',
+          'customer_status',
+          'customer_visible',
+          'visibility',
+          'published_at',
+          'updated_at'
+        ]);
+    }
+
+    function canCreateWarehouseRecord() {
+      return isPrivileged()
+        || isOperationsCoordinator()
+        || (isWms() && doesNotPublishOnCreate());
+    }
+
+    function canUpdateWarehouseRecord() {
+      return isPrivileged()
+        || (
+          isWms()
+          && preservesCustomerCode()
+          && publicationFieldsUntouched()
+        )
+        || safeCoordinatorTaskUpdate();
+    }
+
+    function isBillingDocument(data) {
+      return data.keys().hasAll(['entity_type'])
+        && data.entity_type in ['fatura', 'billing', 'invoice'];
+    }
+
+    function canReadDocumentInternally() {
+      return canReadOperations()
+        || (isFinance() && isBillingDocument(resource.data));
+    }
+
+    function canCreateDocumentInternally() {
+      return canCoordinateOperations()
+        || isWms()
+        || (isFinance() && isBillingDocument(request.resource.data));
+    }
+
+    function canUpdateDocumentInternally() {
+      return isPrivileged()
+        || isOperationsCoordinator()
+        || (
+          isWms()
+          && preservesCustomerCode()
+          && publicationFieldsUntouched()
+        )
+        || (
+          isFinance()
+          && isBillingDocument(resource.data)
+          && isBillingDocument(request.resource.data)
+          && preservesCustomerCode()
+        );
+    }
+
     match /users/{userId} {
-      allow read: if signedIn() && (request.auth.uid == userId || isInternal());
+      allow get: if signedIn() && (request.auth.uid == userId || canManageAccess());
+      allow list: if canManageAccess();
       allow create: if signedIn()
         && request.auth.uid == userId
+        && safeUserCreateFields()
         && inviteIsPendingForUser(request.resource.data.invite_id)
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.role == get(inviteDoc(request.resource.data.invite_id)).data.role
-        && request.resource.data.role in ['interno', 'cliente'];
-      allow update, delete: if isInternal();
+        && validProfileRole(request.resource.data.role)
+        && invitedCustomerScopeIsValid(request.resource.data.invite_id);
+      allow update, delete: if false;
     }
 
     match /invites/{inviteId} {
-      allow get: if true;
-      allow list: if isInternal();
-      allow create: if isInternal()
-        && request.resource.data.email is string
-        && request.resource.data.role in ['interno', 'cliente']
-        && request.resource.data.status == 'pending';
-      allow update: if isInternal()
+      allow get: if canManageAccess()
         || (
           signedIn()
-          && resource.data.status == 'pending'
           && resource.data.email == request.auth.token.email
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'used_by', 'used_at'])
-          && request.resource.data.status == 'used'
-          && request.resource.data.used_by == request.auth.uid
         );
-      allow delete: if isInternal();
+      allow list: if canManageAccess();
+      allow create, delete: if false;
+      allow update: if safeInviteAcceptUpdate();
     }
 
     match /billing_periods/{periodId} {
-      allow read: if hasProfile();
-      allow write: if isInternal();
+      allow read: if canReadBilling();
+      allow create, update, delete: if false;
+    }
+
+    match /client_invoices/{invoiceId} {
+      allow read: if canReadBilling() || isOwnProjection();
+      allow create, update, delete: if false;
+    }
+
+    match /billing_price_list/{priceId} {
+      allow read: if canReadBilling();
+      allow create, update, delete: if false;
+    }
+
+    match /billing_manual/{manualId} {
+      allow read: if canReadBilling();
+      allow create, update, delete: if false;
+    }
+
+    match /billing_operational_snapshots/{snapshotId} {
+      allow read: if canReadBilling();
+      allow create, update, delete: if false;
+    }
+
+    match /billing_config/{configId} {
+      allow read: if canReadBilling();
+      allow create, update, delete: if false;
+    }
+
+    match /events/{eventId} {
+      allow read: if canReadObservability() || canFinanceReadEvent();
+      allow create, update, delete: if false;
+    }
+
+    match /ai_agent_inbox/{inboxId} {
+      allow read: if canReadObservability()
+        || (
+          isFinance()
+          && resource.data.keys().hasAll(['entity_type'])
+          && resource.data.entity_type in ['fatura', 'billing', 'invoice']
+        );
+      allow create, update, delete: if false;
+    }
+
+    match /operational_notifications/{notificationId} {
+      allow read: if canReadObservability()
+        || (
+          isOwnProjection()
+          && resource.data.keys().hasAll(['status'])
+          && resource.data.status in ['approved', 'sent']
+        );
+      allow create, update, delete: if false;
+    }
+
+    match /ai_agent_memory/{memoryId} {
+      allow read: if hasAnyRole(['owner', 'admin', 'interno', 'suporte']);
+      allow create, update, delete: if canCoordinateOperations();
+    }
+
+    match /ai_agent_knowledge/{knowledgeId} {
+      allow read: if hasAnyRole(['owner', 'admin', 'interno', 'suporte']);
+      allow create, update, delete: if canCoordinateOperations();
+    }
+
+    match /ai_agent_knowledge_chunks/{chunkId} {
+      allow read: if hasAnyRole(['owner', 'admin', 'interno', 'suporte']);
+      allow create, update, delete: if canCoordinateOperations();
+    }
+
+    match /ai_agent_knowledge_files/{fileId} {
+      allow read: if hasAnyRole(['owner', 'admin', 'interno', 'suporte']);
+      allow create, update, delete: if canCoordinateOperations();
+    }
+
+    match /ai_agent_knowledge_file_chunks/{chunkId} {
+      allow read: if hasAnyRole(['owner', 'admin', 'interno', 'suporte']);
+      allow create, update, delete: if canCoordinateOperations();
+    }
+
+    match /agent_conversations/{conversationId} {
+      allow read: if canReadOwnConversation();
+      allow create: if safeConversationCreate(conversationId);
+      allow update: if safeConversationUpdate();
+      allow delete: if false;
+    }
+
+    match /agent_messages/{messageId} {
+      allow read: if canReadOwnMessage();
+      allow create: if safeMessageCreate(messageId);
+      allow update, delete: if false;
+    }
+
+    match /products/{productId} {
+      allow read: if canReadForBilling();
+      allow create, update, delete: if false;
+    }
+
+    match /skus/{skuId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /customers/{customerId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /customer_accounts/{accountId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /customer_requests/{requestId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /client_request_status/{requestId} {
+      allow read: if canReadOperations() || isOwnProjection();
+      allow create, update, delete: if false;
+    }
+
+    match /orders/{orderId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /client_order_tracking/{orderId} {
+      allow read: if canReadOperations() || isOwnProjection();
+      allow create, update, delete: if false;
+    }
+
+    match /order_items/{itemId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /stock_balances/{balanceId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /client_inventory/{inventoryId} {
+      allow read: if canReadForBilling() || isOwnProjection();
+      allow create, update, delete: if false;
+    }
+
+    match /movements/{movementId} {
+      allow read: if canReadForBilling();
+      allow create, update, delete: if false;
+    }
+
+    match /ops_aggregates/{aggregateId} {
+      allow read: if canReadOperations() || isFinance() || isCustomer();
+      allow create, update, delete: if false;
+    }
+
+    match /locations/{locationId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /stock_reservations/{reservationId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /inbound_receipts/{receiptId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /inbound_items/{itemId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /putaway_tasks/{taskId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /quality_exceptions/{exceptionId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /pick_tasks/{taskId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /pick_lines/{lineId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /pack_tasks/{taskId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /packages/{packageId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /package_items/{itemId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /shipments/{shipmentId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /shipment_items/{itemId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /delivery_proofs/{proofId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /returns/{returnId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /return_items/{itemId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /cycle_counts/{countId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /opening_inventory_sessions/{sessionId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /opening_inventory_lines/{lineId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /cycle_count_lines/{lineId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /stock_adjustments/{adjustmentId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
+    match /documents/{documentId} {
+      allow read: if canReadDocumentInternally();
+      allow create: if canCreateDocumentInternally();
+      allow update: if canUpdateDocumentInternally();
+      allow delete: if isPrivileged()
+        || (isFinance() && isBillingDocument(resource.data));
+    }
+
+    match /client_documents/{documentId} {
+      // isOwnProjection() confere apenas customer_code — sem checar
+      // visibilidade, arquivar um documento nao revogava o acesso do cliente.
+      allow read: if canReadDocumentInternally()
+        || (
+          isOwnProjection()
+          && resource.data.keys().hasAll(['customer_visible'])
+          && resource.data.customer_visible == true
+        );
+      allow create, update, delete: if false;
+    }
+
+    match /document_links/{linkId} {
+      allow read: if canReadOperations()
+        || (
+          isFinance()
+          && resource.data.keys().hasAll(['entity_type'])
+          && resource.data.entity_type in ['fatura', 'billing', 'invoice']
+        );
+      allow create, update: if canCoordinateOperations() || isWms();
+      allow delete: if isPrivileged();
+    }
+
+    // Estado operacional (congelamento, inventário de abertura). Consultado
+    // pelo cálculo da fatura e pelas telas de operação. Nunca existiu regra
+    // para esta coleção: a leitura caía no deny final e derrubava toda a
+    // chamada, exibindo R$ 0,00 no lugar de um erro. Escrita segue apenas
+    // via Cloud Functions (Admin SDK).
+    match /system_controls/{controlId} {
+      allow read: if canReadForBilling();
+      allow create, update, delete: if false;
     }
 
     match /{document=**} {
-      allow read, write: if isInternal();
+      allow read, write: if false;
     }
   }
 }
