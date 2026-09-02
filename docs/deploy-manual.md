@@ -1,0 +1,147 @@
+# Publicação manual em produção
+
+Procedimento para publicar o app BTG em `https://app.dutelog.com.br`.
+
+Enquanto o deploy automático do GitHub Actions não estiver funcionando, **este é o
+processo oficial de publicação**. Ele é o mesmo que colocou no ar tudo que está
+rodando hoje.
+
+## Onde isso acontece
+
+A publicação sai da sua própria máquina. Não há painel web para isso.
+
+| Ambiente | Papel |
+|---|---|
+| `C:\DEV\Dute` (PowerShell) | Onde o código vive e o build é gerado. **É daqui que se publica.** |
+| GitHub `Leow4u/Dute` | Guarda o código e roda os testes do CI |
+| Google Cloud, projeto `dute-btg` | Cloud Build monta a imagem → Artifact Registry guarda → Cloud Run executa |
+| `app.dutelog.com.br` | Load Balancer HTTPS apontando para o serviço `dute-btg-app` |
+
+Abra o **Terminal do Windows (PowerShell)** e vá para a pasta do projeto:
+
+```powershell
+cd C:\DEV\Dute
+```
+
+## Pré-requisitos
+
+Já instalados e autenticados nesta máquina:
+
+- `gcloud` — logado como `leonardo@dutelog.com.br`, projeto padrão `dute-btg`
+- `gh` — logado como `Leow4u`
+- `node` e `corepack`
+
+Atenção: **`pnpm` não está no PATH desta máquina.** Use `corepack pnpm`. Por isso o
+script de deploy é chamado com `-SkipBuild` — sem essa flag ele tentaria invocar
+`pnpm` diretamente e falharia.
+
+Opcional, para poder usar `pnpm` sem prefixo (pode exigir terminal como administrador):
+
+```powershell
+corepack enable pnpm
+```
+
+## A regra que não pode ser quebrada
+
+O script publica **o que estiver em `artifacts\btg-inventory\dist\public` no disco**.
+Ele não consulta o git.
+
+Publicar a partir de uma árvore com alteração não commitada faz produção deixar de ser
+rastreável: ninguém consegue mais saber, olhando o repositório, o que está rodando para
+o cliente. Sempre parta de `main` limpa e atualizada.
+
+## Passo a passo
+
+### 1. Partir de main limpa
+
+```powershell
+git checkout main
+git pull
+git status
+```
+
+`git status` não deve listar nenhuma alteração em arquivo rastreado. Se listar, resolva
+antes (commit ou descarte) — não publique por cima.
+
+### 2. Instalar dependências e gerar o build
+
+```powershell
+corepack pnpm install
+corepack pnpm --filter "@workspace/btg-inventory" run build
+```
+
+O build sai em `artifacts\btg-inventory\dist\public`.
+
+### 3. Anotar a revisão atual (para rollback)
+
+```powershell
+gcloud run services describe dute-btg-app --region southamerica-east1 --project dute-btg --format="value(status.latestReadyRevisionName)"
+```
+
+Guarde esse nome. Se o deploy novo der problema, é para ele que você volta.
+
+### 4. Publicar
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\deploy_cloud_run.ps1 -SkipBuild
+```
+
+O script habilita as APIs necessárias, cria o repositório no Artifact Registry se não
+existir, monta um diretório de staging em `tmp\cloud-run-src` contendo apenas
+`Dockerfile`, `nginx.conf` e `dist/public`, submete ao Cloud Build com uma tag de
+timestamp, publica no Cloud Run e imprime a URL do serviço.
+
+### 5. Conferir que subiu
+
+```powershell
+gcloud run revisions list --service dute-btg-app --region southamerica-east1 --project dute-btg --limit 3 --format="table(name,creationTimestamp.date('%Y-%m-%d %H:%M'),active)"
+```
+
+E confirme que o site responde:
+
+```powershell
+curl.exe -sS -o NUL -w "%{http_code}`n" https://app.dutelog.com.br/
+```
+
+Deve retornar `200`.
+
+## Rollback
+
+Não é preciso reconstruir nada — o Cloud Run guarda as revisões anteriores. Para voltar
+o tráfego para uma revisão conhecida:
+
+```powershell
+gcloud run services update-traffic dute-btg-app --region southamerica-east1 --project dute-btg --to-revisions NOME-DA-REVISAO=100
+```
+
+Use o nome anotado no passo 3.
+
+## Como saber qual commit está em produção
+
+As tags de imagem são timestamps (`20260812141220`), não commits — então a rastreabilidade
+depende da disciplina do passo 1. Para verificar depois, reconstrua o commit suspeito e
+compare os assets gerados com os servidos em produção: os nomes de arquivo do Vite são
+hash de conteúdo, então batem quando o código é o mesmo. Diferenças restritas a nomes de
+variável minificados são ruído do minificador, não diferença de código.
+
+## Voltar ao deploy automático
+
+O workflow `.github/workflows/ci.yml` já tem o job `deploy-frontend` pronto, usando
+Workload Identity. Ele falha em `gcloud builds submit` com:
+
+```
+The user is forbidden from accessing the bucket [dute-btg_cloudbuild]
+```
+
+Já verificado e descartado como causa: o binding `roles/iam.workloadIdentityUser` do
+principalSet `Leow4u/Dute` sobre a service account está correto; não há política de
+organização no projeto; e a SA `github-actions-deploy@dute-btg.iam.gserviceaccount.com`
+tem `artifactregistry.writer`, `cloudbuild.builds.editor`, `iam.serviceAccountUser`,
+`run.admin`, `serviceusage.serviceUsageConsumer` no projeto, mais `storage.objectAdmin` e
+`storage.legacyBucketReader` no bucket `gs://dute-btg_cloudbuild`.
+
+Para tentar novamente depois:
+
+```powershell
+gh run rerun 33675003851 --repo Leow4u/Dute --failed
+```
