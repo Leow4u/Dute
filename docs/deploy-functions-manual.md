@@ -1,0 +1,98 @@
+# Publicação de Cloud Functions
+
+Procedimento para publicar `functions/` (as callables usadas pelo app BTG) no
+projeto Google Cloud `dute-btg`.
+
+Diferente do frontend (`docs/deploy-manual.md`), este processo nunca foi escrito
+antes — o que é provavelmente como o incidente de 03/09/2026 (ver abaixo) passou
+um mês sem ser percebido.
+
+## Pré-requisitos
+
+Os mesmos do deploy do frontend: `gcloud` autenticado como
+`leonardo@dutelog.com.br`, projeto padrão `dute-btg`, `node`/`corepack`. O
+diretório `functions/` usa **npm**, não pnpm (tem `package-lock.json` próprio).
+
+## Passo a passo
+
+### 1. Partir de main limpa
+
+```powershell
+git checkout main
+git pull
+git status
+```
+
+### 2. Rodar os testes críticos antes de publicar
+
+```powershell
+npm --prefix functions run test:critical
+```
+
+Isso roda `test:unit` (billing) e `test:integration` (fluxo WMS/estoque contra o
+emulador do Firestore — exige Java 21+). Não publique com isso vermelho.
+
+### 3. Publicar
+
+```powershell
+firebase deploy --only functions --project dute-btg
+```
+
+O `predeploy` do `firebase.json` já roda `npm run build` (tsc) antes de subir.
+
+Para publicar só uma function específica (mais rápido, mas é exatamente o tipo
+de deploy que causou o incidente abaixo — **nunca pule o passo 4** depois de um
+deploy parcial):
+
+```powershell
+firebase deploy --only functions:nomeDaFunction --project dute-btg
+```
+
+### 4. Verificar que toda callable continua com invocação pública
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\check_functions_invoker.ps1
+```
+
+Esse script lê as callables exportadas em `functions/src/index.ts`, compara com
+o Cloud Run real e falha (exit 1) se alguma estiver sem `allUsers` /
+`roles/run.invoker`. **Rode sempre, mesmo em deploy que "só" mudou uma
+function** — foi exatamente esse tipo de deploy que causou o incidente abaixo.
+
+Isso não é uma falha de segurança: a autorização de verdade acontece dentro de
+cada callable via Firebase Auth + papel (`requireCustomerScope`,
+`requireOperationsCoordinator`, etc.) — Cloud Run só decide se a requisição
+chega até o código. Ver invariante 5 do `CLAUDE.md`.
+
+## Incidente de 03/09/2026 — invoker ausente em 8 callables
+
+Um cliente tentou montar um pedido no portal (`/portal/estoque`, papel
+`cliente`) e recebeu "Falha interna no servidor" ao enviar. Investigação:
+
+- `createCustomerRequest`, `decideCustomerRequest` e `advanceWarehouseTask`
+  estavam com a política de IAM do Cloud Run **vazia** — nenhum member, nenhum
+  `roles/run.invoker`. Toda chamada (de qualquer tamanho, não só pedidos
+  grandes) era rejeitada na borda do Cloud Run antes do código rodar (`403
+  The request was not authenticated` nos logs do `OPTIONS` de preflight). O
+  SDK do Firebase mapeia qualquer falha de transporte/autorização assim para o
+  mesmo código genérico `internal`, que o frontend traduz para essa mensagem —
+  indistinguível, do lado do cliente, de um bug real no código.
+- Rodar o script acima contra produção achou mais 5 na mesma condição:
+  `extractOperationalDocumentContent`, `recordWarehouseException`,
+  `recordOperationalEvent`, `analyzeEvent`, `generateDailyBriefing`.
+- As outras ~24 callables (deployadas no mesmo lote de 31/07) tinham o invoker
+  correto. Não há como confirmar pelo histórico de revisões *qual* deploy
+  causou a lacuna nessas 8 especificamente — algumas foram redeployadas
+  isoladamente depois do lote de 31/07 (ex.: `createCustomerRequest` em
+  06/08 e 12/08), outras nunca mais foram tocadas desde 31/07, o que sugere
+  que a falha em setar o invoker pode ter sido silenciosa mesmo dentro do
+  deploy em lote original, não só em redeploys parciais.
+- As 8 foram corrigidas manualmente em produção:
+  ```
+  gcloud run services add-iam-policy-binding NOME_DA_FUNCTION `
+    --project dute-btg --region southamerica-east1 `
+    --member=allUsers --role=roles/run.invoker
+  ```
+- `tools/check_functions_invoker.ps1` e o passo 4 acima existem para que essa
+  classe de regressão seja percebida no próximo deploy, não semanas depois por
+  um cliente.

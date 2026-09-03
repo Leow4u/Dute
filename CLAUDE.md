@@ -13,9 +13,15 @@ documentação de produto e operação está em `docs/`.
 - **Produção é `https://app.dutelog.com.br`**, servida por Cloud Run
   (`dute-btg-app`, região `southamerica-east1`, projeto Google Cloud `dute-btg`).
   Firebase Hosting **não** é produção nem fallback.
-- **A publicação é manual.** Ver `docs/deploy-manual.md`. O job `deploy-frontend`
+- **A publicação é manual.** Ver `docs/deploy-manual.md` (frontend) e
+  `docs/deploy-functions-manual.md` (Cloud Functions). O job `deploy-frontend`
   do GitHub Actions existe mas falha em `gcloud builds submit`; o diagnóstico e o
-  que já foi descartado estão no mesmo documento.
+  que já foi descartado estão no primeiro documento.
+- **Depois de qualquer deploy de functions, rode
+  `tools/check_functions_invoker.ps1`.** Em 03/09/2026, 8 callables (incluindo
+  `createCustomerRequest`) ficaram sem `roles/run.invoker` para `allUsers` e
+  falhavam com um erro genérico antes mesmo do código rodar. Ver
+  `docs/deploy-functions-manual.md`.
 - **`pnpm` não está no PATH.** Use `corepack pnpm`. O diretório `functions/` usa
   **npm** (tem `package-lock.json` próprio), não pnpm.
 
