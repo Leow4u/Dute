@@ -1,7 +1,21 @@
 ---
-name: BTG Inventory data model — stock & cost
-description: How product stock/cost are derived and why the source spreadsheet has no unit prices
+name: BTG Inventory data model — stock & cost (OBSOLETO)
+description: OBSOLETO — baseado na planilha de referência e no schema PostgreSQL, ambos fora de uso
 ---
+
+> **⚠️ OBSOLETO — NÃO USE.**
+>
+> Este documento descreve o modelo de dados em PostgreSQL/Drizzle e trata a
+> planilha `Inventário_BTG_Consolidado` como origem do modelo. Ambos estão fora
+> de uso.
+>
+> **A planilha foi referência inicial do projeto e não deve ser usada** — não
+> derive lógica, preço ou taxonomia dela. O sistema foi zerado e recarregado no
+> go-live de 30/07/2026 a partir do inventário de abertura; a fonte de verdade de
+> estoque é o ledger e as coleções operacionais no Firestore.
+>
+> Fonte de verdade atual: `CLAUDE.md` e `docs/`. Mantido apenas como registro
+> histórico.
 
 # Product stock & cost are derived, not stored
 

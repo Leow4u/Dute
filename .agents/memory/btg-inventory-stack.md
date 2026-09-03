@@ -1,7 +1,17 @@
 ---
-name: BTG Inventory Stack
-description: Key technical decisions and quirks for the BTG Pactual inventory management system
+name: BTG Inventory Stack (OBSOLETO)
+description: OBSOLETO — descreve o stack Clerk/Express/Drizzle/PostgreSQL removido em julho de 2026
 ---
+
+> **⚠️ OBSOLETO — NÃO USE.**
+>
+> Este documento descreve o stack anterior (Clerk, Express, Drizzle, PostgreSQL,
+> Orval), removido na migração para Firebase/Google Cloud em julho de 2026.
+> Nada aqui reflete o sistema atual: autenticação é Firebase Auth, dados são
+> Firestore, backend são Cloud Functions e não existe mais `artifacts/api-server`.
+>
+> Fonte de verdade atual: `CLAUDE.md` e `docs/`. Mantido apenas como registro
+> histórico.
 
 ## Stack
 - Frontend: React + Vite (artifacts/btg-inventory), @clerk/react, wouter routing, recharts, shadcn/ui

@@ -1,7 +1,18 @@
 ---
-name: BTG Billing Module (Cobrança Mensal)
-description: Design decisions for the monthly billing/invoicing module in the BTG/Dutelog inventory app
+name: BTG Billing Module (PARCIALMENTE OBSOLETO)
+description: PARCIALMENTE OBSOLETO — decisões de produto seguem válidas, a implementação descrita (Clerk/Drizzle/Express) não existe mais
 ---
+
+> **⚠️ PARCIALMENTE OBSOLETO.**
+>
+> As *decisões de produto* seguem válidas: faturamento single-client por desenho,
+> papéis fail-closed, emissão de fatura atômica e e-mail não-fatal.
+>
+> A *implementação* descrita não existe mais — não há Clerk, Drizzle, transação
+> `db.transaction` nem `lib/roles.ts`. O faturamento hoje vive em
+> `functions/src/billing.ts` e `functions/src/index.ts`, sobre Firestore.
+>
+> Fonte de verdade atual: `CLAUDE.md` e `docs/`.
 
 # Módulo de Cobrança Mensal
 
