@@ -43,7 +43,7 @@ import { useAppUser } from "@/lib/auth";
 import { canDecideRequests, humanApiError } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
-type CustomerRequest = {
+export type CustomerRequest = {
   id: string;
   customer_code?: string;
   type?: string;
@@ -51,6 +51,7 @@ type CustomerRequest = {
   title?: string;
   description?: string;
   status?: string;
+  stock_reservation_status?: string | null;
   quantity?: number | string | null;
   qty?: number | string | null;
   qtd_solic?: number | string | null;
@@ -77,7 +78,7 @@ type CustomerRequest = {
   };
 };
 
-type CustomerRequestItem =
+export type CustomerRequestItem =
   | string
   | {
       id?: string | number | null;
@@ -116,7 +117,7 @@ type ListResponse = {
   total: number;
 };
 
-type StockBalance = {
+export type StockBalance = {
   id?: string | number | null;
   _docId?: string | null;
   customer_code?: string | null;
@@ -207,7 +208,7 @@ type BalanceValidationLine = RequestValidationLine & {
   message: string;
 };
 
-type BalanceValidation = {
+export type BalanceValidation = {
   status: BalanceValidationStatus;
   title: string;
   detail: string;
@@ -589,12 +590,18 @@ function getStockBalanceAvailable(balance: StockBalance) {
   return Math.max(0, onHand - reserved);
 }
 
-function findStockBalanceForLine(
+/**
+ * Um SKU pode ter saldo em mais de uma localização — a reserva de verdade
+ * (createCustomerRequestTransaction) soma todas ao alocar. Retornar só a
+ * primeira linha encontrada subestima o disponível sempre que o estoque do
+ * SKU está fragmentado entre localizações.
+ */
+function findStockBalancesForLine(
   balances: StockBalance[],
   line: RequestValidationLine,
   customerCode?: string,
 ) {
-  return balances.find((balance) => {
+  return balances.filter((balance) => {
     const balanceCustomer = firstNonEmpty(balance.customer_code);
     const sameCustomer =
       !customerCode || !balanceCustomer || balanceCustomer === customerCode;
@@ -627,7 +634,7 @@ function buildMissingDataLine(line: RequestValidationLine): BalanceValidationLin
   };
 }
 
-function buildBalanceValidation(
+export function buildBalanceValidation(
   request: CustomerRequest,
   balances: StockBalance[] | undefined,
   isChecking: boolean,
@@ -651,6 +658,32 @@ function buildBalanceValidation(
     (sum, line) => sum + (line.requested ?? 0),
     0,
   );
+
+  // createCustomerRequestTransaction já reserva o estoque atomicamente no
+  // envio do pedido (qty_reserved/qty_available de stock_balances já saem de
+  // lá refletindo essa própria reserva). Comparar "solicitado" contra o
+  // saldo ao vivo aqui compara contra um disponível que já teve a reserva
+  // deste mesmo pedido descontada — qualquer pedido que reservou uma fatia
+  // relevante do saldo de um SKU aparenta "saldo insuficiente" mesmo estando
+  // correto. Se o pedido já está reservado, a validação de saldo já
+  // aconteceu (com sucesso) no momento da criação; não há o que reconferir
+  // aqui além de confirmar que a reserva está de pé.
+  if (request.stock_reservation_status === "reserved") {
+    return {
+      status: "ready",
+      title: "Saldo reservado no envio",
+      detail:
+        "O pedido já reservou o estoque no momento em que foi criado — a validação de saldo já foi feita então.",
+      canApprove: true,
+      requestedTotal,
+      issueCount: 0,
+      lines: lines.map((line) => ({
+        ...line,
+        status: "ready",
+        message: "Reservado no envio do pedido.",
+      })),
+    };
+  }
 
   if (lines.length === 0) {
     return {
@@ -722,13 +755,13 @@ function buildBalanceValidation(
   }
 
   const validationLines = lines.map<BalanceValidationLine>((line) => {
-    const balance = findStockBalanceForLine(
+    const matches = findStockBalancesForLine(
       balances,
       line,
       request.customer_code,
     );
 
-    if (!balance) {
+    if (matches.length === 0) {
       return {
         ...line,
         status: "missing-balance",
@@ -736,22 +769,26 @@ function buildBalanceValidation(
       };
     }
 
-    const available = getStockBalanceAvailable(balance);
-    if (available === undefined) {
+    const availableValues = matches
+      .map((balance) => getStockBalanceAvailable(balance))
+      .filter((value): value is number => value !== undefined);
+    if (availableValues.length === 0) {
       return {
         ...line,
         status: "unknown",
-        balanceId: getStockBalanceId(balance),
+        balanceId: getStockBalanceId(matches[0]),
         message: "Saldo encontrado sem quantidade disponível.",
       };
     }
+
+    const available = availableValues.reduce((sum, value) => sum + value, 0);
 
     if ((line.requested ?? 0) > available) {
       return {
         ...line,
         status: "insufficient",
         available,
-        balanceId: getStockBalanceId(balance),
+        balanceId: getStockBalanceId(matches[0]),
         message: `Disponível: ${formatQuantity(available)}.`,
       };
     }
@@ -760,7 +797,7 @@ function buildBalanceValidation(
       ...line,
       status: "ready",
       available,
-      balanceId: getStockBalanceId(balance),
+      balanceId: getStockBalanceId(matches[0]),
       message: `Disponível: ${formatQuantity(available)}.`,
     };
   });
