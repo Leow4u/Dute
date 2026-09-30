@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { type Sku, useListSkus, useCreateSku, useUpdateSku, useDeleteSku, getListSkusQueryKey } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -316,7 +316,7 @@ export default function Skus() {
   );
 }
 
-function SkuModal({ sku }: { sku?: any }) {
+export function SkuModal({ sku, trigger }: { sku?: any; trigger?: ReactNode }) {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -384,7 +384,7 @@ function SkuModal({ sku }: { sku?: any }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        {isEdit ? (
+        {trigger ? trigger : isEdit ? (
           <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50">
             <Edit className="h-4 w-4" />
           </Button>
@@ -504,7 +504,7 @@ function SkuModal({ sku }: { sku?: any }) {
   );
 }
 
-function DeleteSkuButton({ id, cod_btg }: { id: number, cod_btg: string }) {
+export function DeleteSkuButton({ id, cod_btg, trigger }: { id: number, cod_btg: string, trigger?: ReactNode }) {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -516,12 +516,12 @@ function DeleteSkuButton({ id, cod_btg }: { id: number, cod_btg: string }) {
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListSkusQueryKey() });
-          toast({ title: "SKU excluído" });
+          toast({ title: "Item arquivado" });
           setOpen(false);
         },
         onError: (error) => {
           toast({
-            title: "Erro ao excluir SKU",
+            title: "Erro ao arquivar item",
             description: humanApiError(error, "Tente novamente em instantes."),
             variant: "destructive",
           });
@@ -533,24 +533,26 @@ function DeleteSkuButton({ id, cod_btg }: { id: number, cod_btg: string }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50">
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        {trigger ?? (
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50">
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
-          <DialogTitle>Excluir SKU</DialogTitle>
+          <DialogTitle>Arquivar item</DialogTitle>
         </DialogHeader>
         <div className="py-4">
           <p className="text-sm text-muted-foreground">
-            Tem certeza de que deseja excluir o SKU <strong className="text-foreground">{cod_btg}</strong>? 
-            Esta ação não pode ser desfeita.
+            Arquivar <strong className="text-foreground">{cod_btg}</strong>? O item sai das
+            listas; o histórico de movimentos continua guardado.
           </p>
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
           <Button type="button" variant="destructive" onClick={onDelete} disabled={deleteSku.isPending}>
-            {deleteSku.isPending ? "Excluindo..." : "Excluir"}
+            {deleteSku.isPending ? "Arquivando..." : "Arquivar"}
           </Button>
         </DialogFooter>
       </DialogContent>

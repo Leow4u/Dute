@@ -21,6 +21,18 @@ const REQUEST_DECISION_ROLES: ReadonlySet<ProfileRole> = new Set([
   "interno",
 ]);
 
+/** requireWarehouseWrite: foto em item já cadastrado (addCatalogPhotos). */
+const ITEM_PHOTO_ROLES: ReadonlySet<ProfileRole> = new Set([
+  "owner",
+  "admin",
+  "interno",
+  "wms",
+]);
+
+export function canAddItemPhotos(role: ProfileRole | null | undefined) {
+  return Boolean(role && ITEM_PHOTO_ROLES.has(role));
+}
+
 export function canWriteCatalog(role: ProfileRole | null | undefined) {
   return Boolean(role && CATALOG_WRITE_ROLES.has(role));
 }

@@ -25,6 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
 import { canDecideRequests, humanApiError } from "@/lib/permissions";
+import { useItemPhotos } from "@/lib/use-item-photos";
 import { cn } from "@/lib/utils";
 
 export type CustomerRequest = {
@@ -1487,6 +1488,8 @@ function RequestDetail({
 }) {
   const verdict = buildVerdict(request, validation);
   const style = VERDICT_STYLE[verdict.tone];
+  // Mesma foto do Estoque, para quem aprova ver o que está sendo pedido.
+  const photoFor = useItemPhotos();
   const status = normalizeStatus(request.status);
   const reserved = request.stock_reservation_status === "reserved";
   // Pedido já decidido não é revalidado contra o saldo de agora: a reserva
@@ -1627,10 +1630,24 @@ function RequestDetail({
                 return (
                   <tr key={line.key} className="border-b border-border/40">
                     <td className="py-2.5 pr-3">
-                      <div className="font-mono text-[13px] text-foreground/85">{line.label}</div>
-                      {line.productName && line.productName !== line.label ? (
-                        <div className="text-xs text-foreground/55">{line.productName}</div>
-                      ) : null}
+                      <div className="flex items-center gap-3">
+                        {photoFor(line.skuCode, line.clientItemCode) ? (
+                          <img
+                            src={photoFor(line.skuCode, line.clientItemCode)}
+                            alt=""
+                            loading="lazy"
+                            className="size-10 shrink-0 rounded-lg bg-muted object-cover"
+                          />
+                        ) : (
+                          <span className="size-10 shrink-0 rounded-lg border border-dashed border-border" />
+                        )}
+                        <div className="min-w-0">
+                          <div className="font-mono text-[13px] text-foreground/85">{line.label}</div>
+                          {line.productName && line.productName !== line.label ? (
+                            <div className="text-xs text-foreground/55">{line.productName}</div>
+                          ) : null}
+                        </div>
+                      </div>
                     </td>
                     <td className="py-2.5 pr-3 text-right tabular-nums">
                       {formatQuantity(line.requested)}

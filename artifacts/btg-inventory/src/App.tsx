@@ -87,7 +87,7 @@ const CustomerRequests = lazy(() => import("./pages/customer-requests"));
 const WarehouseOps = lazy(() => import("./pages/warehouse-ops"));
 const WmsInventoryPage = lazy(() => import("./pages/wms-inventory"));
 const Pedidos = lazy(() => import("./pages/pedidos"));
-const Skus = lazy(() => import("./pages/skus"));
+const Estoque = lazy(() => import("./pages/estoque"));
 const WmsReturnsPage = lazy(() => import("./pages/wms-returns"));
 const ClienteAssistente = lazy(() =>
   import("./pages/client").then((m) => ({ default: m.ClienteAssistente })),
@@ -867,7 +867,7 @@ function protectedRoute(
  * alcançada pelo botão dentro da própria régua.
  */
 const WMS_STAGES: Array<{ label: string; path: string; match?: string[] }> = [
-  { label: "Estoque", path: "/wms", match: ["/wms", "/wms/contagem"] },
+  { label: "Estoque", path: "/estoque", match: ["/estoque", "/wms/contagem"] },
   { label: "Receber", path: "/wms/receber", match: ["/wms/receber", "/wms/recebimento"] },
 ];
 
@@ -904,14 +904,6 @@ function WmsModuleScreen({ module }: { module: WarehouseOpsModuleKey }) {
   return <WarehouseOps key={module} initialModule={module} />;
 }
 
-// Aba Estoque: a lista física dos pallets (mesma tela de SKUs e saldos).
-const WmsStockScreen = () => (
-  <div className="space-y-6">
-    <WmsStageTabs />
-    <Skus />
-  </div>
-);
-
 // Aba Receber: o centro de recebimento existente.
 const WmsReceiveScreen = () => (
   <div className="space-y-6">
@@ -922,6 +914,8 @@ const WmsReceiveScreen = () => (
 
 // A fila de pedidos saiu da bancada: é o item "Pedidos" do menu.
 const WmsOrdersRedirect = () => <Redirect to="/pedidos" />;
+// Saldos virou a lista de Itens do Estoque (com a ficha de cada item).
+const WmsStockRedirect = () => <Redirect to="/estoque" />;
 
 // Contagem (abertura + cíclica) — alcançada pelo botão da aba Estoque.
 const WmsCountScreen = () => (
@@ -969,7 +963,8 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/wms/expedicao", WmsExpedition),
   protectedRoute("/wms/devolucoes", WmsReturnsPage),
   protectedRoute("/wms/excecoes", WmsExceptions),
-  protectedRoute("/wms", WmsStockScreen),
+  protectedRoute("/wms", WmsStockRedirect),
+  protectedRoute("/estoque", Estoque),
   protectedRoute("/catalogo", Catalog),
   protectedRoute("/catalogo/saldos", Catalog),
   protectedRoute("/catalogo/mapa", Catalog),

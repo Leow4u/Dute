@@ -1,6 +1,5 @@
 import {
   Activity,
-  ArrowRightLeft,
   BarChart3,
   Building2,
   BrainCircuit,
@@ -14,7 +13,6 @@ import {
   Receipt,
   Truck,
   Users,
-  Warehouse,
   type LucideIcon,
 } from "lucide-react";
 
@@ -188,8 +186,9 @@ export const APP_MODULES: AppModule[] = [
       }),
     ],
   }),
-  // Estoque físico (bancada WMS) e cadastro no mesmo lugar. As etapas da
-  // bancada seguem trocando pelo seletor próprio e pelos deep links.
+  // Estoque: uma lista de itens com a ficha de cada um (cadastro, foto,
+  // endereços, reservas, histórico) e o recebimento. Catálogo, Mapa e
+  // Movimentações viraram partes da ficha e da aba Histórico.
   appModule({
     id: "inventory",
     label: "Estoque",
@@ -198,12 +197,11 @@ export const APP_MODULES: AppModule[] = [
     roles: WMS_ROLES,
     routes: [
       navRoute({
-        id: "inventory-stock",
-        label: "Saldos",
-        href: "/wms",
-        icon: Warehouse,
+        id: "inventory-items",
+        label: "Itens",
+        href: "/estoque",
+        icon: PackageSearch,
         roles: WMS_ROLES,
-        exact: true,
       }),
       navRoute({
         id: "inventory-receive",
@@ -211,20 +209,6 @@ export const APP_MODULES: AppModule[] = [
         href: "/wms/receber",
         icon: PackagePlus,
         roles: WMS_ROLES,
-      }),
-      navRoute({
-        id: "inventory-catalog",
-        label: "Catálogo",
-        href: "/catalogo",
-        icon: PackageSearch,
-        roles: COORDINATION_NAV_ROLES,
-      }),
-      navRoute({
-        id: "inventory-movements",
-        label: "Movimentações",
-        href: "/movements",
-        icon: ArrowRightLeft,
-        roles: COORDINATION_NAV_ROLES,
       }),
     ],
   }),
@@ -452,6 +436,9 @@ const WMS_DEEP_LINK_PROFILE_ROLES = Object.fromEntries(
  * Precisam de entrada própria porque não constam como rota de menu.
  */
 const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
+  // Telas antigas de Estoque, fora do menu mas com os mesmos acessos.
+  { path: "/catalogo", roles: COORDINATION_NAV_ROLES },
+  { path: "/movements", roles: COORDINATION_NAV_ROLES },
   // Triagem detalhada e histórico, abertos a partir da fila de Pedidos.
   { path: "/solicitacoes", roles: COORDINATION_NAV_ROLES },
   { path: "/orders", roles: COORDINATION_NAV_ROLES },
@@ -592,13 +579,24 @@ const ACTIVE_ALIASES: Record<string, string> = {
   "/solicitacoes": "/pedidos",
   "/orders": "/pedidos",
   "/wms/pedidos": "/pedidos",
+  "/wms": "/estoque",
+  "/wms/contagem": "/estoque",
+  "/catalogo": "/estoque",
+  "/catalogo/saldos": "/estoque",
+  "/catalogo/mapa": "/estoque",
+  "/movements": "/estoque",
 };
 
 export function getActiveModule(
   modules: AppModule[],
   path: string,
 ): AppModule {
-  const currentPath = ACTIVE_ALIASES[normalizePath(path)] ?? path;
+  const normalized = normalizePath(path);
+  // Etapas da bancada fora do menu (/wms/qualidade, /wms/putaway...) são
+  // parte do Estoque.
+  const currentPath =
+    ACTIVE_ALIASES[normalized] ??
+    (normalized.startsWith("/wms/") ? "/estoque" : path);
   const exactMatch = modules.find((module) =>
     module.routes.some(
       (route) =>
