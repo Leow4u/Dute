@@ -40,20 +40,12 @@ import type {
   WarehouseOpsResponse,
   WarehouseTask,
 } from "@/lib/warehouse-ops/model";
-
-type OrderStage = "separar" | "enviar" | "entregar" | "entregue";
-
-type OrderGroup = {
-  key: string;
-  orderNumber: string;
-  requestId?: string;
-  pick?: WarehouseTask;
-  pack?: WarehouseTask;
-  ship?: WarehouseTask;
-  stage: OrderStage;
-  blockedReason?: string;
-  exceptionCount: number;
-};
+import {
+  groupWarehouseOrders,
+  queueTasks,
+  type OrderGroup,
+  type OrderStage,
+} from "@/lib/warehouse-ops/orders";
 
 const STAGE_LABEL: Record<OrderStage, string> = {
   separar: "Separar",
@@ -88,39 +80,6 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
     throw error;
   }
   return response.json() as Promise<T>;
-}
-
-function queueTasks(
-  ops: WarehouseOpsResponse | undefined,
-  key: string,
-): WarehouseTask[] {
-  const queues = ops?.queues;
-  if (!queues) return [];
-  if (Array.isArray(queues)) {
-    const queue = queues.find((entry) => entry.key === key);
-    return (queue?.tasks ?? queue?.items ?? []) as WarehouseTask[];
-  }
-  const queue = (queues as Record<string, { tasks?: WarehouseTask[]; items?: WarehouseTask[] }>)[
-    key
-  ];
-  return (queue?.tasks ?? queue?.items ?? []) as WarehouseTask[];
-}
-
-function orderKeyForTask(task: WarehouseTask): string {
-  // pick_ord_X / pack_ord_X / ship_ord_X compartilham o sufixo ord_X.
-  const reference = String(task.reference ?? "");
-  const match = reference.match(/^(?:pick|pack|ship)_(ord_.+)$/);
-  if (match) return match[1];
-  if (task.customer_request_id) return `ord_${task.customer_request_id}`;
-  return reference || String(task.id);
-}
-
-function stageForGroup(group: Omit<OrderGroup, "stage">): OrderStage {
-  const shipStatus = String(group.ship?.status ?? "");
-  if (shipStatus === "delivered") return "entregue";
-  if (shipStatus === "dispatched") return "entregar";
-  if (shipStatus === "ready_to_dispatch") return "enviar";
-  return "separar";
 }
 
 function taskUnits(task?: WarehouseTask): number {
@@ -169,52 +128,7 @@ export default function WmsPedidos() {
     refetchOnWindowFocus: false,
   });
 
-  const orders = useMemo(() => {
-    const groups = new Map<string, Omit<OrderGroup, "stage">>();
-    const attach = (
-      task: WarehouseTask,
-      slot: "pick" | "pack" | "ship",
-    ) => {
-      // Tarefas derivadas de dados legados não podem avançar (can_advance
-      // false com status inicial); ficam fora da fila simples.
-      if (task.can_advance === false && String(task.status) !== "completed"
-        && String(task.status) !== "delivered") return;
-      const key = orderKeyForTask(task);
-      const group = groups.get(key) ?? {
-        key,
-        orderNumber: String(task.title ?? key),
-        requestId: task.customer_request_id
-          ? String(task.customer_request_id)
-          : undefined,
-        exceptionCount: 0,
-      };
-      group[slot] = task;
-      group.orderNumber = String(task.title ?? group.orderNumber);
-      if (task.customer_request_id) {
-        group.requestId = String(task.customer_request_id);
-      }
-      group.exceptionCount += Number(task.exception_count ?? 0);
-      if (task.blocked_reason && !group.blockedReason) {
-        group.blockedReason = String(task.blocked_reason);
-      }
-      groups.set(key, group);
-    };
-    queueTasks(ops.data, "picking").forEach((task) => attach(task, "pick"));
-    queueTasks(ops.data, "packing").forEach((task) => attach(task, "pack"));
-    queueTasks(ops.data, "expedition").forEach((task) => attach(task, "ship"));
-
-    return [...groups.values()]
-      .map((group) => ({ ...group, stage: stageForGroup(group) }))
-      .sort((left, right) => {
-        const weight: Record<OrderStage, number> = {
-          separar: 0,
-          enviar: 1,
-          entregar: 2,
-          entregue: 3,
-        };
-        return weight[left.stage] - weight[right.stage];
-      });
-  }, [ops.data]);
+  const orders = useMemo(() => groupWarehouseOrders(ops.data), [ops.data]);
 
   const advanceChain = useMutation({
     mutationFn: async ({

@@ -9,6 +9,7 @@ import {
   Home,
   Inbox,
   LayoutDashboard,
+  MoreHorizontal,
   PackagePlus,
   PackageSearch,
   Receipt,
@@ -54,9 +55,9 @@ export const SUPPORT_ROLES: ProfileRole[] = ["owner", "admin", "suporte"];
 
 /**
  * Poda da escala real (31/07/2026): o operador wms vive na bancada WMS.
- * Torre de Controle, Triagem de solicitações e Catálogo são superfícies de
- * coordenação — fora do menu (e das rotas) do operador. A consulta física
- * dele é a aba Estoque da própria bancada.
+ * Início (antiga Torre de Controle), Triagem de solicitações e Catálogo são
+ * superfícies de coordenação — fora do menu (e das rotas) do operador. A
+ * consulta física dele é a aba Estoque da própria bancada.
  */
 export const TOWER_NAV_ROLES: ProfileRole[] = [
   "owner",
@@ -150,100 +151,83 @@ function appModule(
 }
 
 export const APP_MODULES: AppModule[] = [
-  // "Como está a operação agora?" tem um lugar só. Torre de Controle reúne
-  // as antigas 3 telas de situação (Dashboard, Agent Dute Operacional,
-  // Suporte/Observabilidade) que buscavam os mesmos endpoints e repetiam os
-  // mesmos contadores em réguas próprias.
+  // Menu interno com 5 destinos que falam a língua da operação (29/09/2026).
+  // As telas não mudaram de lugar: a régua só agrupa por assunto e esconde o
+  // que é de uso raro em "Mais". As permissões por rota continuam as mesmas
+  // (ver modules.test.ts) — sair do menu não muda quem acessa a rota.
   appModule({
-    id: "control-tower",
-    label: "Torre de Controle",
+    id: "home",
+    label: "Início",
     audience: "internal",
-    icon: LayoutDashboard,
+    icon: Home,
     roles: TOWER_NAV_ROLES,
     routes: [
       navRoute({
-        id: "control-overview",
-        label: "Visão geral",
+        id: "home-overview",
+        label: "Início",
         href: "/dashboard",
-        icon: LayoutDashboard,
+        icon: Home,
         roles: TOWER_NAV_ROLES,
         exact: true,
       }),
-      navRoute({
-        id: "control-reports",
-        label: "Relatórios",
-        href: "/reports",
-        icon: BarChart3,
-        roles: TOWER_NAV_ROLES,
-      }),
-      navRoute({
-        id: "ai-agent-panel",
-        label: "Agent Dute",
-        href: "/agente",
-        icon: BrainCircuit,
-        roles: TOWER_NAV_ROLES,
-      }),
-      navRoute({
-        id: "ai-agent-knowledge",
-        label: "Conhecimento",
-        href: "/agente/conhecimento",
-        icon: FileText,
-        roles: TOWER_NAV_ROLES,
-      }),
-      navRoute({
-        id: "support-observability",
-        label: "Observabilidade",
-        href: "/suporte",
-        icon: Activity,
-        roles: SUPPORT_ROLES,
-      }),
     ],
   }),
+  // Pedido é um fluxo só: o cliente solicita, a triagem aprova, o armazém
+  // separa e envia. As três telas ficam lado a lado até virarem uma fila.
   appModule({
-    id: "requests",
-    label: "Solicitações",
+    id: "orders",
+    label: "Pedidos",
     audience: "internal",
-    icon: Inbox,
-    roles: COORDINATION_NAV_ROLES,
+    icon: Truck,
+    roles: WMS_ROLES,
     routes: [
       navRoute({
-        id: "request-triage",
-        label: "Triagem",
+        id: "orders-requests",
+        label: "Solicitações",
         href: "/solicitacoes",
         icon: ClipboardList,
         roles: COORDINATION_NAV_ROLES,
       }),
-    ],
-  }),
-  appModule({
-    id: "wms",
-    label: "WMS",
-    audience: "internal",
-    icon: Warehouse,
-    roles: WMS_ROLES,
-    // As etapas (Recebimento, Putaway, Picking...) são módulos internos da
-    // mesma bancada — a tela troca de etapa pelo seletor próprio. Um único
-    // item de menu; os deep links /wms/<etapa> seguem válidos via
-    // WMS_DEEP_LINK_PATHS.
-    routes: [
       navRoute({
-        id: "wms-bench",
-        label: "WMS",
-        href: "/wms",
-        icon: Warehouse,
+        id: "orders-fulfillment",
+        label: "Separar e enviar",
+        href: "/wms/pedidos",
+        icon: Truck,
         roles: WMS_ROLES,
+      }),
+      navRoute({
+        id: "orders-history",
+        label: "Histórico",
+        href: "/orders",
+        icon: ShoppingCart,
+        roles: COORDINATION_NAV_ROLES,
       }),
     ],
   }),
+  // Estoque físico (bancada WMS) e cadastro no mesmo lugar. As etapas da
+  // bancada seguem trocando pelo seletor próprio e pelos deep links.
   appModule({
     id: "inventory",
     label: "Estoque",
     audience: "internal",
     icon: PackageSearch,
-    roles: COORDINATION_NAV_ROLES,
+    roles: WMS_ROLES,
     routes: [
-      // Produtos e SKUs eram duas visões do mesmo catálogo; o Mapa do
-      // armazém é um pivô da coluna Localização. Viraram abas de /catalogo.
+      navRoute({
+        id: "inventory-stock",
+        label: "Saldos",
+        href: "/wms",
+        icon: Warehouse,
+        roles: WMS_ROLES,
+        exact: true,
+      }),
+      navRoute({
+        id: "inventory-receive",
+        label: "Receber",
+        href: "/wms/receber",
+        icon: PackagePlus,
+        roles: WMS_ROLES,
+      }),
       navRoute({
         id: "inventory-catalog",
         label: "Catálogo",
@@ -256,13 +240,6 @@ export const APP_MODULES: AppModule[] = [
         label: "Movimentações",
         href: "/movements",
         icon: ArrowRightLeft,
-        roles: COORDINATION_NAV_ROLES,
-      }),
-      navRoute({
-        id: "inventory-orders",
-        label: "Pedidos",
-        href: "/orders",
-        icon: ShoppingCart,
         roles: COORDINATION_NAV_ROLES,
       }),
     ],
@@ -286,27 +263,11 @@ export const APP_MODULES: AppModule[] = [
     ],
   }),
   appModule({
-    id: "documents",
-    label: "Documentos",
-    audience: "internal",
-    icon: FileText,
-    roles: INTERNAL_ROLES,
-    routes: [
-      navRoute({
-        id: "documents-library",
-        label: "Documentos",
-        href: "/documentos",
-        icon: FileText,
-        roles: INTERNAL_ROLES,
-      }),
-    ],
-  }),
-  appModule({
     id: "admin",
     label: "Administração",
     audience: "internal",
     icon: Users,
-    roles: ACCESS_ADMIN_ROLES,
+    roles: [...ACCESS_ADMIN_ROLES, "suporte"],
     routes: [
       navRoute({
         id: "admin-customers",
@@ -321,6 +282,38 @@ export const APP_MODULES: AppModule[] = [
         href: "/usuarios",
         icon: Users,
         roles: ACCESS_ADMIN_ROLES,
+      }),
+      navRoute({
+        id: "admin-observability",
+        label: "Observabilidade",
+        href: "/suporte",
+        icon: Activity,
+        roles: SUPPORT_ROLES,
+      }),
+    ],
+  }),
+  // Uso raro, fora da régua principal. O Agent Dute virou o botão flutuante
+  // (components/agent/agent-dock.tsx); o painel dele segue em /agente.
+  appModule({
+    id: "more",
+    label: "Mais",
+    audience: "internal",
+    icon: MoreHorizontal,
+    roles: INTERNAL_ROLES,
+    routes: [
+      navRoute({
+        id: "more-reports",
+        label: "Relatórios",
+        href: "/reports",
+        icon: BarChart3,
+        roles: TOWER_NAV_ROLES,
+      }),
+      navRoute({
+        id: "more-documents",
+        label: "Documentos",
+        href: "/documentos",
+        icon: FileText,
+        roles: INTERNAL_ROLES,
       }),
     ],
   }),
@@ -475,6 +468,9 @@ const WMS_DEEP_LINK_PROFILE_ROLES = Object.fromEntries(
  * Precisam de entrada própria porque não constam como rota de menu.
  */
 const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
+  // Painel do Agent Dute, aberto pelo botão flutuante e pelo Início.
+  { path: "/agente", roles: TOWER_NAV_ROLES },
+  { path: "/agente/conhecimento", roles: TOWER_NAV_ROLES },
   { path: "/catalogo/saldos", roles: WMS_ROLES },
   { path: "/catalogo/mapa", roles: WMS_ROLES },
   { path: "/products", roles: WMS_ROLES },
@@ -573,10 +569,18 @@ export function getNavigationForProfileRole(
     (module) =>
       module.appRoles.includes(appRole) && canAccessModule(role, module.roles),
   )
-    .map((module) => ({
-      ...module,
-      routes: module.routes.filter((route) => canAccessModule(role, route.roles)),
-    }))
+    .map((module) => {
+      const routes = module.routes.filter((route) =>
+        canAccessModule(role, route.roles),
+      );
+      // Um grupo que o papel reduziu a uma tela só vira o link dessa tela:
+      // o operador WMS vê "Documentos", não um "Mais" com um item dentro.
+      if (module.routes.length > 1 && routes.length === 1) {
+        const [only] = routes;
+        return { ...module, label: only.label, icon: only.icon, routes };
+      }
+      return { ...module, routes };
+    })
     .filter((module) => module.routes.length > 0);
 }
 
@@ -600,14 +604,30 @@ export function getActiveModule(
   modules: AppModule[],
   currentPath: string,
 ): AppModule {
-  return (
-    modules.find((module) =>
-      module.routes.some(
-        (route) =>
-          route.href && isRouteActive(currentPath, route.href, route.exact),
-      ),
-    ) ??
-    modules.find(isModuleEnabled) ??
-    modules[0]
+  const exactMatch = modules.find((module) =>
+    module.routes.some(
+      (route) =>
+        route.href && isRouteActive(currentPath, route.href, route.exact),
+    ),
   );
+  if (exactMatch) return exactMatch;
+
+  // Telas fora do menu (ex.: /wms/contagem, /wms/qualidade) destacam o grupo
+  // da rota-mãe mais específica.
+  let prefixMatch: AppModule | undefined;
+  let prefixLength = 0;
+  for (const module of modules) {
+    for (const route of module.routes) {
+      if (
+        route.href &&
+        route.href.length > prefixLength &&
+        isRouteActive(currentPath, route.href)
+      ) {
+        prefixMatch = module;
+        prefixLength = route.href.length;
+      }
+    }
+  }
+
+  return prefixMatch ?? modules.find(isModuleEnabled) ?? modules[0];
 }
