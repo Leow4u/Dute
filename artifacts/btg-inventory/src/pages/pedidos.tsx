@@ -28,6 +28,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
 import { buildOrderQueue } from "@/lib/order-queue";
+import { useItemPhotos } from "@/lib/use-item-photos";
 import { canDecideRequests, humanApiError } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import type {
@@ -763,27 +764,43 @@ function OrderRow({
 }
 
 function ItemList({ items }: { items: NonNullable<WarehouseTask["items"]> }) {
+  // Mesma foto do Estoque: quem separa confere o item pela imagem.
+  const photoFor = useItemPhotos();
   return (
     <ul className="border-t border-border/50 bg-muted/30 px-4 py-2 md:px-5 md:pl-[4.6rem]">
-      {items.map((item, index) => (
-        <li
-          key={String(item.id ?? index)}
-          className="grid grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-0.5 py-1.5 text-sm sm:flex"
-        >
-          <span className="rounded-md bg-blue-50 px-1.5 py-0.5 font-mono text-xs text-blue-700">
-            {item.location || "sem endereço"}
-          </span>
-          <span className="font-mono text-[13px] text-foreground/85">
-            {item.sku_code ?? item.sku}
-          </span>
-          <span className="whitespace-nowrap font-semibold tabular-nums sm:order-last">
-            {numberFormatter.format(Number(item.expected_quantity ?? item.quantity ?? 0))} un.
-          </span>
-          <span className="col-span-3 min-w-0 truncate text-foreground/60 sm:flex-1">
-            {item.name ?? item.product_name}
-          </span>
-        </li>
-      ))}
+      {items.map((item, index) => {
+        const photo = photoFor(item.sku_code, item.sku, item.client_item_code);
+        return (
+          <li key={String(item.id ?? index)} className="flex items-center gap-3 py-1.5 text-sm">
+            {photo ? (
+              <img
+                src={photo}
+                alt=""
+                loading="lazy"
+                className="size-11 shrink-0 rounded-lg bg-muted object-cover"
+              />
+            ) : (
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-dashed border-border text-muted-foreground">
+                <Package className="size-4" aria-hidden="true" />
+              </span>
+            )}
+            <div className="grid min-w-0 flex-1 grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-0.5 sm:flex">
+              <span className="rounded-md bg-blue-50 px-1.5 py-0.5 font-mono text-xs text-blue-700">
+                {item.location || "sem endereço"}
+              </span>
+              <span className="font-mono text-[13px] text-foreground/85">
+                {item.sku_code ?? item.sku}
+              </span>
+              <span className="whitespace-nowrap font-semibold tabular-nums sm:order-last">
+                {numberFormatter.format(Number(item.expected_quantity ?? item.quantity ?? 0))} un.
+              </span>
+              <span className="col-span-3 min-w-0 truncate text-foreground/60 sm:flex-1">
+                {item.name ?? item.product_name}
+              </span>
+            </div>
+          </li>
+        );
+      })}
     </ul>
   );
 }

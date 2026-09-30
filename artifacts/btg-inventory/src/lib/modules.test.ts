@@ -35,6 +35,7 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/warehouse", ["owner", "admin", "interno", "wms", "suporte"]],
   ["/products", ["owner", "admin", "interno", "wms", "suporte"]],
   ["/skus", ["owner", "admin", "interno", "wms", "suporte"]],
+  ["/estoque", ["owner", "admin", "interno", "wms", "suporte"]],
   ["/movements", ["owner", "admin", "interno", "suporte"]],
   ["/pedidos", ["owner", "admin", "interno", "wms", "suporte"]],
   ["/orders", ["owner", "admin", "interno", "suporte"]],
@@ -78,10 +79,7 @@ describe("menu interno", () => {
       expect(menu(role)).toEqual([
         { label: "Início", routes: ["Início"] },
         { label: "Pedidos", routes: ["Pedidos"] },
-        {
-          label: "Estoque",
-          routes: ["Saldos", "Receber", "Catálogo", "Movimentações"],
-        },
+        { label: "Estoque", routes: ["Itens", "Receber"] },
         { label: "Faturamento", routes: ["Faturamento"] },
         {
           label: "Administração",
@@ -98,7 +96,7 @@ describe("menu interno", () => {
   it("operador WMS vê só a bancada e os documentos", () => {
     expect(menu("wms")).toEqual([
       { label: "Pedidos", routes: ["Pedidos"] },
-      { label: "Estoque", routes: ["Saldos", "Receber"] },
+      { label: "Estoque", routes: ["Itens", "Receber"] },
       { label: "Documentos", routes: ["Documentos"] },
     ]);
   });
@@ -134,6 +132,8 @@ describe("grupo ativo", () => {
     ["/pedidos", "Pedidos"],
     ["/orders", "Pedidos"],
     ["/wms", "Estoque"],
+    ["/estoque", "Estoque"],
+    ["/movements", "Estoque"],
     ["/wms/receber", "Estoque"],
     ["/wms/contagem", "Estoque"],
     ["/wms/qualidade", "Estoque"],

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   type Movement,
   useListMovements,
@@ -331,7 +331,7 @@ export default function Movements() {
   );
 }
 
-function MovementModal() {
+export function MovementModal({ defaultSku, trigger }: { defaultSku?: string; trigger?: ReactNode } = {}) {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -351,7 +351,7 @@ function MovementModal() {
     defaultValues: {
       data: new Date().toISOString().slice(0, 16),
       tipo_mov: "ENTRADA",
-      cod_sku: "",
+      cod_sku: defaultSku ?? "",
       produto: "",
       qtde: 1,
       sinal: 1,
@@ -413,9 +413,11 @@ function MovementModal() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" /> Registrar Movimentação
-        </Button>
+        {trigger ?? (
+          <Button>
+            <Plus className="mr-2 h-4 w-4" /> Registrar Movimentação
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>

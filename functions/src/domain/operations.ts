@@ -6768,3 +6768,143 @@ export async function advanceWarehouseTaskTransaction(
     return result;
   });
 }
+
+export type AddCatalogPhotosInput = {
+  sku_code: string;
+  client_item_code?: string;
+  customer_code?: string;
+  photo_urls: string[];
+  photo_storage_paths?: string[];
+  idempotency_key: string;
+};
+
+/**
+ * Acrescenta fotos a um item já cadastrado. É a única edição de cadastro
+ * aberta ao armazém: não toca nome, custo nem saldo, só a foto, e grava o
+ * mesmo conjunto em sku, produto, saldos e na projeção do portal para que
+ * todos vejam a mesma imagem.
+ */
+export async function addCatalogPhotosTransaction(
+  db: Firestore,
+  input: AddCatalogPhotosInput,
+  actor: OperationalActor,
+) {
+  const skuCode = text(input.sku_code);
+  const clientItemCode = text(input.client_item_code) || undefined;
+  const customerCode = text(input.customer_code) || "BTG Pactual";
+  const newPhotos = stringList(input.photo_urls);
+  const newPaths = stringList(input.photo_storage_paths);
+  if (!skuCode) {
+    throw new HttpsError("invalid-argument", "Informe o SKU do item.");
+  }
+  if (!newPhotos.length) {
+    throw new HttpsError("invalid-argument", "Envie ao menos uma foto.");
+  }
+  if (newPhotos.some((url) => !/^https:\/\//.test(url))) {
+    throw new HttpsError("invalid-argument", "Foto com endereço inválido.");
+  }
+  const inputHash = digest(
+    { skuCode, clientItemCode, customerCode, newPhotos, newPaths },
+    64,
+  );
+  const operationId = `op_photos_${digest({
+    skuCode,
+    nonce: input.idempotency_key,
+  })}`;
+  const operationRef = db.collection(collections.operations).doc(operationId);
+  const clientInventoryRef = db
+    .collection(collections.clientInventory)
+    .doc(clientScopedInventoryId(customerCode, skuCode, clientItemCode));
+
+  return db.runTransaction(async (transaction) => {
+    const previous = operationResult<Record<string, unknown>>(
+      await transaction.get(operationRef),
+      inputHash,
+    );
+    if (previous) return previous;
+
+    const targets = await resolveCatalogAggregateTargets(
+      transaction,
+      db,
+      skuCode,
+      clientItemCode,
+    );
+    if (!targets.skuRef && !targets.productRef) {
+      throw new HttpsError("not-found", `Item ${skuCode} não encontrado.`);
+    }
+    const [skuSnapshot, productSnapshot, balanceRows, clientSnapshot] =
+      await Promise.all([
+        targets.skuRef ? transaction.get(targets.skuRef) : undefined,
+        targets.productRef ? transaction.get(targets.productRef) : undefined,
+        readRows(transaction, skuBalancesQuery(db, customerCode, skuCode)),
+        transaction.get(clientInventoryRef),
+      ]);
+
+    const current = asRecord(skuSnapshot?.data() ?? productSnapshot?.data());
+    const existingPhotos = stringList(
+      current.photo_urls ?? asRecord(productSnapshot?.data()).photo_urls,
+    );
+    const photoUrls = [...new Set([...existingPhotos, ...newPhotos])].slice(0, 8);
+    const photoPaths = [
+      ...new Set([...stringList(current.photo_storage_paths), ...newPaths]),
+    ].slice(0, 8);
+    const added = photoUrls.length - existingPhotos.length;
+    const photoFields = compact({
+      photo_urls: photoUrls,
+      primary_photo_url: text(current.primary_photo_url) || photoUrls[0],
+      photo_storage_paths: photoPaths.length ? photoPaths : undefined,
+      updated_at: FieldValue.serverTimestamp(),
+    });
+
+    if (targets.skuRef) transaction.update(targets.skuRef, photoFields);
+    if (targets.productRef) transaction.update(targets.productRef, photoFields);
+    for (const row of balanceRows) {
+      transaction.update(row.ref, {
+        photo_urls: photoUrls,
+        primary_photo_url: photoFields.primary_photo_url,
+        updated_at: FieldValue.serverTimestamp(),
+      });
+    }
+    if (clientSnapshot.exists) {
+      transaction.update(clientInventoryRef, {
+        photo_urls: photoUrls,
+        primary_photo_url: photoFields.primary_photo_url,
+        updated_at: FieldValue.serverTimestamp(),
+      });
+    }
+
+    const event = createEvent(
+      transaction,
+      db,
+      operationEventId(operationId, "photos_added"),
+      {
+        type: "catalog.photos_added",
+        title: added === 1 ? "Foto adicionada ao item" : "Fotos adicionadas ao item",
+        description: `${added} foto(s) em ${skuCode}.`,
+        severity: "info",
+        entity_type: "sku",
+        entity_id: skuCode,
+        customer_code: customerCode,
+        payload: { added, total: photoUrls.length, client_item_code: clientItemCode },
+      },
+      actor,
+    );
+    const result = {
+      ok: true,
+      sku_code: skuCode,
+      photo_urls: photoUrls,
+      added,
+      events: [event],
+    };
+    createOperationReceipt(
+      transaction,
+      operationRef,
+      inputHash,
+      "catalog.photos_added",
+      skuCode,
+      actor,
+      result,
+    );
+    return result;
+  });
+}

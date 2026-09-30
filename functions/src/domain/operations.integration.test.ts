@@ -5,6 +5,7 @@ import { deleteApp, initializeApp } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 
 import {
+  addCatalogPhotosTransaction,
   advanceWarehouseTaskTransaction,
   completeOpeningInventorySessionTransaction,
   createInboundReceiptTransaction,
@@ -2312,5 +2313,119 @@ describe("integridade de reservas e agregados de catálogo", () => {
     assert.equal(produto.data()?.status, "active");
     assert.equal(sku.data()?.archived, false);
     assert.equal(sku.data()?.status, "active");
+  });
+});
+
+describe("fotos do item", () => {
+  it("armazém acrescenta foto a item existente em sku, produto, saldo e portal", async () => {
+    await Promise.all([
+      db.collection("skus").doc("SKU-FOTO-1").set({
+        id: "SKU-FOTO-1",
+        sku_code: "SKU-FOTO-1",
+        sku_code_key: "SKU-FOTO-1",
+        cod_cliente: "ITEM-FOTO-1",
+        estoque_atual: 4,
+        preco_unit: 50,
+      }),
+      db.collection("products").doc("ITEM-FOTO-1").set({
+        id: "ITEM-FOTO-1",
+        cod_cliente: "ITEM-FOTO-1",
+        cod_cliente_key: "ITEM-FOTO-1",
+        produto: "Cesto quadrado",
+        custo_total: 200,
+      }),
+      db.collection("stock_balances").doc("balance-foto").set({
+        id: "balance-foto",
+        customer_code: "BTG Pactual",
+        sku_code: "SKU-FOTO-1",
+        location_id: "LOC-FOTO",
+        qty_on_hand: 4,
+        qty_reserved: 0,
+        qty_available: 4,
+      }),
+    ]);
+    const photo = "https://storage.googleapis.com/demo/cesto.jpg";
+    const warehouse = { ...actor, role: "wms" as const };
+
+    const result = (await addCatalogPhotosTransaction(
+      db,
+      {
+        sku_code: "SKU-FOTO-1",
+        client_item_code: "ITEM-FOTO-1",
+        photo_urls: [photo],
+        photo_storage_paths: ["customers/BTG_Pactual/product-photos/cesto.jpg"],
+        idempotency_key: "foto-1",
+      },
+      warehouse,
+    )) as Record<string, unknown>;
+    assert.equal(result.added, 1);
+
+    const [sku, product, balance] = await Promise.all([
+      db.collection("skus").doc("SKU-FOTO-1").get(),
+      db.collection("products").doc("ITEM-FOTO-1").get(),
+      db.collection("stock_balances").doc("balance-foto").get(),
+    ]);
+    for (const doc of [sku, product, balance]) {
+      assert.deepEqual(doc.data()?.photo_urls, [photo]);
+      assert.equal(doc.data()?.primary_photo_url, photo);
+    }
+    // Só a foto muda: nome, custo e saldo ficam como estavam.
+    assert.equal(product.data()?.produto, "Cesto quadrado");
+    assert.equal(product.data()?.custo_total, 200);
+    assert.equal(sku.data()?.estoque_atual, 4);
+    assert.equal(balance.data()?.qty_on_hand, 4);
+
+    // Idempotente: repetir a mesma chamada não duplica a foto.
+    await addCatalogPhotosTransaction(
+      db,
+      {
+        sku_code: "SKU-FOTO-1",
+        client_item_code: "ITEM-FOTO-1",
+        photo_urls: [photo],
+        photo_storage_paths: ["customers/BTG_Pactual/product-photos/cesto.jpg"],
+        idempotency_key: "foto-1",
+      },
+      warehouse,
+    );
+    assert.deepEqual(
+      (await db.collection("skus").doc("SKU-FOTO-1").get()).data()?.photo_urls,
+      [photo],
+    );
+
+    // Auditável: o evento registra quem acrescentou.
+    const events = await db
+      .collection("events")
+      .where("entity_id", "==", "SKU-FOTO-1")
+      .where("type", "==", "catalog.photos_added")
+      .get();
+    assert.equal(events.size, 1);
+    assert.equal(events.docs[0].data().actor?.role, "wms");
+  });
+
+  it("recusa item inexistente e foto sem endereço https", async () => {
+    await assert.rejects(
+      addCatalogPhotosTransaction(
+        db,
+        {
+          sku_code: "SKU-NAO-EXISTE",
+          photo_urls: ["https://storage.googleapis.com/demo/x.jpg"],
+          idempotency_key: "foto-404",
+        },
+        actor,
+      ),
+      /não encontrado/,
+    );
+    await assert.rejects(
+      addCatalogPhotosTransaction(
+        db,
+        {
+          sku_code: "SKU-FOTO-1",
+          photo_urls: ["file:///tmp/x.jpg"],
+          idempotency_key: "foto-invalida",
+        },
+        actor,
+      ),
+      /endereço inválido/,
+    );
   });
 });
