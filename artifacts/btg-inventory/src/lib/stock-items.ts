@@ -20,6 +20,8 @@ export type StockItem = {
   reserved: number;
   available: number;
   unitCost?: number;
+  /** Mínimo cadastrado na ficha; sem ele o item nunca é "baixo". */
+  minimum?: number;
   locations: StockLocation[];
   photos: string[];
   low: boolean;
@@ -28,8 +30,6 @@ export type StockItem = {
 };
 
 export type StockFilter = "all" | "low" | "reserved" | "no-photo" | "zero";
-
-export const LOW_STOCK_LIMIT = 10;
 
 function text(value: unknown) {
   return typeof value === "string" || typeof value === "number"
@@ -49,6 +49,12 @@ function photosOf(record: AnyRecord | undefined) {
     : [];
   const primary = text(record.primary_photo_url);
   return primary && !list.includes(primary) ? [primary, ...list] : list;
+}
+
+function optionalNum(value: unknown) {
+  if (value === undefined || value === null || value === "") return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
 }
 
 function unique<T>(values: T[]) {
@@ -122,6 +128,8 @@ export function buildStockItems({
         num(skuBalances[0]?.unit_cost) ||
         undefined;
 
+      const minimum = optionalNum(sku.estoque_minimo);
+
       const photos = unique([
         ...photosOf(sku),
         ...photosOf(product),
@@ -147,9 +155,11 @@ export function buildStockItems({
         reserved,
         available,
         unitCost,
+        minimum,
         locations,
         photos,
-        low: onHand > 0 && onHand <= LOW_STOCK_LIMIT,
+        // Baixo = tem mínimo e está nele ou abaixo. Zerado é outro estado.
+        low: minimum !== undefined && onHand > 0 && onHand <= minimum,
         zero: onHand <= 0,
         sku,
       };

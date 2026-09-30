@@ -44,6 +44,7 @@ import {
   type BillingManualQuantity,
   type LpuItem,
 } from "./billing.js";
+import { MinimumStockError, normalizeMinimumStock } from "./catalog-minimum.js";
 
 const adminApp = initializeApp();
 setGlobalOptions({
@@ -3257,6 +3258,7 @@ const SKU_WRITE_FIELDS = [
   "cor",
   "tamanho",
   "estado",
+  "estoque_minimo",
 ] as const;
 const BILLING_PRICE_WRITE_FIELDS = [
   "grupo",
@@ -3762,6 +3764,16 @@ function managedWritePayload(
 
   if (input.resource === "skus") {
     const data = allowedFields(input.data, SKU_WRITE_FIELDS);
+    if (Object.prototype.hasOwnProperty.call(data, "estoque_minimo")) {
+      try {
+        data.estoque_minimo = normalizeMinimumStock(data.estoque_minimo);
+      } catch (error) {
+        if (error instanceof MinimumStockError) {
+          throw new HttpsError("invalid-argument", error.message);
+        }
+        throw error;
+      }
+    }
     if (input.action === "create") {
       if (!String(data.produto ?? "").trim()) {
         throw new HttpsError(
