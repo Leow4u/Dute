@@ -1883,6 +1883,145 @@ describe("integridade de reservas e agregados de catálogo", () => {
     assert.equal(recreated.reserved_quantity, 8);
   });
 
+  it("decidir a solicitação fecha os avisos dela e não abre avisos novos na caixa do agente", async () => {
+    await db.collection("system_controls").doc("inventory").delete();
+    await Promise.all([
+      db.collection("stock_balances").doc("balance-inbox").set({
+        id: "balance-inbox",
+        customer_code: "BTG Pactual",
+        sku_code: "SKU-INBOX-1",
+        client_item_code: "ITEM-INBOX-1",
+        product_name: "Produto de teste da caixa do agente",
+        location_id: "LOC-INBOX",
+        qty_on_hand: 10,
+        qty_reserved: 0,
+        qty_available: 10,
+        unit_cost: 10,
+      }),
+      db.collection("skus").doc("SKU-INBOX-1").set({
+        id: "SKU-INBOX-1",
+        cod_btg: "SKU-INBOX-1",
+        sku_code: "SKU-INBOX-1",
+        sku_code_key: "SKU-INBOX-1",
+        cod_cliente: "ITEM-INBOX-1",
+        cod_cliente_key: "ITEM-INBOX-1",
+        estoque_atual: 10,
+        estoque_reservado: 0,
+        estoque_disponivel: 10,
+        custo_total: 100,
+      }),
+      db.collection("products").doc("ITEM-INBOX-1").set({
+        id: "ITEM-INBOX-1",
+        cod_cliente: "ITEM-INBOX-1",
+        cod_cliente_key: "ITEM-INBOX-1",
+        estoque_btg: 10,
+        custo_total: 100,
+      }),
+    ]);
+    const openInbox = async () =>
+      (
+        await db
+          .collection("ai_agent_inbox")
+          .where("status", "==", "open")
+          .get()
+      ).docs.map((doc) => doc.data());
+    const baseline = (await openInbox()).length;
+    const client = { ...actor, role: "cliente" as const, uid: "client-inbox" };
+
+    // Retirada (reserva na criação → aviso de atenção) aprovada pela triagem.
+    const outbound = await createCustomerRequestTransaction(
+      db,
+      {
+        type: "retirada",
+        priority: "normal",
+        title: "Retirada que será aprovada",
+        customer_code: "BTG Pactual",
+        idempotency_key: "request-inbox-outbound",
+        items: [
+          {
+            sku_code: "SKU-INBOX-1",
+            client_item_code: "ITEM-INBOX-1",
+            product_name: "Produto de teste da caixa do agente",
+            unit_cost: 10,
+            quantity: 4,
+          },
+        ],
+      },
+      client,
+    );
+    const outboundId = String(outbound.id);
+    const outboundNotices = (await openInbox()).filter(
+      (item) => item.entity_id === outboundId,
+    );
+    assert.equal(outboundNotices.length, 1);
+
+    // Recebimento urgente (também vira aviso) rejeitado pela triagem.
+    const inbound = await createCustomerRequestTransaction(
+      db,
+      {
+        type: "recebimento",
+        priority: "urgente",
+        title: "Recebimento que será rejeitado",
+        customer_code: "BTG Pactual",
+        idempotency_key: "request-inbox-inbound",
+        items: [
+          {
+            sku_code: "SKU-INBOX-1",
+            client_item_code: "ITEM-INBOX-1",
+            product_name: "Produto de teste da caixa do agente",
+            unit_cost: 10,
+            quantity: 2,
+          },
+        ],
+      },
+      client,
+    );
+    const inboundId = String(inbound.id);
+    assert.equal((await openInbox()).length, baseline + 2);
+
+    await decideCustomerRequestTransaction(
+      db,
+      {
+        request_id: outboundId,
+        action: "approve",
+        expected_status: "open",
+        idempotency_key: "approve-inbox-outbound",
+      },
+      actor,
+    );
+    await decideCustomerRequestTransaction(
+      db,
+      {
+        request_id: inboundId,
+        action: "reject",
+        reason: "Sem nota fiscal",
+        expected_status: "open",
+        idempotency_key: "reject-inbox-inbound",
+      },
+      actor,
+    );
+
+    // Nada da decisão fica pendurado: os avisos de criação fecharam e a
+    // aprovação (pedido, reserva, picking) não abriu avisos novos.
+    assert.equal((await openInbox()).length, baseline);
+
+    const resolved = await db
+      .collection("ai_agent_inbox")
+      .doc(outboundNotices[0].id as string)
+      .get();
+    assert.equal(resolved.data()?.status, "resolved");
+    assert.equal(resolved.data()?.resolution, "customer_request.approved");
+    assert.equal(resolved.data()?.resolved_by?.uid, actor.uid);
+
+    // Os eventos da decisão continuam no ledger de auditoria.
+    const decisionEvents = await db
+      .collection("events")
+      .where("entity_id", "==", outboundId)
+      .where("type", "==", "customer_request.approved")
+      .get();
+    assert.equal(decisionEvents.size, 1);
+  });
+
   it("inventário cíclico sem divergência preserva a projeção agregada multi-localização", async () => {
     await Promise.all([
       db.collection("stock_balances").doc("balance-cyc-a").set({

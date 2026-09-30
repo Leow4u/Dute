@@ -257,6 +257,8 @@ export type OperationalEventInput = {
   occurred_at?: string;
   dedupe_key?: string;
   source?: string;
+  /** false: grava o evento sem abrir item na caixa do agente. */
+  inbox?: boolean;
 };
 
 export type OperationalEventSummary = {
@@ -465,7 +467,10 @@ function createEvent(
   });
   transaction.create(db.collection(collections.events).doc(id), payload);
 
-  if (severity === "attention" || severity === "critical") {
+  if (
+    input.inbox !== false &&
+    (severity === "attention" || severity === "critical")
+  ) {
     const inboxId = `inbox_${safeDocId(id)}`;
     transaction.create(
       db.collection(collections.agentInbox).doc(inboxId),
@@ -4079,6 +4084,21 @@ function normalizeStoredItems(request: Record<string, unknown>) {
   });
 }
 
+/**
+ * Eventos gravados por uma decisão da triagem. Continuam no ledger de
+ * auditoria, mas não viram aviso na caixa do agente: quem decidiu já agiu, e
+ * o que a decisão cria (pedido, reserva, picking) aparece nas filas do WMS.
+ */
+function createDecisionEvent(
+  transaction: Transaction,
+  db: Firestore,
+  id: string,
+  input: OperationalEventInput,
+  actor: OperationalActor,
+) {
+  return createEvent(transaction, db, id, { ...input, inbox: false }, actor);
+}
+
 export async function decideCustomerRequestTransaction(
   db: Firestore,
   input: DecideOperationalRequestInput,
@@ -4401,6 +4421,16 @@ export async function decideCustomerRequestTransaction(
       }
     }
 
+    // Avisos da caixa do agente abertos por esta solicitação (ex.: a criação
+    // no portal). A decisão humana responde a eles; ficam resolvidos junto.
+    const openInboxRows = await readRows(
+      transaction,
+      db
+        .collection(collections.agentInbox)
+        .where("entity_id", "==", requestId)
+        .where("status", "==", "open"),
+    );
+
     const events: OperationalEventSummary[] = [];
     if (input.action === "approve" && kind.outbound) {
       const orderId = `ord_${requestId}`;
@@ -4635,7 +4665,7 @@ export async function decideCustomerRequestTransaction(
       ];
       for (const [suffix, eventInput] of eventInputs) {
         events.push(
-          createEvent(
+          createDecisionEvent(
             transaction,
             db,
             operationEventId(operationId, suffix),
@@ -4716,7 +4746,7 @@ export async function decideCustomerRequestTransaction(
         quantity_total: total,
       });
       events.push(
-        createEvent(
+        createDecisionEvent(
           transaction,
           db,
           operationEventId(operationId, "inbound_created"),
@@ -4859,7 +4889,7 @@ export async function decideCustomerRequestTransaction(
         );
       }
       events.push(
-        createEvent(
+        createDecisionEvent(
           transaction,
           db,
           operationEventId(operationId, "stock_released"),
@@ -4898,7 +4928,7 @@ export async function decideCustomerRequestTransaction(
       payload: { action: input.action, reason: input.reason, ...created },
     };
     events.unshift(
-      createEvent(
+      createDecisionEvent(
         transaction,
         db,
         operationEventId(operationId, "request_decision"),
@@ -4942,6 +4972,15 @@ export async function decideCustomerRequestTransaction(
       }),
       { merge: true },
     );
+    for (const row of openInboxRows) {
+      transaction.update(row.ref, {
+        status: "resolved",
+        resolution: `customer_request.${nextStatus}`,
+        resolved_by: actorPayload(actor),
+        resolved_at: FieldValue.serverTimestamp(),
+        updated_at: FieldValue.serverTimestamp(),
+      });
+    }
     const result = {
       ok: true,
       id: requestId,
