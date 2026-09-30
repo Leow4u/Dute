@@ -67,11 +67,11 @@ describe("buildHomeInbox", () => {
       ["to-pick", "1 pedido para separar", "/wms/pedidos"],
       ["to-ship", "1 pedido pronto para envio", "/wms/pedidos"],
       ["receipts", "1 recebimento para conferir", "/wms/receber"],
-      ["agent", "Agent Dute tem 2 sugestões", "/agente"],
+      ["agent", "2 avisos para revisar", "/agente"],
     ]);
     expect(items[0].detail).toBe("Falta física na rua B");
     expect(items[1].detail).toBe("Retirada 40 un · Recebimento NF 9");
-    expect(items[5].detail).toBe("Saldo divergente em 3 SKUs · você decide");
+    expect(items[5].detail).toBe("Saldo divergente em 3 SKUs e mais 1");
     expect(summary).toEqual({ toPick: 2, toShip: 1, inTransit: 1, openReceipts: 1 });
   });
 

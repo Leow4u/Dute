@@ -181,11 +181,13 @@ export function buildHomeInbox({
     items.push({
       id: "agent",
       tone: "agent",
-      title:
-        agentCount === 1
-          ? "Agent Dute tem 1 sugestão"
-          : `Agent Dute tem ${agentCount} sugestões`,
-      detail: `${agentAlerts[0]?.title ?? "Recomendações"} · você decide`,
+      // A caixa do agente guarda avisos de eventos (ex.: solicitação criada),
+      // não só recomendações — o texto diz o que é.
+      title: `${plural(agentCount, "aviso", "avisos")} para revisar`,
+      detail:
+        agentCount > 1 && agentAlerts[0]?.title
+          ? `${agentAlerts[0].title} e mais ${agentCount - 1}`
+          : (agentAlerts[0]?.title ?? "Caixa do Agent Dute"),
       href: "/agente",
       actionLabel: "Revisar",
     });
