@@ -70,7 +70,7 @@ class ChunkErrorBoundary extends Component<
   }
 }
 
-const Dashboard = lazy(() => import("./pages/dashboard"));
+const Home = lazy(() => import("./pages/home"));
 const Catalog = lazy(() => import("./pages/catalog"));
 const Movements = lazy(() => import("./pages/movements"));
 const Orders = lazy(() => import("./pages/orders"));
@@ -960,7 +960,7 @@ const WarehouseMapRedirect = () => <Redirect to="/catalogo/mapa" />;
 const PriceListRedirect = () => <Redirect to="/faturamento/tabela" />;
 
 const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
-  protectedRoute("/dashboard", Dashboard),
+  protectedRoute("/dashboard", Home),
   protectedRoute("/reports", Reports),
   protectedRoute("/solicitacoes", CustomerRequests),
   protectedRoute("/wms/receber", WmsReceiveScreen),
