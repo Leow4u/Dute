@@ -1,43 +1,27 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Archive,
   AlertTriangle,
-  Boxes,
+  Archive,
   CheckCircle2,
-  ClipboardList,
-  Clock3,
-  FileWarning,
-  Inbox,
-  Link2,
-  PackageCheck,
-  PackageSearch,
   RefreshCw,
   Search,
-  ShieldCheck,
   XCircle,
   type LucideIcon,
 } from "lucide-react";
+import { Link } from "wouter";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
 import { canDecideRequests, humanApiError } from "@/lib/permissions";
@@ -71,11 +55,18 @@ export type CustomerRequest = {
   order_id?: string | null;
   inbound_id?: string | null;
   pick_task_id?: string | null;
-  created_at?: string | null;
+  /** Timestamp do Firestore como veio da lista; ver parseRequestDate. */
+  created_at?: unknown;
   requested_by?: {
     name?: string;
     email?: string;
   };
+  decision_reason?: string | null;
+  decided_at?: unknown;
+  decided_by?: {
+    name?: string;
+    email?: string;
+  } | null;
 };
 
 export type CustomerRequestItem =
@@ -146,6 +137,7 @@ type TransitionVariables = {
   id: string;
   action: RequestAction;
   expectedStatus: string;
+  reason?: string;
 };
 
 type TransitionResponse = {
@@ -161,7 +153,12 @@ type TransitionResponse = {
 type TransitionOverlay = Partial<
   Pick<
     CustomerRequest,
-    "status" | "created_entities" | "order_id" | "inbound_id" | "pick_task_id"
+    | "status"
+    | "created_entities"
+    | "order_id"
+    | "inbound_id"
+    | "pick_task_id"
+    | "decision_reason"
   >
 >;
 
@@ -173,8 +170,6 @@ type RequestStatus =
   | "rejected"
   | "closed";
 
-type RequestTypeFilter = "all" | string;
-type RequestStatusFilter = "all" | RequestStatus;
 
 type ValidationLineStatus =
   | "ready"
@@ -195,6 +190,7 @@ type BalanceValidationStatus =
 type RequestValidationLine = {
   key: string;
   label: string;
+  productName?: string;
   skuCode?: string;
   clientItemCode?: string;
   locationId?: string;
@@ -223,18 +219,6 @@ const queryKey = ["customer-requests"];
 const stockBalancesQueryKey = ["stock-balances", "customer-requests"];
 const openStatuses = new Set<RequestStatus>(["open", "submitted", "pending"]);
 
-const statusFilterOptions: Array<{
-  value: RequestStatusFilter;
-  label: string;
-}> = [
-  { value: "all", label: "Todos os status" },
-  { value: "open", label: "Aberta" },
-  { value: "submitted", label: "Enviada" },
-  { value: "pending", label: "Pendente" },
-  { value: "approved", label: "Aprovada" },
-  { value: "rejected", label: "Rejeitada" },
-  { value: "closed", label: "Encerrada" },
-];
 
 const numberFormatter = new Intl.NumberFormat("pt-BR");
 const dateFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -251,12 +235,6 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-function formatDate(value?: string | null) {
-  if (!value) return "Sem data";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Sem data";
-  return dateFormatter.format(date);
-}
 
 function normalizeSlug(value?: string | null) {
   return String(value ?? "")
@@ -291,23 +269,7 @@ function normalizeStatus(status?: string | null): RequestStatus {
   return "open";
 }
 
-function statusLabel(status?: string | null) {
-  const normalized = normalizeStatus(status);
-  if (normalized === "approved") return "Aprovada";
-  if (normalized === "rejected") return "Rejeitada";
-  if (normalized === "closed") return "Encerrada";
-  if (normalized === "pending") return "Pendente";
-  if (normalized === "submitted") return "Enviada";
-  return "Aberta";
-}
 
-function statusClass(status?: string | null) {
-  const normalized = normalizeStatus(status);
-  if (normalized === "approved") return "border-primary/20 bg-primary/10 text-primary";
-  if (normalized === "rejected") return "border-destructive/20 bg-destructive/10 text-destructive";
-  if (normalized === "closed") return "border-border bg-white/70 text-muted-foreground";
-  return "border-amber-200 bg-amber-50 text-amber-800";
-}
 
 function requestTypeLabel(type?: string | null) {
   const normalized = normalizeSlug(type || "solicitacao");
@@ -339,30 +301,7 @@ function isInboundRequest(request: CustomerRequest) {
   return normalized.includes("receb") || normalized.includes("inbound");
 }
 
-function statusDescription(request: CustomerRequest) {
-  const normalized = normalizeStatus(request.status);
-  if (normalized === "approved") {
-    return hasOperationalLinks(request)
-      ? "Operação WMS vinculada"
-      : "Aprovada sem vínculo informado";
-  }
-  if (normalized === "rejected") return "Sem execução operacional";
-  if (normalized === "closed") return "Fluxo encerrado";
-  if (normalized === "submitted") return "Aguardando triagem";
-  if (normalized === "pending") return "Decisão pendente";
-  return "Aberta para decisão";
-}
 
-function priorityClass(priority?: string | null) {
-  const normalized = normalizeSlug(priority ?? "normal");
-  if (["critica", "critical", "urgente"].includes(normalized)) {
-    return "border-destructive/20 bg-destructive/10 text-destructive";
-  }
-  if (["alta", "high"].includes(normalized)) {
-    return "border-amber-200 bg-amber-50 text-amber-800";
-  }
-  return "border-border bg-white/70 text-muted-foreground";
-}
 
 function priorityLabel(priority?: string | null) {
   const normalized = normalizeSlug(priority ?? "normal");
@@ -385,13 +324,6 @@ function actionToastTitle(action: RequestAction) {
   return "Solicitação encerrada";
 }
 
-function actionHint(status?: string | null) {
-  const normalized = normalizeStatus(status);
-  if (openStatuses.has(normalized)) return "Aberta para aprovar ou rejeitar";
-  if (normalized === "approved") return "Aprovada para execução";
-  if (normalized === "rejected") return "Rejeitada";
-  return "Encerrada";
-}
 
 function coerceNumber(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -449,10 +381,6 @@ function getItemQuantity(item: CustomerRequestItem) {
   );
 }
 
-function getItemUnit(item: CustomerRequestItem) {
-  if (typeof item === "string") return undefined;
-  return item.unit || item.unidade || undefined;
-}
 
 function getItemSkuCode(item: CustomerRequestItem) {
   if (typeof item === "string") return undefined;
@@ -493,29 +421,7 @@ function firstNonEmpty(...values: unknown[]) {
   return found === undefined ? undefined : String(found);
 }
 
-function isMissingPayloadValue(value: unknown) {
-  return value === null || value === undefined || String(value).trim().length === 0;
-}
 
-function getDataWarnings(request: CustomerRequest) {
-  const warnings: string[] = [];
-  const explicitTotal = getExplicitQuantityTotal(request);
-
-  if (isMissingPayloadValue(request.quantity_total)) {
-    warnings.push("quantity_total ausente");
-  } else if (explicitTotal === undefined) {
-    warnings.push("quantity_total inválido");
-  }
-
-  const items = getRequestItems(request);
-  if (!Array.isArray(request.items) || items.length === 0) {
-    warnings.push("items ausente");
-  } else if (items.some((item) => getItemQuantity(item) === undefined)) {
-    warnings.push("item sem quantidade");
-  }
-
-  return warnings;
-}
 
 function getRequestValidationLines(request: CustomerRequest): RequestValidationLine[] {
   const itemLines = getRequestItems(request).map((item, index) => {
@@ -524,6 +430,10 @@ function getRequestValidationLines(request: CustomerRequest): RequestValidationL
     return {
       key: `${label}-${locationId ?? "sem-local"}-${index}`,
       label,
+      productName:
+        typeof item === "string"
+          ? undefined
+          : firstNonEmpty(item.product_name, item.product, item.name),
       skuCode: getItemSkuCode(item),
       clientItemCode: getItemClientCode(item),
       locationId,
@@ -879,10 +789,6 @@ function getOperationalEntities(
   };
 }
 
-function hasOperationalLinks(request: CustomerRequest) {
-  const entities = getOperationalEntities(request);
-  return Boolean(entities.order_id || entities.inbound_id || entities.pick_task_id);
-}
 
 function getTransitionOverlay(
   result: TransitionResponse,
@@ -924,6 +830,274 @@ function mergeTransitionOverlay(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Triagem: lista à esquerda, solicitação aberta à direita. A tela diz em uma
+// frase se dá para aprovar e por quê; os itens com problema vêm primeiro.
+// ---------------------------------------------------------------------------
+
+export type RequestTab = "decide" | "approved" | "done";
+
+export function requestTab(status?: string | null): RequestTab {
+  const normalized = normalizeStatus(status);
+  if (openStatuses.has(normalized)) return "decide";
+  if (normalized === "approved") return "approved";
+  return "done";
+}
+
+/**
+ * A lista genérica devolve os campos de data do Firestore como vieram
+ * (Timestamp serializado em {seconds, nanoseconds}); new Date() sobre esse
+ * objeto dava "Sem data" em toda solicitação.
+ */
+export function parseRequestDate(value: unknown): Date | undefined {
+  if (!value) return undefined;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? undefined : value;
+  }
+  if (typeof value === "string" || typeof value === "number") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? undefined : date;
+  }
+  if (typeof value === "object") {
+    const record = value as {
+      toDate?: () => Date;
+      seconds?: unknown;
+      _seconds?: unknown;
+    };
+    if (typeof record.toDate === "function") return record.toDate();
+    const seconds = Number(record.seconds ?? record._seconds);
+    if (Number.isFinite(seconds)) return new Date(seconds * 1000);
+  }
+  return undefined;
+}
+
+function formatRequestDate(value: unknown) {
+  const date = parseRequestDate(value);
+  return date ? dateFormatter.format(date) : undefined;
+}
+
+export function formatRequestAge(value: unknown, now = Date.now()) {
+  const date = parseRequestDate(value);
+  if (!date) return undefined;
+  const minutes = Math.max(0, Math.round((now - date.getTime()) / 60_000));
+  if (minutes < 1) return "agora";
+  if (minutes < 60) return `há ${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `há ${hours} h`;
+  const days = Math.round(hours / 24);
+  if (days === 1) return "ontem";
+  if (days < 7) return `há ${days} dias`;
+  return dateFormatter.format(date).split(" ")[0];
+}
+
+export type VerdictTone =
+  | "ready"
+  | "blocked"
+  | "checking"
+  | "approved"
+  | "rejected"
+  | "closed";
+
+export type RequestVerdict = {
+  tone: VerdictTone;
+  title: string;
+  detail: string;
+  readyCount?: number;
+  totalCount?: number;
+};
+
+function capitalize(text: string) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function plural(count: number, singular: string, pluralForm: string) {
+  return `${numberFormatter.format(count)} ${count === 1 ? singular : pluralForm}`;
+}
+
+export function buildVerdict(
+  request: CustomerRequest,
+  validation: BalanceValidation,
+): RequestVerdict {
+  const status = normalizeStatus(request.status);
+  if (status === "rejected") {
+    return {
+      tone: "rejected",
+      title: "Recusada",
+      detail: request.decision_reason
+        ? `Motivo: ${request.decision_reason}`
+        : "Recusada sem motivo registrado.",
+    };
+  }
+  if (status === "closed") {
+    return { tone: "closed", title: "Encerrada", detail: "Fluxo concluído." };
+  }
+  if (status === "approved") {
+    return {
+      tone: "approved",
+      title: "Aprovada",
+      detail: isOutboundRequest(request)
+        ? "Pedido criado e enviado para separação."
+        : isInboundRequest(request)
+          ? "Recebimento criado; o saldo entra depois da conferência."
+          : "Aprovada pela coordenação.",
+    };
+  }
+
+  if (validation.status === "checking") {
+    return {
+      tone: "checking",
+      title: "Conferindo o saldo",
+      detail: "Consultando o estoque antes de liberar a aprovação.",
+    };
+  }
+
+  if (validation.canApprove) {
+    const detail =
+      request.stock_reservation_status === "reserved"
+        ? "O estoque já foi reservado quando o cliente enviou o pedido."
+        : isInboundRequest(request)
+          ? "Aprovar cria o recebimento; o saldo entra depois da conferência."
+          : validation.status === "ready"
+            ? "Todos os itens têm saldo disponível."
+            : validation.status === "unknown"
+              ? "Não consegui consultar o saldo agora; o sistema confere de novo ao aprovar."
+              : validation.detail;
+    return { tone: "ready", title: "Pronta para aprovar", detail };
+  }
+
+  const lines = validation.lines;
+  const totalCount = lines.length;
+  if (validation.status === "missing-data") {
+    return {
+      tone: "blocked",
+      title: totalCount
+        ? `Ainda não dá para aprovar: ${validation.issueCount} de ${plural(totalCount, "item", "itens")} sem SKU ou quantidade`
+        : "Ainda não dá para aprovar: a solicitação não tem itens",
+      detail: "Peça ao cliente para corrigir a solicitação ou recuse explicando o motivo.",
+      totalCount,
+    };
+  }
+
+  const readyCount = lines.filter((line) => line.status === "ready").length;
+  const missing = lines.filter((line) => line.status === "missing-balance").length;
+  const short = lines.filter((line) => line.status === "insufficient").length;
+  const reasons = [
+    missing ? `${plural(missing, "item", "itens")} sem saldo cadastrado` : null,
+    short ? `${plural(short, "item", "itens")} com saldo menor que o pedido` : null,
+  ].filter(Boolean);
+  return {
+    tone: "blocked",
+    title: `Ainda não dá para aprovar: ${validation.issueCount} de ${plural(totalCount, "item", "itens")} sem saldo suficiente`,
+    detail: [
+      reasons.length ? `${capitalize(reasons.join(" e "))}.` : null,
+      readyCount === 1
+        ? "O outro item tem saldo."
+        : readyCount > 1
+          ? `Os outros ${numberFormatter.format(readyCount)} itens têm saldo.`
+          : null,
+      "Confira os códigos com o cliente ou recuse explicando o motivo.",
+    ]
+      .filter(Boolean)
+      .join(" "),
+    readyCount,
+    totalCount,
+  };
+}
+
+export function lineSituation(
+  line: BalanceValidationLine,
+  reserved: boolean,
+): { label: string; tone: "ok" | "warn" | "bad" | "muted" } {
+  if (line.status === "ready") {
+    return { label: reserved ? "Reservado" : "OK", tone: "ok" };
+  }
+  if (line.status === "insufficient") {
+    const missing = Math.max(0, (line.requested ?? 0) - (line.available ?? 0));
+    return { label: `Faltam ${numberFormatter.format(missing)}`, tone: "warn" };
+  }
+  if (line.status === "missing-balance") {
+    return { label: "Sem saldo cadastrado", tone: "bad" };
+  }
+  if (line.status === "missing-data") {
+    return { label: "Falta SKU ou quantidade", tone: "bad" };
+  }
+  return { label: "Não conferido", tone: "muted" };
+}
+
+function priorityWeight(priority?: string | null) {
+  const normalized = normalizeSlug(priority ?? "normal");
+  if (["critica", "critical", "urgente"].includes(normalized)) return 0;
+  if (["alta", "high"].includes(normalized)) return 1;
+  return 2;
+}
+
+const TONE_CHIP: Record<"ok" | "warn" | "bad" | "muted" | "info", string> = {
+  ok: "bg-emerald-50 text-emerald-700",
+  warn: "bg-amber-50 text-amber-800",
+  bad: "bg-red-50 text-red-700",
+  muted: "bg-muted text-muted-foreground",
+  info: "bg-blue-50 text-blue-700",
+};
+
+function Chip({
+  tone,
+  icon: Icon,
+  children,
+}: {
+  tone: keyof typeof TONE_CHIP;
+  icon?: LucideIcon;
+  children: ReactNode;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold",
+        TONE_CHIP[tone],
+      )}
+    >
+      {Icon ? <Icon className="size-3.5" aria-hidden="true" /> : null}
+      {children}
+    </span>
+  );
+}
+
+function listChip(request: CustomerRequest, validation: BalanceValidation) {
+  const verdict = buildVerdict(request, validation);
+  if (verdict.tone === "ready") {
+    return <Chip tone="ok" icon={CheckCircle2}>Pronta para aprovar</Chip>;
+  }
+  if (verdict.tone === "blocked") {
+    return (
+      <Chip tone="warn" icon={AlertTriangle}>
+        {validation.status === "missing-data"
+          ? "Dados faltando"
+          : `${plural(validation.issueCount, "item", "itens")} sem saldo`}
+      </Chip>
+    );
+  }
+  if (verdict.tone === "checking") return <Chip tone="muted">Conferindo saldo</Chip>;
+  if (verdict.tone === "approved") return <Chip tone="info">Aprovada</Chip>;
+  if (verdict.tone === "rejected") return <Chip tone="bad">Recusada</Chip>;
+  return <Chip tone="muted">Encerrada</Chip>;
+}
+
+function requestTitle(request: CustomerRequest) {
+  return request.description || request.title || "Solicitação sem descrição";
+}
+
+function requestSummary(request: CustomerRequest) {
+  const lines = getRequestValidationLines(request).length;
+  const total = getQuantityTotal(request);
+  return [
+    requestTypeLabel(request.type),
+    request.customer_code || "BTG Pactual",
+    lines ? plural(lines, "item", "itens") : null,
+    total !== undefined ? `${numberFormatter.format(total)} un.` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 export default function CustomerRequests() {
   // requireOperationsCoordinator no servidor: aprovar/rejeitar é do
   // coordenador (interno) e da administração. O operador vê a fila, mas não
@@ -933,9 +1107,10 @@ export default function CustomerRequests() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<RequestTypeFilter>("all");
-  const [statusFilter, setStatusFilter] =
-    useState<RequestStatusFilter>("all");
+  const [tab, setTab] = useState<RequestTab>("decide");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [rejecting, setRejecting] = useState<CustomerRequest | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
   const [localTransitions, setLocalTransitions] = useState<
     Record<string, TransitionOverlay>
   >({});
@@ -960,7 +1135,7 @@ export default function CustomerRequests() {
     Error,
     TransitionVariables
   >({
-    mutationFn: ({ id, action, expectedStatus }) =>
+    mutationFn: ({ id, action, expectedStatus, reason }) =>
       fetchJson<TransitionResponse>(
         `/api/customer-requests/${encodeURIComponent(id)}/${action}`,
         {
@@ -968,12 +1143,16 @@ export default function CustomerRequests() {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             expected_status: expectedStatus,
+            reason,
             idempotency_key: `${id}:${action}:${expectedStatus}`,
           }),
         },
       ),
     onSuccess: (result, variables) => {
-      const overlay = getTransitionOverlay(result, variables.action);
+      const overlay = {
+        ...getTransitionOverlay(result, variables.action),
+        ...(variables.reason ? { decision_reason: variables.reason } : {}),
+      };
       setLocalTransitions((current) => {
         const previous = current[variables.id];
         return {
@@ -991,27 +1170,13 @@ export default function CustomerRequests() {
           },
         };
       });
+      setRejecting(null);
+      setRejectReason("");
       qc.invalidateQueries({ queryKey });
       qc.invalidateQueries({ queryKey: stockBalancesQueryKey });
       qc.invalidateQueries({ queryKey: ["warehouse-ops"] });
       qc.invalidateQueries({ queryKey: ["ai-overview"] });
-      const entities = getOperationalEntities({
-        created_entities: overlay.created_entities,
-        order_id: overlay.order_id,
-        inbound_id: overlay.inbound_id,
-        pick_task_id: overlay.pick_task_id,
-      });
-      const linkedEntities = [
-        entities.order_id ? `Pedido ${entities.order_id}` : null,
-        entities.inbound_id ? `Recebimento ${entities.inbound_id}` : null,
-        entities.pick_task_id ? `Picking ${entities.pick_task_id}` : null,
-      ].filter(Boolean);
-
-      toast({
-        title: actionToastTitle(variables.action),
-        description:
-          linkedEntities.length > 0 ? linkedEntities.join(" · ") : undefined,
-      });
+      toast({ title: actionToastTitle(variables.action) });
     },
     onError: (error) => {
       toast({
@@ -1051,693 +1216,514 @@ export default function CustomerRequests() {
     stockBalances.isLoading,
   ]);
 
-  const typeFilterOptions = useMemo(() => {
-    const byType = new Map<string, string>();
-
+  const tabCounts = useMemo(() => {
+    const counts: Record<RequestTab, number> = { decide: 0, approved: 0, done: 0 };
     allRequests.forEach((item) => {
-      const value = normalizeSlug(item.type || "solicitacao");
-      if (!byType.has(value)) byType.set(value, requestTypeLabel(item.type));
+      counts[requestTab(item.status)] += 1;
     });
-
-    return [
-      { value: "all", label: "Todos os tipos" },
-      ...[...byType.entries()]
-        .sort(([, a], [, b]) => a.localeCompare(b, "pt-BR"))
-        .map(([value, label]) => ({ value, label })),
-    ];
+    return counts;
   }, [allRequests]);
 
-  const filtered = useMemo(() => {
+  const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    return allRequests.filter((item) => {
-      const matchesType =
-        typeFilter === "all" ||
-        normalizeSlug(item.type || "solicitacao") === typeFilter;
-      const matchesStatus =
-        statusFilter === "all" || normalizeStatus(item.status) === statusFilter;
+    const time = (item: CustomerRequest) =>
+      parseRequestDate(item.created_at)?.getTime() ?? 0;
+    return allRequests
+      .filter((item) => requestTab(item.status) === tab)
+      .filter((item) => {
+        if (!needle) return true;
+        return [
+          item.id,
+          item.customer_code,
+          item.type,
+          item.title,
+          item.description,
+          item.requested_by?.email,
+          item.requested_by?.name,
+          ...getRequestItems(item).map((requestItem) => getItemLabel(requestItem)),
+        ]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(needle));
+      })
+      .sort((left, right) =>
+        // Para aprovar: urgência primeiro, depois quem espera há mais tempo.
+        tab === "decide"
+          ? priorityWeight(left.priority) - priorityWeight(right.priority) ||
+            time(left) - time(right)
+          : time(right) - time(left),
+      );
+  }, [allRequests, search, tab]);
 
-      if (!matchesType || !matchesStatus) return false;
-      if (!needle) return true;
+  const selected =
+    visible.find((item) => item.id === selectedId) ?? visible[0] ?? null;
 
-      const entities = getOperationalEntities(item);
-      const searchableValues = [
-        item.id,
-        item.customer_code,
-        item.type,
-        item.priority,
-        item.title,
-        item.description,
-        item.status,
-        item.requested_by?.email,
-        getQuantityTotal(item),
-        entities.order_id,
-        entities.inbound_id,
-        entities.pick_task_id,
-        ...getRequestItems(item).map((requestItem) => getItemLabel(requestItem)),
-      ]
-        .filter(Boolean)
-        .map((value) => String(value).toLowerCase());
-      return searchableValues.some((value) => value.includes(needle));
+  const validationFor = (item: CustomerRequest) =>
+    balanceValidationById.get(item.id) ??
+    buildBalanceValidation(
+      item,
+      stockBalances.data?.items,
+      stockBalances.isLoading,
+      Boolean(stockBalances.error),
+    );
+
+  const decide = (item: CustomerRequest, action: RequestAction, reason?: string) =>
+    transition.mutate({
+      id: item.id,
+      action,
+      expectedStatus: normalizeStatus(item.status),
+      reason,
     });
-  }, [allRequests, search, statusFilter, typeFilter]);
 
-  const operationalImpact = useMemo(() => {
-    const activeRequests = allRequests.filter((item) =>
-      openStatuses.has(normalizeStatus(item.status)),
-    );
-    const activeValidations = activeRequests.map((item) =>
-      balanceValidationById.get(item.id),
-    );
-    const stockReadyCount = activeValidations.filter(
-      (validation) => validation?.status === "ready",
-    ).length;
-    const stockBlockedCount = activeValidations.filter((validation) =>
-      ["insufficient", "missing-balance", "missing-data"].includes(
-        validation?.status ?? "",
-      ),
-    ).length;
-    const inboundCount = activeRequests.filter(isInboundRequest).length;
-    const dataWarningCount = activeRequests.filter(
-      (item) => getDataWarnings(item).length > 0,
-    ).length;
-    const unitsToReserve = activeRequests.reduce((sum, item) => {
-      const validation = balanceValidationById.get(item.id);
-      if (validation?.status !== "ready") return sum;
-      return sum + (validation.requestedTotal ?? getQuantityTotal(item) ?? 0);
-    }, 0);
-
-    return {
-      stockReadyCount,
-      stockBlockedCount,
-      inboundCount,
-      dataWarningCount,
-      unitsToReserve,
-    };
-  }, [allRequests, balanceValidationById]);
-
-  const openCount = allRequests.filter((item) =>
-    openStatuses.has(normalizeStatus(item.status)),
-  ).length;
-  const approvedCount = allRequests.filter(
-    (item) => normalizeStatus(item.status) === "approved",
-  ).length;
-  const rejectedCount = allRequests.filter(
-    (item) => normalizeStatus(item.status) === "rejected",
-  ).length;
-  const closedCount = allRequests.filter(
-    (item) => normalizeStatus(item.status) === "closed",
-  ).length;
+  const tabs: Array<{ value: RequestTab; label: string }> = [
+    { value: "decide", label: "Para aprovar" },
+    { value: "approved", label: "Aprovadas" },
+    { value: "done", label: "Encerradas" },
+  ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-[18px] border border-border bg-white/70 shadow-[0_8px_24px_rgba(15,23,42,.04)]">
-            <Inbox className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-normal text-foreground">
-              Solicitações do cliente
-            </h1>
-          </div>
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold text-foreground">Solicitações</h1>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => requests.refetch()}
+            disabled={requests.isFetching}
+          >
+            <RefreshCw className={cn("size-4", requests.isFetching && "animate-spin")} />
+            <span className="sr-only">Atualizar</span>
+          </Button>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => requests.refetch()}
-          disabled={requests.isFetching}
-        >
-          <RefreshCw className={cn("h-4 w-4", requests.isFetching && "animate-spin")} />
-          Atualizar
-        </Button>
-      </div>
-
-      {/* Regra da auditoria de UX: só indicadores que mudam a decisão de
-          triagem. Aprovadas/rejeitadas/encerradas são histórico — estão na
-          fila com o filtro de status; saldo validado e recebimentos são
-          consequência da aprovação, não insumo dela. */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <SummaryCard title="Abertas" value={openCount} icon={Clock3} />
-        <OperationalImpactCard
-          title="Bloqueios de aprovação"
-          value={operationalImpact.stockBlockedCount}
-          icon={AlertTriangle}
-          tone="danger"
-        />
-        <OperationalImpactCard
-          title="Dados pendentes"
-          value={operationalImpact.dataWarningCount}
-          icon={FileWarning}
-          tone="warning"
-        />
-      </div>
-
-      <Card>
-        <CardHeader className="border-b border-border/60">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <CardTitle className="text-base">Fila de triagem</CardTitle>
-            <div className="grid w-full gap-3 md:grid-cols-[minmax(0,1fr)_180px_180px] lg:max-w-3xl">
-              <div className="relative min-w-0">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Buscar solicitação..."
-                  className="pl-9"
-                />
-              </div>
-              <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger aria-label="Filtrar por tipo">
-                  <SelectValue placeholder="Tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {typeFilterOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
-                value={statusFilter}
-                onValueChange={(value) =>
-                  setStatusFilter(value as RequestStatusFilter)
-                }
-              >
-                <SelectTrigger aria-label="Filtrar por status">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  {statusFilterOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table className="min-w-[1500px]">
-              <TableHeader>
-                <TableRow className="bg-white/45">
-                  <TableHead className="px-4">Solicitação</TableHead>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead>Itens</TableHead>
-                  <TableHead>Qtde total</TableHead>
-                  <TableHead>Pré-aprovação</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Vínculos</TableHead>
-                  <TableHead>Data</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {requests.isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="px-4 py-10 text-center text-muted-foreground">
-                      Carregando solicitações...
-                    </TableCell>
-                  </TableRow>
-                ) : requests.error ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="px-4 py-10 text-center text-destructive">
-                      <AlertTriangle className="mr-2 inline h-4 w-4" />
-                      Não consegui carregar a fila.
-                    </TableCell>
-                  </TableRow>
-                ) : filtered.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="px-4 py-10 text-center text-muted-foreground">
-                      Nenhuma solicitação encontrada.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filtered.map((item) => {
-                    const activeAction =
-                      transition.isPending && transition.variables?.id === item.id
-                        ? transition.variables.action
-                        : undefined;
-                    const balanceValidation =
-                      balanceValidationById.get(item.id) ??
-                      buildBalanceValidation(
-                        item,
-                        stockBalances.data?.items,
-                        stockBalances.isLoading,
-                        Boolean(stockBalances.error),
-                      );
-
-                    return (
-                      <TableRow key={item.id}>
-                        <TableCell className="px-4">
-                          <div className="max-w-[340px]">
-                            <div className="font-mono text-xs text-primary">
-                              {item.id}
-                            </div>
-                            <div className="mt-1 line-clamp-2 font-medium">
-                              {item.description || item.title || "Solicitação sem descrição"}
-                            </div>
-                            <div className="mt-1 text-xs text-muted-foreground">
-                              {item.requested_by?.email || "Portal do cliente"}
-                            </div>
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              <Badge variant="outline" className="capitalize">
-                                {requestTypeLabel(item.type)}
-                              </Badge>
-                              <Badge variant="outline" className={priorityClass(item.priority)}>
-                                {priorityLabel(item.priority)}
-                              </Badge>
-                            </div>
-                            <DataQualityWarnings request={item} />
-                          </div>
-                        </TableCell>
-                        <TableCell>{item.customer_code || "BTG Pactual"}</TableCell>
-                        <TableCell>
-                          <RequestItemsPreview request={item} />
-                        </TableCell>
-                        <TableCell>
-                          <QuantityTotal request={item} />
-                        </TableCell>
-                        <TableCell>
-                          <BalanceValidationPanel validation={balanceValidation} />
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-1">
-                            <Badge variant="outline" className={statusClass(item.status)}>
-                              {statusLabel(item.status)}
-                            </Badge>
-                            <div className="max-w-[190px] text-xs leading-5 text-muted-foreground">
-                              {statusDescription(item)}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <OperationalLinks request={item} />
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-muted-foreground">
-                          {formatDate(item.created_at)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {requestDecider ? (
-                            <RequestActions
-                              request={item}
-                              activeAction={activeAction}
-                              isMutating={transition.isPending}
-                              balanceValidation={balanceValidation}
-                              onAction={(action) =>
-                                transition.mutate({
-                                  id: item.id,
-                                  action,
-                                  expectedStatus: normalizeStatus(item.status),
-                                })
-                              }
-                            />
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              Decisão da coordenação
-                            </span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function validationClass(status: BalanceValidationStatus) {
-  if (status === "ready") return "border-primary/20 bg-primary/10 text-primary";
-  if (status === "not-required") {
-    return "border-border bg-white/70 text-muted-foreground";
-  }
-  if (status === "checking" || status === "unknown") {
-    return "border-amber-200 bg-amber-50 text-amber-800";
-  }
-  return "border-destructive/20 bg-destructive/10 text-destructive";
-}
-
-function validationLineClass(status: ValidationLineStatus) {
-  if (status === "ready") return "border-primary/20 bg-primary/10";
-  if (status === "unknown") return "border-amber-200 bg-amber-50";
-  return "border-destructive/20 bg-destructive/10";
-}
-
-function validationIcon(status: BalanceValidationStatus): LucideIcon {
-  if (status === "ready") return ShieldCheck;
-  if (status === "not-required") return CheckCircle2;
-  if (status === "checking") return RefreshCw;
-  return AlertTriangle;
-}
-
-function impactToneClass(tone: "success" | "warning" | "danger" | "info") {
-  if (tone === "success") return "border-primary/20 bg-primary/10 text-primary";
-  if (tone === "danger") {
-    return "border-destructive/20 bg-destructive/10 text-destructive";
-  }
-  if (tone === "warning") return "border-amber-200 bg-amber-50 text-amber-800";
-  return "border-sky-200 bg-sky-50 text-sky-800";
-}
-
-function DataQualityWarnings({ request }: { request: CustomerRequest }) {
-  const warnings = getDataWarnings(request);
-  if (warnings.length === 0) return null;
-
-  return (
-    <div className="mt-2 flex flex-wrap gap-1.5">
-      {warnings.map((warning) => (
-        <Badge
-          key={warning}
-          variant="outline"
-          className="gap-1.5 border-amber-200 bg-amber-50 text-amber-800"
-        >
-          <AlertTriangle className="size-3.5" />
-          {warning}
-        </Badge>
-      ))}
-    </div>
-  );
-}
-
-function BalanceValidationPanel({
-  validation,
-}: {
-  validation: BalanceValidation;
-}) {
-  const Icon = validationIcon(validation.status);
-  const visibleLines = validation.lines.slice(0, 2);
-  const hiddenCount = validation.lines.length - visibleLines.length;
-
-  return (
-    <div className="max-w-[280px] space-y-2">
-      <Badge
-        variant="outline"
-        className={cn("max-w-full gap-1.5", validationClass(validation.status))}
-      >
-        <Icon
-          className={cn(
-            "size-3.5 shrink-0",
-            validation.status === "checking" && "animate-spin",
-          )}
-        />
-        <span className="truncate">{validation.title}</span>
-      </Badge>
-      <div className="text-xs leading-5 text-muted-foreground">
-        {validation.detail}
-      </div>
-      {validation.requestedTotal !== undefined ? (
-        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-          <span>Solicitado: {formatQuantity(validation.requestedTotal)}</span>
-          {validation.availableTotal !== undefined ? (
-            <span>Disponível: {formatQuantity(validation.availableTotal)}</span>
-          ) : null}
-        </div>
-      ) : null}
-      {visibleLines.length > 0 ? (
-        <div className="space-y-1.5">
-          {visibleLines.map((line) => (
-            <div
-              key={line.key}
+        <div className="grid grid-cols-3 rounded-xl bg-muted p-1 lg:flex" role="tablist">
+          {tabs.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              role="tab"
+              aria-selected={tab === option.value}
+              onClick={() => {
+                setTab(option.value);
+                setSelectedId(null);
+              }}
               className={cn(
-                "rounded-[14px] border px-2.5 py-1.5 text-xs",
-                validationLineClass(line.status),
+                "flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors sm:px-3 sm:text-sm",
+                tab === option.value
+                  ? "bg-white text-foreground shadow-sm"
+                  : "text-foreground/60 hover:text-foreground",
               )}
             >
-              <div className="flex min-w-0 items-center justify-between gap-2">
-                <span className="min-w-0 truncate font-medium text-foreground">
-                  {line.skuCode ?? line.clientItemCode ?? line.label}
+              {option.label}
+              {option.value === "decide" && tabCounts.decide > 0 ? (
+                <span className="rounded-full bg-red-50 px-1.5 text-xs font-semibold text-red-700">
+                  {tabCounts.decide}
                 </span>
-                <span className="shrink-0 text-muted-foreground">
-                  {formatQuantity(line.requested)}
-                </span>
-              </div>
-              <div className="mt-0.5 line-clamp-2 text-muted-foreground">
-                {line.message}
-              </div>
-            </div>
+              ) : null}
+            </button>
           ))}
-          {hiddenCount > 0 ? (
-            <div className="text-xs text-muted-foreground">
-              +{numberFormatter.format(hiddenCount)}{" "}
-              {hiddenCount === 1 ? "linha" : "linhas"}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[340px_minmax(0,1fr)]">
+        <section className="flex min-w-0 flex-col gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscar por título, SKU ou cliente"
+              className="pl-9"
+            />
+          </div>
+          {requests.isLoading ? (
+            <p className="px-1 py-6 text-sm text-muted-foreground">
+              Carregando solicitações...
+            </p>
+          ) : requests.error ? (
+            <p className="px-1 py-6 text-sm text-destructive">
+              Não consegui carregar a fila.
+            </p>
+          ) : visible.length === 0 ? (
+            <div className="flex items-center gap-2 rounded-2xl border border-border bg-white/70 px-4 py-6 text-sm text-muted-foreground">
+              {tab === "decide" && !search ? (
+                <>
+                  <CheckCircle2 className="size-4 text-emerald-600" />
+                  Nenhuma solicitação esperando decisão.
+                </>
+              ) : (
+                "Nenhuma solicitação encontrada."
+              )}
             </div>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function OperationalImpactCard({
-  title,
-  value,
-  icon: Icon,
-  tone,
-}: {
-  title: string;
-  value: number;
-  icon: LucideIcon;
-  tone: "success" | "warning" | "danger" | "info";
-}) {
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
-        <div className="min-w-0">
-          <CardTitle className="text-sm font-medium text-foreground/70">
-            {title}
-          </CardTitle>
-          <div className="mt-3 truncate text-2xl font-semibold text-foreground">
-            {numberFormatter.format(value)}
-          </div>
-        </div>
-        <div
-          className={cn(
-            "flex size-10 shrink-0 items-center justify-center rounded-[16px] border",
-            impactToneClass(tone),
+          ) : (
+            visible.map((item) => {
+              const active = selected?.id === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setSelectedId(item.id)}
+                  className={cn(
+                    "rounded-2xl border bg-white/80 px-4 py-3.5 text-left transition-[border-color,box-shadow]",
+                    active
+                      ? "border-primary shadow-[0_6px_20px_rgba(110,158,248,.18)] ring-1 ring-primary"
+                      : "border-border hover:border-primary/40",
+                  )}
+                >
+                  <p className="line-clamp-2 text-sm font-semibold text-foreground">
+                    {requestTitle(item)}
+                  </p>
+                  <p className="mt-0.5 truncate text-xs text-foreground/60">
+                    {requestSummary(item)}
+                  </p>
+                  <div className="mt-2.5 flex items-center justify-between gap-2">
+                    {listChip(item, validationFor(item))}
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {formatRequestAge(item.created_at) ?? ""}
+                    </span>
+                  </div>
+                </button>
+              );
+            })
           )}
-        >
-          <Icon className="size-4" />
-        </div>
-      </CardHeader>
-    </Card>
-  );
-}
+        </section>
 
-function RequestItemsPreview({ request }: { request: CustomerRequest }) {
-  const items = getRequestItems(request);
-
-  if (items.length === 0) {
-    return (
-      <div className="flex max-w-[280px] items-center gap-2 rounded-[14px] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-        <Boxes className="size-3.5 shrink-0" />
-        <span>items não informado</span>
+        {selected ? (
+          <RequestDetail
+            key={selected.id}
+            request={selected}
+            validation={validationFor(selected)}
+            canDecide={requestDecider}
+            pendingAction={
+              transition.isPending && transition.variables?.id === selected.id
+                ? transition.variables.action
+                : undefined
+            }
+            busy={transition.isPending}
+            onApprove={() => decide(selected, "approve")}
+            onReject={() => {
+              setRejectReason("");
+              setRejecting(selected);
+            }}
+            onClose={() => decide(selected, "close")}
+          />
+        ) : null}
       </div>
-    );
-  }
 
-  const visibleItems = items.slice(0, 3);
-  const hiddenCount = items.length - visibleItems.length;
-
-  return (
-    <div className="flex max-w-[320px] flex-col gap-1.5">
-      {visibleItems.map((item, index) => {
-        const unit = getItemUnit(item);
-        const quantity = getItemQuantity(item);
-        return (
-          <div
-            key={`${getItemLabel(item)}-${index}`}
-            className="flex min-w-0 items-center justify-between gap-3 rounded-[14px] border border-border bg-white/55 px-3 py-1.5 text-xs"
-          >
-            <span className="min-w-0 truncate font-medium text-foreground">
-              {getItemLabel(item)}
-            </span>
-            <span className="shrink-0 text-muted-foreground">
-              {quantity === undefined
-                ? "Qtd. aberta"
-                : `${formatQuantity(quantity)}${unit ? ` ${unit}` : ""}`}
-            </span>
-          </div>
-        );
-      })}
-      {hiddenCount > 0 ? (
-        <div className="text-xs text-muted-foreground">
-          +{numberFormatter.format(hiddenCount)}{" "}
-          {hiddenCount === 1 ? "item" : "itens"}
-        </div>
-      ) : null}
+      <Dialog
+        open={Boolean(rejecting)}
+        onOpenChange={(open) => {
+          if (!open) setRejecting(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Recusar solicitação</DialogTitle>
+            <DialogDescription>
+              O motivo fica registrado na solicitação e aparece para o cliente.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={rejectReason}
+            onChange={(event) => setRejectReason(event.target.value)}
+            placeholder="Ex.: 20 itens sem saldo no estoque. Confirme os códigos e envie de novo."
+            rows={4}
+          />
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setRejecting(null)}>
+              Voltar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={rejectReason.trim().length < 3 || transition.isPending}
+              onClick={() =>
+                rejecting && decide(rejecting, "reject", rejectReason.trim())
+              }
+            >
+              {transition.isPending ? "Recusando..." : "Recusar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-function QuantityTotal({ request }: { request: CustomerRequest }) {
-  const explicitTotal = getExplicitQuantityTotal(request);
-  const total = getQuantityTotal(request);
-  const itemCount = getRequestItems(request).length;
-  const missingTotal = explicitTotal === undefined;
+const VERDICT_STYLE: Record<
+  VerdictTone,
+  { box: string; icon: string; Icon: LucideIcon }
+> = {
+  ready: { box: "border-emerald-200 bg-emerald-50/70", icon: "bg-emerald-100 text-emerald-700", Icon: CheckCircle2 },
+  blocked: { box: "border-amber-200 bg-amber-50/70", icon: "bg-amber-100 text-amber-800", Icon: AlertTriangle },
+  checking: { box: "border-border bg-muted/40", icon: "bg-muted text-muted-foreground", Icon: RefreshCw },
+  approved: { box: "border-blue-200 bg-blue-50/70", icon: "bg-blue-100 text-blue-700", Icon: CheckCircle2 },
+  rejected: { box: "border-red-200 bg-red-50/70", icon: "bg-red-100 text-red-700", Icon: XCircle },
+  closed: { box: "border-border bg-muted/40", icon: "bg-muted text-muted-foreground", Icon: Archive },
+};
 
-  return (
-    <div className="whitespace-nowrap">
-      <div className="font-semibold text-foreground">{formatQuantity(total)}</div>
-      {missingTotal ? (
-        <div className="mt-1 flex items-center gap-1.5 text-xs text-amber-800">
-          <AlertTriangle className="size-3.5" />
-          <span>quantity_total ausente</span>
-        </div>
-      ) : null}
-      <div className="mt-1 text-xs text-muted-foreground">
-        {itemCount === 0
-          ? "sem linhas"
-          : itemCount === 1
-            ? "1 linha"
-            : `${numberFormatter.format(itemCount)} linhas`}
-      </div>
-    </div>
-  );
-}
-
-function OperationalLinks({ request }: { request: CustomerRequest }) {
-  const entities = getOperationalEntities(request);
-  const links: Array<{ label: string; value?: string | null; icon: LucideIcon }> = [
-    { label: "Pedido", value: entities.order_id, icon: ClipboardList },
-    { label: "Recebimento", value: entities.inbound_id, icon: PackageCheck },
-    { label: "Picking", value: entities.pick_task_id, icon: Link2 },
-  ].filter((link) => Boolean(link.value));
-
-  if (links.length === 0) {
-    return (
-      <div className="max-w-[220px] text-xs leading-5 text-muted-foreground">
-        {normalizeStatus(request.status) === "approved"
-          ? "Aprovada sem vínculo"
-          : "Sem vínculo operacional"}
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex max-w-[260px] flex-col gap-1.5">
-      {links.map(({ label, value, icon: Icon }) => (
-        <Badge
-          key={`${label}-${value}`}
-          variant="outline"
-          className="max-w-full justify-start gap-1.5 border-primary/20 bg-primary/10 text-primary"
-        >
-          <Icon className="size-3.5 shrink-0" />
-          <span className="shrink-0">{label}</span>
-          <span className="min-w-0 truncate font-mono">{value}</span>
-        </Badge>
-      ))}
-    </div>
-  );
-}
-
-function RequestActions({
+function RequestDetail({
   request,
-  activeAction,
-  isMutating,
-  balanceValidation,
-  onAction,
+  validation,
+  canDecide,
+  pendingAction,
+  busy,
+  onApprove,
+  onReject,
+  onClose,
 }: {
   request: CustomerRequest;
-  activeAction?: RequestAction;
-  isMutating: boolean;
-  balanceValidation: BalanceValidation;
-  onAction: (action: RequestAction) => void;
+  validation: BalanceValidation;
+  canDecide: boolean;
+  pendingAction?: RequestAction;
+  busy: boolean;
+  onApprove: () => void;
+  onReject: () => void;
+  onClose: () => void;
 }) {
+  const verdict = buildVerdict(request, validation);
+  const style = VERDICT_STYLE[verdict.tone];
   const status = normalizeStatus(request.status);
-  const canDecide = openStatuses.has(status);
-  const canClose = status === "approved";
-  const canApprove = canDecide && balanceValidation.canApprove;
-  const actionMessage =
-    canDecide && !balanceValidation.canApprove
-      ? balanceValidation.detail
-      : canDecide && isOutboundRequest(request)
-        ? balanceValidation.detail
-        : actionHint(request.status);
+  const reserved = request.stock_reservation_status === "reserved";
+  // Pedido já decidido não é revalidado contra o saldo de agora: a reserva
+  // foi consumida ou liberada, e o "sem saldo" que aparecia confundia.
+  const lines: BalanceValidationLine[] =
+    status !== "approved" && openStatuses.has(status) && validation.lines.length
+      ? validation.lines
+      : getRequestValidationLines(request).map((line) => ({
+          ...line,
+          status: "unknown" as const,
+          message: "",
+        }));
+  const checked =
+    openStatuses.has(status) &&
+    validation.lines.length > 0 &&
+    validation.status !== "not-required";
+  const problemLines = checked
+    ? lines.filter((line) => line.status !== "ready")
+    : [];
+  const [onlyProblems, setOnlyProblems] = useState(true);
+  const showProblems = onlyProblems && problemLines.length > 0;
+  const shownLines = showProblems ? problemLines : lines;
+  const total = getQuantityTotal(request);
+  const sentAt = formatRequestDate(request.created_at);
+  const decidedAt = formatRequestDate(request.decided_at);
+  const decidedBy = request.decided_by?.name || request.decided_by?.email;
+  const entities = getOperationalEntities(request);
+  const approveLabel = isOutboundRequest(request)
+    ? "Aprovar e separar"
+    : isInboundRequest(request)
+      ? "Aprovar e criar recebimento"
+      : "Aprovar";
 
   return (
-    <div className="flex flex-col items-end gap-2">
-      <div className="flex flex-wrap justify-end gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={!canApprove || isMutating}
-          onClick={() => onAction("approve")}
-        >
-          {activeAction === "approve" ? (
-            <RefreshCw className="animate-spin" />
-          ) : (
-            <CheckCircle2 />
-          )}
-          {activeAction === "approve" ? "Aprovando" : "Aprovar"}
-        </Button>
-        <Button
-          type="button"
-          variant="destructive"
-          size="sm"
-          disabled={!canDecide || isMutating}
-          onClick={() => onAction("reject")}
-        >
-          {activeAction === "reject" ? (
-            <RefreshCw className="animate-spin" />
-          ) : (
-            <XCircle />
-          )}
-          {activeAction === "reject" ? "Rejeitando" : "Rejeitar"}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={!canClose || isMutating}
-          onClick={() => onAction("close")}
-        >
-          {activeAction === "close" ? (
-            <RefreshCw className="animate-spin" />
-          ) : (
-            <Archive />
-          )}
-          {activeAction === "close" ? "Encerrando" : "Encerrar"}
-        </Button>
+    <section className="flex min-w-0 flex-col overflow-hidden rounded-[22px] border border-border bg-white/85 lg:sticky lg:top-0 lg:max-h-[calc(100dvh-190px)]">
+      <header className="border-b border-border/70 px-5 py-5 md:px-6">
+        <div className="mb-2 flex flex-wrap gap-2">
+          <Chip tone="muted">{requestTypeLabel(request.type)}</Chip>
+          <Chip tone={priorityWeight(request.priority) < 2 ? "warn" : "muted"}>
+            Prioridade {priorityLabel(request.priority)}
+          </Chip>
+        </div>
+        <h2 className="text-xl font-semibold text-foreground">
+          {requestTitle(request)}
+        </h2>
+        <dl className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-foreground/60">
+          <div>
+            Cliente <span className="font-semibold text-foreground">{request.customer_code || "BTG Pactual"}</span>
+          </div>
+          <div>
+            Pedido por{" "}
+            <span className="font-semibold text-foreground">
+              {request.requested_by?.name || request.requested_by?.email || "Portal do cliente"}
+            </span>
+          </div>
+          {sentAt ? (
+            <div>
+              Enviado <span className="font-semibold text-foreground">{sentAt}</span>
+            </div>
+          ) : null}
+          <div>
+            <span className="font-semibold text-foreground">{plural(lines.length, "item", "itens")}</span>
+            {total !== undefined ? (
+              <>
+                {" · "}
+                <span className="font-semibold text-foreground">{numberFormatter.format(total)}</span> un.
+              </>
+            ) : null}
+          </div>
+        </dl>
+      </header>
+
+      <div className={cn("mx-5 mt-4 flex gap-3 rounded-2xl border p-4 md:mx-6", style.box)}>
+        <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-xl", style.icon)}>
+          <style.Icon className={cn("size-4", verdict.tone === "checking" && "animate-spin")} aria-hidden="true" />
+        </div>
+        <div className="min-w-0">
+          <p className="font-semibold text-foreground">{verdict.title}</p>
+          <p className="mt-0.5 text-sm text-foreground/70">{verdict.detail}</p>
+          {(status === "approved" || status === "rejected" || status === "closed") &&
+          (decidedBy || decidedAt) ? (
+            <p className="mt-1 text-xs text-foreground/55">
+              {[decidedBy ? `Por ${decidedBy}` : null, decidedAt].filter(Boolean).join(" · ")}
+            </p>
+          ) : null}
+          {verdict.tone === "blocked" && verdict.totalCount && verdict.readyCount !== undefined ? (
+            <div className="mt-2.5 h-2 w-full max-w-sm overflow-hidden rounded-full bg-amber-100">
+              <div
+                className="h-full rounded-full bg-emerald-500"
+                style={{ width: `${Math.round((verdict.readyCount / verdict.totalCount) * 100)}%` }}
+              />
+            </div>
+          ) : null}
+          {status === "approved" && (entities.order_id || entities.inbound_id) ? (
+            <Button asChild variant="outline" size="sm" className="mt-3">
+              <Link href={entities.order_id ? "/wms/pedidos" : "/wms/receber"}>
+                {entities.order_id ? "Ver em Separar e enviar" : "Ver no Recebimento"}
+              </Link>
+            </Button>
+          ) : null}
+        </div>
       </div>
-      <div className="max-w-[240px] text-right text-xs leading-5 text-muted-foreground">
-        {actionMessage}
+
+      <div className="flex min-h-0 flex-1 flex-col px-5 pt-4 md:px-6">
+        <div className="mb-2 flex items-center gap-2">
+          {problemLines.length > 0 ? (
+            <>
+              <FilterPill active={showProblems} onClick={() => setOnlyProblems(true)}>
+                Com problema ({problemLines.length})
+              </FilterPill>
+              <FilterPill active={!showProblems} onClick={() => setOnlyProblems(false)}>
+                Todos ({lines.length})
+              </FilterPill>
+            </>
+          ) : (
+            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">
+              Itens ({lines.length})
+            </p>
+          )}
+        </div>
+        <div className="max-h-[420px] min-h-[160px] overflow-auto lg:max-h-none lg:min-h-0 lg:flex-1">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border/70 text-left text-xs uppercase tracking-wide text-foreground/50">
+                <th className="py-2 pr-3 font-semibold">Item</th>
+                <th className="py-2 pr-3 text-right font-semibold">Pedido</th>
+                {checked ? (
+                  <>
+                    <th className="py-2 pr-3 text-right font-semibold">Disponível</th>
+                    <th className="py-2 font-semibold">Situação</th>
+                  </>
+                ) : null}
+              </tr>
+            </thead>
+            <tbody>
+              {shownLines.map((line) => {
+                const situation = lineSituation(line, reserved);
+                return (
+                  <tr key={line.key} className="border-b border-border/40">
+                    <td className="py-2.5 pr-3">
+                      <div className="font-mono text-[13px] text-foreground/85">{line.label}</div>
+                      {line.productName && line.productName !== line.label ? (
+                        <div className="text-xs text-foreground/55">{line.productName}</div>
+                      ) : null}
+                    </td>
+                    <td className="py-2.5 pr-3 text-right tabular-nums">
+                      {formatQuantity(line.requested)}
+                    </td>
+                    {checked ? (
+                      <>
+                        <td className="py-2.5 pr-3 text-right tabular-nums text-foreground/70">
+                          {reserved || line.available === undefined
+                            ? "—"
+                            : numberFormatter.format(line.available)}
+                        </td>
+                        <td className="py-2.5">
+                          <Chip tone={situation.tone}>{situation.label}</Chip>
+                        </td>
+                      </>
+                    ) : null}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+
+      {canDecide && (openStatuses.has(status) || status === "approved") ? (
+        <footer className="mt-4 flex flex-col gap-3 border-t border-border/70 bg-muted/20 px-5 py-4 sm:flex-row sm:items-center sm:justify-between md:px-6">
+          <p className="text-sm text-foreground/60">
+            {status === "approved"
+              ? "Encerre quando o pedido estiver entregue ou o recebimento concluído."
+              : validation.canApprove
+                ? isOutboundRequest(request)
+                  ? "Aprovar cria o pedido e manda para separação."
+                  : "Confira os itens antes de aprovar."
+                : "Aprovar libera quando todos os itens tiverem saldo."}
+          </p>
+          <div className="flex shrink-0 gap-2">
+            {status === "approved" ? (
+              <Button type="button" variant="outline" disabled={busy} onClick={onClose}>
+                <Archive className="size-4" />
+                {pendingAction === "close" ? "Encerrando..." : "Encerrar"}
+              </Button>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="text-destructive hover:text-destructive"
+                  disabled={busy}
+                  onClick={onReject}
+                >
+                  <XCircle className="size-4" />
+                  Recusar com motivo
+                </Button>
+                <Button
+                  type="button"
+                  disabled={busy || !validation.canApprove}
+                  onClick={onApprove}
+                >
+                  <CheckCircle2 className="size-4" />
+                  {pendingAction === "approve" ? "Aprovando..." : approveLabel}
+                </Button>
+              </>
+            )}
+          </div>
+        </footer>
+      ) : !canDecide && openStatuses.has(status) ? (
+        <footer className="mt-4 border-t border-border/70 px-5 py-4 text-sm text-muted-foreground md:px-6">
+          A decisão é da coordenação.
+        </footer>
+      ) : (
+        <div className="h-5" />
+      )}
+    </section>
   );
 }
 
-function SummaryCard({
-  title,
-  value,
-  icon: Icon,
+function FilterPill({
+  active,
+  onClick,
+  children,
 }: {
-  title: string;
-  value: number;
-  icon: LucideIcon;
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
 }) {
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-start justify-between pb-3">
-        <div>
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            {title}
-          </CardTitle>
-          <div className="mt-3 text-2xl font-semibold">
-            {numberFormatter.format(value)}
-          </div>
-        </div>
-        <div className="flex h-10 w-10 items-center justify-center rounded-[16px] border border-border bg-white/70">
-          <Icon className="h-4 w-4 text-muted-foreground" />
-        </div>
-      </CardHeader>
-    </Card>
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+        active
+          ? "border-foreground bg-foreground text-background"
+          : "border-border text-foreground/65 hover:text-foreground",
+      )}
+    >
+      {children}
+    </button>
   );
 }
