@@ -41,7 +41,7 @@ function mutationPayload(
   };
 }
 
-function functionRoute(pathname: string, method: string): FunctionRoute | null {
+export function functionRoute(pathname: string, method: string): FunctionRoute | null {
   if (method === "POST" && pathname === "/api/client/requests") {
     return {
       name: "createCustomerRequest",
@@ -488,6 +488,18 @@ function functionRoute(pathname: string, method: string): FunctionRoute | null {
           {},
           decodeURIComponent(inviteMatch[1]),
         ),
+    };
+  }
+
+  // Prévia da competência: o mesmo cálculo da emissão, no servidor.
+  const billingPreviewMatch = pathname.match(
+    /^\/api\/billing\/periods\/(\d{4}-\d{2})$/,
+  );
+  if (billingPreviewMatch && method === "GET") {
+    const competencia = billingPreviewMatch[1];
+    return {
+      name: "getBillingPreview",
+      payload: async () => ({ competencia }),
     };
   }
 

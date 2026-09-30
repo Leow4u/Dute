@@ -8,6 +8,10 @@ import {
   assertBillingStatus,
   assertBillingStatusTransition,
   assertCompetenciaCanBeOpen,
+  assertCompetenciaClosed,
+  billingCustomerOf,
+  competenciaOfInstant,
+  emissionAvailableFrom,
   buildInvoiceSnapshot,
   calculateBillingPeriod,
   calculateLpuLines,
@@ -19,6 +23,8 @@ import {
 } from "./billing.js";
 
 const NOW = new Date("2026-07-10T12:00:00.000Z");
+// Emitir julho exige o mês fechado: a partir de 01/08 no horário de Brasília.
+const AFTER_CLOSE = new Date("2026-08-01T12:00:00.000Z");
 
 function errorWithCode(code: string): (error: unknown) => boolean {
   return (error) => error instanceof BillingDomainError && error.code === code;
@@ -271,7 +277,7 @@ describe("snapshot e emissao", () => {
   it("produz snapshot profundamente imutavel", () => {
     const input = calculationInput();
     const snapshot = buildInvoiceSnapshot(input, {
-      issuedAt: NOW,
+      issuedAt: AFTER_CLOSE,
       emittedBy: "financeiro@example.com",
       customerCode: "BTG Pactual",
     });
@@ -290,7 +296,7 @@ describe("snapshot e emissao", () => {
     const initial = prepareInvoiceEmission(
       { competencia: "2026-07", status: "aberto" },
       calculationInput(),
-      { issuedAt: NOW, emittedBy: "financeiro@example.com" },
+      { issuedAt: AFTER_CLOSE, emittedBy: "financeiro@example.com" },
     );
     assert.equal(initial.idempotent, false);
     assert.equal(initial.periodUpdate?.status, "emitido");
@@ -300,7 +306,7 @@ describe("snapshot e emissao", () => {
     const repeated = prepareInvoiceEmission(
       initial.periodUpdate,
       changedInput,
-      { issuedAt: new Date("2026-07-11T12:00:00.000Z") },
+      { issuedAt: new Date("2026-08-02T12:00:00.000Z") },
     );
 
     assert.equal(repeated.idempotent, true);
@@ -319,7 +325,7 @@ describe("snapshot e emissao", () => {
             invoice_snapshot: { total: 1 },
           },
           calculationInput(),
-          { issuedAt: NOW },
+          { issuedAt: AFTER_CLOSE },
         ),
       errorWithCode("SNAPSHOT_ALREADY_EXISTS"),
     );
@@ -347,7 +353,7 @@ describe("snapshot e emissao", () => {
       transaction as unknown as Parameters<typeof emitInvoiceInTransaction>[0],
       periodRef as Parameters<typeof emitInvoiceInTransaction>[1],
       calculationInput(),
-      { issuedAt: NOW },
+      { issuedAt: AFTER_CLOSE },
     ] as const;
     const first = await emitInvoiceInTransaction(...args);
     const second = await emitInvoiceInTransaction(...args);
@@ -356,5 +362,52 @@ describe("snapshot e emissao", () => {
     assert.equal(first.total, 326.33);
     assert.equal(second.total, first.total);
     assert.equal(persisted.status, "emitido");
+  });
+});
+
+describe("regras de competência", () => {
+  it("só emite depois que o mês fecha no horário de Brasília", () => {
+    // 31/07 23:30 em Brasília = 01/08 02:30 UTC: julho ainda não fechou.
+    assert.throws(
+      () => assertCompetenciaClosed("2026-07", new Date("2026-08-01T02:30:00.000Z")),
+      errorWithCode("COMPETENCIA_NOT_CLOSED"),
+    );
+    assert.throws(
+      () => assertCompetenciaClosed("2026-07", NOW),
+      errorWithCode("COMPETENCIA_NOT_CLOSED"),
+    );
+    // 01/08 00:00 em Brasília.
+    assertCompetenciaClosed("2026-07", new Date("2026-08-01T03:00:00.000Z"));
+    assert.equal(emissionAvailableFrom("2026-12"), "2027-01-01");
+  });
+
+  it("recusa emitir o mês corrente", () => {
+    assert.throws(
+      () =>
+        prepareInvoiceEmission(
+          { competencia: "2026-07", status: "aberto" },
+          calculationInput(),
+          { issuedAt: NOW },
+        ),
+      errorWithCode("COMPETENCIA_NOT_CLOSED"),
+    );
+  });
+
+  it("classifica o instante pela data de Brasília, não UTC", () => {
+    // 30/09 22:00 em Brasília é setembro, embora em UTC já seja outubro.
+    assert.equal(competenciaOfInstant("2026-10-01T01:00:00.000Z"), "2026-09");
+    assert.equal(competenciaOfInstant("2026-10-01T03:00:00.000Z"), "2026-10");
+    assert.equal(competenciaOfInstant("2026-09-30T22:00:00-03:00"), "2026-09");
+    // Sem fuso (legado) vale a data escrita.
+    assert.equal(competenciaOfInstant("2026-09-30"), "2026-09");
+    assert.equal(competenciaOfInstant("2026-10-01T00:30:00"), "2026-10");
+    assert.equal(competenciaOfInstant(""), null);
+    assert.equal(competenciaOfInstant("ontem"), null);
+  });
+
+  it("item da tabela sem cliente pertence ao cliente padrão", () => {
+    assert.equal(billingCustomerOf(undefined, "BTG Pactual"), "BTG Pactual");
+    assert.equal(billingCustomerOf("  ", "BTG Pactual"), "BTG Pactual");
+    assert.equal(billingCustomerOf("Outro", "BTG Pactual"), "Outro");
   });
 });

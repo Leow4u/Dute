@@ -19,6 +19,7 @@ import {
   AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { humanApiError } from "@/lib/permissions";
 import {
   Activity,
   AlertTriangle,
@@ -85,6 +86,19 @@ export default function Billing() {
   const [obs, setObs] = useState<Record<number, string>>({});
 
   const aberto = !data || data.status === "aberto";
+  // Campos que vêm só da prévia do servidor (getBillingPreview).
+  const preview = data as
+    | (typeof data & {
+        emission?: { can_emit: boolean; available_from: string };
+        calculated_at?: string | null;
+      })
+    | undefined;
+  const emission = preview?.emission;
+  const availableFrom = emission?.available_from
+    ? emission.available_from.split("-").reverse().join("/")
+    : null;
+  // Emitir usa as quantidades salvas: digitadas e não salvas seriam ignoradas.
+  const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
     if (!data) return;
@@ -100,6 +114,7 @@ export default function Billing() {
     );
     setQty(q);
     setObs(o);
+    setDirty(false);
   }, [data]);
 
   useEffect(() => {
@@ -160,17 +175,21 @@ export default function Billing() {
     emit.mutate(
       { competencia },
       {
-        onSuccess: (res) => {
+        onSuccess: () => {
+          // Não há envio de e-mail nem PDF configurados: a fatura é publicada
+          // no portal da cliente (client_invoices), que é o que de fato ocorre.
           toast({
             title: "Fatura emitida",
-            description: res.email.sent
-              ? "PDF gerado e e-mail enviado ao cliente."
-              : `PDF gerado. E-mail não enviado: ${res.email.error || "verifique as configurações."}`,
-            variant: res.email.sent ? undefined : "destructive",
+            description: "Os valores foram congelados e a fatura está disponível para a cliente em Faturas.",
           });
           refetch();
         },
-        onError: () => toast({ title: "Erro ao emitir fatura", variant: "destructive" }),
+        onError: (error) =>
+          toast({
+            title: "Fatura não emitida",
+            description: humanApiError(error, "Tente novamente em instantes."),
+            variant: "destructive",
+          }),
       },
     );
   };
@@ -217,7 +236,10 @@ export default function Billing() {
           </CardHeader>
           <CardContent>
             <div className="text-lg font-bold">{fmtBRL(data?.custo_estoque || 0)}</div>
-            <div className="text-xs text-muted-foreground mt-1">Taxa: {fmtNum((data?.ad_valorem_rate || 0) * 100)}%</div>
+            <div className="text-xs text-muted-foreground mt-1">
+              Taxa: {fmtNum((data?.ad_valorem_rate || 0) * 100)}%
+              {aberto ? " · valor atual do estoque" : " · valor congelado na emissão"}
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -232,9 +254,6 @@ export default function Billing() {
 
       {/* Ações */}
       <div className="flex flex-wrap items-center gap-2">
-        <a href={`${API_BASE}/billing/periods/${competencia}/pdf`} target="_blank" rel="noreferrer">
-          <Button variant="outline"><FileText className="h-4 w-4 mr-2" />Prévia PDF</Button>
-        </a>
         {aberto && (
           <>
             <Button onClick={handleSave} disabled={save.isPending} variant="outline">
@@ -242,14 +261,16 @@ export default function Billing() {
             </Button>
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button disabled={emit.isPending}><Send className="h-4 w-4 mr-2" />Emitir fatura</Button>
+                <Button disabled={emit.isPending || dirty || emission?.can_emit === false}>
+                  <Send className="h-4 w-4 mr-2" />Emitir fatura
+                </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Emitir fatura de {competenciaLabel(competencia)}?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Os valores serão congelados e a fatura não poderá mais ser editada. O PDF será gerado e
-                    enviado por e-mail ao cliente (se configurado). Total: <strong>{fmtBRL(data?.total || 0)}</strong>.
+                    Os valores serão congelados e a fatura não poderá mais ser editada. Ela ficará disponível
+                    para a cliente em Faturas. Total: <strong>{fmtBRL(data?.total || 0)}</strong>.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -258,6 +279,13 @@ export default function Billing() {
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
+            {dirty ? (
+              <span className="text-sm text-amber-700">Salve as quantidades antes de emitir.</span>
+            ) : emission?.can_emit === false && availableFrom ? (
+              <span className="text-sm text-muted-foreground">
+                Emissão liberada a partir de {availableFrom}, quando o mês terminar.
+              </span>
+            ) : null}
           </>
         )}
         {data?.status === "emitido" && (
@@ -432,7 +460,7 @@ export default function Billing() {
                   <>
                     <TableRow key={g.grupo} className="bg-primary/5 hover:bg-primary/5">
                       <TableCell colSpan={4} className="font-bold text-primary">
-                        {GRUPOS[g.grupo]?.emoji} {g.label}
+                        {GRUPOS[g.grupo]?.emoji} {GRUPOS[g.grupo]?.label ?? g.label ?? g.grupo}
                       </TableCell>
                       <TableCell className="text-right font-bold text-primary">{fmtBRL(g.total)}</TableCell>
                       <TableCell />
@@ -457,7 +485,10 @@ export default function Billing() {
                                 type="number"
                                 step="0.01"
                                 value={qty[id!] ?? ""}
-                                onChange={(e) => setQty((s) => ({ ...s, [id!]: e.target.value }))}
+                                onChange={(e) => {
+                                  setDirty(true);
+                                  setQty((s) => ({ ...s, [id!]: e.target.value }));
+                                }}
                                 className="h-8 w-24 ml-auto text-right"
                               />
                             ) : (
@@ -470,7 +501,10 @@ export default function Billing() {
                             {editable ? (
                               <Input
                                 value={obs[id!] ?? ""}
-                                onChange={(e) => setObs((s) => ({ ...s, [id!]: e.target.value }))}
+                                onChange={(e) => {
+                                  setDirty(true);
+                                  setObs((s) => ({ ...s, [id!]: e.target.value }));
+                                }}
                                 className="h-8"
                                 placeholder="—"
                               />
@@ -507,7 +541,6 @@ export default function Billing() {
                   <TableHead>Competência</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Total</TableHead>
-                  <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -518,11 +551,6 @@ export default function Billing() {
                       <TableCell className="font-medium">{competenciaLabel(p.competencia)}</TableCell>
                       <TableCell><Badge variant="outline" className={sm.className}>{sm.label}</Badge></TableCell>
                       <TableCell className="text-right font-semibold">{fmtBRL(p.total)}</TableCell>
-                      <TableCell className="text-right">
-                        <a href={`${API_BASE}/billing/periods/${p.competencia}/pdf`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="sm"><FileText className="h-4 w-4" /></Button>
-                        </a>
-                      </TableCell>
                     </TableRow>
                   );
                 })}

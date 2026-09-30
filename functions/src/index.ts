@@ -38,8 +38,13 @@ import {
 import {
   BillingDomainError,
   assertBillingStatusTransition,
+  billingCustomerOf,
+  calculateBillingPeriod,
+  competenciaOfInstant,
   createOpenBillingPeriod,
+  emissionAvailableFrom,
   emitInvoiceInTransaction,
+  isCompetenciaClosed,
   type BillingCalculationInput,
   type BillingManualQuantity,
   type LpuItem,
@@ -1258,6 +1263,16 @@ function requireWarehouseWrite(profile: Profile) {
     throw new HttpsError(
       "permission-denied",
       "Ação permitida somente para administração ou operação de armazém.",
+    );
+  }
+}
+
+// Mesma lista de canReadBilling nas Firestore Rules.
+function requireBillingRead(profile: Profile) {
+  if (!["owner", "admin", "financeiro", "suporte"].includes(profile.role)) {
+    throw new HttpsError(
+      "permission-denied",
+      "Faturamento visível somente para administração, financeiro ou suporte.",
     );
   }
 }
@@ -3050,9 +3065,10 @@ async function loadBillingCalculation(
   customerCode: string,
   transaction?: Transaction,
 ): Promise<BillingCalculationInput> {
-  const priceQuery = db
-    .collection(collectionNames.billingPriceList)
-    .where("customer_code", "==", customerCode);
+  // Itens criados pela Tabela de preços antes de 01/10/2026 não gravavam
+  // customer_code e ficavam fora da fatura emitida (mas apareciam na prévia).
+  // A lista é pequena: lê tudo e trata "sem cliente" como o cliente padrão.
+  const priceQuery = db.collection(collectionNames.billingPriceList);
   const manualRef = db
     .collection(collectionNames.billingManual)
     .doc(competencia);
@@ -3090,7 +3106,13 @@ async function loadBillingCalculation(
     ? await transaction.get(movementsQuery)
     : await movementsQuery.get();
 
-  const priceList: LpuItem[] = pricesSnapshot.docs.map((document) => {
+  const priceList: LpuItem[] = pricesSnapshot.docs
+    .filter(
+      (document) =>
+        billingCustomerOf(document.data().customer_code, DEFAULT_CUSTOMER) ===
+        customerCode,
+    )
+    .map((document) => {
     const data = document.data();
     return {
       id: data.id ?? document.id,
@@ -3113,12 +3135,13 @@ async function loadBillingCalculation(
     (sum, document) => sum + Number(document.data().total_cost ?? 0),
     0,
   );
+  // Virada do mês no horário de Brasília, não em UTC.
   const allMovements = movementsSnapshot.docs
     .map((document) => document.data())
-    .filter((movement) =>
-      billingDate(movement.occurred_at ?? movement.data).startsWith(
+    .filter(
+      (movement) =>
+        competenciaOfInstant(billingDate(movement.occurred_at ?? movement.data)) ===
         competencia,
-      ),
     );
   const operationalData = operationalSnapshot.data() ?? {};
   const snapshotMode = String(operationalData.mode ?? "");
@@ -3864,6 +3887,8 @@ function managedWritePayload(
       ...(input.action === "create"
         ? {
             id: publicManagedId(input.resource, documentId),
+            // Sem isto a emissão (que filtra por cliente) ignorava o item.
+            customer_code: DEFAULT_CUSTOMER,
             created_by: profile.uid,
             created_at: FieldValue.serverTimestamp(),
           }
@@ -5997,6 +6022,64 @@ export const generateDailyBriefing = onCall(async (request) => {
     ...DailyBriefingSchema.parse(request.data ?? {}),
     actor: profile,
   });
+});
+
+/**
+ * Prévia da competência com o mesmo cálculo da emissão (loadBillingCalculation
+ * + calculateBillingPeriod). Antes a tela recalculava no navegador por outro
+ * caminho e o total exibido podia divergir do que era congelado.
+ */
+export const getBillingPreview = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireBillingRead(profile);
+  const input = BillingCompetenciaSchema.parse(request.data ?? {});
+  const customerCode = DEFAULT_CUSTOMER;
+  const now = new Date();
+  try {
+    const periodSnapshot = await db
+      .collection(collectionNames.periods)
+      .doc(input.competencia)
+      .get();
+    const period = periodSnapshot.data() ?? {};
+    const status = String(period.status ?? "aberto");
+    const frozen = period.invoice_snapshot as Record<string, unknown> | undefined;
+    const common = {
+      competencia: input.competencia,
+      status,
+      emitido_em: period.emitido_em ?? null,
+      pago_em: period.pago_em ?? null,
+      emission: {
+        available_from: emissionAvailableFrom(input.competencia),
+        can_emit:
+          status === "aberto" && isCompetenciaClosed(input.competencia, now),
+      },
+    };
+    if (status !== "aberto" && frozen) {
+      return {
+        ...common,
+        custo_estoque: Number(frozen.custo_estoque ?? 0),
+        ad_valorem_rate: Number(frozen.ad_valorem_rate ?? 0),
+        grupos: frozen.grupos ?? [],
+        total: Number(frozen.total ?? 0),
+        total_cents: Number(frozen.total_cents ?? 0),
+        calculated_at: frozen.issued_at ?? null,
+      };
+    }
+    const calculation = calculateBillingPeriod(
+      await loadBillingCalculation(input.competencia, customerCode),
+    );
+    return {
+      ...common,
+      custo_estoque: calculation.custo_estoque,
+      ad_valorem_rate: calculation.ad_valorem_rate,
+      grupos: calculation.grupos,
+      total: calculation.total,
+      total_cents: calculation.total_cents,
+      calculated_at: now.toISOString(),
+    };
+  } catch (error) {
+    return billingError(error);
+  }
 });
 
 export const saveBillingManual = onCall(async (request) => {
