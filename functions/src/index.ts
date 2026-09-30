@@ -29,6 +29,7 @@ import {
   emitImmutableEvent,
   openingInventorySessionDocumentId,
   recordCycleCountTransaction,
+  addCatalogPhotosTransaction,
   removeOpeningInventoryLineTransaction,
   setReturnDispositionTransaction,
   updateInboundReceiptConferenceTransaction,
@@ -5854,6 +5855,25 @@ export const removeOpeningInventoryLine = onCall(async (request) => {
     { ...input, customer_code },
     profile,
   );
+});
+
+const AddCatalogPhotosSchema = z.object({
+  sku_code: z.string().trim().min(1),
+  client_item_code: z.string().trim().optional(),
+  customer_code: z.string().trim().optional(),
+  photo_urls: z.array(z.string().url()).min(1).max(8),
+  photo_storage_paths: z.array(z.string().trim().min(1).max(900)).max(8).optional(),
+  idempotency_key: z.string().trim().min(1),
+});
+
+// Foto em item já cadastrado: a única edição de cadastro aberta ao armazém
+// (quem cadastra com foto no recebimento e na contagem).
+export const addCatalogPhotos = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  const input = AddCatalogPhotosSchema.parse(request.data ?? {});
+  const customer_code = requireCustomerScope(profile, input.customer_code);
+  return addCatalogPhotosTransaction(db, { ...input, customer_code }, profile);
 });
 
 export const recordCycleCount = onCall(async (request) => {
