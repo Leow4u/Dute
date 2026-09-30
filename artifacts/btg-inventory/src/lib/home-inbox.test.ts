@@ -62,10 +62,10 @@ describe("buildHomeInbox", () => {
     });
 
     expect(items.map((item) => [item.id, item.title, item.href])).toEqual([
-      ["blocked:ord_3", "Pedido PED-3 com exceção", "/wms/pedidos"],
+      ["blocked:ord_3", "Pedido PED-3 com exceção", "/pedidos"],
       ["triage", "2 solicitações para aprovar", "/solicitacoes"],
-      ["to-pick", "1 pedido para separar", "/wms/pedidos"],
-      ["to-ship", "1 pedido pronto para envio", "/wms/pedidos"],
+      ["to-pick", "1 pedido para separar", "/pedidos"],
+      ["to-ship", "2 pedidos para entregar", "/pedidos"],
       ["receipts", "1 recebimento para conferir", "/wms/receber"],
       ["agent", "2 avisos para revisar", "/agente"],
     ]);

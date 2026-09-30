@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   getActiveModule,
+  getHomePathForProfile,
   getNavigationForProfileRole,
   getRouteProfileRoles,
   INTERNAL_ROLES,
@@ -35,6 +36,7 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/products", ["owner", "admin", "interno", "wms", "suporte"]],
   ["/skus", ["owner", "admin", "interno", "wms", "suporte"]],
   ["/movements", ["owner", "admin", "interno", "suporte"]],
+  ["/pedidos", ["owner", "admin", "interno", "wms", "suporte"]],
   ["/orders", ["owner", "admin", "interno", "suporte"]],
   ["/faturamento", ["owner", "admin", "financeiro"]],
   ["/faturamento/tabela", ["owner", "admin", "financeiro"]],
@@ -75,10 +77,7 @@ describe("menu interno", () => {
     (role) => {
       expect(menu(role)).toEqual([
         { label: "Início", routes: ["Início"] },
-        {
-          label: "Pedidos",
-          routes: ["Solicitações", "Separar e enviar", "Histórico"],
-        },
+        { label: "Pedidos", routes: ["Pedidos"] },
         {
           label: "Estoque",
           routes: ["Saldos", "Receber", "Catálogo", "Movimentações"],
@@ -98,7 +97,7 @@ describe("menu interno", () => {
 
   it("operador WMS vê só a bancada e os documentos", () => {
     expect(menu("wms")).toEqual([
-      { label: "Separar e enviar", routes: ["Separar e enviar"] },
+      { label: "Pedidos", routes: ["Pedidos"] },
       { label: "Estoque", routes: ["Saldos", "Receber"] },
       { label: "Documentos", routes: ["Documentos"] },
     ]);
@@ -132,6 +131,8 @@ describe("grupo ativo", () => {
     ["/dashboard", "Início"],
     ["/solicitacoes", "Pedidos"],
     ["/wms/pedidos", "Pedidos"],
+    ["/pedidos", "Pedidos"],
+    ["/orders", "Pedidos"],
     ["/wms", "Estoque"],
     ["/wms/receber", "Estoque"],
     ["/wms/contagem", "Estoque"],
@@ -142,5 +143,16 @@ describe("grupo ativo", () => {
     ["/reports", "Mais"],
   ])("%s destaca %s", (path, label) => {
     expect(activeLabel(path)).toBe(label);
+  });
+});
+
+describe("tela inicial por perfil", () => {
+  it.each<[ProfileRole, string]>([
+    ["wms", "/pedidos"],
+    ["financeiro", "/faturamento"],
+    ["admin", "/dashboard"],
+    ["cliente", "/portal"],
+  ])("%s abre em %s", (role, path) => {
+    expect(getHomePathForProfile(role)).toBe(path);
   });
 });

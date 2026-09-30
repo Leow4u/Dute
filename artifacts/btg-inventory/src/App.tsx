@@ -86,7 +86,7 @@ const Support = lazy(() => import("./pages/support"));
 const CustomerRequests = lazy(() => import("./pages/customer-requests"));
 const WarehouseOps = lazy(() => import("./pages/warehouse-ops"));
 const WmsInventoryPage = lazy(() => import("./pages/wms-inventory"));
-const WmsPedidos = lazy(() => import("./pages/wms-pedidos"));
+const Pedidos = lazy(() => import("./pages/pedidos"));
 const Skus = lazy(() => import("./pages/skus"));
 const WmsReturnsPage = lazy(() => import("./pages/wms-returns"));
 const ClienteAssistente = lazy(() =>
@@ -860,9 +860,8 @@ function protectedRoute(
 }
 
 /**
- * Bancada em 3 abas — o dia a dia do operador numa operação de 150 m²:
- * o que tem (Estoque), o que chegou (Receber), o que a Cristiane pediu
- * (Pedidos). As etapas enterprise (putaway/picking/packing/expedição/
+ * Bancada em 2 abas — o que tem (Estoque) e o que chegou (Receber). O que
+ * o cliente pediu está em /pedidos, item próprio do menu. As etapas enterprise (putaway/picking/packing/expedição/
  * qualidade/exceções) continuam roteáveis por URL como telas de exceção,
  * fora da régua. A contagem (abertura/cíclica) vive em /wms/contagem,
  * alcançada pelo botão dentro da própria régua.
@@ -870,7 +869,6 @@ function protectedRoute(
 const WMS_STAGES: Array<{ label: string; path: string; match?: string[] }> = [
   { label: "Estoque", path: "/wms", match: ["/wms", "/wms/contagem"] },
   { label: "Receber", path: "/wms/receber", match: ["/wms/receber", "/wms/recebimento"] },
-  { label: "Pedidos", path: "/wms/pedidos" },
 ];
 
 function WmsStageTabs() {
@@ -922,13 +920,8 @@ const WmsReceiveScreen = () => (
   </div>
 );
 
-// Aba Pedidos: fila única separar → enviar → entregar.
-const WmsOrdersScreen = () => (
-  <div className="space-y-6">
-    <WmsStageTabs />
-    <WmsPedidos />
-  </div>
-);
+// A fila de pedidos saiu da bancada: é o item "Pedidos" do menu.
+const WmsOrdersRedirect = () => <Redirect to="/pedidos" />;
 
 // Contagem (abertura + cíclica) — alcançada pelo botão da aba Estoque.
 const WmsCountScreen = () => (
@@ -964,7 +957,8 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/reports", Reports),
   protectedRoute("/solicitacoes", CustomerRequests),
   protectedRoute("/wms/receber", WmsReceiveScreen),
-  protectedRoute("/wms/pedidos", WmsOrdersScreen),
+  protectedRoute("/wms/pedidos", WmsOrdersRedirect),
+  protectedRoute("/pedidos", Pedidos),
   protectedRoute("/wms/contagem", WmsCountScreen),
   protectedRoute("/wms/recebimento", WmsReceiveRedirect),
   protectedRoute("/wms/inventario", WmsCountRedirect),
