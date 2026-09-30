@@ -11,6 +11,7 @@ import {
   Search,
   SlidersHorizontal,
   Archive,
+  X,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -144,7 +145,20 @@ export default function Estoque() {
     [filter, items, search],
   );
   const selected = items.find((item) => item.key === selectedKey) ?? null;
-  const panelItem = desktop ? (selected ?? visible[0] ?? null) : selected;
+  // A ficha só abre quando a pessoa escolhe um item; fechada, a lista usa a
+  // largura toda. Clicar de novo na mesma linha (ou no X, ou Esc) recolhe.
+  const panelItem = selected;
+  const toggleItem = (item: StockItem) =>
+    setSelectedKey((current) => (current === item.key ? null : item.key));
+
+  useEffect(() => {
+    if (!desktop || !selectedKey) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedKey(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [desktop, selectedKey]);
 
   return (
     <div className="flex flex-col gap-4 pb-24">
@@ -237,14 +251,28 @@ export default function Estoque() {
           ) : skus.error ? (
             <p className="text-sm text-destructive">Não consegui carregar o estoque.</p>
           ) : (
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_440px]">
+            <div
+              className={cn(
+                "grid grid-cols-1 gap-4",
+                desktop && panelItem && "lg:grid-cols-[minmax(0,1fr)_440px]",
+              )}
+            >
               <ItemList
                 items={visible}
                 selectedKey={panelItem?.key}
-                onSelect={(item) => setSelectedKey(item.key)}
+                onSelect={toggleItem}
               />
               {desktop && panelItem ? (
-                <section className="overflow-hidden rounded-[20px] border border-primary/50 bg-white/90 lg:sticky lg:top-0 lg:max-h-[calc(100dvh-160px)] lg:overflow-y-auto">
+                <section className="relative overflow-hidden rounded-[20px] border border-primary/50 bg-white/90 lg:sticky lg:top-0 lg:max-h-[calc(100dvh-160px)] lg:overflow-y-auto">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedKey(null)}
+                    aria-label="Recolher ficha"
+                    title="Recolher (Esc)"
+                    className="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                   <ItemCard key={panelItem.key} item={panelItem} />
                 </section>
               ) : null}
@@ -321,9 +349,14 @@ function Chip({ tone, children }: { tone: "warn" | "bad" | "muted"; children: Re
   );
 }
 
+// Endereço real é longo ("RUA B - PRATELEIRA 12 - CAIXA 194"): quebra linha
+// dentro da coluna em vez de invadir o saldo ou esconder a caixa.
 function LocationTag({ id }: { id: string }) {
   return (
-    <span className="whitespace-nowrap rounded-md bg-blue-50 px-1.5 py-0.5 font-mono text-xs text-blue-700">
+    <span
+      title={id}
+      className="inline-block max-w-full break-words rounded-md bg-blue-50 px-1.5 py-0.5 align-middle font-mono text-xs text-blue-700"
+    >
       {id}
     </span>
   );
@@ -350,7 +383,7 @@ function ItemList({
   return (
     <div className="flex flex-col gap-2">
       <div className="overflow-hidden rounded-2xl border border-border bg-white/85">
-        <div className="hidden grid-cols-[minmax(0,1fr)_150px_64px_84px] gap-3 border-b border-border/70 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50 md:grid">
+        <div className="hidden grid-cols-[minmax(0,1fr)_200px_64px_84px] gap-3 border-b border-border/70 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50 md:grid">
           <span>Item</span>
           <span>Endereço</span>
           <span className="text-right">Saldo</span>
@@ -363,7 +396,7 @@ function ItemList({
               type="button"
               onClick={() => onSelect(item)}
               className={cn(
-                "grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40 md:grid-cols-[minmax(0,1fr)_150px_64px_84px]",
+                "grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40 md:grid-cols-[minmax(0,1fr)_200px_64px_84px]",
                 selectedKey === item.key && "bg-blue-50/60",
               )}
             >
@@ -381,7 +414,7 @@ function ItemList({
                   </p>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
                     {item.locations[0] ? (
-                      <span className="md:hidden">
+                      <span className="min-w-0 max-w-full md:hidden">
                         <LocationTag id={item.locations[0].id} />
                       </span>
                     ) : null}
@@ -389,12 +422,12 @@ function ItemList({
                   </div>
                 </div>
               </div>
-              <div className="hidden min-w-0 md:block">
+              <div className="hidden min-w-0 items-center gap-1 md:flex">
                 {item.locations[0] ? <LocationTag id={item.locations[0].id} /> : (
                   <span className="text-xs text-muted-foreground">Sem endereço</span>
                 )}
                 {item.locations.length > 1 ? (
-                  <span className="ml-1 text-xs text-muted-foreground">+{item.locations.length - 1}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">+{item.locations.length - 1}</span>
                 ) : null}
               </div>
               <div className="text-right md:contents">
@@ -581,9 +614,9 @@ function ItemCard({ item }: { item: StockItem }) {
         <Section title="Onde está">
           {item.locations.length ? (
             item.locations.map((location) => (
-              <div key={location.id} className="flex items-center justify-between py-1 text-sm">
+              <div key={location.id} className="flex min-w-0 items-center justify-between gap-3 py-1 text-sm">
                 <LocationTag id={location.id} />
-                <span className="font-semibold tabular-nums">
+                <span className="shrink-0 font-semibold tabular-nums">
                   {numberFormatter.format(location.qty)} un.
                 </span>
               </div>
