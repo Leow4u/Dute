@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   getActiveModule,
+  getHomePathForProfile,
   getNavigationForProfileRole,
   getRouteProfileRoles,
   INTERNAL_ROLES,
@@ -142,5 +143,16 @@ describe("grupo ativo", () => {
     ["/reports", "Mais"],
   ])("%s destaca %s", (path, label) => {
     expect(activeLabel(path)).toBe(label);
+  });
+});
+
+describe("tela inicial por perfil", () => {
+  it.each<[ProfileRole, string]>([
+    ["wms", "/pedidos"],
+    ["financeiro", "/faturamento"],
+    ["admin", "/dashboard"],
+    ["cliente", "/portal"],
+  ])("%s abre em %s", (role, path) => {
+    expect(getHomePathForProfile(role)).toBe(path);
   });
 });

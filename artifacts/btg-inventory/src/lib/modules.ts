@@ -522,12 +522,12 @@ export function getHomePathForAppRole(role: AppRole | null | undefined) {
 
 /**
  * Aterrissagem por papel do perfil: cada pessoa cai na tela onde trabalha,
- * não num dashboard genérico. O operador WMS abre a bancada; o financeiro,
- * a competência do mês.
+ * não num dashboard genérico. O operador WMS abre a fila de Pedidos (separar
+ * e entregar); o financeiro, a competência do mês.
  */
 export function getHomePathForProfile(role: ProfileRole | null | undefined) {
   if (role === "cliente") return "/portal";
-  if (role === "wms") return "/wms";
+  if (role === "wms") return "/pedidos";
   if (role === "financeiro") return "/faturamento";
   return "/dashboard";
 }
