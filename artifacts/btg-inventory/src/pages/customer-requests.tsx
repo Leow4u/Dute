@@ -1081,11 +1081,11 @@ function listChip(request: CustomerRequest, validation: BalanceValidation) {
   return <Chip tone="muted">Encerrada</Chip>;
 }
 
-function requestTitle(request: CustomerRequest) {
+export function requestTitle(request: CustomerRequest) {
   return request.description || request.title || "Solicitação sem descrição";
 }
 
-function requestSummary(request: CustomerRequest) {
+export function requestSummary(request: CustomerRequest) {
   const lines = getRequestValidationLines(request).length;
   const total = getQuantityTotal(request);
   return [
@@ -1108,7 +1108,11 @@ export default function CustomerRequests() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<RequestTab>("decide");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // /solicitacoes?id=<id> abre direto a solicitação (vem da fila de Pedidos).
+  const [selectedId, setSelectedId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return new URLSearchParams(window.location.search).get("id");
+  });
   const [rejecting, setRejecting] = useState<CustomerRequest | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [localTransitions, setLocalTransitions] = useState<
@@ -1578,8 +1582,8 @@ function RequestDetail({
           ) : null}
           {status === "approved" && (entities.order_id || entities.inbound_id) ? (
             <Button asChild variant="outline" size="sm" className="mt-3">
-              <Link href={entities.order_id ? "/wms/pedidos" : "/wms/receber"}>
-                {entities.order_id ? "Ver em Separar e enviar" : "Ver no Recebimento"}
+              <Link href={entities.order_id ? "/pedidos" : "/wms/receber"}>
+                {entities.order_id ? "Ver em Pedidos" : "Ver no Recebimento"}
               </Link>
             </Button>
           ) : null}

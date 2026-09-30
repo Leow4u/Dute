@@ -102,8 +102,11 @@ export function buildHomeInbox({
   const toPick = orders.filter(
     (order) => order.stage === "separar" && !blockedKeys.has(order.key),
   );
+  // Entrega no mesmo dia: "pronto para envio" e "em rota" são um passo só.
   const toShip = orders.filter(
-    (order) => order.stage === "enviar" && !blockedKeys.has(order.key),
+    (order) =>
+      (order.stage === "enviar" || order.stage === "entregar") &&
+      !blockedKeys.has(order.key),
   );
   const openReceipts = queueTasks(ops, "receiving").filter(
     (task) =>
@@ -126,7 +129,7 @@ export function buildHomeInbox({
       detail:
         order.blockedReason ??
         plural(order.exceptionCount, "exceção aberta", "exceções abertas"),
-      href: "/wms/pedidos",
+      href: "/pedidos",
       actionLabel: "Resolver",
     });
   }
@@ -150,7 +153,7 @@ export function buildHomeInbox({
       tone: "attention",
       title: `${plural(toPick.length, "pedido", "pedidos")} para separar`,
       detail: listPreview(toPick.map((order) => order.orderNumber), 3),
-      href: "/wms/pedidos",
+      href: "/pedidos",
       actionLabel: "Separar",
     });
   }
@@ -159,10 +162,10 @@ export function buildHomeInbox({
     items.push({
       id: "to-ship",
       tone: "info",
-      title: `${plural(toShip.length, "pedido pronto", "pedidos prontos")} para envio`,
+      title: `${plural(toShip.length, "pedido", "pedidos")} para entregar`,
       detail: listPreview(toShip.map((order) => order.orderNumber), 3),
-      href: "/wms/pedidos",
-      actionLabel: "Enviar",
+      href: "/pedidos",
+      actionLabel: "Entregar",
     });
   }
 

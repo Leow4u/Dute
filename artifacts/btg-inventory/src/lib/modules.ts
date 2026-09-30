@@ -4,7 +4,6 @@ import {
   BarChart3,
   Building2,
   BrainCircuit,
-  ClipboardList,
   FileText,
   Home,
   Inbox,
@@ -13,7 +12,6 @@ import {
   PackagePlus,
   PackageSearch,
   Receipt,
-  ShoppingCart,
   Truck,
   Users,
   Warehouse,
@@ -172,8 +170,8 @@ export const APP_MODULES: AppModule[] = [
       }),
     ],
   }),
-  // Pedido é um fluxo só: o cliente solicita, a triagem aprova, o armazém
-  // separa e envia. As três telas ficam lado a lado até virarem uma fila.
+  // Pedido é um fluxo só: a coordenação aprova, o armazém separa, e a
+  // entrega sai no mesmo dia. Uma tela, três grupos (pages/pedidos.tsx).
   appModule({
     id: "orders",
     label: "Pedidos",
@@ -182,25 +180,11 @@ export const APP_MODULES: AppModule[] = [
     roles: WMS_ROLES,
     routes: [
       navRoute({
-        id: "orders-requests",
-        label: "Solicitações",
-        href: "/solicitacoes",
-        icon: ClipboardList,
-        roles: COORDINATION_NAV_ROLES,
-      }),
-      navRoute({
-        id: "orders-fulfillment",
-        label: "Separar e enviar",
-        href: "/wms/pedidos",
+        id: "orders-queue",
+        label: "Pedidos",
+        href: "/pedidos",
         icon: Truck,
         roles: WMS_ROLES,
-      }),
-      navRoute({
-        id: "orders-history",
-        label: "Histórico",
-        href: "/orders",
-        icon: ShoppingCart,
-        roles: COORDINATION_NAV_ROLES,
       }),
     ],
   }),
@@ -468,6 +452,9 @@ const WMS_DEEP_LINK_PROFILE_ROLES = Object.fromEntries(
  * Precisam de entrada própria porque não constam como rota de menu.
  */
 const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
+  // Triagem detalhada e histórico, abertos a partir da fila de Pedidos.
+  { path: "/solicitacoes", roles: COORDINATION_NAV_ROLES },
+  { path: "/orders", roles: COORDINATION_NAV_ROLES },
   // Painel do Agent Dute, aberto pelo botão flutuante e pelo Início.
   { path: "/agente", roles: TOWER_NAV_ROLES },
   { path: "/agente/conhecimento", roles: TOWER_NAV_ROLES },
@@ -600,10 +587,18 @@ export function isRouteActive(
   return current === target || current.startsWith(`${target}/`);
 }
 
+/** Telas fora do menu que pertencem a um item dele. */
+const ACTIVE_ALIASES: Record<string, string> = {
+  "/solicitacoes": "/pedidos",
+  "/orders": "/pedidos",
+  "/wms/pedidos": "/pedidos",
+};
+
 export function getActiveModule(
   modules: AppModule[],
-  currentPath: string,
+  path: string,
 ): AppModule {
+  const currentPath = ACTIVE_ALIASES[normalizePath(path)] ?? path;
   const exactMatch = modules.find((module) =>
     module.routes.some(
       (route) =>
