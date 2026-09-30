@@ -35,6 +35,7 @@ import {
   type AppModule,
   type ModuleRoute,
 } from "@/lib/modules";
+import { AgentDock } from "@/components/agent/agent-dock";
 import { useAppAuth, useAppUser, type AppUser } from "@/lib/auth";
 import { usePwaInstall } from "@/lib/pwa-install";
 
@@ -742,6 +743,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
       </main>
+      {clientSurface ? null : <AgentDock />}
     </div>
   );
 }

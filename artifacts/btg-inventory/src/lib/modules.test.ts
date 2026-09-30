@@ -90,12 +90,7 @@ describe("menu interno", () => {
         },
         {
           label: "Mais",
-          routes: [
-            "Relatórios",
-            "Documentos",
-            "Agent Dute",
-            "Conhecimento do agente",
-          ],
+          routes: ["Relatórios", "Documentos"],
         },
       ]);
     },
@@ -144,7 +139,7 @@ describe("grupo ativo", () => {
     ["/catalogo/saldos", "Estoque"],
     ["/faturamento/tabela", "Faturamento"],
     ["/suporte", "Administração"],
-    ["/agente/conhecimento", "Mais"],
+    ["/reports", "Mais"],
   ])("%s destaca %s", (path, label) => {
     expect(activeLabel(path)).toBe(label);
   });

@@ -292,9 +292,8 @@ export const APP_MODULES: AppModule[] = [
       }),
     ],
   }),
-  // Uso raro, fora da régua principal. Relatórios, Documentos e o painel do
-  // Agent Dute continuam acessíveis aqui até ganharem lugar nas telas de
-  // trabalho (exportar por tela, documento pelo pedido, assistente flutuante).
+  // Uso raro, fora da régua principal. O Agent Dute virou o botão flutuante
+  // (components/agent/agent-dock.tsx); o painel dele segue em /agente.
   appModule({
     id: "more",
     label: "Mais",
@@ -315,20 +314,6 @@ export const APP_MODULES: AppModule[] = [
         href: "/documentos",
         icon: FileText,
         roles: INTERNAL_ROLES,
-      }),
-      navRoute({
-        id: "more-agent",
-        label: "Agent Dute",
-        href: "/agente",
-        icon: BrainCircuit,
-        roles: TOWER_NAV_ROLES,
-      }),
-      navRoute({
-        id: "more-agent-knowledge",
-        label: "Conhecimento do agente",
-        href: "/agente/conhecimento",
-        icon: FileText,
-        roles: TOWER_NAV_ROLES,
       }),
     ],
   }),
@@ -483,6 +468,9 @@ const WMS_DEEP_LINK_PROFILE_ROLES = Object.fromEntries(
  * Precisam de entrada própria porque não constam como rota de menu.
  */
 const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
+  // Painel do Agent Dute, aberto pelo botão flutuante e pelo Início.
+  { path: "/agente", roles: TOWER_NAV_ROLES },
+  { path: "/agente/conhecimento", roles: TOWER_NAV_ROLES },
   { path: "/catalogo/saldos", roles: WMS_ROLES },
   { path: "/catalogo/mapa", roles: WMS_ROLES },
   { path: "/products", roles: WMS_ROLES },
