@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import { buildStockItems, matchesFilter, matchesSearch } from "./stock-items";
 
 const skus = [
-  { id: 1, cod_btg: "SKU-A", cod_cliente: "A.01.M", produto: "Tricô", cor: "Marinho", tamanho: "M", estoque_atual: 29, estoque_reservado: 0, preco_unit: 100, photo_urls: ["https://x/sku-a.jpg"] },
+  { id: 1, cod_btg: "SKU-A", cod_cliente: "A.01.M", produto: "Tricô", cor: "Marinho", tamanho: "M", estoque_atual: 29, estoque_reservado: 0, estoque_minimo: 30, preco_unit: 100, photo_urls: ["https://x/sku-a.jpg"] },
   { id: 2, cod_btg: "MAT-009", cod_cliente: "MAT-009", produto: "Cesto", estoque_atual: 2 },
-  { id: 3, cod_btg: "SKU-P", cod_cliente: "A.01.P", produto: "Tricô", estoque_atual: 15, estoque_reservado: 10, estoque_disponivel: 5 },
+  { id: 3, cod_btg: "SKU-P", cod_cliente: "A.01.P", produto: "Tricô", estoque_atual: 15, estoque_reservado: 10, estoque_disponivel: 5, estoque_minimo: 10 },
   { id: 4, cod_btg: "SKU-ARQ", cod_cliente: "ARQ", produto: "Arquivado", estoque_atual: 0, archived: true },
   { id: 5, cod_btg: "SKU-Z", cod_cliente: "Z", produto: "Zerado", estoque_atual: 0, rua: "A", prateleira: "1", caixa: "2" },
 ];
@@ -49,11 +49,22 @@ describe("itens do estoque", () => {
   it("filtra baixo, reservados, sem foto e zerados", () => {
     const codes = (filter: Parameters<typeof matchesFilter>[1]) =>
       items.filter((item) => matchesFilter(item, filter)).map((item) => item.skuCode).sort();
-    expect(codes("low")).toEqual(["MAT-009"]);
+    expect(codes("low")).toEqual(["SKU-A"]);
     expect(codes("reserved")).toEqual(["SKU-P"]);
     expect(codes("no-photo")).toEqual(["MAT-009"]);
     expect(codes("zero")).toEqual(["SKU-Z"]);
     expect(byCode("SKU-P").available).toBe(5);
+  });
+
+  it("só marca baixo quem tem mínimo cadastrado", () => {
+    // 2 unidades, mas sem mínimo: não é "baixo" só por ser pouco.
+    expect(byCode("MAT-009").minimum).toBeUndefined();
+    expect(byCode("MAT-009").low).toBe(false);
+    // 29 com mínimo 30: baixo. 15 com mínimo 10: ok.
+    expect(byCode("SKU-A")).toMatchObject({ minimum: 30, low: true });
+    expect(byCode("SKU-P")).toMatchObject({ minimum: 10, low: false });
+    // Zerado continua "Zerado", não "Baixo".
+    expect(byCode("SKU-Z").low).toBe(false);
   });
 
   it("busca por código, nome ou endereço", () => {

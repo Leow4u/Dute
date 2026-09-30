@@ -35,6 +35,15 @@ const skuSchema = z.object({
   cor: z.string().optional(),
   tamanho: z.string().optional(),
   estado: z.string().optional(),
+  // Vazio = sem mínimo (o item nunca aparece como "Baixo").
+  estoque_minimo: z
+    .union([z.string(), z.number(), z.null()])
+    .optional()
+    .refine(
+      (value) =>
+        value === undefined || value === null || /^\d*$/.test(String(value).trim()),
+      "Use um número inteiro, ou deixe vazio",
+    ),
 });
 
 type SkuFormValues = z.infer<typeof skuSchema>;
@@ -327,7 +336,7 @@ export function SkuModal({ sku, trigger }: { sku?: any; trigger?: ReactNode }) {
 
   const { register, handleSubmit, formState: { errors }, reset } = useForm<SkuFormValues>({
     resolver: zodResolver(skuSchema),
-    defaultValues: sku || {
+    defaultValues: sku ? { ...sku, estoque_minimo: sku.estoque_minimo ?? "" } : {
       cod_btg: "",
       cod_cliente: "",
       produto: "",
@@ -337,6 +346,7 @@ export function SkuModal({ sku, trigger }: { sku?: any; trigger?: ReactNode }) {
       cor: "",
       tamanho: "",
       estado: "NOVO",
+      estoque_minimo: "",
     }
   });
 
@@ -347,6 +357,7 @@ export function SkuModal({ sku, trigger }: { sku?: any; trigger?: ReactNode }) {
         {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: getListSkusQueryKey() });
+            queryClient.invalidateQueries({ queryKey: ["estoque"] });
             toast({ title: "SKU atualizado com sucesso" });
             setOpen(false);
           },
@@ -365,6 +376,7 @@ export function SkuModal({ sku, trigger }: { sku?: any; trigger?: ReactNode }) {
         {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: getListSkusQueryKey() });
+            queryClient.invalidateQueries({ queryKey: ["estoque"] });
             toast({ title: "SKU criado com sucesso" });
             setOpen(false);
             reset();
@@ -444,6 +456,28 @@ export function SkuModal({ sku, trigger }: { sku?: any; trigger?: ReactNode }) {
                 <Input id="estado" placeholder="NOVO" {...register("estado")} />
               </div>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Reposição</h3>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="estoque_minimo">Estoque mínimo</Label>
+                <Input
+                  id="estoque_minimo"
+                  type="number"
+                  min={0}
+                  step={1}
+                  inputMode="numeric"
+                  placeholder="Sem mínimo"
+                  {...register("estoque_minimo")}
+                />
+              </div>
+              <p className="col-span-2 self-end pb-2 text-xs leading-5 text-muted-foreground">
+                Com saldo igual ou abaixo deste número o item aparece como “Baixo” no Estoque. Vazio: sem alerta.
+              </p>
+            </div>
+            {errors.estoque_minimo && <span className="text-xs text-destructive">{errors.estoque_minimo.message}</span>}
           </div>
 
           <div className="rounded-2xl border border-blue-100 bg-blue-50/55 p-4">

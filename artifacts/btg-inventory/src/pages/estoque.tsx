@@ -601,7 +601,16 @@ function ItemCard({ item }: { item: StockItem }) {
 
       <div className="flex flex-col gap-5 p-5">
         <div className={cn("grid gap-2", catalogWriter ? "grid-cols-3" : "grid-cols-2")}>
-          <Stat label="em estoque" value={numberFormatter.format(item.onHand)} />
+          <Stat
+            label="em estoque"
+            value={numberFormatter.format(item.onHand)}
+            hint={
+              item.minimum !== undefined
+                ? `mínimo ${numberFormatter.format(item.minimum)}`
+                : undefined
+            }
+            alert={item.low}
+          />
           <Stat label="disponível" value={numberFormatter.format(item.available)} />
           {catalogWriter ? (
             <Stat
@@ -723,11 +732,26 @@ function ItemCard({ item }: { item: StockItem }) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({
+  label,
+  value,
+  hint,
+  alert,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  alert?: boolean;
+}) {
   return (
     <div className="rounded-xl bg-muted/50 px-3 py-2.5">
-      <p className="text-xl font-semibold tabular-nums text-foreground">{value}</p>
+      <p className={cn("text-xl font-semibold tabular-nums", alert ? "text-red-600" : "text-foreground")}>
+        {value}
+      </p>
       <p className="text-xs text-foreground/60">{label}</p>
+      {hint ? (
+        <p className={cn("text-xs", alert ? "font-medium text-red-600" : "text-foreground/50")}>{hint}</p>
+      ) : null}
     </div>
   );
 }
