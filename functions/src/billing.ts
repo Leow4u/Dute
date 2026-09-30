@@ -26,6 +26,7 @@ export type LpuItemId = number | string;
 export type BillingErrorCode =
   | "INVALID_COMPETENCIA"
   | "FUTURE_COMPETENCIA"
+  | "COMPETENCIA_NOT_CLOSED"
   | "INVALID_STATUS"
   | "INVALID_STATUS_TRANSITION"
   | "INVALID_NUMBER"
@@ -501,6 +502,70 @@ export function assertCompetenciaCanBeOpen(
   }
 }
 
+/** Primeiro dia (YYYY-MM-DD) em que a competência pode ser emitida. */
+export function emissionAvailableFrom(competencia: string): string {
+  const { year, month } = parseCompetencia(competencia);
+  const nextYear = month === 12 ? year + 1 : year;
+  const nextMonth = month === 12 ? 1 : month + 1;
+  return `${String(nextYear).padStart(4, "0")}-${String(nextMonth).padStart(2, "0")}-01`;
+}
+
+export function isCompetenciaClosed(
+  competencia: string,
+  now: Date,
+  timeZone = DEFAULT_BILLING_TIME_ZONE,
+): boolean {
+  parseCompetencia(competencia);
+  return competencia < competenciaFromDate(now, timeZone);
+}
+
+/**
+ * Emitir congela a fatura. Se o mês ainda está em curso, o que acontecer
+ * depois da emissão não seria cobrado em competência nenhuma.
+ */
+export function assertCompetenciaClosed(
+  competencia: string,
+  now: Date,
+  timeZone = DEFAULT_BILLING_TIME_ZONE,
+): void {
+  if (!isCompetenciaClosed(competencia, now, timeZone)) {
+    const [year, month, day] = emissionAvailableFrom(competencia).split("-");
+    throw new BillingDomainError(
+      "COMPETENCIA_NOT_CLOSED",
+      `A competência ${competencia} ainda não terminou. A emissão fica liberada a partir de ${day}/${month}/${year}.`,
+    );
+  }
+}
+
+const OFFSET_PATTERN = /(Z|[+-]\d{2}:?\d{2})$/i;
+const LOCAL_DATE_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])(?:-\d{2})?(?:[T ][\d:.]+)?$/;
+
+/**
+ * Competência de um instante no horário de Brasília. Um movimento das 22h do
+ * dia 30/09 (01/10 01:00 UTC) é de setembro. Datas sem fuso (legado) valem
+ * como foram escritas.
+ */
+export function competenciaOfInstant(
+  value: string,
+  timeZone = DEFAULT_BILLING_TIME_ZONE,
+): string | null {
+  const text = value.trim();
+  if (!text) return null;
+  if (!OFFSET_PATTERN.test(text)) {
+    const local = LOCAL_DATE_PATTERN.exec(text);
+    return local ? `${local[1]}-${local[2]}` : null;
+  }
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return null;
+  return competenciaFromDate(date, timeZone);
+}
+
+/** Item da tabela sem cliente gravado pertence ao cliente padrão. */
+export function billingCustomerOf(value: unknown, defaultCustomer: string): string {
+  const text = typeof value === "string" ? value.trim() : "";
+  return text || defaultCustomer;
+}
+
 export function isBillingStatus(value: unknown): value is BillingStatus {
   return (
     typeof value === "string" &&
@@ -808,6 +873,7 @@ export function prepareInvoiceEmission(
     competencia: input.competencia,
     now: options.issuedAt,
   });
+  assertCompetenciaClosed(input.competencia, options.issuedAt);
   const snapshot = buildInvoiceSnapshot(input, options);
   const timestamp = options.firestoreTimestamp ?? options.issuedAt;
   const periodUpdate = Object.freeze({
