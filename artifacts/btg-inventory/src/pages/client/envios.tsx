@@ -8,6 +8,8 @@ import { useToast } from "@/hooks/use-toast";
 import {
   SHIPMENT_STEPS,
   invoiceDraft,
+  pendingCodeItem,
+  shipmentLineProblem,
   fillIfEmpty,
   parsePastedItems,
   splitShipments,
@@ -248,7 +250,7 @@ function OnTheWayCard({ view }: { view: ShipmentView }) {
 
 // -------------------------------------------------------------- formulário
 
-type Line = { id: string; code: string; name: string; quantity: string };
+type Line = { id: string; code: string; name: string; quantity: string; supplierCode?: string };
 
 function normalized(value: string) {
   return value
@@ -321,6 +323,7 @@ function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose
   const filled = resolved.filter(({ line }) => line.code.trim() || line.name.trim() || line.quantity.trim());
   const pieces = filled.reduce((sum, entry) => sum + Math.max(0, entry.quantity), 0);
   const newProducts = filled.filter((entry) => entry.line.code.trim() && !entry.match).length;
+  const pendingCodes = filled.filter((entry) => !entry.line.code.trim() && !entry.match).length;
   const codes = filled.map(({ line, match }) => normalized(match ? inventoryItemClientCode(match) : line.code)).filter(Boolean);
   const duplicates = new Set(codes.filter((code, index) => codes.indexOf(code) !== index));
 
@@ -332,9 +335,8 @@ function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose
     if (!supplier.trim()) return "Informe o fornecedor.";
     if (!filled.length) return "Adicione ao menos um item.";
     for (const [index, { line, match, quantity }] of filled.entries()) {
-      if (!line.code.trim()) return `Item ${index + 1}: informe o código.`;
-      if (!match && !line.name.trim()) return `Item ${index + 1}: produto novo, informe o nome.`;
-      if (quantity <= 0) return `Item ${index + 1}: informe quantas peças vêm.`;
+      const issue = shipmentLineProblem(index, { code: line.code, name: line.name, quantity, inStock: Boolean(match) });
+      if (issue) return issue;
     }
     if (duplicates.size) return "Há códigos repetidos. Junte as quantidades numa linha só.";
     return null;
@@ -361,14 +363,18 @@ function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose
         supplier: supplier.trim(),
         invoice_number: invoice.trim() || undefined,
         attachments,
-        items: filled.map(({ line, match, quantity }) => ({
-          sku_code: match ? inventoryItemSku(match) : line.code.trim(),
-          client_item_code: match ? inventoryItemClientCode(match) : line.code.trim(),
-          product_name: match ? inventoryItemName(match) : line.name.trim(),
-          product_registration: match ? "existing" : "new",
-          location_id: null,
-          quantity,
-        })),
+        items: filled.map(({ line, match, quantity }) =>
+          !match && !line.code.trim()
+            ? pendingCodeItem({ name: line.name, quantity, supplierCode: line.supplierCode })
+            : {
+                sku_code: match ? inventoryItemSku(match) : line.code.trim(),
+                client_item_code: match ? inventoryItemClientCode(match) : line.code.trim(),
+                product_name: match ? inventoryItemName(match) : line.name.trim(),
+                product_registration: match ? "existing" : "new",
+                location_id: null,
+                quantity,
+              },
+        ),
       });
     },
     onSuccess: () => {
@@ -409,14 +415,14 @@ function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose
     if (first && !readableFile && !reading) void readInvoice(first);
   }
 
-  function addLines(incoming: Array<{ code: string; quantity: number; name?: string }>) {
+  function addLines(incoming: Array<{ code: string; quantity: number; name?: string; supplierCode?: string }>) {
     setLines((current) => {
       const kept = current.filter((line) => line.code.trim() || line.name.trim() || line.quantity.trim());
       const next = kept.map((line) => ({ ...line }));
       for (const item of incoming) {
         const existing = item.code ? next.find((line) => normalized(line.code) === normalized(item.code)) : undefined;
         if (existing) existing.quantity = String((Number(existing.quantity) || 0) + item.quantity);
-        else next.push({ ...newLine(item.code, String(item.quantity)), name: item.name ?? "" });
+        else next.push({ ...newLine(item.code, String(item.quantity)), name: item.name ?? "", supplierCode: item.supplierCode });
       }
       return next.length ? next : [newLine()];
     });
@@ -469,6 +475,7 @@ function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose
         code: line.code.trim(),
         name: line.name.trim(),
         quantity: Number(line.quantity.replace(",", ".")) || 0,
+        supplierCode: line.supplierCode,
       })),
     );
     setInvoiceReading(null);
@@ -584,7 +591,7 @@ function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose
                     className={cn(inputClass, "py-1.5", duplicates.has(code) && "border-amber-500")}
                     value={line.code}
                     onChange={(event) => update(line.id, { code: event.target.value })}
-                    placeholder="Código"
+                    placeholder="Código (se souber)"
                     list="envio-codigos"
                     aria-label="Código do item"
                   />
@@ -614,6 +621,8 @@ function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose
                       ) : (
                         <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11.5px] font-semibold text-indigo-700">produto novo</span>
                       )
+                    ) : line.name.trim() ? (
+                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11.5px] font-semibold text-amber-800">código a definir</span>
                     ) : null}
                   </span>
                   <button
@@ -641,6 +650,7 @@ function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose
             <SummaryRow label="Itens" value={integer.format(filled.length)} />
             <SummaryRow label="Peças" value={integer.format(pieces)} />
             {newProducts ? <SummaryRow label="Produtos novos" value={integer.format(newProducts)} /> : null}
+            {pendingCodes ? <SummaryRow label="Código a definir" value={integer.format(pendingCodes)} /> : null}
           </dl>
           <Button type="button" className="mt-4 w-full rounded-xl" onClick={submit} disabled={busy}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
@@ -648,6 +658,7 @@ function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose
           </Button>
           <p className="mt-3 text-xs leading-5 text-muted-foreground">
             O estoque só muda depois da conferência física na Dutelog.
+            {pendingCodes ? " Itens sem código: a equipe define pela etiqueta na chegada." : ""}
           </p>
         </aside>
       </div>
@@ -849,7 +860,7 @@ function InvoiceReview({
           </DialogTitle>
           <DialogDescription>
             {title ? `${title} · ` : ""}
-            {draft.length} {draft.length === 1 ? "item" : "itens"}. Confira o código da BTG e a quantidade de cada um. A leitura automática pode errar.
+            {draft.length} {draft.length === 1 ? "item" : "itens"}. Confira a quantidade e, se souber, o código da BTG. Sem código, a Dutelog define na conferência pela etiqueta. A leitura automática pode errar.
           </DialogDescription>
         </DialogHeader>
         <div className="max-h-[52vh] overflow-y-auto rounded-xl border border-border">
@@ -878,7 +889,7 @@ function InvoiceReview({
                         className={cn(inputClass, "py-1")}
                         value={line.code}
                         list="envio-codigos"
-                        placeholder="Informe o código"
+                        placeholder="Código (se souber)"
                         onChange={(event) => update(line.key, { code: event.target.value })}
                       />
                       <span className="mt-1 block text-[11.5px]">
@@ -890,7 +901,7 @@ function InvoiceReview({
                         ) : line.code.trim() ? (
                           <span className="text-indigo-700">produto novo · {line.name}</span>
                         ) : (
-                          <span className="text-amber-700">não achei no estoque: informe o código</span>
+                          <span className="text-amber-700">código a definir · a Dutelog confere pela etiqueta</span>
                         )}
                       </span>
                     </td>

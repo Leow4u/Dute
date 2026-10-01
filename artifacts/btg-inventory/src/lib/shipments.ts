@@ -202,6 +202,8 @@ export type InvoiceDraftLine = {
   name: string;
   quantity: string;
   matchedBy: "codigo" | "nome" | null;
+  /** Código do produto na nota do fornecedor, para a conferência. */
+  supplierCode: string;
 };
 
 /** Itens lidos da nota viram linhas para a pessoa conferir antes de usar. */
@@ -214,5 +216,34 @@ export function invoiceDraft(reading: InvoiceReading): InvoiceDraftLine[] {
     name: item.match ? item.match.product_name : item.description,
     quantity: String(item.quantity),
     matchedBy: item.match?.by ?? null,
+    supplierCode: item.supplier_code,
   }));
+}
+
+// ------------------------------------------------------- código a definir
+
+/**
+ * O código da BTG muitas vezes só vem na etiqueta. Item sem código segue no
+ * aviso como "código a definir": a Dutelog lê a etiqueta na conferência.
+ * Sem código, o nome do produto é obrigatório.
+ */
+export function shipmentLineProblem(
+  index: number,
+  line: { code: string; name: string; quantity: number; inStock: boolean },
+) {
+  if (!line.code.trim() && !line.name.trim()) return `Item ${index + 1}: informe o código ou o nome do produto.`;
+  if (line.code.trim() && !line.inStock && !line.name.trim()) return `Item ${index + 1}: produto novo, informe o nome.`;
+  if (line.quantity <= 0) return `Item ${index + 1}: informe quantas peças vêm.`;
+  return null;
+}
+
+/** Linha sem código vira item "código a definir", com o código do fornecedor anotado. */
+export function pendingCodeItem(line: { name: string; quantity: number; supplierCode?: string }) {
+  return {
+    product_name: line.name.trim(),
+    product_registration: "unknown" as const,
+    location_id: null,
+    quantity: line.quantity,
+    notes: line.supplierCode?.trim() ? `Código do fornecedor: ${line.supplierCode.trim()}` : undefined,
+  };
 }
