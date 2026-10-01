@@ -37,6 +37,7 @@ import {
   type ModuleRoute,
 } from "@/lib/modules";
 import { AgentDock } from "@/components/agent/agent-dock";
+import { AGENT_PATH, isAgentShortcut } from "@/lib/agent-chat";
 import { useAppAuth, useAppUser, type AppUser } from "@/lib/auth";
 import { usePwaInstall } from "@/lib/pwa-install";
 import { roleDescription, roleLabel } from "@/lib/access";
@@ -472,7 +473,7 @@ function MobileModuleNav({
 }
 
 export default function AppLayout({ children }: { children: ReactNode }) {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const { user } = useAppUser();
   const { signOut } = useAppAuth();
   const { isOnline } = usePwaInstall();
@@ -487,6 +488,39 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem("dute.sidebar") === "collapsed";
   });
+  // No Agent Dute o menu recolhe sozinho e o chat fica com a tela. Abrir o
+  // menu ali vale só até sair da tela; a preferência salva não muda.
+  const agentScreen = location === AGENT_PATH;
+  const [agentMenuOpen, setAgentMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!agentScreen) setAgentMenuOpen(false);
+  }, [agentScreen]);
+  const collapsed = agentScreen ? !agentMenuOpen : sidebarCollapsed;
+  function toggleSidebar() {
+    if (agentScreen) setAgentMenuOpen((current) => !current);
+    else setSidebarCollapsed((current) => !current);
+  }
+  // "/" no portal: vai para o campo do Agent Dute da tela (barra do Início ou
+  // o chat); nas outras telas, abre o Agent Dute.
+  useEffect(() => {
+    if (!clientSurface) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const shortcut = isAgentShortcut({
+        key: event.key,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        altKey: event.altKey,
+        target: event.target as HTMLElement | null,
+      });
+      if (!shortcut) return;
+      event.preventDefault();
+      const field = document.querySelector<HTMLElement>("[data-agent-input]");
+      if (field) field.focus();
+      else navigate(AGENT_PATH);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [clientSurface, navigate]);
   const [openModuleIds, setOpenModuleIds] = useState<Set<string>>(
     () => new Set([activeModule.id]),
   );
@@ -505,14 +539,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   }, [sidebarCollapsed]);
 
   useEffect(() => {
-    if (sidebarCollapsed) return;
+    if (collapsed) return;
     setOpenModuleIds((current) => {
       if (current.has(activeModule.id)) return current;
       const next = new Set(current);
       next.add(activeModule.id);
       return next;
     });
-  }, [activeModule.id, sidebarCollapsed]);
+  }, [activeModule.id, collapsed]);
 
   function toggleModule(moduleId: string) {
     setOpenModuleIds((current) => {
@@ -531,13 +565,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <aside
         className={cn(
           "hidden min-h-0 flex-shrink-0 flex-col border-r border-sidebar-border bg-sidebar/80 backdrop-blur-[40px] transition-[width] duration-200 ease-out md:flex",
-          sidebarCollapsed ? "w-20" : "w-[292px]",
+          collapsed ? "w-20" : "w-[292px]",
         )}
       >
         <div
           className={cn(
             "flex h-20 items-center border-b border-sidebar-border/70 px-3",
-            sidebarCollapsed ? "justify-center" : "justify-between gap-3",
+            collapsed ? "justify-center" : "justify-between gap-3",
           )}
         >
           <img
@@ -545,7 +579,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             alt="Dutelog Soluções Logísticas"
             className={cn(
               "h-9 w-auto object-contain transition-[max-width] duration-200",
-              sidebarCollapsed ? "max-w-[56px]" : "max-w-[168px]",
+              collapsed ? "max-w-[56px]" : "max-w-[168px]",
             )}
           />
           <Tooltip>
@@ -554,23 +588,23 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 type="button"
                 className={cn(
                   "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sidebar-foreground/60 outline-none transition-colors duration-200 hover:bg-white/70 hover:text-sidebar-foreground",
-                  sidebarCollapsed &&
+                  collapsed &&
                     "absolute left-[56px] bg-sidebar/90 shadow-[0_8px_24px_rgba(15,23,42,.04)]",
                 )}
-                onClick={() => setSidebarCollapsed((current) => !current)}
+                onClick={toggleSidebar}
               >
-                {sidebarCollapsed ? (
+                {collapsed ? (
                   <PanelLeftOpen className="h-4 w-4" />
                 ) : (
                   <PanelLeftClose className="h-4 w-4" />
                 )}
                 <span className="sr-only">
-                  {sidebarCollapsed ? "Expandir menu" : "Recolher menu"}
+                  {collapsed ? "Expandir menu" : "Recolher menu"}
                 </span>
               </button>
             </TooltipTrigger>
             <TooltipContent side="right">
-              {sidebarCollapsed ? "Expandir menu" : "Recolher menu"}
+              {collapsed ? "Expandir menu" : "Recolher menu"}
             </TooltipContent>
           </Tooltip>
         </div>
@@ -578,11 +612,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <nav
           className={cn(
             "flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto py-5",
-            sidebarCollapsed ? "items-center px-3" : "px-4",
+            collapsed ? "items-center px-3" : "px-4",
           )}
         >
           {modules.map((module) =>
-            sidebarCollapsed ? (
+            collapsed ? (
               <CollapsedModuleItem
                 key={module.id}
                 module={module}
@@ -605,12 +639,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <div
           className={cn(
             "border-t border-sidebar-border/70 p-3",
-            sidebarCollapsed ? "flex justify-center" : "px-4",
+            collapsed ? "flex justify-center" : "px-4",
           )}
         >
           <SidebarAccountFooter
             basePath={basePath}
-            compact={sidebarCollapsed}
+            compact={collapsed}
             signOut={signOut}
             user={user}
           />

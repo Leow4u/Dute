@@ -118,8 +118,8 @@ const ClienteInicio = lazy(() =>
 const ClientePedidos = lazy(() =>
   import("./pages/client").then((m) => ({ default: m.ClientePedidos })),
 );
-const ClienteSolicitacoes = lazy(() =>
-  import("./pages/client").then((m) => ({ default: m.ClienteSolicitacoes })),
+const ClienteEnvios = lazy(() =>
+  import("./pages/client").then((m) => ({ default: m.ClienteEnvios })),
 );
 import { useRole } from "./hooks/use-role";
 import { AuthProvider, useAppUser } from "./lib/auth";
@@ -1013,7 +1013,7 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/configuracoes/sistema", SettingsSystem),
   protectedRoute("/portal", ClienteInicio),
   protectedRoute("/portal/estoque", ClienteEstoque),
-  protectedRoute("/portal/recebimentos", ClienteSolicitacoes),
+  protectedRoute("/portal/recebimentos", ClienteEnvios),
   protectedRoute("/portal/solicitacoes", ClientRequestsRedirect),
   protectedRoute("/portal/pedidos", ClientePedidos),
   protectedRoute("/portal/faturas/fatura", ClienteFatura),

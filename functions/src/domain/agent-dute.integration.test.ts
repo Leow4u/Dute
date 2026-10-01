@@ -11,6 +11,7 @@ import {
   movementSummary,
   orderDetails,
   recentHistory,
+  requestStage,
   searchItems,
   stockSummary,
   type AgentScope,
@@ -129,6 +130,15 @@ describe("estoque", () => {
     assert.equal(caneca.itens[0]?.arquivado, true);
     assert.equal((await searchItems(db, cliente, "outro cliente")).encontrados, 0);
   });
+
+  it("busca traz o total de todos os itens encontrados e o resumo por produto", async () => {
+    const polo = await searchItems(db, cliente, "polo", 1);
+    assert.equal(polo.itens.length, 1);
+    assert.deepEqual(polo.total, { pecas_em_estoque: 114, pecas_reservadas: 10, pecas_disponiveis: 104 });
+    assert.deepEqual(polo.por_produto, [
+      { nome: "POLO PIQUET MESCLA", itens: 2, em_estoque: 114, disponivel: 104, abaixo_do_minimo: 1 },
+    ]);
+  });
 });
 
 describe("pedidos", () => {
@@ -149,6 +159,13 @@ describe("pedidos", () => {
     assert.equal(detail.pedido?.id, "req-faria");
     assert.deepEqual(detail.itens?.map((item) => item.quantidade), [100, 40]);
     assert.deepEqual(await orderDetails(db, cliente, "req-outro"), { encontrado: false });
+  });
+});
+
+describe("etapa de aviso cancelado", () => {
+  it("cancelado pelo cliente não aparece como recusado", () => {
+    assert.equal(requestStage({ status: "cancelled", operational_status: "cancelled" }), "Cancelado");
+    assert.equal(requestStage({ status: "rejected" }), "Recusado");
   });
 });
 
@@ -186,6 +203,26 @@ describe("faturas e documentos", () => {
 });
 
 describe("memória da conversa", () => {
+  it("mensagens antigas com o mesmo horário: a pergunta vem antes da resposta", async () => {
+    // Antes do v2 a pergunta e a resposta eram gravadas com o mesmo horário.
+    const batch = db.batch();
+    for (const [id, role, content, iso] of [
+      ["msg_user_1", "user", "pergunta antiga", "2026-10-01T01:42:00.000Z"],
+      ["msg_agent_1", "assistant", "resposta antiga", "2026-10-01T01:42:00.000Z"],
+      ["msg_user_2", "user", "outra pergunta", "2026-10-01T01:50:00.000Z"],
+      ["msg_agent_2", "assistant", "outra resposta", "2026-10-01T01:50:00.000Z"],
+    ]) {
+      batch.set(db.collection("agent_messages").doc(id), {
+        conversation_id: "c2", customer_code: BTG, user_id: "u1", role, content, created_at_iso: iso,
+      });
+    }
+    await batch.commit();
+    const history = await recentHistory(db, { conversationId: "c2", customerCode: BTG, userId: "u1" });
+    assert.deepEqual(history.map((message) => message.content), [
+      "pergunta antiga", "resposta antiga", "outra pergunta", "outra resposta",
+    ]);
+  });
+
   it("devolve as últimas mensagens em ordem, mesmo com mais de 30", async () => {
     const batch = db.batch();
     for (let index = 0; index < 40; index += 1) {

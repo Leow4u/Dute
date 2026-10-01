@@ -1,6 +1,6 @@
 export { ClienteInicio } from "./inicio";
 export { ClienteEstoque } from "./estoque";
-export { ClienteSolicitacoes } from "./solicitacoes";
+export { ClienteEnvios } from "./envios";
 export { ClientePedidos } from "./pedidos";
 export { ClienteFaturas } from "./faturas";
 export { ClienteFatura } from "./fatura";

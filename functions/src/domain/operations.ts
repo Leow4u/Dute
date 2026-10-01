@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 
+import { receivedSummary } from "./client-shipments.js";
 import {
   FieldValue,
   type DocumentData,
@@ -6075,12 +6076,16 @@ export async function advanceWarehouseTaskTransaction(
           fulfillment_updated_at: FieldValue.serverTimestamp(),
           updated_at: FieldValue.serverTimestamp(),
         });
+        // O portal mostra quanto chegou de verdade ("118 de 120 peças").
+        const summary = receivedSummary(inboundItems.map((row) => row.data));
         transaction.set(
           db.collection(collections.clientRequestStatus).doc(requestRow.id),
           {
             customer_code: customerCode,
             operational_status: "received",
             status: "closed",
+            ...summary,
+            received_at: new Date().toISOString(),
             published_at: FieldValue.serverTimestamp(),
             updated_at: FieldValue.serverTimestamp(),
           },

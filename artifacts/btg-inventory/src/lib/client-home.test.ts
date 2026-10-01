@@ -62,24 +62,25 @@ describe("pedidos e avisos no Início", () => {
     { id: "b", type: "retirada", status: "approved", operational_status: "separating", created_at: "2026-09-30T10:00:00Z" },
     { id: "c", type: "recebimento", status: "open", created_at: "2026-09-29T10:00:00Z", supplier: "Gráfica Alfa", invoice_number: "48213" },
     { id: "d", type: "retirada", status: "open", created_at: "2026-09-29T10:00:00Z" },
+    { id: "e", type: "recebimento", status: "cancelled", created_at: "2026-09-30T10:00:00Z", supplier: "Cancelado" },
   ];
 
   it("separa pedido de aviso de chegada", () => {
-    expect(requests.map(requestKind)).toEqual(["pedido", "pedido", "aviso", "pedido"]);
+    expect(requests.map(requestKind)).toEqual(["pedido", "pedido", "aviso", "pedido", "aviso"]);
   });
 
   it("em andamento primeiro, depois os concluídos", () => {
     expect(homeOrders(requests).map(({ request }) => request.id)).toEqual(["b", "d", "a"]);
   });
 
-  it("aviso: aguardando, recebido ou recusado", () => {
+  it("envio: avisado, confirmado, chegou (com quanto chegou) ou recusado; cancelado some", () => {
     expect(homeNotices(requests)).toEqual([
-      { title: "Gráfica Alfa · NF 48213", detail: "aguardando a entrega do fornecedor", label: "Aguardando", tone: "waiting" },
+      { title: "Gráfica Alfa · NF 48213", detail: "aguardando confirmação da Dutelog", label: "Avisado", tone: "waiting" },
     ]);
-    expect(noticeView({ status: "closed", operational_status: "received", updated_at: "2026-09-29T15:00:00Z" })).toMatchObject({
-      label: "Recebido",
-      detail: "recebido e conferido em 29/09",
-    });
+    expect(noticeView({ status: "approved", due_at: "2026-10-02T15:00:00Z" })).toMatchObject({ label: "Confirmado", detail: "chega 02/10" });
+    expect(
+      noticeView({ status: "closed", operational_status: "received", received_at: "2026-09-29T15:00:00Z", qty_expected: 120, qty_received: 118 }),
+    ).toMatchObject({ label: "Chegou", detail: "chegou em 29/09 · 118 de 120 peças" });
   });
 });
 

@@ -1751,6 +1751,9 @@ async function getAgentDuteChat(conversationId?: string) {
       content: String(message.content ?? ""),
       created_at: String(message.created_at_iso ?? toIso(message.created_at)),
       source: String(message.source ?? ""),
+      tools_used: Array.isArray(message.tools_used)
+        ? message.tools_used.map(String)
+        : [],
     }));
 
   return {
@@ -1761,6 +1764,41 @@ async function getAgentDuteChat(conversationId?: string) {
     },
     messages,
   };
+}
+
+const CONVERSATION_LIST_CAP = 60;
+
+/** Conversas da pessoa com o Agent Dute, da mais recente para a mais antiga. */
+async function getAgentDuteConversations() {
+  const profile = await getCurrentProfile();
+  const customerCode = String(profile.customer_code || DEFAULT_CUSTOMER.code);
+  if (!firestore) return { conversations: [] };
+  const conversationsRef = collection(firestore, collectionNames.agentConversations);
+  const scope = [
+    where("user_id", "==", profile.uid),
+    where("customer_code", "==", customerCode),
+  ];
+  let snapshot;
+  try {
+    snapshot = await getDocs(
+      query(conversationsRef, ...scope, orderBy("last_message_at", "desc"), fsLimit(CONVERSATION_LIST_CAP)),
+    );
+  } catch (error) {
+    // Sem o índice composto (ainda não publicado), lê sem ordem e ordena aqui.
+    console.warn("[agent-dute] lista de conversas sem índice composto.", error);
+    snapshot = await getDocs(query(conversationsRef, ...scope, fsLimit(200)));
+  }
+  const conversations = snapshot.docs
+    .map(normalizeDoc)
+    .map((conversation) => ({
+      id: String(conversation.id ?? conversation._docId),
+      title: String(conversation.title ?? "").trim() || "Conversa",
+      last_message_at: String(conversation.last_message_at ?? ""),
+    }))
+    .filter((conversation) => conversation.last_message_at)
+    .sort((left, right) => right.last_message_at.localeCompare(left.last_message_at))
+    .slice(0, CONVERSATION_LIST_CAP);
+  return { conversations };
 }
 
 function laneTask(input: {
@@ -3287,6 +3325,9 @@ async function route(
   }
   if (pathname === "/api/client/overview" && method === "GET") {
     return json(await getClientOverview());
+  }
+  if (pathname === "/api/agent-dute/conversations" && method === "GET") {
+    return json(await getAgentDuteConversations());
   }
   if (pathname === "/api/agent-dute/chat" && method === "GET") {
     return json(

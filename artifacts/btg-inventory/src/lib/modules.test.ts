@@ -168,3 +168,17 @@ describe("tela inicial por perfil", () => {
     expect(getHomePathForProfile(role)).toBe(path);
   });
 });
+
+describe("menu do portal da BTG", () => {
+  it("Agent Dute vem primeiro e cada tela é um item próprio", () => {
+    expect(getNavigationForProfileRole("cliente").map((module) => [module.label, module.href])).toEqual([
+      ["Agent Dute", "/portal/agente"],
+      ["Início", "/portal"],
+      ["Estoque", "/portal/estoque"],
+      ["Envios para a Dutelog", "/portal/recebimentos"],
+      ["Pedidos", "/portal/pedidos"],
+      ["Faturas", "/portal/faturas"],
+      ["Documentos", "/portal/documentos"],
+    ]);
+  });
+});

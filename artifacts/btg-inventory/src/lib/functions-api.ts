@@ -133,6 +133,30 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  if (method === "POST" && pathname === "/api/client/shipments/read-invoice") {
+    return {
+      name: "readShipmentInvoice",
+      payload: async (_pathname, init) => {
+        const body = await readJsonBody(init);
+        return { storage_path: String(body.storage_path ?? ""), content_type: String(body.content_type ?? "") };
+      },
+    };
+  }
+
+  const shipmentCancelMatch = pathname.match(/^\/api\/client\/shipments\/([^/]+)\/cancel$/);
+  if (method === "POST" && shipmentCancelMatch) {
+    return {
+      name: "cancelShipmentNotice",
+      payload: async (_pathname, init) => {
+        const body = await readJsonBody(init);
+        return {
+          request_id: decodeURIComponent(shipmentCancelMatch[1]),
+          ...(typeof body.reason === "string" && body.reason.trim() ? { reason: body.reason.trim() } : {}),
+        };
+      },
+    };
+  }
+
   if (method === "GET" && pathname === "/api/system/health") {
     return { name: "getSystemHealth", status: 200, payload: async () => ({}) };
   }
@@ -630,4 +654,39 @@ export async function callFunctionsApi(
 
 function compactError(body: { message: string; code?: string }) {
   return body.code ? body : { message: body.message };
+}
+
+/** Pedaço que o chatWithAgentDute envia enquanto escreve a resposta. */
+export type AgentDuteStreamChunk =
+  | { type: "text"; index: number; text: string }
+  | { type: "tool"; name: string }
+  | { type: "reset" };
+
+/**
+ * Conversa com o Agent Dute recebendo a resposta aos pedaços. Devolve o
+ * mesmo resultado da chamada comum (conversa e as duas mensagens gravadas).
+ */
+export async function streamAgentDuteChat<T>(
+  payload: { message: string; conversation_id?: string },
+  onChunk: (chunk: AgentDuteStreamChunk) => void,
+  signal?: AbortSignal,
+): Promise<T> {
+  if (!firebaseApp) throw new Error("Firebase não configurado.");
+  const callable = httpsCallable<typeof payload, T, AgentDuteStreamChunk>(
+    getFunctions(firebaseApp, "southamerica-east1"),
+    "chatWithAgentDute",
+    { timeout: 180_000 },
+  );
+  try {
+    const { stream, data } = await callable.stream(payload, { signal });
+    for await (const chunk of stream) onChunk(chunk);
+    return await data;
+  } catch (error) {
+    const rawMessage = error instanceof Error ? error.message : "";
+    throw new Error(
+      !rawMessage || rawMessage === "INTERNAL"
+        ? "O Agent Dute não respondeu agora. Tente de novo em instantes."
+        : rawMessage,
+    );
+  }
 }

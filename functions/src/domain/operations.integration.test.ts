@@ -578,6 +578,16 @@ describe("fluxo WMS transacional", () => {
       .get();
     assert.equal(movements.size, 1);
     assert.equal(movements.docs[0]?.data().tipo_mov, "ENTRADA");
+
+    // O portal recebe quanto chegou de verdade.
+    const portal = await db
+      .collection("client_request_status")
+      .doc(String(created.id))
+      .get();
+    assert.equal(portal.data()?.operational_status, "received");
+    assert.equal(portal.data()?.qty_expected, 2);
+    assert.equal(portal.data()?.qty_received, 2);
+    assert.deepEqual(portal.data()?.received_differences, []);
   });
 
   it("cadastra produto e SKU novos no recebimento avulso sem antecipar o saldo", async () => {
