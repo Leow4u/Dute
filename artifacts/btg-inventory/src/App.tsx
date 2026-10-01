@@ -90,7 +90,7 @@ const SettingsApp = lazy(() =>
 );
 const AiControl = lazy(() => import("./pages/ai-control"));
 const AgentKnowledge = lazy(() => import("./pages/agent-knowledge"));
-const Support = lazy(() => import("./pages/support"));
+const SettingsSystem = lazy(() => import("./pages/settings-system"));
 const CustomerRequests = lazy(() => import("./pages/customer-requests"));
 const WarehouseOps = lazy(() => import("./pages/warehouse-ops"));
 const WmsInventoryPage = lazy(() => import("./pages/wms-inventory"));
@@ -1010,7 +1010,7 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/configuracoes/aplicativo", SettingsApp),
   protectedRoute("/configuracoes/pessoas", Users),
   protectedRoute("/configuracoes/cliente", SettingsCustomer),
-  protectedRoute("/configuracoes/sistema", Support),
+  protectedRoute("/configuracoes/sistema", SettingsSystem),
   protectedRoute("/portal", ClienteInicio),
   protectedRoute("/portal/estoque", ClienteEstoque),
   protectedRoute("/portal/recebimentos", ClienteSolicitacoes),

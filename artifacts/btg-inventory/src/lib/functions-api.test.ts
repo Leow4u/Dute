@@ -41,3 +41,12 @@ describe("rotas de pessoas e acessos", () => {
     });
   });
 });
+
+describe("rota do Sistema", () => {
+  it("a verificação do servidor chama getSystemHealth (não um ok fixo do navegador)", async () => {
+    const route = functionRoute("/api/system/health", "GET");
+    expect(route?.name).toBe("getSystemHealth");
+    expect(await route?.payload("/api/system/health")).toEqual({});
+    expect(functionRoute("/api/system/health", "POST")).toBeNull();
+  });
+});

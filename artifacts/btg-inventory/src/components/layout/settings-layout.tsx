@@ -14,6 +14,7 @@ import {
   type SettingsSection,
 } from "@/lib/settings-nav";
 import { normalizePath } from "@/lib/modules";
+import { BUILD_COMMIT } from "@/lib/build-info";
 
 function groupSections(sections: SettingsSection[]) {
   const groups: Array<{ id: SettingsSection["group"]; sections: SettingsSection[] }> = [];
@@ -124,6 +125,9 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
             </div>
           ))}
         </nav>
+        <div className="px-3 pt-3 text-xs text-muted-foreground">
+          Dute · versão <span className="font-mono">{BUILD_COMMIT}</span>
+        </div>
       </aside>
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white/60">

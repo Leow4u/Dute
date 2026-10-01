@@ -15,17 +15,18 @@ faturamento ou acesso fora das rotinas aprovadas.
 
 | Acao | Tela | Perfil |
 | --- | --- | --- |
-| Ver saude do app | Suporte > Observabilidade | owner/admin/suporte |
-| Registrar incidente | Suporte > Observabilidade | owner/admin/suporte |
-| Ver alertas de IA | Suporte > Observabilidade ou Agent Dute | owner/admin/suporte |
-| Ver fila WMS pendente | Suporte > Observabilidade | owner/admin/suporte |
+| Ver saude do app e versao publicada | Configuracao > Sistema | owner/admin/suporte |
+| Registrar incidente | Configuracao > Sistema | owner/admin/suporte |
+| Ver alertas de IA | Agent Dute | owner/admin/suporte |
+| Ver fila WMS pendente | Pedidos / Estoque | owner/admin/suporte |
 | Resolver causa operacional | Modulo dono do processo | perfil responsavel |
 | Alterar estoque/fatura/acesso | Nunca pelo suporte sem aprovacao | dono do processo |
 
 ## Rotina diaria
 
-1. Abrir `Suporte > Observabilidade`.
-2. Confirmar `API do app = Online`.
+1. Abrir `Configuracao > Sistema`.
+2. Confirmar `Servidor = Respondendo` (verificacao real via `getSystemHealth`)
+   e que a versao publicada e o commit esperado.
 3. Revisar alertas criticos e incidentes recentes.
 4. Verificar se o ledger de eventos recebeu registros recentes.
 5. Conferir WMS pendente e solicitacoes abertas.
@@ -64,8 +65,8 @@ Function e criar evento do tipo `support.incident`.
 
 ## Smoke test apos deploy
 
-- `https://app.dutelog.com.br/suporte` responde com a tela.
-- `/api/healthz` retorna online.
+- `https://app.dutelog.com.br/configuracoes/sistema` mostra `Servidor =
+  Respondendo` e a versao publicada igual ao commit de `main`.
 - Um incidente de teste interno cria evento em `events`.
 - O evento aparece no Agent Dute/observabilidade apos atualizar.
 - Usuario sem perfil `owner`, `admin` ou `suporte` nao acessa a rota.
