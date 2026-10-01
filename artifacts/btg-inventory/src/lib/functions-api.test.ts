@@ -64,6 +64,15 @@ describe("rota de arquivar item do portal", () => {
   });
 });
 
+describe("documentos da operação", () => {
+  it("o arquivo sobe por uploadOperationalDocument com o conteúdo em base64", async () => {
+    const route = functionRoute("/api/documents/upload", "POST");
+    expect(route?.name).toBe("uploadOperationalDocument");
+    const body = { customer_code: "BTG Pactual", file_name: "contrato.pdf", content_type: "application/pdf", data_base64: "JVBERi0=", document_type: "contrato" };
+    expect(await route?.payload("/api/documents/upload", { method: "POST", body: JSON.stringify(body) })).toEqual(body);
+  });
+});
+
 describe("envios para a Dutelog", () => {
   it("anexo do aviso sobe por uploadShipmentAttachment, não por URL assinada", async () => {
     const route = functionRoute("/api/client/shipments/attachments", "POST");

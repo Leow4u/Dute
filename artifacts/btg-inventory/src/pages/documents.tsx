@@ -41,6 +41,7 @@ import {
   type DocumentRow,
   type KnowledgeState,
 } from "@/lib/document-rows";
+import { fileToBase64 } from "@/lib/file-base64";
 
 /**
  * Documentos da operação BTG. Uma lista só: o que a Dutelog adicionou e as
@@ -49,9 +50,7 @@ import {
  * vai para lá por "Enviar para o Conhecimento".
  */
 
-type UploadTarget = {
-  upload_url: string;
-  upload_headers?: Record<string, string>;
+type UploadedFile = {
   file_url: string;
   storage_path: string;
   file_name: string;
@@ -173,23 +172,20 @@ export default function Documents() {
       const title = form.title.trim() || file.name.replace(/\.[^.]+$/, "");
       const documentType = isFinance ? "fatura" : form.documentType;
       const entityType = isFinance ? "fatura" : "operacional";
-      const target = await apiJson<UploadTarget>("/api/documents/upload-target", {
+      if (file.size > 20 * 1024 * 1024) throw new Error("Arquivo grande demais. Use até 20 MB.");
+      // O arquivo sobe pelo backend, que grava no Storage. O PUT na URL
+      // assinada era recusado pelo Storage de produção.
+      const target = await apiJson<UploadedFile>("/api/documents/upload", {
         method: "POST",
         body: JSON.stringify({
           customer_code: "BTG Pactual",
           file_name: file.name,
           content_type: file.type || "application/octet-stream",
-          size_bytes: file.size,
+          data_base64: await fileToBase64(file),
           document_type: documentType,
           entity_type: entityType,
         }),
       });
-      const upload = await fetch(target.upload_url, {
-        method: "PUT",
-        headers: target.upload_headers ?? {},
-        body: file,
-      });
-      if (!upload.ok) throw new Error(`Falha ao enviar ${file.name}.`);
       const shared = canPublish && form.customerVisible;
       return apiJson("/api/documents", {
         method: "POST",
@@ -391,7 +387,7 @@ export default function Documents() {
                   <span className="font-semibold text-primary">Escolher arquivo</span> no computador ou celular
                 </span>
               )}
-              <span className="text-xs text-muted-foreground">PDF, imagem ou planilha até 30 MB</span>
+              <span className="text-xs text-muted-foreground">PDF, imagem ou planilha até 20 MB</span>
             </button>
             <input
               ref={fileInput}

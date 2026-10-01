@@ -155,7 +155,7 @@ export async function cancelShipmentNoticeTransaction(
 
 export const SHIPMENT_ATTACHMENT_MAX_BYTES = 8 * 1024 * 1024;
 
-const SIGNATURES: Record<string, (bytes: Buffer) => boolean> = {
+export const FILE_SIGNATURES: Record<string, (bytes: Buffer) => boolean> = {
   "application/pdf": (bytes) => bytes.subarray(0, 5).toString("latin1") === "%PDF-",
   "image/jpeg": (bytes) => bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff,
   "image/png": (bytes) => bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
@@ -170,7 +170,7 @@ const SIGNATURES: Record<string, (bytes: Buffer) => boolean> = {
  */
 export function decodeShipmentAttachment(input: { content_type: string; data_base64: string }) {
   const contentType = text(input.content_type).toLowerCase();
-  const matches = SIGNATURES[contentType];
+  const matches = FILE_SIGNATURES[contentType];
   if (!matches) throw new HttpsError("invalid-argument", "Anexe a nota ou o pedido em PDF ou foto.");
   const base64 = text(input.data_base64).replace(/^data:[^,]*,/, "");
   if (!base64 || !/^[A-Za-z0-9+/=\s]+$/.test(base64)) {
@@ -207,4 +207,48 @@ export function storageFailure(error: unknown, action: "gravar" | "ler") {
     return new HttpsError("not-found", "Arquivo não encontrado no Storage. Anexe de novo.");
   }
   return new HttpsError("unavailable", `Não consegui ${action} o arquivo agora. Tente de novo.`);
+}
+
+// ------------------------------------------------------- documento interno
+
+export const OPERATIONAL_DOCUMENT_MAX_BYTES = 20 * 1024 * 1024;
+
+/** Os mesmos tipos que createDocumentUploadTarget aceitava para a equipe. */
+export function isOperationalDocumentType(contentType: string) {
+  return (
+    contentType === "application/pdf" ||
+    contentType.startsWith("image/") ||
+    contentType.startsWith("text/") ||
+    contentType.includes("spreadsheet") ||
+    contentType.includes("excel") ||
+    contentType.includes("word") ||
+    contentType.includes("officedocument") ||
+    contentType === "application/zip"
+  );
+}
+
+/**
+ * Documentos > Adicionar: o arquivo da equipe chega em base64 e o backend
+ * grava no Storage, como o anexo do aviso. PDF e foto têm o conteúdo
+ * conferido; os demais tipos, só o tipo declarado.
+ */
+export function decodeOperationalDocument(input: { content_type: string; data_base64: string }) {
+  const contentType = text(input.content_type).toLowerCase();
+  if (!isOperationalDocumentType(contentType)) {
+    throw new HttpsError("invalid-argument", "Tipo de arquivo não permitido para documento operacional.");
+  }
+  const base64 = text(input.data_base64).replace(/^data:[^,]*,/, "");
+  if (!base64 || !/^[A-Za-z0-9+/=\s]+$/.test(base64)) {
+    throw new HttpsError("invalid-argument", "Arquivo vazio ou corrompido.");
+  }
+  const buffer = Buffer.from(base64, "base64");
+  if (!buffer.length) throw new HttpsError("invalid-argument", "Arquivo vazio ou corrompido.");
+  if (buffer.length > OPERATIONAL_DOCUMENT_MAX_BYTES) {
+    throw new HttpsError("invalid-argument", "Arquivo grande demais. Use até 20 MB.");
+  }
+  const matches = FILE_SIGNATURES[contentType];
+  if (matches && !matches(buffer)) {
+    throw new HttpsError("invalid-argument", "O conteúdo do arquivo não confere com o tipo informado.");
+  }
+  return { contentType, buffer };
 }

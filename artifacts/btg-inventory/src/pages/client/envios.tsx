@@ -18,6 +18,7 @@ import {
   type InvoiceReading,
   type ShipmentView,
 } from "@/lib/shipments";
+import { fileToBase64 } from "@/lib/file-base64";
 import { cn } from "@/lib/utils";
 
 import {
@@ -953,13 +954,4 @@ async function uploadAttachment(file: File, entityId: string): Promise<ClientReq
     content_type: payload.content_type,
     size_bytes: payload.size_bytes,
   };
-}
-
-function fileToBase64(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result).replace(/^data:[^,]*,/, ""));
-    reader.onerror = () => reject(new Error(`Não consegui abrir ${file.name}.`));
-    reader.readAsDataURL(file);
-  });
 }

@@ -58,7 +58,12 @@ import {
   readClientInventoryForSku,
   setClientItemArchivedTransaction,
 } from "./domain/client-inventory.js";
-import { cancelShipmentNoticeTransaction, decodeShipmentAttachment, storageFailure } from "./domain/client-shipments.js";
+import {
+  cancelShipmentNoticeTransaction,
+  decodeOperationalDocument,
+  decodeShipmentAttachment,
+  storageFailure,
+} from "./domain/client-shipments.js";
 import {
   INVOICE_PROMPT,
   assertOwnInvoicePath,
@@ -4588,6 +4593,88 @@ export const createDocumentUploadTarget = onCall(async (request) => {
   );
 
   return result;
+});
+
+const UploadOperationalDocumentSchema = z.object({
+  customer_code: z.string().trim().optional(),
+  file_name: z.string().trim().min(1).max(240),
+  content_type: z.string().trim().min(1).max(120),
+  data_base64: z.string().min(1).max(28_000_000),
+  document_type: z.string().trim().optional(),
+  entity_type: z.string().trim().optional(),
+  entity_id: z.string().trim().optional(),
+});
+
+/**
+ * Documentos > Adicionar: o arquivo da equipe sobe pelo backend, que grava
+ * no Storage com a credencial das Functions. O PUT do navegador na URL
+ * assinada (createDocumentUploadTarget) leva o cabeçalho do token de
+ * download, que o Storage de produção recusa.
+ */
+export const uploadOperationalDocument = onCall({ timeoutSeconds: 120 }, async (request) => {
+  const profile = await getProfile(request);
+  if (!["owner", "admin", "interno", "wms", "financeiro"].includes(profile.role)) {
+    throw new HttpsError("permission-denied", "Perfil sem permissao para anexar documentos.");
+  }
+  const input = UploadOperationalDocumentSchema.parse(request.data ?? {});
+  const customerCode = requireCustomerScope(profile, input.customer_code);
+  const { contentType, buffer } = decodeOperationalDocument(input);
+  const bucketName = documentBucketName();
+  const objectPath = [
+    "operational-documents",
+    safeDocId(customerCode),
+    new Date().toISOString().slice(0, 7),
+    `${Date.now()}-${safeFileName(input.file_name)}`,
+  ].join("/");
+  const token = randomUUID();
+  try {
+    await getStorage()
+      .bucket(bucketName)
+      .file(objectPath)
+      .save(buffer, {
+        resumable: false,
+        contentType,
+        metadata: { metadata: { firebaseStorageDownloadTokens: token } },
+      });
+  } catch (error) {
+    console.error("uploadOperationalDocument: Storage recusou a gravação", { objectPath, error });
+    throw storageFailure(error, "gravar");
+  }
+
+  await emitEvent(
+    {
+      type: "document.uploaded",
+      title: "Documento operacional enviado",
+      description: `${input.file_name} enviado para ${customerCode}.`,
+      severity: "info",
+      entity_type: input.entity_type || "documento",
+      entity_id: input.entity_id || objectPath,
+      customer_code: customerCode,
+      payload: {
+        file_name: input.file_name,
+        content_type: contentType,
+        size_bytes: buffer.length,
+        document_type: input.document_type,
+        storage_path: objectPath,
+      },
+      source: "functions_document_upload",
+    },
+    {
+      uid: profile.uid,
+      email: profile.email,
+      role: profile.role,
+      customer_code: customerCode,
+      name: profile.name,
+    },
+  );
+
+  return {
+    file_name: input.file_name,
+    file_url: firebaseDownloadUrl(bucketName, objectPath, token),
+    storage_path: objectPath,
+    content_type: contentType,
+    size_bytes: buffer.length,
+  };
 });
 
 export const reviewOperationalDocument = onCall(async (request) => {

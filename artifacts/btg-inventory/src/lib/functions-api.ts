@@ -371,6 +371,13 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  if (method === "POST" && pathname === "/api/documents/upload") {
+    return {
+      name: "uploadOperationalDocument",
+      payload: async (_pathname, init) => readJsonBody(init),
+    };
+  }
+
   if (method === "POST" && pathname === "/api/documents/upload-target") {
     return {
       name: "createDocumentUploadTarget",
