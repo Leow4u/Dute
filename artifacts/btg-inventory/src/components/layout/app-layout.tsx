@@ -37,6 +37,7 @@ import {
   type ModuleRoute,
 } from "@/lib/modules";
 import { AgentDock } from "@/components/agent/agent-dock";
+import { AGENT_PATH, isAgentShortcut } from "@/lib/agent-chat";
 import { useAppAuth, useAppUser, type AppUser } from "@/lib/auth";
 import { usePwaInstall } from "@/lib/pwa-install";
 import { roleDescription, roleLabel } from "@/lib/access";
@@ -472,7 +473,7 @@ function MobileModuleNav({
 }
 
 export default function AppLayout({ children }: { children: ReactNode }) {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const { user } = useAppUser();
   const { signOut } = useAppAuth();
   const { isOnline } = usePwaInstall();
@@ -489,7 +490,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   });
   // No Agent Dute o menu recolhe sozinho e o chat fica com a tela. Abrir o
   // menu ali vale só até sair da tela; a preferência salva não muda.
-  const agentScreen = location === "/portal/agente";
+  const agentScreen = location === AGENT_PATH;
   const [agentMenuOpen, setAgentMenuOpen] = useState(false);
   useEffect(() => {
     if (!agentScreen) setAgentMenuOpen(false);
@@ -499,6 +500,27 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     if (agentScreen) setAgentMenuOpen((current) => !current);
     else setSidebarCollapsed((current) => !current);
   }
+  // "/" no portal: vai para o campo do Agent Dute da tela (barra do Início ou
+  // o chat); nas outras telas, abre o Agent Dute.
+  useEffect(() => {
+    if (!clientSurface) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const shortcut = isAgentShortcut({
+        key: event.key,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        altKey: event.altKey,
+        target: event.target as HTMLElement | null,
+      });
+      if (!shortcut) return;
+      event.preventDefault();
+      const field = document.querySelector<HTMLElement>("[data-agent-input]");
+      if (field) field.focus();
+      else navigate(AGENT_PATH);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [clientSurface, navigate]);
   const [openModuleIds, setOpenModuleIds] = useState<Set<string>>(
     () => new Set([activeModule.id]),
   );

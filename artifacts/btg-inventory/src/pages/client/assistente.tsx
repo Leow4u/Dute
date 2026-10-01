@@ -88,7 +88,9 @@ function AgentDuteScreen({ overview }: { overview: ClientOverview }) {
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
   const search = useSearch();
-  const conversationId = new URLSearchParams(search).get("c");
+  const params = new URLSearchParams(search);
+  const conversationId = params.get("c");
+  const askedFromOutside = params.get("q");
   const [draft, setDraft] = useState("");
   const [streaming, setStreaming] = useState<Streaming | null>(null);
   const [mobileRail, setMobileRail] = useState(false);
@@ -108,17 +110,26 @@ function AgentDuteScreen({ overview }: { overview: ClientOverview }) {
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
+  // Pergunta vinda da barra do Início (?q=): abre uma conversa nova e envia.
+  const handledQuestion = useRef<string | null>(null);
+  useEffect(() => {
+    if (!askedFromOutside || streaming || handledQuestion.current === askedFromOutside) return;
+    handledQuestion.current = askedFromOutside;
+    void send(askedFromOutside, { fresh: true });
+  }, [askedFromOutside]);
+
   function openConversation(id: string | null) {
     setMobileRail(false);
     if (streaming) return;
     navigate(id ? `/portal/agente?c=${encodeURIComponent(id)}` : "/portal/agente");
   }
 
-  async function send(content: string) {
+  async function send(content: string, options: { fresh?: boolean } = {}) {
     const question = content.trim();
     if (!question || streaming) return;
-    const id = conversationId ?? newConversationId();
-    if (!conversationId) navigate(`/portal/agente?c=${encodeURIComponent(id)}`);
+    const current = options.fresh ? null : conversationId;
+    const id = current ?? newConversationId();
+    if (!current) navigate(`/portal/agente?c=${encodeURIComponent(id)}`, { replace: Boolean(options.fresh) });
     setDraft("");
     setStreaming({ conversationId: id, question, tools: [], runningTool: null, text: "", textIndex: -1 });
     const controller = new AbortController();
@@ -340,6 +351,7 @@ function Composer({
           }
         }}
         placeholder={placeholder}
+        data-agent-input
         className="block max-h-[200px] w-full resize-none bg-transparent text-[15px] leading-6 outline-none placeholder:text-muted-foreground"
       />
       <div className="mt-1.5 flex items-center justify-end">
