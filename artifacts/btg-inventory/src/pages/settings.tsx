@@ -2,41 +2,105 @@ import {
   CircleCheck,
   Download,
   Share,
-  ShieldCheck,
   Smartphone,
-  UserRound,
   Wifi,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useAppUser } from "@/lib/auth";
-import { normalizeProfileRole } from "@/lib/modules";
+import { SettingsSectionList } from "@/components/layout/settings-layout";
+import { useAppAuth, useAppUser } from "@/lib/auth";
+import { roleDescription, roleLabel } from "@/lib/access";
 import { usePwaInstall } from "@/lib/pwa-install";
 
-function roleLabel(role: unknown) {
-  const normalized = normalizeProfileRole(role);
-  if (normalized === "owner") return "Owner Dutelog";
-  if (normalized === "admin") return "Admin Dutelog";
-  if (normalized === "wms") return "Operação WMS";
-  if (normalized === "financeiro") return "Financeiro";
-  if (normalized === "suporte") return "Suporte";
-  if (normalized === "interno") return "Interno Dutelog";
-  if (normalized === "cliente") return "Cliente";
-  return "Sem perfil";
+function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div className="mb-5">
+      <h1 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
+      <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+    </div>
+  );
 }
 
-export default function Settings() {
+function Row({ label, value, aside }: { label: string; value: ReactNode; aside?: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-border/50 px-5 py-4 last:border-0">
+      <div className="min-w-0">
+        <div className="text-sm font-medium">{label}</div>
+        <div className="mt-0.5 text-sm text-muted-foreground">{value}</div>
+      </div>
+      {aside}
+    </div>
+  );
+}
+
+/** Minha conta: quem é você no sistema e como sair. */
+export function SettingsAccount() {
   const { user } = useAppUser();
+  const { signOut } = useAppAuth();
   const role = user?.publicMetadata.role;
+  const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+  return (
+    <div>
+      <SectionTitle title="Minha conta" subtitle="Seus dados e o que seu perfil pode fazer" />
+      <div className="space-y-4">
+        <section className="overflow-hidden rounded-[18px] border border-border bg-white">
+          <Row label="Nome" value={user?.fullName || "Usuário"} />
+          <Row label="E-mail" value={user?.primaryEmailAddress.emailAddress || "Sem e-mail"} />
+          <Row
+            label="Perfil"
+            value={
+              <>
+                {roleDescription(role)}{" "}
+                {role === "owner" || role === "admin"
+                  ? "Perfis são definidos em Pessoas e acessos."
+                  : "Para mudar seu perfil, fale com a administração."}
+              </>
+            }
+            aside={<Badge variant="secondary" className="shrink-0">{roleLabel(role)}</Badge>}
+          />
+        </section>
+        <section className="overflow-hidden rounded-[18px] border border-border bg-white">
+          <Row
+            label="Sair da conta"
+            value="Encerra a sessão neste dispositivo"
+            aside={
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => signOut({ redirectUrl: basePath || "/" })}
+              >
+                Sair
+              </Button>
+            }
+          />
+        </section>
+      </div>
+    </div>
+  );
+}
+
+/** Raiz: no celular, a lista de seções; no computador, Minha conta. */
+export default function SettingsHome() {
+  return (
+    <>
+      <SettingsSectionList />
+      <div className="hidden md:block">
+        <SettingsAccount />
+      </div>
+    </>
+  );
+}
+
+export function SettingsApp() {
   const {
     canInstall,
     isAppleMobile,
@@ -62,73 +126,12 @@ export default function Settings() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="max-w-3xl">
-        <p className="text-sm font-medium text-muted-foreground">
-          Conta e sessão
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-foreground">
-          Configuração
-        </h1>
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <Card className="overflow-hidden">
-          <CardHeader className="border-b border-border/60 bg-white/35">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                <UserRound className="h-5 w-5" />
-              </div>
-              <div>
-                <CardTitle className="text-base">Usuário</CardTitle>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="grid gap-4 p-5 sm:grid-cols-2">
-            <div className="rounded-2xl border border-border/70 bg-white/55 p-4">
-              <div className="text-xs font-medium uppercase text-muted-foreground">
-                Nome
-              </div>
-              <div className="mt-2 truncate text-sm font-semibold">
-                {user?.fullName || "Usuário"}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-border/70 bg-white/55 p-4">
-              <div className="text-xs font-medium uppercase text-muted-foreground">
-                E-mail
-              </div>
-              <div className="mt-2 truncate text-sm font-semibold">
-                {user?.primaryEmailAddress.emailAddress || "Sem e-mail"}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="overflow-hidden">
-          <CardHeader className="border-b border-border/60 bg-white/35">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                <ShieldCheck className="h-5 w-5" />
-              </div>
-              <div>
-                <CardTitle className="text-base">Permissão</CardTitle>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4 p-5">
-            <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-white/55 p-4">
-              <span className="text-sm text-muted-foreground">Perfil</span>
-              <Badge variant="secondary">{roleLabel(role)}</Badge>
-            </div>
-            <div className="rounded-2xl border border-border/70 bg-white/55 p-4 text-sm leading-6 text-muted-foreground">
-              Alterações de perfil e permissões continuam sob controle do
-              administrador Dutelog.
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card id="aplicativo" className="scroll-mt-6 overflow-hidden">
+    <div>
+      <SectionTitle
+        title="Aplicativo no celular"
+        subtitle="Abra a Dutelog pelo ícone, em tela cheia"
+      />
+      <Card className="overflow-hidden">
         <CardHeader className="border-b border-border/60 bg-white/35">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">

@@ -10,8 +10,11 @@ service firebase.storage {
       return /databases/(default)/documents/users/$(request.auth.uid);
     }
 
+    // Mesmo critério do firestore.rules: acesso removido não vale.
     function hasProfile() {
-      return signedIn() && firestore.exists(userDoc());
+      return signedIn()
+        && firestore.exists(userDoc())
+        && firestore.get(userDoc()).data.get('access_disabled', false) != true;
     }
 
     function profileRole() {

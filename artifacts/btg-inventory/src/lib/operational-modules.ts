@@ -256,7 +256,7 @@ export const OPERATIONAL_MODULES: OperationalModule[] = [
     title: "Usuários e convites",
     area: "governanca",
     status: "online",
-    route: "/usuarios",
+    route: "/configuracoes/pessoas",
     source: "existente",
     icon: Users,
     purpose: "Controlar acesso interno/cliente por convite e papel.",

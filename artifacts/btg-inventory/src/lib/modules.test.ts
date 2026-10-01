@@ -6,6 +6,7 @@ import {
   getNavigationForProfileRole,
   getRouteProfileRoles,
   INTERNAL_ROLES,
+  isAccountPath,
   type ProfileRole,
 } from "./modules";
 
@@ -41,6 +42,7 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/orders", ["owner", "admin", "interno", "suporte"]],
   ["/faturamento", ["owner", "admin", "financeiro"]],
   ["/faturamento/tabela", ["owner", "admin", "financeiro"]],
+  ["/faturamento/fatura", ["owner", "admin", "financeiro"]],
   ["/tabela-precos", ["owner", "admin", "financeiro"]],
   ["/agente", ["owner", "admin", "interno", "financeiro", "suporte"]],
   ["/agente/conhecimento", ["owner", "admin", "interno", "financeiro", "suporte"]],
@@ -49,11 +51,17 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/clientes", ["owner", "admin"]],
   ["/usuarios", ["owner", "admin"]],
   ["/configuracoes", ["owner", "admin", "interno", "wms", "financeiro", "suporte", "cliente"]],
+  ["/configuracoes/conta", ["owner", "admin", "interno", "wms", "financeiro", "suporte", "cliente"]],
+  ["/configuracoes/aplicativo", ["owner", "admin", "interno", "wms", "financeiro", "suporte", "cliente"]],
+  ["/configuracoes/pessoas", ["owner", "admin"]],
+  ["/configuracoes/cliente", ["owner", "admin"]],
+  ["/configuracoes/sistema", ["owner", "admin", "suporte"]],
   ["/portal", ["cliente"]],
   ["/portal/estoque", ["cliente"]],
   ["/portal/recebimentos", ["cliente"]],
   ["/portal/pedidos", ["cliente"]],
   ["/portal/faturas", ["cliente"]],
+  ["/portal/faturas/fatura", ["cliente"]],
   ["/portal/documentos", ["cliente"]],
   ["/portal/agente", ["cliente"]],
   ["/minhas-faturas", ["cliente"]],
@@ -74,21 +82,15 @@ describe("permissões por rota", () => {
 
 describe("menu interno", () => {
   it.each<ProfileRole>(["owner", "admin"])(
-    "%s vê 5 destinos principais e o grupo Mais",
+    "%s vê os destinos principais, sem grupo Mais (Administração vive na Configuração)",
     (role) => {
       expect(menu(role)).toEqual([
         { label: "Início", routes: ["Início"] },
         { label: "Pedidos", routes: ["Pedidos"] },
         { label: "Estoque", routes: ["Itens", "Receber"] },
         { label: "Faturamento", routes: ["Faturamento"] },
-        {
-          label: "Administração",
-          routes: ["Clientes", "Usuários e acessos", "Observabilidade"],
-        },
-        {
-          label: "Mais",
-          routes: ["Relatórios", "Documentos"],
-        },
+        { label: "Relatórios", routes: ["Relatórios"] },
+        { label: "Documentos", routes: ["Documentos"] },
       ]);
     },
   );
@@ -105,7 +107,8 @@ describe("menu interno", () => {
     expect(menu("financeiro").map((module) => module.label)).toEqual([
       "Início",
       "Faturamento",
-      "Mais",
+      "Relatórios",
+      "Documentos",
     ]);
   });
 
@@ -139,10 +142,19 @@ describe("grupo ativo", () => {
     ["/wms/qualidade", "Estoque"],
     ["/catalogo/saldos", "Estoque"],
     ["/faturamento/tabela", "Faturamento"],
-    ["/suporte", "Administração"],
-    ["/reports", "Mais"],
+    ["/faturamento/fatura", "Faturamento"],
+    ["/reports", "Relatórios"],
   ])("%s destaca %s", (path, label) => {
     expect(activeLabel(path)).toBe(label);
+  });
+});
+
+describe("telas da conta", () => {
+  it("/configuracoes não acende nenhum item do menu", () => {
+    expect(isAccountPath("/configuracoes")).toBe(true);
+    expect(isAccountPath("/configuracoes/pessoas")).toBe(true);
+    expect(isAccountPath("/configuracoesx")).toBe(false);
+    expect(isAccountPath("/dashboard")).toBe(false);
   });
 });
 

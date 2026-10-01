@@ -119,6 +119,24 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  const clientArchiveMatch = pathname.match(/^\/api\/client\/inventory\/([^/]+)\/archive$/);
+  if (method === "POST" && clientArchiveMatch) {
+    return {
+      name: "setClientItemArchived",
+      payload: async (_pathname, init) => {
+        const body = await readJsonBody(init);
+        return {
+          inventory_id: decodeURIComponent(clientArchiveMatch[1]),
+          archived: body.archived === true,
+        };
+      },
+    };
+  }
+
+  if (method === "GET" && pathname === "/api/system/health") {
+    return { name: "getSystemHealth", status: 200, payload: async () => ({}) };
+  }
+
   if (method === "POST" && pathname === "/api/ai/events") {
     return {
       name: "recordOperationalEvent",
@@ -451,6 +469,17 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
           {},
           decodeURIComponent(inboxMatch[1]),
         ),
+    };
+  }
+
+  const accessMatch = pathname.match(/^\/api\/billing\/users\/([^/]+)\/access$/);
+  if (accessMatch && method === "POST") {
+    return {
+      name: "setUserAccess",
+      payload: async (_pathname, init) => ({
+        ...(await readJsonBody(init)),
+        user_id: decodeURIComponent(accessMatch[1]),
+      }),
     };
   }
 

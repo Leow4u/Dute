@@ -246,7 +246,7 @@ function normalizeSlug(value?: string | null) {
     .replace(/(^-|-$)/g, "");
 }
 
-function normalizeStatus(status?: string | null): RequestStatus {
+export function normalizeStatus(status?: string | null): RequestStatus {
   const normalized = normalizeSlug(status || "open");
   if (["approved", "aprovada", "aprovado"].includes(normalized)) {
     return "approved";
@@ -272,7 +272,7 @@ function normalizeStatus(status?: string | null): RequestStatus {
 
 
 
-function requestTypeLabel(type?: string | null) {
+export function requestTypeLabel(type?: string | null) {
   const normalized = normalizeSlug(type || "solicitacao");
   if (normalized === "retirada") return "Retirada";
   if (normalized === "recebimento") return "Recebimento";
@@ -402,7 +402,7 @@ function getExplicitQuantityTotal(request: CustomerRequest) {
   return coerceNumber(request.quantity_total);
 }
 
-function getQuantityTotal(request: CustomerRequest) {
+export function getQuantityTotal(request: CustomerRequest) {
   const explicitTotal = getExplicitQuantityTotal(request);
   if (explicitTotal !== undefined) return explicitTotal;
 
@@ -424,7 +424,7 @@ function firstNonEmpty(...values: unknown[]) {
 
 
 
-function getRequestValidationLines(request: CustomerRequest): RequestValidationLine[] {
+export function getRequestValidationLines(request: CustomerRequest): RequestValidationLine[] {
   const itemLines = getRequestItems(request).map((item, index) => {
     const label = getItemLabel(item);
     const locationId = getItemLocation(item);

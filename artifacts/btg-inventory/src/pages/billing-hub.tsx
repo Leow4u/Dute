@@ -12,7 +12,7 @@ const Billing = lazy(() => import("./billing"));
 const PriceList = lazy(() => import("./price-list"));
 
 const BILLING_TABS = [
-  { value: "competencia", label: "Competência", path: "/faturamento" },
+  { value: "competencia", label: "Fechamento do mês", path: "/faturamento" },
   { value: "tabela", label: "Tabela de preços", path: "/faturamento/tabela" },
 ] as const;
 
@@ -27,7 +27,9 @@ export default function BillingHub() {
   const tab = tabFromLocation(location);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-4">
+      <h1 className="text-2xl font-semibold tracking-tight">Faturamento</h1>
       <Tabs
         value={tab}
         onValueChange={(value) => {
@@ -43,6 +45,7 @@ export default function BillingHub() {
           ))}
         </TabsList>
       </Tabs>
+      </div>
 
       <Suspense fallback={null}>
         {tab === "competencia" ? <Billing /> : null}

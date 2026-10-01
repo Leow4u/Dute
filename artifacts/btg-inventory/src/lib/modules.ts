@@ -1,18 +1,14 @@
 import {
-  Activity,
   BarChart3,
-  Building2,
   BrainCircuit,
   FileText,
   Home,
   Inbox,
   LayoutDashboard,
-  MoreHorizontal,
   PackagePlus,
   PackageSearch,
   Receipt,
   Truck,
-  Users,
   type LucideIcon,
 } from "lucide-react";
 
@@ -230,54 +226,36 @@ export const APP_MODULES: AppModule[] = [
       }),
     ],
   }),
+  // Relatórios virou item próprio (01/10/2026): é tela de uso real do
+  // fechamento, não "uso raro".
   appModule({
-    id: "admin",
-    label: "Administração",
+    id: "reports",
+    label: "Relatórios",
     audience: "internal",
-    icon: Users,
-    roles: [...ACCESS_ADMIN_ROLES, "suporte"],
+    icon: BarChart3,
+    roles: TOWER_NAV_ROLES,
     routes: [
       navRoute({
-        id: "admin-customers",
-        label: "Clientes",
-        href: "/clientes",
-        icon: Building2,
-        roles: ACCESS_ADMIN_ROLES,
-      }),
-      navRoute({
-        id: "admin-users",
-        label: "Usuários e acessos",
-        href: "/usuarios",
-        icon: Users,
-        roles: ACCESS_ADMIN_ROLES,
-      }),
-      navRoute({
-        id: "admin-observability",
-        label: "Observabilidade",
-        href: "/suporte",
-        icon: Activity,
-        roles: SUPPORT_ROLES,
-      }),
-    ],
-  }),
-  // Uso raro, fora da régua principal. O Agent Dute virou o botão flutuante
-  // (components/agent/agent-dock.tsx); o painel dele segue em /agente.
-  appModule({
-    id: "more",
-    label: "Mais",
-    audience: "internal",
-    icon: MoreHorizontal,
-    roles: INTERNAL_ROLES,
-    routes: [
-      navRoute({
-        id: "more-reports",
+        id: "reports-hub",
         label: "Relatórios",
         href: "/reports",
         icon: BarChart3,
         roles: TOWER_NAV_ROLES,
       }),
+    ],
+  }),
+  // O grupo "Mais" acabou: Relatórios virou item próprio e Documentos ficou
+  // sozinho. O Agent Dute é o botão flutuante (components/agent/agent-dock.tsx);
+  // o painel dele segue em /agente.
+  appModule({
+    id: "documents",
+    label: "Documentos",
+    audience: "internal",
+    icon: FileText,
+    roles: INTERNAL_ROLES,
+    routes: [
       navRoute({
-        id: "more-documents",
+        id: "documents-library",
         label: "Documentos",
         href: "/documentos",
         icon: FileText,
@@ -450,7 +428,22 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   { path: "/products", roles: WMS_ROLES },
   { path: "/skus", roles: WMS_ROLES },
   { path: "/faturamento/tabela", roles: FINANCE_ROLES },
+  // Fatura (prévia ou emitida) para imprimir/salvar PDF.
+  { path: "/faturamento/fatura", roles: FINANCE_ROLES },
+  { path: "/portal/faturas/fatura", roles: CLIENT_ROLES },
   { path: "/tabela-precos", roles: FINANCE_ROLES },
+  // Configuração (tela própria, lib/settings-nav.ts). A Administração saiu do
+  // menu e virou seção dela; os endereços antigos redirecionam com os mesmos
+  // papéis de antes.
+  { path: "/configuracoes", roles: [...INTERNAL_ROLES, "cliente"] },
+  { path: "/configuracoes/conta", roles: [...INTERNAL_ROLES, "cliente"] },
+  { path: "/configuracoes/aplicativo", roles: [...INTERNAL_ROLES, "cliente"] },
+  { path: "/configuracoes/pessoas", roles: ACCESS_ADMIN_ROLES },
+  { path: "/configuracoes/cliente", roles: ACCESS_ADMIN_ROLES },
+  { path: "/configuracoes/sistema", roles: SUPPORT_ROLES },
+  { path: "/usuarios", roles: ACCESS_ADMIN_ROLES },
+  { path: "/clientes", roles: ACCESS_ADMIN_ROLES },
+  { path: "/suporte", roles: SUPPORT_ROLES },
 ];
 
 const MERGED_SCREEN_APP_ROLES = Object.fromEntries(
@@ -475,7 +468,6 @@ const ROUTE_APP_ROLES = APP_MODULES.reduce<Record<string, CurrentAppRole[]>>(
     ...MERGED_SCREEN_APP_ROLES,
     "/wms": currentAppRolesFor(WMS_ROLES),
     "/minhas-faturas": ["cliente"],
-    "/configuracoes": ["interno", "cliente"],
   },
 );
 
@@ -493,7 +485,6 @@ const ROUTE_PROFILE_ROLES = APP_MODULES.reduce<Record<string, ProfileRole[]>>(
     ...MERGED_SCREEN_PROFILE_ROLES,
     "/wms": WMS_ROLES,
     "/minhas-faturas": ["cliente"],
-    "/configuracoes": [...INTERNAL_ROLES, "cliente"],
   },
 );
 
@@ -586,6 +577,12 @@ const ACTIVE_ALIASES: Record<string, string> = {
   "/catalogo/mapa": "/estoque",
   "/movements": "/estoque",
 };
+
+/** Telas da Configuração: não pertencem a nenhum item do menu. */
+export function isAccountPath(path: string): boolean {
+  const normalized = normalizePath(path);
+  return normalized === "/configuracoes" || normalized.startsWith("/configuracoes/");
+}
 
 export function getActiveModule(
   modules: AppModule[],

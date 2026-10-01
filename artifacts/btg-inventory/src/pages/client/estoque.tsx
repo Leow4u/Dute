@@ -40,6 +40,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { displayName, groupFamilies, variantLabel, type Family } from "@/lib/stock-variants";
 
 import {
   ClientDataBoundary,
@@ -69,7 +70,7 @@ import {
 type StockViewMode = "lista" | "cards";
 type StockFilter = "todos" | "disponiveis" | "baixo" | "zerado" | "arquivados";
 type StockSort = "relevancia" | "maior-saldo" | "menor-saldo" | "nome";
-type ProductAction = "restock" | "archive";
+type ProductAction = "restock" | "archive" | "restore";
 
 type StockProduct = {
   key: string;
@@ -83,6 +84,10 @@ type StockProduct = {
   total: number;
   value: number;
   photoUrl: string | null;
+  /** Mínimo da ficha publicado no portal; sem ele, nunca é "baixo". */
+  minimum?: number;
+  /** Arquivado pela BTG e ainda sem saldo. */
+  archived: boolean;
   sources: InventoryItem[];
 };
 
@@ -93,8 +98,7 @@ type CartLine = {
 
 type ProductActionCommand = {
   action: ProductAction;
-  productKey: string;
-  payload: CreateClientRequestPayload;
+  product: StockProduct;
 };
 
 const stockFilterOptions: Array<{
@@ -103,13 +107,14 @@ const stockFilterOptions: Array<{
   icon: LucideIcon;
 }> = [
   { value: "todos", label: "Todos", icon: Package },
-  { value: "disponiveis", label: "Disponiveis", icon: PackageCheck },
+  { value: "disponiveis", label: "Com saldo", icon: PackageCheck },
   { value: "baixo", label: "Baixo estoque", icon: AlertTriangle },
-  { value: "zerado", label: "Sem estoque", icon: Archive },
+  { value: "zerado", label: "Sem saldo", icon: Archive },
   { value: "arquivados", label: "Arquivados", icon: Archive },
 ];
 
 const STOCK_PAGE_SIZE = 48;
+const GROUP_STORAGE_KEY = "dute.portal.agrupar-tamanhos";
 
 const stockSortOptions: Array<{
   value: StockSort;
@@ -137,9 +142,24 @@ export function ClienteEstoque() {
   const [selectedProductKey, setSelectedProductKey] = useState<string | null>(
     null,
   );
-  const [archivedProductKeys, setArchivedProductKeys] = useState<Set<string>>(
-    () => new Set(),
-  );
+  // Agrupar tamanhos é preferência de quem usa: fica salva neste navegador.
+  const [groupVariants, setGroupVariantsState] = useState(() => {
+    try {
+      return window.localStorage.getItem(GROUP_STORAGE_KEY) !== "nao";
+    } catch {
+      return true;
+    }
+  });
+  const setGroupVariants = (value: boolean) => {
+    setGroupVariantsState(value);
+    try {
+      window.localStorage.setItem(GROUP_STORAGE_KEY, value ? "sim" : "nao");
+    } catch {
+      // Sem storage (aba privada): vale só nesta visita.
+    }
+  };
+  const [orderName, setOrderName] = useState("");
+  const [cartExpanded, setCartExpanded] = useState(false);
   const [destination, setDestination] = useState("");
   const [dueAt, setDueAt] = useState("");
   const [notes, setNotes] = useState("");
@@ -153,10 +173,11 @@ export function ClienteEstoque() {
       toast({
         title: "Pedido enviado para a Dutelog",
         description:
-          "O tracking do pedido ja esta disponivel em Pedidos/Entregas.",
+          "Acompanhe a separação e a entrega em Pedidos.",
       });
       setCart({});
       setCartOpen(false);
+      setOrderName("");
       setDestination("");
       setDueAt("");
       setNotes("");
@@ -165,7 +186,7 @@ export function ClienteEstoque() {
     },
     onError: (error) => {
       toast({
-        title: "Nao foi possivel enviar o pedido",
+        title: "Não foi possível enviar o pedido",
         description:
           error instanceof Error
             ? error.message
@@ -177,35 +198,40 @@ export function ClienteEstoque() {
 
   const productActionMutation = useMutation({
     mutationFn: async (command: ProductActionCommand) => {
-      const request = await createClientRequest(command.payload);
-      return { ...command, request };
-    },
-    onSuccess: ({ action, productKey }) => {
-      if (action === "archive") {
-        setArchivedProductKeys((current) => {
-          const next = new Set(current);
-          next.add(productKey);
-          return next;
-        });
-        setSelectedProductKey(null);
+      if (command.action === "restock") {
+        await createClientRequest(buildReplenishmentRequest(command.product));
+        return command;
       }
+      // Arquivar é do servidor (setClientItemArchived): valida saldo zero e
+      // o cliente, grava quem arquivou e registra o evento.
+      for (const id of archiveIds(command.product)) {
+        await setItemArchived(id, command.action === "archive");
+      }
+      return command;
+    },
+    onSuccess: ({ action }) => {
+      if (action !== "restock") setSelectedProductKey(null);
 
       toast({
         title:
           action === "restock"
-            ? "Reposicao avisada para a Dutelog"
-            : "Arquivamento solicitado",
+            ? "Reposição avisada para a Dutelog"
+            : action === "archive"
+              ? "Produto arquivado"
+              : "Produto de volta à vitrine",
         description:
           action === "restock"
-            ? "A equipe vai acompanhar a chegada do fornecedor."
-            : "O produto foi ocultado da vitrine e segue preservado no historico.",
+            ? "A Dutelog recebeu o aviso e vai acompanhar com o fornecedor."
+            : action === "archive"
+              ? "Some da vitrine e fica em Arquivados. Se o saldo voltar, ele reaparece."
+              : "O produto aparece de novo na vitrine.",
       });
 
       void invalidateClientData(queryClient);
     },
     onError: (error) => {
       toast({
-        title: "Nao foi possivel registrar a acao",
+        title: "Não foi possível registrar a ação",
         description:
           error instanceof Error
             ? error.message
@@ -238,11 +264,20 @@ export function ClienteEstoque() {
           searchTerm,
           categoryFilter,
           stockFilter,
-          archivedProductKeys,
         });
         const sortedProducts = sortProducts(filteredProducts, cart, sortMode);
         const visibleProducts = sortedProducts.slice(0, visibleProductLimit);
-        const hasMoreProducts = visibleProducts.length < sortedProducts.length;
+        const families = groupFamilies(
+          sortedProducts,
+          (product) => product.clientItemCode ?? product.clientCode,
+          (product) => product.key,
+          groupVariants,
+        );
+        const visibleFamilies = families.slice(0, visibleProductLimit);
+        const hasMoreProducts =
+          viewMode === "cards"
+            ? visibleFamilies.length < families.length
+            : visibleProducts.length < sortedProducts.length;
         const hasActiveFilters =
           Boolean(searchTerm.trim()) ||
           stockFilter !== "todos" ||
@@ -283,7 +318,7 @@ export function ClienteEstoque() {
         function getDraftQuantity(product: StockProduct) {
           const max = liveAvailableForProduct(product, cart);
           if (max <= 0) return 0;
-          return clampQuantity(draftQuantities[product.key] ?? 0, max);
+          return clampQuantity(draftQuantities[product.key] ?? 1, max);
         }
 
         function updateDraftQuantity(product: StockProduct, quantity: number) {
@@ -301,7 +336,7 @@ export function ClienteEstoque() {
           if (quantity <= 0) {
             toast({
               title: "Informe a quantidade",
-              description: "Use +/− ou digite quantas pecas deseja pedir.",
+              description: "Use +/− ou digite quantas peças deseja pedir.",
               variant: "destructive",
             });
             return;
@@ -317,10 +352,11 @@ export function ClienteEstoque() {
               ),
             };
           });
-          setDraftQuantities((current) => ({
-            ...current,
-            [product.key]: 0,
-          }));
+          // Volta para 1: o próximo "Adicionar" já sai com uma peça.
+          setDraftQuantities((current) => {
+            const { [product.key]: _added, ...rest } = current;
+            return rest;
+          });
           setSelectedProductKey(null);
         }
 
@@ -360,18 +396,13 @@ export function ClienteEstoque() {
         }
 
         function requestReplenishment(product: StockProduct) {
-          productActionMutation.mutate({
-            action: "restock",
-            productKey: product.key,
-            payload: buildReplenishmentRequest(product),
-          });
+          productActionMutation.mutate({ action: "restock", product });
         }
 
         function requestArchive(product: StockProduct) {
           productActionMutation.mutate({
-            action: "archive",
-            productKey: product.key,
-            payload: buildArchiveRequest(product),
+            action: product.archived ? "restore" : "archive",
+            product,
           });
         }
 
@@ -387,9 +418,9 @@ export function ClienteEstoque() {
 
           if (!destination.trim()) {
             toast({
-              title: "Informe a unidade de entrega",
+              title: "Informe onde entregar",
               description:
-                "A Dutelog precisa saber para qual unidade o pedido sera enviado.",
+                "A Dutelog precisa saber para qual agência ou prédio o pedido vai.",
               variant: "destructive",
             });
             return;
@@ -398,7 +429,7 @@ export function ClienteEstoque() {
           const requestItems = buildCartRequestItems(cartLines);
           if (requestItems.length === 0) {
             toast({
-              title: "Estoque indisponivel",
+              title: "Estoque indisponível",
               description: "Revise os itens selecionados e tente novamente.",
               variant: "destructive",
             });
@@ -408,7 +439,8 @@ export function ClienteEstoque() {
           requestMutation.mutate({
             type: "retirada",
             priority: "normal",
-            title: `Pedido do estoque com ${formatNumber(cartLines.length)} item(ns)`,
+            // Sem nome, o Início mostra "Pedido de dd/mm".
+            title: orderName.trim() || undefined,
             description: [
               `Pedido montado no estoque para ${destination.trim()}`,
               notes.trim(),
@@ -436,9 +468,11 @@ export function ClienteEstoque() {
                 categories={categories}
                 sortMode={sortMode}
                 viewMode={viewMode}
+                groupVariants={groupVariants}
+                onGroupVariantsChange={setGroupVariants}
                 cartQuantity={cartQuantity}
                 cartOpen={cartOpen}
-                visibleCount={sortedProducts.length}
+                visibleCount={viewMode === "cards" ? families.length : sortedProducts.length}
                 hasActiveFilters={hasActiveFilters}
                 onSearchChange={updateSearch}
                 onStockFilterChange={updateStockFilter}
@@ -472,8 +506,8 @@ export function ClienteEstoque() {
                         onArchive={requestArchive}
                       />
                     ) : (
-                      <StockCardGrid
-                        products={visibleProducts}
+                      <FamilyGrid
+                        families={visibleFamilies}
                         cart={cart}
                         draftQuantities={draftQuantities}
                         onDraftQuantityChange={updateDraftQuantity}
@@ -500,8 +534,10 @@ export function ClienteEstoque() {
                 )}
                 {sortedProducts.length > 0 ? (
                   <CatalogProgress
-                    displayedCount={visibleProducts.length}
-                    totalCount={sortedProducts.length}
+                    displayedCount={
+                      viewMode === "cards" ? visibleFamilies.length : visibleProducts.length
+                    }
+                    totalCount={viewMode === "cards" ? families.length : sortedProducts.length}
                     canLoadMore={hasMoreProducts}
                     onLoadMore={() =>
                       setVisibleProductLimit(
@@ -514,9 +550,13 @@ export function ClienteEstoque() {
             </section>
 
             {cartOpen ? (
-              <SideDrawer onClose={() => setCartOpen(false)}>
+              <SideDrawer onClose={() => setCartOpen(false)} wide={cartExpanded}>
                 <CartPanel
+                  expanded={cartExpanded}
+                  onToggleExpanded={() => setCartExpanded((current) => !current)}
                   lines={cartLines}
+                  orderName={orderName}
+                  onOrderNameChange={setOrderName}
                   destination={destination}
                   dueAt={dueAt}
                   notes={notes}
@@ -594,6 +634,8 @@ function MarketplaceToolbar({
   categories,
   sortMode,
   viewMode,
+  groupVariants,
+  onGroupVariantsChange,
   cartQuantity,
   cartOpen,
   visibleCount,
@@ -612,6 +654,8 @@ function MarketplaceToolbar({
   categories: Array<{ value: string; label: string; count: number }>;
   sortMode: StockSort;
   viewMode: StockViewMode;
+  groupVariants: boolean;
+  onGroupVariantsChange: (value: boolean) => void;
   cartQuantity: number;
   cartOpen: boolean;
   visibleCount: number;
@@ -627,7 +671,7 @@ function MarketplaceToolbar({
   return (
     <section
       data-testid="stock-toolbar"
-      className="sticky top-0 z-20 shrink-0 rounded-[24px] border border-border bg-white/88 p-3 shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px] sm:p-4"
+      className="sticky top-0 z-20 shrink-0 rounded-[20px] border border-border bg-white p-3 shadow-[0_8px_24px_rgba(15,23,42,.06)] sm:p-4"
     >
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
         <div className="relative min-w-0 flex-1">
@@ -635,15 +679,15 @@ function MarketplaceToolbar({
           <Input
             value={searchTerm}
             onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="Buscar produto, cod. cliente ou categoria"
-            aria-label="Buscar produto, cod. cliente ou categoria"
+            placeholder="Buscar por nome, código ou categoria"
+            aria-label="Buscar por nome, código ou categoria"
             className="h-11 rounded-[18px] border-border bg-white/80 pl-11 text-sm"
           />
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <div
             role="group"
-            aria-label="Formato de visualizacao"
+            aria-label="Formato de visualização"
             className="flex items-center gap-1 rounded-[16px] border border-border bg-white/70 p-1"
           >
             <ViewModeButton
@@ -659,6 +703,31 @@ function MarketplaceToolbar({
               onClick={() => onViewModeChange("lista")}
             />
           </div>
+          {viewMode === "cards" ? (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={groupVariants}
+              onClick={() => onGroupVariantsChange(!groupVariants)}
+              title="Junta as variações (P, M, G…) do mesmo produto num card só"
+              className="flex h-11 cursor-pointer items-center gap-2 rounded-[14px] border border-border bg-white px-3 text-sm"
+            >
+              <span
+                className={cn(
+                  "relative h-5 w-9 rounded-full transition-colors",
+                  groupVariants ? "bg-primary" : "bg-muted-foreground/30",
+                )}
+              >
+                <span
+                  className={cn(
+                    "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-[left]",
+                    groupVariants ? "left-[18px]" : "left-0.5",
+                  )}
+                />
+              </span>
+              Agrupar tamanhos
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={onCartToggle}
@@ -763,10 +832,10 @@ function MarketplaceToolbar({
           <span className="font-semibold text-foreground">
             {formatNumber(visibleCount)}
           </span>{" "}
-          produto(s) no catalogo
+          {viewMode === "cards" ? "produto(s) na vitrine" : "item(ns) no catálogo"}
         </p>
         <p className="hidden sm:block">
-          O saldo exibido considera os itens selecionados neste pedido.
+          O saldo exibido já desconta o que está no seu pedido.
         </p>
       </div>
     </section>
@@ -842,7 +911,7 @@ function CatalogProgress({
         </Button>
       ) : (
         <span className="text-xs font-medium text-muted-foreground">
-          Catalogo completo
+          Catálogo completo
         </span>
       )}
     </div>
@@ -876,7 +945,7 @@ function StockList({
             <TableHead className="w-[140px]">Cod. cliente</TableHead>
             <TableHead className="min-w-[360px]">Produto</TableHead>
             <TableHead className="w-[150px]">Categoria</TableHead>
-            <TableHead className="text-right">Disponivel</TableHead>
+            <TableHead className="text-right">Disponível</TableHead>
             <TableHead className="text-right">Reservado</TableHead>
             <TableHead className="text-right">Valor em estoque</TableHead>
             <TableHead className="w-[270px] text-right">Pedido</TableHead>
@@ -964,6 +1033,7 @@ function StockList({
                     ) : (
                       <ZeroStockActions
                         compact
+                        archived={product.archived}
                         onReplenish={() => onReplenish(product)}
                         onArchive={() => onArchive(product)}
                       />
@@ -992,27 +1062,36 @@ function StockList({
 function SideDrawer({
   children,
   onClose,
+  wide = false,
 }: {
   children: ReactNode;
   onClose: () => void;
+  wide?: boolean;
 }) {
+  // Fundo escuro sem desfoque e painel opaco: atrás há uma vitrine de
+  // fotos, e o painel translúcido ficava ilegível.
   return (
-    <div className="fixed inset-0 z-[80] flex justify-end bg-slate-900/10 p-3 backdrop-blur-[2px] sm:p-5">
+    <div className="fixed inset-0 z-[80] flex justify-end bg-slate-900/35 p-3 sm:p-5">
       <button
         type="button"
         className="absolute inset-0 cursor-default"
         onClick={onClose}
         aria-label="Fechar painel"
       />
-      <div className="relative z-[1] h-full w-full max-w-[430px] overflow-y-auto overscroll-contain rounded-[28px]">
+      <div
+        className={cn(
+          "relative z-[1] h-full w-full overflow-hidden rounded-[20px]",
+          wide ? "max-w-[1200px]" : "max-w-[440px]",
+        )}
+      >
         {children}
       </div>
     </div>
   );
 }
 
-function StockCardGrid({
-  products,
+function FamilyGrid({
+  families,
   cart,
   draftQuantities,
   onDraftQuantityChange,
@@ -1021,7 +1100,7 @@ function StockCardGrid({
   onReplenish,
   onArchive,
 }: {
-  products: StockProduct[];
+  families: Family<StockProduct>[];
   cart: Record<string, number>;
   draftQuantities: Record<string, number>;
   onDraftQuantityChange: (product: StockProduct, quantity: number) => void;
@@ -1033,107 +1112,191 @@ function StockCardGrid({
   return (
     <div
       data-testid="stock-card-grid"
-      className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6"
+      className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5"
     >
-      {products.map((product) => {
-        const liveAvailable = liveAvailableForProduct(product, cart);
-        const draftQuantity = draftQuantityForProduct(
-          product,
-          cart,
-          draftQuantities,
-        );
-        const status = productStatus(product, liveAvailable);
-
-        return (
-          <article
-            key={product.key}
-            data-testid="stock-card"
-            className="group flex min-w-0 flex-col overflow-hidden rounded-[22px] border border-border bg-white/76 shadow-[0_8px_24px_rgba(15,23,42,.04)] backdrop-blur-[40px] transition duration-200 hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-[0_18px_60px_rgba(15,23,42,.07)]"
-          >
-            <ProductVisual product={product} status={status} compact />
-
-            <div className="flex min-h-[202px] flex-1 flex-col gap-3 p-3.5">
-              <div className="min-w-0">
-                <p className="truncate text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
-                  {product.clientCode}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => onDetails(product)}
-                  className="mt-1 line-clamp-2 w-full cursor-pointer text-left text-[13px] font-semibold leading-5 text-foreground transition hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-                  aria-label={`Ver detalhes de ${product.name}`}
-                >
-                  {product.name}
-                </button>
-                <div className="mt-2 flex min-w-0 items-center gap-2">
-                  <span
-                    title={product.category}
-                    className="min-w-0 truncate rounded-full border border-border bg-white/70 px-2.5 py-1 text-[11px] text-muted-foreground"
-                  >
-                    {product.category}
-                  </span>
-                  {cart[product.key] ? (
-                    <span className="shrink-0 rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary">
-                      {formatNumber(cart[product.key])} no pedido
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-
-              <StockOrderSummary
-                availableForOrder={liveAvailable}
-                draftQuantity={draftQuantity}
-                reserved={product.reserved}
-                stockValue={product.value}
-                physicalTotal={product.total}
-              />
-
-              <div className="mt-auto">
-                {product.available > 0 ? (
-                  <div className="flex items-center gap-2">
-                    <QuantityStepper
-                      compact
-                      label={product.name}
-                      value={draftQuantity}
-                      max={liveAvailable}
-                      onChange={(quantity) =>
-                        onDraftQuantityChange(product, quantity)
-                      }
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="min-w-0 flex-1 cursor-pointer gap-1 px-2 text-[11px]"
-                      disabled={liveAvailable <= 0 || draftQuantity <= 0}
-                      onClick={() => onAdd(product)}
-                    >
-                      <ShoppingCart className="h-3.5 w-3.5" />
-                      Adicionar
-                    </Button>
-                  </div>
-                ) : (
-                  <ZeroStockActions
-                    compact
-                    onReplenish={() => onReplenish(product)}
-                    onArchive={() => onArchive(product)}
-                  />
-                )}
-              </div>
-            </div>
-          </article>
-        );
-      })}
+      {families.map((family) => (
+        <FamilyCard
+          key={family.key}
+          family={family}
+          cart={cart}
+          draftQuantities={draftQuantities}
+          onDraftQuantityChange={onDraftQuantityChange}
+          onAdd={onAdd}
+          onDetails={onDetails}
+          onReplenish={onReplenish}
+          onArchive={onArchive}
+        />
+      ))}
     </div>
   );
 }
 
+/**
+ * Um card por produto. Com tamanhos agrupados, a pessoa escolhe a variação
+ * nos botões (cada um com o disponível) e adiciona daquele tamanho.
+ */
+function FamilyCard({
+  family,
+  cart,
+  draftQuantities,
+  onDraftQuantityChange,
+  onAdd,
+  onDetails,
+  onReplenish,
+  onArchive,
+}: {
+  family: Family<StockProduct>;
+  cart: Record<string, number>;
+  draftQuantities: Record<string, number>;
+  onDraftQuantityChange: (product: StockProduct, quantity: number) => void;
+  onAdd: (product: StockProduct) => void;
+  onDetails: (product: StockProduct) => void;
+  onReplenish: (product: StockProduct) => void;
+  onArchive: (product: StockProduct) => void;
+}) {
+  const firstAvailable =
+    family.variants.find((entry) => liveAvailableForProduct(entry.item, cart) > 0) ?? family.variants[0];
+  const [selectedKey, setSelectedKey] = useState(firstAvailable.item.key);
+  const selected =
+    family.variants.find((entry) => entry.item.key === selectedKey) ?? firstAvailable;
+  const product = selected.item;
+  const liveAvailable = liveAvailableForProduct(product, cart);
+  const draftQuantity = draftQuantityForProduct(product, cart, draftQuantities);
+  const inCart = family.variants.reduce((sum, entry) => sum + (cart[entry.item.key] ?? 0), 0);
+  const familyAvailable = family.variants.reduce((sum, entry) => sum + entry.item.available, 0);
+  const photo = family.variants.find((entry) => entry.item.photoUrl)?.item ?? product;
+  const status = productStatus(
+    { ...product, available: familyAvailable },
+    family.variants.reduce((sum, entry) => sum + liveAvailableForProduct(entry.item, cart), 0),
+  );
+  const title = displayName(
+    product.category && product.category !== "Sem categoria" ? product.category : product.name,
+  );
+  const showVariants = family.variants.length > 1 || selected.variant !== null;
+
+  return (
+    <article
+      data-testid="stock-card"
+      className="flex min-w-0 flex-col overflow-hidden rounded-[18px] border border-border bg-white shadow-[0_8px_24px_rgba(15,23,42,.04)] transition duration-200 hover:border-primary/30 hover:shadow-[0_18px_60px_rgba(15,23,42,.07)]"
+    >
+      <button
+        type="button"
+        onClick={() => onDetails(product)}
+        className="cursor-pointer text-left"
+        aria-label={`Ver detalhes de ${title}`}
+      >
+        <ProductVisual product={photo} status={status} inCart={inCart} />
+      </button>
+
+      <div className="flex flex-1 flex-col gap-2.5 p-3.5">
+        <div className="min-w-0">
+          <p className="truncate text-[11px] uppercase tracking-wide text-muted-foreground">
+            {product.name} · {family.base || product.clientCode}
+          </p>
+          <button
+            type="button"
+            onClick={() => onDetails(product)}
+            className="mt-0.5 line-clamp-2 w-full cursor-pointer text-left text-sm font-semibold leading-5 hover:text-primary"
+          >
+            {title}
+          </button>
+        </div>
+
+        {showVariants ? (
+          <div role="group" aria-label="Tamanho" className="flex flex-wrap gap-1.5">
+            {family.variants.map((entry) => {
+              const available = liveAvailableForProduct(entry.item, cart);
+              const active = entry.item.key === product.key;
+              return (
+                <button
+                  key={entry.item.key}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setSelectedKey(entry.item.key)}
+                  className={cn(
+                    "flex min-w-[44px] cursor-pointer flex-col items-center rounded-[10px] border px-2 py-1 leading-tight transition",
+                    active
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-foreground hover:border-primary/40",
+                    entry.item.available <= 0 && !active && "text-muted-foreground/60",
+                  )}
+                >
+                  <span className={cn("text-xs font-semibold", entry.item.available <= 0 && "line-through")}>
+                    {variantLabel(entry.variant ?? entry.item.clientCode)}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {entry.item.available <= 0 ? "esgotado" : `${formatNumber(available)} disp.`}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
+        <p className="text-xs text-muted-foreground">
+          {product.available > 0 ? (
+            <>
+              <span className="text-base font-semibold text-foreground">{formatNumber(liveAvailable)}</span>{" "}
+              {showVariants ? "disponíveis neste tamanho" : "disponíveis"}
+            </>
+          ) : (
+            "Sem saldo no momento"
+          )}
+        </p>
+
+        <div className="mt-auto pt-1">
+          {product.available > 0 ? (
+            <div className="flex items-center gap-2">
+              <QuantityStepper
+                compact
+                label={title}
+                value={draftQuantity}
+                max={liveAvailable}
+                onChange={(quantity) => onDraftQuantityChange(product, quantity)}
+              />
+              <Button
+                type="button"
+                size="sm"
+                className="min-w-0 flex-1 cursor-pointer gap-1.5"
+                disabled={liveAvailable <= 0 || draftQuantity <= 0}
+                onClick={() => onAdd(product)}
+              >
+                <ShoppingCart className="h-3.5 w-3.5" />
+                Adicionar
+              </Button>
+            </div>
+          ) : (
+            <ZeroStockActions
+              compact
+              archived={product.archived}
+              onReplenish={() => onReplenish(product)}
+              onArchive={() => onArchive(product)}
+            />
+          )}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+const CART_SEARCH_FROM = 8;
+
+/**
+ * Pedido em montagem. Linhas compactas e busca para pedidos grandes (já
+ * houve pedido com mais de 1.000 itens); "Tela cheia" abre a revisão em
+ * duas colunas, itens à esquerda e dados do pedido à direita.
+ */
 function CartPanel({
   lines,
+  orderName,
   destination,
   dueAt,
   notes,
   isSubmitting,
+  expanded,
+  onToggleExpanded,
   onClose,
+  onOrderNameChange,
   onDestinationChange,
   onDueAtChange,
   onNotesChange,
@@ -1144,11 +1307,15 @@ function CartPanel({
   onSubmit,
 }: {
   lines: CartLine[];
+  orderName: string;
   destination: string;
   dueAt: string;
   notes: string;
   isSubmitting: boolean;
+  expanded: boolean;
+  onToggleExpanded: () => void;
   onClose: () => void;
+  onOrderNameChange: (value: string) => void;
   onDestinationChange: (value: string) => void;
   onDueAtChange: (value: string) => void;
   onNotesChange: (value: string) => void;
@@ -1158,139 +1325,175 @@ function CartPanel({
   onRemove: (product: StockProduct) => void;
   onSubmit: () => void;
 }) {
+  const [query, setQuery] = useState("");
   const totalQuantity = lines.reduce((sum, line) => sum + line.quantity, 0);
-  const selectedSkuCount = lines.length;
+  const needle = normalizeSlug(query);
+  const shownLines = needle
+    ? lines.filter((line) =>
+        normalizeSlug(
+          [line.product.name, line.product.category, line.product.clientCode, line.product.clientItemCode]
+            .filter(Boolean)
+            .join(" "),
+        ).includes(needle),
+      )
+    : lines;
+
+  const list = lines.length ? (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {lines.length > CART_SEARCH_FROM || expanded ? (
+        <div className="relative border-b border-border/60 px-4 py-2.5">
+          <Search className="pointer-events-none absolute left-7 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={`Buscar entre os ${formatNumber(lines.length)} itens do pedido`}
+            className="h-9 pl-9 text-sm"
+          />
+        </div>
+      ) : null}
+      <ul className="min-h-0 flex-1 overflow-y-auto">
+        {shownLines.map((line) => (
+          <li key={line.product.key} className="flex items-center gap-3 border-b border-border/40 px-4 py-2.5">
+            <span className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-muted">
+              {line.product.photoUrl ? (
+                <img src={line.product.photoUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
+              ) : (
+                <Package className="m-2.5 h-5 w-5 text-muted-foreground" aria-hidden="true" />
+              )}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium">
+                {displayName(line.product.category && line.product.category !== "Sem categoria" ? line.product.category : line.product.name)}
+              </span>
+              <span className="block truncate text-xs text-muted-foreground">
+                {line.product.clientCode} · {formatNumber(liveAvailableForLine(line.product, line))} disponíveis
+              </span>
+            </span>
+            <QuantityStepper
+              compact
+              label={line.product.name}
+              value={line.quantity}
+              max={line.product.available}
+              onChange={(quantity) => onQuantityChange(line.product, quantity)}
+              onIncrement={() => onIncrement(line.product)}
+              onDecrement={() => onDecrement(line.product)}
+            />
+            <button
+              type="button"
+              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive"
+              onClick={() => onRemove(line.product)}
+              aria-label={`Remover ${line.product.name}`}
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </li>
+        ))}
+        {needle && !shownLines.length ? (
+          <li className="px-4 py-6 text-center text-sm text-muted-foreground">Nenhum item do pedido com esse nome.</li>
+        ) : null}
+      </ul>
+    </div>
+  ) : (
+    <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
+      <ShoppingCart className="h-6 w-6 text-muted-foreground" />
+      <p className="mt-3 font-medium">Nenhum item no pedido</p>
+      <p className="mt-1 text-sm text-muted-foreground">Escolha o tamanho e a quantidade no card e clique em Adicionar.</p>
+    </div>
+  );
+
+  const form = (
+    <div className="flex flex-col gap-3 p-4">
+      <div className="space-y-1.5">
+        <Label htmlFor="cart-name">Nome do pedido (opcional)</Label>
+        <Input
+          id="cart-name"
+          value={orderName}
+          onChange={(event) => onOrderNameChange(event.target.value)}
+          placeholder="Ex.: Abastecimento loja Faria Lima"
+          maxLength={120}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="cart-destination">Entregar em</Label>
+        <Input
+          id="cart-destination"
+          value={destination}
+          onChange={(event) => onDestinationChange(event.target.value)}
+          placeholder="Agência, prédio ou centro de custo"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="cart-due-at">Para quando</Label>
+        <Input
+          id="cart-due-at"
+          type="datetime-local"
+          value={dueAt}
+          onChange={(event) => onDueAtChange(event.target.value)}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="cart-notes">Observações</Label>
+        <Textarea
+          id="cart-notes"
+          value={notes}
+          onChange={(event) => onNotesChange(event.target.value)}
+          placeholder="Contato, janela de entrega ou restrições"
+          rows={3}
+        />
+      </div>
+      <div className="flex items-center justify-between border-t border-border/60 pt-3 text-sm">
+        <span className="text-muted-foreground">
+          {formatNumber(lines.length)} {lines.length === 1 ? "item" : "itens"}
+        </span>
+        <strong>{formatNumber(totalQuantity)} peças</strong>
+      </div>
+      <Button
+        type="button"
+        className="w-full cursor-pointer"
+        disabled={isSubmitting || lines.length === 0}
+        onClick={onSubmit}
+      >
+        {isSubmitting ? <Truck className="h-4 w-4 animate-pulse" /> : <CheckCircle2 className="h-4 w-4" />}
+        Enviar pedido para a Dutelog
+      </Button>
+    </div>
+  );
 
   return (
-    <ModulePanel
-      title="Pedido de abastecimento"
-      description="Itens selecionados para envio a unidade BTG"
-      icon={ShoppingCart}
-      className="h-fit xl:sticky xl:top-4"
-    >
-      <div className="space-y-5">
-        <div className="-mt-2 flex justify-end">
+    <div className="flex h-full flex-col overflow-hidden rounded-[20px] bg-white shadow-[0_24px_70px_rgba(15,23,42,.25)]">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 px-4 py-3">
+        <div>
+          <h2 className="font-semibold">Seu pedido</h2>
+          <p className="text-xs text-muted-foreground">
+            {formatNumber(lines.length)} {lines.length === 1 ? "item" : "itens"} · {formatNumber(totalQuantity)} peças
+          </p>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button type="button" variant="ghost" size="sm" className="cursor-pointer" onClick={onToggleExpanded}>
+            {expanded ? "Recolher" : "Tela cheia"}
+          </Button>
           <button
             type="button"
-            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-2xl border border-border bg-white/70 text-muted-foreground transition hover:bg-[#F5F6F7]"
+            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
             onClick={onClose}
-            aria-label="Fechar pedido de abastecimento"
+            aria-label="Fechar pedido"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
-
-        {lines.length > 0 ? (
-          <div className="max-h-[320px] space-y-3 overflow-auto pr-1">
-            {lines.map((line) => (
-              <div
-                key={line.product.key}
-                className="rounded-[20px] border border-border bg-white/60 p-4"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-xs text-muted-foreground">
-                      {line.product.clientCode}
-                    </p>
-                    <p className="mt-1 line-clamp-2 font-medium leading-5">
-                      {line.product.name}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-2xl border border-border bg-white/70 text-muted-foreground transition hover:bg-[#F5F6F7] hover:text-destructive"
-                    onClick={() => onRemove(line.product)}
-                    aria-label="Remover item"
-                  >
-                    <X className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </div>
-                <div className="mt-4 flex items-center justify-between gap-3">
-                  <QuantityStepper
-                    label={line.product.name}
-                    value={line.quantity}
-                    max={line.product.available}
-                    onChange={(quantity) =>
-                      onQuantityChange(line.product, quantity)
-                    }
-                    onIncrement={() => onIncrement(line.product)}
-                    onDecrement={() => onDecrement(line.product)}
-                  />
-                  <span className="text-xs text-muted-foreground">
-                    Disp.{" "}
-                    {formatNumber(liveAvailableForLine(line.product, line))}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-[24px] border border-dashed border-border bg-white/35 p-6 text-center">
-            <ShoppingCart className="mx-auto h-6 w-6 text-muted-foreground" />
-            <p className="mt-3 font-medium">Nenhum item selecionado</p>
-            <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              Selecione produtos em cards ou lista para montar o pedido.
-            </p>
-          </div>
-        )}
-
-        <div className="grid gap-3 rounded-[20px] bg-white/45 p-4 text-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Itens no pedido</span>
-            <strong>{formatNumber(selectedSkuCount)}</strong>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Pecas selecionadas</span>
-            <strong>{formatNumber(totalQuantity)}</strong>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <div className="space-y-2">
-            <Label htmlFor="cart-destination">Unidade de entrega</Label>
-            <Input
-              id="cart-destination"
-              value={destination}
-              onChange={(event) => onDestinationChange(event.target.value)}
-              placeholder="Ex.: agencia, predio ou centro de custo"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="cart-due-at">Prazo desejado</Label>
-            <Input
-              id="cart-due-at"
-              type="datetime-local"
-              value={dueAt}
-              onChange={(event) => onDueAtChange(event.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="cart-notes">Observacoes</Label>
-            <Textarea
-              id="cart-notes"
-              value={notes}
-              onChange={(event) => onNotesChange(event.target.value)}
-              placeholder="Detalhe contato, janela de entrega ou restricoes."
-              rows={3}
-            />
-          </div>
-        </div>
-
-        <Button
-          type="button"
-          className="w-full cursor-pointer"
-          disabled={isSubmitting || lines.length === 0}
-          onClick={onSubmit}
-        >
-          {isSubmitting ? (
-            <Truck className="h-4 w-4 animate-pulse" />
-          ) : (
-            <CheckCircle2 className="h-4 w-4" />
-          )}
-          Enviar pedido
-        </Button>
       </div>
-    </ModulePanel>
+      {expanded ? (
+        <div className="grid min-h-0 flex-1 md:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="flex min-h-0 flex-col md:border-r md:border-border/60">{list}</div>
+          <div className="overflow-y-auto">{form}</div>
+        </div>
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          <div className="flex max-h-[45vh] min-h-[120px] flex-col">{list}</div>
+          <div className="border-t border-border/60">{form}</div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1323,7 +1526,7 @@ function ProductDetailPanel({
   return (
     <ModulePanel
       title="Detalhe do produto"
-      description="Visao para pedido e reposicao"
+      description="Visão para pedido e reposição"
       icon={Eye}
       className="h-fit xl:sticky xl:top-4"
     >
@@ -1358,7 +1561,7 @@ function ProductDetailPanel({
 
         <div className="grid grid-cols-2 gap-3">
           <StockFact
-            label="Disponivel para pedido"
+            label="Disponível para pedido"
             value={formatNumber(liveAvailable)}
           />
           {draftQuantity > 0 ? (
@@ -1380,7 +1583,7 @@ function ProductDetailPanel({
           ) : null}
           {showPhysicalTotal ? (
             <StockFact
-              label="Total fisico"
+              label="Total físico"
               value={formatNumber(product.total)}
             />
           ) : null}
@@ -1424,6 +1627,7 @@ function ProductDetailPanel({
         ) : (
           <ZeroStockActions
             disabled={isPending}
+            archived={product.archived}
             onReplenish={onReplenish}
             onArchive={onArchive}
           />
@@ -1438,11 +1642,13 @@ function ProductVisual({
   status,
   large = false,
   compact = false,
+  inCart = 0,
 }: {
   product: StockProduct;
   status: ReturnType<typeof productStatus>;
   large?: boolean;
   compact?: boolean;
+  inCart?: number;
 }) {
   const initials = product.category.slice(0, 2).toUpperCase();
 
@@ -1472,7 +1678,7 @@ function ProductVisual({
         <div
           className={cn("absolute", compact ? "left-3 top-3" : "left-4 top-4")}
         >
-          <StockBadge status={status} compact={compact} />
+          <StockBadge status={status} compact={compact} inCart={inCart} />
         </div>
       </div>
     );
@@ -1526,7 +1732,7 @@ function ProductVisual({
       <div
         className={cn("absolute", compact ? "left-3 top-3" : "left-4 top-4")}
       >
-        <StockBadge status={status} compact={compact} />
+        <StockBadge status={status} compact={compact} inCart={inCart} />
       </div>
     </div>
   );
@@ -1620,11 +1826,13 @@ function QuantityStepper({
 function ZeroStockActions({
   compact = false,
   disabled = false,
+  archived = false,
   onReplenish,
   onArchive,
 }: {
   compact?: boolean;
   disabled?: boolean;
+  archived?: boolean;
   onReplenish: () => void;
   onArchive: () => void;
 }) {
@@ -1644,7 +1852,7 @@ function ZeroStockActions({
         onClick={onReplenish}
       >
         <Truck className="h-4 w-4" />
-        Repor
+        Avisar reposição
       </Button>
       <Button
         type="button"
@@ -1655,7 +1863,7 @@ function ZeroStockActions({
         onClick={onArchive}
       >
         <Archive className="h-4 w-4" />
-        Arquivar
+        {archived ? "Devolver à vitrine" : "Arquivar"}
       </Button>
     </div>
   );
@@ -1719,70 +1927,6 @@ function FilterChip({
   );
 }
 
-function StockOrderSummary({
-  availableForOrder,
-  draftQuantity,
-  reserved,
-  stockValue,
-  physicalTotal,
-}: {
-  availableForOrder: number;
-  draftQuantity: number;
-  reserved: number;
-  stockValue: number;
-  physicalTotal: number;
-}) {
-  const remaining = Math.max(0, availableForOrder - draftQuantity);
-  const showPhysicalTotal = physicalTotal > availableForOrder;
-
-  return (
-    <div className="space-y-2 border-y border-border/70 py-2.5">
-      <div>
-        <p className="text-[11px] text-muted-foreground">Disponivel para pedido</p>
-        <p className="mt-1 text-xl font-semibold leading-none text-foreground">
-          {formatNumber(availableForOrder)}
-        </p>
-        {draftQuantity > 0 ? (
-          <p className="mt-1.5 text-[11px] leading-4 text-primary">
-            Pedindo {formatNumber(draftQuantity)} · Sobra {formatNumber(remaining)}
-          </p>
-        ) : null}
-      </div>
-      {(reserved > 0 || showPhysicalTotal) && (
-        <div className="grid grid-cols-2 gap-2 text-[11px]">
-          {reserved > 0 ? (
-            <div>
-              <p className="text-muted-foreground">Reservado</p>
-              <p className="mt-0.5 font-medium text-foreground">
-                {formatNumber(reserved)}
-              </p>
-            </div>
-          ) : null}
-          {showPhysicalTotal ? (
-            <div className={reserved > 0 ? "text-right" : ""}>
-              <p className="text-muted-foreground">Total fisico</p>
-              <p className="mt-0.5 font-medium text-foreground">
-                {formatNumber(physicalTotal)}
-              </p>
-            </div>
-          ) : null}
-        </div>
-      )}
-      <div className="text-[11px]">
-        <p
-          className="text-muted-foreground"
-          title="Custo do material que voce ja adquiriu — nao e preco de venda."
-        >
-          Valor em estoque
-        </p>
-        <p className="mt-0.5 font-medium text-foreground">
-          {formatMoney(stockValue)}
-        </p>
-      </div>
-    </div>
-  );
-}
-
 function StockFact({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 rounded-[18px] border border-border bg-white/55 p-3">
@@ -1797,63 +1941,39 @@ function StockFact({ label, value }: { label: string; value: string }) {
 function StockBadge({
   status,
   compact = false,
+  inCart = 0,
 }: {
   status: ReturnType<typeof productStatus>;
   compact?: boolean;
+  inCart?: number;
 }) {
-  if (status === "zero") {
+  // Etiqueta só quando importa; "Disponível" em todo card era ruído.
+  const size = compact ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-1 text-xs";
+  if (inCart > 0) {
     return (
-      <span
-        className={cn(
-          "inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 font-medium text-rose-700",
-          compact ? "px-2 py-1 text-[10px]" : "px-2.5 py-1 text-xs",
-        )}
-      >
-        <AlertTriangle className="h-3.5 w-3.5" />
-        Sem estoque
+      <span className={cn("inline-flex items-center gap-1 rounded-md bg-primary font-semibold text-white shadow-sm", size)}>
+        <ShoppingCart className="h-3.5 w-3.5" />
+        {formatNumber(inCart)} no pedido
       </span>
     );
   }
-
+  if (status === "zero") {
+    return (
+      <span className={cn("inline-flex items-center gap-1 rounded-md bg-white font-semibold text-rose-700 shadow-sm", size)}>
+        <AlertTriangle className="h-3.5 w-3.5" />
+        Sem saldo
+      </span>
+    );
+  }
   if (status === "low") {
     return (
-      <span
-        className={cn(
-          "inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 font-medium text-amber-700",
-          compact ? "px-2 py-1 text-[10px]" : "px-2.5 py-1 text-xs",
-        )}
-      >
+      <span className={cn("inline-flex items-center gap-1 rounded-md bg-white font-semibold text-amber-700 shadow-sm", size)}>
         <Sparkles className="h-3.5 w-3.5" />
         Baixo estoque
       </span>
     );
   }
-
-  if (status === "cart") {
-    return (
-      <span
-        className={cn(
-          "inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/10 font-medium text-primary",
-          compact ? "px-2 py-1 text-[10px]" : "px-2.5 py-1 text-xs",
-        )}
-      >
-        <ShoppingCart className="h-3.5 w-3.5" />
-        Selecionado
-      </span>
-    );
-  }
-
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 font-medium text-emerald-700",
-        compact ? "px-2 py-1 text-[10px]" : "px-2.5 py-1 text-xs",
-      )}
-    >
-      <CheckCircle2 className="h-3.5 w-3.5" />
-      Disponivel
-    </span>
-  );
+  return null;
 }
 
 function groupInventoryProducts(items: InventoryItem[]) {
@@ -1879,6 +1999,8 @@ function groupInventoryProducts(items: InventoryItem[]) {
       total: 0,
       value: 0,
       photoUrl: null,
+      minimum: undefined,
+      archived: false,
       sources: [],
     };
 
@@ -1889,6 +2011,18 @@ function groupInventoryProducts(items: InventoryItem[]) {
     current.photoUrl = current.photoUrl ?? inventoryItemPhoto(item);
     current.sources.push(item);
     grouped.set(key, current);
+  }
+
+  for (const product of grouped.values()) {
+    const minimums = product.sources
+      .map((source) => (source as { estoque_minimo?: unknown }).estoque_minimo)
+      .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+    product.minimum = minimums.length ? Math.max(...minimums) : undefined;
+    // Arquivado só enquanto zerado: se o saldo voltar, reaparece na vitrine.
+    product.archived =
+      product.total <= 0 &&
+      product.sources.length > 0 &&
+      product.sources.every((source) => (source as { client_archived?: unknown }).client_archived === true);
   }
 
   return [...grouped.values()].sort((left, right) => {
@@ -1905,19 +2039,17 @@ function filterProducts({
   searchTerm,
   categoryFilter,
   stockFilter,
-  archivedProductKeys,
 }: {
   products: StockProduct[];
   cart: Record<string, number>;
   searchTerm: string;
   categoryFilter: string;
   stockFilter: StockFilter;
-  archivedProductKeys: Set<string>;
 }) {
   const query = normalizeSlug(searchTerm);
 
   return products.filter((product) => {
-    const isArchived = archivedProductKeys.has(product.key);
+    const isArchived = product.archived;
     if (stockFilter === "arquivados") {
       if (!isArchived) return false;
     } else if (isArchived) {
@@ -2058,42 +2190,35 @@ function buildReplenishmentRequest(
   product: StockProduct,
 ): CreateClientRequestPayload {
   return {
-    type: "recebimento",
-    priority: "normal",
-    title: `Reposicao solicitada: ${product.name}`,
-    description: [
-      `Cliente solicitou reposicao com fornecedor para o cod. cliente ${product.clientCode}.`,
-      "Produto aparece sem saldo disponivel na vitrine do portal.",
-      "A Dutelog deve acompanhar a previsao de chegada e conferencia.",
-    ].join(" "),
-    destination: "Recebimento Dutelog",
-    items: [
-      {
-        sku_code: product.sku,
-        client_item_code: product.clientItemCode ?? null,
-        product_name: product.name,
-        location_id: null,
-        quantity: 1,
-        notes: "Reposicao solicitada pelo portal do cliente.",
-      },
-    ],
-  };
-}
-
-function buildArchiveRequest(
-  product: StockProduct,
-): CreateClientRequestPayload {
-  return {
+    // Mensagem para a Dutelog, não aviso de chegada: antes virava um
+    // "recebimento" de 1 peça que aparecia como entrega avisada e na fila
+    // do armazém sem nada para chegar.
     type: "suporte",
     priority: "normal",
-    title: `Arquivar produto sem estoque: ${product.name}`,
+    title: `Reposição: ${displayName(product.category && product.category !== "Sem categoria" ? product.category : product.name)} (${product.clientCode})`,
     description: [
-      `Cliente solicitou arquivamento do cod. cliente ${product.clientCode}.`,
-      "A acao deve apenas ocultar/descontinuar o produto para novos pedidos.",
-      "Nao deletar cadastro, historico, contrato, movimentacoes ou documentos.",
+      `A BTG avisa que o item ${product.clientCode} está sem saldo e precisa de reposição.`,
+      "Quando o fornecedor tiver data, avise a entrega pelo portal.",
     ].join(" "),
     items: [],
   };
+}
+
+/** Documentos de client_inventory do produto (um por SKU/projeção). */
+function archiveIds(product: StockProduct) {
+  return [...new Set(product.sources.map((source) => String(source.id ?? "")).filter(Boolean))];
+}
+
+async function setItemArchived(inventoryId: string, archived: boolean) {
+  const response = await fetch(`/api/client/inventory/${encodeURIComponent(inventoryId)}/archive`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ archived }),
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { message?: string };
+    throw new Error(payload.message || "Não foi possível arquivar.");
+  }
 }
 
 function liveAvailableForProduct(
@@ -2114,7 +2239,7 @@ function draftQuantityForProduct(
 ) {
   const max = liveAvailableForProduct(product, cart);
   if (max <= 0) return 0;
-  return clampQuantity(draftQuantities[product.key] ?? 0, max);
+  return clampQuantity(draftQuantities[product.key] ?? 1, max);
 }
 
 function productStatus(product: StockProduct, liveAvailable: number) {
@@ -2125,28 +2250,25 @@ function productStatus(product: StockProduct, liveAvailable: number) {
 }
 
 function isLowStock(product: StockProduct, liveAvailable: number) {
-  if (product.available <= 0 || liveAvailable <= 0) return false;
-  const dynamicLimit = Math.ceil(
-    Math.max(product.total, product.available) * 0.08,
-  );
-  const limit = Math.max(5, Math.min(20, dynamicLimit || 10));
-  return liveAvailable <= limit;
+  // Mesmo critério do Estoque interno: só com mínimo cadastrado na ficha.
+  if (product.minimum === undefined) return false;
+  return product.available > 0 && liveAvailable > 0 && liveAvailable <= product.minimum;
 }
 
 function agentDuteSignal(product: StockProduct, liveAvailable: number) {
   if (product.available <= 0) {
-    return "Produto sem saldo disponivel. O Agent Dute recomenda registrar reposicao com fornecedor ou solicitar arquivamento operacional, sem deletar historico.";
+    return "Produto sem saldo disponível. Avise a Dutelog sobre a reposição ou arquive o produto; o histórico é preservado.";
   }
 
   if (liveAvailable <= 0) {
-    return "Todo o saldo disponivel ja foi selecionado. Ao enviar, a Dutelog recebe o pedido para separacao, conferencia e entrega.";
+    return "Todo o saldo disponível já está no seu pedido. Ao enviar, a Dutelog separa, confere e entrega.";
   }
 
   if (isLowStock(product, liveAvailable)) {
-    return "Baixo estoque identificado pelo Agent Dute. Vale acompanhar reposicao antes de montar novos pedidos grandes.";
+    return "Estoque baixo. Vale acompanhar a reposição antes de pedidos grandes.";
   }
 
-  return "Saldo disponivel para abastecimento. Escolha a quantidade e clique em Adicionar para incluir no pedido.";
+  return "Saldo disponível. Escolha a quantidade e clique em Adicionar para incluir no pedido.";
 }
 
 function clampQuantity(quantity: number, max: number) {

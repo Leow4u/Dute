@@ -1,300 +1,309 @@
+import type { ReactNode } from "react";
 import { Link } from "wouter";
-import {
-  Activity,
-  AlertTriangle,
-  ArrowRight,
-  Box,
-  CircleCheck,
-  Clock3,
-  DollarSign,
-  PackageCheck,
-  PackagePlus,
-  Truck,
-  type LucideIcon,
-} from "lucide-react";
+import { Box, ChevronRight, PackagePlus, type LucideIcon } from "lucide-react";
 
+import { useAppUser } from "@/lib/auth";
+import {
+  ORDER_STEPS,
+  homeNotices,
+  homeOrders,
+  invoiceLines,
+  orderSummary,
+  orderTitle,
+  type OrderProgress,
+} from "@/lib/client-home";
+import { cn } from "@/lib/utils";
 import {
   ClientDataBoundary,
-  ClientModuleShell,
-  MetricCard,
-  ModulePanel,
-  StatusBadge,
   firstNumber,
-  firstText,
-  formatDate,
   formatMoney,
   formatNumber,
-  getAlerts,
-  getBilling,
   getInventory,
   getInventoryItems,
-  getOrders,
+  getInvoices,
   getRequests,
   inventoryTotalValue,
-  orderDate,
-  orderProduct,
-  orderReference,
-  requestDate,
-  requestReference,
-  requestTitle,
-  sortByDateDesc,
 } from "./shared";
 
-type ActivityItem = {
-  id: string;
-  kind: "Pedido" | "Recebimento";
-  reference: string;
-  title: string;
-  status?: string;
-  date?: string | null;
-};
+/**
+ * Início do portal, do ponto de vista de quem é da BTG: pedir, avisar uma
+ * entrega e acompanhar onde estão os pedidos. Os números do estoque e da
+ * fatura ficam em quadros pequenos ao lado; os detalhes estão nas telas
+ * próprias.
+ */
+
+const longDate = new Intl.DateTimeFormat("pt-BR", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  timeZone: "America/Sao_Paulo",
+});
+
+function firstName(name: string | undefined) {
+  return (name ?? "").trim().split(/\s+/)[0] || "";
+}
 
 export function ClienteInicio() {
+  const { user } = useAppUser();
+  const name = firstName(user?.fullName);
+
   return (
     <ClientDataBoundary>
       {(overview) => {
         const inventory = getInventory(overview);
-        const inventoryItems = getInventoryItems(overview);
-        const billing = getBilling(overview);
-        const orders = getOrders(overview);
-        const requests = getRequests(overview);
-        const alerts = getAlerts(overview);
-        const availablePieces = firstNumber(
-          inventory.available_pieces,
-          inventory.total_pieces,
-          inventory.total_pecas,
-        );
-        const stockReady = inventoryItems.length > 0 || availablePieces > 0;
-        const openOrders = firstNumber(overview.orders?.open, orders.length);
-        const openInvoices = firstNumber(billing.open_count);
-        const inventoryValue = inventoryTotalValue(inventory, inventoryItems);
-
-        const activities: ActivityItem[] = sortByDateDesc(
-          [
-            ...orders.slice(0, 4).map((order, index) => ({
-              id: `order-${orderReference(order)}-${index}`,
-              kind: "Pedido" as const,
-              reference: orderReference(order),
-              title: orderProduct(order),
-              status: order.status,
-              date: orderDate(order),
-            })),
-            ...requests.slice(0, 4).map((request, index) => ({
-              id: `request-${requestReference(request)}-${index}`,
-              kind: "Recebimento" as const,
-              reference: requestReference(request),
-              title: requestTitle(request),
-              status: request.status,
-              date: requestDate(request),
-            })),
-          ],
-          (item) => item.date,
-        ).slice(0, 6);
+        const items = getInventoryItems(overview);
+        const requests = getRequests(overview) as Record<string, unknown>[];
+        const invoices = getInvoices(overview) as Record<string, unknown>[];
+        const available = firstNumber(inventory.available_pieces, inventory.total_pieces);
+        const reserved = firstNumber(inventory.reserved_pieces);
+        const totalPieces = firstNumber(inventory.total_pieces, available + reserved);
+        const itemCount = firstNumber(inventory.total_skus, items.length);
+        const value = inventoryTotalValue(inventory, items);
+        const stockReady = items.length > 0 || available > 0;
+        const orders = homeOrders(requests);
+        const notices = homeNotices(requests);
+        const bills = invoiceLines(invoices, new Date());
+        const customer = overview.customer?.name || "BTG Pactual";
+        const today = longDate.format(new Date());
 
         return (
-          <ClientModuleShell
-            overview={overview}
-            title="Início"
-            icon={Activity}
-          >
-            <section className="rounded-[24px] border border-border bg-white/68 p-5 shadow-[0_8px_24px_rgba(15,23,42,.04)] backdrop-blur-[40px] md:p-6">
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div className="flex min-w-0 items-start gap-4">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border bg-white text-primary">
-                    {stockReady ? (
-                      <CircleCheck className="h-5 w-5" aria-hidden="true" />
-                    ) : (
-                      <Clock3 className="h-5 w-5" aria-hidden="true" />
-                    )}
-                  </span>
-                  <div className="min-w-0">
-                    <h2 className="text-lg font-semibold text-foreground">
-                      {stockReady
-                        ? "Estoque disponível para consulta"
-                        : "Inventário inicial em andamento"}
-                    </h2>
-                    <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
-                      {stockReady
-                        ? "Os saldos exibidos refletem as entradas conferidas pela Dutelog e as reservas dos pedidos em aberto."
-                        : "A Dutelog está contando e cadastrando os produtos. Você já pode avisar entregas de fornecedores; os itens só aparecem no estoque depois da conferência física."}
-                    </p>
-                  </div>
-                </div>
-                <span className="shrink-0 rounded-full border border-border bg-white px-3 py-1.5 text-xs font-medium text-muted-foreground">
-                  {stockReady ? "Atualizado em tempo real" : "Sem saldo liberado"}
-                </span>
-              </div>
-            </section>
+          <main className="h-full min-h-0 w-full overflow-y-auto px-4 py-5 sm:px-6 lg:px-8">
+            <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 pb-6">
+              <header>
+                <h1 className="text-2xl font-semibold tracking-tight md:text-[1.75rem]">
+                  {name ? `Olá, ${name}` : "Olá"}
+                </h1>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  {customer} · {today}
+                </p>
+              </header>
 
-            <section className="grid gap-4 lg:grid-cols-2">
-              <PortalAction
-                href="/portal/estoque"
-                icon={Box}
-                title="Pedir itens do estoque"
-                description="Monte o pedido de abastecimento da loja."
-                meta={
-                  stockReady
-                    ? `${formatNumber(availablePieces)} peça(s) disponíveis`
-                    : "Disponível após o inventário inicial"
-                }
-                disabled={!stockReady}
-              />
-              <PortalAction
-                href="/portal/recebimentos"
-                icon={PackagePlus}
-                title="Avisar uma entrega"
-                description="Informe o que o fornecedor enviará para a Dutelog e anexe a nota ou o pedido."
-                meta="O aviso não altera o saldo do estoque"
-              />
-            </section>
-
-            {stockReady || openOrders > 0 || openInvoices > 0 ? (
-              <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <MetricCard
-                  label="Peças disponíveis"
-                  value={formatNumber(availablePieces)}
-                  description={`${formatNumber(firstNumber(inventory.reserved_pieces))} reservada(s) em pedidos`}
+              <section className="grid gap-3 md:grid-cols-2">
+                <Action
+                  href="/portal/estoque"
                   icon={Box}
-                  tone="info"
+                  title="Pedir itens do estoque"
+                  detail={
+                    stockReady
+                      ? `${formatNumber(available)} peças disponíveis em ${formatNumber(itemCount)} itens`
+                      : "Disponível depois da contagem inicial"
+                  }
+                  disabled={!stockReady}
                 />
-                <MetricCard
-                  label="Valor do estoque"
-                  value={formatMoney(inventoryValue)}
-                  description="Custo total dos saldos disponíveis"
-                  icon={DollarSign}
-                  tone="success"
-                />
-                <MetricCard
-                  label="Pedidos em aberto"
-                  value={formatNumber(openOrders)}
-                  icon={PackageCheck}
-                  tone="neutral"
-                />
-                <MetricCard
-                  label="Faturas em aberto"
-                  value={formatMoney(firstNumber(billing.open_total, billing.current_total))}
-                  description={`${formatNumber(openInvoices)} documento(s)`}
-                  icon={DollarSign}
-                  tone={firstNumber(billing.overdue_total) > 0 ? "danger" : "neutral"}
+                <Action
+                  href="/portal/recebimentos"
+                  icon={PackagePlus}
+                  title="Avisar uma entrega"
+                  detail="O fornecedor vai entregar na Dutelog? Avise e anexe a NF"
                 />
               </section>
-            ) : null}
 
-            {activities.length > 0 || alerts.length > 0 ? (
-              <section className="grid gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,.75fr)]">
-                {activities.length > 0 ? (
-                  <ModulePanel title="Atividade recente" icon={Truck}>
-                    <div className="divide-y divide-border/70">
-                      {activities.map((item) => (
-                        <div
-                          key={item.id}
-                          className="grid gap-3 py-4 md:grid-cols-[110px_minmax(0,1fr)_auto]"
-                        >
-                          <div className="text-xs font-medium text-muted-foreground">
-                            {item.kind}
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+                <Panel title="Seus pedidos" href="/portal/pedidos" linkLabel="Ver todos">
+                  {orders.length ? (
+                    <ul>
+                      {orders.map(({ request, progress }) => (
+                        <li key={String(request.id)} className="border-b border-border/50 px-5 py-4 last:border-0">
+                          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                            <span className="font-semibold">{orderTitle(request)}</span>
+                            <span className="text-xs text-muted-foreground">{orderSummary(request, progress)}</span>
                           </div>
-                          <div className="min-w-0 space-y-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-medium text-foreground">
-                                {item.reference}
+                          {progress.rejected ? (
+                            <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                              {progress.reason
+                                ? `Recusado pela Dutelog: ${progress.reason.replace(/[.\s]+$/, "")}.`
+                                : "Recusado pela Dutelog."}{" "}
+                              Faça um novo pedido ou fale com a Dutelog.
+                            </p>
+                          ) : (
+                            <Steps progress={progress} />
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="px-5 py-6 text-sm text-muted-foreground">
+                      Nenhum pedido ainda. Use "Pedir itens do estoque" para fazer o primeiro.
+                    </p>
+                  )}
+                </Panel>
+
+                <div className="flex flex-col gap-4">
+                  <Panel title="Entregas avisadas" href="/portal/recebimentos" linkLabel="Avisar">
+                    {notices.length ? (
+                      <ul>
+                        {notices.map((notice, index) => (
+                          <Row
+                            key={`${notice.title}-${index}`}
+                            title={notice.title}
+                            detail={notice.detail}
+                            aside={
+                              <span
+                                className={cn(
+                                  "rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                                  notice.tone === "waiting" && "bg-amber-50 text-amber-800",
+                                  notice.tone === "done" && "bg-blue-50 text-blue-700",
+                                  notice.tone === "rejected" && "bg-red-50 text-red-700",
+                                )}
+                              >
+                                {notice.label}
                               </span>
-                              <StatusBadge status={item.status} />
-                            </div>
-                            <p className="truncate text-sm text-muted-foreground">
-                              {item.title}
-                            </p>
-                          </div>
-                          <div className="text-sm text-muted-foreground md:text-right">
-                            {formatDate(item.date)}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </ModulePanel>
-                ) : (
-                  <div />
-                )}
+                            }
+                          />
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="px-5 py-4 text-sm text-muted-foreground">Nenhuma entrega avisada.</p>
+                    )}
+                  </Panel>
 
-                {alerts.length > 0 ? (
-                  <ModulePanel title="Pontos de atenção" icon={AlertTriangle}>
-                    <div className="space-y-3">
-                      {alerts.slice(0, 4).map((alert, index) => (
-                        <div
-                          key={firstText(alert.id, alert.title, `alert-${index}`)}
-                          className="rounded-2xl border border-border bg-white/55 p-4"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <p className="font-medium text-foreground">
-                              {firstText(alert.title, alert.titulo, "Atenção necessária")}
-                            </p>
-                            <StatusBadge status={alert.priority ?? alert.severity} />
-                          </div>
-                          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                            {firstText(alert.message, alert.description, "Consulte os detalhes com a Dutelog.")}
-                          </p>
-                        </div>
+                  <Panel title="Seu estoque" href="/portal/estoque" linkLabel="Abrir">
+                    <ul>
+                      <Row
+                        title="Valor guardado"
+                        detail={`${formatNumber(itemCount)} itens · ${formatNumber(totalPieces)} peças`}
+                        aside={<span className="text-lg font-semibold">{formatMoney(value)}</span>}
+                      />
+                      <Row
+                        title="Reservado em pedidos"
+                        detail="sai do disponível até a entrega"
+                        aside={<span className="font-semibold">{formatNumber(reserved)} peças</span>}
+                      />
+                    </ul>
+                  </Panel>
+
+                  <Panel title="Faturas" href="/portal/faturas" linkLabel="Ver">
+                    <ul>
+                      {bills.map((bill) => (
+                        <Row
+                          key={bill.competencia}
+                          title={bill.label}
+                          detail={bill.detail}
+                          aside={
+                            bill.amount !== undefined ? (
+                              <span className="font-semibold">{formatMoney(bill.amount)}</span>
+                            ) : (
+                              <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground/70">
+                                {bill.state === "running" ? "Em andamento" : "Em fechamento"}
+                              </span>
+                            )
+                          }
+                        />
                       ))}
-                    </div>
-                  </ModulePanel>
-                ) : null}
-              </section>
-            ) : null}
-          </ClientModuleShell>
+                    </ul>
+                  </Panel>
+                </div>
+              </div>
+            </div>
+          </main>
         );
       }}
     </ClientDataBoundary>
   );
 }
 
-function PortalAction({
+function Steps({ progress }: { progress: OrderProgress }) {
+  return (
+    <ol className="mt-3 flex items-start" aria-label={`Etapa: ${ORDER_STEPS[progress.step]}`}>
+      {ORDER_STEPS.map((label, index) => {
+        const done = index < progress.step || (index === progress.step && progress.step === ORDER_STEPS.length - 1);
+        const current = index === progress.step && !done;
+        return (
+          <li key={label} className="flex flex-1 flex-col items-center last:flex-none">
+            <div className="flex w-full items-center">
+              <span
+                className={cn(
+                  "h-3 w-3 shrink-0 rounded-full border-2",
+                  done && "border-primary bg-primary",
+                  current && "border-primary bg-white ring-4 ring-primary/15",
+                  !done && !current && "border-border bg-white",
+                )}
+              />
+              {index < ORDER_STEPS.length - 1 ? (
+                <span className={cn("h-0.5 flex-1", index < progress.step ? "bg-primary" : "bg-border")} />
+              ) : null}
+            </div>
+            <span
+              className={cn(
+                "mt-1 w-full text-left text-[11px]",
+                current ? "font-semibold text-primary" : done ? "text-foreground/70" : "text-muted-foreground",
+              )}
+            >
+              {label}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function Action({
   href,
   icon: Icon,
   title,
-  description,
-  meta,
+  detail,
   disabled = false,
 }: {
   href: string;
   icon: LucideIcon;
   title: string;
-  description: string;
-  meta: string;
+  detail: string;
   disabled?: boolean;
 }) {
-  const content = (
+  const body = (
     <>
-      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] border border-border bg-white text-primary">
+      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
         <Icon className="h-5 w-5" aria-hidden="true" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-lg font-semibold text-foreground">{title}</span>
-        <span className="mt-1 block text-sm leading-6 text-muted-foreground">
-          {description}
-        </span>
-        <span className="mt-3 block text-xs font-medium text-muted-foreground">
-          {meta}
-        </span>
+        <span className="block font-semibold">{title}</span>
+        <span className="block text-sm text-muted-foreground">{detail}</span>
       </span>
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-white text-muted-foreground transition group-hover:text-primary">
-        <ArrowRight className="h-4 w-4" aria-hidden="true" />
-      </span>
+      <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
     </>
   );
-
-  if (disabled) {
-    return (
-      <div className="flex min-h-[168px] items-start gap-4 rounded-[24px] border border-border bg-white/45 p-6 opacity-75">
-        {content}
-      </div>
-    );
-  }
-
+  const className = "flex items-center gap-4 rounded-[18px] border border-border bg-white px-5 py-4";
+  if (disabled) return <div className={cn(className, "opacity-60")}>{body}</div>;
   return (
-    <Link
-      href={href}
-      className="group flex min-h-[168px] cursor-pointer items-start gap-4 rounded-[24px] border border-border bg-white/72 p-6 shadow-[0_8px_24px_rgba(15,23,42,.04)] transition duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-white hover:shadow-[0_18px_60px_rgba(15,23,42,.05)]"
-    >
-      {content}
+    <Link href={href} className={cn(className, "transition-colors hover:border-primary/40")}>
+      {body}
     </Link>
+  );
+}
+
+function Panel({
+  title,
+  href,
+  linkLabel,
+  children,
+}: {
+  title: string;
+  href: string;
+  linkLabel: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="h-fit overflow-hidden rounded-[18px] border border-border bg-white">
+      <div className="flex items-center justify-between border-b border-border/60 px-5 py-3">
+        <h2 className="text-sm font-semibold">{title}</h2>
+        <Link href={href} className="text-sm font-medium text-primary hover:underline">
+          {linkLabel} ›
+        </Link>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Row({ title, detail, aside }: { title: string; detail: string; aside: ReactNode }) {
+  return (
+    <li className="flex items-center justify-between gap-3 border-b border-border/40 px-5 py-3 text-sm last:border-0">
+      <span className="min-w-0">
+        <span className="block truncate">{title}</span>
+        <span className="block text-xs text-muted-foreground">{detail}</span>
+      </span>
+      <span className="shrink-0">{aside}</span>
+    </li>
   );
 }

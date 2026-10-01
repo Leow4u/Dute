@@ -35,6 +35,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import AppLayout from "./components/layout/app-layout";
+import SettingsLayout from "./components/layout/settings-layout";
 import type { WarehouseOpsModuleKey } from "./lib/warehouse-ops/model";
 import NotFound from "./pages/not-found";
 
@@ -76,13 +77,20 @@ const Movements = lazy(() => import("./pages/movements"));
 const Orders = lazy(() => import("./pages/orders"));
 const Reports = lazy(() => import("./pages/reports"));
 const BillingHub = lazy(() => import("./pages/billing-hub"));
+const BillingInvoice = lazy(() => import("./pages/billing-invoice"));
 const Users = lazy(() => import("./pages/users"));
-const Customers = lazy(() => import("./pages/customers"));
+const SettingsCustomer = lazy(() => import("./pages/settings-customer"));
 const Documents = lazy(() => import("./pages/documents"));
 const Settings = lazy(() => import("./pages/settings"));
+const SettingsAccount = lazy(() =>
+  import("./pages/settings").then((m) => ({ default: m.SettingsAccount })),
+);
+const SettingsApp = lazy(() =>
+  import("./pages/settings").then((m) => ({ default: m.SettingsApp })),
+);
 const AiControl = lazy(() => import("./pages/ai-control"));
 const AgentKnowledge = lazy(() => import("./pages/agent-knowledge"));
-const Support = lazy(() => import("./pages/support"));
+const SettingsSystem = lazy(() => import("./pages/settings-system"));
 const CustomerRequests = lazy(() => import("./pages/customer-requests"));
 const WarehouseOps = lazy(() => import("./pages/warehouse-ops"));
 const WmsInventoryPage = lazy(() => import("./pages/wms-inventory"));
@@ -100,6 +108,9 @@ const ClienteEstoque = lazy(() =>
 );
 const ClienteFaturas = lazy(() =>
   import("./pages/client").then((m) => ({ default: m.ClienteFaturas })),
+);
+const ClienteFatura = lazy(() =>
+  import("./pages/client").then((m) => ({ default: m.ClienteFatura })),
 );
 const ClienteInicio = lazy(() =>
   import("./pages/client").then((m) => ({ default: m.ClienteInicio })),
@@ -130,6 +141,7 @@ import {
 } from "./lib/modules";
 import { queryClient } from "./lib/queryClient";
 import { RealtimeSyncBridge } from "./lib/realtime-sync";
+import { LEGACY_SETTINGS_REDIRECTS, isSettingsPath } from "./lib/settings-nav";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -352,7 +364,7 @@ function AuthShell({
 
 function SignInPage() {
   const [, setLocation] = useLocation();
-  const { user, isLoaded, accessDenied } = useAppUser();
+  const { user, isLoaded, accessDenied, accessRemoved } = useAppUser();
   const [form, setForm] = useState<AuthFormState>(initialAuthState);
 
   if (isLoaded && user) return <Redirect to="/" />;
@@ -429,7 +441,9 @@ function SignInPage() {
         {accessDenied ? (
           <Alert variant="destructive">
             <AlertDescription>
-              Seu e-mail ainda não tem convite ativo para acessar o sistema.
+              {accessRemoved
+                ? "Seu acesso foi removido. Se precisar voltar a usar o sistema, fale com a administração da Dutelog."
+                : "Seu e-mail ainda não tem convite ativo para acessar o sistema."}
             </AlertDescription>
           </Alert>
         ) : null}
@@ -845,6 +859,7 @@ type ProtectedRouteConfig = {
   component: React.ComponentType<any>;
   appRoles: AppRole[];
   profileRoles: ProfileRole[];
+  layout: "app" | "settings";
 };
 
 function protectedRoute(
@@ -856,6 +871,8 @@ function protectedRoute(
     component,
     appRoles: getRouteAppRoles(path),
     profileRoles: getRouteProfileRoles(path),
+    // Configuração é tela própria, sem o menu do app (lib/settings-nav.ts).
+    layout: isSettingsPath(path) ? "settings" : "app",
   };
 }
 
@@ -945,6 +962,11 @@ const ProductsRedirect = () => <Redirect to="/catalogo" />;
 const SkusRedirect = () => <Redirect to="/catalogo/saldos" />;
 const WarehouseMapRedirect = () => <Redirect to="/catalogo/mapa" />;
 const PriceListRedirect = () => <Redirect to="/faturamento/tabela" />;
+// A Administração virou seção da Configuração.
+const legacySettingsRedirect = (path: string) => {
+  const to = LEGACY_SETTINGS_REDIRECTS[path];
+  return () => <Redirect to={to} />;
+};
 
 const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/dashboard", Home),
@@ -973,21 +995,28 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/skus", SkusRedirect),
   protectedRoute("/movements", Movements),
   protectedRoute("/orders", Orders),
+  protectedRoute("/faturamento/fatura", BillingInvoice),
   protectedRoute("/faturamento", BillingHub),
   protectedRoute("/faturamento/tabela", BillingHub),
   protectedRoute("/tabela-precos", PriceListRedirect),
   protectedRoute("/agente", AiControl),
   protectedRoute("/agente/conhecimento", AgentKnowledge),
-  protectedRoute("/suporte", Support),
+  protectedRoute("/suporte", legacySettingsRedirect("/suporte")),
   protectedRoute("/documentos", Documents),
-  protectedRoute("/clientes", Customers),
-  protectedRoute("/usuarios", Users),
+  protectedRoute("/clientes", legacySettingsRedirect("/clientes")),
+  protectedRoute("/usuarios", legacySettingsRedirect("/usuarios")),
   protectedRoute("/configuracoes", Settings),
+  protectedRoute("/configuracoes/conta", SettingsAccount),
+  protectedRoute("/configuracoes/aplicativo", SettingsApp),
+  protectedRoute("/configuracoes/pessoas", Users),
+  protectedRoute("/configuracoes/cliente", SettingsCustomer),
+  protectedRoute("/configuracoes/sistema", SettingsSystem),
   protectedRoute("/portal", ClienteInicio),
   protectedRoute("/portal/estoque", ClienteEstoque),
   protectedRoute("/portal/recebimentos", ClienteSolicitacoes),
   protectedRoute("/portal/solicitacoes", ClientRequestsRedirect),
   protectedRoute("/portal/pedidos", ClientePedidos),
+  protectedRoute("/portal/faturas/fatura", ClienteFatura),
   protectedRoute("/portal/faturas", ClienteFaturas),
   protectedRoute("/portal/documentos", ClienteDocumentos),
   protectedRoute("/portal/agente/operacional", ClientAgentRedirect),
@@ -1000,8 +1029,10 @@ function ProtectedRoute({
   component: Component,
   appRoles,
   profileRoles,
+  layout,
   ...rest
 }: any) {
+  const Layout = layout === "settings" ? SettingsLayout : AppLayout;
   const { user, isLoaded } = useAppUser();
 
   return (
@@ -1011,7 +1042,7 @@ function ProtectedRoute({
         if (!user) return <Redirect to="/sign-in" />;
         return (
           <RoleGate appRoles={appRoles} profileRoles={profileRoles}>
-            <AppLayout>
+            <Layout>
               <ChunkErrorBoundary>
                 <Suspense
                   fallback={
@@ -1023,7 +1054,7 @@ function ProtectedRoute({
                   <Component params={params} />
                 </Suspense>
               </ChunkErrorBoundary>
-            </AppLayout>
+            </Layout>
           </RoleGate>
         );
       }}

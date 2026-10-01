@@ -30,6 +30,7 @@ import {
 import {
   getActiveModule,
   getNavigationForProfileRole,
+  isAccountPath,
   isModuleEnabled,
   isRouteActive,
   type AppModule,
@@ -38,6 +39,8 @@ import {
 import { AgentDock } from "@/components/agent/agent-dock";
 import { useAppAuth, useAppUser, type AppUser } from "@/lib/auth";
 import { usePwaInstall } from "@/lib/pwa-install";
+import { roleDescription, roleLabel } from "@/lib/access";
+import { rememberReturnPath } from "@/lib/settings-nav";
 
 type AccountMenuProps = {
   basePath: string;
@@ -69,27 +72,27 @@ function AccountMenu({
   user,
 }: AccountMenuProps) {
   const { isInstalled } = usePwaInstall();
+  const role = user?.publicMetadata.role;
+  const name = user?.fullName || "Usuário";
+  const email = user?.primaryEmailAddress?.emailAddress || "Sem e-mail";
+  const managesAccess = role === "owner" || role === "admin";
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn(
           "flex items-center gap-3 rounded-xl text-sm font-medium text-sidebar-foreground/80 outline-none transition-colors duration-200 hover:bg-white/70 hover:text-sidebar-foreground",
-          compact ? "h-11 w-11 justify-center" : "w-full px-3 py-2",
+          compact ? "h-11 w-11 justify-center" : "w-full px-2 py-2",
         )}
       >
         <UserAvatar user={user} />
         {compact ? (
-          <span className="sr-only">Minha Conta</span>
+          <span className="sr-only">Minha conta</span>
         ) : (
           <>
             <div className="min-w-0 flex-1 text-left">
-              <div className="truncate text-sm font-semibold">
-                {user?.fullName || "Usuário"}
-              </div>
-              <div className="truncate text-xs text-sidebar-foreground/50">
-                {user?.primaryEmailAddress?.emailAddress}
-              </div>
+              <div className="truncate text-sm font-semibold text-sidebar-foreground">{name}</div>
+              <div className="truncate text-xs text-sidebar-foreground/55">{email}</div>
             </div>
             <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
           </>
@@ -98,163 +101,69 @@ function AccountMenu({
       <DropdownMenuContent
         align={compact ? "start" : "end"}
         side={compact ? "right" : "top"}
-        className="w-[240px]"
+        className="w-[300px] p-0"
       >
-        <DropdownMenuLabel>
-          <div className="truncate">Minha Conta</div>
-          <div className="truncate text-xs font-normal text-muted-foreground">
-            {user?.primaryEmailAddress?.emailAddress}
+        {/* A conta inteira cabe aqui; a antiga tela de Configuração repetia isto. */}
+        <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
+          <UserAvatar user={user} />
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold">{name}</div>
+            <div className="truncate text-xs text-muted-foreground">{email}</div>
           </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href="/configuracoes" className="cursor-pointer">
-            <Settings className="mr-2 h-4 w-4" />
-            Configuração
-          </Link>
-        </DropdownMenuItem>
-        {!isInstalled ? (
+        </div>
+        <div className="space-y-1.5 border-b border-border/60 px-4 py-3">
+          <div className="flex items-center justify-between gap-2 text-sm">
+            <span className="text-muted-foreground">Perfil</span>
+            <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-semibold">
+              {roleLabel(role)}
+            </span>
+          </div>
+          <p className="text-xs leading-5 text-muted-foreground">
+            {roleDescription(role)}{" "}
+            {managesAccess
+              ? "Perfis são definidos em Pessoas e acessos."
+              : "Para mudar seu perfil, fale com a administração."}
+          </p>
+        </div>
+        <div className="p-1">
           <DropdownMenuItem asChild>
-            <Link
-              href="/configuracoes#aplicativo"
-              className="cursor-pointer"
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Instalar aplicativo
+            <Link href="/configuracoes" className="cursor-pointer">
+              <Settings className="mr-2 h-4 w-4" />
+              Configuração
             </Link>
           </DropdownMenuItem>
-        ) : null}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onClick={() => signOut({ redirectUrl: basePath || "/" })}
-          className="cursor-pointer text-destructive focus:text-destructive"
-        >
-          <LogOut className="mr-2 h-4 w-4" />
-          Sair
-        </DropdownMenuItem>
+          {!isInstalled ? (
+            <DropdownMenuItem asChild>
+              <Link href="/configuracoes/aplicativo" className="cursor-pointer">
+                <Download className="mr-2 h-4 w-4" />
+                Instalar no celular
+              </Link>
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuItem
+            onClick={() => signOut({ redirectUrl: basePath || "/" })}
+            className="cursor-pointer text-destructive focus:text-destructive"
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            Sair
+          </DropdownMenuItem>
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 
-function SidebarAccountFooter({
-  basePath,
-  compact = false,
-  signOut,
-  user,
-}: AccountMenuProps) {
-  const email = user?.primaryEmailAddress?.emailAddress || "Sem e-mail";
-  const name = user?.fullName || "Usuário";
-  const { isInstalled } = usePwaInstall();
-
-  if (compact) {
+function SidebarAccountFooter(props: AccountMenuProps) {
+  if (props.compact) {
     return (
-      <div className="flex flex-col items-center gap-2">
-        {!isInstalled ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Link
-                href="/configuracoes#aplicativo"
-                className="flex h-11 w-11 items-center justify-center rounded-xl text-sidebar-foreground/60 outline-none transition-colors duration-200 hover:bg-white/70 hover:text-sidebar-foreground"
-              >
-                <Download className="h-4 w-4" />
-                <span className="sr-only">Instalar aplicativo</span>
-              </Link>
-            </TooltipTrigger>
-            <TooltipContent side="right">Instalar aplicativo</TooltipContent>
-          </Tooltip>
-        ) : null}
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Link
-              href="/configuracoes"
-              className="flex h-11 w-11 items-center justify-center rounded-xl text-sidebar-foreground/60 outline-none transition-colors duration-200 hover:bg-white/70 hover:text-sidebar-foreground"
-            >
-              <Settings className="h-4 w-4" />
-              <span className="sr-only">Configuração</span>
-            </Link>
-          </TooltipTrigger>
-          <TooltipContent side="right">Configuração</TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl">
-              <UserAvatar user={user} />
-            </div>
-          </TooltipTrigger>
-          <TooltipContent side="right">
-            <div className="max-w-[220px]">
-              <div className="truncate font-medium">{name}</div>
-              <div className="truncate text-xs opacity-70">{email}</div>
-            </div>
-          </TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              className="flex h-11 w-11 items-center justify-center rounded-xl text-sidebar-foreground/60 outline-none transition-colors duration-200 hover:bg-white/70 hover:text-destructive"
-              onClick={() => signOut({ redirectUrl: basePath || "/" })}
-            >
-              <LogOut className="h-4 w-4" />
-              <span className="sr-only">Sair</span>
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right">Sair</TooltipContent>
-        </Tooltip>
+      <div className="flex justify-center">
+        <AccountMenu {...props} />
       </div>
     );
   }
-
   return (
-    <div className="space-y-3">
-      {!isInstalled ? (
-        <Link
-          href="/configuracoes#aplicativo"
-          className="flex min-h-10 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-sidebar-foreground/70 outline-none transition-colors duration-200 hover:bg-white/70 hover:text-sidebar-foreground"
-        >
-          <Download className="h-4 w-4 shrink-0" />
-          <span>Instalar aplicativo</span>
-        </Link>
-      ) : null}
-
-      <Link
-        href="/configuracoes"
-        className="flex min-h-10 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-sidebar-foreground/70 outline-none transition-colors duration-200 hover:bg-white/70 hover:text-sidebar-foreground"
-      >
-        <Settings className="h-4 w-4 shrink-0" />
-        <span>Configuração</span>
-      </Link>
-
-      <div className="rounded-2xl border border-sidebar-border/70 bg-white/55 p-2 shadow-[0_8px_24px_rgba(15,23,42,.04)] backdrop-blur-[40px]">
-        <div className="flex items-center gap-3">
-          <UserAvatar user={user} />
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-semibold text-sidebar-foreground">
-              {name}
-            </div>
-            <div className="truncate text-xs text-sidebar-foreground/55">
-              {email}
-            </div>
-          </div>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sidebar-foreground/55 outline-none transition-colors duration-200 hover:bg-white/80 hover:text-destructive"
-                onClick={() => signOut({ redirectUrl: basePath || "/" })}
-              >
-                <LogOut className="h-4 w-4" />
-                <span className="sr-only">Sair</span>
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top">Sair</TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
+    <div className="rounded-2xl border border-sidebar-border/70 bg-white/55 p-1 shadow-[0_8px_24px_rgba(15,23,42,.04)] backdrop-blur-[40px]">
+      <AccountMenu {...props} />
     </div>
   );
 }
@@ -483,11 +392,11 @@ function ExpandedModuleItem({
 }
 
 function MobileModuleNav({
-  activeModule,
+  activeModuleId,
   location,
   modules,
 }: {
-  activeModule: AppModule;
+  activeModuleId: string | null;
   location: string;
   modules: AppModule[];
 }) {
@@ -496,7 +405,7 @@ function MobileModuleNav({
       <nav className="flex gap-2 overflow-x-auto px-4 py-2">
         {modules.map((module) => {
           const Icon = module.icon;
-          const active = activeModule.id === module.id;
+          const active = activeModuleId === module.id;
           const enabled = isModuleEnabled(module);
           const hasSubroutes =
             module.routes.filter((route) => route.href).length > 1;
@@ -570,6 +479,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const modules = getNavigationForProfileRole(user?.publicMetadata.role);
   const activeModule = getActiveModule(modules, location);
+  // Na tela da conta nenhum item do menu fica aceso.
+  const activeId = isAccountPath(location) ? null : activeModule.id;
   const clientSurface =
     location === "/portal" || location.startsWith("/portal/");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -579,6 +490,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const [openModuleIds, setOpenModuleIds] = useState<Set<string>>(
     () => new Set([activeModule.id]),
   );
+
+  // O "Voltar" da Configuração devolve a pessoa para esta tela.
+  useEffect(() => {
+    rememberReturnPath(`${location}${window.location.search}`);
+  }, [location]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -671,14 +587,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 key={module.id}
                 module={module}
                 location={location}
-                active={activeModule.id === module.id}
+                active={activeId === module.id}
               />
             ) : (
               <ExpandedModuleItem
                 key={module.id}
                 module={module}
                 location={location}
-                active={activeModule.id === module.id}
+                active={activeId === module.id}
                 isOpen={openModuleIds.has(module.id)}
                 onToggle={toggleModule}
               />
@@ -726,7 +642,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </div>
         ) : null}
         <MobileModuleNav
-          activeModule={activeModule}
+          activeModuleId={activeId}
           location={location}
           modules={modules}
         />

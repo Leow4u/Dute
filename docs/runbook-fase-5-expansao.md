@@ -39,7 +39,7 @@ usuarios, faturas ou eventos com o contrato BTG Pactual.
 
 ## Smoke test obrigatorio
 
-- Acessar `/clientes` como admin.
+- Acessar Configuração > Cliente BTG (`/configuracoes/cliente`) como admin.
 - Criar um cliente de teste interno ou editar um cliente existente.
 - Confirmar evento `customers.create` ou `customers.update`.
 - Criar vinculo de usuario e confirmar evento `customer_accounts.create`.

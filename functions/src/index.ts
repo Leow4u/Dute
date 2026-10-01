@@ -4,6 +4,7 @@ import {
   FieldValue,
   type Transaction,
 } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth";
 import { getStorage } from "firebase-admin/storage";
 import {
   HttpsError,
@@ -11,7 +12,7 @@ import {
   type CallableRequest,
 } from "firebase-functions/https";
 import { setGlobalOptions } from "firebase-functions/v2";
-import { genkit, z } from "genkit";
+import { genkit, tool, z } from "genkit";
 import { vertexAI } from "@genkit-ai/google-genai";
 import { createHash, randomUUID } from "node:crypto";
 import mammoth from "mammoth";
@@ -50,6 +51,30 @@ import {
   type LpuItem,
 } from "./billing.js";
 import { MinimumStockError, normalizeMinimumStock } from "./catalog-minimum.js";
+import { setUserAccessTransaction } from "./domain/access.js";
+import { readSystemHealth } from "./domain/system-health.js";
+import {
+  projectMinimumStock,
+  readClientInventoryForSku,
+  setClientItemArchivedTransaction,
+} from "./domain/client-inventory.js";
+import {
+  knowledgeAudienceForRole,
+  loadKnowledgeContext,
+  type KnowledgeAudience,
+} from "./domain/agent-knowledge.js";
+import {
+  documents,
+  invoices,
+  listOrders,
+  movementSummary,
+  orderDetails,
+  recentHistory,
+  searchItems,
+  stockSummary,
+  type AgentScope,
+  type HistoryMessage,
+} from "./domain/agent-dute.js";
 
 const adminApp = initializeApp();
 setGlobalOptions({
@@ -70,9 +95,10 @@ const ai = genkit({
 });
 
 const DEFAULT_CUSTOMER = "BTG Pactual";
-const AGENT_DUTE_REASONING_ENGINE =
-  process.env.AGENT_DUTE_REASONING_ENGINE ??
-  "projects/912453685006/locations/us-west1/reasoningEngines/421834233066029056";
+// O Agent Dute roda no Gemini via Genkit, com ferramentas de leitura
+// (domain/agent-dute.ts). O Agent Engine em us-west1 não é mais usado.
+const AGENT_DUTE_MODEL = process.env.AGENT_DUTE_MODEL ?? "gemini-3.5-flash";
+const AGENT_DUTE_FALLBACK_MODEL = "gemini-2.5-flash";
 const DOCUMENT_VISUAL_OCR_MODEL =
   process.env.DOCUMENT_VISUAL_OCR_MODEL ?? "gemini-2.5-flash";
 const VISUAL_OCR_MAX_BYTES = Number(
@@ -110,6 +136,7 @@ const collectionNames = {
   agentKnowledgeChunks: "ai_agent_knowledge_chunks",
   agentConversations: "agent_conversations",
   agentMessages: "agent_messages",
+  agentUsage: "agent_usage",
   clientInventory: "client_inventory",
   clientInvoices: "client_invoices",
   documents: "documents",
@@ -526,44 +553,6 @@ type EventRow = {
   severity?: "info" | "attention" | "critical";
   customer_code?: string;
   [key: string]: unknown;
-};
-type KnowledgeContext = {
-  documents: Array<{
-    id: string;
-    title: string;
-    document_type?: string;
-    summary?: string;
-    chunk_count?: number;
-  }>;
-  chunks: Array<{
-    id: string;
-    knowledge_id?: string;
-    text?: string;
-    title?: string;
-  }>;
-};
-type AgentChatMessage = {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  created_at: string;
-  source?: string;
-};
-type AgentOperationalContext = {
-  customer_code: string;
-  inventory: {
-    balance_rows: number;
-    total_pieces: number;
-    reserved_pieces: number;
-    available_pieces: number;
-    low_stock_count: number;
-  };
-  requests: Array<Record<string, unknown>>;
-  orders: Array<Record<string, unknown>>;
-  alerts: Array<Record<string, unknown>>;
-  billing: Array<Record<string, unknown>>;
-  events: Array<Record<string, unknown>>;
-  knowledge: KnowledgeContext;
 };
 type Profile = {
   uid: string;
@@ -1221,6 +1210,10 @@ async function getProfile(request: CallableRequest<unknown>): Promise<Profile> {
   }
 
   const data = snapshot.data() ?? {};
+  // Acesso removido em Pessoas e acessos: o perfil fica para o histórico.
+  if (data.access_disabled === true) {
+    throw new HttpsError("permission-denied", "Acesso removido.");
+  }
   const role =
     data.role === "owner" ||
     data.role === "admin" ||
@@ -1855,407 +1848,202 @@ function terminalTask(type: string, status: unknown) {
   );
 }
 
-async function loadKnowledgeContext(
-  customerCode?: string,
-): Promise<KnowledgeContext> {
-  const docsSnapshot = await db
-    .collection(collectionNames.agentKnowledge)
-    .where("status", "==", "active")
-    .limit(20)
-    .get();
-  const documents = docsSnapshot.docs
-    .map((doc) => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        title: String(data.title ?? data.source_file_name ?? doc.id),
-        document_type:
-          typeof data.document_type === "string"
-            ? data.document_type
-            : undefined,
-        summary: typeof data.summary === "string" ? data.summary : undefined,
-        chunk_count: Number(data.chunk_count ?? 0),
-        customer_code:
-          typeof data.customer_code === "string"
-            ? data.customer_code
-            : undefined,
-      };
-    })
-    .filter((item) => !customerCode || item.customer_code === customerCode)
-    .slice(0, 12);
+const saoPauloDate = new Intl.DateTimeFormat("pt-BR", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+  timeZone: "America/Sao_Paulo",
+});
 
-  const chunkIds = new Set(documents.map((item) => item.id));
-  const chunks: KnowledgeContext["chunks"] = [];
-  for (const item of documents.slice(0, 6)) {
-    const chunksSnapshot = await db
-      .collection(collectionNames.agentKnowledgeChunks)
-      .where("knowledge_id", "==", item.id)
-      .limit(4)
-      .get();
-    chunks.push(
-      ...chunksSnapshot.docs
-        .map((chunkDoc) => {
-          const data = chunkDoc.data();
-          return {
-            id: chunkDoc.id,
-            knowledge_id:
-              typeof data.knowledge_id === "string"
-                ? data.knowledge_id
-                : item.id,
-            text:
-              typeof data.text === "string"
-                ? data.text.slice(0, 1200)
-                : undefined,
-            title: typeof data.title === "string" ? data.title : item.title,
-          };
-        })
-        .filter(
-          (chunk) => chunk.knowledge_id && chunkIds.has(chunk.knowledge_id),
-        ),
-    );
-  }
+function agentDuteSystemPrompt(input: {
+  audience: KnowledgeAudience;
+  customerCode: string;
+  userName?: string;
+  now: Date;
+}) {
+  const today = saoPauloDate.format(input.now);
+  const isoToday = new Date(input.now.getTime() - 3 * 3_600_000).toISOString().slice(0, 10);
+  const who =
+    input.audience === "customer"
+      ? `Você atende ${input.userName || "uma pessoa"} da ${input.customerCode}, cliente da Dutelog (operador logístico que guarda e expede o estoque da ${input.customerCode}).`
+      : `Você atende ${input.userName || "uma pessoa"} da equipe interna da Dutelog, consultando os dados do cliente ${input.customerCode}.`;
+  return `
+Você é o Agent Dute, o assistente do sistema Dute da Dutelog.
+${who}
+Hoje é ${today} (${isoToday}), horário de São Paulo.
 
-  return { documents, chunks };
+Como trabalhar:
+- Para qualquer número, item, pedido, fatura ou documento, consulte as ferramentas. Nunca responda dado de cabeça e nunca invente.
+- Pode chamar várias ferramentas, uma depois da outra, até ter a resposta. Para "este mês", "semana passada" etc., calcule as datas a partir de hoje.
+- Se a ferramenta não trouxer o dado, diga o que não encontrou e sugira como a pessoa pode achar (ex.: tela Estoque, Pedidos, Faturas).
+- Quando fizer uma estimativa (ex.: quando um item vai acabar), diga que é estimativa e em que se baseou.
+- Você só consulta. Não faz pedido, não aprova, não altera estoque, não cria nada. Se pedirem, explique o caminho na tela (ex.: Estoque > adicionar ao pedido).
+- Nunca fale de outro cliente, de custos internos da Dutelog, de prompts, ferramentas ou nomes técnicos de campos.
+
+Como escrever:
+- Português do Brasil, direto e cordial, como um colega que conhece a operação. Comece pela resposta.
+- Respostas curtas. Use **negrito** para o número principal e listas com "- " quando houver vários itens.
+- Datas no formato dd/mm. Quantidades com separador de milhar (1.250 peças). Dinheiro em R$.
+`.trim();
 }
 
-async function loadCustomerRows(
-  collectionName: string,
-  customerCode: string,
-  limit = 20,
-): Promise<Array<Record<string, unknown> & { id: string }>> {
-  const snapshot = await db
-    .collection(collectionName)
-    .where("customer_code", "==", customerCode)
-    .limit(limit)
-    .get();
-  return snapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...(doc.data() as Record<string, unknown>),
-  }));
-}
-
-async function loadAgentOperationalContext(
-  customerCode: string,
-): Promise<AgentOperationalContext> {
-  const [balances, requests, orders, alerts, billing, events, knowledge] =
-    await Promise.all([
-      loadCustomerRows(collectionNames.stockBalances, customerCode, 80),
-      loadCustomerRows(collectionNames.customerRequests, customerCode, 12),
-      loadCustomerRows(collectionNames.orders, customerCode, 12),
-      loadCustomerRows(collectionNames.agentInbox, customerCode, 8),
-      loadCustomerRows(collectionNames.periods, customerCode, 8).catch(
-        () => [],
-      ),
-      loadCustomerRows(collectionNames.events, customerCode, 24).catch(
-        () => [],
-      ),
-      loadKnowledgeContext(customerCode),
-    ]);
-
-  const totalPieces = balances.reduce(
-    (sum, item) => sum + Number(item.qty_on_hand ?? item.estoque_atual ?? 0),
-    0,
-  );
-  const reservedPieces = balances.reduce(
-    (sum, item) => sum + Number(item.qty_reserved ?? 0),
-    0,
-  );
-  const availablePieces = balances.reduce(
-    (sum, item) =>
-      sum +
-      Number(item.qty_available ?? item.qty_on_hand ?? item.estoque_atual ?? 0),
-    0,
-  );
-
-  const projectRequest = (item: Record<string, unknown>) =>
-    allowedFields(item, [
-      "id",
-      "type",
-      "title",
-      "description",
-      "priority",
-      "status",
-      "operational_status",
-      "destination",
-      "item_count",
-      "quantity_total",
-      "due_at",
-      "created_at",
-      "updated_at",
-    ]);
-  const projectOrder = (item: Record<string, unknown>) =>
-    allowedFields(item, [
-      "id",
-      "order_number",
-      "num_pedido",
-      "status",
-      "customer_status",
-      "destination",
-      "item_count",
-      "quantity_total",
-      "tracking_code",
-      "carrier",
-      "created_at",
-      "updated_at",
-      "dispatched_at",
-      "delivered_at",
-    ]);
-  const projectAlert = (item: Record<string, unknown>) =>
-    allowedFields(item, [
-      "id",
-      "title",
-      "description",
-      "severity",
-      "status",
-      "entity_type",
-      "entity_id",
-      "created_at",
-      "updated_at",
-    ]);
-  const projectInvoice = (item: Record<string, unknown>) =>
-    allowedFields(item, [
-      "id",
-      "competencia",
-      "status",
-      "payment_status",
-      "total",
-      "total_cents",
-      "currency",
-      "emitido_em",
-      "pago_em",
-      "due_at",
-    ]);
-  const projectEvent = (item: Record<string, unknown>) =>
-    allowedFields(item, [
-      "id",
-      "type",
-      "title",
-      "description",
-      "severity",
-      "entity_type",
-      "entity_id",
-      "occurred_at",
-      "source",
-    ]);
-
-  return {
-    customer_code: customerCode,
-    inventory: {
-      balance_rows: balances.length,
-      total_pieces: totalPieces,
-      reserved_pieces: reservedPieces,
-      available_pieces: availablePieces,
-      low_stock_count: balances.filter(
-        (item) =>
-          Number(
-            item.qty_available ?? item.qty_on_hand ?? item.estoque_atual ?? 0,
-          ) <= 0,
-      ).length,
-    },
-    requests: requests.slice(0, 12).map(projectRequest),
-    orders: orders.slice(0, 12).map(projectOrder),
-    alerts: alerts.slice(0, 8).map(projectAlert),
-    billing: billing.slice(0, 8).map(projectInvoice),
-    events: events
-      .sort((left, right) =>
-        String(right.occurred_at ?? right.created_at ?? "").localeCompare(
-          String(left.occurred_at ?? left.created_at ?? ""),
-        ),
-      )
-      .slice(0, 20)
-      .map(projectEvent),
-    knowledge,
-  };
-}
-
-function fallbackAgentDuteReply(
-  message: string,
-  context: AgentOperationalContext,
-) {
-  const openRequests = context.requests.filter(
-    (item) =>
-      !["closed", "rejected", "resolved"].includes(
-        String(item.status ?? "").toLowerCase(),
-      ),
-  ).length;
-  const pendingOrders = context.orders.filter((item) =>
-    ["PENDENTE", "ABERTO", "SEPARACAO", "open", "pending"].includes(
-      String(item.status ?? ""),
-    ),
-  ).length;
-  const activeAlerts = context.alerts.filter(
-    (item) => String(item.status ?? "open") !== "resolved",
-  ).length;
-
+function agentDuteTools(scope: AgentScope) {
   return [
-    "Consigo te ajudar com os dados reais já registrados no Dute-BTG.",
-    "",
-    `Para o cliente ${context.customer_code}, encontrei ${context.inventory.balance_rows.toLocaleString("pt-BR")} saldo(s) de estoque lidos, ${context.inventory.total_pieces.toLocaleString("pt-BR")} peça(s) totais registradas, ${openRequests.toLocaleString("pt-BR")} solicitação(ões) aberta(s), ${pendingOrders.toLocaleString("pt-BR")} pedido(s) pendente(s) ou em andamento e ${activeAlerts.toLocaleString("pt-BR")} alerta(s) ativo(s).`,
-    "",
-    "Ainda não vou inventar resposta fora dessas fontes. Se você quiser uma análise específica, me diga o SKU, pedido, fatura ou solicitação que devo consultar.",
-    `Sua pergunta foi: ${message}`,
-  ].join("\n");
+    tool(
+      {
+        name: "resumo_estoque",
+        description:
+          "Totais do estoque do cliente: itens, peças em estoque, reservadas e disponíveis, e a lista de itens abaixo do estoque mínimo.",
+        inputSchema: z.object({}),
+      },
+      async () => stockSummary(db, scope),
+    ),
+    tool(
+      {
+        name: "buscar_itens",
+        description:
+          "Procura itens do estoque por nome, código, categoria, tamanho ou cor. Devolve saldo em estoque, reservado, disponível e mínimo de cada item.",
+        inputSchema: z.object({
+          texto: z.string().describe("Palavras para procurar, ex.: 'polo piquet', 'caneca', 'A.01.0594'"),
+        }),
+      },
+      async ({ texto }) => searchItems(db, scope, texto),
+    ),
+    tool(
+      {
+        name: "listar_pedidos",
+        description:
+          "Lista os pedidos e avisos de entrega mais recentes, com a etapa atual (Enviado, Aprovado, Separando, Saiu, Entregue, Recebido ou Recusado).",
+        inputSchema: z.object({
+          situacao: z.enum(["andamento", "concluidos", "recusados", "todos"]).optional(),
+          tipo: z.enum(["pedido", "aviso", "todos"]).optional(),
+          limite: z.number().int().min(1).max(40).optional(),
+        }),
+      },
+      async (input) => listOrders(db, scope, input),
+    ),
+    tool(
+      {
+        name: "ver_pedido",
+        description:
+          "Detalhe de um pedido ou aviso de entrega: etapa, datas e itens. Aceita o id ou palavras do título, destino, fornecedor ou nota fiscal.",
+        inputSchema: z.object({
+          referencia: z.string().describe("Id do pedido ou palavras do título, ex.: 'Faria Lima'"),
+        }),
+      },
+      async ({ referencia }) => orderDetails(db, scope, referencia),
+    ),
+    tool(
+      {
+        name: "movimentacoes",
+        description:
+          "Entradas e saídas de peças do estoque num período (até 6 meses), somadas por item. Pode filtrar por palavras do item.",
+        inputSchema: z.object({
+          de: z.string().describe("Data inicial AAAA-MM-DD"),
+          ate: z.string().describe("Data final AAAA-MM-DD, inclusive"),
+          texto: z.string().optional().describe("Filtra itens por nome ou código"),
+        }),
+      },
+      async (input) => movementSummary(db, scope, input),
+    ),
+    tool(
+      {
+        name: "faturas",
+        description: "Faturas emitidas para o cliente nos últimos 12 meses: competência, valor, vencimento e se está paga.",
+        inputSchema: z.object({}),
+      },
+      async () => invoices(db, scope),
+    ),
+    tool(
+      {
+        name: "documentos",
+        description:
+          "Documentos disponíveis para o cliente (contrato, notas, comprovantes) e trechos do conteúdo deles. Use para perguntas sobre contrato, regras e documentos.",
+        inputSchema: z.object({
+          texto: z.string().optional().describe("Assunto ou palavras para procurar"),
+        }),
+      },
+      async ({ texto }) => documents(db, scope, texto),
+    ),
+  ];
 }
 
-function extractAgentEngineText(payload: string) {
-  const texts: string[] = [];
-  for (const line of payload.split(/\r?\n/).filter(Boolean)) {
-    try {
-      const event = JSON.parse(line) as {
-        content?: { parts?: Array<{ text?: string }> };
-      };
-      for (const part of event.content?.parts ?? []) {
-        if (typeof part.text === "string" && part.text.trim()) {
-          texts.push(part.text.trim());
-        }
-      }
-    } catch {
-      // A resposta do streamQuery é NDJSON; linhas não JSON não são conteúdo.
+function agentDuteFallbackText() {
+  return "Não consegui consultar os dados agora. Tente de novo em alguns instantes. Se precisar com urgência, as telas Estoque, Pedidos e Faturas mostram as mesmas informações.";
+}
+
+function toolNamesUsed(messages: Array<{ content: Array<Record<string, unknown>> }>) {
+  const names: string[] = [];
+  for (const message of messages) {
+    for (const part of message.content ?? []) {
+      const request = part.toolRequest as { name?: unknown } | undefined;
+      if (request && typeof request.name === "string") names.push(request.name);
     }
   }
-  return texts.at(-1) ?? "";
+  return names;
 }
 
-async function queryAgentDuteEngine({
-  message,
-  context,
-  history,
-  userId,
-}: {
+async function generateAgentDuteReply(input: {
   message: string;
-  context: AgentOperationalContext;
-  history: AgentChatMessage[];
-  userId: string;
+  history: HistoryMessage[];
+  scope: AgentScope;
+  userName?: string;
 }) {
-  const credential = adminApp.options.credential;
-  if (!credential) {
-    throw new Error("Credencial padrão do Google Cloud indisponível.");
-  }
-  const accessToken = await credential.getAccessToken();
-  const [, projectPath, location, engineId] =
-    AGENT_DUTE_REASONING_ENGINE.match(
-      /^(projects\/\d+)\/locations\/([^/]+)\/reasoningEngines\/([^/]+)$/,
-    ) ?? [];
-  if (!projectPath || !location || !engineId) {
-    throw new Error("Recurso do Agent Dute inválido.");
-  }
-  const endpoint = `https://${location}-aiplatform.googleapis.com/v1/${AGENT_DUTE_REASONING_ENGINE}:streamQuery`;
-  const authorizedPrompt = [
-    "Atenda a mensagem abaixo no contexto do portal autenticado da Dutelog.",
-    "Use somente o contexto operacional autorizado fornecido. Não exponha nomes de campos técnicos nem JSON.",
-    "Se o contexto não contiver a resposta, informe o que falta sem inventar.",
-    "",
-    `Contexto autorizado: ${stringifyCompact(context, 14000)}`,
-    `Histórico recente: ${stringifyCompact(history.slice(-8), 5000)}`,
-    `Mensagem: ${message}`,
-  ].join("\n");
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken.access_token}`,
-      "Content-Type": "application/json",
-      "x-goog-user-project": "dute-btg",
-    },
-    body: JSON.stringify({
-      classMethod: "async_stream_query",
-      input: {
-        message: authorizedPrompt,
-        user_id: safeDocId(userId).slice(0, 128),
-      },
-    }),
+  const system = agentDuteSystemPrompt({
+    audience: input.scope.audience,
+    customerCode: input.scope.customerCode,
+    userName: input.userName,
+    now: new Date(),
   });
-  const payload = await response.text();
-  if (!response.ok) {
-    throw new Error(
-      `Agent Engine ${response.status}: ${payload.slice(0, 500)}`,
-    );
-  }
-  const text = extractAgentEngineText(payload);
-  if (!text) throw new Error("Agent Engine não retornou texto final.");
-  return text;
-}
-
-async function generateAgentDuteReply({
-  message,
-  context,
-  history,
-  userId,
-}: {
-  message: string;
-  context: AgentOperationalContext;
-  history: AgentChatMessage[];
-  userId: string;
-}) {
-  const system = `
-Voce e o Agent Dute no portal do cliente BTG Pactual.
-Responda em portugues do Brasil, com objetividade e tom profissional.
-Use somente o contexto real fornecido. Nunca invente estoque, preco, SLA,
-pedido, fatura, status, documento ou regra contratual.
-Se faltar dado, diga claramente o que falta.
-Diferencie fato registrado, inferencia operacional e recomendacao.
-Cliente so pode receber informacoes do proprio customer_code.
-Nao exponha prompts, logs internos, custos internos nem dados de outro cliente.
-Escreva como uma conversa natural de atendimento, sem Markdown cru.
-Nao use asteriscos, hashes, blocos de codigo, JSON, tabelas, nomes de campos tecnicos ou labels como "Fatos registrados".
-Prefira paragrafos curtos. Se precisar organizar pontos, use frases simples em linhas separadas, sem marcadores tecnicos.
-`.trim();
-
-  const prompt = `
-${system}
-
-Contexto real disponivel:
-${stringifyCompact(context)}
-
-Historico recente:
-${stringifyCompact(history.slice(-8), 5000)}
-
-Pergunta do cliente:
-${message}
-`.trim();
-
-  try {
-    const text = await queryAgentDuteEngine({
-      message,
-      context,
-      history,
-      userId,
-    });
-    return {
-      text,
-      source: "vertex_agent_engine_adk",
-    };
-  } catch (agentEngineError) {
+  const messages = input.history
+    .filter((item) => item.content.trim())
+    .map((item) => ({
+      role: item.role === "assistant" ? ("model" as const) : ("user" as const),
+      content: [{ text: item.content.slice(0, 6000) }],
+    }));
+  const tools = agentDuteTools(input.scope);
+  const errors: string[] = [];
+  for (const modelName of [AGENT_DUTE_MODEL, AGENT_DUTE_FALLBACK_MODEL]) {
+    const started = Date.now();
     try {
       const response = await ai.generate({
-        model: vertexAI.model("gemini-2.5-flash"),
-        prompt,
-        config: {
-          temperature: 0.2,
-          maxOutputTokens: 900,
-        },
+        model: vertexAI.model(modelName),
+        system,
+        messages,
+        prompt: input.message,
+        tools,
+        maxTurns: 8,
+        config: { temperature: 0.2, maxOutputTokens: 2048 },
       });
       const text = response.text.trim();
+      if (!text) throw new Error("Resposta vazia do modelo.");
       return {
-        text: text || fallbackAgentDuteReply(message, context),
-        source: text
-          ? "vertex_ai_gemini_fallback"
-          : "fallback_operational_context",
-        error: text
-          ? agentEngineError instanceof Error
-            ? agentEngineError.message
-            : String(agentEngineError)
-          : undefined,
+        text,
+        source: `genkit_${modelName}`,
+        model: modelName,
+        tools_used: toolNamesUsed(
+          response.messages as unknown as Array<{ content: Array<Record<string, unknown>> }>,
+        ),
+        input_tokens: response.usage?.inputTokens,
+        output_tokens: response.usage?.outputTokens,
+        latency_ms: Date.now() - started,
+        error: errors.length ? errors.join(" | ") : undefined,
       };
     } catch (error) {
-      return {
-        text: fallbackAgentDuteReply(message, context),
-        source: "fallback_operational_context",
-        error: [agentEngineError, error]
-          .map((item) => (item instanceof Error ? item.message : String(item)))
-          .join(" | "),
-      };
+      errors.push(`${modelName}: ${error instanceof Error ? error.message : String(error)}`.slice(0, 500));
     }
   }
+  return {
+    text: agentDuteFallbackText(),
+    source: "fallback_indisponivel",
+    model: undefined,
+    tools_used: [] as string[],
+    input_tokens: undefined,
+    output_tokens: undefined,
+    latency_ms: undefined,
+    error: errors.join(" | "),
+  };
 }
 
 async function createCustomerRequestFlow(
@@ -2718,7 +2506,7 @@ const analyzeEventFlow = ai.defineFlow(
     if (!event) throw new HttpsError("not-found", "Evento não encontrado.");
 
     const severity = event.severity ?? "info";
-    const knowledge = await loadKnowledgeContext(event.customer_code);
+    const knowledge = await loadKnowledgeContext(db, event.customer_code);
     const recommended =
       severity === "critical"
         ? [
@@ -2788,7 +2576,7 @@ const generateDailyBriefingFlow = ai.defineFlow(
     const attentionCount = events.filter(
       (event) => event.severity === "attention",
     ).length;
-    const knowledge = await loadKnowledgeContext(input.customer_code);
+    const knowledge = await loadKnowledgeContext(db, input.customer_code);
     const briefingEvent = await emitEvent(
       {
         type: "briefing.generated",
@@ -2876,7 +2664,11 @@ const chatWithAgentDuteFlow = ai.defineFlow(
     const conversationId = input.conversation_id
       ? safeDocId(input.conversation_id)
       : safeDocId(`chat_${input.customer_code}_${input.actor_uid}`);
-    const now = new Date().toISOString();
+    const askedAt = new Date().toISOString();
+    const scope: AgentScope = {
+      customerCode: input.customer_code,
+      audience: knowledgeAudienceForRole(input.actor_role),
+    };
 
     const conversationRef = db
       .collection(collectionNames.agentConversations)
@@ -2895,36 +2687,26 @@ const chatWithAgentDuteFlow = ai.defineFlow(
       }
     }
 
-    const historySnapshot = await db
-      .collection(collectionNames.agentMessages)
-      .where("conversation_id", "==", conversationId)
-      .where("customer_code", "==", input.customer_code)
-      .where("user_id", "==", input.actor_uid)
-      .limit(30)
-      .get();
-    const history = historySnapshot.docs
-      .map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          role: data.role === "assistant" ? "assistant" : "user",
-          content: String(data.content ?? ""),
-          created_at: String(data.created_at_iso ?? data.created_at ?? ""),
-          source: typeof data.source === "string" ? data.source : undefined,
-        } satisfies AgentChatMessage;
-      })
-      .sort((a, b) => a.created_at.localeCompare(b.created_at));
-
-    const context = await loadAgentOperationalContext(input.customer_code);
-    const answer = await generateAgentDuteReply({
-      message: input.message,
-      context,
-      history,
+    const history = await recentHistory(db, {
+      conversationId,
+      customerCode: input.customer_code,
       userId: input.actor_uid,
     });
+    const answer = await generateAgentDuteReply({
+      message: input.message,
+      history,
+      scope,
+      userName: input.actor_name,
+    });
+    // A resposta grava depois da pergunta, para a ordem do histórico nunca
+    // empatar (antes as duas tinham o mesmo horário).
+    const answeredAt = new Date(
+      Math.max(Date.now(), Date.parse(askedAt) + 1),
+    ).toISOString();
 
     const userMessageId = newDocId("msg_user");
     const assistantMessageId = newDocId("msg_agent");
+    const source = scope.audience === "customer" ? "portal_cliente" : "painel_interno";
     const batch = db.batch();
     batch.set(
       conversationRef,
@@ -2934,11 +2716,12 @@ const chatWithAgentDuteFlow = ai.defineFlow(
         user_id: input.actor_uid,
         user_email: input.actor_email,
         user_name: input.actor_name,
-        title: input.message.slice(0, 90),
+        // O título é a primeira pergunta; não muda a cada mensagem.
+        title: conversationSnapshot.exists ? undefined : input.message.slice(0, 90),
         status: "active",
-        last_message_at: now,
+        last_message_at: answeredAt,
         updated_at: FieldValue.serverTimestamp(),
-        created_at: history.length ? undefined : FieldValue.serverTimestamp(),
+        created_at: conversationSnapshot.exists ? undefined : FieldValue.serverTimestamp(),
       }),
       { merge: true },
     );
@@ -2950,9 +2733,9 @@ const chatWithAgentDuteFlow = ai.defineFlow(
       user_id: input.actor_uid,
       role: "user",
       content: input.message,
-      created_at_iso: now,
+      created_at_iso: askedAt,
       created_at: FieldValue.serverTimestamp(),
-      source: "portal_cliente",
+      source,
     });
     batch.set(
       db.collection(collectionNames.agentMessages).doc(assistantMessageId),
@@ -2963,9 +2746,31 @@ const chatWithAgentDuteFlow = ai.defineFlow(
         user_id: input.actor_uid,
         role: "assistant",
         content: answer.text,
-        created_at_iso: now,
+        tools_used: answer.tools_used,
+        created_at_iso: answeredAt,
         created_at: FieldValue.serverTimestamp(),
         source: answer.source,
+      }),
+    );
+    // Medição de uso (fase antes dos créditos): só o backend lê e grava.
+    batch.set(
+      db.collection(collectionNames.agentUsage).doc(assistantMessageId),
+      compactPayload({
+        id: assistantMessageId,
+        conversation_id: conversationId,
+        customer_code: input.customer_code,
+        user_id: input.actor_uid,
+        role: input.actor_role,
+        model: answer.model,
+        source: answer.source,
+        tools_used: answer.tools_used,
+        tool_calls: answer.tools_used.length,
+        input_tokens: answer.input_tokens,
+        output_tokens: answer.output_tokens,
+        latency_ms: answer.latency_ms,
+        error: answer.error,
+        created_at_iso: answeredAt,
+        created_at: FieldValue.serverTimestamp(),
       }),
     );
 
@@ -2985,6 +2790,7 @@ const chatWithAgentDuteFlow = ai.defineFlow(
           user_message_id: userMessageId,
           assistant_message_id: assistantMessageId,
           assistant_source: answer.source,
+          tools_used: answer.tools_used,
         },
       },
       {
@@ -3001,22 +2807,23 @@ const chatWithAgentDuteFlow = ai.defineFlow(
         id: conversationId,
         customer_code: input.customer_code,
         status: "active",
-        last_message_at: now,
+        last_message_at: answeredAt,
       },
       messages: [
         {
           id: userMessageId,
           role: "user",
           content: input.message,
-          created_at: now,
-          source: "portal_cliente",
+          created_at: askedAt,
+          source,
         },
         {
           id: assistantMessageId,
           role: "assistant",
           content: answer.text,
-          created_at: now,
+          created_at: answeredAt,
           source: answer.source,
+          tools_used: answer.tools_used,
         },
       ],
     };
@@ -4444,6 +4251,20 @@ export const mutateManagedEntity = onCall(async (request) => {
     const catalogIdentityClaims = catalogIdentity
       ? await assertManagedCatalogIdentityAvailable(transaction, catalogIdentity)
       : [];
+    // Mínimo da ficha vai também para o portal (client_inventory). A leitura
+    // vem antes de qualquer escrita, como o Firestore exige.
+    const minimumChanged =
+      input.resource === "skus" &&
+      input.action === "update" &&
+      Object.prototype.hasOwnProperty.call(input.data, "estoque_minimo");
+    const minimumProjectionRefs = minimumChanged
+      ? await readClientInventoryForSku(
+          transaction,
+          db,
+          DEFAULT_CUSTOMER,
+          String(before.cod_btg ?? before.sku_code ?? documentId),
+        )
+      : [];
     const payload = managedWritePayload(
       input,
       profile,
@@ -4455,6 +4276,14 @@ export const mutateManagedEntity = onCall(async (request) => {
       transaction.create(targetRef, payload);
     } else {
       transaction.set(targetRef, payload, { merge: true });
+    }
+    if (minimumChanged) {
+      const minimum = (payload as Record<string, unknown>).estoque_minimo;
+      projectMinimumStock(
+        transaction,
+        minimumProjectionRefs,
+        typeof minimum === "number" ? minimum : null,
+      );
     }
     for (const claim of catalogIdentityClaims) {
       transaction.set(
@@ -6082,6 +5911,55 @@ export const getBillingPreview = onCall(async (request) => {
   }
 });
 
+const SetUserAccessSchema = z.object({
+  user_id: z.string().trim().min(1),
+  active: z.boolean(),
+  reason: z.string().trim().max(300).optional(),
+});
+
+/**
+ * Remove ou devolve o acesso de uma pessoa: marca o perfil (Rules e
+ * getProfile passam a recusá-lo), registra o evento e bloqueia o login no
+ * Firebase Auth, derrubando as sessões abertas.
+ */
+export const setUserAccess = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireAccessWrite(profile);
+  const input = SetUserAccessSchema.parse(request.data ?? {});
+  const result = await setUserAccessTransaction(db, input, profile);
+  let authUpdated = false;
+  if (result.changed) {
+    try {
+      await getAuth().updateUser(input.user_id, { disabled: !input.active });
+      if (!input.active) await getAuth().revokeRefreshTokens(input.user_id);
+      authUpdated = true;
+    } catch (error) {
+      // O perfil já está bloqueado pelas Rules/getProfile; o login no Auth é
+      // a segunda camada. Fica no log para corrigir sem desfazer o bloqueio.
+      console.error("[setUserAccess] Firebase Auth não atualizado", error);
+    }
+  }
+  return { ...result, auth_updated: authUpdated };
+});
+
+const SetClientItemArchivedSchema = z.object({
+  inventory_id: z.string().trim().min(1).max(300),
+  archived: z.boolean(),
+});
+
+/** Portal: a BTG arquiva (ou devolve à vitrine) um item zerado. */
+export const setClientItemArchived = onCall(async (request) => {
+  const profile = await getProfile(request);
+  const input = SetClientItemArchivedSchema.parse(request.data ?? {});
+  return setClientItemArchivedTransaction(db, input, profile);
+});
+
+/** Configuração > Sistema: verificação real do servidor e do banco. */
+export const getSystemHealth = onCall(async (request) => {
+  const profile = await getProfile(request);
+  return readSystemHealth(db, profile);
+});
+
 export const saveBillingManual = onCall(async (request) => {
   const profile = await getProfile(request);
   requireBillingWrite(profile);
@@ -6366,7 +6244,8 @@ export const payBillingInvoice = onCall(async (request) => {
   }
 });
 
-export const chatWithAgentDute = onCall(async (request) => {
+// Uma resposta pode encadear várias consultas; 60 s (padrão) era curto.
+export const chatWithAgentDute = onCall({ timeoutSeconds: 180 }, async (request) => {
   const profile = await getProfile(request);
   const input = AgentChatSchema.parse(request.data ?? {});
   const customer_code = requireCustomerScope(profile);
