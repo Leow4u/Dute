@@ -1986,11 +1986,18 @@ function toolNamesUsed(messages: Array<{ content: Array<Record<string, unknown>>
   return names;
 }
 
+/** Pedaços enviados à tela enquanto a resposta é gerada. */
+export type AgentDuteChunk =
+  | { type: "text"; index: number; text: string }
+  | { type: "tool"; name: string }
+  | { type: "reset" };
+
 async function generateAgentDuteReply(input: {
   message: string;
   history: HistoryMessage[];
   scope: AgentScope;
   userName?: string;
+  onChunk?: (chunk: AgentDuteChunk) => void;
 }) {
   const system = agentDuteSystemPrompt({
     audience: input.scope.audience,
@@ -2008,8 +2015,19 @@ async function generateAgentDuteReply(input: {
   const errors: string[] = [];
   for (const modelName of [AGENT_DUTE_MODEL, AGENT_DUTE_FALLBACK_MODEL]) {
     const started = Date.now();
+    // Se o primeiro modelo falhar no meio, a tela descarta o que já recebeu.
+    if (errors.length) input.onChunk?.({ type: "reset" });
     try {
       const response = await ai.generate({
+        onChunk: (chunk) => {
+          if (!input.onChunk) return;
+          for (const request of chunk.toolRequests) {
+            input.onChunk({ type: "tool", name: request.toolRequest.name });
+          }
+          if (chunk.role === "model" && chunk.text) {
+            input.onChunk({ type: "text", index: chunk.index, text: chunk.text });
+          }
+        },
         model: vertexAI.model(modelName),
         system,
         messages,
@@ -2665,8 +2683,9 @@ const chatWithAgentDuteFlow = ai.defineFlow(
       customer_code: z.string(),
     }),
     outputSchema: z.record(z.unknown()),
+    streamSchema: z.record(z.unknown()),
   },
-  async (input) => {
+  async (input, { sendChunk }) => {
     const conversationId = input.conversation_id
       ? safeDocId(input.conversation_id)
       : safeDocId(`chat_${input.customer_code}_${input.actor_uid}`);
@@ -2703,6 +2722,7 @@ const chatWithAgentDuteFlow = ai.defineFlow(
       history,
       scope,
       userName: input.actor_name,
+      onChunk: (chunk) => sendChunk(chunk),
     });
     // A resposta grava depois da pergunta, para a ordem do histórico nunca
     // empatar (antes as duas tinham o mesmo horário).
@@ -6251,11 +6271,13 @@ export const payBillingInvoice = onCall(async (request) => {
 });
 
 // Uma resposta pode encadear várias consultas; 60 s (padrão) era curto.
-export const chatWithAgentDute = onCall({ timeoutSeconds: 180 }, async (request) => {
+// Com httpsCallable(...).stream() a tela recebe a resposta aos pedaços;
+// chamada comum continua recebendo só o resultado final.
+export const chatWithAgentDute = onCall({ timeoutSeconds: 180 }, async (request, response) => {
   const profile = await getProfile(request);
   const input = AgentChatSchema.parse(request.data ?? {});
   const customer_code = requireCustomerScope(profile);
-  return chatWithAgentDuteFlow({
+  const { stream, output } = chatWithAgentDuteFlow.stream({
     ...input,
     customer_code,
     actor_uid: profile.uid,
@@ -6263,4 +6285,12 @@ export const chatWithAgentDute = onCall({ timeoutSeconds: 180 }, async (request)
     actor_name: profile.name,
     actor_role: profile.role,
   });
+  try {
+    for await (const chunk of stream) {
+      if (request.acceptsStreaming) await response?.sendChunk(chunk);
+    }
+  } catch {
+    // O erro real (ex.: permissão) chega por `output`, logo abaixo.
+  }
+  return await output;
 });

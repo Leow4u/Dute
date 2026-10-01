@@ -264,6 +264,23 @@ export const APP_MODULES: AppModule[] = [
     ],
   }),
   appModule({
+    id: "client-assistant",
+    label: "Agent Dute",
+    audience: "client",
+    icon: BrainCircuit,
+    roles: CLIENT_ROLES,
+    routes: [
+      navRoute({
+        id: "client-assistant-chat",
+        label: "Agent Dute",
+        href: "/portal/agente",
+        icon: BrainCircuit,
+        roles: CLIENT_ROLES,
+        exact: true,
+      }),
+    ],
+  }),
+  appModule({
     id: "client-home",
     label: "Início",
     audience: "client",
@@ -359,23 +376,6 @@ export const APP_MODULES: AppModule[] = [
         href: "/portal/documentos",
         icon: FileText,
         roles: CLIENT_ROLES,
-      }),
-    ],
-  }),
-  appModule({
-    id: "client-assistant",
-    label: "Agent Dute",
-    audience: "client",
-    icon: BrainCircuit,
-    roles: CLIENT_ROLES,
-    routes: [
-      navRoute({
-        id: "client-assistant-chat",
-        label: "Agent Dute",
-        href: "/portal/agente",
-        icon: BrainCircuit,
-        roles: CLIENT_ROLES,
-        exact: true,
       }),
     ],
   }),

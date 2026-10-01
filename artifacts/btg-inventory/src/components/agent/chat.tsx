@@ -2,9 +2,12 @@ import { Bot, Clock3, UserRound } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-// Peças do chat com o Agent Dute usadas pelo portal do cliente e pelo botão
-// flutuante das telas internas. A conversa é a mesma: um histórico por
-// usuário, lido de agent_messages e escrito pela callable chatWithAgentDute.
+import { AgentMarkdown } from "./markdown";
+
+// Peças do chat com o Agent Dute. O painel flutuante das telas internas usa
+// o ChatBubble; o portal do cliente tem a tela própria (pages/client/assistente).
+// As mensagens são lidas de agent_messages e escritas pela callable
+// chatWithAgentDute.
 
 const dateFormatter = new Intl.DateTimeFormat("pt-BR", {
   dateStyle: "short",
@@ -26,6 +29,7 @@ export type ChatMessage = {
   content: string;
   created_at?: string | null;
   source?: string | null;
+  tools_used?: string[];
 };
 
 export type ChatResponse = {
@@ -56,78 +60,6 @@ export async function fetchChatJson<T>(url: string, init?: RequestInit): Promise
   return payload as T;
 }
 
-function cleanAssistantInline(text: string) {
-  return text
-    .replace(/\*\*(.*?)\*\*/g, "$1")
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/^#{1,6}\s+/, "")
-    .trim();
-}
-
-function AssistantMessageContent({ content }: { content: string }) {
-  const lines = content
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const blocks: Array<
-    | { type: "paragraph"; text: string }
-    | { type: "heading"; text: string }
-    | { type: "list"; items: string[] }
-  > = [];
-
-  for (const rawLine of lines) {
-    const bulletMatch = rawLine.match(/^[-*]\s+(.*)$/);
-    if (bulletMatch) {
-      const item = cleanAssistantInline(bulletMatch[1]);
-      const previous = blocks[blocks.length - 1];
-      if (previous?.type === "list") {
-        previous.items.push(item);
-      } else {
-        blocks.push({ type: "list", items: [item] });
-      }
-      continue;
-    }
-
-    const line = cleanAssistantInline(rawLine);
-    const isShortHeading =
-      line.endsWith(":") && line.length <= 80 && !line.includes(".");
-
-    blocks.push({
-      type: isShortHeading ? "heading" : "paragraph",
-      text: isShortHeading ? line.replace(/:$/, "") : line,
-    });
-  }
-
-  return (
-    <div className="space-y-3 text-sm leading-6">
-      {blocks.map((block, index) => {
-        if (block.type === "heading") {
-          return (
-            <p key={`${block.type}-${index}`} className="font-medium">
-              {block.text}
-            </p>
-          );
-        }
-
-        if (block.type === "list") {
-          return (
-            <ul key={`${block.type}-${index}`} className="space-y-2 pl-1">
-              {block.items.map((item, itemIndex) => (
-                <li key={`${item}-${itemIndex}`} className="flex gap-2">
-                  <span className="mt-[0.65rem] h-1.5 w-1.5 shrink-0 rounded-full bg-primary/60" />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          );
-        }
-
-        return <p key={`${block.type}-${index}`}>{block.text}</p>;
-      })}
-    </div>
-  );
-}
-
 export function ChatBubble({ message }: { message: ChatMessage }) {
   const isAssistant = message.role === "assistant";
 
@@ -153,7 +85,7 @@ export function ChatBubble({ message }: { message: ChatMessage }) {
         )}
       >
         {isAssistant ? (
-          <AssistantMessageContent content={message.content} />
+          <AgentMarkdown content={message.content} className="text-sm leading-6" />
         ) : (
           <div className="whitespace-pre-wrap text-sm leading-6">
             {message.content}
