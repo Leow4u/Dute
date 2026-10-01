@@ -1,7 +1,8 @@
-import type { ReactNode } from "react";
-import { Link } from "wouter";
-import { Box, ChevronRight, PackagePlus, type LucideIcon } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { Link, useLocation } from "wouter";
+import { ArrowUp, Box, ChevronRight, PackagePlus, Sparkles, type LucideIcon } from "lucide-react";
 
+import { agentAskHref } from "@/lib/agent-chat";
 import { useAppUser } from "@/lib/auth";
 import {
   ORDER_STEPS,
@@ -77,6 +78,8 @@ export function ClienteInicio() {
                   {customer} · {today}
                 </p>
               </header>
+
+              <AskAgent />
 
               <section className="grid gap-3 md:grid-cols-2">
                 <Action
@@ -199,6 +202,49 @@ export function ClienteInicio() {
         );
       }}
     </ClientDataBoundary>
+  );
+}
+
+/** Pergunta rápida: abre o Agent Dute numa conversa nova já com a pergunta. */
+function AskAgent() {
+  const [, navigate] = useLocation();
+  const [question, setQuestion] = useState("");
+  const ask = () => {
+    if (question.trim()) navigate(agentAskHref(question));
+  };
+  return (
+    <form
+      className="flex items-center gap-3 rounded-[18px] border border-[#d9dcf7] bg-gradient-to-r from-[#f6f7ff] to-[#faf6ff] px-4 py-2.5 focus-within:border-primary/50"
+      onSubmit={(event) => {
+        event.preventDefault();
+        ask();
+      }}
+    >
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-gradient-to-br from-[#5b7cfa] to-[#8b5cf6] text-white">
+        <Sparkles className="h-4 w-4" aria-hidden="true" />
+      </span>
+      <input
+        value={question}
+        onChange={(event) => setQuestion(event.target.value)}
+        aria-label="Pergunte ao Agent Dute"
+        data-agent-input
+        placeholder='Pergunte ao Agent Dute: "o que saiu esta semana?", "onde está meu pedido?"…'
+        className="min-w-0 flex-1 bg-transparent py-1 text-[15px] outline-none placeholder:text-muted-foreground"
+      />
+      {question.trim() ? (
+        <button
+          type="submit"
+          aria-label="Perguntar"
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-foreground text-white"
+        >
+          <ArrowUp className="h-4 w-4" />
+        </button>
+      ) : (
+        <kbd className="hidden shrink-0 rounded-md border border-border bg-white px-1.5 text-xs text-muted-foreground sm:inline">
+          /
+        </kbd>
+      )}
+    </form>
   );
 }
 

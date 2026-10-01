@@ -263,3 +263,30 @@ export function daySuggestions(
   }
   return list.slice(0, limit);
 }
+
+// ------------------------------------------------------------- atalhos
+
+export const AGENT_PATH = "/portal/agente";
+
+/** Leva uma pergunta feita fora do chat (barra do Início) para o Agent Dute. */
+export function agentAskHref(question: string) {
+  const trimmed = question.trim();
+  return trimmed ? `${AGENT_PATH}?q=${encodeURIComponent(trimmed.slice(0, 4000))}` : AGENT_PATH;
+}
+
+/**
+ * A tecla "/" abre o Agent Dute, a não ser que a pessoa esteja digitando ou
+ * use a tecla com Ctrl, Alt ou Cmd.
+ */
+export function isAgentShortcut(event: {
+  key: string;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+  altKey?: boolean;
+  target?: { tagName?: string; isContentEditable?: boolean } | null;
+}) {
+  if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) return false;
+  const tag = (event.target?.tagName ?? "").toUpperCase();
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return false;
+  return !event.target?.isContentEditable;
+}

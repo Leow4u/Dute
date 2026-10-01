@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  agentAskHref,
   daySuggestions,
+  isAgentShortcut,
   filterConversations,
   groupConversations,
   parseInline,
@@ -105,5 +107,21 @@ describe("sugestões do dia", () => {
     const suggestions = daySuggestions({ belowMinimum: 0 }, new Date("2026-10-01T15:00:00Z"));
     expect(suggestions).toHaveLength(4);
     expect(suggestions[1].prompt).toBe("Qual é o resumo do meu estoque hoje?");
+  });
+});
+
+describe("atalhos para o Agent Dute", () => {
+  it("leva a pergunta da barra do Início", () => {
+    expect(agentAskHref("  onde está meu pedido?  ")).toBe("/portal/agente?q=onde%20est%C3%A1%20meu%20pedido%3F");
+    expect(agentAskHref("   ")).toBe("/portal/agente");
+  });
+
+  it("'/' abre o agente, menos quando a pessoa está digitando", () => {
+    expect(isAgentShortcut({ key: "/", target: { tagName: "BODY" } })).toBe(true);
+    expect(isAgentShortcut({ key: "/", target: { tagName: "INPUT" } })).toBe(false);
+    expect(isAgentShortcut({ key: "/", target: { tagName: "TEXTAREA" } })).toBe(false);
+    expect(isAgentShortcut({ key: "/", target: { tagName: "DIV", isContentEditable: true } })).toBe(false);
+    expect(isAgentShortcut({ key: "/", ctrlKey: true, target: { tagName: "BODY" } })).toBe(false);
+    expect(isAgentShortcut({ key: "a", target: { tagName: "BODY" } })).toBe(false);
   });
 });
