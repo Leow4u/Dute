@@ -85,6 +85,8 @@ export function receivedView(request: AnyRecord): ReceivedView | null {
 
 export type ShipmentView = {
   id: string;
+  /** ENV-0012; aviso antigo sem número fica vazio. */
+  number: string;
   title: string;
   stage: ShipmentStage;
   arrival: string;
@@ -113,6 +115,7 @@ export function shipmentView(request: AnyRecord): ShipmentView {
           : `avisado${by ? ` por ${by.split(/\s+/)[0]}` : ""}${created ? ` em ${shortDate.format(created)}` : ""}`;
   return {
     id: text(request.id),
+    number: text(request.request_number),
     title: shipmentTitle(request),
     stage,
     arrival: formatArrival(request.due_at),

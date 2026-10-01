@@ -1678,6 +1678,10 @@ async function getClientOverview() {
     stock_by_category: stockByCategory,
     recent_orders: recentOrders,
     recent_requests: recentRequests,
+    // Pedidos precisa do acompanhamento completo (etapas, transportadora) e
+    // do histórico inteiro; recent_* acima é o recorte do Início.
+    order_tracking: customerOrders,
+    request_history: sortByDateDesc(customerRequests, "created_at"),
     invoices: invoiceItems,
     agent_alerts: alertItems,
     alerts: alertItems,

@@ -22,6 +22,8 @@ describe("como o envio aparece", () => {
     expect(view).toMatchObject({ title: "Gráfica Alfa · NF 48213", summary: "4 itens · 1.200 peças", attachments: 1, detail: "avisado por Cristiane em 29/09", canCancel: true });
     expect(view.arrival).toBe("sex, 02/10");
     expect(shipmentView({ ...base, status: "approved" }).canCancel).toBe(false);
+    expect(view.number).toBe("");
+    expect(shipmentView({ ...base, request_number: "ENV-0012" }).number).toBe("ENV-0012");
   });
 
   it("chegou: quanto chegou de verdade e o que veio diferente", () => {
