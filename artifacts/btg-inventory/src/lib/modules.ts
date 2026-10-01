@@ -1,7 +1,5 @@
 import {
-  Activity,
   BarChart3,
-  Building2,
   BrainCircuit,
   FileText,
   Home,
@@ -12,7 +10,6 @@ import {
   PackageSearch,
   Receipt,
   Truck,
-  Users,
   type LucideIcon,
 } from "lucide-react";
 
@@ -230,36 +227,6 @@ export const APP_MODULES: AppModule[] = [
       }),
     ],
   }),
-  appModule({
-    id: "admin",
-    label: "Administração",
-    audience: "internal",
-    icon: Users,
-    roles: [...ACCESS_ADMIN_ROLES, "suporte"],
-    routes: [
-      navRoute({
-        id: "admin-customers",
-        label: "Clientes",
-        href: "/clientes",
-        icon: Building2,
-        roles: ACCESS_ADMIN_ROLES,
-      }),
-      navRoute({
-        id: "admin-users",
-        label: "Pessoas e acessos",
-        href: "/usuarios",
-        icon: Users,
-        roles: ACCESS_ADMIN_ROLES,
-      }),
-      navRoute({
-        id: "admin-observability",
-        label: "Observabilidade",
-        href: "/suporte",
-        icon: Activity,
-        roles: SUPPORT_ROLES,
-      }),
-    ],
-  }),
   // Uso raro, fora da régua principal. O Agent Dute virou o botão flutuante
   // (components/agent/agent-dock.tsx); o painel dele segue em /agente.
   appModule({
@@ -454,6 +421,18 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   { path: "/faturamento/fatura", roles: FINANCE_ROLES },
   { path: "/portal/faturas/fatura", roles: CLIENT_ROLES },
   { path: "/tabela-precos", roles: FINANCE_ROLES },
+  // Configuração (tela própria, lib/settings-nav.ts). A Administração saiu do
+  // menu e virou seção dela; os endereços antigos redirecionam com os mesmos
+  // papéis de antes.
+  { path: "/configuracoes", roles: [...INTERNAL_ROLES, "cliente"] },
+  { path: "/configuracoes/conta", roles: [...INTERNAL_ROLES, "cliente"] },
+  { path: "/configuracoes/aplicativo", roles: [...INTERNAL_ROLES, "cliente"] },
+  { path: "/configuracoes/pessoas", roles: ACCESS_ADMIN_ROLES },
+  { path: "/configuracoes/cliente", roles: ACCESS_ADMIN_ROLES },
+  { path: "/configuracoes/sistema", roles: SUPPORT_ROLES },
+  { path: "/usuarios", roles: ACCESS_ADMIN_ROLES },
+  { path: "/clientes", roles: ACCESS_ADMIN_ROLES },
+  { path: "/suporte", roles: SUPPORT_ROLES },
 ];
 
 const MERGED_SCREEN_APP_ROLES = Object.fromEntries(
@@ -478,7 +457,6 @@ const ROUTE_APP_ROLES = APP_MODULES.reduce<Record<string, CurrentAppRole[]>>(
     ...MERGED_SCREEN_APP_ROLES,
     "/wms": currentAppRolesFor(WMS_ROLES),
     "/minhas-faturas": ["cliente"],
-    "/configuracoes": ["interno", "cliente"],
   },
 );
 
@@ -496,7 +474,6 @@ const ROUTE_PROFILE_ROLES = APP_MODULES.reduce<Record<string, ProfileRole[]>>(
     ...MERGED_SCREEN_PROFILE_ROLES,
     "/wms": WMS_ROLES,
     "/minhas-faturas": ["cliente"],
-    "/configuracoes": [...INTERNAL_ROLES, "cliente"],
   },
 );
 
@@ -590,11 +567,10 @@ const ACTIVE_ALIASES: Record<string, string> = {
   "/movements": "/estoque",
 };
 
-/** Telas da própria conta: não pertencem a nenhum item do menu. */
-const ACCOUNT_PATHS = new Set(["/configuracoes"]);
-
+/** Telas da Configuração: não pertencem a nenhum item do menu. */
 export function isAccountPath(path: string): boolean {
-  return ACCOUNT_PATHS.has(normalizePath(path));
+  const normalized = normalizePath(path);
+  return normalized === "/configuracoes" || normalized.startsWith("/configuracoes/");
 }
 
 export function getActiveModule(

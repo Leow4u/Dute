@@ -134,7 +134,10 @@ export default function Users() {
   const { data, isLoading } = useListBillingUsers();
   const updateRole = useUpdateUserRole();
 
-  const [inviteOpen, setInviteOpen] = useState(false);
+  // "Convidar pessoa da BTG" (Cliente BTG) chega com ?convidar=cliente.
+  const [inviteOpen, setInviteOpen] = useState(
+    () => new URLSearchParams(window.location.search).get("convidar") === "cliente",
+  );
   const [inviteForm, setInviteForm] = useState({ nome: "", email: "", role: "cliente" as ProfileRole });
   const [removing, setRemoving] = useState<Person | null>(null);
   const [reason, setReason] = useState("");
