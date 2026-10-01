@@ -19,20 +19,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAppUser } from "@/lib/auth";
-import { normalizeProfileRole } from "@/lib/modules";
+import { roleDescription, roleLabel } from "@/lib/access";
 import { usePwaInstall } from "@/lib/pwa-install";
-
-function roleLabel(role: unknown) {
-  const normalized = normalizeProfileRole(role);
-  if (normalized === "owner") return "Owner Dutelog";
-  if (normalized === "admin") return "Admin Dutelog";
-  if (normalized === "wms") return "Operação WMS";
-  if (normalized === "financeiro") return "Financeiro";
-  if (normalized === "suporte") return "Suporte";
-  if (normalized === "interno") return "Interno Dutelog";
-  if (normalized === "cliente") return "Cliente";
-  return "Sem perfil";
-}
 
 export default function Settings() {
   const { user } = useAppUser();
@@ -121,8 +109,10 @@ export default function Settings() {
               <Badge variant="secondary">{roleLabel(role)}</Badge>
             </div>
             <div className="rounded-2xl border border-border/70 bg-white/55 p-4 text-sm leading-6 text-muted-foreground">
-              Alterações de perfil e permissões continuam sob controle do
-              administrador Dutelog.
+              {roleDescription(role)}{" "}
+              {role === "owner" || role === "admin"
+                ? "Perfis são definidos em Pessoas e acessos."
+                : "Para mudar seu perfil, fale com a administração."}
             </div>
           </CardContent>
         </Card>
