@@ -58,6 +58,12 @@ import {
   readClientInventoryForSku,
   setClientItemArchivedTransaction,
 } from "./domain/client-inventory.js";
+import {
+  knowledgeAudienceForRole,
+  loadKnowledgeContext,
+  type KnowledgeAudience,
+  type KnowledgeContext,
+} from "./domain/agent-knowledge.js";
 
 const adminApp = initializeApp();
 setGlobalOptions({
@@ -534,21 +540,6 @@ type EventRow = {
   severity?: "info" | "attention" | "critical";
   customer_code?: string;
   [key: string]: unknown;
-};
-type KnowledgeContext = {
-  documents: Array<{
-    id: string;
-    title: string;
-    document_type?: string;
-    summary?: string;
-    chunk_count?: number;
-  }>;
-  chunks: Array<{
-    id: string;
-    knowledge_id?: string;
-    text?: string;
-    title?: string;
-  }>;
 };
 type AgentChatMessage = {
   id: string;
@@ -1867,69 +1858,6 @@ function terminalTask(type: string, status: unknown) {
   );
 }
 
-async function loadKnowledgeContext(
-  customerCode?: string,
-): Promise<KnowledgeContext> {
-  const docsSnapshot = await db
-    .collection(collectionNames.agentKnowledge)
-    .where("status", "==", "active")
-    .limit(20)
-    .get();
-  const documents = docsSnapshot.docs
-    .map((doc) => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        title: String(data.title ?? data.source_file_name ?? doc.id),
-        document_type:
-          typeof data.document_type === "string"
-            ? data.document_type
-            : undefined,
-        summary: typeof data.summary === "string" ? data.summary : undefined,
-        chunk_count: Number(data.chunk_count ?? 0),
-        customer_code:
-          typeof data.customer_code === "string"
-            ? data.customer_code
-            : undefined,
-      };
-    })
-    .filter((item) => !customerCode || item.customer_code === customerCode)
-    .slice(0, 12);
-
-  const chunkIds = new Set(documents.map((item) => item.id));
-  const chunks: KnowledgeContext["chunks"] = [];
-  for (const item of documents.slice(0, 6)) {
-    const chunksSnapshot = await db
-      .collection(collectionNames.agentKnowledgeChunks)
-      .where("knowledge_id", "==", item.id)
-      .limit(4)
-      .get();
-    chunks.push(
-      ...chunksSnapshot.docs
-        .map((chunkDoc) => {
-          const data = chunkDoc.data();
-          return {
-            id: chunkDoc.id,
-            knowledge_id:
-              typeof data.knowledge_id === "string"
-                ? data.knowledge_id
-                : item.id,
-            text:
-              typeof data.text === "string"
-                ? data.text.slice(0, 1200)
-                : undefined,
-            title: typeof data.title === "string" ? data.title : item.title,
-          };
-        })
-        .filter(
-          (chunk) => chunk.knowledge_id && chunkIds.has(chunk.knowledge_id),
-        ),
-    );
-  }
-
-  return { documents, chunks };
-}
-
 async function loadCustomerRows(
   collectionName: string,
   customerCode: string,
@@ -1948,6 +1876,7 @@ async function loadCustomerRows(
 
 async function loadAgentOperationalContext(
   customerCode: string,
+  audience: KnowledgeAudience,
 ): Promise<AgentOperationalContext> {
   const [balances, requests, orders, alerts, billing, events, knowledge] =
     await Promise.all([
@@ -1961,7 +1890,7 @@ async function loadAgentOperationalContext(
       loadCustomerRows(collectionNames.events, customerCode, 24).catch(
         () => [],
       ),
-      loadKnowledgeContext(customerCode),
+      loadKnowledgeContext(db, customerCode, audience),
     ]);
 
   const totalPieces = balances.reduce(
@@ -2730,7 +2659,7 @@ const analyzeEventFlow = ai.defineFlow(
     if (!event) throw new HttpsError("not-found", "Evento não encontrado.");
 
     const severity = event.severity ?? "info";
-    const knowledge = await loadKnowledgeContext(event.customer_code);
+    const knowledge = await loadKnowledgeContext(db, event.customer_code);
     const recommended =
       severity === "critical"
         ? [
@@ -2800,7 +2729,7 @@ const generateDailyBriefingFlow = ai.defineFlow(
     const attentionCount = events.filter(
       (event) => event.severity === "attention",
     ).length;
-    const knowledge = await loadKnowledgeContext(input.customer_code);
+    const knowledge = await loadKnowledgeContext(db, input.customer_code);
     const briefingEvent = await emitEvent(
       {
         type: "briefing.generated",
@@ -2927,7 +2856,10 @@ const chatWithAgentDuteFlow = ai.defineFlow(
       })
       .sort((a, b) => a.created_at.localeCompare(b.created_at));
 
-    const context = await loadAgentOperationalContext(input.customer_code);
+    const context = await loadAgentOperationalContext(
+      input.customer_code,
+      knowledgeAudienceForRole(input.actor_role),
+    );
     const answer = await generateAgentDuteReply({
       message: input.message,
       context,
