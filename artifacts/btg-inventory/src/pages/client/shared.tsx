@@ -33,6 +33,10 @@ export type ClientOverview = {
   recent_orders?: Order[];
   requests?: RequestsSummary | ClientRequest[];
   recent_requests?: ClientRequest[];
+  /** Pedidos: o acompanhamento publicado inteiro (client_order_tracking). */
+  order_tracking?: Record<string, unknown>[];
+  /** Pedidos: todas as solicitações, não só as recentes do Início. */
+  request_history?: ClientRequest[];
   agent_alerts?: AgentAlert[];
   alerts?: AgentAlert[];
   metrics?: Record<string, Numberish>;

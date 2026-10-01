@@ -106,7 +106,10 @@ function ShipmentList({ overview, onCreate }: { overview: ClientOverview; onCrea
             {history.map((view) => (
               <li key={view.id} className="flex items-center justify-between gap-4 border-b border-border/50 px-5 py-3 text-sm last:border-0">
                 <span className="min-w-0">
-                  <span className="block truncate font-medium">{view.title}</span>
+                  <span className="block truncate font-medium">
+                    {view.number ? <span className="mr-2 font-semibold">{view.number}</span> : null}
+                    {view.title}
+                  </span>
                   <span className={cn("block text-xs", view.stage === "rejected" ? "text-red-700" : "text-muted-foreground")}>
                     {view.detail}
                   </span>
@@ -175,7 +178,10 @@ function OnTheWayCard({ view }: { view: ShipmentView }) {
   return (
     <article className="rounded-[18px] border border-border bg-white px-5 py-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h3 className="font-semibold">{view.title}</h3>
+        <h3 className="font-semibold">
+          {view.number ? <span className="mr-2">{view.number}</span> : null}
+          <span className={view.number ? "font-normal text-foreground/80" : undefined}>{view.title}</span>
+        </h3>
         <span className="text-sm text-muted-foreground">
           {view.arrival ? (
             <>
