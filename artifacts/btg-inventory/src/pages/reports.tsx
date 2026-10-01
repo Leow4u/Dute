@@ -1,431 +1,589 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
-  ArrowRight,
-  CalendarDays,
-  CheckCircle2,
+  AlertTriangle,
+  ArrowLeftRight,
+  Boxes,
   Clock3,
-  Database,
-  FileJson,
-  FileSpreadsheet,
-  MapPinned,
-  PackageSearch,
-  RefreshCcw,
-  Rows3,
-  ShieldCheck,
+  Download,
   Truck,
+  type LucideIcon,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useAppUser } from "@/lib/auth";
+import { canAccessModule, type ProfileRole } from "@/lib/modules";
+import {
+  GO_LIVE,
+  belowMinimumReport,
+  competenciaOf,
+  dayRange,
+  formatCell,
+  idleReport,
+  monthRange,
+  movementsReport,
+  positionReport,
+  previousCompetencia,
+  requestsReport,
+  toExcelCsv,
+  type ReportResult,
+} from "@/lib/reports";
+import { buildStockItems } from "@/lib/stock-items";
 import { cn } from "@/lib/utils";
+import {
+  getQuantityTotal,
+  getRequestValidationLines,
+  normalizeStatus,
+  parseRequestDate,
+  requestTypeLabel,
+  type CustomerRequest,
+} from "./customer-requests";
 
-type ReportType = "products" | "skus" | "movements" | "orders";
-type ExportFormat = "json" | "csv";
+/**
+ * Relatórios: escolha à esquerda, prévia e números à direita, planilha que
+ * abre direto no Excel. As fontes são as das telas (Estoque, ledger de
+ * movimentações, pedidos); nada é recalculado por outro caminho.
+ */
 
-const reportCatalog: Array<{
-  value: ReportType;
-  label: string;
+type AnyRecord = Record<string, unknown>;
+type ReportId = "position" | "below-minimum" | "idle" | "movements" | "requests";
+type PeriodPreset = "this-month" | "last-month" | "last-7" | "custom";
+
+// Quem lê estoque/pedidos pelas Firestore Rules (canReadOperations). O
+// financeiro lê o ledger (canReadForBilling), então vê só Movimentações.
+const OPERATIONS_READERS: ProfileRole[] = ["owner", "admin", "interno", "suporte"];
+const LEDGER_READERS: ProfileRole[] = [...OPERATIONS_READERS, "financeiro"];
+
+const REPORTS: Array<{
+  id: ReportId;
+  group: "Estoque" | "Operação";
+  title: string;
+  hint: string;
   description: string;
-  cadence: string;
-  fields: string[];
-  icon: typeof Database;
+  icon: LucideIcon;
+  roles: ProfileRole[];
+  preview: string[];
+  file: string;
 }> = [
   {
-    value: "products",
-    label: "Catálogo Mestre de Produtos",
-    description: "Base de itens BTG para conferência, valoração e saneamento cadastral.",
-    cadence: "Operacional diário",
-    fields: ["SKU", "Produto", "Categoria", "Custo", "Saldo"],
-    icon: PackageSearch,
+    id: "position",
+    group: "Estoque",
+    title: "Posição de estoque",
+    hint: "Saldo e valor de cada item",
+    description: "Saldo de cada item, onde está e quanto vale. Os mesmos números da tela Estoque.",
+    icon: Boxes,
+    roles: OPERATIONS_READERS,
+    preview: ["code", "name", "locations", "onHand", "reserved", "value"],
+    file: "posicao-estoque",
   },
   {
-    value: "skus",
-    label: "SKUs e Localizações",
-    description: "Mapa de posições para leitura rápida de rua, prateleira, caixa e estoque.",
-    cadence: "Atualização de armazém",
-    fields: ["SKU", "Local", "Rua", "Prateleira", "Caixa"],
-    icon: MapPinned,
+    id: "below-minimum",
+    group: "Estoque",
+    title: "Abaixo do mínimo",
+    hint: "Itens para repor",
+    description: "Itens com saldo igual ou abaixo do mínimo cadastrado na ficha. Item sem mínimo não entra.",
+    icon: AlertTriangle,
+    roles: OPERATIONS_READERS,
+    preview: ["code", "name", "locations", "onHand", "minimum", "missing"],
+    file: "abaixo-do-minimo",
   },
   {
-    value: "movements",
-    label: "Movimentações Kardex",
-    description: "Linha do tempo de entradas, saídas e ajustes para rastreabilidade.",
-    cadence: "Auditoria contínua",
-    fields: ["Data", "Tipo", "Origem", "Quantidade", "Saldo"],
-    icon: Rows3,
+    id: "idle",
+    group: "Estoque",
+    title: "Itens parados",
+    hint: "Sem entrada nem saída",
+    description:
+      "Itens com saldo que não entram nem saem há muito tempo. Ocupam posição e pesam no Ad Valorem: bom assunto para conversar com a BTG.",
+    icon: Clock3,
+    roles: OPERATIONS_READERS,
+    preview: ["code", "name", "onHand", "value", "lastMove", "idleDays"],
+    file: "itens-parados",
   },
   {
-    value: "orders",
-    label: "Histórico de Pedidos",
-    description: "Pedidos exportáveis para conciliação de atendimento e expedição.",
-    cadence: "Fechamento por período",
-    fields: ["Pedido", "Cliente", "Status", "Data", "Itens"],
+    id: "movements",
+    group: "Operação",
+    title: "Movimentações",
+    hint: "Entradas, saídas e ajustes",
+    description: "Tudo que entrou, saiu ou foi ajustado no estoque, com o saldo antes e depois e quem fez.",
+    icon: ArrowLeftRight,
+    roles: LEDGER_READERS,
+    preview: ["date", "kind", "name", "quantity", "origin", "who"],
+    file: "movimentacoes",
+  },
+  {
+    id: "requests",
+    group: "Operação",
+    title: "Pedidos",
+    hint: "Pedidos e avisos",
+    description: "O que a BTG pediu no período: quem pediu, o que aconteceu e quem decidiu.",
     icon: Truck,
+    roles: OPERATIONS_READERS,
+    preview: ["created", "type", "requestedBy", "lines", "units", "status", "decidedBy"],
+    file: "pedidos",
   },
 ];
 
-const quickReports = [
-  {
-    title: "Valoração Completa do Estoque",
-    description: "Catálogo e saldos para fechamento financeiro.",
-    type: "products" as ReportType,
-    icon: ShieldCheck,
-  },
-  {
-    title: "Todas as Movimentações",
-    description: "Kardex completo para auditoria operacional.",
-    type: "movements" as ReportType,
-    icon: Rows3,
-  },
-  {
-    title: "Mapa de Localizações do Armazém",
-    description: "Endereçamento de SKUs por posição física.",
-    type: "skus" as ReportType,
-    icon: MapPinned,
-  },
-];
+const IDLE_OPTIONS = [30, 60, 90];
+const PREVIEW_ROWS = 8;
 
-function formatDateLabel(value: string) {
-  if (!value) return "";
-  const [year, month, day] = value.split("-");
-  return `${day}/${month}/${year}`;
+const monthLabel = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" });
+
+function competenciaLabel(competencia: string) {
+  const text = monthLabel.format(new Date(`${competencia}-15T12:00:00Z`));
+  return text.charAt(0).toUpperCase() + text.slice(1).replace(" de ", "/");
+}
+
+function todayIso() {
+  return new Date(Date.now() - 3 * 3_600_000).toISOString().slice(0, 10);
+}
+
+function shiftDay(day: string, delta: number) {
+  const date = new Date(`${day}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + delta);
+  return date.toISOString().slice(0, 10);
+}
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const response = await fetch(url);
+  const payload = (await response.json().catch(() => ({}))) as T & { message?: string };
+  if (!response.ok) throw new Error(payload.message || "Não foi possível carregar os dados.");
+  return payload;
+}
+
+function download(name: string, content: string) {
+  const url = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+const requestHelpers = {
+  date: parseRequestDate,
+  type: requestTypeLabel,
+  status: (status?: string | null) => normalizeStatus(status),
+  lines: (request: AnyRecord) => getRequestValidationLines(request as CustomerRequest).length,
+  units: (request: AnyRecord) => getQuantityTotal(request as CustomerRequest),
+};
+
+function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+        active
+          ? "border-foreground bg-foreground text-background"
+          : "border-border bg-white text-foreground/75 hover:bg-muted",
+      )}
+    >
+      {children}
+    </button>
+  );
 }
 
 export default function Reports() {
-  const [type, setType] = useState<ReportType>("products");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [isExporting, setIsExporting] = useState(false);
+  const { user } = useAppUser();
   const { toast } = useToast();
+  const role = user?.publicMetadata.role;
+  const available = REPORTS.filter((report) => canAccessModule(role, report.roles));
+  const [selectedId, setSelectedId] = useState<ReportId>(available[0]?.id ?? "movements");
+  const selected = available.find((report) => report.id === selectedId) ?? available[0];
 
-  const selectedReport = useMemo(
-    () => reportCatalog.find((report) => report.value === type) ?? reportCatalog[0],
-    [type],
+  const thisMonth = competenciaOf(new Date());
+  const [preset, setPreset] = useState<PeriodPreset>("this-month");
+  const [customFrom, setCustomFrom] = useState(shiftDay(todayIso(), -29));
+  const [customTo, setCustomTo] = useState(todayIso());
+  const [idleDays, setIdleDays] = useState(60);
+
+  const period = useMemo(() => {
+    if (preset === "last-month") {
+      const competencia = previousCompetencia(thisMonth);
+      return { ...monthRange(competencia), label: competenciaLabel(competencia), slug: competencia };
+    }
+    if (preset === "last-7") {
+      const to = todayIso();
+      const from = shiftDay(to, -6);
+      return { ...dayRange(from, to), label: "Últimos 7 dias", slug: `${from}_a_${to}` };
+    }
+    if (preset === "custom" && customFrom && customTo && customFrom <= customTo) {
+      return {
+        ...dayRange(customFrom, customTo),
+        label: `${customFrom.split("-").reverse().join("/")} a ${customTo.split("-").reverse().join("/")}`,
+        slug: `${customFrom}_a_${customTo}`,
+      };
+    }
+    return { ...monthRange(thisMonth), label: competenciaLabel(thisMonth), slug: thisMonth };
+  }, [customFrom, customTo, preset, thisMonth]);
+
+  const needsStock = selected?.id === "position" || selected?.id === "below-minimum" || selected?.id === "idle";
+  const canReadStock = canAccessModule(role, OPERATIONS_READERS);
+
+  // Mesmas chaves e endereços da tela Estoque: o cache é compartilhado.
+  const skus = useQuery({
+    queryKey: ["estoque", "skus"],
+    queryFn: () => fetchJson<{ items: AnyRecord[] }>("/api/skus?limit=2000"),
+    enabled: canReadStock,
+  });
+  const balances = useQuery({
+    queryKey: ["stock-balances", "estoque"],
+    queryFn: () => fetchJson<{ items: AnyRecord[] }>("/api/stock-balances?limit=2000"),
+    enabled: canReadStock,
+  });
+  const products = useQuery({
+    queryKey: ["estoque", "products"],
+    queryFn: () => fetchJson<{ items: AnyRecord[] }>("/api/products?limit=2000"),
+    enabled: canReadStock,
+  });
+  const items = useMemo(
+    () =>
+      buildStockItems({
+        skus: skus.data?.items,
+        balances: balances.data?.items,
+        products: products.data?.items,
+      }),
+    [balances.data?.items, products.data?.items, skus.data?.items],
+  );
+  const stockLoading = skus.isLoading || balances.isLoading || products.isLoading;
+  const stockError = skus.error ?? balances.error ?? products.error;
+
+  const sinceGoLive = useQuery({
+    queryKey: ["reports", "movements", "since-go-live"],
+    queryFn: () =>
+      fetchJson<{ items: AnyRecord[]; capped: boolean }>(
+        `/api/reports/movements?from=${encodeURIComponent(GO_LIVE)}&to=${encodeURIComponent(new Date(Date.now() + 86_400_000).toISOString())}`,
+      ),
+    enabled: selected?.id === "idle",
+  });
+  const movements = useQuery({
+    queryKey: ["reports", "movements", period.from, period.to],
+    queryFn: () =>
+      fetchJson<{ items: AnyRecord[]; capped: boolean }>(
+        `/api/reports/movements?from=${encodeURIComponent(period.from)}&to=${encodeURIComponent(period.to)}`,
+      ),
+    enabled: selected?.id === "movements",
+  });
+  const requests = useQuery({
+    queryKey: ["reports", "requests", period.from, period.to],
+    queryFn: () =>
+      fetchJson<{ items: AnyRecord[]; capped: boolean }>(
+        `/api/reports/requests?from=${encodeURIComponent(period.from)}&to=${encodeURIComponent(period.to)}`,
+      ),
+    enabled: selected?.id === "requests",
+  });
+
+  const stockCounts = useMemo(
+    () =>
+      stockLoading || stockError
+        ? null
+        : {
+            position: positionReport(items).rows.length,
+            "below-minimum": belowMinimumReport(items).rows.length,
+          },
+    [items, stockError, stockLoading],
   );
 
-  const periodLabel = useMemo(() => {
-    if (dateFrom && dateTo) {
-      return `${formatDateLabel(dateFrom)} até ${formatDateLabel(dateTo)}`;
+  const state = useMemo((): {
+    loading: boolean;
+    error: unknown;
+    capped: boolean;
+    report: ReportResult | null;
+  } => {
+    if (!selected) return { loading: false, error: null, capped: false, report: null };
+    if (selected.id === "position" || selected.id === "below-minimum") {
+      if (stockLoading || stockError) return { loading: stockLoading, error: stockError, capped: false, report: null };
+      return {
+        loading: false,
+        error: null,
+        capped: false,
+        report: selected.id === "position" ? positionReport(items) : belowMinimumReport(items),
+      };
     }
-    if (dateFrom) return `A partir de ${formatDateLabel(dateFrom)}`;
-    if (dateTo) return `Até ${formatDateLabel(dateTo)}`;
-    return "Sem filtro de data";
-  }, [dateFrom, dateTo]);
-
-  const setPresetRange = (days: number) => {
-    const today = new Date();
-    const start = new Date(today);
-    start.setDate(today.getDate() - (days - 1));
-    setDateFrom(start.toISOString().slice(0, 10));
-    setDateTo(today.toISOString().slice(0, 10));
-  };
-
-  const clearDates = () => {
-    setDateFrom("");
-    setDateTo("");
-  };
-
-  const handleExport = async (format: ExportFormat, exportType: ReportType = type) => {
-    setIsExporting(true);
-    try {
-      const params = new URLSearchParams();
-      params.append("type", exportType);
-      if (dateFrom) params.append("date_from", new Date(dateFrom).toISOString());
-      if (dateTo) params.append("date_to", new Date(dateTo).toISOString());
-
-      const response = await fetch(`/api/reports/export?${params.toString()}`);
-
-      if (!response.ok) throw new Error("Falha na exportação");
-
-      const data = await response.json();
-
-      let blob;
-      let filename;
-
-      if (format === "json") {
-        blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-        filename = `btg_export_${exportType}_${new Date().toISOString().split("T")[0]}.json`;
-      } else {
-        const items = data.data || [];
-        if (items.length === 0) {
-          toast({ title: "Nenhum dado para exportar" });
-          setIsExporting(false);
-          return;
-        }
-        const headers = Object.keys(items[0]).join(",");
-        const rows = items.map((item: any) =>
-          Object.values(item)
-            .map((val) => `"${val}"`)
-            .join(","),
-        );
-        const csv = [headers, ...rows].join("\n");
-        blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-        filename = `btg_export_${exportType}_${new Date().toISOString().split("T")[0]}.csv`;
-      }
-
-      const link = document.createElement("a");
-      if (link.download !== undefined) {
-        const url = URL.createObjectURL(blob);
-        link.setAttribute("href", url);
-        link.setAttribute("download", filename);
-        link.style.visibility = "hidden";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      }
-
-      toast({ title: "Exportação concluída com sucesso" });
-    } catch {
-      toast({ title: "Falha na exportação", variant: "destructive" });
-    } finally {
-      setIsExporting(false);
+    if (selected.id === "idle") {
+      const loading = stockLoading || sinceGoLive.isLoading;
+      const error = stockError ?? sinceGoLive.error;
+      if (loading || error || !sinceGoLive.data) return { loading, error, capped: false, report: null };
+      return {
+        loading: false,
+        error: null,
+        capped: sinceGoLive.data.capped,
+        report: idleReport(items, sinceGoLive.data.items, idleDays, new Date()),
+      };
     }
+    const source = selected.id === "movements" ? movements : requests;
+    if (source.isLoading || source.error || !source.data) {
+      return { loading: source.isLoading, error: source.error, capped: false, report: null };
+    }
+    return {
+      loading: false,
+      error: null,
+      capped: source.data.capped,
+      report:
+        selected.id === "movements"
+          ? movementsReport(source.data.items)
+          : requestsReport(source.data.items, requestHelpers),
+    };
+  }, [idleDays, items, movements, requests, selected, sinceGoLive, stockError, stockLoading]);
+
+  if (!selected) {
+    return <p className="text-sm text-muted-foreground">Nenhum relatório disponível para o seu perfil.</p>;
+  }
+
+  const report = state.report;
+  const columns = report?.columns.filter((column) => selected.preview.includes(column.key)) ?? [];
+  const usesPeriod = selected.id === "movements" || selected.id === "requests";
+  const groups = (["Estoque", "Operação"] as const)
+    .map((group) => ({ group, reports: available.filter((item) => item.group === group) }))
+    .filter((entry) => entry.reports.length);
+
+  const fileName = () => {
+    const suffix =
+      selected.id === "idle"
+        ? `${idleDays}-dias-${todayIso()}`
+        : usesPeriod
+          ? period.slug
+          : todayIso();
+    return `dutelog-${selected.file}-${suffix}.csv`;
   };
 
-  const SelectedIcon = selectedReport.icon;
+  const handleDownload = () => {
+    if (!report) return;
+    if (!report.rows.length) {
+      toast({ title: "Nada para baixar", description: "O relatório está vazio neste filtro." });
+      return;
+    }
+    download(fileName(), toExcelCsv(report));
+  };
+
+  const countFor = (id: ReportId) => {
+    if (id === selected.id && report) return report.rows.length;
+    if (id === "position" || id === "below-minimum") return stockCounts?.[id];
+    return undefined;
+  };
 
   return (
     <div className="space-y-5">
-      <section className="glass-surface overflow-hidden rounded-[28px] p-5 md:p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 items-start gap-4">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-[18px] border border-primary/20 bg-primary/10 text-primary">
-              <Database className="size-5" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-xl font-semibold text-foreground md:text-2xl">
-                Relatórios e exportação
-              </h1>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
-            <Badge variant="secondary" className="justify-center gap-1.5 py-1.5">
-              <CheckCircle2 className="size-3.5 text-primary" />
-              CSV
-            </Badge>
-            <Badge variant="secondary" className="justify-center gap-1.5 py-1.5">
-              <FileJson className="size-3.5 text-primary" />
-              JSON
-            </Badge>
-          </div>
-        </div>
-      </section>
-
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-        <Card>
-          <CardHeader className="border-b border-border/70 bg-white/35 pb-5">
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div>
-                <CardTitle className="text-lg">Montar exportação</CardTitle>
-              </div>
-              <Badge variant="outline" className="w-fit gap-1.5">
-                <Clock3 className="size-3.5 text-primary" />
-                {periodLabel}
-              </Badge>
-            </div>
-          </CardHeader>
-
-          <CardContent className="space-y-5 pt-5 md:pt-6">
-            <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr_0.8fr]">
-              <div className="space-y-2">
-                <Label htmlFor="dataset">Conjunto de dados</Label>
-                <Select value={type} onValueChange={(value) => setType(value as ReportType)}>
-                  <SelectTrigger id="dataset" className="h-11 w-full bg-white/70">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {reportCatalog.map((report) => (
-                      <SelectItem key={report.value} value={report.value}>
-                        {report.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="date-from">Data inicial</Label>
-                <Input
-                  id="date-from"
-                  type="date"
-                  value={dateFrom}
-                  onChange={(event) => setDateFrom(event.target.value)}
-                  className="h-11 bg-white/70"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="date-to">Data final</Label>
-                <Input
-                  id="date-to"
-                  type="date"
-                  value={dateTo}
-                  onChange={(event) => setDateTo(event.target.value)}
-                  className="h-11 bg-white/70"
-                />
-              </div>
-            </div>
-
-            <div className="soft-panel rounded-[22px] p-3">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                  <CalendarDays className="size-4 text-primary" />
-                  Atalhos de período
-                </div>
-                <div className="grid grid-cols-2 gap-2 sm:flex">
-                  <Button variant="outline" size="sm" onClick={() => setPresetRange(1)}>
-                    Hoje
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setPresetRange(7)}>
-                    7 dias
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setPresetRange(30)}>
-                    30 dias
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={clearDates}>
-                    <RefreshCcw />
-                    Limpar
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="overflow-hidden">
-          <CardHeader className="border-b border-border/70 bg-white/35 pb-5">
-            <div className="flex items-start gap-3">
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-border bg-white/65 text-primary">
-                <SelectedIcon className="size-4" />
-              </div>
-              <div>
-                <CardTitle className="text-lg">Prévia do pacote</CardTitle>
-              </div>
-            </div>
-          </CardHeader>
-
-          <CardContent className="flex flex-col gap-5 pt-5 md:pt-6">
-            <div>
-              <div className="text-sm font-semibold text-foreground">{selectedReport.label}</div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-[20px] border border-border/75 bg-white/50 p-4">
-                <div className="text-xs font-medium text-muted-foreground">Cadência</div>
-                <div className="mt-1 text-sm font-semibold text-foreground">
-                  {selectedReport.cadence}
-                </div>
-              </div>
-              <div className="rounded-[20px] border border-border/75 bg-white/50 p-4">
-                <div className="text-xs font-medium text-muted-foreground">Período</div>
-                <div className="mt-1 text-sm font-semibold text-foreground">{periodLabel}</div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="text-xs font-medium text-muted-foreground">Campos esperados</div>
-              <div className="flex flex-wrap gap-2">
-                {selectedReport.fields.map((field) => (
-                  <Badge key={field} variant="outline">
-                    {field}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Button
-                variant="outline"
-                className="h-11 justify-center"
-                onClick={() => handleExport("csv")}
-                disabled={isExporting}
-              >
-                <FileSpreadsheet className="size-4" />
-                Exportar CSV
-              </Button>
-              <Button
-                className="h-11 justify-center"
-                onClick={() => handleExport("json")}
-                disabled={isExporting}
-              >
-                <FileJson className="size-4" />
-                Exportar JSON
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Relatórios</h1>
+        <p className="text-sm text-muted-foreground">
+          Escolha um relatório, confira a prévia e baixe a planilha. Ela abre direto no Excel.
+        </p>
       </div>
 
-      <section className="space-y-3">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="text-base font-semibold text-foreground">Relatórios rápidos</h2>
-            <p className="text-sm text-muted-foreground">
-              Saídas recorrentes em CSV para rotinas de conferência e fechamento.
-            </p>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[270px_minmax(0,1fr)]">
+        <nav className="h-fit rounded-[18px] border border-border bg-white p-2.5">
+          {groups.map(({ group, reports }) => (
+            <div key={group}>
+              <div className="px-2.5 pb-1.5 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {group}
+              </div>
+              {reports.map((item) => {
+                const Icon = item.icon;
+                const active = item.id === selected.id;
+                const count = countFor(item.id);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setSelectedId(item.id)}
+                    aria-current={active ? "true" : undefined}
+                    className={cn(
+                      "mb-0.5 flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors",
+                      active ? "bg-primary/10" : "hover:bg-muted/60",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "grid h-8 w-8 shrink-0 place-items-center rounded-lg",
+                        active ? "bg-white text-primary" : "bg-muted text-foreground/60",
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold">{item.title}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{item.hint}</span>
+                    </span>
+                    {count !== undefined ? (
+                      <span
+                        className={cn(
+                          "rounded-full px-2 py-0.5 text-xs font-semibold",
+                          item.id === "below-minimum" && count > 0
+                            ? "bg-amber-50 text-amber-800"
+                            : "bg-muted text-foreground/70",
+                        )}
+                      >
+                        {count}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+
+        <section className="flex min-w-0 flex-col overflow-hidden rounded-[18px] border border-border bg-white">
+          <div className="flex flex-wrap items-start justify-between gap-3 px-5 pb-3 pt-5">
+            <div className="min-w-0 max-w-2xl">
+              <h2 className="text-lg font-semibold">{selected.title}</h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">{selected.description}</p>
+            </div>
+            <Button onClick={handleDownload} disabled={!report}>
+              <Download className="mr-2 h-4 w-4" />
+              Baixar planilha
+            </Button>
           </div>
-        </div>
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          {quickReports.map((report) => {
-            const Icon = report.icon;
-            const isActive = report.type === type;
+          {usesPeriod ? (
+            <div className="flex flex-wrap items-center gap-2 px-5 pb-4">
+              <Chip active={preset === "this-month"} onClick={() => setPreset("this-month")}>
+                {competenciaLabel(thisMonth)}
+              </Chip>
+              <Chip active={preset === "last-month"} onClick={() => setPreset("last-month")}>
+                {competenciaLabel(previousCompetencia(thisMonth))}
+              </Chip>
+              <Chip active={preset === "last-7"} onClick={() => setPreset("last-7")}>
+                Últimos 7 dias
+              </Chip>
+              <Chip active={preset === "custom"} onClick={() => setPreset("custom")}>
+                Escolher datas
+              </Chip>
+              {preset === "custom" ? (
+                <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Input
+                    type="date"
+                    aria-label="Data inicial"
+                    className="h-8 w-[150px]"
+                    value={customFrom}
+                    max={customTo}
+                    onChange={(event) => setCustomFrom(event.target.value)}
+                  />
+                  a
+                  <Input
+                    type="date"
+                    aria-label="Data final"
+                    className="h-8 w-[150px]"
+                    value={customTo}
+                    min={customFrom}
+                    onChange={(event) => setCustomTo(event.target.value)}
+                  />
+                </span>
+              ) : null}
+            </div>
+          ) : selected.id === "idle" ? (
+            <div className="flex flex-wrap items-center gap-2 px-5 pb-4">
+              {IDLE_OPTIONS.map((days) => (
+                <Chip key={days} active={idleDays === days} onClick={() => setIdleDays(days)}>
+                  {days} dias
+                </Chip>
+              ))}
+            </div>
+          ) : null}
 
-            return (
-              <button
-                key={report.title}
-                type="button"
-                onClick={() => {
-                  setType(report.type);
-                  handleExport("csv", report.type);
-                }}
-                disabled={isExporting}
-                className={cn(
-                  "soft-panel group flex min-h-[154px] flex-col justify-between rounded-[22px] p-4 text-left outline-none transition-[background-color,border-color,box-shadow,transform] duration-200 focus-visible:ring-2 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-60",
-                  "hover:-translate-y-0.5 hover:border-primary/25 hover:bg-white/70 hover:shadow-[0_18px_60px_rgba(15,23,42,.07)]",
-                  isActive && "border-primary/25 bg-white/72",
-                )}
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-border bg-white/70 text-primary">
-                    <Icon className="size-4" />
+          {report ? (
+            <div className="grid grid-cols-1 border-y border-border/60 sm:grid-cols-3">
+              {report.summary.map((entry) => (
+                <div key={entry.label} className="border-b border-border/60 px-5 py-3 last:border-0 sm:border-b-0 sm:border-r">
+                  <div className="text-xs text-muted-foreground">{entry.label}</div>
+                  <div
+                    className={cn(
+                      "mt-0.5 text-xl font-semibold",
+                      entry.tone === "in" && "text-green-700",
+                      entry.tone === "out" && "text-red-700",
+                    )}
+                  >
+                    {entry.value}
                   </div>
-                  <Badge variant={isActive ? "default" : "outline"}>CSV</Badge>
                 </div>
+              ))}
+            </div>
+          ) : null}
 
-                <div className="space-y-2">
-                  <div className="text-sm font-semibold leading-5 text-foreground">
-                    {report.title}
-                  </div>
-                  <p className="text-sm leading-5 text-muted-foreground">{report.description}</p>
-                </div>
+          {state.loading ? (
+            <p className="px-5 py-8 text-sm text-muted-foreground">Carregando...</p>
+          ) : state.error ? (
+            <p className="px-5 py-8 text-sm text-destructive">
+              {state.error instanceof Error ? state.error.message : "Não foi possível carregar o relatório."}
+            </p>
+          ) : report && report.rows.length ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/40 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                    {columns.map((column) => (
+                      <th
+                        key={column.key}
+                        className={cn(
+                          "whitespace-nowrap px-4 py-2.5 font-semibold",
+                          column.kind && column.kind !== "date" && column.kind !== "day" && "text-right",
+                        )}
+                      >
+                        {column.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.rows.slice(0, PREVIEW_ROWS).map((row, index) => (
+                    <tr key={index} className="border-b border-border/40 last:border-0">
+                      {columns.map((column) => {
+                        const value = row[column.key] ?? null;
+                        const display =
+                          column.kind === "money" && typeof value === "number"
+                            ? value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+                            : column.kind === "number" && typeof value === "number"
+                              ? value.toLocaleString("pt-BR")
+                              : formatCell(value, column.kind);
+                        return (
+                          <td
+                            key={column.key}
+                            className={cn(
+                              "max-w-[280px] truncate whitespace-nowrap px-4 py-2.5",
+                              column.kind && column.kind !== "date" && column.kind !== "day" && "text-right tabular-nums",
+                              column.key === "kind" && value === "Entrada" && "font-semibold text-green-700",
+                              column.key === "kind" && value === "Saída" && "font-semibold text-red-700",
+                              column.key === "kind" && value === "Ajuste" && "font-semibold text-amber-700",
+                            )}
+                          >
+                            {display || "—"}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : report ? (
+            <p className="px-5 py-8 text-sm text-muted-foreground">
+              Nada neste filtro{usesPeriod ? ` (${period.label})` : ""}.
+            </p>
+          ) : null}
 
-                <div className="flex items-center justify-between text-xs font-medium text-primary">
-                  Baixar agora
-                  <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </section>
+          {report && report.rows.length ? (
+            <div className="mt-auto flex flex-wrap justify-between gap-2 border-t border-border/60 px-5 py-3 text-xs text-muted-foreground">
+              <span>
+                Prévia: {Math.min(PREVIEW_ROWS, report.rows.length)} de {report.rows.length}{" "}
+                {report.rows.length === 1 ? "linha" : "linhas"} · a planilha traz todas, com {report.columns.length} colunas
+              </span>
+              {state.capped ? (
+                <span className="font-medium text-amber-700">
+                  Limite de 5.000 registros atingido: reduza o período.
+                </span>
+              ) : selected.id === "idle" ? (
+                <span>Conta a partir do go-live (30/07/2026)</span>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+      </div>
     </div>
   );
 }
