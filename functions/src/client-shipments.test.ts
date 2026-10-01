@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { decodeShipmentAttachment, receivedSummary, SHIPMENT_ATTACHMENT_MAX_BYTES } from "./domain/client-shipments.js";
+import { decodeShipmentAttachment, receivedSummary, SHIPMENT_ATTACHMENT_MAX_BYTES, storageFailure } from "./domain/client-shipments.js";
 
 describe("quanto chegou de verdade", () => {
   it("soma avisado e conferido e lista só as linhas que divergiram", () => {
@@ -50,5 +50,23 @@ describe("anexo do aviso gravado pelo backend", () => {
       () => decodeShipmentAttachment({ content_type: "application/pdf", data_base64: big.toString("base64") }),
       /até 8 MB/,
     );
+  });
+});
+
+describe("falha do Storage com mensagem que diz o que fazer", () => {
+  it("403 do Storage (conta das Functions sem papel) aponta o papel que falta", () => {
+    const denied = Object.assign(
+      new Error("912453685006-compute@developer.gserviceaccount.com does not have storage.objects.create access to the Google Cloud Storage object."),
+      { code: 403 },
+    );
+    const gravar = storageFailure(denied, "gravar");
+    assert.equal(gravar.code, "failed-precondition");
+    assert.match(gravar.message, /roles\/storage\.objectCreator/);
+    assert.match(storageFailure({ code: 403, message: "Forbidden" }, "ler").message, /roles\/storage\.objectViewer/);
+  });
+
+  it("arquivo sumido e falha passageira não viram erro interno genérico", () => {
+    assert.equal(storageFailure({ code: 404, message: "No such object" }, "ler").code, "not-found");
+    assert.equal(storageFailure(new Error("socket hang up"), "gravar").code, "unavailable");
   });
 });

@@ -64,6 +64,42 @@ cada callable via Firebase Auth + papel (`requireCustomerScope`,
 `requireOperationsCoordinator`, etc.) — Cloud Run só decide se a requisição
 chega até o código. Ver invariante 5 do `CLAUDE.md`.
 
+### 5. Permissões da conta das Functions no Storage
+
+As Functions rodam com a conta `912453685006-compute@developer.gserviceaccount.com`,
+que **não** é Editor do projeto. No bucket `dute-btg.firebasestorage.app` ela
+precisa de dois papéis:
+
+| Papel | Para quê |
+| --- | --- |
+| `roles/storage.objectCreator` | gravar o anexo do aviso de envio (`uploadShipmentAttachment`) |
+| `roles/storage.objectViewer` | ler a nota para o Agent Dute (`readShipmentInvoice`) |
+
+Em projeto novo, ou se alguém refizer a política do bucket:
+
+```powershell
+gcloud storage buckets add-iam-policy-binding gs://dute-btg.firebasestorage.app --member="serviceAccount:912453685006-compute@developer.gserviceaccount.com" --role="roles/storage.objectCreator" --project dute-btg
+gcloud storage buckets add-iam-policy-binding gs://dute-btg.firebasestorage.app --member="serviceAccount:912453685006-compute@developer.gserviceaccount.com" --role="roles/storage.objectViewer" --project dute-btg
+```
+
+Só no bucket, não no projeto, e sem apagar/sobrescrever. Sem esses papéis o
+portal mostra "O servidor não tem permissão para gravar (ou ler) arquivos no
+Storage", com o papel que falta. Até 01/10/2026 aparecia só "Falha interna no
+servidor", e a causa (403 `storage.objects.create`) estava apenas no log:
+
+```powershell
+gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="uploadshipmentattachment" AND severity>=WARNING' --project dute-btg --freshness=1h --limit 5
+```
+
+### Deploy lento: "User code failed to load … Timeout after 10000"
+
+O Firebase carrega o código para descobrir as functions e espera 10 s; com o
+Genkit isso às vezes passa. Aumente antes do deploy:
+
+```powershell
+$env:FUNCTIONS_DISCOVERY_TIMEOUT = "60"
+```
+
 ## Incidente de 03/09/2026 — invoker ausente em 8 callables
 
 Um cliente tentou montar um pedido no portal (`/portal/estoque`, papel

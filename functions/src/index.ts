@@ -58,7 +58,7 @@ import {
   readClientInventoryForSku,
   setClientItemArchivedTransaction,
 } from "./domain/client-inventory.js";
-import { cancelShipmentNoticeTransaction, decodeShipmentAttachment } from "./domain/client-shipments.js";
+import { cancelShipmentNoticeTransaction, decodeShipmentAttachment, storageFailure } from "./domain/client-shipments.js";
 import {
   INVOICE_PROMPT,
   assertOwnInvoicePath,
@@ -6028,14 +6028,19 @@ export const uploadShipmentAttachment = onCall({ timeoutSeconds: 60 }, async (re
     `${Date.now()}-${safeFileName(input.file_name)}`,
   ].join("/");
   const token = randomUUID();
-  await getStorage()
-    .bucket(bucketName)
-    .file(objectPath)
-    .save(buffer, {
-      resumable: false,
-      contentType,
-      metadata: { metadata: { firebaseStorageDownloadTokens: token } },
-    });
+  try {
+    await getStorage()
+      .bucket(bucketName)
+      .file(objectPath)
+      .save(buffer, {
+        resumable: false,
+        contentType,
+        metadata: { metadata: { firebaseStorageDownloadTokens: token } },
+      });
+  } catch (error) {
+    console.error("uploadShipmentAttachment: Storage recusou a gravação", { objectPath, error });
+    throw storageFailure(error, "gravar");
+  }
 
   await emitEvent(
     {
@@ -6113,7 +6118,13 @@ export const readShipmentInvoice = onCall({ timeoutSeconds: 120 }, async (reques
   if (contentType !== "application/pdf" && !["image/jpeg", "image/png", "image/webp"].includes(contentType)) {
     throw new HttpsError("invalid-argument", "Use a nota em PDF ou foto.");
   }
-  const [buffer] = await getStorage().bucket(documentBucketName()).file(storagePath).download({ validation: false });
+  let buffer: Buffer;
+  try {
+    [buffer] = await getStorage().bucket(documentBucketName()).file(storagePath).download({ validation: false });
+  } catch (error) {
+    console.error("readShipmentInvoice: Storage recusou a leitura", { storagePath, error });
+    throw storageFailure(error, "ler");
+  }
   if (buffer.length > VISUAL_OCR_MAX_BYTES) {
     throw new HttpsError("invalid-argument", "Arquivo grande demais para leitura automática. Use até 8 MB.");
   }

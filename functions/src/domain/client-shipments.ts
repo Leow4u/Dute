@@ -184,3 +184,27 @@ export function decodeShipmentAttachment(input: { content_type: string; data_bas
   if (!matches(buffer)) throw new HttpsError("invalid-argument", "O conteúdo do arquivo não confere com o tipo informado.");
   return { contentType, buffer };
 }
+
+/**
+ * Falha do Storage vira mensagem que diz o que fazer. O 403 de permissão
+ * (a conta das Functions sem papel no bucket) aparecia como "Falha interna
+ * no servidor" e só se descobria a causa pelo log.
+ */
+export function storageFailure(error: unknown, action: "gravar" | "ler") {
+  const record = (error && typeof error === "object" ? error : {}) as { code?: unknown; message?: unknown };
+  const message = typeof record.message === "string" ? record.message : String(error ?? "");
+  const forbidden =
+    record.code === 403 || /does not have storage\.objects\.(create|get)|permission.*denied|forbidden/i.test(message);
+  if (forbidden) {
+    return new HttpsError(
+      "failed-precondition",
+      `O servidor não tem permissão para ${action} arquivos no Storage. Avise o time técnico: a conta das Functions precisa do papel ${
+        action === "gravar" ? "roles/storage.objectCreator" : "roles/storage.objectViewer"
+      } no bucket.`,
+    );
+  }
+  if (record.code === 404 || /no such object|not found/i.test(message)) {
+    return new HttpsError("not-found", "Arquivo não encontrado no Storage. Anexe de novo.");
+  }
+  return new HttpsError("unavailable", `Não consegui ${action} o arquivo agora. Tente de novo.`);
+}
