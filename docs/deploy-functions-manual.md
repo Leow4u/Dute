@@ -96,3 +96,14 @@ Um cliente tentou montar um pedido no portal (`/portal/estoque`, papel
 - `tools/check_functions_invoker.ps1` e o passo 4 acima existem para que essa
   classe de regressão seja percebida no próximo deploy, não semanas depois por
   um cliente.
+
+## 01/10/2026 — function nova que não subiu
+
+`cancelShipmentNotice` (PR #28) não chegou a ser publicada. O script dizia
+"FALTA … sem invoker" e o `add-iam-policy-binding` sugerido respondia
+`NOT_FOUND`: no Windows o `gcloud` nem sempre devolve código de erro, e o
+script decidia "existe?" por ele. Agora o script decide pela saída da política
+(serviço existente sempre traz `etag`) e mostra **NAO PUBLICADA**, com o
+`firebase deploy --only functions:…` certo, e falha (exit 1) — antes, function
+não publicada passava como "normal para function nova". Os casos estão em
+`tools/check_functions_invoker.tests.ps1`, que roda no CI.
