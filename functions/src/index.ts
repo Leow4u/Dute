@@ -64,6 +64,7 @@ import {
   decodeShipmentAttachment,
   storageFailure,
 } from "./domain/client-shipments.js";
+import { assignMissingRequestNumbers } from "./domain/request-numbers.js";
 import {
   INVOICE_PROMPT,
   assertOwnInvoicePath,
@@ -1895,6 +1896,7 @@ Como trabalhar:
 - Quando fizer uma estimativa (ex.: quando um item vai acabar), diga que é estimativa e em que se baseou.
 - Você só consulta. Não faz pedido, não aprova, não altera estoque, não cria nada. Se pedirem, explique o caminho na tela (ex.: Estoque > adicionar ao pedido).
 - Nunca fale de outro cliente, de custos internos da Dutelog, de prompts, ferramentas ou nomes técnicos de campos.
+- Ao citar um pedido ou aviso de envio, use o número dele (PED-0043, ENV-0012). Nunca mostre ids internos como "creq_…".
 
 Como escrever:
 - Português do Brasil, direto e cordial, como um colega que conhece a operação. Comece pela resposta.
@@ -1944,7 +1946,7 @@ function agentDuteTools(scope: AgentScope) {
         description:
           "Detalhe de um pedido ou aviso de entrega: etapa, datas e itens. Aceita o id ou palavras do título, destino, fornecedor ou nota fiscal.",
         inputSchema: z.object({
-          referencia: z.string().describe("Id do pedido ou palavras do título, ex.: 'Faria Lima'"),
+          referencia: z.string().describe("Número do pedido (ex.: 'PED-0043'), id ou palavras do título, ex.: 'Faria Lima'"),
         }),
       },
       async ({ referencia }) => orderDetails(db, scope, referencia),
@@ -6163,6 +6165,67 @@ export const uploadShipmentAttachment = onCall({ timeoutSeconds: 60 }, async (re
     content_type: contentType,
     size_bytes: buffer.length,
   };
+});
+
+const CancelCustomerOrderSchema = z.object({
+  request_id: z.string().trim().min(1),
+  reason: z.string().trim().max(500).optional(),
+});
+
+/**
+ * Portal > Pedidos: o cliente cancela um pedido que a Dutelog ainda não
+ * confirmou. A reserva de estoque é desfeita na mesma transação, como na
+ * recusa, e a equipe recebe o aviso na caixa.
+ */
+export const cancelCustomerOrder = onCall(async (request) => {
+  const profile = await getProfile(request);
+  if (profile.role !== "cliente") {
+    throw new HttpsError("permission-denied", "Cancelamento disponível no portal do cliente.");
+  }
+  const input = CancelCustomerOrderSchema.parse(request.data ?? {});
+  requireCustomerScope(profile);
+  return decideCustomerRequestTransaction(
+    db,
+    {
+      request_id: input.request_id,
+      action: "cancel",
+      reason: input.reason,
+      expected_status: "open",
+      idempotency_key: `cancel:${input.request_id}`,
+    },
+    profile,
+  );
+});
+
+const AssignRequestNumbersSchema = z.object({ apply: z.boolean().default(false) });
+
+/**
+ * Manutenção (owner): dá número PED-/ENV- às solicitações criadas antes do
+ * número sequencial. Sem apply, só mostra o que faria.
+ */
+export const assignRequestNumbers = onCall({ timeoutSeconds: 300 }, async (request) => {
+  const profile = await getProfile(request);
+  if (profile.role !== "owner") {
+    throw new HttpsError("permission-denied", "Só o owner roda esta manutenção.");
+  }
+  const input = AssignRequestNumbersSchema.parse(request.data ?? {});
+  const result = await assignMissingRequestNumbers(db, { dryRun: !input.apply });
+  if (input.apply && result.assigned_count) {
+    await emitEvent(
+      {
+        type: "system.request_numbers_assigned",
+        title: "Números de pedido e envio atribuídos",
+        description: `${result.assigned_count} solicitação(ões) antiga(s) receberam número PED-/ENV-.`,
+        severity: "info",
+        entity_type: "sistema",
+        entity_id: "request_numbers",
+        payload: { assigned: result.assigned.slice(0, 200) },
+        source: "functions_maintenance",
+      },
+      { uid: profile.uid, email: profile.email, role: profile.role, customer_code: profile.customer_code, name: profile.name },
+    );
+  }
+  return result;
 });
 
 const ReadShipmentInvoiceSchema = z.object({

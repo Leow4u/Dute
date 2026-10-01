@@ -1,4 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
+import {
+  commitRequestNumber,
+  portalRequestItems,
+  requestNumberPrefix,
+  reserveRequestNumber,
+} from "./request-numbers.js";
 
 import { receivedSummary } from "./client-shipments.js";
 import {
@@ -145,7 +151,7 @@ export type SetReturnDispositionInput = {
 
 export type DecideOperationalRequestInput = {
   request_id: string;
-  action: "approve" | "reject" | "close";
+  action: "approve" | "reject" | "close" | "cancel";
   reason?: string;
   expected_status: string;
   idempotency_key?: string;
@@ -3099,6 +3105,9 @@ export async function createCustomerRequestTransaction(
     );
     if (previous) return previous;
 
+    const numberPrefix = requestNumberPrefix(input.type);
+    const requestNumber = await reserveRequestNumber(transaction, db, input.customer_code, numberPrefix);
+
     const reservedBalances = new Map<
       string,
       { row: Row; quantity: number; qtyOnHand: number; qtyReserved: number }
@@ -3259,6 +3268,7 @@ export async function createCustomerRequestTransaction(
     });
     const result = {
       id: requestId,
+      request_number: requestNumber.number,
       status: "open",
       item_count: input.items.length,
       quantity_total: total,
@@ -3349,10 +3359,12 @@ export async function createCustomerRequestTransaction(
       });
     }
 
+    commitRequestNumber(transaction, requestNumber, input.customer_code, numberPrefix);
     transaction.create(
       requestRef,
       compact({
         id: requestId,
+        request_number: requestNumber.number,
         customer_code: input.customer_code,
         type: input.type,
         priority: input.priority,
@@ -3383,6 +3395,7 @@ export async function createCustomerRequestTransaction(
       db.collection(collections.clientRequestStatus).doc(requestId),
       compact({
         id: requestId,
+        request_number: requestNumber.number,
         customer_code: input.customer_code,
         type: input.type,
         priority: input.priority,
@@ -3394,6 +3407,7 @@ export async function createCustomerRequestTransaction(
         invoice_number: input.invoice_number,
         attachments: input.attachments,
         attachment_count: input.attachments?.length,
+        items: portalRequestItems(input.items),
         item_count: input.items.length,
         quantity_total: total,
         status: "open",
@@ -4223,7 +4237,11 @@ export async function decideCustomerRequestTransaction(
       ? "approved"
       : input.action === "reject"
         ? "rejected"
-        : "closed";
+        : input.action === "cancel"
+          ? "cancelled"
+          : "closed";
+  // Recusar (Dutelog) e cancelar (o próprio cliente) desfazem a reserva igual.
+  const releasesRequest = input.action === "reject" || input.action === "cancel";
 
   return db.runTransaction(async (transaction) => {
     const operationSnapshot = await transaction.get(operationRef);
@@ -4249,13 +4267,21 @@ export async function decideCustomerRequestTransaction(
     }
     const decisionableStatuses = new Set(["open", "submitted", "pending"]);
     if (
-      (input.action === "approve" || input.action === "reject") &&
+      (input.action === "approve" || releasesRequest) &&
       !decisionableStatuses.has(currentStatus)
     ) {
       throw new HttpsError(
         "failed-precondition",
-        `Solicitação em ${currentStatus} não pode ser ${input.action === "approve" ? "aprovada" : "rejeitada"}.`,
+        input.action === "cancel"
+          ? "A Dutelog já confirmou esta solicitação. Para mudar, fale com a equipe."
+          : `Solicitação em ${currentStatus} não pode ser ${input.action === "approve" ? "aprovada" : "rejeitada"}.`,
       );
+    }
+    if (input.action === "cancel") {
+      // Só o cliente dono cancela, e só antes da confirmação da Dutelog.
+      if (actor.role !== "cliente" || text(actor.customer_code) !== text(request.customer_code)) {
+        throw new HttpsError("permission-denied", "Só o cliente que fez a solicitação pode cancelá-la.");
+      }
     }
     if (input.action === "close" && currentStatus !== "approved") {
       throw new HttpsError(
@@ -4488,7 +4514,7 @@ export async function decideCustomerRequestTransaction(
       }
     }
 
-    if (input.action === "reject" && kind.outbound) {
+    if (releasesRequest && kind.outbound) {
       releaseReservationRows = await readRows(
         transaction,
         db
@@ -4537,7 +4563,7 @@ export async function decideCustomerRequestTransaction(
     const events: OperationalEventSummary[] = [];
     if (input.action === "approve" && kind.outbound) {
       const orderId = `ord_${requestId}`;
-      const orderNumber = `SOL-${requestId.slice(-8).toUpperCase()}`;
+      const orderNumber = text(request.request_number) || `SOL-${requestId.slice(-8).toUpperCase()}`;
       const pickTaskId = `pick_${safeDocId(orderId)}`;
       const summary = itemSummary(items, description);
 
@@ -4781,7 +4807,7 @@ export async function decideCustomerRequestTransaction(
 
     if (input.action === "approve" && kind.inbound) {
       const inboundId = `inb_${requestId}`;
-      const receiptNumber = `SOL-${requestId.slice(-8).toUpperCase()}`;
+      const receiptNumber = text(request.request_number) || `SOL-${requestId.slice(-8).toUpperCase()}`;
       transaction.create(
         db.collection(collections.inboundReceipts).doc(inboundId),
         compact({
@@ -4877,7 +4903,7 @@ export async function decideCustomerRequestTransaction(
 
     let releasedQtyTotal = 0;
     if (
-      input.action === "reject" &&
+      releasesRequest &&
       kind.outbound &&
       releaseReservationRows.length
     ) {
@@ -4933,7 +4959,7 @@ export async function decideCustomerRequestTransaction(
         transaction.update(reservation.ref, {
           status: "released",
           released_qty: quantity,
-          release_reason: "customer_request_rejected",
+          release_reason: input.action === "cancel" ? "customer_request_cancelled" : "customer_request_rejected",
           released_by: actorPayload(actor),
           released_at: FieldValue.serverTimestamp(),
           updated_at: FieldValue.serverTimestamp(),
@@ -5023,7 +5049,9 @@ export async function decideCustomerRequestTransaction(
           ? "Solicitação aprovada"
           : input.action === "reject"
             ? "Solicitação rejeitada"
-            : "Solicitação encerrada",
+            : input.action === "cancel"
+              ? "Solicitação cancelada pelo cliente"
+              : "Solicitação encerrada",
       description,
       severity: input.action === "approve" ? "attention" : "info",
       entity_type: "solicitacao_cliente",
@@ -5032,13 +5060,17 @@ export async function decideCustomerRequestTransaction(
       payload: { action: input.action, reason: input.reason, ...created },
     };
     events.unshift(
-      createDecisionEvent(
-        transaction,
-        db,
-        operationEventId(operationId, "request_decision"),
-        decisionEventInput,
-        actor,
-      ),
+      // Cancelamento pelo cliente vai para a caixa da equipe: quem estava
+      // para separar precisa saber. Decisão da própria Dutelog, não.
+      input.action === "cancel"
+        ? createEvent(transaction, db, operationEventId(operationId, "request_decision"), decisionEventInput, actor)
+        : createDecisionEvent(
+            transaction,
+            db,
+            operationEventId(operationId, "request_decision"),
+            decisionEventInput,
+            actor,
+          ),
     );
 
     transaction.update(

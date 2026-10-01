@@ -680,6 +680,8 @@ function groupToTrackingRecord(group: TrackingGroup): TrackingRecord {
     ? summarizeProducts(products)
     : firstText(...group.requests.map(requestTitle), "Pedido sem itens")!;
   const reference = firstText(
+    // PED-0043 primeiro: pedidos antigos têm order_number SOL-… do hash.
+    ...group.requests.map((request) => request.request_number),
     ...group.orders.map(orderReference),
     ...group.requests.map((request) =>
       firstText(

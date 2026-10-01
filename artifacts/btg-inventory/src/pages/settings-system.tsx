@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useAppUser } from "@/lib/auth";
 import { BUILD_COMMIT, BUILD_TIME } from "@/lib/build-info";
 import { humanApiError } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -117,11 +118,20 @@ function Tile({
 
 const emptyIncident = { severity: "attention" as Severity, title: "", description: "" };
 
+type NumberingResult = {
+  dry_run: boolean;
+  assigned_count: number;
+  assigned: Array<{ id: string; request_number: string }>;
+};
+
 export default function SettingsSystem() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [incident, setIncident] = useState(emptyIncident);
+  const { user } = useAppUser();
+  const isOwner = user?.publicMetadata.role === "owner";
+  const [numbering, setNumbering] = useState<NumberingResult | null>(null);
 
   const health = useQuery({
     queryKey: ["system-health"],
@@ -162,6 +172,26 @@ export default function SettingsSystem() {
     onError: (error) =>
       toast({
         title: "Incidente não registrado",
+        description: humanApiError(error, "Tente novamente em instantes."),
+        variant: "destructive",
+      }),
+  });
+
+  // Manutenção única: solicitações antigas ganham número PED-/ENV-. Primeiro
+  // mostra o que faria; só grava depois de confirmar.
+  const assignNumbers = useMutation({
+    mutationFn: (apply: boolean) =>
+      fetchJson<NumberingResult>("/api/system/request-numbers", {
+        method: "POST",
+        body: JSON.stringify({ apply }),
+      }),
+    onSuccess: (result) => {
+      setNumbering(result);
+      if (!result.dry_run) toast({ title: `${result.assigned_count} solicitação(ões) numerada(s)` });
+    },
+    onError: (error) =>
+      toast({
+        title: "Numeração não concluída",
         description: humanApiError(error, "Tente novamente em instantes."),
         variant: "destructive",
       }),
@@ -261,6 +291,36 @@ export default function SettingsSystem() {
           </p>
         )}
       </section>
+
+      {isOwner ? (
+        <section className="rounded-[18px] border border-border bg-white px-5 py-4">
+          <h2 className="text-sm font-semibold">Numerar pedidos e envios antigos</h2>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            Dá número PED-/ENV- às solicitações criadas antes da numeração, na ordem de criação, e publica os itens delas no portal.
+            Quem já tem número não muda.
+          </p>
+          {numbering ? (
+            <p className="mt-2 text-sm">
+              {numbering.dry_run ? "Vai numerar" : "Numerou"} {numbering.assigned_count} solicitação(ões)
+              {numbering.assigned.length
+                ? `: ${numbering.assigned.slice(0, 6).map((entry) => entry.request_number).join(", ")}${numbering.assigned.length > 6 ? "…" : ""}`
+                : "."}
+            </p>
+          ) : null}
+          <div className="mt-3 flex gap-2">
+            <Button size="sm" variant="outline" disabled={assignNumbers.isPending} onClick={() => assignNumbers.mutate(false)}>
+              Ver o que muda
+            </Button>
+            <Button
+              size="sm"
+              disabled={assignNumbers.isPending || !numbering?.dry_run || !numbering.assigned_count}
+              onClick={() => assignNumbers.mutate(true)}
+            >
+              Numerar agora
+            </Button>
+          </div>
+        </section>
+      ) : null}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-[480px]">

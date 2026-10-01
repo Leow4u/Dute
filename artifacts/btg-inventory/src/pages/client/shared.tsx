@@ -209,6 +209,8 @@ export type ClientRequest = {
   supplier?: string;
   invoice_number?: string;
   attachment_count?: Numberish;
+  /** PED-0043 / ENV-0012: o número que as pessoas leem. */
+  request_number?: string;
   protocol?: string;
   protocolo?: string;
   title?: string;
@@ -1222,7 +1224,7 @@ export function orderProgress(order: Order) {
 
 export function requestReference(request: ClientRequest) {
   return (
-    firstText(request.protocol, request.protocolo, request.id) ??
+    firstText(request.request_number, request.protocol, request.protocolo, request.id) ??
     "Sem protocolo"
   );
 }

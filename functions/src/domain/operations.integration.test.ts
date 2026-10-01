@@ -21,6 +21,7 @@ import {
   updateInboundReceiptConferenceTransaction,
   type OperationalActor,
 } from "./operations.js";
+import { assignMissingRequestNumbers } from "./request-numbers.js";
 
 const PROJECT_ID = "demo-dute-operations";
 const actor: OperationalActor = {
@@ -2414,6 +2415,160 @@ describe("integridade de reservas e agregados de catálogo", () => {
     assert.equal(produto.data()?.status, "active");
     assert.equal(sku.data()?.archived, false);
     assert.equal(sku.data()?.status, "active");
+  });
+});
+
+describe("número do pedido e cancelamento pelo cliente", () => {
+  const client = { ...actor, role: "cliente", uid: "client-ped" };
+  const retirada = (key: string, quantity: number) =>
+    createCustomerRequestTransaction(
+      db,
+      {
+        type: "retirada",
+        priority: "normal",
+        title: "Kit boas-vindas",
+        destination: "BTG Faria Lima",
+        customer_code: "BTG Pactual",
+        idempotency_key: key,
+        items: [{ sku_code: "SKU-PED-1", client_item_code: "ITEM-PED-1", product_name: "POLO PIQUET AZUL M", unit_cost: 10, quantity }],
+      },
+      client,
+    );
+
+  it("numera PED-/ENV- em sequência, publica os itens no portal e o cliente cancela antes da confirmação", async () => {
+    await clearFirestore();
+    await Promise.all([
+      db.collection("stock_balances").doc("balance-ped").set({
+        id: "balance-ped",
+        customer_code: "BTG Pactual",
+        sku_code: "SKU-PED-1",
+        client_item_code: "ITEM-PED-1",
+        product_name: "POLO PIQUET AZUL M",
+        location_id: "LOC-PED",
+        qty_on_hand: 10,
+        qty_reserved: 0,
+        qty_available: 10,
+        unit_cost: 10,
+      }),
+      db.collection("skus").doc("SKU-PED-1").set({
+        id: "SKU-PED-1",
+        cod_btg: "SKU-PED-1",
+        sku_code: "SKU-PED-1",
+        sku_code_key: "SKU-PED-1",
+        cod_cliente: "ITEM-PED-1",
+        cod_cliente_key: "ITEM-PED-1",
+        estoque_atual: 10,
+        estoque_reservado: 0,
+        estoque_disponivel: 10,
+      }),
+      db.collection("products").doc("ITEM-PED-1").set({ id: "ITEM-PED-1", cod_cliente: "ITEM-PED-1", cod_cliente_key: "ITEM-PED-1", estoque_btg: 10 }),
+    ]);
+
+    const first = await retirada("ped-1", 3);
+    assert.equal(first.request_number, "PED-0001");
+    const envio = await createCustomerRequestTransaction(
+      db,
+      {
+        type: "recebimento",
+        priority: "normal",
+        title: "Envio de fornecedor",
+        customer_code: "BTG Pactual",
+        idempotency_key: "env-1",
+        items: [{ product_name: "BLUSA MOLETOM", product_registration: "unknown", quantity: 8 }],
+      },
+      client,
+    );
+    assert.equal(envio.request_number, "ENV-0001");
+    const second = await retirada("ped-2", 4);
+    assert.equal(second.request_number, "PED-0002");
+    // Mesma chave de idempotência não gasta número.
+    assert.equal((await retirada("ped-1", 3)).request_number, "PED-0001");
+    assert.equal((await retirada("ped-3", 1)).request_number, "PED-0003");
+
+    const portal = await db.collection("client_request_status").doc(String(first.id)).get();
+    assert.equal(portal.data()?.request_number, "PED-0001");
+    assert.deepEqual(portal.data()?.items, [
+      { line_number: 1, product_name: "POLO PIQUET AZUL M", quantity: 3, client_item_code: "ITEM-PED-1" },
+    ]);
+    const envioPortal = await db.collection("client_request_status").doc(String(envio.id)).get();
+    assert.equal(envioPortal.data()?.items?.[0]?.code_pending, true);
+
+    // Cancelar: só o cliente, só antes da confirmação; a reserva volta.
+    await assert.rejects(
+      decideCustomerRequestTransaction(
+        db,
+        { request_id: String(second.id), action: "cancel", expected_status: "open", idempotency_key: "cancel-wms" },
+        actor,
+      ),
+      /Só o cliente/,
+    );
+    const cancelled = (await decideCustomerRequestTransaction(
+      db,
+      { request_id: String(second.id), action: "cancel", reason: "Evento adiado", expected_status: "open", idempotency_key: "cancel-ped-2" },
+      client,
+    )) as Record<string, unknown>;
+    assert.equal(cancelled.status, "cancelled");
+    const balance = await db.collection("stock_balances").doc("balance-ped").get();
+    assert.equal(balance.data()?.qty_reserved, 4); // 3 (PED-0001) + 1 (PED-0003)
+    const portalCancelled = await db.collection("client_request_status").doc(String(second.id)).get();
+    assert.equal(portalCancelled.data()?.status, "cancelled");
+    const cancelEvents = await db.collection("events").where("type", "==", "customer_request.cancelled").get();
+    assert.equal(cancelEvents.size, 1);
+
+    // Confirmado pela Dutelog: o pedido sai com o mesmo número e não cancela mais.
+    const approved = (await decideCustomerRequestTransaction(
+      db,
+      { request_id: String(first.id), action: "approve", expected_status: "open", idempotency_key: "approve-ped-1" },
+      actor,
+    )) as Record<string, unknown>;
+    const order = await db.collection("orders").doc(String(approved.order_id)).get();
+    assert.equal(order.data()?.order_number, "PED-0001");
+    await assert.rejects(
+      decideCustomerRequestTransaction(
+        db,
+        { request_id: String(first.id), action: "cancel", expected_status: "approved", idempotency_key: "cancel-ped-1" },
+        client,
+      ),
+      /já confirmou/,
+    );
+  });
+
+  it("dá número às solicitações antigas na ordem de criação, sem repetir", async () => {
+    await Promise.all([
+      db.collection("customer_requests").doc("creq_antigo_a").set({
+        id: "creq_antigo_a",
+        customer_code: "BTG Pactual",
+        type: "retirada",
+        status: "cancelled",
+        items: [{ sku_code: "SKU-X", client_item_code: "ITEM-X", product_name: "CANECA", quantity: 2, unit_cost: 9 }],
+        created_at: new Date("2026-08-01T10:00:00Z"),
+      }),
+      db.collection("customer_requests").doc("creq_antigo_b").set({
+        id: "creq_antigo_b",
+        customer_code: "BTG Pactual",
+        type: "recebimento",
+        status: "open",
+        items: [],
+        created_at: new Date("2026-08-02T10:00:00Z"),
+      }),
+      db.collection("client_request_status").doc("creq_antigo_a").set({ id: "creq_antigo_a", customer_code: "BTG Pactual" }),
+    ]);
+
+    const preview = await assignMissingRequestNumbers(db, { dryRun: true });
+    assert.deepEqual(preview.assigned, [
+      { id: "creq_antigo_a", request_number: "PED-0004" },
+      { id: "creq_antigo_b", request_number: "ENV-0002" },
+    ]);
+    assert.equal((await db.collection("customer_requests").doc("creq_antigo_a").get()).data()?.request_number, undefined);
+
+    const applied = await assignMissingRequestNumbers(db, { dryRun: false });
+    assert.equal(applied.assigned_count, 2);
+    const portal = await db.collection("client_request_status").doc("creq_antigo_a").get();
+    assert.equal(portal.data()?.request_number, "PED-0004");
+    assert.deepEqual(portal.data()?.items, [{ line_number: 1, product_name: "CANECA", quantity: 2, client_item_code: "ITEM-X" }]);
+    assert.equal((await assignMissingRequestNumbers(db, { dryRun: false })).assigned_count, 0);
+    // O próximo pedido continua a contagem.
+    assert.equal((await retirada("ped-4", 1)).request_number, "PED-0005");
   });
 });
 
