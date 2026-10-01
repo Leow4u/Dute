@@ -35,6 +35,8 @@ export type ClientOverview = {
   recent_requests?: ClientRequest[];
   /** Pedidos: o acompanhamento publicado inteiro (client_order_tracking). */
   order_tracking?: Record<string, unknown>[];
+  /** Faturas: todas as faturas da conta, não só as 6 do Início. */
+  invoice_history?: Record<string, unknown>[];
   /** Pedidos: todas as solicitações, não só as recentes do Início. */
   request_history?: ClientRequest[];
   agent_alerts?: AgentAlert[];

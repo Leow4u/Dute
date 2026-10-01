@@ -112,6 +112,9 @@ const ClienteFaturas = lazy(() =>
 const ClienteFatura = lazy(() =>
   import("./pages/client").then((m) => ({ default: m.ClienteFatura })),
 );
+const ClienteRelatorio = lazy(() =>
+  import("./pages/client").then((m) => ({ default: m.ClienteRelatorio })),
+);
 const ClienteInicio = lazy(() =>
   import("./pages/client").then((m) => ({ default: m.ClienteInicio })),
 );
@@ -1017,6 +1020,7 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/portal/solicitacoes", ClientRequestsRedirect),
   protectedRoute("/portal/pedidos", ClientePedidos),
   protectedRoute("/portal/faturas/fatura", ClienteFatura),
+  protectedRoute("/portal/faturas/relatorio", ClienteRelatorio),
   protectedRoute("/portal/faturas", ClienteFaturas),
   protectedRoute("/portal/documentos", ClienteDocumentos),
   protectedRoute("/portal/agente/operacional", ClientAgentRedirect),

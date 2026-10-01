@@ -133,6 +133,16 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  if (method === "POST" && pathname === "/api/client/billing/report") {
+    return {
+      name: "exportBillingReport",
+      payload: async (_pathname, init) => {
+        const body = await readJsonBody(init);
+        return { from: String(body.from ?? ""), to: String(body.to ?? "") };
+      },
+    };
+  }
+
   if (method === "POST" && pathname === "/api/system/request-numbers") {
     return {
       name: "assignRequestNumbers",
