@@ -10,8 +10,12 @@ service cloud.firestore {
       return /databases/$(database)/documents/users/$(request.auth.uid);
     }
 
+    // Acesso removido em Pessoas e acessos (setUserAccess): o perfil
+    // continua existindo para o histórico, mas deixa de valer em toda regra.
     function hasProfile() {
-      return signedIn() && exists(userDoc());
+      return signedIn()
+        && exists(userDoc())
+        && get(userDoc()).data.get('access_disabled', false) != true;
     }
 
     function validProfileRole(role) {

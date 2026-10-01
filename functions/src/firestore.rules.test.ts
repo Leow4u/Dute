@@ -60,6 +60,20 @@ async function seed() {
         ...(customerCode ? { customer_code: customerCode } : {}),
       });
     }
+    // Perfis com o acesso removido em Pessoas e acessos.
+    await setDoc(doc(database, "users", "wms-off"), {
+      nome: "wms-off",
+      email: "wms-off@example.com",
+      role: "wms",
+      access_disabled: true,
+    });
+    await setDoc(doc(database, "users", "client-off"), {
+      nome: "client-off",
+      email: "client-off@example.com",
+      role: "cliente",
+      customer_code: CUSTOMER_A,
+      access_disabled: true,
+    });
 
     await setDoc(doc(database, "stock_balances", "balance-a"), {
       customer_code: CUSTOMER_A,
@@ -287,6 +301,37 @@ describe("ledger e mutações críticas", () => {
         used_at: new Date(),
       }),
     );
+  });
+});
+
+describe("acesso removido", () => {
+  it("perfil interno com acesso removido não lê mais a operação", async () => {
+    const database = testEnvironment
+      .authenticatedContext("wms-off", { email: "wms-off@example.com" })
+      .firestore();
+    await assertFails(getDoc(doc(database, "stock_balances", "balance-a")));
+    await assertFails(getDoc(doc(database, "movements", "movement-a")));
+  });
+
+  it("cliente com acesso removido não lê mais a própria conta", async () => {
+    const database = testEnvironment
+      .authenticatedContext("client-off", { email: "client-off@example.com" })
+      .firestore();
+    await assertFails(getDoc(doc(database, "client_inventory", "inventory-a")));
+  });
+
+  it("ainda lê o próprio perfil, para o app mostrar que o acesso foi removido", async () => {
+    const database = testEnvironment
+      .authenticatedContext("wms-off", { email: "wms-off@example.com" })
+      .firestore();
+    await assertSucceeds(getDoc(doc(database, "users", "wms-off")));
+  });
+
+  it("o mesmo papel com acesso ativo continua lendo", async () => {
+    const database = testEnvironment
+      .authenticatedContext("wms-a", { email: "wms-a@example.com" })
+      .firestore();
+    await assertSucceeds(getDoc(doc(database, "stock_balances", "balance-a")));
   });
 });
 

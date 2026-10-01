@@ -20,7 +20,8 @@ import {
 } from "firebase/firestore";
 
 import { firebaseAuth, firestore } from "./firebase";
-import { normalizeProfileRole, type ProfileRole } from "./modules";
+import { profileAccess } from "./access";
+import { type ProfileRole } from "./modules";
 
 export type Role = "interno" | "cliente";
 
@@ -42,6 +43,8 @@ type AuthContextValue = {
   user: AppUser | null;
   isLoaded: boolean;
   accessDenied: boolean;
+  /** Acesso removido em Pessoas e acessos (mensagem própria no login). */
+  accessRemoved?: boolean;
 };
 
 const AuthContext = createContext<AuthContextValue>({
@@ -84,8 +87,9 @@ function profileFromSnapshot(snapshot: DocumentSnapshot): ProfileData | null {
     customer_code?: unknown;
     nome?: unknown;
   };
-  const role = normalizeProfileRole(data.role);
-  if (!role) return null;
+  const access = profileAccess(data);
+  if (access.state !== "active") return null;
+  const role = access.role;
 
   return {
     role,
@@ -95,11 +99,17 @@ function profileFromSnapshot(snapshot: DocumentSnapshot): ProfileData | null {
   };
 }
 
-async function loadProfile(firebaseUser: User): Promise<ProfileData | null> {
-  if (!firestore) return null;
+function isRemoved(snapshot: DocumentSnapshot) {
+  return snapshot.exists() && profileAccess(snapshot.data()).state === "removed";
+}
+
+async function loadProfile(
+  firebaseUser: User,
+): Promise<{ profile: ProfileData | null; removed: boolean }> {
+  if (!firestore) return { profile: null, removed: false };
   const ref = doc(firestore, "users", firebaseUser.uid);
   const snapshot = await getDoc(ref);
-  return profileFromSnapshot(snapshot);
+  return { profile: profileFromSnapshot(snapshot), removed: isRemoved(snapshot) };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -138,13 +148,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const role = await loadProfile(firebaseUser);
+      const { profile: role, removed } = await loadProfile(firebaseUser);
       if (!role || !firestore) {
         setState({
           firebaseUser,
           user: null,
           isLoaded: true,
           accessDenied: true,
+          accessRemoved: removed,
         });
         return;
       }
@@ -161,11 +172,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         (snapshot) => {
           const profile = profileFromSnapshot(snapshot);
           if (!profile) {
+            // Removido com a sessão aberta: sai na hora.
             setState({
               firebaseUser,
               user: null,
               isLoaded: true,
               accessDenied: true,
+              accessRemoved: isRemoved(snapshot),
             });
             return;
           }
