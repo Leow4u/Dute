@@ -1534,6 +1534,10 @@ async function getClientOverview() {
       // carrega; sem repassá-las o portal só conseguia mostrar placeholder.
       primary_photo_url: item.primary_photo_url ?? item.photo_urls?.[0] ?? null,
       photo_urls: Array.isArray(item.photo_urls) ? item.photo_urls : [],
+      // Mínimo da ficha e arquivamento pela BTG (domain/client-inventory.ts).
+      estoque_minimo:
+        typeof item.estoque_minimo === "number" ? item.estoque_minimo : undefined,
+      client_archived: item.client_archived === true,
     }));
   const topItems = stockItems.slice(0, 8);
 

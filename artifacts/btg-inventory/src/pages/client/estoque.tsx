@@ -70,7 +70,7 @@ import {
 type StockViewMode = "lista" | "cards";
 type StockFilter = "todos" | "disponiveis" | "baixo" | "zerado" | "arquivados";
 type StockSort = "relevancia" | "maior-saldo" | "menor-saldo" | "nome";
-type ProductAction = "restock" | "archive";
+type ProductAction = "restock" | "archive" | "restore";
 
 type StockProduct = {
   key: string;
@@ -84,6 +84,10 @@ type StockProduct = {
   total: number;
   value: number;
   photoUrl: string | null;
+  /** Mínimo da ficha publicado no portal; sem ele, nunca é "baixo". */
+  minimum?: number;
+  /** Arquivado pela BTG e ainda sem saldo. */
+  archived: boolean;
   sources: InventoryItem[];
 };
 
@@ -94,8 +98,7 @@ type CartLine = {
 
 type ProductActionCommand = {
   action: ProductAction;
-  productKey: string;
-  payload: CreateClientRequestPayload;
+  product: StockProduct;
 };
 
 const stockFilterOptions: Array<{
@@ -138,9 +141,6 @@ export function ClienteEstoque() {
   const [cartOpen, setCartOpen] = useState(false);
   const [selectedProductKey, setSelectedProductKey] = useState<string | null>(
     null,
-  );
-  const [archivedProductKeys, setArchivedProductKeys] = useState<Set<string>>(
-    () => new Set(),
   );
   // Agrupar tamanhos é preferência de quem usa: fica salva neste navegador.
   const [groupVariants, setGroupVariantsState] = useState(() => {
@@ -198,28 +198,33 @@ export function ClienteEstoque() {
 
   const productActionMutation = useMutation({
     mutationFn: async (command: ProductActionCommand) => {
-      const request = await createClientRequest(command.payload);
-      return { ...command, request };
-    },
-    onSuccess: ({ action, productKey }) => {
-      if (action === "archive") {
-        setArchivedProductKeys((current) => {
-          const next = new Set(current);
-          next.add(productKey);
-          return next;
-        });
-        setSelectedProductKey(null);
+      if (command.action === "restock") {
+        await createClientRequest(buildReplenishmentRequest(command.product));
+        return command;
       }
+      // Arquivar é do servidor (setClientItemArchived): valida saldo zero e
+      // o cliente, grava quem arquivou e registra o evento.
+      for (const id of archiveIds(command.product)) {
+        await setItemArchived(id, command.action === "archive");
+      }
+      return command;
+    },
+    onSuccess: ({ action }) => {
+      if (action !== "restock") setSelectedProductKey(null);
 
       toast({
         title:
           action === "restock"
             ? "Reposição avisada para a Dutelog"
-            : "Arquivamento solicitado",
+            : action === "archive"
+              ? "Produto arquivado"
+              : "Produto de volta à vitrine",
         description:
           action === "restock"
             ? "A Dutelog recebeu o aviso e vai acompanhar com o fornecedor."
-            : "O produto foi ocultado da vitrine e segue preservado no histórico.",
+            : action === "archive"
+              ? "Some da vitrine e fica em Arquivados. Se o saldo voltar, ele reaparece."
+              : "O produto aparece de novo na vitrine.",
       });
 
       void invalidateClientData(queryClient);
@@ -259,7 +264,6 @@ export function ClienteEstoque() {
           searchTerm,
           categoryFilter,
           stockFilter,
-          archivedProductKeys,
         });
         const sortedProducts = sortProducts(filteredProducts, cart, sortMode);
         const visibleProducts = sortedProducts.slice(0, visibleProductLimit);
@@ -392,18 +396,13 @@ export function ClienteEstoque() {
         }
 
         function requestReplenishment(product: StockProduct) {
-          productActionMutation.mutate({
-            action: "restock",
-            productKey: product.key,
-            payload: buildReplenishmentRequest(product),
-          });
+          productActionMutation.mutate({ action: "restock", product });
         }
 
         function requestArchive(product: StockProduct) {
           productActionMutation.mutate({
-            action: "archive",
-            productKey: product.key,
-            payload: buildArchiveRequest(product),
+            action: product.archived ? "restore" : "archive",
+            product,
           });
         }
 
@@ -1034,6 +1033,7 @@ function StockList({
                     ) : (
                       <ZeroStockActions
                         compact
+                        archived={product.archived}
                         onReplenish={() => onReplenish(product)}
                         onArchive={() => onArchive(product)}
                       />
@@ -1268,6 +1268,7 @@ function FamilyCard({
           ) : (
             <ZeroStockActions
               compact
+              archived={product.archived}
               onReplenish={() => onReplenish(product)}
               onArchive={() => onArchive(product)}
             />
@@ -1626,6 +1627,7 @@ function ProductDetailPanel({
         ) : (
           <ZeroStockActions
             disabled={isPending}
+            archived={product.archived}
             onReplenish={onReplenish}
             onArchive={onArchive}
           />
@@ -1824,11 +1826,13 @@ function QuantityStepper({
 function ZeroStockActions({
   compact = false,
   disabled = false,
+  archived = false,
   onReplenish,
   onArchive,
 }: {
   compact?: boolean;
   disabled?: boolean;
+  archived?: boolean;
   onReplenish: () => void;
   onArchive: () => void;
 }) {
@@ -1859,7 +1863,7 @@ function ZeroStockActions({
         onClick={onArchive}
       >
         <Archive className="h-4 w-4" />
-        Arquivar
+        {archived ? "Devolver à vitrine" : "Arquivar"}
       </Button>
     </div>
   );
@@ -1995,6 +1999,8 @@ function groupInventoryProducts(items: InventoryItem[]) {
       total: 0,
       value: 0,
       photoUrl: null,
+      minimum: undefined,
+      archived: false,
       sources: [],
     };
 
@@ -2005,6 +2011,18 @@ function groupInventoryProducts(items: InventoryItem[]) {
     current.photoUrl = current.photoUrl ?? inventoryItemPhoto(item);
     current.sources.push(item);
     grouped.set(key, current);
+  }
+
+  for (const product of grouped.values()) {
+    const minimums = product.sources
+      .map((source) => (source as { estoque_minimo?: unknown }).estoque_minimo)
+      .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+    product.minimum = minimums.length ? Math.max(...minimums) : undefined;
+    // Arquivado só enquanto zerado: se o saldo voltar, reaparece na vitrine.
+    product.archived =
+      product.total <= 0 &&
+      product.sources.length > 0 &&
+      product.sources.every((source) => (source as { client_archived?: unknown }).client_archived === true);
   }
 
   return [...grouped.values()].sort((left, right) => {
@@ -2021,19 +2039,17 @@ function filterProducts({
   searchTerm,
   categoryFilter,
   stockFilter,
-  archivedProductKeys,
 }: {
   products: StockProduct[];
   cart: Record<string, number>;
   searchTerm: string;
   categoryFilter: string;
   stockFilter: StockFilter;
-  archivedProductKeys: Set<string>;
 }) {
   const query = normalizeSlug(searchTerm);
 
   return products.filter((product) => {
-    const isArchived = archivedProductKeys.has(product.key);
+    const isArchived = product.archived;
     if (stockFilter === "arquivados") {
       if (!isArchived) return false;
     } else if (isArchived) {
@@ -2188,20 +2204,21 @@ function buildReplenishmentRequest(
   };
 }
 
-function buildArchiveRequest(
-  product: StockProduct,
-): CreateClientRequestPayload {
-  return {
-    type: "suporte",
-    priority: "normal",
-    title: `Arquivar produto sem estoque: ${product.name}`,
-    description: [
-      `Cliente solicitou arquivamento do código ${product.clientCode}.`,
-      "A ação deve apenas ocultar/descontinuar o produto para novos pedidos.",
-      "Não apagar cadastro, histórico, contrato, movimentações ou documentos.",
-    ].join(" "),
-    items: [],
-  };
+/** Documentos de client_inventory do produto (um por SKU/projeção). */
+function archiveIds(product: StockProduct) {
+  return [...new Set(product.sources.map((source) => String(source.id ?? "")).filter(Boolean))];
+}
+
+async function setItemArchived(inventoryId: string, archived: boolean) {
+  const response = await fetch(`/api/client/inventory/${encodeURIComponent(inventoryId)}/archive`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ archived }),
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { message?: string };
+    throw new Error(payload.message || "Não foi possível arquivar.");
+  }
 }
 
 function liveAvailableForProduct(
@@ -2233,12 +2250,9 @@ function productStatus(product: StockProduct, liveAvailable: number) {
 }
 
 function isLowStock(product: StockProduct, liveAvailable: number) {
-  if (product.available <= 0 || liveAvailable <= 0) return false;
-  const dynamicLimit = Math.ceil(
-    Math.max(product.total, product.available) * 0.08,
-  );
-  const limit = Math.max(5, Math.min(20, dynamicLimit || 10));
-  return liveAvailable <= limit;
+  // Mesmo critério do Estoque interno: só com mínimo cadastrado na ficha.
+  if (product.minimum === undefined) return false;
+  return product.available > 0 && liveAvailable > 0 && liveAvailable <= product.minimum;
 }
 
 function agentDuteSignal(product: StockProduct, liveAvailable: number) {
