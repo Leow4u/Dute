@@ -32,9 +32,24 @@ describe("o que a IA devolveu", () => {
       supplier: "Gráfica Alfa Ltda",
       invoice_number: "48213",
       issue_date: "2026-09-28",
+      notes: "NF emitida em 28/09/2026",
       items: [{ supplier_code: "CAM-G", description: "CAMISETA BASICA G", quantity: 1200, unit: "UN" }],
     });
-    assert.deepEqual(sanitizeInvoiceReading(null), { supplier: "", invoice_number: "", issue_date: "", items: [] });
+    assert.deepEqual(sanitizeInvoiceReading(null), { supplier: "", invoice_number: "", issue_date: "", notes: "", items: [] });
+  });
+
+  it("DANFE real: número sem zeros e pontos, volumes e transporte nas observações", () => {
+    const reading = sanitizeInvoiceReading({
+      supplier: "Uniformes Elegância Confecções LTDA",
+      invoice_number: "000.002.471",
+      issue_date: "2026-06-26",
+      volumes: "2 CAIXA",
+      carrier: "Transporte próprio por conta do remetente",
+      items: [{ supplier_code: "BAT101", description: "BLUSA MOLETOM ABERTA - PRETO XT - GG", quantity: 8, unit: "UN" }],
+    });
+    assert.equal(reading.invoice_number, "2471");
+    assert.equal(reading.notes, "Volumes: 2 CAIXA · Transporte: Transporte próprio por conta do remetente · NF emitida em 26/06/2026");
+    assert.equal(sanitizeInvoiceReading({ invoice_number: "PED-7781" }).invoice_number, "PED-7781");
   });
 });
 

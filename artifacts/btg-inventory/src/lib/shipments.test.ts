@@ -84,4 +84,28 @@ describe("itens lidos da nota", () => {
       { key: "nf1", include: true, invoiceText: "77 · ECOBAG LONA", code: "", name: "ECOBAG LONA", quantity: "500", matchedBy: null },
     ]);
   });
+
+  it("fornecedor, NF e observações entram logo após a leitura, sem apagar o que foi digitado", async () => {
+    const { invoiceFields } = await import("./shipments");
+    const reading = {
+      supplier: "Uniformes Elegância Confecções LTDA",
+      invoice_number: "2471",
+      issue_date: "2026-06-26",
+      notes: "Volumes: 2 CAIXA · NF emitida em 26/06/2026",
+      items: [],
+    };
+    expect(invoiceFields(reading, { supplier: "", invoice: " ", notes: "" })).toEqual({
+      supplier: "Uniformes Elegância Confecções LTDA",
+      invoice: "2471",
+      notes: "Volumes: 2 CAIXA · NF emitida em 26/06/2026",
+      changed: true,
+    });
+    expect(invoiceFields(reading, { supplier: "Elegância", invoice: "2471", notes: "Ligar antes" })).toEqual({
+      supplier: "Elegância",
+      invoice: "2471",
+      notes: "Ligar antes",
+      changed: false,
+    });
+    expect(invoiceFields({ ...reading, notes: undefined }, { supplier: "", invoice: "", notes: "" }).notes).toBe("");
+  });
 });

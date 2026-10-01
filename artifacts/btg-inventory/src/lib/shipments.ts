@@ -176,7 +176,33 @@ export function parsePastedItems(source: string): { lines: PastedLine[]; ignored
 
 export type InvoiceMatch = { client_item_code: string; sku_code: string; product_name: string; by: "codigo" | "nome" };
 export type InvoiceItem = { supplier_code: string; description: string; quantity: number; unit: string; match: InvoiceMatch | null };
-export type InvoiceReading = { supplier: string; invoice_number: string; issue_date: string; items: InvoiceItem[] };
+export type InvoiceReading = {
+  supplier: string;
+  invoice_number: string;
+  issue_date: string;
+  /** Volumes, transporte e emissão, prontos para "Observações". */
+  notes?: string;
+  items: InvoiceItem[];
+};
+
+type InvoiceFormFields = { supplier: string; invoice: string; notes: string };
+
+/**
+ * Logo depois de ler a nota: fornecedor, número e observações entram no
+ * formulário, mas só onde a pessoa ainda não escreveu nada.
+ */
+export function invoiceFields(reading: InvoiceReading, current: InvoiceFormFields): InvoiceFormFields & { changed: boolean } {
+  const pick = (typed: string, read: string | undefined) => (typed.trim() ? typed : text(read));
+  const next = {
+    supplier: pick(current.supplier, reading.supplier),
+    invoice: pick(current.invoice, reading.invoice_number),
+    notes: pick(current.notes, reading.notes),
+  };
+  return {
+    ...next,
+    changed: next.supplier !== current.supplier || next.invoice !== current.invoice || next.notes !== current.notes,
+  };
+}
 
 export type InvoiceDraftLine = {
   key: string;

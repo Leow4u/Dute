@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   SHIPMENT_STEPS,
   invoiceDraft,
+  invoiceFields,
   parsePastedItems,
   splitShipments,
   stageIndex,
@@ -277,7 +278,7 @@ function catalogIndex(items: InventoryItem[]) {
 function isAcceptedAttachment(file: File) {
   return (
     file.size > 0 &&
-    file.size <= 30 * 1024 * 1024 &&
+    file.size <= 8 * 1024 * 1024 &&
     ["application/pdf", "image/jpeg", "image/png", "image/webp"].includes(file.type)
   );
 }
@@ -344,7 +345,7 @@ function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose
       for (const [index, file] of files.entries()) {
         setProgress(`Enviando anexo ${index + 1} de ${files.length}…`);
         const cached = uploaded.current.get(file);
-        attachments.push(cached ?? (await uploadAttachment(file, customerCode, draftId)));
+        attachments.push(cached ?? (await uploadAttachment(file, draftId)));
       }
       setProgress("Registrando o aviso…");
       return createClientRequest({
@@ -398,7 +399,7 @@ function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose
     const accepted = [...list].filter(isAcceptedAttachment);
     setFiles((current) => [...current, ...accepted].slice(0, 8));
     if (accepted.length !== list.length) {
-      toast({ title: "Alguns arquivos ficaram de fora", description: "Use PDF ou imagem, até 30 MB cada e 8 no total.", variant: "destructive" });
+      toast({ title: "Alguns arquivos ficaram de fora", description: "Use PDF ou imagem, até 8 MB cada e 8 no total.", variant: "destructive" });
     }
   }
 
@@ -427,7 +428,7 @@ function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose
     setReading(true);
     try {
       const attachment =
-        uploaded.current.get(readableFile) ?? (await uploadAttachment(readableFile, customerCode, draftId));
+        uploaded.current.get(readableFile) ?? (await uploadAttachment(readableFile, draftId));
       uploaded.current.set(readableFile, attachment);
       const response = await fetch("/api/client/shipments/read-invoice", {
         method: "POST",
@@ -436,7 +437,20 @@ function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose
       });
       const payload = (await response.json().catch(() => null)) as (InvoiceReading & { message?: string }) | null;
       if (!response.ok || !payload) throw new Error(payload?.message || "Não consegui ler a nota agora.");
-      if (!payload.items?.length) throw new Error("Não encontrei itens nesta nota. Preencha os itens ou cole da planilha.");
+      // Fornecedor, NF e observações entram já; só preenche o que está vazio.
+      const filled = invoiceFields(payload, { supplier, invoice, notes });
+      setSupplier(filled.supplier);
+      setInvoice(filled.invoice);
+      setNotes(filled.notes);
+      if (!payload.items?.length) {
+        toast({
+          title: "Não encontrei itens nesta nota",
+          description: filled.changed
+            ? "Preenchi fornecedor, NF e observações. Os itens você preenche ou cola da planilha."
+            : "Preencha os itens ou cole da planilha.",
+        });
+        return;
+      }
       setInvoiceReading(payload);
     } catch (error) {
       toast({
@@ -449,9 +463,7 @@ function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose
     }
   }
 
-  function applyInvoice(selected: InvoiceDraftLine[], reading: InvoiceReading) {
-    if (!supplier.trim() && reading.supplier) setSupplier(reading.supplier);
-    if (!invoice.trim() && reading.invoice_number) setInvoice(reading.invoice_number);
+  function applyInvoice(selected: InvoiceDraftLine[]) {
     addLines(
       selected.map((line) => ({
         code: line.code.trim(),
@@ -668,7 +680,7 @@ function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose
 
       <PasteDialog open={pasting} onOpenChange={setPasting} catalog={catalog} onAdd={addPasted} />
       {invoiceReading ? (
-        <InvoiceReview reading={invoiceReading} catalog={catalog} onCancel={() => setInvoiceReading(null)} onUse={(lines) => applyInvoice(lines, invoiceReading)} />
+        <InvoiceReview reading={invoiceReading} catalog={catalog} onCancel={() => setInvoiceReading(null)} onUse={(lines) => applyInvoice(lines)} />
       ) : null}
     </Page>
   );
@@ -853,26 +865,20 @@ function InvoiceReview({
   );
 }
 
-type UploadTarget = ClientRequestAttachment & { upload_url: string; upload_headers?: Record<string, string> };
-
-async function uploadAttachment(file: File, customerCode: string, entityId: string): Promise<ClientRequestAttachment> {
-  const response = await fetch("/api/documents/upload-target", {
+/** O arquivo sobe pelo backend, que grava no Storage na pasta do cliente. */
+async function uploadAttachment(file: File, entityId: string): Promise<ClientRequestAttachment> {
+  const response = await fetch("/api/client/shipments/attachments", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      customer_code: customerCode,
       file_name: file.name,
       content_type: file.type,
-      size_bytes: file.size,
-      document_type: "aviso_recebimento",
-      entity_type: "customer_request_draft",
+      data_base64: await fileToBase64(file),
       entity_id: entityId,
     }),
   });
-  const payload = (await response.json().catch(() => null)) as (UploadTarget & { message?: string }) | null;
-  if (!response.ok || !payload) throw new Error(payload?.message || `Falha ao preparar o envio de ${file.name}.`);
-  const upload = await fetch(payload.upload_url, { method: "PUT", headers: payload.upload_headers, body: file });
-  if (!upload.ok) throw new Error(`Falha ao enviar ${file.name}.`);
+  const payload = (await response.json().catch(() => null)) as (ClientRequestAttachment & { message?: string }) | null;
+  if (!response.ok || !payload?.storage_path) throw new Error(payload?.message || `Falha ao enviar ${file.name}.`);
   return {
     file_name: payload.file_name,
     file_url: payload.file_url,
@@ -880,4 +886,13 @@ async function uploadAttachment(file: File, customerCode: string, entityId: stri
     content_type: payload.content_type,
     size_bytes: payload.size_bytes,
   };
+}
+
+function fileToBase64(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).replace(/^data:[^,]*,/, ""));
+    reader.onerror = () => reject(new Error(`Não consegui abrir ${file.name}.`));
+    reader.readAsDataURL(file);
+  });
 }

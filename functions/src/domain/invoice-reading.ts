@@ -39,8 +39,30 @@ export type InvoiceReading = {
   supplier: string;
   invoice_number: string;
   issue_date: string;
+  /** Texto pronto para "Observações": volumes, transporte e emissão. */
+  notes: string;
   items: InvoiceItem[];
 };
+
+/** "000.002.471" → "2471"; números com letras ficam como estão. */
+export function invoiceNumber(value: unknown) {
+  const raw = text(value).replace(/^n[ºo°.\s]*/i, "").trim();
+  if (/^[\d.\s-]+$/.test(raw)) return raw.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+  return raw.slice(0, 40);
+}
+
+function invoiceNotes(data: Record<string, unknown>, issueDate: string) {
+  const volumes = text(data.volumes).slice(0, 80);
+  const carrier = text(data.carrier).slice(0, 120);
+  const issued = issueDate ? issueDate.split("-").reverse().join("/") : "";
+  return [
+    volumes ? `Volumes: ${volumes}` : "",
+    carrier ? `Transporte: ${carrier}` : "",
+    issued ? `NF emitida em ${issued}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
 
 const MAX_ITEMS = 300;
 
@@ -66,10 +88,12 @@ export function sanitizeInvoiceReading(raw: unknown): InvoiceReading {
     .filter((entry) => entry.description && Number.isFinite(entry.quantity) && entry.quantity > 0)
     .slice(0, MAX_ITEMS);
   const issue = text(data.issue_date);
+  const issueDate = /^\d{4}-\d{2}-\d{2}$/.test(issue) ? issue : "";
   return {
     supplier: text(data.supplier).slice(0, 160),
-    invoice_number: text(data.invoice_number).replace(/^n[ºo°.\s]*/i, "").slice(0, 40),
-    issue_date: /^\d{4}-\d{2}-\d{2}$/.test(issue) ? issue : "",
+    invoice_number: invoiceNumber(data.invoice_number),
+    issue_date: issueDate,
+    notes: invoiceNotes(data, issueDate),
     items,
   };
 }
@@ -136,9 +160,11 @@ export function matchInvoiceItems(items: InvoiceItem[], catalog: CatalogEntry[])
 export const INVOICE_PROMPT = `
 Você lê notas fiscais (DANFE) e pedidos de compra brasileiros.
 Extraia do documento:
-- supplier: razão social ou nome do emitente/fornecedor;
+- supplier: razão social ou nome do EMITENTE (quem vendeu e envia), nunca o destinatário;
 - invoice_number: número da nota ou do pedido, só os dígitos/letras do número;
 - issue_date: data de emissão no formato AAAA-MM-DD (vazio se não houver);
+- volumes: quantidade e espécie dos volumes transportados, ex.: "2 CAIXA" (vazio se não houver);
+- carrier: transportadora ou modalidade do frete, ex.: "Transporte próprio por conta do remetente" (vazio se não houver);
 - items: cada produto listado, com supplier_code (código do produto na nota), description (descrição como está escrita), quantity (quantidade, número) e unit (unidade, ex.: UN, PC, CX).
 Não invente itens nem números. Se algo não estiver legível, deixe vazio. Ignore impostos, frete e totais.
 `.trim();

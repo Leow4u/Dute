@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { receivedSummary } from "./domain/client-shipments.js";
+import { decodeShipmentAttachment, receivedSummary, SHIPMENT_ATTACHMENT_MAX_BYTES } from "./domain/client-shipments.js";
 
 describe("quanto chegou de verdade", () => {
   it("soma avisado e conferido e lista só as linhas que divergiram", () => {
@@ -25,5 +25,30 @@ describe("quanto chegou de verdade", () => {
       { client_item_code: "X", expected_qty: 1, received_qty: 0, ...({ location_id: "R1", unit_cost: 9 } as object) },
     ]);
     assert.deepEqual(Object.keys(summary.received_differences[0]).sort(), ["code", "expected", "name", "received"]);
+  });
+});
+
+describe("anexo do aviso gravado pelo backend", () => {
+  const pdf = Buffer.from("%PDF-1.7\n1 0 obj\n").toString("base64");
+
+  it("aceita PDF e foto de verdade, com ou sem prefixo data:", () => {
+    assert.equal(decodeShipmentAttachment({ content_type: "application/pdf", data_base64: pdf }).buffer.length, 17);
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10]).toString("base64");
+    const decoded = decodeShipmentAttachment({ content_type: "IMAGE/JPEG", data_base64: `data:image/jpeg;base64,${jpeg}` });
+    assert.equal(decoded.contentType, "image/jpeg");
+    assert.equal(decoded.buffer[0], 0xff);
+  });
+
+  it("recusa tipo fora da lista, conteúdo que não confere, vazio e acima de 8 MB", () => {
+    assert.throws(() => decodeShipmentAttachment({ content_type: "text/html", data_base64: pdf }), /PDF ou foto/);
+    assert.throws(() => decodeShipmentAttachment({ content_type: "image/png", data_base64: pdf }), /não confere/);
+    assert.throws(() => decodeShipmentAttachment({ content_type: "application/pdf", data_base64: "" }), /vazio/);
+    assert.throws(() => decodeShipmentAttachment({ content_type: "application/pdf", data_base64: "<script>" }), /corrompido/);
+    const big = Buffer.alloc(SHIPMENT_ATTACHMENT_MAX_BYTES + 1);
+    big.write("%PDF-");
+    assert.throws(
+      () => decodeShipmentAttachment({ content_type: "application/pdf", data_base64: big.toString("base64") }),
+      /até 8 MB/,
+    );
   });
 });
