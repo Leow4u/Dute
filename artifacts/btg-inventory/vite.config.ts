@@ -1,3 +1,4 @@
+import { execSync } from "child_process";
 import path from "path";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -14,8 +15,31 @@ if (Number.isNaN(port) || port <= 0) {
 
 const basePath = process.env.BASE_PATH ?? "/";
 
+/**
+ * Commit do build, exibido em Configuração > Sistema. A tag da imagem do
+ * Cloud Run é timestamp; é isto que diz qual código está no ar. "+local"
+ * marca build feito com alterações não commitadas.
+ */
+function gitBuildCommit() {
+  try {
+    const commit = execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim();
+    const dirty = execSync("git status --porcelain", { stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim();
+    return dirty ? `${commit}+local` : commit;
+  } catch {
+    return "";
+  }
+}
+
 export default defineConfig({
   base: basePath,
+  define: {
+    __BUILD_COMMIT__: JSON.stringify(gitBuildCommit()),
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
   envDir: path.resolve(import.meta.dirname, "..", ".."),
   plugins: [
     react(),

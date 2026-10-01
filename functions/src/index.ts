@@ -52,6 +52,7 @@ import {
 } from "./billing.js";
 import { MinimumStockError, normalizeMinimumStock } from "./catalog-minimum.js";
 import { setUserAccessTransaction } from "./domain/access.js";
+import { readSystemHealth } from "./domain/system-health.js";
 
 const adminApp = initializeApp();
 setGlobalOptions({
@@ -6117,6 +6118,12 @@ export const setUserAccess = onCall(async (request) => {
     }
   }
   return { ...result, auth_updated: authUpdated };
+});
+
+/** Configuração > Sistema: verificação real do servidor e do banco. */
+export const getSystemHealth = onCall(async (request) => {
+  const profile = await getProfile(request);
+  return readSystemHealth(db, profile);
 });
 
 export const saveBillingManual = onCall(async (request) => {

@@ -119,6 +119,10 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  if (method === "GET" && pathname === "/api/system/health") {
+    return { name: "getSystemHealth", status: 200, payload: async () => ({}) };
+  }
+
   if (method === "POST" && pathname === "/api/ai/events") {
     return {
       name: "recordOperationalEvent",
