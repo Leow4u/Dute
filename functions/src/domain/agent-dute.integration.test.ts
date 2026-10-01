@@ -11,6 +11,7 @@ import {
   movementSummary,
   orderDetails,
   recentHistory,
+  requestStage,
   searchItems,
   stockSummary,
   type AgentScope,
@@ -158,6 +159,13 @@ describe("pedidos", () => {
     assert.equal(detail.pedido?.id, "req-faria");
     assert.deepEqual(detail.itens?.map((item) => item.quantidade), [100, 40]);
     assert.deepEqual(await orderDetails(db, cliente, "req-outro"), { encontrado: false });
+  });
+});
+
+describe("etapa de aviso cancelado", () => {
+  it("cancelado pelo cliente não aparece como recusado", () => {
+    assert.equal(requestStage({ status: "cancelled", operational_status: "cancelled" }), "Cancelado");
+    assert.equal(requestStage({ status: "rejected" }), "Recusado");
   });
 });
 

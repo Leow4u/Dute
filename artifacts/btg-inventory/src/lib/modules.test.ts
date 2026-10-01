@@ -175,7 +175,7 @@ describe("menu do portal da BTG", () => {
       ["Agent Dute", "/portal/agente"],
       ["Início", "/portal"],
       ["Estoque", "/portal/estoque"],
-      ["Avisar chegada", "/portal/recebimentos"],
+      ["Envios para a Dutelog", "/portal/recebimentos"],
       ["Pedidos", "/portal/pedidos"],
       ["Faturas", "/portal/faturas"],
       ["Documentos", "/portal/documentos"],

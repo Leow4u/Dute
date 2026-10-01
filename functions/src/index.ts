@@ -58,6 +58,7 @@ import {
   readClientInventoryForSku,
   setClientItemArchivedTransaction,
 } from "./domain/client-inventory.js";
+import { cancelShipmentNoticeTransaction } from "./domain/client-shipments.js";
 import {
   knowledgeAudienceForRole,
   loadKnowledgeContext,
@@ -5978,6 +5979,18 @@ export const setClientItemArchived = onCall(async (request) => {
   const profile = await getProfile(request);
   const input = SetClientItemArchivedSchema.parse(request.data ?? {});
   return setClientItemArchivedTransaction(db, input, profile);
+});
+
+const CancelShipmentNoticeSchema = z.object({
+  request_id: z.string().trim().min(1),
+  reason: z.string().trim().max(500).optional(),
+});
+
+/** Portal: a cliente cancela um aviso de envio que a Dutelog não confirmou. */
+export const cancelShipmentNotice = onCall(async (request) => {
+  const profile = await getProfile(request);
+  const input = CancelShipmentNoticeSchema.parse(request.data ?? {});
+  return cancelShipmentNoticeTransaction(db, input, profile);
 });
 
 /** Configuração > Sistema: verificação real do servidor e do banco. */

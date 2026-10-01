@@ -133,6 +133,20 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  const shipmentCancelMatch = pathname.match(/^\/api\/client\/shipments\/([^/]+)\/cancel$/);
+  if (method === "POST" && shipmentCancelMatch) {
+    return {
+      name: "cancelShipmentNotice",
+      payload: async (_pathname, init) => {
+        const body = await readJsonBody(init);
+        return {
+          request_id: decodeURIComponent(shipmentCancelMatch[1]),
+          ...(typeof body.reason === "string" && body.reason.trim() ? { reason: body.reason.trim() } : {}),
+        };
+      },
+    };
+  }
+
   if (method === "GET" && pathname === "/api/system/health") {
     return { name: "getSystemHealth", status: 200, payload: async () => ({}) };
   }
