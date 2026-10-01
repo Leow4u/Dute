@@ -6,6 +6,7 @@ import {
   getNavigationForProfileRole,
   getRouteProfileRoles,
   INTERNAL_ROLES,
+  isAccountPath,
   type ProfileRole,
 } from "./modules";
 
@@ -146,6 +147,14 @@ describe("grupo ativo", () => {
     ["/reports", "Mais"],
   ])("%s destaca %s", (path, label) => {
     expect(activeLabel(path)).toBe(label);
+  });
+});
+
+describe("telas da conta", () => {
+  it("/configuracoes não acende nenhum item do menu", () => {
+    expect(isAccountPath("/configuracoes")).toBe(true);
+    expect(isAccountPath("/configuracoes#aplicativo")).toBe(true);
+    expect(isAccountPath("/dashboard")).toBe(false);
   });
 });
 

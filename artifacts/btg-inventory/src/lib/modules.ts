@@ -590,6 +590,13 @@ const ACTIVE_ALIASES: Record<string, string> = {
   "/movements": "/estoque",
 };
 
+/** Telas da própria conta: não pertencem a nenhum item do menu. */
+const ACCOUNT_PATHS = new Set(["/configuracoes"]);
+
+export function isAccountPath(path: string): boolean {
+  return ACCOUNT_PATHS.has(normalizePath(path));
+}
+
 export function getActiveModule(
   modules: AppModule[],
   path: string,

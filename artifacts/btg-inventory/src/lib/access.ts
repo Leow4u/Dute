@@ -32,6 +32,12 @@ export function roleLabel(role: unknown) {
   return ROLE_INFO.find((item) => item.role === normalized)?.label ?? "Sem perfil";
 }
 
+export function roleDescription(role: unknown) {
+  const normalized = normalizeProfileRole(role);
+  const key = normalized === "owner" ? "admin" : normalized;
+  return ROLE_INFO.find((item) => item.role === key)?.description ?? "";
+}
+
 /** Perfis que quem administra pode atribuir: só o owner cria administradores. */
 export function assignableRoles(actorRole: ProfileRole | null | undefined): ProfileRole[] {
   const base: ProfileRole[] = ["interno", "wms", "financeiro", "suporte", "cliente"];
