@@ -60,6 +60,12 @@ import {
 } from "./domain/client-inventory.js";
 import { cancelShipmentNoticeTransaction } from "./domain/client-shipments.js";
 import {
+  INVOICE_PROMPT,
+  assertOwnInvoicePath,
+  matchInvoiceItems,
+  sanitizeInvoiceReading,
+} from "./domain/invoice-reading.js";
+import {
   knowledgeAudienceForRole,
   loadKnowledgeContext,
   type KnowledgeAudience,
@@ -5991,6 +5997,103 @@ export const cancelShipmentNotice = onCall(async (request) => {
   const profile = await getProfile(request);
   const input = CancelShipmentNoticeSchema.parse(request.data ?? {});
   return cancelShipmentNoticeTransaction(db, input, profile);
+});
+
+const ReadShipmentInvoiceSchema = z.object({
+  storage_path: z.string().trim().min(1).max(900),
+  content_type: z.string().trim().min(1).max(120),
+});
+
+const InvoiceExtractionSchema = z.object({
+  supplier: z.string().optional(),
+  invoice_number: z.string().optional(),
+  issue_date: z.string().optional(),
+  items: z
+    .array(
+      z.object({
+        supplier_code: z.string().optional(),
+        description: z.string().optional(),
+        quantity: z.number().optional(),
+        unit: z.string().optional(),
+      }),
+    )
+    .optional(),
+});
+
+/**
+ * Envios para a Dutelog > "Ler itens da nota": o Agent Dute lê a NF que a
+ * cliente anexou e devolve sugestões de itens. Não grava aviso nem estoque;
+ * a pessoa confere na tela e envia.
+ */
+export const readShipmentInvoice = onCall({ timeoutSeconds: 120 }, async (request) => {
+  const profile = await getProfile(request);
+  if (profile.role !== "cliente") {
+    throw new HttpsError("permission-denied", "Leitura de nota disponível no portal do cliente.");
+  }
+  const input = ReadShipmentInvoiceSchema.parse(request.data ?? {});
+  const customerCode = requireCustomerScope(profile);
+  const storagePath = assertOwnInvoicePath(input.storage_path, customerCode);
+  const contentType = input.content_type.toLowerCase();
+  if (contentType !== "application/pdf" && !["image/jpeg", "image/png", "image/webp"].includes(contentType)) {
+    throw new HttpsError("invalid-argument", "Use a nota em PDF ou foto.");
+  }
+  const [buffer] = await getStorage().bucket(documentBucketName()).file(storagePath).download({ validation: false });
+  if (buffer.length > VISUAL_OCR_MAX_BYTES) {
+    throw new HttpsError("invalid-argument", "Arquivo grande demais para leitura automática. Use até 8 MB.");
+  }
+
+  const started = Date.now();
+  const errors: string[] = [];
+  for (const modelName of [AGENT_DUTE_MODEL, AGENT_DUTE_FALLBACK_MODEL]) {
+    try {
+      const response = await ai.generate({
+        model: vertexAI.model(modelName),
+        messages: [
+          {
+            role: "user",
+            content: [
+              { text: INVOICE_PROMPT },
+              { media: { url: `data:${contentType};base64,${buffer.toString("base64")}`, contentType } },
+            ],
+          },
+        ],
+        output: { schema: InvoiceExtractionSchema },
+        config: { temperature: 0, maxOutputTokens: 8192 },
+      });
+      const reading = sanitizeInvoiceReading(response.output);
+      const inventory = await db
+        .collection(collectionNames.clientInventory)
+        .where("customer_code", "==", customerCode)
+        .get();
+      const catalog = inventory.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          client_item_code: String(data.client_item_code ?? ""),
+          sku_code: String(data.sku_code ?? ""),
+          product_name: String(data.product_name ?? ""),
+        };
+      });
+      const items = matchInvoiceItems(reading.items, catalog);
+      await db.collection(collectionNames.agentUsage).add({
+        customer_code: customerCode,
+        user_id: profile.uid,
+        role: profile.role,
+        source: "leitura_nota",
+        model: modelName,
+        input_tokens: response.usage?.inputTokens ?? null,
+        output_tokens: response.usage?.outputTokens ?? null,
+        latency_ms: Date.now() - started,
+        items_read: items.length,
+        error: errors.length ? errors.join(" | ") : null,
+        created_at_iso: new Date().toISOString(),
+        created_at: FieldValue.serverTimestamp(),
+      });
+      return { ...reading, items };
+    } catch (error) {
+      errors.push(`${modelName}: ${error instanceof Error ? error.message : String(error)}`.slice(0, 500));
+    }
+  }
+  throw new HttpsError("unavailable", "Não consegui ler a nota agora. Tente de novo ou preencha os itens.");
 });
 
 /** Configuração > Sistema: verificação real do servidor e do banco. */

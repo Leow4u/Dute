@@ -133,6 +133,16 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  if (method === "POST" && pathname === "/api/client/shipments/read-invoice") {
+    return {
+      name: "readShipmentInvoice",
+      payload: async (_pathname, init) => {
+        const body = await readJsonBody(init);
+        return { storage_path: String(body.storage_path ?? ""), content_type: String(body.content_type ?? "") };
+      },
+    };
+  }
+
   const shipmentCancelMatch = pathname.match(/^\/api\/client\/shipments\/([^/]+)\/cancel$/);
   if (method === "POST" && shipmentCancelMatch) {
     return {

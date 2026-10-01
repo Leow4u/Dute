@@ -65,6 +65,17 @@ describe("rota de arquivar item do portal", () => {
 });
 
 describe("envios para a Dutelog", () => {
+  it("ler itens da nota vai para readShipmentInvoice com o arquivo enviado", async () => {
+    const route = functionRoute("/api/client/shipments/read-invoice", "POST");
+    expect(route?.name).toBe("readShipmentInvoice");
+    expect(
+      await route?.payload("/api/client/shipments/read-invoice", {
+        method: "POST",
+        body: JSON.stringify({ storage_path: "operational-documents/BTG_Pactual/2026-10/1-nf.pdf", content_type: "application/pdf" }),
+      }),
+    ).toEqual({ storage_path: "operational-documents/BTG_Pactual/2026-10/1-nf.pdf", content_type: "application/pdf" });
+  });
+
   it("cancelar aviso vai para cancelShipmentNotice com o id e o motivo", async () => {
     const route = functionRoute("/api/client/shipments/creq_1/cancel", "POST");
     expect(route?.name).toBe("cancelShipmentNotice");
