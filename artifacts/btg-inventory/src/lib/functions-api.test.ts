@@ -64,6 +64,24 @@ describe("rota de arquivar item do portal", () => {
   });
 });
 
+describe("pedidos", () => {
+  it("cancelar pedido vai para cancelCustomerOrder com o id e o motivo", async () => {
+    const route = functionRoute("/api/client/orders/creq_9/cancel", "POST");
+    expect(route?.name).toBe("cancelCustomerOrder");
+    expect(await route?.payload("/api/client/orders/creq_9/cancel", { method: "POST", body: JSON.stringify({ reason: " adiado " }) })).toEqual({
+      request_id: "creq_9",
+      reason: "adiado",
+    });
+  });
+
+  it("numerar solicitações antigas só grava com apply true", async () => {
+    const route = functionRoute("/api/system/request-numbers", "POST");
+    expect(route?.name).toBe("assignRequestNumbers");
+    expect(await route?.payload("/api/system/request-numbers", { method: "POST", body: JSON.stringify({}) })).toEqual({ apply: false });
+    expect(await route?.payload("/api/system/request-numbers", { method: "POST", body: JSON.stringify({ apply: true }) })).toEqual({ apply: true });
+  });
+});
+
 describe("documentos da operação", () => {
   it("o arquivo sobe por uploadOperationalDocument com o conteúdo em base64", async () => {
     const route = functionRoute("/api/documents/upload", "POST");

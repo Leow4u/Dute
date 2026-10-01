@@ -133,6 +133,28 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  if (method === "POST" && pathname === "/api/system/request-numbers") {
+    return {
+      name: "assignRequestNumbers",
+      payload: async (_pathname, init) => {
+        const body = await readJsonBody(init);
+        return { apply: body.apply === true };
+      },
+    };
+  }
+
+  const orderCancelMatch = pathname.match(/^\/api\/client\/orders\/([^/]+)\/cancel$/);
+  if (method === "POST" && orderCancelMatch) {
+    return {
+      name: "cancelCustomerOrder",
+      payload: async (_pathname, init) => {
+        const body = await readJsonBody(init);
+        const reason = String(body.reason ?? "").trim();
+        return { request_id: decodeURIComponent(orderCancelMatch[1]), ...(reason ? { reason } : {}) };
+      },
+    };
+  }
+
   if (method === "POST" && pathname === "/api/client/shipments/attachments") {
     return {
       name: "uploadShipmentAttachment",

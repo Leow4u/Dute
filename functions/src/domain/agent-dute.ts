@@ -161,6 +161,8 @@ function requestView(request: Row) {
   const stage = requestStage(request);
   return {
     id: request.id,
+    // O número que a pessoa vê no portal (PED-0043, ENV-0012). Use este ao falar do pedido.
+    numero: text(request.request_number) || undefined,
     titulo: text(request.title) || requestKind(request),
     tipo: requestKind(request),
     etapa: stage,
@@ -220,7 +222,9 @@ export async function orderDetails(db: Firestore, scope: AgentScope, reference: 
   if (!request) {
     const terms = normalize(wanted).split(/\s+/).filter(Boolean);
     request = (await recentRequests(db, scope)).find((row) => {
-      const haystack = normalize(`${text(row.title)} ${text(row.destination)} ${text(row.supplier)} ${text(row.invoice_number)}`);
+      const haystack = normalize(
+        `${text(row.request_number)} ${text(row.title)} ${text(row.destination)} ${text(row.supplier)} ${text(row.invoice_number)}`,
+      );
       return terms.length > 0 && terms.every((term) => haystack.includes(term));
     });
   }
