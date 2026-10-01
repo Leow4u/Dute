@@ -6,6 +6,8 @@ import {
   FileCheck2,
 } from "lucide-react";
 
+import { Link } from "wouter";
+
 import {
   Table,
   TableBody,
@@ -164,6 +166,7 @@ export function ClienteFaturas() {
                           <TableHead>Status</TableHead>
                           <TableHead className="text-right">Total</TableHead>
                           <TableHead>Vencimento</TableHead>
+                          <TableHead />
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -175,6 +178,16 @@ export function ClienteFaturas() {
                             <TableCell><StatusBadge status={invoice.status} /></TableCell>
                             <TableCell className="text-right">{formatMoney(invoice.total)}</TableCell>
                             <TableCell>{formatDate(invoice.due_date ?? invoice.vencimento)}</TableCell>
+                            <TableCell className="text-right">
+                              {firstText(invoice.competencia) ? (
+                                <Link
+                                  href={`/portal/faturas/fatura?competencia=${firstText(invoice.competencia)}`}
+                                  className="text-sm font-medium text-primary"
+                                >
+                                  Ver fatura
+                                </Link>
+                              ) : null}
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>

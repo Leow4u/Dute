@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   useGetBillingPeriod,
   getGetBillingPeriodQueryKey,
@@ -9,135 +9,158 @@ import {
   useListBillingPeriods,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CheckCircle2, Clock3, FileText, Save, Send, TriangleAlert } from "lucide-react";
+import { Link } from "wouter";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import {
-  AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader,
-  AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { humanApiError } from "@/lib/permissions";
 import {
-  Activity,
-  AlertTriangle,
-  CheckCircle2,
-  ClipboardList,
-  FileText,
-  PackageOpen,
-  Save,
-  Send,
-  Truck,
-  Zap,
-} from "lucide-react";
-import { API_BASE, GRUPOS, STATUS_META, fmtBRL, fmtNum, currentCompetencia, competenciaLabel } from "@/lib/billing-format";
+  STATUS_META,
+  competenciaLabel,
+  currentCompetencia,
+  fmtBRL,
+  fmtNum,
+} from "@/lib/billing-format";
+import { isAdValoremLine } from "@/lib/invoice-view";
+import { cn } from "@/lib/utils";
 
-type BillingEvidence = {
-  generated_at: string;
+/**
+ * Fechamento do mês: o que vai ser cobrado, o que falta preencher e emitir.
+ * O total vem do servidor (getBillingPreview) com o mesmo cálculo que a
+ * emissão congela; aqui só se digitam as quantidades manuais.
+ */
+
+type Line = {
+  price_list_id: number | string | null;
+  item: string;
+  unidade?: string | null;
+  qtde: number;
+  valor_unit: number;
+  total: number;
+  observacao?: string | null;
+  auto?: boolean;
+  auto_source?: string | null;
+};
+
+type Period = {
+  competencia: string;
   status: string;
-  metrics: {
-    movements: number;
-    incoming_pieces: number;
-    outgoing_pieces: number;
-    inbound_receipts: number;
-    orders: number;
-    shipments: number;
-    documents: number;
-    manual_items: number;
-    events: number;
-  };
-  readiness: {
-    ok: boolean;
-    missing: string[];
-  };
-  documents: Array<{
-    id: string;
-    file_name: string;
-    type: string;
-    entity_id: string | null;
-    created_at: string;
-  }>;
-  events: Array<{
-    id: string;
-    type: string;
-    title: string;
-    description?: string;
-    severity?: string;
-    occurred_at: string;
-    entity_type?: string;
-    entity_id?: string;
-  }>;
-  sources: string[];
+  custo_estoque: number;
+  ad_valorem_rate: number;
+  total: number;
+  grupos: Array<{ grupo: string; total: number; itens: Line[] }>;
+  emitido_em?: string | null;
+  pago_em?: string | null;
+  emission?: { can_emit: boolean; available_from: string };
+};
+
+const cents = (value: number) => Math.round(value * 100);
+
+function brDate(value?: string | null) {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value.split("-").reverse().join("/");
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? ""
+    : date.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+}
+
+function previousCompetencia(competencia: string) {
+  const [year, month] = competencia.split("-").map(Number);
+  return month === 1
+    ? `${year - 1}-12`
+    : `${year}-${String(month - 1).padStart(2, "0")}`;
+}
+
+function competenciaFromUrl() {
+  if (typeof window === "undefined") return null;
+  const value = new URLSearchParams(window.location.search).get("competencia");
+  return value && /^\d{4}-\d{2}$/.test(value) ? value : null;
+}
+
+const STATUS_DOT: Record<string, string> = {
+  aberto: "bg-amber-500",
+  emitido: "bg-blue-500",
+  pago: "bg-green-600",
 };
 
 export default function Billing() {
-  const [competencia, setCompetencia] = useState(currentCompetencia());
+  // Abre no mês a fechar (o anterior); o mês corrente fica ao lado.
+  const [competencia, setCompetencia] = useState(
+    () => competenciaFromUrl() ?? previousCompetencia(currentCompetencia()),
+  );
   const qc = useQueryClient();
   const { toast } = useToast();
 
-  const { data, isLoading } = useGetBillingPeriod(competencia);
+  const { data: raw, isLoading, error } = useGetBillingPeriod(competencia);
+  const data = raw as unknown as Period | undefined;
   const { data: periodsData } = useListBillingPeriods();
-  const [evidence, setEvidence] = useState<BillingEvidence | null>(null);
-  const [evidenceLoading, setEvidenceLoading] = useState(false);
 
-  const [qty, setQty] = useState<Record<number, string>>({});
-  const [obs, setObs] = useState<Record<number, string>>({});
-
-  const aberto = !data || data.status === "aberto";
-  // Campos que vêm só da prévia do servidor (getBillingPreview).
-  const preview = data as
-    | (typeof data & {
-        emission?: { can_emit: boolean; available_from: string };
-        calculated_at?: string | null;
-      })
-    | undefined;
-  const emission = preview?.emission;
-  const availableFrom = emission?.available_from
-    ? emission.available_from.split("-").reverse().join("/")
-    : null;
-  // Emitir usa as quantidades salvas: digitadas e não salvas seriam ignoradas.
+  const [qty, setQty] = useState<Record<string, string>>({});
+  const [obs, setObs] = useState<Record<string, string>>({});
   const [dirty, setDirty] = useState(false);
 
+  const lines = useMemo(() => data?.grupos.flatMap((group) => group.itens) ?? [], [data]);
+  const autoLines = lines.filter((line) => line.auto);
+  const manualLines = useMemo(
+    () => lines.filter((line) => !line.auto && line.price_list_id != null),
+    [lines],
+  );
+  const aberto = !data || data.status === "aberto";
+
   useEffect(() => {
-    if (!data) return;
-    const q: Record<number, string> = {};
-    const o: Record<number, string> = {};
-    data.grupos.forEach((g) =>
-      g.itens.forEach((it) => {
-        if (it.price_list_id != null && !it.auto) {
-          q[it.price_list_id] = String(it.qtde);
-          o[it.price_list_id] = it.observacao || "";
-        }
-      }),
-    );
+    const q: Record<string, string> = {};
+    const o: Record<string, string> = {};
+    for (const line of manualLines) {
+      q[String(line.price_list_id)] = String(line.qtde);
+      o[String(line.price_list_id)] = line.observacao || "";
+    }
     setQty(q);
     setObs(o);
     setDirty(false);
-  }, [data]);
+  }, [manualLines]);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    setEvidenceLoading(true);
-    fetch(`${API_BASE}/billing/periods/${competencia}/evidence`, {
-      signal: controller.signal,
-    })
-      .then((response) => {
-        if (!response.ok) throw new Error("Falha ao carregar evidências.");
-        return response.json() as Promise<BillingEvidence>;
-      })
-      .then((payload) => setEvidence(payload))
-      .catch((error) => {
-        if ((error as { name?: string }).name !== "AbortError") {
-          setEvidence(null);
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setEvidenceLoading(false);
-      });
-    return () => controller.abort();
-  }, [competencia]);
+  const quantity = (line: Line) =>
+    aberto ? Number(qty[String(line.price_list_id)] || 0) : line.qtde;
+  const lineTotal = (line: Line) =>
+    aberto && dirty ? cents(quantity(line) * line.valor_unit) / 100 : line.total;
+  // Com alterações não salvas, mostra o total que elas vão dar.
+  const total = dirty
+    ? (cents(data?.total ?? 0) -
+        manualLines.reduce((sum, line) => sum + cents(line.total), 0) +
+        manualLines.reduce((sum, line) => sum + cents(lineTotal(line)), 0)) /
+      100
+    : (data?.total ?? 0);
+
+  const months = useMemo(() => {
+    const known = new Map<string, { status: string; total: number }>();
+    for (const period of periodsData?.items ?? []) {
+      known.set(period.competencia, { status: period.status, total: period.total });
+    }
+    const current = currentCompetencia();
+    const list = new Set([...known.keys(), current, previousCompetencia(current), competencia]);
+    return [...list]
+      .filter((value) => value <= current)
+      .sort()
+      .slice(-4)
+      .map((value) => ({
+        competencia: value,
+        ...(known.get(value) ?? { status: "aberto", total: 0 }),
+      }));
+  }, [periodsData, competencia]);
 
   const save = useSaveBillingManual();
   const emit = useEmitBillingInvoice();
@@ -148,417 +171,362 @@ export default function Billing() {
     qc.invalidateQueries({ queryKey: getListBillingPeriodsQueryKey() });
   };
 
+  const failure = (title: string) => (err: unknown) =>
+    toast({
+      title,
+      description: humanApiError(err, "Tente novamente em instantes."),
+      variant: "destructive",
+    });
+
   const handleSave = () => {
-    if (!data) return;
-    const items: { price_list_id: number; qtde: number; observacao: string | null }[] = [];
-    data.grupos.forEach((g) =>
-      g.itens.forEach((it) => {
-        if (it.price_list_id != null && !it.auto) {
-          items.push({
-            price_list_id: it.price_list_id,
-            qtde: Number(qty[it.price_list_id] || 0),
-            observacao: obs[it.price_list_id] || null,
-          });
-        }
-      }),
-    );
+    const items = manualLines.map((line) => ({
+      price_list_id: line.price_list_id as number,
+      qtde: Number(qty[String(line.price_list_id)] || 0),
+      observacao: obs[String(line.price_list_id)] || null,
+    }));
     save.mutate(
       { competencia, data: { items } },
       {
-        onSuccess: () => { toast({ title: "Quantidades salvas" }); refetch(); },
-        onError: () => toast({ title: "Erro ao salvar", variant: "destructive" }),
+        onSuccess: () => {
+          toast({ title: "Quantidades salvas" });
+          refetch();
+        },
+        onError: failure("Quantidades não salvas"),
       },
     );
   };
 
-  const handleEmit = () => {
+  const handleEmit = () =>
     emit.mutate(
       { competencia },
       {
         onSuccess: () => {
-          // Não há envio de e-mail nem PDF configurados: a fatura é publicada
-          // no portal da cliente (client_invoices), que é o que de fato ocorre.
           toast({
             title: "Fatura emitida",
-            description: "Os valores foram congelados e a fatura está disponível para a cliente em Faturas.",
+            description:
+              "Os valores foram congelados e a fatura está disponível para a cliente em Faturas.",
           });
           refetch();
         },
-        onError: (error) =>
-          toast({
-            title: "Fatura não emitida",
-            description: humanApiError(error, "Tente novamente em instantes."),
-            variant: "destructive",
-          }),
+        onError: failure("Fatura não emitida"),
       },
     );
-  };
 
-  const handlePay = () => {
+  const handlePay = () =>
     pay.mutate(
       { competencia },
-      { onSuccess: () => { toast({ title: "Fatura marcada como paga" }); refetch(); } },
+      {
+        onSuccess: () => {
+          toast({ title: "Fatura marcada como paga" });
+          refetch();
+        },
+        onError: failure("Não foi possível marcar como paga"),
+      },
     );
-  };
 
-  const statusMeta = data ? STATUS_META[data.status] ?? STATUS_META.aberto : STATUS_META.aberto;
+  const status = data?.status ?? "aberto";
+  const statusMeta = STATUS_META[status] ?? STATUS_META.aberto;
+  const canEmit = aberto && data?.emission?.can_emit === true && !dirty;
+  const monthName = competenciaLabel(competencia).split(" de ")[0];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-primary">Faturamento Mensal</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <Input
-            type="month"
-            value={competencia}
-            onChange={(e) => setCompetencia(e.target.value || currentCompetencia())}
-            className="w-44"
-          />
-        </div>
-      </div>
-
-      {/* Resumo */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Competência</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-lg font-bold">{competenciaLabel(competencia)}</div>
-            <Badge variant="outline" className={`mt-1 ${statusMeta.className}`}>{statusMeta.label}</Badge>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Valor do estoque (base Ad Valorem)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-lg font-bold">{fmtBRL(data?.custo_estoque || 0)}</div>
-            <div className="text-xs text-muted-foreground mt-1">
-              Taxa: {fmtNum((data?.ad_valorem_rate || 0) * 100)}%
-              {aberto ? " · valor atual do estoque" : " · valor congelado na emissão"}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total do mês</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold text-foreground">{fmtBRL(data?.total || 0)}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Ações */}
+    <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        {aberto && (
-          <>
-            <Button onClick={handleSave} disabled={save.isPending} variant="outline">
-              <Save className="h-4 w-4 mr-2" />Salvar quantidades
-            </Button>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button disabled={emit.isPending || dirty || emission?.can_emit === false}>
-                  <Send className="h-4 w-4 mr-2" />Emitir fatura
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Emitir fatura de {competenciaLabel(competencia)}?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Os valores serão congelados e a fatura não poderá mais ser editada. Ela ficará disponível
-                    para a cliente em Faturas. Total: <strong>{fmtBRL(data?.total || 0)}</strong>.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleEmit}>Emitir</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-            {dirty ? (
-              <span className="text-sm text-amber-700">Salve as quantidades antes de emitir.</span>
-            ) : emission?.can_emit === false && availableFrom ? (
-              <span className="text-sm text-muted-foreground">
-                Emissão liberada a partir de {availableFrom}, quando o mês terminar.
+        {months.map((month) => {
+          const meta = STATUS_META[month.status] ?? STATUS_META.aberto;
+          return (
+            <button
+              key={month.competencia}
+              type="button"
+              onClick={() => setCompetencia(month.competencia)}
+              className={cn(
+                "min-w-[150px] rounded-2xl border bg-white px-4 py-2 text-left transition-colors",
+                month.competencia === competencia
+                  ? "border-2 border-primary bg-blue-50/40"
+                  : "border-border hover:bg-muted/40",
+              )}
+            >
+              <span className="block text-sm font-semibold">{competenciaLabel(month.competencia)}</span>
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT[month.status] ?? "bg-amber-500")} />
+                {meta.label}
+                {month.status !== "aberto" && month.total ? ` · ${fmtBRL(month.total)}` : ""}
               </span>
-            ) : null}
-          </>
-        )}
-        {data?.status === "emitido" && (
-          <Button onClick={handlePay} disabled={pay.isPending} variant="outline">
-            <CheckCircle2 className="h-4 w-4 mr-2" />Marcar como paga
-          </Button>
-        )}
+            </button>
+          );
+        })}
+        <Input
+          type="month"
+          aria-label="Outro mês"
+          value={competencia}
+          max={currentCompetencia()}
+          onChange={(event) => event.target.value && setCompetencia(event.target.value)}
+          className="h-10 w-40"
+        />
       </div>
 
-      <Card className="overflow-hidden border-blue-100 bg-white/80">
-        <CardHeader className="border-b bg-blue-50/40">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Activity className="h-4 w-4 text-blue-500" />
-                Evidências da competência
-              </CardTitle>
+      {error ? (
+        <p className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          {humanApiError(error, "Não consegui calcular a competência.")}
+        </p>
+      ) : isLoading || !data ? (
+        <p className="text-sm text-muted-foreground">Calculando {competenciaLabel(competencia)}...</p>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <section className="overflow-hidden rounded-[18px] border border-border bg-white">
+            <div className="flex items-baseline justify-between px-5 pb-2 pt-4">
+              <h2 className="text-sm font-semibold">Cobrado automaticamente</h2>
+              <span className="text-xs text-muted-foreground">calculado pelo sistema</span>
             </div>
-            <Badge
-              variant="outline"
-              className={
-                evidence?.readiness.ok
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                  : "border-amber-200 bg-amber-50 text-amber-700"
-              }
-            >
-              {evidenceLoading
-                ? "Conferindo..."
-                : evidence?.readiness.ok
-                  ? "Pronto para revisão"
-                  : "Revisar evidências"}
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-5 p-5">
-          <div className="grid gap-3 md:grid-cols-3">
-            {[
-              {
-                label: "Entradas",
-                value: fmtNum(evidence?.metrics.incoming_pieces ?? 0),
-                detail: `${fmtNum(evidence?.metrics.inbound_receipts ?? 0)} recebimento(s)`,
-                icon: PackageOpen,
-              },
-              {
-                label: "Saídas",
-                value: fmtNum(evidence?.metrics.outgoing_pieces ?? 0),
-                detail: `${fmtNum(evidence?.metrics.orders ?? 0)} pedido(s) no mês`,
-                icon: Truck,
-              },
-              {
-                label: "Documentos",
-                value: fmtNum(evidence?.metrics.documents ?? 0),
-                detail: "Notas, comprovantes ou vínculos financeiros",
-                icon: FileText,
-              },
-              // O contador de eventos tem dono (Agent Dute) — aparecia em 4
-              // telas; aqui não sustenta a decisão de emitir.
-            ].map((item) => (
-              <div
-                key={item.label}
-                className="rounded-[20px] border border-slate-100 bg-white/75 p-4 shadow-[0_8px_24px_rgba(15,23,42,.04)]"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-muted-foreground">{item.label}</span>
-                  <span className="rounded-full border border-blue-100 bg-blue-50 p-2 text-blue-500">
-                    <item.icon className="h-4 w-4" />
-                  </span>
-                </div>
-                <div className="mt-3 text-2xl font-semibold text-foreground">
-                  {item.value}
-                </div>
-                <div className="mt-1 text-xs text-muted-foreground">{item.detail}</div>
-              </div>
-            ))}
-          </div>
-
-          {evidence?.readiness.missing.length ? (
-            <div className="rounded-[18px] border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-800">
-              <div className="mb-2 flex items-center gap-2 font-medium">
-                <AlertTriangle className="h-4 w-4" />
-                Pontos para validar antes de emitir
-              </div>
-              <ul className="space-y-1">
-                {evidence.readiness.missing.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
-          <div className="grid gap-4 xl:grid-cols-[1fr_1.2fr]">
-            <div className="rounded-[20px] border border-slate-100 bg-white/70 p-4">
-              <div className="mb-3 text-sm font-medium text-foreground">
-                Documentos vinculados
-              </div>
-              {evidence?.documents.length ? (
-                <div className="space-y-2">
-                  {evidence.documents.map((document) => (
-                    <div
-                      key={document.id}
-                      className="flex items-center justify-between gap-3 rounded-[14px] border border-slate-100 px-3 py-2 text-sm"
-                    >
-                      <div className="min-w-0">
-                        <div className="truncate font-medium">{document.file_name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {document.type}
-                        </div>
+            <div className="space-y-2 px-5 pb-4">
+              {autoLines.length ? (
+                autoLines.map((line) => (
+                  <div
+                    key={String(line.price_list_id ?? line.item)}
+                    className="flex items-center gap-4 rounded-xl border border-blue-100 bg-blue-50/40 px-4 py-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium">{line.item}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {isAdValoremLine(line)
+                          ? `${fmtNum(line.valor_unit * 100)}% × ${fmtBRL(line.qtde)} · ${
+                              aberto ? "valor atual do estoque" : "valor congelado na emissão"
+                            }`
+                          : `${fmtNum(line.qtde)} ${line.unidade ?? ""} × ${fmtBRL(line.valor_unit)}`}
                       </div>
-                      <Badge variant="outline">{document.entity_id ?? "doc"}</Badge>
                     </div>
-                  ))}
-                </div>
+                    <div className="text-lg font-semibold tabular-nums">{fmtBRL(line.total)}</div>
+                  </div>
+                ))
               ) : (
-                <div className="rounded-[14px] border border-dashed p-4 text-sm text-muted-foreground">
-                  Nenhum documento financeiro vinculado a esta competência.
-                </div>
+                <p className="text-sm text-muted-foreground">
+                  Nenhum serviço automático na tabela de preços.
+                </p>
               )}
             </div>
 
-            <div className="rounded-[20px] border border-slate-100 bg-white/70 p-4">
-              <div className="mb-3 text-sm font-medium text-foreground">
-                Eventos recentes da cobrança
-              </div>
-              {evidence?.events.length ? (
-                <div className="space-y-2">
-                  {evidence.events.slice(0, 6).map((event) => (
-                    <div
-                      key={event.id}
-                      className="rounded-[14px] border border-slate-100 px-3 py-2 text-sm"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="font-medium">{event.title}</span>
-                        <Badge variant="outline">{event.type}</Badge>
-                      </div>
-                      {event.description ? (
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          {event.description}
-                        </div>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-[14px] border border-dashed p-4 text-sm text-muted-foreground">
-                  Nenhum evento encontrado para a competência.
-                </div>
-              )}
+            <div className="flex items-baseline justify-between border-t border-border/60 px-5 pb-2 pt-4">
+              <h2 className="text-sm font-semibold">Serviços do mês</h2>
+              <span className="text-xs text-muted-foreground">
+                {aberto ? "quantidade lançada por você" : "quantidades congeladas"}
+              </span>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] text-sm">
+                <thead>
+                  <tr className="border-b border-border/70 text-left text-[11px] uppercase tracking-wide text-foreground/50">
+                    <th className="px-5 py-2 font-semibold">Serviço</th>
+                    <th className="px-3 py-2 text-right font-semibold">Qtde</th>
+                    <th className="px-3 py-2 text-right font-semibold">Valor unit.</th>
+                    <th className="px-3 py-2 text-right font-semibold">Total</th>
+                    <th className="px-5 py-2 font-semibold">Observação</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {manualLines.map((line) => {
+                    const id = String(line.price_list_id);
+                    const value = lineTotal(line);
+                    return (
+                      <tr key={id} className="border-b border-border/40 last:border-0">
+                        <td className="px-5 py-2">
+                          <div>{line.item}</div>
+                          <div className="text-xs text-muted-foreground">{line.unidade}</div>
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          {aberto ? (
+                            <Input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              inputMode="decimal"
+                              aria-label={`Quantidade de ${line.item}`}
+                              value={qty[id] ?? ""}
+                              onChange={(event) => {
+                                setDirty(true);
+                                setQty((state) => ({ ...state, [id]: event.target.value }));
+                              }}
+                              className="ml-auto h-9 w-24 text-right tabular-nums"
+                            />
+                          ) : (
+                            <span className="tabular-nums">{fmtNum(line.qtde)}</span>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-muted-foreground">
+                          {fmtBRL(line.valor_unit)}
+                        </td>
+                        <td
+                          className={cn(
+                            "whitespace-nowrap px-3 py-2 text-right tabular-nums",
+                            value > 0 ? "font-semibold" : "text-muted-foreground",
+                          )}
+                        >
+                          {fmtBRL(value)}
+                        </td>
+                        <td className="px-5 py-2">
+                          {aberto ? (
+                            <Input
+                              aria-label={`Observação de ${line.item}`}
+                              value={obs[id] ?? ""}
+                              placeholder="—"
+                              onChange={(event) => {
+                                setDirty(true);
+                                setObs((state) => ({ ...state, [id]: event.target.value }));
+                              }}
+                              className="h-9"
+                            />
+                          ) : (
+                            <span className="text-muted-foreground">{line.observacao}</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
 
-      {/* Grade de linhas */}
-      <Card>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="p-8 text-center text-muted-foreground">Carregando...</div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[32%]">Serviço / Item</TableHead>
-                  <TableHead>Unidade</TableHead>
-                  <TableHead className="text-right">Qtde.</TableHead>
-                  <TableHead className="text-right">Valor unit.</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="w-[18%]">Observação</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data?.grupos.map((g) => (
+          <aside className="order-first space-y-3 lg:order-none lg:sticky lg:top-0 lg:self-start">
+            <div className="rounded-[20px] border-2 border-primary bg-white p-5 shadow-[0_10px_30px_rgba(110,158,248,.12)]">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm text-muted-foreground">
+                  {competenciaLabel(competencia)} · {aberto ? "total previsto" : "total"}
+                </span>
+                <span
+                  className={cn(
+                    "rounded-full border px-2.5 py-0.5 text-xs font-semibold",
+                    statusMeta.className,
+                  )}
+                >
+                  {statusMeta.label}
+                </span>
+              </div>
+              <div className="mt-1 text-3xl font-bold tabular-nums">{fmtBRL(total)}</div>
+              <p className="text-xs text-muted-foreground">
+                {aberto
+                  ? dirty
+                    ? "Inclui alterações ainda não salvas."
+                    : "Mesmo cálculo que será congelado na emissão."
+                  : "Valores congelados na emissão."}
+              </p>
+
+              <ul className="mt-4 space-y-2.5 text-sm">
+                {aberto ? (
                   <>
-                    <TableRow key={g.grupo} className="bg-primary/5 hover:bg-primary/5">
-                      <TableCell colSpan={4} className="font-bold text-primary">
-                        {GRUPOS[g.grupo]?.emoji} {GRUPOS[g.grupo]?.label ?? g.label ?? g.grupo}
-                      </TableCell>
-                      <TableCell className="text-right font-bold text-primary">{fmtBRL(g.total)}</TableCell>
-                      <TableCell />
-                    </TableRow>
-                    {g.itens.map((it, idx) => {
-                      const id = it.price_list_id;
-                      const editable = aberto && !it.auto && id != null;
-                      return (
-                        <TableRow key={`${g.grupo}-${id ?? idx}`}>
-                          <TableCell className="pl-6">{it.item}</TableCell>
-                          <TableCell className="text-muted-foreground text-sm">
-                            {it.unidade}
-                            {it.auto && (
-                              <Badge variant="outline" className="ml-2 text-[10px] py-0 border-blue-200 text-blue-700">
-                                <Zap className="h-3 w-3 mr-0.5" />auto
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {editable ? (
-                              <Input
-                                type="number"
-                                step="0.01"
-                                value={qty[id!] ?? ""}
-                                onChange={(e) => {
-                                  setDirty(true);
-                                  setQty((s) => ({ ...s, [id!]: e.target.value }));
-                                }}
-                                className="h-8 w-24 ml-auto text-right"
-                              />
-                            ) : (
-                              fmtNum(it.qtde)
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right text-muted-foreground">{fmtBRL(it.valor_unit)}</TableCell>
-                          <TableCell className="text-right font-semibold">{fmtBRL(it.total)}</TableCell>
-                          <TableCell>
-                            {editable ? (
-                              <Input
-                                value={obs[id!] ?? ""}
-                                onChange={(e) => {
-                                  setDirty(true);
-                                  setObs((s) => ({ ...s, [id!]: e.target.value }));
-                                }}
-                                className="h-8"
-                                placeholder="—"
-                              />
-                            ) : (
-                              <span className="text-sm text-muted-foreground">{it.observacao}</span>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
+                    <Check
+                      tone={dirty ? "warn" : "ok"}
+                      title={dirty ? "Alterações não salvas" : "Quantidades salvas"}
+                      detail={dirty ? "Salve antes de emitir." : undefined}
+                    />
+                    <Check
+                      tone={data.emission?.can_emit ? "ok" : "wait"}
+                      title={
+                        data.emission?.can_emit
+                          ? `${monthName} encerrado`
+                          : `${monthName} ainda não terminou`
+                      }
+                      detail={
+                        data.emission?.can_emit
+                          ? "Pronto para emitir."
+                          : `Emissão liberada a partir de ${brDate(data.emission?.available_from)}.`
+                      }
+                    />
                   </>
-                ))}
-                <TableRow className="border-t-2">
-                  <TableCell colSpan={4} className="font-bold text-lg">TOTAL GERAL</TableCell>
-                  <TableCell className="text-right font-bold text-lg text-primary">{fmtBRL(data?.total || 0)}</TableCell>
-                  <TableCell />
-                </TableRow>
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+                ) : (
+                  <>
+                    <Check
+                      tone="ok"
+                      title={`Emitida${data.emitido_em ? ` em ${brDate(data.emitido_em)}` : ""}`}
+                      detail="Disponível para a cliente em Faturas."
+                    />
+                    <Check
+                      tone={status === "pago" ? "ok" : "wait"}
+                      title={
+                        status === "pago"
+                          ? `Paga${data.pago_em ? ` em ${brDate(data.pago_em)}` : ""}`
+                          : "Aguardando pagamento"
+                      }
+                    />
+                  </>
+                )}
+              </ul>
 
-      {/* Histórico de competências */}
-      {periodsData?.items && periodsData.items.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Histórico de competências</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Competência</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {periodsData.items.map((p) => {
-                  const sm = STATUS_META[p.status] ?? STATUS_META.aberto;
-                  return (
-                    <TableRow key={p.competencia} className="cursor-pointer" onClick={() => setCompetencia(p.competencia)}>
-                      <TableCell className="font-medium">{competenciaLabel(p.competencia)}</TableCell>
-                      <TableCell><Badge variant="outline" className={sm.className}>{sm.label}</Badge></TableCell>
-                      <TableCell className="text-right font-semibold">{fmtBRL(p.total)}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+              <div className="mt-4 flex flex-col gap-2">
+                {aberto && dirty ? (
+                  <Button onClick={handleSave} disabled={save.isPending}>
+                    <Save className="mr-2 h-4 w-4" />
+                    Salvar quantidades
+                  </Button>
+                ) : null}
+                <Button asChild variant="outline">
+                  <Link href={`/faturamento/fatura?competencia=${competencia}`}>
+                    <FileText className="mr-2 h-4 w-4" />
+                    {aberto ? "Ver prévia da fatura (PDF)" : "Ver fatura (PDF)"}
+                  </Link>
+                </Button>
+                {aberto ? (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button disabled={!canEmit || emit.isPending}>
+                        <Send className="mr-2 h-4 w-4" />
+                        Emitir e publicar para a cliente
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>
+                          Emitir a fatura de {competenciaLabel(competencia)}?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Os valores serão congelados e a fatura não poderá mais ser editada. Ela ficará
+                          disponível para a cliente em Faturas. Total:{" "}
+                          <strong>{fmtBRL(data.total)}</strong>.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleEmit}>Emitir</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                ) : null}
+                {status === "emitido" ? (
+                  <Button variant="outline" onClick={handlePay} disabled={pay.isPending}>
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    Marcar como paga
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          </aside>
+        </div>
       )}
     </div>
+  );
+}
+
+function Check({
+  tone,
+  title,
+  detail,
+}: {
+  tone: "ok" | "warn" | "wait";
+  title: string;
+  detail?: string;
+}) {
+  const Icon = tone === "ok" ? CheckCircle2 : tone === "warn" ? TriangleAlert : Clock3;
+  return (
+    <li className="flex gap-2.5">
+      <Icon
+        className={cn(
+          "mt-0.5 h-4 w-4 shrink-0",
+          tone === "ok" ? "text-green-600" : tone === "warn" ? "text-amber-600" : "text-blue-500",
+        )}
+      />
+      <div>
+        <div>{title}</div>
+        {detail ? <div className="text-xs text-muted-foreground">{detail}</div> : null}
+      </div>
+    </li>
   );
 }

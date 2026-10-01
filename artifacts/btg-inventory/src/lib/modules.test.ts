@@ -41,6 +41,7 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/orders", ["owner", "admin", "interno", "suporte"]],
   ["/faturamento", ["owner", "admin", "financeiro"]],
   ["/faturamento/tabela", ["owner", "admin", "financeiro"]],
+  ["/faturamento/fatura", ["owner", "admin", "financeiro"]],
   ["/tabela-precos", ["owner", "admin", "financeiro"]],
   ["/agente", ["owner", "admin", "interno", "financeiro", "suporte"]],
   ["/agente/conhecimento", ["owner", "admin", "interno", "financeiro", "suporte"]],
@@ -54,6 +55,7 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/portal/recebimentos", ["cliente"]],
   ["/portal/pedidos", ["cliente"]],
   ["/portal/faturas", ["cliente"]],
+  ["/portal/faturas/fatura", ["cliente"]],
   ["/portal/documentos", ["cliente"]],
   ["/portal/agente", ["cliente"]],
   ["/minhas-faturas", ["cliente"]],
@@ -139,6 +141,7 @@ describe("grupo ativo", () => {
     ["/wms/qualidade", "Estoque"],
     ["/catalogo/saldos", "Estoque"],
     ["/faturamento/tabela", "Faturamento"],
+    ["/faturamento/fatura", "Faturamento"],
     ["/suporte", "Administração"],
     ["/reports", "Mais"],
   ])("%s destaca %s", (path, label) => {
