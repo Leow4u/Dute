@@ -96,3 +96,15 @@ describe("filtros", () => {
     expect(filter(rows, { search: "p-0128" })).toEqual(["Comprovante P-0128"]);
   });
 });
+
+describe("situação no Conhecimento do Agent", () => {
+  it("lê o status gravado pela extração e pela aprovação", () => {
+    const state = (document: Record<string, unknown>) =>
+      buildDocumentRows([{ _docId: "x", title: "x", ...document }], [])[0].knowledge;
+    expect(state({})).toBe("none");
+    expect(state({ content_extraction_status: "pending_visual_ocr" })).toBe("reading");
+    expect(state({ knowledge_status: "pending_approval", knowledge_id: "k" })).toBe("pending");
+    expect(state({ knowledge_status: "active", knowledge_id: "k" })).toBe("active");
+    expect(state({ knowledge_status: "rejected" })).toBe("rejected");
+  });
+});

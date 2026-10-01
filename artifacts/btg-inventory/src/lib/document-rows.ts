@@ -8,6 +8,8 @@ type AnyRecord = Record<string, unknown>;
 
 export type DocumentKind = "nf" | "comprovante" | "contrato" | "outros";
 export type DocumentAudience = "btg" | "internal" | "archived";
+/** Situação na base do Agent Dute (Conhecimento). */
+export type KnowledgeState = "none" | "reading" | "pending" | "active" | "rejected";
 
 export type DocumentRow = {
   key: string;
@@ -22,6 +24,7 @@ export type DocumentRow = {
   audience: DocumentAudience;
   date?: Date;
   href: string;
+  knowledge: KnowledgeState;
   searchText: string;
 };
 
@@ -79,6 +82,16 @@ function audienceOf(document: AnyRecord): DocumentAudience {
   return "btg";
 }
 
+export function knowledgeStateOf(document: AnyRecord): KnowledgeState {
+  const status = text(document.knowledge_status);
+  if (status === "pending_approval") return "pending";
+  if (status === "rejected") return "rejected";
+  if (status === "active" && text(document.knowledge_id)) return "active";
+  const extraction = text(document.content_extraction_status);
+  if (extraction === "pending_ocr" || extraction === "pending_visual_ocr") return "reading";
+  return "none";
+}
+
 function linkedToOf(document: AnyRecord) {
   const reference = text(document.reference);
   if (reference) return reference;
@@ -112,6 +125,7 @@ export function buildDocumentRows(documents: AnyRecord[], requests: AnyRecord[])
       audience: audienceOf(document),
       date: parseDocumentDate(document.created_at) ?? parseDocumentDate(document.updated_at),
       href: text(document.file_url) || text(document.external_url),
+      knowledge: knowledgeStateOf(document),
       searchText: [title, fileName, linkedTo, text(document.notes)].join(" ").toLowerCase(),
     });
   }
@@ -139,6 +153,7 @@ export function buildDocumentRows(documents: AnyRecord[], requests: AnyRecord[])
         audience: "btg",
         date: parseDocumentDate(request.created_at),
         href: text(attachment.file_url),
+        knowledge: "none",
         searchText: [title, linkedTo, who].join(" ").toLowerCase(),
       });
     });

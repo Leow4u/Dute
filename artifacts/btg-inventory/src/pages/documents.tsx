@@ -39,12 +39,14 @@ import {
   type DocumentAudience,
   type DocumentKind,
   type DocumentRow,
+  type KnowledgeState,
 } from "@/lib/document-rows";
 
 /**
  * Documentos da operação BTG. Uma lista só: o que a Dutelog adicionou e as
  * NFs que a BTG anexou no aviso de chegada. É o arquivo da operação; a base
- * que o Agent Dute consulta é outra tela (Conhecimento).
+ * que o Agent Dute consulta é outra tela (Conhecimento), e um documento só
+ * vai para lá por "Enviar para o Conhecimento".
  */
 
 type UploadTarget = {
@@ -59,6 +61,9 @@ type UploadTarget = {
 
 // Espelha o backend (mutateManagedEntity): só estes publicam para a BTG.
 const PUBLISHERS: ProfileRole[] = ["owner", "admin", "interno"];
+// Espelha extractOperationalDocumentContent e approveDocumentKnowledge.
+const KNOWLEDGE_SENDERS: ProfileRole[] = ["owner", "admin", "interno", "wms", "financeiro"];
+const KNOWLEDGE_APPROVERS: ProfileRole[] = ["owner", "admin", "interno", "financeiro"];
 // Quem lê os avisos de chegada (canReadOperations nas Firestore Rules).
 const REQUEST_READERS: ProfileRole[] = ["owner", "admin", "interno", "wms", "suporte"];
 
@@ -125,6 +130,8 @@ export default function Documents() {
   const { user } = useAppUser();
   const role = user?.publicMetadata.role;
   const canPublish = canAccessModule(role, PUBLISHERS);
+  const canSend = canAccessModule(role, KNOWLEDGE_SENDERS);
+  const canApprove = canAccessModule(role, KNOWLEDGE_APPROVERS);
   const isFinance = role === "financeiro";
 
   const [search, setSearch] = useState("");
@@ -246,6 +253,47 @@ export default function Documents() {
     onError: failure("Documento não arquivado"),
   });
 
+  // "Enviar para o Conhecimento": extrai o texto e liga à base do Agent
+  // Dute. Tipos sensíveis voltam "aguardando aprovação" (regra do backend);
+  // aprovar é de uma pessoa, nunca automático.
+  const sendToKnowledge = useMutation({
+    mutationFn: async (id: string) =>
+      apiJson<{ message?: string; content_extraction_status?: string; knowledge_status?: string }>(
+        `/api/documents/${encodeURIComponent(id)}/extract`,
+        { method: "POST", body: JSON.stringify({}) },
+      ),
+    onSuccess: async (payload) => {
+      await refresh();
+      const reading =
+        payload.content_extraction_status === "pending_ocr" ||
+        payload.content_extraction_status === "pending_visual_ocr";
+      toast({
+        title: reading
+          ? "Lendo o arquivo"
+          : payload.knowledge_status === "pending_approval"
+            ? "Aguardando aprovação para o Conhecimento"
+            : payload.knowledge_status === "active"
+              ? "Documento no Conhecimento do Agent Dute"
+              : "Nada para levar ao Conhecimento",
+        description: payload.message,
+      });
+    },
+    onError: failure("Não foi enviado ao Conhecimento"),
+  });
+
+  const decideKnowledge = useMutation({
+    mutationFn: async ({ id, approve }: { id: string; approve: boolean }) =>
+      apiJson(`/api/documents/${encodeURIComponent(id)}/knowledge/${approve ? "approve" : "reject"}`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      }),
+    onSuccess: async (_payload, input) => {
+      await refresh();
+      toast({ title: input.approve ? "Aprovado para o Conhecimento" : "Recusado para o Conhecimento" });
+    },
+    onError: failure("Decisão não registrada"),
+  });
+
   const loading = documents.isLoading || requests.isLoading;
 
   return (
@@ -299,6 +347,10 @@ export default function Documents() {
                     key={row.key}
                     row={row}
                     canPublish={canPublish}
+                    canSend={canSend}
+                    canApprove={canApprove}
+                    onSend={() => row.documentId && sendToKnowledge.mutate(row.documentId)}
+                    onDecide={(approve) => row.documentId && decideKnowledge.mutate({ id: row.documentId, approve })}
                     onShare={(shared) => row.documentId && setShared.mutate({ id: row.documentId, shared })}
                     onArchive={() => row.documentId && archive.mutate(row.documentId)}
                   />
@@ -425,14 +477,30 @@ export default function Documents() {
   );
 }
 
+const KNOWLEDGE_LABEL: Record<KnowledgeState, string> = {
+  none: "",
+  reading: "Lendo o arquivo para o Conhecimento",
+  pending: "Aguardando aprovação para o Conhecimento",
+  active: "No Conhecimento do Agent Dute",
+  rejected: "Recusado para o Conhecimento",
+};
+
 function DocumentLine({
   row,
   canPublish,
+  canSend,
+  canApprove,
+  onSend,
+  onDecide,
   onShare,
   onArchive,
 }: {
   row: DocumentRow;
   canPublish: boolean;
+  canSend: boolean;
+  canApprove: boolean;
+  onSend: () => void;
+  onDecide: (approve: boolean) => void;
   onShare: (shared: boolean) => void;
   onArchive: () => void;
 }) {
@@ -449,6 +517,16 @@ function DocumentLine({
       <td className="px-5 py-3">
         <div className="font-medium text-foreground">{row.title}</div>
         <div className="text-xs text-muted-foreground">{row.origin}</div>
+        {KNOWLEDGE_LABEL[row.knowledge] ? (
+          <div
+            className={cn(
+              "mt-0.5 text-xs font-medium",
+              row.knowledge === "pending" ? "text-amber-700" : row.knowledge === "active" ? "text-primary" : "text-muted-foreground",
+            )}
+          >
+            {KNOWLEDGE_LABEL[row.knowledge]}
+          </div>
+        ) : null}
       </td>
       <td className="px-3 py-3">{row.typeLabel}</td>
       <td className="px-3 py-3">{row.linkedTo || <span className="text-muted-foreground">—</span>}</td>
@@ -473,6 +551,15 @@ function DocumentLine({
             ) : (
               <DropdownMenuItem disabled>Sem arquivo anexado</DropdownMenuItem>
             )}
+            {manageable && canSend && row.href && (row.knowledge === "none" || row.knowledge === "rejected") ? (
+              <DropdownMenuItem onSelect={onSend}>Enviar para o Conhecimento</DropdownMenuItem>
+            ) : null}
+            {manageable && canApprove && row.knowledge === "pending" ? (
+              <>
+                <DropdownMenuItem onSelect={() => onDecide(true)}>Aprovar para o Conhecimento</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => onDecide(false)}>Recusar para o Conhecimento</DropdownMenuItem>
+              </>
+            ) : null}
             {manageable && canPublish ? (
               <DropdownMenuItem onSelect={() => onShare(row.audience !== "btg")}>
                 {row.audience === "btg" ? "Ocultar da BTG" : "Mostrar para a BTG"}
