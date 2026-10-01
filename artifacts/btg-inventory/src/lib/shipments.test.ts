@@ -80,8 +80,8 @@ describe("itens lidos da nota", () => {
       ],
     });
     expect(draft).toEqual([
-      { key: "nf0", include: true, invoiceText: "A.01.0114.004.G · CAMISETA G", code: "A.01.0114.004.G", name: "CAMISETA", quantity: "300", matchedBy: "codigo" },
-      { key: "nf1", include: true, invoiceText: "77 · ECOBAG LONA", code: "", name: "ECOBAG LONA", quantity: "500", matchedBy: null },
+      { key: "nf0", include: true, invoiceText: "A.01.0114.004.G · CAMISETA G", code: "A.01.0114.004.G", name: "CAMISETA", quantity: "300", matchedBy: "codigo", supplierCode: "A.01.0114.004.G" },
+      { key: "nf1", include: true, invoiceText: "77 · ECOBAG LONA", code: "", name: "ECOBAG LONA", quantity: "500", matchedBy: null, supplierCode: "77" },
     ]);
   });
 
@@ -91,5 +91,28 @@ describe("itens lidos da nota", () => {
     expect(fillIfEmpty(" ", "2471")).toBe("2471");
     expect(fillIfEmpty("Elegância", "Uniformes Elegância Confecções LTDA")).toBe("Elegância");
     expect(fillIfEmpty("", undefined)).toBe("");
+  });
+});
+
+describe("código a definir", () => {
+  it("item sem código passa com o nome; sem código e sem nome, não", async () => {
+    const { shipmentLineProblem } = await import("./shipments");
+    expect(shipmentLineProblem(0, { code: "", name: "BLUSA MOLETOM", quantity: 8, inStock: false })).toBeNull();
+    expect(shipmentLineProblem(1, { code: " ", name: "", quantity: 8, inStock: false })).toBe("Item 2: informe o código ou o nome do produto.");
+    expect(shipmentLineProblem(0, { code: "NOVO-1", name: "", quantity: 8, inStock: false })).toBe("Item 1: produto novo, informe o nome.");
+    expect(shipmentLineProblem(0, { code: "A.01", name: "", quantity: 8, inStock: true })).toBeNull();
+    expect(shipmentLineProblem(2, { code: "", name: "CALÇA", quantity: 0, inStock: false })).toBe("Item 3: informe quantas peças vêm.");
+  });
+
+  it("vai para a Dutelog como código a definir, com o código do fornecedor anotado", async () => {
+    const { pendingCodeItem } = await import("./shipments");
+    expect(pendingCodeItem({ name: " BLUSA MOLETOM ", quantity: 8, supplierCode: "BAT101" })).toEqual({
+      product_name: "BLUSA MOLETOM",
+      product_registration: "unknown",
+      location_id: null,
+      quantity: 8,
+      notes: "Código do fornecedor: BAT101",
+    });
+    expect(pendingCodeItem({ name: "CALÇA", quantity: 20 }).notes).toBeUndefined();
   });
 });
