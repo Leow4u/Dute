@@ -19,3 +19,25 @@ describe("rotas de faturamento", () => {
     );
   });
 });
+
+describe("rotas de pessoas e acessos", () => {
+  it("remover/devolver acesso vai para setUserAccess com o id da pessoa", async () => {
+    const route = functionRoute("/api/billing/users/uid-123/access", "POST");
+    expect(route?.name).toBe("setUserAccess");
+    const payload = await route?.payload("/api/billing/users/uid-123/access", {
+      method: "POST",
+      body: JSON.stringify({ active: false, reason: "Saiu" }),
+    });
+    expect(payload).toEqual({ active: false, reason: "Saiu", user_id: "uid-123" });
+  });
+
+  it("cancelar convite arquiva o convite pelo token", async () => {
+    const route = functionRoute("/api/invites/tok-1", "DELETE");
+    expect(route?.name).toBe("mutateManagedEntity");
+    expect(await route?.payload("/api/invites/tok-1")).toMatchObject({
+      resource: "invites",
+      action: "archive",
+      id: "tok-1",
+    });
+  });
+});

@@ -85,7 +85,7 @@ describe("menu interno", () => {
         { label: "Faturamento", routes: ["Faturamento"] },
         {
           label: "Administração",
-          routes: ["Clientes", "Usuários e acessos", "Observabilidade"],
+          routes: ["Clientes", "Pessoas e acessos", "Observabilidade"],
         },
         {
           label: "Mais",

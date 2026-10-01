@@ -356,7 +356,7 @@ function AuthShell({
 
 function SignInPage() {
   const [, setLocation] = useLocation();
-  const { user, isLoaded, accessDenied } = useAppUser();
+  const { user, isLoaded, accessDenied, accessRemoved } = useAppUser();
   const [form, setForm] = useState<AuthFormState>(initialAuthState);
 
   if (isLoaded && user) return <Redirect to="/" />;
@@ -433,7 +433,9 @@ function SignInPage() {
         {accessDenied ? (
           <Alert variant="destructive">
             <AlertDescription>
-              Seu e-mail ainda não tem convite ativo para acessar o sistema.
+              {accessRemoved
+                ? "Seu acesso foi removido. Se precisar voltar a usar o sistema, fale com a administração da Dutelog."
+                : "Seu e-mail ainda não tem convite ativo para acessar o sistema."}
             </AlertDescription>
           </Alert>
         ) : null}

@@ -246,7 +246,7 @@ export const APP_MODULES: AppModule[] = [
       }),
       navRoute({
         id: "admin-users",
-        label: "Usuários e acessos",
+        label: "Pessoas e acessos",
         href: "/usuarios",
         icon: Users,
         roles: ACCESS_ADMIN_ROLES,

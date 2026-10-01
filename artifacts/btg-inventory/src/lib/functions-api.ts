@@ -454,6 +454,17 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  const accessMatch = pathname.match(/^\/api\/billing\/users\/([^/]+)\/access$/);
+  if (accessMatch && method === "POST") {
+    return {
+      name: "setUserAccess",
+      payload: async (_pathname, init) => ({
+        ...(await readJsonBody(init)),
+        user_id: decodeURIComponent(accessMatch[1]),
+      }),
+    };
+  }
+
   const roleMatch = pathname.match(/^\/api\/billing\/users\/([^/]+)\/role$/);
   if (roleMatch && method === "PATCH") {
     return {

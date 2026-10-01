@@ -4,6 +4,7 @@ import {
   FieldValue,
   type Transaction,
 } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth";
 import { getStorage } from "firebase-admin/storage";
 import {
   HttpsError,
@@ -50,6 +51,7 @@ import {
   type LpuItem,
 } from "./billing.js";
 import { MinimumStockError, normalizeMinimumStock } from "./catalog-minimum.js";
+import { setUserAccessTransaction } from "./domain/access.js";
 
 const adminApp = initializeApp();
 setGlobalOptions({
@@ -1221,6 +1223,10 @@ async function getProfile(request: CallableRequest<unknown>): Promise<Profile> {
   }
 
   const data = snapshot.data() ?? {};
+  // Acesso removido em Pessoas e acessos: o perfil fica para o histórico.
+  if (data.access_disabled === true) {
+    throw new HttpsError("permission-denied", "Acesso removido.");
+  }
   const role =
     data.role === "owner" ||
     data.role === "admin" ||
@@ -6080,6 +6086,37 @@ export const getBillingPreview = onCall(async (request) => {
   } catch (error) {
     return billingError(error);
   }
+});
+
+const SetUserAccessSchema = z.object({
+  user_id: z.string().trim().min(1),
+  active: z.boolean(),
+  reason: z.string().trim().max(300).optional(),
+});
+
+/**
+ * Remove ou devolve o acesso de uma pessoa: marca o perfil (Rules e
+ * getProfile passam a recusá-lo), registra o evento e bloqueia o login no
+ * Firebase Auth, derrubando as sessões abertas.
+ */
+export const setUserAccess = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireAccessWrite(profile);
+  const input = SetUserAccessSchema.parse(request.data ?? {});
+  const result = await setUserAccessTransaction(db, input, profile);
+  let authUpdated = false;
+  if (result.changed) {
+    try {
+      await getAuth().updateUser(input.user_id, { disabled: !input.active });
+      if (!input.active) await getAuth().revokeRefreshTokens(input.user_id);
+      authUpdated = true;
+    } catch (error) {
+      // O perfil já está bloqueado pelas Rules/getProfile; o login no Auth é
+      // a segunda camada. Fica no log para corrigir sem desfazer o bloqueio.
+      console.error("[setUserAccess] Firebase Auth não atualizado", error);
+    }
+  }
+  return { ...result, auth_updated: authUpdated };
 });
 
 export const saveBillingManual = onCall(async (request) => {
