@@ -38,7 +38,7 @@ IA operacional:
 
 | Area | Modulos | Rotas principais | Dono operacional |
 |---|---|---|---|
-| Governanca | Usuarios, convites, parametros, feature flags, documentos, eventos | `/usuarios`, `/agente` | `owner` / `admin` |
+| Governanca | Usuarios, convites, parametros, feature flags, documentos, eventos | `/configuracoes/pessoas`, `/agente` | `owner` / `admin` |
 | Operacao | Solicitacoes, pedidos, reservas, kardex, relatorios | `/solicitacoes`, `/orders`, `/movements`, `/reports` | `interno` |
 | WMS fisico | Receiving, putaway, picking, packing, expedicao, devolucao, inventario | `/wms`, `/warehouse` | `wms` com supervisao `interno` |
 | Financeiro | Tabela de precos, competencias, billing, faturas | `/faturamento`, `/tabela-precos` | `financeiro` |

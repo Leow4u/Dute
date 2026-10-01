@@ -51,6 +51,11 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/clientes", ["owner", "admin"]],
   ["/usuarios", ["owner", "admin"]],
   ["/configuracoes", ["owner", "admin", "interno", "wms", "financeiro", "suporte", "cliente"]],
+  ["/configuracoes/conta", ["owner", "admin", "interno", "wms", "financeiro", "suporte", "cliente"]],
+  ["/configuracoes/aplicativo", ["owner", "admin", "interno", "wms", "financeiro", "suporte", "cliente"]],
+  ["/configuracoes/pessoas", ["owner", "admin"]],
+  ["/configuracoes/cliente", ["owner", "admin"]],
+  ["/configuracoes/sistema", ["owner", "admin", "suporte"]],
   ["/portal", ["cliente"]],
   ["/portal/estoque", ["cliente"]],
   ["/portal/recebimentos", ["cliente"]],
@@ -77,17 +82,13 @@ describe("permissões por rota", () => {
 
 describe("menu interno", () => {
   it.each<ProfileRole>(["owner", "admin"])(
-    "%s vê 5 destinos principais e o grupo Mais",
+    "%s vê 4 destinos principais e o grupo Mais (Administração vive na Configuração)",
     (role) => {
       expect(menu(role)).toEqual([
         { label: "Início", routes: ["Início"] },
         { label: "Pedidos", routes: ["Pedidos"] },
         { label: "Estoque", routes: ["Itens", "Receber"] },
         { label: "Faturamento", routes: ["Faturamento"] },
-        {
-          label: "Administração",
-          routes: ["Clientes", "Pessoas e acessos", "Observabilidade"],
-        },
         {
           label: "Mais",
           routes: ["Relatórios", "Documentos"],
@@ -143,7 +144,6 @@ describe("grupo ativo", () => {
     ["/catalogo/saldos", "Estoque"],
     ["/faturamento/tabela", "Faturamento"],
     ["/faturamento/fatura", "Faturamento"],
-    ["/suporte", "Administração"],
     ["/reports", "Mais"],
   ])("%s destaca %s", (path, label) => {
     expect(activeLabel(path)).toBe(label);
@@ -153,7 +153,8 @@ describe("grupo ativo", () => {
 describe("telas da conta", () => {
   it("/configuracoes não acende nenhum item do menu", () => {
     expect(isAccountPath("/configuracoes")).toBe(true);
-    expect(isAccountPath("/configuracoes#aplicativo")).toBe(true);
+    expect(isAccountPath("/configuracoes/pessoas")).toBe(true);
+    expect(isAccountPath("/configuracoesx")).toBe(false);
     expect(isAccountPath("/dashboard")).toBe(false);
   });
 });

@@ -325,7 +325,7 @@ export default function Support() {
           </div>
           <div>
             <h1 className="text-3xl font-semibold tracking-normal text-slate-900">
-              Suporte e Observabilidade
+              Sistema
             </h1>
           </div>
         </div>

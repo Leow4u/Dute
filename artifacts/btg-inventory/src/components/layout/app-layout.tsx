@@ -8,7 +8,7 @@ import {
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
-
+  Settings,
   User as UserIcon,
   WifiOff,
 } from "lucide-react";
@@ -40,6 +40,7 @@ import { AgentDock } from "@/components/agent/agent-dock";
 import { useAppAuth, useAppUser, type AppUser } from "@/lib/auth";
 import { usePwaInstall } from "@/lib/pwa-install";
 import { roleDescription, roleLabel } from "@/lib/access";
+import { rememberReturnPath } from "@/lib/settings-nav";
 
 type AccountMenuProps = {
   basePath: string;
@@ -125,9 +126,15 @@ function AccountMenu({
           </p>
         </div>
         <div className="p-1">
+          <DropdownMenuItem asChild>
+            <Link href="/configuracoes" className="cursor-pointer">
+              <Settings className="mr-2 h-4 w-4" />
+              Configuração
+            </Link>
+          </DropdownMenuItem>
           {!isInstalled ? (
             <DropdownMenuItem asChild>
-              <Link href="/configuracoes#aplicativo" className="cursor-pointer">
+              <Link href="/configuracoes/aplicativo" className="cursor-pointer">
                 <Download className="mr-2 h-4 w-4" />
                 Instalar no celular
               </Link>
@@ -483,6 +490,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const [openModuleIds, setOpenModuleIds] = useState<Set<string>>(
     () => new Set([activeModule.id]),
   );
+
+  // O "Voltar" da Configuração devolve a pessoa para esta tela.
+  useEffect(() => {
+    rememberReturnPath(`${location}${window.location.search}`);
+  }, [location]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
