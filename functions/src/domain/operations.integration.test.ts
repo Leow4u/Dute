@@ -590,6 +590,97 @@ describe("fluxo WMS transacional", () => {
     assert.deepEqual(portal.data()?.received_differences, []);
   });
 
+  it("aviso sem código: conferente define o código da etiqueta e só então o estoque entra", async () => {
+    await clearFirestore();
+    await db.collection("skus").doc("BTG-9").set({
+      cod_btg: "BTG-9",
+      cod_cliente: "ITEM-9",
+      cod_cliente_key: "ITEM-9",
+      produto: "CAMISETA ITEM 9",
+    });
+
+    const created = await createCustomerRequestTransaction(
+      db,
+      {
+        type: "recebimento",
+        priority: "normal",
+        title: "Envio de Uniformes Elegância",
+        customer_code: "BTG Pactual",
+        supplier: "Uniformes Elegância",
+        invoice_number: "2471",
+        idempotency_key: "request-sem-codigo-1",
+        items: [
+          { product_name: "BLUSA MOLETOM", product_registration: "unknown", notes: "Código do fornecedor: BAT101", quantity: 8 },
+          { product_name: "CALÇA BRIM", product_registration: "unknown", quantity: 20 },
+        ],
+      },
+      { ...actor, role: "cliente", uid: "client-1" },
+    );
+    const approved = (await decideCustomerRequestTransaction(
+      db,
+      { request_id: String(created.id), action: "approve", expected_status: "open", idempotency_key: "approve-sem-codigo-1" },
+      actor,
+    )) as Record<string, unknown>;
+    const inboundId = String(approved.inbound_id);
+    await advance(`receiving:${inboundId}`, "created");
+    const rows = (await db.collection("inbound_items").where("receipt_id", "==", inboundId).get()).docs.sort(
+      (a, b) => Number(a.data().line_number) - Number(b.data().line_number),
+    );
+    assert.equal(rows.length, 2);
+    assert.equal(rows[0]?.data().sku_code, undefined);
+    assert.equal(rows[0]?.data().notes, "Código do fornecedor: BAT101");
+
+    // Sem código, não conclui nem confere.
+    await assert.rejects(advance(`receiving:${inboundId}`, "checking"), /código a definir/);
+    await assert.rejects(
+      updateInboundReceiptConferenceTransaction(
+        db,
+        {
+          receipt_id: inboundId,
+          expected_status: "checking",
+          idempotency_key: "conference-sem-codigo-0",
+          lines: rows.map((row) => ({ inbound_item_id: row.id, received_qty: Number(row.data().expected_qty) })),
+        },
+        actor,
+      ),
+      /código a definir/,
+    );
+
+    const conference = await updateInboundReceiptConferenceTransaction(
+      db,
+      {
+        receipt_id: inboundId,
+        expected_status: "checking",
+        idempotency_key: "conference-sem-codigo-1",
+        lines: [
+          { inbound_item_id: rows[0]!.id, received_qty: 8, client_item_code: "item-9" },
+          { inbound_item_id: rows[1]!.id, received_qty: 20, client_item_code: "novo-77" },
+        ],
+      },
+      actor,
+    );
+    assert.equal(conference.codes_assigned, 2);
+    const [existing, created77] = await Promise.all(rows.map((row) => row.ref.get()));
+    assert.equal(existing.data()?.sku_code, "BTG-9");
+    assert.equal(existing.data()?.client_item_code, "ITEM-9");
+    assert.equal(existing.data()?.product_name, "CAMISETA ITEM 9");
+    assert.equal(existing.data()?.product_registration, "existing");
+    assert.equal(created77.data()?.sku_code, "NOVO-77");
+    assert.equal(created77.data()?.product_registration, "new");
+    assert.equal(created77.data()?.code_assigned_by?.uid, "operator-1");
+    const assignedEvents = await db.collection("events").where("type", "==", "inbound.item_codes_assigned").get();
+    assert.equal(assignedEvents.size, 1);
+    assert.equal(assignedEvents.docs[0]?.data().payload?.lines?.length, 2);
+
+    await advance(`receiving:${inboundId}`, "checking");
+    const [stock9, stock77] = await Promise.all([
+      db.collection("client_inventory").doc("cinv_BTG_Pactual__BTG-9").get(),
+      db.collection("client_inventory").doc("cinv_BTG_Pactual__NOVO-77").get(),
+    ]);
+    assert.equal(stock9.data()?.qty_on_hand, 8);
+    assert.equal(stock77.data()?.qty_on_hand, 20);
+  });
+
   it("cadastra produto e SKU novos no recebimento avulso sem antecipar o saldo", async () => {
     await clearFirestore();
 

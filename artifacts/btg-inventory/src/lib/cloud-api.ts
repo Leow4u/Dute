@@ -1983,6 +1983,7 @@ async function getWarehouseOps() {
       difference_qty: Number(item.difference_qty ?? 0),
       conference_status: item.conference_status,
       unit_cost: Number(item.unit_cost ?? 0),
+      notes: item.notes,
       status: item.status,
       location: item.location_id,
     }));

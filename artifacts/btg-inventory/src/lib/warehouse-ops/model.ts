@@ -52,6 +52,8 @@ export type WarehouseTaskItem = {
   package_number?: string | number | null;
   tracking_code?: string | null;
   client_item_code?: string | null;
+  /** Observação do aviso do cliente (ex.: código do fornecedor). */
+  notes?: string | null;
   unit_cost?: number | null;
   volume?: string | null;
   volume_id?: string | null;

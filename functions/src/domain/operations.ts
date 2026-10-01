@@ -117,6 +117,8 @@ export type UpdateInboundReceiptConferenceInput = {
     location_id?: string;
     unit_cost?: number;
     notes?: string;
+    /** Código lido na etiqueta, para linha avisada com "código a definir". */
+    client_item_code?: string;
   }>;
 };
 
@@ -3943,6 +3945,66 @@ export async function updateInboundReceiptConferenceTransaction(
       );
     }
     const rowsById = new Map(rows.map((row) => [row.id, row]));
+
+    // Linha avisada pelo cliente sem código: o conferente informa o código
+    // da etiqueta. Existente no cadastro liga ao SKU; senão vira produto novo.
+    // Todas as leituras antes de qualquer escrita da transação.
+    const codeAssignments = new Map<
+      string,
+      {
+        sku_code: string;
+        client_item_code: string;
+        product_name: string;
+        product_registration: "existing" | "new";
+      }
+    >();
+    for (const line of input.lines) {
+      const row = rowsById.get(safeDocId(line.inbound_item_id));
+      if (!row || text(row.data.sku_code)) continue;
+      const lineLabel = number(row.data.line_number) || row.id;
+      const clientCode = normalizedIdentity(line.client_item_code);
+      if (!clientCode) {
+        throw new HttpsError(
+          "invalid-argument",
+          `Linha ${lineLabel} está com código a definir. Informe o código da etiqueta.`,
+        );
+      }
+      const [skuRows, productSnapshot] = await Promise.all([
+        readRows(
+          transaction,
+          db.collection(collections.skus).where("cod_cliente_key", "==", clientCode),
+        ),
+        transaction.get(db.collection(collections.products).doc(safeDocId(clientCode))),
+      ]);
+      const skuCodes = [
+        ...new Set(
+          skuRows
+            .map((sku) => normalizedIdentity(sku.data.cod_btg || sku.data.sku_code || sku.data.cod_sku))
+            .filter(Boolean),
+        ),
+      ];
+      if (skuCodes.length > 1) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Código ${clientCode} está ligado a mais de um SKU (${skuCodes.join(", ")}). Revise o cadastro antes de conferir.`,
+        );
+      }
+      const product = productSnapshot.data() ?? {};
+      const catalogName = text(
+        skuRows[0]?.data.produto ||
+          skuRows[0]?.data.product_name ||
+          product.produto ||
+          product.product_name,
+      );
+      const exists = skuCodes.length > 0 || productSnapshot.exists;
+      codeAssignments.set(row.id, {
+        sku_code: skuCodes[0] || clientCode,
+        client_item_code: clientCode,
+        product_name: catalogName || text(row.data.product_name) || clientCode,
+        product_registration: exists ? "existing" : "new",
+      });
+    }
+
     let receivedTotal = 0;
     let expectedTotal = 0;
     let differenceTotal = 0;
@@ -3988,6 +4050,10 @@ export async function updateInboundReceiptConferenceTransaction(
               ? "checked"
               : "divergence",
           conference_notes: text(line.notes) || undefined,
+          ...(codeAssignments.get(row.id) ?? {}),
+          ...(codeAssignments.has(row.id)
+            ? { code_assigned_by: actorPayload(actor), code_assigned_at: FieldValue.serverTimestamp() }
+            : {}),
           checked_by: actorPayload(actor),
           checked_at: FieldValue.serverTimestamp(),
           updated_at: FieldValue.serverTimestamp(),
@@ -4031,6 +4097,34 @@ export async function updateInboundReceiptConferenceTransaction(
       actor,
     );
 
+    const events = [event];
+    if (codeAssignments.size) {
+      events.push(
+        createEvent(
+          transaction,
+          db,
+          operationEventId(operationId, "item_codes_assigned"),
+          {
+            type: "inbound.item_codes_assigned",
+            title: "Código definido na conferência",
+            description: `${codeAssignments.size} linha(s) avisada(s) sem código receberam o código da etiqueta.`,
+            severity: "attention",
+            entity_type: "recebimento",
+            entity_id: receiptId,
+            customer_code: text(receipt.customer_code) || undefined,
+            payload: {
+              receipt_number: receipt.receipt_number,
+              lines: [...codeAssignments].map(([inboundItemId, assigned]) => ({
+                inbound_item_id: inboundItemId,
+                ...assigned,
+              })),
+            },
+          },
+          actor,
+        ),
+      );
+    }
+
     const result = {
       ok: true,
       id: receiptId,
@@ -4041,7 +4135,8 @@ export async function updateInboundReceiptConferenceTransaction(
       received_quantity: receivedTotal,
       difference_quantity: differenceTotal,
       divergence_count: divergenceCount,
-      events: [event],
+      codes_assigned: codeAssignments.size,
+      events,
     };
     createOperationReceipt(
       transaction,
@@ -4378,10 +4473,17 @@ export async function decideCustomerRequestTransaction(
     }
 
     if (input.action === "approve" && kind.inbound) {
-      if (!items.length || items.some((item) => !text(item.sku_code))) {
+      // Sem código só vale como "código a definir" (o conferente informa o
+      // código da etiqueta), e mesmo assim com o nome do produto.
+      const invalid = items.some((item) =>
+        text(item.sku_code)
+          ? false
+          : text(item.product_registration) !== "unknown" || !text(item.product_name),
+      );
+      if (!items.length || invalid) {
         throw new HttpsError(
           "invalid-argument",
-          "Solicitação de recebimento precisa de itens com sku_code.",
+          "Solicitação de recebimento precisa de itens com código ou, sem código, com o nome do produto.",
         );
       }
     }
@@ -4730,6 +4832,7 @@ export async function decideCustomerRequestTransaction(
               : undefined,
             location_id: item.location_id,
             unit_cost: item.unit_cost,
+            notes: item.notes,
             expected_qty: item.quantity,
             received_qty: 0,
             status: "expected",
@@ -5172,7 +5275,7 @@ export async function advanceWarehouseTaskTransaction(
         if (!skuCode) {
           throw new HttpsError(
             "failed-precondition",
-            `Linha ${row.id} não possui sku_code.`,
+            `Linha ${number(row.data.line_number) || row.id} está com código a definir. Informe o código da etiqueta na conferência antes de concluir.`,
           );
         }
         keys.set(balanceKey(customerCode, skuCode, locationId), {

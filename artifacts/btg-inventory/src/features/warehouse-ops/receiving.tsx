@@ -1264,6 +1264,7 @@ export function ReceivingConferenceSection({
           ? String(item.unit_cost)
           : "",
       notes: "",
+      code: "",
     })),
   );
   useEffect(() => {
@@ -1283,6 +1284,7 @@ export function ReceivingConferenceSection({
             ? String(item.unit_cost)
             : "",
         notes: "",
+        code: "",
       })),
     );
   }, [task.id, task.items]);
@@ -1295,7 +1297,9 @@ export function ReceivingConferenceSection({
     const validReceived =
       hasPhysicalCount && Number.isFinite(received) && received >= 0;
     const difference = validReceived ? received - expected : undefined;
-    return { item, line, expected, received, validReceived, difference };
+    // Aviso do cliente sem código: o conferente lê a etiqueta e informa.
+    const needsCode = !(item.sku_code || item.sku || item.client_item_code);
+    return { item, line, expected, received, validReceived, difference, needsCode };
   });
   const summary = conferenceRows.reduce(
     (acc, row) => {
@@ -1314,7 +1318,8 @@ export function ReceivingConferenceSection({
   const hasInvalidLine =
     !conferenceRows.length ||
     summary.invalid > 0 ||
-    conferenceRows.some((row) => !row.line?.id);
+    conferenceRows.some((row) => !row.line?.id || (row.needsCode && !row.line?.code.trim()));
+  const pendingCodes = conferenceRows.filter((row) => row.needsCode && !row.line?.code.trim()).length;
   const hasDivergence = summary.divergences > 0;
 
   function setLine(index: number, patch: Partial<(typeof lines)[number]>) {
@@ -1370,6 +1375,7 @@ export function ReceivingConferenceSection({
               location_id: line.location,
               unit_cost: line.unitCost.trim() ? Number(line.unitCost) : undefined,
               notes: line.notes || undefined,
+              client_item_code: line.code.trim() || undefined,
             })),
         }),
       }),
@@ -1454,6 +1460,16 @@ export function ReceivingConferenceSection({
         </div>
       </div>
 
+      {pendingCodes ? (
+        <Alert className="mt-4 border-amber-200 bg-amber-50 text-amber-900">
+          <AlertTriangle className="size-4" />
+          <AlertTitle>Código a definir</AlertTitle>
+          <AlertDescription>
+            {pendingCodes === 1 ? "1 linha foi avisada" : `${pendingCodes} linhas foram avisadas`} pelo cliente sem o código. Leia a etiqueta e informe o código: se já existir no cadastro, liga ao item; senão, entra como produto novo.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       {hasDivergence ? (
         <Alert className="mt-4 border-amber-200 bg-amber-50 text-amber-900">
           <AlertTriangle className="size-4" />
@@ -1465,7 +1481,7 @@ export function ReceivingConferenceSection({
       ) : null}
 
       <div className="mt-4 space-y-3">
-        {conferenceRows.map(({ item, line, expected, difference }, index) => {
+        {conferenceRows.map(({ item, line, expected, difference, needsCode }, index) => {
           return (
             <div
               key={item.id || index}
@@ -1486,9 +1502,23 @@ export function ReceivingConferenceSection({
                     </div>
                     {conferenceBadge(difference)}
                   </div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    {item.client_item_code || item.sku || item.sku_code} · esperado {formatNumber(Number(expected))} un.
-                  </div>
+                  {needsCode ? (
+                    <div className="mt-2 space-y-1">
+                      <Label className="text-xs text-amber-800">Código da etiqueta · esperado {formatNumber(Number(expected))} un.</Label>
+                      <Input
+                        value={line?.code ?? ""}
+                        onChange={(event) => setLine(index, { code: event.target.value })}
+                        placeholder="Código a definir"
+                        aria-label="Código da etiqueta"
+                        className={cn(!line?.code.trim() && "border-amber-400")}
+                      />
+                      {item.notes ? <div className="text-[11px] text-muted-foreground">{item.notes}</div> : null}
+                    </div>
+                  ) : (
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {item.client_item_code || item.sku || item.sku_code} · esperado {formatNumber(Number(expected))} un.
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Físico</Label>
