@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ClipboardPaste, FileText, Loader2, Paperclip, Plus, Sparkles, X } from "lucide-react";
+import { CheckCircle2, ClipboardPaste, FileText, Loader2, Paperclip, Plus, RotateCw, Sparkles, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   SHIPMENT_STEPS,
   invoiceDraft,
-  invoiceFields,
+  fillIfEmpty,
   parsePastedItems,
   splitShipments,
   stageIndex,
@@ -295,6 +295,8 @@ function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose
   const [pasting, setPasting] = useState(false);
   const [invoiceReading, setInvoiceReading] = useState<InvoiceReading | null>(null);
   const [reading, setReading] = useState(false);
+  // Arquivo que o Agent Dute já leu com sucesso.
+  const [readFile, setReadFile] = useState<File | null>(null);
   // Arquivo já enviado ao ler a nota não sobe de novo ao enviar o aviso.
   const uploaded = useRef(new Map<File, ClientRequestAttachment>());
   const [progress, setProgress] = useState<string | null>(null);
@@ -401,6 +403,10 @@ function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose
     if (accepted.length !== list.length) {
       toast({ title: "Alguns arquivos ficaram de fora", description: "Use PDF ou imagem, até 8 MB cada e 8 no total.", variant: "destructive" });
     }
+    // A primeira nota anexada já vai para o Agent Dute: a pessoa não precisa
+    // preencher fornecedor, NF e itens à mão.
+    const first = accepted[0];
+    if (first && !readableFile && !reading) void readInvoice(first);
   }
 
   function addLines(incoming: Array<{ code: string; quantity: number; name?: string }>) {
@@ -423,39 +429,33 @@ function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose
 
   const readableFile = files.find((file) => file.type === "application/pdf" || file.type.startsWith("image/"));
 
-  async function readInvoice() {
-    if (!readableFile || !customerCode) return;
+  async function readInvoice(file: File) {
+    if (!customerCode) return;
     setReading(true);
     try {
-      const attachment =
-        uploaded.current.get(readableFile) ?? (await uploadAttachment(readableFile, draftId));
-      uploaded.current.set(readableFile, attachment);
+      const attachment = uploaded.current.get(file) ?? (await uploadAttachment(file, draftId));
+      uploaded.current.set(file, attachment);
       const response = await fetch("/api/client/shipments/read-invoice", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ storage_path: attachment.storage_path, content_type: readableFile.type }),
+        body: JSON.stringify({ storage_path: attachment.storage_path, content_type: file.type }),
       });
       const payload = (await response.json().catch(() => null)) as (InvoiceReading & { message?: string }) | null;
       if (!response.ok || !payload) throw new Error(payload?.message || "Não consegui ler a nota agora.");
-      // Fornecedor, NF e observações entram já; só preenche o que está vazio.
-      const filled = invoiceFields(payload, { supplier, invoice, notes });
-      setSupplier(filled.supplier);
-      setInvoice(filled.invoice);
-      setNotes(filled.notes);
+      // Fornecedor, NF e observações entram já; só onde ainda está vazio.
+      setSupplier((current) => fillIfEmpty(current, payload.supplier));
+      setInvoice((current) => fillIfEmpty(current, payload.invoice_number));
+      setNotes((current) => fillIfEmpty(current, payload.notes));
+      setReadFile(file);
       if (!payload.items?.length) {
-        toast({
-          title: "Não encontrei itens nesta nota",
-          description: filled.changed
-            ? "Preenchi fornecedor, NF e observações. Os itens você preenche ou cola da planilha."
-            : "Preencha os itens ou cole da planilha.",
-        });
+        toast({ title: "Não encontrei itens nesta nota", description: "Os itens você preenche ou cola da planilha." });
         return;
       }
       setInvoiceReading(payload);
     } catch (error) {
       toast({
         title: "Não consegui ler a nota",
-        description: error instanceof Error ? error.message : "Tente de novo ou preencha os itens.",
+        description: error instanceof Error ? error.message : "Tente de novo ou preencha à mão.",
         variant: "destructive",
       });
     } finally {
@@ -488,6 +488,28 @@ function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose
     >
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="flex min-w-0 flex-col gap-4">
+          <InvoiceDrop
+            files={files}
+            readableFile={readableFile}
+            reading={reading}
+            read={Boolean(readableFile && readFile === readableFile)}
+            disabled={busy}
+            onPick={() => fileInput.current?.click()}
+            onDrop={addFiles}
+            onRead={() => readableFile && void readInvoice(readableFile)}
+            onRemove={(index) => setFiles((current) => current.filter((_, i) => i !== index))}
+          />
+          <input
+            ref={fileInput}
+            type="file"
+            multiple
+            accept="application/pdf,image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={(event) => {
+              addFiles(event.target.files);
+              event.target.value = "";
+            }}
+          />
           <section className="rounded-[18px] border border-border bg-white p-5">
             <div className="grid gap-3 sm:grid-cols-[1.3fr_1fr_170px]">
               <Field label="Fornecedor">
@@ -511,64 +533,16 @@ function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose
                 <input type="date" className={inputClass} value={arrival} onChange={(event) => setArrival(event.target.value)} />
               </Field>
             </div>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div className="mt-3">
               <Field label="Observações (opcional)">
                 <textarea
-                  className={cn(inputClass, "min-h-[72px] resize-y")}
+                  className={cn(inputClass, "min-h-[64px] resize-y")}
                   value={notes}
                   onChange={(event) => setNotes(event.target.value)}
                   placeholder="Transportadora, volumes, contato…"
                 />
               </Field>
-              <Field label="Nota fiscal, pedido ou foto (opcional)">
-                <div
-                  className="flex min-h-[72px] flex-wrap items-center gap-2 rounded-xl border-[1.5px] border-dashed border-border px-3 py-2 text-sm text-muted-foreground"
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    addFiles(event.dataTransfer.files);
-                  }}
-                >
-                  <button type="button" className="inline-flex items-center gap-1.5 font-medium text-primary" onClick={() => fileInput.current?.click()}>
-                    <Paperclip className="h-4 w-4" />
-                    Anexar
-                  </button>
-                  <span>ou arraste aqui</span>
-                  {files.map((file, index) => (
-                    <span key={`${file.name}-${index}`} className="inline-flex items-center gap-1 rounded-lg bg-muted px-2 py-0.5 text-xs text-foreground">
-                      <FileText className="h-3.5 w-3.5" />
-                      {file.name}
-                      <button type="button" aria-label={`Remover ${file.name}`} onClick={() => setFiles((current) => current.filter((_, i) => i !== index))}>
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  ))}
-                  <input
-                    ref={fileInput}
-                    type="file"
-                    multiple
-                    accept="application/pdf,image/jpeg,image/png,image/webp"
-                    className="hidden"
-                    onChange={(event) => {
-                      addFiles(event.target.files);
-                      event.target.value = "";
-                    }}
-                  />
-                </div>
-              </Field>
             </div>
-            {readableFile ? (
-              <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-[#c9b8fb] bg-[#faf8ff] px-3 py-2.5 text-sm text-[#5b3fc4]">
-                <Sparkles className="h-4 w-4 shrink-0" />
-                <span className="min-w-0 flex-1">
-                  <b>Ler itens da nota</b> · o Agent Dute lê <i>{readableFile.name}</i> e preenche os itens. Você confere antes de usar.
-                </span>
-                <Button type="button" size="sm" variant="outline" className="rounded-lg border-[#c9b8fb] bg-white" disabled={reading || busy} onClick={() => void readInvoice()}>
-                  {reading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  {reading ? "Lendo a nota…" : "Ler itens"}
-                </Button>
-              </div>
-            ) : null}
           </section>
 
           <section className="rounded-[18px] border border-border bg-white p-5">
@@ -683,6 +657,88 @@ function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose
         <InvoiceReview reading={invoiceReading} catalog={catalog} onCancel={() => setInvoiceReading(null)} onUse={(lines) => applyInvoice(lines)} />
       ) : null}
     </Page>
+  );
+}
+
+/**
+ * Topo do formulário: a nota vem primeiro. Ao anexar, o Agent Dute lê e
+ * preenche fornecedor, NF, observações e itens; a pessoa só confere.
+ */
+function InvoiceDrop({
+  files,
+  readableFile,
+  reading,
+  read,
+  disabled,
+  onPick,
+  onDrop,
+  onRead,
+  onRemove,
+}: {
+  files: File[];
+  readableFile: File | undefined;
+  reading: boolean;
+  read: boolean;
+  disabled: boolean;
+  onPick: () => void;
+  onDrop: (files: FileList | null) => void;
+  onRead: () => void;
+  onRemove: (index: number) => void;
+}) {
+  return (
+    <section
+      className="rounded-[18px] border-[1.5px] border-dashed border-[#c9b8fb] bg-[#faf8ff] p-5"
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={(event) => {
+        event.preventDefault();
+        onDrop(event.dataTransfer.files);
+      }}
+    >
+      <div className="flex flex-wrap items-center gap-4">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white text-[#5b3fc4] shadow-sm">
+          {reading ? <Loader2 className="h-5 w-5 animate-spin" /> : read ? <CheckCircle2 className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="font-semibold text-[#3b2a85]">
+            {reading ? "Lendo a nota…" : read ? "Nota lida pelo Agent Dute" : "Comece pela nota fiscal ou pedido"}
+          </h2>
+          <p className="text-sm text-[#5b3fc4]">
+            {reading
+              ? "O Agent Dute está preenchendo fornecedor, NF, observações e itens."
+              : read
+                ? "Confira os dados abaixo antes de enviar. A leitura automática pode errar."
+                : "Anexe em PDF ou foto e o Agent Dute preenche o resto. Sem nota? Preencha abaixo."}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {readableFile && !reading ? (
+            <Button type="button" size="sm" variant="outline" className="rounded-lg border-[#c9b8fb] bg-white" disabled={disabled} onClick={onRead}>
+              {read ? <RotateCw className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+              {read ? "Ler de novo" : "Ler nota"}
+            </Button>
+          ) : null}
+          <Button type="button" size="sm" className="rounded-lg bg-[#5b3fc4] text-white hover:bg-[#4c33a8]" disabled={disabled || reading} onClick={onPick}>
+            <Paperclip className="h-4 w-4" />
+            {files.length ? "Anexar outro" : "Anexar nota"}
+          </Button>
+        </div>
+      </div>
+      {files.length ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {files.map((file, index) => (
+            <span key={`${file.name}-${index}`} className="inline-flex max-w-full items-center gap-1 rounded-lg bg-white px-2 py-1 text-xs text-foreground">
+              <FileText className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{file.name}</span>
+              <button type="button" aria-label={`Remover ${file.name}`} disabled={reading} onClick={() => onRemove(index)}>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 text-xs text-[#7a66c9]">ou arraste o arquivo para cá · até 8 MB</p>
+      )}
+    </section>
   );
 }
 

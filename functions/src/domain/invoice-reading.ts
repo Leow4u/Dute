@@ -53,7 +53,8 @@ export function invoiceNumber(value: unknown) {
 
 function invoiceNotes(data: Record<string, unknown>, issueDate: string) {
   const volumes = text(data.volumes).slice(0, 80);
-  const carrier = text(data.carrier).slice(0, 120);
+  // A DANFE traz a modalidade com código ("3 - Transporte próprio..."): só o texto interessa.
+  const carrier = text(data.carrier).replace(/^\d+\s*[-–]\s*/, "").slice(0, 120);
   const issued = issueDate ? issueDate.split("-").reverse().join("/") : "";
   return [
     volumes ? `Volumes: ${volumes}` : "",

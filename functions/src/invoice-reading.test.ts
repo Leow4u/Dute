@@ -44,7 +44,7 @@ describe("o que a IA devolveu", () => {
       invoice_number: "000.002.471",
       issue_date: "2026-06-26",
       volumes: "2 CAIXA",
-      carrier: "Transporte próprio por conta do remetente",
+      carrier: "3 - Transporte próprio por conta do remetente",
       items: [{ supplier_code: "BAT101", description: "BLUSA MOLETOM ABERTA - PRETO XT - GG", quantity: 8, unit: "UN" }],
     });
     assert.equal(reading.invoice_number, "2471");

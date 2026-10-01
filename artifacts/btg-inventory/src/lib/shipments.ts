@@ -185,23 +185,12 @@ export type InvoiceReading = {
   items: InvoiceItem[];
 };
 
-type InvoiceFormFields = { supplier: string; invoice: string; notes: string };
-
 /**
- * Logo depois de ler a nota: fornecedor, número e observações entram no
+ * Logo depois de ler a nota, fornecedor, número e observações entram no
  * formulário, mas só onde a pessoa ainda não escreveu nada.
  */
-export function invoiceFields(reading: InvoiceReading, current: InvoiceFormFields): InvoiceFormFields & { changed: boolean } {
-  const pick = (typed: string, read: string | undefined) => (typed.trim() ? typed : text(read));
-  const next = {
-    supplier: pick(current.supplier, reading.supplier),
-    invoice: pick(current.invoice, reading.invoice_number),
-    notes: pick(current.notes, reading.notes),
-  };
-  return {
-    ...next,
-    changed: next.supplier !== current.supplier || next.invoice !== current.invoice || next.notes !== current.notes,
-  };
+export function fillIfEmpty(typed: string, read: unknown) {
+  return typed.trim() ? typed : text(read);
 }
 
 export type InvoiceDraftLine = {
