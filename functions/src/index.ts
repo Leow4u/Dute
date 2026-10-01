@@ -1874,6 +1874,8 @@ ${who}
 Hoje é ${today} (${isoToday}), horário de São Paulo.
 
 Como trabalhar:
+- Responda só à última mensagem. O histórico é contexto: não repita respostas anteriores.
+- Para "quanto tenho de X", use os totais e o resumo por produto da busca; não liste item por item, a não ser que peçam.
 - Para qualquer número, item, pedido, fatura ou documento, consulte as ferramentas. Nunca responda dado de cabeça e nunca invente.
 - Pode chamar várias ferramentas, uma depois da outra, até ter a resposta. Para "este mês", "semana passada" etc., calcule as datas a partir de hoje.
 - Se a ferramenta não trouxer o dado, diga o que não encontrou e sugira como a pessoa pode achar (ex.: tela Estoque, Pedidos, Faturas).
@@ -2014,10 +2016,14 @@ async function generateAgentDuteReply(input: {
         prompt: input.message,
         tools,
         maxTurns: 8,
-        config: { temperature: 0.2, maxOutputTokens: 2048 },
+        // O Gemini 3.x conta o raciocínio no limite: 2048 cortava respostas.
+        config: { temperature: 0.2, maxOutputTokens: 8192 },
       });
-      const text = response.text.trim();
+      let text = response.text.trim();
       if (!text) throw new Error("Resposta vazia do modelo.");
+      if (response.finishReason === "length") {
+        text += "\n\n(A resposta ficou longa e foi cortada. Peça um recorte menor, por exemplo um item ou um mês.)";
+      }
       return {
         text,
         source: `genkit_${modelName}`,
