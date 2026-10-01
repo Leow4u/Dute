@@ -150,3 +150,37 @@ export async function cancelShipmentNoticeTransaction(
     return { ok: true, request_id: id, changed: true };
   });
 }
+
+// ------------------------------------------------------- anexo do aviso
+
+export const SHIPMENT_ATTACHMENT_MAX_BYTES = 8 * 1024 * 1024;
+
+const SIGNATURES: Record<string, (bytes: Buffer) => boolean> = {
+  "application/pdf": (bytes) => bytes.subarray(0, 5).toString("latin1") === "%PDF-",
+  "image/jpeg": (bytes) => bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff,
+  "image/png": (bytes) => bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+  "image/webp": (bytes) =>
+    bytes.subarray(0, 4).toString("latin1") === "RIFF" && bytes.subarray(8, 12).toString("latin1") === "WEBP",
+};
+
+/**
+ * O anexo do aviso (nota ou pedido) chega em base64 e o backend grava no
+ * Storage. Só PDF ou foto, até 8 MB, e o conteúdo precisa ser mesmo do tipo
+ * declarado.
+ */
+export function decodeShipmentAttachment(input: { content_type: string; data_base64: string }) {
+  const contentType = text(input.content_type).toLowerCase();
+  const matches = SIGNATURES[contentType];
+  if (!matches) throw new HttpsError("invalid-argument", "Anexe a nota ou o pedido em PDF ou foto.");
+  const base64 = text(input.data_base64).replace(/^data:[^,]*,/, "");
+  if (!base64 || !/^[A-Za-z0-9+/=\s]+$/.test(base64)) {
+    throw new HttpsError("invalid-argument", "Arquivo vazio ou corrompido.");
+  }
+  const buffer = Buffer.from(base64, "base64");
+  if (!buffer.length) throw new HttpsError("invalid-argument", "Arquivo vazio ou corrompido.");
+  if (buffer.length > SHIPMENT_ATTACHMENT_MAX_BYTES) {
+    throw new HttpsError("invalid-argument", "Arquivo grande demais. Use até 8 MB.");
+  }
+  if (!matches(buffer)) throw new HttpsError("invalid-argument", "O conteúdo do arquivo não confere com o tipo informado.");
+  return { contentType, buffer };
+}

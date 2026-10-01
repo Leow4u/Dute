@@ -133,6 +133,21 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  if (method === "POST" && pathname === "/api/client/shipments/attachments") {
+    return {
+      name: "uploadShipmentAttachment",
+      payload: async (_pathname, init) => {
+        const body = await readJsonBody(init);
+        return {
+          file_name: String(body.file_name ?? ""),
+          content_type: String(body.content_type ?? ""),
+          data_base64: String(body.data_base64 ?? ""),
+          entity_id: String(body.entity_id ?? ""),
+        };
+      },
+    };
+  }
+
   if (method === "POST" && pathname === "/api/client/shipments/read-invoice") {
     return {
       name: "readShipmentInvoice",

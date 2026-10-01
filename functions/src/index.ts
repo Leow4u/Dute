@@ -58,7 +58,7 @@ import {
   readClientInventoryForSku,
   setClientItemArchivedTransaction,
 } from "./domain/client-inventory.js";
-import { cancelShipmentNoticeTransaction } from "./domain/client-shipments.js";
+import { cancelShipmentNoticeTransaction, decodeShipmentAttachment } from "./domain/client-shipments.js";
 import {
   INVOICE_PROMPT,
   assertOwnInvoicePath,
@@ -5999,6 +5999,79 @@ export const cancelShipmentNotice = onCall(async (request) => {
   return cancelShipmentNoticeTransaction(db, input, profile);
 });
 
+const UploadShipmentAttachmentSchema = z.object({
+  file_name: z.string().trim().min(1).max(240),
+  content_type: z.string().trim().min(1).max(120),
+  data_base64: z.string().min(1).max(12_000_000),
+  entity_id: z.string().trim().max(160).optional(),
+});
+
+/**
+ * Envios para a Dutelog: o anexo (nota ou pedido) sobe pelo backend, que
+ * grava no Storage com a credencial das Functions. A URL assinada com
+ * cabeçalho de token, usada antes, é recusada pelo Storage de produção.
+ */
+export const uploadShipmentAttachment = onCall({ timeoutSeconds: 60 }, async (request) => {
+  const profile = await getProfile(request);
+  if (profile.role !== "cliente") {
+    throw new HttpsError("permission-denied", "Anexo de aviso disponível no portal do cliente.");
+  }
+  const input = UploadShipmentAttachmentSchema.parse(request.data ?? {});
+  const customerCode = requireCustomerScope(profile);
+  const { contentType, buffer } = decodeShipmentAttachment(input);
+  const bucketName = documentBucketName();
+  const objectPath = [
+    "operational-documents",
+    safeDocId(customerCode),
+    new Date().toISOString().slice(0, 7),
+    `${Date.now()}-${safeFileName(input.file_name)}`,
+  ].join("/");
+  const token = randomUUID();
+  await getStorage()
+    .bucket(bucketName)
+    .file(objectPath)
+    .save(buffer, {
+      resumable: false,
+      contentType,
+      metadata: { metadata: { firebaseStorageDownloadTokens: token } },
+    });
+
+  await emitEvent(
+    {
+      type: "document.uploaded",
+      title: "Anexo de aviso de envio",
+      description: `${input.file_name} anexado por ${customerCode}.`,
+      severity: "info",
+      entity_type: "customer_request_draft",
+      entity_id: input.entity_id || objectPath,
+      customer_code: customerCode,
+      payload: {
+        file_name: input.file_name,
+        content_type: contentType,
+        size_bytes: buffer.length,
+        document_type: "aviso_recebimento",
+        storage_path: objectPath,
+      },
+      source: "functions_shipment_attachment",
+    },
+    {
+      uid: profile.uid,
+      email: profile.email,
+      role: profile.role,
+      customer_code: customerCode,
+      name: profile.name,
+    },
+  );
+
+  return {
+    file_name: input.file_name,
+    file_url: firebaseDownloadUrl(bucketName, objectPath, token),
+    storage_path: objectPath,
+    content_type: contentType,
+    size_bytes: buffer.length,
+  };
+});
+
 const ReadShipmentInvoiceSchema = z.object({
   storage_path: z.string().trim().min(1).max(900),
   content_type: z.string().trim().min(1).max(120),
@@ -6008,6 +6081,8 @@ const InvoiceExtractionSchema = z.object({
   supplier: z.string().optional(),
   invoice_number: z.string().optional(),
   issue_date: z.string().optional(),
+  volumes: z.string().optional(),
+  carrier: z.string().optional(),
   items: z
     .array(
       z.object({

@@ -65,6 +65,17 @@ describe("rota de arquivar item do portal", () => {
 });
 
 describe("envios para a Dutelog", () => {
+  it("anexo do aviso sobe por uploadShipmentAttachment, não por URL assinada", async () => {
+    const route = functionRoute("/api/client/shipments/attachments", "POST");
+    expect(route?.name).toBe("uploadShipmentAttachment");
+    expect(
+      await route?.payload("/api/client/shipments/attachments", {
+        method: "POST",
+        body: JSON.stringify({ file_name: "nf.pdf", content_type: "application/pdf", data_base64: "JVBERi0=", entity_id: "draft_1" }),
+      }),
+    ).toEqual({ file_name: "nf.pdf", content_type: "application/pdf", data_base64: "JVBERi0=", entity_id: "draft_1" });
+  });
+
   it("ler itens da nota vai para readShipmentInvoice com o arquivo enviado", async () => {
     const route = functionRoute("/api/client/shipments/read-invoice", "POST");
     expect(route?.name).toBe("readShipmentInvoice");
