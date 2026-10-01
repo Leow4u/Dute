@@ -1,16 +1,23 @@
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
-import { getAuth, type Auth } from "firebase/auth";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import { connectAuthEmulator, getAuth, type Auth } from "firebase/auth";
+import {
+  connectFirestoreEmulator,
+  getFirestore,
+  type Firestore,
+} from "firebase/firestore";
+import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-};
+import {
+  DEMO_EMULATORS,
+  isDemoModeEnv,
+  resolveFirebaseConfig,
+} from "./firebase-config";
+
+/** Modo demo: dados fictícios em emuladores locais. Ver docs/modo-demo.md. */
+export const isDemoMode = isDemoModeEnv(import.meta.env);
+
+const firebaseConfig = resolveFirebaseConfig(import.meta.env);
 
 const missingConfig = Object.entries(firebaseConfig)
   .filter(([, value]) => !value)
@@ -37,3 +44,18 @@ export const firestore: Firestore | null = firebaseApp
 export const firebaseStorage: FirebaseStorage | null = firebaseApp
   ? getStorage(firebaseApp)
   : null;
+
+if (isDemoMode && firebaseApp && firebaseAuth && firestore) {
+  const { host, authPort, firestorePort, functionsPort } = DEMO_EMULATORS;
+  connectAuthEmulator(firebaseAuth, `http://${host}:${authPort}`, {
+    disableWarnings: true,
+  });
+  connectFirestoreEmulator(firestore, host, firestorePort);
+  // getFunctions devolve a mesma instância por região; App.tsx e
+  // functions-api.ts passam a usar o emulador sem mudança.
+  connectFunctionsEmulator(
+    getFunctions(firebaseApp, "southamerica-east1"),
+    host,
+    functionsPort,
+  );
+}
