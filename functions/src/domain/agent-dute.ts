@@ -105,10 +105,27 @@ export async function searchItems(db: Firestore, scope: AgentScope, query: strin
     const haystack = normalize([item.codigo, item.nome, item.categoria, item.tamanho, item.cor].join(" "));
     return terms.every((term) => haystack.includes(term));
   });
+  // Totais de todos os encontrados, não só dos listados: "quanto tenho de
+  // polo?" com 127 variações precisa da soma, não de 25 linhas.
+  const byProduct = new Map<string, { nome: string; itens: number; em_estoque: number; disponivel: number; abaixo_do_minimo: number }>();
+  for (const item of matches) {
+    const entry = byProduct.get(item.nome) ?? { nome: item.nome, itens: 0, em_estoque: 0, disponivel: 0, abaixo_do_minimo: 0 };
+    entry.itens += 1;
+    entry.em_estoque += item.em_estoque;
+    entry.disponivel += Math.max(0, item.disponivel);
+    if (item.abaixo_do_minimo) entry.abaixo_do_minimo += 1;
+    byProduct.set(item.nome, entry);
+  }
   return {
     encontrados: matches.length,
+    total: {
+      pecas_em_estoque: matches.reduce((sum, item) => sum + item.em_estoque, 0),
+      pecas_reservadas: matches.reduce((sum, item) => sum + item.reservado, 0),
+      pecas_disponiveis: matches.reduce((sum, item) => sum + Math.max(0, item.disponivel), 0),
+    },
+    por_produto: [...byProduct.values()].sort((left, right) => right.disponivel - left.disponivel).slice(0, 30),
     itens: matches.slice(0, limit),
-    observacao: matches.length > limit ? `Mostrando ${limit} de ${matches.length}. Peça um termo mais específico.` : undefined,
+    observacao: matches.length > limit ? `Listando ${limit} de ${matches.length} itens; os totais e o resumo por produto incluem todos.` : undefined,
   };
 }
 
@@ -372,5 +389,11 @@ export async function recentHistory(
         created_at: String(data.created_at_iso ?? ""),
       };
     })
-    .reverse();
+    // Antes do v2, pergunta e resposta tinham o mesmo horário: no empate a
+    // pergunta vem primeiro, senão o histórico terminava numa pergunta já
+    // respondida e o modelo respondia de novo.
+    .sort((left, right) =>
+      left.created_at.localeCompare(right.created_at) ||
+      (left.role === right.role ? 0 : left.role === "user" ? -1 : 1),
+    );
 }
