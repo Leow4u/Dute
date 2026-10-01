@@ -76,6 +76,7 @@ const Movements = lazy(() => import("./pages/movements"));
 const Orders = lazy(() => import("./pages/orders"));
 const Reports = lazy(() => import("./pages/reports"));
 const BillingHub = lazy(() => import("./pages/billing-hub"));
+const BillingInvoice = lazy(() => import("./pages/billing-invoice"));
 const Users = lazy(() => import("./pages/users"));
 const Customers = lazy(() => import("./pages/customers"));
 const Documents = lazy(() => import("./pages/documents"));
@@ -100,6 +101,9 @@ const ClienteEstoque = lazy(() =>
 );
 const ClienteFaturas = lazy(() =>
   import("./pages/client").then((m) => ({ default: m.ClienteFaturas })),
+);
+const ClienteFatura = lazy(() =>
+  import("./pages/client").then((m) => ({ default: m.ClienteFatura })),
 );
 const ClienteInicio = lazy(() =>
   import("./pages/client").then((m) => ({ default: m.ClienteInicio })),
@@ -973,6 +977,7 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/skus", SkusRedirect),
   protectedRoute("/movements", Movements),
   protectedRoute("/orders", Orders),
+  protectedRoute("/faturamento/fatura", BillingInvoice),
   protectedRoute("/faturamento", BillingHub),
   protectedRoute("/faturamento/tabela", BillingHub),
   protectedRoute("/tabela-precos", PriceListRedirect),
@@ -988,6 +993,7 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/portal/recebimentos", ClienteSolicitacoes),
   protectedRoute("/portal/solicitacoes", ClientRequestsRedirect),
   protectedRoute("/portal/pedidos", ClientePedidos),
+  protectedRoute("/portal/faturas/fatura", ClienteFatura),
   protectedRoute("/portal/faturas", ClienteFaturas),
   protectedRoute("/portal/documentos", ClienteDocumentos),
   protectedRoute("/portal/agente/operacional", ClientAgentRedirect),

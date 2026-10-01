@@ -450,6 +450,9 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   { path: "/products", roles: WMS_ROLES },
   { path: "/skus", roles: WMS_ROLES },
   { path: "/faturamento/tabela", roles: FINANCE_ROLES },
+  // Fatura (prévia ou emitida) para imprimir/salvar PDF.
+  { path: "/faturamento/fatura", roles: FINANCE_ROLES },
+  { path: "/portal/faturas/fatura", roles: CLIENT_ROLES },
   { path: "/tabela-precos", roles: FINANCE_ROLES },
 ];
 
