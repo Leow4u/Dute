@@ -53,6 +53,11 @@ import {
 import { MinimumStockError, normalizeMinimumStock } from "./catalog-minimum.js";
 import { setUserAccessTransaction } from "./domain/access.js";
 import { readSystemHealth } from "./domain/system-health.js";
+import {
+  projectMinimumStock,
+  readClientInventoryForSku,
+  setClientItemArchivedTransaction,
+} from "./domain/client-inventory.js";
 
 const adminApp = initializeApp();
 setGlobalOptions({
@@ -4451,6 +4456,20 @@ export const mutateManagedEntity = onCall(async (request) => {
     const catalogIdentityClaims = catalogIdentity
       ? await assertManagedCatalogIdentityAvailable(transaction, catalogIdentity)
       : [];
+    // Mínimo da ficha vai também para o portal (client_inventory). A leitura
+    // vem antes de qualquer escrita, como o Firestore exige.
+    const minimumChanged =
+      input.resource === "skus" &&
+      input.action === "update" &&
+      Object.prototype.hasOwnProperty.call(input.data, "estoque_minimo");
+    const minimumProjectionRefs = minimumChanged
+      ? await readClientInventoryForSku(
+          transaction,
+          db,
+          DEFAULT_CUSTOMER,
+          String(before.cod_btg ?? before.sku_code ?? documentId),
+        )
+      : [];
     const payload = managedWritePayload(
       input,
       profile,
@@ -4462,6 +4481,14 @@ export const mutateManagedEntity = onCall(async (request) => {
       transaction.create(targetRef, payload);
     } else {
       transaction.set(targetRef, payload, { merge: true });
+    }
+    if (minimumChanged) {
+      const minimum = (payload as Record<string, unknown>).estoque_minimo;
+      projectMinimumStock(
+        transaction,
+        minimumProjectionRefs,
+        typeof minimum === "number" ? minimum : null,
+      );
     }
     for (const claim of catalogIdentityClaims) {
       transaction.set(
@@ -6118,6 +6145,18 @@ export const setUserAccess = onCall(async (request) => {
     }
   }
   return { ...result, auth_updated: authUpdated };
+});
+
+const SetClientItemArchivedSchema = z.object({
+  inventory_id: z.string().trim().min(1).max(300),
+  archived: z.boolean(),
+});
+
+/** Portal: a BTG arquiva (ou devolve à vitrine) um item zerado. */
+export const setClientItemArchived = onCall(async (request) => {
+  const profile = await getProfile(request);
+  const input = SetClientItemArchivedSchema.parse(request.data ?? {});
+  return setClientItemArchivedTransaction(db, input, profile);
 });
 
 /** Configuração > Sistema: verificação real do servidor e do banco. */

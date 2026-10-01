@@ -119,6 +119,20 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  const clientArchiveMatch = pathname.match(/^\/api\/client\/inventory\/([^/]+)\/archive$/);
+  if (method === "POST" && clientArchiveMatch) {
+    return {
+      name: "setClientItemArchived",
+      payload: async (_pathname, init) => {
+        const body = await readJsonBody(init);
+        return {
+          inventory_id: decodeURIComponent(clientArchiveMatch[1]),
+          archived: body.archived === true,
+        };
+      },
+    };
+  }
+
   if (method === "GET" && pathname === "/api/system/health") {
     return { name: "getSystemHealth", status: 200, payload: async () => ({}) };
   }

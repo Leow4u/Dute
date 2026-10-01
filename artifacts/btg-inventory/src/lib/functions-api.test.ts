@@ -50,3 +50,16 @@ describe("rota do Sistema", () => {
     expect(functionRoute("/api/system/health", "POST")).toBeNull();
   });
 });
+
+describe("rota de arquivar item do portal", () => {
+  it("vai para setClientItemArchived com o id da projeção", async () => {
+    const route = functionRoute("/api/client/inventory/cinv_BTG_Pactual__SKU1/archive", "POST");
+    expect(route?.name).toBe("setClientItemArchived");
+    expect(
+      await route?.payload("/api/client/inventory/cinv_BTG_Pactual__SKU1/archive", {
+        method: "POST",
+        body: JSON.stringify({ archived: true }),
+      }),
+    ).toEqual({ inventory_id: "cinv_BTG_Pactual__SKU1", archived: true });
+  });
+});
