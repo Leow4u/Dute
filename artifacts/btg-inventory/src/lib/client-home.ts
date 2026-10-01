@@ -119,6 +119,7 @@ export function orderSummary(request: AnyRecord, progress: OrderProgress) {
 
 export type NoticeView = { title: string; detail: string; label: string; tone: "waiting" | "done" | "rejected" };
 
+/** Envio para a Dutelog no Início: avisado, confirmado, chegou ou recusado. */
 export function noticeView(request: AnyRecord): NoticeView {
   const status = slug(request.status);
   const operational = slug(request.operational_status);
@@ -129,19 +130,24 @@ export function noticeView(request: AnyRecord): NoticeView {
     return { title, detail: text(request.decision_reason) || "Recusado pela Dutelog", label: "Recusado", tone: "rejected" };
   }
   if (operational === "received" || status === "closed") {
-    const updated = parseDate(request.updated_at);
+    const arrived = parseDate(request.received_at ?? request.updated_at);
+    const counted =
+      request.qty_received !== undefined && request.qty_expected !== undefined
+        ? ` · ${integer.format(num(request.qty_received))} de ${integer.format(num(request.qty_expected))} peças`
+        : "";
     return {
       title,
-      detail: updated ? `recebido e conferido em ${formatShortDate(updated)}` : "recebido e conferido",
-      label: "Recebido",
+      detail: `${arrived ? `chegou em ${formatShortDate(arrived)}` : "chegou e foi conferido"}${counted}`,
+      label: "Chegou",
       tone: "done",
     };
   }
   const due = parseDate(request.due_at);
+  const confirmed = status === "approved" || status === "aprovado";
   return {
     title,
-    detail: due ? `previsto para ${formatShortDate(due)}` : "aguardando a entrega do fornecedor",
-    label: "Aguardando",
+    detail: due ? `chega ${formatShortDate(due)}` : confirmed ? "confirmado pela Dutelog" : "aguardando confirmação da Dutelog",
+    label: confirmed ? "Confirmado" : "Avisado",
     tone: "waiting",
   };
 }
@@ -166,7 +172,9 @@ export function homeOrders(requests: AnyRecord[], limit = 4) {
 }
 
 export function homeNotices(requests: AnyRecord[], limit = 3) {
-  const notices = sortByCreatedDesc(requests.filter((request) => requestKind(request) === "aviso")).map(noticeView);
+  const notices = sortByCreatedDesc(
+    requests.filter((request) => requestKind(request) === "aviso" && slug(request.status) !== "cancelled"),
+  ).map(noticeView);
   const waiting = notices.filter((notice) => notice.tone === "waiting");
   const rest = notices.filter((notice) => notice.tone !== "waiting");
   return [...waiting, ...rest].slice(0, limit);

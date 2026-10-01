@@ -1,7 +1,7 @@
 /**
  * Uma linha por documento da operação, juntando duas fontes: a coleção
  * `documents` (o que a Dutelog adicionou) e os anexos que a BTG manda no
- * "Avisar chegada" (gravados no próprio `customer_requests.attachments`).
+ * "Envios para a Dutelog" (gravados no próprio `customer_requests.attachments`).
  */
 
 type AnyRecord = Record<string, unknown>;

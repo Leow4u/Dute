@@ -313,18 +313,18 @@ export const APP_MODULES: AppModule[] = [
       }),
     ],
   }),
-  // "Avisar chegada" fala a língua do fluxo real: a Cristiane comprou,
-  // manda entregar no galpão e avisa; o Rafael recebe e confere.
+  // "Envios para a Dutelog": a Cristiane comprou, o fornecedor entrega no
+  // armazém da Dutelog e ela avisa; o Rafael recebe e confere.
   appModule({
     id: "client-requests",
-    label: "Avisar chegada",
+    label: "Envios para a Dutelog",
     audience: "client",
     icon: Inbox,
     roles: CLIENT_ROLES,
     routes: [
       navRoute({
         id: "client-request-list",
-        label: "Avisar chegada",
+        label: "Envios para a Dutelog",
         href: "/portal/recebimentos",
         icon: PackagePlus,
         roles: CLIENT_ROLES,

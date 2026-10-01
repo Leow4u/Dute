@@ -63,3 +63,16 @@ describe("rota de arquivar item do portal", () => {
     ).toEqual({ inventory_id: "cinv_BTG_Pactual__SKU1", archived: true });
   });
 });
+
+describe("envios para a Dutelog", () => {
+  it("cancelar aviso vai para cancelShipmentNotice com o id e o motivo", async () => {
+    const route = functionRoute("/api/client/shipments/creq_1/cancel", "POST");
+    expect(route?.name).toBe("cancelShipmentNotice");
+    expect(
+      await route?.payload("/api/client/shipments/creq_1/cancel", {
+        method: "POST",
+        body: JSON.stringify({ reason: " fornecedor atrasou " }),
+      }),
+    ).toEqual({ request_id: "creq_1", reason: "fornecedor atrasou" });
+  });
+});

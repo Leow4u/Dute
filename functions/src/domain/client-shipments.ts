@@ -1,0 +1,152 @@
+import { FieldValue, type Firestore } from "firebase-admin/firestore";
+import { HttpsError } from "firebase-functions/https";
+
+/**
+ * "Envios para a Dutelog" no portal da BTG: o cliente avisa que um
+ * fornecedor vai entregar mercadoria no armazém. Aqui ficam o resumo do que
+ * chegou de verdade (publicado no portal ao concluir o recebimento) e o
+ * cancelamento de um aviso que a Dutelog ainda não confirmou.
+ */
+
+function num(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function text(value: unknown) {
+  return typeof value === "string" || typeof value === "number" ? String(value).trim() : "";
+}
+
+export type ReceivedLine = {
+  client_item_code?: unknown;
+  sku_code?: unknown;
+  product_name?: unknown;
+  expected_qty?: unknown;
+  received_qty?: unknown;
+};
+
+export type ReceivedSummary = {
+  qty_expected: number;
+  qty_received: number;
+  received_differences: Array<{ code: string; name: string; expected: number; received: number }>;
+};
+
+/**
+ * Quanto foi avisado e quanto a conferência contou, com as linhas que
+ * divergiram. Sem custo, endereço nem justificativa interna: vai para o
+ * portal do cliente.
+ */
+export function receivedSummary(lines: ReceivedLine[]): ReceivedSummary {
+  let expected = 0;
+  let received = 0;
+  const differences: ReceivedSummary["received_differences"] = [];
+  for (const line of lines) {
+    const lineExpected = num(line.expected_qty);
+    const lineReceived = num(line.received_qty);
+    expected += lineExpected;
+    received += lineReceived;
+    if (lineExpected !== lineReceived && differences.length < 20) {
+      differences.push({
+        code: text(line.client_item_code) || text(line.sku_code),
+        name: text(line.product_name),
+        expected: lineExpected,
+        received: lineReceived,
+      });
+    }
+  }
+  return { qty_expected: expected, qty_received: received, received_differences: differences };
+}
+
+export type ShipmentActor = {
+  uid: string;
+  role: string;
+  customer_code?: string;
+  email?: string;
+  name?: string;
+};
+
+const INBOUND = /receb|inbound/i;
+
+export async function cancelShipmentNoticeTransaction(
+  db: Firestore,
+  input: { request_id: string; reason?: string },
+  actor: ShipmentActor,
+) {
+  if (actor.role !== "cliente") {
+    throw new HttpsError("permission-denied", "Só quem avisou o envio pode cancelar o aviso.");
+  }
+  const id = text(input.request_id);
+  if (!id || id.includes("/")) throw new HttpsError("invalid-argument", "Aviso inválido.");
+  const requestRef = db.collection("customer_requests").doc(id);
+  const statusRef = db.collection("client_request_status").doc(id);
+
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(requestRef);
+    if (!snapshot.exists) throw new HttpsError("not-found", "Aviso não encontrado.");
+    const request = snapshot.data() ?? {};
+    if (!actor.customer_code || request.customer_code !== actor.customer_code) {
+      throw new HttpsError("permission-denied", "Aviso de outro cliente.");
+    }
+    if (!INBOUND.test(text(request.type))) {
+      throw new HttpsError("failed-precondition", "Só avisos de envio podem ser cancelados aqui.");
+    }
+    const status = text(request.status);
+    if (status === "cancelled") return { ok: true, request_id: id, changed: false };
+    if (status !== "open") {
+      throw new HttpsError(
+        "failed-precondition",
+        "A Dutelog já confirmou este aviso. Para mudar, fale com a Dutelog.",
+      );
+    }
+
+    const now = new Date().toISOString();
+    const reason = text(input.reason).slice(0, 500) || undefined;
+    const update = {
+      status: "cancelled",
+      operational_status: "cancelled",
+      cancelled_at: now,
+      cancelled_by: actor.uid,
+      ...(reason ? { cancel_reason: reason } : {}),
+      updated_at: FieldValue.serverTimestamp(),
+    };
+    transaction.update(requestRef, update);
+    transaction.set(
+      statusRef,
+      {
+        customer_code: request.customer_code,
+        status: "cancelled",
+        operational_status: "cancelled",
+        cancelled_at: now,
+        ...(reason ? { cancel_reason: reason } : {}),
+        published_at: FieldValue.serverTimestamp(),
+        updated_at: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    const eventRef = db.collection("events").doc();
+    transaction.create(eventRef, {
+      id: eventRef.id,
+      type: "customer_request.cancelled",
+      title: "Aviso de envio cancelado pelo cliente",
+      description: [text(request.supplier), text(request.invoice_number) && `NF ${text(request.invoice_number)}`, reason]
+        .filter(Boolean)
+        .join(" · "),
+      severity: "info",
+      entity_type: "customer_request",
+      entity_id: id,
+      customer_code: request.customer_code,
+      payload: { previous_status: status, reason: reason ?? null },
+      occurred_at: now,
+      source: "functions_client_shipments",
+      actor: {
+        uid: actor.uid,
+        role: actor.role,
+        email: actor.email ?? null,
+        name: actor.name ?? null,
+        customer_code: actor.customer_code ?? null,
+      },
+      created_at: FieldValue.serverTimestamp(),
+    });
+    return { ok: true, request_id: id, changed: true };
+  });
+}

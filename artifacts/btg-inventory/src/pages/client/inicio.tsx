@@ -96,7 +96,7 @@ export function ClienteInicio() {
                 <Action
                   href="/portal/recebimentos"
                   icon={PackagePlus}
-                  title="Avisar uma entrega"
+                  title="Avisar um envio"
                   detail="O fornecedor vai entregar na Dutelog? Avise e anexe a NF"
                 />
               </section>
@@ -132,7 +132,7 @@ export function ClienteInicio() {
                 </Panel>
 
                 <div className="flex flex-col gap-4">
-                  <Panel title="Entregas avisadas" href="/portal/recebimentos" linkLabel="Avisar">
+                  <Panel title="Envios para a Dutelog" href="/portal/recebimentos" linkLabel="Ver">
                     {notices.length ? (
                       <ul>
                         {notices.map((notice, index) => (
@@ -156,7 +156,7 @@ export function ClienteInicio() {
                         ))}
                       </ul>
                     ) : (
-                      <p className="px-5 py-4 text-sm text-muted-foreground">Nenhuma entrega avisada.</p>
+                      <p className="px-5 py-4 text-sm text-muted-foreground">Nenhum envio a caminho.</p>
                     )}
                   </Panel>
 

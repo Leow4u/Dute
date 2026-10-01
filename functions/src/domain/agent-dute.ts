@@ -138,7 +138,8 @@ const SEPARATING = new Set(["separating", "separated", "checking", "ready_to_dis
 export function requestStage(request: Record<string, unknown>) {
   const status = normalize(request.status);
   const operational = normalize(request.operational_status);
-  if (["rejected", "rejeitado", "rejeitada", "cancelled", "canceled", "cancelado"].includes(status)) return "Recusado";
+  if (["cancelled", "canceled", "cancelado"].includes(status)) return "Cancelado";
+  if (["rejected", "rejeitado", "rejeitada"].includes(status)) return "Recusado";
   if (operational === "delivered" || status === "closed" || status === "delivered") return "Entregue";
   if (operational === "received") return "Recebido";
   if (operational === "dispatched") return "Saiu";
@@ -199,7 +200,7 @@ export async function listOrders(
     if (input.tipo === "pedido" && view.tipo !== "pedido") return false;
     if (input.tipo === "aviso" && view.tipo !== "aviso de entrega") return false;
     const done = view.etapa === "Entregue" || view.etapa === "Recebido";
-    if (input.situacao === "andamento") return !done && view.etapa !== "Recusado";
+    if (input.situacao === "andamento") return !done && view.etapa !== "Recusado" && view.etapa !== "Cancelado";
     if (input.situacao === "concluidos") return done;
     if (input.situacao === "recusados") return view.etapa === "Recusado";
     return true;
