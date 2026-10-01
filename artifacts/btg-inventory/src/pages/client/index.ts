@@ -4,6 +4,7 @@ export { ClienteEnvios } from "./envios";
 export { ClientePedidos } from "./pedidos";
 export { ClienteFaturas } from "./faturas";
 export { ClienteFatura } from "./fatura";
+export { ClienteRelatorio } from "./relatorio";
 export { ClienteDocumentos } from "./documentos";
 export { ClienteAssistente } from "./assistente";
 export { clientOverviewQueryKey, useClientOverview } from "./shared";

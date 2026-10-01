@@ -527,6 +527,9 @@
   .print-area,
   .print-area * {
     visibility: visible;
+    /* Barras do gráfico do relatório são fundo: sem isto o PDF sai sem elas. */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
   .print-area {
     position: absolute;

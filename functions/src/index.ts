@@ -65,6 +65,7 @@ import {
   storageFailure,
 } from "./domain/client-shipments.js";
 import { assignMissingRequestNumbers } from "./domain/request-numbers.js";
+import { billingReportWorkbook, buildBillingReport } from "./domain/billing-report.js";
 import {
   INVOICE_PROMPT,
   assertOwnInvoicePath,
@@ -152,6 +153,7 @@ const collectionNames = {
   agentUsage: "agent_usage",
   clientInventory: "client_inventory",
   clientInvoices: "client_invoices",
+  clientOrderTracking: "client_order_tracking",
   documents: "documents",
   clientDocuments: "client_documents",
   documentLinks: "document_links",
@@ -6164,6 +6166,46 @@ export const uploadShipmentAttachment = onCall({ timeoutSeconds: 60 }, async (re
     storage_path: objectPath,
     content_type: contentType,
     size_bytes: buffer.length,
+  };
+});
+
+const ExportBillingReportSchema = z.object({
+  from: z.string().trim().regex(/^\d{4}-\d{2}$/),
+  to: z.string().trim().regex(/^\d{4}-\d{2}$/),
+});
+
+/**
+ * Portal > Faturas > Gerar relatório > Baixar planilha. Lê só faturas
+ * fechadas do próprio cliente (client_invoices) e os pedidos entregues
+ * (client_order_tracking); a equipe de faturamento vê o mesmo da BTG.
+ */
+export const exportBillingReport = onCall({ timeoutSeconds: 60 }, async (request) => {
+  const profile = await getProfile(request);
+  let customerCode: string;
+  if (profile.role === "cliente") customerCode = requireCustomerScope(profile);
+  else {
+    requireBillingRead(profile);
+    customerCode = DEFAULT_CUSTOMER;
+  }
+  const input = ExportBillingReportSchema.parse(request.data ?? {});
+  const [invoices, trackings] = await Promise.all([
+    db.collection(collectionNames.clientInvoices).where("customer_code", "==", customerCode).get(),
+    db.collection(collectionNames.clientOrderTracking).where("customer_code", "==", customerCode).get(),
+  ]);
+  const report = buildBillingReport({
+    customerCode,
+    from: input.from,
+    to: input.to,
+    invoices: invoices.docs.map((doc) => ({ ...doc.data(), id: doc.id })),
+    trackings: trackings.docs.map((doc) => ({ ...doc.data(), id: doc.id })),
+  });
+  const buffer = await billingReportWorkbook(report, profile.name || profile.email || "Portal");
+  return {
+    file_name: `extrato-dutelog-${input.from}-a-${input.to}.xlsx`,
+    content_type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    content_base64: buffer.toString("base64"),
+    invoices: report.invoices.length,
+    total: report.total,
   };
 });
 

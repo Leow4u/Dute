@@ -64,6 +64,17 @@ describe("rota de arquivar item do portal", () => {
   });
 });
 
+describe("faturas", () => {
+  it("baixar planilha do relatório vai para exportBillingReport com o período", async () => {
+    const route = functionRoute("/api/client/billing/report", "POST");
+    expect(route?.name).toBe("exportBillingReport");
+    expect(await route?.payload("/api/client/billing/report", { method: "POST", body: JSON.stringify({ from: "2026-07", to: "2026-09" }) })).toEqual({
+      from: "2026-07",
+      to: "2026-09",
+    });
+  });
+});
+
 describe("pedidos", () => {
   it("cancelar pedido vai para cancelCustomerOrder com o id e o motivo", async () => {
     const route = functionRoute("/api/client/orders/creq_9/cancel", "POST");
