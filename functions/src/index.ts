@@ -321,6 +321,7 @@ const InboundConferenceLineSchema = z.object({
   location_id: z.string().trim().optional(),
   unit_cost: z.number().nonnegative().optional(),
   notes: z.string().trim().optional(),
+  client_item_code: z.string().trim().max(80).optional(),
 });
 
 const UpdateInboundReceiptConferenceSchema = z.object({
