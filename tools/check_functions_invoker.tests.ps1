@@ -57,3 +57,6 @@ Expect "nao publicada falha e sugere firebase deploy, nao add-iam-policy-binding
 
 if ($failures -gt 0) { Write-Host "$failures teste(s) falharam." -ForegroundColor Red; exit 1 }
 Write-Host "Todos os testes passaram." -ForegroundColor Green
+# O último caso testado sai com 1 de propósito; o runner do CI usa o
+# $LASTEXITCODE final como resultado do passo.
+exit 0
