@@ -1576,9 +1576,11 @@ async function getClientOverview() {
       destination: order.destination,
       timeline: Array.isArray(order.timeline) ? order.timeline : [],
     }));
+  // O Início do portal separa pedidos de avisos de chegada; com só 8, uma
+  // semana de avisos escondia os pedidos em andamento.
   const recentRequests = sortByDateDesc(customerRequests, "created_at").slice(
     0,
-    8,
+    30,
   );
   const invoiceItems = sortByDateDesc(periods, "competencia").slice(0, 6);
   const alertItems = sortByDateDesc(customerAlerts, "created_at").slice(0, 6);
