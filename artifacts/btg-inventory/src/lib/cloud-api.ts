@@ -3562,27 +3562,45 @@ async function route(
 
   if (pathname === "/api/warehouse/map") return json(await getWarehouseMap());
 
-  if (pathname === "/api/reports/export") {
-    const type = searchParams.get("type");
-    if (!type) {
-      return json(
-        { message: "Informe type=orders|movements|products e filtros." },
-        400,
-      );
-    }
-    const name =
-      type === "orders"
-        ? collectionNames.orders
-        : type === "movements"
-          ? collectionNames.movements
-          : collectionNames.products;
-    const orderField =
-      type === "orders" ? "data_solic" : type === "movements" ? "data" : "produto";
+  // Relatórios (pages/reports.tsx): período filtrado na consulta, não na
+  // tela. O ledger grava `data` em ISO; os pedidos, `created_at` Timestamp.
+  if (pathname === "/api/reports/movements" && method === "GET") {
+    const from = searchParams.get("from") ?? "";
+    const to = searchParams.get("to") ?? "";
+    if (!from || !to) return json({ message: "Informe from e to." }, 400);
+    if (!firestore) return json({ items: [], capped: false });
+    const snapshot = await getDocs(
+      query(
+        collection(firestore, collectionNames.movements),
+        where("data", ">=", from),
+        where("data", "<", to),
+        orderBy("data", "desc"),
+        fsLimit(EXPORT_HARD_CAP),
+      ),
+    );
     return json({
-      generated_at: new Date().toISOString(),
-      capped: true,
-      limit: EXPORT_HARD_CAP,
-      data: await readLimited(name, EXPORT_HARD_CAP, orderField, "desc"),
+      items: snapshot.docs.map(normalizeDoc),
+      capped: snapshot.size >= EXPORT_HARD_CAP,
+    });
+  }
+
+  if (pathname === "/api/reports/requests" && method === "GET") {
+    const from = searchParams.get("from") ?? "";
+    const to = searchParams.get("to") ?? "";
+    if (!from || !to) return json({ message: "Informe from e to." }, 400);
+    if (!firestore) return json({ items: [], capped: false });
+    const snapshot = await getDocs(
+      query(
+        collection(firestore, collectionNames.customerRequests),
+        where("created_at", ">=", Timestamp.fromDate(new Date(from))),
+        where("created_at", "<", Timestamp.fromDate(new Date(to))),
+        orderBy("created_at", "desc"),
+        fsLimit(EXPORT_HARD_CAP),
+      ),
+    );
+    return json({
+      items: snapshot.docs.map(normalizeDoc),
+      capped: snapshot.size >= EXPORT_HARD_CAP,
     });
   }
 

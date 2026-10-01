@@ -82,17 +82,15 @@ describe("permissões por rota", () => {
 
 describe("menu interno", () => {
   it.each<ProfileRole>(["owner", "admin"])(
-    "%s vê 4 destinos principais e o grupo Mais (Administração vive na Configuração)",
+    "%s vê os destinos principais, sem grupo Mais (Administração vive na Configuração)",
     (role) => {
       expect(menu(role)).toEqual([
         { label: "Início", routes: ["Início"] },
         { label: "Pedidos", routes: ["Pedidos"] },
         { label: "Estoque", routes: ["Itens", "Receber"] },
         { label: "Faturamento", routes: ["Faturamento"] },
-        {
-          label: "Mais",
-          routes: ["Relatórios", "Documentos"],
-        },
+        { label: "Relatórios", routes: ["Relatórios"] },
+        { label: "Documentos", routes: ["Documentos"] },
       ]);
     },
   );
@@ -109,7 +107,8 @@ describe("menu interno", () => {
     expect(menu("financeiro").map((module) => module.label)).toEqual([
       "Início",
       "Faturamento",
-      "Mais",
+      "Relatórios",
+      "Documentos",
     ]);
   });
 
@@ -144,7 +143,7 @@ describe("grupo ativo", () => {
     ["/catalogo/saldos", "Estoque"],
     ["/faturamento/tabela", "Faturamento"],
     ["/faturamento/fatura", "Faturamento"],
-    ["/reports", "Mais"],
+    ["/reports", "Relatórios"],
   ])("%s destaca %s", (path, label) => {
     expect(activeLabel(path)).toBe(label);
   });

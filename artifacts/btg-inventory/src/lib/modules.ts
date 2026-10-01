@@ -5,7 +5,6 @@ import {
   Home,
   Inbox,
   LayoutDashboard,
-  MoreHorizontal,
   PackagePlus,
   PackageSearch,
   Receipt,
@@ -227,24 +226,36 @@ export const APP_MODULES: AppModule[] = [
       }),
     ],
   }),
-  // Uso raro, fora da régua principal. O Agent Dute virou o botão flutuante
-  // (components/agent/agent-dock.tsx); o painel dele segue em /agente.
+  // Relatórios virou item próprio (01/10/2026): é tela de uso real do
+  // fechamento, não "uso raro".
   appModule({
-    id: "more",
-    label: "Mais",
+    id: "reports",
+    label: "Relatórios",
     audience: "internal",
-    icon: MoreHorizontal,
-    roles: INTERNAL_ROLES,
+    icon: BarChart3,
+    roles: TOWER_NAV_ROLES,
     routes: [
       navRoute({
-        id: "more-reports",
+        id: "reports-hub",
         label: "Relatórios",
         href: "/reports",
         icon: BarChart3,
         roles: TOWER_NAV_ROLES,
       }),
+    ],
+  }),
+  // O grupo "Mais" acabou: Relatórios virou item próprio e Documentos ficou
+  // sozinho. O Agent Dute é o botão flutuante (components/agent/agent-dock.tsx);
+  // o painel dele segue em /agente.
+  appModule({
+    id: "documents",
+    label: "Documentos",
+    audience: "internal",
+    icon: FileText,
+    roles: INTERNAL_ROLES,
+    routes: [
       navRoute({
-        id: "more-documents",
+        id: "documents-library",
         label: "Documentos",
         href: "/documentos",
         icon: FileText,
