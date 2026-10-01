@@ -631,3 +631,38 @@ export async function callFunctionsApi(
 function compactError(body: { message: string; code?: string }) {
   return body.code ? body : { message: body.message };
 }
+
+/** Pedaço que o chatWithAgentDute envia enquanto escreve a resposta. */
+export type AgentDuteStreamChunk =
+  | { type: "text"; index: number; text: string }
+  | { type: "tool"; name: string }
+  | { type: "reset" };
+
+/**
+ * Conversa com o Agent Dute recebendo a resposta aos pedaços. Devolve o
+ * mesmo resultado da chamada comum (conversa e as duas mensagens gravadas).
+ */
+export async function streamAgentDuteChat<T>(
+  payload: { message: string; conversation_id?: string },
+  onChunk: (chunk: AgentDuteStreamChunk) => void,
+  signal?: AbortSignal,
+): Promise<T> {
+  if (!firebaseApp) throw new Error("Firebase não configurado.");
+  const callable = httpsCallable<typeof payload, T, AgentDuteStreamChunk>(
+    getFunctions(firebaseApp, "southamerica-east1"),
+    "chatWithAgentDute",
+    { timeout: 180_000 },
+  );
+  try {
+    const { stream, data } = await callable.stream(payload, { signal });
+    for await (const chunk of stream) onChunk(chunk);
+    return await data;
+  } catch (error) {
+    const rawMessage = error instanceof Error ? error.message : "";
+    throw new Error(
+      !rawMessage || rawMessage === "INTERNAL"
+        ? "O Agent Dute não respondeu agora. Tente de novo em instantes."
+        : rawMessage,
+    );
+  }
+}

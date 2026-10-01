@@ -1,0 +1,109 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  daySuggestions,
+  filterConversations,
+  groupConversations,
+  parseInline,
+  parseMarkdown,
+  settleStreamingMarkdown,
+  toolLabel,
+  uniqueTools,
+} from "./agent-chat";
+
+describe("Markdown das respostas", () => {
+  it("negrito, itálico e código; asterisco solto fica como texto", () => {
+    expect(parseInline('Você tem **412 polos** e *"Pedido do estoque"* com `A.01`')).toEqual([
+      { kind: "text", text: "Você tem " },
+      { kind: "bold", text: "412 polos" },
+      { kind: "text", text: " e " },
+      { kind: "italic", text: '"Pedido do estoque"' },
+      { kind: "text", text: " com " },
+      { kind: "code", text: "A.01" },
+    ]);
+    expect(parseInline("2 * 3 = 6")).toEqual([{ kind: "text", text: "2 * 3 = 6" }]);
+  });
+
+  it("parágrafos, título, listas e linha", () => {
+    const blocks = parseMarkdown("## Saldo\nPrimeira linha\ncontinua\n\n- um\n- **dois**\n\n1. a\n2. b\n\n---\nfim");
+    expect(blocks.map((block) => block.kind)).toEqual(["heading", "paragraph", "list", "list", "rule", "paragraph"]);
+    expect(blocks[1]).toEqual({ kind: "paragraph", content: [{ kind: "text", text: "Primeira linha continua" }] });
+    expect(blocks[2]).toMatchObject({ kind: "list", ordered: false, items: [[{ text: "um" }], [{ kind: "bold", text: "dois" }]] });
+    expect(blocks[3]).toMatchObject({ kind: "list", ordered: true });
+  });
+
+  it("tabela com números alinhados à direita", () => {
+    const [table] = parseMarkdown("| Tamanho | Disponível |\n|---|---:|\n| P | 96 |\n| GG | **18** |");
+    expect(table).toMatchObject({ kind: "table", align: ["left", "right"] });
+    if (table.kind !== "table") throw new Error("esperava tabela");
+    expect(table.rows).toHaveLength(2);
+    expect(table.rows[1][1]).toEqual([{ kind: "bold", text: "18" }]);
+  });
+});
+
+describe("texto chegando", () => {
+  it("esconde o ** que ainda não fechou", () => {
+    expect(settleStreamingMarkdown("o **GG ac")).toBe("o GG ac");
+    expect(settleStreamingMarkdown("o **GG** acaba")).toBe("o **GG** acaba");
+  });
+});
+
+describe("consultas feitas", () => {
+  it("rótulo em português e sem repetição", () => {
+    expect(toolLabel("buscar_itens")).toBe("Buscou itens no estoque");
+    expect(toolLabel("listar_pedidos", true)).toBe("Consultando os pedidos");
+    expect(toolLabel("desconhecida")).toBe("Consultou os dados");
+    expect(uniqueTools(["buscar_itens", "movimentacoes", "buscar_itens"])).toEqual(["buscar_itens", "movimentacoes"]);
+  });
+});
+
+describe("lista de conversas", () => {
+  const now = new Date("2026-10-01T15:00:00Z"); // 12:00 em São Paulo
+  const list = [
+    { id: "a", title: "Polo piquet: saldo", last_message_at: "2026-10-01T04:00:00Z" }, // 01:00 SP, hoje
+    { id: "b", title: "Fatura de agosto", last_message_at: "2026-10-01T02:00:00Z" }, // 23:00 SP, ontem
+    { id: "c", title: "Kits outubro", last_message_at: "2026-09-27T12:00:00Z" },
+    { id: "d", title: "Antiga", last_message_at: "2026-07-01T12:00:00Z" },
+  ];
+
+  it("agrupa pelo dia de São Paulo", () => {
+    expect(groupConversations(list, now).map((group) => [group.label, group.items.map((item) => item.id)])).toEqual([
+      ["Hoje", ["a"]],
+      ["Ontem", ["b"]],
+      ["Últimos 7 dias", ["c"]],
+      ["Mais antigas", ["d"]],
+    ]);
+  });
+
+  it("busca sem acento", () => {
+    expect(filterConversations(list, "polo").map((item) => item.id)).toEqual(["a"]);
+    expect(filterConversations(list, "FATURA agosto").map((item) => item.id)).toEqual(["b"]);
+    expect(filterConversations(list, "")).toHaveLength(4);
+  });
+});
+
+describe("sugestões do dia", () => {
+  it("usa o pedido em andamento, o mínimo e a fatura", () => {
+    const suggestions = daySuggestions(
+      {
+        activeOrder: { title: "Abastecimento loja Faria Lima", stage: "Separando" },
+        belowMinimum: 4,
+        lastInvoice: { label: "Agosto/2026", detail: "emitida" },
+      },
+      new Date("2026-10-01T15:00:00Z"),
+    );
+    expect(suggestions.map((item) => item.prompt)).toEqual([
+      "Onde está o pedido Abastecimento loja Faria Lima?",
+      "O que está abaixo do estoque mínimo?",
+      "Quanto saiu de cada item em setembro?",
+      "Explique a fatura de agosto/2026",
+    ]);
+    expect(suggestions[1].hint).toBe("4 itens hoje");
+  });
+
+  it("sem dados do dia, completa com perguntas gerais", () => {
+    const suggestions = daySuggestions({ belowMinimum: 0 }, new Date("2026-10-01T15:00:00Z"));
+    expect(suggestions).toHaveLength(4);
+    expect(suggestions[1].prompt).toBe("Qual é o resumo do meu estoque hoje?");
+  });
+});
