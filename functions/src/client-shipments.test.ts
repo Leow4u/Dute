@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { decodeShipmentAttachment, receivedSummary, SHIPMENT_ATTACHMENT_MAX_BYTES, storageFailure } from "./domain/client-shipments.js";
+import { decodeOperationalDocument, decodeShipmentAttachment, OPERATIONAL_DOCUMENT_MAX_BYTES, receivedSummary, SHIPMENT_ATTACHMENT_MAX_BYTES, storageFailure } from "./domain/client-shipments.js";
 
 describe("quanto chegou de verdade", () => {
   it("soma avisado e conferido e lista só as linhas que divergiram", () => {
@@ -68,5 +68,32 @@ describe("falha do Storage com mensagem que diz o que fazer", () => {
   it("arquivo sumido e falha passageira não viram erro interno genérico", () => {
     assert.equal(storageFailure({ code: 404, message: "No such object" }, "ler").code, "not-found");
     assert.equal(storageFailure(new Error("socket hang up"), "gravar").code, "unavailable");
+  });
+});
+
+describe("documento interno gravado pelo backend", () => {
+  it("aceita PDF real, planilha e texto; recusa tipo fora da lista e PDF falso", () => {
+    const pdf = Buffer.from("%PDF-1.4 contrato").toString("base64");
+    assert.equal(decodeOperationalDocument({ content_type: "application/pdf", data_base64: pdf }).contentType, "application/pdf");
+    const xlsx = Buffer.from("PK\u0003\u0004planilha").toString("base64");
+    assert.equal(
+      decodeOperationalDocument({
+        content_type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        data_base64: xlsx,
+      }).buffer.length,
+      12,
+    );
+    assert.equal(decodeOperationalDocument({ content_type: "text/csv", data_base64: Buffer.from("a;b").toString("base64") }).buffer.length, 3);
+    assert.throws(() => decodeOperationalDocument({ content_type: "application/x-msdownload", data_base64: pdf }), /não permitido/);
+    assert.throws(() => decodeOperationalDocument({ content_type: "application/pdf", data_base64: xlsx }), /não confere/);
+  });
+
+  it("aceita até 20 MB", () => {
+    const big = Buffer.alloc(OPERATIONAL_DOCUMENT_MAX_BYTES + 1);
+    big.write("%PDF-");
+    assert.throws(
+      () => decodeOperationalDocument({ content_type: "application/pdf", data_base64: big.toString("base64") }),
+      /até 20 MB/,
+    );
   });
 });
