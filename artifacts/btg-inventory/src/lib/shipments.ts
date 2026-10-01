@@ -171,3 +171,33 @@ export function parsePastedItems(source: string): { lines: PastedLine[]; ignored
   }
   return { lines: [...totals.values()], ignored };
 }
+
+// ------------------------------------------------------- ler itens da nota
+
+export type InvoiceMatch = { client_item_code: string; sku_code: string; product_name: string; by: "codigo" | "nome" };
+export type InvoiceItem = { supplier_code: string; description: string; quantity: number; unit: string; match: InvoiceMatch | null };
+export type InvoiceReading = { supplier: string; invoice_number: string; issue_date: string; items: InvoiceItem[] };
+
+export type InvoiceDraftLine = {
+  key: string;
+  include: boolean;
+  /** Como está na nota, para a pessoa comparar. */
+  invoiceText: string;
+  code: string;
+  name: string;
+  quantity: string;
+  matchedBy: "codigo" | "nome" | null;
+};
+
+/** Itens lidos da nota viram linhas para a pessoa conferir antes de usar. */
+export function invoiceDraft(reading: InvoiceReading): InvoiceDraftLine[] {
+  return reading.items.map((item, index) => ({
+    key: `nf${index}`,
+    include: true,
+    invoiceText: [item.supplier_code, item.description].filter(Boolean).join(" · "),
+    code: item.match?.client_item_code ?? "",
+    name: item.match ? item.match.product_name : item.description,
+    quantity: String(item.quantity),
+    matchedBy: item.match?.by ?? null,
+  }));
+}

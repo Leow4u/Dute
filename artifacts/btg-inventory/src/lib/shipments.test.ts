@@ -66,3 +66,22 @@ describe("colar da planilha", () => {
     expect(ignored).toBe(2);
   });
 });
+
+describe("itens lidos da nota", () => {
+  it("viram linhas para conferir: casadas trazem o código da BTG, as outras pedem código", async () => {
+    const { invoiceDraft } = await import("./shipments");
+    const draft = invoiceDraft({
+      supplier: "Gráfica Alfa",
+      invoice_number: "48213",
+      issue_date: "2026-09-28",
+      items: [
+        { supplier_code: "A.01.0114.004.G", description: "CAMISETA G", quantity: 300, unit: "UN", match: { client_item_code: "A.01.0114.004.G", sku_code: "S1", product_name: "CAMISETA", by: "codigo" } },
+        { supplier_code: "77", description: "ECOBAG LONA", quantity: 500, unit: "UN", match: null },
+      ],
+    });
+    expect(draft).toEqual([
+      { key: "nf0", include: true, invoiceText: "A.01.0114.004.G · CAMISETA G", code: "A.01.0114.004.G", name: "CAMISETA", quantity: "300", matchedBy: "codigo" },
+      { key: "nf1", include: true, invoiceText: "77 · ECOBAG LONA", code: "", name: "ECOBAG LONA", quantity: "500", matchedBy: null },
+    ]);
+  });
+});

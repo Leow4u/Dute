@@ -1,15 +1,18 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ClipboardPaste, FileText, Loader2, Paperclip, Plus, X } from "lucide-react";
+import { ClipboardPaste, FileText, Loader2, Paperclip, Plus, Sparkles, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
   SHIPMENT_STEPS,
+  invoiceDraft,
   parsePastedItems,
   splitShipments,
   stageIndex,
+  type InvoiceDraftLine,
+  type InvoiceReading,
   type ShipmentView,
 } from "@/lib/shipments";
 import { cn } from "@/lib/utils";
@@ -289,6 +292,10 @@ function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose
   const [files, setFiles] = useState<File[]>([]);
   const [lines, setLines] = useState<Line[]>([newLine()]);
   const [pasting, setPasting] = useState(false);
+  const [invoiceReading, setInvoiceReading] = useState<InvoiceReading | null>(null);
+  const [reading, setReading] = useState(false);
+  // Arquivo já enviado ao ler a nota não sobe de novo ao enviar o aviso.
+  const uploaded = useRef(new Map<File, ClientRequestAttachment>());
   const [progress, setProgress] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const draftId = useMemo(() => `envio-${Date.now()}`, []);
@@ -336,7 +343,8 @@ function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose
       const attachments: ClientRequestAttachment[] = [];
       for (const [index, file] of files.entries()) {
         setProgress(`Enviando anexo ${index + 1} de ${files.length}…`);
-        attachments.push(await uploadAttachment(file, customerCode, draftId));
+        const cached = uploaded.current.get(file);
+        attachments.push(cached ?? (await uploadAttachment(file, customerCode, draftId)));
       }
       setProgress("Registrando o aviso…");
       return createClientRequest({
@@ -394,18 +402,64 @@ function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose
     }
   }
 
-  function addPasted(pasted: Array<{ code: string; quantity: number }>) {
+  function addLines(incoming: Array<{ code: string; quantity: number; name?: string }>) {
     setLines((current) => {
       const kept = current.filter((line) => line.code.trim() || line.name.trim() || line.quantity.trim());
       const next = kept.map((line) => ({ ...line }));
-      for (const item of pasted) {
-        const existing = next.find((line) => normalized(line.code) === normalized(item.code));
+      for (const item of incoming) {
+        const existing = item.code ? next.find((line) => normalized(line.code) === normalized(item.code)) : undefined;
         if (existing) existing.quantity = String((Number(existing.quantity) || 0) + item.quantity);
-        else next.push(newLine(item.code, String(item.quantity)));
+        else next.push({ ...newLine(item.code, String(item.quantity)), name: item.name ?? "" });
       }
       return next.length ? next : [newLine()];
     });
+  }
+
+  function addPasted(pasted: Array<{ code: string; quantity: number }>) {
+    addLines(pasted);
     setPasting(false);
+  }
+
+  const readableFile = files.find((file) => file.type === "application/pdf" || file.type.startsWith("image/"));
+
+  async function readInvoice() {
+    if (!readableFile || !customerCode) return;
+    setReading(true);
+    try {
+      const attachment =
+        uploaded.current.get(readableFile) ?? (await uploadAttachment(readableFile, customerCode, draftId));
+      uploaded.current.set(readableFile, attachment);
+      const response = await fetch("/api/client/shipments/read-invoice", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ storage_path: attachment.storage_path, content_type: readableFile.type }),
+      });
+      const payload = (await response.json().catch(() => null)) as (InvoiceReading & { message?: string }) | null;
+      if (!response.ok || !payload) throw new Error(payload?.message || "Não consegui ler a nota agora.");
+      if (!payload.items?.length) throw new Error("Não encontrei itens nesta nota. Preencha os itens ou cole da planilha.");
+      setInvoiceReading(payload);
+    } catch (error) {
+      toast({
+        title: "Não consegui ler a nota",
+        description: error instanceof Error ? error.message : "Tente de novo ou preencha os itens.",
+        variant: "destructive",
+      });
+    } finally {
+      setReading(false);
+    }
+  }
+
+  function applyInvoice(selected: InvoiceDraftLine[], reading: InvoiceReading) {
+    if (!supplier.trim() && reading.supplier) setSupplier(reading.supplier);
+    if (!invoice.trim() && reading.invoice_number) setInvoice(reading.invoice_number);
+    addLines(
+      selected.map((line) => ({
+        code: line.code.trim(),
+        name: line.name.trim(),
+        quantity: Number(line.quantity.replace(",", ".")) || 0,
+      })),
+    );
+    setInvoiceReading(null);
   }
 
   const busy = send.isPending;
@@ -491,6 +545,18 @@ function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose
                 </div>
               </Field>
             </div>
+            {readableFile ? (
+              <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-[#c9b8fb] bg-[#faf8ff] px-3 py-2.5 text-sm text-[#5b3fc4]">
+                <Sparkles className="h-4 w-4 shrink-0" />
+                <span className="min-w-0 flex-1">
+                  <b>Ler itens da nota</b> · o Agent Dute lê <i>{readableFile.name}</i> e preenche os itens. Você confere antes de usar.
+                </span>
+                <Button type="button" size="sm" variant="outline" className="rounded-lg border-[#c9b8fb] bg-white" disabled={reading || busy} onClick={() => void readInvoice()}>
+                  {reading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  {reading ? "Lendo a nota…" : "Ler itens"}
+                </Button>
+              </div>
+            ) : null}
           </section>
 
           <section className="rounded-[18px] border border-border bg-white p-5">
@@ -601,6 +667,9 @@ function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose
       </div>
 
       <PasteDialog open={pasting} onOpenChange={setPasting} catalog={catalog} onAdd={addPasted} />
+      {invoiceReading ? (
+        <InvoiceReview reading={invoiceReading} catalog={catalog} onCancel={() => setInvoiceReading(null)} onUse={(lines) => applyInvoice(lines, invoiceReading)} />
+      ) : null}
     </Page>
   );
 }
@@ -679,6 +748,104 @@ function PasteDialog({
           </Button>
           <Button type="button" disabled={!parsed.lines.length} onClick={() => { onAdd(parsed.lines); setValue(""); }}>
             Adicionar {parsed.lines.length || ""} {parsed.lines.length === 1 ? "item" : "itens"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function InvoiceReview({
+  reading,
+  catalog,
+  onCancel,
+  onUse,
+}: {
+  reading: InvoiceReading;
+  catalog: Map<string, InventoryItem>;
+  onCancel: () => void;
+  onUse: (lines: InvoiceDraftLine[]) => void;
+}) {
+  const [draft, setDraft] = useState(() => invoiceDraft(reading));
+  const selected = draft.filter((line) => line.include);
+  const update = (key: string, patch: Partial<InvoiceDraftLine>) =>
+    setDraft((current) => current.map((line) => (line.key === key ? { ...line, ...patch } : line)));
+  const title = [reading.supplier, reading.invoice_number && `NF ${reading.invoice_number}`].filter(Boolean).join(" · ");
+  return (
+    <Dialog open onOpenChange={(open) => (open ? null : onCancel())}>
+      <DialogContent className="max-h-[90vh] overflow-hidden sm:max-w-[860px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-[#8b5cf6]" />
+            Itens lidos da nota
+          </DialogTitle>
+          <DialogDescription>
+            {title ? `${title} · ` : ""}
+            {draft.length} {draft.length === 1 ? "item" : "itens"}. Confira o código da BTG e a quantidade de cada um. A leitura automática pode errar.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="max-h-[52vh] overflow-y-auto rounded-xl border border-border">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-muted/60 text-xs text-muted-foreground">
+              <tr>
+                <th className="w-8 px-2 py-2" />
+                <th className="px-2 py-2 text-left font-semibold">Na nota</th>
+                <th className="px-2 py-2 text-left font-semibold">Código da BTG</th>
+                <th className="w-24 px-2 py-2 text-right font-semibold">Peças</th>
+              </tr>
+            </thead>
+            <tbody>
+              {draft.map((line) => {
+                const match = catalog.get(normalized(line.code));
+                return (
+                  <tr key={line.key} className={cn("border-t border-border/60", !line.include && "opacity-45")}>
+                    <td className="px-2 py-2 text-center">
+                      <input type="checkbox" checked={line.include} aria-label="Usar este item" onChange={(event) => update(line.key, { include: event.target.checked })} />
+                    </td>
+                    <td className="max-w-[300px] px-2 py-2">
+                      <span className="line-clamp-2">{line.invoiceText}</span>
+                    </td>
+                    <td className="px-2 py-2">
+                      <input
+                        className={cn(inputClass, "py-1")}
+                        value={line.code}
+                        list="envio-codigos"
+                        placeholder="Informe o código"
+                        onChange={(event) => update(line.key, { code: event.target.value })}
+                      />
+                      <span className="mt-1 block text-[11.5px]">
+                        {match ? (
+                          <span className="text-emerald-700">
+                            já no estoque · {inventoryItemName(match)}
+                            {line.matchedBy === "nome" && normalized(line.code) === normalized(inventoryItemClientCode(match)) ? " · achado pelo nome, confira" : ""}
+                          </span>
+                        ) : line.code.trim() ? (
+                          <span className="text-indigo-700">produto novo · {line.name}</span>
+                        ) : (
+                          <span className="text-amber-700">não achei no estoque: informe o código</span>
+                        )}
+                      </span>
+                    </td>
+                    <td className="px-2 py-2">
+                      <input
+                        className={cn(inputClass, "py-1 text-right")}
+                        inputMode="numeric"
+                        value={line.quantity}
+                        onChange={(event) => update(line.key, { quantity: event.target.value.replace(/[^\d.,]/g, "") })}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onCancel}>
+            Cancelar
+          </Button>
+          <Button type="button" disabled={!selected.length} onClick={() => onUse(selected)}>
+            Usar {selected.length} {selected.length === 1 ? "item" : "itens"}
           </Button>
         </DialogFooter>
       </DialogContent>
