@@ -6,6 +6,7 @@ import { fetchChatJson } from "@/components/agent/chat";
 import { useToast } from "@/hooks/use-toast";
 import {
   describeSchedule,
+  editingRoutine,
   EMPTY_ROUTINE,
   FREQUENCY_LABELS,
   MAX_ROUTINES,
@@ -235,8 +236,11 @@ function RoutineEditor({ routine, onDone, onOpenConversation }: { routine: Routi
 /** Lista de rotinas e o editor; `onCollapse` só no desktop (o celular abre por cima). */
 export function RoutinesPanel({ onOpenConversation, onCollapse }: { onOpenConversation: (id: string) => void; onCollapse?: () => void }) {
   const routines = useRoutines();
-  const [editing, setEditing] = useState<Routine | "new" | null>(null);
+  // Guarda só qual rotina está aberta: o editor lê a versão atual da lista,
+  // que muda depois de "Rodar agora", pausar ou salvar.
+  const [editing, setEditing] = useState<string | null>(null);
   const list = routines.data?.routines ?? [];
+  const open = editingRoutine(list, editing);
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col gap-3 px-3 py-4">
@@ -250,10 +254,10 @@ export function RoutinesPanel({ onOpenConversation, onCollapse }: { onOpenConver
           </button>
         ) : null}
       </div>
-      {editing ? (
+      {editing && (editing === "new" || open) ? (
         <RoutineEditor
-          key={editing === "new" ? "new" : editing.id}
-          routine={editing === "new" ? null : editing}
+          key={editing}
+          routine={open}
           onDone={() => setEditing(null)}
           onOpenConversation={onOpenConversation}
         />
@@ -280,7 +284,7 @@ export function RoutinesPanel({ onOpenConversation, onCollapse }: { onOpenConver
                 <button
                   key={routine.id}
                   type="button"
-                  onClick={() => setEditing(routine)}
+                  onClick={() => setEditing(routine.id)}
                   className="flex flex-col gap-0.5 rounded-xl border border-border bg-white px-3 py-2.5 text-left hover:border-[#5b3fc4]/50"
                 >
                   <span className="flex items-baseline justify-between gap-2">

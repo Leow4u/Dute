@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   describeSchedule,
+  editingRoutine,
   isUnreadRoutine,
   markSeen,
   routineFormFromSuggestion,
@@ -63,6 +64,16 @@ describe("rotinas do Agent Dute na tela", () => {
     expect(routinePayload({ ...form, id: "rot_1", frequency: "monthly", day_of_month: 5 })).toMatchObject({ id: "rot_1", day_of_month: 5 });
     expect(routinePayload({ ...form, frequency: "daily" })).not.toHaveProperty("days");
     expect(routineFormFromSuggestion({ frequency: "anual" })).toBeNull();
+  });
+
+  it("o editor lê a rotina pela versão atual da lista (depois de rodar, mostra a última execução)", () => {
+    const before = [{ ...routine, last_run_at: null }];
+    const after = [{ ...routine, last_run_at: "2026-10-02T20:10:00.000Z" }];
+    expect(editingRoutine(before, "rot_1")?.last_run_at).toBeNull();
+    expect(editingRoutine(after, "rot_1")?.last_run_at).toBe("2026-10-02T20:10:00.000Z");
+    expect(editingRoutine(after, "new")).toBeNull();
+    expect(editingRoutine(after, "apagada")).toBeNull();
+    expect(editingRoutine(after, null)).toBeNull();
   });
 
   it("diz o que falta antes de salvar", () => {
