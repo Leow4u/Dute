@@ -136,3 +136,18 @@ describe("envios para a Dutelog", () => {
     ).toEqual({ request_id: "creq_1", reason: "fornecedor atrasou" });
   });
 });
+
+describe("anotações do Agent Dute", () => {
+  it("lista e decide pela callable, com o id e a ação da rota", async () => {
+    expect(functionRoute("/api/agent-dute/notes", "GET")?.name).toBe("listAgentNotes");
+    const route = functionRoute("/api/agent-dute/notes/note_abc/approve", "POST");
+    expect(route?.name).toBe("decideAgentNote");
+    expect(
+      await route?.payload("/api/agent-dute/notes/note_abc/approve", {
+        method: "POST",
+        body: JSON.stringify({ text: "Entregas só de manhã", visibility: "equipe", id: "outro", action: "x" }),
+      }),
+    ).toEqual({ text: "Entregas só de manhã", visibility: "equipe", id: "note_abc", action: "approve" });
+    expect(functionRoute("/api/agent-dute/notes/note_abc/apagar", "POST")).toBeNull();
+  });
+});

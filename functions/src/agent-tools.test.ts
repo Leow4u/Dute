@@ -12,6 +12,7 @@ const PORTAL = [
   "faturas",
   "documentos",
   "conversas_anteriores",
+  "sugerir_anotacao",
 ];
 
 describe("consultas do Agent Dute por papel", () => {
