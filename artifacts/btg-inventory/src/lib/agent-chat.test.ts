@@ -58,6 +58,8 @@ describe("consultas feitas", () => {
     expect(toolLabel("buscar_itens")).toBe("Buscou itens no estoque");
     expect(toolLabel("listar_pedidos", true)).toBe("Consultando os pedidos");
     expect(toolLabel("desconhecida")).toBe("Consultou os dados");
+    expect(toolLabel("tarefas_armazem", true)).toBe("Consultando as tarefas do armazém");
+    expect(toolLabel("previa_faturamento")).toBe("Calculou a prévia da fatura");
     expect(uniqueTools(["buscar_itens", "movimentacoes", "buscar_itens"])).toEqual(["buscar_itens", "movimentacoes"]);
   });
 });
@@ -145,6 +147,8 @@ describe("agente para todos os papéis", () => {
       expect(teamSuggestions(role)).toHaveLength(4);
     }
     expect(teamSuggestions("wms").some((item) => /fatura|valor|R\$/i.test(item.prompt))).toBe(false);
-    expect(teamSuggestions("financeiro")[0]?.prompt).toMatch(/fatura/);
+    expect(teamSuggestions("financeiro")[0]?.prompt).toMatch(/prévia/);
+    expect(teamSuggestions("wms").some((item) => /prévia|fatura/i.test(item.prompt))).toBe(false);
+    expect(teamSuggestions("interno")[0]?.prompt).toMatch(/aprovação/);
   });
 });

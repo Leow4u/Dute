@@ -141,6 +141,12 @@ const TOOL_LABELS: Record<string, { done: string; running: string }> = {
   movimentacoes: { done: "Consultou as movimentações", running: "Consultando as movimentações" },
   faturas: { done: "Consultou as faturas", running: "Consultando as faturas" },
   documentos: { done: "Consultou os documentos", running: "Consultando os documentos" },
+  fila_solicitacoes: { done: "Consultou a fila de solicitações", running: "Consultando a fila de solicitações" },
+  recebimentos: { done: "Consultou os recebimentos", running: "Consultando os recebimentos" },
+  tarefas_armazem: { done: "Consultou as tarefas do armazém", running: "Consultando as tarefas do armazém" },
+  enderecos: { done: "Consultou os endereços", running: "Consultando os endereços" },
+  eventos: { done: "Consultou o histórico", running: "Consultando o histórico" },
+  previa_faturamento: { done: "Calculou a prévia da fatura", running: "Calculando a prévia da fatura" },
 };
 
 export function toolLabel(name: string, running = false) {
@@ -279,32 +285,32 @@ export function isAgentScreen(location: string) {
 }
 
 /**
- * Sugestões da tela do agente para a equipe, pelo papel. Só perguntas que as
- * consultas de hoje respondem (estoque, pedidos, movimentações, faturas e
- * documentos); o WMS não recebe sugestão de valores.
+ * Sugestões da tela do agente para a equipe, pelo papel. Cada uma usa uma
+ * consulta que o papel tem (agentToolsForRole, no backend): o WMS não recebe
+ * sugestão de valores; a prévia do mês é de quem lê faturamento.
  */
 export function teamSuggestions(role: unknown): Suggestion[] {
   if (role === "wms") {
     return [
-      { prompt: "Quais pedidos estão em separação agora?", hint: "pedidos para separar" },
-      { prompt: "O que entrou no estoque hoje?", hint: "recebimentos do dia" },
+      { prompt: "Quais tarefas de separação e guarda estão abertas?", hint: "tarefas do armazém" },
+      { prompt: "O que está para chegar ou em conferência?", hint: "recebimentos" },
+      { prompt: "Em que endereços está o item CAM-01?", hint: "troque pelo código que procura" },
       { prompt: "Quais itens estão zerados?", hint: "para conferir no endereço" },
-      { prompt: "Quanto tem do item CAM-01?", hint: "troque pelo código que procura" },
     ];
   }
   if (role === "financeiro") {
     return [
+      { prompt: "Quanto está a prévia da fatura deste mês?", hint: "por serviço, até hoje" },
       { prompt: "Explique a última fatura emitida", hint: "serviços e valores" },
       { prompt: "Como os valores das faturas mudaram nos últimos meses?", hint: "comparação mês a mês" },
       { prompt: "Quantos pedidos foram entregues este mês?", hint: "base da expedição" },
-      { prompt: "Qual é o resumo do estoque hoje?", hint: "base da armazenagem" },
     ];
   }
   return [
-    { prompt: "Quais pedidos estão em andamento?", hint: "etapa de cada um" },
-    { prompt: "O que saiu do estoque esta semana?", hint: "movimentações" },
-    { prompt: "Quais itens estão abaixo do mínimo ou zerados?", hint: "para avisar o cliente" },
-    { prompt: "Explique a última fatura emitida", hint: "serviços e valores" },
+    { prompt: "Quais solicitações estão esperando aprovação?", hint: "fila, a mais antiga primeiro" },
+    { prompt: "O que está para chegar ou em conferência?", hint: "recebimentos" },
+    { prompt: "Quais tarefas do armazém estão atrasadas?", hint: "separação e guarda" },
+    { prompt: "Quem aprovou o último pedido e quando?", hint: "histórico de eventos" },
   ];
 }
 

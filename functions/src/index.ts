@@ -90,6 +90,13 @@ import {
   type AgentScope,
   type HistoryMessage,
 } from "./domain/agent-dute.js";
+import {
+  itemLocations,
+  pendingRequests,
+  receipts,
+  recentEvents,
+  warehouseTasks,
+} from "./domain/agent-team.js";
 
 const adminApp = initializeApp();
 setGlobalOptions({
@@ -1988,7 +1995,93 @@ function agentDuteTools(scope: AgentScope, role: string) {
       },
       async ({ texto }) => documents(db, scope, texto),
     ),
+    // ---- só equipe Dutelog (liberadas por agentToolsForRole)
+    tool(
+      {
+        name: "fila_solicitacoes",
+        description:
+          "Solicitações do cliente (pedidos, avisos de envio) esperando a Dutelog aprovar, com há quantos dias cada uma espera.",
+        inputSchema: z.object({}),
+      },
+      async () => pendingRequests(db, scope),
+    ),
+    tool(
+      {
+        name: "recebimentos",
+        description:
+          "Recebimentos no armazém: aguardando chegada ou em conferência (padrão), ou todos. Mostra fornecedor, nota fiscal, previsão e peças previstas e recebidas.",
+        inputSchema: z.object({
+          situacao: z.enum(["abertos", "todos"]).optional(),
+          texto: z.string().optional().describe("Número do recebimento, fornecedor ou nota fiscal"),
+        }),
+      },
+      async (input) => receipts(db, scope, input),
+    ),
+    tool(
+      {
+        name: "tarefas_armazem",
+        description:
+          "Tarefas abertas do armazém: separação de pedidos e guarda de recebimentos, com situação, peças e há quantos dias estão abertas.",
+        inputSchema: z.object({}),
+      },
+      async () => warehouseTasks(db, scope),
+    ),
+    tool(
+      {
+        name: "enderecos",
+        description:
+          "Onde está cada item no armazém: saldo por endereço (em estoque, reservado, disponível). Procura por código, nome do item ou endereço.",
+        inputSchema: z.object({
+          texto: z.string().describe("Código, nome do item ou endereço, ex.: 'A.01.0594', 'polo', 'R01-P02'"),
+        }),
+      },
+      async ({ texto }) => itemLocations(db, scope, texto),
+    ),
+    tool(
+      {
+        name: "eventos",
+        description:
+          "Histórico auditável da operação: quem fez o quê e quando (aprovações, recebimentos, ajustes). Pode filtrar por número do pedido, recebimento ou palavras.",
+        inputSchema: z.object({
+          referencia: z.string().optional().describe("Ex.: 'PED-0041', 'ENV-0012', 'ajuste'"),
+          limite: z.number().int().min(1).max(40).optional(),
+        }),
+      },
+      async (input) => recentEvents(db, scope, input),
+    ),
+    tool(
+      {
+        name: "previa_faturamento",
+        description:
+          "Prévia da fatura de uma competência ainda aberta (padrão: o mês atual), calculada agora: total e valor por serviço.",
+        inputSchema: z.object({
+          competencia: z.string().regex(/^\d{4}-\d{2}$/).optional().describe("AAAA-MM"),
+        }),
+      },
+      async ({ competencia }) => billingPreviewForAgent(competencia ?? saoPauloCompetencia(new Date()), scope.customerCode),
+    ),
   ].filter((item) => allowed.has(item.__action.name));
+}
+
+function saoPauloCompetencia(now: Date) {
+  return new Date(now.getTime() - 3 * 3_600_000).toISOString().slice(0, 7);
+}
+
+/** Mesma conta de getBillingPreview, resumida por serviço para o agente. */
+async function billingPreviewForAgent(competencia: string, customerCode: string) {
+  const period = (await db.collection(collectionNames.periods).doc(competencia).get()).data() ?? {};
+  const status = String(period.status ?? "aberto");
+  const frozen = period.invoice_snapshot as { total?: unknown; grupos?: Array<{ grupo?: unknown; total?: unknown }> } | undefined;
+  const calculation =
+    status !== "aberto" && frozen
+      ? { total: Number(frozen.total ?? 0), grupos: (frozen.grupos ?? []).map((group) => ({ grupo: String(group.grupo ?? ""), total: Number(group.total ?? 0) })) }
+      : calculateBillingPeriod(await loadBillingCalculation(competencia, customerCode));
+  return {
+    competencia,
+    situacao: status === "aberto" ? "em aberto (prévia, muda até o fechamento)" : status,
+    total: calculation.total,
+    por_servico: calculation.grupos.map((group) => ({ servico: group.grupo, total: group.total })),
+  };
 }
 
 function agentDuteFallbackText() {
