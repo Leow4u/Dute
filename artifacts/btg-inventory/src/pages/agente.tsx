@@ -11,6 +11,18 @@ import { canAccessModule, getRouteProfileRoles } from "@/lib/modules";
  * papel. O painel (notificações, riscos, memória) e o Conhecimento ficam a
  * um clique, para quem tem acesso a eles.
  */
+const INTRO = {
+  wms: "Eu consulto as tarefas do armazém, os recebimentos, os endereços e o estoque, em tempo real.",
+  financeiro: "Eu consulto a prévia do mês, as faturas, os pedidos e o estoque, em tempo real.",
+  coordenacao: "Eu consulto a fila de solicitações, os recebimentos, o armazém, o estoque, as faturas e o histórico, em tempo real.",
+};
+
+const PLACEHOLDER = {
+  wms: "Pergunte sobre tarefas, recebimentos ou onde está um item…",
+  financeiro: "Pergunte sobre a prévia do mês, faturas ou pedidos…",
+  coordenacao: "Pergunte sobre solicitações, recebimentos, armazém ou estoque…",
+};
+
 export default function AgentePage() {
   const { user } = useAppUser();
   const role = user?.publicMetadata.role;
@@ -22,12 +34,8 @@ export default function AgentePage() {
     <AgentScreen
       basePath={TEAM_AGENT_PATH}
       suggestions={teamSuggestions(role)}
-      intro={
-        role === "wms"
-          ? "Eu consulto o estoque, os pedidos e as movimentações do cliente, em tempo real."
-          : "Eu consulto o estoque, os pedidos, as movimentações, as faturas e os documentos do cliente, em tempo real."
-      }
-      placeholder={role === "wms" ? "Pergunte sobre pedidos, saldos ou movimentações…" : "Pergunte sobre estoque, pedidos, movimentações ou faturas…"}
+      intro={INTRO[role === "wms" || role === "financeiro" ? role : "coordenacao"]}
+      placeholder={PLACEHOLDER[role === "wms" || role === "financeiro" ? role : "coordenacao"]}
       actions={links.map(({ href, label, icon: Icon }) => (
         <Link
           key={href}

@@ -19,6 +19,7 @@ export type AgentScope = {
 
 /** Consultas que o Agent Dute oferece ao modelo (nomes das ferramentas). */
 export const AGENT_TOOL_NAMES = [
+  // As mesmas projeções do portal: cliente e equipe.
   "resumo_estoque",
   "buscar_itens",
   "listar_pedidos",
@@ -26,17 +27,48 @@ export const AGENT_TOOL_NAMES = [
   "movimentacoes",
   "faturas",
   "documentos",
+  // Só equipe Dutelog (agent-team.ts e a prévia do faturamento).
+  "fila_solicitacoes",
+  "recebimentos",
+  "tarefas_armazem",
+  "enderecos",
+  "eventos",
+  "previa_faturamento",
 ] as const;
 
 export type AgentToolName = (typeof AGENT_TOOL_NAMES)[number];
 
+const PORTAL_TOOLS: AgentToolName[] = [
+  "resumo_estoque",
+  "buscar_itens",
+  "listar_pedidos",
+  "ver_pedido",
+  "movimentacoes",
+  "faturas",
+  "documentos",
+];
+const FLOOR_TOOLS: AgentToolName[] = ["recebimentos", "tarefas_armazem", "enderecos"];
+const COORDINATION_TOOLS: AgentToolName[] = ["fila_solicitacoes", ...FLOOR_TOOLS, "eventos"];
+
 /**
- * Consultas liberadas para o papel. O operador WMS não vê faturamento nas
- * telas, então o agente também não consulta faturas para ele.
+ * Consultas liberadas para o papel, pelo mesmo critério das telas:
+ * - cliente: só o que o portal mostra;
+ * - WMS: o chão do armazém, sem faturas nem valores;
+ * - financeiro: o portal e a prévia do mês (mesmo acesso de getBillingPreview);
+ * - coordenação (interno, suporte, admin, owner): a operação inteira; a prévia
+ *   do mês só para quem lê faturamento.
  */
 export function agentToolsForRole(role: string): AgentToolName[] {
-  if (role === "wms") return AGENT_TOOL_NAMES.filter((name) => name !== "faturas");
-  return [...AGENT_TOOL_NAMES];
+  const allowed = new Set<AgentToolName>();
+  const add = (names: AgentToolName[]) => names.forEach((name) => allowed.add(name));
+  if (role === "cliente") add(PORTAL_TOOLS);
+  else if (role === "wms") add([...PORTAL_TOOLS.filter((name) => name !== "faturas"), ...FLOOR_TOOLS]);
+  else if (role === "financeiro") add([...PORTAL_TOOLS, "previa_faturamento"]);
+  else if (["owner", "admin", "interno", "suporte"].includes(role)) {
+    add([...PORTAL_TOOLS, ...COORDINATION_TOOLS]);
+    if (role !== "interno") add(["previa_faturamento"]);
+  }
+  return AGENT_TOOL_NAMES.filter((name) => allowed.has(name));
 }
 
 type Row = Record<string, unknown> & { id: string };
