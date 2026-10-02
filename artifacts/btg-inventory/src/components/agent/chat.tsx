@@ -11,6 +11,8 @@ export type ChatMessage = {
   created_at?: string | null;
   source?: string | null;
   tools_used?: string[];
+  /** Rascunho de pedido ou aviso de envio montado pelo agente (lib/agent-draft). */
+  draft?: unknown;
 };
 
 export type ChatResponse = {

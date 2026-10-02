@@ -15,8 +15,14 @@ const PORTAL = [
 ];
 
 describe("consultas do Agent Dute por papel", () => {
-  it("cliente só tem o que o portal mostra", () => {
-    assert.deepEqual(agentToolsForRole("cliente"), PORTAL);
+  it("cliente tem o que o portal mostra e os rascunhos", () => {
+    assert.deepEqual(agentToolsForRole("cliente"), [...PORTAL, "rascunho_pedido", "rascunho_envio"]);
+  });
+
+  it("rascunhos são só do cliente", () => {
+    for (const role of ["owner", "admin", "interno", "suporte", "wms", "financeiro"]) {
+      assert.equal(agentToolsForRole(role).some((name) => name.startsWith("rascunho_")), false, role);
+    }
   });
 
   it("WMS tem o chão do armazém, sem faturas nem prévia", () => {

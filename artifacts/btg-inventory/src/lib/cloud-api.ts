@@ -1762,6 +1762,7 @@ async function getAgentDuteChat(conversationId?: string) {
       tools_used: Array.isArray(message.tools_used)
         ? message.tools_used.map(String)
         : [],
+      draft: message.draft,
     }));
 
   return {
