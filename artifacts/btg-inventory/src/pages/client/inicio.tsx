@@ -1,8 +1,11 @@
 import { useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { ArrowUp, Box, ChevronRight, PackagePlus, Sparkles, type LucideIcon } from "lucide-react";
+import { ArrowUp, Box, CalendarClock, ChevronRight, PackagePlus, Sparkles, type LucideIcon } from "lucide-react";
 
-import { agentAskHref } from "@/lib/agent-chat";
+import { fetchChatJson } from "@/components/agent/chat";
+import { agentAskHref, type ConversationSummary } from "@/lib/agent-chat";
+import { isUnreadRoutine } from "@/lib/agent-routines";
 import { useAppUser } from "@/lib/auth";
 import { invoiceLines } from "@/lib/client-home";
 import { ORDER_STEPS, homeOrderViews, orderStepIndex, type OrderView } from "@/lib/orders";
@@ -83,6 +86,7 @@ export function ClienteInicio() {
               </header>
 
               <AskAgent />
+              <RoutineNews />
 
               <section className="grid gap-3 md:grid-cols-2">
                 <Action
@@ -224,6 +228,35 @@ function OrderRow({ order }: { order: OrderView }) {
       {rejected ? null : <Steps step={orderStepIndex(order.stage)} />}
       {order.detail ? <p className="mt-1.5 text-xs text-muted-foreground">{order.detail}</p> : null}
     </li>
+  );
+}
+
+/** Resposta nova de rotina do Agent Dute (ainda não aberta neste navegador). */
+function RoutineNews() {
+  const conversations = useQuery<{ conversations: ConversationSummary[] }, Error>({
+    queryKey: ["agent-dute-conversations"],
+    queryFn: () => fetchChatJson<{ conversations: ConversationSummary[] }>("/api/agent-dute/conversations"),
+    staleTime: 60_000,
+  });
+  const unread = (conversations.data?.conversations ?? []).filter((item) => isUnreadRoutine(item)).slice(0, 2);
+  if (!unread.length) return null;
+  return (
+    <ul className="flex flex-col gap-2">
+      {unread.map((item) => (
+        <li key={item.id}>
+          <Link
+            href={`/portal/agente?c=${encodeURIComponent(item.id)}`}
+            className="flex items-center gap-3 rounded-[14px] border border-[#d9d0fb] bg-[#faf8ff] px-4 py-2.5 text-sm hover:border-[#5b3fc4]/50"
+          >
+            <CalendarClock className="h-4 w-4 shrink-0 text-[#5b3fc4]" aria-hidden="true" />
+            <span className="min-w-0 flex-1 truncate">
+              <b className="font-semibold">{item.title.replace(/^Rotina:\s*/, "")}</b> chegou
+            </span>
+            <span className="shrink-0 font-medium text-primary">Abrir ›</span>
+          </Link>
+        </li>
+      ))}
+    </ul>
   );
 }
 

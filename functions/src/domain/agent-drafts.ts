@@ -203,7 +203,7 @@ export function draftFromToolResponses(messages: Array<{ content?: Array<Record<
   for (const message of messages) {
     for (const part of message.content ?? []) {
       const response = part.toolResponse as { name?: unknown; output?: unknown } | undefined;
-      if (!response || (response.name !== "rascunho_pedido" && response.name !== "rascunho_envio")) continue;
+      if (!response || !["rascunho_pedido", "rascunho_envio", "sugerir_rotina"].includes(String(response.name))) continue;
       if (response.output && typeof response.output === "object") {
         const { instrucao: _instrucao, ...rest } = response.output as Record<string, unknown>;
         // Firestore recusa undefined aninhado: o JSON tira esses campos.
@@ -226,7 +226,7 @@ export type DraftSent = { request_id: string; request_number: string; sent_at: s
  */
 export async function sendAgentDraft<T extends Record<string, unknown>>(
   db: Firestore,
-  input: { messageId: string; uid: string; customerCode: string; tipo: "pedido" | "envio" },
+  input: { messageId: string; uid: string; customerCode: string; tipo: "pedido" | "envio" | "rotina" },
   create: (idempotencyKey: string) => Promise<T>,
 ) {
   const ref = db.collection("agent_messages").doc(input.messageId);
@@ -234,13 +234,13 @@ export async function sendAgentDraft<T extends Record<string, unknown>>(
   if (!message || message.user_id !== input.uid || message.customer_code !== input.customerCode || message.role !== "assistant") {
     throw new HttpsError("permission-denied", "Este rascunho não é desta conversa.");
   }
-  const label = input.tipo === "pedido" ? "pedido" : "aviso";
+  const label = { pedido: ["um pedido", "Este pedido já foi enviado"], envio: ["um aviso", "Este aviso já foi enviado"], rotina: ["uma rotina", "Esta rotina já foi criada"] }[input.tipo];
   if ((message.draft as { tipo?: unknown } | undefined)?.tipo !== input.tipo) {
-    throw new HttpsError("failed-precondition", `Esta mensagem não tem um ${label} para enviar.`);
+    throw new HttpsError("failed-precondition", `Esta mensagem não tem ${label[0]} para enviar.`);
   }
   const sent = message.draft_sent as DraftSent | undefined;
   if (sent?.request_id) {
-    throw new HttpsError("failed-precondition", `Este ${label} já foi enviado (${sent.request_number || sent.request_id}).`);
+    throw new HttpsError("failed-precondition", `${label[1]} (${sent.request_number || sent.request_id}).`);
   }
   const result = await create(`agent_draft_${input.messageId}`);
   const draftSent: DraftSent = {

@@ -12,6 +12,7 @@ import {
   type CallableRequest,
 } from "firebase-functions/https";
 import { setGlobalOptions } from "firebase-functions/v2";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { genkit, tool, z } from "genkit";
 import { vertexAI } from "@genkit-ai/google-genai";
 import { createHash, randomUUID } from "node:crypto";
@@ -102,6 +103,18 @@ import { buildOrderDraft, buildShipmentDraft, draftFromToolResponses, sendAgentD
 import { AgentAttachmentSchema, attachmentsForDraft, invoiceContext, READABLE_INVOICE_TYPES, type AgentAttachment } from "./domain/agent-attachments.js";
 import { activeNotesForPrompt, decideNote, DecideNoteSchema, listNotes, NOTE_REVIEWER_ROLES, suggestNote } from "./domain/agent-notes.js";
 import { conversationSummary, refreshConversationSummary, SUMMARY_WINDOW, summaryPrompt, type SummaryMessage } from "./domain/agent-summary.js";
+import {
+  buildRoutineSuggestion,
+  claimDueRoutines,
+  deleteRoutine,
+  listRoutines,
+  recordRoutineRun,
+  ROUTINES_COLLECTION,
+  RoutineInputSchema,
+  routinePrompt,
+  saveRoutine,
+  type DueRoutine,
+} from "./domain/agent-routines.js";
 
 const adminApp = initializeApp();
 setGlobalOptions({
@@ -1234,9 +1247,14 @@ function assertAuth(request: CallableRequest<unknown>) {
 
 async function getProfile(request: CallableRequest<unknown>): Promise<Profile> {
   const auth = assertAuth(request);
+  return loadProfile(auth.uid, auth.token.email, auth.token.name);
+}
+
+/** Perfil atual da pessoa (callables e rotinas do Agent Dute, que rodam sem ninguém logado). */
+async function loadProfile(uid: string, email?: string, tokenName?: string): Promise<Profile> {
   const snapshot = await db
     .collection(collectionNames.users)
-    .doc(auth.uid)
+    .doc(uid)
     .get();
   if (!snapshot.exists) {
     throw new HttpsError("permission-denied", "Usuário sem perfil ativo.");
@@ -1262,12 +1280,12 @@ async function getProfile(request: CallableRequest<unknown>): Promise<Profile> {
   }
 
   return {
-    uid: auth.uid,
-    email: auth.token.email,
+    uid,
+    email: email ?? (typeof data.email === "string" ? data.email : undefined),
     role,
     customer_code:
       typeof data.customer_code === "string" ? data.customer_code : undefined,
-    name: typeof data.nome === "string" ? data.nome : auth.token.name,
+    name: typeof data.nome === "string" ? data.nome : tokenName,
   };
 }
 
@@ -1924,6 +1942,7 @@ Como trabalhar:
 Anotações aprovadas sobre ${input.customerCode} (valem como regra da operação; use quando fizer sentido, sem repetir à toa):
 ${input.notes?.length ? input.notes.map((note) => `- ${note}`).join("\n") : "- (nenhuma ainda)"}
 - Quando a pessoa disser uma preferência ou regra que vale para as próximas vezes (horário, local, contato, embalagem, como prefere receber), sugira com sugerir_anotacao e diga que a equipe Dutelog aprova antes de valer. Não sugira o que já está anotado acima.
+- Quando a pessoa pedir algo que se repete ("toda segunda me manda…", "todo dia de manhã quero saber…"), proponha uma rotina com sugerir_rotina: a pessoa confirma no cartão. As rotinas também ficam na coluna Rotinas, à direita do chat.
 
 ${input.summary ? `Resumo do começo desta conversa (as mensagens antigas não aparecem abaixo; use como contexto e confirme dados atuais nas consultas):\n${input.summary}\n\n` : ""}Como escrever:
 - Português do Brasil, direto e cordial, como um colega que conhece a operação. Comece pela resposta.
@@ -1958,6 +1977,22 @@ function agentDuteTools(
           audience: scope.audience === "customer" ? "customer" : "internal",
           actor: { uid: asker.userId, email: asker.email, name: asker.name, role, customer_code: scope.customerCode },
         }),
+    ),
+    tool(
+      {
+        name: "sugerir_rotina",
+        description:
+          "Propõe uma ROTINA: uma pergunta que o Agent Dute responde sozinho no horário marcado (ex.: 'toda segunda às 8h, resumo da semana'). Não cria nada; a pessoa confirma no cartão abaixo da resposta. A rotina só consulta.",
+        inputSchema: z.object({
+          nome: z.string().describe("Nome curto, ex.: 'Resumo da semana'"),
+          pergunta: z.string().describe("O que o agente deve responder a cada vez, escrito como pedido completo"),
+          frequencia: z.enum(["todo_dia", "dia_util", "semanal", "mensal"]),
+          dias: z.array(z.string()).optional().describe("Semanal: dias como 'seg', 'ter', 'qua', 'qui', 'sex', 'sab', 'dom'"),
+          dia_do_mes: z.number().int().optional().describe("Mensal: dia de 1 a 28"),
+          horario: z.string().optional().describe("HH:MM, horário de São Paulo (vai para o múltiplo de 15 min mais próximo)"),
+        }),
+      },
+      async (input) => buildRoutineSuggestion(input),
     ),
     // ---- rascunhos do cliente: o agente monta, a pessoa confere e envia
     tool(
@@ -7006,3 +7041,192 @@ export const chatWithAgentDute = onCall({ timeoutSeconds: 180 }, async (request,
   }
   return await output;
 });
+
+// ------------------------------------------------- rotinas do Agent Dute
+
+function routineOwner(profile: Profile) {
+  return { uid: profile.uid, customerCode: requireCustomerScope(profile), role: profile.role, name: profile.name };
+}
+
+export const listAgentRoutines = onCall(async (request) => {
+  const profile = await getProfile(request);
+  return { routines: await listRoutines(db, routineOwner(profile)) };
+});
+
+/** Cria ou altera uma rotina. Pelo cartão do chat, a mesma mensagem não cria duas. */
+export const saveAgentRoutine = onCall(async (request) => {
+  const profile = await getProfile(request);
+  const parsed = RoutineInputSchema.safeParse(request.data ?? {});
+  if (!parsed.success) {
+    throw new HttpsError("invalid-argument", parsed.error.issues[0]?.message ?? "Rotina inválida.");
+  }
+  const owner = routineOwner(profile);
+  const { agent_message_id, ...input } = parsed.data;
+  if (agent_message_id && !input.id) {
+    return sendAgentDraft(db, { messageId: agent_message_id, uid: owner.uid, customerCode: owner.customerCode, tipo: "rotina" }, async (key) => {
+      const saved = await saveRoutine(db, owner, input, new Date(), key);
+      return { id: saved.id, request_number: saved.name };
+    });
+  }
+  return saveRoutine(db, owner, input);
+});
+
+export const deleteAgentRoutine = onCall(async (request) => {
+  const profile = await getProfile(request);
+  const input = z.object({ id: z.string().trim().min(1).max(120) }).parse(request.data ?? {});
+  return deleteRoutine(db, routineOwner(profile), input.id);
+});
+
+/** "Rodar agora" no editor: roda já, sem mexer na agenda. No máximo uma vez a cada 5 minutos. */
+export const runAgentRoutineNow = onCall({ timeoutSeconds: 180 }, async (request) => {
+  const profile = await getProfile(request);
+  const owner = routineOwner(profile);
+  const input = z.object({ id: z.string().trim().min(1).max(120) }).parse(request.data ?? {});
+  const ref = db.collection(ROUTINES_COLLECTION).doc(input.id);
+  const data = (await ref.get()).data();
+  if (!data) throw new HttpsError("not-found", "Rotina não encontrada.");
+  if (data.user_id !== owner.uid || data.customer_code !== owner.customerCode) {
+    throw new HttpsError("permission-denied", "Esta rotina é de outra pessoa.");
+  }
+  if (typeof data.last_run_at === "string" && Date.now() - Date.parse(data.last_run_at) < 5 * 60_000) {
+    throw new HttpsError("failed-precondition", "Esta rotina rodou há pouco. Espere uns minutos.");
+  }
+  const routine: DueRoutine = {
+    id: input.id,
+    user_id: owner.uid,
+    customer_code: owner.customerCode,
+    name: String(data.name ?? ""),
+    prompt: String(data.prompt ?? ""),
+    conversation_id: String(data.conversation_id ?? `routine_${input.id}`),
+    retry_pending: true,
+  };
+  await runRoutine(routine);
+  return { conversation_id: routine.conversation_id };
+});
+
+/** De 15 em 15 minutos: roda as rotinas vencidas (até 20 por vez, uma de cada vez). */
+export const runAgentRoutines = onSchedule(
+  { schedule: "every 15 minutes", timeZone: "America/Sao_Paulo", timeoutSeconds: 540, memory: "512MiB" },
+  async () => {
+    const started = Date.now();
+    const due = await claimDueRoutines(db, new Date());
+    for (const routine of due) {
+      // Deixa folga para não estourar o tempo da tarefa; o que sobrar vai na próxima.
+      if (Date.now() - started > 420_000) {
+        await recordRoutineRun(db, { ...routine, retry_pending: false }, { status: "failed", error: "Sem tempo nesta rodada." });
+        continue;
+      }
+      try {
+        await runRoutine(routine);
+      } catch (error) {
+        console.error("runAgentRoutines: rotina falhou", { id: routine.id, error });
+      }
+    }
+  },
+);
+
+/**
+ * Roda uma rotina com o perfil ATUAL de quem criou (se perdeu o acesso, a
+ * rotina pausa) e grava pergunta e resposta na conversa da rotina.
+ */
+async function runRoutine(routine: DueRoutine) {
+  let profile: Profile;
+  try {
+    profile = await loadProfile(routine.user_id);
+  } catch {
+    await recordRoutineRun(db, routine, { status: "no_access" });
+    return;
+  }
+  const customerCode = profile.role === "cliente" ? profile.customer_code : routine.customer_code;
+  if (!customerCode || customerCode !== routine.customer_code) {
+    await recordRoutineRun(db, routine, { status: "no_access" });
+    return;
+  }
+  try {
+    const now = new Date();
+    const askedAt = now.toISOString();
+    const scope: AgentScope = { customerCode, audience: knowledgeAudienceForRole(profile.role) };
+    const question = routinePrompt(routine, now);
+    const answer = await generateAgentDuteReply({
+      message: question,
+      history: [],
+      scope,
+      role: profile.role,
+      asker: { userId: profile.uid, conversationId: routine.conversation_id, name: profile.name, email: profile.email },
+      userName: profile.name,
+    });
+    const answeredAt = new Date(Math.max(Date.now(), now.getTime() + 1)).toISOString();
+    const conversationRef = db.collection(collectionNames.agentConversations).doc(routine.conversation_id);
+    const userMessageId = newDocId("msg_user");
+    const assistantMessageId = newDocId("msg_agent");
+    const batch = db.batch();
+    batch.set(
+      conversationRef,
+      compactPayload({
+        id: routine.conversation_id,
+        customer_code: customerCode,
+        user_id: profile.uid,
+        user_email: profile.email,
+        user_name: profile.name,
+        title: `Rotina: ${routine.name}`.slice(0, 90),
+        routine_id: routine.id,
+        status: "active",
+        last_message_at: answeredAt,
+        updated_at: FieldValue.serverTimestamp(),
+      }),
+      { merge: true },
+    );
+    batch.set(db.collection(collectionNames.agentMessages).doc(userMessageId), {
+      id: userMessageId,
+      conversation_id: routine.conversation_id,
+      customer_code: customerCode,
+      user_id: profile.uid,
+      role: "user",
+      content: routine.prompt,
+      created_at_iso: askedAt,
+      created_at: FieldValue.serverTimestamp(),
+      source: "rotina",
+    });
+    batch.set(
+      db.collection(collectionNames.agentMessages).doc(assistantMessageId),
+      compactPayload({
+        id: assistantMessageId,
+        conversation_id: routine.conversation_id,
+        customer_code: customerCode,
+        user_id: profile.uid,
+        role: "assistant",
+        content: answer.text,
+        tools_used: answer.tools_used,
+        draft: answer.draft,
+        created_at_iso: answeredAt,
+        created_at: FieldValue.serverTimestamp(),
+        source: answer.source,
+      }),
+    );
+    batch.set(
+      db.collection(collectionNames.agentUsage).doc(assistantMessageId),
+      compactPayload({
+        id: assistantMessageId,
+        conversation_id: routine.conversation_id,
+        customer_code: customerCode,
+        user_id: profile.uid,
+        role: profile.role,
+        model: answer.model,
+        source: "rotina",
+        tools_used: answer.tools_used,
+        tool_calls: answer.tools_used.length,
+        input_tokens: answer.input_tokens,
+        output_tokens: answer.output_tokens,
+        latency_ms: answer.latency_ms,
+        error: answer.error,
+        created_at_iso: answeredAt,
+        created_at: FieldValue.serverTimestamp(),
+      }),
+    );
+    await batch.commit();
+    await recordRoutineRun(db, routine, { status: "ok" });
+  } catch (error) {
+    await recordRoutineRun(db, routine, { status: "failed", error: error instanceof Error ? error.message : String(error) });
+    throw error;
+  }
+}
