@@ -1683,6 +1683,9 @@ async function getClientOverview() {
     order_tracking: customerOrders,
     invoice_history: periods,
     request_history: sortByDateDesc(customerRequests, "created_at"),
+    // Documentos publicados para a BTG (client_documents); antes só a
+    // contagem chegava ao portal e a tela ficava sempre vazia.
+    document_history: sortByDateDesc(customerDocuments, "created_at"),
     invoices: invoiceItems,
     agent_alerts: alertItems,
     alerts: alertItems,
