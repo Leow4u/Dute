@@ -22,6 +22,8 @@ import {
   UploadCloud,
 } from "lucide-react";
 
+import { AgentNotes } from "@/components/agent/agent-notes";
+import { useAppUser } from "@/lib/auth";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -289,6 +291,9 @@ async function emitKnowledgeEvent(input: {
 
 export default function AgentKnowledge() {
   const { toast } = useToast();
+  const { user } = useAppUser();
+  // Mesmo critério do backend (NOTE_REVIEWER_ROLES); o financeiro vê só os documentos.
+  const canReviewNotes = ["owner", "admin", "interno", "suporte"].includes(String(user?.publicMetadata.role ?? ""));
   const queryClient = useQueryClient();
   const [form, setForm] = useState<UploadFormState>(initialForm);
   const [file, setFile] = useState<File | null>(null);
@@ -578,6 +583,8 @@ export default function AgentKnowledge() {
           Atualizar
         </Button>
       </div>
+
+      {canReviewNotes ? <AgentNotes /> : null}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>

@@ -99,6 +99,7 @@ import {
 } from "./domain/agent-team.js";
 import { searchPastConversations } from "./domain/agent-history.js";
 import { buildOrderDraft, buildShipmentDraft, draftFromToolResponses } from "./domain/agent-drafts.js";
+import { activeNotesForPrompt, decideNote, listNotes, NOTE_REVIEWER_ROLES, suggestNote } from "./domain/agent-notes.js";
 
 const adminApp = initializeApp();
 setGlobalOptions({
@@ -1888,6 +1889,7 @@ function agentDuteSystemPrompt(input: {
   customerCode: string;
   userName?: string;
   now: Date;
+  notes?: string[];
 }) {
   const today = saoPauloDate.format(input.now);
   const isoToday = new Date(input.now.getTime() - 3 * 3_600_000).toISOString().slice(0, 10);
@@ -1912,6 +1914,10 @@ Como trabalhar:
 - Se a pessoa citar algo de uma conversa anterior ("aquilo que te perguntei", "como ficou o pedido de ontem"), procure com conversas_anteriores antes de responder. Diga a data da conversa e confirme o dado atual nas outras consultas.
 - Ao citar um pedido ou aviso de envio, use o número dele (PED-0043, ENV-0012). Nunca mostre ids internos como "creq_…".${input.role === "wms" ? "\n- Você atende a bancada do armazém: não consulta faturas nem valores. Se perguntarem, diga que isso fica com o financeiro." : ""}
 
+Anotações aprovadas sobre ${input.customerCode} (valem como regra da operação; use quando fizer sentido, sem repetir à toa):
+${input.notes?.length ? input.notes.map((note) => `- ${note}`).join("\n") : "- (nenhuma ainda)"}
+- Quando a pessoa disser uma preferência ou regra que vale para as próximas vezes (horário, local, contato, embalagem, como prefere receber), sugira com sugerir_anotacao e diga que a equipe Dutelog aprova antes de valer. Não sugira o que já está anotado acima.
+
 Como escrever:
 - Português do Brasil, direto e cordial, como um colega que conhece a operação. Comece pela resposta.
 - Respostas curtas. Use **negrito** para o número principal e listas com "- " quando houver vários itens.
@@ -1922,10 +1928,30 @@ Como escrever:
 function agentDuteTools(
   scope: AgentScope,
   role: string,
-  asker: { userId: string; conversationId: string },
+  asker: { userId: string; conversationId: string; name?: string; email?: string },
 ) {
   const allowed = new Set<string>(agentToolsForRole(role));
   return [
+    tool(
+      {
+        name: "sugerir_anotacao",
+        description:
+          "Sugere uma anotação duradoura sobre o cliente para o Agent Dute lembrar nas próximas conversas (ex.: 'Entregas na Faria Lima só pela manhã', 'Contato do almoxarifado: Cristiane'). Fica pendente até a equipe Dutelog aprovar. Não use para dado que muda (saldo, status de pedido) nem para dado pessoal sensível.",
+        inputSchema: z.object({
+          texto: z.string().describe("A anotação, curta e objetiva, até 300 caracteres"),
+          motivo: z.string().optional().describe("Por que vale anotar (o que a pessoa disse)"),
+        }),
+      },
+      async ({ texto, motivo }) =>
+        suggestNote(db, {
+          customerCode: scope.customerCode,
+          text: texto,
+          reason: motivo,
+          conversationId: asker.conversationId,
+          audience: scope.audience === "customer" ? "customer" : "internal",
+          actor: { uid: asker.userId, email: asker.email, name: asker.name, role, customer_code: scope.customerCode },
+        }),
+    ),
     // ---- rascunhos do cliente: o agente monta, a pessoa confere e envia
     tool(
       {
@@ -2182,16 +2208,20 @@ async function generateAgentDuteReply(input: {
   history: HistoryMessage[];
   scope: AgentScope;
   role: string;
-  asker: { userId: string; conversationId: string };
+  asker: { userId: string; conversationId: string; name?: string; email?: string };
   userName?: string;
   onChunk?: (chunk: AgentDuteChunk) => void;
 }) {
+  const notes = await activeNotesForPrompt(db, input.scope.customerCode, input.scope.audience === "customer" ? "customer" : "internal").catch(
+    () => [] as string[],
+  );
   const system = agentDuteSystemPrompt({
     audience: input.scope.audience,
     role: input.role,
     customerCode: input.scope.customerCode,
     userName: input.userName,
     now: new Date(),
+    notes,
   });
   const messages = input.history
     .filter((item) => item.content.trim())
@@ -2914,7 +2944,7 @@ const chatWithAgentDuteFlow = ai.defineFlow(
       history,
       scope,
       role: input.actor_role,
-      asker: { userId: input.actor_uid, conversationId },
+      asker: { userId: input.actor_uid, conversationId, name: input.actor_name, email: input.actor_email },
       userName: input.actor_name,
       onChunk: (chunk) => sendChunk(chunk),
     });
@@ -6842,6 +6872,34 @@ export const payBillingInvoice = onCall(async (request) => {
   } catch (error) {
     return billingError(error);
   }
+});
+
+const DecideAgentNoteSchema = z.object({
+  id: z.string().trim().min(1).max(120),
+  action: z.enum(["approve", "reject", "archive"]),
+  text: z.string().trim().max(300).optional(),
+  visibility: z.enum(["todos", "equipe"]).optional(),
+});
+
+function requireNoteReviewer(profile: Profile) {
+  if (!NOTE_REVIEWER_ROLES.includes(profile.role)) {
+    throw new HttpsError("permission-denied", "Só a coordenação vê e aprova as anotações do Agent Dute.");
+  }
+}
+
+/** Anotações do Agent Dute (pendentes e valendo) do cliente, para a coordenação revisar. */
+export const listAgentNotes = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireNoteReviewer(profile);
+  return { notes: await listNotes(db, requireCustomerScope(profile)) };
+});
+
+/** Aprova (com edição), recusa ou arquiva uma anotação; grava evento. */
+export const decideAgentNote = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireNoteReviewer(profile);
+  const input = DecideAgentNoteSchema.parse(request.data ?? {});
+  return decideNote(db, input, profile);
 });
 
 // Uma resposta pode encadear várias consultas; 60 s (padrão) era curto.

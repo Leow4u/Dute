@@ -29,6 +29,8 @@ export const AGENT_TOOL_NAMES = [
   "documentos",
   // As conversas anteriores da própria pessoa: todos os papéis.
   "conversas_anteriores",
+  // Sugerir anotação (fica pendente até a coordenação aprovar): todos os papéis.
+  "sugerir_anotacao",
   // Rascunhos de pedido e de aviso de envio: só o cliente (não grava nada).
   "rascunho_pedido",
   "rascunho_envio",
@@ -52,6 +54,7 @@ const PORTAL_TOOLS: AgentToolName[] = [
   "faturas",
   "documentos",
   "conversas_anteriores",
+  "sugerir_anotacao",
 ];
 const FLOOR_TOOLS: AgentToolName[] = ["recebimentos", "tarefas_armazem", "enderecos"];
 const COORDINATION_TOOLS: AgentToolName[] = ["fila_solicitacoes", ...FLOOR_TOOLS, "eventos"];

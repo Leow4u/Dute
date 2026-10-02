@@ -449,7 +449,7 @@ function eventSummaryFromData(id: string, data: Record<string, unknown>) {
   });
 }
 
-function createEvent(
+export function createEvent(
   transaction: Transaction,
   db: Firestore,
   id: string,

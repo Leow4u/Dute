@@ -143,6 +143,7 @@ const TOOL_LABELS: Record<string, { done: string; running: string }> = {
   documentos: { done: "Consultou os documentos", running: "Consultando os documentos" },
   rascunho_pedido: { done: "Montou o rascunho do pedido", running: "Montando o rascunho do pedido" },
   rascunho_envio: { done: "Montou o rascunho do aviso", running: "Montando o rascunho do aviso" },
+  sugerir_anotacao: { done: "Sugeriu uma anotação para a equipe aprovar", running: "Sugerindo uma anotação" },
   conversas_anteriores: { done: "Procurou nas conversas anteriores", running: "Procurando nas conversas anteriores" },
   fila_solicitacoes: { done: "Consultou a fila de solicitações", running: "Consultando a fila de solicitações" },
   recebimentos: { done: "Consultou os recebimentos", running: "Consultando os recebimentos" },

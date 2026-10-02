@@ -378,6 +378,27 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  // Anotações sugeridas pelo Agent Dute: a coordenação lista e decide.
+  if (method === "GET" && pathname === "/api/agent-dute/notes") {
+    return { name: "listAgentNotes", payload: async () => ({}) };
+  }
+
+  const noteDecisionMatch = pathname.match(/^\/api\/agent-dute\/notes\/([^/]+)\/(approve|reject|archive)$/);
+  if (method === "POST" && noteDecisionMatch) {
+    return {
+      name: "decideAgentNote",
+      payload: async (_pathname, init) => {
+        const body = await readJsonBody(init);
+        return {
+          text: typeof body.text === "string" ? body.text : undefined,
+          visibility: body.visibility === "equipe" || body.visibility === "todos" ? body.visibility : undefined,
+          id: decodeURIComponent(noteDecisionMatch[1]),
+          action: noteDecisionMatch[2],
+        };
+      },
+    };
+  }
+
   if (method === "POST" && pathname === "/api/agent-dute/notifications/sync") {
     return {
       name: "syncOperationalNotifications",
