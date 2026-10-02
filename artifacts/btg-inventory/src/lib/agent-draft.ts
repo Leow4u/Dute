@@ -15,6 +15,7 @@ export type OrderDraft = {
   nome?: string;
   destino?: string;
   prazo?: string;
+  hora?: string;
   observacoes?: string;
   linhas: OrderDraftLine[];
   pendencias: DraftPending[];
@@ -62,6 +63,7 @@ export function parseDraft(value: unknown): AgentDraft | null {
       nome: optional(raw.nome),
       destino: optional(raw.destino),
       prazo: optional(raw.prazo),
+      hora: optional(raw.hora),
       observacoes: optional(raw.observacoes),
       linhas: list(raw.linhas)
         .map((line) => ({
@@ -153,7 +155,103 @@ export function cartFromDraft(products: Array<{ key: string; sku: string; availa
   return { cart, missing };
 }
 
-/** "2026-10-04" → valor do campo datetime-local do pedido (meio-dia). */
-export function dueAtFromDraft(prazo: string | undefined) {
-  return prazo && /^\d{4}-\d{2}-\d{2}$/.test(prazo) ? `${prazo}T12:00` : "";
+/** "2026-10-04" (+ "11:00") → valor do campo datetime-local do pedido (sem hora, meio-dia). */
+export function dueAtFromDraft(prazo: string | undefined, hora?: string) {
+  if (!prazo || !/^\d{4}-\d{2}-\d{2}$/.test(prazo)) return "";
+  return `${prazo}T${hora && /^\d{2}:\d{2}$/.test(hora) ? hora : "12:00"}`;
+}
+
+// ------------------------------------------------ pedido enviado pelo cartão
+
+/** Pedido que já saiu do cartão (gravado na mensagem pelo servidor). */
+export type DraftSent = { request_id: string; request_number: string; sent_at: string };
+
+export function parseDraftSent(value: unknown): DraftSent | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as AnyRecord;
+  const requestId = text(raw.request_id);
+  return requestId ? { request_id: requestId, request_number: text(raw.request_number), sent_at: text(raw.sent_at) } : null;
+}
+
+export type OrderFormLine = { sku_code: string; codigo: string; nome: string; detalhe?: string; quantidade: number; disponivel: number };
+
+/** O que a pessoa confere e ajusta no cartão antes de enviar. */
+export type OrderForm = {
+  linhas: OrderFormLine[];
+  destino: string;
+  dia: string;
+  hora: string;
+  nome: string;
+  observacoes: string;
+};
+
+export function orderFormFromDraft(draft: OrderDraft): OrderForm {
+  return {
+    linhas: draft.linhas.map((line) => ({ ...line })),
+    destino: draft.destino ?? "",
+    dia: draft.prazo ?? "",
+    hora: draft.prazo ? (draft.hora ?? "") : "",
+    nome: draft.nome ?? "",
+    observacoes: draft.observacoes ?? "",
+  };
+}
+
+/** Saldo de agora no lugar do saldo de quando o agente montou (quando a tela já tem o estoque). */
+export function withLiveAvailability(form: OrderForm, availableBySku: Map<string, number> | null): OrderForm {
+  if (!availableBySku) return form;
+  return {
+    ...form,
+    linhas: form.linhas.map((line) =>
+      availableBySku.has(line.sku_code) ? { ...line, disponivel: Math.max(0, availableBySku.get(line.sku_code) ?? 0) } : line,
+    ),
+  };
+}
+
+/** O que impede o envio, em palavras de quem está enviando; null quando está pronto. */
+export function orderFormProblem(form: OrderForm, today: string) {
+  if (!form.linhas.length) return "Coloque ao menos um item.";
+  const over = form.linhas.find((line) => line.quantidade > line.disponivel);
+  if (over) return `${over.codigo || over.nome}: só ${over.disponivel} disponíveis.`;
+  if (form.linhas.some((line) => line.quantidade <= 0)) return "Toda linha precisa de quantidade.";
+  if (!form.destino.trim()) return "Diga onde entregar.";
+  if (form.dia && form.dia < today) return "A data já passou.";
+  return null;
+}
+
+/**
+ * Pedido para a mesma criação do Estoque. Sem hora, vale até as 18h do dia.
+ * O servidor separa as quantidades pelas posições do armazém.
+ */
+export function orderPayloadFromForm(form: OrderForm, messageId: string) {
+  const destino = form.destino.trim();
+  const dueAt = form.dia ? new Date(`${form.dia}T${form.hora || "18:00"}:00-03:00`) : null;
+  return {
+    type: "retirada" as const,
+    priority: "normal",
+    title: form.nome.trim() || undefined,
+    description: [`Pedido montado com o Agent Dute para ${destino}`, form.observacoes.trim()].filter(Boolean).join(" | "),
+    destination: destino,
+    due_at: dueAt && !Number.isNaN(dueAt.getTime()) ? dueAt.toISOString() : undefined,
+    items: form.linhas.map((line) => ({
+      sku_code: line.sku_code,
+      client_item_code: line.codigo || undefined,
+      product_name: line.nome || undefined,
+      quantity: line.quantidade,
+    })),
+    agent_message_id: messageId,
+  };
+}
+
+/** Rascunho com o que a pessoa já ajustou, para continuar na tela Estoque. */
+export function draftFromOrderForm(form: OrderForm): OrderDraft {
+  return {
+    tipo: "pedido",
+    nome: form.nome.trim() || undefined,
+    destino: form.destino.trim() || undefined,
+    prazo: form.dia || undefined,
+    hora: form.hora || undefined,
+    observacoes: form.observacoes.trim() || undefined,
+    linhas: form.linhas.map((line) => ({ ...line })),
+    pendencias: [],
+  };
 }

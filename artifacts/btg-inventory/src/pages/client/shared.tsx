@@ -447,6 +447,8 @@ export type CreateClientRequestPayload = {
   invoice_number?: string;
   attachments?: ClientRequestAttachment[];
   items: CreateClientRequestItem[];
+  /** Pedido enviado pelo cartão do Agent Dute (a mensagem que trouxe o rascunho). */
+  agent_message_id?: string;
 };
 
 export function createClientRequest(payload: CreateClientRequestPayload) {

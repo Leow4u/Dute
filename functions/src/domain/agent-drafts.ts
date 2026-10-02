@@ -1,4 +1,5 @@
 import type { Firestore } from "firebase-admin/firestore";
+import { HttpsError } from "firebase-functions/https";
 
 import { normalize, type AgentScope } from "./agent-dute.js";
 
@@ -6,8 +7,9 @@ import { normalize, type AgentScope } from "./agent-dute.js";
  * Rascunho de ação do Agent Dute (ideia do Hermes Agent, com aprovação
  * humana): o agente confere os itens no estoque publicado do cliente e monta
  * um pedido ou aviso de envio. Nada é gravado aqui: o rascunho volta na
- * resposta, a tela abre o formulário preenchido e quem envia é a pessoa,
- * pelo mesmo botão e com as mesmas validações de sempre.
+ * resposta. O pedido vira um cartão na conversa, que a pessoa confere e envia
+ * (sendOrderDraft, com as validações de sempre); o aviso de envio abre a tela
+ * Envios preenchida.
  */
 
 const MAX_LINES = 40;
@@ -25,6 +27,10 @@ function num(value: unknown) {
 
 function isoDay(value: string | undefined) {
   return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined;
+}
+
+function isoTime(value: string | undefined) {
+  return value && /^([01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : undefined;
 }
 
 function short(value: string | undefined, max: number) {
@@ -78,6 +84,7 @@ export type OrderDraftInput = {
   itens: Array<{ item: string; quantidade: number }>;
   destino?: string;
   prazo?: string;
+  hora?: string;
   nome?: string;
   observacoes?: string;
 };
@@ -131,12 +138,13 @@ export async function buildOrderDraft(db: Firestore, scope: AgentScope, input: O
     nome: short(input.nome, 120),
     destino,
     prazo: isoDay(input.prazo),
+    hora: isoDay(input.prazo) ? isoTime(input.hora) : undefined,
     observacoes: short(input.observacoes, 1000),
     linhas,
     pendencias,
     falta_destino: !destino,
     instrucao:
-      "Mostre o resumo. A pessoa confere e envia pelo botão 'Abrir para conferir e enviar' que aparece abaixo da resposta; você não envia nada. Se houver pendências ou faltar destino, pergunte antes.",
+      "Mostre um resumo curto. Abaixo da resposta aparece um cartão com o pedido: a pessoa confere, ajusta quantidades, destino e data e envia pelo botão 'Enviar pedido' do cartão; você não envia nada e nunca diga que enviou. Se houver pendências, pergunte; se faltar destino ou data, pergunte ou diga que dá para preencher no cartão.",
   };
 }
 
@@ -182,7 +190,7 @@ export async function buildShipmentDraft(db: Firestore, scope: AgentScope, input
     observacoes: short(input.observacoes, 1000),
     linhas,
     instrucao:
-      "Mostre o resumo. A pessoa confere, anexa a nota se quiser e envia pelo botão 'Abrir para conferir e enviar' que aparece abaixo da resposta; você não envia nada.",
+      "Mostre o resumo. A pessoa confere, anexa a nota se quiser e envia pelo botão 'Abrir para conferir e enviar' que aparece abaixo da resposta, na tela Envios; você não envia nada.",
   };
 }
 
@@ -203,4 +211,41 @@ export function draftFromToolResponses(messages: Array<{ content?: Array<Record<
     }
   }
   return draft;
+}
+
+export type DraftSent = { request_id: string; request_number: string; sent_at: string };
+
+/**
+ * Envio do pedido que o Agent Dute montou, pelo botão do cartão na conversa.
+ * Quem envia é a pessoa (com o login dela, pela mesma criação de pedido do
+ * Estoque); aqui só se confere que o rascunho é dela e ainda não foi enviado,
+ * e a chave de idempotência vem da mensagem: a mesma mensagem nunca vira dois
+ * pedidos. Depois de criado, a mensagem guarda o número para o cartão mostrar
+ * "Enviado" em qualquer aparelho.
+ */
+export async function sendOrderDraft<T extends Record<string, unknown>>(
+  db: Firestore,
+  input: { messageId: string; uid: string; customerCode: string },
+  create: (idempotencyKey: string) => Promise<T>,
+) {
+  const ref = db.collection("agent_messages").doc(input.messageId);
+  const message = (await ref.get()).data();
+  if (!message || message.user_id !== input.uid || message.customer_code !== input.customerCode || message.role !== "assistant") {
+    throw new HttpsError("permission-denied", "Este rascunho não é desta conversa.");
+  }
+  if ((message.draft as { tipo?: unknown } | undefined)?.tipo !== "pedido") {
+    throw new HttpsError("failed-precondition", "Esta mensagem não tem um pedido para enviar.");
+  }
+  const sent = message.draft_sent as DraftSent | undefined;
+  if (sent?.request_id) {
+    throw new HttpsError("failed-precondition", `Este pedido já foi enviado (${sent.request_number || sent.request_id}).`);
+  }
+  const result = await create(`agent_draft_${input.messageId}`);
+  const draftSent: DraftSent = {
+    request_id: text(result.id),
+    request_number: text(result.request_number),
+    sent_at: new Date().toISOString(),
+  };
+  await ref.update({ draft_sent: draftSent });
+  return result;
 }

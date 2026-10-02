@@ -5,7 +5,7 @@ import { deleteApp, initializeApp } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 
 import type { AgentScope } from "./agent-dute.js";
-import { buildOrderDraft, buildShipmentDraft, draftFromToolResponses } from "./agent-drafts.js";
+import { buildOrderDraft, buildShipmentDraft, draftFromToolResponses, sendOrderDraft } from "./agent-drafts.js";
 
 const PROJECT_ID = "demo-dute-operations";
 const BTG = "BTG Pactual";
@@ -85,6 +85,74 @@ describe("rascunho de pedido", () => {
     const draft = await buildOrderDraft(db, cliente, { itens: [{ item: "C.0659", quantidade: 1 }], prazo: "sexta" });
     assert.equal(draft.prazo, undefined);
     assert.equal(draft.falta_destino, true);
+  });
+
+  it("hora só com data válida e no formato HH:MM", async () => {
+    const item = [{ item: "C.0659", quantidade: 1 }];
+    assert.equal((await buildOrderDraft(db, cliente, { itens: item, prazo: "2026-10-06", hora: "11:00" })).hora, "11:00");
+    assert.equal((await buildOrderDraft(db, cliente, { itens: item, prazo: "2026-10-06", hora: "manhã" })).hora, undefined);
+    assert.equal((await buildOrderDraft(db, cliente, { itens: item, hora: "11:00" })).hora, undefined);
+  });
+});
+
+describe("enviar o pedido do cartão", () => {
+  const messageId = "msg_a1";
+  const owner = { messageId, uid: "u-btg", customerCode: BTG };
+
+  async function seedMessage(extra: Record<string, unknown> = {}) {
+    await db.collection("agent_messages").doc(messageId).set({
+      id: messageId, conversation_id: "conv_1", customer_code: BTG, user_id: "u-btg", role: "assistant",
+      content: "Montei o pedido.", draft: { tipo: "pedido", linhas: [{ sku_code: "S1", quantidade: 5 }] }, ...extra,
+    });
+  }
+
+  it("cria com a chave da mensagem e marca a mensagem como enviada", async () => {
+    await seedMessage();
+    const keys: string[] = [];
+    const result = await sendOrderDraft(db, owner, async (key) => {
+      keys.push(key);
+      return { id: "creq_1", request_number: "PED-0045" };
+    });
+    assert.deepEqual(keys, ["agent_draft_msg_a1"]);
+    assert.equal(result.request_number, "PED-0045");
+    const sent = (await db.collection("agent_messages").doc(messageId).get()).data()?.draft_sent;
+    assert.equal(sent.request_id, "creq_1");
+    assert.equal(sent.request_number, "PED-0045");
+    assert.ok(sent.sent_at);
+  });
+
+  it("não envia de novo a mesma mensagem", async () => {
+    await seedMessage({ draft_sent: { request_id: "creq_1", request_number: "PED-0045", sent_at: "2026-10-02T15:00:00Z" } });
+    let called = false;
+    await assert.rejects(
+      sendOrderDraft(db, owner, async () => {
+        called = true;
+        return { id: "x" };
+      }),
+      /já foi enviado \(PED-0045\)/,
+    );
+    assert.equal(called, false);
+  });
+
+  it("recusa mensagem de outra pessoa, de outro cliente ou sem pedido", async () => {
+    const create = async () => ({ id: "x" });
+    await seedMessage();
+    await assert.rejects(sendOrderDraft(db, { ...owner, uid: "outra" }, create), /não é desta conversa/);
+    await assert.rejects(sendOrderDraft(db, { ...owner, customerCode: "Outro" }, create), /não é desta conversa/);
+    await assert.rejects(sendOrderDraft(db, { ...owner, messageId: "nao-existe" }, create), /não é desta conversa/);
+    await seedMessage({ draft: { tipo: "envio", linhas: [] } });
+    await assert.rejects(sendOrderDraft(db, owner, create), /não tem um pedido/);
+  });
+
+  it("falha na criação não marca a mensagem", async () => {
+    await seedMessage();
+    await assert.rejects(
+      sendOrderDraft(db, owner, async () => {
+        throw new Error("Saldo insuficiente para o SKU S1.");
+      }),
+      /Saldo insuficiente/,
+    );
+    assert.equal((await db.collection("agent_messages").doc(messageId).get()).data()?.draft_sent, undefined);
   });
 });
 

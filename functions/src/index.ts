@@ -98,7 +98,7 @@ import {
   warehouseTasks,
 } from "./domain/agent-team.js";
 import { searchPastConversations } from "./domain/agent-history.js";
-import { buildOrderDraft, buildShipmentDraft, draftFromToolResponses } from "./domain/agent-drafts.js";
+import { buildOrderDraft, buildShipmentDraft, draftFromToolResponses, sendOrderDraft } from "./domain/agent-drafts.js";
 import { activeNotesForPrompt, decideNote, DecideNoteSchema, listNotes, NOTE_REVIEWER_ROLES, suggestNote } from "./domain/agent-notes.js";
 import { conversationSummary, refreshConversationSummary, SUMMARY_WINDOW, summaryPrompt, type SummaryMessage } from "./domain/agent-summary.js";
 
@@ -269,6 +269,8 @@ const CreateCustomerRequestSchema = z.object({
   customer_code: z.string().optional(),
   idempotency_key: z.string().trim().min(1),
   items: z.array(RequestItemSchema).max(100).default([]),
+  // Pedido enviado pelo cartão do Agent Dute: a mensagem que trouxe o rascunho.
+  agent_message_id: z.string().trim().min(1).max(160).nullish(),
 });
 
 const DecideCustomerRequestSchema = z.object({
@@ -1959,7 +1961,7 @@ function agentDuteTools(
       {
         name: "rascunho_pedido",
         description:
-          "Monta um RASCUNHO de pedido do estoque (não envia nada): confere cada item e o saldo disponível. A pessoa abre o rascunho na tela Estoque, confere e envia. Use quando ela pedir para fazer, montar ou preparar um pedido.",
+          "Monta um RASCUNHO de pedido do estoque (não envia nada): confere cada item e o saldo disponível. O pedido aparece num cartão abaixo da resposta, onde a pessoa confere, ajusta e envia. Use quando ela pedir para fazer, montar ou preparar um pedido.",
         inputSchema: z.object({
           itens: z
             .array(
@@ -1972,6 +1974,7 @@ function agentDuteTools(
             .max(40),
           destino: z.string().optional().describe("Para onde entregar (agência, prédio, loja)"),
           prazo: z.string().optional().describe("Para quando, AAAA-MM-DD"),
+          hora: z.string().optional().describe("Até que horas, HH:MM, só se a pessoa disser um horário"),
           nome: z.string().optional().describe("Nome curto do pedido, se a pessoa disser"),
           observacoes: z.string().optional(),
         }),
@@ -5910,8 +5913,13 @@ export const applyDocumentOperationalAction = onCall(async (request) => {
 
 export const createCustomerRequest = onCall(async (request) => {
   const profile = await getProfile(request);
-  const input = CreateCustomerRequestSchema.parse(request.data ?? {});
+  const { agent_message_id, ...input } = CreateCustomerRequestSchema.parse(request.data ?? {});
   const customer_code = requireCustomerScope(profile, input.customer_code);
+  if (agent_message_id) {
+    return sendOrderDraft(db, { messageId: agent_message_id, uid: profile.uid, customerCode: customer_code }, (idempotency_key) =>
+      createCustomerRequestFlow({ ...input, idempotency_key, customer_code }, profile),
+    );
+  }
   return createCustomerRequestFlow({ ...input, customer_code }, profile);
 });
 

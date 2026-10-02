@@ -1763,6 +1763,7 @@ async function getAgentDuteChat(conversationId?: string) {
         ? message.tools_used.map(String)
         : [],
       draft: message.draft,
+      draft_sent: message.draft_sent,
     }));
 
   return {

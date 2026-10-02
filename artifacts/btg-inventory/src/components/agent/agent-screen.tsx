@@ -478,7 +478,14 @@ function Conversation({
             message.role === "user" ? (
               <UserMessage key={message.id}>{message.content}</UserMessage>
             ) : (
-              <AssistantMessage key={message.id} tools={message.tools_used} content={message.content} draft={message.draft} />
+              <AssistantMessage
+                key={message.id}
+                id={message.id}
+                tools={message.tools_used}
+                content={message.content}
+                draft={message.draft}
+                draftSent={message.draft_sent}
+              />
             ),
           )}
           {streaming ? (
@@ -511,7 +518,7 @@ function Conversation({
         <div className="mx-auto w-full max-w-[780px]">
           <Composer value={draft} onChange={onDraft} onSend={onSend} disabled={busy} placeholder="Responder…" />
           <p className="mt-2 text-center text-[11.5px] text-muted-foreground">
-            O Agent Dute consulta, mas não faz pedidos nem altera dados. Confira as informações importantes.
+            O Agent Dute monta pedidos para você conferir; quem envia é você. Confira as informações importantes.
           </p>
         </div>
       </div>
@@ -530,15 +537,19 @@ function UserMessage({ children }: { children: ReactNode }) {
 }
 
 function AssistantMessage({
+  id,
   content,
   tools,
   runningTool,
   draft,
+  draftSent,
   streaming = false,
 }: {
+  id?: string;
   content: string;
   tools?: string[];
   draft?: unknown;
+  draftSent?: unknown;
   runningTool?: string | null;
   streaming?: boolean;
 }) {
@@ -578,7 +589,7 @@ function AssistantMessage({
             {names.length ? "Organizando a resposta…" : "Pensando…"}
           </p>
         ) : null}
-        {!streaming && draft ? <DraftCard value={draft} /> : null}
+        {!streaming && draft ? <DraftCard value={draft} messageId={id} sent={draftSent} /> : null}
         {!streaming && content ? (
           <button
             type="button"
