@@ -143,3 +143,24 @@ script decidia "existe?" por ele. Agora o script decide pela saída da política
 `firebase deploy --only functions:…` certo, e falha (exit 1) — antes, function
 não publicada passava como "normal para function nova". Os casos estão em
 `tools/check_functions_invoker.tests.ps1`, que roda no CI.
+
+## 02/10/2026 — function nova com deploy falho (rotinas do Agent Dute)
+
+No primeiro deploy das rotinas (PR #53), a API do Cloud Scheduler ainda estava
+desligada no projeto, e a `runAgentRoutines` é agendada. As 4 callables novas
+(`listAgentRoutines`, `saveAgentRoutine`, `deleteAgentRoutine`,
+`runAgentRoutineNow`) ficaram com o deploy falho: o serviço do Cloud Run chegou
+a existir, sem invoker, e o script disse "FALTA … sem invoker". Minutos depois
+o serviço sumiu e o `add-iam-policy-binding` sugerido respondeu `NOT_FOUND`.
+Um novo `firebase deploy --only functions:…` dessas 5 ativou a API
+(`cloudscheduler.googleapis.com`) e criou tudo; aí o invoker veio certo.
+
+O script agora também consulta o estado da function
+(`gcloud functions describe … --format="value(state)"`). Estado diferente de
+`ACTIVE` aparece como **NAO PUBLICADA** (com o estado), sugere o
+`firebase deploy` certo e falha. Se o `describe` não responder, vale só a
+política, como antes. Na lista de "FALTA", o script também avisa que
+`NOT_FOUND` no `add-iam-policy-binding` quer dizer "a function não subiu".
+
+Function agendada nova (`onSchedule`) usa o Cloud Scheduler. Agora a API já
+está ativa em `dute-btg`; em outro projeto, o deploy pode precisar ativá-la.
