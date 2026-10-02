@@ -119,7 +119,7 @@ export function shipmentView(request: AnyRecord): ShipmentView {
     title: shipmentTitle(request),
     stage,
     arrival: formatArrival(request.due_at),
-    summary: [items ? `${integer.format(items)} ${items === 1 ? "item" : "itens"}` : "", pieces ? `${integer.format(pieces)} peças` : ""]
+    summary: [items ? `${integer.format(items)} ${items === 1 ? "item" : "itens"}` : "", pieces ? `${integer.format(pieces)} ${pieces === 1 ? "peça" : "peças"}` : ""]
       .filter(Boolean)
       .join(" · "),
     attachments: num(request.attachment_count) || (Array.isArray(request.attachments) ? request.attachments.length : 0),

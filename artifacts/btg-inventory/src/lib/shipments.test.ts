@@ -21,6 +21,7 @@ describe("como o envio aparece", () => {
     const view = shipmentView({ ...base, id: "r1", status: "open", due_at: "2026-10-02T12:00:00Z", attachment_count: 1, requested_by_name: "Cristiane Souza", created_at: "2026-09-29T13:00:00Z" });
     expect(view).toMatchObject({ title: "Gráfica Alfa · NF 48213", summary: "4 itens · 1.200 peças", attachments: 1, detail: "avisado por Cristiane em 29/09", canCancel: true });
     expect(view.arrival).toBe("sex, 02/10");
+    expect(shipmentView({ ...base, item_count: 1, quantity_total: 1 }).summary).toBe("1 item · 1 peça");
     expect(shipmentView({ ...base, status: "approved" }).canCancel).toBe(false);
     expect(view.number).toBe("");
     expect(shipmentView({ ...base, request_number: "ENV-0012" }).number).toBe("ENV-0012");

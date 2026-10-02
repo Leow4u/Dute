@@ -4,16 +4,12 @@ import { ArrowUp, Box, ChevronRight, PackagePlus, Sparkles, type LucideIcon } fr
 
 import { agentAskHref } from "@/lib/agent-chat";
 import { useAppUser } from "@/lib/auth";
-import {
-  ORDER_STEPS,
-  homeNotices,
-  homeOrders,
-  invoiceLines,
-  orderSummary,
-  orderTitle,
-  type OrderProgress,
-} from "@/lib/client-home";
+import { invoiceLines } from "@/lib/client-home";
+import { ORDER_STEPS, homeOrderViews, orderStepIndex, type OrderView } from "@/lib/orders";
+import { stockOverview } from "@/lib/portal-stock";
+import { splitShipments } from "@/lib/shipments";
 import { cn } from "@/lib/utils";
+import { groupInventoryProducts } from "./estoque";
 import {
   ClientDataBoundary,
   firstNumber,
@@ -22,15 +18,16 @@ import {
   getInventory,
   getInventoryItems,
   getInvoices,
+  getOrders,
   getRequests,
   inventoryTotalValue,
 } from "./shared";
 
 /**
- * Início do portal, do ponto de vista de quem é da BTG: pedir, avisar uma
- * entrega e acompanhar onde estão os pedidos. Os números do estoque e da
- * fatura ficam em quadros pequenos ao lado; os detalhes estão nas telas
- * próprias.
+ * Início do portal: só o que pede atenção agora. Pedidos em andamento com a
+ * mesma régua da tela Pedidos (e, por 7 dias, os recusados), envios a
+ * caminho, um resumo do estoque e as faturas fechadas. O que já terminou fica
+ * nas telas próprias.
  */
 
 const longDate = new Intl.DateTimeFormat("pt-BR", {
@@ -44,6 +41,10 @@ function firstName(name: string | undefined) {
   return (name ?? "").trim().split(/\s+/)[0] || "";
 }
 
+function pieces(value: number) {
+  return `${formatNumber(value)} ${value === 1 ? "peça" : "peças"}`;
+}
+
 export function ClienteInicio() {
   const { user } = useAppUser();
   const name = firstName(user?.fullName);
@@ -51,21 +52,23 @@ export function ClienteInicio() {
   return (
     <ClientDataBoundary>
       {(overview) => {
+        const now = new Date();
         const inventory = getInventory(overview);
         const items = getInventoryItems(overview);
-        const requests = getRequests(overview) as Record<string, unknown>[];
+        const requests = (overview.request_history ?? getRequests(overview)) as Record<string, unknown>[];
+        const trackings = (overview.order_tracking ?? getOrders(overview)) as Record<string, unknown>[];
         const invoices = getInvoices(overview) as Record<string, unknown>[];
         const available = firstNumber(inventory.available_pieces, inventory.total_pieces);
         const reserved = firstNumber(inventory.reserved_pieces);
-        const totalPieces = firstNumber(inventory.total_pieces, available + reserved);
         const itemCount = firstNumber(inventory.total_skus, items.length);
         const value = inventoryTotalValue(inventory, items);
+        const low = stockOverview(groupInventoryProducts(items)).low;
         const stockReady = items.length > 0 || available > 0;
-        const orders = homeOrders(requests);
-        const notices = homeNotices(requests);
-        const bills = invoiceLines(invoices, new Date());
+        const orders = homeOrderViews(requests, trackings, now);
+        const shipments = splitShipments(requests).onTheWay.slice(0, 3);
+        const bills = invoiceLines(invoices, now, { includeCurrent: false });
         const customer = overview.customer?.name || "BTG Pactual";
-        const today = longDate.format(new Date());
+        const today = longDate.format(now);
 
         return (
           <main className="h-full min-h-0 w-full overflow-y-auto px-4 py-5 sm:px-6 lg:px-8">
@@ -88,7 +91,7 @@ export function ClienteInicio() {
                   title="Pedir itens do estoque"
                   detail={
                     stockReady
-                      ? `${formatNumber(available)} peças disponíveis em ${formatNumber(itemCount)} itens`
+                      ? `${pieces(available)} disponíveis em ${formatNumber(itemCount)} ${itemCount === 1 ? "item" : "itens"}`
                       : "Disponível depois da contagem inicial"
                   }
                   disabled={!stockReady}
@@ -102,55 +105,40 @@ export function ClienteInicio() {
               </section>
 
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-                <Panel title="Seus pedidos" href="/portal/pedidos" linkLabel="Ver todos">
+                <Panel title="Pedidos em andamento" href="/portal/pedidos" linkLabel="Ver todos">
                   {orders.length ? (
                     <ul>
-                      {orders.map(({ request, progress }) => (
-                        <li key={String(request.id)} className="border-b border-border/50 px-5 py-4 last:border-0">
-                          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-                            <span className="font-semibold">{orderTitle(request)}</span>
-                            <span className="text-xs text-muted-foreground">{orderSummary(request, progress)}</span>
-                          </div>
-                          {progress.rejected ? (
-                            <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-                              {progress.reason
-                                ? `Recusado pela Dutelog: ${progress.reason.replace(/[.\s]+$/, "")}.`
-                                : "Recusado pela Dutelog."}{" "}
-                              Faça um novo pedido ou fale com a Dutelog.
-                            </p>
-                          ) : (
-                            <Steps progress={progress} />
-                          )}
-                        </li>
+                      {orders.map((order) => (
+                        <OrderRow key={order.id} order={order} />
                       ))}
                     </ul>
                   ) : (
                     <p className="px-5 py-6 text-sm text-muted-foreground">
-                      Nenhum pedido ainda. Use "Pedir itens do estoque" para fazer o primeiro.
+                      Nenhum pedido em andamento. Use "Pedir itens do estoque" para fazer um.
                     </p>
                   )}
                 </Panel>
 
                 <div className="flex flex-col gap-4">
-                  <Panel title="Envios para a Dutelog" href="/portal/recebimentos" linkLabel="Ver">
-                    {notices.length ? (
+                  <Panel title="Envios a caminho" href="/portal/recebimentos" linkLabel="Ver">
+                    {shipments.length ? (
                       <ul>
-                        {notices.map((notice, index) => (
+                        {shipments.map((shipment) => (
                           <Row
-                            key={`${notice.title}-${index}`}
-                            title={notice.title}
-                            detail={notice.detail}
+                            key={shipment.id}
+                            title={
+                              <>
+                                {shipment.number ? <span className="font-semibold">{shipment.number} · </span> : null}
+                                {shipment.title}
+                              </>
+                            }
+                            detail={shipment.summary || shipment.detail}
                             aside={
-                              <span
-                                className={cn(
-                                  "rounded-full px-2.5 py-0.5 text-xs font-semibold",
-                                  notice.tone === "waiting" && "bg-amber-50 text-amber-800",
-                                  notice.tone === "done" && "bg-blue-50 text-blue-700",
-                                  notice.tone === "rejected" && "bg-red-50 text-red-700",
-                                )}
-                              >
-                                {notice.label}
-                              </span>
+                              shipment.arrival ? (
+                                <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+                                  chega {shipment.arrival}
+                                </span>
+                              ) : null
                             }
                           />
                         ))}
@@ -163,37 +151,50 @@ export function ClienteInicio() {
                   <Panel title="Seu estoque" href="/portal/estoque" linkLabel="Abrir">
                     <ul>
                       <Row
-                        title="Valor guardado"
-                        detail={`${formatNumber(itemCount)} itens · ${formatNumber(totalPieces)} peças`}
+                        title="Valor do estoque (custo)"
+                        detail="base do seguro ad valorem"
                         aside={<span className="text-lg font-semibold">{formatMoney(value)}</span>}
                       />
+                      <Row title="Disponível" aside={<span className="font-semibold">{pieces(available)}</span>} />
+                      <Row title="Reservado em pedidos" aside={<span className="font-semibold">{pieces(reserved)}</span>} />
                       <Row
-                        title="Reservado em pedidos"
-                        detail="sai do disponível até a entrega"
-                        aside={<span className="font-semibold">{formatNumber(reserved)} peças</span>}
+                        title="Abaixo do mínimo"
+                        aside={
+                          low ? (
+                            <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+                              {formatNumber(low)} {low === 1 ? "item" : "itens"}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">nenhum</span>
+                          )
+                        }
                       />
                     </ul>
                   </Panel>
 
                   <Panel title="Faturas" href="/portal/faturas" linkLabel="Ver">
-                    <ul>
-                      {bills.map((bill) => (
-                        <Row
-                          key={bill.competencia}
-                          title={bill.label}
-                          detail={bill.detail}
-                          aside={
-                            bill.amount !== undefined ? (
-                              <span className="font-semibold">{formatMoney(bill.amount)}</span>
-                            ) : (
-                              <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground/70">
-                                {bill.state === "running" ? "Em andamento" : "Em fechamento"}
-                              </span>
-                            )
-                          }
-                        />
-                      ))}
-                    </ul>
+                    {bills.length ? (
+                      <ul>
+                        {bills.map((bill) => (
+                          <Row
+                            key={bill.competencia}
+                            title={bill.label}
+                            detail={bill.detail}
+                            aside={
+                              bill.amount !== undefined ? (
+                                <span className="font-semibold">{formatMoney(bill.amount)}</span>
+                              ) : (
+                                <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground/70">
+                                  Em fechamento
+                                </span>
+                              )
+                            }
+                          />
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="px-5 py-4 text-sm text-muted-foreground">Nenhuma fatura fechada ainda.</p>
+                    )}
                   </Panel>
                 </div>
               </div>
@@ -202,6 +203,27 @@ export function ClienteInicio() {
         );
       }}
     </ClientDataBoundary>
+  );
+}
+
+/** Uma linha de pedido: número, nome, a régua de 4 etapas; recusado ganha só um chip. */
+function OrderRow({ order }: { order: OrderView }) {
+  const rejected = order.stage === "rejected";
+  return (
+    <li className="border-b border-border/50 px-5 py-4 last:border-0">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+        <span className="min-w-0">
+          {order.number ? <span className="font-semibold">{order.number} · </span> : null}
+          <span className={cn(!order.number && "font-semibold")}>{order.title}</span>
+          {rejected ? (
+            <span className="ml-2 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700">Recusado</span>
+          ) : null}
+        </span>
+        {order.summary ? <span className="text-xs text-muted-foreground">{order.summary}</span> : null}
+      </div>
+      {rejected ? null : <Steps step={orderStepIndex(order.stage)} />}
+      {order.detail ? <p className="mt-1.5 text-xs text-muted-foreground">{order.detail}</p> : null}
+    </li>
   );
 }
 
@@ -248,12 +270,12 @@ function AskAgent() {
   );
 }
 
-function Steps({ progress }: { progress: OrderProgress }) {
+function Steps({ step }: { step: number }) {
   return (
-    <ol className="mt-3 flex items-start" aria-label={`Etapa: ${ORDER_STEPS[progress.step]}`}>
+    <ol className="mt-3 flex items-start" aria-label={`Etapa: ${ORDER_STEPS[step]}`}>
       {ORDER_STEPS.map((label, index) => {
-        const done = index < progress.step || (index === progress.step && progress.step === ORDER_STEPS.length - 1);
-        const current = index === progress.step && !done;
+        const done = index < step || (index === step && step === ORDER_STEPS.length - 1);
+        const current = index === step && !done;
         return (
           <li key={label} className="flex flex-1 flex-col items-center last:flex-none">
             <div className="flex w-full items-center">
@@ -266,7 +288,7 @@ function Steps({ progress }: { progress: OrderProgress }) {
                 )}
               />
               {index < ORDER_STEPS.length - 1 ? (
-                <span className={cn("h-0.5 flex-1", index < progress.step ? "bg-primary" : "bg-border")} />
+                <span className={cn("h-0.5 flex-1", index < step ? "bg-primary" : "bg-border")} />
               ) : null}
             </div>
             <span
@@ -342,12 +364,12 @@ function Panel({
   );
 }
 
-function Row({ title, detail, aside }: { title: string; detail: string; aside: ReactNode }) {
+function Row({ title, detail, aside }: { title: ReactNode; detail?: string; aside: ReactNode }) {
   return (
     <li className="flex items-center justify-between gap-3 border-b border-border/40 px-5 py-3 text-sm last:border-0">
       <span className="min-w-0">
         <span className="block truncate">{title}</span>
-        <span className="block text-xs text-muted-foreground">{detail}</span>
+        {detail ? <span className="block text-xs text-muted-foreground">{detail}</span> : null}
       </span>
       <span className="shrink-0">{aside}</span>
     </li>

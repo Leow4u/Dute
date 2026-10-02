@@ -203,7 +203,7 @@ export type InvoiceLine = { competencia: string; label: string; detail: string; 
  * Mês corrente (em andamento), mês anterior (emitido, pago ou ainda em
  * fechamento) e a fatura anterior a ele, se houver.
  */
-export function invoiceLines(invoices: AnyRecord[], now: Date): InvoiceLine[] {
+export function invoiceLines(invoices: AnyRecord[], now: Date, options: { includeCurrent?: boolean } = {}): InvoiceLine[] {
   const byMonth = new Map(invoices.map((invoice) => [text(invoice.competencia), invoice]));
   const current = competenciaOf(now);
   const previous = previousCompetencia(current);
@@ -227,7 +227,8 @@ export function invoiceLines(invoices: AnyRecord[], now: Date): InvoiceLine[] {
       state,
     };
   };
-  const lines = [line(current, "running"), line(previous, "closing")];
+  // O Início trabalha só com mês fechado (ou em fechamento), como Faturas.
+  const lines = options.includeCurrent === false ? [line(previous, "closing")] : [line(current, "running"), line(previous, "closing")];
   const older = invoices
     .map((invoice) => text(invoice.competencia))
     .filter((competencia) => competencia && competencia < previous)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { orderNumber, orderStage, orderTitle, orderView, splitOrders } from "./orders";
+import { homeOrderViews, orderNumber, orderStage, orderTitle, orderView, splitOrders } from "./orders";
 
 const request = {
   id: "creq_c2a648db96a33d6453643a98d298cec5",
@@ -64,6 +64,7 @@ describe("como o pedido aparece", () => {
     const view = orderView(request, tracking);
     expect(view.number).toBe("PED-0043");
     expect(view.summary).toBe("2 itens · 100 peças");
+    expect(orderView({ id: "r1", type: "pedido", item_count: 1, quantity_total: 1 }).summary).toBe("1 item · 1 peça");
     expect(view.destination).toBe("BTG Faria Lima");
     expect(view.delivery).toBe("Transportadora Expressa · placa ABC1D23");
     expect(view.stepDates[0]).toBe("01/10, 09:40");
@@ -99,5 +100,26 @@ describe("como o pedido aparece", () => {
     );
     expect(active.map((view) => view.number)).toEqual(["PED-0043"]);
     expect(history.map((view) => view.stage)).toEqual(["cancelled"]);
+  });
+});
+
+describe("pedidos no Início", () => {
+  const now = new Date("2026-10-02T15:00:00Z");
+  const base = { type: "retirada", item_count: 1, quantity_total: 1 };
+  const requests = [
+    { ...base, id: "a", request_number: "PED-0044", status: "open", created_at: "2026-10-01T12:00:00Z" },
+    { ...base, id: "b", request_number: "PED-0042", status: "rejected", decision_reason: "saldo insuficiente", created_at: "2026-09-30T12:00:00Z", updated_at: "2026-10-01T18:00:00Z" },
+    { ...base, id: "c", request_number: "PED-0030", status: "rejected", created_at: "2026-09-03T12:00:00Z", updated_at: "2026-09-04T12:00:00Z" },
+    { ...base, id: "d", request_number: "PED-0040", status: "closed", operational_status: "delivered", created_at: "2026-09-28T12:00:00Z" },
+    { ...base, id: "e", request_number: "PED-0041", status: "cancelled", created_at: "2026-10-01T10:00:00Z" },
+  ];
+
+  it("em andamento e recusados dos últimos 7 dias; entregues, cancelados e recusados antigos ficam fora", () => {
+    const views = homeOrderViews(requests, [], now);
+    expect(views.map((view) => [view.number, view.stage])).toEqual([
+      ["PED-0044", "placed"],
+      ["PED-0042", "rejected"],
+    ]);
+    expect(views[1]?.detail).toContain("saldo insuficiente");
   });
 });
