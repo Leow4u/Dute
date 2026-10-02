@@ -113,6 +113,12 @@ export function routineFormFromSuggestion(value: Record<string, unknown>): Routi
   };
 }
 
+/** A rotina aberta no editor, pela versão atual da lista ("new" ou nada: nenhuma). */
+export function editingRoutine(list: Routine[], editing: string | null) {
+  if (!editing || editing === "new") return null;
+  return list.find((routine) => routine.id === editing) ?? null;
+}
+
 export function routineProblem(form: RoutineForm) {
   if (form.name.trim().length < 2) return "Dê um nome à rotina.";
   if (form.prompt.trim().length < 5) return "Escreva o que o Agent Dute deve responder.";
