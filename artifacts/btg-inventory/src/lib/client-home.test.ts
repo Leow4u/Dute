@@ -108,3 +108,17 @@ describe("faturas no Início", () => {
     ]);
   });
 });
+
+describe("faturas no Início", () => {
+  it("sem o mês em andamento: só o mês em fechamento e as fechadas", () => {
+    const lines = invoiceLines(
+      [{ competencia: "2026-08", status: "pago", total: 21400 }],
+      new Date("2026-10-02T12:00:00Z"),
+      { includeCurrent: false },
+    );
+    expect(lines.map((line) => [line.competencia, line.state])).toEqual([
+      ["2026-09", "closing"],
+      ["2026-08", "paid"],
+    ]);
+  });
+});

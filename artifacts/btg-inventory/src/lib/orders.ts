@@ -179,7 +179,7 @@ export function orderView(request: AnyRecord, tracking?: AnyRecord): OrderView {
       stepDate(tracking, ["dispatched"]),
       stepDate(tracking, ["delivered"]),
     ],
-    summary: [count ? `${integer.format(count)} ${count === 1 ? "item" : "itens"}` : "", pieces ? `${integer.format(pieces)} peças` : ""]
+    summary: [count ? `${integer.format(count)} ${count === 1 ? "item" : "itens"}` : "", pieces ? `${integer.format(pieces)} ${pieces === 1 ? "peça" : "peças"}` : ""]
       .filter(Boolean)
       .join(" · "),
     destination: text(request.destination) || text(tracking?.destination),
@@ -204,4 +204,23 @@ export function splitOrders(requests: AnyRecord[], trackings: AnyRecord[]) {
   );
   const done = (view: OrderView) => view.stage === "delivered" || view.stage === "rejected" || view.stage === "cancelled";
   return { active: views.filter((view) => !done(view)), history: views.filter(done) };
+}
+
+const REJECTED_ON_HOME_DAYS = 7;
+
+/**
+ * Pedidos do Início: os em andamento e, por 7 dias, os recusados (com o
+ * motivo); entregues e recusados antigos ficam só no histórico de Pedidos.
+ */
+export function homeOrderViews(requests: AnyRecord[], trackings: AnyRecord[], now = new Date(), limit = 4) {
+  const { active, history } = splitOrders(requests, trackings);
+  const byId = new Map(requests.map((request) => [text(request.id), request]));
+  const since = now.getTime() - REJECTED_ON_HOME_DAYS * 86_400_000;
+  const rejected = history.filter((view) => {
+    if (view.stage !== "rejected") return false;
+    const request = byId.get(view.id);
+    const decided = parseDate(request?.updated_at) ?? parseDate(request?.created_at);
+    return Boolean(decided && decided.getTime() >= since);
+  });
+  return [...active, ...rejected].slice(0, limit);
 }

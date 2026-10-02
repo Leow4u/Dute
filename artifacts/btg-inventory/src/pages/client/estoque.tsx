@@ -2010,7 +2010,8 @@ function DraftLoader({ products, onLoad }: { products: StockProduct[]; onLoad: (
   return null;
 }
 
-function groupInventoryProducts(items: InventoryItem[]) {
+/** Produtos da vitrine (o Início usa para contar os abaixo do mínimo como o Estoque). */
+export function groupInventoryProducts(items: InventoryItem[]) {
   const grouped = new Map<string, StockProduct>();
 
   for (const item of items) {
