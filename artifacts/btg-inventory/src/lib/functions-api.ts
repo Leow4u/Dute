@@ -389,9 +389,10 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
       name: "decideAgentNote",
       payload: async (_pathname, init) => {
         const body = await readJsonBody(init);
+        // Só os campos preenchidos: undefined vira null no SDK do Firebase.
         return {
-          text: typeof body.text === "string" ? body.text : undefined,
-          visibility: body.visibility === "equipe" || body.visibility === "todos" ? body.visibility : undefined,
+          ...(typeof body.text === "string" && body.text.trim() ? { text: body.text } : {}),
+          ...(body.visibility === "equipe" || body.visibility === "todos" ? { visibility: body.visibility } : {}),
           id: decodeURIComponent(noteDecisionMatch[1]),
           action: noteDecisionMatch[2],
         };

@@ -12,7 +12,7 @@
     "build:test": "tsc -p tsconfig.test.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run test:unit",
-    "test:unit": "npm run build:test && node --test lib/billing.test.js lib/catalog-minimum.test.js lib/client-shipments.test.js lib/invoice-reading.test.js lib/billing-report.test.js lib/agent-tools.test.js",
+    "test:unit": "npm run build:test && node --test lib/billing.test.js lib/catalog-minimum.test.js lib/client-shipments.test.js lib/invoice-reading.test.js lib/billing-report.test.js lib/agent-tools.test.js lib/agent-notes-input.test.js",
     "test:integration": "npm run build:test && firebase emulators:exec --project demo-dute-operations --only firestore \"node --test --test-concurrency=1 lib/domain/operations.integration.test.js lib/domain/access.integration.test.js lib/domain/system-health.integration.test.js lib/domain/client-inventory.integration.test.js lib/domain/agent-knowledge.integration.test.js lib/domain/agent-dute.integration.test.js lib/domain/agent-team.integration.test.js lib/domain/agent-history.integration.test.js lib/domain/agent-drafts.integration.test.js lib/domain/agent-notes.integration.test.js lib/domain/agent-summary.integration.test.js lib/domain/client-shipments.integration.test.js lib/firestore.rules.test.js\"",
     "test:critical": "npm run test:unit && npm run test:integration"
   },
