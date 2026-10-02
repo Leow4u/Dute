@@ -99,7 +99,7 @@ import {
 } from "./domain/agent-team.js";
 import { searchPastConversations } from "./domain/agent-history.js";
 import { buildOrderDraft, buildShipmentDraft, draftFromToolResponses } from "./domain/agent-drafts.js";
-import { activeNotesForPrompt, decideNote, listNotes, NOTE_REVIEWER_ROLES, suggestNote } from "./domain/agent-notes.js";
+import { activeNotesForPrompt, decideNote, DecideNoteSchema, listNotes, NOTE_REVIEWER_ROLES, suggestNote } from "./domain/agent-notes.js";
 import { conversationSummary, refreshConversationSummary, SUMMARY_WINDOW, summaryPrompt, type SummaryMessage } from "./domain/agent-summary.js";
 
 const adminApp = initializeApp();
@@ -6903,13 +6903,6 @@ export const payBillingInvoice = onCall(async (request) => {
   }
 });
 
-const DecideAgentNoteSchema = z.object({
-  id: z.string().trim().min(1).max(120),
-  action: z.enum(["approve", "reject", "archive"]),
-  text: z.string().trim().max(300).optional(),
-  visibility: z.enum(["todos", "equipe"]).optional(),
-});
-
 function requireNoteReviewer(profile: Profile) {
   if (!NOTE_REVIEWER_ROLES.includes(profile.role)) {
     throw new HttpsError("permission-denied", "Só a coordenação vê e aprova as anotações do Agent Dute.");
@@ -6927,7 +6920,9 @@ export const listAgentNotes = onCall(async (request) => {
 export const decideAgentNote = onCall(async (request) => {
   const profile = await getProfile(request);
   requireNoteReviewer(profile);
-  const input = DecideAgentNoteSchema.parse(request.data ?? {});
+  const parsed = DecideNoteSchema.safeParse(request.data ?? {});
+  if (!parsed.success) throw new HttpsError("invalid-argument", "Anotação inválida.");
+  const input = parsed.data;
   return decideNote(db, input, profile);
 });
 

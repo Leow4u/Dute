@@ -148,6 +148,9 @@ describe("anotações do Agent Dute", () => {
         body: JSON.stringify({ text: "Entregas só de manhã", visibility: "equipe", id: "outro", action: "x" }),
       }),
     ).toEqual({ text: "Entregas só de manhã", visibility: "equipe", id: "note_abc", action: "approve" });
+    expect(
+      await route?.payload("/api/agent-dute/notes/note_abc/approve", { method: "POST", body: JSON.stringify({ visibility: "todos" }) }),
+    ).toEqual({ visibility: "todos", id: "note_abc", action: "approve" });
     expect(functionRoute("/api/agent-dute/notes/note_abc/apagar", "POST")).toBeNull();
   });
 });

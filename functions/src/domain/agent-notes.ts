@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
+import { z } from "genkit";
 
 import { normalize } from "./agent-dute.js";
 import { createEvent, type OperationalActor } from "./operations.js";
@@ -94,6 +95,24 @@ export async function suggestNote(
     };
   });
 }
+
+/**
+ * Entrada da callable decideAgentNote. O SDK do Firebase transforma campo
+ * undefined em null ao chamar a function: "sem edição" chega como null.
+ */
+export const DecideNoteSchema = z
+  .object({
+    id: z.string().trim().min(1).max(120),
+    action: z.enum(["approve", "reject", "archive"]),
+    text: z.string().trim().max(300).nullish(),
+    visibility: z.enum(["todos", "equipe"]).nullish(),
+  })
+  .transform((input) => ({
+    id: input.id,
+    action: input.action,
+    text: input.text || undefined,
+    visibility: input.visibility ?? undefined,
+  }));
 
 export async function decideNote(
   db: Firestore,
