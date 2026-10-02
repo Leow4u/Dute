@@ -100,6 +100,7 @@ import {
 import { searchPastConversations } from "./domain/agent-history.js";
 import { buildOrderDraft, buildShipmentDraft, draftFromToolResponses } from "./domain/agent-drafts.js";
 import { activeNotesForPrompt, decideNote, listNotes, NOTE_REVIEWER_ROLES, suggestNote } from "./domain/agent-notes.js";
+import { conversationSummary, refreshConversationSummary, SUMMARY_WINDOW, summaryPrompt, type SummaryMessage } from "./domain/agent-summary.js";
 
 const adminApp = initializeApp();
 setGlobalOptions({
@@ -1890,6 +1891,7 @@ function agentDuteSystemPrompt(input: {
   userName?: string;
   now: Date;
   notes?: string[];
+  summary?: string;
 }) {
   const today = saoPauloDate.format(input.now);
   const isoToday = new Date(input.now.getTime() - 3 * 3_600_000).toISOString().slice(0, 10);
@@ -1918,7 +1920,7 @@ Anotações aprovadas sobre ${input.customerCode} (valem como regra da operaçã
 ${input.notes?.length ? input.notes.map((note) => `- ${note}`).join("\n") : "- (nenhuma ainda)"}
 - Quando a pessoa disser uma preferência ou regra que vale para as próximas vezes (horário, local, contato, embalagem, como prefere receber), sugira com sugerir_anotacao e diga que a equipe Dutelog aprova antes de valer. Não sugira o que já está anotado acima.
 
-Como escrever:
+${input.summary ? `Resumo do começo desta conversa (as mensagens antigas não aparecem abaixo; use como contexto e confirme dados atuais nas consultas):\n${input.summary}\n\n` : ""}Como escrever:
 - Português do Brasil, direto e cordial, como um colega que conhece a operação. Comece pela resposta.
 - Respostas curtas. Use **negrito** para o número principal e listas com "- " quando houver vários itens.
 - Datas no formato dd/mm. Quantidades com separador de milhar (1.250 peças). Dinheiro em R$.
@@ -2182,6 +2184,23 @@ async function billingPreviewForAgent(competencia: string, customerCode: string)
   };
 }
 
+async function summarizeAgentConversation(previous: string, messages: SummaryMessage[]) {
+  for (const modelName of [AGENT_DUTE_FALLBACK_MODEL, AGENT_DUTE_MODEL]) {
+    try {
+      const response = await ai.generate({
+        model: vertexAI.model(modelName),
+        prompt: summaryPrompt(previous, messages),
+        config: { temperature: 0.1, maxOutputTokens: 2048 },
+      });
+      const text = response.text.trim();
+      if (text) return text;
+    } catch {
+      // tenta o próximo modelo
+    }
+  }
+  return "";
+}
+
 function agentDuteFallbackText() {
   return "Não consegui consultar os dados agora. Tente de novo em alguns instantes. Se precisar com urgência, as telas Estoque, Pedidos e Faturas mostram as mesmas informações.";
 }
@@ -2209,6 +2228,7 @@ async function generateAgentDuteReply(input: {
   scope: AgentScope;
   role: string;
   asker: { userId: string; conversationId: string; name?: string; email?: string };
+  summary?: string;
   userName?: string;
   onChunk?: (chunk: AgentDuteChunk) => void;
 }) {
@@ -2222,6 +2242,7 @@ async function generateAgentDuteReply(input: {
     userName: input.userName,
     now: new Date(),
     notes,
+    summary: input.summary,
   });
   const messages = input.history
     .filter((item) => item.content.trim())
@@ -2934,14 +2955,15 @@ const chatWithAgentDuteFlow = ai.defineFlow(
       }
     }
 
-    const history = await recentHistory(db, {
-      conversationId,
-      customerCode: input.customer_code,
-      userId: input.actor_uid,
-    });
+    const historyScope = { conversationId, customerCode: input.customer_code, userId: input.actor_uid };
+    const [history, summary] = await Promise.all([
+      recentHistory(db, historyScope, SUMMARY_WINDOW),
+      conversationSummary(db, historyScope).catch(() => ""),
+    ]);
     const answer = await generateAgentDuteReply({
       message: input.message,
       history,
+      summary,
       scope,
       role: input.actor_role,
       asker: { userId: input.actor_uid, conversationId, name: input.actor_name, email: input.actor_email },
@@ -3026,6 +3048,13 @@ const chatWithAgentDuteFlow = ai.defineFlow(
     );
 
     await batch.commit();
+
+    // Conversa longa: o que sai da janela de mensagens vira resumo. Falha
+    // aqui nunca derruba a resposta, que já foi gravada.
+    await refreshConversationSummary(db, historyScope, summarizeAgentConversation).catch((error) => {
+      console.warn("[agent-dute] resumo da conversa não atualizado", error);
+    });
+
 
     await emitEvent(
       {
