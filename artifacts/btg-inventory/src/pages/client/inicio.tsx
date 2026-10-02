@@ -151,8 +151,8 @@ export function ClienteInicio() {
                   <Panel title="Seu estoque" href="/portal/estoque" linkLabel="Abrir">
                     <ul>
                       <Row
-                        title="Valor do estoque (custo)"
-                        detail="base do seguro ad valorem"
+                        title="Valor do estoque"
+                        detail="custo · base do seguro ad valorem"
                         aside={<span className="text-lg font-semibold">{formatMoney(value)}</span>}
                       />
                       <Row title="Disponível" aside={<span className="font-semibold">{pieces(available)}</span>} />
