@@ -11,6 +11,9 @@ import {
   parseDraft,
   parseDraftSent,
   saveDraft,
+  shipmentFormFromDraft,
+  shipmentFormProblem,
+  shipmentPayloadFromForm,
   takeDraft,
   withLiveAvailability,
   type OrderDraft,
@@ -131,5 +134,53 @@ describe("pedido enviado pelo cartão", () => {
     expect(parseDraftSent({})).toBeNull();
     const back = draftFromOrderForm({ ...orderFormFromDraft(draft), destino: "Prédio BTG" });
     expect(back).toMatchObject({ tipo: "pedido", destino: "Prédio BTG", prazo: "2026-10-04", hora: "11:00" });
+  });
+});
+
+describe("aviso de envio enviado pelo cartão", () => {
+  const nota = { file_name: "nf-2471.pdf", file_url: "https://x/nf.pdf", storage_path: "operational-documents/BTG/chat/nf.pdf", content_type: "application/pdf", size_bytes: 1200 };
+  const draft = parseDraft({
+    tipo: "envio",
+    fornecedor: "Gráfica Alfa",
+    nota_fiscal: "2471",
+    chegada: "2026-10-10",
+    linhas: [
+      { sku_code: "S1", codigo: "A.01.P", nome: "Polo P", quantidade: 120, situacao: "no_estoque" },
+      { codigo: "NOVO-1", nome: "Camiseta nova", quantidade: 50, situacao: "novo" },
+      { nome: "Sacola kraft", quantidade: 300, situacao: "codigo_a_definir" },
+    ],
+    anexos: [nota, { file_name: "sem caminho" }],
+  }) as Extract<ReturnType<typeof parseDraft>, { tipo: "envio" }>;
+
+  it("lê a nota anexada e descarta anexo incompleto", () => {
+    expect(draft.anexos).toEqual([nota]);
+    expect(draft.linhas[0]!.sku_code).toBe("S1");
+  });
+
+  it("diz o que falta antes de enviar", () => {
+    const form = shipmentFormFromDraft(draft);
+    expect(shipmentFormProblem(form, "2026-10-02")).toBeNull();
+    expect(shipmentFormProblem({ ...form, fornecedor: "" }, "2026-10-02")).toBe("Diga quem vai entregar (fornecedor).");
+    expect(shipmentFormProblem({ ...form, chegada: "2026-10-01" }, "2026-10-02")).toBe("A data de chegada já passou.");
+    expect(shipmentFormProblem({ ...form, linhas: [{ ...form.linhas[1]!, nome: "" }] }, "2026-10-02")).toBe("Item 1: produto novo, informe o nome.");
+  });
+
+  it("monta o mesmo aviso da tela Envios, com a nota e ligado à mensagem", () => {
+    const payload = shipmentPayloadFromForm(shipmentFormFromDraft(draft), "msg_9");
+    expect(payload).toMatchObject({
+      type: "recebimento",
+      title: "Envio de Gráfica Alfa",
+      supplier: "Gráfica Alfa",
+      invoice_number: "2471",
+      destination: "Recebimento Dutelog",
+      due_at: "2026-10-10T15:00:00.000Z",
+      attachments: [nota],
+      agent_message_id: "msg_9",
+    });
+    expect(payload.items).toEqual([
+      { sku_code: "S1", client_item_code: "A.01.P", product_name: "Polo P", product_registration: "existing", location_id: null, quantity: 120 },
+      { sku_code: "NOVO-1", client_item_code: "NOVO-1", product_name: "Camiseta nova", product_registration: "new", location_id: null, quantity: 50 },
+      { product_name: "Sacola kraft", product_registration: "unknown", location_id: null, quantity: 300 },
+    ]);
   });
 });

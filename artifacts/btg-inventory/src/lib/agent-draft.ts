@@ -21,7 +21,16 @@ export type OrderDraft = {
   pendencias: DraftPending[];
 };
 
-export type ShipmentDraftLine = { codigo?: string; nome?: string; quantidade: number; situacao: "no_estoque" | "novo" | "codigo_a_definir" };
+export type ShipmentDraftLine = {
+  sku_code?: string;
+  codigo?: string;
+  nome?: string;
+  quantidade: number;
+  situacao: "no_estoque" | "novo" | "codigo_a_definir";
+};
+
+/** Nota anexada no chat, já no Storage do cliente. */
+export type DraftAttachment = { file_name: string; file_url: string; storage_path: string; content_type: string; size_bytes: number };
 
 export type ShipmentDraft = {
   tipo: "envio";
@@ -30,6 +39,7 @@ export type ShipmentDraft = {
   chegada?: string;
   observacoes?: string;
   linhas: ShipmentDraftLine[];
+  anexos?: DraftAttachment[];
 };
 
 export type AgentDraft = OrderDraft | ShipmentDraft;
@@ -96,6 +106,7 @@ export function parseDraft(value: unknown): AgentDraft | null {
       observacoes: optional(raw.observacoes),
       linhas: list(raw.linhas)
         .map((line) => ({
+          sku_code: optional(line.sku_code),
           codigo: optional(line.codigo),
           nome: optional(line.nome),
           quantidade: quantity(line.quantidade),
@@ -103,6 +114,15 @@ export function parseDraft(value: unknown): AgentDraft | null {
             line.situacao === "no_estoque" || line.situacao === "novo" ? (line.situacao as "no_estoque" | "novo") : ("codigo_a_definir" as const),
         }))
         .filter((line) => line.quantidade > 0 && (line.codigo || line.nome)),
+      anexos: list(raw.anexos)
+        .map((file) => ({
+          file_name: text(file.file_name),
+          file_url: text(file.file_url),
+          storage_path: text(file.storage_path),
+          content_type: text(file.content_type),
+          size_bytes: quantity(file.size_bytes),
+        }))
+        .filter((file) => file.storage_path && file.file_url && file.file_name),
     };
   }
   return null;
@@ -253,5 +273,75 @@ export function draftFromOrderForm(form: OrderForm): OrderDraft {
     observacoes: form.observacoes.trim() || undefined,
     linhas: form.linhas.map((line) => ({ ...line })),
     pendencias: [],
+  };
+}
+
+// ------------------------------------------- aviso de envio enviado pelo cartão
+
+export type ShipmentFormLine = { sku_code?: string; codigo: string; nome: string; quantidade: number; situacao: ShipmentDraftLine["situacao"] };
+
+export type ShipmentForm = {
+  fornecedor: string;
+  nota_fiscal: string;
+  chegada: string;
+  observacoes: string;
+  linhas: ShipmentFormLine[];
+  anexos: DraftAttachment[];
+};
+
+export function shipmentFormFromDraft(draft: ShipmentDraft): ShipmentForm {
+  return {
+    fornecedor: draft.fornecedor ?? "",
+    nota_fiscal: draft.nota_fiscal ?? "",
+    chegada: draft.chegada ?? "",
+    observacoes: draft.observacoes ?? "",
+    linhas: draft.linhas.map((line) => ({ sku_code: line.sku_code, codigo: line.codigo ?? "", nome: line.nome ?? "", quantidade: line.quantidade, situacao: line.situacao })),
+    anexos: [...(draft.anexos ?? [])],
+  };
+}
+
+/** O que impede o envio do aviso; null quando está pronto. Mesmas regras da tela Envios. */
+export function shipmentFormProblem(form: ShipmentForm, today: string) {
+  if (!form.fornecedor.trim()) return "Diga quem vai entregar (fornecedor).";
+  if (!form.linhas.length) return "Coloque ao menos um item.";
+  for (const [index, line] of form.linhas.entries()) {
+    if (!line.codigo.trim() && !line.nome.trim()) return `Item ${index + 1}: informe o código ou o nome.`;
+    if (line.situacao === "novo" && !line.nome.trim()) return `Item ${index + 1}: produto novo, informe o nome.`;
+    if (line.quantidade <= 0) return `Item ${index + 1}: informe quantas peças vêm.`;
+  }
+  if (form.chegada && form.chegada < today) return "A data de chegada já passou.";
+  return null;
+}
+
+/**
+ * Aviso para a mesma criação da tela Envios: item do estoque vai com o SKU,
+ * produto novo com o código informado e item sem código fica "código a
+ * definir" (a Dutelog lê a etiqueta na conferência).
+ */
+export function shipmentPayloadFromForm(form: ShipmentForm, messageId: string) {
+  const fornecedor = form.fornecedor.trim();
+  return {
+    type: "recebimento" as const,
+    priority: "normal",
+    title: `Envio de ${fornecedor}`,
+    description: form.observacoes.trim() || "Envio de fornecedor avisado pelo cliente com o Agent Dute.",
+    destination: "Recebimento Dutelog",
+    // Só o dia: meio-dia em São Paulo, para não virar o dia anterior.
+    due_at: form.chegada ? new Date(`${form.chegada}T12:00:00-03:00`).toISOString() : undefined,
+    supplier: fornecedor,
+    invoice_number: form.nota_fiscal.trim() || undefined,
+    attachments: form.anexos,
+    items: form.linhas.map((line) => {
+      const code = line.codigo.trim();
+      const name = line.nome.trim();
+      if (line.situacao === "no_estoque" && line.sku_code) {
+        return { sku_code: line.sku_code, client_item_code: code || undefined, product_name: name || undefined, product_registration: "existing" as const, location_id: null, quantity: line.quantidade };
+      }
+      if (code) {
+        return { sku_code: code, client_item_code: code, product_name: name || undefined, product_registration: "new" as const, location_id: null, quantity: line.quantidade };
+      }
+      return { product_name: name, product_registration: "unknown" as const, location_id: null, quantity: line.quantidade };
+    }),
+    agent_message_id: messageId,
   };
 }
