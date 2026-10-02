@@ -177,7 +177,7 @@ export function ClienteEstoque() {
     const { cart: draftCart, missing } = cartFromDraft(products, draft);
     setCart(draftCart);
     setDestination(draft.destino ?? "");
-    setDueAt(dueAtFromDraft(draft.prazo));
+    setDueAt(dueAtFromDraft(draft.prazo, draft.hora));
     setOrderName(draft.nome ?? "");
     setNotes(draft.observacoes ?? "");
     setCartOpen(true);
