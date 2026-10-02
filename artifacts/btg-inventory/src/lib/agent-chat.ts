@@ -141,6 +141,7 @@ const TOOL_LABELS: Record<string, { done: string; running: string }> = {
   movimentacoes: { done: "Consultou as movimentações", running: "Consultando as movimentações" },
   faturas: { done: "Consultou as faturas", running: "Consultando as faturas" },
   documentos: { done: "Consultou os documentos", running: "Consultando os documentos" },
+  conversas_anteriores: { done: "Procurou nas conversas anteriores", running: "Procurando nas conversas anteriores" },
   fila_solicitacoes: { done: "Consultou a fila de solicitações", running: "Consultando a fila de solicitações" },
   recebimentos: { done: "Consultou os recebimentos", running: "Consultando os recebimentos" },
   tarefas_armazem: { done: "Consultou as tarefas do armazém", running: "Consultando as tarefas do armazém" },
