@@ -502,8 +502,6 @@ export function ClientModuleShell({
   children,
   className,
 }: ClientModuleShellProps) {
-  const customerName = firstText(overview.customer?.name, "Cliente");
-  const customerCode = firstText(overview.customer?.code);
   const headerLabel = firstText(eyebrow, title) ?? "Modulo";
 
   return (
@@ -532,11 +530,6 @@ export function ClientModuleShell({
                 </p>
               ) : null}
             </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs leading-5 text-foreground/65 md:max-w-sm md:justify-end md:pt-2 md:text-right">
-            <span className="font-medium text-foreground">{customerName}</span>
-            {customerCode ? <span>Conta {customerCode}</span> : null}
-            <span>Atualizado {formatDate(overview.updated_at)}</span>
           </div>
         </header>
         <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pr-1">
