@@ -22,6 +22,14 @@ param(
 # NOT_FOUND. No Windows o gcloud nem sempre devolve exit code de erro, entao
 # "existe?" e decidido pela saida: politica de servico existente sempre traz
 # pelo menos o etag; servico inexistente nao imprime nada.
+#
+# 02/10/2026: no primeiro deploy das rotinas (API do Cloud Scheduler
+# desligada) as 4 callables novas ficaram com deploy falho: o servico do
+# Cloud Run existia, sem invoker, e o script disse "FALTA"; minutos depois o
+# servico sumiu e o add-iam-policy-binding respondeu NOT_FOUND. Agora o
+# estado da function (gcloud functions describe) tambem conta: diferente de
+# ACTIVE e "NAO PUBLICADA", com o firebase deploy certo. Se o describe nao
+# responder, vale so a politica, como antes.
 
 $ErrorActionPreference = "Continue"
 
@@ -54,6 +62,13 @@ foreach ($fn in $exports) {
     $notFound += $fn
     continue
   }
+  $state = (gcloud functions describe $fn `
+    --project $ProjectId --region $Region --format="value(state)" 2>$null | Out-String).Trim()
+  if ($state -and $state -ne "ACTIVE") {
+    Write-Host "NAO PUBLICADA $service - deploy nao terminou (estado $state)" -ForegroundColor Red
+    $notFound += $fn
+    continue
+  }
   if (($json -match '"allUsers"') -and ($json -match 'roles/run\.invoker')) {
     Write-Host "OK    $service"
   } else {
@@ -82,6 +97,8 @@ if ($missing.Count -gt 0) {
   $missing | ForEach-Object {
     Write-Host "  gcloud run services add-iam-policy-binding $_ --project $ProjectId --region $Region --member=allUsers --role=roles/run.invoker"
   }
+  Write-Host ""
+  Write-Host "Se algum desses responder NOT_FOUND, a function nao subiu: publique de novo com firebase deploy --only functions:<nome> e rode este script."
 }
 if ($failed) { exit 1 }
 

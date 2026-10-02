@@ -18,12 +18,29 @@ function New-FakeIndex([string[]]$names) {
 # - inexistente: erro no stderr e NADA no stdout. No Windows o wrapper do
 #   gcloud nem sempre devolve exit code diferente de 0, entao o script nao
 #   pode depender do $LASTEXITCODE para saber se o servico existe.
+# - falhou: o servico do Cloud Run existe (politica sem invoker), mas a
+#   function ficou FAILED no deploy (02/10/2026, primeiro deploy das rotinas,
+#   com a API do Cloud Scheduler desligada). Minutos depois o servico sumiu.
+# - semEstado: "functions describe" nao responde (versao/permissao do
+#   gcloud); o script nao pode reprovar so por isso.
 function global:gcloud {
-  $service = $args[3]
   $global:LASTEXITCODE = 0
+  if ($args[0] -eq "functions") {
+    $name = $args[2]
+    switch ($name) {
+      "falhou" { "FAILED" }
+      "semEstado" { [Console]::Error.WriteLine("ERROR: describe indisponivel.") }
+      "naoPublicada" { [Console]::Error.WriteLine("ERROR: NOT_FOUND: function '$name' does not exist.") }
+      default { "ACTIVE" }
+    }
+    return
+  }
+  $service = $args[3]
   switch ($service) {
     "publica" { '{"bindings":[{"members":["allUsers"],"role":"roles/run.invoker"}],"etag":"BwY"}' }
+    "semestado" { '{"bindings":[{"members":["allUsers"],"role":"roles/run.invoker"}],"etag":"BwY"}' }
     "privada" { '{"etag":"ACAB"}' }
+    "falhou" { '{"etag":"ACAB"}' }
     default { [Console]::Error.WriteLine("ERROR: NOT_FOUND: Resource '$service' does not exist.") }
   }
 }
@@ -54,6 +71,17 @@ Expect "nao publicada falha e sugere firebase deploy, nao add-iam-policy-binding
   $result.Output -match "firebase deploy --only functions:naoPublicada" -and
   $result.Output -notmatch "add-iam-policy-binding naopublicada"
 ) $result.Output
+
+$result = Run-Check @("publica", "falhou")
+Expect "function com deploy falho conta como nao publicada, nao como falta de invoker" (
+  $result.Exit -eq 1 -and
+  $result.Output -match "NAO PUBLICADA\s+falhou.*FAILED" -and
+  $result.Output -match "firebase deploy --only functions:falhou" -and
+  $result.Output -notmatch "add-iam-policy-binding falhou"
+) $result.Output
+
+$result = Run-Check @("publica", "semEstado")
+Expect "sem resposta do functions describe decide pela politica" ($result.Exit -eq 0 -and $result.Output -match "OK: as 2 callable") $result.Output
 
 if ($failures -gt 0) { Write-Host "$failures teste(s) falharam." -ForegroundColor Red; exit 1 }
 Write-Host "Todos os testes passaram." -ForegroundColor Green
