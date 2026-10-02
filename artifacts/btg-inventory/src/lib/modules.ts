@@ -8,6 +8,7 @@ import {
   PackagePlus,
   PackageSearch,
   Receipt,
+  Sparkles,
   Truck,
   type LucideIcon,
 } from "lucide-react";
@@ -164,6 +165,24 @@ export const APP_MODULES: AppModule[] = [
       }),
     ],
   }),
+  // Agent Dute: a mesma tela de conversa do portal, para toda a equipe,
+  // inclusive o WMS (02/10/2026). O painel do agente segue em /agente/painel.
+  appModule({
+    id: "agent",
+    label: "Agent Dute",
+    audience: "internal",
+    icon: Sparkles,
+    roles: INTERNAL_ROLES,
+    routes: [
+      navRoute({
+        id: "agent-chat",
+        label: "Agent Dute",
+        href: "/agente",
+        icon: Sparkles,
+        roles: INTERNAL_ROLES,
+      }),
+    ],
+  }),
   // Pedido é um fluxo só: a coordenação aprova, o armazém separa, e a
   // entrega sai no mesmo dia. Uma tela, três grupos (pages/pedidos.tsx).
   appModule({
@@ -245,8 +264,7 @@ export const APP_MODULES: AppModule[] = [
     ],
   }),
   // O grupo "Mais" acabou: Relatórios virou item próprio e Documentos ficou
-  // sozinho. O Agent Dute é o botão flutuante (components/agent/agent-dock.tsx);
-  // o painel dele segue em /agente.
+  // sozinho.
   appModule({
     id: "documents",
     label: "Documentos",
@@ -420,8 +438,9 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   // Triagem detalhada e histórico, abertos a partir da fila de Pedidos.
   { path: "/solicitacoes", roles: COORDINATION_NAV_ROLES },
   { path: "/orders", roles: COORDINATION_NAV_ROLES },
-  // Painel do Agent Dute, aberto pelo botão flutuante e pelo Início.
-  { path: "/agente", roles: TOWER_NAV_ROLES },
+  // Painel do Agent Dute (notificações, riscos, memória), aberto pela tela
+  // do agente e pelo Início.
+  { path: "/agente/painel", roles: TOWER_NAV_ROLES },
   { path: "/agente/conhecimento", roles: TOWER_NAV_ROLES },
   { path: "/catalogo/saldos", roles: WMS_ROLES },
   { path: "/catalogo/mapa", roles: WMS_ROLES },

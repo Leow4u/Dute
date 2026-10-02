@@ -191,7 +191,7 @@ export function buildHomeInbox({
         agentCount > 1 && agentAlerts[0]?.title
           ? `${agentAlerts[0].title} e mais ${agentCount - 1}`
           : (agentAlerts[0]?.title ?? "Caixa do Agent Dute"),
-      href: "/agente",
+      href: "/agente/painel",
       actionLabel: "Revisar",
     });
   }

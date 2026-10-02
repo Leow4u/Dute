@@ -67,7 +67,7 @@ describe("buildHomeInbox", () => {
       ["to-pick", "1 pedido para separar", "/pedidos"],
       ["to-ship", "2 pedidos para entregar", "/pedidos"],
       ["receipts", "1 recebimento para conferir", "/wms/receber"],
-      ["agent", "2 avisos para revisar", "/agente"],
+      ["agent", "2 avisos para revisar", "/agente/painel"],
     ]);
     expect(items[0].detail).toBe("Falta física na rua B");
     expect(items[1].detail).toBe("Retirada 40 un · Recebimento NF 9");

@@ -267,11 +267,51 @@ export function daySuggestions(
 // ------------------------------------------------------------- atalhos
 
 export const AGENT_PATH = "/portal/agente";
+/** A mesma tela do agente para a equipe Dutelog (todos os papéis internos). */
+export const TEAM_AGENT_PATH = "/agente";
+
+export function agentPathFor(role: unknown) {
+  return role === "cliente" ? AGENT_PATH : TEAM_AGENT_PATH;
+}
+
+export function isAgentScreen(location: string) {
+  return location === AGENT_PATH || location === TEAM_AGENT_PATH;
+}
+
+/**
+ * Sugestões da tela do agente para a equipe, pelo papel. Só perguntas que as
+ * consultas de hoje respondem (estoque, pedidos, movimentações, faturas e
+ * documentos); o WMS não recebe sugestão de valores.
+ */
+export function teamSuggestions(role: unknown): Suggestion[] {
+  if (role === "wms") {
+    return [
+      { prompt: "Quais pedidos estão em separação agora?", hint: "pedidos para separar" },
+      { prompt: "O que entrou no estoque hoje?", hint: "recebimentos do dia" },
+      { prompt: "Quais itens estão zerados?", hint: "para conferir no endereço" },
+      { prompt: "Quanto tem do item CAM-01?", hint: "troque pelo código que procura" },
+    ];
+  }
+  if (role === "financeiro") {
+    return [
+      { prompt: "Explique a última fatura emitida", hint: "serviços e valores" },
+      { prompt: "Como os valores das faturas mudaram nos últimos meses?", hint: "comparação mês a mês" },
+      { prompt: "Quantos pedidos foram entregues este mês?", hint: "base da expedição" },
+      { prompt: "Qual é o resumo do estoque hoje?", hint: "base da armazenagem" },
+    ];
+  }
+  return [
+    { prompt: "Quais pedidos estão em andamento?", hint: "etapa de cada um" },
+    { prompt: "O que saiu do estoque esta semana?", hint: "movimentações" },
+    { prompt: "Quais itens estão abaixo do mínimo ou zerados?", hint: "para avisar o cliente" },
+    { prompt: "Explique a última fatura emitida", hint: "serviços e valores" },
+  ];
+}
 
 /** Leva uma pergunta feita fora do chat (barra do Início) para o Agent Dute. */
-export function agentAskHref(question: string) {
+export function agentAskHref(question: string, path = AGENT_PATH) {
   const trimmed = question.trim();
-  return trimmed ? `${AGENT_PATH}?q=${encodeURIComponent(trimmed.slice(0, 4000))}` : AGENT_PATH;
+  return trimmed ? `${path}?q=${encodeURIComponent(trimmed.slice(0, 4000))}` : path;
 }
 
 /**

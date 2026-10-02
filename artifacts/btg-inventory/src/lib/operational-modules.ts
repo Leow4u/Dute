@@ -68,7 +68,7 @@ export const OPERATIONAL_MODULES: OperationalModule[] = [
     title: "Fundação AI-native",
     area: "inteligencia",
     status: "foundation",
-    route: "/agente",
+    route: "/agente/painel",
     source: "novo",
     icon: BrainCircuit,
     purpose: "Registrar tudo que acontece como evento auditável e alimentar memória operacional.",

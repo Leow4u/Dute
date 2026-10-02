@@ -89,6 +89,7 @@ const SettingsApp = lazy(() =>
   import("./pages/settings").then((m) => ({ default: m.SettingsApp })),
 );
 const AiControl = lazy(() => import("./pages/ai-control"));
+const AgentePage = lazy(() => import("./pages/agente"));
 const AgentKnowledge = lazy(() => import("./pages/agent-knowledge"));
 const SettingsSystem = lazy(() => import("./pages/settings-system"));
 const CustomerRequests = lazy(() => import("./pages/customer-requests"));
@@ -1002,7 +1003,8 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/faturamento", BillingHub),
   protectedRoute("/faturamento/tabela", BillingHub),
   protectedRoute("/tabela-precos", PriceListRedirect),
-  protectedRoute("/agente", AiControl),
+  protectedRoute("/agente", AgentePage),
+  protectedRoute("/agente/painel", AiControl),
   protectedRoute("/agente/conhecimento", AgentKnowledge),
   protectedRoute("/suporte", legacySettingsRedirect("/suporte")),
   protectedRoute("/documentos", Documents),
