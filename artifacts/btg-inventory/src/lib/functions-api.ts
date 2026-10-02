@@ -743,7 +743,11 @@ export type AgentDuteStreamChunk =
  * mesmo resultado da chamada comum (conversa e as duas mensagens gravadas).
  */
 export async function streamAgentDuteChat<T>(
-  payload: { message: string; conversation_id?: string },
+  payload: {
+    message: string;
+    conversation_id?: string;
+    attachments?: Array<{ file_name: string; file_url: string; storage_path: string; content_type: string; size_bytes: number }>;
+  },
   onChunk: (chunk: AgentDuteStreamChunk) => void,
   signal?: AbortSignal,
 ): Promise<T> {

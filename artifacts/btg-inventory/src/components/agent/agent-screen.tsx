@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
-import { ArrowDown, ArrowUp, Check, Copy, Loader2, MessagesSquare, Plus, Search, Sparkles } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Copy, FileText, Loader2, MessagesSquare, Paperclip, Plus, Search, Sparkles, X } from "lucide-react";
 
 import { fetchChatJson, type ChatMessage, type ChatResponse } from "@/components/agent/chat";
 import { DraftCard } from "@/components/agent/draft-card";
@@ -21,6 +21,8 @@ import {
 } from "@/lib/agent-chat";
 import { useAppUser } from "@/lib/auth";
 import { streamAgentDuteChat, type AgentDuteStreamChunk } from "@/lib/functions-api";
+import { ATTACHMENT_ACCEPT, isAcceptedAttachment, uploadAttachment } from "@/lib/shipment-files";
+import type { ClientRequestAttachment } from "@/pages/client/shared";
 import { cn } from "@/lib/utils";
 
 /**
@@ -36,6 +38,8 @@ type ConversationsResponse = { conversations: ConversationSummary[] };
 type Streaming = {
   conversationId: string;
   question: string;
+  /** Nomes das notas anexadas nesta pergunta. */
+  files: string[];
   tools: string[];
   runningTool: string | null;
   text: string;
@@ -44,6 +48,18 @@ type Streaming = {
 };
 
 const conversationsKey = ["agent-dute-conversations"] as const;
+
+/** Nota anexada no campo do chat: sobe assim que é escolhida. */
+type PendingFile = { key: string; name: string; status: "uploading" | "ready" | "error"; attachment?: ClientRequestAttachment };
+
+/** Clipe do chat (só portal do cliente): a nota sobe pelo mesmo caminho do Envios. */
+type AttachControls = {
+  files: PendingFile[];
+  onAttach: (list: FileList | null) => void;
+  onRemove: (key: string) => void;
+};
+
+const MAX_CHAT_FILES = 3;
 const messagesKey = (id: string) => ["agent-dute-chat", id] as const;
 
 function firstQuestion(messages: ChatMessage[]) {
@@ -77,7 +93,38 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
   const [draft, setDraft] = useState("");
   const [streaming, setStreaming] = useState<Streaming | null>(null);
   const [mobileRail, setMobileRail] = useState(false);
+  const [files, setFiles] = useState<PendingFile[]>([]);
   const abortRef = useRef<AbortController | null>(null);
+  const canAttach = user?.publicMetadata.role === "cliente";
+
+  function attachFiles(list: FileList | null) {
+    if (!list) return;
+    const chosen = [...list];
+    const accepted = chosen.filter(isAcceptedAttachment).slice(0, Math.max(0, MAX_CHAT_FILES - files.length));
+    if (accepted.length !== chosen.length) {
+      toast({ title: "Alguns arquivos ficaram de fora", description: `Use PDF ou foto, até 8 MB cada e ${MAX_CHAT_FILES} por mensagem.`, variant: "destructive" });
+    }
+    for (const file of accepted) {
+      const key = `${file.name}-${file.size}-${Math.random().toString(36).slice(2, 8)}`;
+      setFiles((current) => [...current, { key, name: file.name, status: "uploading" }]);
+      uploadAttachment(file, `chat_${conversationId ?? "novo"}`)
+        .then((attachment) =>
+          setFiles((current) => current.map((item) => (item.key === key ? { ...item, status: "ready", attachment } : item))),
+        )
+        .catch((error: unknown) => {
+          setFiles((current) => current.map((item) => (item.key === key ? { ...item, status: "error" } : item)));
+          toast({
+            title: `Não consegui anexar ${file.name}`,
+            description: error instanceof Error ? error.message : "Tente de novo.",
+            variant: "destructive",
+          });
+        });
+    }
+  }
+
+  const attach: AttachControls | undefined = canAttach
+    ? { files, onAttach: attachFiles, onRemove: (key) => setFiles((current) => current.filter((item) => item.key !== key)) }
+    : undefined;
 
   const conversations = useQuery<ConversationsResponse, Error>({
     queryKey: conversationsKey,
@@ -107,13 +154,17 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
   }
 
   async function send(content: string, options: { fresh?: boolean } = {}) {
-    const question = content.trim();
+    if (files.some((file) => file.status === "uploading")) return;
+    const sentFiles = files.filter((file) => file.status === "ready" && file.attachment);
+    const attachments = sentFiles.map((file) => file.attachment!);
+    const question = content.trim() || (attachments.length ? "Segue a nota fiscal em anexo." : "");
     if (!question || streaming) return;
     const current = options.fresh ? null : conversationId;
     const id = current ?? newConversationId();
     if (!current) navigate(`${basePath}?c=${encodeURIComponent(id)}`, { replace: Boolean(options.fresh) });
     setDraft("");
-    setStreaming({ conversationId: id, question, tools: [], runningTool: null, text: "", textIndex: -1 });
+    setFiles([]);
+    setStreaming({ conversationId: id, question, files: sentFiles.map((file) => file.name), tools: [], runningTool: null, text: "", textIndex: -1 });
     const controller = new AbortController();
     abortRef.current = controller;
     const onChunk = (chunk: AgentDuteStreamChunk) => {
@@ -134,7 +185,7 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
     };
     try {
       const result = await streamAgentDuteChat<ChatResponse>(
-        { message: question, conversation_id: id },
+        { message: question, conversation_id: id, ...(attachments.length ? { attachments } : {}) },
         onChunk,
         controller.signal,
       );
@@ -144,7 +195,8 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
       }));
       await queryClient.invalidateQueries({ queryKey: conversationsKey });
     } catch (error) {
-      setDraft(question);
+      setDraft(content);
+      setFiles(sentFiles);
       toast({
         title: "Não consegui enviar agora",
         description: error instanceof Error ? error.message : "Tente de novo em instantes.",
@@ -205,6 +257,7 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
             draft={draft}
             onDraft={setDraft}
             onSend={send}
+            attach={attach}
           />
         ) : (
           <Conversation
@@ -215,6 +268,7 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
             onDraft={setDraft}
             onSend={send}
             busy={Boolean(streaming)}
+            attach={attach}
           />
         )}
       </section>
@@ -305,6 +359,7 @@ function Composer({
   disabled,
   placeholder,
   autoFocus,
+  attach,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -312,17 +367,47 @@ function Composer({
   disabled: boolean;
   placeholder: string;
   autoFocus?: boolean;
+  attach?: AttachControls;
 }) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
+  const fileInput = useRef<HTMLInputElement | null>(null);
+  const files = attach?.files ?? [];
+  const uploading = files.some((file) => file.status === "uploading");
+  const hasFile = files.some((file) => file.status === "ready");
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
     element.style.height = "auto";
     element.style.height = `${Math.min(element.scrollHeight, 200)}px`;
   }, [value]);
-  const canSend = value.trim().length > 0 && !disabled;
+  const canSend = (value.trim().length > 0 || hasFile) && !uploading && !disabled;
   return (
     <div className="rounded-[22px] border border-border bg-white px-4 pb-2.5 pt-3 shadow-[0_6px_24px_rgba(30,40,70,.06)] focus-within:border-primary/40">
+      {files.length ? (
+        <ul className="mb-2 flex flex-wrap gap-1.5">
+          {files.map((file) => (
+            <li
+              key={file.key}
+              className={cn(
+                "inline-flex max-w-full items-center gap-1.5 rounded-lg border px-2 py-1 text-xs",
+                file.status === "error" ? "border-red-200 bg-red-50 text-red-700" : "border-border bg-muted/50",
+              )}
+            >
+              {file.status === "uploading" ? (
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden="true" />
+              ) : (
+                <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+              )}
+              <span className="max-w-[220px] truncate">{file.name}</span>
+              {file.status === "uploading" ? <span className="text-muted-foreground">enviando…</span> : null}
+              {file.status === "error" ? <span>não anexou</span> : null}
+              <button type="button" aria-label={`Tirar ${file.name}`} onClick={() => attach?.onRemove(file.key)} className="text-muted-foreground hover:text-foreground">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <textarea
         ref={ref}
         rows={1}
@@ -339,7 +424,32 @@ function Composer({
         data-agent-input
         className="block max-h-[200px] w-full resize-none bg-transparent text-[15px] leading-6 outline-none placeholder:text-muted-foreground"
       />
-      <div className="mt-1.5 flex items-center justify-end">
+      <div className={cn("mt-1.5 flex items-center", attach ? "justify-between" : "justify-end")}>
+        {attach ? (
+          <>
+            <input
+              ref={fileInput}
+              type="file"
+              accept={ATTACHMENT_ACCEPT}
+              multiple
+              className="hidden"
+              onChange={(event) => {
+                attach.onAttach(event.target.files);
+                event.target.value = "";
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => fileInput.current?.click()}
+              disabled={disabled || files.length >= MAX_CHAT_FILES}
+              aria-label="Anexar nota fiscal"
+              title="Anexar nota fiscal (PDF ou foto)"
+              className="grid h-9 w-9 place-items-center rounded-xl text-muted-foreground hover:bg-muted disabled:opacity-40"
+            >
+              <Paperclip className="h-4 w-4" />
+            </button>
+          </>
+        ) : null}
         <button
           type="button"
           disabled={!canSend}
@@ -366,6 +476,7 @@ function Welcome({
   draft,
   onDraft,
   onSend,
+  attach,
 }: {
   name: string;
   suggestions: Suggestion[];
@@ -375,6 +486,7 @@ function Welcome({
   draft: string;
   onDraft: (value: string) => void;
   onSend: (value: string) => void;
+  attach?: AttachControls;
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-10 pt-6">
@@ -393,6 +505,7 @@ function Welcome({
           disabled={disabled}
           autoFocus
           placeholder={placeholder}
+          attach={attach}
         />
       </div>
       <div className="mt-4 grid w-full max-w-[720px] gap-2.5 sm:grid-cols-2">
@@ -421,6 +534,7 @@ function Conversation({
   onDraft,
   onSend,
   busy,
+  attach,
 }: {
   messages: ChatMessage[];
   loading: boolean;
@@ -429,6 +543,7 @@ function Conversation({
   onDraft: (value: string) => void;
   onSend: (value: string) => void;
   busy: boolean;
+  attach?: AttachControls;
 }) {
   const viewport = useRef<HTMLDivElement | null>(null);
   const pinned = useRef(true);
@@ -476,7 +591,9 @@ function Conversation({
           ) : null}
           {ordered.map((message) =>
             message.role === "user" ? (
-              <UserMessage key={message.id}>{message.content}</UserMessage>
+              <UserMessage key={message.id} files={(message.attachments ?? []).map((file) => file.file_name)}>
+                {message.content}
+              </UserMessage>
             ) : (
               <AssistantMessage
                 key={message.id}
@@ -490,7 +607,7 @@ function Conversation({
           )}
           {streaming ? (
             <>
-              <UserMessage>{streaming.question}</UserMessage>
+              <UserMessage files={streaming.files}>{streaming.question}</UserMessage>
               <AssistantMessage
                 tools={streaming.tools}
                 runningTool={streaming.runningTool}
@@ -516,7 +633,7 @@ function Conversation({
       ) : null}
       <div className="shrink-0 px-4 pb-4 md:px-7">
         <div className="mx-auto w-full max-w-[780px]">
-          <Composer value={draft} onChange={onDraft} onSend={onSend} disabled={busy} placeholder="Responder…" />
+          <Composer value={draft} onChange={onDraft} onSend={onSend} disabled={busy} placeholder="Responder…" attach={attach} />
           <p className="mt-2 text-center text-[11.5px] text-muted-foreground">
             O Agent Dute monta pedidos para você conferir; quem envia é você. Confira as informações importantes.
           </p>
@@ -526,9 +643,19 @@ function Conversation({
   );
 }
 
-function UserMessage({ children }: { children: ReactNode }) {
+function UserMessage({ children, files = [] }: { children: ReactNode; files?: string[] }) {
   return (
-    <div className="mb-5 mt-1 flex justify-end">
+    <div className="mb-5 mt-1 flex flex-col items-end gap-1.5">
+      {files.length ? (
+        <ul className="flex max-w-[80%] flex-wrap justify-end gap-1.5">
+          {files.map((name, index) => (
+            <li key={`${name}-${index}`} className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-border bg-white px-2 py-1 text-xs">
+              <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <span className="truncate">{name}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <div className="max-w-[80%] whitespace-pre-wrap rounded-[18px] rounded-br-md bg-muted px-4 py-2.5 text-[15px] leading-6">
         {children}
       </div>

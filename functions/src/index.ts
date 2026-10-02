@@ -98,7 +98,8 @@ import {
   warehouseTasks,
 } from "./domain/agent-team.js";
 import { searchPastConversations } from "./domain/agent-history.js";
-import { buildOrderDraft, buildShipmentDraft, draftFromToolResponses, sendOrderDraft } from "./domain/agent-drafts.js";
+import { buildOrderDraft, buildShipmentDraft, draftFromToolResponses, sendAgentDraft } from "./domain/agent-drafts.js";
+import { AgentAttachmentSchema, attachmentsForDraft, invoiceContext, READABLE_INVOICE_TYPES, type AgentAttachment } from "./domain/agent-attachments.js";
 import { activeNotesForPrompt, decideNote, DecideNoteSchema, listNotes, NOTE_REVIEWER_ROLES, suggestNote } from "./domain/agent-notes.js";
 import { conversationSummary, refreshConversationSummary, SUMMARY_WINDOW, summaryPrompt, type SummaryMessage } from "./domain/agent-summary.js";
 
@@ -466,6 +467,8 @@ const DailyBriefingSchema = z.object({
 const AgentChatSchema = z.object({
   message: z.string().trim().min(1).max(4000),
   conversation_id: z.string().optional(),
+  // NF anexada no chat (portal do cliente), já no Storage do cliente.
+  attachments: z.array(AgentAttachmentSchema).max(3).nullish(),
 });
 
 const BillingCompetenciaSchema = z.object({
@@ -2228,6 +2231,8 @@ export type AgentDuteChunk =
 async function generateAgentDuteReply(input: {
   message: string;
   history: HistoryMessage[];
+  /** Texto só para o modelo, junto da mensagem (ex.: leitura da nota anexada). */
+  context?: string;
   scope: AgentScope;
   role: string;
   asker: { userId: string; conversationId: string; name?: string; email?: string };
@@ -2251,7 +2256,7 @@ async function generateAgentDuteReply(input: {
     .filter((item) => item.content.trim())
     .map((item) => ({
       role: item.role === "assistant" ? ("model" as const) : ("user" as const),
-      content: [{ text: item.content.slice(0, 6000) }],
+      content: [{ text: (item.context ? `${item.content}\n\n${item.context}` : item.content).slice(0, 9000) }],
     }));
   const tools = agentDuteTools(input.scope, input.role, input.asker);
   const errors: string[] = [];
@@ -2273,7 +2278,7 @@ async function generateAgentDuteReply(input: {
         model: vertexAI.model(modelName),
         system,
         messages,
-        prompt: input.message,
+        prompt: input.context ? `${input.message}\n\n${input.context}` : input.message,
         tools,
         maxTurns: 8,
         // O Gemini 3.x conta o raciocínio no limite: 2048 cortava respostas.
@@ -2959,12 +2964,26 @@ const chatWithAgentDuteFlow = ai.defineFlow(
     }
 
     const historyScope = { conversationId, customerCode: input.customer_code, userId: input.actor_uid };
-    const [history, summary] = await Promise.all([
+    const attachments = input.attachments ?? [];
+    const readable = attachments.find((attachment) => READABLE_INVOICE_TYPES.includes(attachment.content_type.toLowerCase()));
+    const [history, summary, context] = await Promise.all([
       recentHistory(db, historyScope, SUMMARY_WINDOW),
       conversationSummary(db, historyScope).catch(() => ""),
+      readable
+        ? readInvoiceForCustomer(
+            { uid: input.actor_uid, role: input.actor_role as Role, customer_code: input.customer_code, email: input.actor_email },
+            input.customer_code,
+            readable.storage_path,
+            readable.content_type,
+            "leitura_nota_chat",
+          )
+            .then((reading) => invoiceContext(readable.file_name, reading))
+            .catch(() => invoiceContext(readable.file_name, null))
+        : Promise.resolve(""),
     ]);
     const answer = await generateAgentDuteReply({
       message: input.message,
+      context,
       history,
       summary,
       scope,
@@ -2978,6 +2997,11 @@ const chatWithAgentDuteFlow = ai.defineFlow(
     const answeredAt = new Date(
       Math.max(Date.now(), Date.parse(askedAt) + 1),
     ).toISOString();
+    // O aviso de envio leva a nota anexada (nesta mensagem ou numa anterior).
+    if (answer.draft?.tipo === "envio") {
+      const anexos = attachmentsForDraft(attachments, history);
+      if (anexos.length) answer.draft = { ...answer.draft, anexos };
+    }
 
     const userMessageId = newDocId("msg_user");
     const assistantMessageId = newDocId("msg_agent");
@@ -3008,6 +3032,9 @@ const chatWithAgentDuteFlow = ai.defineFlow(
       user_id: input.actor_uid,
       role: "user",
       content: input.message,
+      ...(attachments.length ? { attachments } : {}),
+      // Leitura da nota: só o modelo lê, nas próximas mensagens da conversa.
+      ...(context ? { context } : {}),
       created_at_iso: askedAt,
       created_at: FieldValue.serverTimestamp(),
       source,
@@ -3099,6 +3126,7 @@ const chatWithAgentDuteFlow = ai.defineFlow(
           content: input.message,
           created_at: askedAt,
           source,
+          ...(attachments.length ? { attachments } : {}),
         },
         {
           id: assistantMessageId,
@@ -5916,7 +5944,10 @@ export const createCustomerRequest = onCall(async (request) => {
   const { agent_message_id, ...input } = CreateCustomerRequestSchema.parse(request.data ?? {});
   const customer_code = requireCustomerScope(profile, input.customer_code);
   if (agent_message_id) {
-    return sendOrderDraft(db, { messageId: agent_message_id, uid: profile.uid, customerCode: customer_code }, (idempotency_key) =>
+    const tipo = input.type === "recebimento" ? "envio" : "pedido";
+    // A nota anexada no chat precisa estar na pasta do próprio cliente.
+    for (const attachment of input.attachments) assertOwnInvoicePath(attachment.storage_path, customer_code);
+    return sendAgentDraft(db, { messageId: agent_message_id, uid: profile.uid, customerCode: customer_code, tipo }, (idempotency_key) =>
       createCustomerRequestFlow({ ...input, idempotency_key, customer_code }, profile),
     );
   }
@@ -6551,9 +6582,20 @@ export const readShipmentInvoice = onCall({ timeoutSeconds: 120 }, async (reques
   }
   const input = ReadShipmentInvoiceSchema.parse(request.data ?? {});
   const customerCode = requireCustomerScope(profile);
-  const storagePath = assertOwnInvoicePath(input.storage_path, customerCode);
-  const contentType = input.content_type.toLowerCase();
-  if (contentType !== "application/pdf" && !["image/jpeg", "image/png", "image/webp"].includes(contentType)) {
+  return readInvoiceForCustomer(profile, customerCode, input.storage_path, input.content_type, "leitura_nota");
+});
+
+/** Lê a NF do Storage do cliente e casa os itens com o estoque (Envios e chat do Agent Dute). */
+async function readInvoiceForCustomer(
+  profile: Profile,
+  customerCode: string,
+  rawStoragePath: string,
+  rawContentType: string,
+  source: "leitura_nota" | "leitura_nota_chat",
+) {
+  const storagePath = assertOwnInvoicePath(rawStoragePath, customerCode);
+  const contentType = rawContentType.toLowerCase();
+  if (!READABLE_INVOICE_TYPES.includes(contentType)) {
     throw new HttpsError("invalid-argument", "Use a nota em PDF ou foto.");
   }
   let buffer: Buffer;
@@ -6566,7 +6608,6 @@ export const readShipmentInvoice = onCall({ timeoutSeconds: 120 }, async (reques
   if (buffer.length > VISUAL_OCR_MAX_BYTES) {
     throw new HttpsError("invalid-argument", "Arquivo grande demais para leitura automática. Use até 8 MB.");
   }
-
   const started = Date.now();
   const errors: string[] = [];
   for (const modelName of [AGENT_DUTE_MODEL, AGENT_DUTE_FALLBACK_MODEL]) {
@@ -6603,7 +6644,7 @@ export const readShipmentInvoice = onCall({ timeoutSeconds: 120 }, async (reques
         customer_code: customerCode,
         user_id: profile.uid,
         role: profile.role,
-        source: "leitura_nota",
+        source,
         model: modelName,
         input_tokens: response.usage?.inputTokens ?? null,
         output_tokens: response.usage?.outputTokens ?? null,
@@ -6619,7 +6660,7 @@ export const readShipmentInvoice = onCall({ timeoutSeconds: 120 }, async (reques
     }
   }
   throw new HttpsError("unavailable", "Não consegui ler a nota agora. Tente de novo ou preencha os itens.");
-});
+}
 
 /** Configuração > Sistema: verificação real do servidor e do banco. */
 export const getSystemHealth = onCall(async (request) => {
@@ -6941,8 +6982,15 @@ export const chatWithAgentDute = onCall({ timeoutSeconds: 180 }, async (request,
   const profile = await getProfile(request);
   const input = AgentChatSchema.parse(request.data ?? {});
   const customer_code = requireCustomerScope(profile);
+  if (input.attachments?.length) {
+    if (profile.role !== "cliente") {
+      throw new HttpsError("permission-denied", "Anexar nota no chat é do portal do cliente.");
+    }
+    for (const attachment of input.attachments) assertOwnInvoicePath(attachment.storage_path, customer_code);
+  }
   const { stream, output } = chatWithAgentDuteFlow.stream({
     ...input,
+    attachments: input.attachments ?? undefined,
     customer_code,
     actor_uid: profile.uid,
     actor_email: profile.email,

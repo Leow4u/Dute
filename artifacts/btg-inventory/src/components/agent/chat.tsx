@@ -13,6 +13,8 @@ export type ChatMessage = {
   tools_used?: string[];
   /** Rascunho de pedido ou aviso de envio montado pelo agente (lib/agent-draft). */
   draft?: unknown;
+  /** Nota anexada pela pessoa (só mensagens dela). */
+  attachments?: Array<{ file_name: string; storage_path?: string }>;
   /** Pedido que já saiu do cartão: número e quando (gravado pelo servidor). */
   draft_sent?: unknown;
 };

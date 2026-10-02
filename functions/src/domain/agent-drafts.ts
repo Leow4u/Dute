@@ -174,6 +174,7 @@ export async function buildShipmentDraft(db: Firestore, scope: AgentScope, input
     if (!code && !name) return [];
     return [
       {
+        sku_code: known ? text(known.sku_code) || undefined : undefined,
         codigo: known ? codeOf(known) : code || undefined,
         nome: name.slice(0, 200) || undefined,
         quantidade: quantity,
@@ -190,7 +191,7 @@ export async function buildShipmentDraft(db: Firestore, scope: AgentScope, input
     observacoes: short(input.observacoes, 1000),
     linhas,
     instrucao:
-      "Mostre o resumo. A pessoa confere, anexa a nota se quiser e envia pelo botão 'Abrir para conferir e enviar' que aparece abaixo da resposta, na tela Envios; você não envia nada.",
+      "Mostre um resumo curto. Abaixo da resposta aparece um cartão com o aviso (e a nota, se foi anexada no chat): a pessoa confere, ajusta e envia pelo botão 'Enviar aviso' do cartão; você não envia nada e nunca diga que enviou. Se faltar fornecedor ou data de chegada, pergunte ou diga que dá para preencher no cartão.",
   };
 }
 
@@ -216,16 +217,16 @@ export function draftFromToolResponses(messages: Array<{ content?: Array<Record<
 export type DraftSent = { request_id: string; request_number: string; sent_at: string };
 
 /**
- * Envio do pedido que o Agent Dute montou, pelo botão do cartão na conversa.
- * Quem envia é a pessoa (com o login dela, pela mesma criação de pedido do
- * Estoque); aqui só se confere que o rascunho é dela e ainda não foi enviado,
- * e a chave de idempotência vem da mensagem: a mesma mensagem nunca vira dois
- * pedidos. Depois de criado, a mensagem guarda o número para o cartão mostrar
- * "Enviado" em qualquer aparelho.
+ * Envio do pedido ou do aviso de envio que o Agent Dute montou, pelo botão do
+ * cartão na conversa. Quem envia é a pessoa (com o login dela, pela mesma
+ * criação do Estoque e do Envios); aqui só se confere que o rascunho é dela,
+ * do tipo certo e ainda não foi enviado, e a chave de idempotência vem da
+ * mensagem: a mesma mensagem nunca vira dois pedidos. Depois de criado, a
+ * mensagem guarda o número para o cartão mostrar "Enviado" em qualquer aparelho.
  */
-export async function sendOrderDraft<T extends Record<string, unknown>>(
+export async function sendAgentDraft<T extends Record<string, unknown>>(
   db: Firestore,
-  input: { messageId: string; uid: string; customerCode: string },
+  input: { messageId: string; uid: string; customerCode: string; tipo: "pedido" | "envio" },
   create: (idempotencyKey: string) => Promise<T>,
 ) {
   const ref = db.collection("agent_messages").doc(input.messageId);
@@ -233,12 +234,13 @@ export async function sendOrderDraft<T extends Record<string, unknown>>(
   if (!message || message.user_id !== input.uid || message.customer_code !== input.customerCode || message.role !== "assistant") {
     throw new HttpsError("permission-denied", "Este rascunho não é desta conversa.");
   }
-  if ((message.draft as { tipo?: unknown } | undefined)?.tipo !== "pedido") {
-    throw new HttpsError("failed-precondition", "Esta mensagem não tem um pedido para enviar.");
+  const label = input.tipo === "pedido" ? "pedido" : "aviso";
+  if ((message.draft as { tipo?: unknown } | undefined)?.tipo !== input.tipo) {
+    throw new HttpsError("failed-precondition", `Esta mensagem não tem um ${label} para enviar.`);
   }
   const sent = message.draft_sent as DraftSent | undefined;
   if (sent?.request_id) {
-    throw new HttpsError("failed-precondition", `Este pedido já foi enviado (${sent.request_number || sent.request_id}).`);
+    throw new HttpsError("failed-precondition", `Este ${label} já foi enviado (${sent.request_number || sent.request_id}).`);
   }
   const result = await create(`agent_draft_${input.messageId}`);
   const draftSent: DraftSent = {

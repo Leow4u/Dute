@@ -43,7 +43,7 @@ const sentFormat = new Intl.DateTimeFormat("pt-BR", {
   timeZone: "America/Sao_Paulo",
 });
 
-const field =
+export const field =
   "w-full min-w-0 rounded-lg border border-border bg-white px-2.5 py-1.5 text-sm outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/15";
 
 function useAvailableBySku() {
@@ -59,13 +59,50 @@ function useAvailableBySku() {
   }, [overview.data]);
 }
 
+/** Dia de hoje em São Paulo, AAAA-MM-DD. */
+export function todaySaoPaulo() {
+  return todayFormat.format(new Date());
+}
+
+/** Cartão depois de enviado: número, quando e o link para acompanhar. */
+export function SentNotice({
+  sent,
+  fallback,
+  detail,
+  href,
+  linkLabel,
+}: {
+  sent: DraftSent;
+  fallback: string;
+  detail: string;
+  href: string;
+  linkLabel: string;
+}) {
+  const at = sent.sent_at ? new Date(sent.sent_at) : null;
+  return (
+    <section className="mt-3 rounded-2xl border border-border bg-white px-4 py-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="flex items-center gap-2 text-sm font-semibold">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+          {sent.request_number || fallback} enviado
+        </p>
+        {at && !Number.isNaN(at.getTime()) ? <span className="text-xs text-muted-foreground">em {sentFormat.format(at)}</span> : null}
+      </div>
+      <p className="mt-1 text-sm text-muted-foreground">{detail}</p>
+      <Link href={href} className="mt-1.5 inline-block text-sm font-medium text-primary hover:underline">
+        {linkLabel} ›
+      </Link>
+    </section>
+  );
+}
+
 export function OrderDraftCard({ draft, messageId, sent: sentValue }: { draft: OrderDraft; messageId?: string; sent?: unknown }) {
   const [form, setForm] = useState<OrderForm>(() => orderFormFromDraft(draft));
   const [sent, setSent] = useState<DraftSent | null>(() => parseDraftSent(sentValue));
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const view = withLiveAvailability(form, useAvailableBySku());
-  const problem = orderFormProblem(view, todayFormat.format(new Date()));
+  const problem = orderFormProblem(view, todaySaoPaulo());
   const pieces = view.linhas.reduce((sum, line) => sum + line.quantidade, 0);
 
   const send = useMutation({
@@ -80,21 +117,14 @@ export function OrderDraftCard({ draft, messageId, sent: sentValue }: { draft: O
   });
 
   if (sent) {
-    const at = sent.sent_at ? new Date(sent.sent_at) : null;
     return (
-      <section className="mt-3 rounded-2xl border border-border bg-white px-4 py-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <p className="flex items-center gap-2 text-sm font-semibold">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden="true" />
-            {sent.request_number || "Pedido"} enviado
-          </p>
-          {at && !Number.isNaN(at.getTime()) ? <span className="text-xs text-muted-foreground">em {sentFormat.format(at)}</span> : null}
-        </div>
-        <p className="mt-1 text-sm text-muted-foreground">Aguardando a Dutelog confirmar. As peças já ficam reservadas.</p>
-        <Link href="/portal/pedidos" className="mt-1.5 inline-block text-sm font-medium text-primary hover:underline">
-          Acompanhar em Pedidos ›
-        </Link>
-      </section>
+      <SentNotice
+        sent={sent}
+        fallback="Pedido"
+        detail="Aguardando a Dutelog confirmar. As peças já ficam reservadas."
+        href="/portal/pedidos"
+        linkLabel="Acompanhar em Pedidos"
+      />
     );
   }
 

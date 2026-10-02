@@ -1764,6 +1764,12 @@ async function getAgentDuteChat(conversationId?: string) {
         : [],
       draft: message.draft,
       draft_sent: message.draft_sent,
+      attachments: Array.isArray(message.attachments)
+        ? (message.attachments as Array<Record<string, unknown>>).map((file) => ({
+            file_name: String(file.file_name ?? "anexo"),
+            storage_path: String(file.storage_path ?? ""),
+          }))
+        : undefined,
     }));
 
   return {

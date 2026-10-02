@@ -1,3 +1,4 @@
+import type { AgentAttachment } from "./agent-attachments.js";
 import type { Firestore, QuerySnapshot } from "firebase-admin/firestore";
 
 import { isPublishedToCustomer, loadKnowledgeContext, type KnowledgeAudience } from "./agent-knowledge.js";
@@ -427,7 +428,15 @@ export async function documents(db: Firestore, scope: AgentScope, query?: string
 
 // --------------------------------------------------------------- conversa
 
-export type HistoryMessage = { id: string; role: "user" | "assistant"; content: string; created_at: string };
+export type HistoryMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+  /** Leitura da nota anexada: só o modelo lê. */
+  context?: string;
+  attachments?: AgentAttachment[];
+};
 
 /**
  * As últimas mensagens da conversa, da mais antiga para a mais nova. Sem o
@@ -455,6 +464,8 @@ export async function recentHistory(
         role: data.role === "assistant" ? ("assistant" as const) : ("user" as const),
         content: String(data.content ?? ""),
         created_at: String(data.created_at_iso ?? ""),
+        ...(typeof data.context === "string" && data.context ? { context: data.context } : {}),
+        ...(Array.isArray(data.attachments) && data.attachments.length ? { attachments: data.attachments as AgentAttachment[] } : {}),
       };
     })
     // Antes do v2, pergunta e resposta tinham o mesmo horário: no empate a
