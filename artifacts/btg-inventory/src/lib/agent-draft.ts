@@ -42,6 +42,9 @@ export type ShipmentDraft = {
   anexos?: DraftAttachment[];
 };
 
+/** Rotina proposta pelo agente (sugerir_rotina): a pessoa confirma no cartão. */
+export type RoutineDraft = { tipo: "rotina"; value: Record<string, unknown> };
+
 export type AgentDraft = OrderDraft | ShipmentDraft;
 
 const STORAGE_KEY = "dute.agent-draft";
@@ -64,6 +67,11 @@ function list(value: unknown) {
 }
 
 /** Lê o rascunho que veio na mensagem (ou do armazenamento), descartando o que não tiver forma de rascunho. */
+export function parseRoutineDraft(value: unknown): RoutineDraft | null {
+  if (!value || typeof value !== "object" || (value as AnyRecord).tipo !== "rotina") return null;
+  return { tipo: "rotina", value: value as AnyRecord };
+}
+
 export function parseDraft(value: unknown): AgentDraft | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as AnyRecord;

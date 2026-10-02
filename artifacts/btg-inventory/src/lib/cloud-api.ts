@@ -1810,6 +1810,7 @@ async function getAgentDuteConversations() {
       id: String(conversation.id ?? conversation._docId),
       title: String(conversation.title ?? "").trim() || "Conversa",
       last_message_at: String(conversation.last_message_at ?? ""),
+      ...(conversation.routine_id ? { routine_id: String(conversation.routine_id) } : {}),
     }))
     .filter((conversation) => conversation.last_message_at)
     .sort((left, right) => right.last_message_at.localeCompare(left.last_message_at))

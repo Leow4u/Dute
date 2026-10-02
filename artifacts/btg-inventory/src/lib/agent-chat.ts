@@ -141,6 +141,7 @@ const TOOL_LABELS: Record<string, { done: string; running: string }> = {
   movimentacoes: { done: "Consultou as movimentações", running: "Consultando as movimentações" },
   faturas: { done: "Consultou as faturas", running: "Consultando as faturas" },
   documentos: { done: "Consultou os documentos", running: "Consultando os documentos" },
+  sugerir_rotina: { done: "Propôs uma rotina", running: "Montando a rotina" },
   rascunho_pedido: { done: "Montou o pedido", running: "Montando o pedido" },
   rascunho_envio: { done: "Montou o rascunho do aviso", running: "Montando o rascunho do aviso" },
   sugerir_anotacao: { done: "Sugeriu uma anotação para a equipe aprovar", running: "Sugerindo uma anotação" },
@@ -170,6 +171,8 @@ export type ConversationSummary = {
   id: string;
   title: string;
   last_message_at: string;
+  /** Conversa onde chegam as respostas de uma rotina. */
+  routine_id?: string;
 };
 
 const DAY = 86_400_000;

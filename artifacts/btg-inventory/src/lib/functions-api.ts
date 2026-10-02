@@ -378,6 +378,21 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  // Rotinas do Agent Dute: cada pessoa lista, cria, altera, apaga e roda as suas.
+  if (method === "GET" && pathname === "/api/agent-dute/routines") {
+    return { name: "listAgentRoutines", payload: async () => ({}) };
+  }
+  if (method === "POST" && pathname === "/api/agent-dute/routines") {
+    return { name: "saveAgentRoutine", payload: async (_pathname, init) => readJsonBody(init) };
+  }
+  const routineActionMatch = pathname.match(/^\/api\/agent-dute\/routines\/([^/]+)\/(delete|run)$/);
+  if (method === "POST" && routineActionMatch) {
+    return {
+      name: routineActionMatch[2] === "delete" ? "deleteAgentRoutine" : "runAgentRoutineNow",
+      payload: async () => ({ id: decodeURIComponent(routineActionMatch[1]!) }),
+    };
+  }
+
   // Anotações sugeridas pelo Agent Dute: a coordenação lista e decide.
   if (method === "GET" && pathname === "/api/agent-dute/notes") {
     return { name: "listAgentNotes", payload: async () => ({}) };
