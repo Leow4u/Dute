@@ -27,6 +27,8 @@ export const AGENT_TOOL_NAMES = [
   "movimentacoes",
   "faturas",
   "documentos",
+  // As conversas anteriores da própria pessoa: todos os papéis.
+  "conversas_anteriores",
   // Só equipe Dutelog (agent-team.ts e a prévia do faturamento).
   "fila_solicitacoes",
   "recebimentos",
@@ -46,6 +48,7 @@ const PORTAL_TOOLS: AgentToolName[] = [
   "movimentacoes",
   "faturas",
   "documentos",
+  "conversas_anteriores",
 ];
 const FLOOR_TOOLS: AgentToolName[] = ["recebimentos", "tarefas_armazem", "enderecos"];
 const COORDINATION_TOOLS: AgentToolName[] = ["fila_solicitacoes", ...FLOOR_TOOLS, "eventos"];

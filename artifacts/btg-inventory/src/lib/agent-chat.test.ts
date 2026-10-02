@@ -60,6 +60,7 @@ describe("consultas feitas", () => {
     expect(toolLabel("desconhecida")).toBe("Consultou os dados");
     expect(toolLabel("tarefas_armazem", true)).toBe("Consultando as tarefas do armazém");
     expect(toolLabel("previa_faturamento")).toBe("Calculou a prévia da fatura");
+    expect(toolLabel("conversas_anteriores")).toBe("Procurou nas conversas anteriores");
     expect(uniqueTools(["buscar_itens", "movimentacoes", "buscar_itens"])).toEqual(["buscar_itens", "movimentacoes"]);
   });
 });

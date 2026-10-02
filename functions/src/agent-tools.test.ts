@@ -3,7 +3,16 @@ import { describe, it } from "node:test";
 
 import { agentToolsForRole } from "./domain/agent-dute.js";
 
-const PORTAL = ["resumo_estoque", "buscar_itens", "listar_pedidos", "ver_pedido", "movimentacoes", "faturas", "documentos"];
+const PORTAL = [
+  "resumo_estoque",
+  "buscar_itens",
+  "listar_pedidos",
+  "ver_pedido",
+  "movimentacoes",
+  "faturas",
+  "documentos",
+  "conversas_anteriores",
+];
 
 describe("consultas do Agent Dute por papel", () => {
   it("cliente só tem o que o portal mostra", () => {
@@ -12,7 +21,7 @@ describe("consultas do Agent Dute por papel", () => {
 
   it("WMS tem o chão do armazém, sem faturas nem prévia", () => {
     const tools = agentToolsForRole("wms");
-    for (const name of ["recebimentos", "tarefas_armazem", "enderecos"]) assert.ok(tools.includes(name as never), name);
+    for (const name of ["recebimentos", "tarefas_armazem", "enderecos", "conversas_anteriores"]) assert.ok(tools.includes(name as never), name);
     for (const name of ["faturas", "previa_faturamento", "fila_solicitacoes", "eventos"]) {
       assert.equal(tools.includes(name as never), false, name);
     }

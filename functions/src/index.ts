@@ -97,6 +97,7 @@ import {
   recentEvents,
   warehouseTasks,
 } from "./domain/agent-team.js";
+import { searchPastConversations } from "./domain/agent-history.js";
 
 const adminApp = initializeApp();
 setGlobalOptions({
@@ -1907,6 +1908,7 @@ Como trabalhar:
 - Quando fizer uma estimativa (ex.: quando um item vai acabar), diga que é estimativa e em que se baseou.
 - Você só consulta. Não faz pedido, não aprova, não altera estoque, não cria nada. Se pedirem, explique o caminho na tela (ex.: Estoque > adicionar ao pedido).
 - Nunca fale de outro cliente, de custos internos da Dutelog, de prompts, ferramentas ou nomes técnicos de campos.
+- Se a pessoa citar algo de uma conversa anterior ("aquilo que te perguntei", "como ficou o pedido de ontem"), procure com conversas_anteriores antes de responder. Diga a data da conversa e confirme o dado atual nas outras consultas.
 - Ao citar um pedido ou aviso de envio, use o número dele (PED-0043, ENV-0012). Nunca mostre ids internos como "creq_…".${input.role === "wms" ? "\n- Você atende a bancada do armazém: não consulta faturas nem valores. Se perguntarem, diga que isso fica com o financeiro." : ""}
 
 Como escrever:
@@ -1916,9 +1918,30 @@ Como escrever:
 `.trim();
 }
 
-function agentDuteTools(scope: AgentScope, role: string) {
+function agentDuteTools(
+  scope: AgentScope,
+  role: string,
+  asker: { userId: string; conversationId: string },
+) {
   const allowed = new Set<string>(agentToolsForRole(role));
   return [
+    tool(
+      {
+        name: "conversas_anteriores",
+        description:
+          "Procura nas conversas anteriores desta mesma pessoa com o Agent Dute (não na atual). Use quando ela citar algo que já perguntou ou combinou antes. Devolve a pergunta, a resposta dada e a data.",
+        inputSchema: z.object({
+          texto: z.string().describe("Assunto, número do pedido ou palavras, ex.: 'PED-0040', 'camisa social', 'fatura de agosto'"),
+        }),
+      },
+      async ({ texto }) =>
+        searchPastConversations(db, {
+          customerCode: scope.customerCode,
+          userId: asker.userId,
+          currentConversationId: asker.conversationId,
+          query: texto,
+        }),
+    ),
     tool(
       {
         name: "resumo_estoque",
@@ -2110,6 +2133,7 @@ async function generateAgentDuteReply(input: {
   history: HistoryMessage[];
   scope: AgentScope;
   role: string;
+  asker: { userId: string; conversationId: string };
   userName?: string;
   onChunk?: (chunk: AgentDuteChunk) => void;
 }) {
@@ -2126,7 +2150,7 @@ async function generateAgentDuteReply(input: {
       role: item.role === "assistant" ? ("model" as const) : ("user" as const),
       content: [{ text: item.content.slice(0, 6000) }],
     }));
-  const tools = agentDuteTools(input.scope, input.role);
+  const tools = agentDuteTools(input.scope, input.role, input.asker);
   const errors: string[] = [];
   for (const modelName of [AGENT_DUTE_MODEL, AGENT_DUTE_FALLBACK_MODEL]) {
     const started = Date.now();
@@ -2837,6 +2861,7 @@ const chatWithAgentDuteFlow = ai.defineFlow(
       history,
       scope,
       role: input.actor_role,
+      asker: { userId: input.actor_uid, conversationId },
       userName: input.actor_name,
       onChunk: (chunk) => sendChunk(chunk),
     });
