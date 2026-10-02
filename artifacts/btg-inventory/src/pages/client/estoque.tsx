@@ -40,8 +40,9 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { cartFromDraft, dueAtFromDraft, takeDraft } from "@/lib/agent-draft";
+import { overviewLine, productTitle, productType, stockOverview, typeOptions, typeValue } from "@/lib/portal-stock";
 import { cn } from "@/lib/utils";
-import { displayName, groupFamilies, variantLabel, type Family } from "@/lib/stock-variants";
+import { groupFamilies, variantLabel, type Family } from "@/lib/stock-variants";
 
 import {
   ClientDataBoundary,
@@ -61,7 +62,6 @@ import {
   inventoryItemSku,
   inventoryItemTotal,
   inventoryItemValue,
-  formatMoney,
   normalizeSlug,
   type CreateClientRequestItem,
   type CreateClientRequestPayload,
@@ -109,7 +109,7 @@ const stockFilterOptions: Array<{
 }> = [
   { value: "todos", label: "Todos", icon: Package },
   { value: "disponiveis", label: "Com saldo", icon: PackageCheck },
-  { value: "baixo", label: "Baixo estoque", icon: AlertTriangle },
+  { value: "baixo", label: "Abaixo do mínimo", icon: AlertTriangle },
   { value: "zerado", label: "Sem saldo", icon: Archive },
   { value: "arquivados", label: "Arquivados", icon: Archive },
 ];
@@ -280,7 +280,15 @@ export function ClienteEstoque() {
         const selectedProduct = selectedProductKey
           ? (productByKey.get(selectedProductKey) ?? null)
           : null;
-        const categories = getCategoryOptions(products);
+        const categories = typeOptions(products);
+        const summary = stockOverview(products);
+        const filterCounts: Record<StockFilter, number> = {
+          todos: summary.items,
+          disponiveis: summary.withStock,
+          baixo: summary.low,
+          zerado: summary.zero,
+          arquivados: summary.archived,
+        };
         const filteredProducts = filterProducts({
           products,
           cart,
@@ -480,6 +488,7 @@ export function ClienteEstoque() {
           <ClientModuleShell
             overview={overview}
             title="Estoque"
+            description={products.length ? overviewLine(summary) : undefined}
             icon={Box}
             className="max-w-[1720px]"
           >
@@ -496,7 +505,7 @@ export function ClienteEstoque() {
                 onGroupVariantsChange={setGroupVariants}
                 cartQuantity={cartQuantity}
                 cartOpen={cartOpen}
-                visibleCount={viewMode === "cards" ? families.length : sortedProducts.length}
+                filterCounts={filterCounts}
                 hasActiveFilters={hasActiveFilters}
                 onSearchChange={updateSearch}
                 onStockFilterChange={updateStockFilter}
@@ -615,6 +624,24 @@ export function ClienteEstoque() {
                 />
               </SideDrawer>
             ) : null}
+
+            {/* Celular: o pedido sempre à vista, sem subir até a barra. */}
+            {cartQuantity > 0 && !cartOpen ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setCartOpen(true);
+                  setSelectedProductKey(null);
+                }}
+                className="fixed inset-x-4 bottom-4 z-40 flex items-center justify-between rounded-2xl bg-foreground px-4 py-3 text-sm font-semibold text-background shadow-lg md:hidden"
+              >
+                <span>
+                  Pedido · {formatNumber(cartLines.length)} {cartLines.length === 1 ? "item" : "itens"} · {formatNumber(cartQuantity)}{" "}
+                  {cartQuantity === 1 ? "peça" : "peças"}
+                </span>
+                <span>Ver ›</span>
+              </button>
+            ) : null}
           </ClientModuleShell>
         );
       }}
@@ -662,7 +689,7 @@ function MarketplaceToolbar({
   onGroupVariantsChange,
   cartQuantity,
   cartOpen,
-  visibleCount,
+  filterCounts,
   hasActiveFilters,
   onSearchChange,
   onStockFilterChange,
@@ -682,7 +709,7 @@ function MarketplaceToolbar({
   onGroupVariantsChange: (value: boolean) => void;
   cartQuantity: number;
   cartOpen: boolean;
-  visibleCount: number;
+  filterCounts: Record<StockFilter, number>;
   hasActiveFilters: boolean;
   onSearchChange: (value: string) => void;
   onStockFilterChange: (value: StockFilter) => void;
@@ -703,8 +730,8 @@ function MarketplaceToolbar({
           <Input
             value={searchTerm}
             onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="Buscar por nome, código ou categoria"
-            aria-label="Buscar por nome, código ou categoria"
+            placeholder="Buscar por nome, código ou tipo"
+            aria-label="Buscar por nome, código ou tipo"
             className="h-11 rounded-[18px] border-border bg-white/80 pl-11 text-sm"
           />
         </div>
@@ -749,7 +776,8 @@ function MarketplaceToolbar({
                   )}
                 />
               </span>
-              Agrupar tamanhos
+              <span className="hidden sm:inline">Agrupar tamanhos</span>
+              <span className="sm:hidden">Tamanhos</span>
             </button>
           ) : null}
           <button
@@ -758,7 +786,7 @@ function MarketplaceToolbar({
             aria-expanded={cartOpen}
             aria-label={`Abrir pedido de abastecimento com ${formatNumber(cartQuantity)} item(ns)`}
             className={cn(
-              "relative flex h-11 cursor-pointer items-center gap-2 rounded-[18px] border px-3.5 text-sm font-medium transition hover:bg-[#F5F6F7] active:translate-y-px",
+              "relative hidden h-11 cursor-pointer items-center gap-2 rounded-[18px] border px-3.5 text-sm font-medium transition hover:bg-[#F5F6F7] active:translate-y-px md:flex",
               cartOpen
                 ? "border-primary/25 bg-primary/10 text-primary"
                 : "border-border bg-white/75 text-foreground",
@@ -791,35 +819,17 @@ function MarketplaceToolbar({
               key={option.value}
               active={stockFilter === option.value}
               icon={option.icon}
-              label={option.label}
+              label={option.value === "arquivados" && !filterCounts.arquivados ? option.label : `${option.label} · ${formatNumber(filterCounts[option.value])}`}
               onClick={() => onStockFilterChange(option.value)}
             />
           ))}
         </div>
 
-        {/* Poucas categorias (vestuário, mobiliário...) merecem chips à
-            vista, não um dropdown; acima de 6 volta o seletor compacto. */}
-        {categories.length <= 6 ? (
-          <div
-            role="group"
-            aria-label="Filtrar por categoria"
-            className="-mx-1 flex min-w-0 items-center gap-2 overflow-x-auto px-1 pb-1 xl:pb-0"
-          >
-            {categories.map((category) => (
-              <FilterChip
-                key={category.value}
-                active={categoryFilter === category.value}
-                label={`${category.label} (${formatNumber(category.count)})`}
-                onClick={() => onCategoryFilterChange(category.value)}
-              />
-            ))}
-          </div>
-        ) : null}
-
         <div className="flex flex-wrap items-center gap-2">
-          {categories.length > 6 ? (
+          {/* Tipo (POLO, SACOLA…) sempre como seletor: em chips disputava a linha com a situação. */}
+          {categories.length > 2 ? (
             <CatalogSelect
-              ariaLabel="Filtrar por categoria"
+              ariaLabel="Filtrar por tipo"
               icon={SlidersHorizontal}
               value={categoryFilter}
               onChange={onCategoryFilterChange}
@@ -851,17 +861,6 @@ function MarketplaceToolbar({
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3 text-xs text-muted-foreground">
-        <p>
-          <span className="font-semibold text-foreground">
-            {formatNumber(visibleCount)}
-          </span>{" "}
-          {viewMode === "cards" ? "produto(s) na vitrine" : "item(ns) no catálogo"}
-        </p>
-        <p className="hidden sm:block">
-          O saldo exibido já desconta o que está no seu pedido.
-        </p>
-      </div>
     </section>
   );
 }
@@ -963,15 +962,13 @@ function StockList({
 }) {
   return (
     <div className="overflow-hidden rounded-[28px] border border-border bg-white/70 shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]">
-      <Table className="min-w-[1120px]">
+      <Table className="min-w-[860px]">
         <TableHeader className="sticky top-0 z-10 bg-white/95 backdrop-blur-[24px]">
           <TableRow>
-            <TableHead className="w-[140px]">Cod. cliente</TableHead>
-            <TableHead className="min-w-[360px]">Produto</TableHead>
-            <TableHead className="w-[150px]">Categoria</TableHead>
+            <TableHead className="w-[170px]">Código</TableHead>
+            <TableHead className="min-w-[300px]">Produto</TableHead>
             <TableHead className="text-right">Disponível</TableHead>
             <TableHead className="text-right">Reservado</TableHead>
-            <TableHead className="text-right">Valor em estoque</TableHead>
             <TableHead className="w-[270px] text-right">Pedido</TableHead>
           </TableRow>
         </TableHeader>
@@ -995,10 +992,11 @@ function StockList({
                     type="button"
                     onClick={() => onDetails(product)}
                     className="max-w-[520px] cursor-pointer truncate text-left font-medium text-foreground transition hover:text-primary"
-                    title={product.name}
+                    title={productTitle(product)}
                   >
-                    {product.name}
+                    {productTitle(product)}
                   </button>
+                  <span className="ml-2 text-xs text-muted-foreground">{productType(product)}</span>
                   <div className="mt-1 flex flex-wrap gap-2">
                     <StockBadge status={status} />
                     {cart[product.key] ? (
@@ -1008,28 +1006,14 @@ function StockList({
                     ) : null}
                   </div>
                 </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {product.category}
-                </TableCell>
                 <TableCell className="text-right">
                   <p className="font-semibold text-foreground">
                     {formatNumber(liveAvailable)}
                   </p>
-                  {draftQuantity > 0 ? (
-                    <p className="mt-1 text-[11px] text-primary">
-                      Pedindo {formatNumber(draftQuantity)} · Sobra{" "}
-                      {formatNumber(Math.max(0, liveAvailable - draftQuantity))}
-                    </p>
-                  ) : null}
+
                 </TableCell>
                 <TableCell className="text-right text-muted-foreground">
                   {formatNumber(product.reserved)}
-                </TableCell>
-                <TableCell
-                  className="text-right text-muted-foreground"
-                  title="Custo do material que você já adquiriu — não é preço de venda."
-                >
-                  {formatMoney(product.value)}
                 </TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-2">
@@ -1092,6 +1076,14 @@ function SideDrawer({
   onClose: () => void;
   wide?: boolean;
 }) {
+  // Esc fecha, como o clique fora; o pedido continua guardado.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
   // Fundo escuro sem desfoque e painel opaco: atrás há uma vitrine de
   // fotos, e o painel translúcido ficava ilegível.
   return (
@@ -1193,26 +1185,34 @@ function FamilyCard({
     { ...product, available: familyAvailable },
     family.variants.reduce((sum, entry) => sum + liveAvailableForProduct(entry.item, cart), 0),
   );
-  const title = displayName(
-    product.category && product.category !== "Sem categoria" ? product.category : product.name,
-  );
-  const showVariants = family.variants.length > 1 || selected.variant !== null;
+  const title = productTitle(product);
+  // Tamanho único ("U") não precisa de botão: o disponível já diz tudo.
+  const showVariants = family.variants.length > 1;
+  const hasPhoto = Boolean(photo.photoUrl);
 
   return (
     <article
       data-testid="stock-card"
       className="flex min-w-0 flex-col overflow-hidden rounded-[18px] border border-border bg-white shadow-[0_8px_24px_rgba(15,23,42,.04)] transition duration-200 hover:border-primary/30 hover:shadow-[0_18px_60px_rgba(15,23,42,.07)]"
     >
-      <button
-        type="button"
-        onClick={() => onDetails(product)}
-        className="cursor-pointer text-left"
-        aria-label={`Ver detalhes de ${title}`}
-      >
-        <ProductVisual product={photo} status={status} inCart={inCart} />
-      </button>
+      {/* Sem foto, o card começa no nome: o quadro vazio ocupava meio card. */}
+      {hasPhoto ? (
+        <button
+          type="button"
+          onClick={() => onDetails(product)}
+          className="cursor-pointer text-left"
+          aria-label={`Ver detalhes de ${title}`}
+        >
+          <ProductVisual product={photo} status={status} inCart={inCart} />
+        </button>
+      ) : null}
 
       <div className="flex flex-1 flex-col gap-2.5 p-3.5">
+        {!hasPhoto && (inCart > 0 || status === "zero" || status === "low") ? (
+          <div>
+            <StockBadge status={status} compact inCart={inCart} />
+          </div>
+        ) : null}
         <div className="min-w-0">
           <p className="truncate text-[11px] uppercase tracking-wide text-muted-foreground">
             {product.name} · {family.base || product.clientCode}
@@ -1387,7 +1387,7 @@ function CartPanel({
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium">
-                {displayName(line.product.category && line.product.category !== "Sem categoria" ? line.product.category : line.product.name)}
+                {productTitle(line.product)}
               </span>
               <span className="block truncate text-xs text-muted-foreground">
                 {line.product.clientCode} · {formatNumber(liveAvailableForLine(line.product, line))} disponíveis
@@ -1438,12 +1438,15 @@ function CartPanel({
         />
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="cart-destination">Entregar em</Label>
+        <Label htmlFor="cart-destination">
+          Entregar em <span className="text-destructive" aria-hidden="true">*</span>
+        </Label>
         <Input
           id="cart-destination"
           value={destination}
           onChange={(event) => onDestinationChange(event.target.value)}
           placeholder="Agência, prédio ou centro de custo"
+          aria-required="true"
         />
       </div>
       <div className="space-y-1.5">
@@ -1573,11 +1576,11 @@ function ProductDetailPanel({
             {product.clientCode}
           </p>
           <h2 className="mt-1 text-xl font-semibold leading-7 text-foreground">
-            {product.name}
+            {productTitle(product)}
           </h2>
           <div className="mt-3 flex flex-wrap gap-2">
             <span className="rounded-full border border-border bg-white/70 px-3 py-1 text-xs text-muted-foreground">
-              {product.category}
+              {productType(product)}
             </span>
             <StockBadge status={status} />
           </div>
@@ -1611,10 +1614,6 @@ function ProductDetailPanel({
               value={formatNumber(product.total)}
             />
           ) : null}
-          <StockFact
-            label="Valor em estoque (custo)"
-            value={formatMoney(product.value)}
-          />
           {draftQuantity > 0 ? (
             <StockFact
               label="Quantidade selecionada"
@@ -1939,7 +1938,7 @@ function FilterChip({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition",
+        "flex shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition",
         active
           ? "border-primary/25 bg-primary/10 text-primary"
           : "border-border bg-white/60 text-muted-foreground hover:bg-white",
@@ -2091,10 +2090,7 @@ function filterProducts({
       return false;
     }
 
-    if (
-      categoryFilter !== "todos" &&
-      normalizeSlug(product.category) !== categoryFilter
-    ) {
+    if (categoryFilter !== "todos" && typeValue(product) !== categoryFilter) {
       return false;
     }
 
@@ -2153,29 +2149,6 @@ function sortProducts(
   });
 }
 
-function getCategoryOptions(products: StockProduct[]) {
-  const counts = new Map<
-    string,
-    { value: string; label: string; count: number }
-  >();
-
-  for (const product of products) {
-    const value = normalizeSlug(product.category) || "sem-categoria";
-    const current = counts.get(value) ?? {
-      value,
-      label: product.category || "Sem categoria",
-      count: 0,
-    };
-    current.count += 1;
-    counts.set(value, current);
-  }
-
-  return [
-    { value: "todos", label: "Todas categorias", count: products.length },
-    ...[...counts.values()].sort((left, right) => right.count - left.count),
-  ];
-}
-
 function getCartLines(
   cart: Record<string, number>,
   productByKey: Map<string, StockProduct>,
@@ -2230,7 +2203,7 @@ function buildReplenishmentRequest(
     // do armazém sem nada para chegar.
     type: "suporte",
     priority: "normal",
-    title: `Reposição: ${displayName(product.category && product.category !== "Sem categoria" ? product.category : product.name)} (${product.clientCode})`,
+    title: `Reposição: ${productTitle(product)} (${product.clientCode})`,
     description: [
       `A BTG avisa que o item ${product.clientCode} está sem saldo e precisa de reposição.`,
       "Quando o fornecedor tiver data, avise a entrega pelo portal.",
