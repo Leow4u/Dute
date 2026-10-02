@@ -29,6 +29,9 @@ export const AGENT_TOOL_NAMES = [
   "documentos",
   // As conversas anteriores da própria pessoa: todos os papéis.
   "conversas_anteriores",
+  // Rascunhos de pedido e de aviso de envio: só o cliente (não grava nada).
+  "rascunho_pedido",
+  "rascunho_envio",
   // Só equipe Dutelog (agent-team.ts e a prévia do faturamento).
   "fila_solicitacoes",
   "recebimentos",
@@ -64,7 +67,7 @@ const COORDINATION_TOOLS: AgentToolName[] = ["fila_solicitacoes", ...FLOOR_TOOLS
 export function agentToolsForRole(role: string): AgentToolName[] {
   const allowed = new Set<AgentToolName>();
   const add = (names: AgentToolName[]) => names.forEach((name) => allowed.add(name));
-  if (role === "cliente") add(PORTAL_TOOLS);
+  if (role === "cliente") add([...PORTAL_TOOLS, "rascunho_pedido", "rascunho_envio"]);
   else if (role === "wms") add([...PORTAL_TOOLS.filter((name) => name !== "faturas"), ...FLOOR_TOOLS]);
   else if (role === "financeiro") add([...PORTAL_TOOLS, "previa_faturamento"]);
   else if (["owner", "admin", "interno", "suporte"].includes(role)) {

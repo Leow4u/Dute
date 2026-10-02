@@ -4,6 +4,7 @@ import { useLocation, useSearch } from "wouter";
 import { ArrowDown, ArrowUp, Check, Copy, Loader2, MessagesSquare, Plus, Search, Sparkles } from "lucide-react";
 
 import { fetchChatJson, type ChatMessage, type ChatResponse } from "@/components/agent/chat";
+import { DraftCard } from "@/components/agent/draft-card";
 import { AgentMarkdown } from "@/components/agent/markdown";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -477,7 +478,7 @@ function Conversation({
             message.role === "user" ? (
               <UserMessage key={message.id}>{message.content}</UserMessage>
             ) : (
-              <AssistantMessage key={message.id} tools={message.tools_used} content={message.content} />
+              <AssistantMessage key={message.id} tools={message.tools_used} content={message.content} draft={message.draft} />
             ),
           )}
           {streaming ? (
@@ -532,10 +533,12 @@ function AssistantMessage({
   content,
   tools,
   runningTool,
+  draft,
   streaming = false,
 }: {
   content: string;
   tools?: string[];
+  draft?: unknown;
   runningTool?: string | null;
   streaming?: boolean;
 }) {
@@ -575,6 +578,7 @@ function AssistantMessage({
             {names.length ? "Organizando a resposta…" : "Pensando…"}
           </p>
         ) : null}
+        {!streaming && draft ? <DraftCard value={draft} /> : null}
         {!streaming && content ? (
           <button
             type="button"

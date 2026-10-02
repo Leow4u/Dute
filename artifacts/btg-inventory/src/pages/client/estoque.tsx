@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import {
   AlertTriangle,
   ArrowDownWideNarrow,
@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { cartFromDraft, dueAtFromDraft, takeDraft } from "@/lib/agent-draft";
 import { cn } from "@/lib/utils";
 import { displayName, groupFamilies, variantLabel, type Family } from "@/lib/stock-variants";
 
@@ -166,6 +167,27 @@ export function ClienteEstoque() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const wantsDraft = new URLSearchParams(useSearch()).get("rascunho") === "1";
+
+  /** Rascunho do Agent Dute: preenche o pedido; quem envia é a pessoa. */
+  function applyDraft(products: StockProduct[]) {
+    navigate("/portal/estoque", { replace: true });
+    const draft = takeDraft("pedido");
+    if (!draft) return;
+    const { cart: draftCart, missing } = cartFromDraft(products, draft);
+    setCart(draftCart);
+    setDestination(draft.destino ?? "");
+    setDueAt(dueAtFromDraft(draft.prazo));
+    setOrderName(draft.nome ?? "");
+    setNotes(draft.observacoes ?? "");
+    setCartOpen(true);
+    toast({
+      title: "Rascunho do Agent Dute no pedido",
+      description: missing.length
+        ? `Confira e envie. Sem saldo agora: ${missing.join(", ")}.`
+        : "Confira os itens, o destino e a data, e envie quando estiver certo.",
+    });
+  }
 
   const requestMutation = useMutation({
     mutationFn: createClientRequest,
@@ -250,6 +272,7 @@ export function ClienteEstoque() {
           products.map((product) => [product.key, product]),
         );
         const cartLines = getCartLines(cart, productByKey);
+        const draftLoader = wantsDraft ? <DraftLoader products={products} onLoad={applyDraft} /> : null;
         const cartQuantity = cartLines.reduce(
           (sum, line) => sum + line.quantity,
           0,
@@ -460,6 +483,7 @@ export function ClienteEstoque() {
             icon={Box}
             className="max-w-[1720px]"
           >
+            {draftLoader}
             {products.length > 0 ? (
               <MarketplaceToolbar
                 searchTerm={searchTerm}
@@ -1973,6 +1997,17 @@ function StockBadge({
       </span>
     );
   }
+  return null;
+}
+
+/** Aplica o rascunho uma vez, quando o estoque já carregou. */
+function DraftLoader({ products, onLoad }: { products: StockProduct[]; onLoad: (products: StockProduct[]) => void }) {
+  const done = useRef(false);
+  useEffect(() => {
+    if (done.current) return;
+    done.current = true;
+    onLoad(products);
+  }, [products, onLoad]);
   return null;
 }
 

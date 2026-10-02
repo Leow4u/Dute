@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useLocation, useSearch } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, ClipboardPaste, FileText, Loader2, Paperclip, Plus, RotateCw, Sparkles, X } from "lucide-react";
 
@@ -18,6 +19,7 @@ import {
   type InvoiceReading,
   type ShipmentView,
 } from "@/lib/shipments";
+import { takeDraft, type ShipmentDraft } from "@/lib/agent-draft";
 import { fileToBase64 } from "@/lib/file-base64";
 import { cn } from "@/lib/utils";
 
@@ -45,12 +47,19 @@ import {
 const integer = new Intl.NumberFormat("pt-BR");
 
 export function ClienteEnvios() {
-  const [creating, setCreating] = useState(false);
+  const [, navigate] = useLocation();
+  const wantsDraft = new URLSearchParams(useSearch()).get("rascunho") === "1";
+  // Rascunho do Agent Dute: abre o aviso já preenchido; quem envia é a pessoa.
+  const [initial] = useState(() => (wantsDraft ? takeDraft("envio") : null));
+  const [creating, setCreating] = useState(Boolean(initial));
+  useEffect(() => {
+    if (wantsDraft) navigate("/portal/recebimentos", { replace: true });
+  }, [wantsDraft, navigate]);
   return (
     <ClientDataBoundary>
       {(overview) =>
         creating ? (
-          <ShipmentForm overview={overview} onClose={() => setCreating(false)} />
+          <ShipmentForm overview={overview} initial={initial} onClose={() => setCreating(false)} />
         ) : (
           <ShipmentList overview={overview} onCreate={() => setCreating(true)} />
         )
@@ -292,15 +301,19 @@ function isAcceptedAttachment(file: File) {
   );
 }
 
-function ShipmentForm({ overview, onClose }: { overview: ClientOverview; onClose: () => void }) {
+function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview; initial?: ShipmentDraft | null; onClose: () => void }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [supplier, setSupplier] = useState("");
-  const [invoice, setInvoice] = useState("");
-  const [arrival, setArrival] = useState("");
-  const [notes, setNotes] = useState("");
+  const [supplier, setSupplier] = useState(initial?.fornecedor ?? "");
+  const [invoice, setInvoice] = useState(initial?.nota_fiscal ?? "");
+  const [arrival, setArrival] = useState(initial?.chegada ?? "");
+  const [notes, setNotes] = useState(initial?.observacoes ?? "");
   const [files, setFiles] = useState<File[]>([]);
-  const [lines, setLines] = useState<Line[]>([newLine()]);
+  const [lines, setLines] = useState<Line[]>(() =>
+    initial?.linhas.length
+      ? initial.linhas.map((line) => ({ ...newLine(line.codigo ?? "", String(line.quantidade)), name: line.nome ?? "" }))
+      : [newLine()],
+  );
   const [pasting, setPasting] = useState(false);
   const [invoiceReading, setInvoiceReading] = useState<InvoiceReading | null>(null);
   const [reading, setReading] = useState(false);
