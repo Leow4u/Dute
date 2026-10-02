@@ -44,7 +44,9 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/faturamento/tabela", ["owner", "admin", "financeiro"]],
   ["/faturamento/fatura", ["owner", "admin", "financeiro"]],
   ["/tabela-precos", ["owner", "admin", "financeiro"]],
-  ["/agente", ["owner", "admin", "interno", "financeiro", "suporte"]],
+  // A conversa com o agente é de toda a equipe; o painel segue com a torre.
+  ["/agente", ["owner", "admin", "interno", "wms", "financeiro", "suporte"]],
+  ["/agente/painel", ["owner", "admin", "interno", "financeiro", "suporte"]],
   ["/agente/conhecimento", ["owner", "admin", "interno", "financeiro", "suporte"]],
   ["/suporte", ["owner", "admin", "suporte"]],
   ["/documentos", ["owner", "admin", "interno", "wms", "financeiro", "suporte"]],
@@ -86,6 +88,7 @@ describe("menu interno", () => {
     (role) => {
       expect(menu(role)).toEqual([
         { label: "Início", routes: ["Início"] },
+        { label: "Agent Dute", routes: ["Agent Dute"] },
         { label: "Pedidos", routes: ["Pedidos"] },
         { label: "Estoque", routes: ["Itens", "Receber"] },
         { label: "Faturamento", routes: ["Faturamento"] },
@@ -95,8 +98,9 @@ describe("menu interno", () => {
     },
   );
 
-  it("operador WMS vê só a bancada e os documentos", () => {
+  it("operador WMS vê o Agent Dute, a bancada e os documentos", () => {
     expect(menu("wms")).toEqual([
+      { label: "Agent Dute", routes: ["Agent Dute"] },
       { label: "Pedidos", routes: ["Pedidos"] },
       { label: "Estoque", routes: ["Itens", "Receber"] },
       { label: "Documentos", routes: ["Documentos"] },
@@ -106,6 +110,7 @@ describe("menu interno", () => {
   it("financeiro não vê operação física", () => {
     expect(menu("financeiro").map((module) => module.label)).toEqual([
       "Início",
+      "Agent Dute",
       "Faturamento",
       "Relatórios",
       "Documentos",
@@ -144,6 +149,8 @@ describe("grupo ativo", () => {
     ["/faturamento/tabela", "Faturamento"],
     ["/faturamento/fatura", "Faturamento"],
     ["/reports", "Relatórios"],
+    ["/agente", "Agent Dute"],
+    ["/agente/painel", "Agent Dute"],
   ])("%s destaca %s", (path, label) => {
     expect(activeLabel(path)).toBe(label);
   });

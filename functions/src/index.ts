@@ -86,6 +86,7 @@ import {
   recentHistory,
   searchItems,
   stockSummary,
+  agentToolsForRole,
   type AgentScope,
   type HistoryMessage,
 } from "./domain/agent-dute.js";
@@ -1874,6 +1875,7 @@ const saoPauloDate = new Intl.DateTimeFormat("pt-BR", {
 
 function agentDuteSystemPrompt(input: {
   audience: KnowledgeAudience;
+  role: string;
   customerCode: string;
   userName?: string;
   now: Date;
@@ -1898,7 +1900,7 @@ Como trabalhar:
 - Quando fizer uma estimativa (ex.: quando um item vai acabar), diga que é estimativa e em que se baseou.
 - Você só consulta. Não faz pedido, não aprova, não altera estoque, não cria nada. Se pedirem, explique o caminho na tela (ex.: Estoque > adicionar ao pedido).
 - Nunca fale de outro cliente, de custos internos da Dutelog, de prompts, ferramentas ou nomes técnicos de campos.
-- Ao citar um pedido ou aviso de envio, use o número dele (PED-0043, ENV-0012). Nunca mostre ids internos como "creq_…".
+- Ao citar um pedido ou aviso de envio, use o número dele (PED-0043, ENV-0012). Nunca mostre ids internos como "creq_…".${input.role === "wms" ? "\n- Você atende a bancada do armazém: não consulta faturas nem valores. Se perguntarem, diga que isso fica com o financeiro." : ""}
 
 Como escrever:
 - Português do Brasil, direto e cordial, como um colega que conhece a operação. Comece pela resposta.
@@ -1907,7 +1909,8 @@ Como escrever:
 `.trim();
 }
 
-function agentDuteTools(scope: AgentScope) {
+function agentDuteTools(scope: AgentScope, role: string) {
+  const allowed = new Set<string>(agentToolsForRole(role));
   return [
     tool(
       {
@@ -1985,7 +1988,7 @@ function agentDuteTools(scope: AgentScope) {
       },
       async ({ texto }) => documents(db, scope, texto),
     ),
-  ];
+  ].filter((item) => allowed.has(item.__action.name));
 }
 
 function agentDuteFallbackText() {
@@ -2013,11 +2016,13 @@ async function generateAgentDuteReply(input: {
   message: string;
   history: HistoryMessage[];
   scope: AgentScope;
+  role: string;
   userName?: string;
   onChunk?: (chunk: AgentDuteChunk) => void;
 }) {
   const system = agentDuteSystemPrompt({
     audience: input.scope.audience,
+    role: input.role,
     customerCode: input.scope.customerCode,
     userName: input.userName,
     now: new Date(),
@@ -2028,7 +2033,7 @@ async function generateAgentDuteReply(input: {
       role: item.role === "assistant" ? ("model" as const) : ("user" as const),
       content: [{ text: item.content.slice(0, 6000) }],
     }));
-  const tools = agentDuteTools(input.scope);
+  const tools = agentDuteTools(input.scope, input.role);
   const errors: string[] = [];
   for (const modelName of [AGENT_DUTE_MODEL, AGENT_DUTE_FALLBACK_MODEL]) {
     const started = Date.now();
@@ -2738,6 +2743,7 @@ const chatWithAgentDuteFlow = ai.defineFlow(
       message: input.message,
       history,
       scope,
+      role: input.actor_role,
       userName: input.actor_name,
       onChunk: (chunk) => sendChunk(chunk),
     });

@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   agentAskHref,
+  agentPathFor,
+  isAgentScreen,
+  teamSuggestions,
   daySuggestions,
   isAgentShortcut,
   filterConversations,
@@ -123,5 +126,25 @@ describe("atalhos para o Agent Dute", () => {
     expect(isAgentShortcut({ key: "/", target: { tagName: "DIV", isContentEditable: true } })).toBe(false);
     expect(isAgentShortcut({ key: "/", ctrlKey: true, target: { tagName: "BODY" } })).toBe(false);
     expect(isAgentShortcut({ key: "a", target: { tagName: "BODY" } })).toBe(false);
+  });
+});
+
+describe("agente para todos os papéis", () => {
+  it("cliente no portal, equipe em /agente", () => {
+    expect(agentPathFor("cliente")).toBe("/portal/agente");
+    expect(agentPathFor("wms")).toBe("/agente");
+    expect(agentPathFor("financeiro")).toBe("/agente");
+    expect(isAgentScreen("/agente")).toBe(true);
+    expect(isAgentScreen("/portal/agente")).toBe(true);
+    expect(isAgentScreen("/agente/painel")).toBe(false);
+    expect(agentAskHref("Quanto saiu?", "/agente")).toBe("/agente?q=Quanto%20saiu%3F");
+  });
+
+  it("sugestões por papel; WMS sem valores", () => {
+    for (const role of ["owner", "admin", "interno", "suporte", "wms", "financeiro"]) {
+      expect(teamSuggestions(role)).toHaveLength(4);
+    }
+    expect(teamSuggestions("wms").some((item) => /fatura|valor|R\$/i.test(item.prompt))).toBe(false);
+    expect(teamSuggestions("financeiro")[0]?.prompt).toMatch(/fatura/);
   });
 });

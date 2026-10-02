@@ -106,7 +106,7 @@ service cloud.firestore {
     }
 
     function canUseAgentChat() {
-      return hasAnyRole(['owner', 'admin', 'interno', 'wms', 'suporte', 'cliente']);
+      return hasAnyRole(['owner', 'admin', 'interno', 'wms', 'financeiro', 'suporte', 'cliente']);
     }
 
     function hasCustomerScope() {

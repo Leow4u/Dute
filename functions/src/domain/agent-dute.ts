@@ -17,6 +17,28 @@ export type AgentScope = {
   audience: KnowledgeAudience;
 };
 
+/** Consultas que o Agent Dute oferece ao modelo (nomes das ferramentas). */
+export const AGENT_TOOL_NAMES = [
+  "resumo_estoque",
+  "buscar_itens",
+  "listar_pedidos",
+  "ver_pedido",
+  "movimentacoes",
+  "faturas",
+  "documentos",
+] as const;
+
+export type AgentToolName = (typeof AGENT_TOOL_NAMES)[number];
+
+/**
+ * Consultas liberadas para o papel. O operador WMS não vê faturamento nas
+ * telas, então o agente também não consulta faturas para ele.
+ */
+export function agentToolsForRole(role: string): AgentToolName[] {
+  if (role === "wms") return AGENT_TOOL_NAMES.filter((name) => name !== "faturas");
+  return [...AGENT_TOOL_NAMES];
+}
+
 type Row = Record<string, unknown> & { id: string };
 
 function num(value: unknown) {

@@ -137,6 +137,18 @@ async function seed() {
       created_at: new Date(),
       updated_at: new Date(),
     });
+    // Equipe interna também conversa com o agente (tela única, 02/10/2026).
+    for (const uid of ["wms-a", "finance-a"]) {
+      await setDoc(doc(database, "agent_conversations", `conv-${uid}`), {
+        id: `conv-${uid}`,
+        customer_code: CUSTOMER_A,
+        user_id: uid,
+        status: "active",
+        created_at_iso: new Date().toISOString(),
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+    }
     await setDoc(doc(database, "agent_messages", "msg-a"), {
       id: "msg-a",
       conversation_id: "conv-a",
@@ -461,6 +473,24 @@ describe("chat do Agent Dute em tempo real", () => {
     );
     assert.equal(conversas.size, 1);
   });
+
+  for (const uid of ["wms-a", "finance-a"]) {
+    it(`${uid} lista as próprias conversas com o agente`, async () => {
+      const database = testEnvironment
+        .authenticatedContext(uid, { email: `${uid}@example.com` })
+        .firestore();
+      const conversas = await assertSucceeds(
+        getDocs(
+          query(
+            collection(database, "agent_conversations"),
+            where("customer_code", "==", CUSTOMER_A),
+            where("user_id", "==", uid),
+          ),
+        ),
+      );
+      assert.equal(conversas.size, 1);
+    });
+  }
 
   it("outro usuário não lê a conversa alheia", async () => {
     const database = testEnvironment
