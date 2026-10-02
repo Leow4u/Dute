@@ -6,8 +6,10 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { ORDER_STEPS, orderStepIndex, splitOrders, type OrderView } from "@/lib/orders";
+import { orderProofs, type PortalDocument } from "@/lib/portal-documents";
 import { cn } from "@/lib/utils";
 
+import { DocumentList } from "./documentos";
 import { ClientDataBoundary, clientOverviewQueryKey, getOrders, getRequests } from "./shared";
 
 /**
@@ -28,7 +30,10 @@ export function ClientePedidos() {
           (overview.order_tracking ?? getOrders(overview)) as Record<string, unknown>[],
         );
         const current = [...active, ...history].find((view) => view.id === selected);
-        if (current) return <OrderDetail view={current} onBack={() => setSelected(null)} />;
+        if (current) {
+          const proofs = orderProofs(overview.document_history ?? [], { id: current.id, number: current.number });
+          return <OrderDetail view={current} proofs={proofs} onBack={() => setSelected(null)} />;
+        }
         return <OrderList active={active} history={history} onOpen={setSelected} />;
       }}
     </ClientDataBoundary>
@@ -242,7 +247,7 @@ function CancelOrder({ view }: { view: OrderView }) {
 
 // ------------------------------------------------------------------ detalhe
 
-function OrderDetail({ view, onBack }: { view: OrderView; onBack: () => void }) {
+function OrderDetail({ view, proofs, onBack }: { view: OrderView; proofs: PortalDocument[]; onBack: () => void }) {
   const closed = view.stage === "cancelled" || view.stage === "rejected";
   const pieces = view.items.reduce((sum, item) => sum + item.quantity, 0);
   return (
@@ -275,6 +280,13 @@ function OrderDetail({ view, onBack }: { view: OrderView; onBack: () => void }) 
               {view.delivery}
             </p>
           ) : null}
+        </section>
+      ) : null}
+
+      {proofs.length ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Comprovante de entrega</h2>
+          <DocumentList rows={proofs} />
         </section>
       ) : null}
 

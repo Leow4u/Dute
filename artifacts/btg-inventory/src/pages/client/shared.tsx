@@ -39,6 +39,8 @@ export type ClientOverview = {
   invoice_history?: Record<string, unknown>[];
   /** Pedidos: todas as solicitações, não só as recentes do Início. */
   request_history?: ClientRequest[];
+  /** Documentos: o que a Dutelog publicou para a conta (client_documents). */
+  document_history?: Record<string, unknown>[];
   agent_alerts?: AgentAlert[];
   alerts?: AgentAlert[];
   metrics?: Record<string, Numberish>;
