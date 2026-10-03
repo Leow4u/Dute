@@ -409,6 +409,24 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
   }
 
   // Anotações sugeridas pelo Agent Dute: a coordenação lista e decide.
+  // Playbooks do Agent Dute (Conhecimento, só coordenação).
+  if (method === "GET" && pathname === "/api/agent-dute/playbooks") {
+    return { name: "listAgentPlaybooks", payload: async () => ({}) };
+  }
+  if (method === "POST" && pathname === "/api/agent-dute/playbooks") {
+    return { name: "saveAgentPlaybook", payload: async (_pathname, init) => readJsonBody(init) };
+  }
+  if (method === "POST" && pathname === "/api/agent-dute/playbooks/seed") {
+    return { name: "seedAgentPlaybooks", payload: async () => ({}) };
+  }
+  const playbookDecisionMatch = pathname.match(/^\/api\/agent-dute\/playbooks\/([^/]+)\/(approve|reject|archive)$/);
+  if (method === "POST" && playbookDecisionMatch) {
+    return {
+      name: "decideAgentPlaybook",
+      payload: async () => ({ id: decodeURIComponent(playbookDecisionMatch[1]), action: playbookDecisionMatch[2] }),
+    };
+  }
+
   if (method === "GET" && pathname === "/api/agent-dute/notes") {
     return { name: "listAgentNotes", payload: async () => ({}) };
   }

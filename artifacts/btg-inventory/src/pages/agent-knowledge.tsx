@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 
 import { AgentNotes } from "@/components/agent/agent-notes";
+import { AgentPlaybooks } from "@/components/agent/agent-playbooks";
 import { useAppUser } from "@/lib/auth";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -585,6 +586,7 @@ export default function AgentKnowledge() {
       </div>
 
       {canReviewNotes ? <AgentNotes /> : null}
+      {canReviewNotes ? <AgentPlaybooks /> : null}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>

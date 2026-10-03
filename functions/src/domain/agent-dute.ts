@@ -34,6 +34,8 @@ export const AGENT_TOOL_NAMES = [
   "sugerir_anotacao",
   // Propor rotina agendada (a pessoa confirma no cartão): todos os papéis.
   "sugerir_rotina",
+  // Abrir playbook aprovado: todos os papéis; o cliente só recebe os "para todos".
+  "consultar_playbook",
   // Rascunhos de pedido e de aviso de envio: só o cliente (não grava nada).
   "rascunho_pedido",
   "rascunho_envio",
@@ -59,6 +61,7 @@ const PORTAL_TOOLS: AgentToolName[] = [
   "conversas_anteriores",
   "sugerir_anotacao",
   "sugerir_rotina",
+  "consultar_playbook",
 ];
 const FLOOR_TOOLS: AgentToolName[] = ["recebimentos", "tarefas_armazem", "enderecos"];
 const COORDINATION_TOOLS: AgentToolName[] = ["fila_solicitacoes", ...FLOOR_TOOLS, "eventos"];
