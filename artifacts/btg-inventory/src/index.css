@@ -162,16 +162,19 @@
   --warning: 38 92% 50%;
   --warning-foreground: 217 33% 18%;
   /* Aviso suave (cartão "atenção" do WMS): antes amber-50 / amber-200 / amber-800. */
-  --warning-soft: 48 100% 96%;
-  --warning-soft-border: 48 97% 77%;
-  --warning-soft-foreground: 26 83% 31%;
-  /* Mesma família para os outros estados (antes emerald/blue/rose 50/200/700). */
-  --success-soft: 152 81% 96%;
-  --success-soft-border: 152 76% 80%;
-  --success-soft-foreground: 161 94% 24%;
-  --info-soft: 214 100% 97%;
-  --info-soft-border: 213 97% 87%;
-  --info-soft-foreground: 224 76% 48%;
+  /* Aviso suave: o bege que index.css aplicava sobre amber-50/200/700/800
+     (rgba(245,242,233,.82), rgba(221,202,145,.48), #8A6A22) sobre branco. */
+  --warning-soft: 45 37% 95%;
+  --warning-soft-border: 45 53% 86%;
+  --warning-soft-foreground: 42 60% 34%;
+  /* Sucesso e informação: o app pintava emerald/blue/indigo com o primário
+     (primary/.10 de fundo, /.24 de borda, primary no texto). */
+  --success-soft: 219 91% 97%;
+  --success-soft-border: 219 89% 93%;
+  --success-soft-foreground: 219 91% 70%;
+  --info-soft: 219 91% 97%;
+  --info-soft-border: 219 89% 93%;
+  --info-soft-foreground: 219 91% 70%;
   --destructive-soft: 356 100% 97%;
   --destructive-soft-border: 353 96% 90%;
   --destructive-soft-foreground: 345 83% 41%;
@@ -248,7 +251,7 @@
 
   --border: 216 34% 17%;
   --input: 216 34% 17%;
-  --ring: 212 98% 30%;
+  --ring: 217 91% 60%;
 
   --card: 222 47% 8%;
   --card-foreground: 210 40% 98%;
@@ -258,8 +261,8 @@
   --popover-foreground: 210 40% 98%;
   --popover-border: 216 34% 17%;
 
-  --primary: 212 98% 40%;
-  --primary-foreground: 0 0% 100%;
+  --primary: 217 91% 65%;
+  --primary-foreground: 222 47% 8%;
   --primary-soft: 217 32% 14%;
   --primary-soft-hover: 217 32% 18%;
   --primary-soft-pressed: 217 32% 22%;
@@ -284,9 +287,9 @@
   --warning-soft: 35 60% 11%;
   --warning-soft-border: 35 55% 26%;
   --warning-soft-foreground: 43 96% 77%;
-  --success-soft: 152 50% 10%;
-  --success-soft-border: 152 45% 24%;
-  --success-soft-foreground: 152 65% 70%;
+  --success-soft: 214 60% 12%;
+  --success-soft-border: 214 55% 28%;
+  --success-soft-foreground: 213 90% 78%;
   --info-soft: 214 60% 12%;
   --info-soft-border: 214 55% 28%;
   --info-soft-foreground: 213 90% 78%;
@@ -319,11 +322,11 @@
   --sidebar: 222 47% 5%;
   --sidebar-foreground: 210 40% 98%;
   --sidebar-border: 216 34% 17%;
-  --sidebar-primary: 212 98% 40%;
+  --sidebar-primary: 217 91% 65%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 217 32% 17%;
   --sidebar-accent-foreground: 210 40% 98%;
-  --sidebar-ring: 212 98% 30%;
+  --sidebar-ring: 217 91% 60%;
 }
 
 /* Documento de impressão (fatura, relatório do portal) é papel: fica claro
@@ -391,22 +394,23 @@
 }
 
 @layer utilities {
+  /* Mesmo canvas do body: brilhos e fundo por token, para o escuro funcionar. */
   .app-atmosphere {
     background:
-      radial-gradient(circle at top left, rgba(237, 245, 242, .9) 0%, rgba(237, 245, 242, 0) 35%),
-      radial-gradient(circle at bottom left, rgba(245, 242, 233, .85) 0%, rgba(245, 242, 233, 0) 40%),
-      radial-gradient(circle at top right, rgba(238, 244, 248, .85) 0%, rgba(238, 244, 248, 0) 30%),
-      #FAFAF8;
+      radial-gradient(circle at top left, var(--canvas-glow-1) 0%, transparent 35%),
+      radial-gradient(circle at bottom left, var(--canvas-glow-2) 0%, transparent 40%),
+      radial-gradient(circle at top right, var(--canvas-glow-3) 0%, transparent 30%),
+      hsl(var(--background));
   }
   .glass-surface {
-    background: rgba(255,255,255,.72);
-    border: 1px solid rgba(255,255,255,.55);
+    background: hsl(var(--card) / .72);
+    border: 1px solid hsl(var(--card-edge) / .55);
     box-shadow: 0 18px 60px rgba(15,23,42,.05);
     backdrop-filter: blur(40px);
   }
   .soft-panel {
-    background: rgba(255,255,255,.58);
-    border: 1px solid rgba(236,238,242,.78);
+    background: hsl(var(--card) / .58);
+    border: 1px solid hsl(var(--border) / .78);
     box-shadow: 0 8px 24px rgba(15,23,42,.04);
     backdrop-filter: blur(32px);
   }
@@ -414,56 +418,10 @@
     transition-duration: 200ms;
     transition-timing-function: ease-out;
   }
-  .bg-gray-50,
-  .bg-gray-50\/30,
-  .bg-gray-50\/50,
-  .bg-gray-50\/80 {
-    background-color: rgba(255,255,255,.48) !important;
-  }
-  .hover\:bg-gray-50:hover,
-  .hover\:bg-gray-50\/50:hover,
-  .hover\:bg-gray-50\/80:hover {
-    background-color: rgba(255,255,255,.68) !important;
-  }
-  .bg-gray-200 {
-    background-color: #ECEEF2 !important;
-  }
-  .bg-blue-50,
-  .bg-indigo-50,
-  .bg-emerald-50,
-  .bg-emerald-100,
-  .bg-purple-100 {
-    background-color: hsl(var(--primary) / .10) !important;
-  }
+  /* Pontos de status sólidos (bg-blue-500, bg-emerald-500) usam o primário. */
   .bg-blue-500,
   .bg-emerald-500 {
     background-color: hsl(var(--primary)) !important;
-  }
-  .text-blue-600,
-  .text-blue-700,
-  .text-indigo-700,
-  .text-emerald-600,
-  .text-emerald-700,
-  .text-emerald-800,
-  .text-purple-800 {
-    color: hsl(var(--primary)) !important;
-  }
-  .border-blue-200,
-  .border-indigo-100,
-  .border-emerald-200,
-  .border-purple-200 {
-    border-color: hsl(var(--primary) / .24) !important;
-  }
-  .bg-amber-50,
-  .bg-amber-100 {
-    background-color: rgba(245,242,233,.82) !important;
-  }
-  .text-amber-700,
-  .text-amber-800 {
-    color: #8A6A22 !important;
-  }
-  .border-amber-200 {
-    border-color: rgba(221, 202, 145, .48) !important;
   }
   input[type='search']::-webkit-search-cancel-button {
     @apply hidden;
