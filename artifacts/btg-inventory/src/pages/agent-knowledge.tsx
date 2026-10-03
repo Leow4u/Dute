@@ -555,7 +555,7 @@ export default function AgentKnowledge() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-[20px] border border-white/60 bg-white/72 shadow-[0_8px_24px_rgba(15,23,42,.04)] backdrop-blur-[40px]">
+            <div className="flex h-12 w-12 items-center justify-center rounded-[20px] border border-card-edge/60 bg-card/72 shadow-[0_8px_24px_rgba(15,23,42,.04)] backdrop-blur-[40px]">
               <BrainCircuit className="h-5 w-5 text-primary" />
             </div>
             <div>
@@ -647,7 +647,7 @@ export default function AgentKnowledge() {
 
                 return (
                   <Card key={item.id} className="overflow-hidden">
-                    <CardHeader className="border-b border-border/60 bg-white/35">
+                    <CardHeader className="border-b border-border/60 bg-card/35">
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
                           <CardTitle className="line-clamp-2 text-base leading-6">
@@ -671,25 +671,25 @@ export default function AgentKnowledge() {
                           "Documento ativo na base de conhecimento do Agent Dute."}
                       </p>
                       <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div className="rounded-2xl border border-border/70 bg-white/55 p-3">
+                        <div className="rounded-2xl border border-border/70 bg-card/55 p-3">
                           <p className="text-xs text-muted-foreground">Cliente</p>
                           <p className="mt-1 font-medium">
                             {item.customer_code ?? "BTG Pactual"}
                           </p>
                         </div>
-                        <div className="rounded-2xl border border-border/70 bg-white/55 p-3">
+                        <div className="rounded-2xl border border-border/70 bg-card/55 p-3">
                           <p className="text-xs text-muted-foreground">Tipo</p>
                           <p className="mt-1 font-medium">
                             {documentTypeLabel(item.document_type)}
                           </p>
                         </div>
-                        <div className="rounded-2xl border border-border/70 bg-white/55 p-3">
+                        <div className="rounded-2xl border border-border/70 bg-card/55 p-3">
                           <p className="text-xs text-muted-foreground">Páginas</p>
                           <p className="mt-1 font-medium">
                             {asNumber(item.pages) || "N/D"}
                           </p>
                         </div>
-                        <div className="rounded-2xl border border-border/70 bg-white/55 p-3">
+                        <div className="rounded-2xl border border-border/70 bg-card/55 p-3">
                           <p className="text-xs text-muted-foreground">Trechos</p>
                           <p className="mt-1 font-medium">
                             {asNumber(item.chunk_count)}
@@ -721,7 +721,7 @@ export default function AgentKnowledge() {
               })}
             </div>
           ) : (
-            <Empty className="min-h-[320px] rounded-[24px] border border-dashed border-border bg-white/45">
+            <Empty className="min-h-[320px] rounded-[24px] border border-dashed border-border bg-card/45">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
                   <FileText className="h-5 w-5" />

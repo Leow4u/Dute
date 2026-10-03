@@ -52,7 +52,7 @@ export function ClienteFaturas() {
                 </div>
                 {latest ? (
                   <div className="flex flex-wrap items-center gap-2">
-                    <div className="inline-flex rounded-xl border border-border bg-white p-0.5 text-sm" role="group" aria-label="Período do gráfico">
+                    <div className="inline-flex rounded-xl border border-border bg-card p-0.5 text-sm" role="group" aria-label="Período do gráfico">
                       {[6, 12].map((value) => (
                         <button
                           key={value}
@@ -76,7 +76,7 @@ export function ClienteFaturas() {
               </header>
 
               {!latest ? (
-                <p className="rounded-[18px] border border-dashed border-border bg-white/60 px-5 py-8 text-sm text-muted-foreground">
+                <p className="rounded-[18px] border border-dashed border-border bg-card/60 px-5 py-8 text-sm text-muted-foreground">
                   Nenhuma fatura fechada ainda. Quando a Dutelog emitir a fatura do mês, ela aparece aqui com o detalhamento.
                 </p>
               ) : (
@@ -85,7 +85,7 @@ export function ClienteFaturas() {
                     <Tile label={`${monthLabel(latest.competencia, true)} · ${latest.status === "paga" ? "paga" : "emitida"}`} value={formatMoney(latest.total)}>
                       {insights.change !== null ? (
                         <>
-                          <span className={cn("font-semibold", insights.change > 0 ? "text-amber-700" : "text-emerald-700")}>
+                          <span className={cn("font-semibold", insights.change > 0 ? "text-warning-soft-foreground" : "text-success-soft-foreground")}>
                             {insights.change > 0 ? "▲" : "▼"} {Math.abs(insights.change).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
                           </span>{" "}
                           vs mês anterior
@@ -121,7 +121,7 @@ export function ClienteFaturas() {
                           <Link
                             key={question}
                             href={agentAskHref(question)}
-                            className="inline-flex items-center gap-1.5 rounded-full border border-[#d9d0fb] bg-[#faf8ff] px-3 py-1.5 text-xs font-medium text-[#5b3fc4] hover:bg-[#f2eefe]"
+                            className="inline-flex items-center gap-1.5 rounded-full border border-agent-border bg-agent-soft px-3 py-1.5 text-xs font-medium text-agent hover:bg-agent-soft-hover"
                           >
                             <Sparkles className="h-3.5 w-3.5" />
                             {question}
@@ -151,11 +151,11 @@ export function ClienteFaturas() {
                               <td className="py-2.5 pr-2 text-right tabular-nums">{formatMoney(invoice.total)}</td>
                               <td className="py-2.5 pl-4 pr-2">
                                 {invoice.status === "paga" ? (
-                                  <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+                                  <span className="rounded-full bg-success-soft px-2.5 py-0.5 text-xs font-semibold text-success-soft-foreground">
                                     Paga{invoice.paidAt ? ` em ${shortDate(invoice.paidAt)}` : ""}
                                   </span>
                                 ) : (
-                                  <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800">A pagar</span>
+                                  <span className="rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-semibold text-warning-soft-foreground">A pagar</span>
                                 )}
                               </td>
                               <td className="py-2.5 text-right">
@@ -181,7 +181,7 @@ export function ClienteFaturas() {
 
 function Tile({ label, value, children }: { label: string; value: string; children: ReactNode }) {
   return (
-    <div className="rounded-[18px] border border-border bg-white px-4 py-3.5">
+    <div className="rounded-[18px] border border-border bg-card px-4 py-3.5">
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{value}</div>
       <div className="mt-0.5 text-xs text-muted-foreground">{children}</div>
@@ -191,7 +191,7 @@ function Tile({ label, value, children }: { label: string; value: string; childr
 
 function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
   return (
-    <section className="min-w-0 rounded-[18px] border border-border bg-white px-5 py-4">
+    <section className="min-w-0 rounded-[18px] border border-border bg-card px-5 py-4">
       <h2 className="font-semibold">{title}</h2>
       {subtitle ? <p className="text-xs text-muted-foreground">{subtitle}</p> : null}
       <div className="mt-3">{children}</div>

@@ -44,7 +44,7 @@ const sentFormat = new Intl.DateTimeFormat("pt-BR", {
 });
 
 export const field =
-  "w-full min-w-0 rounded-lg border border-border bg-white px-2.5 py-1.5 text-sm outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/15";
+  "w-full min-w-0 rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/15";
 
 function useAvailableBySku() {
   const overview = useClientOverview();
@@ -80,10 +80,10 @@ export function SentNotice({
 }) {
   const at = sent.sent_at ? new Date(sent.sent_at) : null;
   return (
-    <section className="mt-3 rounded-2xl border border-border bg-white px-4 py-3">
+    <section className="mt-3 rounded-2xl border border-border bg-card px-4 py-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="flex items-center gap-2 text-sm font-semibold">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+          <CheckCircle2 className="h-4 w-4 text-success-soft-foreground" aria-hidden="true" />
           {sent.request_number || fallback} enviado
         </p>
         {at && !Number.isNaN(at.getTime()) ? <span className="text-xs text-muted-foreground">em {sentFormat.format(at)}</span> : null}
@@ -137,9 +137,9 @@ export function OrderDraftCard({ draft, messageId, sent: sentValue }: { draft: O
   const id = (name: string) => `order-${messageId ?? "draft"}-${name}`;
 
   return (
-    <section className="mt-3 overflow-hidden rounded-2xl border border-[#d9d0fb] bg-[#faf8ff]">
+    <section className="mt-3 overflow-hidden rounded-2xl border border-agent-border bg-agent-soft">
       <header className="flex items-start gap-2.5 px-4 pt-3">
-        <ClipboardCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#5b3fc4]" aria-hidden="true" />
+        <ClipboardCheck className="mt-0.5 h-4 w-4 shrink-0 text-agent" aria-hidden="true" />
         <div className="min-w-0">
           <p className="text-sm font-semibold">Pedido pronto para enviar</p>
           <p className="text-xs text-muted-foreground">
@@ -150,7 +150,7 @@ export function OrderDraftCard({ draft, messageId, sent: sentValue }: { draft: O
       </header>
 
       {view.linhas.length ? (
-        <ul className="mx-4 mt-2 divide-y divide-[#ebe5fd] rounded-xl border border-[#ebe5fd] bg-white text-sm">
+        <ul className="mx-4 mt-2 divide-y divide-agent-divider rounded-xl border border-agent-divider bg-card text-sm">
           {view.linhas.map((line, index) => (
             <li key={`${line.sku_code}-${index}`} className="flex items-center gap-2 px-3 py-2">
               <span className="min-w-0 flex-1">
@@ -159,7 +159,7 @@ export function OrderDraftCard({ draft, messageId, sent: sentValue }: { draft: O
                   {line.nome}
                   {line.detalhe ? <span className="text-muted-foreground"> · {line.detalhe}</span> : null}
                 </span>
-                <span className={cn("block text-xs", line.quantidade > line.disponivel ? "text-red-700" : "text-muted-foreground")}>
+                <span className={cn("block text-xs", line.quantidade > line.disponivel ? "text-destructive-soft-foreground" : "text-muted-foreground")}>
                   {integer.format(line.disponivel)} disponíveis
                 </span>
               </span>
@@ -179,7 +179,7 @@ export function OrderDraftCard({ draft, messageId, sent: sentValue }: { draft: O
                   value={line.quantidade}
                   onChange={(event) => setQuantity(index, Math.floor(Number(event.target.value.replace(/\D/g, "")) || 1))}
                   disabled={send.isPending}
-                  className="h-8 w-12 bg-white text-center tabular-nums outline-none"
+                  className="h-8 w-12 bg-card text-center tabular-nums outline-none"
                 />
                 <button
                   type="button"
@@ -206,7 +206,7 @@ export function OrderDraftCard({ draft, messageId, sent: sentValue }: { draft: O
       ) : null}
 
       {draft.pendencias.length ? (
-        <ul className="mx-4 mt-2 flex flex-col gap-1 text-xs text-amber-800">
+        <ul className="mx-4 mt-2 flex flex-col gap-1 text-xs text-warning-soft-foreground">
           {draft.pendencias.map((item, index) => (
             <li key={index} className="flex gap-1.5">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -221,7 +221,7 @@ export function OrderDraftCard({ draft, messageId, sent: sentValue }: { draft: O
       <fieldset disabled={send.isPending} className="grid grid-cols-2 gap-2 px-4 pt-3">
         <label className="col-span-2 flex flex-col gap-1" htmlFor={id("destino")}>
           <span className="text-xs font-semibold text-muted-foreground">
-            Onde entregar <span className="text-amber-700">*</span>
+            Onde entregar <span className="text-warning-soft-foreground">*</span>
           </span>
           <input
             id={id("destino")}
@@ -270,7 +270,7 @@ export function OrderDraftCard({ draft, messageId, sent: sentValue }: { draft: O
       </fieldset>
 
       {send.isError ? (
-        <p className="mx-4 mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+        <p className="mx-4 mt-3 rounded-lg bg-destructive-soft px-3 py-2 text-sm text-destructive-soft-foreground" role="alert">
           {send.error instanceof Error ? send.error.message : "Não consegui enviar agora. Tente de novo."}
         </p>
       ) : null}
@@ -288,7 +288,7 @@ export function OrderDraftCard({ draft, messageId, sent: sentValue }: { draft: O
           Abrir no Estoque para adicionar itens
         </button>
         <div className="flex items-center gap-3">
-          {problem ? <span className="text-xs text-amber-800">{problem}</span> : null}
+          {problem ? <span className="text-xs text-warning-soft-foreground">{problem}</span> : null}
           <button
             type="button"
             disabled={Boolean(problem) || !messageId || send.isPending}
