@@ -18,6 +18,8 @@ import { Button } from "@/components/ui/button";
 import { SettingsSectionList } from "@/components/layout/settings-layout";
 import { useAppAuth, useAppUser } from "@/lib/auth";
 import { roleDescription, roleLabel } from "@/lib/access";
+import { canChooseTheme } from "@/lib/theme";
+import { ThemeSelector } from "@/components/theme/theme-selector";
 import { usePwaInstall } from "@/lib/pwa-install";
 
 function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) {
@@ -52,7 +54,7 @@ export function SettingsAccount() {
     <div>
       <SectionTitle title="Minha conta" subtitle="Seus dados e o que seu perfil pode fazer" />
       <div className="space-y-4">
-        <section className="overflow-hidden rounded-[18px] border border-border bg-white">
+        <section className="overflow-hidden rounded-[18px] border border-border bg-card">
           <Row label="Nome" value={user?.fullName || "Usuário"} />
           <Row label="E-mail" value={user?.primaryEmailAddress.emailAddress || "Sem e-mail"} />
           <Row
@@ -68,7 +70,21 @@ export function SettingsAccount() {
             aside={<Badge variant="secondary" className="shrink-0">{roleLabel(role)}</Badge>}
           />
         </section>
-        <section className="overflow-hidden rounded-[18px] border border-border bg-white">
+        {canChooseTheme(role) ? (
+          <section className="overflow-hidden rounded-[18px] border border-border bg-card">
+            <div className="border-b border-border/50 px-5 py-4">
+              <div className="text-sm font-medium">Aparência</div>
+              <div className="mt-0.5 text-sm text-muted-foreground">
+                Tema deste aparelho. O modo escuro ainda está em construção e, por
+                enquanto, só a administração pode ativá-lo.
+              </div>
+            </div>
+            <div className="px-5 py-4">
+              <ThemeSelector />
+            </div>
+          </section>
+        ) : null}
+        <section className="overflow-hidden rounded-[18px] border border-border bg-card">
           <Row
             label="Sair da conta"
             value="Encerra a sessão neste dispositivo"
