@@ -51,7 +51,7 @@ export function ClienteDocumentos() {
                   <p className="mt-0.5 text-sm text-muted-foreground">Contratos, comprovantes, notas fiscais e faturas da sua conta.</p>
                 </div>
                 {rows.length ? (
-                  <label className="flex w-full max-w-sm items-center gap-2 rounded-xl border border-border bg-white px-3 py-2 text-sm sm:w-auto sm:min-w-[300px]">
+                  <label className="flex w-full max-w-sm items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm sm:w-auto sm:min-w-[300px]">
                     <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
                     <input
                       type="search"
@@ -66,7 +66,7 @@ export function ClienteDocumentos() {
               </header>
 
               {!rows.length ? (
-                <p className="rounded-[18px] border border-dashed border-border bg-white/60 px-5 py-8 text-sm text-muted-foreground">
+                <p className="rounded-[18px] border border-dashed border-border bg-card/60 px-5 py-8 text-sm text-muted-foreground">
                   Nenhum documento ainda. Contratos e comprovantes que a Dutelog publicar, as notas fiscais dos seus avisos de envio e as faturas fechadas aparecem aqui.
                 </p>
               ) : (
@@ -83,7 +83,7 @@ export function ClienteDocumentos() {
                   ) : null}
 
                   {!visible.length ? (
-                    <p className="rounded-[18px] border border-dashed border-border bg-white/60 px-5 py-6 text-sm text-muted-foreground">
+                    <p className="rounded-[18px] border border-dashed border-border bg-card/60 px-5 py-6 text-sm text-muted-foreground">
                       Nada encontrado{search.trim() ? ` para "${search.trim()}"` : ""}.
                     </p>
                   ) : (
@@ -116,7 +116,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
       onClick={onClick}
       className={cn(
         "rounded-full border px-3 py-1.5 text-xs font-medium",
-        active ? "border-foreground bg-foreground text-background" : "border-border bg-white text-muted-foreground hover:text-foreground",
+        active ? "border-foreground bg-foreground text-background" : "border-border bg-card text-muted-foreground hover:text-foreground",
       )}
     >
       {children}
@@ -125,17 +125,17 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 }
 
 const FORMAT_TONE: Record<string, string> = {
-  PDF: "bg-red-50 text-red-700",
-  JPG: "bg-blue-50 text-blue-700",
-  PNG: "bg-blue-50 text-blue-700",
-  XLSX: "bg-emerald-50 text-emerald-700",
-  XLS: "bg-emerald-50 text-emerald-700",
-  CSV: "bg-emerald-50 text-emerald-700",
+  PDF: "bg-destructive-soft text-destructive-soft-foreground",
+  JPG: "bg-info-soft text-info-soft-foreground",
+  PNG: "bg-info-soft text-info-soft-foreground",
+  XLSX: "bg-success-soft text-success-soft-foreground",
+  XLS: "bg-success-soft text-success-soft-foreground",
+  CSV: "bg-success-soft text-success-soft-foreground",
 };
 
 export function DocumentList({ rows }: { rows: PortalDocument[] }) {
   return (
-    <ul className="divide-y divide-border/60 overflow-hidden rounded-[18px] border border-border bg-white">
+    <ul className="divide-y divide-border/60 overflow-hidden rounded-[18px] border border-border bg-card">
       {rows.map((row) => (
         <li key={row.key} className="grid grid-cols-[2.25rem_minmax(0,1fr)] items-center gap-3 px-4 py-3 sm:grid-cols-[2.25rem_minmax(0,1fr)_auto]">
           <span className={cn("grid h-9 w-9 place-items-center rounded-lg text-[10px] font-bold", FORMAT_TONE[row.format] ?? "bg-muted text-muted-foreground")}>
