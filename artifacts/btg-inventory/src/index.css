@@ -318,6 +318,20 @@
   --sidebar-ring: 212 98% 30%;
 }
 
+/* Documento de impressão (fatura, relatório do portal) é papel: fica claro
+   nos dois temas. Os componentes dentro dele que leem token (gráfico de
+   barras do relatório) recebem os valores do tema claro. */
+.print-area {
+  color-scheme: light;
+  --background: 60 17% 98%;
+  --foreground: 217 33% 18%;
+  --border: 220 24% 94%;
+  --card: 0 0% 100%;
+  --card-foreground: 217 33% 18%;
+  --muted: 60 12% 96%;
+  --muted-foreground: 215 16% 47%;
+}
+
 @layer base {
   * {
     @apply border-border;

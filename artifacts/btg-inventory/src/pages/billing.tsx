@@ -240,9 +240,9 @@ export default function Billing() {
               type="button"
               onClick={() => setCompetencia(month.competencia)}
               className={cn(
-                "min-w-[150px] rounded-2xl border bg-white px-4 py-2 text-left transition-colors",
+                "min-w-[150px] rounded-2xl border bg-card px-4 py-2 text-left transition-colors",
                 month.competencia === competencia
-                  ? "border-2 border-primary bg-blue-50/40"
+                  ? "border-2 border-primary bg-info-soft/40"
                   : "border-border hover:bg-muted/40",
               )}
             >
@@ -273,7 +273,7 @@ export default function Billing() {
         <p className="text-sm text-muted-foreground">Calculando {competenciaLabel(competencia)}...</p>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <section className="overflow-hidden rounded-[18px] border border-border bg-white">
+          <section className="overflow-hidden rounded-[18px] border border-border bg-card">
             <div className="flex items-baseline justify-between px-5 pb-2 pt-4">
               <h2 className="text-sm font-semibold">Cobrado automaticamente</h2>
               <span className="text-xs text-muted-foreground">calculado pelo sistema</span>
@@ -283,7 +283,7 @@ export default function Billing() {
                 autoLines.map((line) => (
                   <div
                     key={String(line.price_list_id ?? line.item)}
-                    className="flex items-center gap-4 rounded-xl border border-blue-100 bg-blue-50/40 px-4 py-3"
+                    className="flex items-center gap-4 rounded-xl border border-info-soft-border bg-info-soft/40 px-4 py-3"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="font-medium">{line.item}</div>
@@ -387,7 +387,7 @@ export default function Billing() {
           </section>
 
           <aside className="order-first space-y-3 lg:order-none lg:sticky lg:top-0 lg:self-start">
-            <div className="rounded-[20px] border-2 border-primary bg-white p-5 shadow-[0_10px_30px_rgba(110,158,248,.12)]">
+            <div className="rounded-[20px] border-2 border-primary bg-card p-5 shadow-[0_10px_30px_rgba(110,158,248,.12)]">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm text-muted-foreground">
                   {competenciaLabel(competencia)} · {aberto ? "total previsto" : "total"}
@@ -520,7 +520,7 @@ function Check({
       <Icon
         className={cn(
           "mt-0.5 h-4 w-4 shrink-0",
-          tone === "ok" ? "text-green-600" : tone === "warn" ? "text-amber-600" : "text-blue-500",
+          tone === "ok" ? "text-success-soft-foreground" : tone === "warn" ? "text-warning-soft-foreground" : "text-info-soft-foreground",
         )}
       />
       <div>

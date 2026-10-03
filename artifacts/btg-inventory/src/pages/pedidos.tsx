@@ -300,7 +300,7 @@ export default function Pedidos() {
                 className={cn(
                   "whitespace-nowrap rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors sm:px-3",
                   view === value
-                    ? "bg-white text-foreground shadow-sm"
+                    ? "bg-card text-foreground shadow-sm"
                     : "text-foreground/60 hover:text-foreground",
                 )}
               >
@@ -619,7 +619,7 @@ function Group({
           {[hint, count ? String(count) : null].filter(Boolean).join(" · ")}
         </span>
       </h2>
-      <div className="overflow-hidden rounded-2xl border border-border bg-white/85">
+      <div className="overflow-hidden rounded-2xl border border-border bg-card/85">
         {count > 0 ? (
           <div className="divide-y divide-border/60">{children}</div>
         ) : (
@@ -631,9 +631,9 @@ function Group({
 }
 
 const TONE: Record<"approve" | "pick" | "deliver" | "done", string> = {
-  approve: "bg-amber-50 text-amber-700",
-  pick: "bg-blue-50 text-blue-700",
-  deliver: "bg-emerald-50 text-emerald-700",
+  approve: "bg-warning-soft text-warning-soft-foreground",
+  pick: "bg-info-soft text-info-soft-foreground",
+  deliver: "bg-success-soft text-success-soft-foreground",
   done: "bg-muted text-muted-foreground",
 };
 
@@ -673,7 +673,7 @@ function Row({
             {age ? <span className="text-foreground/45"> · {age}</span> : null}
           </p>
           {note ? (
-            <p className="mt-1.5 flex items-center gap-1.5 text-sm text-amber-800">{note}</p>
+            <p className="mt-1.5 flex items-center gap-1.5 text-sm text-warning-soft-foreground">{note}</p>
           ) : null}
           {onToggle ? (
             <button
@@ -728,7 +728,7 @@ function OrderRow({
     .join(" · ");
 
   return (
-    <div className={cn(blocked && "bg-red-50/40")}>
+    <div className={cn(blocked && "bg-destructive-soft/40")}>
       <Row
         icon={icon}
         tone={tone}
@@ -736,7 +736,7 @@ function OrderRow({
         meta={meta || "—"}
         note={
           blocked ? (
-            <span className="flex items-center gap-1.5 text-red-700">
+            <span className="flex items-center gap-1.5 text-destructive-soft-foreground">
               <AlertTriangle className="size-3.5" />
               {order.blockedReason ??
                 `${order.exceptionCount} ${order.exceptionCount === 1 ? "exceção" : "exceções"}`}
@@ -785,7 +785,7 @@ function ItemList({ items }: { items: NonNullable<WarehouseTask["items"]> }) {
               </span>
             )}
             <div className="grid min-w-0 flex-1 grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-0.5 sm:flex">
-              <span className="rounded-md bg-blue-50 px-1.5 py-0.5 font-mono text-xs text-blue-700">
+              <span className="rounded-md bg-info-soft px-1.5 py-0.5 font-mono text-xs text-info-soft-foreground">
                 {item.location || "sem endereço"}
               </span>
               <span className="font-mono text-[13px] text-foreground/85">

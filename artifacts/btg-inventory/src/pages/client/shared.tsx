@@ -657,7 +657,7 @@ type MetricCardProps = {
 
 const metricToneClass = {
   neutral: "border-border bg-card/72 text-foreground",
-  info: "border-sky-200 bg-sky-50 text-sky-800",
+  info: "border-info-soft-border bg-info-soft text-info-soft-foreground",
   success: "border-success-soft-border bg-success-soft text-success-soft-foreground",
   warning: "border-warning-soft-border bg-warning-soft text-warning-soft-foreground",
   danger: "border-destructive-soft-border bg-destructive-soft text-destructive-soft-foreground",

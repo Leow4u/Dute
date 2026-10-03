@@ -1033,11 +1033,11 @@ function priorityWeight(priority?: string | null) {
 }
 
 const TONE_CHIP: Record<"ok" | "warn" | "bad" | "muted" | "info", string> = {
-  ok: "bg-emerald-50 text-emerald-700",
-  warn: "bg-amber-50 text-amber-800",
-  bad: "bg-red-50 text-red-700",
+  ok: "bg-success-soft text-success-soft-foreground",
+  warn: "bg-warning-soft text-warning-soft-foreground",
+  bad: "bg-destructive-soft text-destructive-soft-foreground",
   muted: "bg-muted text-muted-foreground",
-  info: "bg-blue-50 text-blue-700",
+  info: "bg-info-soft text-info-soft-foreground",
 };
 
 function Chip({
@@ -1315,13 +1315,13 @@ export default function CustomerRequests() {
               className={cn(
                 "flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors sm:px-3 sm:text-sm",
                 tab === option.value
-                  ? "bg-white text-foreground shadow-sm"
+                  ? "bg-card text-foreground shadow-sm"
                   : "text-foreground/60 hover:text-foreground",
               )}
             >
               {option.label}
               {option.value === "decide" && tabCounts.decide > 0 ? (
-                <span className="rounded-full bg-red-50 px-1.5 text-xs font-semibold text-red-700">
+                <span className="rounded-full bg-destructive-soft px-1.5 text-xs font-semibold text-destructive-soft-foreground">
                   {tabCounts.decide}
                 </span>
               ) : null}
@@ -1350,10 +1350,10 @@ export default function CustomerRequests() {
               Não consegui carregar a fila.
             </p>
           ) : visible.length === 0 ? (
-            <div className="flex items-center gap-2 rounded-2xl border border-border bg-white/70 px-4 py-6 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 rounded-2xl border border-border bg-card/70 px-4 py-6 text-sm text-muted-foreground">
               {tab === "decide" && !search ? (
                 <>
-                  <CheckCircle2 className="size-4 text-emerald-600" />
+                  <CheckCircle2 className="size-4 text-success-soft-foreground" />
                   Nenhuma solicitação esperando decisão.
                 </>
               ) : (
@@ -1369,7 +1369,7 @@ export default function CustomerRequests() {
                   type="button"
                   onClick={() => setSelectedId(item.id)}
                   className={cn(
-                    "rounded-2xl border bg-white/80 px-4 py-3.5 text-left transition-[border-color,box-shadow]",
+                    "rounded-2xl border bg-card/80 px-4 py-3.5 text-left transition-[border-color,box-shadow]",
                     active
                       ? "border-primary shadow-[0_6px_20px_rgba(110,158,248,.18)] ring-1 ring-primary"
                       : "border-border hover:border-primary/40",
@@ -1459,11 +1459,11 @@ const VERDICT_STYLE: Record<
   VerdictTone,
   { box: string; icon: string; Icon: LucideIcon }
 > = {
-  ready: { box: "border-emerald-200 bg-emerald-50/70", icon: "bg-emerald-100 text-emerald-700", Icon: CheckCircle2 },
-  blocked: { box: "border-amber-200 bg-amber-50/70", icon: "bg-amber-100 text-amber-800", Icon: AlertTriangle },
+  ready: { box: "border-success-soft-border bg-success-soft/70", icon: "bg-success-soft-border/50 text-success-soft-foreground", Icon: CheckCircle2 },
+  blocked: { box: "border-warning-soft-border bg-warning-soft/70", icon: "bg-warning-soft-border/50 text-warning-soft-foreground", Icon: AlertTriangle },
   checking: { box: "border-border bg-muted/40", icon: "bg-muted text-muted-foreground", Icon: RefreshCw },
-  approved: { box: "border-blue-200 bg-blue-50/70", icon: "bg-blue-100 text-blue-700", Icon: CheckCircle2 },
-  rejected: { box: "border-red-200 bg-red-50/70", icon: "bg-red-100 text-red-700", Icon: XCircle },
+  approved: { box: "border-info-soft-border bg-info-soft/70", icon: "bg-info-soft-border/50 text-info-soft-foreground", Icon: CheckCircle2 },
+  rejected: { box: "border-destructive-soft-border bg-destructive-soft/70", icon: "bg-destructive-soft-border/50 text-destructive-soft-foreground", Icon: XCircle },
   closed: { box: "border-border bg-muted/40", icon: "bg-muted text-muted-foreground", Icon: Archive },
 };
 
@@ -1524,7 +1524,7 @@ function RequestDetail({
       : "Aprovar";
 
   return (
-    <section className="flex min-w-0 flex-col overflow-hidden rounded-[22px] border border-border bg-white/85 lg:sticky lg:top-0 lg:max-h-[calc(100dvh-190px)]">
+    <section className="flex min-w-0 flex-col overflow-hidden rounded-[22px] border border-border bg-card/85 lg:sticky lg:top-0 lg:max-h-[calc(100dvh-190px)]">
       <header className="border-b border-border/70 px-5 py-5 md:px-6">
         <div className="mb-2 flex flex-wrap gap-2">
           <Chip tone="muted">{requestTypeLabel(request.type)}</Chip>
@@ -1576,7 +1576,7 @@ function RequestDetail({
             </p>
           ) : null}
           {verdict.tone === "blocked" && verdict.totalCount && verdict.readyCount !== undefined ? (
-            <div className="mt-2.5 h-2 w-full max-w-sm overflow-hidden rounded-full bg-amber-100">
+            <div className="mt-2.5 h-2 w-full max-w-sm overflow-hidden rounded-full bg-warning-soft-border/50">
               <div
                 className="h-full rounded-full bg-emerald-500"
                 style={{ width: `${Math.round((verdict.readyCount / verdict.totalCount) * 100)}%` }}
