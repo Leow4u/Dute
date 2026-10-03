@@ -655,8 +655,8 @@ function OpeningInventoryState({
   onNotifyDelivery: () => void;
 }) {
   return (
-    <div className="flex min-h-[360px] flex-col items-center justify-center rounded-[24px] border border-dashed border-border bg-white/45 px-6 py-12 text-center">
-      <span className="flex h-14 w-14 items-center justify-center rounded-[20px] border border-border bg-white text-primary">
+    <div className="flex min-h-[360px] flex-col items-center justify-center rounded-[24px] border border-dashed border-border bg-card/45 px-6 py-12 text-center">
+      <span className="flex h-14 w-14 items-center justify-center rounded-[20px] border border-border bg-card text-primary">
         <Package className="h-6 w-6" aria-hidden="true" />
       </span>
       <h2 className="mt-5 text-lg font-semibold text-foreground">
@@ -722,7 +722,7 @@ function MarketplaceToolbar({
   return (
     <section
       data-testid="stock-toolbar"
-      className="sticky top-0 z-20 shrink-0 rounded-[20px] border border-border bg-white p-3 shadow-[0_8px_24px_rgba(15,23,42,.06)] sm:p-4"
+      className="sticky top-0 z-20 shrink-0 rounded-[20px] border border-border bg-card p-3 shadow-[0_8px_24px_rgba(15,23,42,.06)] sm:p-4"
     >
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
         <div className="relative min-w-0 flex-1">
@@ -732,14 +732,14 @@ function MarketplaceToolbar({
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="Buscar por nome, código ou tipo"
             aria-label="Buscar por nome, código ou tipo"
-            className="h-11 rounded-[18px] border-border bg-white/80 pl-11 text-sm"
+            className="h-11 rounded-[18px] border-border bg-card/80 pl-11 text-sm"
           />
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <div
             role="group"
             aria-label="Formato de visualização"
-            className="flex items-center gap-1 rounded-[16px] border border-border bg-white/70 p-1"
+            className="flex items-center gap-1 rounded-[16px] border border-border bg-card/70 p-1"
           >
             <ViewModeButton
               active={viewMode === "cards"}
@@ -761,7 +761,7 @@ function MarketplaceToolbar({
               aria-checked={groupVariants}
               onClick={() => onGroupVariantsChange(!groupVariants)}
               title="Junta as variações (P, M, G…) do mesmo produto num card só"
-              className="flex h-11 cursor-pointer items-center gap-2 rounded-[14px] border border-border bg-white px-3 text-sm"
+              className="flex h-11 cursor-pointer items-center gap-2 rounded-[14px] border border-border bg-card px-3 text-sm"
             >
               <span
                 className={cn(
@@ -771,7 +771,7 @@ function MarketplaceToolbar({
               >
                 <span
                   className={cn(
-                    "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-[left]",
+                    "absolute top-0.5 h-4 w-4 rounded-full bg-card shadow transition-[left]",
                     groupVariants ? "left-[18px]" : "left-0.5",
                   )}
                 />
@@ -786,10 +786,10 @@ function MarketplaceToolbar({
             aria-expanded={cartOpen}
             aria-label={`Abrir pedido de abastecimento com ${formatNumber(cartQuantity)} item(ns)`}
             className={cn(
-              "relative hidden h-11 cursor-pointer items-center gap-2 rounded-[18px] border px-3.5 text-sm font-medium transition hover:bg-[#F5F6F7] active:translate-y-px md:flex",
+              "relative hidden h-11 cursor-pointer items-center gap-2 rounded-[18px] border px-3.5 text-sm font-medium transition hover:bg-muted active:translate-y-px md:flex",
               cartOpen
                 ? "border-primary/25 bg-primary/10 text-primary"
-                : "border-border bg-white/75 text-foreground",
+                : "border-border bg-card/75 text-foreground",
             )}
           >
             <ShoppingCart className="h-4 w-4" aria-hidden="true" />
@@ -879,7 +879,7 @@ function CatalogSelect({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="flex h-9 min-w-[178px] cursor-pointer items-center gap-2 rounded-[14px] border border-border bg-white/70 px-3 text-xs text-muted-foreground transition hover:bg-white focus-within:ring-2 focus-within:ring-ring/25">
+    <label className="flex h-9 min-w-[178px] cursor-pointer items-center gap-2 rounded-[14px] border border-border bg-card/70 px-3 text-xs text-muted-foreground transition hover:bg-card focus-within:ring-2 focus-within:ring-ring/25">
       <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
       <select
         aria-label={ariaLabel}
@@ -909,7 +909,7 @@ function CatalogProgress({
   onLoadMore: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center justify-between gap-3 rounded-[18px] border border-border/80 bg-white/56 px-4 py-3 text-center sm:flex-row sm:text-left">
+    <div className="flex flex-col items-center justify-between gap-3 rounded-[18px] border border-border/80 bg-card/56 px-4 py-3 text-center sm:flex-row sm:text-left">
       <p className="text-xs text-muted-foreground">
         Exibindo{" "}
         <span className="font-semibold text-foreground">
@@ -961,9 +961,9 @@ function StockList({
   onArchive: (product: StockProduct) => void;
 }) {
   return (
-    <div className="overflow-hidden rounded-[28px] border border-border bg-white/70 shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]">
+    <div className="overflow-hidden rounded-[28px] border border-border bg-card/70 shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]">
       <Table className="min-w-[860px]">
-        <TableHeader className="sticky top-0 z-10 bg-white/95 backdrop-blur-[24px]">
+        <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-[24px]">
           <TableRow>
             <TableHead className="w-[170px]">Código</TableHead>
             <TableHead className="min-w-[300px]">Produto</TableHead>
@@ -1087,7 +1087,7 @@ function SideDrawer({
   // Fundo escuro sem desfoque e painel opaco: atrás há uma vitrine de
   // fotos, e o painel translúcido ficava ilegível.
   return (
-    <div className="fixed inset-0 z-[80] flex justify-end bg-slate-900/35 p-3 sm:p-5">
+    <div className="fixed inset-0 z-[80] flex justify-end bg-black/35 p-3 sm:p-5">
       <button
         type="button"
         className="absolute inset-0 cursor-default"
@@ -1193,7 +1193,7 @@ function FamilyCard({
   return (
     <article
       data-testid="stock-card"
-      className="flex min-w-0 flex-col overflow-hidden rounded-[18px] border border-border bg-white shadow-[0_8px_24px_rgba(15,23,42,.04)] transition duration-200 hover:border-primary/30 hover:shadow-[0_18px_60px_rgba(15,23,42,.07)]"
+      className="flex min-w-0 flex-col overflow-hidden rounded-[18px] border border-border bg-card shadow-[0_8px_24px_rgba(15,23,42,.04)] transition duration-200 hover:border-primary/30 hover:shadow-[0_18px_60px_rgba(15,23,42,.07)]"
     >
       {/* Sem foto, o card começa no nome: o quadro vazio ocupava meio card. */}
       {hasPhoto ? (
@@ -1487,7 +1487,7 @@ function CartPanel({
   );
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-[20px] bg-white shadow-[0_24px_70px_rgba(15,23,42,.25)]">
+    <div className="flex h-full flex-col overflow-hidden rounded-[20px] bg-card shadow-[0_24px_70px_rgba(15,23,42,.25)]">
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 px-4 py-3">
         <div>
           <h2 className="font-semibold">Seu pedido</h2>
@@ -1561,7 +1561,7 @@ function ProductDetailPanel({
         <div className="-mt-2 flex justify-end">
           <button
             type="button"
-            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-2xl border border-border bg-white/70 text-muted-foreground transition hover:bg-[#F5F6F7]"
+            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-2xl border border-border bg-card/70 text-muted-foreground transition hover:bg-muted"
             onClick={onClose}
             aria-label="Fechar detalhe"
           >
@@ -1579,7 +1579,7 @@ function ProductDetailPanel({
             {productTitle(product)}
           </h2>
           <div className="mt-3 flex flex-wrap gap-2">
-            <span className="rounded-full border border-border bg-white/70 px-3 py-1 text-xs text-muted-foreground">
+            <span className="rounded-full border border-border bg-card/70 px-3 py-1 text-xs text-muted-foreground">
               {productType(product)}
             </span>
             <StockBadge status={status} />
@@ -1681,7 +1681,7 @@ function ProductVisual({
     return (
       <div
         className={cn(
-          "relative overflow-hidden border-b border-border bg-[#F7F7F5]",
+          "relative overflow-hidden border-b border-border bg-muted",
           large ? "rounded-[24px] border border-border" : "",
         )}
       >
@@ -1710,7 +1710,7 @@ function ProductVisual({
   return (
     <div
       className={cn(
-        "relative overflow-hidden border-b border-border bg-[#F7F7F5]",
+        "relative overflow-hidden border-b border-border bg-muted",
         large ? "rounded-[24px] border border-border" : "",
       )}
     >
@@ -1732,7 +1732,7 @@ function ProductVisual({
       >
         <div
           className={cn(
-            "flex items-center justify-center border border-white/70 bg-white/76 text-primary shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]",
+            "flex items-center justify-center border border-card/70 bg-card/76 text-primary shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]",
             compact ? "h-12 w-12 rounded-[18px]" : "h-20 w-20 rounded-[28px]",
           )}
         >
@@ -1785,14 +1785,14 @@ function QuantityStepper({
   return (
     <div
       className={cn(
-        "flex items-center border border-border bg-white/70 shadow-[0_8px_24px_rgba(15,23,42,.04)]",
+        "flex items-center border border-border bg-card/70 shadow-[0_8px_24px_rgba(15,23,42,.04)]",
         compact ? "rounded-[14px] p-0.5" : "rounded-[18px] p-1",
       )}
     >
       <button
         type="button"
         className={cn(
-          "flex cursor-pointer items-center justify-center text-muted-foreground transition hover:bg-[#F5F6F7] disabled:cursor-not-allowed disabled:opacity-40",
+          "flex cursor-pointer items-center justify-center text-muted-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40",
           compact ? "h-8 w-8 rounded-[10px]" : "h-9 w-9 rounded-[14px]",
         )}
         disabled={normalizedValue <= 0}
@@ -1828,7 +1828,7 @@ function QuantityStepper({
       <button
         type="button"
         className={cn(
-          "flex cursor-pointer items-center justify-center text-muted-foreground transition hover:bg-[#F5F6F7] disabled:cursor-not-allowed disabled:opacity-40",
+          "flex cursor-pointer items-center justify-center text-muted-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40",
           compact ? "h-8 w-8 rounded-[10px]" : "h-9 w-9 rounded-[14px]",
         )}
         disabled={normalizedValue >= normalizedMax}
@@ -1911,8 +1911,8 @@ function ViewModeButton({
       className={cn(
         "flex h-10 cursor-pointer items-center gap-2 rounded-[14px] px-3 text-sm transition",
         active
-          ? "bg-white text-primary shadow-[0_8px_24px_rgba(15,23,42,.04)]"
-          : "text-muted-foreground hover:bg-white/70",
+          ? "bg-card text-primary shadow-[0_8px_24px_rgba(15,23,42,.04)]"
+          : "text-muted-foreground hover:bg-card/70",
       )}
     >
       <Icon className="h-4 w-4" aria-hidden="true" />
@@ -1941,7 +1941,7 @@ function FilterChip({
         "flex shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition",
         active
           ? "border-primary/25 bg-primary/10 text-primary"
-          : "border-border bg-white/60 text-muted-foreground hover:bg-white",
+          : "border-border bg-card/60 text-muted-foreground hover:bg-card",
       )}
     >
       {Icon ? <Icon className="h-3.5 w-3.5" aria-hidden="true" /> : null}
@@ -1952,7 +1952,7 @@ function FilterChip({
 
 function StockFact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0 rounded-[18px] border border-border bg-white/55 p-3">
+    <div className="min-w-0 rounded-[18px] border border-border bg-card/55 p-3">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="mt-1 break-words text-sm font-semibold leading-5 text-foreground">
         {value}
@@ -1982,7 +1982,7 @@ function StockBadge({
   }
   if (status === "zero") {
     return (
-      <span className={cn("inline-flex items-center gap-1 rounded-md bg-white font-semibold text-rose-700 shadow-sm", size)}>
+      <span className={cn("inline-flex items-center gap-1 rounded-md bg-card font-semibold text-destructive-soft-foreground shadow-sm", size)}>
         <AlertTriangle className="h-3.5 w-3.5" />
         Sem saldo
       </span>
@@ -1990,7 +1990,7 @@ function StockBadge({
   }
   if (status === "low") {
     return (
-      <span className={cn("inline-flex items-center gap-1 rounded-md bg-white font-semibold text-amber-700 shadow-sm", size)}>
+      <span className={cn("inline-flex items-center gap-1 rounded-md bg-card font-semibold text-warning-soft-foreground shadow-sm", size)}>
         <Sparkles className="h-3.5 w-3.5" />
         Baixo estoque
       </span>
