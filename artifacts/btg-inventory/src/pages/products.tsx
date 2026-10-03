@@ -155,7 +155,7 @@ export default function Products() {
       <StockTableCard>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-              <thead className="text-xs text-muted-foreground uppercase border-b border-border/80 bg-white/55">
+              <thead className="text-xs text-muted-foreground uppercase border-b border-border/80 bg-card/55">
                 <tr>
                   <th className="px-5 py-4 font-medium">Cod. cliente</th>
                   <th className="px-5 py-4 font-medium">Produto</th>
@@ -179,7 +179,7 @@ export default function Products() {
                   </tr>
                 ) : (
                   filteredProducts.map((product: Product) => (
-                    <tr key={product.id} className="hover:bg-white/70 transition-colors">
+                    <tr key={product.id} className="hover:bg-card/70 transition-colors">
                       <td className="px-5 py-3 font-mono text-xs text-primary font-semibold">{product.cod_cliente}</td>
                       <td className="px-5 py-3 font-medium max-w-[280px] truncate" title={product.produto}>{product.produto}</td>
                       <td className="px-4 py-2">
@@ -192,7 +192,7 @@ export default function Products() {
                       </td>
                       <td className="px-4 py-2 text-xs">
                         {product.categoria && <Badge variant="secondary" className="mr-1 mb-1 font-normal bg-primary/10 text-primary">{product.categoria}</Badge>}
-                        {product.grupo && <Badge variant="outline" className="font-normal text-gray-600">{product.grupo}</Badge>}
+                        {product.grupo && <Badge variant="outline" className="font-normal text-muted-foreground">{product.grupo}</Badge>}
                       </td>
                       <td className="px-4 py-2 text-xs text-muted-foreground">
                         {product.cor || "-"} / {product.tamanho || "-"}
@@ -300,7 +300,7 @@ function ProductModal({ product }: { product?: any }) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {isEdit ? (
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50">
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-info-soft-foreground hover:text-info-soft-foreground hover:bg-info-soft">
             <Edit className="h-4 w-4" />
           </Button>
         ) : (
@@ -391,7 +391,7 @@ function DeleteProductButton({ id, cod_cliente }: { id: number, cod_cliente: str
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50">
+        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive-soft-foreground hover:text-destructive-soft-foreground hover:bg-destructive-soft">
           <Trash2 className="h-4 w-4" />
         </Button>
       </DialogTrigger>

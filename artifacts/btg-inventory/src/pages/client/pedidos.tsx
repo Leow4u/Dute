@@ -79,7 +79,7 @@ function OrderList({ active, history, onOpen }: { active: OrderView[]; history: 
         {active.length ? (
           active.map((view) => <ActiveCard key={view.id} view={view} onOpen={() => onOpen(view.id)} />)
         ) : (
-          <p className="rounded-[18px] border border-dashed border-border bg-white/60 px-5 py-6 text-sm text-muted-foreground">
+          <p className="rounded-[18px] border border-dashed border-border bg-card/60 px-5 py-6 text-sm text-muted-foreground">
             Nenhum pedido em andamento. Os pedidos são montados no Estoque.
           </p>
         )}
@@ -87,7 +87,7 @@ function OrderList({ active, history, onOpen }: { active: OrderView[]; history: 
 
       {history.length ? (
         <Section label="Entregues e cancelados">
-          <ul className="overflow-hidden rounded-[18px] border border-border bg-white">
+          <ul className="overflow-hidden rounded-[18px] border border-border bg-card">
             {history.map((view) => (
               <li key={view.id} className="border-b border-border/50 last:border-0">
                 <button
@@ -98,7 +98,7 @@ function OrderList({ active, history, onOpen }: { active: OrderView[]; history: 
                   <span className="min-w-0">
                     <span className="font-semibold">{view.number}</span>
                     <span className="ml-3 text-foreground/80">{[view.title, view.summary].filter(Boolean).join(" · ")}</span>
-                    <span className={cn("block truncate text-xs", view.stage === "rejected" ? "text-red-700" : "text-muted-foreground")}>
+                    <span className={cn("block truncate text-xs", view.stage === "rejected" ? "text-destructive-soft-foreground" : "text-muted-foreground")}>
                       {view.detail}
                     </span>
                   </span>
@@ -114,9 +114,9 @@ function OrderList({ active, history, onOpen }: { active: OrderView[]; history: 
 }
 
 function HistoryBadge({ view }: { view: OrderView }) {
-  if (view.stage === "rejected") return <span className="shrink-0 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">Recusado</span>;
+  if (view.stage === "rejected") return <span className="shrink-0 rounded-full bg-destructive-soft px-2.5 py-0.5 text-xs font-semibold text-destructive-soft-foreground">Recusado</span>;
   if (view.stage === "cancelled") return <span className="shrink-0 rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground">Cancelado</span>;
-  return <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">Entregue</span>;
+  return <span className="shrink-0 rounded-full bg-success-soft px-2.5 py-0.5 text-xs font-semibold text-success-soft-foreground">Entregue</span>;
 }
 
 function Steps({ view, withDates = false }: { view: OrderView; withDates?: boolean }) {
@@ -133,8 +133,8 @@ function Steps({ view, withDates = false }: { view: OrderView; withDates?: boole
                 className={cn(
                   "h-3 w-3 shrink-0 rounded-full border-2",
                   done && "border-primary bg-primary",
-                  current && "border-primary bg-white ring-4 ring-primary/15",
-                  !done && !current && "border-border bg-white",
+                  current && "border-primary bg-card ring-4 ring-primary/15",
+                  !done && !current && "border-border bg-card",
                 )}
               />
               {index < ORDER_STEPS.length - 1 ? <span className={cn("h-0.5 flex-1", done ? "bg-primary" : "bg-border")} /> : null}
@@ -157,7 +157,7 @@ function Steps({ view, withDates = false }: { view: OrderView; withDates?: boole
 
 function ActiveCard({ view, onOpen }: { view: OrderView; onOpen: () => void }) {
   return (
-    <article className="rounded-[18px] border border-border bg-white px-5 py-4">
+    <article className="rounded-[18px] border border-border bg-card px-5 py-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <button type="button" className="group text-left" onClick={onOpen}>
           <span className="font-semibold group-hover:underline">{view.number}</span>
@@ -226,7 +226,7 @@ function CancelOrder({ view }: { view: OrderView }) {
   });
   if (!confirming) {
     return (
-      <button type="button" className="font-medium text-muted-foreground hover:text-red-700 hover:underline" onClick={() => setConfirming(true)}>
+      <button type="button" className="font-medium text-muted-foreground hover:text-destructive-soft-foreground hover:underline" onClick={() => setConfirming(true)}>
         Cancelar pedido
       </button>
     );
@@ -272,7 +272,7 @@ function OrderDetail({ view, proofs, onBack }: { view: OrderView; proofs: Portal
       </header>
 
       {!closed ? (
-        <section className="rounded-[18px] border border-border bg-white px-5 py-4">
+        <section className="rounded-[18px] border border-border bg-card px-5 py-4">
           <Steps view={view} withDates />
           {view.delivery ? (
             <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -291,7 +291,7 @@ function OrderDetail({ view, proofs, onBack }: { view: OrderView; proofs: Portal
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <section className="rounded-[18px] border border-border bg-white px-5 py-4">
+        <section className="rounded-[18px] border border-border bg-card px-5 py-4">
           <div className="mb-2 flex items-baseline justify-between">
             <h2 className="font-semibold">Itens{view.items.length ? ` · ${integer.format(view.items.length)}` : ""}</h2>
             {pieces ? <span className="text-sm text-muted-foreground">{integer.format(pieces)} peças</span> : null}
@@ -309,7 +309,7 @@ function OrderDetail({ view, proofs, onBack }: { view: OrderView; proofs: Portal
                 {view.items.map((item, index) => (
                   <tr key={`${item.code}-${index}`} className="border-b border-border/40 last:border-0">
                     <td className="py-2 pr-2 font-mono text-xs">
-                      {item.code || <span className="font-sans text-amber-700">código a definir</span>}
+                      {item.code || <span className="font-sans text-warning-soft-foreground">código a definir</span>}
                     </td>
                     <td className="py-2 pr-2">{item.name}</td>
                     <td className="py-2 text-right tabular-nums">{integer.format(item.quantity)}</td>
@@ -322,7 +322,7 @@ function OrderDetail({ view, proofs, onBack }: { view: OrderView; proofs: Portal
           )}
         </section>
 
-        <section className="h-fit rounded-[18px] border border-border bg-white px-5 py-4">
+        <section className="h-fit rounded-[18px] border border-border bg-card px-5 py-4">
           <h2 className="font-semibold">Atualizações da Dutelog</h2>
           {view.timeline.length ? (
             <ol className="mt-3 border-l-2 border-border/70 pl-4">

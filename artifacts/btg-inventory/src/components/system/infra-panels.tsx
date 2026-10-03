@@ -51,7 +51,7 @@ export function InfraTiles() {
 }
 
 function SectionError({ message }: { message: string }) {
-  return <p className="px-5 py-4 text-sm text-red-700">{message}</p>;
+  return <p className="px-5 py-4 text-sm text-destructive-soft-foreground">{message}</p>;
 }
 
 function CopyCommand({ command }: { command: string }) {
@@ -62,7 +62,7 @@ function CopyCommand({ command }: { command: string }) {
       <button
         type="button"
         aria-label="Copiar comando"
-        className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-white hover:text-foreground"
+        className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-card hover:text-foreground"
         onClick={() =>
           navigator.clipboard
             .writeText(command)
@@ -88,9 +88,9 @@ function ErrorRow({ group, name }: { group: ErrorGroup; name: string }) {
       >
         <span className="flex min-w-0 flex-wrap items-center gap-2">
           <b className="break-all">{name}</b>
-          {group.blocked ? <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-700">bloqueada</span> : null}
+          {group.blocked ? <span className="rounded-full bg-destructive-soft px-2 py-0.5 text-xs font-semibold text-destructive-soft-foreground">bloqueada</span> : null}
           {group.admin ? (
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700" title="Registro de auditoria: deploy ou permissão no Google Cloud">
+            <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-foreground" title="Registro de auditoria: deploy ou permissão no Google Cloud">
               Google Cloud
             </span>
           ) : null}
@@ -160,7 +160,7 @@ function FunctionsPanel({ infra }: { infra: SystemInfra }) {
               <span
                 className={cn(
                   "shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold",
-                  row.status === "ok" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700",
+                  row.status === "ok" ? "bg-success-soft text-success-soft-foreground" : "bg-destructive-soft text-destructive-soft-foreground",
                 )}
               >
                 {FUNCTION_STATUS_LABELS[row.status]}
@@ -229,7 +229,7 @@ function BillingPanel({ infra, agentMonthCost, onConfigure }: { infra: SystemInf
             {billing.data_until ? `dados até ${dayTime.format(new Date(billing.data_until))}` : "sem dados do mês ainda"}
           </div>
         </div>
-        {billing.currency !== "BRL" ? <p className="text-xs text-amber-800">A fatura está em {billing.currency}; os valores acima estão nessa moeda.</p> : null}
+        {billing.currency !== "BRL" ? <p className="text-xs text-warning-soft-foreground">A fatura está em {billing.currency}; os valores acima estão nessa moeda.</p> : null}
         {billing.services.length ? (
           <ul className="flex flex-col gap-2">
             {billing.services.slice(0, 8).map((row) => (
@@ -250,7 +250,7 @@ function BillingPanel({ infra, agentMonthCost, onConfigure }: { infra: SystemInf
           </p>
         )}
         {billing.vertex_ai > 0 && agentMonthCost !== null ? (
-          <p className="rounded-lg bg-violet-50 px-3 py-2 text-xs text-violet-900">
+          <p className="rounded-lg bg-agent-soft px-3 py-2 text-xs text-agent-strong">
             Vertex AI na fatura: <b>{formatMoney(billing.vertex_ai)}</b> · estimativa do Agent Dute: <b>{formatMoney(agentMonthCost)}</b>.
             {comparison ? ` ${comparison}` : ""}
           </p>
@@ -275,7 +275,7 @@ function BillingTableDialog({ current, onClose }: { current: string | null; onCl
   });
   return (
     <Dialog open onOpenChange={(open) => (!open ? onClose() : undefined)}>
-      <DialogContent className="max-w-lg bg-white">
+      <DialogContent className="max-w-lg bg-card">
         <DialogHeader>
           <DialogTitle>Tabela do faturamento</DialogTitle>
           <DialogDescription>
@@ -295,7 +295,7 @@ function BillingTableDialog({ current, onClose }: { current: string | null; onCl
           <span className="text-xs font-normal text-muted-foreground">Deixe em branco para esconder o custo real.</span>
         </label>
         <DialogFooter className="gap-2">
-          <button type="button" onClick={onClose} className="rounded-xl border border-border bg-white px-3.5 py-2 text-sm font-medium hover:bg-muted">
+          <button type="button" onClick={onClose} className="rounded-xl border border-border bg-card px-3.5 py-2 text-sm font-medium hover:bg-muted">
             Cancelar
           </button>
           <button
@@ -334,9 +334,9 @@ export function InfraSection({ agentMonthCost }: { agentMonthCost: number | null
         </span>
       </div>
       {infra.isLoading ? (
-        <p className="rounded-[18px] border border-border bg-white px-5 py-4 text-sm text-muted-foreground">Consultando o Google Cloud…</p>
+        <p className="rounded-[18px] border border-border bg-card px-5 py-4 text-sm text-muted-foreground">Consultando o Google Cloud…</p>
       ) : infra.isError || !infra.data ? (
-        <p className="rounded-[18px] border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">Não consegui consultar a infraestrutura: {infra.error?.message}</p>
+        <p className="rounded-[18px] border border-destructive-soft-border bg-destructive-soft px-5 py-4 text-sm text-destructive-soft-foreground">Não consegui consultar a infraestrutura: {infra.error?.message}</p>
       ) : (
         <div className="space-y-4">
           <ErrorsPanel infra={infra.data} />

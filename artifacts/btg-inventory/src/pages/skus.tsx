@@ -212,7 +212,7 @@ export default function Skus() {
       <StockTableCard>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-              <thead className="text-xs text-muted-foreground uppercase border-b border-border/80 bg-white/55">
+              <thead className="text-xs text-muted-foreground uppercase border-b border-border/80 bg-card/55">
                 <tr>
                   <th className="px-5 py-4 font-medium">Cod. cliente</th>
                   <th className="px-4 py-4 font-medium">SKU interno</th>
@@ -243,11 +243,11 @@ export default function Skus() {
                     const noLocation = !locationsForSku(sku).length;
 
                     return (
-                      <tr key={sku.id} className="hover:bg-gray-50/80 transition-colors">
+                      <tr key={sku.id} className="hover:bg-muted/80 transition-colors">
                         <td className="px-5 py-3 font-mono text-xs text-primary font-bold">{sku.cod_cliente}</td>
                         <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{sku.cod_btg}</td>
                         <td className="px-4 py-2">
-                          <div className="font-medium text-gray-900 truncate max-w-[200px]" title={sku.produto}>{sku.produto}</div>
+                          <div className="font-medium text-foreground truncate max-w-[200px]" title={sku.produto}>{sku.produto}</div>
                           <div className="text-xs text-muted-foreground mt-0.5">
                             {sku.categoria && `${sku.categoria} • `}
                             {sku.cor || "-"} / {sku.tamanho || "-"}
@@ -259,9 +259,9 @@ export default function Skus() {
                             Status sem estado legado = OK (saldo saudável). */}
                         <td className="px-4 py-2 text-center">
                           <Badge variant="secondary" className={
-                            current <= 0 ? 'bg-rose-50 text-rose-700' :
-                            isLow ? 'bg-amber-50 text-amber-700' :
-                            sku.estado === 'AVARIADO' ? 'bg-rose-50 text-rose-700' :
+                            current <= 0 ? 'bg-destructive-soft text-destructive-soft-foreground' :
+                            isLow ? 'bg-warning-soft text-warning-soft-foreground' :
+                            sku.estado === 'AVARIADO' ? 'bg-destructive-soft text-destructive-soft-foreground' :
                             'bg-primary/10 text-primary'
                           }>
                             {current <= 0 ? "ZERADO" : isLow ? "BAIXO" : sku.estado || "OK"}
@@ -270,7 +270,7 @@ export default function Skus() {
                         <td className="px-4 py-2">
                           {locationsForSku(sku).length ? (
                             <div
-                              className="flex items-center gap-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 px-2 py-1 rounded w-fit border border-indigo-100"
+                              className="flex items-center gap-1.5 text-xs font-medium text-info-soft-foreground bg-info-soft px-2 py-1 rounded w-fit border border-info-soft-border"
                               title={locationsForSku(sku).join(" · ")}
                             >
                               <MapPin className="h-3 w-3" />
@@ -280,11 +280,11 @@ export default function Skus() {
                                 : ""}
                             </div>
                           ) : (
-                            <span className="text-xs text-amber-700">Sem endereço</span>
+                            <span className="text-xs text-warning-soft-foreground">Sem endereço</span>
                           )}
                         </td>
                         <td className="px-4 py-2 text-right">
-                          <div className={`font-semibold ${current === 0 ? 'text-rose-500' : 'text-gray-900'}`}>
+                          <div className={`font-semibold ${current === 0 ? 'text-destructive-soft-foreground' : 'text-foreground'}`}>
                             {current.toLocaleString('pt-BR')}
                           </div>
                           <div className="text-xs text-muted-foreground">
@@ -397,7 +397,7 @@ export function SkuModal({ sku, trigger }: { sku?: any; trigger?: ReactNode }) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {trigger ? trigger : isEdit ? (
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50">
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-info-soft-foreground hover:text-info-soft-foreground hover:bg-info-soft">
             <Edit className="h-4 w-4" />
           </Button>
         ) : (
@@ -480,9 +480,9 @@ export function SkuModal({ sku, trigger }: { sku?: any; trigger?: ReactNode }) {
             {errors.estoque_minimo && <span className="text-xs text-destructive">{errors.estoque_minimo.message}</span>}
           </div>
 
-          <div className="rounded-2xl border border-blue-100 bg-blue-50/55 p-4">
+          <div className="rounded-2xl border border-info-soft-border bg-info-soft/55 p-4">
             <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-blue-100 bg-white text-blue-600">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-info-soft-border bg-card text-info-soft-foreground">
                 <Boxes className="h-4 w-4" />
               </div>
               <div className="min-w-0">
@@ -494,10 +494,10 @@ export function SkuModal({ sku, trigger }: { sku?: any; trigger?: ReactNode }) {
             </div>
 
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              <Button asChild type="button" variant="outline" className="h-auto min-h-16 justify-between gap-3 bg-white px-4 py-3 text-left">
+              <Button asChild type="button" variant="outline" className="h-auto min-h-16 justify-between gap-3 bg-card px-4 py-3 text-left">
                 <Link href="/wms/inventario" onClick={() => setOpen(false)}>
                   <span className="flex min-w-0 items-center gap-3">
-                    <ClipboardCheck className="h-4 w-4 shrink-0 text-blue-600" />
+                    <ClipboardCheck className="h-4 w-4 shrink-0 text-info-soft-foreground" />
                     <span className="min-w-0">
                       <span className="block text-sm font-medium">Inventário de abertura</span>
                       <span className="block text-xs font-normal text-muted-foreground">Registrar o primeiro saldo</span>
@@ -507,10 +507,10 @@ export function SkuModal({ sku, trigger }: { sku?: any; trigger?: ReactNode }) {
                 </Link>
               </Button>
 
-              <Button asChild type="button" variant="outline" className="h-auto min-h-16 justify-between gap-3 bg-white px-4 py-3 text-left">
+              <Button asChild type="button" variant="outline" className="h-auto min-h-16 justify-between gap-3 bg-card px-4 py-3 text-left">
                 <Link href="/wms/recebimento" onClick={() => setOpen(false)}>
                   <span className="flex min-w-0 items-center gap-3">
-                    <PackagePlus className="h-4 w-4 shrink-0 text-blue-600" />
+                    <PackagePlus className="h-4 w-4 shrink-0 text-info-soft-foreground" />
                     <span className="min-w-0">
                       <span className="block text-sm font-medium">Recebimento</span>
                       <span className="block text-xs font-normal text-muted-foreground">Lançar as próximas entradas</span>
@@ -568,7 +568,7 @@ export function DeleteSkuButton({ id, cod_btg, trigger }: { id: number, cod_btg:
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {trigger ?? (
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50">
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive-soft-foreground hover:text-destructive-soft-foreground hover:bg-destructive-soft">
             <Trash2 className="h-4 w-4" />
           </Button>
         )}

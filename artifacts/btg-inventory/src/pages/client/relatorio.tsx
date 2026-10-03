@@ -88,13 +88,13 @@ export function ClienteRelatorio() {
                   </Link>
                   <div className="flex flex-wrap items-center gap-2 text-sm">
                     <label htmlFor="relatorio-de">De</label>
-                    <select id="relatorio-de" className="rounded-lg border border-border bg-white px-2 py-1.5" value={start} onChange={(event) => setFrom(event.target.value)}>
+                    <select id="relatorio-de" className="rounded-lg border border-border bg-card px-2 py-1.5" value={start} onChange={(event) => setFrom(event.target.value)}>
                       {available.map((month) => (
                         <option key={month} value={month}>{monthLabel(month, true)}</option>
                       ))}
                     </select>
                     <label htmlFor="relatorio-ate">até</label>
-                    <select id="relatorio-ate" className="rounded-lg border border-border bg-white px-2 py-1.5" value={end} onChange={(event) => setTo(event.target.value)}>
+                    <select id="relatorio-ate" className="rounded-lg border border-border bg-card px-2 py-1.5" value={end} onChange={(event) => setTo(event.target.value)}>
                       {available.map((month) => (
                         <option key={month} value={month}>{monthLabel(month, true)}</option>
                       ))}
@@ -114,7 +114,7 @@ export function ClienteRelatorio() {
               </div>
 
               {!report ? (
-                <p className="rounded-[18px] border border-dashed border-border bg-white/60 px-5 py-8 text-sm text-muted-foreground">
+                <p className="rounded-[18px] border border-dashed border-border bg-card/60 px-5 py-8 text-sm text-muted-foreground">
                   {available.length ? "Escolha um período válido: o mês inicial antes do final." : "Nenhuma fatura fechada para gerar o relatório."}
                 </p>
               ) : (

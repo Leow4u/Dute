@@ -181,7 +181,7 @@ export default function Estoque() {
                 className={cn(
                   "whitespace-nowrap rounded-lg px-2.5 py-1.5 text-sm font-medium sm:px-3",
                   tab === value
-                    ? "bg-white text-foreground shadow-sm"
+                    ? "bg-card text-foreground shadow-sm"
                     : "text-foreground/60 hover:text-foreground",
                 )}
               >
@@ -234,7 +234,7 @@ export default function Estoque() {
                     "whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium sm:text-sm",
                     filter === option.value
                       ? "border-foreground bg-foreground text-background"
-                      : "border-border bg-white/70 text-foreground/70 hover:text-foreground",
+                      : "border-border bg-card/70 text-foreground/70 hover:text-foreground",
                   )}
                 >
                   {option.label}
@@ -263,7 +263,7 @@ export default function Estoque() {
                 onSelect={toggleItem}
               />
               {desktop && panelItem ? (
-                <section className="relative overflow-hidden rounded-[20px] border border-primary/50 bg-white/90 lg:sticky lg:top-0 lg:max-h-[calc(100dvh-160px)] lg:overflow-y-auto">
+                <section className="relative overflow-hidden rounded-[20px] border border-primary/50 bg-card/90 lg:sticky lg:top-0 lg:max-h-[calc(100dvh-160px)] lg:overflow-y-auto">
                   <button
                     type="button"
                     onClick={() => setSelectedKey(null)}
@@ -303,7 +303,7 @@ function Thumb({ item, size = "md" }: { item: StockItem; size?: "md" | "lg" }) {
     return (
       <div
         className={cn(
-          "flex shrink-0 items-center justify-center border-[1.5px] border-dashed border-red-200 bg-white text-red-600",
+          "flex shrink-0 items-center justify-center border-[1.5px] border-dashed border-destructive-soft-border bg-card text-destructive-soft-foreground",
           box,
         )}
         title="Sem foto"
@@ -339,8 +339,8 @@ function Chip({ tone, children }: { tone: "warn" | "bad" | "muted"; children: Re
     <span
       className={cn(
         "whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold",
-        tone === "warn" && "bg-amber-50 text-amber-800",
-        tone === "bad" && "bg-red-50 text-red-700",
+        tone === "warn" && "bg-warning-soft text-warning-soft-foreground",
+        tone === "bad" && "bg-destructive-soft text-destructive-soft-foreground",
         tone === "muted" && "bg-muted text-muted-foreground",
       )}
     >
@@ -355,7 +355,7 @@ function LocationTag({ id }: { id: string }) {
   return (
     <span
       title={id}
-      className="inline-block max-w-full break-words rounded-md bg-blue-50 px-1.5 py-0.5 align-middle font-mono text-xs text-blue-700"
+      className="inline-block max-w-full break-words rounded-md bg-info-soft px-1.5 py-0.5 align-middle font-mono text-xs text-info-soft-foreground"
     >
       {id}
     </span>
@@ -374,7 +374,7 @@ function ItemList({
   const [limit, setLimit] = useState(100);
   if (!items.length) {
     return (
-      <div className="rounded-2xl border border-border bg-white/80 px-5 py-6 text-sm text-muted-foreground">
+      <div className="rounded-2xl border border-border bg-card/80 px-5 py-6 text-sm text-muted-foreground">
         Nenhum item encontrado.
       </div>
     );
@@ -382,7 +382,7 @@ function ItemList({
   const shown = items.slice(0, limit);
   return (
     <div className="flex flex-col gap-2">
-      <div className="overflow-hidden rounded-2xl border border-border bg-white/85">
+      <div className="overflow-hidden rounded-2xl border border-border bg-card/85">
         <div className="hidden grid-cols-[minmax(0,1fr)_200px_64px_84px] gap-3 border-b border-border/70 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50 md:grid">
           <span>Item</span>
           <span>Endereço</span>
@@ -397,7 +397,7 @@ function ItemList({
               onClick={() => onSelect(item)}
               className={cn(
                 "grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40 md:grid-cols-[minmax(0,1fr)_200px_64px_84px]",
-                selectedKey === item.key && "bg-blue-50/60",
+                selectedKey === item.key && "bg-info-soft/60",
               )}
             >
               <div className="col-span-2 flex min-w-0 items-center gap-3 md:col-span-1">
@@ -661,7 +661,7 @@ function ItemCard({ item }: { item: StockItem }) {
                   <span
                     className={cn(
                       "flex size-7 shrink-0 items-center justify-center rounded-lg",
-                      positive ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700",
+                      positive ? "bg-success-soft text-success-soft-foreground" : "bg-destructive-soft text-destructive-soft-foreground",
                     )}
                   >
                     {positive ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />}
@@ -673,7 +673,7 @@ function ItemCard({ item }: { item: StockItem }) {
                       {[who, movementDate(row.data)].filter(Boolean).join(" · ")}
                     </span>
                   </span>
-                  <span className={cn("font-semibold tabular-nums", positive ? "text-foreground" : "text-red-700")}>
+                  <span className={cn("font-semibold tabular-nums", positive ? "text-foreground" : "text-destructive-soft-foreground")}>
                     {positive ? "+" : "−"}
                     {numberFormatter.format(Math.abs(quantity))}
                   </span>
@@ -745,12 +745,12 @@ function Stat({
 }) {
   return (
     <div className="rounded-xl bg-muted/50 px-3 py-2.5">
-      <p className={cn("text-xl font-semibold tabular-nums", alert ? "text-red-600" : "text-foreground")}>
+      <p className={cn("text-xl font-semibold tabular-nums", alert ? "text-destructive-soft-foreground" : "text-foreground")}>
         {value}
       </p>
       <p className="text-xs text-foreground/60">{label}</p>
       {hint ? (
-        <p className={cn("text-xs", alert ? "font-medium text-red-600" : "text-foreground/50")}>{hint}</p>
+        <p className={cn("text-xs", alert ? "font-medium text-destructive-soft-foreground" : "text-foreground/50")}>{hint}</p>
       ) : null}
     </div>
   );

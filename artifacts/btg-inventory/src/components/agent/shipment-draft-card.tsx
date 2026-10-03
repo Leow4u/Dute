@@ -30,9 +30,9 @@ import { SentNotice, field, todaySaoPaulo } from "./order-draft-card";
 const integer = new Intl.NumberFormat("pt-BR");
 
 const SITUATION: Record<ShipmentFormLine["situacao"], { label: string; tone: string }> = {
-  no_estoque: { label: "no estoque", tone: "bg-emerald-50 text-emerald-800" },
-  novo: { label: "produto novo", tone: "bg-amber-50 text-amber-800" },
-  codigo_a_definir: { label: "código a definir", tone: "bg-amber-50 text-amber-800" },
+  no_estoque: { label: "no estoque", tone: "bg-success-soft text-success-soft-foreground" },
+  novo: { label: "produto novo", tone: "bg-warning-soft text-warning-soft-foreground" },
+  codigo_a_definir: { label: "código a definir", tone: "bg-warning-soft text-warning-soft-foreground" },
 };
 
 export function ShipmentDraftCard({ draft, messageId, sent: sentValue }: { draft: ShipmentDraft; messageId?: string; sent?: unknown }) {
@@ -75,9 +75,9 @@ export function ShipmentDraftCard({ draft, messageId, sent: sentValue }: { draft
   const id = (name: string) => `shipment-${messageId ?? "draft"}-${name}`;
 
   return (
-    <section className="mt-3 overflow-hidden rounded-2xl border border-[#d9d0fb] bg-[#faf8ff]">
+    <section className="mt-3 overflow-hidden rounded-2xl border border-agent-border bg-agent-soft">
       <header className="flex items-start gap-2.5 px-4 pt-3">
-        <PackagePlus className="mt-0.5 h-4 w-4 shrink-0 text-[#5b3fc4]" aria-hidden="true" />
+        <PackagePlus className="mt-0.5 h-4 w-4 shrink-0 text-agent" aria-hidden="true" />
         <div className="min-w-0">
           <p className="text-sm font-semibold">Aviso de envio pronto para enviar</p>
           <p className="text-xs text-muted-foreground">
@@ -90,7 +90,7 @@ export function ShipmentDraftCard({ draft, messageId, sent: sentValue }: { draft
       <fieldset disabled={send.isPending} className="grid grid-cols-2 gap-2 px-4 pt-3">
         <label className="col-span-2 flex flex-col gap-1" htmlFor={id("fornecedor")}>
           <span className="text-xs font-semibold text-muted-foreground">
-            Quem vai entregar (fornecedor) <span className="text-amber-700">*</span>
+            Quem vai entregar (fornecedor) <span className="text-warning-soft-foreground">*</span>
           </span>
           <input id={id("fornecedor")} value={form.fornecedor} onChange={(event) => update({ fornecedor: event.target.value })} className={field} />
         </label>
@@ -105,7 +105,7 @@ export function ShipmentDraftCard({ draft, messageId, sent: sentValue }: { draft
       </fieldset>
 
       {form.linhas.length ? (
-        <ul className="mx-4 mt-3 divide-y divide-[#ebe5fd] rounded-xl border border-[#ebe5fd] bg-white text-sm">
+        <ul className="mx-4 mt-3 divide-y divide-agent-divider rounded-xl border border-agent-divider bg-card text-sm">
           {form.linhas.map((line, index) => (
             <li key={index} className="flex flex-wrap items-center gap-2 px-3 py-2">
               <span className="flex min-w-0 flex-1 flex-col gap-1">
@@ -142,7 +142,7 @@ export function ShipmentDraftCard({ draft, messageId, sent: sentValue }: { draft
                 value={line.quantidade}
                 disabled={send.isPending}
                 onChange={(event) => updateLine(index, { quantidade: Math.floor(Number(event.target.value.replace(/\D/g, "")) || 0) })}
-                className="h-8 w-16 rounded-lg border border-border bg-white text-center tabular-nums outline-none focus:border-primary/60"
+                className="h-8 w-16 rounded-lg border border-border bg-card text-center tabular-nums outline-none focus:border-primary/60"
               />
               <button
                 type="button"
@@ -174,7 +174,7 @@ export function ShipmentDraftCard({ draft, messageId, sent: sentValue }: { draft
         {form.anexos.length ? (
           <ul className="flex flex-wrap gap-1.5">
             {form.anexos.map((file) => (
-              <li key={file.storage_path} className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-border bg-white px-2 py-1 text-xs">
+              <li key={file.storage_path} className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-border bg-card px-2 py-1 text-xs">
                 <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <span className="truncate">{file.file_name}</span>
                 <button
@@ -193,7 +193,7 @@ export function ShipmentDraftCard({ draft, messageId, sent: sentValue }: { draft
       </div>
 
       {send.isError ? (
-        <p className="mx-4 mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+        <p className="mx-4 mt-3 rounded-lg bg-destructive-soft px-3 py-2 text-sm text-destructive-soft-foreground" role="alert">
           {send.error instanceof Error ? send.error.message : "Não consegui enviar agora. Tente de novo."}
         </p>
       ) : null}
@@ -210,7 +210,7 @@ export function ShipmentDraftCard({ draft, messageId, sent: sentValue }: { draft
           Abrir na tela Envios
         </button>
         <div className="flex items-center gap-3">
-          {problem ? <span className="text-xs text-amber-800">{problem}</span> : null}
+          {problem ? <span className="text-xs text-warning-soft-foreground">{problem}</span> : null}
           <button
             type="button"
             disabled={Boolean(problem) || !messageId || send.isPending}

@@ -96,7 +96,7 @@ function DetailField({
   value: string;
 }) {
   return (
-    <div className="rounded-[16px] border border-border bg-white/55 px-3 py-2">
+    <div className="rounded-[16px] border border-border bg-card/55 px-3 py-2">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Icon className="size-3.5 shrink-0 text-primary" />
         <span>{label}</span>
@@ -286,8 +286,8 @@ export function ReceivingCommandCenter({
   const activeEntry = selectedEntry ?? entries[0];
 
   return (
-    <Card className="overflow-hidden border-primary/20 bg-white/78 shadow-[0_18px_60px_rgba(15,23,42,.05)]">
-      <CardHeader className="border-b border-border/60 bg-white/45 p-5">
+    <Card className="overflow-hidden border-primary/20 bg-card/78 shadow-[0_18px_60px_rgba(15,23,42,.05)]">
+      <CardHeader className="border-b border-border/60 bg-card/45 p-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex min-w-0 gap-3">
             <div className="flex size-11 shrink-0 items-center justify-center rounded-[18px] border border-primary/20 bg-primary/10 text-primary">
@@ -312,7 +312,7 @@ export function ReceivingCommandCenter({
         </div>
       </CardHeader>
       <CardContent className="grid gap-5 p-5 xl:grid-cols-[minmax(380px,520px)_minmax(0,1fr)]">
-        <div className="min-w-0 rounded-[24px] border border-border bg-white/60 p-4">
+        <div className="min-w-0 rounded-[24px] border border-border bg-card/60 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold text-foreground">
@@ -326,7 +326,7 @@ export function ReceivingCommandCenter({
               <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
                 {formatNumber(planned)} prevista(s)
               </Badge>
-              <Badge variant="outline" className="border-border bg-white/70">
+              <Badge variant="outline" className="border-border bg-card/70">
                 {formatNumber(unplanned)} avulsa(s)
               </Badge>
             </div>
@@ -346,7 +346,7 @@ export function ReceivingCommandCenter({
                 </div>
               </ScrollArea>
             ) : (
-              <Empty className="min-h-[360px] border border-dashed border-border bg-white/35">
+              <Empty className="min-h-[360px] border border-dashed border-border bg-card/35">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
                     <CheckCircle2 className="size-5" />
@@ -399,7 +399,7 @@ export function ReceivingKpiPill({
         "rounded-full border px-3 py-1.5 text-sm",
         tone === "danger"
           ? "border-destructive/20 bg-destructive/10 text-destructive"
-          : "border-border bg-white/70 text-muted-foreground",
+          : "border-border bg-card/70 text-muted-foreground",
       )}
     >
       <span className="font-semibold text-foreground">{formatNumber(value)}</span>{" "}
@@ -426,8 +426,8 @@ export function ReceivingTaskRow({
     <button
       type="button"
       className={cn(
-        "w-full rounded-[20px] border bg-white/68 p-4 text-left transition-[border-color,box-shadow,background-color,transform]",
-        "hover:-translate-y-0.5 hover:border-primary/25 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+        "w-full rounded-[20px] border bg-card/68 p-4 text-left transition-[border-color,box-shadow,background-color,transform]",
+        "hover:-translate-y-0.5 hover:border-primary/25 hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
         isSelected
           ? "border-primary/35 bg-primary/5 shadow-[0_12px_34px_rgba(15,23,42,.06)]"
           : "border-border",
@@ -441,7 +441,7 @@ export function ReceivingTaskRow({
               variant="outline"
               className={cn(
                 isUnplanned
-                  ? "border-amber-200 bg-amber-50 text-amber-800"
+                  ? "border-warning-soft-border bg-warning-soft text-warning-soft-foreground"
                   : "border-primary/20 bg-primary/10 text-primary",
               )}
             >
@@ -466,19 +466,19 @@ export function ReceivingTaskRow({
         />
       </div>
       <div className="mt-4 grid grid-cols-3 gap-2">
-        <div className="rounded-[14px] border border-border bg-white/60 px-3 py-2">
+        <div className="rounded-[14px] border border-border bg-card/60 px-3 py-2">
           <div className="text-[11px] text-muted-foreground">Linhas</div>
           <div className="mt-1 text-sm font-semibold text-foreground">
             {formatNumber(itemCount || 1)}
           </div>
         </div>
-        <div className="rounded-[14px] border border-border bg-white/60 px-3 py-2">
+        <div className="rounded-[14px] border border-border bg-card/60 px-3 py-2">
           <div className="text-[11px] text-muted-foreground">Peças</div>
           <div className="mt-1 text-sm font-semibold text-foreground">
             {quantity ? formatNumber(quantity) : "aberto"}
           </div>
         </div>
-        <div className="rounded-[14px] border border-border bg-white/60 px-3 py-2">
+        <div className="rounded-[14px] border border-border bg-card/60 px-3 py-2">
           <div className="text-[11px] text-muted-foreground">Prazo</div>
           <div className="mt-1 truncate text-sm font-semibold text-foreground">
             {formatDate(task.due_at, "sem prazo")}
@@ -506,7 +506,7 @@ export function ReceivingTaskDetailCard({
 }) {
   if (!entry) {
     return (
-      <Empty className="min-h-[520px] rounded-[24px] border border-dashed border-border bg-white/35">
+      <Empty className="min-h-[520px] rounded-[24px] border border-dashed border-border bg-card/35">
         <EmptyHeader>
           <EmptyMedia variant="icon">
             <ClipboardCheck className="size-5" />
@@ -526,8 +526,8 @@ export function ReceivingTaskDetailCard({
   const taskAlerts = alerts.filter((alert) => alert.task_id === task.id);
 
   return (
-    <Card className="min-w-0 overflow-hidden border-border bg-white/68 shadow-[0_8px_24px_rgba(15,23,42,.04)]">
-      <CardHeader className="border-b border-border/60 bg-white/40 p-5">
+    <Card className="min-w-0 overflow-hidden border-border bg-card/68 shadow-[0_8px_24px_rgba(15,23,42,.04)]">
+      <CardHeader className="border-b border-border/60 bg-card/40 p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -609,18 +609,18 @@ export function ReceivingTaskDetailCard({
         <ReceivingConferenceSection task={task} />
 
         {taskAlerts.length > 0 ? (
-          <Alert className="border-amber-200 bg-amber-50 text-amber-900">
+          <Alert className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
             <Sparkles className="size-4" />
             <AlertTitle>Agent Dute observou este recebimento</AlertTitle>
             <AlertDescription>{taskAlerts[0]?.message || taskAlerts[0]?.title}</AlertDescription>
           </Alert>
         ) : (
-          <div className="rounded-[18px] border border-border bg-white/55 px-4 py-3 text-sm text-muted-foreground">
+          <div className="rounded-[18px] border border-border bg-card/55 px-4 py-3 text-sm text-muted-foreground">
             Sem alerta ativo da IA para esta chegada.
           </div>
         )}
 
-        <div className="rounded-[18px] border border-border bg-white/55 px-4 py-3">
+        <div className="rounded-[18px] border border-border bg-card/55 px-4 py-3">
           <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
             <Route className="size-3.5 text-primary" />
             Próximo passo
@@ -902,19 +902,19 @@ export function UnplannedReceiptDialog({
                   <div
                     key={index}
                     className={cn(
-                      "rounded-[22px] border bg-white/65 p-3",
+                      "rounded-[22px] border bg-card/65 p-3",
                       issue?.duplicateInDraft || (existing && line.createNew)
                         ? "border-destructive/25 bg-destructive/5"
                         : existing
                           ? "border-primary/25 bg-primary/5"
                           : mustCreate && !line.createNew
-                            ? "border-amber-200 bg-amber-50/70"
+                            ? "border-warning-soft-border bg-warning-soft/70"
                             : "border-border",
                     )}
                   >
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="outline" className="border-border bg-white/70">
+                        <Badge variant="outline" className="border-border bg-card/70">
                           Linha {index + 1}
                         </Badge>
                         {issue?.duplicateInDraft ? (
@@ -938,11 +938,11 @@ export function UnplannedReceiptDialog({
                             produto existente
                           </Badge>
                         ) : line.createNew ? (
-                          <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">
+                          <Badge variant="outline" className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
                             novo cadastro
                           </Badge>
                         ) : (
-                          <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">
+                          <Badge variant="outline" className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
                             localizar ou cadastrar
                           </Badge>
                         )}
@@ -1008,7 +1008,7 @@ export function UnplannedReceiptDialog({
                     </div>
 
                     {existing ? (
-                      <div className="mt-3 flex flex-col gap-2 rounded-[16px] border border-primary/20 bg-white/70 px-3 py-2 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between">
+                      <div className="mt-3 flex flex-col gap-2 rounded-[16px] border border-primary/20 bg-card/70 px-3 py-2 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between">
                         <div>
                           <span className="font-medium">{existing.productName}</span>
                           <span className="text-muted-foreground">
@@ -1025,7 +1025,7 @@ export function UnplannedReceiptDialog({
                         </Button>
                       </div>
                     ) : mustCreate ? (
-                      <div className="mt-3 rounded-[16px] border border-amber-200 bg-white/75 px-3 py-2 text-sm text-amber-900">
+                      <div className="mt-3 rounded-[16px] border border-warning-soft-border bg-card/75 px-3 py-2 text-sm text-warning-soft-foreground">
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                           <span>
                             Produto não localizado pelo código informado.
@@ -1051,7 +1051,7 @@ export function UnplannedReceiptDialog({
                     ) : null}
 
                     {line.createNew && !existing ? (
-                      <div className="mt-3 space-y-3 rounded-[18px] border border-border bg-white/80 p-3">
+                      <div className="mt-3 space-y-3 rounded-[18px] border border-border bg-card/80 p-3">
                         <div>
                           <div className="text-sm font-semibold text-foreground">
                             Cadastro do novo produto
@@ -1101,7 +1101,7 @@ export function UnplannedReceiptDialog({
                           <label
                             htmlFor={`receipt-photo-${index}`}
                             className={cn(
-                              "inline-flex h-10 cursor-pointer items-center gap-2 rounded-[14px] border border-border bg-white px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted",
+                              "inline-flex h-10 cursor-pointer items-center gap-2 rounded-[14px] border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted",
                               line.photoUploading && "pointer-events-none opacity-60",
                             )}
                           >
@@ -1142,7 +1142,7 @@ export function UnplannedReceiptDialog({
                                 />
                                 <button
                                   type="button"
-                                  className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-full bg-white/90 text-foreground shadow-sm"
+                                  className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-full bg-card/90 text-foreground shadow-sm"
                                   aria-label={`Remover foto ${photoIndex + 1}`}
                                   onClick={() =>
                                     updateLine(index, {
@@ -1175,7 +1175,7 @@ export function UnplannedReceiptDialog({
             />
           </div>
 
-          <div className="grid gap-2 rounded-[18px] border border-border bg-white/65 p-3 text-sm md:grid-cols-3">
+          <div className="grid gap-2 rounded-[18px] border border-border bg-card/65 p-3 text-sm md:grid-cols-3">
             <div>
               <div className="text-xs text-muted-foreground">Peças esperadas</div>
               <div className="mt-1 font-semibold text-foreground">
@@ -1347,13 +1347,13 @@ export function ReceivingConferenceSection({
     }
     if (difference < 0) {
       return (
-        <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">
+        <Badge variant="outline" className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
           falta {formatNumber(Math.abs(difference))}
         </Badge>
       );
     }
     return (
-      <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">
+      <Badge variant="outline" className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
         sobra {formatNumber(difference)}
       </Badge>
     );
@@ -1401,7 +1401,7 @@ export function ReceivingConferenceSection({
   if (!task.items?.length) return null;
 
   return (
-    <div className="rounded-[22px] border border-border bg-white/60 p-4">
+    <div className="rounded-[22px] border border-border bg-card/60 p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h3 className="text-sm font-semibold text-foreground">
@@ -1429,31 +1429,31 @@ export function ReceivingConferenceSection({
       </div>
 
       <div className="mt-4 grid gap-2 md:grid-cols-4">
-        <div className="rounded-[16px] border border-border bg-white/70 px-3 py-2">
+        <div className="rounded-[16px] border border-border bg-card/70 px-3 py-2">
           <div className="text-xs text-muted-foreground">Esperado</div>
           <div className="mt-1 text-lg font-semibold">{formatNumber(summary.expected)} un.</div>
         </div>
-        <div className="rounded-[16px] border border-border bg-white/70 px-3 py-2">
+        <div className="rounded-[16px] border border-border bg-card/70 px-3 py-2">
           <div className="text-xs text-muted-foreground">Físico contado</div>
           <div className="mt-1 text-lg font-semibold">{formatNumber(summary.received)} un.</div>
           <div className="mt-1 text-[11px] text-muted-foreground">
             {formatNumber(conferenceRows.length - summary.invalid)} de {formatNumber(conferenceRows.length)} linha(s)
           </div>
         </div>
-        <div className="rounded-[16px] border border-border bg-white/70 px-3 py-2">
+        <div className="rounded-[16px] border border-border bg-card/70 px-3 py-2">
           <div className="text-xs text-muted-foreground">Diferença</div>
           <div className={cn(
             "mt-1 text-lg font-semibold",
-            summary.difference === 0 ? "text-foreground" : "text-amber-800",
+            summary.difference === 0 ? "text-foreground" : "text-warning-soft-foreground",
           )}>
             {formatDeltaUnits(summary.difference)}
           </div>
         </div>
-        <div className="rounded-[16px] border border-border bg-white/70 px-3 py-2">
+        <div className="rounded-[16px] border border-border bg-card/70 px-3 py-2">
           <div className="text-xs text-muted-foreground">Divergências</div>
           <div className={cn(
             "mt-1 text-lg font-semibold",
-            hasDivergence ? "text-amber-800" : "text-foreground",
+            hasDivergence ? "text-warning-soft-foreground" : "text-foreground",
           )}>
             {formatNumber(summary.divergences)}
           </div>
@@ -1461,7 +1461,7 @@ export function ReceivingConferenceSection({
       </div>
 
       {pendingCodes ? (
-        <Alert className="mt-4 border-amber-200 bg-amber-50 text-amber-900">
+        <Alert className="mt-4 border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
           <AlertTriangle className="size-4" />
           <AlertTitle>Código a definir</AlertTitle>
           <AlertDescription>
@@ -1471,7 +1471,7 @@ export function ReceivingConferenceSection({
       ) : null}
 
       {hasDivergence ? (
-        <Alert className="mt-4 border-amber-200 bg-amber-50 text-amber-900">
+        <Alert className="mt-4 border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
           <AlertTriangle className="size-4" />
           <AlertTitle>Divergência física detectada</AlertTitle>
           <AlertDescription>
@@ -1486,12 +1486,12 @@ export function ReceivingConferenceSection({
             <div
               key={item.id || index}
               className={cn(
-                "rounded-[18px] border bg-white/70 p-3",
+                "rounded-[18px] border bg-card/70 p-3",
                 difference === undefined
                   ? "border-destructive/20"
                   : difference === 0
                     ? "border-border"
-                    : "border-amber-200 bg-amber-50/45",
+                    : "border-warning-soft-border bg-warning-soft/45",
               )}
             >
               <div className="grid gap-3 md:grid-cols-[minmax(0,1.35fr)_104px_120px_120px]">
@@ -1504,13 +1504,13 @@ export function ReceivingConferenceSection({
                   </div>
                   {needsCode ? (
                     <div className="mt-2 space-y-1">
-                      <Label className="text-xs text-amber-800">Código da etiqueta · esperado {formatNumber(Number(expected))} un.</Label>
+                      <Label className="text-xs text-warning-soft-foreground">Código da etiqueta · esperado {formatNumber(Number(expected))} un.</Label>
                       <Input
                         value={line?.code ?? ""}
                         onChange={(event) => setLine(index, { code: event.target.value })}
                         placeholder="Código a definir"
                         aria-label="Código da etiqueta"
-                        className={cn(!line?.code.trim() && "border-amber-400")}
+                        className={cn(!line?.code.trim() && "border-warning")}
                       />
                       {item.notes ? <div className="text-[11px] text-muted-foreground">{item.notes}</div> : null}
                     </div>

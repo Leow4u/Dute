@@ -41,10 +41,10 @@ async function fetchJson<T>(url: string): Promise<T> {
 }
 
 const TONE_STYLE: Record<HomeInboxTone, { icon: LucideIcon; box: string }> = {
-  critical: { icon: AlertTriangle, box: "bg-red-50 text-red-700" },
-  attention: { icon: ClipboardList, box: "bg-amber-50 text-amber-700" },
-  info: { icon: Truck, box: "bg-blue-50 text-blue-700" },
-  agent: { icon: Sparkles, box: "bg-violet-50 text-violet-700" },
+  critical: { icon: AlertTriangle, box: "bg-destructive-soft text-destructive-soft-foreground" },
+  attention: { icon: ClipboardList, box: "bg-warning-soft text-warning-soft-foreground" },
+  info: { icon: Truck, box: "bg-info-soft text-info-soft-foreground" },
+  agent: { icon: Sparkles, box: "bg-agent-soft text-agent" },
 };
 
 const ITEM_ICON: Record<string, LucideIcon> = {
@@ -177,7 +177,7 @@ export default function Home() {
               "Nada parado esperando por você."
             ) : (
               <>
-                <span className="font-semibold text-red-700">
+                <span className="font-semibold text-destructive-soft-foreground">
                   {pending === 1 ? "1 item" : `${pending} itens`}
                 </span>{" "}
                 {pending === 1 ? "precisa" : "precisam"} de você.
@@ -211,7 +211,7 @@ export default function Home() {
                   ))}
                 </div>
               ) : pending === 0 ? (
-                <div className="flex items-center gap-3 px-5 py-8 text-emerald-700">
+                <div className="flex items-center gap-3 px-5 py-8 text-success-soft-foreground">
                   <CheckCircle2 className="size-5" aria-hidden="true" />
                   <span className="font-medium">Tudo em dia.</span>
                 </div>

@@ -210,11 +210,11 @@ export default function SettingsCustomer() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="min-w-0 space-y-4">
-          <section className="overflow-hidden rounded-[18px] border border-border bg-white">
+          <section className="overflow-hidden rounded-[18px] border border-border bg-card">
             <div className="flex items-center justify-between border-b border-border/60 px-5 py-3.5">
               <h2 className="text-sm font-semibold">Contrato</h2>
               {customer ? (
-                <span className="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                <span className="rounded-md bg-info-soft px-2 py-0.5 text-xs font-semibold text-info-soft-foreground">
                   {customer.status === "paused" ? "Pausado" : "Ativo"}
                 </span>
               ) : null}
@@ -232,7 +232,7 @@ export default function SettingsCustomer() {
             )}
           </section>
 
-          <section className="overflow-hidden rounded-[18px] border border-border bg-white">
+          <section className="overflow-hidden rounded-[18px] border border-border bg-card">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 px-5 py-3.5">
               <h2 className="text-sm font-semibold">Quem da BTG acessa o portal</h2>
               <Link
@@ -255,7 +255,7 @@ export default function SettingsCustomer() {
                       !person.active && "text-muted-foreground",
                     )}
                   >
-                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-blue-50 text-xs font-semibold text-blue-700">
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-info-soft text-xs font-semibold text-info-soft-foreground">
                       {initials(person.name)}
                     </span>
                     <div className="min-w-0 flex-1">
@@ -285,7 +285,7 @@ export default function SettingsCustomer() {
         <aside className="h-fit space-y-3">
           <Link
             href="/faturamento"
-            className="block rounded-[18px] border border-border bg-white px-5 py-4 transition-colors hover:border-primary/40"
+            className="block rounded-[18px] border border-border bg-card px-5 py-4 transition-colors hover:border-primary/40"
           >
             <div className="text-xs text-muted-foreground">Cobrança</div>
             <div className="mt-1 text-lg font-semibold">{billingModeLabel(customer?.billing_mode)}</div>

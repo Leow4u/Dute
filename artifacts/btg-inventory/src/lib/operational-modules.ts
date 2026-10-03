@@ -56,10 +56,10 @@ export const MODULE_STATUS_LABEL: Record<OperationalModuleStatus, string> = {
 };
 
 export const MODULE_STATUS_CLASS: Record<OperationalModuleStatus, string> = {
-  online: "border-blue-200 bg-blue-50 text-blue-700",
-  partial: "border-amber-200 bg-amber-50 text-amber-800",
-  foundation: "border-blue-200 bg-blue-50 text-blue-700",
-  planned: "border-border bg-white/70 text-muted-foreground",
+  online: "border-info-soft-border bg-info-soft text-info-soft-foreground",
+  partial: "border-warning-soft-border bg-warning-soft text-warning-soft-foreground",
+  foundation: "border-info-soft-border bg-info-soft text-info-soft-foreground",
+  planned: "border-border bg-card/70 text-muted-foreground",
 };
 
 export const OPERATIONAL_MODULES: OperationalModule[] = [

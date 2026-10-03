@@ -35,6 +35,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import AppLayout from "./components/layout/app-layout";
+import { AppThemeProvider } from "./components/theme/theme-provider";
 import SettingsLayout from "./components/layout/settings-layout";
 import type { WarehouseOpsModuleKey } from "./lib/warehouse-ops/model";
 import NotFound from "./pages/not-found";
@@ -1071,35 +1072,37 @@ function ProtectedRoute({
 function AppRoutes() {
   return (
     <AuthProvider>
-      <QueryClientProvider client={queryClient}>
-        <QueryClientCacheInvalidator />
-        <RealtimeSyncBridge />
-        <TooltipProvider>
-          <ChunkErrorBoundary>
-            <Suspense
-              fallback={
-                <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
-                  Carregando...
-                </div>
-              }
-            >
-              <Switch>
-                <Route path="/" component={HomeRedirect} />
-                <Route path="/sign-in/*?" component={SignInPage} />
-                <Route path="/convite/*?" component={SignUpPage} />
-                <Route path="/sign-up/*?" component={SignUpPage} />
+      <AppThemeProvider>
+        <QueryClientProvider client={queryClient}>
+          <QueryClientCacheInvalidator />
+          <RealtimeSyncBridge />
+          <TooltipProvider>
+            <ChunkErrorBoundary>
+              <Suspense
+                fallback={
+                  <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+                    Carregando...
+                  </div>
+                }
+              >
+                <Switch>
+                  <Route path="/" component={HomeRedirect} />
+                  <Route path="/sign-in/*?" component={SignInPage} />
+                  <Route path="/convite/*?" component={SignUpPage} />
+                  <Route path="/sign-up/*?" component={SignUpPage} />
 
-                {PROTECTED_ROUTES.map((route) => (
-                  <ProtectedRoute key={route.path} {...route} />
-                ))}
+                  {PROTECTED_ROUTES.map((route) => (
+                    <ProtectedRoute key={route.path} {...route} />
+                  ))}
 
-                <Route component={NotFound} />
-              </Switch>
-            </Suspense>
-          </ChunkErrorBoundary>
-          <Toaster />
-        </TooltipProvider>
-      </QueryClientProvider>
+                  <Route component={NotFound} />
+                </Switch>
+              </Suspense>
+            </ChunkErrorBoundary>
+            <Toaster />
+          </TooltipProvider>
+        </QueryClientProvider>
+      </AppThemeProvider>
     </AuthProvider>
   );
 }

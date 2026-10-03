@@ -61,7 +61,7 @@ import { cn } from "@/lib/utils";
  */
 
 const field =
-  "w-full min-w-0 rounded-lg border border-border bg-white px-2.5 py-1.5 text-sm outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/15";
+  "w-full min-w-0 rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/15";
 
 async function postJson<T>(url: string, body: unknown) {
   return fetchChatJson<T>(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -89,13 +89,13 @@ export function RoutineFields({ form, onChange, idPrefix, disabled }: { form: Ro
     <fieldset disabled={disabled} className="flex flex-col gap-4">
       <label className="flex flex-col gap-1.5" htmlFor={`${idPrefix}-name`}>
         <span className="text-sm font-semibold">
-          Nome <span className="text-amber-700">*</span>
+          Nome <span className="text-warning-soft-foreground">*</span>
         </span>
         <input id={`${idPrefix}-name`} value={form.name} maxLength={80} onChange={(event) => set({ name: event.target.value })} placeholder="Ex.: Resumo da semana" className={field} />
       </label>
       <label className="flex flex-col gap-1.5" htmlFor={`${idPrefix}-prompt`}>
         <span className="text-sm font-semibold">
-          O que o Agent Dute deve responder <span className="text-amber-700">*</span>
+          O que o Agent Dute deve responder <span className="text-warning-soft-foreground">*</span>
         </span>
         <textarea
           id={`${idPrefix}-prompt`}
@@ -119,7 +119,7 @@ export function RoutineFields({ form, onChange, idPrefix, disabled }: { form: Ro
               onClick={() => set({ frequency: option.value })}
               className={cn(
                 "rounded-lg px-3 py-1.5 text-sm",
-                form.frequency === option.value ? "bg-white font-semibold text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                form.frequency === option.value ? "bg-card font-semibold text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
               )}
             >
               {option.label}
@@ -138,7 +138,7 @@ export function RoutineFields({ form, onChange, idPrefix, disabled }: { form: Ro
                   onClick={() => set({ days: selected ? form.days.filter((item) => item !== day) : [...form.days, day] })}
                   className={cn(
                     "rounded-lg border px-2.5 py-1 text-sm",
-                    selected ? "border-[#5b3fc4] bg-[#5b3fc4] text-white" : "border-border bg-white text-foreground/80 hover:bg-muted",
+                    selected ? "border-agent bg-agent text-agent-foreground" : "border-border bg-card text-foreground/80 hover:bg-muted",
                   )}
                 >
                   {WEEKDAYS[day]}
@@ -195,16 +195,16 @@ function RoutineDialog({ routine, open, onClose }: { routine: Routine | null; op
   });
   return (
     <Dialog open={open} onOpenChange={(next) => (!next && !save.isPending ? onClose() : undefined)}>
-      <DialogContent className="max-w-2xl bg-white">
+      <DialogContent className="max-w-2xl bg-card">
         <DialogHeader>
           <DialogTitle>{routine ? "Editar rotina" : "Nova rotina"}</DialogTitle>
           <DialogDescription>O Agent Dute responde sozinho no horário marcado. Só consulta: a rotina nunca faz pedido nem muda dado.</DialogDescription>
         </DialogHeader>
         <RoutineFields form={form} onChange={setForm} idPrefix={`routine-${routine?.id ?? "new"}`} disabled={save.isPending} />
         <DialogFooter className="items-center gap-2 sm:justify-between">
-          <span className="text-xs text-amber-800">{problem ?? ""}</span>
+          <span className="text-xs text-warning-soft-foreground">{problem ?? ""}</span>
           <div className="flex gap-2">
-            <button type="button" onClick={onClose} disabled={save.isPending} className="rounded-xl border border-border bg-white px-3.5 py-2 text-sm font-medium hover:bg-muted">
+            <button type="button" onClick={onClose} disabled={save.isPending} className="rounded-xl border border-border bg-card px-3.5 py-2 text-sm font-medium hover:bg-muted">
               Cancelar
             </button>
             <button
@@ -251,7 +251,7 @@ function RoutineCard({ routine, onEdit, onOpenConversation }: { routine: Routine
   const state = !routine.active ? "Pausada" : routine.last_status === "failed" ? "Falhou na última vez" : "Ativa";
 
   return (
-    <div className="group relative rounded-xl border border-border bg-white hover:border-[#5b3fc4]/50">
+    <div className="group relative rounded-xl border border-border bg-card hover:border-agent/50">
       <button type="button" onClick={onEdit} className="flex w-full flex-col gap-1 px-3 py-2.5 pr-10 text-left">
         <span className="truncate text-sm font-semibold">{routine.name}</span>
         <span className="line-clamp-2 text-xs text-foreground/70">{routine.prompt}</span>
@@ -292,7 +292,7 @@ function RoutineCard({ routine, onEdit, onOpenConversation }: { routine: Routine
             </DropdownMenuItem>
           ) : null}
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => setConfirmDelete(true)} className="text-red-700 focus:text-red-700">
+          <DropdownMenuItem onSelect={() => setConfirmDelete(true)} className="text-destructive-soft-foreground focus:text-destructive-soft-foreground">
             <Trash2 className="h-4 w-4" /> Apagar
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -327,7 +327,7 @@ export function RoutinesPanel({ onOpenConversation, onCollapse }: { onOpenConver
     <div className="flex h-full min-h-0 w-full flex-col gap-3 px-3 py-4">
       <div className="flex items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
-          <CalendarClock className="h-4 w-4 text-[#5b3fc4]" aria-hidden="true" /> Rotinas
+          <CalendarClock className="h-4 w-4 text-agent" aria-hidden="true" /> Rotinas
         </h2>
         {onCollapse ? (
           <button type="button" onClick={onCollapse} aria-label="Recolher rotinas" title="Recolher" className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted">
@@ -340,7 +340,7 @@ export function RoutinesPanel({ onOpenConversation, onCollapse }: { onOpenConver
         type="button"
         disabled={list.length >= MAX_ROUTINES}
         onClick={() => setEditing("new")}
-        className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-[#d9d0fb] bg-white px-3 py-2 text-sm font-semibold text-[#5b3fc4] hover:bg-[#faf8ff] disabled:opacity-50"
+        className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-agent-border bg-card px-3 py-2 text-sm font-semibold text-agent hover:bg-agent-soft disabled:opacity-50"
       >
         <Plus className="h-4 w-4" /> Criar rotina
       </button>
@@ -348,7 +348,7 @@ export function RoutinesPanel({ onOpenConversation, onCollapse }: { onOpenConver
         {routines.isLoading ? (
           <p className="text-sm text-muted-foreground">Carregando…</p>
         ) : routines.isError ? (
-          <p className="text-sm text-red-700">Não consegui carregar as rotinas.</p>
+          <p className="text-sm text-destructive-soft-foreground">Não consegui carregar as rotinas.</p>
         ) : list.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nenhuma rotina ainda. Crie uma aqui ou peça no chat, por exemplo: "toda segunda às 8h me manda o resumo da semana".</p>
         ) : (
@@ -375,7 +375,7 @@ export function RoutinesCollapsed({ onExpand }: { onExpand: () => void }) {
       <button type="button" onClick={onExpand} aria-label="Abrir rotinas" title="Rotinas" className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted">
         <PanelRightOpen className="h-4 w-4" />
       </button>
-      <button type="button" onClick={onExpand} aria-label="Rotinas" className="grid h-9 w-9 place-items-center rounded-lg text-[#5b3fc4] hover:bg-muted">
+      <button type="button" onClick={onExpand} aria-label="Rotinas" className="grid h-9 w-9 place-items-center rounded-lg text-agent hover:bg-muted">
         <CalendarClock className="h-4 w-4" />
       </button>
     </div>

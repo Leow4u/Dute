@@ -45,6 +45,40 @@
   --color-success-foreground: hsl(var(--success-foreground));
   --color-warning: hsl(var(--warning));
   --color-warning-foreground: hsl(var(--warning-foreground));
+  --color-warning-soft: hsl(var(--warning-soft));
+  --color-warning-soft-border: hsl(var(--warning-soft-border));
+  --color-warning-soft-foreground: hsl(var(--warning-soft-foreground));
+  --color-success-soft: hsl(var(--success-soft));
+  --color-success-soft-border: hsl(var(--success-soft-border));
+  --color-success-soft-foreground: hsl(var(--success-soft-foreground));
+  --color-info-soft: hsl(var(--info-soft));
+  --color-info-soft-border: hsl(var(--info-soft-border));
+  --color-info-soft-foreground: hsl(var(--info-soft-foreground));
+  --color-destructive-soft: hsl(var(--destructive-soft));
+  --color-destructive-soft-border: hsl(var(--destructive-soft-border));
+  --color-destructive-soft-foreground: hsl(var(--destructive-soft-foreground));
+
+  --color-agent: hsl(var(--agent));
+  --color-agent-hover: hsl(var(--agent-hover));
+  --color-agent-foreground: hsl(var(--agent-foreground));
+  --color-agent-strong: hsl(var(--agent-strong));
+  --color-agent-muted: hsl(var(--agent-muted));
+  --color-agent-accent: hsl(var(--agent-accent));
+  --color-agent-soft: hsl(var(--agent-soft));
+  --color-agent-soft-border: hsl(var(--agent-soft-border));
+  --color-agent-soft-hover: hsl(var(--agent-soft-hover));
+  --color-agent-border: hsl(var(--agent-border));
+  --color-agent-divider: hsl(var(--agent-divider));
+  --color-agent-start: hsl(var(--agent-start));
+
+  /* Superfícies neutras: borda de vidro dos cards e hover/pressed de botões. */
+  --color-card-edge: hsl(var(--card-edge));
+  --color-surface-hover: hsl(var(--primary-soft-hover));
+  --color-surface-pressed: hsl(var(--primary-soft-pressed));
+
+  /* Barras do gráfico de faturamento do portal (mês em destaque / demais). */
+  --color-chart-bar: hsl(var(--chart-bar));
+  --color-chart-bar-soft: hsl(var(--chart-bar-soft));
 
   --color-chart-1: hsl(var(--chart-1));
   --color-chart-2: hsl(var(--chart-2));
@@ -88,6 +122,9 @@
 
   --background: 60 17% 98%; /* #FAFAF8 */
   --foreground: 217 33% 18%; /* #1E293B */
+  --canvas-glow-1: rgba(237, 245, 242, .9);
+  --canvas-glow-2: rgba(245, 242, 233, .85);
+  --canvas-glow-3: rgba(238, 244, 248, .85);
 
   --border: 220 24% 94%; /* #ECEEF2 */
   --input: 210 20% 92%; /* #E8EBEF */
@@ -124,6 +161,38 @@
   
   --warning: 38 92% 50%;
   --warning-foreground: 217 33% 18%;
+  /* Aviso suave (cartão "atenção" do WMS): antes amber-50 / amber-200 / amber-800. */
+  --warning-soft: 48 100% 96%;
+  --warning-soft-border: 48 97% 77%;
+  --warning-soft-foreground: 26 83% 31%;
+  /* Mesma família para os outros estados (antes emerald/blue/rose 50/200/700). */
+  --success-soft: 152 81% 96%;
+  --success-soft-border: 152 76% 80%;
+  --success-soft-foreground: 161 94% 24%;
+  --info-soft: 214 100% 97%;
+  --info-soft-border: 213 97% 87%;
+  --info-soft-foreground: 224 76% 48%;
+  --destructive-soft: 356 100% 97%;
+  --destructive-soft-border: 353 96% 90%;
+  --destructive-soft-foreground: 345 83% 41%;
+
+  /* Identidade do Agente Dute (roxo). Antes hex solto: #5b3fc4, #4c33a8,
+     #3b2a85, #7a66c9, #8b5cf6, #faf8ff, #c9b8fb. */
+  --agent: 253 54% 51%;
+  --agent-hover: 253 53% 43%;
+  --agent-foreground: 0 0% 100%;
+  --agent-strong: 251 52% 34%;
+  --agent-muted: 252 48% 59%;
+  --agent-accent: 258 90% 66%;
+  --agent-soft: 257 100% 99%;
+  --agent-soft-border: 255 89% 85%;
+  --agent-soft-hover: 255 89% 96%; /* #f2eefe */
+  --agent-border: 253 84% 90%; /* #d9d0fb */
+  --agent-divider: 255 86% 95%; /* #ebe5fd */
+  --agent-start: 228 94% 67%; /* #5b7cfa, início do gradiente da marca */
+  --card-edge: 0 0% 100%; /* era border-white/NN */
+  --chart-bar: 213 68% 50%; /* #2a78d6 */
+  --chart-bar-soft: 213 69% 80%; /* #a9c8ef */
 
   --chart-1: 219 91% 70%;
   --chart-2: 212 78% 76%;
@@ -171,8 +240,11 @@
   --elevate-1: rgba(255, 255, 255, 0.04);
   --elevate-2: rgba(255, 255, 255, 0.09);
 
-  --background: 222 47% 5%; /* #060a13 */
+  --background: 222 47% 5%; /* #060a13 — theme-color em lib/theme.ts */
   --foreground: 210 40% 98%;
+  --canvas-glow-1: rgba(30, 58, 138, .18);
+  --canvas-glow-2: rgba(15, 23, 42, .6);
+  --canvas-glow-3: rgba(30, 64, 175, .12);
 
   --border: 216 34% 17%;
   --input: 216 34% 17%;
@@ -188,6 +260,9 @@
 
   --primary: 212 98% 40%;
   --primary-foreground: 0 0% 100%;
+  --primary-soft: 217 32% 14%;
+  --primary-soft-hover: 217 32% 18%;
+  --primary-soft-pressed: 217 32% 22%;
 
   --secondary: 217 32% 17%;
   --secondary-foreground: 210 40% 98%;
@@ -206,6 +281,34 @@
   
   --warning: 38 60% 30%;
   --warning-foreground: 210 40% 98%;
+  --warning-soft: 35 60% 11%;
+  --warning-soft-border: 35 55% 26%;
+  --warning-soft-foreground: 43 96% 77%;
+  --success-soft: 152 50% 10%;
+  --success-soft-border: 152 45% 24%;
+  --success-soft-foreground: 152 65% 70%;
+  --info-soft: 214 60% 12%;
+  --info-soft-border: 214 55% 28%;
+  --info-soft-foreground: 213 90% 78%;
+  --destructive-soft: 350 50% 11%;
+  --destructive-soft-border: 350 45% 27%;
+  --destructive-soft-foreground: 350 90% 80%;
+
+  --agent: 253 65% 62%;
+  --agent-hover: 253 65% 56%;
+  --agent-foreground: 0 0% 100%;
+  --agent-strong: 255 80% 86%;
+  --agent-muted: 253 40% 66%;
+  --agent-accent: 258 90% 74%;
+  --agent-soft: 253 40% 11%;
+  --agent-soft-border: 253 40% 30%;
+  --agent-soft-hover: 253 40% 15%;
+  --agent-border: 253 35% 26%;
+  --agent-divider: 253 30% 18%;
+  --agent-start: 228 94% 67%;
+  --card-edge: 216 34% 24%;
+  --chart-bar: 213 68% 55%;
+  --chart-bar-soft: 213 45% 38%;
 
   --chart-1: 212 98% 40%;
   --chart-2: 212 80% 50%;
@@ -223,6 +326,20 @@
   --sidebar-ring: 212 98% 30%;
 }
 
+/* Documento de impressão (fatura, relatório do portal) é papel: fica claro
+   nos dois temas. Os componentes dentro dele que leem token (gráfico de
+   barras do relatório) recebem os valores do tema claro. */
+.print-area {
+  color-scheme: light;
+  --background: 60 17% 98%;
+  --foreground: 217 33% 18%;
+  --border: 220 24% 94%;
+  --card: 0 0% 100%;
+  --card-foreground: 217 33% 18%;
+  --muted: 60 12% 96%;
+  --muted-foreground: 215 16% 47%;
+}
+
 @layer base {
   * {
     @apply border-border;
@@ -230,18 +347,19 @@
   html {
     height: 100%;
     overflow: hidden;
-    background: #FAFAF8;
+    background: hsl(var(--background));
   }
   body {
     @apply font-sans antialiased bg-background text-foreground;
     height: 100%;
     min-height: 100dvh;
     overflow: hidden;
+    /* Brilhos do canvas vêm de --canvas-glow-*, definidos por tema acima. */
     background:
-      radial-gradient(circle at top left, rgba(237, 245, 242, .9) 0%, rgba(237, 245, 242, 0) 35%),
-      radial-gradient(circle at bottom left, rgba(245, 242, 233, .85) 0%, rgba(245, 242, 233, 0) 40%),
-      radial-gradient(circle at top right, rgba(238, 244, 248, .85) 0%, rgba(238, 244, 248, 0) 30%),
-      #FAFAF8;
+      radial-gradient(circle at top left, var(--canvas-glow-1) 0%, transparent 35%),
+      radial-gradient(circle at bottom left, var(--canvas-glow-2) 0%, transparent 40%),
+      radial-gradient(circle at top right, var(--canvas-glow-3) 0%, transparent 30%),
+      hsl(var(--background));
   }
   #root {
     height: 100dvh;
