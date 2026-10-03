@@ -34,9 +34,11 @@ export type LogEntry = {
   jsonPayload?: { message?: unknown; [key: string]: unknown };
   resource?: { labels?: { service_name?: string } };
   httpRequest?: { status?: number };
+  // Log de auditoria do Google Cloud (deploy, permissão): vem sem service_name.
+  protoPayload?: { methodName?: string; resourceName?: string; status?: { message?: string } };
 };
 
-export type ErrorGroup = { service: string; message: string; count: number; first_at: string; last_at: string; blocked: boolean };
+export type ErrorGroup = { service: string; message: string; count: number; first_at: string; last_at: string; blocked: boolean; admin: boolean };
 
 export function errorsFilter(since: Date) {
   // Erros das functions e do site, mais as chamadas recusadas com 403 na
@@ -53,29 +55,54 @@ export function isBlocked(entry: LogEntry) {
   return (entry.logName ?? "").endsWith("run.googleapis.com%2Frequests") && entry.httpRequest?.status === 403;
 }
 
-/** Primeira linha da mensagem, sem números de linha nem ids que mudam a cada erro. */
+export function isAdmin(entry: LogEntry) {
+  return (entry.logName ?? "").includes("cloudaudit.googleapis.com");
+}
+
+/** Serviço do Cloud Run do registro; na auditoria, sai do recurso ou da mensagem. */
+export function errorService(entry: LogEntry) {
+  const label = entry.resource?.labels?.service_name;
+  if (label) return label;
+  const proto = entry.protoPayload;
+  const fromResource = proto?.resourceName?.match(/services\/([^/]+)/)?.[1];
+  const fromMessage = proto?.status?.message?.match(/Resource '([^']+)' of kind 'SERVICE'/)?.[1];
+  return fromResource ?? fromMessage ?? "desconhecido";
+}
+
+const MESSAGE_LIMIT = 240;
+
+/**
+ * Mensagem sem a pilha de chamadas: as linhas "at ..." saem, o resto vira uma
+ * linha só (erro de validação do Zod explica o campo nas linhas seguintes).
+ */
 export function errorMessage(entry: LogEntry) {
   if (isBlocked(entry)) return BLOCKED_MESSAGE;
+  const proto = entry.protoPayload;
+  if (proto?.status?.message) {
+    const method = (proto.methodName ?? "").split(".").at(-1);
+    return `${method ? `${method}: ` : ""}${proto.status.message}`.slice(0, MESSAGE_LIMIT);
+  }
   const payload = entry.jsonPayload;
-  const raw =
-    entry.textPayload ??
-    (typeof payload?.message === "string" ? payload.message : null) ??
-    (payload ? JSON.stringify(payload) : "") ??
-    "";
-  const firstLine = raw.split("\n").find((line) => line.trim()) ?? "";
-  return firstLine.trim().slice(0, 200) || "(sem mensagem)";
+  const raw = entry.textPayload ?? (typeof payload?.message === "string" ? payload.message : payload ? JSON.stringify(payload) : "");
+  const text = raw
+    .split("\n")
+    .filter((line) => !/^\s+at\s/.test(line))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text.slice(0, MESSAGE_LIMIT) || "(sem mensagem)";
 }
 
 export function groupErrors(entries: LogEntry[]) {
   const groups = new Map<string, ErrorGroup>();
   for (const entry of entries) {
-    const service = entry.resource?.labels?.service_name ?? "desconhecido";
+    const service = errorService(entry);
     const message = errorMessage(entry);
     const at = entry.timestamp ?? "";
     const key = `${service}\u0000${message}`;
     const current = groups.get(key);
     if (!current) {
-      groups.set(key, { service, message, count: 1, first_at: at, last_at: at, blocked: isBlocked(entry) });
+      groups.set(key, { service, message, count: 1, first_at: at, last_at: at, blocked: isBlocked(entry), admin: isAdmin(entry) });
       continue;
     }
     current.count += 1;

@@ -89,6 +89,11 @@ function ErrorsPanel({ infra }: { infra: SystemInfra }) {
                 <span className="flex min-w-0 items-center gap-2">
                   <b className="truncate">{name(group.service)}</b>
                   {group.blocked ? <span className="shrink-0 rounded-full bg-destructive-soft px-2 py-0.5 text-xs font-semibold text-destructive-soft-foreground">bloqueada</span> : null}
+                  {group.admin ? (
+                    <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-foreground" title="Registro de auditoria: deploy ou permissão no Google Cloud">
+                      Google Cloud
+                    </span>
+                  ) : null}
                 </span>
                 <span className="shrink-0 font-semibold tabular-nums">{group.count}×</span>
               </div>
