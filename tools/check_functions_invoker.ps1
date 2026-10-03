@@ -30,6 +30,12 @@ param(
 # estado da function (gcloud functions describe) tambem conta: diferente de
 # ACTIVE e "NAO PUBLICADA", com o firebase deploy certo. Se o describe nao
 # responder, vale so a politica, como antes.
+#
+# 02/10/2026 (painel do sistema): o deploy parou no timeout de descoberta e
+# as 2 callables novas nem foram criadas, mas o get-iam-policy devolveu uma
+# politica vazia com etag e o script disse "FALTA"; o add-iam-policy-binding
+# respondeu NOT_FOUND. A existencia agora vem do "run services describe",
+# que nao imprime nada quando o servico nao existe.
 
 $ErrorActionPreference = "Continue"
 
@@ -55,9 +61,13 @@ $notFound = @()
 
 foreach ($fn in $exports) {
   $service = $fn.ToLower()
-  $json = (gcloud run services get-iam-policy $service `
-    --project $ProjectId --region $Region --format=json 2>$null | Out-String).Trim()
-  if (-not $json -or $json -notmatch '"etag"') {
+  $exists = (gcloud run services describe $service `
+    --project $ProjectId --region $Region --format="value(metadata.name)" 2>$null | Out-String).Trim()
+  $json = if ($exists) {
+    (gcloud run services get-iam-policy $service `
+      --project $ProjectId --region $Region --format=json 2>$null | Out-String).Trim()
+  }
+  if (-not $exists -or -not $json -or $json -notmatch '"etag"') {
     Write-Host "NAO PUBLICADA $service - nao existe no Cloud Run" -ForegroundColor Red
     $notFound += $fn
     continue

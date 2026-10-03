@@ -100,6 +100,10 @@ Genkit isso às vezes passa. Aumente antes do deploy:
 $env:FUNCTIONS_DISCOVERY_TIMEOUT = "60"
 ```
 
+Se ainda der "Timeout after 60000", suba para `"180"`. O código carrega em
+poucos segundos; a demora é da máquina na hora (em 02/10/2026, 60 s não bastou
+e 180 s publicou). Nada é publicado quando o deploy para aqui.
+
 ## Incidente de 03/09/2026 — invoker ausente em 8 callables
 
 Um cliente tentou montar um pedido no portal (`/portal/estoque`, papel
@@ -164,3 +168,17 @@ política, como antes. Na lista de "FALTA", o script também avisa que
 
 Function agendada nova (`onSchedule`) usa o Cloud Scheduler. Agora a API já
 está ativa em `dute-btg`; em outro projeto, o deploy pode precisar ativá-la.
+
+## 02/10/2026 — function que nunca subiu aparecendo como "FALTA" (painel do sistema)
+
+O deploy do PR #57 parou em "User code failed to load … Timeout after 60000",
+então `getSystemDashboard` e `saveAgentCostSettings` nem foram criadas. Mesmo
+assim o script disse "FALTA … sem invoker": o `gcloud run services
+get-iam-policy` devolveu uma política vazia com `etag` para um serviço que não
+existia, e o `gcloud functions describe` não respondeu (o que o script já
+tratava como "decide pela política"). O `add-iam-policy-binding` respondeu
+`NOT_FOUND`.
+
+Agora o script decide se o serviço existe pelo `gcloud run services describe`
+(sem saída quando não existe) antes de olhar a política. Serviço inexistente
+aparece como **NAO PUBLICADA** e sugere o `firebase deploy`.
