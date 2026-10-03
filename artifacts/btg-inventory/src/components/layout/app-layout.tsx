@@ -37,6 +37,7 @@ import {
   type ModuleRoute,
 } from "@/lib/modules";
 import { AgentDock } from "@/components/agent/agent-dock";
+import { SidebarBrand } from "@/components/layout/sidebar-brand";
 import { agentPathFor, isAgentScreen, isAgentShortcut } from "@/lib/agent-chat";
 import { useAppAuth, useAppUser, type AppUser } from "@/lib/auth";
 import { usePwaInstall } from "@/lib/pwa-install";
@@ -574,14 +575,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             collapsed ? "justify-center" : "justify-between gap-3",
           )}
         >
-          <img
-            src={`${basePath}/dutelog-logo.png`}
-            alt="Dutelog Soluções Logísticas"
-            className={cn(
-              "h-9 w-auto object-contain transition-[max-width] duration-200",
-              collapsed ? "max-w-[56px]" : "max-w-[168px]",
-            )}
-          />
+          <SidebarBrand basePath={basePath} collapsed={collapsed} />
           <Tooltip>
             <TooltipTrigger asChild>
               <button
