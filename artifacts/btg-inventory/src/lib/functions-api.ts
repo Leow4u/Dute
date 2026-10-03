@@ -211,6 +211,13 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
   if (method === "POST" && pathname === "/api/system/agent-costs") {
     return { name: "saveAgentCostSettings", payload: async (_pathname, init) => readJsonBody(init) };
   }
+  // Infraestrutura (só owner): erros do servidor, functions publicadas, custo real.
+  if (method === "GET" && pathname === "/api/system/infra") {
+    return { name: "getSystemInfra", payload: async () => ({}) };
+  }
+  if (method === "POST" && pathname === "/api/system/infra-settings") {
+    return { name: "saveSystemInfraSettings", payload: async (_pathname, init) => readJsonBody(init) };
+  }
 
   if (method === "GET" && pathname === "/api/system/health") {
     return { name: "getSystemHealth", status: 200, payload: async () => ({}) };

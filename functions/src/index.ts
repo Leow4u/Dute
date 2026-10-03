@@ -1,4 +1,4 @@
-import { initializeApp } from "firebase-admin/app";
+import { applicationDefault, initializeApp } from "firebase-admin/app";
 import {
   getFirestore,
   FieldValue,
@@ -55,6 +55,7 @@ import { MinimumStockError, normalizeMinimumStock } from "./catalog-minimum.js";
 import { setUserAccessTransaction } from "./domain/access.js";
 import { readSystemHealth } from "./domain/system-health.js";
 import { CostSettingsSchema, readSystemDashboard, saveCostSettings } from "./domain/system-dashboard.js";
+import { codeFunctions, InfraSettingsSchema, readSystemInfra, saveInfraSettings, type GcpFetch } from "./domain/system-infra.js";
 import {
   projectMinimumStock,
   readClientInventoryForSku,
@@ -7246,4 +7247,38 @@ export const saveAgentCostSettings = onCall(async (request) => {
   const parsed = CostSettingsSchema.safeParse(request.data ?? {});
   if (!parsed.success) throw new HttpsError("invalid-argument", "Preços e orçamento precisam ser números positivos.");
   return saveCostSettings(db, profile, parsed.data);
+});
+
+/** Chamada autenticada às APIs do Google Cloud com a conta de serviço da function. */
+const gcpFetch: GcpFetch = async (url, init) => {
+  const { access_token } = await applicationDefault().getAccessToken();
+  const response = await fetch(url, {
+    method: init?.method ?? "GET",
+    headers: { Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },
+    body: init?.body,
+  });
+  const text = await response.text();
+  let json: unknown = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    json = { error: { message: text.slice(0, 300) } };
+  }
+  return { status: response.status, json };
+};
+
+/** Configuração > Sistema, infraestrutura: erros de 24 h, functions publicadas e custo real. Só owner. */
+export const getSystemInfra = onCall({ timeoutSeconds: 90 }, async (request) => {
+  const profile = await getProfile(request);
+  // As functions do próprio código: o que deveria estar publicado.
+  const code = codeFunctions((await import("./index.js")) as Record<string, unknown>);
+  return readSystemInfra(db, profile, { gcp: gcpFetch, code, project: "dute-btg", region: "southamerica-east1" });
+});
+
+/** Tabela da exportação do faturamento no BigQuery (custo real no painel). Só owner. */
+export const saveSystemInfraSettings = onCall(async (request) => {
+  const profile = await getProfile(request);
+  const parsed = InfraSettingsSchema.safeParse(request.data ?? {});
+  if (!parsed.success) throw new HttpsError("invalid-argument", parsed.error.issues[0]?.message ?? "Tabela inválida.");
+  return saveInfraSettings(db, profile, parsed.data);
 });
