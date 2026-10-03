@@ -20,7 +20,7 @@ const infra: SystemInfra = {
     total: 7,
     blocked: 3,
     services: 2,
-    groups: [{ service: "readshipmentinvoice", message: "x", count: 5, first_at: "", last_at: "", blocked: false }],
+    groups: [{ service: "readshipmentinvoice", message: "x", count: 5, first_at: "", last_at: "", blocked: false, admin: false }],
   },
   functions: {
     status: "ok",

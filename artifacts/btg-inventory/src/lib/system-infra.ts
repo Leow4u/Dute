@@ -5,7 +5,7 @@
 
 export type Section<T> = ({ status: "ok" } & T) | { status: "error"; message: string } | { status: "not_configured" };
 
-export type ErrorGroup = { service: string; message: string; count: number; first_at: string; last_at: string; blocked: boolean };
+export type ErrorGroup = { service: string; message: string; count: number; first_at: string; last_at: string; blocked: boolean; admin: boolean };
 export type FunctionStatus = "ok" | "sem_acesso" | "nao_publicada";
 export type FunctionRow = { name: string; service: string; status: FunctionStatus; state: string | null; updated_at: string | null; fix: string | null };
 

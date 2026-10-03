@@ -49,6 +49,42 @@ describe("painel do sistema: erros do servidor", () => {
     assert.match(summary.groups[2]!.message, /403 antes do código rodar/);
   });
 
+  it("auditoria do Google Cloud: lê a function e o status (02/10, add-iam-policy-binding em function que não existia)", () => {
+    const audit = (resource: string): LogEntry => ({
+      timestamp: "2026-10-02T22:20:00Z",
+      severity: "ERROR",
+      logName: "projects/dute-btg/logs/cloudaudit.googleapis.com%2Factivity",
+      resource: { labels: { service_name: "" } },
+      protoPayload: {
+        methodName: "google.cloud.run.v1.Services.SetIamPolicy",
+        resourceName: `namespaces/dute-btg/services/${resource}`,
+        status: { message: `Resource '${resource}' of kind 'SERVICE' in region 'southamerica-east1' in project 'dute-btg' does not exist.` },
+      },
+    });
+    const noResource = audit("getsystemdashboard");
+    delete noResource.protoPayload!.resourceName;
+    const summary = groupErrors([audit("saveagentcostsettings"), audit("saveagentcostsettings"), noResource]);
+    assert.deepEqual(
+      summary.groups.map((group) => [group.service, group.count, group.admin]),
+      [
+        ["saveagentcostsettings", 2, true],
+        ["getsystemdashboard", 1, true],
+      ],
+    );
+    assert.equal(summary.groups[0]!.message, "SetIamPolicy: Resource 'saveagentcostsettings' of kind 'SERVICE' in region 'southamerica-east1' in project 'dute-btg' does not exist.");
+    assert.equal(summary.total, 3);
+  });
+
+  it("mensagem de várias linhas (ZodError) junta as linhas sem a pilha", () => {
+    const zod = entry("decideagentnote", "2026-10-02T13:09:00Z", {
+      textPayload: 'Unhandled error ZodError: [\n  {\n    "code": "invalid_type",\n    "path": ["note_id"],\n    "message": "Required"\n  }\n]\n    at Object.parse (/workspace/node_modules/zod/lib/types.js:1:1)',
+    });
+    const summary = groupErrors([zod]);
+    assert.equal(summary.groups[0]!.message, 'Unhandled error ZodError: [ { "code": "invalid_type", "path": ["note_id"], "message": "Required" } ]');
+    const long = entry("x", "2026-10-02T13:09:00Z", { textPayload: "a".repeat(500) });
+    assert.equal(groupErrors([long]).groups[0]!.message.length, 240);
+  });
+
   it("o filtro pega ERROR das functions e 403 de requisição, sem repetir o 5xx", () => {
     const filter = errorsFilter(new Date("2026-10-02T15:00:00Z"));
     assert.match(filter, /timestamp>="2026-10-02T15:00:00.000Z"/);
