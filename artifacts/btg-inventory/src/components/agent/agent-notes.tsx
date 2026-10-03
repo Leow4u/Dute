@@ -61,9 +61,9 @@ export function AgentNotes() {
   const active = list.filter((note) => note.status === "active");
 
   return (
-    <section className="rounded-[18px] border border-border bg-white px-5 py-4">
+    <section className="rounded-[18px] border border-border bg-card px-5 py-4">
       <header className="flex items-start gap-3">
-        <NotebookPen className="mt-0.5 h-5 w-5 text-[#5b3fc4]" aria-hidden="true" />
+        <NotebookPen className="mt-0.5 h-5 w-5 text-agent" aria-hidden="true" />
         <div>
           <h2 className="font-semibold">Anotações do Agent Dute</h2>
           <p className="text-sm text-muted-foreground">
@@ -136,20 +136,20 @@ function PendingNote({
   const [text, setText] = useState(note.text);
   const [visibility, setVisibility] = useState(note.visibility);
   return (
-    <li className="rounded-xl border border-[#d9d0fb] bg-[#faf8ff] p-3">
+    <li className="rounded-xl border border-agent-border bg-agent-soft p-3">
       <textarea
         value={text}
         onChange={(event) => setText(event.target.value)}
         maxLength={300}
         rows={2}
         aria-label="Texto da anotação"
-        className="w-full resize-none rounded-lg border border-border bg-white px-2.5 py-1.5 text-sm outline-none focus:border-primary/40"
+        className="w-full resize-none rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm outline-none focus:border-primary/40"
       />
       <p className="mt-1 text-xs text-muted-foreground">
         {[who(note), note.reason ? `“${note.reason}”` : ""].filter(Boolean).join(" · ")}
       </p>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-        <div className="inline-flex rounded-lg border border-border bg-white p-0.5 text-xs" role="group" aria-label="Quem o agente considera">
+        <div className="inline-flex rounded-lg border border-border bg-card p-0.5 text-xs" role="group" aria-label="Quem o agente considera">
           {(["todos", "equipe"] as const).map((value) => (
             <button
               key={value}
@@ -167,7 +167,7 @@ function PendingNote({
             type="button"
             disabled={busy}
             onClick={() => onDecide({ action: "reject" })}
-            className="inline-flex items-center gap-1 rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium hover:bg-muted"
+            className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted"
           >
             <X className="h-3.5 w-3.5" /> Recusar
           </button>

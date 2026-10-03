@@ -255,8 +255,8 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
   );
 
   return (
-    <main className="flex h-full min-h-0 w-full overflow-hidden bg-white">
-      <div className="hidden w-[264px] shrink-0 border-r border-border/70 bg-[#fbfbfa] md:flex">{rail}</div>
+    <main className="flex h-full min-h-0 w-full overflow-hidden bg-card">
+      <div className="hidden w-[264px] shrink-0 border-r border-border/70 bg-background md:flex">{rail}</div>
       <Sheet open={mobileRail} onOpenChange={setMobileRail}>
         <SheetContent side="left" className="w-[300px] p-0">
           <SheetTitle className="sr-only">Conversas</SheetTitle>
@@ -278,7 +278,7 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
           {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
           <button
             type="button"
-            className="grid h-9 w-9 place-items-center rounded-lg text-[#5b3fc4] hover:bg-muted lg:hidden"
+            className="grid h-9 w-9 place-items-center rounded-lg text-agent hover:bg-muted lg:hidden"
             onClick={() => setMobileRoutines(true)}
             aria-label="Rotinas"
           >
@@ -312,7 +312,7 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
         )}
       </section>
 
-      <aside className={cn("hidden shrink-0 border-l border-border/70 bg-[#fbfbfa] lg:flex", routinesOpen ? "w-[300px]" : "w-[52px]")}>
+      <aside className={cn("hidden shrink-0 border-l border-border/70 bg-background lg:flex", routinesOpen ? "w-[300px]" : "w-[52px]")}>
         {routinesOpen ? (
           <RoutinesPanel onOpenConversation={(id) => openConversation(id)} onCollapse={() => setRoutinesOpen(false)} />
         ) : (
@@ -352,11 +352,11 @@ function ConversationRail({
   ];
   return (
     <div className="flex min-h-0 w-full flex-col gap-1 px-3 py-4">
-      <Button type="button" variant="outline" className="mb-2 h-10 rounded-xl bg-white font-semibold" onClick={() => onOpen(null)}>
+      <Button type="button" variant="outline" className="mb-2 h-10 rounded-xl bg-card font-semibold" onClick={() => onOpen(null)}>
         <Plus className="h-4 w-4" />
         Nova conversa
       </Button>
-      <label className="mb-2 flex items-center gap-2 rounded-lg border border-border/70 bg-white px-2.5 py-1.5 text-sm text-muted-foreground">
+      <label className="mb-2 flex items-center gap-2 rounded-lg border border-border/70 bg-card px-2.5 py-1.5 text-sm text-muted-foreground">
         <Search className="h-4 w-4 shrink-0" />
         <input
           value={query}
@@ -390,7 +390,7 @@ function ConversationRail({
                   )}
                 >
                   {item.id !== activeId && isUnreadRoutine(item) ? (
-                    <span className="h-2 w-2 shrink-0 rounded-full bg-[#5b3fc4]" aria-label="Resposta nova" />
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-agent" aria-label="Resposta nova" />
                   ) : null}
                   <span className="truncate">{item.title}</span>
                 </button>
@@ -407,7 +407,7 @@ function AgentMark({ size = "sm" }: { size?: "sm" | "lg" }) {
   return (
     <span
       className={cn(
-        "grid shrink-0 place-items-center bg-gradient-to-br from-[#5b7cfa] to-[#8b5cf6] text-white",
+        "grid shrink-0 place-items-center bg-gradient-to-br from-agent-start to-agent-accent text-white",
         size === "lg" ? "h-14 w-14 rounded-2xl" : "h-8 w-8 rounded-[10px]",
       )}
     >
@@ -446,7 +446,7 @@ function Composer({
   }, [value]);
   const canSend = (value.trim().length > 0 || hasFile) && !uploading && !disabled;
   return (
-    <div className="rounded-[22px] border border-border bg-white px-4 pb-2.5 pt-3 shadow-[0_6px_24px_rgba(30,40,70,.06)] focus-within:border-primary/40">
+    <div className="rounded-[22px] border border-border bg-card px-4 pb-2.5 pt-3 shadow-[0_6px_24px_rgba(30,40,70,.06)] focus-within:border-primary/40">
       {files.length ? (
         <ul className="mb-2 flex flex-wrap gap-1.5">
           {files.map((file) => (
@@ -454,7 +454,7 @@ function Composer({
               key={file.key}
               className={cn(
                 "inline-flex max-w-full items-center gap-1.5 rounded-lg border px-2 py-1 text-xs",
-                file.status === "error" ? "border-red-200 bg-red-50 text-red-700" : "border-border bg-muted/50",
+                file.status === "error" ? "border-destructive-soft-border bg-destructive-soft text-destructive-soft-foreground" : "border-border bg-muted/50",
               )}
             >
               {file.status === "uploading" ? (
@@ -521,7 +521,7 @@ function Composer({
           aria-label="Enviar"
           className={cn(
             "grid h-9 w-9 place-items-center rounded-xl transition-colors",
-            canSend ? "bg-foreground text-white hover:bg-foreground/85" : "bg-muted text-muted-foreground",
+            canSend ? "bg-foreground text-background hover:bg-foreground/85" : "bg-muted text-muted-foreground",
           )}
         >
           {disabled ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
@@ -579,7 +579,7 @@ function Welcome({
             type="button"
             disabled={disabled}
             onClick={() => onSend(suggestion.prompt)}
-            className="rounded-2xl border border-border/80 bg-white px-4 py-3 text-left text-sm transition-colors hover:border-primary/40 hover:bg-primary/[0.03] disabled:opacity-60"
+            className="rounded-2xl border border-border/80 bg-card px-4 py-3 text-left text-sm transition-colors hover:border-primary/40 hover:bg-primary/[0.03] disabled:opacity-60"
           >
             <span className="block">{suggestion.prompt}</span>
             <span className="mt-0.5 block text-xs text-muted-foreground">{suggestion.hint}</span>
@@ -689,7 +689,7 @@ function Conversation({
             pinned.current = true;
             scrollToBottom("smooth");
           }}
-          className="absolute bottom-[150px] left-1/2 grid h-9 w-9 -translate-x-1/2 place-items-center rounded-full border border-border bg-white shadow-md"
+          className="absolute bottom-[150px] left-1/2 grid h-9 w-9 -translate-x-1/2 place-items-center rounded-full border border-border bg-card shadow-md"
           aria-label="Ir para o fim"
         >
           <ArrowDown className="h-4 w-4" />
@@ -713,7 +713,7 @@ function UserMessage({ children, files = [] }: { children: ReactNode; files?: st
       {files.length ? (
         <ul className="flex max-w-[80%] flex-wrap justify-end gap-1.5">
           {files.map((name, index) => (
-            <li key={`${name}-${index}`} className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-border bg-white px-2 py-1 text-xs">
+            <li key={`${name}-${index}`} className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-border bg-card px-2 py-1 text-xs">
               <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
               <span className="truncate">{name}</span>
             </li>
@@ -760,9 +760,9 @@ function AssistantMessage({
                   className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/50 px-2.5 py-0.5 text-xs text-muted-foreground"
                 >
                   {running ? (
-                    <Loader2 className="h-3 w-3 animate-spin text-[#8b5cf6]" />
+                    <Loader2 className="h-3 w-3 animate-spin text-agent-accent" />
                   ) : (
-                    <Check className="h-3 w-3 text-emerald-600" />
+                    <Check className="h-3 w-3 text-success-soft-foreground" />
                   )}
                   {toolLabel(name, running)}
                 </span>

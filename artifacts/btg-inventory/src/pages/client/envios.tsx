@@ -104,14 +104,14 @@ function ShipmentList({ overview, onCreate }: { overview: ClientOverview; onCrea
         {onTheWay.length ? (
           onTheWay.map((view) => <OnTheWayCard key={view.id} view={view} />)
         ) : (
-          <p className="rounded-[18px] border border-dashed border-border bg-white/60 px-5 py-6 text-sm text-muted-foreground">
+          <p className="rounded-[18px] border border-dashed border-border bg-card/60 px-5 py-6 text-sm text-muted-foreground">
             Nenhum envio a caminho. Comprou de um fornecedor que vai entregar na Dutelog? Use "Avisar um envio".
           </p>
         )}
       </Section>
       {history.length ? (
         <Section label="Chegaram, recusados e cancelados">
-          <ul className="overflow-hidden rounded-[18px] border border-border bg-white">
+          <ul className="overflow-hidden rounded-[18px] border border-border bg-card">
             {history.map((view) => (
               <li key={view.id} className="flex items-center justify-between gap-4 border-b border-border/50 px-5 py-3 text-sm last:border-0">
                 <span className="min-w-0">
@@ -119,7 +119,7 @@ function ShipmentList({ overview, onCreate }: { overview: ClientOverview; onCrea
                     {view.number ? <span className="mr-2 font-semibold">{view.number}</span> : null}
                     {view.title}
                   </span>
-                  <span className={cn("block text-xs", view.stage === "rejected" ? "text-red-700" : "text-muted-foreground")}>
+                  <span className={cn("block text-xs", view.stage === "rejected" ? "text-destructive-soft-foreground" : "text-muted-foreground")}>
                     {view.detail}
                   </span>
                 </span>
@@ -143,14 +143,14 @@ function Section({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function HistoryBadge({ view }: { view: ShipmentView }) {
-  if (view.stage === "rejected") return <span className="shrink-0 text-sm font-semibold text-red-700">Recusado</span>;
+  if (view.stage === "rejected") return <span className="shrink-0 text-sm font-semibold text-destructive-soft-foreground">Recusado</span>;
   if (view.stage === "cancelled") return <span className="shrink-0 text-sm text-muted-foreground">Cancelado</span>;
-  if (!view.received) return <span className="shrink-0 text-sm font-semibold text-emerald-700">Chegou</span>;
+  if (!view.received) return <span className="shrink-0 text-sm font-semibold text-success-soft-foreground">Chegou</span>;
   return (
     <span
       className={cn(
         "shrink-0 text-sm font-semibold",
-        view.received.tone === "ok" ? "text-emerald-700" : "text-amber-700",
+        view.received.tone === "ok" ? "text-success-soft-foreground" : "text-warning-soft-foreground",
       )}
     >
       {view.received.label}
@@ -185,7 +185,7 @@ function OnTheWayCard({ view }: { view: ShipmentView }) {
   });
   const step = stageIndex(view.stage);
   return (
-    <article className="rounded-[18px] border border-border bg-white px-5 py-4">
+    <article className="rounded-[18px] border border-border bg-card px-5 py-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h3 className="font-semibold">
           {view.number ? <span className="mr-2">{view.number}</span> : null}
@@ -212,8 +212,8 @@ function OnTheWayCard({ view }: { view: ShipmentView }) {
                   className={cn(
                     "h-3 w-3 shrink-0 rounded-full border-2",
                     done && "border-primary bg-primary",
-                    current && "border-primary bg-white ring-4 ring-primary/15",
-                    !done && !current && "border-border bg-white",
+                    current && "border-primary bg-card ring-4 ring-primary/15",
+                    !done && !current && "border-border bg-card",
                   )}
                 />
                 {index < SHIPMENT_STEPS.length - 1 ? (
@@ -529,7 +529,7 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
               event.target.value = "";
             }}
           />
-          <section className="rounded-[18px] border border-border bg-white p-5">
+          <section className="rounded-[18px] border border-border bg-card p-5">
             <div className="grid gap-3 sm:grid-cols-[1.3fr_1fr_170px]">
               <Field label="Fornecedor">
                 <input
@@ -564,7 +564,7 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
             </div>
           </section>
 
-          <section className="rounded-[18px] border border-border bg-white p-5">
+          <section className="rounded-[18px] border border-border bg-card p-5">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <h2 className="font-semibold">Itens</h2>
               <div className="flex gap-2">
@@ -600,7 +600,7 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
                   className="grid grid-cols-[1fr_96px_28px] items-center gap-2 border-b border-border/40 py-2 sm:grid-cols-[190px_minmax(0,1fr)_96px_118px_28px]"
                 >
                   <input
-                    className={cn(inputClass, "py-1.5", duplicates.has(code) && "border-amber-500")}
+                    className={cn(inputClass, "py-1.5", duplicates.has(code) && "border-warning")}
                     value={line.code}
                     onChange={(event) => update(line.id, { code: event.target.value })}
                     placeholder="Código (se souber)"
@@ -629,12 +629,12 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
                   <span className="hidden sm:block">
                     {line.code.trim() ? (
                       match ? (
-                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11.5px] font-semibold text-emerald-700">já no estoque</span>
+                        <span className="rounded-full bg-success-soft px-2 py-0.5 text-[11.5px] font-semibold text-success-soft-foreground">já no estoque</span>
                       ) : (
-                        <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11.5px] font-semibold text-indigo-700">produto novo</span>
+                        <span className="rounded-full bg-info-soft px-2 py-0.5 text-[11.5px] font-semibold text-info-soft-foreground">produto novo</span>
                       )
                     ) : line.name.trim() ? (
-                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11.5px] font-semibold text-amber-800">código a definir</span>
+                      <span className="rounded-full bg-warning-soft px-2 py-0.5 text-[11.5px] font-semibold text-warning-soft-foreground">código a definir</span>
                     ) : null}
                   </span>
                   <button
@@ -649,12 +649,12 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
               );
             })}
             {duplicates.size ? (
-              <p className="mt-2 text-xs text-amber-700">Há códigos repetidos. Junte as quantidades numa linha só.</p>
+              <p className="mt-2 text-xs text-warning-soft-foreground">Há códigos repetidos. Junte as quantidades numa linha só.</p>
             ) : null}
           </section>
         </div>
 
-        <aside className="h-fit rounded-[18px] border border-border bg-white p-5 lg:sticky lg:top-2">
+        <aside className="h-fit rounded-[18px] border border-border bg-card p-5 lg:sticky lg:top-2">
           <h2 className="font-semibold">Resumo</h2>
           <dl className="mt-2 text-sm">
             <SummaryRow label="Fornecedor" value={supplier.trim() || "—"} />
@@ -710,7 +710,7 @@ function InvoiceDrop({
 }) {
   return (
     <section
-      className="rounded-[18px] border-[1.5px] border-dashed border-[#c9b8fb] bg-[#faf8ff] p-5"
+      className="rounded-[18px] border-[1.5px] border-dashed border-agent-soft-border bg-agent-soft p-5"
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
         event.preventDefault();
@@ -718,14 +718,14 @@ function InvoiceDrop({
       }}
     >
       <div className="flex flex-wrap items-center gap-4">
-        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white text-[#5b3fc4] shadow-sm">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-card text-agent shadow-sm">
           {reading ? <Loader2 className="h-5 w-5 animate-spin" /> : read ? <CheckCircle2 className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="font-semibold text-[#3b2a85]">
+          <h2 className="font-semibold text-agent-strong">
             {reading ? "Lendo a nota…" : read ? "Nota lida pelo Agent Dute" : "Comece pela nota fiscal ou pedido"}
           </h2>
-          <p className="text-sm text-[#5b3fc4]">
+          <p className="text-sm text-agent">
             {reading
               ? "O Agent Dute está preenchendo fornecedor, NF, observações e itens."
               : read
@@ -735,12 +735,12 @@ function InvoiceDrop({
         </div>
         <div className="flex flex-wrap gap-2">
           {readableFile && !reading ? (
-            <Button type="button" size="sm" variant="outline" className="rounded-lg border-[#c9b8fb] bg-white" disabled={disabled} onClick={onRead}>
+            <Button type="button" size="sm" variant="outline" className="rounded-lg border-agent-soft-border bg-card" disabled={disabled} onClick={onRead}>
               {read ? <RotateCw className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
               {read ? "Ler de novo" : "Ler nota"}
             </Button>
           ) : null}
-          <Button type="button" size="sm" className="rounded-lg bg-[#5b3fc4] text-white hover:bg-[#4c33a8]" disabled={disabled || reading} onClick={onPick}>
+          <Button type="button" size="sm" className="rounded-lg bg-agent text-agent-foreground hover:bg-agent-hover" disabled={disabled || reading} onClick={onPick}>
             <Paperclip className="h-4 w-4" />
             {files.length ? "Anexar outro" : "Anexar nota"}
           </Button>
@@ -749,7 +749,7 @@ function InvoiceDrop({
       {files.length ? (
         <div className="mt-3 flex flex-wrap gap-2">
           {files.map((file, index) => (
-            <span key={`${file.name}-${index}`} className="inline-flex max-w-full items-center gap-1 rounded-lg bg-white px-2 py-1 text-xs text-foreground">
+            <span key={`${file.name}-${index}`} className="inline-flex max-w-full items-center gap-1 rounded-lg bg-card px-2 py-1 text-xs text-foreground">
               <FileText className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">{file.name}</span>
               <button type="button" aria-label={`Remover ${file.name}`} disabled={reading} onClick={() => onRemove(index)}>
@@ -759,14 +759,14 @@ function InvoiceDrop({
           ))}
         </div>
       ) : (
-        <p className="mt-2 text-xs text-[#7a66c9]">ou arraste o arquivo para cá · até 8 MB</p>
+        <p className="mt-2 text-xs text-agent-muted">ou arraste o arquivo para cá · até 8 MB</p>
       )}
     </section>
   );
 }
 
 const inputClass =
-  "w-full rounded-xl border border-border bg-white px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus:border-primary/50";
+  "w-full rounded-xl border border-border bg-card px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus:border-primary/50";
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -824,7 +824,7 @@ function PasteDialog({
         />
         <p className="text-sm text-muted-foreground">
           {parsed.lines.length ? (
-            <span className="text-emerald-700">
+            <span className="text-success-soft-foreground">
               {parsed.lines.length} {parsed.lines.length === 1 ? "linha reconhecida" : "linhas reconhecidas"} · {known} já no estoque
               {parsed.lines.length - known ? ` · ${parsed.lines.length - known} produto(s) novo(s), vai pedir o nome` : ""}
             </span>
@@ -867,7 +867,7 @@ function InvoiceReview({
       <DialogContent className="max-h-[90vh] overflow-hidden sm:max-w-[860px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-[#8b5cf6]" />
+            <Sparkles className="h-5 w-5 text-agent-accent" />
             Itens lidos da nota
           </DialogTitle>
           <DialogDescription>
@@ -906,14 +906,14 @@ function InvoiceReview({
                       />
                       <span className="mt-1 block text-[11.5px]">
                         {match ? (
-                          <span className="text-emerald-700">
+                          <span className="text-success-soft-foreground">
                             já no estoque · {inventoryItemName(match)}
                             {line.matchedBy === "nome" && normalized(line.code) === normalized(inventoryItemClientCode(match)) ? " · achado pelo nome, confira" : ""}
                           </span>
                         ) : line.code.trim() ? (
-                          <span className="text-indigo-700">produto novo · {line.name}</span>
+                          <span className="text-info-soft-foreground">produto novo · {line.name}</span>
                         ) : (
-                          <span className="text-amber-700">código a definir · a Dutelog confere pela etiqueta</span>
+                          <span className="text-warning-soft-foreground">código a definir · a Dutelog confere pela etiqueta</span>
                         )}
                       </span>
                     </td>

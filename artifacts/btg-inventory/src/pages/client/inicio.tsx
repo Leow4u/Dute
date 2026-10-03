@@ -139,7 +139,7 @@ export function ClienteInicio() {
                             detail={shipment.summary || shipment.detail}
                             aside={
                               shipment.arrival ? (
-                                <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+                                <span className="rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-semibold text-warning-soft-foreground">
                                   chega {shipment.arrival}
                                 </span>
                               ) : null
@@ -165,7 +165,7 @@ export function ClienteInicio() {
                         title="Abaixo do mínimo"
                         aside={
                           low ? (
-                            <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+                            <span className="rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-semibold text-warning-soft-foreground">
                               {formatNumber(low)} {low === 1 ? "item" : "itens"}
                             </span>
                           ) : (
@@ -220,7 +220,7 @@ function OrderRow({ order }: { order: OrderView }) {
           {order.number ? <span className="font-semibold">{order.number} · </span> : null}
           <span className={cn(!order.number && "font-semibold")}>{order.title}</span>
           {rejected ? (
-            <span className="ml-2 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700">Recusado</span>
+            <span className="ml-2 rounded-full bg-destructive-soft px-2 py-0.5 text-[11px] font-semibold text-destructive-soft-foreground">Recusado</span>
           ) : null}
         </span>
         {order.summary ? <span className="text-xs text-muted-foreground">{order.summary}</span> : null}
@@ -246,9 +246,9 @@ function RoutineNews() {
         <li key={item.id}>
           <Link
             href={`/portal/agente?c=${encodeURIComponent(item.id)}`}
-            className="flex items-center gap-3 rounded-[14px] border border-[#d9d0fb] bg-[#faf8ff] px-4 py-2.5 text-sm hover:border-[#5b3fc4]/50"
+            className="flex items-center gap-3 rounded-[14px] border border-agent-border bg-agent-soft px-4 py-2.5 text-sm hover:border-agent/50"
           >
-            <CalendarClock className="h-4 w-4 shrink-0 text-[#5b3fc4]" aria-hidden="true" />
+            <CalendarClock className="h-4 w-4 shrink-0 text-agent" aria-hidden="true" />
             <span className="min-w-0 flex-1 truncate">
               <b className="font-semibold">{item.title.replace(/^Rotina:\s*/, "")}</b> chegou
             </span>
@@ -269,13 +269,13 @@ function AskAgent() {
   };
   return (
     <form
-      className="flex items-center gap-3 rounded-[18px] border border-[#d9dcf7] bg-gradient-to-r from-[#f6f7ff] to-[#faf6ff] px-4 py-2.5 focus-within:border-primary/50"
+      className="flex items-center gap-3 rounded-[18px] border border-agent-border bg-gradient-to-r from-info-soft to-agent-soft px-4 py-2.5 focus-within:border-primary/50"
       onSubmit={(event) => {
         event.preventDefault();
         ask();
       }}
     >
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-gradient-to-br from-[#5b7cfa] to-[#8b5cf6] text-white">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-gradient-to-br from-agent-start to-agent-accent text-white">
         <Sparkles className="h-4 w-4" aria-hidden="true" />
       </span>
       <input
@@ -290,12 +290,12 @@ function AskAgent() {
         <button
           type="submit"
           aria-label="Perguntar"
-          className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-foreground text-white"
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-foreground text-background"
         >
           <ArrowUp className="h-4 w-4" />
         </button>
       ) : (
-        <kbd className="hidden shrink-0 rounded-md border border-border bg-white px-1.5 text-xs text-muted-foreground sm:inline">
+        <kbd className="hidden shrink-0 rounded-md border border-border bg-card px-1.5 text-xs text-muted-foreground sm:inline">
           /
         </kbd>
       )}
@@ -316,8 +316,8 @@ function Steps({ step }: { step: number }) {
                 className={cn(
                   "h-3 w-3 shrink-0 rounded-full border-2",
                   done && "border-primary bg-primary",
-                  current && "border-primary bg-white ring-4 ring-primary/15",
-                  !done && !current && "border-border bg-white",
+                  current && "border-primary bg-card ring-4 ring-primary/15",
+                  !done && !current && "border-border bg-card",
                 )}
               />
               {index < ORDER_STEPS.length - 1 ? (
@@ -364,7 +364,7 @@ function Action({
       <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
     </>
   );
-  const className = "flex items-center gap-4 rounded-[18px] border border-border bg-white px-5 py-4";
+  const className = "flex items-center gap-4 rounded-[18px] border border-border bg-card px-5 py-4";
   if (disabled) return <div className={cn(className, "opacity-60")}>{body}</div>;
   return (
     <Link href={href} className={cn(className, "transition-colors hover:border-primary/40")}>
@@ -385,7 +385,7 @@ function Panel({
   children: ReactNode;
 }) {
   return (
-    <section className="h-fit overflow-hidden rounded-[18px] border border-border bg-white">
+    <section className="h-fit overflow-hidden rounded-[18px] border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border/60 px-5 py-3">
         <h2 className="text-sm font-semibold">{title}</h2>
         <Link href={href} className="text-sm font-medium text-primary hover:underline">

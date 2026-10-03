@@ -196,7 +196,7 @@ export default function Movements() {
       <StockTableCard>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-              <thead className="text-xs text-muted-foreground uppercase border-b border-border/80 bg-white/55">
+              <thead className="text-xs text-muted-foreground uppercase border-b border-border/80 bg-card/55">
                 <tr>
                   <th className="px-5 py-4 font-medium">Data</th>
                   <th className="px-4 py-3 font-medium">Tipo</th>
@@ -236,7 +236,7 @@ export default function Movements() {
                     return (
                       <tr
                         key={mov.id}
-                        className="hover:bg-gray-50/80 transition-colors"
+                        className="hover:bg-muted/80 transition-colors"
                       >
                         <td className="px-5 py-3 whitespace-nowrap text-muted-foreground">
                           {new Date(mov.data).toLocaleString("pt-BR", {
@@ -249,8 +249,8 @@ export default function Movements() {
                             variant="outline"
                             className={
                               isPositive
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                : "bg-rose-50 text-rose-700 border-rose-200"
+                                ? "bg-success-soft text-success-soft-foreground border-success-soft-border"
+                                : "bg-destructive-soft text-destructive-soft-foreground border-destructive-soft-border"
                             }
                           >
                             {mov.tipo_mov}
@@ -267,7 +267,7 @@ export default function Movements() {
                         </td>
                         <td className="px-4 py-2 text-right">
                           <div
-                            className={`flex items-center justify-end gap-1 font-bold ${isPositive ? "text-emerald-600" : "text-rose-600"}`}
+                            className={`flex items-center justify-end gap-1 font-bold ${isPositive ? "text-success-soft-foreground" : "text-destructive-soft-foreground"}`}
                           >
                             {isPositive ? (
                               <ArrowDownRight className="h-3 w-3" />
@@ -286,7 +286,7 @@ export default function Movements() {
                             >
                               {mov.origem || "-"}
                             </span>
-                            <span className="text-gray-300">&rarr;</span>
+                            <span className="text-muted-foreground/70">&rarr;</span>
                             <span
                               className="truncate max-w-[80px]"
                               title={mov.destino || "-"}
@@ -301,7 +301,7 @@ export default function Movements() {
                         <td className="px-4 py-2 text-xs text-muted-foreground">
                           {mov.doc_nf || "-"}
                         </td>
-                        <td className="px-4 py-2 text-xs font-medium text-gray-700">
+                        <td className="px-4 py-2 text-xs font-medium text-foreground">
                           {mov.responsavel || "-"}
                         </td>
                       </tr>

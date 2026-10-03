@@ -116,7 +116,7 @@ export default function Orders() {
       <StockTableCard>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-              <thead className="text-xs text-muted-foreground uppercase border-b border-border/80 bg-white/55">
+              <thead className="text-xs text-muted-foreground uppercase border-b border-border/80 bg-card/55">
                 <tr>
                   <th className="px-5 py-4 font-medium">Nº Pedido</th>
                   <th className="px-4 py-3 font-medium">Data</th>
@@ -140,7 +140,7 @@ export default function Orders() {
                   orders.map((order: Order) => {
                     const progress = order.qtd_solic > 0 ? ((order.qtd_sep || 0) / order.qtd_solic) * 100 : 0;
                     return (
-                      <tr key={order.id} className="hover:bg-gray-50/80 transition-colors">
+                      <tr key={order.id} className="hover:bg-muted/80 transition-colors">
                         <td className="px-5 py-3 font-mono text-xs text-primary font-bold">#{order.num_pedido}</td>
                         <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
                           {order.data_solic ? new Date(order.data_solic).toLocaleDateString('pt-BR') : "-"}
@@ -153,7 +153,7 @@ export default function Orders() {
                         <td className="px-4 py-3">
                           <div className="flex flex-col gap-1 w-full max-w-[120px] mx-auto">
                             <div className="flex justify-between text-xs">
-                              <span className="font-medium text-gray-700">{order.qtd_sep || 0} / {order.qtd_solic}</span>
+                              <span className="font-medium text-foreground">{order.qtd_sep || 0} / {order.qtd_solic}</span>
                               <span className="text-muted-foreground">{Math.round(progress)}%</span>
                             </div>
                             <Progress value={progress} className="h-1.5 bg-primary/10" />
@@ -161,10 +161,10 @@ export default function Orders() {
                         </td>
                         <td className="px-4 py-3 text-center">
                           <Badge variant="secondary" className={
-                            order.status === 'ENTREGUE' || order.status === 'FATURADO' ? 'bg-emerald-50 text-emerald-700' :
-                            order.status === 'PENDENTE' ? 'bg-amber-50 text-amber-700' :
-                            order.status === 'CANCELADO' ? 'bg-rose-50 text-rose-700' :
-                            'bg-blue-50 text-blue-700'
+                            order.status === 'ENTREGUE' || order.status === 'FATURADO' ? 'bg-success-soft text-success-soft-foreground' :
+                            order.status === 'PENDENTE' ? 'bg-warning-soft text-warning-soft-foreground' :
+                            order.status === 'CANCELADO' ? 'bg-destructive-soft text-destructive-soft-foreground' :
+                            'bg-info-soft text-info-soft-foreground'
                           }>
                             {order.status}
                           </Badge>
@@ -222,7 +222,7 @@ function OrderStatusUpdater({ order }: { order: any }) {
 
   return (
     <Select value={order.status} onValueChange={handleStatusChange}>
-      <SelectTrigger className="w-[130px] h-8 text-xs bg-white mx-auto">
+      <SelectTrigger className="w-[130px] h-8 text-xs bg-card mx-auto">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

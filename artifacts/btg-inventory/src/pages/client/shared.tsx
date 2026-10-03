@@ -550,7 +550,7 @@ export function ClientModuleLoading({
   title = "Carregando portal do cliente",
 }: ClientModuleLoadingProps) {
   return (
-    <main className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#f6f8f7] px-4 py-5 sm:px-6 lg:px-8">
+    <main className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-background px-4 py-5 sm:px-6 lg:px-8">
       <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col gap-5 overflow-auto overscroll-contain">
         <div className="flex items-center gap-4 border-b border-border/70 pb-5">
           <Skeleton className="h-12 w-12 rounded-2xl" />
@@ -584,9 +584,9 @@ function ClientModuleError({
   onRetry,
 }: ClientModuleErrorProps) {
   return (
-    <main className="flex h-full min-h-0 w-full items-center justify-center overflow-hidden bg-[#f6f8f7] px-4 py-5 sm:px-6 lg:px-8">
+    <main className="flex h-full min-h-0 w-full items-center justify-center overflow-hidden bg-background px-4 py-5 sm:px-6 lg:px-8">
       <div className="mx-auto max-h-full max-w-3xl overflow-auto overscroll-contain">
-        <Alert variant="destructive" className="bg-white">
+        <Alert variant="destructive" className="bg-card">
           <AlertCircle className="h-4 w-4" />
         <AlertTitle>Portal indisponível</AlertTitle>
           <AlertDescription className="space-y-4">
@@ -636,7 +636,7 @@ export function ModulePanel({
             <CardTitle className="text-base">{title}</CardTitle>
           </div>
           {Icon ? (
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-white/70 text-muted-foreground">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-card/70 text-muted-foreground">
               <Icon className="h-4 w-4" aria-hidden="true" />
             </div>
           ) : null}
@@ -656,11 +656,11 @@ type MetricCardProps = {
 };
 
 const metricToneClass = {
-  neutral: "border-border bg-white/72 text-foreground",
-  info: "border-sky-200 bg-sky-50 text-sky-800",
-  success: "border-emerald-200 bg-emerald-50 text-emerald-800",
-  warning: "border-amber-200 bg-amber-50 text-amber-800",
-  danger: "border-rose-200 bg-rose-50 text-rose-800",
+  neutral: "border-border bg-card/72 text-foreground",
+  info: "border-info-soft-border bg-info-soft text-info-soft-foreground",
+  success: "border-success-soft-border bg-success-soft text-success-soft-foreground",
+  warning: "border-warning-soft-border bg-warning-soft text-warning-soft-foreground",
+  danger: "border-destructive-soft-border bg-destructive-soft text-destructive-soft-foreground",
 } as const;
 
 export function MetricCard({
@@ -711,8 +711,8 @@ export function EmptyModuleState({
   icon: Icon = SearchX,
 }: EmptyModuleStateProps) {
   return (
-    <div className="flex min-h-52 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-white/45 p-8 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-white/75 text-muted-foreground">
+    <div className="flex min-h-52 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-card/45 p-8 text-center">
+      <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-card/75 text-muted-foreground">
         <Icon className="h-5 w-5" aria-hidden="true" />
       </div>
       <div className="space-y-1">
@@ -836,7 +836,7 @@ export function statusBadgeClass(status?: string | null) {
       "faturado",
     ].some((term) => normalized.includes(term))
   ) {
-    return "border-emerald-200 bg-emerald-50 text-emerald-800";
+    return "border-success-soft-border bg-success-soft text-success-soft-foreground";
   }
 
   if (
@@ -852,7 +852,7 @@ export function statusBadgeClass(status?: string | null) {
       "diverg",
     ].some((term) => normalized.includes(term))
   ) {
-    return "border-rose-200 bg-rose-50 text-rose-800";
+    return "border-destructive-soft-border bg-destructive-soft text-destructive-soft-foreground";
   }
 
   if (
@@ -867,10 +867,10 @@ export function statusBadgeClass(status?: string | null) {
       "planned",
     ].some((term) => normalized.includes(term))
   ) {
-    return "border-amber-200 bg-amber-50 text-amber-800";
+    return "border-warning-soft-border bg-warning-soft text-warning-soft-foreground";
   }
 
-  return "border-border bg-white/70 text-muted-foreground";
+  return "border-border bg-card/70 text-muted-foreground";
 }
 
 export function priorityLabel(priority?: string | null) {

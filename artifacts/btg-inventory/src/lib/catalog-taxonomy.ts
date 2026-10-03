@@ -74,11 +74,11 @@ export function isCatalogGrupo(value: string): value is CatalogGrupo {
 export function catalogGeneroBadgeClass(genero?: string | null): string {
   switch (genero?.trim()) {
     case "Masculino":
-      return "border-sky-200 bg-sky-50 text-sky-800";
+      return "border-info-soft-border bg-info-soft text-info-soft-foreground";
     case "Feminino":
-      return "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-800";
+      return "border-agent-border bg-agent-soft text-agent-strong";
     case "Outros":
-      return "border-amber-200 bg-amber-50 text-amber-800";
+      return "border-warning-soft-border bg-warning-soft text-warning-soft-foreground";
     default:
       return "border-border bg-muted/40 text-muted-foreground";
   }

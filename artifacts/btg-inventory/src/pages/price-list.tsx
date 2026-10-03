@@ -233,7 +233,7 @@ export default function PriceList() {
                   <TableCell className="text-right">{fmtBRL(it.valor_unit)}</TableCell>
                   <TableCell className="text-sm">
                     {it.auto_source ? (
-                      <Badge variant="outline" className="border-blue-200 text-blue-700">{AUTO_LABELS[it.auto_source] || it.auto_source}</Badge>
+                      <Badge variant="outline" className="border-info-soft-border text-info-soft-foreground">{AUTO_LABELS[it.auto_source] || it.auto_source}</Badge>
                     ) : (
                       <span className="text-muted-foreground">Manual</span>
                     )}

@@ -103,7 +103,7 @@ function Segmented<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div className="inline-flex overflow-hidden rounded-xl border border-border bg-white">
+    <div className="inline-flex overflow-hidden rounded-xl border border-border bg-card">
       {options.map((option) => (
         <button
           key={option.value}
@@ -305,7 +305,7 @@ export default function Documents() {
         </Button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 rounded-[18px] border border-border bg-white p-3">
+      <div className="flex flex-wrap items-center gap-2 rounded-[18px] border border-border bg-card p-3">
         <div className="relative min-w-[220px] flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -319,7 +319,7 @@ export default function Documents() {
         <Segmented<DocumentAudience | "all"> options={AUDIENCE_FILTERS} value={audience} onChange={setAudience} />
       </div>
 
-      <section className="overflow-hidden rounded-[18px] border border-border bg-white">
+      <section className="overflow-hidden rounded-[18px] border border-border bg-card">
         {loading ? (
           <p className="p-6 text-sm text-muted-foreground">Carregando documentos...</p>
         ) : documents.error ? (
@@ -503,10 +503,10 @@ function DocumentLine({
   const date = row.date ? dateFormatter.format(row.date) : "—";
   const audience =
     row.audience === "archived"
-      ? { label: "Arquivado", tone: "bg-slate-100 text-slate-500" }
+      ? { label: "Arquivado", tone: "bg-muted text-muted-foreground" }
       : row.audience === "btg"
-        ? { label: row.source === "request" ? "Enviado pela BTG" : "BTG vê", tone: "bg-blue-50 text-blue-700" }
-        : { label: "Só Dutelog", tone: "bg-slate-100 text-slate-700" };
+        ? { label: row.source === "request" ? "Enviado pela BTG" : "BTG vê", tone: "bg-info-soft text-info-soft-foreground" }
+        : { label: "Só Dutelog", tone: "bg-muted text-foreground" };
   const manageable = row.source === "document" && row.audience !== "archived";
   return (
     <tr className={cn("border-b border-border/40 last:border-0", row.audience === "archived" && "text-muted-foreground")}>
@@ -517,7 +517,7 @@ function DocumentLine({
           <div
             className={cn(
               "mt-0.5 text-xs font-medium",
-              row.knowledge === "pending" ? "text-amber-700" : row.knowledge === "active" ? "text-primary" : "text-muted-foreground",
+              row.knowledge === "pending" ? "text-warning-soft-foreground" : row.knowledge === "active" ? "text-primary" : "text-muted-foreground",
             )}
           >
             {KNOWLEDGE_LABEL[row.knowledge]}

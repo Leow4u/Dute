@@ -51,7 +51,7 @@ export function MonthlyBars({
               ) : null}
               <span
                 className="block w-full max-w-[56px] rounded-t-[4px]"
-                style={{ height: barHeight, background: strong ? "#2a78d6" : "#a9c8ef" }}
+                style={{ height: barHeight, background: strong ? "hsl(var(--chart-bar))" : "hsl(var(--chart-bar-soft))" }}
               />
               <span
                 className={cn(
@@ -62,7 +62,7 @@ export function MonthlyBars({
                 {month.label}
               </span>
               {!print && hover === month.competencia ? (
-                <span className="pointer-events-none absolute -top-2 z-10 -translate-y-full whitespace-nowrap rounded-lg border border-border bg-white px-2.5 py-1.5 text-xs shadow-sm">
+                <span className="pointer-events-none absolute -top-2 z-10 -translate-y-full whitespace-nowrap rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs shadow-sm">
                   <b>{month.label}</b> · {month.total === null ? "sem fatura" : exact.format(value)}
                 </span>
               ) : null}

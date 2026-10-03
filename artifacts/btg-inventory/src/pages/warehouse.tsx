@@ -11,9 +11,9 @@ export default function Warehouse() {
   if (isLoading) {
     return (
       <div className="space-y-6 animate-pulse">
-        <div className="h-8 w-64 bg-gray-200 rounded"></div>
+        <div className="h-8 w-64 bg-primary/10 rounded"></div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {[1,2,3].map(i => <div key={i} className="h-64 bg-gray-200 rounded-xl"></div>)}
+          {[1,2,3].map(i => <div key={i} className="h-64 bg-primary/10 rounded-xl"></div>)}
         </div>
       </div>
     );
@@ -25,7 +25,7 @@ export default function Warehouse() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-primary">Mapa do Armazém</h1>
         </div>
-        <div className="p-8 text-center bg-gray-50 border border-border rounded-lg text-muted-foreground">
+        <div className="p-8 text-center bg-muted border border-border rounded-lg text-muted-foreground">
           Nenhum dado de localização atribuído a SKUs ainda.
         </div>
       </div>
@@ -58,35 +58,35 @@ export default function Warehouse() {
                 <div><span className="font-bold text-foreground">{rua.prateleiras.length}</span> Prateleiras</div>
               </div>
             </CardHeader>
-            <ScrollArea className="flex-1 bg-gray-50/30">
+            <ScrollArea className="flex-1 bg-muted/30">
               <CardContent className="p-0">
                 <Accordion type="multiple" className="w-full">
                   {rua.prateleiras.map((prat) => (
                     <AccordionItem value={`prat-${prat.prateleira}`} key={prat.prateleira} className="border-b border-border last:border-0">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-gray-50">
-                        <div className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                           <PackageOpen className="h-4 w-4 text-muted-foreground" />
                           Prateleira {prat.prateleira}
-                          <Badge variant="secondary" className="ml-2 bg-blue-50 text-blue-700 font-normal">
+                          <Badge variant="secondary" className="ml-2 bg-info-soft text-info-soft-foreground font-normal">
                             {prat.caixas.length} caixas
                           </Badge>
                         </div>
                       </AccordionTrigger>
                       <AccordionContent className="pb-0">
-                        <div className="bg-white divide-y divide-gray-100">
+                        <div className="bg-card divide-y divide-border">
                           {prat.caixas.map((cx) => (
-                            <div key={cx.caixa} className="p-3 pl-10 hover:bg-gray-50/50 transition-colors">
+                            <div key={cx.caixa} className="p-3 pl-10 hover:bg-muted/50 transition-colors">
                               <div className="flex items-center gap-2 mb-2">
                                 <Box className="h-3.5 w-3.5 text-primary" />
-                                <span className="font-semibold text-xs text-gray-900">Caixa {cx.caixa}</span>
+                                <span className="font-semibold text-xs text-foreground">Caixa {cx.caixa}</span>
                               </div>
                               <div className="space-y-1">
                                 {cx.skus.map((sku) => (
-                                  <div key={sku.id} className="flex items-center justify-between text-xs p-1.5 rounded bg-gray-50 border border-border">
+                                  <div key={sku.id} className="flex items-center justify-between text-xs p-1.5 rounded bg-muted border border-border">
                                     <span className="font-mono font-medium text-primary" title={sku.produto}>
                                       {sku.cod_btg}
                                     </span>
-                                    <span className="font-bold text-gray-700 bg-white px-1.5 py-0.5 rounded shadow-sm">
+                                    <span className="font-bold text-foreground bg-card px-1.5 py-0.5 rounded shadow-sm">
                                       {sku.estoque_atual} peças
                                     </span>
                                   </div>

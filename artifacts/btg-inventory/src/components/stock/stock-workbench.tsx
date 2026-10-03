@@ -77,14 +77,14 @@ export function StockMetricCard({
   tone = "default",
 }: StockMetricCardProps) {
   const toneClass = {
-    default: "bg-white/72 text-muted-foreground",
+    default: "bg-card/72 text-muted-foreground",
     blue: "bg-primary/10 text-primary",
-    amber: "bg-amber-50 text-amber-700",
-    rose: "bg-rose-50 text-rose-700",
+    amber: "bg-warning-soft text-warning-soft-foreground",
+    rose: "bg-destructive-soft text-destructive-soft-foreground",
   }[tone];
 
   return (
-    <div className="rounded-[24px] border border-white/55 bg-white/72 p-6 shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]">
+    <div className="rounded-[24px] border border-card-edge/55 bg-card/72 p-6 shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-medium text-foreground/70">{label}</p>
@@ -134,7 +134,7 @@ export function StockToolbar({
   children,
 }: StockToolbarProps) {
   return (
-    <section className="rounded-[24px] border border-white/55 bg-white/72 p-5 shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]">
+    <section className="rounded-[24px] border border-card-edge/55 bg-card/72 p-5 shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div className="relative min-w-0 flex-1">
           <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -142,7 +142,7 @@ export function StockToolbar({
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder={placeholder}
-            className="h-12 rounded-[18px] border-border bg-white/80 pl-11 text-sm shadow-none"
+            className="h-12 rounded-[18px] border-border bg-card/80 pl-11 text-sm shadow-none"
           />
         </div>
         {children ? (
@@ -177,7 +177,7 @@ export function StockFilterChip({
         "inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors duration-200",
         active
           ? "border-primary/25 bg-primary/10 text-primary"
-          : "border-border bg-white/70 text-muted-foreground hover:bg-[#F5F6F7]",
+          : "border-border bg-card/70 text-muted-foreground hover:bg-surface-hover",
       )}
     >
       <span>{children}</span>
@@ -190,7 +190,7 @@ export function StockFilterChip({
 
 export function StockTableCard({ children }: { children: ReactNode }) {
   return (
-    <section className="overflow-hidden rounded-[24px] border border-white/55 bg-white/72 shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]">
+    <section className="overflow-hidden rounded-[24px] border border-card-edge/55 bg-card/72 shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]">
       {children}
     </section>
   );
@@ -222,7 +222,7 @@ export function StockTablePagination({
 }: StockTablePaginationProps) {
   const canGoNext = hasMore ?? count >= limit;
   return (
-    <div className="flex flex-col gap-3 border-t border-border/80 bg-white/55 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-3 border-t border-border/80 bg-card/55 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
       <p className="text-sm text-muted-foreground">
         Exibindo <span className="font-medium text-foreground">{count}</span> de{" "}
         <span className="font-medium text-foreground">{total}</span> {label}

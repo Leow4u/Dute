@@ -34,9 +34,9 @@ export function RoutineDraftCard({ draft, messageId, sent: sentValue }: { draft:
 
   if (created) {
     return (
-      <section className="mt-3 rounded-2xl border border-border bg-white px-4 py-3">
+      <section className="mt-3 rounded-2xl border border-border bg-card px-4 py-3">
         <p className="flex items-center gap-2 text-sm font-semibold">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+          <CheckCircle2 className="h-4 w-4 text-success-soft-foreground" aria-hidden="true" />
           Rotina criada: {form.name}
         </p>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -48,9 +48,9 @@ export function RoutineDraftCard({ draft, messageId, sent: sentValue }: { draft:
 
   const problem = routineProblem(form);
   return (
-    <section className="mt-3 overflow-hidden rounded-2xl border border-[#d9d0fb] bg-[#faf8ff]">
+    <section className="mt-3 overflow-hidden rounded-2xl border border-agent-border bg-agent-soft">
       <header className="flex items-start gap-2.5 px-4 pt-3">
-        <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-[#5b3fc4]" aria-hidden="true" />
+        <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-agent" aria-hidden="true" />
         <div className="min-w-0">
           <p className="text-sm font-semibold">Rotina para confirmar</p>
           <p className="text-xs text-muted-foreground">Só consulta: nunca faz pedido nem muda dado.</p>
@@ -68,12 +68,12 @@ export function RoutineDraftCard({ draft, messageId, sent: sentValue }: { draft:
         />
       </div>
       {create.isError ? (
-        <p className="mx-4 mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+        <p className="mx-4 mt-3 rounded-lg bg-destructive-soft px-3 py-2 text-sm text-destructive-soft-foreground" role="alert">
           {create.error instanceof Error ? create.error.message : "Não consegui criar a rotina."}
         </p>
       ) : null}
       <div className="flex flex-wrap items-center justify-end gap-3 px-4 py-3">
-        {problem ? <span className="text-xs text-amber-800">{problem}</span> : null}
+        {problem ? <span className="text-xs text-warning-soft-foreground">{problem}</span> : null}
         <button
           type="button"
           disabled={Boolean(problem) || !messageId || create.isPending}
