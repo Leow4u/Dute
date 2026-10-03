@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  agentView,
   agentAskHref,
   agentPathFor,
   isAgentScreen,
@@ -151,5 +152,15 @@ describe("agente para todos os papéis", () => {
     expect(teamSuggestions("financeiro")[0]?.prompt).toMatch(/prévia/);
     expect(teamSuggestions("wms").some((item) => /prévia|fatura/i.test(item.prompt))).toBe(false);
     expect(teamSuggestions("interno")[0]?.prompt).toMatch(/aprovação/);
+  });
+});
+
+describe("telas do Agent Dute", () => {
+  it("?v= escolhe Rotinas ou WhatsApp; o resto é a conversa", () => {
+    expect(agentView("?v=rotinas")).toBe("rotinas");
+    expect(agentView("v=whatsapp")).toBe("whatsapp");
+    expect(agentView("?c=abc")).toBe("chat");
+    expect(agentView("?v=outra")).toBe("chat");
+    expect(agentView("")).toBe("chat");
   });
 });

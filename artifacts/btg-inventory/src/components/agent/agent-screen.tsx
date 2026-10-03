@@ -1,38 +1,42 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
-import { ArrowDown, ArrowUp, CalendarClock, Check, Copy, FileText, Loader2, MessagesSquare, Paperclip, Plus, Search, Sparkles, X } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarClock, Check, Copy, FileText, Loader2, MessageCircle, MessagesSquare, PanelLeftClose, PanelLeftOpen, Paperclip, Plus, Search, Sparkles, X } from "lucide-react";
 
 import { fetchChatJson, type ChatMessage, type ChatResponse } from "@/components/agent/chat";
 import { DraftCard } from "@/components/agent/draft-card";
-import { RoutinesCollapsed, RoutinesPanel } from "@/components/agent/routines";
+import { RoutinesPage, useRoutines } from "@/components/agent/routines";
 import { AgentMarkdown } from "@/components/agent/markdown";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import {
+  agentView,
   filterConversations,
   groupConversations,
   newConversationId,
   settleStreamingMarkdown,
   toolLabel,
   uniqueTools,
+  type AgentView,
   type ConversationSummary,
   type Suggestion,
 } from "@/lib/agent-chat";
 import { useAppUser } from "@/lib/auth";
 import { streamAgentDuteChat, type AgentDuteStreamChunk } from "@/lib/functions-api";
-import { isUnreadRoutine, markSeen } from "@/lib/agent-routines";
+import { isUnreadRoutine, markSeen, routineHistory, type RoutineHistoryItem } from "@/lib/agent-routines";
 import { ATTACHMENT_ACCEPT, isAcceptedAttachment, uploadAttachment } from "@/lib/shipment-files";
 import type { ClientRequestAttachment } from "@/pages/client/shared";
 import { cn } from "@/lib/utils";
 
 /**
  * Agent Dute em tela inteira, como um ChatGPT dentro do sistema. A mesma tela
- * para todos os papéis (portal do cliente e equipe Dutelog): à esquerda as
- * conversas da pessoa; no centro a conversa, com a resposta chegando aos
- * pedaços e as consultas que o agente fez. O agente só lê: pedidos e
- * mudanças continuam nas telas próprias.
+ * para todos os papéis (portal do cliente e equipe Dutelog). À esquerda, a
+ * barra com Nova conversa, Rotinas e WhatsApp (em breve), as conversas
+ * recentes e, embaixo, o histórico das rotinas. No centro, a conversa (a
+ * resposta chega aos pedaços, com as consultas que o agente fez), a tela de
+ * Rotinas (?v=rotinas) ou a do WhatsApp (?v=whatsapp). O agente só lê:
+ * pedidos e mudanças continuam nas telas próprias.
  */
 
 type ConversationsResponse = { conversations: ConversationSummary[] };
@@ -62,26 +66,26 @@ type AttachControls = {
 };
 
 const MAX_CHAT_FILES = 3;
-const ROUTINES_PANEL_KEY = "dute.agent.routines-panel";
+const RAIL_KEY = "dute.agent.rail";
 
-/** Coluna Rotinas aberta ou recolhida, lembrado neste navegador. */
-function useRoutinesPanelOpen() {
-  const [open, setOpen] = useState(() => {
+/** Barra lateral aberta ou recolhida (só ícones), lembrado neste navegador. */
+function useRailCollapsed() {
+  const [collapsed, setCollapsed] = useState(() => {
     try {
-      return window.localStorage.getItem(ROUTINES_PANEL_KEY) !== "closed";
+      return window.localStorage.getItem(RAIL_KEY) === "collapsed";
     } catch {
-      return true;
+      return false;
     }
   });
   const change = (next: boolean) => {
-    setOpen(next);
+    setCollapsed(next);
     try {
-      window.localStorage.setItem(ROUTINES_PANEL_KEY, next ? "open" : "closed");
+      window.localStorage.setItem(RAIL_KEY, next ? "collapsed" : "open");
     } catch {
       // Sem storage: vale só nesta visita.
     }
   };
-  return [open, change] as const;
+  return [collapsed, change] as const;
 }
 const messagesKey = (id: string) => ["agent-dute-chat", id] as const;
 
@@ -111,14 +115,14 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
   const [, navigate] = useLocation();
   const search = useSearch();
   const params = new URLSearchParams(search);
-  const conversationId = params.get("c");
+  const view = agentView(search);
+  const conversationId = view === "chat" ? params.get("c") : null;
   const askedFromOutside = params.get("q");
   const [draft, setDraft] = useState("");
   const [streaming, setStreaming] = useState<Streaming | null>(null);
   const [mobileRail, setMobileRail] = useState(false);
   const [files, setFiles] = useState<PendingFile[]>([]);
-  const [routinesOpen, setRoutinesOpen] = useRoutinesPanelOpen();
-  const [mobileRoutines, setMobileRoutines] = useState(false);
+  const [railCollapsed, setRailCollapsed] = useRailCollapsed();
   const abortRef = useRef<AbortController | null>(null);
   const canAttach = user?.publicMetadata.role === "cliente";
 
@@ -174,9 +178,13 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
 
   function openConversation(id: string | null) {
     setMobileRail(false);
-    setMobileRoutines(false);
     if (streaming) return;
     navigate(id ? `${basePath}?c=${encodeURIComponent(id)}` : basePath);
+  }
+
+  function openView(next: Exclude<AgentView, "chat">) {
+    setMobileRail(false);
+    navigate(`${basePath}?v=${next}`);
   }
 
   async function send(content: string, options: { fresh?: boolean } = {}) {
@@ -234,7 +242,9 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
     }
   }
 
+  const routines = useRoutines();
   const list = conversations.data?.conversations ?? [];
+  const history = routineHistory(list, routines.data?.routines ?? []);
   const active = list.find((item) => item.id === conversationId);
   const activeTitle = active?.title;
   // Abriu a conversa de uma rotina: a resposta que chegou conta como lida.
@@ -244,23 +254,38 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
   const messages = conversationId ? (chat.data?.messages ?? []) : [];
   const showingStream = streaming && streaming.conversationId === conversationId ? streaming : null;
   const empty = !conversationId || (!chat.isLoading && messages.length === 0 && !showingStream);
+  const title =
+    view === "rotinas"
+      ? "Rotinas"
+      : view === "whatsapp"
+        ? "WhatsApp"
+        : empty
+          ? "Agent Dute"
+          : activeTitle || showingStream?.question || firstQuestion(messages) || "Conversa";
 
-  const rail = (
-    <ConversationRail
-      conversations={list}
+  const rail = (collapsed: boolean) => (
+    <AgentRail
+      conversations={list.filter((item) => !item.routine_id)}
+      history={history}
       loading={conversations.isLoading}
+      view={view}
       activeId={conversationId}
       onOpen={openConversation}
+      onView={openView}
+      collapsed={collapsed}
+      onToggle={() => setRailCollapsed(!railCollapsed)}
     />
   );
 
   return (
     <main className="flex h-full min-h-0 w-full overflow-hidden bg-card">
-      <div className="hidden w-[264px] shrink-0 border-r border-border/70 bg-background md:flex">{rail}</div>
+      <div className={cn("hidden shrink-0 border-r border-border/70 bg-background md:flex", railCollapsed ? "w-[60px]" : "w-[264px]")}>
+        {rail(railCollapsed)}
+      </div>
       <Sheet open={mobileRail} onOpenChange={setMobileRail}>
         <SheetContent side="left" className="w-[300px] p-0">
           <SheetTitle className="sr-only">Conversas</SheetTitle>
-          {rail}
+          {rail(false)}
         </SheetContent>
       </Sheet>
 
@@ -274,19 +299,15 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
           >
             <MessagesSquare className="h-5 w-5" />
           </button>
-          <h1 className="min-w-0 flex-1 truncate text-[15px] font-semibold">{empty ? "Agent Dute" : activeTitle || showingStream?.question || firstQuestion(messages) || "Conversa"}</h1>
+          <h1 className="min-w-0 flex-1 truncate text-[15px] font-semibold">{title}</h1>
           {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
-          <button
-            type="button"
-            className="grid h-9 w-9 place-items-center rounded-lg text-agent hover:bg-muted lg:hidden"
-            onClick={() => setMobileRoutines(true)}
-            aria-label="Rotinas"
-          >
-            <CalendarClock className="h-5 w-5" />
-          </button>
         </header>
 
-        {empty ? (
+        {view === "rotinas" ? (
+          <RoutinesPage role={user?.publicMetadata.role} onOpenConversation={(id) => openConversation(id)} />
+        ) : view === "whatsapp" ? (
+          <WhatsAppSoon />
+        ) : empty ? (
           <Welcome
             name={firstName(user?.fullName)}
             suggestions={suggestions}
@@ -312,51 +333,114 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
         )}
       </section>
 
-      <aside className={cn("hidden shrink-0 border-l border-border/70 bg-background lg:flex", routinesOpen ? "w-[300px]" : "w-[52px]")}>
-        {routinesOpen ? (
-          <RoutinesPanel onOpenConversation={(id) => openConversation(id)} onCollapse={() => setRoutinesOpen(false)} />
-        ) : (
-          <RoutinesCollapsed onExpand={() => setRoutinesOpen(true)} />
-        )}
-      </aside>
-      <Sheet open={mobileRoutines} onOpenChange={setMobileRoutines}>
-        <SheetContent side="right" className="w-[320px] p-0">
-          <SheetTitle className="sr-only">Rotinas</SheetTitle>
-          <RoutinesPanel onOpenConversation={(id) => openConversation(id)} />
-        </SheetContent>
-      </Sheet>
     </main>
   );
 }
 
-function ConversationRail({
+function RailButton({
+  icon,
+  label,
+  active,
+  collapsed,
+  onClick,
+  badge,
+}: {
+  icon: ReactNode;
+  label: string;
+  active: boolean;
+  collapsed: boolean;
+  onClick: () => void;
+  badge?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={collapsed ? (badge ? `${label} (${badge})` : label) : undefined}
+      aria-label={collapsed ? label : undefined}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "flex items-center gap-2.5 rounded-lg text-[13.5px] text-foreground/85 hover:bg-muted",
+        collapsed ? "h-10 w-10 justify-center" : "w-full px-2.5 py-2",
+        active && "bg-muted font-semibold text-foreground",
+      )}
+    >
+      <span className="shrink-0 text-muted-foreground [&>svg]:h-[18px] [&>svg]:w-[18px]">{icon}</span>
+      {collapsed ? null : <span className="min-w-0 flex-1 truncate text-left">{label}</span>}
+      {!collapsed && badge ? <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10.5px] font-semibold text-muted-foreground">{badge}</span> : null}
+    </button>
+  );
+}
+
+function AgentRail({
   conversations,
+  history,
   loading,
+  view,
   activeId,
   onOpen,
+  onView,
+  collapsed,
+  onToggle,
 }: {
   conversations: ConversationSummary[];
+  history: RoutineHistoryItem[];
   loading: boolean;
+  view: AgentView;
   activeId: string | null;
   onOpen: (id: string | null) => void;
+  onView: (view: Exclude<AgentView, "chat">) => void;
+  collapsed: boolean;
+  onToggle: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const filtered = filterConversations(conversations, query);
-  const routineItems = filtered.filter((item) => item.routine_id);
-  const groups = [
-    ...(routineItems.length ? [{ label: "Rotinas", items: routineItems }] : []),
-    ...groupConversations(
-      filtered.filter((item) => !item.routine_id),
-      new Date(),
-    ),
-  ];
+  const groups = groupConversations(filterConversations(conversations, query), new Date());
+  const unreadHistory = history.some((item) => item.id !== activeId && isUnreadRoutine(item));
+  const nav = (
+    <>
+      <RailButton icon={<Plus />} label="Nova conversa" active={view === "chat" && !activeId} collapsed={collapsed} onClick={() => onOpen(null)} />
+      <RailButton icon={<CalendarClock />} label="Rotinas" active={view === "rotinas"} collapsed={collapsed} onClick={() => onView("rotinas")} />
+      <RailButton icon={<MessageCircle />} label="WhatsApp" badge="em breve" active={view === "whatsapp"} collapsed={collapsed} onClick={() => onView("whatsapp")} />
+    </>
+  );
+
+  if (collapsed) {
+    return (
+      <div className="flex h-full w-full flex-col items-center gap-1 py-3">
+        <button type="button" onClick={onToggle} aria-label="Abrir a barra" title="Abrir a barra" className="mb-2 grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted">
+          <PanelLeftOpen className="h-4 w-4" />
+        </button>
+        {nav}
+        {unreadHistory ? <span className="mt-1 h-2 w-2 rounded-full bg-agent" aria-label="Resposta nova de rotina" /> : null}
+      </div>
+    );
+  }
+
+  const item = (id: string, label: string, unread: boolean, title?: string) => (
+    <button
+      key={id}
+      type="button"
+      onClick={() => onOpen(id)}
+      title={title ?? label}
+      className={cn(
+        "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13.5px] text-foreground/80 hover:bg-muted",
+        id === activeId && "bg-muted font-semibold text-foreground",
+      )}
+    >
+      {id !== activeId && unread ? <span className="h-2 w-2 shrink-0 rounded-full bg-agent" aria-label="Resposta nova" /> : null}
+      <span className="truncate">{label}</span>
+    </button>
+  );
+
   return (
-    <div className="flex min-h-0 w-full flex-col gap-1 px-3 py-4">
-      <Button type="button" variant="outline" className="mb-2 h-10 rounded-xl bg-card font-semibold" onClick={() => onOpen(null)}>
-        <Plus className="h-4 w-4" />
-        Nova conversa
-      </Button>
-      <label className="mb-2 flex items-center gap-2 rounded-lg border border-border/70 bg-card px-2.5 py-1.5 text-sm text-muted-foreground">
+    <div className="flex min-h-0 w-full flex-col gap-0.5 px-3 py-3">
+      <div className="mb-1 flex justify-end">
+        <button type="button" onClick={onToggle} aria-label="Recolher a barra" title="Recolher a barra" className="hidden h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted md:grid">
+          <PanelLeftClose className="h-4 w-4" />
+        </button>
+      </div>
+      {nav}
+      <label className="my-2 flex items-center gap-2 rounded-lg border border-border/70 bg-card px-2.5 py-1.5 text-sm text-muted-foreground">
         <Search className="h-4 w-4 shrink-0" />
         <input
           value={query}
@@ -365,40 +449,41 @@ function ConversationRail({
           className="min-w-0 flex-1 bg-transparent text-foreground outline-none placeholder:text-muted-foreground"
         />
       </label>
-      <nav className="min-h-0 flex-1 overflow-y-auto">
+      <nav aria-label="Conversas recentes" className="min-h-0 flex-1 overflow-y-auto">
         {loading ? (
           <p className="px-2 py-3 text-sm text-muted-foreground">Carregando…</p>
         ) : groups.length === 0 ? (
-          <p className="px-2 py-3 text-sm text-muted-foreground">
-            {query ? "Nenhuma conversa encontrada." : "Suas conversas aparecem aqui."}
-          </p>
+          <p className="px-2 py-3 text-sm text-muted-foreground">{query ? "Nenhuma conversa encontrada." : "Suas conversas aparecem aqui."}</p>
         ) : (
           groups.map((group) => (
             <div key={group.label} className="mb-2">
-              <p className="px-2 pb-1 pt-3 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {group.label}
-              </p>
-              {group.items.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => onOpen(item.id)}
-                  title={item.title}
-                  className={cn(
-                    "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13.5px] text-foreground/80 hover:bg-muted",
-                    item.id === activeId && "bg-muted font-semibold text-foreground",
-                  )}
-                >
-                  {item.id !== activeId && isUnreadRoutine(item) ? (
-                    <span className="h-2 w-2 shrink-0 rounded-full bg-agent" aria-label="Resposta nova" />
-                  ) : null}
-                  <span className="truncate">{item.title}</span>
-                </button>
-              ))}
+              <p className="px-2 pb-1 pt-3 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">{group.label}</p>
+              {group.items.map((conversation) => item(conversation.id, conversation.title, false))}
             </div>
           ))
         )}
       </nav>
+      {history.length ? (
+        <nav aria-label="Histórico das rotinas" className="max-h-[34%] shrink-0 overflow-y-auto border-t border-border/70 pt-1">
+          <p className="px-2 pb-1 pt-2 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Histórico das rotinas</p>
+          {history.map((entry) => item(entry.id, entry.label, isUnreadRoutine(entry)))}
+        </nav>
+      ) : null}
+    </div>
+  );
+}
+
+function WhatsAppSoon() {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto px-6 pb-10 text-center">
+      <span className="grid h-14 w-14 place-items-center rounded-2xl bg-success-soft text-success-soft-foreground">
+        <MessageCircle className="h-7 w-7" aria-hidden="true" />
+      </span>
+      <span className="rounded-full bg-success-soft px-2.5 py-0.5 text-xs font-semibold text-success-soft-foreground">Em breve</span>
+      <h2 className="text-xl font-semibold tracking-tight">Agent Dute no WhatsApp</h2>
+      <p className="max-w-md text-sm text-muted-foreground">
+        Você vai poder falar com o Agent Dute pelo WhatsApp, com as mesmas consultas de estoque, pedidos e entregas. As conversas do WhatsApp vão aparecer aqui, junto com as do portal.
+      </p>
     </div>
   );
 }

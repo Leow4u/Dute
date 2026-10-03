@@ -287,6 +287,14 @@ export function agentPathFor(role: unknown) {
   return role === "cliente" ? AGENT_PATH : TEAM_AGENT_PATH;
 }
 
+export type AgentView = "chat" | "rotinas" | "whatsapp";
+
+/** Tela do Agent Dute pela busca da URL: ?v=rotinas, ?v=whatsapp ou a conversa. */
+export function agentView(search: string): AgentView {
+  const view = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search).get("v");
+  return view === "rotinas" || view === "whatsapp" ? view : "chat";
+}
+
 export function isAgentScreen(location: string) {
   return location === AGENT_PATH || location === TEAM_AGENT_PATH;
 }

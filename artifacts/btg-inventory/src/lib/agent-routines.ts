@@ -141,6 +141,80 @@ export function routinePayload(form: RoutineForm, agentMessageId?: string) {
   };
 }
 
+// ------------------------------------------------------- modelos prontos
+
+export type RoutineTemplate = Pick<RoutineForm, "name" | "prompt" | "frequency" | "days" | "time"> & {
+  id: string;
+  day_of_month?: number;
+  /** Linha curta do card do modelo. */
+  hint: string;
+};
+
+/** Modelos da tela Rotinas: o do cliente fala do estoque dele; o da equipe, da operação. */
+export const ROUTINE_TEMPLATES: { customer: RoutineTemplate[]; team: RoutineTemplate[] } = {
+  customer: [
+    { id: "estoque", name: "Resumo do estoque", hint: "Peças, reservas e disponível.", prompt: "Qual é o resumo do meu estoque hoje? Peças disponíveis, reservadas e itens zerados.", frequency: "weekly", days: [1], time: "08:00" },
+    { id: "minimo", name: "Itens abaixo do mínimo", hint: "O que precisa repor.", prompt: "Quais itens estão abaixo do estoque mínimo e quanto falta de cada um?", frequency: "weekdays", days: [], time: "07:30" },
+    { id: "pedidos", name: "Pedidos em andamento", hint: "Etapa de cada pedido aberto.", prompt: "Quais pedidos estão em andamento e em que etapa está cada um?", frequency: "weekdays", days: [], time: "09:00" },
+    { id: "entregas", name: "Entregas da semana", hint: "O que saiu e o que está a caminho.", prompt: "O que saiu do estoque esta semana e quais entregas ainda estão a caminho?", frequency: "weekly", days: [5], time: "17:00" },
+    { id: "fechamento", name: "Fechamento do mês", hint: "Pedidos, envios e fatura do mês passado.", prompt: "Resumo do mês passado: pedidos, envios recebidos, o que saiu do estoque e a fatura.", frequency: "monthly", days: [], day_of_month: 1, time: "09:00" },
+    { id: "faturas", name: "Faturas a vencer", hint: "Faturas em aberto e vencimentos.", prompt: "Quais faturas estão em aberto e quando vence cada uma?", frequency: "weekly", days: [1], time: "09:00" },
+  ],
+  team: [
+    { id: "estoque", name: "Resumo do estoque", hint: "Peças, reservas e disponível.", prompt: "Qual é o resumo do estoque hoje? Peças disponíveis, reservadas e itens zerados.", frequency: "weekly", days: [1], time: "08:00" },
+    { id: "minimo", name: "Itens abaixo do mínimo", hint: "O que precisa repor.", prompt: "Quais itens estão abaixo do estoque mínimo e quanto falta de cada um?", frequency: "weekdays", days: [], time: "07:30" },
+    { id: "pedidos", name: "Pedidos em andamento", hint: "Etapa de cada pedido aberto.", prompt: "Quais pedidos estão em andamento e em que etapa está cada um?", frequency: "weekdays", days: [], time: "09:00" },
+    { id: "aprovacao", name: "Solicitações esperando aprovação", hint: "Pedidos e envios parados na aprovação.", prompt: "Quais solicitações estão esperando aprovação e há quanto tempo?", frequency: "weekdays", days: [], time: "08:30" },
+    { id: "wms", name: "Fila do WMS", hint: "Tarefas abertas do armazém.", prompt: "Como está a fila do WMS? Tarefas abertas por etapa e as mais antigas.", frequency: "weekdays", days: [], time: "07:00" },
+    { id: "fechamento", name: "Fechamento do mês", hint: "Pedidos, envios e faturamento do mês passado.", prompt: "Resumo do mês passado: pedidos, envios recebidos, o que saiu do estoque e o faturamento.", frequency: "monthly", days: [], day_of_month: 1, time: "09:00" },
+  ],
+};
+
+export function templatesFor(role: string | undefined) {
+  return role === "cliente" ? ROUTINE_TEMPLATES.customer : ROUTINE_TEMPLATES.team;
+}
+
+/** O modelo vira o formulário da janela de nova rotina, já preenchido. */
+export function templateForm(template: RoutineTemplate): RoutineForm {
+  return {
+    name: template.name,
+    prompt: template.prompt,
+    frequency: template.frequency,
+    days: [...template.days],
+    day_of_month: template.day_of_month ?? 1,
+    time: template.time,
+    active: true,
+  };
+}
+
+/** Em "Minhas rotinas" os modelos aparecem só enquanto não há nenhuma; depois ficam na aba Modelos. */
+export function showTemplatesInMine(list: Routine[]) {
+  return list.length === 0;
+}
+
+export type RoutineHistoryItem = { id: string; label: string; last_message_at: string; routine_id: string };
+
+/**
+ * Histórico das rotinas na barra lateral: a conversa de cada rotina (uma por
+ * rotina), da resposta mais recente para a mais antiga. Rotina apagada
+ * continua aqui, com o título da conversa.
+ */
+export function routineHistory(
+  conversations: Array<{ id: string; title: string; last_message_at: string; routine_id?: string }>,
+  routines: Array<Pick<Routine, "id" | "name">>,
+): RoutineHistoryItem[] {
+  const names = new Map(routines.map((routine) => [routine.id, routine.name]));
+  return conversations
+    .filter((item): item is typeof item & { routine_id: string } => Boolean(item.routine_id))
+    .map((item) => ({
+      id: item.id,
+      routine_id: item.routine_id,
+      last_message_at: item.last_message_at,
+      label: names.get(item.routine_id) ?? item.title.replace(/^Rotina:\s*/, ""),
+    }))
+    .sort((left, right) => right.last_message_at.localeCompare(left.last_message_at));
+}
+
 // ------------------------------------------------- não lido (neste navegador)
 
 type SeenStorage = Pick<Storage, "getItem" | "setItem">;
