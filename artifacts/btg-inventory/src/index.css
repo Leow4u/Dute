@@ -48,6 +48,15 @@
   --color-warning-soft: hsl(var(--warning-soft));
   --color-warning-soft-border: hsl(var(--warning-soft-border));
   --color-warning-soft-foreground: hsl(var(--warning-soft-foreground));
+  --color-success-soft: hsl(var(--success-soft));
+  --color-success-soft-border: hsl(var(--success-soft-border));
+  --color-success-soft-foreground: hsl(var(--success-soft-foreground));
+  --color-info-soft: hsl(var(--info-soft));
+  --color-info-soft-border: hsl(var(--info-soft-border));
+  --color-info-soft-foreground: hsl(var(--info-soft-foreground));
+  --color-destructive-soft: hsl(var(--destructive-soft));
+  --color-destructive-soft-border: hsl(var(--destructive-soft-border));
+  --color-destructive-soft-foreground: hsl(var(--destructive-soft-foreground));
 
   --color-chart-1: hsl(var(--chart-1));
   --color-chart-2: hsl(var(--chart-2));
@@ -134,6 +143,16 @@
   --warning-soft: 48 100% 96%;
   --warning-soft-border: 48 97% 77%;
   --warning-soft-foreground: 26 83% 31%;
+  /* Mesma família para os outros estados (antes emerald/blue/rose 50/200/700). */
+  --success-soft: 152 81% 96%;
+  --success-soft-border: 152 76% 80%;
+  --success-soft-foreground: 161 94% 24%;
+  --info-soft: 214 100% 97%;
+  --info-soft-border: 213 97% 87%;
+  --info-soft-foreground: 224 76% 48%;
+  --destructive-soft: 356 100% 97%;
+  --destructive-soft-border: 353 96% 90%;
+  --destructive-soft-foreground: 345 83% 41%;
 
   --chart-1: 219 91% 70%;
   --chart-2: 212 78% 76%;
@@ -225,6 +244,15 @@
   --warning-soft: 35 60% 11%;
   --warning-soft-border: 35 55% 26%;
   --warning-soft-foreground: 43 96% 77%;
+  --success-soft: 152 50% 10%;
+  --success-soft-border: 152 45% 24%;
+  --success-soft-foreground: 152 65% 70%;
+  --info-soft: 214 60% 12%;
+  --info-soft-border: 214 55% 28%;
+  --info-soft-foreground: 213 90% 78%;
+  --destructive-soft: 350 50% 11%;
+  --destructive-soft-border: 350 45% 27%;
+  --destructive-soft-foreground: 350 90% 80%;
 
   --chart-1: 212 98% 40%;
   --chart-2: 212 80% 50%;
