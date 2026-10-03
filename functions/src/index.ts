@@ -104,6 +104,17 @@ import { searchPastConversations } from "./domain/agent-history.js";
 import { buildOrderDraft, buildShipmentDraft, draftFromToolResponses, sendAgentDraft } from "./domain/agent-drafts.js";
 import { AgentAttachmentSchema, attachmentsForDraft, invoiceContext, READABLE_INVOICE_TYPES, type AgentAttachment } from "./domain/agent-attachments.js";
 import { activeNotesForPrompt, decideNote, DecideNoteSchema, listNotes, NOTE_REVIEWER_ROLES, suggestNote } from "./domain/agent-notes.js";
+import {
+  activePlaybooksForPrompt,
+  decidePlaybook,
+  DecidePlaybookSchema,
+  listPlaybooks,
+  playbookIndexText,
+  PlaybookInputSchema,
+  readPlaybookForAgent,
+  savePlaybook,
+  seedInitialPlaybooks,
+} from "./domain/agent-playbooks.js";
 import { conversationSummary, refreshConversationSummary, SUMMARY_WINDOW, summaryPrompt, type SummaryMessage } from "./domain/agent-summary.js";
 import {
   buildRoutineSuggestion,
@@ -1916,6 +1927,8 @@ function agentDuteSystemPrompt(input: {
   userName?: string;
   now: Date;
   notes?: string[];
+  /** Índice dos playbooks aprovados (id, nome e quando usar). */
+  playbooks?: string;
   summary?: string;
 }) {
   const today = saoPauloDate.format(input.now);
@@ -1944,8 +1957,14 @@ Como trabalhar:
 Anotações aprovadas sobre ${input.customerCode} (valem como regra da operação; use quando fizer sentido, sem repetir à toa):
 ${input.notes?.length ? input.notes.map((note) => `- ${note}`).join("\n") : "- (nenhuma ainda)"}
 - Quando a pessoa disser uma preferência ou regra que vale para as próximas vezes (horário, local, contato, embalagem, como prefere receber), sugira com sugerir_anotacao e diga que a equipe Dutelog aprova antes de valer. Não sugira o que já está anotado acima.
-- Quando a pessoa pedir algo que se repete ("toda segunda me manda…", "todo dia de manhã quero saber…"), proponha uma rotina com sugerir_rotina: a pessoa confirma no cartão. As rotinas também ficam na coluna Rotinas, à direita do chat.
-
+- Quando a pessoa pedir algo que se repete ("toda segunda me manda…", "todo dia de manhã quero saber…"), proponha uma rotina com sugerir_rotina: a pessoa confirma no cartão. As rotinas também ficam na tela Rotinas, na barra lateral do Agent Dute.
+${input.playbooks ? `
+Playbooks aprovados pela coordenação (procedimentos da operação):
+${input.playbooks}
+- Quando a pergunta for sobre como fazer um destes procedimentos (ou uma situação que ele cobre), abra o playbook com consultar_playbook e oriente a pessoa pelos passos, dizendo em que tela fazer cada um. Diga que é o procedimento aprovado pela coordenação.
+- O playbook orienta; quem executa é a pessoa. Continue usando as consultas para os dados reais do caso (pedido, NF, saldo).
+- Se nenhum playbook cobrir a pergunta, responda como sempre. Não invente procedimento da operação: se não souber a regra, diga que a coordenação define.
+` : ""}
 ${input.summary ? `Resumo do começo desta conversa (as mensagens antigas não aparecem abaixo; use como contexto e confirme dados atuais nas consultas):\n${input.summary}\n\n` : ""}Como escrever:
 - Português do Brasil, direto e cordial, como um colega que conhece a operação. Comece pela resposta.
 - Respostas curtas. Use **negrito** para o número principal e listas com "- " quando houver vários itens.
@@ -1979,6 +1998,15 @@ function agentDuteTools(
           audience: scope.audience === "customer" ? "customer" : "internal",
           actor: { uid: asker.userId, email: asker.email, name: asker.name, role, customer_code: scope.customerCode },
         }),
+    ),
+    tool(
+      {
+        name: "consultar_playbook",
+        description:
+          "Abre um playbook aprovado pela coordenação (passo a passo de um procedimento da operação) pelo id listado no prompt. Use quando a pergunta for sobre como fazer aquele procedimento. Só leitura.",
+        inputSchema: z.object({ id: z.string().describe("O id entre colchetes na lista de playbooks, ex.: 'pb_ini_btg_pactual_receber'") }),
+      },
+      async ({ id }) => readPlaybookForAgent(db, scope.customerCode, id, scope.audience === "customer" ? "customer" : "internal"),
     ),
     tool(
       {
@@ -2277,9 +2305,11 @@ async function generateAgentDuteReply(input: {
   userName?: string;
   onChunk?: (chunk: AgentDuteChunk) => void;
 }) {
-  const notes = await activeNotesForPrompt(db, input.scope.customerCode, input.scope.audience === "customer" ? "customer" : "internal").catch(
-    () => [] as string[],
-  );
+  const who = input.scope.audience === "customer" ? "customer" : "internal";
+  const [notes, playbooks] = await Promise.all([
+    activeNotesForPrompt(db, input.scope.customerCode, who).catch(() => [] as string[]),
+    activePlaybooksForPrompt(db, input.scope.customerCode, who).catch(() => []),
+  ]);
   const system = agentDuteSystemPrompt({
     audience: input.scope.audience,
     role: input.role,
@@ -2287,6 +2317,7 @@ async function generateAgentDuteReply(input: {
     userName: input.userName,
     now: new Date(),
     notes,
+    playbooks: playbooks.length ? playbookIndexText(playbooks) : undefined,
     summary: input.summary,
   });
   const messages = input.history
@@ -7010,6 +7041,34 @@ export const decideAgentNote = onCall(async (request) => {
   if (!parsed.success) throw new HttpsError("invalid-argument", "Anotação inválida.");
   const input = parsed.data;
   return decideNote(db, input, profile);
+});
+
+/** Playbooks do Agent Dute do cliente (pendentes e valendo), para a coordenação. */
+export const listAgentPlaybooks = onCall(async (request) => {
+  const profile = await getProfile(request);
+  return { playbooks: await listPlaybooks(db, requireCustomerScope(profile), profile) };
+});
+
+/** Cria ou edita um playbook; escrito pela coordenação vale direto. Grava evento. */
+export const saveAgentPlaybook = onCall(async (request) => {
+  const profile = await getProfile(request);
+  const parsed = PlaybookInputSchema.safeParse(request.data ?? {});
+  if (!parsed.success) throw new HttpsError("invalid-argument", "Preencha nome, quando usar e pelo menos um passo.");
+  return savePlaybook(db, requireCustomerScope(profile), parsed.data, profile);
+});
+
+/** Aprova, recusa ou arquiva um playbook. Grava evento. */
+export const decideAgentPlaybook = onCall(async (request) => {
+  const profile = await getProfile(request);
+  const parsed = DecidePlaybookSchema.safeParse(request.data ?? {});
+  if (!parsed.success) throw new HttpsError("invalid-argument", "Playbook inválido.");
+  return decidePlaybook(db, requireCustomerScope(profile), parsed.data, profile);
+});
+
+/** Carrega os playbooks iniciais como pendentes (não duplica). */
+export const seedAgentPlaybooks = onCall(async (request) => {
+  const profile = await getProfile(request);
+  return seedInitialPlaybooks(db, requireCustomerScope(profile), profile);
 });
 
 // Uma resposta pode encadear várias consultas; 60 s (padrão) era curto.

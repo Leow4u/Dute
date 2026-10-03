@@ -14,6 +14,7 @@ const PORTAL = [
   "conversas_anteriores",
   "sugerir_anotacao",
   "sugerir_rotina",
+  "consultar_playbook",
 ];
 
 describe("consultas do Agent Dute por papel", () => {
