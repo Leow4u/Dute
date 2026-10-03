@@ -23,6 +23,10 @@ function New-FakeIndex([string[]]$names) {
 #   com a API do Cloud Scheduler desligada). Minutos depois o servico sumiu.
 # - semEstado: "functions describe" nao responde (versao/permissao do
 #   gcloud); o script nao pode reprovar so por isso.
+# - fantasma: nunca foi publicada (02/10/2026, deploy do painel do sistema
+#   parou no timeout de descoberta), mas "run services get-iam-policy"
+#   devolveu uma politica vazia com etag como se o servico existisse. So o
+#   "run services describe" diz a verdade: nada no stdout.
 function global:gcloud {
   $global:LASTEXITCODE = 0
   if ($args[0] -eq "functions") {
@@ -36,11 +40,17 @@ function global:gcloud {
     return
   }
   $service = $args[3]
+  if ($args[2] -eq "describe") {
+    if (@("publica", "semestado", "privada", "falhou") -contains $service) { $service }
+    else { [Console]::Error.WriteLine("ERROR: NOT_FOUND: Resource '$service' does not exist.") }
+    return
+  }
   switch ($service) {
     "publica" { '{"bindings":[{"members":["allUsers"],"role":"roles/run.invoker"}],"etag":"BwY"}' }
     "semestado" { '{"bindings":[{"members":["allUsers"],"role":"roles/run.invoker"}],"etag":"BwY"}' }
     "privada" { '{"etag":"ACAB"}' }
     "falhou" { '{"etag":"ACAB"}' }
+    "fantasma" { '{"etag":"ACAB"}' }
     default { [Console]::Error.WriteLine("ERROR: NOT_FOUND: Resource '$service' does not exist.") }
   }
 }
@@ -78,6 +88,14 @@ Expect "function com deploy falho conta como nao publicada, nao como falta de in
   $result.Output -match "NAO PUBLICADA\s+falhou.*FAILED" -and
   $result.Output -match "firebase deploy --only functions:falhou" -and
   $result.Output -notmatch "add-iam-policy-binding falhou"
+) $result.Output
+
+$result = Run-Check @("publica", "fantasma")
+Expect "servico inexistente com politica vazia conta como nao publicada" (
+  $result.Exit -eq 1 -and
+  $result.Output -match "NAO PUBLICADA\s+fantasma" -and
+  $result.Output -match "firebase deploy --only functions:fantasma" -and
+  $result.Output -notmatch "add-iam-policy-binding fantasma"
 ) $result.Output
 
 $result = Run-Check @("publica", "semEstado")
