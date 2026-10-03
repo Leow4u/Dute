@@ -209,16 +209,25 @@ function BillingPanel({ infra, agentMonthCost, onConfigure }: { infra: SystemInf
       </Panel>
     );
   }
-  const max = Math.max(...billing.services.map((row) => row.cost), 0.01);
+  const max = Math.max(...billing.services.map((row) => row.gross), 0.01);
   const comparison = agentMonthCost === null ? null : vertexComparison(billing.vertex_ai, agentMonthCost);
+  const covered = billing.credits < 0;
   return (
     <Panel title="Custo real do Google Cloud" note="no mês" action={configure}>
       <div className="flex flex-col gap-3 px-5 py-4">
-        <div className="text-2xl font-semibold tabular-nums">
-          {formatMoney(billing.total)}{" "}
-          <span className="text-sm font-normal text-muted-foreground">
+        <div>
+          <div className="text-2xl font-semibold tabular-nums">
+            {formatMoney(billing.gross)} <span className="text-sm font-normal text-muted-foreground">de uso</span>
+          </div>
+          <div className="mt-0.5 text-xs text-muted-foreground">
+            {covered ? (
+              <>
+                Créditos <b className="tabular-nums text-success-soft-foreground">{formatMoney(billing.credits)}</b> · cobrado{" "}
+                <b className="tabular-nums text-foreground">{formatMoney(billing.net)}</b> ·{" "}
+              </>
+            ) : null}
             {billing.data_until ? `dados até ${dayTime.format(new Date(billing.data_until))}` : "sem dados do mês ainda"}
-          </span>
+          </div>
         </div>
         {billing.currency !== "BRL" ? <p className="text-xs text-warning-soft-foreground">A fatura está em {billing.currency}; os valores acima estão nessa moeda.</p> : null}
         {billing.services.length ? (
@@ -226,15 +235,19 @@ function BillingPanel({ infra, agentMonthCost, onConfigure }: { infra: SystemInf
             {billing.services.slice(0, 8).map((row) => (
               <li key={row.service} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 text-sm">
                 <span className="truncate">{row.service}</span>
-                <b className="tabular-nums">{formatMoney(row.cost)}</b>
+                <b className="tabular-nums">{formatMoney(row.gross)}</b>
                 <span className="col-span-2 h-1.5 overflow-hidden rounded-full bg-muted">
-                  <span className="block h-full rounded-full bg-primary" style={{ width: `${Math.max(2, (row.cost / max) * 100)}%` }} />
+                  <span className="block h-full rounded-full bg-primary" style={{ width: `${Math.max(2, (row.gross / max) * 100)}%` }} />
                 </span>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground">A exportação ainda não trouxe dados deste mês. Os primeiros chegam algumas horas depois de ativada.</p>
+          <p className="text-sm text-muted-foreground">
+            {billing.has_data
+              ? "Nenhum custo de uso neste mês até agora."
+              : "A exportação ainda não trouxe dados deste mês. Os primeiros chegam algumas horas depois de ativada."}
+          </p>
         )}
         {billing.vertex_ai > 0 && agentMonthCost !== null ? (
           <p className="rounded-lg bg-agent-soft px-3 py-2 text-xs text-agent-strong">

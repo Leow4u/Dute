@@ -166,26 +166,39 @@ describe("painel do sistema: custo real do Google Cloud", () => {
     assert.equal(invoiceMonth(new Date("2026-11-01T00:30:00Z")), "202610");
     const { query, params } = billingQuery("dute-btg.billing_export.gcp_billing_export_v1_01AB", now);
     assert.match(query, /FROM `dute-btg\.billing_export\.gcp_billing_export_v1_01AB`/);
-    assert.match(query, /UNNEST\(credits\)/);
+    assert.match(query, /SUM\(cost\) AS gross/);
+    assert.match(query, /UNNEST\(credits\).*AS credits/s);
     assert.deepEqual(params, { month: "202610", since: "2026-09-26" });
     assert.throws(() => billingQuery("x`y", now));
   });
 
   it("lê a resposta do BigQuery e separa o Vertex AI para comparar com a estimativa", () => {
+    // Formato real (03/10/2026): créditos do período de teste anulando o custo.
     const rows = parseBillingResponse({
       rows: [
-        { f: [{ v: "Cloud Run" }, { v: "9.104" }, { v: "BRL" }, { v: "1.7914752E9" }] },
-        { f: [{ v: "Cloud Firestore" }, { v: "5.3" }, { v: "BRL" }, { v: "1.79146E9" }] },
-        { f: [{ v: "Vertex AI" }, { v: "0.744" }, { v: "BRL" }, { v: null }] },
-        { f: [{ v: "Cloud Scheduler" }, { v: "0" }, { v: "BRL" }, { v: null }] },
+        { f: [{ v: "Networking" }, { v: "4.471" }, { v: "-4.471" }, { v: "BRL" }, { v: "1.7914752E9" }] },
+        { f: [{ v: "Vertex AI" }, { v: "1.49" }, { v: "-1.49" }, { v: "BRL" }, { v: "1.79146E9" }] },
+        { f: [{ v: "Cloud Run Functions" }, { v: "0.21" }, { v: "-0.11" }, { v: "BRL" }, { v: null }] },
+        { f: [{ v: "Cloud Build" }, { v: "0" }, { v: "0" }, { v: "BRL" }, { v: null }] },
       ],
     });
     const summary = summarizeBilling(rows);
-    assert.equal(summary.total, 15.15);
+    assert.equal(summary.has_data, true);
+    assert.equal(summary.gross, 6.17);
+    assert.equal(summary.credits, -6.07);
+    assert.equal(summary.net, 0.1);
     assert.equal(summary.currency, "BRL");
-    assert.equal(summary.vertex_ai, 0.74);
+    // Comparação com a estimativa usa o custo de uso, sem créditos.
+    assert.equal(summary.vertex_ai, 1.49);
     assert.equal(summary.data_until, new Date(1.7914752e12).toISOString());
-    assert.deepEqual(summary.services.map((row) => row.service), ["Cloud Run", "Cloud Firestore", "Vertex AI"]);
-    assert.deepEqual(summarizeBilling([]), { total: 0, currency: "BRL", vertex_ai: 0, data_until: null, services: [] });
+    assert.deepEqual(
+      summary.services.map((row) => [row.service, row.gross, row.net]),
+      [
+        ["Networking", 4.47, 0],
+        ["Vertex AI", 1.49, 0],
+        ["Cloud Run Functions", 0.21, 0.1],
+      ],
+    );
+    assert.deepEqual(summarizeBilling([]), { has_data: false, gross: 0, credits: 0, net: 0, currency: "BRL", vertex_ai: 0, data_until: null, services: [] });
   });
 });

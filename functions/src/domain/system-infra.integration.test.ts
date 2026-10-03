@@ -55,7 +55,7 @@ function fakeGcp(overrides: Partial<Record<"logging" | "functions" | "run" | "bi
       return { status: 200, json: open ? { bindings: [{ role: "roles/run.invoker", members: ["allUsers"] }] } : { etag: "ACAB" } };
     }
     if (url.startsWith("https://bigquery.googleapis.com/")) {
-      return overrides.bigquery ?? { status: 200, json: { jobComplete: true, rows: [{ f: [{ v: "Cloud Run" }, { v: "9.1" }, { v: "BRL" }, { v: null }] }] } };
+      return overrides.bigquery ?? { status: 200, json: { jobComplete: true, rows: [{ f: [{ v: "Cloud Run" }, { v: "9.1" }, { v: "-9" }, { v: "BRL" }, { v: null }] }] } };
     }
     return { status: 404, json: { error: { message: "não simulado" } } };
   };
@@ -103,7 +103,7 @@ describe("painel do sistema: infraestrutura", () => {
     const after = await readSystemInfra(db, { role: "owner" }, options(gcp));
     assert.equal(after.settings.billing_table, TABLE);
     assert.equal(after.billing.status, "ok");
-    if (after.billing.status === "ok") assert.equal(after.billing.total, 9.1);
+    if (after.billing.status === "ok") assert.deepEqual([after.billing.gross, after.billing.credits, after.billing.net], [9.1, -9, 0.1]);
     const query = calls.find((call) => call.url.includes("bigquery"))!.body as { query: string; queryParameters: Array<{ name: string; parameterValue: { value: string } }> };
     assert.match(query.query, new RegExp(`FROM \`${TABLE.replace(/\./g, "\\.")}\``));
     assert.deepEqual(
