@@ -6,12 +6,14 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from "@/hooks/use-toast";
 import { formatMoney } from "@/lib/system-dashboard";
 import {
+  errorsToShow,
   FUNCTION_STATUS_LABELS,
   functionsToShow,
   infraKey,
   infraTiles,
   serviceNames,
   vertexComparison,
+  type ErrorGroup,
   type SystemInfra,
 } from "@/lib/system-infra";
 import { cn } from "@/lib/utils";
@@ -74,37 +76,62 @@ function CopyCommand({ command }: { command: string }) {
   );
 }
 
+function ErrorRow({ group, name }: { group: ErrorGroup; name: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <li className="border-b border-border/40 last:border-0">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 px-5 py-3 text-left text-sm hover:bg-muted/40"
+      >
+        <span className="flex min-w-0 flex-wrap items-center gap-2">
+          <b className="break-all">{name}</b>
+          {group.blocked ? <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-700">bloqueada</span> : null}
+          {group.admin ? (
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700" title="Registro de auditoria: deploy ou permissão no Google Cloud">
+              Google Cloud
+            </span>
+          ) : null}
+        </span>
+        <span className="flex items-baseline gap-3 text-xs text-muted-foreground">
+          <span>{dayTime.format(new Date(group.last_at))}</span>
+          <b className="text-sm tabular-nums text-foreground">{group.count}×</b>
+        </span>
+        <code className={cn("col-span-2 break-words font-mono text-xs text-muted-foreground", !open && "line-clamp-2")}>{group.message}</code>
+        {open && group.count > 1 ? (
+          <span className="col-span-2 text-xs text-muted-foreground">primeira {dayTime.format(new Date(group.first_at))}</span>
+        ) : null}
+      </button>
+    </li>
+  );
+}
+
 function ErrorsPanel({ infra }: { infra: SystemInfra }) {
+  const [showAll, setShowAll] = useState(false);
   const errors = infra.errors;
   const name = serviceNames(infra);
+  const hidden = errors.status === "ok" ? errors.groups.length - errorsToShow(errors.groups, false).length : 0;
   return (
-    <Panel title="Erros do servidor" note="últimas 24 h">
+    <Panel title="Erros do servidor" note="últimas 24 h · clique para ver a mensagem inteira">
       {errors.status === "error" ? (
         <SectionError message={errors.message} />
       ) : errors.status !== "ok" ? null : errors.groups.length ? (
-        <ul>
-          {errors.groups.map((group) => (
-            <li key={`${group.service}-${group.message}`} className="flex flex-col gap-0.5 border-b border-border/40 px-5 py-3 text-sm last:border-0">
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="flex min-w-0 items-center gap-2">
-                  <b className="truncate">{name(group.service)}</b>
-                  {group.blocked ? <span className="shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-700">bloqueada</span> : null}
-                  {group.admin ? (
-                    <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700" title="Registro de auditoria: deploy ou permissão no Google Cloud">
-                      Google Cloud
-                    </span>
-                  ) : null}
-                </span>
-                <span className="shrink-0 font-semibold tabular-nums">{group.count}×</span>
-              </div>
-              <code className="break-words font-mono text-xs text-muted-foreground">{group.message}</code>
-              <span className="text-xs text-muted-foreground">
-                última {dayTime.format(new Date(group.last_at))}
-                {group.count > 1 ? ` · primeira ${dayTime.format(new Date(group.first_at))}` : ""}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul>
+            {errorsToShow(errors.groups, showAll).map((group) => (
+              <ErrorRow key={`${group.service}-${group.message}`} group={group} name={name(group.service)} />
+            ))}
+          </ul>
+          {hidden > 0 ? (
+            <div className="border-t border-border/40 px-5 py-2.5 text-right text-xs">
+              <button type="button" onClick={() => setShowAll(!showAll)} className="font-semibold text-primary hover:underline">
+                {showAll ? "mostrar só os 5 mais recentes" : `ver todos (${errors.groups.length})`}
+              </button>
+            </div>
+          ) : null}
+        </>
       ) : (
         <p className="px-5 py-4 text-sm text-muted-foreground">Nenhum erro nem chamada bloqueada nas últimas 24 h.</p>
       )}
@@ -298,10 +325,12 @@ export function InfraSection({ agentMonthCost }: { agentMonthCost: number | null
       ) : infra.isError || !infra.data ? (
         <p className="rounded-[18px] border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">Não consegui consultar a infraestrutura: {infra.error?.message}</p>
       ) : (
-        <div className="grid items-start gap-4 lg:grid-cols-3">
+        <div className="space-y-4">
           <ErrorsPanel infra={infra.data} />
-          <FunctionsPanel infra={infra.data} />
-          <BillingPanel infra={infra.data} agentMonthCost={agentMonthCost} onConfigure={() => setEditingTable(true)} />
+          <div className="grid items-start gap-4 lg:grid-cols-2">
+            <FunctionsPanel infra={infra.data} />
+            <BillingPanel infra={infra.data} agentMonthCost={agentMonthCost} onConfigure={() => setEditingTable(true)} />
+          </div>
         </div>
       )}
       {editingTable ? <BillingTableDialog current={infra.data?.settings.billing_table ?? null} onClose={() => setEditingTable(false)} /> : null}

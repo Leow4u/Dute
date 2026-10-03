@@ -80,7 +80,10 @@ export function errorMessage(entry: LogEntry) {
   const proto = entry.protoPayload;
   if (proto?.status?.message) {
     const method = (proto.methodName ?? "").split(".").at(-1);
-    return `${method ? `${method}: ` : ""}${proto.status.message}`.slice(0, MESSAGE_LIMIT);
+    const status = /of kind 'SERVICE' .*does not exist/.test(proto.status.message)
+      ? "o serviço não existia (function não publicada)"
+      : proto.status.message;
+    return `${method ? `${method}: ` : ""}${status}`.slice(0, MESSAGE_LIMIT);
   }
   const payload = entry.jsonPayload;
   const raw = entry.textPayload ?? (typeof payload?.message === "string" ? payload.message : payload ? JSON.stringify(payload) : "");

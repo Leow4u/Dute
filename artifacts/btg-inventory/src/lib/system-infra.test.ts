@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { functionRoute } from "./functions-api";
-import { functionsToShow, infraTiles, serviceNames, vertexComparison, type FunctionRow, type SystemInfra } from "./system-infra";
+import { errorsToShow, functionsToShow, infraTiles, serviceNames, vertexComparison, type FunctionRow, type SystemInfra } from "./system-infra";
 
 const row = (name: string, status: FunctionRow["status"]): FunctionRow => ({
   name,
@@ -66,6 +66,12 @@ describe("painel do sistema: infraestrutura", () => {
     expect(name("readshipmentinvoice")).toBe("readShipmentInvoice");
     expect(name("dute-btg-app")).toBe("Site (dute-btg-app)");
     expect(name("outra")).toBe("outra");
+  });
+
+  it("erros: os 5 mais recentes, ou todos", () => {
+    const groups = Array.from({ length: 7 }, (_, index) => ({ service: `s${index}`, message: "m", count: 1, first_at: "", last_at: "", blocked: false, admin: false }));
+    expect(errorsToShow(groups, false).map((group) => group.service)).toEqual(["s0", "s1", "s2", "s3", "s4"]);
+    expect(errorsToShow(groups, true)).toHaveLength(7);
   });
 
   it("compara o Vertex AI da fatura com a estimativa", () => {

@@ -68,6 +68,11 @@ export const FUNCTION_STATUS_LABELS: Record<FunctionStatus, string> = {
   nao_publicada: "não publicada",
 };
 
+/** Os 5 erros mais recentes; "ver todos" abre o resto. */
+export function errorsToShow<T>(groups: T[], showAll: boolean) {
+  return showAll ? groups : groups.slice(0, 5);
+}
+
 /** Só as que têm problema; a lista inteira fica atrás de "ver todas". */
 export function functionsToShow(list: FunctionRow[], showAll: boolean) {
   return showAll ? list : list.filter((row) => row.status !== "ok");
