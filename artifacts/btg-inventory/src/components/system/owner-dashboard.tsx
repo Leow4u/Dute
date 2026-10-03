@@ -16,6 +16,9 @@ import {
 } from "@/lib/system-dashboard";
 import { cn } from "@/lib/utils";
 
+import { InfraSection, InfraTiles } from "./infra-panels";
+import { dayTime, fetchJson, field, Health, Panel } from "./parts";
+
 /**
  * Painel do sistema (só owner): custo estimado e uso do Agent Dute, as
  * rotinas de todo mundo e o que deu errado. Atualiza sozinho a cada minuto.
@@ -23,46 +26,8 @@ import { cn } from "@/lib/utils";
  */
 
 const KIND_COLORS: Record<UsageKind, string> = { chat: "#5b3fc4", rotinas: "#2f5bd3", leitura_nota: "#c08a1e" };
-const field =
-  "w-full min-w-0 rounded-lg border border-border bg-white px-2.5 py-1.5 text-sm outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/15";
-
-async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, { ...init, headers: { "content-type": "application/json", ...(init?.headers ?? {}) } });
-  const payload = (await response.json().catch(() => ({}))) as { message?: string };
-  if (!response.ok) throw new Error(payload.message || "O servidor não respondeu.");
-  return payload as T;
-}
-
 const shortDay = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" });
-const dayTime = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
 const integer = new Intl.NumberFormat("pt-BR");
-
-function Panel({ title, note, children, action }: { title: string; note?: string; children: React.ReactNode; action?: React.ReactNode }) {
-  return (
-    <section className="min-w-0 overflow-hidden rounded-[18px] border border-border bg-white">
-      <div className="flex items-center justify-between gap-2 border-b border-border/60 px-5 py-3">
-        <h2 className="text-sm font-semibold">
-          {title} {note ? <span className="font-normal text-muted-foreground">· {note}</span> : null}
-        </h2>
-        {action}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function Health({ label, value, detail, tone }: { label: string; value: string; detail: string; tone: "ok" | "warn" | "bad" }) {
-  return (
-    <div className="rounded-[18px] border border-border bg-white px-5 py-4">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="mt-1.5 flex items-center gap-2 text-lg font-semibold">
-        <span className={cn("inline-block h-2.5 w-2.5 shrink-0 rounded-full", tone === "ok" ? "bg-green-600" : tone === "warn" ? "bg-amber-500" : "bg-red-600")} />
-        <span className="min-w-0 truncate">{value}</span>
-      </div>
-      <div className="mt-0.5 text-xs text-muted-foreground">{detail}</div>
-    </div>
-  );
-}
 
 function DailyBars({ days }: { days: SystemDashboard["usage"]["days"] }) {
   const max = Math.max(...days.map((day) => day.cost), 0.01);
@@ -188,7 +153,7 @@ export function OwnerDashboard() {
         </p>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Health
           label="Agent Dute hoje"
           value={`${integer.format(usage.today.count)} ${usage.today.count === 1 ? "resposta" : "respostas"}`}
@@ -201,6 +166,7 @@ export function OwnerDashboard() {
           detail={`${routines.list.length} no total, de todas as pessoas`}
           tone={routines.failed ? "warn" : "ok"}
         />
+        <InfraTiles />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
@@ -353,21 +319,7 @@ export function OwnerDashboard() {
         </Panel>
       </div>
 
-      <section>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Em breve (precisa de uma configuração no Google Cloud)</p>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {[
-            ["Erros do servidor", "Qualquer function que falhar, com mensagem e quantidade (Error Reporting)."],
-            ["Custo real do Google Cloud", "Cloud Run, Firestore, Storage e Vertex AI, pela exportação do faturamento."],
-            ["Functions publicadas", "O mesmo do check_functions_invoker, visto aqui."],
-          ].map(([title, detail]) => (
-            <div key={title} className="rounded-[14px] border border-dashed border-border bg-white px-4 py-3 opacity-80">
-              <b className="block text-sm">{title}</b>
-              <span className="text-xs text-muted-foreground">{detail}</span>
-            </div>
-          ))}
-        </div>
-      </section>
+      <InfraSection agentMonthCost={usage.priced ? usage.month.cost : null} />
 
       {editingCosts ? <CostSettingsDialog settings={data.settings} onClose={() => setEditingCosts(false)} /> : null}
     </div>
