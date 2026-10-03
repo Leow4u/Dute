@@ -54,6 +54,7 @@ import {
 import { MinimumStockError, normalizeMinimumStock } from "./catalog-minimum.js";
 import { setUserAccessTransaction } from "./domain/access.js";
 import { readSystemHealth } from "./domain/system-health.js";
+import { CostSettingsSchema, readSystemDashboard, saveCostSettings } from "./domain/system-dashboard.js";
 import {
   projectMinimumStock,
   readClientInventoryForSku,
@@ -7230,3 +7231,19 @@ async function runRoutine(routine: DueRoutine) {
     throw error;
   }
 }
+
+// ------------------------------------------------ painel do sistema (owner)
+
+/** Configuração > Sistema: custo estimado e uso do Agent Dute, rotinas e falhas. Só owner. */
+export const getSystemDashboard = onCall({ timeoutSeconds: 60 }, async (request) => {
+  const profile = await getProfile(request);
+  return readSystemDashboard(db, profile);
+});
+
+/** Preço por milhão de tokens (estimativa de custo) e orçamento mensal do Agent Dute. Só owner. */
+export const saveAgentCostSettings = onCall(async (request) => {
+  const profile = await getProfile(request);
+  const parsed = CostSettingsSchema.safeParse(request.data ?? {});
+  if (!parsed.success) throw new HttpsError("invalid-argument", "Preços e orçamento precisam ser números positivos.");
+  return saveCostSettings(db, profile, parsed.data);
+});

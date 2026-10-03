@@ -204,6 +204,14 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  // Painel do sistema (só owner): custo e uso do Agent Dute, rotinas e falhas.
+  if (method === "GET" && pathname === "/api/system/dashboard") {
+    return { name: "getSystemDashboard", payload: async () => ({}) };
+  }
+  if (method === "POST" && pathname === "/api/system/agent-costs") {
+    return { name: "saveAgentCostSettings", payload: async (_pathname, init) => readJsonBody(init) };
+  }
+
   if (method === "GET" && pathname === "/api/system/health") {
     return { name: "getSystemHealth", status: 200, payload: async () => ({}) };
   }
