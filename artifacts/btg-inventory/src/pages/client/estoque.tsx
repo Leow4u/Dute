@@ -786,7 +786,7 @@ function MarketplaceToolbar({
             aria-expanded={cartOpen}
             aria-label={`Abrir pedido de abastecimento com ${formatNumber(cartQuantity)} item(ns)`}
             className={cn(
-              "relative hidden h-11 cursor-pointer items-center gap-2 rounded-[18px] border px-3.5 text-sm font-medium transition hover:bg-muted active:translate-y-px md:flex",
+              "relative hidden h-11 cursor-pointer items-center gap-2 rounded-[18px] border px-3.5 text-sm font-medium transition hover:bg-surface-hover active:translate-y-px md:flex",
               cartOpen
                 ? "border-primary/25 bg-primary/10 text-primary"
                 : "border-border bg-card/75 text-foreground",
@@ -1561,7 +1561,7 @@ function ProductDetailPanel({
         <div className="-mt-2 flex justify-end">
           <button
             type="button"
-            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-2xl border border-border bg-card/70 text-muted-foreground transition hover:bg-muted"
+            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-2xl border border-border bg-card/70 text-muted-foreground transition hover:bg-surface-hover"
             onClick={onClose}
             aria-label="Fechar detalhe"
           >
@@ -1732,7 +1732,7 @@ function ProductVisual({
       >
         <div
           className={cn(
-            "flex items-center justify-center border border-card/70 bg-card/76 text-primary shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]",
+            "flex items-center justify-center border border-card-edge/70 bg-card/76 text-primary shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]",
             compact ? "h-12 w-12 rounded-[18px]" : "h-20 w-20 rounded-[28px]",
           )}
         >
@@ -1792,7 +1792,7 @@ function QuantityStepper({
       <button
         type="button"
         className={cn(
-          "flex cursor-pointer items-center justify-center text-muted-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40",
+          "flex cursor-pointer items-center justify-center text-muted-foreground transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40",
           compact ? "h-8 w-8 rounded-[10px]" : "h-9 w-9 rounded-[14px]",
         )}
         disabled={normalizedValue <= 0}
@@ -1828,7 +1828,7 @@ function QuantityStepper({
       <button
         type="button"
         className={cn(
-          "flex cursor-pointer items-center justify-center text-muted-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40",
+          "flex cursor-pointer items-center justify-center text-muted-foreground transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40",
           compact ? "h-8 w-8 rounded-[10px]" : "h-9 w-9 rounded-[14px]",
         )}
         disabled={normalizedValue >= normalizedMax}

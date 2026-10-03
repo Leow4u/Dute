@@ -66,6 +66,15 @@
   --color-agent-accent: hsl(var(--agent-accent));
   --color-agent-soft: hsl(var(--agent-soft));
   --color-agent-soft-border: hsl(var(--agent-soft-border));
+  --color-agent-soft-hover: hsl(var(--agent-soft-hover));
+  --color-agent-border: hsl(var(--agent-border));
+  --color-agent-divider: hsl(var(--agent-divider));
+  --color-agent-start: hsl(var(--agent-start));
+
+  /* Superfícies neutras: borda de vidro dos cards e hover/pressed de botões. */
+  --color-card-edge: hsl(var(--card-edge));
+  --color-surface-hover: hsl(var(--primary-soft-hover));
+  --color-surface-pressed: hsl(var(--primary-soft-pressed));
 
   --color-chart-1: hsl(var(--chart-1));
   --color-chart-2: hsl(var(--chart-2));
@@ -173,6 +182,11 @@
   --agent-accent: 258 90% 66%;
   --agent-soft: 257 100% 99%;
   --agent-soft-border: 255 89% 85%;
+  --agent-soft-hover: 255 89% 96%; /* #f2eefe */
+  --agent-border: 253 84% 90%; /* #d9d0fb */
+  --agent-divider: 255 86% 95%; /* #ebe5fd */
+  --agent-start: 228 94% 67%; /* #5b7cfa, início do gradiente da marca */
+  --card-edge: 0 0% 100%; /* era border-white/NN */
 
   --chart-1: 219 91% 70%;
   --chart-2: 212 78% 76%;
@@ -282,6 +296,11 @@
   --agent-accent: 258 90% 74%;
   --agent-soft: 253 40% 11%;
   --agent-soft-border: 253 40% 30%;
+  --agent-soft-hover: 253 40% 15%;
+  --agent-border: 253 35% 26%;
+  --agent-divider: 253 30% 18%;
+  --agent-start: 228 94% 67%;
+  --card-edge: 216 34% 24%;
 
   --chart-1: 212 98% 40%;
   --chart-2: 212 80% 50%;
