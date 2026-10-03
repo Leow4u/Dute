@@ -222,7 +222,7 @@ function BillingPanel({ infra, agentMonthCost, onConfigure }: { infra: SystemInf
           <div className="mt-0.5 text-xs text-muted-foreground">
             {covered ? (
               <>
-                Créditos <b className="tabular-nums text-green-700">{formatMoney(billing.credits)}</b> · cobrado{" "}
+                Créditos <b className="tabular-nums text-success-soft-foreground">{formatMoney(billing.credits)}</b> · cobrado{" "}
                 <b className="tabular-nums text-foreground">{formatMoney(billing.net)}</b> ·{" "}
               </>
             ) : null}
