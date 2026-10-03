@@ -14,7 +14,17 @@ export type SystemInfra = {
   settings: { billing_table: string | null };
   errors: Section<{ total: number; blocked: number; services: number; groups: ErrorGroup[] }>;
   functions: Section<{ total: number; ok: number; sem_acesso: number; nao_publicada: number; last_deploy_at: string | null; list: FunctionRow[] }>;
-  billing: Section<{ table: string; total: number; currency: string; vertex_ai: number; data_until: string | null; services: Array<{ service: string; cost: number }> }>;
+  billing: Section<{
+    table: string;
+    has_data: boolean;
+    gross: number;
+    credits: number;
+    net: number;
+    currency: string;
+    vertex_ai: number;
+    data_until: string | null;
+    services: Array<{ service: string; gross: number; net: number }>;
+  }>;
 };
 
 export const infraKey = ["system-infra"] as const;
@@ -85,5 +95,5 @@ export function vertexComparison(billed: number, estimated: number) {
   if (Math.abs(diff) < 0.15) return "A estimativa está perto da fatura.";
   return diff > 0
     ? "A estimativa está acima da fatura: o preço informado pode estar alto."
-    : "A estimativa está abaixo da fatura: confira o preço informado ou a cotação do dólar.";
+    : "A estimativa está abaixo da fatura: confira o preço informado, a cotação do dólar ou usos do Gemini fora do Agent Dute.";
 }

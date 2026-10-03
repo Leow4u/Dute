@@ -215,7 +215,10 @@ export function invoiceMonth(now: Date) {
   return `${local.getUTCFullYear()}${String(local.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-/** Custo do mês da fatura, por serviço, já com créditos (descontos) abatidos. */
+/**
+ * Custo do mês da fatura, por serviço: custo de uso (bruto) e créditos
+ * (negativos: período de teste, descontos). Cobrado = bruto + créditos.
+ */
 export function billingQuery(table: string, now: Date) {
   if (!BILLING_TABLE.test(table)) throw new HttpsError("failed-precondition", "Tabela do faturamento inválida.");
   const local = new Date(now.getTime() + SAO_PAULO_OFFSET_MS);
@@ -224,29 +227,40 @@ export function billingQuery(table: string, now: Date) {
   return {
     query: [
       "SELECT service.description AS service,",
-      "  SUM(cost) + SUM(IFNULL((SELECT SUM(credit.amount) FROM UNNEST(credits) AS credit), 0)) AS cost,",
+      "  SUM(cost) AS gross,",
+      "  SUM(IFNULL((SELECT SUM(credit.amount) FROM UNNEST(credits) AS credit), 0)) AS credits,",
       "  ANY_VALUE(currency) AS currency,",
       "  MAX(usage_end_time) AS last_usage",
       `FROM \`${table}\``,
       "WHERE invoice.month = @month AND project.id = @project AND DATE(_PARTITIONTIME) >= @since",
       "GROUP BY service",
-      "ORDER BY cost DESC",
+      "ORDER BY gross DESC",
     ].join("\n"),
     params: { month: invoiceMonth(now), since },
   };
 }
 
-export type BillingRow = { service: string; cost: number; currency: string; last_usage: string | null };
+export type BillingRow = { service: string; gross: number; credits: number; currency: string; last_usage: string | null };
 
 export function summarizeBilling(rows: BillingRow[]) {
   const round2 = (value: number) => Math.round(value * 100) / 100;
-  const services = rows.map((row) => ({ service: row.service, cost: round2(row.cost) })).filter((row) => row.cost !== 0);
-  const vertex = rows.filter((row) => /vertex ai|gemini/i.test(row.service)).reduce((sum, row) => sum + row.cost, 0);
+  // Arredonda no fim para o zero não virar -0.
+  const money = (value: number) => round2(value) || 0;
+  const gross = rows.reduce((sum, row) => sum + row.gross, 0);
+  const credits = rows.reduce((sum, row) => sum + row.credits, 0);
+  const services = rows
+    .map((row) => ({ service: row.service, gross: money(row.gross), net: money(row.gross + row.credits) }))
+    .filter((row) => row.gross !== 0);
+  // Comparado com a estimativa do Agent Dute, que não conta créditos.
+  const vertex = rows.filter((row) => /vertex ai|gemini/i.test(row.service)).reduce((sum, row) => sum + row.gross, 0);
   const lastUsage = rows.map((row) => row.last_usage ?? "").filter(Boolean).sort().at(-1) ?? null;
   return {
-    total: round2(rows.reduce((sum, row) => sum + row.cost, 0)),
+    has_data: rows.length > 0,
+    gross: money(gross),
+    credits: money(credits),
+    net: money(gross + credits),
     currency: rows[0]?.currency ?? "BRL",
-    vertex_ai: round2(vertex),
+    vertex_ai: money(vertex),
     data_until: lastUsage,
     services,
   };
@@ -256,11 +270,12 @@ export function summarizeBilling(rows: BillingRow[]) {
 export function parseBillingResponse(json: unknown): BillingRow[] {
   const rows = (json as { rows?: Array<{ f: Array<{ v: unknown }> }> }).rows ?? [];
   return rows.map((row) => {
-    const [service, cost, currency, lastUsage] = row.f.map((cell) => cell.v);
+    const [service, gross, credits, currency, lastUsage] = row.f.map((cell) => cell.v);
     const seconds = Number(lastUsage);
     return {
       service: String(service ?? "Outros"),
-      cost: Number(cost) || 0,
+      gross: Number(gross) || 0,
+      credits: Number(credits) || 0,
       currency: String(currency ?? "BRL"),
       // TIMESTAMP vem como segundos desde 1970 (com fração).
       last_usage: lastUsage == null ? null : Number.isFinite(seconds) ? new Date(seconds * 1000).toISOString() : String(lastUsage),
