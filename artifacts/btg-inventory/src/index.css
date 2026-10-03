@@ -58,6 +58,15 @@
   --color-destructive-soft-border: hsl(var(--destructive-soft-border));
   --color-destructive-soft-foreground: hsl(var(--destructive-soft-foreground));
 
+  --color-agent: hsl(var(--agent));
+  --color-agent-hover: hsl(var(--agent-hover));
+  --color-agent-foreground: hsl(var(--agent-foreground));
+  --color-agent-strong: hsl(var(--agent-strong));
+  --color-agent-muted: hsl(var(--agent-muted));
+  --color-agent-accent: hsl(var(--agent-accent));
+  --color-agent-soft: hsl(var(--agent-soft));
+  --color-agent-soft-border: hsl(var(--agent-soft-border));
+
   --color-chart-1: hsl(var(--chart-1));
   --color-chart-2: hsl(var(--chart-2));
   --color-chart-3: hsl(var(--chart-3));
@@ -153,6 +162,17 @@
   --destructive-soft: 356 100% 97%;
   --destructive-soft-border: 353 96% 90%;
   --destructive-soft-foreground: 345 83% 41%;
+
+  /* Identidade do Agente Dute (roxo). Antes hex solto: #5b3fc4, #4c33a8,
+     #3b2a85, #7a66c9, #8b5cf6, #faf8ff, #c9b8fb. */
+  --agent: 253 54% 51%;
+  --agent-hover: 253 53% 43%;
+  --agent-foreground: 0 0% 100%;
+  --agent-strong: 251 52% 34%;
+  --agent-muted: 252 48% 59%;
+  --agent-accent: 258 90% 66%;
+  --agent-soft: 257 100% 99%;
+  --agent-soft-border: 255 89% 85%;
 
   --chart-1: 219 91% 70%;
   --chart-2: 212 78% 76%;
@@ -253,6 +273,15 @@
   --destructive-soft: 350 50% 11%;
   --destructive-soft-border: 350 45% 27%;
   --destructive-soft-foreground: 350 90% 80%;
+
+  --agent: 253 65% 62%;
+  --agent-hover: 253 65% 56%;
+  --agent-foreground: 0 0% 100%;
+  --agent-strong: 255 80% 86%;
+  --agent-muted: 253 40% 66%;
+  --agent-accent: 258 90% 74%;
+  --agent-soft: 253 40% 11%;
+  --agent-soft-border: 253 40% 30%;
 
   --chart-1: 212 98% 40%;
   --chart-2: 212 80% 50%;
