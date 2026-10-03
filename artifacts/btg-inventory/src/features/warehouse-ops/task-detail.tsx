@@ -110,7 +110,7 @@ function DetailField({
   value: string;
 }) {
   return (
-    <div className="rounded-[16px] border border-border bg-white/55 px-3 py-2">
+    <div className="rounded-[16px] border border-border bg-card/55 px-3 py-2">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Icon className="size-3.5 shrink-0 text-primary" />
         <span>{label}</span>
@@ -155,7 +155,7 @@ function LineResolutionControls({
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
               isActive
                 ? `${copy.className} shadow-[0_8px_24px_rgba(15,23,42,.04)]`
-                : "border-border bg-white/70 text-muted-foreground hover:bg-white",
+                : "border-border bg-card/70 text-muted-foreground hover:bg-card",
             )}
             onClick={() => onChange(isActive ? "pending" : option.value)}
           >
@@ -185,9 +185,9 @@ function ExecutionLineRowCard({
   return (
     <div
       className={cn(
-        "rounded-[16px] border border-border bg-white/65 px-3 py-3",
+        "rounded-[16px] border border-border bg-card/65 px-3 py-3",
         resolution === "confirmed" && "border-primary/20 bg-primary/5",
-        hasIssue && "border-amber-200 bg-amber-50/70",
+        hasIssue && "border-warning-soft-border bg-warning-soft/70",
         resolution === "damaged" && "border-destructive/20 bg-destructive/10",
       )}
     >
@@ -228,19 +228,19 @@ function ExecutionLineRowCard({
         </div>
 
         <div className="grid gap-2 text-xs sm:grid-cols-3">
-          <div className="rounded-[14px] border border-border bg-white/70 px-3 py-2">
+          <div className="rounded-[14px] border border-border bg-card/70 px-3 py-2">
             <div className="text-muted-foreground">Esperado</div>
             <div className="mt-1 font-medium text-foreground">
               {formatUnits(row.expectedQuantity)}
             </div>
           </div>
-          <div className="rounded-[14px] border border-border bg-white/70 px-3 py-2">
+          <div className="rounded-[14px] border border-border bg-card/70 px-3 py-2">
             <div className="text-muted-foreground">Físico lido</div>
             <div className="mt-1 font-medium text-foreground">
               {formatUnits(row.packedQuantity)}
             </div>
           </div>
-          <div className="rounded-[14px] border border-border bg-white/70 px-3 py-2">
+          <div className="rounded-[14px] border border-border bg-card/70 px-3 py-2">
             <div className="text-muted-foreground">Diferença</div>
             <div
               className={cn(
@@ -267,7 +267,7 @@ function OperatorMicrocopy({
   const copy = QUEUE_OPERATOR_COPY[queue.key];
 
   return (
-    <div className="rounded-[18px] border border-border bg-white/55 px-4 py-3">
+    <div className="rounded-[18px] border border-border bg-card/55 px-4 py-3">
       <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
         <ClipboardCheck className="size-3.5 text-primary" />
         {copy.title}
@@ -277,7 +277,7 @@ function OperatorMicrocopy({
         {copy.steps.map((step, index) => (
           <div
             key={step}
-            className="rounded-[14px] border border-border bg-white/65 px-3 py-2 text-xs leading-5 text-muted-foreground"
+            className="rounded-[14px] border border-border bg-card/65 px-3 py-2 text-xs leading-5 text-muted-foreground"
           >
             <span className="font-medium text-foreground">{index + 1}. </span>
             {step}
@@ -318,10 +318,10 @@ function PhysicalLineChecklist({
   const issueNote = buildLineExceptionNote(task, rows, lineConfirmations);
 
   return (
-    <div className="rounded-[22px] border border-border bg-white/45 p-4">
+    <div className="rounded-[22px] border border-border bg-card/45 p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 gap-3">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-border bg-white/70">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-border bg-card/70">
             <ListChecks className="size-4 text-primary" />
           </div>
           <div className="min-w-0">
@@ -353,25 +353,25 @@ function PhysicalLineChecklist({
       </div>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-4">
-        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+        <div className="rounded-[16px] border border-border bg-card/65 px-3 py-2">
           <div className="text-xs text-muted-foreground">Linhas</div>
           <div className="mt-1 text-sm font-semibold text-foreground">
             {formatNumber(counts.total)}
           </div>
         </div>
-        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+        <div className="rounded-[16px] border border-border bg-card/65 px-3 py-2">
           <div className="text-xs text-muted-foreground">OK físico</div>
           <div className="mt-1 text-sm font-semibold text-primary">
             {formatNumber(counts.confirmed)}
           </div>
         </div>
-        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+        <div className="rounded-[16px] border border-border bg-card/65 px-3 py-2">
           <div className="text-xs text-muted-foreground">Falta</div>
-          <div className="mt-1 text-sm font-semibold text-amber-800">
+          <div className="mt-1 text-sm font-semibold text-warning-soft-foreground">
             {formatNumber(counts.shortage)}
           </div>
         </div>
-        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+        <div className="rounded-[16px] border border-border bg-card/65 px-3 py-2">
           <div className="text-xs text-muted-foreground">Avaria</div>
           <div className="mt-1 text-sm font-semibold text-destructive">
             {formatNumber(counts.damaged)}
@@ -380,7 +380,7 @@ function PhysicalLineChecklist({
       </div>
 
       {hasIssue ? (
-        <Alert className="mt-4 border-amber-200 bg-amber-50 text-amber-900">
+        <Alert className="mt-4 border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
           <AlertTriangle className="size-4" />
           <AlertTitle>Segurar etapa antes de avançar</AlertTitle>
           <AlertDescription>
@@ -404,7 +404,7 @@ function PhysicalLineChecklist({
         ))}
 
         {rows.length > 8 ? (
-          <div className="rounded-[16px] border border-border bg-white/55 px-3 py-2 text-xs text-muted-foreground">
+          <div className="rounded-[16px] border border-border bg-card/55 px-3 py-2 text-xs text-muted-foreground">
             + {formatNumber(rows.length - 8)} linha(s) no payload.
           </div>
         ) : null}
@@ -461,7 +461,7 @@ function PutawayDetailSection({
     <div className="rounded-[22px] border border-primary/20 bg-primary/5 p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 gap-3">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-primary/20 bg-white/75">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-primary/20 bg-card/75">
             <Forklift className="size-4 text-primary" />
           </div>
           <div className="min-w-0">
@@ -474,13 +474,13 @@ function PutawayDetailSection({
             </p>
           </div>
         </div>
-        <Badge variant="outline" className="border-primary/20 bg-white/70 text-primary">
+        <Badge variant="outline" className="border-primary/20 bg-card/70 text-primary">
           transferência interna
         </Badge>
       </div>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-3">
-        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+        <div className="rounded-[16px] border border-border bg-card/65 px-3 py-2">
           <div className="text-xs text-muted-foreground">Produto</div>
           <div className="mt-1 line-clamp-2 text-sm font-semibold text-foreground">
             {productName || "Produto a identificar"}
@@ -489,13 +489,13 @@ function PutawayDetailSection({
             {clientCode || sku || "Código pendente"}
           </div>
         </div>
-        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+        <div className="rounded-[16px] border border-border bg-card/65 px-3 py-2">
           <div className="text-xs text-muted-foreground">Quantidade</div>
           <div className="mt-1 text-lg font-semibold text-foreground">
             {formatUnits(quantity)}
           </div>
         </div>
-        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+        <div className="rounded-[16px] border border-border bg-card/65 px-3 py-2">
           <div className="text-xs text-muted-foreground">Status</div>
           <Badge variant="outline" className={cn("mt-1", statusClass(task.status))}>
             {statusLabel(task.status)}
@@ -503,7 +503,7 @@ function PutawayDetailSection({
         </div>
       </div>
 
-      <div className="mt-4 rounded-[18px] border border-border bg-white/70 p-3">
+      <div className="mt-4 rounded-[18px] border border-border bg-card/70 p-3">
         <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <MapPin className="size-4 text-primary" />
           Origem e destino
@@ -554,7 +554,7 @@ function PutawayDetailSection({
       </div>
 
       {sameAddress ? (
-        <Alert className="mt-4 border-amber-200 bg-amber-50 text-amber-900">
+        <Alert className="mt-4 border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
           <AlertTriangle className="size-4" />
           <AlertTitle>Endereço repetido</AlertTitle>
           <AlertDescription>
@@ -611,7 +611,7 @@ function PickingDetailSection({
     <div className="rounded-[22px] border border-primary/20 bg-primary/5 p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 gap-3">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-primary/20 bg-white/75">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-primary/20 bg-card/75">
             <PackageSearch className="size-4 text-primary" />
           </div>
           <div className="min-w-0">
@@ -628,8 +628,8 @@ function PickingDetailSection({
           variant="outline"
           className={
             isReady
-              ? "border-primary/20 bg-white/70 text-primary"
-              : "border-amber-200 bg-amber-50 text-amber-800"
+              ? "border-primary/20 bg-card/70 text-primary"
+              : "border-warning-soft-border bg-warning-soft text-warning-soft-foreground"
           }
         >
           {isReady ? "pronto para packing" : "conferir linhas"}
@@ -637,25 +637,25 @@ function PickingDetailSection({
       </div>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-4">
-        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+        <div className="rounded-[16px] border border-border bg-card/65 px-3 py-2">
           <div className="text-xs text-muted-foreground">Linhas</div>
           <div className="mt-1 text-sm font-semibold text-foreground">
             {formatNumber(counts.confirmed)} / {formatNumber(counts.total)}
           </div>
         </div>
-        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+        <div className="rounded-[16px] border border-border bg-card/65 px-3 py-2">
           <div className="text-xs text-muted-foreground">Quantidade</div>
           <div className="mt-1 text-sm font-semibold text-foreground">
             {formatUnits(totalExpected)}
           </div>
         </div>
-        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+        <div className="rounded-[16px] border border-border bg-card/65 px-3 py-2">
           <div className="text-xs text-muted-foreground">Endereços</div>
           <div className="mt-1 text-sm font-semibold text-foreground">
             {formatNumber(uniqueLocations.length)}
           </div>
         </div>
-        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+        <div className="rounded-[16px] border border-border bg-card/65 px-3 py-2">
           <div className="text-xs text-muted-foreground">Divergências</div>
           <div
             className={cn(
@@ -709,7 +709,7 @@ function PickingDetailSection({
         ))}
 
         {rows.length > 12 ? (
-          <div className="rounded-[16px] border border-border bg-white/55 px-3 py-2 text-xs text-muted-foreground">
+          <div className="rounded-[16px] border border-border bg-card/55 px-3 py-2 text-xs text-muted-foreground">
             + {formatNumber(rows.length - 12)} linha(s) no pedido.
           </div>
         ) : null}
@@ -769,7 +769,7 @@ function PackingDetailSection({
     <div className="rounded-[22px] border border-primary/20 bg-primary/5 p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 gap-3">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-primary/20 bg-white/70">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-primary/20 bg-card/70">
             <PackageCheck className="size-4 text-primary" />
           </div>
           <div className="min-w-0">
@@ -799,25 +799,25 @@ function PackingDetailSection({
       </div>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-4">
-        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+        <div className="rounded-[16px] border border-border bg-card/65 px-3 py-2">
           <div className="text-xs text-muted-foreground">Volumes</div>
           <div className="mt-1 text-sm font-semibold text-foreground">
             {formatNumber(rows.length)}
           </div>
         </div>
-        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+        <div className="rounded-[16px] border border-border bg-card/65 px-3 py-2">
           <div className="text-xs text-muted-foreground">OK físico</div>
           <div className="mt-1 text-sm font-semibold text-foreground">
             {formatNumber(counts.confirmed)} / {formatNumber(counts.total)}
           </div>
         </div>
-        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+        <div className="rounded-[16px] border border-border bg-card/65 px-3 py-2">
           <div className="text-xs text-muted-foreground">Status</div>
           <Badge variant="outline" className={cn("mt-1", statusClass(task.status))}>
             {statusLabel(task.status)}
           </Badge>
         </div>
-        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+        <div className="rounded-[16px] border border-border bg-card/65 px-3 py-2">
           <div className="text-xs text-muted-foreground">Divergência</div>
           <div
             className={cn(
@@ -831,7 +831,7 @@ function PackingDetailSection({
       </div>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-3">
-        <div className="rounded-[16px] border border-border bg-white/60 px-3 py-2">
+        <div className="rounded-[16px] border border-border bg-card/60 px-3 py-2">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <PackageOpen className="size-3.5 text-primary" />
             Físico lido
@@ -840,7 +840,7 @@ function PackingDetailSection({
             {formatUnits(totalPacked)} / {formatUnits(totalExpected)}
           </div>
         </div>
-        <div className="rounded-[16px] border border-border bg-white/60 px-3 py-2">
+        <div className="rounded-[16px] border border-border bg-card/60 px-3 py-2">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <ShieldAlert className="size-3.5 text-primary" />
             Lacre
@@ -849,7 +849,7 @@ function PackingDetailSection({
             {isReadyToSeal ? "Pode lacrar" : "Manter volume aberto"}
           </div>
         </div>
-        <div className="rounded-[16px] border border-border bg-white/60 px-3 py-2">
+        <div className="rounded-[16px] border border-border bg-card/60 px-3 py-2">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Truck className="size-3.5 text-primary" />
             Expedição
@@ -860,7 +860,7 @@ function PackingDetailSection({
         </div>
       </div>
 
-      <div className="mt-4 rounded-[18px] border border-border bg-white/65 p-3">
+      <div className="mt-4 rounded-[18px] border border-border bg-card/65 p-3">
         <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <ShieldAlert className="size-4 text-primary" />
           Dados do volume
@@ -917,7 +917,7 @@ function PackingDetailSection({
       </div>
 
       {hasDivergence ? (
-        <Alert className="mt-4 border-amber-200 bg-amber-50 text-amber-900">
+        <Alert className="mt-4 border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
           <AlertTriangle className="size-4" />
           <AlertTitle>Divergência em packing</AlertTitle>
           <AlertDescription>
@@ -952,7 +952,7 @@ function PackingDetailSection({
         ))}
 
         {rows.length > 8 ? (
-          <div className="rounded-[16px] border border-border bg-white/55 px-3 py-2 text-xs text-muted-foreground">
+          <div className="rounded-[16px] border border-border bg-card/55 px-3 py-2 text-xs text-muted-foreground">
             + {formatNumber(rows.length - 8)} volume(s) no payload.
           </div>
         ) : null}
@@ -1013,10 +1013,10 @@ function ExpeditionReadinessSection({
   ];
 
   return (
-    <div className="rounded-[22px] border border-border bg-white/45 p-4">
+    <div className="rounded-[22px] border border-border bg-card/45 p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 gap-3">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-border bg-white/70">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-border bg-card/70">
             <Truck className="size-4 text-primary" />
           </div>
           <div className="min-w-0">
@@ -1033,7 +1033,7 @@ function ExpeditionReadinessSection({
           className={
             isReadyToDispatch
               ? "border-primary/20 bg-primary/10 text-primary"
-              : "border-amber-200 bg-amber-50 text-amber-800"
+              : "border-warning-soft-border bg-warning-soft text-warning-soft-foreground"
           }
         >
           {isReadyToDispatch ? "pronta para saída" : "segurar na doca"}
@@ -1048,14 +1048,14 @@ function ExpeditionReadinessSection({
               "rounded-[16px] border px-3 py-2",
               step.done
                 ? "border-primary/20 bg-primary/5"
-                : "border-border bg-white/65",
+                : "border-border bg-card/65",
             )}
           >
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               {step.done ? (
                 <CheckCircle2 className="size-3.5 text-primary" />
               ) : (
-                <Clock3 className="size-3.5 text-amber-800" />
+                <Clock3 className="size-3.5 text-warning-soft-foreground" />
               )}
               {step.label}
             </div>
@@ -1066,7 +1066,7 @@ function ExpeditionReadinessSection({
         ))}
       </div>
 
-      <div className="mt-4 rounded-[18px] border border-border bg-white/65 p-3">
+      <div className="mt-4 rounded-[18px] border border-border bg-card/65 p-3">
         <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <Truck className="size-4 text-primary" />
           Dados da expedição
@@ -1133,7 +1133,7 @@ function ExpeditionReadinessSection({
       </div>
 
       {hasIssue ? (
-        <Alert className="mt-4 border-amber-200 bg-amber-50 text-amber-900">
+        <Alert className="mt-4 border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
           <AlertTriangle className="size-4" />
           <AlertTitle>Saída ainda não liberada</AlertTitle>
           <AlertDescription>
@@ -1214,14 +1214,14 @@ function TaskAiEvidencePanel({
         "A fila segue monitorada por prioridade, SLA e exceções.",
       className: primaryAlert
         ? alertClass(primaryAlert.severity)
-        : "border-border bg-white/65 text-muted-foreground",
+        : "border-border bg-card/65 text-muted-foreground",
     },
     {
       label: "SLA físico",
       value: isDueSoon(task.due_at) ? "risco próximo" : "sem risco 4h",
       caption: `Prazo: ${formatDate(task.due_at)}`,
       className: isDueSoon(task.due_at)
-        ? "border-amber-200 bg-amber-50 text-amber-800"
+        ? "border-warning-soft-border bg-warning-soft text-warning-soft-foreground"
         : "border-primary/20 bg-primary/10 text-primary",
     },
     {
@@ -1236,7 +1236,7 @@ function TaskAiEvidencePanel({
       className:
         exceptions > 0 || task.blocked_reason
           ? "border-destructive/20 bg-destructive/10 text-destructive"
-          : "border-border bg-white/65 text-muted-foreground",
+          : "border-border bg-card/65 text-muted-foreground",
     },
   ];
 
@@ -1293,25 +1293,25 @@ function CustomerVisibilityPanel({
       : "Sem leitura linha a linha";
 
   return (
-    <div className="rounded-[18px] border border-border bg-white/55 px-4 py-3">
+    <div className="rounded-[18px] border border-border bg-card/55 px-4 py-3">
       <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
         <UserRound className="size-3.5 text-primary" />
         Visão cliente-operador
       </div>
       <div className="mt-3 grid gap-2 sm:grid-cols-3">
-        <div className="rounded-[14px] border border-border bg-white/65 px-3 py-2">
+        <div className="rounded-[14px] border border-border bg-card/65 px-3 py-2">
           <div className="text-xs text-muted-foreground">Portal cliente</div>
           <div className="mt-1 text-sm font-semibold text-foreground">
             {visibleState}
           </div>
         </div>
-        <div className="rounded-[14px] border border-border bg-white/65 px-3 py-2">
+        <div className="rounded-[14px] border border-border bg-card/65 px-3 py-2">
           <div className="text-xs text-muted-foreground">Fila física</div>
           <div className="mt-1 text-sm font-semibold text-foreground">
             {queue.label}
           </div>
         </div>
-        <div className="rounded-[14px] border border-border bg-white/65 px-3 py-2">
+        <div className="rounded-[14px] border border-border bg-card/65 px-3 py-2">
           <div className="text-xs text-muted-foreground">Evidência</div>
           <div
             className={cn(
@@ -1334,7 +1334,7 @@ function CustomerVisibilityPanel({
 function TaskItemsList({ items }: { items: WarehouseTaskItem[] }) {
   if (!items.length) {
     return (
-      <div className="rounded-[18px] border border-border bg-white/45 px-4 py-3 text-sm text-muted-foreground">
+      <div className="rounded-[18px] border border-border bg-card/45 px-4 py-3 text-sm text-muted-foreground">
         Sem itens detalhados no payload da tarefa.
       </div>
     );
@@ -1360,7 +1360,7 @@ function TaskItemsList({ items }: { items: WarehouseTaskItem[] }) {
         return (
           <div
             key={item.id || `${title}:${index}`}
-            className="rounded-[16px] border border-border bg-white/55 px-3 py-2"
+            className="rounded-[16px] border border-border bg-card/55 px-3 py-2"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -1389,7 +1389,7 @@ function TaskItemsList({ items }: { items: WarehouseTaskItem[] }) {
 function TaskTimeline({ timeline }: { timeline: WarehouseTaskTimelineEvent[] }) {
   if (!timeline.length) {
     return (
-      <div className="rounded-[18px] border border-border bg-white/45 px-4 py-3 text-sm text-muted-foreground">
+      <div className="rounded-[18px] border border-border bg-card/45 px-4 py-3 text-sm text-muted-foreground">
         Sem timeline operacional para esta tarefa.
       </div>
     );
@@ -1402,7 +1402,7 @@ function TaskTimeline({ timeline }: { timeline: WarehouseTaskTimelineEvent[] }) 
           <div className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10">
             <Activity className="size-3.5 text-primary" />
           </div>
-          <div className="min-w-0 flex-1 rounded-[16px] border border-border bg-white/55 px-3 py-2">
+          <div className="min-w-0 flex-1 rounded-[16px] border border-border bg-card/55 px-3 py-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="truncate text-sm font-medium text-foreground">
                 {event.title || event.status || "Evento operacional"}
@@ -1524,7 +1524,7 @@ export function TaskDetailPanel({
     return (
       <Card className="min-w-0 xl:sticky xl:top-6">
         <CardContent className="pt-6">
-          <Empty className="min-h-[420px] border border-border bg-white/35">
+          <Empty className="min-h-[420px] border border-border bg-card/35">
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <ListChecks className="size-5" />
@@ -1668,7 +1668,7 @@ export function TaskDetailPanel({
               </CardDescription>
             ) : null}
           </div>
-          <div className="flex size-11 shrink-0 items-center justify-center rounded-[18px] border border-border bg-white/70">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-[18px] border border-border bg-card/70">
             <queue.icon className="size-5 text-primary" />
           </div>
         </div>
@@ -1745,7 +1745,7 @@ export function TaskDetailPanel({
         <OperatorMicrocopy queue={queue} counts={lineCounts} />
 
         {canAdvance && advanceGate.blockedReason ? (
-          <Alert className="border-amber-200 bg-amber-50 text-amber-900">
+          <Alert className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
             <AlertTriangle className="size-4" />
             <AlertTitle>Conferência física pendente</AlertTitle>
             <AlertDescription>{advanceGate.blockedReason}</AlertDescription>
@@ -1753,7 +1753,7 @@ export function TaskDetailPanel({
         ) : null}
 
         {canAdvance && !advanceGate.blockedReason && operationBlockReason ? (
-          <Alert className="border-amber-200 bg-amber-50 text-amber-900">
+          <Alert className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
             <AlertTriangle className="size-4" />
             <AlertTitle>Dados operacionais pendentes</AlertTitle>
             <AlertDescription>{operationBlockReason}</AlertDescription>
@@ -1761,22 +1761,22 @@ export function TaskDetailPanel({
         ) : null}
 
         {requiresReceivingJustification ? (
-          <div className="rounded-[18px] border border-amber-200 bg-amber-50/55 p-3">
+          <div className="rounded-[18px] border border-warning-soft-border bg-warning-soft/55 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <div className="text-sm font-semibold text-amber-950">
+                <div className="text-sm font-semibold text-warning-soft-foreground">
                   Justificativa para concluir com divergência
                 </div>
-                <p className="mt-1 text-xs leading-5 text-amber-900">
+                <p className="mt-1 text-xs leading-5 text-warning-soft-foreground">
                   {receivingDivergenceRows.length} linha(s) têm falta ou sobra. Esta nota fica na trilha operacional antes de liberar saldo.
                 </p>
               </div>
-              <Badge variant="outline" className="border-amber-300 bg-white/70 text-amber-900">
+              <Badge variant="outline" className="border-warning-soft-border bg-card/70 text-warning-soft-foreground">
                 obrigatório
               </Badge>
             </div>
             <Textarea
-              className="mt-3 min-h-20 bg-white/85"
+              className="mt-3 min-h-20 bg-card/85"
               value={receivingAdvanceNote}
               onChange={(event) => setReceivingAdvanceNote(event.target.value)}
               placeholder="Ex.: NF entregue com falta física em 2 linhas; liberar estoque apenas da quantidade conferida e manter exceção para tratativa com fornecedor."
@@ -1839,7 +1839,7 @@ export function TaskDetailPanel({
           />
         )}
 
-        <div className="rounded-[18px] border border-border bg-white/55 px-4 py-3">
+        <div className="rounded-[18px] border border-border bg-card/55 px-4 py-3">
           <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
             <Route className="size-3.5 text-primary" />
             Próxima ação da fila
@@ -1883,7 +1883,7 @@ export function TaskDetailPanel({
               </Button>
             ) : null}
             {!hasVisibleAction ? (
-              <div className="w-full rounded-[18px] border border-border bg-white/55 px-4 py-3 text-sm text-muted-foreground">
+              <div className="w-full rounded-[18px] border border-border bg-card/55 px-4 py-3 text-sm text-muted-foreground">
                 Nenhuma ação disponível para o status atual.
               </div>
             ) : null}

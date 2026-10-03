@@ -201,7 +201,7 @@ function MetricCard({
             {value}
           </div>
         </div>
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-border bg-white/70">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-border bg-card/70">
           <Icon className="size-4 text-primary" aria-hidden="true" />
         </div>
       </CardHeader>
@@ -238,11 +238,11 @@ function WmsModuleSnapshot({
     queues.find((queue) => queue.activeTask?.id === activeTask?.id);
 
   return (
-    <Card className="min-w-0 overflow-hidden border-primary/20 bg-white/45 backdrop-blur">
-      <CardHeader className="border-b border-border/60 bg-white/35">
+    <Card className="min-w-0 overflow-hidden border-primary/20 bg-card/45 backdrop-blur">
+      <CardHeader className="border-b border-border/60 bg-card/35">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex min-w-0 gap-3">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-[18px] border border-primary/20 bg-white/70">
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-[18px] border border-primary/20 bg-card/70">
               <Icon className="size-5 text-primary" />
             </div>
             <div className="min-w-0">
@@ -260,26 +260,26 @@ function WmsModuleSnapshot({
             >
               {formatNumber(blocked)} bloqueio(s)
             </Badge>
-            <Badge variant="outline" className="border-border bg-white/70 text-muted-foreground">
+            <Badge variant="outline" className="border-border bg-card/70 text-muted-foreground">
               {formatNumber(alerts.length)} alerta(s)
             </Badge>
           </div>
         </div>
       </CardHeader>
       <CardContent className="grid gap-3 p-4 md:grid-cols-[repeat(4,minmax(0,1fr))] xl:grid-cols-[repeat(4,minmax(0,1fr))_minmax(260px,1.3fr)]">
-        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+        <div className="rounded-[16px] border border-border bg-card/65 px-3 py-2">
           <div className="text-xs text-foreground/70">Pendentes</div>
           <div className="mt-1 text-lg font-semibold text-foreground">
             {formatNumber(pending)}
           </div>
         </div>
-        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+        <div className="rounded-[16px] border border-border bg-card/65 px-3 py-2">
           <div className="text-xs text-foreground/70">Em execução</div>
           <div className="mt-1 text-lg font-semibold text-foreground">
             {formatNumber(inProgress)}
           </div>
         </div>
-        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+        <div className="rounded-[16px] border border-border bg-card/65 px-3 py-2">
           <div className="text-xs text-foreground/70">Exceções</div>
           <div
             className={cn(
@@ -290,13 +290,13 @@ function WmsModuleSnapshot({
             {formatNumber(exceptions)}
           </div>
         </div>
-        <div className="rounded-[16px] border border-border bg-white/65 px-3 py-2">
+        <div className="rounded-[16px] border border-border bg-card/65 px-3 py-2">
           <div className="text-xs text-muted-foreground">Abertas</div>
           <div className="mt-1 text-lg font-semibold text-foreground">
             {formatNumber(pending)}
           </div>
         </div>
-        <div className="rounded-[18px] border border-border bg-white/65 px-4 py-3 md:col-span-4 xl:col-span-1">
+        <div className="rounded-[18px] border border-border bg-card/65 px-4 py-3 md:col-span-4 xl:col-span-1">
           <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
             <Route className="size-3.5 text-primary" />
             Próximo toque
@@ -325,7 +325,7 @@ function WmsModuleEmptyState({ module }: { module: WarehouseOpsModule }) {
   const Icon = module.icon;
 
   return (
-    <Empty className="min-h-[260px] border border-border bg-white/35">
+    <Empty className="min-h-[260px] border border-border bg-card/35">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <Icon className="size-5" />
@@ -385,10 +385,10 @@ function QueueSlaCard({
         queue.blockedCount > 0 && "border-destructive/25",
       )}
     >
-      <CardHeader className="border-b border-border/60 bg-white/35 pb-4">
+      <CardHeader className="border-b border-border/60 bg-card/35 pb-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 gap-3">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-border bg-white/70">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-border bg-card/70">
               <Icon className="size-4 text-primary" />
             </div>
             <div className="min-w-0">
@@ -402,19 +402,19 @@ function QueueSlaCard({
       </CardHeader>
       <CardContent className="flex flex-col gap-4 pt-4">
         <div className="grid grid-cols-3 gap-2">
-          <div className="rounded-[16px] border border-border bg-white/55 px-3 py-2">
+          <div className="rounded-[16px] border border-border bg-card/55 px-3 py-2">
             <div className="text-lg font-semibold text-foreground">
               {formatNumber(queue.pending)}
             </div>
             <div className="text-xs text-foreground/70">Pendentes</div>
           </div>
-          <div className="rounded-[16px] border border-border bg-white/55 px-3 py-2">
+          <div className="rounded-[16px] border border-border bg-card/55 px-3 py-2">
             <div className="text-lg font-semibold text-foreground">
               {formatNumber(queue.blockedCount)}
             </div>
             <div className="text-xs text-foreground/70">Bloqueios</div>
           </div>
-          <div className="rounded-[16px] border border-border bg-white/55 px-3 py-2">
+          <div className="rounded-[16px] border border-border bg-card/55 px-3 py-2">
             <div className="text-lg font-semibold text-foreground">
               {formatNumber(queue.exceptionCount)}
             </div>
@@ -430,7 +430,7 @@ function QueueSlaCard({
           <Progress value={queue.progress} />
         </div>
 
-        <div className="rounded-[18px] border border-border bg-white/55 px-4 py-3">
+        <div className="rounded-[18px] border border-border bg-card/55 px-4 py-3">
           <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
             <Route className="size-3.5 text-primary" />
             Ação seguinte
@@ -489,7 +489,7 @@ function PhysicalFlowMap({
 
   return (
     <Card className="min-w-0 overflow-hidden border-primary/20">
-      <CardHeader className="border-b border-border/60 bg-white/35">
+      <CardHeader className="border-b border-border/60 bg-card/35">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <CardTitle className="text-base">
@@ -499,7 +499,7 @@ function PhysicalFlowMap({
           <div className="flex flex-wrap gap-2">
             <Badge
               variant="outline"
-              className="border-border bg-white/70 text-muted-foreground"
+              className="border-border bg-card/70 text-muted-foreground"
             >
               {formatNumber(pendingTotal)} pendentes
             </Badge>
@@ -547,7 +547,7 @@ function PhysicalFlowMap({
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-2">
-                      <span className="flex size-9 shrink-0 items-center justify-center rounded-[15px] border border-border bg-white/70">
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-[15px] border border-border bg-card/70">
                         <Icon className="size-4 text-primary" />
                       </span>
                       <div className="min-w-0">
@@ -570,19 +570,19 @@ function PhysicalFlowMap({
                   </div>
 
                   <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
-                    <div className="rounded-[14px] border border-border bg-white/65 px-2 py-2">
+                    <div className="rounded-[14px] border border-border bg-card/65 px-2 py-2">
                       <div className="font-semibold text-foreground">
                         {formatNumber(queue.pending)}
                       </div>
                       <div className="text-foreground/70">Pendentes</div>
                     </div>
-                    <div className="rounded-[14px] border border-border bg-white/65 px-2 py-2">
+                    <div className="rounded-[14px] border border-border bg-card/65 px-2 py-2">
                       <div className="font-semibold text-foreground">
                         {formatNumber(queue.inProgress)}
                       </div>
                       <div className="text-foreground/70">Em execução</div>
                     </div>
-                    <div className="rounded-[14px] border border-border bg-white/65 px-2 py-2">
+                    <div className="rounded-[14px] border border-border bg-card/65 px-2 py-2">
                       <div
                         className={cn(
                           "font-semibold",
@@ -663,7 +663,7 @@ function TaskListItem({
               </Badge>
             ) : null}
             {exceptions > 0 ? (
-              <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">
+              <Badge variant="outline" className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
                 {formatNumber(exceptions)} exceções
               </Badge>
             ) : null}
@@ -745,10 +745,10 @@ function QueueCard({
         isFocusQueue && "border-primary/25",
       )}
     >
-      <CardHeader className="border-b border-border/60 bg-white/35 p-5">
+      <CardHeader className="border-b border-border/60 bg-card/35 p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 gap-3">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-border bg-white/70">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-border bg-card/70">
               <Icon className="size-4 text-primary" />
             </div>
             <div className="min-w-0">
@@ -794,7 +794,7 @@ function QueueCard({
           </div>
         </div>
 
-        <div className="rounded-[18px] border border-border bg-white/55 px-4 py-3">
+        <div className="rounded-[18px] border border-border bg-card/55 px-4 py-3">
           <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
             <Route className="size-3.5 text-primary" />
             Ação seguinte
@@ -821,7 +821,7 @@ function QueueCard({
             </div>
           </ScrollArea>
         ) : (
-          <Empty className="min-h-[240px] border border-border bg-white/35">
+          <Empty className="min-h-[240px] border border-border bg-card/35">
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <CheckCircle2 className="size-5" />
@@ -898,7 +898,7 @@ function BlockedTasksPanel({
             ))}
           </div>
         ) : (
-          <Empty className="min-h-[180px] border border-border bg-white/35">
+          <Empty className="min-h-[180px] border border-border bg-card/35">
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <CheckCircle2 className="size-5" />
@@ -929,7 +929,7 @@ function AgentAlertsPanel({
       <CardHeader className="border-b border-border/60">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 gap-3">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-border bg-white/70">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-[16px] border border-border bg-card/70">
               <ShieldAlert className="size-4 text-primary" />
             </div>
             <div className="min-w-0">
@@ -971,7 +971,7 @@ function AgentAlertsPanel({
                       </span>
                     </div>
                     {alert.action ? (
-                      <div className="rounded-[14px] border border-border bg-white/55 px-3 py-2 text-xs leading-5 text-foreground">
+                      <div className="rounded-[14px] border border-border bg-card/55 px-3 py-2 text-xs leading-5 text-foreground">
                         {alert.action}
                       </div>
                     ) : null}
@@ -981,7 +981,7 @@ function AgentAlertsPanel({
             ))}
           </div>
         ) : (
-          <Empty className="min-h-[220px] border border-border bg-white/35">
+          <Empty className="min-h-[220px] border border-border bg-card/35">
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <CheckCircle2 className="size-5" />
@@ -994,7 +994,7 @@ function AgentAlertsPanel({
           </Empty>
         )}
 
-        <div className="rounded-[18px] border border-border bg-white/55 px-4 py-3 text-xs leading-5 text-muted-foreground">
+        <div className="rounded-[18px] border border-border bg-card/55 px-4 py-3 text-xs leading-5 text-muted-foreground">
           Última atualização: {formatDate(updatedAt, "Sem atualização")}
         </div>
       </CardContent>
@@ -1289,7 +1289,7 @@ export default function WarehouseOps({
     return (
       <div className="flex flex-col gap-6">
         <div className="flex min-w-0 gap-3">
-          <div className="flex size-11 shrink-0 items-center justify-center rounded-[18px] border border-border bg-white/70 shadow-[0_8px_24px_rgba(15,23,42,.04)]">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-[18px] border border-border bg-card/70 shadow-[0_8px_24px_rgba(15,23,42,.04)]">
             <ClipboardCheck className="size-5 text-primary" />
           </div>
           <div className="min-w-0">
@@ -1310,7 +1310,7 @@ export default function WarehouseOps({
       <div className="flex flex-col gap-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex min-w-0 gap-3">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-[18px] border border-border bg-white/70 shadow-[0_8px_24px_rgba(15,23,42,.04)]">
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-[18px] border border-border bg-card/70 shadow-[0_8px_24px_rgba(15,23,42,.04)]">
               <WarehouseIcon className="size-5 text-primary" />
             </div>
             <div className="min-w-0">
@@ -1347,7 +1347,7 @@ export default function WarehouseOps({
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex min-w-0 gap-3">
-          <div className="flex size-11 shrink-0 items-center justify-center rounded-[18px] border border-border bg-white/70 shadow-[0_8px_24px_rgba(15,23,42,.04)]">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-[18px] border border-border bg-card/70 shadow-[0_8px_24px_rgba(15,23,42,.04)]">
             <WarehouseIcon className="size-5 text-primary" />
           </div>
           <div className="min-w-0">

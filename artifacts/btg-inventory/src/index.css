@@ -45,6 +45,9 @@
   --color-success-foreground: hsl(var(--success-foreground));
   --color-warning: hsl(var(--warning));
   --color-warning-foreground: hsl(var(--warning-foreground));
+  --color-warning-soft: hsl(var(--warning-soft));
+  --color-warning-soft-border: hsl(var(--warning-soft-border));
+  --color-warning-soft-foreground: hsl(var(--warning-soft-foreground));
 
   --color-chart-1: hsl(var(--chart-1));
   --color-chart-2: hsl(var(--chart-2));
@@ -127,6 +130,10 @@
   
   --warning: 38 92% 50%;
   --warning-foreground: 217 33% 18%;
+  /* Aviso suave (cartão "atenção" do WMS): antes amber-50 / amber-200 / amber-800. */
+  --warning-soft: 48 100% 96%;
+  --warning-soft-border: 48 97% 77%;
+  --warning-soft-foreground: 26 83% 31%;
 
   --chart-1: 219 91% 70%;
   --chart-2: 212 78% 76%;
@@ -215,6 +222,9 @@
   
   --warning: 38 60% 30%;
   --warning-foreground: 210 40% 98%;
+  --warning-soft: 35 60% 11%;
+  --warning-soft-border: 35 55% 26%;
+  --warning-soft-foreground: 43 96% 77%;
 
   --chart-1: 212 98% 40%;
   --chart-2: 212 80% 50%;
