@@ -77,7 +77,53 @@ function violations(): string[] {
   return found;
 }
 
+/** Conteúdo de um bloco `@layer nome { ... }` do CSS, por contagem de chaves. */
+function layerBlock(css: string, name: string): string {
+  const start = css.indexOf(`@layer ${name} {`);
+  if (start < 0) return "";
+  let depth = 0;
+  for (let index = css.indexOf("{", start); index < css.length; index += 1) {
+    if (css[index] === "{") depth += 1;
+    if (css[index] === "}") depth -= 1;
+    if (depth === 0) return css.slice(start, index + 1);
+  }
+  return css.slice(start);
+}
+
+/**
+ * As classes próprias do app (@layer base e utilities em index.css) também
+ * não podem ter superfície clara fixa: em 03/10/2026 o fundo .app-atmosphere
+ * (#FAFAF8) e o vidro .glass-surface (branco .72) deixaram o escuro com a área
+ * principal clara, e o teste só olhava .ts/.tsx.
+ */
+const CSS_LIGHT_LITERALS: Array<{ name: string; pattern: RegExp }> = [
+  { name: "branco", pattern: /#fff(?:fff)?\b|rgba\(\s*255\s*,\s*255\s*,\s*255\s*,\s*0?\.[1-9]/gi },
+  { name: "fundo claro do app", pattern: /#FAFAF8|#ECEEF2|rgba\(\s*2[2-5]\d\s*,\s*2[2-5]\d\s*,\s*2[2-5]\d\s*,/gi },
+  {
+    name: "sobrescrita de cor do Tailwind",
+    pattern: /\.(?:hover\\:)?(?:bg|text|border)-(?:gray|slate|amber|emerald|green|blue|indigo|purple|sky|red|rose)-(?:50|100|200|300|600|700|800|900)\b/g,
+  },
+];
+
+function cssViolations(): string[] {
+  const css = readFileSync(join(SRC, "index.css"), "utf8");
+  const found: string[] = [];
+  for (const layer of ["base", "utilities"]) {
+    const block = layerBlock(css, layer);
+    for (const rule of CSS_LIGHT_LITERALS) {
+      for (const match of block.matchAll(rule.pattern)) {
+        found.push(`index.css @layer ${layer} ${rule.name}: ${match[0]}`);
+      }
+    }
+  }
+  return found;
+}
+
 describe("cores do tema", () => {
+  it("classes próprias do index.css leem token, sem superfície clara fixa", () => {
+    expect(cssViolations()).toEqual([]);
+  });
+
   it("nenhuma tela usa cor fixa que quebra o modo escuro", () => {
     expect(violations()).toEqual([]);
   });
