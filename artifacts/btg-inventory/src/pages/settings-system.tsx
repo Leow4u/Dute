@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { OwnerDashboard } from "@/components/system/owner-dashboard";
 import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
 import { BUILD_COMMIT, BUILD_TIME } from "@/lib/build-info";
@@ -28,7 +29,8 @@ import { cn } from "@/lib/utils";
 
 /**
  * Sistema: o servidor responde? Qual versão está no ar? O ledger está
- * recebendo eventos? E o registro de incidentes. A verificação é feita no
+ * recebendo eventos? E o registro de incidentes. O owner vê também o painel
+ * do sistema (custo e uso do Agent Dute, rotinas, o que deu errado). A verificação é feita no
  * servidor (getSystemHealth), não um "ok" fixo do navegador.
  */
 
@@ -242,6 +244,8 @@ export default function SettingsSystem() {
           detail={check?.last_event?.title || (check ? "ledger de eventos vazio" : null)}
         />
       </div>
+
+      {isOwner ? <OwnerDashboard /> : null}
 
       <section className="overflow-hidden rounded-[18px] border border-border bg-white">
         <div className="flex items-center justify-between gap-2 border-b border-border/60 px-5 py-3">

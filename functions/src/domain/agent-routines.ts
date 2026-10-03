@@ -291,7 +291,7 @@ export async function recordRoutineRun(
   now = new Date(),
 ) {
   const ref = db.collection(ROUTINES_COLLECTION).doc(routine.id);
-  const base = { running_since: FieldValue.delete(), last_error: outcome.error?.slice(0, 500) ?? null };
+  const base = { running_since: FieldValue.delete(), last_error: outcome.error?.slice(0, 500) ?? null, last_attempt_at: now.toISOString() };
   if (outcome.status === "no_access") {
     await ref.update({ ...base, active: false, next_run_at: null, last_status: "no_access", retry_pending: false });
     return;
