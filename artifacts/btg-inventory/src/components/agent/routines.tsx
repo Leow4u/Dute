@@ -5,8 +5,6 @@ import {
   Loader2,
   MessageSquareText,
   MoreVertical,
-  PanelRightClose,
-  PanelRightOpen,
   Pause,
   Pencil,
   Play,
@@ -40,6 +38,9 @@ import {
   EMPTY_ROUTINE,
   MAX_ROUTINES,
   routineForm,
+  showTemplatesInMine,
+  templateForm,
+  templatesFor,
   routinePayload,
   routineProblem,
   routinesKey,
@@ -50,14 +51,15 @@ import {
   type Routine,
   type RoutineForm,
   type RoutineFrequency,
+  type RoutineTemplate,
 } from "@/lib/agent-routines";
 import { cn } from "@/lib/utils";
 
 /**
- * Coluna Rotinas da tela do Agent Dute: perguntas que o agente responde
- * sozinho no horário marcado. Cada rotina é um card; clicar abre a janela de
- * edição no meio da tela, e o "⋯" tem executar agora, pausar, editar e
- * apagar. A resposta chega numa conversa própria (lista à esquerda).
+ * Rotinas do Agent Dute: perguntas que o agente responde sozinho no horário
+ * marcado. Cada rotina é um card; clicar abre a janela de edição no meio da
+ * tela, e o "⋯" tem executar agora, pausar, editar e apagar. A resposta chega
+ * numa conversa própria ("Histórico das rotinas", na barra lateral).
  */
 
 const field =
@@ -180,10 +182,10 @@ export function RoutineFields({ form, onChange, idPrefix, disabled }: { form: Ro
 }
 
 /** Janela de criar ou editar rotina, no meio da tela. */
-function RoutineDialog({ routine, open, onClose }: { routine: Routine | null; open: boolean; onClose: () => void }) {
+function RoutineDialog({ routine, initial, open, onClose }: { routine: Routine | null; initial?: RoutineForm; open: boolean; onClose: () => void }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [form, setForm] = useState<RoutineForm>(() => (routine ? routineForm(routine) : { ...EMPTY_ROUTINE }));
+  const [form, setForm] = useState<RoutineForm>(() => (routine ? routineForm(routine) : { ...(initial ?? EMPTY_ROUTINE) }));
   const problem = routineProblem(form);
   const save = useMutation({
     mutationFn: (next: RoutineForm) => postJson("/api/agent-dute/routines", routinePayload(next)),
@@ -222,7 +224,7 @@ function RoutineDialog({ routine, open, onClose }: { routine: Routine | null; op
   );
 }
 
-/** Card da rotina na coluna: clique abre a janela de edição; "⋯" tem as ações rápidas. */
+/** Card da rotina: clique abre a janela de edição; "⋯" tem as ações rápidas. */
 function RoutineCard({ routine, onEdit, onOpenConversation }: { routine: Routine; onEdit: () => void; onOpenConversation: (id: string) => void }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -315,69 +317,118 @@ function RoutineCard({ routine, onEdit, onOpenConversation }: { routine: Routine
   );
 }
 
-/** Lista de rotinas; `onCollapse` só no desktop (o celular abre por cima). */
-export function RoutinesPanel({ onOpenConversation, onCollapse }: { onOpenConversation: (id: string) => void; onCollapse?: () => void }) {
+/** Card de um modelo pronto: abre a janela de nova rotina já preenchida. */
+function TemplateCard({ template, disabled, onPick }: { template: RoutineTemplate; disabled: boolean; onPick: () => void }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onPick}
+      className="flex flex-col gap-1 rounded-xl border border-border bg-card px-3.5 py-3 text-left hover:border-agent/50 disabled:opacity-50"
+    >
+      <CalendarClock className="mb-1 h-4 w-4 text-agent" aria-hidden="true" />
+      <span className="text-sm font-semibold">{template.name}</span>
+      <span className="text-xs text-muted-foreground">
+        {template.hint} {describeSchedule({ ...template, day_of_month: template.day_of_month ?? null })}.
+      </span>
+    </button>
+  );
+}
+
+type RoutinesTab = "mine" | "templates";
+
+/**
+ * Tela Rotinas do Agent Dute (aberta pela barra lateral): as rotinas da
+ * pessoa e os modelos prontos. Em "Minhas rotinas" os modelos aparecem só
+ * enquanto não há nenhuma rotina; depois ficam na aba Modelos.
+ */
+export function RoutinesPage({ role, onOpenConversation }: { role: string | undefined; onOpenConversation: (id: string) => void }) {
   const routines = useRoutines();
-  // Guarda só qual rotina está aberta: a janela lê a versão atual da lista.
+  // "new", id da rotina ou "tpl:<id>"; a janela lê a versão atual da lista.
   const [editing, setEditing] = useState<string | null>(null);
+  const [tab, setTab] = useState<RoutinesTab>("mine");
   const list = routines.data?.routines ?? [];
+  const templates = templatesFor(role);
+  const full = list.length >= MAX_ROUTINES;
   const open = editingRoutine(list, editing);
+  const template = editing?.startsWith("tpl:") ? templates.find((item) => `tpl:${item.id}` === editing) : undefined;
+  const templateGrid = (
+    <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+      {templates.map((item) => (
+        <TemplateCard key={item.id} template={item} disabled={full} onPick={() => setEditing(`tpl:${item.id}`)} />
+      ))}
+    </div>
+  );
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col gap-3 px-3 py-4">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 text-sm font-semibold">
-          <CalendarClock className="h-4 w-4 text-agent" aria-hidden="true" /> Rotinas
-        </h2>
-        {onCollapse ? (
-          <button type="button" onClick={onCollapse} aria-label="Recolher rotinas" title="Recolher" className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted">
-            <PanelRightClose className="h-4 w-4" />
+    <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="mx-auto flex w-full max-w-[920px] flex-col gap-4 px-4 py-6 md:px-7">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1 basis-[420px]">
+            <h2 className="text-2xl font-semibold tracking-tight">Rotinas</h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Perguntas que o Agent Dute responde sozinho no horário marcado. As respostas ficam em "Histórico das rotinas", na barra ao lado.
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={full}
+            onClick={() => setEditing("new")}
+            className="flex items-center gap-1.5 rounded-xl bg-foreground px-3.5 py-2 text-sm font-semibold text-background hover:bg-foreground/85 disabled:opacity-50"
+          >
+            <Plus className="h-4 w-4" /> Nova rotina
           </button>
-        ) : null}
-      </div>
-      <p className="text-xs text-muted-foreground">Perguntas que o Agent Dute responde sozinho no horário marcado.</p>
-      <button
-        type="button"
-        disabled={list.length >= MAX_ROUTINES}
-        onClick={() => setEditing("new")}
-        className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-agent-border bg-card px-3 py-2 text-sm font-semibold text-agent hover:bg-agent-soft disabled:opacity-50"
-      >
-        <Plus className="h-4 w-4" /> Criar rotina
-      </button>
-      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
-        {routines.isLoading ? (
+        </div>
+        <div role="tablist" aria-label="Rotinas" className="flex gap-5 border-b border-border text-sm">
+          {(
+            [
+              ["mine", `Minhas rotinas${list.length ? ` (${list.length})` : ""}`],
+              ["templates", "Modelos"],
+            ] as Array<[RoutinesTab, string]>
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={tab === value}
+              onClick={() => setTab(value)}
+              className={cn("-mb-px border-b-2 pb-2", tab === value ? "border-foreground font-semibold text-foreground" : "border-transparent text-muted-foreground hover:text-foreground")}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === "templates" ? (
+          templateGrid
+        ) : routines.isLoading ? (
           <p className="text-sm text-muted-foreground">Carregando…</p>
         ) : routines.isError ? (
           <p className="text-sm text-destructive-soft-foreground">Não consegui carregar as rotinas.</p>
-        ) : list.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nenhuma rotina ainda. Crie uma aqui ou peça no chat, por exemplo: "toda segunda às 8h me manda o resumo da semana".</p>
+        ) : showTemplatesInMine(list) ? (
+          <>
+            <p className="rounded-xl border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">
+              Nenhuma rotina ainda. Comece por um modelo abaixo, crie do zero ou peça no chat, por exemplo: "toda segunda às 8h me manda o resumo da semana".
+            </p>
+            <p className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Comece por um modelo</p>
+            {templateGrid}
+          </>
         ) : (
-          list.map((routine) => (
-            <RoutineCard key={routine.id} routine={routine} onEdit={() => setEditing(routine.id)} onOpenConversation={onOpenConversation} />
-          ))
+          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+            {list.map((routine) => (
+              <RoutineCard key={routine.id} routine={routine} onEdit={() => setEditing(routine.id)} onOpenConversation={onOpenConversation} />
+            ))}
+          </div>
         )}
+        {list.length ? (
+          <p className="text-xs text-muted-foreground">
+            {list.length} de {MAX_ROUTINES} rotinas{full ? ". Apague uma para criar outra." : ""}
+          </p>
+        ) : null}
       </div>
-      {list.length ? (
-        <p className="text-xs text-muted-foreground">
-          {list.length} de {MAX_ROUTINES} rotinas
-        </p>
+      {editing && (editing === "new" || open || template) ? (
+        <RoutineDialog key={editing} routine={open} initial={template ? templateForm(template) : undefined} open onClose={() => setEditing(null)} />
       ) : null}
-      {editing && (editing === "new" || open) ? (
-        <RoutineDialog key={editing} routine={open} open onClose={() => setEditing(null)} />
-      ) : null}
-    </div>
-  );
-}
-/** Coluna recolhida: uma faixa fina com o botão para abrir. */
-export function RoutinesCollapsed({ onExpand }: { onExpand: () => void }) {
-  return (
-    <div className="flex h-full flex-col items-center gap-2 py-4">
-      <button type="button" onClick={onExpand} aria-label="Abrir rotinas" title="Rotinas" className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted">
-        <PanelRightOpen className="h-4 w-4" />
-      </button>
-      <button type="button" onClick={onExpand} aria-label="Rotinas" className="grid h-9 w-9 place-items-center rounded-lg text-agent hover:bg-muted">
-        <CalendarClock className="h-4 w-4" />
-      </button>
     </div>
   );
 }

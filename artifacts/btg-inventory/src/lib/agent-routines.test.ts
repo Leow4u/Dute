@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ROUTINE_TEMPLATES,
+  routineHistory,
+  showTemplatesInMine,
+  templateForm,
+  templatesFor,
   describeSchedule,
   editingRoutine,
   isUnreadRoutine,
@@ -91,5 +96,46 @@ describe("rotinas do Agent Dute na tela", () => {
     expect(isUnreadRoutine(conversation, storage)).toBe(false);
     expect(isUnreadRoutine({ ...conversation, last_message_at: "2026-10-12T11:01:00Z" }, storage)).toBe(true);
     expect(isUnreadRoutine({ id: "c1", last_message_at: "2026-10-12T11:01:00Z" }, storage)).toBe(false);
+  });
+
+  it("modelos prontos por perfil, cada um já válido para salvar", () => {
+    expect(templatesFor("cliente").map((template) => template.name)).toEqual([
+      "Resumo do estoque",
+      "Itens abaixo do mínimo",
+      "Pedidos em andamento",
+      "Entregas da semana",
+      "Fechamento do mês",
+      "Faturas a vencer",
+    ]);
+    const team = templatesFor("interno").map((template) => template.name);
+    expect(team).toContain("Solicitações esperando aprovação");
+    expect(team).toContain("Fila do WMS");
+    expect(team).not.toContain("Faturas a vencer");
+    expect(team).not.toContain("Entregas da semana");
+    for (const template of [...ROUTINE_TEMPLATES.customer, ...ROUTINE_TEMPLATES.team]) {
+      const form = templateForm(template);
+      expect(routineProblem(form), template.name).toBeNull();
+      expect(form.id).toBeUndefined();
+      expect(TIME_OPTIONS).toContain(form.time);
+    }
+  });
+
+  it("em Minhas rotinas, os modelos só aparecem enquanto não há nenhuma rotina", () => {
+    expect(showTemplatesInMine([])).toBe(true);
+    expect(showTemplatesInMine([routine])).toBe(false);
+  });
+
+  it("histórico das rotinas: uma linha por rotina, a de resposta mais recente primeiro", () => {
+    const conversations = [
+      { id: "c1", title: "quanto tenho de polo?", last_message_at: "2026-10-03T12:00:00Z" },
+      { id: "routine_rot_1", title: "Rotina: Resumo do estoque", last_message_at: "2026-10-02T13:00:00Z", routine_id: "rot_1" },
+      { id: "routine_rot_2", title: "Rotina: Abaixo do mínimo", last_message_at: "2026-10-03T10:30:00Z", routine_id: "rot_2" },
+    ];
+    const routines = [{ ...routine, id: "rot_1", name: "Resumo do estoque" }];
+    expect(routineHistory(conversations, routines).map((item) => [item.id, item.label])).toEqual([
+      // Rotina apagada continua no histórico, com o título da conversa sem "Rotina:".
+      ["routine_rot_2", "Abaixo do mínimo"],
+      ["routine_rot_1", "Resumo do estoque"],
+    ]);
   });
 });
