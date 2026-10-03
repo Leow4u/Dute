@@ -51,7 +51,7 @@ export function MonthlyBars({
               ) : null}
               <span
                 className="block w-full max-w-[56px] rounded-t-[4px]"
-                style={{ height: barHeight, background: strong ? "#2a78d6" : "#a9c8ef" }}
+                style={{ height: barHeight, background: strong ? "hsl(var(--chart-bar))" : "hsl(var(--chart-bar-soft))" }}
               />
               <span
                 className={cn(

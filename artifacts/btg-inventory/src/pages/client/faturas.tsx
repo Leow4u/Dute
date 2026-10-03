@@ -209,7 +209,7 @@ function ServiceBars({ invoice }: { invoice: ClosedInvoice }) {
         <li key={service.key} className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)_auto_2.5rem] items-center gap-3 text-sm">
           <span className="truncate" title={service.label}>{service.label}</span>
           <span className="h-2 rounded-full bg-muted">
-            <span className="block h-2 rounded-full bg-[#2a78d6]" style={{ width: `${Math.max(2, (service.total / max) * 100)}%` }} />
+            <span className="block h-2 rounded-full bg-chart-bar" style={{ width: `${Math.max(2, (service.total / max) * 100)}%` }} />
           </span>
           <span className="text-right tabular-nums">{moneyShort(service.total)}</span>
           <span className="text-right text-xs tabular-nums text-muted-foreground">{Math.round((service.total / total) * 100)}%</span>

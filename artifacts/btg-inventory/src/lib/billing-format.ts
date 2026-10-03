@@ -17,9 +17,9 @@ export const AUTO_LABELS: Record<string, string> = {
 };
 
 export const STATUS_META: Record<string, { label: string; className: string }> = {
-  aberto: { label: "Em aberto", className: "bg-amber-100 text-amber-800 border-amber-200" },
-  emitido: { label: "Emitida", className: "bg-blue-100 text-blue-800 border-blue-200" },
-  pago: { label: "Paga", className: "bg-green-100 text-green-800 border-green-200" },
+  aberto: { label: "Em aberto", className: "bg-warning-soft-border/50 text-warning-soft-foreground border-warning-soft-border" },
+  emitido: { label: "Emitida", className: "bg-info-soft-border/50 text-info-soft-foreground border-info-soft-border" },
+  pago: { label: "Paga", className: "bg-success-soft-border/50 text-success-soft-foreground border-success-soft-border" },
 };
 
 export const fmtBRL = (n: number) =>

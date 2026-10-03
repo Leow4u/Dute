@@ -451,7 +451,7 @@ export const LINE_RESOLUTION_COPY: Record<
     label: "A conferir",
     shortLabel: "A conferir",
     description: "Conte o físico antes de avançar.",
-    className: "border-border bg-white/60 text-muted-foreground",
+    className: "border-border bg-card/60 text-muted-foreground",
   },
   confirmed: {
     label: "OK físico",
@@ -463,7 +463,7 @@ export const LINE_RESOLUTION_COPY: Record<
     label: "Falta física",
     shortLabel: "Falta",
     description: "Segure a etapa e registre exceção.",
-    className: "border-amber-200 bg-amber-50 text-amber-800",
+    className: "border-warning-soft-border bg-warning-soft text-warning-soft-foreground",
   },
   damaged: {
     label: "Avaria",
@@ -733,10 +733,10 @@ export function priorityClass(priority?: string | null) {
     return "border-destructive/20 bg-destructive/10 text-destructive";
   }
   if (priority === "high") {
-    return "border-amber-200 bg-amber-50 text-amber-800";
+    return "border-warning-soft-border bg-warning-soft text-warning-soft-foreground";
   }
   if (priority === "low") {
-    return "border-border bg-white/60 text-muted-foreground";
+    return "border-border bg-card/60 text-muted-foreground";
   }
   return "border-primary/20 bg-primary/10 text-primary";
 }
@@ -761,9 +761,9 @@ export function statusClass(status?: string | null) {
     return "border-primary/20 bg-primary/10 text-primary";
   }
   if (["checking", "in_progress", "dispatched"].includes(normalized)) {
-    return "border-amber-200 bg-amber-50 text-amber-800";
+    return "border-warning-soft-border bg-warning-soft text-warning-soft-foreground";
   }
-  return "border-border bg-white/60 text-muted-foreground";
+  return "border-border bg-card/60 text-muted-foreground";
 }
 
 export function alertClass(severity?: string | null) {
@@ -771,7 +771,7 @@ export function alertClass(severity?: string | null) {
     return "border-destructive/20 bg-destructive/10 text-destructive";
   }
   if (severity === "attention") {
-    return "border-amber-200 bg-amber-50 text-amber-800";
+    return "border-warning-soft-border bg-warning-soft text-warning-soft-foreground";
   }
   return "border-primary/20 bg-primary/10 text-primary";
 }
@@ -1011,7 +1011,7 @@ export function queueSlaState(queue: NormalizedQueue) {
   if (queue.dueSoonCount > 0) {
     return {
       label: "SLA em risco",
-      className: "border-amber-200 bg-amber-50 text-amber-800",
+      className: "border-warning-soft-border bg-warning-soft text-warning-soft-foreground",
     };
   }
   if (queue.pending > 0) {
@@ -1022,7 +1022,7 @@ export function queueSlaState(queue: NormalizedQueue) {
   }
   return {
     label: "Fila limpa",
-    className: "border-border bg-white/60 text-muted-foreground",
+    className: "border-border bg-card/60 text-muted-foreground",
   };
 }
 

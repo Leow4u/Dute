@@ -76,6 +76,10 @@
   --color-surface-hover: hsl(var(--primary-soft-hover));
   --color-surface-pressed: hsl(var(--primary-soft-pressed));
 
+  /* Barras do gráfico de faturamento do portal (mês em destaque / demais). */
+  --color-chart-bar: hsl(var(--chart-bar));
+  --color-chart-bar-soft: hsl(var(--chart-bar-soft));
+
   --color-chart-1: hsl(var(--chart-1));
   --color-chart-2: hsl(var(--chart-2));
   --color-chart-3: hsl(var(--chart-3));
@@ -187,6 +191,8 @@
   --agent-divider: 255 86% 95%; /* #ebe5fd */
   --agent-start: 228 94% 67%; /* #5b7cfa, início do gradiente da marca */
   --card-edge: 0 0% 100%; /* era border-white/NN */
+  --chart-bar: 213 68% 50%; /* #2a78d6 */
+  --chart-bar-soft: 213 69% 80%; /* #a9c8ef */
 
   --chart-1: 219 91% 70%;
   --chart-2: 212 78% 76%;
@@ -301,6 +307,8 @@
   --agent-divider: 253 30% 18%;
   --agent-start: 228 94% 67%;
   --card-edge: 216 34% 24%;
+  --chart-bar: 213 68% 55%;
+  --chart-bar-soft: 213 45% 38%;
 
   --chart-1: 212 98% 40%;
   --chart-2: 212 80% 50%;

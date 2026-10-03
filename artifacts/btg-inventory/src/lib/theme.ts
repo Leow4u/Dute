@@ -8,10 +8,10 @@ import { ACCESS_ADMIN_ROLES, canAccessModule, type ProfileRole } from "./modules
  * do produto e precisa de teste: quem pode escolher, qual é o padrão e qual
  * cor a barra do navegador recebe em cada tema.
  *
- * O modo escuro ainda está em construção: os tokens existem em index.css, mas
- * várias telas usam cor fixa (bg-white, text-slate-*). Até essa limpeza
- * terminar, o seletor fica restrito à administração e todo mundo mais segue
- * no claro, independente do que houver salvo no aparelho.
+ * Todas as telas leem tokens de index.css (a trava é lib/theme-colors.test.ts).
+ * Mesmo assim o seletor fica restrito à administração até o modo escuro ser
+ * conferido tela a tela com usuário logado; todo mundo mais segue no claro,
+ * independente do que houver salvo no aparelho.
  */
 
 export type ThemePreference = "light" | "dark" | "system";
