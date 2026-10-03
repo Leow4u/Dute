@@ -71,7 +71,10 @@ describe("painel do sistema: erros do servidor", () => {
         ["getsystemdashboard", 1, true],
       ],
     );
-    assert.equal(summary.groups[0]!.message, "SetIamPolicy: Resource 'saveagentcostsettings' of kind 'SERVICE' in region 'southamerica-east1' in project 'dute-btg' does not exist.");
+    // Mensagem longa do Google Cloud vira uma frase curta; a desconhecida passa como veio.
+    assert.equal(summary.groups[0]!.message, "SetIamPolicy: o serviço não existia (function não publicada)");
+    const other = groupErrors([{ ...audit("x"), protoPayload: { methodName: "google.cloud.run.v1.Services.ReplaceService", status: { message: "Revision failed to become ready." } } }]);
+    assert.equal(other.groups[0]!.message, "ReplaceService: Revision failed to become ready.");
     assert.equal(summary.total, 3);
   });
 
