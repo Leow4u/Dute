@@ -25,7 +25,7 @@ import { dayTime, fetchJson, field, Health, Panel } from "./parts";
  * Nada da operação (estoque, pedidos) entra aqui.
  */
 
-const KIND_COLORS: Record<UsageKind, string> = { chat: "#5b3fc4", rotinas: "#2f5bd3", leitura_nota: "#c08a1e" };
+const KIND_COLORS: Record<UsageKind, string> = { chat: "hsl(var(--agent))", rotinas: "#2f5bd3", leitura_nota: "#c08a1e" };
 const shortDay = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" });
 const integer = new Intl.NumberFormat("pt-BR");
 
@@ -36,21 +36,21 @@ function DailyBars({ days }: { days: SystemDashboard["usage"]["days"] }) {
   const bar = (width - 40) / days.length;
   return (
     <svg viewBox={`0 0 ${width} ${height}`} className="w-full" role="img" aria-label="Custo por dia nos últimos 14 dias">
-      <line x1="34" y1="96" x2={width - 4} y2="96" stroke="#e3e5eb" />
-      <line x1="34" y1="16" x2={width - 4} y2="16" stroke="#e3e5eb" strokeDasharray="3 3" />
-      <text x="0" y="99" fontSize="10" fill="#5f6370">0</text>
-      <text x="0" y="19" fontSize="10" fill="#5f6370">{max.toFixed(2).replace(".", ",")}</text>
+      <line x1="34" y1="96" x2={width - 4} y2="96" stroke="hsl(var(--border))" />
+      <line x1="34" y1="16" x2={width - 4} y2="16" stroke="hsl(var(--border))" strokeDasharray="3 3" />
+      <text x="0" y="99" fontSize="10" fill="hsl(var(--muted-foreground))">0</text>
+      <text x="0" y="19" fontSize="10" fill="hsl(var(--muted-foreground))">{max.toFixed(2).replace(".", ",")}</text>
       {days.map((day, index) => {
         const barHeight = (day.cost / max) * 80;
         const last = index === days.length - 1;
         return (
-          <rect key={day.day} x={38 + index * bar} y={96 - barHeight} width={bar - 6} height={Math.max(barHeight, day.count ? 1 : 0)} rx="3" fill={last ? "#2f5bd3" : "#5b3fc4"}>
+          <rect key={day.day} x={38 + index * bar} y={96 - barHeight} width={bar - 6} height={Math.max(barHeight, day.count ? 1 : 0)} rx="3" fill={last ? "#2f5bd3" : "hsl(var(--agent))"}>
             <title>{`${shortDay.format(new Date(`${day.day}T12:00:00-03:00`))}: ${formatMoney(day.cost)} · ${day.count} respostas`}</title>
           </rect>
         );
       })}
-      <text x="38" y="112" fontSize="10" fill="#5f6370">{shortDay.format(new Date(`${days[0]!.day}T12:00:00-03:00`))}</text>
-      <text x={width - 30} y="112" fontSize="10" fill="#5f6370">hoje</text>
+      <text x="38" y="112" fontSize="10" fill="hsl(var(--muted-foreground))">{shortDay.format(new Date(`${days[0]!.day}T12:00:00-03:00`))}</text>
+      <text x={width - 30} y="112" fontSize="10" fill="hsl(var(--muted-foreground))">hoje</text>
     </svg>
   );
 }
@@ -79,7 +79,7 @@ function CostSettingsDialog({ settings, onClose }: { settings: SystemDashboard["
   const invalid = [input, output, budget].some((value) => value.trim() !== "" && (!Number.isFinite(parse(value)) || parse(value) < 0));
   return (
     <Dialog open onOpenChange={(open) => (!open ? onClose() : undefined)}>
-      <DialogContent className="max-w-lg bg-white">
+      <DialogContent className="max-w-lg bg-card">
         <DialogHeader>
           <DialogTitle>Preços e orçamento do Agent Dute</DialogTitle>
           <DialogDescription>
@@ -102,7 +102,7 @@ function CostSettingsDialog({ settings, onClose }: { settings: SystemDashboard["
           </label>
         </div>
         <DialogFooter className="gap-2">
-          <button type="button" onClick={onClose} className="rounded-xl border border-border bg-white px-3.5 py-2 text-sm font-medium hover:bg-muted">
+          <button type="button" onClick={onClose} className="rounded-xl border border-border bg-card px-3.5 py-2 text-sm font-medium hover:bg-muted">
             Cancelar
           </button>
           <button
@@ -129,7 +129,7 @@ export function OwnerDashboard() {
 
   if (dashboard.isLoading) return <p className="text-sm text-muted-foreground">Carregando o painel…</p>;
   if (dashboard.isError || !dashboard.data) {
-    return <p className="rounded-[18px] border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">Não consegui carregar o painel: {dashboard.error?.message}</p>;
+    return <p className="rounded-[18px] border border-destructive-soft-border bg-destructive-soft px-5 py-4 text-sm text-destructive-soft-foreground">Não consegui carregar o painel: {dashboard.error?.message}</p>;
   }
   const data = dashboard.data;
   const { usage, routines } = data;
@@ -139,13 +139,13 @@ export function OwnerDashboard() {
   return (
     <div className="space-y-4">
       {usage.month.over_budget ? (
-        <p className="flex items-start gap-2 rounded-[14px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="alert">
+        <p className="flex items-start gap-2 rounded-[14px] border border-warning-soft-border bg-warning-soft px-4 py-3 text-sm text-warning-soft-foreground" role="alert">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           A projeção do mês ({formatMoney(usage.month.projection)}) passou do orçamento de {formatMoney(usage.month.budget ?? 0)}.
         </p>
       ) : null}
       {!usage.priced ? (
-        <p className="flex flex-wrap items-center justify-between gap-2 rounded-[14px] border border-border bg-white px-4 py-3 text-sm">
+        <p className="flex flex-wrap items-center justify-between gap-2 rounded-[14px] border border-border bg-card px-4 py-3 text-sm">
           <span>Para ver o custo em reais, informe o preço do modelo (R$ por milhão de tokens).</span>
           <button type="button" onClick={() => setEditingCosts(true)} className="font-semibold text-primary hover:underline">
             Informar preços
@@ -203,7 +203,7 @@ export function OwnerDashboard() {
               ))}
             </div>
             <DailyBars days={usage.days} />
-            {data.usage_truncated ? <p className="text-xs text-amber-800">Muitos registros no período: o painel considerou os 20 mil mais antigos.</p> : null}
+            {data.usage_truncated ? <p className="text-xs text-warning-soft-foreground">Muitos registros no período: o painel considerou os 20 mil mais antigos.</p> : null}
           </div>
         </Panel>
 
@@ -270,9 +270,9 @@ export function OwnerDashboard() {
                     const state = !routine.active
                       ? { label: routine.last_status === "no_access" ? "pausada (sem acesso)" : "pausada", tone: "bg-muted text-muted-foreground" }
                       : routine.last_status === "failed"
-                        ? { label: `falhou${routine.last_attempt_at ? ` · ${shortDay.format(new Date(routine.last_attempt_at))}` : ""}`, tone: "bg-red-50 text-red-700" }
+                        ? { label: `falhou${routine.last_attempt_at ? ` · ${shortDay.format(new Date(routine.last_attempt_at))}` : ""}`, tone: "bg-destructive-soft text-destructive-soft-foreground" }
                         : routine.last_run_at
-                          ? { label: `ok · ${shortDay.format(new Date(routine.last_run_at))}`, tone: "bg-emerald-50 text-emerald-800" }
+                          ? { label: `ok · ${shortDay.format(new Date(routine.last_run_at))}`, tone: "bg-success-soft text-success-soft-foreground" }
                           : { label: "ainda não rodou", tone: "bg-muted text-muted-foreground" };
                     return (
                       <tr key={routine.id} className="border-b border-border/40 last:border-0">
@@ -302,7 +302,7 @@ export function OwnerDashboard() {
             <ul>
               {problems.map((problem, index) => (
                 <li key={`${problem.at}-${index}`} className="flex items-start gap-3 border-b border-border/40 px-5 py-3 text-sm last:border-0">
-                  <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold", problem.tone === "bad" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-800")}>
+                  <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold", problem.tone === "bad" ? "bg-destructive-soft text-destructive-soft-foreground" : "bg-warning-soft text-warning-soft-foreground")}>
                     {problem.tag}
                   </span>
                   <span className="min-w-0 flex-1">

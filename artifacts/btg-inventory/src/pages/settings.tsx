@@ -148,7 +148,7 @@ export function SettingsApp() {
         subtitle="Abra a Dutelog pelo ícone, em tela cheia"
       />
       <Card className="overflow-hidden">
-        <CardHeader className="border-b border-border/60 bg-white/35">
+        <CardHeader className="border-b border-border/60 bg-card/35">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
@@ -178,7 +178,7 @@ export function SettingsApp() {
                 </div>
               </div>
             ) : isAppleMobile ? (
-              <div className="space-y-3 rounded-2xl border border-border/70 bg-white/55 p-4">
+              <div className="space-y-3 rounded-2xl border border-border/70 bg-card/55 p-4">
                 <div className="text-sm font-semibold">No iPhone ou iPad</div>
                 <ol className="space-y-3 text-sm leading-6 text-muted-foreground">
                   <li className="flex gap-3">
@@ -225,7 +225,7 @@ export function SettingsApp() {
             )}
           </div>
 
-          <div className="rounded-2xl border border-border/70 bg-white/55 p-4">
+          <div className="rounded-2xl border border-border/70 bg-card/55 p-4">
             <div className="flex items-center gap-2 text-sm font-semibold">
               <Wifi className="h-4 w-4 text-primary" />
               Operação protegida
@@ -235,7 +235,7 @@ export function SettingsApp() {
               contagens e pedidos exigem internet para manter o saldo único em
               tempo real.
             </p>
-            <div className="mt-4 flex items-center justify-between rounded-xl border border-border/70 bg-white/70 px-3 py-2 text-sm">
+            <div className="mt-4 flex items-center justify-between rounded-xl border border-border/70 bg-card/70 px-3 py-2 text-sm">
               <span className="text-muted-foreground">Conexão agora</span>
               <span className="font-medium">
                 {isOnline ? "Online" : "Sem conexão"}

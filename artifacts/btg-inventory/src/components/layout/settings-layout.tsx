@@ -30,7 +30,7 @@ function BackLink({ href, label }: { href: string; label: string }) {
   return (
     <Link
       href={href}
-      className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-black/[.04] hover:text-foreground"
+      className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-foreground/[.04] hover:text-foreground"
     >
       <ChevronLeft className="h-4 w-4" />
       {label}
@@ -52,7 +52,7 @@ export function SettingsSectionList() {
           <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             {SETTINGS_GROUP_LABEL[group.id]}
           </div>
-          <div className="overflow-hidden rounded-[18px] border border-border bg-white">
+          <div className="overflow-hidden rounded-[18px] border border-border bg-card">
             {group.sections.map((section) => {
               const Icon = section.icon;
               return (
@@ -112,8 +112,8 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
                       className={cn(
                         "flex items-center gap-2.5 rounded-xl border px-3 py-2 text-sm transition-colors",
                         active
-                          ? "border-border bg-white font-semibold text-foreground shadow-[0_1px_2px_rgba(15,23,42,.06)]"
-                          : "border-transparent text-sidebar-foreground/70 hover:bg-white/70 hover:text-sidebar-foreground",
+                          ? "border-border bg-card font-semibold text-foreground shadow-[0_1px_2px_rgba(15,23,42,.06)]"
+                          : "border-transparent text-sidebar-foreground/70 hover:bg-card/70 hover:text-sidebar-foreground",
                       )}
                     >
                       <Icon className="h-4 w-4 shrink-0" />
@@ -130,8 +130,8 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white/60">
-        <header className="flex h-14 shrink-0 items-center border-b border-border/70 bg-white/80 px-2 backdrop-blur-[40px] md:hidden">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-card/60">
+        <header className="flex h-14 shrink-0 items-center border-b border-border/70 bg-card/80 px-2 backdrop-blur-[40px] md:hidden">
           {atRoot ? (
             <BackLink href={returnPath} label="Voltar" />
           ) : (
@@ -141,7 +141,7 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
         {!isOnline ? (
           <div
             role="status"
-            className="flex shrink-0 items-center justify-center gap-2 border-b border-amber-200 bg-amber-50/95 px-4 py-2 text-center text-xs font-medium text-amber-900"
+            className="flex shrink-0 items-center justify-center gap-2 border-b border-warning-soft-border bg-warning-soft/95 px-4 py-2 text-center text-xs font-medium text-warning-soft-foreground"
           >
             <WifiOff className="h-4 w-4 shrink-0" />
             Sem conexão. Alterações ficam bloqueadas até a internet voltar.

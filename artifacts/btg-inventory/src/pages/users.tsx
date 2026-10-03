@@ -90,13 +90,13 @@ const ROLE_ORDER: Record<string, number> = {
 };
 
 const ROLE_TONE: Record<string, string> = {
-  owner: "bg-slate-100 text-slate-800",
-  admin: "bg-slate-100 text-slate-800",
-  interno: "bg-blue-50 text-blue-700",
-  wms: "bg-amber-50 text-amber-800",
-  financeiro: "bg-emerald-50 text-emerald-700",
-  suporte: "bg-sky-50 text-sky-700",
-  cliente: "bg-violet-50 text-violet-700",
+  owner: "bg-muted text-foreground",
+  admin: "bg-muted text-foreground",
+  interno: "bg-info-soft text-info-soft-foreground",
+  wms: "bg-warning-soft text-warning-soft-foreground",
+  financeiro: "bg-success-soft text-success-soft-foreground",
+  suporte: "bg-info-soft text-info-soft-foreground",
+  cliente: "bg-agent-soft text-agent",
 };
 
 function initials(name: string) {
@@ -287,7 +287,7 @@ export default function Users() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <section className="overflow-hidden rounded-[18px] border border-border bg-white">
+        <section className="overflow-hidden rounded-[18px] border border-border bg-card">
           {isLoading || invites.isLoading ? (
             <p className="p-6 text-sm text-muted-foreground">Carregando pessoas...</p>
           ) : (
@@ -315,7 +315,7 @@ export default function Users() {
                       >
                         <td className="px-5 py-3">
                           <div className="flex items-center gap-3">
-                            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-blue-50 text-xs font-semibold text-blue-700">
+                            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-info-soft text-xs font-semibold text-info-soft-foreground">
                               {initials(person.name)}
                             </span>
                             <div className="min-w-0">
@@ -434,7 +434,7 @@ export default function Users() {
           )}
         </section>
 
-        <aside className="h-fit rounded-[18px] border border-border bg-white">
+        <aside className="h-fit rounded-[18px] border border-border bg-card">
           <h2 className="border-b border-border/60 px-5 py-3.5 text-sm font-semibold">O que cada perfil faz</h2>
           <div className="space-y-3 px-5 py-4">
             {ROLE_INFO.map((info) => (
