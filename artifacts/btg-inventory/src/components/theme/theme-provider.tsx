@@ -10,13 +10,12 @@ import {
 } from "@/lib/theme";
 
 /**
- * Liga o next-themes ao perfil. Enquanto o modo escuro está em construção, só
- * a administração escolhe tema; para todo mundo mais o tema é forçado para o
- * claro sem apagar o que estiver salvo no aparelho (se a pessoa virar admin,
- * a escolha volta).
+ * Liga o next-themes ao perfil. Qualquer perfil logado usa o tema que escolheu
+ * em Configuração > Minha conta; sem perfil (login, convite) o tema é forçado
+ * para o claro, sem apagar o que estiver salvo no aparelho.
  *
  * Precisa ficar dentro do AuthProvider. Enquanto o perfil não carregou, não
- * força nada: quem é admin e usa escuro não vê a tela piscar em claro.
+ * força nada: quem usa escuro não vê a tela piscar em claro.
  */
 export function AppThemeProvider({ children }: { children: ReactNode }) {
   const { user, isLoaded } = useAppUser();

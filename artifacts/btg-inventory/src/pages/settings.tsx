@@ -75,8 +75,7 @@ export function SettingsAccount() {
             <div className="border-b border-border/50 px-5 py-4">
               <div className="text-sm font-medium">Aparência</div>
               <div className="mt-0.5 text-sm text-muted-foreground">
-                Tema deste aparelho. O modo escuro ainda está em construção e, por
-                enquanto, só a administração pode ativá-lo.
+                Tema deste aparelho. Sistema acompanha o claro ou escuro do aparelho.
               </div>
             </div>
             <div className="px-5 py-4">

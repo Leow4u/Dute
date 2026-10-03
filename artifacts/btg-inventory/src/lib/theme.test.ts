@@ -12,20 +12,16 @@ import {
 } from "./theme";
 
 describe("quem pode escolher o tema", () => {
-  // Modo escuro ainda tem telas com cor fixa (bg-white etc.). Enquanto a
-  // limpeza por módulo não termina, só a administração enxerga o seletor.
-  it.each<ProfileRole>(["owner", "admin"])("%s vê o seletor", (role) => {
-    expect(canChooseTheme(role)).toBe(true);
-  });
-
-  it.each<ProfileRole>(["interno", "wms", "financeiro", "suporte", "cliente"])(
-    "%s fica no tema claro",
+  // Todas as telas leem tokens de tema (trava em theme-colors.test.ts), então
+  // qualquer perfil logado escolhe o tema em Configuração > Minha conta.
+  it.each<ProfileRole>(["owner", "admin", "interno", "wms", "financeiro", "suporte", "cliente"])(
+    "%s vê o seletor",
     (role) => {
-      expect(canChooseTheme(role)).toBe(false);
+      expect(canChooseTheme(role)).toBe(true);
     },
   );
 
-  it("sem perfil carregado, não escolhe", () => {
+  it("sem perfil carregado (login, convite), não escolhe", () => {
     expect(canChooseTheme(null)).toBe(false);
     expect(canChooseTheme(undefined)).toBe(false);
   });

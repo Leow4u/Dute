@@ -1,4 +1,4 @@
-import { ACCESS_ADMIN_ROLES, canAccessModule, type ProfileRole } from "./modules";
+import { canAccessModule, type ProfileRole } from "./modules";
 
 /**
  * Tema claro/escuro.
@@ -8,10 +8,9 @@ import { ACCESS_ADMIN_ROLES, canAccessModule, type ProfileRole } from "./modules
  * do produto e precisa de teste: quem pode escolher, qual é o padrão e qual
  * cor a barra do navegador recebe em cada tema.
  *
- * Todas as telas leem tokens de index.css (a trava é lib/theme-colors.test.ts).
- * Mesmo assim o seletor fica restrito à administração até o modo escuro ser
- * conferido tela a tela com usuário logado; todo mundo mais segue no claro,
- * independente do que houver salvo no aparelho.
+ * Todas as telas leem tokens de index.css (a trava é lib/theme-colors.test.ts),
+ * então qualquer perfil logado escolhe o tema em Configuração > Minha conta.
+ * Sem perfil (login, convite) o tema fica no claro.
  */
 
 export type ThemePreference = "light" | "dark" | "system";
@@ -41,8 +40,9 @@ export const THEME_COLORS: Record<ResolvedTheme, string> = {
   dark: "#060a13",
 };
 
+/** Qualquer perfil logado; sem perfil, não. */
 export function canChooseTheme(role: ProfileRole | null | undefined): boolean {
-  return canAccessModule(role, ACCESS_ADMIN_ROLES);
+  return canAccessModule(role);
 }
 
 export function normalizeThemePreference(value: unknown): ThemePreference {
