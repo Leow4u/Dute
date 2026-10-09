@@ -3,8 +3,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Check,
-  ChevronDown,
-  ChevronRight,
   ClipboardCheck,
   Package,
   RefreshCw,
@@ -15,7 +13,17 @@ import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
+import { QueueGroup, QueueRow, type QueueTone } from "@/components/ui/queue-list";
 import { Segmented } from "@/components/ui/segmented";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { ExceptionDialog, useWarehouseTaskActions } from "@/features/warehouse-ops/task-actions";
+import { TaskDetailPanel } from "@/features/warehouse-ops/task-detail";
 import {
   Dialog,
   DialogContent,
@@ -33,9 +41,13 @@ import { buildOrderQueue } from "@/lib/order-queue";
 import { useItemPhotos } from "@/lib/use-item-photos";
 import { canDecideRequests, humanApiError } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
-import type {
-  WarehouseOpsResponse,
-  WarehouseTask,
+import {
+  type LineConfirmationMap,
+  type WarehouseOpsResponse,
+  type WarehouseTask,
+  lineConfirmationKey,
+  normalizeQueues,
+  queueEntries,
 } from "@/lib/warehouse-ops/model";
 import { queueTasks, type OrderGroup } from "@/lib/warehouse-ops/orders";
 import {
@@ -105,6 +117,9 @@ export default function Pedidos() {
   const [driver, setDriver] = useState(() => remembered("motorista", "Equipe Dutelog"));
   const [plate, setPlate] = useState(() => remembered("placa", ""));
   const [receivedBy, setReceivedBy] = useState("");
+  // "Tratar": a tarefa bloqueada do pedido abre aqui mesmo, num painel.
+  const [treating, setTreating] = useState<OrderGroup | null>(null);
+  const [lineConfirmations, setLineConfirmations] = useState<LineConfirmationMap>({});
 
   const ops = useQuery({
     queryKey: ["warehouse-ops"],
@@ -132,6 +147,18 @@ export default function Pedidos() {
     () => buildOrderQueue({ requests: requests.data?.items, ops: ops.data }),
     [ops.data, requests.data?.items],
   );
+  const entries = useMemo(() => queueEntries(normalizeQueues(ops.data?.queues)), [ops.data?.queues]);
+  const actions = useWarehouseTaskActions({
+    findEntry: (taskId) => entries.find((entry) => entry.task.id === taskId),
+  });
+  const treatingTask = treating
+    ? [treating.pick, treating.pack, treating.ship].find((task) => task?.blocked_reason) ??
+      (treating.stage === "separar" ? treating.pick : treating.ship)
+    : undefined;
+  // Procura pelo id: depois de avançar, a tarefa vem atualizada do servidor.
+  const treatingEntry = treatingTask
+    ? entries.find((entry) => entry.task.id === treatingTask.id)
+    : undefined;
 
   const refreshAll = () => {
     void queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
@@ -308,7 +335,7 @@ export default function Pedidos() {
         <p className="text-sm text-muted-foreground">Carregando pedidos...</p>
       ) : view === "delivered" ? (
         <>
-          <Group
+          <QueueGroup
             title="Entregues"
             hint="recentes"
             count={queue.delivered.length}
@@ -317,7 +344,7 @@ export default function Pedidos() {
             {queue.delivered.map((order) => (
               <OrderRow key={order.key} order={order} icon={Check} tone="done" />
             ))}
-          </Group>
+          </QueueGroup>
           <Link href="/orders" className="px-1 text-sm text-primary hover:underline">
             Ver histórico completo de pedidos
           </Link>
@@ -325,7 +352,7 @@ export default function Pedidos() {
       ) : (
         <>
           {decider ? (
-            <Group
+            <QueueGroup
               title="Para aprovar"
               hint="coordenação"
               count={queue.approve.length}
@@ -339,7 +366,7 @@ export default function Pedidos() {
                   Boolean(balances.error),
                 );
                 return (
-                  <Row
+                  <QueueRow
                     key={request.id}
                     icon={ClipboardCheck}
                     tone="approve"
@@ -389,10 +416,10 @@ export default function Pedidos() {
                   />
                 );
               })}
-            </Group>
+            </QueueGroup>
           ) : null}
 
-          <Group
+          <QueueGroup
             title="Para separar"
             hint="armazém"
             count={queue.pick.length}
@@ -405,6 +432,7 @@ export default function Pedidos() {
                 icon={Package}
                 tone="pick"
                 defaultOpen
+                onTreat={() => setTreating(order)}
                 action={
                   <Button
                     type="button"
@@ -420,9 +448,9 @@ export default function Pedidos() {
                 }
               />
             ))}
-          </Group>
+          </QueueGroup>
 
-          <Group
+          <QueueGroup
             title="Para entregar"
             hint="hoje"
             count={queue.deliver.length}
@@ -434,6 +462,7 @@ export default function Pedidos() {
                 order={order}
                 icon={Truck}
                 tone="deliver"
+                onTreat={() => setTreating(order)}
                 action={
                   <Button
                     type="button"
@@ -449,7 +478,7 @@ export default function Pedidos() {
                 }
               />
             ))}
-          </Group>
+          </QueueGroup>
         </>
       )}
 
@@ -577,109 +606,42 @@ export default function Pedidos() {
           ) : null}
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
 
-function Group({
-  title,
-  hint,
-  count,
-  empty,
-  children,
-}: {
-  title: string;
-  hint?: string;
-  count: number;
-  empty: string;
-  children: ReactNode;
-}) {
-  return (
-    <section className="flex flex-col gap-2.5">
-      <h2 className="flex items-baseline gap-2 px-1">
-        <span className="text-base font-semibold text-foreground">{title}</span>
-        <span className="text-sm text-foreground/50">
-          {[hint, count ? String(count) : null].filter(Boolean).join(" · ")}
-        </span>
-      </h2>
-      <div className="overflow-hidden rounded-2xl border border-border bg-card">
-        {count > 0 ? (
-          <div className="divide-y divide-border/60">{children}</div>
-        ) : (
-          <p className="px-5 py-4 text-sm text-muted-foreground">{empty}</p>
-        )}
-      </div>
-    </section>
-  );
-}
+      <Sheet open={treating !== null} onOpenChange={(open) => !open && setTreating(null)}>
+        <SheetContent side="right" className="w-full overflow-y-auto bg-background p-4 sm:max-w-xl sm:p-5">
+          <SheetHeader className="mb-3 text-left">
+            <SheetTitle>{treating ? `Tratar ${treating.orderNumber}` : "Tratar pedido"}</SheetTitle>
+            <SheetDescription>
+              Marque o que faltou ou avariou por item, registre a exceção ou avance a etapa. Tudo fica na trilha do pedido.
+            </SheetDescription>
+          </SheetHeader>
+          <TaskDetailPanel
+            entry={treatingEntry}
+            alerts={ops.data?.alerts ?? []}
+            lineConfirmations={lineConfirmations}
+            advancingTaskId={actions.advancingTaskId}
+            registeringExceptionId={actions.registeringExceptionId}
+            onLineConfirmationChange={(taskId, rowId, resolution) =>
+              setLineConfirmations((current) => ({
+                ...current,
+                [lineConfirmationKey(taskId, rowId)]: resolution,
+              }))
+            }
+            onAdvance={(id, operation, note) => actions.advanceTask.mutate({ id, operation, note })}
+            onOpenException={actions.exception.openFor}
+          />
+        </SheetContent>
+      </Sheet>
 
-const TONE: Record<"approve" | "pick" | "deliver" | "done", string> = {
-  approve: "bg-warning-soft text-warning-soft-foreground",
-  pick: "bg-info-soft text-info-soft-foreground",
-  deliver: "bg-success-soft text-success-soft-foreground",
-  done: "bg-muted text-muted-foreground",
-};
-
-function Row({
-  icon: Icon,
-  tone,
-  title,
-  meta,
-  age,
-  note,
-  actions,
-  onToggle,
-  open,
-  actionsClassName,
-}: {
-  actionsClassName?: string;
-  icon: LucideIcon;
-  tone: keyof typeof TONE;
-  title: string;
-  meta: string;
-  age?: string;
-  note?: ReactNode;
-  actions?: ReactNode;
-  onToggle?: () => void;
-  open?: boolean;
-}) {
-  return (
-    <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:gap-4 md:px-5">
-      <div className="flex min-w-0 flex-1 items-start gap-3.5">
-        <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-xl", TONE[tone])}>
-          <Icon className="size-5" aria-hidden="true" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="font-semibold text-foreground">{title}</p>
-          <p className="mt-0.5 text-sm text-foreground/60">
-            {meta}
-            {age ? <span className="text-foreground/45"> · {age}</span> : null}
-          </p>
-          {note ? (
-            <p className="mt-1.5 flex items-center gap-1.5 text-sm text-warning-soft-foreground">{note}</p>
-          ) : null}
-          {onToggle ? (
-            <button
-              type="button"
-              onClick={onToggle}
-              className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-primary"
-            >
-              {open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
-              {open ? "Esconder itens" : "Ver itens"}
-            </button>
-          ) : null}
-        </div>
-      </div>
-      {actions ? (
-        <div
-          className={cn(
-            "flex shrink-0 gap-2 [&>*]:flex-1 sm:[&>*]:flex-none",
-            actionsClassName,
-          )}
-        >
-          {actions}
-        </div>
-      ) : null}
+      <ExceptionDialog
+        open={actions.exception.open}
+        taskEntry={actions.exception.entry ?? treatingEntry}
+        note={actions.exception.note}
+        isPending={actions.registerException.isPending}
+        onOpenChange={actions.exception.onOpenChange}
+        onNoteChange={actions.exception.setNote}
+        onSubmit={(event) => actions.exception.submit(event, treatingEntry)}
+      />
     </div>
   );
 }
@@ -690,12 +652,14 @@ function OrderRow({
   tone,
   action,
   defaultOpen = false,
+  onTreat,
 }: {
   order: OrderGroup;
   icon: LucideIcon;
-  tone: keyof typeof TONE;
+  tone: QueueTone;
   action?: ReactNode;
   defaultOpen?: boolean;
+  onTreat?: () => void;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const items = orderItems(order);
@@ -712,7 +676,7 @@ function OrderRow({
 
   return (
     <div className={cn(blocked && "bg-destructive-soft/40")}>
-      <Row
+      <QueueRow
         icon={icon}
         tone={tone}
         title={order.orderNumber}
@@ -723,12 +687,11 @@ function OrderRow({
               <AlertTriangle className="size-3.5" />
               {order.blockedReason ??
                 `${order.exceptionCount} ${order.exceptionCount === 1 ? "exceção" : "exceções"}`}
-              <Link
-                href={order.stage === "separar" ? "/wms/picking" : "/wms/expedicao"}
-                className="font-medium underline"
-              >
-                Tratar
-              </Link>
+              {onTreat ? (
+                <button type="button" onClick={onTreat} className="font-medium underline">
+                  Tratar
+                </button>
+              ) : null}
             </span>
           ) : undefined
         }

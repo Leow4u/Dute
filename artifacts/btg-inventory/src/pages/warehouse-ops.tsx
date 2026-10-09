@@ -172,7 +172,7 @@ import {
 
 export type { WarehouseOpsModuleKey };
 
-import { ReceivingCommandCenter } from "@/features/warehouse-ops/receiving";
+import { ExceptionDialog, useWarehouseTaskActions } from "@/features/warehouse-ops/task-actions";
 import { CycleCountWorkspace } from "@/features/warehouse-ops/inventory";
 import {
   ExceptionWorkspace,
@@ -1003,82 +1003,6 @@ function AgentAlertsPanel({
   );
 }
 
-function ExceptionDialog({
-  open,
-  taskEntry,
-  note,
-  isPending,
-  onOpenChange,
-  onNoteChange,
-  onSubmit,
-}: {
-  open: boolean;
-  taskEntry?: TaskQueueEntry;
-  note: string;
-  isPending: boolean;
-  onOpenChange: (open: boolean) => void;
-  onNoteChange: (value: string) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-}) {
-  const task = taskEntry?.task;
-  const title = task ? getTaskTitle(task) : "Tarefa";
-  const canSubmit = Boolean(task && (note.trim() || task.blocked_reason));
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <form className="flex flex-col gap-5" onSubmit={onSubmit}>
-          <DialogHeader>
-            <DialogTitle>Registrar exceção</DialogTitle>
-            <DialogDescription>
-              {title} · {taskEntry?.queue.label ?? "Fila WMS"}
-            </DialogDescription>
-          </DialogHeader>
-
-          {task?.blocked_reason ? (
-            <Alert className="border-destructive/20 bg-destructive/10 text-destructive">
-              <Ban className="size-4" />
-              <AlertTitle>Bloqueio atual</AlertTitle>
-              <AlertDescription>{task.blocked_reason}</AlertDescription>
-            </Alert>
-          ) : null}
-
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-foreground" htmlFor="warehouse-exception-note">
-              Motivo da exceção
-            </label>
-            <Textarea
-              id="warehouse-exception-note"
-              value={note}
-              onChange={(event) => onNoteChange(event.target.value)}
-              placeholder="Divergência, falta, avaria, documento pendente..."
-            />
-          </div>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isPending}
-            >
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={!canSubmit || isPending}>
-              {isPending ? (
-                <RefreshCw data-icon="inline-start" className="animate-spin" />
-              ) : (
-                <MessageSquareWarning data-icon="inline-start" />
-              )}
-              Registrar
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 type WarehouseOpsProps = {
   initialModule?: WarehouseOpsModuleKey;
 };
@@ -1091,9 +1015,6 @@ export default function WarehouseOps({
   const [activeModuleKey, setActiveModuleKey] =
     useState<WarehouseOpsModuleKey>(initialModule);
   const [selectedTaskId, setSelectedTaskId] = useState<string>();
-  const [exceptionDialogOpen, setExceptionDialogOpen] = useState(false);
-  const [exceptionTaskId, setExceptionTaskId] = useState<string>();
-  const [exceptionNote, setExceptionNote] = useState("");
   const [lineConfirmations, setLineConfirmations] =
     useState<LineConfirmationMap>({});
 
@@ -1130,6 +1051,9 @@ export default function WarehouseOps({
     );
   }, [activeModuleKey, initialModule]);
   const taskEntries = useMemo(() => queueEntries(queues), [queues]);
+  const actions = useWarehouseTaskActions({
+    findEntry: (taskId) => taskEntries.find((entry) => entry.task.id === taskId),
+  });
   const moduleQueues = useMemo(
     () => getModuleQueues(queues, activeModule),
     [activeModule, queues],
@@ -1149,120 +1073,12 @@ export default function WarehouseOps({
   const selectedTaskEntry =
     moduleTaskEntries.find(({ task }) => task.id === selectedTaskId) ??
     moduleDefaultTaskEntry;
-  const exceptionTaskEntry =
-    taskEntries.find(({ task }) => task.id === exceptionTaskId) ?? selectedTaskEntry;
+  const exceptionTaskEntry = actions.exception.entry ?? selectedTaskEntry;
   const selectedResolvedId = selectedTaskEntry?.task.id;
   const blockedEntries = taskEntries.filter(({ task }) => Boolean(task.blocked_reason));
   const activeBlockedEntries = moduleTaskEntries.filter(({ task }) =>
     Boolean(task.blocked_reason),
   );
-
-  const advanceTask = useMutation<unknown, Error, AdvanceTaskPayload>({
-    mutationFn: ({ id: taskId, operation, note }) => {
-      const task = taskEntries.find((entry) => entry.task.id === taskId)?.task;
-      return (
-      fetchJson(`/api/warehouse/tasks/${encodeURIComponent(taskId)}/advance`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          expected_status: task?.status,
-          operation,
-          note,
-          idempotency_key: `${taskId}:${task?.status ?? "unknown"}`,
-        }),
-      })
-      );
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
-      queryClient.invalidateQueries({ queryKey: ["ai-overview"] });
-      toast({
-        title: "Tarefa avançada",
-        description: "A bancada WMS foi atualizada com a próxima etapa.",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Não consegui avançar a tarefa",
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
-    },
-  });
-
-  const registerException = useMutation<unknown, Error, ExceptionPayload>({
-    mutationFn: ({ task, queue, note }) =>
-      fetchJson(`/api/warehouse/tasks/${encodeURIComponent(task.id)}/exception`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          note: note || task.blocked_reason || "Exceção registrada na bancada WMS.",
-          severity:
-            task.priority === "critical" || task.blocked_reason
-              ? "critical"
-              : "attention",
-          source: "warehouse_ops",
-          payload: {
-            queue,
-            event_type: EXCEPTION_EVENT_TYPE[queue],
-            task_id: task.id,
-            reference: task.reference,
-            status: task.status,
-            customer_request_id: task.customer_request_id,
-            blocked_reason: task.blocked_reason,
-            exception_count: task.exception_count,
-          },
-        }),
-      }),
-    onSuccess: () => {
-      setExceptionDialogOpen(false);
-      setExceptionTaskId(undefined);
-      setExceptionNote("");
-      queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
-      queryClient.invalidateQueries({ queryKey: ["ai-overview"] });
-      toast({
-        title: "Exceção registrada",
-        description: "O evento operacional foi enviado para a memória da IA.",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Não consegui registrar a exceção",
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
-    },
-  });
-
-  const createUnplannedReceipt = useMutation<unknown, Error, Record<string, unknown>>({
-    mutationFn: (payload) =>
-      fetchJson("/api/warehouse/receipts", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
-      queryClient.invalidateQueries({ queryKey: ["ai-overview"] });
-      toast({
-        title: "Chegada avulsa registrada",
-        description: "A conferência foi criada no WMS sem lançar estoque ainda.",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Não consegui registrar a chegada",
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
-    },
-  });
-
-  function openExceptionDialog(task: WarehouseTask, suggestedNote?: string) {
-    setExceptionTaskId(task.id);
-    setExceptionNote(suggestedNote || task.blocked_reason || "");
-    setExceptionDialogOpen(true);
-  }
 
   function handleLineConfirmationChange(
     taskId: string,
@@ -1273,17 +1089,6 @@ export default function WarehouseOps({
       ...current,
       [lineConfirmationKey(taskId, rowId)]: resolution,
     }));
-  }
-
-  function handleExceptionSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!exceptionTaskEntry) return;
-
-    registerException.mutate({
-      task: exceptionTaskEntry.task,
-      queue: exceptionTaskEntry.queue.key,
-      note: exceptionNote.trim(),
-    });
   }
 
   if (activeModule.key === "inventory") {
@@ -1356,24 +1161,6 @@ export default function WarehouseOps({
         <ReturnWorkspace />
       ) : activeModule.key === "exceptions" ? (
         <ExceptionWorkspace />
-      ) : activeModule.key === "receiving" ? (
-        <ReceivingCommandCenter
-          entries={moduleTaskEntries}
-          selectedEntry={selectedTaskEntry}
-          selectedTaskId={selectedResolvedId}
-          alerts={moduleAlerts}
-          isCreating={createUnplannedReceipt.isPending}
-          advancingTaskId={advanceTask.isPending ? advanceTask.variables?.id : undefined}
-          registeringExceptionId={
-            registerException.isPending
-              ? registerException.variables.task.id
-              : undefined
-          }
-          onCreate={(payload) => createUnplannedReceipt.mutate(payload)}
-          onSelectTask={setSelectedTaskId}
-          onAdvance={(taskId) => advanceTask.mutate({ id: taskId })}
-          onOpenException={openExceptionDialog}
-        />
       ) : (
         <>
           {/* Só o que muda a próxima ação do turno: carga, urgência e
@@ -1461,35 +1248,25 @@ export default function WarehouseOps({
               alerts={moduleAlerts}
               lineConfirmations={lineConfirmations}
               onAdvance={(taskId, operation, note) =>
-                advanceTask.mutate({ id: taskId, operation, note })
+                actions.advanceTask.mutate({ id: taskId, operation, note })
               }
               onLineConfirmationChange={handleLineConfirmationChange}
-              onOpenException={openExceptionDialog}
-              advancingTaskId={advanceTask.isPending ? advanceTask.variables?.id : undefined}
-              registeringExceptionId={
-                registerException.isPending
-                  ? registerException.variables.task.id
-                  : undefined
-              }
+              onOpenException={actions.exception.openFor}
+              advancingTaskId={actions.advancingTaskId}
+              registeringExceptionId={actions.registeringExceptionId}
             />
           </div>
         </>
       )}
 
       <ExceptionDialog
-        open={exceptionDialogOpen}
+        open={actions.exception.open}
         taskEntry={exceptionTaskEntry}
-        note={exceptionNote}
-        isPending={registerException.isPending}
-        onOpenChange={(open) => {
-          setExceptionDialogOpen(open);
-          if (!open && !registerException.isPending) {
-            setExceptionTaskId(undefined);
-            setExceptionNote("");
-          }
-        }}
-        onNoteChange={setExceptionNote}
-        onSubmit={handleExceptionSubmit}
+        note={actions.exception.note}
+        isPending={actions.registerException.isPending}
+        onOpenChange={actions.exception.onOpenChange}
+        onNoteChange={actions.exception.setNote}
+        onSubmit={(event) => actions.exception.submit(event, selectedTaskEntry)}
       />
     </div>
   );

@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Chip as FilterChip } from "@/components/ui/chip";
 import { FilterGroup, FilterPanel } from "@/components/ui/filter-panel";
 import { PageHeader } from "@/components/ui/page-header";
+import { useIsDesktop } from "@/hooks/use-desktop";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import {
@@ -71,20 +72,6 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
     throw new Error(text || `HTTP ${response.status}`);
   }
   return response.json() as Promise<T>;
-}
-
-function useIsDesktop() {
-  const query = "(min-width: 1024px)";
-  const [desktop, setDesktop] = useState(() =>
-    typeof window === "undefined" ? true : window.matchMedia(query).matches,
-  );
-  useEffect(() => {
-    const media = window.matchMedia(query);
-    const onChange = () => setDesktop(media.matches);
-    media.addEventListener("change", onChange);
-    return () => media.removeEventListener("change", onChange);
-  }, []);
-  return desktop;
 }
 
 const FILTERS: Array<{ value: StockFilter; label: string }> = [

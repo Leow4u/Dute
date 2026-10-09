@@ -1,4 +1,4 @@
-/** Receiving command center, unplanned receipt dialog, conference. */
+/** Receber: ficha da chegada, chegada avulsa e conferência física. */
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,12 +9,10 @@ import {
   Box,
   Camera,
   CheckCircle2,
-  ChevronRight,
   ClipboardCheck,
   Clock3,
   Hash,
   ImagePlus,
-  Inbox,
   MessageSquareWarning,
   PackageOpen,
   PackageSearch,
@@ -52,7 +50,6 @@ import {
 } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -243,252 +240,6 @@ export function receiptIdFromTask(task: WarehouseTask) {
   return task.reference || task.id.replace(/^receiving:/, "");
 }
 
-export function ReceivingCommandCenter({
-  entries,
-  selectedEntry,
-  selectedTaskId,
-  alerts,
-  isCreating,
-  advancingTaskId,
-  registeringExceptionId,
-  onCreate,
-  onSelectTask,
-  onAdvance,
-  onOpenException,
-}: {
-  entries: TaskQueueEntry[];
-  selectedEntry?: TaskQueueEntry;
-  selectedTaskId?: string;
-  alerts: OpsAlert[];
-  isCreating: boolean;
-  advancingTaskId?: string;
-  registeringExceptionId?: string;
-  onCreate: (payload: Record<string, unknown>) => void;
-  onSelectTask: (id: string) => void;
-  onAdvance: (id: string) => void;
-  onOpenException: (task: WarehouseTask, suggestedNote?: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const planned = entries.filter(
-    ({ task }) => task.customer_request_id && !TERMINAL_STATUSES.has(normalizeStatus(task.status)),
-  ).length;
-  const checking = entries.filter(
-    ({ task }) => normalizeStatus(task.status) === "checking",
-  ).length;
-  const unplanned = entries.filter(
-    ({ task }) => String(task.reference || task.id).includes("inb_avulso"),
-  ).length;
-  const blocked = entries.filter(({ task }) => Boolean(task.blocked_reason)).length;
-  const totalQuantity = entries.reduce(
-    (total, { task }) => total + coerceNumber(task.quantity),
-    0,
-  );
-  const activeEntry = selectedEntry ?? entries[0];
-
-  return (
-    <Card className="overflow-hidden border-primary/20 bg-card">
-      <CardHeader className="border-b border-border/60 bg-card p-5">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex min-w-0 gap-3">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
-              <Inbox className="size-5" />
-            </div>
-            <div className="min-w-0">
-              <CardTitle className="text-xl">Entrada no galpão</CardTitle>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <ReceivingKpiPill label="Recebimentos" value={entries.length} />
-            <ReceivingKpiPill label="Peças aguardando" value={totalQuantity} />
-            <ReceivingKpiPill label="Em conferência" value={checking} />
-            {blocked > 0 ? (
-              <ReceivingKpiPill label="Bloqueados" value={blocked} tone="danger" />
-            ) : null}
-            <Button type="button" className="ml-0 xl:ml-2" onClick={() => setOpen(true)}>
-              <PackageOpen data-icon="inline-start" />
-              Chegada avulsa
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="grid gap-5 p-5 xl:grid-cols-[minmax(380px,520px)_minmax(0,1fr)]">
-        <div className="min-w-0 rounded-lg border border-border bg-card p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-base font-semibold text-foreground">
-                Fila de recebimento
-              </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Selecione uma chegada para conferir.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
-                {formatNumber(planned)} prevista(s)
-              </Badge>
-              <Badge variant="outline" className="border-border bg-card">
-                {formatNumber(unplanned)} avulsa(s)
-              </Badge>
-            </div>
-          </div>
-          <div className="mt-4">
-            {entries.length > 0 ? (
-              <ScrollArea className="h-[min(58dvh,620px)] pr-3">
-                <div className="flex flex-col gap-3">
-                  {entries.map((entry) => (
-                    <ReceivingTaskRow
-                      key={`${entry.queue.key}:${entry.task.id}`}
-                      entry={entry}
-                      isSelected={(selectedTaskId ?? activeEntry?.task.id) === entry.task.id}
-                      onSelect={onSelectTask}
-                    />
-                  ))}
-                </div>
-              </ScrollArea>
-            ) : (
-              <Empty className="min-h-[360px] border border-dashed border-border bg-card">
-                <EmptyHeader>
-                  <EmptyMedia variant="icon">
-                    <CheckCircle2 className="size-5" />
-                  </EmptyMedia>
-                  <EmptyTitle className="text-base">Nenhuma chegada aberta</EmptyTitle>
-                  <EmptyDescription>
-                    Quando uma NF chegar ou uma chegada avulsa for registrada,
-                    ela aparece aqui para conferência.
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            )}
-          </div>
-        </div>
-
-        <ReceivingTaskDetailCard
-          entry={activeEntry}
-          alerts={alerts}
-          advancingTaskId={advancingTaskId}
-          registeringExceptionId={registeringExceptionId}
-          onAdvance={onAdvance}
-          onOpenException={onOpenException}
-        />
-      </CardContent>
-      <UnplannedReceiptDialog
-        open={open}
-        isPending={isCreating}
-        onOpenChange={setOpen}
-        onCreate={(payload) => {
-          onCreate(payload);
-          setOpen(false);
-        }}
-      />
-    </Card>
-  );
-}
-
-export function ReceivingKpiPill({
-  label,
-  value,
-  tone = "neutral",
-}: {
-  label: string;
-  value: number;
-  tone?: "neutral" | "danger";
-}) {
-  return (
-    <div
-      className={cn(
-        "rounded-full border px-3 py-1.5 text-sm",
-        tone === "danger"
-          ? "border-destructive/20 bg-destructive/10 text-destructive"
-          : "border-border bg-card text-muted-foreground",
-      )}
-    >
-      <span className="font-semibold text-foreground">{formatNumber(value)}</span>{" "}
-      {label}
-    </div>
-  );
-}
-
-export function ReceivingTaskRow({
-  entry,
-  isSelected,
-  onSelect,
-}: {
-  entry: TaskQueueEntry;
-  isSelected: boolean;
-  onSelect: (id: string) => void;
-}) {
-  const { task } = entry;
-  const isUnplanned = String(task.reference || task.id).includes("inb_avulso");
-  const quantity = coerceNumber(task.quantity);
-  const itemCount = task.items?.length ?? 0;
-
-  return (
-    <button
-      type="button"
-      className={cn(
-        "w-full rounded-lg border bg-card p-4 text-left transition-[border-color,box-shadow,background-color,transform]",
-        "hover:-translate-y-0.5 hover:border-primary/25 hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
-        isSelected
-          ? "border-primary/35 bg-primary/5"
-          : "border-border",
-      )}
-      onClick={() => onSelect(task.id)}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge
-              variant="outline"
-              className={cn(
-                isUnplanned
-                  ? "border-warning-soft-border bg-warning-soft text-warning-soft-foreground"
-                  : "border-primary/20 bg-primary/10 text-primary",
-              )}
-            >
-              {isUnplanned ? "Avulsa" : "Prevista"}
-            </Badge>
-            <Badge variant="outline" className={statusClass(task.status)}>
-              {statusLabel(task.status)}
-            </Badge>
-          </div>
-          <div className="mt-3 truncate text-sm font-semibold text-foreground">
-            {getTaskTitle(task)}
-          </div>
-          <div className="mt-1 truncate text-xs text-muted-foreground">
-            {task.customer || task.customer_request_id || "BTG Pactual"} · {formatDate(task.created_at || task.due_at)}
-          </div>
-        </div>
-        <ChevronRight
-          className={cn(
-            "mt-1 size-4 shrink-0 text-muted-foreground transition-transform",
-            isSelected && "translate-x-0.5 text-primary",
-          )}
-        />
-      </div>
-      <div className="mt-4 grid grid-cols-3 gap-2">
-        <div className="rounded-md border border-border bg-card px-3 py-2">
-          <div className="text-xs text-muted-foreground">Linhas</div>
-          <div className="mt-1 text-sm font-semibold text-foreground">
-            {formatNumber(itemCount || 1)}
-          </div>
-        </div>
-        <div className="rounded-md border border-border bg-card px-3 py-2">
-          <div className="text-xs text-muted-foreground">Peças</div>
-          <div className="mt-1 text-sm font-semibold text-foreground">
-            {quantity ? formatNumber(quantity) : "aberto"}
-          </div>
-        </div>
-        <div className="rounded-md border border-border bg-card px-3 py-2">
-          <div className="text-xs text-muted-foreground">Prazo</div>
-          <div className="mt-1 truncate text-sm font-semibold text-foreground">
-            {formatDate(task.due_at, "sem prazo")}
-          </div>
-        </div>
-      </div>
-    </button>
-  );
-}
-
 export function ReceivingTaskDetailCard({
   entry,
   alerts,
@@ -528,7 +279,7 @@ export function ReceivingTaskDetailCard({
   return (
     <Card className="min-w-0 overflow-hidden border-border bg-card">
       <CardHeader className="border-b border-border/60 bg-card p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex flex-col gap-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
@@ -579,7 +330,7 @@ export function ReceivingTaskDetailCard({
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-5 p-5">
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3">
           <DetailField icon={Hash} label="Referência" value={task.reference || task.id} />
           <DetailField
             icon={Box}
@@ -614,11 +365,7 @@ export function ReceivingTaskDetailCard({
             <AlertTitle>Agent Dute observou este recebimento</AlertTitle>
             <AlertDescription>{taskAlerts[0]?.message || taskAlerts[0]?.title}</AlertDescription>
           </Alert>
-        ) : (
-          <div className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
-            Sem alerta ativo da IA para esta chegada.
-          </div>
-        )}
+        ) : null}
 
         <div className="rounded-lg border border-border bg-card px-4 py-3">
           <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
@@ -1401,7 +1148,7 @@ export function ReceivingConferenceSection({
   if (!task.items?.length) return null;
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
+    <div className="@container rounded-lg border border-border bg-card p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h3 className="text-sm font-semibold text-foreground">
@@ -1428,7 +1175,7 @@ export function ReceivingConferenceSection({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-2 md:grid-cols-4">
+      <div className="mt-4 grid grid-cols-2 gap-2 @xl:grid-cols-4">
         <div className="rounded-md border border-border bg-card px-3 py-2">
           <div className="text-xs text-muted-foreground">Esperado</div>
           <div className="mt-1 text-lg font-semibold">{formatNumber(summary.expected)} un.</div>
@@ -1494,7 +1241,7 @@ export function ReceivingConferenceSection({
                     : "border-warning-soft-border bg-warning-soft/45",
               )}
             >
-              <div className="grid gap-3 md:grid-cols-[minmax(0,1.35fr)_104px_120px_120px]">
+              <div className="grid gap-3 @xl:grid-cols-[minmax(0,1.35fr)_104px_120px_120px]">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="truncate text-sm font-medium text-foreground">
@@ -1520,6 +1267,7 @@ export function ReceivingConferenceSection({
                     </div>
                   )}
                 </div>
+                <div className="grid grid-cols-3 gap-2 @xl:contents">
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Físico</Label>
                   <Input
@@ -1550,6 +1298,7 @@ export function ReceivingConferenceSection({
                     placeholder="Custo"
                     aria-label="Custo unitário"
                   />
+                </div>
                 </div>
               </div>
               <Textarea
