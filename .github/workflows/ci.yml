@@ -183,3 +183,52 @@ jobs:
               --format "table(name,creationTimestamp.date('%Y-%m-%d %H:%M'),active,spec.containers[0].image)"
             exit 1
           fi
+
+  cloud-run-diagnostico:
+    name: Diagnóstico do Cloud Run (só leitura)
+    runs-on: ubuntu-latest
+    # Disparo manual (Actions > CI > Run workflow), de qualquer branch. Mostra
+    # geração, tráfego, template, revisões e o que as URLs servem, com a mesma
+    # credencial do deploy. Não altera nada no serviço.
+    if: github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PROJECT_ID: dute-btg
+      REGION: southamerica-east1
+      SERVICE: dute-btg-app
+      PUBLIC_URL: https://app.dutelog.com.br
+      WORKLOAD_IDENTITY_PROVIDER: projects/912453685006/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+      GCP_SERVICE_ACCOUNT: github-actions-deploy@dute-btg.iam.gserviceaccount.com
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Serviço (geração, tráfego, template)
+        run: |
+          set -euo pipefail
+          gcloud run services describe "${SERVICE}" --region "${REGION}" --project "${PROJECT_ID}" \
+            --format "yaml(metadata.generation,status.observedGeneration,status.latestCreatedRevisionName,status.latestReadyRevisionName,status.traffic,spec.traffic,spec.template.metadata,spec.template.spec.containers[0].image,status.conditions)"
+
+      - name: Revisões (15 mais recentes)
+        run: |
+          set -euo pipefail
+          gcloud run revisions list --service "${SERVICE}" --region "${REGION}" --project "${PROJECT_ID}" --limit 15
+          echo
+          gcloud run revisions list --service "${SERVICE}" --region "${REGION}" --project "${PROJECT_ID}" --limit 15 \
+            --format "table(name,creationTimestamp.date('%Y-%m-%d %H:%M:%S'),active,status.conditions[0].status,status.conditions[0].message,spec.containers[0].image)"
+
+      - name: O que as URLs servem
+        run: |
+          set -euo pipefail
+          SERVICE_URL="$(gcloud run services describe "${SERVICE}" --region "${REGION}" --project "${PROJECT_ID}" --format "value(status.url)")"
+          for url in "${SERVICE_URL}" "${PUBLIC_URL}"; do
+            echo "== ${url}"
+            curl -sSI --max-time 20 "${url}/index.html" | grep -i -E "^(HTTP|last-modified|etag)" || true
+            curl -sS --max-time 20 "${url}/index.html" | grep -o '/assets/shell-app-[^"]*\.js' || true
+          done
