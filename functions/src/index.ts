@@ -154,8 +154,10 @@ const AGENT_DUTE_MODEL = process.env.AGENT_DUTE_MODEL ?? "gemini-3.5-flash";
 const AGENT_DUTE_FALLBACK_MODEL = "gemini-2.5-flash";
 const DOCUMENT_VISUAL_OCR_MODEL =
   process.env.DOCUMENT_VISUAL_OCR_MODEL ?? "gemini-2.5-flash";
+// 14 MB: o arquivo vai inline em base64 para o Gemini, cuja requisição é
+// limitada a 20 MB. Fica abaixo dos 15 MB do anexo de propósito.
 const VISUAL_OCR_MAX_BYTES = Number(
-  process.env.DOCUMENT_VISUAL_OCR_MAX_BYTES ?? 8 * 1024 * 1024,
+  process.env.DOCUMENT_VISUAL_OCR_MAX_BYTES ?? 14 * 1024 * 1024,
 );
 
 const collectionNames = {
@@ -6439,7 +6441,8 @@ export const cancelShipmentNotice = onCall(async (request) => {
 const UploadShipmentAttachmentSchema = z.object({
   file_name: z.string().trim().min(1).max(240),
   content_type: z.string().trim().min(1).max(120),
-  data_base64: z.string().min(1).max(12_000_000),
+  // 15 MB em base64 dão 20.971.520 caracteres (ver SHIPMENT_ATTACHMENT_MAX_BYTES).
+  data_base64: z.string().min(1).max(21_000_000),
   entity_id: z.string().trim().max(160).optional(),
 });
 
@@ -6674,7 +6677,7 @@ async function readInvoiceForCustomer(
     throw storageFailure(error, "ler");
   }
   if (buffer.length > VISUAL_OCR_MAX_BYTES) {
-    throw new HttpsError("invalid-argument", "Arquivo grande demais para leitura automática. Use até 8 MB.");
+    throw new HttpsError("invalid-argument", "Arquivo grande demais para leitura automática. Use até 14 MB.");
   }
   const started = Date.now();
   const errors: string[] = [];
