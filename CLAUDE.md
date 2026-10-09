@@ -19,7 +19,9 @@ documentação de produto e operação está em `docs/`.
   Registry e termina conferindo se a URL do Cloud Run e `app.dutelog.com.br`
   passaram a servir o build (`tools/check_frontend_deployed.sh`). **Verde sem
   essa verificação não vale**: em 09/10/2026 o job ficou verde oito vezes
-  seguidas sem mudar a produção. Ver `docs/deploy-manual.md` (inclui o roteiro
+  seguidas sem mudar a produção. O build no CI usa a configuração web pública do
+  Firebase definida no próprio workflow; sem ela o login quebra com "Firebase não
+  configurado" (aconteceu em 09/10/2026). Ver `docs/deploy-manual.md` (inclui o roteiro
   manual de reserva e o que checar quando a verificação falha) e
   `docs/deploy-functions-manual.md` (Cloud Functions, sempre manual).
 - **Depois de qualquer deploy de functions, rode
