@@ -4,6 +4,8 @@ on:
   push:
     branches: [main, master, codex/ai-native-foundation]
   pull_request:
+  # Publicação manual do frontend a partir de main (Actions > CI > Run workflow).
+  workflow_dispatch:
 
 jobs:
   frontend-typecheck:
@@ -82,7 +84,8 @@ jobs:
     name: Deploy frontend (Cloud Run)
     runs-on: ubuntu-latest
     needs: [frontend-typecheck]
-    if: github.event_name == 'push'
+    # Só main publica: push mergeado ou disparo manual.
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     concurrency:
       group: deploy-frontend-production
       cancel-in-progress: true
@@ -114,12 +117,25 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm --filter "@workspace/btg-inventory" run build
 
-      - uses: google-github-actions/auth@v2
+      - id: auth
+        uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
 
       - uses: google-github-actions/setup-gcloud@v2
+
+      # A imagem é montada aqui no runner e enviada direto ao Artifact Registry.
+      # `gcloud builds submit` precisava do bucket dute-btg_cloudbuild e falhava
+      # com "forbidden from accessing the bucket" mesmo com os papéis certos
+      # (ver docs/deploy-manual.md); sem Cloud Build, bastam artifactregistry.writer
+      # e run.admin, que a conta de serviço já tem.
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGION }}-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
 
       - name: Build image and deploy to Cloud Run
         run: |
@@ -134,8 +150,8 @@ jobs:
           SHORT_SHA="${GITHUB_SHA:0:7}"
           IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${SERVICE}:${SHORT_SHA}"
 
-          gcloud config set project "${PROJECT_ID}"
-          gcloud builds submit "${STAGE_DIR}" --tag "${IMAGE}" --project "${PROJECT_ID}"
+          docker build --tag "${IMAGE}" "${STAGE_DIR}"
+          docker push "${IMAGE}"
           gcloud run deploy "${SERVICE}" \
             --image "${IMAGE}" \
             --region "${REGION}" \
