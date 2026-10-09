@@ -1729,17 +1729,9 @@ export default function AiControl() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-border bg-card">
-              <BrainCircuit className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-semibold tracking-normal text-foreground">
-                Agent Dute
-              </h1>
-            </div>
-          </div>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Painel do Agent Dute</h1>
+          <p className="mt-1 text-sm text-muted-foreground">O que o agente observou e sugere; nada aqui executa sozinho.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Badge

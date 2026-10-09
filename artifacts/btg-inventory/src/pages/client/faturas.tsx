@@ -3,6 +3,7 @@ import { FileBarChart2, Sparkles } from "lucide-react";
 import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
+import { Segmented } from "@/components/ui/segmented";
 import { agentAskHref } from "@/lib/agent-chat";
 import {
   billingInsights,
@@ -52,20 +53,16 @@ export function ClienteFaturas() {
                 </div>
                 {latest ? (
                   <div className="flex flex-wrap items-center gap-2">
-                    <div className="inline-flex rounded-xl border border-border bg-card p-0.5 text-sm" role="group" aria-label="Período do gráfico">
-                      {[6, 12].map((value) => (
-                        <button
-                          key={value}
-                          type="button"
-                          aria-pressed={span === value}
-                          className={cn("rounded-md px-3 py-1.5", span === value ? "bg-foreground text-background" : "text-muted-foreground")}
-                          onClick={() => setSpan(value)}
-                        >
-                          {value} meses
-                        </button>
-                      ))}
-                    </div>
-                    <Button asChild className="rounded-xl">
+                    <Segmented
+                      aria-label="Período do gráfico"
+                      value={String(span)}
+                      onChange={(value) => setSpan(Number(value))}
+                      options={[
+                        { value: "6", label: "6 meses" },
+                        { value: "12", label: "12 meses" },
+                      ]}
+                    />
+                    <Button asChild>
                       <Link href={`/portal/faturas/relatorio?de=${reportFrom}&ate=${latest.competencia}`}>
                         <FileBarChart2 className="h-4 w-4" />
                         Gerar relatório

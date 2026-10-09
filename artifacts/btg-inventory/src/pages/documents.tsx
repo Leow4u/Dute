@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MoreHorizontal, Plus, Search, UploadCloud } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Chip } from "@/components/ui/chip";
 import { PageHeader } from "@/components/ui/page-header";
 import {
   Dialog,
@@ -92,34 +93,6 @@ async function apiJson<T>(url: string, init?: RequestInit): Promise<T> {
   const payload = (await response.json().catch(() => ({}))) as { message?: string };
   if (!response.ok) throw new Error(payload.message || "Não foi possível concluir a operação.");
   return payload as T;
-}
-
-function Segmented<T extends string>({
-  options,
-  value,
-  onChange,
-}: {
-  options: Array<{ value: T; label: string }>;
-  value: T;
-  onChange: (value: T) => void;
-}) {
-  return (
-    <div className="inline-flex overflow-hidden rounded-xl border border-border bg-card">
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          onClick={() => onChange(option.value)}
-          className={cn(
-            "px-3 py-1.5 text-sm transition-colors",
-            value === option.value ? "bg-primary/10 font-semibold text-primary" : "text-foreground/70 hover:bg-muted",
-          )}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
 }
 
 const emptyForm = { title: "", documentType: "nf_entrada", reference: "", customerVisible: false };
@@ -316,8 +289,21 @@ export default function Documents() {
             className="pl-9"
           />
         </div>
-        <Segmented<DocumentKind | "all"> options={KIND_FILTERS} value={kind} onChange={setKind} />
-        <Segmented<DocumentAudience | "all"> options={AUDIENCE_FILTERS} value={audience} onChange={setAudience} />
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Tipo de documento">
+          {KIND_FILTERS.map((option) => (
+            <Chip key={option.value} selected={kind === option.value} onClick={() => setKind(option.value)}>
+              {option.label}
+            </Chip>
+          ))}
+        </div>
+        <span className="hidden h-6 w-px bg-border sm:block" aria-hidden="true" />
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Quem vê">
+          {AUDIENCE_FILTERS.map((option) => (
+            <Chip key={option.value} selected={audience === option.value} onClick={() => setAudience(option.value)}>
+              {option.label}
+            </Chip>
+          ))}
+        </div>
       </div>
 
       <section className="overflow-hidden rounded-lg border border-border bg-card">

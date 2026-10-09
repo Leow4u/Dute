@@ -121,10 +121,6 @@ export default function PriceList() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-primary">Tabela de Preços (LPU) & Configurações</h1>
-      </div>
-
       {/* Configurações */}
       <Card>
         <CardHeader><CardTitle className="text-base">Configurações de cobrança</CardTitle></CardHeader>
@@ -165,7 +161,7 @@ export default function PriceList() {
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {Object.entries(GRUPOS).map(([k, v]) => (
-                        <SelectItem key={k} value={k}>{v.emoji} {v.label}</SelectItem>
+                        <SelectItem key={k} value={k}>{v.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -227,7 +223,7 @@ export default function PriceList() {
             <TableBody>
               {items.map((it) => (
                 <TableRow key={it.id} className={it.ativo ? "" : "opacity-50"}>
-                  <TableCell className="text-sm">{GRUPOS[it.grupo]?.emoji} {GRUPOS[it.grupo]?.label ?? it.grupo}</TableCell>
+                  <TableCell className="text-sm">{GRUPOS[it.grupo]?.label ?? it.grupo}</TableCell>
                   <TableCell className="font-medium">{it.item}</TableCell>
                   <TableCell className="text-muted-foreground text-sm">{it.unidade}</TableCell>
                   <TableCell className="text-right">{fmtBRL(it.valor_unit)}</TableCell>

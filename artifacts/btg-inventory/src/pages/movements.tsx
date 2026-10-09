@@ -140,12 +140,7 @@ export default function Movements() {
   }, [movements]);
 
   return (
-    <StockPageShell
-      eyebrow="Estoque"
-      title="Movimentações"
-      icon={<Activity className="h-6 w-6" />}
-      actions={<MovementModal />}
-    >
+    <StockPageShell actions={<MovementModal />}>
       <StockMetricsGrid>
         <StockMetricCard
           label="Movimentos"

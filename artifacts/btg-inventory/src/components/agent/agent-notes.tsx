@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Loader2, NotebookPen, X } from "lucide-react";
 
 import { fetchChatJson } from "@/components/agent/chat";
+import { buttonVariants } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -167,7 +168,7 @@ function PendingNote({
             type="button"
             disabled={busy}
             onClick={() => onDecide({ action: "reject" })}
-            className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted"
+            className={buttonVariants({ variant: "outline", size: "sm" })}
           >
             <X className="h-3.5 w-3.5" /> Recusar
           </button>
@@ -175,7 +176,7 @@ function PendingNote({
             type="button"
             disabled={busy || text.trim().length < 8}
             onClick={() => onDecide({ action: "approve", text: text.trim() !== note.text ? text.trim() : undefined, visibility })}
-            className="inline-flex items-center gap-1 rounded-lg bg-foreground px-3 py-1.5 text-xs font-semibold text-background hover:bg-foreground/85 disabled:opacity-50"
+            className={buttonVariants({ size: "sm" })}
           >
             <Check className="h-3.5 w-3.5" /> Aprovar
           </button>

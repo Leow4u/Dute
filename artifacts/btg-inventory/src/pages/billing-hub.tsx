@@ -7,6 +7,7 @@ import { Suspense, lazy } from "react";
 import { useLocation } from "wouter";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PageHeader } from "@/components/ui/page-header";
 
 const Billing = lazy(() => import("./billing"));
 const PriceList = lazy(() => import("./price-list"));
@@ -28,24 +29,23 @@ export default function BillingHub() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Faturamento</h1>
-      <Tabs
-        value={tab}
-        onValueChange={(value) => {
-          const target = BILLING_TABS.find((item) => item.value === value);
-          if (target) navigate(target.path);
-        }}
-      >
-        <TabsList>
-          {BILLING_TABS.map((item) => (
-            <TabsTrigger key={item.value} value={item.value}>
-              {item.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
-      </div>
+      <PageHeader title="Faturamento" description="Fechamento do mês e tabela de preços da operação BTG">
+        <Tabs
+          value={tab}
+          onValueChange={(value) => {
+            const target = BILLING_TABS.find((item) => item.value === value);
+            if (target) navigate(target.path);
+          }}
+        >
+          <TabsList>
+            {BILLING_TABS.map((item) => (
+              <TabsTrigger key={item.value} value={item.value}>
+                {item.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+      </PageHeader>
 
       <Suspense fallback={null}>
         {tab === "competencia" ? <Billing /> : null}

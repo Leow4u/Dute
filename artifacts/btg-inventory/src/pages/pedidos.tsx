@@ -14,6 +14,8 @@ import {
 import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
+import { Segmented } from "@/components/ui/segmented";
 import {
   Dialog,
   DialogContent,
@@ -281,45 +283,26 @@ export default function Pedidos() {
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6 pb-24">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-foreground sm:text-2xl">Pedidos</h1>
-        <div className="flex items-center gap-2">
-          <div className="flex rounded-xl bg-muted p-1" role="tablist">
-            {(
-              [
-                ["open", `Em aberto${openCount ? ` · ${openCount}` : ""}`],
-                ["delivered", "Entregues"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                role="tab"
-                aria-selected={view === value}
-                onClick={() => setView(value)}
-                className={cn(
-                  "whitespace-nowrap rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors sm:px-3",
-                  view === value
-                    ? "bg-card text-foreground shadow-sm"
-                    : "text-foreground/60 hover:text-foreground",
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={refreshAll}
-            disabled={ops.isFetching}
-          >
-            <RefreshCw className={cn("size-4", ops.isFetching && "animate-spin")} />
-            <span className="sr-only">Atualizar</span>
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Pedidos"
+        actions={
+          <>
+            <Segmented<"open" | "delivered">
+              value={view}
+              onChange={setView}
+              aria-label="Pedidos em aberto ou entregues"
+              options={[
+                { value: "open", label: `Em aberto${openCount ? ` · ${openCount}` : ""}` },
+                { value: "delivered", label: "Entregues" },
+              ]}
+            />
+            <Button type="button" variant="outline" size="icon" onClick={refreshAll} disabled={ops.isFetching}>
+              <RefreshCw className={cn("size-4", ops.isFetching && "animate-spin")} />
+              <span className="sr-only">Atualizar</span>
+            </Button>
+          </>
+        }
+      />
 
       {loading ? (
         <p className="text-sm text-muted-foreground">Carregando pedidos...</p>

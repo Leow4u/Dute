@@ -39,6 +39,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   Card,
   CardContent,
@@ -1303,23 +1304,14 @@ export default function WarehouseOps({
     );
   }
 
+  const pageTitle = initialModule === "receiving" ? "Receber" : activeModule.label;
+
   if (ops.isLoading) return <WarehouseOpsLoading />;
 
   if (ops.error || !ops.data) {
     return (
       <div className="flex flex-col gap-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex min-w-0 gap-3">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-border bg-card">
-              <WarehouseIcon className="size-5 text-primary" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-2xl font-semibold tracking-normal text-foreground">
-                Bancada WMS
-              </h1>
-            </div>
-          </div>
-        </div>
+        <PageHeader title={pageTitle} />
 
         <Alert variant="destructive" className="bg-destructive/10">
           <AlertCircle className="size-4" />
@@ -1345,40 +1337,20 @@ export default function WarehouseOps({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex min-w-0 gap-3">
-          <div className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-border bg-card">
-            <WarehouseIcon className="size-5 text-primary" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-normal text-foreground">
-              Bancada WMS
-            </h1>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {blockedEntries.length > 0 ? (
-            <Badge
-              variant="outline"
-              className="border-destructive/20 bg-destructive/10 text-destructive"
-            >
-              {formatNumber(blockedEntries.length)} bloqueio(s)
-            </Badge>
-          ) : null}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => ops.refetch()}
-            disabled={ops.isFetching}
-          >
-            <RefreshCw
-              data-icon="inline-start"
-              className={cn(ops.isFetching && "animate-spin")}
-            />
-            Atualizar
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title={pageTitle}
+        actions={
+          <>
+            {blockedEntries.length > 0 ? (
+              <Badge variant="destructive">{formatNumber(blockedEntries.length)} bloqueio(s)</Badge>
+            ) : null}
+            <Button type="button" variant="outline" onClick={() => ops.refetch()} disabled={ops.isFetching}>
+              <RefreshCw data-icon="inline-start" className={cn(ops.isFetching && "animate-spin")} />
+              Atualizar
+            </Button>
+          </>
+        }
+      />
 
       {activeModule.key === "returns" ? (
         <ReturnWorkspace />

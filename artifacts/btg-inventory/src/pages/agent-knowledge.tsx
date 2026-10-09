@@ -28,6 +28,7 @@ import { useAppUser } from "@/lib/auth";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   Card,
   CardContent,
@@ -553,37 +554,24 @@ export default function AgentKnowledge() {
 
   return (
     <div className="space-y-7">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-border bg-card">
-              <BrainCircuit className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-semibold tracking-normal text-foreground">
-                Conhecimento
-              </h1>
-            </div>
-          </div>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => {
-            documents.refetch();
-            files.refetch();
-          }}
-          disabled={documents.isFetching || files.isFetching}
-        >
-          <RefreshCw
-            className={cn(
-              "h-4 w-4",
-              (documents.isFetching || files.isFetching) && "animate-spin",
-            )}
-          />
-          Atualizar
-        </Button>
-      </div>
+      <PageHeader
+        title="Conhecimento"
+        description="O que o Agent Dute sabe da operação: anotações, playbooks e documentos aprovados"
+        actions={
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              documents.refetch();
+              files.refetch();
+            }}
+            disabled={documents.isFetching || files.isFetching}
+          >
+            <RefreshCw className={cn("h-4 w-4", (documents.isFetching || files.isFetching) && "animate-spin")} />
+            Atualizar
+          </Button>
+        }
+      />
 
       {canReviewNotes ? <AgentNotes /> : null}
       {canReviewNotes ? <AgentPlaybooks /> : null}

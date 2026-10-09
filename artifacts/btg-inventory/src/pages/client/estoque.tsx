@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Chip as UiChip } from "@/components/ui/chip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -1933,20 +1934,10 @@ function FilterChip({
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        "flex shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition",
-        active
-          ? "border-primary/25 bg-primary/10 text-primary"
-          : "border-border bg-card text-muted-foreground hover:bg-card",
-      )}
-    >
+    <UiChip selected={active} onClick={onClick}>
       {Icon ? <Icon className="h-3.5 w-3.5" aria-hidden="true" /> : null}
       {label}
-    </button>
+    </UiChip>
   );
 }
 

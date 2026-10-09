@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpenCheck, Check, Loader2, Pencil, Plus, X } from "lucide-react";
 
 import { fetchChatJson } from "@/components/agent/chat";
+import { buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -103,7 +104,7 @@ function PlaybookDialog({ playbook, onClose }: { playbook: Playbook | null; onCl
         <DialogFooter className="items-center gap-2 sm:justify-between">
           <span className="text-xs text-warning-soft-foreground">{problem ?? ""}</span>
           <div className="flex flex-wrap justify-end gap-2">
-            <button type="button" onClick={onClose} disabled={save.isPending} className="rounded-xl border border-border bg-card px-3.5 py-2 text-sm font-medium hover:bg-muted">
+            <button type="button" onClick={onClose} disabled={save.isPending} className={buttonVariants({ variant: "outline" })}>
               Cancelar
             </button>
             {pending ? (
@@ -111,7 +112,7 @@ function PlaybookDialog({ playbook, onClose }: { playbook: Playbook | null; onCl
                 type="button"
                 disabled={Boolean(problem) || save.isPending}
                 onClick={() => save.mutate(false)}
-                className="rounded-xl border border-border bg-card px-3.5 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+                className={buttonVariants({ variant: "outline" })}
               >
                 Salvar sem aprovar
               </button>
@@ -120,7 +121,7 @@ function PlaybookDialog({ playbook, onClose }: { playbook: Playbook | null; onCl
               type="button"
               disabled={Boolean(problem) || save.isPending}
               onClick={() => save.mutate(pending)}
-              className="rounded-xl bg-foreground px-4 py-2 text-sm font-semibold text-background hover:bg-foreground/85 disabled:opacity-50"
+              className={buttonVariants({})}
             >
               {save.isPending ? "Salvando…" : pending ? "Salvar e aprovar" : playbook ? "Salvar" : "Salvar e publicar"}
             </button>
@@ -180,7 +181,7 @@ export function AgentPlaybooks() {
         <button
           type="button"
           onClick={() => setEditing("new")}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm font-semibold hover:bg-muted"
+          className={buttonVariants({ variant: "outline", size: "sm" })}
         >
           <Plus className="h-4 w-4" /> Novo playbook
         </button>
@@ -201,7 +202,7 @@ export function AgentPlaybooks() {
                 type="button"
                 disabled={busy}
                 onClick={() => seed.mutate()}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-foreground px-3.5 py-2 text-sm font-semibold text-background hover:bg-foreground/85 disabled:opacity-50"
+                className={cn("shrink-0", buttonVariants({ size: "sm" }))}
               >
                 {seed.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Carregar os 7 iniciais
               </button>
@@ -226,14 +227,14 @@ export function AgentPlaybooks() {
                     </span>
                   </button>
                   <div className="flex shrink-0 gap-2">
-                    <button type="button" onClick={() => setEditing(item.id)} className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted">
+                    <button type="button" onClick={() => setEditing(item.id)} className={buttonVariants({ variant: "outline", size: "sm" })}>
                       <Pencil className="h-3.5 w-3.5" /> Ver e editar
                     </button>
                     <button
                       type="button"
                       disabled={busy}
                       onClick={() => decide.mutate({ id: item.id, action: "reject" })}
-                      className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted"
+                      className={buttonVariants({ variant: "outline", size: "sm" })}
                     >
                       <X className="h-3.5 w-3.5" /> Recusar
                     </button>
@@ -241,7 +242,7 @@ export function AgentPlaybooks() {
                       type="button"
                       disabled={busy}
                       onClick={() => decide.mutate({ id: item.id, action: "approve" })}
-                      className="inline-flex items-center gap-1 rounded-lg bg-foreground px-3 py-1.5 text-xs font-semibold text-background hover:bg-foreground/85 disabled:opacity-50"
+                      className={buttonVariants({ size: "sm" })}
                     >
                       <Check className="h-3.5 w-3.5" /> Aprovar
                     </button>
