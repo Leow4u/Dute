@@ -124,10 +124,28 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
+      # O build precisa da configuração web do Firebase (VITE_FIREBASE_*). Na máquina
+      # do Leonardo ela vem do .env.local da raiz (envDir do vite.config.ts); aqui
+      # vem destas variáveis. São os valores públicos que vão em todo bundle servido
+      # ao navegador: a chave de API web do Firebase não é segredo, o acesso é
+      # controlado por Rules e backend. Em 09/10/2026 um build sem elas foi
+      # publicado e o login parou com "Firebase não configurado"; por isso a trava
+      # no fim do passo. Segredos de verdade (AGENT_DUTE_*) nunca entram aqui.
       - name: Install and build frontend
+        env:
+          VITE_FIREBASE_API_KEY: "AIzaSyDaoJ0a_ZScGJHEbwwvUPYvW7dRmPssPQw"
+          VITE_FIREBASE_AUTH_DOMAIN: "dute-btg.firebaseapp.com"
+          VITE_FIREBASE_PROJECT_ID: "dute-btg"
+          VITE_FIREBASE_STORAGE_BUCKET: "dute-btg.firebasestorage.app"
+          VITE_FIREBASE_MESSAGING_SENDER_ID: "912453685006"
+          VITE_FIREBASE_APP_ID: "912453685006:web:38592b73c2d5569823d15f"
         run: |
           pnpm install --frozen-lockfile
           pnpm --filter "@workspace/btg-inventory" run build
+          if ! grep -q "${VITE_FIREBASE_AUTH_DOMAIN}" artifacts/btg-inventory/dist/public/assets/*.js; then
+            echo "::error::O build saiu sem a configuração do Firebase (VITE_FIREBASE_*); não vai subir."
+            exit 1
+          fi
 
       - id: auth
         uses: google-github-actions/auth@v2

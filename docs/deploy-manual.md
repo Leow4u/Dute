@@ -128,6 +128,25 @@ compare os assets gerados com os servidos em produção: os nomes de arquivo do 
 hash de conteúdo, então batem quando o código é o mesmo. Diferenças restritas a nomes de
 variável minificados são ruído do minificador, não diferença de código.
 
+## Configuração do Firebase no build
+
+O build do frontend precisa das seis variáveis `VITE_FIREBASE_*` (configuração web pública
+do projeto `dute-btg`: chave de API web, authDomain, projectId, storageBucket,
+messagingSenderId e appId). Na sua máquina elas vêm do `.env.local` da raiz (o
+`vite.config.ts` aponta `envDir` para a raiz do repositório). No CI elas estão no próprio
+workflow, no passo `Install and build frontend`, que trava se o bundle sair sem o
+`authDomain`.
+
+Essas chaves são públicas por construção: vão em todo bundle servido ao navegador, e o
+acesso é controlado por Firestore Rules e pelo backend. Segredos de verdade (`AGENT_DUTE_*`,
+chaves de serviço) ficam fora do repositório e do workflow.
+
+Em 09/10/2026 à noite, a primeira publicação feita pelo CI subiu um build sem essas
+variáveis: o login parou com "Firebase não configurado" e o tráfego voltou para
+`dute-btg-app-00143-loc` em poucos minutos (Actions > CI > Run workflow com
+`liberar_trafego` marcado e `revisao` preenchida). A trava do passo de build existe para
+isso não se repetir.
+
 ## Deploy automático pelo GitHub Actions
 
 O job `deploy-frontend` em `.github/workflows/ci.yml` publica o frontend a cada push
