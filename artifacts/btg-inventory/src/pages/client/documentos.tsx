@@ -1,5 +1,8 @@
 import { useState, type ReactNode } from "react";
 import { Chip as UiChip } from "@/components/ui/chip";
+import { FilterGroup, FilterPanel } from "@/components/ui/filter-panel";
+import { Input } from "@/components/ui/input";
+import { PageHeader } from "@/components/ui/page-header";
 import { Search } from "lucide-react";
 import { Link } from "wouter";
 
@@ -46,25 +49,10 @@ export function ClienteDocumentos() {
         return (
           <main className="h-full min-h-0 w-full overflow-y-auto px-4 py-5 sm:px-6 lg:px-8">
             <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 pb-8">
-              <header className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h1 className="text-2xl font-semibold tracking-tight">Documentos</h1>
-                  <p className="mt-0.5 text-sm text-muted-foreground">Contratos, comprovantes, notas fiscais e faturas da sua conta.</p>
-                </div>
-                {rows.length ? (
-                  <label className="flex w-full max-w-sm items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm sm:w-auto sm:min-w-[300px]">
-                    <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <input
-                      type="search"
-                      value={search}
-                      onChange={(event) => setSearch(event.target.value)}
-                      placeholder="Buscar por nome, PED-0043, NF 2471…"
-                      aria-label="Buscar documentos"
-                      className="w-full min-w-0 bg-transparent outline-none placeholder:text-muted-foreground"
-                    />
-                  </label>
-                ) : null}
-              </header>
+              <PageHeader
+                title="Documentos"
+                description="Contratos, comprovantes, notas fiscais e faturas da sua conta."
+              />
 
               {!rows.length ? (
                 <p className="rounded-lg border border-dashed border-border bg-card px-5 py-8 text-sm text-muted-foreground">
@@ -72,16 +60,33 @@ export function ClienteDocumentos() {
                 </p>
               ) : (
                 <>
-                  {chips.length > 1 ? (
-                    <div className="flex flex-wrap gap-2" role="group" aria-label="Tipo de documento">
-                      <Chip active={kind === "all"} onClick={() => setKind("all")}>Todos · {rows.length}</Chip>
-                      {chips.map((item) => (
-                        <Chip key={item.kind} active={kind === item.kind} onClick={() => setKind(item.kind)}>
-                          {item.label} · {counts.get(item.kind)}
-                        </Chip>
-                      ))}
+                  <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3">
+                    <div className="relative min-w-[220px] flex-1">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        type="search"
+                        value={search}
+                        onChange={(event) => setSearch(event.target.value)}
+                        placeholder="Buscar por nome, PED-0043, NF 2471…"
+                        aria-label="Buscar documentos"
+                        className="pl-9"
+                      />
                     </div>
-                  ) : null}
+                    {chips.length > 1 ? (
+                      <FilterPanel
+                        summary={kind === "all" ? undefined : chips.find((item) => item.kind === kind)?.label}
+                      >
+                        <FilterGroup label="Tipo de documento">
+                          <Chip active={kind === "all"} onClick={() => setKind("all")}>Todos · {rows.length}</Chip>
+                          {chips.map((item) => (
+                            <Chip key={item.kind} active={kind === item.kind} onClick={() => setKind(item.kind)}>
+                              {item.label} · {counts.get(item.kind)}
+                            </Chip>
+                          ))}
+                        </FilterGroup>
+                      </FilterPanel>
+                    ) : null}
+                  </div>
 
                   {!visible.length ? (
                     <p className="rounded-lg border border-dashed border-border bg-card px-5 py-6 text-sm text-muted-foreground">

@@ -3,6 +3,7 @@ import { FileBarChart2, Sparkles } from "lucide-react";
 import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { Segmented } from "@/components/ui/segmented";
 import { agentAskHref } from "@/lib/agent-chat";
 import {
@@ -44,15 +45,11 @@ export function ClienteFaturas() {
         return (
           <main className="h-full min-h-0 w-full overflow-y-auto px-4 py-5 sm:px-6 lg:px-8">
             <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 pb-8">
-              <header className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h1 className="text-2xl font-semibold tracking-tight">Faturas</h1>
-                  <p className="mt-0.5 max-w-2xl text-sm text-muted-foreground">
-                    Quanto a operação na Dutelog custa, mês a mês, e o que compõe cada fatura.
-                  </p>
-                </div>
-                {latest ? (
-                  <div className="flex flex-wrap items-center gap-2">
+              <PageHeader
+                title="Faturas"
+                description="Quanto a operação na Dutelog custa, mês a mês, e o que compõe cada fatura."
+                actions={latest ? (
+                  <>
                     <Segmented
                       aria-label="Período do gráfico"
                       value={String(span)}
@@ -68,9 +65,9 @@ export function ClienteFaturas() {
                         Gerar relatório
                       </Link>
                     </Button>
-                  </div>
+                  </>
                 ) : null}
-              </header>
+              />
 
               {!latest ? (
                 <p className="rounded-lg border border-dashed border-border bg-card px-5 py-8 text-sm text-muted-foreground">

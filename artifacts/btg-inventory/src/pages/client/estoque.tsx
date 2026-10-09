@@ -28,6 +28,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Chip as UiChip } from "@/components/ui/chip";
+import { FilterGroup, FilterPanel } from "@/components/ui/filter-panel";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -809,24 +810,30 @@ function MarketplaceToolbar({
         </div>
       </div>
 
-      <div className="mt-3 flex flex-col gap-2.5 xl:flex-row xl:items-center xl:justify-between">
-        <div
-          role="group"
-          aria-label="Filtrar disponibilidade"
-          className="-mx-1 flex min-w-0 items-center gap-2 overflow-x-auto px-1 pb-1 xl:pb-0"
+      {/* Uma linha só: situação à esquerda (rola se faltar espaço), tipo e
+          ordem à direita. No celular a situação vira o painel "Filtros". */}
+      <div className="mt-3 flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
+        <FilterPanel
+          className="min-w-0 flex-1 md:flex-nowrap md:overflow-x-auto md:pb-0.5"
+          summary={
+            stockFilter === "todos"
+              ? undefined
+              : stockFilterOptions.find((option) => option.value === stockFilter)?.label
+          }
         >
-          {stockFilterOptions.map((option) => (
-            <FilterChip
-              key={option.value}
-              active={stockFilter === option.value}
-              icon={option.icon}
-              label={option.value === "arquivados" && !filterCounts.arquivados ? option.label : `${option.label} · ${formatNumber(filterCounts[option.value])}`}
-              onClick={() => onStockFilterChange(option.value)}
-            />
-          ))}
-        </div>
+          <FilterGroup label="Situação" className="md:flex-nowrap">
+            {stockFilterOptions.map((option) => (
+              <FilterChip
+                key={option.value}
+                active={stockFilter === option.value}
+                label={option.value === "arquivados" && !filterCounts.arquivados ? option.label : `${option.label} · ${formatNumber(filterCounts[option.value])}`}
+                onClick={() => onStockFilterChange(option.value)}
+              />
+            ))}
+          </FilterGroup>
+        </FilterPanel>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 lg:flex-nowrap">
           {/* Tipo (POLO, SACOLA…) sempre como seletor: em chips disputava a linha com a situação. */}
           {categories.length > 2 ? (
             <CatalogSelect
@@ -1129,7 +1136,7 @@ function FamilyGrid({
   return (
     <div
       data-testid="stock-card-grid"
-      className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5"
+      className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
     >
       {families.map((family) => (
         <FamilyCard
@@ -1924,18 +1931,15 @@ function ViewModeButton({
 
 function FilterChip({
   active,
-  icon: Icon,
   label,
   onClick,
 }: {
   active: boolean;
-  icon?: LucideIcon;
   label: string;
   onClick: () => void;
 }) {
   return (
-    <UiChip selected={active} onClick={onClick}>
-      {Icon ? <Icon className="h-3.5 w-3.5" aria-hidden="true" /> : null}
+    <UiChip selected={active} onClick={onClick} className="shrink-0">
       {label}
     </UiChip>
   );

@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, ClipboardPaste, FileText, Loader2, Paperclip, Plus, RotateCw, Sparkles, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -72,13 +73,7 @@ function Page({ title, subtitle, action, children }: { title: string; subtitle: 
   return (
     <main className="h-full min-h-0 w-full overflow-y-auto px-4 py-5 sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 pb-8">
-        <header className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-            <p className="mt-0.5 max-w-2xl text-sm text-muted-foreground">{subtitle}</p>
-          </div>
-          {action}
-        </header>
+        <PageHeader title={title} description={subtitle} actions={action} />
         {children}
       </div>
     </main>
