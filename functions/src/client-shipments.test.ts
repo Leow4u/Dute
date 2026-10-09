@@ -39,7 +39,7 @@ describe("anexo do aviso gravado pelo backend", () => {
     assert.equal(decoded.buffer[0], 0xff);
   });
 
-  it("recusa tipo fora da lista, conteúdo que não confere, vazio e acima de 8 MB", () => {
+  it("recusa tipo fora da lista, conteúdo que não confere, vazio e acima de 15 MB", () => {
     assert.throws(() => decodeShipmentAttachment({ content_type: "text/html", data_base64: pdf }), /PDF ou foto/);
     assert.throws(() => decodeShipmentAttachment({ content_type: "image/png", data_base64: pdf }), /não confere/);
     assert.throws(() => decodeShipmentAttachment({ content_type: "application/pdf", data_base64: "" }), /vazio/);
@@ -48,8 +48,17 @@ describe("anexo do aviso gravado pelo backend", () => {
     big.write("%PDF-");
     assert.throws(
       () => decodeShipmentAttachment({ content_type: "application/pdf", data_base64: big.toString("base64") }),
-      /até 8 MB/,
+      /até 15 MB/,
     );
+  });
+
+  it("aceita a nota escaneada no celular, que passa de 9 MB", () => {
+    // Duas páginas fotografadas no iPhone dão 9,3 MB; o limite antigo de 8 MB
+    // recusava antes mesmo de subir.
+    const scan = Buffer.alloc(Math.round(9.3 * 1024 * 1024));
+    scan.write("%PDF-1.3");
+    assert.equal(SHIPMENT_ATTACHMENT_MAX_BYTES, 15 * 1024 * 1024);
+    assert.equal(decodeShipmentAttachment({ content_type: "application/pdf", data_base64: scan.toString("base64") }).buffer.length, scan.length);
   });
 });
 

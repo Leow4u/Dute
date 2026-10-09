@@ -22,7 +22,7 @@ Permitir que documentos que nao possuem texto extraivel por parser, como imagens
 ## Limites de seguranca
 
 - OCR visual automatico limitado por `DOCUMENT_VISUAL_OCR_MAX_BYTES`.
-- Padrao atual: 8 MB.
+- Padrao atual: 14 MB (o arquivo vai inline em base64 e a requisicao ao Gemini tem teto de 20 MB). O anexo do aviso de envio aceita ate 15 MB; o portal reduz scans de celular no navegador antes de subir (`lib/attachment-compact.ts`).
 - Modelo configuravel por `DOCUMENT_VISUAL_OCR_MODEL`.
 - Padrao atual: `gemini-2.5-flash`.
 - O prompt nao pede interpretacao, classificacao ou conclusao; pede transcricao.

@@ -20,7 +20,7 @@ import {
   type ShipmentView,
 } from "@/lib/shipments";
 import { takeDraft, type ShipmentDraft } from "@/lib/agent-draft";
-import { isAcceptedAttachment, uploadAttachment } from "@/lib/shipment-files";
+import { ATTACHMENT_LIMIT_HINT, isAcceptedAttachment, prepareAttachment, uploadAttachment } from "@/lib/shipment-files";
 import { cn } from "@/lib/utils";
 
 import {
@@ -309,6 +309,8 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
   const [pasting, setPasting] = useState(false);
   const [invoiceReading, setInvoiceReading] = useState<InvoiceReading | null>(null);
   const [reading, setReading] = useState(false);
+  // Reduzindo scan grande no navegador antes de subir.
+  const [preparing, setPreparing] = useState(false);
   // Arquivo que o Agent Dute já leu com sucesso.
   const [readFile, setReadFile] = useState<File | null>(null);
   // Arquivo já enviado ao ler a nota não sobe de novo ao enviar o aviso.
@@ -414,12 +416,33 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
     send.mutate();
   }
 
-  function addFiles(list: FileList | null) {
+  async function addFiles(list: FileList | null) {
     if (!list) return;
-    const accepted = [...list].filter(isAcceptedAttachment);
+    const chosen = [...list].filter(isAcceptedAttachment);
+    let left = list.length - chosen.length;
+    // Scan de celular passa de 9 MB; é reduzido aqui antes de subir, para
+    // ninguém precisar reescanear a nota.
+    setPreparing(true);
+    const accepted: File[] = [];
+    try {
+      for (const file of chosen) {
+        try {
+          accepted.push(await prepareAttachment(file));
+        } catch (error) {
+          left += 1;
+          console.warn("envios: anexo recusado", { name: file.name, error });
+        }
+      }
+    } finally {
+      setPreparing(false);
+    }
     setFiles((current) => [...current, ...accepted].slice(0, 8));
-    if (accepted.length !== list.length) {
-      toast({ title: "Alguns arquivos ficaram de fora", description: "Use PDF ou imagem, até 8 MB cada e 8 no total.", variant: "destructive" });
+    if (left > 0) {
+      toast({
+        title: "Alguns arquivos ficaram de fora",
+        description: `Use PDF ou imagem, ${ATTACHMENT_LIMIT_HINT} cada e 8 no total.`,
+        variant: "destructive",
+      });
     }
     // A primeira nota anexada já vai para o Agent Dute: a pessoa não precisa
     // preencher fornecedor, NF e itens à mão.
@@ -511,10 +534,11 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
             files={files}
             readableFile={readableFile}
             reading={reading}
+            preparing={preparing}
             read={Boolean(readableFile && readFile === readableFile)}
             disabled={busy}
             onPick={() => fileInput.current?.click()}
-            onDrop={addFiles}
+            onDrop={(list) => void addFiles(list)}
             onRead={() => readableFile && void readInvoice(readableFile)}
             onRemove={(index) => setFiles((current) => current.filter((_, i) => i !== index))}
           />
@@ -525,7 +549,7 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
             accept="application/pdf,image/jpeg,image/png,image/webp"
             className="hidden"
             onChange={(event) => {
-              addFiles(event.target.files);
+              void addFiles(event.target.files);
               event.target.value = "";
             }}
           />
@@ -691,6 +715,7 @@ function InvoiceDrop({
   files,
   readableFile,
   reading,
+  preparing,
   read,
   disabled,
   onPick,
@@ -701,6 +726,7 @@ function InvoiceDrop({
   files: File[];
   readableFile: File | undefined;
   reading: boolean;
+  preparing: boolean;
   read: boolean;
   disabled: boolean;
   onPick: () => void;
@@ -719,18 +745,20 @@ function InvoiceDrop({
     >
       <div className="flex flex-wrap items-center gap-4">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-card text-agent shadow-sm">
-          {reading ? <Loader2 className="h-5 w-5 animate-spin" /> : read ? <CheckCircle2 className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
+          {reading || preparing ? <Loader2 className="h-5 w-5 animate-spin" /> : read ? <CheckCircle2 className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
         </span>
         <div className="min-w-0 flex-1">
           <h2 className="font-semibold text-agent-strong">
-            {reading ? "Lendo a nota…" : read ? "Nota lida pelo Agent Dute" : "Comece pela nota fiscal ou pedido"}
+            {preparing ? "Preparando o arquivo…" : reading ? "Lendo a nota…" : read ? "Nota lida pelo Agent Dute" : "Comece pela nota fiscal ou pedido"}
           </h2>
           <p className="text-sm text-agent">
-            {reading
-              ? "O Agent Dute está preenchendo fornecedor, NF, observações e itens."
-              : read
-                ? "Confira os dados abaixo antes de enviar. A leitura automática pode errar."
-                : "Anexe em PDF ou foto e o Agent Dute preenche o resto. Sem nota? Preencha abaixo."}
+            {preparing
+              ? "Scan grande é reduzido aqui mesmo antes de subir."
+              : reading
+                ? "O Agent Dute está preenchendo fornecedor, NF, observações e itens."
+                : read
+                  ? "Confira os dados abaixo antes de enviar. A leitura automática pode errar."
+                  : "Anexe em PDF ou foto e o Agent Dute preenche o resto. Sem nota? Preencha abaixo."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -740,7 +768,7 @@ function InvoiceDrop({
               {read ? "Ler de novo" : "Ler nota"}
             </Button>
           ) : null}
-          <Button type="button" size="sm" className="rounded-lg bg-agent text-agent-foreground hover:bg-agent-hover" disabled={disabled || reading} onClick={onPick}>
+          <Button type="button" size="sm" className="rounded-lg bg-agent text-agent-foreground hover:bg-agent-hover" disabled={disabled || reading || preparing} onClick={onPick}>
             <Paperclip className="h-4 w-4" />
             {files.length ? "Anexar outro" : "Anexar nota"}
           </Button>
@@ -752,14 +780,14 @@ function InvoiceDrop({
             <span key={`${file.name}-${index}`} className="inline-flex max-w-full items-center gap-1 rounded-lg bg-card px-2 py-1 text-xs text-foreground">
               <FileText className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">{file.name}</span>
-              <button type="button" aria-label={`Remover ${file.name}`} disabled={reading} onClick={() => onRemove(index)}>
+              <button type="button" aria-label={`Remover ${file.name}`} disabled={reading || preparing} onClick={() => onRemove(index)}>
                 <X className="h-3 w-3" />
               </button>
             </span>
           ))}
         </div>
       ) : (
-        <p className="mt-2 text-xs text-agent-muted">ou arraste o arquivo para cá · até 8 MB</p>
+        <p className="mt-2 text-xs text-agent-muted">ou arraste o arquivo para cá · {ATTACHMENT_LIMIT_HINT}, scan grande é reduzido aqui</p>
       )}
     </section>
   );
