@@ -1134,23 +1134,29 @@ function FamilyGrid({
   onArchive: (product: StockProduct) => void;
 }) {
   return (
-    <div
-      data-testid="stock-card-grid"
-      className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
-    >
-      {families.map((family) => (
-        <FamilyCard
-          key={family.key}
-          family={family}
-          cart={cart}
-          draftQuantities={draftQuantities}
-          onDraftQuantityChange={onDraftQuantityChange}
-          onAdd={onAdd}
-          onDetails={onDetails}
-          onReplenish={onReplenish}
-          onArchive={onArchive}
-        />
-      ))}
+    // Colunas pela largura disponível, não da janela: com a barra lateral aberta,
+    // 5 colunas a 1536px deixavam o card com ~230px e o rodapé não cabia.
+    // Cada degrau mantém o card com pelo menos ~250px. O @container fica no
+    // pai porque um elemento não consulta a própria largura.
+    <div className="@container">
+      <div
+        data-testid="stock-card-grid"
+        className="grid grid-cols-1 gap-3 @md:grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-4 @7xl:grid-cols-5"
+      >
+        {families.map((family) => (
+          <FamilyCard
+            key={family.key}
+            family={family}
+            cart={cart}
+            draftQuantities={draftQuantities}
+            onDraftQuantityChange={onDraftQuantityChange}
+            onAdd={onAdd}
+            onDetails={onDetails}
+            onReplenish={onReplenish}
+            onArchive={onArchive}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -1276,9 +1282,12 @@ function FamilyCard({
           )}
         </p>
 
-        <div className="mt-auto pt-1">
+        {/* Contador e "Adicionar" lado a lado só quando cabem (240px de conteúdo:
+            contador de 114px, espaço e botão de ~110px); abaixo disso, empilhados,
+            com o botão em largura total. Antes o botão vazava para fora do card. */}
+        <div className="@container mt-auto pt-1">
           {product.available > 0 ? (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col items-start gap-2 @min-[240px]:flex-row @min-[240px]:items-center">
               <QuantityStepper
                 compact
                 label={title}
@@ -1289,7 +1298,7 @@ function FamilyCard({
               <Button
                 type="button"
                 size="sm"
-                className="min-w-0 flex-1 cursor-pointer gap-1.5"
+                className="w-full min-w-0 cursor-pointer gap-1.5 @min-[240px]:w-auto @min-[240px]:flex-1"
                 disabled={liveAvailable <= 0 || draftQuantity <= 0}
                 onClick={() => onAdd(product)}
               >
