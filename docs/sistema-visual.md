@@ -72,6 +72,21 @@ no celular. Seções que vivem dentro de um painel estreito usam `@container`
 e variantes `@md:`/`@xl:` em vez de `md:`/`xl:`, para seguir a largura do
 painel e não a da janela.
 
+## Escuro
+
+- Mesma escala e os mesmos componentes; só os tokens mudam (`.dark` em
+  `index.css`). Borda a 21% de luz para botão secundário, campo e card se
+  destacarem do fundo; acento azul escuro com texto azul-claro para badge
+  padrão, item ativo do menu e destaque de lista.
+- Logo: no escuro entra `dutelog-logo-light.png` (a versão vermelha tem o
+  "Soluções Logísticas" em preto). As duas imagens ficam na página; o
+  `dark:` troca qual aparece.
+- Cor fixa (`bg-white`, `text-slate-900`) continua proibida pelo teste de
+  tema: é o que quebra o escuro.
+
 ## O que vem depois (plano da auditoria)
 
-PR 7 escuro. O relatório completo está no artefato "Auditoria de UI Dute".
+As sete PRs da auditoria de 09/10/2026 estão em `main`. O relatório completo
+está no artefato "Auditoria de UI Dute". Pendências de produto que ficaram
+fora: "faltou" na separação com decisão do coordenador (depende de regra de
+negócio) e endereço sugerido na guarda (depende do saldo por endereço).

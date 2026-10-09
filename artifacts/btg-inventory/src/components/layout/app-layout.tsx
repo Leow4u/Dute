@@ -570,7 +570,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <img
             src={`${basePath}/dutelog-logo.png`}
             alt="Dutelog Soluções Logísticas"
-            className="h-8 w-auto max-w-[168px] object-contain"
+            className="h-8 w-auto max-w-[168px] object-contain dark:hidden"
+          />
+          <img
+            src={`${basePath}/dutelog-logo-light.png`}
+            alt=""
+            aria-hidden="true"
+            className="hidden h-8 w-auto max-w-[168px] object-contain dark:block"
           />
           <AccountMenu
             basePath={basePath}
