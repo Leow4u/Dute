@@ -5,7 +5,14 @@ on:
     branches: [main, master, codex/ai-native-foundation]
   pull_request:
   # Publicação manual do frontend a partir de main (Actions > CI > Run workflow).
+  # Marcar "liberar_trafego" solta o tráfego do Cloud Run para a última revisão
+  # pronta (--to-latest); é o que desfaz um rollback feito com --to-revisions.
   workflow_dispatch:
+    inputs:
+      liberar_trafego:
+        description: "Soltar o tráfego do dute-btg-app para a última revisão pronta (--to-latest)"
+        type: boolean
+        default: false
 
 jobs:
   frontend-typecheck:
@@ -232,4 +239,52 @@ jobs:
             echo "== ${url}"
             curl -sSI --max-time 20 "${url}/index.html" | grep -i -E "^(HTTP|last-modified|etag)" || true
             curl -sS --max-time 20 "${url}/index.html" | grep -o '/assets/shell-app-[^"]*\.js' || true
+          done
+
+  liberar-trafego:
+    name: Liberar tráfego para a última revisão
+    runs-on: ubuntu-latest
+    # Só roda no disparo manual com "liberar_trafego" marcado. Muda a produção:
+    # 100% do tráfego passa para a última revisão pronta do serviço. Reversível
+    # com --to-revisions NOME=100 (ver docs/deploy-manual.md).
+    if: github.event_name == 'workflow_dispatch' && inputs.liberar_trafego
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PROJECT_ID: dute-btg
+      REGION: southamerica-east1
+      SERVICE: dute-btg-app
+      PUBLIC_URL: https://app.dutelog.com.br
+      WORKLOAD_IDENTITY_PROVIDER: projects/912453685006/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+      GCP_SERVICE_ACCOUNT: github-actions-deploy@dute-btg.iam.gserviceaccount.com
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Tráfego antes
+        run: |
+          set -euo pipefail
+          gcloud run services describe "${SERVICE}" --region "${REGION}" --project "${PROJECT_ID}" \
+            --format "yaml(spec.traffic,status.traffic,status.latestCreatedRevisionName,status.latestReadyRevisionName)"
+
+      - name: Soltar o tráfego (100% para a última revisão pronta)
+        run: |
+          set -euo pipefail
+          gcloud run services update-traffic "${SERVICE}" --region "${REGION}" --project "${PROJECT_ID}" --to-latest
+
+      - name: Tráfego depois e o que as URLs servem
+        run: |
+          set -euo pipefail
+          gcloud run services describe "${SERVICE}" --region "${REGION}" --project "${PROJECT_ID}" \
+            --format "yaml(spec.traffic,status.traffic,status.latestCreatedRevisionName,status.latestReadyRevisionName)"
+          SERVICE_URL="$(gcloud run services describe "${SERVICE}" --region "${REGION}" --project "${PROJECT_ID}" --format "value(status.url)")"
+          for url in "${SERVICE_URL}" "${PUBLIC_URL}"; do
+            echo "== ${url}"
+            curl -sSI --max-time 20 "${url}/index.html?after=release" | grep -i -E "^(HTTP|last-modified|etag)" || true
+            curl -sS --max-time 20 "${url}/index.html?after=release" | grep -o '/assets/shell-app-[^"]*\.js' || true
           done
