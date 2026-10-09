@@ -97,6 +97,7 @@ jobs:
       REGION: southamerica-east1
       SERVICE: dute-btg-app
       REPOSITORY: dute-btg
+      PUBLIC_URL: https://app.dutelog.com.br
       WORKLOAD_IDENTITY_PROVIDER: projects/912453685006/locations/global/workloadIdentityPools/github-pool/providers/github-provider
       GCP_SERVICE_ACCOUNT: github-actions-deploy@dute-btg.iam.gserviceaccount.com
     steps:
@@ -163,3 +164,22 @@ jobs:
             --region "${REGION}" \
             --project "${PROJECT_ID}" \
             --format "value(status.url)"
+
+      # Em 09/10/2026, oito execuções seguidas deste job terminaram verdes sem mudar
+      # o que a produção servia: todas imprimiram a mesma revisão
+      # (dute-btg-app-00143-loc) e o app continuou no build de 08/10. Por isso o
+      # deploy só conta quando o index.html servido referencia os assets do build
+      # que acabamos de montar; se não bater, o job falha e mostra o tráfego e as
+      # últimas revisões do serviço para diagnóstico.
+      - name: Verify production is serving this build
+        run: |
+          set -euo pipefail
+          SERVICE_URL="$(gcloud run services describe "${SERVICE}" --region "${REGION}" --project "${PROJECT_ID}" --format "value(status.url)")"
+          if ! bash tools/check_frontend_deployed.sh artifacts/btg-inventory/dist/public/index.html "${SERVICE_URL}" "${PUBLIC_URL}"; then
+            echo "Tráfego e revisões do serviço:"
+            gcloud run services describe "${SERVICE}" --region "${REGION}" --project "${PROJECT_ID}" \
+              --format "yaml(status.latestCreatedRevisionName,status.latestReadyRevisionName,status.traffic,spec.traffic)"
+            gcloud run revisions list --service "${SERVICE}" --region "${REGION}" --project "${PROJECT_ID}" --limit 5 \
+              --format "table(name,creationTimestamp.date('%Y-%m-%d %H:%M'),active,spec.containers[0].image)"
+            exit 1
+          fi

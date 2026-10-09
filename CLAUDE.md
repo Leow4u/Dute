@@ -16,7 +16,11 @@ documentação de produto e operação está em `docs/`.
 - **Frontend publica pelo GitHub Actions; functions são manuais.** O job
   `deploy-frontend` roda a cada push em `main` e por disparo manual (Actions >
   CI > Run workflow), montando a imagem no runner e enviando ao Artifact
-  Registry. Ver `docs/deploy-manual.md` (inclui o roteiro manual de reserva) e
+  Registry e termina conferindo se a URL do Cloud Run e `app.dutelog.com.br`
+  passaram a servir o build (`tools/check_frontend_deployed.sh`). **Verde sem
+  essa verificação não vale**: em 09/10/2026 o job ficou verde oito vezes
+  seguidas sem mudar a produção. Ver `docs/deploy-manual.md` (inclui o roteiro
+  manual de reserva e o que checar quando a verificação falha) e
   `docs/deploy-functions-manual.md` (Cloud Functions, sempre manual).
 - **Depois de qualquer deploy de functions, rode
   `tools/check_functions_invoker.ps1`.** Em 03/09/2026, 8 callables (incluindo
