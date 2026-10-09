@@ -36,7 +36,7 @@ import {
   type AppModule,
   type ModuleRoute,
 } from "@/lib/modules";
-import { AgentDock } from "@/components/agent/agent-dock";
+import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { SidebarBrand } from "@/components/layout/sidebar-brand";
 import { agentPathFor, isAgentScreen, isAgentShortcut } from "@/lib/agent-chat";
 import { useAppAuth, useAppUser, type AppUser } from "@/lib/auth";
@@ -393,86 +393,6 @@ function ExpandedModuleItem({
   );
 }
 
-function MobileModuleNav({
-  activeModuleId,
-  location,
-  modules,
-}: {
-  activeModuleId: string | null;
-  location: string;
-  modules: AppModule[];
-}) {
-  return (
-    <div className="border-b border-border/70 bg-card md:hidden">
-      <nav className="flex gap-2 overflow-x-auto px-4 py-2">
-        {modules.map((module) => {
-          const Icon = module.icon;
-          const active = activeModuleId === module.id;
-          const enabled = isModuleEnabled(module);
-          const hasSubroutes =
-            module.routes.filter((route) => route.href).length > 1;
-          const itemClassName = cn(
-            "flex h-10 shrink-0 items-center gap-2 rounded-xl px-3 text-sm font-medium outline-none transition-colors",
-            active
-              ? "bg-primary text-primary-foreground"
-              : "text-muted-foreground hover:bg-muted hover:text-foreground",
-          );
-
-          if (!enabled) {
-            return (
-              <span
-                key={module.id}
-                className="flex h-10 shrink-0 cursor-not-allowed items-center gap-2 rounded-xl px-3 text-sm font-medium text-muted-foreground opacity-45"
-              >
-                <Icon className="h-4 w-4" />
-                {module.label}
-              </span>
-            );
-          }
-
-          if (!hasSubroutes && module.href) {
-            return (
-              <Link
-                key={module.id}
-                href={module.href}
-                className={itemClassName}
-                aria-current={active ? "page" : undefined}
-              >
-                <Icon className="h-4 w-4" />
-                {module.label}
-              </Link>
-            );
-          }
-
-          return (
-            <DropdownMenu key={module.id}>
-              <DropdownMenuTrigger className={itemClassName}>
-                <Icon className="h-4 w-4" />
-                {module.label}
-                <ChevronDown className="h-3.5 w-3.5 opacity-70" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-[260px]">
-                <DropdownMenuLabel>{module.label}</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {module.routes.map((route) => (
-                  <RouteDropdownItem
-                    key={route.id}
-                    route={route}
-                    active={Boolean(
-                      route.href &&
-                      isRouteActive(location, route.href, route.exact),
-                    )}
-                  />
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          );
-        })}
-      </nav>
-    </div>
-  );
-}
-
 export default function AppLayout({ children }: { children: ReactNode }) {
   const [location, navigate] = useLocation();
   const { user } = useAppUser();
@@ -669,11 +589,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             permanecem bloqueadas até a internet voltar.
           </div>
         ) : null}
-        <MobileModuleNav
-          activeModuleId={activeId}
-          location={location}
-          modules={modules}
-        />
         <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
           <div
             className={cn(
@@ -686,8 +601,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             {children}
           </div>
         </div>
+        <MobileTabBar activeModuleId={activeId} modules={modules} />
       </main>
-      {clientSurface ? null : <AgentDock />}
     </div>
   );
 }

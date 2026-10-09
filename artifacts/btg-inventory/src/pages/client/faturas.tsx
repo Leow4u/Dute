@@ -103,7 +103,16 @@ export function ClienteFaturas() {
                   </section>
 
                   <section className="grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-                    <Card title="Gasto por mês" subtitle="Total de cada fatura fechada">
+                    <Card
+                      title="Gasto por mês"
+                      subtitle={
+                        <>
+                          Total de cada fatura fechada
+                          {/* No celular o valor em cima da barra sai sem unidade ("10,8"). */}
+                          {insights.months.length <= 8 ? <span className="sm:hidden"> · em R$ mil</span> : null}
+                        </>
+                      }
+                    >
                       <MonthlyBars months={insights.months} highlight={latest.competencia} />
                     </Card>
                     <Card title={`Para onde vai o dinheiro · ${monthLabel(latest.competencia)}`} subtitle="Por serviço, do maior para o menor">
@@ -186,7 +195,7 @@ function Tile({ label, value, children }: { label: string; value: string; childr
   );
 }
 
-function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
+function Card({ title, subtitle, children }: { title: string; subtitle?: ReactNode; children: ReactNode }) {
   return (
     <section className="min-w-0 rounded-lg border border-border bg-card px-5 py-4">
       <h2 className="font-semibold">{title}</h2>

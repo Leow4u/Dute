@@ -17,6 +17,7 @@ import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
 import { Chip as FilterChip } from "@/components/ui/chip";
+import { FilterGroup, FilterPanel } from "@/components/ui/filter-panel";
 import { PageHeader } from "@/components/ui/page-header";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -212,18 +213,22 @@ export default function Estoque() {
                 className="pl-9"
               />
             </div>
-            <div className="flex gap-1.5 overflow-x-auto pb-1 lg:pb-0">
-              {FILTERS.map((option) => (
-                <FilterChip
-                  key={option.value}
-                  selected={filter === option.value}
-                  onClick={() => setFilter(option.value)}
-                  count={option.value !== "all" || counts.all ? counts[option.value] : null}
-                >
-                  {option.label}
-                </FilterChip>
-              ))}
-            </div>
+            <FilterPanel
+              summary={filter === "all" ? undefined : FILTERS.find((option) => option.value === filter)?.label}
+            >
+              <FilterGroup label="Mostrar">
+                {FILTERS.map((option) => (
+                  <FilterChip
+                    key={option.value}
+                    selected={filter === option.value}
+                    onClick={() => setFilter(option.value)}
+                    count={option.value !== "all" || counts.all ? counts[option.value] : null}
+                  >
+                    {option.label}
+                  </FilterChip>
+                ))}
+              </FilterGroup>
+            </FilterPanel>
           </div>
 
           {skus.isLoading ? (

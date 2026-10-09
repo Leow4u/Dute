@@ -39,6 +39,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
+import { cn } from "@/lib/utils";
 import {
   formatStockNumber,
   StockFilterChip,
@@ -51,6 +52,19 @@ import {
 } from "@/components/stock/stock-workbench";
 
 const POSITIVE_MOVEMENTS = new Set(["ENTRADA", "DEVOLUCAO", "AJUSTE_ENTRADA"]);
+
+const MOVEMENT_LABELS: Record<string, string> = {
+  ENTRADA: "Entrada",
+  SAIDA: "Saída",
+  DEVOLUCAO: "Devolução",
+  AJUSTE_ENTRADA: "Ajuste +",
+  AJUSTE_SAIDA: "Ajuste -",
+  AJUSTE: "Ajuste",
+};
+
+function movementLabel(type: string | undefined) {
+  return (type && MOVEMENT_LABELS[type]) || type || "—";
+}
 
 const movementSchema = z.object({
   data: z.string().min(1, "Obrigatório"),
@@ -170,6 +184,8 @@ export default function Movements() {
         search={search}
         onSearchChange={setSearch}
         placeholder="Buscar por SKU interno da movimentação"
+        filterLabel="Tipo"
+        filterSummary={typeFilter === "todos" ? undefined : movementLabel(typeFilter)}
       >
         <StockFilterChip active={typeFilter === "todos"} onClick={() => setTypeFilter("todos")}>
           Todos
@@ -189,7 +205,16 @@ export default function Movements() {
       </StockToolbar>
 
       <StockTableCard>
-          <div className="overflow-x-auto">
+          <ul className="divide-y divide-border md:hidden">
+            {isLoading ? (
+              <li className="px-4 py-8 text-center text-sm text-muted-foreground">Carregando movimentações...</li>
+            ) : movements.length === 0 ? (
+              <li className="px-4 py-8 text-center text-sm text-muted-foreground">Nenhuma movimentação encontrada.</li>
+            ) : (
+              movements.map((mov: Movement) => <MovementCard key={mov.id} movement={mov} />)
+            )}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-muted-foreground uppercase border-b border-border/80 bg-card">
                 <tr>
@@ -323,6 +348,56 @@ export default function Movements() {
           />
       </StockTableCard>
     </StockPageShell>
+  );
+}
+
+/** Abaixo de 768px a tabela vira esta lista: produto, quantidade, código, tipo, data e trajeto. */
+function MovementCard({ movement: mov }: { movement: Movement }) {
+  const isPositive = mov.sinal > 0;
+  const Arrow = isPositive ? ArrowDownRight : ArrowUpRight;
+  const when = new Date(mov.data).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  const details = [
+    mov.origem || mov.destino ? `${mov.origem || "-"} → ${mov.destino || "-"}` : null,
+    mov.estoque_resultante != null ? `saldo ${mov.estoque_resultante.toLocaleString("pt-BR")}` : null,
+    mov.doc_nf || null,
+    mov.responsavel || null,
+  ].filter(Boolean);
+  return (
+    <li className="flex items-start gap-3 px-4 py-3">
+      <span
+        className={cn(
+          "mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-md",
+          isPositive
+            ? "bg-success-soft text-success-soft-foreground"
+            : "bg-destructive-soft text-destructive-soft-foreground",
+        )}
+        aria-hidden="true"
+      >
+        <Arrow className="h-4 w-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="truncate text-sm font-medium text-foreground" title={mov.produto}>
+            {mov.produto}
+          </span>
+          <span
+            className={cn(
+              "shrink-0 text-sm font-semibold tabular-nums",
+              isPositive ? "text-success-soft-foreground" : "text-destructive-soft-foreground",
+            )}
+          >
+            {isPositive ? "+" : "-"}
+            {mov.qtde}
+          </span>
+        </div>
+        <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted-foreground">
+          <span className="whitespace-nowrap font-mono">{mov.cod_sku}</span>
+          <span>{movementLabel(mov.tipo_mov)}</span>
+          <span className="whitespace-nowrap">{when}</span>
+        </div>
+        <div className="mt-0.5 text-xs text-muted-foreground">{details.join(" · ")}</div>
+      </div>
+    </li>
   );
 }
 

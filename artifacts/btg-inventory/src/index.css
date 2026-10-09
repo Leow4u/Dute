@@ -604,3 +604,8 @@
     display: none !important;
   }
 }
+
+/* Barra inferior do celular: respeita a área do indicador de início (iOS). */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}

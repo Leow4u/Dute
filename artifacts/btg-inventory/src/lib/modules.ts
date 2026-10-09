@@ -568,6 +568,56 @@ export function getNavigationForProfileRole(
     .filter((module) => module.routes.length > 0);
 }
 
+/**
+ * Barra inferior do celular: até quatro destinos fixos (Início, Pedidos,
+ * Estoque, Agent Dute, nesta ordem) e "Mais" com o resto. Papéis que não
+ * têm todos os quatro completam a barra com os próximos itens do menu.
+ * As telas secundárias de um destino da barra (Receber, dentro de Estoque)
+ * ficam em "Mais".
+ */
+export type MobileNavigation = {
+  bar: AppModule[];
+  more: Array<{ module: AppModule; routes: ModuleRoute[] }>;
+};
+
+const MOBILE_BAR_PRIORITY = [
+  "home",
+  "client-home",
+  "orders",
+  "client-orders",
+  "inventory",
+  "client-inventory",
+  "agent",
+  "client-assistant",
+];
+
+export const MOBILE_BAR_SLOTS = 4;
+
+export function getMobileNavigation(modules: AppModule[]): MobileNavigation {
+  const enabled = modules.filter(isModuleEnabled);
+  const bar: AppModule[] = [];
+  for (const id of MOBILE_BAR_PRIORITY) {
+    const match = enabled.find((module) => module.id === id);
+    if (match && bar.length < MOBILE_BAR_SLOTS) bar.push(match);
+  }
+  for (const module of enabled) {
+    if (bar.length >= MOBILE_BAR_SLOTS) break;
+    if (!bar.includes(module)) bar.push(module);
+  }
+  const more: MobileNavigation["more"] = [];
+  for (const module of modules) {
+    if (bar.includes(module)) {
+      const routes = module.routes.filter(
+        (route) => route.href && route.href !== module.href,
+      );
+      if (routes.length) more.push({ module, routes });
+    } else {
+      more.push({ module, routes: module.routes });
+    }
+  }
+  return { bar, more };
+}
+
 export function isModuleEnabled(module: AppModule): boolean {
   return Boolean(module.href);
 }
