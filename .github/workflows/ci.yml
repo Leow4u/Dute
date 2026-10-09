@@ -10,9 +10,13 @@ on:
   workflow_dispatch:
     inputs:
       liberar_trafego:
-        description: "Soltar o tráfego do dute-btg-app para a última revisão pronta (--to-latest)"
+        description: "Mudar o tráfego do dute-btg-app: 100% para a última revisão pronta (--to-latest), ou para a revisão informada abaixo"
         type: boolean
         default: false
+      revisao:
+        description: "Opcional, para rollback: nome da revisão que recebe 100% do tráfego (ex.: dute-btg-app-00143-loc). Vazio = última revisão pronta."
+        type: string
+        default: ""
 
 jobs:
   frontend-typecheck:
@@ -242,7 +246,7 @@ jobs:
           done
 
   liberar-trafego:
-    name: Liberar tráfego para a última revisão
+    name: Mudar tráfego do serviço
     runs-on: ubuntu-latest
     # Só roda no disparo manual com "liberar_trafego" marcado. Muda a produção:
     # 100% do tráfego passa para a última revisão pronta do serviço. Reversível
@@ -272,10 +276,16 @@ jobs:
           gcloud run services describe "${SERVICE}" --region "${REGION}" --project "${PROJECT_ID}" \
             --format "yaml(spec.traffic,status.traffic,status.latestCreatedRevisionName,status.latestReadyRevisionName)"
 
-      - name: Soltar o tráfego (100% para a última revisão pronta)
+      - name: Mudar o tráfego (100% para a revisão informada, ou para a última pronta)
+        env:
+          REVISAO: ${{ inputs.revisao }}
         run: |
           set -euo pipefail
-          gcloud run services update-traffic "${SERVICE}" --region "${REGION}" --project "${PROJECT_ID}" --to-latest
+          if [ -n "${REVISAO}" ]; then
+            gcloud run services update-traffic "${SERVICE}" --region "${REGION}" --project "${PROJECT_ID}" --to-revisions "${REVISAO}=100"
+          else
+            gcloud run services update-traffic "${SERVICE}" --region "${REGION}" --project "${PROJECT_ID}" --to-latest
+          fi
 
       - name: Tráfego depois e o que as URLs servem
         run: |
