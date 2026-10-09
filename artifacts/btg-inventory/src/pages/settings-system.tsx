@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   Dialog,
   DialogContent,
@@ -217,18 +218,16 @@ export default function SettingsSystem() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Sistema</h1>
-          <p className="text-sm text-muted-foreground">
-            O sistema está no ar e com a versão certa?
-          </p>
-        </div>
-        <Button variant="outline" onClick={() => health.refetch()} disabled={health.isFetching}>
-          <RefreshCw className={cn("mr-2 h-4 w-4", health.isFetching && "animate-spin")} />
-          Verificar agora
-        </Button>
-      </div>
+      <PageHeader
+        title="Sistema"
+        description="O sistema está no ar e com a versão certa?"
+        actions={
+          <Button variant="outline" onClick={() => health.refetch()} disabled={health.isFetching}>
+            <RefreshCw className={cn("mr-2 h-4 w-4", health.isFetching && "animate-spin")} />
+            Verificar agora
+          </Button>
+        }
+      />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Tile label="Servidor" value={serverValue} detail={serverDetail} dot={serverDot} />

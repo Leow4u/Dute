@@ -500,7 +500,6 @@ export function ClientModuleShell({
   eyebrow,
   title,
   description,
-  icon: Icon,
   children,
   className,
 }: ClientModuleShellProps) {
@@ -518,20 +517,9 @@ export function ClientModuleShell({
           aria-label={headerLabel}
           className="shrink-0 flex flex-col gap-4 border-b border-border/60 pb-5 md:flex-row md:items-start md:justify-between"
         >
-          <div className="flex min-w-0 gap-4">
-            <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 text-primary">
-              <Icon className="h-5 w-5" aria-hidden="true" />
-            </div>
-            <div className="min-w-0 space-y-1">
-              <h1 className="text-2xl font-semibold tracking-normal text-foreground">
-                {title}
-              </h1>
-              {description ? (
-                <p className="max-w-3xl text-sm leading-6 text-foreground/70">
-                  {description}
-                </p>
-              ) : null}
-            </div>
+          <div className="min-w-0 space-y-1">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
+            {description ? <p className="max-w-3xl text-sm text-muted-foreground">{description}</p> : null}
           </div>
         </header>
         <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pr-1">

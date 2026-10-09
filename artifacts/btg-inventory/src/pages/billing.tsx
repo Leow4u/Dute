@@ -9,7 +9,7 @@ import {
   useListBillingPeriods,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Clock3, FileText, Save, Send, TriangleAlert } from "lucide-react";
+import { CalendarDays, CheckCircle2, Clock3, FileText, Save, Send, TriangleAlert } from "lucide-react";
 import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
@@ -255,14 +255,18 @@ export default function Billing() {
             </button>
           );
         })}
-        <Input
-          type="month"
-          aria-label="Outro mês"
-          value={competencia}
-          max={currentCompetencia()}
-          onChange={(event) => event.target.value && setCompetencia(event.target.value)}
-          className="h-10 w-40"
-        />
+        <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-md border border-border bg-card px-3 text-sm text-muted-foreground hover:bg-surface-hover">
+          <CalendarDays className="size-4" aria-hidden="true" />
+          Outro mês
+          <input
+            type="month"
+            aria-label="Outro mês"
+            value={competencia}
+            max={currentCompetencia()}
+            onChange={(event) => event.target.value && setCompetencia(event.target.value)}
+            className="w-32 bg-transparent text-sm text-foreground outline-none"
+          />
+        </label>
       </div>
 
       {error ? (

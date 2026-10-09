@@ -67,7 +67,7 @@ function OrderList({ active, history, onOpen }: { active: OrderView[]; history: 
           <h1 className="text-2xl font-semibold tracking-tight">Pedidos</h1>
           <p className="mt-0.5 max-w-2xl text-sm text-muted-foreground">O que você pediu do estoque e onde está cada entrega.</p>
         </div>
-        <Button asChild variant="outline" className="rounded-xl">
+        <Button asChild variant="outline">
           <Link href="/portal/estoque">
             <PackageOpen className="h-4 w-4" />
             Fazer um pedido

@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { SettingsSectionList } from "@/components/layout/settings-layout";
 import { useAppAuth, useAppUser } from "@/lib/auth";
 import { roleDescription, roleLabel } from "@/lib/access";
@@ -24,10 +25,7 @@ import { usePwaInstall } from "@/lib/pwa-install";
 
 function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) {
   return (
-    <div className="mb-5">
-      <h1 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
-      <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
-    </div>
+    <PageHeader title={title} description={subtitle} className="mb-5" />
   );
 }
 

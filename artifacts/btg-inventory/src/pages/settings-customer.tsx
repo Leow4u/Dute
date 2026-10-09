@@ -5,6 +5,7 @@ import { Link } from "wouter";
 import { ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   Dialog,
   DialogContent,
@@ -196,17 +197,15 @@ export default function SettingsCustomer() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Cliente BTG</h1>
-          <p className="text-sm text-muted-foreground">
-            Dados do contrato e quem da BTG acessa o portal
-          </p>
-        </div>
-        <Button variant="outline" onClick={openEdit} disabled={customers.isLoading}>
-          Editar dados
-        </Button>
-      </div>
+      <PageHeader
+        title="Cliente BTG"
+        description="Dados do contrato e quem da BTG acessa o portal"
+        actions={
+          <Button variant="outline" onClick={openEdit} disabled={customers.isLoading}>
+            Editar dados
+          </Button>
+        }
+      />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="min-w-0 space-y-4">

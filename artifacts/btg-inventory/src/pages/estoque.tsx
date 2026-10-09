@@ -16,6 +16,9 @@ import {
 import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
+import { Chip as FilterChip } from "@/components/ui/chip";
+import { PageHeader } from "@/components/ui/page-header";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import {
   Sheet,
@@ -162,53 +165,38 @@ export default function Estoque() {
 
   return (
     <div className="flex flex-col gap-4 pb-24">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold text-foreground sm:text-2xl">Estoque</h1>
-          <div className="flex rounded-xl bg-muted p-1" role="tablist">
-            {(
-              [
-                ["items", `Itens${items.length ? ` · ${numberFormatter.format(items.length)}` : ""}`],
-                ["history", "Histórico"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                role="tab"
-                aria-selected={tab === value}
-                onClick={() => setTab(value)}
-                className={cn(
-                  "whitespace-nowrap rounded-lg px-2.5 py-1.5 text-sm font-medium sm:px-3",
-                  tab === value
-                    ? "bg-card text-foreground shadow-sm"
-                    : "text-foreground/60 hover:text-foreground",
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Button asChild variant="outline">
-            <Link href="/wms/contagem">
-              <ClipboardCheck className="size-4" />
-              Contagem
-            </Link>
-          </Button>
-          {catalogWriter ? (
-            <SkuModal
-              trigger={
-                <Button>
-                  <Plus className="size-4" />
-                  Novo item
-                </Button>
-              }
-            />
-          ) : null}
-        </div>
-      </div>
+      <PageHeader
+        title="Estoque"
+        actions={
+          <>
+            <Button asChild variant="outline">
+              <Link href="/wms/contagem">
+                <ClipboardCheck className="size-4" />
+                Contagem
+              </Link>
+            </Button>
+            {catalogWriter ? (
+              <SkuModal
+                trigger={
+                  <Button>
+                    <Plus className="size-4" />
+                    Novo item
+                  </Button>
+                }
+              />
+            ) : null}
+          </>
+        }
+      >
+        <Tabs value={tab} onValueChange={(value) => setTab(value as "items" | "history")}>
+          <TabsList>
+            <TabsTrigger value="items">
+              Itens{items.length ? ` · ${numberFormatter.format(items.length)}` : ""}
+            </TabsTrigger>
+            <TabsTrigger value="history">Histórico</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </PageHeader>
 
       {tab === "history" ? (
         <Movements />
@@ -226,22 +214,14 @@ export default function Estoque() {
             </div>
             <div className="flex gap-1.5 overflow-x-auto pb-1 lg:pb-0">
               {FILTERS.map((option) => (
-                <button
+                <FilterChip
                   key={option.value}
-                  type="button"
+                  selected={filter === option.value}
                   onClick={() => setFilter(option.value)}
-                  className={cn(
-                    "whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium sm:text-sm",
-                    filter === option.value
-                      ? "border-foreground bg-foreground text-background"
-                      : "border-border bg-card text-foreground/70 hover:text-foreground",
-                  )}
+                  count={option.value !== "all" || counts.all ? counts[option.value] : null}
                 >
                   {option.label}
-                  {option.value !== "all" || counts.all ? (
-                    <span className="ml-1.5 font-semibold">{counts[option.value]}</span>
-                  ) : null}
-                </button>
+                </FilterChip>
               ))}
             </div>
           </div>

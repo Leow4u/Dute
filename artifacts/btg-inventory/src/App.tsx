@@ -911,11 +911,6 @@ function WmsStageTabs() {
           ))}
         </TabsList>
       </Tabs>
-      {location === "/wms" || location === "/wms/contagem" ? (
-        <Button asChild type="button" variant="outline" size="sm">
-          <Link href="/wms/contagem">Contagem de estoque</Link>
-        </Button>
-      ) : null}
     </div>
   );
 }

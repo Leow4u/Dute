@@ -19,6 +19,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   Dialog,
   DialogContent,
@@ -273,18 +274,16 @@ export default function Users() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Pessoas e acessos</h1>
-          <p className="text-sm text-muted-foreground">
-            Quem entra no sistema e o que cada perfil pode fazer
-          </p>
-        </div>
-        <Button onClick={() => setInviteOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Convidar pessoa
-        </Button>
-      </div>
+      <PageHeader
+        title="Pessoas e acessos"
+        description="Quem entra no sistema e o que cada perfil pode fazer"
+        actions={
+          <Button onClick={() => setInviteOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Convidar pessoa
+          </Button>
+        }
+      />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <section className="overflow-hidden rounded-lg border border-border bg-card">

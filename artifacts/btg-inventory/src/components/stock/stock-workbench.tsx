@@ -3,6 +3,8 @@ import { Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Chip } from "@/components/ui/chip";
+import { PageHeader } from "@/components/ui/page-header";
 import { cn } from "@/lib/utils";
 
 const numberFormatter = new Intl.NumberFormat("pt-BR");
@@ -22,40 +24,23 @@ export function formatStockMoney(value: unknown) {
 }
 
 type StockPageShellProps = {
-  icon: ReactNode;
+  /** Mantido por compatibilidade; o cabeçalho do sistema não usa ícone. */
+  icon?: ReactNode;
   eyebrow?: string;
-  title: string;
+  /** Sem título a tela é uma aba de outra (Estoque › Histórico): só as ações. */
+  title?: string;
   actions?: ReactNode;
   children: ReactNode;
 };
 
-export function StockPageShell({
-  icon,
-  eyebrow,
-  title,
-  actions,
-  children,
-}: StockPageShellProps) {
+export function StockPageShell({ eyebrow, title, actions, children }: StockPageShellProps) {
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-5 border-b border-border/70 pb-6 xl:flex-row xl:items-end xl:justify-between">
-        <div className="flex max-w-4xl gap-5">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-primary/15 bg-primary/10 text-primary">
-            {icon}
-          </div>
-          <div>
-            {eyebrow ? (
-              <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-foreground/60">
-                {eyebrow}
-              </div>
-            ) : null}
-            <h1 className="text-3xl font-semibold tracking-normal text-foreground">
-              {title}
-            </h1>
-          </div>
-        </div>
-        {actions ? <div className="flex flex-wrap items-center gap-3">{actions}</div> : null}
-      </header>
+      {title ? (
+        <PageHeader title={title} description={eyebrow} actions={actions} />
+      ) : actions ? (
+        <div className="flex flex-wrap items-center justify-end gap-3">{actions}</div>
+      ) : null}
       {children}
     </div>
   );
@@ -170,21 +155,13 @@ export function StockFilterChip({
   onClick,
 }: StockFilterChipProps) {
   return (
-    <button
-      type="button"
+    <Chip
+      selected={active}
       onClick={onClick}
-      className={cn(
-        "inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors duration-200",
-        active
-          ? "border-primary/25 bg-primary/10 text-primary"
-          : "border-border bg-card text-muted-foreground hover:bg-surface-hover",
-      )}
+      count={typeof count === "number" || typeof count === "string" ? count : undefined}
     >
-      <span>{children}</span>
-      {count !== undefined ? (
-        <span className="text-xs opacity-70">{count}</span>
-      ) : null}
-    </button>
+      {children}
+    </Chip>
   );
 }
 

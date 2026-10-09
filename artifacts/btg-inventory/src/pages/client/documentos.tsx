@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { Chip as UiChip } from "@/components/ui/chip";
 import { Search } from "lucide-react";
 import { Link } from "wouter";
 
@@ -110,17 +111,9 @@ export function ClienteDocumentos() {
 
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
   return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={cn(
-        "rounded-full border px-3 py-1.5 text-xs font-medium",
-        active ? "border-foreground bg-foreground text-background" : "border-border bg-card text-muted-foreground hover:text-foreground",
-      )}
-    >
+    <UiChip selected={active} onClick={onClick}>
       {children}
-    </button>
+    </UiChip>
   );
 }
 
