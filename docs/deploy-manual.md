@@ -165,6 +165,12 @@ Solte o tráfego e a última revisão pronta passa a receber tudo:
 gcloud run services update-traffic dute-btg-app --region southamerica-east1 --project dute-btg --to-latest
 ```
 
+Sem gcloud na máquina, o mesmo efeito vem de Actions > CI > Run workflow com
+`liberar_trafego` marcado (job `Liberar tráfego para a última revisão`). Foi assim que o
+tráfego foi solto em 09/10/2026 às 20:28 UTC, colocando no ar a revisão `00150-lk5`
+(`8324dbb`); desde então `spec.traffic` volta a seguir a última revisão e cada push em
+`main` passa a valer de novo.
+
 Se a lista não mostrar nenhuma revisão criada pelo job (a imagem dela tem o commit
 curto como tag), o deploy não está criando revisões: publique pelo roteiro manual deste
 documento e investigue o job antes de confiar nele de novo.
