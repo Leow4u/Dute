@@ -11,23 +11,29 @@ import {
   type PriceListItem,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader,
+  AlertDialog, AlertDialogContent, AlertDialogHeader,
   AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { MoreHorizontal, Plus } from "lucide-react";
 import { GRUPOS, AUTO_LABELS, fmtBRL } from "@/lib/billing-format";
 
 type FormState = {
@@ -56,6 +62,7 @@ export default function PriceList() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY);
+  const [removing, setRemoving] = useState<PriceListItem | null>(null);
 
   // Config form
   const [rate, setRate] = useState("");
@@ -120,145 +127,176 @@ export default function PriceList() {
   const items = data?.items ?? [];
 
   return (
-    <div className="space-y-6">
-      {/* Configurações */}
-      <Card>
-        <CardHeader><CardTitle className="text-base">Configurações de cobrança</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="space-y-1.5">
-            <Label>Taxa Ad Valorem (%)</Label>
-            <Input type="number" step="0.001" value={rate} onChange={(e) => setRate(e.target.value)} />
-            <p className="text-xs text-muted-foreground">Aplicada sobre o valor total do estoque.</p>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Nome do cliente</Label>
-            <Input value={nome} onChange={(e) => setNome(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>E-mail para envio da fatura</Label>
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="cliente@empresa.com" />
-          </div>
-          <div className="md:col-span-3">
-            <Button onClick={handleSaveConfig} disabled={saveConfig.isPending}>Salvar configurações</Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* LPU */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Serviços e valores</CardTitle>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={openNew} size="sm"><Plus className="h-4 w-4 mr-2" />Novo item</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>{editId != null ? "Editar item" : "Novo item"}</DialogTitle></DialogHeader>
-              <div className="grid grid-cols-2 gap-4 py-2">
-                <div className="space-y-1.5 col-span-2">
-                  <Label>Grupo</Label>
-                  <Select value={form.grupo} onValueChange={(v) => setForm((s) => ({ ...s, grupo: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(GRUPOS).map(([k, v]) => (
-                        <SelectItem key={k} value={k}>{v.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5 col-span-2">
-                  <Label>Serviço / Item</Label>
-                  <Input value={form.item} onChange={(e) => setForm((s) => ({ ...s, item: e.target.value }))} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Unidade</Label>
-                  <Input value={form.unidade} onChange={(e) => setForm((s) => ({ ...s, unidade: e.target.value }))} placeholder="palete, caixa..." />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Valor unitário (R$)</Label>
-                  <Input type="number" step="0.0001" value={form.valor_unit} onChange={(e) => setForm((s) => ({ ...s, valor_unit: e.target.value }))} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Origem da quantidade</Label>
-                  <Select value={form.auto_source || "manual"} onValueChange={(v) => setForm((s) => ({ ...s, auto_source: v === "manual" ? "" : v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="manual">Manual (digitada)</SelectItem>
-                      <SelectItem value="ad_valorem">Ad Valorem (% estoque)</SelectItem>
-                      <SelectItem value="mov_entrada_pecas">Entradas (peças)</SelectItem>
-                      <SelectItem value="mov_saida_pecas">Saídas (peças)</SelectItem>
-                      <SelectItem value="mov_count">Nº de movimentações</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Ordem</Label>
-                  <Input type="number" value={form.ordem} onChange={(e) => setForm((s) => ({ ...s, ordem: e.target.value }))} />
-                </div>
-                <div className="flex items-center gap-2 col-span-2">
-                  <Switch checked={form.ativo} onCheckedChange={(v) => setForm((s) => ({ ...s, ativo: v }))} />
-                  <Label>Ativo</Label>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-                <Button onClick={handleSubmit} disabled={create.isPending || update.isPending}>Salvar</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Grupo</TableHead>
-                <TableHead>Serviço</TableHead>
-                <TableHead>Unidade</TableHead>
-                <TableHead className="text-right">Valor unit.</TableHead>
-                <TableHead>Quantidade</TableHead>
-                <TableHead></TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <section className="overflow-hidden rounded-lg border border-border bg-card">
+        <div className="flex items-center justify-between gap-3 border-b border-border/60 px-5 py-3">
+          <h2 className="text-sm font-semibold">Serviços e valores</h2>
+          <Button size="sm" onClick={openNew}>
+            <Plus className="h-4 w-4" />
+            Novo item
+          </Button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead>
+              <tr className="border-b border-border/70 text-left text-xs uppercase tracking-wide text-foreground/50">
+                <th className="px-5 py-2.5 font-semibold">Serviço</th>
+                <th className="px-3 py-2.5 font-semibold">Grupo</th>
+                <th className="px-3 py-2.5 font-semibold">Unidade</th>
+                <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold">Valor unit.</th>
+                <th className="px-3 py-2.5 font-semibold">Quantidade</th>
+                <th className="w-12 px-3 py-2.5" />
+              </tr>
+            </thead>
+            <tbody>
+              {items.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-6 text-sm text-muted-foreground">
+                    Nenhum serviço na tabela. Adicione o primeiro em "Novo item".
+                  </td>
+                </tr>
+              ) : null}
               {items.map((it) => (
-                <TableRow key={it.id} className={it.ativo ? "" : "opacity-50"}>
-                  <TableCell className="text-sm">{GRUPOS[it.grupo]?.label ?? it.grupo}</TableCell>
-                  <TableCell className="font-medium">{it.item}</TableCell>
-                  <TableCell className="text-muted-foreground text-sm">{it.unidade}</TableCell>
-                  <TableCell className="text-right">{fmtBRL(it.valor_unit)}</TableCell>
-                  <TableCell className="text-sm">
+                <tr
+                  key={it.id}
+                  className={cn("border-b border-border/40 last:border-0", !it.ativo && "text-muted-foreground")}
+                >
+                  <td className="px-5 py-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-foreground">{it.item}</span>
+                      {!it.ativo ? <Badge variant="secondary">Inativo</Badge> : null}
+                    </div>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-3">{GRUPOS[it.grupo]?.label ?? it.grupo}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">{it.unidade}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">{fmtBRL(it.valor_unit)}</td>
+                  <td className="whitespace-nowrap px-3 py-3">
                     {it.auto_source ? (
-                      <Badge variant="outline" className="border-info-soft-border text-info-soft-foreground">{AUTO_LABELS[it.auto_source] || it.auto_source}</Badge>
+                      <Badge variant="default">{AUTO_LABELS[it.auto_source] || it.auto_source}</Badge>
                     ) : (
                       <span className="text-muted-foreground">Manual</span>
                     )}
-                  </TableCell>
-                  <TableCell>{!it.ativo && <Badge variant="outline">Inativo</Badge>}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" onClick={() => openEdit(it)}><Pencil className="h-4 w-4" /></Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="sm" className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Remover "{it.item}"?</AlertDialogTitle>
-                          <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDelete(it.id)}>Remover</AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </TableCell>
-                </TableRow>
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" aria-label={`Ações de ${it.item}`}>
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onSelect={() => openEdit(it)}>Editar</DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-destructive" onSelect={() => setRemoving(it)}>
+                          Remover
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </td>
+                </tr>
               ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="h-fit rounded-lg border border-border bg-card">
+        <h2 className="border-b border-border/60 px-5 py-3.5 text-sm font-semibold">Cobrança</h2>
+        <div className="space-y-4 p-5">
+          <div className="space-y-1.5">
+            <Label htmlFor="billing-rate">Taxa ad valorem (%)</Label>
+            <Input id="billing-rate" type="number" step="0.001" value={rate} onChange={(e) => setRate(e.target.value)} />
+            <p className="text-xs text-muted-foreground">Aplicada sobre o valor total do estoque.</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="billing-name">Nome do cliente</Label>
+            <Input id="billing-name" value={nome} onChange={(e) => setNome(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="billing-email">E-mail para envio da fatura</Label>
+            <Input id="billing-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="cliente@empresa.com" />
+          </div>
+          <Button variant="outline" className="w-full" onClick={handleSaveConfig} disabled={saveConfig.isPending}>
+            {saveConfig.isPending ? "Salvando..." : "Salvar cobrança"}
+          </Button>
+        </div>
+      </section>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{editId != null ? "Editar item" : "Novo item"}</DialogTitle></DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-2">
+            <div className="space-y-1.5 col-span-2">
+              <Label>Grupo</Label>
+              <Select value={form.grupo} onValueChange={(v) => setForm((s) => ({ ...s, grupo: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(GRUPOS).map(([k, v]) => (
+                    <SelectItem key={k} value={k}>{v.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5 col-span-2">
+              <Label>Serviço / Item</Label>
+              <Input value={form.item} onChange={(e) => setForm((s) => ({ ...s, item: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Unidade</Label>
+              <Input value={form.unidade} onChange={(e) => setForm((s) => ({ ...s, unidade: e.target.value }))} placeholder="palete, caixa..." />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Valor unitário (R$)</Label>
+              <Input type="number" step="0.0001" value={form.valor_unit} onChange={(e) => setForm((s) => ({ ...s, valor_unit: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Origem da quantidade</Label>
+              <Select value={form.auto_source || "manual"} onValueChange={(v) => setForm((s) => ({ ...s, auto_source: v === "manual" ? "" : v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manual">Manual (digitada)</SelectItem>
+                  <SelectItem value="ad_valorem">Ad Valorem (% estoque)</SelectItem>
+                  <SelectItem value="mov_entrada_pecas">Entradas (peças)</SelectItem>
+                  <SelectItem value="mov_saida_pecas">Saídas (peças)</SelectItem>
+                  <SelectItem value="mov_count">Nº de movimentações</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Ordem</Label>
+              <Input type="number" value={form.ordem} onChange={(e) => setForm((s) => ({ ...s, ordem: e.target.value }))} />
+            </div>
+            <div className="flex items-center gap-2 col-span-2">
+              <Switch checked={form.ativo} onCheckedChange={(v) => setForm((s) => ({ ...s, ativo: v }))} />
+              <Label>Ativo</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSubmit} disabled={create.isPending || update.isPending}>Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={removing !== null} onOpenChange={(open) => !open && setRemoving(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover "{removing?.item}"?</AlertDialogTitle>
+            <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (removing) handleDelete(removing.id);
+                setRemoving(null);
+              }}
+            >
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -9,7 +9,6 @@ import {
   CheckCircle2,
   ClipboardCheck,
   ImagePlus,
-  ListChecks,
   PackageOpen,
   PackageSearch,
   PlayCircle,
@@ -1227,14 +1226,12 @@ export function ExistingCycleCountWorkspace() {
     <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
       <Card className="overflow-hidden rounded-lg border-border/80 bg-card">
         <CardHeader className="border-b border-border/70 p-6">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div className="flex gap-3">
-              <div className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
-                <ListChecks className="size-5" />
-              </div>
-              <div>
-                <CardTitle>Inventário cíclico</CardTitle>
-              </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-base">Registrar contagem</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Conte um item num endereço; a diferença vira ajuste com evento.
+              </p>
             </div>
             <Badge variant="outline" className="w-fit border-primary/20 bg-primary/10 text-primary">
               ajuste auditado
@@ -1293,8 +1290,8 @@ export function ExistingCycleCountWorkspace() {
                 <AlertTriangle className="size-4" />
                 <AlertTitle>Produto ainda não localizado</AlertTitle>
                 <AlertDescription>
-                  Inventário cíclico ajusta apenas produtos já cadastrados e com
-                  saldo físico criado. Se for produto novo, use Recebimento.
+                  A contagem ajusta apenas produtos já cadastrados e com saldo
+                  físico criado. Se for produto novo, use Receber.
                   {similarProducts.length ? (
                     <span className="mt-2 block text-xs">
                       Parecidos:{" "}
@@ -1393,7 +1390,7 @@ export function ExistingCycleCountWorkspace() {
           <CardContent className="space-y-3 text-sm text-muted-foreground">
             <div className="rounded-lg border border-border bg-card p-3">
               <strong className="text-foreground">Produto novo</strong>
-              <p className="mt-1">Use Recebimento para criar cadastro e conferência.</p>
+              <p className="mt-1">Use Receber para criar cadastro e conferência.</p>
             </div>
             <div className="rounded-lg border border-border bg-card p-3">
               <strong className="text-foreground">Divergência</strong>

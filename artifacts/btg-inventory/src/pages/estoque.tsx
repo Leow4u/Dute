@@ -163,7 +163,16 @@ export default function Estoque() {
                 Contagem
               </Link>
             </Button>
-            {catalogWriter ? (
+            {tab === "history" ? (
+              <MovementModal
+                trigger={
+                  <Button>
+                    <Plus className="size-4" />
+                    Registrar movimentação
+                  </Button>
+                }
+              />
+            ) : catalogWriter ? (
               <SkuModal
                 trigger={
                   <Button>
@@ -187,7 +196,7 @@ export default function Estoque() {
       </PageHeader>
 
       {tab === "history" ? (
-        <Movements />
+        <Movements embedded />
       ) : (
         <>
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
