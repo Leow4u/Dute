@@ -132,36 +132,7 @@ export type OpeningInventorySession = {
 };
 
 export function CycleCountWorkspace() {
-  const [mode, setMode] = useState<"opening" | "cycle">("opening");
-  return (
-    <div className="space-y-5">
-      <div className="flex w-fit items-center rounded-md border border-border bg-card p-1">
-        <Button
-          type="button"
-          variant={mode === "opening" ? "secondary" : "ghost"}
-          className={cn(mode === "opening" && "text-primary")}
-          onClick={() => setMode("opening")}
-        >
-          <PackageOpen data-icon="inline-start" />
-          Inventário de abertura
-        </Button>
-        <Button
-          type="button"
-          variant={mode === "cycle" ? "secondary" : "ghost"}
-          className={cn(mode === "cycle" && "text-primary")}
-          onClick={() => setMode("cycle")}
-        >
-          <ListChecks data-icon="inline-start" />
-          Inventário cíclico
-        </Button>
-      </div>
-      {mode === "opening" ? (
-        <OpeningInventoryWorkspace />
-      ) : (
-        <ExistingCycleCountWorkspace />
-      )}
-    </div>
-  );
+  return <ExistingCycleCountWorkspace />;
 }
 
 export function OpeningInventoryWorkspace() {

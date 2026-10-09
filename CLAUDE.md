@@ -13,10 +13,11 @@ documentação de produto e operação está em `docs/`.
 - **Produção é `https://app.dutelog.com.br`**, servida por Cloud Run
   (`dute-btg-app`, região `southamerica-east1`, projeto Google Cloud `dute-btg`).
   Firebase Hosting **não** é produção nem fallback.
-- **A publicação é manual.** Ver `docs/deploy-manual.md` (frontend) e
-  `docs/deploy-functions-manual.md` (Cloud Functions). O job `deploy-frontend`
-  do GitHub Actions existe mas falha em `gcloud builds submit`; o diagnóstico e o
-  que já foi descartado estão no primeiro documento.
+- **Frontend publica pelo GitHub Actions; functions são manuais.** O job
+  `deploy-frontend` roda a cada push em `main` e por disparo manual (Actions >
+  CI > Run workflow), montando a imagem no runner e enviando ao Artifact
+  Registry. Ver `docs/deploy-manual.md` (inclui o roteiro manual de reserva) e
+  `docs/deploy-functions-manual.md` (Cloud Functions, sempre manual).
 - **Depois de qualquer deploy de functions, rode
   `tools/check_functions_invoker.ps1`.** Em 03/09/2026, 8 callables (incluindo
   `createCustomerRequest`) ficaram sem `roles/run.invoker` para `allUsers` e

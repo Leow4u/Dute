@@ -124,10 +124,16 @@ compare os assets gerados com os servidos em produção: os nomes de arquivo do 
 hash de conteúdo, então batem quando o código é o mesmo. Diferenças restritas a nomes de
 variável minificados são ruído do minificador, não diferença de código.
 
-## Voltar ao deploy automático
+## Deploy automático pelo GitHub Actions
 
-O workflow `.github/workflows/ci.yml` já tem o job `deploy-frontend` pronto, usando
-Workload Identity. Ele falha em `gcloud builds submit` com:
+O job `deploy-frontend` em `.github/workflows/ci.yml` publica o frontend a cada push
+em `main` (depois do `frontend-typecheck`) e também por disparo manual em
+Actions > CI > Run workflow, sempre a partir de `main`. A tag da imagem é o commit
+curto, então dá para saber o que está no ar olhando a revisão do Cloud Run.
+
+A imagem é montada no próprio runner e enviada ao Artifact Registry com `docker push`,
+autenticado com o token da Workload Identity. Até 09/10/2026 o job usava
+`gcloud builds submit` e falhava em todo push com:
 
 ```
 The user is forbidden from accessing the bucket [dute-btg_cloudbuild]
@@ -138,10 +144,9 @@ principalSet `Leow4u/Dute` sobre a service account está correto; não há polí
 organização no projeto; e a SA `github-actions-deploy@dute-btg.iam.gserviceaccount.com`
 tem `artifactregistry.writer`, `cloudbuild.builds.editor`, `iam.serviceAccountUser`,
 `run.admin`, `serviceusage.serviceUsageConsumer` no projeto, mais `storage.objectAdmin` e
-`storage.legacyBucketReader` no bucket `gs://dute-btg_cloudbuild`.
+`storage.legacyBucketReader` no bucket `gs://dute-btg_cloudbuild`. Sem Cloud Build no
+caminho, o bucket deixa de importar.
 
-Para tentar novamente depois:
-
-```powershell
-gh run rerun 33675003851 --repo Leow4u/Dute --failed
-```
+As Cloud Functions continuam com publicação manual (`docs/deploy-functions-manual.md`).
+Quando uma mudança toca frontend e functions, publique as functions logo depois do
+merge para os dois lados não ficarem fora de sincronia.

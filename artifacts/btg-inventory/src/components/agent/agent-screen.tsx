@@ -25,7 +25,7 @@ import {
 import { useAppUser } from "@/lib/auth";
 import { streamAgentDuteChat, type AgentDuteStreamChunk } from "@/lib/functions-api";
 import { isUnreadRoutine, markSeen, routineHistory, type RoutineHistoryItem } from "@/lib/agent-routines";
-import { ATTACHMENT_ACCEPT, isAcceptedAttachment, uploadAttachment } from "@/lib/shipment-files";
+import { ATTACHMENT_ACCEPT, ATTACHMENT_LIMIT_HINT, isAcceptedAttachment, prepareAttachment, uploadAttachment } from "@/lib/shipment-files";
 import type { ClientRequestAttachment } from "@/pages/client/shared";
 import { cn } from "@/lib/utils";
 
@@ -131,12 +131,14 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
     const chosen = [...list];
     const accepted = chosen.filter(isAcceptedAttachment).slice(0, Math.max(0, MAX_CHAT_FILES - files.length));
     if (accepted.length !== chosen.length) {
-      toast({ title: "Alguns arquivos ficaram de fora", description: `Use PDF ou foto, até 8 MB cada e ${MAX_CHAT_FILES} por mensagem.`, variant: "destructive" });
+      toast({ title: "Alguns arquivos ficaram de fora", description: `Use PDF ou foto, ${ATTACHMENT_LIMIT_HINT} cada e ${MAX_CHAT_FILES} por mensagem.`, variant: "destructive" });
     }
     for (const file of accepted) {
       const key = `${file.name}-${file.size}-${Math.random().toString(36).slice(2, 8)}`;
       setFiles((current) => [...current, { key, name: file.name, status: "uploading" }]);
-      uploadAttachment(file, `chat_${conversationId ?? "novo"}`)
+      // Scan grande é reduzido no navegador antes de subir (attachment-compact.ts).
+      prepareAttachment(file)
+        .then((ready) => uploadAttachment(ready, `chat_${conversationId ?? "novo"}`))
         .then((attachment) =>
           setFiles((current) => current.map((item) => (item.key === key ? { ...item, status: "ready", attachment } : item))),
         )

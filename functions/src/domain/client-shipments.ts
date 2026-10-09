@@ -153,7 +153,12 @@ export async function cancelShipmentNoticeTransaction(
 
 // ------------------------------------------------------- anexo do aviso
 
-export const SHIPMENT_ATTACHMENT_MAX_BYTES = 8 * 1024 * 1024;
+/**
+ * 15 MB, alinhado ao frontend (lib/attachment-compact.ts reduz scans de
+ * celular antes de subir). O callable recebe base64, então 15 MB viram ~20 MB
+ * de requisição, dentro dos 32 MB do Cloud Functions 2ª geração.
+ */
+export const SHIPMENT_ATTACHMENT_MAX_BYTES = 15 * 1024 * 1024;
 
 export const FILE_SIGNATURES: Record<string, (bytes: Buffer) => boolean> = {
   "application/pdf": (bytes) => bytes.subarray(0, 5).toString("latin1") === "%PDF-",
@@ -165,7 +170,7 @@ export const FILE_SIGNATURES: Record<string, (bytes: Buffer) => boolean> = {
 
 /**
  * O anexo do aviso (nota ou pedido) chega em base64 e o backend grava no
- * Storage. Só PDF ou foto, até 8 MB, e o conteúdo precisa ser mesmo do tipo
+ * Storage. Só PDF ou foto, até 15 MB, e o conteúdo precisa ser mesmo do tipo
  * declarado.
  */
 export function decodeShipmentAttachment(input: { content_type: string; data_base64: string }) {
@@ -179,7 +184,7 @@ export function decodeShipmentAttachment(input: { content_type: string; data_bas
   const buffer = Buffer.from(base64, "base64");
   if (!buffer.length) throw new HttpsError("invalid-argument", "Arquivo vazio ou corrompido.");
   if (buffer.length > SHIPMENT_ATTACHMENT_MAX_BYTES) {
-    throw new HttpsError("invalid-argument", "Arquivo grande demais. Use até 8 MB.");
+    throw new HttpsError("invalid-argument", "Arquivo grande demais. Use até 15 MB.");
   }
   if (!matches(buffer)) throw new HttpsError("invalid-argument", "O conteúdo do arquivo não confere com o tipo informado.");
   return { contentType, buffer };
