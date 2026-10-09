@@ -60,12 +60,13 @@ export function FilterPanel({ summary, children, className }: FilterPanelProps) 
 type FilterGroupProps = {
   label: string;
   children: ReactNode;
+  className?: string;
 };
 
 /** Um grupo de chips. O rótulo só aparece no painel do celular. */
-export function FilterGroup({ label, children }: FilterGroupProps) {
+export function FilterGroup({ label, children, className }: FilterGroupProps) {
   return (
-    <div role="group" aria-label={label} className="flex flex-wrap gap-1.5">
+    <div role="group" aria-label={label} className={cn("flex flex-wrap gap-1.5", className)}>
       <p className="w-full text-xs font-semibold uppercase tracking-wide text-muted-foreground md:hidden">{label}</p>
       {children}
     </div>

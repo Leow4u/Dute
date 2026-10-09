@@ -74,5 +74,4 @@ painel e não a da janela.
 
 ## O que vem depois (plano da auditoria)
 
-PR 6 portal;
 PR 7 escuro. O relatório completo está no artefato "Auditoria de UI Dute".

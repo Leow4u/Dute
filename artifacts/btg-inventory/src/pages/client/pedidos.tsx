@@ -4,6 +4,7 @@ import { ArrowLeft, ChevronRight, Loader2, PackageOpen, Truck } from "lucide-rea
 import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { ORDER_STEPS, orderStepIndex, splitOrders, type OrderView } from "@/lib/orders";
 import { orderProofs, type PortalDocument } from "@/lib/portal-documents";
@@ -62,18 +63,18 @@ function Section({ label, children }: { label: string; children: ReactNode }) {
 function OrderList({ active, history, onOpen }: { active: OrderView[]; history: OrderView[]; onOpen: (id: string) => void }) {
   return (
     <Page>
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Pedidos</h1>
-          <p className="mt-0.5 max-w-2xl text-sm text-muted-foreground">O que você pediu do estoque e onde está cada entrega.</p>
-        </div>
-        <Button asChild variant="outline">
-          <Link href="/portal/estoque">
-            <PackageOpen className="h-4 w-4" />
-            Fazer um pedido
-          </Link>
-        </Button>
-      </header>
+      <PageHeader
+        title="Pedidos"
+        description="O que você pediu do estoque e onde está cada entrega."
+        actions={
+          <Button asChild variant="outline">
+            <Link href="/portal/estoque">
+              <PackageOpen className="h-4 w-4" />
+              Fazer um pedido
+            </Link>
+          </Button>
+        }
+      />
 
       <Section label={`Em andamento${active.length ? ` · ${active.length}` : ""}`}>
         {active.length ? (

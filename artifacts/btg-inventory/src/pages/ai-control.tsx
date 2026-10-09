@@ -352,13 +352,59 @@ function entityTypeLabel(value?: string | null) {
   );
 }
 
+/**
+ * Ids internos (creq_236, inb_creq_233, pick_ord_139) não são linguagem da
+ * operação: ficam fora da tela. Referências legíveis (PED-0139, NF 18.233)
+ * continuam aparecendo.
+ */
+function isInternalId(value: string) {
+  return /^[a-z]+(?:_[a-z0-9]+)+$/i.test(value.trim()) || /^[a-z]{2,5}_\w+$/.test(value.trim());
+}
+
+function humanReference(value?: string | null) {
+  // "Solicitação creq_236" vira "Solicitação": o id interno sai, o resto fica.
+  const text = String(value ?? "")
+    .split(/\s+/)
+    .filter((token) => token && !isInternalId(token))
+    .join(" ")
+    .replace(/\s*[·:]\s*$/, "")
+    .trim();
+  return text;
+}
+
 function entityLabel(
   entityType?: string | null,
   entityId?: string | null,
   fallback?: string | null,
 ) {
-  if (entityId) return `${entityTypeLabel(entityType)} ${entityId}`;
+  const reference = humanReference(entityId);
+  if (reference) return `${entityTypeLabel(entityType)} ${reference}`;
+  if (entityId) return entityTypeLabel(entityType);
   return fallback || entityTypeLabel(entityType);
+}
+
+const EVENT_TYPE_LABELS: Record<string, string> = {
+  "picking.shortage_found": "Falta na separação",
+  "picking.blocked": "Separação bloqueada",
+  "packing.divergence": "Divergência na embalagem",
+  "receiving.divergence": "Divergência no recebimento",
+  "receiving.blocked": "Recebimento bloqueado",
+  "putaway.delayed": "Guarda atrasada",
+  "expedition.blocked": "Expedição bloqueada",
+  "inventory.divergence": "Divergência de inventário",
+  "customer_request.approved": "Solicitação aprovada",
+};
+
+/** Tipo de evento em português; tipo desconhecido não vira código na tela. */
+function eventTypeLabel(value?: string | null) {
+  const key = String(value ?? "").trim();
+  if (!key) return "";
+  return EVENT_TYPE_LABELS[key] ?? "";
+}
+
+/** "Falta na separação · Solicitação" sem ids: só o que a operação entende. */
+function traceLabel(...parts: Array<string | null | undefined>) {
+  return parts.map((part) => humanReference(part)).filter(Boolean).join(" · ") || "Operação";
 }
 
 function eventEntityKey(event: AiEvent) {
@@ -945,7 +991,7 @@ function deriveSuggestedDecisions({
         reason: risk.signal,
         priority: risk.priority,
         owner: "Líder WMS",
-        trace: `${risk.eventType} · ${risk.relatedEntity || risk.source}`,
+        trace: traceLabel(eventTypeLabel(risk.eventType), risk.relatedEntity || risk.source),
         confidence: "Alta",
       });
     });
@@ -959,7 +1005,7 @@ function deriveSuggestedDecisions({
       reason: risk.detail,
       priority: risk.priority,
       owner: risk.source === "Bancada WMS" ? "Líder WMS" : "Operação",
-      trace: risk.entity || risk.customerCode || risk.source,
+      trace: traceLabel(risk.entity || risk.customerCode || risk.source),
       confidence: risk.priority === "normal" ? "Média" : "Alta",
     });
   });
@@ -984,7 +1030,7 @@ function deriveSuggestedDecisions({
         ? "critical"
         : "high",
       owner: "Atendimento operacional",
-      trace: `customer_request.approved · ${requestWithoutWms.id}`,
+      trace: traceLabel("Solicitação aberta", requestWithoutWms.title),
       confidence: "Alta",
     });
   }
@@ -998,7 +1044,7 @@ function deriveSuggestedDecisions({
       reason: `${numberFormatter.format(snapshot.missing_costs)} custo(s) pendente(s) no inventário monitorado.`,
       priority: "high",
       owner: "Financeiro / Cadastro",
-      trace: "inventoryAnomalyFlow · skus",
+      trace: "Inventário monitorado",
       confidence: "Alta",
     });
   }
@@ -1012,7 +1058,7 @@ function deriveSuggestedDecisions({
       reason: `${numberFormatter.format(snapshot.open_orders)} pedido(s) aberto(s) no radar do Agent Dute.`,
       priority: "normal",
       owner: "Operação",
-      trace: "dailyBriefingFlow · orders",
+      trace: "Briefing diário",
       confidence: "Média",
     });
   }
