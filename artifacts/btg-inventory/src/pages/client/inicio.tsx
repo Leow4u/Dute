@@ -8,7 +8,7 @@ import { agentAskHref, type ConversationSummary } from "@/lib/agent-chat";
 import { isUnreadRoutine } from "@/lib/agent-routines";
 import { useAppUser } from "@/lib/auth";
 import { invoiceLines } from "@/lib/client-home";
-import { ORDER_STEPS, homeOrderViews, orderStepIndex, type OrderView } from "@/lib/orders";
+import { ORDER_STEPS, homeOrderViews, orderStepIndex, type OrderStage, type OrderView } from "@/lib/orders";
 import { stockOverview } from "@/lib/portal-stock";
 import { splitShipments } from "@/lib/shipments";
 import { cn } from "@/lib/utils";
@@ -109,19 +109,25 @@ export function ClienteInicio() {
               </section>
 
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-                <Panel title="Pedidos em andamento" href="/portal/pedidos" linkLabel="Ver todos">
+                <section className="min-w-0">
+                  <div className="mb-3 flex items-center justify-between px-1">
+                    <h2 className="text-sm font-semibold">Pedidos em andamento</h2>
+                    <Link href="/portal/pedidos" className="text-sm font-medium text-primary hover:underline">
+                      Ver todos ›
+                    </Link>
+                  </div>
                   {orders.length ? (
-                    <ul>
+                    <ul className="flex flex-col gap-3">
                       {orders.map((order) => (
-                        <OrderRow key={order.id} order={order} />
+                        <OrderCard key={order.id} order={order} />
                       ))}
                     </ul>
                   ) : (
-                    <p className="px-5 py-6 text-sm text-muted-foreground">
+                    <p className="rounded-lg border border-dashed border-border px-5 py-6 text-sm text-muted-foreground">
                       Nenhum pedido em andamento. Use "Pedir itens do estoque" para fazer um.
                     </p>
                   )}
-                </Panel>
+                </section>
 
                 <div className="flex flex-col gap-4">
                   <Panel title="Envios a caminho" href="/portal/recebimentos" linkLabel="Ver">
@@ -210,23 +216,53 @@ export function ClienteInicio() {
   );
 }
 
-/** Uma linha de pedido: número, nome, a régua de 4 etapas; recusado ganha só um chip. */
-function OrderRow({ order }: { order: OrderView }) {
-  const rejected = order.stage === "rejected";
+/** Status do pedido como a pessoa lê, com o tom das filas de Pedidos e Receber. */
+const ORDER_STATUS: Record<OrderStage, { label: string; pill: string; bar: string }> = {
+  placed: { label: "Aguardando confirmação", pill: "bg-warning-soft text-warning-soft-foreground", bar: "bg-warning" },
+  confirmed: { label: "Confirmado pela Dutelog", pill: "bg-info-soft text-info-soft-foreground", bar: "bg-primary" },
+  picking: { label: "Em separação", pill: "bg-info-soft text-info-soft-foreground", bar: "bg-primary" },
+  dispatched: { label: "Saiu para entrega", pill: "bg-success-soft text-success-soft-foreground", bar: "bg-success" },
+  delivered: { label: "Entregue", pill: "bg-muted text-muted-foreground", bar: "bg-success" },
+  rejected: { label: "Recusado", pill: "bg-destructive-soft text-destructive-soft-foreground", bar: "bg-muted" },
+  cancelled: { label: "Cancelado", pill: "bg-muted text-muted-foreground", bar: "bg-muted" },
+};
+
+/**
+ * Um card por pedido: número e nome, a pílula de status (o que importa na
+ * Início) e o progresso em 4 segmentos. A régua com os nomes das etapas fica
+ * na página do pedido.
+ */
+function OrderCard({ order }: { order: OrderView }) {
+  const status = ORDER_STATUS[order.stage];
+  const closed = order.stage === "rejected" || order.stage === "cancelled";
+  const step = orderStepIndex(order.stage);
+  // A pílula já diz "aguardando confirmação"; o apoio fica só com quem pediu e quando.
+  const detail = order.detail.replace(/ · aguardando a Dutelog confirmar$/, "");
+  const support = [order.summary, detail].filter(Boolean).join(" · ");
   return (
-    <li className="border-b border-border/50 px-5 py-4 last:border-0">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-        <span className="min-w-0">
-          {order.number ? <span className="font-semibold">{order.number} · </span> : null}
-          <span className={cn(!order.number && "font-semibold")}>{order.title}</span>
-          {rejected ? (
-            <span className="ml-2 rounded-full bg-destructive-soft px-2 py-0.5 text-xs font-semibold text-destructive-soft-foreground">Recusado</span>
-          ) : null}
-        </span>
-        {order.summary ? <span className="text-xs text-muted-foreground">{order.summary}</span> : null}
+    <li className="rounded-lg border border-border bg-card px-4 py-3.5">
+      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+        <div className="min-w-0">
+          <p className="text-sm">
+            {order.number ? <span className="font-semibold">{order.number} · </span> : null}
+            <span className={cn("font-semibold", order.number && "font-medium")}>{order.title}</span>
+          </p>
+          {support ? <p className="mt-0.5 text-xs text-muted-foreground">{support}</p> : null}
+        </div>
+        <span className={cn("shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold", status.pill)}>{status.label}</span>
       </div>
-      {rejected ? null : <Steps step={orderStepIndex(order.stage)} />}
-      {order.detail ? <p className="mt-1.5 text-xs text-muted-foreground">{order.detail}</p> : null}
+      {closed ? null : (
+        <div className="mt-3">
+          <div className="flex gap-1" aria-hidden="true">
+            {ORDER_STEPS.map((label, index) => (
+              <span key={label} className={cn("h-1.5 flex-1 rounded-full", index <= step ? status.bar : "bg-muted")} />
+            ))}
+          </div>
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Etapa {step + 1} de {ORDER_STEPS.length} · {ORDER_STEPS[step]}
+          </p>
+        </div>
+      )}
     </li>
   );
 }
@@ -300,42 +336,6 @@ function AskAgent() {
         </kbd>
       )}
     </form>
-  );
-}
-
-function Steps({ step }: { step: number }) {
-  return (
-    <ol className="mt-3 flex items-start" aria-label={`Etapa: ${ORDER_STEPS[step]}`}>
-      {ORDER_STEPS.map((label, index) => {
-        const done = index < step || (index === step && step === ORDER_STEPS.length - 1);
-        const current = index === step && !done;
-        return (
-          <li key={label} className="flex flex-1 flex-col items-center last:flex-none">
-            <div className="flex w-full items-center">
-              <span
-                className={cn(
-                  "h-3 w-3 shrink-0 rounded-full border-2",
-                  done && "border-primary bg-primary",
-                  current && "border-primary bg-card ring-4 ring-primary/15",
-                  !done && !current && "border-border bg-card",
-                )}
-              />
-              {index < ORDER_STEPS.length - 1 ? (
-                <span className={cn("h-0.5 flex-1", index < step ? "bg-primary" : "bg-border")} />
-              ) : null}
-            </div>
-            <span
-              className={cn(
-                "mt-1 w-full text-left text-xs",
-                current ? "font-semibold text-primary" : done ? "text-foreground/70" : "text-muted-foreground",
-              )}
-            >
-              {label}
-            </span>
-          </li>
-        );
-      })}
-    </ol>
   );
 }
 
