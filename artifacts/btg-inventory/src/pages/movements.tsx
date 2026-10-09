@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   type Movement,
   useListMovements,
@@ -8,16 +8,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import {
-  Activity,
-  Plus,
-  ArrowDownRight,
-  ArrowUpRight,
-  ClipboardList,
-  PackagePlus,
-  PackageMinus,
-} from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Plus } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -41,10 +32,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import {
-  formatStockNumber,
   StockFilterChip,
-  StockMetricCard,
-  StockMetricsGrid,
   StockPageShell,
   StockTableCard,
   StockTablePagination,
@@ -60,6 +48,7 @@ const MOVEMENT_LABELS: Record<string, string> = {
   AJUSTE_ENTRADA: "Ajuste +",
   AJUSTE_SAIDA: "Ajuste -",
   AJUSTE: "Ajuste",
+  TRANSFERENCIA: "Transferência",
 };
 
 function movementLabel(type: string | undefined) {
@@ -82,7 +71,12 @@ const movementSchema = z.object({
 
 type MovementFormValues = z.infer<typeof movementSchema>;
 
-export default function Movements() {
+/**
+ * Histórico de movimentos. Dentro de Estoque (aba Histórico) vem `embedded`:
+ * sem cabeçalho próprio, a ação "Registrar movimentação" fica no cabeçalho
+ * da página. Em /movements (rota antiga) ganha cabeçalho e ação próprios.
+ */
+export default function Movements({ embedded = false }: { embedded?: boolean } = {}) {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("todos");
@@ -135,50 +129,16 @@ export default function Movements() {
   const hasMore =
     Boolean((data as { has_more?: boolean } | undefined)?.has_more) ||
     (page + 1) * limit < total;
-  const stats = useMemo(() => {
-    return movements.reduce(
-      (acc, mov) => {
-        const quantity = Number(mov.qtde ?? 0);
-        if (mov.sinal > 0) {
-          acc.entries += 1;
-          acc.entryQuantity += quantity;
-        } else {
-          acc.exits += 1;
-          acc.exitQuantity += quantity;
-        }
-        if (mov.tipo_mov?.includes("AJUSTE")) acc.adjustments += 1;
-        return acc;
-      },
-      { entries: 0, exits: 0, adjustments: 0, entryQuantity: 0, exitQuantity: 0 },
-    );
-  }, [movements]);
 
-  return (
-    <StockPageShell actions={<MovementModal />}>
-      <StockMetricsGrid>
-        <StockMetricCard
-          label="Movimentos"
-          value={formatStockNumber(data?.total ?? 0)}
-          icon={<ClipboardList className="h-5 w-5" />}
-          tone="blue"
-        />
-        <StockMetricCard
-          label="Entradas"
-          value={formatStockNumber(stats.entryQuantity)}
-          icon={<PackagePlus className="h-5 w-5" />}
-        />
-        <StockMetricCard
-          label="Saídas"
-          value={formatStockNumber(stats.exitQuantity)}
-          icon={<PackageMinus className="h-5 w-5" />}
-        />
-        <StockMetricCard
-          label="Ajustes"
-          value={formatStockNumber(stats.adjustments)}
-          icon={<Activity className="h-5 w-5" />}
-          tone={stats.adjustments ? "amber" : "default"}
-        />
-      </StockMetricsGrid>
+  // Colunas sem dado em nenhuma linha da página não aparecem.
+  const showRoute = movements.some((mov) => mov.origem || mov.destino);
+  const showBalance = movements.some((mov) => mov.estoque_resultante != null);
+  const showDoc = movements.some((mov) => mov.doc_nf);
+  const showOperator = movements.some((mov) => mov.responsavel);
+  const columnCount = 5 + Number(showRoute) + Number(showBalance) + Number(showDoc) + Number(showOperator);
+
+  const content = (
+    <>
 
       <StockToolbar
         search={search}
@@ -215,115 +175,82 @@ export default function Movements() {
             )}
           </ul>
           <div className="hidden overflow-x-auto md:block">
-            <table className="w-full text-sm text-left">
-              <thead className="text-xs text-muted-foreground uppercase border-b border-border/80 bg-card">
-                <tr>
-                  <th className="px-5 py-4 font-medium">Data</th>
-                  <th className="px-4 py-3 font-medium">Tipo</th>
-                  <th className="px-4 py-3 font-medium">Cod. SKU</th>
-                  <th className="px-4 py-3 font-medium">Produto</th>
-                  <th className="px-4 py-3 font-medium text-right">Qtde</th>
-                  <th className="px-4 py-3 font-medium text-center">
-                    Trajeto (Orig &rarr; Dest)
-                  </th>
-                  <th className="px-4 py-3 font-medium text-right">Saldo</th>
-                  <th className="px-4 py-3 font-medium">Doc/NF</th>
-                  <th className="px-4 py-3 font-medium">Operador</th>
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-border/70 text-xs uppercase tracking-wide text-foreground/50">
+                  <th className="px-5 py-2.5 font-semibold">Data</th>
+                  <th className="px-3 py-2.5 font-semibold">Tipo</th>
+                  <th className="px-3 py-2.5 font-semibold">Código</th>
+                  <th className="px-3 py-2.5 font-semibold">Produto</th>
+                  <th className="px-3 py-2.5 text-right font-semibold">Qtde</th>
+                  {showRoute ? <th className="px-3 py-2.5 font-semibold">Trajeto</th> : null}
+                  {showBalance ? <th className="px-3 py-2.5 text-right font-semibold">Saldo</th> : null}
+                  {showDoc ? <th className="px-3 py-2.5 font-semibold">Doc/NF</th> : null}
+                  {showOperator ? <th className="px-3 py-2.5 font-semibold">Operador</th> : null}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody>
                 {isLoading ? (
                   <tr>
-                    <td
-                      colSpan={9}
-                      className="px-4 py-8 text-center text-muted-foreground"
-                    >
+                    <td colSpan={columnCount} className="px-4 py-8 text-center text-muted-foreground">
                       Carregando movimentações...
                     </td>
                   </tr>
                 ) : data?.items?.length === 0 ? (
                   <tr>
-                    <td
-                      colSpan={9}
-                      className="px-4 py-8 text-center text-muted-foreground"
-                    >
+                    <td colSpan={columnCount} className="px-4 py-8 text-center text-muted-foreground">
                       Nenhuma movimentação encontrada.
                     </td>
                   </tr>
                 ) : (
                   movements.map((mov: Movement) => {
                     const isPositive = mov.sinal > 0;
+                    const Arrow = isPositive ? ArrowDownRight : ArrowUpRight;
                     return (
-                      <tr
-                        key={mov.id}
-                        className="hover:bg-muted/80 transition-colors"
-                      >
-                        <td className="px-5 py-3 whitespace-nowrap text-muted-foreground">
+                      <tr key={mov.id} className="border-b border-border/40 last:border-0 hover:bg-muted/60">
+                        <td className="whitespace-nowrap px-5 py-3 text-muted-foreground">
                           {new Date(mov.data).toLocaleString("pt-BR", {
                             dateStyle: "short",
                             timeStyle: "short",
                           })}
                         </td>
-                        <td className="px-4 py-2 whitespace-nowrap">
-                          <Badge
-                            variant="outline"
-                            className={
-                              isPositive
-                                ? "bg-success-soft text-success-soft-foreground border-success-soft-border"
-                                : "bg-destructive-soft text-destructive-soft-foreground border-destructive-soft-border"
-                            }
-                          >
-                            {mov.tipo_mov}
-                          </Badge>
+                        <td className="whitespace-nowrap px-3 py-3">
+                          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                            <Arrow className="h-3.5 w-3.5" aria-hidden="true" />
+                            {movementLabel(mov.tipo_mov)}
+                          </span>
                         </td>
-                        <td className="px-4 py-2 font-mono text-xs text-primary font-bold">
+                        <td className="whitespace-nowrap px-3 py-3 font-mono text-xs font-semibold text-primary">
                           {mov.cod_sku}
                         </td>
-                        <td
-                          className="px-4 py-2 truncate max-w-[150px] font-medium"
-                          title={mov.produto}
-                        >
+                        <td className="max-w-[280px] truncate px-3 py-3 font-medium text-foreground" title={mov.produto}>
                           {mov.produto}
                         </td>
-                        <td className="px-4 py-2 text-right">
-                          <div
-                            className={`flex items-center justify-end gap-1 font-bold ${isPositive ? "text-success-soft-foreground" : "text-destructive-soft-foreground"}`}
-                          >
-                            {isPositive ? (
-                              <ArrowDownRight className="h-3 w-3" />
-                            ) : (
-                              <ArrowUpRight className="h-3 w-3" />
-                            )}
-                            {isPositive ? "+" : "-"}
-                            {mov.qtde}
-                          </div>
+                        <td
+                          className={cn(
+                            "whitespace-nowrap px-3 py-3 text-right font-semibold tabular-nums",
+                            isPositive ? "text-success-soft-foreground" : "text-destructive-soft-foreground",
+                          )}
+                        >
+                          {isPositive ? "+" : "-"}
+                          {mov.qtde}
                         </td>
-                        <td className="px-4 py-2 text-center text-xs text-muted-foreground">
-                          <div className="flex items-center justify-center gap-2">
-                            <span
-                              className="truncate max-w-[80px]"
-                              title={mov.origem || "-"}
-                            >
-                              {mov.origem || "-"}
-                            </span>
-                            <span className="text-muted-foreground/70">&rarr;</span>
-                            <span
-                              className="truncate max-w-[80px]"
-                              title={mov.destino || "-"}
-                            >
-                              {mov.destino || "-"}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-2 text-right font-mono text-xs text-muted-foreground">
-                          {mov.estoque_resultante?.toLocaleString("pt-BR") ?? "-"}
-                        </td>
-                        <td className="px-4 py-2 text-xs text-muted-foreground">
-                          {mov.doc_nf || "-"}
-                        </td>
-                        <td className="px-4 py-2 text-xs font-medium text-foreground">
-                          {mov.responsavel || "-"}
-                        </td>
+                        {showRoute ? (
+                          <td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">
+                            {mov.origem || "-"} → {mov.destino || "-"}
+                          </td>
+                        ) : null}
+                        {showBalance ? (
+                          <td className="whitespace-nowrap px-3 py-3 text-right font-mono text-xs text-muted-foreground">
+                            {mov.estoque_resultante?.toLocaleString("pt-BR") ?? "-"}
+                          </td>
+                        ) : null}
+                        {showDoc ? (
+                          <td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">{mov.doc_nf || "-"}</td>
+                        ) : null}
+                        {showOperator ? (
+                          <td className="whitespace-nowrap px-3 py-3 text-xs text-foreground">{mov.responsavel || "-"}</td>
+                        ) : null}
                       </tr>
                     );
                   })
@@ -347,6 +274,13 @@ export default function Movements() {
             }}
           />
       </StockTableCard>
+    </>
+  );
+
+  if (embedded) return <div className="flex flex-col gap-4">{content}</div>;
+  return (
+    <StockPageShell title="Histórico de movimentos" actions={<MovementModal />}>
+      {content}
     </StockPageShell>
   );
 }

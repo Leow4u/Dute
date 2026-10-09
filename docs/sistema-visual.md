@@ -74,5 +74,5 @@ painel e não a da janela.
 
 ## O que vem depois (plano da auditoria)
 
-PR 5 Estoque histórico e contagem; PR 6 portal;
+PR 6 portal;
 PR 7 escuro. O relatório completo está no artefato "Auditoria de UI Dute".
