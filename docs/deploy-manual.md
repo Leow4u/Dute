@@ -185,10 +185,12 @@ gcloud run services update-traffic dute-btg-app --region southamerica-east1 --pr
 ```
 
 Sem gcloud na máquina, o mesmo efeito vem de Actions > CI > Run workflow com
-`liberar_trafego` marcado (job `Liberar tráfego para a última revisão`). Foi assim que o
-tráfego foi solto em 09/10/2026 às 20:28 UTC, colocando no ar a revisão `00150-lk5`
-(`8324dbb`); desde então `spec.traffic` volta a seguir a última revisão e cada push em
-`main` passa a valer de novo.
+`liberar_trafego` marcado (job `Mudar tráfego do serviço`); com `revisao` preenchida, o
+mesmo job faz rollback para essa revisão. Em 09/10/2026 o tráfego foi solto às 20:28 UTC
+(revisão `00150-lk5`, que estava sem a configuração do Firebase e quebrou o login),
+voltou para `00143-loc` às 20:46 e foi solto de novo às 21:08 para `00152-xw7`
+(`1e56c84`, build com a configuração). Desde então `spec.traffic` segue a última revisão
+e cada push em `main` passa a valer de novo.
 
 Se a lista não mostrar nenhuma revisão criada pelo job (a imagem dela tem o commit
 curto como tag), o deploy não está criando revisões: publique pelo roteiro manual deste
