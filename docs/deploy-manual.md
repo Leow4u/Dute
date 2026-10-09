@@ -116,6 +116,10 @@ gcloud run services update-traffic dute-btg-app --region southamerica-east1 --pr
 
 Use o nome anotado no passo 3.
 
+Isso **prende** o tráfego nessa revisão: a partir daí nenhum deploy novo, manual ou do
+GitHub Actions, recebe tráfego até você soltar com `--to-latest` (comando na seção do
+deploy automático). Depois de corrigir o problema, solte.
+
 ## Como saber qual commit está em produção
 
 As tags de imagem são timestamps (`20260812141220`), não commits — então a rastreabilidade
@@ -130,6 +134,46 @@ O job `deploy-frontend` em `.github/workflows/ci.yml` publica o frontend a cada 
 em `main` (depois do `frontend-typecheck`) e também por disparo manual em
 Actions > CI > Run workflow, sempre a partir de `main`. A tag da imagem é o commit
 curto, então dá para saber o que está no ar olhando a revisão do Cloud Run.
+
+**Verde não basta.** Em 09/10/2026, oito execuções seguidas do job terminaram com
+sucesso e nenhuma mudou o que `app.dutelog.com.br` servia: todas imprimiram a mesma
+revisão (`dute-btg-app-00143-loc`), com "Creating Revision" concluído em menos de um
+segundo, e o app continuou no build de 08/10. Por isso o job termina com
+`tools/check_frontend_deployed.sh`, que compara os assets do `index.html` do build com
+os servidos pela URL do Cloud Run e pelo domínio; se não baterem, o job falha e imprime
+`spec.traffic`, `status.traffic` e as últimas revisões do serviço.
+
+No caso de 09/10 a causa era esta: o tráfego estava preso em `dute-btg-app-00143-loc`
+desde 08/10 01:55 UTC (`spec.traffic` com `revisionName` fixo), e as oito revisões que o
+job criou (`00143-cg4` a `00150-lk5`, todas prontas, a última com a imagem `8324dbb`)
+ficaram com 0% de tráfego. O job `Diagnóstico do Cloud Run (só leitura)`, que roda no
+disparo manual do CI (Actions > CI > Run workflow, de qualquer branch), mostra tráfego,
+revisões e o que as URLs servem sem precisar de gcloud na máquina.
+
+Quando a verificação falhar, olhe primeiro o tráfego e as revisões:
+
+```powershell
+gcloud run services describe dute-btg-app --region southamerica-east1 --project dute-btg --format "yaml(spec.traffic,status.traffic,status.latestCreatedRevisionName,status.latestReadyRevisionName)"
+gcloud run revisions list --service dute-btg-app --region southamerica-east1 --project dute-btg --limit 5 --format "table(name,creationTimestamp.date('%Y-%m-%d %H:%M'),active,spec.containers[0].image)"
+```
+
+Se `spec.traffic` apontar para um `revisionName` fixo em vez de `latestRevision: true`
+(é o que o rollback da seção acima faz), as revisões novas ficam com 0% de tráfego.
+Solte o tráfego e a última revisão pronta passa a receber tudo:
+
+```powershell
+gcloud run services update-traffic dute-btg-app --region southamerica-east1 --project dute-btg --to-latest
+```
+
+Sem gcloud na máquina, o mesmo efeito vem de Actions > CI > Run workflow com
+`liberar_trafego` marcado (job `Liberar tráfego para a última revisão`). Foi assim que o
+tráfego foi solto em 09/10/2026 às 20:28 UTC, colocando no ar a revisão `00150-lk5`
+(`8324dbb`); desde então `spec.traffic` volta a seguir a última revisão e cada push em
+`main` passa a valer de novo.
+
+Se a lista não mostrar nenhuma revisão criada pelo job (a imagem dela tem o commit
+curto como tag), o deploy não está criando revisões: publique pelo roteiro manual deste
+documento e investigue o job antes de confiar nele de novo.
 
 A imagem é montada no próprio runner e enviada ao Artifact Registry com `docker push`,
 autenticado com o token da Workload Identity. Até 09/10/2026 o job usava
