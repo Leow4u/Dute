@@ -21,7 +21,7 @@ export function AgentDock() {
   return (
     <Link
       href={TEAM_AGENT_PATH}
-      className="fixed bottom-5 right-5 z-30 flex items-center gap-2 rounded-full bg-foreground px-4 py-3 text-sm font-semibold text-background shadow-[0_12px_32px_rgba(15,23,42,.25)] transition-transform duration-200 hover:-translate-y-0.5 md:bottom-8 md:right-8"
+      className="fixed bottom-5 right-5 z-30 flex items-center gap-2 rounded-full bg-foreground px-4 py-3 text-sm font-semibold text-background transition-transform duration-200 hover:-translate-y-0.5 md:bottom-8 md:right-8"
     >
       <MessageCircle className="size-5" aria-hidden="true" />
       <span className="hidden sm:inline">Perguntar ao Agent Dute</span>

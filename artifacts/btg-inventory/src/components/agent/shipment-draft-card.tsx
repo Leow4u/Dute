@@ -125,7 +125,7 @@ export function ShipmentDraftCard({ draft, messageId, sent: sentValue }: { draft
                     }
                     className="w-40 min-w-0 rounded-md border border-transparent bg-transparent px-1 font-mono text-xs text-muted-foreground hover:border-border focus:border-primary/60 focus:outline-none"
                   />
-                  <span className={cn("rounded-full px-1.5 py-0.5 text-[11px]", SITUATION[line.situacao].tone)}>{SITUATION[line.situacao].label}</span>
+                  <span className={cn("rounded-full px-1.5 py-0.5 text-xs", SITUATION[line.situacao].tone)}>{SITUATION[line.situacao].label}</span>
                 </span>
                 <input
                   aria-label={`Nome do item ${index + 1}`}

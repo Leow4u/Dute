@@ -77,7 +77,7 @@ export function ClienteInicio() {
           <main className="h-full min-h-0 w-full overflow-y-auto px-4 py-5 sm:px-6 lg:px-8">
             <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 pb-6">
               <header>
-                <h1 className="text-2xl font-semibold tracking-tight md:text-[1.75rem]">
+                <h1 className="text-2xl font-semibold tracking-tight">
                   {name ? `Olá, ${name}` : "Olá"}
                 </h1>
                 <p className="mt-0.5 text-sm text-muted-foreground">
@@ -220,7 +220,7 @@ function OrderRow({ order }: { order: OrderView }) {
           {order.number ? <span className="font-semibold">{order.number} · </span> : null}
           <span className={cn(!order.number && "font-semibold")}>{order.title}</span>
           {rejected ? (
-            <span className="ml-2 rounded-full bg-destructive-soft px-2 py-0.5 text-[11px] font-semibold text-destructive-soft-foreground">Recusado</span>
+            <span className="ml-2 rounded-full bg-destructive-soft px-2 py-0.5 text-xs font-semibold text-destructive-soft-foreground">Recusado</span>
           ) : null}
         </span>
         {order.summary ? <span className="text-xs text-muted-foreground">{order.summary}</span> : null}
@@ -246,7 +246,7 @@ function RoutineNews() {
         <li key={item.id}>
           <Link
             href={`/portal/agente?c=${encodeURIComponent(item.id)}`}
-            className="flex items-center gap-3 rounded-[14px] border border-agent-border bg-agent-soft px-4 py-2.5 text-sm hover:border-agent/50"
+            className="flex items-center gap-3 rounded-md border border-agent-border bg-agent-soft px-4 py-2.5 text-sm hover:border-agent/50"
           >
             <CalendarClock className="h-4 w-4 shrink-0 text-agent" aria-hidden="true" />
             <span className="min-w-0 flex-1 truncate">
@@ -269,13 +269,13 @@ function AskAgent() {
   };
   return (
     <form
-      className="flex items-center gap-3 rounded-[18px] border border-agent-border bg-gradient-to-r from-info-soft to-agent-soft px-4 py-2.5 focus-within:border-primary/50"
+      className="flex items-center gap-3 rounded-lg border border-agent-border bg-gradient-to-r from-info-soft to-agent-soft px-4 py-2.5 focus-within:border-primary/50"
       onSubmit={(event) => {
         event.preventDefault();
         ask();
       }}
     >
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-gradient-to-br from-agent-start to-agent-accent text-white">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-gradient-to-br from-agent-start to-agent-accent text-white">
         <Sparkles className="h-4 w-4" aria-hidden="true" />
       </span>
       <input
@@ -284,7 +284,7 @@ function AskAgent() {
         aria-label="Pergunte ao Agent Dute"
         data-agent-input
         placeholder='Pergunte ao Agent Dute: "o que saiu esta semana?", "onde está meu pedido?"…'
-        className="min-w-0 flex-1 bg-transparent py-1 text-[15px] outline-none placeholder:text-muted-foreground"
+        className="min-w-0 flex-1 bg-transparent py-1 text-base outline-none placeholder:text-muted-foreground"
       />
       {question.trim() ? (
         <button
@@ -326,7 +326,7 @@ function Steps({ step }: { step: number }) {
             </div>
             <span
               className={cn(
-                "mt-1 w-full text-left text-[11px]",
+                "mt-1 w-full text-left text-xs",
                 current ? "font-semibold text-primary" : done ? "text-foreground/70" : "text-muted-foreground",
               )}
             >
@@ -364,7 +364,7 @@ function Action({
       <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
     </>
   );
-  const className = "flex items-center gap-4 rounded-[18px] border border-border bg-card px-5 py-4";
+  const className = "flex items-center gap-4 rounded-lg border border-border bg-card px-5 py-4";
   if (disabled) return <div className={cn(className, "opacity-60")}>{body}</div>;
   return (
     <Link href={href} className={cn(className, "transition-colors hover:border-primary/40")}>
@@ -385,7 +385,7 @@ function Panel({
   children: ReactNode;
 }) {
   return (
-    <section className="h-fit overflow-hidden rounded-[18px] border border-border bg-card">
+    <section className="h-fit overflow-hidden rounded-lg border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border/60 px-5 py-3">
         <h2 className="text-sm font-semibold">{title}</h2>
         <Link href={href} className="text-sm font-medium text-primary hover:underline">

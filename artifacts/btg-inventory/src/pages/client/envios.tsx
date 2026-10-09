@@ -104,14 +104,14 @@ function ShipmentList({ overview, onCreate }: { overview: ClientOverview; onCrea
         {onTheWay.length ? (
           onTheWay.map((view) => <OnTheWayCard key={view.id} view={view} />)
         ) : (
-          <p className="rounded-[18px] border border-dashed border-border bg-card/60 px-5 py-6 text-sm text-muted-foreground">
+          <p className="rounded-lg border border-dashed border-border bg-card px-5 py-6 text-sm text-muted-foreground">
             Nenhum envio a caminho. Comprou de um fornecedor que vai entregar na Dutelog? Use "Avisar um envio".
           </p>
         )}
       </Section>
       {history.length ? (
         <Section label="Chegaram, recusados e cancelados">
-          <ul className="overflow-hidden rounded-[18px] border border-border bg-card">
+          <ul className="overflow-hidden rounded-lg border border-border bg-card">
             {history.map((view) => (
               <li key={view.id} className="flex items-center justify-between gap-4 border-b border-border/50 px-5 py-3 text-sm last:border-0">
                 <span className="min-w-0">
@@ -185,7 +185,7 @@ function OnTheWayCard({ view }: { view: ShipmentView }) {
   });
   const step = stageIndex(view.stage);
   return (
-    <article className="rounded-[18px] border border-border bg-card px-5 py-4">
+    <article className="rounded-lg border border-border bg-card px-5 py-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h3 className="font-semibold">
           {view.number ? <span className="mr-2">{view.number}</span> : null}
@@ -222,7 +222,7 @@ function OnTheWayCard({ view }: { view: ShipmentView }) {
               </div>
               <span
                 className={cn(
-                  "mt-1 pr-2 text-[11.5px]",
+                  "mt-1 pr-2 text-xs",
                   current ? "font-semibold text-primary" : done ? "text-foreground/70" : "text-muted-foreground",
                 )}
               >
@@ -553,7 +553,7 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
               event.target.value = "";
             }}
           />
-          <section className="rounded-[18px] border border-border bg-card p-5">
+          <section className="rounded-lg border border-border bg-card p-5">
             <div className="grid gap-3 sm:grid-cols-[1.3fr_1fr_170px]">
               <Field label="Fornecedor">
                 <input
@@ -588,7 +588,7 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
             </div>
           </section>
 
-          <section className="rounded-[18px] border border-border bg-card p-5">
+          <section className="rounded-lg border border-border bg-card p-5">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <h2 className="font-semibold">Itens</h2>
               <div className="flex gap-2">
@@ -609,7 +609,7 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
                 </option>
               ))}
             </datalist>
-            <div className="hidden grid-cols-[190px_minmax(0,1fr)_96px_118px_28px] gap-2 border-b border-border/60 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground sm:grid">
+            <div className="hidden grid-cols-[190px_minmax(0,1fr)_96px_118px_28px] gap-2 border-b border-border/60 pb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground sm:grid">
               <span>Código</span>
               <span>Produto</span>
               <span className="text-right">Peças</span>
@@ -653,12 +653,12 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
                   <span className="hidden sm:block">
                     {line.code.trim() ? (
                       match ? (
-                        <span className="rounded-full bg-success-soft px-2 py-0.5 text-[11.5px] font-semibold text-success-soft-foreground">já no estoque</span>
+                        <span className="rounded-full bg-success-soft px-2 py-0.5 text-xs font-semibold text-success-soft-foreground">já no estoque</span>
                       ) : (
-                        <span className="rounded-full bg-info-soft px-2 py-0.5 text-[11.5px] font-semibold text-info-soft-foreground">produto novo</span>
+                        <span className="rounded-full bg-info-soft px-2 py-0.5 text-xs font-semibold text-info-soft-foreground">produto novo</span>
                       )
                     ) : line.name.trim() ? (
-                      <span className="rounded-full bg-warning-soft px-2 py-0.5 text-[11.5px] font-semibold text-warning-soft-foreground">código a definir</span>
+                      <span className="rounded-full bg-warning-soft px-2 py-0.5 text-xs font-semibold text-warning-soft-foreground">código a definir</span>
                     ) : null}
                   </span>
                   <button
@@ -678,7 +678,7 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
           </section>
         </div>
 
-        <aside className="h-fit rounded-[18px] border border-border bg-card p-5 lg:sticky lg:top-2">
+        <aside className="h-fit rounded-lg border border-border bg-card p-5 lg:sticky lg:top-2">
           <h2 className="font-semibold">Resumo</h2>
           <dl className="mt-2 text-sm">
             <SummaryRow label="Fornecedor" value={supplier.trim() || "—"} />
@@ -736,7 +736,7 @@ function InvoiceDrop({
 }) {
   return (
     <section
-      className="rounded-[18px] border-[1.5px] border-dashed border-agent-soft-border bg-agent-soft p-5"
+      className="rounded-lg border-[1.5px] border-dashed border-agent-soft-border bg-agent-soft p-5"
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
         event.preventDefault();
@@ -848,7 +848,7 @@ function PasteDialog({
           value={value}
           onChange={(event) => setValue(event.target.value)}
           placeholder={"A.01.0114.004.G\t300\nA.01.0114.004.GG\t200"}
-          className="h-40 w-full resize-none rounded-xl border border-border p-3 font-mono text-[12.5px] leading-6 outline-none focus:border-primary/50"
+          className="h-40 w-full resize-none rounded-xl border border-border p-3 font-mono text-xs leading-6 outline-none focus:border-primary/50"
         />
         <p className="text-sm text-muted-foreground">
           {parsed.lines.length ? (
@@ -932,7 +932,7 @@ function InvoiceReview({
                         placeholder="Código (se souber)"
                         onChange={(event) => update(line.key, { code: event.target.value })}
                       />
-                      <span className="mt-1 block text-[11.5px]">
+                      <span className="mt-1 block text-xs">
                         {match ? (
                           <span className="text-success-soft-foreground">
                             já no estoque · {inventoryItemName(match)}

@@ -79,7 +79,7 @@ function OrderList({ active, history, onOpen }: { active: OrderView[]; history: 
         {active.length ? (
           active.map((view) => <ActiveCard key={view.id} view={view} onOpen={() => onOpen(view.id)} />)
         ) : (
-          <p className="rounded-[18px] border border-dashed border-border bg-card/60 px-5 py-6 text-sm text-muted-foreground">
+          <p className="rounded-lg border border-dashed border-border bg-card px-5 py-6 text-sm text-muted-foreground">
             Nenhum pedido em andamento. Os pedidos são montados no Estoque.
           </p>
         )}
@@ -87,7 +87,7 @@ function OrderList({ active, history, onOpen }: { active: OrderView[]; history: 
 
       {history.length ? (
         <Section label="Entregues e cancelados">
-          <ul className="overflow-hidden rounded-[18px] border border-border bg-card">
+          <ul className="overflow-hidden rounded-lg border border-border bg-card">
             {history.map((view) => (
               <li key={view.id} className="border-b border-border/50 last:border-0">
                 <button
@@ -141,7 +141,7 @@ function Steps({ view, withDates = false }: { view: OrderView; withDates?: boole
             </div>
             <span
               className={cn(
-                "mt-1 pr-2 text-[11.5px]",
+                "mt-1 pr-2 text-xs",
                 current ? "font-semibold text-primary" : done ? "text-foreground/70" : "text-muted-foreground",
               )}
             >
@@ -157,7 +157,7 @@ function Steps({ view, withDates = false }: { view: OrderView; withDates?: boole
 
 function ActiveCard({ view, onOpen }: { view: OrderView; onOpen: () => void }) {
   return (
-    <article className="rounded-[18px] border border-border bg-card px-5 py-4">
+    <article className="rounded-lg border border-border bg-card px-5 py-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <button type="button" className="group text-left" onClick={onOpen}>
           <span className="font-semibold group-hover:underline">{view.number}</span>
@@ -272,7 +272,7 @@ function OrderDetail({ view, proofs, onBack }: { view: OrderView; proofs: Portal
       </header>
 
       {!closed ? (
-        <section className="rounded-[18px] border border-border bg-card px-5 py-4">
+        <section className="rounded-lg border border-border bg-card px-5 py-4">
           <Steps view={view} withDates />
           {view.delivery ? (
             <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -291,7 +291,7 @@ function OrderDetail({ view, proofs, onBack }: { view: OrderView; proofs: Portal
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <section className="rounded-[18px] border border-border bg-card px-5 py-4">
+        <section className="rounded-lg border border-border bg-card px-5 py-4">
           <div className="mb-2 flex items-baseline justify-between">
             <h2 className="font-semibold">Itens{view.items.length ? ` · ${integer.format(view.items.length)}` : ""}</h2>
             {pieces ? <span className="text-sm text-muted-foreground">{integer.format(pieces)} peças</span> : null}
@@ -299,7 +299,7 @@ function OrderDetail({ view, proofs, onBack }: { view: OrderView; proofs: Portal
           {view.items.length ? (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border/60 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+                <tr className="border-b border-border/60 text-left text-xs uppercase tracking-wider text-muted-foreground">
                   <th className="py-1.5 pr-2 font-semibold">Código</th>
                   <th className="py-1.5 pr-2 font-semibold">Produto</th>
                   <th className="py-1.5 text-right font-semibold">Peças</th>
@@ -322,7 +322,7 @@ function OrderDetail({ view, proofs, onBack }: { view: OrderView; proofs: Portal
           )}
         </section>
 
-        <section className="h-fit rounded-[18px] border border-border bg-card px-5 py-4">
+        <section className="h-fit rounded-lg border border-border bg-card px-5 py-4">
           <h2 className="font-semibold">Atualizações da Dutelog</h2>
           {view.timeline.length ? (
             <ol className="mt-3 border-l-2 border-border/70 pl-4">

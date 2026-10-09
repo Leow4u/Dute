@@ -320,9 +320,9 @@ function AuthShell({
 
         <main className="relative flex flex-1 items-center py-10">
           <div className="mx-auto w-full max-w-[420px]">
-            <h1 className="auth-title text-[28px]">{title}</h1>
+            <h1 className="auth-title text-3xl">{title}</h1>
             {subtitle ? (
-              <p className="mt-2 text-[14px] leading-relaxed text-[var(--auth-muted)]">
+              <p className="mt-2 text-sm leading-relaxed text-[var(--auth-muted)]">
                 {subtitle}
               </p>
             ) : null}
@@ -341,7 +341,7 @@ function AuthShell({
         </main>
 
         <footer className="relative">
-          <p className="text-[12px] text-[var(--auth-muted)]">
+          <p className="text-xs text-[var(--auth-muted)]">
             © {year} Dutelog Soluções Logísticas
           </p>
         </footer>
@@ -460,7 +460,7 @@ function SignInPage() {
           {form.loading ? "Entrando..." : "Entrar"}
         </Button>
       </form>
-      <div className="mt-5 flex items-center justify-between border-t border-[var(--auth-line)] pt-4 text-[13px]">
+      <div className="mt-5 flex items-center justify-between border-t border-[var(--auth-line)] pt-4 text-sm">
         <button
           type="button"
           className="font-medium text-[var(--auth-accent)] transition-opacity hover:opacity-80"
@@ -751,7 +751,7 @@ function SignUpPage() {
             required
           />
         </div>
-        <div className="soft-panel rounded-[16px] px-4 py-3 text-sm text-muted-foreground">
+        <div className="soft-panel rounded-md px-4 py-3 text-sm text-muted-foreground">
           Perfil do convite:{" "}
           <span className="font-medium text-foreground">
             {roleLabel(invite.data.role)}

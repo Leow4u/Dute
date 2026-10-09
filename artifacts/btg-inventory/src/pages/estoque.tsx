@@ -234,7 +234,7 @@ export default function Estoque() {
                     "whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium sm:text-sm",
                     filter === option.value
                       ? "border-foreground bg-foreground text-background"
-                      : "border-border bg-card/70 text-foreground/70 hover:text-foreground",
+                      : "border-border bg-card text-foreground/70 hover:text-foreground",
                   )}
                 >
                   {option.label}
@@ -263,7 +263,7 @@ export default function Estoque() {
                 onSelect={toggleItem}
               />
               {desktop && panelItem ? (
-                <section className="relative overflow-hidden rounded-[20px] border border-primary/50 bg-card/90 lg:sticky lg:top-0 lg:max-h-[calc(100dvh-160px)] lg:overflow-y-auto">
+                <section className="relative overflow-hidden rounded-lg border border-primary/50 bg-card lg:sticky lg:top-0 lg:max-h-[calc(100dvh-160px)] lg:overflow-y-auto">
                   <button
                     type="button"
                     onClick={() => setSelectedKey(null)}
@@ -281,7 +281,7 @@ export default function Estoque() {
 
           {!desktop ? (
             <Sheet open={Boolean(selected)} onOpenChange={(open) => !open && setSelectedKey(null)}>
-              <SheetContent side="bottom" className="max-h-[88dvh] overflow-y-auto rounded-t-[22px] p-0">
+              <SheetContent side="bottom" className="max-h-[88dvh] overflow-y-auto rounded-t-lg p-0">
                 <SheetHeader className="sr-only">
                   <SheetTitle>{selected?.name ?? "Item"}</SheetTitle>
                   <SheetDescription>Ficha do item</SheetDescription>
@@ -374,7 +374,7 @@ function ItemList({
   const [limit, setLimit] = useState(100);
   if (!items.length) {
     return (
-      <div className="rounded-2xl border border-border bg-card/80 px-5 py-6 text-sm text-muted-foreground">
+      <div className="rounded-2xl border border-border bg-card px-5 py-6 text-sm text-muted-foreground">
         Nenhum item encontrado.
       </div>
     );
@@ -382,7 +382,7 @@ function ItemList({
   const shown = items.slice(0, limit);
   return (
     <div className="flex flex-col gap-2">
-      <div className="overflow-hidden rounded-2xl border border-border bg-card/85">
+      <div className="overflow-hidden rounded-2xl border border-border bg-card">
         <div className="hidden grid-cols-[minmax(0,1fr)_200px_64px_84px] gap-3 border-b border-border/70 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50 md:grid">
           <span>Item</span>
           <span>Endereço</span>
@@ -403,7 +403,7 @@ function ItemList({
               <div className="col-span-2 flex min-w-0 items-center gap-3 md:col-span-1">
                 <Thumb item={item} />
                 <div className="min-w-0">
-                  <p className="font-mono text-[13px] font-semibold text-primary">
+                  <p className="font-mono text-sm font-semibold text-primary">
                     {item.clientCode ?? item.skuCode}
                   </p>
                   <p className="truncate text-sm font-medium text-foreground">
@@ -551,7 +551,7 @@ function ItemCard({ item }: { item: StockItem }) {
           ) : null}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="font-mono text-[13px] font-semibold text-primary">
+          <p className="font-mono text-sm font-semibold text-primary">
             {item.clientCode ?? item.skuCode}
           </p>
           <h2 className="text-lg font-semibold leading-snug text-foreground">{item.name}</h2>

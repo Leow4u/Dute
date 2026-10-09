@@ -521,11 +521,11 @@ export function OpeningInventoryWorkspace() {
 
   return (
     <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-      <Card className="overflow-hidden rounded-[28px] border-border/80 bg-card/72 shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]">
+      <Card className="overflow-hidden rounded-lg border-border/80 bg-card">
         <CardHeader className="border-b border-border/70 p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex gap-3">
-              <div className="flex size-12 shrink-0 items-center justify-center rounded-[18px] border border-primary/20 bg-primary/10 text-primary">
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
                 <PackageOpen className="size-5" />
               </div>
               <div>
@@ -552,7 +552,7 @@ export function OpeningInventoryWorkspace() {
                   "w-fit",
                   sessionOpen
                     ? "border-primary/20 bg-primary/10 text-primary"
-                    : "border-border bg-card/70",
+                    : "border-border bg-card",
                 )}
               >
                 {sessionOpen ? "sessão em andamento" : "sessão concluída"}
@@ -562,7 +562,7 @@ export function OpeningInventoryWorkspace() {
         </CardHeader>
         <CardContent className="p-6">
           {sessionQuery.isLoading ? (
-            <Skeleton className="h-72 w-full rounded-[22px]" />
+            <Skeleton className="h-72 w-full rounded-lg" />
           ) : sessionQuery.isError ? (
             <Alert variant="destructive" className="bg-destructive/10">
               <AlertCircle className="size-4" />
@@ -581,7 +581,7 @@ export function OpeningInventoryWorkspace() {
               </AlertDescription>
             </Alert>
           ) : !sessionOpen ? (
-            <Empty className="min-h-72 rounded-[22px] border border-dashed border-border bg-card/40">
+            <Empty className="min-h-72 rounded-lg border border-dashed border-border bg-card">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
                   <ClipboardCheck className="size-5" />
@@ -647,7 +647,7 @@ export function OpeningInventoryWorkspace() {
               </div>
 
               {lookupQuery.isLoading || lookupQuery.isFetching ? (
-                <Alert className="border-border bg-card/60">
+                <Alert className="border-border bg-card">
                   <RefreshCw className="size-4 animate-spin" />
                   <AlertTitle>Verificando o catálogo</AlertTitle>
                   <AlertDescription>
@@ -685,7 +685,7 @@ export function OpeningInventoryWorkspace() {
                   </AlertDescription>
                 </Alert>
               ) : existingProduct ? (
-                <div className="flex flex-col gap-3 rounded-[20px] border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div className="text-sm font-semibold text-foreground">
                       Produto já cadastrado: {existingProduct.productName}
@@ -805,7 +805,7 @@ export function OpeningInventoryWorkspace() {
                 </div>
               </div>
 
-              <div className="rounded-[20px] border border-border bg-card/60 p-4">
+              <div className="rounded-lg border border-border bg-card p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div className="text-sm font-semibold text-foreground">Fotos do produto</div>
@@ -816,7 +816,7 @@ export function OpeningInventoryWorkspace() {
                   <label
                     htmlFor="opening-product-photo"
                     className={cn(
-                      "inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-[14px] border border-border bg-card px-4 text-sm font-medium text-foreground hover:bg-muted",
+                      "inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-medium text-foreground hover:bg-muted",
                       photoUploading && "pointer-events-none opacity-60",
                     )}
                   >
@@ -839,22 +839,22 @@ export function OpeningInventoryWorkspace() {
                 {photos.length ? (
                   <div className="mt-4 flex flex-wrap gap-2">
                     {photos.map((photo, index) => (
-                      <div key={photo.storagePath} className="relative size-24 overflow-hidden rounded-[16px] border border-border bg-muted">
+                      <div key={photo.storagePath} className="relative size-24 overflow-hidden rounded-md border border-border bg-muted">
                         <img src={photo.fileUrl} alt={`Foto ${index + 1} do produto`} className="size-full object-cover" />
-                        <button type="button" className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-full bg-card/90" aria-label={`Remover foto ${index + 1}`} onClick={() => setPhotos((current) => current.filter((_, currentIndex) => currentIndex !== index))}>
+                        <button type="button" className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-full bg-card" aria-label={`Remover foto ${index + 1}`} onClick={() => setPhotos((current) => current.filter((_, currentIndex) => currentIndex !== index))}>
                           <Trash2 className="size-3.5" />
                         </button>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="mt-4 rounded-[16px] border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">
+                  <div className="mt-4 rounded-md border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">
                     Produto novo precisa de ao menos uma foto.
                   </div>
                 )}
               </div>
 
-              <div className="flex flex-col gap-3 rounded-[22px] border border-border bg-card/60 p-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 lg:flex-row lg:items-center lg:justify-between">
                 <p className="text-sm leading-6 text-muted-foreground">
                   Ao confirmar, o sistema cria produto e SKU quando necessário, registra o movimento de entrada e publica o saldo para o cliente.
                 </p>
@@ -869,22 +869,22 @@ export function OpeningInventoryWorkspace() {
       </Card>
 
       <div className="space-y-4">
-        <Card className="rounded-[24px] border-border/80 bg-card/72 shadow-[0_18px_60px_rgba(15,23,42,.05)]">
+        <Card className="rounded-lg border-border/80 bg-card">
           <CardHeader>
             <CardTitle className="text-base">Progresso da abertura</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-[16px] border border-border bg-card/60 p-3">
+              <div className="rounded-md border border-border bg-card p-3">
                 <div className="text-xs text-muted-foreground">Produtos</div>
                 <div className="mt-1 text-xl font-semibold text-foreground">{formatNumber(session?.line_count)}</div>
               </div>
-              <div className="rounded-[16px] border border-border bg-card/60 p-3">
+              <div className="rounded-md border border-border bg-card p-3">
                 <div className="text-xs text-muted-foreground">Unidades</div>
                 <div className="mt-1 text-xl font-semibold text-foreground">{formatNumber(session?.unit_count)}</div>
               </div>
             </div>
-            <div className="rounded-[16px] border border-border bg-card/60 p-3">
+            <div className="rounded-md border border-border bg-card p-3">
               <div className="text-xs text-muted-foreground">Valor controlado</div>
               <div className="mt-1 text-lg font-semibold text-foreground">{formatCurrency(coerceNumber(session?.total_cost))}</div>
             </div>
@@ -924,7 +924,7 @@ export function OpeningInventoryWorkspace() {
                     {sessionLines.map((line) => (
                       <div
                         key={line.id}
-                        className="flex items-start gap-3 rounded-[16px] border border-border bg-card/60 p-3"
+                        className="flex items-start gap-3 rounded-md border border-border bg-card p-3"
                       >
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-sm font-medium text-foreground">
@@ -965,7 +965,7 @@ export function OpeningInventoryWorkspace() {
                   </div>
                 </ScrollArea>
               ) : (
-                <div className="rounded-[16px] border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">
+                <div className="rounded-md border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">
                   Nenhum produto confirmado nesta sessão.
                 </div>
               )}
@@ -992,13 +992,13 @@ export function OpeningInventoryWorkspace() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-3 py-2">
-            <div className="rounded-[16px] border border-border bg-card/60 p-3">
+            <div className="rounded-md border border-border bg-card p-3">
               <div className="text-xs text-muted-foreground">Produtos</div>
               <div className="mt-1 text-xl font-semibold text-foreground">
                 {formatNumber(session?.line_count)}
               </div>
             </div>
-            <div className="rounded-[16px] border border-border bg-card/60 p-3">
+            <div className="rounded-md border border-border bg-card p-3">
               <div className="text-xs text-muted-foreground">Unidades</div>
               <div className="mt-1 text-xl font-semibold text-foreground">
                 {formatNumber(session?.unit_count)}
@@ -1049,7 +1049,7 @@ export function OpeningInventoryWorkspace() {
             </DialogDescription>
           </DialogHeader>
           {lineToRemove ? (
-            <div className="rounded-[18px] border border-border bg-card/60 p-4">
+            <div className="rounded-lg border border-border bg-card p-4">
               <div className="font-medium text-foreground">
                 {lineToRemove.product_name ||
                   lineToRemove.client_item_code ||
@@ -1225,11 +1225,11 @@ export function ExistingCycleCountWorkspace() {
 
   return (
     <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-      <Card className="overflow-hidden rounded-[28px] border-border/80 bg-card/72 shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]">
+      <Card className="overflow-hidden rounded-lg border-border/80 bg-card">
         <CardHeader className="border-b border-border/70 p-6">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex gap-3">
-              <div className="flex size-12 shrink-0 items-center justify-center rounded-[18px] border border-primary/20 bg-primary/10 text-primary">
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
                 <ListChecks className="size-5" />
               </div>
               <div>
@@ -1274,7 +1274,7 @@ export function ExistingCycleCountWorkspace() {
             </div>
 
             {existingProduct ? (
-              <div className="flex flex-col gap-3 rounded-[20px] border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="text-sm font-semibold text-foreground">
                     {existingProduct.productName}
@@ -1362,7 +1362,7 @@ export function ExistingCycleCountWorkspace() {
               />
             </div>
 
-            <div className="flex flex-col gap-3 rounded-[22px] border border-border bg-card/60 p-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <div className="text-sm font-semibold text-foreground">
                   Confirmação operacional
@@ -1386,20 +1386,20 @@ export function ExistingCycleCountWorkspace() {
       </Card>
 
       <div className="flex flex-col gap-4">
-        <Card className="rounded-[24px] border-border/80 bg-card/72 shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]">
+        <Card className="rounded-lg border-border/80 bg-card">
           <CardHeader>
             <CardTitle className="text-base">Regra operacional</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <div className="rounded-[18px] border border-border bg-card/55 p-3">
+            <div className="rounded-lg border border-border bg-card p-3">
               <strong className="text-foreground">Produto novo</strong>
               <p className="mt-1">Use Recebimento para criar cadastro e conferência.</p>
             </div>
-            <div className="rounded-[18px] border border-border bg-card/55 p-3">
+            <div className="rounded-lg border border-border bg-card p-3">
               <strong className="text-foreground">Divergência</strong>
               <p className="mt-1">A diferença gera movimento e evento para o Agent Dute.</p>
             </div>
-            <div className="rounded-[18px] border border-border bg-card/55 p-3">
+            <div className="rounded-lg border border-border bg-card p-3">
               <strong className="text-foreground">Reserva ativa</strong>
               <p className="mt-1">O sistema bloqueia contagem menor que itens reservados.</p>
             </div>

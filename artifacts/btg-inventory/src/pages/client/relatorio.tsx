@@ -114,11 +114,11 @@ export function ClienteRelatorio() {
               </div>
 
               {!report ? (
-                <p className="rounded-[18px] border border-dashed border-border bg-card/60 px-5 py-8 text-sm text-muted-foreground">
+                <p className="rounded-lg border border-dashed border-border bg-card px-5 py-8 text-sm text-muted-foreground">
                   {available.length ? "Escolha um período válido: o mês inicial antes do final." : "Nenhuma fatura fechada para gerar o relatório."}
                 </p>
               ) : (
-                <article className="print-area rounded-md bg-white p-8 text-[13px] text-slate-800 shadow-[0_12px_40px_rgba(31,42,61,.12)] sm:p-10">
+                <article className="print-area rounded-md bg-white p-8 text-sm text-slate-800 sm:p-10">
                   <header className="flex items-start justify-between border-b-2 border-slate-800 pb-3">
                     <div>
                       <div className="text-xl font-black tracking-[0.12em] text-[#e3262c]">DUTELOG</div>
@@ -155,9 +155,9 @@ export function ClienteRelatorio() {
 
                   <h2 className="mt-8 text-xs font-semibold uppercase tracking-wider text-slate-500">Por serviço</h2>
                   <div className="mt-2 overflow-x-auto">
-                    <table className="w-full text-[12.5px]">
+                    <table className="w-full text-xs">
                       <thead>
-                        <tr className="border-b border-slate-200 text-left text-[10.5px] uppercase text-slate-500">
+                        <tr className="border-b border-slate-200 text-left text-xs uppercase text-slate-500">
                           <th className="py-1.5 pr-2 font-semibold">Serviço</th>
                           {report.months.map((month) => (
                             <th key={month} className="py-1.5 pr-2 text-right font-semibold">{monthLabel(month)}</th>
@@ -194,9 +194,9 @@ export function ClienteRelatorio() {
                   </div>
 
                   <h2 className="mt-8 text-xs font-semibold uppercase tracking-wider text-slate-500">Faturas do período</h2>
-                  <table className="mt-2 w-full text-[12.5px]">
+                  <table className="mt-2 w-full text-xs">
                     <thead>
-                      <tr className="border-b border-slate-200 text-left text-[10.5px] uppercase text-slate-500">
+                      <tr className="border-b border-slate-200 text-left text-xs uppercase text-slate-500">
                         <th className="py-1.5 pr-2 font-semibold">Competência</th>
                         <th className="py-1.5 pr-2 font-semibold">Emissão</th>
                         <th className="py-1.5 pr-2 font-semibold">Situação</th>
@@ -215,7 +215,7 @@ export function ClienteRelatorio() {
                     </tbody>
                   </table>
 
-                  <p className="mt-8 border-t border-slate-100 pt-2 text-[10.5px] text-slate-400">
+                  <p className="mt-8 border-t border-slate-100 pt-2 text-xs text-slate-400">
                     Valores das faturas emitidas pela Dutelog. O detalhe de cada item (quantidade × preço) está na planilha, aba Itens.
                   </p>
                 </article>
@@ -231,7 +231,7 @@ export function ClienteRelatorio() {
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-slate-200 px-3 py-2">
-      <div className="text-[11px] text-slate-500">{label}</div>
+      <div className="text-xs text-slate-500">{label}</div>
       <div className="mt-0.5 text-base font-semibold tabular-nums">{value}</div>
     </div>
   );

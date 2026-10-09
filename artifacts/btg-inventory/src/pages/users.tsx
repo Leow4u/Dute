@@ -287,14 +287,14 @@ export default function Users() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <section className="overflow-hidden rounded-[18px] border border-border bg-card">
+        <section className="overflow-hidden rounded-lg border border-border bg-card">
           {isLoading || invites.isLoading ? (
             <p className="p-6 text-sm text-muted-foreground">Carregando pessoas...</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[560px] text-sm">
                 <thead>
-                  <tr className="border-b border-border/70 text-left text-[11px] uppercase tracking-wide text-foreground/50">
+                  <tr className="border-b border-border/70 text-left text-xs uppercase tracking-wide text-foreground/50">
                     <th className="px-5 py-2.5 font-semibold">Pessoa</th>
                     <th className="px-3 py-2.5 font-semibold">Perfil</th>
                     <th className="px-3 py-2.5 font-semibold">Situação</th>
@@ -434,7 +434,7 @@ export default function Users() {
           )}
         </section>
 
-        <aside className="h-fit rounded-[18px] border border-border bg-card">
+        <aside className="h-fit rounded-lg border border-border bg-card">
           <h2 className="border-b border-border/60 px-5 py-3.5 text-sm font-semibold">O que cada perfil faz</h2>
           <div className="space-y-3 px-5 py-4">
             {ROLE_INFO.map((info) => (

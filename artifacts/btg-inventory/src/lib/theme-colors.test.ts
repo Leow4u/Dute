@@ -49,6 +49,15 @@ const RULES: Array<{ name: string; pattern: RegExp }> = [
     pattern: new RegExp(`\\btext-(?:${HUES})-(?:600|700|800|900|950)\\b`, "g"),
   },
   { name: "hex solto em classe", pattern: /-\[#[0-9a-fA-F]{3,8}\]/g },
+  // Forma do sistema (auditoria de 09/10/2026): a escala de raio, as
+  // superfícies sólidas, as duas sombras e a escala de texto moram em
+  // index.css e em components/ui. Valor arbitrário na tela foi o que deixou o
+  // app com 22 raios, 20 opacidades de vidro e texto de 10,5px.
+  { name: "raio arbitrário", pattern: /\brounded(?:-[a-z]{1,2})?-\[(?!inherit\])[^\]]+\]/g },
+  { name: "vidro fosco", pattern: /\bbackdrop-blur(?:-[^\s"'`]+)?/g },
+  { name: "superfície translúcida", pattern: /\bbg-(?:card|popover|sidebar)\/\d+\b/g },
+  { name: "sombra arbitrária", pattern: /\bshadow-\[[^\]]+\]/g },
+  { name: "tamanho de texto arbitrário", pattern: /\btext-\[[0-9.]+(?:px|rem)\]/g },
 ];
 
 function sourceFiles(dir: string): string[] {
@@ -97,6 +106,7 @@ function layerBlock(css: string, name: string): string {
  * principal clara, e o teste só olhava .ts/.tsx.
  */
 const CSS_LIGHT_LITERALS: Array<{ name: string; pattern: RegExp }> = [
+  { name: "vidro ou brilho", pattern: /backdrop-filter|radial-gradient/g },
   { name: "branco", pattern: /#fff(?:fff)?\b|rgba\(\s*255\s*,\s*255\s*,\s*255\s*,\s*0?\.[1-9]/gi },
   { name: "fundo claro do app", pattern: /#FAFAF8|#ECEEF2|rgba\(\s*2[2-5]\d\s*,\s*2[2-5]\d\s*,\s*2[2-5]\d\s*,/gi },
   {
@@ -119,12 +129,12 @@ function cssViolations(): string[] {
   return found;
 }
 
-describe("cores do tema", () => {
+describe("cores e forma do tema", () => {
   it("classes próprias do index.css leem token, sem superfície clara fixa", () => {
     expect(cssViolations()).toEqual([]);
   });
 
-  it("nenhuma tela usa cor fixa que quebra o modo escuro", () => {
+  it("nenhuma tela usa cor fixa que quebra o escuro nem valor fora da escala do sistema", () => {
     expect(violations()).toEqual([]);
   });
 

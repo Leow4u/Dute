@@ -1048,7 +1048,7 @@ function MetricCard({
             {value}
           </div>
         </div>
-        <div className="flex h-10 w-10 items-center justify-center rounded-[16px] border border-border bg-card/70">
+        <div className="flex h-10 w-10 items-center justify-center rounded-md border border-border bg-card">
           <Icon className="h-4 w-4 text-primary" aria-hidden="true" />
         </div>
       </CardHeader>
@@ -1064,15 +1064,15 @@ function MetricCard({
 function AiLoading() {
   return (
     <div className="space-y-6 animate-pulse">
-      <div className="h-8 w-72 rounded-[16px] bg-primary/10" />
+      <div className="h-8 w-72 rounded-md bg-primary/10" />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {[1, 2, 3, 4].map((item) => (
-          <div key={item} className="h-36 rounded-[24px] bg-primary/10" />
+          <div key={item} className="h-36 rounded-lg bg-primary/10" />
         ))}
       </div>
       <div className="grid gap-6 xl:grid-cols-[1fr_420px]">
-        <div className="h-[520px] rounded-[24px] bg-primary/10" />
-        <div className="h-[520px] rounded-[24px] bg-primary/10" />
+        <div className="h-[520px] rounded-lg bg-primary/10" />
+        <div className="h-[520px] rounded-lg bg-primary/10" />
       </div>
     </div>
   );
@@ -1087,7 +1087,7 @@ function SuggestedDecisionsPanel({
     <Card>
       <CardHeader className="border-b border-border/60">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border border-border bg-card/70">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-card">
             <ListChecks className="h-4 w-4 text-muted-foreground" />
           </div>
           <div>
@@ -1102,10 +1102,10 @@ function SuggestedDecisionsPanel({
           </div>
         ) : (
           decisions.map((decision, index) => (
-            <div key={decision.id} className="soft-panel rounded-[18px] p-4">
+            <div key={decision.id} className="soft-panel rounded-lg p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] border border-border bg-card/70 text-xs font-semibold text-foreground">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-card text-xs font-semibold text-foreground">
                     {index + 1}
                   </div>
                   <div className="min-w-0">
@@ -1124,7 +1124,7 @@ function SuggestedDecisionsPanel({
                   {riskPriorityLabel(decision.priority)}
                 </Badge>
               </div>
-              <div className="mt-3 rounded-[14px] border border-border bg-card/65 px-3 py-2 text-xs leading-5 text-muted-foreground">
+              <div className="mt-3 rounded-md border border-border bg-card px-3 py-2 text-xs leading-5 text-muted-foreground">
                 {decision.reason}
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -1207,11 +1207,11 @@ function OperationalNotificationsCard({
       </CardHeader>
       <CardContent className="space-y-3 pt-5">
         {isLoading ? (
-          <div className="rounded-[20px] border border-border bg-card/58 p-4 text-sm text-muted-foreground">
+          <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
             Carregando notificações operacionais...
           </div>
         ) : visibleNotifications.length === 0 ? (
-          <div className="rounded-[20px] border border-dashed border-border bg-card/45 p-6 text-center">
+          <div className="rounded-lg border border-dashed border-border bg-card p-6 text-center">
             <MailCheck className="mx-auto h-5 w-5 text-muted-foreground" />
             <p className="mt-3 text-sm font-medium text-foreground">
               Nenhuma mensagem pendente
@@ -1232,7 +1232,7 @@ function OperationalNotificationsCard({
             return (
               <div
                 key={item.id}
-                className="rounded-[20px] border border-border bg-card/58 p-4 shadow-[0_8px_24px_rgba(15,23,42,.04)] backdrop-blur-[32px]"
+                className="rounded-lg border border-border bg-card p-4"
               >
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -1243,7 +1243,7 @@ function OperationalNotificationsCard({
                     >
                       {notificationStatusLabel(item.status)}
                     </Badge>
-                    <Badge variant="outline" className="bg-card/70">
+                    <Badge variant="outline" className="bg-card">
                       {item.audience === "client" ? "Cliente" : "Interno"}
                     </Badge>
                   </div>
@@ -1256,7 +1256,7 @@ function OperationalNotificationsCard({
                 </div>
                 <MailCheck className="mt-1 h-4 w-4 shrink-0 text-primary" />
               </div>
-              <div className="mt-4 rounded-2xl border border-border bg-card/50 p-3 text-xs leading-5 text-muted-foreground">
+              <div className="mt-4 rounded-2xl border border-border bg-card p-3 text-xs leading-5 text-muted-foreground">
                 <span className="font-medium text-foreground">Origem:</span>{" "}
                 {item.trigger_event_type || "evento operacional"} ·{" "}
                 {item.customer_code || "BTG Pactual"}
@@ -1390,14 +1390,14 @@ function PhysicalWmsRiskPanel({ risks }: { risks: PhysicalWmsRisk[] }) {
       <CardHeader className="border-b border-border/60">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border border-border bg-card/70">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-card">
               <FileWarning className="h-4 w-4 text-muted-foreground" />
             </div>
             <div>
               <CardTitle className="text-base">Risco de WMS físico</CardTitle>
             </div>
           </div>
-          <Badge variant="outline" className="border-border bg-card/70">
+          <Badge variant="outline" className="border-border bg-card">
             <Box className="mr-1 h-3 w-3" />
             {numberFormatter.format(risks.length)} risco(s)
           </Badge>
@@ -1411,7 +1411,7 @@ function PhysicalWmsRiskPanel({ risks }: { risks: PhysicalWmsRisk[] }) {
         ) : (
           <div className="grid gap-3 lg:grid-cols-2">
             {risks.map((risk) => (
-              <div key={risk.id} className="soft-panel rounded-[20px] p-4">
+              <div key={risk.id} className="soft-panel rounded-lg p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <div className="text-sm font-semibold text-foreground">
@@ -1429,10 +1429,10 @@ function PhysicalWmsRiskPanel({ risks }: { risks: PhysicalWmsRisk[] }) {
                   </Badge>
                 </div>
                 <div className="mt-3 grid gap-2 text-xs leading-5 text-muted-foreground">
-                  <div className="rounded-[14px] border border-border bg-card/65 px-3 py-2">
+                  <div className="rounded-md border border-border bg-card px-3 py-2">
                     {risk.impact}
                   </div>
-                  <div className="rounded-[14px] border border-border bg-card/65 px-3 py-2">
+                  <div className="rounded-md border border-border bg-card px-3 py-2">
                     {risk.guardrail}
                   </div>
                 </div>
@@ -1458,7 +1458,7 @@ function EventTraceabilityPanel({ events }: { events: AiEvent[] }) {
     <Card>
       <CardHeader className="border-b border-border/60">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border border-border bg-card/70">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-card">
             <Database className="h-4 w-4 text-muted-foreground" />
           </div>
           <div>
@@ -1486,7 +1486,7 @@ function EventTraceabilityPanel({ events }: { events: AiEvent[] }) {
               </thead>
               <tbody className="divide-y divide-border">
                 {tracedEvents.map((event) => (
-                  <tr key={event.id} className="align-top hover:bg-card/50">
+                  <tr key={event.id} className="align-top hover:bg-card">
                     <td className="px-3 py-4">
                       <div className="font-mono text-xs text-foreground">
                         {event.id}
@@ -1691,7 +1691,7 @@ export default function AiControl() {
 
   if (overview.error || !overview.data) {
     return (
-      <div className="rounded-[20px] border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+      <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
         Não consegui carregar a central da IA agora.
       </div>
     );
@@ -1731,7 +1731,7 @@ export default function AiControl() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-[18px] border border-border bg-card/70 shadow-[0_8px_24px_rgba(15,23,42,.04)]">
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-border bg-card">
               <BrainCircuit className="h-5 w-5 text-primary" />
             </div>
             <div>
@@ -1813,7 +1813,7 @@ export default function AiControl() {
         <Card>
           <CardHeader className="border-b border-border/60">
             <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border border-border bg-card/70">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-card">
                 <PackageSearch className="h-4 w-4 text-muted-foreground" />
               </div>
               <div>
@@ -1832,7 +1832,7 @@ export default function AiControl() {
               eventEntityGroups.map((group) => (
                 <div
                   key={group.key}
-                  className="rounded-[20px] border border-border bg-card/58 p-4 shadow-[0_8px_24px_rgba(15,23,42,.04)] backdrop-blur-[32px]"
+                  className="rounded-lg border border-border bg-card p-4"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -1890,7 +1890,7 @@ export default function AiControl() {
         <Card>
           <CardHeader className="border-b border-border/60">
             <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border border-border bg-card/70">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-card">
                 <UserRound className="h-4 w-4 text-muted-foreground" />
               </div>
               <div>
@@ -1907,7 +1907,7 @@ export default function AiControl() {
               clientMemory.map((item) => (
                 <div
                   key={item.id}
-                  className="rounded-[20px] border border-border bg-card/58 p-4 shadow-[0_8px_24px_rgba(15,23,42,.04)] backdrop-blur-[32px]"
+                  className="rounded-lg border border-border bg-card p-4"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -1940,7 +1940,7 @@ export default function AiControl() {
         <CardHeader className="border-b border-border/60">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border border-border bg-card/70">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-card">
                 <ShieldAlert className="h-4 w-4 text-muted-foreground" />
               </div>
               <div>
@@ -1950,11 +1950,11 @@ export default function AiControl() {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Badge variant="outline" className="border-border bg-card/70">
+              <Badge variant="outline" className="border-border bg-card">
                 <Warehouse className="mr-1 h-3 w-3" />
                 {numberFormatter.format(activeWmsTasks.length)} tarefa(s) WMS
               </Badge>
-              <Badge variant="outline" className="border-border bg-card/70">
+              <Badge variant="outline" className="border-border bg-card">
                 <ClipboardList className="mr-1 h-3 w-3" />
                 {numberFormatter.format(openRequests.length)} solicitação(ões)
               </Badge>
@@ -1963,7 +1963,7 @@ export default function AiControl() {
         </CardHeader>
         <CardContent className="space-y-4 pt-5">
           {warehouseOps.error || customerRequests.error ? (
-            <div className="rounded-[16px] border border-warning-soft-border bg-warning-soft px-4 py-3 text-sm text-warning-soft-foreground">
+            <div className="rounded-md border border-warning-soft-border bg-warning-soft px-4 py-3 text-sm text-warning-soft-foreground">
               Parte do radar WMS/solicitações não carregou agora.
             </div>
           ) : null}
@@ -1977,7 +1977,7 @@ export default function AiControl() {
               {operationalRisks.map((risk) => (
                 <div
                   key={risk.id}
-                  className="rounded-[20px] border border-border bg-card/58 p-4 shadow-[0_8px_24px_rgba(15,23,42,.04)] backdrop-blur-[32px]"
+                  className="rounded-lg border border-border bg-card p-4"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -2008,7 +2008,7 @@ export default function AiControl() {
                   </div>
 
                   {risk.action ? (
-                    <div className="mt-3 flex items-start gap-2 rounded-[14px] border border-border bg-card/70 px-3 py-2 text-xs text-muted-foreground">
+                    <div className="mt-3 flex items-start gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
                       <CalendarClock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                       <span>{risk.action}</span>
                     </div>
@@ -2048,7 +2048,7 @@ export default function AiControl() {
                       <Clock3 className="mt-0.5 h-3.5 w-3.5" />
                       <span>{formatDate(event.occurred_at)}</span>
                     </div>
-                    <div className="rounded-[20px] border border-border bg-card/58 p-4 shadow-[0_8px_24px_rgba(15,23,42,.04)] backdrop-blur-[32px]">
+                    <div className="rounded-lg border border-border bg-card p-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <div className="font-medium text-foreground">
@@ -2116,7 +2116,7 @@ export default function AiControl() {
                   return (
                     <div
                       key={item.id}
-                      className="rounded-[20px] border border-border bg-card/58 p-4 shadow-[0_8px_24px_rgba(15,23,42,.04)] backdrop-blur-[32px]"
+                      className="rounded-lg border border-border bg-card p-4"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
@@ -2209,7 +2209,7 @@ export default function AiControl() {
             {memory.map((item) => (
               <div
                 key={item.id}
-                className="rounded-[20px] border border-border bg-card/58 p-4 shadow-[0_8px_24px_rgba(15,23,42,.04)] backdrop-blur-[32px]"
+                className="rounded-lg border border-border bg-card p-4"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>

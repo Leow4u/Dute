@@ -28,7 +28,7 @@ const field =
 
 function AudiencePill({ audience }: { audience: Playbook["audience"] }) {
   return (
-    <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+    <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
       {audience === "todos" ? "cliente e equipe" : "só equipe"}
     </span>
   );
@@ -166,7 +166,7 @@ export function AgentPlaybooks() {
   const busy = decide.isPending || seed.isPending;
 
   return (
-    <section className="rounded-[18px] border border-border bg-card px-5 py-4">
+    <section className="rounded-lg border border-border bg-card px-5 py-4">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 flex-1 basis-[320px] items-start gap-3">
           <BookOpenCheck className="mt-0.5 h-5 w-5 shrink-0 text-agent" aria-hidden="true" />

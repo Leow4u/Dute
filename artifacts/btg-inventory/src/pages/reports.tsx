@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
@@ -369,18 +370,16 @@ export default function Reports() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Relatórios</h1>
-        <p className="text-sm text-muted-foreground">
-          Escolha um relatório, confira a prévia e baixe a planilha. Ela abre direto no Excel.
-        </p>
-      </div>
+      <PageHeader
+        title="Relatórios"
+        description="Escolha um relatório, confira a prévia e baixe a planilha. Ela abre direto no Excel."
+      />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[270px_minmax(0,1fr)]">
-        <nav className="h-fit rounded-[18px] border border-border bg-card p-2.5">
+        <nav className="h-fit rounded-lg border border-border bg-card p-2.5">
           {groups.map(({ group, reports }) => (
             <div key={group}>
-              <div className="px-2.5 pb-1.5 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="px-2.5 pb-1.5 pt-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {group}
               </div>
               {reports.map((item) => {
@@ -429,7 +428,7 @@ export default function Reports() {
           ))}
         </nav>
 
-        <section className="flex min-w-0 flex-col overflow-hidden rounded-[18px] border border-border bg-card">
+        <section className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card">
           <div className="flex flex-wrap items-start justify-between gap-3 px-5 pb-3 pt-5">
             <div className="min-w-0 max-w-2xl">
               <h2 className="text-lg font-semibold">{selected.title}</h2>
@@ -516,7 +515,7 @@ export default function Reports() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-muted/40 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                  <tr className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                     {columns.map((column) => (
                       <th
                         key={column.key}

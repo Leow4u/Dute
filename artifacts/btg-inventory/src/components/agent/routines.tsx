@@ -410,7 +410,7 @@ export function RoutinesPage({ role, onOpenConversation }: { role: string | unde
             <p className="rounded-xl border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">
               Nenhuma rotina ainda. Comece por um modelo abaixo, crie do zero ou peça no chat, por exemplo: "toda segunda às 8h me manda o resumo da semana".
             </p>
-            <p className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Comece por um modelo</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Comece por um modelo</p>
             {templateGrid}
           </>
         ) : (

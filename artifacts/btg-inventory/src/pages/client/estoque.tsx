@@ -655,8 +655,8 @@ function OpeningInventoryState({
   onNotifyDelivery: () => void;
 }) {
   return (
-    <div className="flex min-h-[360px] flex-col items-center justify-center rounded-[24px] border border-dashed border-border bg-card/45 px-6 py-12 text-center">
-      <span className="flex h-14 w-14 items-center justify-center rounded-[20px] border border-border bg-card text-primary">
+    <div className="flex min-h-[360px] flex-col items-center justify-center rounded-lg border border-dashed border-border bg-card px-6 py-12 text-center">
+      <span className="flex h-14 w-14 items-center justify-center rounded-lg border border-border bg-card text-primary">
         <Package className="h-6 w-6" aria-hidden="true" />
       </span>
       <h2 className="mt-5 text-lg font-semibold text-foreground">
@@ -722,7 +722,7 @@ function MarketplaceToolbar({
   return (
     <section
       data-testid="stock-toolbar"
-      className="sticky top-0 z-20 shrink-0 rounded-[20px] border border-border bg-card p-3 shadow-[0_8px_24px_rgba(15,23,42,.06)] sm:p-4"
+      className="sticky top-0 z-20 shrink-0 rounded-lg border border-border bg-card p-3 sm:p-4"
     >
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
         <div className="relative min-w-0 flex-1">
@@ -732,14 +732,14 @@ function MarketplaceToolbar({
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="Buscar por nome, código ou tipo"
             aria-label="Buscar por nome, código ou tipo"
-            className="h-11 rounded-[18px] border-border bg-card/80 pl-11 text-sm"
+            className="h-11 rounded-lg border-border bg-card pl-11 text-sm"
           />
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <div
             role="group"
             aria-label="Formato de visualização"
-            className="flex items-center gap-1 rounded-[16px] border border-border bg-card/70 p-1"
+            className="flex items-center gap-1 rounded-md border border-border bg-card p-1"
           >
             <ViewModeButton
               active={viewMode === "cards"}
@@ -761,7 +761,7 @@ function MarketplaceToolbar({
               aria-checked={groupVariants}
               onClick={() => onGroupVariantsChange(!groupVariants)}
               title="Junta as variações (P, M, G…) do mesmo produto num card só"
-              className="flex h-11 cursor-pointer items-center gap-2 rounded-[14px] border border-border bg-card px-3 text-sm"
+              className="flex h-11 cursor-pointer items-center gap-2 rounded-md border border-border bg-card px-3 text-sm"
             >
               <span
                 className={cn(
@@ -786,10 +786,10 @@ function MarketplaceToolbar({
             aria-expanded={cartOpen}
             aria-label={`Abrir pedido de abastecimento com ${formatNumber(cartQuantity)} item(ns)`}
             className={cn(
-              "relative hidden h-11 cursor-pointer items-center gap-2 rounded-[18px] border px-3.5 text-sm font-medium transition hover:bg-surface-hover active:translate-y-px md:flex",
+              "relative hidden h-11 cursor-pointer items-center gap-2 rounded-lg border px-3.5 text-sm font-medium transition hover:bg-surface-hover active:translate-y-px md:flex",
               cartOpen
                 ? "border-primary/25 bg-primary/10 text-primary"
-                : "border-border bg-card/75 text-foreground",
+                : "border-border bg-card text-foreground",
             )}
           >
             <ShoppingCart className="h-4 w-4" aria-hidden="true" />
@@ -798,7 +798,7 @@ function MarketplaceToolbar({
               className={cn(
                 "flex min-w-7 items-center justify-center rounded-full px-2 py-1 text-xs font-semibold",
                 cartQuantity > 0
-                  ? "bg-primary text-white shadow-[0_8px_24px_rgba(110,158,248,.25)]"
+                  ? "bg-primary text-white"
                   : "bg-muted text-muted-foreground",
               )}
             >
@@ -879,7 +879,7 @@ function CatalogSelect({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="flex h-9 min-w-[178px] cursor-pointer items-center gap-2 rounded-[14px] border border-border bg-card/70 px-3 text-xs text-muted-foreground transition hover:bg-card focus-within:ring-2 focus-within:ring-ring/25">
+    <label className="flex h-9 min-w-[178px] cursor-pointer items-center gap-2 rounded-md border border-border bg-card px-3 text-xs text-muted-foreground transition hover:bg-card focus-within:ring-2 focus-within:ring-ring/25">
       <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
       <select
         aria-label={ariaLabel}
@@ -909,7 +909,7 @@ function CatalogProgress({
   onLoadMore: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center justify-between gap-3 rounded-[18px] border border-border/80 bg-card/56 px-4 py-3 text-center sm:flex-row sm:text-left">
+    <div className="flex flex-col items-center justify-between gap-3 rounded-lg border border-border/80 bg-card px-4 py-3 text-center sm:flex-row sm:text-left">
       <p className="text-xs text-muted-foreground">
         Exibindo{" "}
         <span className="font-semibold text-foreground">
@@ -961,9 +961,9 @@ function StockList({
   onArchive: (product: StockProduct) => void;
 }) {
   return (
-    <div className="overflow-hidden rounded-[28px] border border-border bg-card/70 shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]">
+    <div className="overflow-hidden rounded-lg border border-border bg-card">
       <Table className="min-w-[860px]">
-        <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-[24px]">
+        <TableHeader className="sticky top-0 z-10 bg-card">
           <TableRow>
             <TableHead className="w-[170px]">Código</TableHead>
             <TableHead className="min-w-[300px]">Produto</TableHead>
@@ -1000,7 +1000,7 @@ function StockList({
                   <div className="mt-1 flex flex-wrap gap-2">
                     <StockBadge status={status} />
                     {cart[product.key] ? (
-                      <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] text-primary">
+                      <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs text-primary">
                         {formatNumber(cart[product.key])} no pedido
                       </span>
                     ) : null}
@@ -1096,7 +1096,7 @@ function SideDrawer({
       />
       <div
         className={cn(
-          "relative z-[1] h-full w-full overflow-hidden rounded-[20px]",
+          "relative z-[1] h-full w-full overflow-hidden rounded-lg",
           wide ? "max-w-[1200px]" : "max-w-[440px]",
         )}
       >
@@ -1193,7 +1193,7 @@ function FamilyCard({
   return (
     <article
       data-testid="stock-card"
-      className="flex min-w-0 flex-col overflow-hidden rounded-[18px] border border-border bg-card shadow-[0_8px_24px_rgba(15,23,42,.04)] transition duration-200 hover:border-primary/30 hover:shadow-[0_18px_60px_rgba(15,23,42,.07)]"
+      className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card transition duration-200 hover:border-primary/30 hover:"
     >
       {/* Sem foto, o card começa no nome: o quadro vazio ocupava meio card. */}
       {hasPhoto ? (
@@ -1214,7 +1214,7 @@ function FamilyCard({
           </div>
         ) : null}
         <div className="min-w-0">
-          <p className="truncate text-[11px] uppercase tracking-wide text-muted-foreground">
+          <p className="truncate text-xs uppercase tracking-wide text-muted-foreground">
             {product.name} · {family.base || product.clientCode}
           </p>
           <button
@@ -1238,7 +1238,7 @@ function FamilyCard({
                   aria-pressed={active}
                   onClick={() => setSelectedKey(entry.item.key)}
                   className={cn(
-                    "flex min-w-[44px] cursor-pointer flex-col items-center rounded-[10px] border px-2 py-1 leading-tight transition",
+                    "flex min-w-[44px] cursor-pointer flex-col items-center rounded-md border px-2 py-1 leading-tight transition",
                     active
                       ? "border-primary bg-primary/10 text-primary"
                       : "border-border text-foreground hover:border-primary/40",
@@ -1248,7 +1248,7 @@ function FamilyCard({
                   <span className={cn("text-xs font-semibold", entry.item.available <= 0 && "line-through")}>
                     {variantLabel(entry.variant ?? entry.item.clientCode)}
                   </span>
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-xs text-muted-foreground">
                     {entry.item.available <= 0 ? "esgotado" : `${formatNumber(available)} disp.`}
                   </span>
                 </button>
@@ -1487,7 +1487,7 @@ function CartPanel({
   );
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-[20px] bg-card shadow-[0_24px_70px_rgba(15,23,42,.25)]">
+    <div className="flex h-full flex-col overflow-hidden rounded-lg bg-card">
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 px-4 py-3">
         <div>
           <h2 className="font-semibold">Seu pedido</h2>
@@ -1561,7 +1561,7 @@ function ProductDetailPanel({
         <div className="-mt-2 flex justify-end">
           <button
             type="button"
-            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-2xl border border-border bg-card/70 text-muted-foreground transition hover:bg-surface-hover"
+            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-2xl border border-border bg-card text-muted-foreground transition hover:bg-surface-hover"
             onClick={onClose}
             aria-label="Fechar detalhe"
           >
@@ -1579,7 +1579,7 @@ function ProductDetailPanel({
             {productTitle(product)}
           </h2>
           <div className="mt-3 flex flex-wrap gap-2">
-            <span className="rounded-full border border-border bg-card/70 px-3 py-1 text-xs text-muted-foreground">
+            <span className="rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground">
               {productType(product)}
             </span>
             <StockBadge status={status} />
@@ -1622,7 +1622,7 @@ function ProductDetailPanel({
           ) : null}
         </div>
 
-        <div className="rounded-[22px] border border-primary/15 bg-primary/10 p-4 text-sm leading-6 text-primary">
+        <div className="rounded-lg border border-primary/15 bg-primary/10 p-4 text-sm leading-6 text-primary">
           <div className="flex items-start gap-3">
             <Sparkles className="mt-1 h-4 w-4 shrink-0" aria-hidden="true" />
             <p>{agentDuteSignal(product, liveAvailable)}</p>
@@ -1682,7 +1682,7 @@ function ProductVisual({
       <div
         className={cn(
           "relative overflow-hidden border-b border-border bg-muted",
-          large ? "rounded-[24px] border border-border" : "",
+          large ? "rounded-lg border border-border" : "",
         )}
       >
         <img
@@ -1711,7 +1711,7 @@ function ProductVisual({
     <div
       className={cn(
         "relative overflow-hidden border-b border-border bg-muted",
-        large ? "rounded-[24px] border border-border" : "",
+        large ? "rounded-lg border border-border" : "",
       )}
     >
       <div
@@ -1732,8 +1732,8 @@ function ProductVisual({
       >
         <div
           className={cn(
-            "flex items-center justify-center border border-card-edge/70 bg-card/76 text-primary shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]",
-            compact ? "h-12 w-12 rounded-[18px]" : "h-20 w-20 rounded-[28px]",
+            "flex items-center justify-center border border-border bg-card text-primary",
+            compact ? "h-12 w-12 rounded-lg" : "h-20 w-20 rounded-lg",
           )}
         >
           <Package
@@ -1743,7 +1743,7 @@ function ProductVisual({
         </div>
         {!compact ? (
           <div className="space-y-1">
-            <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+            <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
               {initials || "BT"}
             </p>
             <p className="max-w-[220px] text-sm font-medium leading-5 text-foreground">
@@ -1785,15 +1785,15 @@ function QuantityStepper({
   return (
     <div
       className={cn(
-        "flex items-center border border-border bg-card/70 shadow-[0_8px_24px_rgba(15,23,42,.04)]",
-        compact ? "rounded-[14px] p-0.5" : "rounded-[18px] p-1",
+        "flex items-center border border-border bg-card",
+        compact ? "rounded-md p-0.5" : "rounded-lg p-1",
       )}
     >
       <button
         type="button"
         className={cn(
           "flex cursor-pointer items-center justify-center text-muted-foreground transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40",
-          compact ? "h-8 w-8 rounded-[10px]" : "h-9 w-9 rounded-[14px]",
+          compact ? "h-8 w-8 rounded-md" : "h-9 w-9 rounded-md",
         )}
         disabled={normalizedValue <= 0}
         onClick={() =>
@@ -1829,7 +1829,7 @@ function QuantityStepper({
         type="button"
         className={cn(
           "flex cursor-pointer items-center justify-center text-muted-foreground transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40",
-          compact ? "h-8 w-8 rounded-[10px]" : "h-9 w-9 rounded-[14px]",
+          compact ? "h-8 w-8 rounded-md" : "h-9 w-9 rounded-md",
         )}
         disabled={normalizedValue >= normalizedMax}
         onClick={() =>
@@ -1909,10 +1909,10 @@ function ViewModeButton({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "flex h-10 cursor-pointer items-center gap-2 rounded-[14px] px-3 text-sm transition",
+        "flex h-10 cursor-pointer items-center gap-2 rounded-md px-3 text-sm transition",
         active
-          ? "bg-card text-primary shadow-[0_8px_24px_rgba(15,23,42,.04)]"
-          : "text-muted-foreground hover:bg-card/70",
+          ? "bg-card text-primary"
+          : "text-muted-foreground hover:bg-card",
       )}
     >
       <Icon className="h-4 w-4" aria-hidden="true" />
@@ -1941,7 +1941,7 @@ function FilterChip({
         "flex shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition",
         active
           ? "border-primary/25 bg-primary/10 text-primary"
-          : "border-border bg-card/60 text-muted-foreground hover:bg-card",
+          : "border-border bg-card text-muted-foreground hover:bg-card",
       )}
     >
       {Icon ? <Icon className="h-3.5 w-3.5" aria-hidden="true" /> : null}
@@ -1952,7 +1952,7 @@ function FilterChip({
 
 function StockFact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0 rounded-[18px] border border-border bg-card/55 p-3">
+    <div className="min-w-0 rounded-lg border border-border bg-card p-3">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="mt-1 break-words text-sm font-semibold leading-5 text-foreground">
         {value}
@@ -1971,7 +1971,7 @@ function StockBadge({
   inCart?: number;
 }) {
   // Etiqueta só quando importa; "Disponível" em todo card era ruído.
-  const size = compact ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-1 text-xs";
+  const size = compact ? "px-2 py-0.5 text-xs" : "px-2.5 py-1 text-xs";
   if (inCart > 0) {
     return (
       <span className={cn("inline-flex items-center gap-1 rounded-md bg-primary font-semibold text-white shadow-sm", size)}>

@@ -523,7 +523,7 @@ export function ClientModuleShell({
               <Icon className="h-5 w-5" aria-hidden="true" />
             </div>
             <div className="min-w-0 space-y-1">
-              <h1 className="text-2xl font-semibold tracking-normal text-foreground md:text-[2rem] md:leading-tight">
+              <h1 className="text-2xl font-semibold tracking-normal text-foreground">
                 {title}
               </h1>
               {description ? (
@@ -562,10 +562,10 @@ export function ClientModuleLoading({
         </div>
         <div className="grid gap-4 md:grid-cols-4">
           {[0, 1, 2, 3].map((item) => (
-            <Skeleton key={item} className="h-32 rounded-[24px]" />
+            <Skeleton key={item} className="h-32 rounded-lg" />
           ))}
         </div>
-        <Skeleton className="h-80 rounded-[24px]" />
+        <Skeleton className="h-80 rounded-lg" />
         <span className="sr-only">{title}</span>
       </div>
     </main>
@@ -636,7 +636,7 @@ export function ModulePanel({
             <CardTitle className="text-base">{title}</CardTitle>
           </div>
           {Icon ? (
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-card/70 text-muted-foreground">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-card text-muted-foreground">
               <Icon className="h-4 w-4" aria-hidden="true" />
             </div>
           ) : null}
@@ -656,7 +656,7 @@ type MetricCardProps = {
 };
 
 const metricToneClass = {
-  neutral: "border-border bg-card/72 text-foreground",
+  neutral: "border-border bg-card text-foreground",
   info: "border-info-soft-border bg-info-soft text-info-soft-foreground",
   success: "border-success-soft-border bg-success-soft text-success-soft-foreground",
   warning: "border-warning-soft-border bg-warning-soft text-warning-soft-foreground",
@@ -711,8 +711,8 @@ export function EmptyModuleState({
   icon: Icon = SearchX,
 }: EmptyModuleStateProps) {
   return (
-    <div className="flex min-h-52 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-card/45 p-8 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-card/75 text-muted-foreground">
+    <div className="flex min-h-52 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-card p-8 text-center">
+      <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-card text-muted-foreground">
         <Icon className="h-5 w-5" aria-hidden="true" />
       </div>
       <div className="space-y-1">
@@ -870,7 +870,7 @@ export function statusBadgeClass(status?: string | null) {
     return "border-warning-soft-border bg-warning-soft text-warning-soft-foreground";
   }
 
-  return "border-border bg-card/70 text-muted-foreground";
+  return "border-border bg-card text-muted-foreground";
 }
 
 export function priorityLabel(priority?: string | null) {

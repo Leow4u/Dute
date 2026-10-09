@@ -78,7 +78,7 @@ function InboxRow({ item }: { item: HomeInboxItem }) {
       <div className="flex min-w-0 flex-1 items-center gap-4">
         <div
           className={cn(
-            "flex size-11 shrink-0 items-center justify-center rounded-[14px]",
+            "flex size-11 shrink-0 items-center justify-center rounded-md",
             tone.box,
           )}
         >

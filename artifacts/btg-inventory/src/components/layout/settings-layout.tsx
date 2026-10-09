@@ -49,10 +49,10 @@ export function SettingsSectionList() {
     <div className="space-y-6 md:hidden">
       {groups.map((group) => (
         <div key={group.id}>
-          <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {SETTINGS_GROUP_LABEL[group.id]}
           </div>
-          <div className="overflow-hidden rounded-[18px] border border-border bg-card">
+          <div className="overflow-hidden rounded-lg border border-border bg-card">
             {group.sections.map((section) => {
               const Icon = section.icon;
               return (
@@ -89,7 +89,7 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="app-atmosphere flex h-[100dvh] min-h-0 w-full overflow-hidden font-sans text-foreground">
-      <aside className="hidden w-[264px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar/80 px-3 py-4 backdrop-blur-[40px] md:flex">
+      <aside className="hidden w-[264px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar px-3 py-4 md:flex">
         <div>
           <BackLink href={returnPath} label="Voltar" />
         </div>
@@ -97,7 +97,7 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
         <nav className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           {groups.map((group) => (
             <div key={group.id} className="mt-4">
-              <div className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="mb-1.5 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {SETTINGS_GROUP_LABEL[group.id]}
               </div>
               <div className="space-y-0.5">
@@ -112,8 +112,8 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
                       className={cn(
                         "flex items-center gap-2.5 rounded-xl border px-3 py-2 text-sm transition-colors",
                         active
-                          ? "border-border bg-card font-semibold text-foreground shadow-[0_1px_2px_rgba(15,23,42,.06)]"
-                          : "border-transparent text-sidebar-foreground/70 hover:bg-card/70 hover:text-sidebar-foreground",
+                          ? "border-border bg-card font-semibold text-foreground"
+                          : "border-transparent text-sidebar-foreground/70 hover:bg-card hover:text-sidebar-foreground",
                       )}
                     >
                       <Icon className="h-4 w-4 shrink-0" />
@@ -130,8 +130,8 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-card/60">
-        <header className="flex h-14 shrink-0 items-center border-b border-border/70 bg-card/80 px-2 backdrop-blur-[40px] md:hidden">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-card">
+        <header className="flex h-14 shrink-0 items-center border-b border-border/70 bg-card px-2 md:hidden">
           {atRoot ? (
             <BackLink href={returnPath} label="Voltar" />
           ) : (

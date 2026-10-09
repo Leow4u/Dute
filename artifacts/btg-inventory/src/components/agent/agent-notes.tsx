@@ -61,7 +61,7 @@ export function AgentNotes() {
   const active = list.filter((note) => note.status === "active");
 
   return (
-    <section className="rounded-[18px] border border-border bg-card px-5 py-4">
+    <section className="rounded-lg border border-border bg-card px-5 py-4">
       <header className="flex items-start gap-3">
         <NotebookPen className="mt-0.5 h-5 w-5 text-agent" aria-hidden="true" />
         <div>
@@ -100,7 +100,7 @@ export function AgentNotes() {
                 <li key={note.id} className="flex items-start justify-between gap-3 px-3 py-2 text-sm">
                   <span className="min-w-0">
                     {note.text}
-                    <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                    <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                       {note.visibility === "equipe" ? "só equipe" : "cliente e equipe"}
                     </span>
                   </span>

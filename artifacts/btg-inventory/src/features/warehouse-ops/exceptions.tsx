@@ -232,11 +232,11 @@ export function ExceptionWorkspace() {
 
   return (
     <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-      <Card className="overflow-hidden rounded-[28px] border-border/80 bg-card/72 shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]">
+      <Card className="overflow-hidden rounded-lg border-border/80 bg-card">
         <CardHeader className="border-b border-border/70 p-6">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex gap-3">
-              <div className="flex size-12 shrink-0 items-center justify-center rounded-[18px] border border-destructive/20 bg-destructive/10 text-destructive">
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-destructive/20 bg-destructive/10 text-destructive">
                 <ShieldAlert className="size-5" />
               </div>
               <div>
@@ -265,9 +265,9 @@ export function ExceptionWorkspace() {
         <CardContent className="p-6">
           {exceptionsQuery.isLoading ? (
             <div className="space-y-3">
-              <Skeleton className="h-28 rounded-[22px]" />
-              <Skeleton className="h-28 rounded-[22px]" />
-              <Skeleton className="h-28 rounded-[22px]" />
+              <Skeleton className="h-28 rounded-lg" />
+              <Skeleton className="h-28 rounded-lg" />
+              <Skeleton className="h-28 rounded-lg" />
             </div>
           ) : openExceptions.length ? (
             <div className="space-y-3">
@@ -279,9 +279,9 @@ export function ExceptionWorkspace() {
                     type="button"
                     onClick={() => setSelectedExceptionId(exception.id)}
                     className={cn(
-                      "w-full cursor-pointer rounded-[22px] border bg-card/62 p-4 text-left transition hover:bg-card/85",
+                      "w-full cursor-pointer rounded-lg border bg-card p-4 text-left transition hover:bg-card",
                       isSelected
-                        ? "border-primary/30 shadow-[0_12px_36px_rgba(15,23,42,.06)]"
+                        ? "border-primary/30"
                         : "border-border",
                     )}
                   >
@@ -298,7 +298,7 @@ export function ExceptionWorkspace() {
                           >
                             {severityLabel(exception.severity as AlertSeverity)}
                           </Badge>
-                          <Badge variant="outline" className="border-border bg-card/70">
+                          <Badge variant="outline" className="border-border bg-card">
                             {taskTypeLabel(exception.taskType)}
                           </Badge>
                         </div>
@@ -318,7 +318,7 @@ export function ExceptionWorkspace() {
               })}
             </div>
           ) : (
-            <Empty className="min-h-[300px] border border-border bg-card/35">
+            <Empty className="min-h-[300px] border border-border bg-card">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
                   <CheckCircle2 className="size-5" />
@@ -334,14 +334,14 @@ export function ExceptionWorkspace() {
       </Card>
 
       <div className="flex flex-col gap-4">
-        <Card className="rounded-[24px] border-border/80 bg-card/72 shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]">
+        <Card className="rounded-lg border-border/80 bg-card">
           <CardHeader>
             <CardTitle className="text-base">Tratativa</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {selectedException ? (
               <>
-                <div className="rounded-[20px] border border-border bg-card/60 p-4">
+                <div className="rounded-lg border border-border bg-card p-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="outline">{selectedException.customerCode}</Badge>
                     <Badge variant="outline">
@@ -407,7 +407,7 @@ export function ExceptionWorkspace() {
                 </Button>
               </>
             ) : (
-              <Empty className="min-h-[220px] border border-border bg-card/35">
+              <Empty className="min-h-[220px] border border-border bg-card">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
                     <MessageSquareWarning className="size-5" />
@@ -423,7 +423,7 @@ export function ExceptionWorkspace() {
         </Card>
 
         {recentlyClosed.length ? (
-          <Card className="rounded-[24px] border-border/80 bg-card/72 shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]">
+          <Card className="rounded-lg border-border/80 bg-card">
             <CardHeader>
               <CardTitle className="text-base">Recentes</CardTitle>
             </CardHeader>
@@ -431,7 +431,7 @@ export function ExceptionWorkspace() {
               {recentlyClosed.map((exception) => (
                 <div
                   key={exception.id}
-                  className="rounded-[16px] border border-border bg-card/55 px-3 py-2 text-sm"
+                  className="rounded-md border border-border bg-card px-3 py-2 text-sm"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <span className="font-medium text-foreground">
@@ -732,11 +732,11 @@ export function ReturnWorkspace() {
 
   return (
     <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-      <Card className="overflow-hidden rounded-[28px] border-border/80 bg-card/72 shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]">
+      <Card className="overflow-hidden rounded-lg border-border/80 bg-card">
         <CardHeader className="border-b border-border/70 p-6">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex gap-3">
-              <div className="flex size-12 shrink-0 items-center justify-center rounded-[18px] border border-primary/20 bg-primary/10 text-primary">
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
                 <RotateCcw className="size-5" />
               </div>
               <div>
@@ -797,7 +797,7 @@ export function ReturnWorkspace() {
                     <div
                       key={index}
                       className={cn(
-                        "rounded-[22px] border bg-card/65 p-3",
+                        "rounded-lg border bg-card p-3",
                         issue?.duplicateInDraft
                           ? "border-destructive/25 bg-destructive/5"
                           : existing
@@ -809,7 +809,7 @@ export function ReturnWorkspace() {
                     >
                       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="outline" className="border-border bg-card/70">
+                          <Badge variant="outline" className="border-border bg-card">
                             Linha {index + 1}
                           </Badge>
                           {issue?.duplicateInDraft ? (
@@ -880,7 +880,7 @@ export function ReturnWorkspace() {
                         />
                       </div>
                       {existing ? (
-                        <div className="mt-3 flex flex-col gap-2 rounded-[16px] border border-primary/20 bg-card/70 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
+                        <div className="mt-3 flex flex-col gap-2 rounded-md border border-primary/20 bg-card px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
                           <div>
                             <span className="font-medium text-foreground">
                               {existing.productName}
@@ -932,7 +932,7 @@ export function ReturnWorkspace() {
               />
             </div>
 
-            <div className="flex flex-col gap-3 rounded-[22px] border border-border bg-card/60 p-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 lg:flex-row lg:items-center lg:justify-between">
               <p className="text-sm leading-6 text-muted-foreground">
                 Criar devolução não altera saldo. O estoque só muda quando a
                 disposição for “volta para disponível”.
@@ -951,7 +951,7 @@ export function ReturnWorkspace() {
       </Card>
 
       <div className="flex flex-col gap-4">
-        <Card className="rounded-[24px] border-border/80 bg-card/72 shadow-[0_18px_60px_rgba(15,23,42,.05)] backdrop-blur-[40px]">
+        <Card className="rounded-lg border-border/80 bg-card">
           <CardHeader>
             <CardTitle className="text-base">Disposição física</CardTitle>
           </CardHeader>
@@ -973,10 +973,10 @@ export function ReturnWorkspace() {
                   <div
                     key={line.itemId}
                     className={cn(
-                      "rounded-[20px] border p-4",
+                      "rounded-lg border p-4",
                       isDone
                         ? "border-primary/20 bg-primary/5"
-                        : "border-border bg-card/60",
+                        : "border-border bg-card",
                     )}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -1087,7 +1087,7 @@ export function ReturnWorkspace() {
                         </Button>
                       </div>
                     ) : (
-                      <div className="mt-3 rounded-[16px] border border-primary/20 bg-card/70 px-3 py-2 text-sm text-muted-foreground">
+                      <div className="mt-3 rounded-md border border-primary/20 bg-card px-3 py-2 text-sm text-muted-foreground">
                         Disposição registrada: {line.disposition}.
                       </div>
                     )}
@@ -1096,11 +1096,11 @@ export function ReturnWorkspace() {
               })
             ) : pendingReturnLinesQuery.isLoading ? (
               <div className="space-y-3">
-                <Skeleton className="h-28 rounded-[20px]" />
-                <Skeleton className="h-28 rounded-[20px]" />
+                <Skeleton className="h-28 rounded-lg" />
+                <Skeleton className="h-28 rounded-lg" />
               </div>
             ) : (
-              <Empty className="min-h-[260px] border border-border bg-card/35">
+              <Empty className="min-h-[260px] border border-border bg-card">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
                     <RotateCcw className="size-5" />

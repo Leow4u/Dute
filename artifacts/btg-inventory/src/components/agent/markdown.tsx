@@ -26,7 +26,7 @@ function InlineText({ content }: { content: Inline[] }) {
 export function AgentMarkdown({ content, className }: { content: string; className?: string }) {
   const blocks = parseMarkdown(content);
   return (
-    <div className={cn("space-y-3 text-[15px] leading-7", className)}>
+    <div className={cn("space-y-3 text-base leading-7", className)}>
       {blocks.map((block, index) => {
         if (block.kind === "heading") {
           return (

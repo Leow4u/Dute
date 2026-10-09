@@ -1350,7 +1350,7 @@ export default function CustomerRequests() {
               Não consegui carregar a fila.
             </p>
           ) : visible.length === 0 ? (
-            <div className="flex items-center gap-2 rounded-2xl border border-border bg-card/70 px-4 py-6 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-4 py-6 text-sm text-muted-foreground">
               {tab === "decide" && !search ? (
                 <>
                   <CheckCircle2 className="size-4 text-success-soft-foreground" />
@@ -1369,9 +1369,9 @@ export default function CustomerRequests() {
                   type="button"
                   onClick={() => setSelectedId(item.id)}
                   className={cn(
-                    "rounded-2xl border bg-card/80 px-4 py-3.5 text-left transition-[border-color,box-shadow]",
+                    "rounded-2xl border bg-card px-4 py-3.5 text-left transition-[border-color,box-shadow]",
                     active
-                      ? "border-primary shadow-[0_6px_20px_rgba(110,158,248,.18)] ring-1 ring-primary"
+                      ? "border-primary ring-1 ring-primary"
                       : "border-border hover:border-primary/40",
                   )}
                 >
@@ -1524,7 +1524,7 @@ function RequestDetail({
       : "Aprovar";
 
   return (
-    <section className="flex min-w-0 flex-col overflow-hidden rounded-[22px] border border-border bg-card/85 lg:sticky lg:top-0 lg:max-h-[calc(100dvh-190px)]">
+    <section className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card lg:sticky lg:top-0 lg:max-h-[calc(100dvh-190px)]">
       <header className="border-b border-border/70 px-5 py-5 md:px-6">
         <div className="mb-2 flex flex-wrap gap-2">
           <Chip tone="muted">{requestTypeLabel(request.type)}</Chip>
@@ -1642,7 +1642,7 @@ function RequestDetail({
                           <span className="size-10 shrink-0 rounded-lg border border-dashed border-border" />
                         )}
                         <div className="min-w-0">
-                          <div className="font-mono text-[13px] text-foreground/85">{line.label}</div>
+                          <div className="font-mono text-sm text-foreground/85">{line.label}</div>
                           {line.productName && line.productName !== line.label ? (
                             <div className="text-xs text-foreground/55">{line.productName}</div>
                           ) : null}

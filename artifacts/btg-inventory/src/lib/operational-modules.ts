@@ -59,7 +59,7 @@ export const MODULE_STATUS_CLASS: Record<OperationalModuleStatus, string> = {
   online: "border-info-soft-border bg-info-soft text-info-soft-foreground",
   partial: "border-warning-soft-border bg-warning-soft text-warning-soft-foreground",
   foundation: "border-info-soft-border bg-info-soft text-info-soft-foreground",
-  planned: "border-border bg-card/70 text-muted-foreground",
+  planned: "border-border bg-card text-muted-foreground",
 };
 
 export const OPERATIONAL_MODULES: OperationalModule[] = [

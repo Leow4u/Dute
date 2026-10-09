@@ -58,7 +58,7 @@ export function ClienteFaturas() {
                           key={value}
                           type="button"
                           aria-pressed={span === value}
-                          className={cn("rounded-[10px] px-3 py-1.5", span === value ? "bg-foreground text-background" : "text-muted-foreground")}
+                          className={cn("rounded-md px-3 py-1.5", span === value ? "bg-foreground text-background" : "text-muted-foreground")}
                           onClick={() => setSpan(value)}
                         >
                           {value} meses
@@ -76,7 +76,7 @@ export function ClienteFaturas() {
               </header>
 
               {!latest ? (
-                <p className="rounded-[18px] border border-dashed border-border bg-card/60 px-5 py-8 text-sm text-muted-foreground">
+                <p className="rounded-lg border border-dashed border-border bg-card px-5 py-8 text-sm text-muted-foreground">
                   Nenhuma fatura fechada ainda. Quando a Dutelog emitir a fatura do mês, ela aparece aqui com o detalhamento.
                 </p>
               ) : (
@@ -135,7 +135,7 @@ export function ClienteFaturas() {
                     <div className="overflow-x-auto">
                       <table className="w-full min-w-[560px] text-sm">
                         <thead>
-                          <tr className="border-b border-border/60 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+                          <tr className="border-b border-border/60 text-left text-xs uppercase tracking-wider text-muted-foreground">
                             <th className="py-2 pr-2 font-semibold">Competência</th>
                             <th className="py-2 pr-2 font-semibold">Emitida</th>
                             <th className="py-2 pr-2 text-right font-semibold">Valor</th>
@@ -181,7 +181,7 @@ export function ClienteFaturas() {
 
 function Tile({ label, value, children }: { label: string; value: string; children: ReactNode }) {
   return (
-    <div className="rounded-[18px] border border-border bg-card px-4 py-3.5">
+    <div className="rounded-lg border border-border bg-card px-4 py-3.5">
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{value}</div>
       <div className="mt-0.5 text-xs text-muted-foreground">{children}</div>
@@ -191,7 +191,7 @@ function Tile({ label, value, children }: { label: string; value: string; childr
 
 function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
   return (
-    <section className="min-w-0 rounded-[18px] border border-border bg-card px-5 py-4">
+    <section className="min-w-0 rounded-lg border border-border bg-card px-5 py-4">
       <h2 className="font-semibold">{title}</h2>
       {subtitle ? <p className="text-xs text-muted-foreground">{subtitle}</p> : null}
       <div className="mt-3">{children}</div>

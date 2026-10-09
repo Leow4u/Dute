@@ -129,7 +129,7 @@ export function OwnerDashboard() {
 
   if (dashboard.isLoading) return <p className="text-sm text-muted-foreground">Carregando o painel…</p>;
   if (dashboard.isError || !dashboard.data) {
-    return <p className="rounded-[18px] border border-destructive-soft-border bg-destructive-soft px-5 py-4 text-sm text-destructive-soft-foreground">Não consegui carregar o painel: {dashboard.error?.message}</p>;
+    return <p className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-4 text-sm text-destructive-soft-foreground">Não consegui carregar o painel: {dashboard.error?.message}</p>;
   }
   const data = dashboard.data;
   const { usage, routines } = data;
@@ -139,13 +139,13 @@ export function OwnerDashboard() {
   return (
     <div className="space-y-4">
       {usage.month.over_budget ? (
-        <p className="flex items-start gap-2 rounded-[14px] border border-warning-soft-border bg-warning-soft px-4 py-3 text-sm text-warning-soft-foreground" role="alert">
+        <p className="flex items-start gap-2 rounded-md border border-warning-soft-border bg-warning-soft px-4 py-3 text-sm text-warning-soft-foreground" role="alert">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           A projeção do mês ({formatMoney(usage.month.projection)}) passou do orçamento de {formatMoney(usage.month.budget ?? 0)}.
         </p>
       ) : null}
       {!usage.priced ? (
-        <p className="flex flex-wrap items-center justify-between gap-2 rounded-[14px] border border-border bg-card px-4 py-3 text-sm">
+        <p className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-card px-4 py-3 text-sm">
           <span>Para ver o custo em reais, informe o preço do modelo (R$ por milhão de tokens).</span>
           <button type="button" onClick={() => setEditingCosts(true)} className="font-semibold text-primary hover:underline">
             Informar preços
@@ -180,7 +180,7 @@ export function OwnerDashboard() {
           }
         >
           <div className="flex flex-col gap-3 px-5 py-4">
-            <div className="text-[1.7rem] font-bold tabular-nums">
+            <div className="text-3xl font-bold tabular-nums">
               {formatMoney(usage.month.cost)}{" "}
               <span className="text-sm font-medium text-muted-foreground">
                 até hoje · projeção do mês {formatMoney(usage.month.projection)}

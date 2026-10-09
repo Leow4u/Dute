@@ -301,7 +301,7 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
           >
             <MessagesSquare className="h-5 w-5" />
           </button>
-          <h1 className="min-w-0 flex-1 truncate text-[15px] font-semibold">{title}</h1>
+          <h1 className="min-w-0 flex-1 truncate text-base font-semibold">{title}</h1>
           {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
         </header>
 
@@ -362,14 +362,14 @@ function RailButton({
       aria-label={collapsed ? label : undefined}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex items-center gap-2.5 rounded-lg text-[13.5px] text-foreground/85 hover:bg-muted",
+        "flex items-center gap-2.5 rounded-lg text-sm text-foreground/85 hover:bg-muted",
         collapsed ? "h-10 w-10 justify-center" : "w-full px-2.5 py-2",
         active && "bg-muted font-semibold text-foreground",
       )}
     >
       <span className="shrink-0 text-muted-foreground [&>svg]:h-[18px] [&>svg]:w-[18px]">{icon}</span>
       {collapsed ? null : <span className="min-w-0 flex-1 truncate text-left">{label}</span>}
-      {!collapsed && badge ? <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10.5px] font-semibold text-muted-foreground">{badge}</span> : null}
+      {!collapsed && badge ? <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">{badge}</span> : null}
     </button>
   );
 }
@@ -425,7 +425,7 @@ function AgentRail({
       onClick={() => onOpen(id)}
       title={title ?? label}
       className={cn(
-        "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13.5px] text-foreground/80 hover:bg-muted",
+        "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-foreground/80 hover:bg-muted",
         id === activeId && "bg-muted font-semibold text-foreground",
       )}
     >
@@ -459,7 +459,7 @@ function AgentRail({
         ) : (
           groups.map((group) => (
             <div key={group.label} className="mb-2">
-              <p className="px-2 pb-1 pt-3 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">{group.label}</p>
+              <p className="px-2 pb-1 pt-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{group.label}</p>
               {group.items.map((conversation) => item(conversation.id, conversation.title, false))}
             </div>
           ))
@@ -467,7 +467,7 @@ function AgentRail({
       </nav>
       {history.length ? (
         <nav aria-label="Histórico das rotinas" className="max-h-[34%] shrink-0 overflow-y-auto border-t border-border/70 pt-1">
-          <p className="px-2 pb-1 pt-2 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Histórico das rotinas</p>
+          <p className="px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Histórico das rotinas</p>
           {history.map((entry) => item(entry.id, entry.label, isUnreadRoutine(entry)))}
         </nav>
       ) : null}
@@ -495,7 +495,7 @@ function AgentMark({ size = "sm" }: { size?: "sm" | "lg" }) {
     <span
       className={cn(
         "grid shrink-0 place-items-center bg-gradient-to-br from-agent-start to-agent-accent text-white",
-        size === "lg" ? "h-14 w-14 rounded-2xl" : "h-8 w-8 rounded-[10px]",
+        size === "lg" ? "h-14 w-14 rounded-2xl" : "h-8 w-8 rounded-md",
       )}
     >
       <Sparkles className={size === "lg" ? "h-7 w-7" : "h-4 w-4"} aria-hidden="true" />
@@ -533,7 +533,7 @@ function Composer({
   }, [value]);
   const canSend = (value.trim().length > 0 || hasFile) && !uploading && !disabled;
   return (
-    <div className="rounded-[22px] border border-border bg-card px-4 pb-2.5 pt-3 shadow-[0_6px_24px_rgba(30,40,70,.06)] focus-within:border-primary/40">
+    <div className="rounded-lg border border-border bg-card px-4 pb-2.5 pt-3 focus-within:border-primary/40">
       {files.length ? (
         <ul className="mb-2 flex flex-wrap gap-1.5">
           {files.map((file) => (
@@ -573,7 +573,7 @@ function Composer({
         }}
         placeholder={placeholder}
         data-agent-input
-        className="block max-h-[200px] w-full resize-none bg-transparent text-[15px] leading-6 outline-none placeholder:text-muted-foreground"
+        className="block max-h-[200px] w-full resize-none bg-transparent text-base leading-6 outline-none placeholder:text-muted-foreground"
       />
       <div className={cn("mt-1.5 flex items-center", attach ? "justify-between" : "justify-end")}>
         {attach ? (
@@ -642,7 +642,7 @@ function Welcome({
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-10 pt-6">
       <AgentMark size="lg" />
-      <h2 className="mt-4 text-center text-2xl font-semibold tracking-tight md:text-[28px]">
+      <h2 className="mt-4 text-center text-2xl font-semibold tracking-tight md:text-3xl">
         {name ? `Olá, ${name}. Como posso ajudar?` : "Como posso ajudar?"}
       </h2>
       <p className="mt-1.5 max-w-xl text-center text-sm text-muted-foreground">
@@ -785,7 +785,7 @@ function Conversation({
       <div className="shrink-0 px-4 pb-4 md:px-7">
         <div className="mx-auto w-full max-w-[780px]">
           <Composer value={draft} onChange={onDraft} onSend={onSend} disabled={busy} placeholder="Responder…" attach={attach} />
-          <p className="mt-2 text-center text-[11.5px] text-muted-foreground">
+          <p className="mt-2 text-center text-xs text-muted-foreground">
             O Agent Dute monta pedidos para você conferir; quem envia é você. Confira as informações importantes.
           </p>
         </div>
@@ -807,7 +807,7 @@ function UserMessage({ children, files = [] }: { children: ReactNode; files?: st
           ))}
         </ul>
       ) : null}
-      <div className="max-w-[80%] whitespace-pre-wrap rounded-[18px] rounded-br-md bg-muted px-4 py-2.5 text-[15px] leading-6">
+      <div className="max-w-[80%] whitespace-pre-wrap rounded-lg rounded-br-md bg-muted px-4 py-2.5 text-base leading-6">
         {children}
       </div>
     </div>
