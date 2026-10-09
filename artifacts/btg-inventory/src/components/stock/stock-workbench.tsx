@@ -4,6 +4,7 @@ import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Chip } from "@/components/ui/chip";
+import { FilterGroup, FilterPanel } from "@/components/ui/filter-panel";
 import { PageHeader } from "@/components/ui/page-header";
 import { cn } from "@/lib/utils";
 
@@ -108,6 +109,10 @@ type StockToolbarProps = {
   onSearchChange: (value: string) => void;
   placeholder: string;
   resultText?: string;
+  /** O que está filtrado ("Entrada"); vazio quando é "Todos". */
+  filterSummary?: string;
+  /** Rótulo do grupo de chips no painel do celular. */
+  filterLabel?: string;
   children?: ReactNode;
 };
 
@@ -116,6 +121,8 @@ export function StockToolbar({
   onSearchChange,
   placeholder,
   resultText,
+  filterSummary,
+  filterLabel = "Mostrar",
   children,
 }: StockToolbarProps) {
   return (
@@ -131,7 +138,9 @@ export function StockToolbar({
           />
         </div>
         {children ? (
-          <div className="flex flex-wrap items-center gap-2">{children}</div>
+          <FilterPanel summary={filterSummary}>
+            <FilterGroup label={filterLabel}>{children}</FilterGroup>
+          </FilterPanel>
         ) : null}
       </div>
       {resultText ? (

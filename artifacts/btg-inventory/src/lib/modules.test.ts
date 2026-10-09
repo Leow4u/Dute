@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   getActiveModule,
   getHomePathForProfile,
+  getMobileNavigation,
   getNavigationForProfileRole,
   getRouteProfileRoles,
   INTERNAL_ROLES,
@@ -186,6 +187,44 @@ describe("menu do portal da BTG", () => {
       ["Pedidos", "/portal/pedidos"],
       ["Faturas", "/portal/faturas"],
       ["Documentos", "/portal/documentos"],
+    ]);
+  });
+});
+
+describe("barra inferior do celular", () => {
+  const bar = (role: ProfileRole) =>
+    getMobileNavigation(getNavigationForProfileRole(role)).bar.map((module) => module.label);
+  const more = (role: ProfileRole) =>
+    getMobileNavigation(getNavigationForProfileRole(role)).more.flatMap(({ module, routes }) =>
+      routes.map((route) => `${module.label} · ${route.label}`),
+    );
+
+  it("coordenação: Início, Pedidos, Estoque e Agent Dute; o resto em Mais", () => {
+    expect(bar("owner")).toEqual(["Início", "Pedidos", "Estoque", "Agent Dute"]);
+    expect(more("owner")).toEqual([
+      "Estoque · Receber",
+      "Faturamento · Faturamento",
+      "Relatórios · Relatórios",
+      "Documentos · Documentos",
+    ]);
+  });
+
+  it("operador WMS completa a barra com Documentos", () => {
+    expect(bar("wms")).toEqual(["Pedidos", "Estoque", "Agent Dute", "Documentos"]);
+    expect(more("wms")).toEqual(["Estoque · Receber"]);
+  });
+
+  it("financeiro completa a barra com Faturamento e Relatórios", () => {
+    expect(bar("financeiro")).toEqual(["Início", "Agent Dute", "Faturamento", "Relatórios"]);
+    expect(more("financeiro")).toEqual(["Documentos · Documentos"]);
+  });
+
+  it("portal da BTG: Início, Pedidos, Estoque e Agent Dute; Envios, Faturas e Documentos em Mais", () => {
+    expect(bar("cliente")).toEqual(["Início", "Pedidos", "Estoque", "Agent Dute"]);
+    expect(more("cliente")).toEqual([
+      "Envios para a Dutelog · Envios para a Dutelog",
+      "Faturas · Faturas",
+      "Documentos · Documentos",
     ]);
   });
 });

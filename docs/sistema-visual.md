@@ -46,8 +46,24 @@ Sombra só em overlay (`shadow-lg` em diálogo e menu) e no painel flutuante
 borda, `ghost` e `destructive` com borda. Tamanhos `sm` 36, padrão 40, `lg`
 44. Não crie `<button>` com classes próprias para o que o `Button` já faz.
 
+## Celular (abaixo de 768px)
+
+- Navegação pela barra inferior (`MobileTabBar`): até quatro destinos fixos
+  (Início, Pedidos, Estoque, Agent Dute, nesta ordem; o papel sem algum deles
+  completa com os próximos do menu) e "Mais" com o resto e a Configuração.
+  A ordem vem de `getMobileNavigation` em `lib/modules.ts`, com teste.
+- Não há botão flutuante: o Agent Dute é item da barra; no desktop, do menu.
+- Filtros de lista em painel (`FilterPanel` + `FilterGroup`): chips em linha
+  no desktop; no celular, botão "Filtros · <o que está ativo>" que abre um
+  sheet com os grupos. `StockToolbar` já faz isso para quem passa chips.
+- Tabela com mais de quatro colunas vira lista de cartões no celular
+  (Documentos, Histórico); a tabela fica `hidden md:block` e a lista
+  `md:hidden`, com as mesmas ações.
+- Gráfico de barras: rótulo curto ("10,8") com a unidade no apoio do cartão;
+  acima de 8 meses, sem valor em cima da barra e mês alternado a partir do
+  último.
+
 ## O que vem depois (plano da auditoria)
 
-PR 2 cabeçalho/abas/chips em todas as telas; PR 3 celular com barra inferior;
 PR 4 Receber reconstruído; PR 5 Estoque histórico e contagem; PR 6 portal;
 PR 7 escuro. O relatório completo está no artefato "Auditoria de UI Dute".

@@ -4,6 +4,7 @@ import { MoreHorizontal, Plus, Search, UploadCloud } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
+import { FilterGroup, FilterPanel } from "@/components/ui/filter-panel";
 import { PageHeader } from "@/components/ui/page-header";
 import {
   Dialog,
@@ -265,6 +266,13 @@ export default function Documents() {
   });
 
   const loading = documents.isLoading || requests.isLoading;
+  const filterSummary =
+    [
+      kind !== "all" ? KIND_FILTERS.find((option) => option.value === kind)?.label : null,
+      audience !== "all" ? AUDIENCE_FILTERS.find((option) => option.value === audience)?.label : null,
+    ]
+      .filter(Boolean)
+      .join(" · ") || undefined;
 
   return (
     <div className="space-y-4">
@@ -289,21 +297,23 @@ export default function Documents() {
             className="pl-9"
           />
         </div>
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Tipo de documento">
-          {KIND_FILTERS.map((option) => (
-            <Chip key={option.value} selected={kind === option.value} onClick={() => setKind(option.value)}>
-              {option.label}
-            </Chip>
-          ))}
-        </div>
-        <span className="hidden h-6 w-px bg-border sm:block" aria-hidden="true" />
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Quem vê">
-          {AUDIENCE_FILTERS.map((option) => (
-            <Chip key={option.value} selected={audience === option.value} onClick={() => setAudience(option.value)}>
-              {option.label}
-            </Chip>
-          ))}
-        </div>
+        <FilterPanel summary={filterSummary}>
+          <FilterGroup label="Tipo de documento">
+            {KIND_FILTERS.map((option) => (
+              <Chip key={option.value} selected={kind === option.value} onClick={() => setKind(option.value)}>
+                {option.label}
+              </Chip>
+            ))}
+          </FilterGroup>
+          <span className="hidden h-6 w-px bg-border md:block" aria-hidden="true" />
+          <FilterGroup label="Quem vê">
+            {AUDIENCE_FILTERS.map((option) => (
+              <Chip key={option.value} selected={audience === option.value} onClick={() => setAudience(option.value)}>
+                {option.label}
+              </Chip>
+            ))}
+          </FilterGroup>
+        </FilterPanel>
       </div>
 
       <section className="overflow-hidden rounded-lg border border-border bg-card">
@@ -312,7 +322,8 @@ export default function Documents() {
         ) : documents.error ? (
           <p className="p-6 text-sm text-destructive">{humanApiError(documents.error, "Não foi possível carregar.")}</p>
         ) : visible.length ? (
-          <div className="overflow-x-auto">
+          <>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[720px] text-sm">
               <thead>
                 <tr className="border-b border-border/70 text-left text-xs uppercase tracking-wide text-foreground/50">
@@ -341,6 +352,22 @@ export default function Documents() {
               </tbody>
             </table>
           </div>
+          <ul className="divide-y divide-border md:hidden">
+            {visible.map((row) => (
+              <DocumentCard
+                key={row.key}
+                row={row}
+                canPublish={canPublish}
+                canSend={canSend}
+                canApprove={canApprove}
+                onSend={() => row.documentId && sendToKnowledge.mutate(row.documentId)}
+                onDecide={(approve) => row.documentId && decideKnowledge.mutate({ id: row.documentId, approve })}
+                onShare={(shared) => row.documentId && setShared.mutate({ id: row.documentId, shared })}
+                onArchive={() => row.documentId && archive.mutate(row.documentId)}
+              />
+            ))}
+          </ul>
+          </>
         ) : (
           <p className="p-6 text-sm text-muted-foreground">
             {rows.length ? "Nenhum documento neste filtro." : "Nenhum documento ainda. As NFs anexadas pela BTG no aviso de chegada aparecem aqui."}
@@ -468,16 +495,7 @@ const KNOWLEDGE_LABEL: Record<KnowledgeState, string> = {
   rejected: "Recusado para o Conhecimento",
 };
 
-function DocumentLine({
-  row,
-  canPublish,
-  canSend,
-  canApprove,
-  onSend,
-  onDecide,
-  onShare,
-  onArchive,
-}: {
+type DocumentLineProps = {
   row: DocumentRow;
   canPublish: boolean;
   canSend: boolean;
@@ -486,29 +504,77 @@ function DocumentLine({
   onDecide: (approve: boolean) => void;
   onShare: (shared: boolean) => void;
   onArchive: () => void;
-}) {
-  const date = row.date ? dateFormatter.format(row.date) : "—";
-  const audience =
-    row.audience === "archived"
-      ? { label: "Arquivado", tone: "bg-muted text-muted-foreground" }
-      : row.audience === "btg"
-        ? { label: row.source === "request" ? "Enviado pela BTG" : "BTG vê", tone: "bg-info-soft text-info-soft-foreground" }
-        : { label: "Só Dutelog", tone: "bg-muted text-foreground" };
+};
+
+function audienceOf(row: DocumentRow) {
+  if (row.audience === "archived") return { label: "Arquivado", tone: "bg-muted text-muted-foreground" };
+  if (row.audience === "btg") {
+    return { label: row.source === "request" ? "Enviado pela BTG" : "BTG vê", tone: "bg-info-soft text-info-soft-foreground" };
+  }
+  return { label: "Só Dutelog", tone: "bg-muted text-foreground" };
+}
+
+function knowledgeTone(state: KnowledgeState) {
+  return state === "pending" ? "text-warning-soft-foreground" : state === "active" ? "text-primary" : "text-muted-foreground";
+}
+
+function DocumentActions({ row, canPublish, canSend, canApprove, onSend, onDecide, onShare, onArchive }: DocumentLineProps) {
   const manageable = row.source === "document" && row.audience !== "archived";
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" aria-label={`Ações de ${row.title}`}>
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {row.href ? (
+          <DropdownMenuItem asChild>
+            <a href={row.href} target="_blank" rel="noreferrer">
+              Abrir
+            </a>
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem disabled>Sem arquivo anexado</DropdownMenuItem>
+        )}
+        {manageable && canSend && row.href && (row.knowledge === "none" || row.knowledge === "rejected") ? (
+          <DropdownMenuItem onSelect={onSend}>Enviar para o Conhecimento</DropdownMenuItem>
+        ) : null}
+        {manageable && canApprove && row.knowledge === "pending" ? (
+          <>
+            <DropdownMenuItem onSelect={() => onDecide(true)}>Aprovar para o Conhecimento</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onDecide(false)}>Recusar para o Conhecimento</DropdownMenuItem>
+          </>
+        ) : null}
+        {manageable && canPublish ? (
+          <DropdownMenuItem onSelect={() => onShare(row.audience !== "btg")}>
+            {row.audience === "btg" ? "Ocultar da BTG" : "Mostrar para a BTG"}
+          </DropdownMenuItem>
+        ) : null}
+        {manageable ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="text-destructive" onSelect={onArchive}>
+              Arquivar
+            </DropdownMenuItem>
+          </>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function DocumentLine(props: DocumentLineProps) {
+  const { row } = props;
+  const date = row.date ? dateFormatter.format(row.date) : "—";
+  const audience = audienceOf(row);
   return (
     <tr className={cn("border-b border-border/40 last:border-0", row.audience === "archived" && "text-muted-foreground")}>
       <td className="px-5 py-3">
         <div className="font-medium text-foreground">{row.title}</div>
         <div className="text-xs text-muted-foreground">{row.origin}</div>
         {KNOWLEDGE_LABEL[row.knowledge] ? (
-          <div
-            className={cn(
-              "mt-0.5 text-xs font-medium",
-              row.knowledge === "pending" ? "text-warning-soft-foreground" : row.knowledge === "active" ? "text-primary" : "text-muted-foreground",
-            )}
-          >
-            {KNOWLEDGE_LABEL[row.knowledge]}
-          </div>
+          <div className={cn("mt-0.5 text-xs font-medium", knowledgeTone(row.knowledge))}>{KNOWLEDGE_LABEL[row.knowledge]}</div>
         ) : null}
       </td>
       <td className="px-3 py-3">{row.typeLabel}</td>
@@ -518,47 +584,34 @@ function DocumentLine({
       </td>
       <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">{date}</td>
       <td className="px-3 py-3 text-right">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" aria-label={`Ações de ${row.title}`}>
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {row.href ? (
-              <DropdownMenuItem asChild>
-                <a href={row.href} target="_blank" rel="noreferrer">
-                  Abrir
-                </a>
-              </DropdownMenuItem>
-            ) : (
-              <DropdownMenuItem disabled>Sem arquivo anexado</DropdownMenuItem>
-            )}
-            {manageable && canSend && row.href && (row.knowledge === "none" || row.knowledge === "rejected") ? (
-              <DropdownMenuItem onSelect={onSend}>Enviar para o Conhecimento</DropdownMenuItem>
-            ) : null}
-            {manageable && canApprove && row.knowledge === "pending" ? (
-              <>
-                <DropdownMenuItem onSelect={() => onDecide(true)}>Aprovar para o Conhecimento</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => onDecide(false)}>Recusar para o Conhecimento</DropdownMenuItem>
-              </>
-            ) : null}
-            {manageable && canPublish ? (
-              <DropdownMenuItem onSelect={() => onShare(row.audience !== "btg")}>
-                {row.audience === "btg" ? "Ocultar da BTG" : "Mostrar para a BTG"}
-              </DropdownMenuItem>
-            ) : null}
-            {manageable ? (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive" onSelect={onArchive}>
-                  Arquivar
-                </DropdownMenuItem>
-              </>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <DocumentActions {...props} />
       </td>
     </tr>
+  );
+}
+
+/** Abaixo de 768px a tabela vira esta lista: nome, origem, selo e data, com as mesmas ações. */
+function DocumentCard(props: DocumentLineProps) {
+  const { row } = props;
+  const date = row.date ? dateFormatter.format(row.date) : "—";
+  const audience = audienceOf(row);
+  return (
+    <li className={cn("flex items-start gap-2 px-4 py-3", row.audience === "archived" && "text-muted-foreground")}>
+      <div className="min-w-0 flex-1">
+        <div className="truncate font-medium text-foreground">{row.title}</div>
+        <div className="text-xs text-muted-foreground">{row.origin}</div>
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+          <span className={cn("rounded-md px-2 py-0.5 font-semibold", audience.tone)}>{audience.label}</span>
+          <span>
+            {row.typeLabel} · {date}
+          </span>
+        </div>
+        {row.linkedTo ? <div className="mt-1 text-xs text-muted-foreground">{row.linkedTo}</div> : null}
+        {KNOWLEDGE_LABEL[row.knowledge] ? (
+          <div className={cn("mt-1 text-xs font-medium", knowledgeTone(row.knowledge))}>{KNOWLEDGE_LABEL[row.knowledge]}</div>
+        ) : null}
+      </div>
+      <DocumentActions {...props} />
+    </li>
   );
 }

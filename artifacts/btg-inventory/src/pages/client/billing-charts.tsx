@@ -12,6 +12,11 @@ export function moneyShort(value: number) {
 
 const exact = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
+/** "10,8" para o rótulo estreito do celular; a unidade (R$ mil) fica no apoio do cartão. */
+function thousands(value: number) {
+  return (value / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+}
+
 /**
  * Gasto por mês: uma série, um tom. O mês em destaque (a última fatura) leva
  * o tom cheio; os demais, o mesmo tom mais claro. Mês sem fatura não tem
@@ -31,11 +36,16 @@ export function MonthlyBars({
   const [hover, setHover] = useState<string | null>(null);
   const max = Math.max(1, ...months.map((month) => month.total ?? 0));
   const plot = height - 40;
+  // Com mais de 8 meses não cabe valor em cima de cada barra no celular, e
+  // os rótulos de mês saem alternados a partir do último (o mês em destaque
+  // é o mais recente). O valor exato continua no toque.
+  const dense = months.length > 8;
+  const skipLabel = (index: number) => dense && (months.length - 1 - index) % 2 === 1;
   return (
     <div className="relative" style={{ height }} role="img" aria-label={`Gasto por mês: ${months.map((m) => `${m.label} ${m.total === null ? "sem fatura" : exact.format(m.total)}`).join("; ")}`}>
       <div className="absolute inset-x-0 border-b border-border" style={{ top: plot + 18 }} />
       <div className="absolute inset-0 flex items-end gap-2 px-1 sm:gap-4" style={{ paddingBottom: height - plot - 18 }}>
-        {months.map((month) => {
+        {months.map((month, index) => {
           const value = month.total ?? 0;
           const barHeight = month.total === null ? 0 : Math.max(3, (value / max) * plot);
           const strong = !highlight || month.competencia === highlight;
@@ -47,7 +57,16 @@ export function MonthlyBars({
               onMouseLeave={() => setHover(null)}
             >
               {month.total !== null ? (
-                <span className="mb-1 whitespace-nowrap text-xs tabular-nums text-muted-foreground">{moneyShort(value)}</span>
+                <span className={cn("mb-1 whitespace-nowrap text-xs tabular-nums text-muted-foreground", dense && "hidden sm:inline")}>
+                  {print ? (
+                    moneyShort(value)
+                  ) : (
+                    <>
+                      <span className="sm:hidden">{thousands(value)}</span>
+                      <span className="hidden sm:inline">{moneyShort(value)}</span>
+                    </>
+                  )}
+                </span>
               ) : null}
               <span
                 className="block w-full max-w-[56px] rounded-t-sm"
@@ -57,6 +76,7 @@ export function MonthlyBars({
                 className={cn(
                   "absolute -bottom-[22px] whitespace-nowrap text-xs",
                   month.competencia === highlight ? "font-semibold text-foreground" : "text-muted-foreground",
+                  skipLabel(index) && "hidden sm:inline",
                 )}
               >
                 {month.label}
