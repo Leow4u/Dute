@@ -2,22 +2,30 @@ import { cn } from "@/lib/utils";
 
 /**
  * Logo no topo da barra lateral. Aberta, o logo completo; recolhida, só o
- * "D" (o mesmo ícone do app no celular), em vez do logo espremido. As duas
+ * "D" (o mesmo ícone do app no celular), em vez do logo espremido. As
  * imagens ficam sempre na página, já carregadas: ao recolher, uma some e a
  * outra aparece no lugar do D do logo, junto com a barra estreitando, sem
- * nada para baixar.
+ * nada para baixar. No escuro entra a versão clara do logo: a vermelha tem
+ * o "Soluções Logísticas" em preto, invisível sobre fundo escuro.
  */
 export function SidebarBrand({ basePath, collapsed }: { basePath: string; collapsed: boolean }) {
+  const logoClassName = cn(
+    "h-9 w-auto object-contain transition-[max-width,opacity] duration-200 ease-out motion-reduce:transition-none",
+    collapsed ? "max-w-0 opacity-0" : "max-w-[168px] opacity-100",
+  );
   return (
     <span className="relative flex h-9 min-w-8 items-center">
       <img
         src={`${basePath}/dutelog-logo.png`}
         alt={collapsed ? "" : "Dutelog Soluções Logísticas"}
         aria-hidden={collapsed ? "true" : undefined}
-        className={cn(
-          "h-9 w-auto object-contain transition-[max-width,opacity] duration-200 ease-out motion-reduce:transition-none",
-          collapsed ? "max-w-0 opacity-0" : "max-w-[168px] opacity-100",
-        )}
+        className={cn(logoClassName, "dark:hidden")}
+      />
+      <img
+        src={`${basePath}/dutelog-logo-light.png`}
+        alt=""
+        aria-hidden="true"
+        className={cn(logoClassName, "hidden dark:block")}
       />
       <img
         src={`${basePath}/dutelog-mark-180.png`}
