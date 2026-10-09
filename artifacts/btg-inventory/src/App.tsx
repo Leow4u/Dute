@@ -26,7 +26,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
@@ -95,6 +94,7 @@ const AgentKnowledge = lazy(() => import("./pages/agent-knowledge"));
 const SettingsSystem = lazy(() => import("./pages/settings-system"));
 const CustomerRequests = lazy(() => import("./pages/customer-requests"));
 const WarehouseOps = lazy(() => import("./pages/warehouse-ops"));
+const Receber = lazy(() => import("./pages/receber"));
 const WmsInventoryPage = lazy(() => import("./pages/wms-inventory"));
 const Pedidos = lazy(() => import("./pages/pedidos"));
 const Estoque = lazy(() => import("./pages/estoque"));
@@ -881,78 +881,26 @@ function protectedRoute(
   };
 }
 
-/**
- * Bancada em 2 abas — o que tem (Estoque) e o que chegou (Receber). O que
- * o cliente pediu está em /pedidos, item próprio do menu. As etapas enterprise (putaway/picking/packing/expedição/
- * qualidade/exceções) continuam roteáveis por URL como telas de exceção,
- * fora da régua. A contagem (abertura/cíclica) vive em /wms/contagem,
- * alcançada pelo botão dentro da própria régua.
- */
-const WMS_STAGES: Array<{ label: string; path: string; match?: string[] }> = [
-  { label: "Estoque", path: "/estoque", match: ["/estoque", "/wms/contagem"] },
-  { label: "Receber", path: "/wms/receber", match: ["/wms/receber", "/wms/recebimento"] },
-];
-
-function WmsStageTabs() {
-  const [location, navigate] = useLocation();
-  const active =
-    WMS_STAGES.find((stage) =>
-      (stage.match ?? [stage.path]).some((path) => location === path),
-    )?.path ?? "/wms";
-
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <Tabs value={active} onValueChange={(value) => navigate(value)}>
-        <TabsList className="h-auto flex-wrap">
-          {WMS_STAGES.map((stage) => (
-            <TabsTrigger key={stage.path} value={stage.path}>
-              {stage.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
-    </div>
-  );
-}
-
 function WmsModuleScreen({ module }: { module: WarehouseOpsModuleKey }) {
-  // Force remount when the WMS module changes so shared WarehouseOps state
-  // never leaks between Recebimento / Putaway / etc.
+  // Remonta quando o módulo muda: o estado da bancada não vaza entre filas.
   return <WarehouseOps key={module} initialModule={module} />;
 }
-
-// Aba Receber: o centro de recebimento existente.
-const WmsReceiveScreen = () => (
-  <div className="space-y-6">
-    <WmsStageTabs />
-    <WarehouseOps key="receiving" initialModule="receiving" />
-  </div>
-);
 
 // A fila de pedidos saiu da bancada: é o item "Pedidos" do menu.
 const WmsOrdersRedirect = () => <Redirect to="/pedidos" />;
 // Saldos virou a lista de Itens do Estoque (com a ficha de cada item).
 const WmsStockRedirect = () => <Redirect to="/estoque" />;
-
-// Contagem (abertura + cíclica) — alcançada pelo botão da aba Estoque.
-const WmsCountScreen = () => (
-  <div className="space-y-6">
-    <WmsStageTabs />
-    <WmsInventoryPage />
-  </div>
-);
+// Guarda (putaway) é o grupo "Para guardar" do Receber.
+const WmsPutawayRedirect = () => <Redirect to="/wms/receber" />;
 
 const WmsReceiveRedirect = () => <Redirect to="/wms/receber" />;
 const WmsCountRedirect = () => <Redirect to="/wms/contagem" />;
 
-// Telas por etapa (exceções e casos avançados) — fora da régua, mas vivas
-// por URL. "Tratar exceção" nos cartões de Pedidos aponta para cá.
+// Qualidade (falta, avaria, retenção) continua viva por URL, fora da régua.
+// As etapas antigas (putaway, picking, packing, expedição, exceções) viraram
+// redirects: a guarda vive no Receber e o pedido inteiro em Pedidos, onde
+// "Tratar" abre a tarefa bloqueada.
 const WmsQuality = () => <WmsModuleScreen module="quality" />;
-const WmsPutaway = () => <WmsModuleScreen module="putaway" />;
-const WmsPicking = () => <WmsModuleScreen module="picking" />;
-const WmsPacking = () => <WmsModuleScreen module="packing" />;
-const WmsExpedition = () => <WmsModuleScreen module="expedition" />;
-const WmsExceptions = () => <WmsModuleScreen module="exceptions" />;
 const ClientRequestsRedirect = () => <Redirect to="/portal/recebimentos" />;
 const ClientAgentRedirect = () => <Redirect to="/portal/agente" />;
 const ClientInvoicesRedirect = () => <Redirect to="/portal/faturas" />;
@@ -972,19 +920,19 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/dashboard", Home),
   protectedRoute("/reports", Reports),
   protectedRoute("/solicitacoes", CustomerRequests),
-  protectedRoute("/wms/receber", WmsReceiveScreen),
+  protectedRoute("/wms/receber", Receber),
   protectedRoute("/wms/pedidos", WmsOrdersRedirect),
   protectedRoute("/pedidos", Pedidos),
-  protectedRoute("/wms/contagem", WmsCountScreen),
+  protectedRoute("/wms/contagem", WmsInventoryPage),
   protectedRoute("/wms/recebimento", WmsReceiveRedirect),
   protectedRoute("/wms/inventario", WmsCountRedirect),
   protectedRoute("/wms/qualidade", WmsQuality),
-  protectedRoute("/wms/putaway", WmsPutaway),
-  protectedRoute("/wms/picking", WmsPicking),
-  protectedRoute("/wms/packing", WmsPacking),
-  protectedRoute("/wms/expedicao", WmsExpedition),
+  protectedRoute("/wms/putaway", WmsPutawayRedirect),
+  protectedRoute("/wms/picking", WmsOrdersRedirect),
+  protectedRoute("/wms/packing", WmsOrdersRedirect),
+  protectedRoute("/wms/expedicao", WmsOrdersRedirect),
   protectedRoute("/wms/devolucoes", WmsReturnsPage),
-  protectedRoute("/wms/excecoes", WmsExceptions),
+  protectedRoute("/wms/excecoes", WmsOrdersRedirect),
   protectedRoute("/wms", WmsStockRedirect),
   protectedRoute("/estoque", Estoque),
   protectedRoute("/catalogo", Catalog),

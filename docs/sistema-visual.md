@@ -63,7 +63,16 @@ borda, `ghost` e `destructive` com borda. Tamanhos `sm` 36, padrão 40, `lg`
   acima de 8 meses, sem valor em cima da barra e mês alternado a partir do
   último.
 
+## Listas de fila (Pedidos e Receber)
+
+`QueueGroup` + `QueueRow` (`components/ui/queue-list.tsx`): grupos com
+título, apoio e contagem; linhas com ícone em tom suave, título, apoio, nota
+e ações. A ficha do item abre ao lado no desktop (`useIsDesktop`) e num sheet
+no celular. Seções que vivem dentro de um painel estreito usam `@container`
+e variantes `@md:`/`@xl:` em vez de `md:`/`xl:`, para seguir a largura do
+painel e não a da janela.
+
 ## O que vem depois (plano da auditoria)
 
-PR 4 Receber reconstruído; PR 5 Estoque histórico e contagem; PR 6 portal;
+PR 5 Estoque histórico e contagem; PR 6 portal;
 PR 7 escuro. O relatório completo está no artefato "Auditoria de UI Dute".

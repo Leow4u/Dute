@@ -185,14 +185,14 @@ function ExecutionLineRowCard({
   return (
     <div
       className={cn(
-        "rounded-md border border-border bg-card px-3 py-3",
+        "@container rounded-md border border-border bg-card px-3 py-3",
         resolution === "confirmed" && "border-primary/20 bg-primary/5",
         hasIssue && "border-warning-soft-border bg-warning-soft/70",
         resolution === "damaged" && "border-destructive/20 bg-destructive/10",
       )}
     >
       <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-start @2xl:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-medium uppercase text-muted-foreground">
@@ -217,7 +217,7 @@ function ExecutionLineRowCard({
             </div>
           </div>
 
-          <div className="w-full lg:w-[280px]">
+          <div className="w-full @2xl:w-[280px]">
             <LineResolutionControls
               value={resolution}
               onChange={(nextResolution) =>
@@ -503,12 +503,12 @@ function PutawayDetailSection({
         </div>
       </div>
 
-      <div className="mt-4 rounded-lg border border-border bg-card p-3">
+      <div className="@container mt-4 rounded-lg border border-border bg-card p-3">
         <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <MapPin className="size-4 text-primary" />
           Origem e destino
         </div>
-        <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_130px]">
+        <div className="mt-3 grid grid-cols-2 gap-3 @md:grid-cols-[1fr_1fr_88px]">
           <div className="space-y-1.5">
             <Label htmlFor={`${task.id}-putaway-source`}>Origem</Label>
             <Input
