@@ -194,6 +194,10 @@ Se a lista não mostrar nenhuma revisão criada pelo job (a imagem dela tem o co
 curto como tag), o deploy não está criando revisões: publique pelo roteiro manual deste
 documento e investigue o job antes de confiar nele de novo.
 
+A imagem base (`nginx:1.27-alpine`) vem de `mirror.gcr.io`, espelho do Docker Hub mantido
+pelo Google: o Docker Hub limita pulls anônimos por IP e em 09/10/2026 derrubou o job com
+`429 Too Many Requests` no `docker build`. O conteúdo é o mesmo da imagem oficial.
+
 A imagem é montada no próprio runner e enviada ao Artifact Registry com `docker push`,
 autenticado com o token da Workload Identity. Até 09/10/2026 o job usava
 `gcloud builds submit` e falhava em todo push com:
