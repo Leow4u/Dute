@@ -167,7 +167,8 @@ jobs:
 
       # Em 09/10/2026, oito execuções seguidas deste job terminaram verdes sem mudar
       # o que a produção servia: todas imprimiram a mesma revisão
-      # (dute-btg-app-00143-loc) e o app continuou no build de 08/10. Por isso o
+      # (dute-btg-app-00143-loc) e o app continuou no build de 08/10: o tráfego
+      # estava preso nessa revisão e as novas ficaram com 0%. Por isso o
       # deploy só conta quando o index.html servido referencia os assets do build
       # que acabamos de montar; se não bater, o job falha e mostra o tráfego e as
       # últimas revisões do serviço para diagnóstico.

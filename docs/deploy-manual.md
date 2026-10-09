@@ -143,6 +143,13 @@ segundo, e o app continuou no build de 08/10. Por isso o job termina com
 os servidos pela URL do Cloud Run e pelo domínio; se não baterem, o job falha e imprime
 `spec.traffic`, `status.traffic` e as últimas revisões do serviço.
 
+No caso de 09/10 a causa era esta: o tráfego estava preso em `dute-btg-app-00143-loc`
+desde 08/10 01:55 UTC (`spec.traffic` com `revisionName` fixo), e as oito revisões que o
+job criou (`00143-cg4` a `00150-lk5`, todas prontas, a última com a imagem `8324dbb`)
+ficaram com 0% de tráfego. O job `Diagnóstico do Cloud Run (só leitura)`, que roda no
+disparo manual do CI (Actions > CI > Run workflow, de qualquer branch), mostra tráfego,
+revisões e o que as URLs servem sem precisar de gcloud na máquina.
+
 Quando a verificação falhar, olhe primeiro o tráfego e as revisões:
 
 ```powershell
