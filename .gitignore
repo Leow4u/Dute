@@ -63,3 +63,6 @@ graphify-out/
 landing_code.txt
 make_landing.js
 write_landing.js
+
+# Harness local de fotos das telas (tools/ui)
+artifacts/btg-inventory/.preview-tmp/

@@ -83,7 +83,7 @@ function AccountMenu({
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn(
-          "flex items-center gap-3 rounded-xl text-sm font-medium text-sidebar-foreground/80 outline-none transition-colors duration-200 hover:bg-card/70 hover:text-sidebar-foreground",
+          "flex items-center gap-3 rounded-xl text-sm font-medium text-sidebar-foreground/80 outline-none transition-colors duration-200 hover:bg-card hover:text-sidebar-foreground",
           compact ? "h-11 w-11 justify-center" : "w-full px-2 py-2",
         )}
       >
@@ -164,7 +164,7 @@ function SidebarAccountFooter(props: AccountMenuProps) {
     );
   }
   return (
-    <div className="rounded-2xl border border-sidebar-border/70 bg-card/55 p-1 shadow-[0_8px_24px_rgba(15,23,42,.04)] backdrop-blur-[40px]">
+    <div className="rounded-2xl border border-sidebar-border/70 bg-card p-1">
       <AccountMenu {...props} />
     </div>
   );
@@ -219,8 +219,8 @@ function CollapsedModuleItem({
   const triggerClassName = cn(
     "flex h-11 w-11 items-center justify-center rounded-xl outline-none transition-[background-color,color,box-shadow] duration-200",
     active
-      ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-[0_8px_24px_rgba(15,23,42,.04)]"
-      : "text-sidebar-foreground/60 hover:bg-card/70 hover:text-sidebar-foreground",
+      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+      : "text-sidebar-foreground/60 hover:bg-card hover:text-sidebar-foreground",
     !enabled && "cursor-not-allowed opacity-40 hover:bg-transparent",
   );
 
@@ -302,8 +302,8 @@ function ExpandedModuleItem({
   const itemClassName = cn(
     "flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-left text-sm font-medium outline-none transition-[background-color,color,box-shadow] duration-200",
     active
-      ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-[0_8px_24px_rgba(15,23,42,.04)]"
-      : "text-sidebar-foreground/70 hover:bg-card/70 hover:text-sidebar-foreground",
+      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+      : "text-sidebar-foreground/70 hover:bg-card hover:text-sidebar-foreground",
     !enabled && "cursor-not-allowed opacity-45 hover:bg-transparent",
   );
 
@@ -360,8 +360,8 @@ function ExpandedModuleItem({
             const className = cn(
               "flex min-h-9 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-[background-color,color] duration-200",
               routeActive
-                ? "bg-primary text-primary-foreground"
-                : "text-sidebar-foreground/55 hover:bg-card/70 hover:text-sidebar-foreground",
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground/55 hover:bg-card hover:text-sidebar-foreground",
               !route.href &&
                 "cursor-not-allowed opacity-40 hover:bg-transparent",
             );
@@ -403,7 +403,7 @@ function MobileModuleNav({
   modules: AppModule[];
 }) {
   return (
-    <div className="border-b border-border/70 bg-card/72 backdrop-blur-[40px] md:hidden">
+    <div className="border-b border-border/70 bg-card md:hidden">
       <nav className="flex gap-2 overflow-x-auto px-4 py-2">
         {modules.map((module) => {
           const Icon = module.icon;
@@ -565,7 +565,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     <div className="app-atmosphere flex h-[100dvh] min-h-0 w-full overflow-hidden font-sans text-foreground">
       <aside
         className={cn(
-          "hidden min-h-0 flex-shrink-0 flex-col border-r border-sidebar-border bg-sidebar/80 backdrop-blur-[40px] transition-[width] duration-200 ease-out md:flex",
+          "hidden min-h-0 flex-shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-200 ease-out md:flex",
           collapsed ? "w-20" : "w-[292px]",
         )}
       >
@@ -581,9 +581,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               <button
                 type="button"
                 className={cn(
-                  "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sidebar-foreground/60 outline-none transition-colors duration-200 hover:bg-card/70 hover:text-sidebar-foreground",
+                  "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sidebar-foreground/60 outline-none transition-colors duration-200 hover:bg-card hover:text-sidebar-foreground",
                   collapsed &&
-                    "absolute left-[56px] bg-sidebar/90 shadow-[0_8px_24px_rgba(15,23,42,.04)]",
+                    "absolute left-[56px] bg-sidebar",
                 )}
                 onClick={toggleSidebar}
               >
@@ -646,7 +646,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       </aside>
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between border-b border-border/70 bg-card/72 px-4 backdrop-blur-[40px] md:hidden">
+        <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between border-b border-border/70 bg-card px-4 md:hidden">
           <img
             src={`${basePath}/dutelog-logo.png`}
             alt="Dutelog Soluções Logísticas"

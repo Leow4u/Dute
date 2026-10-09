@@ -66,7 +66,7 @@ export function ClienteDocumentos() {
               </header>
 
               {!rows.length ? (
-                <p className="rounded-[18px] border border-dashed border-border bg-card/60 px-5 py-8 text-sm text-muted-foreground">
+                <p className="rounded-lg border border-dashed border-border bg-card px-5 py-8 text-sm text-muted-foreground">
                   Nenhum documento ainda. Contratos e comprovantes que a Dutelog publicar, as notas fiscais dos seus avisos de envio e as faturas fechadas aparecem aqui.
                 </p>
               ) : (
@@ -83,7 +83,7 @@ export function ClienteDocumentos() {
                   ) : null}
 
                   {!visible.length ? (
-                    <p className="rounded-[18px] border border-dashed border-border bg-card/60 px-5 py-6 text-sm text-muted-foreground">
+                    <p className="rounded-lg border border-dashed border-border bg-card px-5 py-6 text-sm text-muted-foreground">
                       Nada encontrado{search.trim() ? ` para "${search.trim()}"` : ""}.
                     </p>
                   ) : (
@@ -135,10 +135,10 @@ const FORMAT_TONE: Record<string, string> = {
 
 export function DocumentList({ rows }: { rows: PortalDocument[] }) {
   return (
-    <ul className="divide-y divide-border/60 overflow-hidden rounded-[18px] border border-border bg-card">
+    <ul className="divide-y divide-border/60 overflow-hidden rounded-lg border border-border bg-card">
       {rows.map((row) => (
         <li key={row.key} className="grid grid-cols-[2.25rem_minmax(0,1fr)] items-center gap-3 px-4 py-3 sm:grid-cols-[2.25rem_minmax(0,1fr)_auto]">
-          <span className={cn("grid h-9 w-9 place-items-center rounded-lg text-[10px] font-bold", FORMAT_TONE[row.format] ?? "bg-muted text-muted-foreground")}>
+          <span className={cn("grid h-9 w-9 place-items-center rounded-lg text-xs font-bold", FORMAT_TONE[row.format] ?? "bg-muted text-muted-foreground")}>
             {row.format}
           </span>
           <div className="min-w-0">

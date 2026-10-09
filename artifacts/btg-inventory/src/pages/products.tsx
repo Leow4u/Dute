@@ -155,7 +155,7 @@ export default function Products() {
       <StockTableCard>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-              <thead className="text-xs text-muted-foreground uppercase border-b border-border/80 bg-card/55">
+              <thead className="text-xs text-muted-foreground uppercase border-b border-border/80 bg-card">
                 <tr>
                   <th className="px-5 py-4 font-medium">Cod. cliente</th>
                   <th className="px-5 py-4 font-medium">Produto</th>
@@ -179,7 +179,7 @@ export default function Products() {
                   </tr>
                 ) : (
                   filteredProducts.map((product: Product) => (
-                    <tr key={product.id} className="hover:bg-card/70 transition-colors">
+                    <tr key={product.id} className="hover:bg-card transition-colors">
                       <td className="px-5 py-3 font-mono text-xs text-primary font-semibold">{product.cod_cliente}</td>
                       <td className="px-5 py-3 font-medium max-w-[280px] truncate" title={product.produto}>{product.produto}</td>
                       <td className="px-4 py-2">

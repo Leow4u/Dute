@@ -95,7 +95,7 @@ function Tile({
   mono?: boolean;
 }) {
   return (
-    <div className="rounded-[18px] border border-border bg-card px-5 py-4">
+    <div className="rounded-lg border border-border bg-card px-5 py-4">
       <div className="text-xs text-muted-foreground">{label}</div>
       <div
         className={cn(
@@ -247,7 +247,7 @@ export default function SettingsSystem() {
 
       {isOwner ? <OwnerDashboard /> : null}
 
-      <section className="overflow-hidden rounded-[18px] border border-border bg-card">
+      <section className="overflow-hidden rounded-lg border border-border bg-card">
         <div className="flex items-center justify-between gap-2 border-b border-border/60 px-5 py-3">
           <h2 className="text-sm font-semibold">Incidentes</h2>
           <Button size="sm" onClick={() => setOpen(true)}>
@@ -297,7 +297,7 @@ export default function SettingsSystem() {
       </section>
 
       {isOwner ? (
-        <section className="rounded-[18px] border border-border bg-card px-5 py-4">
+        <section className="rounded-lg border border-border bg-card px-5 py-4">
           <h2 className="text-sm font-semibold">Numerar pedidos e envios antigos</h2>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
             Dá número PED-/ENV- às solicitações criadas antes da numeração, na ordem de criação, e publica os itens delas no portal.

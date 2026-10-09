@@ -59,7 +59,7 @@ export function InvoiceDocument({
         </Button>
       </div>
 
-      <article className="print-area mx-auto max-w-[820px] rounded-md bg-white p-8 text-[13px] text-slate-800 shadow-[0_12px_40px_rgba(31,42,61,.12)] sm:p-10">
+      <article className="print-area mx-auto max-w-[820px] rounded-md bg-white p-8 text-sm text-slate-800 sm:p-10">
         <header className="flex items-start justify-between gap-6 border-b-2 border-slate-800 pb-4">
           <img src="/dutelog-logo.png" alt="Dutelog" className="h-8" />
           <div className="text-right text-xs leading-5 text-slate-500">
@@ -95,7 +95,7 @@ export function InvoiceDocument({
         {view.groups.length ? (
           <table className="w-full border-collapse">
             <thead>
-              <tr className="border-b border-slate-200 text-left text-[10.5px] uppercase tracking-wide text-slate-400">
+              <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
                 <th className="py-1.5 pr-2 font-semibold">Serviço</th>
                 <th className="py-1.5 pr-2 font-semibold">Unidade</th>
                 <th className="py-1.5 pr-2 text-right font-semibold">Qtde</th>
@@ -140,7 +140,7 @@ export function InvoiceDocument({
           </div>
         </div>
 
-        <footer className="mt-6 text-[11px] leading-5 text-slate-400">
+        <footer className="mt-6 text-xs leading-5 text-slate-400">
           Somente serviços com quantidade no mês aparecem na fatura. Documento gerado pelo sistema
           Dutelog a partir do fechamento da competência; o mesmo conteúdo fica disponível para a
           cliente em Faturas no portal.

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MoreHorizontal, Plus, Search, UploadCloud } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   Dialog,
   DialogContent,
@@ -294,18 +295,18 @@ export default function Documents() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Documentos</h1>
-          <p className="text-sm text-muted-foreground">NFs, comprovantes e contratos da operação BTG</p>
-        </div>
-        <Button onClick={() => setAdding(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Adicionar documento
-        </Button>
-      </div>
+      <PageHeader
+        title="Documentos"
+        description="NFs, comprovantes e contratos da operação BTG"
+        actions={
+          <Button onClick={() => setAdding(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Adicionar documento
+          </Button>
+        }
+      />
 
-      <div className="flex flex-wrap items-center gap-2 rounded-[18px] border border-border bg-card p-3">
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3">
         <div className="relative min-w-[220px] flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -319,7 +320,7 @@ export default function Documents() {
         <Segmented<DocumentAudience | "all"> options={AUDIENCE_FILTERS} value={audience} onChange={setAudience} />
       </div>
 
-      <section className="overflow-hidden rounded-[18px] border border-border bg-card">
+      <section className="overflow-hidden rounded-lg border border-border bg-card">
         {loading ? (
           <p className="p-6 text-sm text-muted-foreground">Carregando documentos...</p>
         ) : documents.error ? (
@@ -328,7 +329,7 @@ export default function Documents() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-sm">
               <thead>
-                <tr className="border-b border-border/70 text-left text-[11px] uppercase tracking-wide text-foreground/50">
+                <tr className="border-b border-border/70 text-left text-xs uppercase tracking-wide text-foreground/50">
                   <th className="px-5 py-2.5 font-semibold">Documento</th>
                   <th className="px-3 py-2.5 font-semibold">Tipo</th>
                   <th className="px-3 py-2.5 font-semibold">Vinculado a</th>

@@ -95,6 +95,9 @@ de reserva ao rejeitar solicitação) e outros estão descritos de forma impreci
 ## Como trabalhamos
 
 - Um problema por PR, com teste que falha antes e passa depois.
+- Sistema visual: ver `docs/sistema-visual.md`. O teste
+  `src/lib/theme-colors.test.ts` trava cor fixa e valor fora da escala
+  (raio, vidro, sombra e tamanho de texto arbitrários).
 - CI verde antes de publicar (`frontend-typecheck`, `functions-unit`,
   `functions-integration`).
 - Não refatorar os arquivos grandes (`functions/src/domain/operations.ts` e

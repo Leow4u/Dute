@@ -96,7 +96,7 @@ function DetailField({
   value: string;
 }) {
   return (
-    <div className="rounded-[16px] border border-border bg-card/55 px-3 py-2">
+    <div className="rounded-md border border-border bg-card px-3 py-2">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Icon className="size-3.5 shrink-0 text-primary" />
         <span>{label}</span>
@@ -286,11 +286,11 @@ export function ReceivingCommandCenter({
   const activeEntry = selectedEntry ?? entries[0];
 
   return (
-    <Card className="overflow-hidden border-primary/20 bg-card/78 shadow-[0_18px_60px_rgba(15,23,42,.05)]">
-      <CardHeader className="border-b border-border/60 bg-card/45 p-5">
+    <Card className="overflow-hidden border-primary/20 bg-card">
+      <CardHeader className="border-b border-border/60 bg-card p-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex min-w-0 gap-3">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-[18px] border border-primary/20 bg-primary/10 text-primary">
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
               <Inbox className="size-5" />
             </div>
             <div className="min-w-0">
@@ -312,7 +312,7 @@ export function ReceivingCommandCenter({
         </div>
       </CardHeader>
       <CardContent className="grid gap-5 p-5 xl:grid-cols-[minmax(380px,520px)_minmax(0,1fr)]">
-        <div className="min-w-0 rounded-[24px] border border-border bg-card/60 p-4">
+        <div className="min-w-0 rounded-lg border border-border bg-card p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold text-foreground">
@@ -326,7 +326,7 @@ export function ReceivingCommandCenter({
               <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
                 {formatNumber(planned)} prevista(s)
               </Badge>
-              <Badge variant="outline" className="border-border bg-card/70">
+              <Badge variant="outline" className="border-border bg-card">
                 {formatNumber(unplanned)} avulsa(s)
               </Badge>
             </div>
@@ -346,7 +346,7 @@ export function ReceivingCommandCenter({
                 </div>
               </ScrollArea>
             ) : (
-              <Empty className="min-h-[360px] border border-dashed border-border bg-card/35">
+              <Empty className="min-h-[360px] border border-dashed border-border bg-card">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
                     <CheckCircle2 className="size-5" />
@@ -399,7 +399,7 @@ export function ReceivingKpiPill({
         "rounded-full border px-3 py-1.5 text-sm",
         tone === "danger"
           ? "border-destructive/20 bg-destructive/10 text-destructive"
-          : "border-border bg-card/70 text-muted-foreground",
+          : "border-border bg-card text-muted-foreground",
       )}
     >
       <span className="font-semibold text-foreground">{formatNumber(value)}</span>{" "}
@@ -426,10 +426,10 @@ export function ReceivingTaskRow({
     <button
       type="button"
       className={cn(
-        "w-full rounded-[20px] border bg-card/68 p-4 text-left transition-[border-color,box-shadow,background-color,transform]",
+        "w-full rounded-lg border bg-card p-4 text-left transition-[border-color,box-shadow,background-color,transform]",
         "hover:-translate-y-0.5 hover:border-primary/25 hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
         isSelected
-          ? "border-primary/35 bg-primary/5 shadow-[0_12px_34px_rgba(15,23,42,.06)]"
+          ? "border-primary/35 bg-primary/5"
           : "border-border",
       )}
       onClick={() => onSelect(task.id)}
@@ -466,20 +466,20 @@ export function ReceivingTaskRow({
         />
       </div>
       <div className="mt-4 grid grid-cols-3 gap-2">
-        <div className="rounded-[14px] border border-border bg-card/60 px-3 py-2">
-          <div className="text-[11px] text-muted-foreground">Linhas</div>
+        <div className="rounded-md border border-border bg-card px-3 py-2">
+          <div className="text-xs text-muted-foreground">Linhas</div>
           <div className="mt-1 text-sm font-semibold text-foreground">
             {formatNumber(itemCount || 1)}
           </div>
         </div>
-        <div className="rounded-[14px] border border-border bg-card/60 px-3 py-2">
-          <div className="text-[11px] text-muted-foreground">Peças</div>
+        <div className="rounded-md border border-border bg-card px-3 py-2">
+          <div className="text-xs text-muted-foreground">Peças</div>
           <div className="mt-1 text-sm font-semibold text-foreground">
             {quantity ? formatNumber(quantity) : "aberto"}
           </div>
         </div>
-        <div className="rounded-[14px] border border-border bg-card/60 px-3 py-2">
-          <div className="text-[11px] text-muted-foreground">Prazo</div>
+        <div className="rounded-md border border-border bg-card px-3 py-2">
+          <div className="text-xs text-muted-foreground">Prazo</div>
           <div className="mt-1 truncate text-sm font-semibold text-foreground">
             {formatDate(task.due_at, "sem prazo")}
           </div>
@@ -506,7 +506,7 @@ export function ReceivingTaskDetailCard({
 }) {
   if (!entry) {
     return (
-      <Empty className="min-h-[520px] rounded-[24px] border border-dashed border-border bg-card/35">
+      <Empty className="min-h-[520px] rounded-lg border border-dashed border-border bg-card">
         <EmptyHeader>
           <EmptyMedia variant="icon">
             <ClipboardCheck className="size-5" />
@@ -526,8 +526,8 @@ export function ReceivingTaskDetailCard({
   const taskAlerts = alerts.filter((alert) => alert.task_id === task.id);
 
   return (
-    <Card className="min-w-0 overflow-hidden border-border bg-card/68 shadow-[0_8px_24px_rgba(15,23,42,.04)]">
-      <CardHeader className="border-b border-border/60 bg-card/40 p-5">
+    <Card className="min-w-0 overflow-hidden border-border bg-card">
+      <CardHeader className="border-b border-border/60 bg-card p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -615,12 +615,12 @@ export function ReceivingTaskDetailCard({
             <AlertDescription>{taskAlerts[0]?.message || taskAlerts[0]?.title}</AlertDescription>
           </Alert>
         ) : (
-          <div className="rounded-[18px] border border-border bg-card/55 px-4 py-3 text-sm text-muted-foreground">
+          <div className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
             Sem alerta ativo da IA para esta chegada.
           </div>
         )}
 
-        <div className="rounded-[18px] border border-border bg-card/55 px-4 py-3">
+        <div className="rounded-lg border border-border bg-card px-4 py-3">
           <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
             <Route className="size-3.5 text-primary" />
             Próximo passo
@@ -902,7 +902,7 @@ export function UnplannedReceiptDialog({
                   <div
                     key={index}
                     className={cn(
-                      "rounded-[22px] border bg-card/65 p-3",
+                      "rounded-lg border bg-card p-3",
                       issue?.duplicateInDraft || (existing && line.createNew)
                         ? "border-destructive/25 bg-destructive/5"
                         : existing
@@ -914,7 +914,7 @@ export function UnplannedReceiptDialog({
                   >
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="outline" className="border-border bg-card/70">
+                        <Badge variant="outline" className="border-border bg-card">
                           Linha {index + 1}
                         </Badge>
                         {issue?.duplicateInDraft ? (
@@ -1008,7 +1008,7 @@ export function UnplannedReceiptDialog({
                     </div>
 
                     {existing ? (
-                      <div className="mt-3 flex flex-col gap-2 rounded-[16px] border border-primary/20 bg-card/70 px-3 py-2 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between">
+                      <div className="mt-3 flex flex-col gap-2 rounded-md border border-primary/20 bg-card px-3 py-2 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between">
                         <div>
                           <span className="font-medium">{existing.productName}</span>
                           <span className="text-muted-foreground">
@@ -1025,7 +1025,7 @@ export function UnplannedReceiptDialog({
                         </Button>
                       </div>
                     ) : mustCreate ? (
-                      <div className="mt-3 rounded-[16px] border border-warning-soft-border bg-card/75 px-3 py-2 text-sm text-warning-soft-foreground">
+                      <div className="mt-3 rounded-md border border-warning-soft-border bg-card px-3 py-2 text-sm text-warning-soft-foreground">
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                           <span>
                             Produto não localizado pelo código informado.
@@ -1051,7 +1051,7 @@ export function UnplannedReceiptDialog({
                     ) : null}
 
                     {line.createNew && !existing ? (
-                      <div className="mt-3 space-y-3 rounded-[18px] border border-border bg-card/80 p-3">
+                      <div className="mt-3 space-y-3 rounded-lg border border-border bg-card p-3">
                         <div>
                           <div className="text-sm font-semibold text-foreground">
                             Cadastro do novo produto
@@ -1101,7 +1101,7 @@ export function UnplannedReceiptDialog({
                           <label
                             htmlFor={`receipt-photo-${index}`}
                             className={cn(
-                              "inline-flex h-10 cursor-pointer items-center gap-2 rounded-[14px] border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted",
+                              "inline-flex h-10 cursor-pointer items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted",
                               line.photoUploading && "pointer-events-none opacity-60",
                             )}
                           >
@@ -1133,7 +1133,7 @@ export function UnplannedReceiptDialog({
                             {line.photos.map((photo, photoIndex) => (
                               <div
                                 key={photo.storagePath}
-                                className="group relative size-20 overflow-hidden rounded-[14px] border border-border bg-muted"
+                                className="group relative size-20 overflow-hidden rounded-md border border-border bg-muted"
                               >
                                 <img
                                   src={photo.fileUrl}
@@ -1142,7 +1142,7 @@ export function UnplannedReceiptDialog({
                                 />
                                 <button
                                   type="button"
-                                  className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-full bg-card/90 text-foreground shadow-sm"
+                                  className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-full bg-card text-foreground shadow-sm"
                                   aria-label={`Remover foto ${photoIndex + 1}`}
                                   onClick={() =>
                                     updateLine(index, {
@@ -1175,7 +1175,7 @@ export function UnplannedReceiptDialog({
             />
           </div>
 
-          <div className="grid gap-2 rounded-[18px] border border-border bg-card/65 p-3 text-sm md:grid-cols-3">
+          <div className="grid gap-2 rounded-lg border border-border bg-card p-3 text-sm md:grid-cols-3">
             <div>
               <div className="text-xs text-muted-foreground">Peças esperadas</div>
               <div className="mt-1 font-semibold text-foreground">
@@ -1401,7 +1401,7 @@ export function ReceivingConferenceSection({
   if (!task.items?.length) return null;
 
   return (
-    <div className="rounded-[22px] border border-border bg-card/60 p-4">
+    <div className="rounded-lg border border-border bg-card p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h3 className="text-sm font-semibold text-foreground">
@@ -1429,18 +1429,18 @@ export function ReceivingConferenceSection({
       </div>
 
       <div className="mt-4 grid gap-2 md:grid-cols-4">
-        <div className="rounded-[16px] border border-border bg-card/70 px-3 py-2">
+        <div className="rounded-md border border-border bg-card px-3 py-2">
           <div className="text-xs text-muted-foreground">Esperado</div>
           <div className="mt-1 text-lg font-semibold">{formatNumber(summary.expected)} un.</div>
         </div>
-        <div className="rounded-[16px] border border-border bg-card/70 px-3 py-2">
+        <div className="rounded-md border border-border bg-card px-3 py-2">
           <div className="text-xs text-muted-foreground">Físico contado</div>
           <div className="mt-1 text-lg font-semibold">{formatNumber(summary.received)} un.</div>
-          <div className="mt-1 text-[11px] text-muted-foreground">
+          <div className="mt-1 text-xs text-muted-foreground">
             {formatNumber(conferenceRows.length - summary.invalid)} de {formatNumber(conferenceRows.length)} linha(s)
           </div>
         </div>
-        <div className="rounded-[16px] border border-border bg-card/70 px-3 py-2">
+        <div className="rounded-md border border-border bg-card px-3 py-2">
           <div className="text-xs text-muted-foreground">Diferença</div>
           <div className={cn(
             "mt-1 text-lg font-semibold",
@@ -1449,7 +1449,7 @@ export function ReceivingConferenceSection({
             {formatDeltaUnits(summary.difference)}
           </div>
         </div>
-        <div className="rounded-[16px] border border-border bg-card/70 px-3 py-2">
+        <div className="rounded-md border border-border bg-card px-3 py-2">
           <div className="text-xs text-muted-foreground">Divergências</div>
           <div className={cn(
             "mt-1 text-lg font-semibold",
@@ -1486,7 +1486,7 @@ export function ReceivingConferenceSection({
             <div
               key={item.id || index}
               className={cn(
-                "rounded-[18px] border bg-card/70 p-3",
+                "rounded-lg border bg-card p-3",
                 difference === undefined
                   ? "border-destructive/20"
                   : difference === 0
@@ -1512,7 +1512,7 @@ export function ReceivingConferenceSection({
                         aria-label="Código da etiqueta"
                         className={cn(!line?.code.trim() && "border-warning")}
                       />
-                      {item.notes ? <div className="text-[11px] text-muted-foreground">{item.notes}</div> : null}
+                      {item.notes ? <div className="text-xs text-muted-foreground">{item.notes}</div> : null}
                     </div>
                   ) : (
                     <div className="mt-1 text-xs text-muted-foreground">

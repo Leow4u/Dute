@@ -451,7 +451,7 @@ export const LINE_RESOLUTION_COPY: Record<
     label: "A conferir",
     shortLabel: "A conferir",
     description: "Conte o físico antes de avançar.",
-    className: "border-border bg-card/60 text-muted-foreground",
+    className: "border-border bg-card text-muted-foreground",
   },
   confirmed: {
     label: "OK físico",
@@ -736,7 +736,7 @@ export function priorityClass(priority?: string | null) {
     return "border-warning-soft-border bg-warning-soft text-warning-soft-foreground";
   }
   if (priority === "low") {
-    return "border-border bg-card/60 text-muted-foreground";
+    return "border-border bg-card text-muted-foreground";
   }
   return "border-primary/20 bg-primary/10 text-primary";
 }
@@ -763,7 +763,7 @@ export function statusClass(status?: string | null) {
   if (["checking", "in_progress", "dispatched"].includes(normalized)) {
     return "border-warning-soft-border bg-warning-soft text-warning-soft-foreground";
   }
-  return "border-border bg-card/60 text-muted-foreground";
+  return "border-border bg-card text-muted-foreground";
 }
 
 export function alertClass(severity?: string | null) {
@@ -1022,7 +1022,7 @@ export function queueSlaState(queue: NormalizedQueue) {
   }
   return {
     label: "Fila limpa",
-    className: "border-border bg-card/60 text-muted-foreground",
+    className: "border-border bg-card text-muted-foreground",
   };
 }
 

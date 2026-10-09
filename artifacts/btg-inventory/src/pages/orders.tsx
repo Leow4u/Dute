@@ -116,7 +116,7 @@ export default function Orders() {
       <StockTableCard>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-              <thead className="text-xs text-muted-foreground uppercase border-b border-border/80 bg-card/55">
+              <thead className="text-xs text-muted-foreground uppercase border-b border-border/80 bg-card">
                 <tr>
                   <th className="px-5 py-4 font-medium">Nº Pedido</th>
                   <th className="px-4 py-3 font-medium">Data</th>

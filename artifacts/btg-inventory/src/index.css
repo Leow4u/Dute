@@ -24,6 +24,8 @@
   --color-primary: hsl(var(--primary));
   --color-primary-foreground: hsl(var(--primary-foreground));
   --color-primary-border: var(--primary-border);
+  --color-primary-hover: hsl(var(--primary-hover));
+  --color-primary-pressed: hsl(var(--primary-pressed));
 
   --color-secondary: hsl(var(--secondary));
   --color-secondary-foreground: hsl(var(--secondary-foreground));
@@ -101,10 +103,14 @@
   --font-serif: var(--app-font-serif);
   --font-mono: var(--app-font-mono);
 
-  --radius-sm: calc(var(--radius) - 2px);
-  --radius-md: var(--radius);
-  --radius-lg: calc(var(--radius) + 2px);
-  --radius-xl: calc(var(--radius) + 4px);
+  /* Escala de raio do sistema: 4 miúdo, 6 botão/campo/chip, 10 card e
+     linha de lista, 14 diálogo e painel. rounded-2xl/3xl param em 14. */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: var(--radius);
+  --radius-xl: 14px;
+  --radius-2xl: 14px;
+  --radius-3xl: 14px;
 }
 
 @layer clerk {
@@ -120,44 +126,44 @@
   --elevate-1: rgba(0, 0, 0, 0.03);
   --elevate-2: rgba(0, 0, 0, 0.08);
 
-  --background: 60 17% 98%; /* #FAFAF8 */
+  --background: 220 16% 96%; /* #F4F5F7, fundo plano */
   --foreground: 217 33% 18%; /* #1E293B */
-  --canvas-glow-1: rgba(237, 245, 242, .9);
-  --canvas-glow-2: rgba(245, 242, 233, .85);
-  --canvas-glow-3: rgba(238, 244, 248, .85);
 
-  --border: 220 24% 94%; /* #ECEEF2 */
-  --input: 210 20% 92%; /* #E8EBEF */
-  --ring: 219 91% 70%; /* #6E9EF8 */
+  --border: 213 18% 90%; /* #E2E6EB */
+  --input: 213 16% 84%; /* #CED4DC, borda do campo mais firme */
+  --ring: 222 71% 49%;
 
   --card: 0 0% 100%;
   --card-foreground: 217 33% 18%;
-  --card-border: 220 24% 94%;
+  --card-border: 213 18% 90%;
 
   --popover: 0 0% 100%;
   --popover-foreground: 217 33% 18%;
-  --popover-border: 220 24% 94%;
+  --popover-border: 213 18% 90%;
 
-  --primary: 219 91% 70%; /* #6E9EF8 */
-  --primary-foreground: 217 33% 18%;
-  --primary-soft: 214 33% 96%; /* #F1F4F8 */
-  --primary-soft-hover: 210 20% 96%; /* #F5F6F7 */
-  --primary-soft-pressed: 220 16% 94%; /* #ECEEF1 */
+  /* Um acento: botão primário sólido, link, item ativo. */
+  --primary: 222 71% 49%; /* #2457D6 */
+  --primary-foreground: 0 0% 100%;
+  --primary-hover: 222 71% 43%;
+  --primary-pressed: 222 71% 37%;
+  --primary-soft: 221 77% 95%; /* #E8EEFC, seleção */
+  --primary-soft-hover: 216 17% 95%; /* #F1F3F6, hover de superfície */
+  --primary-soft-pressed: 216 16% 91%; /* #E4E8ED */
 
-  --secondary: 210 20% 96%;
+  --secondary: 216 17% 95%;
   --secondary-foreground: 217 33% 18%;
 
-  --muted: 60 12% 96%;
-  --muted-foreground: 215 16% 47%; /* #64748B */
+  --muted: 216 17% 95%;
+  --muted-foreground: 215 15% 44%; /* #5D6877 */
 
-  --accent: 217 100% 96%;
-  --accent-foreground: 219 88% 57%;
+  --accent: 221 77% 95%;
+  --accent-foreground: 222 71% 45%;
 
-  --destructive: 0 84% 60%;
+  --destructive: 4 72% 41%; /* #B3261E, só bloqueio e crítico */
   --destructive-foreground: 0 0% 100%;
 
-  --success: 219 91% 70%;
-  --success-foreground: 217 33% 18%;
+  --success: 146 59% 30%; /* #1F7A46, concluído */
+  --success-foreground: 0 0% 100%;
   
   --warning: 38 92% 50%;
   --warning-foreground: 217 33% 18%;
@@ -169,12 +175,12 @@
   --warning-soft-foreground: 42 60% 34%;
   /* Sucesso e informação: o app pintava emerald/blue/indigo com o primário
      (primary/.10 de fundo, /.24 de borda, primary no texto). */
-  --success-soft: 219 91% 97%;
-  --success-soft-border: 219 89% 93%;
-  --success-soft-foreground: 219 91% 70%;
-  --info-soft: 219 91% 97%;
-  --info-soft-border: 219 89% 93%;
-  --info-soft-foreground: 219 91% 70%;
+  --success-soft: 140 45% 94%;
+  --success-soft-border: 142 38% 82%;
+  --success-soft-foreground: 146 59% 28%;
+  --info-soft: 221 77% 95%;
+  --info-soft-border: 221 70% 86%;
+  --info-soft-foreground: 222 71% 42%;
   --destructive-soft: 356 100% 97%;
   --destructive-soft-border: 353 96% 90%;
   --destructive-soft-foreground: 345 83% 41%;
@@ -193,39 +199,33 @@
   --agent-border: 253 84% 90%; /* #d9d0fb */
   --agent-divider: 255 86% 95%; /* #ebe5fd */
   --agent-start: 228 94% 67%; /* #5b7cfa, início do gradiente da marca */
-  --card-edge: 0 0% 100%; /* era border-white/NN */
+  --card-edge: 213 18% 90%; /* = border: a borda do card é a borda */
   --chart-bar: 213 68% 50%; /* #2a78d6 */
   --chart-bar-soft: 213 69% 80%; /* #a9c8ef */
 
-  --chart-1: 219 91% 70%;
+  --chart-1: 222 71% 49%;
   --chart-2: 212 78% 76%;
   --chart-3: 194 34% 78%;
   --chart-4: 44 44% 82%;
   --chart-5: 217 20% 88%;
 
-  --sidebar: 60 11% 96%; /* #F7F7F5 */
+  --sidebar: 216 17% 94%; /* #EEF0F3 */
   --sidebar-foreground: 217 33% 18%;
-  --sidebar-border: 220 24% 94%;
-  --sidebar-primary: 219 91% 70%;
-  --sidebar-primary-foreground: 219 88% 57%;
-  --sidebar-accent: 217 100% 96%;
-  --sidebar-accent-foreground: 219 88% 57%;
-  --sidebar-ring: 219 91% 70%;
+  --sidebar-border: 213 18% 90%;
+  --sidebar-primary: 222 71% 49%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 221 77% 95%;
+  --sidebar-accent-foreground: 222 71% 45%;
+  --sidebar-ring: 222 71% 49%;
 
   --app-font-sans: 'Plus Jakarta Sans', sans-serif;
   --app-font-serif: Georgia, serif;
   --app-font-mono: 'Spline Sans Mono', monospace;
   
-  --radius: 1rem;
+  --radius: 10px;
   
-  --shadow-2xs: 0 1px 2px rgba(15,23,42,.02);
-  --shadow-xs: 0 4px 12px rgba(15,23,42,.03);
-  --shadow-sm: 0 8px 24px rgba(15,23,42,.04);
-  --shadow: 0 18px 60px rgba(15,23,42,.05);
-  --shadow-md: 0 18px 60px rgba(15,23,42,.05);
-  --shadow-lg: 0 18px 60px rgba(15,23,42,.05);
-  --shadow-xl: 0 24px 72px rgba(15,23,42,.06);
-  --shadow-2xl: 0 28px 84px rgba(15,23,42,.07);
+  /* Profundidade vem de superfície + borda. Sombra só em overlay e no
+     painel flutuante (shadow-lg / shadow-md do Tailwind). */
 
   --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
   --sidebar-accent-border: hsl(from hsl(var(--sidebar-accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
@@ -245,13 +245,10 @@
 
   --background: 222 47% 5%; /* #060a13 — theme-color em lib/theme.ts */
   --foreground: 210 40% 98%;
-  --canvas-glow-1: rgba(30, 58, 138, .18);
-  --canvas-glow-2: rgba(15, 23, 42, .6);
-  --canvas-glow-3: rgba(30, 64, 175, .12);
 
   --border: 216 34% 17%;
   --input: 216 34% 17%;
-  --ring: 217 91% 60%;
+  --ring: 217 85% 55%;
 
   --card: 222 47% 8%;
   --card-foreground: 210 40% 98%;
@@ -261,8 +258,10 @@
   --popover-foreground: 210 40% 98%;
   --popover-border: 216 34% 17%;
 
-  --primary: 217 91% 65%;
-  --primary-foreground: 222 47% 8%;
+  --primary: 217 85% 55%;
+  --primary-foreground: 0 0% 100%;
+  --primary-hover: 217 85% 49%;
+  --primary-pressed: 217 85% 43%;
   --primary-soft: 217 32% 14%;
   --primary-soft-hover: 217 32% 18%;
   --primary-soft-pressed: 217 32% 22%;
@@ -276,7 +275,7 @@
   --accent: 217 32% 17%;
   --accent-foreground: 210 40% 98%;
 
-  --destructive: 0 62% 30%;
+  --destructive: 3 80% 62%; /* legível como texto no escuro */
   --destructive-foreground: 210 40% 98%;
   
   --success: 142 60% 30%;
@@ -287,9 +286,9 @@
   --warning-soft: 35 60% 11%;
   --warning-soft-border: 35 55% 26%;
   --warning-soft-foreground: 43 96% 77%;
-  --success-soft: 214 60% 12%;
-  --success-soft-border: 214 55% 28%;
-  --success-soft-foreground: 213 90% 78%;
+  --success-soft: 146 40% 12%;
+  --success-soft-border: 146 35% 26%;
+  --success-soft-foreground: 146 60% 70%;
   --info-soft: 214 60% 12%;
   --info-soft-border: 214 55% 28%;
   --info-soft-foreground: 213 90% 78%;
@@ -309,7 +308,7 @@
   --agent-border: 253 35% 26%;
   --agent-divider: 253 30% 18%;
   --agent-start: 228 94% 67%;
-  --card-edge: 216 34% 24%;
+  --card-edge: 216 34% 17%; /* = border */
   --chart-bar: 213 68% 55%;
   --chart-bar-soft: 213 45% 38%;
 
@@ -357,12 +356,7 @@
     height: 100%;
     min-height: 100dvh;
     overflow: hidden;
-    /* Brilhos do canvas vêm de --canvas-glow-*, definidos por tema acima. */
-    background:
-      radial-gradient(circle at top left, var(--canvas-glow-1) 0%, transparent 35%),
-      radial-gradient(circle at bottom left, var(--canvas-glow-2) 0%, transparent 40%),
-      radial-gradient(circle at top right, var(--canvas-glow-3) 0%, transparent 30%),
-      hsl(var(--background));
+    background: hsl(var(--background));
   }
   #root {
     height: 100dvh;
@@ -394,25 +388,16 @@
 }
 
 @layer utilities {
-  /* Mesmo canvas do body: brilhos e fundo por token, para o escuro funcionar. */
+  /* Fundo plano, sem brilho: a profundidade vem de superfície + borda. */
   .app-atmosphere {
-    background:
-      radial-gradient(circle at top left, var(--canvas-glow-1) 0%, transparent 35%),
-      radial-gradient(circle at bottom left, var(--canvas-glow-2) 0%, transparent 40%),
-      radial-gradient(circle at top right, var(--canvas-glow-3) 0%, transparent 30%),
-      hsl(var(--background));
+    background: hsl(var(--background));
   }
-  .glass-surface {
-    background: hsl(var(--card) / .72);
-    border: 1px solid hsl(var(--card-edge) / .55);
-    box-shadow: 0 18px 60px rgba(15,23,42,.05);
-    backdrop-filter: blur(40px);
-  }
+  /* Nomes antigos de vidro: hoje são o card sólido do sistema. */
+  .glass-surface,
   .soft-panel {
-    background: hsl(var(--card) / .58);
-    border: 1px solid hsl(var(--border) / .78);
-    box-shadow: 0 8px 24px rgba(15,23,42,.04);
-    backdrop-filter: blur(32px);
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    box-shadow: none;
   }
   .motion-soft {
     transition-duration: 200ms;

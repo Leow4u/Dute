@@ -273,7 +273,7 @@ export default function Billing() {
         <p className="text-sm text-muted-foreground">Calculando {competenciaLabel(competencia)}...</p>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <section className="overflow-hidden rounded-[18px] border border-border bg-card">
+          <section className="overflow-hidden rounded-lg border border-border bg-card">
             <div className="flex items-baseline justify-between px-5 pb-2 pt-4">
               <h2 className="text-sm font-semibold">Cobrado automaticamente</h2>
               <span className="text-xs text-muted-foreground">calculado pelo sistema</span>
@@ -314,7 +314,7 @@ export default function Billing() {
             <div className="overflow-x-auto">
               <table className="w-full min-w-[640px] text-sm">
                 <thead>
-                  <tr className="border-b border-border/70 text-left text-[11px] uppercase tracking-wide text-foreground/50">
+                  <tr className="border-b border-border/70 text-left text-xs uppercase tracking-wide text-foreground/50">
                     <th className="px-5 py-2 font-semibold">Serviço</th>
                     <th className="px-3 py-2 text-right font-semibold">Qtde</th>
                     <th className="px-3 py-2 text-right font-semibold">Valor unit.</th>
@@ -387,7 +387,7 @@ export default function Billing() {
           </section>
 
           <aside className="order-first space-y-3 lg:order-none lg:sticky lg:top-0 lg:self-start">
-            <div className="rounded-[20px] border-2 border-primary bg-card p-5 shadow-[0_10px_30px_rgba(110,158,248,.12)]">
+            <div className="rounded-lg border-2 border-primary bg-card p-5">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm text-muted-foreground">
                   {competenciaLabel(competencia)} · {aberto ? "total previsto" : "total"}

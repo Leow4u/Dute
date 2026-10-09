@@ -47,15 +47,15 @@ export function MonthlyBars({
               onMouseLeave={() => setHover(null)}
             >
               {month.total !== null ? (
-                <span className="mb-1 whitespace-nowrap text-[11px] tabular-nums text-muted-foreground">{moneyShort(value)}</span>
+                <span className="mb-1 whitespace-nowrap text-xs tabular-nums text-muted-foreground">{moneyShort(value)}</span>
               ) : null}
               <span
-                className="block w-full max-w-[56px] rounded-t-[4px]"
+                className="block w-full max-w-[56px] rounded-t-sm"
                 style={{ height: barHeight, background: strong ? "hsl(var(--chart-bar))" : "hsl(var(--chart-bar-soft))" }}
               />
               <span
                 className={cn(
-                  "absolute -bottom-[22px] whitespace-nowrap text-[11.5px]",
+                  "absolute -bottom-[22px] whitespace-nowrap text-xs",
                   month.competencia === highlight ? "font-semibold text-foreground" : "text-muted-foreground",
                 )}
               >

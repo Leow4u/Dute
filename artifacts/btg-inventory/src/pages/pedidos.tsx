@@ -619,7 +619,7 @@ function Group({
           {[hint, count ? String(count) : null].filter(Boolean).join(" · ")}
         </span>
       </h2>
-      <div className="overflow-hidden rounded-2xl border border-border bg-card/85">
+      <div className="overflow-hidden rounded-2xl border border-border bg-card">
         {count > 0 ? (
           <div className="divide-y divide-border/60">{children}</div>
         ) : (
@@ -788,7 +788,7 @@ function ItemList({ items }: { items: NonNullable<WarehouseTask["items"]> }) {
               <span className="rounded-md bg-info-soft px-1.5 py-0.5 font-mono text-xs text-info-soft-foreground">
                 {item.location || "sem endereço"}
               </span>
-              <span className="font-mono text-[13px] text-foreground/85">
+              <span className="font-mono text-sm text-foreground/85">
                 {item.sku_code ?? item.sku}
               </span>
               <span className="whitespace-nowrap font-semibold tabular-nums sm:order-last">
