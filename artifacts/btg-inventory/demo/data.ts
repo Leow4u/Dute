@@ -3,7 +3,7 @@
  * material de marketing guardados na Dutelog. Nada aqui é dado real e nada
  * sai do navegador: cada /api/... é respondido daqui mesmo.
  */
-import { productPhoto, type IconName } from "./photos";
+import { productPhoto } from "./photos";
 
 const NOW = Date.now();
 const H = 3_600_000;
@@ -23,7 +23,6 @@ type CatalogItem = {
   n: number;
   name: string;
   cat: string;
-  icon: IconName;
   qty: number;
   res: number;
   min: number;
@@ -33,47 +32,49 @@ type CatalogItem = {
   size?: string;
   /** Código do cliente; tamanhos do mesmo produto dividem a base (TT.VST.029.P/M/G). */
   clientCode?: string;
+  /** Número da foto em ./photos quando é a de outro item (tamanhos do mesmo produto). */
+  photo?: number;
 };
 
 const CATALOG: CatalogItem[] = [
   // Mobiliário
-  { n: 1, name: "Sofá modular 3 lugares", cat: "Mobiliário", icon: "sofa", color: "Preto", qty: 8, res: 0, min: 2, price: 4890, loc: ["A", "01", "1"] },
-  { n: 2, name: "Poltrona lounge rosa", cat: "Mobiliário", icon: "armchair", color: "Rosa", qty: 12, res: 0, min: 4, price: 1650, loc: ["A", "01", "2"] },
-  { n: 3, name: "Poltrona lounge ciano", cat: "Mobiliário", icon: "armchair", color: "Ciano", qty: 12, res: 2, min: 4, price: 1650, loc: ["A", "01", "3"] },
-  { n: 4, name: "Pufe redondo preto", cat: "Mobiliário", icon: "cylinder", color: "Preto", qty: 40, res: 0, min: 10, price: 320, loc: ["A", "02", "1"] },
-  { n: 5, name: "Pufe redondo rosa", cat: "Mobiliário", icon: "cylinder", color: "Rosa", qty: 30, res: 0, min: 10, price: 320, loc: ["A", "02", "2"] },
-  { n: 6, name: "Mesa bistrô alta", cat: "Mobiliário", icon: "coffee", color: "Branca", qty: 24, res: 0, min: 6, price: 780, loc: ["B", "01", "1"] },
-  { n: 7, name: "Banqueta alta", cat: "Mobiliário", icon: "cylinder", color: "Preta", qty: 60, res: 0, min: 12, price: 290, loc: ["B", "01", "2"] },
-  { n: 8, name: "Balcão de recepção iluminado", cat: "Mobiliário", icon: "store", qty: 4, res: 0, min: 1, price: 6200, loc: ["B", "02", "1"] },
-  { n: 9, name: "Estante expositora modular", cat: "Mobiliário", icon: "shelf", qty: 10, res: 0, min: 2, price: 1980, loc: ["B", "02", "2"] },
-  { n: 10, name: "Mesa de reunião 8 lugares", cat: "Mobiliário", icon: "table", qty: 3, res: 0, min: 1, price: 3400, loc: ["C", "01", "1"] },
-  { n: 11, name: "Luminária de piso LED", cat: "Mobiliário", icon: "lamp", qty: 14, res: 0, min: 4, price: 690, loc: ["C", "01", "2"] },
-  { n: 12, name: "Tapete 3 × 2 m", cat: "Mobiliário", icon: "layers", color: "Preto", qty: 6, res: 0, min: 2, price: 1150, loc: ["C", "01", "3"] },
+  { n: 1, name: "Sofá modular 3 lugares", cat: "Mobiliário", color: "Preto", qty: 8, res: 0, min: 2, price: 4890, loc: ["A", "01", "1"] },
+  { n: 2, name: "Poltrona lounge rosa", cat: "Mobiliário", color: "Rosa", qty: 12, res: 0, min: 4, price: 1650, loc: ["A", "01", "2"] },
+  { n: 3, name: "Poltrona lounge azul", cat: "Mobiliário", color: "Azul", qty: 12, res: 2, min: 4, price: 1650, loc: ["A", "01", "3"] },
+  { n: 4, name: "Pufe redondo terracota", cat: "Mobiliário", color: "Terracota", qty: 40, res: 0, min: 10, price: 320, loc: ["A", "02", "1"] },
+  { n: 5, name: "Pufe redondo rosa", cat: "Mobiliário", color: "Rosa", qty: 30, res: 0, min: 10, price: 320, loc: ["A", "02", "2"] },
+  { n: 6, name: "Mesa bistrô alta", cat: "Mobiliário", color: "Branca", qty: 24, res: 0, min: 6, price: 780, loc: ["B", "01", "1"] },
+  { n: 7, name: "Banqueta alta", cat: "Mobiliário", color: "Preta", qty: 60, res: 0, min: 12, price: 290, loc: ["B", "01", "2"] },
+  { n: 8, name: "Balcão de recepção iluminado", cat: "Mobiliário", qty: 4, res: 0, min: 1, price: 6200, loc: ["B", "02", "1"] },
+  { n: 9, name: "Estante expositora modular", cat: "Mobiliário", qty: 10, res: 0, min: 2, price: 1980, loc: ["B", "02", "2"] },
+  { n: 10, name: "Mesa de reunião 8 lugares", cat: "Mobiliário", qty: 3, res: 0, min: 1, price: 3400, loc: ["C", "01", "1"] },
+  { n: 11, name: "Luminária de piso LED", cat: "Mobiliário", qty: 14, res: 0, min: 4, price: 690, loc: ["C", "01", "2"] },
+  { n: 12, name: "Tapete 3 × 2 m", cat: "Mobiliário", qty: 6, res: 0, min: 2, price: 1150, loc: ["C", "01", "3"] },
   // Cenografia
-  { n: 13, name: "Backdrop 3 × 2,5 m com estrutura", cat: "Cenografia", icon: "frame", qty: 5, res: 0, min: 2, price: 2300, loc: ["D", "01", "1"] },
-  { n: 14, name: "Totem display iluminado", cat: "Cenografia", icon: "totem", qty: 6, res: 0, min: 2, price: 3100, loc: ["D", "01", "2"] },
-  { n: 15, name: "Letreiro neon LED", cat: "Cenografia", icon: "zap", color: "Rosa", qty: 4, res: 0, min: 1, price: 1850, loc: ["D", "02", "1"] },
-  { n: 16, name: "Tenda sanfonada 3 × 3 m", cat: "Cenografia", icon: "tent", qty: 6, res: 2, min: 2, price: 2700, loc: ["D", "02", "2"] },
-  { n: 17, name: "Wind banner 2,5 m", cat: "Cenografia", icon: "flag", color: "Ciano", qty: 12, res: 4, min: 4, price: 380, loc: ["D", "03", "1"] },
+  { n: 13, name: "Backdrop 3 × 2,5 m com estrutura", cat: "Cenografia", qty: 5, res: 0, min: 2, price: 2300, loc: ["D", "01", "1"] },
+  { n: 14, name: "Totem display iluminado", cat: "Cenografia", qty: 6, res: 0, min: 2, price: 3100, loc: ["D", "01", "2"] },
+  { n: 15, name: "Letreiro neon LED", cat: "Cenografia", color: "Rosa", qty: 4, res: 0, min: 1, price: 1850, loc: ["D", "02", "1"] },
+  { n: 16, name: "Tenda sanfonada 3 × 3 m", cat: "Cenografia", qty: 6, res: 2, min: 2, price: 2700, loc: ["D", "02", "2"] },
+  { n: 17, name: "Bandeirolas de tecido 10 m", cat: "Cenografia", qty: 12, res: 4, min: 4, price: 380, loc: ["D", "03", "1"] },
   // Material de PDV
-  { n: 18, name: "Banner roll-up 85 × 200 cm", cat: "Material de PDV", icon: "presentation", qty: 35, res: 4, min: 10, price: 260, loc: ["E", "01", "1"] },
-  { n: 19, name: "Display de mesa acrílico A5", cat: "Material de PDV", icon: "note", qty: 150, res: 0, min: 40, price: 45, loc: ["E", "01", "2"] },
-  { n: 20, name: "Folder institucional", cat: "Material de PDV", icon: "file", qty: 8000, res: 0, min: 2000, price: 0.6, loc: ["E", "02", "1"] },
+  { n: 18, name: "Banner roll-up 85 × 200 cm", cat: "Material de PDV", qty: 35, res: 4, min: 10, price: 260, loc: ["E", "01", "1"] },
+  { n: 19, name: "Display de mesa A5", cat: "Material de PDV", qty: 150, res: 0, min: 40, price: 45, loc: ["E", "01", "2"] },
+  { n: 20, name: "Folder institucional", cat: "Material de PDV", qty: 8000, res: 0, min: 2000, price: 0.6, loc: ["E", "02", "1"] },
   // Equipamentos de gravação
-  { n: 21, name: "Ring light 18\" com tripé", cat: "Equipamentos", icon: "aperture", qty: 30, res: 6, min: 8, price: 420, loc: ["F", "01", "1"] },
-  { n: 22, name: "Microfone de lapela sem fio", cat: "Equipamentos", icon: "mic", qty: 24, res: 4, min: 6, price: 390, loc: ["F", "01", "2"] },
-  { n: 23, name: "Caixa de som bluetooth", cat: "Equipamentos", icon: "speaker", qty: 0, res: 0, min: 10, price: 210, loc: ["F", "02", "1"] },
+  { n: 21, name: "Ring light 18\" com tripé", cat: "Equipamentos", qty: 30, res: 6, min: 8, price: 420, loc: ["F", "01", "1"] },
+  { n: 22, name: "Microfone sem fio com base", cat: "Equipamentos", qty: 24, res: 4, min: 6, price: 390, loc: ["F", "01", "2"] },
+  { n: 23, name: "Caixa de som bluetooth", cat: "Equipamentos", qty: 0, res: 0, min: 10, price: 210, loc: ["F", "02", "1"] },
   // Brindes
-  { n: 24, name: "Ecobag de algodão", cat: "Brindes", icon: "bag", qty: 1500, res: 300, min: 300, price: 18, loc: ["G", "01", "1"] },
-  { n: 25, name: "Garrafa térmica 500 ml", cat: "Brindes", icon: "cup", color: "Preta", qty: 800, res: 120, min: 200, price: 49, loc: ["G", "01", "2"] },
-  { n: 26, name: "Boné aba curva", cat: "Brindes", icon: "sparkles", color: "Preto", qty: 600, res: 120, min: 150, price: 35, loc: ["G", "02", "1"] },
-  { n: 27, name: "Adesivos (pacote com 10)", cat: "Brindes", icon: "sticker", qty: 5000, res: 1000, min: 1000, price: 1.2, loc: ["G", "02", "2"] },
-  { n: 28, name: "Kit creator (caixa presente)", cat: "Kits", icon: "gift", qty: 220, res: 0, min: 50, price: 185, loc: ["H", "01", "1"] },
+  { n: 24, name: "Ecobag de algodão", cat: "Brindes", qty: 1500, res: 300, min: 300, price: 18, loc: ["G", "01", "1"] },
+  { n: 25, name: "Garrafa térmica 500 ml", cat: "Brindes", color: "Preta", qty: 800, res: 120, min: 200, price: 49, loc: ["G", "01", "2"] },
+  { n: 26, name: "Boné trucker", cat: "Brindes", color: "Preto", qty: 600, res: 120, min: 150, price: 35, loc: ["G", "02", "1"] },
+  { n: 27, name: "Adesivos (pacote com 10)", cat: "Brindes", qty: 5000, res: 1000, min: 1000, price: 1.2, loc: ["G", "02", "2"] },
+  { n: 28, name: "Kit creator (caixa presente)", cat: "Kits", qty: 220, res: 0, min: 50, price: 185, loc: ["H", "01", "1"] },
   // Vestuário (um produto, quatro tamanhos)
-  { n: 29, name: "Moletom canguru", cat: "Vestuário", icon: "shirt", color: "Preto", size: "P", qty: 90, res: 0, min: 100, price: 120, loc: ["H", "02", "1"], clientCode: "TT.VST.029.P" },
-  { n: 30, name: "Moletom canguru", cat: "Vestuário", icon: "shirt", color: "Preto", size: "M", qty: 260, res: 0, min: 100, price: 120, loc: ["H", "02", "2"], clientCode: "TT.VST.029.M" },
-  { n: 31, name: "Moletom canguru", cat: "Vestuário", icon: "shirt", color: "Preto", size: "G", qty: 210, res: 0, min: 100, price: 120, loc: ["H", "02", "3"], clientCode: "TT.VST.029.G" },
-  { n: 32, name: "Moletom canguru", cat: "Vestuário", icon: "shirt", color: "Preto", size: "GG", qty: 70, res: 0, min: 50, price: 120, loc: ["H", "02", "4"], clientCode: "TT.VST.029.GG" },
+  { n: 29, name: "Moletom canguru", cat: "Vestuário", color: "Branco", size: "P", qty: 90, res: 0, min: 100, price: 120, loc: ["H", "02", "1"], clientCode: "TT.VST.029.P" },
+  { n: 30, name: "Moletom canguru", cat: "Vestuário", color: "Branco", size: "M", qty: 260, res: 0, min: 100, price: 120, loc: ["H", "02", "2"], clientCode: "TT.VST.029.M", photo: 29 },
+  { n: 31, name: "Moletom canguru", cat: "Vestuário", color: "Branco", size: "G", qty: 210, res: 0, min: 100, price: 120, loc: ["H", "02", "3"], clientCode: "TT.VST.029.G", photo: 29 },
+  { n: 32, name: "Moletom canguru", cat: "Vestuário", color: "Branco", size: "GG", qty: 70, res: 0, min: 50, price: 120, loc: ["H", "02", "4"], clientCode: "TT.VST.029.GG", photo: 29 },
 ];
 
 const PREFIX: Record<string, string> = {
@@ -98,7 +99,7 @@ const clientCode = (n: number) => {
 };
 const address = (loc: string[]) => `${loc[0]}-${loc[1]}-${loc[2]}`;
 const fullName = (item: CatalogItem) => (item.size ? `${item.name} · ${item.size}` : item.name);
-const photoOf = (item: CatalogItem) => productPhoto(item.icon, item.color);
+const photoOf = (item: CatalogItem) => productPhoto(item.photo ?? item.n);
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
 export const skus = CATALOG.map((s) => ({
@@ -122,7 +123,7 @@ export const skus = CATALOG.map((s) => ({
   endereco: address(s.loc),
   estoque_tipo: "normal",
   customer_code: CUSTOMER,
-  photo_urls: [photoOf(s)],
+  photo_urls: photoOf(s) ? [photoOf(s)!] : [],
   primary_photo_url: photoOf(s),
   updated_at: daysAgo(s.n % 5),
 }));
@@ -405,7 +406,7 @@ const receivingTasks: R[] = [
     items: [
       { id: "ii_1", sku_code: code(1), product_name: "Sofá modular 3 lugares", client_item_code: clientCode(1), expected_quantity: 2, quantity: 2, received_qty: 2, conference_status: "checked", location: "RECEBIMENTO" },
       { id: "ii_2", sku_code: code(2), product_name: "Poltrona lounge rosa", client_item_code: clientCode(2), expected_quantity: 4, quantity: 4, received_qty: 0, conference_status: "checking", location: "RECEBIMENTO" },
-      { id: "ii_3", sku_code: code(4), product_name: "Pufe redondo preto", client_item_code: clientCode(4), expected_quantity: 16, quantity: 16, received_qty: 8, conference_status: "checking", location: "RECEBIMENTO" },
+      { id: "ii_3", sku_code: code(4), product_name: "Pufe redondo terracota", client_item_code: clientCode(4), expected_quantity: 16, quantity: 16, received_qty: 8, conference_status: "checking", location: "RECEBIMENTO" },
     ],
     timeline: timeline("inb_creq_112", "Retorno de evento aprovado", daysAgo(2), "checking", ago(2)),
   },
@@ -432,7 +433,7 @@ const receivingTasks: R[] = [
 ];
 
 const putawayTasks: R[] = [
-  { id: "putaway:put_1", reference: "put_1", title: "Guardar Display de mesa acrílico A5", sku_code: code(19), customer: CUSTOMER, status: "planned", priority: "normal", quantity: 50, total_units: 50, source_location_id: "RECEBIMENTO", created_at: daysAgo(1), next_action: "Informar endereço final e concluir guarda.", can_advance: true, can_register_exception: true, exception_count: 0, items: [pickItem("pi_1", 19, 50)] },
+  { id: "putaway:put_1", reference: "put_1", title: "Guardar Display de mesa A5", sku_code: code(19), customer: CUSTOMER, status: "planned", priority: "normal", quantity: 50, total_units: 50, source_location_id: "RECEBIMENTO", created_at: daysAgo(1), next_action: "Informar endereço final e concluir guarda.", can_advance: true, can_register_exception: true, exception_count: 0, items: [pickItem("pi_1", 19, 50)] },
   { id: "putaway:put_2", reference: "put_2", title: "Guardar Sofá modular 3 lugares", sku_code: code(1), customer: CUSTOMER, status: "planned", priority: "high", quantity: 2, total_units: 2, source_location_id: "RECEBIMENTO", created_at: ago(2), next_action: "Informar endereço final e concluir guarda.", can_advance: true, can_register_exception: true, exception_count: 0, items: [pickItem("pi_2", 1, 2)] },
 ];
 
@@ -590,8 +591,8 @@ export function conversations() {
 const chatConv1 = {
   conversation: { id: "conv_1", customer_code: CUSTOMER, status: "open", last_message_at: ago(3) },
   messages: [
-    { id: "m1", role: "user", content: "Tenho poltronas e pufes suficientes para o Creators Summit? Preciso de 6 poltronas rosa e 20 pufes pretos.", created_at: ago(3.3) },
-    { id: "m2", role: "assistant", created_at: ago(3.28), tools_used: ["resumo_estoque", "listar_pedidos"], content: "Dá para atender os dois.\n\n- **Poltrona lounge rosa**: 12 no galpão, todas livres.\n- **Pufe redondo preto**: 40 no galpão, todos livres. Outros 16 voltam do Rio2C e estão em conferência hoje.\n\nSe quiser, monto o pedido com o lounge completo: sofás, banquetas, backdrop, totens e o neon." },
+    { id: "m1", role: "user", content: "Tenho poltronas e pufes suficientes para o Creators Summit? Preciso de 6 poltronas rosa e 20 pufes terracota.", created_at: ago(3.3) },
+    { id: "m2", role: "assistant", created_at: ago(3.28), tools_used: ["resumo_estoque", "listar_pedidos"], content: "Dá para atender os dois.\n\n- **Poltrona lounge rosa**: 12 no galpão, todas livres.\n- **Pufe redondo terracota**: 40 no galpão, todos livres. Outros 16 voltam do Rio2C e estão em conferência hoje.\n\nSe quiser, monto o pedido com o lounge completo: sofás, banquetas, backdrop, totens e o neon." },
     { id: "m3", role: "user", content: "Monta sim, com 2 sofás, 10 banquetas, o backdrop, 2 totens e o neon. Montagem quinta às 7h no Expo Center Norte.", created_at: ago(3.2) },
     { id: "m4", role: "assistant", created_at: ago(3.15), tools_used: ["buscar_itens", "rascunho_pedido"], content: "Montei o rascunho com **7 itens e 42 peças**. Tudo tem saldo livre agora.\n\nA Dutelog leva no caminhão baú e a equipe de montagem fica no local até as 9h. Confira o endereço e o horário antes de enviar." },
     { id: "m5", role: "user", content: "Perfeito, pode enviar.", created_at: ago(3.05) },

@@ -16,6 +16,12 @@ describe("dados da demonstração", () => {
     for (const request of customerRequests()) expect(request.customer_code).toBe(CUSTOMER);
   });
 
+  it("todo item tem foto", () => {
+    const withoutPhoto = skus.filter((sku) => sku.photo_urls.length === 0).map((sku) => sku.produto);
+    expect(withoutPhoto).toEqual([]);
+    for (const sku of skus) expect(sku.primary_photo_url ?? null).toBe(sku.photo_urls[0] ?? null);
+  });
+
   it("todo item de pedido existe no estoque", () => {
     const codes = new Set(skus.map((sku) => sku.sku_code));
     for (const request of customerRequests()) {

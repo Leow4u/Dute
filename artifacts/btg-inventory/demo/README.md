@@ -31,6 +31,13 @@ Os dois cartões da tela de entrada também entram direto.
 
 Anexar arquivos (nota fiscal, fotos) não funciona na demonstração.
 
+## Fotos
+
+Cada item tem uma foto real em `photos/`, com o número do item (`01.jpg` é
+o item 1 de `data.ts`). São fotos do Unsplash, de uso livre inclusive
+comercial; a origem de cada uma está em `photos/CREDITS.md`. O build embute
+as fotos no HTML.
+
 ## Onde ficam os dados
 
 - `data.ts`: catálogo, pedidos, envios, faturas, documentos e as rotas `/api`.
