@@ -1,5 +1,5 @@
-/* DEMO: põe Kits e Destinatários no menu do portal, logo depois de Estoque. */
-import { BookUser, Gift, type LucideIcon } from "lucide-react";
+/* DEMO: põe Kits, Eventos e Destinatários no menu do portal, logo depois de Estoque. */
+import { BookUser, CalendarDays, Gift, type LucideIcon } from "lucide-react";
 import { APP_MODULES, type AppModule } from "../src/lib/modules";
 
 function pageLike(base: AppModule, id: string, label: string, href: string, icon: LucideIcon): AppModule {
@@ -22,6 +22,7 @@ export function installDemoMenu() {
     at,
     0,
     pageLike(base, "client-kits", "Kits", "/portal/kits", Gift),
+    pageLike(base, "client-events", "Eventos", "/portal/eventos", CalendarDays),
     pageLike(base, "client-recipients", "Destinatários", "/portal/destinatarios", BookUser),
   );
 }

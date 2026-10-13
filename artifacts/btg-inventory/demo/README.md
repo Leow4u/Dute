@@ -26,7 +26,18 @@ Os dois cartões da tela de entrada também entram direto.
 - Navegar por todas as telas do portal e da operação.
 - Montar um pedido no Estoque e enviar: ele aparece em Pedidos.
 - Entrar como Operação Dutelog e aprovar ou recusar o pedido.
-- Perguntar ao Agent Dute sobre estoque, pedidos, envios, faturas e kits.
+- Perguntar ao Agent Dute sobre estoque, pedidos, envios, faturas, kits e eventos.
+- Estoque com o que a TikTok leva para eventos: ícones (ícone gigante
+  iluminado, mala e cubo infláveis), cenografia de palco e de estande
+  (portal, celulares gigantes, pórticos neon, cabine de fotos, backdrop),
+  mobiliário e brindes personalizados (garrafa, caneta, caderno, copo, power
+  bank, chaveiro). "Mais relevantes" ordena pelo valor guardado.
+- **Eventos**: modelos como TikTok Live Fest, TikTok Shop Day e o estande da
+  Game XP, com local, data da próxima edição, montagem, transporte e a lista
+  do que vai. Mostra o que falta no saldo livre de hoje e o valor das peças
+  (base do seguro). "Usar no pedido" abre o pedido com itens, local, entrega
+  na véspera às 7h e as instruções; "Salvar como evento" guarda um pedido
+  montado no Estoque.
 - Protótipo de envio de kits para creators:
   - **Kits**: composições salvas ("Kit lançamento TikTok Shop"), com quantos
     kits o estoque de hoje monta. "Usar no pedido" carrega o kit no Estoque.

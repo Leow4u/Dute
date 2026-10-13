@@ -76,8 +76,8 @@ import {
   type InventoryItem,
 } from "../../src/pages/client/shared";
 import { splitVariant } from "@/lib/stock-variants";
-import { BookUser, MapPin, MessageSquareText, Printer, Save } from "lucide-react";
-import { useKits, useRecipients, useSaveKit, useSaveRecipient, type KitModel, type Recipient } from "./demo-api";
+import { BookUser, CalendarDays, MapPin, MessageSquareText, Printer, Save } from "lucide-react";
+import { eventShortages, useEvents, useKits, useRecipients, useSaveEvent, useSaveKit, useSaveRecipient, type EventModel, type KitModel, type Recipient } from "./demo-api";
 import { pick } from "../i18n/lang";
 
 type StockViewMode = "lista" | "cards";
@@ -145,6 +145,16 @@ function destinationFromRecipient(recipient: Recipient): Destination {
     customMessage: false,
     save: false,
   };
+}
+
+/** Entrega do evento: véspera às 7h, no formato do campo datetime-local. */
+function eveningBefore(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  date.setDate(date.getDate() - 1);
+  date.setHours(7, 0, 0, 0);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T07:00`;
 }
 
 /** Cartão que vai dentro da caixa: até 280 caracteres. */
@@ -289,8 +299,10 @@ export function ClienteEstoque() {
   const [cartExpanded, setCartExpanded] = useState(false);
   const [destinations, setDestinations] = useState<Destination[]>(() => [emptyDestination()]);
   const kitsQuery = useKits();
+  const eventsQuery = useEvents();
   const recipientsQuery = useRecipients();
   const saveKit = useSaveKit();
+  const saveEvent = useSaveEvent();
   const saveRecipient = useSaveRecipient();
   const [dueAt, setDueAt] = useState("");
   const [notes, setNotes] = useState("");
@@ -300,8 +312,9 @@ export function ClienteEstoque() {
   const { toast } = useToast();
   const searchParams = new URLSearchParams(useSearch());
   const wantsDraft = searchParams.get("rascunho") === "1";
-  // Atalhos das telas Kits (?kit=) e Destinatários (?para=).
+  // Atalhos das telas Kits (?kit=), Eventos (?evento=) e Destinatários (?para=).
   const wantsKit = searchParams.get("kit");
+  const wantsEvent = searchParams.get("evento");
   const wantsRecipient = searchParams.get("para");
 
   function applyKit(kit: KitModel, products: StockProduct[]) {
@@ -322,11 +335,36 @@ export function ClienteEstoque() {
     });
   }
 
+  /** Evento modelo no pedido: itens, local, entrega na véspera às 7h e as instruções de montagem e retorno. */
+  function applyEvent(event: EventModel, products: StockProduct[]) {
+    const next: Record<string, number> = {};
+    const available = new Map(products.map((product) => [product.sku, product.available]));
+    for (const item of event.items) {
+      const product = products.find((entry) => entry.sku === item.sku);
+      if (product && product.available > 0) next[product.key] = (next[product.key] ?? 0) + Math.min(item.quantity, product.available);
+    }
+    const short = eventShortages(event, available);
+    setCart(next);
+    setOrderName(event.name);
+    setDestinations([{ ...emptyDestination(), name: event.venue, address: event.address, kind: "Evento" }]);
+    setDueAt(event.next_date ? eveningBefore(event.next_date) : "");
+    setNotes([event.schedule, event.logistics].filter(Boolean).join(" · "));
+    setCartOpen(true);
+    toast({
+      title: pick(`${event.name} no pedido`, `${event.name} added to the order`),
+      description: short.length
+        ? pick(`Confira antes de enviar. Falta: ${short.map((item) => item.name).join(", ")}.`, `Check before sending. Short: ${short.map((item) => item.name).join(", ")}.`)
+        : pick("Local, data e montagem já preenchidos. Confira e envie.", "Venue, date and setup are filled in. Check and send."),
+    });
+  }
+
   function applyPreset(products: StockProduct[]) {
     navigate("/portal/estoque", { replace: true });
     const kit = wantsKit ? kitsQuery.data?.find((entry) => entry.id === wantsKit) : undefined;
+    const event = wantsEvent ? eventsQuery.data?.find((entry) => entry.id === wantsEvent) : undefined;
     const recipient = wantsRecipient ? recipientsQuery.data?.find((entry) => entry.id === wantsRecipient) : undefined;
     if (kit) applyKit(kit, products);
+    if (event) applyEvent(event, products);
     if (recipient) setDestinations([destinationFromRecipient(recipient)]);
     setCartOpen(true);
   }
@@ -450,7 +488,7 @@ export function ClienteEstoque() {
         const cartLines = getCartLines(cart, productByKey);
         const draftLoader = wantsDraft ? (
           <DraftLoader products={products} onLoad={applyDraft} />
-        ) : (wantsKit || wantsRecipient) && kitsQuery.data && recipientsQuery.data ? (
+        ) : (wantsKit || wantsEvent || wantsRecipient) && kitsQuery.data && eventsQuery.data && recipientsQuery.data ? (
           <DraftLoader key="preset" products={products} onLoad={applyPreset} />
         ) : null;
         const cartQuantity = cartLines.reduce(
@@ -805,8 +843,27 @@ export function ClienteEstoque() {
                   onDestinationsChange={setDestinations}
                   recipients={recipientsQuery.data ?? []}
                   kits={kitsQuery.data ?? []}
+                  events={eventsQuery.data ?? []}
                   onApplyKit={(kit) => applyKit(kit, products)}
-                  savingKit={saveKit.isPending}
+                  onApplyEvent={(event) => applyEvent(event, products)}
+                  savingKit={saveKit.isPending || saveEvent.isPending}
+                  onSaveEvent={(name) => {
+                    const place = destinations.find((destination) => !isBlankDestination(destination));
+                    saveEvent.mutate(
+                      {
+                        name,
+                        venue: place?.name.trim() ?? "",
+                        address: place?.address.trim() ?? "",
+                        next_date: dueAt ? new Date(dueAt).toISOString() : undefined,
+                        schedule: notes.trim() || undefined,
+                        items: cartLines.map((line) => ({ sku: line.product.sku, name: productTitle(line.product) + (splitVariant(line.product.clientCode) ? ` · ${splitVariant(line.product.clientCode)!.variant}` : ""), quantity: line.quantity })),
+                      },
+                      {
+                        onSuccess: () => toast({ title: pick("Evento salvo", "Event saved"), description: pick(`${name} está em Eventos, pronto para a próxima edição.`, `${name} is in Events, ready for the next edition.`) }),
+                        onError: (error) => toast({ title: pick("Evento não salvo", "Event not saved"), description: error instanceof Error ? error.message : "", variant: "destructive" }),
+                      },
+                    );
+                  }}
                   onSaveKit={(name) =>
                     saveKit.mutate(
                       {
@@ -1561,6 +1618,7 @@ function CartPanel({
   destinations,
   recipients,
   kits,
+  events,
   dueAt,
   notes,
   cardMessage,
@@ -1573,7 +1631,9 @@ function CartPanel({
   onOrderNameChange,
   onDestinationsChange,
   onApplyKit,
+  onApplyEvent,
   onSaveKit,
+  onSaveEvent,
   onDueAtChange,
   onNotesChange,
   onIncrement,
@@ -1587,6 +1647,7 @@ function CartPanel({
   destinations: Destination[];
   recipients: Recipient[];
   kits: KitModel[];
+  events: EventModel[];
   dueAt: string;
   notes: string;
   cardMessage: string;
@@ -1599,7 +1660,9 @@ function CartPanel({
   onOrderNameChange: (value: string) => void;
   onDestinationsChange: (value: Destination[]) => void;
   onApplyKit: (kit: KitModel) => void;
+  onApplyEvent: (event: EventModel) => void;
   onSaveKit: (name: string) => void;
+  onSaveEvent: (name: string) => void;
   onDueAtChange: (value: string) => void;
   onNotesChange: (value: string) => void;
   onIncrement: (product: StockProduct) => void;
@@ -1611,6 +1674,8 @@ function CartPanel({
   const [query, setQuery] = useState("");
   const [picking, setPicking] = useState(false);
   const [kitName, setKitName] = useState<string | null>(null);
+  // O mesmo campo de nome serve para salvar como kit ou como evento.
+  const [saveAs, setSaveAs] = useState<"kit" | "evento">("kit");
   const perDestination = lines.reduce((sum, line) => sum + line.quantity, 0);
   const destinationCount = Math.max(1, destinations.filter((destination) => !isBlankDestination(destination)).length);
   const totalQuantity = perDestination * destinationCount;
@@ -1716,35 +1781,79 @@ function CartPanel({
       <div className="flex items-center gap-2">
         <Package className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <select
-          aria-label="Usar um kit salvo"
+          aria-label={pick("Usar um kit ou evento salvo", "Use a saved kit or event")}
           className="h-9 min-w-0 flex-1 cursor-pointer rounded-md border border-input bg-background px-2 text-sm"
           value=""
           onChange={(event) => {
-            const kit = kits.find((entry) => entry.id === event.target.value);
-            if (kit) onApplyKit(kit);
+            const [type, id] = event.target.value.split(":");
+            if (type === "kit") {
+              const kit = kits.find((entry) => entry.id === id);
+              if (kit) onApplyKit(kit);
+            } else if (type === "evento") {
+              const found = events.find((entry) => entry.id === id);
+              if (found) onApplyEvent(found);
+            }
           }}
         >
-          <option value="">{kits.length ? "Usar um kit salvo…" : "Nenhum kit salvo ainda"}</option>
-          {kits.map((kit) => (
-            <option key={kit.id} value={kit.id}>
-              {kit.name} · {formatNumber(kit.items.reduce((sum, item) => sum + item.quantity, 0))} peças
-            </option>
-          ))}
+          <option value="">{kits.length || events.length ? pick("Usar um kit ou evento salvo…", "Use a saved kit or event…") : pick("Nenhum kit ou evento salvo ainda", "No saved kits or events yet")}</option>
+          {events.length ? (
+            <optgroup label={pick("Eventos", "Events")}>
+              {events.map((entry) => (
+                <option key={entry.id} value={`evento:${entry.id}`}>
+                  {entry.name} · {formatNumber(entry.items.reduce((sum, item) => sum + item.quantity, 0))} {pick("peças", "pieces")}
+                </option>
+              ))}
+            </optgroup>
+          ) : null}
+          {kits.length ? (
+            <optgroup label="Kits">
+              {kits.map((kit) => (
+                <option key={kit.id} value={`kit:${kit.id}`}>
+                  {kit.name} · {formatNumber(kit.items.reduce((sum, item) => sum + item.quantity, 0))} {pick("peças", "pieces")}
+                </option>
+              ))}
+            </optgroup>
+          ) : null}
         </select>
-        {lines.length && kitName === null ? (
-          <Button type="button" variant="outline" size="sm" className="shrink-0 cursor-pointer" onClick={() => setKitName(orderName.trim())}>
-            <Save className="h-4 w-4" aria-hidden="true" />
-            Salvar como kit
-          </Button>
-        ) : null}
       </div>
+      {lines.length && kitName === null ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="cursor-pointer"
+            onClick={() => {
+              setSaveAs("kit");
+              setKitName(orderName.trim());
+            }}
+          >
+            <Save className="h-4 w-4" aria-hidden="true" />
+            {pick("Salvar como kit", "Save as kit")}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="cursor-pointer"
+            onClick={() => {
+              setSaveAs("evento");
+              setKitName(orderName.trim());
+            }}
+          >
+            <CalendarDays className="h-4 w-4" aria-hidden="true" />
+            {pick("Salvar como evento", "Save as event")}
+          </Button>
+        </div>
+      ) : null}
       {kitName !== null ? (
         <form
           className="flex items-center gap-2"
           onSubmit={(event) => {
             event.preventDefault();
             if (!kitName.trim()) return;
-            onSaveKit(kitName.trim());
+            if (saveAs === "evento") onSaveEvent(kitName.trim());
+            else onSaveKit(kitName.trim());
             setKitName(null);
           }}
         >
@@ -1752,7 +1861,7 @@ function CartPanel({
             autoFocus
             value={kitName}
             onChange={(event) => setKitName(event.target.value)}
-            placeholder="Nome do kit, por exemplo Kit lançamento"
+            placeholder={saveAs === "evento" ? pick("Nome do evento, por exemplo TikTok Live Fest", "Event name, e.g. TikTok Live Fest") : pick("Nome do kit, por exemplo Kit lançamento", "Kit name, e.g. Launch kit")}
             className="h-9 text-sm"
             maxLength={80}
           />
@@ -2761,11 +2870,9 @@ function sortProducts(
       return left.name.localeCompare(right.name, "pt-BR");
     }
 
-    return (
-      liveAvailableForProduct(right, cart) -
-        liveAvailableForProduct(left, cart) ||
-      left.name.localeCompare(right.name, "pt-BR")
-    );
+    // Na demo, "mais relevante" é o que vale mais guardado: ícones e cenografia
+    // antes de caneta e adesivo (o app ordena pelo saldo, que põe brinde no topo).
+    return right.value - left.value || left.name.localeCompare(right.name, "pt-BR");
   });
 }
 

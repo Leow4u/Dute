@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { CUSTOMER, clientOverview, customerRequests, kits, recipients, resetDemoState, resolve, skus } from "./data";
+import { CUSTOMER, clientOverview, customerRequests, events, kits, recipients, resetDemoState, resolve, skus } from "./data";
 
 const call = (path: string, method = "GET", body: unknown = null) => {
   const url = new URL(path, "http://demo.local");
@@ -83,11 +83,37 @@ describe("dados da demonstração", () => {
     expect(kits()).toHaveLength(before);
   });
 
+  it("todo item de evento modelo existe no estoque", () => {
+    const codes = new Set(skus.map((sku) => sku.sku_code));
+    expect(events().length).toBeGreaterThan(0);
+    for (const event of events()) for (const item of event.items) expect(codes.has(item.sku), `${event.name}: ${item.name}`).toBe(true);
+  });
+
+  it("evento modelo mostra o que falta no saldo livre de hoje", () => {
+    const free = new Map(skus.map((sku) => [sku.sku_code, sku.estoque_disponivel]));
+    const short = (id: string) => events().find((event) => event.id === id)!.items.filter((item) => (free.get(item.sku) ?? 0) < item.quantity).map((item) => item.name);
+    // O Live Fest cabe no estoque de hoje; na Game XP falta a caixa de som (zerada).
+    expect(short("evt_1")).toEqual([]);
+    expect(short("evt_3")).toEqual(["Caixa de som bluetooth"]);
+  });
+
+  it("evento modelo: salva com nome, local e itens, e exclui", () => {
+    const before = events().length;
+    const event = call("/api/demo/events", "POST", { name: "Evento teste", venue: "Galpão", address: "Rua A, 1", items: [{ sku: skus[0].sku_code, name: "x", quantity: 1 }] });
+    expect(events()).toHaveLength(before + 1);
+    expect(events().find((item) => item.id === event.id)?.venue).toBe("Galpão");
+    expect(call("/api/demo/events", "POST", { name: "Vazio", items: [] }).ok).toBe(false);
+    call(`/api/demo/events/${event.id}`, "DELETE");
+    expect(events()).toHaveLength(before);
+  });
+
   it("restaurar volta ao roteiro original", () => {
     call("/api/client/requests", "POST", { type: "retirada", items: [] });
     call("/api/demo/kits/kit_1", "DELETE");
+    call("/api/demo/events/evt_1", "DELETE");
     resetDemoState();
     expect(customerRequests().some((item) => item.request_number === "SOL-121")).toBe(false);
     expect(kits().some((kit) => kit.id === "kit_1")).toBe(true);
+    expect(events().some((event) => event.id === "evt_1")).toBe(true);
   });
 });

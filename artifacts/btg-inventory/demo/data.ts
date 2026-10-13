@@ -39,6 +39,16 @@ type CatalogItem = {
 };
 
 const CATALOG: CatalogItem[] = [
+  // Ícones TikTok: as peças que viajam para os eventos (fotos recortadas de eventos reais, ver photos/CREDITS.md).
+  // Peça única de cenografia não tem mínimo: não se repõe como brinde.
+  { n: 33, name: "Ícone TikTok gigante iluminado 3 m", cat: "Ícones TikTok", qty: 2, res: 1, min: 0, price: 38000, loc: ["I", "01", "1"] },
+  { n: 37, name: "Mala gigante TikTok", cat: "Ícones TikTok", color: "Turquesa", qty: 6, res: 0, min: 2, price: 3200, loc: ["J", "01", "1"] },
+  { n: 38, name: "Cubo inflável TikTok", cat: "Ícones TikTok", color: "Rosa", qty: 24, res: 6, min: 6, price: 680, loc: ["J", "01", "2"] },
+  // Cenografia de palco e de estande
+  { n: 36, name: "Portal de palco com ícone e arcos coloridos", cat: "Cenografia", qty: 1, res: 0, min: 0, price: 46000, loc: ["I", "02", "1"] },
+  { n: 35, name: "Celular gigante cenográfico com tela LED", cat: "Cenografia", qty: 2, res: 0, min: 0, price: 14500, loc: ["I", "02", "2"] },
+  { n: 34, name: "Pórtico triangular neon rosa e turquesa", cat: "Cenografia", qty: 2, res: 0, min: 0, price: 22000, loc: ["I", "03", "1"] },
+  { n: 39, name: "Cabine de fotos TikTok", cat: "Cenografia", qty: 1, res: 0, min: 0, price: 28000, loc: ["I", "03", "2"] },
   // Mobiliário
   { n: 1, name: "Sofá modular 3 lugares", cat: "Mobiliário", color: "Preto", qty: 8, res: 0, min: 2, price: 4890, loc: ["A", "01", "1"] },
   { n: 2, name: "Poltrona lounge rosa", cat: "Mobiliário", color: "Rosa", qty: 12, res: 0, min: 4, price: 1650, loc: ["A", "01", "2"] },
@@ -53,9 +63,9 @@ const CATALOG: CatalogItem[] = [
   { n: 11, name: "Luminária de piso LED", cat: "Mobiliário", qty: 14, res: 0, min: 4, price: 690, loc: ["C", "01", "2"] },
   { n: 12, name: "Tapete 3 × 2 m", cat: "Mobiliário", qty: 6, res: 0, min: 2, price: 1150, loc: ["C", "01", "3"] },
   // Cenografia
-  { n: 13, name: "Backdrop 3 × 2,5 m com estrutura", cat: "Cenografia", qty: 5, res: 0, min: 2, price: 2300, loc: ["D", "01", "1"] },
+  { n: 13, name: "Backdrop step and repeat TikTok Shop 6 × 3 m", cat: "Cenografia", qty: 4, res: 0, min: 1, price: 5400, loc: ["D", "01", "1"] },
   { n: 14, name: "Totem display iluminado", cat: "Cenografia", qty: 6, res: 0, min: 2, price: 3100, loc: ["D", "01", "2"] },
-  { n: 15, name: "Letreiro neon LED", cat: "Cenografia", color: "Rosa", qty: 4, res: 0, min: 1, price: 1850, loc: ["D", "02", "1"] },
+  { n: 15, name: "Letreiro neon TikTok", cat: "Cenografia", color: "Rosa", qty: 4, res: 0, min: 1, price: 1850, loc: ["D", "02", "1"] },
   { n: 16, name: "Tenda sanfonada 3 × 3 m", cat: "Cenografia", qty: 6, res: 2, min: 2, price: 2700, loc: ["D", "02", "2"] },
   { n: 17, name: "Bandeirolas de tecido 10 m", cat: "Cenografia", qty: 12, res: 4, min: 4, price: 380, loc: ["D", "03", "1"] },
   // Material de PDV
@@ -66,11 +76,16 @@ const CATALOG: CatalogItem[] = [
   { n: 21, name: "Ring light 18\" com tripé", cat: "Equipamentos", qty: 30, res: 6, min: 8, price: 420, loc: ["F", "01", "1"] },
   { n: 22, name: "Microfone sem fio com base", cat: "Equipamentos", qty: 24, res: 4, min: 6, price: 390, loc: ["F", "01", "2"] },
   { n: 23, name: "Caixa de som bluetooth", cat: "Equipamentos", qty: 0, res: 0, min: 10, price: 210, loc: ["F", "02", "1"] },
-  // Brindes
-  { n: 24, name: "Ecobag de algodão", cat: "Brindes", qty: 1500, res: 300, min: 300, price: 18, loc: ["G", "01", "1"] },
-  { n: 25, name: "Garrafa térmica 500 ml", cat: "Brindes", color: "Preta", qty: 800, res: 120, min: 200, price: 49, loc: ["G", "01", "2"] },
-  { n: 26, name: "Boné trucker", cat: "Brindes", color: "Preto", qty: 600, res: 120, min: 150, price: 35, loc: ["G", "02", "1"] },
-  { n: 27, name: "Adesivos (pacote com 10)", cat: "Brindes", qty: 5000, res: 1000, min: 1000, price: 1.2, loc: ["G", "02", "2"] },
+  // Brindes personalizados com a marca
+  { n: 24, name: "Ecobag personalizada TikTok", cat: "Brindes", qty: 1500, res: 300, min: 300, price: 18, loc: ["G", "01", "1"] },
+  { n: 25, name: "Garrafa térmica personalizada TikTok 500 ml", cat: "Brindes", color: "Preta", qty: 800, res: 120, min: 200, price: 49, loc: ["G", "01", "2"] },
+  { n: 26, name: "Boné trucker TikTok", cat: "Brindes", color: "Preto", qty: 600, res: 120, min: 150, price: 35, loc: ["G", "02", "1"] },
+  { n: 27, name: "Adesivos TikTok (pacote com 10)", cat: "Brindes", qty: 5000, res: 1000, min: 1000, price: 1.2, loc: ["G", "02", "2"] },
+  { n: 40, name: "Caneta personalizada TikTok", cat: "Brindes", color: "Preta", qty: 3000, res: 0, min: 500, price: 4.5, loc: ["G", "03", "1"] },
+  { n: 41, name: "Caderno personalizado TikTok A5", cat: "Brindes", color: "Preto", qty: 800, res: 0, min: 200, price: 28, loc: ["G", "03", "2"] },
+  { n: 42, name: "Copo térmico personalizado TikTok 350 ml", cat: "Brindes", color: "Preto", qty: 600, res: 0, min: 150, price: 39, loc: ["G", "04", "1"] },
+  { n: 43, name: "Power bank personalizado TikTok 10.000 mAh", cat: "Brindes", qty: 250, res: 0, min: 50, price: 89, loc: ["G", "04", "2"] },
+  { n: 44, name: "Chaveiro acrílico TikTok", cat: "Brindes", qty: 1500, res: 0, min: 300, price: 6, loc: ["G", "05", "1"] },
   { n: 28, name: "Kit creator (caixa presente)", cat: "Kits", qty: 220, res: 0, min: 50, price: 185, loc: ["H", "01", "1"] },
   // Vestuário (um produto, quatro tamanhos)
   { n: 29, name: "Moletom canguru", cat: "Vestuário", color: "Branco", size: "P", qty: 90, res: 0, min: 100, price: 120, loc: ["H", "02", "1"], clientCode: "TT.VST.029.P" },
@@ -89,6 +104,7 @@ if (isEnglish) {
 }
 
 const PREFIX: Record<string, string> = {
+  "Ícones TikTok": "ICO",
   "Mobiliário": "MOB",
   Cenografia: "CEN",
   "Material de PDV": "PDV",
@@ -258,7 +274,7 @@ const baseRequests: R[] = [
   request({
     id: "creq_116", request_number: "SOL-116", type: "retirada", priority: "alta", status: "approved", operational_status: "separating",
     title: "Ativação na Avenida Paulista — fim de semana", order_id: "ord_416", order_number: "PED-0416",
-    items: [reqItem(16, 2), reqItem(17, 4), reqItem(18, 4), reqItem(24, 300), reqItem(27, 1000)], created_at: daysAgo(1), updated_at: ago(2), decided_at: ago(5), decided_by: decided, requested_by: client2,
+    items: [reqItem(33, 1), reqItem(38, 6), reqItem(16, 2), reqItem(17, 4), reqItem(18, 4), reqItem(24, 300), reqItem(27, 1000)], created_at: daysAgo(1), updated_at: ago(2), decided_at: ago(5), decided_by: decided, requested_by: client2,
   }),
   request({
     id: "creq_114", request_number: "SOL-114", type: "retirada", status: "approved", operational_status: "ready_to_dispatch",
@@ -314,10 +330,25 @@ const baseRequests: R[] = [
 
 /* ---------- Estado da demo (pedidos novos e decisões) ---------- */
 // Um estado por idioma: kits e agenda criados numa língua não se misturam com a outra.
-const STATE_KEY = LANG === "en" ? "dute.demo.state.v1.en" : "dute.demo.state.v1";
+// v2: catálogo com os ícones TikTok e os eventos modelo; o estado salvo da v1 tinha os nomes antigos.
+const STATE_KEY = LANG === "en" ? "dute.demo.state.v2.en" : "dute.demo.state.v2";
 type DemoConversation = { id: string; title: string; last_message_at: string; messages: R[] };
 export type Recipient = { id: string; name: string; kind: string; address: string; contact?: string; size?: string; notes?: string; created_at: string };
 export type KitModel = { id: string; name: string; description?: string; message?: string; items: Array<{ sku: string; name: string; quantity: number }>; created_at: string };
+/** Evento modelo: o que vai para o local, onde é, e como a Dutelog leva, monta e traz de volta. */
+export type EventModel = {
+  id: string;
+  name: string;
+  description?: string;
+  venue: string;
+  address: string;
+  /** Próxima edição (ISO). */
+  next_date?: string;
+  schedule?: string;
+  logistics?: string;
+  items: Array<{ sku: string; name: string; quantity: number }>;
+  created_at: string;
+};
 
 type DemoState = {
   created: R[];
@@ -327,6 +358,7 @@ type DemoState = {
   nextNumber: number;
   recipients: Recipient[];
   kits: KitModel[];
+  events: EventModel[];
   nextId: number;
 };
 
@@ -359,11 +391,64 @@ const SEED_KITS: KitModel[] = [
   { id: "kit_3", name: pick("Kit boas-vindas parceiros", "Partner welcome kit"), description: pick("Caixa presente com material institucional.", "Gift box with company material."), items: [kitLine(28, 1), kitLine(25, 1), kitLine(20, 1)], created_at: daysAgo(20) },
 ];
 
+/* Eventos modelo: a lista do que vai para cada evento fica pronta; vira pedido de ida e volta em um clique. */
+const SEED_EVENTS: EventModel[] = [
+  {
+    id: "evt_1",
+    name: "TikTok Live Fest",
+    description: pick(
+      "Palco principal, lounge de creators e área instagramável com o ícone gigante.",
+      "Main stage, creator lounge and photo area with the giant icon.",
+    ),
+    venue: "Distrito Anhembi",
+    address: "Av. Olavo Fontoura, 1209 · Santana, São Paulo/SP · 02012-021",
+    next_date: inDays(24),
+    schedule: pick("Montagem na véspera a partir das 7h · desmontagem e retorno ao galpão no dia seguinte", "Setup the day before from 7 am · teardown and return to the warehouse the next day"),
+    logistics: pick("2 caminhões baú, 8 montadores e conferência peça a peça na volta", "2 box trucks, 8 crew and piece-by-piece check on return"),
+    items: [
+      kitLine(36, 1), kitLine(35, 2), kitLine(33, 1), kitLine(34, 2), kitLine(39, 1), kitLine(38, 10), kitLine(13, 1), kitLine(15, 2),
+      kitLine(1, 4), kitLine(2, 6), kitLine(5, 12), kitLine(6, 8), kitLine(7, 24), kitLine(11, 6), kitLine(21, 4), kitLine(22, 6),
+    ],
+    created_at: daysAgo(30),
+  },
+  {
+    id: "evt_2",
+    name: "TikTok Shop Day",
+    description: pick("Vitrine de produtos, recepção e brindes personalizados para sellers.", "Product showcase, reception and custom giveaways for sellers."),
+    venue: "Hotel Unique",
+    address: "Av. Brigadeiro Luís Antônio, 4700 · Jardim Paulista, São Paulo/SP · 01402-002",
+    next_date: inDays(10),
+    schedule: pick("Montagem às 6h · retirada às 22h no mesmo dia", "Setup at 6 am · pickup at 10 pm the same day"),
+    logistics: pick("1 caminhão baú e 4 montadores", "1 box truck and 4 crew"),
+    items: [
+      kitLine(13, 1), kitLine(37, 4), kitLine(38, 6), kitLine(9, 6), kitLine(8, 1), kitLine(18, 8), kitLine(19, 40), kitLine(14, 2),
+      kitLine(6, 6), kitLine(7, 12), kitLine(25, 200), kitLine(40, 300), kitLine(41, 200), kitLine(24, 200),
+    ],
+    created_at: daysAgo(18),
+  },
+  {
+    id: "evt_3",
+    name: pick("Estande TikTok · Game XP", "TikTok booth · Game XP"),
+    description: pick("Estande com pórticos neon, ícone gigante, cabine de fotos e lounge gamer.", "Booth with neon arches, giant icon, photo booth and gaming lounge."),
+    venue: "Parque Olímpico",
+    address: "Av. Embaixador Abelardo Bueno, 3401 · Barra da Tijuca, Rio de Janeiro/RJ · 22775-040",
+    next_date: inDays(45),
+    schedule: pick("Montagem em 2 dias antes da abertura · desmontagem na última noite", "Setup 2 days before opening · teardown on the last night"),
+    logistics: pick("Carreta São Paulo–Rio com seguro de transporte e 6 montadores", "São Paulo–Rio trailer with transit insurance and 6 crew"),
+    items: [
+      kitLine(33, 1), kitLine(34, 2), kitLine(39, 1), kitLine(38, 8), kitLine(1, 2), kitLine(5, 10), kitLine(15, 1), kitLine(11, 4),
+      kitLine(23, 4), kitLine(42, 300), kitLine(44, 500), kitLine(26, 150),
+    ],
+    created_at: daysAgo(9),
+  },
+];
+
 function freshState(): DemoState {
   return {
     created: [], decisions: {}, conversations: [], followUps: {}, nextNumber: 121,
     recipients: SEED_RECIPIENTS.map((item) => ({ ...item })),
     kits: SEED_KITS.map((kit) => ({ ...kit, items: kit.items.map((item) => ({ ...item })) })),
+    events: SEED_EVENTS.map((event) => ({ ...event, items: event.items.map((item) => ({ ...item })) })),
     nextId: 100,
   };
 }
@@ -482,6 +567,39 @@ function saveKit(body: R) {
   return kit;
 }
 
+export function events() {
+  return [...state.events].sort((left, right) => (left.next_date ?? "9").localeCompare(right.next_date ?? "9"));
+}
+
+function saveEvent(body: R) {
+  const name = text(body?.name);
+  const items = (Array.isArray(body?.items) ? body.items : [])
+    .map((item: R) => ({ sku: text(item.sku), name: text(item.name), quantity: Math.max(1, Math.floor(Number(item.quantity) || 0)) }))
+    .filter((item: R) => item.sku);
+  if (!name || !items.length) return { ok: false, message: pick("Dê um nome e escolha ao menos um item.", "Give it a name and pick at least one item.") };
+  const event: EventModel = {
+    id: `evt_${state.nextId++}`,
+    name,
+    description: text(body?.description) || undefined,
+    venue: text(body?.venue),
+    address: text(body?.address),
+    next_date: text(body?.next_date) || undefined,
+    schedule: text(body?.schedule) || undefined,
+    logistics: text(body?.logistics) || undefined,
+    items,
+    created_at: new Date().toISOString(),
+  };
+  state.events.push(event);
+  saveState();
+  return event;
+}
+
+function deleteEvent(id: string) {
+  state.events = state.events.filter((event) => event.id !== id);
+  saveState();
+  return { ok: true };
+}
+
 function deleteKit(id: string) {
   state.kits = state.kits.filter((kit) => kit.id !== id);
   saveState();
@@ -563,7 +681,7 @@ function order(num: number, requestId: string, opts: { pick: string; pack?: stri
 
 const orders = [
   order(415, "creq_115", { pick: "planned", items: [pickItem("pl_415_1", 21, 6), pickItem("pl_415_2", 22, 4), pickItem("pl_415_3", 3, 2)], created: daysAgo(2) }),
-  order(416, "creq_116", { pick: "in_progress", progress: 60, items: [pickItem("pl_416_1", 16, 2, 2), pickItem("pl_416_2", 17, 4, 4), pickItem("pl_416_3", 18, 4), pickItem("pl_416_4", 24, 300, 300), pickItem("pl_416_5", 27, 1000)], created: daysAgo(1), destination: "Avenida Paulista, 1578 · São Paulo" }),
+  order(416, "creq_116", { pick: "in_progress", progress: 60, items: [pickItem("pl_416_6", 33, 1, 1), pickItem("pl_416_7", 38, 6), pickItem("pl_416_1", 16, 2, 2), pickItem("pl_416_2", 17, 4, 4), pickItem("pl_416_3", 18, 4), pickItem("pl_416_4", 24, 300, 300), pickItem("pl_416_5", 27, 1000)], created: daysAgo(1), destination: "Avenida Paulista, 1578 · São Paulo" }),
   order(414, "creq_114", { pick: "completed", pack: "completed", ship: "ready_to_dispatch", seal: "LCR-5120", items: [pickItem("pl_414_1", 25, 120, 120), pickItem("pl_414_2", 26, 120, 120)], created: daysAgo(3), destination: "Hotel Unique · Jardim Paulista, São Paulo" }),
   order(413, "creq_113", { pick: "completed", pack: "completed", ship: "dispatched", seal: "LCR-5117", driver: "Edson Ribeiro", items: [pickItem("pl_413_1", 10, 1, 1), pickItem("pl_413_2", 11, 2, 2)], created: daysAgo(4) }),
   order(409, "creq_109", { pick: "completed", pack: "completed", ship: "delivered", seal: "LCR-5101", driver: "Edson Ribeiro", items: [pickItem("pl_409_1", 30, 40, 40), pickItem("pl_409_2", 31, 30, 30)], created: daysAgo(6) }),
@@ -774,7 +892,7 @@ const aiEvents = [
   ["ev_1", "order.dispatched", "PED-0413 saiu para entrega", "Motorista Edson Ribeiro, placa GHT-4C21.", "info", ago(3)],
   ["ev_2", "receiving.started", "Conferência do retorno do Rio2C iniciada", "22 peças de mobiliário.", "info", ago(2)],
   ["ev_3", "request.created", "SOL-118 enviada pelo portal", "Creators Summit · 42 peças.", "attention", ago(3)],
-  ["ev_4", "request.approved", "SOL-116 aprovada", "Ativação na Avenida Paulista · 1.310 peças.", "info", ago(5)],
+  ["ev_4", "request.approved", "SOL-116 aprovada", "Ativação na Avenida Paulista · 1.317 peças.", "info", ago(5)],
   ["ev_5", "request.rejected", "SOL-117 recusada", "Caixa de som zerada.", "attention", daysAgo(2)],
   ["ev_6", "receiving.completed", "NF 7.690 recebida com diferença", "396 de 400 moletons.", "attention", daysAgo(3)],
   ["ev_7", "order.delivered", "PED-0409 entregue", "Recebido por Juliana (recepção).", "info", daysAgo(5)],
@@ -922,6 +1040,9 @@ const routes: Array<[string | null, RegExp, Handler]> = [
   ["GET", /^\/api\/demo\/kits$/, () => list(kits())],
   ["POST", /^\/api\/demo\/kits$/, (_m, _p, _method, body) => saveKit(body ?? {})],
   ["DELETE", /^\/api\/demo\/kits\/([^/]+)$/, (m) => deleteKit(decodeURIComponent(m[1]))],
+  ["GET", /^\/api\/demo\/events$/, () => list(events())],
+  ["POST", /^\/api\/demo\/events$/, (_m, _p, _method, body) => saveEvent(body ?? {})],
+  ["DELETE", /^\/api\/demo\/events\/([^/]+)$/, (m) => deleteEvent(decodeURIComponent(m[1]))],
   [null, /^\/api\/healthz$/, () => ({ ok: true })],
   [null, /^\/api\/dashboard$/, () => dashboard],
   [null, /^\/api\/warehouse\/ops$/, () => warehouseOps],
@@ -979,4 +1100,4 @@ export function resolve(pathname: string, method: string, params: URLSearchParam
 }
 
 /** Números que o agente da demo usa nas respostas. */
-export const demoFacts = { catalog: CATALOG, code, fullName, totalPieces, totalCost, periods, kits };
+export const demoFacts = { catalog: CATALOG, code, fullName, totalPieces, totalCost, periods, kits, events };

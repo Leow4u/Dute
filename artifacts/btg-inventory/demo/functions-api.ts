@@ -23,7 +23,7 @@ function stockAnswer(question: string) {
     .filter((word) => word.length > 3);
   const plain = (text: string) => text.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
   const matches = demoFacts.catalog.filter((item) => words.some((word) => plain(item.name).includes(word.replace(/s$/, ""))));
-  const rows = (matches.length ? matches : demoFacts.catalog.filter((item) => item.cat === "Mobiliário")).slice(0, 6);
+  const rows = (matches.length ? matches : demoFacts.catalog.filter((item) => item.cat === "Ícones TikTok" || item.cat === "Cenografia")).slice(0, 7);
   const lines = rows.map((item) => {
     const free = Math.max(0, item.qty - item.res);
     const status = item.qty === 0 ? pick(" · **zerado**", " · **out of stock**") : item.qty < item.min ? pick(" · abaixo do mínimo", " · below minimum") : "";
@@ -32,7 +32,7 @@ function stockAnswer(question: string) {
       `- **${demoFacts.fullName(item)}**: ${int(item.qty)} in the warehouse, ${int(free)} available${status}`,
     );
   });
-  const intro = matches.length ? pick("Aqui está o saldo agora:", "Here's the stock right now:") : pick("Esse é o mobiliário guardado agora:", "This is the furniture in storage right now:");
+  const intro = matches.length ? pick("Aqui está o saldo agora:", "Here's the stock right now:") : pick("Esses são os ícones e a cenografia guardados agora:", "These are the icons and set pieces in storage right now:");
   return `${intro}\n\n${lines.join("\n")}\n\n${pick("Quer que eu monte um pedido com algum desses itens?", "Want me to put together an order with any of these items?")}`;
 }
 
@@ -85,6 +85,26 @@ function kitsAnswer() {
   );
 }
 
+function eventsAnswer() {
+  const free = new Map(demoFacts.catalog.map((item) => [demoFacts.code(item.n), Math.max(0, item.qty - item.res)]));
+  const date = (iso?: string) => (iso ? new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "");
+  const lines = demoFacts.events().map((event) => {
+    const short = event.items.filter((item) => (free.get(item.sku) ?? 0) < item.quantity);
+    const pieces = event.items.reduce((sum, item) => sum + item.quantity, 0);
+    const status = short.length
+      ? pick(`falta ${short.map((item) => item.name.toLowerCase()).join(", ")}`, `short on ${short.map((item) => item.name.toLowerCase()).join(", ")}`)
+      : pick("tudo disponível hoje", "everything available today");
+    return pick(
+      `- **${event.name}** (${date(event.next_date)}, ${event.venue}): ${int(event.items.length)} itens e ${int(pieces)} peças, ${status}.`,
+      `- **${event.name}** (${date(event.next_date)}, ${event.venue}): ${int(event.items.length)} items and ${int(pieces)} pieces, ${status}.`,
+    );
+  });
+  return pick(
+    `Seus eventos modelo:\n\n${lines.join("\n")}\n\nO ícone gigante tem 2 unidades e 1 já está reservada para a ativação na Paulista; se o Live Fest e a Game XP caírem na mesma semana, só um leva o ícone. Para pedir, abra o evento em **Eventos** e clique em Usar no pedido: local, data e montagem já vêm preenchidos, e a Dutelog traz tudo de volta e confere peça a peça.`,
+    `Your event templates:\n\n${lines.join("\n")}\n\nThe giant icon has 2 units and 1 is already reserved for the Paulista activation; if Live Fest and Game XP fall in the same week, only one gets the icon. To order, open the event in **Events** and click Use in order: venue, date and setup come filled in, and Dutelog brings everything back and checks it piece by piece.`,
+  );
+}
+
 function defaultAnswer() {
   return pick(
     `Posso ajudar com o estoque, os pedidos, os envios para a Dutelog e as faturas. Hoje a conta tem **${demoFacts.catalog.length} itens** e **${int(demoFacts.totalPieces)} peças** guardadas, com valor de **${brl(demoFacts.totalCost)}**.\n\nExperimente perguntar \"quantos pufes temos livres?\" ou \"como estão meus pedidos?\".`,
@@ -95,11 +115,12 @@ function defaultAnswer() {
 function answerFor(question: string): { tools: string[]; text: string } {
   const q = question.toLowerCase();
   // Palavras em português e em inglês: a demo responde no idioma escolhido na entrada.
+  if (/(live fest|shop day|game xp|eventos?\b.*(modelo|próxim|proxim)|(modelo|próxim|proxim).*eventos?\b|events?\b.*(template|next|upcoming)|(template|next|upcoming).*events?\b|^eventos?\??$|^events?\??$|meus eventos|my events)/.test(q)) return { tools: ["eventos_modelo", "resumo_estoque"], text: eventsAnswer() };
   if (/\bkits?\b|influenc|creators?\b/.test(q)) return { tools: ["buscar_itens", "resumo_estoque"], text: kitsAnswer() };
   if (/(fatur|cobran|custo|preç|preco|pagar|valor|invoice|bill|cost|price|\bpay|charge|\bfees?\b)/.test(q)) return { tools: ["faturas", "tabela_precos"], text: billingAnswer() };
   if (/(pedido|entreg|evento|separa|rota|chega|order|deliver|event|picking|route|arriv)/.test(q) && !/(nota|nf|envio|recebimento|retorno|shipment|inbound|receiv|return|incoming)/.test(q)) return { tools: ["listar_pedidos"], text: ordersAnswer() };
   if (/(envio|recebimento|retorno|nota|\bnf\b|chegando|shipment|inbound|receiv|return|incoming)/.test(q)) return { tools: ["recebimentos"], text: inboundAnswer() };
-  if (/(estoque|saldo|quant|tem|temos|livre|dispon|sofá|sofa|poltron|pufe|mesa|banner|backdrop|totem|kit|brinde|moletom|ring|stock|inventory|how many|available|armchair|chair|pouf|table|stool|hoodie|cap|bottle|tote|sticker|speaker|microphone|light)/.test(q)) return { tools: ["resumo_estoque"], text: stockAnswer(question) };
+  if (/(estoque|saldo|quant|tem|temos|livre|dispon|sofá|sofa|poltron|pufe|mesa|banner|backdrop|totem|kit|brinde|moletom|ring|stock|inventory|how many|available|armchair|chair|pouf|table|stool|hoodie|cap|bottle|tote|sticker|speaker|microphone|light|[íi]cone|icon|cubo|cube|mala|suitcase|cabine|booth|p[óo]rtico|arch|palco|stage|celular|phone|caneta|pen\b|caderno|notebook|copo|tumbler|power bank|chaveiro|keychain|brinde|giveaway)/.test(q)) return { tools: ["resumo_estoque"], text: stockAnswer(question) };
   return { tools: [], text: defaultAnswer() };
 }
 
