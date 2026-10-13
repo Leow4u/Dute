@@ -1,0 +1,133 @@
+@import "./fonts/fonts.css";
+@import "../src/index.css";
+@source "../src";
+@source "./";
+
+/*
+ * Estilos só da tela de entrada da demo. Ficam em CSS comum (não em classes
+ * do Tailwind) para o build de produção, que também varre esta pasta, não
+ * ganhar nenhuma classe nova.
+ */
+.demo-pill {
+  border: 1px solid var(--auth-line-strong);
+  border-radius: 9999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--auth-muted);
+}
+
+.demo-error {
+  font-size: 14px;
+  color: #ff8a8a;
+}
+
+.demo-access {
+  margin-top: 24px;
+  border-top: 1px solid var(--auth-line);
+  padding-top: 20px;
+}
+
+.demo-access-title {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--auth-muted);
+}
+
+.demo-access-list {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.auth-cover .demo-profile {
+  display: flex;
+  width: 100%;
+  height: auto;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid var(--auth-line);
+  border-radius: 8px;
+  padding: 12px 14px;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  transition: border-color 150ms, background-color 150ms;
+}
+
+.auth-cover .demo-profile:hover,
+.auth-cover .demo-profile:focus-visible {
+  border-color: var(--auth-line-strong);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.demo-profile-icon,
+.demo-profile-arrow {
+  margin-top: 2px;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.demo-profile-icon {
+  color: var(--auth-accent);
+}
+
+.demo-profile-arrow {
+  color: var(--auth-muted);
+  transition: transform 150ms;
+}
+
+.demo-profile:hover .demo-profile-arrow {
+  transform: translateX(2px);
+}
+
+.demo-profile-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.demo-profile-title {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--auth-text);
+}
+
+.demo-profile-hint {
+  margin-top: 2px;
+  display: block;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--auth-muted);
+}
+
+.demo-profile-login {
+  margin-top: 6px;
+  display: block;
+  font-family: var(--app-font-mono, monospace);
+  font-size: 12px;
+  color: var(--auth-muted);
+}
+
+.demo-reset {
+  margin-top: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--auth-muted);
+  cursor: pointer;
+}
+
+.demo-reset:hover {
+  color: var(--auth-text);
+}
+
+.demo-reset svg {
+  width: 14px;
+  height: 14px;
+}
