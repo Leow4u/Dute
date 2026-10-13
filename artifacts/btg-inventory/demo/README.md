@@ -44,6 +44,27 @@ Os dois cartões da tela de entrada também entram direto.
 
 Anexar arquivos (nota fiscal, fotos) não funciona na demonstração.
 
+## Link para o cliente (só o portal)
+
+`build:demo:cliente` gera `dist/demo-cliente/index.html`: o mesmo arquivo, mas
+o login só aceita o portal (`tiktok@demo.dutelog.com.br`, senha `demo`). A
+sessão da operação é ignorada e as rotas internas voltam para o portal. É o
+que vai por link para a empresa testar sozinha.
+
+Publicação num site próprio do Firebase Hosting, separado da produção
+(`app.dutelog.com.br` continua no Cloud Run e não muda):
+
+```powershell
+corepack pnpm --filter "@workspace/btg-inventory" run build:demo:cliente
+# só na primeira vez; se o nome estiver em uso, troque aqui e em demo/firebase.json
+firebase hosting:sites:create dutelog-demo --project dute-btg
+firebase deploy --only hosting --project dute-btg --config artifacts/btg-inventory/demo/firebase.json
+```
+
+O link fica `https://dutelog-demo.web.app`, sem indexação em buscador
+(`X-Robots-Tag`). Cada pessoa vê os próprios pedidos: tudo fica no navegador
+dela e nada chega à Dutelog.
+
 ## Inglês
 
 Na tela de entrada, o botão **English** troca o idioma (fica guardado no

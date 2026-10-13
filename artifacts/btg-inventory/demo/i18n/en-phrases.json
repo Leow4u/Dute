@@ -1026,5 +1026,8 @@
  "Bancada WMS": "WMS bench",
  "Faturado": "Invoiced",
  "Grupo": "Group",
- "Servidor": "Server"
+ "Servidor": "Server",
+ "E-mail ou senha não conferem. Use o acesso de demonstração abaixo.": "Email or password don't match. Use the demo access below.",
+ "Acesso de demonstração": "Demo access",
+ "Estoque com fotos, pedidos, kits, destinatários, envios, faturas e o Agent Dute.": "Stock with photos, orders, kits, recipients, shipments, invoices and Agent Dute."
 }

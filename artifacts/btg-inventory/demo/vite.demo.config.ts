@@ -3,7 +3,10 @@
  * simulados, num único HTML que abre com dois cliques, sem servidor.
  *
  *   corepack pnpm --filter "@workspace/btg-inventory" run build:demo
- *   -> artifacts/btg-inventory/dist/demo/dutelog-demo.html
+ *   -> artifacts/btg-inventory/dist/demo/dutelog-demo.html (portal e operação Dutelog)
+ *
+ *   corepack pnpm --filter "@workspace/btg-inventory" run build:demo:cliente
+ *   -> artifacts/btg-inventory/dist/demo-cliente/index.html (só o portal, para mandar por link)
  *
  * Nada aqui entra no build de produção (vite.config.ts não conhece esta pasta).
  */
@@ -17,7 +20,6 @@ const here = import.meta.dirname;
 const app = path.resolve(here, "..");
 const src = path.resolve(app, "src");
 const publicDir = path.resolve(app, "public");
-const outDir = path.resolve(app, "dist/demo");
 
 /** Módulos do app trocados pela versão da demo (só quando quem importa está em src/). */
 const OVERRIDES: Record<string, string> = {
@@ -29,14 +31,14 @@ const OVERRIDES: Record<string, string> = {
 
 function demoOverrides(): Plugin {
   return {
-    name: "dute-demo-overrides",
-    enforce: "pre",
-    async resolveId(source, importer, options) {
-      if (!importer || importer.startsWith(here)) return null;
-      const resolved = await this.resolve(source, importer, { ...options, skipSelf: true });
-      if (resolved && OVERRIDES[resolved.id]) return OVERRIDES[resolved.id];
-      return null;
-    },
+      name: "dute-demo-overrides",
+      enforce: "pre",
+      async resolveId(source, importer, options) {
+        if (!importer || importer.startsWith(here)) return null;
+        const resolved = await this.resolve(source, importer, { ...options, skipSelf: true });
+        if (resolved && OVERRIDES[resolved.id]) return OVERRIDES[resolved.id];
+        return null;
+      },
   };
 }
 
@@ -64,7 +66,7 @@ function inlinePublicAssets(): Plugin {
 }
 
 /** Junta JS e CSS dentro do HTML e renomeia para dutelog-demo.html. */
-function singleFile(): Plugin {
+function singleFile(fileName: string): Plugin {
   return {
     name: "dute-demo-single-file",
     enforce: "post",
@@ -96,26 +98,29 @@ function singleFile(): Plugin {
       // Sobra só o worker do leitor de PDF, que a demo não usa (anexos não funcionam aqui).
       for (const name of Object.keys(bundle)) if (name.startsWith("assets/")) delete bundle[name];
       delete bundle[htmlName];
-      this.emitFile({ type: "asset", fileName: "dutelog-demo.html", source: html });
+      this.emitFile({ type: "asset", fileName, source: html });
     },
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const clientOnly = mode === "cliente";
+  return {
   root: here,
   base: "/",
   publicDir: false,
   define: {
     __BUILD_COMMIT__: JSON.stringify("demo"),
     __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+    __DEMO_CLIENT_ONLY__: JSON.stringify(clientOnly),
   },
-  plugins: [demoOverrides(), inlinePublicAssets(), react(), tailwindcss({ optimize: false }), singleFile()],
+  plugins: [demoOverrides(), inlinePublicAssets(), react(), tailwindcss({ optimize: false }), singleFile(clientOnly ? "index.html" : "dutelog-demo.html")],
   resolve: {
     alias: { "@": src },
     dedupe: ["react", "react-dom"],
   },
   build: {
-    outDir,
+    outDir: path.resolve(app, clientOnly ? "dist/demo-cliente" : "dist/demo"),
     emptyOutDir: true,
     assetsInlineLimit: 100_000_000,
     cssCodeSplit: false,
@@ -126,4 +131,5 @@ export default defineConfig({
     },
   },
   server: { port: 5198, strictPort: true, host: "127.0.0.1" },
+  };
 });

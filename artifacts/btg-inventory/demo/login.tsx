@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import markUrl from "../public/dutelog-mark-64.png";
 import visualUrl from "../public/auth-visual.jpg";
 import { CUSTOMER, resetDemoState } from "./data";
-import { DEMO_PROFILES, profileForLogin, writeSession, type DemoProfile } from "./session";
+import { AVAILABLE_PROFILES, profileForLogin, writeSession, type DemoProfile } from "./session";
 import { LANG, setLang, type Lang } from "./i18n/lang";
 
 function switchLang(lang: Lang) {
@@ -34,7 +34,7 @@ export default function DemoLogin() {
     event.preventDefault();
     const profile = profileForLogin(email, password);
     if (!profile) {
-      setError("E-mail ou senha não conferem. Use um dos acessos de demonstração abaixo.");
+      setError(AVAILABLE_PROFILES.length > 1 ? "E-mail ou senha não conferem. Use um dos acessos de demonstração abaixo." : "E-mail ou senha não conferem. Use o acesso de demonstração abaixo.");
       return;
     }
     enter(profile);
@@ -90,9 +90,9 @@ export default function DemoLogin() {
               </form>
 
               <div className="demo-access">
-                <p className="demo-access-title">Acessos de demonstração</p>
+                <p className="demo-access-title">{AVAILABLE_PROFILES.length > 1 ? "Acessos de demonstração" : "Acesso de demonstração"}</p>
                 <ul className="demo-access-list">
-                  {[DEMO_PROFILES.cliente, DEMO_PROFILES.dutelog].map((profile) => {
+                  {AVAILABLE_PROFILES.map((profile) => {
                     const Icon = profile.key === "cliente" ? Store : Building2;
                     return (
                       <li key={profile.key}>
