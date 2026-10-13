@@ -1,6 +1,6 @@
 /* DEMO: tela Kits do portal. Composições salvas que viram pedido em um clique. */
 import { useLocation } from "wouter";
-import { Gift, PackageOpen, Send, Trash2 } from "lucide-react";
+import { Gift, MessageSquareText, PackageOpen, Send, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -51,6 +51,12 @@ export function DemoKits() {
                 <div className="min-w-0">
                   <h2 className="font-semibold">{kit.name}</h2>
                   {kit.description ? <p className="mt-0.5 text-sm text-muted-foreground">{kit.description}</p> : null}
+                  {kit.message ? (
+                    <p className="mt-2 flex items-start gap-1.5 rounded-md bg-muted px-2.5 py-1.5 text-xs leading-relaxed">
+                      <MessageSquareText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      <span>Cartão: “{kit.message}”</span>
+                    </p>
+                  ) : null}
                 </div>
                 <span className="shrink-0 rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
                   {formatNumber(pieces)} peças

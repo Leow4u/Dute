@@ -305,7 +305,7 @@ const baseRequests: R[] = [
 const STATE_KEY = "dute.demo.state.v1";
 type DemoConversation = { id: string; title: string; last_message_at: string; messages: R[] };
 export type Recipient = { id: string; name: string; kind: string; address: string; contact?: string; size?: string; notes?: string; created_at: string };
-export type KitModel = { id: string; name: string; description?: string; items: Array<{ sku: string; name: string; quantity: number }>; created_at: string };
+export type KitModel = { id: string; name: string; description?: string; message?: string; items: Array<{ sku: string; name: string; quantity: number }>; created_at: string };
 
 type DemoState = {
   created: R[];
@@ -331,7 +331,7 @@ const SEED_RECIPIENTS: Recipient[] = [
 
 /* Kits modelo: a composição fica salva e vira pedido em um clique. */
 const SEED_KITS: KitModel[] = [
-  { id: "kit_1", name: "Kit lançamento TikTok Shop", description: "Para creators no lançamento de campanha. O moletom segue o tamanho da agenda.", items: [
+  { id: "kit_1", name: "Kit lançamento TikTok Shop", description: "Para creators no lançamento de campanha. O moletom segue o tamanho da agenda.", message: "Oi {nome}! O TikTok Shop chegou e você está entre as primeiras pessoas a receber o kit de lançamento. Mostra pra gente como ficou?", items: [
     { sku: "TT-0030", name: "Moletom canguru · M", quantity: 1 },
     { sku: "TT-0025", name: "Garrafa térmica 500 ml", quantity: 1 },
     { sku: "TT-0026", name: "Boné trucker", quantity: 1 },
@@ -410,6 +410,7 @@ function createRequest(body: R) {
     supplier: body?.supplier,
     invoice_number: body?.invoice_number,
     items: items.map((item) => ({ ...item, requested_qty: item.quantity })),
+    card_message: typeof body?.card_message === "string" && body.card_message.trim() ? body.card_message.trim() : undefined,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     requested_by: by,
@@ -466,7 +467,7 @@ function saveKit(body: R) {
     .map((item: R) => ({ sku: text(item.sku), name: text(item.name), quantity: Math.max(1, Math.floor(Number(item.quantity) || 0)) }))
     .filter((item: R) => item.sku);
   if (!name || !items.length) return { ok: false, message: "Dê um nome e escolha ao menos um item." };
-  const kit: KitModel = { id: `kit_${state.nextId++}`, name, description: text(body?.description) || undefined, items, created_at: new Date().toISOString() };
+  const kit: KitModel = { id: `kit_${state.nextId++}`, name, description: text(body?.description) || undefined, message: text(body?.message) || undefined, items, created_at: new Date().toISOString() };
   state.kits.push(kit);
   saveState();
   return kit;

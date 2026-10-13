@@ -48,7 +48,7 @@ export function useDeleteRecipient() {
 export function useSaveKit() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (kit: Pick<KitModel, "name" | "description" | "items">) => call<KitModel>("/api/demo/kits", "POST", kit),
+    mutationFn: (kit: Pick<KitModel, "name" | "description" | "message" | "items">) => call<KitModel>("/api/demo/kits", "POST", kit),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: kitsKey }),
   });
 }

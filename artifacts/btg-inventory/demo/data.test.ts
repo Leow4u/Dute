@@ -47,8 +47,9 @@ describe("dados da demonstração", () => {
   });
 
   it("pedido feito no portal aparece na lista e a aprovação da Dutelog muda o status", () => {
-    const created = call("/api/client/requests", "POST", { type: "retirada", title: "Teste", items: [{ sku_code: skus[0].sku_code, quantity: 1 }] });
+    const created = call("/api/client/requests", "POST", { type: "retirada", title: "Teste", card_message: " Oi Luana! ", items: [{ sku_code: skus[0].sku_code, quantity: 1 }] });
     expect(created.request_number).toBe("SOL-121");
+    expect(created.card_message).toBe("Oi Luana!");
     expect(call("/api/client/overview").request_history[0].id).toBe(created.id);
 
     const decided = call(`/api/customer-requests/${created.id}/approve`, "POST", {});
@@ -74,8 +75,9 @@ describe("dados da demonstração", () => {
 
   it("kit modelo: salva com nome e itens, e exclui", () => {
     const before = kits().length;
-    const kit = call("/api/demo/kits", "POST", { name: "Kit teste", items: [{ sku: skus[0].sku_code, name: "x", quantity: 2 }] });
+    const kit = call("/api/demo/kits", "POST", { name: "Kit teste", message: "Oi {nome}!", items: [{ sku: skus[0].sku_code, name: "x", quantity: 2 }] });
     expect(kits()[0].id).toBe(kit.id);
+    expect(kits()[0].message).toBe("Oi {nome}!");
     expect(call("/api/demo/kits", "POST", { name: "Vazio", items: [] }).ok).toBe(false);
     call(`/api/demo/kits/${kit.id}`, "DELETE");
     expect(kits()).toHaveLength(before);

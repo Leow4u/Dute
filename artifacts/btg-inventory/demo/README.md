@@ -36,6 +36,10 @@ Os dois cartões da tela de entrada também entram direto.
     "Escolher da agenda". Cada destino vira um pedido próprio, e a roupa do
     kit segue o tamanho de cada destinatário. "Salvar como kit" guarda a
     composição do pedido.
+  - **Mensagem no cartão**: uma mensagem padrão no pedido, com `{nome}`
+    trocado pelo nome de cada destinatário, e "Personalizar" para escrever
+    uma mensagem só daquele destino. "Ver e imprimir cartões" abre os
+    cartões prontos para ir na caixa. O kit modelo guarda a mensagem padrão.
 - "Restaurar os dados da demonstração", na tela de entrada, desfaz tudo.
 
 Anexar arquivos (nota fiscal, fotos) não funciona na demonstração.

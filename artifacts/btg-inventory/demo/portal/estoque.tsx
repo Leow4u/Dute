@@ -76,7 +76,7 @@ import {
   type InventoryItem,
 } from "../../src/pages/client/shared";
 import { splitVariant } from "@/lib/stock-variants";
-import { BookUser, MapPin, Save } from "lucide-react";
+import { BookUser, MapPin, MessageSquareText, Printer, Save } from "lucide-react";
 import { useKits, useRecipients, useSaveKit, useSaveRecipient, type KitModel, type Recipient } from "./demo-api";
 
 type StockViewMode = "lista" | "cards";
@@ -116,6 +116,11 @@ type Destination = {
   address: string;
   contact?: string;
   size?: string;
+  /** Tipo na agenda (Creator, Agência...): decide o que {nome} vira no cartão. */
+  kind?: string;
+  /** Mensagem só deste destino; sem ela vale a mensagem padrão do pedido. */
+  message?: string;
+  customMessage: boolean;
   save: boolean;
 };
 
@@ -123,7 +128,7 @@ let destinationSeq = 0;
 
 function emptyDestination(): Destination {
   destinationSeq += 1;
-  return { key: `novo_${destinationSeq}`, name: "", address: "", contact: "", save: false };
+  return { key: `novo_${destinationSeq}`, name: "", address: "", contact: "", customMessage: false, save: false };
 }
 
 function destinationFromRecipient(recipient: Recipient): Destination {
@@ -135,8 +140,58 @@ function destinationFromRecipient(recipient: Recipient): Destination {
     address: recipient.address,
     contact: recipient.contact,
     size: recipient.size,
+    kind: recipient.kind,
+    customMessage: false,
     save: false,
   };
+}
+
+/** Cartão que vai dentro da caixa: até 280 caracteres. */
+const CARD_LIMIT = 280;
+
+/** {nome} vira o primeiro nome de pessoas e o nome inteiro de agências, eventos e escritórios. */
+function greetingName(destination: Destination) {
+  const name = destination.name.trim();
+  if (destination.kind && destination.kind !== "Creator") return name;
+  return name.split(/\s+/)[0] ?? name;
+}
+
+function cardMessageFor(destination: Destination, template: string) {
+  if (destination.customMessage) return (destination.message ?? "").trim();
+  return template.trim().replace(/\{nome\}/gi, greetingName(destination) || "você");
+}
+
+function escapeHtml(text: string) {
+  return text.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
+}
+
+/** Abre os cartões numa página para conferir e imprimir (é o que vai na caixa de cada destino). */
+function printCards(cards: Array<{ name: string; address: string; message: string }>) {
+  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Cartões do pedido</title><style>
+@page { size: A4; margin: 12mm; }
+* { box-sizing: border-box; }
+body { margin: 0; padding: 12mm; font-family: "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif; color: #17171c; background: #f4f4f6; }
+.bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8mm; font-size: 14px; }
+.bar button { font: inherit; padding: 8px 16px; border: 0; border-radius: 8px; background: #1f5eea; color: #fff; cursor: pointer; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8mm; }
+.card { background: #fff; border: 1px dashed #b8b8c2; border-radius: 4mm; padding: 9mm 8mm 6mm; min-height: 80mm; display: flex; flex-direction: column; break-inside: avoid; }
+.to { font-size: 9pt; color: #6b6b76; letter-spacing: .06em; text-transform: uppercase; }
+.name { font-size: 17pt; font-weight: 700; margin: 1mm 0 5mm; }
+.msg { font-size: 12.5pt; line-height: 1.55; white-space: pre-wrap; flex: 1; }
+.foot { margin-top: 6mm; padding-top: 3mm; border-top: 1px solid #ececf0; font-size: 8pt; color: #9a9aa4; }
+@media print { body { padding: 0; background: #fff; } .bar { display: none; } }
+</style></head><body><div class="bar"><strong>${cards.length} ${cards.length === 1 ? "cartão" : "cartões"} para imprimir e pôr na caixa de cada destino</strong><button onclick="print()">Imprimir</button></div><div class="grid">${cards
+    .map(
+      (card) =>
+        `<section class="card"><div class="to">Para</div><div class="name">${escapeHtml(card.name)}</div><div class="msg">${escapeHtml(card.message)}</div><div class="foot">Caixa de ${escapeHtml(card.name)} · ${escapeHtml(card.address)}</div></section>`,
+    )
+    .join("")}</div></body></html>`;
+  const page = window.open("", "_blank");
+  if (!page) return false;
+  page.document.open();
+  page.document.write(html);
+  page.document.close();
+  return true;
 }
 
 function isBlankDestination(destination: Destination) {
@@ -155,8 +210,11 @@ function lineForDestination(line: CartLine, destination: Destination, products: 
   return sibling ? { product: sibling, quantity: line.quantity } : line;
 }
 
+/** O pedido da demo leva a mensagem do cartão de cada destino. */
+type DemoRequestPayload = CreateClientRequestPayload & { card_message?: string };
+
 type OrderBatch = {
-  payloads: CreateClientRequestPayload[];
+  payloads: DemoRequestPayload[];
   toSave: Destination[];
 };
 
@@ -231,6 +289,7 @@ export function ClienteEstoque() {
   const saveRecipient = useSaveRecipient();
   const [dueAt, setDueAt] = useState("");
   const [notes, setNotes] = useState("");
+  const [cardMessage, setCardMessage] = useState("");
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -250,6 +309,7 @@ export function ClienteEstoque() {
     }
     setCart(next);
     setOrderName((current) => current || kit.name);
+    if (kit.message) setCardMessage(kit.message);
     setCartOpen(true);
     toast({
       title: `${kit.name} no pedido`,
@@ -311,6 +371,7 @@ export function ClienteEstoque() {
       setCartOpen(false);
       setOrderName("");
       setDestinations([emptyDestination()]);
+      setCardMessage("");
       setDueAt("");
       setNotes("");
       void invalidateClientData(queryClient);
@@ -594,8 +655,18 @@ export function ClienteEstoque() {
             return;
           }
 
+          const longCard = targets.find((destination) => cardMessageFor(destination, cardMessage).length > CARD_LIMIT);
+          if (longCard) {
+            toast({
+              title: "Mensagem longa demais para o cartão",
+              description: `A de ${longCard.name.trim()} passa de ${CARD_LIMIT} caracteres.`,
+              variant: "destructive",
+            });
+            return;
+          }
+
           const many = plan.length > 1;
-          const payloads: CreateClientRequestPayload[] = plan.map(({ destination, lines }) => ({
+          const payloads: DemoRequestPayload[] = plan.map(({ destination, lines }) => ({
             type: "retirada",
             priority: "normal",
             // Sem nome, o Início mostra "Pedido de dd/mm".
@@ -603,6 +674,7 @@ export function ClienteEstoque() {
             description: [
               `Entrega para ${destination.name.trim()} · ${destination.address.trim()}`,
               destination.contact?.trim() ? `Contato: ${destination.contact.trim()}` : "",
+              cardMessageFor(destination, cardMessage) ? `Cartão: “${cardMessageFor(destination, cardMessage)}”` : "",
               notes.trim(),
             ]
               .filter(Boolean)
@@ -610,6 +682,7 @@ export function ClienteEstoque() {
             destination: `${destination.name.trim()} · ${destination.address.trim()}`,
             due_at: dueAt ? new Date(dueAt).toISOString() : undefined,
             items: buildCartRequestItems(lines),
+            card_message: cardMessageFor(destination, cardMessage) || undefined,
           }));
           requestMutation.mutate({
             payloads,
@@ -733,6 +806,7 @@ export function ClienteEstoque() {
                     saveKit.mutate(
                       {
                         name,
+                        message: cardMessage.trim() || undefined,
                         items: cartLines.map((line) => ({ sku: line.product.sku, name: productTitle(line.product) + (splitVariant(line.product.clientCode) ? ` · ${splitVariant(line.product.clientCode)!.variant}` : ""), quantity: line.quantity })),
                       },
                       {
@@ -743,6 +817,8 @@ export function ClienteEstoque() {
                   }
                   dueAt={dueAt}
                   notes={notes}
+                  cardMessage={cardMessage}
+                  onCardMessageChange={setCardMessage}
                   isSubmitting={requestMutation.isPending}
                   onClose={() => setCartOpen(false)}
                   onDueAtChange={setDueAt}
@@ -1482,6 +1558,8 @@ function CartPanel({
   kits,
   dueAt,
   notes,
+  cardMessage,
+  onCardMessageChange,
   isSubmitting,
   savingKit,
   expanded,
@@ -1506,6 +1584,8 @@ function CartPanel({
   kits: KitModel[];
   dueAt: string;
   notes: string;
+  cardMessage: string;
+  onCardMessageChange: (value: string) => void;
   isSubmitting: boolean;
   savingKit: boolean;
   expanded: boolean;
@@ -1530,6 +1610,10 @@ function CartPanel({
   const destinationCount = Math.max(1, destinations.filter((destination) => !isBlankDestination(destination)).length);
   const totalQuantity = perDestination * destinationCount;
   const hasSizedLine = lines.some((line) => splitVariant(line.product.clientCode));
+  const cards = destinations
+    .filter((destination) => !isBlankDestination(destination))
+    .map((destination) => ({ name: destination.name.trim(), address: destination.address.trim(), message: cardMessageFor(destination, cardMessage) }))
+    .filter((card) => card.message);
   const needle = normalizeSlug(query);
   const shownLines = needle
     ? lines.filter((line) =>
@@ -1756,6 +1840,11 @@ function CartPanel({
                 </label>
               </div>
             )}
+            <CardMessageLine
+              destination={destination}
+              template={cardMessage}
+              onChange={(patch) => updateDestination(destination.key, patch)}
+            />
           </li>
         ))}
       </ul>
@@ -1799,6 +1888,38 @@ function CartPanel({
         />
       </div>
       {destinationList}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <Label htmlFor="cart-card">Mensagem no cartão (opcional)</Label>
+          <span className={cn("text-xs", cardMessage.length > CARD_LIMIT ? "text-destructive" : "text-muted-foreground")}>
+            {cardMessage.length}/{CARD_LIMIT}
+          </span>
+        </div>
+        <Textarea
+          id="cart-card"
+          value={cardMessage}
+          onChange={(event) => onCardMessageChange(event.target.value)}
+          placeholder="Oi {nome}! Esse kit é seu. Conta pra gente o que achou."
+          rows={3}
+        />
+        <p className="text-xs text-muted-foreground">
+          {"{nome}"} vira o nome de quem recebe. Em cada destino dá para trocar por uma mensagem só dele.
+        </p>
+        {cards.length ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="cursor-pointer"
+            onClick={() => {
+              if (!printCards(cards)) window.alert("O navegador bloqueou a janela dos cartões. Libere pop-ups para este arquivo.");
+            }}
+          >
+            <Printer className="h-4 w-4" aria-hidden="true" />
+            Ver e imprimir {formatNumber(cards.length)} {cards.length === 1 ? "cartão" : "cartões"}
+          </Button>
+        ) : null}
+      </div>
       <div className="space-y-1.5">
         <Label htmlFor="cart-due-at">Para quando</Label>
         <Input
@@ -1890,6 +2011,64 @@ function CartPanel({
           <div className="border-t border-border/60">{form}</div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Mensagem do cartão de um destino: a padrão já com o nome, ou uma só dele. */
+function CardMessageLine({
+  destination,
+  template,
+  onChange,
+}: {
+  destination: Destination;
+  template: string;
+  onChange: (patch: Partial<Destination>) => void;
+}) {
+  const rendered = cardMessageFor(destination, template);
+  const who = destination.name.trim() || "este destino";
+  if (destination.customMessage) {
+    const length = (destination.message ?? "").length;
+    return (
+      <div className="mt-2.5 space-y-1">
+        <Textarea
+          rows={2}
+          autoFocus
+          value={destination.message ?? ""}
+          onChange={(event) => onChange({ message: event.target.value })}
+          aria-label={`Mensagem do cartão para ${who}`}
+          placeholder={`Mensagem só para ${who}`}
+          className="text-sm"
+        />
+        <div className="flex items-center justify-between gap-2 text-xs">
+          <button
+            type="button"
+            className="cursor-pointer font-medium text-primary hover:underline"
+            onClick={() => onChange({ customMessage: false, message: "" })}
+          >
+            Usar a mensagem padrão
+          </button>
+          <span className={length > CARD_LIMIT ? "text-destructive" : "text-muted-foreground"}>
+            {length}/{CARD_LIMIT}
+          </span>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2.5 flex items-start gap-2 rounded-md bg-muted px-2.5 py-2 text-xs">
+      <MessageSquareText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <span className={cn("min-w-0 flex-1 leading-relaxed", rendered ? "text-foreground" : "text-muted-foreground")}>
+        {rendered ? `“${rendered}”` : "Sem mensagem no cartão"}
+      </span>
+      <button
+        type="button"
+        className="shrink-0 cursor-pointer font-medium text-primary hover:underline"
+        onClick={() => onChange({ customMessage: true, message: rendered })}
+        aria-label={`Personalizar a mensagem para ${who}`}
+      >
+        Personalizar
+      </button>
     </div>
   );
 }
