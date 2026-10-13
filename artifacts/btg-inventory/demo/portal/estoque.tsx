@@ -78,6 +78,7 @@ import {
 import { splitVariant } from "@/lib/stock-variants";
 import { BookUser, MapPin, MessageSquareText, Printer, Save } from "lucide-react";
 import { useKits, useRecipients, useSaveKit, useSaveRecipient, type KitModel, type Recipient } from "./demo-api";
+import { pick } from "../i18n/lang";
 
 type StockViewMode = "lista" | "cards";
 type StockFilter = "todos" | "disponiveis" | "baixo" | "zerado" | "arquivados";
@@ -158,7 +159,8 @@ function greetingName(destination: Destination) {
 
 function cardMessageFor(destination: Destination, template: string) {
   if (destination.customMessage) return (destination.message ?? "").trim();
-  return template.trim().replace(/\{nome\}/gi, greetingName(destination) || "você");
+  // Em inglês o marcador é {name}; os dois funcionam nos dois idiomas.
+  return template.trim().replace(/\{(nome|name)\}/gi, greetingName(destination) || pick("você", "you"));
 }
 
 function escapeHtml(text: string) {
@@ -167,7 +169,7 @@ function escapeHtml(text: string) {
 
 /** Abre os cartões numa página para conferir e imprimir (é o que vai na caixa de cada destino). */
 function printCards(cards: Array<{ name: string; address: string; message: string }>) {
-  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Cartões do pedido</title><style>
+  const html = `<!doctype html><html lang="${pick("pt-BR", "en")}"><head><meta charset="utf-8"><title>${pick("Cartões do pedido", "Order cards")}</title><style>
 @page { size: A4; margin: 12mm; }
 * { box-sizing: border-box; }
 body { margin: 0; padding: 12mm; font-family: "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif; color: #17171c; background: #f4f4f6; }
@@ -180,10 +182,13 @@ body { margin: 0; padding: 12mm; font-family: "Plus Jakarta Sans", "Segoe UI", s
 .msg { font-size: 12.5pt; line-height: 1.55; white-space: pre-wrap; flex: 1; }
 .foot { margin-top: 6mm; padding-top: 3mm; border-top: 1px solid #ececf0; font-size: 8pt; color: #9a9aa4; }
 @media print { body { padding: 0; background: #fff; } .bar { display: none; } }
-</style></head><body><div class="bar"><strong>${cards.length} ${cards.length === 1 ? "cartão" : "cartões"} para imprimir e pôr na caixa de cada destino</strong><button onclick="print()">Imprimir</button></div><div class="grid">${cards
+</style></head><body><div class="bar"><strong>${pick(
+    `${cards.length} ${cards.length === 1 ? "cartão" : "cartões"} para imprimir e pôr na caixa de cada destino`,
+    `${cards.length} ${cards.length === 1 ? "card" : "cards"} to print and put in each recipient's box`,
+  )}</strong><button onclick="print()">${pick("Imprimir", "Print")}</button></div><div class="grid">${cards
     .map(
       (card) =>
-        `<section class="card"><div class="to">Para</div><div class="name">${escapeHtml(card.name)}</div><div class="msg">${escapeHtml(card.message)}</div><div class="foot">Caixa de ${escapeHtml(card.name)} · ${escapeHtml(card.address)}</div></section>`,
+        `<section class="card"><div class="to">${pick("Para", "To")}</div><div class="name">${escapeHtml(card.name)}</div><div class="msg">${escapeHtml(card.message)}</div><div class="foot">${pick("Caixa de", "Box for")} ${escapeHtml(card.name)} · ${escapeHtml(card.address)}</div></section>`,
     )
     .join("")}</div></body></html>`;
   const page = window.open("", "_blank");
@@ -670,11 +675,11 @@ export function ClienteEstoque() {
             type: "retirada",
             priority: "normal",
             // Sem nome, o Início mostra "Pedido de dd/mm".
-            title: many ? `${orderName.trim() || "Envio"} · ${destination.name.trim()}` : orderName.trim() || undefined,
+            title: many ? `${orderName.trim() || pick("Envio", "Shipment")} · ${destination.name.trim()}` : orderName.trim() || undefined,
             description: [
-              `Entrega para ${destination.name.trim()} · ${destination.address.trim()}`,
-              destination.contact?.trim() ? `Contato: ${destination.contact.trim()}` : "",
-              cardMessageFor(destination, cardMessage) ? `Cartão: “${cardMessageFor(destination, cardMessage)}”` : "",
+              `${pick("Entrega para", "Deliver to")} ${destination.name.trim()} · ${destination.address.trim()}`,
+              destination.contact?.trim() ? `${pick("Contato", "Contact")}: ${destination.contact.trim()}` : "",
+              cardMessageFor(destination, cardMessage) ? `${pick("Cartão", "Card")}: “${cardMessageFor(destination, cardMessage)}”` : "",
               notes.trim(),
             ]
               .filter(Boolean)
@@ -1899,11 +1904,14 @@ function CartPanel({
           id="cart-card"
           value={cardMessage}
           onChange={(event) => onCardMessageChange(event.target.value)}
-          placeholder="Oi {nome}! Esse kit é seu. Conta pra gente o que achou."
+          placeholder={pick("Oi {nome}! Esse kit é seu. Conta pra gente o que achou.", "Hi {name}! This kit is for you. Tell us what you think.")}
           rows={3}
         />
         <p className="text-xs text-muted-foreground">
-          {"{nome}"} vira o nome de quem recebe. Em cada destino dá para trocar por uma mensagem só dele.
+          {pick(
+            "{nome} vira o nome de quem recebe. Em cada destino dá para trocar por uma mensagem só dele.",
+            "{name} becomes the recipient's name. Each destination can have its own message instead.",
+          )}
         </p>
         {cards.length ? (
           <Button
@@ -1912,7 +1920,7 @@ function CartPanel({
             size="sm"
             className="cursor-pointer"
             onClick={() => {
-              if (!printCards(cards)) window.alert("O navegador bloqueou a janela dos cartões. Libere pop-ups para este arquivo.");
+              if (!printCards(cards)) window.alert(pick("O navegador bloqueou a janela dos cartões. Libere pop-ups para este arquivo.", "The browser blocked the cards window. Allow pop-ups for this file."));
             }}
           >
             <Printer className="h-4 w-4" aria-hidden="true" />

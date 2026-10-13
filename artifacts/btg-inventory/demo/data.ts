@@ -3,6 +3,8 @@
  * material de marketing guardados na Dutelog. Nada aqui é dado real e nada
  * sai do navegador: cada /api/... é respondido daqui mesmo.
  */
+import { EN_PHRASES } from "./i18n/en";
+import { LANG, isEnglish, pick } from "./i18n/lang";
 import { productPhoto } from "./photos";
 
 const NOW = Date.now();
@@ -76,6 +78,15 @@ const CATALOG: CatalogItem[] = [
   { n: 31, name: "Moletom canguru", cat: "Vestuário", color: "Branco", size: "G", qty: 210, res: 0, min: 100, price: 120, loc: ["H", "02", "3"], clientCode: "TT.VST.029.G", photo: 29 },
   { n: 32, name: "Moletom canguru", cat: "Vestuário", color: "Branco", size: "GG", qty: 70, res: 0, min: 50, price: 120, loc: ["H", "02", "4"], clientCode: "TT.VST.029.GG", photo: 29 },
 ];
+
+// Em inglês, nome e cor dos itens já nascem traduzidos: a busca e o Agent Dute funcionam em inglês.
+// A categoria fica em português (é chave do prefixo do código) e a tela traduz na exibição.
+if (isEnglish) {
+  for (const item of CATALOG) {
+    item.name = EN_PHRASES[item.name] ?? item.name;
+    if (item.color) item.color = EN_PHRASES[item.color] ?? item.color;
+  }
+}
 
 const PREFIX: Record<string, string> = {
   "Mobiliário": "MOB",
@@ -280,7 +291,7 @@ const baseRequests: R[] = [
   request({
     id: "creq_108", request_number: "SOL-108", type: "recebimento", status: "closed", operational_status: "received",
     title: "Aviso de envio NF 7.690 · Têxtil Paulista", supplier: "Têxtil Paulista", invoice_number: "7690", qty_expected: 400, qty_received: 396, received_at: daysAgo(3),
-    received_differences: [{ sku_code: code(30), product_name: "Moletom canguru · M", expected: 200, received: 196 }],
+    received_differences: [{ sku_code: code(30), product_name: fullName(itemOf(30)), expected: 200, received: 196 }],
     items: [reqItem(30, 200), reqItem(31, 200)], inbound_id: "inb_creq_108",
     created_at: daysAgo(7), updated_at: daysAgo(3), decided_at: daysAgo(6), decided_by: decided, requested_by: client2,
   }),
@@ -302,7 +313,8 @@ const baseRequests: R[] = [
 ];
 
 /* ---------- Estado da demo (pedidos novos e decisões) ---------- */
-const STATE_KEY = "dute.demo.state.v1";
+// Um estado por idioma: kits e agenda criados numa língua não se misturam com a outra.
+const STATE_KEY = LANG === "en" ? "dute.demo.state.v1.en" : "dute.demo.state.v1";
 type DemoConversation = { id: string; title: string; last_message_at: string; messages: R[] };
 export type Recipient = { id: string; name: string; kind: string; address: string; contact?: string; size?: string; notes?: string; created_at: string };
 export type KitModel = { id: string; name: string; description?: string; message?: string; items: Array<{ sku: string; name: string; quantity: number }>; created_at: string };
@@ -320,34 +332,31 @@ type DemoState = {
 
 /* Agenda de destinatários: pessoas e endereços fictícios. */
 const SEED_RECIPIENTS: Recipient[] = [
-  { id: "dst_1", name: "Luana Prado", kind: "Creator", address: "Rua Harmonia, 412, apto 81 · Vila Madalena, São Paulo/SP · 05435-000", contact: "(11) 90000-0101", size: "M", notes: "Moda e lifestyle. Recebe na portaria até 18h.", created_at: daysAgo(40) },
-  { id: "dst_2", name: "Rafa Nunes", kind: "Creator", address: "Av. Rebouças, 1985, apto 34 · Pinheiros, São Paulo/SP · 05401-000", contact: "(11) 90000-0102", size: "G", notes: "Games.", created_at: daysAgo(38) },
-  { id: "dst_3", name: "Bia Moreira", kind: "Creator", address: "Rua Oscar Freire, 720, apto 12 · Jardins, São Paulo/SP · 01426-000", contact: "(11) 90000-0103", size: "P", notes: "Beleza.", created_at: daysAgo(30) },
-  { id: "dst_4", name: "Thiago Ramos", kind: "Creator", address: "Rua Voluntários da Pátria, 1450 · Botafogo, Rio de Janeiro/RJ · 22270-000", contact: "(21) 90000-0104", size: "GG", notes: "Humor. Entrega fora de SP: prazo de 2 dias.", created_at: daysAgo(21) },
-  { id: "dst_5", name: "Agência Pulso", kind: "Agência", address: "Rua Fidalga, 300 · Vila Madalena, São Paulo/SP · 05432-000", contact: "producao@pulso.demo", created_at: daysAgo(60) },
-  { id: "dst_6", name: "Escritório Vila Olímpia", kind: "Escritório", address: "Rua Funchal, 500, 8º andar · Vila Olímpia, São Paulo/SP · 04551-060", contact: "Recepção", created_at: daysAgo(90) },
-  { id: "dst_7", name: "Expo Center Norte", kind: "Evento", address: "Rua José Bernardo Pinto, 333 · Vila Guilherme, São Paulo/SP · 02055-000", contact: "Doca 4, montagem", created_at: daysAgo(15) },
+  { id: "dst_1", name: "Luana Prado", kind: "Creator", address: "Rua Harmonia, 412, apto 81 · Vila Madalena, São Paulo/SP · 05435-000", contact: "(11) 90000-0101", size: "M", notes: pick("Moda e lifestyle. Recebe na portaria até 18h.", "Fashion and lifestyle. Front desk takes deliveries until 6 pm."), created_at: daysAgo(40) },
+  { id: "dst_2", name: "Rafa Nunes", kind: "Creator", address: "Av. Rebouças, 1985, apto 34 · Pinheiros, São Paulo/SP · 05401-000", contact: "(11) 90000-0102", size: "G", notes: pick("Games.", "Gaming."), created_at: daysAgo(38) },
+  { id: "dst_3", name: "Bia Moreira", kind: "Creator", address: "Rua Oscar Freire, 720, apto 12 · Jardins, São Paulo/SP · 01426-000", contact: "(11) 90000-0103", size: "P", notes: pick("Beleza.", "Beauty."), created_at: daysAgo(30) },
+  { id: "dst_4", name: "Thiago Ramos", kind: "Creator", address: "Rua Voluntários da Pátria, 1450 · Botafogo, Rio de Janeiro/RJ · 22270-000", contact: "(21) 90000-0104", size: "GG", notes: pick("Humor. Entrega fora de SP: prazo de 2 dias.", "Comedy. Outside São Paulo: 2-day delivery."), created_at: daysAgo(21) },
+  { id: "dst_5", name: pick("Agência Pulso", "Pulso Agency"), kind: "Agência", address: "Rua Fidalga, 300 · Vila Madalena, São Paulo/SP · 05432-000", contact: "producao@pulso.demo", created_at: daysAgo(60) },
+  { id: "dst_6", name: pick("Escritório Vila Olímpia", "Vila Olímpia office"), kind: "Escritório", address: "Rua Funchal, 500, 8º andar · Vila Olímpia, São Paulo/SP · 04551-060", contact: pick("Recepção", "Reception"), created_at: daysAgo(90) },
+  { id: "dst_7", name: "Expo Center Norte", kind: "Evento", address: "Rua José Bernardo Pinto, 333 · Vila Guilherme, São Paulo/SP · 02055-000", contact: pick("Doca 4, montagem", "Dock 4, setup crew"), created_at: daysAgo(15) },
 ];
 
 /* Kits modelo: a composição fica salva e vira pedido em um clique. */
+const kitLine = (n: number, quantity: number) => ({ sku: code(n), name: fullName(itemOf(n)), quantity });
 const SEED_KITS: KitModel[] = [
-  { id: "kit_1", name: "Kit lançamento TikTok Shop", description: "Para creators no lançamento de campanha. O moletom segue o tamanho da agenda.", message: "Oi {nome}! O TikTok Shop chegou e você está entre as primeiras pessoas a receber o kit de lançamento. Mostra pra gente como ficou?", items: [
-    { sku: "TT-0030", name: "Moletom canguru · M", quantity: 1 },
-    { sku: "TT-0025", name: "Garrafa térmica 500 ml", quantity: 1 },
-    { sku: "TT-0026", name: "Boné trucker", quantity: 1 },
-    { sku: "TT-0024", name: "Ecobag de algodão", quantity: 1 },
-    { sku: "TT-0027", name: "Adesivos (pacote com 10)", quantity: 2 },
-  ], created_at: daysAgo(2) },
-  { id: "kit_2", name: "Kit creator estúdio", description: "Equipamento para gravar em casa.", items: [
-    { sku: "TT-0021", name: "Ring light 18\" com tripé", quantity: 1 },
-    { sku: "TT-0022", name: "Microfone sem fio com base", quantity: 1 },
-    { sku: "TT-0027", name: "Adesivos (pacote com 10)", quantity: 1 },
-  ], created_at: daysAgo(12) },
-  { id: "kit_3", name: "Kit boas-vindas parceiros", description: "Caixa presente com material institucional.", items: [
-    { sku: "TT-0028", name: "Kit creator (caixa presente)", quantity: 1 },
-    { sku: "TT-0025", name: "Garrafa térmica 500 ml", quantity: 1 },
-    { sku: "TT-0020", name: "Folder institucional", quantity: 1 },
-  ], created_at: daysAgo(20) },
+  {
+    id: "kit_1",
+    name: pick("Kit lançamento TikTok Shop", "TikTok Shop launch kit"),
+    description: pick("Para creators no lançamento de campanha. O moletom segue o tamanho da agenda.", "For creators at a campaign launch. The hoodie follows the size saved in the address book."),
+    message: pick(
+      "Oi {nome}! O TikTok Shop chegou e você está entre as primeiras pessoas a receber o kit de lançamento. Mostra pra gente como ficou?",
+      "Hi {name}! TikTok Shop is here and you're among the first to get the launch kit. Show us how it turned out!",
+    ),
+    items: [kitLine(30, 1), kitLine(25, 1), kitLine(26, 1), kitLine(24, 1), kitLine(27, 2)],
+    created_at: daysAgo(2),
+  },
+  { id: "kit_2", name: pick("Kit creator estúdio", "Creator studio kit"), description: pick("Equipamento para gravar em casa.", "Gear to film at home."), items: [kitLine(21, 1), kitLine(22, 1), kitLine(27, 1)], created_at: daysAgo(12) },
+  { id: "kit_3", name: pick("Kit boas-vindas parceiros", "Partner welcome kit"), description: pick("Caixa presente com material institucional.", "Gift box with company material."), items: [kitLine(28, 1), kitLine(25, 1), kitLine(20, 1)], created_at: daysAgo(20) },
 ];
 
 function freshState(): DemoState {
@@ -438,12 +447,12 @@ function decideRequest(id: string, action: string, body: R) {
 const text = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 
 export function recipients() {
-  return [...state.recipients].sort((left, right) => left.name.localeCompare(right.name, "pt-BR"));
+  return [...state.recipients].sort((left, right) => left.name.localeCompare(right.name, pick("pt-BR", "en-US")));
 }
 
 function saveRecipient(id: string | null, body: R) {
   const fields = { name: text(body?.name), kind: text(body?.kind) || "Creator", address: text(body?.address), contact: text(body?.contact) || undefined, size: text(body?.size) || undefined, notes: text(body?.notes) || undefined };
-  if (!fields.name || !fields.address) return { ok: false, message: "Informe o nome e o endereço." };
+  if (!fields.name || !fields.address) return { ok: false, message: pick("Informe o nome e o endereço.", "Enter the name and the address.") };
   const existing = id ? state.recipients.find((item) => item.id === id) : null;
   if (existing) Object.assign(existing, fields);
   else state.recipients.push({ id: `dst_${state.nextId++}`, created_at: new Date().toISOString(), ...fields });
@@ -466,7 +475,7 @@ function saveKit(body: R) {
   const items = (Array.isArray(body?.items) ? body.items : [])
     .map((item: R) => ({ sku: text(item.sku), name: text(item.name), quantity: Math.max(1, Math.floor(Number(item.quantity) || 0)) }))
     .filter((item: R) => item.sku);
-  if (!name || !items.length) return { ok: false, message: "Dê um nome e escolha ao menos um item." };
+  if (!name || !items.length) return { ok: false, message: pick("Dê um nome e escolha ao menos um item.", "Give it a name and pick at least one item.") };
   const kit: KitModel = { id: `kit_${state.nextId++}`, name, description: text(body?.description) || undefined, message: text(body?.message) || undefined, items, created_at: new Date().toISOString() };
   state.kits.push(kit);
   saveState();
@@ -498,9 +507,9 @@ const receivingTasks: R[] = [
     quantity: 22, total_units: 22, customer_request_id: "creq_112", created_at: ago(2), due_at: ago(0), progress: 45,
     next_action: "Conferir o estado de cada peça e registrar o retorno", can_advance: true, can_register_exception: true, exception_count: 0,
     items: [
-      { id: "ii_1", sku_code: code(1), product_name: "Sofá modular 3 lugares", client_item_code: clientCode(1), expected_quantity: 2, quantity: 2, received_qty: 2, conference_status: "checked", location: "RECEBIMENTO" },
-      { id: "ii_2", sku_code: code(2), product_name: "Poltrona lounge rosa", client_item_code: clientCode(2), expected_quantity: 4, quantity: 4, received_qty: 0, conference_status: "checking", location: "RECEBIMENTO" },
-      { id: "ii_3", sku_code: code(4), product_name: "Pufe redondo terracota", client_item_code: clientCode(4), expected_quantity: 16, quantity: 16, received_qty: 8, conference_status: "checking", location: "RECEBIMENTO" },
+      { id: "ii_1", sku_code: code(1), product_name: fullName(itemOf(1)), client_item_code: clientCode(1), expected_quantity: 2, quantity: 2, received_qty: 2, conference_status: "checked", location: "RECEBIMENTO" },
+      { id: "ii_2", sku_code: code(2), product_name: fullName(itemOf(2)), client_item_code: clientCode(2), expected_quantity: 4, quantity: 4, received_qty: 0, conference_status: "checking", location: "RECEBIMENTO" },
+      { id: "ii_3", sku_code: code(4), product_name: fullName(itemOf(4)), client_item_code: clientCode(4), expected_quantity: 16, quantity: 16, received_qty: 8, conference_status: "checking", location: "RECEBIMENTO" },
     ],
     timeline: timeline("inb_creq_112", "Retorno de evento aprovado", daysAgo(2), "checking", ago(2)),
   },
@@ -509,9 +518,9 @@ const receivingTasks: R[] = [
     quantity: 9050, total_units: 9050, customer_request_id: "creq_110", created_at: daysAgo(4), due_at: inDays(2), progress: 0,
     next_action: "Aguardando chegada prevista", can_advance: true, can_register_exception: true, exception_count: 0,
     items: [
-      { id: "ii_4", sku_code: code(27), product_name: "Adesivos (pacote com 10)", client_item_code: clientCode(27), expected_quantity: 5000, quantity: 5000, received_qty: 0, location: "RECEBIMENTO" },
-      { id: "ii_5", sku_code: code(20), product_name: "Folder institucional", client_item_code: clientCode(20), expected_quantity: 4000, quantity: 4000, received_qty: 0, location: "RECEBIMENTO" },
-      { id: "ii_6", sku_code: code(23), product_name: "Caixa de som bluetooth", client_item_code: clientCode(23), expected_quantity: 50, quantity: 50, received_qty: 0, location: "RECEBIMENTO" },
+      { id: "ii_4", sku_code: code(27), product_name: fullName(itemOf(27)), client_item_code: clientCode(27), expected_quantity: 5000, quantity: 5000, received_qty: 0, location: "RECEBIMENTO" },
+      { id: "ii_5", sku_code: code(20), product_name: fullName(itemOf(20)), client_item_code: clientCode(20), expected_quantity: 4000, quantity: 4000, received_qty: 0, location: "RECEBIMENTO" },
+      { id: "ii_6", sku_code: code(23), product_name: fullName(itemOf(23)), client_item_code: clientCode(23), expected_quantity: 50, quantity: 50, received_qty: 0, location: "RECEBIMENTO" },
     ],
     timeline: timeline("inb_creq_110", "Aviso de envio aprovado", daysAgo(4), "planned"),
   },
@@ -519,16 +528,16 @@ const receivingTasks: R[] = [
     id: "receiving:inb_creq_108", reference: "inb_creq_108", title: "NF 7.690 · Têxtil Paulista", customer: CUSTOMER, status: "received", priority: "normal",
     quantity: 396, total_units: 396, customer_request_id: "creq_108", created_at: daysAgo(6), progress: 100, next_action: "Concluído", can_advance: false, can_register_exception: false, exception_count: 1,
     items: [
-      { id: "ii_7", sku_code: code(30), product_name: "Moletom canguru · M", expected_quantity: 200, quantity: 200, received_qty: 196, conference_status: "divergence", difference_qty: -4, location: address(itemOf(30).loc) },
-      { id: "ii_8", sku_code: code(31), product_name: "Moletom canguru · G", expected_quantity: 200, quantity: 200, received_qty: 200, conference_status: "checked", location: address(itemOf(31).loc) },
+      { id: "ii_7", sku_code: code(30), product_name: fullName(itemOf(30)), expected_quantity: 200, quantity: 200, received_qty: 196, conference_status: "divergence", difference_qty: -4, location: address(itemOf(30).loc) },
+      { id: "ii_8", sku_code: code(31), product_name: fullName(itemOf(31)), expected_quantity: 200, quantity: 200, received_qty: 200, conference_status: "checked", location: address(itemOf(31).loc) },
     ],
     timeline: timeline("inb_creq_108", "Aviso de envio aprovado", daysAgo(6), "received", daysAgo(3)),
   },
 ];
 
 const putawayTasks: R[] = [
-  { id: "putaway:put_1", reference: "put_1", title: "Guardar Display de mesa A5", sku_code: code(19), customer: CUSTOMER, status: "planned", priority: "normal", quantity: 50, total_units: 50, source_location_id: "RECEBIMENTO", created_at: daysAgo(1), next_action: "Informar endereço final e concluir guarda.", can_advance: true, can_register_exception: true, exception_count: 0, items: [pickItem("pi_1", 19, 50)] },
-  { id: "putaway:put_2", reference: "put_2", title: "Guardar Sofá modular 3 lugares", sku_code: code(1), customer: CUSTOMER, status: "planned", priority: "high", quantity: 2, total_units: 2, source_location_id: "RECEBIMENTO", created_at: ago(2), next_action: "Informar endereço final e concluir guarda.", can_advance: true, can_register_exception: true, exception_count: 0, items: [pickItem("pi_2", 1, 2)] },
+  { id: "putaway:put_1", reference: "put_1", title: pick("Guardar ", "Put away ") + itemOf(19).name, sku_code: code(19), customer: CUSTOMER, status: "planned", priority: "normal", quantity: 50, total_units: 50, source_location_id: "RECEBIMENTO", created_at: daysAgo(1), next_action: "Informar endereço final e concluir guarda.", can_advance: true, can_register_exception: true, exception_count: 0, items: [pickItem("pi_1", 19, 50)] },
+  { id: "putaway:put_2", reference: "put_2", title: pick("Guardar ", "Put away ") + itemOf(1).name, sku_code: code(1), customer: CUSTOMER, status: "planned", priority: "high", quantity: 2, total_units: 2, source_location_id: "RECEBIMENTO", created_at: ago(2), next_action: "Informar endereço final e concluir guarda.", can_advance: true, can_register_exception: true, exception_count: 0, items: [pickItem("pi_2", 1, 2)] },
 ];
 
 function order(num: number, requestId: string, opts: { pick: string; pack?: string; ship?: string; items: R[]; created: string; blocked?: string; progress?: number; driver?: string; seal?: string; destination?: string }) {
@@ -668,11 +677,11 @@ export const documents = [
 
 /* ---------- Agent Dute ---------- */
 const baseConversations = [
-  { id: "conv_1", title: "Mobiliário para o Creators Summit", last_message_at: ago(3) },
-  { id: "conv_2", title: "Quanto custa guardar mais 20 sofás?", last_message_at: ago(30) },
-  { id: "conv_3", title: "Resumo do dia · operação TikTok", last_message_at: ago(26), routine_id: "rt_1" },
-  { id: "conv_4", title: "Itens abaixo do mínimo", last_message_at: daysAgo(4) },
-  { id: "conv_5", title: "Como avisar o retorno de um evento", last_message_at: daysAgo(9) },
+  { id: "conv_1", title: pick("Mobiliário para o Creators Summit", "Furniture for the Creators Summit"), last_message_at: ago(3) },
+  { id: "conv_2", title: pick("Quanto custa guardar mais 20 sofás?", "How much to store 20 more sofas?"), last_message_at: ago(30) },
+  { id: "conv_3", title: pick("Resumo do dia · operação TikTok", "Daily summary · TikTok operation"), last_message_at: ago(26), routine_id: "rt_1" },
+  { id: "conv_4", title: pick("Itens abaixo do mínimo", "Items below minimum"), last_message_at: daysAgo(4) },
+  { id: "conv_5", title: pick("Como avisar o retorno de um evento", "How to notify an event return"), last_message_at: daysAgo(9) },
 ];
 
 export function conversations() {
@@ -685,20 +694,20 @@ export function conversations() {
 const chatConv1 = {
   conversation: { id: "conv_1", customer_code: CUSTOMER, status: "open", last_message_at: ago(3) },
   messages: [
-    { id: "m1", role: "user", content: "Tenho poltronas e pufes suficientes para o Creators Summit? Preciso de 6 poltronas rosa e 20 pufes terracota.", created_at: ago(3.3) },
-    { id: "m2", role: "assistant", created_at: ago(3.28), tools_used: ["resumo_estoque", "listar_pedidos"], content: "Dá para atender os dois.\n\n- **Poltrona lounge rosa**: 12 no galpão, todas livres.\n- **Pufe redondo terracota**: 40 no galpão, todos livres. Outros 16 voltam do Rio2C e estão em conferência hoje.\n\nSe quiser, monto o pedido com o lounge completo: sofás, banquetas, backdrop, totens e o neon." },
-    { id: "m3", role: "user", content: "Monta sim, com 2 sofás, 10 banquetas, o backdrop, 2 totens e o neon. Montagem quinta às 7h no Expo Center Norte.", created_at: ago(3.2) },
-    { id: "m4", role: "assistant", created_at: ago(3.15), tools_used: ["buscar_itens", "rascunho_pedido"], content: "Montei o rascunho com **7 itens e 42 peças**. Tudo tem saldo livre agora.\n\nA Dutelog leva no caminhão baú e a equipe de montagem fica no local até as 9h. Confira o endereço e o horário antes de enviar." },
-    { id: "m5", role: "user", content: "Perfeito, pode enviar.", created_at: ago(3.05) },
-    { id: "m6", role: "assistant", created_at: ago(3), content: "Enviado. O pedido entrou como **SOL-118** e está aguardando a confirmação da Dutelog. Eu aviso aqui quando for confirmado e quando sair para a montagem." },
+    { id: "m1", role: "user", content: pick("Tenho poltronas e pufes suficientes para o Creators Summit? Preciso de 6 poltronas rosa e 20 pufes terracota.", "Do I have enough armchairs and poufs for the Creators Summit? I need 6 pink armchairs and 20 terracotta poufs."), created_at: ago(3.3) },
+    { id: "m2", role: "assistant", created_at: ago(3.28), tools_used: ["resumo_estoque", "listar_pedidos"], content: pick("Dá para atender os dois.\n\n- **Poltrona lounge rosa**: 12 no galpão, todas livres.\n- **Pufe redondo terracota**: 40 no galpão, todos livres. Outros 16 voltam do Rio2C e estão em conferência hoje.\n\nSe quiser, monto o pedido com o lounge completo: sofás, banquetas, backdrop, totens e o neon.", "Yes, both are covered.\n\n- **Pink lounge armchair**: 12 in the warehouse, all available.\n- **Terracotta round pouf**: 40 in the warehouse, all available. Another 16 are coming back from Rio2C and are being checked today.\n\nIf you like, I can put together the order for the full lounge: sofas, stools, backdrop, totems and the neon sign.") },
+    { id: "m3", role: "user", content: pick("Monta sim, com 2 sofás, 10 banquetas, o backdrop, 2 totens e o neon. Montagem quinta às 7h no Expo Center Norte.", "Yes, please: 2 sofas, 10 stools, the backdrop, 2 totems and the neon sign. Setup Thursday at 7 am at Expo Center Norte."), created_at: ago(3.2) },
+    { id: "m4", role: "assistant", created_at: ago(3.15), tools_used: ["buscar_itens", "rascunho_pedido"], content: pick("Montei o rascunho com **7 itens e 42 peças**. Tudo tem saldo livre agora.\n\nA Dutelog leva no caminhão baú e a equipe de montagem fica no local até as 9h. Confira o endereço e o horário antes de enviar.", "I drafted the order with **7 items and 42 pieces**. Everything is available right now.\n\nDutelog delivers by box truck and the setup crew stays on site until 9 am. Check the address and time before sending.") },
+    { id: "m5", role: "user", content: pick("Perfeito, pode enviar.", "Perfect, go ahead and send it."), created_at: ago(3.05) },
+    { id: "m6", role: "assistant", created_at: ago(3), content: pick("Enviado. O pedido entrou como **SOL-118** e está aguardando a confirmação da Dutelog. Eu aviso aqui quando for confirmado e quando sair para a montagem.", "Sent. The order came in as **SOL-118** and is waiting for Dutelog to confirm. I'll let you know here when it's confirmed and when it leaves for setup.") },
   ],
 };
 
 const chatConv2 = {
   conversation: { id: "conv_2", customer_code: CUSTOMER, status: "open", last_message_at: ago(30) },
   messages: [
-    { id: "c2m1", role: "user", content: "Quanto custa guardar mais 20 sofás por mês?", created_at: ago(30.2) },
-    { id: "c2m2", role: "assistant", created_at: ago(30), tools_used: ["tabela_precos"], content: "Pela tabela do contrato, mobiliário é cobrado por **área ocupada**: R$ 42,00 por m² no mês.\n\nUm sofá de 3 lugares ocupa cerca de 2 m² protegido com manta, então 20 sofás somam **40 m², cerca de R$ 1.680,00 por mês**. O recebimento é R$ 3,50 por volume e a embalagem com manta e filme, R$ 28,00 por peça, cobrados uma vez." },
+    { id: "c2m1", role: "user", content: pick("Quanto custa guardar mais 20 sofás por mês?", "How much does it cost to store 20 more sofas per month?"), created_at: ago(30.2) },
+    { id: "c2m2", role: "assistant", created_at: ago(30), tools_used: ["tabela_precos"], content: pick("Pela tabela do contrato, mobiliário é cobrado por **área ocupada**: R$ 42,00 por m² no mês.\n\nUm sofá de 3 lugares ocupa cerca de 2 m² protegido com manta, então 20 sofás somam **40 m², cerca de R$ 1.680,00 por mês**. O recebimento é R$ 3,50 por volume e a embalagem com manta e filme, R$ 28,00 por peça, cobrados uma vez.", "Under the contract price list, furniture is charged by **occupied area**: R$ 42.00 per m² per month.\n\nA 3-seat sofa takes about 2 m² wrapped in a moving blanket, so 20 sofas add up to **40 m², about R$ 1,680.00 per month**. Receiving is R$ 3.50 per package and blanket-and-film wrapping is R$ 28.00 per piece, both charged once.") },
   ],
 };
 
@@ -896,7 +905,7 @@ export const foundation = {
 export const openingInventory = { ok: true, id: "oi_demo", session_id: "oi_demo", status: "completed", line_count: CATALOG.length, unit_count: totalPieces, total_cost: totalCost, started_at: daysAgo(120), completed_at: daysAgo(119), lines: [] };
 
 export const cycleCounts = [
-  { id: "cc_1", location_id: "A-01-2", sku_code: code(2), product_name: "Poltrona lounge rosa", expected_qty: 12, counted_qty: null, status: "open", requested_by: "Agent Dute", created_at: ago(4) },
+  { id: "cc_1", location_id: "A-01-2", sku_code: code(2), product_name: fullName(itemOf(2)), expected_qty: 12, counted_qty: null, status: "open", requested_by: "Agent Dute", created_at: ago(4) },
 ];
 
 /* ---------- Roteador ---------- */

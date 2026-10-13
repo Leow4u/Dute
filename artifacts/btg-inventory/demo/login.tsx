@@ -8,6 +8,13 @@ import markUrl from "../public/dutelog-mark-64.png";
 import visualUrl from "../public/auth-visual.jpg";
 import { CUSTOMER, resetDemoState } from "./data";
 import { DEMO_PROFILES, profileForLogin, writeSession, type DemoProfile } from "./session";
+import { LANG, setLang, type Lang } from "./i18n/lang";
+
+function switchLang(lang: Lang) {
+  if (lang === LANG) return;
+  setLang(lang);
+  window.location.reload();
+}
 
 function enter(profile: DemoProfile) {
   writeSession(profile.key);
@@ -49,6 +56,14 @@ export default function DemoLogin() {
           <span className="demo-pill">
             Ambiente de demonstração
           </span>
+          <div className="demo-lang" role="group" aria-label="Idioma" data-no-translate>
+            <button type="button" aria-pressed={LANG === "pt"} onClick={() => switchLang("pt")}>
+              Português
+            </button>
+            <button type="button" aria-pressed={LANG === "en"} onClick={() => switchLang("en")}>
+              English
+            </button>
+          </div>
         </header>
 
         <main className="relative flex flex-1 items-center py-10">

@@ -3,6 +3,8 @@
  * dados fictícios e rotas no hash, para abrir com dois cliques a partir do
  * arquivo, sem servidor e sem tocar no Firebase de produção.
  */
+// Precisa vir antes do app: em inglês, formatadores e textos já nascem traduzidos.
+import "./i18n/boot";
 import "./demo.css";
 import { createRoot } from "react-dom/client";
 import { Router } from "wouter";

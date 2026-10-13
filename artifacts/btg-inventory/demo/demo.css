@@ -131,3 +131,27 @@
   width: 14px;
   height: 14px;
 }
+
+.demo-lang {
+  margin-left: auto;
+  display: inline-flex;
+  border: 1px solid var(--auth-line-strong);
+  border-radius: 9999px;
+  padding: 2px;
+}
+
+.auth-cover .demo-lang button {
+  height: auto;
+  border-radius: 9999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--auth-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.auth-cover .demo-lang button[aria-pressed="true"] {
+  background: var(--auth-text);
+  color: var(--auth-canvas);
+}

@@ -5,9 +5,12 @@
  */
 import type { AgentDuteStreamChunk } from "../src/lib/functions-api";
 import { customerRequests, demoFacts, saveConversationTurn } from "./data";
+import { pick } from "./i18n/lang";
+import { translate } from "./i18n/translator";
 
 export * from "../src/lib/functions-api";
 
+// Em inglês, o locale da demo troca pt-BR por en-US: R$ 1,234.56 e 1,234.
 const brl = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const int = (value: number) => value.toLocaleString("pt-BR");
 
@@ -23,34 +26,47 @@ function stockAnswer(question: string) {
   const rows = (matches.length ? matches : demoFacts.catalog.filter((item) => item.cat === "Mobiliário")).slice(0, 6);
   const lines = rows.map((item) => {
     const free = Math.max(0, item.qty - item.res);
-    const status = item.qty === 0 ? " · **zerado**" : item.qty < item.min ? " · abaixo do mínimo" : "";
-    return `- **${demoFacts.fullName(item)}**: ${int(item.qty)} no galpão, ${int(free)} livres${status}`;
+    const status = item.qty === 0 ? pick(" · **zerado**", " · **out of stock**") : item.qty < item.min ? pick(" · abaixo do mínimo", " · below minimum") : "";
+    return pick(
+      `- **${demoFacts.fullName(item)}**: ${int(item.qty)} no galpão, ${int(free)} livres${status}`,
+      `- **${demoFacts.fullName(item)}**: ${int(item.qty)} in the warehouse, ${int(free)} available${status}`,
+    );
   });
-  const intro = matches.length ? "Aqui está o saldo agora:" : "Esse é o mobiliário guardado agora:";
-  return `${intro}\n\n${lines.join("\n")}\n\nQuer que eu monte um pedido com algum desses itens?`;
+  const intro = matches.length ? pick("Aqui está o saldo agora:", "Here's the stock right now:") : pick("Esse é o mobiliário guardado agora:", "This is the furniture in storage right now:");
+  return `${intro}\n\n${lines.join("\n")}\n\n${pick("Quer que eu monte um pedido com algum desses itens?", "Want me to put together an order with any of these items?")}`;
 }
 
 function ordersAnswer() {
   const active = customerRequests().filter((item) => item.type === "retirada" && ["submitted", "approved"].includes(item.status));
   const label = (item: Record<string, any>) =>
     item.status === "submitted"
-      ? "aguardando a confirmação da Dutelog"
+      ? pick("aguardando a confirmação da Dutelog", "waiting for Dutelog to confirm")
       : item.operational_status === "dispatched"
-        ? "saiu para entrega"
+        ? pick("saiu para entrega", "out for delivery")
         : item.operational_status === "ready_to_dispatch"
-          ? "pronto para sair"
-          : "em separação no galpão";
-  const lines = active.slice(0, 6).map((item) => `- **${item.request_number}** · ${item.title}: ${label(item)}`);
-  return `Você tem **${active.length} pedidos em andamento**:\n\n${lines.join("\n")}\n\nO PED-0413 está com o motorista Edson e deve chegar na Vila Olímpia até as 14h.`;
+          ? pick("pronto para sair", "ready to ship")
+          : pick("em separação no galpão", "being picked in the warehouse");
+  // Títulos do roteiro estão em português; em inglês passam pelo mesmo dicionário da tela.
+  const lines = active.slice(0, 6).map((item) => `- **${item.request_number}** · ${pick(item.title, translate(item.title))}: ${label(item)}`);
+  return pick(
+    `Você tem **${active.length} pedidos em andamento**:\n\n${lines.join("\n")}\n\nO PED-0413 está com o motorista Edson e deve chegar na Vila Olímpia até as 14h.`,
+    `You have **${active.length} orders in progress**:\n\n${lines.join("\n")}\n\nPED-0413 is with our driver Edson and should reach Vila Olímpia by 2 pm.`,
+  );
 }
 
 function billingAnswer() {
   const [current, previous] = demoFacts.periods;
-  return `A fatura de outubro está aberta e soma **${brl(current.total)}** até agora. Ela fecha no dia 30 e é emitida no dia 1º.\n\nA de setembro foi de **${brl(previous.total)}**. O maior peso é a área de mobiliário, cobrada por m² ocupado no mês, seguida da montagem e desmontagem nos eventos.`;
+  return pick(
+    `A fatura de outubro está aberta e soma **${brl(current.total)}** até agora. Ela fecha no dia 30 e é emitida no dia 1º.\n\nA de setembro foi de **${brl(previous.total)}**. O maior peso é a área de mobiliário, cobrada por m² ocupado no mês, seguida da montagem e desmontagem nos eventos.`,
+    `The October invoice is open and comes to **${brl(current.total)}** so far. It closes on the 30th and is issued on the 1st.\n\nSeptember's was **${brl(previous.total)}**. The biggest share is furniture storage, charged per m² occupied in the month, followed by event setup and teardown.`,
+  );
 }
 
 function inboundAnswer() {
-  return "Há **2 envios** chegando:\n\n- **Retorno do Rio2C**: 22 peças em conferência agora. Duas poltronas rosa voltaram com o tecido marcado e as fotos estão em Documentos.\n- **NF 7.731 · Gráfica Ideal**: 5.000 pacotes de adesivos, 4.000 folders e 50 caixas de som, previstos para quinta.\n\nPara avisar um envio novo, é só me mandar a nota fiscal aqui.";
+  return pick(
+    "Há **2 envios** chegando:\n\n- **Retorno do Rio2C**: 22 peças em conferência agora. Duas poltronas rosa voltaram com o tecido marcado e as fotos estão em Documentos.\n- **NF 7.731 · Gráfica Ideal**: 5.000 pacotes de adesivos, 4.000 folders e 50 caixas de som, previstos para quinta.\n\nPara avisar um envio novo, é só me mandar a nota fiscal aqui.",
+    "There are **2 shipments** on the way in:\n\n- **Rio2C return**: 22 pieces being checked right now. Two pink armchairs came back with stained fabric and the photos are in Documents.\n- **Invoice 7.731 · Gráfica Ideal**: 5,000 sticker packs, 4,000 brochures and 50 speakers, expected Thursday.\n\nTo notify a new shipment, just send me the invoice here.",
+  );
 }
 
 function kitsAnswer() {
@@ -58,22 +74,32 @@ function kitsAnswer() {
   const lines = demoFacts.kits().map((kit) => {
     const count = Math.min(...kit.items.map((item) => Math.floor((free.get(item.sku) ?? 0) / Math.max(1, item.quantity))));
     const limit = kit.items.reduce((worst, item) => ((free.get(item.sku) ?? 0) / item.quantity < (free.get(worst.sku) ?? 0) / worst.quantity ? item : worst), kit.items[0]);
-    return `- **${kit.name}**: dá para montar **${int(count)}** agora. Quem limita é ${limit.name.toLowerCase()}.`;
+    return pick(
+      `- **${kit.name}**: dá para montar **${int(count)}** agora. Quem limita é ${limit.name.toLowerCase()}.`,
+      `- **${kit.name}**: you can build **${int(count)}** right now. The limiting item is the ${limit.name.toLowerCase()}.`,
+    );
   });
-  return `Com o estoque livre de hoje:\n\n${lines.join("\n")}\n\nPara enviar, abra o kit em **Kits**, clique em Usar no pedido e escolha os destinatários na agenda. Cada um vira um pedido com entrega própria.`;
+  return pick(
+    `Com o estoque livre de hoje:\n\n${lines.join("\n")}\n\nPara enviar, abra o kit em **Kits**, clique em Usar no pedido e escolha os destinatários na agenda. Cada um vira um pedido com entrega própria.`,
+    `With today's available stock:\n\n${lines.join("\n")}\n\nTo send one, open the kit in **Kits**, click Use in order and pick the recipients from the address book. Each one becomes an order with its own delivery.`,
+  );
 }
 
 function defaultAnswer() {
-  return `Posso ajudar com o estoque, os pedidos, os envios para a Dutelog e as faturas. Hoje a conta tem **${demoFacts.catalog.length} itens** e **${int(demoFacts.totalPieces)} peças** guardadas, com valor de **${brl(demoFacts.totalCost)}**.\n\nExperimente perguntar \"quantos pufes temos livres?\" ou \"como estão meus pedidos?\".`;
+  return pick(
+    `Posso ajudar com o estoque, os pedidos, os envios para a Dutelog e as faturas. Hoje a conta tem **${demoFacts.catalog.length} itens** e **${int(demoFacts.totalPieces)} peças** guardadas, com valor de **${brl(demoFacts.totalCost)}**.\n\nExperimente perguntar \"quantos pufes temos livres?\" ou \"como estão meus pedidos?\".`,
+    `I can help with stock, orders, shipments to Dutelog and invoices. Today the account has **${demoFacts.catalog.length} items** and **${int(demoFacts.totalPieces)} pieces** in storage, worth **${brl(demoFacts.totalCost)}**.\n\nTry asking \"how many poufs do we have available?\" or \"how are my orders doing?\".`,
+  );
 }
 
 function answerFor(question: string): { tools: string[]; text: string } {
   const q = question.toLowerCase();
+  // Palavras em português e em inglês: a demo responde no idioma escolhido na entrada.
   if (/\bkits?\b|influenc|creators?\b/.test(q)) return { tools: ["buscar_itens", "resumo_estoque"], text: kitsAnswer() };
-  if (/(fatur|cobran|custo|preç|preco|pagar|valor)/.test(q)) return { tools: ["faturas", "tabela_precos"], text: billingAnswer() };
-  if (/(pedido|entreg|evento|separa|rota|chega)/.test(q) && !/(nota|nf|envio|recebimento|retorno)/.test(q)) return { tools: ["listar_pedidos"], text: ordersAnswer() };
-  if (/(envio|recebimento|retorno|nota|\bnf\b|chegando)/.test(q)) return { tools: ["recebimentos"], text: inboundAnswer() };
-  if (/(estoque|saldo|quant|tem|temos|livre|dispon|sofá|sofa|poltron|pufe|mesa|banner|backdrop|totem|kit|brinde|moletom|ring)/.test(q)) return { tools: ["resumo_estoque"], text: stockAnswer(question) };
+  if (/(fatur|cobran|custo|preç|preco|pagar|valor|invoice|bill|cost|price|\bpay|charge|\bfees?\b)/.test(q)) return { tools: ["faturas", "tabela_precos"], text: billingAnswer() };
+  if (/(pedido|entreg|evento|separa|rota|chega|order|deliver|event|picking|route|arriv)/.test(q) && !/(nota|nf|envio|recebimento|retorno|shipment|inbound|receiv|return|incoming)/.test(q)) return { tools: ["listar_pedidos"], text: ordersAnswer() };
+  if (/(envio|recebimento|retorno|nota|\bnf\b|chegando|shipment|inbound|receiv|return|incoming)/.test(q)) return { tools: ["recebimentos"], text: inboundAnswer() };
+  if (/(estoque|saldo|quant|tem|temos|livre|dispon|sofá|sofa|poltron|pufe|mesa|banner|backdrop|totem|kit|brinde|moletom|ring|stock|inventory|how many|available|armchair|chair|pouf|table|stool|hoodie|cap|bottle|tote|sticker|speaker|microphone|light)/.test(q)) return { tools: ["resumo_estoque"], text: stockAnswer(question) };
   return { tools: [], text: defaultAnswer() };
 }
 
@@ -82,7 +108,7 @@ const wait = (ms: number, signal?: AbortSignal) =>
     const timer = setTimeout(resolve, ms);
     signal?.addEventListener("abort", () => {
       clearTimeout(timer);
-      reject(new Error("Conversa interrompida."));
+      reject(new Error(pick("Conversa interrompida.", "Conversation stopped.")));
     });
   });
 

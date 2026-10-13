@@ -44,6 +44,28 @@ Os dois cartões da tela de entrada também entram direto.
 
 Anexar arquivos (nota fiscal, fotos) não funciona na demonstração.
 
+## Inglês
+
+Na tela de entrada, o botão **English** troca o idioma (fica guardado no
+navegador; **Português** volta). Nada no app de produção muda:
+
+- `i18n/boot.ts` é o primeiro import: troca o locale `pt-BR` por `en-US` em
+  `Intl` e `toLocale*String` antes de o app criar seus formatadores, e liga o
+  tradutor.
+- `i18n/translator.ts` observa o DOM e troca cada texto pelo dicionário
+  (`i18n/en-phrases.json`, frase exata) ou pelas regras de `i18n/rules.ts`
+  (textos com número, nome ou data). Não mexe em `textarea` nem em
+  `[data-no-translate]`.
+- Os dados da demo (nomes e cores dos itens, kits, agenda, conversas e
+  respostas do Agent Dute) nascem em inglês via `pick(pt, en)`, para a busca e
+  o agente funcionarem no idioma. Endereços, pessoas e fornecedores ficam como
+  estão; tamanhos seguem P/M/G/GG (a ordenação do app conhece só esses).
+- Cada idioma tem o próprio estado salvo (`dute.demo.state.v1` e
+  `dute.demo.state.v1.en`).
+
+Texto novo no app que apareça em português na versão em inglês: acrescente a
+frase em `en-phrases.json` (ou uma regra, se tiver número ou nome).
+
 ## Fotos
 
 Cada item tem uma foto real em `photos/`, com o número do item (`01.jpg` é
