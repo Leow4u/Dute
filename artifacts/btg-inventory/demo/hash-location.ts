@@ -21,4 +21,7 @@ export function useDemoHashLocation(options: { ssrPath?: string } = {}): [string
   return [location, navigate];
 }
 
-useDemoHashLocation.hrefs = useHashLocation.hrefs;
+// O wouter lê hrefs do hook para montar os links (#/portal/...).
+(useDemoHashLocation as unknown as { hrefs: (href: string) => string }).hrefs = (
+  useHashLocation as unknown as { hrefs: (href: string) => string }
+).hrefs;

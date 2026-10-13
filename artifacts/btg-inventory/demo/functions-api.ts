@@ -53,15 +53,26 @@ function inboundAnswer() {
   return "Há **2 envios** chegando:\n\n- **Retorno do Rio2C**: 22 peças em conferência agora. Duas poltronas rosa voltaram com o tecido marcado e as fotos estão em Documentos.\n- **NF 7.731 · Gráfica Ideal**: 5.000 pacotes de adesivos, 4.000 folders e 50 caixas de som, previstos para quinta.\n\nPara avisar um envio novo, é só me mandar a nota fiscal aqui.";
 }
 
+function kitsAnswer() {
+  const free = new Map(demoFacts.catalog.map((item) => [demoFacts.code(item.n), Math.max(0, item.qty - item.res)]));
+  const lines = demoFacts.kits().map((kit) => {
+    const count = Math.min(...kit.items.map((item) => Math.floor((free.get(item.sku) ?? 0) / Math.max(1, item.quantity))));
+    const limit = kit.items.reduce((worst, item) => ((free.get(item.sku) ?? 0) / item.quantity < (free.get(worst.sku) ?? 0) / worst.quantity ? item : worst), kit.items[0]);
+    return `- **${kit.name}**: dá para montar **${int(count)}** agora. Quem limita é ${limit.name.toLowerCase()}.`;
+  });
+  return `Com o estoque livre de hoje:\n\n${lines.join("\n")}\n\nPara enviar, abra o kit em **Kits**, clique em Usar no pedido e escolha os destinatários na agenda. Cada um vira um pedido com entrega própria.`;
+}
+
 function defaultAnswer() {
   return `Posso ajudar com o estoque, os pedidos, os envios para a Dutelog e as faturas. Hoje a conta tem **${demoFacts.catalog.length} itens** e **${int(demoFacts.totalPieces)} peças** guardadas, com valor de **${brl(demoFacts.totalCost)}**.\n\nExperimente perguntar \"quantos pufes temos livres?\" ou \"como estão meus pedidos?\".`;
 }
 
 function answerFor(question: string): { tools: string[]; text: string } {
   const q = question.toLowerCase();
+  if (/\bkits?\b|influenc|creators?\b/.test(q)) return { tools: ["buscar_itens", "resumo_estoque"], text: kitsAnswer() };
   if (/(fatur|cobran|custo|preç|preco|pagar|valor)/.test(q)) return { tools: ["faturas", "tabela_precos"], text: billingAnswer() };
   if (/(pedido|entreg|evento|separa|rota|chega)/.test(q) && !/(nota|nf|envio|recebimento|retorno)/.test(q)) return { tools: ["listar_pedidos"], text: ordersAnswer() };
-  if (/(envio|recebimento|retorno|nota|\bnf\b|chegando)/.test(q)) return { tools: ["listar_envios"], text: inboundAnswer() };
+  if (/(envio|recebimento|retorno|nota|\bnf\b|chegando)/.test(q)) return { tools: ["recebimentos"], text: inboundAnswer() };
   if (/(estoque|saldo|quant|tem|temos|livre|dispon|sofá|sofa|poltron|pufe|mesa|banner|backdrop|totem|kit|brinde|moletom|ring)/.test(q)) return { tools: ["resumo_estoque"], text: stockAnswer(question) };
   return { tools: [], text: defaultAnswer() };
 }

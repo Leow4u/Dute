@@ -304,10 +304,59 @@ const baseRequests: R[] = [
 /* ---------- Estado da demo (pedidos novos e decisões) ---------- */
 const STATE_KEY = "dute.demo.state.v1";
 type DemoConversation = { id: string; title: string; last_message_at: string; messages: R[] };
-type DemoState = { created: R[]; decisions: Record<string, R>; conversations: DemoConversation[]; followUps: Record<string, R[]>; nextNumber: number };
+export type Recipient = { id: string; name: string; kind: string; address: string; contact?: string; size?: string; notes?: string; created_at: string };
+export type KitModel = { id: string; name: string; description?: string; items: Array<{ sku: string; name: string; quantity: number }>; created_at: string };
+
+type DemoState = {
+  created: R[];
+  decisions: Record<string, R>;
+  conversations: DemoConversation[];
+  followUps: Record<string, R[]>;
+  nextNumber: number;
+  recipients: Recipient[];
+  kits: KitModel[];
+  nextId: number;
+};
+
+/* Agenda de destinatários: pessoas e endereços fictícios. */
+const SEED_RECIPIENTS: Recipient[] = [
+  { id: "dst_1", name: "Luana Prado", kind: "Creator", address: "Rua Harmonia, 412, apto 81 · Vila Madalena, São Paulo/SP · 05435-000", contact: "(11) 90000-0101", size: "M", notes: "Moda e lifestyle. Recebe na portaria até 18h.", created_at: daysAgo(40) },
+  { id: "dst_2", name: "Rafa Nunes", kind: "Creator", address: "Av. Rebouças, 1985, apto 34 · Pinheiros, São Paulo/SP · 05401-000", contact: "(11) 90000-0102", size: "G", notes: "Games.", created_at: daysAgo(38) },
+  { id: "dst_3", name: "Bia Moreira", kind: "Creator", address: "Rua Oscar Freire, 720, apto 12 · Jardins, São Paulo/SP · 01426-000", contact: "(11) 90000-0103", size: "P", notes: "Beleza.", created_at: daysAgo(30) },
+  { id: "dst_4", name: "Thiago Ramos", kind: "Creator", address: "Rua Voluntários da Pátria, 1450 · Botafogo, Rio de Janeiro/RJ · 22270-000", contact: "(21) 90000-0104", size: "GG", notes: "Humor. Entrega fora de SP: prazo de 2 dias.", created_at: daysAgo(21) },
+  { id: "dst_5", name: "Agência Pulso", kind: "Agência", address: "Rua Fidalga, 300 · Vila Madalena, São Paulo/SP · 05432-000", contact: "producao@pulso.demo", created_at: daysAgo(60) },
+  { id: "dst_6", name: "Escritório Vila Olímpia", kind: "Escritório", address: "Rua Funchal, 500, 8º andar · Vila Olímpia, São Paulo/SP · 04551-060", contact: "Recepção", created_at: daysAgo(90) },
+  { id: "dst_7", name: "Expo Center Norte", kind: "Evento", address: "Rua José Bernardo Pinto, 333 · Vila Guilherme, São Paulo/SP · 02055-000", contact: "Doca 4, montagem", created_at: daysAgo(15) },
+];
+
+/* Kits modelo: a composição fica salva e vira pedido em um clique. */
+const SEED_KITS: KitModel[] = [
+  { id: "kit_1", name: "Kit lançamento TikTok Shop", description: "Para creators no lançamento de campanha. O moletom segue o tamanho da agenda.", items: [
+    { sku: "TT-0030", name: "Moletom canguru · M", quantity: 1 },
+    { sku: "TT-0025", name: "Garrafa térmica 500 ml", quantity: 1 },
+    { sku: "TT-0026", name: "Boné trucker", quantity: 1 },
+    { sku: "TT-0024", name: "Ecobag de algodão", quantity: 1 },
+    { sku: "TT-0027", name: "Adesivos (pacote com 10)", quantity: 2 },
+  ], created_at: daysAgo(2) },
+  { id: "kit_2", name: "Kit creator estúdio", description: "Equipamento para gravar em casa.", items: [
+    { sku: "TT-0021", name: "Ring light 18\" com tripé", quantity: 1 },
+    { sku: "TT-0022", name: "Microfone sem fio com base", quantity: 1 },
+    { sku: "TT-0027", name: "Adesivos (pacote com 10)", quantity: 1 },
+  ], created_at: daysAgo(12) },
+  { id: "kit_3", name: "Kit boas-vindas parceiros", description: "Caixa presente com material institucional.", items: [
+    { sku: "TT-0028", name: "Kit creator (caixa presente)", quantity: 1 },
+    { sku: "TT-0025", name: "Garrafa térmica 500 ml", quantity: 1 },
+    { sku: "TT-0020", name: "Folder institucional", quantity: 1 },
+  ], created_at: daysAgo(20) },
+];
 
 function freshState(): DemoState {
-  return { created: [], decisions: {}, conversations: [], followUps: {}, nextNumber: 121 };
+  return {
+    created: [], decisions: {}, conversations: [], followUps: {}, nextNumber: 121,
+    recipients: SEED_RECIPIENTS.map((item) => ({ ...item })),
+    kits: SEED_KITS.map((kit) => ({ ...kit, items: kit.items.map((item) => ({ ...item })) })),
+    nextId: 100,
+  };
 }
 
 function loadState(): DemoState {
@@ -383,6 +432,50 @@ function decideRequest(id: string, action: string, body: R) {
   state.decisions[id] = { ...(state.decisions[id] ?? {}), ...decision };
   saveState();
   return { ok: true, request: { ...target, ...decision } };
+}
+
+const text = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+
+export function recipients() {
+  return [...state.recipients].sort((left, right) => left.name.localeCompare(right.name, "pt-BR"));
+}
+
+function saveRecipient(id: string | null, body: R) {
+  const fields = { name: text(body?.name), kind: text(body?.kind) || "Creator", address: text(body?.address), contact: text(body?.contact) || undefined, size: text(body?.size) || undefined, notes: text(body?.notes) || undefined };
+  if (!fields.name || !fields.address) return { ok: false, message: "Informe o nome e o endereço." };
+  const existing = id ? state.recipients.find((item) => item.id === id) : null;
+  if (existing) Object.assign(existing, fields);
+  else state.recipients.push({ id: `dst_${state.nextId++}`, created_at: new Date().toISOString(), ...fields });
+  saveState();
+  return existing ?? state.recipients[state.recipients.length - 1];
+}
+
+function deleteRecipient(id: string) {
+  state.recipients = state.recipients.filter((item) => item.id !== id);
+  saveState();
+  return { ok: true };
+}
+
+export function kits() {
+  return [...state.kits].sort((left, right) => right.created_at.localeCompare(left.created_at));
+}
+
+function saveKit(body: R) {
+  const name = text(body?.name);
+  const items = (Array.isArray(body?.items) ? body.items : [])
+    .map((item: R) => ({ sku: text(item.sku), name: text(item.name), quantity: Math.max(1, Math.floor(Number(item.quantity) || 0)) }))
+    .filter((item: R) => item.sku);
+  if (!name || !items.length) return { ok: false, message: "Dê um nome e escolha ao menos um item." };
+  const kit: KitModel = { id: `kit_${state.nextId++}`, name, description: text(body?.description) || undefined, items, created_at: new Date().toISOString() };
+  state.kits.push(kit);
+  saveState();
+  return kit;
+}
+
+function deleteKit(id: string) {
+  state.kits = state.kits.filter((kit) => kit.id !== id);
+  saveState();
+  return { ok: true };
 }
 
 /* ---------- Bancada WMS ---------- */
@@ -812,6 +905,13 @@ const list = (items: unknown[]) => ({ items, total: items.length, has_more: fals
 const routes: Array<[string | null, RegExp, Handler]> = [
   ["POST", /^\/api\/client\/requests$/, (_m, _p, _method, body) => createRequest(body ?? {})],
   ["POST", /^\/api\/customer-requests\/([^/]+)\/(approve|reject|close)$/, (m, _p, _method, body) => decideRequest(decodeURIComponent(m[1]), m[2], body ?? {})],
+  ["GET", /^\/api\/demo\/recipients$/, () => list(recipients())],
+  ["POST", /^\/api\/demo\/recipients$/, (_m, _p, _method, body) => saveRecipient(null, body ?? {})],
+  ["POST", /^\/api\/demo\/recipients\/([^/]+)$/, (m, _p, _method, body) => saveRecipient(decodeURIComponent(m[1]), body ?? {})],
+  ["DELETE", /^\/api\/demo\/recipients\/([^/]+)$/, (m) => deleteRecipient(decodeURIComponent(m[1]))],
+  ["GET", /^\/api\/demo\/kits$/, () => list(kits())],
+  ["POST", /^\/api\/demo\/kits$/, (_m, _p, _method, body) => saveKit(body ?? {})],
+  ["DELETE", /^\/api\/demo\/kits\/([^/]+)$/, (m) => deleteKit(decodeURIComponent(m[1]))],
   [null, /^\/api\/healthz$/, () => ({ ok: true })],
   [null, /^\/api\/dashboard$/, () => dashboard],
   [null, /^\/api\/warehouse\/ops$/, () => warehouseOps],
@@ -869,4 +969,4 @@ export function resolve(pathname: string, method: string, params: URLSearchParam
 }
 
 /** Números que o agente da demo usa nas respostas. */
-export const demoFacts = { catalog: CATALOG, code, fullName, totalPieces, totalCost, periods };
+export const demoFacts = { catalog: CATALOG, code, fullName, totalPieces, totalCost, periods, kits };

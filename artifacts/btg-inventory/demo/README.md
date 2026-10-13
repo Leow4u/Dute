@@ -26,7 +26,16 @@ Os dois cartões da tela de entrada também entram direto.
 - Navegar por todas as telas do portal e da operação.
 - Montar um pedido no Estoque e enviar: ele aparece em Pedidos.
 - Entrar como Operação Dutelog e aprovar ou recusar o pedido.
-- Perguntar ao Agent Dute sobre estoque, pedidos, envios e faturas.
+- Perguntar ao Agent Dute sobre estoque, pedidos, envios, faturas e kits.
+- Protótipo de envio de kits para creators:
+  - **Kits**: composições salvas ("Kit lançamento TikTok Shop"), com quantos
+    kits o estoque de hoje monta. "Usar no pedido" carrega o kit no Estoque.
+  - **Destinatários**: agenda de creators, agências, eventos e escritórios,
+    com endereço, contato e tamanho de roupa.
+  - **Pedido com vários destinos**: no Estoque, "Adicionar destino" e
+    "Escolher da agenda". Cada destino vira um pedido próprio, e a roupa do
+    kit segue o tamanho de cada destinatário. "Salvar como kit" guarda a
+    composição do pedido.
 - "Restaurar os dados da demonstração", na tela de entrada, desfaz tudo.
 
 Anexar arquivos (nota fiscal, fotos) não funciona na demonstração.
@@ -46,8 +55,20 @@ as fotos no HTML.
 
 Para outro cliente, troque `CUSTOMER`, o catálogo e os pedidos em `data.ts`.
 
-## Cuidado com classes do Tailwind
+## O que é cópia do app
 
-O build de produção também varre esta pasta atrás de classes. Use aqui só
-classes que o app já usa e ponha o resto em `demo.css`, em CSS comum. Assim o
-CSS de produção continua idêntico com ou sem a demo.
+- `portal/estoque.tsx` é uma cópia de `src/pages/client/estoque.tsx` com o
+  pedido para vários destinos. O build da demo troca o original por ela.
+- `not-found.tsx` substitui o 404 para servir as telas Kits e Destinatários,
+  que não existem nas rotas do app; `menu.ts` põe as duas no menu.
+- Mudou o Estoque do app? Refaça a cópia antes de gerar a demo de novo.
+
+## CSS de produção
+
+`src/index.css` limita a varredura do Tailwind à pasta `src`
+(`@import 'tailwindcss' source(".")`). As classes usadas só aqui entram no
+CSS da demo e nunca no de produção.
+
+```powershell
+corepack pnpm --filter "@workspace/btg-inventory" exec tsc -p demo/tsconfig.json --noEmit
+```

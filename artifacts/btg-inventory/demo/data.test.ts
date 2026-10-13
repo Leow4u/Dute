@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { CUSTOMER, clientOverview, customerRequests, resetDemoState, resolve, skus } from "./data";
+import { CUSTOMER, clientOverview, customerRequests, kits, recipients, resetDemoState, resolve, skus } from "./data";
 
 const call = (path: string, method = "GET", body: unknown = null) => {
   const url = new URL(path, "http://demo.local");
@@ -56,9 +56,36 @@ describe("dados da demonstração", () => {
     expect(customerRequests().find((item) => item.id === created.id)?.status).toBe("approved");
   });
 
+  it("todo item de kit modelo existe no estoque", () => {
+    const codes = new Set(skus.map((sku) => sku.sku_code));
+    for (const kit of kits()) for (const item of kit.items) expect(codes.has(item.sku), `${kit.name}: ${item.name}`).toBe(true);
+  });
+
+  it("agenda de destinatários: cria, edita e remove", () => {
+    const before = recipients().length;
+    const created = call("/api/demo/recipients", "POST", { name: "Pessoa Teste", address: "Rua A, 1", size: "M" });
+    expect(recipients()).toHaveLength(before + 1);
+    call(`/api/demo/recipients/${created.id}`, "POST", { name: "Pessoa Teste", address: "Rua B, 2" });
+    expect(recipients().find((item) => item.id === created.id)?.address).toBe("Rua B, 2");
+    expect(call("/api/demo/recipients", "POST", { name: "Sem endereço" }).ok).toBe(false);
+    call(`/api/demo/recipients/${created.id}`, "DELETE");
+    expect(recipients()).toHaveLength(before);
+  });
+
+  it("kit modelo: salva com nome e itens, e exclui", () => {
+    const before = kits().length;
+    const kit = call("/api/demo/kits", "POST", { name: "Kit teste", items: [{ sku: skus[0].sku_code, name: "x", quantity: 2 }] });
+    expect(kits()[0].id).toBe(kit.id);
+    expect(call("/api/demo/kits", "POST", { name: "Vazio", items: [] }).ok).toBe(false);
+    call(`/api/demo/kits/${kit.id}`, "DELETE");
+    expect(kits()).toHaveLength(before);
+  });
+
   it("restaurar volta ao roteiro original", () => {
     call("/api/client/requests", "POST", { type: "retirada", items: [] });
+    call("/api/demo/kits/kit_1", "DELETE");
     resetDemoState();
     expect(customerRequests().some((item) => item.request_number === "SOL-121")).toBe(false);
+    expect(kits().some((kit) => kit.id === "kit_1")).toBe(true);
   });
 });
