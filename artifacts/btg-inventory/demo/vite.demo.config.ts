@@ -14,31 +14,53 @@ import fs from "fs";
 import path from "path";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, normalizePath, type Plugin } from "vite";
 
 const here = import.meta.dirname;
 const app = path.resolve(here, "..");
 const src = path.resolve(app, "src");
 const publicDir = path.resolve(app, "public");
 
+/**
+ * Caminho comparável no Linux e no Windows. No Windows o Vite entrega os ids
+ * com "/" e o path.join monta com "\"; sem isso nenhuma troca casava e o build
+ * saía com o login de produção ("Firebase não configurado") e sem logo.
+ */
+function pathKey(file: string) {
+  const normalized = normalizePath(file);
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}
+
 /** Módulos do app trocados pela versão da demo (só quando quem importa está em src/). */
-const OVERRIDES: Record<string, string> = {
-  [path.join(src, "lib/auth.tsx")]: path.join(here, "auth.tsx"),
-  [path.join(src, "lib/functions-api.ts")]: path.join(here, "functions-api.ts"),
-  [path.join(src, "pages/client/estoque.tsx")]: path.join(here, "portal/estoque.tsx"),
-  [path.join(src, "pages/not-found.tsx")]: path.join(here, "not-found.tsx"),
-};
+const OVERRIDES = new Map<string, string>([
+  [pathKey(path.join(src, "lib/auth.tsx")), path.join(here, "auth.tsx")],
+  [pathKey(path.join(src, "lib/functions-api.ts")), path.join(here, "functions-api.ts")],
+  [pathKey(path.join(src, "pages/client/estoque.tsx")), path.join(here, "portal/estoque.tsx")],
+  [pathKey(path.join(src, "pages/not-found.tsx")), path.join(here, "not-found.tsx")],
+]);
 
 function demoOverrides(): Plugin {
+  const demoDir = `${pathKey(here)}/`;
+  const applied = new Set<string>();
   return {
-      name: "dute-demo-overrides",
-      enforce: "pre",
-      async resolveId(source, importer, options) {
-        if (!importer || importer.startsWith(here)) return null;
-        const resolved = await this.resolve(source, importer, { ...options, skipSelf: true });
-        if (resolved && OVERRIDES[resolved.id]) return OVERRIDES[resolved.id];
-        return null;
-      },
+    name: "dute-demo-overrides",
+    enforce: "pre",
+    async resolveId(source, importer, options) {
+      if (!importer || pathKey(importer).startsWith(demoDir)) return null;
+      const resolved = await this.resolve(source, importer, { ...options, skipSelf: true });
+      const target = resolved ? OVERRIDES.get(pathKey(resolved.id)) : undefined;
+      if (!target) return null;
+      applied.add(target);
+      return target;
+    },
+    // Sem as trocas o arquivo sai com o login e o Firebase de produção: melhor não sair.
+    buildEnd(error) {
+      if (error) return;
+      const missing = [...OVERRIDES.values()].filter((target) => !applied.has(target));
+      if (missing.length) {
+        this.error(`Demo: troca de módulo não aplicada (${missing.map((target) => path.relative(app, target)).join(", ")}). O arquivo sairia com o app de produção.`);
+      }
+    },
   };
 }
 
@@ -51,16 +73,24 @@ function dataUri(file: string) {
 /** Logos que o app pede por caminho absoluto (/dutelog-logo.png) viram data URI. */
 function inlinePublicAssets(): Plugin {
   const pattern = /`\$\{basePath\}\/([\w.-]+\.(?:png|jpg|svg))`|"\/(dutelog-[\w.-]+\.png)"/g;
+  const srcDir = `${pathKey(src)}/`;
+  let inlined = 0;
   return {
     name: "dute-demo-public-assets",
     enforce: "pre",
     transform(code, id) {
-      if (!id.startsWith(src)) return null;
+      if (!pathKey(id).startsWith(srcDir)) return null;
       const next = code.replace(pattern, (match, fromTemplate: string | undefined, fromString: string | undefined) => {
         const file = path.join(publicDir, fromTemplate ?? fromString ?? "");
-        return fs.existsSync(file) ? JSON.stringify(dataUri(file)) : match;
+        if (!fs.existsSync(file)) return match;
+        inlined += 1;
+        return JSON.stringify(dataUri(file));
       });
       return next === code ? null : { code: next, map: null };
+    },
+    // Sem logo embutido, a página publicada mostra a imagem quebrada.
+    buildEnd(error) {
+      if (!error && inlined === 0) this.error("Demo: nenhum logo do app foi embutido no arquivo.");
     },
   };
 }
@@ -106,30 +136,30 @@ function singleFile(fileName: string): Plugin {
 export default defineConfig(({ mode }) => {
   const clientOnly = mode === "cliente";
   return {
-  root: here,
-  base: "/",
-  publicDir: false,
-  define: {
-    __BUILD_COMMIT__: JSON.stringify("demo"),
-    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
-    __DEMO_CLIENT_ONLY__: JSON.stringify(clientOnly),
-  },
-  plugins: [demoOverrides(), inlinePublicAssets(), react(), tailwindcss({ optimize: false }), singleFile(clientOnly ? "index.html" : "dutelog-demo.html")],
-  resolve: {
-    alias: { "@": src },
-    dedupe: ["react", "react-dom"],
-  },
-  build: {
-    outDir: path.resolve(app, clientOnly ? "dist/demo-cliente" : "dist/demo"),
-    emptyOutDir: true,
-    assetsInlineLimit: 100_000_000,
-    cssCodeSplit: false,
-    modulePreload: false,
-    chunkSizeWarningLimit: 100_000,
-    rollupOptions: {
-      output: { inlineDynamicImports: true },
+    root: here,
+    base: "/",
+    publicDir: false,
+    define: {
+      __BUILD_COMMIT__: JSON.stringify("demo"),
+      __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+      __DEMO_CLIENT_ONLY__: JSON.stringify(clientOnly),
     },
-  },
-  server: { port: 5198, strictPort: true, host: "127.0.0.1" },
+    plugins: [demoOverrides(), inlinePublicAssets(), react(), tailwindcss({ optimize: false }), singleFile(clientOnly ? "index.html" : "dutelog-demo.html")],
+    resolve: {
+      alias: { "@": src },
+      dedupe: ["react", "react-dom"],
+    },
+    build: {
+      outDir: path.resolve(app, clientOnly ? "dist/demo-cliente" : "dist/demo"),
+      emptyOutDir: true,
+      assetsInlineLimit: 100_000_000,
+      cssCodeSplit: false,
+      modulePreload: false,
+      chunkSizeWarningLimit: 100_000,
+      rollupOptions: {
+        output: { inlineDynamicImports: true },
+      },
+    },
+    server: { port: 5198, strictPort: true, host: "127.0.0.1" },
   };
 });
