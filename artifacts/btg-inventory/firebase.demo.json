@@ -1,7 +1,7 @@
 {
   "hosting": {
     "site": "dutelog-demo",
-    "public": "../dist/demo-cliente",
+    "public": "dist/demo-cliente",
     "ignore": ["**/.*"],
     "cleanUrls": true,
     "headers": [

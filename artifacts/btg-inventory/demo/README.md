@@ -67,9 +67,9 @@ Publicação num site próprio do Firebase Hosting, separado da produção
 
 ```powershell
 corepack pnpm --filter "@workspace/btg-inventory" run build:demo:cliente
-# só na primeira vez; se o nome estiver em uso, troque aqui e em demo/firebase.json
+# só na primeira vez; se o nome estiver em uso, troque aqui e em firebase.demo.json
 firebase hosting:sites:create dutelog-demo --project dute-btg
-firebase deploy --only hosting --project dute-btg --config artifacts/btg-inventory/demo/firebase.json
+firebase deploy --only hosting --project dute-btg --config artifacts/btg-inventory/firebase.demo.json
 ```
 
 O link fica `https://dutelog-demo.web.app`, sem indexação em buscador
