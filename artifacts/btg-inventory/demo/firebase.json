@@ -1,0 +1,18 @@
+{
+  "hosting": {
+    "site": "dutelog-demo",
+    "public": "../dist/demo-cliente",
+    "ignore": ["**/.*"],
+    "cleanUrls": true,
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          { "key": "X-Robots-Tag", "value": "noindex, nofollow" },
+          { "key": "Cache-Control", "value": "no-cache" },
+          { "key": "Referrer-Policy", "value": "no-referrer" }
+        ]
+      }
+    ]
+  }
+}
