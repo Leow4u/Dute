@@ -92,7 +92,7 @@ describe("menu interno", () => {
         { label: "Início", routes: ["Início"] },
         { label: "Agent Dute", routes: ["Agent Dute"] },
         { label: "Pedidos", routes: ["Pedidos"] },
-        { label: "Estoque", routes: ["Itens", "Receber", "Contagem"] },
+        { label: "Estoque", routes: ["Itens", "Receber", "Contagem", "Posições"] },
         { label: "Faturamento", routes: ["Faturamento"] },
         { label: "Relatórios", routes: ["Relatórios"] },
         { label: "Documentos", routes: ["Documentos"] },
@@ -104,7 +104,7 @@ describe("menu interno", () => {
     expect(menu("wms")).toEqual([
       { label: "Agent Dute", routes: ["Agent Dute"] },
       { label: "Pedidos", routes: ["Pedidos"] },
-      { label: "Estoque", routes: ["Itens", "Receber", "Contagem"] },
+      { label: "Estoque", routes: ["Itens", "Receber", "Contagem", "Posições"] },
       { label: "Documentos", routes: ["Documentos"] },
     ]);
   });
@@ -206,6 +206,7 @@ describe("barra inferior do celular", () => {
     expect(more("owner")).toEqual([
       "Estoque · Receber",
       "Estoque · Contagem",
+      "Estoque · Posições",
       "Faturamento · Faturamento",
       "Relatórios · Relatórios",
       "Documentos · Documentos",
@@ -214,7 +215,7 @@ describe("barra inferior do celular", () => {
 
   it("operador WMS completa a barra com Documentos", () => {
     expect(bar("wms")).toEqual(["Pedidos", "Estoque", "Agent Dute", "Documentos"]);
-    expect(more("wms")).toEqual(["Estoque · Receber", "Estoque · Contagem"]);
+    expect(more("wms")).toEqual(["Estoque · Receber", "Estoque · Contagem", "Estoque · Posições"]);
   });
 
   it("financeiro completa a barra com Faturamento e Relatórios", () => {

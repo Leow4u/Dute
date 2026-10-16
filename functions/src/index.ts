@@ -112,6 +112,15 @@ import { buildOrderDraft, buildShipmentDraft, draftFromToolResponses, sendAgentD
 import { AgentAttachmentSchema, attachmentsForDraft, invoiceContext, READABLE_INVOICE_TYPES, type AgentAttachment } from "./domain/agent-attachments.js";
 import { activeNotesForPrompt, decideNote, DecideNoteSchema, listNotes, NOTE_REVIEWER_ROLES, suggestNote } from "./domain/agent-notes.js";
 import {
+  CreateWarehouseAisleSchema,
+  DeleteWarehousePositionSchema,
+  SaveWarehousePositionsSchema,
+  createWarehouseAisle,
+  deleteWarehousePosition,
+  seedDefaultWarehouseLayout,
+  upsertWarehousePositions,
+} from "./domain/warehouse-positions.js";
+import {
   activePlaybooksForPrompt,
   decidePlaybook,
   DecidePlaybookSchema,
@@ -7383,4 +7392,44 @@ export const saveSystemInfraSettings = onCall(async (request) => {
   const parsed = InfraSettingsSchema.safeParse(request.data ?? {});
   if (!parsed.success) throw new HttpsError("invalid-argument", parsed.error.issues[0]?.message ?? "Tabela inválida.");
   return saveInfraSettings(db, profile, parsed.data);
+});
+
+// ---------------------------------------------------------------------------
+// Posições do armazém (mapa do galpão): cadastro das prateleiras com medidas,
+// sequência de caminhada e zona por cliente. Só administração e coordenação
+// alteram (validado no domínio); todo papel de armazém lê pelo Firestore.
+// ---------------------------------------------------------------------------
+
+function firstIssue(error: z.ZodError, fallback: string) {
+  return error.issues[0]?.message ?? fallback;
+}
+
+/** Cria ou altera posições (uma, ou várias de uma vez, como a zona de uma rua). */
+export const saveWarehousePositions = onCall(async (request) => {
+  const profile = await getProfile(request);
+  const parsed = SaveWarehousePositionsSchema.safeParse(request.data ?? {});
+  if (!parsed.success) throw new HttpsError("invalid-argument", firstIssue(parsed.error, "Posição inválida."));
+  return upsertWarehousePositions(db, parsed.data, profile);
+});
+
+/** Carga inicial do mapa (ruas A, B e C de 16/10/2026); só com o cadastro vazio. */
+export const seedWarehouseLayout = onCall(async (request) => {
+  const profile = await getProfile(request);
+  return seedDefaultWarehouseLayout(db, profile);
+});
+
+/** Rua nova com N prateleiras iguais, para quando o galpão mudar. */
+export const createWarehouseAislePositions = onCall(async (request) => {
+  const profile = await getProfile(request);
+  const parsed = CreateWarehouseAisleSchema.safeParse(request.data ?? {});
+  if (!parsed.success) throw new HttpsError("invalid-argument", firstIssue(parsed.error, "Rua inválida."));
+  return createWarehouseAisle(db, parsed.data, profile);
+});
+
+/** Remove uma posição sem saldo. */
+export const removeWarehousePosition = onCall(async (request) => {
+  const profile = await getProfile(request);
+  const parsed = DeleteWarehousePositionSchema.safeParse(request.data ?? {});
+  if (!parsed.success) throw new HttpsError("invalid-argument", firstIssue(parsed.error, "Posição inválida."));
+  return deleteWarehousePosition(db, parsed.data, profile);
 });

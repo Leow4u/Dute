@@ -67,6 +67,7 @@ const collectionNames = {
   customerAccounts: "customer_accounts",
   customerRequests: "customer_requests",
   locations: "locations",
+  warehousePositions: "warehouse_positions",
   stockBalances: "stock_balances",
   clientInventory: "client_inventory",
   clientOrderTracking: "client_order_tracking",
@@ -3434,6 +3435,17 @@ async function route(
       orderByField: "cod_btg",
       equalityFilterFields: ["cod_cliente"],
       hardCap: CATALOG_READ_CAP,
+    },
+    {
+      // Mapa do galpão: as prateleiras cadastradas, em ordem de caminhada.
+      regex: /^\/api\/warehouse\/positions$/,
+      name: collectionNames.warehousePositions,
+      filters: ["aisle", "customer_code", "status"],
+      searchFields: ["code", "aisle"],
+      orderByField: "sequence",
+      direction: "asc",
+      equalityFilterFields: ["aisle", "customer_code", "status"],
+      hardCap: 2000,
     },
     {
       regex: /^\/api\/locations$/,

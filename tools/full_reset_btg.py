@@ -54,7 +54,13 @@ CUSTOMER_CODE = "BTG Pactual"
 ACCESS_COLLECTIONS = ("users", "invites", "customer_accounts", "system_settings")
 # Estrutura, não histórico: clientes, endereços do armazém, lista de preços e
 # configuração de cobrança. Só são apagadas com --include-setup.
-SETUP_COLLECTIONS = ("customers", "locations", "billing_price_list", "billing_config")
+SETUP_COLLECTIONS = (
+    "customers",
+    "locations",
+    "warehouse_positions",
+    "billing_price_list",
+    "billing_config",
+)
 CONTROL_COLLECTION = "system_controls"
 CONTROL_DOC = "inventory"
 EVENTS_COLLECTION = "events"
