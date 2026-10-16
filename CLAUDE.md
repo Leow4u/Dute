@@ -117,6 +117,9 @@ de reserva ao rejeitar solicitação) e outros estão descritos de forma impreci
 ## Como trabalhamos
 
 - Um problema por PR, com teste que falha antes e passa depois.
+- Comando para rodar na máquina do Leonardo vai sempre com a pasta na frente:
+  `cd C:\DEV\Dute` (PowerShell) antes de `firebase deploy`, dos scripts de
+  `tools/` e de qualquer `git`. Comando sem a pasta já foi rodado no lugar errado.
 - Sistema visual: ver `docs/sistema-visual.md`. O teste
   `src/lib/theme-colors.test.ts` trava cor fixa e valor fora da escala
   (raio, vidro, sombra e tamanho de texto arbitrários).
