@@ -29,6 +29,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  OpeningInventoryNotice,
+  useOpeningInventorySession,
+} from "@/features/warehouse-ops/opening-inventory-status";
 import { uploadProductPhoto } from "@/features/warehouse-ops/shared";
 import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
@@ -114,6 +118,9 @@ export default function Estoque() {
     queryFn: () => fetchJson<{ items: AnyRecord[] }>("/api/products?limit=2000"),
     refetchInterval: 300_000,
   });
+  // Enquanto a abertura estiver pendente ou em curso, a lista avisa e leva
+  // para a Contagem; quem não pode contar (suporte) não vê a faixa.
+  const openingSession = useOpeningInventorySession();
 
   const items = useMemo(
     () =>
@@ -194,6 +201,20 @@ export default function Estoque() {
           </TabsList>
         </Tabs>
       </PageHeader>
+
+      <OpeningInventoryNotice
+        session={openingSession.data}
+        actions={
+          <Button asChild variant="outline" size="sm">
+            <Link href="/wms/contagem">
+              <ClipboardCheck className="size-4" />
+              {openingSession.data?.status === "open"
+                ? "Continuar contagem"
+                : "Iniciar contagem"}
+            </Link>
+          </Button>
+        }
+      />
 
       {tab === "history" ? (
         <Movements embedded />

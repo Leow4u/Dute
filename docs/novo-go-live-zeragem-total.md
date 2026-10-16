@@ -102,12 +102,15 @@ URI do export. Guarde essa saída.
 
 1. Se usou `--include-setup`: recadastrar cliente (mesmo `customer_code`),
    endereços do armazém, lista de preços e configuração de cobrança no app.
-2. **Inventário de abertura** em Armazém > Inventário: iniciar sessão,
-   contar cada produto (código do cliente, SKU, nome, categoria, custo,
-   quantidade, endereço, fotos) e concluir. Até concluir, o portal mostra
-   "Inventário inicial em andamento" sem saldos e pedidos de saída são
-   recusados. Não existe carga em massa; o importador da planilha segue
-   congelado de propósito.
+2. **Inventário de abertura** em Estoque › Contagem, aba "Inventário de
+   abertura" (Estoque › Itens mostra o aviso com o atalho enquanto a
+   abertura estiver pendente): iniciar sessão, contar cada produto (código
+   do cliente, SKU, nome, categoria, custo, quantidade, endereço, fotos) e
+   concluir. É uma sessão por cliente: concluída, não abre de novo. Até
+   concluir, o portal mostra "Inventário inicial em andamento" sem saldos e
+   pedidos de saída são recusados. Não existe carga em massa; o importador
+   da planilha segue congelado de propósito. A aba saiu do app em 08/10/2026
+   (PR 68) e voltou em 16/10, depois da zeragem.
 3. Financeiro abre a competência corrente. A numeração PED-/ENV- recomeça em
    0001.
 4. Cloud Storage, opcional. Liste antes, apague depois:
@@ -151,6 +154,7 @@ só o formato da zeragem de estoque e recusa este).
 | 16/10/2026 11:54 UTC | Parou no export: bucket inexistente. Nada apagado, controle restaurado. | — | `full-reset-20261016T115443Z.json` |
 | 16/10/2026 11:57 UTC | **Concluída.** Preservadas as 8 coleções padrão (acesso e estrutura; sem `--include-setup`). Apagadas, entre outras: 373 produtos, 373 SKUs, 616 saldos, 620 movimentações, 727 eventos, 112 reservas, contadores PED/ENV, playbooks e conhecimento do Agent Dute. | `gs://dute-btg-firestore-backups/full-reset/full-reset-20261016T115746Z` | `full-reset-20261016T115746Z.json` (`1bf95b12…56f7`) |
 
-Depois da execução de 16/10: inventário de abertura pendente no app; playbooks do
+Depois da execução de 16/10: inventário de abertura pendente no app (Estoque ›
+Contagem); playbooks do
 Agent Dute precisam ser semeados de novo (Agent Dute > Playbooks); modelos de
 pedido do portal e memória do agente recomeçam vazios.

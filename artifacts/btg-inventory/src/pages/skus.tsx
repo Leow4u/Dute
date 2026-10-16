@@ -13,6 +13,8 @@ import { canWriteCatalog, humanApiError } from "@/lib/permissions";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
+import { useOpeningInventorySession } from "@/features/warehouse-ops/opening-inventory-status";
+import { cn } from "@/lib/utils";
 import { Link } from "wouter";
 import {
   formatStockNumber,
@@ -333,6 +335,10 @@ export function SkuModal({ sku, trigger }: { sku?: any; trigger?: ReactNode }) {
   const updateSku = useUpdateSku();
 
   const isEdit = !!sku;
+  // Depois da abertura concluída, saldo novo só entra por recebimento; o
+  // atalho para a abertura some para não levar a um beco sem saída.
+  const openingSession = useOpeningInventorySession();
+  const openingAvailable = openingSession.data?.status !== "completed";
 
   const { register, handleSubmit, formState: { errors }, reset } = useForm<SkuFormValues>({
     resolver: zodResolver(skuSchema),
@@ -493,22 +499,24 @@ export function SkuModal({ sku, trigger }: { sku?: any; trigger?: ReactNode }) {
               </div>
             </div>
 
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              <Button asChild type="button" variant="outline" className="h-auto min-h-16 justify-between gap-3 bg-card px-4 py-3 text-left">
-                <Link href="/wms/inventario" onClick={() => setOpen(false)}>
-                  <span className="flex min-w-0 items-center gap-3">
-                    <ClipboardCheck className="h-4 w-4 shrink-0 text-info-soft-foreground" />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium">Inventário de abertura</span>
-                      <span className="block text-xs font-normal text-muted-foreground">Registrar o primeiro saldo</span>
+            <div className={cn("mt-4 grid gap-2", openingAvailable && "sm:grid-cols-2")}>
+              {openingAvailable ? (
+                <Button asChild type="button" variant="outline" className="h-auto min-h-16 justify-between gap-3 bg-card px-4 py-3 text-left">
+                  <Link href="/wms/contagem" onClick={() => setOpen(false)}>
+                    <span className="flex min-w-0 items-center gap-3">
+                      <ClipboardCheck className="h-4 w-4 shrink-0 text-info-soft-foreground" />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium">Inventário de abertura</span>
+                        <span className="block text-xs font-normal text-muted-foreground">Registrar o primeiro saldo</span>
+                      </span>
                     </span>
-                  </span>
-                  <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                </Link>
-              </Button>
+                    <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  </Link>
+                </Button>
+              ) : null}
 
               <Button asChild type="button" variant="outline" className="h-auto min-h-16 justify-between gap-3 bg-card px-4 py-3 text-left">
-                <Link href="/wms/recebimento" onClick={() => setOpen(false)}>
+                <Link href="/wms/receber" onClick={() => setOpen(false)}>
                   <span className="flex min-w-0 items-center gap-3">
                     <PackagePlus className="h-4 w-4 shrink-0 text-info-soft-foreground" />
                     <span className="min-w-0">
@@ -522,7 +530,10 @@ export function SkuModal({ sku, trigger }: { sku?: any; trigger?: ReactNode }) {
             </div>
 
             <p className="mt-3 text-xs text-muted-foreground">
-              {isEdit ? "Caminhos" : "Salve este cadastro antes de seguir. Depois, use"}: WMS &gt; Inventário &gt; Inventário de abertura ou WMS &gt; Recebimento.
+              {isEdit ? "Caminhos" : "Salve este cadastro antes de seguir. Depois, use"}:{" "}
+              {openingAvailable
+                ? "Estoque › Contagem, aba Inventário de abertura, ou Estoque › Receber."
+                : "Estoque › Receber. O inventário de abertura já foi concluído; saldo novo entra por recebimento."}
             </p>
           </div>
 
