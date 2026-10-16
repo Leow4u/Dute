@@ -268,3 +268,24 @@ gcloud iam service-accounts delete github-actions-functions@dute-btg.iam.gservic
 
 Remove a SA e, com ela, todo acesso que os passos acima deram — não precisa
 reverter papel por papel.
+
+## 16/10/2026 — primeiro deploy automático falhou antes de tocar em produção
+
+Depois do pré-requisito de IAM acima rodado pela primeira vez, o primeiro
+`deploy-functions` real falhou no passo "Garantir API do Cloud Scheduler
+ativa": `PERMISSION_DENIED` em `serviceusage.services.enable`.
+`roles/serviceusage.serviceUsageConsumer` (o papel dado à SA) permite *usar*
+serviço já ativo, não ativar um novo — faltava `serviceusage.serviceUsageAdmin`
+pra esse comando específico.
+
+O job falhou **antes** do `firebase deploy --only functions` rodar — nenhuma
+function foi tocada, nada ficou pela metade. Dar `serviceUsageAdmin` (que deixa
+a SA ligar/desligar qualquer API do projeto) só por causa de um passo que já é
+redundante em `dute-btg` (a API já está ativa desde 02/10) não parecia troca
+boa. Em vez disso, o passo ganhou `continue-on-error: true`: tenta, mas não
+trava o job se faltar permissão ou a API já estiver ativa — quem garante que
+um projeto sem a API configurada não quebra é o próprio `firebase deploy`,
+que falha claro se precisar dela e ela estiver desligada.
+
+Ainda não sabemos se os papéis dados à SA bastam pro `firebase deploy --only
+functions` em si — esse teste continua pendente pro próximo push em `main`.

@@ -272,8 +272,14 @@ jobs:
 
       # 02/10/2026: a API do Cloud Scheduler estava desligada e 4 callables novas
       # (rotinas do Agent Dute) ficaram com deploy falho — a onSchedule precisa
-      # dela. Chamada idempotente, não falha se já estiver ativa.
+      # dela. Já está ativa em dute-btg hoje; isso é só rede de segurança pra um
+      # projeto novo. 16/10/2026: a SA github-actions-functions não tem
+      # serviceusage.services.enable (só serviceUsageConsumer, que é pra
+      # *usar* serviço já ativo, não ativar um novo) — dar serviceUsageAdmin só
+      # pra isso seria mais privilégio do que vale a pena; não trava o job se
+      # falhar, o `firebase deploy` já falha sozinho se a API estiver desligada.
       - name: Garantir API do Cloud Scheduler ativa
+        continue-on-error: true
         run: gcloud services enable cloudscheduler.googleapis.com --project "${{ env.PROJECT_ID }}"
 
       # Sempre o lote inteiro, nunca "firebase deploy --only functions:nome": foi
