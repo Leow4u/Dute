@@ -334,12 +334,16 @@ def foreign_customers(
     return {collection: sorted(values) for collection, values in found.items()}
 
 
+INVENTORY_BACKUP_FORMAT = "firestore-rest-inventory-reset-backup-v1"
+
+
 def create_backup(
     path: Path,
     snapshot: dict[str, list[dict[str, Any]]],
     *,
     project_id: str,
     database: str,
+    backup_format: str = INVENTORY_BACKUP_FORMAT,
 ) -> tuple[Path, str]:
     path = path.expanduser().resolve()
     checksum_path = path.with_suffix(path.suffix + ".sha256")
@@ -347,7 +351,7 @@ def create_backup(
         raise FileExistsError(f"Backup já existe; recusando sobrescrever: {path}")
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "format": "firestore-rest-inventory-reset-backup-v1",
+        "format": backup_format,
         "created_at": utc_now(),
         "project_id": project_id,
         "database": database,
