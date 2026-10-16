@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   ClipboardCheck,
   ImagePlus,
+  ListChecks,
   PackageOpen,
   PackageSearch,
   PlayCircle,
@@ -52,8 +53,10 @@ import {
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { type CountMode, defaultCountMode } from "@/lib/opening-inventory";
 import { cn } from "@/lib/utils";
 import {
   type AnyRecord,
@@ -89,6 +92,12 @@ import {
   inferGeneroFromClientCode,
   inferGrupoFromProduto,
 } from "@/lib/catalog-taxonomy";
+import {
+  type OpeningInventoryLine,
+  type OpeningInventorySession,
+  OpeningInventoryNotice,
+  useOpeningInventorySession,
+} from "@/features/warehouse-ops/opening-inventory-status";
 
 export type CycleCountResult = {
   ok?: boolean;
@@ -103,35 +112,57 @@ export type CycleCountResult = {
   adjustment_type?: string;
 };
 
-export type OpeningInventoryLine = {
-  id: string;
-  client_item_code?: string;
-  sku_code?: string;
-  product_name?: string;
-  category?: string;
-  genero?: string;
-  grupo?: string;
-  location_id?: string;
-  counted_qty?: number;
-  unit_cost?: number;
-  total_cost?: number;
-};
+export type { OpeningInventoryLine, OpeningInventorySession };
 
-export type OpeningInventorySession = {
-  ok?: boolean;
-  id?: string;
-  session_id?: string;
-  status?: "not_started" | "open" | "completed" | string;
-  line_count?: number;
-  unit_count?: number;
-  total_cost?: number;
-  started_at?: string;
-  completed_at?: string;
-  lines?: OpeningInventoryLine[];
-};
-
+/**
+ * A Contagem tem duas abas: o inventário de abertura (uma vez por cliente,
+ * para inicializar o estoque) e a contagem cíclica (a rotina). Sem abertura
+ * concluída, abre na abertura; a pessoa pode trocar. O seletor saiu em
+ * 08/10/2026 (PR 68) e voltou em 16/10, com a zeragem total: sem ele, a
+ * abertura não tinha como ser concluída e o portal ficava preso em
+ * "Inventário inicial em andamento".
+ */
 export function CycleCountWorkspace() {
-  return <ExistingCycleCountWorkspace />;
+  const sessionQuery = useOpeningInventorySession();
+  const [picked, setPicked] = useState<CountMode | null>(null);
+  const settled = !sessionQuery.isLoading;
+  const mode: CountMode | null =
+    picked ??
+    (settled
+      ? defaultCountMode(sessionQuery.isError ? "completed" : sessionQuery.data?.status)
+      : null);
+
+  return (
+    <div className="flex flex-col gap-5">
+      <Tabs
+        value={mode ?? "opening"}
+        onValueChange={(value) => setPicked(value as CountMode)}
+      >
+        <TabsList aria-label="Tipo de contagem">
+          <TabsTrigger value="opening">
+            <PackageOpen className="mr-2 size-4" />
+            Inventário de abertura
+          </TabsTrigger>
+          <TabsTrigger value="cycle">
+            <ListChecks className="mr-2 size-4" />
+            Contagem cíclica
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+      {mode === null ? (
+        <Skeleton className="h-72 w-full rounded-lg" />
+      ) : (
+        <>
+          <OpeningInventoryNotice session={sessionQuery.data} />
+          {mode === "opening" ? (
+            <OpeningInventoryWorkspace />
+          ) : (
+            <ExistingCycleCountWorkspace />
+          )}
+        </>
+      )}
+    </div>
+  );
 }
 
 export function OpeningInventoryWorkspace() {
@@ -173,14 +204,7 @@ export function OpeningInventoryWorkspace() {
     }
   }, [productName]);
 
-  const sessionQuery = useQuery<OpeningInventorySession>({
-    queryKey: ["opening-inventory-session"],
-    queryFn: () =>
-      fetchJson<OpeningInventorySession>(
-        "/api/warehouse/opening-inventory/session",
-      ),
-    staleTime: 10_000,
-  });
+  const sessionQuery = useOpeningInventorySession();
   const lookupQuery = useQuery({
     queryKey: ["opening-inventory-product-lookup"],
     staleTime: 30_000,

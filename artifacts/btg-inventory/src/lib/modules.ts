@@ -2,6 +2,7 @@ import {
   BarChart3,
   BrainCircuit,
   CalendarDays,
+  ClipboardCheck,
   FileText,
   Home,
   Inbox,
@@ -203,8 +204,10 @@ export const APP_MODULES: AppModule[] = [
     ],
   }),
   // Estoque: uma lista de itens com a ficha de cada um (cadastro, foto,
-  // endereços, reservas, histórico) e o recebimento. Catálogo, Mapa e
-  // Movimentações viraram partes da ficha e da aba Histórico.
+  // endereços, reservas, histórico), o recebimento e a contagem (abertura
+  // do estoque e cíclica). Catálogo, Mapa e Movimentações viraram partes da
+  // ficha e da aba Histórico. Contagem voltou ao menu em 16/10/2026: é por
+  // ela que o estoque é inicializado depois de uma zeragem.
   appModule({
     id: "inventory",
     label: "Estoque",
@@ -224,6 +227,13 @@ export const APP_MODULES: AppModule[] = [
         label: "Receber",
         href: "/wms/receber",
         icon: PackagePlus,
+        roles: WMS_ROLES,
+      }),
+      navRoute({
+        id: "inventory-count",
+        label: "Contagem",
+        href: "/wms/contagem",
+        icon: ClipboardCheck,
         roles: WMS_ROLES,
       }),
     ],

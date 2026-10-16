@@ -85,8 +85,8 @@ de abertura e **zerado por completo em 16/10/2026** para um novo go-live
 (`tools/full_reset_btg.py`, roteiro e registro da execução em
 `docs/novo-go-live-zeragem-total.md`): catálogo, estoque, fluxos, faturamento,
 eventos e Agent Dute apagados; acesso, clientes, endereços e lista de preços
-preservados. O estoque volta pelo inventário de abertura. A fonte de verdade de
-estoque é o ledger e as coleções operacionais no Firestore.
+preservados. O estoque volta pelo inventário de abertura (Estoque › Contagem). A
+fonte de verdade de estoque é o ledger e as coleções operacionais no Firestore.
 
 Notas antigas que tratavam a planilha como origem do modelo de dados foram
 removidas justamente por induzirem a erro.
