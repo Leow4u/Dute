@@ -67,6 +67,13 @@ import {
   decodeShipmentAttachment,
   storageFailure,
 } from "./domain/client-shipments.js";
+import {
+  archiveClientEvent,
+  ArchiveClientEventSchema,
+  ClientEventInputSchema,
+  listClientEvents,
+  saveClientEvent,
+} from "./domain/client-events.js";
 import { assignMissingRequestNumbers } from "./domain/request-numbers.js";
 import { billingReportWorkbook, buildBillingReport } from "./domain/billing-report.js";
 import {
@@ -6424,6 +6431,39 @@ export const setClientItemArchived = onCall(async (request) => {
   const profile = await getProfile(request);
   const input = SetClientItemArchivedSchema.parse(request.data ?? {});
   return setClientItemArchivedTransaction(db, input, profile);
+});
+
+/** customer_code pedido pela coordenação; o do cliente vem sempre do perfil. */
+function requestedCustomer(data: unknown) {
+  const value = (data as { customer_code?: unknown } | null)?.customer_code;
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+/** Portal › Eventos: os eventos ativos do cliente. */
+export const listClientEventTemplates = onCall(async (request) => {
+  const profile = await getProfile(request);
+  const customerCode = requireCustomerScope(profile, requestedCustomer(request.data));
+  return { events: await listClientEvents(db, customerCode, profile) };
+});
+
+/** Cria ou edita um evento do portal (modelo de pedido). Grava evento. */
+export const saveClientEventTemplate = onCall(async (request) => {
+  const profile = await getProfile(request);
+  const parsed = ClientEventInputSchema.safeParse(request.data ?? {});
+  if (!parsed.success) {
+    throw new HttpsError("invalid-argument", "Dê um nome ao evento, informe o local e escolha ao menos um item.");
+  }
+  const customerCode = requireCustomerScope(profile, requestedCustomer(request.data));
+  return saveClientEvent(db, customerCode, parsed.data, profile);
+});
+
+/** Exclui (arquiva) um evento do portal. Grava evento. */
+export const archiveClientEventTemplate = onCall(async (request) => {
+  const profile = await getProfile(request);
+  const parsed = ArchiveClientEventSchema.safeParse(request.data ?? {});
+  if (!parsed.success) throw new HttpsError("invalid-argument", "Evento inválido.");
+  const customerCode = requireCustomerScope(profile, requestedCustomer(request.data));
+  return archiveClientEvent(db, customerCode, parsed.data, profile);
 });
 
 const CancelShipmentNoticeSchema = z.object({

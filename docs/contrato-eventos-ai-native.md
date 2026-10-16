@@ -37,6 +37,9 @@ Portal e solicitacoes:
 - `customer_request.approved`
 - `customer_request.rejected`
 - `customer_request.closed`
+- `client_event_template.created`
+- `client_event_template.updated`
+- `client_event_template.archived`
 
 Pedido e estoque:
 

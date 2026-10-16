@@ -117,8 +117,12 @@ Para outro cliente, troque `CUSTOMER`, o catálogo e os pedidos em `data.ts`.
 
 - `portal/estoque.tsx` é uma cópia de `src/pages/client/estoque.tsx` com o
   pedido para vários destinos. O build da demo troca o original por ela.
+- `portal/eventos.tsx` é a versão da demo de `src/pages/client/eventos.tsx`:
+  mesma tela, lendo os eventos de `data.ts` em vez das Cloud Functions. O
+  build da demo troca o original por ela.
 - `not-found.tsx` substitui o 404 para servir as telas Kits e Destinatários,
-  que não existem nas rotas do app; `menu.ts` põe as duas no menu.
+  que não existem nas rotas do app; `menu.ts` põe as duas no menu, em volta
+  de Eventos.
 - Mudou o Estoque do app? Refaça a cópia antes de gerar a demo de novo.
 
 ## CSS de produção
