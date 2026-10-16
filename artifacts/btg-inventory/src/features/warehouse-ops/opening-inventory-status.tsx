@@ -26,6 +26,8 @@ export type OpeningInventoryLine = {
   genero?: string;
   grupo?: string;
   location_id?: string;
+  /** Caixa em que o produto foi guardado (CX-000001); vazio nas linhas antigas. */
+  box_code?: string;
   counted_qty?: number;
   unit_cost?: number;
   total_cost?: number;

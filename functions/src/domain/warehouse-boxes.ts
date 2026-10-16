@@ -1,0 +1,720 @@
+import { FieldValue, type DocumentReference, type Firestore, type Transaction } from "firebase-admin/firestore";
+import { HttpsError } from "firebase-functions/https";
+import { z } from "genkit";
+import { createHash } from "node:crypto";
+
+import { WAREHOUSE_POSITIONS_COLLECTION } from "./warehouse-positions.js";
+
+/**
+ * A caixa como unidade de manuseio e o endereçamento dirigido.
+ *
+ * O que vai para a prateleira é a caixa, não o SKU. Cada caixa recebe um
+ * código sequencial (CX-000001), tem medidas, peso e uma posição; o saldo do
+ * estoque continua por cliente × SKU × posição (stock_balances), e cada linha
+ * da abertura que entra numa caixa referencia o código dela (box_code).
+ *
+ * A posição é escolhida por regra, não por IA, nesta ordem (docs/mapa-do-
+ * armazem-enderecamento-dirigido.md, seção 4): prateleira que já tem o mesmo
+ * SKU e ainda cabe; senão a mais próxima dessas pela sequência de caminhada;
+ * senão a primeira da zona com espaço; desempate pela menor sobra de frente.
+ * Só prateleiras da zona do cliente entram; zona cheia bloqueia e avisa.
+ *
+ * Capacidade nesta versão: a caixa ocupa frente × profundidade do chão da
+ * prateleira, sem empilhar caixa sobre caixa. É a conta conservadora do
+ * levantamento (3 caixas de 50 cm numa frente de 1,80 m).
+ */
+
+export const WAREHOUSE_BOXES_COLLECTION = "warehouse_boxes";
+export const WAREHOUSE_COUNTERS_COLLECTION = "warehouse_counters";
+export const BOX_COUNTER_DOC = "boxes";
+export const BOX_EDITOR_ROLES = ["owner", "admin", "interno", "wms"] as const;
+const OPERATIONS_COLLECTION = "operational_operations";
+const TOLERANCE_M = 0.001;
+const MAX_METERS = 50;
+
+export type WarehouseBoxActor = {
+  uid: string;
+  role: string;
+  email?: string;
+  name?: string;
+  customer_code?: string;
+};
+
+export type BoxDimensions = {
+  length_m: number;
+  width_m: number;
+  height_m: number;
+  gross_weight_kg?: number | null;
+};
+
+export type SlottingPosition = {
+  code: string;
+  length_m: number;
+  depth_m: number;
+  height_m: number;
+  max_weight_kg?: number | null;
+  sequence?: number | null;
+  customer_code?: string | null;
+  status?: string | null;
+};
+
+export type PositionOccupancy = {
+  front_used_m: number;
+  weight_used_kg: number;
+  box_count: number;
+  sku_codes: Set<string>;
+};
+
+export type Placement = {
+  /** Lado da caixa paralelo à frente da prateleira. */
+  front_m: number;
+  /** Lado da caixa que entra na profundidade. */
+  depth_m: number;
+};
+
+export type SlottingCandidate = {
+  code: string;
+  reason: string;
+  tier: 1 | 2 | 3;
+  leftover_m: number;
+  sequence: number;
+  placement: Placement;
+};
+
+export type SlottingResult = {
+  position: SlottingCandidate | null;
+  alternatives: SlottingCandidate[];
+  /** Por que nenhuma prateleira serviu; null quando há sugestão. */
+  rejected: string | null;
+  checked: number;
+};
+
+// ------------------------------------------------------------------ schemas
+
+function optionalNumber(min: number, max: number, label: string) {
+  return z.preprocess(
+    (value) => (value === null || value === undefined || value === "" ? null : Number(value)),
+    z.number({ invalid_type_error: `${label} inválido.` }).min(min, `${label} inválido.`).max(max, `${label} inválido.`).nullable(),
+  );
+}
+
+const meters = (problem: string) =>
+  z.coerce
+    .number({ invalid_type_error: `${problem}: informe em metros.` })
+    .positive(`${problem}: informe em metros.`)
+    .max(MAX_METERS, `${problem}: informe em metros.`);
+
+const dimensionFields = {
+  length_m: meters("Comprimento da caixa inválido"),
+  width_m: meters("Largura da caixa inválida"),
+  height_m: meters("Altura da caixa inválida"),
+  gross_weight_kg: optionalNumber(0, 100_000, "Peso bruto").optional(),
+};
+
+const positionCodeField = z.string().trim().min(1, "Informe a posição.").max(12, "Posição inválida.");
+
+export const SuggestWarehousePositionSchema = z.object({
+  customer_code: z.string().trim().optional(),
+  ...dimensionFields,
+  sku_codes: z.array(z.string().trim().min(1).max(120)).max(50).optional(),
+  exclude: z.array(positionCodeField).max(20).optional(),
+});
+
+export const CreateWarehouseBoxSchema = z.object({
+  customer_code: z.string().trim().optional(),
+  session_id: z.string().trim().max(160).optional(),
+  ...dimensionFields,
+  location_id: positionCodeField,
+  suggestion: z
+    .object({
+      position: positionCodeField.nullable().optional(),
+      reason: z.string().trim().max(300).nullable().optional(),
+      alternatives: z.array(positionCodeField).max(5).optional(),
+    })
+    .optional(),
+  refusal: z
+    .object({
+      position: positionCodeField,
+      reason: z.string().trim().min(1, "Informe o motivo da recusa.").max(300),
+    })
+    .optional(),
+  notes: z.string().trim().max(500).nullable().optional(),
+  idempotency_key: z.string().trim().min(1),
+});
+
+export const RemoveWarehouseBoxSchema = z.object({
+  customer_code: z.string().trim().optional(),
+  code: z.string().trim().min(1, "Informe a caixa.").max(12),
+});
+
+export type SuggestWarehousePositionInput = z.infer<typeof SuggestWarehousePositionSchema> & { customer_code: string };
+export type CreateWarehouseBoxInput = z.infer<typeof CreateWarehouseBoxSchema> & { customer_code: string };
+
+// ------------------------------------------------------------------ helpers
+
+export function formatBoxCode(sequence: number) {
+  return `CX-${String(Math.max(1, Math.trunc(sequence))).padStart(6, "0")}`;
+}
+
+function digest(value: unknown, length = 32) {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, length);
+}
+
+function round(value: number, decimals: number) {
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
+}
+
+function centimeters(value: number) {
+  return `${Math.round(value * 100)}`;
+}
+
+function describeBox(box: BoxDimensions) {
+  const size = `${centimeters(box.length_m)} × ${centimeters(box.width_m)} × ${centimeters(box.height_m)} cm`;
+  return box.gross_weight_kg != null ? `${size}, ${round(box.gross_weight_kg, 1)} kg` : size;
+}
+
+function requireEditor(actor: WarehouseBoxActor) {
+  if (!(BOX_EDITOR_ROLES as readonly string[]).includes(actor.role)) {
+    throw new HttpsError("permission-denied", "Caixas do armazém: somente administração ou operação de armazém.");
+  }
+}
+
+function actorFields(actor: WarehouseBoxActor) {
+  return {
+    uid: actor.uid,
+    role: actor.role,
+    email: actor.email ?? null,
+    name: actor.name ?? null,
+    customer_code: actor.customer_code ?? null,
+  };
+}
+
+function requireDimensions(raw: BoxDimensions): BoxDimensions {
+  const read = (value: unknown, problem: string) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0 || parsed > MAX_METERS) {
+      throw new HttpsError("invalid-argument", `${problem}: informe em metros.`);
+    }
+    return round(parsed, 3);
+  };
+  const dimensions: BoxDimensions = {
+    length_m: read(raw.length_m, "Comprimento da caixa inválido"),
+    width_m: read(raw.width_m, "Largura da caixa inválida"),
+    height_m: read(raw.height_m, "Altura da caixa inválida"),
+    gross_weight_kg: null,
+  };
+  if (raw.gross_weight_kg !== undefined && raw.gross_weight_kg !== null) {
+    const weight = Number(raw.gross_weight_kg);
+    if (!Number.isFinite(weight) || weight < 0) {
+      throw new HttpsError("invalid-argument", "Peso bruto inválido: informe em quilos.");
+    }
+    dimensions.gross_weight_kg = round(weight, 2);
+  }
+  return dimensions;
+}
+
+export function emptyOccupancy(): PositionOccupancy {
+  return { front_used_m: 0, weight_used_kg: 0, box_count: 0, sku_codes: new Set() };
+}
+
+/** Ocupação por posição a partir das caixas guardadas e dos saldos por posição. */
+export function buildOccupancy(
+  boxes: Array<{ location_id?: string | null; front_m?: number | null; gross_weight_kg?: number | null }>,
+  balances: Array<{ location_id?: string | null; sku_code?: string | null; qty_on_hand?: number | null }>,
+): Map<string, PositionOccupancy> {
+  const occupancy = new Map<string, PositionOccupancy>();
+  const at = (code: string) => {
+    const existing = occupancy.get(code);
+    if (existing) return existing;
+    const created = emptyOccupancy();
+    occupancy.set(code, created);
+    return created;
+  };
+  for (const box of boxes) {
+    const code = String(box.location_id ?? "").trim().toUpperCase();
+    if (!code) continue;
+    const entry = at(code);
+    entry.front_used_m += Number(box.front_m ?? 0) || 0;
+    entry.weight_used_kg += Number(box.gross_weight_kg ?? 0) || 0;
+    entry.box_count += 1;
+  }
+  for (const balance of balances) {
+    const code = String(balance.location_id ?? "").trim().toUpperCase();
+    const sku = String(balance.sku_code ?? "").trim();
+    if (!code || !sku || Number(balance.qty_on_hand ?? 0) <= 0) continue;
+    at(code).sku_codes.add(sku);
+  }
+  return occupancy;
+}
+
+/** Como a caixa entra na prateleira, se entra: menor frente que ainda cabe na profundidade. */
+export function placementFor(
+  position: Pick<SlottingPosition, "length_m" | "depth_m" | "height_m" | "max_weight_kg">,
+  box: BoxDimensions,
+  occupancy: PositionOccupancy = emptyOccupancy(),
+): Placement | null {
+  if (box.height_m > position.height_m + TOLERANCE_M) return null;
+  if (
+    position.max_weight_kg != null &&
+    box.gross_weight_kg != null &&
+    occupancy.weight_used_kg + box.gross_weight_kg > position.max_weight_kg + TOLERANCE_M
+  ) {
+    return null;
+  }
+  const freeFront = position.length_m - occupancy.front_used_m;
+  const options = [
+    { front_m: box.length_m, depth_m: box.width_m },
+    { front_m: box.width_m, depth_m: box.length_m },
+  ]
+    .filter((option) => option.depth_m <= position.depth_m + TOLERANCE_M && option.front_m <= freeFront + TOLERANCE_M)
+    .sort((left, right) => left.front_m - right.front_m);
+  return options[0] ?? null;
+}
+
+/**
+ * Escolhe a prateleira para uma caixa. Determinístico: a mesma entrada dá a
+ * mesma resposta. Devolve também as alternativas e, sem resposta, o motivo.
+ */
+export function suggestPosition(
+  box: BoxDimensions & { customer_code: string; sku_codes?: string[] },
+  positions: SlottingPosition[],
+  occupancy: Map<string, PositionOccupancy>,
+  options: { exclude?: string[] } = {},
+): SlottingResult {
+  const customer = box.customer_code.trim();
+  const excluded = new Set((options.exclude ?? []).map((code) => code.trim().toUpperCase()));
+  const skus = new Set((box.sku_codes ?? []).map((sku) => sku.trim()).filter(Boolean));
+  const zone = positions.filter((position) => String(position.customer_code ?? "").trim() === customer);
+  if (!zone.length) {
+    return {
+      position: null,
+      alternatives: [],
+      rejected: `Nenhuma prateleira está na zona de ${customer}. Atribua uma rua a esse cliente em Estoque › Posições.`,
+      checked: 0,
+    };
+  }
+  const sequenceOf = (position: SlottingPosition) => Number(position.sequence ?? Number.MAX_SAFE_INTEGER);
+  const sameSkuPositions = zone
+    .filter((position) => {
+      const present = occupancy.get(position.code)?.sku_codes;
+      return present ? [...skus].some((sku) => present.has(sku)) : false;
+    })
+    .sort((left, right) => sequenceOf(left) - sequenceOf(right) || left.code.localeCompare(right.code));
+  const sameSkuSequences = sameSkuPositions.map(sequenceOf);
+  const active = zone.filter(
+    (position) => (position.status ?? "active") === "active" && !excluded.has(position.code.toUpperCase()),
+  );
+
+  const candidates: Array<SlottingCandidate & { distance: number }> = [];
+  for (const position of active) {
+    const current = occupancy.get(position.code) ?? emptyOccupancy();
+    const placement = placementFor(position, box, current);
+    if (!placement) continue;
+    const freeFront = position.length_m - current.front_used_m;
+    const leftover = round(freeFront - placement.front_m, 3);
+    const sequence = sequenceOf(position);
+    const sharedSku = [...skus].find((sku) => current.sku_codes.has(sku));
+    if (sharedSku) {
+      candidates.push({
+        code: position.code,
+        tier: 1,
+        reason: `Já tem ${sharedSku} nesta prateleira e ainda cabe.`,
+        leftover_m: leftover,
+        sequence,
+        placement,
+        distance: 0,
+      });
+    } else if (sameSkuSequences.length) {
+      const distance = Math.min(...sameSkuSequences.map((other) => Math.abs(sequence - other)));
+      // A prateleira do produto mais perto desta; em empate, a primeira na caminhada.
+      const anchor = sameSkuPositions.find((other) => Math.abs(sequenceOf(other) - sequence) === distance);
+      candidates.push({
+        code: position.code,
+        tier: 2,
+        reason: `A mais próxima de ${anchor?.code ?? "onde o produto já está"}, que já tem o mesmo produto.`,
+        leftover_m: leftover,
+        sequence,
+        placement,
+        distance,
+      });
+    } else {
+      candidates.push({
+        code: position.code,
+        tier: 3,
+        reason: "Primeira prateleira da zona com espaço, na ordem de caminhada.",
+        leftover_m: leftover,
+        sequence,
+        placement,
+        distance: 0,
+      });
+    }
+  }
+
+  candidates.sort(
+    (left, right) =>
+      left.tier - right.tier ||
+      left.distance - right.distance ||
+      (left.tier === 3 ? left.sequence - right.sequence : left.leftover_m - right.leftover_m) ||
+      left.sequence - right.sequence,
+  );
+  const strip = ({ distance: _distance, ...candidate }: SlottingCandidate & { distance: number }) => candidate;
+  const [first, ...rest] = candidates;
+  if (!first) {
+    const rejected = !active.length
+      ? `A zona de ${customer} não tem prateleira ativa disponível.`
+      : `Nenhuma prateleira da zona de ${customer} tem espaço para uma caixa de ${describeBox(box)}. Coordenação precisa ampliar a zona ou liberar espaço.`;
+    return { position: null, alternatives: [], rejected, checked: active.length };
+  }
+  return {
+    position: strip(first),
+    alternatives: rest.slice(0, 2).map(strip),
+    rejected: null,
+    checked: active.length,
+  };
+}
+
+// ----------------------------------------------------------- leitura Firestore
+
+type Row = Record<string, unknown>;
+
+function asPosition(data: Row): SlottingPosition {
+  return {
+    code: String(data.code ?? data.id ?? ""),
+    length_m: Number(data.length_m ?? 0),
+    depth_m: Number(data.depth_m ?? 0),
+    height_m: Number(data.height_m ?? 0),
+    max_weight_kg: data.max_weight_kg == null ? null : Number(data.max_weight_kg),
+    sequence: data.sequence == null ? null : Number(data.sequence),
+    customer_code: data.customer_code == null ? null : String(data.customer_code),
+    status: data.status == null ? "active" : String(data.status),
+  };
+}
+
+/** Prateleiras da zona, caixas guardadas e SKUs por posição do cliente. */
+export async function readSlottingContext(db: Firestore, customerCode: string) {
+  const [positionsSnapshot, boxesSnapshot, balancesSnapshot] = await Promise.all([
+    db.collection(WAREHOUSE_POSITIONS_COLLECTION).where("customer_code", "==", customerCode).get(),
+    db.collection(WAREHOUSE_BOXES_COLLECTION).where("customer_code", "==", customerCode).where("status", "==", "stored").get(),
+    db.collection("stock_balances").where("customer_code", "==", customerCode).get(),
+  ]);
+  const positions = positionsSnapshot.docs.map((document) => asPosition(document.data()));
+  const occupancy = buildOccupancy(
+    boxesSnapshot.docs.map((document) => document.data()),
+    balancesSnapshot.docs.map((document) => document.data()),
+  );
+  return { positions, occupancy };
+}
+
+export async function suggestWarehousePosition(
+  db: Firestore,
+  input: SuggestWarehousePositionInput,
+  actor: WarehouseBoxActor,
+) {
+  requireEditor(actor);
+  const customerCode = String(input.customer_code ?? "").trim();
+  if (!customerCode) throw new HttpsError("invalid-argument", "Informe o cliente.");
+  const box = requireDimensions(input);
+  const { positions, occupancy } = await readSlottingContext(db, customerCode);
+  const result = suggestPosition(
+    { ...box, customer_code: customerCode, sku_codes: input.sku_codes ?? [] },
+    positions,
+    occupancy,
+    { exclude: input.exclude ?? [] },
+  );
+  return {
+    ok: true,
+    customer_code: customerCode,
+    box,
+    zone_positions: positions.length,
+    ...result,
+  };
+}
+
+// --------------------------------------------------------------- criar caixa
+
+export type WarehouseBoxRecord = {
+  code: string;
+  customer_code: string;
+  status: "stored";
+  location_id: string;
+  length_m: number;
+  width_m: number;
+  height_m: number;
+  front_m: number;
+  depth_m: number;
+  gross_weight_kg: number | null;
+  line_count: number;
+  unit_count: number;
+  total_cost: number;
+};
+
+export type CreateWarehouseBoxResult = { ok: true; box: WarehouseBoxRecord; replayed?: boolean };
+
+async function readReceipt(transaction: Transaction, ref: DocumentReference, inputHash: string) {
+  const snapshot = await transaction.get(ref);
+  if (!snapshot.exists) return undefined;
+  const data = snapshot.data() ?? {};
+  if (data.input_hash !== inputHash) {
+    throw new HttpsError("already-exists", "A chave de idempotência já foi usada com outro conteúdo.");
+  }
+  return data.result as Record<string, unknown>;
+}
+
+/**
+ * Cria a caixa já guardada na posição informada (a sugerida, ou outra que o
+ * motor ofereceu). Reconfere na transação que a posição é da zona do cliente,
+ * está ativa e ainda tem espaço. Uma recusa marca a prateleira recusada em
+ * verificação e fica registrada no evento.
+ */
+export async function createWarehouseBox(
+  db: Firestore,
+  input: CreateWarehouseBoxInput,
+  actor: WarehouseBoxActor,
+): Promise<CreateWarehouseBoxResult> {
+  requireEditor(actor);
+  const customerCode = String(input.customer_code ?? "").trim();
+  if (!customerCode) throw new HttpsError("invalid-argument", "Informe o cliente.");
+  const box = requireDimensions(input);
+  const locationCode = String(input.location_id ?? "").trim().toUpperCase();
+  if (!locationCode || locationCode.includes("/")) throw new HttpsError("invalid-argument", "Informe a posição da caixa.");
+  const refusalCode = input.refusal ? String(input.refusal.position).trim().toUpperCase() : "";
+  if (refusalCode && refusalCode === locationCode) {
+    throw new HttpsError("invalid-argument", "A posição recusada não pode ser a mesma da guarda.");
+  }
+  const nonce = String(input.idempotency_key ?? "").trim();
+  if (!nonce) throw new HttpsError("invalid-argument", "Chave de idempotência obrigatória.");
+  const inputHash = digest(input, 64);
+  const receiptRef = db.collection(OPERATIONS_COLLECTION).doc(`op_warehouse_box_${digest({ customerCode, nonce })}`);
+  const counterRef = db.collection(WAREHOUSE_COUNTERS_COLLECTION).doc(BOX_COUNTER_DOC);
+  const positionRef = db.collection(WAREHOUSE_POSITIONS_COLLECTION).doc(locationCode);
+  const refusedRef = refusalCode ? db.collection(WAREHOUSE_POSITIONS_COLLECTION).doc(refusalCode) : null;
+
+  return db.runTransaction(async (transaction) => {
+    const replay = await readReceipt(transaction, receiptRef, inputHash);
+    if (replay) return { ...(replay as CreateWarehouseBoxResult), replayed: true };
+
+    const [counterSnapshot, positionSnapshot, boxesSnapshot, refusedSnapshot] = await Promise.all([
+      transaction.get(counterRef),
+      transaction.get(positionRef),
+      transaction.get(
+        db.collection(WAREHOUSE_BOXES_COLLECTION).where("location_id", "==", locationCode).where("status", "==", "stored"),
+      ),
+      refusedRef ? transaction.get(refusedRef) : Promise.resolve(null),
+    ]);
+    if (!positionSnapshot.exists) {
+      throw new HttpsError("not-found", `Posição ${locationCode} não está cadastrada em Estoque › Posições.`);
+    }
+    const position = asPosition(positionSnapshot.data() ?? {});
+    if ((position.status ?? "active") !== "active") {
+      throw new HttpsError(
+        "failed-precondition",
+        `A prateleira ${locationCode} está ${position.status === "blocked" ? "bloqueada" : "em verificação"}; escolha outra.`,
+      );
+    }
+    if (String(position.customer_code ?? "") !== customerCode) {
+      throw new HttpsError(
+        "failed-precondition",
+        `A prateleira ${locationCode} não é da zona de ${customerCode}. Atribua a rua ao cliente em Estoque › Posições.`,
+      );
+    }
+    const occupancy = buildOccupancy(
+      boxesSnapshot.docs.map((document) => document.data()),
+      [],
+    ).get(locationCode) ?? emptyOccupancy();
+    const placement = placementFor(position, box, occupancy);
+    if (!placement) {
+      throw new HttpsError(
+        "failed-precondition",
+        `A caixa de ${describeBox(box)} não cabe na prateleira ${locationCode}: frente livre de ${centimeters(Math.max(0, position.length_m - occupancy.front_used_m))} cm, profundidade ${centimeters(position.depth_m)} cm, altura ${centimeters(position.height_m)} cm${position.max_weight_kg != null ? `, peso máximo ${position.max_weight_kg} kg` : ""}. Peça outra sugestão.`,
+      );
+    }
+    if (refusedRef && !refusedSnapshot?.exists) {
+      throw new HttpsError("not-found", `Posição recusada ${refusalCode} não está cadastrada.`);
+    }
+
+    const sequence = Number(counterSnapshot.data()?.last ?? 0) + 1;
+    const code = formatBoxCode(sequence);
+    const boxRef = db.collection(WAREHOUSE_BOXES_COLLECTION).doc(code);
+    const now = new Date().toISOString();
+    const sessionId = String(input.session_id ?? "").trim();
+    const suggestion = input.suggestion
+      ? {
+          position: input.suggestion.position ? String(input.suggestion.position).trim().toUpperCase() : null,
+          reason: input.suggestion.reason ?? null,
+          alternatives: (input.suggestion.alternatives ?? []).map((item) => String(item).trim().toUpperCase()),
+          followed: input.suggestion.position
+            ? String(input.suggestion.position).trim().toUpperCase() === locationCode
+            : null,
+        }
+      : null;
+    const refusal = input.refusal ? { position: refusalCode, reason: input.refusal.reason } : null;
+
+    transaction.set(
+      counterRef,
+      { last: sequence, prefix: "CX", updated_at: FieldValue.serverTimestamp() },
+      { merge: true },
+    );
+    const record: WarehouseBoxRecord = {
+      code,
+      customer_code: customerCode,
+      status: "stored",
+      location_id: locationCode,
+      length_m: box.length_m,
+      width_m: box.width_m,
+      height_m: box.height_m,
+      front_m: placement.front_m,
+      depth_m: placement.depth_m,
+      gross_weight_kg: box.gross_weight_kg ?? null,
+      line_count: 0,
+      unit_count: 0,
+      total_cost: 0,
+    };
+    transaction.create(boxRef, {
+      id: code,
+      ...record,
+      sku_codes: [],
+      origin: sessionId ? { kind: "opening_inventory", session_id: sessionId } : { kind: "manual" },
+      suggestion,
+      refusal,
+      notes: input.notes ?? null,
+      stored_at: now,
+      stored_by: actorFields(actor),
+      created_at: FieldValue.serverTimestamp(),
+      created_by: actor.uid,
+      updated_at: FieldValue.serverTimestamp(),
+    });
+
+    const events: string[] = [];
+    const boxEventRef = db.collection("events").doc();
+    events.push(boxEventRef.id);
+    transaction.create(boxEventRef, {
+      id: boxEventRef.id,
+      type: "warehouse.box_stored",
+      title: `Caixa ${code} guardada em ${locationCode}`,
+      description: `${describeBox(box)} · ${
+        suggestion?.followed === false
+          ? `posição diferente da sugerida (${suggestion.position})`
+          : suggestion?.position
+            ? "na posição sugerida pelo sistema"
+            : "posição informada sem sugestão"
+      }${refusal ? ` · recusou ${refusal.position}: ${refusal.reason}` : ""}`,
+      severity: "info",
+      entity_type: "warehouse_box",
+      entity_id: code,
+      customer_code: customerCode,
+      payload: {
+        box: record,
+        suggestion,
+        refusal,
+        session_id: sessionId || null,
+        occupancy_before: { front_used_m: occupancy.front_used_m, box_count: occupancy.box_count },
+      },
+      occurred_at: now,
+      source: "functions_warehouse_boxes",
+      actor: actorFields(actor),
+      created_at: FieldValue.serverTimestamp(),
+    });
+
+    if (refusedRef && refusal) {
+      const refused = refusedSnapshot?.data() ?? {};
+      const previousNotes = String(refused.notes ?? "").trim();
+      const note = `Guarda recusada em ${now.slice(0, 10)} por ${actor.name ?? actor.email ?? actor.uid}: ${refusal.reason}`;
+      transaction.update(refusedRef, {
+        status: "review",
+        notes: previousNotes ? `${previousNotes}\n${note}` : note,
+        updated_at: FieldValue.serverTimestamp(),
+        updated_by: actor.uid,
+      });
+      const refusalEventRef = db.collection("events").doc();
+      events.push(refusalEventRef.id);
+      transaction.create(refusalEventRef, {
+        id: refusalEventRef.id,
+        type: "warehouse.position_refused",
+        title: `Posição ${refusal.position} recusada na guarda da ${code}`,
+        description: `${refusal.reason}. A prateleira entrou em verificação; coordenação decide se volta a receber caixas.`,
+        severity: "warning",
+        entity_type: "warehouse_position",
+        entity_id: refusal.position,
+        customer_code: customerCode,
+        payload: { box_code: code, stored_at: locationCode, reason: refusal.reason },
+        occurred_at: now,
+        source: "functions_warehouse_boxes",
+        actor: actorFields(actor),
+        created_at: FieldValue.serverTimestamp(),
+      });
+    }
+
+    const result: CreateWarehouseBoxResult = { ok: true, box: record };
+    transaction.create(receiptRef, {
+      id: receiptRef.id,
+      kind: "warehouse.box.create",
+      target_id: code,
+      input_hash: inputHash,
+      status: "completed",
+      actor: actorFields(actor),
+      result,
+      events,
+      created_at: FieldValue.serverTimestamp(),
+      completed_at: FieldValue.serverTimestamp(),
+    });
+    return result;
+  });
+}
+
+// -------------------------------------------------------------- remover caixa
+
+export async function removeWarehouseBox(
+  db: Firestore,
+  input: { code: string; customer_code?: string },
+  actor: WarehouseBoxActor,
+): Promise<{ ok: true; code: string }> {
+  requireEditor(actor);
+  const code = String(input.code ?? "").trim().toUpperCase();
+  if (!code || code.includes("/")) throw new HttpsError("invalid-argument", "Caixa inválida.");
+  const ref = db.collection(WAREHOUSE_BOXES_COLLECTION).doc(code);
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists) throw new HttpsError("not-found", `Caixa ${code} não encontrada.`);
+    const data = snapshot.data() ?? {};
+    const customerCode = String(input.customer_code ?? "").trim();
+    if (customerCode && String(data.customer_code ?? "") !== customerCode) {
+      throw new HttpsError("permission-denied", "Caixa de outro cliente.");
+    }
+    if (Number(data.line_count ?? 0) > 0 || Number(data.unit_count ?? 0) > 0) {
+      throw new HttpsError(
+        "failed-precondition",
+        `A caixa ${code} ainda tem ${Number(data.line_count ?? 0)} produto(s) lançados. Remova as linhas dela antes de removê-la.`,
+      );
+    }
+    transaction.delete(ref);
+    const eventRef = db.collection("events").doc();
+    transaction.create(eventRef, {
+      id: eventRef.id,
+      type: "warehouse.box_removed",
+      title: `Caixa ${code} removida`,
+      description: `Estava em ${String(data.location_id ?? "")}, sem produtos lançados.`,
+      severity: "warning",
+      entity_type: "warehouse_box",
+      entity_id: code,
+      customer_code: data.customer_code ?? null,
+      payload: { box: data },
+      occurred_at: new Date().toISOString(),
+      source: "functions_warehouse_boxes",
+      actor: actorFields(actor),
+      created_at: FieldValue.serverTimestamp(),
+    });
+    return { ok: true, code };
+  });
+}
+
+/** Caixas de um cliente, mais novas primeiro (uso em testes e rotinas). */
+export async function listWarehouseBoxes(db: Firestore, customerCode: string) {
+  const snapshot = await db
+    .collection(WAREHOUSE_BOXES_COLLECTION)
+    .where("customer_code", "==", customerCode)
+    .get();
+  return snapshot.docs
+    .map((document) => document.data())
+    .sort((left, right) => String(right.code).localeCompare(String(left.code)));
+}

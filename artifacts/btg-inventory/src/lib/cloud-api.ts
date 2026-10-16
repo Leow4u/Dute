@@ -68,6 +68,7 @@ const collectionNames = {
   customerRequests: "customer_requests",
   locations: "locations",
   warehousePositions: "warehouse_positions",
+  warehouseBoxes: "warehouse_boxes",
   stockBalances: "stock_balances",
   clientInventory: "client_inventory",
   clientOrderTracking: "client_order_tracking",
@@ -3446,6 +3447,17 @@ async function route(
       direction: "asc",
       equalityFilterFields: ["aisle", "customer_code", "status"],
       hardCap: 2000,
+    },
+    {
+      // Caixas guardadas: a mais recente primeiro (o código é sequencial).
+      regex: /^\/api\/warehouse\/boxes$/,
+      name: collectionNames.warehouseBoxes,
+      filters: ["customer_code", "location_id", "status"],
+      searchFields: ["code", "location_id"],
+      orderByField: "code",
+      direction: "desc",
+      equalityFilterFields: ["customer_code", "location_id", "status"],
+      hardCap: 5000,
     },
     {
       regex: /^\/api\/locations$/,

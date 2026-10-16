@@ -95,6 +95,15 @@ async function seed() {
       customer_code: null,
       status: "active",
     });
+    await setDoc(doc(database, "warehouse_boxes", "CX-000001"), {
+      id: "CX-000001",
+      code: "CX-000001",
+      customer_code: CUSTOMER_A,
+      location_id: "A-01",
+      status: "stored",
+      line_count: 0,
+      unit_count: 0,
+    });
     await setDoc(doc(database, "movements", "movement-a"), {
       customer_code: CUSTOMER_A,
       sku_code: "BTG-TEST-1",
@@ -274,6 +283,11 @@ describe("ledger e mutações críticas", () => {
       .authenticatedContext("client-a", { email: "client-a@example.com" })
       .firestore();
     await assertFails(getDoc(doc(client, "warehouse_positions", "A-01")));
+
+    await assertSucceeds(getDoc(doc(wms, "warehouse_boxes", "CX-000001")));
+    await assertFails(updateDoc(doc(wms, "warehouse_boxes", "CX-000001"), { location_id: "A-02" }));
+    await assertFails(setDoc(doc(admin, "warehouse_boxes", "CX-000002"), { code: "CX-000002" }));
+    await assertFails(getDoc(doc(client, "warehouse_boxes", "CX-000001")));
   });
 
   it("bloqueia saldo, pedido e tarefa WMS fora das Cloud Functions", async () => {

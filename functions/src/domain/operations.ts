@@ -228,6 +228,8 @@ export type RecordCycleCountInput = {
   unit_cost?: number;
   reason: string;
   reference?: string;
+  /** Caixa (unidade de manuseio) onde o produto foi lançado; só na abertura. */
+  box_code?: string;
   occurred_at?: string;
   idempotency_key: string;
 };
@@ -1497,6 +1499,10 @@ export async function recordCycleCountTransaction(
   const locationId = text(input.location_id);
   const reason = text(input.reason);
   const countedQty = number(input.counted_qty);
+  const boxCode = mode === "opening" ? text(input.box_code).toUpperCase() : "";
+  if (boxCode && !/^[A-Z0-9-]{1,20}$/.test(boxCode)) {
+    throw new HttpsError("invalid-argument", "Código de caixa inválido.");
+  }
   if (!customerCode || !skuCode || !locationId || !reason) {
     throw new HttpsError(
       "invalid-argument",
@@ -1545,6 +1551,7 @@ export async function recordCycleCountTransaction(
 
     let openingSessionRef: DocumentReference<DocumentData> | undefined;
     let openingLineRef: DocumentReference<DocumentData> | undefined;
+    let boxRef: DocumentReference<DocumentData> | undefined;
     let productRows: Row[] = [];
     let skuRows: Row[] = [];
     let productCodeSnapshot: DocumentSnapshot<DocumentData> | undefined;
@@ -1557,7 +1564,12 @@ export async function recordCycleCountTransaction(
         .collection(collections.openingInventoryLines)
         .doc(
           safeDocId(
-            `line_${digest({ sessionId, customerCode, skuCode, locationId }, 48)}`,
+            `line_${digest(
+              boxCode
+                ? { sessionId, customerCode, skuCode, locationId, boxCode }
+                : { sessionId, customerCode, skuCode, locationId },
+              48,
+            )}`,
           ),
         );
       const lookupClientCode = normalizedIdentity(input.client_item_code || skuCode);
@@ -1589,6 +1601,30 @@ export async function recordCycleCountTransaction(
           ),
           transaction.get(db.collection(collections.skus).doc(safeDocId(skuCode))),
         ]);
+      // Caixa: precisa existir, ser do cliente e estar guardada nesta posição.
+      boxRef = boxCode ? db.collection("warehouse_boxes").doc(boxCode) : undefined;
+      const boxSnapshot = boxRef ? await transaction.get(boxRef) : undefined;
+      if (boxRef) {
+        const boxData = boxSnapshot?.exists ? boxSnapshot.data() ?? {} : undefined;
+        if (!boxData) {
+          throw new HttpsError(
+            "not-found",
+            `Caixa ${boxCode} não encontrada. Crie a caixa antes de lançar o produto.`,
+          );
+        }
+        if (text(boxData.customer_code) !== customerCode) {
+          throw new HttpsError("permission-denied", "A caixa pertence a outro cliente.");
+        }
+        if (text(boxData.status) !== "stored") {
+          throw new HttpsError("failed-precondition", `A caixa ${boxCode} não está guardada.`);
+        }
+        if (text(boxData.location_id).toUpperCase() !== locationId.toUpperCase()) {
+          throw new HttpsError(
+            "failed-precondition",
+            `A caixa ${boxCode} está em ${text(boxData.location_id)}, não em ${locationId}.`,
+          );
+        }
+      }
       if (!sessionSnapshot.exists || text(sessionSnapshot.data()?.status) !== "open") {
         throw new HttpsError(
           "failed-precondition",
@@ -1641,13 +1677,25 @@ export async function recordCycleCountTransaction(
       } satisfies Row);
     const beforeOnHand = number(balanceRow.data.qty_on_hand);
     const beforeReserved = number(balanceRow.data.qty_reserved);
-    if (mode === "opening" && (beforeOnHand !== 0 || beforeReserved !== 0)) {
+    // Com caixa, o mesmo SKU pode entrar mais de uma vez na mesma posição
+    // (uma caixa por vez): a linha soma ao saldo que a própria abertura criou.
+    const additive =
+      Boolean(boxCode) &&
+      beforeReserved === 0 &&
+      (beforeOnHand === 0 ||
+        text(balanceRow.data.opening_inventory_session_id) === sessionId);
+    if (
+      mode === "opening" &&
+      !additive &&
+      (beforeOnHand !== 0 || beforeReserved !== 0)
+    ) {
       throw new HttpsError(
         "failed-precondition",
         `O SKU ${skuCode} no local ${locationId} já possui saldo. Use inventário cíclico para corrigir uma posição existente.`,
       );
     }
-    if (countedQty < beforeReserved) {
+    const nextOnHand = additive ? beforeOnHand + countedQty : countedQty;
+    if (nextOnHand < beforeReserved) {
       throw new HttpsError(
         "failed-precondition",
         `A contagem física (${countedQty}) é menor que a reserva ativa (${beforeReserved}). Resolva as reservas antes de ajustar o saldo.`,
@@ -1658,7 +1706,7 @@ export async function recordCycleCountTransaction(
     // sem divergência, a projeção do cliente precisa dos saldos de TODAS as
     // localizações do SKU; com ajuste em modo cíclico, os agregados de
     // catálogo precisam ser localizados.
-    const projectedDelta = countedQty - beforeOnHand;
+    const projectedDelta = nextOnHand - beforeOnHand;
     let cycleCatalogTargets: CatalogAggregateTarget = {};
     let aggregateBalanceRows: Row[] = [];
     if (projectedDelta === 0) {
@@ -1797,7 +1845,7 @@ export async function recordCycleCountTransaction(
       }
     }
 
-    const delta = countedQty - beforeOnHand;
+    const delta = nextOnHand - beforeOnHand;
     const movementType = delta >= 0 ? "ENTRADA" : "SAIDA";
     const adjustmentQty = Math.abs(delta);
     const catalogProduct =
@@ -1998,6 +2046,7 @@ export async function recordCycleCountTransaction(
             ? photoStoragePaths
             : undefined,
           location_id: locationId,
+          box_code: boxCode || undefined,
           counted_qty: countedQty,
           unit_cost: unitCost,
           total_cost: countedQty * unitCost,
@@ -2017,6 +2066,15 @@ export async function recordCycleCountTransaction(
         last_counted_at: occurredAt,
         updated_at: FieldValue.serverTimestamp(),
       });
+      if (boxRef) {
+        transaction.update(boxRef, {
+          line_count: FieldValue.increment(1),
+          unit_count: FieldValue.increment(countedQty),
+          total_cost: FieldValue.increment(countedQty * unitCost),
+          sku_codes: FieldValue.arrayUnion(skuCode),
+          updated_at: FieldValue.serverTimestamp(),
+        });
+      }
     }
 
     transaction.set(
@@ -2035,11 +2093,11 @@ export async function recordCycleCountTransaction(
         color,
         photo_urls: photoUrls.length ? photoUrls : undefined,
         primary_photo_url: photoUrls[0],
-        qty_on_hand: countedQty,
+        qty_on_hand: nextOnHand,
         qty_reserved: beforeReserved,
-        qty_available: countedQty - beforeReserved,
+        qty_available: nextOnHand - beforeReserved,
         unit_cost: unitCost,
-        status: countedQty > 0 ? "available" : "empty",
+        status: nextOnHand > 0 ? "available" : "empty",
         source,
         opening_inventory_session_id: sessionId,
         last_cycle_count_id: cycleCountId,
@@ -2071,12 +2129,13 @@ export async function recordCycleCountTransaction(
           ? photoStoragePaths
           : undefined,
         location_id: locationId,
+        box_code: boxCode || undefined,
         mode,
         opening_inventory_session_id: sessionId,
         counted_qty: countedQty,
         qty_before: beforeOnHand,
         qty_reserved: beforeReserved,
-        qty_available_after: countedQty - beforeReserved,
+        qty_available_after: nextOnHand - beforeReserved,
         adjustment_qty: adjustmentQty,
         adjustment_delta: delta,
         adjustment_type: delta === 0 ? "SEM_DIVERGENCIA" : movementType,
@@ -2106,12 +2165,13 @@ export async function recordCycleCountTransaction(
             productName,
             locationId,
             beforeQty: beforeOnHand,
-            afterQty: countedQty,
+            afterQty: nextOnHand,
             source,
             occurredAt,
             entity: {
               reason,
               reference: text(input.reference) || undefined,
+              box_code: boxCode || undefined,
               cycle_count_id: cycleCountId,
               opening_inventory_session_id: sessionId,
               operational_operation_id: operationId,
@@ -2191,7 +2251,7 @@ export async function recordCycleCountTransaction(
             : "Inventário cíclico ajustado",
         description:
           mode === "opening"
-            ? `${productName} publicado com ${countedQty} unidade(s) no local ${locationId}.`
+            ? `${productName} publicado com ${countedQty} unidade(s) no local ${locationId}${boxCode ? ` (caixa ${boxCode})` : ""}.`
             : delta === 0
             ? `${skuCode} conferido no local ${locationId} sem diferença.`
             : `${skuCode} ajustado em ${delta > 0 ? "+" : ""}${delta} unidade(s) no local ${locationId}.`,
@@ -2210,6 +2270,7 @@ export async function recordCycleCountTransaction(
           mode,
           opening_inventory_session_id: sessionId,
           location_id: locationId,
+          box_code: boxCode || undefined,
           counted_qty: countedQty,
           qty_before: beforeOnHand,
           qty_reserved: beforeReserved,
@@ -2231,11 +2292,12 @@ export async function recordCycleCountTransaction(
       qty_before: beforeOnHand,
       qty_counted: countedQty,
       qty_reserved: beforeReserved,
-      qty_available: countedQty - beforeReserved,
+      qty_available: nextOnHand - beforeReserved,
       adjustment_delta: delta,
       adjustment_qty: adjustmentQty,
       adjustment_type: delta === 0 ? "SEM_DIVERGENCIA" : movementType,
       mode,
+      box_code: boxCode || undefined,
       opening_inventory_session_id: sessionId,
       events: [event],
     });
@@ -2330,6 +2392,8 @@ export async function removeOpeningInventoryLineTransaction(
     const unitCost = number(line.unit_cost);
     const cycleCountId = safeDocId(text(line.cycle_count_id));
     const originalMovementId = safeDocId(text(line.movement_id));
+    const boxCode = text(line.box_code).toUpperCase();
+    const boxRef = boxCode ? db.collection("warehouse_boxes").doc(boxCode) : undefined;
     if (!skuCode || !clientItemCode || !locationId || !cycleCountId) {
       throw new HttpsError(
         "failed-precondition",
@@ -2359,6 +2423,7 @@ export async function removeOpeningInventoryLineTransaction(
         transaction.get(cycleCountRef),
         readRows(transaction, allOpeningLinesQuery),
       ]);
+    const boxSnapshot = boxRef ? await transaction.get(boxRef) : undefined;
 
     const targetBalances = balanceRows.filter(
       (row) => text(row.data.location_id) === locationId,
@@ -2366,11 +2431,14 @@ export async function removeOpeningInventoryLineTransaction(
     const balance = assertSingleBalance(targetBalances, skuCode, locationId);
     const balanceOnHand = number(balance.data.qty_on_hand);
     const balanceReserved = number(balance.data.qty_reserved);
-    if (
-      balanceOnHand !== countedQty ||
-      balanceReserved !== 0 ||
-      text(balance.data.last_cycle_count_id) !== cycleCountId
-    ) {
+    // Linha de caixa soma ao saldo da posição (várias caixas do mesmo SKU):
+    // a correção subtrai a quantidade da linha em vez de zerar o saldo.
+    const consistent = boxCode
+      ? balanceReserved === 0 && balanceOnHand >= countedQty
+      : balanceOnHand === countedQty &&
+        balanceReserved === 0 &&
+        text(balance.data.last_cycle_count_id) === cycleCountId;
+    if (!consistent) {
       throw new HttpsError(
         "failed-precondition",
         "Este saldo já recebeu outra movimentação ou reserva. Faça um inventário cíclico em vez de remover a linha de abertura.",
@@ -2399,7 +2467,25 @@ export async function removeOpeningInventoryLineTransaction(
       );
     }
 
-    transaction.delete(balance.ref);
+    const remainingAtLocation = balanceOnHand - countedQty;
+    if (remainingAtLocation > 0) {
+      transaction.update(balance.ref, {
+        qty_on_hand: remainingAtLocation,
+        qty_available: remainingAtLocation - balanceReserved,
+        status: "available",
+        updated_at: FieldValue.serverTimestamp(),
+      });
+    } else {
+      transaction.delete(balance.ref);
+    }
+    if (boxRef && boxSnapshot?.exists) {
+      transaction.update(boxRef, {
+        line_count: FieldValue.increment(-1),
+        unit_count: FieldValue.increment(-countedQty),
+        total_cost: FieldValue.increment(-(countedQty * unitCost)),
+        updated_at: FieldValue.serverTimestamp(),
+      });
+    }
     transaction.delete(lineRef);
     if (cycleSnapshot.exists) {
       transaction.update(cycleCountRef, {
@@ -2423,8 +2509,8 @@ export async function removeOpeningInventoryLineTransaction(
           clientItemCode,
           productName: text(line.product_name) || skuCode,
           locationId,
-          beforeQty: countedQty,
-          afterQty: 0,
+          beforeQty: balanceOnHand,
+          afterQty: remainingAtLocation,
           source: "functions_opening_inventory_reversal",
           occurredAt: new Date().toISOString(),
           entity: {
@@ -2517,6 +2603,7 @@ export async function removeOpeningInventoryLineTransaction(
           sku_code: skuCode,
           client_item_code: clientItemCode,
           location_id: locationId,
+          box_code: boxCode || undefined,
           counted_qty: countedQty,
           reversed_cycle_count_id: cycleCountId,
           reversed_movement_id: originalMovementId || undefined,

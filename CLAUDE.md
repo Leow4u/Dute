@@ -25,6 +25,11 @@ documentação de produto e operação está em `docs/`.
   configurado" (aconteceu em 09/10/2026). Ver `docs/deploy-manual.md` (inclui o roteiro
   manual de reserva e o que checar quando a verificação falha) e
   `docs/deploy-functions-manual.md` (Cloud Functions, sempre manual).
+  **Regras e índices do Firestore também são manuais e não vão junto com
+  `--only functions`**: `cd C:\DEV\Dute` e
+  `firebase deploy --only firestore --project dute-btg`. Em 16/10/2026 a tela
+  Estoque › Posições ficou em "Missing or insufficient permissions" depois do
+  deploy de functions, até as regras subirem.
 - **Depois de qualquer deploy de functions, rode
   `tools/check_functions_invoker.ps1`.** Em 03/09/2026, 8 callables (incluindo
   `createCustomerRequest`) ficaram sem `roles/run.invoker` para `allUsers` e

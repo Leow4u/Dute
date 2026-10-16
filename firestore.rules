@@ -776,6 +776,12 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Caixas (unidade de manuseio): criadas e movidas pelas Cloud Functions.
+    match /warehouse_boxes/{boxCode} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
     match /stock_reservations/{reservationId} {
       allow read: if canReadOperations();
       allow create, update, delete: if false;
