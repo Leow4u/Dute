@@ -312,6 +312,37 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  // Caixas do armazém: o motor sugere a prateleira, a caixa nasce já guardada.
+  if (method === "POST" && pathname === "/api/warehouse/boxes/suggest") {
+    return {
+      name: "suggestWarehousePosition",
+      payload: async (_pathname, init) => readJsonBody(init),
+    };
+  }
+  if (method === "POST" && pathname === "/api/warehouse/boxes") {
+    return {
+      name: "createWarehouseBox",
+      status: 201,
+      payload: async (_pathname, init) => {
+        const body = await readJsonBody(init);
+        return {
+          ...body,
+          idempotency_key: body.idempotency_key ?? crypto.randomUUID(),
+        };
+      },
+    };
+  }
+  const boxRemovalMatch = pathname.match(/^\/api\/warehouse\/boxes\/([^/]+)\/remove$/);
+  if (method === "POST" && boxRemovalMatch) {
+    return {
+      name: "removeWarehouseBox",
+      payload: async (_pathname, init) => ({
+        ...(await readJsonBody(init)),
+        code: decodeURIComponent(boxRemovalMatch[1]!),
+      }),
+    };
+  }
+
   // Posições do armazém (mapa do galpão): cadastro mantido pelas Functions.
   if (method === "POST" && pathname === "/api/warehouse/positions") {
     return {

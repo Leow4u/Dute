@@ -10,6 +10,9 @@ import {
   ClipboardCheck,
   ImagePlus,
   ListChecks,
+  Boxes,
+  MapPin,
+  PackageCheck,
   PackageOpen,
   PackageSearch,
   PlayCircle,
@@ -57,6 +60,22 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { type CountMode, defaultCountMode } from "@/lib/opening-inventory";
+import {
+  type BoxDraft,
+  type BoxRefusal,
+  type CreateBoxResult,
+  type SuggestionResult,
+  type WarehouseBox,
+  boxDraftToPayload,
+  emptyBoxDraft,
+  formatBoxDimensions,
+  occupiedPositions,
+  resolveContentSkus,
+  sessionBoxes,
+  sortBoxes,
+  tierLabel,
+  warehouseBoxFromRecord,
+} from "@/lib/warehouse-boxes";
 import { cn } from "@/lib/utils";
 import {
   type AnyRecord,
@@ -110,6 +129,7 @@ export type CycleCountResult = {
   adjustment_delta?: number;
   adjustment_qty?: number;
   adjustment_type?: string;
+  box_code?: string;
 };
 
 export type { OpeningInventoryLine, OpeningInventorySession };
@@ -165,6 +185,15 @@ export function CycleCountWorkspace() {
   );
 }
 
+const OPENING_CUSTOMER = "BTG Pactual";
+const JSON_HEADERS = { "content-type": "application/json" };
+
+/**
+ * A abertura é lançada por caixa (docs/mapa-do-armazem-enderecamento-dirigido.md,
+ * seção 5.2): a pessoa mede a caixa, o motor diz em que prateleira guardar,
+ * a caixa nasce já na posição e cada produto lançado vai com o código dela.
+ * O endereço deixou de ser digitado; é a posição da caixa aberta na tela.
+ */
 export function OpeningInventoryWorkspace() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -178,7 +207,6 @@ export function OpeningInventoryWorkspace() {
   const [brand, setBrand] = useState("");
   const [size, setSize] = useState("");
   const [color, setColor] = useState("");
-  const [locationId, setLocationId] = useState("");
   const [countedQty, setCountedQty] = useState("");
   const [unitCost, setUnitCost] = useState("");
   const [reference, setReference] = useState("");
@@ -189,6 +217,15 @@ export function OpeningInventoryWorkspace() {
     useState<ProductLookupItem>();
   const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
   const [lineToRemove, setLineToRemove] = useState<OpeningInventoryLine>();
+  // A caixa: medidas digitadas, sugestão do motor, recusa e a caixa aberta na tela.
+  const [boxDraft, setBoxDraft] = useState<BoxDraft>(emptyBoxDraft);
+  const [suggestion, setSuggestion] = useState<SuggestionResult>();
+  const [excluded, setExcluded] = useState<string[]>([]);
+  const [refusal, setRefusal] = useState<BoxRefusal>();
+  const [refusing, setRefusing] = useState(false);
+  const [refusalReason, setRefusalReason] = useState("");
+  const [activeBox, setActiveBox] = useState<WarehouseBox>();
+  const [boxToRemove, setBoxToRemove] = useState<WarehouseBox>();
 
   useEffect(() => {
     const suggested = inferGeneroFromClientCode(clientCode);
@@ -219,7 +256,36 @@ export function OpeningInventoryWorkspace() {
       );
     },
   });
+  const boxesQuery = useQuery({
+    queryKey: ["warehouse-boxes", OPENING_CUSTOMER],
+    staleTime: 10_000,
+    queryFn: async () =>
+      normalizeApiRows(
+        await fetchJson<unknown>(
+          `/api/warehouse/boxes?customer_code=${encodeURIComponent(OPENING_CUSTOMER)}&limit=1000`,
+        ),
+      ).map(warehouseBoxFromRecord),
+  });
   const lookupProducts = lookupQuery.data ?? [];
+  const session = sessionQuery.data;
+  const sessionLines = session?.lines ?? [];
+  const sessionOpen = session?.status === "open";
+  const storedBoxes = useMemo(() => sortBoxes(boxesQuery.data ?? []), [boxesQuery.data]);
+  const boxesOfSession = useMemo(
+    () => sessionBoxes(storedBoxes, session?.session_id),
+    [session?.session_id, storedBoxes],
+  );
+  const occupied = occupiedPositions(storedBoxes);
+  // A caixa aberta com os contadores mais recentes; logo depois de criar, ainda só existe no estado.
+  const currentBox = activeBox
+    ? storedBoxes.find((box) => box.code === activeBox.code) ?? activeBox
+    : undefined;
+  const locationId = currentBox?.location_id ?? "";
+  const boxPayload = useMemo(() => boxDraftToPayload(boxDraft), [boxDraft]);
+  const contentSkus = useMemo(
+    () => resolveContentSkus(boxDraft.content, lookupProducts),
+    [boxDraft.content, lookupProducts],
+  );
   const draftLine = useMemo<ReceiptDraftLine>(
     () => ({
       sku: skuCode,
@@ -290,9 +356,6 @@ export function OpeningInventoryWorkspace() {
     () => (existingProduct ? [] : similarProductNames(draftLine, lookupProducts)),
     [draftLine, existingProduct, lookupProducts],
   );
-  const session = sessionQuery.data;
-  const sessionLines = session?.lines ?? [];
-  const sessionOpen = session?.status === "open";
   const parsedCount = Number(countedQty);
   const parsedCost = Number(unitCost);
   const hasIdentity = Boolean(clientCode.trim() || skuCode.trim());
@@ -314,7 +377,7 @@ export function OpeningInventoryWorkspace() {
     hasIdentity &&
     lookupQuery.isSuccess &&
     !identityConflict &&
-    Boolean(locationId.trim()) &&
+    Boolean(currentBox) &&
     countedQty.trim() !== "" &&
     Number.isFinite(parsedCount) &&
     parsedCount >= 0 &&
@@ -330,9 +393,9 @@ export function OpeningInventoryWorkspace() {
         "/api/warehouse/opening-inventory/session",
         {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: JSON_HEADERS,
           body: JSON.stringify({
-            customer_code: "BTG Pactual",
+            customer_code: OPENING_CUSTOMER,
             reference: `Inventário de abertura ${new Date().toLocaleDateString("pt-BR")}`,
             idempotency_key: crypto.randomUUID(),
           }),
@@ -343,7 +406,7 @@ export function OpeningInventoryWorkspace() {
       queryClient.invalidateQueries({ queryKey: ["opening-inventory-session"] });
       toast({
         title: "Inventário de abertura iniciado",
-        description: "Cada produto confirmado já ficará registrado no ledger.",
+        description: "Meça a primeira caixa: o sistema diz onde guardar e cada produto confirmado já fica no ledger.",
       });
     },
     onError: (error) =>
@@ -360,15 +423,16 @@ export function OpeningInventoryWorkspace() {
         "/api/warehouse/opening-inventory/session/complete",
         {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: JSON_HEADERS,
           body: JSON.stringify({
-            customer_code: "BTG Pactual",
+            customer_code: OPENING_CUSTOMER,
             session_id: session?.session_id,
             idempotency_key: crypto.randomUUID(),
           }),
         },
       ),
     onSuccess: () => {
+      setActiveBox(undefined);
       queryClient.invalidateQueries({ queryKey: ["opening-inventory-session"] });
       toast({
         title: "Inventário de abertura concluído",
@@ -383,15 +447,114 @@ export function OpeningInventoryWorkspace() {
       }),
   });
 
-  const recordOpeningLine = useMutation<CycleCountResult, Error>({
-    mutationFn: () =>
-      fetchJson<CycleCountResult>("/api/warehouse/cycle-counts", {
+  const suggestPosition = useMutation<SuggestionResult, Error, { exclude: string[] }>({
+    mutationFn: ({ exclude }) => {
+      if (!boxPayload) {
+        throw new Error("Informe comprimento, largura e altura da caixa em centímetros.");
+      }
+      return fetchJson<SuggestionResult>("/api/warehouse/boxes/suggest", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          customer_code: OPENING_CUSTOMER,
+          ...boxPayload,
+          sku_codes: contentSkus,
+          exclude,
+        }),
+      });
+    },
+    onSuccess: (result) => setSuggestion(result),
+    onError: (error) =>
+      toast({
+        title: "Não consegui sugerir a posição",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      }),
+  });
+
+  const createBox = useMutation<CreateBoxResult, Error, { location: string }>({
+    mutationFn: ({ location }) => {
+      if (!boxPayload) {
+        throw new Error("Informe comprimento, largura e altura da caixa em centímetros.");
+      }
+      return fetchJson<CreateBoxResult>("/api/warehouse/boxes", {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          customer_code: OPENING_CUSTOMER,
+          session_id: session?.session_id,
+          ...boxPayload,
+          location_id: location,
+          suggestion: suggestion
+            ? {
+                position: suggestion.position?.code ?? null,
+                reason: suggestion.position?.reason ?? suggestion.rejected ?? null,
+                alternatives: suggestion.alternatives.map((item) => item.code),
+              }
+            : undefined,
+          refusal,
+          idempotency_key: crypto.randomUUID(),
+        }),
+      });
+    },
+    onSuccess: (result) => {
+      const box = warehouseBoxFromRecord(result.box);
+      setActiveBox(box);
+      setBoxDraft(emptyBoxDraft());
+      setSuggestion(undefined);
+      setExcluded([]);
+      setRefusal(undefined);
+      setRefusing(false);
+      setRefusalReason("");
+      queryClient.invalidateQueries({ queryKey: ["warehouse-boxes"] });
+      queryClient.invalidateQueries({ queryKey: ["warehouse-positions"] });
+      toast({
+        title: `Caixa ${box.code} guardada em ${box.location_id}`,
+        description: "Leve a caixa para a prateleira e lance os produtos que estão dentro dela.",
+      });
+    },
+    onError: (error) =>
+      toast({
+        title: "Não consegui guardar a caixa",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      }),
+  });
+
+  const removeBox = useMutation<unknown, Error, WarehouseBox>({
+    mutationFn: (box) =>
+      fetchJson(`/api/warehouse/boxes/${encodeURIComponent(box.code)}/remove`, {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ customer_code: OPENING_CUSTOMER }),
+      }),
+    onSuccess: (_result, box) => {
+      setBoxToRemove(undefined);
+      setActiveBox((current) => (current?.code === box.code ? undefined : current));
+      queryClient.invalidateQueries({ queryKey: ["warehouse-boxes"] });
+      toast({
+        title: `Caixa ${box.code} removida`,
+        description: `A posição ${box.location_id} voltou a ter o espaço dela livre.`,
+      });
+    },
+    onError: (error) =>
+      toast({
+        title: "Não consegui remover a caixa",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      }),
+  });
+
+  const recordOpeningLine = useMutation<CycleCountResult, Error>({
+    mutationFn: () => {
+      if (!currentBox) throw new Error("Abra uma caixa antes de lançar o produto.");
+      return fetchJson<CycleCountResult>("/api/warehouse/cycle-counts", {
+        method: "POST",
+        headers: JSON_HEADERS,
         body: JSON.stringify({
           mode: "opening",
           session_id: session?.session_id,
-          customer_code: "BTG Pactual",
+          customer_code: OPENING_CUSTOMER,
           sku_code:
             selectedProduct?.skuCode || skuCode.trim() || clientCode.trim(),
           client_item_code:
@@ -416,7 +579,8 @@ export function OpeningInventoryWorkspace() {
           color: color.trim() || undefined,
           photo_urls: photos.map((photo) => photo.fileUrl),
           photo_storage_paths: photos.map((photo) => photo.storagePath),
-          location_id: locationId.trim(),
+          location_id: currentBox.location_id,
+          box_code: currentBox.code,
           counted_qty: parsedCount,
           unit_cost: unitCost.trim()
             ? parsedCost
@@ -426,15 +590,17 @@ export function OpeningInventoryWorkspace() {
           occurred_at: new Date().toISOString(),
           idempotency_key: crypto.randomUUID(),
         }),
-      }),
+      });
+    },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["opening-inventory-session"] });
       queryClient.invalidateQueries({ queryKey: ["opening-inventory-product-lookup"] });
+      queryClient.invalidateQueries({ queryKey: ["warehouse-boxes"] });
       queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
       queryClient.invalidateQueries({ queryKey: ["ai-overview"] });
       toast({
         title: "Produto contado e publicado",
-        description: `${formatNumber(result.qty_counted)} unidade(s) registradas no estoque.`,
+        description: `${formatNumber(result.qty_counted)} unidade(s) na caixa ${result.box_code ?? currentBox?.code ?? ""}, posição ${currentBox?.location_id ?? ""}.`,
       });
       setClientCode("");
       setSkuCode("");
@@ -467,9 +633,9 @@ export function OpeningInventoryWorkspace() {
         `/api/warehouse/opening-inventory/lines/${encodeURIComponent(line.id)}/remove`,
         {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: JSON_HEADERS,
           body: JSON.stringify({
-            customer_code: "BTG Pactual",
+            customer_code: OPENING_CUSTOMER,
             session_id: session?.session_id,
             idempotency_key: crypto.randomUUID(),
           }),
@@ -481,6 +647,7 @@ export function OpeningInventoryWorkspace() {
       queryClient.invalidateQueries({
         queryKey: ["opening-inventory-product-lookup"],
       });
+      queryClient.invalidateQueries({ queryKey: ["warehouse-boxes"] });
       queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
       toast({
         title: "Linha removida para correção",
@@ -542,6 +709,28 @@ export function OpeningInventoryWorkspace() {
     }
   }
 
+  function updateBoxDraft(field: keyof BoxDraft, value: string) {
+    setBoxDraft((current) => ({ ...current, [field]: value }));
+    // Medida nova, sugestão velha: a prateleira é escolhida de novo.
+    if (field !== "content") setSuggestion(undefined);
+  }
+
+  /** "Não cabe aqui": guarda o motivo, tira a prateleira da próxima rodada e pergunta de novo. */
+  function refuseSuggestedPosition() {
+    const code = suggestion?.position?.code;
+    const reason = refusalReason.trim();
+    if (!code || !reason) return;
+    const nextExcluded = excluded.includes(code) ? excluded : [...excluded, code];
+    setRefusal({ position: code, reason });
+    setExcluded(nextExcluded);
+    setRefusing(false);
+    setRefusalReason("");
+    suggestPosition.mutate({ exclude: nextExcluded });
+  }
+
+  const boxBusy = suggestPosition.isPending || createBox.isPending;
+  const suggestedCode = suggestion?.position?.code;
+
   return (
     <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
       <Card className="overflow-hidden rounded-lg border-border/80 bg-card">
@@ -553,6 +742,9 @@ export function OpeningInventoryWorkspace() {
               </div>
               <div>
                 <CardTitle>Inventário de abertura</CardTitle>
+                <CardDescription className="mt-1">
+                  Uma caixa por vez: meça, guarde onde o sistema indicar e lance o que tem dentro.
+                </CardDescription>
               </div>
             </div>
             {session?.status === "not_started" ? (
@@ -612,7 +804,7 @@ export function OpeningInventoryWorkspace() {
                 <EmptyTitle>
                   {session?.status === "completed"
                     ? "Inventário de abertura encerrado"
-                    : "Inicie a sessão para lançar o primeiro produto"}
+                    : "Inicie a sessão para guardar a primeira caixa"}
                 </EmptyTitle>
                 <EmptyDescription>
                   {session?.status === "completed"
@@ -622,271 +814,457 @@ export function OpeningInventoryWorkspace() {
               </EmptyHeader>
             </Empty>
           ) : (
-            <form
-              className="space-y-6"
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (canSubmit && !recordOpeningLine.isPending) {
-                  recordOpeningLine.mutate();
-                }
-              }}
-            >
-              <div className="grid gap-4 lg:grid-cols-[1fr_1fr_1.5fr]">
-                <div className="space-y-2">
-                  <Label htmlFor="opening-client-code">Cód. cliente</Label>
-                  <Input
-                    id="opening-client-code"
-                    value={clientCode}
-                    onChange={(event) => {
-                      setClientCode(event.target.value);
-                      setCreateNew(false);
-                      setSelectedProduct(undefined);
-                    }}
-                    placeholder="Código usado pelo BTG"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="opening-sku">SKU interno</Label>
-                  <Input
-                    id="opening-sku"
-                    value={skuCode}
-                    onChange={(event) => {
-                      setSkuCode(event.target.value);
-                      setCreateNew(false);
-                      setSelectedProduct(undefined);
-                    }}
-                    placeholder="Opcional; usa o cód. cliente"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="opening-product">Produto</Label>
-                  <Input
-                    id="opening-product"
-                    value={productName}
-                    onChange={(event) => setProductName(event.target.value)}
-                    placeholder="Descrição clara do produto"
-                  />
-                </div>
-              </div>
-
-              {lookupQuery.isLoading || lookupQuery.isFetching ? (
-                <Alert className="border-border bg-card">
-                  <RefreshCw className="size-4 animate-spin" />
-                  <AlertTitle>Verificando o catálogo</AlertTitle>
-                  <AlertDescription>
-                    Aguarde a confirmação antes de cadastrar o produto.
-                  </AlertDescription>
-                </Alert>
-              ) : lookupQuery.isError ? (
-                <Alert variant="destructive" className="bg-destructive/10">
-                  <AlertCircle className="size-4" />
-                  <AlertTitle>Catálogo indisponível</AlertTitle>
-                  <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <span>
-                      O cadastro de produto novo foi bloqueado para evitar duplicidade.
-                    </span>
-                    <Button type="button" variant="outline" onClick={() => lookupQuery.refetch()}>
-                      <RefreshCw data-icon="inline-start" />
-                      Tentar novamente
-                    </Button>
-                  </AlertDescription>
-                </Alert>
-              ) : identityConflict ? (
-                <Alert variant="destructive" className="bg-destructive/10">
-                  <AlertTriangle className="size-4" />
-                  <AlertTitle>Códigos pertencem a cadastros diferentes</AlertTitle>
-                  <AlertDescription>
-                    Revise o Cód. cliente e o SKU. O sistema não permite combinar identidades de produtos diferentes.
-                  </AlertDescription>
-                </Alert>
-              ) : existingProduct && !existingProduct.hasSku ? (
-                <Alert variant="destructive" className="bg-destructive/10">
-                  <AlertTriangle className="size-4" />
-                  <AlertTitle>Cadastro incompleto</AlertTitle>
-                  <AlertDescription>
-                    Este produto não possui SKU válido. Um administrador precisa corrigir o cadastro antes da contagem.
-                  </AlertDescription>
-                </Alert>
-              ) : existingProduct ? (
-                <div className="flex flex-col gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <div className="text-sm font-semibold text-foreground">
-                      Produto já cadastrado: {existingProduct.productName}
+            <div className="space-y-6">
+              {currentBox ? (
+                <div className="flex flex-col gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex items-start gap-3">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-card text-primary">
+                      <Boxes className="size-5" />
                     </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      Cod. cliente {existingProduct.clientCode} · SKU {existingProduct.skuCode}
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-foreground">
+                        Caixa {currentBox.code} · posição {currentBox.location_id}
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {formatBoxDimensions(currentBox)} · {formatNumber(currentBox.line_count)} produto(s) · {formatNumber(currentBox.unit_count)} un.
+                      </div>
+                      {currentBox.suggestion?.position && currentBox.suggestion.position !== currentBox.location_id ? (
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          Sugerida {currentBox.suggestion.position}; guardada em {currentBox.location_id}.
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                   <Button
                     type="button"
                     variant="outline"
-                    disabled={selectedProduct?.id === existingProduct.id}
-                    onClick={() => applyProduct(existingProduct)}
+                    onClick={() => setActiveBox(undefined)}
+                    disabled={recordOpeningLine.isPending}
                   >
-                    {selectedProduct?.id === existingProduct.id
-                      ? "Cadastro selecionado"
-                      : "Usar este cadastro"}
+                    <PackageCheck data-icon="inline-start" />
+                    Fechar caixa
                   </Button>
                 </div>
-              ) : hasIdentity && lookupQuery.isSuccess ? (
-                <Alert className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
-                  <AlertTriangle className="size-4" />
-                  <AlertTitle>Produto não encontrado</AlertTitle>
-                  <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <span>
-                      Confirme que é realmente novo antes de criar uma identidade no estoque.
-                      {similarProducts.length
-                        ? ` Parecidos: ${similarProducts
-                            .map((product) => product.productName)
-                            .join(", ")}.`
-                        : ""}
-                    </span>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={createNew ? "default" : "outline"}
-                      onClick={() => setCreateNew((current) => !current)}
-                    >
-                      {createNew ? "Novo produto confirmado" : "Cadastrar como novo"}
-                    </Button>
-                  </AlertDescription>
-                </Alert>
-              ) : null}
-
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="space-y-2">
-                  <Label>Categoria</Label>
-                  <Input value={category} onChange={(event) => setCategory(event.target.value)} placeholder="Obrigatória para novo" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Gênero</Label>
-                  <Select value={genero || undefined} onValueChange={setGenero}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o gênero" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CATALOG_GENEROS.map((option) => (
-                        <SelectItem key={option} value={option}>
-                          {option}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Grupo</Label>
-                  <Select value={grupo || undefined} onValueChange={setGrupo}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o grupo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CATALOG_GRUPOS.map((option) => (
-                        <SelectItem key={option} value={option}>
-                          {option}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Marca</Label>
-                  <Input value={brand} onChange={(event) => setBrand(event.target.value)} placeholder="Marca" />
-                </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="space-y-2">
-                  <Label>Tamanho</Label>
-                  <Input value={size} onChange={(event) => setSize(event.target.value)} placeholder="Tamanho" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Cor</Label>
-                  <Input value={color} onChange={(event) => setColor(event.target.value)} placeholder="Cor" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Código de barras</Label>
-                  <Input value={barcode} onChange={(event) => setBarcode(event.target.value)} placeholder="Opcional" />
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <div className="space-y-2">
-                  <Label>Endereço físico</Label>
-                  <Input value={locationId} onChange={(event) => setLocationId(event.target.value)} placeholder="Rua / prateleira / caixa" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Contagem física</Label>
-                  <Input value={countedQty} onChange={(event) => setCountedQty(event.target.value)} type="number" min="0" step="1" placeholder="0" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Custo unitário</Label>
-                  <Input value={unitCost} onChange={(event) => setUnitCost(event.target.value)} type="number" min="0" step="0.01" placeholder="R$ 0,00" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Referência</Label>
-                  <Input value={reference} onChange={(event) => setReference(event.target.value)} placeholder="Etiqueta, lote ou observação" />
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-border bg-card p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <div className="text-sm font-semibold text-foreground">Fotos do produto</div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Use a câmera do celular ou anexe imagens existentes.
+              ) : (
+                <div className="space-y-4 rounded-lg border border-border bg-card p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-foreground">
+                      <Boxes className="size-5" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-foreground">Nova caixa</div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Meça a caixa fechada, em centímetros. O sistema escolhe a prateleira na zona do cliente; você confirma ou recusa com motivo.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="box-length">Comprimento (cm)</Label>
+                      <Input id="box-length" inputMode="decimal" value={boxDraft.length_cm} onChange={(event) => updateBoxDraft("length_cm", event.target.value)} placeholder="50" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="box-width">Largura (cm)</Label>
+                      <Input id="box-width" inputMode="decimal" value={boxDraft.width_cm} onChange={(event) => updateBoxDraft("width_cm", event.target.value)} placeholder="50" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="box-height">Altura (cm)</Label>
+                      <Input id="box-height" inputMode="decimal" value={boxDraft.height_cm} onChange={(event) => updateBoxDraft("height_cm", event.target.value)} placeholder="35" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="box-weight">Peso (kg)</Label>
+                      <Input id="box-weight" inputMode="decimal" value={boxDraft.weight_kg} onChange={(event) => updateBoxDraft("weight_kg", event.target.value)} placeholder="Opcional" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="box-content">O que tem dentro (opcional)</Label>
+                    <Input id="box-content" value={boxDraft.content} onChange={(event) => updateBoxDraft("content", event.target.value)} placeholder="Cód. cliente ou SKU; separe por vírgula" />
+                    <p className="text-xs text-muted-foreground">
+                      Com o produto informado, a caixa vai para a prateleira que já tem o mesmo produto, ou para a mais próxima dela.
                     </p>
                   </div>
-                  <label
-                    htmlFor="opening-product-photo"
-                    className={cn(
-                      "inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-medium text-foreground hover:bg-muted",
-                      photoUploading && "pointer-events-none opacity-60",
-                    )}
-                  >
-                    {photoUploading ? <RefreshCw className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
-                    {photoUploading ? "Enviando..." : "Adicionar foto"}
-                  </label>
-                  <input
-                    id="opening-product-photo"
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    multiple
-                    className="sr-only"
-                    onChange={(event) => {
-                      void addOpeningPhotos(event.target.files);
-                      event.currentTarget.value = "";
-                    }}
-                  />
-                </div>
-                {photos.length ? (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {photos.map((photo, index) => (
-                      <div key={photo.storagePath} className="relative size-24 overflow-hidden rounded-md border border-border bg-muted">
-                        <img src={photo.fileUrl} alt={`Foto ${index + 1} do produto`} className="size-full object-cover" />
-                        <button type="button" className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-full bg-card" aria-label={`Remover foto ${index + 1}`} onClick={() => setPhotos((current) => current.filter((_, currentIndex) => currentIndex !== index))}>
-                          <Trash2 className="size-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="mt-4 rounded-md border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">
-                    Produto novo precisa de ao menos uma foto.
-                  </div>
-                )}
-              </div>
 
-              <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 lg:flex-row lg:items-center lg:justify-between">
-                <p className="text-sm leading-6 text-muted-foreground">
-                  Ao confirmar, o sistema cria produto e SKU quando necessário, registra o movimento de entrada e publica o saldo para o cliente.
-                </p>
-                <Button type="submit" disabled={!canSubmit || recordOpeningLine.isPending}>
-                  {recordOpeningLine.isPending ? <RefreshCw data-icon="inline-start" className="animate-spin" /> : <CheckCircle2 data-icon="inline-start" />}
-                  Confirmar produto
-                </Button>
-              </div>
-            </form>
+                  {suggestion ? (
+                    <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+                      {suggestion.position ? (
+                        <>
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="min-w-0">
+                              <div className="text-xs uppercase tracking-wide text-muted-foreground">Guardar em</div>
+                              <div className="mt-1 flex items-center gap-2 text-3xl font-semibold text-foreground">
+                                <MapPin className="size-6 text-primary" />
+                                {suggestion.position.code}
+                              </div>
+                              <p className="mt-1 text-sm text-muted-foreground">{suggestion.position.reason}</p>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                <Badge variant="outline">{tierLabel(suggestion.position.tier)}</Badge>
+                                {refusal ? <Badge variant="outline">{refusal.position} recusada</Badge> : null}
+                              </div>
+                            </div>
+                            <div className="flex flex-col gap-2 sm:items-end">
+                              <Button
+                                type="button"
+                                onClick={() => createBox.mutate({ location: suggestion.position!.code })}
+                                disabled={boxBusy}
+                              >
+                                {createBox.isPending ? <RefreshCw data-icon="inline-start" className="animate-spin" /> : <CheckCircle2 data-icon="inline-start" />}
+                                Guardar em {suggestion.position.code}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setRefusing((current) => !current)}
+                                disabled={boxBusy}
+                              >
+                                Não cabe aqui
+                              </Button>
+                            </div>
+                          </div>
+                          {suggestion.alternatives.length ? (
+                            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-primary/10 pt-3 text-xs text-muted-foreground">
+                              <span>Se preferir:</span>
+                              {suggestion.alternatives.map((alternative) => (
+                                <Button
+                                  key={alternative.code}
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  title={alternative.reason}
+                                  onClick={() => createBox.mutate({ location: alternative.code })}
+                                  disabled={boxBusy}
+                                >
+                                  Guardar em {alternative.code}
+                                </Button>
+                              ))}
+                            </div>
+                          ) : null}
+                          {refusing ? (
+                            <div className="mt-3 space-y-2 border-t border-primary/10 pt-3">
+                              <Label htmlFor="box-refusal">Por que {suggestion.position.code} não serve?</Label>
+                              <Textarea
+                                id="box-refusal"
+                                rows={2}
+                                value={refusalReason}
+                                onChange={(event) => setRefusalReason(event.target.value)}
+                                placeholder="Ex.: prateleira ocupada por material fora do sistema"
+                              />
+                              <div className="flex flex-wrap gap-2">
+                                <Button type="button" size="sm" onClick={refuseSuggestedPosition} disabled={!refusalReason.trim() || boxBusy}>
+                                  Pedir outra posição
+                                </Button>
+                                <Button type="button" size="sm" variant="ghost" onClick={() => setRefusing(false)} disabled={boxBusy}>
+                                  Cancelar
+                                </Button>
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                A prateleira recusada fica em verificação para a coordenação conferir.
+                              </p>
+                            </div>
+                          ) : null}
+                        </>
+                      ) : (
+                        <Alert variant="destructive" className="bg-destructive/10">
+                          <AlertTriangle className="size-4" />
+                          <AlertTitle>Nenhuma prateleira serve para esta caixa</AlertTitle>
+                          <AlertDescription className="flex flex-col gap-3">
+                            <span>{suggestion.rejected}</span>
+                            <Button type="button" variant="outline" className="w-fit" onClick={() => suggestPosition.mutate({ exclude: excluded })} disabled={boxBusy}>
+                              <RefreshCw data-icon="inline-start" />
+                              Tentar de novo
+                            </Button>
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                      <div className="mt-3 text-xs text-muted-foreground">
+                        {formatNumber(suggestion.checked)} prateleira(s) da zona conferidas.
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        {boxPayload ? formatBoxDimensions(boxPayload) : "Informe os três lados para pedir a posição."}
+                      </p>
+                      <Button type="button" onClick={() => suggestPosition.mutate({ exclude: excluded })} disabled={!boxPayload || boxBusy}>
+                        {suggestPosition.isPending ? <RefreshCw data-icon="inline-start" className="animate-spin" /> : <MapPin data-icon="inline-start" />}
+                        Onde guardar?
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {currentBox ? (
+                <form
+                  className="space-y-6"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    if (canSubmit && !recordOpeningLine.isPending) {
+                      recordOpeningLine.mutate();
+                    }
+                  }}
+                >
+                  <div className="grid gap-4 lg:grid-cols-[1fr_1fr_1.5fr]">
+                    <div className="space-y-2">
+                      <Label htmlFor="opening-client-code">Cód. cliente</Label>
+                      <Input
+                        id="opening-client-code"
+                        value={clientCode}
+                        onChange={(event) => {
+                          setClientCode(event.target.value);
+                          setCreateNew(false);
+                          setSelectedProduct(undefined);
+                        }}
+                        placeholder="Código usado pelo BTG"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="opening-sku">SKU interno</Label>
+                      <Input
+                        id="opening-sku"
+                        value={skuCode}
+                        onChange={(event) => {
+                          setSkuCode(event.target.value);
+                          setCreateNew(false);
+                          setSelectedProduct(undefined);
+                        }}
+                        placeholder="Opcional; usa o cód. cliente"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="opening-product">Produto</Label>
+                      <Input
+                        id="opening-product"
+                        value={productName}
+                        onChange={(event) => setProductName(event.target.value)}
+                        placeholder="Descrição clara do produto"
+                      />
+                    </div>
+                  </div>
+
+                  {lookupQuery.isLoading || lookupQuery.isFetching ? (
+                    <Alert className="border-border bg-card">
+                      <RefreshCw className="size-4 animate-spin" />
+                      <AlertTitle>Verificando o catálogo</AlertTitle>
+                      <AlertDescription>
+                        Aguarde a confirmação antes de cadastrar o produto.
+                      </AlertDescription>
+                    </Alert>
+                  ) : lookupQuery.isError ? (
+                    <Alert variant="destructive" className="bg-destructive/10">
+                      <AlertCircle className="size-4" />
+                      <AlertTitle>Catálogo indisponível</AlertTitle>
+                      <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <span>
+                          O cadastro de produto novo foi bloqueado para evitar duplicidade.
+                        </span>
+                        <Button type="button" variant="outline" onClick={() => lookupQuery.refetch()}>
+                          <RefreshCw data-icon="inline-start" />
+                          Tentar novamente
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
+                  ) : identityConflict ? (
+                    <Alert variant="destructive" className="bg-destructive/10">
+                      <AlertTriangle className="size-4" />
+                      <AlertTitle>Códigos pertencem a cadastros diferentes</AlertTitle>
+                      <AlertDescription>
+                        Revise o Cód. cliente e o SKU. O sistema não permite combinar identidades de produtos diferentes.
+                      </AlertDescription>
+                    </Alert>
+                  ) : existingProduct && !existingProduct.hasSku ? (
+                    <Alert variant="destructive" className="bg-destructive/10">
+                      <AlertTriangle className="size-4" />
+                      <AlertTitle>Cadastro incompleto</AlertTitle>
+                      <AlertDescription>
+                        Este produto não possui SKU válido. Um administrador precisa corrigir o cadastro antes da contagem.
+                      </AlertDescription>
+                    </Alert>
+                  ) : existingProduct ? (
+                    <div className="flex flex-col gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <div className="text-sm font-semibold text-foreground">
+                          Produto já cadastrado: {existingProduct.productName}
+                        </div>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          Cod. cliente {existingProduct.clientCode} · SKU {existingProduct.skuCode}
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={selectedProduct?.id === existingProduct.id}
+                        onClick={() => applyProduct(existingProduct)}
+                      >
+                        {selectedProduct?.id === existingProduct.id
+                          ? "Cadastro selecionado"
+                          : "Usar este cadastro"}
+                      </Button>
+                    </div>
+                  ) : hasIdentity && lookupQuery.isSuccess ? (
+                    <Alert className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
+                      <AlertTriangle className="size-4" />
+                      <AlertTitle>Produto não encontrado</AlertTitle>
+                      <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <span>
+                          Confirme que é realmente novo antes de criar uma identidade no estoque.
+                          {similarProducts.length
+                            ? ` Parecidos: ${similarProducts
+                                .map((product) => product.productName)
+                                .join(", ")}.`
+                            : ""}
+                        </span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={createNew ? "default" : "outline"}
+                          onClick={() => setCreateNew((current) => !current)}
+                        >
+                          {createNew ? "Novo produto confirmado" : "Cadastrar como novo"}
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
+                  ) : null}
+
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="space-y-2">
+                      <Label>Categoria</Label>
+                      <Input value={category} onChange={(event) => setCategory(event.target.value)} placeholder="Obrigatória para novo" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Gênero</Label>
+                      <Select value={genero || undefined} onValueChange={setGenero}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o gênero" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CATALOG_GENEROS.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Grupo</Label>
+                      <Select value={grupo || undefined} onValueChange={setGrupo}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o grupo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CATALOG_GRUPOS.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Marca</Label>
+                      <Input value={brand} onChange={(event) => setBrand(event.target.value)} placeholder="Marca" />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="space-y-2">
+                      <Label>Tamanho</Label>
+                      <Input value={size} onChange={(event) => setSize(event.target.value)} placeholder="Tamanho" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Cor</Label>
+                      <Input value={color} onChange={(event) => setColor(event.target.value)} placeholder="Cor" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Código de barras</Label>
+                      <Input value={barcode} onChange={(event) => setBarcode(event.target.value)} placeholder="Opcional" />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="opening-position">Posição da caixa</Label>
+                      <Input id="opening-position" value={`${currentBox.location_id} · ${currentBox.code}`} readOnly className="bg-muted" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Contagem física</Label>
+                      <Input value={countedQty} onChange={(event) => setCountedQty(event.target.value)} type="number" min="0" step="1" placeholder="0" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Custo unitário</Label>
+                      <Input value={unitCost} onChange={(event) => setUnitCost(event.target.value)} type="number" min="0" step="0.01" placeholder="R$ 0,00" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Referência</Label>
+                      <Input value={reference} onChange={(event) => setReference(event.target.value)} placeholder="Etiqueta, lote ou observação" />
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-border bg-card p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <div className="text-sm font-semibold text-foreground">Fotos do produto</div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Use a câmera do celular ou anexe imagens existentes.
+                        </p>
+                      </div>
+                      <label
+                        htmlFor="opening-product-photo"
+                        className={cn(
+                          "inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-medium text-foreground hover:bg-muted",
+                          photoUploading && "pointer-events-none opacity-60",
+                        )}
+                      >
+                        {photoUploading ? <RefreshCw className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
+                        {photoUploading ? "Enviando..." : "Adicionar foto"}
+                      </label>
+                      <input
+                        id="opening-product-photo"
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        multiple
+                        className="sr-only"
+                        onChange={(event) => {
+                          void addOpeningPhotos(event.target.files);
+                          event.currentTarget.value = "";
+                        }}
+                      />
+                    </div>
+                    {photos.length ? (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {photos.map((photo, index) => (
+                          <div key={photo.storagePath} className="relative size-24 overflow-hidden rounded-md border border-border bg-muted">
+                            <img src={photo.fileUrl} alt={`Foto ${index + 1} do produto`} className="size-full object-cover" />
+                            <button type="button" className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-full bg-card" aria-label={`Remover foto ${index + 1}`} onClick={() => setPhotos((current) => current.filter((_, currentIndex) => currentIndex !== index))}>
+                              <Trash2 className="size-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-4 rounded-md border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">
+                        Produto novo precisa de ao menos uma foto.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 lg:flex-row lg:items-center lg:justify-between">
+                    <p className="text-sm leading-6 text-muted-foreground">
+                      Ao confirmar, o sistema cria produto e SKU quando necessário, registra o movimento de entrada na caixa {currentBox.code} e publica o saldo da posição {currentBox.location_id} para o cliente.
+                    </p>
+                    <Button type="submit" disabled={!canSubmit || recordOpeningLine.isPending}>
+                      {recordOpeningLine.isPending ? <RefreshCw data-icon="inline-start" className="animate-spin" /> : <CheckCircle2 data-icon="inline-start" />}
+                      Confirmar produto
+                    </Button>
+                  </div>
+                </form>
+              ) : (
+                <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+                  Os produtos são lançados dentro de uma caixa guardada. Meça a caixa acima ou abra uma das caixas desta sessão.
+                </div>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>
@@ -905,6 +1283,14 @@ export function OpeningInventoryWorkspace() {
               <div className="rounded-md border border-border bg-card p-3">
                 <div className="text-xs text-muted-foreground">Unidades</div>
                 <div className="mt-1 text-xl font-semibold text-foreground">{formatNumber(session?.unit_count)}</div>
+              </div>
+              <div className="rounded-md border border-border bg-card p-3">
+                <div className="text-xs text-muted-foreground">Caixas</div>
+                <div className="mt-1 text-xl font-semibold text-foreground">{formatNumber(boxesOfSession.length)}</div>
+              </div>
+              <div className="rounded-md border border-border bg-card p-3" title="Prateleiras com ao menos uma caixa guardada: a base da cobrança por posição.">
+                <div className="text-xs text-muted-foreground">Posições ocupadas</div>
+                <div className="mt-1 text-xl font-semibold text-foreground">{formatNumber(occupied)}</div>
               </div>
             </div>
             <div className="rounded-md border border-border bg-card p-3">
@@ -927,6 +1313,81 @@ export function OpeningInventoryWorkspace() {
                 Concluir inventário
               </Button>
             ) : null}
+
+            <div className="border-t border-border/70 pt-3">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-medium text-foreground">
+                    Caixas desta sessão
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Abra uma caixa para continuar lançando nela.
+                  </div>
+                </div>
+                <Badge variant="outline">{formatNumber(boxesOfSession.length)}</Badge>
+              </div>
+              {boxesQuery.isError ? (
+                <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  Não consegui carregar as caixas: {getErrorMessage(boxesQuery.error)}
+                </div>
+              ) : boxesOfSession.length ? (
+                <ScrollArea className="h-[220px] pr-3">
+                  <div className="space-y-2">
+                    {boxesOfSession.map((box) => {
+                      const open = currentBox?.code === box.code;
+                      return (
+                        <div
+                          key={box.code}
+                          className={cn(
+                            "flex items-start gap-3 rounded-md border p-3",
+                            open ? "border-primary/40 bg-primary/5" : "border-border bg-card",
+                          )}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-medium text-foreground">
+                              {box.code} <span className="text-muted-foreground">· {box.location_id}</span>
+                            </div>
+                            <div className="mt-1 text-xs text-muted-foreground">{formatBoxDimensions(box)}</div>
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              {formatNumber(box.line_count)} produto(s) · {formatNumber(box.unit_count)} un.
+                            </div>
+                          </div>
+                          {sessionOpen ? (
+                            <div className="flex shrink-0 items-center gap-1">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant={open ? "default" : "outline"}
+                                onClick={() => setActiveBox(box)}
+                                disabled={open}
+                              >
+                                {open ? "Aberta" : "Abrir"}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="shrink-0 text-muted-foreground hover:text-destructive"
+                                onClick={() => setBoxToRemove(box)}
+                                disabled={box.line_count > 0 || removeBox.isPending}
+                                aria-label={`Remover caixa ${box.code}`}
+                                title={box.line_count > 0 ? "Só caixa vazia pode ser removida" : "Remover caixa vazia"}
+                              >
+                                <Trash2 className="size-4" />
+                              </Button>
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+              ) : (
+                <div className="rounded-md border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">
+                  Nenhuma caixa guardada nesta sessão.
+                </div>
+              )}
+            </div>
 
             <div className="border-t border-border/70 pt-3">
               <div className="mb-2 flex items-center justify-between gap-3">
@@ -960,6 +1421,7 @@ export function OpeningInventoryWorkspace() {
                           <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
                             <span>{formatNumber(line.counted_qty)} un.</span>
                             <span>{line.location_id || "Sem endereço"}</span>
+                            {line.box_code ? <span>{line.box_code}</span> : null}
                             <span>
                               {formatCurrency(
                                 coerceNumber(line.total_cost) ||
@@ -999,7 +1461,7 @@ export function OpeningInventoryWorkspace() {
           <Sparkles className="size-4 text-primary" />
           <AlertTitle>Agent Dute acompanha a abertura</AlertTitle>
           <AlertDescription>
-            Cada confirmação gera evento operacional com produto, quantidade, custo, endereço e responsável.
+            Cada caixa guardada e cada confirmação geram evento operacional com produto, quantidade, custo, caixa, posição e responsável.
           </AlertDescription>
         </Alert>
       </div>
@@ -1014,7 +1476,7 @@ export function OpeningInventoryWorkspace() {
               ser feitas em WMS &gt; Recebimento.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-3 py-2">
+          <div className="grid grid-cols-3 gap-3 py-2">
             <div className="rounded-md border border-border bg-card p-3">
               <div className="text-xs text-muted-foreground">Produtos</div>
               <div className="mt-1 text-xl font-semibold text-foreground">
@@ -1025,6 +1487,12 @@ export function OpeningInventoryWorkspace() {
               <div className="text-xs text-muted-foreground">Unidades</div>
               <div className="mt-1 text-xl font-semibold text-foreground">
                 {formatNumber(session?.unit_count)}
+              </div>
+            </div>
+            <div className="rounded-md border border-border bg-card p-3">
+              <div className="text-xs text-muted-foreground">Caixas</div>
+              <div className="mt-1 text-xl font-semibold text-foreground">
+                {formatNumber(boxesOfSession.length)}
               </div>
             </div>
           </div>
@@ -1089,6 +1557,9 @@ export function OpeningInventoryWorkspace() {
                 <Badge variant="outline">
                   {lineToRemove.location_id || "Sem endereço"}
                 </Badge>
+                {lineToRemove.box_code ? (
+                  <Badge variant="outline">{lineToRemove.box_code}</Badge>
+                ) : null}
               </div>
             </div>
           ) : null}
@@ -1115,6 +1586,52 @@ export function OpeningInventoryWorkspace() {
                 <Trash2 data-icon="inline-start" />
               )}
               Remover para corrigir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(boxToRemove)}
+        onOpenChange={(open) => {
+          if (!open && !removeBox.isPending) setBoxToRemove(undefined);
+        }}
+      >
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Remover a caixa {boxToRemove?.code}?</DialogTitle>
+            <DialogDescription>
+              Só caixa vazia pode ser removida. A posição {boxToRemove?.location_id} volta a ter o espaço dela livre e a remoção fica registrada na timeline.
+            </DialogDescription>
+          </DialogHeader>
+          {boxToRemove ? (
+            <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
+              {formatBoxDimensions(boxToRemove)} · {formatNumber(boxToRemove.line_count)} produto(s)
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setBoxToRemove(undefined)}
+              disabled={removeBox.isPending}
+            >
+              Manter caixa
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => {
+                if (boxToRemove) removeBox.mutate(boxToRemove);
+              }}
+              disabled={!boxToRemove || removeBox.isPending}
+            >
+              {removeBox.isPending ? (
+                <RefreshCw data-icon="inline-start" className="animate-spin" />
+              ) : (
+                <Trash2 data-icon="inline-start" />
+              )}
+              Remover caixa
             </Button>
           </DialogFooter>
         </DialogContent>

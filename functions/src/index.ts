@@ -121,6 +121,14 @@ import {
   upsertWarehousePositions,
 } from "./domain/warehouse-positions.js";
 import {
+  CreateWarehouseBoxSchema,
+  RemoveWarehouseBoxSchema,
+  SuggestWarehousePositionSchema,
+  createWarehouseBox as createWarehouseBoxTransaction,
+  removeWarehouseBox as removeWarehouseBoxTransaction,
+  suggestWarehousePosition as suggestWarehousePositionFor,
+} from "./domain/warehouse-boxes.js";
+import {
   activePlaybooksForPrompt,
   decidePlaybook,
   DecidePlaybookSchema,
@@ -436,6 +444,7 @@ const CycleCountSchema = z.object({
   unit_cost: z.number().nonnegative().optional(),
   reason: z.string().trim().min(3),
   reference: z.string().trim().optional(),
+  box_code: z.string().trim().max(20).optional(),
   occurred_at: z.string().trim().optional(),
   idempotency_key: z.string().trim().min(1),
 });
@@ -7432,4 +7441,40 @@ export const removeWarehousePosition = onCall(async (request) => {
   const parsed = DeleteWarehousePositionSchema.safeParse(request.data ?? {});
   if (!parsed.success) throw new HttpsError("invalid-argument", firstIssue(parsed.error, "Posição inválida."));
   return deleteWarehousePosition(db, parsed.data, profile);
+});
+
+// ---------------------------------------------------------------------------
+// Caixas do armazém (unidade de manuseio) e endereçamento dirigido: o motor
+// de regras sugere a prateleira; a caixa é criada já guardada na posição
+// confirmada; as linhas da abertura referenciam a caixa (box_code).
+// ---------------------------------------------------------------------------
+
+/** Sugere a prateleira para uma caixa (regra determinística, sem escrita). */
+export const suggestWarehousePosition = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  const parsed = SuggestWarehousePositionSchema.safeParse(request.data ?? {});
+  if (!parsed.success) throw new HttpsError("invalid-argument", firstIssue(parsed.error, "Medidas da caixa inválidas."));
+  const customer_code = requireCustomerScope(profile, parsed.data.customer_code);
+  return suggestWarehousePositionFor(db, { ...parsed.data, customer_code }, profile);
+});
+
+/** Cria a caixa guardada na posição confirmada; recusa marca a prateleira em verificação. */
+export const createWarehouseBox = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  const parsed = CreateWarehouseBoxSchema.safeParse(request.data ?? {});
+  if (!parsed.success) throw new HttpsError("invalid-argument", firstIssue(parsed.error, "Dados da caixa inválidos."));
+  const customer_code = requireCustomerScope(profile, parsed.data.customer_code);
+  return createWarehouseBoxTransaction(db, { ...parsed.data, customer_code }, profile);
+});
+
+/** Remove uma caixa sem produtos lançados. */
+export const removeWarehouseBox = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  const parsed = RemoveWarehouseBoxSchema.safeParse(request.data ?? {});
+  if (!parsed.success) throw new HttpsError("invalid-argument", firstIssue(parsed.error, "Caixa inválida."));
+  const customer_code = requireCustomerScope(profile, parsed.data.customer_code);
+  return removeWarehouseBoxTransaction(db, { code: parsed.data.code, customer_code }, profile);
 });

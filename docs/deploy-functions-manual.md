@@ -45,6 +45,18 @@ firebase deploy --only functions --project dute-btg
 
 O `predeploy` do `firebase.json` já roda `npm run build` (tsc) antes de subir.
 
+`--only functions` **não publica `firestore.rules` nem `firestore.indexes.json`.**
+Quando o PR mexe em regra ou índice (toda coleção nova mexe: `warehouse_positions`
+e `warehouse_boxes` em 16/10/2026), publique também:
+
+```powershell
+cd C:\DEV\Dute
+firebase deploy --only firestore --project dute-btg
+```
+
+Em 16/10/2026 a tela Estoque › Posições ficou em "Missing or insufficient
+permissions" depois de um deploy só de functions, até as regras subirem.
+
 Para publicar só uma function específica (mais rápido, mas é exatamente o tipo
 de deploy que causou o incidente abaixo — **nunca pule o passo 4** depois de um
 deploy parcial):

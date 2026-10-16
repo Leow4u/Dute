@@ -404,7 +404,8 @@ export default function WarehousePositionsPage() {
   });
 
   const loading = positionsQuery.isLoading;
-  const empty = !loading && positions.length === 0;
+  // Erro de leitura não é mapa vazio: sem isso a tela oferecia carregar o mapa inicial junto com o erro.
+  const empty = !loading && !positionsQuery.isError && positions.length === 0;
   const busy = save.isPending || seed.isPending || createAisle.isPending || remove.isPending;
 
   return (
@@ -523,7 +524,7 @@ export default function WarehousePositionsPage() {
               </div>
             </div>
             <div className="overflow-x-auto">
-              <Table className="min-w-[880px]">
+              <Table className="min-w-[880px] whitespace-nowrap">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Código</TableHead>

@@ -25,6 +25,11 @@ documentação de produto e operação está em `docs/`.
   configurado" (aconteceu em 09/10/2026). Ver `docs/deploy-manual.md` (inclui o roteiro
   manual de reserva e o que checar quando a verificação falha) e
   `docs/deploy-functions-manual.md` (Cloud Functions, sempre manual).
+  **Regras e índices do Firestore também são manuais e não vão junto com
+  `--only functions`**: `cd C:\DEV\Dute` e
+  `firebase deploy --only firestore --project dute-btg`. Em 16/10/2026 a tela
+  Estoque › Posições ficou em "Missing or insufficient permissions" depois do
+  deploy de functions, até as regras subirem.
 - **Depois de qualquer deploy de functions, rode
   `tools/check_functions_invoker.ps1`.** Em 03/09/2026, 8 callables (incluindo
   `createCustomerRequest`) ficaram sem `roles/run.invoker` para `allUsers` e
@@ -117,6 +122,9 @@ de reserva ao rejeitar solicitação) e outros estão descritos de forma impreci
 ## Como trabalhamos
 
 - Um problema por PR, com teste que falha antes e passa depois.
+- Comando para rodar na máquina do Leonardo vai sempre com a pasta na frente:
+  `cd C:\DEV\Dute` (PowerShell) antes de `firebase deploy`, dos scripts de
+  `tools/` e de qualquer `git`. Comando sem a pasta já foi rodado no lugar errado.
 - Sistema visual: ver `docs/sistema-visual.md`. O teste
   `src/lib/theme-colors.test.ts` trava cor fixa e valor fora da escala
   (raio, vidro, sombra e tamanho de texto arbitrários).

@@ -193,21 +193,40 @@ etiquetas, junto com a etiqueta de caixa.
 ### 5.2 Contagem de abertura por caixa (novo go-live)
 
 Base: a tela restaurada no PR #94 (Estoque › Contagem, aba "Inventário de
-abertura", uma sessão por cliente). Muda a linha: em vez de SKU + quantidade +
-endereço digitado, a linha vira **uma caixa**: tipo ou medidas, peso, conteúdo
-(SKU + quantidade + custo unitário, como hoje). O sistema sugere a posição,
-imprime a etiqueta com o destino, e a linha é confirmada lendo a posição e a
-caixa. Saldo e caixa nascem na posição confirmada.
+abertura", uma sessão por cliente). O endereço deixou de ser digitado: a
+unidade da contagem é **a caixa**, e cada produto é lançado dentro de uma
+caixa guardada.
 
-Dois modos possíveis, a decidir (pendência P5):
+**Construído (fase 0, PR 2), no modo direcionado (pendência P5 decidida):**
 
-- **direcionada**: o motor escolhe a posição de cada caixa e o galpão é
-  reorganizado durante a contagem. Recomendado, porque as zonas por cliente
-  são novas e as caixas vão mudar de lugar de qualquer forma. Custo: cada
-  caixa é medida, pesada, etiquetada e levada; a contagem demora mais;
-- **no lugar**: a caixa é registrada onde está (posição lida no cadastro, que
-  precisa ser da zona do cliente e caber). O motor só passa a decidir a partir
-  do primeiro recebimento.
+1. a pessoa mede a caixa fechada (comprimento, largura e altura em
+   centímetros; peso opcional) e, se souber, diz o que vai dentro (cód.
+   cliente ou SKU, para a regra do mesmo produto);
+2. "Onde guardar?" chama o motor (`suggestWarehousePosition`, só leitura),
+   que devolve a prateleira, o motivo (mesmo produto, perto do produto ou
+   primeira livre) e até duas alternativas, ou explica por que nenhuma serve
+   (zona sem rua, zona cheia, caixa alta ou pesada demais);
+3. "Guardar em A-01" cria a caixa já na posição (`createWarehouseBox`,
+   coleção `warehouse_boxes`, código sequencial `CX-000001`, evento
+   `warehouse.box_stored`). A transação reconfere zona, situação e espaço.
+   Escolher uma alternativa fica registrado como sugestão não seguida; "Não
+   cabe aqui" exige motivo, tira a prateleira da próxima sugestão e, ao
+   guardar, marca a recusada em verificação (`warehouse.position_refused`);
+4. com a caixa aberta na tela, cada produto lançado leva `box_code` e a
+   posição da caixa. O saldo da posição soma por SKU (duas caixas do mesmo
+   produto na mesma prateleira dão um saldo só) e a caixa acumula linhas,
+   unidades e custo;
+5. "Fechar caixa" só muda a tela; a caixa continua guardada. Caixa vazia pode
+   ser removida (`removeWarehouseBox`); com produto dentro, primeiro a linha
+   sai pela correção da abertura, que devolve saldo e contadores.
+
+A tela mostra, além de produtos, unidades e valor, as caixas da sessão e as
+posições ocupadas (prateleiras com ao menos uma caixa), que é o número que a
+fatura manual usa por enquanto.
+
+Fora desta entrega: etiqueta em PDF (próximo PR), tipos de caixa padrão
+(pendência P2, medidas sempre manuais por enquanto) e produto solto fora de
+caixa na abertura (a tela exige caixa).
 
 ### 5.3 Recebimento com guarda dirigida (fase 1)
 
@@ -294,10 +313,14 @@ antes e passa depois:
 
 1. cadastro de posições e zonas: coleção, callables, tela, mapa inicial no
    código (feito no PR 1; a etiqueta de posição vai com as etiquetas);
-2. tipos de caixa e a caixa como unidade de manuseio: coleção, callables de
-   criar, mover e encerrar, conciliação com o saldo;
-3. motor de endereçamento com os testes de cenário da seção 4;
-4. contagem de abertura por caixa, com sugestão e etiqueta em PDF;
+2. a caixa como unidade de manuseio: coleção `warehouse_boxes`, callables de
+   sugerir, criar e remover, conciliação com o saldo por `box_code` (feito
+   no PR 2; mover e encerrar ficam com a movimentação, fase 1; tipos de
+   caixa esperam a pendência P2);
+3. motor de endereçamento com os testes de cenário da seção 4 (feito no PR
+   2, `functions/src/domain/warehouse-boxes.ts`);
+4. contagem de abertura por caixa, com sugestão (feito no PR 2) e etiqueta
+   em PDF (próximo PR);
 5. mapa básico por zona com ocupação.
 
 **Fase 1, logo após o go-live:** recebimento com embalagem e guarda dirigida;
