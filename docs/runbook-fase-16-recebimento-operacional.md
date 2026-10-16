@@ -31,6 +31,7 @@ Transformar o recebimento em uma etapa operacional confiavel: a Dutelog registra
   - produto novo sem nome;
   - produto existente marcado como novo.
 - O formulario de chegada avulsa mostra resumo de pecas esperadas, produtos existentes e novos cadastros.
+- A chegada avulsa começa pela nota (16/10/2026): o operador anexa a NF em PDF ou foto, o Agent Dute lê fornecedor, número, observações e itens pela mesma leitura do portal (`readShipmentInvoice`, agora aberta aos papéis owner, admin, interno e wms), e o operador confere os itens lidos antes de usá-los nas linhas. Item sem código entra só com nome: quem lê a etiqueta é o operador. A nota sobe por `uploadOperationalDocument` e fica em `attachments` da chegada. A leitura só preenche o formulário; a conferência continua sendo o único lançamento de estoque.
 
 ## Fluxo operacional
 

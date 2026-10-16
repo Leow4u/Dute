@@ -246,6 +246,22 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  // Receber > Chegada avulsa: a mesma leitura de nota do portal, dizendo de
+  // qual cliente é a chegada.
+  if (method === "POST" && pathname === "/api/warehouse/receipts/read-invoice") {
+    return {
+      name: "readShipmentInvoice",
+      payload: async (_pathname, init) => {
+        const body = await readJsonBody(init);
+        return {
+          storage_path: String(body.storage_path ?? ""),
+          content_type: String(body.content_type ?? ""),
+          ...(body.customer_code ? { customer_code: String(body.customer_code) } : {}),
+        };
+      },
+    };
+  }
+
   if (method === "POST" && pathname === "/api/warehouse/receipts") {
     return {
       name: "createInboundReceipt",

@@ -78,9 +78,12 @@ import { assignMissingRequestNumbers } from "./domain/request-numbers.js";
 import { billingReportWorkbook, buildBillingReport } from "./domain/billing-report.js";
 import {
   INVOICE_PROMPT,
+  assertInvoiceReader,
   assertOwnInvoicePath,
+  invoiceReadingSource,
   matchInvoiceItems,
   sanitizeInvoiceReading,
+  type InvoiceReadingSource,
 } from "./domain/invoice-reading.js";
 import {
   knowledgeAudienceForRole,
@@ -281,6 +284,15 @@ const DecideOperationalNotificationSchema = z.object({
   idempotency_key: z.string().trim().min(1).optional(),
 });
 
+/** Arquivo que acompanha o aviso de envio ou a chegada avulsa (nota, pedido, foto). */
+const RequestAttachmentSchema = z.object({
+  file_name: z.string().trim().min(1).max(240),
+  file_url: z.string().url(),
+  storage_path: z.string().trim().min(1).max(900),
+  content_type: z.string().trim().min(1).max(120),
+  size_bytes: z.number().int().positive().max(30 * 1024 * 1024),
+});
+
 const CreateCustomerRequestSchema = z.object({
   type: z.string().default("solicitacao"),
   priority: z.string().default("normal"),
@@ -290,18 +302,7 @@ const CreateCustomerRequestSchema = z.object({
   due_at: z.string().optional(),
   supplier: z.string().trim().max(240).optional(),
   invoice_number: z.string().trim().max(240).optional(),
-  attachments: z
-    .array(
-      z.object({
-        file_name: z.string().trim().min(1).max(240),
-        file_url: z.string().url(),
-        storage_path: z.string().trim().min(1).max(900),
-        content_type: z.string().trim().min(1).max(120),
-        size_bytes: z.number().int().positive().max(30 * 1024 * 1024),
-      }),
-    )
-    .max(8)
-    .default([]),
+  attachments: z.array(RequestAttachmentSchema).max(8).default([]),
   customer_code: z.string().optional(),
   idempotency_key: z.string().trim().min(1),
   items: z.array(RequestItemSchema).max(100).default([]),
@@ -369,6 +370,8 @@ const CreateInboundReceiptSchema = z.object({
   notes: z.string().trim().optional(),
   priority: z.string().trim().default("normal"),
   received_at: z.string().trim().optional(),
+  // Chegada avulsa: a nota que o operador anexou e o Agent Dute leu fica na chegada.
+  attachments: z.array(RequestAttachmentSchema).max(8).optional(),
   idempotency_key: z.string().trim().min(1),
   items: z.array(RequestItemSchema).min(1).max(100),
 });
@@ -6054,6 +6057,8 @@ export const createInboundReceipt = onCall(async (request) => {
   requireWarehouseWrite(profile);
   const input = CreateInboundReceiptSchema.parse(request.data ?? {});
   const customer_code = requireCustomerScope(profile, input.customer_code);
+  // A nota anexada à chegada precisa estar na pasta do cliente dono dela.
+  for (const attachment of input.attachments ?? []) assertOwnInvoicePath(attachment.storage_path, customer_code);
   return createInboundReceiptTransaction(
     db,
     { ...input, customer_code },
@@ -6661,6 +6666,8 @@ export const assignRequestNumbers = onCall({ timeoutSeconds: 300 }, async (reque
 const ReadShipmentInvoiceSchema = z.object({
   storage_path: z.string().trim().min(1).max(900),
   content_type: z.string().trim().min(1).max(120),
+  // Receber > Chegada avulsa diz de qual cliente é a chegada; no portal vem do perfil.
+  customer_code: z.string().trim().max(120).optional(),
 });
 
 const InvoiceExtractionSchema = z.object({
@@ -6682,27 +6689,27 @@ const InvoiceExtractionSchema = z.object({
 });
 
 /**
- * Envios para a Dutelog > "Ler itens da nota": o Agent Dute lê a NF que a
- * cliente anexou e devolve sugestões de itens. Não grava aviso nem estoque;
- * a pessoa confere na tela e envia.
+ * Envios para a Dutelog > "Ler itens da nota" (portal) e Receber > "Chegada
+ * avulsa" (operação): o Agent Dute lê a NF anexada e devolve fornecedor,
+ * número e sugestões de itens. Não grava aviso, recebimento nem estoque; a
+ * pessoa confere na tela. A cliente só lê a própria pasta; a operação informa
+ * o cliente dono da chegada.
  */
 export const readShipmentInvoice = onCall({ timeoutSeconds: 120 }, async (request) => {
   const profile = await getProfile(request);
-  if (profile.role !== "cliente") {
-    throw new HttpsError("permission-denied", "Leitura de nota disponível no portal do cliente.");
-  }
+  assertInvoiceReader(profile);
   const input = ReadShipmentInvoiceSchema.parse(request.data ?? {});
-  const customerCode = requireCustomerScope(profile);
-  return readInvoiceForCustomer(profile, customerCode, input.storage_path, input.content_type, "leitura_nota");
+  const customerCode = requireCustomerScope(profile, input.customer_code);
+  return readInvoiceForCustomer(profile, customerCode, input.storage_path, input.content_type, invoiceReadingSource(profile.role));
 });
 
-/** Lê a NF do Storage do cliente e casa os itens com o estoque (Envios e chat do Agent Dute). */
+/** Lê a NF do Storage do cliente e casa os itens com o estoque (Envios, chat do Agent Dute e Receber). */
 async function readInvoiceForCustomer(
   profile: Profile,
   customerCode: string,
   rawStoragePath: string,
   rawContentType: string,
-  source: "leitura_nota" | "leitura_nota_chat",
+  source: InvoiceReadingSource,
 ) {
   const storagePath = assertOwnInvoicePath(rawStoragePath, customerCode);
   const contentType = rawContentType.toLowerCase();

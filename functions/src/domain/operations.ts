@@ -80,6 +80,15 @@ export type OperationalRequestItem = {
   notes?: string;
 };
 
+/** Arquivo que acompanha o aviso de envio ou a chegada avulsa (nota, pedido, foto). */
+export type RequestAttachment = {
+  file_name: string;
+  file_url: string;
+  storage_path: string;
+  content_type: string;
+  size_bytes: number;
+};
+
 export type CreateOperationalRequestInput = {
   type: string;
   priority: string;
@@ -89,13 +98,7 @@ export type CreateOperationalRequestInput = {
   due_at?: string;
   supplier?: string;
   invoice_number?: string;
-  attachments?: Array<{
-    file_name: string;
-    file_url: string;
-    storage_path: string;
-    content_type: string;
-    size_bytes: number;
-  }>;
+  attachments?: RequestAttachment[];
   customer_code: string;
   idempotency_key: string;
   items: OperationalRequestItem[];
@@ -109,6 +112,8 @@ export type CreateInboundReceiptInput = {
   notes?: string;
   priority?: string;
   received_at?: string;
+  /** Chegada avulsa: a nota que o operador anexou e o Agent Dute leu. */
+  attachments?: RequestAttachment[];
   idempotency_key: string;
   items: OperationalRequestItem[];
 };
@@ -3803,6 +3808,8 @@ export async function createInboundReceiptTransaction(
         invoice_number: input.invoice_number,
         reference: input.reference || input.invoice_number,
         notes: input.notes,
+        attachments: input.attachments?.length ? input.attachments : undefined,
+        attachment_count: input.attachments?.length ? input.attachments.length : undefined,
         item_count: normalizedItems.length,
         qty_expected: quantityTotal,
         qty_received: 0,
@@ -3870,6 +3877,7 @@ export async function createInboundReceiptTransaction(
           supplier: input.supplier,
           invoice_number: input.invoice_number,
           quantity_total: quantityTotal,
+          attachment_count: input.attachments?.length ?? 0,
           source: "wms_unplanned_receipt",
         },
       },

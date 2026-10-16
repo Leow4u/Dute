@@ -1,7 +1,25 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { assertOwnInvoicePath, matchInvoiceItems, sanitizeInvoiceReading } from "./domain/invoice-reading.js";
+import { assertInvoiceReader, assertOwnInvoicePath, invoiceReadingSource, matchInvoiceItems, sanitizeInvoiceReading } from "./domain/invoice-reading.js";
+
+describe("quem pode ler a nota", () => {
+  it("cliente no portal e operação de armazém no Receber; financeiro e suporte não", () => {
+    for (const role of ["cliente", "owner", "admin", "interno", "wms"]) {
+      assert.doesNotThrow(() => assertInvoiceReader({ role }), role);
+    }
+    for (const role of ["financeiro", "suporte", "", "visitante"]) {
+      assert.throws(() => assertInvoiceReader({ role }), /permission-denied|Leitura de nota/, role);
+    }
+  });
+
+  it("a origem do custo separa portal e Receber, e as duas contam como leitura de NF", () => {
+    assert.equal(invoiceReadingSource("cliente"), "leitura_nota");
+    assert.equal(invoiceReadingSource("wms"), "leitura_nota_recebimento");
+    assert.equal(invoiceReadingSource("admin"), "leitura_nota_recebimento");
+    assert.ok(invoiceReadingSource("wms").startsWith("leitura_nota"));
+  });
+});
 
 describe("arquivo da nota", () => {
   it("só lê arquivo da pasta do próprio cliente", () => {

@@ -1,6 +1,6 @@
 /** Receber: ficha da chegada, chegada avulsa e conferência física. */
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
@@ -51,7 +51,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { InvoiceDrop, InvoiceReview } from "@/components/agent/invoice-reading";
 import { useToast } from "@/hooks/use-toast";
+import { ATTACHMENT_ACCEPT, ATTACHMENT_LIMIT_HINT, isAcceptedAttachment, prepareAttachment } from "@/lib/shipment-files";
+import { fillIfEmpty, type InvoiceDraftLine, type InvoiceReading } from "@/lib/shipments";
 import { cn } from "@/lib/utils";
 import {
   type AnyRecord,
@@ -79,9 +82,12 @@ import {
 import {
   type ProductLookupItem,
   type ProductPhoto,
+  type ReceiptAttachment,
   productLookupFromRecord,
   uploadProductPhoto,
+  uploadReceiptAttachment,
 } from "@/features/warehouse-ops/shared";
+import { receiptLinesFromInvoice } from "@/lib/warehouse-ops/receiving";
 
 function DetailField({
   icon: Icon,
@@ -398,6 +404,19 @@ export function UnplannedReceiptDialog({
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<ReceiptDraftLine[]>([emptyReceiptLine()]);
+  // A nota vem primeiro: o Agent Dute lê e preenche; o operador confere.
+  const [files, setFiles] = useState<File[]>([]);
+  const [preparing, setPreparing] = useState(false);
+  const [reading, setReading] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+  // Arquivo que o Agent Dute já leu com sucesso.
+  const [readFile, setReadFile] = useState<File | null>(null);
+  const [invoiceReading, setInvoiceReading] = useState<InvoiceReading | null>(null);
+  // Arquivo já enviado ao ler a nota não sobe de novo ao criar a conferência.
+  const uploaded = useRef(new Map<File, ReceiptAttachment>());
+  const fileInput = useRef<HTMLInputElement | null>(null);
+  const draftId = useMemo(() => `avulsa-${Date.now()}`, []);
+  const readableFile = files.find((file) => file.type === "application/pdf" || file.type.startsWith("image/"));
   const lookupQuery = useQuery({
     queryKey: ["receiving-product-lookup"],
     enabled: open,
@@ -472,7 +491,97 @@ export function UnplannedReceiptDialog({
     }
   }
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  function productByCode(code: string) {
+    return findExistingProduct({ ...emptyReceiptLine(), clientCode: code, sku: code }, productLookup);
+  }
+
+  async function addFiles(list: FileList | null) {
+    if (!list) return;
+    const chosen = Array.from(list).filter(isAcceptedAttachment);
+    let left = list.length - chosen.length;
+    // Scan de celular passa de 9 MB; é reduzido aqui antes de subir.
+    setPreparing(true);
+    const accepted: File[] = [];
+    try {
+      for (const file of chosen) {
+        try {
+          accepted.push(await prepareAttachment(file));
+        } catch (error) {
+          left += 1;
+          console.warn("receber: anexo recusado", { name: file.name, error });
+        }
+      }
+    } finally {
+      setPreparing(false);
+    }
+    setFiles((current) => [...current, ...accepted].slice(0, 8));
+    if (left > 0) {
+      toast({
+        title: "Alguns arquivos ficaram de fora",
+        description: `Use PDF ou imagem, ${ATTACHMENT_LIMIT_HINT} cada e 8 no total.`,
+        variant: "destructive",
+      });
+    }
+    // A primeira nota anexada já vai para o Agent Dute: o operador não
+    // precisa digitar fornecedor, NF e itens.
+    const first = accepted[0];
+    if (first && !readableFile && !reading) void readInvoice(first);
+  }
+
+  async function uploadFile(file: File) {
+    const cached = uploaded.current.get(file);
+    if (cached) return cached;
+    const attachment = await uploadReceiptAttachment(file, draftId);
+    uploaded.current.set(file, attachment);
+    return attachment;
+  }
+
+  async function readInvoice(file: File) {
+    setReading(true);
+    try {
+      const attachment = await uploadFile(file);
+      const payload = await fetchJson<InvoiceReading>("/api/warehouse/receipts/read-invoice", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          storage_path: attachment.storage_path,
+          content_type: attachment.content_type,
+          customer_code: "BTG Pactual",
+        }),
+      });
+      // Fornecedor, NF e observações entram já; só onde ainda está vazio.
+      setSupplier((current) => fillIfEmpty(current, payload.supplier));
+      setInvoiceNumber((current) => fillIfEmpty(current, payload.invoice_number));
+      setNotes((current) => fillIfEmpty(current, payload.notes));
+      setReadFile(file);
+      if (!payload.items?.length) {
+        toast({ title: "Não encontrei itens nesta nota", description: "Fornecedor e NF entraram; os itens você preenche nas linhas." });
+        return;
+      }
+      setInvoiceReading(payload);
+    } catch (error) {
+      toast({ title: "Não consegui ler a nota", description: getErrorMessage(error), variant: "destructive" });
+    } finally {
+      setReading(false);
+    }
+  }
+
+  function applyInvoice(selected: InvoiceDraftLine[]) {
+    setLines((current) =>
+      receiptLinesFromInvoice(current, selected, {
+        emptyLine: emptyReceiptLine,
+        lookup: (code) => {
+          const product = productByCode(code);
+          return product
+            ? { skuCode: product.skuCode, clientCode: product.clientCode, productName: product.productName, unitCost: product.unitCost }
+            : undefined;
+        },
+      }),
+    );
+    setInvoiceReading(null);
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const hasInvalidLine = lines.some((line, index) => {
       const currentKey = normalizeProductKey(line.clientCode || line.sku);
@@ -532,6 +641,18 @@ export function UnplannedReceiptDialog({
 
     if (!items.length) return;
 
+    // A nota fica anexada à chegada; o que o Agent Dute já leu não sobe de novo.
+    const attachments: ReceiptAttachment[] = [];
+    setUploadingFiles(true);
+    try {
+      for (const file of files) attachments.push(await uploadFile(file));
+    } catch (error) {
+      toast({ title: "Não consegui anexar a nota", description: getErrorMessage(error), variant: "destructive" });
+      return;
+    } finally {
+      setUploadingFiles(false);
+    }
+
     onCreate({
       customer_code: "BTG Pactual",
       supplier: supplier.trim() || undefined,
@@ -540,6 +661,7 @@ export function UnplannedReceiptDialog({
       priority: "normal",
       received_at: new Date().toISOString(),
       idempotency_key: crypto.randomUUID(),
+      attachments: attachments.length ? attachments : undefined,
       items,
     });
   }
@@ -598,6 +720,7 @@ export function UnplannedReceiptDialog({
     { quantity: 0, existing: 0, newProducts: 0 },
   );
 
+  const busy = isPending || uploadingFiles;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-[820px]">
@@ -607,7 +730,30 @@ export function UnplannedReceiptDialog({
             Use quando o fornecedor entregou sem aviso da cliente. Isso cria a tarefa de conferência, não lança estoque ainda.
           </DialogDescription>
         </DialogHeader>
-        <form className="space-y-5" onSubmit={submit}>
+        <form className="space-y-5" onSubmit={(event) => void submit(event)}>
+          <InvoiceDrop
+            files={files}
+            readableFile={readableFile}
+            reading={reading}
+            preparing={preparing}
+            read={Boolean(readableFile && readFile === readableFile)}
+            disabled={busy}
+            onPick={() => fileInput.current?.click()}
+            onDrop={(list) => void addFiles(list)}
+            onRead={() => readableFile && void readInvoice(readableFile)}
+            onRemove={(index) => setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))}
+          />
+          <input
+            ref={fileInput}
+            type="file"
+            multiple
+            accept={ATTACHMENT_ACCEPT}
+            className="hidden"
+            onChange={(event) => {
+              void addFiles(event.target.files);
+              event.target.value = "";
+            }}
+          />
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label>Fornecedor</Label>
@@ -952,16 +1098,30 @@ export function UnplannedReceiptDialog({
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={isPending || !canSubmit}>
-              {isPending ? (
+            <Button type="submit" disabled={busy || reading || preparing || !canSubmit}>
+              {busy ? (
                 <RefreshCw data-icon="inline-start" className="animate-spin" />
               ) : (
                 <PackageOpen data-icon="inline-start" />
               )}
-              Criar conferência
+              {uploadingFiles ? "Anexando a nota..." : "Criar conferência"}
             </Button>
           </DialogFooter>
         </form>
+        {invoiceReading ? (
+          <InvoiceReview
+            reading={invoiceReading}
+            codeLabel="Cod. cliente"
+            intro="Confira a quantidade e o Cod. cliente de cada item. Sem código, leia a etiqueta da peça e informe na linha: a conferência só é criada com código."
+            pendingCodeHint="sem código · leia a etiqueta e informe na linha"
+            lookup={(code) => {
+              const product = productByCode(code);
+              return product ? { clientCode: product.clientCode, name: product.productName } : null;
+            }}
+            onCancel={() => setInvoiceReading(null)}
+            onUse={applyInvoice}
+          />
+        ) : null}
       </DialogContent>
     </Dialog>
   );

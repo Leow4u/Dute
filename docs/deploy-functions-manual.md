@@ -72,8 +72,8 @@ precisa de dois papéis:
 
 | Papel | Para quê |
 | --- | --- |
-| `roles/storage.objectCreator` | gravar o anexo do aviso de envio (`uploadShipmentAttachment`) |
-| `roles/storage.objectViewer` | ler a nota para o Agent Dute (`readShipmentInvoice`) |
+| `roles/storage.objectCreator` | gravar o anexo do aviso de envio (`uploadShipmentAttachment`) e a nota da chegada avulsa (`uploadOperationalDocument`) |
+| `roles/storage.objectViewer` | ler a nota para o Agent Dute (`readShipmentInvoice`, no portal e no Receber) |
 
 Em projeto novo, ou se alguém refizer a política do bucket:
 

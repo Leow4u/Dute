@@ -125,6 +125,18 @@ describe("envios para a Dutelog", () => {
     ).toEqual({ storage_path: "operational-documents/BTG_Pactual/2026-10/1-nf.pdf", content_type: "application/pdf" });
   });
 
+  it("no Receber, a nota da chegada avulsa vai para a mesma readShipmentInvoice, com o cliente da chegada", async () => {
+    const route = functionRoute("/api/warehouse/receipts/read-invoice", "POST");
+    expect(route?.name).toBe("readShipmentInvoice");
+    expect(
+      await route?.payload("/api/warehouse/receipts/read-invoice", {
+        method: "POST",
+        body: JSON.stringify({ storage_path: "operational-documents/BTG_Pactual/2026-10/1-nf.pdf", content_type: "application/pdf", customer_code: "BTG Pactual" }),
+      }),
+    ).toEqual({ storage_path: "operational-documents/BTG_Pactual/2026-10/1-nf.pdf", content_type: "application/pdf", customer_code: "BTG Pactual" });
+    expect(functionRoute("/api/warehouse/receipts", "POST")?.name).toBe("createInboundReceipt");
+  });
+
   it("cancelar aviso vai para cancelShipmentNotice com o id e o motivo", async () => {
     const route = functionRoute("/api/client/shipments/creq_1/cancel", "POST");
     expect(route?.name).toBe("cancelShipmentNotice");

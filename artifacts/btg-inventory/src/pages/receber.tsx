@@ -48,6 +48,8 @@ export default function Receber() {
   const [view, setView] = useState<"open" | "done">("open");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [unplannedOpen, setUnplannedOpen] = useState(false);
+  // Cada chegada criada zera o formulário: a nota anexada numa não vai para a próxima.
+  const [unplannedKey, setUnplannedKey] = useState(0);
   const [lineConfirmations, setLineConfirmations] = useState<LineConfirmationMap>({});
 
   const ops = useQuery({
@@ -268,12 +270,14 @@ export default function Receber() {
       ) : null}
 
       <UnplannedReceiptDialog
+        key={unplannedKey}
         open={unplannedOpen}
         isPending={actions.createUnplannedReceipt.isPending}
         onOpenChange={setUnplannedOpen}
         onCreate={(payload) => {
           actions.createUnplannedReceipt.mutate(payload);
           setUnplannedOpen(false);
+          setUnplannedKey((current) => current + 1);
         }}
       />
 

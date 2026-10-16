@@ -1,9 +1,10 @@
 import { HttpsError } from "firebase-functions/https";
 
 /**
- * "Ler itens da nota" em Envios para a Dutelog: o Agent Dute lê a NF que a
- * cliente anexou e sugere os itens do aviso. A IA só sugere; a pessoa
- * confere e envia, e o estoque continua mudando só na conferência física.
+ * "Ler itens da nota" em Envios para a Dutelog e em Receber > Chegada avulsa:
+ * o Agent Dute lê a NF anexada e sugere fornecedor, número e itens. A IA só
+ * sugere; a pessoa confere, e o estoque continua mudando só na conferência
+ * física.
  */
 
 function text(value: unknown) {
@@ -23,7 +24,31 @@ function safeSegment(value: string) {
   return value.replace(/[^\w.-]/g, "_").slice(0, 900);
 }
 
-/** O arquivo precisa estar na pasta do próprio cliente no Storage. */
+/**
+ * Quem pode pedir a leitura: a cliente no portal (Envios) e a operação de
+ * armazém no Receber (chegada que o fornecedor entregou sem aviso). Financeiro
+ * e suporte não registram chegada, então não leem nota.
+ */
+export const INVOICE_READER_ROLES = ["cliente", "owner", "admin", "interno", "wms"] as const;
+
+export function assertInvoiceReader(profile: { role: string }) {
+  if (!(INVOICE_READER_ROLES as readonly string[]).includes(profile.role)) {
+    throw new HttpsError("permission-denied", "Leitura de nota disponível no portal do cliente e no Receber da operação.");
+  }
+}
+
+/**
+ * Origem gravada em agent_usage. Configuração > Sistema agrupa tudo que começa
+ * com "leitura_nota" em "Leitura de NF"; o sufixo separa portal, chat e
+ * Receber quando alguém precisar saber de onde veio o custo.
+ */
+export type InvoiceReadingSource = "leitura_nota" | "leitura_nota_chat" | "leitura_nota_recebimento";
+
+export function invoiceReadingSource(role: string): InvoiceReadingSource {
+  return role === "cliente" ? "leitura_nota" : "leitura_nota_recebimento";
+}
+
+/** O arquivo precisa estar na pasta do cliente dono da chegada no Storage. */
 export function assertOwnInvoicePath(storagePath: string, customerCode: string) {
   const path = text(storagePath);
   const prefix = `operational-documents/${safeSegment(customerCode)}/`;

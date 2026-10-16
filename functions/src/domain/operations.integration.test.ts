@@ -691,6 +691,16 @@ describe("fluxo WMS transacional", () => {
       invoice_number: "NF-AVULSA-001",
       notes: "Mercadoria entregue sem aviso prévio do cliente.",
       received_at: "2026-07-22T13:00:00.000Z",
+      // A nota que o operador anexou no Receber fica na chegada, como no aviso do portal.
+      attachments: [
+        {
+          file_name: "nf-avulsa-001.pdf",
+          file_url: "https://firebasestorage.googleapis.com/v0/b/demo/o/nf-avulsa-001.pdf?alt=media",
+          storage_path: "operational-documents/BTG_Pactual/2026-07/1-nf-avulsa-001.pdf",
+          content_type: "application/pdf",
+          size_bytes: 1024,
+        },
+      ],
       idempotency_key: "unplanned-receipt-new-product-1",
       items: [
         {
@@ -742,6 +752,12 @@ describe("fluxo WMS transacional", () => {
     assert.equal((await db.collection("movements").get()).size, 0);
 
     const receiptId = String(created.receipt_id);
+    const receipt = await db.collection("inbound_receipts").doc(receiptId).get();
+    assert.equal(receipt.data()?.attachment_count, 1);
+    assert.equal(
+      receipt.data()?.attachments?.[0]?.storage_path,
+      "operational-documents/BTG_Pactual/2026-07/1-nf-avulsa-001.pdf",
+    );
     await advance(`receiving:${receiptId}`, "created");
     const inboundItems = await db
       .collection("inbound_items")

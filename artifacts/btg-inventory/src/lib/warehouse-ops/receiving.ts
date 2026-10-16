@@ -92,3 +92,74 @@ export function putawayRowMeta(task: WarehouseTask) {
     .filter(Boolean)
     .join(" · ");
 }
+
+// ------------------------------------------------- chegada avulsa pela nota
+
+const THOUSANDS = /^\d{1,3}(\.\d{3})+$/;
+
+/** Quantidade digitada na conferência da nota: "1.200", "1.200,5" e "1200.5" valem o que parecem. */
+export function parseQuantity(value: string | number) {
+  if (typeof value === "number") return Number.isFinite(value) && value > 0 ? value : 0;
+  const raw = value.trim();
+  const plain = raw.includes(",")
+    ? raw.replace(/\./g, "").replace(",", ".")
+    : THOUSANDS.test(raw)
+      ? raw.replace(/\./g, "")
+      : raw;
+  const parsed = Number(plain);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+export type InvoiceLineInput = { code: string; name: string; quantity: string | number };
+
+/** O que o cadastro sabe do código: entra na linha como "Usar cadastro". */
+export type CatalogFill = { skuCode: string; clientCode: string; productName: string; unitCost: number };
+
+type DraftLine = {
+  sku: string;
+  clientCode: string;
+  product: string;
+  quantity: string;
+  unitCost: string;
+  createNew: boolean;
+};
+
+/**
+ * Itens lidos da nota viram linhas da chegada avulsa. Item com código já no
+ * cadastro entra com SKU, nome e custo do cadastro, como "Usar cadastro".
+ * Item sem código entra só com nome e quantidade: o operador lê a etiqueta
+ * da peça e informa o código. O mesmo código em duas linhas soma, e a linha
+ * vazia inicial some.
+ */
+export function receiptLinesFromInvoice<Line extends DraftLine>(
+  current: Line[],
+  selected: InvoiceLineInput[],
+  options: { emptyLine: () => Line; lookup: (code: string) => CatalogFill | undefined },
+): Line[] {
+  const key = (value: string) => value.trim().toUpperCase();
+  const next = current
+    .filter((line) => line.clientCode.trim() || line.sku.trim() || line.product.trim())
+    .map((line) => ({ ...line }));
+  for (const item of selected) {
+    const code = item.code.trim();
+    const name = item.name.trim();
+    if (!code && !name) continue;
+    const quantity = parseQuantity(item.quantity);
+    const same = code ? next.find((line) => key(line.clientCode || line.sku) === key(code)) : undefined;
+    if (same) {
+      same.quantity = String(parseQuantity(same.quantity) + quantity);
+      continue;
+    }
+    const fill = code ? options.lookup(code) : undefined;
+    next.push({
+      ...options.emptyLine(),
+      clientCode: fill?.clientCode || code,
+      sku: fill?.skuCode ?? "",
+      product: fill?.productName || name,
+      unitCost: fill && fill.unitCost > 0 ? String(fill.unitCost) : "",
+      quantity: String(quantity),
+      createNew: false,
+    });
+  }
+  return next.length ? next : [options.emptyLine()];
+}

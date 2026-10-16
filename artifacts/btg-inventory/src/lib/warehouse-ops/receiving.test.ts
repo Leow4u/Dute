@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { normalizeQueues, type WarehouseOpsResponse, type WarehouseTask } from "./model";
-import { buildReceivingBoard, putawayRowMeta, receivingRowMeta } from "./receiving";
+import { buildReceivingBoard, parseQuantity, putawayRowMeta, receiptLinesFromInvoice, receivingRowMeta } from "./receiving";
 
 function task(overrides: Partial<WarehouseTask> & { id: string }): WarehouseTask {
   return { status: "planned", can_advance: true, exception_count: 0, ...overrides };
@@ -59,5 +59,44 @@ describe("quadro do Receber", () => {
 
   it("não quebra sem filas", () => {
     expect(buildReceivingBoard(normalizeQueues(undefined))).toEqual({ check: [], store: [], done: [] });
+  });
+});
+
+describe("chegada avulsa pela nota", () => {
+  const emptyLine = () => ({ sku: "", clientCode: "", product: "", quantity: "1", unitCost: "", createNew: false, category: "" });
+  const lookup = (code: string) =>
+    code.toUpperCase() === "A.01" ? { skuCode: "SKU-A01", clientCode: "A.01", productName: "CAMISETA G", unitCost: 12.5 } : undefined;
+
+  it("item casado entra com o cadastro; item sem código entra para o operador ler a etiqueta", () => {
+    const lines = receiptLinesFromInvoice(
+      [emptyLine()],
+      [
+        { code: "a.01", name: "CAMISETA", quantity: "300" },
+        { code: "", name: "ECOBAG LONA", quantity: "1.200" },
+        { code: "", name: "", quantity: "4" },
+      ],
+      { emptyLine, lookup },
+    );
+    expect(lines).toEqual([
+      { ...emptyLine(), sku: "SKU-A01", clientCode: "A.01", product: "CAMISETA G", unitCost: "12.5", quantity: "300" },
+      { ...emptyLine(), product: "ECOBAG LONA", quantity: "1200" },
+    ]);
+  });
+
+  it("código repetido soma com a linha que já estava; sem nada lido fica uma linha vazia", () => {
+    const typed = { ...emptyLine(), clientCode: "B.02", product: "CANECA", quantity: "10" };
+    expect(receiptLinesFromInvoice([typed, emptyLine()], [{ code: "b.02", name: "Caneca", quantity: "5" }], { emptyLine, lookup })).toEqual([
+      { ...typed, quantity: "15" },
+    ]);
+    expect(receiptLinesFromInvoice([emptyLine()], [], { emptyLine, lookup })).toEqual([emptyLine()]);
+  });
+
+  it("quantidade no formato brasileiro, no formato numérico e inválida", () => {
+    expect(parseQuantity("1.200")).toBe(1200);
+    expect(parseQuantity("1.200,5")).toBe(1200.5);
+    expect(parseQuantity("1200.5")).toBe(1200.5);
+    expect(parseQuantity("1,5")).toBe(1.5);
+    expect(parseQuantity("abc")).toBe(0);
+    expect(parseQuantity(-3)).toBe(0);
   });
 });

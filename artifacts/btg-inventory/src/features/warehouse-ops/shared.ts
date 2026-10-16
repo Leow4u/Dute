@@ -1,6 +1,7 @@
 /** Shared catalog/photo helpers for warehouse-ops features. */
 
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { fileToBase64 } from "@/lib/file-base64";
 import { firebaseStorage } from "@/lib/firebase";
 import {
   type AnyRecord,
@@ -122,6 +123,46 @@ export async function uploadProductPhoto(file: File, clientItemCode: string) {
     fileUrl,
     storagePath: target.storage_path,
   } satisfies ProductPhoto;
+}
+
+/** Nota ou pedido anexado à chegada avulsa, como o backend devolve. */
+export type ReceiptAttachment = {
+  file_name: string;
+  file_url: string;
+  storage_path: string;
+  content_type: string;
+  size_bytes: number;
+};
+
+/**
+ * Receber > Chegada avulsa: a nota (PDF ou foto) sobe pelo backend para a
+ * pasta do cliente no Storage, o mesmo caminho dos documentos da operação.
+ * O Agent Dute lê a partir desse caminho e o arquivo fica anexado à chegada.
+ */
+export async function uploadReceiptAttachment(file: File, draftId: string): Promise<ReceiptAttachment> {
+  const payload = await fetchJson<Partial<ReceiptAttachment>>("/api/documents/upload", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      customer_code: "BTG Pactual",
+      file_name: file.name,
+      content_type: file.type || "application/pdf",
+      data_base64: await fileToBase64(file),
+      document_type: "nota_chegada_avulsa",
+      entity_type: "recebimento_avulso_rascunho",
+      entity_id: draftId,
+    }),
+  });
+  if (!payload.storage_path || !payload.file_url) {
+    throw new Error(`Não consegui enviar ${file.name}.`);
+  }
+  return {
+    file_name: payload.file_name || file.name,
+    file_url: payload.file_url,
+    storage_path: payload.storage_path,
+    content_type: payload.content_type || file.type,
+    size_bytes: payload.size_bytes || file.size,
+  };
 }
 
 export function productLookupFromRecord(
