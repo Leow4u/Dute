@@ -29,6 +29,11 @@ documentação de produto e operação está em `docs/`.
   `createCustomerRequest`) ficaram sem `roles/run.invoker` para `allUsers` e
   falhavam com um erro genérico antes mesmo do código rodar. Ver
   `docs/deploy-functions-manual.md`.
+- **Zeragem total para novo go-live tem roteiro próprio:**
+  `docs/novo-go-live-zeragem-total.md` e `tools/full_reset_btg.py`. Descobre as
+  coleções no banco, preserva só acesso (e estrutura por padrão) e exige export
+  gerenciado antes de apagar. Sempre dry-run antes; a execução é manual, da
+  máquina do responsável.
 - **`pnpm` não está no PATH.** Use `corepack pnpm`. O diretório `functions/` usa
   **npm** (tem `package-lock.json` próprio), não pnpm.
 

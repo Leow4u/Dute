@@ -67,6 +67,18 @@ jobs:
         shell: pwsh
         run: ./tools/check_functions_invoker.tests.ps1
 
+  tools-python-tests:
+    name: Testes das ferramentas Python (tools/)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Zeragem total (tools/full_reset_btg.py) e helpers de backup: só stdlib.
+      - name: Unit tests
+        run: python -m unittest discover -s tools -p "test_*.py" -v
+
   functions-integration:
     runs-on: ubuntu-latest
     defaults:
