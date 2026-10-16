@@ -36,6 +36,7 @@ const OVERRIDES = new Map<string, string>([
   [pathKey(path.join(src, "lib/auth.tsx")), path.join(here, "auth.tsx")],
   [pathKey(path.join(src, "lib/functions-api.ts")), path.join(here, "functions-api.ts")],
   [pathKey(path.join(src, "pages/client/estoque.tsx")), path.join(here, "portal/estoque.tsx")],
+  [pathKey(path.join(src, "pages/client/eventos.tsx")), path.join(here, "portal/eventos.tsx")],
   [pathKey(path.join(src, "pages/not-found.tsx")), path.join(here, "not-found.tsx")],
 ]);
 

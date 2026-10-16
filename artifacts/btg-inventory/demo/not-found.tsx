@@ -1,19 +1,18 @@
 /*
  * DEMO: substitui src/pages/not-found. As telas que só existem na demo
- * (Kits, Eventos e Destinatários) caem aqui por não estarem nas rotas do App; as
- * outras continuam com o 404 de verdade.
+ * (Kits e Destinatários) caem aqui por não estarem nas rotas do App; as
+ * outras continuam com o 404 de verdade. Eventos é rota do app: o build
+ * troca a página pela cópia em portal/eventos.tsx.
  */
 import { Suspense, type ComponentType } from "react";
 import { useLocation } from "wouter";
 import AppLayout from "../src/components/layout/app-layout";
 import NotFound from "../src/pages/not-found";
 import { DemoRecipients } from "./portal/destinatarios";
-import { DemoEvents } from "./portal/eventos";
 import { DemoKits } from "./portal/kits";
 
 const PAGES: Record<string, ComponentType> = {
   "/portal/kits": DemoKits,
-  "/portal/eventos": DemoEvents,
   "/portal/destinatarios": DemoRecipients,
 };
 

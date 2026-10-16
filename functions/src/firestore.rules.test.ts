@@ -120,6 +120,13 @@ async function seed() {
       customer_visible: true,
       created_at: new Date(),
     });
+    // Evento do portal (modelo de pedido): só as Cloud Functions leem e gravam.
+    await setDoc(doc(database, "client_event_templates", "cev-a"), {
+      customer_code: CUSTOMER_A,
+      name: "Feira de Investimentos",
+      status: "active",
+      items: [{ sku_code: "BTG-TEST-1", product_name: "Produto real de teste", quantity: 1 }],
+    });
     await setDoc(doc(database, "client_documents", "doc-arquivado"), {
       customer_code: CUSTOMER_A,
       title: "Documento arquivado",
@@ -377,6 +384,23 @@ describe("isolamento entre clientes", () => {
         qty_available: 1000,
       }),
     );
+  });
+
+  it("eventos do portal só passam pelas Cloud Functions, nem o próprio cliente acessa direto", async () => {
+    for (const uid of ["client-a", "client-b", "owner-a", "ops-a"]) {
+      const database = testEnvironment
+        .authenticatedContext(uid, { email: `${uid}@example.com` })
+        .firestore();
+      await assertFails(getDoc(doc(database, "client_event_templates", "cev-a")));
+      await assertFails(
+        getDocs(query(collection(database, "client_event_templates"), where("customer_code", "==", CUSTOMER_A))),
+      );
+      await assertFails(updateDoc(doc(database, "client_event_templates", "cev-a"), { name: "Alterado" }));
+      await assertFails(deleteDoc(doc(database, "client_event_templates", "cev-a")));
+      await assertFails(
+        setDoc(doc(database, "client_event_templates", `novo-${uid}`), { customer_code: CUSTOMER_A, name: "Novo" }),
+      );
+    }
   });
 });
 

@@ -1,6 +1,7 @@
 import {
   BarChart3,
   BrainCircuit,
+  CalendarDays,
   FileText,
   Home,
   Inbox,
@@ -327,6 +328,23 @@ export const APP_MODULES: AppModule[] = [
         label: "Estoque",
         href: "/portal/estoque",
         icon: PackageSearch,
+        roles: CLIENT_ROLES,
+      }),
+    ],
+  }),
+  // Eventos: o que vai para cada evento que se repete; vira pedido no Estoque.
+  appModule({
+    id: "client-events",
+    label: "Eventos",
+    audience: "client",
+    icon: CalendarDays,
+    roles: CLIENT_ROLES,
+    routes: [
+      navRoute({
+        id: "client-events-list",
+        label: "Eventos",
+        href: "/portal/eventos",
+        icon: CalendarDays,
         roles: CLIENT_ROLES,
       }),
     ],

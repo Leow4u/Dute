@@ -133,6 +133,21 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  // Portal › Eventos: modelos de pedido do cliente (só pelo backend).
+  if (method === "GET" && pathname === "/api/client/events") {
+    return { name: "listClientEventTemplates", payload: async () => ({}) };
+  }
+  if (method === "POST" && pathname === "/api/client/events") {
+    return { name: "saveClientEventTemplate", payload: async (_pathname, init) => readJsonBody(init) };
+  }
+  const clientEventArchiveMatch = pathname.match(/^\/api\/client\/events\/([^/]+)\/archive$/);
+  if (method === "POST" && clientEventArchiveMatch) {
+    return {
+      name: "archiveClientEventTemplate",
+      payload: async () => ({ id: decodeURIComponent(clientEventArchiveMatch[1]) }),
+    };
+  }
+
   if (method === "POST" && pathname === "/api/client/billing/report") {
     return {
       name: "exportBillingReport",

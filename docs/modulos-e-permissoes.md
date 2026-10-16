@@ -94,6 +94,7 @@ le/acompanha, `P` limitado ao proprio `customer_code`, `-` sem acesso direto.
 | Agente IA interno | G | G | L/A recomendacao | L WMS | L financeiro | - | L diagnostico |
 | Portal do cliente | G | G | L | L operacional | L financeiro | E(P) | L(P) suporte |
 | Solicitacoes do cliente | G | G | A/E | E apos aprovacao | A tipo financeiro | E(P) criar/acompanhar | L/E nota suporte |
+| Eventos do portal (modelos de pedido) | E a pedido do cliente | E a pedido do cliente | E a pedido do cliente | - | - | E(P) criar/editar/excluir | - |
 | Catalogo e SKUs | G | G/E | E | L/E localizacao | L custo | L(P) filtrado | L |
 | Kardex e saldos | G | G | A/E | E fisico | L | L(P) | L |
 | Receiving | G | G | A/L | E | L documentos | L(P) status | L incidente |

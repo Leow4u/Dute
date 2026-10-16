@@ -2,6 +2,8 @@
  * DEMO: tela Eventos do portal. Cada evento modelo guarda o que vai para o
  * local (ícones, cenografia, mobiliário, brindes), onde é e como a Dutelog
  * leva, monta e traz de volta; "Usar no pedido" abre o pedido já pronto.
+ * O build da demo troca src/pages/client/eventos.tsx (que fala com as Cloud
+ * Functions) por este arquivo, que lê os eventos de data.ts.
  */
 import { useState } from "react";
 import { useLocation } from "wouter";
@@ -32,7 +34,7 @@ function nextDateLabel(value?: string) {
   return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).replace(".", "");
 }
 
-export function DemoEvents() {
+export function ClienteEventos() {
   const overview = useClientOverview();
   const events = useEvents();
   const deleteEvent = useDeleteEvent();

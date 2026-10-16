@@ -6,6 +6,7 @@ import {
   ArrowDownWideNarrow,
   Archive,
   Box,
+  CalendarDays,
   CheckCircle2,
   ChevronRight,
   Eye,
@@ -42,10 +43,12 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { cartFromDraft, dueAtFromDraft, takeDraft } from "@/lib/agent-draft";
+import { cartFromEvent, eventDateFromDueAt, eventDestination, eventDueAt, eventNotes } from "@/lib/client-events";
 import { overviewLine, productTitle, productType, stockOverview, typeOptions, typeValue } from "@/lib/portal-stock";
 import { cn } from "@/lib/utils";
 import { groupFamilies, variantLabel, type Family } from "@/lib/stock-variants";
 
+import { useClientEvents, useSaveClientEvent } from "./events-api";
 import {
   ClientDataBoundary,
   ClientModuleShell,
@@ -169,7 +172,12 @@ export function ClienteEstoque() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const wantsDraft = new URLSearchParams(useSearch()).get("rascunho") === "1";
+  const searchParams = new URLSearchParams(useSearch());
+  const wantsDraft = searchParams.get("rascunho") === "1";
+  // "Usar no pedido" da tela Eventos.
+  const wantsEvent = searchParams.get("evento");
+  const eventsQuery = useClientEvents({ enabled: Boolean(wantsEvent) });
+  const saveEvent = useSaveClientEvent();
 
   /** Rascunho do Agent Dute: preenche o pedido; quem envia é a pessoa. */
   function applyDraft(products: StockProduct[]) {
@@ -188,6 +196,37 @@ export function ClienteEstoque() {
       description: missing.length
         ? `Confira e envie. Sem saldo agora: ${missing.join(", ")}.`
         : "Confira os itens, o destino e a data, e envie quando estiver certo.",
+    });
+  }
+
+  /** Evento no pedido: itens até o saldo livre, local, entrega na véspera e as instruções. */
+  function applyEvent(products: StockProduct[]) {
+    navigate("/portal/estoque", { replace: true });
+    const event = eventsQuery.data?.find((entry) => entry.id === wantsEvent);
+    if (!event) {
+      toast({
+        title: eventsQuery.isError ? "Não foi possível abrir o evento" : "Evento não encontrado",
+        description: eventsQuery.isError ? eventsQuery.error.message : "Ele pode ter sido excluído. Veja a lista em Eventos.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const { cart: eventCart, missing } = cartFromEvent(event, products);
+    const due = eventDueAt(event.next_date);
+    setCart(eventCart);
+    setOrderName(event.name);
+    setDestination(eventDestination(event));
+    setDueAt(due);
+    setNotes(eventNotes(event));
+    setCartOpen(true);
+    toast({
+      title: `${event.name} no pedido`,
+      description: [
+        missing.length ? `Saldo menor que o evento: ${missing.join(", ")}.` : "",
+        due ? "Entrega na véspera do evento, às 7h. Confira e envie." : "O evento está sem data futura: preencha Para quando.",
+      ]
+        .filter(Boolean)
+        .join(" "),
     });
   }
 
@@ -274,7 +313,11 @@ export function ClienteEstoque() {
           products.map((product) => [product.key, product]),
         );
         const cartLines = getCartLines(cart, productByKey);
-        const draftLoader = wantsDraft ? <DraftLoader products={products} onLoad={applyDraft} /> : null;
+        const draftLoader = wantsDraft ? (
+          <DraftLoader products={products} onLoad={applyDraft} />
+        ) : wantsEvent && (eventsQuery.data || eventsQuery.isError) ? (
+          <DraftLoader key="evento" products={products} onLoad={applyEvent} />
+        ) : null;
         const cartQuantity = cartLines.reduce(
           (sum, line) => sum + line.quantity,
           0,
@@ -439,6 +482,51 @@ export function ClienteEstoque() {
           });
         }
 
+        /** Guarda o pedido montado como evento: itens, "Entregar em" como local e as observações. */
+        function saveCartAsEvent(input: { name: string; nextDate: string; key: string }, onSaved: () => void) {
+          if (!destination.trim()) {
+            toast({
+              title: "Informe onde entregar",
+              description: "É o local do evento: preencha Entregar em antes de salvar.",
+              variant: "destructive",
+            });
+            return;
+          }
+          saveEvent.mutate(
+            {
+              idempotency_key: input.key,
+              name: input.name.trim(),
+              description: null,
+              venue: destination.trim(),
+              address: null,
+              next_date: input.nextDate || null,
+              schedule: notes.trim() || null,
+              logistics: null,
+              items: cartLines.map((line) => ({
+                sku_code: line.product.sku,
+                client_item_code: line.product.clientItemCode ?? null,
+                product_name: productTitle(line.product),
+                quantity: line.quantity,
+              })),
+            },
+            {
+              onSuccess: () => {
+                onSaved();
+                toast({
+                  title: "Evento salvo",
+                  description: `${input.name.trim()} está em Eventos, pronto para a próxima edição.`,
+                });
+              },
+              onError: (error) =>
+                toast({
+                  title: "Evento não salvo",
+                  description: error instanceof Error ? error.message : "Tente de novo em alguns instantes.",
+                  variant: "destructive",
+                }),
+            },
+          );
+        }
+
         function submitCart() {
           if (cartLines.length === 0) {
             toast({
@@ -596,6 +684,8 @@ export function ClienteEstoque() {
                   dueAt={dueAt}
                   notes={notes}
                   isSubmitting={requestMutation.isPending}
+                  isSavingEvent={saveEvent.isPending}
+                  onSaveEvent={saveCartAsEvent}
                   onClose={() => setCartOpen(false)}
                   onDestinationChange={setDestination}
                   onDueAtChange={setDueAt}
@@ -1334,9 +1424,11 @@ function CartPanel({
   dueAt,
   notes,
   isSubmitting,
+  isSavingEvent,
   expanded,
   onToggleExpanded,
   onClose,
+  onSaveEvent,
   onOrderNameChange,
   onDestinationChange,
   onDueAtChange,
@@ -1353,9 +1445,11 @@ function CartPanel({
   dueAt: string;
   notes: string;
   isSubmitting: boolean;
+  isSavingEvent: boolean;
   expanded: boolean;
   onToggleExpanded: () => void;
   onClose: () => void;
+  onSaveEvent: (input: { name: string; nextDate: string; key: string }, onSaved: () => void) => void;
   onOrderNameChange: (value: string) => void;
   onDestinationChange: (value: string) => void;
   onDueAtChange: (value: string) => void;
@@ -1367,6 +1461,8 @@ function CartPanel({
   onSubmit: () => void;
 }) {
   const [query, setQuery] = useState("");
+  // Salvar como evento: nome, data do evento e a chave que evita salvar duas vezes.
+  const [eventDraft, setEventDraft] = useState<{ name: string; nextDate: string; key: string } | null>(null);
   const totalQuantity = lines.reduce((sum, line) => sum + line.quantity, 0);
   const needle = normalizeSlug(query);
   const shownLines = needle
@@ -1500,6 +1596,64 @@ function CartPanel({
         {isSubmitting ? <Truck className="h-4 w-4 animate-pulse" /> : <CheckCircle2 className="h-4 w-4" />}
         Enviar pedido para a Dutelog
       </Button>
+      {eventDraft ? (
+        <form
+          className="flex flex-col gap-3 rounded-lg border border-border p-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!eventDraft.name.trim()) return;
+            onSaveEvent(eventDraft, () => setEventDraft(null));
+          }}
+        >
+          <div>
+            <p className="text-sm font-medium">Salvar como evento</p>
+            <p className="text-xs text-muted-foreground">
+              Guarda os itens, o local (Entregar em) e as observações. Na próxima edição, é só usar no pedido.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="cart-event-name">Nome do evento</Label>
+            <Input
+              id="cart-event-name"
+              autoFocus
+              value={eventDraft.name}
+              onChange={(event) => setEventDraft({ ...eventDraft, name: event.target.value })}
+              placeholder="Ex.: Feira de Investimentos"
+              maxLength={120}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="cart-event-date">Data do evento</Label>
+            <Input
+              id="cart-event-date"
+              type="date"
+              value={eventDraft.nextDate}
+              onChange={(event) => setEventDraft({ ...eventDraft, nextDate: event.target.value })}
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" size="sm" className="cursor-pointer" onClick={() => setEventDraft(null)}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="outline" size="sm" className="cursor-pointer" disabled={!eventDraft.name.trim() || isSavingEvent}>
+              {isSavingEvent ? "Salvando…" : "Salvar evento"}
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full cursor-pointer"
+          disabled={lines.length === 0}
+          onClick={() =>
+            setEventDraft({ name: orderName.trim(), nextDate: eventDateFromDueAt(dueAt), key: crypto.randomUUID() })
+          }
+        >
+          <CalendarDays className="h-4 w-4" />
+          Salvar como evento
+        </Button>
+      )}
     </div>
   );
 

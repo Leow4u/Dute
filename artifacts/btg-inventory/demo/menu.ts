@@ -1,5 +1,5 @@
-/* DEMO: põe Kits, Eventos e Destinatários no menu do portal, logo depois de Estoque. */
-import { BookUser, CalendarDays, Gift, type LucideIcon } from "lucide-react";
+/* DEMO: põe Kits e Destinatários no menu do portal, em volta de Estoque e Eventos (que são do app). */
+import { BookUser, Gift, type LucideIcon } from "lucide-react";
 import { APP_MODULES, type AppModule } from "../src/lib/modules";
 
 function pageLike(base: AppModule, id: string, label: string, href: string, icon: LucideIcon): AppModule {
@@ -17,12 +17,8 @@ export function installDemoMenu() {
   if (APP_MODULES.some((module) => module.id === "client-kits")) return;
   const base = APP_MODULES.find((module) => module.id === "client-inventory");
   if (!base) return;
-  const at = APP_MODULES.indexOf(base) + 1;
-  APP_MODULES.splice(
-    at,
-    0,
-    pageLike(base, "client-kits", "Kits", "/portal/kits", Gift),
-    pageLike(base, "client-events", "Eventos", "/portal/eventos", CalendarDays),
-    pageLike(base, "client-recipients", "Destinatários", "/portal/destinatarios", BookUser),
-  );
+  // Fica Estoque, Kits, Eventos, Destinatários.
+  APP_MODULES.splice(APP_MODULES.indexOf(base) + 1, 0, pageLike(base, "client-kits", "Kits", "/portal/kits", Gift));
+  const events = APP_MODULES.find((module) => module.id === "client-events") ?? base;
+  APP_MODULES.splice(APP_MODULES.indexOf(events) + 1, 0, pageLike(base, "client-recipients", "Destinatários", "/portal/destinatarios", BookUser));
 }

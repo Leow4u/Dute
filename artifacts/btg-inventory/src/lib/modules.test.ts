@@ -61,6 +61,7 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/configuracoes/sistema", ["owner", "admin", "suporte"]],
   ["/portal", ["cliente"]],
   ["/portal/estoque", ["cliente"]],
+  ["/portal/eventos", ["cliente"]],
   ["/portal/recebimentos", ["cliente"]],
   ["/portal/pedidos", ["cliente"]],
   ["/portal/faturas", ["cliente"]],
@@ -183,6 +184,7 @@ describe("menu do portal da BTG", () => {
       ["Agent Dute", "/portal/agente"],
       ["Início", "/portal"],
       ["Estoque", "/portal/estoque"],
+      ["Eventos", "/portal/eventos"],
       ["Envios para a Dutelog", "/portal/recebimentos"],
       ["Pedidos", "/portal/pedidos"],
       ["Faturas", "/portal/faturas"],
@@ -219,9 +221,10 @@ describe("barra inferior do celular", () => {
     expect(more("financeiro")).toEqual(["Documentos · Documentos"]);
   });
 
-  it("portal da BTG: Início, Pedidos, Estoque e Agent Dute; Envios, Faturas e Documentos em Mais", () => {
+  it("portal da BTG: Início, Pedidos, Estoque e Agent Dute; Eventos, Envios, Faturas e Documentos em Mais", () => {
     expect(bar("cliente")).toEqual(["Início", "Pedidos", "Estoque", "Agent Dute"]);
     expect(more("cliente")).toEqual([
+      "Eventos · Eventos",
       "Envios para a Dutelog · Envios para a Dutelog",
       "Faturas · Faturas",
       "Documentos · Documentos",
