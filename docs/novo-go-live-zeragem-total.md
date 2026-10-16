@@ -43,11 +43,16 @@ Fora do alcance da ferramenta:
    recadastrado, e o cliente deve voltar com **o mesmo `customer_code`**
    (`BTG Pactual`) dos perfis em `users`, senão os usuários do portal perdem o
    vínculo.
-4. **Bucket do export existe**, no projeto `dute-btg`, na região do banco:
+4. **Bucket do export existe**, no projeto `dute-btg`, na mesma localização do
+   banco (o export recusa bucket em outra). Confira a localização e crie:
 
    ```powershell
+   gcloud firestore databases describe --database="(default)" --project dute-btg --format="value(locationId)"
    gcloud storage buckets create gs://dute-btg-firestore-backups --project dute-btg --location southamerica-east1 --uniform-bucket-level-access
    ```
+
+   Sem o bucket, o `--apply` para no export com "nada foi apagado" e o
+   controle de estoque volta ao normal; basta criar o bucket e repetir.
 
 5. `gcloud` autenticado como `leonardo@dutelog.com.br`, projeto `dute-btg`,
    `main` limpa e atualizada, Python 3 disponível.
@@ -138,3 +143,14 @@ só o formato da zeragem de estoque e recusa este).
 | Antes do export | nada apagado, controle congelado | Rodar de novo; o script aceita o próprio congelamento (`full_reset_running`). |
 | Export falhou | nada apagado, controle restaurado | Corrigir bucket/permissão e rodar de novo. |
 | Durante ou após o delete | parcialmente apagado, controle congelado | Rodar de novo para concluir, ou `gcloud firestore import` do export para voltar. |
+
+## Histórico de execuções
+
+| Data | Resultado | Export | Backup local (SHA-256) |
+|---|---|---|---|
+| 16/10/2026 11:54 UTC | Parou no export: bucket inexistente. Nada apagado, controle restaurado. | — | `full-reset-20261016T115443Z.json` |
+| 16/10/2026 11:57 UTC | **Concluída.** Preservadas as 8 coleções padrão (acesso e estrutura; sem `--include-setup`). Apagadas, entre outras: 373 produtos, 373 SKUs, 616 saldos, 620 movimentações, 727 eventos, 112 reservas, contadores PED/ENV, playbooks e conhecimento do Agent Dute. | `gs://dute-btg-firestore-backups/full-reset/full-reset-20261016T115746Z` | `full-reset-20261016T115746Z.json` (`1bf95b12…56f7`) |
+
+Depois da execução de 16/10: inventário de abertura pendente no app; playbooks do
+Agent Dute precisam ser semeados de novo (Agent Dute > Playbooks); modelos de
+pedido do portal e memória do agente recomeçam vazios.
