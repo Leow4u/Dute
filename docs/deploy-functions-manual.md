@@ -7,6 +7,11 @@ Diferente do frontend (`docs/deploy-manual.md`), este processo nunca foi escrito
 antes — o que é provavelmente como o incidente de 03/09/2026 (ver abaixo) passou
 um mês sem ser percebido.
 
+**Existe um job automático** (`deploy-functions` em `.github/workflows/ci.yml`,
+ver seção no fim deste documento), mas ele só funciona depois que o
+pré-requisito de IAM dessa seção for criado manualmente — isso não pode rodar
+sozinho. **Enquanto isso não for feito, publique pelo roteiro manual abaixo.**
+
 ## Pré-requisitos
 
 Os mesmos do deploy do frontend: `gcloud` autenticado como
@@ -182,3 +187,84 @@ tratava como "decide pela política"). O `add-iam-policy-binding` respondeu
 Agora o script decide se o serviço existe pelo `gcloud run services describe`
 (sem saída quando não existe) antes de olhar a política. Serviço inexistente
 aparece como **NAO PUBLICADA** e sugere o `firebase deploy`.
+
+## Deploy automático pelo GitHub Actions
+
+O job `deploy-functions` em `.github/workflows/ci.yml` publica `functions/` a
+cada push em `main` (depois de `frontend-typecheck`, `functions-unit` e
+`functions-integration` passarem) e também por disparo manual, do mesmo jeito
+que o `deploy-frontend`. Ele sempre publica o lote inteiro
+(`firebase deploy --only functions`, nunca `--only functions:nome`) e termina
+rodando `tools/check_functions_invoker.ps1` contra produção de verdade.
+
+**Ele não autocorrige.** Se alguma callable ficar sem `allUsers`/
+`roles/run.invoker`, ou não publicar, o job termina vermelho e mostra o comando
+certo — uma pessoa ainda precisa rodar. Isso foi proposital: o histórico desta
+página é de falhas silenciosas (03/09, 01/10, 02/10 x2), e preferimos um deploy
+automático que avisa a um que tenta se corrigir sozinho sem nunca ter rodado
+antes num ambiente não observado por humano.
+
+### Pré-requisito: criar a identidade do job (manual, uma vez)
+
+O classificador do Claude Code bloqueia IaC apply (criar service account/IAM)
+mesmo com o usuário pedindo — por isso isso nunca roda sozinho. Rode uma vez,
+autenticado como `leonardo@dutelog.com.br` (mesmo pré-requisito do resto deste
+documento):
+
+```powershell
+# 1. Service account dedicada (não reusa a do frontend: menor escopo de dano
+#    se uma das duas vazar ou for usada errado).
+gcloud iam service-accounts create github-actions-functions `
+  --project dute-btg `
+  --display-name="GitHub Actions - deploy Cloud Functions"
+
+# 2. Papéis no projeto. Espelha a SA do frontend (artifactregistry.writer,
+#    cloudbuild.builds.editor, serviceusage.serviceUsageConsumer) e acrescenta
+#    o que function/scheduler precisam que o frontend não precisa.
+$SA = "github-actions-functions@dute-btg.iam.gserviceaccount.com"
+foreach ($role in @(
+  "roles/cloudfunctions.developer",
+  "roles/run.admin",
+  "roles/artifactregistry.writer",
+  "roles/cloudbuild.builds.editor",
+  "roles/cloudscheduler.admin",
+  "roles/serviceusage.serviceUsageConsumer"
+)) {
+  gcloud projects add-iam-policy-binding dute-btg --member="serviceAccount:$SA" --role=$role
+}
+
+# 3. iam.serviceAccountUser só na SA de runtime das functions (mais estreito
+#    que dar esse papel no projeto inteiro, que é o que a SA do frontend tem).
+gcloud iam service-accounts add-iam-policy-binding `
+  912453685006-compute@developer.gserviceaccount.com `
+  --project dute-btg `
+  --member="serviceAccount:$SA" `
+  --role="roles/iam.serviceAccountUser"
+
+# 4. Workload Identity: reusa o mesmo pool/provider do frontend (mesmo repo),
+#    só autoriza a SA nova a ser assumida por ele.
+gcloud iam service-accounts add-iam-policy-binding $SA `
+  --project dute-btg `
+  --role="roles/iam.workloadIdentityUser" `
+  --member="principalSet://iam.googleapis.com/projects/912453685006/locations/global/workloadIdentityPools/github-pool/attribute.repository/Leow4u/Dute"
+```
+
+Depois de rodar isso, o job `deploy-functions` já publica sozinho no próximo
+push em `main`. **Antes disso, ele falha na autenticação** (a SA não existe) —
+não há risco de publicar pela metade por falta desse passo.
+
+Papéis ainda não testados contra um deploy de verdade com uma SA restrita (só
+o Leonardo, com Owner, já publicou functions até hoje): se o primeiro run
+falhar com erro de permissão em vez de falhar no `check_functions_invoker`,
+veja de qual API a mensagem reclama e adicione o papel que faltar — bucket de
+build do Cloud Functions gen2 é o candidato mais provável, por analogia com o
+`dute-btg_cloudbuild` que travou o deploy do frontend antes de 09/10/2026.
+
+### Para desfazer
+
+```powershell
+gcloud iam service-accounts delete github-actions-functions@dute-btg.iam.gserviceaccount.com --project dute-btg
+```
+
+Remove a SA e, com ela, todo acesso que os passos acima deram — não precisa
+reverter papel por papel.
