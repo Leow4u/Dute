@@ -2,6 +2,7 @@
 
 Sistema de inventário, armazenagem, movimentações e cobrança para a operação
 BTG/Dutelog. Em produção desde 30/07/2026, com operação real e faturamento real.
+Dados zerados por completo em 16/10/2026 para um novo go-live (ver abaixo).
 
 Este arquivo é a fonte de verdade sobre **como trabalhar neste repositório**. A
 documentação de produto e operação está em `docs/`.
@@ -80,8 +81,12 @@ Definidas em `docs/roadmap-producao.md` e `docs/manual-producao.md`:
 deve ser usada**. Não derive lógica, preço, taxonomia ou dado dela.
 
 O sistema foi zerado e recarregado no go-live de 30/07/2026 a partir do inventário
-de abertura. A fonte de verdade de estoque é o ledger e as coleções operacionais
-no Firestore.
+de abertura e **zerado por completo em 16/10/2026** para um novo go-live
+(`tools/full_reset_btg.py`, roteiro e registro da execução em
+`docs/novo-go-live-zeragem-total.md`): catálogo, estoque, fluxos, faturamento,
+eventos e Agent Dute apagados; acesso, clientes, endereços e lista de preços
+preservados. O estoque volta pelo inventário de abertura. A fonte de verdade de
+estoque é o ledger e as coleções operacionais no Firestore.
 
 Notas antigas que tratavam a planilha como origem do modelo de dados foram
 removidas justamente por induzirem a erro.

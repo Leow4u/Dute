@@ -18,5 +18,6 @@ justifica para algo que não caiba em nenhum dos dois.
 A planilha `attached_assets/Inventário_BTG_Consolidado*.xlsx` foi referência
 inicial do projeto e **não deve ser usada** — não derive lógica, preço ou
 taxonomia dela. O sistema foi zerado e recarregado no go-live de 30/07/2026 a
-partir do inventário de abertura; a fonte de verdade de estoque é o ledger e as
-coleções operacionais no Firestore.
+partir do inventário de abertura e zerado por completo em 16/10/2026 para um
+novo go-live (`docs/novo-go-live-zeragem-total.md`); a fonte de verdade de
+estoque é o ledger e as coleções operacionais no Firestore.
