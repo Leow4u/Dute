@@ -150,9 +150,10 @@ isso não se repetir.
 ## Deploy automático pelo GitHub Actions
 
 O job `deploy-frontend` em `.github/workflows/ci.yml` publica o frontend a cada push
-em `main` (depois do `frontend-typecheck`) e também por disparo manual em
-Actions > CI > Run workflow, sempre a partir de `main`. A tag da imagem é o commit
-curto, então dá para saber o que está no ar olhando a revisão do Cloud Run.
+em `main` (depois de `frontend-typecheck`, `functions-unit` e `functions-integration`
+passarem) e também por disparo manual em Actions > CI > Run workflow, sempre a partir
+de `main`. A tag da imagem é o commit curto, então dá para saber o que está no ar
+olhando a revisão do Cloud Run.
 
 **Verde não basta.** Em 09/10/2026, oito execuções seguidas do job terminaram com
 sucesso e nenhuma mudou o que `app.dutelog.com.br` servia: todas imprimiram a mesma
