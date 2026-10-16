@@ -106,7 +106,10 @@ jobs:
   deploy-frontend:
     name: Deploy frontend (Cloud Run)
     runs-on: ubuntu-latest
-    needs: [frontend-typecheck]
+    # CI verde antes de publicar (frontend-typecheck, functions-unit e
+    # functions-integration). Antes só frontend-typecheck travava o deploy: um
+    # push que quebrasse os testes de functions publicava o frontend assim mesmo.
+    needs: [frontend-typecheck, functions-unit, functions-integration]
     # Só main publica: push mergeado ou disparo manual.
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     concurrency:
