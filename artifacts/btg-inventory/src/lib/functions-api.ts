@@ -312,6 +312,37 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  // Posições do armazém (mapa do galpão): cadastro mantido pelas Functions.
+  if (method === "POST" && pathname === "/api/warehouse/positions") {
+    return {
+      name: "saveWarehousePositions",
+      payload: async (_pathname, init) => readJsonBody(init),
+    };
+  }
+  if (method === "POST" && pathname === "/api/warehouse/positions/seed") {
+    return {
+      name: "seedWarehouseLayout",
+      status: 201,
+      payload: async () => ({}),
+    };
+  }
+  if (method === "POST" && pathname === "/api/warehouse/positions/aisles") {
+    return {
+      name: "createWarehouseAislePositions",
+      status: 201,
+      payload: async (_pathname, init) => readJsonBody(init),
+    };
+  }
+  const positionRemovalMatch = pathname.match(
+    /^\/api\/warehouse\/positions\/([^/]+)\/remove$/,
+  );
+  if (method === "POST" && positionRemovalMatch) {
+    return {
+      name: "removeWarehousePosition",
+      payload: async () => ({ code: decodeURIComponent(positionRemovalMatch[1]!) }),
+    };
+  }
+
   if (pathname === "/api/warehouse/opening-inventory/session") {
     if (method === "GET") {
       return {

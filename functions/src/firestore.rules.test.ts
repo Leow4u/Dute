@@ -83,6 +83,18 @@ async function seed() {
       qty_reserved: 0,
       qty_available: 10,
     });
+    await setDoc(doc(database, "warehouse_positions", "A-01"), {
+      id: "A-01",
+      code: "A-01",
+      aisle: "A",
+      shelf: 1,
+      length_m: 1.8,
+      depth_m: 0.75,
+      height_m: 0.65,
+      sequence: 1,
+      customer_code: null,
+      status: "active",
+    });
     await setDoc(doc(database, "movements", "movement-a"), {
       customer_code: CUSTOMER_A,
       sku_code: "BTG-TEST-1",
@@ -240,6 +252,28 @@ describe("ledger e mutações críticas", () => {
     );
     await assertFails(updateDoc(movement, { quantity: 99 }));
     await assertFails(deleteDoc(movement));
+  });
+
+  it("posições do armazém: operação lê, ninguém grava pelo navegador, cliente não vê", async () => {
+    const wms = testEnvironment
+      .authenticatedContext("wms-a", { email: "wms-a@example.com" })
+      .firestore();
+    await assertSucceeds(getDoc(doc(wms, "warehouse_positions", "A-01")));
+    await assertFails(updateDoc(doc(wms, "warehouse_positions", "A-01"), { height_m: 2 }));
+
+    const admin = testEnvironment
+      .authenticatedContext("admin-a", { email: "admin-a@example.com" })
+      .firestore();
+    await assertSucceeds(getDoc(doc(admin, "warehouse_positions", "A-01")));
+    await assertFails(
+      setDoc(doc(admin, "warehouse_positions", "A-02"), { code: "A-02", aisle: "A", shelf: 2 }),
+    );
+    await assertFails(deleteDoc(doc(admin, "warehouse_positions", "A-01")));
+
+    const client = testEnvironment
+      .authenticatedContext("client-a", { email: "client-a@example.com" })
+      .firestore();
+    await assertFails(getDoc(doc(client, "warehouse_positions", "A-01")));
   });
 
   it("bloqueia saldo, pedido e tarefa WMS fora das Cloud Functions", async () => {

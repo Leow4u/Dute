@@ -124,6 +124,7 @@ def seeded_production() -> FakeFirestore:
     fake.seed("system_settings", "infra", {"alerts": True})
     fake.seed("customers", "btg", {"customer_code": "BTG Pactual"})
     fake.seed("locations", "l1", {"rua": "A"})
+    fake.seed("warehouse_positions", "A-01", {"code": "A-01", "aisle": "A", "shelf": 1})
     fake.seed("billing_price_list", "p1", {"valor_unit": 10})
     fake.seed("billing_config", "default", {"ad_valorem": 0.005})
     fake.seed("products", "prod1", {"produto": "Cadeira"})

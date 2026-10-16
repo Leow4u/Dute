@@ -1,10 +1,11 @@
 # Mapa do armazém e endereçamento dirigido — desenho para decisão
 
-**Situação:** proposta em discussão, escrita em 16/10/2026. Nada daqui está
-implementado e nenhuma regra do sistema mudou. O documento existe para fechar
-as definições que precisam estar prontas **antes da contagem de abertura** do
-novo go-live, porque a contagem vai gravar posições e caixas no formato
-definido aqui. Decisão registrada: a contagem não começa antes disso.
+**Situação:** desenho aprovado em 16/10/2026 (mockups das cinco telas da fase 0
+avaliados por Leonardo). A fase 0 começou a ser construída: o cadastro de
+posições é o primeiro PR. O documento fecha as definições que precisam estar
+prontas **antes da contagem de abertura** do novo go-live, porque a contagem
+vai gravar posições e caixas no formato definido aqui. Decisão registrada: a
+contagem não começa antes disso.
 
 Documentos relacionados: `novo-go-live-zeragem-total.md` (zeragem de
 16/10/2026), `manual-producao.md` e `roadmap-producao.md` (invariantes).
@@ -167,9 +168,27 @@ mais próxima, primeira livre, desempate, zona cheia, recusa.
 
 ### 5.1 Cadastro de posições e zonas (antes da contagem)
 
-Importar a planilha de medidas (rua, prateleira, comprimento, profundidade,
-altura, peso máximo, sequência, cliente dono). Imprimir a etiqueta de cada
-prateleira com o código de barras da posição. Atribuir as zonas.
+**Construído (fase 0, PR 1).** Tela Estoque › Posições, coleção
+`warehouse_positions`, callables `saveWarehousePositions`,
+`seedWarehouseLayout`, `createWarehouseAislePositions` e
+`removeWarehousePosition` (`functions/src/domain/warehouse-positions.ts`).
+
+Não há importação por planilha: as medidas levantadas em 16/10/2026 (ruas A,
+B e C, 43 prateleiras) estão no código como mapa inicial e entram com um
+clique, só com o cadastro vazio. A partir daí tudo muda pela tela: editar uma
+prateleira, cadastrar uma rua nova com N prateleiras iguais, atribuir a zona
+de uma rua inteira a um cliente, bloquear, remover (só sem saldo). Se o galpão
+mudar um dia, é por aí que o mapa é reconstruído.
+
+Vocabulário da planilha, mantido na tela: comprimento é a frente da
+prateleira (1,80 m ou 1,78 m), largura é a profundidade (0,75 m, 0,88 m na
+C-01) e altura é o vão livre (0,65 a 1,90 m). Código da posição: rua e
+prateleira, `A-01` a `C-12`. A planilha não tem a prateleira 8 da rua A, e a
+altura da A-16 ficou incompleta ("9"): entrou como 0,90 m com observação para
+conferir. Peso máximo e zona não foram levantados: entram pela tela.
+
+A etiqueta de posição (código de barras da prateleira) fica para o PR das
+etiquetas, junto com a etiqueta de caixa.
 
 ### 5.2 Contagem de abertura por caixa (novo go-live)
 
@@ -257,15 +276,15 @@ saída e movimentações. Depende das pendências P3 e P4.
 
 | # | Pendência | Proposta |
 |---|-----------|----------|
-| P1 | Formato do código da posição. Existe nível dentro da prateleira? | `R01-P03` (rua 01, prateleira 03). Se a estante tiver níveis, `R01-E02-N3`. |
-| P2 | Medidas e tara das caixas pequena, média e grande; planilha das prateleiras com medidas e sequência. | Preencher a planilha de importação. |
-| P3 | O que é "uma posição ocupada" numa prateleira de frente livre. | Módulo = frente da caixa média. Por prateleira, posições = frente ocupada ÷ módulo, arredondado para cima. Alternativas: uma caixa = uma posição; ou metro linear. |
-| P4 | Regra do mês para a cobrança. | Média das posições ocupadas por dia (diária de armazenagem). Alternativas: ocupação no fechamento; maior ocupação do mês. |
-| P5 | Modo da contagem de abertura. | Direcionada (reorganiza durante a contagem). |
-| P6 | Gabarito da etiqueta adesiva A4 e tamanho da etiqueta. | Escolher o modelo de folha e enviar as medidas. |
+| P1 | Formato do código da posição. | **Decidido:** rua e prateleira, `A-01`. Caixa em cima de caixa fica dentro da mesma prateleira e não entra no código; a capacidade considera a altura livre. |
+| P2 | Medidas das prateleiras e das caixas. | **Prateleiras: decidido**, 43 medidas de 16/10/2026 no mapa inicial. **Caixas: ainda sem tamanhos padrão**; as medidas entram à mão por caixa até os três tamanhos serem definidos. |
+| P3 | O que é "uma posição ocupada". | **Decidido para agora:** uma caixa guardada conta uma posição. O mapa só mostra o número; a fatura segue manual. Rever quando a cobrança for automatizada. |
+| P4 | Regra do mês para a cobrança. | Adiado: a cobrança não será automatizada neste primeiro momento. |
+| P5 | Modo da contagem de abertura. | **Decidido:** direcionada, reorganizando todas as posições. |
+| P6 | Etiqueta. | **Decidido:** impressa em A4, mas menor: 10 por folha, 101,6 × 50,8 mm. |
 | P7 | "Unidades por caixa" por SKU: cadastrar ou declarar na hora. | Declarar na hora no go-live; cadastrar depois para os SKUs de giro. |
 | P8 | De qual caixa a separação retira. | FIFO por data de entrada. Alternativa: esvaziar primeiro a caixa com menos unidades. |
-| P9 | Zonas iniciais: quais prateleiras pertencem a cada cliente. | Definir na planilha de importação. |
+| P9 | Zonas iniciais: quais prateleiras pertencem a cada cliente. | Atribuir pela tela de Posições ("Zona da rua") antes da contagem. |
 | P10 | Balança disponível para o peso bruto por caixa? | Sim, no recebimento e na contagem. |
 
 ## 9. Entrega em fases
@@ -273,8 +292,8 @@ saída e movimentações. Depende das pendências P3 e P4.
 **Fase 0, bloqueia a contagem.** Um problema por PR, com teste que falha
 antes e passa depois:
 
-1. cadastro de posições e zonas: coleção, callables, tela, importação da
-   planilha, etiqueta de posição;
+1. cadastro de posições e zonas: coleção, callables, tela, mapa inicial no
+   código (feito no PR 1; a etiqueta de posição vai com as etiquetas);
 2. tipos de caixa e a caixa como unidade de manuseio: coleção, callables de
    criar, mover e encerrar, conciliação com o saldo;
 3. motor de endereçamento com os testes de cenário da seção 4;
@@ -288,9 +307,9 @@ confirmação por leitura; movimentação de caixa; expedição com etiqueta.
 relatório de conciliação caixas × saldo; completar caixa aberta; ZPL para
 Zebra; reorganização sugerida (IA recomenda, pessoa aprova).
 
-Antes de codificar a fase 0, fazer os mockups das quatro telas novas (cadastro
-de posições, contagem por caixa, etiqueta, mapa), como foi feito com a
-abertura.
+Mockups das telas da fase 0 (mapa, posições, contagem por caixa, celular,
+etiquetas) feitos e aprovados em 16/10/2026, com uma mudança: posições sem
+importação por planilha.
 
 ## 10. O que muda para quem opera
 

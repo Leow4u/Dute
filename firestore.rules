@@ -769,6 +769,13 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Posições do armazém (mapa do galpão): estrutura mantida pelas Cloud
+    // Functions saveWarehousePositions/seedWarehouseLayout/...; o app só lê.
+    match /warehouse_positions/{positionId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
     match /stock_reservations/{reservationId} {
       allow read: if canReadOperations();
       allow create, update, delete: if false;
