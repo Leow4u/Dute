@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import {
   AlertCircle,
   AlertTriangle,
@@ -16,6 +17,7 @@ import {
   PackageOpen,
   PackageSearch,
   PlayCircle,
+  Printer,
   RefreshCw,
   Sparkles,
   Trash2,
@@ -60,6 +62,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { type CountMode, defaultCountMode } from "@/lib/opening-inventory";
+import { labelsUrl } from "@/lib/warehouse-labels";
 import {
   type BoxDraft,
   type BoxRefusal,
@@ -197,6 +200,7 @@ const JSON_HEADERS = { "content-type": "application/json" };
 export function OpeningInventoryWorkspace() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [clientCode, setClientCode] = useState("");
   const [skuCode, setSkuCode] = useState("");
   const [productName, setProductName] = useState("");
@@ -835,15 +839,26 @@ export function OpeningInventoryWorkspace() {
                       ) : null}
                     </div>
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setActiveBox(undefined)}
-                    disabled={recordOpeningLine.isPending}
-                  >
-                    <PackageCheck data-icon="inline-start" />
-                    Fechar caixa
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => navigate(labelsUrl({ boxes: [currentBox.code] }))}
+                      disabled={recordOpeningLine.isPending}
+                    >
+                      <Printer data-icon="inline-start" />
+                      Imprimir etiqueta
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setActiveBox(undefined)}
+                      disabled={recordOpeningLine.isPending}
+                    >
+                      <PackageCheck data-icon="inline-start" />
+                      Fechar caixa
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-4 rounded-lg border border-border bg-card p-4">
@@ -1324,7 +1339,21 @@ export function OpeningInventoryWorkspace() {
                     Abra uma caixa para continuar lançando nela.
                   </div>
                 </div>
-                <Badge variant="outline">{formatNumber(boxesOfSession.length)}</Badge>
+                <div className="flex items-center gap-2">
+                  {boxesOfSession.length ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => navigate(labelsUrl({ session: true }))}
+                      title="Todas as etiquetas desta sessão, dez por folha A4"
+                    >
+                      <Printer data-icon="inline-start" />
+                      Etiquetas
+                    </Button>
+                  ) : null}
+                  <Badge variant="outline">{formatNumber(boxesOfSession.length)}</Badge>
+                </div>
               </div>
               {boxesQuery.isError ? (
                 <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
@@ -1362,6 +1391,17 @@ export function OpeningInventoryWorkspace() {
                                 disabled={open}
                               >
                                 {open ? "Aberta" : "Abrir"}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="shrink-0 text-muted-foreground"
+                                onClick={() => navigate(labelsUrl({ boxes: [box.code] }))}
+                                aria-label={`Imprimir etiqueta da caixa ${box.code}`}
+                                title="Imprimir etiqueta"
+                              >
+                                <Printer className="size-4" />
                               </Button>
                               <Button
                                 type="button"
