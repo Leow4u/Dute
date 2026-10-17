@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LayoutGrid, Pencil, Plus, Rows3, Trash2, Users } from "lucide-react";
+import { LayoutGrid, Pencil, Plus, Printer, Rows3, Trash2, Users } from "lucide-react";
+import { useLocation } from "wouter";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -28,6 +29,7 @@ import { useAppUser } from "@/lib/auth";
 import { normalizeProfileRole } from "@/lib/modules";
 import { cn } from "@/lib/utils";
 import { fetchJson } from "@/lib/warehouse-ops/model";
+import { labelsUrl } from "@/lib/warehouse-labels";
 import {
   POSITION_STATUS_LABELS,
   REFERENCE_BOX,
@@ -257,6 +259,7 @@ function CustomerSelect({
 export default function WarehousePositionsPage() {
   const { user } = useAppUser();
   const canEdit = canEditPositions(normalizeProfileRole(user?.publicMetadata.role));
+  const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -414,7 +417,17 @@ export default function WarehousePositionsPage() {
         title="Posições"
         description="Prateleiras do galpão com medidas úteis, sequência de caminhada e zona por cliente. É a base do mapa e do endereçamento dirigido."
         actions={
-          canEdit ? (
+          <>
+            <Button
+              variant="outline"
+              onClick={() => navigate(labelsUrl({ positions: filtered.map((position) => position.code) }))}
+              disabled={loading || filtered.length === 0}
+              title="Etiquetas das posições filtradas, dez por folha A4"
+            >
+              <Printer className="size-4" />
+              Imprimir etiquetas
+            </Button>
+          {canEdit ? (
             <>
               <Button variant="outline" onClick={() => setZoneOpen(true)} disabled={empty || busy}>
                 <Users className="size-4" />
@@ -429,7 +442,8 @@ export default function WarehousePositionsPage() {
                 Nova posição
               </Button>
             </>
-          ) : null
+          ) : null}
+          </>
         }
       />
 

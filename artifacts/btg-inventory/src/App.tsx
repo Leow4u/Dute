@@ -97,6 +97,7 @@ const WarehouseOps = lazy(() => import("./pages/warehouse-ops"));
 const Receber = lazy(() => import("./pages/receber"));
 const WmsInventoryPage = lazy(() => import("./pages/wms-inventory"));
 const WarehousePositionsPage = lazy(() => import("./pages/warehouse-positions"));
+const WarehouseLabelsPage = lazy(() => import("./pages/warehouse-labels"));
 const Pedidos = lazy(() => import("./pages/pedidos"));
 const Estoque = lazy(() => import("./pages/estoque"));
 const WmsReturnsPage = lazy(() => import("./pages/wms-returns"));
@@ -939,6 +940,7 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/wms/excecoes", WmsOrdersRedirect),
   protectedRoute("/wms", WmsStockRedirect),
   protectedRoute("/estoque/posicoes", WarehousePositionsPage),
+  protectedRoute("/estoque/etiquetas", WarehouseLabelsPage),
   protectedRoute("/estoque", Estoque),
   protectedRoute("/catalogo", Catalog),
   protectedRoute("/catalogo/saldos", Catalog),

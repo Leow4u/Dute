@@ -224,9 +224,9 @@ A tela mostra, além de produtos, unidades e valor, as caixas da sessão e as
 posições ocupadas (prateleiras com ao menos uma caixa), que é o número que a
 fatura manual usa por enquanto.
 
-Fora desta entrega: etiqueta em PDF (próximo PR), tipos de caixa padrão
-(pendência P2, medidas sempre manuais por enquanto) e produto solto fora de
-caixa na abertura (a tela exige caixa).
+Fora desta entrega: tipos de caixa padrão (pendência P2, medidas sempre
+manuais por enquanto) e produto solto fora de caixa na abertura (a tela exige
+caixa). As etiquetas entraram no PR 3 (seção 6).
 
 ### 5.3 Recebimento com guarda dirigida (fase 1)
 
@@ -275,6 +275,28 @@ saída e movimentações. Depende das pendências P3 e P4.
 - **Leitura:** câmera do celular (a tela de contagem já é usada no celular) ou
   digitação do código. Coletor dedicado fica para depois.
 
+**Construído (fase 0, PR 3).** Tela Estoque › Etiquetas (`/estoque/etiquetas`),
+aberta pela Contagem (caixa aberta, cada caixa da sessão ou todas da sessão) e
+por Posições (as posições filtradas). Sem gerador de PDF: a impressão é a do
+navegador, como a fatura (Imprimir → Salvar PDF). Code 128 feito no próprio
+app (`lib/code128.ts`, conjunto B, com teste do dígito verificador da norma).
+
+- Etiqueta de 101,6 × 50,8 mm, o rolo de 4 × 2 polegadas da Zebra. Na folha
+  A4 saem dez (duas colunas por cinco linhas, bloco centrado); "pular N" usa
+  uma folha adesiva já começada.
+- Caixa: código em barras e em texto, posição em destaque, cliente, medidas,
+  peso, origem e data, até quatro produtos com quantidade e "+ n produto(s)"
+  quando não cabe, total de unidades. O conteúdo vem das linhas da abertura
+  da caixa, por isso a etiqueta se imprime depois de lançar os produtos.
+- Posição: código em barras e em texto, zona, rua e prateleira, medidas e
+  peso máximo.
+- Modo "uma por etiqueta": cada etiqueta vira uma página do tamanho dela. É o
+  caminho da Zebra no primeiro dia, pelo driver do Windows com o rolo
+  configurado. ZPL direto (Zebra Browser Print) fica para quando houver a
+  impressora, com o mesmo conteúdo; nada da etiqueta muda.
+- Ainda sem evento "etiqueta impressa": a impressão é do navegador e o app
+  não sabe se saiu. Entra com o ZPL, quando o app passa a mandar o texto.
+
 ## 7. Invariantes que continuam valendo
 
 1. Toda escrita (posição, caixa, guarda, movimento, encerramento, snapshot de
@@ -319,8 +341,8 @@ antes e passa depois:
    caixa esperam a pendência P2);
 3. motor de endereçamento com os testes de cenário da seção 4 (feito no PR
    2, `functions/src/domain/warehouse-boxes.ts`);
-4. contagem de abertura por caixa, com sugestão (feito no PR 2) e etiqueta
-   em PDF (próximo PR);
+4. contagem de abertura por caixa, com sugestão (feito no PR 2) e etiquetas
+   de caixa e de posição (feito no PR 3, seção 6);
 5. mapa básico por zona com ocupação.
 
 **Fase 1, logo após o go-live:** recebimento com embalagem e guarda dirigida;
