@@ -1,8 +1,8 @@
 /**
  * Catálogo — Produtos e SKUs são duas visões do mesmo mestre (mesmo
  * cod_cliente, mesmas colunas). Uma rota só, com as telas existentes
- * renderizadas intactas sob abas; o Mapa do armazém é um pivô da coluna
- * "Localização" dos SKUs e vive aqui como terceira visão.
+ * renderizadas intactas sob abas. O Mapa do armazém saiu daqui em 16/10/2026:
+ * vive em Estoque › Mapa, com as posições cadastradas e as caixas guardadas.
  */
 import { Suspense, lazy } from "react";
 import { useLocation } from "wouter";
@@ -11,19 +11,16 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const Products = lazy(() => import("./products"));
 const Skus = lazy(() => import("./skus"));
-const Warehouse = lazy(() => import("./warehouse"));
 
 const CATALOG_TABS = [
   { value: "cadastro", label: "Cadastro", path: "/catalogo" },
   { value: "saldos", label: "SKUs e saldos", path: "/catalogo/saldos" },
-  { value: "mapa", label: "Mapa do armazém", path: "/catalogo/mapa" },
 ] as const;
 
 type CatalogTab = (typeof CATALOG_TABS)[number]["value"];
 
 function tabFromLocation(location: string): CatalogTab {
   if (location.startsWith("/catalogo/saldos")) return "saldos";
-  if (location.startsWith("/catalogo/mapa")) return "mapa";
   return "cadastro";
 }
 
@@ -52,7 +49,6 @@ export default function Catalog() {
       <Suspense fallback={null}>
         {tab === "cadastro" ? <Products /> : null}
         {tab === "saldos" ? <Skus /> : null}
-        {tab === "mapa" ? <Warehouse /> : null}
       </Suspense>
     </div>
   );

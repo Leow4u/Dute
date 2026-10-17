@@ -98,6 +98,7 @@ const Receber = lazy(() => import("./pages/receber"));
 const WmsInventoryPage = lazy(() => import("./pages/wms-inventory"));
 const WarehousePositionsPage = lazy(() => import("./pages/warehouse-positions"));
 const WarehouseLabelsPage = lazy(() => import("./pages/warehouse-labels"));
+const WarehouseMapPage = lazy(() => import("./pages/warehouse-map"));
 const Pedidos = lazy(() => import("./pages/pedidos"));
 const Estoque = lazy(() => import("./pages/estoque"));
 const WmsReturnsPage = lazy(() => import("./pages/wms-returns"));
@@ -913,7 +914,8 @@ const ClientInvoicesRedirect = () => <Redirect to="/portal/faturas" />;
 // para a aba equivalente, preservando links salvos.
 const ProductsRedirect = () => <Redirect to="/catalogo" />;
 const SkusRedirect = () => <Redirect to="/catalogo/saldos" />;
-const WarehouseMapRedirect = () => <Redirect to="/catalogo/mapa" />;
+// O mapa do armazém mudou para Estoque › Mapa (16/10/2026); os endereços antigos seguem para lá.
+const WarehouseMapRedirect = () => <Redirect to="/estoque/mapa" />;
 const PriceListRedirect = () => <Redirect to="/faturamento/tabela" />;
 // A Administração virou seção da Configuração.
 const legacySettingsRedirect = (path: string) => {
@@ -941,10 +943,11 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/wms", WmsStockRedirect),
   protectedRoute("/estoque/posicoes", WarehousePositionsPage),
   protectedRoute("/estoque/etiquetas", WarehouseLabelsPage),
+  protectedRoute("/estoque/mapa", WarehouseMapPage),
   protectedRoute("/estoque", Estoque),
   protectedRoute("/catalogo", Catalog),
   protectedRoute("/catalogo/saldos", Catalog),
-  protectedRoute("/catalogo/mapa", Catalog),
+  protectedRoute("/catalogo/mapa", WarehouseMapRedirect),
   protectedRoute("/warehouse", WarehouseMapRedirect),
   protectedRoute("/products", ProductsRedirect),
   protectedRoute("/skus", SkusRedirect),

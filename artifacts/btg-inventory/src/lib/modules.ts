@@ -3,11 +3,12 @@ import {
   BrainCircuit,
   CalendarDays,
   ClipboardCheck,
-  LayoutGrid,
   FileText,
   Home,
   Inbox,
   LayoutDashboard,
+  LayoutGrid,
+  Map,
   PackagePlus,
   PackageSearch,
   Receipt,
@@ -237,9 +238,17 @@ export const APP_MODULES: AppModule[] = [
         icon: ClipboardCheck,
         roles: WMS_ROLES,
       }),
-      // Mapa do galpão: as prateleiras com medidas, sequência e zona. Todo
-      // papel de armazém consulta; só administração e coordenação alteram
-      // (validado nas Functions).
+      // Mapa do armazém: prateleiras, ocupação e caixas por zona (só leitura).
+      navRoute({
+        id: "inventory-map",
+        label: "Mapa",
+        href: "/estoque/mapa",
+        icon: Map,
+        roles: WMS_ROLES,
+      }),
+      // Cadastro das prateleiras com medidas, sequência e zona. Todo papel de
+      // armazém consulta; só administração e coordenação alteram (validado
+      // nas Functions).
       navRoute({
         id: "inventory-positions",
         label: "Posições",

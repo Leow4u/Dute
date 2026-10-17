@@ -254,6 +254,27 @@ Por zona: ruas e prateleiras com ocupação da frente (livre, parcial, cheia,
 bloqueada), caixas e SKUs em cada uma, filtro por cliente e SKU. Substitui o
 mapa atual. Fica em Estoque, ao lado de Itens e Contagem.
 
+**Construído (fase 0, PR 4).** Estoque › Mapa (`/estoque/mapa`); o mapa
+antigo do catálogo (`/catalogo/mapa`, pivô da coluna de localização dos
+SKUs) foi removido e o endereço redireciona para o novo.
+
+- Quatro números no alto: posições ocupadas (prateleira com ao menos uma
+  caixa, o que a fatura manual usa), prateleiras da zona (com caixa, vazias,
+  indisponíveis), espaço restante em caixas de referência de 50 × 50 × 35
+  cm numa camada, e caixas guardadas com unidades e produtos.
+- Filtros por zona e rua, busca por caixa, produto ou código (acha pelo
+  código da caixa, SKU, código do cliente e nome, sem acento). Legenda:
+  livre, parcial, cheia, em verificação, bloqueada.
+- Cada rua é uma linha na ordem de caminhada; cada prateleira mostra o
+  código, as caixas, a barra da frente usada e "cabe n" ou "livre". Tocar na
+  prateleira abre a ficha: medidas, peso usado e máximo, frente livre, o que
+  ainda cabe, as caixas com conteúdo (das linhas da abertura, com
+  quantidade), e os atalhos para etiqueta da posição, etiquetas das caixas e
+  o cadastro. No celular a ficha sobe como gaveta.
+- Só leitura: as contas (frente usada, o que cabe, estado) seguem a regra do
+  motor, sem empilhar caixa. Mover caixa e bloquear pela ficha ficam para a
+  fase 1, com a movimentação.
+
 ### 5.7 Cobrança por posição ocupada (fase 2)
 
 Snapshot diário automático das posições ocupadas por cliente, calculado do
@@ -343,7 +364,10 @@ antes e passa depois:
    2, `functions/src/domain/warehouse-boxes.ts`);
 4. contagem de abertura por caixa, com sugestão (feito no PR 2) e etiquetas
    de caixa e de posição (feito no PR 3, seção 6);
-5. mapa básico por zona com ocupação.
+5. mapa básico por zona com ocupação (feito no PR 4, seção 5.6).
+
+Com isso a fase 0 está entregue; falta só atribuir as zonas pela tela de
+Posições antes da contagem.
 
 **Fase 1, logo após o go-live:** recebimento com embalagem e guarda dirigida;
 confirmação por leitura; movimentação de caixa; expedição com etiqueta.
