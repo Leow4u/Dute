@@ -40,10 +40,14 @@ documentação de produto e operação está em `docs/`.
   coleções no banco, preserva só acesso (e estrutura por padrão) e exige export
   gerenciado antes de apagar. Sempre dry-run antes; a execução é manual, da
   máquina do responsável.
-- **Mapa do armazém começou pelo cadastro de posições** (Estoque › Posições,
-  coleção `warehouse_positions`, preservada na zeragem). O mapa inicial (ruas
-  A, B e C, 43 prateleiras medidas em 16/10/2026) está no código e só entra com
-  o cadastro vazio; depois tudo muda pela tela. Desenho completo e decisões em
+- **Mapa do armazém: posições, caixas, etiquetas e mapa (fase 0, 16 e
+  17/10/2026).** Cadastro em Estoque › Posições (coleção `warehouse_positions`,
+  preservada na zeragem; o mapa inicial das ruas A, B e C, 43 prateleiras, está
+  no código e só entra com o cadastro vazio). A caixa é a unidade de manuseio
+  (`warehouse_boxes`, código `CX-000001`); a prateleira é escolhida pelo motor
+  em `functions/src/domain/warehouse-boxes.ts`, nunca digitada. Etiquetas em
+  Estoque › Etiquetas (impressão do navegador, 101,6 × 50,8 mm) e o mapa em
+  Estoque › Mapa (só leitura). Desenho completo e decisões em
   `docs/mapa-do-armazem-enderecamento-dirigido.md`.
 - **`pnpm` não está no PATH.** Use `corepack pnpm`. O diretório `functions/` usa
   **npm** (tem `package-lock.json` próprio), não pnpm.
