@@ -123,6 +123,8 @@ def seeded_production() -> FakeFirestore:
     fake.seed("customer_accounts", "a1", {"user_id": "u1"})
     fake.seed("system_settings", "infra", {"alerts": True})
     fake.seed("customers", "btg", {"customer_code": "BTG Pactual"})
+    # Perfil de operação publicado para o portal, gravado junto com o cadastro.
+    fake.seed("client_profiles", "btg", {"customer_code": "BTG Pactual", "operation_template": "uniformes"})
     fake.seed("locations", "l1", {"rua": "A"})
     fake.seed("warehouse_positions", "A-01", {"code": "A-01", "aisle": "A", "shelf": 1})
     fake.seed("billing_price_list", "p1", {"valor_unit": 10})
