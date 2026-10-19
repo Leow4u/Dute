@@ -374,13 +374,18 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  // Sessão de abertura do cliente ativo: o código do cliente vai no caminho.
+  const openingSessionMatch = pathname.match(
+    /^\/api\/warehouse\/opening-inventory\/session\/([^/]+)$/,
+  );
+  if (openingSessionMatch && method === "GET") {
+    return {
+      name: "getOpeningInventorySession",
+      payload: async () => ({ customer_code: decodeURIComponent(openingSessionMatch[1]!) }),
+    };
+  }
+
   if (pathname === "/api/warehouse/opening-inventory/session") {
-    if (method === "GET") {
-      return {
-        name: "getOpeningInventorySession",
-        payload: async () => ({ customer_code: "BTG Pactual" }),
-      };
-    }
     if (method === "POST") {
       return {
         name: "createOpeningInventorySession",

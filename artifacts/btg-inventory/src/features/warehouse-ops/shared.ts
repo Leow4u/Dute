@@ -51,7 +51,12 @@ export type OperationalException = {
  * Autoriza o caminho via Function e envia o arquivo com o SDK autenticado.
  * Evita PUT com signed URL no browser (CORS / assinatura de headers).
  */
-export async function uploadProductPhoto(file: File, clientItemCode: string) {
+/** Foto de produto do cliente informado (o cliente ativo da tela que chama). */
+export async function uploadProductPhoto(
+  file: File,
+  clientItemCode: string,
+  customerCode: string,
+) {
   if (!firebaseStorage) {
     throw new Error("Firebase Storage não está configurado neste ambiente.");
   }
@@ -70,7 +75,7 @@ export async function uploadProductPhoto(file: File, clientItemCode: string) {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        customer_code: "BTG Pactual",
+        customer_code: customerCode,
         client_item_code: clientItemCode,
         file_name: file.name,
         content_type: contentType,

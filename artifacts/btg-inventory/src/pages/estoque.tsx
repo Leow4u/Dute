@@ -51,6 +51,8 @@ import {
 import { cn } from "@/lib/utils";
 import Movements, { MovementModal } from "./movements";
 import { DeleteSkuButton, SkuModal } from "./skus";
+import { canCreateCatalogItemFor, customerRows } from "@/lib/active-customer";
+import { useActiveCustomer } from "@/lib/active-customer-context";
 
 type AnyRecord = Record<string, unknown>;
 
@@ -91,6 +93,9 @@ export default function Estoque() {
   const role = user?.publicMetadata.role;
   const catalogWriter = canWriteCatalog(role);
   const desktop = useIsDesktop();
+  // A lista é do cliente ativo; registro sem customer_code é da BTG.
+  const { code: customerCode, active: activeCustomer } = useActiveCustomer();
+  const canCreateItem = canCreateCatalogItemFor(customerCode);
   const [tab, setTab] = useState<"items" | "history">("items");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<StockFilter>(() => {
@@ -125,11 +130,11 @@ export default function Estoque() {
   const items = useMemo(
     () =>
       buildStockItems({
-        skus: skus.data?.items,
-        balances: balances.data?.items,
-        products: products.data?.items,
+        skus: customerRows(skus.data?.items, customerCode),
+        balances: customerRows(balances.data?.items, customerCode),
+        products: customerRows(products.data?.items, customerCode),
       }),
-    [balances.data?.items, products.data?.items, skus.data?.items],
+    [balances.data?.items, customerCode, products.data?.items, skus.data?.items],
   );
   const counts = useMemo(() => {
     const result = {} as Record<StockFilter, number>;
@@ -161,7 +166,7 @@ export default function Estoque() {
   return (
     <div className="flex flex-col gap-4 pb-24">
       <PageHeader
-        title="Estoque"
+        title={`Estoque · ${activeCustomer.name}`}
         actions={
           <>
             <Button asChild variant="outline">
@@ -179,6 +184,17 @@ export default function Estoque() {
                   </Button>
                 }
               />
+            ) : catalogWriter && !canCreateItem ? (
+              // O cadastro avulso grava o item sem cliente (vira da BTG). Até o
+              // SKU por cliente (PR 2), os itens dos outros clientes entram pelo
+              // Receber e pela Contagem, que gravam o cliente ativo.
+              <Button
+                disabled
+                title={`Itens de ${activeCustomer.name} entram pelo Receber e pela Contagem até o SKU por cliente.`}
+              >
+                <Plus className="size-4" />
+                Novo item
+              </Button>
             ) : catalogWriter ? (
               <SkuModal
                 trigger={
@@ -474,6 +490,8 @@ function movementDate(value: unknown) {
 
 function ItemCard({ item }: { item: StockItem }) {
   const { user } = useAppUser();
+  // O item listado é do cliente ativo (a lista é filtrada por ele).
+  const { code: customerCode } = useActiveCustomer();
   const role = user?.publicMetadata.role;
   const catalogWriter = canWriteCatalog(role);
   const photoWriter = canAddItemPhotos(role);
@@ -495,7 +513,7 @@ function ItemCard({ item }: { item: StockItem }) {
     mutationFn: async (files: File[]) => {
       const uploaded = await Promise.all(
         files.slice(0, 4).map((file) =>
-          uploadProductPhoto(file, item.clientCode ?? item.skuCode),
+          uploadProductPhoto(file, item.clientCode ?? item.skuCode, customerCode),
         ),
       );
       return fetchJson("/api/catalog/photos", {

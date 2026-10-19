@@ -89,25 +89,84 @@ firebase deploy --only firestore --project dute-btg
 
 O frontend sobe pelo GitHub Actions no merge em `main`.
 
+## O que o PR 1b construiu (19/10/2026): cliente ativo na área interna
+
+- **Seletor de cliente ativo** no menu da área interna (no celular, no
+  cabeçalho), lendo `client_profiles` (todo papel interno lê, inclusive o
+  financeiro). A escolha fica guardada no aparelho, por pessoa. A BTG entra
+  sempre, mesmo antes de o cadastro dela ser salvo de novo. Contexto e regras
+  puras em `src/lib/active-customer-context.tsx` e `src/lib/active-customer.ts`.
+- **O que segue o cliente ativo**: Contagem (sessão de abertura, caixas,
+  sugestão de posição, produtos, linhas e contagem cíclica), chegada avulsa do
+  Receber, devoluções, fotos de produto, Etiquetas, Documentos novos, anotação
+  e sincronização de notificações do agente, envio à base de conhecimento e a
+  lista de Estoque › Itens. Trocar de cliente recomeça a Contagem (caixa aberta
+  e rascunho eram do cliente anterior).
+- **O que mostra todos**: Início, Pedidos, a fila do Receber, Mapa, a
+  biblioteca de Documentos e o painel do agente. Decisão: a equipe é uma só e a
+  fila de trabalho não pode esconder o pedido de um cliente porque o seletor
+  está em outro.
+- **"Novo item" avulso** (Estoque) só para a BTG até o PR 2: o cadastro avulso
+  grava o item sem cliente. Itens dos outros clientes entram pelo Receber e
+  pela Contagem, que gravam o cliente.
+- **Registro sem `customer_code` é da BTG** em todo lugar (`recordCustomerCode`,
+  `customerRows` no app; `recordOwner` nas Functions). O nome literal "BTG
+  Pactual" só existe no pacote `btg`; `customer-literals.test.ts` trava a volta
+  do literal no app.
+
+Isolamento entre clientes nas Functions (`functions/src/domain/customer-scope.ts`,
+testes em `customer-scope.test.ts` e `customer-isolation.integration.test.ts`):
+
+- **Inventário de abertura por cliente.** `system_controls/inventory` continua
+  sendo a abertura da BTG (a da zeragem de 16/10/2026 e a base do faturamento
+  atual), com o mesmo comportamento de antes. A abertura de outro cliente não
+  escreve nele: trava só os pedidos de saída do próprio cliente, enquanto a
+  sessão dele está aberta. Cliente novo, sem sessão, começa pelo recebimento e
+  não espera a contagem de ninguém. `getOpeningInventorySession` devolve
+  `opening_required`, e a Contagem só avisa "abertura pendente" quando trava.
+- **Catálogo com dono.** Contagem, recebimento e devolução de um cliente
+  recusam produto ou SKU de outro ("O código X já está cadastrado para o
+  cliente Y"), inclusive arquivado (reativar tomaria o histórico do outro). O
+  catálogo ainda é um só; o código por cliente é o PR 2.
+- **E-mail ao cliente.** A lista de destinatários do ambiente
+  (`AGENT_DUTE_EMAIL_CLIENT_TO`) vale só para a BTG; notificação de outro
+  cliente só sai com destinatário informado na aprovação.
+- **Incidente do sistema** (Configurações › Sistema) passa a ser da operação
+  (`customer_code` "Dutelog"), não da BTG: a sincronização de notificações não
+  redige e-mail ao cliente sobre problema interno.
+
+Deploy deste PR: functions (lote completo), checagem do invoker e frontend
+pelo CI. Regras e índices não mudam.
+
+```powershell
+cd C:\DEV\Dute
+git checkout main
+git pull origin main
+$env:FUNCTIONS_DISCOVERY_TIMEOUT = "180"
+firebase deploy --only functions --project dute-btg
+tools\check_functions_invoker.ps1
+```
+
 ## Próximos PRs
 
-1. **Cliente ativo na área interna** (PR 1b): seletor no topo da área interna
-   ("muda menu, campos e regras para o cliente escolhido; Todos só no mapa e
-   no painel"), remoção dos ~21 literais `"BTG Pactual"` do app e do
-   `DEFAULT_CUSTOMER` das Functions nas trilhas que ainda assumem um cliente só.
-2. **SKU por cliente** (PR 2): `<SIGLA>-000001` sequencial por cliente
+1. **SKU por cliente** (PR 2): `<SIGLA>-000001` sequencial por cliente
    (contador nas Functions), código do cliente e código de barras únicos
    **por cliente**, checagem forte de produto parecido com foto antes de criar,
    busca por qualquer código. Produtos com peças serializadas (patrimônio)
    agrupadas sob o produto ("Cadeira Herman Miller" com 0050500, 0050501...).
-3. **Mobiliário**: estado de conservação (ótimo, bom, ruim, danificado) com
+2. **Mobiliário**: estado de conservação (ótimo, bom, ruim, danificado) com
    foto no recebimento e etiqueta por peça; solicitações de retirada,
    devolução, manutenção e descarte; custo de transporte por viagem; LPU do
    contrato; posições de piso com área e unidade de manuseio "volume"
    (caixa, palete, peça) no mapa.
-4. **Insumos internos**: entrada, baixa por uso, mínimo de estoque, sem portal
+3. **Insumos internos**: entrada, baixa por uso, mínimo de estoque, sem portal
    e sem fatura, na zona da Dutelog.
-5. A contagem de abertura da BTG espera os PRs 1 e 2 (decisão de 19/10/2026).
+4. A contagem de abertura da BTG espera os PRs 1 e 2 (decisão de 19/10/2026).
+5. Ainda assumem a BTG, de propósito, até virarem por cliente: faturamento
+   (`billing_config`, prévia e competências), os alertas derivados do painel do
+   agente e o `DEFAULT_CUSTOMER` das Functions como leitura de registro antigo.
+   O mapa mostra o conteúdo das caixas só do cliente ativo (as linhas vêm da
+   sessão de abertura dele).
 
 ## Decisões registradas
 

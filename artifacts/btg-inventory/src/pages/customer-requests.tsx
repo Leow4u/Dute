@@ -27,6 +27,7 @@ import { useAppUser } from "@/lib/auth";
 import { canDecideRequests, humanApiError } from "@/lib/permissions";
 import { useItemPhotos } from "@/lib/use-item-photos";
 import { cn } from "@/lib/utils";
+import { recordCustomerCode } from "@/lib/active-customer";
 
 export type CustomerRequest = {
   id: string;
@@ -1091,7 +1092,7 @@ export function requestSummary(request: CustomerRequest) {
   const total = getQuantityTotal(request);
   return [
     requestTypeLabel(request.type),
-    request.customer_code || "BTG Pactual",
+    recordCustomerCode(request),
     lines ? plural(lines, "item", "itens") : null,
     total !== undefined ? `${numberFormatter.format(total)} un.` : null,
   ]
@@ -1537,7 +1538,7 @@ function RequestDetail({
         </h2>
         <dl className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-foreground/60">
           <div>
-            Cliente <span className="font-semibold text-foreground">{request.customer_code || "BTG Pactual"}</span>
+            Cliente <span className="font-semibold text-foreground">{recordCustomerCode(request)}</span>
           </div>
           <div>
             Pedido por{" "}

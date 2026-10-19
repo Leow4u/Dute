@@ -56,6 +56,7 @@ import { firestore } from "@/lib/firebase";
 import { normalizeProfileRole, type ProfileRole } from "@/lib/modules";
 import { humanApiError } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
+import { LEGACY_CUSTOMER_CODE } from "@/lib/active-customer";
 
 /**
  * Pessoas e acessos: quem entra no sistema, com que perfil, e como tirar o
@@ -86,8 +87,6 @@ type InviteCustomer = {
   portal_status?: string;
 };
 
-/** Convite de cliente antes do cadastro de vários clientes: sempre a BTG. */
-const LEGACY_CUSTOMER_CODE = "BTG Pactual";
 
 type Person = {
   key: string;

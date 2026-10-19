@@ -56,6 +56,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { firestore } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
+import { recordCustomerCode } from "@/lib/active-customer";
+import { useActiveCustomer } from "@/lib/active-customer-context";
 
 const knowledgeCollection = "ai_agent_knowledge";
 const textChunkCollection = "ai_agent_knowledge_chunks";
@@ -120,7 +122,8 @@ type UploadFormState = {
 
 const initialForm: UploadFormState = {
   title: "",
-  customer_code: "BTG Pactual",
+  // Vazio: o envio usa o cliente ativo no menu.
+  customer_code: "",
   document_type: "documento_operacional",
   notes: "",
 };
@@ -294,6 +297,7 @@ async function emitKnowledgeEvent(input: {
 export default function AgentKnowledge() {
   const { toast } = useToast();
   const { user } = useAppUser();
+  const { code: activeCustomerCode } = useActiveCustomer();
   // Mesmo critério do backend (NOTE_REVIEWER_ROLES); o financeiro vê só os documentos.
   const canReviewNotes = ["owner", "admin", "interno", "suporte"].includes(String(user?.publicMetadata.role ?? ""));
   const queryClient = useQueryClient();
@@ -382,7 +386,7 @@ export default function AgentKnowledge() {
           id: knowledgeId,
           title,
           document_type: form.document_type,
-          customer_code: form.customer_code.trim() || "BTG Pactual",
+          customer_code: form.customer_code.trim() || activeCustomerCode,
           source_file_name: file.name,
           summary:
             form.notes.trim() ||
@@ -458,7 +462,7 @@ export default function AgentKnowledge() {
                 text: chunk,
                 source_file_name: file.name,
                 title,
-                customer_code: form.customer_code.trim() || "BTG Pactual",
+                customer_code: form.customer_code.trim() || activeCustomerCode,
                 document_type: form.document_type,
                 created_at: serverTimestamp(),
               },
@@ -471,7 +475,7 @@ export default function AgentKnowledge() {
       await emitKnowledgeEvent({
         id: knowledgeId,
         title,
-        customer_code: form.customer_code.trim() || "BTG Pactual",
+        customer_code: form.customer_code.trim() || activeCustomerCode,
         file_name: file.name,
         extraction_status: extractionStatus,
       });
@@ -664,7 +668,7 @@ export default function AgentKnowledge() {
                         <div className="rounded-2xl border border-border/70 bg-card p-3">
                           <p className="text-xs text-muted-foreground">Cliente</p>
                           <p className="mt-1 font-medium">
-                            {item.customer_code ?? "BTG Pactual"}
+                            {recordCustomerCode(item)}
                           </p>
                         </div>
                         <div className="rounded-2xl border border-border/70 bg-card p-3">
@@ -767,6 +771,7 @@ export default function AgentKnowledge() {
                   <Label htmlFor="knowledge-customer">Cliente</Label>
                   <Input
                     id="knowledge-customer"
+                    placeholder={activeCustomerCode}
                     value={form.customer_code}
                     onChange={(event) =>
                       setForm((current) => ({

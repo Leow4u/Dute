@@ -11,6 +11,7 @@ import {
   type PortalStatus,
 } from "./operations";
 import { summarizeZones, type WarehousePosition } from "./warehouse-positions";
+import { LEGACY_CUSTOMER_CODE } from "./active-customer";
 
 /**
  * Configurações › Clientes: o cadastro de cada cliente aponta para um modelo
@@ -74,8 +75,6 @@ export type CustomerRow = {
   paused: boolean;
 };
 
-/** Cliente sem código operacional (convites antigos) pertence à BTG. */
-const LEGACY_CUSTOMER_CODE = "BTG Pactual";
 
 export function customerCode(customer: Pick<CustomerRecord, "code" | "id">): string {
   return String(customer.code ?? customer.id ?? "").trim();

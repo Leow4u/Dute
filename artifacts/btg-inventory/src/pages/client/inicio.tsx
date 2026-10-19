@@ -25,6 +25,7 @@ import {
   getRequests,
   inventoryTotalValue,
 } from "./shared";
+import { LEGACY_CUSTOMER_CODE } from "@/lib/active-customer";
 
 /**
  * Início do portal: só o que pede atenção agora. Pedidos em andamento com a
@@ -70,7 +71,7 @@ export function ClienteInicio() {
         const orders = homeOrderViews(requests, trackings, now);
         const shipments = splitShipments(requests).onTheWay.slice(0, 3);
         const bills = invoiceLines(invoices, now, { includeCurrent: false });
-        const customer = overview.customer?.name || "BTG Pactual";
+        const customer = overview.customer?.name || LEGACY_CUSTOMER_CODE;
         const today = longDate.format(now);
 
         return (

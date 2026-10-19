@@ -24,6 +24,12 @@ export const OPERATION_PACKS: readonly OperationPack[] = [btg];
 /** Modelo da BTG: cadastro anterior ao campo e perfil não publicado caem aqui. */
 export const DEFAULT_OPERATION_TEMPLATE: OperationTemplateKey = "uniformes";
 
+/**
+ * Cliente legado: o da BTG, do pacote btg. Registro sem `customer_code`
+ * (anterior ao multicliente) é dele (lib/active-customer.ts).
+ */
+export const LEGACY_CUSTOMER_CODE: string = btg.customers[0]!;
+
 export const OPERATION_TEMPLATE_KEYS: readonly OperationTemplateKey[] = OPERATION_TEMPLATES.map(
   (template) => template.key,
 );
@@ -75,7 +81,7 @@ export type OperationProfile = {
 
 export function resolveOperationProfile(
   record: CustomerProfileRecord | null | undefined,
-  fallbackCustomerCode = "BTG Pactual",
+  fallbackCustomerCode = LEGACY_CUSTOMER_CODE,
 ): OperationProfile {
   const customerCode =
     String(record?.customer_code ?? record?.code ?? "").trim() || fallbackCustomerCode;

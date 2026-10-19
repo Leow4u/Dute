@@ -14,6 +14,12 @@ export type OpeningInventorySummary = {
   status?: "not_started" | "open" | "completed" | string;
   line_count?: number;
   unit_count?: number;
+  /**
+   * A abertura deste cliente trava os pedidos de saída (getOpeningInventorySession).
+   * Cliente novo, que começa pelo recebimento, vem com false; sem o campo
+   * (backend antigo), vale como obrigatória, como sempre foi.
+   */
+  opening_required?: boolean;
 };
 
 /**
@@ -22,8 +28,11 @@ export type OpeningInventorySummary = {
  */
 export function defaultCountMode(
   status: OpeningInventorySummary["status"],
+  openingRequired?: boolean,
 ): CountMode {
-  return status === "completed" ? "cycle" : "opening";
+  if (status === "completed") return "cycle";
+  if (status === "not_started" && openingRequired === false) return "cycle";
+  return "opening";
 }
 
 export type OpeningInventoryNoticeContent = {
@@ -47,6 +56,8 @@ export function openingInventoryNotice(
   session: OpeningInventorySummary | undefined,
 ): OpeningInventoryNoticeContent | null {
   if (!session) return null;
+  // Cliente que não precisa de abertura (começa pelo recebimento): nada a avisar.
+  if (session.status === "not_started" && session.opening_required === false) return null;
   if (session.status === "not_started") {
     return {
       tone: "warning",

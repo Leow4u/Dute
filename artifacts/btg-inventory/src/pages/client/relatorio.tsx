@@ -16,6 +16,7 @@ import {
 
 import { ClientDataBoundary, formatMoney, getInvoices, getOrders } from "./shared";
 import { MonthlyBars } from "./billing-charts";
+import { LEGACY_CUSTOMER_CODE } from "@/lib/active-customer";
 
 /**
  * Extrato de serviços logísticos de um período, para apresentar: o
@@ -125,7 +126,7 @@ export function ClienteRelatorio() {
                       <div className="text-xs text-slate-500">Soluções logísticas</div>
                     </div>
                     <div className="text-right text-xs text-slate-500">
-                      <div className="text-sm font-semibold text-slate-800">{overview.customer?.name || overview.customer?.code || "BTG Pactual"}</div>
+                      <div className="text-sm font-semibold text-slate-800">{overview.customer?.name || overview.customer?.code || LEGACY_CUSTOMER_CODE}</div>
                       Gerado em {dateBr.format(new Date())}
                       {generatedBy ? ` por ${generatedBy}` : ""}
                     </div>

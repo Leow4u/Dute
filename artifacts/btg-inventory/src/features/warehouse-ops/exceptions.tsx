@@ -60,6 +60,8 @@ import {
   normalizeProductKey,
   similarProductNames,
 } from "@/features/warehouse-ops/receiving";
+import { LEGACY_CUSTOMER_CODE, customerRows, recordCustomerCode } from "@/lib/active-customer";
+import { useActiveCustomer } from "@/lib/active-customer-context";
 
 export type ReturnReceiptResult = {
   ok?: boolean;
@@ -125,7 +127,7 @@ function exceptionFromRecord(record: AnyRecord): OperationalException {
       ? severity
       : "attention",
     status: coerceText(record.status, "open"),
-    customerCode: coerceText(record.customer_code, "BTG Pactual"),
+    customerCode: recordCustomerCode(record),
     createdAt: apiDateText(record.created_at),
     resolvedAt: apiDateText(record.resolved_at),
     resolution: coerceText(record.resolution) || undefined,
@@ -482,7 +484,10 @@ function returnLineFromRecord(
 export function ReturnWorkspace() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [source, setSource] = useState("Loja BTG");
+  // A devolução é do cliente ativo: produtos, pendências e o registro são dele.
+  const { code: customerCode, active: activeCustomer } = useActiveCustomer();
+  const defaultSource = customerCode === LEGACY_CUSTOMER_CODE ? "Loja BTG" : activeCustomer.name;
+  const [source, setSource] = useState(defaultSource);
   const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<ReceiptDraftLine[]>([
@@ -494,22 +499,22 @@ export function ReturnWorkspace() {
   >({});
 
   const lookupQuery = useQuery({
-    queryKey: ["returns-product-lookup"],
+    queryKey: ["returns-product-lookup", customerCode],
     staleTime: 60_000,
     queryFn: async () => {
       const [skusPayload, productsPayload] = await Promise.all([
         fetchJson<unknown>("/api/skus?limit=5000"),
         fetchJson<unknown>("/api/products?limit=5000"),
       ]);
-      const skus = normalizeApiRows(skusPayload).map(productLookupFromRecord);
-      const products = normalizeApiRows(productsPayload).map(productLookupFromRecord);
+      const skus = customerRows(normalizeApiRows(skusPayload), customerCode).map(productLookupFromRecord);
+      const products = customerRows(normalizeApiRows(productsPayload), customerCode).map(productLookupFromRecord);
       return mergeProductLookup(skus, products);
     },
   });
 
   const productLookup = lookupQuery.data ?? [];
   const pendingReturnLinesQuery = useQuery({
-    queryKey: ["returns-pending"],
+    queryKey: ["returns-pending", customerCode],
     staleTime: 20_000,
     queryFn: async () => {
       const [itemsPayload, headersPayload] = await Promise.all([
@@ -522,7 +527,7 @@ export function ReturnWorkspace() {
           header,
         ]),
       );
-      return normalizeApiRows(itemsPayload)
+      return customerRows(normalizeApiRows(itemsPayload), customerCode)
         .map((record) => returnLineFromRecord(record, headersById))
         .filter((line) => line.itemId && line.status === "pending_disposition")
         .sort((a, b) => (b.receivedAt ?? "").localeCompare(a.receivedAt ?? ""));
@@ -602,8 +607,8 @@ export function ReturnWorkspace() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          customer_code: "BTG Pactual",
-          source: source.trim() || "Loja BTG",
+          customer_code: customerCode,
+          source: source.trim() || defaultSource,
           reference: reference.trim() || undefined,
           notes: notes.trim() || undefined,
           received_at: new Date().toISOString(),

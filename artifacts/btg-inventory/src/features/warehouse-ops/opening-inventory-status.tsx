@@ -16,6 +16,7 @@ import {
 } from "@/lib/opening-inventory";
 import { cn } from "@/lib/utils";
 import { fetchJson } from "@/lib/warehouse-ops/model";
+import { useActiveCustomer } from "@/lib/active-customer-context";
 
 export type OpeningInventoryLine = {
   id: string;
@@ -46,12 +47,14 @@ export type OpeningInventorySession = OpeningInventorySummary & {
 /** A mesma chave que as mutações do inventário invalidam. */
 export const OPENING_INVENTORY_SESSION_KEY = ["opening-inventory-session"];
 
+/** Sessão de abertura do cliente ativo (cada cliente tem a sua). */
 export function useOpeningInventorySession() {
+  const { code } = useActiveCustomer();
   return useQuery<OpeningInventorySession>({
-    queryKey: OPENING_INVENTORY_SESSION_KEY,
+    queryKey: [...OPENING_INVENTORY_SESSION_KEY, code],
     queryFn: () =>
       fetchJson<OpeningInventorySession>(
-        "/api/warehouse/opening-inventory/session",
+        `/api/warehouse/opening-inventory/session/${encodeURIComponent(code)}`,
       ),
     staleTime: 10_000,
     retry: false,

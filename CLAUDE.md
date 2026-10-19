@@ -56,9 +56,13 @@ documentação de produto e operação está em `docs/`.
   `operation_template` e `sku_prefix`, validados em
   `functions/src/domain/customer-profile.ts`; a projeção `client_profiles` é o
   que o portal lê para montar menu e rotas por modelo. Personalização por
-  cliente é PR no pacote dele, nunca configuração de tela. Ver
-  `docs/multicliente-modelos-de-operacao.md` (inclui a ordem dos próximos PRs:
-  cliente ativo na área interna, SKU por cliente, mobiliário, insumos).
+  cliente é PR no pacote dele, nunca configuração de tela. **A área interna
+  opera o cliente ativo** (seletor no menu, `src/lib/active-customer*.ts`):
+  tela interna grava para ele, nunca para a BTG fixa (`customer-literals.test.ts`
+  trava o literal). Nas Functions, `domain/customer-scope.ts` isola os
+  clientes: abertura de estoque por cliente (o `system_controls/inventory` é
+  só da BTG) e catálogo com dono. Ver `docs/multicliente-modelos-de-operacao.md`
+  (inclui a ordem dos próximos PRs: SKU por cliente, mobiliário, insumos).
 - **`pnpm` não está no PATH.** Use `corepack pnpm`. O diretório `functions/` usa
   **npm** (tem `package-lock.json` próprio), não pnpm.
 

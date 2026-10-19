@@ -6,6 +6,7 @@ import { buildInvoiceView } from "@/lib/invoice-view";
 
 import { ClientDataBoundary, EmptyModuleState, firstText, getInvoices } from "./shared";
 import { FileX } from "lucide-react";
+import { LEGACY_CUSTOMER_CODE } from "@/lib/active-customer";
 
 function competenciaFromUrl() {
   if (typeof window === "undefined") return "";
@@ -31,7 +32,7 @@ export function ClienteFatura() {
               <InvoiceDocument
                 competencia={competencia}
                 view={buildInvoiceView(invoice)}
-                customerName={firstText(invoice.customer_name, invoice.customer_code, "BTG Pactual")}
+                customerName={firstText(invoice.customer_name, invoice.customer_code, LEGACY_CUSTOMER_CODE)}
                 issuedAt={firstText(invoice.emitido_em, invoice.issued_at) ?? null}
               />
             ) : (

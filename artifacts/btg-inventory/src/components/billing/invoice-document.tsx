@@ -3,6 +3,7 @@ import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { competenciaLabel, fmtBRL, fmtNum } from "@/lib/billing-format";
 import type { InvoiceView } from "@/lib/invoice-view";
+import { LEGACY_CUSTOMER_CODE } from "@/lib/active-customer";
 
 /**
  * A fatura como documento: é o que a cliente vê no portal e o que sai no
@@ -27,7 +28,7 @@ function dateLabel(value?: string | null) {
 export function InvoiceDocument({
   competencia,
   view,
-  customerName = "BTG Pactual",
+  customerName = LEGACY_CUSTOMER_CODE,
   issuedAt,
   draft,
 }: {

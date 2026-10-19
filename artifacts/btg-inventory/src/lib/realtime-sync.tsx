@@ -14,8 +14,10 @@ import {
 
 import { useAppUser } from "./auth";
 import { firestore } from "./firebase";
+import { LEGACY_CUSTOMER_CODE } from "./active-customer";
 
-const DEFAULT_CUSTOMER_CODE = "BTG Pactual";
+// Perfil de cliente sem código (convites antigos) é da BTG.
+const DEFAULT_CUSTOMER_CODE = LEGACY_CUSTOMER_CODE;
 
 const CUSTOMER_AUTHORIZED_COLLECTIONS = [
   "client_inventory",
