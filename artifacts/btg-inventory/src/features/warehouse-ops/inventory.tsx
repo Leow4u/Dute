@@ -103,7 +103,6 @@ import {
   findExistingProduct,
   mergeProductLookup,
   normalizeApiRows,
-  normalizeProductKey,
   similarProductNames,
   sourcePhotos,
   sourceText,
@@ -122,6 +121,12 @@ import {
 } from "@/features/warehouse-ops/opening-inventory-status";
 import { customerRows } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
+import {
+  CODE_MATCH_LABEL,
+  findProductByAnyCode,
+  findProductByBarcode,
+} from "@/lib/product-match";
+import { SimilarProductList } from "@/features/warehouse-ops/similar-products";
 
 export type CycleCountResult = {
   ok?: boolean;
@@ -135,6 +140,9 @@ export type CycleCountResult = {
   adjustment_qty?: number;
   adjustment_type?: string;
   box_code?: string;
+  /** SKU da linha; `sku_generated` quando o produto novo ganhou o SKU agora. */
+  sku_code?: string;
+  sku_generated?: boolean;
 };
 
 export type { OpeningInventoryLine, OpeningInventorySession };
@@ -205,12 +213,20 @@ const JSON_HEADERS = { "content-type": "application/json" };
  */
 export function OpeningInventoryWorkspace() {
   // A abertura é do cliente ativo: sessão, caixas, produtos e linhas são dele.
-  const { code: customerCode } = useActiveCustomer();
+  const {
+    code: customerCode,
+    active: activeCustomer,
+    isLoading: customerLoading,
+  } = useActiveCustomer();
+  const skuPrefix = activeCustomer.profile.skuPrefix;
+  // Sem sigla no cadastro publicado, as Functions recusam produto novo: a
+  // tela avisa antes. Perfil ainda não publicado fica para as Functions dizerem.
+  const missingSkuPrefix =
+    !customerLoading && activeCustomer.profile.source === "published" && !skuPrefix;
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [clientCode, setClientCode] = useState("");
-  const [skuCode, setSkuCode] = useState("");
   const [productName, setProductName] = useState("");
   const [category, setCategory] = useState("");
   const [genero, setGenero] = useState("");
@@ -300,7 +316,7 @@ export function OpeningInventoryWorkspace() {
   );
   const draftLine = useMemo<ReceiptDraftLine>(
     () => ({
-      sku: skuCode,
+      sku: "",
       clientCode,
       product: productName,
       category,
@@ -328,49 +344,38 @@ export function OpeningInventoryWorkspace() {
       photos,
       productName,
       size,
-      skuCode,
       unitCost,
     ],
   );
-  const clientCodeMatch = useMemo(() => {
-    const key = normalizeProductKey(clientCode);
-    return key
-      ? lookupProducts.find(
-          (product) => normalizeProductKey(product.clientCode) === key,
-        )
-      : undefined;
-  }, [clientCode, lookupProducts]);
-  const skuCodeMatch = useMemo(() => {
-    const key = normalizeProductKey(skuCode);
-    return key
-      ? lookupProducts.find(
-          (product) => normalizeProductKey(product.skuCode) === key,
-        )
-      : undefined;
-  }, [lookupProducts, skuCode]);
+  // O SKU não se digita (é gerado na sigla do cliente): o campo de código
+  // acha o produto pelo código do cliente, pelo SKU ou pelo de barras, e o
+  // código de barras sozinho também acha (lib/product-match.ts).
+  const codeMatch = useMemo(
+    () => findProductByAnyCode(lookupProducts, clientCode),
+    [clientCode, lookupProducts],
+  );
+  const barcodeMatch = useMemo(
+    () => findProductByBarcode(lookupProducts, barcode),
+    [barcode, lookupProducts],
+  );
   const identityConflict = Boolean(
-    (clientCodeMatch &&
-      skuCode.trim() &&
-      normalizeProductKey(clientCodeMatch.skuCode) !==
-        normalizeProductKey(skuCode)) ||
-      (skuCodeMatch &&
-        clientCode.trim() &&
-        normalizeProductKey(skuCodeMatch.clientCode) !==
-          normalizeProductKey(clientCode)) ||
-      (clientCodeMatch &&
-        skuCodeMatch &&
-        clientCodeMatch.id !== skuCodeMatch.id),
+    codeMatch && barcodeMatch && codeMatch.product.id !== barcodeMatch.id,
   );
   const existingProduct = identityConflict
     ? undefined
-    : skuCodeMatch ?? clientCodeMatch;
+    : codeMatch?.product ?? barcodeMatch;
+  const existingMatchLabel = codeMatch
+    ? CODE_MATCH_LABEL[codeMatch.field]
+    : barcodeMatch
+      ? CODE_MATCH_LABEL.barcode
+      : "";
   const similarProducts = useMemo(
     () => (existingProduct ? [] : similarProductNames(draftLine, lookupProducts)),
     [draftLine, existingProduct, lookupProducts],
   );
   const parsedCount = Number(countedQty);
   const parsedCost = Number(unitCost);
-  const hasIdentity = Boolean(clientCode.trim() || skuCode.trim());
+  const hasIdentity = Boolean(clientCode.trim());
   const newProductComplete =
     Boolean(productName.trim()) &&
     Boolean(category.trim()) &&
@@ -396,7 +401,7 @@ export function OpeningInventoryWorkspace() {
     !photoUploading &&
     taxonomyComplete &&
     ((Boolean(selectedProduct?.hasSku) && selectedProductCost > 0) ||
-      (createNew && newProductComplete)) &&
+      (createNew && newProductComplete && !missingSkuPrefix)) &&
     !(selectedProduct && createNew);
 
   const startSession = useMutation<OpeningInventorySession, Error>({
@@ -567,10 +572,9 @@ export function OpeningInventoryWorkspace() {
           mode: "opening",
           session_id: session?.session_id,
           customer_code: customerCode,
-          sku_code:
-            selectedProduct?.skuCode || skuCode.trim() || clientCode.trim(),
-          client_item_code:
-            selectedProduct?.clientCode || clientCode.trim() || skuCode.trim(),
+          // Produto novo não leva SKU: as Functions geram na sigla do cliente.
+          sku_code: selectedProduct?.skuCode || undefined,
+          client_item_code: selectedProduct?.clientCode || clientCode.trim(),
           product_name: selectedProduct?.productName || productName.trim(),
           product_registration: selectedProduct ? "existing" : "new",
           category:
@@ -611,11 +615,12 @@ export function OpeningInventoryWorkspace() {
       queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
       queryClient.invalidateQueries({ queryKey: ["ai-overview"] });
       toast({
-        title: "Produto contado e publicado",
+        title: result.sku_generated
+          ? `Produto cadastrado: SKU ${result.sku_code}`
+          : "Produto contado e publicado",
         description: `${formatNumber(result.qty_counted)} unidade(s) na caixa ${result.box_code ?? currentBox?.code ?? ""}, posição ${currentBox?.location_id ?? ""}.`,
       });
       setClientCode("");
-      setSkuCode("");
       setProductName("");
       setCategory("");
       setGenero("");
@@ -675,8 +680,7 @@ export function OpeningInventoryWorkspace() {
   });
 
   function applyProduct(product: ProductLookupItem) {
-    setClientCode(product.clientCode);
-    setSkuCode(product.skuCode);
+    setClientCode(product.clientCode || product.skuCode);
     setProductName(product.productName);
     setCategory(sourceText(product.source, "category", "categoria"));
     setGenero(
@@ -704,8 +708,7 @@ export function OpeningInventoryWorkspace() {
     if (!selected.length) return;
     setPhotoUploading(true);
     try {
-      const clientItemCode =
-        clientCode.trim() || skuCode.trim() || `abertura-${Date.now()}`;
+      const clientItemCode = clientCode.trim() || `abertura-${Date.now()}`;
       const uploaded = await Promise.all(
         selected.map((file) => uploadProductPhoto(file, clientItemCode, customerCode)),
       );
@@ -1037,20 +1040,21 @@ export function OpeningInventoryWorkspace() {
                           setCreateNew(false);
                           setSelectedProduct(undefined);
                         }}
-                        placeholder="Código usado pelo BTG"
+                        placeholder="Também acha por SKU ou cód. de barras"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="opening-sku">SKU interno</Label>
+                      <Label htmlFor="opening-sku">SKU</Label>
+                      {/* O SKU não se digita: é o do cadastro achado ou o gerado ao salvar. */}
                       <Input
                         id="opening-sku"
-                        value={skuCode}
-                        onChange={(event) => {
-                          setSkuCode(event.target.value);
-                          setCreateNew(false);
-                          setSelectedProduct(undefined);
-                        }}
-                        placeholder="Opcional; usa o cód. cliente"
+                        value={existingProduct?.skuCode ?? ""}
+                        readOnly
+                        tabIndex={-1}
+                        className="bg-muted"
+                        placeholder={
+                          skuPrefix ? `Gerado ao salvar (${skuPrefix}-…)` : "Gerado ao salvar"
+                        }
                       />
                     </div>
                     <div className="space-y-2">
@@ -1091,7 +1095,7 @@ export function OpeningInventoryWorkspace() {
                       <AlertTriangle className="size-4" />
                       <AlertTitle>Códigos pertencem a cadastros diferentes</AlertTitle>
                       <AlertDescription>
-                        Revise o Cód. cliente e o SKU. O sistema não permite combinar identidades de produtos diferentes.
+                        {`O código ${clientCode.trim()} é de ${codeMatch?.product.productName ?? "um cadastro"} e o código de barras ${barcode.trim()} é de ${barcodeMatch?.productName ?? "outro"}. Revise os dois antes de continuar.`}
                       </AlertDescription>
                     </Alert>
                   ) : existingProduct && !existingProduct.hasSku ? (
@@ -1109,7 +1113,8 @@ export function OpeningInventoryWorkspace() {
                           Produto já cadastrado: {existingProduct.productName}
                         </div>
                         <div className="mt-1 text-xs text-muted-foreground">
-                          Cod. cliente {existingProduct.clientCode} · SKU {existingProduct.skuCode}
+                          Cod. cliente {existingProduct.clientCode || "sem código"} · SKU {existingProduct.skuCode}
+                          {existingMatchLabel ? ` · achado ${existingMatchLabel}` : ""}
                         </div>
                       </div>
                       <Button
@@ -1127,23 +1132,28 @@ export function OpeningInventoryWorkspace() {
                     <Alert className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
                       <AlertTriangle className="size-4" />
                       <AlertTitle>Produto não encontrado</AlertTitle>
-                      <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <span>
-                          Confirme que é realmente novo antes de criar uma identidade no estoque.
-                          {similarProducts.length
-                            ? ` Parecidos: ${similarProducts
-                                .map((product) => product.productName)
-                                .join(", ")}.`
-                            : ""}
-                        </span>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={createNew ? "default" : "outline"}
-                          onClick={() => setCreateNew((current) => !current)}
-                        >
-                          {createNew ? "Novo produto confirmado" : "Cadastrar como novo"}
-                        </Button>
+                      <AlertDescription>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <span>
+                            {missingSkuPrefix
+                              ? `Cadastre a sigla do SKU de ${activeCustomer.name} em Configurações › Clientes antes de cadastrar produto novo: o SKU é gerado com ela.`
+                              : "Confirme que é realmente novo antes de criar uma identidade no estoque. O SKU é gerado ao salvar."}
+                          </span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={createNew ? "default" : "outline"}
+                            disabled={missingSkuPrefix}
+                            onClick={() => setCreateNew((current) => !current)}
+                          >
+                            {createNew ? "Novo produto confirmado" : "Cadastrar como novo"}
+                          </Button>
+                        </div>
+                        <SimilarProductList
+                          products={similarProducts}
+                          onPick={applyProduct}
+                          pickLabel="Usar este"
+                        />
                       </AlertDescription>
                     </Alert>
                   ) : null}
@@ -1846,7 +1856,7 @@ export function ExistingCycleCountWorkspace() {
                   id="cycle-sku-code"
                   value={skuCode}
                   onChange={(event) => setSkuCode(event.target.value)}
-                  placeholder="Ex.: BTG-2089"
+                  placeholder="Ex.: BTG-000123"
                 />
               </div>
               <div className="space-y-2">
@@ -1882,14 +1892,11 @@ export function ExistingCycleCountWorkspace() {
                 <AlertDescription>
                   A contagem ajusta apenas produtos já cadastrados e com saldo
                   físico criado. Se for produto novo, use Receber.
-                  {similarProducts.length ? (
-                    <span className="mt-2 block text-xs">
-                      Parecidos:{" "}
-                      {similarProducts
-                        .map((product) => `${product.productName} (${product.clientCode})`)
-                        .join(", ")}
-                    </span>
-                  ) : null}
+                  <SimilarProductList
+                    products={similarProducts}
+                    onPick={applyProduct}
+                    pickLabel="Usar este"
+                  />
                 </AlertDescription>
               </Alert>
             ) : null}

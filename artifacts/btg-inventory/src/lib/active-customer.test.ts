@@ -6,7 +6,6 @@ import {
   activeCustomerStorageKey,
   belongsToCustomer,
   customerRows,
-  canCreateCatalogItemFor,
   recordCustomerCode,
   resolveActiveCustomerCode,
 } from "./active-customer";
@@ -74,10 +73,5 @@ describe("dono do registro", () => {
     expect(customerRows(rows, "Itaú").map((row) => row.id)).toEqual(["1"]);
     expect(customerRows(rows, LEGACY_CUSTOMER_CODE).map((row) => row.id)).toEqual(["2", "3"]);
     expect(customerRows(undefined, "Itaú")).toEqual([]);
-  });
-
-  it("o Novo item do catálogo segue só para a BTG até o SKU por cliente", () => {
-    expect(canCreateCatalogItemFor(LEGACY_CUSTOMER_CODE)).toBe(true);
-    expect(canCreateCatalogItemFor("Itaú")).toBe(false);
   });
 });

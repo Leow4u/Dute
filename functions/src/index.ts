@@ -64,6 +64,8 @@ import {
   openingInventoryBlocksOutbound,
   openingUsesGlobalControl,
 } from "./domain/customer-scope.js";
+import { assertManagedCatalogCreateAllowed } from "./domain/catalog-codes.js";
+import { CycleCountSchema } from "./domain/cycle-count-input.js";
 import { readSystemHealth } from "./domain/system-health.js";
 import { CostSettingsSchema, readSystemDashboard, saveCostSettings } from "./domain/system-dashboard.js";
 import { codeFunctions, InfraSettingsSchema, readSystemInfra, saveInfraSettings, type GcpFetch } from "./domain/system-infra.js";
@@ -432,33 +434,6 @@ const InventoryMovementSchema = z.object({
   customer_code: z.string().trim().optional(),
   client_item_code: z.string().trim().optional(),
   unit_cost: z.number().nonnegative().optional(),
-});
-
-const CycleCountSchema = z.object({
-  mode: z.enum(["cycle", "opening"]).default("cycle"),
-  session_id: z.string().trim().optional(),
-  customer_code: z.string().trim().optional(),
-  sku_code: z.string().trim().min(1),
-  client_item_code: z.string().trim().optional(),
-  product_name: z.string().trim().optional(),
-  product_registration: z.enum(["existing", "new"]).optional(),
-  category: z.string().trim().optional(),
-  genero: z.string().trim().max(80).optional(),
-  grupo: z.string().trim().max(120).optional(),
-  barcode: z.string().trim().max(120).optional(),
-  brand: z.string().trim().max(120).optional(),
-  size: z.string().trim().max(80).optional(),
-  color: z.string().trim().max(80).optional(),
-  photo_urls: z.array(z.string().url()).max(8).optional(),
-  photo_storage_paths: z.array(z.string().trim().min(1).max(900)).max(8).optional(),
-  location_id: z.string().trim().min(1),
-  counted_qty: z.number().nonnegative(),
-  unit_cost: z.number().nonnegative().optional(),
-  reason: z.string().trim().min(3),
-  reference: z.string().trim().optional(),
-  box_code: z.string().trim().max(20).optional(),
-  occurred_at: z.string().trim().optional(),
-  idempotency_key: z.string().trim().min(1),
 });
 
 const CreateOpeningInventorySessionSchema = z.object({
@@ -3885,6 +3860,9 @@ function assertManagedAction(
     if (!["create", "update", "archive"].includes(input.action)) {
       throw new HttpsError("invalid-argument", "Ação de catálogo inválida.");
     }
+    // Produto novo nasce no Receber e na Contagem, com SKU gerado
+    // (domain/catalog-codes.ts); aqui só edição e arquivamento.
+    assertManagedCatalogCreateAllowed(input.resource, input.action);
     return;
   }
   if (["billing_price_list", "billing_config"].includes(input.resource)) {

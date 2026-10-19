@@ -51,7 +51,7 @@ import {
 import { cn } from "@/lib/utils";
 import Movements, { MovementModal } from "./movements";
 import { DeleteSkuButton, SkuModal } from "./skus";
-import { canCreateCatalogItemFor, customerRows } from "@/lib/active-customer";
+import { customerRows } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 
 type AnyRecord = Record<string, unknown>;
@@ -95,7 +95,6 @@ export default function Estoque() {
   const desktop = useIsDesktop();
   // A lista é do cliente ativo; registro sem customer_code é da BTG.
   const { code: customerCode, active: activeCustomer } = useActiveCustomer();
-  const canCreateItem = canCreateCatalogItemFor(customerCode);
   const [tab, setTab] = useState<"items" | "history">("items");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<StockFilter>(() => {
@@ -184,27 +183,10 @@ export default function Estoque() {
                   </Button>
                 }
               />
-            ) : catalogWriter && !canCreateItem ? (
-              // O cadastro avulso grava o item sem cliente (vira da BTG). Até o
-              // SKU por cliente (PR 2), os itens dos outros clientes entram pelo
-              // Receber e pela Contagem, que gravam o cliente ativo.
-              <Button
-                disabled
-                title={`Itens de ${activeCustomer.name} entram pelo Receber e pela Contagem até o SKU por cliente.`}
-              >
-                <Plus className="size-4" />
-                Novo item
-              </Button>
-            ) : catalogWriter ? (
-              <SkuModal
-                trigger={
-                  <Button>
-                    <Plus className="size-4" />
-                    Novo item
-                  </Button>
-                }
-              />
             ) : null}
+            {/* Sem "Novo item": produto novo nasce no Receber ou na Contagem, com
+                o SKU gerado na sigla do cliente e a duplicidade conferida ali
+                (docs/multicliente-modelos-de-operacao.md, PR 2). */}
           </>
         }
       >

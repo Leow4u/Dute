@@ -147,22 +147,82 @@ firebase deploy --only functions --project dute-btg
 tools\check_functions_invoker.ps1
 ```
 
+## O que o PR 2 construiu (19/10/2026): SKU gerado por cliente
+
+O SKU deixou de ser digitado. Produto novo nasce com `<SIGLA>-000001` na
+sigla do cliente (`BTG-000001`, `ITAU-000001`), gerado nas Functions dentro da
+mesma transação que cria o produto (`functions/src/domain/catalog-codes.ts`,
+testes em `catalog-codes.test.ts` e `catalog-codes.integration.test.ts`).
+
+- **Onde o SKU nasce**: produto novo da Contagem (abertura), da chegada avulsa
+  do Receber, da conferência de linha "código a definir" e da confirmação do
+  envio avisado no portal (linha marcada como nova). O que vier digitado como
+  SKU de produto novo é ignorado; no portal, o código que o cliente digita é o
+  código do cliente, e na confirmação o envio liga ao SKU do cadastro dele (se
+  já existir) ou ganha um gerado.
+- **Contador por sigla** em `sku_counters/{SIGLA}` (`last`, `last_code`), só
+  escrito pelas Functions (as regras negam o resto). Código que já existe no
+  catálogo é pulado. **Número não volta**: remover uma linha da abertura apaga
+  o cadastro que ela criou, e a recontagem recebe o próximo número.
+- **Reativação**: recontar como novo um produto arquivado do mesmo cliente
+  reaproveita o SKU dele, sem gerar outro número para o mesmo produto.
+- **Sem sigla, sem produto novo**: as Functions recusam com "Cadastre a sigla
+  do SKU de X em Configurações › Clientes"; a Contagem avisa antes e trava o
+  "Cadastrar como novo".
+- **Código de barras único dentro do cliente**: produto novo com o código de
+  barras de outro produto ativo do mesmo cliente é recusado ("já é do SKU
+  BTG-000001"), comparado sem espaços (`barcode_key`). Outro cliente pode usar
+  o mesmo código. Duas linhas novas com o mesmo código de barras na mesma
+  chegada também são recusadas.
+- **Sem "Novo item" avulso**: o botão saiu do Estoque e `mutateManagedEntity`
+  recusa criar produto ou SKU; editar e arquivar seguem. O SKU continua
+  imutável depois de criado.
+- **Na tela** (Contagem, chegada avulsa, contagem cíclica, devoluções): o campo
+  de código acha o produto pelo código do cliente, pelo SKU ou pelo código de
+  barras (`src/lib/product-match.ts`); o SKU aparece só para leitura ("Gerado
+  ao salvar (BTG-…)"); antes de cadastrar como novo, até três parecidos com
+  foto, com "Usar este"; o aviso depois de salvar mostra o SKU gerado. Na
+  chegada avulsa, duas linhas do mesmo produto (por códigos diferentes ou pelo
+  mesmo código de barras) aparecem como repetidas.
+- **Zeragem total**: `sku_counters` não é acesso nem estrutura, então sai junto
+  com o catálogo e a numeração recomeça em 000001.
+
+Fica como estava, de propósito:
+
+- **Código do cliente igual em dois clientes** continua recusado (PR 1b): o
+  produto ainda é guardado pelo código do cliente (`products/{código}`).
+  Separar exige migrar essa chave; fica para quando o caso aparecer.
+- **Patrimônio** (peças serializadas agrupadas sob o produto, "Cadeira Herman
+  Miller" com 0050500, 0050501...) foi para o PR de mobiliário: só faz sentido
+  com o recebimento de peça, a etiqueta por peça e o estado de conservação,
+  que nascem lá.
+
+Antes de contar ou receber produto novo de um cliente, a sigla dele precisa
+estar salva em Configurações › Clientes (a BTG com `BTG`). Deploy deste PR:
+functions (lote completo), checagem do invoker e frontend pelo CI. Regras e
+índices não mudam.
+
+```powershell
+cd C:\DEV\Dute
+git checkout main
+git pull origin main
+$env:FUNCTIONS_DISCOVERY_TIMEOUT = "180"
+firebase deploy --only functions --project dute-btg
+tools\check_functions_invoker.ps1
+```
+
 ## Próximos PRs
 
-1. **SKU por cliente** (PR 2): `<SIGLA>-000001` sequencial por cliente
-   (contador nas Functions), código do cliente e código de barras únicos
-   **por cliente**, checagem forte de produto parecido com foto antes de criar,
-   busca por qualquer código. Produtos com peças serializadas (patrimônio)
-   agrupadas sob o produto ("Cadeira Herman Miller" com 0050500, 0050501...).
-2. **Mobiliário**: estado de conservação (ótimo, bom, ruim, danificado) com
-   foto no recebimento e etiqueta por peça; solicitações de retirada,
-   devolução, manutenção e descarte; custo de transporte por viagem; LPU do
-   contrato; posições de piso com área e unidade de manuseio "volume"
-   (caixa, palete, peça) no mapa.
-3. **Insumos internos**: entrada, baixa por uso, mínimo de estoque, sem portal
+1. **Mobiliário**: estado de conservação (ótimo, bom, ruim, danificado) com
+   foto no recebimento e etiqueta por peça; peças serializadas (patrimônio)
+   agrupadas sob o produto; solicitações de retirada, devolução, manutenção e
+   descarte; custo de transporte por viagem; LPU do contrato; posições de piso
+   com área e unidade de manuseio "volume" (caixa, palete, peça) no mapa.
+2. **Insumos internos**: entrada, baixa por uso, mínimo de estoque, sem portal
    e sem fatura, na zona da Dutelog.
-4. A contagem de abertura da BTG espera os PRs 1 e 2 (decisão de 19/10/2026).
-5. Ainda assumem a BTG, de propósito, até virarem por cliente: faturamento
+3. A contagem de abertura da BTG esperava os PRs 1 e 2 (decisão de
+   19/10/2026): com os dois publicados e a sigla `BTG` salva, pode começar.
+4. Ainda assumem a BTG, de propósito, até virarem por cliente: faturamento
    (`billing_config`, prévia e competências), os alertas derivados do painel do
    agente e o `DEFAULT_CUSTOMER` das Functions como leitura de registro antigo.
    O mapa mostra o conteúdo das caixas só do cliente ativo (as linhas vêm da
