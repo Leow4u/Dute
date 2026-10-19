@@ -29,6 +29,11 @@ ser a fonte de verdade antes de liberar producao.
 `cod_cliente` continua sendo codigo de item/produto do cliente e nao deve ser
 usado como fronteira de acesso.
 
+Desde 19/10/2026 cada cliente tem um modelo de operacao (codigo, em
+`src/lib/operations`) apontado pelo cadastro em `customers`; o portal le a
+projecao `client_profiles` e mostra so os modulos do modelo. Ver
+`docs/multicliente-modelos-de-operacao.md`.
+
 ## Mapa Dutelog/Cliente
 
 ### Dutelog interno

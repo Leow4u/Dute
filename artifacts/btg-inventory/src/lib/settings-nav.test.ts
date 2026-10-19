@@ -19,7 +19,7 @@ describe("seções da Configuração por perfil", () => {
       "Minha conta",
       "Aplicativo no celular",
       "Pessoas e acessos",
-      "Cliente BTG",
+      "Clientes",
       "Sistema",
     ]);
   });
@@ -65,7 +65,7 @@ describe("rotas e seção ativa", () => {
 
   it("a raiz acende Minha conta", () => {
     expect(getActiveSettingsSection("/configuracoes")).toBe("conta");
-    expect(getActiveSettingsSection("/configuracoes/cliente")).toBe("cliente");
+    expect(getActiveSettingsSection("/configuracoes/clientes")).toBe("clientes");
     expect(getActiveSettingsSection("/configuracoes/pessoas?convidar=cliente")).toBe("pessoas");
   });
 });

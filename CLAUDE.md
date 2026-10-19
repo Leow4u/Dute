@@ -49,6 +49,16 @@ documentação de produto e operação está em `docs/`.
   Estoque › Etiquetas (impressão do navegador, 101,6 × 50,8 mm) e o mapa em
   Estoque › Mapa (só leitura). Desenho completo e decisões em
   `docs/mapa-do-armazem-enderecamento-dirigido.md`.
+- **Multicliente: modelo de operação e pacote são código; o cadastro só aponta
+  (19/10/2026).** `artifacts/btg-inventory/src/lib/operations` registra os
+  modelos (`uniformes` pronto, `mobiliario` e `insumos` em construção) e os
+  pacotes (`btg`). O cadastro em Configurações › Clientes (`customers`) guarda
+  `operation_template` e `sku_prefix`, validados em
+  `functions/src/domain/customer-profile.ts`; a projeção `client_profiles` é o
+  que o portal lê para montar menu e rotas por modelo. Personalização por
+  cliente é PR no pacote dele, nunca configuração de tela. Ver
+  `docs/multicliente-modelos-de-operacao.md` (inclui a ordem dos próximos PRs:
+  cliente ativo na área interna, SKU por cliente, mobiliário, insumos).
 - **`pnpm` não está no PATH.** Use `corepack pnpm`. O diretório `functions/` usa
   **npm** (tem `package-lock.json` próprio), não pnpm.
 

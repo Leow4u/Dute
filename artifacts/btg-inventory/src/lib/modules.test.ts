@@ -8,8 +8,10 @@ import {
   getRouteProfileRoles,
   INTERNAL_ROLES,
   isAccountPath,
+  portalModuleForPath,
   type ProfileRole,
 } from "./modules";
+import { resolveOperationProfile } from "./operations";
 
 // Quem acessa cada rota, fixado em 29/09/2026 antes de enxugar o menu. As
 // permissões por rota são derivadas das entradas do menu; mexer na régua não
@@ -59,6 +61,7 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/configuracoes/conta", ["owner", "admin", "interno", "wms", "financeiro", "suporte", "cliente"]],
   ["/configuracoes/aplicativo", ["owner", "admin", "interno", "wms", "financeiro", "suporte", "cliente"]],
   ["/configuracoes/pessoas", ["owner", "admin"]],
+  ["/configuracoes/clientes", ["owner", "admin"]],
   ["/configuracoes/cliente", ["owner", "admin"]],
   ["/configuracoes/sistema", ["owner", "admin", "suporte"]],
   ["/portal", ["cliente"]],
@@ -194,6 +197,71 @@ describe("menu do portal da BTG", () => {
       ["Pedidos", "/portal/pedidos"],
       ["Faturas", "/portal/faturas"],
       ["Documentos", "/portal/documentos"],
+    ]);
+  });
+});
+
+describe("menu do portal por modelo de operação", () => {
+  const profileFor = (template: string) =>
+    resolveOperationProfile({ customer_code: "Cliente X", operation_template: template });
+  const labels = (template: string) =>
+    getNavigationForProfileRole("cliente", profileFor(template)).map((module) => module.label);
+
+  it("uniformes é o portal da BTG de hoje, inteiro", () => {
+    expect(labels("uniformes")).toEqual([
+      "Agent Dute",
+      "Início",
+      "Estoque",
+      "Eventos",
+      "Envios para a Dutelog",
+      "Pedidos",
+      "Faturas",
+      "Documentos",
+    ]);
+  });
+
+  it("mobiliário não tem Eventos", () => {
+    expect(labels("mobiliario")).toEqual([
+      "Agent Dute",
+      "Início",
+      "Estoque",
+      "Envios para a Dutelog",
+      "Pedidos",
+      "Faturas",
+      "Documentos",
+    ]);
+  });
+
+  it("insumos não tem portal: uma conta de cliente por engano vê só o Início", () => {
+    expect(labels("insumos")).toEqual(["Início"]);
+  });
+
+  it("sem perfil carregado nada é escondido; o perfil não mexe no menu interno", () => {
+    expect(getNavigationForProfileRole("cliente", null).length).toBe(8);
+    expect(getNavigationForProfileRole("cliente", undefined).length).toBe(8);
+    expect(getNavigationForProfileRole("admin", profileFor("insumos")).map((module) => module.label)).toEqual(
+      getNavigationForProfileRole("admin").map((module) => module.label),
+    );
+  });
+
+  it("cada rota do portal sabe a que módulo pertence", () => {
+    expect(portalModuleForPath("/portal")).toBe("home");
+    expect(portalModuleForPath("/portal/eventos")).toBe("events");
+    expect(portalModuleForPath("/portal/faturas/fatura")).toBe("invoices");
+    expect(portalModuleForPath("/portal/agente?x=1")).toBe("assistant");
+    expect(portalModuleForPath("/estoque")).toBeNull();
+    expect(portalModuleForPath("/configuracoes/conta")).toBeNull();
+  });
+
+  it("barra do celular do mobiliário: sem Eventos em Mais", () => {
+    const navigation = getMobileNavigation(getNavigationForProfileRole("cliente", profileFor("mobiliario")));
+    expect(navigation.bar.map((module) => module.label)).toEqual(["Início", "Pedidos", "Estoque", "Agent Dute"]);
+    expect(
+      navigation.more.flatMap(({ module, routes }) => routes.map((route) => `${module.label} · ${route.label}`)),
+    ).toEqual([
+      "Envios para a Dutelog · Envios para a Dutelog",
+      "Faturas · Faturas",
+      "Documentos · Documentos",
     ]);
   });
 });

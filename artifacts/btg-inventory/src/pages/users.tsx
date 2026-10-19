@@ -70,6 +70,25 @@ type Invite = {
   status: "pending" | "used" | "revoked";
 };
 
+type InviteForm = {
+  nome: string;
+  email: string;
+  role: ProfileRole;
+  /** Conta do portal (vazio = primeiro cliente com portal). Só para o perfil cliente. */
+  customer_code: string;
+};
+
+type InviteCustomer = {
+  id?: string;
+  code: string;
+  name?: string;
+  archived?: boolean;
+  portal_status?: string;
+};
+
+/** Convite de cliente antes do cadastro de vários clientes: sempre a BTG. */
+const LEGACY_CUSTOMER_CODE = "BTG Pactual";
+
 type Person = {
   key: string;
   kind: "user" | "invite";
@@ -135,11 +154,37 @@ export default function Users() {
   const { data, isLoading } = useListBillingUsers();
   const updateRole = useUpdateUserRole();
 
-  // "Convidar pessoa da BTG" (Cliente BTG) chega com ?convidar=cliente.
+  // "Convidar" em Configurações › Clientes chega com ?convidar=cliente&cliente=<código>.
   const [inviteOpen, setInviteOpen] = useState(
     () => new URLSearchParams(window.location.search).get("convidar") === "cliente",
   );
-  const [inviteForm, setInviteForm] = useState({ nome: "", email: "", role: "cliente" as ProfileRole });
+  const [inviteForm, setInviteForm] = useState<InviteForm>(() => ({
+    nome: "",
+    email: "",
+    role: "cliente",
+    customer_code: new URLSearchParams(window.location.search).get("cliente") ?? "",
+  }));
+
+  // Clientes com portal, para escolher a conta que a pessoa convidada acessa.
+  const customers = useQuery({
+    queryKey: ["invite-customers"],
+    enabled: inviteOpen,
+    queryFn: async (): Promise<InviteCustomer[]> => {
+      const response = await fetch("/api/customers?status=active&limit=250");
+      const payload = (await jsonOrThrow(response, "Não foi possível carregar os clientes.")) as {
+        items?: InviteCustomer[];
+        data?: InviteCustomer[];
+      };
+      return (payload.items ?? payload.data ?? []).filter(
+        (customer) => customer.archived !== true && customer.portal_status !== "inactive",
+      );
+    },
+  });
+  const portalCustomers = customers.data ?? [];
+  const inviteCustomerCode =
+    inviteForm.customer_code || portalCustomers[0]?.code || LEGACY_CUSTOMER_CODE;
+  const inviteCustomerName =
+    portalCustomers.find((customer) => customer.code === inviteCustomerCode)?.name || inviteCustomerCode;
   const [removing, setRemoving] = useState<Person | null>(null);
   const [reason, setReason] = useState("");
 
@@ -207,7 +252,7 @@ export default function Users() {
           nome: inviteForm.nome.trim(),
           email: inviteForm.email.trim().toLowerCase(),
           role,
-          customer_code: role === "cliente" ? "BTG Pactual" : "Dutelog",
+          customer_code: role === "cliente" ? inviteCustomerCode : "Dutelog",
         }),
       });
       await jsonOrThrow(response, "Não foi possível criar o convite.");
@@ -215,7 +260,7 @@ export default function Users() {
     },
     onSuccess: async (token) => {
       setInviteOpen(false);
-      setInviteForm({ nome: "", email: "", role: "cliente" });
+      setInviteForm({ nome: "", email: "", role: "cliente", customer_code: "" });
       await refresh();
       await navigator.clipboard.writeText(inviteLink(token)).catch(() => undefined);
       toast({
@@ -498,9 +543,35 @@ export default function Users() {
               </Select>
               <p className="text-xs text-muted-foreground">
                 {ROLE_INFO.find((info) => info.role === inviteForm.role)?.description}
-                {inviteForm.role === "cliente" ? " Acesso à conta BTG Pactual." : ""}
               </p>
             </div>
+            {inviteForm.role === "cliente" ? (
+              <div className="space-y-2">
+                <Label>Cliente</Label>
+                <Select
+                  value={inviteCustomerCode}
+                  onValueChange={(customer_code) => setInviteForm((state) => ({ ...state, customer_code }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Escolha o cliente" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(portalCustomers.length
+                      ? portalCustomers
+                      : [{ code: inviteCustomerCode, name: inviteCustomerName }]
+                    ).map((customer) => (
+                      <SelectItem key={customer.code} value={customer.code}>
+                        {customer.name || customer.code}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  A pessoa entra no portal de {inviteCustomerName} e vê só a operação desse cliente. Cadastro
+                  em Configurações › Clientes.
+                </p>
+              </div>
+            ) : null}
           </form>
           <DialogFooter>
             <Button variant="outline" onClick={() => setInviteOpen(false)}>
