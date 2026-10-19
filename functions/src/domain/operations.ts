@@ -8,10 +8,17 @@ import {
 
 import { receivedSummary } from "./client-shipments.js";
 import {
+  LEGACY_CUSTOMER_CODE,
   assertCatalogOwnedBy,
   openingInventoryBlocksOutbound,
   openingUsesGlobalControl,
 } from "./customer-scope.js";
+import {
+  assertBarcodeAvailable,
+  normalizeBarcode,
+  openSkuAllocator,
+  type SkuAllocator,
+} from "./catalog-codes.js";
 import {
   FieldValue,
   type DocumentData,
@@ -215,7 +222,8 @@ export type RecordCycleCountInput = {
   mode?: "cycle" | "opening";
   session_id?: string;
   customer_code: string;
-  sku_code: string;
+  /** Produto novo na abertura vem sem SKU: ele é gerado na transação. */
+  sku_code?: string;
   client_item_code?: string;
   product_name?: string;
   product_registration?: "existing" | "new" | string;
@@ -1506,7 +1514,11 @@ export async function recordCycleCountTransaction(
 ) {
   const mode = input.mode === "opening" ? "opening" : "cycle";
   const customerCode = text(input.customer_code);
-  const skuCode = normalizedIdentity(input.sku_code);
+  // Produto novo na abertura: o SKU é gerado na sigla do cliente dentro da
+  // transação (domain/catalog-codes.ts); o que vier digitado é ignorado.
+  const generatesSku =
+    mode === "opening" && text(input.product_registration) === "new";
+  const requestedSku = generatesSku ? "" : normalizedIdentity(input.sku_code);
   const locationId = text(input.location_id);
   const reason = text(input.reason);
   const countedQty = number(input.counted_qty);
@@ -1514,7 +1526,7 @@ export async function recordCycleCountTransaction(
   if (boxCode && !/^[A-Z0-9-]{1,20}$/.test(boxCode)) {
     throw new HttpsError("invalid-argument", "Código de caixa inválido.");
   }
-  if (!customerCode || !skuCode || !locationId || !reason) {
+  if (!customerCode || (!requestedSku && !generatesSku) || !locationId || !reason) {
     throw new HttpsError(
       "invalid-argument",
       "Cliente, SKU, local e motivo da contagem são obrigatórios.",
@@ -1542,7 +1554,8 @@ export async function recordCycleCountTransaction(
   const occurredAt = input.occurred_at ?? new Date().toISOString();
   const operationId = `op_${mode === "opening" ? "opening_inventory" : "cycle_count"}_${digest({
     customer: customerCode,
-    sku: skuCode,
+    // Produto novo ainda não tem SKU: o código do cliente distingue a operação.
+    sku: requestedSku || `novo:${normalizedIdentity(input.client_item_code)}`,
     location: locationId,
     session: sessionId,
     nonce: input.idempotency_key,
@@ -1559,6 +1572,42 @@ export async function recordCycleCountTransaction(
     if (previous) return previous;
 
     await assertInventoryOperationsEnabled(transaction, db);
+
+    // Leituras do SKU gerado (sigla, contador, código livre) e da
+    // duplicidade por código de barras, antes de qualquer escrita. Recontar
+    // como novo um cadastro arquivado do mesmo cliente reativa o SKU dele:
+    // o histórico continua no mesmo código, sem gerar outro.
+    let skuAllocator: SkuAllocator | undefined;
+    let skuCode = requestedSku;
+    if (generatesSku) {
+      const clientKey = normalizedIdentity(input.client_item_code);
+      const sameClientCode = clientKey
+        ? await readRows(
+            transaction,
+            db.collection(collections.skus).where("cod_cliente_key", "==", clientKey),
+          )
+        : [];
+      const archivedOwn =
+        sameClientCode.length > 0 &&
+        sameClientCode.every(
+          (row) =>
+            (row.data.archived === true || text(row.data.status) === "archived") &&
+            (text(row.data.customer_code) || LEGACY_CUSTOMER_CODE) === customerCode,
+        );
+      const reactivated = archivedOwn
+        ? normalizedIdentity(
+            sameClientCode[0]!.data.cod_btg ||
+              sameClientCode[0]!.data.sku_code ||
+              sameClientCode[0]!.data.cod_sku,
+          )
+        : "";
+      if (reactivated) {
+        skuCode = reactivated;
+      } else {
+        skuAllocator = await openSkuAllocator(transaction, db, customerCode);
+        skuCode = await skuAllocator.next();
+      }
+    }
 
     let openingSessionRef: DocumentReference<DocumentData> | undefined;
     let openingLineRef: DocumentReference<DocumentData> | undefined;
@@ -1797,7 +1846,9 @@ export async function recordCycleCountTransaction(
           `O Cod. cliente ${requestedClientItemCode} possui cadastro duplicado. Corrija o catálogo antes de contar o item.`,
         );
       }
-      if (existingSkuCodes.size > 0 && !existingSkuCodes.has(skuCode)) {
+      // SKU gerado nunca está entre os existentes: para produto novo, o
+      // código do cliente repetido cai no "já existe" logo abaixo.
+      if (!generatesSku && existingSkuCodes.size > 0 && !existingSkuCodes.has(skuCode)) {
         throw new HttpsError(
           "failed-precondition",
           `Cod. cliente ${requestedClientItemCode} já está vinculado ao SKU ${[
@@ -1863,6 +1914,9 @@ export async function recordCycleCountTransaction(
             "Produto novo exige ao menos uma foto.",
           );
         }
+        // Depois das checagens de código: o código de barras de outro produto
+        // ativo do mesmo cliente é o mesmo produto (domain/catalog-codes.ts).
+        await assertBarcodeAvailable(transaction, db, customerCode, input.barcode, LEGACY_CUSTOMER_CODE);
       }
       if (!text(input.genero) || !text(input.grupo)) {
         throw new HttpsError(
@@ -1960,6 +2014,9 @@ export async function recordCycleCountTransaction(
     const movementIdValue =
       adjustmentQty > 0 ? movementId(operationId, "cycle_count") : undefined;
 
+    // Primeira escrita: o contador do SKU gerado.
+    skuAllocator?.commit();
+
     if (mode === "opening" && openingSessionRef && openingLineRef) {
       const catalogPayload = compact({
         customer_code: customerCode,
@@ -1971,6 +2028,7 @@ export async function recordCycleCountTransaction(
         genero,
         grupo,
         barcode,
+        barcode_key: normalizeBarcode(barcode) || undefined,
         brand,
         marca: brand,
         size,
@@ -2324,6 +2382,9 @@ export async function recordCycleCountTransaction(
       adjustment_qty: adjustmentQty,
       adjustment_type: delta === 0 ? "SEM_DIVERGENCIA" : movementType,
       mode,
+      sku_code: skuCode,
+      client_item_code: clientItemCode,
+      sku_generated: generatesSku || undefined,
       box_code: boxCode || undefined,
       opening_inventory_session_id: sessionId,
       events: [event],
@@ -3610,16 +3671,21 @@ export async function createInboundReceiptTransaction(
   }
 
   const normalizedItems = input.items.map((item, index) => {
+    // Linha de produto novo: o SKU é gerado na sigla do cliente dentro da
+    // transação (domain/catalog-codes.ts); o que vier digitado é ignorado.
+    const isNew = text(item.product_registration) === "new";
     const clientItemCode = normalizedIdentity(
-      item.client_item_code || item.sku_code,
+      item.client_item_code || (isNew ? "" : item.sku_code),
     );
-    const skuCode = normalizedIdentity(item.sku_code || item.client_item_code);
+    const skuCode = isNew
+      ? ""
+      : normalizedIdentity(item.sku_code || item.client_item_code);
     const productName = text(item.product_name || clientItemCode || skuCode);
     const quantity = requiredPositive(
       item.quantity,
       `Quantidade da linha ${index + 1}`,
     );
-    if (!skuCode || !productName) {
+    if ((!skuCode && !isNew) || !productName) {
       throw new HttpsError(
         "invalid-argument",
         `Linha ${index + 1} precisa de código do cliente ou SKU e descrição do produto.`,
@@ -3661,6 +3727,7 @@ export async function createInboundReceiptTransaction(
     clientCodeSeen.set(key, item.line_number);
 
     const skuKey = normalizedIdentity(item.sku_code);
+    if (!skuKey) continue;
     const previousSkuLine = skuCodeSeen.get(skuKey);
     if (previousSkuLine) {
       throw new HttpsError(
@@ -3669,6 +3736,22 @@ export async function createInboundReceiptTransaction(
       );
     }
     skuCodeSeen.set(skuKey, item.line_number);
+  }
+
+  // Dois produtos novos com o mesmo código de barras na mesma chegada são um só.
+  const barcodeSeen = new Map<string, number>();
+  for (const item of normalizedItems) {
+    if (item.product_registration !== "new") continue;
+    const barcodeKey = normalizeBarcode(item.barcode);
+    if (!barcodeKey) continue;
+    const previousLine = barcodeSeen.get(barcodeKey);
+    if (previousLine) {
+      throw new HttpsError(
+        "invalid-argument",
+        `Código de barras ${barcodeKey} repetido nas linhas ${previousLine} e ${item.line_number}. Use uma única linha para o mesmo produto.`,
+      );
+    }
+    barcodeSeen.set(barcodeKey, item.line_number);
   }
 
   const nonce = input.idempotency_key;
@@ -3700,8 +3783,31 @@ export async function createInboundReceiptTransaction(
 
     await assertInventoryOperationsEnabled(transaction, db);
 
+    // SKU gerado para cada linha nova, na ordem das linhas, e duplicidade por
+    // código de barras dentro do cliente. Tudo leitura, antes das escritas.
+    const customerCode = text(input.customer_code);
+    const skuAllocator: SkuAllocator | undefined = normalizedItems.some(
+      (item) => item.product_registration === "new",
+    )
+      ? await openSkuAllocator(transaction, db, customerCode)
+      : undefined;
+    const items: typeof normalizedItems = [];
+    for (const item of normalizedItems) {
+      if (item.product_registration !== "new" || !skuAllocator) {
+        items.push(item);
+        continue;
+      }
+      const generated = await skuAllocator.next();
+      items.push({
+        ...item,
+        sku_code: generated,
+        client_item_code: item.client_item_code || generated,
+        product_name: item.product_name || generated,
+      });
+    }
+
     const catalogChecks = await Promise.all(
-      normalizedItems.map(async (item) => {
+      items.map(async (item) => {
         const clientCode = normalizedIdentity(item.client_item_code);
         const declaredSku = normalizedIdentity(item.sku_code);
         const productRef = db
@@ -3876,6 +3982,16 @@ export async function createInboundReceiptTransaction(
 
     }
 
+    // Depois das checagens de código: código de barras de outro produto ativo
+    // do mesmo cliente é o mesmo produto (domain/catalog-codes.ts).
+    for (const item of items) {
+      if (item.product_registration !== "new") continue;
+      await assertBarcodeAvailable(transaction, db, customerCode, item.barcode, LEGACY_CUSTOMER_CODE);
+    }
+
+    // Primeira escrita: o contador dos SKUs gerados.
+    skuAllocator?.commit();
+
     for (const check of catalogChecks) {
       const {
         item,
@@ -3904,6 +4020,7 @@ export async function createInboundReceiptTransaction(
           category: item.category,
           categoria: item.category,
           barcode: item.barcode,
+          barcode_key: normalizeBarcode(item.barcode) || undefined,
           brand: item.brand,
           marca: item.brand,
           size: item.size,
@@ -3957,7 +4074,7 @@ export async function createInboundReceiptTransaction(
         invoice_number: input.invoice_number,
         reference: input.reference || input.invoice_number,
         notes: input.notes,
-        item_count: normalizedItems.length,
+        item_count: items.length,
         qty_expected: quantityTotal,
         qty_received: 0,
         source: "wms_unplanned_receipt",
@@ -3968,7 +4085,7 @@ export async function createInboundReceiptTransaction(
       }),
     );
 
-    normalizedItems.forEach((item, index) => {
+    items.forEach((item, index) => {
       const lineNumber = index + 1;
       const itemId = `inbi_${safeDocId(receiptId)}_${String(lineNumber).padStart(2, "0")}`;
       transaction.create(
@@ -4014,7 +4131,7 @@ export async function createInboundReceiptTransaction(
         title: "Recebimento avulso registrado no WMS",
         description:
           input.notes ||
-          `${normalizedItems.length} linha(s), ${quantityTotal} unidade(s) aguardando conferência.`,
+          `${items.length} linha(s), ${quantityTotal} unidade(s) aguardando conferência.`,
         severity: "attention",
         entity_type: "recebimento",
         entity_id: receiptId,
@@ -4036,8 +4153,15 @@ export async function createInboundReceiptTransaction(
       receipt_id: receiptId,
       receipt_number: receiptNumber,
       status: "created",
-      item_count: normalizedItems.length,
+      item_count: items.length,
       quantity_total: quantityTotal,
+      // Códigos de cada linha, com o SKU gerado das linhas novas.
+      items: items.map((item) => ({
+        line_number: item.line_number,
+        sku_code: item.sku_code,
+        client_item_code: item.client_item_code,
+        product_registration: item.product_registration || undefined,
+      })),
       events: [event],
     };
     createOperationReceipt(
@@ -4126,6 +4250,10 @@ export async function updateInboundReceiptConferenceTransaction(
         product_registration: "existing" | "new";
       }
     >();
+    // Produto novo achado na conferência: SKU gerado na sigla do cliente
+    // (domain/catalog-codes.ts), aberto só quando a primeira linha nova aparece.
+    const receiptCustomer = text(receipt.customer_code) || LEGACY_CUSTOMER_CODE;
+    let skuAllocator: SkuAllocator | undefined;
     for (const line of input.lines) {
       const row = rowsById.get(safeDocId(line.inbound_item_id));
       if (!row || text(row.data.sku_code)) continue;
@@ -4157,6 +4285,16 @@ export async function updateInboundReceiptConferenceTransaction(
           `Código ${clientCode} está ligado a mais de um SKU (${skuCodes.join(", ")}). Revise o cadastro antes de conferir.`,
         );
       }
+      // Um código de catálogo tem dono: o envio de um cliente não liga a
+      // linha ao cadastro de outro (domain/customer-scope.ts).
+      assertCatalogOwnedBy(
+        receiptCustomer,
+        [
+          ...skuRows.map((sku) => sku.data),
+          productSnapshot.exists ? productSnapshot.data() : undefined,
+        ],
+        `O código ${clientCode}`,
+      );
       const product = productSnapshot.data() ?? {};
       const catalogName = text(
         skuRows[0]?.data.produto ||
@@ -4165,13 +4303,21 @@ export async function updateInboundReceiptConferenceTransaction(
           product.product_name,
       );
       const exists = skuCodes.length > 0 || productSnapshot.exists;
+      let skuCode = skuCodes[0] || clientCode;
+      if (!exists) {
+        skuAllocator ??= await openSkuAllocator(transaction, db, receiptCustomer);
+        skuCode = await skuAllocator.next();
+      }
       codeAssignments.set(row.id, {
-        sku_code: skuCodes[0] || clientCode,
+        sku_code: skuCode,
         client_item_code: clientCode,
         product_name: catalogName || text(row.data.product_name) || clientCode,
         product_registration: exists ? "existing" : "new",
       });
     }
+
+    // Primeira escrita: o contador dos SKUs gerados.
+    skuAllocator?.commit();
 
     let receivedTotal = 0;
     let expectedTotal = 0;
@@ -4460,6 +4606,7 @@ export async function decideCustomerRequestTransaction(
     let preReservedRows: Row[] = [];
     let releaseReservationRows: Row[] = [];
     const releaseBalancesBySku = new Map<string, Row[]>();
+    let inboundSkuAllocator: SkuAllocator | undefined;
 
     if (input.action === "approve" && kind.outbound) {
       preReservedRows = await readRows(
@@ -4666,6 +4813,49 @@ export async function decideCustomerRequestTransaction(
           "Solicitação de recebimento precisa de itens com código ou, sem código, com o nome do produto.",
         );
       }
+      // Produto novo avisado no portal: o código digitado é o do cliente, não
+      // o SKU. Código já cadastrado para o cliente liga ao SKU dele; senão o
+      // SKU é gerado na sigla do cliente (domain/catalog-codes.ts).
+      for (const item of items) {
+        if (text(item.product_registration) !== "new") continue;
+        const clientCode = normalizedIdentity(item.client_item_code || item.sku_code);
+        const [skuRows, productSnapshot] = await Promise.all([
+          readRows(
+            transaction,
+            db.collection(collections.skus).where("cod_cliente_key", "==", clientCode),
+          ),
+          transaction.get(db.collection(collections.products).doc(safeDocId(clientCode))),
+        ]);
+        assertCatalogOwnedBy(
+          customerCode,
+          [
+            ...skuRows.map((row) => row.data),
+            productSnapshot.exists ? productSnapshot.data() : undefined,
+          ],
+          `O código ${clientCode}`,
+        );
+        const skuCodes = [
+          ...new Set(
+            skuRows
+              .map((row) => normalizedIdentity(row.data.cod_btg || row.data.sku_code || row.data.cod_sku))
+              .filter(Boolean),
+          ),
+        ];
+        if (skuCodes.length > 1) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Código ${clientCode} está ligado a mais de um SKU (${skuCodes.join(", ")}). Revise o cadastro antes de confirmar o envio.`,
+          );
+        }
+        item.client_item_code = clientCode;
+        if (skuCodes.length || productSnapshot.exists) {
+          item.sku_code = skuCodes[0] || clientCode;
+          item.product_registration = "existing";
+          continue;
+        }
+        inboundSkuAllocator ??= await openSkuAllocator(transaction, db, customerCode);
+        item.sku_code = await inboundSkuAllocator.next();
+      }
     }
 
     if (releasesRequest && kind.outbound) {
@@ -4713,6 +4903,9 @@ export async function decideCustomerRequestTransaction(
         .where("entity_id", "==", requestId)
         .where("status", "==", "open"),
     );
+
+    // Primeira escrita: o contador dos SKUs gerados para o envio.
+    inboundSkuAllocator?.commit();
 
     const events: OperationalEventSummary[] = [];
     if (input.action === "approve" && kind.outbound) {

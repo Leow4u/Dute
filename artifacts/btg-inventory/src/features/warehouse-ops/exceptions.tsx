@@ -60,6 +60,7 @@ import {
   normalizeProductKey,
   similarProductNames,
 } from "@/features/warehouse-ops/receiving";
+import { SimilarProductList } from "@/features/warehouse-ops/similar-products";
 import { LEGACY_CUSTOMER_CODE, customerRows, recordCustomerCode } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 
@@ -910,14 +911,11 @@ export function ReturnWorkspace() {
                           <AlertDescription>
                             Devolução aceita apenas produto já cadastrado. Se for
                             mercadoria nova, registre por Recebimento.
-                            {issue?.similar.length ? (
-                              <span className="mt-2 block text-xs">
-                                Parecidos:{" "}
-                                {issue.similar
-                                  .map((product) => `${product.productName} (${product.clientCode})`)
-                                  .join(", ")}
-                              </span>
-                            ) : null}
+                            <SimilarProductList
+                              products={issue?.similar ?? []}
+                              onPick={(product) => applyExistingProduct(index, product)}
+                              pickLabel="Usar este"
+                            />
                           </AlertDescription>
                         </Alert>
                       ) : null}

@@ -45,6 +45,9 @@ async function reset(control: Record<string, unknown>) {
   if (!host) throw new Error("FIRESTORE_EMULATOR_HOST não definido.");
   await fetch(`http://${host}/emulator/v1/projects/${PROJECT_ID}/databases/(default)/documents`, { method: "DELETE" });
   await db.collection("system_controls").doc("inventory").set(control);
+  // Produto novo ganha SKU na sigla do cliente (domain/catalog-codes.ts).
+  await db.collection("customers").doc("BTG_Pactual").set({ code: BTG, customer_code: BTG, name: BTG, sku_prefix: "BTG", status: "active" });
+  await db.collection("customers").doc("Itau").set({ code: ITAU, customer_code: ITAU, name: "Itaú Unibanco", sku_prefix: "ITAU", status: "active" });
 }
 
 async function control() {
@@ -271,7 +274,8 @@ describe("catálogo com dono", () => {
     const own = (await db.collection("products").doc("7802-07").get()).data() ?? {};
     assert.equal(own.customer_code, ITAU);
     const itauBalances = await db.collection("stock_balances").where("customer_code", "==", ITAU).get();
-    assert.deepEqual(itauBalances.docs.map((row) => row.data().sku_code), ["ITAU-SKU-3"]);
+    // As tentativas recusadas não gastaram número: o primeiro SKU do Itaú é este.
+    assert.deepEqual(itauBalances.docs.map((row) => row.data().sku_code), ["ITAU-000001"]);
   });
 
   it("o recebimento e a devolução de outro cliente não usam produto da BTG", async () => {

@@ -69,7 +69,6 @@ import {
   getErrorMessage,
   getPhysicalLineRows,
   getTaskTitle,
-  normalizeSlug,
   normalizeStatus,
   statusClass,
   statusLabel,
@@ -84,6 +83,13 @@ import {
 } from "@/features/warehouse-ops/shared";
 import { customerRows } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
+import {
+  barcodeKey,
+  findProductByAnyCode,
+  findProductByBarcode,
+  similarProducts,
+} from "@/lib/product-match";
+import { SimilarProductList } from "@/features/warehouse-ops/similar-products";
 
 function DetailField({
   icon: Icon,
@@ -160,6 +166,11 @@ export function mergeProductLookup(
     return {
       ...sku,
       productName: sku.productName || product?.productName || sku.skuCode,
+      barcode: sku.barcode || product?.barcode || "",
+      brand: sku.brand || product?.brand || "",
+      size: sku.size || product?.size || "",
+      color: sku.color || product?.color || "",
+      photoUrl: sku.photoUrl || product?.photoUrl || "",
       unitCost: sku.unitCost || product?.unitCost || 0,
       source: { ...(product?.source ?? {}), ...sku.source },
     };
@@ -177,46 +188,28 @@ export function mergeProductLookup(
   ];
 }
 
+/**
+ * Cadastro existente da linha: vale qualquer código que a pessoa tenha na mão
+ * (o do cliente, o SKU da etiqueta ou o de barras), e o de barras sozinho
+ * também acha (lib/product-match.ts).
+ */
 export function findExistingProduct(
   line: ReceiptDraftLine,
   products: ProductLookupItem[],
 ) {
-  const clientCode = normalizeProductKey(line.clientCode);
-  const sku = normalizeProductKey(line.sku);
-  if (!clientCode && !sku) return undefined;
-
-  const candidates = products.filter((product) => {
-    const sameClientCode =
-      clientCode && normalizeProductKey(product.clientCode) === clientCode;
-    const sameSku = sku && normalizeProductKey(product.skuCode) === sku;
-    return sameClientCode || sameSku;
-  });
-
-  if (!candidates.length) return undefined;
-  if (sku) {
-    const exactSku = candidates.find(
-      (product) => normalizeProductKey(product.skuCode) === sku,
-    );
-    if (exactSku) return exactSku;
-  }
-  if (clientCode) {
-    const exactClientCode = candidates.find(
-      (product) => normalizeProductKey(product.clientCode) === clientCode,
-    );
-    if (exactClientCode) return exactClientCode;
-  }
-  return candidates[0];
+  return (
+    findProductByAnyCode(products, line.sku)?.product ??
+    findProductByAnyCode(products, line.clientCode)?.product ??
+    findProductByBarcode(products, line.barcode)
+  );
 }
 
+/** Até três parecidos pela descrição, marca, tamanho e cor (lib/product-match.ts). */
 export function similarProductNames(line: ReceiptDraftLine, products: ProductLookupItem[]) {
-  const needle = normalizeSlug(line.product);
-  if (needle.length < 5) return [];
-  return products
-    .filter((product) => {
-      const haystack = normalizeSlug(product.productName);
-      return haystack.includes(needle) || needle.includes(haystack);
-    })
-    .slice(0, 3);
+  return similarProducts(
+    { name: line.product, brand: line.brand, size: line.size, color: line.color },
+    products,
+  );
 }
 
 export function normalizeApiRows(payload: unknown): AnyRecord[] {
@@ -476,6 +469,21 @@ export function UnplannedReceiptDialog({
     }
   }
 
+  // Duas linhas do mesmo produto, mesmo que por códigos diferentes (o do
+  // cliente numa, o de barras na outra), são uma linha só.
+  function lineIdentity(line: ReceiptDraftLine) {
+    const existing = findExistingProduct(line, productLookup);
+    return existing
+      ? `cadastro:${existing.id}`
+      : normalizeProductKey(line.clientCode || line.sku);
+  }
+
+  function sameProduct(line: ReceiptDraftLine, other: ReceiptDraftLine) {
+    if (lineIdentity(line) === lineIdentity(other)) return true;
+    const barcode = barcodeKey(line.barcode);
+    return Boolean(barcode) && barcode === barcodeKey(other.barcode);
+  }
+
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const hasInvalidLine = lines.some((line, index) => {
@@ -485,8 +493,7 @@ export function UnplannedReceiptDialog({
         currentKey &&
         lines.some(
           (otherLine, otherIndex) =>
-            otherIndex !== index &&
-            normalizeProductKey(otherLine.clientCode || otherLine.sku) === currentKey,
+            otherIndex !== index && sameProduct(line, otherLine),
         );
       const existing = findExistingProduct(line, productLookup);
       return (
@@ -513,9 +520,9 @@ export function UnplannedReceiptDialog({
       .map((line) => {
         const existing = findExistingProduct(line, productLookup);
         return {
-          sku_code: existing?.skuCode || line.sku.trim() || line.clientCode.trim(),
-          client_item_code:
-            existing?.clientCode || line.clientCode.trim() || line.sku.trim(),
+          // Produto novo não leva SKU: as Functions geram na sigla do cliente.
+          sku_code: existing?.skuCode || undefined,
+          client_item_code: existing?.clientCode || line.clientCode.trim(),
           product_name: existing?.productName || line.product.trim(),
           category: line.category.trim() || undefined,
           barcode: line.barcode.trim() || undefined,
@@ -532,7 +539,7 @@ export function UnplannedReceiptDialog({
           product_registration: existing ? "existing" : "new",
         };
       })
-      .filter((line) => line.sku_code && line.product_name && line.quantity > 0);
+      .filter((line) => line.product_name && line.quantity > 0);
 
     if (!items.length) return;
 
@@ -555,8 +562,7 @@ export function UnplannedReceiptDialog({
       currentKey &&
         lines.some(
           (otherLine, otherIndex) =>
-            otherIndex !== index &&
-            normalizeProductKey(otherLine.clientCode || otherLine.sku) === currentKey,
+            otherIndex !== index && sameProduct(line, otherLine),
         ),
     );
     const existing = findExistingProduct(line, productLookup);
@@ -671,7 +677,7 @@ export function UnplannedReceiptDialog({
                         </Badge>
                         {issue?.duplicateInDraft ? (
                           <Badge variant="outline" className="border-destructive/20 bg-destructive/10 text-destructive">
-                            código repetido nesta NF
+                            produto repetido nesta NF
                           </Badge>
                         ) : issue?.invalidQuantity ? (
                           <Badge variant="outline" className="border-destructive/20 bg-destructive/10 text-destructive">
@@ -717,20 +723,21 @@ export function UnplannedReceiptDialog({
                         onChange={(event) =>
                           updateLine(index, {
                             clientCode: event.target.value,
+                            sku: "",
                             createNew: false,
                           })
                         }
-                        placeholder="Cod. cliente"
+                        placeholder="Cód. cliente, SKU ou barras"
+                        aria-label={`Código do produto da linha ${index + 1}`}
                       />
+                      {/* O SKU não se digita: é o do cadastro achado ou o gerado ao salvar. */}
                       <Input
-                        value={line.sku}
-                        onChange={(event) =>
-                          updateLine(index, {
-                            sku: event.target.value,
-                            createNew: false,
-                          })
-                        }
-                        placeholder="SKU interno"
+                        value={existing?.skuCode ?? ""}
+                        readOnly
+                        tabIndex={-1}
+                        className="bg-muted"
+                        placeholder={line.createNew ? "Gerado ao salvar" : "SKU"}
+                        aria-label={`SKU da linha ${index + 1}`}
                       />
                       <Input
                         value={line.product}
@@ -780,7 +787,8 @@ export function UnplannedReceiptDialog({
                       <div className="mt-3 rounded-md border border-warning-soft-border bg-card px-3 py-2 text-sm text-warning-soft-foreground">
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                           <span>
-                            Produto não localizado pelo código informado.
+                            Produto não localizado pelo código informado. O SKU
+                            do novo cadastro é gerado na sigla do cliente.
                           </span>
                           <Button
                             type="button"
@@ -791,14 +799,11 @@ export function UnplannedReceiptDialog({
                             {line.createNew ? "Novo produto marcado" : "Cadastrar como novo"}
                           </Button>
                         </div>
-                        {issue?.similar.length ? (
-                          <div className="mt-2 text-xs leading-5 text-muted-foreground">
-                            Nomes parecidos encontrados:{" "}
-                            {issue.similar
-                              .map((product) => `${product.productName} (${product.clientCode})`)
-                              .join(", ")}
-                          </div>
-                        ) : null}
+                        <SimilarProductList
+                          products={issue?.similar ?? []}
+                          onPick={(product) => applyExistingProduct(index, product)}
+                          pickLabel="Usar este"
+                        />
                       </div>
                     ) : null}
 

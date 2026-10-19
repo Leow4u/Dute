@@ -61,8 +61,12 @@ documentação de produto e operação está em `docs/`.
   tela interna grava para ele, nunca para a BTG fixa (`customer-literals.test.ts`
   trava o literal). Nas Functions, `domain/customer-scope.ts` isola os
   clientes: abertura de estoque por cliente (o `system_controls/inventory` é
-  só da BTG) e catálogo com dono. Ver `docs/multicliente-modelos-de-operacao.md`
-  (inclui a ordem dos próximos PRs: SKU por cliente, mobiliário, insumos).
+  só da BTG) e catálogo com dono. **O SKU não se digita**: produto novo nasce
+  com `<SIGLA>-000001` gerado em `domain/catalog-codes.ts`, na transação que
+  cria o produto (Contagem, Receber, conferência e envio do portal); não existe
+  mais cadastro avulso de produto, e o código de barras não se repete dentro do
+  cliente. Ver `docs/multicliente-modelos-de-operacao.md` (inclui a ordem dos
+  próximos PRs: mobiliário, com patrimônio, e insumos).
 - **`pnpm` não está no PATH.** Use `corepack pnpm`. O diretório `functions/` usa
   **npm** (tem `package-lock.json` próprio), não pnpm.
 

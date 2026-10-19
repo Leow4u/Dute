@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { generatedSkuNote, type SavedLineCodes } from "@/lib/product-match";
 import {
   type AdvanceTaskPayload,
   type ExceptionPayload,
@@ -127,11 +128,19 @@ export function useWarehouseTaskActions({
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       }),
-    onSuccess: () => {
+    onSuccess: (result) => {
       invalidate();
+      const generated = generatedSkuNote(
+        (result as { items?: SavedLineCodes[] } | undefined)?.items,
+      );
       toast({
         title: "Chegada avulsa registrada",
-        description: "A conferência foi criada no WMS sem lançar estoque ainda.",
+        description: [
+          "A conferência foi criada no WMS sem lançar estoque ainda.",
+          generated,
+        ]
+          .filter(Boolean)
+          .join(" "),
       });
     },
     onError: (error) => {
