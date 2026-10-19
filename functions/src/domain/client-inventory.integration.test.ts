@@ -7,6 +7,7 @@ import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import {
   projectMinimumStock,
   readClientInventoryForSku,
+  readClientInventoryForSkuRecord,
   setClientItemArchivedTransaction,
 } from "./client-inventory.js";
 
@@ -145,5 +146,36 @@ describe("mínimo da ficha no portal", () => {
       projectMinimumStock(transaction, refs, null);
     });
     assert.equal((await db.collection("client_inventory").doc("com-saldo").get()).data()?.estoque_minimo, undefined);
+  });
+
+  it("SKU de outro cliente leva o mínimo para o portal desse cliente", async () => {
+    await db.collection("skus").doc("ITAU-000001").set({
+      cod_btg: "ITAU-000001",
+      sku_code: "ITAU-000001",
+      customer_code: "Itaú",
+      produto: "CAMISA POLO",
+    });
+    await db.collection("client_inventory").doc("itau").set({
+      customer_code: "Itaú",
+      sku_code: "ITAU-000001",
+      qty_on_hand: 4,
+      qty_reserved: 0,
+    });
+
+    // Como no mutateManagedEntity: o portal sai da ficha já gravada (before).
+    await db.runTransaction(async (transaction) => {
+      const sku = (await transaction.get(db.collection("skus").doc("ITAU-000001"))).data() ?? {};
+      const refs = await readClientInventoryForSkuRecord(transaction, db, sku, "ITAU-000001");
+      projectMinimumStock(transaction, refs, 12);
+    });
+    assert.equal((await db.collection("client_inventory").doc("itau").get()).data()?.estoque_minimo, 12);
+  });
+
+  it("registro antigo sem customer_code continua indo para a BTG", async () => {
+    await db.runTransaction(async (transaction) => {
+      const refs = await readClientInventoryForSkuRecord(transaction, db, { cod_btg: "SKU2" }, "SKU2");
+      projectMinimumStock(transaction, refs, 15);
+    });
+    assert.equal((await db.collection("client_inventory").doc("com-saldo").get()).data()?.estoque_minimo, 15);
   });
 });

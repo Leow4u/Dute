@@ -69,7 +69,7 @@ import { CostSettingsSchema, readSystemDashboard, saveCostSettings } from "./dom
 import { codeFunctions, InfraSettingsSchema, readSystemInfra, saveInfraSettings, type GcpFetch } from "./domain/system-infra.js";
 import {
   projectMinimumStock,
-  readClientInventoryForSku,
+  readClientInventoryForSkuRecord,
   setClientItemArchivedTransaction,
 } from "./domain/client-inventory.js";
 import {
@@ -3714,6 +3714,11 @@ function managedCatalogIdentity(
   };
 }
 
+// A chave do claim usa o cliente legado de propósito: SKU e código do cliente
+// ainda são únicos no catálogo inteiro (`skus/{sku}`, `products/{código}`),
+// não por cliente. O `customer_code` gravado no claim também fica a BTG; nada
+// o lê hoje. Separar o código do cliente por cliente muda a chave, esse campo
+// e as consultas de assertManagedCatalogIdentityAvailable juntos.
 function managedCatalogIdentityClaims(identity: ManagedCatalogIdentity) {
   const values =
     identity.resource === "products"
@@ -4646,19 +4651,15 @@ export const mutateManagedEntity = onCall(async (request) => {
     const catalogIdentityClaims = catalogIdentity
       ? await assertManagedCatalogIdentityAvailable(transaction, catalogIdentity)
       : [];
-    // Mínimo da ficha vai também para o portal (client_inventory). A leitura
-    // vem antes de qualquer escrita, como o Firestore exige.
+    // Mínimo da ficha vai também para o portal do dono do SKU
+    // (client_inventory). A leitura vem antes de qualquer escrita, como o
+    // Firestore exige.
     const minimumChanged =
       input.resource === "skus" &&
       input.action === "update" &&
       Object.prototype.hasOwnProperty.call(input.data, "estoque_minimo");
     const minimumProjectionRefs = minimumChanged
-      ? await readClientInventoryForSku(
-          transaction,
-          db,
-          DEFAULT_CUSTOMER,
-          String(before.cod_btg ?? before.sku_code ?? documentId),
-        )
+      ? await readClientInventoryForSkuRecord(transaction, db, before, documentId)
       : [];
     const payload = managedWritePayload(
       input,
@@ -4710,6 +4711,7 @@ export const mutateManagedEntity = onCall(async (request) => {
           canonical_value: claim.value,
           resource: catalogIdentity?.resource,
           document_id: documentId,
+          // Não é o dono do cadastro: ver managedCatalogIdentityClaims.
           customer_code: DEFAULT_CUSTOMER,
           updated_by: profile.uid,
           updated_at: FieldValue.serverTimestamp(),

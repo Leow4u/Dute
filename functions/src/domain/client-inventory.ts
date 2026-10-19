@@ -6,8 +6,10 @@ import {
 } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 
+import { recordOwner } from "./customer-scope.js";
+
 /**
- * Duas coisas que o portal da BTG lê de client_inventory e que a projeção
+ * Duas coisas que o portal do cliente lê de client_inventory e que a projeção
  * operacional não gravava:
  * - o estoque mínimo da ficha (skus.estoque_minimo), para "Baixo estoque";
  * - o arquivamento pelo cliente de item zerado, que antes só escondia o
@@ -135,6 +137,25 @@ export async function readClientInventoryForSku(
       .where("sku_code", "==", skuCode),
   );
   return snapshot.docs.map((document) => document.ref);
+}
+
+/**
+ * Projeções do SKU no portal do dono dele: `customer_code` da ficha, a BTG só
+ * para registro antigo sem o campo (recordOwner). Mesma regra de leitura
+ * antes das escritas.
+ */
+export async function readClientInventoryForSkuRecord(
+  transaction: Transaction,
+  db: Firestore,
+  sku: Record<string, unknown>,
+  documentId: string,
+) {
+  return readClientInventoryForSku(
+    transaction,
+    db,
+    recordOwner(sku),
+    String(sku.cod_btg ?? sku.sku_code ?? documentId),
+  );
 }
 
 /** Leva o mínimo da ficha para o portal; null apaga. */
