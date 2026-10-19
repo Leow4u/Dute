@@ -12,6 +12,12 @@ describe("modo padrão da Contagem", () => {
   it("abre na contagem cíclica depois da abertura concluída", () => {
     expect(defaultCountMode("completed")).toBe("cycle");
   });
+
+  it("cliente que não precisa de abertura abre na cíclica; com a abertura aberta, nela", () => {
+    expect(defaultCountMode("not_started", false)).toBe("cycle");
+    expect(defaultCountMode("not_started", true)).toBe("opening");
+    expect(defaultCountMode("open", true)).toBe("opening");
+  });
 });
 
 describe("aviso do inventário de abertura", () => {
@@ -37,6 +43,11 @@ describe("aviso do inventário de abertura", () => {
   it("concorda o número com uma unidade só", () => {
     const notice = openingInventoryNotice({ status: "open", line_count: 1, unit_count: 1 });
     expect(notice?.description).toContain("1 produto e 1 unidade confirmados");
+  });
+
+  it("cliente novo, que começa pelo recebimento, não recebe aviso de abertura pendente", () => {
+    expect(openingInventoryNotice({ status: "not_started", opening_required: false })).toBeNull();
+    expect(openingInventoryNotice({ status: "not_started", opening_required: true })?.tone).toBe("warning");
   });
 
   it("não avisa nada depois da conclusão nem sem sessão", () => {

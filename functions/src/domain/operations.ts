@@ -8,6 +8,11 @@ import {
 
 import { receivedSummary } from "./client-shipments.js";
 import {
+  assertCatalogOwnedBy,
+  openingInventoryBlocksOutbound,
+  openingUsesGlobalControl,
+} from "./customer-scope.js";
+import {
   FieldValue,
   type DocumentData,
   type DocumentReference,
@@ -1304,16 +1309,20 @@ export async function createOpeningInventorySessionTransaction(
         updated_at: FieldValue.serverTimestamp(),
       }),
     );
-    transaction.set(
-      db.collection(collections.systemControls).doc("inventory"),
-      {
-        stock_initialized: false,
-        opening_inventory_required: true,
-        opening_inventory_session_id: sessionId,
-        updated_at: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
+    // system_controls/inventory é a abertura do cliente legado (a BTG):
+    // a contagem de outro cliente trava só os pedidos dele, pela sessão.
+    if (openingUsesGlobalControl(customerCode)) {
+      transaction.set(
+        db.collection(collections.systemControls).doc("inventory"),
+        {
+          stock_initialized: false,
+          opening_inventory_required: true,
+          opening_inventory_session_id: sessionId,
+          updated_at: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
 
     const event = createEvent(
       transaction,
@@ -1432,17 +1441,19 @@ export async function completeOpeningInventorySessionTransaction(
         updated_at: FieldValue.serverTimestamp(),
       }),
     );
-    transaction.set(
-      db.collection(collections.systemControls).doc("inventory"),
-      {
-        stock_initialized: true,
-        opening_inventory_required: false,
-        opening_inventory_session_id: sessionId,
-        opening_inventory_completed_at: occurredAt,
-        updated_at: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
+    if (openingUsesGlobalControl(customerCode)) {
+      transaction.set(
+        db.collection(collections.systemControls).doc("inventory"),
+        {
+          stock_initialized: true,
+          opening_inventory_required: false,
+          opening_inventory_session_id: sessionId,
+          opening_inventory_completed_at: occurredAt,
+          updated_at: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
     const event = createEvent(
       transaction,
       db,
@@ -1730,6 +1741,22 @@ export async function recordCycleCountTransaction(
     );
     const wantsNewProduct = text(input.product_registration) === "new";
     if (mode === "opening") {
+      // Um código de catálogo tem dono: a contagem de um cliente não
+      // reaproveita o cadastro de outro (domain/customer-scope.ts).
+      assertCatalogOwnedBy(
+        customerCode,
+        [
+          ...productRows.map((row) => row.data),
+          ...skuRows.map((row) => row.data),
+          productCodeSnapshot?.exists ? productCodeSnapshot.data() : undefined,
+        ],
+        `O código ${requestedClientItemCode}`,
+      );
+      assertCatalogOwnedBy(
+        customerCode,
+        [skuCodeSnapshot?.exists ? skuCodeSnapshot.data() : undefined],
+        `O SKU ${skuCode}`,
+      );
       const existingSkuCodes = new Set(
         skuRows
           .map((row) =>
@@ -2732,6 +2759,16 @@ export async function createReturnReceiptTransaction(
         ),
         transaction.get(db.collection(collections.skus).doc(safeDocId(declaredSku))),
       ]);
+      assertCatalogOwnedBy(
+        customerCode,
+        [...productRows.map((row) => row.data), ...skuRows.map((row) => row.data)],
+        `O código ${clientCode}`,
+      );
+      assertCatalogOwnedBy(
+        customerCode,
+        [skuCodeSnapshot.exists ? skuCodeSnapshot.data() : undefined],
+        `O SKU ${declaredSku}`,
+      );
       const existingSkuCodes = new Set(
         skuRows
           .map((row) => text(row.data.cod_btg || row.data.sku_code || row.data.cod_sku))
@@ -3208,9 +3245,23 @@ export async function createCustomerRequestTransaction(
         transaction,
         db,
       );
+      // Cada cliente segue a própria abertura (domain/customer-scope.ts).
+      const requestCustomer = text(input.customer_code);
+      const openingSession = openingUsesGlobalControl(requestCustomer)
+        ? undefined
+        : (
+            await transaction.get(
+              db
+                .collection(collections.openingInventorySessions)
+                .doc(openingInventorySessionDocumentId(requestCustomer)),
+            )
+          ).data();
       if (
-        inventoryControl.stock_initialized === false ||
-        inventoryControl.opening_inventory_required === true
+        openingInventoryBlocksOutbound({
+          customerCode: requestCustomer,
+          control: inventoryControl,
+          session: openingSession,
+        })
       ) {
         throw new HttpsError(
           "failed-precondition",
@@ -3702,6 +3753,22 @@ export async function createInboundReceiptTransaction(
         skuCodeSnapshot,
         wantsNewProduct,
       } = check;
+      // Um código de catálogo tem dono: o recebimento de um cliente não
+      // reaproveita o cadastro de outro (domain/customer-scope.ts).
+      assertCatalogOwnedBy(
+        text(input.customer_code),
+        [
+          ...productRows.map((row) => row.data),
+          ...skuRows.map((row) => row.data),
+          productCodeSnapshot.exists ? productCodeSnapshot.data() : undefined,
+        ],
+        `O código ${clientCode}`,
+      );
+      assertCatalogOwnedBy(
+        text(input.customer_code),
+        [skuCodeSnapshot.exists ? skuCodeSnapshot.data() : undefined],
+        `O SKU ${declaredSku}`,
+      );
       const existingSkuCodes = new Set(
         [
           ...skuRows.map((row) =>

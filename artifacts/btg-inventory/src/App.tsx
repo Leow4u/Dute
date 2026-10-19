@@ -134,6 +134,7 @@ const ClienteEnvios = lazy(() =>
 );
 import { useRole } from "./hooks/use-role";
 import { AuthProvider, useAppUser } from "./lib/auth";
+import { ActiveCustomerProvider } from "./lib/active-customer-context";
 import { useOperationProfile } from "./lib/operation-profile";
 import { portalModulesFor } from "./lib/operations";
 import {
@@ -156,6 +157,7 @@ import {
 import { queryClient } from "./lib/queryClient";
 import { RealtimeSyncBridge } from "./lib/realtime-sync";
 import { LEGACY_SETTINGS_REDIRECTS, isSettingsPath } from "./lib/settings-nav";
+import { INTERNAL_CUSTOMER_CODE, LEGACY_CUSTOMER_CODE } from "./lib/active-customer";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -517,7 +519,7 @@ function SignUpPage() {
         .trim()
         .toLowerCase();
       const customerCode =
-        data.customer_code ?? (role === "cliente" ? "BTG Pactual" : "Dutelog");
+        data.customer_code ?? (role === "cliente" ? LEGACY_CUSTOMER_CODE : INTERNAL_CUSTOMER_CODE);
       if (!email || !role) {
         if (active) setInvite({ status: "invalid" });
         return;
@@ -609,8 +611,8 @@ function SignUpPage() {
           customer_code:
             invite.data.customer_code ??
             (appRole(invite.data.role) === "cliente"
-              ? "BTG Pactual"
-              : "Dutelog"),
+              ? LEGACY_CUSTOMER_CODE
+              : INTERNAL_CUSTOMER_CODE),
           payload: {
             email: invite.data.email,
             role: invite.data.role,
@@ -1048,6 +1050,8 @@ function AppRoutes() {
         <QueryClientProvider client={queryClient}>
           <QueryClientCacheInvalidator />
           <RealtimeSyncBridge />
+          {/* Cliente ativo da área interna (lib/active-customer.ts). */}
+          <ActiveCustomerProvider>
           <TooltipProvider>
             <ChunkErrorBoundary>
               <Suspense
@@ -1073,6 +1077,7 @@ function AppRoutes() {
             </ChunkErrorBoundary>
             <Toaster />
           </TooltipProvider>
+          </ActiveCustomerProvider>
         </QueryClientProvider>
       </AppThemeProvider>
     </AuthProvider>

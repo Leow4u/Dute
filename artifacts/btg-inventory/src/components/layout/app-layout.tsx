@@ -40,6 +40,7 @@ import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { SidebarBrand } from "@/components/layout/sidebar-brand";
 import { agentPathFor, isAgentScreen, isAgentShortcut } from "@/lib/agent-chat";
 import { useAppAuth, useAppUser, type AppUser } from "@/lib/auth";
+import { ActiveCustomerSwitcher } from "@/components/layout/active-customer-switcher";
 import { useOperationProfile } from "@/lib/operation-profile";
 import { usePwaInstall } from "@/lib/pwa-install";
 import { roleDescription, roleLabel } from "@/lib/access";
@@ -408,6 +409,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const activeId = isAccountPath(location) ? null : activeModule.id;
   const clientSurface =
     location === "/portal" || location.startsWith("/portal/");
+  // Cliente ativo: só na área interna; o portal é sempre o cliente da conta.
+  const profileRole = user?.publicMetadata.role;
+  const showCustomerSwitcher = Boolean(profileRole) && profileRole !== "cliente";
+  const canManageCustomers = profileRole === "owner" || profileRole === "admin";
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem("dute.sidebar") === "collapsed";
@@ -526,6 +531,15 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </Tooltip>
         </div>
 
+        {showCustomerSwitcher ? (
+          <div className={cn("pt-4", collapsed ? "flex justify-center px-3" : "px-4")}>
+            <ActiveCustomerSwitcher
+              variant={collapsed ? "compact" : "sidebar"}
+              canManageCustomers={canManageCustomers}
+            />
+          </div>
+        ) : null}
+
         <nav
           className={cn(
             "flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto py-5",
@@ -569,24 +583,29 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       </aside>
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between border-b border-border/70 bg-card px-4 md:hidden">
+        <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border/70 bg-card px-4 md:hidden">
           <img
             src={`${basePath}/dutelog-logo.png`}
             alt="Dutelog Soluções Logísticas"
-            className="h-8 w-auto max-w-[168px] object-contain dark:hidden"
+            className="h-8 w-auto min-w-0 max-w-[168px] shrink object-contain dark:hidden"
           />
           <img
             src={`${basePath}/dutelog-logo-light.png`}
             alt=""
             aria-hidden="true"
-            className="hidden h-8 w-auto max-w-[168px] object-contain dark:block"
+            className="hidden h-8 w-auto min-w-0 max-w-[168px] shrink object-contain dark:block"
           />
-          <AccountMenu
-            basePath={basePath}
-            compact
-            signOut={signOut}
-            user={user}
-          />
+          <div className="flex min-w-0 items-center gap-2">
+            {showCustomerSwitcher ? (
+              <ActiveCustomerSwitcher variant="header" canManageCustomers={canManageCustomers} />
+            ) : null}
+            <AccountMenu
+              basePath={basePath}
+              compact
+              signOut={signOut}
+              user={user}
+            />
+          </div>
         </header>
         {!isOnline ? (
           <div

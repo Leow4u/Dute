@@ -82,6 +82,8 @@ import {
   productLookupFromRecord,
   uploadProductPhoto,
 } from "@/features/warehouse-ops/shared";
+import { customerRows } from "@/lib/active-customer";
+import { useActiveCustomer } from "@/lib/active-customer-context";
 
 function DetailField({
   icon: Icon,
@@ -394,12 +396,14 @@ export function UnplannedReceiptDialog({
   onCreate: (payload: Record<string, unknown>) => void;
 }) {
   const { toast } = useToast();
+  // A chegada é do cliente ativo: só os produtos dele aparecem na busca.
+  const { code: customerCode, active: activeCustomer } = useActiveCustomer();
   const [supplier, setSupplier] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<ReceiptDraftLine[]>([emptyReceiptLine()]);
   const lookupQuery = useQuery({
-    queryKey: ["receiving-product-lookup"],
+    queryKey: ["receiving-product-lookup", customerCode],
     enabled: open,
     staleTime: 60_000,
     queryFn: async () => {
@@ -407,8 +411,8 @@ export function UnplannedReceiptDialog({
         fetchJson<unknown>("/api/skus"),
         fetchJson<unknown>("/api/products"),
       ]);
-      const skus = normalizeApiRows(skusPayload).map(productLookupFromRecord);
-      const products = normalizeApiRows(productsPayload).map(productLookupFromRecord);
+      const skus = customerRows(normalizeApiRows(skusPayload), customerCode).map(productLookupFromRecord);
+      const products = customerRows(normalizeApiRows(productsPayload), customerCode).map(productLookupFromRecord);
       return mergeProductLookup(skus, products);
     },
   });
@@ -449,7 +453,7 @@ export function UnplannedReceiptDialog({
     updateLine(index, { photoUploading: true });
     try {
       const uploaded = await Promise.all(
-        selected.map((file) => uploadProductPhoto(file, clientItemCode)),
+        selected.map((file) => uploadProductPhoto(file, clientItemCode, customerCode)),
       );
       setLines((current) =>
         current.map((currentLine, lineIndex) =>
@@ -533,7 +537,7 @@ export function UnplannedReceiptDialog({
     if (!items.length) return;
 
     onCreate({
-      customer_code: "BTG Pactual",
+      customer_code: customerCode,
       supplier: supplier.trim() || undefined,
       invoice_number: invoiceNumber.trim() || undefined,
       notes: notes.trim() || undefined,
@@ -602,9 +606,10 @@ export function UnplannedReceiptDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-[820px]">
         <DialogHeader>
-          <DialogTitle>Registrar chegada avulsa</DialogTitle>
+          <DialogTitle>Registrar chegada avulsa · {activeCustomer.name}</DialogTitle>
           <DialogDescription>
             Use quando o fornecedor entregou sem aviso da cliente. Isso cria a tarefa de conferência, não lança estoque ainda.
+            A chegada entra para {activeCustomer.name}, o cliente ativo no menu.
           </DialogDescription>
         </DialogHeader>
         <form className="space-y-5" onSubmit={submit}>

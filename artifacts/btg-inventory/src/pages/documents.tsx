@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -45,6 +46,7 @@ import {
   type KnowledgeState,
 } from "@/lib/document-rows";
 import { fileToBase64 } from "@/lib/file-base64";
+import { useActiveCustomer } from "@/lib/active-customer-context";
 
 /**
  * Documentos da operação BTG. Uma lista só: o que a Dutelog adicionou e as
@@ -107,6 +109,8 @@ export default function Documents() {
   const canSend = canAccessModule(role, KNOWLEDGE_SENDERS);
   const canApprove = canAccessModule(role, KNOWLEDGE_APPROVERS);
   const isFinance = role === "financeiro";
+  // O documento novo é do cliente ativo; a biblioteca lista todos.
+  const { code: customerCode, active: activeCustomer } = useActiveCustomer();
 
   const [search, setSearch] = useState("");
   const [kind, setKind] = useState<DocumentKind | "all">("all");
@@ -153,7 +157,7 @@ export default function Documents() {
       const target = await apiJson<UploadedFile>("/api/documents/upload", {
         method: "POST",
         body: JSON.stringify({
-          customer_code: "BTG Pactual",
+          customer_code: customerCode,
           file_name: file.name,
           content_type: file.type || "application/octet-stream",
           data_base64: await fileToBase64(file),
@@ -165,7 +169,7 @@ export default function Documents() {
       return apiJson("/api/documents", {
         method: "POST",
         body: JSON.stringify({
-          customer_code: "BTG Pactual",
+          customer_code: customerCode,
           title,
           file_name: target.file_name,
           document_type: documentType,
@@ -379,6 +383,9 @@ export default function Documents() {
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle>Adicionar documento</DialogTitle>
+            <DialogDescription>
+              O documento fica com {activeCustomer.name}, o cliente ativo no menu.
+            </DialogDescription>
           </DialogHeader>
           <form
             id="document-form"

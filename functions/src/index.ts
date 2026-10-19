@@ -59,6 +59,11 @@ import {
   buildCustomerPayload,
   clientProfileProjection,
 } from "./domain/customer-profile.js";
+import {
+  defaultNotificationRecipients,
+  openingInventoryBlocksOutbound,
+  openingUsesGlobalControl,
+} from "./domain/customer-scope.js";
 import { readSystemHealth } from "./domain/system-health.js";
 import { CostSettingsSchema, readSystemDashboard, saveCostSettings } from "./domain/system-dashboard.js";
 import { codeFunctions, InfraSettingsSchema, readSystemInfra, saveInfraSettings, type GcpFetch } from "./domain/system-infra.js";
@@ -1591,11 +1596,14 @@ function notificationRecipients(
         (item): item is string => typeof item === "string",
       )
     : [];
-  const audience = rowText(data, "audience");
-  const defaults =
-    audience === "client"
-      ? envCsv("AGENT_DUTE_EMAIL_CLIENT_TO")
-      : envCsv("AGENT_DUTE_EMAIL_INTERNAL_TO");
+  // A lista de e-mails do cliente (ambiente) é a do cliente legado: a
+  // notificação de outro cliente só sai com destinatário informado.
+  const defaults = defaultNotificationRecipients({
+    audience: rowText(data, "audience"),
+    customerCode: rowText(data, "customer_code"),
+    clientDefaults: envCsv("AGENT_DUTE_EMAIL_CLIENT_TO"),
+    internalDefaults: envCsv("AGENT_DUTE_EMAIL_INTERNAL_TO"),
+  });
   return uniqueEmails([...(parsed.recipients ?? []), ...existing, ...defaults]);
 }
 
@@ -6144,13 +6152,23 @@ export const getOpeningInventorySession = onCall(async (request) => {
     typeof requestedCustomer === "string" ? requestedCustomer : undefined,
   );
   const sessionId = openingInventorySessionDocumentId(customer_code);
-  const [snapshot, linesSnapshot] = await Promise.all([
+  const [snapshot, linesSnapshot, controlSnapshot] = await Promise.all([
     db.collection(collectionNames.openingInventorySessions).doc(sessionId).get(),
     db
       .collection(collectionNames.openingInventoryLines)
       .where("session_id", "==", sessionId)
       .get(),
+    openingUsesGlobalControl(customer_code)
+      ? db.collection("system_controls").doc("inventory").get()
+      : Promise.resolve(undefined),
   ]);
+  // A abertura deste cliente trava os pedidos de saída? A tela avisa só
+  // quando trava: cliente novo começa pelo recebimento e não precisa dela.
+  const opening_required = openingInventoryBlocksOutbound({
+    customerCode: customer_code,
+    control: controlSnapshot?.data(),
+    session: snapshot.data(),
+  });
   const lines = linesSnapshot.docs
     .map(
       (document): Record<string, unknown> & { id: string } => ({
@@ -6171,6 +6189,7 @@ export const getOpeningInventorySession = onCall(async (request) => {
       session_id: sessionId,
       customer_code,
       status: "not_started",
+      opening_required,
       line_count: 0,
       unit_count: 0,
       total_cost: 0,
@@ -6182,6 +6201,7 @@ export const getOpeningInventorySession = onCall(async (request) => {
     id: snapshot.id,
     session_id: snapshot.id,
     ...snapshot.data(),
+    opening_required,
     lines,
   };
 });

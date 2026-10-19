@@ -36,11 +36,13 @@ import {
 } from "@/lib/warehouse-labels";
 import { fetchJson, formatNumber, getErrorMessage } from "@/lib/warehouse-ops/model";
 import { type WarehousePosition, sortPositions } from "@/lib/warehouse-positions";
+import { useActiveCustomer } from "@/lib/active-customer-context";
 
-const CUSTOMER = "BTG Pactual";
 type PositionsResponse = { items?: WarehousePosition[] };
 
 export default function WarehouseLabelsPage() {
+  // Caixas e conteúdo do cliente ativo (o mesmo da Contagem que abriu a página).
+  const { code: customerCode } = useActiveCustomer();
   const search = useSearch();
   const [, navigate] = useLocation();
   const query = useMemo(() => parseLabelsQuery(search), [search]);
@@ -48,12 +50,12 @@ export default function WarehouseLabelsPage() {
   const wantsPositions = query.positions.length > 0;
 
   const boxesQuery = useQuery({
-    queryKey: ["warehouse-boxes", CUSTOMER],
+    queryKey: ["warehouse-boxes", customerCode],
     enabled: wantsBoxes,
     staleTime: 10_000,
     queryFn: async () =>
       normalizeApiRows(
-        await fetchJson<unknown>(`/api/warehouse/boxes?customer_code=${encodeURIComponent(CUSTOMER)}&limit=1000`),
+        await fetchJson<unknown>(`/api/warehouse/boxes?customer_code=${encodeURIComponent(customerCode)}&limit=1000`),
       ).map(warehouseBoxFromRecord),
   });
   const sessionQuery = useOpeningInventorySession();

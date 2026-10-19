@@ -2,6 +2,7 @@ import {
   OPERATIONAL_MODULES,
   type OperationalModuleStatus,
 } from "./operational-modules";
+import { LEGACY_CUSTOMER_CODE } from "./active-customer";
 
 export type AnyOperationalRecord = Record<string, any>;
 
@@ -51,10 +52,11 @@ export type OperationalFoundationSnapshot = {
   };
 };
 
+// Cliente legado: registro sem customer_code é dele (lib/active-customer.ts).
 export const DEFAULT_CUSTOMER = {
-  code: "BTG Pactual",
+  code: LEGACY_CUSTOMER_CODE,
   id: "btg-pactual",
-  name: "BTG Pactual",
+  name: LEGACY_CUSTOMER_CODE,
 };
 
 export const OPERATIONAL_COLLECTION_CONTRACTS: OperationalCollectionContract[] =

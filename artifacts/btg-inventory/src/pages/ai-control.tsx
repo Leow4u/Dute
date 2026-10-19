@@ -53,6 +53,8 @@ import {
 } from "@/lib/operational-modules";
 import type { OperationalFoundationSnapshot } from "@/lib/operational-foundation";
 import { cn } from "@/lib/utils";
+import { recordCustomerCode } from "@/lib/active-customer";
+import { useActiveCustomer } from "@/lib/active-customer-context";
 
 type EventSeverity = "info" | "attention" | "critical";
 
@@ -1305,7 +1307,7 @@ function OperationalNotificationsCard({
               <div className="mt-4 rounded-2xl border border-border bg-card p-3 text-xs leading-5 text-muted-foreground">
                 <span className="font-medium text-foreground">Origem:</span>{" "}
                 {item.trigger_event_type || "evento operacional"} ·{" "}
-                {item.customer_code || "BTG Pactual"}
+                {recordCustomerCode(item)}
               </div>
               {item.status === "approved" ? (
                 <div className="mt-4 space-y-3 rounded-2xl border border-info-soft-border bg-info-soft/35 p-3">
@@ -1583,6 +1585,8 @@ function EventTraceabilityPanel({ events }: { events: AiEvent[] }) {
 export default function AiControl() {
   const qc = useQueryClient();
   const { toast } = useToast();
+  // Anotação e sincronização de notificações valem para o cliente ativo.
+  const { code: activeCustomerCode } = useActiveCustomer();
   const [note, setNote] = useState("");
   const [severity, setSeverity] = useState<EventSeverity>("info");
 
@@ -1643,7 +1647,7 @@ export default function AiControl() {
           severity,
           entity_type: "operacao",
           entity_id: "dutelog",
-          customer_code: "BTG Pactual",
+          customer_code: activeCustomerCode,
           source: "operator_note",
         }),
       }),
@@ -1682,7 +1686,7 @@ export default function AiControl() {
       }>("/api/agent-dute/notifications/sync", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ customer_code: "BTG Pactual", limit: 250 }),
+        body: JSON.stringify({ customer_code: activeCustomerCode, limit: 250 }),
       }),
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["agent-operational-notifications"] });

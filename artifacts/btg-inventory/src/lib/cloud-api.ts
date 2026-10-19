@@ -45,6 +45,7 @@ import {
   buildDerivedStockBalances,
   buildOperationalFoundationSnapshot,
 } from "./operational-foundation";
+import { LEGACY_CUSTOMER_CODE } from "./active-customer";
 
 type AnyRecord = Record<string, any>;
 type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
@@ -2541,7 +2542,7 @@ async function getBillingConfig() {
   if (snapshot.exists()) return { id: 1, ...snapshot.data() };
   return {
     id: 1,
-    cliente_nome: "BTG Pactual",
+    cliente_nome: LEGACY_CUSTOMER_CODE,
     cliente_email: "",
     ad_valorem_rate: 0.005,
   };
@@ -3078,7 +3079,7 @@ function knowledgeMemoryView(item: AnyRecord) {
     last_event_at: toIso(item.ingested_at) || item.ingested_at || "",
     summary:
       item.summary ??
-      `Documento real vinculado ao cliente ${item.customer_code ?? "BTG Pactual"}.`,
+      `Documento real vinculado ao cliente ${item.customer_code ?? LEGACY_CUSTOMER_CODE}.`,
   };
 }
 
@@ -3145,7 +3146,7 @@ function deriveAgentInsights({
           status: "open",
           entity_type: "produto",
           entity_id: null,
-          customer_code: "BTG Pactual",
+          customer_code: LEGACY_CUSTOMER_CODE,
           created_at: new Date().toISOString(),
         }
       : null,
@@ -3158,7 +3159,7 @@ function deriveAgentInsights({
           status: "open",
           entity_type: "pedido",
           entity_id: null,
-          customer_code: "BTG Pactual",
+          customer_code: LEGACY_CUSTOMER_CODE,
           created_at: new Date().toISOString(),
         }
       : null,
@@ -3171,7 +3172,7 @@ function deriveAgentInsights({
           status: "open",
           entity_type: "sku",
           entity_id: null,
-          customer_code: "BTG Pactual",
+          customer_code: LEGACY_CUSTOMER_CODE,
           created_at: new Date().toISOString(),
         }
       : null,
@@ -3184,7 +3185,7 @@ function deriveAgentInsights({
           status: "open",
           entity_type: "fatura",
           entity_id: currentPeriod,
-          customer_code: "BTG Pactual",
+          customer_code: LEGACY_CUSTOMER_CODE,
           created_at: new Date().toISOString(),
         }
       : null,
@@ -3198,7 +3199,7 @@ function deriveAgentInsights({
           status: "open",
           entity_type: "movimentacao",
           entity_id: null,
-          customer_code: "BTG Pactual",
+          customer_code: LEGACY_CUSTOMER_CODE,
           created_at: new Date().toISOString(),
         }
       : null,
@@ -3278,8 +3279,8 @@ async function getAiOverview() {
     {
       id: "derived_btg",
       scope_type: "cliente",
-      scope_id: "BTG Pactual",
-      title: "BTG Pactual",
+      scope_id: LEGACY_CUSTOMER_CODE,
+      title: LEGACY_CUSTOMER_CODE,
       event_count:
         movements.length + orders.length + periods.length + events.length,
       last_event_title: latestEvent?.title ?? "Base importada",
@@ -3406,6 +3407,16 @@ async function route(
   };
 
   const listRoutes: ListRouteConfig[] = [
+    // Perfis de operação publicados (cliente ativo da área interna).
+    {
+      regex: /^\/api\/client-profiles$/,
+      name: collectionNames.clientProfiles,
+      filters: [],
+      searchFields: ["customer_code", "name"],
+      orderByField: "name",
+      direction: "asc",
+      hardCap: 500,
+    },
     {
       regex: /^\/api\/customers$/,
       name: collectionNames.customers,
@@ -3782,7 +3793,7 @@ async function route(
       severity: "attention",
       entity_type: "importacao",
       entity_id: Date.now(),
-      customer_code: "BTG Pactual",
+      customer_code: LEGACY_CUSTOMER_CODE,
       payload: compactPayload({
         products: body.products?.length,
         skus: body.skus?.length,

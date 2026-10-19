@@ -27,6 +27,7 @@ import { useAppUser } from "@/lib/auth";
 import { BUILD_COMMIT, BUILD_TIME } from "@/lib/build-info";
 import { humanApiError } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
+import { INTERNAL_CUSTOMER_CODE } from "@/lib/active-customer";
 
 /**
  * Sistema: o servidor responde? Qual versão está no ar? O ledger está
@@ -160,7 +161,10 @@ export default function SettingsSystem() {
           severity: incident.severity,
           entity_type: "suporte",
           entity_id: `support_${Date.now()}`,
-          customer_code: "BTG Pactual",
+          // Incidente do sistema é da operação, não de um cliente: com o código
+          // de um cliente, a sincronização de notificações podia redigir e-mail
+          // para ele sobre um problema interno.
+          customer_code: INTERNAL_CUSTOMER_CODE,
           source: "support_console",
           payload: { support_status: "open", channel: "dute_system" },
         }),

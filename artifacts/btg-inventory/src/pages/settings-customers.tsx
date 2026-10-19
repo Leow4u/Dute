@@ -62,6 +62,7 @@ import {
   templateStatusLabel,
   type OperationTemplateKey,
 } from "@/lib/operations";
+import { CLIENT_PROFILES_QUERY_KEY } from "@/lib/active-customer-context";
 import { humanApiError } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { fetchJson } from "@/lib/warehouse-ops/model";
@@ -208,7 +209,12 @@ export default function SettingsCustomers() {
     });
   };
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: CUSTOMERS_KEY });
+  // O seletor de cliente ativo lê client_profiles, que o cadastro publica.
+  const invalidate = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: CUSTOMERS_KEY }),
+      queryClient.invalidateQueries({ queryKey: CLIENT_PROFILES_QUERY_KEY }),
+    ]);
 
   const save = useMutation({
     mutationFn: async () => {

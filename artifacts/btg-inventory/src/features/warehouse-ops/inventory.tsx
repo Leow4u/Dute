@@ -120,6 +120,8 @@ import {
   OpeningInventoryNotice,
   useOpeningInventorySession,
 } from "@/features/warehouse-ops/opening-inventory-status";
+import { customerRows } from "@/lib/active-customer";
+import { useActiveCustomer } from "@/lib/active-customer-context";
 
 export type CycleCountResult = {
   ok?: boolean;
@@ -146,13 +148,17 @@ export type { OpeningInventoryLine, OpeningInventorySession };
  * "Inventário inicial em andamento".
  */
 export function CycleCountWorkspace() {
+  const { code: customerCode } = useActiveCustomer();
   const sessionQuery = useOpeningInventorySession();
   const [picked, setPicked] = useState<CountMode | null>(null);
   const settled = !sessionQuery.isLoading;
   const mode: CountMode | null =
     picked ??
     (settled
-      ? defaultCountMode(sessionQuery.isError ? "completed" : sessionQuery.data?.status)
+      ? defaultCountMode(
+          sessionQuery.isError ? "completed" : sessionQuery.data?.status,
+          sessionQuery.data?.opening_required,
+        )
       : null);
 
   return (
@@ -177,10 +183,11 @@ export function CycleCountWorkspace() {
       ) : (
         <>
           <OpeningInventoryNotice session={sessionQuery.data} />
+          {/* Trocar o cliente ativo recomeça a tela: caixa aberta e rascunho são do cliente anterior. */}
           {mode === "opening" ? (
-            <OpeningInventoryWorkspace />
+            <OpeningInventoryWorkspace key={customerCode} />
           ) : (
-            <ExistingCycleCountWorkspace />
+            <ExistingCycleCountWorkspace key={customerCode} />
           )}
         </>
       )}
@@ -188,7 +195,6 @@ export function CycleCountWorkspace() {
   );
 }
 
-const OPENING_CUSTOMER = "BTG Pactual";
 const JSON_HEADERS = { "content-type": "application/json" };
 
 /**
@@ -198,6 +204,8 @@ const JSON_HEADERS = { "content-type": "application/json" };
  * O endereço deixou de ser digitado; é a posição da caixa aberta na tela.
  */
 export function OpeningInventoryWorkspace() {
+  // A abertura é do cliente ativo: sessão, caixas, produtos e linhas são dele.
+  const { code: customerCode } = useActiveCustomer();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -247,7 +255,7 @@ export function OpeningInventoryWorkspace() {
 
   const sessionQuery = useOpeningInventorySession();
   const lookupQuery = useQuery({
-    queryKey: ["opening-inventory-product-lookup"],
+    queryKey: ["opening-inventory-product-lookup", customerCode],
     staleTime: 30_000,
     queryFn: async () => {
       const [skusPayload, productsPayload] = await Promise.all([
@@ -255,18 +263,18 @@ export function OpeningInventoryWorkspace() {
         fetchJson<unknown>("/api/products?limit=5000"),
       ]);
       return mergeProductLookup(
-        normalizeApiRows(skusPayload).map(productLookupFromRecord),
-        normalizeApiRows(productsPayload).map(productLookupFromRecord),
+        customerRows(normalizeApiRows(skusPayload), customerCode).map(productLookupFromRecord),
+        customerRows(normalizeApiRows(productsPayload), customerCode).map(productLookupFromRecord),
       );
     },
   });
   const boxesQuery = useQuery({
-    queryKey: ["warehouse-boxes", OPENING_CUSTOMER],
+    queryKey: ["warehouse-boxes", customerCode],
     staleTime: 10_000,
     queryFn: async () =>
       normalizeApiRows(
         await fetchJson<unknown>(
-          `/api/warehouse/boxes?customer_code=${encodeURIComponent(OPENING_CUSTOMER)}&limit=1000`,
+          `/api/warehouse/boxes?customer_code=${encodeURIComponent(customerCode)}&limit=1000`,
         ),
       ).map(warehouseBoxFromRecord),
   });
@@ -399,7 +407,7 @@ export function OpeningInventoryWorkspace() {
           method: "POST",
           headers: JSON_HEADERS,
           body: JSON.stringify({
-            customer_code: OPENING_CUSTOMER,
+            customer_code: customerCode,
             reference: `Inventário de abertura ${new Date().toLocaleDateString("pt-BR")}`,
             idempotency_key: crypto.randomUUID(),
           }),
@@ -429,7 +437,7 @@ export function OpeningInventoryWorkspace() {
           method: "POST",
           headers: JSON_HEADERS,
           body: JSON.stringify({
-            customer_code: OPENING_CUSTOMER,
+            customer_code: customerCode,
             session_id: session?.session_id,
             idempotency_key: crypto.randomUUID(),
           }),
@@ -460,7 +468,7 @@ export function OpeningInventoryWorkspace() {
         method: "POST",
         headers: JSON_HEADERS,
         body: JSON.stringify({
-          customer_code: OPENING_CUSTOMER,
+          customer_code: customerCode,
           ...boxPayload,
           sku_codes: contentSkus,
           exclude,
@@ -485,7 +493,7 @@ export function OpeningInventoryWorkspace() {
         method: "POST",
         headers: JSON_HEADERS,
         body: JSON.stringify({
-          customer_code: OPENING_CUSTOMER,
+          customer_code: customerCode,
           session_id: session?.session_id,
           ...boxPayload,
           location_id: location,
@@ -530,7 +538,7 @@ export function OpeningInventoryWorkspace() {
       fetchJson(`/api/warehouse/boxes/${encodeURIComponent(box.code)}/remove`, {
         method: "POST",
         headers: JSON_HEADERS,
-        body: JSON.stringify({ customer_code: OPENING_CUSTOMER }),
+        body: JSON.stringify({ customer_code: customerCode }),
       }),
     onSuccess: (_result, box) => {
       setBoxToRemove(undefined);
@@ -558,7 +566,7 @@ export function OpeningInventoryWorkspace() {
         body: JSON.stringify({
           mode: "opening",
           session_id: session?.session_id,
-          customer_code: OPENING_CUSTOMER,
+          customer_code: customerCode,
           sku_code:
             selectedProduct?.skuCode || skuCode.trim() || clientCode.trim(),
           client_item_code:
@@ -639,7 +647,7 @@ export function OpeningInventoryWorkspace() {
           method: "POST",
           headers: JSON_HEADERS,
           body: JSON.stringify({
-            customer_code: OPENING_CUSTOMER,
+            customer_code: customerCode,
             session_id: session?.session_id,
             idempotency_key: crypto.randomUUID(),
           }),
@@ -699,7 +707,7 @@ export function OpeningInventoryWorkspace() {
       const clientItemCode =
         clientCode.trim() || skuCode.trim() || `abertura-${Date.now()}`;
       const uploaded = await Promise.all(
-        selected.map((file) => uploadProductPhoto(file, clientItemCode)),
+        selected.map((file) => uploadProductPhoto(file, clientItemCode, customerCode)),
       );
       setPhotos((current) => [...current, ...uploaded].slice(0, 8));
     } catch (error) {
@@ -1681,6 +1689,7 @@ export function OpeningInventoryWorkspace() {
 }
 
 export function ExistingCycleCountWorkspace() {
+  const { code: customerCode } = useActiveCustomer();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [clientCode, setClientCode] = useState("");
@@ -1693,15 +1702,15 @@ export function ExistingCycleCountWorkspace() {
   const [reference, setReference] = useState("");
 
   const lookupQuery = useQuery({
-    queryKey: ["cycle-count-product-lookup"],
+    queryKey: ["cycle-count-product-lookup", customerCode],
     staleTime: 60_000,
     queryFn: async () => {
       const [skusPayload, productsPayload] = await Promise.all([
         fetchJson<unknown>("/api/skus?limit=5000"),
         fetchJson<unknown>("/api/products?limit=5000"),
       ]);
-      const skus = normalizeApiRows(skusPayload).map(productLookupFromRecord);
-      const products = normalizeApiRows(productsPayload).map(productLookupFromRecord);
+      const skus = customerRows(normalizeApiRows(skusPayload), customerCode).map(productLookupFromRecord);
+      const products = customerRows(normalizeApiRows(productsPayload), customerCode).map(productLookupFromRecord);
       return mergeProductLookup(skus, products);
     },
   });
@@ -1749,7 +1758,7 @@ export function ExistingCycleCountWorkspace() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          customer_code: "BTG Pactual",
+          customer_code: customerCode,
           sku_code: existingProduct?.skuCode || skuCode.trim(),
           client_item_code: existingProduct?.clientCode || clientCode.trim(),
           product_name: existingProduct?.productName || productName.trim(),
