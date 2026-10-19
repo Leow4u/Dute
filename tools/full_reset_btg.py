@@ -52,10 +52,12 @@ CUSTOMER_CODE = "BTG Pactual"
 # o papel de cada pessoa vem de `users`; `customer_accounts` liga usuário a
 # cliente e `system_settings` guarda a configuração do painel. Nunca apagadas.
 ACCESS_COLLECTIONS = ("users", "invites", "customer_accounts", "system_settings")
-# Estrutura, não histórico: clientes, endereços do armazém, lista de preços e
-# configuração de cobrança. Só são apagadas com --include-setup.
+# Estrutura, não histórico: clientes (e o perfil de operação publicado para o
+# portal), endereços do armazém, lista de preços e configuração de cobrança.
+# Só são apagadas com --include-setup.
 SETUP_COLLECTIONS = (
     "customers",
+    "client_profiles",
     "locations",
     "warehouse_positions",
     "billing_price_list",

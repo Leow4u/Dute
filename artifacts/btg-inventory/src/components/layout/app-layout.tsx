@@ -40,6 +40,7 @@ import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { SidebarBrand } from "@/components/layout/sidebar-brand";
 import { agentPathFor, isAgentScreen, isAgentShortcut } from "@/lib/agent-chat";
 import { useAppAuth, useAppUser, type AppUser } from "@/lib/auth";
+import { useOperationProfile } from "@/lib/operation-profile";
 import { usePwaInstall } from "@/lib/pwa-install";
 import { roleDescription, roleLabel } from "@/lib/access";
 import { rememberReturnPath } from "@/lib/settings-nav";
@@ -399,7 +400,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const { signOut } = useAppAuth();
   const { isOnline } = usePwaInstall();
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
-  const modules = getNavigationForProfileRole(user?.publicMetadata.role);
+  // No portal, o modelo de operação do cliente decide quais módulos existem.
+  const operation = useOperationProfile();
+  const modules = getNavigationForProfileRole(user?.publicMetadata.role, operation.profile);
   const activeModule = getActiveModule(modules, location);
   // Na tela da conta nenhum item do menu fica aceso.
   const activeId = isAccountPath(location) ? null : activeModule.id;

@@ -79,7 +79,7 @@ const Reports = lazy(() => import("./pages/reports"));
 const BillingHub = lazy(() => import("./pages/billing-hub"));
 const BillingInvoice = lazy(() => import("./pages/billing-invoice"));
 const Users = lazy(() => import("./pages/users"));
-const SettingsCustomer = lazy(() => import("./pages/settings-customer"));
+const SettingsCustomers = lazy(() => import("./pages/settings-customers"));
 const Documents = lazy(() => import("./pages/documents"));
 const Settings = lazy(() => import("./pages/settings"));
 const SettingsAccount = lazy(() =>
@@ -134,6 +134,8 @@ const ClienteEnvios = lazy(() =>
 );
 import { useRole } from "./hooks/use-role";
 import { AuthProvider, useAppUser } from "./lib/auth";
+import { useOperationProfile } from "./lib/operation-profile";
+import { portalModulesFor } from "./lib/operations";
 import {
   firebaseApp,
   firebaseAuth,
@@ -147,6 +149,7 @@ import {
   getRouteAppRoles,
   getRouteProfileRoles,
   normalizeProfileRole,
+  portalModuleForPath,
   type CurrentAppRole as AppRole,
   type ProfileRole,
 } from "./lib/modules";
@@ -849,18 +852,32 @@ function HomeRedirect() {
 function RoleGate({
   appRoles,
   profileRoles,
+  path,
   children,
 }: {
   appRoles: AppRole[];
   profileRoles: ProfileRole[];
+  path?: string;
   children: React.ReactNode;
 }) {
   const { role, isLoaded } = useRole();
   const { user } = useAppUser();
+  const operation = useOperationProfile();
   if (!isLoaded) return null;
   if (!role || !appRoles.includes(role)) return <Redirect to="/" />;
   if (!canAccessModule(user?.publicMetadata.role, profileRoles)) {
     return <Redirect to="/" />;
+  }
+  // Portal: uma tela que o modelo de operação do cliente não tem (Eventos no
+  // Mobiliário) volta ao Início, mesmo por link direto. Espera a primeira
+  // leitura do perfil para não abrir a tela e tirar em seguida.
+  if (role === "cliente" && path) {
+    if (operation.isLoading) return null;
+    const allowed = portalModulesFor(operation.profile);
+    const portalModule = portalModuleForPath(path);
+    if (allowed && portalModule && !allowed.includes(portalModule)) {
+      return <Redirect to="/portal" />;
+    }
   }
   return <>{children}</>;
 }
@@ -968,7 +985,8 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/configuracoes/conta", SettingsAccount),
   protectedRoute("/configuracoes/aplicativo", SettingsApp),
   protectedRoute("/configuracoes/pessoas", Users),
-  protectedRoute("/configuracoes/cliente", SettingsCustomer),
+  protectedRoute("/configuracoes/clientes", SettingsCustomers),
+  protectedRoute("/configuracoes/cliente", legacySettingsRedirect("/configuracoes/cliente")),
   protectedRoute("/configuracoes/sistema", SettingsSystem),
   protectedRoute("/portal", ClienteInicio),
   protectedRoute("/portal/estoque", ClienteEstoque),
@@ -1002,7 +1020,7 @@ function ProtectedRoute({
         if (!isLoaded) return null;
         if (!user) return <Redirect to="/sign-in" />;
         return (
-          <RoleGate appRoles={appRoles} profileRoles={profileRoles}>
+          <RoleGate appRoles={appRoles} profileRoles={profileRoles} path={rest.path}>
             <Layout>
               <ChunkErrorBoundary>
                 <Suspense

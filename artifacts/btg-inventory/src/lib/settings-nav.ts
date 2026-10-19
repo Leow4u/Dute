@@ -61,10 +61,12 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     group: "administracao",
     roles: ACCESS_ADMIN_ROLES,
   },
+  // Clientes: cadastro, modelo de operação, sigla do SKU e portal de cada
+  // cliente (docs/multicliente-modelos-de-operacao.md).
   {
-    id: "cliente",
-    label: "Cliente BTG",
-    href: "/configuracoes/cliente",
+    id: "clientes",
+    label: "Clientes",
+    href: "/configuracoes/clientes",
     icon: Building2,
     group: "administracao",
     roles: ACCESS_ADMIN_ROLES,
@@ -87,7 +89,9 @@ export const SETTINGS_GROUP_LABEL: Record<SettingsSection["group"], string> = {
 /** Endereços antigos da Administração, preservados para links salvos. */
 export const LEGACY_SETTINGS_REDIRECTS: Record<string, string> = {
   "/usuarios": "/configuracoes/pessoas",
-  "/clientes": "/configuracoes/cliente",
+  "/clientes": "/configuracoes/clientes",
+  // "Cliente BTG" virou Clientes quando o cadastro passou a aceitar vários.
+  "/configuracoes/cliente": "/configuracoes/clientes",
   "/suporte": "/configuracoes/sistema",
 };
 

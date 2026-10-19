@@ -75,6 +75,7 @@ const collectionNames = {
   clientRequestStatus: "client_request_status",
   clientInvoices: "client_invoices",
   clientDocuments: "client_documents",
+  clientProfiles: "client_profiles",
   inboundReceipts: "inbound_receipts",
   inboundItems: "inbound_items",
   returns: "returns",
@@ -1370,6 +1371,23 @@ function progressForOrder(order: AnyRecord) {
   return requested > 0
     ? Math.min(100, Math.round((picked / requested) * 100))
     : 0;
+}
+
+/**
+ * Perfil de operação do cliente logado: a projeção `client_profiles` que as
+ * Functions gravam junto com o cadastro. Sem registro (cadastro anterior ao
+ * campo), `profile` vem null e o app usa o modelo padrão (lib/operations).
+ */
+async function getClientProfile() {
+  const profile = await getCurrentProfile();
+  const customerCode = String(profile.customer_code || DEFAULT_CUSTOMER.code);
+  const rows = await readOptionalWhereEqual(
+    collectionNames.clientProfiles,
+    "customer_code",
+    customerCode,
+    { maxDocs: 1 },
+  );
+  return { customer_code: customerCode, profile: rows[0] ?? null };
 }
 
 async function getClientOverview() {
@@ -3345,6 +3363,9 @@ async function route(
   }
   if (pathname === "/api/client/overview" && method === "GET") {
     return json(await getClientOverview());
+  }
+  if (pathname === "/api/client/profile" && method === "GET") {
+    return json(await getClientProfile());
   }
   if (pathname === "/api/agent-dute/conversations" && method === "GET") {
     return json(await getAgentDuteConversations());

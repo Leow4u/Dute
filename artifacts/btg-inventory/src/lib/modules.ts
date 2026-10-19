@@ -17,6 +17,12 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import {
+  portalModulesFor,
+  type OperationProfile,
+  type PortalModuleKey,
+} from "./operations";
+
 export type ProfileRole =
   | "owner"
   | "admin"
@@ -116,6 +122,12 @@ export type AppModule = {
   roles: ProfileRole[];
   appRoles: CurrentAppRole[];
   routes: ModuleRoute[];
+  /**
+   * Módulo do portal que este item representa. O modelo de operação do
+   * cliente (lib/operations) diz quais existem: o portal de Mobiliário não
+   * tem Eventos, o de Insumos não existe.
+   */
+  portal?: PortalModuleKey;
 };
 
 const CLIENT_ROLES: ProfileRole[] = ["cliente"];
@@ -314,6 +326,7 @@ export const APP_MODULES: AppModule[] = [
   }),
   appModule({
     id: "client-assistant",
+    portal: "assistant",
     label: "Agent Dute",
     audience: "client",
     icon: BrainCircuit,
@@ -331,6 +344,7 @@ export const APP_MODULES: AppModule[] = [
   }),
   appModule({
     id: "client-home",
+    portal: "home",
     label: "Início",
     audience: "client",
     icon: Home,
@@ -348,6 +362,7 @@ export const APP_MODULES: AppModule[] = [
   }),
   appModule({
     id: "client-inventory",
+    portal: "inventory",
     label: "Estoque",
     audience: "client",
     icon: PackageSearch,
@@ -365,6 +380,7 @@ export const APP_MODULES: AppModule[] = [
   // Eventos: o que vai para cada evento que se repete; vira pedido no Estoque.
   appModule({
     id: "client-events",
+    portal: "events",
     label: "Eventos",
     audience: "client",
     icon: CalendarDays,
@@ -383,6 +399,7 @@ export const APP_MODULES: AppModule[] = [
   // armazém da Dutelog e ela avisa; o Rafael recebe e confere.
   appModule({
     id: "client-requests",
+    portal: "requests",
     label: "Envios para a Dutelog",
     audience: "client",
     icon: Inbox,
@@ -399,6 +416,7 @@ export const APP_MODULES: AppModule[] = [
   }),
   appModule({
     id: "client-orders",
+    portal: "orders",
     label: "Pedidos",
     audience: "client",
     icon: Truck,
@@ -415,6 +433,7 @@ export const APP_MODULES: AppModule[] = [
   }),
   appModule({
     id: "client-invoices",
+    portal: "invoices",
     label: "Faturas",
     audience: "client",
     icon: Receipt,
@@ -431,6 +450,7 @@ export const APP_MODULES: AppModule[] = [
   }),
   appModule({
     id: "client-documents",
+    portal: "documents",
     label: "Documentos",
     audience: "client",
     icon: FileText,
@@ -508,6 +528,9 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   { path: "/configuracoes/conta", roles: [...INTERNAL_ROLES, "cliente"] },
   { path: "/configuracoes/aplicativo", roles: [...INTERNAL_ROLES, "cliente"] },
   { path: "/configuracoes/pessoas", roles: ACCESS_ADMIN_ROLES },
+  // Clientes (cadastro, modelo de operação, sigla do SKU). O endereço antigo
+  // da tela "Cliente BTG" redireciona.
+  { path: "/configuracoes/clientes", roles: ACCESS_ADMIN_ROLES },
   { path: "/configuracoes/cliente", roles: ACCESS_ADMIN_ROLES },
   { path: "/configuracoes/sistema", roles: SUPPORT_ROLES },
   { path: "/usuarios", roles: ACCESS_ADMIN_ROLES },
@@ -594,14 +617,23 @@ export function getNavigationForAppRole(
   return APP_MODULES.filter((module) => module.appRoles.includes(appRole));
 }
 
+/**
+ * Menu por papel. No portal, o perfil de operação do cliente (modelo +
+ * pacote, lib/operations) esconde os módulos que o modelo não tem; sem
+ * perfil (área interna, ou ainda carregando) nada é escondido.
+ */
 export function getNavigationForProfileRole(
   role: ProfileRole | null | undefined,
+  operation?: OperationProfile | null,
 ): AppModule[] {
   const appRole = appRoleForProfile(role) ?? "interno";
+  const portalModules = appRole === "cliente" ? portalModulesFor(operation) : null;
 
   return APP_MODULES.filter(
     (module) =>
-      module.appRoles.includes(appRole) && canAccessModule(role, module.roles),
+      module.appRoles.includes(appRole) &&
+      canAccessModule(role, module.roles) &&
+      (portalModules === null || !module.portal || portalModules.includes(module.portal)),
   )
     .map((module) => {
       const routes = module.routes.filter((route) =>
@@ -696,6 +728,22 @@ const ACTIVE_ALIASES: Record<string, string> = {
   "/catalogo/mapa": "/estoque",
   "/movements": "/estoque",
 };
+
+/** Módulo do portal a que uma rota pertence (/portal/eventos → events). */
+export function portalModuleForPath(path: string): PortalModuleKey | null {
+  const normalized = normalizePath(path);
+  for (const module of APP_MODULES) {
+    if (module.audience !== "client" || !module.portal) continue;
+    if (
+      module.routes.some(
+        (route) => route.href && isRouteActive(normalized, route.href, route.exact),
+      )
+    ) {
+      return module.portal;
+    }
+  }
+  return null;
+}
 
 /** Telas da Configuração: não pertencem a nenhum item do menu. */
 export function isAccountPath(path: string): boolean {

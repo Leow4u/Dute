@@ -53,6 +53,12 @@ import {
 } from "./billing.js";
 import { MinimumStockError, normalizeMinimumStock } from "./catalog-minimum.js";
 import { setUserAccessTransaction } from "./domain/access.js";
+import {
+  CLIENT_PROFILES_COLLECTION,
+  assertSkuPrefixAvailable,
+  buildCustomerPayload,
+  clientProfileProjection,
+} from "./domain/customer-profile.js";
 import { readSystemHealth } from "./domain/system-health.js";
 import { CostSettingsSchema, readSystemDashboard, saveCostSettings } from "./domain/system-dashboard.js";
 import { codeFunctions, InfraSettingsSchema, readSystemInfra, saveInfraSettings, type GcpFetch } from "./domain/system-infra.js";
@@ -231,6 +237,7 @@ const collectionNames = {
   catalogIdentities: "catalog_identities",
   customers: "customers",
   customerAccounts: "customer_accounts",
+  clientProfiles: CLIENT_PROFILES_COLLECTION,
 } as const;
 
 function stripNullFields<T extends Record<string, unknown>>(value: T): T {
@@ -3511,6 +3518,8 @@ const BILLING_CONFIG_WRITE_FIELDS = [
   "cliente_nome",
   "cliente_email",
 ] as const;
+// Modelo de operação e sigla do SKU: validados em domain/customer-profile.ts
+// (docs/multicliente-modelos-de-operacao.md).
 const CUSTOMER_WRITE_FIELDS = [
   "code",
   "name",
@@ -3523,6 +3532,8 @@ const CUSTOMER_WRITE_FIELDS = [
   "primary_contact_name",
   "primary_contact_email",
   "notes",
+  "operation_template",
+  "sku_prefix",
 ] as const;
 const CUSTOMER_ACCOUNT_WRITE_FIELDS = [
   "customer_code",
@@ -4349,47 +4360,16 @@ function managedWritePayload(
   }
 
   if (input.resource === "customers") {
-    const data = allowedFields(input.data, CUSTOMER_WRITE_FIELDS);
-    if (input.action === "archive") {
-      return {
-        status: "archived",
-        archived: true,
-        archived_by: profile.uid,
-        archived_at: FieldValue.serverTimestamp(),
-        updated_at: FieldValue.serverTimestamp(),
-      };
+    if (!["create", "update", "archive"].includes(input.action)) {
+      throw new HttpsError("invalid-argument", "Ação de cliente inválida.");
     }
-    const code = String(data.code ?? before.code ?? documentId).trim();
-    const name = String(data.name ?? before.name ?? "").trim();
-    if (!code || !name) {
-      throw new HttpsError(
-        "invalid-argument",
-        "Código e nome do cliente são obrigatórios.",
-      );
-    }
-    return {
-      ...data,
-      id: documentId,
-      code,
-      name,
-      customer_code: code,
-      status: String(data.status ?? before.status ?? "active"),
-      portal_status: String(
-        data.portal_status ?? before.portal_status ?? "active",
-      ),
-      billing_mode: String(data.billing_mode ?? before.billing_mode ?? "lpu"),
-      default_currency: String(
-        data.default_currency ?? before.default_currency ?? "BRL",
-      ),
-      archived: false,
-      ...(input.action === "create"
-        ? {
-            created_by: profile.uid,
-            created_at: FieldValue.serverTimestamp(),
-          }
-        : { updated_by: profile.uid }),
-      updated_at: FieldValue.serverTimestamp(),
-    };
+    return buildCustomerPayload({
+      action: input.action as "create" | "update" | "archive",
+      data: allowedFields(input.data, CUSTOMER_WRITE_FIELDS),
+      before,
+      documentId,
+      actorUid: profile.uid,
+    });
   }
 
   if (input.resource === "customer_accounts") {
@@ -4679,10 +4659,32 @@ export const mutateManagedEntity = onCall(async (request) => {
       before,
       catalogIdentity,
     );
+    // Sigla do SKU única entre clientes ativos: leitura antes das escritas.
+    if (input.resource === "customers" && input.action !== "archive") {
+      await assertSkuPrefixAvailable(
+        transaction,
+        db,
+        String((payload as Record<string, unknown>).sku_prefix ?? ""),
+        documentId,
+      );
+    }
     if (input.action === "create") {
       transaction.create(targetRef, payload);
     } else {
       transaction.set(targetRef, payload, { merge: true });
+    }
+    // O portal não lê `customers` (observações e contrato são internos);
+    // lê a projeção client_profiles, gravada na mesma transação.
+    if (input.resource === "customers") {
+      transaction.set(
+        db.collection(collectionNames.clientProfiles).doc(documentId),
+        clientProfileProjection(
+          documentId,
+          payload as Record<string, unknown>,
+          before,
+        ),
+        { merge: true },
+      );
     }
     if (minimumChanged) {
       const minimum = (payload as Record<string, unknown>).estoque_minimo;

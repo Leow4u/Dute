@@ -127,6 +127,33 @@ async function seed() {
       qty_available: 5,
       published_at: new Date(),
     });
+    // Perfil de operação publicado para o portal (client_profiles).
+    await setDoc(doc(database, "client_profiles", "profile-a"), {
+      id: "profile-a",
+      customer_code: CUSTOMER_A,
+      name: "BTG Pactual",
+      operation_template: "uniformes",
+      sku_prefix: "BTG",
+      portal_status: "active",
+      status: "active",
+      archived: false,
+    });
+    await setDoc(doc(database, "client_profiles", "profile-b"), {
+      id: "profile-b",
+      customer_code: CUSTOMER_B,
+      name: "Cliente isolado",
+      operation_template: "mobiliario",
+      sku_prefix: "ISO",
+      portal_status: "active",
+      status: "active",
+      archived: false,
+    });
+    await setDoc(doc(database, "customers", "profile-a-customer"), {
+      code: CUSTOMER_A,
+      name: "BTG Pactual",
+      notes: "observação interna",
+      status: "active",
+    });
     await setDoc(doc(database, "products", "product-a"), {
       id: "product-a",
       customer_code: CUSTOMER_A,
@@ -421,6 +448,35 @@ describe("isolamento entre clientes", () => {
       ),
     );
     assert.equal(ownInventory.size, 1);
+  });
+
+  it("cliente lê o próprio perfil de operação, não o de outro contrato nem o cadastro interno", async () => {
+    const database = testEnvironment
+      .authenticatedContext("client-a", { email: "client-a@example.com" })
+      .firestore();
+
+    await assertSucceeds(getDoc(doc(database, "client_profiles", "profile-a")));
+    await assertFails(getDoc(doc(database, "client_profiles", "profile-b")));
+    const own = await assertSucceeds(
+      getDocs(query(collection(database, "client_profiles"), where("customer_code", "==", CUSTOMER_A))),
+    );
+    assert.equal(own.size, 1);
+    assert.equal(own.docs[0].get("operation_template"), "uniformes");
+    // O cadastro completo (observações, contrato) continua interno.
+    await assertFails(getDoc(doc(database, "customers", "profile-a-customer")));
+    await assertFails(
+      updateDoc(doc(database, "client_profiles", "profile-a"), { operation_template: "mobiliario" }),
+    );
+  });
+
+  it("operação e financeiro leem o perfil de operação; ninguém grava pelo navegador", async () => {
+    for (const uid of ["ops-a", "wms-a", "finance-a", "owner-a"]) {
+      const database = testEnvironment
+        .authenticatedContext(uid, { email: `${uid}@example.com` })
+        .firestore();
+      await assertSucceeds(getDoc(doc(database, "client_profiles", "profile-b")));
+      await assertFails(setDoc(doc(database, "client_profiles", "novo"), { customer_code: CUSTOMER_A }));
+    }
   });
 
   it("cliente não altera nem a própria projeção", async () => {

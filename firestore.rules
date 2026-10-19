@@ -754,6 +754,14 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Perfil de operação do cliente (modelo, sigla do SKU, portal): a única
+    // parte do cadastro `customers` que o portal lê. Gravada só pelas Cloud
+    // Functions, na mesma transação do cadastro (functions/src/domain/customer-profile.ts).
+    match /client_profiles/{profileId} {
+      allow read: if canReadForBilling() || isOwnProjection();
+      allow create, update, delete: if false;
+    }
+
     match /movements/{movementId} {
       allow read: if canReadForBilling();
       allow create, update, delete: if false;

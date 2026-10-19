@@ -1,0 +1,147 @@
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+
+import {
+  DEFAULT_OPERATION_TEMPLATE,
+  OPERATION_PACKS,
+  OPERATION_TEMPLATES,
+  OPERATION_TEMPLATE_KEYS,
+  SKU_PREFIX_PATTERN,
+  canonicalSkuPrefix,
+  isOperationTemplateKey,
+  operationTemplate,
+  packForCustomer,
+  portalModulesFor,
+  resolveOperationProfile,
+  skuExample,
+  skuPrefixProblem,
+  suggestSkuPrefix,
+  templateStatusLabel,
+} from "./index";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const functionsDomain = resolve(here, "../../../../../functions/src/domain/customer-profile.ts");
+
+function listFrom(source: string, name: string): string[] {
+  const match = source.match(new RegExp(`${name}[^=]*=\\s*\\[([^\\]]*)\\]`));
+  if (!match) throw new Error(`${name} não encontrado nas Functions`);
+  return match[1]
+    .split(",")
+    .map((item) => item.trim().replace(/^"|"$/g, ""))
+    .filter(Boolean);
+}
+
+describe("registro de modelos", () => {
+  it("tem chaves únicas e todos os arquivos que anuncia", () => {
+    const keys = OPERATION_TEMPLATES.map((template) => template.key);
+    expect(new Set(keys).size).toBe(keys.length);
+    for (const template of [...OPERATION_TEMPLATES]) {
+      expect(existsSync(resolve(here, "..", template.file.replace(/^lib\//, "")))).toBe(true);
+      expect(template.defines.length).toBeGreaterThan(0);
+    }
+    for (const pack of OPERATION_PACKS) {
+      expect(existsSync(resolve(here, "..", pack.file.replace(/^lib\//, "")))).toBe(true);
+      expect(operationTemplate(pack.template)).not.toBeNull();
+      expect(pack.customers.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("bate com as chaves que as Functions validam", () => {
+    const source = readFileSync(functionsDomain, "utf8");
+    expect(listFrom(source, "OPERATION_TEMPLATE_KEYS").sort()).toEqual([...OPERATION_TEMPLATE_KEYS].sort());
+    expect(listFrom(source, "TEMPLATES_WITHOUT_PORTAL")).toEqual(
+      OPERATION_TEMPLATES.filter((template) => template.portal === null).map((template) => template.key),
+    );
+    expect(source).toContain(`DEFAULT_OPERATION_TEMPLATE: OperationTemplateKey = "${DEFAULT_OPERATION_TEMPLATE}"`);
+    expect(source).toContain(`SKU_PREFIX_PATTERN = ${SKU_PREFIX_PATTERN.toString()}`);
+  });
+
+  it("o modelo da BTG está pronto; os outros, em construção", () => {
+    expect(operationTemplate("uniformes")?.status).toBe("ready");
+    expect(templateStatusLabel(operationTemplate("uniformes")!)).toBe("Pronto");
+    expect(templateStatusLabel(operationTemplate("mobiliario")!)).toBe("Em construção");
+    expect(isOperationTemplateKey("insumos")).toBe(true);
+    expect(isOperationTemplateKey("varejo")).toBe(false);
+    expect(operationTemplate("varejo")).toBeNull();
+  });
+
+  it("o pacote é encontrado pelo código operacional", () => {
+    expect(packForCustomer("BTG Pactual")?.key).toBe("btg");
+    expect(packForCustomer("Itaú")).toBeNull();
+    expect(packForCustomer("")).toBeNull();
+  });
+});
+
+describe("perfil de operação", () => {
+  it("sem registro publicado, a BTG continua como hoje: uniformes com o pacote btg", () => {
+    const profile = resolveOperationProfile(null);
+    expect(profile.customerCode).toBe("BTG Pactual");
+    expect(profile.template.key).toBe("uniformes");
+    expect(profile.pack?.key).toBe("btg");
+    expect(profile.portalStatus).toBe("active");
+    expect(profile.source).toBe("fallback");
+    expect(portalModulesFor(profile)).toEqual([
+      "assistant",
+      "home",
+      "inventory",
+      "events",
+      "requests",
+      "orders",
+      "invoices",
+      "documents",
+    ]);
+  });
+
+  it("registro publicado define modelo, sigla e portal", () => {
+    const profile = resolveOperationProfile({
+      customer_code: "Itaú",
+      name: "Itaú Unibanco",
+      operation_template: "mobiliario",
+      sku_prefix: "ITAU",
+      portal_status: "active",
+    });
+    expect(profile.customerName).toBe("Itaú Unibanco");
+    expect(profile.template.key).toBe("mobiliario");
+    expect(profile.pack).toBeNull();
+    expect(profile.skuPrefix).toBe("ITAU");
+    expect(profile.source).toBe("published");
+    expect(portalModulesFor(profile)).not.toContain("events");
+  });
+
+  it("pacote só se aplica sobre o próprio modelo", () => {
+    const profile = resolveOperationProfile({ customer_code: "BTG Pactual", operation_template: "mobiliario" });
+    expect(profile.pack).toBeNull();
+  });
+
+  it("modelo desconhecido ou sem portal cai no comportamento seguro", () => {
+    expect(resolveOperationProfile({ customer_code: "X", operation_template: "varejo" }).template.key).toBe("uniformes");
+    const internal = resolveOperationProfile({ customer_code: "Dutelog", operation_template: "insumos", portal_status: "active" });
+    expect(internal.portalStatus).toBe("inactive");
+    expect(portalModulesFor(internal)).toEqual(["home"]);
+    expect(resolveOperationProfile({ customer_code: "X", archived: true }).portalStatus).toBe("inactive");
+    expect(portalModulesFor(null)).toBeNull();
+  });
+});
+
+describe("sigla do SKU", () => {
+  it("normaliza e valida como as Functions", () => {
+    expect(canonicalSkuPrefix(" itaú ")).toBe("ITAU");
+    expect(skuPrefixProblem("btg")).toBeNull();
+    expect(skuPrefixProblem("")).toMatch(/Informe a sigla/);
+    expect(skuPrefixProblem("B")).toMatch(/2 a 6/);
+    expect(skuPrefixProblem("1AB")).toMatch(/começando por letra/);
+    expect(skuPrefixProblem("DUTELOG")).toMatch(/2 a 6/);
+  });
+
+  it("sugere a sigla pelo nome e mostra o exemplo de SKU", () => {
+    expect(suggestSkuPrefix("Itaú Unibanco")).toBe("ITAU");
+    expect(suggestSkuPrefix("BTG Pactual")).toBe("BTG");
+    expect(suggestSkuPrefix("Dutelog")).toBe("DUTELO");
+    expect(suggestSkuPrefix("3M do Brasil")).toBe("DO");
+    expect(suggestSkuPrefix("")).toBe("");
+    expect(skuExample("itau")).toBe("ITAU-000001");
+    expect(skuExample("")).toBe("SIGLA-000001");
+  });
+});
