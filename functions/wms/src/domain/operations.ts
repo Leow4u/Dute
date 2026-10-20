@@ -2402,6 +2402,213 @@ export async function recordCycleCountTransaction(
   });
 }
 
+export type MoveOpeningInventoryLineInput = {
+  customer_code: string;
+  session_id: string;
+  opening_line_id: string;
+  target_box_code: string;
+  reason: string;
+  idempotency_key: string;
+};
+
+/**
+ * Corrige a caixa de uma linha inteira, sem recadastrar o produto.
+ * Não junta linhas do mesmo SKU: a caixa de destino precisa não ter esse SKU.
+ * A operação preserva catálogo, fotos, custo e totais da sessão/cliente.
+ */
+export async function moveOpeningInventoryLineTransaction(
+  db: Firestore,
+  input: MoveOpeningInventoryLineInput,
+  actor: OperationalActor,
+) {
+  if (!["owner", "admin", "interno", "wms"].includes(actor.role)) {
+    throw new HttpsError("permission-denied", "Correção permitida somente à operação de armazém.");
+  }
+  const customerCode = text(input.customer_code);
+  const sessionId = safeDocId(text(input.session_id));
+  const openingLineId = safeDocId(text(input.opening_line_id));
+  const targetBoxCode = text(input.target_box_code).toUpperCase();
+  const reason = text(input.reason);
+  if (!customerCode || !sessionId || !openingLineId || !/^CX-\d+$/.test(targetBoxCode) || !text(input.idempotency_key) || reason.length < 3 || reason.length > 300) {
+    throw new HttpsError("invalid-argument", "Informe cliente, sessão, linha, caixa de destino e motivo da correção.");
+  }
+  if (sessionId !== openingInventorySessionDocumentId(customerCode)) {
+    throw new HttpsError("permission-denied", "A sessão não pertence ao cliente informado.");
+  }
+  const operationId = `op_opening_inventory_move_${digest({
+    customer: customerCode, session: sessionId, line: openingLineId, nonce: input.idempotency_key,
+  })}`;
+  const inputHash = digest(input, 64);
+  const operationRef = db.collection(collections.operations).doc(operationId);
+  const sessionRef = db.collection(collections.openingInventorySessions).doc(sessionId);
+  const lineRef = db.collection(collections.openingInventoryLines).doc(openingLineId);
+  const targetBoxRef = db.collection("warehouse_boxes").doc(targetBoxCode);
+
+  return db.runTransaction(async (transaction) => {
+    const [receipt, sessionSnapshot, lineSnapshot, targetBoxSnapshot] = await Promise.all([
+      transaction.get(operationRef), transaction.get(sessionRef),
+      transaction.get(lineRef), transaction.get(targetBoxRef),
+    ]);
+    const previous = operationResult<Record<string, unknown>>(receipt, inputHash);
+    if (previous) return previous;
+    await assertInventoryOperationsEnabled(transaction, db);
+    if (!sessionSnapshot.exists || text(sessionSnapshot.get("status")) !== "open") {
+      throw new HttpsError("failed-precondition", "A caixa só pode ser corrigida enquanto o inventário de abertura estiver ativo.");
+    }
+    if (text(sessionSnapshot.get("customer_code")) !== customerCode) {
+      throw new HttpsError("permission-denied", "A sessão pertence a outro cliente.");
+    }
+    if (!lineSnapshot.exists) throw new HttpsError("not-found", "Linha do inventário não encontrada.");
+    const line = lineSnapshot.data() ?? {};
+    if (text(line.customer_code) !== customerCode || text(line.session_id) !== sessionId) {
+      throw new HttpsError("permission-denied", "A linha não pertence à sessão informada.");
+    }
+    const sourceBoxCode = text(line.box_code).toUpperCase();
+    const sourceLocation = text(line.location_id);
+    const skuCode = normalizedIdentity(line.sku_code);
+    const quantity = number(line.counted_qty);
+    if (!/^CX-\d+$/.test(sourceBoxCode) || !sourceLocation || !skuCode || quantity <= 0 || text(line.status) !== "counted") {
+      throw new HttpsError("failed-precondition", "A linha não possui caixa e contagem válidas para transferência.");
+    }
+    if (sourceBoxCode === targetBoxCode) {
+      throw new HttpsError("invalid-argument", "Escolha uma caixa diferente da atual.");
+    }
+    const sourceBoxRef = db.collection("warehouse_boxes").doc(sourceBoxCode);
+    const [sourceBoxSnapshot, sessionLines, balances] = await Promise.all([
+      transaction.get(sourceBoxRef),
+      readRows(transaction, db.collection(collections.openingInventoryLines).where("session_id", "==", sessionId)),
+      readRows(transaction, skuBalancesQuery(db, customerCode, skuCode)),
+    ]);
+    for (const boxSnapshot of [sourceBoxSnapshot, targetBoxSnapshot]) {
+      if (!boxSnapshot.exists) throw new HttpsError("not-found", "Caixa de origem ou destino não encontrada.");
+      const box = boxSnapshot.data() ?? {};
+      if (text(box.customer_code) !== customerCode || text(asRecord(box.origin).session_id) !== sessionId) {
+        throw new HttpsError("permission-denied", "As duas caixas precisam pertencer ao mesmo cliente e inventário.");
+      }
+      if (text(box.status) !== "stored") {
+        throw new HttpsError("failed-precondition", "As duas caixas precisam estar guardadas.");
+      }
+    }
+    if (text(sourceBoxSnapshot.get("location_id")) !== sourceLocation) {
+      throw new HttpsError("failed-precondition", "A posição da linha não corresponde à caixa de origem.");
+    }
+    const targetLocation = text(targetBoxSnapshot.get("location_id"));
+    if (!targetLocation) throw new HttpsError("failed-precondition", "A caixa de destino não tem posição.");
+    const targetLineId = safeDocId(`line_${digest({
+      sessionId, customerCode, skuCode, locationId: targetLocation, boxCode: targetBoxCode,
+    }, 48)}`);
+    const targetLineRef = db.collection(collections.openingInventoryLines).doc(targetLineId);
+    const targetLineSnapshot = await transaction.get(targetLineRef);
+    const activeLines = sessionLines.filter((row) => text(row.data.status || "counted") === "counted");
+    if (targetLineSnapshot.exists || activeLines.some((row) =>
+      text(row.data.box_code).toUpperCase() === targetBoxCode && normalizedIdentity(row.data.sku_code) === skuCode)) {
+      throw new HttpsError("already-exists", "A caixa de destino já contém este SKU. Escolha outra caixa; juntar contagens não está disponível nesta correção.");
+    }
+    const sourceBalance = assertSingleBalance(balances.filter((row) => text(row.data.location_id) === sourceLocation), skuCode, sourceLocation);
+    const sourceOnHand = number(sourceBalance.data.qty_on_hand);
+    if (number(sourceBalance.data.qty_reserved) !== 0 || sourceOnHand < quantity ||
+      text(sourceBalance.data.opening_inventory_session_id) !== sessionId) {
+      throw new HttpsError("failed-precondition", "O saldo de origem recebeu reserva ou não comporta esta linha. Revise as movimentações antes de corrigir.");
+    }
+    const changesPosition = targetLocation !== sourceLocation;
+    const targetBalances = changesPosition ? balances.filter((row) => text(row.data.location_id) === targetLocation) : [];
+    if (targetBalances.length > 1) {
+      throw new HttpsError("failed-precondition", "Há mais de um saldo para o SKU na posição de destino.");
+    }
+    const targetBalance = targetBalances[0];
+    if (targetBalance && (number(targetBalance.data.qty_reserved) !== 0 ||
+      text(targetBalance.data.opening_inventory_session_id) !== sessionId)) {
+      throw new HttpsError("failed-precondition", "O saldo de destino não pertence a esta abertura ou possui reserva.");
+    }
+
+    // Todas as leituras terminam antes de atualizar saldo, linhas ou caixas.
+    if (changesPosition) {
+      const remaining = sourceOnHand - quantity;
+      if (remaining > 0) {
+        transaction.update(sourceBalance.ref, {
+          qty_on_hand: remaining, qty_available: remaining,
+          updated_at: FieldValue.serverTimestamp(),
+        });
+      } else {
+        transaction.delete(sourceBalance.ref);
+      }
+      const targetBefore = number(targetBalance?.data.qty_on_hand);
+      const targetBalanceId = `bal_${digest({ customerCode, skuCode, locationId: targetLocation }, 48)}`;
+      const targetBalanceRef = targetBalance?.ref ?? db.collection(collections.stockBalances).doc(targetBalanceId);
+      transaction.set(targetBalanceRef, {
+        ...(targetBalance?.data ?? sourceBalance.data),
+        id: targetBalanceRef.id, location_id: targetLocation,
+        qty_on_hand: targetBefore + quantity, qty_available: targetBefore + quantity, qty_reserved: 0,
+        opening_inventory_session_id: sessionId, status: "available",
+        updated_at: FieldValue.serverTimestamp(),
+      });
+      const now = new Date().toISOString();
+      const transfer = {
+        type: "inventory.relocated", billable: false,
+        unit_cost: number(line.unit_cost), total_cost: number(line.total_cost),
+        original_movement_id: text(line.movement_id), cycle_count_id: text(line.cycle_count_id),
+        reason, opening_inventory_session_id: sessionId,
+        opening_inventory_line_id: targetLineId, previous_opening_line_id: openingLineId,
+        operational_operation_id: operationId,
+        source_box_code: sourceBoxCode, target_box_code: targetBoxCode,
+        from_location_id: sourceLocation, to_location_id: targetLocation,
+      };
+      const common = {
+        quantity, customerCode, skuCode,
+        clientItemCode: text(line.client_item_code), productName: text(line.product_name),
+        source: "functions_opening_inventory_transfer", occurredAt: now, entity: transfer,
+      };
+      createMovement(transaction, db, movementId(operationId, "transfer_out"), {
+        ...common, type: "SAIDA", locationId: sourceLocation, beforeQty: sourceOnHand, afterQty: remaining,
+      }, actor);
+      createMovement(transaction, db, movementId(operationId, "transfer_in"), {
+        ...common, type: "ENTRADA", locationId: targetLocation, beforeQty: targetBefore, afterQty: targetBefore + quantity,
+      }, actor);
+    }
+    transaction.create(targetLineRef, {
+      ...line, id: targetLineId, box_code: targetBoxCode, location_id: targetLocation,
+      previous_opening_line_id: openingLineId, correction_reason: reason,
+      corrected_by: actorPayload(actor), corrected_at: FieldValue.serverTimestamp(),
+      updated_at: FieldValue.serverTimestamp(),
+    });
+    transaction.delete(lineRef);
+    // Recalcular pelas linhas também retira da caixa os SKUs que saíram.
+    for (const [boxRef, boxCode] of [[sourceBoxRef, sourceBoxCode], [targetBoxRef, targetBoxCode]] as const) {
+      const rows = activeLines.filter((row) => row.id !== openingLineId && text(row.data.box_code).toUpperCase() === boxCode).map((row) => row.data);
+      if (boxCode === targetBoxCode) rows.push(line);
+      transaction.update(boxRef, {
+        line_count: rows.length,
+        unit_count: rows.reduce((sum, row) => sum + number(row.counted_qty), 0),
+        total_cost: rows.reduce((sum, row) => sum + number(row.counted_qty) * number(row.unit_cost), 0),
+        sku_codes: [...new Set(rows.map((row) => normalizedIdentity(row.sku_code)).filter(Boolean))],
+        updated_at: FieldValue.serverTimestamp(),
+      });
+    }
+    transaction.update(sessionRef, { updated_at: FieldValue.serverTimestamp() });
+    const event = createEvent(transaction, db, operationEventId(operationId, "opening_inventory_line_moved"), {
+      type: "inventory.opening_line_moved", title: "Caixa do inventário corrigida",
+      description: `${quantity} unidade(s) de ${skuCode}: ${sourceBoxCode} → ${targetBoxCode}. ${reason}`,
+      severity: "attention", entity_type: "opening_inventory_line", entity_id: targetLineId,
+      customer_code: customerCode,
+      payload: {
+        sku_code: skuCode, quantity,
+        source_line_id: openingLineId, target_line_id: targetLineId,
+        source_box_code: sourceBoxCode, target_box_code: targetBoxCode,
+        source_location_id: sourceLocation, target_location_id: targetLocation,
+        reason,
+      },
+    }, actor);
+    const result = {
+      ok: true, opening_line_id: targetLineId, previous_opening_line_id: openingLineId,
+      source_box_code: sourceBoxCode, target_box_code: targetBoxCode,
+      source_location_id: sourceLocation, target_location_id: targetLocation,
+      sku_code: skuCode, quantity_moved: quantity, events: [event],
+    };
+    createOperationReceipt(transaction, operationRef, inputHash, "inventory.opening_line.move", targetLineId, actor, result);
+    return result;
+  });
+}
+
 export async function removeOpeningInventoryLineTransaction(
   db: Firestore,
   input: RemoveOpeningInventoryLineInput,
