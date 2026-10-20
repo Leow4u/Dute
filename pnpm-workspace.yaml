@@ -2,7 +2,7 @@ minimumReleaseAge: 1440
 
 packages:
   - artifacts/*
-  - functions
+  - functions/*
   - lib/*
   - lib/integrations/*
 

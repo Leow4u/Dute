@@ -11,8 +11,8 @@ aponta.
 
 | Camada | Onde vive | O que é |
 |---|---|---|
-| **1. Modelo de operação** | `artifacts/btg-inventory/src/lib/operations/templates/*.ts` | O jeito de operar: como o estoque é contado (quantidade ou peça), quais módulos o portal tem, campos do cadastro, cobrança, etiqueta, mapa. |
-| **2. Pacote do cliente** (opcional) | `artifacts/btg-inventory/src/lib/operations/packs/*.ts` | O que um contrato muda sobre o modelo. Encontrado pelo código operacional do cliente, nunca digitado. |
+| **1. Modelo de operação** | `artifacts/app/src/lib/operations/templates/*.ts` | O jeito de operar: como o estoque é contado (quantidade ou peça), quais módulos o portal tem, campos do cadastro, cobrança, etiqueta, mapa. |
+| **2. Pacote do cliente** (opcional) | `artifacts/app/src/lib/operations/packs/*.ts` | O que um contrato muda sobre o modelo. Encontrado pelo código operacional do cliente, nunca digitado. |
 | **3. Cadastro do cliente** | Firestore `customers` (Configurações › Clientes) | Nome, código operacional, **sigla do SKU**, **modelo de operação**, portal ligado ou não, contrato. Nada de regra. |
 
 Reaproveitar é promover um pacote a modelo, nunca copiar o sistema nem abrir
@@ -44,10 +44,10 @@ Um modelo novo nasce quando dois clientes pedem a mesma coisa.
 - **Registro em código** (`src/lib/operations`): tipos, os três modelos, o
   pacote `btg`, `resolveOperationProfile` (modelo + pacote + sigla + portal a
   partir do cadastro, com o modelo da BTG como padrão), validação da sigla.
-  `operations.test.ts` lê `functions/src/domain/customer-profile.ts` e trava
+  `operations.test.ts` lê `functions/wms/src/domain/customer-profile.ts` e trava
   as chaves dos dois lados.
 - **Cadastro** (`customers`): campos `operation_template` e `sku_prefix`,
-  validados em `functions/src/domain/customer-profile.ts` dentro do
+  validados em `functions/wms/src/domain/customer-profile.ts` dentro do
   `mutateManagedEntity` (modelo tem de existir; sigla com 2 a 6 letras ou
   números, única entre clientes não arquivados, lida na transação antes das
   escritas; código operacional não muda depois do cadastro; modelo sem portal
@@ -114,7 +114,7 @@ O frontend sobe pelo GitHub Actions no merge em `main`.
   Pactual" só existe no pacote `btg`; `customer-literals.test.ts` trava a volta
   do literal no app.
 
-Isolamento entre clientes nas Functions (`functions/src/domain/customer-scope.ts`,
+Isolamento entre clientes nas Functions (`functions/wms/src/domain/customer-scope.ts`,
 testes em `customer-scope.test.ts` e `customer-isolation.integration.test.ts`):
 
 - **Inventário de abertura por cliente.** `system_controls/inventory` continua

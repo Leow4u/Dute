@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Campo — concluir OS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:15px;line-height:1.45}
+a{color:#0054CE;text-decoration:none}a:hover{color:#004496}
+h1,h2,h3,p{margin:0}
+.ic{width:20px;height:20px;flex:0 0 auto}
+.ic-s{width:16px;height:16px;flex:0 0 auto}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.card h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:800;color:#5F6368}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 16px;border-radius:8px;font:700 15px Manrope,sans-serif;border:1px solid transparent;cursor:pointer;white-space:nowrap;text-decoration:none}
+.btn-p{background:#E71C23;color:#fff}.btn-p:hover{background:#AD0015;color:#fff}
+.inp{height:46px;border:1px solid #D4D4CF;border-radius:8px;padding:0 14px;font:600 15px Manrope,sans-serif;background:#fff;color:#161616;width:100%}
+.inp:focus{outline:2px solid #0054CE;outline-offset:1px}
+textarea.inp{height:auto;padding:10px 14px;resize:vertical}
+.lbl{font-size:12.5px;font-weight:700;color:#3F403F;display:block;margin-bottom:6px}
+.fld{display:flex;flex-direction:column;min-width:0}
+.thumb{width:92px;height:72px;border-radius:8px;background:#F0F0ED;border:1px solid #E5E5E1;display:flex;align-items:center;justify-content:center;color:#5F6368;flex:0 0 auto;position:relative}
+.thumb svg{width:24px;height:24px}
+.thumb em{position:absolute;left:6px;bottom:6px;font-style:normal;font-size:10.5px;font-weight:800;background:#161616;color:#fff;padding:2px 6px;border-radius:4px}
+.opt{display:flex;align-items:center;gap:12px;min-height:46px;padding:0 14px;border:1px solid #E5E5E1;border-radius:10px;font-size:14.5px;font-weight:700;cursor:pointer}
+.opt input{width:20px;height:20px;accent-color:#E71C23;margin:0}
+.opt.on{border-color:#161616;background:#FAFAF8}
+</style>
+</helmet>
+<div style="width: 390px; height: 1000px; background: #F5F5F3; display: flex; flex-direction: column; overflow: hidden">
+  <header style="background: #161616; color: #fff; padding: 16px 16px 18px; display: flex; align-items: center; gap: 12px; border-radius: 0 0 20px 20px">
+    <a href="CampoDetalhe.dc.html" aria-label="Voltar" style="width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,.1); display: inline-flex; align-items: center; justify-content: center; color: #fff; flex: 0 0 auto"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7M19 12H5"/></svg></a>
+    <div style="flex: 1 1 auto; min-width: 0"><h1 style="font-size: 21px; font-weight: 800; letter-spacing: -.01em">Concluir entrega</h1><span style="font-size: 13px; color: rgba(255,255,255,.62); font-weight: 600">OS 000151 · Avenida Paulista, 1000</span></div>
+  </header>
+  <main style="flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px">
+    <div class="card">
+      <h2>Fotos da entrega</h2>
+      <div style="display: flex; gap: 10px; align-items: center">
+        <div class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><em>10:55</em></div>
+        <div class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg><em>canhoto</em></div>
+        <button type="button" class="thumb" style="background: #fff; border: 1.5px dashed #D4D4CF; cursor: pointer; flex-direction: column; gap: 4px; font: 700 11.5px Manrope, sans-serif; color: #161616" aria-label="Tirar foto"><svg viewBox="0 0 24 24" fill="none" stroke="#E71C23" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Foto</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Quem recebeu</h2>
+      <div class="fld"><label class="lbl" for="rec">Nome</label><input class="inp" id="rec" value="Carlos Almeida"></div>
+      <div class="fld"><label class="lbl" for="doc">RG ou CPF</label><input class="inp" id="doc" value="12.345.678-9"></div>
+    </div>
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center"><h2>Assinatura</h2><button type="button" style="border: 0; background: transparent; font: 700 13px Manrope, sans-serif; color: #0054CE; cursor: pointer; min-height: 32px">Limpar</button></div>
+      <div style="height: 130px; border: 1.5px dashed #D4D4CF; border-radius: 10px; background: #FAFAF8; display: flex; align-items: center; justify-content: center">
+        <svg viewBox="0 0 300 100" style="width: 280px; height: 94px" role="img" aria-label="Assinatura do recebedor"><path d="M18 62 C 34 20, 52 78, 72 46 S 108 18, 124 54 S 158 86, 178 42 S 214 20, 232 58 S 262 70, 284 40" stroke="#161616" stroke-width="2.4" fill="none" stroke-linecap="round"/><path d="M60 72 L 240 72" stroke="#D4D4CF" stroke-width="1" fill="none"/></svg>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Como foi a entrega</h2>
+      <label class="opt on"><input type="radio" name="st" checked> Sem avarias</label>
+      <label class="opt"><input type="radio" name="st"> Com avaria parcial</label>
+      <label class="opt"><input type="radio" name="st"> Recusada pelo cliente</label>
+    </div>
+    <div class="card">
+      <div class="fld"><label class="lbl" for="obs">Observações</label><textarea class="inp" id="obs" rows="2"></textarea></div>
+    </div>
+  </main>
+  <footer style="padding: 12px 16px 18px; background: #fff; border-top: 1px solid #E5E5E1; flex: 0 0 auto">
+    <a href="CampoV2.dc.html" class="btn btn-p" style="width: 100%; height: 54px; font-size: 16px"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Confirmar entrega</a>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

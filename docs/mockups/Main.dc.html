@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Login</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+a{color:#0054CE;text-decoration:none}a:hover{color:#004496}
+h1,h2,h3,p{margin:0}
+.ic{width:18px;height:18px;flex:0 0 auto}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:46px;padding:0 18px;border-radius:8px;font:700 15px Manrope,sans-serif;border:1px solid transparent;cursor:pointer;white-space:nowrap;text-decoration:none}
+.btn-p{background:#E71C23;color:#fff}.btn-p:hover{background:#AD0015;color:#fff}
+.inp{height:46px;border:1px solid #D4D4CF;border-radius:8px;padding:0 14px;font:600 15px Manrope,sans-serif;background:#fff;color:#161616;width:100%}
+.inp:focus{outline:2px solid #0054CE;outline-offset:1px}
+.lbl{font-size:13px;font-weight:700;color:#3F403F;display:block;margin-bottom:6px}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-wrap: wrap; background: #F5F5F3">
+  <section style="flex: 1 1 520px; min-width: 0; background: #161616; color: #fff; padding: 56px; display: flex; flex-direction: column; justify-content: space-between; gap: 48px; min-height: 480px">
+    <img src="/_blob/51b94b624eef7c9daa70d9dd1cfb5330" alt="Dutelog Soluções Logísticas" style="width: 240px; height: auto; display: block">
+    <h1 style="font-size: 48px; font-weight: 800; line-height: 1.08; letter-spacing: -.02em; max-width: 520px">Sistema Operacional</h1>
+    <div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap">
+      <span style="font-size: 20px; font-weight: 800; color: #fff">Para quem vai <span style="color: #E71C23">e faz!</span></span>
+      <span style="font-size: 12.5px; color: rgba(255,255,255,.45); font-weight: 600">© 2026 Dutelog Soluções Logísticas</span>
+    </div>
+  </section>
+  <section style="flex: 1 1 520px; min-width: 0; display: flex; align-items: center; justify-content: center; padding: 48px 24px">
+    <form style="width: 100%; max-width: 440px; background: #fff; border: 1px solid #E5E5E1; border-radius: 14px; padding: 40px; display: flex; flex-direction: column; gap: 22px">
+      <h2 style="font-size: 26px; font-weight: 800; letter-spacing: -.01em">Entrar</h2>
+      <div style="display: flex; flex-direction: column">
+        <label class="lbl" for="email">E-mail</label>
+        <input class="inp" id="email" type="email" value="nome@dutelog.com.br">
+      </div>
+      <div style="display: flex; flex-direction: column">
+        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px"><label class="lbl" for="senha" style="margin: 0">Senha</label><a href="#" style="font-size: 13px; font-weight: 700">Esqueci minha senha</a></div>
+        <div style="position: relative">
+          <input class="inp" id="senha" type="password" value="••••••••••" style="padding-right: 46px">
+          <button type="button" aria-label="Mostrar senha" style="position: absolute; right: 5px; top: 5px; width: 36px; height: 36px; border: 0; background: transparent; color: #5F6368; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        </div>
+      </div>
+      <label style="display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; color: #3F403F; min-height: 24px"><input type="checkbox" checked style="width: 18px; height: 18px; accent-color: #E71C23; margin: 0"> Manter conectado</label>
+      <a class="btn btn-p" href="Inicio.dc.html" style="width: 100%">Entrar<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
+    </form>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

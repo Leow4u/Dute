@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Operação</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+a{color:#0054CE;text-decoration:none}a:hover{color:#004496}
+h1,h2,h3,p{margin:0}
+.ic{width:20px;height:20px;flex:0 0 auto}
+.ic-s{width:16px;height:16px;flex:0 0 auto}
+.sb{flex:0 0 248px;background:#161616;color:#fff;display:flex;flex-direction:column;padding:26px 14px 18px;gap:4px}
+.nav{display:flex;align-items:center;gap:12px;height:48px;padding:0 14px;border-radius:10px;color:rgba(255,255,255,.72);font-weight:600;font-size:15px;text-decoration:none;position:relative}
+.nav:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav.on{background:rgba(255,255,255,.12);color:#fff}
+.nav.on::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:3px;background:#E71C23}
+.nav .cnt{margin-left:auto;min-width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.nav .cnt.red{background:#E71C23;color:#fff}
+.nav.agent{color:#C9B8FB}.nav.agent:hover{color:#E0D6FF}
+.main{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;padding:30px 44px;gap:20px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;font:700 14px Manrope,sans-serif;border:1px solid transparent;cursor:pointer;white-space:nowrap;text-decoration:none}
+.btn-p{background:#E71C23;color:#fff}.btn-p:hover{background:#AD0015;color:#fff}
+.btn-s{background:#fff;color:#161616;border-color:#D4D4CF}.btn-s:hover{background:#F0F0ED;color:#161616}
+.seg{display:inline-flex;background:#E8E8E4;border-radius:8px;padding:3px;gap:2px}
+.seg a{height:34px;padding:0 14px;border-radius:6px;display:inline-flex;align-items:center;font-weight:700;font-size:13.5px;color:#5F6368;text-decoration:none}
+.seg a.on{background:#fff;color:#161616;border:1px solid #E5E5E1}
+.chip{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:999px;background:#fff;border:1px solid #D4D4CF;font-size:13.5px;font-weight:600;color:#161616}
+.col{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:10px}
+.colh{display:flex;align-items:center;gap:8px;padding:0 4px;min-height:32px}
+.colh h2{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;display:inline-flex;align-items:center;gap:8px}
+.colh h2 i{width:9px;height:9px;border-radius:50%;display:inline-block}
+.colh em{font-style:normal;min-width:24px;height:24px;border-radius:999px;background:#E8E8E4;color:#161616;font-size:12.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.kcard{background:#fff;border:1px solid #E5E5E1;border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;color:#161616;text-decoration:none}
+.kcard:hover{border-color:#B9B9B3;color:#161616}
+.kcard .t{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.kcard .h{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums}
+.kcard .n{font-size:12px;color:#5F6368;font-weight:600}
+.kcard .c{font-size:15px;font-weight:700;line-height:1.3}
+.kcard .d{font-size:13px;color:#5F6368;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kcard .d svg{color:#161616;width:15px;height:15px;flex:0 0 auto}
+.kcard .f{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:8px;border-top:1px solid #F0F0ED;font-size:13px;color:#5F6368}
+.kcard.late{border-color:#F3C2C4;background:#FFFBFB}
+.av{width:24px;height:24px;border-radius:50%;background:#161616;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;flex:0 0 auto}
+.badge{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:6px;font-size:12px;font-weight:700;white-space:nowrap;border:1px solid transparent}
+.s-atrasada{background:#FBE3E4;border-color:#F3C2C4;color:#8E1016}
+.s-aviso{background:#FDF0D5;border-color:#F3DCA3;color:#8A4B00}
+.s-concluida{background:#DDF5E4;border-color:#B6E4C4;color:#14602F}
+.s-portal{background:#ECE6FA;border-color:#D7CBF4;color:#5B21B6}
+.s-muted{background:#F0F0ED;border-color:#E5E5E1;color:#5F6368}
+.muted{color:#5F6368}
+.av2{width:36px;height:36px;border-radius:50%;background:#E71C23;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto}
+.add{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;border:1px solid #D4D4CF;background:#fff;color:#161616;margin-left:auto;cursor:pointer}
+</style>
+</helmet>
+<div style="min-height: 100%; display: flex; flex-wrap: wrap">
+  <aside class="sb">
+    <a href="Inicio.dc.html" style="display: block; padding: 4px 14px 24px"><img src="/_blob/51b94b624eef7c9daa70d9dd1cfb5330" alt="Dutelog Soluções Logísticas" style="width: 148px; height: auto; display: block"></a>
+    <a class="nav" href="Inicio.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>Início<span class="cnt">4</span></a>
+    <a class="nav on" href="Operacao.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Operação<span class="cnt red">1</span></a>
+    <a class="nav" href="Cadastros.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Clientes</a>
+    <a class="nav" href="Financeiro.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>Financeiro</a>
+    <a class="nav agent" href="Operacao.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></svg>Agent Dute</a>
+    <a class="nav" href="Operacao.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Administração</a>
+    <div style="margin-top: auto; padding: 14px 10px 0; border-top: 1px solid rgba(255,255,255,.1); display: flex; align-items: center; gap: 12px">
+      <span class="av2">LE</span>
+      <div style="min-width: 0"><div style="font-weight: 700; font-size: 14.5px">Leonardo</div><div style="font-size: 12.5px; color: rgba(255,255,255,.55)">Administrador</div></div>
+    </div>
+  </aside>
+  <div class="main">
+    <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap">
+      <h1 style="font-size: 28px; font-weight: 800; letter-spacing: -.02em; margin-right: 8px">Operação</h1>
+      <nav class="seg" aria-label="Período"><a class="on" href="Operacao.dc.html">Hoje</a><a href="Operacao.dc.html">Semana</a><a href="Operacao.dc.html">Todas</a></nav>
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 10px">
+        <label style="position: relative"><span style="position: absolute; left: 12px; top: 11px; color: #5F6368"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span><input aria-label="Buscar" placeholder="Buscar OS ou cliente" style="height: 40px; width: 260px; border: 1px solid #D4D4CF; border-radius: 8px; padding: 0 12px 0 36px; font: 600 14px Manrope, sans-serif; background: #fff; color: #161616"></label>
+        <a href="TVSala.dc.html" class="btn btn-s"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>TV</a>
+        <a href="OSNova.dc.html" class="btn btn-p"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Nova OS</a>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+      <button type="button" class="chip">Todos os tipos<svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+      <button type="button" class="chip">Todos os motoristas<svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+      <button type="button" class="chip">Todos os clientes<svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+      <span class="muted" style="margin-left: auto; font-size: 13.5px; font-weight: 700">Segunda, 19 de outubro · 14 OS</span>
+    </div>
+    <div style="display: flex; gap: 16px; align-items: flex-start">
+      <section class="col">
+        <div class="colh"><h2 style="color: #004496"><i style="background: #0054CE"></i>Para agendar</h2><em>2</em><button type="button" class="add" aria-label="Nova OS"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div>
+        <a class="kcard" href="OSDetalheV2.dc.html">
+          <div class="t"><span class="badge s-portal">Pedido do portal</span><span class="n">OS 000159</span></div>
+          <div class="c">Supermercados Boa Vista</div>
+          <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>Armazenagem · saída de 18 paletes</div>
+          <div class="f"><span>Pedido para quarta, 21/10</span><span class="badge s-muted">Sem equipe</span></div>
+        </a>
+        <a class="kcard" href="OSDetalheV2.dc.html">
+          <div class="t"><span class="badge s-portal">Pedido do portal</span><span class="n">OS 000160</span></div>
+          <div class="c">TechPrime Escritórios</div>
+          <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>Serviço em campo · troca de divisórias</div>
+          <div class="f"><span>Pedido para sexta, 23/10</span><span class="badge s-muted">Sem equipe</span></div>
+        </a>
+      </section>
+      <section class="col">
+        <div class="colh"><h2 style="color: #5B21B6"><i style="background: #7C3AED"></i>Agendadas hoje</h2><em>3</em></div>
+        <a class="kcard" href="OSDetalheV2.dc.html">
+          <div class="t"><span class="h">15:00</span><span class="n">OS 000156</span></div>
+          <div class="c">Supermercados Boa Vista</div>
+          <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Transporte · CD Guarulhos → Loja Tatuapé</div>
+          <div class="f"><span style="display: inline-flex; align-items: center; gap: 8px"><span class="av">JP</span>João Pereira</span><span>DEF-4G56</span></div>
+        </a>
+        <a class="kcard" href="OSDetalheV2.dc.html">
+          <div class="t"><span class="h">16:30</span><span class="n">OS 000153</span></div>
+          <div class="c">Clínica Vida Plena</div>
+          <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>Serviço em campo · instalação de mobiliário</div>
+          <div class="f"><span style="display: inline-flex; align-items: center; gap: 8px"><span class="av">AL</span>Ana Lima</span><span>ABC-1D23</span></div>
+        </a>
+        <a class="kcard" href="OSDetalheV2.dc.html">
+          <div class="t"><span class="h">17:00</span><span class="n">OS 000158</span></div>
+          <div class="c">Construtora Horizonte</div>
+          <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Transporte · Campinas → Osasco</div>
+          <div class="f"><span style="display: inline-flex; align-items: center; gap: 8px"><span class="av">PN</span>Pedro Nunes</span><span class="badge s-aviso">Sem veículo</span></div>
+        </a>
+      </section>
+      <section class="col">
+        <div class="colh"><h2 style="color: #8A4B00"><i style="background: #D98B00"></i>Em execução</h2><em>5</em></div>
+        <a class="kcard late" href="OSDetalheV2.dc.html">
+          <div class="t"><span class="h">09:30</span><span class="badge s-atrasada">Atrasada 32 min</span></div>
+          <div class="c">Metalúrgica Souza &amp; Filhos</div>
+          <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Transporte · Guarulhos → Av. Paulista</div>
+          <div class="f"><span style="display: inline-flex; align-items: center; gap: 8px"><span class="av">JP</span>João Pereira</span><span>a 6 km</span></div>
+        </a>
+        <a class="kcard" href="OSDetalheV2.dc.html">
+          <div class="t"><span class="h">07:00</span><span class="n">OS 000152</span></div>
+          <div class="c">TechPrime Escritórios</div>
+          <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>Mudança · Barueri → Alphaville · 61 de 84 itens</div>
+          <div class="f"><span style="display: inline-flex; align-items: center; gap: 8px"><span class="av">CS</span>Carlos Silva +2</span><span>GHI-7J89</span></div>
+        </a>
+        <a class="kcard" href="OSDetalheV2.dc.html">
+          <div class="t"><span class="h">10:00</span><span class="n">OS 000150</span></div>
+          <div class="c">Supermercados Boa Vista</div>
+          <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>Armazenagem · 28 de 40 paletes conferidos</div>
+          <div class="f"><span style="display: inline-flex; align-items: center; gap: 8px"><span class="av">MA</span>Marcos Andrade</span><span>Galpão 2</span></div>
+        </a>
+        <a class="kcard" href="OSDetalheV2.dc.html">
+          <div class="t"><span class="h">11:00</span><span class="n">OS 000154</span></div>
+          <div class="c">Construtora Horizonte</div>
+          <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Transporte · Osasco → Campinas · chega 15:10</div>
+          <div class="f"><span style="display: inline-flex; align-items: center; gap: 8px"><span class="av">PN</span>Pedro Nunes</span><span>JKL-0M12</span></div>
+        </a>
+        <a class="kcard" href="OSDetalheV2.dc.html">
+          <div class="t"><span class="h">13:30</span><span class="n">OS 000155</span></div>
+          <div class="c">Distribuidora Rápida</div>
+          <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>Serviço em campo · montagem de estantes</div>
+          <div class="f"><span style="display: inline-flex; align-items: center; gap: 8px"><span class="av">AL</span>Ana Lima</span><span>Santo André</span></div>
+        </a>
+      </section>
+      <section class="col">
+        <div class="colh"><h2 style="color: #14602F"><i style="background: #1F8A4C"></i>Concluídas hoje</h2><em>4</em></div>
+        <a class="kcard" href="OSDetalheV2.dc.html">
+          <div class="t"><span class="h">12:40</span><span class="badge s-concluida">Assinada</span></div>
+          <div class="c">Padaria Pão Nosso</div>
+          <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Transporte · São Paulo → Guarulhos</div>
+          <div class="f"><span style="display: inline-flex; align-items: center; gap: 8px"><span class="av">RC</span>Rafael Costa</span><span>MNO-3P45</span></div>
+        </a>
+        <a class="kcard" href="OSDetalheV2.dc.html">
+          <div class="t"><span class="h">11:50</span><span class="badge s-concluida">Assinada</span></div>
+          <div class="c">Escola Nova Geração</div>
+          <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Transporte · 14 caixas de mobiliário</div>
+          <div class="f"><span style="display: inline-flex; align-items: center; gap: 8px"><span class="av">RC</span>Rafael Costa</span><span>MNO-3P45</span></div>
+        </a>
+        <a class="kcard" href="OSDetalheV2.dc.html">
+          <div class="t"><span class="h">10:15</span><span class="badge s-concluida">Concluída</span></div>
+          <div class="c">Clínica Vida Plena</div>
+          <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>Serviço em campo · instalação de mobiliário</div>
+          <div class="f"><span style="display: inline-flex; align-items: center; gap: 8px"><span class="av">AL</span>Ana Lima</span><span>ABC-1D23</span></div>
+        </a>
+        <a class="kcard" href="OSDetalheV2.dc.html">
+          <div class="t"><span class="h">08:40</span><span class="badge s-concluida">Assinada</span></div>
+          <div class="c">Farmácia Central</div>
+          <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Transporte · Santo André → São Caetano</div>
+          <div class="f"><span style="display: inline-flex; align-items: center; gap: 8px"><span class="av">RC</span>Rafael Costa</span><span>MNO-3P45</span></div>
+        </a>
+      </section>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
