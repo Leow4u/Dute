@@ -2,7 +2,17 @@ name: Publicar
 
 # Publica um ambiente (homologação ou produção). Chamado pelo ci.yml depois
 # dos testes: homologação a cada push na main, produção só por disparo manual.
-# Primeiro as regras e os índices; o frontend e as functions só sobem depois.
+# Em série: confere se o commit ainda é o da main, regras e índices, functions
+# e por último o frontend, para a tela nova nunca chegar antes da callable que
+# ela chama.
+#
+# Uma publicação por ambiente de cada vez: o ci.yml chama este workflow com
+# concurrency "publicar-<ambiente>" e cancel-in-progress: false. Até 20/10/2026
+# cada job tinha o próprio grupo com cancel-in-progress: true, e o push seguinte
+# cancelou duas vezes no mesmo dia o "firebase deploy --only functions" da
+# homologação no meio (merges do #106 e do #110), pulando a conferência do
+# invoker. Agora a publicação em andamento termina; quem chega depois espera, e
+# o GitHub mantém só a mais nova na espera.
 on:
   workflow_call:
     inputs:
@@ -39,18 +49,50 @@ env:
   REGION: southamerica-east1
 
 jobs:
-  # Regras do Firestore e do Storage e índices do Firestore. O frontend e as
-  # functions dependem deste job: em 16/10/2026 os dois subiram sem as regras
+  # A fila de concorrência não garante que o commit mais novo publique por
+  # último: os testes de dois pushes seguidos podem terminar fora de ordem, e o
+  # pendente mais antigo entra depois do mais novo. Por isso a publicação só
+  # começa se este commit ainda for o HEAD da main. Na homologação, se a main
+  # já andou, nada sobe e o run fica verde com aviso: a execução do commit novo
+  # é que publica. Na produção, falha: o disparo foi para um commit que já não
+  # é o da main, e a conferência na homologação é a do commit novo.
+  head-da-main:
+    name: Commit ainda é o HEAD da main
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      publicar: ${{ steps.conferir.outputs.publicar }}
+    steps:
+      - id: conferir
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AMBIENTE: ${{ inputs.ambiente }}
+        run: |
+          set -euo pipefail
+          HEAD_MAIN="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
+          if [ "${HEAD_MAIN}" = "${GITHUB_SHA}" ]; then
+            echo "publicar=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          if [ "${AMBIENTE}" = "producao" ]; then
+            echo "::error::A main está em ${HEAD_MAIN:0:7}, não mais em ${GITHUB_SHA:0:7}. Confira ${HEAD_MAIN:0:7} na homologação e dispare a produção de novo."
+            exit 1
+          fi
+          echo "::notice::${GITHUB_SHA:0:7} não é mais o HEAD da main (${HEAD_MAIN:0:7}); a homologação fica para a execução de ${HEAD_MAIN:0:7}."
+          echo "publicar=false" >> "${GITHUB_OUTPUT}"
+
+  # Regras do Firestore e do Storage e índices do Firestore. As functions e o
+  # frontend dependem deste job: em 16/10/2026 os dois subiram sem as regras
   # novas e a tela Estoque › Posições ficou em "Missing or insufficient
   # permissions" até alguém publicar as regras à mão. Usa a conta do job de
   # functions, que tem firebase.viewer (acha o banco e o bucket padrão),
   # firebaserules.admin e datastore.indexAdmin (ver docs/deploy-functions-manual.md).
   regras:
     name: Regras e índices (Firestore e Storage)
+    needs: head-da-main
+    if: needs.head-da-main.outputs.publicar == 'true'
     runs-on: ubuntu-latest
-    concurrency:
-      group: publicar-regras-${{ inputs.ambiente }}
-      cancel-in-progress: true
     permissions:
       contents: read
       id-token: write
@@ -87,13 +129,81 @@ jobs:
           ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
         run: bash tools/check_rules_deployed.sh "${PROJECT_ID}"
 
-  frontend:
-    name: Frontend (Cloud Run)
+  functions:
+    name: Cloud Functions
     needs: regras
     runs-on: ubuntu-latest
-    concurrency:
-      group: publicar-frontend-${{ inputs.ambiente }}
-      cancel-in-progress: true
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PROJECT_ID: ${{ inputs.project_id }}
+      WORKLOAD_IDENTITY_PROVIDER: projects/${{ inputs.project_number }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+      GCP_SERVICE_ACCOUNT: github-actions-functions@${{ inputs.project_id }}.iam.gserviceaccount.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/wms/package-lock.json
+
+      - name: Install functions deps
+        working-directory: functions/wms
+        run: npm ci
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      # 02/10/2026: a API do Cloud Scheduler estava desligada e 4 callables novas
+      # (rotinas do Agent Dute) ficaram com deploy falho — a onSchedule precisa
+      # dela. Os projetos já a têm ativa; isso é só rede de segurança pra um
+      # projeto novo. 16/10/2026: a SA github-actions-functions não tem
+      # serviceusage.services.enable (só serviceUsageConsumer, que é pra
+      # *usar* serviço já ativo, não ativar um novo) — dar serviceUsageAdmin só
+      # pra isso seria mais privilégio do que vale a pena; não trava o job se
+      # falhar, o `firebase deploy` já falha sozinho se a API estiver desligada.
+      - name: Garantir API do Cloud Scheduler ativa
+        continue-on-error: true
+        run: gcloud services enable cloudscheduler.googleapis.com --project "${PROJECT_ID}"
+
+      # Sempre o lote inteiro, nunca "firebase deploy --only functions:nome": foi
+      # deploy parcial que causou o incidente de 03/09/2026 (8 callables sem
+      # invoker, um mês sem ninguém perceber). Timeout de descoberta já subido de
+      # cara — na máquina do Leonardo precisou de 60-180s dependendo do dia (ver
+      # docs/deploy-functions-manual.md); o runner do CI é uma máquina
+      # desconhecida, sem alguém olhando pra tentar de novo com um valor maior.
+      # firebase.json fica na raiz do repo (não em functions/wms/) — é de lá que o
+      # firebase deploy precisa rodar, igual no roteiro manual.
+      - name: Publicar todas as functions
+        env:
+          FUNCTIONS_DISCOVERY_TIMEOUT: "180"
+        run: firebase deploy --only functions --project "${PROJECT_ID}" --non-interactive
+
+      # Não autocorrige — só falha e avisa. O incidente de 03/09/2026 ficou um mês
+      # sem ninguém perceber justamente porque nada conferia isso depois do
+      # deploy; o script sugere o "gcloud run services add-iam-policy-binding"
+      # certo, mas quem aplica é uma pessoa (ver docs/deploy-functions-manual.md).
+      - name: Verificar invocação pública de cada callable
+        shell: pwsh
+        run: ./tools/check_functions_invoker.ps1 -ProjectId "${env:PROJECT_ID}"
+
+  # Por último: até 20/10/2026 o frontend subia junto com as functions e ficava
+  # uns 5 minutos no ar chamando as functions antigas. Se as functions ou a
+  # conferência do invoker falham, o frontend não sobe.
+  frontend:
+    name: Frontend (Cloud Run)
+    needs: [regras, functions]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
@@ -208,74 +318,3 @@ jobs:
               --format "table(name,creationTimestamp.date('%Y-%m-%d %H:%M'),active,spec.containers[0].image)"
             exit 1
           fi
-
-  functions:
-    name: Cloud Functions
-    needs: regras
-    runs-on: ubuntu-latest
-    concurrency:
-      group: publicar-functions-${{ inputs.ambiente }}
-      cancel-in-progress: true
-    permissions:
-      contents: read
-      id-token: write
-    env:
-      PROJECT_ID: ${{ inputs.project_id }}
-      WORKLOAD_IDENTITY_PROVIDER: projects/${{ inputs.project_number }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider
-      GCP_SERVICE_ACCOUNT: github-actions-functions@${{ inputs.project_id }}.iam.gserviceaccount.com
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: functions/wms/package-lock.json
-
-      - name: Install functions deps
-        working-directory: functions/wms
-        run: npm ci
-
-      - id: auth
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
-
-      - uses: google-github-actions/setup-gcloud@v2
-
-      - name: Install Firebase CLI
-        run: npm install -g firebase-tools
-
-      # 02/10/2026: a API do Cloud Scheduler estava desligada e 4 callables novas
-      # (rotinas do Agent Dute) ficaram com deploy falho — a onSchedule precisa
-      # dela. Os projetos já a têm ativa; isso é só rede de segurança pra um
-      # projeto novo. 16/10/2026: a SA github-actions-functions não tem
-      # serviceusage.services.enable (só serviceUsageConsumer, que é pra
-      # *usar* serviço já ativo, não ativar um novo) — dar serviceUsageAdmin só
-      # pra isso seria mais privilégio do que vale a pena; não trava o job se
-      # falhar, o `firebase deploy` já falha sozinho se a API estiver desligada.
-      - name: Garantir API do Cloud Scheduler ativa
-        continue-on-error: true
-        run: gcloud services enable cloudscheduler.googleapis.com --project "${PROJECT_ID}"
-
-      # Sempre o lote inteiro, nunca "firebase deploy --only functions:nome": foi
-      # deploy parcial que causou o incidente de 03/09/2026 (8 callables sem
-      # invoker, um mês sem ninguém perceber). Timeout de descoberta já subido de
-      # cara — na máquina do Leonardo precisou de 60-180s dependendo do dia (ver
-      # docs/deploy-functions-manual.md); o runner do CI é uma máquina
-      # desconhecida, sem alguém olhando pra tentar de novo com um valor maior.
-      # firebase.json fica na raiz do repo (não em functions/wms/) — é de lá que o
-      # firebase deploy precisa rodar, igual no roteiro manual.
-      - name: Publicar todas as functions
-        env:
-          FUNCTIONS_DISCOVERY_TIMEOUT: "180"
-        run: firebase deploy --only functions --project "${PROJECT_ID}" --non-interactive
-
-      # Não autocorrige — só falha e avisa. O incidente de 03/09/2026 ficou um mês
-      # sem ninguém perceber justamente porque nada conferia isso depois do
-      # deploy; o script sugere o "gcloud run services add-iam-policy-binding"
-      # certo, mas quem aplica é uma pessoa (ver docs/deploy-functions-manual.md).
-      - name: Verificar invocação pública de cada callable
-        shell: pwsh
-        run: ./tools/check_functions_invoker.ps1 -ProjectId "${env:PROJECT_ID}"
