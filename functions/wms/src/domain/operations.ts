@@ -2538,6 +2538,9 @@ export async function moveOpeningInventoryLineTransaction(
       transaction.set(targetBalanceRef, {
         ...(targetBalance?.data ?? sourceBalance.data),
         id: targetBalanceRef.id, location_id: targetLocation,
+        // Outra caixa pode ter sido a última contagem na origem com custo distinto.
+        // Ao criar posição, o custo acompanha a linha que efetivamente mudou.
+        unit_cost: targetBalance ? number(targetBalance.data.unit_cost) : number(line.unit_cost),
         qty_on_hand: targetBefore + quantity, qty_available: targetBefore + quantity, qty_reserved: 0,
         opening_inventory_session_id: sessionId, status: "available",
         updated_at: FieldValue.serverTimestamp(),

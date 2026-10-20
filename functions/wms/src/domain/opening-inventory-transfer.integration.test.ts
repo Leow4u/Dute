@@ -202,6 +202,21 @@ describe("correção de caixa de linha do inventário de abertura", () => {
     assert.equal((await db.collection("skus").doc("BTG-000001").get()).get("estoque_atual"), 12);
   });
 
+  it("ao criar posição usa o custo da linha transferida, preservando outra caixa de custo diferente", async () => {
+    const { sessionId, input } = await scenario();
+    await openingLine(sessionId, "CX-000002", { product_registration: "existing", counted_qty: 18, unit_cost: 220 });
+    const beforeCatalog = await catalog();
+    const result = await moveOpeningInventoryLineTransaction(db, { ...input, target_box_code: "CX-000003" }, operacao);
+    const balances = (await db.collection("stock_balances").get()).docs.map((doc) => doc.data());
+    const source = balances.find((row) => row.location_id === "A-01")!;
+    const target = balances.find((row) => row.location_id === "A-02")!;
+    assert.deepEqual([source.qty_on_hand, source.unit_cost], [18, 220]);
+    assert.deepEqual([target.qty_on_hand, target.unit_cost], [12, 189.9]);
+    const line = (await db.collection("opening_inventory_lines").doc(String(result.opening_line_id)).get()).data()!;
+    assert.equal(line.unit_cost, 189.9);
+    assert.deepEqual(await catalog(), beforeCatalog);
+  });
+
   it("rejeita destino com o mesmo SKU sem juntar contagens nem alterar qualquer saldo", async () => {
     const { sessionId, input } = await scenario();
     await openingLine(sessionId, "CX-000002", { product_registration: "existing", counted_qty: 18 });
