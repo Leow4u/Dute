@@ -595,6 +595,7 @@ export function OpeningInventoryWorkspace() {
       }),
     onSuccess: (_result, box) => {
       setBoxToRemove(undefined);
+      queryClient.invalidateQueries({ queryKey: ["opening-conference-box"] });
       setActiveBox((current) => (current?.code === box.code ? undefined : current));
       queryClient.invalidateQueries({ queryKey: ["warehouse-boxes"] });
       toast({
@@ -866,6 +867,7 @@ export function OpeningInventoryWorkspace() {
       ),
     onSuccess: () => {
       setLineToRemove(undefined);
+      queryClient.invalidateQueries({ queryKey: ["opening-conference-box"] });
       queryClient.invalidateQueries({ queryKey: ["opening-inventory-session"] });
       queryClient.invalidateQueries({
         queryKey: ["opening-inventory-product-lookup"],
@@ -1188,11 +1190,13 @@ export function OpeningInventoryWorkspace() {
                                   type="button"
                                   size="sm"
                                   variant="outline"
+                                  className="h-auto flex-col items-start py-2"
                                   title={`${alternative.reason} ${formatBoxPlacement(alternative.placement)}`}
                                   onClick={() => currentBox ? storeConference.mutate(alternative) : createBox.mutate({ candidate: alternative })}
                                   disabled={boxBusy}
                                 >
-                                  Guardar em {alternative.code}
+                                  <span>Guardar em {alternative.code}</span>
+                                   <span className="text-xs font-normal">{formatBoxPlacement(alternative.placement)}</span>
                                 </Button>
                               ))}
                             </div>
