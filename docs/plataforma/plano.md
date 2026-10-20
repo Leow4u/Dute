@@ -277,7 +277,7 @@ NF-e e CT-e próprios (vêm por integração), WhatsApp, app nativo, GPS em temp
 
 - **Migração:** contagem de documentos por coleção igual entre `dute-btg` e `dute-prod`; amostra de usuários entrando com a senha antiga; anexos abrindo; rotinas agendadas rodando só no projeto novo.
 - **Testes:** `test:critical` de cada codebase de functions; testes de regras (cliente só vê o próprio, operação não lê preço, perfil sem o módulo não acessa, banco `rh` fechado); typecheck e testes do app.
-- **Deploy:** homologação a cada push; produção manual com verificação da URL e do invoker; regras e índices em deploy próprio.
+- **Deploy:** homologação a cada push; produção manual com verificação da URL e do invoker; regras e índices num job próprio do CI, antes do frontend e das functions.
 - **IA:** sugestão de duração mostra a origem; alerta de item parado respeita o limite do perfil; dado do cliente A nunca aparece para o cliente B (teste); taxa de acerto aparece no painel.
 - **Celular e TV:** PWA instalado conclui OS com assinatura; TV atualiza sozinha com o usuário `painel`.
 

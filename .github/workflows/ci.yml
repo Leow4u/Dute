@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       publicar_producao:
-        description: "Publicar a main na produção (app.dutelog.com.br): frontend e functions"
+        description: "Publicar a main na produção (app.dutelog.com.br): regras e índices, frontend e functions"
         type: boolean
         default: false
       liberar_trafego:

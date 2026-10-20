@@ -2,6 +2,7 @@ name: Publicar
 
 # Publica um ambiente (homologação ou produção). Chamado pelo ci.yml depois
 # dos testes: homologação a cada push na main, produção só por disparo manual.
+# Primeiro as regras e os índices; o frontend e as functions só sobem depois.
 on:
   workflow_call:
     inputs:
@@ -38,8 +39,57 @@ env:
   REGION: southamerica-east1
 
 jobs:
+  # Regras do Firestore e do Storage e índices do Firestore. O frontend e as
+  # functions dependem deste job: em 16/10/2026 os dois subiram sem as regras
+  # novas e a tela Estoque › Posições ficou em "Missing or insufficient
+  # permissions" até alguém publicar as regras à mão. Usa a conta do job de
+  # functions, que tem firebase.viewer (acha o banco e o bucket padrão),
+  # firebaserules.admin e datastore.indexAdmin (ver docs/deploy-functions-manual.md).
+  regras:
+    name: Regras e índices (Firestore e Storage)
+    runs-on: ubuntu-latest
+    concurrency:
+      group: publicar-regras-${{ inputs.ambiente }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PROJECT_ID: ${{ inputs.project_id }}
+      WORKLOAD_IDENTITY_PROVIDER: projects/${{ inputs.project_number }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+      GCP_SERVICE_ACCOUNT: github-actions-functions@${{ inputs.project_id }}.iam.gserviceaccount.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      # Sem --force: índice que existe no projeto e não está no
+      # firestore.indexes.json só gera aviso no log, o CI nunca apaga índice.
+      - name: Publicar regras e índices
+        run: firebase deploy --only firestore,storage --project "${PROJECT_ID}" --non-interactive
+
+      # Os índices novos ficam construindo por alguns minutos depois do deploy;
+      # as regras valem na hora, então é delas que se confere o conteúdo.
+      - name: Conferir as regras publicadas
+        env:
+          ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: bash tools/check_rules_deployed.sh "${PROJECT_ID}"
+
   frontend:
     name: Frontend (Cloud Run)
+    needs: regras
     runs-on: ubuntu-latest
     concurrency:
       group: publicar-frontend-${{ inputs.ambiente }}
@@ -161,6 +211,7 @@ jobs:
 
   functions:
     name: Cloud Functions
+    needs: regras
     runs-on: ubuntu-latest
     concurrency:
       group: publicar-functions-${{ inputs.ambiente }}
