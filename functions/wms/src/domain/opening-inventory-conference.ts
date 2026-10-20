@@ -18,7 +18,7 @@ export const OPENING_CONFERENCE_LINES = "opening_inventory_draft_lines";
 const MAX_LINES = 100;
 type Row = Record<string, unknown>;
 const str = (value: unknown) => String(value ?? "").trim();
-const upper = (value: unknown) => str(value).toUpperCase();
+const upper = (value: unknown) => str(value).toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const clean = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 const identity = z.string().trim().min(1).max(160).refine((value) => !value.includes("/"), "Identificador inválido.");
@@ -34,6 +34,7 @@ export const SaveOpeningConferenceLineSchema = CycleCountSchema.omit({
   ...mutationFields, line_id: identity.optional(), counted_qty: z.number().finite().positive(),
   unit_cost: z.number().finite().positive(),
   genero: z.string().trim().min(1).max(80), grupo: z.string().trim().min(1).max(120),
+  sku_code: z.string().trim().max(120).refine((value) => !value.includes("/"), "SKU inválido.").optional(),
   client_item_code: z.string().trim().max(120).optional(),
   product_name: z.string().trim().max(500).optional(), category: z.string().trim().max(120).optional(),
   reference: z.string().trim().max(500).optional(), reason: z.string().trim().min(3).max(500),
@@ -91,7 +92,7 @@ function finish(tx: Transaction, ref: DocumentReference, input: unknown, result:
 }
 function draftBody(input: DraftInput): Row {
   const { expected_revision: _revision, idempotency_key: _key, line_id: _line, ...rest } = input;
-  return clean({ ...rest, sku_code: upper(input.sku_code), client_item_code: upper(input.client_item_code), barcode: normalizeBarcode(input.barcode) });
+  return clean({ ...rest, sku_code: input.product_registration === "new" ? "" : upper(input.sku_code), client_item_code: upper(input.client_item_code), barcode: normalizeBarcode(input.barcode) });
 }
 function keys(line: Row): string[] {
   return [str(line.sku_code) && `sku:${upper(line.sku_code)}`, str(line.client_item_code) && `client:${upper(line.client_item_code)}`,
@@ -303,6 +304,7 @@ export async function storeOpeningConferenceBox(db: Firestore, raw: unknown, act
     revision(box, input.expected_revision);
     if (box.status !== "reviewed") throw new HttpsError("failed-precondition", "Revise e finalize a conferência antes de guardar a caixa.");
     const location = upper(input.location_id);
+    if (location.includes("/") || (input.refusal && str(input.refusal.position).includes("/"))) throw new HttpsError("invalid-argument", "Posição inválida.");
     const dimensions = requireDimensions(input);
     const [positionSnapshot, occupied, drafts, refused] = await Promise.all([
       tx.get(db.collection("warehouse_positions").doc(location)),
@@ -381,7 +383,7 @@ export async function resumeOpeningConferenceBox(db: Firestore, raw: unknown, ac
     });
     if (!prepared) continue;
     try {
-      const result = await recordCycleCountTransaction(db, prepared.input, actor, { conference_commit_id: prepared.commitId });
+      const result = await recordCycleCountTransaction(db, prepared.input, actor, { conference_commit_id: prepared.commitId, conference_line_id: listed.id, conference_version: prepared.version });
       await db.runTransaction(async (tx) => {
         const snapshot = await tx.get(lineRef);
         if (snapshot.get("status") === "committed") return;

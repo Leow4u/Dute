@@ -1527,7 +1527,7 @@ export async function recordCycleCountTransaction(
   db: Firestore,
   input: RecordCycleCountInput,
   actor: OperationalActor,
-  internal?: { conference_commit_id: string },
+  internal?: { conference_commit_id: string; conference_line_id: string; conference_version: number },
 ) {
   const mode = input.mode === "opening" ? "opening" : "cycle";
   const customerCode = text(input.customer_code);
@@ -1587,6 +1587,24 @@ export async function recordCycleCountTransaction(
       inputHash,
     );
     if (previous) return previous;
+
+    // O checkpoint faz parte da transação do estoque. Duas retomadas não
+    // podem liberar edição de uma linha que a outra já confirmou.
+    const conferenceLineRef = internal
+      ? db.collection("opening_inventory_draft_lines").doc(safeDocId(internal.conference_line_id))
+      : undefined;
+    if (internal && conferenceLineRef) {
+      const draft = await transaction.get(conferenceLineRef);
+      if (mode !== "opening" || !draft.exists ||
+          draft.get("status") !== "processing" ||
+          number(draft.get("version")) !== internal.conference_version ||
+          text(draft.get("box_code")) !== boxCode ||
+          text(draft.get("customer_code")) !== customerCode ||
+          text(draft.get("session_id")) !== sessionId ||
+          digest(draft.get("prepared_input"), 64) !== inputHash) {
+        throw new HttpsError("aborted", "A linha da conferência mudou. Atualize antes de retomar a guarda.");
+      }
+    }
 
     await assertInventoryOperationsEnabled(transaction, db);
 
@@ -2422,6 +2440,12 @@ export async function recordCycleCountTransaction(
       actor,
       result,
     );
+    if (conferenceLineRef) {
+      transaction.update(conferenceLineRef, {
+        status: "committed", result, error: null,
+        committed_at: FieldValue.serverTimestamp(),
+      });
+    }
     return result;
   });
 }
@@ -2562,6 +2586,7 @@ export async function moveOpeningInventoryLineTransaction(
       transaction.set(targetBalanceRef, {
         ...(targetBalance?.data ?? sourceBalance.data),
         id: targetBalanceRef.id, location_id: targetLocation,
+        unit_cost: targetBalance ? number(targetBalance.data.unit_cost) : number(line.unit_cost),
         qty_on_hand: targetBefore + quantity, qty_available: targetBefore + quantity, qty_reserved: 0,
         opening_inventory_session_id: sessionId, status: "available",
         updated_at: FieldValue.serverTimestamp(),
