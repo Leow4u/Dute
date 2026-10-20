@@ -469,3 +469,4 @@ como caminho da volta (seção "Volta").
 | 19/10/2026 | Ensaio na homologação (tabela acima), `dute-prod` preparado, CNAMEs criados na Hostinger, certificados ativos e Load Balancer novo testado pelo IP |
 | 20/10/2026 | Corte antes da contagem de abertura: `app.dutelog.com.br` no `dute-prod` desde 03:39 UTC, `dute-btg` congelado (seção acima) |
 | 20/10/2026 | Site institucional (`dutelog.com.br` e `www`) no `dute-prod` desde 09:43 UTC; o `dute-btg` não serve mais nada |
+| 20/10/2026 | Firestore do `dute-prod` com PITR de 7 dias e backup diário de 14 dias desde 14:28 UTC; antes disso, a única cópia é o export do corte (`docs/plataforma/backup-e-recuperacao.md`) |

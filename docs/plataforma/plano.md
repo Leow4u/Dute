@@ -176,7 +176,7 @@ Faturamento de armazenagem e de OS no mesmo lugar, a receber único, LPU de cobr
 Colaboradores, documentos, CNH, exames e treinamentos no banco `rh`, com acesso só de `rh` e `admin`; folha e eSocial por integração.
 
 ### Contínuo
-Backups do Firestore com teste de restauração, monitoramento e alertas, LGPD (retenção e exclusão), manual do usuário e treinamento.
+Backups do Firestore com teste de restauração (PITR e backup diário ligados no `dute-prod` em 20/10/2026; teste de restauração pendente, roteiro em `docs/plataforma/backup-e-recuperacao.md`), monitoramento e alertas, LGPD (retenção e exclusão), manual do usuário e treinamento.
 
 ## Módulo Operação — especificação
 
@@ -240,7 +240,7 @@ Região `southamerica-east1`; Vertex AI em `global`.
 | Projetos | `dute-prod` e `dute-homolog` com Firebase; `.firebaserc` com os dois aliases |
 | APIs | run, artifactregistry, cloudbuild, cloudfunctions, firestore, identitytoolkit, storage, secretmanager, aiplatform, bigquery, certificatemanager, compute, iam |
 | Firebase Auth | e-mail e senha; SMTP pelo Resend; link dos e-mails em `app.dutelog.com.br`; nome público "Dute" |
-| Firestore | banco da plataforma e banco `rh`; regras e índices versionados, inclusive índices vetoriais; export gerenciado agendado |
+| Firestore | banco da plataforma e banco `rh`; regras e índices versionados, inclusive índices vetoriais; na produção, PITR de 7 dias e backup diário de 14 dias (`docs/plataforma/backup-e-recuperacao.md`) |
 | Storage | bucket privado de anexos com `storage.rules` |
 | Functions | uma codebase por módulo; `tools/check_functions_invoker.ps1` após todo deploy |
 | BigQuery | eventos copiados pela extensão Stream Firestore to BigQuery, para medidas e relatórios |
