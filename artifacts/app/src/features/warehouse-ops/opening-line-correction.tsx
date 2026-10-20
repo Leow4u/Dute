@@ -32,7 +32,7 @@ export function OpeningLineCorrection({
     [boxes, line, customerCode, sessionId, lines],
   );
   const selected = targets.find((item) => item.box.code === target);
-  const canMove = Boolean(selected && !selected.duplicateSku && reason.trim());
+  const canMove = Boolean(selected && !selected.duplicateSku && reason.trim().length >= 3 && reason.trim().length <= 300);
   const move = useMutation({
     mutationFn: async () => {
       if (!canMove) throw new Error("Selecione a caixa física de destino e informe o motivo.");
@@ -92,7 +92,7 @@ export function OpeningLineCorrection({
           </div>
           <div className="space-y-2">
             <Label htmlFor="opening-correction-reason">Motivo da correção</Label>
-            <Textarea id="opening-correction-reason" value={reason} onChange={(event) => setReason(event.target.value)} disabled={move.isPending} placeholder="Ex.: lançamento feito na caixa anterior por engano" maxLength={500} />
+            <Textarea id="opening-correction-reason" value={reason} onChange={(event) => setReason(event.target.value)} disabled={move.isPending} placeholder="Ex.: lançamento feito na caixa anterior por engano" maxLength={300} />
           </div>
         </div>
         <DialogFooter>
