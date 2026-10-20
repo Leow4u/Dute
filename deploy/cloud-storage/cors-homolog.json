@@ -1,0 +1,20 @@
+[
+  {
+    "origin": [
+      "https://dute-app-368642218894.southamerica-east1.run.app",
+      "https://dute-app-u2iwz5xjyq-rj.a.run.app",
+      "http://localhost:5173"
+    ],
+    "method": [
+      "GET",
+      "HEAD",
+      "PUT",
+      "OPTIONS"
+    ],
+    "responseHeader": [
+      "Content-Type",
+      "x-goog-meta-firebaseStorageDownloadTokens"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]

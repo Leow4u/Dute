@@ -1,13 +1,13 @@
 # Publicação de Cloud Functions
 
-Procedimento para publicar `functions/` (as callables usadas pelo app BTG) no
+Procedimento para publicar `functions/wms/` (as callables usadas pelo app BTG) no
 projeto Google Cloud `dute-btg`.
 
 Diferente do frontend (`docs/deploy-manual.md`), este processo nunca foi escrito
 antes — o que é provavelmente como o incidente de 03/09/2026 (ver abaixo) passou
 um mês sem ser percebido.
 
-**Existe um job automático** (`deploy-functions` em `.github/workflows/ci.yml`,
+**Existe um job automático** (`Cloud Functions` em `.github/workflows/publicar.yml`,
 ver seção no fim deste documento), mas ele só funciona depois que o
 pré-requisito de IAM dessa seção for criado manualmente — isso não pode rodar
 sozinho. **Enquanto isso não for feito, publique pelo roteiro manual abaixo.**
@@ -16,7 +16,7 @@ sozinho. **Enquanto isso não for feito, publique pelo roteiro manual abaixo.**
 
 Os mesmos do deploy do frontend: `gcloud` autenticado como
 `leonardo@dutelog.com.br`, projeto padrão `dute-btg`, `node`/`corepack`. O
-diretório `functions/` usa **npm**, não pnpm (tem `package-lock.json` próprio).
+diretório `functions/wms/` usa **npm**, não pnpm (tem `package-lock.json` próprio).
 
 ## Passo a passo
 
@@ -31,7 +31,7 @@ git status
 ### 2. Rodar os testes críticos antes de publicar
 
 ```powershell
-npm --prefix functions run test:critical
+npm --prefix functions/wms run test:critical
 ```
 
 Isso roda `test:unit` (billing) e `test:integration` (fluxo WMS/estoque contra o
@@ -71,7 +71,7 @@ firebase deploy --only functions:nomeDaFunction --project dute-btg
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\check_functions_invoker.ps1
 ```
 
-Esse script lê as callables exportadas em `functions/src/index.ts`, compara com
+Esse script lê as callables exportadas em `functions/wms/src/index.ts`, compara com
 o Cloud Run real e falha (exit 1) se alguma estiver sem `allUsers` /
 `roles/run.invoker`. **Rode sempre, mesmo em deploy que "só" mudou uma
 function** — foi exatamente esse tipo de deploy que causou o incidente abaixo.
@@ -202,12 +202,14 @@ aparece como **NAO PUBLICADA** e sugere o `firebase deploy`.
 
 ## Deploy automático pelo GitHub Actions
 
-O job `deploy-functions` em `.github/workflows/ci.yml` publica `functions/` a
-cada push em `main` (depois de `frontend-typecheck`, `functions-unit` e
-`functions-integration` passarem) e também por disparo manual, do mesmo jeito
-que o `deploy-frontend`. Ele sempre publica o lote inteiro
+O job `Cloud Functions` em `.github/workflows/publicar.yml` publica
+`functions/wms/` junto com o frontend, sempre depois de `frontend-typecheck`,
+`functions-unit` e `functions-integration` passarem: na homologação
+(`dute-homolog`) a cada push em `main`, e na produção (`dute-btg`) só por disparo
+manual com `publicar_producao` marcado. Ele sempre publica o lote inteiro
 (`firebase deploy --only functions`, nunca `--only functions:nome`) e termina
-rodando `tools/check_functions_invoker.ps1` contra produção de verdade.
+rodando `tools/check_functions_invoker.ps1 -ProjectId <projeto>` contra o projeto
+que acabou de publicar.
 
 **Ele não autocorrige.** Se alguma callable ficar sem `allUsers`/
 `roles/run.invoker`, ou não publicar, o job termina vermelho e mostra o comando
@@ -261,8 +263,8 @@ gcloud iam service-accounts add-iam-policy-binding $SA `
   --member="principalSet://iam.googleapis.com/projects/912453685006/locations/global/workloadIdentityPools/github-pool/attribute.repository/Leow4u/Dute"
 ```
 
-Depois de rodar isso, o job `deploy-functions` já publica sozinho no próximo
-push em `main`. **Antes disso, ele falha na autenticação** (a SA não existe) —
+Depois de rodar isso, o job `Cloud Functions` já publica sozinho na próxima
+execução. **Antes disso, ele falha na autenticação** (a SA não existe) —
 não há risco de publicar pela metade por falta desse passo.
 
 Papéis ainda não testados contra um deploy de verdade com uma SA restrita (só

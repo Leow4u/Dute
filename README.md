@@ -19,20 +19,20 @@ Pré-requisitos:
 2. PNPM.
 3. `.env.local` com as variáveis `VITE_FIREBASE_*`.
 
-O `vite.config.ts` do app BTG lê esse arquivo na raiz do repositório, mesmo com o frontend dentro de `artifacts/btg-inventory`.
+O `vite.config.ts` do app BTG lê esse arquivo na raiz do repositório, mesmo com o frontend dentro de `artifacts/app`.
 
 Comandos principais:
 
 ```powershell
 pnpm install
 pnpm run typecheck
-pnpm --filter @workspace/btg-inventory run dev
+pnpm --filter @workspace/app run dev
 ```
 
 Para gerar o build de produção:
 
 ```powershell
-pnpm --filter @workspace/btg-inventory run build
+pnpm --filter @workspace/app run build
 ```
 
 ## Deploy
@@ -42,7 +42,7 @@ O único endereço oficial de produção é `https://app.dutelog.com.br`.
 O app é publicado no Cloud Run pelo container descrito em `Dockerfile`.
 
 ```powershell
-pnpm --filter @workspace/btg-inventory run build
+pnpm --filter @workspace/app run build
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\deploy_cloud_run.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\setup_cloud_run_load_balancer.ps1
 ```
@@ -81,10 +81,10 @@ As regras do Firestore só permitem criar perfil quando existe convite pendente 
 
 ## Mapa técnico
 
-- `artifacts/btg-inventory`: frontend React/Vite em PT-BR.
-- `artifacts/btg-inventory/src/lib/firebase.ts`: inicialização atual de Auth/Firestore.
-- `artifacts/btg-inventory/src/lib/auth.tsx`: autenticação e perfil do usuário.
-- `artifacts/btg-inventory/src/lib/cloud-api.ts`: ponte Firestore para as chamadas que as telas já usam.
+- `artifacts/app`: frontend React/Vite em PT-BR.
+- `artifacts/app/src/lib/firebase.ts`: inicialização atual de Auth/Firestore.
+- `artifacts/app/src/lib/auth.tsx`: autenticação e perfil do usuário.
+- `artifacts/app/src/lib/cloud-api.ts`: ponte Firestore para as chamadas que as telas já usam.
 - `lib/api-client-react`: hooks e tipos usados pelas telas existentes.
 - `attached_assets`: planilhas e imagens de referência importadas no início do projeto.
 - `.agents/memory`: notas técnicas úteis sobre decisões já tomadas.

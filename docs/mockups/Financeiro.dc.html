@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Financeiro</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+a{color:#0054CE;text-decoration:none}a:hover{color:#004496}
+h1,h2,h3,p{margin:0}
+.ic{width:20px;height:20px;flex:0 0 auto}
+.ic-s{width:16px;height:16px;flex:0 0 auto}
+.sb{flex:0 0 248px;background:#161616;color:#fff;display:flex;flex-direction:column;padding:26px 14px 18px;gap:4px}
+.nav{display:flex;align-items:center;gap:12px;height:48px;padding:0 14px;border-radius:10px;color:rgba(255,255,255,.72);font-weight:600;font-size:15px;text-decoration:none;position:relative}
+.nav:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav.on{background:rgba(255,255,255,.12);color:#fff}
+.nav.on::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:3px;background:#E71C23}
+.nav .cnt{margin-left:auto;min-width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.nav .cnt.red{background:#E71C23;color:#fff}
+.nav.agent{color:#C9B8FB}.nav.agent:hover{color:#E0D6FF}
+.main{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;padding:30px 44px 36px;gap:20px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;font:700 14px Manrope,sans-serif;border:1px solid transparent;cursor:pointer;white-space:nowrap;text-decoration:none}
+.btn-p{background:#E71C23;color:#fff}.btn-p:hover{background:#AD0015;color:#fff}
+.btn-s{background:#fff;color:#161616;border-color:#D4D4CF}.btn-s:hover{background:#F0F0ED;color:#161616}
+.btn-sm{height:34px;padding:0 12px;font-size:13px}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px}
+.muted{color:#5F6368}
+.seg{display:inline-flex;background:#E8E8E4;border-radius:8px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg a{height:34px;padding:0 14px;border-radius:6px;display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:13.5px;color:#5F6368;text-decoration:none}
+.seg a.on{background:#fff;color:#161616;border:1px solid #E5E5E1}
+.seg a em{font-style:normal;min-width:20px;height:20px;border-radius:999px;background:rgba(0,0,0,.07);font-size:11.5px;display:inline-flex;align-items:center;justify-content:center;padding:0 6px}
+.seg a em.red{background:#FBE3E4;color:#8E1016}
+.kpi{flex:1 1 170px;min-width:0;padding:16px 20px;display:flex;flex-direction:column;gap:2px}
+.kpi span{font-size:13px;color:#5F6368;font-weight:700}
+.kpi b{font-size:26px;font-weight:800;line-height:1.15;font-variant-numeric:tabular-nums}
+.kpi em{font-style:normal;font-size:12.5px;font-weight:700;color:#5F6368}
+.qrow{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1.4fr) minmax(0,1fr) auto;gap:16px;align-items:center;padding:16px 20px;border-top:1px solid #F0F0ED;position:relative}
+.qrow:first-child{border-top:0}
+.qrow.sel{background:#FFFBFB}
+.qrow.sel::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:3px;background:#E71C23}
+.qrow b{display:block;font-size:15px;font-weight:800}
+.qrow span{display:block;font-size:13px;color:#5F6368;font-weight:600}
+.val{text-align:right}
+.val b{font-variant-numeric:tabular-nums}
+.hb{display:flex;align-items:center;gap:12px}
+.hb span{flex:0 0 190px;font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hb i{display:block;height:12px;border-radius:999px;background:#161616}
+.hb b{font-size:13.5px;font-weight:800;min-width:78px;text-align:right;font-variant-numeric:tabular-nums}
+.inp{height:40px;border:1px solid #D4D4CF;border-radius:8px;padding:0 12px;font:600 14px Manrope,sans-serif;background:#fff;color:#161616;width:100%}
+.inp:focus{outline:2px solid #0054CE;outline-offset:1px}
+.lbl{font-size:12.5px;font-weight:700;color:#3F403F;display:block;margin-bottom:6px}
+.fld{display:flex;flex-direction:column;min-width:0}
+.chk{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600;min-height:24px}
+.chk input{width:18px;height:18px;accent-color:#E71C23;margin:0}
+.av{width:36px;height:36px;border-radius:50%;background:#E71C23;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto}
+.tp{display:inline-flex;align-items:center;gap:6px}
+.tp svg{width:14px;height:14px}
+</style>
+</helmet>
+<div style="min-height: 100%; display: flex; flex-wrap: wrap">
+  <aside class="sb">
+    <a href="Inicio.dc.html" style="display: block; padding: 4px 14px 24px"><img src="/_blob/51b94b624eef7c9daa70d9dd1cfb5330" alt="Dutelog Soluções Logísticas" style="width: 148px; height: auto; display: block"></a>
+    <a class="nav" href="Inicio.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>Início<span class="cnt">4</span></a>
+    <a class="nav" href="Operacao.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Operação<span class="cnt red">1</span></a>
+    <a class="nav" href="Cadastros.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Clientes</a>
+    <a class="nav on" href="Financeiro.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>Financeiro</a>
+    <a class="nav agent" href="Inicio.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></svg>Agent Dute</a>
+    <a class="nav" href="Inicio.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Administração</a>
+    <div style="margin-top: auto; padding: 14px 10px 0; border-top: 1px solid rgba(255,255,255,.1); display: flex; align-items: center; gap: 12px">
+      <span class="av">LE</span>
+      <div style="min-width: 0"><div style="font-weight: 700; font-size: 14.5px">Leonardo</div><div style="font-size: 12.5px; color: rgba(255,255,255,.55)">Administrador</div></div>
+    </div>
+  </aside>
+  <div class="main">
+    <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap">
+      <h1 style="font-size: 28px; font-weight: 800; letter-spacing: -.02em; margin-right: 8px">Financeiro</h1>
+      <button type="button" class="btn btn-s btn-sm">Outubro de 2026<svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+      <div style="margin-left: auto; display: flex; gap: 10px">
+        <a href="Relatorios.dc.html" class="btn btn-s"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>Relatórios</a>
+        <button type="button" class="btn btn-s"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg>Exportar XLSX</button>
+      </div>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 14px">
+      <div class="card kpi"><span>A precificar</span><b>4 OS</b><em>mais antiga de 13/10</em></div>
+      <div class="card kpi"><span>A faturar</span><b>R$ 12.930</b><em>6 OS</em></div>
+      <div class="card kpi"><span>A receber</span><b>R$ 24.300</b><em>9 títulos</em></div>
+      <div class="card kpi" style="border-color: #F3C2C4"><span style="color: #8E1016">Vencidos</span><b style="color: #8E1016">R$ 6.150</b><em style="color: #8E1016">3 títulos · até 11 dias</em></div>
+      <div class="card kpi"><span>Recebido no mês</span><b style="color: #14602F">R$ 71.200</b><em>22 pagamentos</em></div>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+      <div style="flex: 3 1 600px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+        <nav class="seg" aria-label="Situação">
+          <a href="Financeiro.dc.html">A precificar<em>4</em></a>
+          <a class="on" href="Financeiro.dc.html">A faturar<em>6</em></a>
+          <a href="Financeiro.dc.html">A receber<em>9</em></a>
+          <a href="Financeiro.dc.html">Vencidos<em class="red">3</em></a>
+          <a href="Financeiro.dc.html">Pagos<em>31</em></a>
+        </nav>
+        <div class="card" style="overflow: hidden">
+          <div class="qrow sel">
+            <div><b>OS 000149</b><span class="tp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>Serviço em campo</span></div>
+            <div><b style="font-weight: 700">Clínica Vida Plena</b><span>concluída 15/10</span></div>
+            <div class="val"><b>R$ 980,00</b><span>Boleto · 28 dias</span></div>
+            <button type="button" class="btn btn-p btn-sm">Faturar</button>
+          </div>
+          <div class="qrow">
+            <div><b>OS 000145</b><span class="tp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>Armazenagem</span></div>
+            <div><b style="font-weight: 700">Metalúrgica Souza &amp; Filhos</b><span>concluída 08/10</span></div>
+            <div class="val"><b>R$ 2.100,00</b><span>Boleto · 28 dias</span></div>
+            <button type="button" class="btn btn-s btn-sm">Faturar</button>
+          </div>
+          <div class="qrow">
+            <div><b>OS 000144</b><span class="tp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>Mudança</span></div>
+            <div><b style="font-weight: 700">Construtora Horizonte</b><span>concluída 07/10</span></div>
+            <div class="val"><b>R$ 4.250,00</b><span>Pix à vista</span></div>
+            <button type="button" class="btn btn-s btn-sm">Faturar</button>
+          </div>
+          <div class="qrow">
+            <div><b>OS 000143</b><span class="tp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Transporte</span></div>
+            <div><b style="font-weight: 700">TechPrime Escritórios</b><span>concluída 06/10</span></div>
+            <div class="val"><b>R$ 3.100,00</b><span>Boleto · 14 dias</span></div>
+            <button type="button" class="btn btn-s btn-sm">Faturar</button>
+          </div>
+          <div class="qrow">
+            <div><b>OS 000141</b><span class="tp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Transporte</span></div>
+            <div><b style="font-weight: 700">Farmácia Central</b><span>concluída 03/10</span></div>
+            <div class="val"><b>R$ 1.300,00</b><span>Boleto · 28 dias</span></div>
+            <button type="button" class="btn btn-s btn-sm">Faturar</button>
+          </div>
+          <div class="qrow">
+            <div><b>OS 000140</b><span class="tp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>Armazenagem</span></div>
+            <div><b style="font-weight: 700">Supermercados Boa Vista</b><span>concluída 02/10</span></div>
+            <div class="val"><b>R$ 1.200,00</b><span>Boleto · 28 dias</span></div>
+            <button type="button" class="btn btn-s btn-sm">Faturar</button>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 20px; border-top: 1px solid #E5E5E1; background: #FAFAF8">
+            <span class="muted" style="font-size: 13.5px; font-weight: 700">6 OS</span>
+            <span style="font-size: 15px; font-weight: 700">Total <b style="font-weight: 800; font-variant-numeric: tabular-nums">R$ 12.930,00</b></span>
+          </div>
+        </div>
+        <div class="card" style="display: flex; flex-direction: column; gap: 16px; padding: 18px 20px">
+          <div style="display: flex; justify-content: space-between; align-items: center"><h3 style="font-size: 15px; font-weight: 800">Receita por cliente em outubro</h3><a href="Relatorios.dc.html" style="font-size: 13px; font-weight: 700">Ver relatório</a></div>
+          <div style="display: flex; flex-direction: column; gap: 12px">
+            <div class="hb"><span>Metalúrgica Souza &amp; Filhos</span><i style="width: 100%; max-width: 420px"></i><b>R$ 24.900</b></div>
+            <div class="hb"><span>TechPrime Escritórios</span><i style="width: 77%; max-width: 324px"></i><b>R$ 19.200</b></div>
+            <div class="hb"><span>Construtora Horizonte</span><i style="width: 60%; max-width: 252px"></i><b>R$ 14.950</b></div>
+            <div class="hb"><span>Supermercados Boa Vista</span><i style="width: 46%; max-width: 193px"></i><b>R$ 11.400</b></div>
+            <div class="hb"><span class="muted">Outros 6 clientes</span><i style="width: 64%; max-width: 270px; background: #C9C9C4"></i><b>R$ 16.000</b></div>
+          </div>
+        </div>
+      </div>
+      <form class="card" style="flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 16px; padding: 22px">
+        <div style="display: flex; flex-direction: column; gap: 4px">
+          <span style="font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; font-weight: 800; color: #AD0015">Faturar</span>
+          <h3 style="font-size: 19px; font-weight: 800; letter-spacing: -.01em">OS 000149 · Clínica Vida Plena</h3>
+          <span class="muted" style="font-size: 13px; font-weight: 600">Serviço em campo · concluída 15/10 por Ana Lima</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; padding: 14px 16px; background: #F5F5F3; border-radius: 10px">
+          <div style="display: flex; justify-content: space-between; gap: 12px"><span style="font-weight: 600">Instalação de mobiliário · 4 h</span><b style="font-variant-numeric: tabular-nums">R$ 760,00</b></div>
+          <div style="display: flex; justify-content: space-between; gap: 12px"><span style="font-weight: 600">Deslocamento</span><b style="font-variant-numeric: tabular-nums">R$ 120,00</b></div>
+          <div style="display: flex; justify-content: space-between; gap: 12px"><span style="font-weight: 600">Materiais de fixação</span><b style="font-variant-numeric: tabular-nums">R$ 100,00</b></div>
+          <div style="display: flex; justify-content: space-between; gap: 12px; padding-top: 8px; border-top: 1px solid #E5E5E1; font-size: 16px"><span style="font-weight: 800">Total</span><b style="font-weight: 800; font-variant-numeric: tabular-nums">R$ 980,00</b></div>
+        </div>
+        <div class="fld"><label class="lbl" for="nf">Número da NF</label><input class="inp" id="nf"></div>
+        <div style="display: flex; gap: 10px">
+          <div class="fld" style="flex: 1 1 0"><label class="lbl" for="dfat">Faturamento</label><input class="inp" id="dfat" value="19/10/2026"></div>
+          <div class="fld" style="flex: 1 1 0"><label class="lbl" for="dvenc">Vencimento</label><input class="inp" id="dvenc" value="16/11/2026"></div>
+        </div>
+        <div class="fld"><label class="lbl" for="forma">Forma de pagamento</label><select class="inp" id="forma"><option>Boleto bancário</option><option>Pix</option><option>Transferência</option><option>Cartão</option><option>Dinheiro</option></select></div>
+        <div class="fld"><label class="lbl" for="obsf">Observação na cobrança</label><input class="inp" id="obsf"></div>
+        <label class="chk"><input type="checkbox" checked> Enviar e-mail ao cliente com o PDF da OS</label>
+        <label class="chk"><input type="checkbox" checked> Anexar comprovante assinado</label>
+        <button type="button" class="btn btn-p" style="width: 100%; height: 46px; font-size: 15px"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Confirmar faturamento</button>
+      </form>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1040}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Impressão da OS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#fff;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:12px;line-height:1.4}
+a{color:#0054CE;text-decoration:none}
+h1,h2,h3,p{margin:0}
+.sec{border:1px solid #CFCFCB;border-radius:6px;overflow:hidden}
+.sec h2{font-size:10px;letter-spacing:.12em;text-transform:uppercase;font-weight:800;color:#fff;background:#161616;padding:5px 10px}
+.kv{display:flex;flex-direction:column;gap:1px;min-width:0}
+.kv span{font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;color:#5F6368;font-weight:700}
+.kv b{font-size:12.5px;font-weight:700}
+.g{display:grid;gap:10px 14px;padding:10px}
+.t{width:100%;border-collapse:collapse;font-size:12px}
+.t th{text-align:left;font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:#5F6368;font-weight:800;padding:6px 10px;border-bottom:1px solid #CFCFCB;background:#F5F5F3}
+.t td{padding:6px 10px;border-bottom:1px solid #E5E5E1}
+.t tr:last-child td{border-bottom:0}
+.num{font-variant-numeric:tabular-nums}
+.sig{flex:1 1 0;display:flex;flex-direction:column;gap:4px;align-items:center;text-align:center}
+.sig i{display:block;width:100%;height:1px;background:#161616;margin-top:34px}
+.sig b{font-size:11px;font-weight:800}
+.sig span{font-size:10px;color:#5F6368}
+</style>
+</helmet>
+<div style="width: 794px; height: 1123px; background: #fff; padding: 36px 40px; display: flex; flex-direction: column; gap: 12px">
+  <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding-bottom: 12px; border-bottom: 3px solid #E71C23">
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <img src="/_blob/dd13b47801f7c0c113caf2c19f596b0a" alt="Dutelog Soluções Logísticas" style="width: 190px; height: auto; display: block">
+      <div style="font-size: 10.5px; color: #3F403F; line-height: 1.45; font-weight: 600">Dutelog Soluções Logísticas · CNPJ [CNPJ DA EMPRESA]<br>[ENDEREÇO DA EMPRESA] · (11) 5039-0681 · os.dutelog.com.br</div>
+    </div>
+    <div style="text-align: right; display: flex; flex-direction: column; gap: 2px">
+      <span style="font-size: 10px; letter-spacing: .14em; text-transform: uppercase; font-weight: 800; color: #5F6368">Ordem de serviço</span>
+      <b style="font-size: 30px; font-weight: 800; line-height: 1; color: #161616">Nº 000151</b>
+      <span style="font-size: 12px; font-weight: 800; color: #E71C23">Transporte / frete</span>
+      <span style="font-size: 10.5px; color: #5F6368; font-weight: 600">Emitida em 19/10/2026 às 10:52 · Em execução</span>
+    </div>
+  </div>
+  <div style="display: flex; gap: 12px">
+    <div class="sec" style="flex: 1.2 1 0">
+      <h2>Cliente</h2>
+      <div class="g" style="grid-template-columns: repeat(2, minmax(0, 1fr))">
+        <div class="kv" style="grid-column: span 2"><span>Razão social</span><b>Metalúrgica Souza &amp; Filhos Ltda.</b></div>
+        <div class="kv"><span>CNPJ</span><b class="num">[CNPJ DO CLIENTE]</b></div>
+        <div class="kv"><span>Solicitante</span><b>Roberto Souza</b></div>
+        <div class="kv"><span>Telefone</span><b class="num">(11) 98765-4321</b></div>
+        <div class="kv"><span>E-mail</span><b>logistica@souzaefilhos.com.br</b></div>
+      </div>
+    </div>
+    <div class="sec" style="flex: 1 1 0">
+      <h2>Agendamento e equipe</h2>
+      <div class="g" style="grid-template-columns: repeat(2, minmax(0, 1fr))">
+        <div class="kv"><span>Coleta</span><b class="num">19/10/2026 · 09:30–11:00</b></div>
+        <div class="kv"><span>Entrega prevista</span><b class="num">19/10/2026 · 14:00</b></div>
+        <div class="kv"><span>Motorista</span><b>João Pereira</b></div>
+        <div class="kv"><span>Veículo</span><b>Truck VW 24.280 · DEF-4G56</b></div>
+        <div class="kv"><span>Equipe</span><b>Marcos Andrade (ajudante)</b></div>
+        <div class="kv"><span>Responsável Dutelog</span><b>Leonardo</b></div>
+      </div>
+    </div>
+  </div>
+  <div style="display: flex; gap: 12px">
+    <div class="sec" style="flex: 1 1 0">
+      <h2>Origem (coleta)</h2>
+      <div class="g" style="grid-template-columns: 1fr">
+        <div class="kv"><span>Endereço</span><b>Rua das Indústrias, 450 – Galpão 3, portaria B<br>Cumbica · Guarulhos/SP · CEP 07220-000</b></div>
+        <div class="kv"><span>Contato no local</span><b>Roberto Souza · (11) 98765-4321</b></div>
+      </div>
+    </div>
+    <div class="sec" style="flex: 1 1 0">
+      <h2>Destino (entrega)</h2>
+      <div class="g" style="grid-template-columns: 1fr">
+        <div class="kv"><span>Endereço</span><b>Avenida Paulista, 1000 – Doca 2, subsolo<br>Bela Vista · São Paulo/SP · CEP 01310-100</b></div>
+        <div class="kv"><span>Contato no local</span><b>Recebimento – Sr. Almeida · (11) 3456-7890</b></div>
+      </div>
+    </div>
+  </div>
+  <div class="sec">
+    <h2>Carga</h2>
+    <div class="g" style="grid-template-columns: repeat(5, minmax(0, 1fr))">
+      <div class="kv" style="grid-column: span 2"><span>Descrição</span><b>12 paletes de peças usinadas em aço, embaladas com filme</b></div>
+      <div class="kv"><span>Tipo</span><b>Paletizada</b></div>
+      <div class="kv"><span>Volumes</span><b class="num">12</b></div>
+      <div class="kv"><span>NF de referência</span><b class="num">88.412</b></div>
+      <div class="kv"><span>Peso</span><b class="num">3.200 kg</b></div>
+      <div class="kv"><span>Volume</span><b class="num">14 m³</b></div>
+      <div class="kv"><span>Valor da mercadoria</span><b class="num">R$ 48.000,00</b></div>
+      <div class="kv" style="grid-column: span 2"><span>Exigências</span><b>Seguro de carga · Ajudante na descarga · Conferir lacres 7–12</b></div>
+    </div>
+  </div>
+  <div class="sec">
+    <h2>Serviços</h2>
+    <table class="t">
+      <thead><tr><th style="width: 70%">Descrição</th><th style="text-align: right">Qtd.</th></tr></thead>
+      <tbody>
+        <tr><td>Frete rodoviário – truck</td><td class="num" style="text-align: right">1 viagem</td></tr>
+        <tr><td>Ajudante para descarga</td><td class="num" style="text-align: right">2 h</td></tr>
+        <tr><td>Seguro de carga</td><td class="num" style="text-align: right">1</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="sec">
+    <h2>Observações</h2>
+    <p style="padding: 8px 10px; font-size: 12px; font-weight: 600">Entrar pela portaria B. Conferir lacres dos paletes 7 a 12 antes de sair. Entrega mediante conferência e assinatura do recebedor.</p>
+  </div>
+  <div style="margin-top: auto; display: flex; gap: 28px; padding-top: 8px">
+    <div class="sig"><i></i><b>Responsável Dutelog</b><span>Leonardo · data ____/____/______</span></div>
+    <div class="sig"><i></i><b>Motorista</b><span>João Pereira · CNH ______________</span></div>
+    <div class="sig"><i></i><b>Cliente / recebedor</b><span>Nome ______________ · Doc. ______________ · ___:___</span></div>
+  </div>
+  <div style="display: flex; justify-content: space-between; font-size: 9.5px; color: #5F6368; font-weight: 600; padding-top: 10px; border-top: 1px solid #E5E5E1">
+    <span>os.dutelog.com.br</span>
+    <span>OS 000151 · página 1 de 1</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":794,"height":1123}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

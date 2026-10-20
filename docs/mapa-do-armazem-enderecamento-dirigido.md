@@ -171,7 +171,7 @@ mais próxima, primeira livre, desempate, zona cheia, recusa.
 **Construído (fase 0, PR 1).** Tela Estoque › Posições, coleção
 `warehouse_positions`, callables `saveWarehousePositions`,
 `seedWarehouseLayout`, `createWarehouseAislePositions` e
-`removeWarehousePosition` (`functions/src/domain/warehouse-positions.ts`).
+`removeWarehousePosition` (`functions/wms/src/domain/warehouse-positions.ts`).
 
 Não há importação por planilha: as medidas levantadas em 16/10/2026 (ruas A,
 B e C, 43 prateleiras) estão no código como mapa inicial e entram com um
@@ -361,7 +361,7 @@ antes e passa depois:
    no PR 2; mover e encerrar ficam com a movimentação, fase 1; tipos de
    caixa esperam a pendência P2);
 3. motor de endereçamento com os testes de cenário da seção 4 (feito no PR
-   2, `functions/src/domain/warehouse-boxes.ts`);
+   2, `functions/wms/src/domain/warehouse-boxes.ts`);
 4. contagem de abertura por caixa, com sugestão (feito no PR 2) e etiquetas
    de caixa e de posição (feito no PR 3, seção 6);
 5. mapa básico por zona com ocupação (feito no PR 4, seção 5.6).

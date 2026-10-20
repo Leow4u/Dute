@@ -2,9 +2,9 @@
 .firebase
 .secrets
 node_modules
-artifacts/btg-inventory/node_modules
-artifacts/btg-inventory/src
-artifacts/btg-inventory/public
+artifacts/app/node_modules
+artifacts/app/src
+artifacts/app/public
 attached_assets
 tmp
 functions

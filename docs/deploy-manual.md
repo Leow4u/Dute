@@ -43,7 +43,7 @@ corepack enable pnpm
 
 ## A regra que não pode ser quebrada
 
-O script publica **o que estiver em `artifacts\btg-inventory\dist\public` no disco**.
+O script publica **o que estiver em `artifacts\app\dist\public` no disco**.
 Ele não consulta o git.
 
 Publicar a partir de uma árvore com alteração não commitada faz produção deixar de ser
@@ -67,10 +67,10 @@ antes (commit ou descarte) — não publique por cima.
 
 ```powershell
 corepack pnpm install
-corepack pnpm --filter "@workspace/btg-inventory" run build
+corepack pnpm --filter "@workspace/app" run build
 ```
 
-O build sai em `artifacts\btg-inventory\dist\public`.
+O build sai em `artifacts\app\dist\public`.
 
 ### 3. Anotar a revisão atual (para rollback)
 
@@ -149,11 +149,16 @@ isso não se repetir.
 
 ## Deploy automático pelo GitHub Actions
 
-O job `deploy-frontend` em `.github/workflows/ci.yml` publica o frontend a cada push
-em `main` (depois de `frontend-typecheck`, `functions-unit` e `functions-integration`
-passarem) e também por disparo manual em Actions > CI > Run workflow, sempre a partir
-de `main`. A tag da imagem é o commit curto, então dá para saber o que está no ar
-olhando a revisão do Cloud Run.
+A publicação fica em `.github/workflows/publicar.yml` (job `Frontend (Cloud Run)`),
+chamada pelo `.github/workflows/ci.yml` sempre a partir de `main` e depois de
+`frontend-typecheck`, `functions-unit` e `functions-integration` passarem:
+
+- **Homologação** (`dute-homolog`, serviço `dute-app`): a cada push em `main`.
+- **Produção** (`dute-btg`, serviço `dute-btg-app`, `app.dutelog.com.br`): só por
+  disparo manual em Actions > CI > Run workflow, com `publicar_producao` marcado.
+
+A tag da imagem é o commit curto, então dá para saber o que está no ar olhando a
+revisão do Cloud Run.
 
 **Verde não basta.** Em 09/10/2026, oito execuções seguidas do job terminaram com
 sucesso e nenhuma mudou o que `app.dutelog.com.br` servia: todas imprimiram a mesma
@@ -217,6 +222,5 @@ tem `artifactregistry.writer`, `cloudbuild.builds.editor`, `iam.serviceAccountUs
 `storage.legacyBucketReader` no bucket `gs://dute-btg_cloudbuild`. Sem Cloud Build no
 caminho, o bucket deixa de importar.
 
-As Cloud Functions continuam com publicação manual (`docs/deploy-functions-manual.md`).
-Quando uma mudança toca frontend e functions, publique as functions logo depois do
-merge para os dois lados não ficarem fora de sincronia.
+As Cloud Functions saem na mesma execução (job `Cloud Functions` do
+`publicar.yml`); o roteiro manual delas está em `docs/deploy-functions-manual.md`.

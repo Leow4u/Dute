@@ -1,7 +1,7 @@
 param(
   [string]$ProjectId = "dute-btg",
   [string]$Region = "southamerica-east1",
-  [string]$IndexFile = "$PSScriptRoot\..\functions\src\index.ts"
+  [string]$IndexFile = "$PSScriptRoot\..\functions\wms\src\index.ts"
 )
 
 # Incidente de 03/09/2026: createCustomerRequest, decideCustomerRequest e
@@ -12,7 +12,7 @@ param(
 # de qualquer excecao nao tratada (Falha interna no servidor) - sem pista
 # nenhuma de que era uma permissao de infraestrutura, nao um bug de codigo.
 #
-# Este script compara cada callable exportada em functions/src/index.ts com
+# Este script compara cada callable exportada em functions/wms/src/index.ts com
 # o Cloud Run real e falha (exit 1) se alguma estiver sem invocacao publica
 # ou se nem tiver sido publicada. Rode depois de qualquer deploy de functions.
 # Ver docs/deploy-functions-manual.md. Testes: check_functions_invoker.tests.ps1.

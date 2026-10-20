@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Nova OS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+a{color:#0054CE;text-decoration:none}a:hover{color:#004496}
+h1,h2,h3,p{margin:0}
+.ic{width:20px;height:20px;flex:0 0 auto}
+.ic-s{width:16px;height:16px;flex:0 0 auto}
+.sb{flex:0 0 248px;background:#161616;color:#fff;display:flex;flex-direction:column;padding:26px 14px 18px;gap:4px}
+.nav{display:flex;align-items:center;gap:12px;height:48px;padding:0 14px;border-radius:10px;color:rgba(255,255,255,.72);font-weight:600;font-size:15px;text-decoration:none;position:relative}
+.nav:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav.on{background:rgba(255,255,255,.12);color:#fff}
+.nav.on::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:3px;background:#E71C23}
+.nav .cnt{margin-left:auto;min-width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.nav .cnt.red{background:#E71C23;color:#fff}
+.nav.agent{color:#C9B8FB}.nav.agent:hover{color:#E0D6FF}
+.main{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;padding:28px 44px 36px;gap:20px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;font:700 14px Manrope,sans-serif;border:1px solid transparent;cursor:pointer;white-space:nowrap;text-decoration:none}
+.btn-p{background:#E71C23;color:#fff}.btn-p:hover{background:#AD0015;color:#fff}
+.btn-s{background:#fff;color:#161616;border-color:#D4D4CF}.btn-s:hover{background:#F0F0ED;color:#161616}
+.btn-g{background:transparent;color:#5F6368}.btn-g:hover{background:#E8E8E4;color:#161616}
+.btn-sm{height:32px;padding:0 12px;font-size:13px}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px}
+.inp{height:40px;border:1px solid #D4D4CF;border-radius:8px;padding:0 12px;font:600 14px Manrope,sans-serif;background:#fff;color:#161616;width:100%}
+.inp:focus{outline:2px solid #0054CE;outline-offset:1px}
+textarea.inp{height:auto;padding:10px 12px;resize:vertical}
+.lbl{font-size:12.5px;font-weight:700;color:#3F403F;display:block;margin-bottom:6px}
+.fld{display:flex;flex-direction:column;min-width:0}
+.muted{color:#5F6368}
+.sec{display:flex;flex-direction:column;gap:16px;padding:22px 24px;border-top:1px solid #F0F0ED}
+.sec h3{font-size:15px;font-weight:800;display:flex;align-items:center;gap:10px}
+.sec h3 span{width:28px;height:28px;border-radius:8px;background:#F0F0ED;color:#161616;display:inline-flex;align-items:center;justify-content:center}
+.grid{display:grid;grid-template-columns:repeat(6, minmax(0, 1fr));gap:14px}
+.step{display:flex;align-items:center;gap:12px;flex:1 1 150px;min-width:0}
+.step i{width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-style:normal;font-weight:800;font-size:13px;flex:0 0 auto}
+.step b{display:block;font-size:14px;font-weight:700}
+.step span{display:block;font-size:12.5px;color:#5F6368}
+.done i{background:#DDF5E4;color:#14602F;border:1px solid #B6E4C4}
+.cur i{background:#E71C23;color:#fff;box-shadow:0 0 0 4px #FBE3E4}
+.todo i{background:#F0F0ED;color:#5F6368;border:1px solid #E5E5E1}
+.todo b{color:#5F6368}
+.ln{flex:0 0 28px;height:2px;background:#E5E5E1}
+.ln.ok{background:#14602F}
+.chk{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600;min-height:24px}
+.chk input{width:18px;height:18px;accent-color:#E71C23;margin:0}
+.row{display:flex;justify-content:space-between;gap:12px;font-size:13.5px}
+.row span{color:#5F6368;font-weight:600}
+.row b{font-weight:700;text-align:right}
+.av{width:36px;height:36px;border-radius:50%;background:#E71C23;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto}
+</style>
+</helmet>
+<div style="min-height: 100%; display: flex; flex-wrap: wrap">
+  <aside class="sb">
+    <a href="Inicio.dc.html" style="display: block; padding: 4px 14px 24px"><img src="/_blob/51b94b624eef7c9daa70d9dd1cfb5330" alt="Dutelog Soluções Logísticas" style="width: 148px; height: auto; display: block"></a>
+    <a class="nav" href="Inicio.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>Início<span class="cnt">4</span></a>
+    <a class="nav on" href="Operacao.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Operação<span class="cnt red">1</span></a>
+    <a class="nav" href="Cadastros.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Clientes</a>
+    <a class="nav" href="Financeiro.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>Financeiro</a>
+    <a class="nav agent" href="Inicio.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></svg>Agent Dute</a>
+    <a class="nav" href="Cadastros.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Administração</a>
+    <div style="margin-top: auto; padding: 14px 10px 0; border-top: 1px solid rgba(255,255,255,.1); display: flex; align-items: center; gap: 12px">
+      <span class="av">LE</span>
+      <div style="min-width: 0"><div style="font-weight: 700; font-size: 14.5px">Leonardo</div><div style="font-size: 12.5px; color: rgba(255,255,255,.55)">Administrador</div></div>
+    </div>
+  </aside>
+  <div class="main">
+    <a href="Operacao.dc.html" style="display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 13.5px; color: #5F6368"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7M19 12H5"/></svg>Operação</a>
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap">
+      <div><h1 style="font-size: 30px; font-weight: 800; letter-spacing: -.02em">Nova OS</h1><span class="muted" style="font-size: 14px; font-weight: 600">Rascunho salvo às 10:42</span></div>
+      <div style="display: flex; gap: 10px"><button type="button" class="btn btn-s">Salvar rascunho</button><a href="Operacao.dc.html" class="btn btn-g">Cancelar</a></div>
+    </div>
+    <div class="card" style="padding: 18px 24px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+      <div class="step done"><i><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i><div><b>Tipo</b><span>Transporte / frete</span></div></div>
+      <div class="ln ok"></div>
+      <div class="step done"><i><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i><div><b>Dados gerais</b><span>Metalúrgica Souza · 16/10 09:30</span></div></div>
+      <div class="ln ok"></div>
+      <div class="step cur"><i>3</i><div><b>Dados do transporte</b></div></div>
+      <div class="ln"></div>
+      <div class="step todo"><i>4</i><div><b>Revisão</b></div></div>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+      <form class="card" style="flex: 3 1 620px; min-width: 0; display: flex; flex-direction: column">
+        <div class="sec" style="border-top: 0">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap">
+            <h3><span><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>Origem (coleta)</h3>
+            <button type="button" class="btn btn-g btn-sm">Usar endereço do cliente</button>
+          </div>
+          <div class="grid">
+            <div class="fld" style="grid-column: span 2"><label class="lbl" for="cep1">CEP</label><div style="display: flex; gap: 8px"><input class="inp" id="cep1" value="07220-000"><button type="button" class="btn btn-s" style="padding: 0 12px" aria-label="Buscar CEP"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></button></div></div>
+            <div class="fld" style="grid-column: span 3"><label class="lbl" for="rua1">Logradouro</label><input class="inp" id="rua1" value="Rua das Indústrias"></div>
+            <div class="fld" style="grid-column: span 1"><label class="lbl" for="num1">Número</label><input class="inp" id="num1" value="450"></div>
+            <div class="fld" style="grid-column: span 2"><label class="lbl" for="comp1">Complemento</label><input class="inp" id="comp1" value="Galpão 3, portaria B"></div>
+            <div class="fld" style="grid-column: span 2"><label class="lbl" for="bai1">Bairro</label><input class="inp" id="bai1" value="Cumbica"></div>
+            <div class="fld" style="grid-column: span 1"><label class="lbl" for="cid1">Cidade</label><input class="inp" id="cid1" value="Guarulhos"></div>
+            <div class="fld" style="grid-column: span 1"><label class="lbl" for="uf1">UF</label><input class="inp" id="uf1" value="SP"></div>
+            <div class="fld" style="grid-column: span 2"><label class="lbl" for="cont1">Contato no local</label><input class="inp" id="cont1" value="Roberto Souza"></div>
+            <div class="fld" style="grid-column: span 2"><label class="lbl" for="tel1">Telefone</label><input class="inp" id="tel1" value="(11) 98765-4321"></div>
+            <div class="fld" style="grid-column: span 2"><label class="lbl" for="jan1">Janela de coleta</label><div style="display: flex; gap: 8px"><input class="inp" id="jan1" value="16/10/2026"><input class="inp" value="09:30" aria-label="Hora inicial" style="width: 84px; flex: 0 0 84px"><input class="inp" value="11:00" aria-label="Hora final" style="width: 84px; flex: 0 0 84px"></div></div>
+          </div>
+        </div>
+        <div class="sec">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap">
+            <h3><span><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span>Destino (entrega)</h3>
+            <button type="button" class="btn btn-g btn-sm">Usar endereço do cliente</button>
+          </div>
+          <div class="grid">
+            <div class="fld" style="grid-column: span 2"><label class="lbl" for="cep2">CEP</label><div style="display: flex; gap: 8px"><input class="inp" id="cep2" value="01310-100"><button type="button" class="btn btn-s" style="padding: 0 12px" aria-label="Buscar CEP"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></button></div></div>
+            <div class="fld" style="grid-column: span 3"><label class="lbl" for="rua2">Logradouro</label><input class="inp" id="rua2" value="Avenida Paulista"></div>
+            <div class="fld" style="grid-column: span 1"><label class="lbl" for="num2">Número</label><input class="inp" id="num2" value="1000"></div>
+            <div class="fld" style="grid-column: span 2"><label class="lbl" for="comp2">Complemento</label><input class="inp" id="comp2" value="Doca 2, subsolo"></div>
+            <div class="fld" style="grid-column: span 2"><label class="lbl" for="bai2">Bairro</label><input class="inp" id="bai2" value="Bela Vista"></div>
+            <div class="fld" style="grid-column: span 1"><label class="lbl" for="cid2">Cidade</label><input class="inp" id="cid2" value="São Paulo"></div>
+            <div class="fld" style="grid-column: span 1"><label class="lbl" for="uf2">UF</label><input class="inp" id="uf2" value="SP"></div>
+            <div class="fld" style="grid-column: span 2"><label class="lbl" for="cont2">Contato no local</label><input class="inp" id="cont2" value="Recebimento – Sr. Almeida"></div>
+            <div class="fld" style="grid-column: span 2"><label class="lbl" for="tel2">Telefone</label><input class="inp" id="tel2" value="(11) 3456-7890"></div>
+            <div class="fld" style="grid-column: span 2"><label class="lbl" for="jan2">Entrega prevista</label><div style="display: flex; gap: 8px"><input class="inp" id="jan2" value="16/10/2026"><input class="inp" value="14:00" aria-label="Hora prevista" style="width: 84px; flex: 0 0 84px"></div></div>
+          </div>
+        </div>
+        <div class="sec">
+          <h3><span><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg></span>Carga</h3>
+          <div class="grid">
+            <div class="fld" style="grid-column: span 2"><label class="lbl" for="tcarga">Tipo de carga</label><select class="inp" id="tcarga"><option>Paletizada</option><option>Granel</option><option>Caixas avulsas</option><option>Máquinas e equipamentos</option><option>Frágil</option></select></div>
+            <div class="fld" style="grid-column: span 4"><label class="lbl" for="dcarga">Descrição</label><input class="inp" id="dcarga" value="12 paletes de peças usinadas em aço, embaladas com filme"></div>
+            <div class="fld" style="grid-column: span 1"><label class="lbl" for="vol">Volumes</label><input class="inp" id="vol" value="12"></div>
+            <div class="fld" style="grid-column: span 1"><label class="lbl" for="peso">Peso (kg)</label><input class="inp" id="peso" value="3.200"></div>
+            <div class="fld" style="grid-column: span 1"><label class="lbl" for="m3">Volume (m³)</label><input class="inp" id="m3" value="14"></div>
+            <div class="fld" style="grid-column: span 2"><label class="lbl" for="vmerc">Valor da mercadoria (R$)</label><input class="inp" id="vmerc" value="48.000,00"></div>
+            <div class="fld" style="grid-column: span 1"><label class="lbl" for="nf">NF de referência</label><input class="inp" id="nf" value="88.412"></div>
+            <div class="fld" style="grid-column: span 3"><label class="lbl">Exigências</label><div style="display: flex; flex-direction: column; gap: 8px; padding-top: 4px"><label class="chk"><input type="checkbox" checked> Requer seguro de carga</label><label class="chk"><input type="checkbox"> Carga frágil</label><label class="chk"><input type="checkbox" checked> Precisa de ajudante na descarga</label></div></div>
+            <div class="fld" style="grid-column: span 3"><label class="lbl" for="obsm">Observações para o motorista</label><textarea class="inp" id="obsm" rows="4">Entrar pela portaria B. Conferir lacres dos paletes 7 a 12 antes de sair.</textarea></div>
+          </div>
+        </div>
+        <div style="display: flex; justify-content: space-between; gap: 12px; padding: 18px 24px; border-top: 1px solid #F0F0ED; flex-wrap: wrap">
+          <button type="button" class="btn btn-s"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7M19 12H5"/></svg>Voltar</button>
+          <a href="OSDetalheV2.dc.html" class="btn btn-p">Continuar<svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
+        </div>
+      </form>
+      <aside style="flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+        <div class="card" style="padding: 20px; display: flex; flex-direction: column; gap: 14px">
+          <h3 style="font-size: 15px; font-weight: 800">Resumo</h3>
+          <div class="row"><span>Tipo</span><b>Transporte / frete</b></div>
+          <div class="row"><span>Cliente</span><b>Metalúrgica Souza &amp; Filhos</b></div>
+          <div class="row"><span>Solicitante</span><b>Roberto Souza</b></div>
+          <div class="row"><span>Prioridade</span><b>Normal</b></div>
+          <div class="row"><span>Data desejada</span><b>16/10/2026 · 09:30</b></div>
+          <div class="row"><span>Responsável</span><b>Leonardo</b></div>
+          <div style="height: 1px; background: #F0F0ED"></div>
+          <div class="row"><span>Trajeto estimado</span><b>32 km · 55 min</b></div>
+        </div>
+        <div class="card" style="padding: 20px; display: flex; flex-direction: column; gap: 12px">
+          <h3 style="font-size: 15px; font-weight: 800">Veículo sugerido</h3>
+          <div style="display: flex; gap: 12px; align-items: center">
+            <span style="width: 44px; height: 44px; border-radius: 10px; background: #F0F0ED; display: inline-flex; align-items: center; justify-content: center; color: #161616"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg></span>
+            <div><b style="display: block; font-size: 14px">Truck VW 24.280 · DEF-4G56</b><span class="muted" style="font-size: 12.5px; font-weight: 600">cap. 8.000 kg · 45 m³ · livre no dia 16</span></div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

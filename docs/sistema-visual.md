@@ -6,9 +6,9 @@ texto legível de longe. Sem vidro, brilho ou sombra espalhada.
 
 ## Onde mora
 
-- **Tokens:** `artifacts/btg-inventory/src/index.css` (`:root` claro, `.dark`
+- **Tokens:** `artifacts/app/src/index.css` (`:root` claro, `.dark`
   escuro, `@theme inline` para o Tailwind).
-- **Componentes base:** `artifacts/btg-inventory/src/components/ui/` —
+- **Componentes base:** `artifacts/app/src/components/ui/` —
   `button`, `input`, `textarea`, `select`, `badge`, `card`, `dialog`, `tabs`,
   `chip`, `page-header`.
 - **Trava:** `src/lib/theme-colors.test.ts` falha com cor fixa que quebra o

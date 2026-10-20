@@ -31,7 +31,7 @@ operacional calculada a partir dos dados reais de produtos, SKUs, movimentaçõe
 pedidos, faturamento e eventos.
 
 A malha de módulos está definida em `docs/ai-native-operational-blueprint.md` e
-no catálogo tipado `artifacts/btg-inventory/src/lib/operational-modules.ts`.
+no catálogo tipado `artifacts/app/src/lib/operational-modules.ts`.
 Essa malha conecta a planilha atual, os módulos já existentes e os benchmarks de
 WMS/OMS para guiar portal do cliente, receiving, putaway, picking, packing,
 expedição, devoluções, billing e documentos.

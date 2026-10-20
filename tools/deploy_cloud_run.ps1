@@ -9,17 +9,17 @@ param(
 $ErrorActionPreference = "Stop"
 
 $Root = Split-Path $PSScriptRoot -Parent
-$PublicDir = Join-Path $Root "artifacts\btg-inventory\dist\public"
+$PublicDir = Join-Path $Root "artifacts\app\dist\public"
 $StageDir = Join-Path $Root "tmp\cloud-run-src"
 
 if (-not $SkipBuild) {
   Write-Host "Gerando build do frontend..."
-  & pnpm --filter "@workspace/btg-inventory" run build
+  & pnpm --filter "@workspace/app" run build
   if ($LASTEXITCODE -ne 0) {
     throw "Falha ao gerar build do frontend."
   }
 } elseif (-not (Test-Path $PublicDir)) {
-  throw "Build nao encontrado em $PublicDir. Rode sem -SkipBuild ou gere pnpm --filter @workspace/btg-inventory run build."
+  throw "Build nao encontrado em $PublicDir. Rode sem -SkipBuild ou gere pnpm --filter @workspace/app run build."
 }
 
 $Stamp = Get-Date -Format "yyyyMMddHHmmss"
@@ -73,10 +73,10 @@ if (Test-Path $StageDir) {
 }
 
 New-Item -ItemType Directory -Force -Path (Join-Path $StageDir "deploy\cloud-run") | Out-Null
-New-Item -ItemType Directory -Force -Path (Join-Path $StageDir "artifacts\btg-inventory\dist") | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $StageDir "artifacts\app\dist") | Out-Null
 Copy-Item -LiteralPath (Join-Path $Root "Dockerfile") -Destination (Join-Path $StageDir "Dockerfile") -Force
 Copy-Item -LiteralPath (Join-Path $Root "deploy\cloud-run\nginx.conf") -Destination (Join-Path $StageDir "deploy\cloud-run\nginx.conf") -Force
-Copy-Item -LiteralPath $PublicDir -Destination (Join-Path $StageDir "artifacts\btg-inventory\dist\public") -Recurse -Force
+Copy-Item -LiteralPath $PublicDir -Destination (Join-Path $StageDir "artifacts\app\dist\public") -Recurse -Force
 
 Invoke-Gcloud builds submit $StageDir --tag $Image --project $ProjectId
 
