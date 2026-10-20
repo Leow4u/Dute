@@ -111,7 +111,6 @@ import {
   findExistingProduct,
   mergeProductLookup,
   normalizeApiRows,
-  similarProductNames,
   sourcePhotos,
   sourceText,
 } from "@/features/warehouse-ops/receiving";
@@ -134,7 +133,7 @@ import {
   findProductByAnyCode,
   findProductByBarcode,
 } from "@/lib/product-match";
-import { SimilarProductList } from "@/features/warehouse-ops/similar-products";
+import { ProductIdentityCard, NewProductNotice } from "./product-identity";
 
 export type CycleCountResult = {
   ok?: boolean;
@@ -361,39 +360,6 @@ export function OpeningInventoryWorkspace() {
       : resolveContentSkus(boxDraft.content, lookupProducts),
     [boxDraft.content, lookupProducts, currentBox?.status, conferenceLines],
   );
-  const draftLine = useMemo<ReceiptDraftLine>(
-    () => ({
-      sku: "",
-      clientCode,
-      product: productName,
-      category,
-      barcode,
-      brand,
-      size,
-      color,
-      photos,
-      photoUploading,
-      quantity: countedQty || "0",
-      unitCost,
-      location: locationId,
-      createNew,
-    }),
-    [
-      barcode,
-      brand,
-      category,
-      clientCode,
-      color,
-      countedQty,
-      createNew,
-      locationId,
-      photoUploading,
-      photos,
-      productName,
-      size,
-      unitCost,
-    ],
-  );
   // O SKU não se digita (é gerado na sigla do cliente): o campo de código
   // acha o produto pelo código do cliente, pelo SKU ou pelo de barras, e o
   // código de barras sozinho também acha (lib/product-match.ts).
@@ -416,10 +382,6 @@ export function OpeningInventoryWorkspace() {
     : barcodeMatch
       ? CODE_MATCH_LABEL.barcode
       : "";
-  const similarProducts = useMemo(
-    () => (existingProduct ? [] : similarProductNames(draftLine, lookupProducts)),
-    [draftLine, existingProduct, lookupProducts],
-  );
   const parsedCount = Number(countedQty);
   const parsedCost = Number(unitCost);
   const hasIdentity = Boolean(clientCode.trim());
@@ -1372,55 +1334,21 @@ export function OpeningInventoryWorkspace() {
                       </AlertDescription>
                     </Alert>
                   ) : existingProduct ? (
-                    <div className="flex flex-col gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <div className="text-sm font-semibold text-foreground">
-                          Produto já cadastrado: {existingProduct.productName}
-                        </div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          Cod. cliente {existingProduct.clientCode || "sem código"} · SKU {existingProduct.skuCode}
-                          {existingMatchLabel ? ` · achado ${existingMatchLabel}` : ""}
-                        </div>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={selectedProduct?.id === existingProduct.id}
-                        onClick={() => applyProduct(existingProduct)}
-                      >
-                        {selectedProduct?.id === existingProduct.id
-                          ? "Cadastro selecionado"
-                          : "Usar este cadastro"}
-                      </Button>
-                    </div>
+                    <ProductIdentityCard
+                      product={existingProduct}
+                      matchLabel={existingMatchLabel}
+                      selected={selectedProduct?.id === existingProduct.id}
+                      onSelect={() => applyProduct(existingProduct)}
+                    />
                   ) : hasIdentity && lookupQuery.isSuccess ? (
-                    <Alert className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
-                      <AlertTriangle className="size-4" />
-                      <AlertTitle>Produto não encontrado</AlertTitle>
-                      <AlertDescription>
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                          <span>
-                            {missingSkuPrefix
-                              ? `Cadastre a sigla do SKU de ${activeCustomer.name} em Configurações › Clientes antes de cadastrar produto novo: o SKU é gerado com ela.`
-                              : "Confirme que é realmente novo antes de criar uma identidade no estoque. O SKU é gerado ao salvar."}
-                          </span>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant={createNew ? "default" : "outline"}
-                            disabled={missingSkuPrefix}
-                            onClick={() => setCreateNew((current) => !current)}
-                          >
-                            {createNew ? "Novo produto confirmado" : "Cadastrar como novo"}
-                          </Button>
-                        </div>
-                        <SimilarProductList
-                          products={similarProducts}
-                          onPick={applyProduct}
-                          pickLabel="Usar este"
-                        />
-                      </AlertDescription>
-                    </Alert>
+                    <NewProductNotice
+                      confirmed={createNew}
+                      disabled={missingSkuPrefix}
+                      note={missingSkuPrefix
+                        ? `Cadastre a sigla do SKU de ${activeCustomer.name} em Configurações › Clientes antes de cadastrar produto novo: o SKU é gerado com ela.`
+                        : isDraftBox ? "SKU gerado ao guardar a caixa." : "SKU gerado ao salvar."}
+                      onToggle={() => setCreateNew((current) => !current)}
+                    />
                   ) : null}
 
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -2109,10 +2037,6 @@ export function ExistingCycleCountWorkspace() {
     () => findExistingProduct(draftLine, lookupProducts),
     [draftLine, lookupProducts],
   );
-  const similarProducts = useMemo(
-    () => (existingProduct ? [] : similarProductNames(draftLine, lookupProducts)),
-    [draftLine, existingProduct, lookupProducts],
-  );
   const parsedCount = Number(countedQty);
   const hasCount = countedQty.trim() !== "" && Number.isFinite(parsedCount);
   const canSubmit =
@@ -2231,20 +2155,7 @@ export function ExistingCycleCountWorkspace() {
             </div>
 
             {existingProduct ? (
-              <div className="flex flex-col gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <div className="text-sm font-semibold text-foreground">
-                    {existingProduct.productName}
-                  </div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    Cod. cliente {existingProduct.clientCode || "sem código"} · SKU{" "}
-                    {existingProduct.skuCode}
-                  </div>
-                </div>
-                <Button type="button" variant="outline" onClick={() => applyProduct(existingProduct)}>
-                  Usar cadastro
-                </Button>
-              </div>
+              <ProductIdentityCard product={existingProduct} onSelect={() => applyProduct(existingProduct)} />
             ) : clientCode.trim() || skuCode.trim() || productName.trim() ? (
               <Alert className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
                 <AlertTriangle className="size-4" />
@@ -2252,11 +2163,6 @@ export function ExistingCycleCountWorkspace() {
                 <AlertDescription>
                   A contagem ajusta apenas produtos já cadastrados e com saldo
                   físico criado. Se for produto novo, use Receber.
-                  <SimilarProductList
-                    products={similarProducts}
-                    onPick={applyProduct}
-                    pickLabel="Usar este"
-                  />
                 </AlertDescription>
               </Alert>
             ) : null}

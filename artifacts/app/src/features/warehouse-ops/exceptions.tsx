@@ -58,9 +58,8 @@ import {
   mergeProductLookup,
   normalizeApiRows,
   normalizeProductKey,
-  similarProductNames,
 } from "@/features/warehouse-ops/receiving";
-import { SimilarProductList } from "@/features/warehouse-ops/similar-products";
+import { ProductIdentityCard } from "./product-identity";
 import { LEGACY_CUSTOMER_CODE, customerRows, recordCustomerCode } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 
@@ -557,8 +556,7 @@ export function ReturnWorkspace() {
         ),
     );
     const existing = findExistingProduct(line, productLookup);
-    const similar = existing ? [] : similarProductNames(line, productLookup);
-    return { duplicateInDraft, existing, similar };
+    return { duplicateInDraft, existing };
   });
   const canCreate =
     lines.some((line) => line.clientCode.trim() || line.sku.trim()) &&
@@ -886,23 +884,8 @@ export function ReturnWorkspace() {
                         />
                       </div>
                       {existing ? (
-                        <div className="mt-3 flex flex-col gap-2 rounded-md border border-primary/20 bg-card px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
-                          <div>
-                            <span className="font-medium text-foreground">
-                              {existing.productName}
-                            </span>
-                            <span className="text-muted-foreground">
-                              {" "}· Cod. cliente {existing.clientCode} · SKU {existing.skuCode}
-                            </span>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyExistingProduct(index, existing)}
-                          >
-                            Usar cadastro
-                          </Button>
+                        <div className="mt-3">
+                          <ProductIdentityCard product={existing} onSelect={() => applyExistingProduct(index, existing)} />
                         </div>
                       ) : hasKey ? (
                         <Alert className="mt-3 border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
@@ -911,11 +894,6 @@ export function ReturnWorkspace() {
                           <AlertDescription>
                             Devolução aceita apenas produto já cadastrado. Se for
                             mercadoria nova, registre por Recebimento.
-                            <SimilarProductList
-                              products={issue?.similar ?? []}
-                              onPick={(product) => applyExistingProduct(index, product)}
-                              pickLabel="Usar este"
-                            />
                           </AlertDescription>
                         </Alert>
                       ) : null}

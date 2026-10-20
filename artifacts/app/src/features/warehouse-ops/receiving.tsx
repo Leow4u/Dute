@@ -87,9 +87,8 @@ import {
   barcodeKey,
   findProductByAnyCode,
   findProductByBarcode,
-  similarProducts,
 } from "@/lib/product-match";
-import { SimilarProductList } from "@/features/warehouse-ops/similar-products";
+import { ProductIdentityCard, NewProductNotice } from "./product-identity";
 
 function DetailField({
   icon: Icon,
@@ -201,14 +200,6 @@ export function findExistingProduct(
     findProductByAnyCode(products, line.sku)?.product ??
     findProductByAnyCode(products, line.clientCode)?.product ??
     findProductByBarcode(products, line.barcode)
-  );
-}
-
-/** Até três parecidos pela descrição, marca, tamanho e cor (lib/product-match.ts). */
-export function similarProductNames(line: ReceiptDraftLine, products: ProductLookupItem[]) {
-  return similarProducts(
-    { name: line.product, brand: line.brand, size: line.size, color: line.color },
-    products,
   );
 }
 
@@ -395,6 +386,7 @@ export function UnplannedReceiptDialog({
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<ReceiptDraftLine[]>([emptyReceiptLine()]);
+  const [activeLineIndex, setActiveLineIndex] = useState(0);
   const lookupQuery = useQuery({
     queryKey: ["receiving-product-lookup", customerCode],
     enabled: open,
@@ -430,6 +422,9 @@ export function UnplannedReceiptDialog({
   }
 
   function removeLine(index: number) {
+    setActiveLineIndex((current) =>
+      current > index ? current - 1 : Math.min(current, Math.max(0, lines.length - 2)),
+    );
     setLines((current) =>
       current.length === 1
         ? [emptyReceiptLine()]
@@ -566,11 +561,9 @@ export function UnplannedReceiptDialog({
         ),
     );
     const existing = findExistingProduct(line, productLookup);
-    const similar = existing ? [] : similarProductNames(line, productLookup);
     return {
       duplicateInDraft,
       existing,
-      similar,
       hasCode: Boolean(currentKey),
       invalidQuantity: !Number.isFinite(quantity) || quantity <= 0,
       missingProduct: !existing && line.createNew && !line.product.trim(),
@@ -610,7 +603,7 @@ export function UnplannedReceiptDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-[820px]">
+      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-6xl">
         <DialogHeader>
           <DialogTitle>Registrar chegada avulsa · {activeCustomer.name}</DialogTitle>
           <DialogDescription>
@@ -645,281 +638,340 @@ export function UnplannedReceiptDialog({
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setLines((current) => [...current, emptyReceiptLine()])}
+                disabled={isPending}
+                onClick={() => {
+                  setActiveLineIndex(lines.length);
+                  setLines((current) => [...current, emptyReceiptLine()]);
+                }}
               >
                 Adicionar linha
               </Button>
             </div>
-            <div className="space-y-3">
-              {lines.map((line, index) => {
-                const issue = lineIssues[index];
-                const existing = issue?.existing;
-                const mustCreate =
-                  !existing && Boolean(line.clientCode.trim() || line.sku.trim());
-                return (
-                  <div
-                    key={index}
-                    className={cn(
-                      "rounded-lg border bg-card p-3",
-                      issue?.duplicateInDraft || (existing && line.createNew)
-                        ? "border-destructive/25 bg-destructive/5"
+            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+              <div className="space-y-2" aria-label="Linhas da chegada">
+                {lines.map((line, index) => {
+                  const issue = lineIssues[index];
+                  const existing = issue?.existing;
+                  const status = issue?.duplicateInDraft
+                    ? "Produto repetido"
+                    : issue?.invalidQuantity
+                      ? "Quantidade inválida"
+                      : issue?.missingProduct || issue?.missingNewProductData
+                        ? "Cadastro incompleto"
                         : existing
-                          ? "border-primary/25 bg-primary/5"
-                          : mustCreate && !line.createNew
-                            ? "border-warning-soft-border bg-warning-soft/70"
-                            : "border-border",
-                    )}
-                  >
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="outline" className="border-border bg-card">
-                          Linha {index + 1}
-                        </Badge>
-                        {issue?.duplicateInDraft ? (
-                          <Badge variant="outline" className="border-destructive/20 bg-destructive/10 text-destructive">
-                            produto repetido nesta NF
-                          </Badge>
-                        ) : issue?.invalidQuantity ? (
-                          <Badge variant="outline" className="border-destructive/20 bg-destructive/10 text-destructive">
-                            quantidade inválida
-                          </Badge>
-                        ) : issue?.missingProduct ? (
-                          <Badge variant="outline" className="border-destructive/20 bg-destructive/10 text-destructive">
-                            informe o produto
-                          </Badge>
-                        ) : issue?.missingNewProductData ? (
-                          <Badge variant="outline" className="border-destructive/20 bg-destructive/10 text-destructive">
-                            complete cadastro e foto
-                          </Badge>
-                        ) : existing ? (
-                          <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
-                            produto existente
-                          </Badge>
-                        ) : line.createNew ? (
-                          <Badge variant="outline" className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
-                            novo cadastro
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
-                            localizar ou cadastrar
-                          </Badge>
-                        )}
+                          ? "Cadastro encontrado"
+                          : line.createNew ? "Produto novo confirmado" : "Identificação pendente";
+                  return (
+                    <button
+                      key={index}
+                      type="button"
+                      aria-pressed={activeLineIndex === index}
+                      aria-controls="receipt-product-editor"
+                      onClick={() => setActiveLineIndex(index)}
+                      className={cn(
+                        "w-full rounded-lg border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        activeLineIndex === index ? "border-primary bg-primary/5" : "border-border bg-card hover:bg-muted",
+                      )}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                        <span>Linha {index + 1}</span>
+                        <span>{status}</span>
                       </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="size-9"
-                        aria-label={`Excluir linha ${index + 1}`}
-                        onClick={() => removeLine(index)}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-
-                    <div className="grid gap-3 md:grid-cols-[1fr_1fr_1.45fr_92px_112px_130px]">
-                      <Input
-                        value={line.clientCode}
-                        onChange={(event) =>
-                          updateLine(index, {
-                            clientCode: event.target.value,
-                            sku: "",
-                            createNew: false,
-                          })
-                        }
-                        placeholder="Cód. cliente, SKU ou barras"
-                        aria-label={`Código do produto da linha ${index + 1}`}
-                      />
-                      {/* O SKU não se digita: é o do cadastro achado ou o gerado ao salvar. */}
-                      <Input
-                        value={existing?.skuCode ?? ""}
-                        readOnly
-                        tabIndex={-1}
-                        className="bg-muted"
-                        placeholder={line.createNew ? "Gerado ao salvar" : "SKU"}
-                        aria-label={`SKU da linha ${index + 1}`}
-                      />
-                      <Input
-                        value={line.product}
-                        onChange={(event) => updateLine(index, { product: event.target.value })}
-                        placeholder="Produto"
-                      />
-                      <Input
-                        value={line.quantity}
-                        onChange={(event) => updateLine(index, { quantity: event.target.value })}
-                        type="number"
-                        min="1"
-                        placeholder="Qtde"
-                      />
-                      <Input
-                        value={line.unitCost}
-                        onChange={(event) => updateLine(index, { unitCost: event.target.value })}
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="Custo"
-                      />
-                      <Input
-                        value={line.location}
-                        onChange={(event) => updateLine(index, { location: event.target.value })}
-                        placeholder="Local"
-                      />
-                    </div>
-
-                    {existing ? (
-                      <div className="mt-3 flex flex-col gap-2 rounded-md border border-primary/20 bg-card px-3 py-2 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <span className="font-medium">{existing.productName}</span>
-                          <span className="text-muted-foreground">
-                            {" "}· Cod. cliente {existing.clientCode} · SKU {existing.skuCode}
-                          </span>
+                      <p className="mt-2 break-words text-sm font-semibold text-foreground">
+                        {existing?.productName || line.product || "Identificar produto"}
+                      </p>
+                      <p className="mt-1 break-words text-xs text-muted-foreground">
+                        Cód. cliente: {existing?.clientCode || line.clientCode || "Não informado"}
+                      </p>
+                      {existing?.skuCode ? <p className="mt-1 break-words text-xs text-muted-foreground">SKU: {existing.skuCode}</p> : null}
+                      <div className="mt-2 flex flex-wrap justify-between gap-2 text-sm text-foreground">
+                        <span>{[existing?.size || line.size, existing?.color || line.color].filter(Boolean).join(" · ")}</span>
+                        <span>{line.quantity || "0"} un.</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              <section id="receipt-product-editor" aria-labelledby="receipt-editor-heading" className="min-w-0 space-y-3">
+                <h3 id="receipt-editor-heading" className="text-base font-semibold text-foreground">Identificar produto · Linha {activeLineIndex + 1}</h3>
+                {lines.map((line, index) => {
+                  if (index !== activeLineIndex) return null;
+                  const issue = lineIssues[index];
+                  const existing = issue?.existing;
+                  const mustCreate =
+                    !existing && Boolean(line.clientCode.trim() || line.sku.trim());
+                  return (
+                    <div
+                      key={index}
+                      className={cn(
+                        "rounded-lg border bg-card p-3",
+                        issue?.duplicateInDraft || (existing && line.createNew)
+                          ? "border-destructive/25 bg-destructive/5"
+                          : existing
+                            ? "border-primary/25 bg-primary/5"
+                            : mustCreate && !line.createNew
+                              ? "border-warning-soft-border bg-warning-soft/70"
+                              : "border-border",
+                      )}
+                    >
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline" className="border-border bg-card">
+                            Linha {index + 1}
+                          </Badge>
+                          {issue?.duplicateInDraft ? (
+                            <Badge variant="outline" className="border-destructive/20 bg-destructive/10 text-destructive">
+                              produto repetido nesta NF
+                            </Badge>
+                          ) : issue?.invalidQuantity ? (
+                            <Badge variant="outline" className="border-destructive/20 bg-destructive/10 text-destructive">
+                              quantidade inválida
+                            </Badge>
+                          ) : issue?.missingProduct ? (
+                            <Badge variant="outline" className="border-destructive/20 bg-destructive/10 text-destructive">
+                              informe o produto
+                            </Badge>
+                          ) : issue?.missingNewProductData ? (
+                            <Badge variant="outline" className="border-destructive/20 bg-destructive/10 text-destructive">
+                              complete cadastro e foto
+                            </Badge>
+                          ) : existing ? (
+                            <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
+                              produto existente
+                            </Badge>
+                          ) : line.createNew ? (
+                            <Badge variant="outline" className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
+                              novo cadastro
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
+                              localizar ou cadastrar
+                            </Badge>
+                          )}
                         </div>
                         <Button
                           type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => applyExistingProduct(index, existing)}
+                          variant="ghost"
+                          size="icon"
+                          className="size-9"
+                          aria-label={`Excluir linha ${index + 1}`}
+                          disabled={isPending || lines.some((item) => item.photoUploading)}
+                          onClick={() => removeLine(index)}
                         >
-                          Usar cadastro
+                          <Trash2 className="size-4" />
                         </Button>
                       </div>
-                    ) : mustCreate ? (
-                      <div className="mt-3 rounded-md border border-warning-soft-border bg-card px-3 py-2 text-sm text-warning-soft-foreground">
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                          <span>
-                            Produto não localizado pelo código informado. O SKU
-                            do novo cadastro é gerado na sigla do cliente.
-                          </span>
-                          <Button
-                            type="button"
-                            variant={line.createNew ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => updateLine(index, { createNew: !line.createNew })}
-                          >
-                            {line.createNew ? "Novo produto marcado" : "Cadastrar como novo"}
-                          </Button>
-                        </div>
-                        <SimilarProductList
-                          products={issue?.similar ?? []}
-                          onPick={(product) => applyExistingProduct(index, product)}
-                          pickLabel="Usar este"
-                        />
-                      </div>
-                    ) : null}
 
-                    {line.createNew && !existing ? (
-                      <div className="mt-3 space-y-3 rounded-lg border border-border bg-card p-3">
-                        <div>
-                          <div className="text-sm font-semibold text-foreground">
-                            Cadastro do novo produto
-                          </div>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            Categoria, custo e ao menos uma foto são obrigatórios.
-                          </p>
-                        </div>
-                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="space-y-1.5 text-sm text-foreground">
+                          <span>Cód. cliente, SKU ou barras</span>
                           <Input
-                            value={line.category}
+                            value={line.clientCode}
                             onChange={(event) =>
-                              updateLine(index, { category: event.target.value })
+                              updateLine(index, {
+                                clientCode: event.target.value,
+                                sku: "",
+                                createNew: false,
+                              })
                             }
-                            placeholder="Categoria *"
+                            placeholder="Cód. cliente, SKU ou barras"
+                            aria-label={`Código do produto da linha ${index + 1}`}
                           />
+                        </label>
+                        {/* O SKU não se digita: é o do cadastro achado ou o gerado ao salvar. */}
+                        <label className="space-y-1.5 text-sm text-foreground">
+                          <span>SKU</span>
                           <Input
-                            value={line.brand}
-                            onChange={(event) =>
-                              updateLine(index, { brand: event.target.value })
-                            }
-                            placeholder="Marca"
+                            value={existing?.skuCode ?? ""}
+                            readOnly
+                            tabIndex={-1}
+                            className="bg-muted"
+                            placeholder={line.createNew ? "Gerado ao salvar" : "SKU"}
+                            aria-label={`SKU da linha ${index + 1}`}
                           />
+                        </label>
+                        <label className="space-y-1.5 text-sm text-foreground">
+                          <span>Produto</span>
                           <Input
-                            value={line.size}
-                            onChange={(event) =>
-                              updateLine(index, { size: event.target.value })
-                            }
-                            placeholder="Tamanho"
+                            value={line.product}
+                            onChange={(event) => updateLine(index, { product: event.target.value })}
+                            placeholder="Produto"
                           />
+                        </label>
+                        <label className="space-y-1.5 text-sm text-foreground">
+                          <span>Quantidade</span>
                           <Input
-                            value={line.color}
-                            onChange={(event) =>
-                              updateLine(index, { color: event.target.value })
-                            }
-                            placeholder="Cor"
+                            value={line.quantity}
+                            onChange={(event) => updateLine(index, { quantity: event.target.value })}
+                            type="number"
+                            min="1"
+                            placeholder="Qtde"
                           />
+                        </label>
+                        <label className="space-y-1.5 text-sm text-foreground">
+                          <span>Custo unitário</span>
                           <Input
-                            value={line.barcode}
-                            onChange={(event) =>
-                              updateLine(index, { barcode: event.target.value })
-                            }
-                            placeholder="Código de barras"
+                            value={line.unitCost}
+                            onChange={(event) => updateLine(index, { unitCost: event.target.value })}
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="Custo"
                           />
-                        </div>
-                        <div className="flex flex-wrap items-center gap-3">
-                          <label
-                            htmlFor={`receipt-photo-${index}`}
-                            className={cn(
-                              "inline-flex h-10 cursor-pointer items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted",
-                              line.photoUploading && "pointer-events-none opacity-60",
-                            )}
-                          >
-                            {line.photoUploading ? (
-                              <RefreshCw className="size-4 animate-spin" />
-                            ) : (
-                              <Camera className="size-4" />
-                            )}
-                            {line.photoUploading ? "Enviando..." : "Fotografar ou anexar"}
-                          </label>
-                          <input
-                            id={`receipt-photo-${index}`}
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            multiple
-                            className="sr-only"
-                            onChange={(event) => {
-                              void addPhotos(index, event.target.files);
-                              event.currentTarget.value = "";
-                            }}
+                        </label>
+                        <label className="space-y-1.5 text-sm text-foreground">
+                          <span>Local</span>
+                          <Input
+                            value={line.location}
+                            onChange={(event) => updateLine(index, { location: event.target.value })}
+                            placeholder="Local"
                           />
-                          <span className="text-xs text-muted-foreground">
-                            {line.photos.length}/8 foto(s)
-                          </span>
-                        </div>
-                        {line.photos.length ? (
-                          <div className="flex flex-wrap gap-2">
-                            {line.photos.map((photo, photoIndex) => (
-                              <div
-                                key={photo.storagePath}
-                                className="group relative size-20 overflow-hidden rounded-md border border-border bg-muted"
-                              >
-                                <img
-                                  src={photo.fileUrl}
-                                  alt={`Foto ${photoIndex + 1} de ${line.product || "produto"}`}
-                                  className="size-full object-cover"
-                                />
-                                <button
-                                  type="button"
-                                  className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-full bg-card text-foreground shadow-sm"
-                                  aria-label={`Remover foto ${photoIndex + 1}`}
-                                  onClick={() =>
-                                    updateLine(index, {
-                                      photos: line.photos.filter(
-                                        (_, currentIndex) => currentIndex !== photoIndex,
-                                      ),
-                                    })
-                                  }
-                                >
-                                  <Trash2 className="size-3.5" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
+                        </label>
                       </div>
-                    ) : null}
-                  </div>
-                );
-              })}
+
+                      {existing ? (
+                        <div className="mt-3">
+                          <ProductIdentityCard product={existing} onSelect={() => applyExistingProduct(index, existing)} />
+                        </div>
+                      ) : mustCreate ? (
+                        <div className="mt-3">
+                          <NewProductNotice
+                            confirmed={line.createNew}
+                            note="SKU gerado ao salvar o novo cadastro."
+                            onToggle={() => updateLine(index, { createNew: !line.createNew })}
+                          />
+                        </div>
+                      ) : null}
+
+                      {line.createNew && !existing ? (
+                        <div className="mt-3 space-y-3 rounded-lg border border-border bg-card p-3">
+                          <div>
+                            <div className="text-sm font-semibold text-foreground">
+                              Cadastro do novo produto
+                            </div>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Categoria, custo e ao menos uma foto são obrigatórios.
+                            </p>
+                          </div>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <label className="space-y-1.5 text-sm text-foreground">
+                              <span>Categoria *</span>
+                              <Input
+                                value={line.category}
+                                onChange={(event) =>
+                                  updateLine(index, { category: event.target.value })
+                                }
+                                placeholder="Categoria *"
+                              />
+                            </label>
+                            <label className="space-y-1.5 text-sm text-foreground">
+                              <span>Marca</span>
+                              <Input
+                                value={line.brand}
+                                onChange={(event) =>
+                                  updateLine(index, { brand: event.target.value })
+                                }
+                                placeholder="Marca"
+                              />
+                            </label>
+                            <label className="space-y-1.5 text-sm text-foreground">
+                              <span>Tamanho</span>
+                              <Input
+                                value={line.size}
+                                onChange={(event) =>
+                                  updateLine(index, { size: event.target.value })
+                                }
+                                placeholder="Tamanho"
+                              />
+                            </label>
+                            <label className="space-y-1.5 text-sm text-foreground">
+                              <span>Cor</span>
+                              <Input
+                                value={line.color}
+                                onChange={(event) =>
+                                  updateLine(index, { color: event.target.value })
+                                }
+                                placeholder="Cor"
+                              />
+                            </label>
+                            <label className="space-y-1.5 text-sm text-foreground">
+                              <span>Código de barras</span>
+                              <Input
+                                value={line.barcode}
+                                onChange={(event) =>
+                                  updateLine(index, { barcode: event.target.value })
+                                }
+                                placeholder="Código de barras"
+                              />
+                            </label>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <label
+                              htmlFor={`receipt-photo-${index}`}
+                              className={cn(
+                                "inline-flex h-10 cursor-pointer items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted",
+                                line.photoUploading && "pointer-events-none opacity-60",
+                              )}
+                            >
+                              {line.photoUploading ? (
+                                <RefreshCw className="size-4 animate-spin" />
+                              ) : (
+                                <Camera className="size-4" />
+                              )}
+                              {line.photoUploading ? "Enviando..." : "Fotografar ou anexar"}
+                            </label>
+                            <input
+                              id={`receipt-photo-${index}`}
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              multiple
+                              className="sr-only"
+                              onChange={(event) => {
+                                void addPhotos(index, event.target.files);
+                                event.currentTarget.value = "";
+                              }}
+                            />
+                            <span className="text-xs text-muted-foreground">
+                              {line.photos.length}/8 foto(s)
+                            </span>
+                          </div>
+                          {line.photos.length ? (
+                            <div className="flex flex-wrap gap-2">
+                              {line.photos.map((photo, photoIndex) => (
+                                <div
+                                  key={photo.storagePath}
+                                  className="group relative size-20 overflow-hidden rounded-md border border-border bg-muted"
+                                >
+                                  <img
+                                    src={photo.fileUrl}
+                                    alt={`Foto ${photoIndex + 1} de ${line.product || "produto"}`}
+                                    className="size-full object-cover"
+                                  />
+                                  <button
+                                    type="button"
+                                    className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-full bg-card text-foreground shadow-sm"
+                                    aria-label={`Remover foto ${photoIndex + 1}`}
+                                    onClick={() =>
+                                      updateLine(index, {
+                                        photos: line.photos.filter(
+                                          (_, currentIndex) => currentIndex !== photoIndex,
+                                        ),
+                                      })
+                                    }
+                                  >
+                                    <Trash2 className="size-3.5" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </section>
             </div>
           </div>
 

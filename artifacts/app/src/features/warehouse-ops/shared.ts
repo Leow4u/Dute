@@ -27,7 +27,7 @@ export type ProductLookupItem = {
   skuCode: string;
   clientCode: string;
   productName: string;
-  /** Código de barras, marca, tamanho, cor e foto: busca e parecidos (lib/product-match.ts). */
+  /** Código de barras para identificação; marca, tamanho, cor e foto para conferência. */
   barcode: string;
   brand: string;
   size: string;
