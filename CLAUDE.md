@@ -74,8 +74,12 @@ documentação de produto e operação está em `docs/`.
   `.github/workflows/publicar.yml`: o job `regras` publica `firestore.rules`,
   `firestore.indexes.json` e `storage.rules`
   (`firebase deploy --only firestore,storage`) e confere as regras servidas
-  (`tools/check_rules_deployed.sh`); só depois sobem o frontend (imagem montada
-  no runner e enviada ao Artifact Registry) e as functions. A publicação termina
+  (`tools/check_rules_deployed.sh`); só depois sobem as functions e, por último,
+  o frontend (imagem montada no runner e enviada ao Artifact Registry), para a
+  tela nova nunca chegar antes da callable que ela chama. Uma publicação por
+  ambiente de cada vez, sem cancelar a que está rodando (`cancel-in-progress:
+  false`), e só do commit que ainda é o HEAD da main; não cancele à mão uma
+  publicação no meio. A publicação termina
   conferindo se o Cloud Run (e `app.dutelog.com.br`, na produção) passou a
   servir o build (`tools/check_frontend_deployed.sh`) e se cada callable está
   pública (`tools/check_functions_invoker.ps1`). **Verde sem essa verificação

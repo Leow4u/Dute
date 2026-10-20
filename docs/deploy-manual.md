@@ -155,7 +155,8 @@ isso não se repetir.
 
 A publicação fica em `.github/workflows/publicar.yml` (job `Frontend (Cloud Run)`),
 chamada pelo `.github/workflows/ci.yml` sempre a partir de `main` e depois de
-`frontend-typecheck`, `functions-unit` e `functions-integration` passarem:
+`frontend-typecheck`, `functions-unit`, `functions-integration` e
+`Testes das ferramentas Python (tools/)` passarem:
 
 - **Homologação** (`dute-homolog`, serviço `dute-app`): a cada push em `main`.
 - **Produção** (`dute-prod`, serviço `dute-app`, `app.dutelog.com.br`): só por
@@ -194,8 +195,9 @@ Solte o tráfego e a última revisão pronta passa a receber tudo:
 gcloud run services update-traffic dute-app --region southamerica-east1 --project dute-prod --to-latest
 ```
 
-Sem gcloud na máquina, o mesmo efeito vem de Actions > CI > Run workflow com
-`liberar_trafego` marcado (job `Mudar tráfego do serviço`); com `revisao` preenchida, o
+Sem gcloud na máquina, o mesmo efeito vem de Actions > CI > Run workflow, a partir da
+`main`, com `liberar_trafego` marcado (job `Mudar tráfego do serviço`, que não roda em
+outra branch); com `revisao` preenchida, o
 mesmo job faz rollback para essa revisão. Em 09/10/2026 o tráfego foi solto às 20:28 UTC
 (revisão `00150-lk5`, que estava sem a configuração do Firebase e quebrou o login),
 voltou para `00143-loc` às 20:46 e foi solto de novo às 21:08 para `00152-xw7`
@@ -226,5 +228,38 @@ tem `artifactregistry.writer`, `cloudbuild.builds.editor`, `iam.serviceAccountUs
 `storage.legacyBucketReader` no bucket `gs://dute-btg_cloudbuild`. Sem Cloud Build no
 caminho, o bucket deixa de importar.
 
-As Cloud Functions saem na mesma execução (job `Cloud Functions` do
-`publicar.yml`); o roteiro manual delas está em `docs/deploy-functions-manual.md`.
+As Cloud Functions saem na mesma execução, antes do frontend (job `Cloud Functions`
+do `publicar.yml`); o roteiro manual delas está em `docs/deploy-functions-manual.md`.
+
+### Ordem e fila (desde 20/10/2026)
+
+Os jobs rodam em série: `Commit ainda é o HEAD da main`, `Regras e índices`,
+`Cloud Functions` e por último `Frontend (Cloud Run)`. Se um falha, os seguintes
+não sobem. O frontend vem depois das functions para a tela nova nunca chegar antes
+da callable que ela chama; antes os dois subiam juntos e o frontend novo ficava uns
+5 minutos no ar com as functions antigas.
+
+Uma publicação por ambiente de cada vez: o `ci.yml` chama o `publicar.yml` com
+`concurrency` `publicar-homologacao` ou `publicar-producao` e `cancel-in-progress:
+false`. A publicação em andamento sempre termina; a que chega depois espera, e o
+GitHub mantém só a mais nova na espera (a mais antiga aparece como cancelada, sem
+ter publicado nada). Até 20/10/2026 cada job tinha o próprio grupo com
+`cancel-in-progress: true`, e em 20/10/2026 o push seguinte cortou duas vezes
+o `firebase deploy --only functions` da homologação no meio (merges dos PRs 106
+e 110), pulando a conferência do invoker.
+
+A fila não garante a ordem dos commits (os testes de dois pushes seguidos podem
+terminar fora de ordem), por isso o primeiro job confere se o commit ainda é o HEAD
+da main:
+
+- **Homologação**: se a main já andou, nada sobe e o run fica verde com o aviso
+  "não é mais o HEAD da main"; quem publica é a execução do commit novo. Se essa
+  falhar nos testes, a homologação fica no último commit publicado até o próximo
+  push verde.
+- **Produção**: se a main andou entre o disparo e a publicação, o run falha antes
+  de publicar. Confira o commit novo na homologação e dispare de novo.
+
+**Não cancele uma publicação no meio** (botão Cancel do Actions): é o mesmo corte
+que a fila evita. Para repetir uma publicação que falhou, use "Re-run failed jobs"
+só se o commit ainda for o HEAD da main, porque o job que confere o HEAD não roda
+de novo quando passou; se a main andou, a execução do commit novo é que publica.
