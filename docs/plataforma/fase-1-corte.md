@@ -392,8 +392,8 @@ falha da volta.
   volta, até o prazo dos certificados acima). Não descongelar sem decidir
   voltar.
 - Antes de o Leonardo apagar o `dute-btg` (30 a 60 dias): o site institucional
-  já no `dute-prod` (passo 9) e um último export do `dute-btg` guardado fora dele,
-  se quiser histórico.
+  já está no `dute-prod` desde 20/10/2026 (passo 9); falta só um último export do
+  `dute-btg` guardado fora dele, se quiser histórico.
 - Os exports do corte ficam em `gs://dute-prod-migracao`, e os do ensaio em
   `gs://dute-homolog-migracao`; apagar quando não forem mais necessários
   (decisão do Leonardo).
@@ -444,11 +444,23 @@ Feito, com o OK do Leonardo:
 | — | Leonardo entrou com a senha de antes pelo `run.app` do `dute-prod` | ok |
 | 03:27–03:38 | `congelar_projeto.ps1 -ProjectId dute-btg -Apply` | "CONGELAR concluido": regras de manutenção, rotina pausada, 68 callables sem invocação pública (403) |
 | 03:38 | `dute-btg` congelado contra o export | "Iguais." |
-| 03:39 | Hostinger, registro `app` (A) de `8.232.54.179` para `34.54.243.247`, TTL 300 | só esse registro mudou (zona antes e depois em `.secretsase-1\dns-zona-*-app.json`) |
+| 03:39 | Hostinger, registro `app` (A) de `8.232.54.179` para `34.54.243.247`, TTL 300 | só esse registro mudou (zona antes e depois em `.secrets\fase-1\dns-zona-*-app.json`) |
 | 03:41 | Conferência | servidor da Hostinger, Google e Cloudflare respondem o IP novo; `https://app.dutelog.com.br` 200 com o certificado do Certificate Manager e o mesmo build do `dute-app` (configuração do `dute-prod`) |
 
-O site institucional (`@` e `www`) continua no Load Balancer do `dute-btg`, que
-segue no ar; a troca dele (passo 9) fica para depois.
+### Site institucional (passo 9), 20/10/2026
+
+Feito depois, com o OK do Leonardo a cada passo. Zona antes e depois de cada
+mudança em `.secrets\fase-1\dns-zona-*-site-ttl.json` e `dns-zona-*-site.json`.
+
+| Hora (UTC) | Passo | Resultado |
+|---|---|---|
+| — | Conferência pelo IP novo (`curl --resolve`) | `dutelog.com.br` e `www` 200 em `34.54.243.247`, certificado do Certificate Manager válido até 18/01/2027; página igual byte a byte à do IP antigo; `dutelog-site` com a mesma imagem nos dois projetos |
+| 04:16 | Hostinger, TTL do `@` (A) de 1800 para 300, mesmo IP | só esse registro mudou; os servidores da Hostinger alternaram entre 300 e 1800 por mais de 20 minutos |
+| 09:43 | Hostinger, registro `@` (A) de `8.232.54.179` para `34.54.243.247`, TTL 300 | só esse registro mudou; nenhum registro da zona aponta mais para `8.232.54.179` |
+| 09:44 | Conferência | servidores da Hostinger, Google, Cloudflare, Quad9 e OpenDNS respondem o IP novo; `https://dutelog.com.br` e `https://www.dutelog.com.br` 200 pelo `dute-prod`, com o certificado do Certificate Manager, a mesma página e os recursos dela |
+
+Com isso o `dute-btg` não serve mais nada. O Load Balancer antigo segue no ar só
+como caminho da volta (seção "Volta").
 
 ## Histórico
 
@@ -456,3 +468,4 @@ segue no ar; a troca dele (passo 9) fica para depois.
 |---|---|
 | 19/10/2026 | Ensaio na homologação (tabela acima), `dute-prod` preparado, CNAMEs criados na Hostinger, certificados ativos e Load Balancer novo testado pelo IP |
 | 20/10/2026 | Corte antes da contagem de abertura: `app.dutelog.com.br` no `dute-prod` desde 03:39 UTC, `dute-btg` congelado (seção acima) |
+| 20/10/2026 | Site institucional (`dutelog.com.br` e `www`) no `dute-prod` desde 09:43 UTC; o `dute-btg` não serve mais nada |
