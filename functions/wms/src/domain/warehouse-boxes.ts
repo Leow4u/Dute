@@ -19,10 +19,10 @@ import { WAREHOUSE_POSITIONS_COLLECTION } from "./warehouse-positions.js";
  * senão a primeira da zona com espaço; desempate pela menor sobra de frente.
  * Só prateleiras da zona do cliente entram; zona cheia bloqueia e avisa.
  *
- * Capacidade nesta versão: uma fileira de caixas ao longo da frente, sem
- * empilhar nem usar uma segunda fileira na profundidade. O padrão preserva a
- * altura da caixa; apoiar em outro lado exige allow_tilt explícito. A
- * orientação escolhida é guardada para refletir a posição física da caixa.
+ * Capacidade: uma fileira na profundidade, com empilhamento somente mediante
+ * allow_stacking explícito e apoio integral sobre uma caixa já guardada.
+ * O padrão preserva a altura; apoiar de lado exige allow_tilt. A orientação,
+ * a caixa de apoio e a altura da base são guardadas com a posição física.
  */
 
 export const WAREHOUSE_BOXES_COLLECTION = "warehouse_boxes";
@@ -64,6 +64,8 @@ export type PositionOccupancy = {
   weight_used_kg: number;
   box_count: number;
   sku_codes: Set<string>;
+  /** Topos livres de caixas guardadas; reservas não servem de apoio. */
+  supports?: Array<{ code: string; customer_code?: string | null; front_m: number; depth_m: number; top_m: number }>;
 };
 
 export const BOX_ORIENTATIONS = [
@@ -83,6 +85,10 @@ export type BoxPlacementOptions = {
   allow_tilt?: boolean;
   /** Quando informada, valida esta orientação sem trocar por outra. */
   orientation?: BoxOrientation;
+  /** Permite apoiar sobre outra caixa, separadamente da permissão para tombar. */
+  allow_stacking?: boolean;
+  /** undefined busca apoio; null confirma a base da prateleira; string fixa a caixa de apoio. */
+  support_box_code?: string | null;
 };
 
 export type Placement = {
@@ -93,6 +99,8 @@ export type Placement = {
   /** Altura efetiva depois de orientar a caixa. */
   height_m: number;
   orientation: BoxOrientation;
+  support_box_code?: string;
+  base_height_m?: number;
 };
 
 export type SlottingCandidate = {
@@ -136,6 +144,8 @@ const dimensionFields = {
 
 const placementFields = {
   allow_tilt: z.boolean().optional(),
+  allow_stacking: z.boolean().optional(),
+  support_box_code: z.string().trim().toUpperCase().regex(/^CX-\d{6,}$/, "Caixa de apoio inválida.").nullable().optional(),
   orientation: z.enum(BOX_ORIENTATIONS).optional(),
 };
 
@@ -245,12 +255,26 @@ export function requireDimensions(raw: BoxDimensions): BoxDimensions {
 }
 
 export function emptyOccupancy(): PositionOccupancy {
-  return { front_used_m: 0, weight_used_kg: 0, box_count: 0, sku_codes: new Set() };
+  return { front_used_m: 0, weight_used_kg: 0, box_count: 0, sku_codes: new Set(), supports: [] };
 }
+
+type OccupiedBox = {
+  code?: string | null;
+  id?: string | null;
+  customer_code?: string | null;
+  status?: string | null;
+  location_id?: string | null;
+  front_m?: number | null;
+  depth_m?: number | null;
+  height_m?: number | null;
+  placed_height_m?: number | null;
+  support_box_code?: string | null;
+  gross_weight_kg?: number | null;
+};
 
 /** Ocupação por posição a partir das caixas guardadas e dos saldos por posição. */
 export function buildOccupancy(
-  boxes: Array<{ location_id?: string | null; front_m?: number | null; gross_weight_kg?: number | null }>,
+  boxes: OccupiedBox[],
   balances: Array<{ location_id?: string | null; sku_code?: string | null; qty_on_hand?: number | null }>,
 ): Map<string, PositionOccupancy> {
   const occupancy = new Map<string, PositionOccupancy>();
@@ -261,11 +285,44 @@ export function buildOccupancy(
     occupancy.set(code, created);
     return created;
   };
+  const normalized = (value: unknown) => String(value ?? "").trim().toUpperCase();
+  const byCode = new Map(boxes.map((box) => [normalized(box.code ?? box.id), box]));
+  const children = new Map<string, number>();
   for (const box of boxes) {
-    const code = String(box.location_id ?? "").trim().toUpperCase();
+    const support = normalized(box.support_box_code);
+    if (support) children.set(support, (children.get(support) ?? 0) + 1);
+  }
+  // Reconstitui a altura pela cadeia real de apoios, sem confiar numa altura
+  // enviada pelo cliente. Documentos incompletos/órfãos não liberam capacidade.
+  const topOf = (box: OccupiedBox, visiting = new Set<OccupiedBox>()): number | null => {
+    if (visiting.has(box)) return null;
+    const height = Number(box.placed_height_m ?? box.height_m);
+    if (![box.front_m, box.depth_m, height].every((value) => Number.isFinite(value) && Number(value) > 0)) return null;
+    const supportCode = normalized(box.support_box_code);
+    if (!supportCode) return height;
+    const support = byCode.get(supportCode);
+    if (!support || children.get(supportCode) !== 1 ||
+        support.status !== "stored" ||
+        normalized(support.location_id) !== normalized(box.location_id) ||
+        support.customer_code !== box.customer_code ||
+        Number(box.front_m) > Number(support.front_m) + TOLERANCE_M ||
+        Number(box.depth_m) > Number(support.depth_m) + TOLERANCE_M) return null;
+    const next = new Set(visiting);
+    next.add(box);
+    const below = topOf(support, next);
+    return below == null ? null : round(below + height, 3);
+  };
+  for (const box of boxes) {
+    const code = normalized(box.location_id);
     if (!code) continue;
     const entry = at(code);
-    entry.front_used_m += Number(box.front_m ?? 0) || 0;
+    const top = topOf(box);
+    const supported = Boolean(normalized(box.support_box_code)) && top != null;
+    if (!supported) entry.front_used_m += Number(box.front_m ?? 0) || 0;
+    const boxCode = normalized(box.code ?? box.id);
+    if (boxCode && box.status === "stored" && !children.has(boxCode) && top != null) {
+      entry.supports!.push({ code: boxCode, customer_code: box.customer_code, front_m: Number(box.front_m), depth_m: Number(box.depth_m), top_m: top });
+    }
     entry.weight_used_kg += Number(box.gross_weight_kg ?? 0) || 0;
     entry.box_count += 1;
   }
@@ -284,7 +341,7 @@ export function buildOccupancy(
  * a sugestão e a guarda, incluindo a orientação confirmada pela pessoa.
  */
 export function placementFor(
-  position: Pick<SlottingPosition, "length_m" | "depth_m" | "height_m" | "max_weight_kg">,
+  position: Pick<SlottingPosition, "length_m" | "depth_m" | "height_m" | "max_weight_kg" | "customer_code">,
   box: BoxDimensions,
   occupancy: PositionOccupancy = emptyOccupancy(),
   options: BoxPlacementOptions = {},
@@ -306,14 +363,32 @@ export function placementFor(
       const [front, depth, height] = orientation.split("_") as [Axis, Axis, Axis];
       return { front_m: axes[front]!, depth_m: axes[depth]!, height_m: axes[height]!, orientation };
     })
-    .filter(
-      (placement) =>
-        placement.depth_m <= position.depth_m + TOLERANCE_M &&
-        placement.front_m <= freeFront + TOLERANCE_M &&
-        placement.height_m <= position.height_m + TOLERANCE_M,
-    )
+    .filter((placement) =>
+      placement.depth_m <= position.depth_m + TOLERANCE_M &&
+      placement.height_m <= position.height_m + TOLERANCE_M)
     .sort((left, right) => left.front_m - right.front_m || left.height_m - right.height_m);
-  return placements[0] ?? null;
+
+  // Prefere a base da prateleira quando há frente. Na confirmação, o apoio
+  // escolhido é fixo: nunca troca silenciosamente piso, orientação ou caixa.
+  if (options.support_box_code == null) {
+    const floor = placements.find((placement) => placement.front_m <= freeFront + TOLERANCE_M);
+    if (floor) return floor;
+  }
+  if (options.allow_stacking !== true || options.support_box_code === null) return null;
+  const supports = [...(occupancy.supports ?? [])]
+    .filter((support) =>
+      (!position.customer_code || support.customer_code === position.customer_code) &&
+      (!options.support_box_code || support.code === options.support_box_code))
+    .sort((left, right) => left.top_m - right.top_m || left.code.localeCompare(right.code));
+  for (const support of supports) {
+    const placement = placements.find((candidate) =>
+      candidate.front_m <= support.front_m + TOLERANCE_M &&
+      candidate.front_m <= position.length_m + TOLERANCE_M &&
+      candidate.depth_m <= support.depth_m + TOLERANCE_M &&
+      support.top_m + candidate.height_m <= position.height_m + TOLERANCE_M);
+    if (placement) return { ...placement, support_box_code: support.code, base_height_m: support.top_m };
+  }
+  return null;
 }
 
 /**
@@ -356,7 +431,7 @@ export function suggestPosition(
     const placement = placementFor(position, box, current, box);
     if (!placement) continue;
     const freeFront = position.length_m - current.front_used_m;
-    const leftover = round(freeFront - placement.front_m, 3);
+    const leftover = round(freeFront - (placement.support_box_code ? 0 : placement.front_m), 3);
     const sequence = sequenceOf(position);
     const sharedSku = [...skus].find((sku) => current.sku_codes.has(sku));
     if (sharedSku) {
@@ -461,7 +536,7 @@ export async function suggestWarehousePosition(
   const box = requireDimensions(input);
   const { positions, occupancy } = await readSlottingContext(db, customerCode);
   const result = suggestPosition(
-    { ...box, allow_tilt: input.allow_tilt, orientation: input.orientation, customer_code: customerCode, sku_codes: input.sku_codes ?? [] },
+    { ...box, allow_tilt: input.allow_tilt, allow_stacking: input.allow_stacking, support_box_code: input.support_box_code, orientation: input.orientation, customer_code: customerCode, sku_codes: input.sku_codes ?? [] },
     positions,
     occupancy,
     { exclude: input.exclude ?? [] },
@@ -490,6 +565,9 @@ export type WarehouseBoxRecord = {
   placed_height_m: number;
   orientation: BoxOrientation;
   allow_tilt: boolean;
+  allow_stacking: boolean;
+  support_box_code: string | null;
+  base_height_m: number;
   gross_weight_kg: number | null;
   line_count: number;
   unit_count: number;
@@ -618,6 +696,9 @@ export async function createWarehouseBox(
       placed_height_m: placement.height_m,
       orientation: placement.orientation,
       allow_tilt: input.allow_tilt === true,
+      allow_stacking: input.allow_stacking === true,
+      support_box_code: placement.support_box_code ?? null,
+      base_height_m: placement.base_height_m ?? 0,
       gross_weight_kg: box.gross_weight_kg ?? null,
       line_count: 0,
       unit_count: 0,
@@ -739,6 +820,20 @@ export async function removeWarehouseBox(
         "failed-precondition",
         `A caixa ${code} ainda tem ${Number(data.line_count ?? 0)} produto(s) lançados. Remova as linhas dela antes de removê-la.`,
       );
+    }
+    const location = String(data.location_id ?? "");
+    const positionRef = location ? db.collection(WAREHOUSE_POSITIONS_COLLECTION).doc(location) : null;
+    const [positionSnapshot, supportedBoxes] = await Promise.all([
+      positionRef ? transaction.get(positionRef) : Promise.resolve(null),
+      transaction.get(db.collection(WAREHOUSE_BOXES_COLLECTION).where("support_box_code", "==", code)),
+    ]);
+    if (supportedBoxes.docs.some((box) => ["stored", "committing"].includes(String(box.get("status"))))) {
+      throw new HttpsError("failed-precondition", `A caixa ${code} serve de apoio para outra caixa. Retire a caixa de cima antes de removê-la.`);
+    }
+    // Disputa a mesma revisão da guarda: não remove um apoio entre sugestão
+    // e confirmação, nem durante uma reserva concorrente.
+    if (positionRef && positionSnapshot?.exists) {
+      transaction.update(positionRef, { occupancy_revision: FieldValue.increment(1) });
     }
     transaction.delete(ref);
     const eventRef = db.collection("events").doc();

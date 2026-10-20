@@ -259,7 +259,8 @@ export async function setOpeningConferenceBoxState(db: Firestore, raw: unknown, 
       const positionRef = db.collection("warehouse_positions").doc(str(box.location_id));
       const position = await tx.get(positionRef);
       const updates = { status: "counting", opening_closed: false, location_id: "", front_m: null, depth_m: null,
-        placed_height_m: null, conference_commit_id: null, conference_store_input: null,
+        placed_height_m: null, support_box_code: null, base_height_m: null, allow_stacking: false,
+        conference_commit_id: null, conference_store_input: null,
         conference_revision: input.expected_revision + 1 };
       if (position.exists) tx.update(positionRef, { occupancy_revision: FieldValue.increment(1) });
       tx.update(ref, { ...updates, updated_at: FieldValue.serverTimestamp() });
@@ -318,7 +319,7 @@ export async function storeOpeningConferenceBox(db: Firestore, raw: unknown, act
     if (position.customer_code !== input.customer_code || position.status !== "active") throw new HttpsError("failed-precondition", "Escolha uma posição ativa da zona do cliente.");
     if (input.refusal && (upper(input.refusal.position) === location || !refused?.exists || refused.get("customer_code") !== input.customer_code)) throw new HttpsError("failed-precondition", "Posição recusada inválida ou de outro cliente.");
     const occupancy = buildOccupancy(occupied.docs.map((doc) => doc.data()), []).get(location) ?? emptyOccupancy();
-    const placement = placementFor(position, dimensions, occupancy, { allow_tilt: input.allow_tilt, orientation: input.orientation });
+    const placement = placementFor(position, dimensions, occupancy, input);
     if (!placement) throw new HttpsError("failed-precondition", "A caixa não cabe mais nesta posição. Peça outra sugestão.");
     if (drafts.empty || drafts.size > MAX_LINES) throw new HttpsError("failed-precondition", "A caixa precisa ter entre 1 e 100 produtos conferidos.");
     const skus: string[] = [];
@@ -329,6 +330,8 @@ export async function storeOpeningConferenceBox(db: Firestore, raw: unknown, act
       status: "committing", location_id: location, ...dimensions,
       front_m: placement.front_m, depth_m: placement.depth_m, placed_height_m: placement.height_m,
       orientation: placement.orientation, allow_tilt: input.allow_tilt ?? false,
+      allow_stacking: input.allow_stacking === true, support_box_code: placement.support_box_code ?? null,
+      base_height_m: placement.base_height_m ?? 0,
       opening_closed: true, conference_commit_id: commitId,
       conference_revision: input.expected_revision + 1,
       conference_store_input: clean(input), conference_commit_started_at: new Date().toISOString(),

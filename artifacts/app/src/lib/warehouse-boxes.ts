@@ -28,6 +28,9 @@ export type WarehouseBox = {
   placed_height_m?: number | null;
   orientation?: BoxOrientation | null;
   allow_tilt?: boolean;
+  allow_stacking?: boolean;
+  support_box_code?: string | null;
+  base_height_m?: number | null;
   conference_revision?: number;
   opening_closed?: boolean;
   draft_line_count?: number;
@@ -54,7 +57,7 @@ export type SlottingCandidate = {
   tier: 1 | 2 | 3;
   leftover_m: number;
   sequence: number;
-  placement: { front_m: number; depth_m: number; height_m?: number; orientation?: BoxOrientation };
+  placement: { front_m: number; depth_m: number; height_m?: number; orientation?: BoxOrientation; support_box_code?: string; base_height_m?: number };
 };
 
 /** Resposta de suggestWarehousePosition: a posição, as alternativas ou o motivo. */
@@ -171,6 +174,9 @@ export function warehouseBoxFromRecord(record: AnyRecord): WarehouseBox {
     placed_height_m: nullableNumber(record.placed_height_m),
     orientation: (text(record.orientation) || null) as BoxOrientation | null,
     allow_tilt: record.allow_tilt === true,
+    allow_stacking: record.allow_stacking === true,
+    support_box_code: text(record.support_box_code).toUpperCase() || null,
+    base_height_m: nullableNumber(record.base_height_m),
     conference_revision: number(record.conference_revision),
     opening_closed: record.opening_closed === true,
     draft_line_count: number(record.draft_line_count),
@@ -245,5 +251,8 @@ export function resolveContentSkus(
 /** Placement dimensions are ordered by the actual shelf, unlike measured box sides. */
 export function formatBoxPlacement(placement: SlottingCandidate["placement"]) {
   const cm = (value: number) => new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(value * 100);
-  return `Frente ${cm(placement.front_m)} × profundidade ${cm(placement.depth_m)}${placement.height_m == null ? "" : ` × altura ${cm(placement.height_m)}`} cm`;
+  const support = placement.support_box_code
+    ? `Sobre a caixa ${placement.support_box_code} · base a ${cm(placement.base_height_m ?? 0)} cm · `
+    : "";
+  return `${support}Frente ${cm(placement.front_m)} × profundidade ${cm(placement.depth_m)}${placement.height_m == null ? "" : ` × altura ${cm(placement.height_m)}`} cm`;
 }

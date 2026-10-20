@@ -4,9 +4,9 @@
  * ainda cabe, por zona de cliente. Só leitura e conta: posições e caixas vêm
  * das coleções, a decisão de onde guardar é do motor nas Functions.
  *
- * A capacidade segue a conta conservadora do motor: a caixa ocupa a frente
- * da prateleira numa camada só, sem empilhar. "Cabe ainda" conta caixas de
- * referência (50 × 50 × 35 cm) na frente livre.
+ * A frente é ocupada pelas caixas apoiadas na prateleira. Caixas empilhadas
+ * continuam contando no peso e nos totais. "Cabe ainda" estima apenas caixas
+ * de referência (50 × 50 × 35 cm) na base; o motor verifica empilhamento.
  */
 
 import type { AnyRecord } from "@/lib/warehouse-ops/model";
@@ -20,7 +20,7 @@ export type ShelfState = "free" | "partial" | "full" | "review" | "blocked";
 export const SHELF_STATE_LABELS: Record<ShelfState, string> = {
   free: "livre",
   partial: "parcial",
-  full: "cheia",
+  full: "sem vaga na base",
   review: "em verificação",
   blocked: "bloqueada",
 };
@@ -49,7 +49,8 @@ function round(value: number) {
 }
 
 /** A frente que a caixa ocupa: o backend grava front_m; sem ele, o menor lado. */
-export function boxFront(box: Pick<WarehouseBox, "front_m" | "length_m" | "width_m">) {
+export function boxFront(box: Pick<WarehouseBox, "front_m" | "length_m" | "width_m" | "support_box_code" | "base_height_m">) {
+  if (box.support_box_code && Number(box.base_height_m) > 0) return 0;
   if (box.front_m != null && box.front_m > 0) return box.front_m;
   return Math.min(box.length_m, box.width_m);
 }

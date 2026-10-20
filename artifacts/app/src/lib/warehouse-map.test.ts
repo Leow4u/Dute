@@ -46,6 +46,19 @@ const box = (code: string, location: string, overrides: Record<string, unknown> 
   });
 
 describe("prateleira com caixas", () => {
+  it("caixa empilhada não ocupa outra frente, mas conta no peso, nas unidades e no total", () => {
+    const result = buildShelves([shelf("A-02", 2)], [
+      box("CX-000001", "A-02", { height_m: 0.3 }),
+      box("CX-000002", "A-02", { height_m: 0.3, support_box_code: "CX-000001", base_height_m: 0.3 }),
+    ])[0]!;
+    expect(result.front_used_m).toBe(0.5);
+    expect(result.free_front_m).toBe(1.3);
+    expect(result.weight_used_kg).toBe(20);
+    expect(result.unit_count).toBe(24);
+    expect(result.boxes).toHaveLength(2);
+    expect(result.remaining_reference_boxes).toBe(2);
+  });
+
   it("soma a frente usada e diz quantas caixas de referência ainda cabem", () => {
     const shelves = buildShelves([shelf("A-01", 1)], [box("CX-000001", "a-01"), box("CX-000002", "A-01")]);
     expect(shelves).toHaveLength(1);

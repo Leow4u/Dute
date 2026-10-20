@@ -393,3 +393,52 @@ describe("inventário de abertura: conferir antes de guardar", () => {
     await assert.rejects(save(code), /não está ativo/);
   });
 });
+
+describe("guarda de conferência com empilhamento", () => {
+  it("leva a permissão e o apoio da sugestão até a guarda e o saldo em A-02", async () => {
+    for (let i = 0; i < 3; i += 1) {
+      await createWarehouseBox(db, { customer_code: CUSTOMER, ...dimensions, length_m: 0.6, width_m: 0.6, height_m: 0.3,
+        location_id: "A-02", idempotency_key: nonce() }, actor);
+    }
+    const { code } = await createBox();
+    await save(code);
+    await change(code, "review");
+    const measured = { ...dimensions, length_m: 0.6, width_m: 0.6, height_m: 0.3 };
+    const suggestion = await suggestWarehousePosition(db, {
+      customer_code: CUSTOMER, ...measured, allow_stacking: true, exclude: ["A-01"],
+    }, actor);
+    assert.equal(suggestion.position?.code, "A-02");
+    const placement = suggestion.position!.placement;
+    const input = { ...await storeInput(code, "A-02"), ...measured, allow_stacking: true,
+      orientation: placement.orientation, support_box_code: placement.support_box_code };
+    const stored = await storeOpeningConferenceBox(db, input, actor);
+    assert.equal(stored.box.status, "stored");
+    assert.equal(stored.box.support_box_code, placement.support_box_code);
+    assert.equal(stored.box.base_height_m, 0.3);
+    assert.equal(stored.box.location_id, "A-02");
+    assert.equal((await rows("stock_balances"))[0]!.location_id, "A-02");
+    const replayed = await storeOpeningConferenceBox(db, input, actor);
+    assert.equal(replayed.box.code, code);
+    assert.equal((await rows("opening_inventory_lines")).length, 1);
+    await assert.rejects(removeWarehouseBox(db, { code: placement.support_box_code!, customer_code: CUSTOMER }, actor), /serve de apoio/);
+  });
+
+  it("reserva empilhada bloqueia o apoio e libera o vínculo ao voltar à conferência", async () => {
+    const base = await createWarehouseBox(db, { customer_code: CUSTOMER, ...dimensions, height_m: 0.3,
+      location_id: "A-02", idempotency_key: nonce() }, actor);
+    const { code } = await createBox();
+    await save(code);
+    await change(code, "review");
+    await reserveCheckpoint(code, "A-02");
+    await db.collection("warehouse_boxes").doc(code).update({
+      allow_stacking: true, support_box_code: base.box.code, base_height_m: 0.3,
+    });
+    await assert.rejects(removeWarehouseBox(db, { code: base.box.code, customer_code: CUSTOMER }, actor), /serve de apoio/);
+    await change(code, "release");
+    const released = (await state(code)).box;
+    assert.equal(released.status, "counting");
+    assert.equal(released.support_box_code, null);
+    assert.equal(released.base_height_m, null);
+    await removeWarehouseBox(db, { code: base.box.code, customer_code: CUSTOMER }, actor);
+  });
+});

@@ -268,6 +268,7 @@ export function OpeningInventoryWorkspace() {
   const [boxToRemove, setBoxToRemove] = useState<WarehouseBox>();
   const [legacyBoxMode, setLegacyBoxMode] = useState(false);
   const [allowTilt, setAllowTilt] = useState(false);
+  const [allowStacking, setAllowStacking] = useState(false);
   const [editingDraft, setEditingDraft] = useState<OpeningConferenceLine>();
   const [draftToRemove, setDraftToRemove] = useState<OpeningConferenceLine>();
   const [reviewBoxOpen, setReviewBoxOpen] = useState(false);
@@ -526,6 +527,7 @@ export function OpeningInventoryWorkspace() {
           ...boxPayload,
           sku_codes: contentSkus,
           allow_tilt: allowTilt,
+          allow_stacking: allowStacking,
           exclude,
         }),
       });
@@ -555,7 +557,9 @@ export function OpeningInventoryWorkspace() {
           ...boxPayload,
           location_id: candidate.code,
           allow_tilt: allowTilt,
+          allow_stacking: allowStacking,
           orientation: candidate.placement.orientation,
+          support_box_code: candidate.placement.support_box_code ?? null,
           suggestion: suggestion
             ? {
                 position: suggestion.position?.code ?? null,
@@ -659,6 +663,7 @@ export function OpeningInventoryWorkspace() {
     setLegacyBoxMode(false);
     setBoxDraft(emptyBoxDraft());
     setAllowTilt(false);
+    setAllowStacking(false);
     setSuggestion(undefined);
     setExcluded([]);
     setRefusal(undefined);
@@ -733,7 +738,8 @@ export function OpeningInventoryWorkspace() {
         { method: "POST", headers: JSON_HEADERS,
           body: JSON.stringify(withAttempt("store-conference", {
             ...conferenceBody(), ...boxPayload, location_id: candidate.code,
-            allow_tilt: allowTilt, orientation: candidate.placement.orientation,
+            allow_tilt: allowTilt, allow_stacking: allowStacking, orientation: candidate.placement.orientation,
+            support_box_code: candidate.placement.support_box_code ?? null,
             suggestion: suggestion ? { position: suggestion.position?.code, reason: suggestion.position?.reason,
               alternatives: suggestion.alternatives.map((alternative) => alternative.code) } : undefined,
             refusal,
@@ -1158,7 +1164,13 @@ export function OpeningInventoryWorkspace() {
                     <Checkbox id="box-allow-tilt" checked={allowTilt} disabled={boxBusy} onCheckedChange={(checked) => {
                       setAllowTilt(checked === true); suggestionGeneration.current += 1; setSuggestion(undefined); setExcluded([]); setRefusal(undefined);
                     }} />
-                    <Label htmlFor="box-allow-tilt" className="leading-6">Pode apoiar esta caixa de lado</Label>
+                    <Label htmlFor="box-allow-tilt" className="leading-6">Pode virar esta caixa de lado</Label>
+                  </div>
+                  <div className="flex items-start gap-3 rounded-md border border-border p-3">
+                    <Checkbox id="box-allow-stacking" checked={allowStacking} disabled={boxBusy} onCheckedChange={(checked) => {
+                      setAllowStacking(checked === true); suggestionGeneration.current += 1; setSuggestion(undefined); setExcluded([]); setRefusal(undefined);
+                    }} />
+                    <Label htmlFor="box-allow-stacking" className="leading-6">Pode empilhar esta caixa sobre outra que suporte seu peso</Label>
                   </div>
                   {suggestion ? (
                     <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">

@@ -4,6 +4,7 @@ import {
   boxDraftToPayload,
   emptyBoxDraft,
   formatBoxDimensions,
+  formatBoxPlacement,
   occupiedPositions,
   parseCentimeters,
   parseKilos,
@@ -125,5 +126,19 @@ describe("conteúdo da caixa para a regra do mesmo produto", () => {
     expect(resolveContentSkus("a.01.0802.007.g, sku-camisa-g\nNOVO-1 novo-1", products)).toEqual(["SKU-CAMISA-G", "NOVO-1"]);
     expect(resolveContentSkus("sku-sem-codigo", products)).toEqual(["SKU-SEM-CODIGO"]);
     expect(resolveContentSkus("   ", products)).toEqual([]);
+  });
+});
+
+describe("apoio da caixa na sugestão e na leitura", () => {
+  it("mostra a caixa de apoio e a altura da base para confirmação física", () => {
+    expect(formatBoxPlacement({ front_m: 0.6, depth_m: 0.6, height_m: 0.3,
+      support_box_code: "CX-000001", base_height_m: 0.3,
+    })).toBe("Sobre a caixa CX-000001 · base a 30 cm · Frente 60 × profundidade 60 × altura 30 cm");
+    expect(formatBoxPlacement({ front_m: 0.6, depth_m: 0.6, height_m: 0.3 }))
+      .toBe("Frente 60 × profundidade 60 × altura 30 cm");
+    const stored = warehouseBoxFromRecord({ support_box_code: "cx-000001", base_height_m: 0.3, allow_stacking: true });
+    expect(stored.support_box_code).toBe("CX-000001");
+    expect(stored.base_height_m).toBe(0.3);
+    expect(stored.allow_stacking).toBe(true);
   });
 });

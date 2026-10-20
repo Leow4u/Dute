@@ -120,7 +120,21 @@ prateleira; altura da caixa ≤ altura livre; frente da caixa ≤ frente livre
 (comprimento menos a soma das frentes das caixas já lá); peso bruto somado ≤
 peso máximo. "Frente" é o lado da caixa que fica paralelo à prateleira. O
 sistema testa as duas orientações horizontais e usa a que deixa a menor frente
-e ainda cabe na profundidade. Caixa não é empilhada sobre caixa nesta versão.
+e ainda cabe na profundidade. Virar para outro lado exige `allow_tilt`.
+
+Empilhar exige a permissão independente `allow_stacking`. Sem frente livre,
+o motor testa o topo de caixas guardadas na mesma posição e cliente. A nova
+base precisa caber integralmente sobre uma caixa, a altura total da pilha
+precisa caber no vão e o peso de todas as caixas continua limitado pela
+prateleira. Cada apoio recebe uma única caixa diretamente acima. A sugestão
+identifica `support_box_code` e `base_height_m`; a guarda confirma esse
+apoio dentro da transação que reserva capacidade. A resistência da embalagem
+é conferida pelo operador, não calculada pelo sistema.
+
+Caixas em `committing` ocupam seu lugar e seu apoio, mas não podem servir
+de base até ficarem `stored`. A frente de uma pilha é contada uma única vez.
+Caixas antigas sem vínculo de apoio permanecem na base; nada é reorganizado
+automaticamente. Não se permite remover uma caixa com outra apoiada sobre ela.
 
 ## 4. Regras de endereçamento (motor determinístico)
 
@@ -222,8 +236,9 @@ O estorno continua separado e não deve ser usado para trocar apenas a caixa.
 **Recusa:** o motivo e a alternativa escolhida ficam auditados. Recusar uma
 sugestão não coloca mais toda a prateleira em verificação.
 
-Capacidade continua por uma fileira, sem empilhamento nem segunda fileira.
-Sem permissão para apoiar de lado, preserva a altura original. Totais de
+Capacidade continua por uma fileira na profundidade. Empilhamento é
+opcional, com apoio identificado e altura total revalidada (seção 3.5).
+Sem permissão para virar de lado, preserva a altura original. Totais de
 rascunhos e publicados são separados; posições ocupadas contam caixas
 armazenadas. Procedimento e limites em
 [`wms-abertura-correcoes.md`](wms-abertura-correcoes.md).
@@ -271,9 +286,11 @@ SKUs) foi removido e o endereço redireciona para o novo.
   ainda cabe, as caixas com conteúdo (das linhas da abertura, com
   quantidade), e os atalhos para etiqueta da posição, etiquetas das caixas e
   o cadastro. No celular a ficha sobe como gaveta.
-- Só leitura: as contas (frente usada, o que cabe, estado) seguem a regra do
-  motor, sem empilhar caixa. Mover caixa e bloquear pela ficha ficam para a
-  fase 1, com a movimentação.
+- Só leitura: a frente usada conta uma vez por pilha; peso, caixas e unidades
+  incluem todas as camadas. "Cabe ainda" e "sem vaga na base" se referem à
+  capacidade de referência na base da prateleira. A ficha identifica o apoio
+  das caixas empilhadas. A sugestão de guarda verifica o espaço acima delas.
+  Mover caixa e bloquear pela ficha ficam para a fase 1, com a movimentação.
 
 ### 5.7 Cobrança por posição ocupada (fase 2)
 

@@ -8,7 +8,7 @@ O inventário de abertura é a carga inicial de cada cliente. Durante essa etapa
 2. Identifique e conte cada produto. Confira a caixa de destino a cada lançamento. Os itens salvos ficam em conferência, sem criar catálogo, SKU, saldo ou posição ocupada.
 3. Edite ou remova rascunhos até o resumo corresponder ao conteúdo físico.
 4. Use **Revisar e fechar caixa**. O fechamento é persistido; para editar novamente, use **Reabrir conferência**.
-5. Meça a caixa fechada e peça a posição. Se a embalagem puder apoiar em outro lado, marque **Pode apoiar esta caixa de lado**. Confira frente, profundidade e altura efetivas exibidas na sugestão.
+5. Meça a caixa fechada e peça a posição. Se a embalagem puder virar, marque **Pode virar esta caixa de lado**. Para empilhar, marque separadamente **Pode empilhar esta caixa sobre outra que suporte seu peso**. Confira frente, profundidade e altura efetivas exibidas na sugestão.
 6. Confirme a guarda na posição física e imprima a etiqueta. Só nessa etapa os produtos novos ganham SKU e as contagens entram no estoque.
 7. Inicie a próxima caixa. O inventário só pode ser concluído quando todas as caixas estiverem guardadas ou as caixas vazias tiverem sido removidas.
 
@@ -22,7 +22,19 @@ Caixas armazenadas podem ser reabertas explicitamente para ajustes durante a ses
 
 As seis orientações da caixa são consideradas quando o operador permite apoiar de lado. Sem essa permissão, a altura original é preservada. A confirmação revalida espaço e peso no servidor e grava a orientação efetiva, sem alterar as medidas originais.
 
-O cálculo continua considerando uma fileira, sem empilhamento nem segunda fileira na profundidade. A recusa de uma sugestão vale para a caixa atual e fica auditada; não bloqueia a prateleira para as demais caixas.
+O cálculo considera uma fileira na profundidade. Com a permissão de empilhar,
+o motor também testa os topos livres de caixas já guardadas na mesma
+prateleira. A base da nova caixa precisa caber inteira sobre uma única caixa;
+a soma das alturas e o peso total precisam respeitar a prateleira. A pessoa
+confere se a embalagem indicada suporta o peso: o cadastro ainda não mede
+resistência da embalagem. A sugestão mostra o código do apoio e a altura da
+base; a confirmação revalida esse mesmo apoio, sem substituí-lo.
+
+O sistema prefere a base da prateleira quando há frente livre. Caixas em
+guarda (`committing`) reservam o apoio, mas só oferecem um novo topo após
+concluir a guarda. Não é possível remover uma caixa que serve de apoio a
+outra. O mapa desconta da frente apenas as caixas da base e informa
+capacidade de referência **na base**, sem estimar empilhamento automaticamente. A recusa de uma sugestão vale para a caixa atual e fica auditada; não bloqueia a prateleira para as demais caixas.
 
 No fluxo novo, a sugestão usa os SKUs conhecidos das linhas conferidas. A preferência continua por SKU exato e proximidade; não deduz família/modelo a partir do nome nem do sufixo do código. A organização por modelo/cor é feita na separação física. Para produtos totalmente novos, ainda sem SKU e posição anterior, vale a primeira prateleira compatível da zona do cliente.
 
