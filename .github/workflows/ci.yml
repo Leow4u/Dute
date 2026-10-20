@@ -14,16 +14,12 @@ on:
         description: "Publicar a main na produção (app.dutelog.com.br): frontend e functions"
         type: boolean
         default: false
-      publicar_dute_prod:
-        description: "Antes do corte da Fase 1: publicar a main no dute-prod (confere só o endereço run.app)"
-        type: boolean
-        default: false
       liberar_trafego:
-        description: "Mudar o tráfego do dute-btg-app: 100% para a última revisão pronta (--to-latest), ou para a revisão informada abaixo"
+        description: "Mudar o tráfego do dute-app: 100% para a última revisão pronta (--to-latest), ou para a revisão informada abaixo"
         type: boolean
         default: false
       revisao:
-        description: "Opcional, para rollback: nome da revisão que recebe 100% do tráfego (ex.: dute-btg-app-00143-loc). Vazio = última revisão pronta."
+        description: "Opcional, para rollback: nome da revisão que recebe 100% do tráfego (ex.: dute-app-00012-abc). Vazio = última revisão pronta."
         type: string
         default: ""
 
@@ -136,8 +132,8 @@ jobs:
       firebase_app_id: "1:368642218894:web:13790f72c76fbb21af22df"
 
   # Produção só por disparo manual a partir da main, com "publicar_producao"
-  # marcado. Até a migração do WMS (Fase 1, docs/plataforma/plano.md) a
-  # produção é o dute-btg; o dute-prod entra no lugar dele no corte.
+  # marcado. Desde o corte da Fase 1 (docs/plataforma/fase-1-corte.md) a
+  # produção é o dute-prod; o dute-btg ficou congelado.
   publicar-producao:
     name: Publicar na produção
     needs: [frontend-typecheck, functions-unit, functions-integration]
@@ -148,32 +144,11 @@ jobs:
     uses: ./.github/workflows/publicar.yml
     with:
       ambiente: producao
-      project_id: dute-btg
-      project_number: "912453685006"
-      service: dute-btg-app
-      repository: dute-btg
-      public_url: https://app.dutelog.com.br
-      firebase_api_key: "AIzaSyDaoJ0a_ZScGJHEbwwvUPYvW7dRmPssPQw"
-      firebase_app_id: "912453685006:web:38592b73c2d5569823d15f"
-
-  # Até o corte da Fase 1 (docs/plataforma/fase-1-corte.md), o dute-prod recebe a
-  # main só por este disparo, conferindo o endereço run.app: app.dutelog.com.br
-  # ainda é do dute-btg. No corte, publicar-producao passa a ser o dute-prod e
-  # este job sai.
-  publicar-dute-prod:
-    name: Publicar no dute-prod (antes do corte)
-    needs: [frontend-typecheck, functions-unit, functions-integration]
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publicar_dute_prod
-    permissions:
-      contents: read
-      id-token: write
-    uses: ./.github/workflows/publicar.yml
-    with:
-      ambiente: dute-prod
       project_id: dute-prod
       project_number: "974421124970"
       service: dute-app
       repository: dute
+      public_url: https://app.dutelog.com.br
       firebase_api_key: "AIzaSyAqA8X_nzaN145XHBbRbviSbXENw_fQkpw"
       firebase_app_id: "1:974421124970:web:e224e2335773655bde6713"
 
@@ -188,12 +163,12 @@ jobs:
       contents: read
       id-token: write
     env:
-      PROJECT_ID: dute-btg
+      PROJECT_ID: dute-prod
       REGION: southamerica-east1
-      SERVICE: dute-btg-app
+      SERVICE: dute-app
       PUBLIC_URL: https://app.dutelog.com.br
-      WORKLOAD_IDENTITY_PROVIDER: projects/912453685006/locations/global/workloadIdentityPools/github-pool/providers/github-provider
-      GCP_SERVICE_ACCOUNT: github-actions-deploy@dute-btg.iam.gserviceaccount.com
+      WORKLOAD_IDENTITY_PROVIDER: projects/974421124970/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+      GCP_SERVICE_ACCOUNT: github-actions-deploy@dute-prod.iam.gserviceaccount.com
     steps:
       - uses: google-github-actions/auth@v2
         with:
@@ -237,12 +212,12 @@ jobs:
       contents: read
       id-token: write
     env:
-      PROJECT_ID: dute-btg
+      PROJECT_ID: dute-prod
       REGION: southamerica-east1
-      SERVICE: dute-btg-app
+      SERVICE: dute-app
       PUBLIC_URL: https://app.dutelog.com.br
-      WORKLOAD_IDENTITY_PROVIDER: projects/912453685006/locations/global/workloadIdentityPools/github-pool/providers/github-provider
-      GCP_SERVICE_ACCOUNT: github-actions-deploy@dute-btg.iam.gserviceaccount.com
+      WORKLOAD_IDENTITY_PROVIDER: projects/974421124970/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+      GCP_SERVICE_ACCOUNT: github-actions-deploy@dute-prod.iam.gserviceaccount.com
     steps:
       - uses: google-github-actions/auth@v2
         with:

@@ -1,8 +1,8 @@
 param(
-  [string]$ProjectId = "dute-btg",
+  [string]$ProjectId = "dute-prod",
   [string]$Region = "southamerica-east1",
-  [string]$Service = "dute-btg-app",
-  [string]$Repository = "dute-btg",
+  [string]$Service = "dute-app",
+  [string]$Repository = "dute",
   [switch]$SkipBuild
 )
 

@@ -1,8 +1,8 @@
 param(
-  [string]$ProjectId = "dute-btg",
-  [string]$CertName = "dute-btg-app-cert",
+  [string]$ProjectId = "dute-prod",
+  [string]$CertName = "dute-app-cert",
   [string]$Domain = "app.dutelog.com.br",
-  [string]$CloudRunUrl = "https://dute-btg-app-pgv7m7drtq-rj.a.run.app"
+  [string]$CloudRunUrl = "https://dute-app-w2wl7rt66a-rj.a.run.app"
 )
 
 $ErrorActionPreference = "Continue"
@@ -54,10 +54,10 @@ Show-Dns -Type "CNAME"
 
 Write-Host ""
 Write-Host "Certificado Google Cloud:"
-gcloud compute ssl-certificates describe $CertName `
-  --global `
+# Desde o corte da Fase 1 o certificado e do Certificate Manager (dute-prod).
+gcloud certificate-manager certificates describe $CertName `
   --project $ProjectId `
-  --format "yaml(managed.status,managed.domainStatus,managed.domains)"
+  --format "yaml(sanDnsnames,managed.state,managed.authorizationAttemptInfo,expireTime)"
 
 Show-HttpProbe -Label "Cloud Run direto:" -Url "$CloudRunUrl/portal/estoque"
 Show-HttpProbe -Label "Dominio final HTTPS:" -Url "https://$Domain/portal/estoque"

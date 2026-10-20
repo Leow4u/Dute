@@ -14,20 +14,21 @@ documentação de produto e operação está em `docs/`.
 
 - **Plano em `docs/plataforma/plano.md`** (Fases 0 a 8) e telas em
   `docs/mockups/` (identidade v3). Fase 0, projetos e repositório, feita em
-  19/10/2026. Fase 1, migração do WMS para o `dute-prod`, em andamento: ensaio
-  na homologação e `dute-prod` preparado em 19/10/2026; o corte segue
-  `docs/plataforma/fase-1-corte.md` (`tools/migracao_firestore.py` e
+  19/10/2026. Fase 1, migração do WMS para o `dute-prod`, feita em 20/10/2026,
+  antes da contagem de abertura do inventário (roteiro e registro em
+  `docs/plataforma/fase-1-corte.md`; ferramentas `tools/migracao_firestore.py` e
   `tools/congelar_projeto.ps1`).
 - **Projetos Google Cloud**, todos em `southamerica-east1`:
-  - `dute-btg`: produção atual (`app.dutelog.com.br`, Cloud Run `dute-btg-app`).
-    Depois do corte da Fase 1 fica parado de 30 a 60 dias; quem apaga é o
-    Leonardo.
+  - `dute-prod`: produção (`app.dutelog.com.br` e o site `dutelog.com.br`, Cloud
+    Run `dute-app` e `dutelog-site`, Load Balancer com IP `34.54.243.247`).
+    Certificados do Certificate Manager; a renovação depende dos CNAMEs
+    `_acme-challenge_drmxqhwlpiaruyad*` na Hostinger, que não podem sair.
   - `dute-homolog`: homologação. Recebe cada push em `main` (Cloud Run
     `dute-app`, endereço `run.app`).
-  - `dute-prod`: produção da plataforma, sem dados até o corte da Fase 1. Já
-    tem Load Balancer próprio (IP `34.54.243.247`, app e site institucional).
-    Até o corte, recebe frontend e functions da `main` só pelo disparo manual
-    `publicar_dute_prod` do CI; regras e índices, à mão (abaixo).
+  - `dute-btg`: produção anterior, congelada desde o corte da Fase 1
+    (`tools/congelar_projeto.ps1`). Fica parada de 30 a 60 dias como volta pelo
+    DNS (só até 02/12/2026, quando vence o certificado do Load Balancer antigo);
+    quem apaga é o Leonardo.
 - **Pastas:**
   - `artifacts/app` (`@workspace/app`): o app único, hoje o WMS.
   - `artifacts/dutelog-site`: site institucional.
@@ -50,8 +51,9 @@ documentação de produto e operação está em `docs/`.
 - **`main` é a branch de trabalho.** O PR #1 (`codex/ai-native-foundation`) foi
   mergeado em 02/09/2026. Não existe mais branch paralela com "o código de verdade".
 - **Produção é `https://app.dutelog.com.br`**, servida por Cloud Run
-  (`dute-btg-app`, região `southamerica-east1`, projeto Google Cloud `dute-btg`)
-  até o corte da Fase 1. Firebase Hosting **não** é produção nem fallback.
+  (`dute-app`, região `southamerica-east1`, projeto Google Cloud `dute-prod`)
+  desde o corte da Fase 1 (20/10/2026); antes, `dute-btg-app` no `dute-btg`.
+  Firebase Hosting **não** é produção nem fallback.
 - **Publicação pelo GitHub Actions, em dois ambientes.** Cada push em `main`
   publica frontend e functions na homologação (`dute-homolog`); a produção só
   recebe por disparo manual (Actions > CI > Run workflow com `publicar_producao`
@@ -68,12 +70,12 @@ documentação de produto e operação está em `docs/`.
   quando a verificação falha) e `docs/deploy-functions-manual.md`.
   **Regras e índices do Firestore são manuais e não vão junto com
   `--only functions`**: `cd C:\DEV\Dute` e
-  `firebase deploy --only firestore,storage --project dute-btg` (ou
-  `dute-homolog`, `dute-prod`); as regras do Storage também não vão pelo CI. Em
+  `firebase deploy --only firestore,storage --project dute-prod` (ou
+  `dute-homolog`); as regras do Storage também não vão pelo CI. Em
   16/10/2026 a tela Estoque › Posições ficou em "Missing or insufficient
   permissions" depois do deploy de functions, até as regras subirem.
 - **Depois de qualquer deploy de functions, rode
-  `tools/check_functions_invoker.ps1 -ProjectId <projeto>`** (padrão `dute-btg`).
+  `tools/check_functions_invoker.ps1 -ProjectId <projeto>`** (padrão `dute-prod`).
   Em 03/09/2026, 8 callables (incluindo `createCustomerRequest`) ficaram sem
   `roles/run.invoker` para `allUsers` e falhavam com um erro genérico antes mesmo
   do código rodar. Ver `docs/deploy-functions-manual.md`.

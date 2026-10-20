@@ -37,7 +37,7 @@ pnpm --filter @workspace/app run build
 
 ## Deploy
 
-O projeto Google Cloud padrão é `dute-btg`.
+O projeto Google Cloud padrão é `dute-prod` (desde o corte da Fase 1, 20/10/2026; antes, `dute-btg`).
 O único endereço oficial de produção é `https://app.dutelog.com.br`.
 O app é publicado no Cloud Run pelo container descrito em `Dockerfile`.
 
@@ -55,10 +55,10 @@ Antes de trocar DNS, preserve e-mail, SPF, Microsoft, Google verification, MX, D
 
 O Load Balancer HTTPS de produção usa:
 
-- Cloud Run service: `dute-btg-app`
+- Cloud Run service: `dute-app`
 - Região: `southamerica-east1`
-- IP global: `8.232.54.179`
-- Certificado gerenciado: `dute-btg-app-cert`
+- IP global: `34.54.243.247`
+- Certificados do Certificate Manager: `dute-app-cert` (app) e `dutelog-site-cert` (site), no mapa `dute-cert-map`
 
 Para apontar `app.dutelog.com.br` para o Google Cloud Load Balancer:
 
