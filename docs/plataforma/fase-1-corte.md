@@ -81,7 +81,8 @@ faltava na homologação e existia no `dute-btg`:
   `www.dutelog.com.br`), autorizados por DNS do tipo por projeto, que não
   disputa registro com outro projeto. Ativos desde 19/10/2026 23:24, emitidos
   pela Google Trust Services; a renovação é automática **enquanto os três CNAMEs
-  `_acme-challenge_drmxqhwlpiaruyad*` ficarem na zona**.
+  `_acme-challenge_drmxqhwlpiaruyad*` ficarem na zona**. A porta 80, só com
+  redirecionamento para https, entrou depois do corte (seção "Porta 80").
 - Teste pelo IP, sem DNS: `app.dutelog.com.br` responde 200 com a imagem
   provisória e `dutelog.com.br`/`www` com o site.
 - Bucket `gs://dute-prod-migracao` para o export do corte; o agente do Firestore
@@ -438,9 +439,31 @@ Feito, com o OK do Leonardo:
 O site institucional (`@` e `www`) continua no Load Balancer do `dute-btg`, que
 segue no ar; a troca dele (passo 9) fica para depois.
 
+### Porta 80, 20/10/2026
+
+Nenhum endereço respondia em `http://`: o Google aceitava a conexão na porta 80 e
+não devolvia nada. O Load Balancer do `dute-btg` também era assim. Com o OK do
+Leonardo, o do `dute-prod` ganhou a porta 80 no mesmo IP, só para redirecionar;
+nada no HTTPS mudou:
+
+- mapa `dute-app-http-redirect`, só com `defaultUrlRedirect`: `httpsRedirect`,
+  `MOVED_PERMANENTLY_DEFAULT` (301) e a query preservada;
+- proxy `dute-app-http-proxy`;
+- regra `dute-app-http-rule` (80) no `dute-app-ip`, `EXTERNAL_MANAGED`.
+
+| Hora (UTC) | Passo | Resultado |
+|---|---|---|
+| 10:17–10:18 | Mapa, proxy e regra criados | regra de 443, `dute-app-https-proxy` e `dute-app-url-map` com o mesmo fingerprint de antes |
+| 10:18–10:22 | Propagação | porta 80 sem resposta e depois 404 do Google, até o mapa chegar |
+| 10:22 | Conferência | `http://dutelog.com.br/`, `http://www.dutelog.com.br/` e `http://app.dutelog.com.br/` dão 301 para o mesmo endereço em `https://`, com caminho e query (o Google põe `:443` no `Location`, o navegador tira); seguindo o redirecionamento, 200; os três `https://` seguem 200 |
+
+Para desfazer: apagar a regra `dute-app-http-rule` (a porta 80 volta a não
+responder), depois o proxy e o mapa.
+
 ## Histórico
 
 | Data | O quê |
 |---|---|
 | 19/10/2026 | Ensaio na homologação (tabela acima), `dute-prod` preparado, CNAMEs criados na Hostinger, certificados ativos e Load Balancer novo testado pelo IP |
 | 20/10/2026 | Corte antes da contagem de abertura: `app.dutelog.com.br` no `dute-prod` desde 03:39 UTC, `dute-btg` congelado (seção acima) |
+| 20/10/2026 | Porta 80 do Load Balancer do `dute-prod` redirecionando para https (301) desde 10:22 UTC (seção "Porta 80") |
