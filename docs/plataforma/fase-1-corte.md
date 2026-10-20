@@ -429,13 +429,18 @@ Feito, com o OK do Leonardo:
 | 03:17–03:19 | Export do `dute-btg` (`gs://dute-prod-migracao/corte-20261020`) e import no `dute-prod` | 476 documentos; `dute-btg` igual antes e depois; `dute-prod` "Iguais." ao `dute-btg` |
 | 03:20 | Contas | 6 de 6 com a senha de antes |
 | 03:23 | `dute-btg` de novo contra o export | "Iguais.": nada gravou depois da cópia |
+| — | Leonardo entrou com a senha de antes pelo `run.app` do `dute-prod` | ok |
+| 03:27–03:38 | `congelar_projeto.ps1 -ProjectId dute-btg -Apply` | "CONGELAR concluido": regras de manutenção, rotina pausada, 68 callables sem invocação pública (403) |
+| 03:38 | `dute-btg` congelado contra o export | "Iguais." |
+| 03:39 | Hostinger, registro `app` (A) de `8.232.54.179` para `34.54.243.247`, TTL 300 | só esse registro mudou (zona antes e depois em `.secretsase-1\dns-zona-*-app.json`) |
+| 03:41 | Conferência | servidor da Hostinger, Google e Cloudflare respondem o IP novo; `https://app.dutelog.com.br` 200 com o certificado do Certificate Manager e o mesmo build do `dute-app` (configuração do `dute-prod`) |
 
-Falta: congelar o `dute-btg`, trocar o registro `app` (A) para `34.54.243.247`
-(passo 6), conferir (passo 7) e o merge do PR do corte (passo 8).
+O site institucional (`@` e `www`) continua no Load Balancer do `dute-btg`, que
+segue no ar; a troca dele (passo 9) fica para depois.
 
 ## Histórico
 
 | Data | O quê |
 |---|---|
 | 19/10/2026 | Ensaio na homologação (tabela acima), `dute-prod` preparado, CNAMEs criados na Hostinger, certificados ativos e Load Balancer novo testado pelo IP |
-| 20/10/2026 | Corte antes da contagem de abertura (seção acima) |
+| 20/10/2026 | Corte antes da contagem de abertura: `app.dutelog.com.br` no `dute-prod` desde 03:39 UTC, `dute-btg` congelado (seção acima) |
