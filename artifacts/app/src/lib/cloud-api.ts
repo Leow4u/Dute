@@ -2656,7 +2656,7 @@ async function getBillingEvidence(competencia: string) {
   ]);
 
   const allMovementsInPeriod = movements.items.filter((movement) =>
-    sameBillingCompetencia(
+    movement.billable !== false && sameBillingCompetencia(
       movement.occurred_at ?? movement.data ?? movement.created_at,
       competencia,
     ),
@@ -2895,7 +2895,7 @@ async function getBillingPeriod(competencia: string) {
   // A faixa já veio filtrada pelo servidor; a checagem em memória cobre
   // apenas registros legados cujo `data` diverge de `occurred_at`.
   const allMovementsInPeriod = movements.items.filter((movement) =>
-    sameBillingCompetencia(
+    movement.billable !== false && sameBillingCompetencia(
       movement.occurred_at ?? movement.data ?? movement.created_at,
       competencia,
     ),
