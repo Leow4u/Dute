@@ -168,3 +168,33 @@ describe("correção de caixa no inventário de abertura", () => {
     expect(functionRoute(url, "GET")).toBeNull();
   });
 });
+
+describe("conferência persistente antes da guarda", () => {
+  const scope = { customer_code: "Cliente A", session_id: "sessao-1", expected_revision: 4, idempotency_key: "tentativa-1" };
+  it("cria caixa sem exigir medidas ou posição", async () => {
+    const route = functionRoute("/api/warehouse/opening-inventory/boxes", "POST");
+    expect(route?.name).toBe("createOpeningConferenceBox");
+    expect(await route?.payload("", { body: JSON.stringify(scope) })).toEqual(scope);
+  });
+  it.each([
+    ["read", "getOpeningConferenceBox"], ["lines", "saveOpeningConferenceLine"],
+    ["state", "setOpeningConferenceBoxState"], ["store", "storeOpeningConferenceBox"],
+    ["resume", "resumeOpeningConferenceBox"],
+  ])("encaminha %s com código da rota e escopo preservado", async (action, name) => {
+    const path = `/api/warehouse/opening-inventory/boxes/CX-000123/${action}`;
+    const route = functionRoute(path, "POST");
+    expect(route?.name).toBe(name);
+    expect(await route?.payload(path, { body: JSON.stringify({ ...scope, box_code: "OUTRA", allow_tilt: true, orientation: "width_height_length" }) })).toEqual({
+      ...scope, box_code: "CX-000123", allow_tilt: true, orientation: "width_height_length",
+    });
+    expect(functionRoute(path, "GET")).toBeNull();
+  });
+  it("remove somente o rascunho identificado na rota", async () => {
+    const path = "/api/warehouse/opening-inventory/boxes/CX-000123/lines/linha%20dois/remove";
+    const route = functionRoute(path, "POST");
+    expect(route?.name).toBe("removeOpeningConferenceLine");
+    expect(await route?.payload(path, { body: JSON.stringify({ ...scope, line_id: "outra" }) })).toEqual({
+      ...scope, box_code: "CX-000123", line_id: "linha dois",
+    });
+  });
+});
