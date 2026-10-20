@@ -14,7 +14,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { MODULOS_CONTRATAVEIS, MODULO_ROTULO } from "@workspace/dominio";
+
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -44,6 +47,7 @@ import {
   emptyCustomerForm,
   peopleLabel,
   portalStatusFor,
+  toggleContractedModule,
   zoneLabel,
   type CustomerForm,
   type CustomerRecord,
@@ -62,6 +66,7 @@ import {
   templateStatusLabel,
   type OperationTemplateKey,
 } from "@/lib/operations";
+import { PLATAFORMA_LIBERADA } from "@/lib/liberacao";
 import { CLIENT_PROFILES_QUERY_KEY } from "@/lib/active-customer-context";
 import { humanApiError } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -223,12 +228,12 @@ export default function SettingsCustomers() {
       if (dialog?.mode === "edit") {
         return apiJson(`/api/customers/${encodeURIComponent(customerDocumentId(dialog.row.customer))}`, {
           method: "PATCH",
-          body: JSON.stringify(customerPayload(form, "edit")),
+          body: JSON.stringify(customerPayload(form, "edit", { modules: PLATAFORMA_LIBERADA })),
         });
       }
       return apiJson("/api/customers", {
         method: "POST",
-        body: JSON.stringify(customerPayload(form, "create")),
+        body: JSON.stringify(customerPayload(form, "create", { modules: PLATAFORMA_LIBERADA })),
       });
     },
     onSuccess: async () => {
@@ -542,6 +547,25 @@ export default function SettingsCustomers() {
                   </Select>
                 </FormField>
               </div>
+
+              {PLATAFORMA_LIBERADA ? (
+                <fieldset className="min-w-0 space-y-1.5">
+                  <legend className="text-sm font-medium leading-none">Módulos contratados</legend>
+                  <div className="flex flex-wrap gap-x-5 gap-y-2 pt-1">
+                    {MODULOS_CONTRATAVEIS.map((key) => (
+                      <label key={key} className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={form.modules.includes(key)}
+                          onCheckedChange={(checked) =>
+                            update({ modules: toggleContractedModule(form.modules, key, checked === true) })
+                          }
+                        />
+                        {MODULO_ROTULO[key]}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              ) : null}
 
               <div
                 className={cn(

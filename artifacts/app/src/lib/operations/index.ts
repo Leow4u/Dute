@@ -1,3 +1,5 @@
+import { modulosContratados, type ModuloContratavel } from "@workspace/dominio";
+
 import { btg } from "./packs/btg";
 import { insumos } from "./templates/insumos";
 import { mobiliario } from "./templates/mobiliario";
@@ -65,6 +67,8 @@ export type CustomerProfileRecord = {
   portal_status?: string | null;
   status?: string | null;
   archived?: boolean | null;
+  /** Módulos contratados (lib/dominio); sem o campo vale o padrão da BTG. */
+  modules?: unknown;
 };
 
 export type OperationProfile = {
@@ -77,6 +81,8 @@ export type OperationProfile = {
   portalStatus: PortalStatus;
   /** "published": veio do registro publicado; "fallback": sem registro, modelo padrão. */
   source: "published" | "fallback";
+  /** Módulos contratados. Sem registro, ou sem o campo, armazenagem e faturas. */
+  modules: ModuloContratavel[];
 };
 
 export function resolveOperationProfile(
@@ -100,6 +106,7 @@ export function resolveOperationProfile(
     skuPrefix,
     portalStatus,
     source: record ? "published" : "fallback",
+    modules: modulosContratados(record?.modules),
   };
 }
 

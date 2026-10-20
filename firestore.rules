@@ -18,8 +18,11 @@ service cloud.firestore {
         && get(userDoc()).data.get('access_disabled', false) != true;
     }
 
+    // Os 11 papéis da plataforma (lib/dominio, PAPEIS). Papel novo só entra
+    // onde uma regra o liste de propósito; as listas abaixo continuam
+    // explícitas, então ele nasce sem acesso a nada.
     function validProfileRole(role) {
-      return role in ['owner', 'admin', 'interno', 'wms', 'financeiro', 'suporte', 'cliente'];
+      return role in ['owner', 'admin', 'interno', 'wms', 'campo', 'comercial', 'financeiro', 'rh', 'suporte', 'painel', 'cliente'];
     }
 
     function profileRole() {
@@ -128,6 +131,24 @@ service cloud.firestore {
     function isOwnProjection() {
       return resource.data.keys().hasAll(['customer_code'])
         && isOwnCustomerCode(resource.data.customer_code);
+    }
+
+    // Módulos contratados do cliente (client_access/{customer_code}), gravados
+    // só pelas Functions na transação do cadastro. Sem o documento vale o que
+    // a BTG tem hoje: armazenagem e faturas. Só é avaliado depois de
+    // isOwnProjection(), quando o código do perfil já é texto.
+    function clientAccessDoc() {
+      return /databases/$(database)/documents/client_access/$(profileCustomerCode());
+    }
+
+    function contractedModules() {
+      return exists(clientAccessDoc())
+        ? get(clientAccessDoc()).data.get('modules', ['wms', 'financeiro'])
+        : ['wms', 'financeiro'];
+    }
+
+    function isOwnProjectionWith(module) {
+      return isOwnProjection() && module in contractedModules();
     }
 
     function optionalStringField(field) {
@@ -612,7 +633,7 @@ service cloud.firestore {
     }
 
     match /client_invoices/{invoiceId} {
-      allow read: if canReadBilling() || isOwnProjection();
+      allow read: if canReadBilling() || isOwnProjectionWith('financeiro');
       allow create, update, delete: if false;
     }
 
@@ -725,7 +746,7 @@ service cloud.firestore {
     }
 
     match /client_request_status/{requestId} {
-      allow read: if canReadOperations() || isOwnProjection();
+      allow read: if canReadOperations() || isOwnProjectionWith('wms');
       allow create, update, delete: if false;
     }
 
@@ -735,7 +756,7 @@ service cloud.firestore {
     }
 
     match /client_order_tracking/{orderId} {
-      allow read: if canReadOperations() || isOwnProjection();
+      allow read: if canReadOperations() || isOwnProjectionWith('wms');
       allow create, update, delete: if false;
     }
 
@@ -750,13 +771,17 @@ service cloud.firestore {
     }
 
     match /client_inventory/{inventoryId} {
-      allow read: if canReadForBilling() || isOwnProjection();
+      allow read: if canReadForBilling() || isOwnProjectionWith('wms');
       allow create, update, delete: if false;
     }
 
     // Perfil de operação do cliente (modelo, sigla do SKU, portal): a única
     // parte do cadastro `customers` que o portal lê. Gravada só pelas Cloud
     // Functions, na mesma transação do cadastro (functions/wms/src/domain/customer-profile.ts).
+    // client_access/{customer_code} (módulos contratados) não tem match: o
+    // navegador não lê nem grava. As regras acima a leem por get(), que não
+    // depende de permissão; o portal lê os módulos em client_profiles.
+
     match /client_profiles/{profileId} {
       allow read: if canReadForBilling() || isOwnProjection();
       allow create, update, delete: if false;
@@ -767,8 +792,11 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Agregados globais da operação, sem customer_code: só a equipe lê. O
+    // portal não usa esta coleção; antes qualquer cliente lia os totais de
+    // todos.
     match /ops_aggregates/{aggregateId} {
-      allow read: if canReadOperations() || isFinance() || isCustomer();
+      allow read: if canReadOperations() || isFinance();
       allow create, update, delete: if false;
     }
 
@@ -903,7 +931,7 @@ service cloud.firestore {
       // visibilidade, arquivar um documento nao revogava o acesso do cliente.
       allow read: if canReadDocumentInternally()
         || (
-          isOwnProjection()
+          isOwnProjectionWith('wms')
           && resource.data.keys().hasAll(['customer_visible'])
           && resource.data.customer_visible == true
         );

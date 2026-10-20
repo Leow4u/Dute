@@ -1,0 +1,231 @@
+# Fase 2: Núcleo e app único (partes 1 a 3)
+
+Desenho aprovado pelo Leonardo em 20/10/2026. É o runbook da fase: o registro de cada parte fica no fim.
+
+## O pedido
+
+Executar a Fase 2 do `docs/plataforma/plano.md` começando por:
+
+1. módulos contratados no perfil do cliente e papéis da plataforma, com regras do Firestore e testes;
+2. tela de entrada com um card por módulo, e entrada direta quando a pessoa só tem um módulo (cliente só com armazenagem cai direto no portal do WMS);
+3. menu por papel e por perfil.
+
+Um PR por parte, homologação primeiro, nada em produção sem OK.
+
+## Como está hoje
+
+- **Papéis.** São 7: `owner`, `admin`, `interno`, `wms`, `financeiro`, `suporte` e `cliente`. Vêm só de `users/{uid}`, sem custom claims. A lista está copiada em 9 lugares do app, das Functions e das regras.
+- **`lib/dominio`.** Só tem `MODULOS = ["wms","operacao","comercial","financeiro","rh"]`, e ninguém importa. As Functions não conseguem importar: têm npm próprio, `rootDir: src` e o deploy leva só `functions/wms`.
+- **Perfil do cliente.** O cadastro `customers` é gravado só pela callable `mutateManagedEntity`, com validação em `domain/customer-profile.ts`. A projeção `client_profiles` é o que o portal lê. O id dela é o do cadastro, não o `customer_code`, então as regras não conseguem achá-la. Não existe campo de módulos.
+- **Entrada.** `/` só redireciona: cliente vai a `/portal`, wms a `/pedidos`, financeiro a `/faturamento` e os demais a `/dashboard`. Não há tela de escolha nem mockup dela.
+- **Menu.** `APP_MODULES` em `lib/modules.ts` é uma lista de telas. Não sabe a que módulo da plataforma cada tela pertence. No portal, o menu é filtrado pelo modelo de operação.
+- **Publicação.** Push na `main` publica frontend e functions na homologação. A produção sai da `main` por disparo manual. Regras do Firestore são sempre à mão.
+
+## Decisões deste desenho
+
+1. **Chaves dos módulos** são as de `lib/dominio`. Na tela, `wms` aparece como "Armazenagem".
+2. **O cliente contrata `wms`, `operacao` e `financeiro`**, como no plano. `financeiro` controla as Faturas do portal. Perfil sem o campo vale `["wms","financeiro"]` no app, nas Functions e nas regras, então a BTG continua igual sem migração.
+3. **O backend nega por padrão.** As callables continuam recusando papel novo e cliente sem `wms`. Hoje todas as callables são do WMS. Cada módulo novo libera as suas, com teste.
+4. **Liberação por ambiente** em `lib/liberacao.ts`, pela `VITE_FIREBASE_PROJECT_ID`: ligada no `dute-homolog`, desligada no `dute-prod`, no `dute-btg` e em build sem configuração. Ligar na produção é um PR com o seu OK. O CI não muda. Fica sob a liberação: a tela de entrada, o campo de módulos em Clientes, os papéis novos no convite e o link do logo. As Functions e as regras não ficam: elas são inertes para a BTG e para os 7 papéis de hoje, e vão junto se a `main` for publicada na produção.
+5. **A tela de entrada segue a v3**, com tokens só dentro dela (`.v3`), sem tocar no visual do WMS. No escuro ela usa as cores escuras de hoje.
+6. **Menu agrupado por módulo fica para o shell v3.** A parte 3 entrega o filtro por papel e por perfil e a barreira de rota. Assim não se faz um agrupamento no visual atual que o shell v3 jogaria fora.
+
+## Papel × módulo
+
+Fica em `lib/dominio`, ao lado da lista única de papéis.
+
+| Papel | Módulos |
+|---|---|
+| owner, admin | wms, operacao, comercial, financeiro, rh |
+| interno | wms, operacao |
+| wms | wms |
+| campo | operacao |
+| comercial | comercial |
+| financeiro | financeiro |
+| rh | rh |
+| suporte | wms, operacao |
+| painel | nenhum; vai para `/tv` quando ela existir |
+| cliente | os contratados |
+
+Um módulo só aparece se tiver tela no app. Hoje são `wms` e `financeiro` (o Faturamento). Para o cliente, `financeiro` nunca vira card: as Faturas são parte do portal.
+
+A casa de cada módulo mantém as aterrissagens de hoje:
+
+| Módulo | Papel | Casa |
+|---|---|---|
+| wms | owner, admin, interno, suporte | `/dashboard` |
+| wms | wms | `/pedidos` |
+| wms | cliente | `/portal` |
+| financeiro | owner, admin, financeiro | `/faturamento` |
+
+Na homologação, com a liberação ligada:
+
+| Quem | Para onde vai |
+|---|---|
+| owner, admin | tela de entrada com Armazenagem e Financeiro |
+| interno, suporte | `/dashboard` direto |
+| wms | `/pedidos` direto |
+| financeiro | `/faturamento` direto |
+| cliente BTG, sem o campo | `/portal` direto |
+| cliente com wms e operacao | `/portal` direto, porque a Operação ainda não tem tela |
+| cliente só com operacao | "Nenhum módulo liberado" |
+| papel novo | "Nenhum módulo liberado" |
+
+## Parte 1: papéis da plataforma e módulos contratados (um PR)
+
+**Domínio compartilhado**
+- `lib/dominio/src/index.ts`: `PAPEIS` com os 11, `Papel`, `MODULOS_POR_PAPEL`, `MODULOS_CONTRATAVEIS`, `MODULOS_PADRAO_CLIENTE` e os rótulos dos módulos.
+- O app passa a depender de `@workspace/dominio`, no padrão de `@workspace/api-client-react`, com referência no `tsconfig.json`. O `pnpm-lock.yaml` é gerado com o pnpm 9 do CI.
+- As Functions recebem uma cópia literal em `functions/wms/src/domain/platform-roles.ts`. Um teste do app lê `lib/dominio`, esse arquivo e o `firestore.rules` e trava as três listas, como `operations.test.ts` já faz com os modelos.
+
+**Functions**
+- `Role`, `VALID_ROLES` e `loadProfile` usam a lista única. Convite e troca de papel aceitam os 11.
+- `getProfile` passa por uma função pura de acesso, com teste. Recusa papel fora dos 7 de hoje. Recusa cliente cujo contrato não tem `wms`; para saber isso, lê `client_access` só quando a pessoa é cliente. A rotina agendada (`runRoutine`) passa pela mesma função. Com isso, `recordOperationalEvent`, `requireCustomerScope`, as rotinas e as ferramentas do agente não alcançam papel novo nem cliente sem armazenagem.
+- `domain/customer-profile.ts`:
+  - `resolveContractedModules(data.modules ?? before.modules)`: só chaves conhecidas, sem repetição, ao menos uma, padrão quando ausente.
+  - O valor é gravado depois do `...data`, para o navegador não mandar um array cru.
+  - `modules` entra em `CLIENT_PROFILE_PUBLIC_FIELDS` e na projeção `client_profiles`.
+  - Nova projeção `client_access/{customer_code}` com `customer_code`, `modules` e `updated_at`. O id é o código cru, sem `safeDocId`. É gravada em toda escrita do cadastro, inclusive no arquivamento, a partir de `{...before, ...payload}`, e nunca é apagada.
+  - Na criação, o código não pode ter `/` nem ser `.`, `..` ou `__x__`, e não pode repetir o de outro cadastro. A checagem fica na transação, como a da sigla.
+- `index.ts`: `modules` em `CUSTOMER_WRITE_FIELDS`. A transação do cadastro grava `client_access`. O evento `customers.*` leva os módulos antes e depois.
+- Os arquivos de teste novos entram na lista fixa de `test:unit` e `test:integration` do `package.json`.
+
+**Regras do Firestore**
+- `validProfileRole` com os 11.
+- `customerHasModule(m)` lê `client_access/{customer_code}` e usa `['wms','financeiro']` quando o documento não existe. Só é avaliada para cliente. O navegador não lê `client_access`: o `get()` das regras não depende de permissão.
+- O cliente precisa de `wms` para ler `client_inventory`, `client_order_tracking`, `client_request_status` e `client_documents`, e de `financeiro` para ler `client_invoices`.
+- `ops_aggregates` deixa de ser lido por qualquer cliente. Hoje um cliente lê os totais de todos, e o portal não usa essa coleção.
+- `client_event_templates` continua sem regra, ou seja, ninguém lê direto. A barreira fica nas callables.
+- Storage não muda.
+
+**App**
+- `ProfileRole` passa a ser `Papel`, e `normalizeProfileRole` aceita os 11.
+- `INTERNAL_ROLES` continua com os 6 de hoje. Assim, papel novo não herda Agent Dute, Documentos nem rota sem dono.
+- Configuração fica aberta aos 11, em `modules.ts` e `settings-nav.ts`.
+- Papel novo aterrissa em `/configuracoes/conta` até a parte 2. Sem isso, `/dashboard` nega e volta para `/` em laço.
+- A sincronização em tempo real e o seletor de cliente ativo passam a valer só para `INTERNAL_ROLES`.
+- Rótulos de Campo, Comercial, RH e Painel. As cópias da lista de papéis em `App.tsx`, `users.tsx`, `cloud-api.ts` e `system-dashboard.ts` passam a usar a lista única.
+- O convite e o quadro "O que cada perfil faz" mostram os papéis novos só com a liberação ligada.
+- Campo "Módulos contratados" em Configurações › Clientes, com Armazenagem, Operação e Financeiro, sob a liberação.
+- `modules` em `CustomerProfileRecord` e `OperationProfile`, com o padrão também quando a leitura falha.
+
+**Ferramentas**
+- `tools/full_reset_btg.py` preserva `client_access` junto com `customers`.
+
+**Testes que falham antes e passam depois**
+- **Regras:**
+  - aceite de convite com papel novo;
+  - papel novo negado em `customers`, `stock_balances`, `orders`, `billing_*`, `client_inventory`, `events` e no chat;
+  - seed com `suporte`;
+  - cliente sem `client_access` lê como hoje;
+  - cliente com `client_access` só `operacao`, código "BTG Pactual", não lê o WMS nem as faturas;
+  - cliente com `wms` e `financeiro` lê;
+  - interno com `customer_code` "Dutelog" continua lendo mesmo com `client_access/Dutelog` só `operacao`;
+  - cliente não lê `ops_aggregates`;
+  - ninguém lê nem grava `client_access` pelo navegador.
+- **Functions:**
+  - função de acesso para os 11 papéis e para cliente com e sem `wms`;
+  - `resolveContractedModules`;
+  - alterar sem o campo mantém os módulos;
+  - arquivar mantém `client_access`;
+  - código repetido é recusado;
+  - a transação grava as duas projeções.
+- **App:**
+  - 11 papéis;
+  - papel novo sem menu e com casa na Conta;
+  - rota sem dono nega papel novo;
+  - convite por liberação;
+  - padrão do perfil;
+  - trava das três listas.
+- **Python:** `client_access` é preservado na zeragem.
+
+## Parte 2: tela de entrada (um PR, só frontend)
+
+- `lib/platform-modules.ts`: os módulos do app, com rótulo, ícone, se têm tela e a casa por papel. A função pura `entrada(papel, perfil)` responde "vai para X", "mostra estes cards" ou "nenhum módulo".
+- `App.tsx`: com a liberação ligada, `/` usa `entrada`. O cliente espera o perfil, como o `RoleGate` já faz. Com a liberação desligada, tudo continua como hoje.
+- `pages/entrada.tsx`:
+  - cabeçalho preto de 64 px com logo e menu da conta (Configuração, Sair), como em `Portal.dc.html`;
+  - "Bom dia, Nome" como em `Inicio.dc.html`;
+  - um card por módulo, com ícone em caixa de 52 px e nome; o card inteiro é clicável;
+  - sem legenda e sem números;
+  - sem módulo: "Nenhum módulo liberado" e Sair.
+- Tokens v3 em `.v3` no `index.css`, fora de `@layer`. A Manrope entra no `@import` de fontes que já existe; o navegador só baixa o arquivo quando a tela usa a fonte.
+- O "Voltar" da Configuração cai em `/` com a liberação ligada. A casa de papel novo deixa de ser a Conta.
+- **Testes:**
+  - `entrada` para cada papel e perfil;
+  - trava: a casa de cada módulo é uma rota que o papel abre;
+  - render sem legenda;
+  - com a liberação desligada, `getHomePathForProfile` fica igual;
+  - `theme-colors.test.ts` verde;
+  - a liberação recebe o ambiente como parâmetro, então os testes não dependem do `.env` da máquina.
+
+## Parte 3: menu por papel e por perfil (um PR, só frontend)
+
+- `AppModule` ganha `modulo`:
+  - Pedidos e Estoque são `wms`;
+  - Faturamento é `financeiro`;
+  - Início, Agent Dute, Relatórios e Documentos são núcleo;
+  - no portal, Faturas é `financeiro`, Início e Agent Dute são núcleo e o resto é `wms`;
+  - rota sem módulo conhecido conta como núcleo.
+- `getNavigationForProfileRole` filtra também por módulo. Para a equipe, `MODULOS_POR_PAPEL` com tela. Para o cliente, os contratados com tela.
+- A decisão do `RoleGate` vira função pura e passa a barrar rota de módulo não contratado.
+- A sincronização do portal só assina as coleções dos módulos contratados.
+- O logo leva a `/` com a liberação ligada.
+- **Testes:**
+  - para os 7 papéis e toda rota protegida, "abre hoje" é igual a "abre depois" (trava nova);
+  - os testes de `modules.test.ts` passam sem mudar;
+  - cliente só com `operacao` não vê nem abre tela do WMS;
+  - cliente sem `financeiro` não vê Faturas;
+  - com `operacao` marcado como tendo tela num teste, o interno vê Armazenagem e Operação no mesmo menu e o cliente só com `wms` não vê nada de Operação.
+
+## Publicação de cada parte
+
+1. Abro o PR e espero o CI verde.
+2. Faço o merge na `main`. O CI publica frontend e functions na homologação.
+3. Publico as regras na homologação a partir da `main` limpa:
+
+   ```powershell
+   cd C:\DEV\Dute; git switch main; git pull --ff-only; git status; firebase deploy --only firestore --project dute-homolog
+   ```
+
+4. Confiro na homologação e passo para a próxima parte.
+
+Na parte 1, as regras sobem antes de alguém marcar módulos ou convidar papel novo. O campo de módulos só deve ser salvo depois que o job de functions terminar, porque frontend e functions sobem em paralelo. Antes disso, a function antiga descartaria o campo.
+
+Produção: nada, até o seu OK. Se a `main` for publicada na produção no meio da fase, as Functions e as regras novas vão junto e não mudam nada para a BTG nem para os 7 papéis. As telas novas ficam desligadas pela liberação.
+
+## O que estas partes não entregam
+
+O resto da Fase 2:
+- catálogo da LPU no núcleo;
+- shell v3, com o menu agrupado por módulo e a Administração no menu;
+- Início "Precisa de você" de todos os módulos. Até lá, o card Armazenagem leva ao Início de hoje;
+- TV em `/tv` com o papel `painel`;
+- colaboradores e veículos.
+
+O critério de pronto da fase ("cliente só armazenagem não vê nada de OS, interno vê WMS e Operação no mesmo menu") fica provado por teste na parte 3. Na homologação, ele aparece quando a Operação tiver a primeira tela. A regra de `service_orders` com `customerHasModule('operacao')` entra na Fase 3, com a coleção.
+
+A checagem de módulo por callable (por exemplo, Faturas pedindo `financeiro` no backend) e o filtro das ferramentas do agente por módulo entram antes de existir cliente sem armazenagem, na Fase 4. Até lá, a barreira geral do `getProfile` cobre.
+
+## Achados fora destas partes
+
+- **Bug em produção:** `/portal/faturas/relatorio` e `/portal/agente/operacional` não estão na tabela de rotas. O cliente que abre o relatório das faturas volta ao Início.
+- `suporte` lê faturamento, contra a regra "preço só para owner, admin, financeiro e comercial".
+- A troca de papel não ajusta o `customer_code`, e o evento não guarda o papel anterior.
+- O aceite de convite de cliente não grava evento.
+- O convite de cliente aceita qualquer texto como código.
+- `portal_status` inativo não bloqueia nada.
+- O plano dá RH ao owner ("tudo") e também diz "só rh e admin". Decidir na Fase 8.
+- Funções mortas nas regras (`safeUserRoleUpdate`, `validInviteRoleForManager` e outras) carregam listas antigas de papéis.
+
+## Registro
+
+### Parte 1: papéis da plataforma e módulos contratados
+
+Branch `plataforma/fase-2-parte-1`. Entregue como no desenho acima, menos o teste da transação do cadastro (último parágrafo).
+
+Testes que falhavam antes e passam depois:
+- **Regras do Firestore:** 7 testes de comportamento novo falham com as regras da `main` (aceite de convite para os 4 papéis novos; cliente só com operação; cliente sem financeiro; cliente lendo `ops_aggregates`).
+- **Functions, app e ferramentas:** os testes novos cobrem funções que não existiam (`wmsAccessProblem`, `resolveContractedModules`, `clientAccessProjection`, `assertCustomerCodeAvailable`, `readContractedModules`, `plataformaLiberada`) ou mudam de propósito (`getHomePathForProfile` para papel novo, Configuração aberta aos 11).
+
+A ligação no `index.ts` (barreira em `getProfile` e `runRoutine`, gravação de `client_access` na transação do cadastro, módulos no evento `customers.*`) não tem teste próprio: o `index.ts` não é testável direto, como o resto das callables (CLAUDE.md, "Como trabalhamos").

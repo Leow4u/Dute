@@ -17,7 +17,16 @@ documentação de produto e operação está em `docs/`.
   19/10/2026. Fase 1, migração do WMS para o `dute-prod`, feita em 20/10/2026,
   antes da contagem de abertura do inventário (roteiro e registro em
   `docs/plataforma/fase-1-corte.md`; ferramentas `tools/migracao_firestore.py` e
-  `tools/congelar_projeto.ps1`).
+  `tools/congelar_projeto.ps1`). Fase 2, núcleo e app único, em andamento
+  (desenho e registro em `docs/plataforma/fase-2-nucleo.md`): parte 1, papéis
+  da plataforma e módulos contratados, na homologação.
+- **Papéis e módulos têm lista única em `lib/dominio`.** As Functions
+  (`functions/wms/src/domain/platform-roles.ts`, `customer-profile.ts`) e o
+  `firestore.rules` guardam cópias literais, travadas por
+  `artifacts/app/src/lib/platform-lists.test.ts`. As callables de hoje são do
+  WMS e negam por padrão papel novo e cliente sem armazenagem. Telas novas da
+  plataforma ficam sob `lib/liberacao.ts`: ligadas no `dute-homolog`,
+  desligadas no `dute-prod` até um PR com o OK do Leonardo.
 - **Projetos Google Cloud**, todos em `southamerica-east1`:
   - `dute-prod`: produção (`app.dutelog.com.br` e o site `dutelog.com.br`, Cloud
     Run `dute-app` e `dutelog-site`, Load Balancer com IP `34.54.243.247`).

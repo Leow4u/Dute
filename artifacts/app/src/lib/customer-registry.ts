@@ -1,4 +1,11 @@
 import {
+  MODULOS_CONTRATAVEIS,
+  MODULOS_PADRAO_CLIENTE,
+  modulosContratados,
+  type ModuloContratavel,
+} from "@workspace/dominio";
+
+import {
   DEFAULT_OPERATION_TEMPLATE,
   canonicalSkuPrefix,
   isOperationTemplateKey,
@@ -35,6 +42,7 @@ export type CustomerRecord = {
   operation_template?: string;
   sku_prefix?: string;
   archived?: boolean;
+  modules?: unknown;
 };
 
 export type CustomerStatus = "active" | "paused";
@@ -51,6 +59,8 @@ export type CustomerForm = {
   primary_contact_name: string;
   primary_contact_email: string;
   notes: string;
+  /** Módulos contratados (lib/dominio, MODULOS_CONTRATAVEIS). */
+  modules: ModuloContratavel[];
 };
 
 export type FormMode = "create" | "edit";
@@ -97,6 +107,7 @@ export function emptyCustomerForm(): CustomerForm {
     primary_contact_name: "",
     primary_contact_email: "",
     notes: "",
+    modules: [...MODULOS_PADRAO_CLIENTE],
   };
 }
 
@@ -121,7 +132,17 @@ export function customerFormFrom(customer: CustomerRecord): CustomerForm {
     primary_contact_name: String(customer.primary_contact_name ?? ""),
     primary_contact_email: String(customer.primary_contact_email ?? ""),
     notes: String(customer.notes ?? ""),
+    modules: modulosContratados(customer.modules),
   };
+}
+
+/** Liga ou desliga um módulo, na ordem do registro. */
+export function toggleContractedModule(
+  modules: readonly ModuloContratavel[],
+  module: ModuloContratavel,
+  on: boolean,
+): ModuloContratavel[] {
+  return MODULOS_CONTRATAVEIS.filter((key) => (key === module ? on : modules.includes(key)));
 }
 
 /** Modelo sem portal força "sem portal"; os outros respeitam o cadastro. */
@@ -139,6 +160,7 @@ export function customerFormProblem(form: CustomerForm, mode: FormMode): string 
   const prefix = skuPrefixProblem(form.sku_prefix);
   if (prefix) return prefix;
   if (!operationTemplate(form.operation_template)) return "Escolha o modelo de operação.";
+  if (!form.modules.length) return "Marque ao menos um módulo contratado.";
   const email = form.primary_contact_email.trim();
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "E-mail do contato inválido.";
   return null;
@@ -147,8 +169,14 @@ export function customerFormProblem(form: CustomerForm, mode: FormMode): string 
 /**
  * O que vai para a Function. No update o código não vai (não muda); a sigla
  * vai sempre em maiúsculas; o portal de um modelo sem portal vai desligado.
+ * Os módulos só vão onde a plataforma está liberada (lib/liberacao.ts); sem
+ * o campo, a Function mantém os do cadastro.
  */
-export function customerPayload(form: CustomerForm, mode: FormMode): Record<string, unknown> {
+export function customerPayload(
+  form: CustomerForm,
+  mode: FormMode,
+  options: { modules?: boolean } = {},
+): Record<string, unknown> {
   const payload: Record<string, unknown> = {
     name: form.name.trim(),
     sku_prefix: canonicalSkuPrefix(form.sku_prefix),
@@ -160,6 +188,7 @@ export function customerPayload(form: CustomerForm, mode: FormMode): Record<stri
     primary_contact_name: form.primary_contact_name.trim(),
     primary_contact_email: form.primary_contact_email.trim().toLowerCase(),
     notes: form.notes.trim(),
+    ...(options.modules ? { modules: MODULOS_CONTRATAVEIS.filter((key) => form.modules.includes(key)) } : {}),
   };
   if (mode === "create") {
     return { ...payload, code: form.code.trim(), billing_mode: "lpu", default_currency: "BRL" };

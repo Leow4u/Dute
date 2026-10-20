@@ -73,6 +73,12 @@ Um modelo novo nasce quando dois clientes pedem a mesma coisa.
   registro publicado, o portal é o de hoje. Mobiliário não tem Eventos;
   insumos vê só o Início. A área interna não filtra nada ainda.
 
+**Módulos contratados (Fase 2 da plataforma, 20/10/2026).** O cadastro também
+guarda quais módulos o cliente contrata (`wms`, `operacao`, `financeiro`),
+projetados em `client_profiles` e em `client_access/{customer_code}`. Ligar um
+módulo é configuração no cadastro; o que cada módulo faz continua em código.
+Desenho e regras em `docs/plataforma/fase-2-nucleo.md`.
+
 Para o Leonardo, depois do deploy: abrir Configurações › Clientes, editar a BTG
 e salvar com a sigla `BTG`. Isso publica o `client_profiles` da BTG e prepara o
 PR 2 (SKU por cliente). Sem isso nada muda para a BTG: o padrão é o modelo dela.

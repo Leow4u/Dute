@@ -25,6 +25,7 @@ import {
 const PROJECT_ID = "demo-dute-operations";
 const CUSTOMER_A = "BTG Pactual";
 const CUSTOMER_B = "CLIENTE ISOLADO";
+const NEW_PLATFORM_ROLES = ["campo", "comercial", "rh", "painel"] as const;
 
 let testEnvironment: RulesTestEnvironment;
 
@@ -51,6 +52,15 @@ async function seed() {
       ["finance-a", "financeiro", undefined],
       ["client-a", "cliente", CUSTOMER_A],
       ["client-b", "cliente", CUSTOMER_B],
+      ["support-a", "suporte", undefined],
+      // Papéis da plataforma que o WMS não atende (Fase 2).
+      ["campo-a", "campo", undefined],
+      ["comercial-a", "comercial", undefined],
+      ["rh-a", "rh", undefined],
+      ["painel-a", "painel", undefined],
+      // Equipe interna também carrega customer_code "Dutelog" quando entra
+      // por convite.
+      ["ops-dutelog", "interno", "Dutelog"],
     ] as const;
     for (const [uid, role, customerCode] of users) {
       await setDoc(doc(database, "users", uid), {
@@ -250,6 +260,43 @@ async function seed() {
       customer_code: CUSTOMER_A,
       status: "pending",
       created_by: "owner-a",
+    });
+    for (const role of NEW_PLATFORM_ROLES) {
+      await setDoc(doc(database, "invites", `invite-${role}`), {
+        email: `${role}-novo@example.com`,
+        role,
+        customer_code: "Dutelog",
+        status: "pending",
+        created_by: "owner-a",
+      });
+    }
+    // Projeções do portal ligadas a cada módulo contratado.
+    await setDoc(doc(database, "client_invoices", "invoice-a"), {
+      customer_code: CUSTOMER_A,
+      competencia: "2026-09",
+      total: 100,
+    });
+    await setDoc(doc(database, "client_order_tracking", "order-a"), {
+      customer_code: CUSTOMER_A,
+      status: "separando",
+    });
+    await setDoc(doc(database, "client_request_status", "request-a"), {
+      customer_code: CUSTOMER_A,
+      status: "aguardando",
+    });
+    await setDoc(doc(database, "orders", "order-a"), {
+      customer_code: CUSTOMER_A,
+      status: "aberto",
+    });
+    await setDoc(doc(database, "events", "event-a"), {
+      type: "inventory.adjusted",
+      entity_id: "balance-a",
+      customer_code: CUSTOMER_A,
+    });
+    // Agregado global da operação, sem customer_code.
+    await setDoc(doc(database, "ops_aggregates", "dashboard"), {
+      total_pecas: 100,
+      custo_total: 1000,
     });
   });
 }
@@ -731,5 +778,188 @@ describe("coordenador fora do faturamento (decisão de produto 30/07)", () => {
         .firestore();
       await assertSucceeds(getDocs(collection(database, "billing_periods")));
     }
+  });
+});
+
+function signedAs(uid: string) {
+  return testEnvironment.authenticatedContext(uid, { email: `${uid}@example.com` }).firestore();
+}
+
+async function setClientAccess(customerCode: string, modules: string[]) {
+  await testEnvironment.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "client_access", customerCode), {
+      customer_code: customerCode,
+      modules,
+    });
+  });
+}
+
+describe("papéis da plataforma (Fase 2)", () => {
+  for (const role of NEW_PLATFORM_ROLES) {
+    it(`aceite de convite cria o próprio perfil com o papel ${role}`, async () => {
+      const database = testEnvironment
+        .authenticatedContext(`novo-${role}`, { email: `${role}-novo@example.com` })
+        .firestore();
+      await assertSucceeds(
+        setDoc(doc(database, "users", `novo-${role}`), {
+          nome: `Novo ${role}`,
+          email: `${role}-novo@example.com`,
+          role,
+          customer_code: "Dutelog",
+          invite_id: `invite-${role}`,
+        }),
+      );
+    });
+
+    it(`${role} não lê nada da operação, do faturamento nem do portal`, async () => {
+      const database = signedAs(`${role}-a`);
+      await assertSucceeds(getDoc(doc(database, "users", `${role}-a`)));
+      for (const [collectionName, id] of [
+        ["customers", "profile-a-customer"],
+        ["client_profiles", "profile-a"],
+        ["stock_balances", "balance-a"],
+        ["orders", "order-a"],
+        ["events", "event-a"],
+        ["movements", "movement-a"],
+        ["products", "product-a"],
+        ["warehouse_positions", "A-01"],
+        ["billing_operational_snapshots", "2026-07"],
+        ["billing_config", "default"],
+        ["client_inventory", "inventory-a"],
+        ["client_invoices", "invoice-a"],
+        ["ops_aggregates", "dashboard"],
+        ["ai_agent_inbox", "alert-a"],
+        ["agent_conversations", "conv-a"],
+      ] as const) {
+        await assertFails(getDoc(doc(database, collectionName, id)));
+      }
+      await assertFails(
+        setDoc(doc(database, "agent_conversations", `conv-${role}`), {
+          id: `conv-${role}`,
+          customer_code: CUSTOMER_A,
+          user_id: `${role}-a`,
+          status: "active",
+          created_at_iso: new Date().toISOString(),
+          created_at: new Date(),
+          updated_at: new Date(),
+        }),
+      );
+    });
+  }
+
+  it("papel fora da lista continua sem perfil", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "invites", "invite-viewer"), {
+        email: "viewer@example.com",
+        role: "viewer",
+        status: "pending",
+      });
+    });
+    const database = testEnvironment
+      .authenticatedContext("viewer", { email: "viewer@example.com" })
+      .firestore();
+    await assertFails(
+      setDoc(doc(database, "users", "viewer"), {
+        nome: "Viewer",
+        email: "viewer@example.com",
+        role: "viewer",
+        invite_id: "invite-viewer",
+      }),
+    );
+  });
+
+  it("suporte lê a operação e o faturamento, como hoje", async () => {
+    const database = signedAs("support-a");
+    await assertSucceeds(getDoc(doc(database, "stock_balances", "balance-a")));
+    await assertSucceeds(getDoc(doc(database, "billing_config", "default")));
+    await assertSucceeds(getDoc(doc(database, "ops_aggregates", "dashboard")));
+  });
+});
+
+describe("módulos contratados do cliente (Fase 2)", () => {
+  function portalReads(uid: string) {
+    const database = signedAs(uid);
+    return {
+      inventory: () => getDoc(doc(database, "client_inventory", "inventory-a")),
+      orders: () => getDoc(doc(database, "client_order_tracking", "order-a")),
+      requests: () => getDoc(doc(database, "client_request_status", "request-a")),
+      documents: () => getDoc(doc(database, "client_documents", "doc-visivel")),
+      invoices: () => getDoc(doc(database, "client_invoices", "invoice-a")),
+    };
+  }
+
+  it("cliente sem client_access lê o portal como hoje (armazenagem e faturas)", async () => {
+    const reads = portalReads("client-a");
+    await assertSucceeds(reads.inventory());
+    await assertSucceeds(reads.orders());
+    await assertSucceeds(reads.requests());
+    await assertSucceeds(reads.documents());
+    await assertSucceeds(reads.invoices());
+  });
+
+  it("cliente só com operação não lê nada do WMS nem as faturas", async () => {
+    await setClientAccess(CUSTOMER_A, ["operacao"]);
+    const reads = portalReads("client-a");
+    await assertFails(reads.inventory());
+    await assertFails(reads.orders());
+    await assertFails(reads.requests());
+    await assertFails(reads.documents());
+    await assertFails(reads.invoices());
+    const database = signedAs("client-a");
+    await assertFails(
+      getDocs(query(collection(database, "client_inventory"), where("customer_code", "==", CUSTOMER_A))),
+    );
+    // O perfil continua legível: é por ele que o portal monta o menu.
+    await assertSucceeds(getDoc(doc(database, "client_profiles", "profile-a")));
+  });
+
+  it("cliente com armazenagem e sem financeiro lê o estoque, não as faturas", async () => {
+    await setClientAccess(CUSTOMER_A, ["wms"]);
+    const reads = portalReads("client-a");
+    await assertSucceeds(reads.inventory());
+    await assertSucceeds(reads.orders());
+    await assertFails(reads.invoices());
+  });
+
+  it("cliente com todos os módulos lê tudo do próprio contrato e nada do outro", async () => {
+    await setClientAccess(CUSTOMER_A, ["wms", "operacao", "financeiro"]);
+    const reads = portalReads("client-a");
+    await assertSucceeds(reads.inventory());
+    await assertSucceeds(reads.invoices());
+    await assertFails(getDoc(doc(signedAs("client-a"), "client_inventory", "inventory-b")));
+  });
+
+  it("o contrato de outro cliente não muda o que este lê", async () => {
+    await setClientAccess(CUSTOMER_B, ["operacao"]);
+    await assertSucceeds(portalReads("client-a").inventory());
+  });
+
+  it("equipe com customer_code Dutelog não depende de client_access", async () => {
+    await setClientAccess("Dutelog", ["operacao"]);
+    const database = signedAs("ops-dutelog");
+    await assertSucceeds(getDoc(doc(database, "client_inventory", "inventory-a")));
+    await assertSucceeds(getDoc(doc(database, "client_order_tracking", "order-a")));
+    await assertSucceeds(getDoc(doc(database, "stock_balances", "balance-a")));
+  });
+
+  it("ninguém lê nem grava client_access pelo navegador", async () => {
+    await setClientAccess(CUSTOMER_A, ["wms", "financeiro"]);
+    for (const uid of ["client-a", "owner-a", "admin-a", "ops-a"]) {
+      const database = signedAs(uid);
+      await assertFails(getDoc(doc(database, "client_access", CUSTOMER_A)));
+      await assertFails(
+        setDoc(doc(database, "client_access", CUSTOMER_A), {
+          customer_code: CUSTOMER_A,
+          modules: ["wms", "operacao", "financeiro"],
+        }),
+      );
+    }
+  });
+
+  it("cliente não lê os agregados globais da operação; a equipe lê", async () => {
+    await assertFails(getDoc(doc(signedAs("client-a"), "ops_aggregates", "dashboard")));
+    await assertFails(getDoc(doc(signedAs("client-b"), "ops_aggregates", "dashboard")));
+    await assertSucceeds(getDoc(doc(signedAs("ops-a"), "ops_aggregates", "dashboard")));
+    await assertSucceeds(getDoc(doc(signedAs("finance-a"), "ops_aggregates", "dashboard")));
   });
 });

@@ -54,11 +54,22 @@ import {
 import { MinimumStockError, normalizeMinimumStock } from "./catalog-minimum.js";
 import { setUserAccessTransaction } from "./domain/access.js";
 import {
+  CLIENT_ACCESS_COLLECTION,
   CLIENT_PROFILES_COLLECTION,
+  assertCustomerCodeAvailable,
   assertSkuPrefixAvailable,
   buildCustomerPayload,
+  clientAccessProjection,
   clientProfileProjection,
+  contractedModulesFrom,
+  readContractedModules,
 } from "./domain/customer-profile.js";
+import {
+  PLATFORM_ROLES,
+  isPlatformRole,
+  wmsAccessProblem,
+  type PlatformRole,
+} from "./domain/platform-roles.js";
 import {
   defaultNotificationRecipients,
   openingInventoryBlocksOutbound,
@@ -620,8 +631,9 @@ const DocumentReviewFlowOutputSchema = z.object({
   ai_status: z.string(),
 });
 
-type Role =
-  "owner" | "admin" | "interno" | "wms" | "financeiro" | "suporte" | "cliente";
+// Os 11 papéis da plataforma (domain/platform-roles.ts). As callables de
+// hoje só atendem os do WMS: getProfile nega o resto (wmsAccessProblem).
+type Role = PlatformRole;
 type EventRow = {
   id: string;
   severity?: "info" | "attention" | "critical";
@@ -1275,7 +1287,26 @@ function assertAuth(request: CallableRequest<unknown>) {
 
 async function getProfile(request: CallableRequest<unknown>): Promise<Profile> {
   const auth = assertAuth(request);
-  return loadProfile(auth.uid, auth.token.email, auth.token.name);
+  const profile = await loadProfile(auth.uid, auth.token.email, auth.token.name);
+  await assertWmsAccess(profile);
+  return profile;
+}
+
+/**
+ * Toda callable de hoje é do WMS. Nega por padrão o papel da plataforma que o
+ * WMS não atende e o cliente sem armazenagem no contrato (client_access; sem
+ * o documento vale o padrão, que inclui armazenagem). Só o cliente paga a
+ * leitura extra.
+ */
+async function assertWmsAccess(profile: Profile): Promise<void> {
+  // Cliente sem código (convite antigo) cai no padrão sem ler nada; quem o
+  // recusa é requireCustomerScope, com a mensagem certa.
+  const modules =
+    profile.role === "cliente"
+      ? await readContractedModules(db, profile.customer_code ?? "")
+      : null;
+  const problem = wmsAccessProblem(profile.role, modules);
+  if (problem) throw new HttpsError("permission-denied", problem);
 }
 
 /** Perfil atual da pessoa (callables e rotinas do Agent Dute, que rodam sem ninguém logado). */
@@ -1293,16 +1324,7 @@ async function loadProfile(uid: string, email?: string, tokenName?: string): Pro
   if (data.access_disabled === true) {
     throw new HttpsError("permission-denied", "Acesso removido.");
   }
-  const role =
-    data.role === "owner" ||
-    data.role === "admin" ||
-    data.role === "interno" ||
-    data.role === "wms" ||
-    data.role === "financeiro" ||
-    data.role === "suporte" ||
-    data.role === "cliente"
-      ? data.role
-      : null;
+  const role = isPlatformRole(data.role) ? data.role : null;
   if (!role) {
     throw new HttpsError("permission-denied", "Perfil sem papel válido.");
   }
@@ -3518,6 +3540,7 @@ const CUSTOMER_WRITE_FIELDS = [
   "notes",
   "operation_template",
   "sku_prefix",
+  "modules",
 ] as const;
 const CUSTOMER_ACCOUNT_WRITE_FIELDS = [
   "customer_code",
@@ -3583,15 +3606,9 @@ const DOCUMENT_WRITE_FIELDS = [
   "operational_action_created_by",
   "operational_action_created_at",
 ] as const;
-const VALID_ROLES: Role[] = [
-  "owner",
-  "admin",
-  "interno",
-  "wms",
-  "financeiro",
-  "suporte",
-  "cliente",
-];
+// Convite e troca de papel aceitam os 11 papéis da plataforma. O app só
+// oferece os novos onde a liberação está ligada (lib/liberacao.ts).
+const VALID_ROLES: Role[] = [...PLATFORM_ROLES];
 
 function managedCollection(
   resource: z.infer<typeof ManagedEntityMutationSchema>["resource"],
@@ -4647,6 +4664,15 @@ export const mutateManagedEntity = onCall(async (request) => {
       before,
       catalogIdentity,
     );
+    // Código único entre todos os cadastros: leitura antes das escritas.
+    if (input.resource === "customers" && input.action === "create") {
+      await assertCustomerCodeAvailable(
+        transaction,
+        db,
+        String((payload as Record<string, unknown>).code ?? ""),
+        documentId,
+      );
+    }
     // Sigla do SKU única entre clientes ativos: leitura antes das escritas.
     if (input.resource === "customers" && input.action !== "archive") {
       await assertSkuPrefixAvailable(
@@ -4662,7 +4688,13 @@ export const mutateManagedEntity = onCall(async (request) => {
       transaction.set(targetRef, payload, { merge: true });
     }
     // O portal não lê `customers` (observações e contrato são internos);
-    // lê a projeção client_profiles, gravada na mesma transação.
+    // lê a projeção client_profiles, gravada na mesma transação. Os módulos
+    // contratados vão também para client_access/{customer_code}, que as
+    // regras e as Functions acham pelo código.
+    const customerAccess =
+      input.resource === "customers"
+        ? clientAccessProjection(documentId, payload as Record<string, unknown>, before)
+        : null;
     if (input.resource === "customers") {
       transaction.set(
         db.collection(collectionNames.clientProfiles).doc(documentId),
@@ -4673,6 +4705,13 @@ export const mutateManagedEntity = onCall(async (request) => {
         ),
         { merge: true },
       );
+      if (customerAccess) {
+        transaction.set(
+          db.collection(CLIENT_ACCESS_COLLECTION).doc(customerAccess.customerCode),
+          customerAccess.data,
+          { merge: true },
+        );
+      }
     }
     if (minimumChanged) {
       const minimum = (payload as Record<string, unknown>).estoque_minimo;
@@ -4801,6 +4840,16 @@ export const mutateManagedEntity = onCall(async (request) => {
         action: input.action,
         changed_fields: Object.keys(input.data).sort(),
         operation_id: operationId,
+        ...(input.resource === "customers"
+          ? {
+              modules_before: Array.isArray(before.modules)
+                ? contractedModulesFrom(before.modules)
+                : null,
+              modules_after: contractedModulesFrom(
+                (payload as Record<string, unknown>).modules ?? before.modules,
+              ),
+            }
+          : {}),
       },
       source: "functions_managed_mutation",
       actor: {
@@ -7258,6 +7307,9 @@ async function runRoutine(routine: DueRoutine) {
   let profile: Profile;
   try {
     profile = await loadProfile(routine.user_id);
+    // A mesma barreira das callables: papel que o WMS não atende ou cliente
+    // sem armazenagem pausa a rotina.
+    await assertWmsAccess(profile);
   } catch {
     await recordRoutineRun(db, routine, { status: "no_access" });
     return;
