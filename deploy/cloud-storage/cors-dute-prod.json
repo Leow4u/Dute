@@ -1,0 +1,21 @@
+[
+  {
+    "origin": [
+      "https://app.dutelog.com.br",
+      "https://dute-app-974421124970.southamerica-east1.run.app",
+      "https://dute-app-w2wl7rt66a-rj.a.run.app",
+      "http://localhost:5173"
+    ],
+    "method": [
+      "GET",
+      "HEAD",
+      "PUT",
+      "OPTIONS"
+    ],
+    "responseHeader": [
+      "Content-Type",
+      "x-goog-meta-firebaseStorageDownloadTokens"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]
