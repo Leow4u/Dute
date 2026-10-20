@@ -5,7 +5,6 @@ import {
   findProductByAnyCode,
   findProductByBarcode,
   generatedSkuNote,
-  similarProducts,
   type MatchableProduct,
 } from "./product-match";
 
@@ -63,25 +62,12 @@ describe("busca por qualquer código", () => {
   });
 });
 
-describe("produtos parecidos", () => {
-  it("pede duas palavras em comum e ignora acento, caixa e preposição", () => {
-    expect(similarProducts({ name: "POLO PIQUÊT de manga" }, catalog)).toEqual([polo, poloG]);
-    expect(similarProducts({ name: "Polo de algodão" }, catalog)).toEqual([]);
-  });
-
-  it("descrição de uma palavra só precisa de quatro letras", () => {
-    expect(similarProducts({ name: "mochila" }, catalog)).toEqual([mochila]);
-    expect(similarProducts({ name: "mo" }, catalog)).toEqual([]);
-    expect(similarProducts({ name: "de" }, catalog)).toEqual([]);
-  });
-
-  it("tamanho e cor iguais sobem o parecido na lista", () => {
-    expect(similarProducts({ name: "Polo piquet", size: "g" }, catalog)).toEqual([poloG, polo]);
-    expect(similarProducts({ name: "Polo piquet", size: "M", color: "azul" }, catalog)[0]).toBe(polo);
-  });
-
-  it("respeita o limite", () => {
-    expect(similarProducts({ name: "Polo piquet" }, catalog, 1)).toHaveLength(1);
+describe("identidade do produto", () => {
+  it("não identifica pelo nome mesmo quando descrição, marca e cor coincidem", () => {
+    expect(findProductByAnyCode(catalog, polo.productName)).toBeUndefined();
+    expect(findProductByAnyCode(catalog, "F-POLO-AZ-GG")).toBeUndefined();
+    expect(findProductByAnyCode(catalog, poloG.clientCode)?.product).toBe(poloG);
+    expect(findProductByAnyCode([polo], poloG.clientCode)).toBeUndefined();
   });
 });
 
