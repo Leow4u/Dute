@@ -1562,12 +1562,12 @@ export function OpeningInventoryWorkspace() {
         </CardContent>
       </Card>
 
-      <div className="space-y-4">
-        <Card className="rounded-lg border-border/80 bg-card">
+      <div className="min-w-0 space-y-4">
+        <Card className="min-w-0 rounded-lg border-border/80 bg-card">
           <CardHeader>
             <CardTitle className="text-base">Progresso da abertura</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="min-w-0 space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-md border border-border bg-card p-3">
                 <div className="text-xs text-muted-foreground">Lançamentos publicados</div>
@@ -1641,7 +1641,12 @@ export function OpeningInventoryWorkspace() {
                   Não consegui carregar as caixas: {getErrorMessage(boxesQuery.error)}
                 </div>
               ) : boxesOfSession.length ? (
-                <ScrollArea className="h-[220px] pr-3">
+                <div
+                  role="region"
+                  aria-label="Caixas desta sessão"
+                  tabIndex={0}
+                  className="h-[220px] min-w-0 overflow-y-auto pr-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                >
                   <div className="space-y-2">
                     {boxesOfSession.map((box) => {
                       const open = currentBox?.code === box.code;
@@ -1649,11 +1654,11 @@ export function OpeningInventoryWorkspace() {
                         <div
                           key={box.code}
                           className={cn(
-                            "flex items-start gap-3 rounded-md border p-3",
+                            "min-w-0 space-y-3 rounded-md border p-3",
                             open ? "border-primary/40 bg-primary/5" : "border-border bg-card",
                           )}
                         >
-                          <div className="min-w-0 flex-1">
+                          <div className="min-w-0 [overflow-wrap:anywhere]">
                             <div className="text-sm font-medium text-foreground">
                               {box.code} <span className="text-muted-foreground">· {box.location_id}</span>
                             </div>
@@ -1664,11 +1669,12 @@ export function OpeningInventoryWorkspace() {
                             </div>
                           </div>
                           {sessionOpen ? (
-                            <div className="flex shrink-0 items-center gap-1">
+                            <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3">
                               <Button
                                 type="button"
                                 size="sm"
                                 variant={open ? "default" : "outline"}
+                                className="flex-1"
                                 onClick={() => requestBoxSelection(box)}
                                 disabled={open || conferenceBusy || photoUploading}
                               >
@@ -1704,7 +1710,7 @@ export function OpeningInventoryWorkspace() {
                       );
                     })}
                   </div>
-                </ScrollArea>
+                </div>
               ) : (
                 <div className="rounded-md border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">
                   Nenhuma caixa nesta sessão.
@@ -1733,18 +1739,23 @@ export function OpeningInventoryWorkspace() {
                 </SelectContent>
               </Select>
               {visibleLines.length ? (
-                <ScrollArea className="h-[300px] pr-3">
+                <div
+                  role="region"
+                  aria-label="Lançamentos conferidos"
+                  tabIndex={0}
+                  className="h-[300px] min-w-0 overflow-y-auto pr-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                >
                   <div className="space-y-2">
                     {visibleLines.map((line) => (
                       <div
                         key={line.id}
-                        className="flex items-start gap-3 rounded-md border border-border bg-card p-3"
+                        className="min-w-0 space-y-3 rounded-md border border-border bg-card p-3"
                       >
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-medium text-foreground">
+                        <div className="min-w-0 [overflow-wrap:anywhere]">
+                          <div className="text-sm font-medium leading-snug text-foreground">
                             {line.product_name || line.client_item_code || line.sku_code}
                           </div>
-                          <div className="mt-1 truncate text-xs text-muted-foreground">
+                          <div className="mt-1 text-xs text-muted-foreground">
                             {line.client_item_code || "Sem cód. cliente"}
                             {line.sku_code ? ` · ${line.sku_code}` : ""}
                           </div>
@@ -1762,30 +1773,30 @@ export function OpeningInventoryWorkspace() {
                           </div>
                         </div>
                         {sessionOpen ? (
-                          <div className="flex flex-col items-end gap-1">
+                          <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3">
                             {line.box_code ? (
-                              <Button type="button" variant="outline" size="sm" onClick={() => setLineToMove(line)} disabled={removeOpeningLine.isPending}>
+                              <Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => setLineToMove(line)} disabled={removeOpeningLine.isPending}>
                                 Corrigir caixa
                               </Button>
                             ) : null}
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="shrink-0 text-muted-foreground hover:text-destructive"
-                            onClick={() => setLineToRemove(line)}
-                            disabled={removeOpeningLine.isPending}
-                            aria-label={`Remover ${line.product_name || line.client_item_code || line.sku_code}`}
-                            title="Remover para corrigir"
-                          >
-                            <Trash2 className="size-4" />
-                          </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="shrink-0 text-muted-foreground hover:text-destructive"
+                              onClick={() => setLineToRemove(line)}
+                              disabled={removeOpeningLine.isPending}
+                              aria-label={`Remover ${line.product_name || line.client_item_code || line.sku_code}`}
+                              title="Remover para corrigir"
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
                           </div>
                         ) : null}
                       </div>
                     ))}
                   </div>
-                </ScrollArea>
+                </div>
               ) : (
                 <div className="rounded-md border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">
                   Nenhum lançamento neste filtro.
