@@ -25,6 +25,8 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { OpeningLineCorrection } from "./opening-line-correction";
 import {
   Card,
   CardContent,
@@ -245,6 +247,9 @@ export function OpeningInventoryWorkspace() {
     useState<ProductLookupItem>();
   const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
   const [lineToRemove, setLineToRemove] = useState<OpeningInventoryLine>();
+  const [lineToMove, setLineToMove] = useState<OpeningInventoryLine>();
+  const [boxAcknowledged, setBoxAcknowledged] = useState(false);
+  const [lineBoxFilter, setLineBoxFilter] = useState("all");
   // A caixa: medidas digitadas, sugestão do motor, recusa e a caixa aberta na tela.
   const [boxDraft, setBoxDraft] = useState<BoxDraft>(emptyBoxDraft);
   const [suggestion, setSuggestion] = useState<SuggestionResult>();
@@ -297,6 +302,7 @@ export function OpeningInventoryWorkspace() {
   const lookupProducts = lookupQuery.data ?? [];
   const session = sessionQuery.data;
   const sessionLines = session?.lines ?? [];
+  const visibleLines = lineBoxFilter === "all" ? sessionLines : sessionLines.filter((line) => line.box_code === lineBoxFilter);
   const sessionOpen = session?.status === "open";
   const storedBoxes = useMemo(() => sortBoxes(boxesQuery.data ?? []), [boxesQuery.data]);
   const boxesOfSession = useMemo(
@@ -395,6 +401,7 @@ export function OpeningInventoryWorkspace() {
     lookupQuery.isSuccess &&
     !identityConflict &&
     Boolean(currentBox) &&
+    boxAcknowledged &&
     countedQty.trim() !== "" &&
     Number.isFinite(parsedCount) &&
     parsedCount >= 0 &&
@@ -517,6 +524,7 @@ export function OpeningInventoryWorkspace() {
     onSuccess: (result) => {
       const box = warehouseBoxFromRecord(result.box);
       setActiveBox(box);
+      setBoxAcknowledged(false);
       setBoxDraft(emptyBoxDraft());
       setSuggestion(undefined);
       setExcluded([]);
@@ -564,7 +572,7 @@ export function OpeningInventoryWorkspace() {
 
   const recordOpeningLine = useMutation<CycleCountResult, Error>({
     mutationFn: () => {
-      if (!currentBox) throw new Error("Abra uma caixa antes de lançar o produto.");
+      if (!currentBox || !boxAcknowledged) throw new Error("Confira a etiqueta da caixa física antes de lançar o produto.");
       return fetchJson<CycleCountResult>("/api/warehouse/cycle-counts", {
         method: "POST",
         headers: JSON_HEADERS,
@@ -620,6 +628,7 @@ export function OpeningInventoryWorkspace() {
           : "Produto contado e publicado",
         description: `${formatNumber(result.qty_counted)} unidade(s) na caixa ${result.box_code ?? currentBox?.code ?? ""}, posição ${currentBox?.location_id ?? ""}.`,
       });
+      setBoxAcknowledged(false);
       setClientCode("");
       setProductName("");
       setCategory("");
@@ -838,7 +847,7 @@ export function OpeningInventoryWorkspace() {
                     </div>
                     <div className="min-w-0">
                       <div className="text-sm font-semibold text-foreground">
-                        Caixa {currentBox.code} · posição {currentBox.location_id}
+                        Lançando na caixa {currentBox.code} · {currentBox.location_id}
                       </div>
                       <div className="mt-1 text-xs text-muted-foreground">
                         {formatBoxDimensions(currentBox)} · {formatNumber(currentBox.line_count)} produto(s) · {formatNumber(currentBox.unit_count)} un.
@@ -863,11 +872,11 @@ export function OpeningInventoryWorkspace() {
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() => setActiveBox(undefined)}
+                      onClick={() => { setActiveBox(undefined); setBoxAcknowledged(false); }}
                       disabled={recordOpeningLine.isPending}
                     >
                       <PackageCheck data-icon="inline-start" />
-                      Fechar caixa
+                      Trocar caixa
                     </Button>
                   </div>
                 </div>
@@ -1282,13 +1291,24 @@ export function OpeningInventoryWorkspace() {
                     )}
                   </div>
 
+                  <div className="flex items-start gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
+                    <Checkbox
+                      id="opening-confirm-box"
+                      checked={boxAcknowledged}
+                      onCheckedChange={(checked) => setBoxAcknowledged(checked === true)}
+                      disabled={recordOpeningLine.isPending}
+                    />
+                    <Label htmlFor="opening-confirm-box" className="text-base leading-6">
+                      Conferi a etiqueta: este produto está na caixa {currentBox.code} · {currentBox.location_id}
+                    </Label>
+                  </div>
                   <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 lg:flex-row lg:items-center lg:justify-between">
                     <p className="text-sm leading-6 text-muted-foreground">
                       Ao confirmar, o sistema cria produto e SKU quando necessário, registra o movimento de entrada na caixa {currentBox.code} e publica o saldo da posição {currentBox.location_id} para o cliente.
                     </p>
                     <Button type="submit" disabled={!canSubmit || recordOpeningLine.isPending}>
                       {recordOpeningLine.isPending ? <RefreshCw data-icon="inline-start" className="animate-spin" /> : <CheckCircle2 data-icon="inline-start" />}
-                      Confirmar produto
+                      Confirmar em {currentBox.code}
                     </Button>
                   </div>
                 </form>
@@ -1405,8 +1425,8 @@ export function OpeningInventoryWorkspace() {
                                 type="button"
                                 size="sm"
                                 variant={open ? "default" : "outline"}
-                                onClick={() => setActiveBox(box)}
-                                disabled={open}
+                                onClick={() => { setActiveBox(box); setBoxAcknowledged(false); setLineBoxFilter(box.code); }}
+                                disabled={open || recordOpeningLine.isPending || photoUploading}
                               >
                                 {open ? "Aberta" : "Abrir"}
                               </Button>
@@ -1457,13 +1477,20 @@ export function OpeningInventoryWorkspace() {
                     Revise antes de encerrar a abertura.
                   </div>
                 </div>
-                <Badge variant="outline">{formatNumber(sessionLines.length)}</Badge>
+                <Badge variant="outline">{formatNumber(visibleLines.length)}</Badge>
               </div>
 
-              {sessionLines.length ? (
+              <Select value={lineBoxFilter} onValueChange={setLineBoxFilter}>
+                <SelectTrigger className="mb-3" aria-label="Filtrar lançamentos por caixa"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as caixas</SelectItem>
+                  {boxesOfSession.map((box) => <SelectItem key={box.code} value={box.code}>{box.code} · {box.location_id}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {visibleLines.length ? (
                 <ScrollArea className="h-[300px] pr-3">
                   <div className="space-y-2">
-                    {sessionLines.map((line) => (
+                    {visibleLines.map((line) => (
                       <div
                         key={line.id}
                         className="flex items-start gap-3 rounded-md border border-border bg-card p-3"
@@ -1490,6 +1517,12 @@ export function OpeningInventoryWorkspace() {
                           </div>
                         </div>
                         {sessionOpen ? (
+                          <div className="flex flex-col items-end gap-1">
+                            {line.box_code ? (
+                              <Button type="button" variant="outline" size="sm" onClick={() => setLineToMove(line)} disabled={removeOpeningLine.isPending}>
+                                Corrigir caixa
+                              </Button>
+                            ) : null}
                           <Button
                             type="button"
                             variant="ghost"
@@ -1502,6 +1535,7 @@ export function OpeningInventoryWorkspace() {
                           >
                             <Trash2 className="size-4" />
                           </Button>
+                          </div>
                         ) : null}
                       </div>
                     ))}
@@ -1509,7 +1543,7 @@ export function OpeningInventoryWorkspace() {
                 </ScrollArea>
               ) : (
                 <div className="rounded-md border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">
-                  Nenhum produto confirmado nesta sessão.
+                  Nenhum lançamento neste filtro.
                 </div>
               )}
             </div>
@@ -1523,6 +1557,18 @@ export function OpeningInventoryWorkspace() {
           </AlertDescription>
         </Alert>
       </div>
+
+      {lineToMove && session?.session_id ? (
+        <OpeningLineCorrection
+          key={lineToMove.id}
+          line={lineToMove}
+          lines={sessionLines}
+          boxes={boxesOfSession}
+          sessionId={session.session_id}
+          customerCode={customerCode}
+          onClose={() => setLineToMove(undefined)}
+        />
+      ) : null}
 
       <Dialog open={completeDialogOpen} onOpenChange={setCompleteDialogOpen}>
         <DialogContent className="sm:max-w-[520px]">

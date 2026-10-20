@@ -154,3 +154,17 @@ describe("anotações do Agent Dute", () => {
     expect(functionRoute("/api/agent-dute/notes/note_abc/apagar", "POST")).toBeNull();
   });
 });
+
+describe("correção de caixa no inventário de abertura", () => {
+  it("envia escopo, destino e chave estável à callable usando o id da rota", async () => {
+    const url = "/api/warehouse/opening-inventory/lines/linha%20original/move";
+    const route = functionRoute(url, "POST");
+    expect(route?.name).toBe("moveOpeningInventoryLine");
+    const body = { customer_code: "Cliente A", session_id: "sessao-1", target_box_code: "CX-000009",
+      reason: "Caixa anterior selecionada", idempotency_key: "tentativa-1", opening_line_id: "incorreto" };
+    expect(await route?.payload(url, { method: "POST", body: JSON.stringify(body) })).toEqual({
+      ...body, opening_line_id: "linha original",
+    });
+    expect(functionRoute(url, "GET")).toBeNull();
+  });
+});
