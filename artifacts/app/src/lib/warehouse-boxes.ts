@@ -13,6 +13,8 @@ import { parseDecimal } from "@/lib/warehouse-positions";
 
 const MAX_CENTIMETERS = 5000;
 
+export type BoxOrientation = "length_width_height" | "width_length_height" | "length_height_width" | "height_length_width" | "width_height_length" | "height_width_length";
+
 export type WarehouseBox = {
   code: string;
   customer_code: string;
@@ -23,6 +25,14 @@ export type WarehouseBox = {
   height_m: number;
   front_m: number | null;
   depth_m: number | null;
+  placed_height_m?: number | null;
+  orientation?: BoxOrientation | null;
+  allow_tilt?: boolean;
+  conference_revision?: number;
+  opening_closed?: boolean;
+  draft_line_count?: number;
+  draft_unit_count?: number;
+  draft_total_cost?: number;
   gross_weight_kg: number | null;
   line_count: number;
   unit_count: number;
@@ -44,7 +54,7 @@ export type SlottingCandidate = {
   tier: 1 | 2 | 3;
   leftover_m: number;
   sequence: number;
-  placement: { front_m: number; depth_m: number };
+  placement: { front_m: number; depth_m: number; height_m?: number; orientation?: BoxOrientation };
 };
 
 /** Resposta de suggestWarehousePosition: a posição, as alternativas ou o motivo. */
@@ -158,6 +168,14 @@ export function warehouseBoxFromRecord(record: AnyRecord): WarehouseBox {
     height_m: number(record.height_m),
     front_m: nullableNumber(record.front_m),
     depth_m: nullableNumber(record.depth_m),
+    placed_height_m: nullableNumber(record.placed_height_m),
+    orientation: (text(record.orientation) || null) as BoxOrientation | null,
+    allow_tilt: record.allow_tilt === true,
+    conference_revision: number(record.conference_revision),
+    opening_closed: record.opening_closed === true,
+    draft_line_count: number(record.draft_line_count),
+    draft_unit_count: number(record.draft_unit_count),
+    draft_total_cost: number(record.draft_total_cost),
     gross_weight_kg: nullableNumber(record.gross_weight_kg),
     line_count: number(record.line_count),
     unit_count: number(record.unit_count),
@@ -222,4 +240,10 @@ export function resolveContentSkus(
     if (!skus.includes(sku)) skus.push(sku);
   }
   return skus.slice(0, 50);
+}
+
+/** Placement dimensions are ordered by the actual shelf, unlike measured box sides. */
+export function formatBoxPlacement(placement: SlottingCandidate["placement"]) {
+  const cm = (value: number) => new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(value * 100);
+  return `Frente ${cm(placement.front_m)} × profundidade ${cm(placement.depth_m)}${placement.height_m == null ? "" : ` × altura ${cm(placement.height_m)}`} cm`;
 }

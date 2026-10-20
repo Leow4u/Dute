@@ -1431,13 +1431,6 @@ export async function completeOpeningInventorySessionTransaction(
         "O inventário de abertura já foi concluído.",
       );
     }
-    if (number(session.line_count) < 1) {
-      throw new HttpsError(
-        "failed-precondition",
-        "Registre ao menos um produto antes de concluir o inventário de abertura.",
-      );
-    }
-
     // A leitura participa da mesma transação da conclusão. A criação de caixa
     // também atualiza a sessão, impedindo uma caixa nova entre a checagem e o commit.
     const pendingBoxes = await transaction.get(
@@ -1454,6 +1447,13 @@ export async function completeOpeningInventorySessionTransaction(
         `Finalize a conferência e a guarda da caixa ${pendingBox.id} antes de concluir o inventário. Caixas vazias podem ser removidas.`,
       );
     }
+    if (number(session.line_count) < 1) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Registre ao menos um produto antes de concluir o inventário de abertura.",
+      );
+    }
+
     const occurredAt = new Date().toISOString();
     transaction.update(
       sessionRef,

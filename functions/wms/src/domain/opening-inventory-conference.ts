@@ -51,7 +51,7 @@ function requireEditor(actor: OperationalActor) {
   if (!(BOX_EDITOR_ROLES as readonly string[]).includes(actor.role)) throw new HttpsError("permission-denied", "Conferência: somente administração ou operação de armazém.");
 }
 function revision(box: Row, expected: number) {
-  if (Number(box.conference_revision ?? 0) !== expected) throw new HttpsError("aborted", "A caixa mudou em outra tela. Atualize antes de continuar.");
+  if (Number(box.conference_revision ?? 0) !== expected) throw new HttpsError("aborted", "A caixa mudou em outra tela. Atualize antes de continuar.", { code: "CONFERENCE_REVISION_CONFLICT" });
 }
 async function readSession(tx: Transaction, db: Firestore, scope: { customer_code: string; session_id: string }, requireOpen = true) {
   if (scope.session_id !== openingInventorySessionDocumentId(scope.customer_code)) throw new HttpsError("permission-denied", "Sessão de outro cliente.");
