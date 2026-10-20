@@ -1431,6 +1431,22 @@ export async function completeOpeningInventorySessionTransaction(
         "O inventário de abertura já foi concluído.",
       );
     }
+    // A leitura participa da mesma transação da conclusão. A criação de caixa
+    // também atualiza a sessão, impedindo uma caixa nova entre a checagem e o commit.
+    const pendingBoxes = await transaction.get(
+      db.collection("warehouse_boxes")
+        .where("customer_code", "==", customerCode)
+        .where("origin.session_id", "==", sessionId),
+    );
+    const pendingBox = pendingBoxes.docs.find((box) =>
+      ["counting", "reviewed", "committing"].includes(text(box.get("status"))),
+    );
+    if (pendingBox) {
+      throw new HttpsError(
+        "failed-precondition",
+        `Finalize a conferência e a guarda da caixa ${pendingBox.id} antes de concluir o inventário. Caixas vazias podem ser removidas.`,
+      );
+    }
     if (number(session.line_count) < 1) {
       throw new HttpsError(
         "failed-precondition",
@@ -1511,6 +1527,7 @@ export async function recordCycleCountTransaction(
   db: Firestore,
   input: RecordCycleCountInput,
   actor: OperationalActor,
+  internal?: { conference_commit_id: string; conference_line_id: string; conference_version: number },
 ) {
   const mode = input.mode === "opening" ? "opening" : "cycle";
   const customerCode = text(input.customer_code);
@@ -1570,6 +1587,24 @@ export async function recordCycleCountTransaction(
       inputHash,
     );
     if (previous) return previous;
+
+    // O checkpoint faz parte da transação do estoque. Duas retomadas não
+    // podem liberar edição de uma linha que a outra já confirmou.
+    const conferenceLineRef = internal
+      ? db.collection("opening_inventory_draft_lines").doc(safeDocId(internal.conference_line_id))
+      : undefined;
+    if (internal && conferenceLineRef) {
+      const draft = await transaction.get(conferenceLineRef);
+      if (mode !== "opening" || !draft.exists ||
+          draft.get("status") !== "processing" ||
+          number(draft.get("version")) !== internal.conference_version ||
+          text(draft.get("box_code")) !== boxCode ||
+          text(draft.get("customer_code")) !== customerCode ||
+          text(draft.get("session_id")) !== sessionId ||
+          digest(draft.get("prepared_input"), 64) !== inputHash) {
+        throw new HttpsError("aborted", "A linha da conferência mudou. Atualize antes de retomar a guarda.");
+      }
+    }
 
     await assertInventoryOperationsEnabled(transaction, db);
 
@@ -1675,8 +1710,15 @@ export async function recordCycleCountTransaction(
         if (text(boxData.customer_code) !== customerCode) {
           throw new HttpsError("permission-denied", "A caixa pertence a outro cliente.");
         }
-        if (text(boxData.status) !== "stored") {
-          throw new HttpsError("failed-precondition", `A caixa ${boxCode} não está guardada.`);
+        const conferenceCommit =
+          text(boxData.status) === "committing" &&
+          Boolean(internal?.conference_commit_id) &&
+          internal?.conference_commit_id === text(boxData.conference_commit_id);
+        if (!conferenceCommit && (text(boxData.status) !== "stored" || boxData.opening_closed === true)) {
+          throw new HttpsError("failed-precondition", `A caixa ${boxCode} está fechada ou ainda em conferência. Reabra a caixa antes de lançar.`);
+        }
+        if (conferenceCommit && text(asRecord(boxData.origin).session_id) !== sessionId) {
+          throw new HttpsError("permission-denied", "A caixa pertence a outra sessão de inventário.");
         }
         if (text(boxData.location_id).toUpperCase() !== locationId.toUpperCase()) {
           throw new HttpsError(
@@ -2398,6 +2440,12 @@ export async function recordCycleCountTransaction(
       actor,
       result,
     );
+    if (conferenceLineRef) {
+      transaction.update(conferenceLineRef, {
+        status: "committed", result, error: null,
+        committed_at: FieldValue.serverTimestamp(),
+      });
+    }
     return result;
   });
 }
@@ -2538,8 +2586,6 @@ export async function moveOpeningInventoryLineTransaction(
       transaction.set(targetBalanceRef, {
         ...(targetBalance?.data ?? sourceBalance.data),
         id: targetBalanceRef.id, location_id: targetLocation,
-        // Outra caixa pode ter sido a última contagem na origem com custo distinto.
-        // Ao criar posição, o custo acompanha a linha que efetivamente mudou.
         unit_cost: targetBalance ? number(targetBalance.data.unit_cost) : number(line.unit_cost),
         qty_on_hand: targetBefore + quantity, qty_available: targetBefore + quantity, qty_reserved: 0,
         opening_inventory_session_id: sessionId, status: "available",
@@ -2722,6 +2768,9 @@ export async function removeOpeningInventoryLineTransaction(
         readRows(transaction, allOpeningLinesQuery),
       ]);
     const boxSnapshot = boxRef ? await transaction.get(boxRef) : undefined;
+    if (boxSnapshot?.get("status") === "committing") {
+      throw new HttpsError("failed-precondition", "Retome e finalize a guarda da caixa antes de remover um lançamento confirmado.");
+    }
 
     const targetBalances = balanceRows.filter(
       (row) => text(row.data.location_id) === locationId,

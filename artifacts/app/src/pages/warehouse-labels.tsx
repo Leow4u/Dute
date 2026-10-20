@@ -69,7 +69,7 @@ export default function WarehouseLabelsPage() {
 
   const boxes = useMemo(() => {
     if (!wantsBoxes) return [];
-    const all = boxesQuery.data ?? [];
+    const all = (boxesQuery.data ?? []).filter((box) => box.status === "stored");
     const chosen = query.session
       ? sessionBoxes(all, sessionQuery.data?.session_id)
       : query.boxes.flatMap((code) => all.filter((box) => box.code === code));
@@ -154,9 +154,9 @@ export default function WarehouseLabelsPage() {
 
         {missingBoxes.length || missingPositions.length ? (
           <Alert className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
-            <AlertTitle>Alguns códigos não foram encontrados</AlertTitle>
+            <AlertTitle>Algumas etiquetas não estão disponíveis</AlertTitle>
             <AlertDescription>
-              {[...missingBoxes, ...missingPositions].join(", ")}. Confira se a caixa ou a posição ainda existe.
+              {[...missingBoxes, ...missingPositions].join(", ")}. Confira se a posição existe e se a caixa já foi guardada.
             </AlertDescription>
           </Alert>
         ) : null}
@@ -197,7 +197,7 @@ export default function WarehouseLabelsPage() {
             </EmptyMedia>
             <EmptyTitle>Nada para imprimir</EmptyTitle>
             <EmptyDescription>
-              {query.session ? "A sessão de abertura ainda não tem caixa guardada." : "Os códigos pedidos não existem mais."}
+              {query.session ? "A sessão de abertura ainda não tem caixa guardada." : "Os códigos pedidos não existem ou as caixas ainda aguardam a guarda."}
             </EmptyDescription>
           </EmptyHeader>
         </Empty>

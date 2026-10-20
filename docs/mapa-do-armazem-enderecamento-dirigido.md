@@ -192,41 +192,41 @@ etiquetas, junto com a etiqueta de caixa.
 
 ### 5.2 Contagem de abertura por caixa (novo go-live)
 
-Base: a tela restaurada no PR #94 (Estoque › Contagem, aba "Inventário de
-abertura", uma sessão por cliente). O endereço deixou de ser digitado: a
-unidade da contagem é **a caixa**, e cada produto é lançado dentro de uma
-caixa guardada.
+Atualizado em 20/10/2026: a abertura começa pela **caixa de destino em
+conferência**, antes de escolher posição. A equipe separa fisicamente os
+produtos e pode reunir o mesmo modelo/cor com tamanhos distintos, cada um
+identificado pelo seu código.
 
-**Construído (fase 0, PR 2), no modo direcionado (pendência P5 decidida):**
+1. **Iniciar conferência** gera o CX e salva a caixa em `counting`, sem medidas
+   nem posição. Itens ficam como rascunhos persistidos, editáveis e removíveis;
+   não criam SKU, saldo ou cobrança de posição.
+2. **Revisar e fechar caixa** confere o resumo e persiste `reviewed`. Reabrir
+   é uma ação explícita e auditada.
+3. Medidas e conteúdo conferido alimentam **Onde guardar?**. Para apoiar de
+   lado é necessário permitir essa orientação; a sugestão mostra frente,
+   profundidade e altura efetivas. A preferência é por SKU conhecido, sem
+   inferência de família pelo nome.
+4. **Confirmar guarda** revalida zona, capacidade, peso e orientação. A caixa
+   fica `committing`, reservando espaço; cada linha materializa saldo e
+   checkpoint na mesma transação. **Retomar guarda** continua sem duplicar
+   linhas publicadas. A revisão da prateleira serializa guardas concorrentes.
+5. Quando todas as linhas terminam, a caixa fica `stored` e fechada, pronta
+   para etiqueta. O inventário não encerra com caixas pendentes.
 
-1. a pessoa mede a caixa fechada (comprimento, largura e altura em
-   centímetros; peso opcional) e, se souber, diz o que vai dentro (cód.
-   cliente ou SKU, para a regra do mesmo produto);
-2. "Onde guardar?" chama o motor (`suggestWarehousePosition`, só leitura),
-   que devolve a prateleira, o motivo (mesmo produto, perto do produto ou
-   primeira livre) e até duas alternativas, ou explica por que nenhuma serve
-   (zona sem rua, zona cheia, caixa alta ou pesada demais);
-3. "Guardar em A-01" cria a caixa já na posição (`createWarehouseBox`,
-   coleção `warehouse_boxes`, código sequencial `CX-000001`, evento
-   `warehouse.box_stored`). A transação reconfere zona, situação e espaço.
-   Escolher uma alternativa fica registrado como sugestão não seguida; "Não
-   cabe aqui" exige motivo, tira a prateleira da próxima sugestão e, ao
-   guardar, marca a recusada em verificação (`warehouse.position_refused`);
-4. com a caixa aberta na tela, cada produto lançado leva `box_code` e a
-   posição da caixa. O saldo da posição soma por SKU (duas caixas do mesmo
-   produto na mesma prateleira dão um saldo só) e a caixa acumula linhas,
-   unidades e custo;
-5. "Fechar caixa" só muda a tela; a caixa continua guardada. Caixa vazia pode
-   ser removida (`removeWarehouseBox`); com produto dentro, primeiro a linha
-   sai pela correção da abertura, que devolve saldo e contadores.
+**Correção da operação já iniciada:** `Corrigir caixa` transfere uma linha
+inteira entre caixas da mesma sessão, mantendo SKU, fotos, custo e quantidade
+total. Se faltar o destino no cadastro, use **Cadastrar caixa já armazenada**.
+Essa exceção preserva o fluxo antigo para corrigir vínculos existentes.
+O estorno continua separado e não deve ser usado para trocar apenas a caixa.
 
-A tela mostra, além de produtos, unidades e valor, as caixas da sessão e as
-posições ocupadas (prateleiras com ao menos uma caixa), que é o número que a
-fatura manual usa por enquanto.
+**Recusa:** o motivo e a alternativa escolhida ficam auditados. Recusar uma
+sugestão não coloca mais toda a prateleira em verificação.
 
-Fora desta entrega: tipos de caixa padrão (pendência P2, medidas sempre
-manuais por enquanto) e produto solto fora de caixa na abertura (a tela exige
-caixa). As etiquetas entraram no PR 3 (seção 6).
+Capacidade continua por uma fileira, sem empilhamento nem segunda fileira.
+Sem permissão para apoiar de lado, preserva a altura original. Totais de
+rascunhos e publicados são separados; posições ocupadas contam caixas
+armazenadas. Procedimento e limites em
+[`wms-abertura-correcoes.md`](wms-abertura-correcoes.md).
 
 ### 5.3 Recebimento com guarda dirigida (fase 1)
 

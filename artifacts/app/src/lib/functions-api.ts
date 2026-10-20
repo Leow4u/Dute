@@ -417,6 +417,39 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  if (method === "POST" && pathname === "/api/warehouse/opening-inventory/boxes") {
+    return { name: "createOpeningConferenceBox", status: 201, payload: async (_pathname, init) => {
+      const body = await readJsonBody(init);
+      return { ...body, idempotency_key: body.idempotency_key ?? crypto.randomUUID() };
+    } };
+  }
+  const conferenceBoxMatch = pathname.match(/^\/api\/warehouse\/opening-inventory\/boxes\/([^/]+)\/(read|lines|state|store|resume)$/);
+  if (method === "POST" && conferenceBoxMatch) {
+    const names: Record<string, string> = {
+      read: "getOpeningConferenceBox", lines: "saveOpeningConferenceLine",
+      state: "setOpeningConferenceBoxState", store: "storeOpeningConferenceBox", resume: "resumeOpeningConferenceBox",
+    };
+    return {
+      name: names[conferenceBoxMatch[2]]!,
+      payload: async (_pathname, init) => {
+        const body = await readJsonBody(init);
+        return { ...body, box_code: decodeURIComponent(conferenceBoxMatch[1]),
+          ...(["read", "resume"].includes(conferenceBoxMatch[2]) ? {} : { idempotency_key: body.idempotency_key ?? crypto.randomUUID() }) };
+      },
+    };
+  }
+  const conferenceLineRemovalMatch = pathname.match(/^\/api\/warehouse\/opening-inventory\/boxes\/([^/]+)\/lines\/([^/]+)\/remove$/);
+  if (method === "POST" && conferenceLineRemovalMatch) {
+    return {
+      name: "removeOpeningConferenceLine",
+      payload: async (_pathname, init) => {
+        const body = await readJsonBody(init);
+        return { ...body, box_code: decodeURIComponent(conferenceLineRemovalMatch[1]), line_id: decodeURIComponent(conferenceLineRemovalMatch[2]),
+          idempotency_key: body.idempotency_key ?? crypto.randomUUID() };
+      },
+    };
+  }
+
   const openingInventoryLineMoveMatch = pathname.match(
     /^\/api\/warehouse\/opening-inventory\/lines\/([^/]+)\/move$/,
   );

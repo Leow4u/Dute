@@ -1,9 +1,37 @@
-# Correção de caixa no inventário de abertura
+# Inventário de abertura: conferência e correções
+
+O inventário de abertura é a carga inicial de cada cliente. Durante essa etapa, separe os produtos das caixas de origem e monte as **caixas de destino** conforme a organização física desejada, por exemplo mesmo modelo/cor com tamanhos diferentes. Cada tamanho continua com seu próprio código.
+
+## Conferir antes de guardar
+
+1. Em **Contagem → Inventário de abertura**, inicie uma **Nova caixa de destino**. O sistema gera um CX estável; ainda não exige medidas nem prateleira.
+2. Identifique e conte cada produto. Confira a caixa de destino a cada lançamento. Os itens salvos ficam em conferência, sem criar catálogo, SKU, saldo ou posição ocupada.
+3. Edite ou remova rascunhos até o resumo corresponder ao conteúdo físico.
+4. Use **Revisar e fechar caixa**. O fechamento é persistido; para editar novamente, use **Reabrir conferência**.
+5. Meça a caixa fechada e peça a posição. Se a embalagem puder apoiar em outro lado, marque **Pode apoiar esta caixa de lado**. Confira frente, profundidade e altura efetivas exibidas na sugestão.
+6. Confirme a guarda na posição física e imprima a etiqueta. Só nessa etapa os produtos novos ganham SKU e as contagens entram no estoque.
+7. Inicie a próxima caixa. O inventário só pode ser concluído quando todas as caixas estiverem guardadas ou as caixas vazias tiverem sido removidas.
+
+Rascunhos ficam salvos no servidor e podem ser retomados ao abrir a caixa na lista da sessão. O progresso de lançamentos/unidades publicados é separado do conteúdo ainda em conferência.
+
+Se uma guarda for interrompida, abra a caixa e use **Retomar guarda**. Cada linha tem uma chave persistente de processamento; as linhas já publicadas não são somadas novamente. Uma linha que falhou na validação pode ser corrigida sem alterar as que já publicaram. Só é possível voltar integralmente à conferência enquanto nenhuma linha foi publicada ou estiver em processamento.
+
+Caixas armazenadas podem ser reabertas explicitamente para ajustes durante a sessão. Erro apenas no vínculo de uma linha deve usar **Corrigir caixa**, abaixo.
+
+## Posição e orientação
+
+As seis orientações da caixa são consideradas quando o operador permite apoiar de lado. Sem essa permissão, a altura original é preservada. A confirmação revalida espaço e peso no servidor e grava a orientação efetiva, sem alterar as medidas originais.
+
+O cálculo continua considerando uma fileira, sem empilhamento nem segunda fileira na profundidade. A recusa de uma sugestão vale para a caixa atual e fica auditada; não bloqueia a prateleira para as demais caixas.
+
+No fluxo novo, a sugestão usa os SKUs conhecidos das linhas conferidas. A preferência continua por SKU exato e proximidade; não deduz família/modelo a partir do nome nem do sufixo do código. A organização por modelo/cor é feita na separação física. Para produtos totalmente novos, ainda sem SKU e posição anterior, vale a primeira prateleira compatível da zona do cliente.
+
+## Corrigir lançamentos já publicados
 
 Use **Corrigir caixa** em **Contagem → Inventário de abertura → Linhas conferidas** quando os produtos estão em caixas físicas diferentes, mas foram lançados na mesma caixa por engano.
 
 1. Confira as etiquetas das caixas físicas.
-2. Cadastre a caixa de destino na mesma sessão, caso ainda não exista.
+2. Se o destino ainda não existe no sistema, use **Cadastrar caixa já armazenada** na mesma sessão, com suas medidas e posição física.
 3. Filtre os lançamentos pela caixa incorreta.
 4. Na linha, escolha **Corrigir caixa**, selecione a caixa física de destino e informe o motivo.
 5. Confira origem, destino e quantidade e confirme.
@@ -22,3 +50,13 @@ Cada novo lançamento exige conferir explicitamente a etiqueta da caixa selecion
 - Integração Firestore: mesma posição, posições diferentes, idempotência, isolamento de cliente/sessão, destino inválido e preservação de saldo/catálogo.
 - Frontend: roteamento da callable e seleção dos destinos compatíveis.
 - Nenhuma correção de dados reais é executada pelo deploy; a equipe escolhe as caixas físicas na interface.
+
+## Estado técnico
+
+- `counting`: caixa de destino e rascunhos persistidos em `opening_inventory_draft_lines`; sem saldo.
+- `reviewed`: conteúdo conferido e fechado, aguardando posição.
+- `committing`: capacidade reservada; cada linha publica estoque e checkpoint na mesma transação. Pode retomar após interrupção.
+- `stored`: guarda concluída, com `opening_closed: true`. Reabertura é explícita e auditada.
+- Revisão otimista impede sobrescrever uma edição de outra tela.
+- Criação de caixa e encerramento da sessão são coordenados transacionalmente; caixas pendentes impedem a conclusão.
+- Capacidade considera caixas guardadas e reservas em andamento; a revisão da prateleira serializa guardas concorrentes.

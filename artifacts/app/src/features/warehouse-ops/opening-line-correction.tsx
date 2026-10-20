@@ -48,7 +48,7 @@ export function OpeningLineCorrection({
       );
     },
     onSuccess: () => {
-      for (const queryKey of ["opening-inventory-session", "warehouse-boxes", "warehouse-ops", "warehouse-positions", "ai-overview"]) {
+      for (const queryKey of ["opening-inventory-session", "opening-conference-box", "warehouse-boxes", "warehouse-ops", "warehouse-positions", "ai-overview"]) {
         queryClient.invalidateQueries({ queryKey: [queryKey] });
       }
       toast({ title: "Caixa do lançamento corrigida", description: `${formatNumber(line.counted_qty)} unidade(s) vinculadas à caixa ${target}. SKU, fotos, custo e quantidade total preservados.` });

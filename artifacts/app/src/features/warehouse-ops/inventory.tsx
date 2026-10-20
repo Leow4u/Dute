@@ -1,6 +1,6 @@
 /** Inventory workspaces: opening inventory + cycle count. */
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
@@ -13,7 +13,6 @@ import {
   ListChecks,
   Boxes,
   MapPin,
-  PackageCheck,
   PackageOpen,
   PackageSearch,
   PlayCircle,
@@ -27,6 +26,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { OpeningLineCorrection } from "./opening-line-correction";
+import { OpeningConferenceSummary } from "./opening-conference-summary";
+import {
+  conferenceAttempt, conferenceCanEditLine, conferenceSkus, conferenceStatusLabel, isConferencePending, isConferenceRevisionConflict,
+  type MutationAttempt, type OpeningConferenceLine, type OpeningConferenceResult,
+} from "@/lib/opening-conference";
 import {
   Card,
   CardContent,
@@ -67,6 +71,7 @@ import { type CountMode, defaultCountMode } from "@/lib/opening-inventory";
 import { labelsUrl } from "@/lib/warehouse-labels";
 import {
   type BoxDraft,
+  type SlottingCandidate,
   type BoxRefusal,
   type CreateBoxResult,
   type SuggestionResult,
@@ -74,6 +79,7 @@ import {
   boxDraftToPayload,
   emptyBoxDraft,
   formatBoxDimensions,
+  formatBoxPlacement,
   occupiedPositions,
   resolveContentSkus,
   sessionBoxes,
@@ -259,6 +265,14 @@ export function OpeningInventoryWorkspace() {
   const [refusalReason, setRefusalReason] = useState("");
   const [activeBox, setActiveBox] = useState<WarehouseBox>();
   const [boxToRemove, setBoxToRemove] = useState<WarehouseBox>();
+  const [legacyBoxMode, setLegacyBoxMode] = useState(false);
+  const [allowTilt, setAllowTilt] = useState(false);
+  const [editingDraft, setEditingDraft] = useState<OpeningConferenceLine>();
+  const [draftToRemove, setDraftToRemove] = useState<OpeningConferenceLine>();
+  const [reviewBoxOpen, setReviewBoxOpen] = useState(false);
+  const [pendingBoxSelection, setPendingBoxSelection] = useState<{ box?: WarehouseBox }>();
+  const attempts = useRef(new Map<string, MutationAttempt>());
+  const suggestionGeneration = useRef(0);
 
   useEffect(() => {
     const suggested = inferGeneroFromClientCode(clientCode);
@@ -310,15 +324,40 @@ export function OpeningInventoryWorkspace() {
     [session?.session_id, storedBoxes],
   );
   const occupied = occupiedPositions(storedBoxes);
-  // A caixa aberta com os contadores mais recentes; logo depois de criar, ainda só existe no estado.
-  const currentBox = activeBox
+  const selectedBox = activeBox
     ? storedBoxes.find((box) => box.code === activeBox.code) ?? activeBox
     : undefined;
+  const conferenceQuery = useQuery({
+    queryKey: ["opening-conference-box", customerCode, session?.session_id, selectedBox?.code],
+    enabled: Boolean(selectedBox && session?.session_id),
+    staleTime: 0,
+    queryFn: () => fetchJson<OpeningConferenceResult>(
+      `/api/warehouse/opening-inventory/boxes/${encodeURIComponent(selectedBox!.code)}/read`,
+      { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ customer_code: customerCode, session_id: session?.session_id }) },
+    ),
+  });
+  const currentBox = conferenceQuery.data?.box ? warehouseBoxFromRecord(conferenceQuery.data.box) : selectedBox;
+  const conferenceLines = conferenceQuery.data?.lines ?? [];
+  useEffect(() => {
+    suggestionGeneration.current += 1;
+    setSuggestion(undefined);
+    setExcluded([]);
+    setRefusal(undefined);
+  }, [currentBox?.code, currentBox?.conference_revision]);
+
+  const isDraftBox = currentBox?.status === "counting" || currentBox?.status === "committing";
+  const canEnterProduct = Boolean(currentBox &&
+    ((!currentBox.opening_closed && (currentBox.status === "counting" || currentBox.status === "stored")) ||
+      (currentBox.status === "committing" && editingDraft)));
+  const pendingBoxes = boxesOfSession.filter(isConferencePending);
+  const formDirty = Boolean(clientCode.trim() || productName.trim() || countedQty.trim() || photos.length);
   const locationId = currentBox?.location_id ?? "";
   const boxPayload = useMemo(() => boxDraftToPayload(boxDraft), [boxDraft]);
   const contentSkus = useMemo(
-    () => resolveContentSkus(boxDraft.content, lookupProducts),
-    [boxDraft.content, lookupProducts],
+    () => currentBox?.status === "reviewed"
+      ? conferenceSkus(conferenceLines, lookupProducts)
+      : resolveContentSkus(boxDraft.content, lookupProducts),
+    [boxDraft.content, lookupProducts, currentBox?.status, conferenceLines],
   );
   const draftLine = useMemo<ReceiptDraftLine>(
     () => ({
@@ -400,11 +439,13 @@ export function OpeningInventoryWorkspace() {
     hasIdentity &&
     lookupQuery.isSuccess &&
     !identityConflict &&
-    Boolean(currentBox) &&
+    canEnterProduct &&
+    conferenceQuery.isSuccess &&
+    !conferenceQuery.isFetching &&
     boxAcknowledged &&
     countedQty.trim() !== "" &&
     Number.isFinite(parsedCount) &&
-    parsedCount >= 0 &&
+    parsedCount > 0 &&
     !photoUploading &&
     taxonomyComplete &&
     ((Boolean(selectedProduct?.hasSku) && selectedProductCost > 0) ||
@@ -430,7 +471,7 @@ export function OpeningInventoryWorkspace() {
       queryClient.invalidateQueries({ queryKey: ["opening-inventory-session"] });
       toast({
         title: "Inventário de abertura iniciado",
-        description: "Meça a primeira caixa: o sistema diz onde guardar e cada produto confirmado já fica no ledger.",
+        description: "Separe os produtos na caixa de destino e comece a conferência.",
       });
     },
     onError: (error) =>
@@ -471,7 +512,7 @@ export function OpeningInventoryWorkspace() {
       }),
   });
 
-  const suggestPosition = useMutation<SuggestionResult, Error, { exclude: string[] }>({
+  const suggestPosition = useMutation<SuggestionResult, Error, { exclude: string[]; generation: number }>({
     mutationFn: ({ exclude }) => {
       if (!boxPayload) {
         throw new Error("Informe comprimento, largura e altura da caixa em centímetros.");
@@ -483,11 +524,14 @@ export function OpeningInventoryWorkspace() {
           customer_code: customerCode,
           ...boxPayload,
           sku_codes: contentSkus,
+          allow_tilt: allowTilt,
           exclude,
         }),
       });
     },
-    onSuccess: (result) => setSuggestion(result),
+    onSuccess: (result, variables) => {
+      if (variables.generation === suggestionGeneration.current) setSuggestion(result);
+    },
     onError: (error) =>
       toast({
         title: "Não consegui sugerir a posição",
@@ -496,8 +540,8 @@ export function OpeningInventoryWorkspace() {
       }),
   });
 
-  const createBox = useMutation<CreateBoxResult, Error, { location: string }>({
-    mutationFn: ({ location }) => {
+  const createBox = useMutation<CreateBoxResult, Error, { candidate: SlottingCandidate }>({
+    mutationFn: ({ candidate }) => {
       if (!boxPayload) {
         throw new Error("Informe comprimento, largura e altura da caixa em centímetros.");
       }
@@ -508,7 +552,9 @@ export function OpeningInventoryWorkspace() {
           customer_code: customerCode,
           session_id: session?.session_id,
           ...boxPayload,
-          location_id: location,
+          location_id: candidate.code,
+          allow_tilt: allowTilt,
+          orientation: candidate.placement.orientation,
           suggestion: suggestion
             ? {
                 position: suggestion.position?.code ?? null,
@@ -524,6 +570,7 @@ export function OpeningInventoryWorkspace() {
     onSuccess: (result) => {
       const box = warehouseBoxFromRecord(result.box);
       setActiveBox(box);
+      setLegacyBoxMode(false);
       setBoxAcknowledged(false);
       setBoxDraft(emptyBoxDraft());
       setSuggestion(undefined);
@@ -535,7 +582,7 @@ export function OpeningInventoryWorkspace() {
       queryClient.invalidateQueries({ queryKey: ["warehouse-positions"] });
       toast({
         title: `Caixa ${box.code} guardada em ${box.location_id}`,
-        description: "Leve a caixa para a prateleira e lance os produtos que estão dentro dela.",
+        description: "Caixa física cadastrada. Use Corrigir caixa para vincular os lançamentos existentes.",
       });
     },
     onError: (error) =>
@@ -555,6 +602,7 @@ export function OpeningInventoryWorkspace() {
       }),
     onSuccess: (_result, box) => {
       setBoxToRemove(undefined);
+      queryClient.invalidateQueries({ queryKey: ["opening-conference-box"] });
       setActiveBox((current) => (current?.code === box.code ? undefined : current));
       queryClient.invalidateQueries({ queryKey: ["warehouse-boxes"] });
       toast({
@@ -570,16 +618,189 @@ export function OpeningInventoryWorkspace() {
       }),
   });
 
+  function withAttempt(operation: string, body: Record<string, unknown>) {
+    const attempt = conferenceAttempt(attempts.current.get(operation), operation, body, () => crypto.randomUUID());
+    attempts.current.set(operation, attempt);
+    return { ...attempt.payload, idempotency_key: attempt.key };
+  }
+
+  function conferenceBody() {
+    if (!currentBox || !session?.session_id) throw new Error("Selecione uma caixa desta sessão.");
+    return { customer_code: customerCode, session_id: session.session_id, box_code: currentBox.code, expected_revision: currentBox.conference_revision ?? 0 };
+  }
+
+  function discardRejectedRevision(operation: string, error: unknown) {
+    if (isConferenceRevisionConflict(getErrorMessage(error))) attempts.current.delete(operation);
+  }
+
+  async function refreshConference() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["opening-conference-box"] }),
+      queryClient.invalidateQueries({ queryKey: ["warehouse-boxes"] }),
+      queryClient.invalidateQueries({ queryKey: ["opening-inventory-session"] }),
+      queryClient.invalidateQueries({ queryKey: ["opening-inventory-product-lookup"] }),
+      queryClient.invalidateQueries({ queryKey: ["warehouse-positions"] }),
+      queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] }),
+    ]);
+  }
+
+  function resetProductForm() {
+    setClientCode(""); setProductName(""); setCategory(""); setGenero(""); setGrupo("");
+    setBarcode(""); setBrand(""); setSize(""); setColor(""); setCountedQty(""); setUnitCost("");
+    setReference(""); setPhotos([]); setCreateNew(false); setSelectedProduct(undefined);
+    setEditingDraft(undefined); setBoxAcknowledged(false);
+  }
+
+  function activateBox(box?: WarehouseBox) {
+    resetProductForm();
+    setActiveBox(box);
+    setLineBoxFilter(box?.code ?? "all");
+    setLegacyBoxMode(false);
+    setBoxDraft(emptyBoxDraft());
+    setAllowTilt(false);
+    setSuggestion(undefined);
+    setExcluded([]);
+    setRefusal(undefined);
+    suggestionGeneration.current += 1;
+  }
+
+  function requestBoxSelection(box?: WarehouseBox) {
+    if (formDirty) setPendingBoxSelection({ box });
+    else activateBox(box);
+  }
+
+  const createConference = useMutation<OpeningConferenceResult, Error>({
+    mutationFn: () => fetchJson<OpeningConferenceResult>("/api/warehouse/opening-inventory/boxes", {
+      method: "POST", headers: JSON_HEADERS,
+      body: JSON.stringify(withAttempt("create-conference", { customer_code: customerCode, session_id: session?.session_id })),
+    }),
+    onSuccess: async (result) => {
+      attempts.current.delete("create-conference");
+      activateBox(warehouseBoxFromRecord(result.box));
+      await refreshConference();
+      toast({ title: `Caixa ${coerceText(result.box.code)} em conferência`, description: "Separe os produtos nesta caixa de destino e conte cada tamanho." });
+    },
+    onError: (error) => toast({ title: "Não consegui iniciar a caixa", description: getErrorMessage(error), variant: "destructive" }),
+  });
+
+  const changeConferenceState = useMutation<OpeningConferenceResult, Error, "review" | "reopen" | "release">({
+    mutationFn: (action) => fetchJson<OpeningConferenceResult>(
+      `/api/warehouse/opening-inventory/boxes/${encodeURIComponent(currentBox!.code)}/state`,
+      { method: "POST", headers: JSON_HEADERS,
+        body: JSON.stringify(withAttempt("conference-state", { ...conferenceBody(), action })) },
+    ),
+    onSuccess: async () => {
+      attempts.current.delete("conference-state");
+      attempts.current.delete("store-conference");
+      setReviewBoxOpen(false);
+      resetProductForm();
+      setSuggestion(undefined);
+      suggestionGeneration.current += 1;
+      await refreshConference();
+    },
+    onError: async (error) => {
+      discardRejectedRevision("conference-state", error);
+      await refreshConference();
+      toast({ title: "Não consegui alterar a conferência", description: getErrorMessage(error), variant: "destructive" });
+    },
+  });
+
+  const removeConferenceLine = useMutation<unknown, Error, OpeningConferenceLine>({
+    mutationFn: (line) => fetchJson(
+      `/api/warehouse/opening-inventory/boxes/${encodeURIComponent(currentBox!.code)}/lines/${encodeURIComponent(line.id)}/remove`,
+      { method: "POST", headers: JSON_HEADERS,
+        body: JSON.stringify(withAttempt("remove-conference-line", { ...conferenceBody(), line_id: line.id })) },
+    ),
+    onSuccess: async () => {
+      attempts.current.delete("remove-conference-line");
+      if (editingDraft?.id === draftToRemove?.id) resetProductForm();
+      setDraftToRemove(undefined);
+      await refreshConference();
+    },
+    onError: async (error) => {
+      discardRejectedRevision("remove-conference-line", error);
+      await refreshConference();
+      toast({ title: "Não consegui remover o rascunho", description: getErrorMessage(error), variant: "destructive" });
+    },
+  });
+
+  const storeConference = useMutation<OpeningConferenceResult, Error, SlottingCandidate>({
+    mutationFn: (candidate) => {
+      if (!boxPayload || currentBox?.status !== "reviewed") throw new Error("Revise a caixa e informe suas medidas antes de guardar.");
+      return fetchJson<OpeningConferenceResult>(
+        `/api/warehouse/opening-inventory/boxes/${encodeURIComponent(currentBox.code)}/store`,
+        { method: "POST", headers: JSON_HEADERS,
+          body: JSON.stringify(withAttempt("store-conference", {
+            ...conferenceBody(), ...boxPayload, location_id: candidate.code,
+            allow_tilt: allowTilt, orientation: candidate.placement.orientation,
+            suggestion: suggestion ? { position: suggestion.position?.code, reason: suggestion.position?.reason,
+              alternatives: suggestion.alternatives.map((alternative) => alternative.code) } : undefined,
+            refusal,
+          })) },
+      );
+    },
+    onSuccess: async (result) => {
+      attempts.current.delete("store-conference");
+      setActiveBox(warehouseBoxFromRecord(result.box));
+      setSuggestion(undefined);
+      await refreshConference();
+      toast({ title: `Caixa ${coerceText(result.box.code)} guardada em ${coerceText(result.box.location_id)}`, description: "Conferência concluída. Imprima a etiqueta e comece a próxima caixa." });
+    },
+    onError: async (error) => {
+      discardRejectedRevision("store-conference", error);
+      await refreshConference();
+      toast({ title: "A guarda precisa de conferência", description: getErrorMessage(error), variant: "destructive" });
+    },
+  });
+
+  const resumeConference = useMutation<OpeningConferenceResult, Error>({
+    mutationFn: () => fetchJson<OpeningConferenceResult>(
+      `/api/warehouse/opening-inventory/boxes/${encodeURIComponent(currentBox!.code)}/resume`,
+      { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(conferenceBody()) },
+    ),
+    onSuccess: async (result) => {
+      setActiveBox(warehouseBoxFromRecord(result.box));
+      resetProductForm();
+      await refreshConference();
+      toast({ title: "Guarda concluída", description: "A caixa está armazenada e pode ser etiquetada." });
+    },
+    onError: async (error) => {
+      await refreshConference();
+      toast({ title: "Há itens pendentes na guarda", description: getErrorMessage(error), variant: "destructive" });
+    },
+  });
+
+  function editConferenceLine(line: OpeningConferenceLine) {
+    if (!currentBox || !conferenceCanEditLine(currentBox, line)) return;
+    resetProductForm();
+    const product = lookupProducts.find((item) => item.skuCode === line.sku_code);
+    if (product) applyProduct(product);
+    setClientCode(line.client_item_code || line.sku_code || "");
+    setProductName(line.product_name || "");
+    setCategory(line.category || "");
+    setGenero(line.genero || "");
+    setGrupo(line.grupo || "");
+    setBarcode(line.barcode || "");
+    setBrand(line.brand || "");
+    setSize(line.size || "");
+    setColor(line.color || "");
+    setCountedQty(String(line.counted_qty));
+    setUnitCost(String(line.unit_cost));
+    setReference(line.reference || "");
+    setPhotos(sourcePhotos(line as unknown as AnyRecord));
+    setCreateNew(line.product_registration === "new");
+    setEditingDraft(line);
+    setBoxAcknowledged(false);
+  }
+
   const recordOpeningLine = useMutation<CycleCountResult, Error>({
     mutationFn: () => {
-      if (!currentBox || !boxAcknowledged) throw new Error("Confira a etiqueta da caixa física antes de lançar o produto.");
-      return fetchJson<CycleCountResult>("/api/warehouse/cycle-counts", {
-        method: "POST",
-        headers: JSON_HEADERS,
-        body: JSON.stringify({
+      if (!currentBox || !boxAcknowledged || !canEnterProduct) throw new Error("Confira a etiqueta da caixa física antes de lançar o produto.");
+      const body = {
           mode: "opening",
           session_id: session?.session_id,
           customer_code: customerCode,
+          ...(isDraftBox ? { line_id: editingDraft?.id, expected_revision: currentBox.conference_revision ?? 0 } : {}),
           // Produto novo não leva SKU: as Functions geram na sigla do cliente.
           sku_code: selectedProduct?.skuCode || undefined,
           client_item_code: selectedProduct?.clientCode || clientCode.trim(),
@@ -612,45 +833,37 @@ export function OpeningInventoryWorkspace() {
           reason: "Inventário físico de abertura do estoque",
           reference: reference.trim() || session?.session_id,
           occurred_at: new Date().toISOString(),
-          idempotency_key: crypto.randomUUID(),
-        }),
-      });
+      };
+      return fetchJson<CycleCountResult>(
+        isDraftBox ? `/api/warehouse/opening-inventory/boxes/${encodeURIComponent(currentBox.code)}/lines` : "/api/warehouse/cycle-counts",
+        { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(withAttempt("record-opening-line", body)) },
+      );
     },
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
+      attempts.current.delete("record-opening-line");
       queryClient.invalidateQueries({ queryKey: ["opening-inventory-session"] });
       queryClient.invalidateQueries({ queryKey: ["opening-inventory-product-lookup"] });
       queryClient.invalidateQueries({ queryKey: ["warehouse-boxes"] });
       queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
       queryClient.invalidateQueries({ queryKey: ["ai-overview"] });
       toast({
-        title: result.sku_generated
+        title: isDraftBox ? "Produto salvo na conferência" : result.sku_generated
           ? `Produto cadastrado: SKU ${result.sku_code}`
           : "Produto contado e publicado",
-        description: `${formatNumber(result.qty_counted)} unidade(s) na caixa ${result.box_code ?? currentBox?.code ?? ""}, posição ${currentBox?.location_id ?? ""}.`,
+        description: isDraftBox ? `Caixa ${currentBox?.code}. Revise os itens antes de guardar.` : `${formatNumber(result.qty_counted)} unidade(s) na caixa ${result.box_code ?? currentBox?.code ?? ""}, posição ${currentBox?.location_id ?? ""}.`,
       });
-      setBoxAcknowledged(false);
-      setClientCode("");
-      setProductName("");
-      setCategory("");
-      setGenero("");
-      setGrupo("");
-      setBarcode("");
-      setBrand("");
-      setSize("");
-      setColor("");
-      setCountedQty("");
-      setUnitCost("");
-      setReference("");
-      setPhotos([]);
-      setCreateNew(false);
-      setSelectedProduct(undefined);
+      resetProductForm();
+      await refreshConference();
     },
-    onError: (error) =>
+    onError: async (error) => {
+      discardRejectedRevision("record-opening-line", error);
+      await refreshConference();
       toast({
-        title: "Não consegui publicar a contagem",
+        title: "Não consegui salvar a contagem",
         description: getErrorMessage(error),
         variant: "destructive",
-      }),
+      });
+    },
   });
 
   const removeOpeningLine = useMutation<unknown, Error, OpeningInventoryLine>({
@@ -669,6 +882,7 @@ export function OpeningInventoryWorkspace() {
       ),
     onSuccess: () => {
       setLineToRemove(undefined);
+      queryClient.invalidateQueries({ queryKey: ["opening-conference-box"] });
       queryClient.invalidateQueries({ queryKey: ["opening-inventory-session"] });
       queryClient.invalidateQueries({
         queryKey: ["opening-inventory-product-lookup"],
@@ -735,8 +949,10 @@ export function OpeningInventoryWorkspace() {
 
   function updateBoxDraft(field: keyof BoxDraft, value: string) {
     setBoxDraft((current) => ({ ...current, [field]: value }));
-    // Medida nova, sugestão velha: a prateleira é escolhida de novo.
-    if (field !== "content") setSuggestion(undefined);
+    suggestionGeneration.current += 1;
+    setSuggestion(undefined);
+    setExcluded([]);
+    setRefusal(undefined);
   }
 
   /** "Não cabe aqui": guarda o motivo, tira a prateleira da próxima rodada e pergunta de novo. */
@@ -749,11 +965,15 @@ export function OpeningInventoryWorkspace() {
     setExcluded(nextExcluded);
     setRefusing(false);
     setRefusalReason("");
-    suggestPosition.mutate({ exclude: nextExcluded });
+    suggestPosition.mutate({ exclude: nextExcluded, generation: suggestionGeneration.current });
   }
 
-  const boxBusy = suggestPosition.isPending || createBox.isPending;
+  const conferenceBusy = createConference.isPending || changeConferenceState.isPending ||
+    removeConferenceLine.isPending || storeConference.isPending || resumeConference.isPending ||
+    recordOpeningLine.isPending || conferenceQuery.isFetching;
+  const boxBusy = suggestPosition.isPending || createBox.isPending || conferenceBusy;
   const suggestedCode = suggestion?.position?.code;
+  const reviewLines = currentBox?.status === "stored" ? sessionLines.filter((line) => line.box_code === currentBox.code) : conferenceLines;
 
   return (
     <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -767,7 +987,7 @@ export function OpeningInventoryWorkspace() {
               <div>
                 <CardTitle>Inventário de abertura</CardTitle>
                 <CardDescription className="mt-1">
-                  Uma caixa por vez: meça, guarde onde o sistema indicar e lance o que tem dentro.
+                  Separe os produtos na caixa de destino, conte, revise e confirme onde guardar.
                 </CardDescription>
               </div>
             </div>
@@ -828,7 +1048,7 @@ export function OpeningInventoryWorkspace() {
                 <EmptyTitle>
                   {session?.status === "completed"
                     ? "Inventário de abertura encerrado"
-                    : "Inicie a sessão para guardar a primeira caixa"}
+                    : "Inicie a sessão para conferir a primeira caixa"}
                 </EmptyTitle>
                 <EmptyDescription>
                   {session?.status === "completed"
@@ -839,58 +1059,72 @@ export function OpeningInventoryWorkspace() {
             </Empty>
           ) : (
             <div className="space-y-6">
+              {!currentBox && !legacyBoxMode ? (
+                <div className="space-y-4 rounded-lg border border-border p-5">
+                  <h3 className="text-lg font-semibold">Nova caixa de destino</h3>
+                  <p className="text-sm text-muted-foreground">Separe aqui os produtos que ficarão juntos. Modelos e tamanhos continuam identificados por seus próprios códigos.</p>
+                  <Button type="button" onClick={() => createConference.mutate()} disabled={boxBusy}>
+                    {createConference.isPending ? <RefreshCw data-icon="inline-start" className="animate-spin" /> : <Boxes data-icon="inline-start" />}
+                    Iniciar conferência da caixa
+                  </Button>
+                  <div className="border-t border-border pt-3">
+                    <Button type="button" variant="outline" onClick={() => setLegacyBoxMode(true)} disabled={boxBusy}>Cadastrar caixa já armazenada</Button>
+                    <p className="mt-2 text-sm text-muted-foreground">Para corrigir o vínculo de lançamentos que já foram feitos.</p>
+                  </div>
+                </div>
+              ) : null}
               {currentBox ? (
-                <div className="flex flex-col gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="flex items-start gap-3">
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-card text-primary">
-                      <Boxes className="size-5" />
+                <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="text-lg font-semibold">Caixa de destino {currentBox.code}</div>
+                      <div className="mt-1 text-sm text-muted-foreground">{conferenceStatusLabel(currentBox)}{currentBox.location_id ? ` · ${currentBox.location_id}` : ""}</div>
+                      <div className="mt-1 text-sm text-muted-foreground">
+                        {formatNumber(isConferencePending(currentBox) ? currentBox.draft_line_count : currentBox.line_count)} linhas · {formatNumber(isConferencePending(currentBox) ? currentBox.draft_unit_count : currentBox.unit_count)} un.
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-foreground">
-                        Lançando na caixa {currentBox.code} · {currentBox.location_id}
-                      </div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {formatBoxDimensions(currentBox)} · {formatNumber(currentBox.line_count)} produto(s) · {formatNumber(currentBox.unit_count)} un.
-                      </div>
-                      {currentBox.suggestion?.position && currentBox.suggestion.position !== currentBox.location_id ? (
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          Sugerida {currentBox.suggestion.position}; guardada em {currentBox.location_id}.
-                        </div>
+                    <div className="flex flex-wrap gap-2">
+                      {currentBox.status === "stored" ? <Button type="button" variant="outline" onClick={() => navigate(labelsUrl({ boxes: [currentBox.code] }))} disabled={conferenceBusy}><Printer data-icon="inline-start" />Imprimir etiqueta</Button> : null}
+                      <Button type="button" variant="outline" onClick={() => requestBoxSelection()} disabled={conferenceBusy || photoUploading}>Trocar caixa</Button>
+                      {currentBox.status === "stored" ? (
+                        <Button type="button" variant="outline" disabled={conferenceBusy || photoUploading || formDirty}
+                          onClick={() => currentBox.opening_closed ? changeConferenceState.mutate("reopen") : setReviewBoxOpen(true)}>
+                          {currentBox.opening_closed ? "Reabrir para ajustar" : "Revisar e fechar caixa"}
+                        </Button>
                       ) : null}
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => navigate(labelsUrl({ boxes: [currentBox.code] }))}
-                      disabled={recordOpeningLine.isPending}
-                    >
-                      <Printer data-icon="inline-start" />
-                      Imprimir etiqueta
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => { setActiveBox(undefined); setBoxAcknowledged(false); }}
-                      disabled={recordOpeningLine.isPending}
-                    >
-                      <PackageCheck data-icon="inline-start" />
-                      Trocar caixa
-                    </Button>
-                  </div>
+                  {conferenceQuery.isError ? <Alert variant="destructive"><AlertTitle>Não consegui carregar a conferência</AlertTitle><AlertDescription><Button type="button" variant="outline" onClick={() => conferenceQuery.refetch()}>Tentar novamente</Button></AlertDescription></Alert> : null}
+                  {currentBox.status === "stored" && currentBox.opening_closed ? <p className="text-sm">Caixa fechada. Para continuar contando, inicie a próxima caixa.</p> : null}
                 </div>
-              ) : (
+              ) : null}
+              {currentBox && isConferencePending(currentBox) && conferenceQuery.isSuccess ? (
+                <OpeningConferenceSummary
+                  box={currentBox}
+                  lines={conferenceLines}
+                  busy={conferenceBusy || photoUploading || formDirty}
+                  onEdit={editConferenceLine}
+                  onRemove={setDraftToRemove}
+                  onReview={() => setReviewBoxOpen(true)}
+                  onReopen={() => changeConferenceState.mutate("reopen")}
+                  onResume={() => resumeConference.mutate()}
+                />
+              ) : null}
+              {currentBox?.status === "committing" && conferenceLines.every((line) => line.status === "pending" || line.status === "failed") ? (
+                <Button type="button" variant="outline" onClick={() => changeConferenceState.mutate("release")} disabled={conferenceBusy || formDirty}>Voltar à conferência</Button>
+              ) : null}
+              {((!currentBox && legacyBoxMode) || currentBox?.status === "reviewed") ? (
                 <div className="space-y-4 rounded-lg border border-border bg-card p-4">
                   <div className="flex items-start gap-3">
                     <div className="flex size-10 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-foreground">
                       <Boxes className="size-5" />
                     </div>
                     <div>
-                      <div className="text-sm font-semibold text-foreground">Nova caixa</div>
+                      <div className="text-sm font-semibold text-foreground">{currentBox ? `Guardar caixa ${currentBox.code}` : "Cadastrar caixa já armazenada"}</div>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Meça a caixa fechada, em centímetros. O sistema escolhe a prateleira na zona do cliente; você confirma ou recusa com motivo.
+                        Meça a caixa fechada. Confirme a orientação e a posição física antes de guardar.
                       </p>
+                      {!currentBox ? <Button type="button" variant="ghost" onClick={() => setLegacyBoxMode(false)} disabled={boxBusy}>Voltar à nova conferência</Button> : null}
                     </div>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -911,14 +1145,20 @@ export function OpeningInventoryWorkspace() {
                       <Input id="box-weight" inputMode="decimal" value={boxDraft.weight_kg} onChange={(event) => updateBoxDraft("weight_kg", event.target.value)} placeholder="Opcional" />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="box-content">O que tem dentro (opcional)</Label>
+                  {!currentBox ? <div className="space-y-2">
+                    <Label htmlFor="box-content">Produto de referência para a posição (opcional)</Label>
                     <Input id="box-content" value={boxDraft.content} onChange={(event) => updateBoxDraft("content", event.target.value)} placeholder="Cód. cliente ou SKU; separe por vírgula" />
                     <p className="text-xs text-muted-foreground">
-                      Com o produto informado, a caixa vai para a prateleira que já tem o mesmo produto, ou para a mais próxima dela.
+                      Informe um código já cadastrado para priorizar a posição desse produto.
                     </p>
-                  </div>
+                  </div> : <p className="text-sm text-muted-foreground">{conferenceLines.length} linhas conferidas. A sugestão usa os produtos identificados nesta caixa.</p>}
 
+                  <div className="flex items-start gap-3 rounded-md border border-border p-3">
+                    <Checkbox id="box-allow-tilt" checked={allowTilt} disabled={boxBusy} onCheckedChange={(checked) => {
+                      setAllowTilt(checked === true); suggestionGeneration.current += 1; setSuggestion(undefined); setExcluded([]); setRefusal(undefined);
+                    }} />
+                    <Label htmlFor="box-allow-tilt" className="leading-6">Pode apoiar esta caixa de lado</Label>
+                  </div>
                   {suggestion ? (
                     <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
                       {suggestion.position ? (
@@ -931,6 +1171,7 @@ export function OpeningInventoryWorkspace() {
                                 {suggestion.position.code}
                               </div>
                               <p className="mt-1 text-sm text-muted-foreground">{suggestion.position.reason}</p>
+                              <p className="mt-2 font-medium">{formatBoxPlacement(suggestion.position.placement)}</p>
                               <div className="mt-2 flex flex-wrap gap-2">
                                 <Badge variant="outline">{tierLabel(suggestion.position.tier)}</Badge>
                                 {refusal ? <Badge variant="outline">{refusal.position} recusada</Badge> : null}
@@ -939,11 +1180,11 @@ export function OpeningInventoryWorkspace() {
                             <div className="flex flex-col gap-2 sm:items-end">
                               <Button
                                 type="button"
-                                onClick={() => createBox.mutate({ location: suggestion.position!.code })}
+                                onClick={() => currentBox ? storeConference.mutate(suggestion.position!) : createBox.mutate({ candidate: suggestion.position! })}
                                 disabled={boxBusy}
                               >
-                                {createBox.isPending ? <RefreshCw data-icon="inline-start" className="animate-spin" /> : <CheckCircle2 data-icon="inline-start" />}
-                                Guardar em {suggestion.position.code}
+                                {createBox.isPending || storeConference.isPending ? <RefreshCw data-icon="inline-start" className="animate-spin" /> : <CheckCircle2 data-icon="inline-start" />}
+                                Confirmar guarda em {suggestion.position.code}
                               </Button>
                               <Button
                                 type="button"
@@ -964,11 +1205,13 @@ export function OpeningInventoryWorkspace() {
                                   type="button"
                                   size="sm"
                                   variant="outline"
-                                  title={alternative.reason}
-                                  onClick={() => createBox.mutate({ location: alternative.code })}
+                                  className="h-auto flex-col items-start py-2"
+                                  title={`${alternative.reason} ${formatBoxPlacement(alternative.placement)}`}
+                                  onClick={() => currentBox ? storeConference.mutate(alternative) : createBox.mutate({ candidate: alternative })}
                                   disabled={boxBusy}
                                 >
-                                  Guardar em {alternative.code}
+                                  <span>Guardar em {alternative.code}</span>
+                                   <span className="text-xs font-normal">{formatBoxPlacement(alternative.placement)}</span>
                                 </Button>
                               ))}
                             </div>
@@ -992,7 +1235,7 @@ export function OpeningInventoryWorkspace() {
                                 </Button>
                               </div>
                               <p className="text-xs text-muted-foreground">
-                                A prateleira recusada fica em verificação para a coordenação conferir.
+                                A recusa vale para esta caixa e fica registrada com o motivo.
                               </p>
                             </div>
                           ) : null}
@@ -1003,7 +1246,7 @@ export function OpeningInventoryWorkspace() {
                           <AlertTitle>Nenhuma prateleira serve para esta caixa</AlertTitle>
                           <AlertDescription className="flex flex-col gap-3">
                             <span>{suggestion.rejected}</span>
-                            <Button type="button" variant="outline" className="w-fit" onClick={() => suggestPosition.mutate({ exclude: excluded })} disabled={boxBusy}>
+                            <Button type="button" variant="outline" className="w-fit" onClick={() => suggestPosition.mutate({ exclude: excluded, generation: suggestionGeneration.current })} disabled={boxBusy}>
                               <RefreshCw data-icon="inline-start" />
                               Tentar de novo
                             </Button>
@@ -1019,16 +1262,16 @@ export function OpeningInventoryWorkspace() {
                       <p className="text-xs text-muted-foreground">
                         {boxPayload ? formatBoxDimensions(boxPayload) : "Informe os três lados para pedir a posição."}
                       </p>
-                      <Button type="button" onClick={() => suggestPosition.mutate({ exclude: excluded })} disabled={!boxPayload || boxBusy}>
+                      <Button type="button" onClick={() => suggestPosition.mutate({ exclude: excluded, generation: suggestionGeneration.current })} disabled={!boxPayload || boxBusy}>
                         {suggestPosition.isPending ? <RefreshCw data-icon="inline-start" className="animate-spin" /> : <MapPin data-icon="inline-start" />}
                         Onde guardar?
                       </Button>
                     </div>
                   )}
                 </div>
-              )}
+              ) : null}
 
-              {currentBox ? (
+              {currentBox && canEnterProduct ? (
                 <form
                   className="space-y-6"
                   onSubmit={(event) => {
@@ -1057,12 +1300,12 @@ export function OpeningInventoryWorkspace() {
                       {/* O SKU não se digita: é o do cadastro achado ou o gerado ao salvar. */}
                       <Input
                         id="opening-sku"
-                        value={existingProduct?.skuCode ?? ""}
+                        value={selectedProduct?.skuCode ?? existingProduct?.skuCode ?? ""}
                         readOnly
                         tabIndex={-1}
                         className="bg-muted"
                         placeholder={
-                          skuPrefix ? `Gerado ao salvar (${skuPrefix}-…)` : "Gerado ao salvar"
+                          isDraftBox ? (skuPrefix ? `Gerado ao guardar (${skuPrefix}-…)` : "Gerado ao guardar a caixa") : (skuPrefix ? `Gerado ao salvar (${skuPrefix}-…)` : "Gerado ao salvar")
                         }
                       />
                     </div>
@@ -1226,7 +1469,7 @@ export function OpeningInventoryWorkspace() {
                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                     <div className="space-y-2">
                       <Label htmlFor="opening-position">Posição da caixa</Label>
-                      <Input id="opening-position" value={`${currentBox.location_id} · ${currentBox.code}`} readOnly className="bg-muted" />
+                      <Input id="opening-position" value={`${currentBox.location_id || "A definir após conferência"} · ${currentBox.code}`} readOnly className="bg-muted" />
                     </div>
                     <div className="space-y-2">
                       <Label>Contagem física</Label>
@@ -1299,24 +1542,21 @@ export function OpeningInventoryWorkspace() {
                       disabled={recordOpeningLine.isPending}
                     />
                     <Label htmlFor="opening-confirm-box" className="text-base leading-6">
-                      Conferi a etiqueta: este produto está na caixa {currentBox.code} · {currentBox.location_id}
+                      {isDraftBox ? "Confirmo: este produto está na caixa de destino " : "Conferi a etiqueta: este produto está na caixa "}{currentBox.code}{currentBox.location_id ? ` · ${currentBox.location_id}` : ""}
                     </Label>
                   </div>
                   <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 lg:flex-row lg:items-center lg:justify-between">
                     <p className="text-sm leading-6 text-muted-foreground">
-                      Ao confirmar, o sistema cria produto e SKU quando necessário, registra o movimento de entrada na caixa {currentBox.code} e publica o saldo da posição {currentBox.location_id} para o cliente.
+                      {isDraftBox ? "A contagem fica salva nesta caixa. O estoque será publicado ao confirmar a guarda." : `A contagem será publicada na caixa ${currentBox.code}, posição ${currentBox.location_id}.`}
                     </p>
                     <Button type="submit" disabled={!canSubmit || recordOpeningLine.isPending}>
                       {recordOpeningLine.isPending ? <RefreshCw data-icon="inline-start" className="animate-spin" /> : <CheckCircle2 data-icon="inline-start" />}
-                      Confirmar em {currentBox.code}
+                      {editingDraft ? "Salvar correção" : isDraftBox ? "Salvar na conferência" : `Confirmar em ${currentBox.code}`}
                     </Button>
                   </div>
+                  {formDirty ? <Button type="button" variant="outline" onClick={resetProductForm} disabled={conferenceBusy || photoUploading}>{editingDraft ? "Cancelar edição" : "Limpar campos"}</Button> : null}
                 </form>
-              ) : (
-                <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-                  Os produtos são lançados dentro de uma caixa guardada. Meça a caixa acima ou abra uma das caixas desta sessão.
-                </div>
-              )}
+              ) : null}
             </div>
           )}
         </CardContent>
@@ -1330,11 +1570,11 @@ export function OpeningInventoryWorkspace() {
           <CardContent className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-md border border-border bg-card p-3">
-                <div className="text-xs text-muted-foreground">Produtos</div>
+                <div className="text-xs text-muted-foreground">Lançamentos publicados</div>
                 <div className="mt-1 text-xl font-semibold text-foreground">{formatNumber(session?.line_count)}</div>
               </div>
               <div className="rounded-md border border-border bg-card p-3">
-                <div className="text-xs text-muted-foreground">Unidades</div>
+                <div className="text-xs text-muted-foreground">Unidades publicadas</div>
                 <div className="mt-1 text-xl font-semibold text-foreground">{formatNumber(session?.unit_count)}</div>
               </div>
               <div className="rounded-md border border-border bg-card p-3">
@@ -1350,6 +1590,7 @@ export function OpeningInventoryWorkspace() {
               <div className="text-xs text-muted-foreground">Valor controlado</div>
               <div className="mt-1 text-lg font-semibold text-foreground">{formatCurrency(coerceNumber(session?.total_cost))}</div>
             </div>
+            {pendingBoxes.length ? <Alert><AlertTitle>{pendingBoxes.length} caixa(s) por concluir</AlertTitle><AlertDescription>Conclua a guarda ou remova as caixas vazias antes de encerrar o inventário.</AlertDescription></Alert> : null}
             {sessionOpen ? (
               <Button
                 type="button"
@@ -1357,6 +1598,7 @@ export function OpeningInventoryWorkspace() {
                 className="w-full"
                 disabled={
                   !session?.line_count ||
+                  pendingBoxes.length > 0 || boxesQuery.isLoading || boxesQuery.isError || conferenceBusy ||
                   completeSession.isPending ||
                   removeOpeningLine.isPending
                 }
@@ -1374,7 +1616,7 @@ export function OpeningInventoryWorkspace() {
                     Caixas desta sessão
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    Abra uma caixa para continuar lançando nela.
+                    Selecione a caixa pela etiqueta física.
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1383,8 +1625,9 @@ export function OpeningInventoryWorkspace() {
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() => navigate(labelsUrl({ session: true }))}
-                      title="Todas as etiquetas desta sessão, dez por folha A4"
+                      onClick={() => navigate(labelsUrl({ boxes: boxesOfSession.filter((box) => box.status === "stored").map((box) => box.code) }))}
+                      disabled={!boxesOfSession.some((box) => box.status === "stored")}
+                      title="Etiquetas das caixas guardadas desta sessão, dez por folha A4"
                     >
                       <Printer data-icon="inline-start" />
                       Etiquetas
@@ -1414,9 +1657,10 @@ export function OpeningInventoryWorkspace() {
                             <div className="text-sm font-medium text-foreground">
                               {box.code} <span className="text-muted-foreground">· {box.location_id}</span>
                             </div>
-                            <div className="mt-1 text-xs text-muted-foreground">{formatBoxDimensions(box)}</div>
+                            <div className="mt-1 text-xs text-muted-foreground">{conferenceStatusLabel(box)}</div>
+                            {box.length_m > 0 ? <div className="mt-1 text-xs text-muted-foreground">{formatBoxDimensions(box)}</div> : null}
                             <div className="mt-1 text-xs text-muted-foreground">
-                              {formatNumber(box.line_count)} produto(s) · {formatNumber(box.unit_count)} un.
+                              {formatNumber(isConferencePending(box) ? box.draft_line_count : box.line_count)} linhas · {formatNumber(isConferencePending(box) ? box.draft_unit_count : box.unit_count)} un.
                             </div>
                           </div>
                           {sessionOpen ? (
@@ -1425,10 +1669,10 @@ export function OpeningInventoryWorkspace() {
                                 type="button"
                                 size="sm"
                                 variant={open ? "default" : "outline"}
-                                onClick={() => { setActiveBox(box); setBoxAcknowledged(false); setLineBoxFilter(box.code); }}
-                                disabled={open || recordOpeningLine.isPending || photoUploading}
+                                onClick={() => requestBoxSelection(box)}
+                                disabled={open || conferenceBusy || photoUploading}
                               >
-                                {open ? "Aberta" : "Abrir"}
+                                {open ? "Selecionada" : "Abrir"}
                               </Button>
                               <Button
                                 type="button"
@@ -1436,6 +1680,7 @@ export function OpeningInventoryWorkspace() {
                                 size="icon"
                                 className="shrink-0 text-muted-foreground"
                                 onClick={() => navigate(labelsUrl({ boxes: [box.code] }))}
+                                disabled={box.status !== "stored"}
                                 aria-label={`Imprimir etiqueta da caixa ${box.code}`}
                                 title="Imprimir etiqueta"
                               >
@@ -1447,9 +1692,9 @@ export function OpeningInventoryWorkspace() {
                                 size="icon"
                                 className="shrink-0 text-muted-foreground hover:text-destructive"
                                 onClick={() => setBoxToRemove(box)}
-                                disabled={box.line_count > 0 || removeBox.isPending}
+                                disabled={box.line_count > 0 || (box.draft_line_count ?? 0) > 0 || box.status === "committing" || removeBox.isPending || conferenceBusy || (open && formDirty)}
                                 aria-label={`Remover caixa ${box.code}`}
-                                title={box.line_count > 0 ? "Só caixa vazia pode ser removida" : "Remover caixa vazia"}
+                                title={box.line_count > 0 || (box.draft_line_count ?? 0) > 0 ? "Remova ou corrija os itens antes de excluir a caixa" : "Remover caixa vazia"}
                               >
                                 <Trash2 className="size-4" />
                               </Button>
@@ -1462,7 +1707,7 @@ export function OpeningInventoryWorkspace() {
                 </ScrollArea>
               ) : (
                 <div className="rounded-md border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">
-                  Nenhuma caixa guardada nesta sessão.
+                  Nenhuma caixa nesta sessão.
                 </div>
               )}
             </div>
@@ -1553,10 +1798,51 @@ export function OpeningInventoryWorkspace() {
           <Sparkles className="size-4 text-primary" />
           <AlertTitle>Agent Dute acompanha a abertura</AlertTitle>
           <AlertDescription>
-            Cada caixa guardada e cada confirmação geram evento operacional com produto, quantidade, custo, caixa, posição e responsável.
+            Conferências, correções e guardas ficam registradas com o responsável.
           </AlertDescription>
         </Alert>
       </div>
+
+      <Dialog open={Boolean(pendingBoxSelection)} onOpenChange={(open) => { if (!open) setPendingBoxSelection(undefined); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Trocar de caixa?</DialogTitle><DialogDescription>Há um produto preenchido que ainda não foi salvo. Os itens já salvos na conferência serão mantidos.</DialogDescription></DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setPendingBoxSelection(undefined)}>Continuar preenchendo</Button>
+            <Button type="button" onClick={() => { activateBox(pendingBoxSelection?.box); setPendingBoxSelection(undefined); }}>Descartar preenchimento e trocar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={reviewBoxOpen} onOpenChange={(open) => { if (!changeConferenceState.isPending) setReviewBoxOpen(open); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Conferir e fechar {currentBox?.code}</DialogTitle>
+            <DialogDescription>Confira este resumo com o conteúdo da caixa física antes de fechar.</DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-80">
+            <div className="space-y-2">
+              {reviewLines.map((line) => <div key={line.id} className="flex justify-between gap-3 rounded-md border border-border p-3">
+                <span>{line.product_name || line.client_item_code || line.sku_code}<span className="block text-sm text-muted-foreground">{line.client_item_code} · {line.sku_code || "SKU ao guardar"}</span></span>
+                <span className="whitespace-nowrap font-semibold">{formatNumber(line.counted_qty)} un.</span>
+              </div>)}
+            </div>
+          </ScrollArea>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setReviewBoxOpen(false)} disabled={conferenceBusy}>Voltar à contagem</Button>
+            <Button type="button" onClick={() => changeConferenceState.mutate("review")} disabled={conferenceBusy || !reviewLines.length}>Conferido, fechar caixa</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(draftToRemove)} onOpenChange={(open) => { if (!open && !removeConferenceLine.isPending) setDraftToRemove(undefined); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Remover item da conferência?</DialogTitle><DialogDescription>{draftToRemove?.product_name || draftToRemove?.client_item_code} · {formatNumber(draftToRemove?.counted_qty)} un. Este rascunho ainda não foi publicado no estoque.</DialogDescription></DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDraftToRemove(undefined)} disabled={removeConferenceLine.isPending}>Manter</Button>
+            <Button type="button" variant="destructive" onClick={() => { if (draftToRemove) removeConferenceLine.mutate(draftToRemove); }} disabled={removeConferenceLine.isPending}>Remover rascunho</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {lineToMove && session?.session_id ? (
         <OpeningLineCorrection
@@ -1614,6 +1900,7 @@ export function OpeningInventoryWorkspace() {
               onClick={() => completeSession.mutate()}
               disabled={
                 !session?.line_count ||
+                  pendingBoxes.length > 0 || boxesQuery.isLoading || boxesQuery.isError || conferenceBusy ||
                 completeSession.isPending ||
                 removeOpeningLine.isPending
               }

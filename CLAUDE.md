@@ -115,6 +115,11 @@ documentação de produto e operação está em `docs/`.
   Estoque › Etiquetas (impressão do navegador, 101,6 × 50,8 mm) e o mapa em
   Estoque › Mapa (só leitura). Desenho completo e decisões em
   `docs/mapa-do-armazem-enderecamento-dirigido.md`.
+  Na abertura, caixas passam por conferência (`counting`), revisão
+  (`reviewed`) e guarda retomável (`committing`) antes de `stored`.
+  Rascunhos não são estoque; fechamento/reabertura são persistidos.
+  Correção de caixa preserva cadastro e saldo global; não usar estorno para
+  trocar só o vínculo. Ver `docs/wms-abertura-correcoes.md`.
 - **Multicliente: modelo de operação e pacote são código; o cadastro só aponta
   (19/10/2026).** `artifacts/app/src/lib/operations` registra os
   modelos (`uniformes` pronto, `mobiliario` e `insumos` em construção) e os
