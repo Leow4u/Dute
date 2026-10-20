@@ -75,6 +75,10 @@ jobs:
         working-directory: .
         shell: pwsh
         run: ./tools/congelar_projeto.tests.ps1
+      - name: Testes do trocar_registro_a_hostinger.ps1
+        working-directory: .
+        shell: pwsh
+        run: ./tools/trocar_registro_a_hostinger.tests.ps1
 
   tools-python-tests:
     name: Testes das ferramentas Python (tools/)

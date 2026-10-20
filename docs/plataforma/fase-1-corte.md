@@ -16,6 +16,10 @@ Ferramentas:
 - `tools/congelar_projeto.ps1`: congela e descongela um projeto (regras,
   rotinas agendadas e invocação pública das callables publicadas nele). Sem
   `-Apply`, só mostra o plano. Testes em `tools/congelar_projeto.tests.ps1`.
+- `tools/trocar_registro_a_hostinger.ps1`: troca um único registro A na
+  Hostinger (IP padrão do `dute-prod`), com a zona fotografada antes e depois e
+  parada com erro se mudar qualquer outro registro. Sem `-Apply`, só fotografa e
+  valida. Testes em `tools/trocar_registro_a_hostinger.tests.ps1`.
 
 Saídas com dado de produção ficam em `tmp\fase-1\` (manifestos, listagens) e
 `.secrets\fase-1\` (exports do Auth, com hash de senha; fotos da zona DNS).
@@ -351,7 +355,10 @@ falha da volta.
   recarreguem o app. Se o passo 8 já foi feito, reverter o PR do corte.
 
   ```powershell
+  cd C:\DEV\Dute
   .\tools\congelar_projeto.ps1 -ProjectId dute-prod -Apply
+  $env:HOSTINGER_API_TOKEN = "cole-o-token-aqui"
+  .\tools\trocar_registro_a_hostinger.ps1 -Nome app -Ip 8.232.54.179 -Rotulo volta-app -Apply
   .\tools\congelar_projeto.ps1 -ProjectId dute-btg -Desfazer -Apply
   ```
 
@@ -360,6 +367,11 @@ falha da volta.
 
 - **Depois do passo 9 (site):** registro `@` (A) de volta para `8.232.54.179`; o
   `www` vai junto.
+
+  ```powershell
+  cd C:\DEV\Dute
+  .\tools\trocar_registro_a_hostinger.ps1 -Nome "@" -Ip 8.232.54.179 -Rotulo volta-site -Apply
+  ```
 
 - **Prazo da volta pelo DNS:** o Load Balancer antigo usa certificados clássicos,
   que só se renovam com o DNS apontando para ele. O `dute-btg-app-cert` vence em

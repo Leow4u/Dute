@@ -51,7 +51,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\setup_cloud_run_load
 
 Deploy concluído no Cloud Run não significa produção saudável enquanto `https://app.dutelog.com.br` não responder com o app.
 Não use Firebase Hosting como URL de produção ou fallback operacional.
-Antes de trocar DNS, preserve e-mail, SPF, Microsoft, Google verification, MX, DKIM e DMARC.
+Antes de trocar DNS, preserve e-mail, SPF, Microsoft, Google verification, MX, DKIM, DMARC, os registros do Lovable e os CNAMEs `_acme-challenge_drmxqhwlpiaruyad*` (renovação dos certificados).
 
 O Load Balancer HTTPS de produção usa:
 
@@ -60,12 +60,18 @@ O Load Balancer HTTPS de produção usa:
 - IP global: `34.54.243.247`
 - Certificados do Certificate Manager: `dute-app-cert` (app) e `dutelog-site-cert` (site), no mapa `dute-cert-map`
 
-Para apontar `app.dutelog.com.br` para o Google Cloud Load Balancer:
+O DNS de `dutelog.com.br` é da Hostinger e só muda com OK do Leonardo. Registro A
+(`app`, `@`) muda com `tools/trocar_registro_a_hostinger.ps1`: ele troca um único
+registro A (PUT com `overwrite` e um grupo só), fotografa a zona antes e depois em
+`.secrets\fase-1\dns-zona-{antes,depois}-<rótulo>.json` e para com erro se qualquer
+outro registro mudar. O IP padrão é o do Load Balancer do `dute-prod`; sem `-Apply`,
+só fotografa e valida na Hostinger. Testes em `tools/trocar_registro_a_hostinger.tests.ps1`.
 
 ```powershell
+cd C:\DEV\Dute
 $env:HOSTINGER_API_TOKEN = "cole-o-token-aqui"
-powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\point_hostinger_app_to_gclb.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\point_hostinger_app_to_gclb.ps1 -Apply
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\trocar_registro_a_hostinger.ps1 -Nome app -Rotulo app-aaaammdd
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\trocar_registro_a_hostinger.ps1 -Nome app -Rotulo app-aaaammdd -Apply
 ```
 
 ## Acesso por convite
