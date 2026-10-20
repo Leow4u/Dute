@@ -28,7 +28,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { OpeningLineCorrection } from "./opening-line-correction";
 import { OpeningConferenceSummary } from "./opening-conference-summary";
 import {
-  conferenceAttempt, conferenceCanEditLine, conferenceSkus, conferenceStatusLabel, isConferencePending,
+  conferenceAttempt, conferenceCanEditLine, conferenceSkus, conferenceStatusLabel, isConferencePending, isConferenceRevisionConflict,
   type MutationAttempt, type OpeningConferenceLine, type OpeningConferenceResult,
 } from "@/lib/opening-conference";
 import {
@@ -614,12 +614,16 @@ export function OpeningInventoryWorkspace() {
   function withAttempt(operation: string, body: Record<string, unknown>) {
     const attempt = conferenceAttempt(attempts.current.get(operation), operation, body, () => crypto.randomUUID());
     attempts.current.set(operation, attempt);
-    return { ...body, idempotency_key: attempt.key };
+    return { ...attempt.payload, idempotency_key: attempt.key };
   }
 
   function conferenceBody() {
     if (!currentBox || !session?.session_id) throw new Error("Selecione uma caixa desta sessão.");
-    return { customer_code: customerCode, session_id: session.session_id, expected_revision: currentBox.conference_revision ?? 0 };
+    return { customer_code: customerCode, session_id: session.session_id, box_code: currentBox.code, expected_revision: currentBox.conference_revision ?? 0 };
+  }
+
+  function discardRejectedRevision(operation: string, error: unknown) {
+    if (isConferenceRevisionConflict(getErrorMessage(error))) attempts.current.delete(operation);
   }
 
   async function refreshConference() {
@@ -688,6 +692,7 @@ export function OpeningInventoryWorkspace() {
       await refreshConference();
     },
     onError: async (error) => {
+      discardRejectedRevision("conference-state", error);
       await refreshConference();
       toast({ title: "Não consegui alterar a conferência", description: getErrorMessage(error), variant: "destructive" });
     },
@@ -706,6 +711,7 @@ export function OpeningInventoryWorkspace() {
       await refreshConference();
     },
     onError: async (error) => {
+      discardRejectedRevision("remove-conference-line", error);
       await refreshConference();
       toast({ title: "Não consegui remover o rascunho", description: getErrorMessage(error), variant: "destructive" });
     },
@@ -734,6 +740,7 @@ export function OpeningInventoryWorkspace() {
       toast({ title: `Caixa ${coerceText(result.box.code)} guardada em ${coerceText(result.box.location_id)}`, description: "Conferência concluída. Imprima a etiqueta e comece a próxima caixa." });
     },
     onError: async (error) => {
+      discardRejectedRevision("store-conference", error);
       await refreshConference();
       toast({ title: "A guarda precisa de conferência", description: getErrorMessage(error), variant: "destructive" });
     },
@@ -842,6 +849,7 @@ export function OpeningInventoryWorkspace() {
       await refreshConference();
     },
     onError: async (error) => {
+      discardRejectedRevision("record-opening-line", error);
       await refreshConference();
       toast({
         title: "Não consegui salvar a contagem",
@@ -1290,7 +1298,7 @@ export function OpeningInventoryWorkspace() {
                         tabIndex={-1}
                         className="bg-muted"
                         placeholder={
-                          skuPrefix ? `Gerado ao guardar (${skuPrefix}-…)` : "Gerado ao guardar"
+                          isDraftBox ? (skuPrefix ? `Gerado ao guardar (${skuPrefix}-…)` : "Gerado ao guardar a caixa") : (skuPrefix ? `Gerado ao salvar (${skuPrefix}-…)` : "Gerado ao salvar")
                         }
                       />
                     </div>
@@ -1527,7 +1535,7 @@ export function OpeningInventoryWorkspace() {
                       disabled={recordOpeningLine.isPending}
                     />
                     <Label htmlFor="opening-confirm-box" className="text-base leading-6">
-                      Conferi a caixa física: este produto está na {currentBox.code}{currentBox.location_id ? ` · ${currentBox.location_id}` : ""}
+                      {isDraftBox ? "Confirmo: este produto está na caixa de destino " : "Conferi a etiqueta: este produto está na caixa "}{currentBox.code}{currentBox.location_id ? ` · ${currentBox.location_id}` : ""}
                     </Label>
                   </div>
                   <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 lg:flex-row lg:items-center lg:justify-between">

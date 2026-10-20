@@ -55,7 +55,7 @@ export function conferenceSkus(lines: OpeningConferenceLine[], products: Array<{
     byCode.get((line.client_item_code ?? "").trim().toUpperCase())).filter((sku): sku is string => Boolean(sku)))];
 }
 
-export type MutationAttempt = { fingerprint: string; key: string };
+export type MutationAttempt = { fingerprint: string; key: string; payload: Record<string, unknown> };
 /** A network retry keeps its operation key even after a refetch advances the revision. */
 export function conferenceAttempt(
   previous: MutationAttempt | undefined,
@@ -67,5 +67,12 @@ export function conferenceAttempt(
   delete identity.expected_revision;
   delete identity.occurred_at;
   const fingerprint = JSON.stringify({ operation, ...identity });
-  return previous?.fingerprint === fingerprint ? previous : { fingerprint, key: newKey() };
+  return previous?.fingerprint === fingerprint ? previous : {
+    fingerprint, key: newKey(), payload: JSON.parse(JSON.stringify(payload)) as Record<string, unknown>,
+  };
+}
+
+/** Only the server's explicit revision rejection is safe to start as a new attempt. */
+export function isConferenceRevisionConflict(message: string) {
+  return message.includes("A caixa mudou em outra tela. Atualize antes de continuar.");
 }

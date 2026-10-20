@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { conferenceAttempt, conferenceCanEditLine, conferenceSkus, conferenceStatusLabel, isConferencePending, type OpeningConferenceLine } from "./opening-conference";
+import { conferenceAttempt, conferenceCanEditLine, conferenceSkus, conferenceStatusLabel, isConferencePending, isConferenceRevisionConflict, type OpeningConferenceLine } from "./opening-conference";
 import { formatBoxPlacement, occupiedPositions, warehouseBoxFromRecord } from "./warehouse-boxes";
 
 const line = (status: OpeningConferenceLine["status"], extra: Partial<OpeningConferenceLine> = {}): OpeningConferenceLine => ({
@@ -34,9 +34,24 @@ describe("estados da abertura por caixa", () => {
   it("repetir a mesma operação após perda de resposta não gera outra chave", () => {
     const body = { box_code: "CX-000001", expected_revision: 3, counted_qty: 2, occurred_at: "antes" };
     const attempt = conferenceAttempt(undefined, "save", body, () => "chave-1");
-    expect(conferenceAttempt(attempt, "save", { ...body, expected_revision: 4, occurred_at: "depois" }, () => "chave-2")).toBe(attempt);
+    const retried = conferenceAttempt(attempt, "save", { ...body, expected_revision: 4, occurred_at: "depois" }, () => "chave-2");
+    expect(retried).toBe(attempt);
+    expect({ ...retried.payload, idempotency_key: retried.key }).toEqual({
+      box_code: "CX-000001", expected_revision: 3, counted_qty: 2, occurred_at: "antes", idempotency_key: "chave-1",
+    });
     expect(conferenceAttempt(attempt, "save", { ...body, counted_qty: 5 }, () => "chave-2").key).toBe("chave-2");
     expect(conferenceAttempt(attempt, "remove", body, () => "chave-3").key).toBe("chave-3");
+  });
+  it("outra caixa nunca reaproveita tentativa de estado ou guarda", () => {
+    const first = conferenceAttempt(undefined, "review", { box_code: "CX-000001", expected_revision: 4, action: "review" }, () => "primeira");
+    const second = conferenceAttempt(first, "review", { box_code: "CX-000002", expected_revision: 4, action: "review" }, () => "segunda");
+    expect(second.key).toBe("segunda");
+    expect(second.payload.box_code).toBe("CX-000002");
+  });
+  it("somente revisão rejeitada permite iniciar outro corpo; rede mantém tentativa", () => {
+    expect(isConferenceRevisionConflict("A caixa mudou em outra tela. Atualize antes de continuar.")).toBe(true);
+    expect(isConferenceRevisionConflict("Tempo limite excedido")).toBe(false);
+    expect(isConferenceRevisionConflict("Failed to fetch")).toBe(false);
   });
   it("mostra a orientação efetiva sem alterar as medidas originais", () => {
     const box = warehouseBoxFromRecord({ code: "CX-1", length_m: 0.6, width_m: 0.35, height_m: 0.5,
