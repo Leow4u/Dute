@@ -100,8 +100,3 @@ export function resolveActiveCustomerCode(
 export function activeCustomerStorageKey(uid: string | null | undefined): string {
   return `dute.active-customer.${text(uid) || "anon"}`;
 }
-
-/** Até o SKU por cliente (PR 2), o "Novo item" do catálogo cria cadastro do legado. */
-export function canCreateCatalogItemFor(customerCode: string): boolean {
-  return customerCode === LEGACY_CUSTOMER_CODE;
-}

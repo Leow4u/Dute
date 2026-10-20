@@ -27,6 +27,12 @@ export type ProductLookupItem = {
   skuCode: string;
   clientCode: string;
   productName: string;
+  /** Código de barras, marca, tamanho, cor e foto: busca e parecidos (lib/product-match.ts). */
+  barcode: string;
+  brand: string;
+  size: string;
+  color: string;
+  photoUrl: string;
   unitCost: number;
   hasSku: boolean;
   source: AnyRecord;
@@ -163,6 +169,14 @@ export function productLookupFromRecord(
       record.produto,
       record.name,
       record.descricao,
+    ),
+    barcode: coerceText(record.barcode, record.codigo_barras, record.ean),
+    brand: coerceText(record.brand, record.marca),
+    size: coerceText(record.size, record.tamanho),
+    color: coerceText(record.color, record.cor),
+    photoUrl: coerceText(
+      record.primary_photo_url,
+      Array.isArray(record.photo_urls) ? record.photo_urls[0] : undefined,
     ),
     unitCost: Number.isFinite(unitCost) ? unitCost : 0,
     hasSku: Boolean(explicitSkuCode),

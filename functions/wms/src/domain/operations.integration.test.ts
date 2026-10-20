@@ -43,6 +43,14 @@ async function clearFirestore() {
     { method: "DELETE" },
   );
   assert.equal(response.ok, true, await response.text());
+  // Produto novo ganha SKU na sigla do cliente (domain/catalog-codes.ts).
+  await db.collection("customers").doc("BTG_Pactual").set({
+    code: "BTG Pactual",
+    customer_code: "BTG Pactual",
+    name: "BTG Pactual",
+    sku_prefix: "BTG",
+    status: "active",
+  });
 }
 
 async function advance(
@@ -72,7 +80,10 @@ function openingCountInput(
     mode: "opening",
     session_id: sessionId,
     customer_code: "BTG Pactual",
-    sku_code: "SKU-OPEN-001",
+    // Produto novo ganha o SKU gerado na sigla da BTG (o primeiro depois da
+    // limpeza é BTG-000001); o código aqui serve às recontagens do mesmo
+    // produto como existente.
+    sku_code: "BTG-000001",
     client_item_code: "CLIENTE-OPEN-001",
     product_name: "Camiseta institucional de teste",
     product_registration: "new",
@@ -666,7 +677,8 @@ describe("fluxo WMS transacional", () => {
     assert.equal(existing.data()?.client_item_code, "ITEM-9");
     assert.equal(existing.data()?.product_name, "CAMISETA ITEM 9");
     assert.equal(existing.data()?.product_registration, "existing");
-    assert.equal(created77.data()?.sku_code, "NOVO-77");
+    // Produto novo achado na conferência: SKU gerado na sigla da BTG.
+    assert.equal(created77.data()?.sku_code, "BTG-000001");
     assert.equal(created77.data()?.product_registration, "new");
     assert.equal(created77.data()?.code_assigned_by?.uid, "operator-1");
     const assignedEvents = await db.collection("events").where("type", "==", "inbound.item_codes_assigned").get();
@@ -676,7 +688,7 @@ describe("fluxo WMS transacional", () => {
     await advance(`receiving:${inboundId}`, "checking");
     const [stock9, stock77] = await Promise.all([
       db.collection("client_inventory").doc("cinv_BTG_Pactual__BTG-9").get(),
-      db.collection("client_inventory").doc("cinv_BTG_Pactual__NOVO-77").get(),
+      db.collection("client_inventory").doc("cinv_BTG_Pactual__BTG-000001").get(),
     ]);
     assert.equal(stock9.data()?.qty_on_hand, 8);
     assert.equal(stock77.data()?.qty_on_hand, 20);
@@ -727,14 +739,14 @@ describe("fluxo WMS transacional", () => {
       .get();
     const skuBeforeConference = await db
       .collection("skus")
-      .doc("SKU-RECEB-001")
+      .doc("BTG-000001")
       .get();
     assert.equal(productBeforeConference.exists, true);
     assert.equal(productBeforeConference.data()?.cod_cliente, "REC-EXTERNO-001");
     assert.equal(productBeforeConference.data()?.cod_cliente_key, "REC-EXTERNO-001");
     assert.equal(productBeforeConference.data()?.estoque_btg, 0);
     assert.equal(skuBeforeConference.exists, true);
-    assert.equal(skuBeforeConference.data()?.sku_code, "SKU-RECEB-001");
+    assert.equal(skuBeforeConference.data()?.sku_code, "BTG-000001");
     assert.equal(skuBeforeConference.data()?.estoque_atual, 0);
     assert.equal(skuBeforeConference.data()?.estoque_disponivel, 0);
     assert.equal((await db.collection("stock_balances").get()).size, 0);
@@ -748,7 +760,7 @@ describe("fluxo WMS transacional", () => {
       .where("receipt_id", "==", receiptId)
       .get();
     assert.equal(inboundItems.size, 1);
-    assert.equal(inboundItems.docs[0]?.data().sku_code, "SKU-RECEB-001");
+    assert.equal(inboundItems.docs[0]?.data().sku_code, "BTG-000001");
     assert.equal(
       inboundItems.docs[0]?.data().client_item_code,
       "REC-EXTERNO-001",
@@ -785,11 +797,11 @@ describe("fluxo WMS transacional", () => {
 
     const balances = await db
       .collection("stock_balances")
-      .where("sku_code", "==", "SKU-RECEB-001")
+      .where("sku_code", "==", "BTG-000001")
       .get();
     const projections = await db
       .collection("client_inventory")
-      .where("sku_code", "==", "SKU-RECEB-001")
+      .where("sku_code", "==", "BTG-000001")
       .get();
     const movements = await db
       .collection("movements")
@@ -801,7 +813,7 @@ describe("fluxo WMS transacional", () => {
       .get();
     const skuAfterReceipt = await db
       .collection("skus")
-      .doc("SKU-RECEB-001")
+      .doc("BTG-000001")
       .get();
 
     assert.equal(balances.size, 1);
@@ -1131,7 +1143,7 @@ describe("inventário de abertura transacional", () => {
 
     const movementsAfterRemoval = await db
       .collection("movements")
-      .where("sku_code", "==", "SKU-OPEN-001")
+      .where("sku_code", "==", "BTG-000001")
       .get();
     assert.equal(movementsAfterRemoval.size, 2);
     assert.deepEqual(
@@ -1182,6 +1194,9 @@ describe("inventário de abertura transacional", () => {
     );
     assert.equal(relaunched.qty_counted, 9);
     assert.equal(relaunched.adjustment_delta, 9);
+    // Número de SKU não volta: a remoção apagou o cadastro que a linha criou
+    // e a recontagem recebe o próximo da sequência da sigla.
+    assert.equal(relaunched.sku_code, "BTG-000002");
 
     const openingLinesAfter = await db
       .collection("opening_inventory_lines")
@@ -1189,12 +1204,9 @@ describe("inventário de abertura transacional", () => {
       .get();
     const balancesAfter = await db
       .collection("stock_balances")
-      .where("sku_code", "==", "SKU-OPEN-001")
+      .where("sku_code", "==", "BTG-000002")
       .get();
-    const movementsAfterRelaunch = await db
-      .collection("movements")
-      .where("sku_code", "==", "SKU-OPEN-001")
-      .get();
+    const movementsAfterRelaunch = await db.collection("movements").get();
     const sessionAfterRelaunch = await db
       .collection("opening_inventory_sessions")
       .doc(sessionId)
@@ -1300,13 +1312,14 @@ describe("inventário de abertura transacional", () => {
       .collection("products")
       .doc("COD-CLIENTE-001")
       .get();
-    const sku = await db.collection("skus").doc("SKU-ABC-001").get();
+    // O SKU de produto novo é gerado; o digitado (" sku-ábc-001 ") é ignorado.
+    const sku = await db.collection("skus").doc("BTG-000001").get();
     assert.equal(product.exists, true);
     assert.equal(product.data()?.cod_cliente, "COD-CLIENTE-001");
     assert.equal(product.data()?.cod_cliente_key, "COD-CLIENTE-001");
     assert.equal(sku.exists, true);
-    assert.equal(sku.data()?.sku_code, "SKU-ABC-001");
-    assert.equal(sku.data()?.sku_code_key, "SKU-ABC-001");
+    assert.equal(sku.data()?.sku_code, "BTG-000001");
+    assert.equal(sku.data()?.sku_code_key, "BTG-000001");
 
     await assert.rejects(
       recordCycleCountTransaction(
@@ -1333,7 +1346,7 @@ describe("inventário de abertura transacional", () => {
         }),
         actor,
       ),
-      /já está vinculado ao SKU SKU-ABC-001/,
+      /já está vinculado ao SKU BTG-000001/,
     );
 
     assert.equal((await db.collection("products").get()).size, 1);
@@ -1369,13 +1382,16 @@ describe("inventário de abertura transacional", () => {
         }),
         actor,
       ),
-      /já está vinculado ao SKU/,
+      /já existe/,
     );
     await assert.rejects(
       recordCycleCountTransaction(
         db,
+        // SKU digitado só vale para produto existente: este SKU é do
+        // CLIENTE-OPEN-001.
         openingCountInput(sessionId, {
           client_item_code: "CLIENTE-OPEN-002",
+          product_registration: "existing",
           location_id: "RUA-A/PRAT-01/CX-003",
           idempotency_key: "opening-duplicate-sku-code",
         }),
@@ -1387,6 +1403,7 @@ describe("inventário de abertura transacional", () => {
       recordCycleCountTransaction(
         db,
         openingCountInput(sessionId, {
+          product_registration: "existing",
           idempotency_key: "opening-duplicate-line",
         }),
         actor,
@@ -2391,26 +2408,43 @@ describe("integridade de reservas e agregados de catálogo", () => {
       actor,
     );
     const input = openingCountInput(String(session.session_id));
-    await db.collection("products").doc(input.client_item_code!).set(
-      { archived: true, status: "archived" },
-      { merge: true },
-    );
-    await db.collection("skus").doc(input.sku_code).set(
-      { archived: true, status: "archived" },
-      { merge: true },
-    );
+    // A exclusão pelo Catálogo só marca archived: o cadastro guarda a
+    // identidade (dono, código do cliente e o SKU gerado).
+    const identity = {
+      customer_code: "BTG Pactual",
+      cod_cliente: input.client_item_code,
+      cod_cliente_key: input.client_item_code,
+      produto: input.product_name,
+      archived: true,
+      status: "archived",
+    };
+    await db.collection("products").doc(input.client_item_code!).set({
+      id: input.client_item_code,
+      ...identity,
+    });
+    await db.collection("skus").doc("BTG-000001").set({
+      id: "BTG-000001",
+      ...identity,
+      cod_btg: "BTG-000001",
+      sku_code: "BTG-000001",
+      sku_code_key: "BTG-000001",
+    });
 
     const recontagem = await recordCycleCountTransaction(db, {
       ...input,
       idempotency_key: "opening-count-reactivation-retry",
     }, actor);
     assert.equal(recontagem.qty_counted, 12);
+    // Reativação reaproveita o SKU arquivado do mesmo código do cliente em
+    // vez de gerar outro número para o mesmo produto.
+    assert.equal(recontagem.sku_code, "BTG-000001");
+    assert.equal((await db.collection("skus").get()).size, 1);
 
     const produto = await db
       .collection("products")
       .doc(input.client_item_code!)
       .get();
-    const sku = await db.collection("skus").doc(input.sku_code).get();
+    const sku = await db.collection("skus").doc("BTG-000001").get();
     assert.equal(produto.data()?.archived, false);
     assert.equal(produto.data()?.status, "active");
     assert.equal(sku.data()?.archived, false);

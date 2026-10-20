@@ -38,6 +38,8 @@ beforeEach(async () => {
   if (!host) throw new Error("FIRESTORE_EMULATOR_HOST não definido.");
   await fetch(`http://${host}/emulator/v1/projects/${PROJECT_ID}/databases/(default)/documents`, { method: "DELETE" });
   await seedDefaultWarehouseLayout(db, coordenacao);
+  // Produto novo ganha SKU na sigla do cliente (domain/catalog-codes.ts).
+  await db.collection("customers").doc("BTG_Pactual").set({ code: BTG, customer_code: BTG, name: BTG, sku_prefix: "BTG", status: "active" });
   // Zona da BTG: A-01 a A-03. O resto fica livre.
   await upsertWarehousePositions(
     db,
@@ -67,7 +69,9 @@ function openingLine(sessionId: string, boxCode: string, overrides: Record<strin
       mode: "opening",
       session_id: sessionId,
       customer_code: BTG,
-      sku_code: "SKU-CAIXA-1",
+      // Produto novo ganha o SKU gerado (o primeiro depois da limpeza é
+      // BTG-000001); o código aqui serve à segunda caixa, como existente.
+      sku_code: "BTG-000001",
       client_item_code: "A.01.0802.007.G",
       product_name: "Camisa social branca manga longa",
       product_registration: "new",
@@ -181,14 +185,14 @@ describe("caixas e endereçamento dirigido", () => {
     assert.deepEqual(lines.docs.map((row) => row.data().box_code).sort(), ["CX-000001", "CX-000002"]);
     const boxOne = (await db.collection("warehouse_boxes").doc("CX-000001").get()).data()!;
     const boxTwo = (await db.collection("warehouse_boxes").doc("CX-000002").get()).data()!;
-    assert.deepEqual([boxOne.line_count, boxOne.unit_count, boxOne.sku_codes], [1, 12, ["SKU-CAIXA-1"]]);
+    assert.deepEqual([boxOne.line_count, boxOne.unit_count, boxOne.sku_codes], [1, 12, ["BTG-000001"]]);
     assert.deepEqual([boxTwo.line_count, boxTwo.unit_count], [1, 18]);
     assert.ok(Math.abs(Number(boxTwo.total_cost) - 18 * 189.9) < 1e-6);
-    const sku = (await db.collection("skus").doc("SKU-CAIXA-1").get()).data()!;
+    const sku = (await db.collection("skus").doc("BTG-000001").get()).data()!;
     assert.equal(sku.estoque_atual, 30);
 
     // O mesmo SKU já está em A-01: a próxima caixa dele vai para A-01 (ainda cabe uma).
-    const suggestion = await suggestWarehousePosition(db, { customer_code: BTG, ...box, sku_codes: ["SKU-CAIXA-1"] }, operacao);
+    const suggestion = await suggestWarehousePosition(db, { customer_code: BTG, ...box, sku_codes: ["BTG-000001"] }, operacao);
     assert.equal(suggestion.position?.code, "A-01");
     assert.equal(suggestion.position?.tier, 1);
 
@@ -204,7 +208,7 @@ describe("caixas e endereçamento dirigido", () => {
     assert.equal(balanceAfter.qty_available, 12);
     const boxTwoAfter = (await db.collection("warehouse_boxes").doc("CX-000002").get()).data()!;
     assert.deepEqual([boxTwoAfter.line_count, boxTwoAfter.unit_count], [0, 0]);
-    assert.equal((await db.collection("skus").doc("SKU-CAIXA-1").get()).data()!.estoque_atual, 12);
+    assert.equal((await db.collection("skus").doc("BTG-000001").get()).data()!.estoque_atual, 12);
     const reversal = (await db.collection("movements").where("source", "==", "functions_opening_inventory_reversal").get()).docs[0]!.data();
     assert.equal(reversal.quantity ?? reversal.qtd ?? reversal.quantidade, 18);
 
