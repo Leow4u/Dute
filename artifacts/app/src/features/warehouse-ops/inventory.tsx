@@ -248,6 +248,7 @@ export function OpeningInventoryWorkspace() {
   const [reference, setReference] = useState("");
   const [photos, setPhotos] = useState<ProductPhoto[]>([]);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const [createNew, setCreateNew] = useState(false);
   const [selectedProduct, setSelectedProduct] =
     useState<ProductLookupItem>();
@@ -1493,23 +1494,26 @@ export function OpeningInventoryWorkspace() {
                           Use a câmera do celular ou anexe imagens existentes.
                         </p>
                       </div>
-                      <label
-                        htmlFor="opening-product-photo"
-                        className={cn(
-                          "inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-medium text-foreground hover:bg-muted",
-                          photoUploading && "pointer-events-none opacity-60",
-                        )}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="shrink-0"
+                        disabled={photoUploading}
+                        onClick={() => photoInputRef.current?.click()}
                       >
                         {photoUploading ? <RefreshCw className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
                         {photoUploading ? "Enviando..." : "Adicionar foto"}
-                      </label>
+                      </Button>
+                      {/* Fora do layout e do foco: ativar um input sr-only pode deslocar os painéis com overflow. */}
                       <input
+                        ref={photoInputRef}
                         id="opening-product-photo"
                         type="file"
                         accept="image/*"
                         capture="environment"
                         multiple
-                        className="sr-only"
+                        hidden
+                        disabled={photoUploading}
                         onChange={(event) => {
                           void addOpeningPhotos(event.target.files);
                           event.currentTarget.value = "";
