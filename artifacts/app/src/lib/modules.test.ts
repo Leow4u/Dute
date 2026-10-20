@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -5,13 +7,24 @@ import {
   getHomePathForProfile,
   getMobileNavigation,
   getNavigationForProfileRole,
+  getRouteAppRoles,
   getRouteProfileRoles,
+  hasRouteRoles,
   INTERNAL_ROLES,
   isAccountPath,
   portalModuleForPath,
   type ProfileRole,
 } from "./modules";
 import { resolveOperationProfile } from "./operations";
+
+// Caminhos de PROTECTED_ROUTES, lidos do App.tsx (importar o App puxaria o
+// Firebase para o teste).
+const PROTECTED_PATHS = Array.from(
+  readFileSync(new URL("../App.tsx", import.meta.url), "utf8").matchAll(
+    /protectedRoute\(\s*"([^"]+)"/g,
+  ),
+  ([, path]) => path,
+);
 
 // Quem acessa cada rota, fixado em 29/09/2026 antes de enxugar o menu. As
 // permissões por rota são derivadas das entradas do menu; mexer na régua não
@@ -42,6 +55,7 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/estoque", ["owner", "admin", "interno", "wms", "suporte"]],
   ["/estoque/etiquetas", ["owner", "admin", "interno", "wms", "suporte"]],
   ["/estoque/mapa", ["owner", "admin", "interno", "wms", "suporte"]],
+  ["/estoque/posicoes", ["owner", "admin", "interno", "wms", "suporte"]],
   ["/movements", ["owner", "admin", "interno", "suporte"]],
   ["/pedidos", ["owner", "admin", "interno", "wms", "suporte"]],
   ["/orders", ["owner", "admin", "interno", "suporte"]],
@@ -68,11 +82,14 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/portal/estoque", ["cliente"]],
   ["/portal/eventos", ["cliente"]],
   ["/portal/recebimentos", ["cliente"]],
+  ["/portal/solicitacoes", ["cliente"]],
   ["/portal/pedidos", ["cliente"]],
   ["/portal/faturas", ["cliente"]],
   ["/portal/faturas/fatura", ["cliente"]],
+  ["/portal/faturas/relatorio", ["cliente"]],
   ["/portal/documentos", ["cliente"]],
   ["/portal/agente", ["cliente"]],
+  ["/portal/agente/operacional", ["cliente"]],
   ["/minhas-faturas", ["cliente"]],
 ];
 
@@ -87,6 +104,22 @@ describe("permissões por rota", () => {
   it.each(ROUTE_ACCESS)("%s mantém os mesmos papéis", (path, roles) => {
     expect([...getRouteProfileRoles(path)].sort()).toEqual([...roles].sort());
   });
+
+  // Rota sem entrada própria cai no padrão interno: o cliente volta para "/"
+  // e o interno abre a tela do portal (/portal/faturas/relatorio, 20/10/2026).
+  it("toda rota protegida do App tem papéis próprios e fixados aqui", () => {
+    expect(PROTECTED_PATHS).toContain("/portal/faturas/relatorio");
+    const fixed = new Set(ROUTE_ACCESS.map(([path]) => path));
+    expect(PROTECTED_PATHS.filter((path) => !hasRouteRoles(path))).toEqual([]);
+    expect(PROTECTED_PATHS.filter((path) => !fixed.has(path))).toEqual([]);
+  });
+
+  it.each(ROUTE_ACCESS.filter(([, roles]) => roles.join() === "cliente"))(
+    "%s abre para o cliente no portal",
+    (path) => {
+      expect(getRouteAppRoles(path)).toEqual(["cliente"]);
+    },
+  );
 });
 
 describe("menu interno", () => {
@@ -248,6 +281,7 @@ describe("menu do portal por modelo de operação", () => {
     expect(portalModuleForPath("/portal")).toBe("home");
     expect(portalModuleForPath("/portal/eventos")).toBe("events");
     expect(portalModuleForPath("/portal/faturas/fatura")).toBe("invoices");
+    expect(portalModuleForPath("/portal/faturas/relatorio?de=2026-05&ate=2026-10")).toBe("invoices");
     expect(portalModuleForPath("/portal/agente?x=1")).toBe("assistant");
     expect(portalModuleForPath("/estoque")).toBeNull();
     expect(portalModuleForPath("/configuracoes/conta")).toBeNull();
