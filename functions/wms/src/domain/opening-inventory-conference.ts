@@ -96,6 +96,7 @@ function draftBody(input: DraftInput): Row {
 }
 function keys(line: Row): string[] {
   return [str(line.sku_code) && `sku:${upper(line.sku_code)}`, str(line.client_item_code) && `client:${upper(line.client_item_code)}`,
+    str(line.client_item_code) && `productdoc:${upper(line.client_item_code).replace(/[^a-zA-Z0-9_.-]/g, "_")}`,
     str(line.barcode) && `barcode:${normalizeBarcode(line.barcode)}`].filter((key): key is string => Boolean(key));
 }
 function assertDistinct(candidate: Row, rows: Row[], except?: string) {
@@ -120,7 +121,7 @@ async function validateCatalog(tx: Transaction, db: Firestore, customer: string,
   const sku = upper(line.sku_code);
   const code = upper(line.client_item_code || sku);
   const isNew = line.product_registration === "new";
-  if (!code || code.includes("/") || (!isNew && !sku)) throw new HttpsError("invalid-argument", "Informe o código do cliente e selecione o produto.");
+  if (!code || (!isNew && !sku)) throw new HttpsError("invalid-argument", "Informe o código do cliente e selecione o produto.");
   const [products, skus, productDoc, skuDoc] = await Promise.all([
     tx.get(db.collection("products").where("cod_cliente_key", "==", code)),
     tx.get(db.collection("skus").where("cod_cliente_key", "==", code)),

@@ -174,6 +174,19 @@ describe("inventário de abertura: conferir antes de guardar", () => {
     await assertNoStock();
   });
 
+  it("preserva códigos do cliente com barra e impede colisão do documento de produto na mesma caixa", async () => {
+    const { code } = await createBox();
+    await save(code, { client_item_code: "MODELO/01.G" });
+    await assert.rejects(save(code, { client_item_code: "MODELO_01.G" }), /já está nesta caixa/);
+    await change(code, "review");
+    await storeOpeningConferenceBox(db, await storeInput(code), actor);
+    const stock = await committedStock();
+    assert.equal(stock.skus.length, 1);
+    assert.equal(stock.skus[0]!.cod_cliente, "MODELO/01.G");
+    assert.equal(stock.products[0]!.id, "MODELO_01.G");
+    assert.equal(stock.lines[0]!.client_item_code, "MODELO/01.G");
+  });
+
   it("revê e reabre de forma persistente; caixa revisada bloqueia novos lançamentos e conclusão da abertura", async () => {
     const { code } = await createBox();
     const line = await save(code);
