@@ -33,6 +33,7 @@ import {
   recordCycleCountTransaction,
   addCatalogPhotosTransaction,
   removeOpeningInventoryLineTransaction,
+  moveOpeningInventoryLineTransaction,
   setReturnDispositionTransaction,
   updateInboundReceiptConferenceTransaction,
   type OperationalActor,
@@ -467,6 +468,11 @@ const RemoveOpeningInventoryLineSchema = z.object({
   session_id: z.string().trim().min(1),
   opening_line_id: z.string().trim().min(1),
   idempotency_key: z.string().trim().min(1),
+});
+
+const MoveOpeningInventoryLineSchema = RemoveOpeningInventoryLineSchema.extend({
+  target_box_code: z.string().trim().regex(/^CX-\d+$/i),
+  reason: z.string().trim().min(3).max(300),
 });
 
 const CreateReturnReceiptSchema = z.object({
@@ -3367,6 +3373,7 @@ async function loadBillingCalculation(
     .map((document) => document.data())
     .filter(
       (movement) =>
+        movement.billable !== false &&
         competenciaOfInstant(billingDate(movement.occurred_at ?? movement.data)) ===
         competencia,
     );
@@ -6266,6 +6273,18 @@ export const removeOpeningInventoryLine = onCall(async (request) => {
   const input = RemoveOpeningInventoryLineSchema.parse(request.data ?? {});
   const customer_code = requireCustomerScope(profile, input.customer_code);
   return removeOpeningInventoryLineTransaction(
+    db,
+    { ...input, customer_code },
+    profile,
+  );
+});
+
+export const moveOpeningInventoryLine = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  const input = MoveOpeningInventoryLineSchema.parse(request.data ?? {});
+  const customer_code = requireCustomerScope(profile, input.customer_code);
+  return moveOpeningInventoryLineTransaction(
     db,
     { ...input, customer_code },
     profile,

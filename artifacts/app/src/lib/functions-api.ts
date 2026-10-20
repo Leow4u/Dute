@@ -417,6 +417,23 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  const openingInventoryLineMoveMatch = pathname.match(
+    /^\/api\/warehouse\/opening-inventory\/lines\/([^/]+)\/move$/,
+  );
+  if (method === "POST" && openingInventoryLineMoveMatch) {
+    return {
+      name: "moveOpeningInventoryLine",
+      payload: async (_pathname, init) => {
+        const body = await readJsonBody(init);
+        return {
+          ...body,
+          opening_line_id: decodeURIComponent(openingInventoryLineMoveMatch[1]),
+          idempotency_key: body.idempotency_key ?? crypto.randomUUID(),
+        };
+      },
+    };
+  }
+
   const openingInventoryLineRemovalMatch = pathname.match(
     /^\/api\/warehouse\/opening-inventory\/lines\/([^/]+)\/remove$/,
   );
