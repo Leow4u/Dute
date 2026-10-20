@@ -72,6 +72,7 @@ class ChunkErrorBoundary extends Component<
 }
 
 const Home = lazy(() => import("./pages/home"));
+const EntradaPage = lazy(() => import("./pages/entrada"));
 const Catalog = lazy(() => import("./pages/catalog"));
 const Movements = lazy(() => import("./pages/movements"));
 const Orders = lazy(() => import("./pages/orders"));
@@ -136,6 +137,8 @@ import { useRole } from "./hooks/use-role";
 import { AuthProvider, useAppUser } from "./lib/auth";
 import { ActiveCustomerProvider } from "./lib/active-customer-context";
 import { useOperationProfile } from "./lib/operation-profile";
+import { PLATAFORMA_LIBERADA } from "./lib/liberacao";
+import { entrada } from "./lib/platform-modules";
 import { portalModulesFor } from "./lib/operations";
 import {
   firebaseApp,
@@ -853,11 +856,32 @@ function RoleHome() {
   );
 }
 
+/**
+ * Tela de entrada por módulo (docs/plataforma/fase-2-nucleo.md, parte 2): um
+ * módulo vai direto para a casa dele; dois ou mais mostram os cards. O
+ * cliente espera o perfil (módulos contratados) para não abrir o portal e
+ * tirar em seguida.
+ */
+function EntradaPorModulo() {
+  const { user } = useAppUser();
+  const operation = useOperationProfile();
+  const role = user?.publicMetadata.role;
+  if (role === "cliente" && operation.isLoading) return null;
+  const decision = entrada(role, operation.profile);
+  if (decision.kind === "redirect") return <Redirect to={decision.to} />;
+  return (
+    <ChunkErrorBoundary>
+      <EntradaPage decision={decision} />
+    </ChunkErrorBoundary>
+  );
+}
+
 function HomeRedirect() {
   const { user, isLoaded } = useAppUser();
   if (!isLoaded) return null;
   if (!user) return <SignInPage />;
-  return <RoleHome />;
+  // Fora da liberação (produção), a aterrissagem por papel de sempre.
+  return PLATAFORMA_LIBERADA ? <EntradaPorModulo /> : <RoleHome />;
 }
 
 function RoleGate({

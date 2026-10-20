@@ -203,7 +203,7 @@ A checagem de módulo por callable (por exemplo, Faturas pedindo `financeiro` no
 
 ## Achados fora destas partes
 
-- **Bug em produção:** `/portal/faturas/relatorio` e `/portal/agente/operacional` não estão na tabela de rotas. O cliente que abre o relatório das faturas volta ao Início.
+- **Corrigido pelo PR #107, na produção desde 20/10/2026:** `/portal/faturas/relatorio` e `/portal/agente/operacional` não estavam na tabela de rotas, e o cliente que abria o relatório das faturas voltava ao Início.
 - `suporte` lê faturamento, contra a regra "preço só para owner, admin, financeiro e comercial".
 - A troca de papel não ajusta o `customer_code`, e o evento não guarda o papel anterior.
 - O aceite de convite de cliente não grava evento.
@@ -223,3 +223,17 @@ Testes que falhavam antes e passam depois:
 - **Functions, app e ferramentas:** os testes novos cobrem funções que não existiam (`wmsAccessProblem`, `resolveContractedModules`, `clientAccessProjection`, `assertCustomerCodeAvailable`, `readContractedModules`, `plataformaLiberada`) ou mudam de propósito (`getHomePathForProfile` para papel novo, Configuração aberta aos 11).
 
 A ligação no `index.ts` (barreira em `getProfile` e `runRoutine`, gravação de `client_access` na transação do cadastro, módulos no evento `customers.*`) não tem teste próprio: o `index.ts` não é testável direto, como o resto das callables (CLAUDE.md, "Como trabalhamos").
+
+Publicada na homologação em 20/10/2026 pelo merge do PR #110. No run do merge (39409185672), as Functions da parte 1 subiram ("Publicar todas as functions" terminou com sucesso); o cancelado foi a conferência do invoker, interrompida pela publicação do merge do PR #109. Essa conferência rodou completa no run do #109 (39409836510), que já continha o #110.
+
+### Parte 2: tela de entrada
+
+Branch `plataforma/fase-2-parte-2`. Entregue como no desenho.
+
+- `lib/platform-modules.ts`: os módulos do app, a casa de cada um por papel e a função pura `entrada`. A trava confere que cada casa é rota que o papel abre e que só existe para o papel que trabalha no módulo.
+- `pages/entrada.tsx`: cabeçalho preto, saudação e um card por módulo; sem módulo, "Nenhum módulo liberado" e Sair. O teste de render confere que a tela só tem data, saudação, nome, iniciais e os módulos.
+- `index.css`: tokens v3 em `.v3`, só no claro; no escuro valem as cores de sempre. A Manrope entrou no `@import` de fontes e só é baixada por esta tela.
+- Com a liberação desligada, `/` e o "Voltar" da Configuração continuam como antes.
+- O Início (`pages/home.tsx`) passou a usar a saudação de `lib/saudacao.ts`, a mesma da entrada.
+
+Conferido numa prévia estática com o CSS do build: claro, escuro e celular de 375 px sem rolagem lateral.

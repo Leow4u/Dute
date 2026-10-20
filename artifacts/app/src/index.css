@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Spline+Sans+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Spline+Sans+Mono:wght@400;500;600;700&display=swap');
 
 @import 'tailwindcss' source(".");
 @import 'tw-animate-css';
@@ -87,6 +87,10 @@
   --color-chart-3: hsl(var(--chart-3));
   --color-chart-4: hsl(var(--chart-4));
   --color-chart-5: hsl(var(--chart-5));
+
+  /* Cabeçalho preto da identidade v3 (só existe dentro de .v3). */
+  --color-v3-header: hsl(var(--v3-header));
+  --color-v3-header-foreground: hsl(var(--v3-header-foreground));
 
   --color-sidebar: hsl(var(--sidebar));
   --color-sidebar-foreground: hsl(var(--sidebar-foreground));
@@ -328,6 +332,33 @@
   --sidebar-accent: 217 45% 17%;
   --sidebar-accent-foreground: 213 90% 85%;
   --sidebar-ring: 217 91% 60%;
+}
+
+/* Identidade v3 da plataforma (docs/mockups/README.md), só dentro de .v3:
+   telas novas da plataforma (a tela de entrada) sem mexer no visual do WMS,
+   que adota a v3 no lançamento da Operação. A v3 não define escuro para o
+   app: no escuro valem as cores escuras de sempre. Fonte, raio e cabeçalho
+   preto valem nos dois temas. A Manrope só é baixada quando uma tela a usa. */
+.v3 {
+  --app-font-sans: 'Manrope', sans-serif;
+  --radius: 12px;
+  --v3-header: 0 0% 9%; /* #161616 */
+  --v3-header-foreground: 0 0% 100%;
+  font-family: var(--app-font-sans);
+}
+
+:root:not(.dark) .v3 {
+  --background: 60 9% 96%; /* #F5F5F3 */
+  --foreground: 0 0% 9%; /* #161616 */
+  --card-foreground: 0 0% 9%;
+  --border: 60 7% 89%; /* #E5E5E1 */
+  --card-border: 60 7% 89%;
+  --card-edge: 60 7% 89%;
+  --muted: 60 9% 94%; /* #F0F0ED, caixa do ícone */
+  --muted-foreground: 213 5% 39%; /* #5F6368 */
+  --primary: 358 81% 51%; /* #E71C23: ação principal e alerta */
+  --primary-hover: 353 100% 34%; /* #AD0015 */
+  --ring: 358 81% 51%;
 }
 
 /* Documento de impressão (fatura, relatório do portal) é papel: fica claro

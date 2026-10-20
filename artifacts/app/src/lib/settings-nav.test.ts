@@ -104,7 +104,12 @@ describe("Voltar", () => {
   });
 
   it("sem histórico, cai na tela inicial do perfil", () => {
-    expect(getReturnPath("wms")).toBe("/pedidos");
-    expect(getReturnPath("cliente")).toBe("/portal");
+    expect(getReturnPath("wms", false)).toBe("/pedidos");
+    expect(getReturnPath("cliente", false)).toBe("/portal");
+  });
+
+  it("com a plataforma liberada, sem histórico, volta à entrada, que decide pelos módulos", () => {
+    expect(getReturnPath("wms", true)).toBe("/");
+    expect(getReturnPath("campo", true)).toBe("/");
   });
 });

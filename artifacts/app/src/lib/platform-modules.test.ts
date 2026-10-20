@@ -1,0 +1,82 @@
+import { MODULOS_POR_PAPEL, PAPEIS, type Papel } from "@workspace/dominio";
+import { describe, expect, it } from "vitest";
+
+import { getHomePathForProfile, getRouteProfileRoles } from "./modules";
+import { PLATFORM_MODULES, entrada, modulesForPerson } from "./platform-modules";
+
+const labels = (role: Papel, modules?: string[]) =>
+  modulesForPerson(role, modules ? { modules: modules as never } : null).map((entry) => entry.module.label);
+
+describe("tela de entrada por módulo (Fase 2, parte 2)", () => {
+  it("owner e admin veem os cards de Armazenagem e Financeiro", () => {
+    for (const role of ["owner", "admin"] as const) {
+      const decision = entrada(role, null);
+      expect(decision.kind).toBe("cards");
+      expect(labels(role)).toEqual(["Armazenagem", "Financeiro"]);
+    }
+  });
+
+  it.each<[Papel, string]>([
+    ["interno", "/dashboard"],
+    ["suporte", "/dashboard"],
+    ["wms", "/pedidos"],
+    ["financeiro", "/faturamento"],
+  ])("%s tem um módulo só e vai direto para %s, a aterrissagem de antes", (role, path) => {
+    expect(entrada(role, null)).toEqual({ kind: "redirect", to: path });
+    expect(path).toBe(getHomePathForProfile(role));
+  });
+
+  it("cliente só com armazenagem cai direto no portal do WMS", () => {
+    expect(entrada("cliente", { modules: ["wms"] })).toEqual({ kind: "redirect", to: "/portal" });
+  });
+
+  it("cliente BTG, sem o campo ou sem perfil carregado, cai direto no portal", () => {
+    expect(entrada("cliente", null)).toEqual({ kind: "redirect", to: "/portal" });
+    expect(entrada("cliente", { modules: ["wms", "financeiro"] })).toEqual({ kind: "redirect", to: "/portal" });
+  });
+
+  it("faturas fazem parte do portal: financeiro nunca vira card para o cliente", () => {
+    expect(labels("cliente", ["wms", "financeiro"])).toEqual(["Armazenagem"]);
+  });
+
+  it("cliente com armazenagem e operação vai ao portal enquanto a Operação não tem tela", () => {
+    expect(entrada("cliente", { modules: ["wms", "operacao"] })).toEqual({ kind: "redirect", to: "/portal" });
+  });
+
+  it("cliente sem armazenagem e papel sem tela ainda não têm módulo", () => {
+    expect(entrada("cliente", { modules: ["operacao"] })).toEqual({ kind: "nenhum" });
+    for (const role of ["campo", "comercial", "rh", "painel"] as const) {
+      expect(entrada(role, null)).toEqual({ kind: "nenhum" });
+    }
+  });
+
+  it("sem papel, nenhum módulo", () => {
+    expect(entrada(null, null)).toEqual({ kind: "nenhum" });
+  });
+});
+
+describe("casa de cada módulo", () => {
+  it("é uma rota que o papel abre", () => {
+    for (const module of PLATFORM_MODULES) {
+      for (const [role, path] of Object.entries(module.home)) {
+        expect(getRouteProfileRoles(path), `${module.key} → ${role}`).toContain(role);
+      }
+    }
+  });
+
+  it("só existe para papel da equipe que trabalha no módulo", () => {
+    for (const module of PLATFORM_MODULES) {
+      for (const role of Object.keys(module.home) as Papel[]) {
+        if (role === "cliente") continue;
+        expect(MODULOS_POR_PAPEL[role], `${module.key} → ${role}`).toContain(module.key);
+      }
+    }
+  });
+
+  it("todo módulo do domínio está no app, uma vez", () => {
+    expect(PLATFORM_MODULES.map((module) => module.key).sort()).toEqual(
+      ["comercial", "financeiro", "operacao", "rh", "wms"],
+    );
+    expect(PAPEIS).toContain("cliente");
+  });
+});

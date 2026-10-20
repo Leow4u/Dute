@@ -8,7 +8,7 @@
  * com o OK do Leonardo.
  *
  * Fica sob a liberação: papéis novos no convite, módulos contratados em
- * Configurações › Clientes e, nas próximas partes, a tela de entrada.
+ * Configurações › Clientes e a tela de entrada por módulo (/).
  */
 
 export const AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog"];
