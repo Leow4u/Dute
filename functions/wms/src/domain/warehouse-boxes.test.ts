@@ -205,3 +205,94 @@ describe("código e schema da caixa", () => {
   });
 
 });
+
+describe("empilhamento dirigido na mesma prateleira", () => {
+  const stored = (code: string, extra: Record<string, unknown> = {}) => ({
+    code, customer_code: BTG, location_id: "A-02", status: "stored",
+    front_m: 0.6, depth_m: 0.6, height_m: 0.3, placed_height_m: 0.3, gross_weight_kg: 5,
+    ...extra,
+  });
+  const floor = () => [stored("CX-000001"), stored("CX-000002"), stored("CX-000003")];
+  const incoming = { ...box, length_m: 0.6, width_m: 0.6, height_m: 0.3, gross_weight_kg: 5 };
+  const position = shelf("A-02", 2);
+
+  it("mantém A-02 com a frente cheia quando a caixa cabe sobre outra, somente com permissão", () => {
+    const occupancy = buildOccupancy(floor(), []);
+    const positions = [position, shelf("A-03", 3)];
+    assert.equal(suggestPosition(incoming, positions, occupancy).position?.code, "A-03");
+    assert.equal(suggestPosition({ ...incoming, allow_tilt: true }, positions, occupancy).position?.code, "A-03");
+    const result = suggestPosition({ ...incoming, allow_stacking: true }, positions, occupancy);
+    assert.equal(result.position?.code, "A-02");
+    assert.equal(result.position?.placement.support_box_code, "CX-000001");
+    assert.equal(result.position?.placement.base_height_m, 0.3);
+    assert.equal(result.position?.leftover_m, 0);
+    assert.deepEqual(result, suggestPosition({ ...incoming, allow_stacking: true }, positions, buildOccupancy(floor().reverse(), [])));
+  });
+
+  it("soma as alturas da pilha e não soma novamente a frente da caixa de cima", () => {
+    const boxes = [stored("CX-000001"), stored("CX-000004", { support_box_code: "CX-000001" })];
+    const occupancy = buildOccupancy(boxes, []).get("A-02")!;
+    assert.equal(occupancy.front_used_m, 0.6);
+    assert.equal(occupancy.weight_used_kg, 10);
+    assert.equal(occupancy.box_count, 2);
+    assert.deepEqual(occupancy.supports?.map((support) => [support.code, support.top_m]), [["CX-000004", 0.6]]);
+    const options = { allow_stacking: true, support_box_code: "CX-000004" };
+    assert.equal(placementFor(position, incoming, occupancy, options), null);
+    assert.equal(placementFor({ ...position, height_m: 0.9 }, incoming, occupancy, options)?.base_height_m, 0.6);
+  });
+
+  it("exige apoio integral, altura total e peso disponível", () => {
+    const occupancy = buildOccupancy(floor(), []).get("A-02")!;
+    const options = { allow_stacking: true };
+    assert.equal(placementFor(position, { ...incoming, height_m: 0.36 }, occupancy, options), null);
+    assert.equal(placementFor(position, { ...incoming, length_m: 0.7 }, occupancy, options), null);
+    assert.equal(placementFor(position, { ...incoming, width_m: 0.7 }, occupancy, options), null);
+    assert.equal(placementFor({ ...position, max_weight_kg: 19 }, incoming, occupancy, options), null);
+    assert.ok(placementFor({ ...position, max_weight_kg: 20 }, incoming, occupancy, options));
+  });
+
+  it("fixa o apoio confirmado sem substituir por outro ou pela base", () => {
+    const occupancy = buildOccupancy([stored("CX-000001")], []).get("A-02")!;
+    assert.equal(placementFor(position, incoming, occupancy, { allow_stacking: true })?.support_box_code, undefined);
+    assert.equal(placementFor(position, incoming, occupancy, { allow_stacking: true, support_box_code: "CX-000001" })?.support_box_code, "CX-000001");
+    assert.equal(placementFor(position, incoming, occupancy, { support_box_code: "CX-000001" }), null);
+    assert.equal(placementFor(position, incoming, occupancy, { allow_stacking: true, support_box_code: "CX-999999" }), null);
+    const full = buildOccupancy(floor(), []).get("A-02")!;
+    assert.equal(placementFor(position, incoming, full, { allow_stacking: true, support_box_code: null }), null);
+  });
+
+  it("reservas ocupam o apoio mas não oferecem um novo topo até concluir a guarda", () => {
+    const occupancy = buildOccupancy([
+      ...floor(), stored("CX-000004", { status: "committing", support_box_code: "CX-000001" }),
+    ], []).get("A-02")!;
+    assert.equal(Math.round(occupancy.front_used_m * 100), 180);
+    assert.deepEqual(occupancy.supports?.map((support) => support.code), ["CX-000002", "CX-000003"]);
+    assert.equal(placementFor(position, incoming, occupancy, { allow_stacking: true, support_box_code: "CX-000001" }), null);
+    assert.equal(placementFor(position, incoming, occupancy, { allow_stacking: true, support_box_code: "CX-000004" }), null);
+  });
+
+  it("caixas legadas usam a altura original; dados incompletos, ciclos e outro cliente não viram apoio", () => {
+    const legacy = buildOccupancy([stored("CX-000001", { placed_height_m: null })], []).get("A-02")!;
+    assert.equal(legacy.supports?.[0]?.top_m, 0.3);
+    const broken = buildOccupancy([
+      stored("CX-000001", { depth_m: null }),
+      stored("CX-000002", { support_box_code: "CX-000003" }),
+      stored("CX-000003", { support_box_code: "CX-000002" }),
+    ], []).get("A-02")!;
+    assert.equal(broken.supports?.length, 0);
+    assert.equal(Math.round(broken.front_used_m * 100), 180);
+    const foreign = buildOccupancy([stored("CX-000001", { customer_code: "Outro" })], []).get("A-02")!;
+    assert.equal(placementFor(position, incoming, foreign, { allow_stacking: true, support_box_code: "CX-000001" }), null);
+  });
+
+  it("schema mantém empilhamento separado de tombamento e preserva o apoio confirmado", () => {
+    const input = { ...incoming, location_id: "A-02", idempotency_key: "stack" };
+    for (const schema of [SuggestWarehousePositionSchema, CreateWarehouseBoxSchema]) {
+      assert.equal(schema.parse(input).allow_stacking, undefined);
+      assert.equal(schema.parse({ ...input, allow_stacking: true, support_box_code: "cx-000001" }).support_box_code, "CX-000001");
+      assert.equal(schema.parse({ ...input, support_box_code: null }).support_box_code, null);
+      assert.throws(() => schema.parse({ ...input, allow_stacking: "true" }));
+      assert.throws(() => schema.parse({ ...input, support_box_code: "../CX-000001" }));
+    }
+  });
+});

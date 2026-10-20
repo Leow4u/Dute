@@ -93,6 +93,56 @@ function openingLine(sessionId: string, boxCode: string, overrides: Record<strin
 }
 
 describe("caixas e endereçamento dirigido", () => {
+
+  it("confirma empilhamento em A-02, audita o apoio e preserva idempotência", async () => {
+    for (let i = 0; i < 3; i += 1) await store("A-02", `stack-floor-${i}`, { length_m: 0.6, width_m: 0.6, height_m: 0.3 });
+    const dimensions = { length_m: 0.6, width_m: 0.6, height_m: 0.3, gross_weight_kg: 2 };
+    const suggestion = await suggestWarehousePosition(db, {
+      customer_code: BTG, ...dimensions, allow_stacking: true, exclude: ["A-01"],
+    }, operacao);
+    assert.equal(suggestion.position?.code, "A-02");
+    const placement = suggestion.position!.placement;
+    assert.equal(placement.support_box_code, "CX-000001");
+    const input = { customer_code: BTG, ...dimensions, location_id: "A-02", allow_stacking: true,
+      support_box_code: placement.support_box_code, orientation: placement.orientation, idempotency_key: "stacked" };
+    const result = await createWarehouseBox(db, input, operacao);
+    assert.equal(result.box.support_box_code, "CX-000001");
+    assert.equal(result.box.base_height_m, 0.3);
+    assert.equal(result.box.front_m, 0.6);
+    const replayed = await createWarehouseBox(db, input, operacao);
+    assert.equal(replayed.replayed, true);
+    assert.equal(replayed.box.code, result.box.code);
+    const saved = (await db.collection("warehouse_boxes").doc(result.box.code).get()).data()!;
+    assert.equal(saved.support_box_code, "CX-000001");
+    const audit = (await events("warehouse.box_stored")).find((entry) => entry.entity_id === result.box.code)!;
+    assert.equal(audit.payload.box.base_height_m, 0.3);
+    await assert.rejects(removeWarehouseBox(db, { code: "CX-000001", customer_code: BTG }, operacao), /serve de apoio/);
+    await removeWarehouseBox(db, { code: result.box.code, customer_code: BTG }, operacao);
+    await removeWarehouseBox(db, { code: "CX-000001", customer_code: BTG }, operacao);
+  });
+
+  it("duas guardas concorrentes não usam o mesmo apoio", async () => {
+    const base = await store("A-02", "stack-concurrent-base", { height_m: 0.3 });
+    const input = { customer_code: BTG, ...box, height_m: 0.3, location_id: "A-02",
+      allow_stacking: true, support_box_code: base.box.code };
+    const results = await Promise.allSettled([
+      createWarehouseBox(db, { ...input, idempotency_key: "stack-a" }, operacao),
+      createWarehouseBox(db, { ...input, idempotency_key: "stack-b" }, operacao),
+    ]);
+    assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
+    const stored = await listWarehouseBoxes(db, BTG);
+    assert.equal(stored.filter((record) => record.support_box_code === base.box.code).length, 1);
+  });
+
+  it("revalida apoio removido ou de outra posição sem mudar silenciosamente a guarda", async () => {
+    const base = await store("A-02", "stack-stale-base", { height_m: 0.3 });
+    const input = { customer_code: BTG, ...box, height_m: 0.3, location_id: "A-01",
+      allow_stacking: true, support_box_code: base.box.code, idempotency_key: "stack-stale" };
+    await assert.rejects(createWarehouseBox(db, input, operacao), /não cabe/);
+    await removeWarehouseBox(db, { code: base.box.code, customer_code: BTG }, operacao);
+    await assert.rejects(createWarehouseBox(db, { ...input, location_id: "A-02" }, operacao), /não cabe/);
+  });
+
   it("sugere a primeira prateleira da zona, guarda caixas até encher e repete sem duplicar", async () => {
     const first = await suggestWarehousePosition(db, { customer_code: BTG, ...box, sku_codes: [] }, operacao);
     assert.equal(first.position?.code, "A-01");

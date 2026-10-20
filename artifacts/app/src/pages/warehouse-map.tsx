@@ -73,7 +73,7 @@ function shelfNote(shelf: Shelf) {
   if (shelf.state === "blocked" || shelf.state === "review") return SHELF_STATE_LABELS[shelf.state];
   if (shelf.boxes.length === 0) return `livre ${formatMeters(shelf.position.length_m)}`;
   if (shelf.remaining_reference_boxes > 0) return `cabe ${shelf.remaining_reference_boxes}`;
-  return "cheia";
+  return "sem vaga na base";
 }
 
 export default function WarehouseMapPage() {
@@ -410,7 +410,7 @@ function ShelfPanel({
         <Tile label="Medidas úteis" value={`${formatMeters(position.length_m)} × ${formatMeters(position.depth_m)} × ${formatMeters(position.height_m)}`} note="Comprimento × largura × altura livre" />
         <Tile label="Peso" value={formatKilos(shelf.weight_used_kg)} note={`Máximo ${formatKilos(position.max_weight_kg)}`} />
         <Tile label="Caixas" value={formatNumber(shelf.boxes.length)} note={`Frente livre ${formatMeters(shelf.free_front_m)}`} />
-        <Tile label="Cabe ainda" value={`${formatNumber(shelf.remaining_reference_boxes)} caixa(s)`} note={`De ${formatBoxDimensions(REFERENCE_BOX)}`} />
+        <Tile label="Cabe ainda" value={`${formatNumber(shelf.remaining_reference_boxes)} caixa(s)`} note={`De ${formatBoxDimensions(REFERENCE_BOX)}, na base`} />
       </div>
       {position.notes ? <p className="text-xs text-muted-foreground">{position.notes}</p> : null}
       <div>
@@ -443,6 +443,7 @@ function ShelfPanel({
                   )}
                   <div className="mt-1 text-xs text-muted-foreground">
                     {formatBoxDimensions(box)} · {box.session_id ? "abertura" : "manual"}
+                    {box.support_box_code ? ` · sobre ${box.support_box_code}` : ""}
                   </div>
                 </div>
               );
