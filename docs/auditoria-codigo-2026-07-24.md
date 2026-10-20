@@ -1246,7 +1246,7 @@ Confirmed end-to-end. (1) Dependency: functions/package.json:25 pins "xlsx": "^0
 
 **Arquivo:** `deploy/cloud-run/nginx.conf:26` | **Dimensao:** Dependencias e Deploy
 
-The entire Cloud Run nginx config for a financial-sector customer portal (BTG Pactual inventory/billing, handles auth sessions and invoices) sets only Cache-Control headers. There is no Strict-Transport-Security (Cloud Run/GCLB does not add it for you — and tools/point_hostinger_app_to_gclb.ps1 shows a custom domain is in use), no X-Content-Type-Options: nosniff, no X-Frame-Options or Content-Security-Policy frame-ancestors (the app can be framed for clickjacking of approval/decision flows like decideCustomerRequest), and no Referrer-Policy. The Dockerfile also runs the stock root nginx image with no hardening layer, so nothing else supplies these headers.
+The entire Cloud Run nginx config for a financial-sector customer portal (BTG Pactual inventory/billing, handles auth sessions and invoices) sets only Cache-Control headers. There is no Strict-Transport-Security (Cloud Run/GCLB does not add it for you — and tools/trocar_registro_a_hostinger.ps1 shows a custom domain is in use), no X-Content-Type-Options: nosniff, no X-Frame-Options or Content-Security-Policy frame-ancestors (the app can be framed for clickjacking of approval/decision flows like decideCustomerRequest), and no Referrer-Policy. The Dockerfile also runs the stock root nginx image with no hardening layer, so nothing else supplies these headers.
 
 **Evidencia:**
 
