@@ -119,7 +119,7 @@ describe("caixas e endereçamento dirigido", () => {
     assert.match(String(stored.find((event) => event.entity_id === "CX-000001")?.description), /na posição sugerida/);
   });
 
-  it("só guarda na zona do cliente e em prateleira ativa; recusa marca a prateleira em verificação", async () => {
+  it("só guarda na zona do cliente e em prateleira ativa; recusa não bloqueia outras caixas", async () => {
     await assert.rejects(store("B-01", "fora-da-zona"), /não é da zona de BTG Pactual/);
     await assert.rejects(store("Z-99", "inexistente"), /não está cadastrada/);
     await upsertWarehousePositions(
@@ -130,17 +130,87 @@ describe("caixas e endereçamento dirigido", () => {
     await assert.rejects(store("A-03", "bloqueada"), /bloqueada/);
     await assert.rejects(store("A-01", "sem-permissao", {}).then(() => createWarehouseBox(db, { customer_code: BTG, ...box, location_id: "A-02", idempotency_key: "cliente" }, cliente)), /somente administração ou operação/);
 
+    const beforeRefusal = (await db.collection("warehouse_positions").doc("A-01").get()).data()!;
     const refused = await store("A-02", "recusa", { refusal: { position: "A-01", reason: "Prateleira ocupada por material fora do sistema" } });
     assert.equal(refused.box.location_id, "A-02");
     const a01 = (await db.collection("warehouse_positions").doc("A-01").get()).data()!;
-    assert.equal(a01.status, "review");
-    assert.match(String(a01.notes), /Guarda recusada .* Prateleira ocupada/);
+    assert.deepEqual(a01, beforeRefusal);
     const refusals = await events("warehouse.position_refused");
     assert.equal(refusals.length, 1);
     assert.equal(refusals[0]!.entity_id, "A-01");
     const after = await suggestWarehousePosition(db, { customer_code: BTG, ...box, sku_codes: [] }, operacao);
-    assert.equal(after.position?.code, "A-02");
-    assert.equal(after.checked, 1);
+    assert.equal(after.position?.code, "A-01");
+    assert.equal(after.checked, 2);
+    assert.match(String(refusals[0]!.description), /estado da prateleira não foi alterado/);
+  });
+
+  it("persiste a orientação real e permite cinco caixas de 35 cm de frente sem alterar medidas originais", async () => {
+    const dimensions = { length_m: 0.6, width_m: 0.4, height_m: 0.35, gross_weight_kg: 5 };
+    for (let index = 0; index < 5; index += 1) {
+      const suggestion = await suggestWarehousePosition(db, { customer_code: BTG, ...dimensions, allow_tilt: true }, operacao);
+      assert.equal(suggestion.position?.code, "A-01");
+      const orientation = suggestion.position!.placement.orientation;
+      assert.equal(orientation, "height_length_width");
+      const input = { customer_code: BTG, ...dimensions, allow_tilt: true, orientation, location_id: "A-01", idempotency_key: `tilt-${index}` };
+      const created = await createWarehouseBox(db, input, operacao);
+      assert.deepEqual([created.box.length_m, created.box.width_m, created.box.height_m], [0.6, 0.4, 0.35]);
+      assert.deepEqual([created.box.front_m, created.box.depth_m, created.box.placed_height_m], [0.35, 0.6, 0.4]);
+      assert.equal(created.box.orientation, orientation);
+      assert.equal(created.box.allow_tilt, true);
+      const saved = (await db.collection("warehouse_boxes").doc(created.box.code).get()).data()!;
+      assert.equal(saved.orientation, orientation);
+      assert.equal(saved.placed_height_m, 0.4);
+      const replayed = await createWarehouseBox(db, input, operacao);
+      assert.equal(replayed.replayed, true);
+      assert.equal(replayed.box.code, created.box.code);
+    }
+    const next = await suggestWarehousePosition(db, { customer_code: BTG, ...dimensions, allow_tilt: true }, operacao);
+    assert.equal(next.position?.code, "A-02");
+    await assert.rejects(createWarehouseBox(db, {
+      customer_code: BTG, ...dimensions, allow_tilt: true, orientation: "height_length_width",
+      location_id: "A-01", idempotency_key: "tilt-overflow",
+    }, operacao), /não cabe/);
+    const stored = await events("warehouse.box_stored");
+    assert.equal(stored.length, 5);
+    assert.equal((stored[0]!.payload as { box: { orientation: string } }).box.orientation, "height_length_width");
+  });
+
+  it("não tomba sem permissão e reconfere a orientação confirmada na transação", async () => {
+    const dimensions = { length_m: 0.6, width_m: 0.4, height_m: 0.35, gross_weight_kg: 5 };
+    await assert.rejects(createWarehouseBox(db, {
+      customer_code: BTG, ...dimensions, orientation: "height_length_width",
+      location_id: "A-01", idempotency_key: "sem-opt-in",
+    }, operacao), /não cabe/);
+    const suggestion = await suggestWarehousePosition(db, { customer_code: BTG, ...dimensions, allow_tilt: true }, operacao);
+    assert.equal(suggestion.position?.placement.orientation, "height_length_width");
+    await upsertWarehousePositions(db, {
+      positions: [{ aisle: "A", shelf: 1, length_m: 1.8, depth_m: 0.55, height_m: 0.65, customer_code: BTG }],
+    }, coordenacao);
+    await assert.rejects(createWarehouseBox(db, {
+      customer_code: BTG, ...dimensions, allow_tilt: true, orientation: suggestion.position!.placement.orientation,
+      location_id: "A-01", idempotency_key: "orientacao-nao-cabe",
+    }, operacao), /não cabe/);
+    // Outra orientação cabe, mas precisa ser confirmada explicitamente.
+    const created = await createWarehouseBox(db, {
+      customer_code: BTG, ...dimensions, allow_tilt: true, orientation: "height_width_length",
+      location_id: "A-01", idempotency_key: "nova-orientacao",
+    }, operacao);
+    assert.equal(created.box.placed_height_m, 0.6);
+    assert.equal(created.box.depth_m, 0.4);
+  });
+
+  it("caixa em confirmação reserva espaço; caixa em contagem ainda não ocupa a prateleira", async () => {
+    await db.collection("warehouse_boxes").doc("RESERVADA").set({
+      customer_code: BTG, location_id: "A-01", status: "committing", front_m: 1.5, gross_weight_kg: 5,
+    });
+    await db.collection("warehouse_boxes").doc("RASCUNHO").set({
+      customer_code: BTG, location_id: "A-02", status: "counting", front_m: 10, gross_weight_kg: 5,
+    });
+    const suggestion = await suggestWarehousePosition(db, { customer_code: BTG, ...box }, operacao);
+    assert.equal(suggestion.position?.code, "A-02");
+    await assert.rejects(store("A-01", "reservado"), /não cabe/);
+    const created = await store("A-02", "livre");
+    assert.equal(created.box.location_id, "A-02");
   });
 
   it("rejeita caixa alta ou pesada demais e explica a zona cheia", async () => {
@@ -155,6 +225,26 @@ describe("caixas e endereçamento dirigido", () => {
     const noZone = await suggestWarehousePosition(db, { customer_code: "Cliente Sem Zona", ...box, sku_codes: [] }, operacao);
     assert.equal(noZone.position, null);
     assert.match(String(noZone.rejected), /Atribua uma rua/);
+  });
+
+  it("não apaga caixa em confirmação nem descarta linhas em conferência", async () => {
+    for (const [code, status, draft_line_count] of [
+      ["RESERVADA", "committing", 0],
+      ["CONTANDO", "counting", 1],
+      ["REVISADA", "reviewed", 1],
+      ["VAZIA", "counting", 0],
+    ] as const) {
+      await db.collection("warehouse_boxes").doc(code).set({
+        customer_code: BTG, status, draft_line_count, line_count: 0, unit_count: 0,
+      });
+    }
+    await assert.rejects(removeWarehouseBox(db, { code: "RESERVADA", customer_code: BTG }, operacao), /está sendo guardada/);
+    for (const code of ["CONTANDO", "REVISADA"]) {
+      await assert.rejects(removeWarehouseBox(db, { code, customer_code: BTG }, operacao), /produtos em conferência/);
+    }
+    await removeWarehouseBox(db, { code: "VAZIA", customer_code: BTG }, operacao);
+    assert.equal((await db.collection("warehouse_boxes").doc("VAZIA").get()).exists, false);
+    assert.equal((await events("warehouse.box_removed")).length, 1);
   });
 
   it("linhas da abertura entram na caixa: somam o saldo da posição, contam na caixa e saem na correção", async () => {

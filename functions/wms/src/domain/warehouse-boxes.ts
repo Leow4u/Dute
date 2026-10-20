@@ -19,9 +19,10 @@ import { WAREHOUSE_POSITIONS_COLLECTION } from "./warehouse-positions.js";
  * senão a primeira da zona com espaço; desempate pela menor sobra de frente.
  * Só prateleiras da zona do cliente entram; zona cheia bloqueia e avisa.
  *
- * Capacidade nesta versão: a caixa ocupa frente × profundidade do chão da
- * prateleira, sem empilhar caixa sobre caixa. É a conta conservadora do
- * levantamento (3 caixas de 50 cm numa frente de 1,80 m).
+ * Capacidade nesta versão: uma fileira de caixas ao longo da frente, sem
+ * empilhar nem usar uma segunda fileira na profundidade. O padrão preserva a
+ * altura da caixa; apoiar em outro lado exige allow_tilt explícito. A
+ * orientação escolhida é guardada para refletir a posição física da caixa.
  */
 
 export const WAREHOUSE_BOXES_COLLECTION = "warehouse_boxes";
@@ -65,11 +66,33 @@ export type PositionOccupancy = {
   sku_codes: Set<string>;
 };
 
+export const BOX_ORIENTATIONS = [
+  "length_width_height",
+  "width_length_height",
+  "length_height_width",
+  "height_length_width",
+  "width_height_length",
+  "height_width_length",
+] as const;
+
+/** Eixos originais usados, nesta ordem: frente, profundidade e altura. */
+export type BoxOrientation = (typeof BOX_ORIENTATIONS)[number];
+
+export type BoxPlacementOptions = {
+  /** Só true permite apoiar a caixa num lado diferente da base original. */
+  allow_tilt?: boolean;
+  /** Quando informada, valida esta orientação sem trocar por outra. */
+  orientation?: BoxOrientation;
+};
+
 export type Placement = {
   /** Lado da caixa paralelo à frente da prateleira. */
   front_m: number;
   /** Lado da caixa que entra na profundidade. */
   depth_m: number;
+  /** Altura efetiva depois de orientar a caixa. */
+  height_m: number;
+  orientation: BoxOrientation;
 };
 
 export type SlottingCandidate = {
@@ -111,11 +134,17 @@ const dimensionFields = {
   gross_weight_kg: optionalNumber(0, 100_000, "Peso bruto").optional(),
 };
 
+const placementFields = {
+  allow_tilt: z.boolean().optional(),
+  orientation: z.enum(BOX_ORIENTATIONS).optional(),
+};
+
 const positionCodeField = z.string().trim().min(1, "Informe a posição.").max(12, "Posição inválida.");
 
 export const SuggestWarehousePositionSchema = z.object({
   customer_code: z.string().trim().optional(),
   ...dimensionFields,
+  ...placementFields,
   sku_codes: z.array(z.string().trim().min(1).max(120)).max(50).optional(),
   exclude: z.array(positionCodeField).max(20).optional(),
 });
@@ -124,6 +153,7 @@ export const CreateWarehouseBoxSchema = z.object({
   customer_code: z.string().trim().optional(),
   session_id: z.string().trim().max(160).optional(),
   ...dimensionFields,
+  ...placementFields,
   location_id: positionCodeField,
   suggestion: z
     .object({
@@ -190,7 +220,7 @@ function actorFields(actor: WarehouseBoxActor) {
   };
 }
 
-function requireDimensions(raw: BoxDimensions): BoxDimensions {
+export function requireDimensions(raw: BoxDimensions): BoxDimensions {
   const read = (value: unknown, problem: string) => {
     const parsed = Number(value);
     if (!Number.isFinite(parsed) || parsed <= 0 || parsed > MAX_METERS) {
@@ -248,13 +278,17 @@ export function buildOccupancy(
   return occupancy;
 }
 
-/** Como a caixa entra na prateleira, se entra: menor frente que ainda cabe na profundidade. */
+/**
+ * Como a caixa entra na prateleira. Sem orientação explícita escolhe a menor
+ * frente; só considera tombar a caixa com allow_tilt. A mesma função valida
+ * a sugestão e a guarda, incluindo a orientação confirmada pela pessoa.
+ */
 export function placementFor(
   position: Pick<SlottingPosition, "length_m" | "depth_m" | "height_m" | "max_weight_kg">,
   box: BoxDimensions,
   occupancy: PositionOccupancy = emptyOccupancy(),
+  options: BoxPlacementOptions = {},
 ): Placement | null {
-  if (box.height_m > position.height_m + TOLERANCE_M) return null;
   if (
     position.max_weight_kg != null &&
     box.gross_weight_kg != null &&
@@ -263,13 +297,23 @@ export function placementFor(
     return null;
   }
   const freeFront = position.length_m - occupancy.front_used_m;
-  const options = [
-    { front_m: box.length_m, depth_m: box.width_m },
-    { front_m: box.width_m, depth_m: box.length_m },
-  ]
-    .filter((option) => option.depth_m <= position.depth_m + TOLERANCE_M && option.front_m <= freeFront + TOLERANCE_M)
-    .sort((left, right) => left.front_m - right.front_m);
-  return options[0] ?? null;
+  const axes = { length: box.length_m, width: box.width_m, height: box.height_m };
+  const orientations = options.allow_tilt === true ? BOX_ORIENTATIONS : BOX_ORIENTATIONS.slice(0, 2);
+  const placements: Placement[] = orientations
+    .filter((orientation) => !options.orientation || orientation === options.orientation)
+    .map((orientation) => {
+      type Axis = keyof typeof axes;
+      const [front, depth, height] = orientation.split("_") as [Axis, Axis, Axis];
+      return { front_m: axes[front]!, depth_m: axes[depth]!, height_m: axes[height]!, orientation };
+    })
+    .filter(
+      (placement) =>
+        placement.depth_m <= position.depth_m + TOLERANCE_M &&
+        placement.front_m <= freeFront + TOLERANCE_M &&
+        placement.height_m <= position.height_m + TOLERANCE_M,
+    )
+    .sort((left, right) => left.front_m - right.front_m || left.height_m - right.height_m);
+  return placements[0] ?? null;
 }
 
 /**
@@ -277,7 +321,7 @@ export function placementFor(
  * mesma resposta. Devolve também as alternativas e, sem resposta, o motivo.
  */
 export function suggestPosition(
-  box: BoxDimensions & { customer_code: string; sku_codes?: string[] },
+  box: BoxDimensions & BoxPlacementOptions & { customer_code: string; sku_codes?: string[] },
   positions: SlottingPosition[],
   occupancy: Map<string, PositionOccupancy>,
   options: { exclude?: string[] } = {},
@@ -309,7 +353,7 @@ export function suggestPosition(
   const candidates: Array<SlottingCandidate & { distance: number }> = [];
   for (const position of active) {
     const current = occupancy.get(position.code) ?? emptyOccupancy();
-    const placement = placementFor(position, box, current);
+    const placement = placementFor(position, box, current, box);
     if (!placement) continue;
     const freeFront = position.length_m - current.front_used_m;
     const leftover = round(freeFront - placement.front_m, 3);
@@ -378,7 +422,7 @@ export function suggestPosition(
 
 type Row = Record<string, unknown>;
 
-function asPosition(data: Row): SlottingPosition {
+export function asPosition(data: Row): SlottingPosition {
   return {
     code: String(data.code ?? data.id ?? ""),
     length_m: Number(data.length_m ?? 0),
@@ -391,11 +435,11 @@ function asPosition(data: Row): SlottingPosition {
   };
 }
 
-/** Prateleiras da zona, caixas guardadas e SKUs por posição do cliente. */
+/** Prateleiras da zona, caixas guardadas/reservadas e SKUs por posição do cliente. */
 export async function readSlottingContext(db: Firestore, customerCode: string) {
   const [positionsSnapshot, boxesSnapshot, balancesSnapshot] = await Promise.all([
     db.collection(WAREHOUSE_POSITIONS_COLLECTION).where("customer_code", "==", customerCode).get(),
-    db.collection(WAREHOUSE_BOXES_COLLECTION).where("customer_code", "==", customerCode).where("status", "==", "stored").get(),
+    db.collection(WAREHOUSE_BOXES_COLLECTION).where("customer_code", "==", customerCode).where("status", "in", ["stored", "committing"]).get(),
     db.collection("stock_balances").where("customer_code", "==", customerCode).get(),
   ]);
   const positions = positionsSnapshot.docs.map((document) => asPosition(document.data()));
@@ -417,7 +461,7 @@ export async function suggestWarehousePosition(
   const box = requireDimensions(input);
   const { positions, occupancy } = await readSlottingContext(db, customerCode);
   const result = suggestPosition(
-    { ...box, customer_code: customerCode, sku_codes: input.sku_codes ?? [] },
+    { ...box, allow_tilt: input.allow_tilt, orientation: input.orientation, customer_code: customerCode, sku_codes: input.sku_codes ?? [] },
     positions,
     occupancy,
     { exclude: input.exclude ?? [] },
@@ -443,6 +487,9 @@ export type WarehouseBoxRecord = {
   height_m: number;
   front_m: number;
   depth_m: number;
+  placed_height_m: number;
+  orientation: BoxOrientation;
+  allow_tilt: boolean;
   gross_weight_kg: number | null;
   line_count: number;
   unit_count: number;
@@ -464,8 +511,8 @@ async function readReceipt(transaction: Transaction, ref: DocumentReference, inp
 /**
  * Cria a caixa já guardada na posição informada (a sugerida, ou outra que o
  * motor ofereceu). Reconfere na transação que a posição é da zona do cliente,
- * está ativa e ainda tem espaço. Uma recusa marca a prateleira recusada em
- * verificação e fica registrada no evento.
+ * está ativa e ainda tem espaço na orientação confirmada. A recusa vale só
+ * para a caixa atual e fica no evento, sem mudar o cadastro da prateleira.
  */
 export async function createWarehouseBox(
   db: Firestore,
@@ -498,7 +545,7 @@ export async function createWarehouseBox(
       transaction.get(counterRef),
       transaction.get(positionRef),
       transaction.get(
-        db.collection(WAREHOUSE_BOXES_COLLECTION).where("location_id", "==", locationCode).where("status", "==", "stored"),
+        db.collection(WAREHOUSE_BOXES_COLLECTION).where("location_id", "==", locationCode).where("status", "in", ["stored", "committing"]),
       ),
       refusedRef ? transaction.get(refusedRef) : Promise.resolve(null),
     ]);
@@ -522,7 +569,7 @@ export async function createWarehouseBox(
       boxesSnapshot.docs.map((document) => document.data()),
       [],
     ).get(locationCode) ?? emptyOccupancy();
-    const placement = placementFor(position, box, occupancy);
+    const placement = placementFor(position, box, occupancy, input);
     if (!placement) {
       throw new HttpsError(
         "failed-precondition",
@@ -565,6 +612,9 @@ export async function createWarehouseBox(
       height_m: box.height_m,
       front_m: placement.front_m,
       depth_m: placement.depth_m,
+      placed_height_m: placement.height_m,
+      orientation: placement.orientation,
+      allow_tilt: input.allow_tilt === true,
       gross_weight_kg: box.gross_weight_kg ?? null,
       line_count: 0,
       unit_count: 0,
@@ -617,22 +667,13 @@ export async function createWarehouseBox(
     });
 
     if (refusedRef && refusal) {
-      const refused = refusedSnapshot?.data() ?? {};
-      const previousNotes = String(refused.notes ?? "").trim();
-      const note = `Guarda recusada em ${now.slice(0, 10)} por ${actor.name ?? actor.email ?? actor.uid}: ${refusal.reason}`;
-      transaction.update(refusedRef, {
-        status: "review",
-        notes: previousNotes ? `${previousNotes}\n${note}` : note,
-        updated_at: FieldValue.serverTimestamp(),
-        updated_by: actor.uid,
-      });
       const refusalEventRef = db.collection("events").doc();
       events.push(refusalEventRef.id);
       transaction.create(refusalEventRef, {
         id: refusalEventRef.id,
         type: "warehouse.position_refused",
         title: `Posição ${refusal.position} recusada na guarda da ${code}`,
-        description: `${refusal.reason}. A prateleira entrou em verificação; coordenação decide se volta a receber caixas.`,
+        description: `${refusal.reason}. Recusa desta sugestão para esta caixa; o estado da prateleira não foi alterado.`,
         severity: "warning",
         entity_type: "warehouse_position",
         entity_id: refusal.position,
@@ -680,6 +721,15 @@ export async function removeWarehouseBox(
     const customerCode = String(input.customer_code ?? "").trim();
     if (customerCode && String(data.customer_code ?? "") !== customerCode) {
       throw new HttpsError("permission-denied", "Caixa de outro cliente.");
+    }
+    if (data.status === "committing") {
+      throw new HttpsError("failed-precondition", `A caixa ${code} está sendo guardada. Aguarde a conclusão antes de removê-la.`);
+    }
+    if (
+      (data.status === "counting" || data.status === "reviewed") &&
+      Number(data.draft_line_count ?? 0) > 0
+    ) {
+      throw new HttpsError("failed-precondition", `A caixa ${code} ainda tem produtos em conferência. Remova as linhas dela antes de removê-la.`);
     }
     if (Number(data.line_count ?? 0) > 0 || Number(data.unit_count ?? 0) > 0) {
       throw new HttpsError(
