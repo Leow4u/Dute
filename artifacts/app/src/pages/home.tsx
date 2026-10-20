@@ -28,6 +28,7 @@ import {
   COORDINATION_NAV_ROLES,
   WMS_ROLES,
 } from "@/lib/modules";
+import { formatToday, greeting } from "@/lib/saudacao";
 import { cn } from "@/lib/utils";
 import type { WarehouseOpsResponse } from "@/lib/warehouse-ops/model";
 
@@ -52,23 +53,6 @@ const ITEM_ICON: Record<string, LucideIcon> = {
 };
 
 const numberFormatter = new Intl.NumberFormat("pt-BR");
-
-function greeting(date: Date) {
-  const hour = date.getHours();
-  if (hour < 12) return "Bom dia";
-  if (hour < 18) return "Boa tarde";
-  return "Boa noite";
-}
-
-// "terça-feira, 29 de setembro" → só a primeira letra em maiúscula.
-function formatToday(date: Date) {
-  const text = date.toLocaleDateString("pt-BR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
 
 function InboxRow({ item }: { item: HomeInboxItem }) {
   const tone = TONE_STYLE[item.tone];

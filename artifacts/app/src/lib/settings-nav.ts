@@ -7,6 +7,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { PLATAFORMA_LIBERADA } from "./liberacao";
 import {
   ACCESS_ADMIN_ROLES,
   ALL_ROLES,
@@ -133,7 +134,15 @@ export function rememberReturnPath(path: string) {
   }
 }
 
-export function getReturnPath(role: ProfileRole | null | undefined): string {
+/**
+ * Para onde o "Voltar" leva: a última tela do app ou, sem ela, a entrada.
+ * Com a plataforma liberada a entrada é "/", que decide pelos módulos da
+ * pessoa; fora dela, a tela inicial do papel.
+ */
+export function getReturnPath(
+  role: ProfileRole | null | undefined,
+  platform = PLATAFORMA_LIBERADA,
+): string {
   let saved: string | null = null;
   try {
     saved = window.sessionStorage.getItem(RETURN_KEY);
@@ -141,5 +150,5 @@ export function getReturnPath(role: ProfileRole | null | undefined): string {
     saved = null;
   }
   if (saved && saved.startsWith("/") && !isSettingsPath(saved)) return saved;
-  return getHomePathForProfile(role);
+  return platform ? "/" : getHomePathForProfile(role);
 }

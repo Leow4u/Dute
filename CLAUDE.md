@@ -19,7 +19,8 @@ documentação de produto e operação está em `docs/`.
   `docs/plataforma/fase-1-corte.md`; ferramentas `tools/migracao_firestore.py` e
   `tools/congelar_projeto.ps1`). Fase 2, núcleo e app único, em andamento
   (desenho e registro em `docs/plataforma/fase-2-nucleo.md`): parte 1, papéis
-  da plataforma e módulos contratados, na homologação.
+  da plataforma e módulos contratados, na homologação; parte 2, tela de entrada
+  por módulo, em PR.
 - **Papéis e módulos têm lista única em `lib/dominio`.** As Functions
   (`functions/wms/src/domain/platform-roles.ts`, `customer-profile.ts`) e o
   `firestore.rules` guardam cópias literais, travadas por
