@@ -14,14 +14,20 @@ documentação de produto e operação está em `docs/`.
 
 - **Plano em `docs/plataforma/plano.md`** (Fases 0 a 8) e telas em
   `docs/mockups/` (identidade v3). Fase 0, projetos e repositório, feita em
-  19/10/2026; a próxima é a Fase 1, migração do WMS para o `dute-prod`.
+  19/10/2026. Fase 1, migração do WMS para o `dute-prod`, em andamento: ensaio
+  na homologação e `dute-prod` preparado em 19/10/2026; o corte segue
+  `docs/plataforma/fase-1-corte.md` (`tools/migracao_firestore.py` e
+  `tools/congelar_projeto.ps1`).
 - **Projetos Google Cloud**, todos em `southamerica-east1`:
   - `dute-btg`: produção atual (`app.dutelog.com.br`, Cloud Run `dute-btg-app`).
     Depois do corte da Fase 1 fica parado de 30 a 60 dias; quem apaga é o
     Leonardo.
   - `dute-homolog`: homologação. Recebe cada push em `main` (Cloud Run
     `dute-app`, endereço `run.app`).
-  - `dute-prod`: produção da plataforma, vazio até o corte da Fase 1.
+  - `dute-prod`: produção da plataforma, sem dados até o corte da Fase 1. Já
+    tem Load Balancer próprio (IP `34.54.243.247`, app e site institucional).
+    Até o corte, recebe frontend e functions da `main` só pelo disparo manual
+    `publicar_dute_prod` do CI; regras e índices, à mão (abaixo).
 - **Pastas:**
   - `artifacts/app` (`@workspace/app`): o app único, hoje o WMS.
   - `artifacts/dutelog-site`: site institucional.
@@ -62,7 +68,8 @@ documentação de produto e operação está em `docs/`.
   quando a verificação falha) e `docs/deploy-functions-manual.md`.
   **Regras e índices do Firestore são manuais e não vão junto com
   `--only functions`**: `cd C:\DEV\Dute` e
-  `firebase deploy --only firestore --project dute-btg` (ou `dute-homolog`). Em
+  `firebase deploy --only firestore,storage --project dute-btg` (ou
+  `dute-homolog`, `dute-prod`); as regras do Storage também não vão pelo CI. Em
   16/10/2026 a tela Estoque › Posições ficou em "Missing or insufficient
   permissions" depois do deploy de functions, até as regras subirem.
 - **Depois de qualquer deploy de functions, rode

@@ -14,6 +14,10 @@ on:
         description: "Publicar a main na produção (app.dutelog.com.br): frontend e functions"
         type: boolean
         default: false
+      publicar_dute_prod:
+        description: "Antes do corte da Fase 1: publicar a main no dute-prod (confere só o endereço run.app)"
+        type: boolean
+        default: false
       liberar_trafego:
         description: "Mudar o tráfego do dute-btg-app: 100% para a última revisão pronta (--to-latest), ou para a revisão informada abaixo"
         type: boolean
@@ -71,6 +75,10 @@ jobs:
         working-directory: .
         shell: pwsh
         run: ./tools/check_functions_invoker.tests.ps1
+      - name: Testes do congelar_projeto.ps1
+        working-directory: .
+        shell: pwsh
+        run: ./tools/congelar_projeto.tests.ps1
 
   tools-python-tests:
     name: Testes das ferramentas Python (tools/)
@@ -147,6 +155,27 @@ jobs:
       public_url: https://app.dutelog.com.br
       firebase_api_key: "AIzaSyDaoJ0a_ZScGJHEbwwvUPYvW7dRmPssPQw"
       firebase_app_id: "912453685006:web:38592b73c2d5569823d15f"
+
+  # Até o corte da Fase 1 (docs/plataforma/fase-1-corte.md), o dute-prod recebe a
+  # main só por este disparo, conferindo o endereço run.app: app.dutelog.com.br
+  # ainda é do dute-btg. No corte, publicar-producao passa a ser o dute-prod e
+  # este job sai.
+  publicar-dute-prod:
+    name: Publicar no dute-prod (antes do corte)
+    needs: [frontend-typecheck, functions-unit, functions-integration]
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publicar_dute_prod
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/publicar.yml
+    with:
+      ambiente: dute-prod
+      project_id: dute-prod
+      project_number: "974421124970"
+      service: dute-app
+      repository: dute
+      firebase_api_key: "AIzaSyAqA8X_nzaN145XHBbRbviSbXENw_fQkpw"
+      firebase_app_id: "1:974421124970:web:e224e2335773655bde6713"
 
   cloud-run-diagnostico:
     name: Diagnóstico do Cloud Run (só leitura)

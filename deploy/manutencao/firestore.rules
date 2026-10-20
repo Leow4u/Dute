@@ -1,0 +1,12 @@
+rules_version = '2';
+
+// Janela de corte (docs/plataforma/fase-1-corte.md): ninguém lê nem grava pelo
+// app. As Functions usam o Admin SDK e não passam por estas regras; por isso o
+// congelamento também tira a invocação pública delas (tools/congelar_projeto.ps1).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,11 @@
+rules_version = '2';
+
+// Janela de corte (docs/plataforma/fase-1-corte.md): nenhum upload nem leitura
+// pelo SDK. Os links de download com token continuam abrindo.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
