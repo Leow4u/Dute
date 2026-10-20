@@ -2,6 +2,10 @@
 
 Procedimento para publicar o app BTG em `https://app.dutelog.com.br`.
 
+> Desde o corte da Fase 1 (20/10/2026, `docs/plataforma/fase-1-corte.md`), a
+> produção é o projeto `dute-prod`, Cloud Run `dute-app`. Os incidentes contados
+> abaixo aconteceram no `dute-btg`, a produção anterior, hoje congelada.
+
 Enquanto o deploy automático do GitHub Actions não estiver funcionando, **este é o
 processo oficial de publicação**. Ele é o mesmo que colocou no ar tudo que está
 rodando hoje.
@@ -14,8 +18,8 @@ A publicação sai da sua própria máquina. Não há painel web para isso.
 |---|---|
 | `C:\DEV\Dute` (PowerShell) | Onde o código vive e o build é gerado. **É daqui que se publica.** |
 | GitHub `Leow4u/Dute` | Guarda o código e roda os testes do CI |
-| Google Cloud, projeto `dute-btg` | Cloud Build monta a imagem → Artifact Registry guarda → Cloud Run executa |
-| `app.dutelog.com.br` | Load Balancer HTTPS apontando para o serviço `dute-btg-app` |
+| Google Cloud, projeto `dute-prod` | Cloud Build monta a imagem → Artifact Registry guarda → Cloud Run executa |
+| `app.dutelog.com.br` | Load Balancer HTTPS apontando para o serviço `dute-app` |
 
 Abra o **Terminal do Windows (PowerShell)** e vá para a pasta do projeto:
 
@@ -27,7 +31,7 @@ cd C:\DEV\Dute
 
 Já instalados e autenticados nesta máquina:
 
-- `gcloud` — logado como `leonardo@dutelog.com.br`, projeto padrão `dute-btg`
+- `gcloud` — logado como `leonardo@dutelog.com.br`, projeto padrão `dute-prod`
 - `gh` — logado como `Leow4u`
 - `node` e `corepack`
 
@@ -75,7 +79,7 @@ O build sai em `artifacts\app\dist\public`.
 ### 3. Anotar a revisão atual (para rollback)
 
 ```powershell
-gcloud run services describe dute-btg-app --region southamerica-east1 --project dute-btg --format="value(status.latestReadyRevisionName)"
+gcloud run services describe dute-app --region southamerica-east1 --project dute-prod --format="value(status.latestReadyRevisionName)"
 ```
 
 Guarde esse nome. Se o deploy novo der problema, é para ele que você volta.
@@ -94,7 +98,7 @@ timestamp, publica no Cloud Run e imprime a URL do serviço.
 ### 5. Conferir que subiu
 
 ```powershell
-gcloud run revisions list --service dute-btg-app --region southamerica-east1 --project dute-btg --limit 3 --format="table(name,creationTimestamp.date('%Y-%m-%d %H:%M'),active)"
+gcloud run revisions list --service dute-app --region southamerica-east1 --project dute-prod --limit 3 --format="table(name,creationTimestamp.date('%Y-%m-%d %H:%M'),active)"
 ```
 
 E confirme que o site responde:
@@ -111,7 +115,7 @@ Não é preciso reconstruir nada — o Cloud Run guarda as revisões anteriores.
 o tráfego para uma revisão conhecida:
 
 ```powershell
-gcloud run services update-traffic dute-btg-app --region southamerica-east1 --project dute-btg --to-revisions NOME-DA-REVISAO=100
+gcloud run services update-traffic dute-app --region southamerica-east1 --project dute-prod --to-revisions NOME-DA-REVISAO=100
 ```
 
 Use o nome anotado no passo 3.
@@ -131,7 +135,7 @@ variável minificados são ruído do minificador, não diferença de código.
 ## Configuração do Firebase no build
 
 O build do frontend precisa das seis variáveis `VITE_FIREBASE_*` (configuração web pública
-do projeto `dute-btg`: chave de API web, authDomain, projectId, storageBucket,
+do projeto `dute-prod`: chave de API web, authDomain, projectId, storageBucket,
 messagingSenderId e appId). Na sua máquina elas vêm do `.env.local` da raiz (o
 `vite.config.ts` aponta `envDir` para a raiz do repositório). No CI elas estão no próprio
 workflow, no passo `Install and build frontend`, que trava se o bundle sair sem o
@@ -154,7 +158,7 @@ chamada pelo `.github/workflows/ci.yml` sempre a partir de `main` e depois de
 `frontend-typecheck`, `functions-unit` e `functions-integration` passarem:
 
 - **Homologação** (`dute-homolog`, serviço `dute-app`): a cada push em `main`.
-- **Produção** (`dute-btg`, serviço `dute-btg-app`, `app.dutelog.com.br`): só por
+- **Produção** (`dute-prod`, serviço `dute-app`, `app.dutelog.com.br`): só por
   disparo manual em Actions > CI > Run workflow, com `publicar_producao` marcado.
 
 A tag da imagem é o commit curto, então dá para saber o que está no ar olhando a
@@ -178,8 +182,8 @@ revisões e o que as URLs servem sem precisar de gcloud na máquina.
 Quando a verificação falhar, olhe primeiro o tráfego e as revisões:
 
 ```powershell
-gcloud run services describe dute-btg-app --region southamerica-east1 --project dute-btg --format "yaml(spec.traffic,status.traffic,status.latestCreatedRevisionName,status.latestReadyRevisionName)"
-gcloud run revisions list --service dute-btg-app --region southamerica-east1 --project dute-btg --limit 5 --format "table(name,creationTimestamp.date('%Y-%m-%d %H:%M'),active,spec.containers[0].image)"
+gcloud run services describe dute-app --region southamerica-east1 --project dute-prod --format "yaml(spec.traffic,status.traffic,status.latestCreatedRevisionName,status.latestReadyRevisionName)"
+gcloud run revisions list --service dute-app --region southamerica-east1 --project dute-prod --limit 5 --format "table(name,creationTimestamp.date('%Y-%m-%d %H:%M'),active,spec.containers[0].image)"
 ```
 
 Se `spec.traffic` apontar para um `revisionName` fixo em vez de `latestRevision: true`
@@ -187,7 +191,7 @@ Se `spec.traffic` apontar para um `revisionName` fixo em vez de `latestRevision:
 Solte o tráfego e a última revisão pronta passa a receber tudo:
 
 ```powershell
-gcloud run services update-traffic dute-btg-app --region southamerica-east1 --project dute-btg --to-latest
+gcloud run services update-traffic dute-app --region southamerica-east1 --project dute-prod --to-latest
 ```
 
 Sem gcloud na máquina, o mesmo efeito vem de Actions > CI > Run workflow com

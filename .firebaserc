@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "dute-btg"
+    "default": "dute-prod",
+    "prod": "dute-prod",
+    "homolog": "dute-homolog"
   }
 }

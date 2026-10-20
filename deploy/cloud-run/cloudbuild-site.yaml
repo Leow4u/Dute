@@ -5,13 +5,13 @@ steps:
       - --file
       - deploy/cloud-run/Dockerfile.site
       - --tag
-      - southamerica-east1-docker.pkg.dev/$PROJECT_ID/dute-btg/dutelog-site:$BUILD_ID
+      - southamerica-east1-docker.pkg.dev/$PROJECT_ID/dute/dutelog-site:$BUILD_ID
       - .
   - name: gcr.io/cloud-builders/docker
     args:
       - push
-      - southamerica-east1-docker.pkg.dev/$PROJECT_ID/dute-btg/dutelog-site:$BUILD_ID
+      - southamerica-east1-docker.pkg.dev/$PROJECT_ID/dute/dutelog-site:$BUILD_ID
 images:
-  - southamerica-east1-docker.pkg.dev/$PROJECT_ID/dute-btg/dutelog-site:$BUILD_ID
+  - southamerica-east1-docker.pkg.dev/$PROJECT_ID/dute/dutelog-site:$BUILD_ID
 options:
   logging: CLOUD_LOGGING_ONLY

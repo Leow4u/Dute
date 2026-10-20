@@ -1,5 +1,5 @@
 param(
-  [string]$ProjectId = "dute-btg",
+  [string]$ProjectId = "dute-prod",
   [string]$Region = "southamerica-east1",
   [string]$IndexFile = "$PSScriptRoot\..\functions\wms\src\index.ts"
 )

@@ -1,7 +1,11 @@
 # Publicação de Cloud Functions
 
 Procedimento para publicar `functions/wms/` (as callables usadas pelo app BTG) no
-projeto Google Cloud `dute-btg`.
+projeto Google Cloud `dute-prod`.
+
+> Desde o corte da Fase 1 (20/10/2026) a produção é o `dute-prod`. Os incidentes
+> e a configuração inicial contados abaixo aconteceram no `dute-btg`, a
+> produção anterior, hoje congelada.
 
 Diferente do frontend (`docs/deploy-manual.md`), este processo nunca foi escrito
 antes — o que é provavelmente como o incidente de 03/09/2026 (ver abaixo) passou
@@ -15,7 +19,7 @@ sozinho. **Enquanto isso não for feito, publique pelo roteiro manual abaixo.**
 ## Pré-requisitos
 
 Os mesmos do deploy do frontend: `gcloud` autenticado como
-`leonardo@dutelog.com.br`, projeto padrão `dute-btg`, `node`/`corepack`. O
+`leonardo@dutelog.com.br`, projeto padrão `dute-prod`, `node`/`corepack`. O
 diretório `functions/wms/` usa **npm**, não pnpm (tem `package-lock.json` próprio).
 
 ## Passo a passo
@@ -40,7 +44,7 @@ emulador do Firestore — exige Java 21+). Não publique com isso vermelho.
 ### 3. Publicar
 
 ```powershell
-firebase deploy --only functions --project dute-btg
+firebase deploy --only functions --project dute-prod
 ```
 
 O `predeploy` do `firebase.json` já roda `npm run build` (tsc) antes de subir.
@@ -51,7 +55,7 @@ e `warehouse_boxes` em 16/10/2026), publique também:
 
 ```powershell
 cd C:\DEV\Dute
-firebase deploy --only firestore --project dute-btg
+firebase deploy --only firestore,storage --project dute-prod
 ```
 
 Em 16/10/2026 a tela Estoque › Posições ficou em "Missing or insufficient
@@ -62,7 +66,7 @@ de deploy que causou o incidente abaixo — **nunca pule o passo 4** depois de u
 deploy parcial):
 
 ```powershell
-firebase deploy --only functions:nomeDaFunction --project dute-btg
+firebase deploy --only functions:nomeDaFunction --project dute-prod
 ```
 
 ### 4. Verificar que toda callable continua com invocação pública
@@ -105,7 +109,7 @@ Storage", com o papel que falta. Até 01/10/2026 aparecia só "Falha interna no
 servidor", e a causa (403 `storage.objects.create`) estava apenas no log:
 
 ```powershell
-gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="uploadshipmentattachment" AND severity>=WARNING' --project dute-btg --freshness=1h --limit 5
+gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="uploadshipmentattachment" AND severity>=WARNING' --project dute-prod --freshness=1h --limit 5
 ```
 
 ### Deploy lento: "User code failed to load … Timeout after 10000"
@@ -205,7 +209,7 @@ aparece como **NAO PUBLICADA** e sugere o `firebase deploy`.
 O job `Cloud Functions` em `.github/workflows/publicar.yml` publica
 `functions/wms/` junto com o frontend, sempre depois de `frontend-typecheck`,
 `functions-unit` e `functions-integration` passarem: na homologação
-(`dute-homolog`) a cada push em `main`, e na produção (`dute-btg`) só por disparo
+(`dute-homolog`) a cada push em `main`, e na produção (`dute-prod`) só por disparo
 manual com `publicar_producao` marcado. Ele sempre publica o lote inteiro
 (`firebase deploy --only functions`, nunca `--only functions:nome`) e termina
 rodando `tools/check_functions_invoker.ps1 -ProjectId <projeto>` contra o projeto

@@ -405,8 +405,37 @@ PR preparado antes da janela e mergeado no passo 8:
 - `deploy/cloud-run/cloudbuild-site.yaml`: repositório `dute` em vez de
   `dute-btg`, para o site ser publicado no `dute-prod`.
 
+## Corte de 20/10/2026, antes da contagem de abertura
+
+A contagem de abertura do inventário recomeça tudo do zero (produtos, fotos,
+estoque). Por isso o Leonardo decidiu cortar **antes** dela, com o `dute-btg` só
+com a configuração preservada na zeragem de 16/10. Isso dispensou parte do
+roteiro completo:
+
+- **Storage não copiado.** Os 405 arquivos do `dute-btg.firebasestorage.app`
+  são sobras de antes da zeragem e nenhum documento aponta para eles; ficam lá
+  até o `dute-btg` ser apagado.
+- **Troca de bucket vazia.** Nenhum link de foto ou anexo no banco
+  (`trocar-bucket`: 0 documentos).
+- **Sem congelamento antes da cópia.** De madrugada, sem uso, o inventário antes
+  e depois do export bastou para provar a cópia exata.
+
+Feito, com o OK do Leonardo:
+
+| Hora (UTC) | Passo | Resultado |
+|---|---|---|
+| 03:07 | PR #104 mergeado; regras e índices da `main` no `dute-prod` | ok |
+| 03:10–03:21 | `publicar_dute_prod` (execução 39362881155) | frontend e as 69 functions publicados; invoker de cada callable conferido |
+| 03:17–03:19 | Export do `dute-btg` (`gs://dute-prod-migracao/corte-20261020`) e import no `dute-prod` | 476 documentos; `dute-btg` igual antes e depois; `dute-prod` "Iguais." ao `dute-btg` |
+| 03:20 | Contas | 6 de 6 com a senha de antes |
+| 03:23 | `dute-btg` de novo contra o export | "Iguais.": nada gravou depois da cópia |
+
+Falta: congelar o `dute-btg`, trocar o registro `app` (A) para `34.54.243.247`
+(passo 6), conferir (passo 7) e o merge do PR do corte (passo 8).
+
 ## Histórico
 
 | Data | O quê |
 |---|---|
 | 19/10/2026 | Ensaio na homologação (tabela acima), `dute-prod` preparado, CNAMEs criados na Hostinger, certificados ativos e Load Balancer novo testado pelo IP |
+| 20/10/2026 | Corte antes da contagem de abertura (seção acima) |
