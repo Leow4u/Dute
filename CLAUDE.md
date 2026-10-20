@@ -64,25 +64,30 @@ documentação de produto e operação está em `docs/`.
   desde o corte da Fase 1 (20/10/2026); antes, `dute-btg-app` no `dute-btg`.
   Firebase Hosting **não** é produção nem fallback.
 - **Publicação pelo GitHub Actions, em dois ambientes.** Cada push em `main`
-  publica frontend e functions na homologação (`dute-homolog`); a produção só
-  recebe por disparo manual (Actions > CI > Run workflow com `publicar_producao`
-  marcado), depois de conferir na homologação. O fluxo fica em
-  `.github/workflows/publicar.yml`: monta a imagem no runner, envia ao Artifact
-  Registry e termina conferindo se o Cloud Run (e `app.dutelog.com.br`, na
-  produção) passou a servir o build (`tools/check_frontend_deployed.sh`) e se
-  cada callable está pública (`tools/check_functions_invoker.ps1`). **Verde sem
-  essa verificação não vale**: em 09/10/2026 o job ficou verde oito vezes
-  seguidas sem mudar a produção. O build usa a configuração web pública do
-  Firebase de cada projeto, definida no `ci.yml`; sem ela o login quebra com
-  "Firebase não configurado" (aconteceu em 09/10/2026). Ver
-  `docs/deploy-manual.md` (inclui o roteiro manual de reserva e o que checar
-  quando a verificação falha) e `docs/deploy-functions-manual.md`.
-  **Regras e índices do Firestore são manuais e não vão junto com
-  `--only functions`**: `cd C:\DEV\Dute` e
-  `firebase deploy --only firestore,storage --project dute-prod` (ou
-  `dute-homolog`); as regras do Storage também não vão pelo CI. Em
-  16/10/2026 a tela Estoque › Posições ficou em "Missing or insufficient
-  permissions" depois do deploy de functions, até as regras subirem.
+  publica regras e índices, frontend e functions na homologação
+  (`dute-homolog`); a produção só recebe por disparo manual (Actions > CI > Run
+  workflow com `publicar_producao` marcado), depois de conferir na homologação.
+  Nenhum passo da publicação depende da máquina de alguém. O fluxo fica em
+  `.github/workflows/publicar.yml`: o job `regras` publica `firestore.rules`,
+  `firestore.indexes.json` e `storage.rules`
+  (`firebase deploy --only firestore,storage`) e confere as regras servidas
+  (`tools/check_rules_deployed.sh`); só depois sobem o frontend (imagem montada
+  no runner e enviada ao Artifact Registry) e as functions. A publicação termina
+  conferindo se o Cloud Run (e `app.dutelog.com.br`, na produção) passou a
+  servir o build (`tools/check_frontend_deployed.sh`) e se cada callable está
+  pública (`tools/check_functions_invoker.ps1`). **Verde sem essa verificação
+  não vale**: em 09/10/2026 o job ficou verde oito vezes seguidas sem mudar a
+  produção. O build usa a configuração web pública do Firebase de cada projeto,
+  definida no `ci.yml`; sem ela o login quebra com "Firebase não configurado"
+  (aconteceu em 09/10/2026). Ver `docs/deploy-manual.md` (inclui o roteiro
+  manual de reserva e o que checar quando a verificação falha) e
+  `docs/deploy-functions-manual.md`.
+- **Regras e índices sobem antes do frontend e das functions, nunca depois.**
+  Em 16/10/2026, quando eram publicados à mão, a tela Estoque › Posições ficou
+  em "Missing or insufficient permissions" depois do deploy de functions, até as
+  regras subirem. Se o job `regras` falha, nada mais sobe. O CI não apaga
+  índice: o que sair do `firestore.indexes.json` continua no projeto (o log
+  avisa) até alguém apagar com `--force`.
 - **Depois de qualquer deploy de functions, rode
   `tools/check_functions_invoker.ps1 -ProjectId <projeto>`** (padrão `dute-prod`).
   Em 03/09/2026, 8 callables (incluindo `createCustomerRequest`) ficaram sem

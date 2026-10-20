@@ -11,10 +11,10 @@ Diferente do frontend (`docs/deploy-manual.md`), este processo nunca foi escrito
 antes — o que é provavelmente como o incidente de 03/09/2026 (ver abaixo) passou
 um mês sem ser percebido.
 
-**Existe um job automático** (`Cloud Functions` em `.github/workflows/publicar.yml`,
-ver seção no fim deste documento), mas ele só funciona depois que o
-pré-requisito de IAM dessa seção for criado manualmente — isso não pode rodar
-sozinho. **Enquanto isso não for feito, publique pelo roteiro manual abaixo.**
+**A publicação normal é pelo GitHub Actions** (jobs `Regras e índices` e
+`Cloud Functions` em `.github/workflows/publicar.yml`, ver seção no fim deste
+documento): regras, índices e functions sobem sem passar pela máquina de
+ninguém. O roteiro manual abaixo é a reserva, para quando o CI estiver fora.
 
 ## Pré-requisitos
 
@@ -43,23 +43,24 @@ emulador do Firestore — exige Java 21+). Não publique com isso vermelho.
 
 ### 3. Publicar
 
+Regras e índices primeiro, depois as functions, na mesma ordem do CI. Os dois
+comandos rodam da raiz do repositório, onde fica o `firebase.json`:
+
 ```powershell
+firebase deploy --only firestore,storage --project dute-prod
+bash tools/check_rules_deployed.sh dute-prod
 firebase deploy --only functions --project dute-prod
 ```
 
-O `predeploy` do `firebase.json` já roda `npm run build` (tsc) antes de subir.
+O `predeploy` do `firebase.json` já roda `npm run build` (tsc) antes de subir as
+functions.
 
-`--only functions` **não publica `firestore.rules` nem `firestore.indexes.json`.**
-Quando o PR mexe em regra ou índice (toda coleção nova mexe: `warehouse_positions`
-e `warehouse_boxes` em 16/10/2026), publique também:
-
-```powershell
-cd C:\DEV\Dute
-firebase deploy --only firestore,storage --project dute-prod
-```
-
-Em 16/10/2026 a tela Estoque › Posições ficou em "Missing or insufficient
-permissions" depois de um deploy só de functions, até as regras subirem.
+`--only functions` **não publica `firestore.rules`, `firestore.indexes.json` nem
+`storage.rules`.** Em 16/10/2026 a tela Estoque › Posições ficou em "Missing or
+insufficient permissions" depois de um deploy só de functions, até as regras
+subirem. `tools/check_rules_deployed.sh` compara as regras servidas pelo projeto
+com as do checkout (usa o `gcloud` para o token e precisa de `bash`, `curl` e
+`node`).
 
 Para publicar só uma function específica (mais rápido, mas é exatamente o tipo
 de deploy que causou o incidente abaixo — **nunca pule o passo 4** depois de um
@@ -208,7 +209,8 @@ aparece como **NAO PUBLICADA** e sugere o `firebase deploy`.
 
 O job `Cloud Functions` em `.github/workflows/publicar.yml` publica
 `functions/wms/` junto com o frontend, sempre depois de `frontend-typecheck`,
-`functions-unit` e `functions-integration` passarem: na homologação
+`functions-unit` e `functions-integration` passarem e de o job `Regras e índices`
+(abaixo) publicar as regras: na homologação
 (`dute-homolog`) a cada push em `main`, e na produção (`dute-prod`) só por disparo
 manual com `publicar_producao` marcado. Ele sempre publica o lote inteiro
 (`firebase deploy --only functions`, nunca `--only functions:nome`) e termina
@@ -221,6 +223,48 @@ certo — uma pessoa ainda precisa rodar. Isso foi proposital: o histórico dest
 página é de falhas silenciosas (03/09, 01/10, 02/10 x2), e preferimos um deploy
 automático que avisa a um que tenta se corrigir sozinho sem nunca ter rodado
 antes num ambiente não observado por humano.
+
+### Regras e índices (job `regras`, desde 20/10/2026)
+
+Antes do frontend e das functions, o job `Regras e índices (Firestore e
+Storage)` roda `firebase deploy --only firestore,storage --project <projeto>
+--non-interactive` da raiz do repositório e confere com
+`tools/check_rules_deployed.sh` se o Firestore e o bucket padrão do Storage
+passaram a servir as regras do commit. O frontend e as functions têm
+`needs: regras`: se as regras não sobem, nada mais sobe. Os testes de regras do
+Firestore rodam antes, em `functions-integration`; o `storage.rules` ainda não
+tem teste.
+
+Os índices novos ficam construindo por alguns minutos depois do job; uma
+consulta que dependa deles falha com "requires an index" até terminarem. Sem
+`--force`, o CI não apaga índice: o que sair do `firestore.indexes.json` continua
+no projeto e o log do job avisa. Para apagar, alguém roda
+`firebase deploy --only firestore:indexes --force --project <projeto>`.
+
+A conta é a mesma do job de functions (`github-actions-functions@<projeto>`), que
+já tinha `firebase.viewer` (acha o banco e o bucket padrão) e
+`serviceusage.serviceUsageConsumer`. Ela publica functions que leem e gravam o
+banco inteiro pelo Admin SDK, então poder publicar regras não amplia o que ela
+alcança; uma conta só para regras seria mais uma identidade e mais um vínculo de
+Workload Identity para manter em cada projeto. Papéis acrescentados uma vez, por
+quem tem Owner:
+
+```powershell
+foreach ($p in @("dute-homolog", "dute-prod")) {
+  $SA = "github-actions-functions@$p.iam.gserviceaccount.com"
+  foreach ($role in @("roles/firebaserules.admin", "roles/datastore.indexAdmin")) {
+    gcloud projects add-iam-policy-binding $p --member="serviceAccount:$SA" --role=$role --condition=None
+  }
+}
+```
+
+Para desfazer, o mesmo laço com `remove-iam-policy-binding`.
+
+O `storage.rules` usa `firestore.get()`, e para isso o agente do Storage
+(`service-<número do projeto>@gcp-sa-firebasestorage.iam.gserviceaccount.com`)
+precisa de `roles/firebaserules.firestoreServiceAgent`. O `dute-homolog` e o
+`dute-prod` já têm; num projeto novo, quem concede é uma pessoa com Owner, porque
+a conta do CI não pode mexer em IAM.
 
 ### Pré-requisito: criar a identidade do job (manual, uma vez)
 

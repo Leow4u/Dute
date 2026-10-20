@@ -517,6 +517,11 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   // Fatura (prévia ou emitida) para imprimir/salvar PDF.
   { path: "/faturamento/fatura", roles: FINANCE_ROLES },
   { path: "/portal/faturas/fatura", roles: CLIENT_ROLES },
+  // Extrato do período, aberto por "Gerar relatório" em Faturas.
+  { path: "/portal/faturas/relatorio", roles: CLIENT_ROLES },
+  // Endereços antigos do portal que redirecionam.
+  { path: "/portal/solicitacoes", roles: CLIENT_ROLES },
+  { path: "/portal/agente/operacional", roles: CLIENT_ROLES },
   { path: "/tabela-precos", roles: FINANCE_ROLES },
   // Configuração (tela própria, lib/settings-nav.ts). A Administração saiu do
   // menu e virou seção dela; os endereços antigos redirecionam com os mesmos
@@ -608,6 +613,11 @@ export function getRouteAppRoles(path: string): AppRole[] {
 
 export function getRouteProfileRoles(path: string): ProfileRole[] {
   return ROUTE_PROFILE_ROLES[normalizePath(path)] ?? INTERNAL_ROLES;
+}
+
+/** Se a rota tem papéis próprios, sem cair no padrão interno acima. */
+export function hasRouteRoles(path: string): boolean {
+  return Object.hasOwn(ROUTE_PROFILE_ROLES, normalizePath(path));
 }
 
 export function getNavigationForAppRole(
