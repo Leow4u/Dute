@@ -181,16 +181,10 @@ Na homologação, com a liberação ligada:
 ## Publicação de cada parte
 
 1. Abro o PR e espero o CI verde.
-2. Faço o merge na `main`. O CI publica frontend e functions na homologação.
-3. Publico as regras na homologação a partir da `main` limpa:
+2. Faço o merge na `main`. Desde o PR #106 (20/10/2026) o CI publica na homologação, nesta ordem: regras e índices (job `regras`, conferido por `tools/check_rules_deployed.sh`), depois frontend e functions.
+3. Confiro a publicação e a homologação e passo para a próxima parte.
 
-   ```powershell
-   cd C:\DEV\Dute; git switch main; git pull --ff-only; git status; firebase deploy --only firestore --project dute-homolog
-   ```
-
-4. Confiro na homologação e passo para a próxima parte.
-
-Na parte 1, as regras sobem antes de alguém marcar módulos ou convidar papel novo. O campo de módulos só deve ser salvo depois que o job de functions terminar, porque frontend e functions sobem em paralelo. Antes disso, a function antiga descartaria o campo.
+Na parte 1, o campo de módulos só deve ser salvo depois que o job de functions terminar. Frontend e functions sobem em paralelo, e antes disso a function antiga descartaria o campo.
 
 Produção: nada, até o seu OK. Se a `main` for publicada na produção no meio da fase, as Functions e as regras novas vão junto e não mudam nada para a BTG nem para os 7 papéis. As telas novas ficam desligadas pela liberação.
 
