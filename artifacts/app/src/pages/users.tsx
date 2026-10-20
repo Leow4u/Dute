@@ -50,7 +50,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ROLE_INFO, assignableRoles, canManagePerson, roleLabel } from "@/lib/access";
+import { ROLE_INFO, assignableRoles, canManagePerson, roleLabel, visibleRoleInfo } from "@/lib/access";
 import { useAppUser } from "@/lib/auth";
 import { firestore } from "@/lib/firebase";
 import { normalizeProfileRole, type ProfileRole } from "@/lib/modules";
@@ -98,25 +98,43 @@ type Person = {
   state: "active" | "removed" | "pending";
 };
 
-const ROLE_ORDER: Record<string, number> = {
+const ROLE_ORDER: Record<ProfileRole, number> = {
   owner: 0,
   admin: 0,
   interno: 1,
   wms: 2,
   financeiro: 3,
   suporte: 4,
-  cliente: 5,
+  campo: 5,
+  comercial: 6,
+  rh: 7,
+  painel: 8,
+  cliente: 9,
 };
 
-const ROLE_TONE: Record<string, string> = {
+const ROLE_TONE: Record<ProfileRole, string> = {
   owner: "bg-muted text-foreground",
   admin: "bg-muted text-foreground",
   interno: "bg-info-soft text-info-soft-foreground",
   wms: "bg-warning-soft text-warning-soft-foreground",
   financeiro: "bg-success-soft text-success-soft-foreground",
   suporte: "bg-info-soft text-info-soft-foreground",
+  campo: "bg-warning-soft text-warning-soft-foreground",
+  comercial: "bg-success-soft text-success-soft-foreground",
+  rh: "bg-info-soft text-info-soft-foreground",
+  painel: "bg-muted text-foreground",
   cliente: "bg-agent-soft text-agent",
 };
+
+function roleOrder(role: unknown) {
+  const known = normalizeProfileRole(role);
+  return known ? ROLE_ORDER[known] : 99;
+}
+
+function roleTone(role: unknown) {
+  const known = normalizeProfileRole(role);
+  return known ? ROLE_TONE[known] : "bg-muted";
+}
 
 function initials(name: string) {
   return (
@@ -234,7 +252,7 @@ export default function Users() {
     return [...users, ...pending].sort(
       (left, right) =>
         stateOrder[left.state] - stateOrder[right.state] ||
-        (ROLE_ORDER[String(left.role)] ?? 9) - (ROLE_ORDER[String(right.role)] ?? 9) ||
+        roleOrder(left.role) - roleOrder(right.role) ||
         left.name.localeCompare(right.name, "pt-BR"),
     );
   }, [data, invites.data]);
@@ -374,7 +392,7 @@ export default function Users() {
                           <span
                             className={cn(
                               "rounded-lg px-2 py-1 text-xs font-semibold",
-                              ROLE_TONE[String(normalizeProfileRole(person.role))] ?? "bg-muted",
+                              roleTone(person.role),
                             )}
                           >
                             {roleLabel(person.role)}
@@ -480,7 +498,7 @@ export default function Users() {
         <aside className="h-fit rounded-lg border border-border bg-card">
           <h2 className="border-b border-border/60 px-5 py-3.5 text-sm font-semibold">O que cada perfil faz</h2>
           <div className="space-y-3 px-5 py-4">
-            {ROLE_INFO.map((info) => (
+            {visibleRoleInfo().map((info) => (
               <div key={info.role} className="text-sm">
                 <div className="font-medium">{info.label}</div>
                 <div className="text-xs leading-5 text-muted-foreground">{info.description}</div>

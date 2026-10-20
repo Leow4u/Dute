@@ -17,6 +17,7 @@ import {
   type ActiveCustomerOption,
 } from "./active-customer";
 import { useAppUser } from "./auth";
+import { INTERNAL_ROLES } from "./modules";
 import type { CustomerProfileRecord } from "./operations";
 import { fetchJson } from "./warehouse-ops/model";
 
@@ -65,7 +66,8 @@ function writeStored(key: string, value: string) {
 export function ActiveCustomerProvider({ children }: { children: ReactNode }) {
   const { user } = useAppUser();
   const role = user?.publicMetadata.role;
-  const internal = Boolean(role) && role !== "cliente";
+  // Equipe do WMS: o papel da plataforma sem tela do WMS não opera cliente.
+  const internal = Boolean(role) && INTERNAL_ROLES.includes(role!);
   const storageKey = activeCustomerStorageKey(user?.uid);
 
   const profiles = useQuery({

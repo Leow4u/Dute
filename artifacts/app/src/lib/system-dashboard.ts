@@ -1,3 +1,4 @@
+import { isPapel, type Papel } from "@workspace/dominio";
 import { describeSchedule, type RoutineFrequency } from "@/lib/agent-routines";
 
 /**
@@ -55,17 +56,21 @@ export function formatMoney(value: number) {
 
 export const KIND_LABELS: Record<UsageKind, string> = { chat: "Chat", rotinas: "Rotinas", leitura_nota: "Leitura de NF" };
 
-const ROLE_LABELS: Record<string, string> = {
+const ROLE_LABELS: Record<Papel, string> = {
   owner: "Owner",
   admin: "Admin",
   interno: "Coordenação",
   suporte: "Suporte",
   wms: "WMS",
+  campo: "Campo",
+  comercial: "Comercial",
   financeiro: "Financeiro",
+  rh: "RH",
+  painel: "Painel",
   cliente: "Cliente",
 };
 export function roleLabel(role: string) {
-  return ROLE_LABELS[role] ?? role;
+  return isPapel(role) ? ROLE_LABELS[role] : role;
 }
 
 /** "Toda segunda · 10:00", com o mesmo texto da coluna Rotinas. */

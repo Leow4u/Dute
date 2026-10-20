@@ -9,6 +9,7 @@ import {
 
 import {
   ACCESS_ADMIN_ROLES,
+  ALL_ROLES,
   INTERNAL_ROLES,
   SUPPORT_ROLES,
   canAccessModule,
@@ -34,7 +35,7 @@ export type SettingsSection = {
   roles: ProfileRole[];
 };
 
-const EVERYONE: ProfileRole[] = [...INTERNAL_ROLES, "cliente"];
+const EVERYONE: ProfileRole[] = ALL_ROLES;
 
 export const SETTINGS_SECTIONS: SettingsSection[] = [
   {

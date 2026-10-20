@@ -17,6 +17,24 @@ import { HttpsError } from "firebase-functions/https";
 
 export const CUSTOMERS_COLLECTION = "customers";
 export const CLIENT_PROFILES_COLLECTION = "client_profiles";
+/**
+ * Módulos contratados por `customer_code` (o id é o código cru). Existe para
+ * as regras do Firestore e as Functions acharem o contrato sem consulta: o id
+ * de `client_profiles` é o do cadastro, não o código. Só as Functions gravam,
+ * em toda escrita do cadastro, e nunca apagam.
+ */
+export const CLIENT_ACCESS_COLLECTION = "client_access";
+
+/**
+ * Módulos que o cliente contrata (docs/plataforma/fase-2-nucleo.md). Iguais a
+ * MODULOS_CONTRATAVEIS de lib/dominio: o teste platform-lists do app trava.
+ * `financeiro` são as faturas no portal.
+ */
+export const CONTRACTED_MODULE_KEYS = ["wms", "operacao", "financeiro"] as const;
+export type ContractedModule = (typeof CONTRACTED_MODULE_KEYS)[number];
+
+/** Cadastro anterior ao campo: o que a BTG tem hoje (armazenagem e faturas). */
+export const DEFAULT_CONTRACTED_MODULES = ["wms", "financeiro"] as const;
 
 export const OPERATION_TEMPLATE_KEYS = ["uniformes", "mobiliario", "insumos"] as const;
 export type OperationTemplateKey = (typeof OPERATION_TEMPLATE_KEYS)[number];
@@ -88,6 +106,61 @@ function resolvePortalStatus(value: unknown, template: OperationTemplateKey): Po
   return status as PortalStatus;
 }
 
+export function isContractedModule(value: unknown): value is ContractedModule {
+  return typeof value === "string" && (CONTRACTED_MODULE_KEYS as readonly string[]).includes(value);
+}
+
+/**
+ * Módulos contratados vindos do cadastro. Ausente vale o padrão; o resto
+ * precisa ser uma lista de chaves conhecidas com ao menos um módulo. Volta
+ * sem repetição e na ordem do registro.
+ */
+export function resolveContractedModules(value: unknown): ContractedModule[] {
+  if (value === undefined || value === null) return [...DEFAULT_CONTRACTED_MODULES];
+  if (!Array.isArray(value)) {
+    throw new HttpsError("invalid-argument", "Informe os módulos contratados como uma lista.");
+  }
+  const chosen = new Set<string>();
+  for (const item of value) {
+    const key = text(item);
+    if (!isContractedModule(key)) {
+      throw new HttpsError(
+        "invalid-argument",
+        `Módulo desconhecido: ${key || "(vazio)"}. Módulos: ${CONTRACTED_MODULE_KEYS.join(", ")}.`,
+      );
+    }
+    chosen.add(key);
+  }
+  if (!chosen.size) {
+    throw new HttpsError("invalid-argument", "Marque ao menos um módulo contratado.");
+  }
+  return CONTRACTED_MODULE_KEYS.filter((key) => chosen.has(key));
+}
+
+/**
+ * Leitura de um registro já gravado (projeção, perfil). Nunca lança: sem o
+ * campo, ou sem nenhum módulo conhecido, vale o padrão.
+ */
+export function contractedModulesFrom(value: unknown): ContractedModule[] {
+  if (!Array.isArray(value)) return [...DEFAULT_CONTRACTED_MODULES];
+  const known = CONTRACTED_MODULE_KEYS.filter((key) => value.includes(key));
+  return known.length ? known : [...DEFAULT_CONTRACTED_MODULES];
+}
+
+/**
+ * O código do cliente vira id de documento em `client_access` e caminho nas
+ * regras do Firestore: sem `/`, sem `.` ou `..` e sem o formato reservado
+ * `__x__`. Mensagem do problema, ou null quando o código serve.
+ */
+export function customerCodeProblem(code: string): string | null {
+  if (!code) return "Informe o código operacional do cliente.";
+  if (code.includes("/")) return "O código operacional não pode ter barra (/).";
+  if (code === "." || code === "..") return "Código operacional inválido.";
+  if (/^__.*__$/.test(code)) return "Código operacional inválido.";
+  if (Buffer.byteLength(code, "utf8") > 1500) return "Código operacional longo demais.";
+  return null;
+}
+
 function resolveCustomerStatus(value: unknown): CustomerStatus {
   const status = text(value) || "active";
   if (status === "archived") {
@@ -132,6 +205,10 @@ export function buildCustomerPayload(mutation: CustomerMutation): Record<string,
   if (!code || !name) {
     throw new HttpsError("invalid-argument", "Código e nome do cliente são obrigatórios.");
   }
+  if (action === "create") {
+    const problem = customerCodeProblem(code);
+    if (problem) throw new HttpsError("invalid-argument", problem);
+  }
   if (action === "update" && text(before.code) && text(data.code) && text(data.code) !== text(before.code)) {
     throw new HttpsError(
       "invalid-argument",
@@ -153,6 +230,9 @@ export function buildCustomerPayload(mutation: CustomerMutation): Record<string,
     portal_status: portalStatus,
     operation_template: operationTemplate,
     sku_prefix: skuPrefix,
+    // Depois do `...data`: o navegador não grava a lista crua. Alteração
+    // que não manda o campo mantém o que estava.
+    modules: resolveContractedModules(data.modules ?? before.modules),
     billing_mode: text(data.billing_mode ?? before.billing_mode) || "lpu",
     default_currency: text(data.default_currency ?? before.default_currency) || "BRL",
     archived: false,
@@ -172,6 +252,7 @@ export const CLIENT_PROFILE_PUBLIC_FIELDS = [
   "portal_status",
   "status",
   "archived",
+  "modules",
 ] as const;
 
 /**
@@ -197,8 +278,46 @@ export function clientProfileProjection(
     portal_status: merged.archived === true ? "inactive" : text(merged.portal_status) || "active",
     status: text(merged.status) || "active",
     archived: merged.archived === true,
+    modules: contractedModulesFrom(merged.modules),
     updated_at: FieldValue.serverTimestamp(),
   };
+}
+
+/**
+ * Projeção `client_access/{customer_code}`: os módulos contratados, achados
+ * pelo código sem consulta (regras do Firestore e Functions). Calculada de
+ * `{...before, ...payload}`, então o arquivamento mantém os módulos. Código
+ * que não serve de id (cadastro antigo com barra) fica sem projeção e vale o
+ * padrão.
+ */
+export function clientAccessProjection(
+  documentId: string,
+  payload: Record<string, unknown>,
+  before: Record<string, unknown>,
+): { customerCode: string; data: Record<string, unknown> } | null {
+  const merged = { ...before, ...payload };
+  const customerCode = text(merged.customer_code ?? merged.code) || documentId;
+  if (customerCodeProblem(customerCode)) return null;
+  return {
+    customerCode,
+    data: {
+      customer_code: customerCode,
+      customer_id: documentId,
+      modules: contractedModulesFrom(merged.modules),
+      updated_at: FieldValue.serverTimestamp(),
+    },
+  };
+}
+
+/** Módulos contratados do cliente, pelo código. Sem projeção vale o padrão. */
+export async function readContractedModules(
+  db: Firestore,
+  customerCode: string,
+): Promise<ContractedModule[]> {
+  const code = text(customerCode);
+  if (customerCodeProblem(code)) return [...DEFAULT_CONTRACTED_MODULES];
+  const snapshot = await db.collection(CLIENT_ACCESS_COLLECTION).doc(code).get();
+  return contractedModulesFrom(snapshot.exists ? snapshot.get("modules") : undefined);
 }
 
 /**
@@ -222,6 +341,31 @@ export async function assertSkuPrefixAvailable(
     throw new HttpsError(
       "already-exists",
       `A sigla ${prefix} já é do cliente ${text(conflict.get("name")) || conflict.id}.`,
+    );
+  }
+}
+
+/**
+ * O código operacional identifica o cliente em todo o sistema e é o id de
+ * `client_access`: dois cadastros com o mesmo código disputariam o mesmo
+ * contrato. Vale também contra cadastro arquivado. Leitura dentro da
+ * transação, antes de qualquer escrita.
+ */
+export async function assertCustomerCodeAvailable(
+  transaction: Transaction,
+  db: Firestore,
+  code: string,
+  documentId: string,
+): Promise<void> {
+  const [byCode, byCustomerCode] = await Promise.all([
+    transaction.get(db.collection(CUSTOMERS_COLLECTION).where("code", "==", code)),
+    transaction.get(db.collection(CUSTOMERS_COLLECTION).where("customer_code", "==", code)),
+  ]);
+  const conflict = [...byCode.docs, ...byCustomerCode.docs].find((row) => row.id !== documentId);
+  if (conflict) {
+    throw new HttpsError(
+      "already-exists",
+      `O código ${code} já é do cliente ${text(conflict.get("name")) || conflict.id}.`,
     );
   }
 }

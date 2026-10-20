@@ -4,7 +4,7 @@ import { after, before, beforeEach, describe, it } from "node:test";
 import { deleteApp, initializeApp } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 
-import { assertSkuPrefixAvailable } from "./customer-profile.js";
+import { assertCustomerCodeAvailable, assertSkuPrefixAvailable, readContractedModules } from "./customer-profile.js";
 
 const PROJECT_ID = "demo-dute-operations";
 
@@ -44,5 +44,44 @@ describe("sigla do SKU única entre clientes ativos", () => {
 
   it("sigla de cliente arquivado fica livre", async () => {
     await assert.doesNotReject(check("ANT", "Novo"));
+  });
+});
+
+function checkCode(code: string, documentId: string) {
+  return db.runTransaction((transaction) => assertCustomerCodeAvailable(transaction, db, code, documentId));
+}
+
+describe("código operacional único entre cadastros", () => {
+  it("recusa o código de outro cadastro, mesmo com outro id", async () => {
+    await assert.rejects(checkCode("BTG Pactual", "btg-pactual"), /O código BTG Pactual já é do cliente BTG Pactual/);
+  });
+
+  it("recusa também o código de cadastro arquivado", async () => {
+    await assert.rejects(checkCode("Antigo", "Antigo_2"), /já é do cliente Cliente antigo/);
+  });
+
+  it("acha cadastro antigo que só tem customer_code", async () => {
+    await db.collection("customers").doc("legado").set({ customer_code: "Legado", name: "Legado" });
+    await assert.rejects(checkCode("Legado", "Legado"), /já é do cliente Legado/);
+  });
+
+  it("aceita código livre", async () => {
+    await assert.doesNotReject(checkCode("Itaú", "Ita_"));
+  });
+});
+
+describe("módulos contratados pelo código (client_access)", () => {
+  it("sem o documento vale armazenagem e faturas, o que a BTG tem hoje", async () => {
+    assert.deepEqual(await readContractedModules(db, "BTG Pactual"), ["wms", "financeiro"]);
+  });
+
+  it("lê o documento pelo código cru, com espaço", async () => {
+    await db.collection("client_access").doc("BTG Pactual").set({ customer_code: "BTG Pactual", modules: ["operacao"] });
+    assert.deepEqual(await readContractedModules(db, "BTG Pactual"), ["operacao"]);
+  });
+
+  it("código que não serve de id não quebra a leitura", async () => {
+    assert.deepEqual(await readContractedModules(db, "BTG/SP"), ["wms", "financeiro"]);
+    assert.deepEqual(await readContractedModules(db, ""), ["wms", "financeiro"]);
   });
 });

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildCustomerRows,
+  toggleContractedModule,
   customerFormFrom,
   customerFormProblem,
   customerPayload,
@@ -135,5 +136,34 @@ describe("linhas da lista", () => {
     expect(peopleLabel(0)).toBe("Ninguém no portal");
     expect(peopleLabel(1)).toBe("1 pessoa");
     expect(peopleLabel(3)).toBe("3 pessoas");
+  });
+});
+
+describe("módulos contratados no cadastro (Fase 2)", () => {
+  it("cadastro sem o campo abre com armazenagem e faturas, o que a BTG tem hoje", () => {
+    expect(customerFormFrom(btg).modules).toEqual(["wms", "financeiro"]);
+    expect(emptyCustomerForm().modules).toEqual(["wms", "financeiro"]);
+  });
+
+  it("abre com os módulos salvos, na ordem do registro", () => {
+    expect(customerFormFrom({ ...btg, modules: ["operacao", "wms"] }).modules).toEqual(["wms", "operacao"]);
+  });
+
+  it("liga e desliga um módulo mantendo a ordem", () => {
+    expect(toggleContractedModule(["wms"], "financeiro", true)).toEqual(["wms", "financeiro"]);
+    expect(toggleContractedModule(["wms", "operacao", "financeiro"], "operacao", false)).toEqual(["wms", "financeiro"]);
+  });
+
+  it("exige ao menos um módulo", () => {
+    const form = { ...customerFormFrom(btg), modules: [] };
+    expect(customerFormProblem(form, "edit")).toBe("Marque ao menos um módulo contratado.");
+  });
+
+  it("os módulos só vão para a Function onde a plataforma está liberada", () => {
+    const form = { ...customerFormFrom(btg), modules: toggleContractedModule(["wms"], "operacao", true) };
+    expect(customerPayload(form, "edit")).not.toHaveProperty("modules");
+    expect(customerPayload(form, "edit", { modules: false })).not.toHaveProperty("modules");
+    expect(customerPayload(form, "edit", { modules: true }).modules).toEqual(["wms", "operacao"]);
+    expect(customerPayload(form, "create", { modules: true }).modules).toEqual(["wms", "operacao"]);
   });
 });

@@ -1,4 +1,5 @@
-import { normalizeProfileRole, type ProfileRole } from "./modules";
+import { PLATAFORMA_LIBERADA } from "./liberacao";
+import { INTERNAL_ROLES, normalizeProfileRole, type ProfileRole } from "./modules";
 
 /**
  * Situação do perfil em users/{uid}. "removed" = acesso removido em Pessoas e
@@ -24,7 +25,23 @@ export const ROLE_INFO: Array<{ role: ProfileRole; label: string; description: s
   { role: "financeiro", label: "Financeiro", description: "Fecha o mês, emite e acompanha faturas." },
   { role: "suporte", label: "Suporte", description: "Acompanha a saúde do sistema e os incidentes." },
   { role: "cliente", label: "Cliente", description: "Portal da BTG: estoque, pedidos e faturas." },
+  // Papéis da plataforma (Fase 2). Aparecem no convite e neste quadro só onde
+  // a plataforma está liberada (lib/liberacao.ts).
+  { role: "campo", label: "Campo", description: "Executa pelo celular as OS em que está escalado." },
+  { role: "comercial", label: "Comercial", description: "Orçamentos, clientes e preços de venda." },
+  { role: "rh", label: "RH", description: "Colaboradores, documentos e treinamentos." },
+  { role: "painel", label: "Painel", description: "TV da sala de operações, só leitura." },
 ];
+
+/** Papéis que o WMS atende hoje; os demais dependem da liberação. */
+function isWmsRole(role: ProfileRole) {
+  return role === "cliente" || INTERNAL_ROLES.includes(role);
+}
+
+/** Quadro "O que cada perfil faz": sem os papéis da plataforma fora da liberação. */
+export function visibleRoleInfo(platform = PLATAFORMA_LIBERADA) {
+  return ROLE_INFO.filter((item) => platform || isWmsRole(item.role));
+}
 
 export function roleLabel(role: unknown) {
   const normalized = normalizeProfileRole(role);
@@ -38,9 +55,16 @@ export function roleDescription(role: unknown) {
   return ROLE_INFO.find((item) => item.role === key)?.description ?? "";
 }
 
-/** Perfis que quem administra pode atribuir: só o owner cria administradores. */
-export function assignableRoles(actorRole: ProfileRole | null | undefined): ProfileRole[] {
-  const base: ProfileRole[] = ["interno", "wms", "financeiro", "suporte", "cliente"];
+/**
+ * Perfis que quem administra pode atribuir: só o owner cria administradores.
+ * Os papéis da plataforma entram só onde ela está liberada.
+ */
+export function assignableRoles(
+  actorRole: ProfileRole | null | undefined,
+  platform = PLATAFORMA_LIBERADA,
+): ProfileRole[] {
+  const wms: ProfileRole[] = ["interno", "wms", "financeiro", "suporte", "cliente"];
+  const base: ProfileRole[] = platform ? [...wms, "campo", "comercial", "rh", "painel"] : wms;
   return actorRole === "owner" ? ["admin", ...base] : base;
 }
 

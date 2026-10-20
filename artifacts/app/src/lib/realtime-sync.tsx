@@ -15,6 +15,7 @@ import {
 import { useAppUser } from "./auth";
 import { firestore } from "./firebase";
 import { LEGACY_CUSTOMER_CODE } from "./active-customer";
+import { INTERNAL_ROLES } from "./modules";
 
 // Perfil de cliente sem código (convites antigos) é da BTG.
 const DEFAULT_CUSTOMER_CODE = LEGACY_CUSTOMER_CODE;
@@ -271,6 +272,9 @@ export function RealtimeSyncBridge() {
 
     const role = user.publicMetadata.role;
     if (!role) return;
+    // Papel da plataforma que o WMS não atende não assina nada: as regras
+    // negariam todas as coleções.
+    if (!isCustomer(role) && !INTERNAL_ROLES.includes(role)) return;
 
     const customerCode =
       user.publicMetadata.customer_code || DEFAULT_CUSTOMER_CODE;

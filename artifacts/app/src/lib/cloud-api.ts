@@ -22,6 +22,7 @@ import {
   type QueryConstraint,
 } from "firebase/firestore";
 
+import { PAPEIS_DO_WMS, isPapel } from "@workspace/dominio";
 import { firebaseAuth, firestore } from "./firebase";
 import { callFunctionsApi } from "./functions-api";
 import {
@@ -1335,18 +1336,13 @@ async function getCurrentProfile() {
 
   const profile = snapshot.data() as AnyRecord;
   const role = String(profile.role ?? "");
-  if (
-    ![
-      "owner",
-      "admin",
-      "interno",
-      "wms",
-      "financeiro",
-      "suporte",
-      "cliente",
-    ].includes(role)
-  ) {
+  if (!isPapel(role)) {
     throw new RouteError("Perfil sem papel válido.", 403);
+  }
+  // Como nas Functions (wmsAccessProblem): estas rotas são do WMS e o papel
+  // da plataforma que o WMS não atende fica de fora.
+  if (!(PAPEIS_DO_WMS as readonly string[]).includes(role)) {
+    throw new RouteError("Seu perfil ainda não tem acesso a esta ação.", 403);
   }
 
   return {

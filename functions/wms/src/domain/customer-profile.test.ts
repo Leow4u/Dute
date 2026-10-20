@@ -3,12 +3,18 @@ import { describe, it } from "node:test";
 
 import {
   CLIENT_PROFILE_PUBLIC_FIELDS,
+  CONTRACTED_MODULE_KEYS,
+  DEFAULT_CONTRACTED_MODULES,
   DEFAULT_OPERATION_TEMPLATE,
   OPERATION_TEMPLATE_KEYS,
   buildCustomerPayload,
   canonicalSkuPrefix,
+  clientAccessProjection,
   clientProfileProjection,
+  contractedModulesFrom,
+  customerCodeProblem,
   normalizeSkuPrefix,
+  resolveContractedModules,
   resolveOperationTemplate,
 } from "./customer-profile.js";
 
@@ -149,5 +155,89 @@ describe("projeção client_profiles", () => {
     const projection = clientProfileProjection("BTG_Pactual", { name: "BTG Pactual", code: "BTG Pactual" }, {});
     assert.equal(projection.operation_template, "uniformes");
     assert.equal(projection.sku_prefix, null);
+  });
+});
+
+describe("módulos contratados", () => {
+  it("cadastro sem o campo vale armazenagem e faturas, o que a BTG tem hoje", () => {
+    assert.deepEqual(DEFAULT_CONTRACTED_MODULES, ["wms", "financeiro"]);
+    assert.deepEqual(resolveContractedModules(undefined), ["wms", "financeiro"]);
+    assert.deepEqual(resolveContractedModules(null), ["wms", "financeiro"]);
+  });
+
+  it("aceita só as chaves do registro, sem repetição e na ordem do registro", () => {
+    assert.deepEqual(CONTRACTED_MODULE_KEYS, ["wms", "operacao", "financeiro"]);
+    assert.deepEqual(resolveContractedModules(["financeiro", "operacao", "operacao"]), ["operacao", "financeiro"]);
+    assert.deepEqual(resolveContractedModules([" wms "]), ["wms"]);
+  });
+
+  it("recusa chave desconhecida, lista vazia e valor que não é lista", () => {
+    assert.throws(() => resolveContractedModules(["wms", "rh"]), /Módulo desconhecido: rh/);
+    assert.throws(() => resolveContractedModules([]), /ao menos um módulo/);
+    assert.throws(() => resolveContractedModules("wms"), /como uma lista/);
+  });
+
+  it("create grava os módulos validados, nunca a lista crua do navegador", () => {
+    const payload = create({ code: "Itaú", name: "Itaú", sku_prefix: "ITAU", modules: ["operacao", "wms", "wms"] });
+    assert.deepEqual(payload.modules, ["wms", "operacao"]);
+    assert.throws(() => create({ code: "Itaú", name: "Itaú", sku_prefix: "ITAU", modules: ["tudo"] }), /Módulo desconhecido/);
+    assert.deepEqual(create({ code: "Itaú", name: "Itaú", sku_prefix: "ITAU" }).modules, ["wms", "financeiro"]);
+  });
+
+  it("alteração que não manda o campo mantém os módulos de antes", () => {
+    const before = { code: "Itaú", name: "Itaú", sku_prefix: "ITAU", modules: ["operacao"] };
+    const payload = buildCustomerPayload({ action: "update", data: { name: "Itaú Unibanco" }, before, documentId: "Itau", actorUid: actor });
+    assert.deepEqual(payload.modules, ["operacao"]);
+  });
+
+  it("leitura tolerante: registro sem campo ou só com chaves desconhecidas vale o padrão", () => {
+    assert.deepEqual(contractedModulesFrom(undefined), ["wms", "financeiro"]);
+    assert.deepEqual(contractedModulesFrom(["rh"]), ["wms", "financeiro"]);
+    assert.deepEqual(contractedModulesFrom(["operacao", "rh"]), ["operacao"]);
+  });
+
+  it("projeção client_profiles leva os módulos", () => {
+    const payload = create({ code: "Itaú", name: "Itaú", sku_prefix: "ITAU", modules: ["operacao"] });
+    assert.deepEqual(clientProfileProjection("Itau", payload, {}).modules, ["operacao"]);
+    assert.deepEqual(clientProfileProjection("BTG_Pactual", { code: "BTG Pactual" }, {}).modules, ["wms", "financeiro"]);
+  });
+});
+
+describe("código operacional", () => {
+  it("serve de id de documento e de caminho nas regras", () => {
+    assert.equal(customerCodeProblem("BTG Pactual"), null);
+    assert.equal(customerCodeProblem("Itaú"), null);
+    assert.match(customerCodeProblem("BTG/SP") ?? "", /barra/);
+    assert.ok(customerCodeProblem("."));
+    assert.ok(customerCodeProblem(".."));
+    assert.ok(customerCodeProblem("__x__"));
+  });
+
+  it("create recusa código com barra; cadastro antigo com barra continua editável", () => {
+    assert.throws(() => create({ code: "BTG/SP", name: "BTG SP", sku_prefix: "BTGSP" }), /barra/);
+    const before = { code: "BTG/SP", name: "BTG SP", sku_prefix: "BTGSP" };
+    const payload = buildCustomerPayload({ action: "update", data: { name: "BTG São Paulo" }, before, documentId: "BTG_SP", actorUid: actor });
+    assert.equal(payload.name, "BTG São Paulo");
+  });
+});
+
+describe("projeção client_access", () => {
+  it("usa o código cru como id, sem safeDocId", () => {
+    const payload = create({ code: "BTG Pactual", name: "BTG Pactual", sku_prefix: "BTG", modules: ["wms", "operacao"] });
+    const access = clientAccessProjection("BTG_Pactual", payload, {});
+    assert.equal(access?.customerCode, "BTG Pactual");
+    assert.deepEqual(access?.data.modules, ["wms", "operacao"]);
+    assert.equal(access?.data.customer_code, "BTG Pactual");
+    assert.equal(access?.data.customer_id, "BTG_Pactual");
+  });
+
+  it("o arquivamento mantém os módulos", () => {
+    const before = { code: "Itaú", name: "Itaú", sku_prefix: "ITAU", modules: ["operacao"] };
+    const archived = buildCustomerPayload({ action: "archive", data: {}, before, documentId: "Itau", actorUid: actor });
+    assert.deepEqual(clientAccessProjection("Itau", archived, before)?.data.modules, ["operacao"]);
+  });
+
+  it("cadastro antigo com código que não serve de id fica sem projeção", () => {
+    assert.equal(clientAccessProjection("BTG_SP", { code: "BTG/SP" }, {}), null);
   });
 });

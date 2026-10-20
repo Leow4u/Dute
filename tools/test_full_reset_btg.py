@@ -125,6 +125,8 @@ def seeded_production() -> FakeFirestore:
     fake.seed("customers", "btg", {"customer_code": "BTG Pactual"})
     # Perfil de operação publicado para o portal, gravado junto com o cadastro.
     fake.seed("client_profiles", "btg", {"customer_code": "BTG Pactual", "operation_template": "uniformes"})
+    # Módulos contratados, pelo código do cliente (Fase 2 da plataforma).
+    fake.seed("client_access", "BTG Pactual", {"customer_code": "BTG Pactual", "modules": ["wms", "financeiro"]})
     fake.seed("locations", "l1", {"rua": "A"})
     fake.seed("warehouse_positions", "A-01", {"code": "A-01", "aisle": "A", "shelf": 1})
     fake.seed("billing_price_list", "p1", {"valor_unit": 10})
@@ -169,6 +171,17 @@ class PlanTests(unittest.TestCase):
             preserved,
             set(full_reset_btg.ACCESS_COLLECTIONS) | set(full_reset_btg.SETUP_COLLECTIONS),
         )
+
+    def test_contracted_modules_stay_with_the_customer(self) -> None:
+        # client_access nasceu na Fase 2: sem estar na lista, a zeragem a
+        # apagaria e os clientes voltariam ao contrato padrão.
+        self.assertIn("client_access", full_reset_btg.SETUP_COLLECTIONS)
+        to_delete, kept = full_reset_btg.split_collections(
+            ["customers", "client_profiles", "client_access", "products"],
+            full_reset_btg.preserved_collections(include_setup=False),
+        )
+        self.assertEqual(to_delete, ["products"])
+        self.assertEqual(kept, ["client_access", "client_profiles", "customers"])
 
     def test_include_setup_preserves_only_access(self) -> None:
         preserved = full_reset_btg.preserved_collections(include_setup=True)
