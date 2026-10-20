@@ -597,6 +597,9 @@ export async function createWarehouseBox(
       : null;
     const refusal = input.refusal ? { position: refusalCode, reason: input.refusal.reason } : null;
 
+    // Serializa a capacidade com a confirmação das caixas em conferência,
+    // que também lê e atualiza esta posição antes de reservar espaço.
+    transaction.update(positionRef, { occupancy_revision: FieldValue.increment(1) });
     transaction.set(
       counterRef,
       { last: sequence, prefix: "CX", updated_at: FieldValue.serverTimestamp() },

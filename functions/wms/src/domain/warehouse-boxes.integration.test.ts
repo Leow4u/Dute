@@ -103,14 +103,20 @@ describe("caixas e endereçamento dirigido", () => {
     assert.equal(created.box.code, "CX-000001");
     assert.equal(created.box.location_id, "A-01");
     assert.equal(created.box.front_m, 0.5);
+    const positionRef = db.collection("warehouse_positions").doc("A-01");
+    assert.equal((await positionRef.get()).data()!.occupancy_revision, 1);
     const replayed = await store("a-01", "cx-1", { suggestion: { position: "A-01", reason: first.position?.reason, alternatives: ["A-02", "A-03"] } });
     assert.equal(replayed.box.code, "CX-000001");
     assert.equal(replayed.replayed, true);
+    // Repetir a chamada não reserva capacidade outra vez.
+    assert.equal((await positionRef.get()).data()!.occupancy_revision, 1);
     await store("A-01", "cx-2");
     await store("A-01", "cx-3");
     assert.deepEqual((await listWarehouseBoxes(db, BTG)).map((row) => row.code), ["CX-000003", "CX-000002", "CX-000001"]);
 
     await assert.rejects(store("A-01", "cx-4"), /não cabe na prateleira A-01/);
+    // Só as três guardas confirmadas participam da revisão da ocupação.
+    assert.equal((await positionRef.get()).data()!.occupancy_revision, 3);
     const next = await suggestWarehousePosition(db, { customer_code: BTG, ...box, sku_codes: [] }, operacao);
     assert.equal(next.position?.code, "A-02");
     assert.equal(next.checked, 3);
