@@ -71,9 +71,10 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/documentos", ["owner", "admin", "interno", "wms", "financeiro", "suporte"]],
   ["/clientes", ["owner", "admin"]],
   ["/usuarios", ["owner", "admin"]],
-  ["/configuracoes", ["owner", "admin", "interno", "wms", "financeiro", "suporte", "cliente"]],
-  ["/configuracoes/conta", ["owner", "admin", "interno", "wms", "financeiro", "suporte", "cliente"]],
-  ["/configuracoes/aplicativo", ["owner", "admin", "interno", "wms", "financeiro", "suporte", "cliente"]],
+  // Telas da conta valem para os 11 papéis da plataforma (Fase 2).
+  ["/configuracoes", ["owner", "admin", "interno", "wms", "campo", "comercial", "financeiro", "rh", "suporte", "painel", "cliente"]],
+  ["/configuracoes/conta", ["owner", "admin", "interno", "wms", "campo", "comercial", "financeiro", "rh", "suporte", "painel", "cliente"]],
+  ["/configuracoes/aplicativo", ["owner", "admin", "interno", "wms", "campo", "comercial", "financeiro", "rh", "suporte", "painel", "cliente"]],
   ["/configuracoes/pessoas", ["owner", "admin"]],
   ["/configuracoes/clientes", ["owner", "admin"]],
   ["/configuracoes/cliente", ["owner", "admin"]],
@@ -339,5 +340,29 @@ describe("barra inferior do celular", () => {
       "Faturas · Faturas",
       "Documentos · Documentos",
     ]);
+  });
+});
+
+describe("papéis da plataforma que o WMS ainda não atende (Fase 2)", () => {
+  const NEW_ROLES: ProfileRole[] = ["campo", "comercial", "rh", "painel"];
+
+  it.each(NEW_ROLES)("%s não herda nenhum item do menu", (role) => {
+    expect(getNavigationForProfileRole(role)).toEqual([]);
+  });
+
+  it.each(NEW_ROLES)("%s abre na Conta, sem laço de redirecionamento", (role) => {
+    const home = getHomePathForProfile(role);
+    expect(home).toBe("/configuracoes/conta");
+    expect(getRouteProfileRoles(home)).toContain(role);
+  });
+
+  it.each(NEW_ROLES)("%s não entra em rota sem dono nem nas telas da equipe do WMS", (role) => {
+    for (const path of ["/rota-que-nao-existe", "/dashboard", "/agente", "/documentos", "/pedidos", "/estoque", "/faturamento", "/portal"]) {
+      expect(getRouteProfileRoles(path)).not.toContain(role);
+    }
+  });
+
+  it("a equipe do WMS continua sendo a mesma", () => {
+    expect([...INTERNAL_ROLES].sort()).toEqual(["admin", "financeiro", "interno", "owner", "suporte", "wms"]);
   });
 });

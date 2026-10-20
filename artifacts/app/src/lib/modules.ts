@@ -17,24 +17,29 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { PAPEIS, isPapel, type Papel } from "@workspace/dominio";
+
 import {
   portalModulesFor,
   type OperationProfile,
   type PortalModuleKey,
 } from "./operations";
 
-export type ProfileRole =
-  | "owner"
-  | "admin"
-  | "interno"
-  | "wms"
-  | "financeiro"
-  | "suporte"
-  | "cliente";
+/** Os 11 papéis da plataforma (lib/dominio, PAPEIS). */
+export type ProfileRole = Papel;
+
+/** Todos os papéis: telas da conta (Configuração) valem para qualquer perfil. */
+export const ALL_ROLES: ProfileRole[] = [...PAPEIS];
 
 export type AppRole = "interno" | "cliente";
 export type CurrentAppRole = AppRole;
 
+/**
+ * Equipe do WMS: os papéis internos de antes da plataforma. Papel novo
+ * (campo, comercial, rh, painel) fica de fora de propósito: não herda Agent
+ * Dute, Documentos nem rota sem dono (getRouteProfileRoles). Cada módulo
+ * novo libera as telas dele.
+ */
 export const INTERNAL_ROLES: ProfileRole[] = [
   "owner",
   "admin",
@@ -77,15 +82,7 @@ export const COORDINATION_NAV_ROLES: ProfileRole[] = [
 ];
 
 export function normalizeProfileRole(role: unknown): ProfileRole | null {
-  return role === "owner" ||
-    role === "admin" ||
-    role === "interno" ||
-    role === "wms" ||
-    role === "financeiro" ||
-    role === "suporte" ||
-    role === "cliente"
-    ? role
-    : null;
+  return isPapel(role) ? role : null;
 }
 
 export function appRoleForProfile(role: ProfileRole | null | undefined): AppRole | null {
@@ -529,9 +526,9 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   // Configuração (tela própria, lib/settings-nav.ts). A Administração saiu do
   // menu e virou seção dela; os endereços antigos redirecionam com os mesmos
   // papéis de antes.
-  { path: "/configuracoes", roles: [...INTERNAL_ROLES, "cliente"] },
-  { path: "/configuracoes/conta", roles: [...INTERNAL_ROLES, "cliente"] },
-  { path: "/configuracoes/aplicativo", roles: [...INTERNAL_ROLES, "cliente"] },
+  { path: "/configuracoes", roles: ALL_ROLES },
+  { path: "/configuracoes/conta", roles: ALL_ROLES },
+  { path: "/configuracoes/aplicativo", roles: ALL_ROLES },
   { path: "/configuracoes/pessoas", roles: ACCESS_ADMIN_ROLES },
   // Clientes (cadastro, modelo de operação, sigla do SKU). O endereço antigo
   // da tela "Cliente BTG" redireciona.
@@ -604,6 +601,9 @@ export function getHomePathForProfile(role: ProfileRole | null | undefined) {
   if (role === "cliente") return "/portal";
   if (role === "wms") return "/pedidos";
   if (role === "financeiro") return "/faturamento";
+  // Papel da plataforma sem tela ainda: a Conta, que todo perfil abre. Sem
+  // isso o Início negado devolveria a "/" em laço.
+  if (role && !INTERNAL_ROLES.includes(role)) return "/configuracoes/conta";
   return "/dashboard";
 }
 

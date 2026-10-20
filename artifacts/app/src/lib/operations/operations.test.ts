@@ -145,3 +145,18 @@ describe("sigla do SKU", () => {
     expect(skuExample("")).toBe("SIGLA-000001");
   });
 });
+
+describe("módulos contratados no perfil (Fase 2)", () => {
+  it("perfil sem o campo, ou sem registro, vale armazenagem e faturas", () => {
+    expect(resolveOperationProfile(null).modules).toEqual(["wms", "financeiro"]);
+    expect(resolveOperationProfile({ customer_code: "BTG Pactual" }).modules).toEqual(["wms", "financeiro"]);
+  });
+
+  it("perfil publicado traz os módulos do cadastro", () => {
+    expect(resolveOperationProfile({ customer_code: "Itaú", modules: ["operacao"] }).modules).toEqual(["operacao"]);
+    expect(resolveOperationProfile({ customer_code: "Itaú", modules: ["financeiro", "wms"] }).modules).toEqual([
+      "wms",
+      "financeiro",
+    ]);
+  });
+});

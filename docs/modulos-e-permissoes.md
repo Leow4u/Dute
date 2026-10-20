@@ -34,6 +34,14 @@ Desde 19/10/2026 cada cliente tem um modelo de operacao (codigo, em
 projecao `client_profiles` e mostra so os modulos do modelo. Ver
 `docs/multicliente-modelos-de-operacao.md`.
 
+Desde 20/10/2026 (Fase 2 da plataforma) existem 11 papéis: os 7 acima mais
+`campo`, `comercial`, `rh` e `painel`, numa lista única em `lib/dominio`. Os
+papéis novos são aceitos no convite e nas regras, mas o WMS ainda não os
+atende: as callables os recusam (`domain/platform-roles.ts`) e as regras não
+os listam em nenhuma coleção. O cliente também tem módulos contratados
+(`wms`, `operacao`, `financeiro`); sem armazenagem no contrato ele não lê o
+portal do WMS nem chama as callables dele. Ver `docs/plataforma/fase-2-nucleo.md`.
+
 ## Mapa Dutelog/Cliente
 
 ### Dutelog interno

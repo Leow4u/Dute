@@ -15,7 +15,7 @@ do painel) porque essas coleções nasceram depois do script.
 | Grupo | Coleções | Padrão |
 |---|---|---|
 | Acesso e configuração do sistema | `users`, `invites`, `customer_accounts`, `system_settings` | **Nunca apagadas.** Sem elas ninguém entra: o login é por convite e o papel vem de `users`. |
-| Estrutura | `customers`, `client_profiles`, `locations`, `warehouse_positions`, `billing_price_list`, `billing_config` | Preservadas. Com `--include-setup` são apagadas também. |
+| Estrutura | `customers`, `client_profiles`, `client_access`, `locations`, `warehouse_positions`, `billing_price_list`, `billing_config` | Preservadas. Com `--include-setup` são apagadas também. |
 | Tudo o mais | catálogo, saldos, movimentações, inventários, recebimentos, putaway, solicitações, pedidos, reservas, picking, packing, envios, devoluções, exceções, **faturamento** (competências, faturas, manual, snapshots), **eventos**, caixa, notificações, conversas e conhecimento do Agent Dute, documentos, contadores PED-/ENV- e de SKU (`sku_counters`: a numeração `<SIGLA>-000001` recomeça), agregados do painel, recibos de idempotência e qualquer coleção nova | Apagadas. `--keep <coleção>` (repetível) preserva uma coleção específica depois de revisar o dry-run. |
 
 `system_controls/inventory` é reescrito por inteiro ao final: estoque não

@@ -28,6 +28,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  INTERNAL_ROLES,
   getActiveModule,
   getNavigationForProfileRole,
   isAccountPath,
@@ -411,7 +412,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     location === "/portal" || location.startsWith("/portal/");
   // Cliente ativo: só na área interna; o portal é sempre o cliente da conta.
   const profileRole = user?.publicMetadata.role;
-  const showCustomerSwitcher = Boolean(profileRole) && profileRole !== "cliente";
+  const showCustomerSwitcher = Boolean(profileRole) && INTERNAL_ROLES.includes(profileRole!);
   const canManageCustomers = profileRole === "owner" || profileRole === "admin";
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;

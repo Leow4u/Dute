@@ -207,14 +207,23 @@ function appRole(role: ProfileRole): AppRole {
   return role === "cliente" ? "cliente" : "interno";
 }
 
+// Como o papel aparece na frase do convite ("ativou acesso como ...").
+const INVITE_ROLE_LABEL: Record<ProfileRole, string> = {
+  owner: "owner Dutelog",
+  admin: "admin Dutelog",
+  interno: "interno Dutelog",
+  wms: "operação WMS",
+  campo: "campo",
+  comercial: "comercial",
+  financeiro: "financeiro",
+  rh: "RH",
+  suporte: "suporte",
+  painel: "painel",
+  cliente: "cliente",
+};
+
 function roleLabel(role: ProfileRole) {
-  if (role === "owner") return "owner Dutelog";
-  if (role === "admin") return "admin Dutelog";
-  if (role === "wms") return "operação WMS";
-  if (role === "financeiro") return "financeiro";
-  if (role === "suporte") return "suporte";
-  if (role === "interno") return "interno Dutelog";
-  return "cliente";
+  return INVITE_ROLE_LABEL[role];
 }
 
 function getRestString(
