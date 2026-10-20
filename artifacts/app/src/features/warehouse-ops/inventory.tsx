@@ -338,6 +338,13 @@ export function OpeningInventoryWorkspace() {
   });
   const currentBox = conferenceQuery.data?.box ? warehouseBoxFromRecord(conferenceQuery.data.box) : selectedBox;
   const conferenceLines = conferenceQuery.data?.lines ?? [];
+  useEffect(() => {
+    suggestionGeneration.current += 1;
+    setSuggestion(undefined);
+    setExcluded([]);
+    setRefusal(undefined);
+  }, [currentBox?.code, currentBox?.conference_revision]);
+
   const isDraftBox = currentBox?.status === "counting" || currentBox?.status === "committing";
   const canEnterProduct = Boolean(currentBox &&
     ((!currentBox.opening_closed && (currentBox.status === "counting" || currentBox.status === "stored")) ||
