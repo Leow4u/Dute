@@ -285,6 +285,23 @@ describe("empilhamento dirigido na mesma prateleira", () => {
     assert.equal(placementFor(position, incoming, foreign, { allow_stacking: true, support_box_code: "CX-000001" }), null);
   });
 
+
+  it("empilhar não autoriza tombar: usa a orientação real do apoio e da nova caixa", () => {
+    const occupancy = buildOccupancy([stored("CX-000001", {
+      front_m: 0.35, depth_m: 0.6, placed_height_m: 0.2, height_m: 0.6,
+    })], []).get("A-02")!;
+    const dimensions = { ...incoming, length_m: 0.6, width_m: 0.4, height_m: 0.35 };
+    const options = { allow_stacking: true, support_box_code: "CX-000001" };
+    assert.equal(placementFor(position, dimensions, occupancy, options), null);
+    const placed = placementFor(position, dimensions, occupancy, { ...options, allow_tilt: true });
+    assert.equal(placed?.orientation, "height_length_width");
+    assert.equal(placed?.base_height_m, 0.2);
+    assert.equal(placed?.height_m, 0.4);
+    assert.equal(placementFor(position, dimensions, occupancy, {
+      ...options, allow_tilt: true, orientation: "width_length_height",
+    }), null);
+  });
+
   it("schema mantém empilhamento separado de tombamento e preserva o apoio confirmado", () => {
     const input = { ...incoming, location_id: "A-02", idempotency_key: "stack" };
     for (const schema of [SuggestWarehousePositionSchema, CreateWarehouseBoxSchema]) {

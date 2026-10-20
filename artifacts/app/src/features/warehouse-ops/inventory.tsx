@@ -525,7 +525,8 @@ export function OpeningInventoryWorkspace() {
           customer_code: customerCode,
           ...boxPayload,
           sku_codes: contentSkus,
-          allow_tilt: allowTilt, allow_stacking: allowStacking,
+          allow_tilt: allowTilt,
+          allow_stacking: allowStacking,
           exclude,
         }),
       });
@@ -554,9 +555,10 @@ export function OpeningInventoryWorkspace() {
           session_id: session?.session_id,
           ...boxPayload,
           location_id: candidate.code,
-          allow_tilt: allowTilt, allow_stacking: allowStacking,
+          allow_tilt: allowTilt,
+          allow_stacking: allowStacking,
           orientation: candidate.placement.orientation,
-            support_box_code: candidate.placement.support_box_code ?? null,
+          support_box_code: candidate.placement.support_box_code ?? null,
           suggestion: suggestion
             ? {
                 position: suggestion.position?.code ?? null,
