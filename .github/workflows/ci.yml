@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, master, codex/ai-native-foundation]
+    branches: [main]
   pull_request:
   # Disparo manual (Actions > CI > Run workflow): sempre roda o diagnóstico do
   # Cloud Run da produção. Marcar "publicar_producao" publica a main na produção.
@@ -118,10 +118,16 @@ jobs:
 
   # Todo push mergeado na main vai para a homologação (dute-homolog), com os
   # testes verdes. É onde se confere a main antes de publicar na produção.
+  # Uma publicação por ambiente de cada vez, sem cancelar a que está rodando:
+  # um "firebase deploy" cortado no meio deixa functions pela metade e pula a
+  # conferência do invoker. O GitHub mantém só a mais nova na espera.
   publicar-homologacao:
     name: Publicar na homologação
-    needs: [frontend-typecheck, functions-unit, functions-integration]
+    needs: [frontend-typecheck, functions-unit, functions-integration, tools-python-tests]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    concurrency:
+      group: publicar-homologacao
+      cancel-in-progress: false
     permissions:
       contents: read
       id-token: write
@@ -140,8 +146,11 @@ jobs:
   # produção é o dute-prod; o dute-btg ficou congelado.
   publicar-producao:
     name: Publicar na produção
-    needs: [frontend-typecheck, functions-unit, functions-integration]
+    needs: [frontend-typecheck, functions-unit, functions-integration, tools-python-tests]
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publicar_producao
+    concurrency:
+      group: publicar-producao
+      cancel-in-progress: false
     permissions:
       contents: read
       id-token: write
@@ -208,10 +217,10 @@ jobs:
   liberar-trafego:
     name: Mudar tráfego do serviço
     runs-on: ubuntu-latest
-    # Só roda no disparo manual com "liberar_trafego" marcado. Muda a produção:
-    # 100% do tráfego passa para a última revisão pronta do serviço. Reversível
-    # com --to-revisions NOME=100 (ver docs/deploy-manual.md).
-    if: github.event_name == 'workflow_dispatch' && inputs.liberar_trafego
+    # Só roda no disparo manual a partir da main, com "liberar_trafego" marcado.
+    # Muda a produção: 100% do tráfego passa para a última revisão pronta do
+    # serviço. Reversível com --to-revisions NOME=100 (ver docs/deploy-manual.md).
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.liberar_trafego
     permissions:
       contents: read
       id-token: write

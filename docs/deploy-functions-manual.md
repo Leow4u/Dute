@@ -208,9 +208,12 @@ aparece como **NAO PUBLICADA** e sugere o `firebase deploy`.
 ## Deploy automático pelo GitHub Actions
 
 O job `Cloud Functions` em `.github/workflows/publicar.yml` publica
-`functions/wms/` junto com o frontend, sempre depois de `frontend-typecheck`,
-`functions-unit` e `functions-integration` passarem e de o job `Regras e índices`
-(abaixo) publicar as regras: na homologação
+`functions/wms/` antes do frontend, sempre depois de `frontend-typecheck`,
+`functions-unit`, `functions-integration` e `Testes das ferramentas Python
+(tools/)` passarem e de o job `Regras e índices` (abaixo) publicar as regras.
+O frontend só sobe depois que este job termina verde, com a conferência do
+invoker; uma publicação por ambiente de cada vez, sem cancelar a que está
+rodando (ver "Ordem e fila" em `docs/deploy-manual.md`). Roda na homologação
 (`dute-homolog`) a cada push em `main`, e na produção (`dute-prod`) só por disparo
 manual com `publicar_producao` marcado. Ele sempre publica o lote inteiro
 (`firebase deploy --only functions`, nunca `--only functions:nome`) e termina
@@ -230,8 +233,8 @@ Antes do frontend e das functions, o job `Regras e índices (Firestore e
 Storage)` roda `firebase deploy --only firestore,storage --project <projeto>
 --non-interactive` da raiz do repositório e confere com
 `tools/check_rules_deployed.sh` se o Firestore e o bucket padrão do Storage
-passaram a servir as regras do commit. O frontend e as functions têm
-`needs: regras`: se as regras não sobem, nada mais sobe. Os testes de regras do
+passaram a servir as regras do commit. As functions têm `needs: regras` e o
+frontend vem depois delas: se as regras não sobem, nada mais sobe. Os testes de regras do
 Firestore rodam antes, em `functions-integration`; o `storage.rules` ainda não
 tem teste.
 
