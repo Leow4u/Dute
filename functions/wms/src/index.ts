@@ -78,6 +78,15 @@ import {
 } from "./domain/customer-scope.js";
 import { assertManagedCatalogCreateAllowed } from "./domain/catalog-codes.js";
 import { CycleCountSchema } from "./domain/cycle-count-input.js";
+import {
+  createOpeningConferenceBox as createOpeningConferenceBoxFor,
+  getOpeningConferenceBox as getOpeningConferenceBoxFor,
+  saveOpeningConferenceLine as saveOpeningConferenceLineFor,
+  removeOpeningConferenceLine as removeOpeningConferenceLineFor,
+  setOpeningConferenceBoxState as setOpeningConferenceBoxStateFor,
+  storeOpeningConferenceBox as storeOpeningConferenceBoxFor,
+  resumeOpeningConferenceBox as resumeOpeningConferenceBoxFor,
+} from "./domain/opening-inventory-conference.js";
 import { readSystemHealth } from "./domain/system-health.js";
 import { CostSettingsSchema, readSystemDashboard, saveCostSettings } from "./domain/system-dashboard.js";
 import { codeFunctions, InfraSettingsSchema, readSystemInfra, saveInfraSettings, type GcpFetch } from "./domain/system-infra.js";
@@ -7551,4 +7560,62 @@ export const removeWarehouseBox = onCall(async (request) => {
   if (!parsed.success) throw new HttpsError("invalid-argument", firstIssue(parsed.error, "Caixa inválida."));
   const customer_code = requireCustomerScope(profile, parsed.data.customer_code);
   return removeWarehouseBoxTransaction(db, { code: parsed.data.code, customer_code }, profile);
+});
+
+// Conferência persistente antes da guarda: rascunhos não criam estoque.
+
+export const createOpeningConferenceBox = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  const data = request.data && typeof request.data === "object" ? request.data as Record<string, unknown> : {};
+  const customer_code = requireCustomerScope(profile, typeof data.customer_code === "string" ? data.customer_code : undefined);
+  return createOpeningConferenceBoxFor(db, { ...data, customer_code }, profile);
+});
+
+export const getOpeningConferenceBox = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  const data = request.data && typeof request.data === "object" ? request.data as Record<string, unknown> : {};
+  const customer_code = requireCustomerScope(profile, typeof data.customer_code === "string" ? data.customer_code : undefined);
+  return getOpeningConferenceBoxFor(db, { ...data, customer_code }, profile);
+});
+
+export const saveOpeningConferenceLine = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  const data = request.data && typeof request.data === "object" ? request.data as Record<string, unknown> : {};
+  const customer_code = requireCustomerScope(profile, typeof data.customer_code === "string" ? data.customer_code : undefined);
+  return saveOpeningConferenceLineFor(db, { ...data, customer_code }, profile);
+});
+
+export const removeOpeningConferenceLine = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  const data = request.data && typeof request.data === "object" ? request.data as Record<string, unknown> : {};
+  const customer_code = requireCustomerScope(profile, typeof data.customer_code === "string" ? data.customer_code : undefined);
+  return removeOpeningConferenceLineFor(db, { ...data, customer_code }, profile);
+});
+
+export const setOpeningConferenceBoxState = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  const data = request.data && typeof request.data === "object" ? request.data as Record<string, unknown> : {};
+  const customer_code = requireCustomerScope(profile, typeof data.customer_code === "string" ? data.customer_code : undefined);
+  return setOpeningConferenceBoxStateFor(db, { ...data, customer_code }, profile);
+});
+
+export const storeOpeningConferenceBox = onCall({ timeoutSeconds: 300 }, async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  const data = request.data && typeof request.data === "object" ? request.data as Record<string, unknown> : {};
+  const customer_code = requireCustomerScope(profile, typeof data.customer_code === "string" ? data.customer_code : undefined);
+  return storeOpeningConferenceBoxFor(db, { ...data, customer_code }, profile);
+});
+
+export const resumeOpeningConferenceBox = onCall({ timeoutSeconds: 300 }, async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  const data = request.data && typeof request.data === "object" ? request.data as Record<string, unknown> : {};
+  const customer_code = requireCustomerScope(profile, typeof data.customer_code === "string" ? data.customer_code : undefined);
+  return resumeOpeningConferenceBoxFor(db, { ...data, customer_code }, profile);
 });
