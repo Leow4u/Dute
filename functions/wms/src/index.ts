@@ -57,7 +57,7 @@ import { setUserAccessTransaction } from "./domain/access.js";
 import {
   CLIENT_ACCESS_COLLECTION,
   CLIENT_PROFILES_COLLECTION,
-  assertCustomerCodeAvailable,
+  assertCustomerIdentityAvailable,
   assertSkuPrefixAvailable,
   buildCustomerPayload,
   clientAccessProjection,
@@ -65,6 +65,7 @@ import {
   contractedModulesFrom,
   readContractedModules,
 } from "./domain/customer-profile.js";
+import { assertInviteCustomerAllowed } from "./domain/customer-invite.js";
 import {
   PLATFORM_ROLES,
   isPlatformRole,
@@ -4680,14 +4681,18 @@ export const mutateManagedEntity = onCall(async (request) => {
       before,
       catalogIdentity,
     );
-    // Código único entre todos os cadastros: leitura antes das escritas.
+    // Código e raiz do CNPJ únicos entre todos os cadastros: leitura antes
+    // das escritas.
     if (input.resource === "customers" && input.action === "create") {
-      await assertCustomerCodeAvailable(
-        transaction,
-        db,
-        String((payload as Record<string, unknown>).code ?? ""),
+      await assertCustomerIdentityAvailable(transaction, db, {
+        code: (payload as Record<string, unknown>).code,
+        document: (payload as Record<string, unknown>).document,
         documentId,
-      );
+      });
+    }
+    // Convite de cliente: cadastro achado pelo código, cliente com sigla.
+    if (input.resource === "invites" && input.action === "create") {
+      await assertInviteCustomerAllowed(transaction, db, payload as Record<string, unknown>);
     }
     // Sigla do SKU única entre clientes ativos: leitura antes das escritas.
     if (input.resource === "customers" && input.action !== "archive") {

@@ -8,6 +8,8 @@
  * lista de papéis do firestore.rules. Desenho em docs/plataforma/fase-2-nucleo.md.
  */
 
+export * from "./dinheiro";
+
 export const MODULOS = ["wms", "operacao", "comercial", "financeiro", "rh"] as const;
 
 export type Modulo = (typeof MODULOS)[number];
@@ -92,4 +94,18 @@ export function modulosContratados(value: unknown): ModuloContratavel[] {
   if (!Array.isArray(value)) return [...MODULOS_PADRAO_CLIENTE];
   const known = MODULOS_CONTRATAVEIS.filter((modulo) => value.includes(modulo));
   return known.length ? known : [...MODULOS_PADRAO_CLIENTE];
+}
+
+/**
+ * Estágio do cadastro de empresas (`customers`, docs/plataforma/fase-6-comercial.md).
+ * O prospect recebeu orçamento e ainda não é cliente: só o Comercial grava,
+ * sem sigla, módulos nem projeções, e o WMS não o mostra.
+ */
+export const ESTAGIOS_CADASTRO = ["prospect", "cliente"] as const;
+
+export type EstagioCadastro = (typeof ESTAGIOS_CADASTRO)[number];
+
+/** Leitura tolerante do campo `stage`: sem o campo (a BTG e os cadastros de hoje), cliente. */
+export function estagioDoCadastro(value: unknown): EstagioCadastro {
+  return typeof value === "string" && value.trim().toLowerCase() === "prospect" ? "prospect" : "cliente";
 }

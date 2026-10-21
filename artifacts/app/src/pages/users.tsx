@@ -52,6 +52,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { ROLE_INFO, assignableRoles, canManagePerson, roleLabel, visibleRoleInfo } from "@/lib/access";
 import { useAppUser } from "@/lib/auth";
+import { inviteCustomers } from "@/lib/customer-registry";
 import { firestore } from "@/lib/firebase";
 import { normalizeProfileRole, type ProfileRole } from "@/lib/modules";
 import { humanApiError } from "@/lib/permissions";
@@ -85,6 +86,7 @@ type InviteCustomer = {
   name?: string;
   archived?: boolean;
   portal_status?: string;
+  sku_prefix?: string;
 };
 
 
@@ -192,9 +194,7 @@ export default function Users() {
         items?: InviteCustomer[];
         data?: InviteCustomer[];
       };
-      return (payload.items ?? payload.data ?? []).filter(
-        (customer) => customer.archived !== true && customer.portal_status !== "inactive",
-      );
+      return inviteCustomers(payload.items ?? payload.data ?? []);
     },
   });
   const portalCustomers = customers.data ?? [];

@@ -142,6 +142,9 @@ Cada parte roda numa sessão própria.
 11. **Telas: fila e montar orçamento**, com menu, rotas e liberação.
 12. **Telas: aprovar** (celular e Início) **e PDF**.
 13. **Tela de Clientes** e carga dos clientes da Omie (só pessoa jurídica).
+    Antes da carga, as listas de clientes do WMS (Configurações › Clientes,
+    convite e Posições) passam a ler o cadastro até o fim: o prospect sai em
+    memória, depois de uma página só.
 
 **Marco 2: contratos e alertas**
 14. Tela de contrato, aditivos e alertas no Início (vencimento, renovação,

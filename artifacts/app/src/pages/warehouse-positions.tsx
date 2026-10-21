@@ -26,6 +26,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
+import { zoneCustomers } from "@/lib/customer-registry";
 import { normalizeProfileRole } from "@/lib/modules";
 import { cn } from "@/lib/utils";
 import { fetchJson } from "@/lib/warehouse-ops/model";
@@ -55,7 +56,7 @@ import {
  * tudo muda por aqui: editar prateleira, cadastrar rua nova, remover.
  */
 
-type Customer = { id?: string; code?: string; name?: string; status?: string };
+type Customer = { id?: string; code?: string; name?: string; status?: string; sku_prefix?: string };
 type PositionsResponse = { items?: WarehousePosition[] };
 type SaveResult = { ok: true; created: string[]; updated: string[] };
 
@@ -272,10 +273,7 @@ export default function WarehousePositionsPage() {
     queryFn: () => fetchJson<{ items?: Customer[] }>("/api/customers?limit=500"),
     staleTime: 60_000,
   });
-  const customers = useMemo(
-    () => (customersQuery.data?.items ?? []).filter((customer) => customer.code && customer.status !== "inactive"),
-    [customersQuery.data],
-  );
+  const customers = useMemo(() => zoneCustomers(customersQuery.data?.items ?? []), [customersQuery.data]);
   const positions = useMemo(() => sortPositions(positionsQuery.data?.items ?? []), [positionsQuery.data]);
   const aisles = useMemo(() => aislesOf(positions), [positions]);
   const zones = useMemo(() => summarizeZones(positions), [positions]);

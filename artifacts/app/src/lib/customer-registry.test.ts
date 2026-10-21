@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -7,12 +10,67 @@ import {
   customerFormProblem,
   customerPayload,
   emptyCustomerForm,
+  inviteCustomers,
   peopleLabel,
   portalStatusFor,
+  zoneCustomers,
   zoneLabel,
 } from "./customer-registry";
 
 const btg = { id: "BTG_Pactual", code: "BTG Pactual", name: "BTG Pactual", status: "active", notes: "interno" };
+
+describe("cadastro com armazenagem (sigla do SKU)", () => {
+  const itau = { id: "Ita_", code: "Itaú", name: "Itaú", sku_prefix: "ITAU", status: "active", portal_status: "active" };
+  const semSigla = { id: "Mudancas", code: "Mudancas", name: "Mudanças SP", status: "active", portal_status: "active" };
+
+  it("Posições lista só cadastro com sigla; a BTG sem sigla continua", () => {
+    expect(zoneCustomers([btg, itau, semSigla]).map((customer) => customer.code)).toEqual(["BTG Pactual", "Itaú"]);
+    expect(zoneCustomers([{ ...semSigla, sku_prefix: " " }])).toEqual([]);
+    expect(zoneCustomers([{ ...itau, status: "inactive" }, { ...itau, code: "" }])).toEqual([]);
+  });
+
+  it("o convite oferece só cliente com portal e sigla; a BTG sem sigla continua", () => {
+    expect(inviteCustomers([btg, itau, semSigla]).map((customer) => customer.code)).toEqual(["BTG Pactual", "Itaú"]);
+    expect(inviteCustomers([{ ...itau, portal_status: "inactive" }, { ...itau, archived: true }])).toEqual([]);
+  });
+
+  it("Configurações › Clientes mostra \"Convidar\" só para quem pode receber convite; a BTG sem sigla continua", () => {
+    const antigo = { ...itau, id: "Antigo", code: "Antigo", name: "Antigo", archived: true, status: "archived" };
+    const rows = buildCustomerRows([btg, itau, semSigla, antigo], [], []);
+    expect(Object.fromEntries(rows.map((row) => [row.code, row.invitable]))).toEqual({
+      "BTG Pactual": true,
+      Itaú: true,
+      Mudancas: false,
+      Antigo: false,
+    });
+  });
+});
+
+describe("as telas usam as regras do cadastro com armazenagem", () => {
+  const PAGES = fileURLToPath(new URL("../pages/", import.meta.url));
+  const page = (file: string) => readFileSync(`${PAGES}${file}`, "utf8");
+
+  it("Estoque › Posições filtra a lista de clientes por zoneCustomers", () => {
+    const source = page("warehouse-positions.tsx");
+    expect(source).toContain('"/api/customers?limit=500"');
+    expect(source).toMatch(/zoneCustomers\(\s*customersQuery\.data\?\.items/);
+  });
+
+  it("o convite de Pessoas filtra a lista de clientes por inviteCustomers", () => {
+    const source = page("users.tsx");
+    expect(source).toMatch(/\/api\/customers\?status=active/);
+    expect(source).toMatch(/inviteCustomers\(\s*payload\.items/);
+  });
+
+  it("o \"Convidar\" de Configurações › Clientes depende de row.invitable", () => {
+    const source = page("settings-customers.tsx");
+    const link = source.indexOf("convidar=cliente");
+    expect(link).toBeGreaterThan(0);
+    const condition = source.lastIndexOf("{row.invitable ? (", link);
+    expect(condition).toBeGreaterThan(0);
+    expect(link - condition).toBeLessThan(200);
+  });
+});
 
 describe("formulário do cliente", () => {
   it("cadastro antigo da BTG abre em Uniformes com a sigla sugerida pelo nome", () => {

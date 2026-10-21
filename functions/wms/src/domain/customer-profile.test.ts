@@ -106,7 +106,7 @@ describe("payload do cadastro", () => {
 
   it("situação arquivada só pela ação de arquivar", () => {
     assert.throws(() => create({ code: "X", name: "X", sku_prefix: "XX", status: "archived" }), /ação de arquivar/);
-    const archived = buildCustomerPayload({ action: "archive", data: {}, before: { code: "X" }, documentId: "X", actorUid: actor });
+    const archived = buildCustomerPayload({ action: "archive", data: {}, before: { code: "X", sku_prefix: "XX" }, documentId: "X", actorUid: actor });
     assert.equal(archived.status, "archived");
     assert.equal(archived.archived, true);
     assert.equal(archived.portal_status, "inactive");
@@ -218,6 +218,63 @@ describe("código operacional", () => {
     const before = { code: "BTG/SP", name: "BTG SP", sku_prefix: "BTGSP" };
     const payload = buildCustomerPayload({ action: "update", data: { name: "BTG São Paulo" }, before, documentId: "BTG_SP", actorUid: actor });
     assert.equal(payload.name, "BTG São Paulo");
+  });
+});
+
+describe("prospect do Comercial e cadastro sem sigla", () => {
+  const prospect = { code: "ACME", customer_code: "ACME", name: "Acme Ltda", stage: "prospect", status: "active", portal_status: "inactive" };
+
+  it("o WMS não altera prospect, nem dando a sigla", () => {
+    assert.throws(
+      () => buildCustomerPayload({ action: "update", data: { name: "Acme S.A.", sku_prefix: "ACME" }, before: prospect, documentId: "ACME", actorUid: actor }),
+      /prospect do Comercial/,
+    );
+  });
+
+  it("o WMS não arquiva prospect", () => {
+    assert.throws(
+      () => buildCustomerPayload({ action: "archive", data: {}, before: prospect, documentId: "ACME", actorUid: actor }),
+      /prospect do Comercial/,
+    );
+  });
+
+  it("arquivar cadastro sem sigla é recusado: gravaria as projeções com os módulos padrão", () => {
+    const semSigla = { code: "Mudancas", customer_code: "Mudancas", name: "Mudanças SP", stage: "cliente", status: "active" };
+    assert.throws(
+      () => buildCustomerPayload({ action: "archive", data: {}, before: semSigla, documentId: "Mudancas", actorUid: actor }),
+      /sem sigla do SKU/,
+    );
+    assert.throws(
+      () => buildCustomerPayload({ action: "archive", data: {}, before: { code: "BTG Pactual", name: "BTG Pactual" }, documentId: "BTG_Pactual", actorUid: actor }),
+      /sem sigla do SKU/,
+    );
+  });
+
+  it("cliente do Comercial sem sigla ganha a sigla em Configurações › Clientes", () => {
+    const before = { code: "Mudancas", customer_code: "Mudancas", name: "Mudanças SP", stage: "cliente", status: "active", portal_status: "inactive" };
+    const payload = buildCustomerPayload({ action: "update", data: { sku_prefix: "MUD" }, before, documentId: "Mudancas", actorUid: actor });
+    assert.equal(payload.sku_prefix, "MUD");
+    assert.equal("stage" in payload, false);
+  });
+
+  it("o WMS nunca grava stage", () => {
+    const payload = create({ code: "Itaú", name: "Itaú", sku_prefix: "ITAU", stage: "prospect" });
+    assert.equal("stage" in payload, false);
+    const before = { code: "Itaú", name: "Itaú", sku_prefix: "ITAU" };
+    const updated = buildCustomerPayload({ action: "update", data: { stage: "prospect" }, before, documentId: "Itau", actorUid: actor });
+    assert.equal("stage" in updated, false);
+  });
+
+  it("cadastro sem o campo stage (a BTG) continua cliente: altera e arquiva como hoje", () => {
+    const before = { code: "BTG Pactual", name: "BTG Pactual", sku_prefix: "BTG", status: "active" };
+    assert.equal(
+      buildCustomerPayload({ action: "update", data: { name: "BTG Pactual S.A." }, before, documentId: "BTG_Pactual", actorUid: actor }).name,
+      "BTG Pactual S.A.",
+    );
+    assert.equal(
+      buildCustomerPayload({ action: "archive", data: {}, before, documentId: "BTG_Pactual", actorUid: actor }).archived,
+      true,
+    );
   });
 });
 

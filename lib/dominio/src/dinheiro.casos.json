@@ -1,0 +1,155 @@
+{
+  "_leia": "Casos de referência da conta de dinheiro (lib/dominio/src/dinheiro.ts). Rodam no vitest do app e no node --test de functions/comercial, contra a cópia de lá. Quantidade e preço em texto decimal com ponto; resultado em centavos inteiros; erro pelo código.",
+  "linhas": [
+    { "caso": "o caso do WMS (billing.test.ts): 1 × 0,335", "quantidade": "1", "preco": "0.335", "centavos": 34 },
+    { "caso": "3 × 0,335 numa linha só arredonda uma vez", "quantidade": "3", "preco": "0.335", "centavos": 101 },
+    { "caso": "meio centavo sobe", "quantidade": "1", "preco": "0.005", "centavos": 1 },
+    { "caso": "1,5 centavo sobe para 2", "quantidade": "1", "preco": "0.015", "centavos": 2 },
+    { "caso": "abaixo do meio desce", "quantidade": "1", "preco": "0.0049", "centavos": 0 },
+    { "caso": "quantidade × preço no meio exato sobe", "quantidade": "0.5", "preco": "0.0100", "centavos": 1 },
+    { "caso": "meio centavo negativo, em ajuste, vai para longe do zero", "quantidade": "1", "preco": "-0.005", "ajuste": true, "centavos": -1 },
+    { "caso": "quantidade negativa em ajuste", "quantidade": "-1", "preco": "0.015", "ajuste": true, "centavos": -2 },
+    { "caso": "negativo abaixo do meio vira zero", "quantidade": "1", "preco": "-0.0049", "ajuste": true, "centavos": 0 },
+    { "caso": "ajuste de desconto", "quantidade": "1", "preco": "-25.00", "ajuste": true, "centavos": -2500 },
+    { "caso": "ajuste positivo também vale", "quantidade": "1", "preco": "100.00", "ajuste": true, "centavos": 10000 },
+    { "caso": "quantidade com 3 casas", "quantidade": "2.125", "preco": "10.00", "centavos": 2125 },
+    { "caso": "3 casas × 4 casas", "quantidade": "1.333", "preco": "3.3333", "centavos": 444 },
+    { "caso": "preço com 4 casas que desce", "quantidade": "3", "preco": "0.3335", "centavos": 100 },
+    { "caso": "preço com 4 casas que sobe", "quantidade": "1", "preco": "12.3456", "centavos": 1235 },
+    { "caso": "1,005 que o float arredonda para 100", "quantidade": "1.005", "preco": "1", "centavos": 101 },
+    { "caso": "menor quantidade pelo menor preço", "quantidade": "0.001", "preco": "0.0001", "centavos": 0 },
+    { "caso": "quantidade zero", "quantidade": "0", "preco": "10.00", "centavos": 0 },
+    { "caso": "zeros à esquerda", "quantidade": "007", "preco": "01.50", "centavos": 1050 },
+    { "caso": "quantidade grande", "quantidade": "1000000", "preco": "0.0001", "centavos": 10000 },
+    { "caso": "quantidade e preço grandes", "quantidade": "999999.999", "preco": "9999.9999", "centavos": 999999989000 },
+    { "caso": "grande, além da precisão do float", "quantidade": "123456789.123", "preco": "98765.4321", "centavos": 1219326312341168 },
+    { "caso": "no limite seguro", "quantidade": "90071992547409.91", "preco": "1", "centavos": 9007199254740991 },
+    { "caso": "parte inteira com 15 dígitos ainda vale", "quantidade": "999999999999999", "preco": "0.0001", "centavos": 10000000000000 },
+    { "caso": "zeros à esquerda não contam nos 15 dígitos", "quantidade": "0000000000000000001", "preco": "1", "centavos": 100 },
+
+    { "caso": "float na quantidade", "quantidade": 3, "preco": "0.335", "erro": "NAO_E_TEXTO" },
+    { "caso": "float no preço", "quantidade": "1", "preco": 0.335, "erro": "NAO_E_TEXTO" },
+    { "caso": "número inteiro também é recusado", "quantidade": "1", "preco": 10, "erro": "NAO_E_TEXTO" },
+    { "caso": "sem preço", "quantidade": "1", "preco": null, "erro": "NAO_E_TEXTO" },
+    { "caso": "vírgula decimal", "quantidade": "1", "preco": "0,335", "erro": "DECIMAL_INVALIDO" },
+    { "caso": "milhar com ponto e vírgula", "quantidade": "1", "preco": "1.234,56", "erro": "DECIMAL_INVALIDO" },
+    { "caso": "expoente", "quantidade": "1e3", "preco": "1", "erro": "DECIMAL_INVALIDO" },
+    { "caso": "espaço em volta", "quantidade": " 1", "preco": "1", "erro": "DECIMAL_INVALIDO" },
+    { "caso": "texto vazio", "quantidade": "", "preco": "1", "erro": "DECIMAL_INVALIDO" },
+    { "caso": "ponto sem casas", "quantidade": "1.", "preco": "1", "erro": "DECIMAL_INVALIDO" },
+    { "caso": "casas sem inteiro", "quantidade": "1", "preco": ".5", "erro": "DECIMAL_INVALIDO" },
+    { "caso": "sinal de mais", "quantidade": "+1", "preco": "1", "erro": "DECIMAL_INVALIDO" },
+    { "caso": "NaN em texto", "quantidade": "1", "preco": "NaN", "erro": "DECIMAL_INVALIDO" },
+    { "caso": "preço com 5 casas", "quantidade": "1", "preco": "0.12345", "erro": "CASAS_DEMAIS" },
+    { "caso": "quantidade com 4 casas", "quantidade": "1.0001", "preco": "1", "erro": "CASAS_DEMAIS" },
+    { "caso": "zero no fim conta como casa no preço", "quantidade": "1", "preco": "0.33350", "erro": "CASAS_DEMAIS" },
+    { "caso": "zero no fim conta como casa na quantidade", "quantidade": "1.0000", "preco": "1", "erro": "CASAS_DEMAIS" },
+    { "caso": "ajuste com 5 casas no preço", "quantidade": "1", "preco": "-0.00001", "ajuste": true, "erro": "CASAS_DEMAIS" },
+    { "caso": "quantidade negativa fora de ajuste", "quantidade": "-1", "preco": "10.00", "erro": "NEGATIVO_FORA_DE_AJUSTE" },
+    { "caso": "preço negativo fora de ajuste", "quantidade": "1", "preco": "-10.00", "erro": "NEGATIVO_FORA_DE_AJUSTE" },
+    { "caso": "ajuste só vale com true", "quantidade": "1", "preco": "-10.00", "ajuste": "sim", "erro": "NEGATIVO_FORA_DE_AJUSTE" },
+    { "caso": "acima do limite seguro", "quantidade": "90071992547409.92", "preco": "1", "erro": "FORA_DO_LIMITE" },
+    { "caso": "quantidade com 16 dígitos, mesmo com preço zero", "quantidade": "1000000000000000", "preco": "0", "erro": "FORA_DO_LIMITE" },
+    { "caso": "preço com 16 dígitos, mesmo com quantidade zero", "quantidade": "0", "preco": "1000000000000000", "erro": "FORA_DO_LIMITE" },
+    { "caso": "quantidade com 20 dígitos", "quantidade": "99999999999999999999", "preco": "1", "erro": "FORA_DO_LIMITE" },
+    { "caso": "negativo abaixo do limite seguro", "quantidade": "-90071992547409.92", "preco": "1", "ajuste": true, "erro": "FORA_DO_LIMITE" }
+  ],
+  "totais": [
+    {
+      "caso": "o caso do WMS: três linhas de 1 × 0,335 dão 1,02",
+      "linhas": [
+        { "quantidade": "1", "preco": "0.335" },
+        { "quantidade": "1", "preco": "0.335" },
+        { "quantidade": "1", "preco": "0.335" }
+      ],
+      "centavos": 102
+    },
+    {
+      "caso": "arredonda por linha, não no total",
+      "linhas": [
+        { "quantidade": "1", "preco": "0.005" },
+        { "quantidade": "1", "preco": "0.005" }
+      ],
+      "centavos": 2
+    },
+    { "caso": "sem linhas", "linhas": [], "centavos": 0 },
+    {
+      "caso": "ajuste negativo desconta",
+      "linhas": [
+        { "quantidade": "10", "preco": "12.50" },
+        { "quantidade": "1", "preco": "-25.00", "ajuste": true }
+      ],
+      "centavos": 10000
+    },
+    {
+      "caso": "ajuste que zera o total",
+      "linhas": [
+        { "quantidade": "1", "preco": "10.00" },
+        { "quantidade": "-1", "preco": "10.00", "ajuste": true }
+      ],
+      "centavos": 0
+    },
+    {
+      "caso": "total negativo",
+      "linhas": [
+        { "quantidade": "1", "preco": "10.00" },
+        { "quantidade": "1", "preco": "-10.01", "ajuste": true }
+      ],
+      "erro": "TOTAL_NEGATIVO"
+    },
+    {
+      "caso": "só um ajuste negativo",
+      "linhas": [{ "quantidade": "1", "preco": "-0.01", "ajuste": true }],
+      "erro": "TOTAL_NEGATIVO"
+    },
+    {
+      "caso": "linha com float",
+      "linhas": [
+        { "quantidade": "1", "preco": "10.00" },
+        { "quantidade": 1, "preco": "1" }
+      ],
+      "erro": "NAO_E_TEXTO"
+    },
+    {
+      "caso": "negativo fora de ajuste no meio do orçamento",
+      "linhas": [
+        { "quantidade": "1", "preco": "10.00" },
+        { "quantidade": "1", "preco": "-1.00" }
+      ],
+      "erro": "NEGATIVO_FORA_DE_AJUSTE"
+    },
+    {
+      "caso": "soma acima do limite seguro",
+      "linhas": [
+        { "quantidade": "90071992547409.91", "preco": "1" },
+        { "quantidade": "0.01", "preco": "1" }
+      ],
+      "erro": "FORA_DO_LIMITE"
+    }
+  ],
+  "somas": [
+    { "caso": "três linhas de 34", "centavos": [34, 34, 34], "total": 102 },
+    { "caso": "nada", "centavos": [], "total": 0 },
+    { "caso": "com ajuste negativo", "centavos": [10000, -2500], "total": 7500 },
+    { "caso": "a soma não recusa negativo; quem recusa é o total", "centavos": [100, -150], "total": -50 },
+    { "caso": "no limite seguro", "centavos": [9007199254740990, 1], "total": 9007199254740991 },
+    { "caso": "fração de centavo", "centavos": [1.5], "erro": "CENTAVOS_INVALIDOS" },
+    { "caso": "centavos em texto", "centavos": ["100"], "erro": "CENTAVOS_INVALIDOS" },
+    { "caso": "parcela fora do limite seguro", "centavos": [9007199254740992], "erro": "CENTAVOS_INVALIDOS" },
+    { "caso": "soma acima do limite seguro", "centavos": [9007199254740991, 1], "erro": "FORA_DO_LIMITE" }
+  ],
+  "formatos": [
+    { "caso": "zero", "centavos": 0, "texto": "R$ 0,00" },
+    { "caso": "um centavo", "centavos": 1, "texto": "R$ 0,01" },
+    { "caso": "o total do caso do WMS", "centavos": 102, "texto": "R$ 1,02" },
+    { "caso": "mil", "centavos": 100000, "texto": "R$ 1.000,00" },
+    { "caso": "milhar e centavos", "centavos": 123456, "texto": "R$ 1.234,56" },
+    { "caso": "milhão", "centavos": 123456789, "texto": "R$ 1.234.567,89" },
+    { "caso": "ajuste negativo", "centavos": -2500, "texto": "-R$ 25,00" },
+    { "caso": "negativo abaixo de um real", "centavos": -5, "texto": "-R$ 0,05" },
+    { "caso": "limite seguro, que o float mostraria com ,90", "centavos": 9007199254740991, "texto": "R$ 90.071.992.547.409,91" },
+    { "caso": "fração de centavo", "centavos": 1.5, "erro": "CENTAVOS_INVALIDOS" },
+    { "caso": "centavos em texto", "centavos": "100", "erro": "CENTAVOS_INVALIDOS" },
+    { "caso": "fora do limite seguro", "centavos": 9007199254740992, "erro": "CENTAVOS_INVALIDOS" }
+  ]
+}

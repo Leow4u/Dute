@@ -4,11 +4,13 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
+  ESTAGIOS_CADASTRO,
   MODULOS_CONTRATAVEIS,
   MODULOS_PADRAO_CLIENTE,
   MODULOS_POR_PAPEL,
   PAPEIS,
   PAPEIS_DO_WMS,
+  estagioDoCadastro,
 } from "@workspace/dominio";
 
 import { COMERCIAL_AMBIENTES_LIBERADOS } from "./liberacao";
@@ -62,6 +64,13 @@ describe("listas da plataforma iguais em todo lugar", () => {
     );
     expect(defaults).toHaveLength(2);
     for (const list of defaults) expect(list).toEqual([...MODULOS_PADRAO_CLIENTE]);
+  });
+
+  it("estágios do cadastro: lib/dominio e Functions", () => {
+    expect(tsList(customerProfile, "CUSTOMER_STAGES")).toEqual([...ESTAGIOS_CADASTRO]);
+    expect(estagioDoCadastro(undefined)).toBe("cliente");
+    expect(estagioDoCadastro(" Prospect ")).toBe("prospect");
+    expect(estagioDoCadastro("lead")).toBe("cliente");
   });
 
   it("todo papel da equipe tem a sua linha na tabela papel × módulo", () => {
