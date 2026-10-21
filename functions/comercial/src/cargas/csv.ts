@@ -28,6 +28,12 @@ export function decodificarUtf8(bytes: Uint8Array): string {
   return texto.charCodeAt(0) === 0xfeff ? texto.slice(1) : texto;
 }
 
+/** Célula de um CSV com ";": entre aspas quando tem separador, aspas ou quebra de linha. */
+export function celulaCsv(valor: unknown, separador = ";"): string {
+  const texto = valor === null || valor === undefined ? "" : String(valor);
+  return texto.includes(separador) || /["\n\r]/.test(texto) ? `"${texto.replace(/"/g, '""')}"` : texto;
+}
+
 /** Separa o texto em linhas e campos. Linhas só com campos vazios ficam de fora. */
 export function lerCsv(texto: string, separador = ";"): LinhaDoCsv[] {
   const linhas: LinhaDoCsv[] = [];
