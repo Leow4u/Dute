@@ -6,7 +6,8 @@ import {
   signInWithEmailAndPassword,
   updateProfile,
 } from "firebase/auth";
-import { getFunctions, httpsCallable } from "firebase/functions";
+import { httpsCallable } from "firebase/functions";
+import { functionsDoApp } from "@/lib/firebase-functions";
 import { doc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import {
   Switch,
@@ -295,7 +296,7 @@ async function fetchInvite(token: string): Promise<InviteData | null> {
   try {
     if (firebaseApp) {
       const lookup = httpsCallable<{ token: string }, InviteData>(
-        getFunctions(firebaseApp, "southamerica-east1"),
+        functionsDoApp(firebaseApp),
         "lookupInvite",
       );
       const result = await lookup({ token });

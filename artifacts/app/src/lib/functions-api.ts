@@ -1,4 +1,5 @@
-import { getFunctions, httpsCallable } from "firebase/functions";
+import { httpsCallable } from "firebase/functions";
+import { functionsDoApp } from "./firebase-functions";
 
 import { activeCustomerStorageKey, LEGACY_CUSTOMER_CODE } from "./active-customer";
 import { firebaseApp, firebaseAuth } from "./firebase";
@@ -913,7 +914,7 @@ export async function callFunctionsApi(
 
   try {
     const callable = httpsCallable(
-      getFunctions(firebaseApp, "southamerica-east1"),
+      functionsDoApp(firebaseApp),
       route.name,
     );
     const result = await callable(await route.payload(pathname, init));
@@ -957,7 +958,7 @@ export async function streamAgentDuteChat<T>(
 ): Promise<T> {
   if (!firebaseApp) throw new Error("Firebase não configurado.");
   const callable = httpsCallable<typeof payload, T, AgentDuteStreamChunk>(
-    getFunctions(firebaseApp, "southamerica-east1"),
+    functionsDoApp(firebaseApp),
     "chatWithAgentDute",
     { timeout: 180_000 },
   );
