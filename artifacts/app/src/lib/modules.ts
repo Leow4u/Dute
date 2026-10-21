@@ -153,6 +153,13 @@ export type AppModule = {
    */
   liberacao?: "comercial";
   /**
+   * Ambiente de navegação. Ausente é o WMS (menu de hoje). Outro valor não
+   * entra nesse menu: o shell sai do caminho da rota (lib/ambientes.ts).
+   * Módulo futuro com telas próprias ganha o valor e o prefixo; sem tela,
+   * não ganha ambiente.
+   */
+  ambiente?: "wms" | "comercial";
+  /**
    * Grupo mesmo com uma tela só: o menu mostra o módulo e a tela dentro dele
    * ("Comercial" › "Clientes"), em vez de virar o link da tela.
    */
@@ -317,8 +324,8 @@ export const APP_MODULES: AppModule[] = [
       }),
     ],
   }),
-  // Comercial (docs/plataforma/fase-6-comercial.md, partes 11, 13, 14 e 15b):
-  // só onde a liberação do Comercial está ligada. A fila de orçamentos é a casa
+  // Comercial (docs/plataforma/fase-6-comercial.md). As rotas e os papéis
+  // ficam aqui; o menu é do ambiente Comercial, não do WMS. A fila é a casa
   // (/comercial, rota exata para não acender em Clientes e Contratos).
   appModule({
     id: "comercial",
@@ -327,6 +334,7 @@ export const APP_MODULES: AppModule[] = [
     icon: Briefcase,
     roles: COMMERCIAL_ROLES,
     liberacao: "comercial",
+    ambiente: "comercial",
     group: true,
     routes: [
       navRoute({
@@ -718,25 +726,29 @@ export function getNavigationForAppRole(
   role: CurrentAppRole | null | undefined,
 ): AppModule[] {
   const appRole = role ?? "interno";
-  return APP_MODULES.filter((module) => module.appRoles.includes(appRole));
+  return APP_MODULES.filter(
+    (module) => (module.ambiente ?? "wms") === "wms" && module.appRoles.includes(appRole),
+  );
 }
 
 /**
- * Menu por papel. No portal, o perfil de operação do cliente (modelo +
- * pacote, lib/operations) esconde os módulos que o modelo não tem; sem
- * perfil (área interna, ou ainda carregando) nada é escondido. O Comercial
- * só entra com a liberação dele (padrão: a deste build).
+ * Menu de um ambiente. O WMS é o menu de hoje (Início, Pedidos, Estoque,
+ * Faturamento e o portal). O Comercial só entra no ambiente dele, e só com
+ * a liberação. No portal, o perfil de operação esconde o que o modelo não
+ * tem; sem perfil (área interna, ou ainda carregando) nada disso é escondido.
  */
-export function getNavigationForProfileRole(
+function navigationForAmbiente(
+  ambiente: "wms" | "comercial",
   role: ProfileRole | null | undefined,
-  operation?: OperationProfile | null,
-  comercial: boolean = COMERCIAL_LIBERADO,
+  operation: OperationProfile | null | undefined,
+  comercial: boolean,
 ): AppModule[] {
   const appRole = appRoleForProfile(role) ?? "interno";
   const portalModules = appRole === "cliente" ? portalModulesFor(operation) : null;
 
   return APP_MODULES.filter(
     (module) =>
+      (module.ambiente ?? "wms") === ambiente &&
       module.appRoles.includes(appRole) &&
       canAccessModule(role, module.roles) &&
       (module.liberacao !== "comercial" || abreComercial(role, comercial)) &&
@@ -755,6 +767,48 @@ export function getNavigationForProfileRole(
       return { ...module, routes };
     })
     .filter((module) => module.routes.length > 0);
+}
+
+/**
+ * Menu do WMS e do portal. Não inclui o Comercial: ele tem shell próprio.
+ * O terceiro argumento permanece para os chamadores de antes; a liberação
+ * não põe o Comercial neste menu.
+ */
+export function getNavigationForProfileRole(
+  role: ProfileRole | null | undefined,
+  operation?: OperationProfile | null,
+  comercial: boolean = COMERCIAL_LIBERADO,
+): AppModule[] {
+  return navigationForAmbiente("wms", role, operation, comercial);
+}
+
+/**
+ * Funcionalidades do Comercial, uma por tela, para o menu do ambiente.
+ * Fora da liberação, ou para quem não abre o módulo, a lista é vazia.
+ * A aprovação e o documento do orçamento acendem Orçamentos; não são itens.
+ */
+export function menuDoComercial(
+  role: ProfileRole | null | undefined,
+  comercial: boolean = COMERCIAL_LIBERADO,
+): AppModule[] {
+  const [grupo] = navigationForAmbiente("comercial", role, null, comercial);
+  if (!grupo) return [];
+  return grupo.routes.flatMap((route) => {
+    if (!route.href) return [];
+    return [
+      {
+        id: route.id,
+        label: route.label,
+        audience: grupo.audience,
+        href: route.href,
+        icon: route.icon,
+        roles: route.roles,
+        appRoles: route.appRoles,
+        ambiente: "comercial" as const,
+        routes: [route],
+      },
+    ];
+  });
 }
 
 /**
