@@ -22,6 +22,17 @@ Os mesmos do deploy do frontend: `gcloud` autenticado como
 `leonardo@dutelog.com.br`, projeto padrão `dute-prod`, `node`/`corepack`. O
 diretório `functions/wms/` usa **npm**, não pnpm (tem `package-lock.json` próprio).
 
+**Duas codebases desde 20/10/2026.** O `firebase.json` tem `default`
+(`functions/wms/`, o nome não muda) e `comercial` (`functions/comercial/`,
+`docs/plataforma/fase-6-comercial.md`). Cada uma tem o seu `package-lock.json`;
+rode `npm ci` nas duas antes do deploy, porque o `predeploy` roda `tsc` em cada
+pasta. `firebase deploy --only functions` publica as duas. As callables do
+Comercial recusam fora do `dute-homolog` (`functions/comercial/src/domain/liberacao.ts`),
+menos o `comercialStatus`, que responde `liberado: false`. Até a conferência do
+invoker ler todas as codebases (parte 1 do Comercial), o
+`check_functions_invoker.ps1` lê só o `index.ts` do WMS: confira o Comercial com
+`-IndexFile .\functions\comercial\src\index.ts`.
+
 ## Passo a passo
 
 ### 1. Partir de main limpa
@@ -36,6 +47,7 @@ git status
 
 ```powershell
 npm --prefix functions/wms run test:critical
+npm --prefix functions/comercial run test:critical
 ```
 
 Isso roda `test:unit` (billing) e `test:integration` (fluxo WMS/estoque contra o
@@ -208,8 +220,9 @@ aparece como **NAO PUBLICADA** e sugere o `firebase deploy`.
 ## Deploy automático pelo GitHub Actions
 
 O job `Cloud Functions` em `.github/workflows/publicar.yml` publica
-`functions/wms/` antes do frontend, sempre depois de `frontend-typecheck`,
-`functions-unit`, `functions-integration` e `Testes das ferramentas Python
+`functions/wms/` e `functions/comercial/` antes do frontend, sempre depois de
+`frontend-typecheck`, `functions-unit`, `functions-integration`,
+`comercial-unit`, `comercial-integration` e `Testes das ferramentas Python
 (tools/)` passarem e de o job `Regras e índices` (abaixo) publicar as regras.
 O frontend só sobe depois que este job termina verde, com a conferência do
 invoker; uma publicação por ambiente de cada vez, sem cancelar a que está

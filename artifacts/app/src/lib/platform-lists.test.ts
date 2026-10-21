@@ -11,6 +11,7 @@ import {
   PAPEIS_DO_WMS,
 } from "@workspace/dominio";
 
+import { COMERCIAL_AMBIENTES_LIBERADOS } from "./liberacao";
 import { INTERNAL_ROLES } from "./modules";
 
 /**
@@ -65,5 +66,26 @@ describe("listas da plataforma iguais em todo lugar", () => {
 
   it("todo papel da equipe tem a sua linha na tabela papel × módulo", () => {
     expect(Object.keys(MODULOS_POR_PAPEL).sort()).toEqual(PAPEIS.filter((role) => role !== "cliente").sort());
+  });
+});
+
+describe("listas do Comercial iguais em todo lugar", () => {
+  const roles = read("functions/comercial/src/domain/platform-roles.ts");
+  const liberacao = read("functions/comercial/src/domain/liberacao.ts");
+
+  it("papéis: lib/dominio e functions/comercial", () => {
+    expect(tsList(roles, "PLATFORM_ROLES")).toEqual([...PAPEIS]);
+  });
+
+  it("papéis que o Comercial atende: os que têm o módulo comercial em MODULOS_POR_PAPEL", () => {
+    const comercial = PAPEIS.filter(
+      (role) => role !== "cliente" && MODULOS_POR_PAPEL[role].includes("comercial"),
+    );
+    expect(comercial).toEqual(["owner", "admin", "comercial"]);
+    expect(tsList(roles, "COMERCIAL_ROLES")).toEqual(comercial);
+  });
+
+  it("liberação por ambiente: a lista das callables é a do app", () => {
+    expect(tsList(liberacao, "COMERCIAL_AMBIENTES_LIBERADOS")).toEqual([...COMERCIAL_AMBIENTES_LIBERADOS]);
   });
 });
