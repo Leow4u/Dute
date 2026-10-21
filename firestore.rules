@@ -1037,11 +1037,6 @@ service cloud.firestore {
       allow delete: if isPrivileged();
     }
 
-    // Estado operacional (congelamento, inventário de abertura). Consultado
-    // pelo cálculo da fatura e pelas telas de operação. Nunca existiu regra
-    // para esta coleção: a leitura caía no deny final e derrubava toda a
-    // chamada, exibindo R$ 0,00 no lugar de um erro. Escrita segue apenas
-    // via Cloud Functions (Admin SDK).
     // Valor de mercadoria. A operação não lê. O cliente lê o próprio.
     match /catalog_prices/{priceId} {
       allow read: if hasAnyRole(['owner', 'admin', 'financeiro'])
@@ -1049,6 +1044,11 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Estado operacional (congelamento, inventário de abertura). Consultado
+    // pelo cálculo da fatura e pelas telas de operação. Nunca existiu regra
+    // para esta coleção: a leitura caía no deny final e derrubava toda a
+    // chamada, exibindo R$ 0,00 no lugar de um erro. Escrita segue apenas
+    // via Cloud Functions (Admin SDK).
     match /system_controls/{controlId} {
       allow read: if canReadForBilling();
       allow create, update, delete: if false;

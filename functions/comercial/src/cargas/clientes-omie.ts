@@ -23,7 +23,7 @@ import {
   type CustomerStage,
 } from "../domain/customer-identity.js";
 import { createComercialEvent } from "../domain/events.js";
-import { comercialLiberado } from "../domain/liberacao.js";
+import { podeGravarNoProjeto } from "./projeto.js";
 import { digest, runIdempotent, type ComercialActor } from "../domain/operations.js";
 import { ErroDoCsv, celulaCsv, decodificarUtf8, lerCsv } from "./csv.js";
 
@@ -95,7 +95,11 @@ function dentro(pasta: string, caminho: string): boolean {
 const ARQUIVOS = ["clientes", "crm", "titulos"] as const;
 
 /** Lê os argumentos. Erro de uso não lê arquivo nem banco. */
-export function lerOpcoes(argv: readonly string[], raiz = RAIZ_DO_REPOSITORIO): OpcoesCarga {
+export function lerOpcoes(
+  argv: readonly string[],
+  raiz = RAIZ_DO_REPOSITORIO,
+  env: Record<string, string | undefined> = process.env,
+): OpcoesCarga {
   const valores: Record<string, string> = {};
   let executar = false;
   for (let index = 0; index < argv.length; index += 1) {
@@ -115,8 +119,9 @@ export function lerOpcoes(argv: readonly string[], raiz = RAIZ_DO_REPOSITORIO): 
   if (executar && !projeto) {
     throw new ErroDeUso("--projeto é obrigatório com --executar. Rode antes sem --executar (dry-run) e confira o CSV de revisão.");
   }
-  if (executar && projeto && !comercialLiberado(projeto) && !projeto.startsWith("demo-")) {
-    throw new ErroDeUso(`O Comercial ainda não está liberado em ${projeto}: a carga não grava lá (domain/liberacao.ts).`);
+  if (executar && projeto) {
+    const recusa = podeGravarNoProjeto(projeto, env);
+    if (recusa) throw new ErroDeUso(recusa);
   }
   for (const nome of ARQUIVOS) {
     if (!valores[nome]) throw new ErroDeUso(`--${nome} é obrigatório.`);

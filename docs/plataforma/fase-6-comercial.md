@@ -691,3 +691,10 @@ Storage.
   proposta sem fechamento) e a 12 (linha de outro mês) seguem abertas: a tela
   mostra as demandas pendentes da aprovação, mas não tem o atalho nem aceita
   linha de outro mês.
+
+### Parte 17: conferência final e roteiro de produção
+
+- Quatro auditorias independentes (regras, eventos e liberação; fluxo ponta a ponta das telas contra as callables; cargas e dados; publicação e produção) leram o código e rodaram os testes. Resultado: nenhum bloqueio para publicar a `main` no `dute-prod` com o Comercial inerte; um bloqueio para a carga da Omie (listas de clientes do WMS leem uma página só).
+- Corrigido nesta parte: CNPJs reais nos testes do app; trava de projeto igual nas três cargas (`cargas/projeto.ts`); a carga de tabela recusa CSV dentro do repositório fora de `tmp/` e `.secrets/`; roteiro do `tabela.id` no `comercial-cargas.md`; textos de `fase-2-nucleo.md`, `firestore.rules` e do teste da zeragem.
+- Não corrigido (grande ou depende do Leonardo), com recomendação em `comercial-producao.md`: listas de clientes do WMS, ações sem botão, demanda "a faturar" sem lista, `splitCatalogPrices`, contador e carga do legado, rollback de functions e regras, valores que parecem reais nos mockups.
+- Ligar a liberação, rodar as cargas, acertar o contador, dar o papel ao Guilherme e carregar o legado seguem pendentes do OK do Leonardo: roteiro em `docs/plataforma/comercial-producao.md`.

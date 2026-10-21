@@ -19,7 +19,7 @@ Um PR por parte, homologação primeiro, nada em produção sem OK.
 - **Perfil do cliente.** O cadastro `customers` é gravado só pela callable `mutateManagedEntity`, com validação em `domain/customer-profile.ts`. A projeção `client_profiles` é o que o portal lê. O id dela é o do cadastro, não o `customer_code`, então as regras não conseguem achá-la. Não existe campo de módulos.
 - **Entrada.** `/` só redireciona: cliente vai a `/portal`, wms a `/pedidos`, financeiro a `/faturamento` e os demais a `/dashboard`. Não há tela de escolha nem mockup dela.
 - **Menu.** `APP_MODULES` em `lib/modules.ts` é uma lista de telas. Não sabe a que módulo da plataforma cada tela pertence. No portal, o menu é filtrado pelo modelo de operação.
-- **Publicação.** Push na `main` publica frontend e functions na homologação. A produção sai da `main` por disparo manual. Regras do Firestore são sempre à mão.
+- **Publicação.** Push na `main` publica frontend e functions na homologação. A produção sai da `main` por disparo manual. Regras e índices do Firestore sobem pelo job `regras` do CI, antes das functions e do frontend, e o job confere o conteúdo servido.
 
 ## Decisões deste desenho
 
