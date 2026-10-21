@@ -6,6 +6,7 @@ import { setGlobalOptions } from "firebase-functions/v2";
 import { saveCommercialCustomerFor, saveCustomerContactFor, saveCustomerLocationFor } from "./domain/cadastro.js";
 import { registrarAditivo, salvarContrato } from "./domain/contratos.js";
 import { assertAuth, comercialStatusFor, loadProfile, requireComercialCaller } from "./domain/profile.js";
+import { advanceQuoteFor, saveQuoteFor } from "./domain/quotes.js";
 import { PROJECT_ID } from "./project.js";
 
 /**
@@ -87,4 +88,25 @@ export const saveContract = onCall(async (request) => {
 export const recordAditivo = onCall(async (request) => {
   const caller = await requireComercialCaller(db, request, PROJECT_ID);
   return registrarAditivo(db, caller, request.data);
+});
+
+// --- Demanda e orçamento (parte 9; domain/quotes.ts) ---------------------------
+
+/**
+ * Cria a demanda e o orçamento juntos (número único de demand_counters),
+ * edita o rascunho com a edição lida, ou duplica um orçamento com a
+ * data-base de hoje. O servidor recalcula preço e totais.
+ */
+export const saveQuote = onCall(async (request) => {
+  const caller = await requireComercialCaller(db, request, PROJECT_ID);
+  return saveQuoteFor(db, caller, request.data);
+});
+
+/**
+ * Enviar para aprovação, devolver, aprovar (só o owner; congela a RV em
+ * revisoes) e editar o aprovado, conferindo a situação e a edição vistas.
+ */
+export const advanceQuote = onCall(async (request) => {
+  const caller = await requireComercialCaller(db, request, PROJECT_ID);
+  return advanceQuoteFor(db, caller, request.data);
 });

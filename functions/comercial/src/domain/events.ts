@@ -43,8 +43,13 @@ const id = z.string().regex(/^[A-Za-z0-9_-]{1,120}$/, "Id inválido.");
 /** Código de lista (nome de campo), em snake_case e sem algarismo: não cabe valor. */
 const codigo = z.string().regex(/^(?=.{1,60}$)[a-z]+(?:_[a-z]+)*$/, "Código inválido.");
 const contagem = z.number().int().min(0).max(1_000_000);
+/** Segundos desde o passo anterior: um orçamento pode esperar meses. */
+const segundos = z.number().int().min(0).max(1_000_000_000);
 const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida (AAAA-MM-DD).");
 const competencia = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Competência inválida (AAAA-MM).");
+
+// --- Listas da Demanda e do orçamento (domain/demanda.ts e orcamento.ts) -------
+// Ficam aqui porque vão nos eventos; os módulos de domínio reexportam.
 
 export const ETAPAS_DEMANDA = [
   "em_montagem",
@@ -56,11 +61,35 @@ export const ETAPAS_DEMANDA = [
   "aguardando_autorizacao",
   "a_faturar",
   "perdida",
+  "cancelada",
 ] as const;
 const etapa = z.enum(ETAPAS_DEMANDA);
 
 export const TIPOS_RV = ["proposta", "aditivo", "execucao"] as const;
 const tipoRv = z.enum(TIPOS_RV);
+
+/** Como a demanda nasce: pelo Comercial (orçamento antes) ou direta (executada antes do orçamento). */
+export const ENTRADAS_DEMANDA = ["comercial", "direta"] as const;
+export const CANAIS_DEMANDA = ["email", "telefone", "whatsapp", "portal", "wms"] as const;
+export const TIPOS_DEMANDA = ["planejada", "emergencial", "paraquedas"] as const;
+
+/** Situação da RV em curso. */
+export const STATUS_ORCAMENTO = ["rascunho", "para_aprovar", "aprovado", "enviado"] as const;
+const statusOrcamento = z.enum(STATUS_ORCAMENTO);
+
+/** De onde vem o preço de cada linha do orçamento. */
+export const ORIGENS_LINHA = ["tabela", "alterado", "avulso", "ajuste"] as const;
+
+/** O que a aprovação precisa ver marcado. */
+export const MARCAS_ORCAMENTO = [
+  "preco_alterado",
+  "item_avulso",
+  "ajuste",
+  "tabela_vencida",
+  "sem_tabela",
+  "legado",
+] as const;
+const marcas = z.array(z.enum(MARCAS_ORCAMENTO)).max(MARCAS_ORCAMENTO.length);
 
 export const ESTAGIOS_CADASTRO = ["prospect", "cliente"] as const;
 export const REGIMES_COBRANCA = ["por_demanda", "medicao_mensal", "wms"] as const;
@@ -74,29 +103,92 @@ const variante = codigo;
 /** Tipos de aditivo do contrato (contracts/{id}/aditivos). */
 export const TIPOS_ADITIVO = ["formalizacao", "prorrogacao", "preco", "escopo", "outro"] as const;
 
-const quoteStep = z.object({ numero, rv, edicao }).strict();
+/** Quantas linhas de cada origem (nunca o preço nem o total delas). */
+const linhasPorOrigem = z
+  .object({ tabela: contagem, alterado: contagem, avulso: contagem, ajuste: contagem })
+  .strict();
+
+/**
+ * Um passo do orçamento: número, RV e edição; a situação e a etapa da demanda
+ * antes e depois, os segundos desde o passo anterior, as linhas por origem e
+ * as marcas. Nunca valor.
+ */
+const quoteStep = z
+  .object({
+    numero,
+    rv,
+    edicao,
+    status_antes: statusOrcamento.optional(),
+    status_depois: statusOrcamento.optional(),
+    etapa_antes: etapa.optional(),
+    etapa_depois: etapa.optional(),
+    segundos_desde_anterior: segundos.optional(),
+    linhas: linhasPorOrigem.optional(),
+    marcas: marcas.optional(),
+  })
+  .strict();
 
 // --- Payload de cada tipo -----------------------------------------------------
 
 export const COMERCIAL_EVENT_PAYLOADS = {
-  "demand.created": z.object({ numero }).strict(),
+  "demand.created": z
+    .object({
+      numero,
+      entrada: z.enum(ENTRADAS_DEMANDA).optional(),
+      canal: z.enum(CANAIS_DEMANDA).optional(),
+      tipo: z.enum(TIPOS_DEMANDA).optional(),
+      cobranca: z.enum(REGIMES_COBRANCA).optional(),
+      contrato_id: id.nullable().optional(),
+      /** Demanda nova a partir de outra ("Duplicar"). */
+      duplicado_de: numero.optional(),
+    })
+    .strict(),
   "demand.stage_changed": z
     .object({
       numero,
       etapa_antes: etapa,
       etapa_depois: etapa,
-      segundos_desde_anterior: contagem.optional(),
+      segundos_desde_anterior: segundos.optional(),
     })
     .strict(),
   "demand.won": z.object({ numero, rv }).strict(),
   // O motivo entra na parte 10, como z.enum da lista de motivos.
   "demand.lost": z.object({ numero, etapa_antes: etapa }).strict(),
 
-  "quote.created": z.object({ numero, rv, tipo_rv: tipoRv, edicao }).strict(),
-  "quote.updated": z.object({ numero, rv, edicao_antes: edicao, edicao_depois: edicao }).strict(),
+  "quote.created": z
+    .object({
+      numero,
+      rv,
+      tipo_rv: tipoRv,
+      edicao,
+      etapa: etapa.optional(),
+      tabela_id: id.nullable().optional(),
+      variante: variante.optional(),
+      linhas: linhasPorOrigem.optional(),
+      marcas: marcas.optional(),
+      duplicado_de: numero.optional(),
+      /** Na duplicação: linhas cujo preço unitário mudou com a tabela da data-base nova. */
+      linhas_reprecificadas: contagem.optional(),
+    })
+    .strict(),
+  "quote.updated": z
+    .object({
+      numero,
+      rv,
+      edicao_antes: edicao,
+      edicao_depois: edicao,
+      tabela_id: id.nullable().optional(),
+      variante: variante.optional(),
+      linhas: linhasPorOrigem.optional(),
+      marcas: marcas.optional(),
+      segundos_desde_anterior: segundos.optional(),
+    })
+    .strict(),
   "quote.submitted": quoteStep,
   "quote.returned": quoteStep,
   "quote.approved": quoteStep,
+  /** Aprovado → rascunho, na mesma RV ("Editar"). */
+  "quote.edited": quoteStep,
   "quote.approval_waived": quoteStep,
   "quote.sent": quoteStep,
   "quote.revised": z.object({ numero, rv, rv_anterior: rv, tipo_rv: tipoRv }).strict(),
@@ -205,6 +297,7 @@ const ETAPA_ROTULO: Record<(typeof ETAPAS_DEMANDA)[number], string> = {
   aguardando_autorizacao: "Aguardando autorização",
   a_faturar: "A faturar",
   perdida: "Perdida",
+  cancelada: "Cancelada",
 };
 
 const TIPO_RV_ROTULO: Record<(typeof TIPOS_RV)[number], string> = {
@@ -258,7 +351,10 @@ type Text = { title: string; description: string };
 type Templates = { [T in ComercialEventType]: (payload: ComercialEventPayload<T>) => Text };
 
 const TEMPLATES: Templates = {
-  "demand.created": (p) => ({ title: `Demanda ${p.numero} aberta`, description: "Demanda aberta no Comercial." }),
+  "demand.created": (p) => ({
+    title: `Demanda ${p.numero} aberta`,
+    description: p.duplicado_de ? `Demanda aberta no Comercial a partir da ${p.duplicado_de}.` : "Demanda aberta no Comercial.",
+  }),
   "demand.stage_changed": (p) => ({
     title: `Demanda ${p.numero}: ${ETAPA_ROTULO[p.etapa_depois]}`,
     description: `Etapa: ${ETAPA_ROTULO[p.etapa_antes]} → ${ETAPA_ROTULO[p.etapa_depois]}.`,
@@ -271,7 +367,9 @@ const TEMPLATES: Templates = {
 
   "quote.created": (p) => ({
     title: `${orcamento(p.numero, p.rv)} criado`,
-    description: `Revisão de ${TIPO_RV_ROTULO[p.tipo_rv]} em montagem.`,
+    description: p.duplicado_de
+      ? `Revisão de ${TIPO_RV_ROTULO[p.tipo_rv]} em montagem, duplicada do orçamento ${p.duplicado_de}.`
+      : `Revisão de ${TIPO_RV_ROTULO[p.tipo_rv]} em montagem.`,
   }),
   "quote.updated": (p) => ({
     title: `${orcamento(p.numero, p.rv)} atualizado`,
@@ -286,6 +384,10 @@ const TEMPLATES: Templates = {
     description: `Edição ${p.edicao}.`,
   }),
   "quote.approved": (p) => ({ title: `${orcamento(p.numero, p.rv)} aprovado`, description: `Edição ${p.edicao}.` }),
+  "quote.edited": (p) => ({
+    title: `${orcamento(p.numero, p.rv)} reaberto para edição`,
+    description: `Edição ${p.edicao}; volta à montagem na mesma revisão.`,
+  }),
   "quote.approval_waived": (p) => ({
     title: `${orcamento(p.numero, p.rv)} com aprovação dispensada`,
     description: `Edição ${p.edicao}.`,

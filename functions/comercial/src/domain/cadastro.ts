@@ -278,14 +278,14 @@ function conteudo<T extends { idempotency_key: string }>(input: T): Omit<T, "ide
   return rest;
 }
 
-type CadastroEncontrado = { ref: DocumentReference; id: string; data: Record<string, unknown> };
+export type CadastroEncontrado = { ref: DocumentReference; id: string; data: Record<string, unknown> };
 
 /**
  * Cadastro pelo código real (`customer_code`, ou `code` no cadastro antigo
  * sem o campo), dentro da transação. Nenhum: not-found. Mais de um:
  * failed-precondition, sem escolher por conta própria.
  */
-async function cadastroPeloCodigo(transaction: Transaction, db: Firestore, code: string): Promise<CadastroEncontrado> {
+export async function cadastroPeloCodigo(transaction: Transaction, db: Firestore, code: string): Promise<CadastroEncontrado> {
   const customers = db.collection(CUSTOMERS_COLLECTION);
   let docs = (await transaction.get(customers.where("customer_code", "==", code))).docs;
   if (!docs.length) docs = (await transaction.get(customers.where("code", "==", code))).docs;
