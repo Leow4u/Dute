@@ -383,25 +383,52 @@ export async function assertSkuPrefixAvailable(
 
 /**
  * Código comparado na unicidade: sem acento, sem diferenciar maiúsculas e sem
- * espaço sobrando. "Itau" e "ITAÚ" são o mesmo código (o acento vira `_` no
- * id do documento, então só o id não pegaria a colisão).
+ * separador (espaço, hífen, ponto). "Itau" e "ITAÚ" são o mesmo código, e
+ * "BTG Pactual" (WMS) e "BTG-PACTUAL" (o Comercial só usa letras, números e
+ * hífen) também. O acento vira `_` no id do documento, então só o id não
+ * pegaria a colisão.
  */
 export function canonicalCustomerCode(value: unknown): string {
   return text(value)
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .toUpperCase()
-    .replace(/\s+/g, " ");
+    .replace(/[^A-Z0-9]/g, "");
+}
+
+/** CNPJ sem máscara: 12 letras ou números e 2 dígitos verificadores (IN RFB 2.229/2024). */
+const CNPJ_PATTERN = /^[0-9A-Z]{12}[0-9]{2}$/;
+
+/** Dígito verificador do CNPJ, numérico ou alfanumérico (cada caractere vale o código ASCII menos 48). */
+function cnpjCheckDigit(base: string): number {
+  let weight = 2;
+  let sum = 0;
+  for (let index = base.length - 1; index >= 0; index -= 1) {
+    sum += (base.charCodeAt(index) - 48) * weight;
+    weight = weight === 9 ? 2 : weight + 1;
+  }
+  const remainder = sum % 11;
+  return remainder < 2 ? 0 : 11 - remainder;
+}
+
+function isValidCnpj(cnpj: string): boolean {
+  if (!CNPJ_PATTERN.test(cnpj) || /^0+$/.test(cnpj)) return false;
+  const first = cnpjCheckDigit(cnpj.slice(0, 12));
+  const second = cnpjCheckDigit(`${cnpj.slice(0, 12)}${first}`);
+  return cnpj.endsWith(`${first}${second}`);
 }
 
 /**
- * Raiz do CNPJ (8 primeiros dígitos), tirada de `document` só com os números.
- * Só existe com o CNPJ inteiro (14 dígitos): CPF, texto livre ou número
- * incompleto não têm raiz e não entram na comparação.
+ * Raiz do CNPJ (8 primeiros caracteres), tirada de `document` sem máscara.
+ * Vale o CNPJ numérico e o alfanumérico, só com os dígitos verificadores
+ * certos: CPF, texto livre, número incompleto ou preenchimento provisório
+ * ("00.000.000/0000-00") não têm raiz e não entram na comparação. A raiz
+ * 00000000 existe (Banco do Brasil) e conta.
  */
 export function cnpjRoot(value: unknown): string | null {
-  const digits = text(value).replace(/\D/g, "");
-  return digits.length === 14 ? digits.slice(0, 8) : null;
+  const raw = text(value).toUpperCase();
+  const cnpj = [raw.replace(/[^0-9A-Z]/g, ""), raw.replace(/\D/g, "")].find(isValidCnpj);
+  return cnpj ? cnpj.slice(0, 8) : null;
 }
 
 export type CustomerIdentityCandidate = {
@@ -425,24 +452,29 @@ export function customerIdentityConflict(
 ): string | null {
   const code = text(candidate.code);
   const canonical = canonicalCustomerCode(code);
+  // Código sem letra nem número: a comparação volta a ser exata.
+  const sameCode = (existing: string) =>
+    canonical ? canonicalCustomerCode(existing) === canonical : existing === code;
   const root = cnpjRoot(candidate.document);
   const others = rows.filter((row) => row.id !== candidate.documentId);
-  const nameOf = (row: CustomerIdentityRow) => text(row.data.name) || row.id;
+  // O prospect não aparece no WMS: a mensagem diz onde ele está.
+  const ownerOf = (row: CustomerIdentityRow) => {
+    const name = text(row.data.name) || row.id;
+    return isProspect(row.data) ? `do prospect ${name}, no Comercial` : `do cliente ${name}`;
+  };
 
-  if (canonical) {
+  if (code) {
     for (const row of others) {
-      const taken = [row.data.code, row.data.customer_code]
-        .map(text)
-        .find((existing) => existing && canonicalCustomerCode(existing) === canonical);
+      const taken = [row.data.code, row.data.customer_code].map(text).find((existing) => existing && sameCode(existing));
       if (taken === undefined) continue;
       const detail = taken === code ? "" : ` (cadastrado como ${taken})`;
-      return `O código ${code} já é do cliente ${nameOf(row)}${detail}.`;
+      return `O código ${code} já é ${ownerOf(row)}${detail}.`;
     }
   }
   if (root) {
     const conflict = others.find((row) => cnpjRoot(row.data.document) === root);
     if (conflict) {
-      return `A raiz do CNPJ ${root} já é do cliente ${nameOf(conflict)}. Filiais ficam no mesmo cadastro.`;
+      return `A raiz do CNPJ ${root} já é ${ownerOf(conflict)}. Filiais ficam no mesmo cadastro.`;
     }
   }
   return null;

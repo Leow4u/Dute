@@ -83,6 +83,8 @@ export type CustomerRow = {
   people: number;
   archived: boolean;
   paused: boolean;
+  /** "Convidar" na lista: portal ativo e armazenagem; a Function recusa o resto. */
+  invitable: boolean;
 };
 
 
@@ -268,6 +270,7 @@ export function buildCustomerRows(
         people: counts.get(code) ?? 0,
         archived,
         paused: customer.status === "paused",
+        invitable: !archived && profile.portalStatus === "active" && customerHasStorage(customer),
       };
     })
     .filter((row): row is CustomerRow => row !== null)
