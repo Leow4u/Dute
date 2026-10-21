@@ -3,17 +3,20 @@ import { HttpsError } from "firebase-functions/https";
 import { z } from "zod";
 
 import {
-  AUTHORIZATION_SCHEMA_VERSION,
   CLIENT_AUTHORIZATIONS_COLLECTION,
   MARCAS_AUTORIZACAO,
   TIPOS_AUTORIZACAO_CLIENTE,
   chaveDoNumeroDoCliente,
   completarTomador,
+  documentoDaAutorizacao,
   lerTomador,
   marcasDaAutorizacao,
+  numerosDaAutorizacao,
   problemaDaDemandaParaAutorizar,
   problemaDoTipoDaAutorizacao,
   saldoDaAutorizacao,
+  statusDaAutorizacao,
+  valorDaAutorizacao,
   type DemandaCitada,
   type MarcaAutorizacao,
   type OutraAutorizacao,
@@ -281,6 +284,7 @@ function gravarAutorizacoesDaDemanda(
   lida: DemandaLida,
   autorizacaoIds: string[],
   events: string[],
+  extra: Record<string, unknown> = {},
 ): EtapaDemanda {
   const { transaction, db, operationId, actor, caller, iso, instante } = mudanca;
   const { numero, demanda, quote } = lida;
@@ -291,9 +295,12 @@ function gravarAutorizacoesDaDemanda(
   );
   const patch: Record<string, unknown> = {
     autorizacao_ids: autorizacaoIds,
+    ...extra,
     updated_at: FieldValue.serverTimestamp(),
     updated_by: caller.uid,
   };
+  // O id único da medição aprovada, do formato antigo, já está em autorizacao_ids pela leitura.
+  if ("autorizacao_id" in demanda) patch.autorizacao_id = FieldValue.delete();
   if (etapaDepois !== etapaAntes) {
     patch.etapa = etapaDepois;
     patch.etapa_desde = iso;
@@ -326,13 +333,12 @@ async function outrasAutorizacoes(transaction: Transaction, db: Firestore, lidas
   if (!ids.length) return [];
   const snaps = await transaction.getAll(...ids.map((id) => autorizacaoRef(db, id)));
   return snaps
-    .filter((snap) => snap.exists && snap.get("status") === "registrada")
+    .filter((snap) => snap.exists && statusDaAutorizacao(snap.data() ?? {}) === "registrada")
     .map((snap) => {
-      const numeros: unknown = snap.get("demanda_numeros");
-      return {
-        valor_cents: centavosGravados(snap.get("valor_cents"), `A autorização ${snap.id}`),
-        demanda_numeros: Array.isArray(numeros) ? numeros.map(texto) : [],
-      };
+      const dados = snap.data() ?? {};
+      const valor = valorDaAutorizacao(dados);
+      if (valor === null) throw new HttpsError("failed-precondition", `A autorização ${snap.id} está sem valor válido.`);
+      return { valor_cents: valor, demanda_numeros: numerosDaAutorizacao(dados) };
     });
 }
 
@@ -433,41 +439,36 @@ async function registrar(mudanca: Mudanca, input: Registro, entrada: { valor_cen
     documento_do_cadastro: cadastro.data.document,
   });
   const tipo: TipoAutorizacaoCliente = input.tipo;
+  // O mesmo documento da medição aprovada (documentoDaAutorizacao): um formato só.
   transaction.create(autorizacaoRef(db, id), {
-    id,
-    customer_code: code,
-    contrato_id: contratoId,
-    tipo,
-    pedido: input.pedido,
-    aceite: input.aceite,
-    chave_pedido_aceite: chave,
-    recebida_em: input.recebida_em,
-    valor_cents: entrada.valor_cents,
-    soma_cents: somaCents,
-    saldo_cents: saldoCents,
-    demandas: demandas.map(({ numero, rv, rotulo, valor_cents }) => ({ numero, rv, rotulo, valor_cents })),
-    demanda_numeros: numeros,
-    tomador_documento: tomador,
-    codigo_servico: input.codigo_servico ?? codigoServicoDoContrato,
-    centro_custo: input.centro_custo,
-    ref_cliente: input.ref_cliente,
-    escopo: input.escopo,
-    email_link: input.email_link ?? null,
-    documento: input.documento ?? null,
-    marcas,
-    status: "registrada" satisfies StatusAutorizacao,
-    registrada_por: caller.uid,
-    registrada_por_papel: caller.role,
-    registrada_em: iso,
-    cancelada_por: null,
-    cancelada_em: null,
-    motivo_cancelamento: null,
-    // Reservados para a Fase 7 (NF, portal do cliente e Omie).
-    nf_ids: [],
-    enviada_portal_em: null,
-    omie_lancada_em: null,
-    operation_id: operationId,
-    schema_version: AUTHORIZATION_SCHEMA_VERSION,
+    ...documentoDaAutorizacao({
+      id,
+      customer_code: code,
+      contrato_id: contratoId,
+      tipo,
+      origem: "manual",
+      pedido: input.pedido,
+      aceite: input.aceite,
+      chave_pedido_aceite: chave,
+      recebida_em: input.recebida_em,
+      valor_cents: entrada.valor_cents,
+      soma_cents: somaCents,
+      saldo_cents: saldoCents,
+      demandas: demandas.map(({ numero, rv, rotulo, valor_cents }) => ({ numero, rv, rotulo, valor_cents })),
+      demanda_numeros: numeros,
+      tomador_documento: tomador,
+      codigo_servico: input.codigo_servico ?? codigoServicoDoContrato,
+      centro_custo: input.centro_custo,
+      ref_cliente: input.ref_cliente,
+      escopo: input.escopo,
+      email_link: input.email_link ?? null,
+      documento: input.documento ?? null,
+      marcas,
+      registrada_por: caller.uid,
+      registrada_por_papel: caller.role,
+      registrada_em: iso,
+      operation_id: operationId,
+    }),
     created_at: FieldValue.serverTimestamp(),
     updated_at: FieldValue.serverTimestamp(),
   });
@@ -511,7 +512,14 @@ async function cancelar(mudanca: Mudanca, input: Cancelamento): Promise<Trabalho
   const snapshot = await transaction.get(autorizacaoRef(db, id));
   if (!snapshot.exists) throw new HttpsError("not-found", `Autorização ${id} não encontrada.`);
   const autorizacao = snapshot.data() ?? {};
-  const citadas = demandasGravadas(autorizacao.demandas);
+  // Os números vêm de demanda_numeros (ou, no formato antigo da medição, de demandas); o valor, a RV e o
+  // rótulo de cada um, de `demandas` quando a autorização cita a RV (a medição aprovada não cita).
+  const gravadas = demandasGravadas(autorizacao.demandas);
+  const citadas = numerosDaAutorizacao(autorizacao).map(
+    (numero) => gravadas.find((gravada) => gravada.numero === numero) ?? { numero, rv: 0, rotulo: numero, valor_cents: 0 },
+  );
+  const status = statusDaAutorizacao(autorizacao);
+  const daMedicao = autorizacao.tipo === "medicao_aprovada";
   const resultado = (status: StatusAutorizacao, etapas: readonly EtapaDemanda[], events: string[], jaFeito: boolean): Trabalho => ({
     target_id: id,
     result: {
@@ -519,7 +527,7 @@ async function cancelar(mudanca: Mudanca, input: Cancelamento): Promise<Trabalho
       autorizacao_id: id,
       status,
       customer_code: texto(autorizacao.customer_code),
-      valor_cents: Number(autorizacao.valor_cents ?? 0),
+      valor_cents: valorDaAutorizacao(autorizacao) ?? 0,
       soma_cents: Number(autorizacao.soma_cents ?? 0),
       saldo_cents: typeof autorizacao.saldo_cents === "number" ? autorizacao.saldo_cents : null,
       marcas: marcasGravadas(autorizacao.marcas),
@@ -528,15 +536,18 @@ async function cancelar(mudanca: Mudanca, input: Cancelamento): Promise<Trabalho
       events,
     },
   });
-  const lidas = await lerDemandas(
-    transaction,
-    db,
-    citadas.map((citada) => citada.numero),
-  );
-  if (autorizacao.status === "cancelada") {
+  // A medição aprovada sem demanda também se cancela: não há demanda a devolver.
+  const lidas = citadas.length
+    ? await lerDemandas(
+        transaction,
+        db,
+        citadas.map((citada) => citada.numero),
+      )
+    : [];
+  if (status === "cancelada") {
     return resultado("cancelada", lidas.map((lida) => lida.demanda.etapa as EtapaDemanda), [], true);
   }
-  if (autorizacao.status !== "registrada") throw new HttpsError("failed-precondition", `A autorização ${id} não está registrada.`);
+  if (status !== "registrada") throw new HttpsError("failed-precondition", `A autorização ${id} não está registrada.`);
   const usada =
     (Array.isArray(autorizacao.nf_ids) && autorizacao.nf_ids.length > 0) || Boolean(autorizacao.enviada_portal_em) || Boolean(autorizacao.omie_lancada_em);
   if (usada) {
@@ -551,15 +562,18 @@ async function cancelar(mudanca: Mudanca, input: Cancelamento): Promise<Trabalho
 
   // Escritas.
   const events: string[] = [];
-  const etapas = lidas.map((lida) =>
+  // Só a demanda que fica sem nenhuma outra autorização volta a esperar a medição.
+  const semOutra = lidas.map((lida) => autorizacoesDaDemanda(lida.demanda).filter((outra) => outra !== id).length === 0);
+  const etapas = lidas.map((lida, indice) =>
     gravarAutorizacoesDaDemanda(
       mudanca,
       lida,
       autorizacoesDaDemanda(lida.demanda).filter((outra) => outra !== id),
       events,
+      daMedicao && semOutra[indice] ? { medicao_pendente: true } : {},
     ),
   );
-  const devolvidas = lidas.filter((lida, indice) => lida.demanda.etapa !== etapas[indice]).map((lida) => lida.numero);
+  const devolvidas = lidas.filter((lida, indice) => (daMedicao && semOutra[indice]) || lida.demanda.etapa !== etapas[indice]).map((lida) => lida.numero);
   transaction.update(snapshot.ref, {
     status: "cancelada" satisfies StatusAutorizacao,
     cancelada_por: caller.uid,
@@ -582,6 +596,7 @@ async function cancelar(mudanca: Mudanca, input: Cancelamento): Promise<Trabalho
         demandas: citadas.map((citada) => citada.numero),
         devolvidas,
         marcas: marcasGravadas(autorizacao.marcas),
+        ...(daMedicao && textoOuNull(autorizacao.medicao_id) ? { medicao_id: textoOuNull(autorizacao.medicao_id) as string } : {}),
       },
     }).id,
   );

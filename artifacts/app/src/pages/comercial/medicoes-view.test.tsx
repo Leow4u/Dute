@@ -109,6 +109,7 @@ const CABECALHO_E_COMPETENCIAS = [
   "Comercial",
   "Orçamentos",
   "Contratos",
+  "Autorizações",
   "Medições",
   // Competências
   "Agosto/2026",
@@ -351,14 +352,15 @@ describe("tela de medições: marcas e estados", () => {
       "Comercial",
       "Orçamentos",
       "Contratos",
+      "Autorizações",
       "Medições",
       "Carregando...",
     ]);
-    expect(texts(render({ estado: "erro", contrato: null, medicao: "carregando", chips: [] })).slice(4)).toEqual(["Não foi possível carregar os contratos."]);
+    expect(texts(render({ estado: "erro", contrato: null, medicao: "carregando", chips: [] })).slice(5)).toEqual(["Não foi possível carregar os contratos."]);
   });
 
   it("sem contrato por medição mensal, diz que não há", () => {
-    expect(texts(render({ contratos: [], contrato: null, medicao: "carregando", chips: [] })).slice(4)).toEqual([
+    expect(texts(render({ contratos: [], contrato: null, medicao: "carregando", chips: [] })).slice(5)).toEqual([
       "Nenhum contrato cobra por medição mensal",
     ]);
   });

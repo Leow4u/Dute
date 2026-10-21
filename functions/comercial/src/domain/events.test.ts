@@ -699,6 +699,16 @@ describe("evento gravado", () => {
     const { contrato_id: _contrato, marcas: _marcas, ...semContratoNemMarcas } = EXEMPLOS["client_authorization.cancelled"] as Record<string, unknown>;
     assert.equal(cancelled.safeParse(semContratoNemMarcas).success, false, "cancelamento sem contrato nem marcas");
     assert.equal(cancelled.safeParse({ ...EXEMPLOS["client_authorization.cancelled"], contrato_id: null, marcas: [] }).success, true);
+    // A medição aprovada (parte 15b) cancela com a medição e pode não ter demanda.
+    const daMedicao = { autorizacao_id: "aut_safra-2026_2026-10", tipo: "medicao_aprovada", contrato_id: "safra-2026", demandas: [], devolvidas: [], marcas: [], medicao_id: "safra-2026_2026-10" };
+    assert.equal(cancelled.safeParse(daMedicao).success, true);
+    const semDemanda = buildComercialEvent({
+      ...base,
+      type: "client_authorization.cancelled",
+      entity_id: "aut_safra-2026_2026-10",
+      payload: daMedicao as never,
+    });
+    assert.equal(semDemanda.description, "Medição aprovada cancelada, sem demanda ligada.");
     for (const extra of [{ pedido: "4500000412" }, { valor_cents: 2074880 }, { motivo: "Registrada na demanda errada." }]) {
       assert.equal(cancelled.safeParse({ ...EXEMPLOS["client_authorization.cancelled"], ...extra }).success, false, JSON.stringify(extra));
     }

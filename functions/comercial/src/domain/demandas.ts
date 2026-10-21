@@ -8,6 +8,7 @@ import { customerStage, entityIdDoCadastro } from "./customer-identity.js";
 import {
   ETAPAS_DEMANDA,
   MOTIVOS_PERDA,
+  autorizacoesDaDemanda,
   destinoDaValidacao,
   demandaExecutada,
   escopoDasLinhas,
@@ -28,6 +29,7 @@ import {
   type StatusOrcamento,
   type TipoRv,
 } from "./demanda.js";
+import { statusDaAutorizacao } from "./autorizacao.js";
 import { createComercialEvent } from "./events.js";
 import { CLIENT_AUTHORIZATIONS_COLLECTION, MEDICOES_COLLECTION } from "./medicao.js";
 import { runIdempotent, type ComercialActor } from "./operations.js";
@@ -524,7 +526,8 @@ async function lerMedicaoAprovada(
   const autorizacaoId = medicao.exists && medicao.get("status") === "aprovada" ? textoOuNull(medicao.get("autorizacao_id")) : null;
   if (!autorizacaoId) return null;
   const autorizacao = await transaction.get(db.collection(CLIENT_AUTHORIZATIONS_COLLECTION).doc(autorizacaoId));
-  return autorizacao.exists ? { medicao, autorizacao } : null;
+  // A autorização cancelada não autoriza mais: a demanda segue esperando.
+  return autorizacao.exists && statusDaAutorizacao(autorizacao.data() ?? {}) === "registrada" ? { medicao, autorizacao } : null;
 }
 
 /** A lista de demandas pendentes ({ numero, motivo }) sem esta demanda. */
@@ -594,7 +597,7 @@ async function validar(contexto: Contexto, input: z.infer<typeof Validar>): Prom
   }
   if (medicaoAprovada) {
     const { medicao, autorizacao: autorizada } = medicaoAprovada;
-    patch.autorizacao_id = autorizada.id;
+    patch.autorizacao_ids = [...new Set([...autorizacoesDaDemanda(demanda), autorizada.id])];
     transaction.update(medicao.ref, {
       demandas_a_faturar: FieldValue.arrayUnion(numero),
       demandas_pendentes: pendentesSem(medicao.get("demandas_pendentes"), numero),
@@ -603,8 +606,7 @@ async function validar(contexto: Contexto, input: z.infer<typeof Validar>): Prom
       updated_by: caller.uid,
     });
     transaction.update(autorizada.ref, {
-      demandas: FieldValue.arrayUnion(numero),
-      demandas_a_faturar: FieldValue.arrayUnion(numero),
+      demanda_numeros: FieldValue.arrayUnion(numero),
       demandas_pendentes: pendentesSem(autorizada.get("demandas_pendentes"), numero),
       updated_at: FieldValue.serverTimestamp(),
       updated_by: caller.uid,

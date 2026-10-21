@@ -225,7 +225,8 @@ Storage.
     perde, e depois do fechamento o único motivo de perda é o cancelamento
     pelo cliente. Recomendo um motivo de perda "prazo de faturamento", aceito
     só com o alerta vencido, inclusive a partir de "A faturar" com a
-    autorização ainda não usada na NF. (Parte 15b ou Fase 7)
+    autorização ainda não usada na NF. (Fase 7: a 15b ficou na tela e na
+    unificação das autorizações, sem este motivo)
 11. **A aprovação da medição fecha e valida a proposta enviada sem
    fechamento?** Hoje não: a aprovação não registra o que o cliente não
    respondeu. A demanda fica pendente, presa à medição, e ganha a autorização
@@ -261,6 +262,18 @@ Storage.
     (notificação ou um "Copiar link" da aprovação na montagem, com
     `hrefDaAprovacao(numero)`) não está nos mockups. Recomendo ver no uso se o
     e-mail com o número basta. (Parte 12a)
+17. **Cancelar a autorização da medição aprovada reabre a medição?** Hoje não:
+    o cancelamento (o mesmo `recordAuthorization`, `cancel`) desliga as
+    demandas da autorização e as devolve à espera da medição
+    (`medicao_pendente`), e a medição segue aprovada, como fato do cliente.
+    Sem reabrir a medição, a demanda devolvida não ganha outra autorização.
+    Recomendo manter assim e decidir a reabertura (aprovada para enviada,
+    desfazendo as validações da medição) se o caso aparecer. Só volta a
+    esperar a medição a demanda que fica sem nenhuma outra autorização; a que
+    tem complemento registrado à mão segue coberta. A tela avisa disso no
+    diálogo de cancelar. Limite conhecido: a lista de Autorizadas a faturar
+    traz as 200 mais recentes e filtra as já usadas depois; quando a Fase 7
+    marcar NF, portal ou Omie, o filtro passa para a consulta. (Parte 15b)
 
 ## Registro
 
@@ -567,6 +580,75 @@ Storage.
   (`client_authorization.recorded`, com `contrato_id`, `a_faturar`, `marcas`
   e o `medicao_id`; a lista de demandas pode ser vazia).
 - Perguntas para a parte 16b: 11, 12 e 13 acima.
+
+### Parte 15b: tela de Autorizações e autorização única
+
+- **Um formato só em `client_authorizations`.** A medição aprovada (16a) gravava
+  `status: "a_faturar"`, `demandas` como lista de números, `total_cents` e
+  `autorizacao_id` (um id) na demanda; a registrada à mão (15a) grava
+  `status: "registrada"`, `demandas` com a RV e o valor de cada uma,
+  `demanda_numeros`, `valor_cents` e `autorizacao_ids`. Passou a valer o da
+  15a, montado por `documentoDaAutorizacao` (`domain/autorizacao.ts`) nas duas
+  origens: os mesmos campos, o que uma não tem vai vazio (null, `[]`), mais
+  `origem` (`manual` ou `medicao`), `medicao_id`, `competencia`,
+  `demandas_pendentes` e `contato_id`. A medição aprovada nasce `registrada`,
+  com o total aprovado em `valor_cents`, os números em `demanda_numeros`
+  (a pendente entra quando for validada) e `demandas: []` (ela não cita RV),
+  e liga cada demanda por `autorizacao_ids`, como a 15a.
+- **Leitura tolerante, sem migração em lote.** `statusDaAutorizacao`,
+  `numerosDaAutorizacao` e `valorDaAutorizacao` leem também o formato antigo
+  (`a_faturar` é a registrada, `demandas` como números, `total_cents`), e
+  `autorizacoesDaDemanda` lê o `autorizacao_id` antigo da demanda. O que já
+  está gravado na homologação continua valendo e se cancela; o cancelamento
+  grava a demanda no formato novo. A tela lê `registrada` e `a_faturar`.
+- **Cancelamento nas duas.** `recordAuthorization` (`cancel`) cancela a da
+  medição aprovada e a registrada à mão: devolve cada demanda (a da medição
+  volta a esperar a medição, a registrada à mão volta a aguardar autorização),
+  inclusive a medição sem demanda. O evento `client_authorization.cancelled`
+  aceita `demandas` vazio e leva o `medicao_id` (pergunta 17 sobre reabrir a
+  medição). A validação de uma demanda presa a uma medição só usa a
+  autorização dela se estiver registrada.
+- Rota `/comercial/autorizacoes` (aba e item de menu Autorizações), só com a
+  liberação do Comercial, para owner, admin e comercial. O financeiro segue
+  sem a tela: registra pela callable e lê pelas regras, e a tela dele é da
+  Fase 7 (o `comercialStatus` e o menu não mudaram).
+- A tela lê pelo Firestore e grava só pela `recordAuthorization`: `demands`
+  aguardando autorização ou a faturar (`in` na etapa), o total da RV validada
+  em `quotes/{numero}/revisoes/{rv}` (lido uma vez por RV: a enviada não
+  muda), `client_authorizations` registradas (o índice de situação e data da
+  15a, até 200), `contracts` e `customers`. O servidor recalcula o valor.
+- Fila "Executados aguardando autorização" agrupada por cliente, o grupo com
+  o executado mais antigo primeiro, com número-RV, legado, título,
+  referência, gerenciadora (a empresa do contato), data da execução, dias
+  esperando (vermelho acima de 30), valor da RV e o total do grupo. Filtro de
+  idade com a contagem de cada faixa e busca por demanda, legado,
+  referência, gerenciadora, cliente, pedido e aceite. A idade e o prazo de
+  perda são cópias de `domain/autorizacao.ts` em
+  `lib/comercial/autorizacoes.ts`, com as listas travadas pelo teste e os
+  mesmos casos.
+- Uma autorização é de um cliente, um contrato e um tipo: marcada a
+  primeira demanda, as de outro cliente, contrato ou tipo ficam sem a caixa
+  (a callable recusa contratos diferentes). As caixas só aparecem com o
+  painel aberto.
+- O painel segue o tipo que o contrato pedia na validação
+  (`validacao.autorizacao`): pedido e aceite; portal (pedido do portal, sem
+  aceite); outro registro no legado, que pede o pedido ou o documento. O
+  código de serviço mostra o do contrato e vai na entrada quando alguém o
+  muda. O documento é nome e link ou pasta (anexo no Storage não é do v1).
+  A conferência compara o valor com a soma das RVs marcadas: "Valor confere"
+  (verde) ou "Diverge em R$ ..." (âmbar), que não impede o registro (o
+  servidor grava a marca). O complemento de uma demanda já a faturar não
+  entra pela tela: a fila só mostra quem aguarda.
+- "Autorizadas · a faturar": as registradas das duas origens ainda não usadas
+  no faturamento, a mais recente primeiro, com as marcas e, no contrato com
+  prazo de perda, "faturar até" contado do fim da execução (a pergunta 9
+  continua aberta). A da medição aprovada aparece como "Medição MM/AAAA" e
+  "Medição aprovada", com as demandas que cobre. "Cancelar" pede o motivo.
+- Início, para owner, admin e comercial com a liberação (sem consulta para
+  os outros): um item por demanda que alcançou o aviso do prazo de perda
+  (crítico vencido ou no último aviso) e "N executados esperando autorização
+  há mais de 30 dias", os dois levando à tela. Lê `demands` e, se alguma tem
+  contrato, `contracts`; o nome do cliente vem da demanda.
 
 ### Parte 16b: tela de Medições
 

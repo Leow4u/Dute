@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
+  CALLABLES_DA_AUTORIZACAO,
   CALLABLES_DO_CADASTRO,
   CALLABLES_DA_MEDICAO,
   CALLABLES_DO_CONTRATO,
@@ -19,7 +20,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const indexDoComercial = readFileSync(resolve(here, "../../../../../functions/comercial/src/index.ts"), "utf8");
 
 describe("callables do cadastro comercial", () => {
-  it.each([...CALLABLES_DO_CADASTRO, ...CALLABLES_DO_CONTRATO])("%s existe em functions/comercial", (nome) => {
+  it.each([...CALLABLES_DO_CADASTRO, ...CALLABLES_DO_CONTRATO, ...CALLABLES_DA_AUTORIZACAO])("%s existe em functions/comercial", (nome) => {
     expect(indexDoComercial).toMatch(new RegExp(`^export const ${nome} = onCall\\(`, "m"));
   });
 
@@ -52,6 +53,10 @@ describe("callables do cadastro comercial", () => {
     expect(erro).toBeInstanceOf(Error);
     expect(erro.message).toBe("O orçamento mudou.");
     expect(erro.codigo).toBe("failed-precondition");
+  });
+
+  it("a tela de Autorizações grava só pela recordAuthorization (parte 15a)", () => {
+    expect([...CALLABLES_DA_AUTORIZACAO]).toEqual(["recordAuthorization"]);
   });
 
   it("a mensagem do servidor passa; internal vira aviso genérico", () => {

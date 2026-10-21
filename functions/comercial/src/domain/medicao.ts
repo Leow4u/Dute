@@ -1,3 +1,4 @@
+import { AUTHORIZATION_SCHEMA_VERSION, CLIENT_AUTHORIZATIONS_COLLECTION } from "./autorizacao.js";
 import { normalizarTexto } from "./catalogo.js";
 import { dataValida, diasEntre, ultimoDiaDoMes } from "./contratos-datas.js";
 import {
@@ -38,9 +39,10 @@ export type Janela = (typeof JANELAS)[number];
 export type MarcaMedicao = (typeof MARCAS_MEDICAO)[number];
 
 export const MEDICOES_COLLECTION = "medicoes";
-export const CLIENT_AUTHORIZATIONS_COLLECTION = "client_authorizations";
 export const MEDICAO_SCHEMA_VERSION = 1;
-export const CLIENT_AUTHORIZATION_SCHEMA_VERSION = 1;
+// A autorização da medição aprovada é a mesma de client_authorizations (autorizacao.ts).
+export { CLIENT_AUTHORIZATIONS_COLLECTION };
+export const CLIENT_AUTHORIZATION_SCHEMA_VERSION = AUTHORIZATION_SCHEMA_VERSION;
 
 export const STATUS_MEDICAO = ["rascunho", "enviada", "aprovada", "contestada"] as const;
 export type StatusMedicao = (typeof STATUS_MEDICAO)[number];

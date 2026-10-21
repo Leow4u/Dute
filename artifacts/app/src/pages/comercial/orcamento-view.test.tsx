@@ -154,6 +154,7 @@ const CABECALHO_RASCUNHO = [
   "Comercial",
   "Orçamentos",
   "Contratos",
+  "Autorizações",
   "Medições",
   "10045",
   "Em montagem",
@@ -306,10 +307,11 @@ describe("montar orçamento", () => {
       acoes: acoesDoOrcamento({ status: "para_aprovar", role: "owner", uid: "u-leo", autorUid: "u-gui" }),
     });
     const lista = texts(html);
-    expect(lista.slice(0, 26)).toEqual([
+    expect(lista.slice(0, 27)).toEqual([
       "Comercial",
       "Orçamentos",
       "Contratos",
+      "Autorizações",
       "Medições",
       "10045",
       "Para aprovar",
@@ -491,9 +493,9 @@ describe("montar orçamento", () => {
           </Router>,
         ),
       );
-    expect(estado("carregando")).toEqual(["Comercial", "Orçamentos", "Contratos", "Medições", "Carregando..."]);
-    expect(estado("nao_encontrado")).toEqual(["Comercial", "Orçamentos", "Contratos", "Medições", "Orçamento não encontrado"]);
-    expect(estado("erro")).toEqual(["Comercial", "Orçamentos", "Contratos", "Medições", "Não foi possível carregar o orçamento."]);
+    expect(estado("carregando")).toEqual(["Comercial", "Orçamentos", "Contratos", "Autorizações", "Medições", "Carregando..."]);
+    expect(estado("nao_encontrado")).toEqual(["Comercial", "Orçamentos", "Contratos", "Autorizações", "Medições", "Orçamento não encontrado"]);
+    expect(estado("erro")).toEqual(["Comercial", "Orçamentos", "Contratos", "Autorizações", "Medições", "Não foi possível carregar o orçamento."]);
   });
 });
 
@@ -582,10 +584,11 @@ describe("montar orçamento depois do envio (parte 12b)", () => {
 
   it("sem legenda: a RV enviada só tem rótulos, dados e ações", () => {
     const lista = texts(enviada());
-    expect(lista.slice(0, 23)).toEqual([
+    expect(lista.slice(0, 24)).toEqual([
       "Comercial",
       "Orçamentos",
       "Contratos",
+      "Autorizações",
       "Medições",
       "10045",
       "Aguardando cliente",

@@ -36,6 +36,13 @@ export const ROTA_DOCUMENTO = "/comercial/orcamento/documento";
 export const ROTA_CLIENTES = "/comercial/clientes";
 /** Aba Contratos do módulo (parte 14): lista e ficha do contrato. */
 export const ROTA_CONTRATOS = "/comercial/contratos";
+/**
+ * Aba Autorizações (parte 15b, docs/mockups/ComAutorizacoes.dc.html): a fila de
+ * executados e o registro da autorização de faturamento. Owner, admin e
+ * comercial; o financeiro registra pela callable e lê pelas regras, e a tela
+ * dele é da Fase 7.
+ */
+export const ROTA_AUTORIZACOES = "/comercial/autorizacoes";
 /** Aba Medições do módulo (parte 16b): a medição mensal de cada contrato e competência. */
 export const ROTA_MEDICOES = "/comercial/medicoes";
 
@@ -50,6 +57,7 @@ export const TELAS_DO_COMERCIAL: readonly string[] = [
   ROTA_APROVAR,
   ROTA_CLIENTES,
   ROTA_CONTRATOS,
+  ROTA_AUTORIZACOES,
   ROTA_MEDICOES,
 ];
 
@@ -103,7 +111,7 @@ export type AbaDoComercial = {
 export const ABAS_DO_COMERCIAL: readonly AbaDoComercial[] = [
   { id: "orcamentos", rotulo: "Orçamentos", href: ROTA_COMERCIAL, tambem: [ROTA_ORCAMENTO, ROTA_APROVAR, ROTA_DOCUMENTO] },
   { id: "contratos", rotulo: "Contratos", href: ROTA_CONTRATOS },
-  { id: "autorizacoes", rotulo: "Autorizações", href: "/comercial/autorizacoes" },
+  { id: "autorizacoes", rotulo: "Autorizações", href: ROTA_AUTORIZACOES },
   { id: "medicoes", rotulo: "Medições", href: ROTA_MEDICOES },
 ];
 

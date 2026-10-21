@@ -2,15 +2,15 @@ import { FieldValue, type DocumentReference, type Firestore, type Transaction } 
 import { HttpsError } from "firebase-functions/https";
 import { z } from "zod";
 
+import { documentoDaAutorizacao } from "./autorizacao.js";
 import { idDeDocumentoValido, parseEntrada } from "./cadastro.js";
 import { LPU_ITEMS_COLLECTION } from "./catalogo.js";
 import { dataValida } from "./contratos-datas.js";
 import { ADITIVOS_SUBCOLLECTION, CONTRACTS_COLLECTION } from "./contratos.js";
-import { etapaDaDemanda, segundosDesde, type EtapaDemanda } from "./demanda.js";
+import { autorizacoesDaDemanda, etapaDaDemanda, segundosDesde, type EtapaDemanda } from "./demanda.js";
 import { ErroDinheiro } from "./dinheiro.js";
 import { createComercialEvent } from "./events.js";
 import {
-  CLIENT_AUTHORIZATION_SCHEMA_VERSION,
   CLIENT_AUTHORIZATIONS_COLLECTION,
   DIA_TIPOS,
   ErroMedicao,
@@ -830,7 +830,10 @@ async function aprovar(gravacao: Gravacao, id: string, medicao: Dados, input: Ap
       continue;
     }
 
-    const patch: Record<string, unknown> = { medicao_pendente: false, autorizacao_id: autorizacaoId };
+    const patch: Record<string, unknown> = {
+      medicao_pendente: false,
+      autorizacao_ids: [...new Set([...autorizacoesDaDemanda(demanda), autorizacaoId])],
+    };
     if (destino.tipo === "validar") {
       if (destino.registrar_execucao) {
         patch.executado_de = destino.registrar_execucao.de;
@@ -897,27 +900,30 @@ async function aprovar(gravacao: Gravacao, id: string, medicao: Dados, input: Ap
     registrada_por: caller.uid,
     registrada_em: iso,
   };
+  // O mesmo documento da autorização registrada à mão (documentoDaAutorizacao): um formato só. A pendente
+  // entra em demanda_numeros quando for validada (demandas.ts); o valor é o total aprovado da medição.
   transaction.create(autorizacaoRef, {
-    id: autorizacaoId,
-    schema_version: CLIENT_AUTHORIZATION_SCHEMA_VERSION,
-    tipo: "medicao_aprovada",
-    origem: "medicao",
-    status: "a_faturar",
-    customer_code: code,
-    contrato_id: texto(medicao.contrato_id),
-    medicao_id: id,
-    competencia: texto(medicao.competencia),
-    // As demandas autorizadas; a pendente entra quando for validada (demandas.ts).
-    demandas: aFaturar,
-    demandas_a_faturar: aFaturar,
-    demandas_pendentes: pendentes,
-    total_cents: Number(medicao.total_cents ?? 0),
-    recebida_em: em,
-    link: aprovacao.link,
-    contato_id: aprovacao.contato_id,
-    registrada_por: actorPayload(gravacao.actor),
-    registrada_em: iso,
+    ...documentoDaAutorizacao({
+      id: autorizacaoId,
+      customer_code: code,
+      contrato_id: texto(medicao.contrato_id) || null,
+      tipo: "medicao_aprovada",
+      origem: "medicao",
+      recebida_em: em,
+      valor_cents: Number(medicao.total_cents ?? 0),
+      demanda_numeros: aFaturar,
+      demandas_pendentes: pendentes,
+      medicao_id: id,
+      competencia: texto(medicao.competencia),
+      email_link: aprovacao.link,
+      contato_id: aprovacao.contato_id,
+      registrada_por: caller.uid,
+      registrada_por_papel: caller.role,
+      registrada_em: iso,
+      operation_id: gravacao.operationId,
+    }),
     created_at: FieldValue.serverTimestamp(),
+    updated_at: FieldValue.serverTimestamp(),
   });
   const patch = {
     ...mudarSituacao(gravacao, medicao, "aprovada"),

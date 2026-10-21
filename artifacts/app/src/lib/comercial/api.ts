@@ -22,6 +22,14 @@ export type CallableDoContrato = (typeof CALLABLES_DO_CONTRATO)[number];
 export const CALLABLES_DO_ORCAMENTO = ["saveQuote", "advanceQuote"] as const;
 export type CallableDoOrcamento = (typeof CALLABLES_DO_ORCAMENTO)[number];
 
+/**
+ * Autorização de faturamento (parte 15a, domain/autorizacoes.ts): registrar e
+ * cancelar. A chave vai em `request_id`; o servidor confere a etapa de cada
+ * demanda e recalcula o valor das RVs.
+ */
+export const CALLABLES_DA_AUTORIZACAO = ["recordAuthorization"] as const;
+export type CallableDaAutorizacao = (typeof CALLABLES_DA_AUTORIZACAO)[number];
+
 /** Medição mensal (parte 16a, domain/medicoes.ts): saveMedicao (create, upsert_line, remove_line) e advanceMedicao (send, approve, contest, reopen). */
 export const CALLABLES_DA_MEDICAO = ["saveMedicao", "advanceMedicao"] as const;
 export type CallableDaMedicao = (typeof CALLABLES_DA_MEDICAO)[number];
@@ -34,6 +42,7 @@ export type CallableDoComercial =
   | CallableDoCadastro
   | CallableDoContrato
   | CallableDoOrcamento
+  | CallableDaAutorizacao
   | CallableDaMedicao
   | CallableDaDemanda;
 
