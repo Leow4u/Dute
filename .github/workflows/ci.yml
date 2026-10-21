@@ -55,11 +55,6 @@ jobs:
         run: |
           npm install --prefix "$RUNNER_TEMP/dute-browser-smoke" --no-audit --no-fund --no-package-lock playwright@1.56.1
           node "$RUNNER_TEMP/dute-browser-smoke/node_modules/playwright/cli.js" install --with-deps chromium
-      - name: Diagnose current homologation startup
-        if: github.event_name == 'pull_request'
-        continue-on-error: true
-        working-directory: .
-        run: SMOKE_TOOL_DIR="$RUNNER_TEMP/dute-browser-smoke" node tools/check_frontend_startup.cjs https://dute-app-u2iwz5xjyq-rj.a.run.app "$RUNNER_TEMP/dute-startup-before"
       - name: Build production frontend
         env:
           VITE_FIREBASE_API_KEY: "AIzaSyBPaH5X0wHbF_geH1zit0rwyJWmdb3Q7Ds"
@@ -86,7 +81,6 @@ jobs:
         with:
           name: frontend-startup
           path: |
-            ${{ runner.temp }}/dute-startup-before
             ${{ runner.temp }}/dute-startup-after
             ${{ runner.temp }}/dute-preview.log
           retention-days: 7

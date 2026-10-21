@@ -250,6 +250,11 @@ jobs:
             exit 1
           fi
 
+      - name: Install isolated browser test tools
+        run: |
+          npm install --prefix "$RUNNER_TEMP/dute-browser-smoke" --no-audit --no-fund --no-package-lock playwright@1.56.1
+          node "$RUNNER_TEMP/dute-browser-smoke/node_modules/playwright/cli.js" install --with-deps chromium
+
       - id: auth
         uses: google-github-actions/auth@v2
         with:
@@ -318,3 +323,24 @@ jobs:
               --format "table(name,creationTimestamp.date('%Y-%m-%d %H:%M'),active,spec.containers[0].image)"
             exit 1
           fi
+
+      # Os hashes corretos não garantem que o JavaScript consiga inicializar.
+      - name: Verify deployed login starts in Chromium
+        run: |
+          set -euo pipefail
+          SERVICE_URL="$(gcloud run services describe "${SERVICE}" --region "${REGION}" --project "${PROJECT_ID}" --format "value(status.url)")"
+          URLS=("${SERVICE_URL}")
+          if [ -n "${PUBLIC_URL}" ]; then URLS+=("${PUBLIC_URL}"); fi
+          STARTUP_INDEX=0
+          for STARTUP_URL in "${URLS[@]}"; do
+            SMOKE_TOOL_DIR="$RUNNER_TEMP/dute-browser-smoke" node tools/check_frontend_startup.cjs "$STARTUP_URL" "$RUNNER_TEMP/dute-deployed-startup/$STARTUP_INDEX"
+            STARTUP_INDEX=$((STARTUP_INDEX + 1))
+          done
+
+      - name: Upload deployed startup evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-startup-${{ inputs.ambiente }}
+          path: ${{ runner.temp }}/dute-deployed-startup
+          retention-days: 7
