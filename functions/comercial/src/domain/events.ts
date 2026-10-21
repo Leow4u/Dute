@@ -2,6 +2,7 @@ import { FieldValue, type Firestore, type Transaction } from "firebase-admin/fir
 import { HttpsError } from "firebase-functions/https";
 import { z } from "zod";
 
+import { STATUS_CONTRATO } from "./contratos-datas.js";
 import { actorPayload, compactValue, digest, type ComercialActor } from "./operations.js";
 
 /**
@@ -63,6 +64,8 @@ const tipoRv = z.enum(TIPOS_RV);
 
 export const ESTAGIOS_CADASTRO = ["prospect", "cliente"] as const;
 export const REGIMES_COBRANCA = ["por_demanda", "medicao_mensal", "wms"] as const;
+/** Tipos de aditivo do contrato (contracts/{id}/aditivos). */
+export const TIPOS_ADITIVO = ["formalizacao", "prorrogacao", "preco", "escopo", "outro"] as const;
 
 /**
  * Variante da tabela de preço: na tabela é texto livre de letras ("Comercial",
@@ -106,9 +109,26 @@ export const COMERCIAL_EVENT_PAYLOADS = {
   "customer_contact.saved": z.object({ contato_id: id, novo: z.boolean() }).strict(),
   "customer_location.saved": z.object({ local_id: id, novo: z.boolean() }).strict(),
 
-  "contract.created": z.object({ contrato_id: id, regime: z.enum(REGIMES_COBRANCA) }).strict(),
-  "contract.updated": z.object({ contrato_id: id, campos: z.array(codigo).min(1).max(40) }).strict(),
-  "contract.amendment_added": z.object({ contrato_id: id, aditivo_id: id }).strict(),
+  // Contrato (parte 8): ids, tipos, datas e contagens. Nunca o número do
+  // contrato no cliente, o objeto, o documento nem valor.
+  "contract.created": z
+    .object({ contrato_id: id, regime: z.enum(REGIMES_COBRANCA), vigente_de: data, vigente_ate: data.nullable() })
+    .strict(),
+  "contract.updated": z
+    .object({ contrato_id: id, campos: z.array(codigo).min(1).max(40), edicao, status: z.enum(STATUS_CONTRATO) })
+    .strict(),
+  "contract.amendment_added": z
+    .object({
+      contrato_id: id,
+      aditivo_id: id,
+      tipo: z.enum(TIPOS_ADITIVO),
+      vigencia_alterada: z.boolean(),
+      /** O fim novo do contrato, quando o aditivo prorrogou. */
+      vigente_ate: data.optional(),
+      tabelas: contagem,
+      documento_localizado: z.boolean(),
+    })
+    .strict(),
 
   "price_table.imported": z
     .object({
@@ -217,6 +237,18 @@ function dataRotulo(value: string): string {
   return `${dia}/${mes}/${ano}`;
 }
 
+function vigenciaRotulo(de: string, ate: string | null): string {
+  return ate === null ? `vigente desde ${dataRotulo(de)}, por prazo indeterminado` : `vigência de ${dataRotulo(de)} a ${dataRotulo(ate)}`;
+}
+
+const TIPO_ADITIVO_ROTULO: Record<(typeof TIPOS_ADITIVO)[number], string> = {
+  formalizacao: "formalização",
+  prorrogacao: "prorrogação",
+  preco: "preço",
+  escopo: "escopo",
+  outro: "outro tipo",
+};
+
 function competenciaRotulo(value: string): string {
   const [ano, mes] = value.split("-");
   return `${mes}/${ano}`;
@@ -289,13 +321,24 @@ const TEMPLATES: Templates = {
 
   "contract.created": (p) => ({
     title: "Contrato cadastrado",
-    description: `Cobrança ${REGIME_ROTULO[p.regime]}.`,
+    description: `Cobrança ${REGIME_ROTULO[p.regime]}; ${vigenciaRotulo(p.vigente_de, p.vigente_ate)}.`,
   }),
   "contract.updated": (p) => ({
-    title: "Contrato atualizado",
-    description: `${p.campos.length} ${p.campos.length === 1 ? "campo alterado" : "campos alterados"}.`,
+    title: p.status === "encerrado" && p.campos.includes("status") ? "Contrato encerrado" : "Contrato atualizado",
+    description: `${p.campos.length} ${p.campos.length === 1 ? "campo alterado" : "campos alterados"}; edição ${p.edicao}.`,
   }),
-  "contract.amendment_added": () => ({ title: "Aditivo registrado no contrato", description: "Aditivo no histórico do contrato." }),
+  "contract.amendment_added": (p) => ({
+    title: `Aditivo ${p.aditivo_id} registrado no contrato`,
+    description: [
+      `Aditivo de ${TIPO_ADITIVO_ROTULO[p.tipo]}`,
+      p.vigente_ate ? `vigência prorrogada até ${dataRotulo(p.vigente_ate)}` : "vigência mantida",
+      p.tabelas > 0 ? `${p.tabelas} ${p.tabelas === 1 ? "tabela ligada" : "tabelas ligadas"}` : null,
+      p.documento_localizado ? null : "documento não localizado",
+    ]
+      .filter(Boolean)
+      .join("; ")
+      .concat("."),
+  }),
 
   "price_table.imported": (p) => ({
     title: "Tabela de preço importada",

@@ -85,7 +85,7 @@ registro de cada parte entra no fim, como em `fase-2-nucleo.md`.
 | `customers` | ganha `stage` e os dados comerciais | equipe, como hoje, e `comercial` |
 | `customer_locations` | polo, sigla e endereço do cliente | owner, admin, comercial e, na Fase 3, a operação |
 | `customer_contacts` | nome, e-mail, telefone, empresa | owner, admin, comercial |
-| `contracts` (e `aditivos`) | contrato e histórico | `canReadPrices()` |
+| `contracts` (e `contracts/{id}/aditivos/{numero}`, id sem zero à esquerda) | contrato e histórico; o id do contrato é interno, nunca o número do cliente | `canReadPrices()` |
 | `lpu_items`, `price_tables` | catálogo e tabelas | `canReadPrices()`; `lpu_items` abre à operação na Fase 3 |
 | `demands` | a demanda, sem preço | owner, admin, comercial; a operação na Fase 3 |
 | `quotes` (e `revisoes`) | orçamento e RVs congeladas | `canReadPrices()` |
