@@ -2,8 +2,38 @@
 
 Na contagem de abertura, no recebimento e na ficha de um item em Estoque,
 anexe uma foto e escolha **Foto profissional com Agent Dute**. Selecione
-**Foto de catálogo** para produtos em geral ou **Roupa em manequim** para
-vestuário. Ambos pedem fundo branco e iluminação de estúdio.
+**Foto de catálogo** para produtos em geral e **Manequim de vitrine** ou
+**Roupa sem manequim** para vestuário. As opções pedem fundo branco e iluminação de estúdio.
+
+## Apresentação da roupa e conferência visual
+
+**Foto de catálogo** preserva a apresentação do original, inclusive se estiver
+dobrado. É a opção mais fiel quando a foto não mostra a peça inteira aberta.
+**Manequim de vitrine** limita peças superiores (tricôs, camisetas, camisas etc.)
+a um busto sem cabeça, mãos ou pernas, que termina dentro da barra da roupa.
+Peças inferiores usam suporte coberto pela própria peça; vestidos e macacões
+usam suporte invisível. Não deve haver anatomia íntima ou volumes anatômicos.
+**Roupa sem manequim** mostra somente a peça, com suporte invisível.
+
+O prompt exige fidelidade de logo, bordado, zíper, gola, punhos e textura, e
+orienta a não inventar o formato escondido de uma roupa dobrada. Se necessário,
+o resultado mantém a apresentação original em vez de reconstruir a peça aberta.
+
+Antes de armazenar e retornar uma proposta ao navegador, o backend compara
+original e proposta em uma chamada visual separada, usando
+`PRODUCT_PHOTO_REVIEW_MODEL` (padrão `gemini-2.5-flash`). A conferência avalia
+apresentação comercial, fidelidade da peça, marcas e enquadramento. Todos os
+critérios precisam passar. Reprovação, resposta incompleta ou indisponibilidade
+da conferência impedem salvar e exibir a proposta; o original permanece intacto.
+Não há nova geração automática que gere custos adicionais sem uma nova ação.
+
+A conferência acrescenta uma chamada de IA por proposta e admite até 14 MB
+somando original e resultado, para respeitar o limite da requisição. O prazo
+da geração é de 120 s e o da conferência de 45 s, dentro do timeout da callable.
+Uma versão nova da apresentação entra no hash de idempotência para não reutilizar
+propostas antigas sem conferência. O resultado aprovado e o modelo de revisão
+ficam registrados no pedido de geração. Essa conferência também é probabilística:
+a revisão humana continua necessária antes de aprovar a publicação da foto.
 
 A geração recebe a descrição, gênero, grupo, tamanho, cor e marca disponíveis
 no cadastro ou formulário. Esses atributos aparecem antes da geração e na
