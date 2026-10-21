@@ -151,4 +151,28 @@ comercial.
   dele. Nunca reaproveite essa senha em outro lugar.
 - Nenhum dado real entra aqui. Não copie exports de produção, `tmp/` nem
   `.secrets/` para o emulador.
+- **Confira, antes de entrar, que o app está ligado ao emulador.** O Vite lê o
+  `.env.local` da raiz do repositório em que ele roda. Se o servidor subir de
+  outro checkout (por exemplo o principal, que pode ter um `.env.local` antigo
+  com a configuração de um projeto real), o app fala com a nuvem e a tela de
+  login mostra `auth/invalid-credential` para o usuário de teste. Suba o
+  servidor da pasta onde está o `.env.local` de emulador e confira no console
+  do navegador: `firebaseAuth.emulatorConfig` deve mostrar `127.0.0.1:9199` e
+  o projeto deve ser `dute-homolog`.
 - Pare tudo ao terminar: `Ctrl+C` no terminal dos emuladores e no do Vite.
+
+## Conferência das telas (21/10/2026)
+
+Percorrida neste ambiente, no navegador, com os usuários de teste:
+
+- **comercial:** fila de orçamentos; montar o 10001 (busca de item pelo
+  teclado, conta de linhas e total); salvar e enviar para aprovação.
+- **owner:** aprovar pelo celular (375 px) e pelo computador; documento A4
+  ("Prévia" até o envio); Clientes, Contratos (conta do pagamento por faixas e
+  da vigência), Autorizações (registro com pedido e aceite) e Medições (enviar
+  e registrar a aprovação, que cria a autorização da medição na mesma lista).
+- **Isolamento:** `interno` e cliente BTG não veem o Comercial. Pela API REST
+  do emulador, com o token de cada papel, o cliente não lê nenhuma coleção do
+  Comercial, o interno só lê `customers` (como no WMS), o financeiro lê preço,
+  contratos, orçamentos, autorizações e medições, mas não os contatos, e
+  nenhum papel grava direto (403), nem o owner.

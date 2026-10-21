@@ -698,3 +698,13 @@ Storage.
 - Corrigido nesta parte: CNPJs reais nos testes do app; trava de projeto igual nas três cargas (`cargas/projeto.ts`); a carga de tabela recusa CSV dentro do repositório fora de `tmp/` e `.secrets/`; roteiro do `tabela.id` no `comercial-cargas.md`; textos de `fase-2-nucleo.md`, `firestore.rules` e do teste da zeragem.
 - Não corrigido (grande ou depende do Leonardo), com recomendação em `comercial-producao.md`: listas de clientes do WMS, ações sem botão, demanda "a faturar" sem lista, `splitCatalogPrices`, contador e carga do legado, rollback de functions e regras, valores que parecem reais nos mockups.
 - Ligar a liberação, rodar as cargas, acertar o contador, dar o papel ao Guilherme e carregar o legado seguem pendentes do OK do Leonardo: roteiro em `docs/plataforma/comercial-producao.md`.
+
+### Conferência no ambiente local (21/10/2026)
+
+- As telas do Comercial foram percorridas de ponta a ponta no navegador contra
+  emuladores (`docs/plataforma/ambiente-local.md`), como comercial, owner,
+  interno e cliente. Nenhum erro de tela; os valores e as datas conferem com as
+  contas. Não foi possível entrar na homologação: o login exige conta real.
+- Achados menores, sem correção nesta parte: o botão de fechar dos diálogos
+  tem o rótulo "Close" (inglês); o financeiro lê `demands` (o desenho previa
+  owner, admin e comercial; a coleção não tem preço).
