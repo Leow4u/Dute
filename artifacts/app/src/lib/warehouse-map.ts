@@ -33,6 +33,8 @@ export type Shelf = {
   position: WarehousePosition;
   zone: string | null;
   boxes: WarehouseBox[];
+  /** Inclui guardas em andamento que ainda reservam espaço na prateleira. */
+  volumeBoxes: WarehouseBox[];
   /** Estimativa geométrica independente da frente e da capacidade de encaixe. */
   volume: ReturnType<typeof calculateShelfVolume>;
   front_used_m: number;
@@ -77,13 +79,14 @@ export function referenceBoxesThatFit(
 export function buildShelves(positions: WarehousePosition[], boxes: WarehouseBox[]): Shelf[] {
   const byLocation = new Map<string, WarehouseBox[]>();
   for (const box of boxes) {
-    if (box.status !== "stored") continue;
+    if (box.status !== "stored" && box.status !== "committing") continue;
     const code = box.location_id.toUpperCase();
     byLocation.set(code, [...(byLocation.get(code) ?? []), box]);
   }
   return sortPositions(positions).map((position) => {
     const code = position.code.toUpperCase();
-    const stored = [...(byLocation.get(code) ?? [])].sort((left, right) => left.code.localeCompare(right.code));
+    const volumeBoxes = byLocation.get(code) ?? [];
+    const stored = volumeBoxes.filter((box) => box.status === "stored").sort((left, right) => left.code.localeCompare(right.code));
     const front_used_m = round(stored.reduce((sum, box) => sum + boxFront(box), 0));
     const free_front_m = round(Math.max(0, position.length_m - front_used_m));
     const weight_used_kg = round(stored.reduce((sum, box) => sum + (box.gross_weight_kg ?? 0), 0));
@@ -105,7 +108,8 @@ export function buildShelves(positions: WarehousePosition[], boxes: WarehouseBox
       position,
       zone: position.customer_code?.trim() || null,
       boxes: stored,
-      volume: calculateShelfVolume(position, stored),
+      volumeBoxes,
+      volume: calculateShelfVolume(position, volumeBoxes),
       front_used_m,
       free_front_m,
       weight_used_kg,

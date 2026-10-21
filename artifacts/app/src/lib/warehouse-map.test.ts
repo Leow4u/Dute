@@ -138,6 +138,23 @@ describe("volume registrado no mapa", () => {
     expect(result.volume.occupiedM3).toBeCloseTo(0.0875);
   });
 
+  it("guarda em andamento impede estimar espaço livre sem entrar no total de caixas guardadas", () => {
+    const shelves = buildShelves([shelf("A-01", 1)], [
+      box("CX-1", "A-01"),
+      box("CX-2", "A-01", { status: "committing" }),
+    ]);
+    const result = shelves[0]!;
+    expect(result.boxes.map((item) => item.code)).toEqual(["CX-1"]);
+    expect(result.volumeBoxes.map((item) => item.code)).toEqual(["CX-1", "CX-2"]);
+    expect(result.front_used_m).toBe(0.5);
+    expect(result.volume.boxCount).toBe(1);
+    expect(result.volume.pendingCount).toBe(1);
+    expect(result.volume.occupiedM3).toBeCloseTo(0.0875);
+    expect(result.volume.freeM3).toBeNull();
+    expect(result.volume.projectedFreeM3).toBeNull();
+    expect(summarizeZone(shelves, BTG)).toMatchObject({ boxes: 1, occupied: 1 });
+  });
+
   it("não apresenta volume parcial como total quando faltam medidas de uma caixa", () => {
     const shelves = buildShelves([shelf("A-01", 1)], [
       box("CX-1", "A-01"),

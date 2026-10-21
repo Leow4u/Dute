@@ -25,7 +25,8 @@ import { useIsDesktop } from "@/hooks/use-desktop";
 import { cn } from "@/lib/utils";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { openingInventoryNotice } from "@/lib/opening-inventory";
-import { boxVolumeM3, fetchWarehouseRows, formatVolumeM3 } from "@/lib/warehouse-volume";
+import { boxVolumeM3, formatVolumeM3 } from "@/lib/warehouse-volume";
+import { fetchWarehouseRows } from "@/lib/warehouse-rows";
 import { formatBoxDimensions, warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
 import { labelsUrl } from "@/lib/warehouse-labels";
 import {
@@ -82,13 +83,13 @@ export default function WarehouseMapPage() {
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
 
   const positionsQuery = useQuery<PositionsResponse>({
-    queryKey: ["warehouse-positions"],
+    queryKey: ["warehouse-positions", "all-pages"],
     staleTime: 30_000,
     refetchInterval: 120_000,
     queryFn: async () => ({ items: await fetchWarehouseRows<WarehousePosition>("/api/warehouse/positions?limit=2000") }),
   });
   const boxesQuery = useQuery({
-    queryKey: ["warehouse-boxes", "all"],
+    queryKey: ["warehouse-boxes", "all", "all-pages"],
     staleTime: 10_000,
     refetchInterval: 120_000,
     queryFn: async () => (await fetchWarehouseRows<AnyRecord>("/api/warehouse/boxes?limit=5000")).map(warehouseBoxFromRecord),
@@ -381,6 +382,7 @@ function ShelfCell({ shelf, selected, onClick }: { shelf: Shelf; selected: boole
         <span className="text-xs tabular-nums text-muted-foreground">{formatNumber(shelf.boxes.length)} cx</span>
       </div>
       <div className="text-xs text-muted-foreground">{SHELF_STATE_LABELS[shelf.state]}</div>
+      {shelf.volume.pendingCount > 0 ? <div className="text-xs text-muted-foreground">Guarda em andamento</div> : null}
       {hasRecordedBoxes ? (
         <dl className="grid grid-cols-2 gap-2">
             <div>
@@ -441,7 +443,7 @@ function ShelfPanel({
           </Button>
         </div>
       </div>
-      <ShelfVolumeSummary title="Volume da prateleira" position={position} boxes={shelf.boxes} unconfirmed={shelf.boxes.length === 0} />
+      <ShelfVolumeSummary title="Volume da prateleira" position={position} boxes={shelf.volumeBoxes} unconfirmed={shelf.boxes.length === 0} />
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
         <div className="col-span-2">
           <dt className="text-xs text-muted-foreground">Medidas úteis · comprimento × profundidade × altura</dt>
@@ -458,11 +460,11 @@ function ShelfPanel({
         </div>
         <div>
           <dt className="text-xs text-muted-foreground">Frente livre registrada</dt>
-          <dd className="mt-1 font-medium text-foreground">{shelf.boxes.length ? formatMeters(shelf.free_front_m) : "—"}</dd>
+          <dd className="mt-1 font-medium text-foreground">{shelf.boxes.length && shelf.volume.pendingCount === 0 ? formatMeters(shelf.free_front_m) : "—"}</dd>
         </div>
         <div>
           <dt className="text-xs text-muted-foreground">Referência na base</dt>
-          <dd className="mt-1 font-medium text-foreground">{shelf.boxes.length ? `${formatNumber(shelf.remaining_reference_boxes)} caixa(s)` : "—"}</dd>
+          <dd className="mt-1 font-medium text-foreground">{shelf.boxes.length && shelf.volume.pendingCount === 0 ? `${formatNumber(shelf.remaining_reference_boxes)} caixa(s)` : "—"}</dd>
           <dd className="mt-1 text-xs text-muted-foreground">{formatBoxDimensions(REFERENCE_BOX)} · por frente e peso</dd>
         </div>
       </dl>
