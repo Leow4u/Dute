@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   CALLABLES_DO_CADASTRO,
+  CALLABLES_DA_MEDICAO,
   CALLABLES_DO_CONTRATO,
   CALLABLES_DO_ORCAMENTO,
   ErroDaCallable,
@@ -23,6 +24,14 @@ describe("callables do cadastro comercial", () => {
 
   it.each(CALLABLES_DO_ORCAMENTO)("%s (orçamento) existe em functions/comercial", (nome) => {
     expect(indexDoComercial).toMatch(new RegExp(`^export const ${nome} = onCall\\(`, "m"));
+  });
+
+  it.each(CALLABLES_DA_MEDICAO)("%s (medição mensal) existe em functions/comercial", (nome) => {
+    expect(indexDoComercial).toMatch(new RegExp(`^export const ${nome} = onCall\\(`, "m"));
+  });
+
+  it("a medição grava por saveMedicao e advanceMedicao", () => {
+    expect([...CALLABLES_DA_MEDICAO]).toEqual(["saveMedicao", "advanceMedicao"]);
   });
 
   it("o orçamento grava por saveQuote e advanceQuote", () => {

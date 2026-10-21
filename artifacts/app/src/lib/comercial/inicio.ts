@@ -4,6 +4,18 @@ import { firestore } from "../firebase";
 import { cadastroDoDocumento, hojeLocal, type CadastroComercial } from "./clientes";
 import { alertasParaOInicio, contratoDoRegistro, nomesDosClientes, type AlertaDoInicio, type Contrato } from "./contratos";
 import { orcamentosParaOInicio, type OrcamentoParaAprovarNoInicio } from "./aprovar";
+import {
+  alertaMedicaoNaoEnviada,
+  alertasDeMedicaoParaOInicio,
+  competenciaAnterior,
+  competenciaAtual,
+  contratoComMedicaoMensal,
+  medicaoDoRegistro,
+  periodosDosAditivos,
+  type AlertaDeMedicaoDoInicio,
+  type ContratoParaAlertaDeMedicao,
+  type Medicao,
+} from "./medicoes";
 
 /**
  * Alertas de contrato do Início (parte 14): lê `contracts` e `customers` pelo
@@ -35,4 +47,53 @@ export async function lerOrcamentosParaAprovar(): Promise<OrcamentoParaAprovarNo
   if (!firestore) throw new Error("Firebase não configurado.");
   const demandas = await getDocs(query(collection(firestore, "demands"), where("etapa", "==", "para_aprovar")));
   return orcamentosParaOInicio(demandas.docs.map((row) => ({ id: row.id, data: row.data() })));
+}
+
+/**
+ * A medição do mês que passou sem envio (parte 16b), para o Início: as
+ * medições em rascunho, as da competência anterior (de qualquer situação, para
+ * saber se o mês foi aberto) e os contratos por medição mensal, com os
+ * períodos anteriores dos aditivos (a prorrogação reescreve a vigência). A
+ * página só chama para quem abre o Comercial (veMedicoesNoInicio,
+ * lib/home-inbox.ts): para os outros papéis, nenhuma consulta sai.
+ */
+export async function lerAlertasDeMedicao(hoje: string = hojeLocal()): Promise<AlertaDeMedicaoDoInicio[]> {
+  const db = firestore;
+  if (!db) throw new Error("Firebase não configurado.");
+  const anterior = competenciaAnterior(competenciaAtual(hoje));
+  const [rascunhos, doMesAnterior, contratosLidos, clientes] = await Promise.all([
+    getDocs(query(collection(db, "medicoes"), where("status", "==", "rascunho"))),
+    getDocs(query(collection(db, "medicoes"), where("competencia", "==", anterior))),
+    getDocs(collection(db, "contracts")),
+    getDocs(collection(db, "customers")),
+  ]);
+  const medicoes = new Map<string, Medicao>();
+  for (const row of [...rascunhos.docs, ...doMesAnterior.docs]) {
+    const medicao = medicaoDoRegistro(row.id, row.data());
+    if (medicao) medicoes.set(row.id, medicao);
+  }
+  const contratos = contratosLidos.docs
+    .map((row) => contratoDoRegistro(row.id, row.data()))
+    .filter((contrato): contrato is Contrato => contrato !== null);
+  const comMedicao = contratos.filter((contrato) => contrato.dados.status !== "encerrado" && contratoComMedicaoMensal(contrato.dados));
+  const paraAlerta: ContratoParaAlertaDeMedicao[] = await Promise.all(
+    comMedicao.map(async (contrato) => {
+      const aditivos = await getDocs(collection(db, "contracts", contrato.id, "aditivos"));
+      return {
+        id: contrato.id,
+        customer_code: contrato.dados.customer_code,
+        status: contrato.dados.status,
+        regime_padrao: contrato.dados.regime_padrao,
+        regimes: contrato.dados.regimes,
+        vigente_de: contrato.dados.vigente_de,
+        vigente_ate: contrato.dados.vigente_ate,
+        vigencias_anteriores: periodosDosAditivos(aditivos.docs.map((aditivo) => aditivo.data())),
+      };
+    }),
+  );
+  const cadastros = clientes.docs
+    .map((row) => cadastroDoDocumento(row.id, row.data()))
+    .filter((cadastro): cadastro is CadastroComercial => cadastro !== null);
+  const alertas = alertaMedicaoNaoEnviada(hoje, [...medicoes.values()], paraAlerta);
+  return alertasDeMedicaoParaOInicio(alertas, contratos, nomesDosClientes(cadastros));
 }

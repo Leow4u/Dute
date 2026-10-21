@@ -4,7 +4,8 @@ import { PAPEIS, type Papel } from "@workspace/dominio";
 import { describe, expect, it } from "vitest";
 
 import { alertasParaOInicio, contratoDoRegistro, type Contrato } from "./comercial/contratos";
-import { buildHomeInbox, isAwaitingTriage, veAprovacoesNoInicio, veContratosNoInicio } from "./home-inbox";
+import { alertasDeMedicaoParaOInicio, alertaMedicaoNaoEnviada } from "./comercial/medicoes";
+import { buildHomeInbox, isAwaitingTriage, veAprovacoesNoInicio, veContratosNoInicio, veMedicoesNoInicio } from "./home-inbox";
 import type { WarehouseOpsResponse, WarehouseTask } from "./warehouse-ops/model";
 
 function task(overrides: Partial<WarehouseTask> & { id: string }): WarehouseTask {
@@ -283,5 +284,91 @@ describe("orçamentos para aprovar no Início (parte 12a)", () => {
     expect(home).toMatch(/const seesApprovals = veAprovacoesNoInicio\(role\);/);
     expect(home).toMatch(/queryFn: \(\) => lerOrcamentosParaAprovar\(\),\s*enabled: seesApprovals,/);
     expect(home).toMatch(/paraAprovar: approvals\.data/);
+  });
+});
+
+describe("medição não enviada no Início (parte 16b)", () => {
+  const LIBERADO = true;
+  const DESLIGADO = false;
+  const SAFRA = contratoDoRegistro("safra", {
+    customer_code: "BANCO-SAFRA",
+    nome: "LPU de transporte",
+    vigente_de: "2025-05-12",
+    vigente_ate: null,
+    regime_padrao: "medicao_mensal",
+    regimes: [],
+    status: "vigente",
+  })!;
+  const nomes = new Map([["BANCO-SAFRA", "Banco Safra"]]);
+  const alertasEm = (hoje: string, medicoes: Parameters<typeof alertaMedicaoNaoEnviada>[1] = []) =>
+    alertasDeMedicaoParaOInicio(
+      alertaMedicaoNaoEnviada(hoje, medicoes, [{ id: "safra", ...SAFRA.dados, vigencias_anteriores: [] }]),
+      [SAFRA],
+      nomes,
+    );
+  const doInicio = (role: Papel, liberado: boolean, hoje = "2026-10-04") =>
+    buildHomeInbox({ role, medicoes: alertasEm(hoje), comercialLiberado: liberado }).items.filter((item) => item.id.startsWith("medicao:"));
+
+  it("a medição do mês que passou, sem envio, alerta e leva à medição daquela competência", () => {
+    expect(doInicio("owner", LIBERADO)).toEqual([
+      {
+        id: "medicao:safra_2026-09",
+        tone: "critical",
+        title: "Medição de setembro/2026 não enviada · Banco Safra",
+        detail: "LPU de transporte · ainda não aberta · 3 dias de atraso",
+        href: "/comercial/medicoes?contrato=safra&competencia=2026-09",
+        actionLabel: "Abrir medição",
+      },
+    ]);
+  });
+
+  it("no dia da virada do mês, o prazo é hoje e o tom é de atenção; em rascunho diz isso", () => {
+    expect(doInicio("admin", LIBERADO, "2026-10-01")[0]).toMatchObject({ tone: "attention", detail: "LPU de transporte · ainda não aberta · prazo hoje" });
+    const rascunho = alertasDeMedicaoParaOInicio(
+      alertaMedicaoNaoEnviada("2026-10-02", [{ id: "safra_2026-09", contrato_id: "safra", competencia: "2026-09", status: "rascunho" }]),
+      [SAFRA],
+      nomes,
+    );
+    expect(buildHomeInbox({ role: "comercial", medicoes: rascunho, comercialLiberado: LIBERADO }).items[0].detail).toBe(
+      "LPU de transporte · em rascunho · 1 dia de atraso",
+    );
+  });
+
+  it.each(["owner", "admin", "comercial"] as Papel[])("%s vê só com a liberação do Comercial", (role) => {
+    expect(doInicio(role, LIBERADO)).toHaveLength(1);
+    expect(doInicio(role, DESLIGADO)).toEqual([]);
+    expect(veMedicoesNoInicio(role, LIBERADO)).toBe(true);
+    expect(veMedicoesNoInicio(role, DESLIGADO)).toBe(false);
+  });
+
+  it.each(PAPEIS.filter((role) => !["owner", "admin", "comercial"].includes(role)))("%s nunca vê nem consulta a medição", (role) => {
+    expect(doInicio(role, LIBERADO)).toEqual([]);
+    expect(veMedicoesNoInicio(role, LIBERADO)).toBe(false);
+  });
+
+  it("sem papel, nada; sem alerta, o Início fica como era", () => {
+    expect(veMedicoesNoInicio(null, LIBERADO)).toBe(false);
+    expect(buildHomeInbox({ role: null, medicoes: alertasEm("2026-10-04"), comercialLiberado: LIBERADO }).items).toEqual([]);
+    expect(buildHomeInbox({ role: "admin", ops: busyOps, requests, medicoes: [], comercialLiberado: LIBERADO })).toEqual(
+      buildHomeInbox({ role: "admin", ops: busyOps, requests }),
+    );
+  });
+
+  it("entra depois dos alertas de contrato e antes da fila de pedidos", () => {
+    const ids = buildHomeInbox({
+      role: "admin",
+      ops: busyOps,
+      requests,
+      medicoes: alertasEm("2026-10-04"),
+      comercialLiberado: LIBERADO,
+    }).items.map((item) => item.id);
+    expect(ids).toEqual(["blocked:ord_3", "triage", "medicao:safra_2026-09", "to-pick", "to-ship", "receipts", "agent"]);
+  });
+
+  it("a página só consulta para quem vê (enabled): para os outros papéis, nenhuma leitura sai", () => {
+    const home = readFileSync(new URL("../pages/home.tsx", import.meta.url), "utf8");
+    expect(home).toMatch(/const seesMeasurements = veMedicoesNoInicio\(role\);/);
+    expect(home).toMatch(/queryFn: \(\) => lerAlertasDeMedicao\(\),\s*enabled: seesMeasurements,/);
+    expect(home).toMatch(/medicoes: measurements.data/);
   });
 });

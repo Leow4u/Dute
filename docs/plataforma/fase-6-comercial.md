@@ -505,3 +505,45 @@ Storage.
   (`client_authorization.recorded`, com `contrato_id`, `a_faturar`, `marcas`
   e o `medicao_id`; a lista de demandas pode ser vazia).
 - Perguntas para a parte 16b: 11, 12 e 13 acima.
+
+### Parte 16b: tela de Medições
+
+- Rota `/comercial/medicoes` (aba Medições e item de menu, só com a liberação
+  do Comercial; owner, admin e comercial). `?contrato=` e `&competencia=`
+  abrem um contrato e um mês (o Início leva por aí). Tela em
+  `pages/comercial/medicoes*.tsx`, regras puras em `lib/comercial/medicoes.ts`
+  e `lib/comercial/diario.ts`.
+- Lê ao vivo `medicoes` (do contrato), `contracts`, `price_tables`,
+  `lpu_items` (só ao abrir o diálogo da linha) e `customers`; grava só por
+  `saveMedicao` e `advanceMedicao`, com `request_id` (a mesma chave enquanto
+  a intenção é a mesma) e a edição e a situação que a tela viu. Medição que
+  mudou ou sumiu no meio do caminho descarta o que estava aberto, mostra a
+  mensagem do servidor e fica com a versão do snapshot. Não usa o reducer de
+  sincronia da montagem do orçamento: aqui não há formulário longo, cada
+  diálogo guarda a medição de quando abriu.
+- Competências do contrato: as medições que existem (situação, data e total)
+  e, se faltam, o mês de hoje e o anterior como "Não aberta" (ação "Abrir
+  medição"). Cabeçalho: competência, contrato, número de demandas (as OS da
+  medição, com o período), total (nome da tabela) e prazo de envio (a virada
+  do mês, com "em N dias" ou "há N dias").
+- Ação principal por situação: rascunho, Enviar ao cliente; enviada, Registrar
+  aprovação (e Registrar contestação como secundária); contestada, Reabrir;
+  aprovada, nenhuma. Exportar Diário de Bordo em todas, com linhas.
+- Linha: diálogo para incluir, editar e retirar a OS (itens da tabela do
+  contrato vigente na data da solicitação, preço alterado e item avulso, ambos
+  com motivo) e o pedido anexado (nome e referência). Marcas: dia que não bate
+  com a tarifa (com "Aplicar sábado" quando o servidor deu o `trocar_por`),
+  rota fora da tabela e sem pedido anexo.
+- Diário de Bordo: CSV (BOM, `;`, CRLF) gerado no navegador por
+  `exportarDiarioDeBordo`, a mesma conta da função do servidor
+  (`domain/medicao.ts`). `diario.test.ts` roda as duas contra as mesmas
+  medições, e `medicoes.test.ts` faz o mesmo com o alerta da virada do mês.
+- Início: "Medição de setembro/2026 não enviada" (rascunho de mês anterior ou
+  contrato por medição mensal sem a medição do mês que passou), só para
+  owner, admin e comercial, sob a liberação; a consulta só sai para esses
+  papéis (`veMedicoesNoInicio`).
+- Perguntas: a 13 foi aplicada (sem "Baixar ZIP dos pedidos" no v1: os PDFs
+  não estão no Storage; o "Anexar" grava nome e referência). A 11 (atalho da
+  proposta sem fechamento) e a 12 (linha de outro mês) seguem abertas: a tela
+  mostra as demandas pendentes da aprovação, mas não tem o atalho nem aceita
+  linha de outro mês.

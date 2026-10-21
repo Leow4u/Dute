@@ -22,7 +22,11 @@ export type CallableDoContrato = (typeof CALLABLES_DO_CONTRATO)[number];
 export const CALLABLES_DO_ORCAMENTO = ["saveQuote", "advanceQuote"] as const;
 export type CallableDoOrcamento = (typeof CALLABLES_DO_ORCAMENTO)[number];
 
-export type CallableDoComercial = CallableDoCadastro | CallableDoContrato | CallableDoOrcamento;
+/** Medição mensal (parte 16a, domain/medicoes.ts): saveMedicao (create, upsert_line, remove_line) e advanceMedicao (send, approve, contest, reopen). */
+export const CALLABLES_DA_MEDICAO = ["saveMedicao", "advanceMedicao"] as const;
+export type CallableDaMedicao = (typeof CALLABLES_DA_MEDICAO)[number];
+
+export type CallableDoComercial = CallableDoCadastro | CallableDoContrato | CallableDoOrcamento | CallableDaMedicao;
 
 /** Chave nova por intenção de gravar (um diálogo aberto, um clique de desativar). */
 export function novaChave(): string {

@@ -19,11 +19,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAppUser } from "@/lib/auth";
-import { lerAlertasDosContratos, lerOrcamentosParaAprovar } from "@/lib/comercial/inicio";
+import { lerAlertasDeMedicao, lerAlertasDosContratos, lerOrcamentosParaAprovar } from "@/lib/comercial/inicio";
 import {
   buildHomeInbox,
   veAprovacoesNoInicio,
   veContratosNoInicio,
+  veMedicoesNoInicio,
   type HomeInboxItem,
   type HomeInboxTone,
   type HomeRequest,
@@ -116,6 +117,8 @@ export default function Home() {
   const seesContracts = veContratosNoInicio(role);
   // Orçamentos para aprovar: só o owner, que aprova, com a liberação.
   const seesApprovals = veAprovacoesNoInicio(role);
+  // Medição do mês que passou sem envio: owner, admin e comercial, com a liberação.
+  const seesMeasurements = veMedicoesNoInicio(role);
 
   const dashboard = useGetDashboard();
   const ops = useQuery({
@@ -149,6 +152,14 @@ export default function Home() {
     refetchOnWindowFocus: false,
   });
 
+  const measurements = useQuery({
+    queryKey: ["comercial", "medicoes", "inicio"],
+    queryFn: () => lerAlertasDeMedicao(),
+    enabled: seesMeasurements,
+    refetchInterval: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+
   const inbox = useMemo(
     () =>
       buildHomeInbox({
@@ -157,20 +168,23 @@ export default function Home() {
         requests: requests.data?.items,
         contratos: contracts.data,
         paraAprovar: approvals.data,
+        medicoes: measurements.data,
       }),
-    [ops.data, requests.data, contracts.data, approvals.data, role],
+    [ops.data, requests.data, contracts.data, approvals.data, measurements.data, role],
   );
 
   const loading =
     (seesWarehouse && ops.isLoading) ||
     (seesRequests && requests.isLoading) ||
     (seesContracts && contracts.isLoading) ||
-    (seesApprovals && approvals.isLoading);
+    (seesApprovals && approvals.isLoading) ||
+    (seesMeasurements && measurements.isLoading);
   const failedSources = [
     seesWarehouse && ops.isError ? "armazém" : null,
     seesRequests && requests.isError ? "solicitações" : null,
     seesContracts && contracts.isError ? "contratos" : null,
     seesApprovals && approvals.isError ? "orçamentos" : null,
+    seesMeasurements && measurements.isError ? "medições" : null,
   ].filter((source): source is string => Boolean(source));
 
   const now = new Date();

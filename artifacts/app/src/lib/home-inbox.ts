@@ -1,6 +1,7 @@
 import type { OrcamentoParaAprovarNoInicio } from "./comercial/aprovar";
 import type { AlertaDoInicio } from "./comercial/contratos";
-import { ROTA_APROVAR, abreComercial, aprovaOrcamento, hrefDoContrato } from "./comercial/navegacao";
+import { rotuloDaCompetencia, type AlertaDeMedicaoDoInicio } from "./comercial/medicoes";
+import { ROTA_APROVAR, abreComercial, aprovaOrcamento, hrefDaMedicao, hrefDoContrato } from "./comercial/navegacao";
 import { COMERCIAL_LIBERADO } from "./liberacao";
 import {
   canAccessModule,
@@ -111,6 +112,40 @@ export function veAprovacoesNoInicio(
   return aprovaOrcamento(role, comercialLiberado);
 }
 
+/**
+ * Medição mensal não enviada (parte 16b) só para quem abre o Comercial:
+ * owner, admin e comercial, onde a liberação está ligada. É também o
+ * `enabled` da consulta no Início: para os outros, nada é lido.
+ */
+export function veMedicoesNoInicio(
+  role: ProfileRole | null | undefined,
+  comercialLiberado: boolean = COMERCIAL_LIBERADO,
+): boolean {
+  return abreComercial(role, comercialLiberado);
+}
+
+/** Um item por medição do mês que passou sem envio (rascunho ou ainda não aberta), levando a ela. */
+function measurementItems(alertas: readonly AlertaDeMedicaoDoInicio[]): HomeInboxItem[] {
+  return alertas.flatMap((alerta) => {
+    const href = hrefDaMedicao(alerta.contratoId, alerta.competencia);
+    if (!href) return [];
+    const prazo =
+      alerta.diasDeAtraso === 0
+        ? "prazo hoje"
+        : `${alerta.diasDeAtraso} ${alerta.diasDeAtraso === 1 ? "dia" : "dias"} de atraso`;
+    return [
+      {
+        id: `medicao:${alerta.medicaoId}`,
+        tone: alerta.diasDeAtraso > 0 ? "critical" : "attention",
+        title: `Medição de ${rotuloDaCompetencia(alerta.competencia).toLocaleLowerCase("pt-BR")} não enviada · ${alerta.cliente}`,
+        detail: [alerta.contrato, alerta.situacao === "rascunho" ? "em rascunho" : "ainda não aberta", prazo].join(" · "),
+        href,
+        actionLabel: "Abrir medição",
+      } satisfies HomeInboxItem,
+    ];
+  });
+}
+
 /** Um item por alerta (renovação, fim da vigência, reajuste), levando à ficha do contrato. */
 function contractItems(alertas: readonly AlertaDoInicio[]): HomeInboxItem[] {
   return alertas.flatMap((alerta) => {
@@ -135,6 +170,7 @@ export function buildHomeInbox({
   requests,
   contratos,
   paraAprovar,
+  medicoes,
   comercialLiberado = COMERCIAL_LIBERADO,
 }: {
   role: ProfileRole | null | undefined;
@@ -144,6 +180,8 @@ export function buildHomeInbox({
   contratos?: readonly AlertaDoInicio[];
   /** Orçamentos em "Para aprovar" (lib/comercial/inicio.ts, lerOrcamentosParaAprovar). */
   paraAprovar?: readonly OrcamentoParaAprovarNoInicio[];
+  /** Medições do mês que passou sem envio (lib/comercial/medicoes.ts, alertasDeMedicaoParaOInicio). */
+  medicoes?: readonly AlertaDeMedicaoDoInicio[];
   comercialLiberado?: boolean;
 }): HomeInbox {
   const orders = groupWarehouseOrders(ops).filter(
@@ -214,6 +252,10 @@ export function buildHomeInbox({
 
   if (contratos?.length && veContratosNoInicio(role, comercialLiberado)) {
     items.push(...contractItems(contratos));
+  }
+
+  if (medicoes?.length && veMedicoesNoInicio(role, comercialLiberado)) {
+    items.push(...measurementItems(medicoes));
   }
 
   if (toPick.length) {

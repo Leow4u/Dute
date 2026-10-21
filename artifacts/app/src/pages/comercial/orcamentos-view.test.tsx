@@ -181,6 +181,7 @@ const CABECALHO = [
   "Novo orçamento",
   "Orçamentos",
   "Contratos",
+  "Medições",
   "Todas",
   "3",
   "Em montagem",
