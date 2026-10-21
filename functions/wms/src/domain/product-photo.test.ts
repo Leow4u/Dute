@@ -6,7 +6,170 @@ import {
   productPhotoPrompt,
   generateProductPhoto,
   originalProductPhoto,
+  reviewProductPhoto,
+  PRODUCT_PHOTO_DEFAULT_MODEL,
+  PRODUCT_PHOTO_INPUT_MAX_BYTES,
 } from "./product-photo.js";
+
+describe("apresentação comercial e conferência visual", () => {
+  const base = {
+    mode: "mannequin" as const,
+    mannequin: "male" as const,
+    product_name: "TRICOT MEIO ZÍPER PRETO M",
+    category: "Tricô",
+  };
+  it("limita camisetas e tricôs ao busto e proíbe região íntima visível", () => {
+    const prompt = productPhotoPrompt(base);
+    assert.match(prompt, /HEADLESS, ARMLESS TORSO BUST/);
+    assert.match(prompt, /physically ENDS INSIDE the garment hem/);
+    assert.match(
+      prompt,
+      /NO lower torso, pelvis, crotch, groin, legs or hands/,
+    );
+    assert.match(
+      prompt,
+      /no genitalia, genital outlines, anatomical crotch bulges/,
+    );
+    assert.match(prompt, /reproduce visible logos and embroidery exactly/);
+    assert.match(
+      prompt,
+      /keep its original presentation rather than hallucinating/,
+    );
+  });
+  it("usa suporte coberto para peças de baixo e suporte invisível para vestidos", () => {
+    assert.match(
+      productPhotoPrompt({
+        ...base,
+        product_name: "Calça masculina",
+        category: "Calça",
+      }),
+      /HEADLESS lower-body display form/,
+    );
+    assert.match(
+      productPhotoPrompt({
+        ...base,
+        product_name: "Vestido feminino",
+        category: "Vestido",
+        mannequin: "female",
+      }),
+      /INVISIBLE garment support/,
+    );
+    assert.match(
+      productPhotoPrompt({ ...base, mode: "catalog" }),
+      /folded product MUST stay folded/,
+    );
+    assert.match(
+      productPhotoPrompt({ ...base, mode: "garment", mannequin: undefined }),
+      /Show ONLY the same garment/,
+    );
+    assert.ok(
+      ProductPhotoInput.safeParse({
+        ...base,
+        mode: "garment",
+        mannequin: undefined,
+        customer_code: "Cliente",
+        source_url: "https://example.test/source.jpg",
+        request_id: "00000000-0000-4000-8000-000000000000",
+      }).success,
+    );
+  });
+  const input = {
+    project: "demo",
+    model: "gemini-2.5-flash",
+    token: "test",
+    prompt: "Busto de tricô masculino",
+    original: { bytes: Buffer.from("original"), mimeType: "image/jpeg" },
+    generated: { bytes: Buffer.from("generated"), mimeType: "image/png" },
+  };
+  const approved = {
+    commercial_presentation: true,
+    product_fidelity: true,
+    branding_fidelity: true,
+    framing: true,
+  };
+  const result = (review: unknown) =>
+    new Response(
+      JSON.stringify({
+        candidates: [
+          { content: { parts: [{ text: JSON.stringify(review) }] } },
+        ],
+      }),
+    );
+  it("confere original e proposta juntos antes de aprovar, incluindo logos e enquadramento", async () => {
+    let sent: Record<string, any> = {};
+    const review = await reviewProductPhoto(input, async (url, init) => {
+      assert.match(String(url), /gemini-2.5-flash:generateContent$/);
+      sent = JSON.parse(String(init?.body));
+      return result(approved);
+    });
+    assert.deepEqual(review, approved);
+    const images = sent.contents[0].parts.filter(
+      (part: any) => part.inlineData,
+    );
+    assert.deepEqual(
+      images.map((part: any) => part.inlineData.data),
+      [
+        input.original.bytes.toString("base64"),
+        input.generated.bytes.toString("base64"),
+      ],
+    );
+    assert.equal(sent.generationConfig.responseMimeType, "application/json");
+  });
+  it("recusa anatomia inadequada, peça ou logo alterados e enquadramento incorreto", async () => {
+    for (const criterion of Object.keys(approved)) {
+      await assert.rejects(
+        reviewProductPhoto(input, async () =>
+          result({ ...approved, [criterion]: false }),
+        ),
+        (error: any) => {
+          assert.equal(error.code, "failed-precondition");
+          assert.equal(error.details.photo_quality_rejected, true);
+          return true;
+        },
+      );
+    }
+  });
+  it("não libera a proposta se a conferência falhar ou responder dados incompletos", async () => {
+    for (const invalid of [
+      {},
+      { ...approved, commercial_presentation: "true" },
+      { approved: true },
+    ]) {
+      await assert.rejects(
+        reviewProductPhoto(input, async () => result(invalid)),
+        { code: "unavailable" },
+      );
+    }
+    await assert.rejects(
+      reviewProductPhoto(
+        input,
+        async () => new Response("denied", { status: 403 }),
+      ),
+      { code: "unavailable" },
+    );
+    await assert.rejects(
+      reviewProductPhoto(input, async () => new Response('{"candidates":[]}')),
+      { code: "unavailable" },
+    );
+  });
+  it("limita a soma das imagens para caber na requisição de conferência", async () => {
+    await assert.rejects(
+      reviewProductPhoto(
+        {
+          ...input,
+          original: {
+            ...input.original,
+            bytes: Buffer.alloc(14 * 1024 * 1024),
+          },
+        },
+        async () => {
+          throw new Error("Não deve enviar requisição grande");
+        },
+      ),
+      { code: "resource-exhausted" },
+    );
+  });
+});
 
 describe("fotos profissionais do catálogo", () => {
   const bucket = "demo.firebasestorage.app";
@@ -181,7 +344,7 @@ describe("fotos profissionais do catálogo", () => {
   });
   const input = {
     project: "demo",
-    model: "gemini-2.5-flash-image",
+    model: "gemini-3-pro-image",
     token: "test",
     prompt: "edit",
     bytes: Buffer.from("source"),
@@ -192,7 +355,7 @@ describe("fotos profissionais do catálogo", () => {
     const mock: typeof fetch = async (url, init) => {
       assert.match(
         String(url),
-        /locations\/global\/publishers\/google\/models\/gemini-2.5-flash-image:generateContent$/,
+        /locations\/global\/publishers\/google\/models\/gemini-3-pro-image:generateContent$/,
       );
       sent = JSON.parse(String(init?.body));
       return new Response(
@@ -202,6 +365,13 @@ describe("fotos profissionais do catálogo", () => {
               content: {
                 parts: [
                   { text: "photo" },
+                  {
+                    thought: true,
+                    inlineData: {
+                      mimeType: "image/png",
+                      data: Buffer.from("draft").toString("base64"),
+                    },
+                  },
                   {
                     inlineData: {
                       mimeType: "image/png",
@@ -225,6 +395,45 @@ describe("fotos profissionais do catálogo", () => {
       "TEXT",
       "IMAGE",
     ]);
+    assert.deepEqual(sent.generationConfig.imageConfig, {
+      imageSize: "2K",
+      aspectRatio: "1:1",
+    });
+  });
+  it("usa Nano Banana Pro por padrão e rejeita arquivos acima do limite antes de cobrar uma geração", async () => {
+    assert.equal(PRODUCT_PHOTO_DEFAULT_MODEL, "gemini-3-pro-image");
+    let requested = "";
+    await generateProductPhoto({ ...input, model: undefined }, async (url) => {
+      requested = String(url);
+      return new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    inlineData: {
+                      mimeType: "image/png",
+                      data: Buffer.from("image").toString("base64"),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      );
+    });
+    assert.match(requested, /gemini-3-pro-image:generateContent$/);
+    await assert.rejects(
+      generateProductPhoto(
+        { ...input, bytes: Buffer.alloc(PRODUCT_PHOTO_INPUT_MAX_BYTES + 1) },
+        async () => {
+          throw new Error("Não deve enviar uma foto maior que 7 MB");
+        },
+      ),
+      { code: "invalid-argument" },
+    );
   });
   it("falha de forma explícita quando o provedor está indisponível ou não gera imagem", async () => {
     await assert.rejects(

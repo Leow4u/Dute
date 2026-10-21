@@ -52,7 +52,9 @@ export function ProductPhotoStudio({
   const id = useId();
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
-  const [mode, setMode] = useState<"catalog" | "mannequin">("catalog");
+  const [mode, setMode] = useState<"catalog" | "mannequin" | "garment">(
+    "catalog",
+  );
   const [previews, setPreviews] = useState<
     { original: ProductPhoto; generated: ProductPhoto }[]
   >([]);
@@ -182,27 +184,36 @@ export function ProductPhotoStudio({
             {productName || "Produto"} · Fundo branco e iluminação de estúdio
           </DialogDescription>
         </DialogHeader>
-        <dl className="grid grid-cols-2 gap-2 text-sm">
-          {Object.entries({
-            Descrição: context.description || productName,
-            Categoria: category,
-            Gênero: context.gender,
-            Grupo: context.group,
-            Tamanho: context.size,
-            Cor: context.color,
-            Marca: context.brand,
-          })
-            .filter(([, value]) => Boolean(value))
-            .map(([label, value]) => (
-              <div
-                key={label}
-                className={label === "Descrição" ? "col-span-2" : undefined}
-              >
-                <dt className="text-muted-foreground">{label}</dt>
-                <dd>{value}</dd>
-              </div>
-            ))}
-        </dl>
+        <details className="rounded-md border border-border px-3 py-2">
+          <summary className="cursor-pointer text-sm">
+            Dados do produto
+            {[context.gender, context.size, context.color].filter(Boolean)
+              .length
+              ? ` · ${[context.gender, context.size, context.color].filter(Boolean).join(" · ")}`
+              : ""}
+          </summary>
+          <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
+            {Object.entries({
+              Descrição: context.description || productName,
+              Categoria: category,
+              Gênero: context.gender,
+              Grupo: context.group,
+              Tamanho: context.size,
+              Cor: context.color,
+              Marca: context.brand,
+            })
+              .filter(([, value]) => Boolean(value))
+              .map(([label, value]) => (
+                <div
+                  key={label}
+                  className={label === "Descrição" ? "col-span-2" : undefined}
+                >
+                  <dt className="text-muted-foreground">{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+          </dl>
+        </details>
         <fieldset
           disabled={busy || saving}
           className="flex min-w-0 flex-col gap-3"
@@ -223,9 +234,19 @@ export function ProductPhotoStudio({
           >
             <ToggleGroupItem value="catalog">Foto de catálogo</ToggleGroupItem>
             <ToggleGroupItem value="mannequin">
-              Roupa em manequim
+              Manequim de vitrine
+            </ToggleGroupItem>
+            <ToggleGroupItem value="garment">
+              Roupa sem manequim
             </ToggleGroupItem>
           </ToggleGroup>
+          <p className="text-sm text-muted-foreground">
+            {mode === "catalog"
+              ? "Melhora fundo e iluminação mantendo a apresentação original. Para peças dobradas, esta é a opção mais fiel."
+              : mode === "garment"
+                ? "Apresenta somente a roupa, com suporte invisível e fundo branco."
+                : "Usa somente o suporte necessário para a roupa. Camisetas e tricôs usam busto sem cabeça, mãos ou pernas."}
+          </p>
           {mode === "mannequin" ? (
             <>
               <label
@@ -378,7 +399,7 @@ export function ProductPhotoStudio({
           className="text-sm text-muted-foreground"
         >
           {busy
-            ? `Agent Dute está preparando as fotos… ${previews.length}/${chosen.length}`
+            ? `Agent Dute está preparando e conferindo as fotos… ${previews.length}/${chosen.length}`
             : saving
               ? "Salvando fotos aprovadas…"
               : ""}
