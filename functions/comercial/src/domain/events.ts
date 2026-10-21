@@ -99,6 +99,15 @@ export const MOTIVOS_REVISAO = ["pedido_cliente", "correcao", "execucao", "aditi
 /** Os motivos da revisão e a reabertura da demanda perdida, que também abre RV nova. */
 export const ORIGENS_REVISAO = [...MOTIVOS_REVISAO, "reabertura"] as const;
 
+/**
+ * Autorização de faturamento do cliente (parte 15; domain/autorizacao.ts).
+ * O tipo do registro: "outro" cobre o "pode faturar" que não é pedido e
+ * aceite, medição aprovada nem portal (no contrato, a lista tem "nenhuma").
+ */
+export const TIPOS_AUTORIZACAO_CLIENTE = ["pedido_aceite", "medicao_aprovada", "portal", "outro"] as const;
+/** O que a autorização registrada pede para conferir (nunca o valor). */
+export const MARCAS_AUTORIZACAO = ["valor_diverge", "tomador_outra_raiz", "rv_nao_validada"] as const;
+
 export const ESTAGIOS_CADASTRO = ["prospect", "cliente"] as const;
 export const REGIMES_COBRANCA = ["por_demanda", "medicao_mensal", "wms"] as const;
 /** Tipos de aditivo do contrato (contracts/{id}/aditivos). */
@@ -328,8 +337,30 @@ export const COMERCIAL_EVENT_PAYLOADS = {
     })
     .strict(),
 
+  // Autorização de faturamento (parte 15): o id interno, o tipo, o contrato,
+  // as demandas e as marcas. Nunca o pedido, o aceite, o tomador, o centro de
+  // custo nem o valor.
   "client_authorization.recorded": z
-    .object({ autorizacao_id: id, demandas: z.array(numero).min(1).max(200) })
+    .object({
+      autorizacao_id: id,
+      tipo: z.enum(TIPOS_AUTORIZACAO_CLIENTE),
+      contrato_id: id.nullable(),
+      demandas: z.array(numero).min(1).max(200),
+      /** Demandas que esta autorização levou a "a faturar" (as outras já estavam: complemento). */
+      a_faturar: z.array(numero).max(200),
+      marcas: z.array(z.enum(MARCAS_AUTORIZACAO)).max(MARCAS_AUTORIZACAO.length),
+    })
+    .strict(),
+  /** Cancelada: as demandas sem outra autorização voltam a aguardar (devolvidas). */
+  "client_authorization.cancelled": z
+    .object({
+      autorizacao_id: id,
+      tipo: z.enum(TIPOS_AUTORIZACAO_CLIENTE),
+      contrato_id: id.nullable(),
+      demandas: z.array(numero).min(1).max(200),
+      devolvidas: z.array(numero).max(200),
+      marcas: z.array(z.enum(MARCAS_AUTORIZACAO)).max(MARCAS_AUTORIZACAO.length),
+    })
     .strict(),
 
   "medicao.created": z.object({ medicao_id: id, contrato_id: id, competencia, demandas: contagem }).strict(),
@@ -449,6 +480,23 @@ const TIPO_ADITIVO_ROTULO: Record<(typeof TIPOS_ADITIVO)[number], string> = {
   escopo: "escopo",
   outro: "outro tipo",
 };
+
+const TIPO_AUTORIZACAO_ROTULO: Record<(typeof TIPOS_AUTORIZACAO_CLIENTE)[number], string> = {
+  pedido_aceite: "Pedido e aceite",
+  medicao_aprovada: "Medição aprovada",
+  portal: "Portal do fornecedor",
+  outro: "Outro registro do cliente",
+};
+
+const MARCA_AUTORIZACAO_ROTULO: Record<(typeof MARCAS_AUTORIZACAO)[number], string> = {
+  valor_diverge: "valor diferente da soma das RVs",
+  tomador_outra_raiz: "tomador de outra raiz de CNPJ",
+  rv_nao_validada: "RV diferente da validada",
+};
+
+function demandasRotulo(quantidade: number): string {
+  return `${quantidade} ${quantidade === 1 ? "demanda" : "demandas"}`;
+}
 
 function competenciaRotulo(value: string): string {
   const [ano, mes] = value.split("-");
@@ -586,7 +634,20 @@ const TEMPLATES: Templates = {
 
   "client_authorization.recorded": (p) => ({
     title: "Autorização do cliente registrada",
-    description: `Ligada a ${p.demandas.length} ${p.demandas.length === 1 ? "demanda" : "demandas"}.`,
+    description: [
+      `${TIPO_AUTORIZACAO_ROTULO[p.tipo]}, ligada a ${demandasRotulo(p.demandas.length)}`,
+      p.a_faturar.length > 0 ? `${demandasRotulo(p.a_faturar.length)} a faturar` : "complemento de outra autorização",
+      ...p.marcas.map((marca) => `conferir: ${MARCA_AUTORIZACAO_ROTULO[marca]}`),
+    ]
+      .join("; ")
+      .concat("."),
+  }),
+  "client_authorization.cancelled": (p) => ({
+    title: "Autorização do cliente cancelada",
+    description:
+      p.devolvidas.length > 0
+        ? `${TIPO_AUTORIZACAO_ROTULO[p.tipo]} desligada de ${demandasRotulo(p.demandas.length)}; ${demandasRotulo(p.devolvidas.length)} volta${p.devolvidas.length === 1 ? "" : "m"} a aguardar autorização.`
+        : `${TIPO_AUTORIZACAO_ROTULO[p.tipo]} desligada de ${demandasRotulo(p.demandas.length)}; todas seguem com outra autorização.`,
   }),
 
   "medicao.created": (p) => ({

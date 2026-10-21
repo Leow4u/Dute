@@ -13,21 +13,23 @@ import {
 import { collection, deleteDoc, doc, getDoc, getDocs, setDoc, updateDoc } from "firebase/firestore";
 
 /**
- * Catálogo e tabelas de preço do Comercial (docs/plataforma/fase-6-comercial.md,
- * "Leitura"): `lpu_items` e `price_tables` só para canReadPrices() (owner,
- * admin e comercial). A operação, o suporte, o financeiro e o cliente não
- * leem preço, e ninguém grava pelo navegador: a escrita é da carga
- * (functions/comercial/src/cargas/tabela.ts), com o Admin SDK.
+ * Catálogo, tabelas de preço e autorizações de faturamento do Comercial
+ * (docs/plataforma/fase-6-comercial.md, "Leitura"): `lpu_items`,
+ * `price_tables` e `client_authorizations` só para canReadPrices() (owner,
+ * admin, comercial e, desde a parte 15, o financeiro: preço é de owner,
+ * admin, financeiro e comercial). A operação, o suporte e o cliente não leem
+ * preço, e ninguém grava pelo navegador: a escrita é da carga
+ * (functions/comercial/src/cargas/tabela.ts) e da callable recordAuthorization,
+ * com o Admin SDK.
  */
 
 const PROJECT_ID = "demo-dute-operations";
-const COLECOES = ["lpu_items", "price_tables"] as const;
-const LEEM = ["owner-a", "admin-a", "comercial-a"] as const;
+const COLECOES = ["lpu_items", "price_tables", "client_authorizations"] as const;
+const LEEM = ["owner-a", "admin-a", "comercial-a", "finance-a"] as const;
 const NAO_LEEM = [
   "ops-a",
   "wms-a",
   "support-a",
-  "finance-a",
   "campo-a",
   "rh-a",
   "painel-a",
@@ -101,6 +103,17 @@ async function seed() {
       moeda: "BRL",
       precos: { lpu_mesa: { codigo: "DTL-0001-T", descricao_cliente: "Transporte de mesa", preco: "45.50" } },
     });
+    await setDoc(doc(database, "client_authorizations", "aut_teste"), {
+      id: "aut_teste",
+      customer_code: "ITAU",
+      contrato_id: "itau-2026",
+      tipo: "pedido_aceite",
+      pedido: "4500000001",
+      aceite: "1000000001",
+      valor_cents: 9100,
+      demandas: [{ numero: "10045", rv: 1, rotulo: "10045 – RV01", valor_cents: 9100 }],
+      status: "registrada",
+    });
   });
 }
 
@@ -121,11 +134,11 @@ after(async () => {
   await testEnvironment.cleanup();
 });
 
-const ALVO: Record<(typeof COLECOES)[number], string> = { lpu_items: "lpu_mesa", price_tables: "pt_itau" };
+const ALVO: Record<(typeof COLECOES)[number], string> = { lpu_items: "lpu_mesa", price_tables: "pt_itau", client_authorizations: "aut_teste" };
 
 describe("preços do Comercial: leitura", () => {
   for (const uid of LEEM) {
-    it(`${uid} lê o catálogo e as tabelas, pelo id e em lista`, async () => {
+    it(`${uid} lê o catálogo, as tabelas e as autorizações, pelo id e em lista`, async () => {
       const database = signedAs(uid);
       for (const name of COLECOES) {
         await assertSucceeds(getDoc(doc(database, name, ALVO[name])));
@@ -135,7 +148,7 @@ describe("preços do Comercial: leitura", () => {
   }
 
   for (const uid of NAO_LEEM) {
-    it(`${uid} não lê o catálogo nem as tabelas`, async () => {
+    it(`${uid} não lê o catálogo, as tabelas nem as autorizações`, async () => {
       const database = signedAs(uid);
       for (const name of COLECOES) {
         await assertFails(getDoc(doc(database, name, ALVO[name])));
@@ -151,7 +164,7 @@ describe("preços do Comercial: leitura", () => {
 });
 
 describe("preços do Comercial: escrita", () => {
-  for (const uid of [...LEEM, "finance-a", "client-a"]) {
+  for (const uid of [...LEEM, "client-a", "ops-a"]) {
     it(`${uid} não grava pelo navegador`, async () => {
       const database = signedAs(uid);
       for (const name of COLECOES) {
@@ -172,15 +185,15 @@ describe("preços do Comercial: as funções das regras", () => {
     return [...match[1].matchAll(/'([^']+)'/g)].map((item) => item[1]);
   }
 
-  it("canReadPrices() é owner, admin e comercial", () => {
-    assert.deepEqual(roles("canReadPrices"), ["owner", "admin", "comercial"]);
+  it("canReadPrices() é owner, admin, comercial e financeiro (preço: CLAUDE.md; o financeiro desde a parte 15)", () => {
+    assert.deepEqual(roles("canReadPrices"), ["owner", "admin", "comercial", "financeiro"]);
   });
 
   it("canReadBilling() não muda com o Comercial", () => {
     assert.deepEqual(roles("canReadBilling"), ["owner", "admin", "financeiro", "suporte"]);
   });
 
-  it("lpu_items e price_tables leem por canReadPrices() e não aceitam escrita", () => {
+  it("lpu_items, price_tables e client_authorizations leem por canReadPrices() e não aceitam escrita", () => {
     for (const name of COLECOES) {
       const block = rules.match(new RegExp(`match /${name}/\\{[^}]+\\} \\{([^}]*)\\}`));
       assert.ok(block, `match /${name} não encontrado`);

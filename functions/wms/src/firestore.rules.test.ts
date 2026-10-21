@@ -972,13 +972,12 @@ describe("módulos contratados do cliente (Fase 2)", () => {
 });
 
 describe("contratos do Comercial (parte 8)", () => {
-  const LEITORES = ["owner-a", "admin-a", "comercial-a"] as const;
+  const LEITORES = ["owner-a", "admin-a", "comercial-a", "finance-a"] as const;
   const FORA = [
     "ops-a",
     "ops-dutelog",
     "wms-a",
     "support-a",
-    "finance-a",
     "campo-a",
     "rh-a",
     "painel-a",
@@ -1026,7 +1025,7 @@ describe("contratos do Comercial (parte 8)", () => {
     });
   }
 
-  it("operação, campo, suporte, financeiro, rh, painel, cliente e acesso removido não leem contrato nem aditivo", async () => {
+  it("operação, campo, suporte, rh, painel, cliente e acesso removido não leem contrato nem aditivo", async () => {
     for (const uid of FORA) {
       const database = signedAs(uid);
       await assertFails(getDoc(doc(database, "contracts", "ct-a")));

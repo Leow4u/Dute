@@ -98,4 +98,19 @@ describe("perfil de quem chama o Comercial", () => {
     const denied = await rejection(requireComercialCaller(db, request("cli-1"), "dute-homolog"));
     assert.equal(denied.code, "permission-denied");
   });
+
+  it("requireComercialCaller com { financeiro: true }: o financeiro entra; sem a opção, não; os outros papéis continuam fora", async () => {
+    const semOpcao = await rejection(requireComercialCaller(db, request("fin-1"), "dute-homolog"));
+    assert.equal(semOpcao.code, "permission-denied");
+    const financeiro = await requireComercialCaller(db, request("fin-1"), "dute-homolog", { financeiro: true });
+    assert.equal(financeiro.role, "financeiro");
+    assert.equal((await requireComercialCaller(db, request("com-1"), "dute-homolog", { financeiro: true })).role, "comercial");
+    for (const uid of ["wms-1", "cli-1", "off-1"]) {
+      const error = await rejection(requireComercialCaller(db, request(uid), "dute-homolog", { financeiro: true }));
+      assert.equal(error.code, "permission-denied", uid);
+    }
+    // A liberação vem antes: na produção, nem o financeiro passa.
+    const producao = await rejection(requireComercialCaller(db, request("fin-1"), "dute-prod", { financeiro: true }));
+    assert.equal(producao.code, "failed-precondition");
+  });
 });
