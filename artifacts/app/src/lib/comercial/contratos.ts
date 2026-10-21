@@ -87,7 +87,7 @@ export const ROTULO_DO_REGIME: Record<RegimeCobranca, string> = {
 export const ROTULO_DA_AUTORIZACAO: Record<TipoAutorizacao, string> = {
   pedido_aceite: "Pedido e aceite",
   medicao_aprovada: "Medição aprovada",
-  portal: "Portal do cliente",
+  portal: "Portal do fornecedor",
   nenhuma: "Sem autorização",
 };
 

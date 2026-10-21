@@ -177,8 +177,10 @@ const EXEMPLOS: Record<ComercialEventType, Record<string, unknown>> = {
   "client_authorization.cancelled": {
     autorizacao_id: "aut_0001",
     tipo: "pedido_aceite",
+    contrato_id: "itau-2026",
     demandas: ["10045", "10046"],
     devolvidas: ["10045"],
+    marcas: ["valor_diverge"],
   },
   "medicao.created": { medicao_id: "safra-2026-10", contrato_id: "safra-2026", competencia: "2026-10", demandas: 7 },
   "medicao.sent": { medicao_id: "safra-2026-10", competencia: "2026-10" },
@@ -651,7 +653,8 @@ describe("evento gravado", () => {
       entity_id: "aut_0002",
       payload: { ...EXEMPLOS["client_authorization.recorded"], tipo: "portal", demandas: ["10045"], a_faturar: [], marcas: [] } as never,
     });
-    assert.equal(complemento.description, "Portal do cliente, ligada a 1 demanda; complemento de outra autorização.");
+    // O portal é o de compras do cliente (o "Portal do fornecedor" da ComAutorizacoes), não o portal do Dute.
+    assert.equal(complemento.description, "Portal do fornecedor, ligada a 1 demanda; complemento de outra autorização.");
     const cancelada = buildComercialEvent({
       ...base,
       type: "client_authorization.cancelled",
@@ -660,11 +663,19 @@ describe("evento gravado", () => {
     });
     assert.equal(cancelada.title, "Autorização do cliente cancelada");
     assert.equal(cancelada.description, "Pedido e aceite desligada de 2 demandas; 1 demanda volta a aguardar autorização.");
+    // O cancelamento leva o contrato e as marcas, como o registro: a timeline o liga ao contrato sem outra leitura.
+    const cancelled = COMERCIAL_EVENT_PAYLOADS["client_authorization.cancelled"];
+    const { contrato_id: _contrato, marcas: _marcas, ...semContratoNemMarcas } = EXEMPLOS["client_authorization.cancelled"] as Record<string, unknown>;
+    assert.equal(cancelled.safeParse(semContratoNemMarcas).success, false, "cancelamento sem contrato nem marcas");
+    assert.equal(cancelled.safeParse({ ...EXEMPLOS["client_authorization.cancelled"], contrato_id: null, marcas: [] }).success, true);
+    for (const extra of [{ pedido: "4500000412" }, { valor_cents: 2074880 }, { motivo: "Registrada na demanda errada." }]) {
+      assert.equal(cancelled.safeParse({ ...EXEMPLOS["client_authorization.cancelled"], ...extra }).success, false, JSON.stringify(extra));
+    }
     const recorded = COMERCIAL_EVENT_PAYLOADS["client_authorization.recorded"];
     for (const extra of [
       { pedido: "4500000412" },
       { aceite: "1000000877" },
-      { tomador_documento: "60701190000104" },
+      { tomador_documento: "11222333000181" },
       { centro_custo: "41220" },
       { valor_cents: 2074880 },
     ]) {

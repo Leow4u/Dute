@@ -7,12 +7,16 @@ import {
   TIPOS_AUTORIZACAO_CLIENTE,
   alertaDePrazoDePerda,
   chaveDoNumeroDoCliente,
+  completarTomador,
   diasEsperandoAutorizacao,
   faixaDeIdade,
   inicioDaEspera,
+  lerTomador,
   marcasDaAutorizacao,
   marcosDoPrazoDePerda,
   problemaDaDemandaParaAutorizar,
+  problemaDoTipoDaAutorizacao,
+  saldoDaAutorizacao,
 } from "./autorizacao.js";
 import { somarDias } from "./contratos-datas.js";
 import { etapaDaDemanda } from "./demanda.js";
@@ -198,6 +202,102 @@ describe("marcas da autorização", () => {
       marcasDaAutorizacao({ valor_cents: 100, demandas: [rv(100, 1, null)], tomador_documento: null, documento_do_cadastro: MATRIZ }),
       ["rv_nao_validada"],
     );
+  });
+});
+
+describe("o complemento: o que falta autorizar", () => {
+  const rv = (valor_cents: number) => ({ rv: 0, rv_validada: 0, valor_cents });
+
+  it("sem outra autorização, o saldo é a soma das RVs", () => {
+    assert.equal(saldoDaAutorizacao(["10045"], 184_800, []), 184_800);
+  });
+
+  it("outra autorização só destas demandas: o saldo desconta o valor dela", () => {
+    assert.equal(saldoDaAutorizacao(["10045"], 184_800, [{ valor_cents: 172_800, demanda_numeros: ["10045"] }]), 12_000);
+    assert.equal(
+      saldoDaAutorizacao(
+        ["10045", "10047"],
+        369_600,
+        [
+          { valor_cents: 100_000, demanda_numeros: ["10045"] },
+          { valor_cents: 50_000, demanda_numeros: ["10045", "10047"] },
+        ],
+      ),
+      219_600,
+    );
+  });
+
+  it("outra autorização que cobre demanda fora desta: sem saldo (não há como repartir)", () => {
+    assert.equal(saldoDaAutorizacao(["10045"], 184_800, [{ valor_cents: 369_600, demanda_numeros: ["10045", "10046"] }]), null);
+  });
+
+  it("o complemento que fecha o saldo não marca valor_diverge; o que passa dele, marca", () => {
+    const entrada = { demandas: [rv(184_800)], tomador_documento: null, documento_do_cadastro: MATRIZ };
+    assert.deepEqual(marcasDaAutorizacao({ ...entrada, valor_cents: 12_000, saldo_cents: 12_000 }), []);
+    assert.deepEqual(marcasDaAutorizacao({ ...entrada, valor_cents: 12_001, saldo_cents: 12_000 }), ["valor_diverge"]);
+    assert.deepEqual(marcasDaAutorizacao({ ...entrada, valor_cents: 12_000, saldo_cents: null }), ["valor_diverge"]);
+    assert.deepEqual(marcasDaAutorizacao({ ...entrada, valor_cents: 184_800, saldo_cents: 12_000 }), [], "a soma cheia continua valendo");
+  });
+});
+
+describe("tomador mascarado (o e-mail do cliente esconde parte da raiz)", () => {
+  it("CNPJ inteiro vale como veio, com ou sem máscara de pontuação; vazio é null", () => {
+    assert.deepEqual(lerTomador("11.222.333/0002-62"), { tipo: "inteiro", cnpj: FILIAL });
+    assert.deepEqual(lerTomador(MATRIZ), { tipo: "inteiro", cnpj: MATRIZ });
+    assert.equal(lerTomador(""), null);
+    assert.equal(lerTomador("   "), null);
+    assert.equal(lerTomador(null), null);
+  });
+
+  it("raiz escondida com X ou asterisco, filial e dígitos à mostra: mascarado", () => {
+    assert.deepEqual(lerTomador("11.222.XXX/0002-62"), { tipo: "mascarado", mascara: "11222XXX000262" });
+    assert.deepEqual(lerTomador("11.222.xxx/0002-62"), { tipo: "mascarado", mascara: "11222XXX000262" });
+    assert.deepEqual(lerTomador("11222***000262"), { tipo: "mascarado", mascara: "11222***000262" });
+  });
+
+  it("o que não é CNPJ nem a máscara do cliente é inválido", () => {
+    for (const valor of ["11222333000199", "11.222.XXX/0002-6X", "11.222.333/XXXX-62", "11.222.XXX/0002", "abc", "11222XXX00026299"]) {
+      assert.deepEqual(lerTomador(valor), { tipo: "invalido" }, valor);
+    }
+  });
+
+  it("completa com a raiz do cadastro quando os dígitos verificadores fecham", () => {
+    assert.deepEqual(completarTomador("11222XXX000262", MATRIZ), { cnpj: FILIAL });
+    assert.deepEqual(completarTomador("11222***000181", "11.222.333/0001-81"), { cnpj: MATRIZ });
+  });
+
+  it("outra raiz à mostra, dígitos que não fecham ou cadastro sem CNPJ: pede o CNPJ inteiro", () => {
+    assert.match(String((completarTomador("12345XXX000195", MATRIZ) as { problema?: string }).problema), /outra raiz/);
+    assert.match(String((completarTomador("11222XXX000263", MATRIZ) as { problema?: string }).problema), /não fecha/);
+    assert.match(String((completarTomador("11222XXX000262", null) as { problema?: string }).problema), /não tem CNPJ/);
+  });
+});
+
+describe("o tipo da autorização e o contrato", () => {
+  const validada = (autorizacao: string | null) => ({ validacao: { rv: 1, etapa: "aguardando_autorizacao", autorizacao, em: "2026-10-08T13:00:00.000Z" } });
+
+  it("no contrato com pedido e aceite, só pedido e aceite; no portal, só portal", () => {
+    assert.equal(problemaDoTipoDaAutorizacao("pedido_aceite", "10045", validada("pedido_aceite")), null);
+    assert.equal(problemaDoTipoDaAutorizacao("portal", "10044", validada("portal")), null);
+    for (const tipo of ["outro", "portal"] as const) {
+      assert.match(problemaDoTipoDaAutorizacao(tipo, "10045", validada("pedido_aceite")) ?? "", /10045 é de contrato com autorização por pedido e aceite/, tipo);
+    }
+    for (const tipo of ["outro", "pedido_aceite"] as const) {
+      assert.match(problemaDoTipoDaAutorizacao(tipo, "10044", validada("portal")) ?? "", /portal do fornecedor/, tipo);
+    }
+  });
+
+  it("a medição aprovada nunca: vem da medição mensal", () => {
+    for (const exigido of ["pedido_aceite", "portal", null]) {
+      assert.match(problemaDoTipoDaAutorizacao("medicao_aprovada", "10045", validada(exigido)) ?? "", /medição mensal/);
+    }
+  });
+
+  it("validação sem tipo exigido (o legado): pedido e aceite, portal ou outro", () => {
+    for (const tipo of ["pedido_aceite", "portal", "outro"] as const) {
+      assert.equal(problemaDoTipoDaAutorizacao(tipo, "10045", validada(null)), null, tipo);
+      assert.equal(problemaDoTipoDaAutorizacao(tipo, "10045", {}), null, tipo);
+    }
   });
 });
 

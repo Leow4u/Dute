@@ -1,6 +1,7 @@
 import { dataValida, diasEntre, somarDias } from "./contratos-datas.js";
-import { cnpjRoot } from "./customer-identity.js";
+import { cnpjNormalizado, cnpjRoot } from "./customer-identity.js";
 import {
+  AUTORIZACOES_QUE_ESPERAM,
   autorizacoesDaDemanda,
   dataDeHoje,
   rotuloDaEtapa,
@@ -24,8 +25,10 @@ import { MARCAS_AUTORIZACAO, TIPOS_AUTORIZACAO_CLIENTE } from "./events.js";
  *   (a demanda guarda os ids em `autorizacao_ids`; etapaDaDemanda em
  *   demanda.ts); cancelada a última, a demanda volta a aguardar.
  * - Divergência não impede o registro: vira marca para conferir (o valor
- *   diferente da soma das RVs citadas, o tomador de outra raiz de CNPJ, a RV
- *   diferente da validada).
+ *   diferente da soma das RVs citadas e do que falta autorizar nelas, o
+ *   tomador de outra raiz de CNPJ, a RV diferente da validada).
+ * - O tipo segue o que o contrato pedia na validação: pedido e aceite, ou o
+ *   pedido do portal do fornecedor.
  * - A fila mostra há quantos dias o serviço espera o dinheiro, e o contrato
  *   com prazo de perda (autorizacao.prazo_perda_dias) avisa antes de perder.
  */
@@ -172,6 +175,76 @@ export function problemaDaDemandaParaAutorizar(
   return `A demanda ${numero} está ${rotuloDaEtapa(demanda.etapa)}: a autorização é da demanda validada que aguarda autorização (ou complemento de outra já autorizada).`;
 }
 
+/** Como a autorização se chama na mensagem: o tipo que o contrato pede. */
+const TIPO_NA_MENSAGEM: Record<(typeof AUTORIZACOES_QUE_ESPERAM)[number], string> = {
+  pedido_aceite: "pedido e aceite: registre como pedido e aceite, com os dois números",
+  portal: "pedido no portal do fornecedor: registre como portal, com o pedido do portal",
+};
+
+/**
+ * Por que o tipo informado não serve à demanda, ou null. A validação guarda o
+ * tipo que o contrato pedia (`validacao.autorizacao`, parte 10), e só pedido
+ * e aceite ou portal levam a "aguardando autorização": no contrato com pedido
+ * e aceite, a NF do cliente leva os dois números; no portal, o pedido do
+ * portal. A medição aprovada vem da medição mensal, nunca deste registro.
+ */
+export function problemaDoTipoDaAutorizacao(
+  tipo: TipoAutorizacaoCliente,
+  numero: string,
+  demanda: Pick<EstadoDaDemanda, "validacao">,
+): string | null {
+  if (tipo === "medicao_aprovada") return "A medição aprovada se registra na medição mensal, não aqui.";
+  const exigido = (demanda.validacao as { autorizacao?: unknown } | null | undefined)?.autorizacao;
+  if (!(AUTORIZACOES_QUE_ESPERAM as readonly unknown[]).includes(exigido) || exigido === tipo) return null;
+  return `A demanda ${numero} é de contrato com autorização por ${TIPO_NA_MENSAGEM[exigido as (typeof AUTORIZACOES_QUE_ESPERAM)[number]]}.`;
+}
+
+// --- Tomador -------------------------------------------------------------------------------
+
+/**
+ * O tomador como chegou: o CNPJ inteiro (pode ser de filial) ou, como no
+ * e-mail de autorização do Itaú, com parte da raiz escondida
+ * ("11.222.XXX/0001-81"), que o servidor completa com a raiz do cadastro.
+ */
+export type TomadorDaEntrada = { tipo: "inteiro"; cnpj: string } | { tipo: "mascarado"; mascara: string } | { tipo: "invalido" };
+
+/** O que esconde parte da raiz no e-mail do cliente: X ou asterisco. */
+const ESCONDIDO = /[X*]/;
+
+/**
+ * Lê o tomador da entrada; vazio é null. Mascarado: 14 caracteres sem a
+ * máscara, X ou * só na raiz (os 8 primeiros), a filial e os dois dígitos
+ * verificadores à mostra. O CNPJ inteiro válido vale como veio, mesmo com X
+ * (o CNPJ alfanumérico).
+ */
+export function lerTomador(valor: string | null | undefined): TomadorDaEntrada | null {
+  if (!valor?.trim()) return null;
+  const cnpj = cnpjNormalizado(valor);
+  if (cnpj) return { tipo: "inteiro", cnpj };
+  const mascara = valor.toUpperCase().replace(/[^0-9A-Z*]/g, "");
+  const raiz = mascara.slice(0, 8);
+  if (/^[0-9A-Z*]{8}[0-9A-Z]{4}[0-9]{2}$/.test(mascara) && ESCONDIDO.test(raiz)) return { tipo: "mascarado", mascara };
+  return { tipo: "invalido" };
+}
+
+/**
+ * Completa o tomador mascarado com a raiz do cadastro: os caracteres à mostra
+ * precisam ser os da raiz e os dígitos verificadores precisam fechar. Senão,
+ * o motivo (o CNPJ inteiro resolve).
+ */
+export function completarTomador(mascara: string, documentoDoCadastro: unknown): { cnpj: string } | { problema: string } {
+  const raiz = cnpjRoot(documentoDoCadastro);
+  if (!raiz) return { problema: "O cadastro do cliente não tem CNPJ para completar o tomador mascarado: informe o CNPJ inteiro." };
+  if (![...mascara.slice(0, 8)].every((caractere, indice) => ESCONDIDO.test(caractere) || caractere === raiz[indice])) {
+    return { problema: "O tomador mascarado tem outra raiz de CNPJ que o cadastro: informe o CNPJ inteiro." };
+  }
+  const cnpj = cnpjNormalizado(`${raiz}${mascara.slice(8)}`);
+  if (!cnpj) return { problema: "O tomador mascarado não fecha com a raiz do cadastro (dígitos verificadores): informe o CNPJ inteiro." };
+  return { cnpj };
+}
+
+// --- Valor e marcas ------------------------------------------------------------------------
+
 export type DemandaCitada = {
   /** A RV que o cliente cita. */
   rv: number;
@@ -181,9 +254,25 @@ export type DemandaCitada = {
   valor_cents: number;
 };
 
+/** Outra autorização ativa de alguma das demandas: o valor e as demandas que ela cobre. */
+export type OutraAutorizacao = { valor_cents: number; demanda_numeros: readonly string[] };
+
+/**
+ * O que falta autorizar nas demandas (o complemento): a soma das RVs citadas
+ * menos o valor das outras autorizações ativas delas. Sem outra, é a soma.
+ * null quando alguma outra também cobre demanda fora desta: não há como
+ * repartir o valor dela.
+ */
+export function saldoDaAutorizacao(numeros: readonly string[], somaCents: number, outras: readonly OutraAutorizacao[]): number | null {
+  if (outras.some((outra) => outra.demanda_numeros.some((numero) => !numeros.includes(numero)))) return null;
+  return somaCents - somarCentavos(outras.map((outra) => outra.valor_cents));
+}
+
 /**
  * As marcas da autorização, na ordem de MARCAS_AUTORIZACAO.
- * - valor_diverge: o valor informado difere da soma das RVs citadas.
+ * - valor_diverge: o valor informado difere da soma das RVs citadas e do
+ *   saldo (o que falta autorizar nelas; saldoDaAutorizacao). O complemento
+ *   que fecha o saldo não marca.
  * - tomador_outra_raiz: o tomador informado tem outra raiz de CNPJ que o
  *   cadastro (filial da mesma raiz não marca). Cadastro sem CNPJ válido marca:
  *   não há como conferir.
@@ -192,11 +281,13 @@ export type DemandaCitada = {
 export function marcasDaAutorizacao(entrada: {
   valor_cents: number;
   demandas: readonly DemandaCitada[];
+  saldo_cents?: number | null;
   tomador_documento: string | null;
   documento_do_cadastro: unknown;
 }): MarcaAutorizacao[] {
   const marcas = new Set<MarcaAutorizacao>();
-  if (somarCentavos(entrada.demandas.map((demanda) => demanda.valor_cents)) !== entrada.valor_cents) marcas.add("valor_diverge");
+  const soma = somarCentavos(entrada.demandas.map((demanda) => demanda.valor_cents));
+  if (entrada.valor_cents !== soma && entrada.valor_cents !== entrada.saldo_cents) marcas.add("valor_diverge");
   if (entrada.tomador_documento !== null) {
     const raiz = cnpjRoot(entrada.tomador_documento);
     if (raiz === null || raiz !== cnpjRoot(entrada.documento_do_cadastro)) marcas.add("tomador_outra_raiz");

@@ -296,6 +296,7 @@ describe("registrar a autorização (N:N)", () => {
         recebida_em: "2026-07-18",
         valor_cents: 2 * TOTAL_RV,
         soma_cents: 2 * TOTAL_RV,
+        saldo_cents: 2 * TOTAL_RV,
         demandas: [
           { numero: a, rv: 0, rotulo: a, valor_cents: TOTAL_RV },
           { numero: b, rv: 0, rotulo: b, valor_cents: TOTAL_RV },
@@ -368,7 +369,9 @@ describe("registrar a autorização (N:N)", () => {
     const primeira = await registrar(comercial, registro([{ numero: a }, { numero: b }]));
     const complemento = await registrar(comercial, registro([{ numero: a }], { aceite: "1000000901", valor: "120.00" }));
 
+    // A primeira já cobria as RVs inteiras (e também a demanda b): o complemento passa da soma.
     assert.deepEqual(complemento.marcas, ["valor_diverge"]);
+    assert.equal(complemento.saldo_cents, null);
     assert.deepEqual(complemento.demandas.map((d) => d.etapa), ["a_faturar"]);
     assert.deepEqual((await doc(`demands/${a}`)).autorizacao_ids, [primeira.autorizacao_id, complemento.autorizacao_id]);
     assert.deepEqual((await doc(`demands/${b}`)).autorizacao_ids, [primeira.autorizacao_id]);
@@ -378,6 +381,22 @@ describe("registrar a autorização (N:N)", () => {
     assert.deepEqual((evento?.payload as Linha).a_faturar, []);
     assert.deepEqual((evento?.payload as Linha).marcas, ["valor_diverge"]);
     assert.match(String(evento?.description), /complemento/);
+  });
+
+  it("autorização parcial e o complemento que fecha o saldo: só a parcial marca valor_diverge", async () => {
+    const a = await aguardando();
+    const parcial = await registrar(comercial, registro([{ numero: a }], { valor: "1728.00" }));
+    assert.deepEqual([parcial.marcas, parcial.soma_cents, parcial.saldo_cents], [["valor_diverge"], TOTAL_RV, TOTAL_RV]);
+
+    const complemento = await registrar(comercial, registro([{ numero: a }], { aceite: "1000000901", valor: "120.00" }));
+    assert.deepEqual([complemento.marcas, complemento.soma_cents, complemento.saldo_cents], [[], TOTAL_RV, 12_000]);
+    const gravada = await doc(`client_authorizations/${complemento.autorizacao_id}`);
+    assert.deepEqual([gravada.marcas, gravada.saldo_cents], [[], 12_000]);
+
+    // Cancelada a parcial, o saldo volta a ser a RV inteira: outro complemento de 120,00 marca.
+    await cancelar(comercial, parcial.autorizacao_id);
+    const outro = await registrar(comercial, registro([{ numero: a }], { aceite: "1000000902", valor: "120.00" }));
+    assert.deepEqual([outro.marcas, outro.saldo_cents], [["valor_diverge"], TOTAL_RV - 12_000]);
   });
 
   it("valor diferente da soma das RVs: registra e marca valor_diverge", async () => {
@@ -442,6 +461,36 @@ describe("registrar a autorização (N:N)", () => {
     );
     assert.equal((await doc(`demands/${c}`)).etapa, "aguardando_autorizacao");
   });
+
+  it("tomador com a raiz mascarada, como no e-mail do cliente: completa com a raiz do cadastro, ou pede o CNPJ inteiro", async () => {
+    const [a, b] = [await aguardando(), await aguardando()];
+    const mascarado = await registrar(comercial, registro([{ numero: a }], { valor: "1848.00", tomador_documento: "11.222.XXX/0002-62" }));
+    assert.deepEqual(mascarado.marcas, []);
+    assert.equal((await doc(`client_authorizations/${mascarado.autorizacao_id}`)).tomador_documento, "11222333000262");
+
+    const casos: Array<[string, RegExp]> = [
+      ["12.345.XXX/0001-95", /outra raiz/],
+      ["11.222.XXX/0002-63", /não fecha/],
+      ["11.222.333/XXXX-62", /CNPJ do tomador inválido/],
+    ];
+    for (const [tomador, mensagem] of casos) {
+      await rejeita(
+        registrar(comercial, registro([{ numero: b }], { aceite: "1000000904", valor: "1848.00", tomador_documento: tomador })),
+        "invalid-argument",
+        mensagem,
+      );
+    }
+    assert.equal((await doc(`demands/${b}`)).etapa, "aguardando_autorizacao");
+    assert.equal(await count("client_authorizations"), 1);
+
+    // O cadastro sem CNPJ não tem como completar.
+    await db.doc("customers/ITAU").update({ document: null });
+    await rejeita(
+      registrar(comercial, registro([{ numero: b }], { aceite: "1000000904", valor: "1848.00", tomador_documento: "11.222.XXX/0002-62" })),
+      "invalid-argument",
+      /não tem CNPJ/,
+    );
+  });
 });
 
 describe("o que a autorização recusa", () => {
@@ -494,19 +543,38 @@ describe("o que a autorização recusa", () => {
       [{ email_link: "outlook.com/x" }, /Link do e-mail/],
       [{ preco: "10.00" }, /./],
       [{ action: "editar" }, /Ação inválida/],
+      [{ tipo: "medicao_aprovada", pedido: null, aceite: null, documento: { nome: "Medição.pdf", referencia: "pasta do cliente" } }, /medição mensal/],
     ];
     for (const [extra, mensagem] of casos) {
       await rejeita(registrar(comercial, registro([{ numero: a }], extra)), "invalid-argument", mensagem);
     }
     assert.equal(await count("client_authorizations"), 0);
 
-    // Medição aprovada com o documento como prova: sem pedido nem aceite.
-    const medicao = await registrar(
-      comercial,
-      registro([{ numero: a }], { tipo: "medicao_aprovada", pedido: null, aceite: null, email_link: null, valor: "1848.00", documento: { nome: "Medição.pdf", referencia: "pasta do cliente" } }),
-    );
-    assert.equal(medicao.status, "registrada");
-    assert.equal((await doc(`client_authorizations/${medicao.autorizacao_id}`)).chave_pedido_aceite, null);
+  });
+
+  it("o tipo segue o contrato: no de pedido e aceite, outro registro ou portal são recusados", async () => {
+    const a = await aguardando();
+    const casos: Array<Record<string, unknown>> = [
+      { tipo: "outro", pedido: null, aceite: null },
+      { tipo: "outro", aceite: null, documento: { nome: "Autorização.pdf", referencia: "pasta do cliente" } },
+      { tipo: "portal", aceite: null },
+    ];
+    for (const extra of casos) {
+      await rejeita(
+        registrar(comercial, registro([{ numero: a }], { valor: "1848.00", ...extra })),
+        "failed-precondition",
+        new RegExp(`${a} é de contrato com autorização por pedido e aceite`),
+      );
+    }
+    assert.equal(await count("client_authorizations"), 0);
+    assert.equal((await doc(`demands/${a}`)).etapa, "aguardando_autorizacao");
+
+    // A validação sem o tipo do contrato (o legado) aceita outro registro, com o link do e-mail como prova.
+    const dem = await doc(`demands/${a}`);
+    await db.doc(`demands/${a}`).update({ validacao: { ...(dem.validacao as Linha), autorizacao: null } });
+    const outro = await registrar(comercial, registro([{ numero: a }], { tipo: "outro", pedido: null, aceite: null, valor: "1848.00" }));
+    assert.equal(outro.status, "registrada");
+    assert.equal((await doc(`client_authorizations/${outro.autorizacao_id}`)).chave_pedido_aceite, null);
   });
 });
 
@@ -534,7 +602,14 @@ describe("cancelar a autorização", () => {
       ["cancelada", "com-1", "2026-07-20T15:00:00.000Z", "Registrada na demanda errada."],
     );
     const evento = (await eventos()).find((event) => event.type === "client_authorization.cancelled");
-    assert.deepEqual(evento?.payload, { autorizacao_id: primeira.autorizacao_id, tipo: "pedido_aceite", demandas: [a, b], devolvidas: [b] });
+    assert.deepEqual(evento?.payload, {
+      autorizacao_id: primeira.autorizacao_id,
+      tipo: "pedido_aceite",
+      contrato_id: "itau-2026",
+      demandas: [a, b],
+      devolvidas: [b],
+      marcas: [],
+    });
     semDinheiroNemNumeroDoCliente([evento ?? {}]);
 
     // Cancelar de novo só devolve o estado.

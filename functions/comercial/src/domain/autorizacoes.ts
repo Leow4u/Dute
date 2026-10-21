@@ -5,18 +5,24 @@ import { z } from "zod";
 import {
   AUTHORIZATION_SCHEMA_VERSION,
   CLIENT_AUTHORIZATIONS_COLLECTION,
+  MARCAS_AUTORIZACAO,
   TIPOS_AUTORIZACAO_CLIENTE,
   chaveDoNumeroDoCliente,
+  completarTomador,
+  lerTomador,
   marcasDaAutorizacao,
   problemaDaDemandaParaAutorizar,
+  problemaDoTipoDaAutorizacao,
+  saldoDaAutorizacao,
   type DemandaCitada,
   type MarcaAutorizacao,
+  type OutraAutorizacao,
   type StatusAutorizacao,
   type TipoAutorizacaoCliente,
+  type TomadorDaEntrada,
 } from "./autorizacao.js";
 import { cadastroPeloCodigo, idDeDocumentoValido, parseEntrada } from "./cadastro.js";
 import { CONTRACTS_COLLECTION } from "./contratos.js";
-import { cnpjNormalizado } from "./customer-identity.js";
 import {
   autorizacoesDaDemanda,
   dataDeHoje,
@@ -52,12 +58,14 @@ import {
  * "Autorização de faturamento"; parte 15): registrar e cancelar o "pode
  * faturar" do cliente em `client_authorizations`.
  *
- * - record: a autorização (pedido e aceite, medição aprovada, portal ou
- *   outro) de uma ou várias demandas do mesmo cliente, que esperam a
- *   autorização ou, no complemento, já estão a faturar por outra. Cada
+ * - record: a autorização (pedido e aceite, portal ou outro) de uma ou
+ *   várias demandas do mesmo cliente, que esperam a autorização ou, no
+ *   complemento, já estão a faturar por outra. O tipo é o que o contrato
+ *   pedia na validação; a medição aprovada vem da medição mensal. Cada
  *   demanda cita a RV que o cliente autorizou (a validada, se não vier); o
  *   valor de cada uma é o total da RV como foi enviada, lido pelo servidor.
- *   As demandas vão a "a faturar", com o id em `autorizacao_ids`.
+ *   O tomador mascarado do e-mail se completa com a raiz do cadastro. As
+ *   demandas vão a "a faturar", com o id em `autorizacao_ids`.
  * - cancel: a autorização registrada por engano. As demandas sem outra
  *   autorização voltam a "aguardando autorização"; a que já foi usada no
  *   faturamento (NF, portal ou Omie, Fase 7) não se cancela.
@@ -121,7 +129,7 @@ const Registrar = z
     recebida_em: dataDaEntrada,
     valor,
     demandas: z.array(DemandaDaAutorizacao).min(1, "Escolha ao menos uma demanda.").max(50, "Até 50 demandas por autorização."),
-    /** CNPJ do tomador, inteiro (pode ser de filial). */
+    /** CNPJ do tomador, inteiro (pode ser de filial) ou com a raiz mascarada como no e-mail do cliente. */
     tomador_documento: z.string().trim().max(30).nullable().optional(),
     codigo_servico: z
       .string()
@@ -150,6 +158,7 @@ const Registrar = z
       if (!value.aceite) issue("aceite", "Autorização por pedido e aceite: informe o aceite.");
     }
     if (value.tipo === "portal" && !value.pedido) issue("pedido", "Autorização pelo portal: informe o pedido do portal.");
+    if (value.tipo === "medicao_aprovada") issue("tipo", "A medição aprovada se registra na medição mensal, não aqui.");
     if (!value.pedido && !value.email_link && !value.documento) {
       issue("documento", "Registre a prova da autorização: o pedido, o link do e-mail ou o documento.");
     }
@@ -187,6 +196,8 @@ export type RecordAuthorizationResult = {
   valor_cents: number;
   /** Soma dos totais das RVs citadas. */
   soma_cents: number;
+  /** O que faltava autorizar nas demandas (a soma menos as outras autorizações ativas delas), ou null. */
+  saldo_cents: number | null;
   marcas: MarcaAutorizacao[];
   demandas: DemandaAutorizada[];
   /** A ação já estava feita (cancelar a cancelada): só devolve o estado. */
@@ -211,14 +222,27 @@ function idDaAutorizacao(operationId: string): string {
   return `aut_${digest({ operationId, colecao: CLIENT_AUTHORIZATIONS_COLLECTION }, 20)}`;
 }
 
-/** CNPJ do tomador sem máscara (14 caracteres), ou null quando não veio. Inválido é invalid-argument. */
-function tomadorDaEntrada(valor: string | null | undefined): string | null {
-  if (!valor?.trim()) return null;
-  const cnpj = cnpjNormalizado(valor);
-  if (!cnpj) {
-    throw new HttpsError("invalid-argument", "CNPJ do tomador inválido: confira os 14 caracteres e os dígitos verificadores.");
+type TomadorLido = Exclude<TomadorDaEntrada, { tipo: "invalido" }>;
+
+/** O tomador da entrada (inteiro ou mascarado), ou null quando não veio. Inválido é invalid-argument. */
+function tomadorDaEntrada(valor: string | null | undefined): TomadorLido | null {
+  const tomador = lerTomador(valor);
+  if (tomador?.tipo === "invalido") {
+    throw new HttpsError(
+      "invalid-argument",
+      "CNPJ do tomador inválido: confira os 14 caracteres e os dígitos verificadores (a raiz mascarada, como 11.222.XXX/0001-81, vale).",
+    );
   }
-  return cnpj;
+  return tomador;
+}
+
+/** O CNPJ do tomador sem máscara (14 caracteres): o mascarado se completa com a raiz do cadastro. */
+function cnpjDoTomador(tomador: TomadorLido | null, documentoDoCadastro: unknown): string | null {
+  if (!tomador) return null;
+  if (tomador.tipo === "inteiro") return tomador.cnpj;
+  const completo = completarTomador(tomador.mascara, documentoDoCadastro);
+  if ("problema" in completo) throw new HttpsError("invalid-argument", completo.problema);
+  return completo.cnpj;
 }
 
 /** Centavos do valor informado ("20748.80" → 2074880), sem float. */
@@ -296,6 +320,22 @@ function gravarAutorizacoesDaDemanda(
   return etapaDepois;
 }
 
+/** As outras autorizações ativas das demandas (o complemento), cada uma uma vez. */
+async function outrasAutorizacoes(transaction: Transaction, db: Firestore, lidas: readonly DemandaLida[]): Promise<OutraAutorizacao[]> {
+  const ids = [...new Set(lidas.flatMap((lida) => autorizacoesDaDemanda(lida.demanda)))];
+  if (!ids.length) return [];
+  const snaps = await transaction.getAll(...ids.map((id) => autorizacaoRef(db, id)));
+  return snaps
+    .filter((snap) => snap.exists && snap.get("status") === "registrada")
+    .map((snap) => {
+      const numeros: unknown = snap.get("demanda_numeros");
+      return {
+        valor_cents: centavosGravados(snap.get("valor_cents"), `A autorização ${snap.id}`),
+        demanda_numeros: Array.isArray(numeros) ? numeros.map(texto) : [],
+      };
+    });
+}
+
 async function lerDemandas(transaction: Transaction, db: Firestore, numeros: readonly string[]): Promise<DemandaLida[]> {
   if (!numeros.length) throw new HttpsError("failed-precondition", "A autorização não tem demandas.");
   const snaps = await transaction.getAll(...numeros.flatMap((numero) => [demandRef(db, numero), quoteRef(db, numero)]));
@@ -304,6 +344,11 @@ async function lerDemandas(transaction: Transaction, db: Firestore, numeros: rea
     if (!demandaSnap.exists || !quoteSnap.exists) throw new HttpsError("not-found", `Demanda ${numero} não encontrada.`);
     return { numero, ref: demandaSnap.ref, demanda: demandaSnap.data() ?? {}, quote: quoteSnap.data() ?? {} };
   });
+}
+
+/** As marcas gravadas na autorização, só as da lista e na ordem dela. */
+function marcasGravadas(valor: unknown): MarcaAutorizacao[] {
+  return Array.isArray(valor) ? MARCAS_AUTORIZACAO.filter((marca) => valor.includes(marca)) : [];
 }
 
 function demandasGravadas(valor: unknown): Array<{ numero: string; rv: number; rotulo: string; valor_cents: number }> {
@@ -324,19 +369,18 @@ type Registro = z.infer<typeof Registrar>;
 type Cancelamento = z.infer<typeof Cancelar>;
 type Trabalho = { target_id: string; result: RecordAuthorizationResult };
 
-async function registrar(mudanca: Mudanca, input: Registro, entrada: { valor_cents: number; tomador: string | null }): Promise<Trabalho> {
+async function registrar(mudanca: Mudanca, input: Registro, entrada: { valor_cents: number; tomador: TomadorLido | null }): Promise<Trabalho> {
   const { transaction, db, operationId, actor, caller, iso } = mudanca;
   const code = input.customer_code;
   const numeros = input.demandas.map((demanda) => demanda.numero);
 
-  // Leituras: as demandas e os orçamentos, as RVs citadas, o cadastro, o contrato e a autorização repetida.
+  // Leituras: as demandas e os orçamentos, as RVs citadas, o cadastro, o contrato, a autorização
+  // repetida e as outras autorizações ativas das demandas.
   const lidas = await lerDemandas(transaction, db, numeros);
   const citadas = lidas.map((lida, indice) => {
-    const problema = problemaDaDemandaParaAutorizar(
-      lida.numero,
-      { ...lida.demanda, etapa: lida.demanda.etapa as EtapaDemanda },
-      code,
-    );
+    const problema =
+      problemaDaDemandaParaAutorizar(lida.numero, { ...lida.demanda, etapa: lida.demanda.etapa as EtapaDemanda }, code) ??
+      problemaDoTipoDaAutorizacao(input.tipo, lida.numero, lida.demanda);
     if (problema) throw new HttpsError("failed-precondition", problema);
     const validada = validacaoDaDemanda(lida.demanda)?.rv ?? null;
     const rv = input.demandas[indice].rv ?? validada;
@@ -358,6 +402,7 @@ async function registrar(mudanca: Mudanca, input: Registro, entrada: { valor_cen
   }
   const contratoId = contratos[0] ?? null;
   const cadastro = await cadastroPeloCodigo(transaction, db, code);
+  const tomador = cnpjDoTomador(entrada.tomador, cadastro.data.document);
   let codigoServicoDoContrato: string | null = null;
   if (contratoId) {
     const contrato = await transaction.get(db.collection(CONTRACTS_COLLECTION).doc(contratoId));
@@ -374,16 +419,19 @@ async function registrar(mudanca: Mudanca, input: Registro, entrada: { valor_cen
       throw new HttpsError("already-exists", `Este pedido e aceite já estão registrados para o cliente (autorização ${ativa.id}).`);
     }
   }
+  const outras = await outrasAutorizacoes(transaction, db, lidas);
 
   // Escritas.
   const id = idDaAutorizacao(operationId);
+  const somaCents = somarCentavos(demandas.map((demanda) => demanda.valor_cents));
+  const saldoCents = saldoDaAutorizacao(numeros, somaCents, outras);
   const marcas = marcasDaAutorizacao({
     valor_cents: entrada.valor_cents,
     demandas,
-    tomador_documento: entrada.tomador,
+    saldo_cents: saldoCents,
+    tomador_documento: tomador,
     documento_do_cadastro: cadastro.data.document,
   });
-  const somaCents = somarCentavos(demandas.map((demanda) => demanda.valor_cents));
   const tipo: TipoAutorizacaoCliente = input.tipo;
   transaction.create(autorizacaoRef(db, id), {
     id,
@@ -396,9 +444,10 @@ async function registrar(mudanca: Mudanca, input: Registro, entrada: { valor_cen
     recebida_em: input.recebida_em,
     valor_cents: entrada.valor_cents,
     soma_cents: somaCents,
+    saldo_cents: saldoCents,
     demandas: demandas.map(({ numero, rv, rotulo, valor_cents }) => ({ numero, rv, rotulo, valor_cents })),
     demanda_numeros: numeros,
-    tomador_documento: entrada.tomador,
+    tomador_documento: tomador,
     codigo_servico: input.codigo_servico ?? codigoServicoDoContrato,
     centro_custo: input.centro_custo,
     ref_cliente: input.ref_cliente,
@@ -445,6 +494,7 @@ async function registrar(mudanca: Mudanca, input: Registro, entrada: { valor_cen
       customer_code: code,
       valor_cents: entrada.valor_cents,
       soma_cents: somaCents,
+      saldo_cents: saldoCents,
       marcas,
       demandas: demandas.map(({ numero, rv, rotulo, valor_cents }, indice) => ({ numero, rv, rotulo, valor_cents, etapa: etapas[indice] })),
       ja_feito: false,
@@ -471,7 +521,8 @@ async function cancelar(mudanca: Mudanca, input: Cancelamento): Promise<Trabalho
       customer_code: texto(autorizacao.customer_code),
       valor_cents: Number(autorizacao.valor_cents ?? 0),
       soma_cents: Number(autorizacao.soma_cents ?? 0),
-      marcas: Array.isArray(autorizacao.marcas) ? (autorizacao.marcas as MarcaAutorizacao[]) : [],
+      saldo_cents: typeof autorizacao.saldo_cents === "number" ? autorizacao.saldo_cents : null,
+      marcas: marcasGravadas(autorizacao.marcas),
       demandas: citadas.map((citada, indice) => ({ ...citada, etapa: etapas[indice] })),
       ja_feito: jaFeito,
       events,
@@ -527,8 +578,10 @@ async function cancelar(mudanca: Mudanca, input: Cancelamento): Promise<Trabalho
       payload: {
         autorizacao_id: id,
         tipo: autorizacao.tipo as TipoAutorizacaoCliente,
+        contrato_id: textoOuNull(autorizacao.contrato_id),
         demandas: citadas.map((citada) => citada.numero),
         devolvidas,
+        marcas: marcasGravadas(autorizacao.marcas),
       },
     }).id,
   );

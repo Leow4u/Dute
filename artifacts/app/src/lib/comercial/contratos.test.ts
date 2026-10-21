@@ -381,6 +381,12 @@ describe("condições na ficha", () => {
     ]);
   });
 
+  it("o portal é o de compras do cliente (portal do fornecedor), não o Portal do cliente do Dute", () => {
+    const campos = condicoesDoContrato({ ...ITAU.dados, autorizacao: { tipo: "portal", prazo_perda_dias: 90 } }, HOJE).campos;
+    expect(campos).toContainEqual(["Autorização de faturamento", "Portal do fornecedor"]);
+    expect(campos).toContainEqual(["Prazo de perda", "90 dias"]);
+  });
+
   it("regime por serviço em minúscula, sem estragar a sigla", () => {
     const campos = condicoesDoContrato({ ...ITAU.dados, regimes: [{ servico: "Armazenagem", regime: "wms" }] }, HOJE).campos;
     expect(campos).toContainEqual(["Regime por serviço", "Armazenagem: fatura do WMS"]);

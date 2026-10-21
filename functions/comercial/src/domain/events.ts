@@ -356,8 +356,10 @@ export const COMERCIAL_EVENT_PAYLOADS = {
     .object({
       autorizacao_id: id,
       tipo: z.enum(TIPOS_AUTORIZACAO_CLIENTE),
+      contrato_id: id.nullable(),
       demandas: z.array(numero).min(1).max(200),
       devolvidas: z.array(numero).max(200),
+      marcas: z.array(z.enum(MARCAS_AUTORIZACAO)).max(MARCAS_AUTORIZACAO.length),
     })
     .strict(),
 
@@ -482,7 +484,7 @@ const TIPO_ADITIVO_ROTULO: Record<(typeof TIPOS_ADITIVO)[number], string> = {
 const TIPO_AUTORIZACAO_ROTULO: Record<(typeof TIPOS_AUTORIZACAO_CLIENTE)[number], string> = {
   pedido_aceite: "Pedido e aceite",
   medicao_aprovada: "Medição aprovada",
-  portal: "Portal do cliente",
+  portal: "Portal do fornecedor",
   outro: "Outro registro do cliente",
 };
 

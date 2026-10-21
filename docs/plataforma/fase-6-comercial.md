@@ -212,6 +212,20 @@ Storage.
    aceitar a linha igual à fechada (mesmo id, origem, item e preço; no ajuste,
    o mesmo valor), porque os orçamentos do Itaú quase sempre têm alterado ou
    ajuste. (Parte 11)
+9. **De que data corre o prazo de perda do portal (90 dias no BTG)?** O
+   contrato fala em atraso na solicitação no portal do fornecedor; a
+   ComAutorizacoes mostra o prazo contado do pedido do portal ("prazo do
+   pedido", 90 dias depois da autorização). Hoje o alerta conta do fim da
+   execução, que vem antes: avisa cedo e nunca deixa passar o prazo, mas
+   pode dar "vencido" antes da hora. Recomendo manter a execução até o
+   Leonardo confirmar; se valer o pedido, o alerta passa a receber a
+   autorização ativa e a 15b mostra a data do pedido. (Parte 15b)
+10. **Como se encerra a demanda que perdeu o prazo de faturamento?** O alerta
+    segue em "A faturar" depois do fim, vencido; a demanda a faturar não se
+    perde, e depois do fechamento o único motivo de perda é o cancelamento
+    pelo cliente. Recomendo um motivo de perda "prazo de faturamento", aceito
+    só com o alerta vencido, inclusive a partir de "A faturar" com a
+    autorização ainda não usada na NF. (Parte 15b ou Fase 7)
 
 ## Registro
 
@@ -256,7 +270,7 @@ Storage.
   recebida em, valor, as demandas com a RV citada e o total dela, tomador
   (CNPJ inteiro, pode ser filial), código de serviço (o do contrato, se não
   vier), centro de custo, referência, escopo, link do e-mail, documento,
-  marcas e situação (registrada ou cancelada). `nf_ids`,
+  marcas, soma e saldo e situação (registrada ou cancelada). `nf_ids`,
   `enviada_portal_em` e `omie_lancada_em` ficam reservados para a Fase 7. O
   id é interno (`aut_...`), nunca o número do pedido.
 - A callable `recordAuthorization` registra (record) e cancela (cancel). O
@@ -267,15 +281,29 @@ Storage.
   ter várias. O cancelamento devolve a "Aguardando autorização" a demanda
   que fica sem nenhuma; a autorização já usada no faturamento (NF, portal ou
   Omie) não se cancela. Cancelar de novo só devolve o estado.
+- O tipo segue o que o contrato pedia na validação
+  (`validacao.autorizacao`): no contrato com pedido e aceite, só pedido e
+  aceite, com os dois números (a NF do cliente leva os dois); no portal, só
+  o pedido do portal. A medição aprovada vem da medição mensal (parte 16) e
+  não entra nesta callable; "outro registro" só serve à validação sem o
+  tipo do contrato (o legado).
 - A etapa continua saindo de `etapaDaDemanda`: validada para "Aguardando
   autorização" e com autorização ativa é "A faturar". Assim perder, reabrir
   e cancelar a autorização chegam à mesma etapa.
 - O valor de cada demanda é o total da RV citada como foi enviada
   (`revisoes/{rv}.total_cents`), lido pelo servidor; sem RV na entrada, vale
   a validada. A divergência não impede o registro, vira marca:
-  `valor_diverge` (o valor informado difere da soma das RVs),
-  `tomador_outra_raiz` (a raiz do CNPJ do tomador difere da do cadastro, ou
-  o cadastro não tem CNPJ válido para conferir) e `rv_nao_validada`.
+  `valor_diverge` (o valor informado difere da soma das RVs e do saldo, o
+  que falta autorizar nelas: a soma menos as outras autorizações ativas
+  delas; o complemento que fecha o saldo não marca; sem saldo quando outra
+  autorização também cobre demanda fora desta), `tomador_outra_raiz` (a
+  raiz do CNPJ do tomador difere da do cadastro, ou o cadastro não tem CNPJ
+  válido para conferir) e `rv_nao_validada`.
+- O tomador vem inteiro (pode ser filial) ou com a raiz mascarada, como no
+  e-mail de autorização do Itaú ("11.222.XXX/0001-81"): o servidor completa
+  com a raiz do cadastro e confere os dígitos verificadores. Se a parte à
+  mostra é de outra raiz, se os dígitos não fecham ou se o cadastro não tem
+  CNPJ, pede o CNPJ inteiro.
 - Pedido e aceite iguais (sem máscara nem caixa) a uma autorização ativa do
   mesmo cliente são recusados (already-exists); cancelada a anterior, podem
   ser registrados de novo.
@@ -294,9 +322,13 @@ Storage.
 - Eventos `client_authorization.recorded` e `.cancelled` com o id, o tipo,
   o contrato, as demandas, as que mudaram de etapa e as marcas; nunca o
   pedido, o aceite, o tomador, o centro de custo nem valor. A mudança de
-  etapa de cada demanda gera `demand.stage_changed`.
+  etapa de cada demanda gera `demand.stage_changed`. O tipo "portal" se
+  chama "Portal do fornecedor" (o portal de compras do cliente, como na
+  ComAutorizacoes), também na tela de Contrato; "Portal do cliente" é o do
+  Dute.
 - Índices: `demands` por etapa e cliente (a fila); `client_authorizations`
   por situação e por cliente e situação, pela data do registro.
 - Fica para a parte 15b: a tela (ComAutorizacoes) e o acesso do financeiro
   ao app do Comercial (hoje o `comercialStatus` e o menu só abrem a owner,
-  admin e comercial).
+  admin e comercial). Ficam em aberto a data-base do prazo de perda do
+  portal e o encerramento da demanda que o perdeu (perguntas 9 e 10).
