@@ -635,6 +635,14 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  if (method === "POST" && pathname === "/api/products/generate-photo") {
+    return {
+      name: "generateCatalogPhoto",
+      status: 201,
+      payload: async (_pathname, init) => readJsonBody(init),
+    };
+  }
+
   if (method === "POST" && pathname === "/api/products/photo-upload-target") {
     return {
       name: "createProductPhotoUploadTarget",
@@ -916,6 +924,7 @@ export async function callFunctionsApi(
     const callable = httpsCallable(
       functionsDoApp(firebaseApp),
       route.name,
+      { timeout: route.name === "generateCatalogPhoto" ? 180_000 : 70_000 },
     );
     const result = await callable(await route.payload(pathname, init));
     return response(result.data, route.status ?? 200);

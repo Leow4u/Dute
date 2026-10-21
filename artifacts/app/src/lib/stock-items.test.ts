@@ -42,6 +42,11 @@ describe("itens do estoque", () => {
     expect(byCode("MAT-009").photos).toEqual([]);
   });
 
+  it("exibe primeiro a foto principal aprovada, preservando as originais", () => {
+    const [item] = buildStockItems({ skus: [{ cod_btg: "SKU-STUDIO", photo_urls: ["https://x/original.jpg", "https://x/generated.png"], primary_photo_url: "https://x/generated.png" }] });
+    expect(item?.photos).toEqual(["https://x/generated.png", "https://x/original.jpg"]);
+  });
+
   it("usa o endereço antigo do catálogo quando não há saldo por endereço", () => {
     expect(byCode("SKU-Z").locations).toEqual([{ id: "RA P1 C2", qty: 0 }]);
   });

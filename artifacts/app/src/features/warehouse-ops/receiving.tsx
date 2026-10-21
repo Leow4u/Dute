@@ -83,6 +83,7 @@ import {
 } from "@/features/warehouse-ops/shared";
 import { customerRows } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
+import { ProductPhotoStudio } from "./product-photo-studio";
 import {
   barcodeKey,
   findProductByAnyCode,
@@ -966,6 +967,12 @@ export function UnplannedReceiptDialog({
                               ))}
                             </div>
                           ) : null}
+                          {line.photos.length ? <ProductPhotoStudio key={`${customerCode}:${index}:${line.clientCode}`} photos={line.photos} customerCode={customerCode} productName={line.product} category={line.category} disabled={isPending || line.photoUploading}
+                            onApprove={(generated, primaryUrl) => setLines((current) => current.map((entry, entryIndex) => {
+                              if (entryIndex !== index) return entry;
+                              const merged = [...entry.photos, ...generated];
+                              return { ...entry, photos: primaryUrl ? [...merged.filter((photo) => photo.fileUrl === primaryUrl), ...merged.filter((photo) => photo.fileUrl !== primaryUrl)] : merged };
+                            }))} /> : null}
                         </div>
                       ) : null}
                     </div>
@@ -1045,8 +1052,23 @@ export function sourcePhotos(source: AnyRecord): ProductPhoto[] {
   return urls.map((fileUrl, index) => ({
     fileName: `foto-${index + 1}`,
     fileUrl,
-    storagePath: paths[index] || `catalog:${fileUrl}`,
+    storagePath: photoPathFromUrl(fileUrl) || paths[index] || `catalog:${fileUrl}`,
   }));
+}
+
+/** URL is authoritative when legacy records have missing or reordered paths. */
+function photoPathFromUrl(fileUrl: string) {
+  try {
+    const url = new URL(fileUrl);
+    if (url.hostname === "firebasestorage.googleapis.com") {
+      const match = url.pathname.match(/^\/v0\/b\/[^/]+\/o\/(.+)$/);
+      return match ? decodeURIComponent(match[1]!) : "";
+    }
+    if (url.hostname === "storage.googleapis.com") {
+      return decodeURIComponent(url.pathname.split("/").slice(2).join("/"));
+    }
+  } catch { /* Keep the historical fallback for non-Storage images. */ }
+  return "";
 }
 
 

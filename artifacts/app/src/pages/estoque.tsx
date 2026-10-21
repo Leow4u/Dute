@@ -34,6 +34,7 @@ import {
   useOpeningInventorySession,
 } from "@/features/warehouse-ops/opening-inventory-status";
 import { uploadProductPhoto } from "@/features/warehouse-ops/shared";
+import { ProductPhotoStudio } from "@/features/warehouse-ops/product-photo-studio";
 import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
 import {
@@ -156,6 +157,7 @@ export default function Estoque() {
   useEffect(() => {
     if (!desktop || !selectedKey) return;
     const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || document.querySelector('[role="dialog"][data-state="open"]')) return;
       if (event.key === "Escape") setSelectedKey(null);
     };
     window.addEventListener("keydown", onKey);
@@ -502,6 +504,7 @@ function ItemCard({ item }: { item: StockItem }) {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          customer_code: customerCode,
           sku_code: item.skuCode,
           client_item_code: item.clientCode,
           photo_urls: uploaded.map((photo) => photo.fileUrl),
@@ -592,6 +595,26 @@ function ItemCard({ item }: { item: StockItem }) {
                     ? "Mais fotos"
                     : "Adicionar foto"}
               </Button>
+              {item.photos.length ? <div className="mt-2">
+                <ProductPhotoStudio key={`${customerCode}:${item.skuCode}`} photos={item.photos.map((fileUrl, index) => ({ fileUrl, fileName: `foto-${index + 1}`, storagePath: `catalog:${fileUrl}` }))}
+                  customerCode={customerCode} productName={item.name} category={String(item.sku.category ?? item.sku.categoria ?? "")} disabled={addPhotos.isPending}
+                  onApprove={async (generated, primaryUrl) => {
+                    await fetchJson("/api/catalog/photos", {
+                      method: "POST", headers: { "content-type": "application/json" },
+                      body: JSON.stringify({
+                        customer_code: customerCode, sku_code: item.skuCode, client_item_code: item.clientCode,
+                        photo_urls: generated.map((photo) => photo.fileUrl), photo_storage_paths: generated.map((photo) => photo.storagePath),
+                        primary_photo_url: primaryUrl,
+                      }),
+                    });
+                    setPhotoIndex(0);
+                    toast({ title: "Fotos aprovadas e adicionadas ao produto." });
+                    await Promise.all([
+                      queryClient.invalidateQueries({ queryKey: ["estoque"] }),
+                      queryClient.invalidateQueries({ queryKey: ["stock-balances"] }),
+                    ]);
+                  }} />
+              </div> : null}
             </>
           ) : item.photos.length === 0 ? (
             <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">

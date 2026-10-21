@@ -2617,6 +2617,36 @@ describe("número do pedido e cancelamento pelo cliente", () => {
 });
 
 describe("fotos do item", () => {
+  it("aprova foto gerada como principal, preserva original e não altera saldo", async () => {
+    const original = "https://example.test/original.jpg";
+    const generated = "https://example.test/generated.png";
+    const skuRef = db.collection("skus").doc("SKU-STUDIO");
+    const balanceRef = db.collection("stock_balances").doc("balance-studio");
+    await skuRef.set({ sku_code: "SKU-STUDIO", sku_code_key: "SKU-STUDIO", customer_code: "Cliente Studio", photo_urls: [original], photo_storage_paths: ["product-photos/Cliente_Studio/original.jpg"], primary_photo_url: original, estoque_atual: 7 });
+    await balanceRef.set({ sku_code: "SKU-STUDIO", customer_code: "Cliente Studio", photo_urls: [original], qty_on_hand: 7 });
+    const input = { sku_code: "SKU-STUDIO", customer_code: "Cliente Studio", photo_urls: [generated], photo_storage_paths: ["product-photos/Cliente_Studio/generated.png"], primary_photo_url: generated, idempotency_key: "approve-studio" };
+    await addCatalogPhotosTransaction(db, input, actor);
+    await addCatalogPhotosTransaction(db, input, actor);
+    for (const ref of [skuRef, balanceRef]) {
+      const data = (await ref.get()).data()!;
+      assert.deepEqual(data.photo_urls, [generated, original]);
+      assert.equal(data.primary_photo_url, generated);
+    }
+    assert.equal((await skuRef.get()).data()?.estoque_atual, 7);
+    assert.deepEqual((await skuRef.get()).data()?.photo_storage_paths, ["product-photos/Cliente_Studio/generated.png", "product-photos/Cliente_Studio/original.jpg"]);
+    assert.equal((await balanceRef.get()).data()?.qty_on_hand, 7);
+    await assert.rejects(addCatalogPhotosTransaction(db, { ...input, customer_code: "Outro Cliente", idempotency_key: "other-customer-studio" }, actor), { code: "failed-precondition" });
+  });
+
+  it("não descarta originais quando o catálogo está cheio ou a principal é inválida", async () => {
+    const originals = Array.from({ length: 8 }, (_, index) => `https://example.test/original-${index}.jpg`);
+    const ref = db.collection("skus").doc("SKU-STUDIO-FULL");
+    await ref.set({ sku_code: "SKU-STUDIO-FULL", sku_code_key: "SKU-STUDIO-FULL", photo_urls: originals });
+    await assert.rejects(addCatalogPhotosTransaction(db, { sku_code: "SKU-STUDIO-FULL", photo_urls: ["https://example.test/new.png"], idempotency_key: "full-studio" }, actor), { code: "failed-precondition" });
+    await assert.rejects(addCatalogPhotosTransaction(db, { sku_code: "SKU-STUDIO-FULL", photo_urls: [originals[0]!], primary_photo_url: "https://example.test/missing.jpg", idempotency_key: "invalid-primary-studio" }, actor), { code: "invalid-argument" });
+    assert.deepEqual((await ref.get()).data()?.photo_urls, originals);
+  });
+
   it("armazém acrescenta foto a item existente em sku, produto, saldo e portal", async () => {
     await Promise.all([
       db.collection("skus").doc("SKU-FOTO-1").set({
