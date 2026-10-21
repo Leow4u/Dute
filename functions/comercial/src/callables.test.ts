@@ -40,9 +40,16 @@ function callableBlocks(): Map<string, string> {
   return blocks;
 }
 
-/** O handler começa por requireComercialCaller com o projeto do ambiente, antes de qualquer outra coisa. */
+/**
+ * O handler começa por requireComercialCaller com o projeto do ambiente, antes
+ * de qualquer outra coisa. O único acesso a mais que cabe é `{ financeiro: true }`
+ * (e só onde ACESSO_DO_FINANCEIRO lista).
+ */
 const ENTRADA_DE_NEGOCIO =
-  /^export const \w+ = onCall(?:<[^>]*>)?\((?:\{[^{}]*\},\s*)?async \(request\) => \{\s*(?:const (?:\w+|\{[^{}]*\}) = )?await requireComercialCaller\(db, request, PROJECT_ID\);/;
+  /^export const \w+ = onCall(?:<[^>]*>)?\((?:\{[^{}]*\},\s*)?async \(request\) => \{\s*(?:const (?:\w+|\{[^{}]*\}) = )?await requireComercialCaller\(db, request, PROJECT_ID(?:, \{ financeiro: true \})?\);/;
+
+/** As callables que o financeiro também chama (pergunta 4 do desenho): só a autorização de faturamento. */
+const ACESSO_DO_FINANCEIRO = ["recordAuthorization"];
 
 describe("callables do Comercial", () => {
   it("toda linha com onCall está no formato que a conferência do invoker lê, inclusive comentário", () => {
@@ -136,6 +143,34 @@ describe("callables do Comercial", () => {
     assert.match(block, ENTRADA_DE_NEGOCIO, "advanceDemand");
     assert.match(block, /return advanceDemandFor\(db, caller, request\.data\);/);
     assert.match(index, /import \{ advanceDemandFor \} from "\.\/domain\/demandas\.js";/);
+  });
+
+  it("autorização de faturamento (parte 15): recordAuthorization, no domínio autorizacoes.ts, abre ao financeiro", () => {
+    const blocks = callableBlocks();
+    const block = blocks.get("recordAuthorization");
+    assert.ok(block, "recordAuthorization não declarada");
+    assert.match(block, ENTRADA_DE_NEGOCIO, "recordAuthorization");
+    assert.match(block, /await requireComercialCaller\(db, request, PROJECT_ID, \{ financeiro: true \}\);/);
+    assert.match(block, /return recordAuthorizationFor\(db, caller, request\.data\);/);
+    assert.match(index, /import \{ recordAuthorizationFor \} from "\.\/domain\/autorizacoes\.js";/);
+  });
+
+  it("só as callables da lista abrem ao financeiro; nenhuma outra passa acesso a mais", () => {
+    const blocks = callableBlocks();
+    const abertas = [...blocks].filter(([, block]) => /requireComercialCaller\(db, request, PROJECT_ID,/.test(block)).map(([name]) => name);
+    assert.deepEqual(abertas, ACESSO_DO_FINANCEIRO);
+    for (const [name, block] of blocks) {
+      if (name === "comercialStatus" || ACESSO_DO_FINANCEIRO.includes(name)) continue;
+      assert.match(block, /await requireComercialCaller\(db, request, PROJECT_ID\);/, name);
+    }
+    // A trava reprova outro acesso a mais (outro papel, variável, objeto montado à parte).
+    for (const recusado of [
+      "export const saveQuote = onCall(async (request) => {\n  const caller = await requireComercialCaller(db, request, PROJECT_ID, { financeiro: true, rh: true });",
+      "export const saveQuote = onCall(async (request) => {\n  const caller = await requireComercialCaller(db, request, PROJECT_ID, ACESSO);",
+      "export const saveQuote = onCall(async (request) => {\n  const caller = await requireComercialCaller(db, request, PROJECT_ID, { suporte: true });",
+    ]) {
+      assert.doesNotMatch(recusado, ENTRADA_DE_NEGOCIO, recusado);
+    }
   });
 
   it("contratos (parte 8): saveContract e recordAditivo declaradas como callables de negócio", () => {

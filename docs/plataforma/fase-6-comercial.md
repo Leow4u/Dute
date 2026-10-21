@@ -73,7 +73,7 @@ registro de cada parte entra no fim, como em `fase-2-nucleo.md`.
 | Medição mensal | As demandas do mês de um contrato com esse regime (o Safra) viram uma medição, que o cliente aprova antes da NF |
 | Dinheiro | Decimal em texto e centavos inteiros por linha, com arredondamento por linha como o cálculo do WMS (`billing.ts`). O servidor sempre recalcula |
 | Eventos | Sem valor, sem nome nem contato de cliente, título e descrição de modelo fixo. Nenhum tipo usa as palavras do roteador de avisos do WMS (`index.ts`, "order", "invoice", "receb"...) |
-| Leitura | `canReadPrices()`: owner, admin e comercial (financeiro conforme a pergunta 4). `canReadBilling` não muda |
+| Leitura | `canReadPrices()`: owner, admin, comercial e financeiro (o financeiro desde a parte 15, pergunta 4). `canReadBilling` não muda |
 | Codebase | `functions/comercial`. Catálogo e contratos moram nela até a Fase 3; a Operação lê `lpu_items` pelas regras |
 | Liberação | Chave própria do Comercial em `lib/liberacao.ts`, copiada nas callables, que recusam fora dela |
 | IA | Sem sugestão de preço no v1. Cada RV congelada, os tempos de cada passo, o resultado e a execução ficam gravados desde o primeiro dia |
@@ -87,7 +87,7 @@ registro de cada parte entra no fim, como em `fase-2-nucleo.md`.
 | `customer_contacts` | nome, e-mail, telefone, empresa | owner, admin, comercial |
 | `contracts` (e `contracts/{id}/aditivos/{numero}`, id sem zero à esquerda) | contrato e histórico; o id do contrato é interno, nunca o número do cliente | `canReadPrices()` |
 | `lpu_items`, `price_tables` | catálogo e tabelas | `canReadPrices()`; `lpu_items` abre à operação na Fase 3 |
-| `demands` | a demanda, sem preço | owner, admin, comercial; a operação na Fase 3 |
+| `demands` | a demanda, sem preço | owner, admin, comercial e financeiro (parte 15); a operação na Fase 3 |
 | `quotes` (e `revisoes`) | orçamento e RVs congeladas | `canReadPrices()` |
 | `client_authorizations` | autorizações de faturamento | `canReadPrices()` |
 | `medicoes` | medições mensais | `canReadPrices()` |
@@ -195,8 +195,9 @@ Storage.
 3. **A RV de execução sem preço novo passa de novo pela aprovação?** Recomendo
    dispensar quando só mudam quantidades de linhas de tabela e o total não passa
    o fechado; fica o marco "aprovação dispensada". (Parte 10)
-4. **Quem registra a autorização de faturamento?** Recomendo comercial e
-   financeiro, este sem editar itens nem preço. (Parte 15)
+4. **Quem registra a autorização de faturamento?** Recomendação aceita:
+   comercial e financeiro, este sem editar itens nem preço. Feito na parte
+   15a: só a recordAuthorization atende o financeiro. (Parte 15)
 5. **Contratos e Autorizações ficam no Comercial ou no Financeiro?** Recomendo
    no Comercial no v1; o Financeiro passa a ler na Fase 7. (Parte 14)
 6. **A gerenciadora vira empresa no cadastro?** Recomendo que não: ela é a
@@ -247,3 +248,55 @@ Storage.
   linha alterada, avulsa ou de ajuste da RV fechada derruba a dispensa.
 - Fechado, validado e recusado em nunca vêm antes do envio da RV (folga de 5
   minutos do relógio), nem depois de agora.
+
+### Parte 15a: autorização de faturamento (backend)
+
+- `client_authorizations/{id}` guarda o "pode faturar" do cliente: tipo
+  (pedido e aceite, medição aprovada, portal ou outro), pedido, aceite,
+  recebida em, valor, as demandas com a RV citada e o total dela, tomador
+  (CNPJ inteiro, pode ser filial), código de serviço (o do contrato, se não
+  vier), centro de custo, referência, escopo, link do e-mail, documento,
+  marcas e situação (registrada ou cancelada). `nf_ids`,
+  `enviada_portal_em` e `omie_lancada_em` ficam reservados para a Fase 7. O
+  id é interno (`aut_...`), nunca o número do pedido.
+- A callable `recordAuthorization` registra (record) e cancela (cancel). O
+  registro aceita demandas do mesmo cliente e do mesmo contrato em
+  "Aguardando autorização" ou, no complemento, já "A faturar" por outra
+  autorização; leva cada uma a "A faturar" e grava o id em
+  `autorizacao_ids`. Uma autorização cobre várias demandas e uma demanda pode
+  ter várias. O cancelamento devolve a "Aguardando autorização" a demanda
+  que fica sem nenhuma; a autorização já usada no faturamento (NF, portal ou
+  Omie) não se cancela. Cancelar de novo só devolve o estado.
+- A etapa continua saindo de `etapaDaDemanda`: validada para "Aguardando
+  autorização" e com autorização ativa é "A faturar". Assim perder, reabrir
+  e cancelar a autorização chegam à mesma etapa.
+- O valor de cada demanda é o total da RV citada como foi enviada
+  (`revisoes/{rv}.total_cents`), lido pelo servidor; sem RV na entrada, vale
+  a validada. A divergência não impede o registro, vira marca:
+  `valor_diverge` (o valor informado difere da soma das RVs),
+  `tomador_outra_raiz` (a raiz do CNPJ do tomador difere da do cadastro, ou
+  o cadastro não tem CNPJ válido para conferir) e `rv_nao_validada`.
+- Pedido e aceite iguais (sem máscara nem caixa) a uma autorização ativa do
+  mesmo cliente são recusados (already-exists); cancelada a anterior, podem
+  ser registrados de novo.
+- Papéis: owner, admin, comercial e financeiro. O financeiro entra só nesta
+  callable, pela opção `{ financeiro: true }` de `requireComercialCaller`;
+  `callables.test.ts` reprova a opção em qualquer outra. `canReadPrices()`
+  e `canReadDemands()` passam a incluir o financeiro (preço é de owner,
+  admin, financeiro e comercial; a fila de autorizações lê as demandas); os
+  contatos (`canReadCommercialRegistry`) continuam fora dele.
+- A idade na fila conta do fim da execução (a data que a ComAutorizacoes
+  mostra) ou da validação, o que veio antes; a validação só conta sozinha no
+  legado sem período executado. Faixas: até 30 dias, de 31 a 60, mais de 60.
+- Prazo de perda (`autorizacao.prazo_perda_dias` do contrato): avisos a 60,
+  30 e 10 dias do fim (no prazo de 90, aos 30, 60 e 80 dias de espera),
+  em "Aguardando autorização" e "A faturar"; depois do fim, vencido.
+- Eventos `client_authorization.recorded` e `.cancelled` com o id, o tipo,
+  o contrato, as demandas, as que mudaram de etapa e as marcas; nunca o
+  pedido, o aceite, o tomador, o centro de custo nem valor. A mudança de
+  etapa de cada demanda gera `demand.stage_changed`.
+- Índices: `demands` por etapa e cliente (a fila); `client_authorizations`
+  por situação e por cliente e situação, pela data do registro.
+- Fica para a parte 15b: a tela (ComAutorizacoes) e o acesso do financeiro
+  ao app do Comercial (hoje o `comercialStatus` e o menu só abrem a owner,
+  admin e comercial).

@@ -3,6 +3,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { onCall } from "firebase-functions/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 
+import { recordAuthorizationFor } from "./domain/autorizacoes.js";
 import { saveCommercialCustomerFor, saveCustomerContactFor, saveCustomerLocationFor } from "./domain/cadastro.js";
 import { registrarAditivo, salvarContrato } from "./domain/contratos.js";
 import { advanceDemandFor } from "./domain/demandas.js";
@@ -21,7 +22,9 @@ import { PROJECT_ID } from "./project.js";
  * parêntese na declaração: o script reprova qualquer outra linha assim, até em
  * comentário. Toda callable de negócio começa por
  * `await requireComercialCaller(db, request, PROJECT_ID)` (liberação do
- * ambiente, login, perfil e papel); a entrada passa por safeParse e
+ * ambiente, login, perfil e papel); só a recordAuthorization acrescenta
+ * `{ financeiro: true }`, que abre também ao financeiro (callables.test.ts
+ * trava). A entrada passa por safeParse e
  * invalid-argument, e a gravação por runIdempotent (domain/operations.ts) com
  * createComercialEvent (domain/events.ts) na mesma transação.
  */
@@ -124,4 +127,18 @@ export const advanceQuote = onCall(async (request) => {
 export const advanceDemand = onCall(async (request) => {
   const caller = await requireComercialCaller(db, request, PROJECT_ID);
   return advanceDemandFor(db, caller, request.data);
+});
+
+// --- Autorização de faturamento (parte 15; domain/autorizacoes.ts) ------------
+
+/**
+ * Registra (record) a autorização de faturamento do cliente para uma ou
+ * várias demandas que a esperam, levando-as a "a faturar", ou cancela
+ * (cancel) a registrada por engano. É a única callable que também atende o
+ * financeiro (pergunta 4: registra, sem editar itens nem preço), pedido aqui
+ * de propósito; as outras continuam só com owner, admin e comercial.
+ */
+export const recordAuthorization = onCall(async (request) => {
+  const caller = await requireComercialCaller(db, request, PROJECT_ID, { financeiro: true });
+  return recordAuthorizationFor(db, caller, request.data);
 });

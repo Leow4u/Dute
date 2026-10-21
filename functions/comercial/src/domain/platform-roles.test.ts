@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   COMERCIAL_APPROVER_ROLES,
+  COMERCIAL_AUTHORIZATION_ROLES,
   COMERCIAL_ROLES,
   PLATFORM_ROLES,
   canApproveQuote,
@@ -67,5 +68,24 @@ describe("aprovação do orçamento", () => {
     assert.deepEqual(COMERCIAL_APPROVER_ROLES, ["owner"]);
     const approvers = PLATFORM_ROLES.filter((role) => canApproveQuote(role));
     assert.deepEqual(approvers, ["owner"]);
+  });
+});
+
+describe("autorização de faturamento (parte 15): o financeiro só quando a callable pede", () => {
+  it("quem registra: owner, admin, comercial e financeiro", () => {
+    assert.deepEqual(COMERCIAL_AUTHORIZATION_ROLES, [...COMERCIAL_ROLES, "financeiro"]);
+  });
+
+  it("com { financeiro: true }, entram owner, admin, comercial e financeiro, e mais ninguém", () => {
+    const allowed = PLATFORM_ROLES.filter((role) => comercialAccessProblem(role, { financeiro: true }) === null);
+    assert.deepEqual(allowed, [...COMERCIAL_AUTHORIZATION_ROLES]);
+    for (const role of ["interno", "wms", "campo", "rh", "suporte", "painel", "cliente"] as const) {
+      assert.match(comercialAccessProblem(role, { financeiro: true }) ?? "", /não tem acesso ao Comercial/, role);
+    }
+  });
+
+  it("sem a opção, o financeiro continua negado", () => {
+    assert.match(comercialAccessProblem("financeiro") ?? "", /não tem acesso ao Comercial/);
+    assert.match(comercialAccessProblem("financeiro", {}) ?? "", /não tem acesso ao Comercial/);
   });
 });

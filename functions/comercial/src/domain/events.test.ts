@@ -166,7 +166,20 @@ const EXEMPLOS: Record<ComercialEventType, Record<string, unknown>> = {
     substituida_por: "itau-v2-comercial",
     contrato_id: "itau-2026",
   },
-  "client_authorization.recorded": { autorizacao_id: "aut_0001", demandas: ["10045", "10046"] },
+  "client_authorization.recorded": {
+    autorizacao_id: "aut_0001",
+    tipo: "pedido_aceite",
+    contrato_id: "itau-2026",
+    demandas: ["10045", "10046"],
+    a_faturar: ["10045"],
+    marcas: ["valor_diverge"],
+  },
+  "client_authorization.cancelled": {
+    autorizacao_id: "aut_0001",
+    tipo: "pedido_aceite",
+    demandas: ["10045", "10046"],
+    devolvidas: ["10045"],
+  },
   "medicao.created": { medicao_id: "safra-2026-10", contrato_id: "safra-2026", competencia: "2026-10", demandas: 7 },
   "medicao.sent": { medicao_id: "safra-2026-10", competencia: "2026-10" },
   "medicao.approved": { medicao_id: "safra-2026-10", competencia: "2026-10" },
@@ -617,6 +630,49 @@ describe("evento gravado", () => {
       false,
       "recusa sem a RV de volta",
     );
+  });
+
+  it("parte 15: autorização registrada e cancelada, sem pedido, aceite, tomador nem valor", () => {
+    const registrada = buildComercialEvent({
+      ...base,
+      type: "client_authorization.recorded",
+      entity_id: "aut_0001",
+      payload: EXEMPLOS["client_authorization.recorded"] as never,
+    });
+    assert.equal(registrada.entity_type, "client_authorization");
+    assert.equal(registrada.title, "Autorização do cliente registrada");
+    assert.equal(
+      registrada.description,
+      "Pedido e aceite, ligada a 2 demandas; 1 demanda a faturar; conferir: valor diferente da soma das RVs.",
+    );
+    const complemento = buildComercialEvent({
+      ...base,
+      type: "client_authorization.recorded",
+      entity_id: "aut_0002",
+      payload: { ...EXEMPLOS["client_authorization.recorded"], tipo: "portal", demandas: ["10045"], a_faturar: [], marcas: [] } as never,
+    });
+    assert.equal(complemento.description, "Portal do cliente, ligada a 1 demanda; complemento de outra autorização.");
+    const cancelada = buildComercialEvent({
+      ...base,
+      type: "client_authorization.cancelled",
+      entity_id: "aut_0001",
+      payload: EXEMPLOS["client_authorization.cancelled"] as never,
+    });
+    assert.equal(cancelada.title, "Autorização do cliente cancelada");
+    assert.equal(cancelada.description, "Pedido e aceite desligada de 2 demandas; 1 demanda volta a aguardar autorização.");
+    const recorded = COMERCIAL_EVENT_PAYLOADS["client_authorization.recorded"];
+    for (const extra of [
+      { pedido: "4500000412" },
+      { aceite: "1000000877" },
+      { tomador_documento: "60701190000104" },
+      { centro_custo: "41220" },
+      { valor_cents: 2074880 },
+    ]) {
+      assert.equal(recorded.safeParse({ ...EXEMPLOS["client_authorization.recorded"], ...extra }).success, false, JSON.stringify(extra));
+    }
+    // O id da autorização não carrega o número do pedido com espaço nem valor.
+    assert.equal(recorded.safeParse({ ...EXEMPLOS["client_authorization.recorded"], autorizacao_id: "Pedido 4500000412" }).success, false);
+    assert.equal(recorded.safeParse({ ...EXEMPLOS["client_authorization.recorded"], marcas: ["pedido_4500000412"] }).success, false);
   });
 
   it("passo do orçamento (parte 9): segundos de meses cabem, e linhas por origem são só contagens", () => {
