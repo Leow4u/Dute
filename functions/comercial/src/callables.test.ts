@@ -5,53 +5,102 @@ import { fileURLToPath } from "node:url";
 
 /**
  * As callables do Comercial precisam estar no formato que a conferência do
- * invoker lê (tools/check_functions_invoker.ps1): `export const nome = onCall(`
- * no começo da linha. Um `export { x } from` passaria sem conferência, como no
- * incidente de 03/09/2026. E toda callable de negócio entra pela liberação e
- * pelo perfil (requireComercialCaller); só o comercialStatus responde fora dela.
+ * invoker lê (tools/check_functions_invoker.ps1): `export const nome = onCall`
+ * com o parêntese na mesma linha. Um `export { x } from` passaria sem
+ * conferência, como no incidente de 03/09/2026; e o script reprova qualquer
+ * linha do index.ts que use onCall fora desse formato, até em comentário. Toda
+ * callable de negócio começa pela liberação e pelo perfil
+ * (requireComercialCaller); só o comercialStatus responde fora dela.
  */
 
 const read = (relative: string) => readFileSync(fileURLToPath(new URL(relative, import.meta.url)), "utf8");
 
-// Compilado em functions/comercial/lib/callables.test.js. Sem os comentários,
-// que podem citar o formato.
-const index = read("../src/index.ts")
-  .replace(/\/\*[\s\S]*?\*\//g, "")
-  .replace(/^\s*\/\/.*$/gm, "");
+// Compilado em functions/comercial/lib/callables.test.js.
+const rawIndex = read("../src/index.ts");
+// Sem os comentários, para as travas de código.
+const index = rawIndex.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 const invokerScript = read("../../../tools/check_functions_invoker.ps1");
 
+/** Uso de onCall que o script confere linha a linha (o $onCallUsePattern dele). */
+const ON_CALL_USE = /\bonCall\s*[<(]/;
+
+/** O padrão das callables do script: o literal entre aspas simples que começa com ^export const. */
 function invokerPattern(): RegExp {
-  const line = invokerScript.split(/\r?\n/).find((item) => item.includes("onCall") && item.includes("-Pattern"));
-  assert.ok(line, "padrão das callables não encontrado em tools/check_functions_invoker.ps1");
-  const pattern = line.match(/-Pattern\s+'([^']+)'/);
-  assert.ok(pattern, `padrão ilegível: ${line}`);
-  return new RegExp(pattern[1], "gm");
+  const literals = [...invokerScript.matchAll(/'(\^export const [^']*onCall[^']*)'/g)].map((match) => match[1]);
+  assert.equal(literals.length, 1, `esperava um padrão de callable em tools/check_functions_invoker.ps1, achei ${literals.length}`);
+  return new RegExp(literals[0]);
 }
 
 function callableBlocks(): Map<string, string> {
   const blocks = new Map<string, string>();
   for (const block of index.split(/^(?=export const )/m)) {
-    const name = block.match(/^export const (\w+) = onCall\(/);
+    const name = block.match(/^export const (\w+) = onCall\b/);
     if (name) blocks.set(name[1], block);
   }
   return blocks;
 }
 
+/** O handler começa por requireComercialCaller com o projeto do ambiente, antes de qualquer outra coisa. */
+const ENTRADA_DE_NEGOCIO =
+  /^export const \w+ = onCall(?:<[^>]*>)?\((?:\{[^{}]*\},\s*)?async \(request\) => \{\s*(?:const (?:\w+|\{[^{}]*\}) = )?await requireComercialCaller\(db, request, PROJECT_ID\);/;
+
 describe("callables do Comercial", () => {
-  it("toda onCall está no formato que a conferência do invoker lê", () => {
-    const listed = [...index.matchAll(invokerPattern())].map((match) => match[1]);
-    const calls = index.match(/onCall\(/g) ?? [];
-    assert.ok(listed.length > 0, "nenhuma callable encontrada");
-    assert.equal(listed.length, calls.length, "há onCall fora do formato `export const nome = onCall(`");
+  it("toda linha com onCall está no formato que a conferência do invoker lê, inclusive comentário", () => {
+    const pattern = invokerPattern();
+    const lines = rawIndex.split(/\r?\n/);
+    const used = lines.map((line, i) => [i + 1, line] as const).filter(([, line]) => ON_CALL_USE.test(line));
+    assert.ok(used.length > 0, "nenhuma callable encontrada");
+    for (const [number, line] of used) {
+      assert.match(line, pattern, `index.ts:${number} usa onCall fora do formato que o script lê: ${line.trim()}`);
+    }
+    const listed = used.map(([, line]) => line.match(pattern)?.[1]);
     assert.ok(listed.includes("comercialStatus"));
-    assert.doesNotMatch(index, /^export\s*\{/m, "reexportação passa sem conferência do invoker");
   });
 
-  it("toda callable de negócio passa pela liberação e pelo perfil", () => {
-    for (const [name, block] of callableBlocks()) {
-      if (name === "comercialStatus") continue;
-      assert.match(block, /requireComercialCaller\(/, `${name} não chama requireComercialCaller`);
+  it("a trava de formato reprova onCall em comentário e em duas linhas", () => {
+    const pattern = invokerPattern();
+    assert.match("export const approveQuote = onCall(async (request) => {", pattern);
+    for (const line of [
+      " * Toda callable fica escrita como `export const nome = onCall(` no começo da linha",
+      "  onCall(async (request) => {",
+    ]) {
+      assert.match(line, ON_CALL_USE);
+      assert.doesNotMatch(line, pattern);
     }
+  });
+
+  it("nada é exportado de outro arquivo", () => {
+    assert.doesNotMatch(index, /^export\s*\{/m, "reexportação passa sem conferência do invoker");
+    assert.doesNotMatch(index, /^export\s*\*/m, "reexportação passa sem conferência do invoker");
+  });
+
+  it("só há callables: nenhum outro gatilho (HTTP, agenda, documento, fila)", () => {
+    const triggers = new Set([...index.matchAll(/\bon[A-Z]\w*/g)].map((match) => match[0]));
+    assert.deepEqual([...triggers], ["onCall"], "gatilho que não é callable fica fora da liberação e da conferência do invoker");
+    assert.doesNotMatch(index, /firebase-functions\/v1|from "firebase-functions"/, "use só firebase-functions/https e /v2");
+  });
+
+  it("toda callable de negócio começa por requireComercialCaller(db, request, PROJECT_ID)", () => {
+    const blocks = callableBlocks();
+    assert.ok(blocks.has("comercialStatus"));
+    for (const [name, block] of blocks) {
+      if (name === "comercialStatus") continue;
+      assert.match(block, ENTRADA_DE_NEGOCIO, `${name} não começa por await requireComercialCaller(db, request, PROJECT_ID)`);
+    }
+  });
+
+  it("a trava de entrada reprova projeto escrito à mão e chamada fora do começo", () => {
+    const aceitos = [
+      "export const approveQuote = onCall(async (request) => {\n  const caller = await requireComercialCaller(db, request, PROJECT_ID);",
+      "export const sendQuote = onCall({ timeoutSeconds: 60 }, async (request) => {\n  await requireComercialCaller(db, request, PROJECT_ID);",
+    ];
+    const recusados = [
+      "export const approveQuote = onCall(async (request) => {\n  const caller = await requireComercialCaller(db, request, \"dute-homolog\");",
+      "export const approveQuote = onCall(async (request) => {\n  const quote = await db.doc(\"quotes/1\").get();\n  await requireComercialCaller(db, request, PROJECT_ID);",
+      "export const approveQuote = onCall(async (request) => {\n  return helper(request);\n});\nasync function helper(request) {\n  await requireComercialCaller(db, request, PROJECT_ID);",
+    ];
+    for (const block of aceitos) assert.match(block, ENTRADA_DE_NEGOCIO, block);
+    for (const block of recusados) assert.doesNotMatch(block, ENTRADA_DE_NEGOCIO, block);
   });
 
   it("a região é a do app", () => {

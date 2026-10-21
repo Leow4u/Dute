@@ -33,7 +33,7 @@ const EXEMPLOS: Record<ComercialEventType, Record<string, unknown>> = {
     segundos_desde_anterior: 3600,
   },
   "demand.won": { numero: "10045", rv: 1 },
-  "demand.lost": { numero: "10045", etapa_antes: "aguardando_cliente", motivo: "sem_retorno" },
+  "demand.lost": { numero: "10045", etapa_antes: "aguardando_cliente" },
   "quote.created": { numero: "10045", rv: 0, tipo_rv: "proposta", edicao: 1 },
   "quote.updated": { numero: "10045", rv: 0, edicao_antes: 1, edicao_depois: 2 },
   "quote.submitted": { numero: "10045", rv: 0, edicao: 2 },
@@ -101,19 +101,69 @@ const CHAVES_PROIBIDAS = [
 
 const equipe = { uid: "com-1", role: "comercial", name: "Guilherme", email: "comercial@dutelog.com.br" };
 
-/** Percorre o schema e devolve [caminho, objeto zod] de todo objeto, inclusive dentro de listas. */
-function objects(schema: z.ZodTypeAny, path = "payload"): Array<[string, z.ZodObject<z.ZodRawShape>]> {
+/** Texto que nenhum campo de texto do payload pode aceitar: valor, e-mail, telefone, nome. */
+const TEXTOS_PROIBIDOS = ["R$ 1.500,00", "1.500,00", "1500,00", "fulano@x.com", "(11) 98765-4321", "Fulano de Tal"];
+
+/** Visita cada nó do schema, entrando em objeto, lista, opcional, nulo e união. */
+function walk(schema: z.ZodTypeAny, path: string, visit: (node: z.ZodTypeAny, path: string) => void): void {
+  visit(schema, path);
   if (schema instanceof z.ZodObject) {
-    const nested = Object.entries(schema.shape as Record<string, z.ZodTypeAny>).flatMap(([key, value]) =>
-      objects(value, `${path}.${key}`),
-    );
-    return [[path, schema as z.ZodObject<z.ZodRawShape>], ...nested];
+    for (const [key, value] of Object.entries(schema.shape as Record<string, z.ZodTypeAny>)) walk(value, `${path}.${key}`, visit);
+  } else if (schema instanceof z.ZodArray) {
+    walk(schema.element as z.ZodTypeAny, `${path}[]`, visit);
+  } else if (schema instanceof z.ZodOptional || schema instanceof z.ZodNullable) {
+    walk(schema.unwrap() as z.ZodTypeAny, path, visit);
+  } else if (schema instanceof z.ZodUnion || schema instanceof z.ZodDiscriminatedUnion) {
+    (schema.options as z.ZodTypeAny[]).forEach((option, i) => walk(option, `${path}|${i}`, visit));
   }
-  if (schema instanceof z.ZodArray) return objects(schema.element as z.ZodTypeAny, `${path}[]`);
-  if (schema instanceof z.ZodOptional || schema instanceof z.ZodNullable) return objects(schema.unwrap() as z.ZodTypeAny, path);
-  if (schema instanceof z.ZodDefault) return objects(schema._def.innerType as z.ZodTypeAny, path);
-  if (schema instanceof z.ZodEffects) return objects(schema.innerType() as z.ZodTypeAny, path);
-  return [];
+}
+
+/**
+ * Problemas de contrato de um payload. Só passa o que não carrega texto livre
+ * nem número com casas: objeto .strict() (sem catchall), lista, opcional, nulo,
+ * união (cada opção conferida), enum, literal, booleano, número inteiro e texto
+ * com regex. Qualquer outro tipo zod (record, any, unknown, interseção,
+ * effects, default, texto sem regex...) reprova, e chave de dinheiro ou de
+ * contato também.
+ */
+function contractProblems(schema: z.ZodTypeAny): string[] {
+  const problems: string[] = [];
+  walk(schema, "payload", (node, path) => {
+    if (node instanceof z.ZodObject) {
+      if (node._def.unknownKeys !== "strict") problems.push(`${path}: objeto sem .strict()`);
+      if (!(node._def.catchall instanceof z.ZodNever)) problems.push(`${path}: objeto com catchall`);
+      for (const key of Object.keys(node.shape as Record<string, unknown>)) {
+        if (CHAVE_DE_DINHEIRO.test(key)) problems.push(`${path}.${key}: chave de dinheiro`);
+        if (CHAVE_DE_CONTATO.test(key)) problems.push(`${path}.${key}: chave de contato`);
+      }
+    } else if (
+      node instanceof z.ZodArray ||
+      node instanceof z.ZodOptional ||
+      node instanceof z.ZodNullable ||
+      node instanceof z.ZodUnion ||
+      node instanceof z.ZodDiscriminatedUnion ||
+      node instanceof z.ZodEnum ||
+      node instanceof z.ZodLiteral ||
+      node instanceof z.ZodBoolean
+    ) {
+      // Contêiner (os filhos são visitados) ou valor de lista fechada.
+    } else if (node instanceof z.ZodNumber) {
+      if (!node.isInt) problems.push(`${path}: número sem .int()`);
+    } else if (node instanceof z.ZodString) {
+      if (!node._def.checks.some((check) => check.kind === "regex")) problems.push(`${path}: texto sem regex`);
+    } else {
+      problems.push(`${path}: tipo zod fora da lista (${node.constructor.name})`);
+    }
+  });
+  return problems;
+}
+
+function stringLeaves(schema: z.ZodTypeAny): Array<[string, z.ZodString]> {
+  const leaves: Array<[string, z.ZodString]> = [];
+  walk(schema, "payload", (node, path) => {
+    if (node instanceof z.ZodString) leaves.push([path, node]);
+  });
+  return leaves;
 }
 
 function wmsNoticeWords(): string[] {
@@ -129,14 +179,54 @@ describe("contrato dos eventos do Comercial", () => {
     assert.ok(COMERCIAL_EVENT_TYPES.length >= 20);
   });
 
-  it("todo tipo tem payload zod .strict(), inclusive nos objetos de dentro", () => {
+  it("todo tipo tem payload zod .strict(), inclusive nos objetos de dentro, só com tipos da lista", () => {
     for (const type of COMERCIAL_EVENT_TYPES) {
       const schema = COMERCIAL_EVENT_PAYLOADS[type] as z.ZodTypeAny;
       assert.ok(schema instanceof z.ZodObject, `${type}: payload precisa ser z.object`);
-      for (const [path, object] of objects(schema)) {
-        assert.equal(object._def.unknownKeys, "strict", `${type} ${path}: falta .strict()`);
+      assert.deepEqual(contractProblems(schema), [], type);
+    }
+  });
+
+  it("a trava do contrato reprova record, união sem strict, texto livre, número com casas e afins", () => {
+    const regexed = z.string().regex(/^[a-z]+$/);
+    const reprovados: Array<[string, z.ZodTypeAny, RegExp]> = [
+      ["record", z.object({ extras: z.record(z.string(), z.number().int()) }).strict(), /fora da lista \(ZodRecord\)/],
+      ["texto livre", z.object({ observacao: z.string() }).strict(), /texto sem regex/],
+      ["texto livre em lista", z.object({ notas: z.array(z.string().max(80)) }).strict(), /texto sem regex/],
+      [
+        "união com objeto sem strict",
+        z.object({ alvo: z.union([z.object({ a: z.boolean() }).strict(), z.object({ b: z.boolean() })]) }).strict(),
+        /objeto sem \.strict\(\)/,
+      ],
+      ["número com casas", z.object({ peso: z.number() }).strict(), /número sem \.int\(\)/],
+      ["any", z.object({ dados: z.any() }).strict(), /fora da lista \(ZodAny\)/],
+      ["unknown", z.object({ dados: z.unknown() }).strict(), /fora da lista \(ZodUnknown\)/],
+      ["interseção", z.object({ dados: z.intersection(z.object({}).strict(), z.object({}).strict()) }).strict(), /fora da lista/],
+      ["effects", z.object({ codigo: regexed.transform((value) => value.toUpperCase()) }).strict(), /fora da lista \(ZodEffects\)/],
+      ["catchall", z.object({ a: z.boolean() }).catchall(z.number().int()), /catchall/],
+      ["passthrough", z.object({ a: z.boolean() }).passthrough(), /objeto sem \.strict\(\)/],
+      ["chave de dinheiro", z.object({ total_cents: z.number().int() }).strict(), /chave de dinheiro/],
+      ["chave de contato", z.object({ contato_nome: regexed }).strict(), /chave de contato/],
+    ];
+    for (const [caso, schema, expected] of reprovados) {
+      const problems = contractProblems(schema);
+      assert.ok(problems.some((problem) => expected.test(problem)), `${caso}: ${problems.join("; ") || "passou"}`);
+    }
+  });
+
+  it("nenhum texto do payload aceita valor, e-mail, telefone ou nome", () => {
+    for (const type of COMERCIAL_EVENT_TYPES) {
+      for (const [path, leaf] of stringLeaves(COMERCIAL_EVENT_PAYLOADS[type] as z.ZodTypeAny)) {
+        for (const text of TEXTOS_PROIBIDOS) {
+          assert.equal(leaf.safeParse(text).success, false, `${type} ${path} aceitou "${text}"`);
+        }
       }
     }
+    assert.equal(
+      COMERCIAL_EVENT_PAYLOADS["commercial_customer.updated"].safeParse({ campos: ["acima_de_1500_reais"] }).success,
+      false,
+      "código com algarismo carrega valor",
+    );
   });
 
   it("o exemplo de cada tipo é válido", () => {
@@ -148,12 +238,8 @@ describe("contrato dos eventos do Comercial", () => {
 
   it("nenhum payload tem chave de dinheiro ou de contato", () => {
     for (const type of COMERCIAL_EVENT_TYPES) {
-      for (const [path, object] of objects(COMERCIAL_EVENT_PAYLOADS[type] as z.ZodTypeAny)) {
-        for (const key of Object.keys(object.shape)) {
-          assert.doesNotMatch(key, CHAVE_DE_DINHEIRO, `${type} ${path}.${key}: chave de dinheiro`);
-          assert.doesNotMatch(key, CHAVE_DE_CONTATO, `${type} ${path}.${key}: chave de contato`);
-        }
-      }
+      const chaves = contractProblems(COMERCIAL_EVENT_PAYLOADS[type] as z.ZodTypeAny).filter((problem) => /chave de/.test(problem));
+      assert.deepEqual(chaves, [], type);
     }
   });
 
@@ -274,18 +360,69 @@ describe("evento gravado", () => {
     assert.throws(() => buildComercialEvent({ ...base, type: "quote.order_recorded" } as never), HttpsError);
   });
 
-  it("evento de cliente exige customer_code; só a tabela de preço pode não ter cliente", () => {
+  it("evento de cliente exige customer_code; só a tabela sem contrato pode não ter cliente", () => {
     assert.throws(() => buildComercialEvent({ ...base, customer_code: null }), HttpsError);
     assert.throws(() => buildComercialEvent({ ...base, customer_code: "  " }), HttpsError);
-    const table = buildComercialEvent({
+    const padrao = {
       operation_id: "op_table",
-      type: "price_table.imported",
+      type: "price_table.imported" as const,
       entity_id: "padrao-dutelog-2026",
       customer_code: null,
-      payload: { tabela_id: "padrao-dutelog-2026", variante: "comercial", linhas: 80, vigencia_inicio: "2026-01-01", vigencia_fim: null },
+      payload: {
+        tabela_id: "padrao-dutelog-2026",
+        variante: "comercial" as const,
+        linhas: 80,
+        vigencia_inicio: "2026-01-01",
+        vigencia_fim: null,
+      },
       actor: equipe,
-    });
-    assert.equal(table.customer_code, null);
+    };
+    assert.equal(buildComercialEvent(padrao).customer_code, null);
+    assert.equal(buildComercialEvent({ ...padrao, payload: { ...padrao.payload, contrato_id: null } }).customer_code, null);
+    // Tabela com contrato é de um cliente.
+    const doContrato = {
+      ...padrao,
+      entity_id: "itau-v2-comercial",
+      payload: { ...padrao.payload, tabela_id: "itau-v2-comercial", contrato_id: "itau-2026" },
+    };
+    assert.throws(
+      () => buildComercialEvent(doContrato),
+      (error: unknown) => error instanceof HttpsError && /sem customer_code/.test(error.message),
+    );
+    assert.equal(buildComercialEvent({ ...doContrato, customer_code: "ITAU" }).customer_code, "ITAU");
+  });
+
+  it("occurred_at fora do ISO em UTC com milissegundos é recusado", () => {
+    for (const occurred_at of [
+      "21/10/2026 R$ 1.500,00",
+      "2026-10-21",
+      "2026-10-21T10:00:00-03:00",
+      "2026-10-21T13:00:00Z",
+      "2026-13-01T00:00:00.000Z",
+      "",
+    ]) {
+      assert.throws(
+        () => buildComercialEvent({ ...base, occurred_at }),
+        (error: unknown) => error instanceof HttpsError && /occurred_at/.test(error.message),
+        occurred_at,
+      );
+    }
+    assert.equal(
+      buildComercialEvent({ ...base, occurred_at: "2026-10-21T13:00:00.123Z" }).occurred_at,
+      "2026-10-21T13:00:00.123Z",
+    );
+  });
+
+  it("perda sem motivo livre: o motivo entra com a lista, na parte 10", () => {
+    assert.throws(
+      () =>
+        buildComercialEvent({
+          ...base,
+          type: "demand.lost",
+          payload: { numero: "10045", etapa_antes: "aguardando_cliente", motivo: "fulano_achou_caro_acima_de_1500_reais" } as never,
+        }),
+      HttpsError,
+    );
   });
 
   it("o ator é sempre alguém da equipe", () => {

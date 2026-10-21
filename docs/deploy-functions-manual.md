@@ -22,16 +22,14 @@ Os mesmos do deploy do frontend: `gcloud` autenticado como
 `leonardo@dutelog.com.br`, projeto padrão `dute-prod`, `node`/`corepack`. O
 diretório `functions/wms/` usa **npm**, não pnpm (tem `package-lock.json` próprio).
 
-**Duas codebases desde 20/10/2026.** O `firebase.json` tem `default`
-(`functions/wms/`, o nome não muda) e `comercial` (`functions/comercial/`,
+**Duas codebases.** O `firebase.json` tem `default` (`functions/wms/`, o nome
+não muda) e `comercial` (`functions/comercial/`, desde a parte 3 do Comercial,
 `docs/plataforma/fase-6-comercial.md`). Cada uma tem o seu `package-lock.json`;
 rode `npm ci` nas duas antes do deploy, porque o `predeploy` roda `tsc` em cada
-pasta. `firebase deploy --only functions` publica as duas. As callables do
-Comercial recusam fora do `dute-homolog` (`functions/comercial/src/domain/liberacao.ts`),
-menos o `comercialStatus`, que responde `liberado: false`. Até a conferência do
-invoker ler todas as codebases (parte 1 do Comercial), o
-`check_functions_invoker.ps1` lê só o `index.ts` do WMS: confira o Comercial com
-`-IndexFile .\functions\comercial\src\index.ts`.
+pasta. `firebase deploy --only functions` publica as duas, e o passo 4 confere
+as callables das duas. As callables do Comercial recusam fora do `dute-homolog`
+(`functions/comercial/src/domain/liberacao.ts`), menos o `comercialStatus`, que
+responde `liberado: false`.
 
 ## Passo a passo
 

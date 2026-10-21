@@ -10,13 +10,16 @@ import { PROJECT_ID } from "./project.js";
  * Functions do Comercial (codebase `comercial` no firebase.json; desenho em
  * docs/plataforma/fase-6-comercial.md).
  *
- * Toda callable fica escrita como `export const nome = onCall(` no começo da
- * linha: é o que a conferência do invoker (tools/check_functions_invoker.ps1)
- * lê, e o teste callables.test.ts trava. Toda callable de negócio começa por
- * requireComercialCaller (liberação do ambiente, login, perfil e papel); a
- * entrada passa por safeParse e invalid-argument, e a gravação por
- * runIdempotent (domain/operations.ts) com createComercialEvent
- * (domain/events.ts) na mesma transação.
+ * Toda callable fica declarada neste arquivo, numa linha só, no formato que a
+ * conferência do invoker (tools/check_functions_invoker.ps1) lê; o teste
+ * callables.test.ts trava o formato e reprova outros gatilhos (HTTP, agenda,
+ * documento). Neste arquivo, a palavra da callable só aparece seguida de
+ * parêntese na declaração: o script reprova qualquer outra linha assim, até em
+ * comentário. Toda callable de negócio começa por
+ * `await requireComercialCaller(db, request, PROJECT_ID)` (liberação do
+ * ambiente, login, perfil e papel); a entrada passa por safeParse e
+ * invalid-argument, e a gravação por runIdempotent (domain/operations.ts) com
+ * createComercialEvent (domain/events.ts) na mesma transação.
  */
 
 initializeApp();

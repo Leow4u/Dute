@@ -39,8 +39,8 @@ const rv = z.number().int().min(0).max(99);
 const edicao = z.number().int().min(1).max(100_000);
 /** Id de documento (contato, local, contrato, tabela...). Sem espaço: não cabe nome nem valor. */
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,120}$/, "Id inválido.");
-/** Código de lista (motivo, nome de campo), em snake_case. */
-const codigo = z.string().regex(/^[a-z][a-z0-9_]{0,59}$/, "Código inválido.");
+/** Código de lista (nome de campo), em snake_case e sem algarismo: não cabe valor. */
+const codigo = z.string().regex(/^(?=.{1,60}$)[a-z]+(?:_[a-z]+)*$/, "Código inválido.");
 const contagem = z.number().int().min(0).max(1_000_000);
 const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida (AAAA-MM-DD).");
 const competencia = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Competência inválida (AAAA-MM).");
@@ -80,7 +80,8 @@ export const COMERCIAL_EVENT_PAYLOADS = {
     })
     .strict(),
   "demand.won": z.object({ numero, rv }).strict(),
-  "demand.lost": z.object({ numero, etapa_antes: etapa, motivo: codigo }).strict(),
+  // O motivo entra na parte 10, como z.enum da lista de motivos.
+  "demand.lost": z.object({ numero, etapa_antes: etapa }).strict(),
 
   "quote.created": z.object({ numero, rv, tipo_rv: tipoRv, edicao }).strict(),
   "quote.updated": z.object({ numero, rv, edicao_antes: edicao, edicao_depois: edicao }).strict(),
@@ -141,8 +142,16 @@ const ENTITY_TYPES: Record<string, string> = {
   medicao: "medicao",
 };
 
-/** Tipos que podem não ter cliente: a tabela Padrão Dutelog é de todos. */
-const WITHOUT_CUSTOMER: ReadonlySet<ComercialEventType> = new Set(["price_table.imported"]);
+/**
+ * Evento sem cliente: só a importação de tabela sem contrato (a Padrão
+ * Dutelog, que é de todos). Tabela com contrato é de um cliente.
+ */
+function semClienteAceito(type: ComercialEventType, payload: Record<string, unknown>): boolean {
+  return type === "price_table.imported" && !payload.contrato_id;
+}
+
+/** Instante em ISO, em UTC e com milissegundos (o formato de toISOString): o WMS ordena e filtra por ele como texto. */
+const instante = z.string().datetime({ precision: 3 });
 
 // --- Título e descrição: modelo fixo por tipo ---------------------------------
 
@@ -328,10 +337,11 @@ export type ComercialEventInput<T extends ComercialEventType> = {
   suffix?: string;
   type: T;
   entity_id: string;
-  /** Código real do cliente (customer_code); null só na tabela sem cliente. */
+  /** Código real do cliente (customer_code); null só na tabela sem contrato. */
   customer_code: string | null;
   payload: z.input<(typeof COMERCIAL_EVENT_PAYLOADS)[T]>;
   actor: ComercialActor;
+  /** ISO em UTC com milissegundos (toISOString). Padrão: agora. */
   occurred_at?: string;
 };
 
@@ -363,11 +373,15 @@ export function buildComercialEvent<T extends ComercialEventType>(input: Comerci
   if (!id.safeParse(input.entity_id).success) {
     throw new HttpsError("internal", `Evento ${type} com entity_id fora do formato de id.`);
   }
+  const payload = parsePayload(type, input.payload);
   const customerCode = input.customer_code === null ? null : String(input.customer_code ?? "").trim();
-  if (customerCode === "" || (customerCode === null && !WITHOUT_CUSTOMER.has(type))) {
+  if (customerCode === "" || (customerCode === null && !semClienteAceito(type, payload as Record<string, unknown>))) {
     throw new HttpsError("internal", `Evento ${type} sem customer_code.`);
   }
-  const payload = parsePayload(type, input.payload);
+  const occurredAt = input.occurred_at ?? new Date().toISOString();
+  if (!instante.safeParse(occurredAt).success) {
+    throw new HttpsError("internal", `Evento ${type} com occurred_at fora do formato ISO em UTC (AAAA-MM-DDTHH:MM:SS.sssZ).`);
+  }
   const { title, description } = templateText(type, payload);
   return {
     id: comercialEventId(operationId, input.suffix ?? type),
@@ -379,7 +393,7 @@ export function buildComercialEvent<T extends ComercialEventType>(input: Comerci
     entity_id: input.entity_id,
     customer_code: customerCode,
     payload: compactValue(payload) as Record<string, unknown>,
-    occurred_at: input.occurred_at ?? new Date().toISOString(),
+    occurred_at: occurredAt,
     source: COMERCIAL_EVENT_SOURCE,
     operation_id: operationId,
     actor: actorPayload(input.actor),

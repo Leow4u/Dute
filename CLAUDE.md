@@ -57,7 +57,10 @@ documentação de produto e operação está em `docs/`.
     `COMERCIAL_AMBIENTES_LIBERADOS` do app; papéis owner, admin e comercial) e
     grava por `runIdempotent` (recibo em `comercial_operations`) com
     `createComercialEvent` (evento sem valor nem contato de cliente, payload
-    `.strict()` por tipo). Callable escrita como `export const nome = onCall(`.
+    `.strict()` por tipo). Callable escrita como `export const nome = onCall(`,
+    numa linha só, no `src/index.ts`; ali nenhuma outra linha usa `onCall(`,
+    nem comentário, porque a conferência do invoker reprova (trava em
+    `src/callables.test.ts`).
   - `lib/dominio`: tipos e regras que o app e as Functions precisam ter iguais.
 - **IA native.** Todo módulo novo grava desde o primeiro dia o que a IA precisa
   (eventos em `events`, tempos e medidas) e respeita o isolamento por cliente. A
