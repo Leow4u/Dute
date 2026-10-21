@@ -2,15 +2,16 @@
  * Mapa do armazém (docs/mapa-do-armazem-enderecamento-dirigido.md, seção
  * 5.6): cada prateleira com as caixas guardadas nela, a frente usada e o que
  * ainda cabe, por zona de cliente. Só leitura e conta: posições e caixas vêm
- * das coleções, a decisão de onde guardar é do motor nas Functions.
+ * das coleções; as Functions validam a guarda confirmada.
  *
  * A frente é ocupada pelas caixas apoiadas na prateleira. Caixas empilhadas
- * continuam contando no peso e nos totais. "Cabe ainda" estima apenas caixas
+ * continuam contando no peso e nos totais. A referência na base estima caixas
  * de referência (50 × 50 × 35 cm) na base; o motor verifica empilhamento.
  */
 
 import type { AnyRecord } from "@/lib/warehouse-ops/model";
 import type { WarehouseBox } from "@/lib/warehouse-boxes";
+import { calculateShelfVolume } from "@/lib/warehouse-volume";
 import { type WarehousePosition, REFERENCE_BOX, sortPositions } from "@/lib/warehouse-positions";
 
 const TOLERANCE_M = 0.001;
@@ -18,7 +19,7 @@ const TOLERANCE_M = 0.001;
 export type ShelfState = "free" | "partial" | "full" | "review" | "blocked";
 
 export const SHELF_STATE_LABELS: Record<ShelfState, string> = {
-  free: "livre",
+  free: "sem caixas registradas",
   partial: "parcial",
   full: "sem vaga na base",
   review: "em verificação",
@@ -32,6 +33,8 @@ export type Shelf = {
   position: WarehousePosition;
   zone: string | null;
   boxes: WarehouseBox[];
+  /** Estimativa geométrica independente da frente e da capacidade de encaixe. */
+  volume: ReturnType<typeof calculateShelfVolume>;
   front_used_m: number;
   free_front_m: number;
   weight_used_kg: number;
@@ -102,6 +105,7 @@ export function buildShelves(positions: WarehousePosition[], boxes: WarehouseBox
       position,
       zone: position.customer_code?.trim() || null,
       boxes: stored,
+      volume: calculateShelfVolume(position, stored),
       front_used_m,
       free_front_m,
       weight_used_kg,
@@ -138,6 +142,8 @@ export type ZoneSummary = {
   /** Bloqueadas ou em verificação. */
   unavailable: number;
   boxes: number;
+  /** Volume geométrico registrado; null quando alguma caixa não tem medidas válidas. */
+  occupied_volume_m3: number | null;
   units: number;
   products: number;
   remaining_reference_boxes: number;
@@ -157,6 +163,9 @@ export function summarizeZone(shelves: Shelf[], zone: ZoneFilter): ZoneSummary {
     empty: selected.filter((shelf) => shelf.boxes.length === 0 && shelf.state === "free").length,
     unavailable: selected.length - available.length,
     boxes: selected.reduce((sum, shelf) => sum + shelf.boxes.length, 0),
+    occupied_volume_m3: selected.some((shelf) => shelf.volume.occupiedM3 === null)
+      ? null
+      : selected.reduce((sum, shelf) => sum + (shelf.volume.occupiedM3 ?? 0), 0),
     units: selected.reduce((sum, shelf) => sum + shelf.unit_count, 0),
     products: new Set(selected.flatMap((shelf) => shelf.sku_codes)).size,
     remaining_reference_boxes: available.reduce((sum, shelf) => sum + shelf.remaining_reference_boxes, 0),

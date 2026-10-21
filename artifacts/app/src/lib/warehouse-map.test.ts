@@ -110,6 +110,55 @@ describe("prateleira com caixas", () => {
   });
 });
 
+describe("volume registrado no mapa", () => {
+  it("conta o volume de cada caixa empilhada sem duplicar a frente ocupada", () => {
+    const result = buildShelves(
+      [shelf("A-03", 3, { length_m: 1.2, depth_m: 0.7, height_m: 1 })],
+      [
+        box("CX-1", "A-03", { length_m: 0.6, width_m: 0.35, height_m: 0.2, front_m: 0.2 }),
+        box("CX-2", "A-03", { length_m: 0.6, width_m: 0.35, height_m: 0.2, front_m: 0.2, support_box_code: "CX-1", base_height_m: 0.35 }),
+      ],
+    )[0]!;
+    expect(result.front_used_m).toBe(0.2);
+    expect(result.volume.totalM3).toBeCloseTo(0.84);
+    expect(result.volume.occupiedM3).toBeCloseTo(0.084);
+    expect(result.volume.freeM3).toBeCloseTo(0.756);
+    expect(result.volume.occupiedPercent).toBeCloseTo(10);
+    expect(result.volume.boxCount).toBe(2);
+  });
+
+  it("usa somente caixas guardadas na prateleira, sem rascunhos ou caixas removidas", () => {
+    const result = buildShelves([shelf("A-01", 1)], [
+      box("CX-1", "A-01"),
+      box("CX-2", "A-01", { status: "counting" }),
+      box("CX-3", "A-01", { status: "removed" }),
+      box("CX-4", "A-02"),
+    ])[0]!;
+    expect(result.volume.boxCount).toBe(1);
+    expect(result.volume.occupiedM3).toBeCloseTo(0.0875);
+  });
+
+  it("não apresenta volume parcial como total quando faltam medidas de uma caixa", () => {
+    const shelves = buildShelves([shelf("A-01", 1)], [
+      box("CX-1", "A-01"),
+      box("CX-2", "A-01", { height_m: 0 }),
+    ]);
+    expect(shelves[0]!.volume.occupiedM3).toBeNull();
+    expect(shelves[0]!.volume.freeM3).toBeNull();
+    expect(summarizeZone(shelves, BTG).occupied_volume_m3).toBeNull();
+  });
+
+  it("restringe o volume agregado à zona selecionada", () => {
+    const shelves = buildShelves(
+      [shelf("A-01", 1), shelf("B-01", 2, { customer_code: "Outro cliente" })],
+      [box("CX-1", "A-01"), box("CX-2", "B-01", { customer_code: "Outro cliente", length_m: 1 })],
+    );
+    expect(summarizeZone(shelves, BTG).occupied_volume_m3).toBeCloseTo(0.0875);
+    expect(summarizeZone(shelves, "Outro cliente").occupied_volume_m3).toBeCloseTo(0.175);
+    expect(summarizeZone(shelves, "all").occupied_volume_m3).toBeCloseTo(0.2625);
+  });
+});
+
 describe("zona", () => {
   const positions = [
     shelf("A-01", 1),
@@ -128,6 +177,7 @@ describe("zona", () => {
       empty: 0,
       unavailable: 1,
       boxes: 3,
+      occupied_volume_m3: expect.closeTo(0.2625, 8),
       units: 36,
       products: 2,
       remaining_reference_boxes: 1 + 2,
