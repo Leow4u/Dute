@@ -334,6 +334,13 @@ function LinhaDaTabela({ linha, editavel, ocupado, acoes }: { linha: LinhaDaMedi
             </Marca>
           </div>
         ) : null}
+        {editavel && aplicar?.lpu_item_id ? (
+          <div className="mt-1.5 flex">
+            <Button type="button" variant="outline" size="sm" disabled={ocupado} onClick={() => acoes.aplicar(linha.id, aplicar.lpu_item_id as string)}>
+              {rotuloDoAplicar(linha)}
+            </Button>
+          </div>
+        ) : null}
       </td>
       <td className="px-3 py-3">
         {itens.veiculo ? <b className="block text-sm font-bold">{itens.veiculo}</b> : null}
@@ -355,13 +362,6 @@ function LinhaDaTabela({ linha, editavel, ocupado, acoes }: { linha: LinhaDaMedi
       </td>
       <td className="py-3 pl-3 pr-5 text-right tabular-nums">
         <b className="block text-sm font-bold">{formatarReais(linha.total_cents)}</b>
-        {editavel && aplicar?.lpu_item_id ? (
-          <div className="mt-1.5 flex justify-end">
-            <Button type="button" variant="outline" size="sm" disabled={ocupado} onClick={() => acoes.aplicar(linha.id, aplicar.lpu_item_id as string)}>
-              {rotuloDoAplicar(linha)}
-            </Button>
-          </div>
-        ) : null}
       </td>
     </tr>
   );

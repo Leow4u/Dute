@@ -1,4 +1,4 @@
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, getDocs, query, where, type QuerySnapshot } from "firebase/firestore";
 
 import { firestore } from "../firebase";
 import { cadastroDoDocumento, hojeLocal, type CadastroComercial } from "./clientes";
@@ -17,6 +17,26 @@ import {
   type Medicao,
 } from "./medicoes";
 
+const VALIDADE_DA_LEITURA_MS = 15_000;
+const leiturasRecentes = new Map<string, { em: number; leitura: Promise<QuerySnapshot> }>();
+
+/**
+ * `contracts` e `customers` alimentam dois alertas do Início, que saem juntos:
+ * a leitura feita nos últimos segundos é reaproveitada, em vez de repetida.
+ */
+function lerColecao(nome: "contracts" | "customers"): Promise<QuerySnapshot> {
+  if (!firestore) return Promise.reject(new Error("Firebase não configurado."));
+  const agora = Date.now();
+  const recente = leiturasRecentes.get(nome);
+  if (recente && agora - recente.em < VALIDADE_DA_LEITURA_MS) return recente.leitura;
+  const leitura = getDocs(collection(firestore, nome));
+  leiturasRecentes.set(nome, { em: agora, leitura });
+  leitura.catch(() => {
+    if (leiturasRecentes.get(nome)?.leitura === leitura) leiturasRecentes.delete(nome);
+  });
+  return leitura;
+}
+
 /**
  * Alertas de contrato do Início (parte 14): lê `contracts` e `customers` pelo
  * Firestore (as regras abrem a owner, admin e comercial). A página só chama
@@ -25,10 +45,7 @@ import {
  */
 export async function lerAlertasDosContratos(hoje: string = hojeLocal()): Promise<AlertaDoInicio[]> {
   if (!firestore) throw new Error("Firebase não configurado.");
-  const [contratos, clientes] = await Promise.all([
-    getDocs(collection(firestore, "contracts")),
-    getDocs(collection(firestore, "customers")),
-  ]);
+  const [contratos, clientes] = await Promise.all([lerColecao("contracts"), lerColecao("customers")]);
   const lidos = contratos.docs
     .map((row) => contratoDoRegistro(row.id, row.data()))
     .filter((contrato): contrato is Contrato => contrato !== null);
@@ -64,8 +81,8 @@ export async function lerAlertasDeMedicao(hoje: string = hojeLocal()): Promise<A
   const [rascunhos, doMesAnterior, contratosLidos, clientes] = await Promise.all([
     getDocs(query(collection(db, "medicoes"), where("status", "==", "rascunho"))),
     getDocs(query(collection(db, "medicoes"), where("competencia", "==", anterior))),
-    getDocs(collection(db, "contracts")),
-    getDocs(collection(db, "customers")),
+    lerColecao("contracts"),
+    lerColecao("customers"),
   ]);
   const medicoes = new Map<string, Medicao>();
   for (const row of [...rascunhos.docs, ...doMesAnterior.docs]) {

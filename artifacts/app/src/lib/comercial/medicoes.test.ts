@@ -342,7 +342,7 @@ describe("formulário da linha", () => {
     const form = formDaLinha(lida.linhas[2], "chave");
     expect(form).toMatchObject({ id: "l3", os: "OS 10038-01", diaTipo: "domingo_feriado" });
     expect(form.itens.map((item) => [item.origem, item.lpuItemId, item.quantidade, item.preco, item.descricao])).toEqual([
-      ["avulso", null, "1", "1350.00", "Truck até Jundiaí"],
+      ["avulso", null, "1", "1.350,00", "Truck até Jundiaí"],
       ["tabela", "ajud-dom", "4", "", ""],
     ]);
     expect(problemasDaLinha(form, "2026-10", "2026-10-21")).toEqual([]);
@@ -361,6 +361,22 @@ describe("formulário da linha", () => {
       { lpu_item_id: null, quantidade: "1", origem: "avulso", preco: "1350.00", motivo: "Rota fora da LPU", descricao: "Truck até Jundiaí" },
       { lpu_item_id: "ajud-dom", quantidade: "4", origem: "tabela" },
     ]);
+  });
+
+  it("abrir a linha e salvar sem mexer não muda quantidade nem preço, mesmo com três casas depois do ponto", () => {
+    const linha = lida.linhas[2];
+    const gravada = {
+      ...linha,
+      itens: [
+        { ...linha.itens[0], quantidade: "0.500", preco: "38.5000" },
+        { ...linha.itens[1], quantidade: "1.500" },
+      ],
+    } as typeof linha;
+    const form = formDaLinha(gravada, "chave");
+    expect(form.itens.map((item) => item.quantidade)).toEqual(["0,5", "1,5"]);
+    const payload = payloadSalvarLinha(lida, form, "c9") as { linha: { itens: Array<{ quantidade: string; preco?: string }> } };
+    expect(payload.linha.itens.map((item) => Number(item.quantidade))).toEqual([0.5, 1.5]);
+    expect(Number(payload.linha.itens[0].preco)).toBe(38.5);
   });
 
   it("confere o que o servidor também confere: execução no mês e até hoje, solicitação antes, motivo e preço dos avulsos", () => {

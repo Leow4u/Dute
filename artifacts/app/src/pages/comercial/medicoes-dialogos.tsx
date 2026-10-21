@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -216,7 +216,6 @@ export function LinhaDialog({
         >
           <DialogHeader>
             <DialogTitle>{editando ? `Editar ${form.os || "OS"}` : "Nova linha"}</DialogTitle>
-            <DialogDescription>A tabela do contrato vigente na data da solicitação dá o preço; o servidor confere de novo ao gravar.</DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-3 sm:grid-cols-3">
@@ -487,7 +486,6 @@ export function AprovarDialog({ aberto, ocupado, erro, onCancelar, onConfirmar }
         >
           <DialogHeader>
             <DialogTitle>Registrar aprovação</DialogTitle>
-            <DialogDescription>Cria a autorização de faturamento da medição.</DialogDescription>
           </DialogHeader>
           <QuandoRespondeu id="aprovar-quando" valor={quando} onChange={setQuando} disabled={ocupado} />
           <Campo id="aprovar-link" rotulo="Link do e-mail ou do portal">
@@ -537,7 +535,6 @@ export function ContestarDialog({ aberto, ocupado, erro, onCancelar, onConfirmar
         >
           <DialogHeader>
             <DialogTitle>Registrar contestação</DialogTitle>
-            <DialogDescription>A medição fica contestada até ser reaberta para o ajuste.</DialogDescription>
           </DialogHeader>
           <QuandoRespondeu id="contestar-quando" valor={quando} onChange={setQuando} disabled={ocupado} />
           <Campo id="contestar-nota" rotulo="O que o cliente contestou">
