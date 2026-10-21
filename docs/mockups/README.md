@@ -21,6 +21,21 @@ com as 14 telas fica em https://claude.ai/artifact/KzkB7KUsJFB1fKAVsMPWse
 | Campo: detalhe da OS | `CampoDetalhe.dc.html` |
 | Campo: concluir | `CampoConcluir.dc.html` |
 
+As telas do Comercial, aprovadas em 20/10/2026, ficam na página "Comercial ·
+orçamentos e contratos" do mesmo canvas. O desenho está em
+`docs/plataforma/fase-6-comercial.md`.
+
+| Tela | Arquivo |
+|---|---|
+| Comercial · orçamentos | `ComFila.dc.html` |
+| Montar orçamento | `ComOrcamento.dc.html` |
+| Aprovar no celular | `ComAprovarCelular.dc.html` |
+| PDF do orçamento (A4) | `ComDocumento.dc.html` |
+| Clientes e prospects | `ComClientes.dc.html` |
+| Contrato | `ComContrato.dc.html` |
+| Autorizações de faturamento | `ComAutorizacoes.dc.html` |
+| Medição mensal | `ComMedicaoMensal.dc.html` |
+
 ## Regras da v3
 
 - Menu lateral preto `#161616` com logo branco e seis módulos (Início, Operação,

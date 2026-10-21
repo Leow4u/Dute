@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Comercial · orçamentos</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+a{color:#0054CE;text-decoration:none}a:hover{color:#004496}
+h1,h2,h3,p{margin:0}
+.ic{width:20px;height:20px;flex:0 0 auto}
+.ic-s{width:16px;height:16px;flex:0 0 auto}
+.sb{flex:0 0 248px;background:#161616;color:#fff;display:flex;flex-direction:column;padding:26px 14px 18px;gap:4px}
+.nav{display:flex;align-items:center;gap:12px;height:48px;padding:0 14px;border-radius:10px;color:rgba(255,255,255,.72);font-weight:600;font-size:15px;text-decoration:none;position:relative}
+.nav:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav.on{background:rgba(255,255,255,.12);color:#fff}
+.nav.on::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:3px;background:#E71C23}
+.nav .cnt{margin-left:auto;min-width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.nav.agent{color:#C9B8FB}.nav.agent:hover{color:#E0D6FF}
+.main{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;padding:30px 44px 36px;gap:20px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;font:700 14px Manrope,sans-serif;border:1px solid transparent;cursor:pointer;white-space:nowrap;text-decoration:none}
+.btn-p{background:#E71C23;color:#fff}.btn-p:hover{background:#AD0015;color:#fff}
+.btn-s{background:#fff;color:#161616;border-color:#D4D4CF}.btn-s:hover{background:#F0F0ED;color:#161616}
+.btn-sm{height:34px;padding:0 12px;font-size:13px}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px}
+.muted{color:#5F6368}
+.seg{display:inline-flex;background:#E8E8E4;border-radius:8px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg a{height:34px;padding:0 14px;border-radius:6px;display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:13.5px;color:#5F6368;text-decoration:none}
+.seg a.on{background:#fff;color:#161616;border:1px solid #E5E5E1}
+.fc{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 12px;border-radius:999px;background:#fff;border:1px solid #D4D4CF;font:700 13px Manrope,sans-serif;color:#161616;cursor:pointer}
+.fc:hover{background:#F0F0ED}
+.fc em{font-style:normal;min-width:22px;height:20px;border-radius:999px;background:#F0F0ED;color:#161616;font-size:12px;display:inline-flex;align-items:center;justify-content:center;padding:0 6px}
+.fc.on{background:#161616;border-color:#161616;color:#fff}
+.fc.on em{background:rgba(255,255,255,.2);color:#fff}
+.d{width:8px;height:8px;border-radius:50%;display:inline-block;flex:0 0 auto}
+.fc .d,.gh .d{background:currentColor}
+.fc.on .d{box-shadow:0 0 0 2px #fff}
+.badge{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 9px;border-radius:6px;font-size:12.5px;font-weight:700;white-space:nowrap;border:1px solid transparent}
+.st-mont{background:#E7E7E3;color:#3F403F}
+.st-apr{background:#FDF0D5;color:#8A4B00}
+.st-env{background:#ECE6FA;color:#5B21B6}
+.st-cli{background:#E3ECFB;color:#1E4E9C}
+.st-plan{background:#DDF5E4;color:#14602F}
+.st-exe{background:#FDF0D5;color:#8A4B00}
+.st-aut{background:#FDF0D5;color:#8A4B00}
+.st-aut30{background:#FBE3E4;color:#8E1016}
+.st-fat{background:#D5F2EF;color:#0E5F58}
+.st-perd{background:#F0F0ED;color:#5F6368}
+.st-pros{background:#fff;border-color:#B9B9B3;color:#3F403F}
+.pill{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:6px;background:#F0F0ED;border:1px solid #E5E5E1;color:#3F403F;font-size:12px;font-weight:700;white-space:nowrap}
+.av{width:36px;height:36px;border-radius:50%;background:#E71C23;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto}
+.grp{overflow:hidden}
+.gh{display:flex;align-items:center;gap:10px;padding:12px 20px;background:#FAFAF8;border-bottom:1px solid #E5E5E1}
+.gh h2{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#161616}
+.gh em{font-style:normal;min-width:24px;height:24px;border-radius:999px;background:#E8E8E4;color:#161616;font-size:12.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.qrow{display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px 16px;padding:14px 20px;border-top:1px solid #F0F0ED;cursor:pointer}
+.gh+.qrow{border-top:0}
+.qrow:hover{background:#FCFCFA}
+.qrow.sel{background:#FAFAF8;box-shadow:inset 3px 0 0 #161616}
+.q1{flex:0 0 116px;display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+.q2{flex:1 1 240px;min-width:0;display:flex;flex-direction:column;gap:1px}
+.q4{flex:0 0 160px;display:flex;flex-direction:column;align-items:flex-end;gap:6px;text-align:right}
+.qn{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.leg{font-size:12px;font-weight:700;color:#5F6368;white-space:nowrap}
+.qt{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:800;flex-wrap:wrap}
+.qtt{font-size:14px;font-weight:700}
+.qs{display:flex;align-items:center;gap:6px;font-size:13px;color:#5F6368;font-weight:600;line-height:1.4}
+.qs svg{width:14px;height:14px;flex:0 0 auto}
+.qv{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.qd{font-size:12.5px;color:#5F6368;font-weight:700;font-variant-numeric:tabular-nums}
+.fh{padding:20px 22px 16px;border-bottom:1px solid #F0F0ED;display:flex;flex-direction:column;gap:8px}
+.sec{padding:16px 22px;border-bottom:1px solid #F0F0ED}
+.sec h3{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#5F6368;margin-bottom:10px}
+.kv{display:grid;grid-template-columns:96px minmax(0,1fr);gap:8px 12px;margin:0;font-size:13.5px}
+.kv dt{color:#5F6368;font-weight:700}
+.kv dd{margin:0;font-weight:700;min-width:0}
+.lo{display:flex;align-items:center;gap:10px;padding:7px 0;font-size:13.5px;font-weight:600}
+.lo b{margin-left:auto;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.lo .n{color:#5F6368;font-size:12.5px;font-weight:700}
+.mk{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:6px;font-size:12px;font-weight:700;border:1px solid transparent}
+.mk-tab{padding:0;font-size:13.5px;color:#161616}
+.mk-alt{background:#FDF0D5;border-color:#F3DCA3;color:#8A4B00}
+.mk-avu{background:#F0F0ED;border-color:#E5E5E1;color:#3F403F}
+.mk-aju{background:#fff;border-color:#D4D4CF;color:#3F403F}
+.tot{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding-top:10px;margin-top:4px;border-top:1px solid #E5E5E1;font-weight:800}
+.tot b{font-size:20px;font-variant-numeric:tabular-nums}
+.hs{display:flex;gap:12px;position:relative;padding-bottom:12px}
+.hs::before{content:"";position:absolute;left:4px;top:18px;bottom:0;width:2px;background:#F0F0ED}
+.hs:last-child{padding-bottom:0}
+.hs:last-child::before{display:none}
+.hs i{width:10px;height:10px;border-radius:50%;margin-top:5px;flex:0 0 auto;background:#1F8A4C}
+.hs.pend i{background:#fff;border:2px solid #B9B9B3}
+.hs.lost i{background:#5F6368}
+.hs b{display:block;font-size:13.5px;font-weight:700}
+.hs.pend b{color:#5F6368}
+.hs span{display:block;font-size:12.5px;color:#5F6368;font-weight:600}
+.mot{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:8px;background:#F0F0ED;font-size:13.5px;font-weight:700;margin-top:12px}
+.mot span{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#5F6368}
+</style>
+</helmet>
+<div style="min-height: 100%; display: flex; flex-wrap: wrap">
+  <aside class="sb">
+    <a href="Inicio.dc.html" style="display: block; padding: 4px 14px 24px"><img src="/_blob/51b94b624eef7c9daa70d9dd1cfb5330" alt="Dutelog Soluções Logísticas" style="width: 148px; height: auto; display: block"></a>
+    <a class="nav" href="Inicio.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>Início</a>
+    <a class="nav on" href="ComFila.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>Comercial<span class="cnt">5</span></a>
+    <a class="nav" href="ComClientes.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Clientes</a>
+    <a class="nav agent" href="ComFila.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></svg>Agent Dute</a>
+    <div style="margin-top: auto; padding: 14px 10px 0; border-top: 1px solid rgba(255,255,255,.1); display: flex; align-items: center; gap: 12px">
+      <span class="av">G</span>
+      <div style="min-width: 0"><div style="font-weight: 700; font-size: 14.5px">Guilherme</div><div style="font-size: 12.5px; color: rgba(255,255,255,.55)">Comercial</div></div>
+    </div>
+  </aside>
+  <div class="main">
+    <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap">
+      <h1 style="font-size: 28px; font-weight: 800; letter-spacing: -.02em; margin-right: 8px">Comercial</h1>
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+        <label style="position: relative; display: block"><span style="position: absolute; left: 12px; top: 12px; color: #5F6368; display: flex"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span><input aria-label="Buscar orçamento" placeholder="Número, cliente, referência ou título" value="{{ q }}" onChange="{{ onQ }}" style="height: 40px; width: 320px; max-width: 100%; border: 1px solid #D4D4CF; border-radius: 8px; padding: 0 12px 0 36px; font: 600 14px Manrope, sans-serif; background: #fff; color: #161616"></label>
+        <a href="ComOrcamento.dc.html" class="btn btn-s"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg>Orçar execução</a>
+        <a href="ComOrcamento.dc.html" class="btn btn-p"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Novo orçamento</a>
+      </div>
+    </div>
+    <nav class="seg" aria-label="Comercial" style="align-self: flex-start"><a class="on" href="ComFila.dc.html" aria-current="page">Orçamentos</a><a href="ComContrato.dc.html">Contratos</a><a href="ComAutorizacoes.dc.html">Autorizações</a><a href="ComMedicaoMensal.dc.html">Medições</a></nav>
+    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap" role="group" aria-label="Etapa">
+      <sc-for list="{{ stages }}" as="s" hint-placeholder-count="9">
+        <button type="button" class="fc {{ s.cls }}" aria-pressed="{{ s.pressed }}" onClick="{{ s.pick }}"><sc-if value="{{ s.hasDot }}" hint-placeholder-val="{{ true }}"><i class="d st-{{ s.key }}"></i></sc-if>{{ s.label }}<em>{{ s.n }}</em></button>
+      </sc-for>
+    </div>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+      <div style="flex: 3 1 620px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+        <sc-if value="{{ empty }}" hint-placeholder-val="{{ false }}">
+          <div class="card muted" style="padding: 28px; text-align: center; font-weight: 700">Nenhum orçamento</div>
+        </sc-if>
+        <sc-for list="{{ groups }}" as="g" hint-placeholder-count="4">
+          <section class="card grp" aria-label="{{ g.label }}">
+            <div class="gh"><i class="d st-{{ g.key }}"></i><h2>{{ g.label }}</h2><em>{{ g.n }}</em></div>
+            <sc-for list="{{ g.items }}" as="it" hint-placeholder-count="2">
+              <div class="qrow {{ it.selCls }}" onClick="{{ it.pick }}" tabindex="0" aria-selected="{{ it.isSel }}">
+                <div class="q1">
+                  <a class="qn" href="ComOrcamento.dc.html">{{ it.num }}</a>
+                  <span class="pill">{{ it.tipo }}</span>
+                  <sc-if value="{{ it.hasLeg }}" hint-placeholder-val="{{ false }}"><span class="leg">nº legado {{ it.leg }}</span></sc-if>
+                </div>
+                <div class="q2">
+                  <span class="qt">{{ it.cli }}<sc-if value="{{ it.pros }}" hint-placeholder-val="{{ false }}"><span class="badge st-pros">Prospect</span></sc-if><sc-if value="{{ it.spot }}" hint-placeholder-val="{{ false }}"><span class="pill">Spot</span></sc-if></span>
+                  <span class="qtt">{{ it.tit }}</span>
+                  <span class="qs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>{{ it.refLocal }}</span>
+                  <span class="qs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>{{ it.paraTxt }}</span>
+                </div>
+                <div class="q4">
+                  <span class="qv">{{ it.total }}</span>
+                  <span class="badge st-{{ it.bk }}">{{ it.stLabel }}</span>
+                  <span class="qd">{{ it.dias }}</span>
+                </div>
+              </div>
+            </sc-for>
+          </section>
+        </sc-for>
+      </div>
+
+      <aside class="card" style="flex: 1 1 340px; min-width: 0; display: flex; flex-direction: column" aria-label="Orçamento selecionado">
+        <div class="fh">
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+            <a href="ComOrcamento.dc.html" style="font-size: 20px; font-weight: 800; color: #161616; font-variant-numeric: tabular-nums">{{ f.num }}</a>
+            <span class="pill">{{ f.tipo }}</span>
+            <span class="badge st-{{ f.bk }}">{{ f.stLabel }}</span>
+          </div>
+          <div style="font-size: 15px; font-weight: 700">{{ f.tit }}</div>
+          <sc-if value="{{ f.hasLeg }}" hint-placeholder-val="{{ false }}"><span class="leg">nº legado {{ f.leg }}</span></sc-if>
+        </div>
+        <div class="sec">
+          <dl class="kv">
+            <dt>Cliente</dt><dd>{{ f.cli }}</dd>
+            <dt>Local</dt><dd>{{ f.loc }}</dd>
+            <dt>Para</dt><dd>{{ f.paraTxt }}</dd>
+            <dt>Referência</dt><dd>{{ f.refTxt }}</dd>
+            <dt>Contrato</dt><dd>{{ f.ctr }}</dd>
+            <dt>Tabela</dt><dd>{{ f.tab }}</dd>
+            <dt>Data-base</dt><dd>{{ f.baseTxt }}</dd>
+          </dl>
+        </div>
+        <div class="sec">
+          <h3>Linhas</h3>
+          <sc-for list="{{ f.lines }}" as="l" hint-placeholder-count="3">
+            <div class="lo"><span class="mk {{ l.mk }}">{{ l.k }}</span><span class="n">{{ l.nTxt }}</span><b>{{ l.v }}</b></div>
+          </sc-for>
+          <div class="tot"><span>Total</span><b>{{ f.total }}</b></div>
+        </div>
+        <div class="sec">
+          <h3>Histórico</h3>
+          <sc-for list="{{ f.hist }}" as="h" hint-placeholder-count="4">
+            <div class="hs {{ h.cls }}"><i></i><div><b>{{ h.l }}</b><span>{{ h.txt }}</span></div></div>
+          </sc-for>
+          <sc-if value="{{ f.hasMot }}" hint-placeholder-val="{{ false }}"><div class="mot"><span>Motivo</span>{{ f.motivo }}</div></sc-if>
+        </div>
+        <div style="padding: 16px 22px 20px; display: flex; gap: 8px; flex-wrap: wrap">
+          <sc-if value="{{ f.hasAct }}" hint-placeholder-val="{{ false }}"><a href="{{ f.actHref }}" class="btn btn-s btn-sm">{{ f.act }}</a></sc-if>
+          <a href="ComOrcamento.dc.html" class="btn btn-s btn-sm">{{ f.openLabel }}</a>
+          <a href="ComDocumento.dc.html" class="btn btn-s btn-sm"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>PDF</a>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":2200}}'>
+class Component extends DCLogic {
+  constructor(...args) {
+    super(...args);
+    this.state = { stage: 'todas', sel: '10045', q: '' };
+  }
+  renderVals() {
+    const s = this.state || {};
+    const stage = s.stage || 'todas';
+    const sel = s.sel || '10045';
+    const q = (s.q || '').trim().toLowerCase();
+    const fmt = (v) => {
+      const p = Math.abs(v).toFixed(2).split('.');
+      return (v < 0 ? '− R$ ' : 'R$ ') + p[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + p[1];
+    };
+    const ST = [
+      ['mont', 'Em montagem'], ['apr', 'Para aprovar'], ['env', 'Para enviar'], ['cli', 'Aguardando cliente'],
+      ['plan', 'Para planejar'], ['exe', 'Execução a orçar'], ['aut', 'Aguardando autorização'], ['perd', 'Perdidas']
+    ];
+    const LBL = { mont: 'Em montagem', apr: 'Para aprovar', env: 'Para enviar', cli: 'Aguardando cliente', plan: 'Para planejar', exe: 'Execução a orçar', aut: 'Aguardando autorização', perd: 'Perdida' };
+    const H = (l, w, d, x) => ({ l: l, w: w || '', d: d || '', x: !!x });
+    const P4 = (a, b, c, e) => [H('Recebido', a[0], a[1]), H('Montado', b[0], b[1]), H('Aprovado por Leonardo', c[0], c[1]), H('Enviado', e[0], e[1])];
+    const N = ['', ''];
+    const ITAU = 'Itaú · até 30/06/2027';
+    const COM = 'LPU Itaú v2.0 · Comercial';
+    const NOT = 'LPU Itaú v2.0 · Noturna';
+    const DUT = 'Tabela Dutelog 2026';
+    const D = [
+      { n: '10052', rv: 'RV01', tipo: 'Proposta', cli: 'Itaú Unibanco', ref: 'CE9012', tit: 'Mudança de 32 estações do 6º para o 9º andar', loc: 'CEIC – Torre Olavo Setubal', para: 'Marina Teixeira', emp: 'Souza & Lopes', st: 'mont', dias: '1 dia', ctr: ITAU, tab: COM, base: '20/10/2026',
+        L: { t: [9, 14680], a: [1, 1240] }, hist: P4(['20/10 08:47', 'e-mail de Marina Teixeira'], N, N, N) },
+      { n: '10053', rv: 'RV01', tipo: 'Proposta', cli: 'Grupo SBF', pros: true, ref: '', tit: 'Transferência do escritório de Pinheiros', loc: 'Escritório Pinheiros', para: 'Rodrigo Almeida', emp: 'Grupo SBF', st: 'mont', dias: 'hoje', ctr: 'Sem contrato', tab: DUT, base: '21/10/2026',
+        L: { t: [6, 7420], v: [2, 1350] }, hist: P4(['21/10 08:15', 'telefone · Rodrigo Almeida'], N, N, N) },
+      { n: '10045', rv: 'RV02', tipo: 'Aditivo', cli: 'Itaú Unibanco', ref: 'CE8977', tit: 'Mudança do 4º e 5º andares', loc: 'CEIC – Torre Conceição', para: 'Paula Nogueira', emp: 'Hass & Megale', st: 'apr', dias: '40 min', ctr: ITAU, tab: COM, base: '14/10/2026',
+        L: { t: [3, 5480], a: [1, 820], v: [1, 260], j: [1, -420] }, hist: P4(['20/10 18:10', 'e-mail de Paula Nogueira'], ['21/10 09:05', 'Guilherme'], ['', 'com Leonardo desde 09:05'], N) },
+      { n: '10050', rv: 'RV01', tipo: 'Proposta', cli: 'Itaú Unibanco', ref: 'SL.260', tit: 'Montagem de 18 estações em L', loc: 'CAT', para: 'Jorge Pacheco', emp: 'Souza & Lopes', st: 'apr', dias: '1 dia', ctr: ITAU, tab: COM, base: '20/10/2026',
+        L: { t: [5, 10650.4], a: [1, 625] }, hist: P4(['20/10 10:30', 'e-mail de Jorge Pacheco'], ['20/10 16:20', 'Guilherme'], ['', 'com Leonardo desde 20/10 16:20'], N) },
+      { n: '10048', rv: 'RV01', tipo: 'Proposta', cli: 'BTG Pactual', ref: 'EV-2611', tit: 'Montagem de estande · encontro com investidores', loc: 'Sede · Faria Lima 3477', para: 'Camila Duarte', emp: 'BTG Pactual', st: 'env', dias: 'hoje', ctr: 'BTG · eventos por orçamento', tab: 'Tabela BTG 2026', base: '19/10/2026',
+        L: { t: [4, 6900], v: [1, 1050] }, hist: P4(['19/10 14:30', 'e-mail de Camila Duarte'], ['20/10 17:20', 'Guilherme'], ['21/10 08:50', 'celular'], N) },
+      { n: '10041', rv: 'RV01', tipo: 'Proposta', cli: 'Itaú Unibanco', ref: 'FL9464', tit: 'Retirada de mobiliário do 12º andar', loc: 'Faria Lima 3400', para: 'Bruno Siqueira', emp: 'Cushman & Wakefield', st: 'cli', dias: '6 dias', ctr: ITAU, tab: NOT, base: '13/10/2026',
+        L: { t: [8, 22140], a: [1, 2740] }, hist: P4(['13/10 10:02', 'e-mail de Bruno Siqueira'], ['14/10 16:40', 'Guilherme'], ['15/10 07:58', 'celular'], ['15/10 08:30', 'para Bruno Siqueira']) },
+      { n: '10039', rv: 'RV03', tipo: 'Proposta', cli: 'Banco Safra', spot: true, ref: 'SAF-0921', tit: 'Mudança do arquivo · Agência Augusta', loc: 'Agência Augusta', para: 'Lúcia Ferraz', emp: 'Banco Safra', st: 'cli', dias: '9 dias', ctr: 'Spot', tab: DUT, base: '06/10/2026',
+        L: { t: [5, 3980], v: [1, 340] }, hist: P4(['06/10 11:20', 'e-mail de Lúcia Ferraz'], ['12/10 14:00', 'Guilherme · RV03'], ['12/10 14:25', 'celular'], ['12/10 15:10', 'para Lúcia Ferraz']) },
+      { n: '10043', rv: 'RV02', tipo: 'Proposta', cli: 'Itaú Unibanco', ref: 'CE8890', tit: 'Instalação de 40 lockers', loc: 'CEA', para: 'Tatiane Rocha', emp: 'MGE', st: 'plan', dias: '1 dia', ctr: ITAU, tab: COM, base: '08/10/2026',
+        L: { t: [3, 11780], a: [1, 600] }, hist: P4(['08/10 09:00', 'e-mail de Tatiane Rocha'], ['09/10 11:10', 'Guilherme · RV02'], ['09/10 11:40', 'celular'], ['09/10 12:05', 'para Tatiane Rocha']).concat([H('Aceite do cliente', '20/10 11:30', 'Tatiane Rocha')]) },
+      { n: '10047', rv: 'RV02', tipo: 'Execução', cli: 'Itaú Unibanco', ref: 'CE9003', tit: 'Retirada de 14 cadeiras e 2 armários', loc: 'CEIC – Torre Olavo Setubal', para: 'Marina Teixeira', emp: 'Souza & Lopes', st: 'exe', dias: '5 dias', ctr: ITAU, tab: COM, base: '15/10/2026',
+        L: { t: [3, 2860], v: [1, 320] }, hist: [H('Recebido', '15/10 17:40', 'telefone · Marina Teixeira'), H('Executado', '16/10', 'RV01 de proposta'), H('Montado'), H('Aprovado por Leonardo'), H('Enviado')] },
+      { n: '10036', rv: 'RV01', tipo: 'Execução', leg: '9898', cli: 'Itaú Unibanco', ref: 'SL.244', tit: 'Transporte de 60 monitores para o CAT', loc: 'CAT', para: 'Jorge Pacheco', emp: 'Souza & Lopes', st: 'exe', dias: '3 dias', ctr: ITAU, tab: COM, base: '18/10/2026',
+        L: { t: [2, 2940] }, hist: [H('Recebido', '17/10 07:30', 'telefone · Jorge Pacheco'), H('Executado', '18/10'), H('Montado'), H('Aprovado por Leonardo'), H('Enviado')] },
+      { n: '10031', rv: 'RV02', tipo: 'Execução', cli: 'Itaú Unibanco', ref: 'CE8801', tit: 'Mudança do 3º andar', loc: 'CEIC – Torre Conceição', para: 'Paula Nogueira', emp: 'Hass & Megale', st: 'aut', late: true, dias: '38 dias', ctr: ITAU, tab: COM, base: '02/09/2026',
+        L: { t: [12, 29870], a: [2, 2010], j: [1, -420] }, hist: [H('Recebido', '02/09 10:15', 'e-mail de Paula Nogueira'), H('Executado', '13/09'), H('Montado', '15/09 11:00', 'Guilherme · RV02 execução'), H('Aprovado por Leonardo', '15/09 11:30', 'celular'), H('Enviado', '15/09 14:00', 'para Paula Nogueira')] },
+      { n: '10038', rv: 'RV02', tipo: 'Execução', cli: 'Itaú Unibanco', ref: 'FL9410', tit: 'Desmontagem de 24 estações', loc: 'Faria Lima 3400', para: 'Bruno Siqueira', emp: 'Cushman & Wakefield', st: 'aut', dias: '12 dias', ctr: ITAU, tab: NOT, base: '01/10/2026',
+        L: { t: [4, 8715.6] }, hist: [H('Recebido', '01/10 09:40', 'e-mail de Bruno Siqueira'), H('Executado', '09/10'), H('Montado', '10/10 15:20', 'Guilherme · RV02 execução'), H('Aprovado por Leonardo', '10/10 16:05', 'celular'), H('Enviado', '10/10 16:30', 'para Bruno Siqueira')] },
+      { n: '10034', rv: 'RV01', tipo: 'Proposta', cli: 'Bradesco', ref: '', tit: 'Mudança de agência · Alphaville', loc: 'Agência Alphaville', para: 'Sérgio Nunes', emp: 'Bradesco', st: 'perd', dias: '08/10', ctr: 'Sem contrato', tab: DUT, base: '29/09/2026', motivo: 'Preço · fechou com outro fornecedor',
+        L: { t: [7, 14200], v: [1, 1000] }, hist: P4(['29/09 10:00', 'e-mail de Sérgio Nunes'], ['30/09 15:30', 'Guilherme'], ['30/09 16:10', 'celular'], ['30/09 16:40', 'para Sérgio Nunes']).concat([H('Perdida', '08/10 09:20', 'Sérgio Nunes', true)]) }
+    ];
+    const ACT = {
+      env: ['Enviar ao cliente', 'ComDocumento.dc.html'],
+      cli: ['Registrar aceite', 'ComOrcamento.dc.html'],
+      aut: ['Registrar autorização', 'ComAutorizacoes.dc.html'],
+      perd: ['Reabrir', 'ComOrcamento.dc.html']
+    };
+    const OPEN = { mont: 'Continuar montagem', exe: 'Orçar execução' };
+    const nl = (n) => (n === 1 ? '1 linha' : n + ' linhas');
+    const all = D.map((d) => {
+      const L = d.L;
+      const lines = [{ k: 'Tabela', mk: 'mk-tab', nTxt: nl(L.t[0]), v: fmt(L.t[1]) }];
+      if (L.a) lines.push({ k: 'Alterado', mk: 'mk-alt', nTxt: nl(L.a[0]), v: fmt(L.a[1]) });
+      if (L.v) lines.push({ k: 'Avulso', mk: 'mk-avu', nTxt: nl(L.v[0]), v: fmt(L.v[1]) });
+      if (L.j) lines.push({ k: 'Ajuste', mk: 'mk-aju', nTxt: nl(L.j[0]), v: fmt(L.j[1]) });
+      const total = L.t[1] + (L.a ? L.a[1] : 0) + (L.v ? L.v[1] : 0) + (L.j ? L.j[1] : 0);
+      const act = ACT[d.st];
+      const isSel = d.n === sel;
+      return Object.assign({}, d, {
+        num: d.n + ' – ' + d.rv,
+        bk: d.st === 'aut' && d.late ? 'aut30' : d.st,
+        stLabel: LBL[d.st],
+        total: fmt(total),
+        lines: lines,
+        pros: !!d.pros,
+        spot: !!d.spot,
+        hasLeg: !!d.leg,
+        refLocal: [d.ref, d.loc].filter(Boolean).join(' · '),
+        refTxt: d.ref || '—',
+        paraTxt: d.para + ' · ' + d.emp,
+        baseTxt: d.rv === 'RV01' ? d.base : d.base + ' · RV01',
+        hasMot: !!d.motivo,
+        hasAct: !!act,
+        act: act ? act[0] : '',
+        actHref: act ? act[1] : 'ComOrcamento.dc.html',
+        openLabel: OPEN[d.st] || 'Abrir orçamento',
+        hist: d.hist.map((h) => ({ l: h.l, cls: h.x ? 'lost' : (h.w ? 'ok' : 'pend'), txt: [h.w || 'pendente', h.d].filter(Boolean).join(' · ') })),
+        isSel: isSel,
+        selCls: isSel ? 'sel' : '',
+        pick: () => this.setState({ sel: d.n })
+      });
+    });
+    const shown = all.filter((i) => !q || [i.n, i.cli, i.ref, i.tit, i.leg || ''].join(' ').toLowerCase().indexOf(q) >= 0);
+    const groups = ST
+      .filter((st) => stage === 'todas' || stage === st[0])
+      .map((st) => ({ key: st[0], label: st[1], items: shown.filter((i) => i.st === st[0]) }))
+      .filter((g) => g.items.length)
+      .map((g) => Object.assign(g, { n: g.items.length }));
+    const stages = [['todas', 'Todas']].concat(ST).map((st) => ({
+      key: st[0],
+      label: st[1],
+      n: st[0] === 'todas' ? D.length : D.filter((d) => d.st === st[0]).length,
+      hasDot: st[0] !== 'todas',
+      cls: stage === st[0] ? 'on' : '',
+      pressed: stage === st[0] ? 'true' : 'false',
+      pick: () => this.setState({ stage: st[0] })
+    }));
+    return {
+      q: s.q || '',
+      onQ: (e) => this.setState({ q: e.target.value }),
+      stages: stages,
+      groups: groups,
+      empty: groups.length === 0,
+      f: all.find((i) => i.n === sel) || all[0]
+    };
+  }
+}
+</script>
+</body>
+</html>

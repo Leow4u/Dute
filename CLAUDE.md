@@ -20,7 +20,9 @@ documentação de produto e operação está em `docs/`.
   `tools/congelar_projeto.ps1`). Fase 2, núcleo e app único, em andamento
   (desenho e registro em `docs/plataforma/fase-2-nucleo.md`): parte 1, papéis
   da plataforma e módulos contratados, na homologação; parte 2, tela de entrada
-  por módulo, em PR.
+  por módulo, em PR. **Comercial v1 adiantado para antes da Operação** em
+  20/10/2026: desenho e ordem das partes em `docs/plataforma/fase-6-comercial.md`,
+  telas aprovadas em `docs/mockups/Com*.dc.html`.
 - **Papéis e módulos têm lista única em `lib/dominio`.** As Functions
   (`functions/wms/src/domain/platform-roles.ts`, `customer-profile.ts`) e o
   `firestore.rules` guardam cópias literais, travadas por

@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Aprovar no celular</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+a{color:#0054CE;text-decoration:none}a:hover{color:#004496}
+h1,h2,h3,p,dl,dd{margin:0}
+.ic{width:20px;height:20px;flex:0 0 auto}
+.ic-s{width:16px;height:16px;flex:0 0 auto}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;font:700 14px Manrope,sans-serif;border:1px solid transparent;cursor:pointer;white-space:nowrap;text-decoration:none}
+.btn-p{background:#E71C23;color:#fff}.btn-p:hover{background:#AD0015;color:#fff}
+.btn-s{background:#fff;color:#161616;border-color:#D4D4CF}.btn-s:hover{background:#F0F0ED;color:#161616}
+.btn-sm{height:34px;padding:0 12px;font-size:13px}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px}
+.muted{color:#5F6368}
+.badge{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 9px;border-radius:6px;font-size:12.5px;font-weight:700;white-space:nowrap;border:1px solid transparent}
+.e-apr{background:#FDF0D5;border-color:#F5D9A0;color:#8A4B00}
+.e-env{background:#ECE6FA;border-color:#D8CCF5;color:#5B21B6}
+.e-agu{background:#E3ECFB;border-color:#C7D8F5;color:#1E4E9C}
+.e-mon{background:#E7E7E3;border-color:#D4D4CF;color:#3F403F}
+.pill{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:6px;background:#F0F0ED;border:1px solid #E5E5E1;color:#3F403F;font-size:12px;font-weight:700;white-space:nowrap}
+.m-alt{background:#FDF0D5;border-color:#F5D9A0;color:#8A4B00}
+.m-aju{background:#E7E7E3;border-color:#D4D4CF;color:#3F403F}
+.hd{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #F0F0ED}
+.hd h2{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
+.hd em{font-style:normal;min-width:24px;height:24px;border-radius:999px;background:#E8E8E4;color:#161616;font-size:12.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.kv{display:grid;grid-template-columns:64px minmax(0,1fr);gap:6px 12px}
+.kv dt{color:#5F6368;font-size:13px;font-weight:600;line-height:21px}
+.kv dd{font-weight:700}
+.mk{padding:12px 16px;border-top:1px solid #F0F0ED;display:flex;flex-direction:column;gap:4px}
+.hd+.mk{border-top:0}
+.mk-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mk-t{font-weight:800}
+.mk-i{font-size:13.5px;font-weight:600}
+.mk-v{display:flex;align-items:baseline;gap:8px;font-variant-numeric:tabular-nums;font-size:13.5px}
+.mk-v b{font-weight:800}
+.mk-v s{color:#5F6368;font-weight:600}
+.mk-m{font-size:13px;color:#3F403F}
+.mk-m span{color:#5F6368;font-weight:700;margin-right:6px}
+.ln{display:flex;align-items:flex-start;gap:12px;padding:10px 16px;border-top:1px solid #F0F0ED}
+.hd+.ln{border-top:0}
+.ln-a{flex:1 1 auto;min-width:0}
+.ln-n{font-weight:700;font-size:13.5px;line-height:1.35}
+.ln-q{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:3px;font-size:12.5px;color:#5F6368;font-weight:600;font-variant-numeric:tabular-nums}
+.ln-v{flex:0 0 auto;font-weight:800;font-size:13.5px;font-variant-numeric:tabular-nums;text-align:right}
+.ln-v s{display:block;color:#5F6368;font-weight:600;font-size:12px}
+.ibtn{width:36px;height:36px;border-radius:8px;border:1px solid #D4D4CF;background:#fff;color:#161616;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.ibtn:disabled{color:#A3A3A0;background:#F0F0ED;cursor:default}
+.lnk{display:inline-flex;align-items:center;gap:6px;background:none;border:0;padding:0;height:32px;font:700 14px Manrope,sans-serif;color:#0054CE;cursor:pointer;align-self:center}
+.lnk:hover{color:#004496}
+.done{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:700}
+.done svg{width:18px;height:18px;flex:0 0 auto;color:#1F8A4C}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; display: flex; flex-direction: column; background: #F5F5F3; overflow: hidden">
+  <header style="flex: 0 0 auto; height: 56px; background: #161616; color: #fff; display: flex; align-items: center; gap: 8px; padding: 0 12px">
+    <a href="ComFila.dc.html" aria-label="Voltar" style="width: 36px; height: 36px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; color: #fff"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a>
+    <img src="/_blob/51b94b624eef7c9daa70d9dd1cfb5330" alt="Dutelog Soluções Logísticas" style="width: 112px; height: auto; display: block">
+    <span style="margin-left: auto; width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,.14); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px">L</span>
+  </header>
+
+  <div style="flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding: 14px 16px 10px">
+    <h1 style="font-size: 20px; font-weight: 800; letter-spacing: -.01em">Para aprovar</h1>
+    <span class="muted" style="font-weight: 700">1 de 3</span>
+    <div style="margin-left: auto; display: flex; gap: 6px">
+      <button type="button" class="ibtn" aria-label="Anterior" disabled><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+      <button type="button" class="ibtn" aria-label="Próximo"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+    </div>
+  </div>
+
+  <div style="flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 16px 16px; display: flex; flex-direction: column; gap: 12px">
+    <section class="card" aria-label="Orçamento 10045 – RV01" style="padding: 16px; display: flex; flex-direction: column; gap: 14px">
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+        <span style="font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums">10045 – RV01</span>
+        <span class="pill">Proposta</span>
+        <span style="margin-left: auto; display: inline-flex">
+          <sc-if value="{{ pending }}" hint-placeholder-val="{{ true }}"><span class="badge e-apr">Para aprovar</span></sc-if>
+          <sc-if value="{{ isApr }}" hint-placeholder-val="{{ false }}"><span class="badge e-env">Para enviar</span></sc-if>
+          <sc-if value="{{ isEnv }}" hint-placeholder-val="{{ false }}"><span class="badge e-agu">Aguardando cliente</span></sc-if>
+          <sc-if value="{{ isDev }}" hint-placeholder-val="{{ false }}"><span class="badge e-mon">Em montagem</span></sc-if>
+        </span>
+      </div>
+      <h2 style="font-size: 16px; font-weight: 700; line-height: 1.35">Mudança de layout · 12º andar</h2>
+      <dl class="kv">
+        <dt>Cliente</dt><dd>Itaú Unibanco</dd>
+        <dt>Para</dt><dd>Renata Moura · Souza &amp; Lopes</dd>
+        <dt>Ref.</dt><dd>CE8977</dd>
+        <dt>Local</dt><dd>CEIC – Torre Olavo Setubal</dd>
+        <dt>Orçou</dt><dd>Guilherme · 20/10 16:40</dd>
+      </dl>
+      <div style="border-top: 1px solid #F0F0ED; padding-top: 12px; display: flex; align-items: flex-end; gap: 12px">
+        <div>
+          <div class="muted" style="font-size: 13px; font-weight: 700">Total</div>
+          <div style="font-size: 30px; font-weight: 800; letter-spacing: -.02em; line-height: 1.15; font-variant-numeric: tabular-nums">R$ 11.942,00</div>
+        </div>
+        <a href="ComDocumento.dc.html" class="btn btn-s btn-sm" style="margin-left: auto"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>PDF</a>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px">
+        <span class="pill">LPU Itaú v2.0 · Comercial</span>
+        <span class="pill">Data-base 14/10/2026</span>
+        <span class="pill">9 linhas</span>
+      </div>
+    </section>
+
+    <section class="card" aria-label="Conferir" style="overflow: hidden">
+      <div class="hd"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="#8A4B00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></svg><h2>Conferir</h2><em>3</em></div>
+      <div class="mk">
+        <div class="mk-h"><span class="pill m-alt">Alterado</span><span class="mk-t">1 linha com preço alterado</span></div>
+        <div class="mk-i">Transporte dedicado VUC até 2,5 t · VG</div>
+        <div class="mk-v"><b>R$ 980,00</b><s>R$ 860,00</s><span class="muted">tabela</span></div>
+        <div class="mk-m"><span>Motivo</span>Espera de 2 h na doca do CEIC</div>
+      </div>
+      <div class="mk">
+        <div class="mk-h"><span class="pill">Avulso</span><span class="mk-t">1 item avulso</span></div>
+        <div class="mk-i">Içamento de cofre pela escada · VB</div>
+        <div class="mk-v"><b>R$ 1.450,00</b></div>
+      </div>
+      <div class="mk">
+        <div class="mk-h"><span class="pill m-aju">Ajuste</span><span class="mk-t">Ajuste −R$ 500,00</span></div>
+        <div class="mk-m"><span>Motivo</span>Arredondamento combinado com a Souza &amp; Lopes</div>
+      </div>
+    </section>
+
+    <section class="card" aria-label="Linhas" style="overflow: hidden">
+      <div class="hd"><h2>Linhas</h2><em>9</em><a href="ComOrcamento.dc.html" style="margin-left: auto; font-weight: 700; font-size: 13.5px">Abrir orçamento</a></div>
+      <div class="ln"><div class="ln-a"><div class="ln-n">Estação de trabalho em L 1,40 m · Desmontagem</div><div class="ln-q">24 UN</div></div><div class="ln-v">R$ 2.040,00</div></div>
+      <div class="ln"><div class="ln-a"><div class="ln-n">Estação de trabalho em L 1,40 m · Montagem</div><div class="ln-q">24 UN</div></div><div class="ln-v">R$ 2.640,00</div></div>
+      <div class="ln"><div class="ln-a"><div class="ln-n">Cadeira giratória · Transporte</div><div class="ln-q">48 UN</div></div><div class="ln-v">R$ 888,00</div></div>
+      <div class="ln"><div class="ln-a"><div class="ln-n">Gaveteiro volante · Transporte</div><div class="ln-q">24 UN</div></div><div class="ln-v">R$ 528,00</div></div>
+      <div class="ln"><div class="ln-a"><div class="ln-n">Monitor até 27" · Transporte</div><div class="ln-q">30 UN</div></div><div class="ln-v">R$ 780,00</div></div>
+      <div class="ln"><div class="ln-a"><div class="ln-n">Caixa de arquivo · Transporte</div><div class="ln-q">120 UN</div></div><div class="ln-v">R$ 1.176,00</div></div>
+      <div class="ln"><div class="ln-a"><div class="ln-n">Transporte dedicado VUC até 2,5 t</div><div class="ln-q">3 VG<span class="pill m-alt">Alterado</span></div></div><div class="ln-v">R$ 2.940,00<s>R$ 2.580,00</s></div></div>
+      <div class="ln"><div class="ln-a"><div class="ln-n">Içamento de cofre pela escada</div><div class="ln-q">1 VB<span class="pill">Avulso</span></div></div><div class="ln-v">R$ 1.450,00</div></div>
+      <div class="ln"><div class="ln-a"><div class="ln-n">Arredondamento combinado</div><div class="ln-q"><span class="pill m-aju">Ajuste</span></div></div><div class="ln-v">−R$ 500,00</div></div>
+      <div class="ln" style="background: #FAFAF8"><div class="ln-a"><div class="ln-n" style="font-weight: 800">Total</div></div><div class="ln-v" style="font-size: 15px">R$ 11.942,00</div></div>
+    </section>
+  </div>
+
+  <footer style="flex: 0 0 auto; background: #fff; border-top: 1px solid #E5E5E1; padding: 12px 16px 22px; display: flex; flex-direction: column; gap: 6px">
+    <sc-if value="{{ pending }}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; gap: 10px">
+        <button type="button" class="btn btn-s" style="height: 52px; flex: 0 0 132px; font-size: 15px" onClick="{{ devolver }}"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Devolver</button>
+        <button type="button" class="btn btn-p" style="height: 52px; flex: 1 1 auto; font-size: 16px" onClick="{{ aprovar }}"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Aprovar</button>
+      </div>
+      <button type="button" class="lnk" onClick="{{ aprovarEnviar }}"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg>Aprovar e enviar</button>
+    </sc-if>
+    <sc-if value="{{ done }}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; align-items: center; gap: 8px; min-height: 52px">
+        <span class="done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>{{ doneMsg }}</span>
+        <button type="button" class="btn btn-s btn-sm" style="margin-left: auto" onClick="{{ desfazer }}">Desfazer</button>
+        <button type="button" class="btn btn-s btn-sm">Próximo<svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+      </div>
+    </sc-if>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(...args) {
+    super(...args);
+    this.state = { st: '' };
+  }
+  renderVals() {
+    const st = (this.state && this.state.st) || '';
+    const msgs = { apr: 'Aprovado 17:05', env: 'Aprovado e enviado 17:05', dev: 'Devolvido ao Guilherme' };
+    return {
+      pending: st === '',
+      done: st !== '',
+      isApr: st === 'apr',
+      isEnv: st === 'env',
+      isDev: st === 'dev',
+      doneMsg: msgs[st] || '',
+      aprovar: () => this.setState({ st: 'apr' }),
+      aprovarEnviar: () => this.setState({ st: 'env' }),
+      devolver: () => this.setState({ st: 'dev' }),
+      desfazer: () => this.setState({ st: '' })
+    };
+  }
+}
+</script>
+</body>
+</html>
