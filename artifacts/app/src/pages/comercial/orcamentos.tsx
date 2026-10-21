@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 
 import { useToast } from "@/hooks/use-toast";
 import { chamarComercial, novaChave } from "@/lib/comercial/api";
+import { acoesDepoisDoEnvio, pedidoDeExecucaoDireta } from "@/lib/comercial/depois-do-envio";
 import {
   cadastroDoDocumento,
   contatoDoDocumento,
@@ -34,6 +35,7 @@ import {
 } from "@/lib/comercial/orcamentos";
 import { useAppUser } from "@/lib/auth";
 
+import { useDepoisDoEnvio } from "./depois-do-envio";
 import { NovoOrcamentoDialog, type NovoOrcamento } from "./novo-orcamento-dialog";
 import { FilaView, type ContextoDaFila } from "./orcamentos-view";
 
@@ -63,7 +65,7 @@ function useAgora(intervaloMs = 60_000): Date {
   return agora;
 }
 
-type Dialogo = { chave: string; prospectChave: string };
+type Dialogo = { chave: string; prospectChave: string; modo: "orcamento" | "execucao" };
 
 /** Abaixo do lg a ficha toma o lugar da fila (FilaView). */
 const TELA_ESTREITA = "(max-width: 1023px)";
@@ -121,6 +123,17 @@ export default function ComercialOrcamentosPage() {
       : [],
   );
 
+  const depois = useDepoisDoEnvio({ contatos: contatos.itens ?? [] });
+  // O aviso da recusa vale para o orçamento em que aconteceu: ao trocar de ficha, sai.
+  const numeroSelecionado = selecionado?.numero ?? null;
+  useEffect(() => {
+    depois.limparAviso();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [numeroSelecionado]);
+  const acoesDaEtapa = selecionado
+    ? acoesDepoisDoEnvio(selecionado, { role, uid: user?.uid })
+    : { principal: null, secundarias: [] };
+
   const contexto = useMemo<ContextoDaFila>(
     () => ({
       prospects: new Set((cadastros.itens ?? []).filter((cadastro) => cadastro.estagio === "prospect").map((cadastro) => cadastro.code)),
@@ -132,9 +145,9 @@ export default function ComercialOrcamentosPage() {
     [cadastros.itens, contatos.itens, locais.itens, contratos.itens, nomeDe],
   );
 
-  const abrirNovo = () => {
+  const abrirNovo = (modo: Dialogo["modo"]) => {
     setErro(null);
-    setDialogo({ chave: novaChave(), prospectChave: novaChave() });
+    setDialogo({ chave: novaChave(), prospectChave: novaChave(), modo });
   };
 
   async function criar(novo: NovoOrcamento) {
@@ -142,9 +155,18 @@ export default function ComercialOrcamentosPage() {
     setOcupado(true);
     setErro(null);
     try {
-      const resultado = await chamarComercial<{ numero: string; rotulo: string }>("saveQuote", payloadCriar(novo, dialogo.chave));
+      let resultado: { numero: string; rotulo: string };
+      let sucesso: string | null = null;
+      if (dialogo.modo === "execucao") {
+        // A demanda direta (executada antes do orçamento): create_execution, com a chave do diálogo.
+        const pedido = pedidoDeExecucaoDireta({ ...novo, de: novo.de ?? "", ate: novo.ate ?? "" }, dialogo.chave);
+        resultado = await chamarComercial<{ numero: string; rotulo: string }>(pedido.callable, pedido.payload);
+        sucesso = pedido.sucesso;
+      } else {
+        resultado = await chamarComercial<{ numero: string; rotulo: string }>("saveQuote", payloadCriar(novo, dialogo.chave));
+      }
       setDialogo(null);
-      toast({ title: `Orçamento ${resultado.rotulo ?? resultado.numero} criado` });
+      toast({ title: sucesso ?? `Orçamento ${resultado.rotulo ?? resultado.numero} criado` });
       navegar(hrefDoOrcamento(resultado.numero));
     } catch (error) {
       setErro(error instanceof Error ? error.message : "Não foi possível criar o orçamento.");
@@ -223,7 +245,8 @@ export default function ComercialOrcamentosPage() {
         fichaAberta={fichaAberta}
         onVoltar={() => setFichaAberta(false)}
         contexto={contexto}
-        onNovo={abrirNovo}
+        onNovo={() => abrirNovo("orcamento")}
+        onOrcarExecucao={() => abrirNovo("execucao")}
         onAbrir={(numero) => navegar(hrefDoOrcamento(numero))}
         envio={{
           acao: selecionado ? envioDaFicha(selecionado, role) : null,
@@ -231,9 +254,19 @@ export default function ComercialOrcamentosPage() {
           erro: erroDoEnvio && erroDoEnvio.numero === selecionado?.numero ? erroDoEnvio.mensagem : null,
           onEnviar: (item, acao) => void enviar(item, acao),
         }}
+        depois={{
+          acoes: acoesDaEtapa,
+          ocupado: depois.ocupado,
+          aviso: depois.aviso && depois.aviso.numero === selecionado?.numero ? depois.aviso.mensagem : null,
+          onAcao: (acao) => {
+            if (selecionado) depois.abrir(acao, selecionado);
+          },
+        }}
       />
+      {depois.dialogo}
       <NovoOrcamentoDialog
         aberto={dialogo !== null}
+        modo={dialogo?.modo}
         ocupado={ocupado}
         erro={erro}
         onCancelar={() => {

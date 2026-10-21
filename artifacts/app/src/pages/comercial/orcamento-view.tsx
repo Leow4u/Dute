@@ -13,6 +13,7 @@ import {
   Save,
   Search,
   Send,
+  Trash2,
   Undo2,
   X,
 } from "lucide-react";
@@ -20,11 +21,13 @@ import {
 import { formatarReais } from "@workspace/dominio";
 
 import { AbasDoComercial } from "@/components/comercial/abas-do-comercial";
+import { AcoesDepoisDoEnvio } from "@/components/comercial/acoes-depois-do-envio";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { dataBr, type ContatoResumo, type LocalResumo } from "@/lib/comercial/clientes";
+import type { AcaoDepoisDoEnvio, AcoesDaEtapa } from "@/lib/comercial/depois-do-envio";
 import { ROTULO_DO_ENVIO } from "@/lib/comercial/envio";
 import {
   CANAIS_DO_PEDIDO,
@@ -72,7 +75,9 @@ import { MarcaDaOrigem, SeloDaEtapa } from "./orcamentos-view";
  * os dados e as gravações chegam por props (pages/comercial/orcamento.tsx).
  * Conteúdo na identidade v3 dentro do layout de hoje. Sem legenda: rótulos,
  * dados e ações; uma ação principal ("Enviar para aprovação" no rascunho,
- * "Aprovar" para o owner, "Enviar ao cliente" no aprovado). O documento A4
+ * ou "Enviar ao cliente" com a marca "Aprovação dispensada" na RV de execução
+ * que o servidor dispensa da aprovação; "Aprovar" para o owner, "Enviar ao
+ * cliente" no aprovado; na RV enviada, a ação da etapa: Fechado, Validado...). O documento A4
  * abre ao lado ("Prévia do PDF" até o envio; "PDF" depois). A grade é a do Excel do Guilherme; a busca de item
  * da tabela é pelo teclado (Enter adiciona, o foco vai para a quantidade).
  * Enquanto uma gravação está em andamento, nada se edita: o que voltar do
@@ -124,6 +129,8 @@ export type MontarViewProps = {
   desatualizado: boolean;
   /** O documento A4 da RV em curso (lib/comercial/documento.ts, hrefDoDocumento). */
   documentoHref: string;
+  /** As ações depois do envio da etapa em que o orçamento está (lib/comercial/depois-do-envio.ts). */
+  posEnvio: { acoes: AcoesDaEtapa; onAcao: (acao: AcaoDepoisDoEnvio) => void };
   handlers: {
     salvar: () => void;
     /** "Prévia do PDF" com alteração não salva: salva e só então leva a aba nova ao documento. */
@@ -137,6 +144,10 @@ export type MontarViewProps = {
     enviarCliente: () => void;
     /** Só o owner, do "para aprovar" (approve_and_send). */
     aprovarEEnviar: () => void;
+    /** A RV de execução com a aprovação dispensada: do rascunho direto ao cliente (send). */
+    enviarDispensado: () => void;
+    /** Descartar a RV seguinte ainda não enviada (abre a confirmação). */
+    descartarRv: () => void;
     trocarVariante: (variante: string) => void;
     novoContato: () => void;
   };
@@ -279,6 +290,11 @@ function Cabecalho(props: MontarViewProps & { totalCents: number | null }) {
       icone: <Send aria-hidden="true" />,
       onClick: handlers.aprovarEEnviar,
     },
+    descartar_rv: {
+      rotulo: "Descartar RV",
+      icone: <Trash2 aria-hidden="true" />,
+      onClick: handlers.descartarRv,
+    },
   };
   return (
     <section
@@ -345,6 +361,12 @@ function Cabecalho(props: MontarViewProps & { totalCents: number | null }) {
               {dados.situacao}
             </span>
           ) : null}
+          {acoes.aprovacaoDispensada ? (
+            <span className="inline-flex h-10 items-center gap-1.5 text-sm font-bold text-success-soft-foreground">
+              <Check className="size-4" aria-hidden="true" />
+              Aprovação dispensada
+            </span>
+          ) : null}
           {acoes.editavel && props.sujo ? (
             <span className="inline-flex h-10 items-center gap-1.5 text-sm font-bold text-amber-soft-foreground">
               <CircleDot className="size-4" aria-hidden="true" />
@@ -379,10 +401,24 @@ function Cabecalho(props: MontarViewProps & { totalCents: number | null }) {
               {acoes.documento === "enviado" ? "PDF" : "Prévia do PDF"}
             </a>
           </Button>
+          {/* Depois do envio, a ação da etapa é a principal da tela (Descartar RV já está entre as secundárias). */}
+          <AcoesDepoisDoEnvio
+            acoes={props.posEnvio.acoes}
+            onAcao={props.posEnvio.onAcao}
+            ocupado={ocupado}
+            destaque
+            ignorar={["descartar_rv"]}
+          />
           {acoes.principal === "enviar" ? (
             <Button type="button" onClick={handlers.enviar} disabled={ocupado}>
               <Send aria-hidden="true" />
               Enviar para aprovação
+            </Button>
+          ) : null}
+          {acoes.principal === "enviar_dispensado" ? (
+            <Button type="button" onClick={handlers.enviarDispensado} disabled={ocupado}>
+              <Send aria-hidden="true" />
+              {ROTULO_DO_ENVIO.send}
             </Button>
           ) : null}
           {acoes.principal === "aprovar" ? (

@@ -11,6 +11,7 @@ import {
   SINCRONIA_INICIAL,
   VARIANTES,
   acoesDoOrcamento,
+  esperadoDoEnvioDireto,
   adicionarAjuste,
   adicionarAvulsa,
   adicionarDaTabela,
@@ -656,6 +657,56 @@ describe("ações da tela por situação e papel", () => {
 
   it("enviado: só leitura, com o PDF da RV enviada", () => {
     expect(de("enviado", "owner")).toEqual({ editavel: false, principal: null, secundarias: ["duplicar"], documento: "enviado" });
+  });
+
+  it("RV de execução com a aprovação dispensada pelo servidor: Enviar ao cliente direto, com a marca", () => {
+    const execucao = { status: "rascunho", role: "comercial", uid: "u-gui", autorUid: "u-gui", tipoRv: "execucao", dispensada: true };
+    expect(acoesDoOrcamento(execucao)).toEqual({
+      editavel: true,
+      principal: "enviar_dispensado",
+      secundarias: ["salvar", "duplicar"],
+      documento: "previa",
+      aprovacaoDispensada: true,
+    });
+    // Sem a dispensa do servidor, ou em RV que não é de execução, passa pela aprovação.
+    expect(acoesDoOrcamento({ ...execucao, dispensada: false }).principal).toBe("enviar");
+    expect(acoesDoOrcamento({ ...execucao, tipoRv: "proposta" }).principal).toBe("enviar");
+    expect(acoesDoOrcamento({ ...execucao, tipoRv: "aditivo" })).not.toHaveProperty("aprovacaoDispensada");
+    // A dispensa só vale em rascunho: aprovado e enviado seguem os seus caminhos.
+    expect(acoesDoOrcamento({ ...execucao, status: "aprovado" }).principal).toBe("enviar_cliente");
+    expect(acoesDoOrcamento({ ...execucao, status: "enviado" }).principal).toBeNull();
+  });
+
+  it("com alteração não salva a dispensa não vale: a tela volta ao envio para aprovação até gravar", () => {
+    const suja = { status: "rascunho", role: "comercial", uid: "u-gui", autorUid: "u-gui", tipoRv: "execucao", dispensada: true, sujo: true };
+    expect(acoesDoOrcamento(suja).principal).toBe("enviar");
+    expect(acoesDoOrcamento(suja)).not.toHaveProperty("aprovacaoDispensada");
+    expect(acoesDoOrcamento({ ...suja, sujo: false }).principal).toBe("enviar_dispensado");
+  });
+
+  it("o envio direto da dispensa espera o que a tela viu, ou o que acabou de salvar", () => {
+    expect(esperadoDoEnvioDireto({ status: "rascunho", edicao: 4 }, null)).toEqual({ status: "rascunho", edicao: 4 });
+    expect(esperadoDoEnvioDireto({ status: "rascunho", edicao: 4 }, { edicao: 5 })).toEqual({ status: "rascunho", edicao: 5 });
+  });
+
+  it("Descartar RV aparece na RV seguinte ainda não enviada, antes de Duplicar", () => {
+    expect(acoesDoOrcamento({ status: "rascunho", role: "comercial", uid: "u-gui", autorUid: "u-gui", descartavel: true }).secundarias).toEqual([
+      "salvar",
+      "descartar_rv",
+      "duplicar",
+    ]);
+    expect(acoesDoOrcamento({ status: "aprovado", role: "comercial", uid: "u-gui", autorUid: "u-gui", descartavel: true }).secundarias).toEqual([
+      "editar",
+      "descartar_rv",
+      "duplicar",
+    ]);
+    expect(acoesDoOrcamento({ status: "para_aprovar", role: "owner", uid: "u-leo", autorUid: "u-gui", descartavel: true }).secundarias).toEqual([
+      "devolver",
+      "aprovar_e_enviar",
+      "descartar_rv",
+      "duplicar",
+    ]);
+    expect(acoesDoOrcamento({ status: "enviado", role: "comercial", uid: "u-gui", autorUid: "u-gui", descartavel: true }).secundarias).toEqual(["duplicar"]);
   });
 
   it("perdida: nada anda, nem o envio do aprovado", () => {

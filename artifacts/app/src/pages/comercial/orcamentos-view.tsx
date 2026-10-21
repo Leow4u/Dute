@@ -1,13 +1,15 @@
 import type { ReactNode } from "react";
 import { Link } from "wouter";
-import { ArrowLeft, FileText, MapPin, Plus, Search, Send, User } from "lucide-react";
+import { ArrowLeft, FilePlus, FileText, MapPin, Plus, Search, Send, User } from "lucide-react";
 
 import { formatarReais } from "@workspace/dominio";
 
 import { AbasDoComercial } from "@/components/comercial/abas-do-comercial";
+import { AcoesDepoisDoEnvio } from "@/components/comercial/acoes-depois-do-envio";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { dataBr, type ContratoResumo } from "@/lib/comercial/clientes";
+import { ROTULO_DA_ACAO, type AcaoDepoisDoEnvio, type AcoesDaEtapa } from "@/lib/comercial/depois-do-envio";
 import { hrefDoDocumento } from "@/lib/comercial/documento";
 import { ROTULO_DO_ENVIO, type AcaoDeEnvio } from "@/lib/comercial/envio";
 import {
@@ -40,7 +42,9 @@ import { SeloProspect } from "./clientes-view";
  * só a apresentação; os dados e as ações chegam por props
  * (pages/comercial/orcamentos.tsx). Conteúdo na identidade v3 dentro do
  * layout de hoje. Sem legenda: rótulos, dados e ações; uma ação principal,
- * "Novo orçamento". Na ficha, "Enviar ao cliente" no aprovado e o
+ * "Novo orçamento", com "Orçar execução" (a demanda direta) ao lado em
+ * contorno. Na ficha, "Enviar ao cliente" no aprovado, as ações da etapa
+ * depois do envio (parte 12b: Fechado, Validado, Registrar execução...) e o
  * documento A4.
  */
 
@@ -70,6 +74,8 @@ export type FilaViewProps = {
   onVoltar: () => void;
   contexto: ContextoDaFila;
   onNovo: () => void;
+  /** "Orçar execução": a demanda direta, executada antes do orçamento (secundária ao "Novo orçamento"). */
+  onOrcarExecucao: () => void;
   /** Duplo clique na linha: abre o orçamento (o clique só seleciona). */
   onAbrir: (numero: string) => void;
   /** O envio que a ficha oferece ao orçamento selecionado (lib/comercial/envio.ts, envioDaFicha). */
@@ -78,6 +84,14 @@ export type FilaViewProps = {
     ocupado: boolean;
     erro: string | null;
     onEnviar: (item: ItemDaFila, acao: AcaoDeEnvio) => void;
+  };
+  /** As ações da etapa do orçamento selecionado depois do envio (lib/comercial/depois-do-envio.ts). */
+  depois: {
+    acoes: AcoesDaEtapa;
+    ocupado: boolean;
+    /** A recusa de concorrência que fechou o diálogo. */
+    aviso: string | null;
+    onAcao: (acao: AcaoDepoisDoEnvio) => void;
   };
 };
 
@@ -158,7 +172,7 @@ function paraDoItem(item: ItemDaFila, contexto: ContextoDaFila): string | null {
 
 // --- Cabeçalho e segmentos -------------------------------------------------------------------
 
-function Cabecalho({ busca, onBusca, onNovo }: FilaViewProps) {
+function Cabecalho({ busca, onBusca, onNovo, onOrcarExecucao }: FilaViewProps) {
   return (
     <header className="flex flex-wrap items-center gap-4">
       <h1 className="mr-2 text-3xl font-extrabold tracking-tight">Comercial</h1>
@@ -174,6 +188,10 @@ function Cabecalho({ busca, onBusca, onNovo }: FilaViewProps) {
             className="w-full pl-9 sm:w-80"
           />
         </label>
+        <Button type="button" variant="outline" onClick={onOrcarExecucao}>
+          <FilePlus aria-hidden="true" />
+          {ROTULO_DA_ACAO.orcar_execucao}
+        </Button>
         <Button type="button" onClick={onNovo}>
           <Plus aria-hidden="true" />
           Novo orçamento
@@ -337,7 +355,7 @@ function Quadro({ rotulo, children }: { rotulo: string; children: ReactNode }) {
 }
 
 function Ficha(props: FilaViewProps & { selecionado: ItemDaFila }) {
-  const { selecionado: item, agora, contexto, fichaAberta, onVoltar, envio } = props;
+  const { selecionado: item, agora, contexto, fichaAberta, onVoltar, envio, depois } = props;
   const contato = item.contatoId ? (contexto.contatos.get(item.contatoId)?.nome ?? null) : null;
   const campos: Array<[string, string]> = [
     ["Cliente", item.cliente],
@@ -434,8 +452,9 @@ function Ficha(props: FilaViewProps & { selecionado: ItemDaFila }) {
             {ROTULO_DO_ENVIO[envio.acao]}
           </Button>
         ) : null}
+        <AcoesDepoisDoEnvio acoes={depois.acoes} onAcao={depois.onAcao} ocupado={depois.ocupado} tamanho="sm" />
         <Button asChild variant="outline" size="sm">
-          <Link href={href}>{acaoDaEtapa(item.etapa)}</Link>
+          <Link href={href}>{acaoDaEtapa(item.etapa, item.status)}</Link>
         </Button>
         <Button asChild variant="outline" size="sm">
           <Link href={hrefDoDocumento(item.numero, item.rv)}>
@@ -443,14 +462,15 @@ function Ficha(props: FilaViewProps & { selecionado: ItemDaFila }) {
             {item.status === "enviado" ? "PDF" : "Prévia do PDF"}
           </Link>
         </Button>
-        {envio.erro ? (
+        {[envio.erro, depois.aviso].filter(Boolean).map((mensagem) => (
           <p
+            key={mensagem}
             role="alert"
             className="w-full rounded-md border border-destructive-soft-border bg-destructive-soft px-3 py-2 text-sm font-semibold text-destructive-soft-foreground"
           >
-            {envio.erro}
+            {mensagem}
           </p>
-        ) : null}
+        ))}
       </div>
     </aside>
   );

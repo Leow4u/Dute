@@ -8,6 +8,7 @@ import {
   CALLABLES_DO_CADASTRO,
   CALLABLES_DA_MEDICAO,
   CALLABLES_DO_CONTRATO,
+  CALLABLES_DA_DEMANDA,
   CALLABLES_DO_ORCAMENTO,
   ErroDaCallable,
   codigoDoErro,
@@ -36,6 +37,11 @@ describe("callables do cadastro comercial", () => {
 
   it("o orçamento grava por saveQuote e advanceQuote", () => {
     expect([...CALLABLES_DO_ORCAMENTO]).toEqual(["saveQuote", "advanceQuote"]);
+  });
+
+  it("a demanda depois do envio grava por advanceDemand, que existe em functions/comercial", () => {
+    expect([...CALLABLES_DA_DEMANDA]).toEqual(["advanceDemand"]);
+    expect(indexDoComercial).toMatch(/^export const advanceDemand = onCall\(/m);
   });
 
   it("o erro da callable guarda o código: a tela decide se recarrega", () => {

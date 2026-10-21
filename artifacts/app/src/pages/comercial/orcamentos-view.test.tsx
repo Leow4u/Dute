@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { Router } from "wouter";
 
 import { contratoDoDocumento, type ContratoResumo } from "@/lib/comercial/clientes";
+import { acoesDepoisDoEnvio } from "@/lib/comercial/depois-do-envio";
 import { itemDaFila, type ItemDaFila } from "@/lib/comercial/orcamentos";
 
 import { FilaView, LinhaDaFila, type ContextoDaFila, type FilaViewProps } from "./orcamentos-view";
@@ -153,8 +154,10 @@ function props(overrides: Partial<FilaViewProps> = {}): FilaViewProps {
     onVoltar: noop,
     contexto: CONTEXTO,
     onNovo: noop,
+    onOrcarExecucao: noop,
     onAbrir: noop,
     envio: { acao: null, ocupado: false, erro: null, onEnviar: noop },
+    depois: { acoes: { principal: null, secundarias: [] }, ocupado: false, aviso: null, onAcao: noop },
     ...overrides,
   };
 }
@@ -178,6 +181,7 @@ function texts(html: string) {
 
 const CABECALHO = [
   "Comercial",
+  "Orçar execução",
   "Novo orçamento",
   "Orçamentos",
   "Contratos",
@@ -294,6 +298,7 @@ describe("fila de orçamentos", () => {
     const html = render();
     expect(html).toMatch(/^<div class="v3 /);
     expect(html.match(/bg-primary text-primary-foreground/g)).toHaveLength(1);
+    expect(html).toMatch(/bg-primary text-primary-foreground[^"]*"[^>]*>(?:<svg[^>]*>.*?<\/svg>)?Novo orçamento<\/button>/);
     expect(html).toContain('aria-label="Buscar orçamento"');
     expect(html).toContain('placeholder="Número, nº legado, cliente, referência ou título"');
   });
@@ -396,5 +401,80 @@ describe("fila de orçamentos", () => {
     const devolvido = item("10050", {}, { devolucao: { nota: "Rever o preço da cadeira", por_uid: "u-leo", em: "2026-10-21T12:30:00.000Z" } });
     const comNota = texts(render({ itens: [devolvido], selecionado: devolvido }));
     expect(comNota).toEqual(expect.arrayContaining(["Devolvido", "21/10 09:30 · Leonardo", "Devolução", "Rever o preço da cadeira"]));
+  });
+
+  it("Orçar execução é secundária ao Novo orçamento: vem antes, em contorno, e abre a demanda direta", () => {
+    const html = render();
+    expect(html).toMatch(/<button[^>]*border border-border bg-card[^>]*>(?:<svg[^>]*>.*?<\/svg>)?Orçar execução<\/button>/);
+    expect(html.indexOf("Orçar execução")).toBeLessThan(html.indexOf("Novo orçamento"));
+    expect(html.match(/bg-primary text-primary-foreground/g)).toHaveLength(1);
+  });
+});
+
+describe("a ficha depois do envio (parte 12b)", () => {
+  const contexto = { role: "comercial", uid: "u-gui" };
+
+  function comAcoes(it: ItemDaFila, extra: Partial<FilaViewProps["depois"]> = {}) {
+    return render({
+      itens: [it],
+      selecionado: it,
+      depois: { acoes: acoesDepoisDoEnvio(it, contexto), ocupado: false, aviso: null, onAcao: noop, ...extra },
+    });
+  }
+
+  const enviada = (numero: string, demanda: Registro, quote: Registro = {}) =>
+    item(numero, demanda, { status: "enviado", ...quote });
+
+  it("aguardando cliente, proposta: Fechado, Revisar e Perdido antes do link do orçamento", () => {
+    const proposta = enviada("10041", { etapa: "aguardando_cliente" });
+    expect(texts(comAcoes(proposta)).slice(-5)).toEqual(["Fechado", "Revisar", "Perdido", "Abrir orçamento", "PDF"]);
+  });
+
+  it("aguardando cliente, RV de execução e aditivo: Validado; só o aditivo se recusa", () => {
+    const execucao = enviada("10042", { etapa: "aguardando_cliente" }, { rv: 2, tipo_rv: "execucao" });
+    expect(texts(comAcoes(execucao)).slice(-4)).toEqual(["Validado", "Revisar", "Abrir orçamento", "PDF"]);
+    const aditivo = enviada("10043", { etapa: "aguardando_cliente" }, { rv: 1, tipo_rv: "aditivo" });
+    expect(texts(comAcoes(aditivo)).slice(-5)).toEqual(["Validado", "Recusar aditivo", "Revisar", "Abrir orçamento", "PDF"]);
+  });
+
+  it("para planejar, execução a orçar e perdida", () => {
+    const planejar = enviada("10044", { etapa: "para_planejar" });
+    expect(texts(comAcoes(planejar)).slice(-5)).toEqual(["Registrar execução", "Aditivo", "Perdido", "Abrir orçamento", "PDF"]);
+    const orcar = enviada("10046", { etapa: "execucao_a_orcar" });
+    expect(texts(comAcoes(orcar)).slice(-4)).toEqual(["Orçar execução", "Validado", "Abrir orçamento", "PDF"]);
+    const perdida = enviada("10047", { etapa: "perdida", perda: { motivo: "preco", em: "2026-10-08T12:20:00.000Z" } });
+    expect(texts(comAcoes(perdida)).slice(-3)).toEqual(["Reabrir", "Abrir orçamento", "PDF"]);
+  });
+
+  it("rascunho de RV seguinte: Descartar RV e Continuar montagem; a RV de execução em rascunho também continua a montagem", () => {
+    const seguinte = item("10048", { etapa: "em_montagem" }, { rv: 1, revisao_de: { rv: 0, edicao: 3, motivo: "correcao" } });
+    expect(texts(comAcoes(seguinte)).slice(-3)).toEqual(["Descartar RV", "Continuar montagem", "Prévia do PDF"]);
+    const execucao = item("10049", { etapa: "execucao_a_orcar" }, { rv: 2, tipo_rv: "execucao", revisao_de: { rv: 1, edicao: 5, motivo: "execucao" } });
+    expect(texts(comAcoes(execucao)).slice(-3)).toEqual(["Descartar RV", "Continuar montagem", "Prévia do PDF"]);
+  });
+
+  it("nenhum botão da etapa é a ação principal da tela: só Novo orçamento é", () => {
+    const html = comAcoes(enviada("10041", { etapa: "aguardando_cliente" }));
+    expect(html.match(/bg-primary text-primary-foreground/g)).toHaveLength(1);
+  });
+
+  it("ocupado trava os botões; a recusa de concorrência aparece em alerta", () => {
+    const planejar = enviada("10044", { etapa: "para_planejar" });
+    const ficha = comAcoes(planejar);
+    expect(ficha).toMatch(/<button[^>]*type="button"[^>]*>(?:<svg[^>]*>.*?<\/svg>)?Registrar execução<\/button>/);
+    const ocupado = comAcoes(planejar, { ocupado: true });
+    expect(ocupado).toMatch(/<button[^>]*disabled=""[^>]*>(?:<svg[^>]*>.*?<\/svg>)?Registrar execução<\/button>/);
+    const recusado = comAcoes(planejar, { aviso: "A demanda 10044 mudou: está aguardando o cliente, na 10044. Abra de novo. O orçamento foi recarregado." });
+    expect(recusado).toMatch(/role="alert"[^>]*>A demanda 10044 mudou/);
+  });
+
+  it("sem ação para a etapa (papel sem o Comercial, faturamento): a ficha fica como estava", () => {
+    const faturar = enviada("10050", { etapa: "aguardando_autorizacao" });
+    expect(texts(comAcoes(faturar)).slice(-2)).toEqual(["Abrir orçamento", "PDF"]);
+    const sem = render({
+      itens: [item("10041", { etapa: "aguardando_cliente" }, { status: "enviado" })],
+      selecionado: item("10041", { etapa: "aguardando_cliente" }, { status: "enviado" }),
+    });
+    expect(texts(sem).slice(-2)).toEqual(["Abrir orçamento", "PDF"]);
   });
 });

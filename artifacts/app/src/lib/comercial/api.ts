@@ -26,7 +26,16 @@ export type CallableDoOrcamento = (typeof CALLABLES_DO_ORCAMENTO)[number];
 export const CALLABLES_DA_MEDICAO = ["saveMedicao", "advanceMedicao"] as const;
 export type CallableDaMedicao = (typeof CALLABLES_DA_MEDICAO)[number];
 
-export type CallableDoComercial = CallableDoCadastro | CallableDoContrato | CallableDoOrcamento | CallableDaMedicao;
+/** A demanda depois do envio (parte 10): fechar, perder, reabrir, registrar a execução, validar e recusar o aditivo. */
+export const CALLABLES_DA_DEMANDA = ["advanceDemand"] as const;
+export type CallableDaDemanda = (typeof CALLABLES_DA_DEMANDA)[number];
+
+export type CallableDoComercial =
+  | CallableDoCadastro
+  | CallableDoContrato
+  | CallableDoOrcamento
+  | CallableDaMedicao
+  | CallableDaDemanda;
 
 /** Chave nova por intenção de gravar (um diálogo aberto, um clique de desativar). */
 export function novaChave(): string {

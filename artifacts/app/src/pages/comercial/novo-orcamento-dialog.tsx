@@ -13,28 +13,34 @@ import {
   type CadastroComercial,
   type ContratoResumo,
 } from "@/lib/comercial/clientes";
+import { problemasDaExecucao } from "@/lib/comercial/depois-do-envio";
 import { VARIANTES, VARIANTE_PADRAO, contratosParaOrcamento } from "@/lib/comercial/montar";
 import { cn } from "@/lib/utils";
 
 import { SeloProspect } from "./clientes-view";
+import { CamposDoPeriodo } from "./depois-do-envio-dialogos";
 
 /**
  * Novo orçamento (parte 11): o cliente (busca por nome ou CNPJ, ou um
  * prospect novo criado aqui mesmo pela callable do cadastro), o contrato do
- * cliente, se houver, e Comercial ou Noturna. A gravação (saveQuote create)
- * é da página; o diálogo abre fora do contêiner da tela (portal), então leva
+ * cliente, se houver, e Comercial ou Noturna. Em "Orçar execução" (modo
+ * "execucao", parte 12b) é a demanda direta, executada antes do orçamento: o
+ * mesmo diálogo com o período executado (De, Até; saveQuote create_execution).
+ * A gravação é da página; o diálogo abre fora do contêiner da tela (portal), então leva
  * a classe .v3.
  */
 
 const CAMPO_SELECT =
   "flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/25 disabled:opacity-50";
 
-export type NovoOrcamento = { customerCode: string; contratoId: string | null; variante: string };
+export type NovoOrcamento = { customerCode: string; contratoId: string | null; variante: string; de?: string; ate?: string };
 
 export type NovoOrcamentoDialogProps = {
   aberto: boolean;
   ocupado: boolean;
   erro: string | null;
+  /** "execucao": Orçar execução, com o período executado. */
+  modo?: "orcamento" | "execucao";
   onCancelar: () => void;
   cadastros: CadastroComercial[];
   contratos: ContratoResumo[];
@@ -60,12 +66,16 @@ const ESTADO_INICIAL = {
   contratoId: "",
   variante: VARIANTE_PADRAO as string,
   prospect: null as { nome: string; cnpj: string } | null,
+  de: "",
+  ate: "",
+  tentou: false,
 };
 
 export function NovoOrcamentoDialog({
   aberto,
   ocupado,
   erro,
+  modo = "orcamento",
   onCancelar,
   cadastros,
   contratos,
@@ -85,6 +95,8 @@ export function NovoOrcamentoDialog({
   const escolhido = cadastros.find((cadastro) => cadastro.code === estado.code) ?? null;
   const doCliente = estado.code ? contratosParaOrcamento(contratos, estado.code) : [];
   const prospect = estado.prospect;
+  const execucao = modo === "execucao";
+  const problemasDoPeriodo = execucao ? problemasDaExecucao({ de: estado.de, ate: estado.ate }, hoje) : {};
 
   return (
     <Dialog open={aberto} onOpenChange={(open) => (!open && !ocupado ? onCancelar() : undefined)}>
@@ -93,11 +105,21 @@ export function NovoOrcamentoDialog({
           className="grid gap-4"
           onSubmit={(evento) => {
             evento.preventDefault();
-            if (estado.code) onCriar({ customerCode: estado.code, contratoId: estado.contratoId || null, variante: estado.variante });
+            if (!estado.code) return;
+            if (execucao && Object.keys(problemasDoPeriodo).length > 0) {
+              setEstado((atual) => ({ ...atual, tentou: true }));
+              return;
+            }
+            onCriar({
+              customerCode: estado.code,
+              contratoId: estado.contratoId || null,
+              variante: estado.variante,
+              ...(execucao ? { de: estado.de, ate: estado.ate } : {}),
+            });
           }}
         >
           <DialogHeader>
-            <DialogTitle>Novo orçamento</DialogTitle>
+            <DialogTitle>{execucao ? "Orçar execução" : "Novo orçamento"}</DialogTitle>
           </DialogHeader>
 
           <div className="min-w-0 space-y-1.5">
@@ -243,6 +265,19 @@ export function NovoOrcamentoDialog({
                 </div>
               </div>
             </div>
+          ) : null}
+
+          {execucao && escolhido ? (
+            <CamposDoPeriodo
+              prefixo="novo-execucao"
+              de={estado.de}
+              ate={estado.ate}
+              max={hoje}
+              problemas={estado.tentou ? problemasDoPeriodo : {}}
+              desabilitado={ocupado}
+              onDe={(de) => setEstado((atual) => ({ ...atual, de }))}
+              onAte={(ate) => setEstado((atual) => ({ ...atual, ate }))}
+            />
           ) : null}
 
           {erro ? (
