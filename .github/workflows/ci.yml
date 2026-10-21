@@ -150,6 +150,49 @@ jobs:
       - name: Integration + rules tests
         run: npm run test:integration
 
+  # Functions do Comercial (codebase "comercial", docs/plataforma/fase-6-comercial.md):
+  # pacote npm próprio, como o WMS.
+  comercial-unit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: functions/comercial
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/comercial/package-lock.json
+      - name: Install functions deps
+        run: npm ci
+      - name: Unit tests
+        run: npm run test:unit
+
+  comercial-integration:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: functions/comercial
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/comercial/package-lock.json
+      - name: Install Java (Firestore emulator)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Install functions deps
+        run: npm ci
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+      - name: Integration tests
+        run: npm run test:integration
+
   # Todo push mergeado na main vai para a homologação (dute-homolog), com os
   # testes verdes. É onde se confere a main antes de publicar na produção.
   # Uma publicação por ambiente de cada vez, sem cancelar a que está rodando:
@@ -157,7 +200,7 @@ jobs:
   # conferência do invoker. O GitHub mantém só a mais nova na espera.
   publicar-homologacao:
     name: Publicar na homologação
-    needs: [frontend-typecheck, functions-unit, functions-integration, tools-python-tests]
+    needs: [frontend-typecheck, functions-unit, functions-integration, comercial-unit, comercial-integration, tools-python-tests]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     concurrency:
       group: publicar-homologacao
@@ -180,7 +223,7 @@ jobs:
   # produção é o dute-prod; o dute-btg ficou congelado.
   publicar-producao:
     name: Publicar na produção
-    needs: [frontend-typecheck, functions-unit, functions-integration, tools-python-tests]
+    needs: [frontend-typecheck, functions-unit, functions-integration, comercial-unit, comercial-integration, tools-python-tests]
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publicar_producao
     concurrency:
       group: publicar-producao
