@@ -125,7 +125,7 @@ beforeEach(async () => {
 });
 
 /** A carga da v2 (30/06/2026): encerra a v1 na véspera, como cargas/tabela.ts. */
-async function carregarV2() {
+async function carregarV2(extra: { precos?: Record<string, unknown>; condicoes?: string; validade_dias?: number } = {}) {
   await db.doc("price_tables/pt_itau_v1").update({ status: "encerrada", vigente_ate: "2026-06-29", encerrada_por: "pt_itau_v2" });
   await db.doc("price_tables/pt_itau_v2").set({
     id: "pt_itau_v2",
@@ -137,7 +137,9 @@ async function carregarV2() {
     vigente_ate: null,
     status: "ativa",
     substitui: "pt_itau_v1",
-    precos: precos("45.50", "18.50"),
+    condicoes: extra.condicoes ?? null,
+    validade_dias: extra.validade_dias ?? null,
+    precos: { ...precos("45.50", "18.50"), ...extra.precos },
   });
 }
 
@@ -157,12 +159,12 @@ function criar(overrides: Record<string, unknown> = {}) {
     titulo: "Mudança de layout · 12º andar",
     ref_cliente: "CE8977",
     contato_id: "ct_renata",
-    recebida_em: "2026-06-19",
+    recebida_em: "2026-06-19T09:42:00-03:00",
     email_assunto: "RES: CE8977 · Remanejamento",
     email_link: "https://outlook.office.com/mail/id/AAMk",
     origem: { local_id: "loc_ceic", complemento: "12º andar" },
     destino: { local_id: "loc_cat", complemento: null },
-    execucao: { datas: [], de: "2026-06-24", ate: "2026-06-25", a_definir: false },
+    execucao: { datas: [], de: "2026-06-24", ate: "2026-06-25", a_definir: false, visita_tecnica: "2026-06-22" },
     linhas: [
       { origem: "tabela", lpu_item_id: "lpu_mesa", quantidade: "24" },
       { origem: "tabela", lpu_item_id: "lpu_cadeira", quantidade: "48" },
@@ -237,10 +239,11 @@ describe("criar: demanda e orçamento com o mesmo número", () => {
     assert.equal(demanda.titulo, "Mudança de layout · 12º andar");
     assert.equal(demanda.ref_cliente, "CE8977");
     assert.deepEqual(demanda.solicitante, { contato_id: "ct_renata", empresa: "Souza & Lopes" });
-    assert.equal(demanda.recebida_em, "2026-06-19");
+    // Recebido em: o instante, com a hora (o tempo do pedido ao orçamento fica gravado desde o primeiro dia).
+    assert.equal(demanda.recebida_em, "2026-06-19T12:42:00.000Z");
     assert.deepEqual(demanda.origem, { local_id: "loc_ceic", complemento: "12º andar" });
     assert.deepEqual(demanda.destino, { local_id: "loc_cat", complemento: null });
-    assert.deepEqual(demanda.execucao, { datas: [], de: "2026-06-24", ate: "2026-06-25", a_definir: false });
+    assert.deepEqual(demanda.execucao, { datas: [], de: "2026-06-24", ate: "2026-06-25", a_definir: false, visita_tecnica: "2026-06-22" });
     assert.equal(demanda.etapa, "em_montagem");
     assert.equal(typeof demanda.etapa_desde, "string");
     assert.deepEqual(demanda.marcos, [{ etapa: "em_montagem", em: "2026-06-20T15:00:00.000Z", por_uid: "com-1" }]);
@@ -373,6 +376,32 @@ describe("criar: demanda e orçamento com o mesmo número", () => {
     assert.deepEqual((await doc("quotes/10045")).marcas, ["legado"]);
     const achada = await db.collection("demands").where("numero_legado", "==", "1043").get();
     assert.deepEqual(achada.docs.map((row) => row.id), ["10045"]);
+  });
+
+  it("recebido em é o instante, com a hora; sem ele, é agora; só a data, ou depois de agora, é recusado", async () => {
+    const semHora = await saveQuoteFor(db, comercial, criar({ recebida_em: undefined, execucao: undefined }), { agora: JUNHO });
+    const demanda = await doc(`demands/${semHora.numero}`);
+    assert.equal(demanda.recebida_em, "2026-06-20T15:00:00.000Z");
+    assert.deepEqual(demanda.execucao, { datas: [], de: null, ate: null, a_definir: true, visita_tecnica: null });
+
+    await rejeita(saveQuoteFor(db, comercial, criar({ recebida_em: "2026-06-19" }), { agora: JUNHO }), "invalid-argument", /Recebido em/);
+    await rejeita(saveQuoteFor(db, comercial, criar({ recebida_em: "2026-02-30T10:00:00-03:00" }), { agora: JUNHO }), "invalid-argument", /Recebido em/);
+    await rejeita(saveQuoteFor(db, comercial, criar({ recebida_em: "2026-06-21T09:00:00-03:00" }), { agora: JUNHO }), "invalid-argument", /depois de agora/);
+
+    await saveQuoteFor(
+      db,
+      comercial,
+      { action: "update", request_id: key(), numero: semHora.numero, expected_edicao: 1, recebida_em: "2026-06-20T08:47:00-03:00" },
+      { agora: JUNHO },
+    );
+    assert.equal((await doc(`demands/${semHora.numero}`)).recebida_em, "2026-06-20T11:47:00.000Z");
+    assert.equal(await count("demands"), 1);
+  });
+
+  it("demanda direta (executada antes do orçamento) ainda não entra: é do orçamento da execução", async () => {
+    await rejeita(saveQuoteFor(db, comercial, criar({ entrada: "direta" }), { agora: JUNHO }), "failed-precondition", /direta/);
+    assert.equal(await count("demands"), 0);
+    assert.equal(await count("demand_counters"), 0);
   });
 });
 
@@ -548,8 +577,8 @@ describe("data-base", () => {
     assert.equal(quote.data_base, "2026-06-20");
     assert.deepEqual(quote.tabela, { id: "pt_itau_v1", nome: "LPU Itaú v1", variante: "Comercial" });
     assert.deepEqual(linhasDe(quote).map((linha) => linha.preco), ["40.00", "18.50"]);
-    // A v1 foi encerrada pela v2: a aprovação vê a marca.
-    assert.deepEqual(quote.marcas, ["tabela_vencida"]);
+    // A v1 foi encerrada pela v2, mas cobre a data-base (20/06): o orçamento está certo e não ganha marca.
+    assert.deepEqual(quote.marcas, []);
 
     // Trocar a variante só em rascunho, reprecificando pela data-base (não por hoje).
     await saveQuoteFor(db, comercial, { action: "update", request_id: key(), numero, expected_edicao: 2, variante: "Noturna" }, { agora: JULHO });
@@ -564,6 +593,25 @@ describe("data-base", () => {
     const quoteNovo = await doc(`quotes/${novo.numero}`);
     assert.equal(quoteNovo.data_base, "2026-07-15");
     assert.equal((quoteNovo.tabela as Record<string, unknown>).id, "pt_itau_v2");
+  });
+
+  it("tabela que deixa de cobrir a data-base (carga retroativa) marca na aprovação, mesmo sem salvar de novo", async () => {
+    const { numero } = await saveQuoteFor(db, comercial, criar(), { agora: JUNHO });
+    await avancar(comercial, "submit", numero);
+    assert.deepEqual((await doc(`quotes/${numero}`)).marcas, []);
+    // A v2 carregada depois com início em 16/06: a v1 passa a terminar em 15/06, antes da data-base.
+    await db.doc("price_tables/pt_itau_v1").update({ status: "encerrada", vigente_ate: "2026-06-15" });
+
+    await advanceQuoteFor(
+      db,
+      owner,
+      { action: "approve", request_id: key(), numero, expected_status: "para_aprovar", expected_edicao: 1 },
+      { agora: JULHO },
+    );
+    assert.deepEqual((await doc(`quotes/${numero}`)).marcas, ["tabela_vencida"]);
+    assert.deepEqual((await doc(`quotes/${numero}/revisoes/0`)).marcas, ["tabela_vencida"]);
+    const aprovado = (await eventos()).find((event) => event.type === "quote.approved");
+    assert.deepEqual((aprovado?.payload as Record<string, unknown>).marcas, ["tabela_vencida"]);
   });
 
   it("variante sem tabela do cliente nem da Padrão: sem tabela, e só item avulso", async () => {
@@ -635,7 +683,7 @@ describe("duplicar", () => {
     assert.equal(demanda.titulo, "Mudança de layout · 12º andar");
     assert.equal(demanda.ref_cliente, null);
     assert.equal(demanda.email_link, null);
-    assert.equal(demanda.recebida_em, "2026-07-15");
+    assert.equal(demanda.recebida_em, "2026-07-15T15:00:00.000Z");
     assert.equal(demanda.duplicado_de, origem.numero);
     assert.equal(demanda.etapa, "em_montagem");
 
@@ -648,6 +696,94 @@ describe("duplicar", () => {
     assert.equal(created.length, 1);
     assert.equal((created[0].payload as Record<string, unknown>).duplicado_de, origem.numero);
     assert.equal((created[0].payload as Record<string, unknown>).linhas_reprecificadas, 1);
+  });
+
+  it("avulso de item que entrou na tabela vira linha dela; item fora do catálogo ativo vira avulso sem o item", async () => {
+    const origem = await saveQuoteFor(
+      db,
+      comercial,
+      criar({
+        linhas: [
+          { origem: "tabela", lpu_item_id: "lpu_mesa", quantidade: "2" },
+          { origem: "avulso", lpu_item_id: "lpu_cofre", quantidade: "1", preco: "300.00", motivo: "Fora da LPU", descricao: "Içamento de cofre" },
+          { origem: "tabela", lpu_item_id: "lpu_cadeira", quantidade: "4" },
+        ],
+      }),
+      { agora: JUNHO },
+    );
+    // A v2 passa a cobrir o cofre; a cadeira sai do catálogo ativo.
+    await carregarV2({ precos: { lpu_cofre: { codigo: "DTL-0009-I", descricao_cliente: "Içamento de cofre", preco: "350.00" } } });
+    await db.doc("lpu_items/lpu_cadeira").update({ ativo: false });
+
+    const copia = await saveQuoteFor(db, comercial, { action: "duplicate", request_id: key(), origem_numero: origem.numero }, { agora: JULHO });
+    const quote = await doc(`quotes/${copia.numero}`);
+    assert.deepEqual(
+      linhasDe(quote).map((linha) => [linha.lpu_item_id, linha.codigo, linha.preco, linha.origem, linha.preco_anterior]),
+      [
+        ["lpu_mesa", "DTL-0001-T", "45.50", "tabela", "40.00"],
+        ["lpu_cofre", "DTL-0009-I", "350.00", "tabela", "300.00"],
+        [null, null, "18.50", "avulso", null],
+      ],
+    );
+    assert.match(String(linhasDe(quote)[2].motivo), /catálogo/);
+    assert.deepEqual(quote.marcas, ["item_avulso"]);
+    const created = (await eventos()).find((event) => event.type === "quote.created" && event.entity_id === copia.numero);
+    assert.equal((created?.payload as Record<string, unknown>).linhas_reprecificadas, 2);
+  });
+
+  it("contrato encerrado não impede: a cópia sai sem contrato, e o contrato vigente entra depois, no rascunho", async () => {
+    const origem = await saveQuoteFor(db, comercial, criar(), { agora: JUNHO });
+    await db.doc("contracts/itau-2026").update({ status: "encerrado" });
+
+    const copia = await saveQuoteFor(db, comercial, { action: "duplicate", request_id: key(), origem_numero: origem.numero }, { agora: JULHO });
+    const demanda = await doc(`demands/${copia.numero}`);
+    assert.equal(demanda.contrato_id, null);
+    assert.equal(demanda.cobranca, "por_demanda");
+    // O Itaú só tem tabela de contrato: sem contrato, fica sem tabela, e as linhas guardam o preço e o item.
+    const quote = await doc(`quotes/${copia.numero}`);
+    assert.equal((quote.tabela as Record<string, unknown>).id, null);
+    assert.deepEqual(
+      linhasDe(quote).map((linha) => [linha.lpu_item_id, linha.preco, linha.origem]),
+      [
+        ["lpu_mesa", "40.00", "avulso"],
+        ["lpu_cadeira", "18.50", "avulso"],
+      ],
+    );
+    assert.deepEqual(quote.marcas, ["item_avulso", "sem_tabela"]);
+
+    // Com um contrato vigente, escolhê-lo no rascunho devolve as linhas à tabela da data-base.
+    await db.doc("contracts/itau-2026").update({ status: "vigente" });
+    await saveQuoteFor(
+      db,
+      comercial,
+      { action: "update", request_id: key(), numero: copia.numero, expected_edicao: 1, contrato_id: "itau-2026" },
+      { agora: JULHO },
+    );
+    const comContrato = await doc(`quotes/${copia.numero}`);
+    assert.equal((comContrato.tabela as Record<string, unknown>).id, "pt_itau_v1");
+    assert.deepEqual(
+      linhasDe(comContrato).map((linha) => [linha.lpu_item_id, linha.preco, linha.origem]),
+      [
+        ["lpu_mesa", "40.00", "tabela"],
+        ["lpu_cadeira", "18.50", "tabela"],
+      ],
+    );
+    assert.deepEqual(comContrato.marcas, []);
+  });
+
+  it("tabela nova traz as condições e a validade dela; a mesma tabela mantém as do orçamento de origem", async () => {
+    const origem = await saveQuoteFor(db, comercial, criar({ condicoes: "Condições ajustadas para o CEIC.", validade_dias: 15 }), { agora: JUNHO });
+    const mesmaTabela = await saveQuoteFor(db, comercial, { action: "duplicate", request_id: key(), origem_numero: origem.numero }, { agora: JUNHO });
+    const igual = await doc(`quotes/${mesmaTabela.numero}`);
+    assert.equal(igual.condicoes, "Condições ajustadas para o CEIC.");
+    assert.equal(igual.validade_dias, 15);
+
+    await carregarV2({ condicoes: "Condições da LPU v2.0.", validade_dias: 30 });
+    const copia = await saveQuoteFor(db, comercial, { action: "duplicate", request_id: key(), origem_numero: origem.numero }, { agora: JULHO });
+    const quote = await doc(`quotes/${copia.numero}`);
+    assert.equal((quote.tabela as Record<string, unknown>).id, "pt_itau_v2");
+    assert.equal(quote.condicoes, "Condições da LPU v2.0.");
+    assert.equal(quote.validade_dias, 30);
   });
 
   it("orçamento de origem inexistente é not-found", async () => {

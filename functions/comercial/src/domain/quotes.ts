@@ -43,6 +43,8 @@ import {
   TRANSICOES,
   VARIANTE_PADRAO,
   acaoJaFeita,
+  entradaDaLinha,
+  entradasNaTabelaNova,
   linhasPorOrigem,
   marcasDoOrcamento,
   mesmoPreco,
@@ -50,6 +52,7 @@ import {
   precificarLinhas,
   problemaDaAcao,
   type AcaoOrcamento,
+  type CausaDoAvulso,
   type ItemDoCatalogo,
   type LinhaDoOrcamento,
   type LinhaEntrada,
@@ -113,6 +116,18 @@ const textoOpcional = (max: number) =>
     .optional()
     .transform((value) => (value === undefined ? undefined : value || null));
 const data = z.string().trim().refine(dataValida, "Data inválida (AAAA-MM-DD).");
+/** Instante com data, hora e fuso (o app manda o de São Paulo: 2026-10-14T09:42-03:00); grava em UTC. */
+const INSTANTE = /^(\d{4}-\d{2}-\d{2})T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d{1,3})?)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
+const recebidaEm = z
+  .string()
+  .trim()
+  .refine((value) => {
+    const partes = INSTANTE.exec(value);
+    return partes !== null && dataValida(partes[1]) && !Number.isNaN(Date.parse(value));
+  }, "Recebido em: informe a data e a hora, com o fuso (ex.: 2026-10-14T09:42-03:00).")
+  .transform((value) => new Date(value).toISOString());
+/** Folga do relógio do aparelho para "Recebido em" no futuro. */
+const FOLGA_DO_RELOGIO_MS = 5 * 60 * 1000;
 const linkDoEmail = textoOpcional(2000).refine(
   (value) => value == null || /^https?:\/\/\S+$/i.test(value),
   "Link do e-mail inválido: use o endereço que começa com https://.",
@@ -133,6 +148,7 @@ const execucao = z
     de: data.nullable().default(null),
     ate: data.nullable().default(null),
     a_definir: z.boolean().default(false),
+    visita_tecnica: data.nullable().default(null),
   })
   .strict()
   .refine((value) => value.de === null || value.ate === null || value.de <= value.ate, {
@@ -166,7 +182,8 @@ const camposDaDemanda = {
   ref_cliente: textoOpcional(80),
   /** O "Para": um contato do cliente (customer_contacts). */
   contato_id: idDocumento.nullable().optional(),
-  recebida_em: data.optional(),
+  /** Quando o pedido chegou, com a hora: o tempo até o orçamento fica gravado desde o primeiro dia. */
+  recebida_em: recebidaEm.optional(),
   email_assunto: textoOpcional(300),
   email_link: linkDoEmail,
   origem: local.nullable().optional(),
@@ -316,6 +333,13 @@ function varianteConferida(valor: string | undefined): string {
   }
 }
 
+/** "Recebido em" depois de agora (além da folga do relógio) é engano de digitação: recusa. */
+function conferirRecebidaEm(recebida: string | undefined, agora: Date): void {
+  if (recebida !== undefined && Date.parse(recebida) > agora.getTime() + FOLGA_DO_RELOGIO_MS) {
+    throw new HttpsError("invalid-argument", "Recebido em não pode ser depois de agora.");
+  }
+}
+
 function novoIdDeLinha(operationId: string, indice: number): string {
   return `ln_${digest({ operationId, indice }, 16)}`;
 }
@@ -364,6 +388,26 @@ async function lerContrato(
     ? (dados.regime_padrao as ContratoLido["regime"])
     : "por_demanda";
   return { id: snapshot.id, regime };
+}
+
+/**
+ * O contrato do orçamento de origem, para a cópia: só se ainda vale (existe,
+ * é do mesmo cliente e não está encerrado). Senão a cópia sai sem contrato
+ * (por demanda), e o rascunho deixa escolher o contrato vigente.
+ */
+async function lerContratoDaOrigem(
+  transaction: Transaction,
+  db: Firestore,
+  contratoId: string | null,
+  code: string,
+): Promise<ContratoLido | null> {
+  if (!contratoId) return null;
+  try {
+    return await lerContrato(transaction, db, contratoId, code);
+  } catch (error) {
+    if (error instanceof HttpsError) return null;
+    throw error;
+  }
 }
 
 type Solicitante = { contato_id: string; empresa: string | null };
@@ -488,7 +532,7 @@ function escolherTabela(
 async function lerItens(
   transaction: Transaction,
   db: Firestore,
-  linhas: readonly LinhaEntrada[],
+  linhas: readonly { lpu_item_id?: string | null }[],
 ): Promise<Map<string, ItemDoCatalogo>> {
   const ids = [...new Set(linhas.map((linha) => linha.lpu_item_id).filter((id): id is string => Boolean(id)))];
   const itens = new Map<string, ItemDoCatalogo>();
@@ -527,24 +571,6 @@ function precificar(
   }
 }
 
-/** A linha gravada de volta como entrada: a de tabela perde o preço, que a tabela dá de novo. */
-function entradaDaLinha(linha: LinhaDoOrcamento, comId: boolean): LinhaEntrada {
-  return {
-    ...(comId ? { id: linha.id } : {}),
-    origem: linha.origem,
-    lpu_item_id: linha.lpu_item_id,
-    quantidade: linha.quantidade,
-    preco: linha.origem === "tabela" ? undefined : linha.preco,
-    motivo: linha.motivo,
-    descricao: linha.origem === "tabela" || linha.origem === "alterado" ? undefined : linha.descricao,
-    item: linha.origem === "avulso" ? linha.item : undefined,
-    servico: linha.origem === "avulso" ? linha.servico : undefined,
-    unidade: linha.origem === "avulso" ? linha.unidade : undefined,
-    origem_local: linha.origem_local,
-    destino_local: linha.destino_local,
-  };
-}
-
 function tabelaDoOrcamento(tabela: TabelaLida | null, variante: string) {
   return { id: tabela?.id ?? null, nome: tabela?.nome ?? null, variante: tabela?.variante || variante };
 }
@@ -581,6 +607,15 @@ async function criar(db: Firestore, caller: ComercialProfile, input: CriarInput,
     throw new HttpsError("invalid-argument", "Linha nova não leva id: o servidor dá o id da linha.");
   }
   const variante = varianteConferida(input.variante);
+  if (input.entrada === "direta") {
+    // A demanda direta já foi executada: abre o orçamento da execução ("Orçar execução"), com executado_de/ate e a
+    // data-base da solicitação. Entra com a RV de execução; até lá, recusa em vez de abrir uma proposta incoerente.
+    throw new HttpsError(
+      "failed-precondition",
+      "Demanda direta (executada antes do orçamento) ainda não entra: ela abre o orçamento da execução, que vem numa próxima parte.",
+    );
+  }
+  conferirRecebidaEm(input.recebida_em, agora());
 
   return runIdempotent<SaveQuoteResult>(
     db,
@@ -606,7 +641,7 @@ async function criar(db: Firestore, caller: ComercialProfile, input: CriarInput,
       const tabela = escolherTabela(tabelas, { customer_code: code, contrato_id: contrato?.id ?? null, variante, data_base: hoje });
       const precificado = precificar(entradas, tabela, itens, operationId);
       const numeroLegado = input.numero_legado ?? null;
-      const marcas = marcasDoOrcamento({ linhas: precificado.linhas, tabela, hoje, numero_legado: numeroLegado });
+      const marcas = marcasDoOrcamento({ linhas: precificado.linhas, tabela, data_base: hoje, numero_legado: numeroLegado });
 
       // Escritas.
       const demanda = {
@@ -615,13 +650,13 @@ async function criar(db: Firestore, caller: ComercialProfile, input: CriarInput,
           code,
           cadastroNome: texto(cadastro.data.name) || code,
           contrato,
-          entrada: input.entrada ?? "comercial",
+          entrada: "comercial",
           canal: input.canal ?? "email",
           tipo: input.tipo ?? "planejada",
           titulo: input.titulo ?? null,
           ref_cliente: input.ref_cliente ?? null,
           solicitante,
-          recebida_em: input.recebida_em ?? hoje,
+          recebida_em: input.recebida_em ?? iso,
           email_assunto: input.email_assunto ?? null,
           email_link: input.email_link ?? null,
           origem: localDoc(input.origem),
@@ -703,7 +738,7 @@ type DemandaNova = {
   email_link: string | null;
   origem: { local_id: string | null; complemento: string | null } | null;
   destino: { local_id: string | null; complemento: string | null } | null;
-  execucao: { datas: string[]; de: string | null; ate: string | null; a_definir: boolean } | null;
+  execucao: { datas: string[]; de: string | null; ate: string | null; a_definir: boolean; visita_tecnica: string | null } | null;
   numero_legado: string | null;
   duplicado_de: string | null;
   iso: string;
@@ -729,7 +764,7 @@ function demandaNova(dados: DemandaNova): Record<string, unknown> {
     email_link: dados.email_link,
     origem: dados.origem,
     destino: dados.destino,
-    execucao: dados.execucao ?? { datas: [], de: null, ate: null, a_definir: true },
+    execucao: dados.execucao ?? { datas: [], de: null, ate: null, a_definir: true, visita_tecnica: null },
     etapa: "em_montagem",
     etapa_desde: dados.iso,
     marcos: [{ etapa: "em_montagem", em: dados.iso, por_uid: dados.uid }],
@@ -859,6 +894,7 @@ async function atualizar(db: Firestore, caller: ComercialProfile, input: Atualiz
   const actor = actorOf(caller);
   const numero = input.numero;
   const variantePedida = input.variante === undefined ? undefined : varianteConferida(input.variante);
+  conferirRecebidaEm(input.recebida_em, agora());
 
   return runIdempotent<SaveQuoteResult>(
     db,
@@ -866,13 +902,13 @@ async function atualizar(db: Firestore, caller: ComercialProfile, input: Atualiz
     async (transaction, { operationId }) => {
       const instante = agora();
       const iso = instante.toISOString();
-      const hoje = dataDeHoje(instante);
 
       // Leituras.
       const [demandaSnap, quoteSnap] = await transaction.getAll(demandRef(db, numero), quoteRef(db, numero));
       if (!demandaSnap.exists || !quoteSnap.exists) throw new HttpsError("not-found", `Orçamento ${numero} não encontrado.`);
       const demanda = demandaSnap.data() ?? {};
       const quote = quoteSnap.data() ?? {};
+      const dataBase = String(quote.data_base);
       const status = quote.status as StatusOrcamento;
       if (status !== "rascunho") {
         throw new HttpsError(
@@ -904,21 +940,30 @@ async function atualizar(db: Firestore, caller: ComercialProfile, input: Atualiz
           }
         }
       }
-      const entradas: LinhaEntrada[] = input.linhas ?? linhasAntes.map((linha) => entradaDaLinha(linha, true));
       await conferirLocais(transaction, db, idsDeLocais([input.origem, input.destino], input.linhas ?? []), code);
 
       const tabelaAntes = (quote.tabela ?? {}) as { id?: string | null; variante?: string };
       const varianteAntes = String(tabelaAntes.variante ?? VARIANTE_PADRAO);
       const variante = variantePedida ?? varianteAntes;
       const varianteMudou = normalizarVariante(variante) !== normalizarVariante(varianteAntes);
+      const trocouTabela = contratoMudou || varianteMudou;
       let tabela: TabelaLida | null;
-      if (contratoMudou || varianteMudou) {
+      if (trocouTabela) {
         const tabelas = await lerTabelas(transaction, db, code);
-        tabela = escolherTabela(tabelas, { customer_code: code, contrato_id: contratoId, variante, data_base: String(quote.data_base) });
+        tabela = escolherTabela(tabelas, { customer_code: code, contrato_id: contratoId, variante, data_base: dataBase });
       } else {
         tabela = tabelaAntes.id ? await lerTabelaPorId(transaction, db, tabelaAntes.id) : null;
       }
-      const itens = await lerItens(transaction, db, entradas);
+      const itens = await lerItens(transaction, db, input.linhas ?? linhasAntes);
+      // As linhas que o app manda valem como vieram; as gravadas, numa tabela trocada, seguem a tabela nova sem recusar.
+      const entradas: LinhaEntrada[] =
+        input.linhas ??
+        (trocouTabela
+          ? entradasNaTabelaNova(linhasAntes, { tabela, itens }, {
+              comId: true,
+              motivo: (causa) => motivoDoAvulso(causa, { data_base: dataBase, preco: "preço anterior da linha" }),
+            })
+          : linhasAntes.map((linha) => entradaDaLinha(linha, true)));
 
       // Conta.
       const precificado = precificar(entradas, tabela, itens, operationId);
@@ -929,7 +974,7 @@ async function atualizar(db: Firestore, caller: ComercialProfile, input: Atualiz
         if (antes?.preco_anterior && antes.preco === linha.preco) linha.preco_anterior = antes.preco_anterior;
       }
       const numeroLegado = input.numero_legado !== undefined ? input.numero_legado : textoOuNull(demanda.numero_legado);
-      const marcas = marcasDoOrcamento({ linhas: precificado.linhas, tabela, hoje, numero_legado: numeroLegado });
+      const marcas = marcasDoOrcamento({ linhas: precificado.linhas, tabela, data_base: dataBase, numero_legado: numeroLegado });
 
       // Escritas.
       const demandaPatch: Record<string, unknown> = {};
@@ -1021,6 +1066,12 @@ function dataRotulo(valor: string): string {
   return `${dia}/${mes}/${ano}`;
 }
 
+/** O motivo da linha que virou avulsa na troca de tabela (fica na linha e na aprovação). */
+function motivoDoAvulso(causa: CausaDoAvulso, contexto: { data_base: string; preco: string }): string {
+  const fora = causa === "fora_da_tabela" ? "Fora da tabela vigente" : "Item fora do catálogo ativo";
+  return `${fora} em ${dataRotulo(contexto.data_base)}; ${contexto.preco}.`;
+}
+
 async function duplicar(db: Firestore, caller: ComercialProfile, input: DuplicarInput, agora: () => Date) {
   const actor = actorOf(caller);
   const origemNumero = input.origem_numero;
@@ -1052,7 +1103,7 @@ async function duplicar(db: Firestore, caller: ComercialProfile, input: Duplicar
       if (cadastroArquivado(cadastro.data)) {
         throw new HttpsError("failed-precondition", `O cadastro ${code} está arquivado.`);
       }
-      const contrato = await lerContrato(transaction, db, textoOuNull(origem.contrato_id), code);
+      const contrato = await lerContratoDaOrigem(transaction, db, textoOuNull(origem.contrato_id), code);
       // O "Para" vem junto enquanto o contato continua valendo; senão, fica para escolher de novo.
       let solicitante: Solicitante | null = null;
       const solicitanteAntes = origem.solicitante as { contato_id?: string } | null;
@@ -1067,31 +1118,22 @@ async function duplicar(db: Firestore, caller: ComercialProfile, input: Duplicar
       const destinoLocal = origem.destino as LocalEntrada;
       await conferirLocais(transaction, db, idsDeLocais([origemLocal, destinoLocal], []), code);
       const tabelas = await lerTabelas(transaction, db, code);
-      const tabelaAntes = (origemQuote.tabela ?? {}) as { variante?: string };
+      const tabelaAntes = (origemQuote.tabela ?? {}) as { id?: string | null; variante?: string };
       const variante = String(tabelaAntes.variante ?? VARIANTE_PADRAO);
       const tabela = escolherTabela(tabelas, { customer_code: code, contrato_id: contrato?.id ?? null, variante, data_base: hoje });
 
       const linhasOrigem = linhasGravadas(origemQuote.linhas);
-      // Linha de tabela cujo item saiu da tabela de hoje vira avulsa, com o preço que tinha e o motivo.
-      const entradas: LinhaEntrada[] = linhasOrigem.map((linha) => {
-        const entrada = entradaDaLinha(linha, false);
-        const naTabela =
-          tabela !== null && linha.lpu_item_id !== null && Object.prototype.hasOwnProperty.call(tabela.precos, linha.lpu_item_id);
-        if ((linha.origem === "tabela" || linha.origem === "alterado") && !naTabela) {
-          return {
-            ...entrada,
-            origem: "avulso",
-            preco: linha.preco,
-            motivo: `Fora da tabela vigente em ${dataRotulo(hoje)}; preço do orçamento ${origemNumero}.`,
-            descricao: linha.descricao,
-            item: linha.item,
-            servico: linha.servico,
-            unidade: linha.unidade,
-          };
-        }
-        return entrada;
+      const itens = await lerItens(transaction, db, linhasOrigem);
+      // Duplicar vale a partir de qualquer orçamento: cada linha segue a tabela de hoje (orcamento.ts).
+      const entradas = entradasNaTabelaNova(linhasOrigem, { tabela, itens }, {
+        comId: false,
+        motivo: (causa) => motivoDoAvulso(causa, { data_base: hoje, preco: `preço do orçamento ${origemNumero}` }),
       });
-      const itens = await lerItens(transaction, db, entradas);
+      // As condições e a validade citam a tabela: com outra tabela, valem as dela, como na criação.
+      const mesmaTabela = (tabela?.id ?? null) === textoOuNull(tabelaAntes.id);
+      const condicoes = mesmaTabela ? textoOuNull(origemQuote.condicoes) : (tabela?.condicoes ?? null);
+      let validadeDias = tabela?.validade_dias ?? null;
+      if (mesmaTabela) validadeDias = typeof origemQuote.validade_dias === "number" ? origemQuote.validade_dias : null;
 
       // Conta.
       const precificado = precificar(entradas, tabela, itens, operationId);
@@ -1103,7 +1145,7 @@ async function duplicar(db: Firestore, caller: ComercialProfile, input: Duplicar
           reprecificadas += 1;
         }
       });
-      const marcas = marcasDoOrcamento({ linhas: precificado.linhas, tabela, hoje, numero_legado: null });
+      const marcas = marcasDoOrcamento({ linhas: precificado.linhas, tabela, data_base: hoje, numero_legado: null });
 
       // Escritas.
       const demanda = {
@@ -1122,7 +1164,7 @@ async function duplicar(db: Firestore, caller: ComercialProfile, input: Duplicar
           titulo: textoOuNull(origem.titulo),
           ref_cliente: null,
           solicitante,
-          recebida_em: hoje,
+          recebida_em: iso,
           email_assunto: null,
           email_link: null,
           origem: localDoc(origemLocal),
@@ -1145,8 +1187,8 @@ async function duplicar(db: Firestore, caller: ComercialProfile, input: Duplicar
           variante,
           precificado,
           marcas,
-          condicoes: textoOuNull(origemQuote.condicoes),
-          validade_dias: typeof origemQuote.validade_dias === "number" ? origemQuote.validade_dias : null,
+          condicoes,
+          validade_dias: validadeDias,
           observacoes_internas: null,
           duplicado_de: origemNumero,
           iso,
@@ -1322,11 +1364,22 @@ export async function advanceQuoteFor(
       if (acao === "return" && !input.nota && quote.autor_uid !== caller.uid) {
         throw new HttpsError("invalid-argument", "Devolver pede uma nota para quem montou o orçamento.");
       }
+      let marcas = (Array.isArray(quote.marcas) ? quote.marcas : []) as MarcaOrcamento[];
       if (acao === "submit" || acao === "approve") {
         const faltam = pendenciasParaAprovar(demanda, { linhas: linhasGravadas(quote.linhas) });
         if (faltam.length) {
           throw new HttpsError("failed-precondition", `Falta ${faltam.join(", ")} para ${ROTULO_DA_ACAO[acao]}.`);
         }
+        // A tabela pode ter deixado de cobrir a data-base desde o último salvamento (carga retroativa): a aprovação
+        // e a RV congelada veem as marcas de agora.
+        const tabelaId = textoOuNull((quote.tabela as { id?: unknown } | null)?.id);
+        const tabela = tabelaId ? await lerTabelaPorId(transaction, db, tabelaId) : null;
+        marcas = marcasDoOrcamento({
+          linhas: linhasGravadas(quote.linhas),
+          tabela,
+          data_base: String(quote.data_base),
+          numero_legado: textoOuNull(demanda.numero_legado),
+        });
       }
 
       // Escritas.
@@ -1335,6 +1388,7 @@ export async function advanceQuoteFor(
       const etapaDepois = etapaDaDemanda(demanda, { status: statusDepois, tipo_rv: String(quote.tipo_rv) });
       const quotePatch: Record<string, unknown> = {
         status: statusDepois,
+        marcas,
         passo_em: iso,
         updated_at: FieldValue.serverTimestamp(),
         updated_by: caller.uid,
@@ -1345,7 +1399,7 @@ export async function advanceQuoteFor(
         // Regravada a cada aprovação da mesma RV; o envio (parte 10) a congela de vez.
         transaction.set(
           quoteRef(db, numero).collection(REVISOES_SUBCOLLECTION).doc(String(rv)),
-          revisaoCongelada(quote, demanda, aprovada),
+          revisaoCongelada({ ...quote, marcas }, demanda, aprovada),
         );
       }
       if (acao === "return") quotePatch.devolucao = { nota: input.nota ?? null, por_uid: caller.uid, em: iso };
@@ -1378,7 +1432,7 @@ export async function advanceQuoteFor(
             etapa_depois: etapaDepois,
             segundos_desde_anterior: segundosDesde(quote.passo_em, instante),
             linhas: linhasPorOrigem(linhasGravadas(quote.linhas)),
-            marcas: (Array.isArray(quote.marcas) ? quote.marcas : []) as MarcaOrcamento[],
+            marcas,
           },
         }).id,
       ];

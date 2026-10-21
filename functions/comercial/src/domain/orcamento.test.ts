@@ -8,6 +8,7 @@ import {
   ErroOrcamento,
   MARCAS_ORCAMENTO,
   acaoJaFeita,
+  entradasNaTabelaNova,
   marcasDoOrcamento,
   mesmoPreco,
   pendenciasParaAprovar,
@@ -15,6 +16,7 @@ import {
   problemaDaAcao,
   type ContextoDePreco,
   type ItemDoCatalogo,
+  type LinhaDoOrcamento,
   type LinhaEntrada,
 } from "./orcamento.js";
 import { STATUS_ORCAMENTO } from "./events.js";
@@ -306,6 +308,105 @@ describe("preço das linhas", () => {
   });
 });
 
+describe("linhas gravadas numa tabela nova (duplicar, trocar contrato ou variante)", () => {
+  const motivo = (causa: string) => `motivo: ${causa}`;
+  const gravada = (linha: Partial<LinhaDoOrcamento> & Pick<LinhaDoOrcamento, "id" | "origem">): LinhaDoOrcamento => ({
+    lpu_item_id: null,
+    codigo: null,
+    item: "Item",
+    descricao: "Descrição",
+    servico: null,
+    unidade: null,
+    quantidade: "2",
+    preco: "10.00",
+    preco_tabela: null,
+    motivo: null,
+    origem_local: null,
+    destino_local: null,
+    total_cents: 2000,
+    preco_anterior: null,
+    ...linha,
+  });
+  const itens = new Map([MESA, CADEIRA, COFRE].map((item) => [item.id, item]));
+
+  it("avulso de item que entrou na tabela vira linha da tabela; o resto segue a tabela ou fica como estava", () => {
+    const linhas = [
+      gravada({ id: "l1", origem: "tabela", lpu_item_id: "lpu_mesa", preco: "40.00", preco_tabela: "40.00" }),
+      gravada({ id: "l2", origem: "avulso", lpu_item_id: "lpu_cadeira", preco: "300.00", motivo: "Fora da LPU", descricao: "Cadeira especial" }),
+      gravada({ id: "l3", origem: "alterado", lpu_item_id: "lpu_mesa", preco: "50.00", preco_tabela: "40.00", motivo: "Espera" }),
+      gravada({ id: "l4", origem: "avulso", lpu_item_id: "lpu_cofre", preco: "1450.00", motivo: "Fora da LPU", descricao: "Cofre" }),
+      gravada({ id: "l5", origem: "ajuste", preco: "-5.00", motivo: "Arredondamento", descricao: "Ajuste", total_cents: -1000 }),
+    ];
+    const entradas = entradasNaTabelaNova(linhas, { tabela: TABELA, itens }, { comId: false, motivo });
+    assert.deepEqual(
+      entradas.map((entrada) => [entrada.origem, entrada.lpu_item_id, entrada.preco ?? null, entrada.motivo ?? null]),
+      [
+        ["tabela", "lpu_mesa", null, null],
+        ["tabela", "lpu_cadeira", null, null],
+        ["alterado", "lpu_mesa", "50.00", "Espera"],
+        ["avulso", "lpu_cofre", "1450.00", "Fora da LPU"],
+        ["ajuste", null, "-5.00", "Arredondamento"],
+      ],
+    );
+    assert.ok(entradas.every((entrada) => entrada.id === undefined), "linha nova não leva id");
+    const precificado = precificarLinhas(entradas, contexto());
+    assert.deepEqual(
+      precificado.linhas.map((linha) => [linha.origem, linha.preco]),
+      [["tabela", "45.50"], ["tabela", "18.50"], ["alterado", "50.00"], ["avulso", "1450.00"], ["ajuste", "-5.00"]],
+    );
+  });
+
+  it("linha de tabela fora da tabela nova, ou sem tabela, vira avulsa com o preço que tinha e o motivo da troca", () => {
+    const linhas = [
+      gravada({ id: "l1", origem: "tabela", lpu_item_id: "lpu_cofre", preco: "300.00", preco_tabela: "300.00", descricao: "Içamento de cofre" }),
+      gravada({ id: "l2", origem: "alterado", lpu_item_id: "lpu_mesa", preco: "50.00", preco_tabela: "40.00", motivo: "Espera" }),
+    ];
+    const naV2 = entradasNaTabelaNova(linhas, { tabela: TABELA, itens }, { comId: true, motivo });
+    assert.deepEqual(naV2[0], {
+      id: "l1",
+      origem: "avulso",
+      lpu_item_id: "lpu_cofre",
+      quantidade: "2",
+      preco: "300.00",
+      motivo: "motivo: fora_da_tabela",
+      descricao: "Içamento de cofre",
+      item: "Item",
+      servico: null,
+      unidade: null,
+      origem_local: null,
+      destino_local: null,
+    });
+    const semTabela = entradasNaTabelaNova(linhas, { tabela: null, itens }, { comId: true, motivo });
+    assert.deepEqual(
+      semTabela.map((entrada) => [entrada.origem, entrada.lpu_item_id, entrada.preco, entrada.motivo]),
+      [
+        ["avulso", "lpu_cofre", "300.00", "motivo: fora_da_tabela"],
+        ["avulso", "lpu_mesa", "50.00", "motivo: fora_da_tabela"],
+      ],
+    );
+    assert.equal(precificarLinhas(semTabela, contexto({ tabela: null })).total_cents, 2 * 30000 + 2 * 5000);
+  });
+
+  it("item que saiu do catálogo ativo: a linha vira avulsa sem o item, nunca é recusada", () => {
+    const inativos = new Map([...itens, ["lpu_mesa", { ...MESA, ativo: false }]]);
+    const linhas = [
+      gravada({ id: "l1", origem: "tabela", lpu_item_id: "lpu_mesa", preco: "40.00", preco_tabela: "40.00" }),
+      gravada({ id: "l2", origem: "avulso", lpu_item_id: "lpu_mesa", preco: "35.00", motivo: "Fora da LPU", descricao: "Mesa usada" }),
+      gravada({ id: "l3", origem: "tabela", lpu_item_id: "lpu_sumiu", preco: "12.00", preco_tabela: "12.00" }),
+    ];
+    const entradas = entradasNaTabelaNova(linhas, { tabela: TABELA, itens: inativos }, { comId: false, motivo });
+    assert.deepEqual(
+      entradas.map((entrada) => [entrada.origem, entrada.lpu_item_id, entrada.preco, entrada.motivo]),
+      [
+        ["avulso", null, "40.00", "motivo: fora_do_catalogo"],
+        ["avulso", null, "35.00", "Fora da LPU"],
+        ["avulso", null, "12.00", "motivo: fora_do_catalogo"],
+      ],
+    );
+    assert.equal(precificarLinhas(entradas, contexto({ itens: inativos })).total_cents, 2 * 4000 + 2 * 3500 + 2 * 1200);
+  });
+});
+
 describe("marcas", () => {
   const linha = (origem: string) => ({ origem }) as never;
 
@@ -314,23 +415,26 @@ describe("marcas", () => {
     assert.deepEqual(
       marcasDoOrcamento({
         linhas: [linha("tabela"), linha("alterado"), linha("avulso"), linha("ajuste")],
-        tabela: { status: "ativa", vigente_ate: null },
-        hoje: "2026-10-21",
+        tabela: { vigente_de: "2025-07-01", vigente_ate: null },
+        data_base: "2026-10-21",
         numero_legado: null,
       }),
       ["preco_alterado", "item_avulso", "ajuste"],
     );
     assert.deepEqual(
-      marcasDoOrcamento({ linhas: [linha("avulso")], tabela: null, hoje: "2026-10-21", numero_legado: "1043" }),
+      marcasDoOrcamento({ linhas: [linha("avulso")], tabela: null, data_base: "2026-10-21", numero_legado: "1043" }),
       ["item_avulso", "sem_tabela", "legado"],
     );
   });
 
-  it("tabela vencida: encerrada por outra ou com o fim antes de hoje", () => {
-    const base = { linhas: [linha("tabela")], hoje: "2026-10-21", numero_legado: null };
-    assert.deepEqual(marcasDoOrcamento({ ...base, tabela: { status: "encerrada", vigente_ate: "2026-06-29" } }), ["tabela_vencida"]);
-    assert.deepEqual(marcasDoOrcamento({ ...base, tabela: { status: "ativa", vigente_ate: "2026-10-20" } }), ["tabela_vencida"]);
-    assert.deepEqual(marcasDoOrcamento({ ...base, tabela: { status: "ativa", vigente_ate: "2026-10-21" } }), []);
+  it("tabela vencida é a que não cobre a data-base do orçamento, não a encerrada depois dela", () => {
+    const base = { linhas: [linha("tabela")], data_base: "2026-06-20", numero_legado: null };
+    // A v1 encerrada pela v2 (fim em 29/06) ainda vale para o orçamento de 20/06: sem marca, em qualquer dia.
+    assert.deepEqual(marcasDoOrcamento({ ...base, tabela: { vigente_de: "2025-07-01", vigente_ate: "2026-06-29" } }), []);
+    assert.deepEqual(marcasDoOrcamento({ ...base, tabela: { vigente_de: "2025-07-01", vigente_ate: "2026-06-20" } }), []);
+    // Encerrada antes da data-base (carga retroativa) ou que só começa depois dela: marca.
+    assert.deepEqual(marcasDoOrcamento({ ...base, tabela: { vigente_de: "2025-07-01", vigente_ate: "2026-06-19" } }), ["tabela_vencida"]);
+    assert.deepEqual(marcasDoOrcamento({ ...base, tabela: { vigente_de: "2026-06-21", vigente_ate: null } }), ["tabela_vencida"]);
   });
 });
 

@@ -1,7 +1,7 @@
 import { CASAS_DA_QUANTIDADE, CASAS_DO_PRECO, ErroDinheiro, centavosDaLinha, lerDecimal, somarCentavos } from "./dinheiro.js";
 import { MARCAS_ORCAMENTO, ORIGENS_LINHA, STATUS_ORCAMENTO } from "./events.js";
 import { canApproveQuote, comercialAccessProblem, type PlatformRole } from "./platform-roles.js";
-import type { PrecoDaTabela } from "./tabelas.js";
+import { vigenciaContem, type PrecoDaTabela } from "./tabelas.js";
 
 /**
  * O orçamento no domínio, sem Firestore (docs/plataforma/fase-6-comercial.md,
@@ -310,17 +310,95 @@ function precificarLinha(
   };
 }
 
+// --- Linhas gravadas numa tabela nova -----------------------------------------------------
+
+/** A linha gravada de volta como entrada: a de tabela perde o preço, que a tabela dá de novo. */
+export function entradaDaLinha(linha: LinhaDoOrcamento, comId: boolean): LinhaEntrada {
+  return {
+    ...(comId ? { id: linha.id } : {}),
+    origem: linha.origem,
+    lpu_item_id: linha.lpu_item_id,
+    quantidade: linha.quantidade,
+    preco: linha.origem === "tabela" ? undefined : linha.preco,
+    motivo: linha.motivo,
+    descricao: linha.origem === "tabela" || linha.origem === "alterado" ? undefined : linha.descricao,
+    item: linha.origem === "avulso" ? linha.item : undefined,
+    servico: linha.origem === "avulso" ? linha.servico : undefined,
+    unidade: linha.origem === "avulso" ? linha.unidade : undefined,
+    origem_local: linha.origem_local,
+    destino_local: linha.destino_local,
+  };
+}
+
+/** Por que a linha de tabela virou avulsa: o item saiu da tabela ou do catálogo ativo. */
+export type CausaDoAvulso = "fora_da_tabela" | "fora_do_catalogo";
+
+/**
+ * As linhas gravadas como entrada para precificar numa tabela que não é a
+ * delas (duplicar, ou trocar contrato ou variante sem mandar as linhas). Nada
+ * é recusado por causa da troca:
+ * - item que está na tabela nova: linha de tabela com o preço dela, inclusive
+ *   o avulso de item que entrou na tabela; a alterada continua com o preço que
+ *   tinha (e volta a ser de tabela se for o mesmo);
+ * - linha de tabela cujo item não está na tabela nova (ou sem tabela): avulsa,
+ *   com o preço que tinha e o motivo da troca, guardando o item;
+ * - item que não está mais no catálogo ativo: avulsa sem o item, com o preço
+ *   que tinha (a de tabela leva o motivo da troca; a avulsa, o dela);
+ * - avulso sem item, avulso de item fora da tabela e ajuste ficam como estão.
+ */
+export function entradasNaTabelaNova(
+  linhas: readonly LinhaDoOrcamento[],
+  contexto: { tabela: { precos: Record<string, PrecoDaTabela> } | null; itens: ReadonlyMap<string, ItemDoCatalogo> },
+  opcoes: { comId: boolean; motivo: (causa: CausaDoAvulso) => string },
+): LinhaEntrada[] {
+  return linhas.map((linha) => {
+    const entrada = entradaDaLinha(linha, opcoes.comId);
+    if (linha.origem === "ajuste" || !linha.lpu_item_id) return entrada;
+    const item = contexto.itens.get(linha.lpu_item_id);
+    const noCatalogo = item !== undefined && item.ativo && item.orcavel;
+    const naTabela =
+      noCatalogo && contexto.tabela !== null && Object.prototype.hasOwnProperty.call(contexto.tabela.precos, linha.lpu_item_id);
+    if (naTabela) {
+      if (linha.origem !== "avulso") return entrada;
+      return {
+        ...(opcoes.comId ? { id: linha.id } : {}),
+        origem: "tabela",
+        lpu_item_id: linha.lpu_item_id,
+        quantidade: linha.quantidade,
+        origem_local: linha.origem_local,
+        destino_local: linha.destino_local,
+      };
+    }
+    if (linha.origem === "avulso") return noCatalogo ? entrada : { ...entrada, lpu_item_id: null };
+    return {
+      ...entrada,
+      origem: "avulso",
+      lpu_item_id: noCatalogo ? linha.lpu_item_id : null,
+      preco: linha.preco,
+      motivo: opcoes.motivo(noCatalogo ? "fora_da_tabela" : "fora_do_catalogo"),
+      descricao: linha.descricao,
+      item: linha.item,
+      servico: linha.servico,
+      unidade: linha.unidade,
+    };
+  });
+}
+
 // --- Marcas ----------------------------------------------------------------------------
 
 /**
  * O que a aprovação precisa ver: preço alterado, item avulso, ajuste, tabela
- * vencida (encerrada por outra, ou com o fim antes de hoje), sem tabela e o
- * número legado. Na ordem de MARCAS_ORCAMENTO.
+ * vencida, sem tabela e o número legado. Na ordem de MARCAS_ORCAMENTO.
+ *
+ * "Tabela vencida" é a tabela do orçamento que não cobre a data-base dele
+ * ("sem tabela na data-base"): encerrada antes dela por uma carga
+ * retroativa, por exemplo. A tabela encerrada por outra depois da data-base
+ * continua certa para o orçamento (vale a da data-base) e não marca.
  */
 export function marcasDoOrcamento(input: {
   linhas: readonly { origem: string }[];
-  tabela: { status: string; vigente_ate: string | null } | null;
-  hoje: string;
+  tabela: { vigente_de: string; vigente_ate: string | null } | null;
+  data_base: string;
   numero_legado: string | null;
 }): MarcaOrcamento[] {
   const origens = new Set(input.linhas.map((linha) => linha.origem));
@@ -329,9 +407,7 @@ export function marcasDoOrcamento(input: {
   if (origens.has("avulso")) marcas.add("item_avulso");
   if (origens.has("ajuste")) marcas.add("ajuste");
   if (input.tabela) {
-    const vencida =
-      input.tabela.status === "encerrada" || (input.tabela.vigente_ate !== null && input.tabela.vigente_ate < input.hoje);
-    if (vencida) marcas.add("tabela_vencida");
+    if (!vigenciaContem(input.tabela, input.data_base)) marcas.add("tabela_vencida");
   } else {
     marcas.add("sem_tabela");
   }
