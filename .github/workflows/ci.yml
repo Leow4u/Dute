@@ -50,6 +50,40 @@ jobs:
         run: pnpm run typecheck
       - name: Frontend unit tests
         run: pnpm run test
+      - name: Install isolated browser test tools
+        working-directory: .
+        run: |
+          npm install --prefix "$RUNNER_TEMP/dute-browser-smoke" --no-audit --no-fund --no-package-lock playwright@1.56.1
+          node "$RUNNER_TEMP/dute-browser-smoke/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Build production frontend
+        env:
+          VITE_FIREBASE_API_KEY: "AIzaSyBPaH5X0wHbF_geH1zit0rwyJWmdb3Q7Ds"
+          VITE_FIREBASE_AUTH_DOMAIN: dute-homolog.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: dute-homolog
+          VITE_FIREBASE_STORAGE_BUCKET: dute-homolog.firebasestorage.app
+          VITE_FIREBASE_MESSAGING_SENDER_ID: "368642218894"
+          VITE_FIREBASE_APP_ID: "1:368642218894:web:13790f72c76fbb21af22df"
+        run: pnpm run build
+      - name: Verify production bundle starts in Chromium
+        working-directory: .
+        run: |
+          pnpm --filter @workspace/app exec vite preview --host 127.0.0.1 --port 4173 > "$RUNNER_TEMP/dute-preview.log" 2>&1 &
+          PREVIEW_PID=$!
+          trap 'kill "$PREVIEW_PID" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4173/ > /dev/null; then break; fi
+            sleep 1
+          done
+          SMOKE_TOOL_DIR="$RUNNER_TEMP/dute-browser-smoke" node tools/check_frontend_startup.cjs http://127.0.0.1:4173 "$RUNNER_TEMP/dute-startup-after"
+      - name: Upload startup evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-startup
+          path: |
+            ${{ runner.temp }}/dute-startup-after
+            ${{ runner.temp }}/dute-preview.log
+          retention-days: 7
 
   functions-unit:
     runs-on: ubuntu-latest

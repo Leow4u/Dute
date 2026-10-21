@@ -164,7 +164,10 @@ export default defineConfig({
           if (id.includes("recharts") || id.includes("d3-")) return "recharts";
 
           if (id.includes("@tanstack")) return "shell-tanstack";
-          if (id.includes("@radix-ui")) return "shell-radix";
+          // React e Radix precisam da mesma ordem de inicialização. Separá-los
+          // pode criar shell-radix -> shell-react -> shell-radix no build,
+          // fazendo a aplicação falhar antes de montar a tela de login.
+          if (id.includes("@radix-ui")) return "shell-react";
           if (id.includes("react-dom") || id.includes("/react/"))
             return "shell-react";
         },
