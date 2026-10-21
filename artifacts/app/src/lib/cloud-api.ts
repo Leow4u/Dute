@@ -184,6 +184,13 @@ function unitFromPriceIndex(
 
 const DEFAULT_LIST_LIMIT = 50;
 const HARD_LIST_CAP = 200;
+// Lista de clientes sem prospects: leituras extras quando a página vem cheia
+// de prospects. 20 leituras e 5.000 documentos cobrem 10x o hardCap de 500
+// (milhares de prospects de carga em lote) sem deixar uma tela abrir
+// varredura ilimitada no Firestore.
+const CUSTOMER_SCAN_MAX_READS = 20;
+const CUSTOMER_SCAN_MAX_DOCS = 5000;
+const CUSTOMER_SCAN_MIN_PAGE = 100;
 const CATALOG_READ_CAP = 2000;
 const OPS_TASK_READ_CAP = 500;
 const RECENT_MOVEMENTS_CAP = 300;
@@ -3738,46 +3745,107 @@ async function route(
           ? equalityFilters
           : equalityFilters.slice(0, 1);
 
-      const result = await readPaged(routeConfig.name, {
-        orderByField: routeConfig.orderByField,
-        direction: routeConfig.direction,
-        equalityFilters: preferredFilters,
-        searchFields: routeConfig.searchFields,
-        prefixSearchField: routeConfig.prefixSearchField,
-        // Filtros da rota que sobram para a memória invalidam o total exato.
-        inMemoryFilterFields: routeConfig.filters.filter(
-          (field) => !preferredFilters.some((filter) => filter.field === field),
-        ),
-        params: searchParams,
-        hardCap: routeConfig.hardCap,
-        requireIndexedRead: routeConfig.requireIndexedRead,
-      });
+      const readRoute = (params: URLSearchParams) =>
+        readPaged(routeConfig.name, {
+          orderByField: routeConfig.orderByField,
+          direction: routeConfig.direction,
+          equalityFilters: preferredFilters,
+          searchFields: routeConfig.searchFields,
+          prefixSearchField: routeConfig.prefixSearchField,
+          // Filtros da rota que sobram para a memória invalidam o total exato.
+          inMemoryFilterFields: routeConfig.filters.filter(
+            (field) => !preferredFilters.some((filter) => filter.field === field),
+          ),
+          params,
+          hardCap: routeConfig.hardCap,
+          requireIndexedRead: routeConfig.requireIndexedRead,
+        });
 
-      // Apply remaining non-equality filters in memory on the page only.
-      let items = result.items;
-      for (const field of routeConfig.filters) {
-        if (preferredFilters.some((f) => f.field === field)) continue;
-        const value = searchParams.get(field);
-        if (value) items = items.filter((row) => includes(row[field], value));
-      }
-
-      // "Excluir" arquiva o registro (mutateManagedEntity action=archive);
-      // sem esconder aqui, o item continua aparecendo na lista para sempre.
-      // Filtro em memória de propósito: um where() excluiria também os
-      // documentos legados que não têm o campo.
-      if (searchParams.get("include_archived") !== "true") {
-        items = items.filter(
-          (row) => row.archived !== true && row.status !== "archived",
-        );
-      }
       // O prospect do Comercial mora em `customers` mas não é cliente do WMS:
-      // some de Configurações › Clientes, do convite e de Posições. Mesmo
-      // filtro em memória: cadastro sem `stage` é cliente.
-      if (
+      // some de Configurações › Clientes, do convite e de Posições. Filtro em
+      // memória de propósito: cadastro sem `stage` é cliente, e um where()
+      // em `stage` excluiria os legados (a BTG).
+      const hideProspects =
         routeConfig.name === collectionNames.customers &&
-        searchParams.get("include_prospects") !== "true"
-      ) {
-        items = items.filter((row) => estagioDoCadastro(row.stage) !== "prospect");
+        searchParams.get("include_prospects") !== "true";
+
+      // Filtros que rodam em memória sobre as linhas já lidas.
+      const applyMemoryFilters = (rows: AnyRecord[]): AnyRecord[] => {
+        let kept = rows;
+        for (const field of routeConfig.filters) {
+          if (preferredFilters.some((f) => f.field === field)) continue;
+          const value = searchParams.get(field);
+          if (value) kept = kept.filter((row) => includes(row[field], value));
+        }
+        // "Excluir" arquiva o registro (mutateManagedEntity action=archive);
+        // sem esconder aqui, o item continua aparecendo na lista para sempre.
+        // Também em memória: um where() excluiria os documentos legados que
+        // não têm o campo.
+        if (searchParams.get("include_archived") !== "true") {
+          kept = kept.filter(
+            (row) => row.archived !== true && row.status !== "archived",
+          );
+        }
+        if (hideProspects) {
+          kept = kept.filter((row) => estagioDoCadastro(row.stage) !== "prospect");
+        }
+        return kept;
+      };
+
+      let result = await readRoute(searchParams);
+      let items = applyMemoryFilters(result.items);
+
+      if (hideProspects) {
+        // Os filtros acima rodam depois do limite da página: com centenas de
+        // prospects no começo da ordem alfabética, a página inteira podia ser
+        // só prospect e os clientes reais sumiam. Continua lendo as páginas
+        // seguintes (cursor) até completar o limite pedido ou acabar a
+        // coleção. Teto: CUSTOMER_SCAN_MAX_READS leituras e
+        // CUSTOMER_SCAN_MAX_DOCS documentos no total.
+        const requested = Number(searchParams.get("limit"));
+        const wanted = Math.max(
+          1,
+          Math.min(
+            requested > 0 ? requested : DEFAULT_LIST_LIMIT,
+            routeConfig.hardCap ?? HARD_LIST_CAP,
+          ),
+        );
+        const startedAtBeginning =
+          !searchParams.get("cursor") && !Number(searchParams.get("offset") ?? 0);
+        let reads = 1;
+        let scanned = result.items.length;
+        while (
+          items.length < wanted &&
+          result.has_more &&
+          result.next_cursor &&
+          reads < CUSTOMER_SCAN_MAX_READS &&
+          scanned < CUSTOMER_SCAN_MAX_DOCS
+        ) {
+          // Páginas de pelo menos CUSTOMER_SCAN_MIN_PAGE linhas: pedir só o
+          // que falta gastaria o teto de leituras em limites pequenos.
+          const next = new URLSearchParams(searchParams);
+          next.set(
+            "limit",
+            String(Math.max(wanted - items.length, CUSTOMER_SCAN_MIN_PAGE)),
+          );
+          next.set("cursor", result.next_cursor);
+          next.delete("offset");
+          result = await readRoute(next);
+          reads += 1;
+          scanned += result.items.length;
+          items = items.concat(applyMemoryFilters(result.items));
+        }
+        // A última página pode trazer mais que o faltante: corta no limite.
+        // Sobrou linha, então o cursor (que apontaria para depois dela)
+        // deixa de valer; nenhuma tela pagina esta lista.
+        if (items.length > wanted) {
+          items = items.slice(0, wanted);
+          result = { ...result, has_more: true, next_cursor: undefined };
+        }
+        // Coleção esgotada a partir do começo: o total exato é o que sobrou.
+        if (startedAtBeginning && !result.has_more) {
+          result = { ...result, total: items.length };
+        }
       }
 
       const moneyCollections = new Set<string>([
