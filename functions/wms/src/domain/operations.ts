@@ -20,6 +20,11 @@ import {
   type SkuAllocator,
 } from "./catalog-codes.js";
 import {
+  publishedMoneyDeletes,
+  rememberCatalogPrice,
+  unitPriceOf,
+} from "./catalog-prices.js";
+import {
   FieldValue,
   type DocumentData,
   type DocumentReference,
@@ -730,6 +735,13 @@ function updateClientInventory(
         input.clientItemCode,
       ),
     );
+  rememberCatalogPrice(transaction, db, {
+    customerCode: input.customerCode,
+    skuCode: input.skuCode,
+    itemCode: input.clientItemCode,
+    unitCost,
+    totalDelta: onHandDelta && unitCost ? onHandDelta * unitCost : undefined,
+  });
   transaction.set(
     ref,
     compact({
@@ -745,7 +757,6 @@ function updateClientInventory(
       color: input.color,
       photo_urls: input.photoUrls?.length ? input.photoUrls : undefined,
       primary_photo_url: input.photoUrls?.[0],
-      unit_cost: unitCost || undefined,
       qty_on_hand: onHandDelta ? FieldValue.increment(onHandDelta) : undefined,
       qty_reserved: reservedDelta
         ? FieldValue.increment(reservedDelta)
@@ -754,14 +765,11 @@ function updateClientInventory(
         onHandDelta || reservedDelta
           ? FieldValue.increment(onHandDelta - reservedDelta)
           : undefined,
-      total_cost:
-        onHandDelta && unitCost
-          ? FieldValue.increment(onHandDelta * unitCost)
-          : undefined,
       status: "active",
       source: "operational_projection",
       published_at: FieldValue.serverTimestamp(),
       updated_at: FieldValue.serverTimestamp(),
+      ...publishedMoneyDeletes(),
     }),
     { merge: true },
   );
@@ -796,6 +804,13 @@ function setClientInventorySnapshot(
       ),
     );
   const unitCost = number(input.unitCost);
+  rememberCatalogPrice(transaction, db, {
+    customerCode: input.customerCode,
+    skuCode: input.skuCode,
+    itemCode: input.clientItemCode,
+    unitCost,
+    totalCost: input.qtyOnHand * unitCost,
+  });
   transaction.set(
     ref,
     compact({
@@ -811,15 +826,14 @@ function setClientInventorySnapshot(
       color: input.color,
       photo_urls: input.photoUrls?.length ? input.photoUrls : undefined,
       primary_photo_url: input.photoUrls?.[0],
-      unit_cost: unitCost,
       qty_on_hand: input.qtyOnHand,
       qty_reserved: input.qtyReserved,
       qty_available: input.qtyOnHand - input.qtyReserved,
-      total_cost: input.qtyOnHand * unitCost,
       status: input.qtyOnHand > 0 ? "active" : "empty",
       source: "operational_projection",
       published_at: FieldValue.serverTimestamp(),
       updated_at: FieldValue.serverTimestamp(),
+      ...publishedMoneyDeletes(),
     }),
     { merge: true },
   );
@@ -915,7 +929,9 @@ function applyCatalogStockAggregates(
           onHand - reserved
             ? FieldValue.increment(onHand - reserved)
             : undefined,
-        custo_total: cost ? FieldValue.increment(cost) : undefined,
+        custo_total: FieldValue.delete(),
+        preco_unit: FieldValue.delete(),
+        unit_cost: FieldValue.delete(),
         updated_at: FieldValue.serverTimestamp(),
       }),
     );
@@ -925,7 +941,9 @@ function applyCatalogStockAggregates(
       target.productRef,
       compact({
         estoque_btg: onHand ? FieldValue.increment(onHand) : undefined,
-        custo_total: cost ? FieldValue.increment(cost) : undefined,
+        custo_total: FieldValue.delete(),
+        preco_unit: FieldValue.delete(),
+        unit_cost: FieldValue.delete(),
         updated_at: FieldValue.serverTimestamp(),
       }),
     );
@@ -939,7 +957,7 @@ function applyCatalogStockAggregates(
       compact({
         id: "dashboard",
         total_pecas: onHand ? FieldValue.increment(onHand) : undefined,
-        custo_total: cost ? FieldValue.increment(cost) : undefined,
+        custo_total: FieldValue.delete(),
         updated_at: FieldValue.serverTimestamp(),
       }),
       { merge: true },
@@ -1110,7 +1128,6 @@ export async function createInventoryMovementTransaction(
         text(balanceRow?.data.product_name) ||
         skuCode,
       location_id: locationId,
-      unit_cost: number(input.unit_cost || balanceRow?.data.unit_cost),
       qty_on_hand: afterOnHand,
       qty_reserved: beforeReserved,
       qty_available: afterOnHand - beforeReserved,
@@ -1120,7 +1137,10 @@ export async function createInventoryMovementTransaction(
     });
 
     if (balanceRow) {
-      transaction.update(balanceRow.ref, balancePayload);
+      transaction.update(balanceRow.ref, {
+        ...balancePayload,
+        ...publishedMoneyDeletes(),
+      });
     } else {
       if (input.type !== "ENTRADA") {
         throw new HttpsError(
@@ -2082,14 +2102,18 @@ export async function recordCycleCountTransaction(
         photo_storage_paths: photoStoragePaths.length
           ? photoStoragePaths
           : undefined,
-        preco_unit: unitCost,
-        unit_cost: unitCost,
         status: "active",
         archived: false,
         source,
         opening_inventory_session_id: sessionId,
         updated_by: actorPayload(actor),
         updated_at: FieldValue.serverTimestamp(),
+      });
+      rememberCatalogPrice(transaction, db, {
+        customerCode,
+        skuCode,
+        itemCode: clientItemCode,
+        unitCost,
       });
       if (wantsNewProduct) {
         const productId = safeDocId(clientItemCode || skuCode);
@@ -2103,7 +2127,6 @@ export async function recordCycleCountTransaction(
           ...catalogPayload,
           estoque_btg: countedQty,
           num_skus: 1,
-          custo_total: countedQty * unitCost,
           created_by: actorPayload(actor),
           created_at: FieldValue.serverTimestamp(),
         });
@@ -2116,7 +2139,6 @@ export async function recordCycleCountTransaction(
           estoque_atual: countedQty,
           estoque_reservado: 0,
           estoque_disponivel: countedQty,
-          custo_total: countedQty * unitCost,
           created_by: actorPayload(actor),
           created_at: FieldValue.serverTimestamp(),
         });
@@ -2129,7 +2151,7 @@ export async function recordCycleCountTransaction(
           {
             ...catalogPayload,
             estoque_btg: FieldValue.increment(countedQty),
-            custo_total: FieldValue.increment(countedQty * unitCost),
+            ...publishedMoneyDeletes(),
           },
           { merge: true },
         );
@@ -2145,7 +2167,7 @@ export async function recordCycleCountTransaction(
             sku_code_key: normalizedIdentity(skuCode),
             estoque_atual: FieldValue.increment(countedQty),
             estoque_disponivel: FieldValue.increment(countedQty),
-            custo_total: FieldValue.increment(countedQty * unitCost),
+            ...publishedMoneyDeletes(),
           }),
           { merge: true },
         );
@@ -2204,39 +2226,41 @@ export async function recordCycleCountTransaction(
       }
     }
 
-    transaction.set(
-      balanceRow.ref,
-      compact({
-        id: balanceRow.id,
-        customer_code: customerCode,
-        sku_code: skuCode,
-        client_item_code: clientItemCode,
-        product_name: productName,
-        location_id: locationId,
-        category,
-        barcode,
-        brand,
-        size,
-        color,
-        photo_urls: photoUrls.length ? photoUrls : undefined,
-        primary_photo_url: photoUrls[0],
-        qty_on_hand: nextOnHand,
-        qty_reserved: beforeReserved,
-        qty_available: nextOnHand - beforeReserved,
-        unit_cost: unitCost,
-        status: nextOnHand > 0 ? "available" : "empty",
-        source,
-        opening_inventory_session_id: sessionId,
-        last_cycle_count_id: cycleCountId,
-        last_cycle_count_at: occurredAt,
-        created_at:
-          mode === "opening" && !Object.keys(balanceRow.data).length
-            ? FieldValue.serverTimestamp()
-            : undefined,
-        updated_at: FieldValue.serverTimestamp(),
-      }),
-      { merge: true },
-    );
+    const balancePayload = compact({
+      id: balanceRow.id,
+      customer_code: customerCode,
+      sku_code: skuCode,
+      client_item_code: clientItemCode,
+      product_name: productName,
+      location_id: locationId,
+      category,
+      barcode,
+      brand,
+      size,
+      color,
+      photo_urls: photoUrls.length ? photoUrls : undefined,
+      primary_photo_url: photoUrls[0],
+      qty_on_hand: nextOnHand,
+      qty_reserved: beforeReserved,
+      qty_available: nextOnHand - beforeReserved,
+      status: nextOnHand > 0 ? "available" : "empty",
+      source,
+      opening_inventory_session_id: sessionId,
+      last_cycle_count_id: cycleCountId,
+      last_cycle_count_at: occurredAt,
+      updated_at: FieldValue.serverTimestamp(),
+    });
+    if (Object.keys(balanceRow.data).length) {
+      transaction.update(balanceRow.ref, {
+        ...balancePayload,
+        ...publishedMoneyDeletes(),
+      });
+    } else {
+      transaction.set(balanceRow.ref, {
+        ...balancePayload,
+        created_at: FieldValue.serverTimestamp(),
+      });
+    }
 
     transaction.create(
       db.collection(collections.cycleCounts).doc(cycleCountId),
@@ -2575,6 +2599,7 @@ export async function moveOpeningInventoryLineTransaction(
       if (remaining > 0) {
         transaction.update(sourceBalance.ref, {
           qty_on_hand: remaining, qty_available: remaining,
+          ...publishedMoneyDeletes(),
           updated_at: FieldValue.serverTimestamp(),
         });
       } else {
@@ -2583,10 +2608,13 @@ export async function moveOpeningInventoryLineTransaction(
       const targetBefore = number(targetBalance?.data.qty_on_hand);
       const targetBalanceId = `bal_${digest({ customerCode, skuCode, locationId: targetLocation }, 48)}`;
       const targetBalanceRef = targetBalance?.ref ?? db.collection(collections.stockBalances).doc(targetBalanceId);
+      const carried = { ...(targetBalance?.data ?? sourceBalance.data) } as Record<string, unknown>;
+      for (const field of ["preco_unit", "unit_cost", "custo_unit", "custo_total", "total_cost", "total_value"]) {
+        delete carried[field];
+      }
       transaction.set(targetBalanceRef, {
-        ...(targetBalance?.data ?? sourceBalance.data),
+        ...carried,
         id: targetBalanceRef.id, location_id: targetLocation,
-        unit_cost: targetBalance ? number(targetBalance.data.unit_cost) : number(line.unit_cost),
         qty_on_hand: targetBefore + quantity, qty_available: targetBefore + quantity, qty_reserved: 0,
         opening_inventory_session_id: sessionId, status: "available",
         updated_at: FieldValue.serverTimestamp(),
@@ -2887,10 +2915,7 @@ export async function removeOpeningInventoryLineTransaction(
       if (productSnapshot.exists) {
         transaction.update(productRef, {
           estoque_btg: Math.max(0, number(product.estoque_btg) - countedQty),
-          custo_total: Math.max(
-            0,
-            number(product.custo_total) - countedQty * unitCost,
-          ),
+          ...publishedMoneyDeletes(),
           updated_at: FieldValue.serverTimestamp(),
         });
       }
@@ -2899,10 +2924,7 @@ export async function removeOpeningInventoryLineTransaction(
           estoque_atual: nextOnHand,
           estoque_reservado: aggregateReserved,
           estoque_disponivel: nextOnHand - aggregateReserved,
-          custo_total: Math.max(
-            0,
-            number(sku.custo_total) - countedQty * unitCost,
-          ),
+          ...publishedMoneyDeletes(),
           updated_at: FieldValue.serverTimestamp(),
         });
       }
@@ -3340,7 +3362,6 @@ export async function setReturnDispositionTransaction(
         client_item_code: clientItemCode,
         product_name: productName,
         location_id: locationId,
-        unit_cost: unitCost || number(balanceRow?.data.unit_cost) || undefined,
         qty_on_hand: afterOnHand,
         qty_reserved: beforeReserved,
         qty_available: afterOnHand - beforeReserved,
@@ -3349,7 +3370,10 @@ export async function setReturnDispositionTransaction(
         updated_at: FieldValue.serverTimestamp(),
       });
       if (balanceRow) {
-        transaction.update(balanceRow.ref, balancePayload);
+        transaction.update(balanceRow.ref, {
+          ...balancePayload,
+          ...publishedMoneyDeletes(),
+        });
       } else {
         transaction.create(db.collection(collections.stockBalances).doc(stockBalanceId), {
           ...balancePayload,
@@ -4291,8 +4315,6 @@ export async function createInboundReceiptTransaction(
           photo_storage_paths: item.photo_storage_paths?.length
             ? item.photo_storage_paths
             : undefined,
-          preco_unit: item.unit_cost,
-          unit_cost: item.unit_cost,
           status: "active",
           archived: false,
           source: "wms_unplanned_receipt",
@@ -4301,12 +4323,17 @@ export async function createInboundReceiptTransaction(
           created_at: FieldValue.serverTimestamp(),
           updated_at: FieldValue.serverTimestamp(),
         });
+        rememberCatalogPrice(transaction, db, {
+          customerCode: input.customer_code,
+          skuCode: declaredSku,
+          itemCode: clientCode,
+          unitCost: number(item.unit_cost),
+        });
         transaction.create(productRef, {
           id: clientCode,
           ...baseCatalogPayload,
           estoque_btg: 0,
           num_skus: 1,
-          custo_total: 0,
         });
         transaction.create(skuRef, {
           id: declaredSku,
@@ -6432,7 +6459,14 @@ export async function advanceWarehouseTaskTransaction(
         qty_on_hand: sourceAfter,
         qty_available: sourceAfter - sourceReserved,
         status: sourceAfter > 0 ? "available" : "empty",
+        ...publishedMoneyDeletes(),
         updated_at: FieldValue.serverTimestamp(),
+      });
+      rememberCatalogPrice(transaction, db, {
+        customerCode,
+        skuCode,
+        itemCode: clientItemCode,
+        unitCost,
       });
       const destinationPayload = compact({
         customer_code: customerCode,
@@ -6440,7 +6474,6 @@ export async function advanceWarehouseTaskTransaction(
         client_item_code: clientItemCode,
         product_name: productName,
         location_id: destinationLocationId,
-        unit_cost: unitCost || undefined,
         qty_on_hand: destinationAfter,
         qty_reserved: destinationReserved,
         qty_available: destinationAfter - destinationReserved,
@@ -6449,7 +6482,10 @@ export async function advanceWarehouseTaskTransaction(
         updated_at: FieldValue.serverTimestamp(),
       });
       if (Object.keys(destinationBalance.data).length) {
-        transaction.update(destinationBalance.ref, destinationPayload);
+        transaction.update(destinationBalance.ref, {
+          ...destinationPayload,
+          ...publishedMoneyDeletes(),
+        });
       } else {
         transaction.create(
           destinationBalance.ref,
@@ -6697,14 +6733,16 @@ export async function advanceWarehouseTaskTransaction(
           updated_at: FieldValue.serverTimestamp(),
         });
         if (Object.keys(state.row.data).length) {
-          transaction.update(state.row.ref, balancePayload);
+          transaction.update(state.row.ref, {
+            ...balancePayload,
+            ...publishedMoneyDeletes(),
+          });
         } else {
           transaction.create(
             state.row.ref,
             compact({
               id: state.row.id,
               ...balancePayload,
-              unit_cost: number(sourceItem?.data.unit_cost),
               created_at: FieldValue.serverTimestamp(),
             }),
           );
@@ -6746,9 +6784,7 @@ export async function advanceWarehouseTaskTransaction(
               cod_cliente: normalizedClientCode,
               cod_cliente_key: normalizedClientCode,
               estoque_btg: FieldValue.increment(projected.quantity),
-              custo_total: FieldValue.increment(
-                projected.quantity * number(projected.unitCost),
-              ),
+              ...publishedMoneyDeletes(),
               updated_at: FieldValue.serverTimestamp(),
             },
             { merge: true },
@@ -6765,9 +6801,7 @@ export async function advanceWarehouseTaskTransaction(
               cod_cliente_key: normalizedClientCode,
               estoque_atual: FieldValue.increment(projected.quantity),
               estoque_disponivel: FieldValue.increment(projected.quantity),
-              custo_total: FieldValue.increment(
-                projected.quantity * number(projected.unitCost),
-              ),
+              ...publishedMoneyDeletes(),
               updated_at: FieldValue.serverTimestamp(),
             },
             { merge: true },
@@ -7602,12 +7636,26 @@ export async function addCatalogPhotosTransaction(
       updated_at: FieldValue.serverTimestamp(),
     });
 
-    if (targets.skuRef) transaction.update(targets.skuRef, photoFields);
-    if (targets.productRef) transaction.update(targets.productRef, photoFields);
+    const priced = asRecord(skuSnapshot?.data() ?? productSnapshot?.data());
+    const pricedTotal = Number(
+      asRecord(productSnapshot?.data()).custo_total ??
+        asRecord(skuSnapshot?.data()).custo_total,
+    );
+    rememberCatalogPrice(transaction, db, {
+      customerCode,
+      skuCode,
+      itemCode: clientItemCode,
+      unitCost: unitPriceOf(priced),
+      totalCost: Number.isFinite(pricedTotal) && pricedTotal > 0 ? pricedTotal : undefined,
+    });
+    const withoutMoney = { ...photoFields, ...publishedMoneyDeletes() };
+    if (targets.skuRef) transaction.update(targets.skuRef, withoutMoney);
+    if (targets.productRef) transaction.update(targets.productRef, withoutMoney);
     for (const row of balanceRows) {
       transaction.update(row.ref, {
         photo_urls: photoUrls,
         primary_photo_url: photoFields.primary_photo_url,
+        ...publishedMoneyDeletes(),
         updated_at: FieldValue.serverTimestamp(),
       });
     }
@@ -7615,6 +7663,7 @@ export async function addCatalogPhotosTransaction(
       transaction.update(clientInventoryRef, {
         photo_urls: photoUrls,
         primary_photo_url: photoFields.primary_photo_url,
+        ...publishedMoneyDeletes(),
         updated_at: FieldValue.serverTimestamp(),
       });
     }

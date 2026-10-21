@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Label } from "@/components/ui/label";
 import { useForm } from "react-hook-form";
 import { useAppUser } from "@/lib/auth";
-import { canWriteCatalog, humanApiError } from "@/lib/permissions";
+import { canSeeCatalogPrice, canWriteCatalog, humanApiError } from "@/lib/permissions";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
@@ -48,6 +48,7 @@ export default function Products() {
   // receber um "Erro ao criar produto" sem explicação.
   const { user } = useAppUser();
   const catalogWriter = canWriteCatalog(user?.publicMetadata.role);
+  const showPrice = canSeeCatalogPrice(user?.publicMetadata.role);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("todos");
@@ -103,7 +104,7 @@ export default function Products() {
       eyebrow="Estoque"
       title="Produtos"
       icon={<PackageSearch className="h-6 w-6" />}
-      actions={catalogWriter ? <ProductModal /> : undefined}
+      actions={catalogWriter ? <ProductModal showPrice={showPrice} /> : undefined}
     >
       {/* "Peças na página" era soma do recorte visível — número que muda ao
           paginar e não sustenta decisão nenhuma. */}
@@ -114,17 +115,21 @@ export default function Products() {
           icon={<Tags className="h-5 w-5" />}
           tone="blue"
         />
-        <StockMetricCard
-          label="Valor carregado"
-          value={formatStockMoney(pageCost)}
-          icon={<CircleDollarSign className="h-5 w-5" />}
-        />
-        <StockMetricCard
-          label="Sem custo válido"
-          value={formatStockNumber(missingCost)}
-          icon={<AlertTriangle className="h-5 w-5" />}
-          tone={missingCost ? "amber" : "default"}
-        />
+        {showPrice ? (
+          <StockMetricCard
+            label="Valor carregado"
+            value={formatStockMoney(pageCost)}
+            icon={<CircleDollarSign className="h-5 w-5" />}
+          />
+        ) : null}
+        {showPrice ? (
+          <StockMetricCard
+            label="Sem custo válido"
+            value={formatStockNumber(missingCost)}
+            icon={<AlertTriangle className="h-5 w-5" />}
+            tone={missingCost ? "amber" : "default"}
+          />
+        ) : null}
       </StockMetricsGrid>
 
       <StockToolbar
@@ -162,20 +167,20 @@ export default function Products() {
                   <th className="px-4 py-3 font-medium">Gênero</th>
                   <th className="px-4 py-3 font-medium">Categoria / Grupo</th>
                   <th className="px-4 py-3 font-medium">Cor / Tamanho</th>
-                  <th className="px-4 py-3 font-medium text-right">Preço Unit.</th>
+                  {showPrice ? <th className="px-4 py-3 font-medium text-right">Preço Unit.</th> : null}
                   <th className="px-4 py-3 font-medium text-right">Saldo físico</th>
-                  <th className="px-4 py-3 font-medium text-right">Custo Total</th>
+                  {showPrice ? <th className="px-4 py-3 font-medium text-right">Custo Total</th> : null}
                   <th className="px-4 py-3 font-medium text-center">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">Carregando produtos...</td>
+                    <td colSpan={showPrice ? 9 : 7} className="px-4 py-8 text-center text-muted-foreground">Carregando produtos...</td>
                   </tr>
                 ) : data?.items?.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">Nenhum produto encontrado.</td>
+                    <td colSpan={showPrice ? 9 : 7} className="px-4 py-8 text-center text-muted-foreground">Nenhum produto encontrado.</td>
                   </tr>
                 ) : (
                   filteredProducts.map((product: Product) => (
@@ -197,13 +202,17 @@ export default function Products() {
                       <td className="px-4 py-2 text-xs text-muted-foreground">
                         {product.cor || "-"} / {product.tamanho || "-"}
                       </td>
-                      <td className="px-4 py-2 text-right text-muted-foreground">{formatStockMoney(product.preco_unit)}</td>
+                      {showPrice ? (
+                        <td className="px-4 py-2 text-right text-muted-foreground">{formatStockMoney(product.preco_unit)}</td>
+                      ) : null}
                       <td className="px-4 py-2 text-right font-medium">{formatStockNumber(product.estoque_btg)}</td>
-                      <td className="px-4 py-2 text-right font-medium text-foreground">{formatStockMoney(product.custo_total)}</td>
+                      {showPrice ? (
+                        <td className="px-4 py-2 text-right font-medium text-foreground">{formatStockMoney(product.custo_total)}</td>
+                      ) : null}
                       <td className="px-4 py-2 text-center">
                         {catalogWriter ? (
                           <div className="flex items-center justify-center gap-2">
-                            <ProductModal product={product} />
+                            <ProductModal product={product} showPrice={showPrice} />
                             <DeleteProductButton id={product.id} cod_cliente={product.cod_cliente} />
                           </div>
                         ) : (
@@ -232,7 +241,7 @@ export default function Products() {
   );
 }
 
-function ProductModal({ product }: { product?: any }) {
+function ProductModal({ product, showPrice = false }: { product?: any; showPrice?: boolean }) {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -256,9 +265,10 @@ function ProductModal({ product }: { product?: any }) {
   });
 
   const onSubmit = (data: ProductFormValues) => {
+    const payload = showPrice ? data : { ...data, preco_unit: undefined };
     if (isEdit) {
       updateProduct.mutate(
-        { id: product.id, data },
+        { id: product.id, data: payload },
         {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
@@ -276,7 +286,7 @@ function ProductModal({ product }: { product?: any }) {
       );
     } else {
       createProduct.mutate(
-        { data },
+        { data: payload },
         {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
@@ -320,10 +330,14 @@ function ProductModal({ product }: { product?: any }) {
               <Input id="cod_cliente" {...register("cod_cliente")} />
               {errors.cod_cliente && <span className="text-xs text-destructive">{errors.cod_cliente.message}</span>}
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="preco_unit">Preço Unit. (R$)</Label>
-              <Input id="preco_unit" type="number" step="0.01" {...register("preco_unit")} />
-            </div>
+            {showPrice ? (
+              <div className="space-y-2">
+                <Label htmlFor="preco_unit">Preço Unit. (R$)</Label>
+                <Input id="preco_unit" type="number" step="0.01" {...register("preco_unit")} />
+              </div>
+            ) : (
+              <div />
+            )}
             <div className="space-y-2 col-span-2">
               <Label htmlFor="produto">Nome do Produto *</Label>
               <Input id="produto" {...register("produto")} />

@@ -22,6 +22,7 @@ import {
   type OperationalActor,
 } from "./operations.js";
 import { assignMissingRequestNumbers } from "./request-numbers.js";
+import { catalogPriceId } from "./catalog-prices.js";
 
 const PROJECT_ID = "demo-dute-operations";
 const actor: OperationalActor = {
@@ -31,6 +32,11 @@ const actor: OperationalActor = {
   role: "wms",
   customer_code: "BTG Pactual",
 };
+
+async function storedUnitPrice(database: Firestore, customer: string, sku: string) {
+  const snap = await database.collection("catalog_prices").doc(catalogPriceId(customer, sku)).get();
+  return snap.data()?.preco_unit;
+}
 
 let db: Firestore;
 let app: ReturnType<typeof initializeApp>;
@@ -819,13 +825,12 @@ describe("fluxo WMS transacional", () => {
     assert.equal(balances.size, 1);
     assert.equal(balances.docs[0]?.data().qty_on_hand, 7);
     assert.equal(balances.docs[0]?.data().qty_available, 7);
-    assert.equal(balances.docs[0]?.data().unit_cost, 89.9);
+    assert.equal(balances.docs[0]?.data().unit_cost, undefined);
+    assert.equal(await storedUnitPrice(db, "BTG Pactual", "BTG-000001"), 89.9);
     assert.equal(projections.size, 1);
     assert.equal(projections.docs[0]?.data().qty_on_hand, 7);
     assert.equal(projections.docs[0]?.data().qty_available, 7);
-    assert.ok(
-      Math.abs(Number(projections.docs[0]?.data().total_cost) - 629.3) < 1e-9,
-    );
+    assert.equal(projections.docs[0]?.data().total_cost, undefined);
     assert.equal(movements.size, 1);
     assert.equal(movements.docs[0]?.data().tipo_mov, "ENTRADA");
     assert.equal(movements.docs[0]?.data().source, "wms_receiving");
@@ -975,7 +980,11 @@ describe("inventário de abertura transacional", () => {
     assert.equal(products.docs[0]?.data().category, input.category);
     assert.equal(products.docs[0]?.data().genero, input.genero);
     assert.equal(products.docs[0]?.data().grupo, input.grupo);
-    assert.equal(products.docs[0]?.data().preco_unit, input.unit_cost);
+    assert.equal(products.docs[0]?.data().preco_unit, undefined);
+    assert.equal(
+      await storedUnitPrice(db, input.customer_code, String(input.sku_code)),
+      input.unit_cost,
+    );
     assert.deepEqual(products.docs[0]?.data().photo_urls, input.photo_urls);
     assert.equal(products.docs[0]?.data().estoque_btg, input.counted_qty);
 
@@ -989,7 +998,7 @@ describe("inventário de abertura transacional", () => {
     assert.equal(balances.docs[0]?.data().qty_on_hand, input.counted_qty);
     assert.equal(balances.docs[0]?.data().qty_reserved, 0);
     assert.equal(balances.docs[0]?.data().qty_available, input.counted_qty);
-    assert.equal(balances.docs[0]?.data().unit_cost, input.unit_cost);
+    assert.equal(balances.docs[0]?.data().unit_cost, undefined);
     assert.deepEqual(balances.docs[0]?.data().photo_urls, input.photo_urls);
 
     assert.equal(movements.size, 1);
@@ -1020,10 +1029,8 @@ describe("inventário de abertura transacional", () => {
     assert.equal(projections.size, 1);
     assert.equal(projections.docs[0]?.data().qty_on_hand, 12);
     assert.equal(projections.docs[0]?.data().qty_available, 12);
-    assert.equal(projections.docs[0]?.data().unit_cost, 34.9);
-    assert.ok(
-      Math.abs(Number(projections.docs[0]?.data().total_cost) - 418.8) < 1e-9,
-    );
+    assert.equal(projections.docs[0]?.data().unit_cost, undefined);
+    assert.equal(projections.docs[0]?.data().total_cost, undefined);
     assert.deepEqual(projections.docs[0]?.data().photo_urls, input.photo_urls);
 
     const persistedSession = await db
@@ -1718,7 +1725,8 @@ describe("ledger manual e congelamento", () => {
       .doc("cinv_BTG_Pactual__BTG-RETURN-1")
       .get();
     assert.equal(projection.data()?.qty_on_hand, 3);
-    assert.equal(projection.data()?.total_cost, 36);
+    assert.equal(projection.data()?.total_cost, undefined);
+    assert.equal(await storedUnitPrice(db, "BTG Pactual", "BTG-RETURN-1"), 12);
 
     const movements = await db
       .collection("movements")
@@ -2251,9 +2259,10 @@ describe("integridade de reservas e agregados de catálogo", () => {
     let product = await db.collection("products").doc("ITEM-AGG-1").get();
     assert.equal(sku.data()?.estoque_atual, 15);
     assert.equal(sku.data()?.estoque_disponivel, 15);
-    assert.equal(sku.data()?.custo_total, 150);
+    assert.equal(sku.data()?.custo_total, undefined);
     assert.equal(product.data()?.estoque_btg, 15);
-    assert.equal(product.data()?.custo_total, 150);
+    assert.equal(product.data()?.custo_total, undefined);
+    assert.equal(await storedUnitPrice(db, "BTG Pactual", "SKU-AGG-1"), 10);
 
     await createInventoryMovementTransaction(
       db,
@@ -2275,9 +2284,9 @@ describe("integridade de reservas e agregados de catálogo", () => {
     product = await db.collection("products").doc("ITEM-AGG-1").get();
     assert.equal(sku.data()?.estoque_atual, 12);
     assert.equal(sku.data()?.estoque_disponivel, 12);
-    assert.equal(sku.data()?.custo_total, 120);
+    assert.equal(sku.data()?.custo_total, undefined);
     assert.equal(product.data()?.estoque_btg, 12);
-    assert.equal(product.data()?.custo_total, 120);
+    assert.equal(product.data()?.custo_total, undefined);
 
     const adjusted = (await recordCycleCountTransaction(
       db,
@@ -2300,9 +2309,9 @@ describe("integridade de reservas e agregados de catálogo", () => {
     product = await db.collection("products").doc("ITEM-AGG-1").get();
     assert.equal(sku.data()?.estoque_atual, 10);
     assert.equal(sku.data()?.estoque_disponivel, 10);
-    assert.equal(sku.data()?.custo_total, 100);
+    assert.equal(sku.data()?.custo_total, undefined);
     assert.equal(product.data()?.estoque_btg, 10);
-    assert.equal(product.data()?.custo_total, 100);
+    assert.equal(product.data()?.custo_total, undefined);
   });
 
   it("resolve catálogo importado (id stable_id, sem *_key) pelos campos crus", async () => {
@@ -2365,9 +2374,10 @@ describe("integridade de reservas e agregados de catálogo", () => {
       .get();
     assert.equal(sku.data()?.estoque_atual, 6);
     assert.equal(sku.data()?.estoque_disponivel, 6);
-    assert.equal(sku.data()?.custo_total, 150);
+    assert.equal(sku.data()?.custo_total, undefined);
     assert.equal(product.data()?.estoque_btg, 6);
-    assert.equal(product.data()?.custo_total, 150);
+    assert.equal(product.data()?.custo_total, undefined);
+    assert.equal(await storedUnitPrice(db, "BTG Pactual", "SKU-LEG-1"), 25);
   });
 
   it("recontagem de produto arquivado reativa o cadastro em vez de acusar duplicidade", async () => {
@@ -2659,9 +2669,11 @@ describe("fotos do item", () => {
       assert.deepEqual(doc.data()?.photo_urls, [photo]);
       assert.equal(doc.data()?.primary_photo_url, photo);
     }
-    // Só a foto muda: nome, custo e saldo ficam como estavam.
+    // A foto entra. O valor sai do cadastro e fica em catalog_prices.
     assert.equal(product.data()?.produto, "Cesto quadrado");
-    assert.equal(product.data()?.custo_total, 200);
+    assert.equal(product.data()?.custo_total, undefined);
+    assert.equal(sku.data()?.preco_unit, undefined);
+    assert.equal(await storedUnitPrice(db, "BTG Pactual", "SKU-FOTO-1"), 50);
     assert.equal(sku.data()?.estoque_atual, 4);
     assert.equal(balance.data()?.qty_on_hand, 4);
 

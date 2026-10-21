@@ -31,6 +31,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { useAppUser } from "@/lib/auth";
+import { canSeeCatalogPrice } from "@/lib/permissions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -100,7 +102,7 @@ type AiOverview = {
     total_events: number;
     derived_events: number;
     open_insights: number;
-    inventory_value: number;
+    inventory_value: number | null;
     total_pieces: number;
     missing_costs: number;
     open_orders: number;
@@ -1585,6 +1587,8 @@ function EventTraceabilityPanel({ events }: { events: AiEvent[] }) {
 export default function AiControl() {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAppUser();
+  const showPrice = canSeeCatalogPrice(user?.publicMetadata.role);
   // Anotação e sincronização de notificações valem para o cliente ativo.
   const { code: activeCustomerCode } = useActiveCustomer();
   const [note, setNote] = useState("");
@@ -1835,15 +1839,17 @@ export default function AiControl() {
           value={numberFormatter.format(snapshot.open_insights)}
           icon={Bell}
         />
-        <MetricCard
-          title="Valor monitorado"
-          value={moneyFormatter.format(snapshot.inventory_value)}
-          icon={Sparkles}
-        />
+        {showPrice && snapshot.inventory_value != null ? (
+          <MetricCard
+            title="Valor monitorado"
+            value={moneyFormatter.format(snapshot.inventory_value)}
+            icon={Sparkles}
+          />
+        ) : null}
         <MetricCard
           title="Pendências críticas"
           value={numberFormatter.format(
-            snapshot.missing_costs + snapshot.open_orders,
+            (showPrice ? snapshot.missing_costs : 0) + snapshot.open_orders,
           )}
           icon={AlertTriangle}
         />
