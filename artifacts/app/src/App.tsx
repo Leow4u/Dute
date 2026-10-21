@@ -133,11 +133,13 @@ const ClientePedidos = lazy(() =>
 const ClienteEnvios = lazy(() =>
   import("./pages/client").then((m) => ({ default: m.ClienteEnvios })),
 );
+const ComercialClientes = lazy(() => import("./pages/comercial/clientes"));
 import { useRole } from "./hooks/use-role";
 import { AuthProvider, useAppUser } from "./lib/auth";
 import { ActiveCustomerProvider } from "./lib/active-customer-context";
 import { useOperationProfile } from "./lib/operation-profile";
 import { PLATAFORMA_LIBERADA } from "./lib/liberacao";
+import { DESTINO_DO_COMERCIAL, rotasDoComercial } from "./lib/comercial/navegacao";
 import { entrada } from "./lib/platform-modules";
 import { portalModulesFor } from "./lib/operations";
 import {
@@ -969,6 +971,8 @@ const SkusRedirect = () => <Redirect to="/catalogo/saldos" />;
 // O mapa do armazém mudou para Estoque › Mapa (16/10/2026); os endereços antigos seguem para lá.
 const WarehouseMapRedirect = () => <Redirect to="/estoque/mapa" />;
 const PriceListRedirect = () => <Redirect to="/faturamento/tabela" />;
+// Casa do Comercial: Clientes, até a fila de orçamentos (parte 11) existir.
+const ComercialRedirect = () => <Redirect to={DESTINO_DO_COMERCIAL} />;
 // A Administração virou seção da Configuração.
 const legacySettingsRedirect = (path: string) => {
   const to = LEGACY_SETTINGS_REDIRECTS[path];
@@ -1037,6 +1041,12 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/portal/agente", ClienteAssistente),
   // Tela antiga de faturas; /portal/faturas é a dona. Redirect preserva links salvos.
   protectedRoute("/minhas-faturas", ClientInvoicesRedirect),
+  // Comercial (docs/plataforma/fase-6-comercial.md): as rotas só existem onde
+  // a liberação do Comercial está ligada (lib/comercial/navegacao.ts).
+  ...[
+    protectedRoute("/comercial", ComercialRedirect),
+    protectedRoute("/comercial/clientes", ComercialClientes),
+  ].filter((route) => rotasDoComercial().includes(route.path)),
 ];
 
 function ProtectedRoute({
