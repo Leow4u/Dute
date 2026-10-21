@@ -59,6 +59,12 @@
   --color-destructive-soft: hsl(var(--destructive-soft));
   --color-destructive-soft-border: hsl(var(--destructive-soft-border));
   --color-destructive-soft-foreground: hsl(var(--destructive-soft-foreground));
+  --color-violet-soft: hsl(var(--violet-soft));
+  --color-violet-soft-border: hsl(var(--violet-soft-border));
+  --color-violet-soft-foreground: hsl(var(--violet-soft-foreground));
+  --color-teal-soft: hsl(var(--teal-soft));
+  --color-teal-soft-border: hsl(var(--teal-soft-border));
+  --color-teal-soft-foreground: hsl(var(--teal-soft-foreground));
 
   --color-agent: hsl(var(--agent));
   --color-agent-hover: hsl(var(--agent-hover));
@@ -188,6 +194,15 @@
   --destructive-soft: 356 100% 97%;
   --destructive-soft-border: 353 96% 90%;
   --destructive-soft-foreground: 345 83% 41%;
+  /* Status da identidade v3 (docs/mockups/README.md) sem par nos de cima:
+     violeta (agendada; no Comercial, para enviar) e verde-água (faturada;
+     a faturar). */
+  --violet-soft: 258 66% 94%; /* #ECE6FA */
+  --violet-soft-border: 258 60% 86%;
+  --violet-soft-foreground: 263 69% 42%; /* #5B21B6 */
+  --teal-soft: 174 53% 89%; /* #D5F2EF */
+  --teal-soft-border: 174 45% 78%;
+  --teal-soft-foreground: 175 74% 21%; /* #0E5F58 */
 
   /* Identidade do Agente Dute (roxo). Antes hex solto: #5b3fc4, #4c33a8,
      #3b2a85, #7a66c9, #8b5cf6, #faf8ff, #c9b8fb. */
@@ -301,6 +316,12 @@
   --destructive-soft: 350 50% 11%;
   --destructive-soft-border: 350 45% 27%;
   --destructive-soft-foreground: 350 90% 80%;
+  --violet-soft: 258 40% 14%;
+  --violet-soft-border: 258 35% 30%;
+  --violet-soft-foreground: 258 85% 82%;
+  --teal-soft: 175 45% 11%;
+  --teal-soft-border: 175 40% 25%;
+  --teal-soft-foreground: 172 60% 70%;
 
   --agent: 253 65% 62%;
   --agent-hover: 253 65% 56%;

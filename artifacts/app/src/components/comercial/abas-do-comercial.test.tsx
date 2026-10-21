@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Router } from "wouter";
 
-import { ABAS_DO_COMERCIAL, TELAS_DO_COMERCIAL } from "@/lib/comercial/navegacao";
+import { ABAS_DO_COMERCIAL, ROTA_CLIENTES, ROTA_COMERCIAL, ROTA_ORCAMENTO, TELAS_DO_COMERCIAL } from "@/lib/comercial/navegacao";
 
 import { AbasDoComercial } from "./abas-do-comercial";
 
@@ -17,8 +17,17 @@ function render(atual: string, telas: readonly string[]) {
 const href = (id: string) => ABAS_DO_COMERCIAL.find((aba) => aba.id === id)!.href;
 
 describe("barra de abas do Comercial", () => {
-  it("sem tela de nenhuma aba, a barra não aparece (hoje)", () => {
-    expect(render("/comercial/clientes", TELAS_DO_COMERCIAL)).toBe("");
+  it("sem tela de nenhuma aba, a barra não aparece", () => {
+    expect(render("/comercial/clientes", [ROTA_CLIENTES])).toBe("");
+  });
+
+  it("hoje: só Orçamentos, marcada na fila e na montagem do orçamento", () => {
+    for (const atual of [ROTA_COMERCIAL, `${ROTA_ORCAMENTO}`]) {
+      const html = render(atual, TELAS_DO_COMERCIAL);
+      expect(html.replace(/<[^>]+>/g, "|").split("|").filter(Boolean)).toEqual(["Orçamentos"]);
+      expect(html, atual).toMatch(/<a [^>]*aria-current="page"[^>]*>Orçamentos<\/a>/);
+    }
+    expect(render(ROTA_CLIENTES, TELAS_DO_COMERCIAL)).not.toContain("aria-current");
   });
 
   it("mostra só as abas com tela, com a atual marcada", () => {

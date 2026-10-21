@@ -1,0 +1,269 @@
+import { useEffect, useState, type ReactNode } from "react";
+import { Plus, Search } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  contratoVigente,
+  filtrarCadastros,
+  formatarCnpj,
+  vigenciaDoContrato,
+  type CadastroComercial,
+  type ContratoResumo,
+} from "@/lib/comercial/clientes";
+import { VARIANTES, VARIANTE_PADRAO, contratosParaOrcamento } from "@/lib/comercial/montar";
+import { cn } from "@/lib/utils";
+
+import { SeloProspect } from "./clientes-view";
+
+/**
+ * Novo orçamento (parte 11): o cliente (busca por nome ou CNPJ, ou um
+ * prospect novo criado aqui mesmo pela callable do cadastro), o contrato do
+ * cliente, se houver, e Comercial ou Noturna. A gravação (saveQuote create)
+ * é da página; o diálogo abre fora do contêiner da tela (portal), então leva
+ * a classe .v3.
+ */
+
+const CAMPO_SELECT =
+  "flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/25 disabled:opacity-50";
+
+export type NovoOrcamento = { customerCode: string; contratoId: string | null; variante: string };
+
+export type NovoOrcamentoDialogProps = {
+  aberto: boolean;
+  ocupado: boolean;
+  erro: string | null;
+  onCancelar: () => void;
+  cadastros: CadastroComercial[];
+  contratos: ContratoResumo[];
+  /** "AAAA-MM-DD", para o contrato vigente. */
+  hoje: string;
+  onCriar: (novo: NovoOrcamento) => void;
+  /** Cria o prospect (saveCommercialCustomer) e devolve o código dele, ou null se não criou. */
+  onCriarProspect: (prospect: { nome: string; cnpj: string }) => Promise<string | null>;
+};
+
+function Campo({ id, rotulo, children }: { id: string; rotulo: string; children: ReactNode }) {
+  return (
+    <div className="min-w-0 space-y-1.5">
+      <Label htmlFor={id}>{rotulo}</Label>
+      {children}
+    </div>
+  );
+}
+
+const ESTADO_INICIAL = {
+  busca: "",
+  code: "",
+  contratoId: "",
+  variante: VARIANTE_PADRAO as string,
+  prospect: null as { nome: string; cnpj: string } | null,
+};
+
+export function NovoOrcamentoDialog({
+  aberto,
+  ocupado,
+  erro,
+  onCancelar,
+  cadastros,
+  contratos,
+  hoje,
+  onCriar,
+  onCriarProspect,
+}: NovoOrcamentoDialogProps) {
+  const [estado, setEstado] = useState(ESTADO_INICIAL);
+  useEffect(() => {
+    if (aberto) setEstado(ESTADO_INICIAL);
+  }, [aberto]);
+
+  const escolher = (code: string) =>
+    setEstado((atual) => ({ ...atual, code, contratoId: contratoVigente(contratos, code, hoje)?.id ?? "" }));
+  const { clientes, prospects } = filtrarCadastros(cadastros, "todos", estado.busca);
+  const lista = [...clientes, ...prospects];
+  const escolhido = cadastros.find((cadastro) => cadastro.code === estado.code) ?? null;
+  const doCliente = estado.code ? contratosParaOrcamento(contratos, estado.code) : [];
+  const prospect = estado.prospect;
+
+  return (
+    <Dialog open={aberto} onOpenChange={(open) => (!open && !ocupado ? onCancelar() : undefined)}>
+      <DialogContent className="v3 max-w-lg">
+        <form
+          className="grid gap-4"
+          onSubmit={(evento) => {
+            evento.preventDefault();
+            if (estado.code) onCriar({ customerCode: estado.code, contratoId: estado.contratoId || null, variante: estado.variante });
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Novo orçamento</DialogTitle>
+          </DialogHeader>
+
+          <div className="min-w-0 space-y-1.5">
+            <Label htmlFor="novo-cliente">Cliente</Label>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" aria-hidden="true" />
+              <Input
+                id="novo-cliente"
+                type="search"
+                placeholder="Nome ou CNPJ"
+                value={estado.busca}
+                onChange={(evento) => setEstado((atual) => ({ ...atual, busca: evento.target.value }))}
+                autoComplete="off"
+                className="pl-9"
+              />
+            </div>
+            <div role="listbox" aria-label="Clientes" className="max-h-56 overflow-y-auto rounded-md border border-border">
+              {lista.length ? (
+                lista.map((cadastro) => (
+                  <button
+                    key={cadastro.id}
+                    type="button"
+                    role="option"
+                    aria-selected={cadastro.code === estado.code}
+                    onClick={() => escolher(cadastro.code)}
+                    className={cn(
+                      "flex w-full items-center gap-2 border-l-4 border-t border-t-muted px-3 py-2 text-left text-sm first:border-t-0",
+                      cadastro.code === estado.code ? "border-l-foreground bg-background" : "border-l-transparent hover:bg-surface-hover",
+                    )}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-bold">{cadastro.nome}</span>
+                      {cadastro.cnpj ? (
+                        <span className="block truncate text-xs font-semibold text-muted-foreground">{formatarCnpj(cadastro.cnpj)}</span>
+                      ) : null}
+                    </span>
+                    {cadastro.estagio === "prospect" ? <SeloProspect /> : null}
+                  </button>
+                ))
+              ) : (
+                <p className="px-3 py-4 text-center text-sm font-bold text-muted-foreground">Nenhum cliente</p>
+              )}
+            </div>
+            {prospect ? null : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setEstado((atual) => ({ ...atual, prospect: { nome: atual.busca.trim(), cnpj: "" } }))}
+                disabled={ocupado}
+              >
+                <Plus aria-hidden="true" />
+                Novo prospect
+              </Button>
+            )}
+          </div>
+
+          {prospect ? (
+            <section aria-label="Novo prospect" className="grid gap-3 rounded-md border border-border bg-background p-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Campo id="prospect-nome" rotulo="Nome">
+                  <Input
+                    id="prospect-nome"
+                    value={prospect.nome}
+                    onChange={(evento) => setEstado((atual) => ({ ...atual, prospect: { ...prospect, nome: evento.target.value } }))}
+                    maxLength={120}
+                    autoComplete="off"
+                  />
+                </Campo>
+                <Campo id="prospect-cnpj" rotulo="CNPJ">
+                  <Input
+                    id="prospect-cnpj"
+                    value={prospect.cnpj}
+                    onChange={(evento) => setEstado((atual) => ({ ...atual, prospect: { ...prospect, cnpj: evento.target.value } }))}
+                    maxLength={20}
+                    autoComplete="off"
+                  />
+                </Campo>
+              </div>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setEstado((atual) => ({ ...atual, prospect: null }))}
+                  disabled={ocupado}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={ocupado || prospect.nome.trim().length < 2}
+                  onClick={async () => {
+                    const code = await onCriarProspect(prospect);
+                    if (code) setEstado((atual) => ({ ...atual, prospect: null, busca: "", code, contratoId: "" }));
+                  }}
+                >
+                  Criar prospect
+                </Button>
+              </div>
+            </section>
+          ) : null}
+
+          {escolhido ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Campo id="novo-contrato" rotulo="Contrato">
+                <select
+                  id="novo-contrato"
+                  value={estado.contratoId}
+                  onChange={(evento) => setEstado((atual) => ({ ...atual, contratoId: evento.target.value }))}
+                  disabled={ocupado}
+                  className={CAMPO_SELECT}
+                >
+                  <option value="">Sem contrato</option>
+                  {doCliente.map((contrato) => (
+                    <option key={contrato.id} value={contrato.id}>
+                      {`${contrato.nome} · ${vigenciaDoContrato(contrato)}`}
+                    </option>
+                  ))}
+                </select>
+              </Campo>
+              <div className="min-w-0 space-y-1.5">
+                <span className="text-sm font-medium">Tabela</span>
+                <div role="group" aria-label="Tabela" className="flex gap-0.5 rounded-lg bg-muted p-1">
+                  {VARIANTES.map((variante) => (
+                    <button
+                      key={variante}
+                      type="button"
+                      aria-pressed={estado.variante === variante}
+                      onClick={() => setEstado((atual) => ({ ...atual, variante }))}
+                      className={cn(
+                        "inline-flex h-8 flex-1 items-center justify-center rounded-md border px-3 text-sm font-bold transition-colors",
+                        estado.variante === variante
+                          ? "border-border bg-card text-foreground"
+                          : "border-transparent text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {variante}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {erro ? (
+            <p
+              role="alert"
+              className="rounded-md border border-destructive-soft-border bg-destructive-soft px-3 py-2 text-sm font-semibold text-destructive-soft-foreground"
+            >
+              {erro}
+            </p>
+          ) : null}
+
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={onCancelar} disabled={ocupado}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={ocupado || !estado.code}>
+              {ocupado ? "Criando..." : "Criar orçamento"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}

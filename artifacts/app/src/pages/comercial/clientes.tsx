@@ -1,15 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  collection,
-  doc,
-  getDoc,
-  onSnapshot,
-  query,
-  where,
-  type DocumentData,
-  type Firestore,
-  type Query,
-} from "firebase/firestore";
+import { collection, doc, getDoc, query, where } from "firebase/firestore";
 
 import { useToast } from "@/hooks/use-toast";
 import { chamarComercial, novaChave, type CallableDoCadastro } from "@/lib/comercial/api";
@@ -30,11 +20,11 @@ import {
   payloadMarcarCliente,
   payloadNovoProspect,
   type CadastroComercial,
-  type Carga,
   type ContatoResumo,
   type LocalResumo,
   type Segmento,
 } from "@/lib/comercial/clientes";
+import { carga, useLeitura } from "@/lib/comercial/leitura";
 import { useAppUser } from "@/lib/auth";
 import { firestore } from "@/lib/firebase";
 
@@ -48,42 +38,6 @@ import { ABA_INICIAL, ClientesView, type FichaAba } from "./clientes-view";
  * `customer_contacts`; `contracts` por canReadPrices()), e grava só pelas
  * callables de functions/comercial, com chave de idempotência.
  */
-
-type Leitura<T> = { itens: T[] | null; erro: boolean };
-
-/** Coleção (ou consulta) ao vivo: a tela vê o que a callable gravou sem recarregar. */
-function useLeitura<T>(
-  chave: string | null,
-  consulta: (db: Firestore) => Query<DocumentData>,
-  mapear: (id: string, data: DocumentData) => T | null,
-): Leitura<T> {
-  const [estado, setEstado] = useState<Leitura<T> & { chave: string | null }>({ chave: null, itens: null, erro: false });
-  useEffect(() => {
-    if (!chave) return undefined;
-    if (!firestore) {
-      setEstado({ chave, itens: null, erro: true });
-      return undefined;
-    }
-    return onSnapshot(
-      consulta(firestore),
-      (snapshot) =>
-        setEstado({
-          chave,
-          itens: snapshot.docs.map((row) => mapear(row.id, row.data())).filter((item): item is T => item !== null),
-          erro: false,
-        }),
-      () => setEstado({ chave, itens: null, erro: true }),
-    );
-    // A consulta e o mapeamento dependem só da chave.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chave]);
-  return estado.chave === chave ? estado : { itens: null, erro: false };
-}
-
-/** A leitura como a tela mostra: erro e carregando nunca viram lista vazia. */
-function carga<T>(leitura: Leitura<T>): Carga<T> {
-  return leitura.erro ? "erro" : (leitura.itens ?? "carregando");
-}
 
 type Dialogo =
   | { tipo: "prospect"; chave: string }

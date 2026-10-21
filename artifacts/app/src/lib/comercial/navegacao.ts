@@ -20,18 +20,17 @@ import { COMERCIAL_LIBERADO } from "../liberacao";
  */
 export const COMERCIAL_ROLES = ["owner", "admin", "comercial"] as const satisfies readonly Papel[];
 
-/** Casa do módulo: a fila de orçamentos quando a parte 11 existir. */
+/** Casa do módulo: a fila de orçamentos (parte 11, docs/mockups/ComFila.dc.html). */
 export const ROTA_COMERCIAL = "/comercial";
+/** Montar orçamento (docs/mockups/ComOrcamento.dc.html), aberto pela fila: ?numero=10045. */
+export const ROTA_ORCAMENTO = "/comercial/orcamento";
 export const ROTA_CLIENTES = "/comercial/clientes";
 
 /**
  * Telas do Comercial que já existem no app. Cada parte nova acrescenta a dela:
  * a rota passa a existir e a aba ou o link para ela aparece.
  */
-export const TELAS_DO_COMERCIAL: readonly string[] = [ROTA_CLIENTES];
-
-/** Para onde /comercial leva enquanto a fila de orçamentos (parte 11) não existe. */
-export const DESTINO_DO_COMERCIAL = ROTA_CLIENTES;
+export const TELAS_DO_COMERCIAL: readonly string[] = [ROTA_COMERCIAL, ROTA_ORCAMENTO, ROTA_CLIENTES];
 
 /** Rotas do Comercial que o App registra: nenhuma fora da liberação. */
 export function rotasDoComercial(liberado: boolean = COMERCIAL_LIBERADO): string[] {
@@ -64,11 +63,13 @@ export type AbaDoComercial = {
   id: "orcamentos" | "contratos" | "autorizacoes" | "medicoes";
   rotulo: string;
   href: string;
+  /** Outras telas em que a aba fica marcada (a montagem é da aba Orçamentos). */
+  tambem?: readonly string[];
 };
 
 /** Barra de abas do módulo, na ordem dos mockups (ComFila e ComContrato). */
 export const ABAS_DO_COMERCIAL: readonly AbaDoComercial[] = [
-  { id: "orcamentos", rotulo: "Orçamentos", href: ROTA_COMERCIAL },
+  { id: "orcamentos", rotulo: "Orçamentos", href: ROTA_COMERCIAL, tambem: [ROTA_ORCAMENTO] },
   { id: "contratos", rotulo: "Contratos", href: "/comercial/contratos" },
   { id: "autorizacoes", rotulo: "Autorizações", href: "/comercial/autorizacoes" },
   { id: "medicoes", rotulo: "Medições", href: "/comercial/medicoes" },

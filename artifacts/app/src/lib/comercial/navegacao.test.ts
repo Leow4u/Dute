@@ -16,9 +16,9 @@ import { entrada, modulesForPerson } from "../platform-modules";
 import {
   ABAS_DO_COMERCIAL,
   COMERCIAL_ROLES,
-  DESTINO_DO_COMERCIAL,
   ROTA_CLIENTES,
   ROTA_COMERCIAL,
+  ROTA_ORCAMENTO,
   TELAS_DO_COMERCIAL,
   abasVisiveis,
   abreComercial,
@@ -56,10 +56,10 @@ function menu(role: Papel, liberado: boolean) {
 describe("rotas do Comercial", () => {
   it("só existem com a liberação ligada", () => {
     expect(rotasDoComercial(DESLIGADO)).toEqual([]);
-    expect(rotasDoComercial(LIBERADO)).toEqual([ROTA_COMERCIAL, ROTA_CLIENTES]);
+    expect(rotasDoComercial(LIBERADO)).toEqual([ROTA_COMERCIAL, ROTA_ORCAMENTO, ROTA_CLIENTES]);
   });
 
-  it("o App registra exatamente as rotas do Comercial, com /comercial e /comercial/clientes", () => {
+  it("o App registra exatamente as rotas do Comercial: a fila, a montagem e Clientes", () => {
     expect(APP_PATHS.filter(doComercial)).toEqual(rotasDoComercial(LIBERADO));
   });
 
@@ -72,9 +72,13 @@ describe("rotas do Comercial", () => {
   });
 
   it("soComComercialLiberado: na produção nenhuma rota; na homologação, só as do Comercial", () => {
-    const rotas = [{ path: ROTA_COMERCIAL }, { path: ROTA_CLIENTES }, { path: "/comercial/inexistente" }];
+    const rotas = [{ path: ROTA_COMERCIAL }, { path: ROTA_ORCAMENTO }, { path: ROTA_CLIENTES }, { path: "/comercial/inexistente" }];
     expect(soComComercialLiberado(rotas, DESLIGADO)).toEqual([]);
-    expect(soComComercialLiberado(rotas, LIBERADO).map((rota) => rota.path)).toEqual([ROTA_COMERCIAL, ROTA_CLIENTES]);
+    expect(soComComercialLiberado(rotas, LIBERADO).map((rota) => rota.path)).toEqual([
+      ROTA_COMERCIAL,
+      ROTA_ORCAMENTO,
+      ROTA_CLIENTES,
+    ]);
   });
 
   it("owner, admin e comercial abrem; nenhum outro papel", () => {
@@ -100,17 +104,19 @@ describe("rotas do Comercial", () => {
     expect(abreComercial(undefined, LIBERADO)).toBe(false);
   });
 
-  it("/comercial leva a Clientes enquanto a fila de orçamentos (parte 11) não existe", () => {
-    expect(DESTINO_DO_COMERCIAL).toBe(ROTA_CLIENTES);
-    expect(TELAS_DO_COMERCIAL).toEqual([ROTA_CLIENTES]);
+  it("/comercial é a fila de orçamentos (parte 11): sem redirecionar para Clientes", () => {
+    expect(TELAS_DO_COMERCIAL).toEqual([ROTA_COMERCIAL, ROTA_ORCAMENTO, ROTA_CLIENTES]);
+    expect(APP_SOURCE).not.toMatch(/ComercialRedirect|DESTINO_DO_COMERCIAL/);
+    expect(APP_SOURCE).toMatch(/protectedRoute\("\/comercial", ComercialOrcamentos\)/);
+    expect(APP_SOURCE).toMatch(/protectedRoute\("\/comercial\/orcamento", ComercialOrcamento\)/);
   });
 });
 
 describe("menu do Comercial", () => {
-  it("comercial vê só o grupo Comercial, com Clientes dentro", () => {
-    expect(menu("comercial", LIBERADO)).toEqual([{ label: "Comercial", routes: ["Clientes"] }]);
+  it("comercial vê só o grupo Comercial, com Orçamentos e Clientes dentro", () => {
+    expect(menu("comercial", LIBERADO)).toEqual([{ label: "Comercial", routes: ["Orçamentos", "Clientes"] }]);
     const [comercial] = getNavigationForProfileRole("comercial", null, LIBERADO);
-    expect(comercial.href).toBe(ROTA_CLIENTES);
+    expect(comercial.href).toBe(ROTA_COMERCIAL);
     expect(isModuleGroup(comercial)).toBe(true);
   });
 
@@ -145,9 +151,18 @@ describe("menu do Comercial", () => {
     }
   });
 
-  it("Clientes acende o grupo Comercial", () => {
+  it("Clientes, a fila e a montagem do orçamento acendem o grupo Comercial", () => {
     const modules = getNavigationForProfileRole("admin", null, LIBERADO);
-    expect(getActiveModule(modules, ROTA_CLIENTES).label).toBe("Comercial");
+    for (const path of [ROTA_CLIENTES, ROTA_COMERCIAL, ROTA_ORCAMENTO]) {
+      expect(getActiveModule(modules, path).label, path).toBe("Comercial");
+    }
+  });
+
+  it("Orçamentos não acende em Clientes: a rota da fila é exata", () => {
+    const [comercial] = getNavigationForProfileRole("comercial", null, LIBERADO);
+    const orcamentos = comercial.routes.find((route) => route.label === "Orçamentos")!;
+    expect(orcamentos.href).toBe(ROTA_COMERCIAL);
+    expect(orcamentos.exact).toBe(true);
   });
 
   it("os grupos do WMS continuam como eram: grupo é quem tem mais de uma tela", () => {
@@ -159,8 +174,8 @@ describe("menu do Comercial", () => {
     const comercial = getMobileNavigation(getNavigationForProfileRole("comercial", null, LIBERADO));
     expect(comercial.bar.map((module) => module.label)).toEqual(["Comercial"]);
     const owner = getMobileNavigation(getNavigationForProfileRole("owner", null, LIBERADO));
-    expect(owner.more.flatMap(({ module, routes }) => routes.map((route) => `${module.label} · ${route.label}`))).toContain(
-      "Comercial · Clientes",
+    expect(owner.more.flatMap(({ module, routes }) => routes.map((route) => `${module.label} · ${route.label}`))).toEqual(
+      expect.arrayContaining(["Comercial · Orçamentos", "Comercial · Clientes"]),
     );
   });
 });
@@ -221,9 +236,14 @@ describe("abas do módulo (Orçamentos · Contratos · Autorizações · Mediç�
     expect(ABAS_DO_COMERCIAL.map((aba) => aba.rotulo)).toEqual(["Orçamentos", "Contratos", "Autorizações", "Medições"]);
   });
 
-  it("aba sem tela fica oculta: hoje nenhuma tem", () => {
-    expect(abasVisiveis(TELAS_DO_COMERCIAL)).toEqual([]);
-    expect(abasVisiveis()).toEqual([]);
+  it("aba sem tela fica oculta: hoje só Orçamentos tem", () => {
+    expect(abasVisiveis(TELAS_DO_COMERCIAL).map((aba) => aba.id)).toEqual(["orcamentos"]);
+    expect(abasVisiveis().map((aba) => aba.id)).toEqual(["orcamentos"]);
+  });
+
+  it("a montagem do orçamento é da aba Orçamentos", () => {
+    const orcamentos = ABAS_DO_COMERCIAL.find((aba) => aba.id === "orcamentos")!;
+    expect(orcamentos.tambem).toEqual([ROTA_ORCAMENTO]);
   });
 
   it("cada tela nova acende a aba dela, na ordem", () => {

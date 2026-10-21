@@ -17,7 +17,7 @@ export function AbasDoComercial({ telas = TELAS_DO_COMERCIAL }: { telas?: readon
   return (
     <nav aria-label="Comercial" className="inline-flex flex-wrap gap-0.5 self-start rounded-lg bg-muted p-1">
       {abas.map((aba) => {
-        const atual = isRouteActive(location, aba.href, true);
+        const atual = [aba.href, ...(aba.tambem ?? [])].some((href) => isRouteActive(location, href, true));
         return (
           <Link
             key={aba.id}
