@@ -23,6 +23,11 @@ import { WAREHOUSE_POSITIONS_COLLECTION } from "./warehouse-positions.js";
  * allow_stacking explícito e apoio integral sobre uma caixa já guardada.
  * O padrão preserva a altura; apoiar de lado exige allow_tilt. A orientação,
  * a caixa de apoio e a altura da base são guardadas com a posição física.
+ *
+ * Na abertura, a prateleira escolhida manualmente entra mesmo quando esse
+ * cálculo não confirma. A sugestão automática continua por ele. A caixa fica
+ * com opening_model_fit false para a capacidade real ser lida depois do que
+ * foi guardado, não do volume estimado na tela.
  */
 
 export const WAREHOUSE_BOXES_COLLECTION = "warehouse_boxes";
@@ -110,6 +115,8 @@ export type SlottingCandidate = {
   leftover_m: number;
   sequence: number;
   placement: Placement;
+  /** false quando a abertura aceitou a prateleira sem o encaixe calculado. */
+  model_fit?: boolean;
 };
 
 export type SlottingResult = {
@@ -162,6 +169,8 @@ export const SuggestWarehousePositionSchema = z.object({
   ...placementFields,
   sku_codes: z.array(z.string().trim().min(1).max(120)).max(50).optional(),
   exclude: z.array(positionCodeField).max(20).optional(),
+  // Só libera a prévia manual enquanto a sessão de abertura desse cliente está aberta.
+  opening_inventory: z.boolean().optional(),
 });
 
 export const CreateWarehouseBoxSchema = z.object({
@@ -396,6 +405,55 @@ export function placementFor(
   return null;
 }
 
+type BoxAxis = "length" | "width" | "height";
+
+function placementOn(box: BoxDimensions, orientation: BoxOrientation): Placement {
+  const axes: Record<BoxAxis, number> = { length: box.length_m, width: box.width_m, height: box.height_m };
+  const [front, depth, height] = orientation.split("_") as [BoxAxis, BoxAxis, BoxAxis];
+  return { front_m: axes[front], depth_m: axes[depth], height_m: axes[height], orientation };
+}
+
+function orientationsFor(options: BoxPlacementOptions): BoxOrientation[] {
+  const orientations = options.allow_tilt === true ? [...BOX_ORIENTATIONS] : BOX_ORIENTATIONS.slice(0, 2);
+  const filtered = orientations.filter((orientation) => !options.orientation || orientation === options.orientation);
+  if (filtered.length) return filtered;
+  return [options.orientation ?? "length_width_height"];
+}
+
+/**
+ * Encaixe da abertura. Quando o cálculo confirma, devolve essa posição.
+ * Quando não confirma, registra a menor frente que cabe no vão cadastrado,
+ * ou a orientação pedida se nenhuma couber. Não inventa caixa de apoio:
+ * a frente pode passar do comprimento, e opening_model_fit marca o registro.
+ */
+export function resolveOpeningPlacement(
+  position: Pick<SlottingPosition, "length_m" | "depth_m" | "height_m" | "max_weight_kg" | "customer_code">,
+  box: BoxDimensions,
+  occupancy: PositionOccupancy = emptyOccupancy(),
+  options: BoxPlacementOptions = {},
+): Placement & { model_fit: boolean } {
+  const verified = placementFor(position, box, occupancy, options);
+  if (verified) return { ...verified, model_fit: true };
+  const placements = orientationsFor(options).map((orientation) => placementOn(box, orientation));
+  const fitsOpening = placements.filter((placement) =>
+    placement.depth_m <= position.depth_m + TOLERANCE_M &&
+    placement.height_m <= position.height_m + TOLERANCE_M);
+  const [chosen] = (fitsOpening.length ? fitsOpening : placements)
+    .slice()
+    .sort((left, right) => left.front_m - right.front_m || left.height_m - right.height_m);
+  return { ...chosen!, model_fit: false };
+}
+
+/** Cópia de operations.openingInventorySessionDocumentId. O teste de integração trava as duas. */
+export function openingSessionDocId(customerCode: string) {
+  return `opening_${customerCode}`.replace(/[^\w.-]/g, "_").slice(0, 900);
+}
+
+async function openingInventoryIsOpen(db: Firestore, customerCode: string) {
+  const snapshot = await db.collection("opening_inventory_sessions").doc(openingSessionDocId(customerCode)).get();
+  return snapshot.exists && snapshot.get("status") === "open" && snapshot.get("customer_code") === customerCode;
+}
+
 /**
  * Escolhe a prateleira para uma caixa. Determinístico: a mesma entrada dá a
  * mesma resposta. Devolve também as alternativas e, sem resposta, o motivo.
@@ -542,27 +600,52 @@ export async function suggestWarehousePosition(
   const { positions, occupancy } = await readSlottingContext(db, customerCode);
   const locationCode = String(input.location_id ?? "").trim().toUpperCase();
   let candidates = positions;
+  let selected: SlottingPosition | undefined;
   if (locationCode) {
     // A leitura já é limitada ao cliente: uma posição de outra zona não é
     // exposta nem aceita pela prévia manual.
-    const selected = positions.find((position) => position.code === locationCode);
+    selected = positions.find((position) => position.code === locationCode);
     if (!selected) throw new HttpsError("not-found", "Prateleira não cadastrada na zona deste cliente.");
     if ((selected.status ?? "active") !== "active") {
       throw new HttpsError("failed-precondition", "Escolha uma prateleira ativa da zona do cliente.");
     }
     candidates = [selected];
   }
+  const openingChoice = input.opening_inventory === true && selected != null && await openingInventoryIsOpen(db, customerCode);
   const result = suggestPosition(
     { ...box, allow_tilt: input.allow_tilt, allow_stacking: input.allow_stacking, support_box_code: input.support_box_code, orientation: input.orientation, customer_code: customerCode, sku_codes: input.sku_codes ?? [] },
     candidates,
     occupancy,
-    { exclude: input.exclude ?? [] },
+    { exclude: (input.exclude ?? []).filter((code) => !(openingChoice && code.trim().toUpperCase() === locationCode)) },
   );
-  if (locationCode) {
+  if (locationCode && selected) {
+    if (!result.position && openingChoice) {
+      const current = occupancy.get(selected.code) ?? emptyOccupancy();
+      const resolved = resolveOpeningPlacement(selected, box, current, {
+        allow_tilt: input.allow_tilt,
+        allow_stacking: input.allow_stacking,
+        support_box_code: input.support_box_code,
+        orientation: input.orientation,
+      });
+      if (!resolved.model_fit) {
+        const { model_fit: _fit, ...placement } = resolved;
+        const freeFront = selected.length_m - current.front_used_m;
+        result.position = {
+          code: selected.code,
+          tier: 3,
+          reason: "Posição escolhida na abertura. O cálculo de encaixe não confirmou.",
+          leftover_m: round(freeFront - placement.front_m, 3),
+          sequence: Number(selected.sequence ?? Number.MAX_SAFE_INTEGER),
+          placement,
+          model_fit: false,
+        };
+        result.rejected = null;
+      }
+    }
     if (!result.position) {
       throw new HttpsError("failed-precondition", "A caixa não cabe nesta prateleira ou ela foi excluída da escolha. Selecione outra.");
     }
-    result.position.reason = "Prateleira selecionada manualmente.";
+    if (result.position.model_fit !== false) result.position.reason = "Prateleira selecionada manualmente.";
   }
   return {
     ok: true,
@@ -595,6 +678,8 @@ export type WarehouseBoxRecord = {
   line_count: number;
   unit_count: number;
   total_cost: number;
+  /** Presente só quando a abertura guardou sem o encaixe calculado. */
+  opening_model_fit?: false;
 };
 
 export type CreateWarehouseBoxResult = { ok: true; box: WarehouseBoxRecord; replayed?: boolean };
@@ -611,9 +696,11 @@ async function readReceipt(transaction: Transaction, ref: DocumentReference, inp
 
 /**
  * Cria a caixa já guardada na posição informada (a sugerida, ou outra que o
- * motor ofereceu). Reconfere na transação que a posição é da zona do cliente,
- * está ativa e ainda tem espaço na orientação confirmada. A recusa vale só
- * para a caixa atual e fica no evento, sem mudar o cadastro da prateleira.
+ * motor ofereceu). Reconfere na transação que a posição é da zona do cliente
+ * e está ativa. Fora da abertura, também exige o encaixe calculado. Com a
+ * sessão de abertura aberta, a posição escolhida entra mesmo sem esse encaixe
+ * e fica marcada. A recusa vale só para a caixa atual e fica no evento, sem
+ * mudar o cadastro da prateleira.
  */
 export async function createWarehouseBox(
   db: Firestore,
@@ -632,6 +719,8 @@ export async function createWarehouseBox(
   }
   const nonce = String(input.idempotency_key ?? "").trim();
   if (!nonce) throw new HttpsError("invalid-argument", "Chave de idempotência obrigatória.");
+  const sessionId = String(input.session_id ?? "").trim();
+  const sessionRef = sessionId ? db.collection("opening_inventory_sessions").doc(sessionId) : null;
   const inputHash = digest(input, 64);
   const receiptRef = db.collection(OPERATIONS_COLLECTION).doc(`op_warehouse_box_${digest({ customerCode, nonce })}`);
   const counterRef = db.collection(WAREHOUSE_COUNTERS_COLLECTION).doc(BOX_COUNTER_DOC);
@@ -642,13 +731,14 @@ export async function createWarehouseBox(
     const replay = await readReceipt(transaction, receiptRef, inputHash);
     if (replay) return { ...(replay as CreateWarehouseBoxResult), replayed: true };
 
-    const [counterSnapshot, positionSnapshot, boxesSnapshot, refusedSnapshot] = await Promise.all([
+    const [counterSnapshot, positionSnapshot, boxesSnapshot, refusedSnapshot, sessionSnapshot] = await Promise.all([
       transaction.get(counterRef),
       transaction.get(positionRef),
       transaction.get(
         db.collection(WAREHOUSE_BOXES_COLLECTION).where("location_id", "==", locationCode).where("status", "in", ["stored", "committing"]),
       ),
       refusedRef ? transaction.get(refusedRef) : Promise.resolve(null),
+      sessionRef ? transaction.get(sessionRef) : Promise.resolve(null),
     ]);
     if (!positionSnapshot.exists) {
       throw new HttpsError("not-found", `Posição ${locationCode} não está cadastrada em Estoque › Posições.`);
@@ -670,13 +760,23 @@ export async function createWarehouseBox(
       boxesSnapshot.docs.map((document) => document.data()),
       [],
     ).get(locationCode) ?? emptyOccupancy();
-    const placement = placementFor(position, box, occupancy, input);
-    if (!placement) {
+    const verified = placementFor(position, box, occupancy, input);
+    const sessionOpen = Boolean(
+      sessionSnapshot?.exists &&
+      sessionId === openingSessionDocId(customerCode) &&
+      sessionSnapshot.get("status") === "open" &&
+      sessionSnapshot.get("customer_code") === customerCode,
+    );
+    if (!verified && !sessionOpen) {
       throw new HttpsError(
         "failed-precondition",
         `A caixa de ${describeBox(box)} não cabe na prateleira ${locationCode}: frente livre de ${centimeters(Math.max(0, position.length_m - occupancy.front_used_m))} cm, profundidade ${centimeters(position.depth_m)} cm, altura ${centimeters(position.height_m)} cm${position.max_weight_kg != null ? `, peso máximo ${position.max_weight_kg} kg` : ""}. Peça outra sugestão.`,
       );
     }
+    const resolved = verified
+      ? { ...verified, model_fit: true as const }
+      : resolveOpeningPlacement(position, box, occupancy, input);
+    const { model_fit: openingModelFit, ...placement } = resolved;
     if (refusedRef && !refusedSnapshot?.exists) {
       throw new HttpsError("not-found", `Posição recusada ${refusalCode} não está cadastrada.`);
     }
@@ -685,7 +785,6 @@ export async function createWarehouseBox(
     const code = formatBoxCode(sequence);
     const boxRef = db.collection(WAREHOUSE_BOXES_COLLECTION).doc(code);
     const now = new Date().toISOString();
-    const sessionId = String(input.session_id ?? "").trim();
     const suggestion = input.suggestion
       ? {
           position: input.suggestion.position ? String(input.suggestion.position).trim().toUpperCase() : null,
@@ -726,6 +825,7 @@ export async function createWarehouseBox(
       line_count: 0,
       unit_count: 0,
       total_cost: 0,
+      ...(openingModelFit ? {} : { opening_model_fit: false as const }),
     };
     transaction.create(boxRef, {
       id: code,
@@ -755,7 +855,7 @@ export async function createWarehouseBox(
           : suggestion?.position
             ? "na posição sugerida pelo sistema"
             : "posição informada sem sugestão"
-      }${refusal ? ` · recusou ${refusal.position}: ${refusal.reason}` : ""}`,
+      }${refusal ? ` · recusou ${refusal.position}: ${refusal.reason}` : ""}${openingModelFit ? "" : " · encaixe calculado não confirmou; posição registrada na abertura"}`,
       severity: "info",
       entity_type: "warehouse_box",
       entity_id: code,

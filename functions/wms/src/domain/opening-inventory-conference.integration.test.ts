@@ -22,7 +22,7 @@ import {
   setOpeningConferenceBoxState,
   storeOpeningConferenceBox,
 } from "./opening-inventory-conference.js";
-import { createWarehouseBox, removeWarehouseBox, suggestWarehousePosition } from "./warehouse-boxes.js";
+import { createWarehouseBox, openingSessionDocId, removeWarehouseBox, suggestWarehousePosition } from "./warehouse-boxes.js";
 import { seedDefaultWarehouseLayout, upsertWarehousePositions } from "./warehouse-positions.js";
 
 type Row = Record<string, unknown>;
@@ -343,7 +343,7 @@ describe("inventário de abertura: conferir antes de guardar", () => {
     await assertNoStock();
   });
 
-  it("duas guardas concorrentes não usam a mesma última vaga", async () => {
+  it("duas guardas concorrentes na última vaga: a segunda entra marcada e o lançamento não duplica", async () => {
     await upsertWarehousePositions(db, { positions: [{ aisle: "A", shelf: 1,
       length_m: 0.5, depth_m: 0.5, height_m: 0.65, customer_code: CUSTOMER }] }, admin);
     const first = await createBox();
@@ -354,12 +354,13 @@ describe("inventário de abertura: conferir antes de guardar", () => {
     await change(second.code, "review");
     const inputs = await Promise.all([storeInput(first.code), storeInput(second.code)]);
     const results = await Promise.allSettled(inputs.map((input) => storeOpeningConferenceBox(db, input, actor)));
-    assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
-    assert.equal(results.filter((result) => result.status === "rejected").length, 1);
+    assert.equal(results.filter((result) => result.status === "fulfilled").length, 2);
     const boxes = await rows("warehouse_boxes");
-    assert.equal(boxes.filter((box) => box.status === "stored").length, 1);
-    assert.equal(boxes.filter((box) => box.status === "reviewed").length, 1);
-    assert.equal((await rows("movements")).length, 1);
+    const stored = boxes.filter((box) => box.status === "stored" && box.location_id === "A-01");
+    assert.equal(stored.length, 2);
+    assert.equal(stored.filter((box) => box.opening_model_fit === false).length, 1);
+    assert.equal((await rows("movements")).length, 2);
+    assert.equal((await db.collection("warehouse_positions").doc("A-01").get()).get("occupancy_revision"), 2);
   });
 
   it("retomadas simultâneas de um produto novo não liberam edição de uma linha já publicada", async () => {
@@ -440,5 +441,76 @@ describe("guarda de conferência com empilhamento", () => {
     assert.equal(released.support_box_code, null);
     assert.equal(released.base_height_m, null);
     await removeWarehouseBox(db, { code: base.box.code, customer_code: CUSTOMER }, actor);
+  });
+
+  it("na abertura, a prateleira escolhida entra mesmo sem o encaixe calculado", async () => {
+    assert.equal(openingSessionDocId(CUSTOMER), openingInventorySessionDocumentId(CUSTOMER));
+    assert.equal(sessionId, openingSessionDocId(CUSTOMER));
+    await createWarehouseBox(db, {
+      customer_code: CUSTOMER, length_m: 1.8, width_m: 0.5, height_m: 0.4, location_id: "A-02", idempotency_key: nonce(),
+    }, actor);
+    const measured = { length_m: 0.5, width_m: 0.4, height_m: 0.305, allow_tilt: true, allow_stacking: true };
+    await assert.rejects(
+      suggestWarehousePosition(db, { customer_code: CUSTOMER, ...measured, location_id: "A-02" }, actor),
+      /não cabe/,
+    );
+    const preview = await suggestWarehousePosition(db, {
+      customer_code: CUSTOMER, ...measured, location_id: "A-02", exclude: ["A-02"], opening_inventory: true,
+    }, actor);
+    assert.equal(preview.position?.code, "A-02");
+    assert.equal(preview.position?.model_fit, false);
+    assert.equal(preview.position?.placement.orientation, "height_length_width");
+    assert.equal(preview.position?.placement.front_m, 0.305);
+    assert.match(preview.position?.reason ?? "", /não confirmou/);
+    const automatic = await suggestWarehousePosition(db, { customer_code: CUSTOMER, ...measured, opening_inventory: true }, actor);
+    assert.equal(automatic.position?.code, "A-01");
+    assert.equal(automatic.position?.model_fit, undefined);
+    await db.collection("warehouse_positions").doc("A-03").update({ status: "blocked" });
+    await assert.rejects(
+      suggestWarehousePosition(db, { customer_code: CUSTOMER, ...measured, location_id: "A-03", opening_inventory: true }, actor),
+      /ativa/,
+    );
+
+    const { code } = await createBox();
+    await save(code);
+    await change(code, "review");
+    const stored = await storeOpeningConferenceBox(db, {
+      ...await storeInput(code, "A-02"), ...measured,
+      orientation: preview.position!.placement.orientation, support_box_code: null,
+    }, actor);
+    assert.equal(stored.box.status, "stored");
+    assert.equal(stored.box.location_id, "A-02");
+    assert.equal(stored.box.opening_model_fit, false);
+    assert.equal(stored.box.front_m, 0.305);
+    const started = (await db.collection("events").where("type", "==", "inventory.opening_box_storage_started").get()).docs
+      .map((row) => row.data())
+      .find((event) => event.entity_id === code);
+    assert.equal(started?.payload.opening_model_fit, false);
+    assert.ok(Math.abs(Number(started?.payload.occupancy_before.front_used_m) - 1.8) < 0.001);
+
+    const second = await createBox();
+    await save(second.code, { client_item_code: "CAMISA-M", size: "M" });
+    await change(second.code, "review");
+    const again = await storeOpeningConferenceBox(db, { ...await storeInput(second.code, "A-02"), ...measured }, actor);
+    assert.equal(again.box.location_id, "A-02");
+    assert.equal(again.box.opening_model_fit, false);
+
+    const legacy = await createWarehouseBox(db, {
+      customer_code: CUSTOMER, session_id: sessionId, ...measured, location_id: "A-02", idempotency_key: nonce(),
+    }, actor);
+    assert.equal(legacy.box.opening_model_fit, false);
+    const legacyEvent = (await db.collection("events").where("entity_id", "==", legacy.box.code).get()).docs
+      .map((row) => row.data())
+      .find((event) => event.type === "warehouse.box_stored");
+    assert.match(String(legacyEvent?.description), /não confirmou/);
+
+    await db.collection("opening_inventory_sessions").doc(sessionId).update({ status: "completed" });
+    await assert.rejects(
+      suggestWarehousePosition(db, { customer_code: CUSTOMER, ...measured, location_id: "A-02", opening_inventory: true }, actor),
+      /não cabe/,
+    );
+    await assert.rejects(createWarehouseBox(db, {
+      customer_code: CUSTOMER, session_id: sessionId, ...measured, location_id: "A-02", idempotency_key: nonce(),
+    }, actor), /não cabe/);
   });
 });

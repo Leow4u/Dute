@@ -9,6 +9,7 @@ import {
   emptyOccupancy,
   formatBoxCode,
   placementFor,
+  resolveOpeningPlacement,
   suggestPosition,
   type SlottingPosition,
 } from "./warehouse-boxes.js";
@@ -95,6 +96,82 @@ describe("como a caixa entra na prateleira", () => {
   it("não perde uma caixa por arredondamento: três de 0,60 numa frente de 1,80", () => {
     const occupancy = { ...emptyOccupancy(), front_used_m: 1.2 };
     assert.deepEqual(placementFor(shelf("A-01", 1), { ...box, length_m: 0.6, width_m: 0.6 }, occupancy), { front_m: 0.6, depth_m: 0.6, height_m: 0.35, orientation: "length_width_height" });
+  });
+
+  it("na abertura, registra a caixa quando a frente acabou e o volume ainda parece livre", () => {
+    // A-02 do mapa: 1,80 × 0,75 × 0,65 m. Caixa da contagem: 50 × 40 × 30,5 cm.
+    // Quatro caixas de 40 cm tomam 1,60 m de frente; o menor lado da nova é 30,5 cm.
+    const position = shelf("A-02", 2);
+    const incoming = { length_m: 0.5, width_m: 0.4, height_m: 0.305 };
+    const occupancy = { ...emptyOccupancy(), front_used_m: 1.6, box_count: 4 };
+    const options = { allow_tilt: true, allow_stacking: true };
+    assert.equal(placementFor(position, incoming, occupancy, options), null);
+    const observed = resolveOpeningPlacement(position, incoming, occupancy, options);
+    assert.ok(observed);
+    assert.equal(observed.model_fit, false);
+    assert.equal(observed.support_box_code, undefined);
+    assert.equal(observed.orientation, "height_length_width");
+    assert.equal(observed.front_m, 0.305);
+    assert.equal(observed.depth_m, 0.5);
+    assert.equal(observed.height_m, 0.4);
+  });
+
+  it("quando o cálculo confirma, a abertura usa o mesmo encaixe", () => {
+    const position = shelf("A-02", 2);
+    const incoming = { length_m: 0.5, width_m: 0.4, height_m: 0.305 };
+    const options = { allow_tilt: true };
+    const observed = resolveOpeningPlacement(position, incoming, emptyOccupancy(), options);
+    assert.equal(observed.model_fit, true);
+    assert.deepEqual(
+      { front_m: observed.front_m, depth_m: observed.depth_m, height_m: observed.height_m, orientation: observed.orientation },
+      placementFor(position, incoming, emptyOccupancy(), options),
+    );
+  });
+
+  it("na abertura, sem permissão para tombar, registra uma orientação em pé", () => {
+    const incoming = { length_m: 0.5, width_m: 0.4, height_m: 0.305 };
+    const observed = resolveOpeningPlacement(shelf("A-02", 2), incoming, { ...emptyOccupancy(), front_used_m: 1.6 });
+    assert.equal(observed.model_fit, false);
+    assert.equal(observed.orientation, "width_length_height");
+    assert.equal(observed.front_m, 0.4);
+    assert.equal(observed.height_m, 0.305);
+  });
+
+  it("preserva a orientação pedida quando ela não cabe na frente", () => {
+    const incoming = { length_m: 0.5, width_m: 0.4, height_m: 0.305 };
+    const options = { allow_tilt: true, orientation: "length_width_height" as const };
+    const observed = resolveOpeningPlacement(shelf("A-02", 2), incoming, { ...emptyOccupancy(), front_used_m: 1.6 }, options);
+    assert.equal(observed.model_fit, false);
+    assert.equal(observed.orientation, "length_width_height");
+    assert.deepEqual([observed.front_m, observed.depth_m, observed.height_m], [0.5, 0.4, 0.305]);
+  });
+
+  it("registra mesmo uma caixa maior que o vão cadastrado", () => {
+    const position = shelf("A-02", 2);
+    const incoming = { length_m: 2, width_m: 1, height_m: 0.9 };
+    const options = { orientation: "length_width_height" as const };
+    assert.equal(placementFor(position, incoming, emptyOccupancy(), options), null);
+    const observed = resolveOpeningPlacement(position, incoming, emptyOccupancy(), options);
+    assert.equal(observed.model_fit, false);
+    assert.deepEqual([observed.front_m, observed.depth_m, observed.height_m], [2, 1, 0.9]);
+  });
+
+  it("o peso acima do cadastro não bloqueia o registro da abertura", () => {
+    const position = shelf("A-02", 2, { max_weight_kg: 10 });
+    const incoming = { length_m: 0.5, width_m: 0.4, height_m: 0.305, gross_weight_kg: 12 };
+    assert.equal(placementFor(position, incoming), null);
+    const observed = resolveOpeningPlacement(position, incoming);
+    assert.equal(observed.model_fit, false);
+    assert.equal(observed.front_m, 0.4);
+  });
+
+  it("a prévia aceita o sinal de abertura sem mudar o contrato das medidas", () => {
+    const parsed = SuggestWarehousePositionSchema.parse({
+      length_m: 0.5, width_m: 0.4, height_m: 0.305, location_id: "a-02", opening_inventory: true,
+    });
+    assert.equal(parsed.opening_inventory, true);
+    assert.equal(parsed.location_id, "A-02");
+    assert.equal(SuggestWarehousePositionSchema.parse({ length_m: 0.5, width_m: 0.4, height_m: 0.3 }).opening_inventory, undefined);
   });
 });
 

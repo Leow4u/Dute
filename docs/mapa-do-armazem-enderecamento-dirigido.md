@@ -220,7 +220,9 @@ identificado pelo seu código.
    lado é necessário permitir essa orientação; a sugestão mostra frente,
    profundidade e altura efetivas. A preferência é por SKU conhecido, sem
    inferência de família pelo nome.
-4. **Confirmar guarda** revalida zona, capacidade, peso e orientação. A caixa
+4. **Confirmar guarda** revalida a zona e a prateleira ativa. Na abertura, a
+   prateleira escolhida manualmente entra mesmo quando o cálculo de encaixe
+   não confirma; a sugestão automática continua usando o cálculo. A caixa
    fica `committing`, reservando espaço; cada linha materializa saldo e
    checkpoint na mesma transação. **Retomar guarda** continua sem duplicar
    linhas publicadas. A revisão da prateleira serializa guardas concorrentes.

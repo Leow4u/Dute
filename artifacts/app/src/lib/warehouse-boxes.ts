@@ -58,6 +58,8 @@ export type SlottingCandidate = {
   leftover_m: number;
   sequence: number;
   placement: { front_m: number; depth_m: number; height_m?: number; orientation?: BoxOrientation; support_box_code?: string; base_height_m?: number };
+  /** false quando a abertura aceitou a prateleira sem o encaixe calculado. */
+  model_fit?: boolean;
 };
 
 /** Resposta de suggestWarehousePosition: a posição, as alternativas ou o motivo. */
