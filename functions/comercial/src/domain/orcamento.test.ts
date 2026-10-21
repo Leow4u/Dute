@@ -8,6 +8,7 @@ import {
   ErroOrcamento,
   MARCAS_ORCAMENTO,
   acaoJaFeita,
+  dispensaDaAprovacao,
   entradasNaTabelaNova,
   marcasDoOrcamento,
   mesmoPreco,
@@ -157,6 +158,26 @@ describe("preço das linhas", () => {
           contexto({ tabela: null }),
         ),
       /armazenagem/i,
+    );
+  });
+
+  it("item inativo depois: a linha já gravada com ele (mesmo id, mesmo item) continua; linha nova ou de outro item, não", () => {
+    const inativos = contexto({
+      itens: new Map([MESA, { ...CADEIRA, ativo: false }, COFRE, ARMAZENAGEM].map((item) => [item.id, item])),
+      herdada: (linhaId, lpuItemId) => linhaId === "ln_cadeira" && lpuItemId === "lpu_cadeira",
+    });
+    const herdada = precificarLinhas([{ id: "ln_cadeira", origem: "tabela", lpu_item_id: "lpu_cadeira", quantidade: "40" }], inativos);
+    assert.deepEqual([herdada.linhas[0].id, herdada.linhas[0].preco, herdada.total_cents], ["ln_cadeira", "18.50", 40 * 1850]);
+    erro(() => precificarLinhas([{ origem: "tabela", lpu_item_id: "lpu_cadeira", quantidade: "1" }], inativos), /inativo/);
+    erro(() => precificarLinhas([{ id: "ln_mesa", origem: "tabela", lpu_item_id: "lpu_cadeira", quantidade: "1" }], inativos), /inativo/);
+    // Sem a linha herdada, o item inativo é recusado como antes.
+    erro(
+      () =>
+        precificarLinhas([{ id: "ln_cadeira", origem: "tabela", lpu_item_id: "lpu_cadeira", quantidade: "40" }], {
+          ...inativos,
+          herdada: undefined,
+        }),
+      /inativo/,
     );
   });
 
@@ -407,6 +428,105 @@ describe("linhas gravadas numa tabela nova (duplicar, trocar contrato ou variant
   });
 });
 
+describe("aprovação dispensada na RV de execução (parte 10)", () => {
+  const linha = (id: string, extra: Partial<LinhaDoOrcamento> = {}): LinhaDoOrcamento => ({
+    id,
+    lpu_item_id: "lpu_mesa",
+    codigo: "DTL-0001-T",
+    item: "Mesa",
+    descricao: "Transporte de mesa",
+    servico: "Transporte",
+    unidade: "UN",
+    quantidade: "10",
+    preco: "40.00",
+    preco_tabela: "40.00",
+    origem: "tabela",
+    motivo: null,
+    origem_local: null,
+    destino_local: null,
+    total_cents: 40000,
+    preco_anterior: null,
+    ...extra,
+  });
+  const fechada = {
+    tabela_id: "pt_itau_v1",
+    total_cents: 40000 + 18500 * 2,
+    linhas: [linha("ln_mesa"), linha("ln_cadeira", { lpu_item_id: "lpu_cadeira", preco: "18.50", preco_tabela: "18.50", quantidade: "2", total_cents: 37000 })],
+  };
+  const execucao = (linhas: LinhaDoOrcamento[], extra: Partial<{ tipo_rv: string; tabela_id: string | null }> = {}) => ({
+    tipo_rv: "execucao",
+    tabela_id: "pt_itau_v1",
+    linhas,
+    total_cents: linhas.reduce((soma, item) => soma + item.total_cents, 0),
+    ...extra,
+  });
+
+  it("dispensa: só quantidades de linhas de tabela mudam, e o total não passa o fechado", () => {
+    // Menos mesas, as mesmas cadeiras.
+    assert.deepEqual(dispensaDaAprovacao(execucao([linha("ln_mesa", { quantidade: "8", total_cents: 32000 }), fechada.linhas[1]]), fechada), {
+      dispensada: true,
+    });
+    // Linha tirada (quantidade zero) e o mesmo total também dispensam.
+    assert.deepEqual(dispensaDaAprovacao(execucao([fechada.linhas[0]]), fechada), { dispensada: true });
+    assert.deepEqual(dispensaDaAprovacao(execucao(fechada.linhas), fechada), { dispensada: true });
+  });
+
+  it("não dispensa: total maior, linha nova, alterada, avulsa, ajuste, outro item, outro preço, outra tabela, outro tipo ou sem RV fechada", () => {
+    const motivo = (resultado: ReturnType<typeof dispensaDaAprovacao>) => (resultado.dispensada ? "dispensada" : resultado.motivo);
+    const casos: Array<[string, ReturnType<typeof dispensaDaAprovacao>, RegExp]> = [
+      ["total maior", dispensaDaAprovacao(execucao([linha("ln_mesa", { quantidade: "30", total_cents: 120000 })]), fechada), /total/],
+      ["linha nova", dispensaDaAprovacao(execucao([fechada.linhas[0], linha("ln_nova", { quantidade: "1", total_cents: 4000 })]), fechada), /nova/],
+      [
+        "alterada",
+        dispensaDaAprovacao(execucao([linha("ln_mesa", { origem: "alterado", preco: "35.00", motivo: "Desconto", quantidade: "1", total_cents: 3500 })]), fechada),
+        /alterado/,
+      ],
+      ["avulsa", dispensaDaAprovacao(execucao([linha("ln_mesa", { origem: "avulso", lpu_item_id: null, total_cents: 100 })]), fechada), /avulso/],
+      ["ajuste", dispensaDaAprovacao(execucao([fechada.linhas[0], linha("ln_aj", { origem: "ajuste", lpu_item_id: null, preco: "-1.00", quantidade: "1", total_cents: -100 })]), fechada), /ajuste/],
+      ["outro item", dispensaDaAprovacao(execucao([linha("ln_mesa", { lpu_item_id: "lpu_cofre" })]), fechada), /além da quantidade/],
+      ["outro preço", dispensaDaAprovacao(execucao([linha("ln_mesa", { preco: "39.00", total_cents: 39000 })]), fechada), /além da quantidade/],
+      ["outra tabela", dispensaDaAprovacao(execucao(fechada.linhas, { tabela_id: "pt_itau_v2" }), fechada), /tabela/],
+      ["aditivo", dispensaDaAprovacao(execucao(fechada.linhas, { tipo_rv: "aditivo" }), fechada), /só a RV de execução/],
+      ["proposta", dispensaDaAprovacao(execucao(fechada.linhas, { tipo_rv: "proposta" }), fechada), /só a RV de execução/],
+      ["sem RV fechada (demanda direta)", dispensaDaAprovacao(execucao(fechada.linhas), null), /RV fechada/],
+      ["sem linha", dispensaDaAprovacao(execucao([]), fechada), /não tem linha/],
+    ];
+    for (const [caso, resultado, esperado] of casos) {
+      assert.equal(resultado.dispensada, false, caso);
+      assert.match(motivo(resultado), esperado, caso);
+    }
+  });
+
+  it("não dispensa: tirar da RV fechada o ajuste (o desconto combinado), a linha avulsa ou a alterada", () => {
+    // RV fechada: 24 mesas × 40,00, 48 cadeiras × 18,50 e um ajuste de −100,00 (total 1.748,00).
+    const mesa = linha("ln_mesa", { quantidade: "24", total_cents: 96000 });
+    const cadeira = linha("ln_cadeira", { lpu_item_id: "lpu_cadeira", preco: "18.50", preco_tabela: "18.50", quantidade: "48", total_cents: 88800 });
+    const ajuste = linha("ln_aj", { origem: "ajuste", lpu_item_id: null, preco: "-100.00", preco_tabela: null, quantidade: "1", total_cents: -10000 });
+    const comAjuste = { tabela_id: "pt_itau_v1", total_cents: 174800, linhas: [mesa, cadeira, ajuste] };
+    // Execução com 20 mesas, sem o ajuste: 1.688,00, abaixo do fechado, mas com o preço efetivo acima do aprovado.
+    const semAjuste = dispensaDaAprovacao(execucao([linha("ln_mesa", { quantidade: "20", total_cents: 80000 }), cadeira]), comAjuste);
+    assert.deepEqual(semAjuste, { dispensada: false, motivo: "a linha 3 da RV fechada (ajuste) saiu" });
+    // Mantendo o ajuste, a RV também passa pelo owner (a linha de ajuste não é de tabela).
+    const mantido = dispensaDaAprovacao(execucao([linha("ln_mesa", { quantidade: "20", total_cents: 80000 }), cadeira, ajuste]), comAjuste);
+    assert.deepEqual(mantido, { dispensada: false, motivo: "a linha 3 é ajuste" });
+
+    const avulsa = linha("ln_av", { origem: "avulso", lpu_item_id: null, preco: "300.00", preco_tabela: null, quantidade: "1", total_cents: 30000 });
+    const comAvulsa = { tabela_id: "pt_itau_v1", total_cents: 96000 + 30000, linhas: [mesa, avulsa] };
+    assert.match(motivoDe(dispensaDaAprovacao(execucao([mesa]), comAvulsa)), /linha 2 da RV fechada \(avulso\) saiu/);
+    const alterada = linha("ln_alt", { origem: "alterado", preco: "35.00", motivo: "Desconto", quantidade: "5", total_cents: 17500 });
+    const comAlterada = { tabela_id: "pt_itau_v1", total_cents: 96000 + 17500, linhas: [mesa, alterada] };
+    assert.match(motivoDe(dispensaDaAprovacao(execucao([mesa]), comAlterada)), /linha 2 da RV fechada \(alterado\) saiu/);
+    // Linha de tabela tirada continua dispensando.
+    assert.deepEqual(dispensaDaAprovacao(execucao([mesa]), { tabela_id: "pt_itau_v1", total_cents: 184800, linhas: [mesa, cadeira] }), {
+      dispensada: true,
+    });
+  });
+
+  function motivoDe(resultado: ReturnType<typeof dispensaDaAprovacao>): string {
+    return resultado.dispensada ? "dispensada" : resultado.motivo;
+  }
+});
+
 describe("marcas", () => {
   const linha = (origem: string) => ({ origem }) as never;
 
@@ -465,6 +585,28 @@ describe("transições do orçamento (ação × papel × situação)", () => {
       admin: { rascunho: "failed-precondition", para_aprovar: "failed-precondition", aprovado: "ok", enviado: "failed-precondition" },
       comercial: { rascunho: "failed-precondition", para_aprovar: "failed-precondition", aprovado: "ok", enviado: "failed-precondition" },
     },
+    // Parte 10. Enviar sai do aprovado; do rascunho, só com a aprovação dispensada (ver abaixo).
+    send: {
+      owner: { rascunho: "failed-precondition", para_aprovar: "failed-precondition", aprovado: "ok", enviado: "failed-precondition" },
+      admin: { rascunho: "failed-precondition", para_aprovar: "failed-precondition", aprovado: "ok", enviado: "failed-precondition" },
+      comercial: { rascunho: "failed-precondition", para_aprovar: "failed-precondition", aprovado: "ok", enviado: "failed-precondition" },
+    },
+    approve_and_send: {
+      owner: { rascunho: "failed-precondition", para_aprovar: "ok", aprovado: "failed-precondition", enviado: "failed-precondition" },
+      admin: { rascunho: "permission-denied", para_aprovar: "permission-denied", aprovado: "permission-denied", enviado: "permission-denied" },
+      comercial: { rascunho: "permission-denied", para_aprovar: "permission-denied", aprovado: "permission-denied", enviado: "permission-denied" },
+    },
+    revise: {
+      owner: { rascunho: "failed-precondition", para_aprovar: "failed-precondition", aprovado: "failed-precondition", enviado: "ok" },
+      admin: { rascunho: "failed-precondition", para_aprovar: "failed-precondition", aprovado: "failed-precondition", enviado: "ok" },
+      comercial: { rascunho: "failed-precondition", para_aprovar: "failed-precondition", aprovado: "failed-precondition", enviado: "ok" },
+    },
+    // Descartar a RV seguinte não enviada; do "para aprovar", como devolver, o aprovador ou quem montou.
+    discard: {
+      owner: { rascunho: "ok", para_aprovar: "ok", aprovado: "ok", enviado: "failed-precondition" },
+      admin: { rascunho: "ok", para_aprovar: "permission-denied", aprovado: "ok", enviado: "failed-precondition" },
+      comercial: { rascunho: "ok", para_aprovar: "permission-denied", aprovado: "ok", enviado: "failed-precondition" },
+    },
   };
 
   function resultado(problema: ReturnType<typeof problemaDaAcao>): Esperado {
@@ -494,6 +636,7 @@ describe("transições do orçamento (ação × papel × situação)", () => {
   it("quem montou devolve (puxa de volta) o próprio orçamento; o owner aprova do rascunho o que ele montou", () => {
     for (const papel of ["owner", "admin", "comercial"] as const) {
       assert.equal(problemaDaAcao("return", { uid: AUTOR, role: papel }, { status: "para_aprovar", autor_uid: AUTOR }), null, papel);
+      assert.equal(problemaDaAcao("discard", { uid: AUTOR, role: papel }, { status: "para_aprovar", autor_uid: AUTOR }), null, papel);
     }
     assert.equal(problemaDaAcao("approve", { uid: AUTOR, role: "owner" }, { status: "rascunho", autor_uid: AUTOR }), null);
     assert.equal(
@@ -530,6 +673,47 @@ describe("transições do orçamento (ação × papel × situação)", () => {
     assert.equal(acaoJaFeita("return", { status: "rascunho", edicao: 3, aprovacao: null }, { status: "para_aprovar", edicao: 3 }), true);
     assert.equal(acaoJaFeita("edit", { status: "rascunho", edicao: 3, aprovacao: null }, { status: "aprovado", edicao: 3 }), true);
     assert.equal(acaoJaFeita("edit", { status: "rascunho", edicao: 4, aprovacao: null }, { status: "aprovado", edicao: 3 }), false);
+  });
+
+  it("enviar do rascunho: só com a aprovação dispensada, para qualquer papel do Comercial", () => {
+    for (const papel of ["owner", "admin", "comercial"] as const) {
+      assert.equal(
+        problemaDaAcao("send", { uid: "x", role: papel }, { status: "rascunho", autor_uid: AUTOR, aprovacao_dispensada: { dispensada: true } }),
+        null,
+        papel,
+      );
+      const recusado = problemaDaAcao("send", { uid: "x", role: papel }, {
+        status: "rascunho",
+        autor_uid: AUTOR,
+        aprovacao_dispensada: { dispensada: false, motivo: "o total passa o da RV fechada" },
+      });
+      assert.equal(recusado?.codigo, "failed-precondition", papel);
+      assert.match(String(recusado?.mensagem), /aprovação do owner.*o total passa o da RV fechada/);
+    }
+  });
+
+  it("repetir enviar, aprovar e enviar e revisar: reconhece pelo envio e pela RV aberta, na edição vista", () => {
+    const enviado = { status: "enviado" as const, edicao: 3, aprovacao: { edicao: 3 }, envio: { edicao: 3 }, revisao_de: null };
+    assert.equal(acaoJaFeita("send", enviado, { status: "aprovado", edicao: 3 }), true);
+    assert.equal(acaoJaFeita("send", enviado, { status: "rascunho", edicao: 3 }), true);
+    assert.equal(acaoJaFeita("send", enviado, { status: "aprovado", edicao: 2 }), false);
+    assert.equal(acaoJaFeita("approve_and_send", enviado, { status: "para_aprovar", edicao: 3 }), true);
+    assert.equal(acaoJaFeita("approve_and_send", enviado, { status: "aprovado", edicao: 3 }), false);
+    assert.equal(acaoJaFeita("approve", enviado, { status: "para_aprovar", edicao: 3 }), true);
+    const revisada = { status: "rascunho" as const, edicao: 4, aprovacao: null, envio: null, revisao_de: { edicao: 3, motivo: "correcao" } };
+    assert.equal(acaoJaFeita("revise", revisada, { status: "enviado", edicao: 3, motivo: "correcao" }), true);
+    assert.equal(acaoJaFeita("revise", revisada, { status: "enviado", edicao: 3, motivo: "aditivo" }), false);
+    assert.equal(acaoJaFeita("revise", revisada, { status: "enviado", edicao: 2, motivo: "correcao" }), false);
+    assert.equal(acaoJaFeita("revise", enviado, { status: "enviado", edicao: 3, motivo: "correcao" }), false);
+  });
+
+  it("repetir descartar: reconhece pelo descarte da edição vista, já de volta à RV enviada", () => {
+    const devolta = { status: "enviado" as const, edicao: 6, aprovacao: { edicao: 3 }, envio: { edicao: 3 }, descarte: { edicao: 5 } };
+    assert.equal(acaoJaFeita("discard", devolta, { status: "rascunho", edicao: 5 }), true);
+    assert.equal(acaoJaFeita("discard", devolta, { status: "aprovado", edicao: 5 }), true);
+    assert.equal(acaoJaFeita("discard", devolta, { status: "rascunho", edicao: 4 }), false);
+    assert.equal(acaoJaFeita("discard", devolta, { status: "enviado", edicao: 5 }), false);
+    assert.equal(acaoJaFeita("discard", { ...devolta, status: "rascunho" as const, descarte: null }, { status: "rascunho", edicao: 5 }), false);
   });
 
   it("para aprovar: cliente, Para, título e uma linha", () => {

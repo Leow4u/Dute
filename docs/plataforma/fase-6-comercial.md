@@ -201,3 +201,49 @@ Storage.
    no Comercial no v1; o Financeiro passa a ler na Fase 7. (Parte 14)
 6. **A gerenciadora vira empresa no cadastro?** Recomendo que não: ela é a
    empresa do contato, numa lista normalizada, sem `customer_code`. (Parte 6)
+7. **A perda sem resposta, por prazo ou por desistência reabre na mesma RV?**
+   Hoje a reabertura de uma RV enviada abre a RV seguinte (pedido da parte 10).
+   Se o cliente volta aceitando a RV que recebeu, "Descartar RV" desfaz a nova
+   e o aceite cai na enviada. Recomendo manter e rever com o uso. (Parte 11)
+8. **A dispensa da aprovação aceita linha alterada, avulsa ou de ajuste igual à
+   da RV fechada?** Hoje não: a RV de execução com qualquer linha fora da tabela
+   passa pelo owner, e tirar dela o ajuste da RV fechada também. Recomendo
+   aceitar a linha igual à fechada (mesmo id, origem, item e preço; no ajuste,
+   o mesmo valor), porque os orçamentos do Itaú quase sempre têm alterado ou
+   ajuste. (Parte 11)
+
+## Registro
+
+### Parte 10: envio, fechamento, perda, revisão e RV de execução (backend)
+
+- `advanceQuote` ganha enviar, aprovar e enviar (só o owner), revisar (RV
+  seguinte) e descartar a RV seguinte ainda não enviada. `advanceDemand` é
+  nova: fechar, perder, reabrir, registrar a execução, validar e registrar a
+  recusa do aditivo.
+- As filas (Comercial, Aprovar e o Início) leem `demands.etapa`. O
+  `quotes.status` é a situação da RV em curso e não diz se a demanda está
+  perdida: perder e reabrir só gravam a demanda.
+- Em "Aguardando cliente", a ação depende do tipo da RV: na proposta,
+  "Registrar aceite" (close); na execução e no aditivo, "Registrar validação"
+  (validate) e, no aditivo, também a recusa (refuse_addendum). A RV de
+  execução enviada fica em "Aguardando cliente" até a validação; a ComFila,
+  que a mostra direto em "Aguardando autorização", se acerta na parte 11.
+- A validação que leva ao faturamento é `demands.validacao` (RV, etapa e
+  instante). Cada RV guarda a resposta do cliente em `resposta_cliente`
+  ("fechado", "validada" ou "recusada"); a RV fechada validada sem desvio, que
+  já tem o "fechado", guarda a validação em `validacao_cliente`. O aditivo
+  validado antes da execução amplia o escopo (`escopo_origem: "aditivo"`) e a
+  demanda volta a "Para planejar".
+- O aditivo em negociação segue as etapas dele (aparece em "Para aprovar",
+  como no mockup), mas não segura o serviço: a execução se registra mesmo
+  assim. Recusado pelo cliente, o orçamento volta à RV do escopo fechado como
+  foi enviada, e a RV seguinte usa o número depois do aditivo
+  (`ultima_rv_enviada`).
+- "Descartar RV" tira a RV seguinte ainda não enviada (aditivo aberto por
+  engano, revisão de que o cliente desistiu, reabertura em que o cliente aceita
+  a RV que recebeu) e volta à RV enviada de onde ela saiu.
+- Na RV de execução, `quotes.dispensa` diz à tela se pode oferecer "Enviar ao
+  cliente" sem a aprovação; o envio calcula de novo. Tirar da RV de execução a
+  linha alterada, avulsa ou de ajuste da RV fechada derruba a dispensa.
+- Fechado, validado e recusado em nunca vêm antes do envio da RV (folga de 5
+  minutos do relógio), nem depois de agora.

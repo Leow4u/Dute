@@ -398,8 +398,8 @@ describe("criar: demanda e orçamento com o mesmo número", () => {
     assert.equal(await count("demands"), 1);
   });
 
-  it("demanda direta (executada antes do orçamento) ainda não entra: é do orçamento da execução", async () => {
-    await rejeita(saveQuoteFor(db, comercial, criar({ entrada: "direta" }), { agora: JUNHO }), "failed-precondition", /direta/);
+  it("demanda direta (executada antes do orçamento) não abre proposta: entra por create_execution (parte 10)", async () => {
+    await rejeita(saveQuoteFor(db, comercial, criar({ entrada: "direta" }), { agora: JUNHO }), "failed-precondition", /direta.*create_execution/);
     assert.equal(await count("demands"), 0);
     assert.equal(await count("demand_counters"), 0);
   });

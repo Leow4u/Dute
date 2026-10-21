@@ -91,6 +91,14 @@ export const MARCAS_ORCAMENTO = [
 ] as const;
 const marcas = z.array(z.enum(MARCAS_ORCAMENTO)).max(MARCAS_ORCAMENTO.length);
 
+/** Por que a demanda foi perdida (parte 10). Depois do fechamento, só "cancelado_cliente". */
+export const MOTIVOS_PERDA = ["preco", "prazo", "desistencia", "sem_resposta", "cancelado_cliente", "outro"] as const;
+
+/** Por que uma RV enviada ganha a RV seguinte ("Revisar", parte 10). */
+export const MOTIVOS_REVISAO = ["pedido_cliente", "correcao", "execucao", "aditivo"] as const;
+/** Os motivos da revisão e a reabertura da demanda perdida, que também abre RV nova. */
+export const ORIGENS_REVISAO = [...MOTIVOS_REVISAO, "reabertura"] as const;
+
 export const ESTAGIOS_CADASTRO = ["prospect", "cliente"] as const;
 export const REGIMES_COBRANCA = ["por_demanda", "medicao_mensal", "wms"] as const;
 /** Tipos de aditivo do contrato (contracts/{id}/aditivos). */
@@ -151,9 +159,32 @@ export const COMERCIAL_EVENT_PAYLOADS = {
       segundos_desde_anterior: segundos.optional(),
     })
     .strict(),
-  "demand.won": z.object({ numero, rv }).strict(),
-  // O motivo entra na parte 10, como z.enum da lista de motivos.
-  "demand.lost": z.object({ numero, etapa_antes: etapa }).strict(),
+  /** Fechado pelo cliente: a RV fechada vira o escopo; o prospect vira cliente na mesma operação. */
+  "demand.won": z
+    .object({
+      numero,
+      rv,
+      virou_cliente: z.boolean().optional(),
+      segundos_desde_anterior: segundos.optional(),
+    })
+    .strict(),
+  "demand.lost": z
+    .object({
+      numero,
+      rv,
+      etapa_antes: etapa,
+      motivo: z.enum(MOTIVOS_PERDA),
+      segundos_desde_anterior: segundos.optional(),
+    })
+    .strict(),
+  /** Perdida → a etapa de antes, com RV nova quando a atual já tinha sido enviada. */
+  "demand.reopened": z
+    .object({ numero, rv, etapa_antes: etapa, etapa_depois: etapa, rv_aberta: z.boolean() })
+    .strict(),
+  /** O serviço foi executado (o período), antes do orçamento da execução. */
+  "demand.execution_registered": z
+    .object({ numero, executado_de: data, executado_ate: data, direta: z.boolean().optional() })
+    .strict(),
 
   "quote.created": z
     .object({
@@ -189,9 +220,59 @@ export const COMERCIAL_EVENT_PAYLOADS = {
   "quote.approved": quoteStep,
   /** Aprovado → rascunho, na mesma RV ("Editar"). */
   "quote.edited": quoteStep,
+  /** RV de execução enviada sem nova aprovação: só quantidades de linhas de tabela, sem passar o total fechado. */
   "quote.approval_waived": quoteStep,
   "quote.sent": quoteStep,
-  "quote.revised": z.object({ numero, rv, rv_anterior: rv, tipo_rv: tipoRv }).strict(),
+  "quote.revised": z
+    .object({
+      numero,
+      rv,
+      rv_anterior: rv,
+      tipo_rv: tipoRv,
+      motivo: z.enum(ORIGENS_REVISAO),
+      edicao: edicao.optional(),
+      etapa_antes: etapa.optional(),
+      etapa_depois: etapa.optional(),
+    })
+    .strict(),
+  /** A RV seguinte, ainda não enviada, descartada: o orçamento volta à RV enviada de onde ela saiu. */
+  "quote.discarded": z
+    .object({
+      numero,
+      rv,
+      tipo_rv: tipoRv,
+      rv_restaurada: rv,
+      edicao,
+      status_antes: statusOrcamento,
+      etapa_antes: etapa,
+      etapa_depois: etapa,
+    })
+    .strict(),
+  /** O aditivo enviado, recusado pelo cliente: a demanda volta ao escopo fechado (rv_restaurada). */
+  "quote.refused": z
+    .object({
+      numero,
+      rv,
+      tipo_rv: tipoRv,
+      rv_restaurada: rv,
+      etapa_antes: etapa,
+      etapa_depois: etapa,
+      segundos_desde_anterior: segundos.optional(),
+    })
+    .strict(),
+  /** RV de execução ou de aditivo validada pelo cliente. */
+  "quote.validated": z
+    .object({
+      numero,
+      rv,
+      tipo_rv: tipoRv,
+      etapa_antes: etapa,
+      etapa_depois: etapa,
+      autorizacao_exigida: z.boolean(),
+      medicao_pendente: z.boolean(),
+      virou_cliente: z.boolean().optional(),
+    })
+    .strict(),
 
   "commercial_customer.created": z.object({ stage: z.enum(ESTAGIOS_CADASTRO) }).strict(),
   "commercial_customer.updated": z.object({ campos: z.array(codigo).min(1).max(40) }).strict(),
@@ -306,6 +387,23 @@ const TIPO_RV_ROTULO: Record<(typeof TIPOS_RV)[number], string> = {
   execucao: "execução",
 };
 
+const MOTIVO_PERDA_ROTULO: Record<(typeof MOTIVOS_PERDA)[number], string> = {
+  preco: "preço",
+  prazo: "prazo",
+  desistencia: "desistência do cliente",
+  sem_resposta: "sem resposta do cliente",
+  cancelado_cliente: "cancelado pelo cliente",
+  outro: "outro motivo",
+};
+
+const ORIGEM_REVISAO_ROTULO: Record<(typeof ORIGENS_REVISAO)[number], string> = {
+  pedido_cliente: "pedido do cliente",
+  correcao: "correção",
+  execucao: "orçamento da execução",
+  aditivo: "aditivo",
+  reabertura: "reabertura da demanda",
+};
+
 const REGIME_ROTULO: Record<(typeof REGIMES_COBRANCA)[number], string> = {
   por_demanda: "por demanda",
   medicao_mensal: "medição mensal",
@@ -323,6 +421,16 @@ function orcamento(numeroServico: string, revisao: number): string {
 
 function revisaoRotulo(revisao: number): string {
   return revisao === 0 ? "o orçamento original" : `a RV${String(revisao).padStart(2, "0")}`;
+}
+
+/** "do orçamento original", "da RV01". */
+function daRevisao(revisao: number): string {
+  return revisao === 0 ? "do orçamento original" : `da RV${String(revisao).padStart(2, "0")}`;
+}
+
+/** "ao orçamento original", "à RV01". */
+function aRevisao(revisao: number): string {
+  return revisao === 0 ? "ao orçamento original" : `à RV${String(revisao).padStart(2, "0")}`;
 }
 
 function dataRotulo(value: string): string {
@@ -359,10 +467,23 @@ const TEMPLATES: Templates = {
     title: `Demanda ${p.numero}: ${ETAPA_ROTULO[p.etapa_depois]}`,
     description: `Etapa: ${ETAPA_ROTULO[p.etapa_antes]} → ${ETAPA_ROTULO[p.etapa_depois]}.`,
   }),
-  "demand.won": (p) => ({ title: `Demanda ${p.numero} fechada`, description: `Fechada com ${revisaoRotulo(p.rv)}.` }),
+  "demand.won": (p) => ({
+    title: `Demanda ${p.numero} fechada`,
+    description: `Fechada com ${revisaoRotulo(p.rv)}${p.virou_cliente ? "; o prospect virou cliente" : ""}.`,
+  }),
   "demand.lost": (p) => ({
     title: `Demanda ${p.numero} perdida`,
-    description: `Perdida na etapa ${ETAPA_ROTULO[p.etapa_antes]}.`,
+    description: `Perdida na etapa ${ETAPA_ROTULO[p.etapa_antes]}. Motivo: ${MOTIVO_PERDA_ROTULO[p.motivo]}.`,
+  }),
+  "demand.reopened": (p) => ({
+    title: `Demanda ${p.numero} reaberta`,
+    description: p.rv_aberta
+      ? `Volta para ${ETAPA_ROTULO[p.etapa_depois]}, com ${revisaoRotulo(p.rv)} aberta.`
+      : `Volta para ${ETAPA_ROTULO[p.etapa_depois]}.`,
+  }),
+  "demand.execution_registered": (p) => ({
+    title: `Demanda ${p.numero} executada`,
+    description: `${p.direta ? "Demanda direta executada" : "Executada"} de ${dataRotulo(p.executado_de)} a ${dataRotulo(p.executado_ate)}.`,
   }),
 
   "quote.created": (p) => ({
@@ -395,7 +516,19 @@ const TEMPLATES: Templates = {
   "quote.sent": (p) => ({ title: `${orcamento(p.numero, p.rv)} enviado ao cliente`, description: `Edição ${p.edicao}.` }),
   "quote.revised": (p) => ({
     title: `${orcamento(p.numero, p.rv)} aberto`,
-    description: `Revisão de ${TIPO_RV_ROTULO[p.tipo_rv]} a partir de ${revisaoRotulo(p.rv_anterior)}.`,
+    description: `Revisão de ${TIPO_RV_ROTULO[p.tipo_rv]} a partir ${daRevisao(p.rv_anterior)}. Motivo: ${ORIGEM_REVISAO_ROTULO[p.motivo]}.`,
+  }),
+  "quote.discarded": (p) => ({
+    title: `${orcamento(p.numero, p.rv)} descartado`,
+    description: `Revisão de ${TIPO_RV_ROTULO[p.tipo_rv]} descartada antes do envio; o orçamento volta ${aRevisao(p.rv_restaurada)}.`,
+  }),
+  "quote.refused": (p) => ({
+    title: `${orcamento(p.numero, p.rv)} recusado pelo cliente`,
+    description: `Revisão de ${TIPO_RV_ROTULO[p.tipo_rv]} recusada; a demanda volta ao escopo ${daRevisao(p.rv_restaurada)}.`,
+  }),
+  "quote.validated": (p) => ({
+    title: `${orcamento(p.numero, p.rv)} validado pelo cliente`,
+    description: `Revisão de ${TIPO_RV_ROTULO[p.tipo_rv]}; etapa: ${ETAPA_ROTULO[p.etapa_antes]} → ${ETAPA_ROTULO[p.etapa_depois]}.`,
   }),
 
   "commercial_customer.created": (p) => ({

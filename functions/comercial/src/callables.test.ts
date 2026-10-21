@@ -129,6 +129,15 @@ describe("callables do Comercial", () => {
     }
   });
 
+  it("demanda depois do envio (parte 10): advanceDemand, no domínio demandas.ts", () => {
+    const blocks = callableBlocks();
+    const block = blocks.get("advanceDemand");
+    assert.ok(block, "advanceDemand não declarada");
+    assert.match(block, ENTRADA_DE_NEGOCIO, "advanceDemand");
+    assert.match(block, /return advanceDemandFor\(db, caller, request\.data\);/);
+    assert.match(index, /import \{ advanceDemandFor \} from "\.\/domain\/demandas\.js";/);
+  });
+
   it("contratos (parte 8): saveContract e recordAditivo declaradas como callables de negócio", () => {
     const blocks = callableBlocks();
     for (const name of ["saveContract", "recordAditivo"]) {
