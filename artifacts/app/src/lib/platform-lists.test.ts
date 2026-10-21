@@ -13,8 +13,10 @@ import {
   estagioDoCadastro,
 } from "@workspace/dominio";
 
+import { COMERCIAL_ROLES } from "./comercial/navegacao";
 import { COMERCIAL_AMBIENTES_LIBERADOS } from "./liberacao";
 import { INTERNAL_ROLES } from "./modules";
+import { PLATFORM_MODULES } from "./platform-modules";
 
 /**
  * As Functions e as regras do Firestore não importam lib/dominio: guardam
@@ -92,6 +94,15 @@ describe("listas do Comercial iguais em todo lugar", () => {
     );
     expect(comercial).toEqual(["owner", "admin", "comercial"]);
     expect(tsList(roles, "COMERCIAL_ROLES")).toEqual(comercial);
+  });
+
+  it("o app abre o Comercial (menu, rotas e card) para os mesmos papéis", () => {
+    const comercial = PAPEIS.filter(
+      (role) => role !== "cliente" && MODULOS_POR_PAPEL[role].includes("comercial"),
+    );
+    expect([...COMERCIAL_ROLES]).toEqual(comercial);
+    const card = PLATFORM_MODULES.find((module) => module.key === "comercial")!;
+    expect(Object.keys(card.home)).toEqual(comercial);
   });
 
   it("liberação por ambiente: a lista das callables é a do app", () => {

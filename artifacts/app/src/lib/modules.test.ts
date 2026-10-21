@@ -92,10 +92,14 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/portal/agente", ["cliente"]],
   ["/portal/agente/operacional", ["cliente"]],
   ["/minhas-faturas", ["cliente"]],
+  // Comercial (parte 13): rotas registradas só com a liberação (lib/comercial/navegacao.ts).
+  ["/comercial", ["owner", "admin", "comercial"]],
+  ["/comercial/clientes", ["owner", "admin", "comercial"]],
 ];
 
+// Menu com o Comercial desligado, como na produção (o liberado: comercial/navegacao.test.ts).
 function menu(role: ProfileRole) {
-  return getNavigationForProfileRole(role).map((module) => ({
+  return getNavigationForProfileRole(role, null, false).map((module) => ({
     label: module.label,
     routes: module.routes.map((route) => route.label),
   }));
@@ -303,9 +307,9 @@ describe("menu do portal por modelo de operação", () => {
 
 describe("barra inferior do celular", () => {
   const bar = (role: ProfileRole) =>
-    getMobileNavigation(getNavigationForProfileRole(role)).bar.map((module) => module.label);
+    getMobileNavigation(getNavigationForProfileRole(role, null, false)).bar.map((module) => module.label);
   const more = (role: ProfileRole) =>
-    getMobileNavigation(getNavigationForProfileRole(role)).more.flatMap(({ module, routes }) =>
+    getMobileNavigation(getNavigationForProfileRole(role, null, false)).more.flatMap(({ module, routes }) =>
       routes.map((route) => `${module.label} · ${route.label}`),
     );
 
@@ -346,12 +350,13 @@ describe("barra inferior do celular", () => {
 describe("papéis da plataforma que o WMS ainda não atende (Fase 2)", () => {
   const NEW_ROLES: ProfileRole[] = ["campo", "comercial", "rh", "painel"];
 
+  // Com o Comercial desligado, como na produção (o liberado: comercial/navegacao.test.ts).
   it.each(NEW_ROLES)("%s não herda nenhum item do menu", (role) => {
-    expect(getNavigationForProfileRole(role)).toEqual([]);
+    expect(getNavigationForProfileRole(role, null, false)).toEqual([]);
   });
 
   it.each(NEW_ROLES)("%s abre na Conta, sem laço de redirecionamento", (role) => {
-    const home = getHomePathForProfile(role);
+    const home = getHomePathForProfile(role, false);
     expect(home).toBe("/configuracoes/conta");
     expect(getRouteProfileRoles(home)).toContain(role);
   });

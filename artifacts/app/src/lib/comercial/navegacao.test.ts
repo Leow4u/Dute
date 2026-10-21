@@ -1,0 +1,237 @@
+import { readFileSync } from "node:fs";
+
+import { PAPEIS, type Papel } from "@workspace/dominio";
+import { describe, expect, it } from "vitest";
+
+import {
+  getActiveModule,
+  getHomePathForProfile,
+  getMobileNavigation,
+  getNavigationForProfileRole,
+  getRouteAppRoles,
+  getRouteProfileRoles,
+  isModuleGroup,
+} from "../modules";
+import { entrada, modulesForPerson } from "../platform-modules";
+import {
+  ABAS_DO_COMERCIAL,
+  COMERCIAL_ROLES,
+  DESTINO_DO_COMERCIAL,
+  ROTA_CLIENTES,
+  ROTA_COMERCIAL,
+  TELAS_DO_COMERCIAL,
+  abasVisiveis,
+  abreComercial,
+  rotasDoComercial,
+  soComComercialLiberado,
+} from "./navegacao";
+
+/**
+ * Base de navegação do Comercial (docs/plataforma/fase-6-comercial.md, parte
+ * 13): rotas, menu, casa do card na tela de entrada e aterrissagem do papel
+ * comercial, sempre por papel E pela liberação (lib/liberacao.ts). Toda
+ * chamada aqui passa a liberação explícita: o resultado não depende do .env
+ * de quem roda o teste.
+ */
+
+const LIBERADO = true;
+const DESLIGADO = false;
+
+// Caminhos de PROTECTED_ROUTES no App.tsx (importar o App puxaria o Firebase).
+const APP_SOURCE = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
+const caminhos = (source: string) => Array.from(source.matchAll(/protectedRoute\(\s*"([^"]+)"/g), ([, path]) => path);
+const APP_PATHS = caminhos(APP_SOURCE);
+const doComercial = (path: string) => path === ROTA_COMERCIAL || path.startsWith(`${ROTA_COMERCIAL}/`);
+
+const QUEM_ABRE: Papel[] = ["owner", "admin", "comercial"];
+const QUEM_NAO_ABRE = PAPEIS.filter((role) => !QUEM_ABRE.includes(role));
+
+function menu(role: Papel, liberado: boolean) {
+  return getNavigationForProfileRole(role, null, liberado).map((module) => ({
+    label: module.label,
+    routes: module.routes.map((route) => route.label),
+  }));
+}
+
+describe("rotas do Comercial", () => {
+  it("só existem com a liberação ligada", () => {
+    expect(rotasDoComercial(DESLIGADO)).toEqual([]);
+    expect(rotasDoComercial(LIBERADO)).toEqual([ROTA_COMERCIAL, ROTA_CLIENTES]);
+  });
+
+  it("o App registra exatamente as rotas do Comercial, com /comercial e /comercial/clientes", () => {
+    expect(APP_PATHS.filter(doComercial)).toEqual(rotasDoComercial(LIBERADO));
+  });
+
+  it("toda rota do Comercial no App passa pela liberação: nenhuma fora de soComComercialLiberado", () => {
+    const blocos = Array.from(APP_SOURCE.matchAll(/soComComercialLiberado\(\[([\s\S]*?)\]\)/g), ([, bloco]) => bloco);
+    expect(blocos).toHaveLength(1);
+    expect(caminhos(blocos[0])).toEqual(rotasDoComercial(LIBERADO));
+    const fora = APP_SOURCE.replace(/soComComercialLiberado\(\[[\s\S]*?\]\)/g, "");
+    expect(caminhos(fora).filter(doComercial)).toEqual([]);
+  });
+
+  it("soComComercialLiberado: na produção nenhuma rota; na homologação, só as do Comercial", () => {
+    const rotas = [{ path: ROTA_COMERCIAL }, { path: ROTA_CLIENTES }, { path: "/comercial/inexistente" }];
+    expect(soComComercialLiberado(rotas, DESLIGADO)).toEqual([]);
+    expect(soComComercialLiberado(rotas, LIBERADO).map((rota) => rota.path)).toEqual([ROTA_COMERCIAL, ROTA_CLIENTES]);
+  });
+
+  it("owner, admin e comercial abrem; nenhum outro papel", () => {
+    expect([...COMERCIAL_ROLES]).toEqual(QUEM_ABRE);
+    for (const path of rotasDoComercial(LIBERADO)) {
+      expect([...getRouteProfileRoles(path)].sort(), path).toEqual([...QUEM_ABRE].sort());
+      expect(getRouteAppRoles(path), path).toEqual(["interno"]);
+    }
+  });
+
+  it.each(QUEM_ABRE)("%s abre o Comercial só com a liberação", (role) => {
+    expect(abreComercial(role, LIBERADO)).toBe(true);
+    expect(abreComercial(role, DESLIGADO)).toBe(false);
+  });
+
+  it.each(QUEM_NAO_ABRE)("%s nunca abre o Comercial", (role) => {
+    expect(abreComercial(role, LIBERADO)).toBe(false);
+    expect(abreComercial(role, DESLIGADO)).toBe(false);
+  });
+
+  it("sem papel, não abre", () => {
+    expect(abreComercial(null, LIBERADO)).toBe(false);
+    expect(abreComercial(undefined, LIBERADO)).toBe(false);
+  });
+
+  it("/comercial leva a Clientes enquanto a fila de orçamentos (parte 11) não existe", () => {
+    expect(DESTINO_DO_COMERCIAL).toBe(ROTA_CLIENTES);
+    expect(TELAS_DO_COMERCIAL).toEqual([ROTA_CLIENTES]);
+  });
+});
+
+describe("menu do Comercial", () => {
+  it("comercial vê só o grupo Comercial, com Clientes dentro", () => {
+    expect(menu("comercial", LIBERADO)).toEqual([{ label: "Comercial", routes: ["Clientes"] }]);
+    const [comercial] = getNavigationForProfileRole("comercial", null, LIBERADO);
+    expect(comercial.href).toBe(ROTA_CLIENTES);
+    expect(isModuleGroup(comercial)).toBe(true);
+  });
+
+  it("fora da liberação o comercial não tem menu, como antes", () => {
+    expect(menu("comercial", DESLIGADO)).toEqual([]);
+  });
+
+  it.each<Papel>(["owner", "admin"])("%s ganha o grupo Comercial depois do Faturamento, só com a liberação", (role) => {
+    const labels = (liberado: boolean) => menu(role, liberado).map((module) => module.label);
+    expect(labels(DESLIGADO)).not.toContain("Comercial");
+    expect(labels(LIBERADO)).toEqual([
+      "Início",
+      "Agent Dute",
+      "Pedidos",
+      "Estoque",
+      "Faturamento",
+      "Comercial",
+      "Relatórios",
+      "Documentos",
+    ]);
+  });
+
+  it.each(QUEM_NAO_ABRE)("%s não vê o Comercial nem com a liberação", (role) => {
+    expect(menu(role, LIBERADO).map((module) => module.label)).not.toContain("Comercial");
+  });
+
+  it.each(QUEM_ABRE)("todo link do menu de %s abre uma rota permitida para ele", (role) => {
+    for (const module of getNavigationForProfileRole(role, null, LIBERADO)) {
+      for (const route of module.routes) {
+        expect(getRouteProfileRoles(route.href!), route.href).toContain(role);
+      }
+    }
+  });
+
+  it("Clientes acende o grupo Comercial", () => {
+    const modules = getNavigationForProfileRole("admin", null, LIBERADO);
+    expect(getActiveModule(modules, ROTA_CLIENTES).label).toBe("Comercial");
+  });
+
+  it("os grupos do WMS continuam como eram: grupo é quem tem mais de uma tela", () => {
+    const modules = getNavigationForProfileRole("admin", null, LIBERADO);
+    expect(modules.filter(isModuleGroup).map((module) => module.label)).toEqual(["Estoque", "Comercial"]);
+  });
+
+  it("no celular, o comercial tem o Comercial na barra; o owner o encontra em Mais", () => {
+    const comercial = getMobileNavigation(getNavigationForProfileRole("comercial", null, LIBERADO));
+    expect(comercial.bar.map((module) => module.label)).toEqual(["Comercial"]);
+    const owner = getMobileNavigation(getNavigationForProfileRole("owner", null, LIBERADO));
+    expect(owner.more.flatMap(({ module, routes }) => routes.map((route) => `${module.label} · ${route.label}`))).toContain(
+      "Comercial · Clientes",
+    );
+  });
+});
+
+describe("abreComercial decide menu, aterrissagem e card", () => {
+  it.each(PAPEIS)("%s: menu, casa e card seguem abreComercial, com e sem a liberação", (role) => {
+    for (const liberado of [LIBERADO, DESLIGADO]) {
+      const abre = abreComercial(role, liberado);
+      const noMenu = getNavigationForProfileRole(role, null, liberado).some((module) => module.label === "Comercial");
+      const card = modulesForPerson(role, null, liberado).some((entry) => entry.module.label === "Comercial");
+      expect({ noMenu, card }, `${role} ${liberado}`).toEqual({ noMenu: abre, card: abre });
+      if (role === "comercial") expect(getHomePathForProfile(role, liberado) === ROTA_COMERCIAL).toBe(abre);
+    }
+  });
+});
+
+describe("aterrissagem e tela de entrada", () => {
+  it("o papel comercial aterrissa em /comercial com a liberação; sem ela, na Conta", () => {
+    expect(getHomePathForProfile("comercial", LIBERADO)).toBe(ROTA_COMERCIAL);
+    expect(getHomePathForProfile("comercial", DESLIGADO)).toBe("/configuracoes/conta");
+    expect(entrada("comercial", null, LIBERADO)).toEqual({ kind: "redirect", to: ROTA_COMERCIAL });
+    expect(entrada("comercial", null, DESLIGADO)).toEqual({ kind: "nenhum" });
+  });
+
+  it("a liberação não muda a aterrissagem dos outros papéis", () => {
+    for (const role of PAPEIS.filter((papel) => papel !== "comercial")) {
+      expect(getHomePathForProfile(role, LIBERADO), role).toBe(getHomePathForProfile(role, DESLIGADO));
+    }
+  });
+
+  it("owner e admin ganham o card Comercial, com casa em /comercial, só com a liberação", () => {
+    for (const role of ["owner", "admin"] as const) {
+      const cards = (liberado: boolean) =>
+        modulesForPerson(role, null, liberado).map((entry) => [entry.module.label, entry.href]);
+      expect(cards(DESLIGADO)).toEqual([
+        ["Armazenagem", "/dashboard"],
+        ["Financeiro", "/faturamento"],
+      ]);
+      expect(cards(LIBERADO)).toEqual([
+        ["Armazenagem", "/dashboard"],
+        ["Comercial", ROTA_COMERCIAL],
+        ["Financeiro", "/faturamento"],
+      ]);
+      expect(entrada(role, null, LIBERADO).kind).toBe("cards");
+    }
+  });
+
+  it("nenhum outro papel ganha o card Comercial", () => {
+    for (const role of QUEM_NAO_ABRE) {
+      const labels = modulesForPerson(role, null, LIBERADO).map((entry) => entry.module.label);
+      expect(labels, role).not.toContain("Comercial");
+    }
+  });
+});
+
+describe("abas do módulo (Orçamentos · Contratos · Autorizações · Medições)", () => {
+  it("as quatro abas, na ordem dos mockups", () => {
+    expect(ABAS_DO_COMERCIAL.map((aba) => aba.rotulo)).toEqual(["Orçamentos", "Contratos", "Autorizações", "Medições"]);
+  });
+
+  it("aba sem tela fica oculta: hoje nenhuma tem", () => {
+    expect(abasVisiveis(TELAS_DO_COMERCIAL)).toEqual([]);
+    expect(abasVisiveis()).toEqual([]);
+  });
+
+  it("cada tela nova acende a aba dela, na ordem", () => {
+    const contratos = ABAS_DO_COMERCIAL.find((aba) => aba.id === "contratos")!;
+    const orcamentos = ABAS_DO_COMERCIAL.find((aba) => aba.id === "orcamentos")!;
+    expect(abasVisiveis([...TELAS_DO_COMERCIAL, contratos.href, orcamentos.href]).map((aba) => aba.id)).toEqual([
+      "orcamentos",
+      "contratos",
+    ]);
+  });
+});

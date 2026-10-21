@@ -4,13 +4,14 @@ import { describe, expect, it } from "vitest";
 import { getHomePathForProfile, getRouteProfileRoles } from "./modules";
 import { PLATFORM_MODULES, entrada, modulesForPerson } from "./platform-modules";
 
+// Comercial desligado, como na produção: o Comercial liberado está em comercial/navegacao.test.ts.
 const labels = (role: Papel, modules?: string[]) =>
-  modulesForPerson(role, modules ? { modules: modules as never } : null).map((entry) => entry.module.label);
+  modulesForPerson(role, modules ? { modules: modules as never } : null, false).map((entry) => entry.module.label);
 
 describe("tela de entrada por módulo (Fase 2, parte 2)", () => {
   it("owner e admin veem os cards de Armazenagem e Financeiro", () => {
     for (const role of ["owner", "admin"] as const) {
-      const decision = entrada(role, null);
+      const decision = entrada(role, null, false);
       expect(decision.kind).toBe("cards");
       expect(labels(role)).toEqual(["Armazenagem", "Financeiro"]);
     }
@@ -46,7 +47,7 @@ describe("tela de entrada por módulo (Fase 2, parte 2)", () => {
   it("cliente sem armazenagem e papel sem tela ainda não têm módulo", () => {
     expect(entrada("cliente", { modules: ["operacao"] })).toEqual({ kind: "nenhum" });
     for (const role of ["campo", "comercial", "rh", "painel"] as const) {
-      expect(entrada(role, null)).toEqual({ kind: "nenhum" });
+      expect(entrada(role, null, false)).toEqual({ kind: "nenhum" });
     }
   });
 
