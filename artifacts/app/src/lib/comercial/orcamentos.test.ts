@@ -186,6 +186,22 @@ describe("item da fila", () => {
     });
   });
 
+  it("lê a dispensa da aprovação e a RV de onde a seguinte saiu, como o servidor grava", () => {
+    const comum = itemDaFila("10045", demanda("10045"), orcamento("10045"))!;
+    expect(comum.dispensada).toBe(false);
+    expect(comum.revisaoDe).toBeNull();
+    const dispensada = itemDaFila(
+      "10045",
+      demanda("10045"),
+      orcamento("10045", { rv: 2, tipo_rv: "execucao", dispensa: { dispensada: true }, revisao_de: { rv: 1, edicao: 4, motivo: "execucao" } }),
+    )!;
+    expect(dispensada.dispensada).toBe(true);
+    expect(dispensada.revisaoDe).toEqual({ rv: 1, motivo: "execucao" });
+    // Dispensa negada (com o motivo) ou sem o campo: passa pela aprovação.
+    expect(itemDaFila("10045", demanda("10045"), orcamento("10045", { dispensa: { dispensada: false, motivo: "Linha alterada." } }))!.dispensada).toBe(false);
+    expect(itemDaFila("10045", demanda("10045"), orcamento("10045", { dispensa: null, revisao_de: "x" }))!.revisaoDe).toBeNull();
+  });
+
   it("sem demanda não entra; sem orçamento entra sem total", () => {
     expect(itemDaFila("10045", null, orcamento("10045"))).toBeNull();
     const semOrcamento = itemDaFila("10045", demanda("10045"), null)!;
@@ -502,9 +518,11 @@ describe("ficha resumida", () => {
     expect(rotuloDoContratoDoOrcamento("ct-itau", undefined)).toBe("—");
   });
 
-  it("a ação da etapa: continuar a montagem ou abrir", () => {
+  it("a ação da etapa: continuar a montagem ou abrir (orçar a execução é uma ação, não este link)", () => {
     expect(acaoDaEtapa("em_montagem")).toBe("Continuar montagem");
-    expect(acaoDaEtapa("execucao_a_orcar")).toBe("Orçar execução");
+    expect(acaoDaEtapa("execucao_a_orcar", "rascunho")).toBe("Continuar montagem");
+    expect(acaoDaEtapa("execucao_a_orcar", "enviado")).toBe("Abrir orçamento");
+    expect(acaoDaEtapa("execucao_a_orcar")).toBe("Abrir orçamento");
     expect(acaoDaEtapa("para_aprovar")).toBe("Abrir orçamento");
     expect(acaoDaEtapa("perdida")).toBe("Abrir orçamento");
     expect(hrefDoOrcamento("10045")).toBe("/comercial/orcamento?numero=10045");

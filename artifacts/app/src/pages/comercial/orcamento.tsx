@@ -4,6 +4,7 @@ import { useLocation, useSearch } from "wouter";
 
 import { useToast } from "@/hooks/use-toast";
 import { chamarComercial, novaChave, type CallableDoComercial } from "@/lib/comercial/api";
+import { acoesDepoisDoEnvio } from "@/lib/comercial/depois-do-envio";
 import {
   cadastroDoDocumento,
   contatoDoDocumento,
@@ -54,6 +55,7 @@ import { useAppUser } from "@/lib/auth";
 import { firestore } from "@/lib/firebase";
 
 import { ContatoDialog } from "./clientes-dialogos";
+import { useDepoisDoEnvio } from "./depois-do-envio";
 import { DevolverDialog } from "./devolver-dialog";
 import { EstadoDoOrcamento, MontarView, type DadosDoOrcamento } from "./orcamento-view";
 
@@ -168,11 +170,24 @@ function MontarOrcamento({ numero }: { numero: string }) {
   // O nome de quem montou vem do orçamento (autor_nome); o perfil só para o gravado antes dele.
   const nomeDe = useNomes(item ? [item.autorNome ? null : item.autorUid, item.aprovacao?.porUid, item.devolucao?.porUid] : []);
 
+  // As ações depois do envio (Fechado, Validado, Revisar, Descartar RV...): o diálogo grava e, nas do
+  // orçamento, a tela espera a gravação chegar pelo onSnapshot como em qualquer avanço.
+  const depois = useDepoisDoEnvio({
+    contatos: contatos.itens ?? [],
+    aoGravar: (pedido, resultado) => {
+      if (pedido.callable === "advanceQuote" && typeof resultado.edicao === "number" && typeof resultado.status === "string") {
+        despacharRef.current({ tipo: "gravou", edicao: resultado.edicao, status: resultado.status });
+      }
+    },
+  });
+
   // --- Formulário: o servidor ao vivo e o que a pessoa está montando (montar.ts, sincronia) ----
   // A edição e a situação que vão para a callable são as da base do formulário, nunca as do
   // snapshot mais novo: assim o servidor recusa a gravação feita sobre uma edição velha.
   const versao = item ? `${item.edicao}|${item.status}|${item.etapa}` : null;
   const [estado, despachar] = useReducer(sincronia, SINCRONIA_INICIAL);
+  const despacharRef = useRef(despachar);
+  despacharRef.current = despachar;
   useEffect(() => {
     if (!versao || !item || !demandaDoc || !quoteDoc) return;
     despachar({
@@ -339,8 +354,8 @@ function MontarOrcamento({ numero }: { numero: string }) {
    * aprovar"): grava no servidor e SÓ ENTÃO abre o documento para imprimir ou
    * salvar o PDF (lib/comercial/envio.ts). Com erro, o documento não abre.
    */
-  async function enviarAoCliente(acao: AcaoDeEnvio, sucesso: string) {
-    const esperado = esperadoDaBase();
+  async function enviarAoCliente(acao: AcaoDeEnvio, sucesso: string, esperadoDado?: { status: StatusOrcamento; edicao: number }) {
+    const esperado = esperadoDado ?? esperadoDaBase();
     if (!esperado) return;
     setOcupado(true);
     setAviso(null);
@@ -361,6 +376,28 @@ function MontarOrcamento({ numero }: { numero: string }) {
     } finally {
       setOcupado(false);
     }
+  }
+
+  /**
+   * A RV de execução com a aprovação dispensada pelo servidor (quotes.dispensa):
+   * do rascunho direto ao cliente (send). Com alteração não salva, salva antes;
+   * o servidor calcula a dispensa de novo no envio e recusa se deixou de valer.
+   */
+  async function enviarDispensado() {
+    if (!form || !base) return;
+    const faltam = pendenciasParaEnviar(form);
+    if (faltam.length) {
+      setAviso({ tipo: "erro", texto: `Falta ${faltam.join(", ")} para enviar ao cliente.` });
+      return;
+    }
+    let esperado = { status: base.status as StatusOrcamento, edicao: base.edicao };
+    if (sujo) {
+      const salvo = await salvar();
+      if (!salvo) return;
+      if (salvo.recalculo) return;
+      esperado = { status: "rascunho", edicao: salvo.edicao };
+    }
+    await enviarAoCliente("send", "Orçamento enviado", esperado);
   }
 
   /**
@@ -450,7 +487,17 @@ function MontarOrcamento({ numero }: { numero: string }) {
         }
       : null,
   };
-  const acoes = acoesDoOrcamento({ status: item.status, role, uid: user?.uid, autorUid: item.autorUid, etapa: item.etapa });
+  const posEnvio = acoesDepoisDoEnvio(item, { role, uid: user?.uid });
+  const acoes = acoesDoOrcamento({
+    status: item.status,
+    role,
+    uid: user?.uid,
+    autorUid: item.autorUid,
+    etapa: item.etapa,
+    tipoRv: item.tipoRv,
+    dispensada: item.dispensada,
+    descartavel: posEnvio.secundarias.includes("descartar_rv"),
+  });
   atalhoDeSalvar.current = () => {
     if (acoes.editavel && !travado) void salvar();
   };
@@ -468,11 +515,12 @@ function MontarOrcamento({ numero }: { numero: string }) {
         contatos={listaDeContatos}
         locais={ordenarLocais(locais.itens ?? [])}
         catalogo={catalogo}
-        ocupado={travado}
-        aviso={aviso}
+        ocupado={travado || depois.ocupado}
+        aviso={aviso ?? (depois.aviso?.numero === numero ? { tipo: "erro", texto: depois.aviso.mensagem } : null)}
         salvoEm={salvoEm}
         desatualizado={desatualizado(estado)}
         documentoHref={hrefDoDocumento(numero, item.rv)}
+        posEnvio={{ acoes: posEnvio, onAcao: (acao) => depois.abrir(acao, item) }}
         handlers={{
           salvar: () => void salvar(),
           previaSalva: () => void previaSalva(),
@@ -490,6 +538,8 @@ function MontarOrcamento({ numero }: { numero: string }) {
           devolver: () => setDialogo({ tipo: "devolver" }),
           enviarCliente: () => void enviarAoCliente("send", "Orçamento enviado"),
           aprovarEEnviar: () => void enviarAoCliente("approve_and_send", "Aprovado e enviado"),
+          enviarDispensado: () => void enviarDispensado(),
+          descartarRv: () => depois.abrir("descartar_rv", item),
           trocarVariante: (variante) => void salvar(variante),
           novoContato: () => {
             setErroDoDialogo(null);
@@ -497,6 +547,7 @@ function MontarOrcamento({ numero }: { numero: string }) {
           },
         }}
       />
+      {depois.dialogo}
       <DevolverDialog
         aberto={dialogo?.tipo === "devolver"}
         ocupado={travado}
