@@ -45,14 +45,26 @@ param(
 # mesma callable aparece em duas: o servico do Cloud Run e o nome em
 # minusculas, sem a codebase, e uma sobrescreveria a outra. Codebase sem
 # callable so avisa. Fora da codebase default, o firebase deploy precisa de
-# functions:<codebase>:<nome>; functions:<nome> procura so na default.
+# functions:<codebase>:<nome>; functions:<nome> procura o nome na default,
+# a menos que <nome> seja uma codebase (ai publica a codebase inteira).
+# Tambem reprova: codebase com prefix (o servico viraria <prefix>-<nome> e o
+# script conferiria o nome errado) e linha com onCall( ou onCall<...>( que o
+# padrao nao le (sem isso ela passaria sem conferencia, so com AVISO).
 
 $ErrorActionPreference = "Continue"
-$callablePattern = '^export const (\w+) = onCall\('
+$callablePattern = '^export const (\w+) = onCall(<.*>)?\('
+$onCallUsePattern = '\bonCall\s*[<(]'
 
 function Get-Callables([string]$file) {
   @(Select-String -LiteralPath $file -Pattern $callablePattern |
     ForEach-Object { $_.Matches[0].Groups[1].Value })
+}
+
+# Linhas que usam onCall mas nao seguem o padrao: o script nao as enxergaria.
+function Get-UnreadOnCallLines([string]$file) {
+  @(Select-String -LiteralPath $file -Pattern $onCallUsePattern -CaseSensitive |
+    Where-Object { $_.Line -notmatch $callablePattern } |
+    ForEach-Object { $_.LineNumber })
 }
 
 # "comercial: approvequote", ou so o servico quando nao ha codebase (-IndexFile).
@@ -84,7 +96,12 @@ if ($IndexFile) {
     exit 1
   }
   $root = Split-Path -Parent (Resolve-Path -LiteralPath $FirebaseJson).Path
-  $config = Get-Content -LiteralPath $FirebaseJson -Raw | ConvertFrom-Json
+  try {
+    $config = Get-Content -LiteralPath $FirebaseJson -Raw | ConvertFrom-Json -ErrorAction Stop
+  } catch {
+    Write-Host "$FirebaseJson nao e um JSON valido: $($_.Exception.Message)" -ForegroundColor Red
+    exit 1
+  }
   # "functions" pode ser uma lista de codebases ou um objeto so (a default).
   $codebases = @($config.functions | Where-Object { $_ })
   if ($codebases.Count -eq 0) {
@@ -101,11 +118,18 @@ if ($IndexFile) {
       $problems += "${codebase}: sem source no firebase.json"
       continue
     }
+    if ($entry.prefix) {
+      $problems += "${codebase}: prefix '$($entry.prefix)' nao suportado por este script (o servico viraria $($entry.prefix)-<nome>)"
+      continue
+    }
     $source = $entry.source.TrimEnd("/", "\")
     $index = [System.IO.Path]::Combine($root, $source, "src", "index.ts")
     if (-not (Test-Path -LiteralPath $index)) {
       $problems += "${codebase}: nao encontrei $source/src/index.ts"
       continue
+    }
+    foreach ($line in (Get-UnreadOnCallLines $index)) {
+      $problems += "${codebase}: onCall fora do padrao em $source/src/index.ts:$line (declare como export const nome = onCall( numa linha so)"
     }
     $names = @(Get-Callables $index)
     if ($names.Count -eq 0) {

@@ -70,8 +70,10 @@ deploy parcial):
 firebase deploy --only functions:nomeDaFunction --project dute-prod
 ```
 
-`functions:<nome>` só procura na codebase `default` (o WMS). Function de outra
-codebase precisa do nome dela: `functions:comercial:nomeDaFunction`.
+`functions:<nome>` publica a codebase inteira se `<nome>` for o nome de uma
+codebase (`functions:comercial` sobe todo o Comercial); senão, procura a
+function só na `default` (o WMS). Function de outra codebase precisa do nome
+dela: `functions:comercial:nomeDaFunction`.
 
 ### 4. Verificar que toda callable continua com invocação pública
 
@@ -89,7 +91,13 @@ incidente abaixo.
 Desde 20/10/2026 (Comercial, Fase 6) o script lê todas as codebases. Também
 falha, antes de consultar o Cloud Run, quando:
 
-- uma codebase listada não tem `src/index.ts`;
+- o `firebase.json` não é um JSON válido;
+- uma codebase listada não tem `source` (ex.: usa `remoteSource`) ou não tem
+  `src/index.ts`;
+- uma codebase tem `prefix`: o deploy publicaria `<prefix>-<nome>` e o script
+  conferiria o serviço errado. As codebases da Dute não usam `prefix`;
+- o `src/index.ts` usa `onCall(` ou `onCall<...>(` numa linha fora do padrão
+  (ex.: `export const nome =` numa linha e `onCall(` na outra);
 - a mesma callable aparece em duas codebases (o serviço do Cloud Run é o nome
   em minúsculas, sem a codebase, então `approveQuote` e `approvequote` também
   contam como repetidas);
@@ -98,9 +106,11 @@ falha, antes de consultar o Cloud Run, quando:
 Codebase sem callable só gera um `AVISO` e não reprova sozinha. As mensagens
 dizem a codebase (`FALTA comercial: approvequote`) e o `firebase deploy`
 sugerido já vem com `functions:<codebase>:<nome>` fora da `default`. O script
-só enxerga callable declarada como `export const nome = onCall(` no
-`src/index.ts` da codebase; reexportada de outro arquivo, ela não é conferida.
-Com `-IndexFile <arquivo>`, lê só aquele arquivo, como antes.
+só enxerga callable declarada numa linha só, como `export const nome = onCall(`
+ou `export const nome = onCall<Tipo>(`, no `src/index.ts` da codebase.
+Reexportada de outro arquivo, ela não é conferida: no `functions/comercial`,
+toda callable fica declarada no `src/index.ts`. Com `-IndexFile <arquivo>`, lê
+só aquele arquivo, como antes.
 
 Isso não é uma falha de segurança: a autorização de verdade acontece dentro de
 cada callable via Firebase Auth + papel (`requireCustomerScope`,
