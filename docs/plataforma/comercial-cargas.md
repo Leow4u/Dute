@@ -1,22 +1,31 @@
 # Cargas do Comercial
 
 Scripts Node em `functions/comercial/src/cargas/`, com as mesmas funções de
-domínio das callables (catálogo, tabela, dinheiro e evento). Desenho em
-`fase-6-comercial.md` ("Importação inicial").
+domínio e os mesmos schemas das callables (catálogo, tabela, contrato,
+dinheiro e evento). Desenho em `fase-6-comercial.md` ("Importação inicial").
 
 Regras de toda carga:
 
 - **Dry-run por padrão.** Sem `--executar`, nada é gravado. Sem `--projeto`, o
   dry-run só confere o arquivo; com `--projeto`, também lê o banco e mostra o
   que gravaria.
-- **`--executar` exige `--projeto`**, sem padrão, e só grava onde o Comercial
-  está liberado (`domain/liberacao.ts`: hoje só o `dute-homolog`) ou num
-  projeto `demo-` com o emulador ligado. A produção entra na parte 17, com o OK
-  do Leonardo.
-- **Relatório em `tmp/comercial/`** (fora do git), com os preços, para
-  conferir. Nunca copie o relatório, a planilha ou o CSV para o repositório.
-- **Idempotente pelo sha256 do arquivo.** O mesmo arquivo com os mesmos
-  parâmetros não grava de novo; com outros parâmetros, é recusado.
+- **`--executar` exige `--projeto`**, sem padrão, e é recusado antes de ler
+  o arquivo. A carga só grava onde o Comercial está liberado
+  (`domain/liberacao.ts`: hoje só o `dute-homolog`) ou num projeto `demo-` com
+  o emulador ligado. A produção entra na parte 17, com o OK do Leonardo.
+- **O arquivo fica fora do repositório.** O CSV tem preço e o JSON tem dado de
+  contrato: nunca commitar o arquivo nem colar o conteúdo dele em serviço
+  externo (CLAUDE.md, "Dados sensíveis"). A carga de contratos recusa arquivo
+  dentro do repositório, exceto em `tmp/` e `.secrets/`, que o git ignora.
+- **Relatório em `tmp/comercial/`**, na raiz do repositório (fora do git), um
+  JSON por execução com o que foi (ou seria) feito em cada item; o da tabela
+  leva os preços, para conferir. Nunca copie o relatório, a planilha ou o CSV
+  para o repositório.
+- **Mesmas operações das callables e idempotente.** A carga grava com recibo
+  em `comercial_operations` e evento. A de tabela é idempotente pelo sha256 do
+  arquivo: o mesmo arquivo com os mesmos parâmetros não grava de novo; com
+  outros parâmetros, é recusado. A de contratos compara com o banco: rodar de
+  novo o mesmo arquivo não muda nada.
 - **Eventos sem preço**, como todo evento do Comercial.
 - Nunca abrir `Orçamento cálculo.xlsx` (tem salários), `99_ARQUIVO` nem
   `attached_assets`.
@@ -24,6 +33,20 @@ Regras de toda carga:
 As credenciais são as da máquina (Application Default Credentials). Antes da
 primeira carga num projeto: `gcloud auth application-default login`, com uma
 conta que grave no Firestore dele.
+
+## Ordem das cargas
+
+1. **Contratos** (`contratos.js`). O cliente precisa estar em `customers`, já
+   como cliente. O aditivo de preço fica de fora nesta primeira passada, com o
+   problema "tabela não encontrada".
+2. **Tabelas** (`tabela.js`): primeiro a Padrão Dutelog
+   (`LPU_Dutelog_Padrão.xlsx`, sem `--cliente`, Comercial e Noturna), que cria
+   o catálogo; depois as tabelas dos clientes, com `--contrato` apontando para
+   o contrato carregado (Itaú v2.0 Comercial e Noturna; a RFQ de 2021,
+   encerrada; Safra quando o arquivo chegar). O cliente precisa estar em
+   `customers` antes da tabela dele.
+3. **Contratos de novo**, com o mesmo arquivo: só registra os aditivos que
+   faltavam.
 
 ## Tabela de preço (`tabela.ts`)
 
@@ -158,19 +181,7 @@ repetido e como foi separado. Preço zero só avisa.
    contrato e a vigência (o que entra ativo e o que encerra).
 9. Rode com `--projeto dute-homolog --executar --por <seu e-mail>`.
 
-Ordem das cargas: primeiro a Padrão Dutelog (`LPU_Dutelog_Padrão.xlsx`, sem
-`--cliente`, Comercial e Noturna), que cria o catálogo; depois as tabelas dos
-clientes (Itaú v2.0 Comercial e Noturna; a RFQ de 2021, encerrada; Safra
-quando o arquivo chegar). O cliente precisa estar em `customers` antes da
-tabela dele.
-
-## Contratos e aditivos (parte 8)
-
-O JSON tem dado de contrato: a carga recusa arquivo dentro do repositório,
-exceto em `tmp/` e `.secrets/`, que o git ignora. Nunca commitar o arquivo
-nem colar o conteúdo dele em serviço externo (CLAUDE.md, "Dados sensíveis").
-O relatório é um JSON por execução em `tmp/comercial/`, com o que foi (ou
-seria) feito em cada item.
+## Contratos e aditivos (`contratos.ts`, parte 8)
 
 ```powershell
 cd C:\DEV\Dute
@@ -182,11 +193,6 @@ node functions/comercial/lib/cargas/contratos.js --arquivo C:\caminho\fora\do\re
 # 3. Grava
 node functions/comercial/lib/cargas/contratos.js --arquivo C:\caminho\fora\do\repo\contratos.json --projeto dute-homolog --executar
 ```
-
-Ordem com as tabelas: primeiro os contratos (o aditivo de preço fica de
-fora, com o problema "tabela não encontrada"), depois as tabelas com o
-`contract_id` do contrato, e por fim a carga de contratos de novo, que só
-registra os aditivos que faltavam.
 
 O que a carga faz com cada contrato:
 

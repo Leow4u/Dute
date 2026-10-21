@@ -89,15 +89,6 @@ service cloud.firestore {
       return hasAnyRole(['owner', 'admin', 'financeiro', 'suporte']);
     }
 
-    // Preços do Comercial: catálogo, contratos, tabelas, orçamentos,
-    // autorizações e medições (docs/plataforma/fase-6-comercial.md,
-    // "Leitura"). Fora daqui ficam a operação, o campo, o suporte e o
-    // cliente; o financeiro espera a pergunta 4 do desenho. canReadBilling
-    // não muda.
-    function canReadPrices() {
-      return hasAnyRole(['owner', 'admin', 'comercial']);
-    }
-
     // Cadastro comercial do cliente (locais e contatos, com nome, e-mail e
     // telefone): owner, admin e comercial. Lista própria, fora de
     // canReadPrices: quem vier a ler preço não ganha os contatos junto.
@@ -128,6 +119,15 @@ service cloud.firestore {
 
     function canReadObservability() {
       return hasAnyRole(['owner', 'admin', 'interno', 'wms', 'suporte']);
+    }
+
+    // Preço do Comercial (docs/plataforma/fase-6-comercial.md, "Leitura"):
+    // catálogo, tabelas, contratos e aditivos, orçamentos, autorizações e
+    // medições. Operação e campo nunca veem valores; o suporte e o cliente não
+    // entram, e o financeiro espera a pergunta 4 do desenho. canReadBilling
+    // não muda.
+    function canReadPrices() {
+      return hasAnyRole(['owner', 'admin', 'comercial']);
     }
 
     function canUseAgentChat() {

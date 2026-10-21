@@ -93,6 +93,8 @@ const marcas = z.array(z.enum(MARCAS_ORCAMENTO)).max(MARCAS_ORCAMENTO.length);
 
 export const ESTAGIOS_CADASTRO = ["prospect", "cliente"] as const;
 export const REGIMES_COBRANCA = ["por_demanda", "medicao_mensal", "wms"] as const;
+/** Tipos de aditivo do contrato (contracts/{id}/aditivos). */
+export const TIPOS_ADITIVO = ["formalizacao", "prorrogacao", "preco", "escopo", "outro"] as const;
 
 /**
  * Variante da tabela de preço: na tabela é texto livre de letras ("Comercial",
@@ -100,8 +102,6 @@ export const REGIMES_COBRANCA = ["por_demanda", "medicao_mensal", "wms"] as cons
  * em tabelas.ts: "fim_de_semana"), como código, sem algarismo.
  */
 const variante = codigo;
-/** Tipos de aditivo do contrato (contracts/{id}/aditivos). */
-export const TIPOS_ADITIVO = ["formalizacao", "prorrogacao", "preco", "escopo", "outro"] as const;
 
 /** Quantas linhas de cada origem (nunca o preço nem o total delas). */
 const linhasPorOrigem = z
