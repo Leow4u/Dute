@@ -103,6 +103,14 @@ describe("callables do Comercial", () => {
     for (const block of recusados) assert.doesNotMatch(block, ENTRADA_DE_NEGOCIO, block);
   });
 
+  it("contratos (parte 8): saveContract e recordAditivo declaradas como callables de negócio", () => {
+    const blocks = callableBlocks();
+    for (const name of ["saveContract", "recordAditivo"]) {
+      assert.ok(blocks.has(name), `${name} não declarada em index.ts`);
+      assert.match(blocks.get(name) ?? "", ENTRADA_DE_NEGOCIO, name);
+    }
+  });
+
   it("a região é a do app", () => {
     assert.match(index, /setGlobalOptions\(\{[\s\S]*?region: "southamerica-east1"/);
   });

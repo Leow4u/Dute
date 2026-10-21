@@ -109,8 +109,10 @@ service cloud.firestore {
     }
 
     // Preço do Comercial (docs/plataforma/fase-6-comercial.md, "Leitura"):
-    // catálogo, tabelas, contratos e orçamentos. Operação e campo nunca veem
-    // valores, e o suporte não entra; canReadBilling não muda.
+    // catálogo, tabelas, contratos e aditivos, orçamentos, autorizações e
+    // medições. Operação e campo nunca veem valores; o suporte e o cliente não
+    // entram, e o financeiro espera a pergunta 4 do desenho. canReadBilling
+    // não muda.
     function canReadPrices() {
       return hasAnyRole(['owner', 'admin', 'comercial']);
     }
@@ -662,6 +664,19 @@ service cloud.firestore {
     match /billing_config/{configId} {
       allow read: if canReadBilling();
       allow create, update, delete: if false;
+    }
+
+    // Contratos do Comercial e o histórico de aditivos (parte 8). Só as
+    // Functions do Comercial gravam (saveContract e recordAditivo). A
+    // subcoleção tem match próprio: a leitura do contrato não passa para ela.
+    match /contracts/{contractId} {
+      allow read: if canReadPrices();
+      allow create, update, delete: if false;
+
+      match /aditivos/{aditivoId} {
+        allow read: if canReadPrices();
+        allow create, update, delete: if false;
+      }
     }
 
     match /events/{eventId} {

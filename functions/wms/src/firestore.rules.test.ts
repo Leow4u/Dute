@@ -963,3 +963,101 @@ describe("módulos contratados do cliente (Fase 2)", () => {
     await assertSucceeds(getDoc(doc(signedAs("finance-a"), "ops_aggregates", "dashboard")));
   });
 });
+
+describe("contratos do Comercial (parte 8)", () => {
+  const LEITORES = ["owner-a", "admin-a", "comercial-a"] as const;
+  const FORA = [
+    "ops-a",
+    "ops-dutelog",
+    "wms-a",
+    "support-a",
+    "finance-a",
+    "campo-a",
+    "rh-a",
+    "painel-a",
+    "client-a",
+    "client-b",
+    "comercial-off",
+  ] as const;
+
+  beforeEach(async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      const database = context.firestore();
+      await setDoc(doc(database, "users", "comercial-off"), {
+        nome: "comercial-off",
+        email: "comercial-off@example.com",
+        role: "comercial",
+        access_disabled: true,
+      });
+      await setDoc(doc(database, "contracts", "ct-a"), {
+        id: "ct-a",
+        customer_code: CUSTOMER_A,
+        nome: "Contrato de serviços",
+        vigente_de: "2026-07-01",
+        vigente_ate: "2027-06-30",
+        status: "vigente",
+        edicao: 1,
+      });
+      await setDoc(doc(database, "contracts", "ct-a", "aditivos", "1"), {
+        id: "1",
+        numero: 1,
+        tipo: "prorrogacao",
+        contrato_id: "ct-a",
+        customer_code: CUSTOMER_A,
+      });
+    });
+  });
+
+  for (const uid of LEITORES) {
+    it(`${uid} lê contrato e aditivos, inclusive em lista`, async () => {
+      const database = signedAs(uid);
+      await assertSucceeds(getDoc(doc(database, "contracts", "ct-a")));
+      await assertSucceeds(getDocs(collection(database, "contracts")));
+      await assertSucceeds(getDocs(query(collection(database, "contracts"), where("customer_code", "==", CUSTOMER_A))));
+      await assertSucceeds(getDoc(doc(database, "contracts", "ct-a", "aditivos", "1")));
+      await assertSucceeds(getDocs(collection(database, "contracts", "ct-a", "aditivos")));
+    });
+  }
+
+  it("operação, campo, suporte, financeiro, rh, painel, cliente e acesso removido não leem contrato nem aditivo", async () => {
+    for (const uid of FORA) {
+      const database = signedAs(uid);
+      await assertFails(getDoc(doc(database, "contracts", "ct-a")));
+      await assertFails(getDocs(collection(database, "contracts")));
+      await assertFails(getDoc(doc(database, "contracts", "ct-a", "aditivos", "1")));
+      await assertFails(getDocs(collection(database, "contracts", "ct-a", "aditivos")));
+    }
+    const anonimo = testEnvironment.unauthenticatedContext().firestore();
+    await assertFails(getDoc(doc(anonimo, "contracts", "ct-a")));
+    await assertFails(getDoc(doc(anonimo, "contracts", "ct-a", "aditivos", "1")));
+  });
+
+  it("ninguém grava contrato nem aditivo pelo navegador, nem o owner", async () => {
+    for (const uid of LEITORES) {
+      const database = signedAs(uid);
+      await assertFails(
+        setDoc(doc(database, "contracts", `ct-${uid}`), {
+          customer_code: CUSTOMER_A,
+          nome: "Contrato novo",
+          vigente_de: "2026-07-01",
+          vigente_ate: null,
+          status: "vigente",
+        }),
+      );
+      await assertFails(updateDoc(doc(database, "contracts", "ct-a"), { vigente_ate: "2030-12-31" }));
+      await assertFails(deleteDoc(doc(database, "contracts", "ct-a")));
+      await assertFails(setDoc(doc(database, "contracts", "ct-a", "aditivos", "2"), { numero: 2, tipo: "prorrogacao" }));
+      await assertFails(updateDoc(doc(database, "contracts", "ct-a", "aditivos", "1"), { tipo: "preco" }));
+      await assertFails(deleteDoc(doc(database, "contracts", "ct-a", "aditivos", "1")));
+    }
+  });
+
+  it("os recibos do Comercial continuam fechados", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "comercial_operations", "op-1"), { kind: "contract_save" });
+    });
+    for (const uid of LEITORES) {
+      await assertFails(getDoc(doc(signedAs(uid), "comercial_operations", "op-1")));
+    }
+  });
+});
