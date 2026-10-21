@@ -1,8 +1,9 @@
 # Cargas do Comercial
 
 Scripts Node em `functions/comercial/src/cargas/`, com as mesmas funções de
-domínio e os mesmos schemas das callables (catálogo, tabela, contrato,
-dinheiro e evento). Desenho em `fase-6-comercial.md` ("Importação inicial").
+domínio e os mesmos schemas das callables (cadastro, catálogo, tabela,
+contrato, dinheiro e evento). Desenho em `fase-6-comercial.md` ("Importação
+inicial").
 
 Regras de toda carga:
 
@@ -15,8 +16,9 @@ Regras de toda carga:
   o emulador ligado. A produção entra na parte 17, com o OK do Leonardo.
 - **O arquivo fica fora do repositório.** O CSV tem preço e o JSON tem dado de
   contrato: nunca commitar o arquivo nem colar o conteúdo dele em serviço
-  externo (CLAUDE.md, "Dados sensíveis"). A carga de contratos recusa arquivo
-  dentro do repositório, exceto em `tmp/` e `.secrets/`, que o git ignora.
+  externo (CLAUDE.md, "Dados sensíveis"). As cargas de contratos e de
+  clientes da Omie recusam arquivo dentro do repositório, exceto em `tmp/` e
+  `.secrets/`, que o git ignora.
 - **Relatório em `tmp/comercial/`**, na raiz do repositório (fora do git), um
   JSON por execução com o que foi (ou seria) feito em cada item; o da tabela
   leva os preços, para conferir. Nunca copie o relatório, a planilha ou o CSV
@@ -36,6 +38,8 @@ conta que grave no Firestore dele.
 
 ## Ordem das cargas
 
+0. **Clientes da Omie** (`clientes-omie.js`, parte 13): os cadastros que as
+   outras cargas pedem em `customers`, com o estágio pela compra.
 1. **Contratos** (`contratos.js`). O cliente precisa estar em `customers`, já
    como cliente. O aditivo de preço fica de fora nesta primeira passada, com o
    problema "tabela não encontrada".
@@ -180,6 +184,205 @@ repetido e como foi separado. Preço zero só avisa.
 8. Rode o dry-run com `--projeto dute-homolog`: ele confere o cliente, o
    contrato e a vigência (o que entra ativo e o que encerra).
 9. Rode com `--projeto dute-homolog --executar --por <seu e-mail>`.
+
+## Clientes da Omie (`clientes-omie.ts`, parte 13)
+
+Carga do cadastro comercial a partir dos JSON já baixados da Omie, sem tela e
+sem chamar a API da Omie.
+
+```powershell
+cd C:\DEV\Dute
+npm --prefix functions/comercial run build
+# 1. Confere os arquivos e gera o CSV de revisão (supõe o cadastro vazio)
+node functions/comercial/lib/cargas/clientes-omie.js `
+  --clientes tmp\omie\clientes-completo.json `
+  --crm tmp\omie\comercial-2026-10-20\crm-contas.json `
+  --titulos tmp\omie\comercial-2026-10-20\contas-receber-todas.json
+# 2. Compara com o banco, sem gravar; gera o CSV de revisão
+node functions/comercial/lib/cargas/clientes-omie.js <os três arquivos> --projeto dute-homolog
+# 3. Depois da revisão, com os códigos revisados, ainda sem gravar
+node functions/comercial/lib/cargas/clientes-omie.js <os três arquivos> --projeto dute-homolog `
+  --codigos tmp\comercial\clientes-omie-revisado.csv
+# 4. Grava
+node functions/comercial/lib/cargas/clientes-omie.js <os três arquivos> --projeto dute-homolog `
+  --codigos tmp\comercial\clientes-omie-revisado.csv --executar
+```
+
+| Parâmetro | O que é |
+|---|---|
+| `--clientes` | `clientes-completo.json`: os clientes e fornecedores da Omie |
+| `--crm` | `crm-contas.json`: as contas (empresas) do CRM. Os contatos do CRM (`crm-contatos.json`) não entram |
+| `--titulos` | `contas-receber-todas.json`: os títulos do contas a receber, para saber quem comprou |
+| `--codigos` | Opcional. O CSV de revisão com a coluna `codigo` preenchida (abaixo) |
+| `--projeto`, `--executar` | Ver as regras acima |
+
+Antes do primeiro `--executar` num projeto, as listas de clientes do WMS
+(Configurações › Clientes, convite e Posições) precisam ler o cadastro até o
+fim (`docs/multicliente-modelos-de-operacao.md`, "Pendências conhecidas"): a
+carga traz dezenas de prospects.
+
+### O que entra
+
+- **Pessoa jurídica com a tag Cliente** em `clientes-completo.json` e **as
+  contas do CRM**. Fornecedor sem a tag Cliente fica fora.
+- **Fora, pela LGPD:** pessoa física (marcada na Omie, ou com um CPF no lugar
+  do CNPJ, também no CRM), conta de teste (uma palavra do nome que começa por
+  "TESTE", como "Empresa Teste" ou "testexyz") e os contatos. Do que entra,
+  a carga lê só o id, o nome, a razão social, o CNPJ, a cidade, a UF, as tags
+  e as marcas de pessoa física e de inativo; dos títulos, só o cliente, a
+  situação e a data de emissão. E-mail, telefone,
+  contato, dados bancários, observações e valores são descartados na leitura
+  e nunca chegam ao cadastro, ao relatório nem ao CSV. A pessoa física e a
+  conta de teste aparecem no relatório só como contagem.
+- **A conta do CRM sem CNPJ só entra com um código escrito na revisão.** Ela
+  pode ser uma pessoa (no CRM, o filtro de pessoa física só pega quem tem CPF
+  no documento): sai no CSV com a ação `fora`, contada à parte no relatório
+  (`fora_crm_sem_cnpj`), e só é gravada quando a coluna `codigo` traz um
+  código para a chave `crm-<nCod>` dela. Antes, confira se é empresa. A que
+  já foi ligada numa carga anterior segue sem revisão.
+- **Uma por raiz de CNPJ.** As filiais viram um cadastro só; a raiz (os 8
+  primeiros caracteres) é a chave. CNPJ, cidade e UF são os da matriz (ordem
+  0001) ou, sem ela, do menor CNPJ do grupo. Com um CNPJ só, o nome é o nome
+  fantasia. Com mais de um, o nome fantasia de cada CNPJ é o do polo, e a
+  razão social às vezes também ("KAPPA BANCO S.A. - SEDE", "KAPPA BANCO
+  S.A. - POLO NORTE"): o nome e a razão social são o começo comum das razões
+  sociais do grupo ("KAPPA BANCO S.A."), ou a razão social da matriz quando
+  não há começo comum. A
+  conta do CRM com CNPJ entra no grupo da mesma raiz. Empresa com a tag
+  Cliente (ou conta do CRM) com um documento que não é CNPJ válido fica fora,
+  listada no relatório só pelo id da Omie.
+- **Cliente ou prospect pela compra.** Quem tem título não cancelado com
+  emissão a partir de 01/01/2024, em qualquer CNPJ da raiz (inclusive o de um
+  fornecedor), entra como cliente; o resto, como prospect. A conta do CRM sem
+  CNPJ é sempre prospect.
+- **Cliente desde a primeira compra.** O cliente novo nasce com
+  `stage_changed_at` na emissão do título não cancelado mais antigo da raiz
+  (meio-dia UTC, para a data não mudar com o fuso), e não no dia da carga: é o
+  "Cliente desde" da ficha. Vale o título mais antigo do arquivo baixado:
+  quem comprou antes do início dele aparece desde a primeira compra que está
+  nele.
+- `comercial.omie_ids` guarda `cliente:<codigo_cliente_omie>` de cada CNPJ do
+  grupo e `crm:<nCod>` de cada conta do CRM.
+- Nome e cidade entram como estão na Omie, quase sempre em maiúsculas e sem
+  acento ("EMPRESA EXEMPLO S A", "SAO PAULO"). O nome se corrige na revisão
+  (coluna `nome` do CSV); a cidade, depois, na tela.
+
+### O que a carga faz com cada empresa
+
+O cadastro existente é achado, nesta ordem, pelos ids da Omie que ele já tem
+em `comercial.omie_ids`, pela raiz do CNPJ ou pelo código canônico (o código
+revisado ou, sem ele, o sugerido, comparado sem acento, maiúscula nem
+separador, como na unicidade do cadastro). O código revisado acha o cadastro
+mesmo fora do formato do código novo: `BTG Pactual`, como o WMS gravou, e
+`BTG-PACTUAL` acham a BTG.
+
+Na Omie, a BTG se chama "BANCO BTG PACTUAL S.A.", e o código sugerido
+(`BANCO-BTG-PACTUAL`) não é o dela. Por isso, quando nem os ids, nem a raiz,
+nem o código acham o cadastro, a carga procura um **cadastro sem CNPJ de nome
+parecido**: o código ou o nome dele dentro de um dos nomes da Omie do grupo,
+ou o contrário, comparados do mesmo jeito, com 4 caracteres ou mais ("BTG
+Pactual" está em "BANCO BTG PACTUAL"). Achando, a linha fica `a_conferir`
+com "Parece ser o cadastro ...", em vez de criar uma segunda BTG. Na revisão,
+escreva o código dele na coluna `codigo` (para ligar), outro código (para
+criar outro cadastro) ou `-`. A comparação só acontece com `--projeto`: o
+dry-run sem projeto supõe o cadastro vazio.
+
+| Situação | Ação |
+|---|---|
+| Não existe | `criar`, com `origem: "omie"`, o estágio da compra e o código sugerido (ou o revisado) |
+| Existe e falta algum id da Omie | `vincular`: só `comercial.omie_ids` muda. Nome, razão social, CNPJ, código e estágio ficam como estão |
+| Existe com todos os ids | `sem_mudanca` |
+| Outra linha da carga vai para o mesmo cadastro | `juntar` (a linha principal leva a ação) |
+| `-` na coluna `codigo` do CSV revisado | `fora` |
+| Conta do CRM sem CNPJ, sem código na revisão | `fora` |
+| Problema | `a_conferir`: a empresa fica de fora, e a carga termina com código 1 |
+
+O que deixa uma empresa `a_conferir`:
+
+- os ids ou a raiz apontam para mais de um cadastro;
+- o código já é de um cadastro com outra raiz de CNPJ;
+- o cadastro achado está arquivado;
+- um cadastro sem CNPJ de nome parecido, sem código na revisão;
+- duas raízes diferentes da carga com o mesmo código, para um cadastro novo
+  ou para um que já existe sem CNPJ. No cadastro existente, a raiz dele é a
+  do CNPJ gravado, a das linhas que já estão ligadas a ele pelos ids e a das
+  linhas achadas pela raiz; a linha que chegaria só pelo código com outra
+  raiz fica a conferir (inclusive numa segunda carga);
+- nome sem código sugerido, ou código revisado fora do formato (letras sem
+  acento, números e hífen, de 2 a 20 caracteres).
+
+O cadastro existente que é prospect e comprou desde 2024 continua prospect,
+com o aviso "marque como cliente na tela". Linhas com o mesmo código vão para
+um cadastro só quando no máximo uma delas tem CNPJ (a conta do CRM sem CNPJ
+com o código de um cliente da Omie escrito na revisão, por exemplo); para
+separar, dê outro código a uma delas no CSV.
+
+### O que grava
+
+Pelas peças das callables do cadastro (`domain/cadastro.ts` e
+`domain/customer-identity.ts`): a montagem do prospect (`prospectPayload`), o
+código (`codigoDoNovoCadastro`), a unicidade de código e raiz do CNPJ
+(`customerIdentityConflict`), o recibo em `comercial_operations` e o evento,
+na mesma transação, que confere de novo o estado que o plano leu.
+
+- **Criar:** `customers/{código}` com os campos do prospect do Comercial,
+  `origem: "omie"`, `stage` `cliente` ou `prospect`, `comercial`
+  (`responsavel_uid: null`, cidade, UF e `omie_ids`) e `created_by:
+  carga-clientes-omie`. No cliente, `stage_changed_at` é a primeira compra.
+  Nada de sigla, modelo, módulos ou projeções. Evento
+  `commercial_customer.created` com o estágio.
+- **Vincular:** só `comercial.omie_ids` (e, no cadastro do WMS sem o mapa
+  `comercial`, os outros campos dele com `null`), `updated_by` e
+  `updated_at`. A transação recusa se os ids gravados mudaram depois da
+  leitura ("rode a carga de novo"). Evento `commercial_customer.updated` com
+  `campos: ["ids_omie"]`.
+- Rodar de novo os mesmos arquivos não muda nada: tudo fica `sem_mudanca`,
+  sem recibo nem evento novo.
+
+### Revisão humana: o CSV
+
+Cada execução sem erro de arquivo grava, ao lado do relatório JSON,
+`tmp/comercial/clientes-omie-<modo>-<projeto>-<data>.csv` (UTF-8, `;`), uma
+linha por empresa que entra (inclusive as contas do CRM sem CNPJ, com a ação
+`fora`):
+
+| Coluna | O que é |
+|---|---|
+| `chave` | `cnpj-<raiz>`, ou `crm-<nCod>` para a conta do CRM sem CNPJ. Não mude |
+| `nome` | O nome que vai para o cadastro novo. Pode ser corrigido na revisão (de 2 a 120 caracteres); no cadastro que já existe, não muda nada |
+| `cnpj` | O CNPJ da matriz |
+| `filiais`, `omie_ids` | Quantos CNPJs o grupo tem, e os ids da Omie |
+| `primeira_compra`, `ultima_compra` | Emissão do título não cancelado mais antigo (o "cliente desde") e do mais recente |
+| `codigo_sugerido` | O código que a carga usa: o do cadastro existente, o revisado ou o sugerido pelo nome |
+| `codigo` | Para preencher na revisão. Vazio fica o sugerido; `-` deixa a empresa de fora |
+| `estagio`, `acao` | Cliente ou prospect, e a ação (tabela acima) |
+| `avisos` | Problemas e avisos da linha |
+
+1. Rode o dry-run com `--projeto dute-homolog` e abra o CSV no Excel.
+2. Confira nome, CNPJ, estágio e ação. Na coluna `codigo`, escreva o código
+   que deve ficar (vira o `customer_code` e não muda depois) ou `-` para
+   deixar a empresa de fora. Na coluna `nome`, corrija o nome que vem em
+   maiúsculas ou torto da Omie ("Empresa Exemplo", e não "EMPRESA EXEMPLO S A").
+3. Linhas que pedem atenção:
+   - **BTG:** a linha "BANCO BTG PACTUAL S.A." precisa de `BTG Pactual` (ou
+     `BTG-PACTUAL`) na coluna `codigo`, para ligar a Omie ao cadastro do WMS.
+     Sem isso, ela fica `a_conferir` ("Parece ser o cadastro BTG Pactual") ou,
+     se o cadastro da BTG tiver o CNPJ, é achada pela raiz.
+   - **Família Itaú:** o Itaú vem em mais de uma linha, uma por raiz de
+     CNPJ (o banco, a entidade do Itaú Clube e outras empresas do grupo).
+     Nos mockups (`ComClientes`), o Itaú Clube é o local `CLUBE` do Itaú
+     Unibanco, com o contrato e a LPU do Itaú. A carga não junta raízes
+     diferentes num cadastro: para seguir o mockup, ponha `-` na linha do
+     Clube e crie o local CLUBE no Itaú pela tela; para mantê-lo como
+     cliente separado, dê um código a ele e ligue o contrato do Itaú depois.
+     Confira as linhas do Itaú antes do `--executar`.
+   - **Contas do CRM sem CNPJ:** só entram com um código na coluna `codigo`.
+     Escreva o código apenas para as que forem empresa.
+4. Salve como **CSV UTF-8 (delimitado por vírgulas)** em `tmp/comercial/` (o
+   Excel em português grava com `;`) e passe com `--codigos`. Só as colunas
+   `chave`, `codigo` e `nome` são lidas.
+5. Repita o dry-run com `--codigos` até não sobrar `a_conferir`; depois rode
+   com `--executar`.
 
 ## Contratos e aditivos (`contratos.ts`, parte 8)
 
