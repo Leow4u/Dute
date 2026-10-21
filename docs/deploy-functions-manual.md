@@ -70,16 +70,37 @@ deploy parcial):
 firebase deploy --only functions:nomeDaFunction --project dute-prod
 ```
 
+`functions:<nome>` só procura na codebase `default` (o WMS). Function de outra
+codebase precisa do nome dela: `functions:comercial:nomeDaFunction`.
+
 ### 4. Verificar que toda callable continua com invocação pública
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\check_functions_invoker.ps1
 ```
 
-Esse script lê as callables exportadas em `functions/wms/src/index.ts`, compara com
-o Cloud Run real e falha (exit 1) se alguma estiver sem `allUsers` /
-`roles/run.invoker`. **Rode sempre, mesmo em deploy que "só" mudou uma
-function** — foi exatamente esse tipo de deploy que causou o incidente abaixo.
+Esse script lê as codebases do `firebase.json` e as callables exportadas no
+`src/index.ts` de cada uma (`functions/wms` é a `default`), compara com o Cloud
+Run real e falha (exit 1) se alguma estiver sem `allUsers` /
+`roles/run.invoker` ou não tiver sido publicada. **Rode sempre, mesmo em deploy
+que "só" mudou uma function** — foi exatamente esse tipo de deploy que causou o
+incidente abaixo.
+
+Desde 20/10/2026 (Comercial, Fase 6) o script lê todas as codebases. Também
+falha, antes de consultar o Cloud Run, quando:
+
+- uma codebase listada não tem `src/index.ts`;
+- a mesma callable aparece em duas codebases (o serviço do Cloud Run é o nome
+  em minúsculas, sem a codebase, então `approveQuote` e `approvequote` também
+  contam como repetidas);
+- nenhuma codebase tem callable.
+
+Codebase sem callable só gera um `AVISO` e não reprova sozinha. As mensagens
+dizem a codebase (`FALTA comercial: approvequote`) e o `firebase deploy`
+sugerido já vem com `functions:<codebase>:<nome>` fora da `default`. O script
+só enxerga callable declarada como `export const nome = onCall(` no
+`src/index.ts` da codebase; reexportada de outro arquivo, ela não é conferida.
+Com `-IndexFile <arquivo>`, lê só aquele arquivo, como antes.
 
 Isso não é uma falha de segurança: a autorização de verdade acontece dentro de
 cada callable via Firebase Auth + papel (`requireCustomerScope`,
