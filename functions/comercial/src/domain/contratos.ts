@@ -2,7 +2,6 @@ import { FieldValue, type DocumentData, type Firestore, type Transaction } from 
 import { HttpsError } from "firebase-functions/https";
 import { z } from "zod";
 
-import { isProspect } from "./cadastro-estagio.js";
 import {
   MESES_PAGAMENTO,
   STATUS_CONTRATO,
@@ -14,6 +13,7 @@ import {
   mesDiaValido,
   problemaDasFaixas,
 } from "./contratos-datas.js";
+import { isProspect } from "./customer-identity.js";
 import { REGIMES_COBRANCA, TIPOS_ADITIVO, createComercialEvent } from "./events.js";
 import { actorPayload, canonical, compactValue, runIdempotent, type ComercialActor } from "./operations.js";
 

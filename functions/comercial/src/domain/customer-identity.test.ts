@@ -119,7 +119,11 @@ describe("cópias literais do WMS", () => {
   it("as cópias se comportam como o WMS nos casos de lá", () => {
     assert.equal(customerStage(undefined), "cliente");
     assert.equal(customerStage(" Prospect "), "prospect");
+    assert.equal(customerStage("lead"), "cliente");
     assert.equal(isProspect({ stage: "prospect" }), true);
+    assert.equal(isProspect({ stage: "PROSPECT" }), true);
+    assert.equal(isProspect({}), false);
+    assert.equal(isProspect(null), false);
     assert.equal(canonicalCustomerCode("BTG Pactual"), canonicalCustomerCode("BTG-PACTUAL"));
     assert.equal(canonicalCustomerCode("Itaú"), "ITAU");
     assert.equal(cnpjRoot("12.345.678/0001-95"), "12345678");
