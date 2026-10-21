@@ -34,7 +34,7 @@ import {
   isAccountPath,
   isModuleEnabled,
   isModuleGroup,
-  isRouteActive,
+  isNavRouteActive,
   type AppModule,
   type ModuleRoute,
 } from "@/lib/modules";
@@ -278,7 +278,7 @@ function CollapsedModuleItem({
             key={route.id}
             route={route}
             active={Boolean(
-              route.href && isRouteActive(location, route.href, route.exact),
+              isNavRouteActive(location, route),
             )}
           />
         ))}
@@ -359,7 +359,7 @@ function ExpandedModuleItem({
           {module.routes.map((route) => {
             const RouteIcon = route.icon;
             const routeActive = Boolean(
-              route.href && isRouteActive(location, route.href, route.exact),
+              isNavRouteActive(location, route),
             );
             const className = cn(
               "flex min-h-9 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-[background-color,color] duration-200",

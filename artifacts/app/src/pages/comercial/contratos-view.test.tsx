@@ -134,6 +134,7 @@ function texts(html: string) {
 
 const CABECALHO_E_LISTA = [
   "Comercial",
+  "Orçamentos",
   "Contratos",
   "Vigentes",
   "2",
@@ -277,8 +278,9 @@ describe("tela de contratos", () => {
 
   it("filtro Encerrados: a lista mostra os encerrados e o atalho volta para Vigentes", () => {
     const lista = texts(render({ filtro: "encerrados", selecionado: RFQ }));
-    expect(lista.slice(0, 11)).toEqual([
+    expect(lista.slice(0, 12)).toEqual([
       "Comercial",
+      "Orçamentos",
       "Contratos",
       "Encerrados",
       "1",
@@ -327,11 +329,11 @@ describe("tela de contratos", () => {
 
   it("sem contrato nenhum, a lista diz que não há e a ficha não aparece", () => {
     const tela = texts(render({ contratos: [], selecionado: null }));
-    expect(tela).toEqual(["Comercial", "Contratos", "Vigentes", "0", "Novo contrato", "Nenhum contrato vigente", "Encerrados", "0"]);
+    expect(tela).toEqual(["Comercial", "Orçamentos", "Contratos", "Vigentes", "0", "Novo contrato", "Nenhum contrato vigente", "Encerrados", "0"]);
   });
 
   it("carregando e erro na lista", () => {
-    expect(texts(render({ estado: "carregando", selecionado: null })).slice(5)).toEqual(["Carregando..."]);
-    expect(texts(render({ estado: "erro", selecionado: null })).slice(5)).toEqual(["Não foi possível carregar os contratos."]);
+    expect(texts(render({ estado: "carregando", selecionado: null })).slice(6)).toEqual(["Carregando..."]);
+    expect(texts(render({ estado: "erro", selecionado: null })).slice(6)).toEqual(["Não foi possível carregar os contratos."]);
   });
 });

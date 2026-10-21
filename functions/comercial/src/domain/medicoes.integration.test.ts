@@ -736,7 +736,15 @@ describe("enviar, contestar, reabrir e aprovar", () => {
     );
     const registrada = todos.find((event) => event.type === "client_authorization.recorded");
     assert.equal(registrada?.entity_type, "client_authorization");
-    assert.deepEqual(registrada?.payload, { autorizacao_id: autorizacaoId, demandas: [d1, d2, d3].sort(), tipo: "medicao_aprovada", medicao_id: MEDICAO });
+    assert.deepEqual(registrada?.payload, {
+      autorizacao_id: autorizacaoId,
+      tipo: "medicao_aprovada",
+      contrato_id: "safra-2026",
+      demandas: [d1, d2, d3].sort(),
+      a_faturar: [d1, d2, d3].sort(),
+      marcas: [],
+      medicao_id: MEDICAO,
+    });
     const etapas = todos.filter((event) => event.type === "demand.stage_changed" && (event.payload as Linha).etapa_depois === "a_faturar");
     assert.deepEqual(
       etapas.filter((event) => [d2, d3].includes(String(event.entity_id))).map((event) => [event.entity_id, (event.payload as Linha).etapa_antes]).sort(),

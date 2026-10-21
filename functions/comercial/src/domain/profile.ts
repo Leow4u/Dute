@@ -6,6 +6,7 @@ import {
   canApproveQuote,
   comercialAccessProblem,
   isPlatformRole,
+  type AcessoComercial,
   type PlatformRole,
 } from "./platform-roles.js";
 
@@ -68,26 +69,36 @@ export async function loadProfile(
   return profile;
 }
 
-/** Perfil com acesso ao Comercial; os outros papéis, inclusive cliente, dão permission-denied. */
-export async function getProfile(db: Firestore, request: CallableRequest<unknown>): Promise<ComercialProfile> {
+/**
+ * Perfil com acesso ao Comercial; os outros papéis, inclusive cliente, dão
+ * permission-denied. `acesso` abre ao financeiro só quando a callable pede.
+ */
+export async function getProfile(
+  db: Firestore,
+  request: CallableRequest<unknown>,
+  acesso: AcessoComercial = {},
+): Promise<ComercialProfile> {
   const auth = assertAuth(request);
   const profile = await loadProfile(db, auth.uid, auth.token.email, auth.token.name);
-  const problem = comercialAccessProblem(profile.role);
+  const problem = comercialAccessProblem(profile.role, acesso);
   if (problem) throw new HttpsError("permission-denied", problem);
   return profile;
 }
 
 /**
  * Entrada de toda callable de negócio do Comercial: a liberação do ambiente
- * antes de tudo (não lê nada), depois login, perfil e papel.
+ * antes de tudo (não lê nada), depois login, perfil e papel. Sem `acesso`,
+ * owner, admin e comercial; `{ financeiro: true }` abre também ao financeiro,
+ * e só a recordAuthorization pede (callables.test.ts trava).
  */
 export async function requireComercialCaller(
   db: Firestore,
   request: CallableRequest<unknown>,
   projectId: string,
+  acesso: AcessoComercial = {},
 ): Promise<ComercialProfile> {
   assertLiberado(projectId);
-  return getProfile(db, request);
+  return getProfile(db, request, acesso);
 }
 
 /**

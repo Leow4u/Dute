@@ -14,19 +14,18 @@ import { collection, deleteDoc, doc, getDoc, getDocs, setDoc, updateDoc } from "
 
 /**
  * Medição mensal do Comercial (docs/plataforma/fase-6-comercial.md, parte
- * 16a): `medicoes` tem preço e é lida só por canReadPrices() (owner, admin e
- * comercial). A operação, o suporte, o financeiro e o cliente não leem, e
+ * 16a): `medicoes` tem preço e é lida só por canReadPrices() (owner, admin,
+ * comercial e, desde a parte 15, o financeiro). A operação, o suporte e o cliente não leem, e
  * ninguém grava pelo navegador: a escrita é das callables saveMedicao e
  * advanceMedicao.
  */
 
 const PROJECT_ID = "demo-dute-operations";
-const LEEM = ["owner-a", "admin-a", "comercial-a"] as const;
+const LEEM = ["owner-a", "admin-a", "comercial-a", "finance-a"] as const;
 const NAO_LEEM = [
   "ops-a",
   "wms-a",
   "support-a",
-  "finance-a",
   "campo-a",
   "rh-a",
   "painel-a",
@@ -136,7 +135,7 @@ describe("medição mensal: leitura", () => {
 });
 
 describe("medição mensal: escrita", () => {
-  for (const uid of [...LEEM, "finance-a", "client-safra"]) {
+  for (const uid of [...LEEM, "client-safra"]) {
     it(`${uid} não grava pelo navegador`, async () => {
       const database = signedAs(uid);
       await assertFails(setDoc(doc(database, "medicoes", "safra-2026_2026-11"), { id: "safra-2026_2026-11", status: "rascunho" }));

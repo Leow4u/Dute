@@ -101,7 +101,8 @@ Numa transação só, com o recibo em `comercial_operations`:
 - Os eventos `price_table.imported` e, quando encerra a anterior,
   `price_table.closed`, sem preço.
 
-Leitura: `canReadPrices()` no `firestore.rules` (owner, admin e comercial).
+Leitura: `canReadPrices()` no `firestore.rules` (owner, admin, comercial e
+financeiro; o financeiro desde a parte 15).
 Ninguém grava pelo navegador.
 
 ### Vigência

@@ -96,10 +96,12 @@ service cloud.firestore {
       return hasAnyRole(['owner', 'admin', 'comercial']);
     }
 
-    // Demanda do Comercial (parte 9): o serviço pedido, sem preço. A
-    // operação passa a ler na Fase 3; o preço fica em quotes.
+    // Demanda do Comercial (parte 9): o serviço pedido, sem preço. O
+    // financeiro lê desde a parte 15 (registra a autorização de faturamento
+    // e precisa da fila de executados); a operação passa a ler na Fase 3; o
+    // preço fica em quotes.
     function canReadDemands() {
-      return hasAnyRole(['owner', 'admin', 'comercial']);
+      return hasAnyRole(['owner', 'admin', 'comercial', 'financeiro']);
     }
 
     /**
@@ -123,11 +125,12 @@ service cloud.firestore {
 
     // Preço do Comercial (docs/plataforma/fase-6-comercial.md, "Leitura"):
     // catálogo, tabelas, contratos e aditivos, orçamentos, autorizações e
-    // medições. Operação e campo nunca veem valores; o suporte e o cliente não
-    // entram, e o financeiro espera a pergunta 4 do desenho. canReadBilling
-    // não muda.
+    // medições. Preço é de owner, admin, financeiro e comercial (CLAUDE.md;
+    // o financeiro entra na parte 15, pergunta 4 do desenho). Operação e
+    // campo nunca veem valores; o suporte e o cliente não entram.
+    // canReadBilling não muda.
     function canReadPrices() {
-      return hasAnyRole(['owner', 'admin', 'comercial']);
+      return hasAnyRole(['owner', 'admin', 'comercial', 'financeiro']);
     }
 
     function canUseAgentChat() {
@@ -709,6 +712,13 @@ service cloud.firestore {
         allow read: if canReadPrices();
         allow create, update, delete: if false;
       }
+    }
+
+    // Autorizações de faturamento do cliente (parte 15): pedido, aceite,
+    // valor e tomador. Só a callable recordAuthorization grava.
+    match /client_authorizations/{autorizacaoId} {
+      allow read: if canReadPrices();
+      allow create, update, delete: if false;
     }
 
     // Medição mensal do Comercial (parte 16a): as linhas do mês de um

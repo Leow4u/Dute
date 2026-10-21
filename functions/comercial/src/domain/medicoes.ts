@@ -946,7 +946,15 @@ async function aprovar(gravacao: Gravacao, id: string, medicao: Dados, input: Ap
     createComercialEvent(transaction, db, {
       ...comum(gravacao, medicao, autorizacaoId),
       type: "client_authorization.recorded",
-      payload: { autorizacao_id: autorizacaoId, demandas: aFaturar, tipo: "medicao_aprovada", medicao_id: id },
+      payload: {
+        autorizacao_id: autorizacaoId,
+        tipo: "medicao_aprovada",
+        contrato_id: texto(medicao.contrato_id),
+        demandas: aFaturar,
+        a_faturar: aFaturar,
+        marcas: [],
+        medicao_id: id,
+      },
     }).id,
   );
   return resultado(id, medicao, "aprovada", patch.edicao, events, {

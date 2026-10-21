@@ -14,19 +14,19 @@ import { collection, deleteDoc, doc, getDoc, getDocs, setDoc, updateDoc } from "
 
 /**
  * Demanda e orçamento do Comercial (docs/plataforma/fase-6-comercial.md,
- * "Coleções"; parte 9): `demands` não tem preço e é lida por owner, admin e
- * comercial (a operação entra na Fase 3); `quotes` e `quotes/{n}/revisoes`
- * têm preço e são lidas por canReadPrices(). Ninguém grava pelo navegador, e
- * o contador `demand_counters` não tem match: ninguém lê.
+ * "Coleções"; parte 9): `demands` não tem preço e é lida por owner, admin,
+ * comercial e, desde a parte 15, o financeiro (a fila de autorizações; a
+ * operação entra na Fase 3); `quotes` e `quotes/{n}/revisoes` têm preço e são
+ * lidas por canReadPrices(), que também inclui o financeiro. Ninguém grava
+ * pelo navegador, e o contador `demand_counters` não tem match: ninguém lê.
  */
 
 const PROJECT_ID = "demo-dute-operations";
-const LEEM = ["owner-a", "admin-a", "comercial-a"] as const;
+const LEEM = ["owner-a", "admin-a", "comercial-a", "finance-a"] as const;
 const NAO_LEEM = [
   "ops-a",
   "wms-a",
   "support-a",
-  "finance-a",
   "campo-a",
   "rh-a",
   "painel-a",
@@ -163,7 +163,7 @@ describe("demanda e orçamento: leitura", () => {
 });
 
 describe("demanda e orçamento: escrita", () => {
-  for (const uid of [...LEEM, "finance-a", "client-a", "ops-a"]) {
+  for (const uid of [...LEEM, "client-a", "ops-a"]) {
     it(`${uid} não grava pelo navegador`, async () => {
       const database = signedAs(uid);
       for (const name of Object.keys(ALVOS)) {
@@ -186,8 +186,8 @@ describe("demanda e orçamento: as regras escritas", () => {
     return [...match[1].matchAll(/'([^']+)'/g)].map((item) => item[1]);
   }
 
-  it("canReadDemands() é owner, admin e comercial (a operação entra na Fase 3)", () => {
-    assert.deepEqual(roles("canReadDemands"), ["owner", "admin", "comercial"]);
+  it("canReadDemands() é owner, admin, comercial e financeiro (a operação entra na Fase 3)", () => {
+    assert.deepEqual(roles("canReadDemands"), ["owner", "admin", "comercial", "financeiro"]);
   });
 
   it("demands lê por canReadDemands(); quotes e revisoes, por canReadPrices(); nada aceita escrita", () => {

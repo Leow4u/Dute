@@ -54,10 +54,10 @@ export default defineConfig({
       ],
       manifest: {
         id: "/",
-        name: "Dutelog | Operacao BTG",
-        short_name: "Dutelog BTG",
+        name: "Dutelog",
+        short_name: "Dutelog",
         description:
-          "Operacao de estoque, inventario e armazenagem da Dutelog para o BTG Pactual.",
+          "Sistema da Dutelog para armazenagem, pedidos, estoque e faturamento.",
         lang: "pt-BR",
         start_url: "/",
         scope: "/",
