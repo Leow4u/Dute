@@ -65,9 +65,14 @@ const ARMAZENAGEM = /\barmazena(?:gem|mento)\b/;
  * Armazenagem não passa por orçamento: a cobrança é do WMS (decisão 3). O
  * item entra no catálogo, com o preço na tabela do contrato, mas não aparece
  * para orçar.
+ *
+ * Conta a palavra na categoria, no item ou no serviço: numa LPU de cliente a
+ * armazenagem pode vir só no item (categoria "Serviços", serviço "Prestação
+ * de Serviço"). A descrição não conta: ela é do cliente e muda de tabela para
+ * tabela, e o `orcavel` precisa depender só da chave, como o id.
  */
-export function itemOrcavel(chave: Pick<ChaveDoItem, "categoria" | "servico">): boolean {
-  return ![chave.categoria, chave.servico].some((valor) => ARMAZENAGEM.test(normalizarTexto(valor)));
+export function itemOrcavel(chave: Pick<ChaveDoItem, "categoria" | "item" | "servico">): boolean {
+  return ![chave.categoria, chave.item, chave.servico].some((valor) => ARMAZENAGEM.test(normalizarTexto(valor)));
 }
 
 export type LpuItemDoc = ChaveDoItem & {

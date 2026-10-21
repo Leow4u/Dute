@@ -425,7 +425,7 @@ export function lerTabelaCsv(bytes: Uint8Array): LeituraDaTabela {
       item,
       servico,
       unidade,
-      orcavel: itemOrcavel({ categoria, servico }),
+      orcavel: itemOrcavel({ categoria, item, servico }),
       codigo,
       descricao_cliente: descricao,
       preco: preco.texto,
@@ -614,7 +614,16 @@ function conferirEstado(plano: PlanoDaCarga, estado: EstadoDoBanco): EstadoConfe
   }
   if (contrato !== null && estado.contrato) {
     if (!estado.contrato.existe) {
-      avisos.push(`O contrato ${contrato} ainda não está em contracts: confira o id antes de executar.`);
+      // A tabela é imutável: um contract_id que não existe viraria tabela órfã
+      // para sempre. O dry-run avisa; o --executar recusa até o contrato existir.
+      if (plano.args.executar) {
+        erros.push(
+          `O contrato ${contrato} não está em contracts. A tabela é imutável e não pode apontar para contrato que não existe: ` +
+            "confira o id ou cadastre o contrato antes.",
+        );
+      } else {
+        avisos.push(`O contrato ${contrato} ainda não está em contracts: o --executar recusa enquanto ele não existir.`);
+      }
     } else if (estado.contrato.customer_code !== cliente) {
       erros.push(`O contrato ${contrato} é de outro cliente (${estado.contrato.customer_code ?? "sem cliente"}).`);
     }
@@ -903,6 +912,12 @@ export type Dependencias = {
   agora?: () => Date;
   env?: Record<string, string | undefined>;
   log?: (linha: string) => void;
+  /**
+   * Roda entre a conferência fora da transação e a gravação. Os testes usam
+   * para mudar o banco nesse intervalo e provar que a transação confere tudo
+   * de novo; a carga de verdade não passa nada aqui.
+   */
+  antesDeGravar?: (db: Firestore) => Promise<void>;
 };
 
 function abrirBancoPadrao(projeto: string): Firestore {
@@ -988,6 +1003,7 @@ export async function rodarCarga(argv: readonly string[], deps: Dependencias = {
     }
 
     if (args.executar && resultado.erros.length === 0) {
+      await deps.antesDeGravar?.(db);
       try {
         const gravado = await gravar(db, plano, actor);
         resultado.replayed = gravado.replayed === true;

@@ -89,13 +89,25 @@ describe("id do item do catálogo", () => {
 
 describe("item orçável", () => {
   it("armazenagem não passa por orçamento: a cobrança é do WMS", () => {
-    assert.equal(itemOrcavel({ categoria: "Armazenagem", servico: "Prestação de serviço" }), false);
-    assert.equal(itemOrcavel({ categoria: "Guarda", servico: "Armazenamento" }), false);
-    assert.equal(itemOrcavel({ categoria: "ARMAZENAGEM MENSAL", servico: "Fornecimento" }), false);
+    assert.equal(itemOrcavel({ categoria: "Armazenagem", item: "Pallet", servico: "Prestação de serviço" }), false);
+    assert.equal(itemOrcavel({ categoria: "Guarda", item: "Pallet", servico: "Armazenamento" }), false);
+    assert.equal(itemOrcavel({ categoria: "ARMAZENAGEM MENSAL", item: "Caixa", servico: "Fornecimento" }), false);
+  });
+
+  it("armazenagem só no item também conta (categoria Serviços, como numa LPU de cliente)", () => {
+    const galpao = { categoria: "Serviços", item: "Armazenamento em galpão", servico: "Prestação de Serviço", unidade: "M³/MÊS" };
+    assert.equal(itemOrcavel(galpao), false);
+    assert.equal(lpuItemDoc({ ...galpao, descricao: "Guarda de mobiliário em galpão", origem_tabela_id: "pt_x" }).orcavel, false);
+    assert.equal(itemOrcavel({ ...galpao, item: "Mesa de escritório" }), true);
+  });
+
+  it("a descrição não decide: orcavel depende só da chave do item, como o id", () => {
+    const docItem = lpuItemDoc({ ...mesa, servico: "Transporte", descricao: "Retirada da mesa para armazenagem", origem_tabela_id: "pt_x" });
+    assert.equal(docItem.orcavel, true);
   });
 
   it("transporte para o armazém continua orçável", () => {
-    assert.equal(itemOrcavel({ categoria: "Transporte para armazém", servico: "Transporte" }), true);
+    assert.equal(itemOrcavel({ categoria: "Transporte para armazém", item: "Mesa de escritório", servico: "Transporte" }), true);
     assert.equal(itemOrcavel(mesa), true);
   });
 });

@@ -43,7 +43,7 @@ node functions/comercial/lib/cargas/tabela.js --arquivo <caminho do CSV> `
 | `--arquivo` | O CSV (formato abaixo). No relatório e na tabela fica só o nome do arquivo |
 | `--nome` | Nome da tabela, como sai no orçamento |
 | `--cliente` | `customer_code` de um cadastro em `customers`. Sem ele, é a Tabela Padrão Dutelog |
-| `--contrato` | Id do contrato em `contracts`. Exige `--cliente`. Contrato de outro cliente é recusado; contrato que ainda não existe em `contracts` só avisa |
+| `--contrato` | Id do contrato em `contracts`. Exige `--cliente`. Contrato de outro cliente é recusado. Contrato que ainda não existe em `contracts` só avisa no dry-run e é recusado no `--executar`, porque a tabela é imutável e ficaria apontando para nada |
 | `--variante` | Texto livre de letras, espaço e hífen: Comercial, Noturna, Fim de semana. Sem algarismo, porque vai no evento |
 | `--vigente-de`, `--vigente-ate` | Vigência da tabela, que não precisa ser a do contrato. Sem `--vigente-ate`, fica em aberto |
 | `--rodape`, `--condicoes`, `--validade-dias` | Texto do documento. Sem `--validade-dias`, o orçamento sai sem validade, como no Itaú |
@@ -62,7 +62,9 @@ Numa transação só, com o recibo em `comercial_operations`:
   unidade, comparados sem acento, sem maiúscula e sem espaço sobrando ("M²" e
   "M2" são a mesma unidade): a Padrão Dutelog e as tabelas dos clientes caem
   nos mesmos itens, e recarregar não duplica. Armazenagem entra com
-  `orcavel: false`, porque a cobrança é do WMS.
+  `orcavel: false`, porque a cobrança é do WMS: vale a palavra armazenagem ou
+  armazenamento na categoria, no item ou no serviço (numa LPU de cliente ela
+  pode vir só no item, com a categoria "Serviços"). A descrição não conta.
 - `price_tables/{id}`: a tabela, imutável, com `precos { lpu_item_id: { codigo,
   descricao_cliente, preco } }` num documento só, o preço em texto decimal
   exato, `fonte { arquivo, sha256, linhas }`, `importado_por` e
@@ -89,9 +91,11 @@ Ninguém grava pelo navegador.
   entra com os contratos (parte 8); até lá, a carga recusa.
 - O orçamento usa a tabela cuja vigência contém a data-base (a data do
   orçamento), mesmo que ela já esteja encerrada (`tabelaVigente` em
-  `domain/tabelas.ts`). O cliente sem tabela naquela variante usa a Padrão
-  Dutelog da mesma variante; o cliente que tem tabela, mas nenhuma vigente na
-  data-base, não cai na Padrão.
+  `domain/tabelas.ts`), do contrato do orçamento (ou sem contrato, quando o
+  orçamento não tem). Só o cliente sem nenhuma tabela naquela variante, em
+  contrato nenhum, usa a Padrão Dutelog da mesma variante. O cliente que tem
+  tabela naquela variante, mas nenhuma do contrato do orçamento ou vigente na
+  data-base, fica sem tabela (a linha é livre) e nunca cai na Padrão.
 
 ### O CSV
 

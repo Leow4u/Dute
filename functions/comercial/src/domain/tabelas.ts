@@ -237,12 +237,27 @@ function naData<T extends VigenciaDaTabela>(tabelas: readonly T[], data: string)
   return cobrem[0] ?? null;
 }
 
+/** O cliente tem alguma tabela nessa variante, de qualquer contrato ou sem contrato. */
+function clienteTemTabela(tabelas: readonly IdentidadeDaTabela[], customerCode: string, variante: string): boolean {
+  const cliente = customerCode.trim();
+  const chaveDaVariante = normalizarVariante(variante);
+  return tabelas.some(
+    (tabela) =>
+      tabela.customer_code !== null &&
+      String(tabela.customer_code).trim() === cliente &&
+      normalizarVariante(tabela.variante) === chaveDaVariante,
+  );
+}
+
 /**
- * A tabela que vale para a data-base do orçamento: a do cliente (e do
- * contrato) na variante pedida cuja vigência contém a data, ativa ou já
- * encerrada. Cliente sem nenhuma tabela nessa variante (e contrato) cai na
- * Padrão Dutelog da mesma variante. Cliente que tem tabela, mas nenhuma
- * vigente na data, não cai na Padrão: não há tabela (a linha fica livre).
+ * A tabela que vale para a data-base do orçamento: a do cliente e do contrato
+ * do orçamento (ou sem contrato, quando o orçamento não tem) na variante
+ * pedida, cuja vigência contém a data, ativa ou já encerrada.
+ *
+ * Só o cliente sem nenhuma tabela nessa variante, em contrato nenhum, cai na
+ * Padrão Dutelog da mesma variante. O cliente que tem tabela nessa variante,
+ * mas nenhuma que sirva para o contrato e a data do orçamento, fica sem
+ * tabela (null, a linha fica livre): nunca precifica com a Padrão por engano.
  */
 export function tabelaVigente<T extends VigenciaDaTabela>(
   tabelas: readonly T[],
@@ -250,12 +265,9 @@ export function tabelaVigente<T extends VigenciaDaTabela>(
 ): TabelaVigente<T> | null {
   const data = conferirData(filtro.data, "data-base");
   const chave = chaveDeVigencia(filtro);
-  if (filtro.customer_code !== null) {
-    const doCliente = tabelas.filter(mesmaChave(chave));
-    if (doCliente.length > 0) {
-      const tabela = naData(doCliente, data);
-      return tabela ? { tabela, origem: "cliente" } : null;
-    }
+  if (filtro.customer_code !== null && clienteTemTabela(tabelas, filtro.customer_code, filtro.variante)) {
+    const tabela = naData(tabelas.filter(mesmaChave(chave)), data);
+    return tabela ? { tabela, origem: "cliente" } : null;
   }
   const padrao = tabelas.filter(mesmaChave(chaveDeVigencia({ customer_code: null, contract_id: null, variante: filtro.variante })));
   const tabela = naData(padrao, data);

@@ -280,9 +280,25 @@ describe("tabela vigente na data-base", () => {
     assert.equal(tabelaVigente(todas, { ...itau, data: "2025-12-12" }), null);
   });
 
-  it("tabela do contrato não serve para outro contrato do mesmo cliente", () => {
-    assert.deepEqual(tabelaVigente(todas, { ...itau, contract_id: "itau-2030", data: "2026-03-15" }), {
-      tabela: padrao,
+  it("tabela do contrato não serve para outro contrato do mesmo cliente, e ele não cai na Padrão", () => {
+    assert.equal(tabelaVigente(todas, { ...itau, contract_id: "itau-2030", data: "2026-03-15" }), null);
+  });
+
+  it("orçamento sem contrato de cliente que só tem tabela de contrato não cai na Padrão", () => {
+    assert.equal(tabelaVigente(todas, { ...itau, contract_id: null, data: "2026-03-15" }), null);
+  });
+
+  it("tabela do cliente sem contrato não serve para orçamento com contrato, e ele não cai na Padrão", () => {
+    assert.equal(tabelaVigente(todas, { customer_code: "SAFRA", contract_id: "safra-2026", variante: "Comercial", data: "2026-03-15" }), null);
+    assert.deepEqual(tabelaVigente(todas, { customer_code: "SAFRA", contract_id: null, variante: "Comercial", data: "2026-03-15" }), {
+      tabela: safra,
+      origem: "cliente",
+    });
+  });
+
+  it("cliente com tabela só em outra variante usa a Padrão da variante pedida", () => {
+    assert.deepEqual(tabelaVigente(todas, { customer_code: "SAFRA", contract_id: null, variante: "Noturna", data: "2026-03-15" }), {
+      tabela: padraoNoturna,
       origem: "padrao",
     });
   });

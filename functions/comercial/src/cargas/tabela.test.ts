@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { after, describe, it } from "node:test";
 
 import { lpuItemId } from "../domain/catalogo.js";
@@ -229,6 +230,14 @@ describe("leitura do CSV", () => {
     assert.equal(leitura.itens[0].orcavel, false);
   });
 
+  it("armazenagem com a palavra só no item (categoria Serviços) também entra como não orçável", () => {
+    const leitura = lerTabelaCsv(
+      csv("DTL-0900;Serviços;Armazenamento em galpão;Prestação de Serviço;Guarda de mobiliário em galpão;M³/MÊS;60"),
+    );
+    assert.deepEqual(leitura.erros, []);
+    assert.equal(leitura.itens[0].orcavel, false);
+  });
+
   it("cabeçalho diferente, separador vírgula e arquivo que não é UTF-8 param a carga", () => {
     assert.match(lerTabelaCsv(new TextEncoder().encode("codigo;item;preco\nA;B;1")).erros[0], /cabeçalho/);
     assert.match(
@@ -333,5 +342,36 @@ describe("dry-run sem projeto", () => {
       (error: unknown) => error instanceof ErroDaCarga && /não está liberado/.test(error.message),
     );
     assert.equal(abriu, false);
+  });
+});
+
+describe("gravação: tudo lido na transação, antes das escritas", () => {
+  // Compilado em functions/comercial/lib/cargas/tabela.test.js.
+  const fonte = readFileSync(fileURLToPath(new URL("../../src/cargas/tabela.ts", import.meta.url)), "utf8").replace(/\r\n/g, "\n");
+
+  // ref.get(), query.get() e db.getAll() leem o banco fora da transação;
+  // snapshot.get("campo") só lê um campo do que já foi lido.
+  const LEITURA_FORA_DO_LEITOR = /leitorDireto|\.get\(\s*\)|getAll\(/;
+
+  function corpo(assinatura: string): string {
+    const inicio = fonte.indexOf(assinatura);
+    assert.ok(inicio >= 0, `não achei ${assinatura} em tabela.ts`);
+    const fim = fonte.indexOf("\n}\n", inicio);
+    assert.ok(fim > inicio, `não achei o fim de ${assinatura}`);
+    return fonte.slice(inicio, fim);
+  }
+
+  it("gravar relê o estado pela transação e confere os erros de novo antes de escrever", () => {
+    const gravar = corpo("async function gravar(");
+    const leitura = gravar.indexOf("lerEstado(db, leitorDaTransacao(transaction), plano)");
+    assert.ok(leitura >= 0, "gravar precisa reler o estado com o leitor da transação");
+    assert.doesNotMatch(gravar, LEITURA_FORA_DO_LEITOR, "gravar não lê fora da transação");
+    assert.match(gravar, /conferido\.erros\.length > 0/, "gravar precisa parar nos erros da conferência feita na transação");
+    const primeiraEscrita = gravar.search(/transaction\.(create|update|set|delete)\(|createComercialEvent\(/);
+    assert.ok(primeiraEscrita > leitura, "a leitura do estado vem antes da primeira escrita");
+  });
+
+  it("lerEstado só lê pelo leitor que recebe", () => {
+    assert.doesNotMatch(corpo("async function lerEstado("), LEITURA_FORA_DO_LEITOR);
   });
 });

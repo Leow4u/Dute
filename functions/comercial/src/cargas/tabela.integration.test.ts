@@ -272,13 +272,19 @@ describe("carga de tabela: --executar", () => {
     assert.equal(evento.payload.contrato_id, "itau-2026");
   });
 
-  it("contrato que ainda não está em contracts só avisa", async () => {
+  it("contrato que ainda não está em contracts: o dry-run avisa e o --executar recusa sem gravar", async () => {
     await db.collection("customers").doc("itau").set({ code: "ITAU", customer_code: "ITAU", name: "Itaú" });
-    const resultado = await carga([
-      ...padrao(arquivo(...V1), "--cliente", "ITAU", "--contrato", "itau-2026", "--vigente-de", "2026-06-30"),
-    ]);
-    assert.equal(resultado.ok, true, resultado.erros.join(" | "));
-    assert.match(resultado.avisos.join(" | "), /itau-2026 ainda não está em contracts/);
+    const caminho = arquivo(...V1);
+    const itau = ["--cliente", "ITAU", "--contrato", "itau-2026", "--vigente-de", "2026-06-30"];
+    const dry = await carga([...padrao(caminho, ...itau)]);
+    assert.equal(dry.ok, true, dry.erros.join(" | "));
+    assert.match(dry.avisos.join(" | "), /itau-2026 ainda não está em contracts/);
+
+    const executar = await carga([...padrao(caminho, ...itau, "--executar")]);
+    assert.equal(executar.ok, false);
+    assert.equal(executar.gravou, false);
+    assert.match(executar.erros.join(" | "), /itau-2026 não está em contracts/);
+    assert.deepEqual(await contagem(), VAZIO);
   });
 
   it("--executar sem --projeto nunca abre o banco", async () => {
@@ -293,5 +299,86 @@ describe("carga de tabela: --executar", () => {
       ErroDaCarga,
     );
     assert.deepEqual(await contagem(), VAZIO);
+  });
+});
+
+describe("carga de tabela: a transação confere o estado de novo", () => {
+  // Entre a conferência fora da transação e a gravação, outra carga (ou outra
+  // pessoa) muda o banco. A transação relê tudo e para sem gravar nada.
+  function cargaComIntervalo(argv: string[], intervalo: () => Promise<unknown>): Promise<ResultadoDaCarga> {
+    return rodarCarga(argv, {
+      abrirBanco: () => db,
+      pastaDoRelatorio: pasta,
+      env: { FIRESTORE_EMULATOR_HOST: process.env.FIRESTORE_EMULATOR_HOST },
+      log: () => undefined,
+      antesDeGravar: async () => {
+        await intervalo();
+      },
+    });
+  }
+
+  it("outra carga da mesma chave e do mesmo início grava antes: sobreposição, nada gravado", async () => {
+    let concorrente: ResultadoDaCarga | undefined;
+    const resultado = await cargaComIntervalo(padrao(arquivo(...V1), "--vigente-de", "2026-01-01", "--executar"), async () => {
+      concorrente = await carga(padrao(arquivo(...V2), "--vigente-de", "2026-01-01", "--executar"));
+    });
+    assert.equal(concorrente?.ok, true, concorrente?.erros.join(" | "));
+    assert.equal(resultado.ok, false);
+    assert.equal(resultado.gravou, false);
+    assert.match(resultado.erros.join(" | "), /sobrep/i);
+    // Só o que a outra carga gravou.
+    assert.deepEqual(await contagem(), { lpu_items: 4, price_tables: 1, events: 1, [COMERCIAL_OPERATIONS_COLLECTION]: 1 });
+    const [unica] = await tabelas();
+    assert.equal((unica.precos as Record<string, { preco: string }>)[MESA].preco, "48.00");
+  });
+
+  it("o cliente sai do cadastro antes da gravação: nada gravado", async () => {
+    await db.collection("customers").doc("itau").set({ code: "ITAU", customer_code: "ITAU", name: "Itaú" });
+    const resultado = await cargaComIntervalo(
+      padrao(arquivo(...V1), "--cliente", "ITAU", "--vigente-de", "2026-06-30", "--executar"),
+      () => db.collection("customers").doc("itau").delete(),
+    );
+    assert.equal(resultado.ok, false);
+    assert.equal(resultado.gravou, false);
+    assert.match(resultado.erros.join(" | "), /ITAU.*não está no cadastro/);
+    assert.deepEqual(await contagem(), VAZIO);
+  });
+
+  it("o contrato passa a ser de outro cliente antes da gravação: nada gravado", async () => {
+    await db.collection("customers").doc("itau").set({ code: "ITAU", customer_code: "ITAU", name: "Itaú" });
+    await db.collection("contracts").doc("itau-2026").set({ customer_code: "ITAU" });
+    const resultado = await cargaComIntervalo(
+      padrao(arquivo(...V1), "--cliente", "ITAU", "--contrato", "itau-2026", "--vigente-de", "2026-06-30", "--executar"),
+      () => db.collection("contracts").doc("itau-2026").set({ customer_code: "SAFRA" }),
+    );
+    assert.equal(resultado.ok, false);
+    assert.match(resultado.erros.join(" | "), /contrato itau-2026 é de outro cliente/);
+    assert.deepEqual(await contagem(), VAZIO);
+  });
+
+  it("o mesmo arquivo entra antes com outros parâmetros: o recibo recusa, nada gravado", async () => {
+    const caminho = arquivo(...V1);
+    const resultado = await cargaComIntervalo(padrao(caminho, "--vigente-de", "2026-01-01", "--executar"), async () => {
+      const outra = await carga(padrao(caminho, "--vigente-de", "2027-01-01", "--executar"));
+      assert.equal(outra.ok, true, outra.erros.join(" | "));
+    });
+    assert.equal(resultado.ok, false);
+    assert.equal(resultado.gravou, false);
+    assert.match(resultado.erros.join(" | "), /já foi carregado com outros parâmetros/);
+    assert.deepEqual(await contagem(), { lpu_items: 3, price_tables: 1, events: 1, [COMERCIAL_OPERATIONS_COLLECTION]: 1 });
+    const [unica] = await tabelas();
+    assert.equal(unica.vigente_de, "2027-01-01");
+  });
+
+  it("a mesma carga entra antes com os mesmos parâmetros: vira repetição, sem duplicar", async () => {
+    const caminho = arquivo(...V1);
+    const resultado = await cargaComIntervalo(padrao(caminho, "--vigente-de", "2026-01-01", "--executar"), async () => {
+      const outra = await carga(padrao(caminho, "--vigente-de", "2026-01-01", "--executar"));
+      assert.equal(outra.gravou, true, outra.erros.join(" | "));
+    });
+    assert.equal(resultado.ok, true, resultado.erros.join(" | "));
+    assert.equal(resultado.replayed, true);
+    assert.equal(resultado.gravou, false);
+    assert.deepEqual(await contagem(), { lpu_items: 3, price_tables: 1, events: 1, [COMERCIAL_OPERATIONS_COLLECTION]: 1 });
   });
 });
