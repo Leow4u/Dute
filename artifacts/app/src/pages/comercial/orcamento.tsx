@@ -2,10 +2,6 @@ import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { useLocation, useSearch } from "wouter";
 
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { chamarComercial, novaChave, type CallableDoComercial } from "@/lib/comercial/api";
 import {
@@ -17,6 +13,8 @@ import {
   payloadContato,
   type FormContato,
 } from "@/lib/comercial/clientes";
+import { hrefDoDocumento } from "@/lib/comercial/documento";
+import { enviarEAbrirDocumento, type AcaoDeEnvio } from "@/lib/comercial/envio";
 import { useDocumento, useLeitura, useNomes } from "@/lib/comercial/leitura";
 import {
   SINCRONIA_INICIAL,
@@ -56,6 +54,7 @@ import { useAppUser } from "@/lib/auth";
 import { firestore } from "@/lib/firebase";
 
 import { ContatoDialog } from "./clientes-dialogos";
+import { DevolverDialog } from "./devolver-dialog";
 import { EstadoDoOrcamento, MontarView, type DadosDoOrcamento } from "./orcamento-view";
 
 /**
@@ -82,7 +81,7 @@ function inteiro(value: unknown): number | null {
 }
 
 type ResultadoDoSave = { numero: string; rotulo: string; edicao: number; status: StatusOrcamento; total_cents: number };
-type ResultadoDoAvanco = { edicao: number; status: StatusOrcamento; ja_feito: boolean };
+type ResultadoDoAvanco = { edicao: number; status: StatusOrcamento; ja_feito: boolean; rv: number };
 
 /** Quanto a tela espera a própria gravação chegar pelo onSnapshot antes de destravar com o que tem. */
 const ESPERA_DA_GRAVACAO_MS = 15_000;
@@ -121,54 +120,6 @@ function useItensDoCatalogo(ativo: boolean): Map<string, ItemDoCatalogoDoc> | "c
     };
   }, [ativo]);
   return estado;
-}
-
-function DevolverDialog({
-  aberto,
-  ocupado,
-  notaObrigatoria,
-  onCancelar,
-  onDevolver,
-}: {
-  aberto: boolean;
-  ocupado: boolean;
-  notaObrigatoria: boolean;
-  onCancelar: () => void;
-  onDevolver: (nota: string) => void;
-}) {
-  const [nota, setNota] = useState("");
-  useEffect(() => {
-    if (aberto) setNota("");
-  }, [aberto]);
-  return (
-    <Dialog open={aberto} onOpenChange={(open) => (!open && !ocupado ? onCancelar() : undefined)}>
-      <DialogContent className="v3 max-w-md">
-        <form
-          className="grid gap-4"
-          onSubmit={(evento) => {
-            evento.preventDefault();
-            if (!notaObrigatoria || nota.trim()) onDevolver(nota);
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>Devolver para montagem</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-1.5">
-            <Label htmlFor="devolver-nota">Nota</Label>
-            <Textarea id="devolver-nota" rows={4} value={nota} onChange={(evento) => setNota(evento.target.value)} maxLength={1000} />
-          </div>
-          <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={onCancelar} disabled={ocupado}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={ocupado || (notaObrigatoria && !nota.trim())}>
-              {ocupado ? "Devolvendo..." : "Devolver"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
 }
 
 type Dialogo = { tipo: "devolver" } | { tipo: "contato"; chave: string };
@@ -214,7 +165,8 @@ function MontarOrcamento({ numero }: { numero: string }) {
   }, [tabelaId, tabela.erro, tabela.dados, itensDoCatalogo]);
 
   const item = demandaDoc && quoteDoc ? itemDaFila(numero, demandaDoc, quoteDoc) : null;
-  const nomeDe = useNomes(item ? [item.autorUid, item.aprovacao?.porUid, item.devolucao?.porUid] : []);
+  // O nome de quem montou vem do orçamento (autor_nome); o perfil só para o gravado antes dele.
+  const nomeDe = useNomes(item ? [item.autorNome ? null : item.autorUid, item.aprovacao?.porUid, item.devolucao?.porUid] : []);
 
   // --- Formulário: o servidor ao vivo e o que a pessoa está montando (montar.ts, sincronia) ----
   // A edição e a situação que vão para a callable são as da base do formulário, nunca as do
@@ -382,6 +334,35 @@ function MontarOrcamento({ numero }: { numero: string }) {
     await avancar("submit", esperado, "Enviado para aprovação");
   }
 
+  /**
+   * Enviar ao cliente (o aprovado) ou aprovar e enviar (o owner, do "para
+   * aprovar"): grava no servidor e SÓ ENTÃO abre o documento para imprimir ou
+   * salvar o PDF (lib/comercial/envio.ts). Com erro, o documento não abre.
+   */
+  async function enviarAoCliente(acao: AcaoDeEnvio, sucesso: string) {
+    const esperado = esperadoDaBase();
+    if (!esperado) return;
+    setOcupado(true);
+    setAviso(null);
+    try {
+      const pedido = comChave("advanceQuote", payloadAvancar(acao, { numero, ...esperado }, ""));
+      const resultado = await enviarEAbrirDocumento({
+        acao,
+        orcamento: { numero, ...esperado },
+        chave: String(pedido.request_id),
+        chamar: (payload) => chamarComercial<ResultadoDoAvanco>("advanceQuote", payload),
+        abrir: navegar,
+      });
+      tentativa.current = null;
+      despachar({ tipo: "gravou", edicao: resultado.edicao, status: resultado.status });
+      toast({ title: sucesso });
+    } catch (error) {
+      tratarErro(error);
+    } finally {
+      setOcupado(false);
+    }
+  }
+
   async function duplicar() {
     if (sujo) {
       setAviso({ tipo: "erro", texto: "Salve antes de duplicar: a cópia sai do que está gravado." });
@@ -424,7 +405,7 @@ function MontarOrcamento({ numero }: { numero: string }) {
 
   const contratoLido =
     contratoId && contrato.dados ? contratoDoDocumento(contratoId, contrato.dados) : contrato.dados === null ? null : undefined;
-  const autor = nomeDe(item.autorUid);
+  const autor = item.autorNome ?? nomeDe(item.autorUid);
   const aprovador = item.aprovacao ? nomeDe(item.aprovacao.porUid) : null;
   const devolveu = item.devolucao ? nomeDe(item.devolucao.porUid) : null;
   const dados: DadosDoOrcamento = {
@@ -446,7 +427,7 @@ function MontarOrcamento({ numero }: { numero: string }) {
     subtotalCents: inteiro(quoteDoc?.subtotal_cents),
     ajustesCents: inteiro(quoteDoc?.ajustes_cents),
     totalCents: item.totalCents,
-    situacao: situacaoDoCabecalho({ status: item.status, passoEm: item.passoEm, aprovacao: item.aprovacao, aprovador }),
+    situacao: situacaoDoCabecalho({ status: item.status, passoEm: item.passoEm, aprovacao: item.aprovacao, aprovador, envio: item.envio }),
     devolucao: item.devolucao
       ? {
           nota: item.devolucao.nota,
@@ -476,6 +457,7 @@ function MontarOrcamento({ numero }: { numero: string }) {
         aviso={aviso}
         salvoEm={salvoEm}
         desatualizado={desatualizado(estado)}
+        documentoHref={hrefDoDocumento(numero, item.rv)}
         handlers={{
           salvar: () => void salvar(),
           enviar: () => void enviar(),
@@ -490,6 +472,8 @@ function MontarOrcamento({ numero }: { numero: string }) {
             if (esperado) void avancar("approve", esperado, "Orçamento aprovado");
           },
           devolver: () => setDialogo({ tipo: "devolver" }),
+          enviarCliente: () => void enviarAoCliente("send", "Orçamento enviado"),
+          aprovarEEnviar: () => void enviarAoCliente("approve_and_send", "Aprovado e enviado"),
           trocarVariante: (variante) => void salvar(variante),
           novoContato: () => {
             setErroDoDialogo(null);

@@ -26,8 +26,11 @@ import {
   ROTA_CLIENTES,
   ROTA_COMERCIAL,
   ROTA_CONTRATOS,
+  ROTA_APROVAR,
+  ROTA_DOCUMENTO,
   ROTA_ORCAMENTO,
   abreComercial,
+  APROVADOR_ROLES,
 } from "./comercial/navegacao";
 import { COMERCIAL_LIBERADO } from "./liberacao";
 import {
@@ -329,7 +332,8 @@ export const APP_MODULES: AppModule[] = [
         icon: FileText,
         roles: COMMERCIAL_ROLES,
         exact: true,
-        tambem: [ROTA_ORCAMENTO],
+        // A montagem, a aprovação e o documento do orçamento são da fila.
+        tambem: [ROTA_ORCAMENTO, ROTA_APROVAR, ROTA_DOCUMENTO],
       }),
       navRoute({
         id: "comercial-clientes",
@@ -602,6 +606,9 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   { path: "/suporte", roles: SUPPORT_ROLES },
   // Montar orçamento, aberto pela fila do Comercial (?numero=).
   { path: ROTA_ORCAMENTO, roles: COMMERCIAL_ROLES },
+  // O documento A4 do orçamento (prévia e PDF) e a aprovação, que é só do owner.
+  { path: ROTA_DOCUMENTO, roles: COMMERCIAL_ROLES },
+  { path: ROTA_APROVAR, roles: [...APROVADOR_ROLES] },
 ];
 
 const MERGED_SCREEN_APP_ROLES = Object.fromEntries(

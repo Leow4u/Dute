@@ -281,6 +281,8 @@ describe("criar: demanda e orçamento com o mesmo número", () => {
     assert.equal(quote.condicoes, "Condições da LPU do Itaú.");
     assert.equal(quote.validade_dias, null);
     assert.equal(quote.autor_uid, "com-1");
+    // O nome de quem montou, para o documento ("Orçamento elaborado por"): o comercial não lê `users`.
+    assert.equal(quote.autor_nome, "Guilherme");
     assert.equal(quote.aprovacao, null);
     assert.equal(quote.devolucao, null);
     assert.equal(quote.schema_version, 1);
@@ -827,6 +829,7 @@ describe("enviar para aprovação, devolver, aprovar e editar", () => {
     assert.deepEqual(revisao.tabela, quote.tabela);
     assert.equal(revisao.data_base, "2026-06-20");
     assert.deepEqual(revisao.aprovacao, quote.aprovacao);
+    assert.equal(revisao.autor_nome, "Guilherme");
     assert.equal((revisao.demanda as Record<string, unknown>).titulo, "Mudança de layout · 12º andar");
 
     const demanda = await doc(`demands/${numero}`);

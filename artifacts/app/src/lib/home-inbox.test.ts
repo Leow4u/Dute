@@ -1,8 +1,10 @@
+import { readFileSync } from "node:fs";
+
 import { PAPEIS, type Papel } from "@workspace/dominio";
 import { describe, expect, it } from "vitest";
 
 import { alertasParaOInicio, contratoDoRegistro, type Contrato } from "./comercial/contratos";
-import { buildHomeInbox, isAwaitingTriage, veContratosNoInicio } from "./home-inbox";
+import { buildHomeInbox, isAwaitingTriage, veAprovacoesNoInicio, veContratosNoInicio } from "./home-inbox";
 import type { WarehouseOpsResponse, WarehouseTask } from "./warehouse-ops/model";
 
 function task(overrides: Partial<WarehouseTask> & { id: string }): WarehouseTask {
@@ -219,5 +221,67 @@ describe("alertas de contrato do Comercial no Início (parte 14)", () => {
   it("sem alertas, o Início fica como era", () => {
     const sem = buildHomeInbox({ role: "admin", ops: busyOps, requests, contratos: [], comercialLiberado: LIBERADO });
     expect(sem).toEqual(buildHomeInbox({ role: "admin", ops: busyOps, requests }));
+  });
+});
+
+describe("orçamentos para aprovar no Início (parte 12a)", () => {
+  const LIBERADO = true;
+  const DESLIGADO = false;
+  const PARA_APROVAR = [
+    { numero: "10045", cliente: "Itaú Unibanco" },
+    { numero: "10052", cliente: "Grupo SBF" },
+    { numero: "10053", cliente: "Safra" },
+  ];
+  const doComercial = (role: Papel, liberado: boolean) =>
+    buildHomeInbox({ role, paraAprovar: PARA_APROVAR, comercialLiberado: liberado }).items.filter(
+      (item) => item.id === "comercial:aprovar",
+    );
+
+  it("o owner vê quantos esperam por ele, levando à tela de aprovar", () => {
+    expect(doComercial("owner", LIBERADO)).toEqual([
+      {
+        id: "comercial:aprovar",
+        tone: "attention",
+        title: "3 orçamentos para aprovar",
+        detail: "10045 · Itaú Unibanco · 10052 · Grupo SBF e mais 1",
+        href: "/comercial/aprovar",
+        actionLabel: "Aprovar",
+      },
+    ]);
+    expect(buildHomeInbox({ role: "owner", paraAprovar: PARA_APROVAR.slice(0, 1), comercialLiberado: LIBERADO }).items[0].title).toBe(
+      "1 orçamento para aprovar",
+    );
+    expect(veAprovacoesNoInicio("owner", LIBERADO)).toBe(true);
+  });
+
+  it.each(PAPEIS.filter((role) => role !== "owner"))("%s não vê nem consulta (só o owner aprova)", (role) => {
+    expect(doComercial(role, LIBERADO)).toEqual([]);
+    expect(veAprovacoesNoInicio(role, LIBERADO)).toBe(false);
+  });
+
+  it("fora da liberação do Comercial, nem o owner", () => {
+    expect(doComercial("owner", DESLIGADO)).toEqual([]);
+    expect(veAprovacoesNoInicio("owner", DESLIGADO)).toBe(false);
+    expect(veAprovacoesNoInicio(null, LIBERADO)).toBe(false);
+  });
+
+  it("nada para aprovar: o Início fica como era", () => {
+    expect(buildHomeInbox({ role: "owner", ops: busyOps, requests, paraAprovar: [], comercialLiberado: LIBERADO })).toEqual(
+      buildHomeInbox({ role: "owner", ops: busyOps, requests }),
+    );
+  });
+
+  it("entra depois das solicitações e antes dos contratos e da fila de pedidos", () => {
+    const ids = buildHomeInbox({ role: "owner", ops: busyOps, requests, paraAprovar: PARA_APROVAR, comercialLiberado: LIBERADO }).items.map(
+      (item) => item.id,
+    );
+    expect(ids.slice(0, 3)).toEqual(["blocked:ord_3", "triage", "comercial:aprovar"]);
+  });
+
+  it("a página só consulta para quem vê (enabled): para os outros papéis, nenhuma leitura sai", () => {
+    const home = readFileSync(new URL("../pages/home.tsx", import.meta.url), "utf8");
+    expect(home).toMatch(/const seesApprovals = veAprovacoesNoInicio\(role\);/);
+    expect(home).toMatch(/queryFn: \(\) => lerOrcamentosParaAprovar\(\),\s*enabled: seesApprovals,/);
+    expect(home).toMatch(/paraAprovar: approvals\.data/);
   });
 });

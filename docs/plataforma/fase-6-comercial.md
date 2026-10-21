@@ -247,3 +247,32 @@ Storage.
   linha alterada, avulsa ou de ajuste da RV fechada derruba a dispensa.
 - Fechado, validado e recusado em nunca vêm antes do envio da RV (folga de 5
   minutos do relógio), nem depois de agora.
+
+### Parte 12a: aprovar no celular, Início, documento A4 e envio (telas)
+
+- **Aprovar** (`/comercial/aprovar`, `ComAprovarCelular`): só o owner (a rota
+  tem papel próprio; `aprovaOrcamento` em `lib/comercial/navegacao.ts`). Lê as
+  demandas em "Para aprovar" com a RV "para aprovar", de quem espera há mais
+  tempo; "1 de N" com anterior e próximo; depois da ação, a confirmação e
+  "Próximo" (o que vinha depois na fila que a pessoa via). O bloco Conferir
+  mostra a linha alterada (preço da tabela riscado e motivo), a avulsa, o
+  ajuste e as marcas da tabela (fora da vigência, sem tabela). "Devolver" pede
+  a nota; "Aprovar e enviar" grava e abre o documento. O "Desfazer" do mockup
+  ficou de fora: desfazer a aprovação é "Editar" na montagem.
+- **Início**: "N orçamentos para aprovar" só para o owner, e a consulta só sai
+  para ele (`veAprovacoesNoInicio` é o `enabled`).
+- **Documento A4** (`/comercial/orcamento/documento?numero=&rv=`,
+  `ComDocumento`): impressão do navegador, como a fatura; o papel é
+  `components/comercial/orcamento-documento.tsx` (PAPER_FILES). Até o envio é
+  a prévia do orçamento ao vivo, com a marca "Prévia"; enviada, a RV vem da
+  cópia congelada em `quotes/{numero}/revisoes/{rv}`. O título da aba é o nome
+  do PDF ("Orçamento 10045 – RV01 – CE8977 – título"). Sem CNPJ: o cabeçalho
+  leva o nome que o app já usa e o e-mail do Comercial do site.
+- **Envio** (pergunta 2: os dois caminhos): "Enviar" (aprovado → enviado) na
+  montagem e na ficha da fila, e "Aprovar e enviar" do owner, gravam por
+  advanceQuote e só então abrem o documento, que imprime sozinho quando a cópia
+  congelada chega. Com erro, o documento não abre. A data do envio vem de
+  `quotes.envio` no histórico da ficha e no cabeçalho da montagem.
+- **Quem montou**: o comercial não lê `users` de outra pessoa, então o
+  servidor grava `autor_nome` no orçamento (criar, duplicar, RV seguinte) e na
+  RV congelada; o orçamento antigo cai no perfil, quando quem lê pode.

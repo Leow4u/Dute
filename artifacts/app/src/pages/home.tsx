@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   ClipboardList,
+  FileCheck,
   FileText,
   PackageCheck,
   Sparkles,
@@ -18,9 +19,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAppUser } from "@/lib/auth";
-import { lerAlertasDosContratos } from "@/lib/comercial/inicio";
+import { lerAlertasDosContratos, lerOrcamentosParaAprovar } from "@/lib/comercial/inicio";
 import {
   buildHomeInbox,
+  veAprovacoesNoInicio,
   veContratosNoInicio,
   type HomeInboxItem,
   type HomeInboxTone,
@@ -53,6 +55,7 @@ const TONE_STYLE: Record<HomeInboxTone, { icon: LucideIcon; box: string }> = {
 
 const ITEM_ICON: Record<string, LucideIcon> = {
   receipts: PackageCheck,
+  "comercial:aprovar": FileCheck,
 };
 
 const numberFormatter = new Intl.NumberFormat("pt-BR");
@@ -111,6 +114,8 @@ export default function Home() {
   const seesRequests = canAccessModule(role, COORDINATION_NAV_ROLES);
   // Contratos do Comercial: só owner, admin e comercial, com a liberação.
   const seesContracts = veContratosNoInicio(role);
+  // Orçamentos para aprovar: só o owner, que aprova, com a liberação.
+  const seesApprovals = veAprovacoesNoInicio(role);
 
   const dashboard = useGetDashboard();
   const ops = useQuery({
@@ -136,6 +141,14 @@ export default function Home() {
     refetchOnWindowFocus: false,
   });
 
+  const approvals = useQuery({
+    queryKey: ["comercial", "orcamentos", "para-aprovar"],
+    queryFn: () => lerOrcamentosParaAprovar(),
+    enabled: seesApprovals,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: false,
+  });
+
   const inbox = useMemo(
     () =>
       buildHomeInbox({
@@ -143,18 +156,21 @@ export default function Home() {
         ops: ops.data,
         requests: requests.data?.items,
         contratos: contracts.data,
+        paraAprovar: approvals.data,
       }),
-    [ops.data, requests.data, contracts.data, role],
+    [ops.data, requests.data, contracts.data, approvals.data, role],
   );
 
   const loading =
     (seesWarehouse && ops.isLoading) ||
     (seesRequests && requests.isLoading) ||
-    (seesContracts && contracts.isLoading);
+    (seesContracts && contracts.isLoading) ||
+    (seesApprovals && approvals.isLoading);
   const failedSources = [
     seesWarehouse && ops.isError ? "armazém" : null,
     seesRequests && requests.isError ? "solicitações" : null,
     seesContracts && contracts.isError ? "contratos" : null,
+    seesApprovals && approvals.isError ? "orçamentos" : null,
   ].filter((source): source is string => Boolean(source));
 
   const now = new Date();

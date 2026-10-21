@@ -617,23 +617,54 @@ describe("saveQuote e advanceQuote", () => {
 describe("ações da tela por situação e papel", () => {
   const de = (status: string, role: string, uid = "u-gui") => acoesDoOrcamento({ status, role, uid, autorUid: "u-gui" });
 
-  it("rascunho: Enviar para aprovação é a principal; Salvar e Duplicar ao lado", () => {
-    expect(de("rascunho", "comercial")).toEqual({ editavel: true, principal: "enviar", secundarias: ["salvar", "duplicar"] });
+  it("rascunho: Enviar para aprovação é a principal; Salvar e Duplicar ao lado; o documento é a prévia", () => {
+    expect(de("rascunho", "comercial")).toEqual({
+      editavel: true,
+      principal: "enviar",
+      secundarias: ["salvar", "duplicar"],
+      documento: "previa",
+    });
   });
 
-  it("para aprovar: só leitura; o owner aprova ou devolve; quem montou puxa de volta com Editar", () => {
-    expect(de("para_aprovar", "owner", "u-leo")).toEqual({ editavel: false, principal: "aprovar", secundarias: ["devolver", "duplicar"] });
-    expect(de("para_aprovar", "comercial")).toEqual({ editavel: false, principal: null, secundarias: ["editar", "duplicar"] });
-    expect(de("para_aprovar", "owner")).toEqual({ editavel: false, principal: "aprovar", secundarias: ["editar", "duplicar"] });
-    expect(de("para_aprovar", "admin", "u-ana")).toEqual({ editavel: false, principal: null, secundarias: ["duplicar"] });
+  it("para aprovar: só leitura; o owner aprova, devolve ou aprova e envia; quem montou puxa de volta com Editar", () => {
+    expect(de("para_aprovar", "owner", "u-leo")).toEqual({
+      editavel: false,
+      principal: "aprovar",
+      secundarias: ["devolver", "aprovar_e_enviar", "duplicar"],
+      documento: "previa",
+    });
+    expect(de("para_aprovar", "comercial")).toEqual({ editavel: false, principal: null, secundarias: ["editar", "duplicar"], documento: "previa" });
+    expect(de("para_aprovar", "owner")).toEqual({
+      editavel: false,
+      principal: "aprovar",
+      secundarias: ["editar", "aprovar_e_enviar", "duplicar"],
+      documento: "previa",
+    });
+    expect(de("para_aprovar", "admin", "u-ana")).toEqual({ editavel: false, principal: null, secundarias: ["duplicar"], documento: "previa" });
   });
 
-  it("aprovado: só leitura com Editar", () => {
-    expect(de("aprovado", "comercial", "u-ana")).toEqual({ editavel: false, principal: null, secundarias: ["editar", "duplicar"] });
+  it("aprovado: Enviar ao cliente é a principal, para qualquer papel do Comercial; Editar volta ao rascunho", () => {
+    for (const role of ["comercial", "admin", "owner"]) {
+      expect(de("aprovado", role, "u-ana"), role).toEqual({
+        editavel: false,
+        principal: "enviar_cliente",
+        secundarias: ["editar", "duplicar"],
+        documento: "previa",
+      });
+    }
   });
 
-  it("enviado: só leitura (envio, aceite e perda são da parte 10 e 12)", () => {
-    expect(de("enviado", "owner")).toEqual({ editavel: false, principal: null, secundarias: ["duplicar"] });
+  it("enviado: só leitura, com o PDF da RV enviada", () => {
+    expect(de("enviado", "owner")).toEqual({ editavel: false, principal: null, secundarias: ["duplicar"], documento: "enviado" });
+  });
+
+  it("perdida: nada anda, nem o envio do aprovado", () => {
+    expect(acoesDoOrcamento({ status: "aprovado", role: "owner", uid: "u-leo", autorUid: "u-gui", etapa: "perdida" })).toEqual({
+      editavel: false,
+      principal: null,
+      secundarias: ["duplicar"],
+      documento: "previa",
+    });
   });
 });
 
@@ -649,6 +680,18 @@ describe("situação no cabeçalho", () => {
     expect(situacaoDoCabecalho({ status: "aprovado", passoEm: null, aprovacao, aprovador: "Leonardo" })).toBe("Aprovado por Leonardo · 21/10 08:50");
     expect(situacaoDoCabecalho({ status: "aprovado", passoEm: null, aprovacao, aprovador: null })).toBe("Aprovado · 21/10 08:50");
     expect(situacaoDoCabecalho({ status: "rascunho", passoEm: null, aprovacao: null, aprovador: null })).toBeNull();
+  });
+
+  it("enviado: a data do envio ao cliente", () => {
+    expect(
+      situacaoDoCabecalho({
+        status: "enviado",
+        passoEm: "2026-10-21T13:30:00.000Z",
+        aprovacao: { em: "2026-10-21T11:50:00.000Z" },
+        aprovador: "Leonardo",
+        envio: { em: "2026-10-21T13:02:00.000Z" },
+      }),
+    ).toBe("Enviado · 21/10 10:02");
   });
 });
 

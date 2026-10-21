@@ -787,7 +787,8 @@ export function payloadCriar(
   };
 }
 
-export type AcaoDeAvanco = "submit" | "return" | "approve" | "edit";
+/** As ações de advanceQuote que a tela usa; o envio ao cliente (send, approve_and_send) é de lib/comercial/envio.ts. */
+export type AcaoDeAvanco = "submit" | "return" | "approve" | "edit" | "send" | "approve_and_send";
 
 /** advanceQuote com a situação e a edição que a tela viu; a nota só na devolução. */
 export function payloadAvancar(
@@ -815,16 +816,24 @@ export function payloadDuplicar(numero: string, chave: string): Registro {
 
 // --- Ações da tela ---------------------------------------------------------------------------
 
-export type AcaoPrincipal = "enviar" | "aprovar";
-export type AcaoSecundaria = "salvar" | "duplicar" | "editar" | "devolver";
-export type AcoesDoOrcamento = { editavel: boolean; principal: AcaoPrincipal | null; secundarias: AcaoSecundaria[] };
+/** "enviar": para aprovação (submit); "enviar_cliente": o aprovado ao cliente (send, parte 12a). */
+export type AcaoPrincipal = "enviar" | "aprovar" | "enviar_cliente";
+export type AcaoSecundaria = "salvar" | "duplicar" | "editar" | "devolver" | "aprovar_e_enviar";
+export type AcoesDoOrcamento = {
+  editavel: boolean;
+  principal: AcaoPrincipal | null;
+  secundarias: AcaoSecundaria[];
+  /** O link do documento A4: a prévia até o envio; depois, o PDF da RV enviada. */
+  documento: "previa" | "enviado";
+};
 
 /**
  * O que a tela oferece. Rascunho: montar, com "Enviar para aprovação". Para
- * aprovar: só leitura; o owner aprova e devolve (com nota), quem montou puxa
- * de volta com "Editar". Aprovado: "Editar" volta ao rascunho. Enviado,
- * perdido ou cancelado: só leitura (envio, aceite e perda são das partes 10 e
- * 12). Duplicar vale sempre.
+ * aprovar: só leitura; o owner aprova (principal), devolve (com nota) e tem
+ * "Aprovar e enviar"; quem montou puxa de volta com "Editar". Aprovado:
+ * "Enviar" ao cliente (grava e só então abre o documento) e "Editar" volta ao
+ * rascunho. Enviado, perdido ou cancelado: só leitura (aceite e perda são da
+ * parte 10). Duplicar vale sempre; o documento também (prévia até o envio).
  */
 export function acoesDoOrcamento(entrada: {
   status: StatusOrcamento | string;
@@ -833,25 +842,27 @@ export function acoesDoOrcamento(entrada: {
   autorUid: string | null | undefined;
   etapa?: EtapaDemanda;
 }): AcoesDoOrcamento {
+  const documento = entrada.status === "enviado" ? "enviado" : "previa";
   if (entrada.etapa === "perdida" || entrada.etapa === "cancelada") {
-    return { editavel: false, principal: null, secundarias: ["duplicar"] };
+    return { editavel: false, principal: null, secundarias: ["duplicar"], documento };
   }
   switch (entrada.status) {
     case "rascunho":
-      return { editavel: true, principal: "enviar", secundarias: ["salvar", "duplicar"] };
+      return { editavel: true, principal: "enviar", secundarias: ["salvar", "duplicar"], documento };
     case "para_aprovar": {
       const owner = entrada.role === "owner";
       const autor = Boolean(entrada.uid) && entrada.uid === entrada.autorUid;
       const secundarias: AcaoSecundaria[] = [];
       if (autor) secundarias.push("editar");
       else if (owner) secundarias.push("devolver");
+      if (owner) secundarias.push("aprovar_e_enviar");
       secundarias.push("duplicar");
-      return { editavel: false, principal: owner ? "aprovar" : null, secundarias };
+      return { editavel: false, principal: owner ? "aprovar" : null, secundarias, documento };
     }
     case "aprovado":
-      return { editavel: false, principal: null, secundarias: ["editar", "duplicar"] };
+      return { editavel: false, principal: "enviar_cliente", secundarias: ["editar", "duplicar"], documento };
     default:
-      return { editavel: false, principal: null, secundarias: ["duplicar"] };
+      return { editavel: false, principal: null, secundarias: ["duplicar"], documento };
   }
 }
 
@@ -888,15 +899,18 @@ export function classificarErro(error: unknown): { mensagem: string; recarregar:
 /**
  * A situação ao lado das ações do cabeçalho: "Com o aprovador · 21/10 09:05"
  * enquanto espera a aprovação; "Aprovado por Leonardo · 21/10 08:50" depois
- * (o nome só quando quem lê pode ver o perfil de quem aprovou).
+ * (o nome só quando quem lê pode ver o perfil de quem aprovou); "Enviado ·
+ * 21/10 10:02" depois do envio ao cliente.
  */
 export function situacaoDoCabecalho(entrada: {
   status: string;
   passoEm: string | null;
   aprovacao: { em: string | null } | null;
   aprovador: string | null;
+  envio?: { em: string | null } | null;
 }): string | null {
   if (entrada.status === "para_aprovar") return ["Com o aprovador", dataHoraCurta(entrada.passoEm)].filter(Boolean).join(" · ");
+  if (entrada.status === "enviado") return ["Enviado", dataHoraCurta(entrada.envio?.em ?? entrada.passoEm)].filter(Boolean).join(" · ");
   if (entrada.status === "aprovado" && entrada.aprovacao) {
     return [entrada.aprovador ? `Aprovado por ${entrada.aprovador}` : "Aprovado", dataHoraCurta(entrada.aprovacao.em)]
       .filter(Boolean)

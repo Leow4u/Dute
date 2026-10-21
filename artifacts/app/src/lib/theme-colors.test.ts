@@ -23,6 +23,8 @@ const SRC = fileURLToPath(new URL("..", import.meta.url));
 /** Papel de impressão: fica branco nos dois temas (ver .print-area em index.css). */
 const PAPER_FILES = new Set([
   "components/billing/invoice-document.tsx",
+  // O orçamento A4 do Comercial (parte 12a, docs/mockups/ComDocumento.dc.html).
+  "components/comercial/orcamento-documento.tsx",
   "pages/client/relatorio.tsx",
 ]);
 

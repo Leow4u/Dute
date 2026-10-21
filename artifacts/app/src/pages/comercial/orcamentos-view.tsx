@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "wouter";
-import { ArrowLeft, MapPin, Plus, Search, User } from "lucide-react";
+import { ArrowLeft, FileText, MapPin, Plus, Search, Send, User } from "lucide-react";
 
 import { formatarReais } from "@workspace/dominio";
 
@@ -8,6 +8,8 @@ import { AbasDoComercial } from "@/components/comercial/abas-do-comercial";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { dataBr, type ContratoResumo } from "@/lib/comercial/clientes";
+import { hrefDoDocumento } from "@/lib/comercial/documento";
+import { ROTULO_DO_ENVIO, type AcaoDeEnvio } from "@/lib/comercial/envio";
 import {
   ETAPA_ROTULO,
   SEGMENTOS_DA_FILA,
@@ -38,7 +40,8 @@ import { SeloProspect } from "./clientes-view";
  * só a apresentação; os dados e as ações chegam por props
  * (pages/comercial/orcamentos.tsx). Conteúdo na identidade v3 dentro do
  * layout de hoje. Sem legenda: rótulos, dados e ações; uma ação principal,
- * "Novo orçamento".
+ * "Novo orçamento". Na ficha, o envio ao cliente ("Enviar" no aprovado;
+ * "Aprovar e enviar" para o owner) e o documento A4.
  */
 
 /** O que a fila mostra além da demanda e do orçamento: cadastro, contatos, locais e contratos. */
@@ -69,6 +72,13 @@ export type FilaViewProps = {
   onNovo: () => void;
   /** Duplo clique na linha: abre o orçamento (o clique só seleciona). */
   onAbrir: (numero: string) => void;
+  /** O envio que a ficha oferece ao orçamento selecionado (lib/comercial/envio.ts, envioDaFicha). */
+  envio: {
+    acao: AcaoDeEnvio | null;
+    ocupado: boolean;
+    erro: string | null;
+    onEnviar: (item: ItemDaFila, acao: AcaoDeEnvio) => void;
+  };
 };
 
 function Contador({ children, invertido = false }: { children: ReactNode; invertido?: boolean }) {
@@ -327,7 +337,7 @@ function Quadro({ rotulo, children }: { rotulo: string; children: ReactNode }) {
 }
 
 function Ficha(props: FilaViewProps & { selecionado: ItemDaFila }) {
-  const { selecionado: item, agora, contexto, fichaAberta, onVoltar } = props;
+  const { selecionado: item, agora, contexto, fichaAberta, onVoltar, envio } = props;
   const contato = item.contatoId ? (contexto.contatos.get(item.contatoId)?.nome ?? null) : null;
   const campos: Array<[string, string]> = [
     ["Cliente", item.cliente],
@@ -418,9 +428,29 @@ function Ficha(props: FilaViewProps & { selecionado: ItemDaFila }) {
         {item.status === "rascunho" && item.devolucao?.nota ? <Quadro rotulo="Devolução">{item.devolucao.nota}</Quadro> : null}
       </Secao>
       <div className="flex flex-wrap gap-2 px-5 pb-5 pt-4">
+        {envio.acao ? (
+          <Button type="button" variant="outline" size="sm" onClick={() => envio.onEnviar(item, envio.acao!)} disabled={envio.ocupado}>
+            <Send aria-hidden="true" />
+            {ROTULO_DO_ENVIO[envio.acao]}
+          </Button>
+        ) : null}
         <Button asChild variant="outline" size="sm">
           <Link href={href}>{acaoDaEtapa(item.etapa)}</Link>
         </Button>
+        <Button asChild variant="outline" size="sm">
+          <Link href={hrefDoDocumento(item.numero, item.rv)}>
+            <FileText aria-hidden="true" />
+            {item.status === "enviado" ? "PDF" : "Prévia do PDF"}
+          </Link>
+        </Button>
+        {envio.erro ? (
+          <p
+            role="alert"
+            className="w-full rounded-md border border-destructive-soft-border bg-destructive-soft px-3 py-2 text-sm font-semibold text-destructive-soft-foreground"
+          >
+            {envio.erro}
+          </p>
+        ) : null}
       </div>
     </aside>
   );

@@ -342,6 +342,16 @@ export function textoOuNull(valor: unknown): string | null {
   return texto(valor) || null;
 }
 
+/**
+ * O nome de quem monta, gravado no orçamento (`autor_nome`) para o documento
+ * A4 ("Orçamento elaborado por"): o comercial não lê o perfil de outra pessoa
+ * em `users`. Nunca vai para os eventos.
+ */
+export function nomeDoAutor(caller: Pick<ComercialProfile, "name">): string | null {
+  const nome = typeof caller.name === "string" ? caller.name.trim() : "";
+  return nome ? nome.slice(0, 120) : null;
+}
+
 export function actorOf(caller: ComercialProfile): ComercialActor {
   const actor: ComercialActor = { uid: caller.uid, role: caller.role };
   if (caller.email) actor.email = caller.email;
@@ -807,6 +817,7 @@ async function criar(db: Firestore, caller: ComercialProfile, input: CriarInput 
           duplicado_de: null,
           iso,
           uid: caller.uid,
+          autorNome: nomeDoAutor(caller),
         }),
         // A RV de execução da demanda direta não tem RV fechada para comparar: passa pela aprovação.
         ...(direta
@@ -946,6 +957,8 @@ type OrcamentoNovo = {
   duplicado_de: string | null;
   iso: string;
   uid: string;
+  /** O nome de quem monta (nomeDoAutor). */
+  autorNome: string | null;
 };
 
 /** O orçamento novo, RV 0 em rascunho, com a data-base de hoje. */
@@ -969,6 +982,7 @@ function orcamentoNovo(dados: OrcamentoNovo): Record<string, unknown> {
     validade_dias: dados.validade_dias,
     observacoes_internas: dados.observacoes_internas,
     autor_uid: dados.uid,
+    autor_nome: dados.autorNome,
     aprovacao: null,
     aprovacao_dispensada: null,
     devolucao: null,
@@ -1367,6 +1381,7 @@ async function duplicar(db: Firestore, caller: ComercialProfile, input: Duplicar
           duplicado_de: origemNumero,
           iso,
           uid: caller.uid,
+          autorNome: nomeDoAutor(caller),
         }),
         request_id: input.request_id,
         operation_id: operationId,
@@ -1465,6 +1480,7 @@ export function revisaoCongelada(quote: Dados, demanda: Dados, congelamento: Con
     condicoes: quote.condicoes ?? null,
     validade_dias: quote.validade_dias ?? null,
     autor_uid: quote.autor_uid ?? null,
+    autor_nome: quote.autor_nome ?? null,
     revisao_de: quote.revisao_de ?? null,
     aprovacao: congelamento.aprovacao ?? null,
     aprovacao_dispensada: congelamento.aprovacao_dispensada ?? null,
@@ -1528,7 +1544,12 @@ function ultimaRvEnviada(quote: Dados): number {
  * A RV enviada fica como está em `revisoes/{rv}`. O número segue a maior RV
  * já enviada (ultima_rv_enviada), quando o orçamento voltou a uma anterior.
  */
-export function rvSeguinte(numero: string, quote: Dados, motivo: OrigemRevisao, quem: { uid: string; iso: string }): RvSeguinte {
+export function rvSeguinte(
+  numero: string,
+  quote: Dados,
+  motivo: OrigemRevisao,
+  quem: { uid: string; iso: string; nome?: string | null },
+): RvSeguinte {
   const rvAnterior = Number(quote.rv ?? 0);
   const rv = Math.max(rvAnterior, ultimaRvEnviada(quote)) + 1;
   if (rv > 99) throw new HttpsError("failed-precondition", `O orçamento ${numero} chegou à RV99: abra um orçamento novo.`);
@@ -1548,6 +1569,7 @@ export function rvSeguinte(numero: string, quote: Dados, motivo: OrigemRevisao, 
       status: "rascunho",
       edicao,
       autor_uid: quem.uid,
+      autor_nome: quem.nome ?? null,
       aprovacao: null,
       aprovacao_dispensada: null,
       dispensa: null,
@@ -1605,6 +1627,7 @@ export function rvRestaurada(
       condicoes: enviada.condicoes ?? null,
       validade_dias: enviada.validade_dias ?? null,
       autor_uid: enviada.autor_uid ?? null,
+      autor_nome: enviada.autor_nome ?? null,
       aprovacao: enviada.aprovacao ?? null,
       aprovacao_dispensada: enviada.aprovacao_dispensada ?? null,
       dispensa: null,
@@ -1650,7 +1673,7 @@ function revisar(
   dispensa: Dispensa | null,
 ): { target_id: string; result: AdvanceQuoteResult } {
   const { transaction, db, numero, demanda, quote, caller, iso } = contexto;
-  const seguinte = rvSeguinte(numero, quote, motivo, { uid: caller.uid, iso });
+  const seguinte = rvSeguinte(numero, quote, motivo, { uid: caller.uid, nome: nomeDoAutor(caller), iso });
   const etapaAntes = demanda.etapa as EtapaDemanda;
   const etapaDepois = etapaDaDemanda(demanda, { status: "rascunho", tipo_rv: seguinte.tipo_rv, rv: seguinte.rv });
   transaction.update(quoteRef(db, numero), { ...seguinte.patch, dispensa });

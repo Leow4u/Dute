@@ -24,6 +24,10 @@ export const COMERCIAL_ROLES = ["owner", "admin", "comercial"] as const satisfie
 export const ROTA_COMERCIAL = "/comercial";
 /** Montar orçamento (docs/mockups/ComOrcamento.dc.html), aberto pela fila: ?numero=10045. */
 export const ROTA_ORCAMENTO = "/comercial/orcamento";
+/** Aprovar no celular (docs/mockups/ComAprovarCelular.dc.html, parte 12a): só o owner. */
+export const ROTA_APROVAR = "/comercial/aprovar";
+/** O documento A4 do orçamento (docs/mockups/ComDocumento.dc.html): ?numero=10045&rv=1. */
+export const ROTA_DOCUMENTO = "/comercial/orcamento/documento";
 export const ROTA_CLIENTES = "/comercial/clientes";
 /** Aba Contratos do módulo (parte 14): lista e ficha do contrato. */
 export const ROTA_CONTRATOS = "/comercial/contratos";
@@ -32,7 +36,14 @@ export const ROTA_CONTRATOS = "/comercial/contratos";
  * Telas do Comercial que já existem no app. Cada parte nova acrescenta a dela:
  * a rota passa a existir e a aba ou o link para ela aparece.
  */
-export const TELAS_DO_COMERCIAL: readonly string[] = [ROTA_COMERCIAL, ROTA_ORCAMENTO, ROTA_CLIENTES, ROTA_CONTRATOS];
+export const TELAS_DO_COMERCIAL: readonly string[] = [
+  ROTA_COMERCIAL,
+  ROTA_ORCAMENTO,
+  ROTA_DOCUMENTO,
+  ROTA_APROVAR,
+  ROTA_CLIENTES,
+  ROTA_CONTRATOS,
+];
 
 /** Rotas do Comercial que o App registra: nenhuma fora da liberação. */
 export function rotasDoComercial(liberado: boolean = COMERCIAL_LIBERADO): string[] {
@@ -61,6 +72,17 @@ export function abreComercial(role: Papel | string | null | undefined, liberado:
   return liberado && Boolean(role) && (COMERCIAL_ROLES as readonly string[]).includes(role as string);
 }
 
+/**
+ * Quem aprova o orçamento: só o owner (pergunta 1 da fase 6; canApproveQuote
+ * em functions/comercial). É a guarda da tela de aprovar e o `enabled` da
+ * consulta do Início: para os outros papéis, nada é lido.
+ */
+export const APROVADOR_ROLES = ["owner"] as const satisfies readonly Papel[];
+
+export function aprovaOrcamento(role: Papel | string | null | undefined, liberado: boolean = COMERCIAL_LIBERADO): boolean {
+  return abreComercial(role, liberado) && (APROVADOR_ROLES as readonly string[]).includes(role as string);
+}
+
 export type AbaDoComercial = {
   id: "orcamentos" | "contratos" | "autorizacoes" | "medicoes";
   rotulo: string;
@@ -71,7 +93,7 @@ export type AbaDoComercial = {
 
 /** Barra de abas do módulo, na ordem dos mockups (ComFila e ComContrato). */
 export const ABAS_DO_COMERCIAL: readonly AbaDoComercial[] = [
-  { id: "orcamentos", rotulo: "Orçamentos", href: ROTA_COMERCIAL, tambem: [ROTA_ORCAMENTO] },
+  { id: "orcamentos", rotulo: "Orçamentos", href: ROTA_COMERCIAL, tambem: [ROTA_ORCAMENTO, ROTA_APROVAR, ROTA_DOCUMENTO] },
   { id: "contratos", rotulo: "Contratos", href: ROTA_CONTRATOS },
   { id: "autorizacoes", rotulo: "Autorizações", href: "/comercial/autorizacoes" },
   { id: "medicoes", rotulo: "Medições", href: "/comercial/medicoes" },

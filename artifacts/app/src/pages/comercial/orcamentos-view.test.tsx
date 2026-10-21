@@ -154,6 +154,7 @@ function props(overrides: Partial<FilaViewProps> = {}): FilaViewProps {
     contexto: CONTEXTO,
     onNovo: noop,
     onAbrir: noop,
+    envio: { acao: null, ocupado: false, erro: null, onEnviar: noop },
     ...overrides,
   };
 }
@@ -280,6 +281,7 @@ const FICHA = [
   "Enviado",
   "pendente",
   "Abrir orçamento",
+  "Prévia do PDF",
 ];
 
 describe("fila de orçamentos", () => {
@@ -330,7 +332,37 @@ describe("fila de orçamentos", () => {
     const html = render();
     expect(html).toContain('href="/comercial/orcamento?numero=10045"');
     const montagem = texts(render({ selecionado: ITENS[0] }));
-    expect(montagem.at(-1)).toBe("Continuar montagem");
+    expect(montagem.slice(-2)).toEqual(["Continuar montagem", "Prévia do PDF"]);
+  });
+
+  it("a ficha abre o documento da RV em curso: a prévia até o envio; o PDF depois", () => {
+    expect(render()).toContain('href="/comercial/orcamento/documento?numero=10045&amp;rv=2"');
+    const enviado = item("10041", { etapa: "aguardando_cliente" }, { status: "enviado", rv: 0 });
+    const lista = texts(render({ itens: [enviado], selecionado: enviado }));
+    expect(lista.slice(-2)).toEqual(["Abrir orçamento", "PDF"]);
+  });
+
+  it("a ficha oferece o envio que a fila decidiu (Enviar ou Aprovar e enviar), sem virar a ação principal", () => {
+    const enviados: Array<[string, string]> = [];
+    const aprovado = item("10048", { etapa: "para_enviar" }, { status: "aprovado" });
+    const html = render({
+      itens: [aprovado],
+      selecionado: aprovado,
+      envio: { acao: "send", ocupado: false, erro: null, onEnviar: (orc, acao) => enviados.push([orc.numero, acao]) },
+    });
+    expect(texts(html).slice(-3)).toEqual(["Enviar", "Abrir orçamento", "Prévia do PDF"]);
+    expect(html.match(/bg-primary text-primary-foreground/g)).toHaveLength(1);
+    const dono = texts(render({ envio: { acao: "approve_and_send", ocupado: false, erro: null, onEnviar: noop } }));
+    expect(dono.slice(-3)).toEqual(["Aprovar e enviar", "Abrir orçamento", "Prévia do PDF"]);
+    // Enviando: o botão não responde; a recusa do servidor aparece em alerta na ficha.
+    const enviando = render({ selecionado: aprovado, itens: [aprovado], envio: { acao: "send", ocupado: true, erro: null, onEnviar: noop } });
+    expect(enviando).toMatch(/<button[^>]*disabled=""[^>]*>(?:<svg[^>]*>.*?<\/svg>)?Enviar<\/button>/);
+    const recusado = render({
+      selecionado: aprovado,
+      itens: [aprovado],
+      envio: { acao: "send", ocupado: false, erro: "O orçamento 10048 mudou: está em rascunho, não aprovado. Abra de novo.", onEnviar: noop },
+    });
+    expect(recusado).toMatch(/role="alert"[^>]*>O orçamento 10048 mudou/);
   });
 
   it("no celular, a fila abre a ficha no lugar da lista; no computador, ficam lado a lado", () => {
@@ -361,7 +393,7 @@ describe("fila de orçamentos", () => {
   it("perdida mostra o motivo; devolvido mostra a nota", () => {
     const perdida = item("10034", { etapa: "perdida", etapa_desde: "2026-10-08T12:20:00.000Z", perda: { motivo: "Preço · fechou com outro fornecedor", em: "2026-10-08T12:20:00.000Z" } }, {});
     const comPerda = texts(render({ itens: [perdida], selecionado: perdida }));
-    expect(comPerda.slice(-4)).toEqual(["08/10 09:20", "Motivo", "Preço · fechou com outro fornecedor", "Abrir orçamento"]);
+    expect(comPerda.slice(-5)).toEqual(["08/10 09:20", "Motivo", "Preço · fechou com outro fornecedor", "Abrir orçamento", "Prévia do PDF"]);
     const devolvido = item("10050", {}, { devolucao: { nota: "Rever o preço da cadeira", por_uid: "u-leo", em: "2026-10-21T12:30:00.000Z" } });
     const comNota = texts(render({ itens: [devolvido], selecionado: devolvido }));
     expect(comNota).toEqual(expect.arrayContaining(["Devolvido", "21/10 09:30 · Leonardo", "Devolução", "Rever o preço da cadeira"]));
