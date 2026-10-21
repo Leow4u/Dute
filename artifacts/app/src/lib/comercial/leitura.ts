@@ -6,8 +6,9 @@ import { firestore } from "../firebase";
 import type { Carga } from "./clientes";
 
 /**
- * Leitura do Firestore nas telas do Comercial: coleção (ou consulta) e
- * documento ao vivo, para a tela ver o que a callable gravou sem recarregar,
+ * Leitura do Firestore nas telas do Comercial (Clientes, Contratos, fila e
+ * montagem do orçamento): coleção (ou consulta) e documento ao vivo, para a
+ * tela ver o que a callable gravou sem recarregar,
  * e o nome de quem fez cada passo. As regras abrem a leitura a owner, admin e
  * comercial; a escrita é só das callables (lib/comercial/api.ts).
  */

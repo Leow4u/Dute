@@ -21,13 +21,20 @@ describe("barra de abas do Comercial", () => {
     expect(render("/comercial/clientes", [ROTA_CLIENTES])).toBe("");
   });
 
-  it("hoje: só Orçamentos, marcada na fila e na montagem do orçamento", () => {
-    for (const atual of [ROTA_COMERCIAL, `${ROTA_ORCAMENTO}`]) {
+  it("hoje: Orçamentos e Contratos; Orçamentos marcada na fila e na montagem do orçamento", () => {
+    for (const atual of [ROTA_COMERCIAL, ROTA_ORCAMENTO]) {
       const html = render(atual, TELAS_DO_COMERCIAL);
-      expect(html.replace(/<[^>]+>/g, "|").split("|").filter(Boolean)).toEqual(["Orçamentos"]);
+      expect(html.replace(/<[^>]+>/g, "|").split("|").filter(Boolean)).toEqual(["Orçamentos", "Contratos"]);
       expect(html, atual).toMatch(/<a [^>]*aria-current="page"[^>]*>Orçamentos<\/a>/);
+      expect(html, atual).not.toMatch(/<a [^>]*aria-current="page"[^>]*>Contratos<\/a>/);
     }
     expect(render(ROTA_CLIENTES, TELAS_DO_COMERCIAL)).not.toContain("aria-current");
+  });
+
+  it("na tela de contratos, a aba Contratos fica marcada", () => {
+    const html = render(href("contratos"), TELAS_DO_COMERCIAL);
+    expect(html).toMatch(/<a [^>]*aria-current="page"[^>]*>Contratos<\/a>/);
+    expect(html).not.toMatch(/<a [^>]*aria-current="page"[^>]*>Orçamentos<\/a>/);
   });
 
   it("mostra só as abas com tela, com a atual marcada", () => {

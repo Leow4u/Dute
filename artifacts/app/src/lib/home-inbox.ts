@@ -1,3 +1,6 @@
+import type { AlertaDoInicio } from "./comercial/contratos";
+import { abreComercial, hrefDoContrato } from "./comercial/navegacao";
+import { COMERCIAL_LIBERADO } from "./liberacao";
 import {
   canAccessModule,
   getRouteProfileRoles,
@@ -83,14 +86,49 @@ function listPreview(values: Array<string | null | undefined>, max = 2) {
   return clean.length > max ? `${shown} e mais ${clean.length - max}` : shown;
 }
 
+/**
+ * Alertas de contrato do Comercial (parte 14) só para quem abre o Comercial:
+ * owner, admin e comercial, onde a liberação está ligada. É também o
+ * `enabled` da consulta no Início: para os outros, nada é lido.
+ */
+export function veContratosNoInicio(
+  role: ProfileRole | null | undefined,
+  comercialLiberado: boolean = COMERCIAL_LIBERADO,
+): boolean {
+  return abreComercial(role, comercialLiberado);
+}
+
+/** Um item por alerta (renovação, fim da vigência, reajuste), levando à ficha do contrato. */
+function contractItems(alertas: readonly AlertaDoInicio[]): HomeInboxItem[] {
+  return alertas.flatMap((alerta) => {
+    const href = hrefDoContrato(alerta.contratoId);
+    if (!href) return [];
+    return [
+      {
+        id: `contrato:${alerta.contratoId}:${alerta.tipo}`,
+        tone: alerta.tom === "critico" ? "critical" : "attention",
+        title: `${alerta.titulo} · ${alerta.cliente}`,
+        detail: `${alerta.contrato} · ${alerta.quando}`,
+        href,
+        actionLabel: "Abrir contrato",
+      } satisfies HomeInboxItem,
+    ];
+  });
+}
+
 export function buildHomeInbox({
   role,
   ops,
   requests,
+  contratos,
+  comercialLiberado = COMERCIAL_LIBERADO,
 }: {
   role: ProfileRole | null | undefined;
   ops?: WarehouseOpsResponse;
   requests?: HomeRequest[];
+  /** Alertas dos contratos (lib/comercial/contratos.ts, alertasParaOInicio). */
+  contratos?: readonly AlertaDoInicio[];
+  comercialLiberado?: boolean;
 }): HomeInbox {
   const orders = groupWarehouseOrders(ops).filter(
     (order) => order.stage !== "entregue",
@@ -145,6 +183,10 @@ export function buildHomeInbox({
       href: "/solicitacoes",
       actionLabel: "Aprovar",
     });
+  }
+
+  if (contratos?.length && veContratosNoInicio(role, comercialLiberado)) {
+    items.push(...contractItems(contratos));
   }
 
   if (toPick.length) {

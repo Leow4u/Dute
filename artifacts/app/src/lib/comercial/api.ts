@@ -14,11 +14,15 @@ import { firebaseApp } from "../firebase";
 export const CALLABLES_DO_CADASTRO = ["saveCommercialCustomer", "saveCustomerLocation", "saveCustomerContact"] as const;
 export type CallableDoCadastro = (typeof CALLABLES_DO_CADASTRO)[number];
 
+/** Contratos (parte 8): saveContract confere a edição lida; recordAditivo recusa número que já está no histórico. */
+export const CALLABLES_DO_CONTRATO = ["saveContract", "recordAditivo"] as const;
+export type CallableDoContrato = (typeof CALLABLES_DO_CONTRATO)[number];
+
 /** Demanda e orçamento (parte 9, domain/quotes.ts): a chave vai em `request_id`. */
 export const CALLABLES_DO_ORCAMENTO = ["saveQuote", "advanceQuote"] as const;
 export type CallableDoOrcamento = (typeof CALLABLES_DO_ORCAMENTO)[number];
 
-export type CallableDoComercial = CallableDoCadastro | CallableDoOrcamento;
+export type CallableDoComercial = CallableDoCadastro | CallableDoContrato | CallableDoOrcamento;
 
 /** Chave nova por intenção de gravar (um diálogo aberto, um clique de desativar). */
 export function novaChave(): string {

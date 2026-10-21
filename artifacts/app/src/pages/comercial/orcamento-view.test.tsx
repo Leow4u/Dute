@@ -135,6 +135,7 @@ function texts(html: string) {
 const CABECALHO_RASCUNHO = [
   "Comercial",
   "Orçamentos",
+  "Contratos",
   "10045",
   "Em montagem",
   "Proposta",
@@ -281,9 +282,10 @@ describe("montar orçamento", () => {
       acoes: acoesDoOrcamento({ status: "para_aprovar", role: "owner", uid: "u-leo", autorUid: "u-gui" }),
     });
     const lista = texts(html);
-    expect(lista.slice(0, 22)).toEqual([
+    expect(lista.slice(0, 23)).toEqual([
       "Comercial",
       "Orçamentos",
+      "Contratos",
       "10045",
       "Para aprovar",
       "Proposta",
@@ -354,8 +356,8 @@ describe("montar orçamento", () => {
           </Router>,
         ),
       );
-    expect(estado("carregando")).toEqual(["Comercial", "Orçamentos", "Carregando..."]);
-    expect(estado("nao_encontrado")).toEqual(["Comercial", "Orçamentos", "Orçamento não encontrado"]);
-    expect(estado("erro")).toEqual(["Comercial", "Orçamentos", "Não foi possível carregar o orçamento."]);
+    expect(estado("carregando")).toEqual(["Comercial", "Orçamentos", "Contratos", "Carregando..."]);
+    expect(estado("nao_encontrado")).toEqual(["Comercial", "Orçamentos", "Contratos", "Orçamento não encontrado"]);
+    expect(estado("erro")).toEqual(["Comercial", "Orçamentos", "Contratos", "Não foi possível carregar o orçamento."]);
   });
 });

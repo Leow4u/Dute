@@ -21,7 +21,14 @@ import {
 
 import { PAPEIS, isPapel, type Papel } from "@workspace/dominio";
 
-import { COMERCIAL_ROLES, ROTA_CLIENTES, ROTA_COMERCIAL, ROTA_ORCAMENTO, abreComercial } from "./comercial/navegacao";
+import {
+  COMERCIAL_ROLES,
+  ROTA_CLIENTES,
+  ROTA_COMERCIAL,
+  ROTA_CONTRATOS,
+  ROTA_ORCAMENTO,
+  abreComercial,
+} from "./comercial/navegacao";
 import { COMERCIAL_LIBERADO } from "./liberacao";
 import {
   portalModulesFor,
@@ -301,9 +308,9 @@ export const APP_MODULES: AppModule[] = [
       }),
     ],
   }),
-  // Comercial (docs/plataforma/fase-6-comercial.md, partes 11 e 13): só onde
-  // a liberação do Comercial está ligada. A fila de orçamentos é a casa
-  // (/comercial, rota exata para não acender em Clientes).
+  // Comercial (docs/plataforma/fase-6-comercial.md, partes 11, 13 e 14): só
+  // onde a liberação do Comercial está ligada. A fila de orçamentos é a casa
+  // (/comercial, rota exata para não acender em Clientes e Contratos).
   appModule({
     id: "comercial",
     label: "Comercial",
@@ -326,6 +333,13 @@ export const APP_MODULES: AppModule[] = [
         label: "Clientes",
         href: ROTA_CLIENTES,
         icon: Users,
+        roles: COMMERCIAL_ROLES,
+      }),
+      navRoute({
+        id: "comercial-contratos",
+        label: "Contratos",
+        href: ROTA_CONTRATOS,
+        icon: FileText,
         roles: COMMERCIAL_ROLES,
       }),
     ],

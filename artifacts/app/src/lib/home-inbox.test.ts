@@ -1,6 +1,8 @@
+import { PAPEIS, type Papel } from "@workspace/dominio";
 import { describe, expect, it } from "vitest";
 
-import { buildHomeInbox, isAwaitingTriage } from "./home-inbox";
+import { alertasParaOInicio, contratoDoRegistro, type Contrato } from "./comercial/contratos";
+import { buildHomeInbox, isAwaitingTriage, veContratosNoInicio } from "./home-inbox";
 import type { WarehouseOpsResponse, WarehouseTask } from "./warehouse-ops/model";
 
 function task(overrides: Partial<WarehouseTask> & { id: string }): WarehouseTask {
@@ -122,5 +124,100 @@ describe("isAwaitingTriage", () => {
     ["concluído", false],
   ])("%s → %s", (status, expected) => {
     expect(isAwaitingTriage(status)).toBe(expected);
+  });
+});
+
+describe("alertas de contrato do Comercial no Início (parte 14)", () => {
+  const HOJE = "2026-10-21";
+  const base = {
+    customer_code: "BTG_Pactual",
+    nome: "Armazenagem e serviços",
+    vigente_de: "2026-01-01",
+    vigente_ate: "2026-12-31",
+    renovacao: { tipo: "automatica", aviso_dias: null, oposicao_ate_dias: 60 },
+    reajuste: { tipo: "indice", indice: "IPCA", data_base: "11-01" },
+    status: "vigente",
+  };
+  const contratos = [
+    contratoDoRegistro("btg-2026", base),
+    contratoDoRegistro("antigo", { ...base, customer_code: "ALFA", nome: "Antigo", status: "encerrado" }),
+    contratoDoRegistro("longe", { ...base, customer_code: "BETA", vigente_ate: "2028-12-31", reajuste: { tipo: "negociado" } }),
+  ].filter((contrato): contrato is Contrato => contrato !== null);
+  const alertas = alertasParaOInicio(contratos, new Map([["BTG_Pactual", "BTG Pactual"]]), HOJE);
+
+  const LIBERADO = true;
+  const DESLIGADO = false;
+  const QUEM_VE: Papel[] = ["owner", "admin", "comercial"];
+
+  const doContrato = (role: Papel, liberado: boolean) =>
+    buildHomeInbox({ role, contratos: alertas, comercialLiberado: liberado }).items.filter((item) =>
+      item.id.startsWith("contrato:"),
+    );
+
+  it("um item por alerta (oposição à renovação, reajuste e fim), levando à ficha do contrato", () => {
+    expect(doContrato("owner", LIBERADO)).toEqual([
+      {
+        id: "contrato:btg-2026:renovacao",
+        tone: "critical",
+        title: "Oposição à renovação até 01/11/2026 · BTG Pactual",
+        detail: "Armazenagem e serviços · em 11 dias",
+        href: "/comercial/contratos?id=btg-2026",
+        actionLabel: "Abrir contrato",
+      },
+      {
+        id: "contrato:btg-2026:reajuste",
+        tone: "critical",
+        title: "Reajuste IPCA em 01/11/2026 · BTG Pactual",
+        detail: "Armazenagem e serviços · em 11 dias",
+        href: "/comercial/contratos?id=btg-2026",
+        actionLabel: "Abrir contrato",
+      },
+      {
+        id: "contrato:btg-2026:fim_vigencia",
+        tone: "attention",
+        title: "Fim da vigência em 31/12/2026 · BTG Pactual",
+        detail: "Armazenagem e serviços · em 71 dias",
+        href: "/comercial/contratos?id=btg-2026",
+        actionLabel: "Abrir contrato",
+      },
+    ]);
+  });
+
+  it.each(QUEM_VE)("%s vê os alertas só com a liberação do Comercial", (role) => {
+    expect(doContrato(role, LIBERADO)).toHaveLength(3);
+    expect(doContrato(role, DESLIGADO)).toEqual([]);
+    expect(veContratosNoInicio(role, LIBERADO)).toBe(true);
+    expect(veContratosNoInicio(role, DESLIGADO)).toBe(false);
+  });
+
+  it.each(PAPEIS.filter((role) => !QUEM_VE.includes(role)))("%s nunca vê nem consulta os contratos", (role) => {
+    expect(doContrato(role, LIBERADO)).toEqual([]);
+    expect(veContratosNoInicio(role, LIBERADO)).toBe(false);
+    expect(veContratosNoInicio(role, DESLIGADO)).toBe(false);
+  });
+
+  it("sem papel, nada", () => {
+    expect(veContratosNoInicio(null, LIBERADO)).toBe(false);
+    expect(buildHomeInbox({ role: null, contratos: alertas, comercialLiberado: LIBERADO }).items).toEqual([]);
+  });
+
+  it("os alertas entram depois das solicitações e antes da fila de pedidos", () => {
+    const { items } = buildHomeInbox({ role: "admin", ops: busyOps, requests, contratos: alertas, comercialLiberado: LIBERADO });
+    expect(items.map((item) => item.id)).toEqual([
+      "blocked:ord_3",
+      "triage",
+      "contrato:btg-2026:renovacao",
+      "contrato:btg-2026:reajuste",
+      "contrato:btg-2026:fim_vigencia",
+      "to-pick",
+      "to-ship",
+      "receipts",
+      "agent",
+    ]);
+  });
+
+  it("sem alertas, o Início fica como era", () => {
+    const sem = buildHomeInbox({ role: "admin", ops: busyOps, requests, contratos: [], comercialLiberado: LIBERADO });
+    expect(sem).toEqual(buildHomeInbox({ role: "admin", ops: busyOps, requests }));
   });
 });

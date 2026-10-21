@@ -178,6 +178,7 @@ const CABECALHO = [
   "Comercial",
   "Novo orçamento",
   "Orçamentos",
+  "Contratos",
   "Todas",
   "3",
   "Em montagem",
