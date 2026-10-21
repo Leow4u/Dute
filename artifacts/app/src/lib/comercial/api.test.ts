@@ -7,7 +7,9 @@ import { describe, expect, it } from "vitest";
 import {
   CALLABLES_DA_AUTORIZACAO,
   CALLABLES_DO_CADASTRO,
+  CALLABLES_DA_MEDICAO,
   CALLABLES_DO_CONTRATO,
+  CALLABLES_DA_DEMANDA,
   CALLABLES_DO_ORCAMENTO,
   ErroDaCallable,
   codigoDoErro,
@@ -26,8 +28,21 @@ describe("callables do cadastro comercial", () => {
     expect(indexDoComercial).toMatch(new RegExp(`^export const ${nome} = onCall\\(`, "m"));
   });
 
+  it.each(CALLABLES_DA_MEDICAO)("%s (medição mensal) existe em functions/comercial", (nome) => {
+    expect(indexDoComercial).toMatch(new RegExp(`^export const ${nome} = onCall\\(`, "m"));
+  });
+
+  it("a medição grava por saveMedicao e advanceMedicao", () => {
+    expect([...CALLABLES_DA_MEDICAO]).toEqual(["saveMedicao", "advanceMedicao"]);
+  });
+
   it("o orçamento grava por saveQuote e advanceQuote", () => {
     expect([...CALLABLES_DO_ORCAMENTO]).toEqual(["saveQuote", "advanceQuote"]);
+  });
+
+  it("a demanda depois do envio grava por advanceDemand, que existe em functions/comercial", () => {
+    expect([...CALLABLES_DA_DEMANDA]).toEqual(["advanceDemand"]);
+    expect(indexDoComercial).toMatch(/^export const advanceDemand = onCall\(/m);
   });
 
   it("o erro da callable guarda o código: a tela decide se recarrega", () => {

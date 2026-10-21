@@ -300,7 +300,7 @@ function secao(html: string, rotulo: string): string {
 
 describe("tela de autorizações", () => {
   it("sem legenda: abas, fila, painel e autorizadas só têm rótulos, dados e ações", () => {
-    expect(texts(render())).toEqual(["Comercial", "Orçamentos", "Contratos", "Autorizações", ...FILA, ...PAINEL, ...AUTORIZADAS_TEXTOS]);
+    expect(texts(render())).toEqual(["Comercial", "Orçamentos", "Contratos", "Autorizações", "Medições", ...FILA, ...PAINEL, ...AUTORIZADAS_TEXTOS]);
   });
 
   it("identidade v3 dentro do layout do app, e uma ação principal só: Registrar autorização", () => {
@@ -420,7 +420,7 @@ describe("tela de autorizações", () => {
     expect(html).not.toContain('role="checkbox"');
     expect(html).not.toContain('aria-label="Registrar autorização de faturamento"');
     expect(html).not.toMatch(/bg-primary text-primary-foreground/);
-    expect(texts(html).slice(0, 5)).toEqual(["Comercial", "Orçamentos", "Contratos", "Autorizações", "Nova autorização"]);
+    expect(texts(html).slice(0, 6)).toEqual(["Comercial", "Orçamentos", "Contratos", "Autorizações", "Medições", "Nova autorização"]);
   });
 
   it("registrada: a confirmação aparece no painel; o erro do servidor também", () => {

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { Router } from "wouter";
 
 import { contatoDoDocumento, localDoDocumento } from "@/lib/comercial/clientes";
+import { acoesDepoisDoEnvio, type ItemParaAcoes } from "@/lib/comercial/depois-do-envio";
 import { acoesDoOrcamento, adicionarDaTabela, catalogoDaTabela, formDoOrcamento, type FormOrcamento } from "@/lib/comercial/montar";
 
 import {
@@ -112,6 +113,7 @@ function props(overrides: Partial<MontarViewProps> & { form?: FormOrcamento } = 
     salvoEm: null,
     desatualizado: false,
     documentoHref: "/comercial/orcamento/documento?numero=10045&rv=0",
+    posEnvio: { acoes: { principal: null, secundarias: [] }, onAcao: noop },
     handlers: {
       salvar: noop,
       previaSalva: noop,
@@ -122,6 +124,8 @@ function props(overrides: Partial<MontarViewProps> & { form?: FormOrcamento } = 
       devolver: noop,
       enviarCliente: noop,
       aprovarEEnviar: noop,
+      enviarDispensado: noop,
+      descartarRv: noop,
       trocarVariante: noop,
       novoContato: noop,
     },
@@ -151,6 +155,7 @@ const CABECALHO_RASCUNHO = [
   "Orçamentos",
   "Contratos",
   "Autorizações",
+  "Medições",
   "10045",
   "Em montagem",
   "Proposta",
@@ -302,11 +307,12 @@ describe("montar orçamento", () => {
       acoes: acoesDoOrcamento({ status: "para_aprovar", role: "owner", uid: "u-leo", autorUid: "u-gui" }),
     });
     const lista = texts(html);
-    expect(lista.slice(0, 26)).toEqual([
+    expect(lista.slice(0, 27)).toEqual([
       "Comercial",
       "Orçamentos",
       "Contratos",
       "Autorizações",
+      "Medições",
       "10045",
       "Para aprovar",
       "Proposta",
@@ -487,8 +493,122 @@ describe("montar orçamento", () => {
           </Router>,
         ),
       );
-    expect(estado("carregando")).toEqual(["Comercial", "Orçamentos", "Contratos", "Autorizações", "Carregando..."]);
-    expect(estado("nao_encontrado")).toEqual(["Comercial", "Orçamentos", "Contratos", "Autorizações", "Orçamento não encontrado"]);
-    expect(estado("erro")).toEqual(["Comercial", "Orçamentos", "Contratos", "Autorizações", "Não foi possível carregar o orçamento."]);
+    expect(estado("carregando")).toEqual(["Comercial", "Orçamentos", "Contratos", "Autorizações", "Medições", "Carregando..."]);
+    expect(estado("nao_encontrado")).toEqual(["Comercial", "Orçamentos", "Contratos", "Autorizações", "Medições", "Orçamento não encontrado"]);
+    expect(estado("erro")).toEqual(["Comercial", "Orçamentos", "Contratos", "Autorizações", "Medições", "Não foi possível carregar o orçamento."]);
+  });
+});
+
+describe("montar orçamento depois do envio (parte 12b)", () => {
+  const ENVIADA: ItemParaAcoes = { numero: "10045", rv: 0, etapa: "aguardando_cliente", tipoRv: "proposta", status: "enviado", edicao: 7, revisaoDe: null, autorUid: "u-gui", escopoRv: null, executada: false, validada: false };
+  const quem = { role: "comercial", uid: "u-gui" };
+
+  function enviada(parcial: Partial<ItemParaAcoes> = {}, dados: Partial<DadosDoOrcamento> = {}, onAcao: (acao: string) => void = noop) {
+    const item = { ...ENVIADA, ...parcial };
+    return render({
+      dados: { ...DADOS, status: "enviado", etapa: item.etapa, tipoRv: item.tipoRv, situacao: "Enviado · 21/10 10:02", ...dados },
+      acoes: acoesDoOrcamento({ status: "enviado", role: "comercial", uid: "u-gui", autorUid: "u-gui", etapa: item.etapa }),
+      posEnvio: { acoes: acoesDepoisDoEnvio(item, quem), onAcao },
+    });
+  }
+
+  it("proposta enviada: Fechado é a ação principal da tela; Revisar e Perdido ao lado", () => {
+    const html = enviada();
+    const lista = texts(html);
+    const inicio = lista.indexOf("PDF");
+    expect(lista.slice(inicio, inicio + 4)).toEqual(["PDF", "Fechado", "Revisar", "Perdido"]);
+    expect(html.match(/bg-primary text-primary-foreground/g)).toHaveLength(1);
+    expect(html).toMatch(/bg-primary text-primary-foreground[^"]*"[^>]*>(?:<svg[^>]*>.*?<\/svg>)?Fechado<\/button>/);
+  });
+
+  it("RV de execução enviada: Validado; aditivo: Validado, Recusar aditivo e Revisar", () => {
+    const execucao = texts(enviada({ tipoRv: "execucao", rv: 2 }));
+    expect(execucao.slice(execucao.indexOf("PDF"), execucao.indexOf("PDF") + 3)).toEqual(["PDF", "Validado", "Revisar"]);
+    const aditivo = texts(enviada({ tipoRv: "aditivo", rv: 1 }));
+    expect(aditivo.slice(aditivo.indexOf("PDF"), aditivo.indexOf("PDF") + 4)).toEqual(["PDF", "Validado", "Recusar aditivo", "Revisar"]);
+  });
+
+  it("para planejar e execução a orçar têm as ações da etapa; as ações da etapa ficam no cabeçalho", () => {
+    expect(texts(enviada({ etapa: "para_planejar" }, { etapa: "para_planejar" }))).toEqual(
+      expect.arrayContaining(["Registrar execução", "Aditivo", "Perdido"]),
+    );
+    expect(texts(enviada({ etapa: "execucao_a_orcar" }, { etapa: "execucao_a_orcar" }))).toEqual(expect.arrayContaining(["Orçar execução", "Validado"]));
+  });
+
+  it("perdida: Reabrir", () => {
+    const html = enviada({ etapa: "perdida" }, { etapa: "perdida" });
+    expect(texts(html)).toContain("Reabrir");
+    expect(texts(html)).not.toContain("Fechado");
+  });
+
+  it("papel sem o Comercial: a RV enviada não tem ação", () => {
+    const html = render({
+      dados: { ...DADOS, status: "enviado", etapa: "aguardando_cliente", situacao: "Enviado · 21/10 10:02" },
+      acoes: acoesDoOrcamento({ status: "enviado", role: "financeiro", uid: "u-fin", autorUid: "u-gui" }),
+      posEnvio: { acoes: acoesDepoisDoEnvio(ENVIADA, { role: "financeiro", uid: "u-fin" }), onAcao: noop },
+    });
+    expect(html).not.toContain("bg-primary text-primary-foreground");
+    expect(texts(html)).not.toContain("Fechado");
+  });
+
+  it("RV de execução com a aprovação dispensada: marca visível e Enviar ao cliente direto, sem passar pela aprovação", () => {
+    const html = render({
+      dados: { ...DADOS, tipoRv: "execucao", etapa: "execucao_a_orcar" },
+      acoes: acoesDoOrcamento({ status: "rascunho", role: "comercial", uid: "u-gui", autorUid: "u-gui", etapa: "execucao_a_orcar", tipoRv: "execucao", dispensada: true }),
+    });
+    const lista = texts(html);
+    expect(lista).toContain("Aprovação dispensada");
+    expect(lista).toContain("Enviar ao cliente");
+    expect(lista).not.toContain("Enviar para aprovação");
+    expect(html.match(/bg-primary text-primary-foreground/g)).toHaveLength(1);
+    expect(html).toMatch(/bg-primary text-primary-foreground[^"]*"[^>]*>(?:<svg[^>]*>.*?<\/svg>)?Enviar ao cliente<\/button>/);
+  });
+
+  it("sem a dispensa do servidor, a RV de execução passa pela aprovação e não mostra a marca", () => {
+    const html = render({
+      dados: { ...DADOS, tipoRv: "execucao", etapa: "execucao_a_orcar" },
+      acoes: acoesDoOrcamento({ status: "rascunho", role: "comercial", uid: "u-gui", autorUid: "u-gui", tipoRv: "execucao", dispensada: false }),
+    });
+    expect(texts(html)).toContain("Enviar para aprovação");
+    expect(texts(html)).not.toContain("Aprovação dispensada");
+  });
+
+  it("RV seguinte em rascunho: Descartar RV entre as secundárias, sem virar a principal", () => {
+    const html = render({
+      acoes: acoesDoOrcamento({ status: "rascunho", role: "comercial", uid: "u-gui", autorUid: "u-gui", descartavel: true }),
+    });
+    const lista = texts(html);
+    expect(lista.slice(lista.indexOf("Salvar"), lista.indexOf("Salvar") + 3)).toEqual(["Salvar", "Descartar RV", "Duplicar"]);
+    expect(html.match(/bg-primary text-primary-foreground/g)).toHaveLength(1);
+  });
+
+  it("sem legenda: a RV enviada só tem rótulos, dados e ações", () => {
+    const lista = texts(enviada());
+    expect(lista.slice(0, 24)).toEqual([
+      "Comercial",
+      "Orçamentos",
+      "Contratos",
+      "Autorizações",
+      "Medições",
+      "10045",
+      "Aguardando cliente",
+      "Proposta",
+      "Itaú Unibanco",
+      "·",
+      "Contrato Itaú · até 30/06/2027",
+      "·",
+      "Guilherme",
+      "LPU Itaú v2.0",
+      "Comercial",
+      "Data-base 14/10/2026",
+      "Total",
+      "R$ 1.864,00",
+      "Enviado · 21/10 10:02",
+      "Duplicar",
+      "PDF",
+      "Fechado",
+      "Revisar",
+      "Perdido",
+    ]);
   });
 });

@@ -43,6 +43,8 @@ export const ROTA_CONTRATOS = "/comercial/contratos";
  * dele é da Fase 7.
  */
 export const ROTA_AUTORIZACOES = "/comercial/autorizacoes";
+/** Aba Medições do módulo (parte 16b): a medição mensal de cada contrato e competência. */
+export const ROTA_MEDICOES = "/comercial/medicoes";
 
 /**
  * Telas do Comercial que já existem no app. Cada parte nova acrescenta a dela:
@@ -56,6 +58,7 @@ export const TELAS_DO_COMERCIAL: readonly string[] = [
   ROTA_CLIENTES,
   ROTA_CONTRATOS,
   ROTA_AUTORIZACOES,
+  ROTA_MEDICOES,
 ];
 
 /** Rotas do Comercial que o App registra: nenhuma fora da liberação. */
@@ -109,7 +112,7 @@ export const ABAS_DO_COMERCIAL: readonly AbaDoComercial[] = [
   { id: "orcamentos", rotulo: "Orçamentos", href: ROTA_COMERCIAL, tambem: [ROTA_ORCAMENTO, ROTA_APROVAR, ROTA_DOCUMENTO] },
   { id: "contratos", rotulo: "Contratos", href: ROTA_CONTRATOS },
   { id: "autorizacoes", rotulo: "Autorizações", href: ROTA_AUTORIZACOES },
-  { id: "medicoes", rotulo: "Medições", href: "/comercial/medicoes" },
+  { id: "medicoes", rotulo: "Medições", href: ROTA_MEDICOES },
 ];
 
 /** Abas com tela; a que ainda não tem fica oculta. */
@@ -126,4 +129,22 @@ export function hrefDoContrato(contratoId: string, telas: readonly string[] = TE
 export function contratoDaBusca(busca: string): string | null {
   const id = new URLSearchParams(busca.startsWith("?") ? busca.slice(1) : busca).get("id")?.trim();
   return id ? id : null;
+}
+
+/**
+ * Link para a medição de um contrato (e uma competência, AAAA-MM) na aba
+ * Medições (parte 16b), quando a tela existe. O Início leva por aqui.
+ */
+export function hrefDaMedicao(contratoId: string, competencia?: string | null, telas: readonly string[] = TELAS_DO_COMERCIAL): string | null {
+  if (!telas.includes(ROTA_MEDICOES)) return null;
+  const contrato = `contrato=${encodeURIComponent(contratoId)}`;
+  return `${ROTA_MEDICOES}?${competencia ? `${contrato}&competencia=${encodeURIComponent(competencia)}` : contrato}`;
+}
+
+/** O contrato e a competência abertos na aba Medições: `contrato` e `competencia` da busca da URL. */
+export function medicaoDaBusca(busca: string): { contrato: string | null; competencia: string | null } {
+  const parametros = new URLSearchParams(busca.startsWith("?") ? busca.slice(1) : busca);
+  const contrato = parametros.get("contrato")?.trim() || null;
+  const competencia = parametros.get("competencia")?.trim() ?? "";
+  return { contrato, competencia: /^\d{4}-(0[1-9]|1[0-2])$/.test(competencia) ? competencia : null };
 }

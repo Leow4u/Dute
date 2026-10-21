@@ -21,10 +21,10 @@ describe("barra de abas do Comercial", () => {
     expect(render("/comercial/clientes", [ROTA_CLIENTES])).toBe("");
   });
 
-  it("hoje: Orçamentos, Contratos e Autorizações; Orçamentos marcada na fila e na montagem do orçamento", () => {
+  it("hoje: Orçamentos, Contratos, Autorizações e Medições; Orçamentos marcada na fila e na montagem do orçamento", () => {
     for (const atual of [ROTA_COMERCIAL, ROTA_ORCAMENTO]) {
       const html = render(atual, TELAS_DO_COMERCIAL);
-      expect(html.replace(/<[^>]+>/g, "|").split("|").filter(Boolean)).toEqual(["Orçamentos", "Contratos", "Autorizações"]);
+      expect(html.replace(/<[^>]+>/g, "|").split("|").filter(Boolean)).toEqual(["Orçamentos", "Contratos", "Autorizações", "Medições"]);
       expect(html, atual).toMatch(/<a [^>]*aria-current="page"[^>]*>Orçamentos<\/a>/);
       expect(html, atual).not.toMatch(/<a [^>]*aria-current="page"[^>]*>Contratos<\/a>/);
     }
@@ -41,6 +41,12 @@ describe("barra de abas do Comercial", () => {
     const html = render(href("autorizacoes"), TELAS_DO_COMERCIAL);
     expect(html).toMatch(/<a [^>]*aria-current="page"[^>]*>Autorizações<\/a>/);
     expect(html).not.toMatch(/<a [^>]*aria-current="page"[^>]*>Contratos<\/a>/);
+  });
+
+  it("na tela de medições, a aba Medições fica marcada", () => {
+    const html = render(href("medicoes"), TELAS_DO_COMERCIAL);
+    expect(html).toMatch(/<a [^>]*aria-current="page"[^>]*>Medições<\/a>/);
+    expect(html).not.toMatch(/<a [^>]*aria-current="page"[^>]*>Orçamentos<\/a>/);
   });
 
   it("mostra só as abas com tela, com a atual marcada", () => {

@@ -816,24 +816,46 @@ export function payloadDuplicar(numero: string, chave: string): Registro {
 
 // --- Ações da tela ---------------------------------------------------------------------------
 
-/** "enviar": para aprovação (submit); "enviar_cliente": o aprovado ao cliente (send, parte 12a). */
-export type AcaoPrincipal = "enviar" | "aprovar" | "enviar_cliente";
-export type AcaoSecundaria = "salvar" | "duplicar" | "editar" | "devolver" | "aprovar_e_enviar";
+/**
+ * "enviar": para aprovação (submit); "enviar_cliente": o aprovado ao cliente
+ * (send, parte 12a); "enviar_dispensado": a RV de execução em rascunho cuja
+ * aprovação o servidor dispensou, direto ao cliente (send, parte 12b).
+ */
+export type AcaoPrincipal = "enviar" | "aprovar" | "enviar_cliente" | "enviar_dispensado";
+export type AcaoSecundaria = "salvar" | "duplicar" | "editar" | "devolver" | "aprovar_e_enviar" | "descartar_rv";
 export type AcoesDoOrcamento = {
   editavel: boolean;
   principal: AcaoPrincipal | null;
   secundarias: AcaoSecundaria[];
   /** O link do documento A4: a prévia até o envio; depois, o PDF da RV enviada. */
   documento: "previa" | "enviado";
+  /** O servidor dispensa a aprovação desta RV de execução ("Aprovação dispensada"). */
+  aprovacaoDispensada?: true;
 };
 
 /**
- * O que a tela oferece. Rascunho: montar, com "Enviar para aprovação". Para
- * aprovar: só leitura; o owner aprova (principal), devolve (com nota) e tem
- * "Aprovar e enviar"; quem montou puxa de volta com "Editar". Aprovado:
- * "Enviar ao cliente" (grava e só então abre o documento) e "Editar" volta ao
- * rascunho. Enviado, perdido ou cancelado: só leitura (aceite e perda são da
- * parte 10). Duplicar vale sempre; o documento também (prévia até o envio).
+ * O que o envio direto da dispensa espera do servidor: a situação e a edição
+ * que a tela viu, ou, se salvou antes, o rascunho na edição que o servidor
+ * acabou de gravar.
+ */
+export function esperadoDoEnvioDireto(
+  base: { status: StatusOrcamento | string; edicao: number },
+  salvo: { edicao: number } | null,
+): { status: StatusOrcamento; edicao: number } {
+  return salvo ? { status: "rascunho", edicao: salvo.edicao } : { status: base.status as StatusOrcamento, edicao: base.edicao };
+}
+
+/**
+ * O que a tela oferece. Rascunho: montar, com "Enviar para aprovação" (ou,
+ * na RV de execução com a aprovação dispensada pelo servidor, "Enviar ao
+ * cliente" direto). Para aprovar: só leitura; o owner aprova (principal),
+ * devolve (com nota) e tem "Aprovar e enviar"; quem montou puxa de volta com
+ * "Editar". Aprovado: "Enviar ao cliente" (grava e só então abre o documento)
+ * e "Editar" volta ao rascunho. Enviado, perdido ou cancelado: só leitura (o
+ * que vem depois do envio são as ações de depois-do-envio.ts). "Descartar RV"
+ * vale na RV seguinte ainda não enviada (`descartavel`, de
+ * acoesDepoisDoEnvio). Duplicar vale sempre; o documento também (prévia até
+ * o envio).
  */
 export function acoesDoOrcamento(entrada: {
   status: StatusOrcamento | string;
@@ -841,14 +863,29 @@ export function acoesDoOrcamento(entrada: {
   uid: string | null | undefined;
   autorUid: string | null | undefined;
   etapa?: EtapaDemanda;
+  tipoRv?: string;
+  /** quotes.dispensa.dispensada, do servidor. */
+  dispensada?: boolean;
+  /** Há alteração não salva: a dispensa gravada não vale para o que está na tela. */
+  sujo?: boolean;
+  descartavel?: boolean;
 }): AcoesDoOrcamento {
   const documento = entrada.status === "enviado" ? "enviado" : "previa";
   if (entrada.etapa === "perdida" || entrada.etapa === "cancelada") {
     return { editavel: false, principal: null, secundarias: ["duplicar"], documento };
   }
+  const descartar: AcaoSecundaria[] = entrada.descartavel ? ["descartar_rv"] : [];
   switch (entrada.status) {
-    case "rascunho":
-      return { editavel: true, principal: "enviar", secundarias: ["salvar", "duplicar"], documento };
+    case "rascunho": {
+      const dispensada = entrada.tipoRv === "execucao" && entrada.dispensada === true && entrada.sujo !== true;
+      return {
+        editavel: true,
+        principal: dispensada ? "enviar_dispensado" : "enviar",
+        secundarias: ["salvar", ...descartar, "duplicar"],
+        documento,
+        ...(dispensada ? { aprovacaoDispensada: true as const } : {}),
+      };
+    }
     case "para_aprovar": {
       const owner = entrada.role === "owner";
       const autor = Boolean(entrada.uid) && entrada.uid === entrada.autorUid;
@@ -856,11 +893,11 @@ export function acoesDoOrcamento(entrada: {
       if (autor) secundarias.push("editar");
       else if (owner) secundarias.push("devolver");
       if (owner) secundarias.push("aprovar_e_enviar");
-      secundarias.push("duplicar");
+      secundarias.push(...descartar, "duplicar");
       return { editavel: false, principal: owner ? "aprovar" : null, secundarias, documento };
     }
     case "aprovado":
-      return { editavel: false, principal: "enviar_cliente", secundarias: ["editar", "duplicar"], documento };
+      return { editavel: false, principal: "enviar_cliente", secundarias: ["editar", ...descartar, "duplicar"], documento };
     default:
       return { editavel: false, principal: null, secundarias: ["duplicar"], documento };
   }
