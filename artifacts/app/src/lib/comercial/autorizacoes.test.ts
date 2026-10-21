@@ -13,6 +13,7 @@ import {
   FILTROS_DE_IDADE,
   MARCAS_AUTORIZACAO,
   ROTULO_DO_FILTRO,
+  SITUACOES_A_LER,
   TIPOS_AUTORIZACAO_CLIENTE,
   alertaDePrazoDePerda,
   alternarMarcacao,
@@ -635,6 +636,148 @@ describe("autorizadas, a faturar", () => {
     expect(busca("po 0000001")).toEqual(["aut_2"]);
     expect(busca("10035")).toEqual(["aut_1"]);
     expect(busca("btg")).toEqual(["aut_2"]);
+  });
+});
+
+describe("autorização da medição aprovada: o mesmo formato da registrada à mão", () => {
+  const SAFRA = "SAFRA";
+  const nomes = new Map([...NOMES, [SAFRA, "Safra"]]);
+  /** O documento como a medição aprovada grava hoje (documentoDaAutorizacao). */
+  const daMedicao = {
+    customer_code: SAFRA,
+    contrato_id: "safra-2026",
+    tipo: "medicao_aprovada",
+    origem: "medicao",
+    status: "registrada",
+    pedido: null,
+    aceite: null,
+    recebida_em: "2026-11-03T13:30:00.000Z",
+    valor_cents: 480000,
+    demandas: [],
+    demanda_numeros: ["10050", "10051"],
+    demandas_pendentes: [{ numero: "10052", motivo: "proposta sem fechamento" }],
+    medicao_id: "safra-2026_2026-10",
+    competencia: "2026-10",
+    marcas: [],
+    centro_custo: null,
+    registrada_em: "2026-11-03T13:30:00.000Z",
+    nf_ids: [],
+  };
+  /** Como a medição gravava antes da unificação: a_faturar, demandas como números e total_cents. */
+  const antiga = {
+    customer_code: SAFRA,
+    contrato_id: "safra-2026",
+    tipo: "medicao_aprovada",
+    origem: "medicao",
+    status: "a_faturar",
+    demandas: ["10050"],
+    demandas_a_faturar: ["10050"],
+    demandas_pendentes: [],
+    total_cents: 118000,
+    medicao_id: "safra-2026_2026-09",
+    competencia: "2026-09",
+    recebida_em: "2026-10-05T13:30:00.000Z",
+    registrada_em: "2026-10-05T13:30:00.000Z",
+  };
+  const contexto = { nomes, demandas: [], contratos: CONTRATOS, hoje: "2026-11-10" };
+
+  it("lê os números de demanda_numeros, o valor de valor_cents e a situação registrada", () => {
+    const autorizacao = autorizacaoDoRegistro("aut_safra-2026_2026-10", daMedicao)!;
+    expect(autorizacao.status).toBe("registrada");
+    expect(autorizacao.valorCents).toBe(480000);
+    expect(autorizacao.demandas.map((demanda) => [demanda.numero, demanda.rotulo, demanda.rv, demanda.valorCents])).toEqual([
+      ["10050", "10050", null, null],
+      ["10051", "10051", null, null],
+    ]);
+    expect([autorizacao.origem, autorizacao.competencia, autorizacao.medicaoId]).toEqual(["medicao", "2026-10", "safra-2026_2026-10"]);
+  });
+
+  it("lê também o formato antigo: a_faturar vira registrada, demandas como números, total_cents como valor", () => {
+    const autorizacao = autorizacaoDoRegistro("aut_antiga", antiga)!;
+    expect(autorizacao.status).toBe("registrada");
+    expect(autorizacao.valorCents).toBe(118000);
+    expect(autorizacao.demandas.map((demanda) => demanda.numero)).toEqual(["10050"]);
+  });
+
+  it("a registrada à mão e a da medição aparecem juntas em Autorizadas a faturar, a mais recente primeiro", () => {
+    const todas = [
+      autorizacaoDoRegistro("aut_1", {
+        customer_code: ITAU,
+        tipo: "pedido_aceite",
+        pedido: "4500000001",
+        aceite: "1000000001",
+        recebida_em: "2026-10-14",
+        valor_cents: 3120460,
+        demandas: [{ numero: "10033", rv: 2, rotulo: "10033 – RV02", valor_cents: 3120460 }],
+        demanda_numeros: ["10033"],
+        centro_custo: "41220",
+        marcas: [],
+        status: "registrada",
+        registrada_em: "2026-10-14T15:00:00.000Z",
+        nf_ids: [],
+      })!,
+      autorizacaoDoRegistro("aut_2", {
+        customer_code: BTG,
+        tipo: "portal",
+        pedido: "PO 0000001",
+        recebida_em: "2026-10-19",
+        valor_cents: 795000,
+        demandas: [{ numero: "10040", rv: 2, rotulo: "10040 – RV02", valor_cents: 790000 }],
+        demanda_numeros: ["10040"],
+        marcas: ["valor_diverge"],
+        status: "registrada",
+        registrada_em: "2026-10-19T12:00:00.000Z",
+        nf_ids: [],
+      })!,
+      autorizacaoDoRegistro("aut_safra-2026_2026-10", daMedicao)!,
+      autorizacaoDoRegistro("aut_antiga", antiga)!,
+    ];
+    const linhas = autorizadasAFaturar(todas, contexto);
+    expect(linhas.map((linha) => linha.id)).toEqual(["aut_safra-2026_2026-10", "aut_2", "aut_1", "aut_antiga"]);
+    const medicao = linhas[0];
+    expect(medicao).toEqual({
+      id: "aut_safra-2026_2026-10",
+      pedido: "Medição 10/2026",
+      sub: "Medição aprovada",
+      cliente: "Safra",
+      demandas: ["10050", "10051"],
+      marcas: [],
+      info: "",
+      valorCents: 480000,
+      quando: "autorizada 03/11",
+    });
+    expect(linhas[3].pedido).toBe("Medição 09/2026");
+    expect(totalDasAutorizadas(linhas)).toBe(480000 + 795000 + 3120460 + 118000);
+  });
+
+  it("a medição aprovada sem demanda também aparece, e a cancelada não", () => {
+    const semDemanda = autorizacaoDoRegistro("aut_vazia", { ...daMedicao, demanda_numeros: [], competencia: "2026-08" })!;
+    const cancelada = autorizacaoDoRegistro("aut_cancelada", { ...daMedicao, status: "cancelada" })!;
+    const linhas = autorizadasAFaturar([semDemanda, cancelada], contexto);
+    expect(linhas.map((linha) => [linha.id, linha.demandas])).toEqual([["aut_vazia", []]]);
+  });
+
+  it("a busca acha a medição pela competência e pelo cliente", () => {
+    const todas = [autorizacaoDoRegistro("aut_safra-2026_2026-10", daMedicao)!, autorizacaoDoRegistro("aut_antiga", antiga)!];
+    const busca = (termo: string) => autorizadasAFaturar(todas, { ...contexto, busca: termo }).map((linha) => linha.id);
+    expect(busca("10/2026")).toEqual(["aut_safra-2026_2026-10"]);
+    expect(busca("safra")).toEqual(["aut_safra-2026_2026-10", "aut_antiga"]);
+    expect(busca("10051")).toEqual(["aut_safra-2026_2026-10"]);
+  });
+
+  it("a consulta lê as registradas e, por tolerância, as a_faturar do formato antigo da medição", () => {
+    expect([...SITUACOES_A_LER]).toEqual(["registrada", "a_faturar"]);
+    const pagina = readFileSync(resolve(here, "../../pages/comercial/autorizacoes.tsx"), "utf8");
+    expect(pagina).toMatch(/where\("status", "in", \[\.\.\.SITUACOES_A_LER\]\)/);
+  });
+
+  it("os campos que a tela lê existem no documento único do servidor (functions/comercial)", () => {
+    const fonte = readFileSync(resolve(here, "../../../../../functions/comercial/src/domain/autorizacao.ts"), "utf8");
+    const corpo = fonte.slice(fonte.indexOf("export function documentoDaAutorizacao"), fonte.indexOf("export function statusDaAutorizacao"));
+    for (const campo of ["demanda_numeros", "valor_cents", "competencia", "medicao_id", "origem", "status", "tipo", "recebida_em", "nf_ids", "marcas", "centro_custo"]) {
+      expect(corpo, campo).toMatch(new RegExp(`\\b${campo}:`));
+    }
+    expect(corpo).toMatch(/status: "registrada"/);
   });
 });
 

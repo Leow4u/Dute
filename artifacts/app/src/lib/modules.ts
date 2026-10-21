@@ -4,6 +4,7 @@ import {
   Briefcase,
   CalendarDays,
   ClipboardCheck,
+  FileCheck,
   FileText,
   Home,
   Inbox,
@@ -23,6 +24,7 @@ import { PAPEIS, isPapel, type Papel } from "@workspace/dominio";
 
 import {
   COMERCIAL_ROLES,
+  ROTA_AUTORIZACOES,
   ROTA_CLIENTES,
   ROTA_COMERCIAL,
   ROTA_CONTRATOS,
@@ -313,8 +315,8 @@ export const APP_MODULES: AppModule[] = [
       }),
     ],
   }),
-  // Comercial (docs/plataforma/fase-6-comercial.md, partes 11, 13 e 14): só
-  // onde a liberação do Comercial está ligada. A fila de orçamentos é a casa
+  // Comercial (docs/plataforma/fase-6-comercial.md, partes 11, 13, 14 e 15b):
+  // só onde a liberação do Comercial está ligada. A fila de orçamentos é a casa
   // (/comercial, rota exata para não acender em Clientes e Contratos).
   appModule({
     id: "comercial",
@@ -347,6 +349,13 @@ export const APP_MODULES: AppModule[] = [
         label: "Contratos",
         href: ROTA_CONTRATOS,
         icon: FileText,
+        roles: COMMERCIAL_ROLES,
+      }),
+      navRoute({
+        id: "comercial-autorizacoes",
+        label: "Autorizações",
+        href: ROTA_AUTORIZACOES,
+        icon: FileCheck,
         roles: COMMERCIAL_ROLES,
       }),
     ],

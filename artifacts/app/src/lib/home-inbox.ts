@@ -1,6 +1,8 @@
 import type { OrcamentoParaAprovarNoInicio } from "./comercial/aprovar";
-import type { AlertaDoInicio } from "./comercial/contratos";
-import { ROTA_APROVAR, abreComercial, aprovaOrcamento, hrefDoContrato } from "./comercial/navegacao";
+import type { PendenciasDoInicio } from "./comercial/autorizacoes";
+import { dataBr } from "./comercial/clientes";
+import { quandoEmDias, type AlertaDoInicio } from "./comercial/contratos";
+import { ROTA_APROVAR, ROTA_AUTORIZACOES, abreComercial, aprovaOrcamento, hrefDoContrato } from "./comercial/navegacao";
 import { COMERCIAL_LIBERADO } from "./liberacao";
 import {
   canAccessModule,
@@ -129,12 +131,56 @@ function contractItems(alertas: readonly AlertaDoInicio[]): HomeInboxItem[] {
   });
 }
 
+/**
+ * Autorizações de faturamento do Comercial (parte 15b) só para quem abre o
+ * Comercial: owner, admin e comercial, onde a liberação está ligada. O
+ * financeiro registra pela callable, mas a tela e o Início dele são da Fase
+ * 7. É também o `enabled` da consulta: para os outros, nada é lido.
+ */
+export function veAutorizacoesNoInicio(
+  role: ProfileRole | null | undefined,
+  comercialLiberado: boolean = COMERCIAL_LIBERADO,
+): boolean {
+  return abreComercial(role, comercialLiberado);
+}
+
+/**
+ * O prazo de perda de cada demanda (o mais próximo primeiro) e um item com
+ * os executados esperando a autorização há mais de 30 dias, levando à tela de
+ * Autorizações.
+ */
+function authorizationItems(pendencias: PendenciasDoInicio): HomeInboxItem[] {
+  const items: HomeInboxItem[] = pendencias.prazos.map((prazo) => ({
+    id: `autorizacoes:prazo:${prazo.numero}`,
+    tone: prazo.critico ? "critical" : "attention",
+    title: prazo.vencido
+      ? `Prazo de faturamento vencido em ${dataBr(prazo.limite)} · ${prazo.cliente}`
+      : `Faturar até ${dataBr(prazo.limite)} · ${prazo.cliente}`,
+    detail: `${prazo.rotulo} · ${quandoEmDias(prazo.restantes)}`,
+    href: ROTA_AUTORIZACOES,
+    actionLabel: "Abrir autorizações",
+  }));
+  const esperando = pendencias.esperandoMaisDe30;
+  if (esperando.length) {
+    items.push({
+      id: "autorizacoes:mais-de-30",
+      tone: "attention",
+      title: `${plural(esperando.length, "executado", "executados")} esperando autorização há mais de 30 dias`,
+      detail: listPreview(esperando.map((item) => item.rotulo), 3),
+      href: ROTA_AUTORIZACOES,
+      actionLabel: "Abrir autorizações",
+    });
+  }
+  return items;
+}
+
 export function buildHomeInbox({
   role,
   ops,
   requests,
   contratos,
   paraAprovar,
+  autorizacoes,
   comercialLiberado = COMERCIAL_LIBERADO,
 }: {
   role: ProfileRole | null | undefined;
@@ -144,6 +190,8 @@ export function buildHomeInbox({
   contratos?: readonly AlertaDoInicio[];
   /** Orçamentos em "Para aprovar" (lib/comercial/inicio.ts, lerOrcamentosParaAprovar). */
   paraAprovar?: readonly OrcamentoParaAprovarNoInicio[];
+  /** Pendências das autorizações (lib/comercial/autorizacoes.ts, autorizacoesParaOInicio). */
+  autorizacoes?: PendenciasDoInicio;
   comercialLiberado?: boolean;
 }): HomeInbox {
   const orders = groupWarehouseOrders(ops).filter(
@@ -214,6 +262,10 @@ export function buildHomeInbox({
 
   if (contratos?.length && veContratosNoInicio(role, comercialLiberado)) {
     items.push(...contractItems(contratos));
+  }
+
+  if (autorizacoes && veAutorizacoesNoInicio(role, comercialLiberado)) {
+    items.push(...authorizationItems(autorizacoes));
   }
 
   if (toPick.length) {

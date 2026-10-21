@@ -300,7 +300,7 @@ function secao(html: string, rotulo: string): string {
 
 describe("tela de autorizações", () => {
   it("sem legenda: abas, fila, painel e autorizadas só têm rótulos, dados e ações", () => {
-    expect(texts(render())).toEqual(["Comercial", "Contratos", "Autorizações", ...FILA, ...PAINEL, ...AUTORIZADAS_TEXTOS]);
+    expect(texts(render())).toEqual(["Comercial", "Orçamentos", "Contratos", "Autorizações", ...FILA, ...PAINEL, ...AUTORIZADAS_TEXTOS]);
   });
 
   it("identidade v3 dentro do layout do app, e uma ação principal só: Registrar autorização", () => {
@@ -309,6 +309,38 @@ describe("tela de autorizações", () => {
     const principais = html.match(/<button[^>]*class="[^"]*bg-primary text-primary-foreground[^"]*"[^>]*>[\s\S]*?<\/button>/g) ?? [];
     expect(principais).toHaveLength(1);
     expect(texts(principais[0] ?? "")).toEqual(["Registrar autorização"]);
+  });
+
+  it("a autorização da medição aprovada aparece junto das outras, com Cancelar e sem legenda", () => {
+    const daMedicao = autorizacaoDoRegistro("aut_safra-2026_2026-10", {
+      customer_code: ITAU,
+      contrato_id: "itau-2026",
+      tipo: "medicao_aprovada",
+      origem: "medicao",
+      status: "registrada",
+      recebida_em: "2026-10-20T13:30:00.000Z",
+      valor_cents: 480000,
+      demandas: [],
+      demanda_numeros: ["10050", "10051"],
+      competencia: "2026-09",
+      medicao_id: "itau-2026_2026-09",
+      registrada_em: "2026-10-20T13:30:00.000Z",
+    })!;
+    const lista = autorizadasAFaturar([...AUTORIZACOES, daMedicao], { nomes: NOMES, demandas: A_FATURAR, contratos: CONTRATOS, hoje: HOJE });
+    const secaoAutorizadas = texts(secao(render({ autorizadas: lista }), "Autorizadas, a faturar"));
+    expect(secaoAutorizadas.slice(0, 3)).toEqual(["Autorizadas · a faturar", "3", "R$ 43.954,60"]);
+    const inicio = secaoAutorizadas.indexOf("Medição 09/2026");
+    expect(secaoAutorizadas.slice(inicio, inicio + 8)).toEqual([
+      "Medição 09/2026",
+      "Medição aprovada",
+      "Itaú Unibanco",
+      "10050",
+      "10051",
+      "R$ 4.800,00",
+      "autorizada 20/10",
+      "A faturar",
+    ]);
+    expect(secaoAutorizadas.filter((texto) => texto === "Cancelar")).toHaveLength(3);
   });
 
   it("a aba Autorizações aparece marcada na barra do módulo", () => {
@@ -381,7 +413,7 @@ describe("tela de autorizações", () => {
     expect(html).not.toContain('role="checkbox"');
     expect(html).not.toContain('aria-label="Registrar autorização de faturamento"');
     expect(html).not.toMatch(/bg-primary text-primary-foreground/);
-    expect(texts(html).slice(0, 4)).toEqual(["Comercial", "Contratos", "Autorizações", "Nova autorização"]);
+    expect(texts(html).slice(0, 5)).toEqual(["Comercial", "Orçamentos", "Contratos", "Autorizações", "Nova autorização"]);
   });
 
   it("registrada: a confirmação aparece no painel; o erro do servidor também", () => {

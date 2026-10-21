@@ -9,17 +9,21 @@ import {
   chaveDoNumeroDoCliente,
   completarTomador,
   diasEsperandoAutorizacao,
+  documentoDaAutorizacao,
   faixaDeIdade,
   inicioDaEspera,
   lerTomador,
   marcasDaAutorizacao,
   marcosDoPrazoDePerda,
+  numerosDaAutorizacao,
   problemaDaDemandaParaAutorizar,
   problemaDoTipoDaAutorizacao,
   saldoDaAutorizacao,
+  statusDaAutorizacao,
+  valorDaAutorizacao,
 } from "./autorizacao.js";
 import { somarDias } from "./contratos-datas.js";
-import { etapaDaDemanda } from "./demanda.js";
+import { autorizacoesDaDemanda, etapaDaDemanda } from "./demanda.js";
 
 /**
  * Regras puras da autorização de faturamento (parte 15): a idade na fila de
@@ -349,5 +353,90 @@ describe("a etapa da demanda com a autorização", () => {
     const aFaturar = { ...demandaValidada, validacao: { ...demandaValidada.validacao, etapa: "a_faturar" } };
     assert.equal(etapaDaDemanda(aFaturar, quote), "a_faturar");
     assert.equal(etapaDaDemanda({ ...demandaValidada, autorizacao_ids: ["aut_1"], perda: { motivo: "cancelado_cliente" } }, quote), "perdida");
+  });
+});
+
+describe("um só formato para a autorização (registrada à mão ou da medição aprovada)", () => {
+  const comum = {
+    customer_code: "SAFRA",
+    contrato_id: "safra-2026",
+    recebida_em: "2026-11-03",
+    registrada_por: "uid_1",
+    registrada_por_papel: "comercial",
+    registrada_em: "2026-11-03T13:30:00.000Z",
+    operation_id: "op_1",
+  };
+  const manual = documentoDaAutorizacao({
+    ...comum,
+    id: "aut_manual",
+    tipo: "pedido_aceite",
+    valor_cents: 2_074_880,
+    soma_cents: 2_074_880,
+    saldo_cents: 2_074_880,
+    pedido: "PO 7781",
+    aceite: "AC 204",
+    chave_pedido_aceite: "PO7781|AC204",
+    demandas: [{ numero: "10045", rv: 2, rotulo: "10045 – RV02", valor_cents: 2_074_880 }],
+    demanda_numeros: ["10045"],
+    marcas: [],
+  });
+  const medicao = documentoDaAutorizacao({
+    ...comum,
+    id: "aut_safra-2026_2026-10",
+    tipo: "medicao_aprovada",
+    valor_cents: 480_000,
+    demanda_numeros: ["10050", "10051"],
+    origem: "medicao",
+    medicao_id: "safra-2026_2026-10",
+    competencia: "2026-10",
+    demandas_pendentes: [{ numero: "10052", motivo: "proposta sem fechamento" }],
+    contato_id: "ct_safra",
+    email_link: "https://outlook.office.com/mail/id/aprovacao",
+  });
+
+  it("os dois têm exatamente os mesmos campos, na situação registrada", () => {
+    assert.deepEqual(Object.keys(medicao).sort(), Object.keys(manual).sort());
+    assert.equal(manual.status, "registrada");
+    assert.equal(medicao.status, "registrada");
+    assert.equal(manual.origem, "manual");
+    assert.equal(medicao.origem, "medicao");
+  });
+
+  it("a medição guarda o valor aprovado em valor_cents e os números em demanda_numeros", () => {
+    assert.equal(medicao.valor_cents, 480_000);
+    assert.deepEqual(medicao.demanda_numeros, ["10050", "10051"]);
+    assert.deepEqual(medicao.demandas, []);
+    assert.equal(medicao.total_cents, undefined);
+    assert.equal(medicao.demandas_a_faturar, undefined);
+    assert.deepEqual(medicao.marcas, []);
+    assert.deepEqual([medicao.pedido, medicao.aceite, medicao.tomador_documento], [null, null, null]);
+    assert.deepEqual([medicao.nf_ids, medicao.enviada_portal_em, medicao.omie_lancada_em], [[], null, null]);
+    assert.deepEqual([medicao.cancelada_em, medicao.motivo_cancelamento], [null, null]);
+  });
+
+  it("lê a situação, os números e o valor também do formato antigo da medição", () => {
+    assert.equal(statusDaAutorizacao({ status: "registrada" }), "registrada");
+    assert.equal(statusDaAutorizacao({ status: "cancelada" }), "cancelada");
+    assert.equal(statusDaAutorizacao({ status: "a_faturar" }), "registrada", "formato antigo da medição aprovada");
+    assert.equal(statusDaAutorizacao({ status: "outra" }), null);
+    assert.equal(statusDaAutorizacao({}), null);
+
+    assert.deepEqual(numerosDaAutorizacao(manual), ["10045"]);
+    assert.deepEqual(numerosDaAutorizacao(medicao), ["10050", "10051"]);
+    assert.deepEqual(numerosDaAutorizacao({ demandas: ["10050", "10051", "10050"] }), ["10050", "10051"], "antigo: lista de números");
+    assert.deepEqual(numerosDaAutorizacao({ demandas: [{ numero: "10045" }, { numero: 7 }, "x"] }), ["10045"], "só números de demanda");
+    assert.deepEqual(numerosDaAutorizacao({}), []);
+
+    assert.equal(valorDaAutorizacao(manual), 2_074_880);
+    assert.equal(valorDaAutorizacao({ total_cents: 480_000 }), 480_000, "antigo: total_cents");
+    assert.equal(valorDaAutorizacao({ valor_cents: -1 }), null);
+    assert.equal(valorDaAutorizacao({}), null);
+  });
+
+  it("a demanda presa à autorização antiga (autorizacao_id) também conta como autorizada", () => {
+    assert.deepEqual(autorizacoesDaDemanda({ autorizacao_ids: ["aut_1"] }), ["aut_1"]);
+    assert.deepEqual(autorizacoesDaDemanda({ autorizacao_id: "aut_medicao" } as never), ["aut_medicao"]);
+    assert.deepEqual(autorizacoesDaDemanda({ autorizacao_ids: ["aut_1"], autorizacao_id: "aut_1" } as never), ["aut_1"]);
+    assert.deepEqual(autorizacoesDaDemanda({ autorizacao_ids: ["aut_1"], autorizacao_id: "aut_2" } as never), ["aut_1", "aut_2"]);
   });
 });

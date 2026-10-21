@@ -367,15 +367,20 @@ export const COMERCIAL_EVENT_PAYLOADS = {
       medicao_id: id.optional(),
     })
     .strict(),
-  /** Cancelada: as demandas sem outra autorização voltam a aguardar (devolvidas). */
+  /**
+   * Cancelada: as demandas sem outra autorização voltam a aguardar (devolvidas).
+   * A da medição aprovada (parte 15b) pode não ter demanda e traz a medição; as
+   * demandas dela voltam a esperar a medição.
+   */
   "client_authorization.cancelled": z
     .object({
       autorizacao_id: id,
       tipo: z.enum(TIPOS_AUTORIZACAO_CLIENTE),
       contrato_id: id.nullable(),
-      demandas: z.array(numero).min(1).max(200),
+      demandas: z.array(numero).max(200),
       devolvidas: z.array(numero).max(200),
       marcas: z.array(z.enum(MARCAS_AUTORIZACAO)).max(MARCAS_AUTORIZACAO.length),
+      medicao_id: id.optional(),
     })
     .strict(),
 
@@ -730,7 +735,11 @@ const TEMPLATES: Templates = {
   "client_authorization.cancelled": (p) => ({
     title: "Autorização do cliente cancelada",
     description:
-      p.devolvidas.length > 0
+      p.tipo === "medicao_aprovada"
+        ? p.demandas.length === 0
+          ? `${TIPO_AUTORIZACAO_ROTULO[p.tipo]} cancelada, sem demanda ligada.`
+          : `${TIPO_AUTORIZACAO_ROTULO[p.tipo]} desligada de ${demandasRotulo(p.demandas.length)}; ${p.devolvidas.length === 1 ? "1 volta" : `${p.devolvidas.length} voltam`} a esperar a medição.`
+        : p.devolvidas.length > 0
         ? `${TIPO_AUTORIZACAO_ROTULO[p.tipo]} desligada de ${demandasRotulo(p.demandas.length)}; ${demandasRotulo(p.devolvidas.length)} volta${p.devolvidas.length === 1 ? "" : "m"} a aguardar autorização.`
         : `${TIPO_AUTORIZACAO_ROTULO[p.tipo]} desligada de ${demandasRotulo(p.demandas.length)}; todas seguem com outra autorização.`,
   }),

@@ -22,7 +22,19 @@ export type CallableDoContrato = (typeof CALLABLES_DO_CONTRATO)[number];
 export const CALLABLES_DO_ORCAMENTO = ["saveQuote", "advanceQuote"] as const;
 export type CallableDoOrcamento = (typeof CALLABLES_DO_ORCAMENTO)[number];
 
-export type CallableDoComercial = CallableDoCadastro | CallableDoContrato | CallableDoOrcamento;
+/**
+ * Autorização de faturamento (parte 15a, domain/autorizacoes.ts): registrar e
+ * cancelar. A chave vai em `request_id`; o servidor confere a etapa de cada
+ * demanda e recalcula o valor das RVs.
+ */
+export const CALLABLES_DA_AUTORIZACAO = ["recordAuthorization"] as const;
+export type CallableDaAutorizacao = (typeof CALLABLES_DA_AUTORIZACAO)[number];
+
+export type CallableDoComercial =
+  | CallableDoCadastro
+  | CallableDoContrato
+  | CallableDoOrcamento
+  | CallableDaAutorizacao;
 
 /** Chave nova por intenção de gravar (um diálogo aberto, um clique de desativar). */
 export function novaChave(): string {

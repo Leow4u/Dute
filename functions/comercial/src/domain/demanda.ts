@@ -105,12 +105,20 @@ export type EstadoDaDemanda = {
   validacao?: unknown;
   /** As autorizações de faturamento registradas (e não canceladas) que cobrem a demanda (parte 15). */
   autorizacao_ids?: unknown;
+  /** Formato antigo da medição aprovada (um id só); lido como se estivesse em autorizacao_ids. */
+  autorizacao_id?: unknown;
 };
 
-/** As autorizações de faturamento ativas da demanda (ids de client_authorizations). */
-export function autorizacoesDaDemanda(demanda: Pick<EstadoDaDemanda, "autorizacao_ids">): string[] {
-  const ids = demanda.autorizacao_ids;
-  return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string" && id.length > 0) : [];
+/**
+ * As autorizações de faturamento ativas da demanda (ids de client_authorizations):
+ * `autorizacao_ids` e, nas demandas que a medição aprovada ligou antes da
+ * unificação, o `autorizacao_id` antigo.
+ */
+export function autorizacoesDaDemanda(demanda: Pick<EstadoDaDemanda, "autorizacao_ids" | "autorizacao_id">): string[] {
+  const ids = Array.isArray(demanda.autorizacao_ids) ? demanda.autorizacao_ids : [];
+  const antigo = demanda.autorizacao_id;
+  const todos = typeof antigo === "string" ? [...ids, antigo] : ids;
+  return [...new Set(todos.filter((id): id is string => typeof id === "string" && id.length > 0))];
 }
 
 /** A RV fechada pelo cliente, ou null. */

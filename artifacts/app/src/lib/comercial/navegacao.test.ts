@@ -19,6 +19,7 @@ import {
   APROVADOR_ROLES,
   COMERCIAL_ROLES,
   ROTA_APROVAR,
+  ROTA_AUTORIZACOES,
   ROTA_CLIENTES,
   ROTA_COMERCIAL,
   ROTA_CONTRATOS,
@@ -71,10 +72,11 @@ describe("rotas do Comercial", () => {
       ROTA_APROVAR,
       ROTA_CLIENTES,
       ROTA_CONTRATOS,
+      ROTA_AUTORIZACOES,
     ]);
   });
 
-  it("o App registra exatamente as rotas do Comercial: a fila, a montagem, o documento, a aprovação, Clientes e Contratos", () => {
+  it("o App registra exatamente as rotas do Comercial: a fila, a montagem, o documento, a aprovação, Clientes, Contratos e Autorizações", () => {
     expect(APP_PATHS.filter(doComercial)).toEqual(rotasDoComercial(LIBERADO));
   });
 
@@ -94,6 +96,7 @@ describe("rotas do Comercial", () => {
       { path: ROTA_APROVAR },
       { path: ROTA_CLIENTES },
       { path: ROTA_CONTRATOS },
+      { path: ROTA_AUTORIZACOES },
       { path: "/comercial/inexistente" },
     ];
     expect(soComComercialLiberado(rotas, DESLIGADO)).toEqual([]);
@@ -104,6 +107,7 @@ describe("rotas do Comercial", () => {
       ROTA_APROVAR,
       ROTA_CLIENTES,
       ROTA_CONTRATOS,
+      ROTA_AUTORIZACOES,
     ]);
   });
 
@@ -113,6 +117,16 @@ describe("rotas do Comercial", () => {
       const permitida = getRouteProfileRoles(ROTA_CONTRATOS).includes(role);
       expect(registrada && permitida, `${role} ${liberado}`).toBe(abreComercial(role, liberado));
     }
+  });
+
+  it.each(PAPEIS)("%s: a rota de Autorizações (parte 15b) abre só para owner, admin e comercial, com a liberação", (role) => {
+    // O financeiro registra pela callable e lê pelas regras; a tela dele é da Fase 7.
+    for (const liberado of [LIBERADO, DESLIGADO]) {
+      const existe = rotasDoComercial(liberado).includes(ROTA_AUTORIZACOES);
+      const permitida = getRouteProfileRoles(ROTA_AUTORIZACOES).includes(role);
+      expect(existe && permitida, `${role} ${liberado}`).toBe(abreComercial(role, liberado));
+    }
+    expect(getRouteProfileRoles(ROTA_AUTORIZACOES)).not.toContain("financeiro");
   });
 
   it("owner, admin e comercial abrem; nenhum outro papel (a aprovação, só o owner)", () => {
@@ -150,7 +164,7 @@ describe("rotas do Comercial", () => {
   });
 
   it("/comercial é a fila de orçamentos (parte 11): sem redirecionar para Clientes", () => {
-    expect(TELAS_DO_COMERCIAL).toEqual([ROTA_COMERCIAL, ROTA_ORCAMENTO, ROTA_DOCUMENTO, ROTA_APROVAR, ROTA_CLIENTES, ROTA_CONTRATOS]);
+    expect(TELAS_DO_COMERCIAL).toEqual([ROTA_COMERCIAL, ROTA_ORCAMENTO, ROTA_DOCUMENTO, ROTA_APROVAR, ROTA_CLIENTES, ROTA_CONTRATOS, ROTA_AUTORIZACOES]);
     expect(APP_SOURCE).not.toMatch(/ComercialRedirect|DESTINO_DO_COMERCIAL/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/comercial", ComercialOrcamentos\)/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/comercial\/orcamento", ComercialOrcamento\)/);
@@ -185,7 +199,7 @@ describe("link para a ficha do contrato", () => {
 
 describe("menu do Comercial", () => {
   it("comercial vê só o grupo Comercial, com Orçamentos, Clientes e Contratos dentro", () => {
-    expect(menu("comercial", LIBERADO)).toEqual([{ label: "Comercial", routes: ["Orçamentos", "Clientes", "Contratos"] }]);
+    expect(menu("comercial", LIBERADO)).toEqual([{ label: "Comercial", routes: ["Orçamentos", "Clientes", "Contratos", "Autorizações"] }]);
     const [comercial] = getNavigationForProfileRole("comercial", null, LIBERADO);
     expect(comercial.href).toBe(ROTA_COMERCIAL);
     expect(isModuleGroup(comercial)).toBe(true);
@@ -253,6 +267,7 @@ describe("menu do Comercial", () => {
     expect(acesos(ROTA_COMERCIAL)).toEqual(["Orçamentos"]);
     expect(acesos(ROTA_CLIENTES)).toEqual(["Clientes"]);
     expect(acesos(ROTA_CONTRATOS)).toEqual(["Contratos"]);
+    expect(acesos(ROTA_AUTORIZACOES)).toEqual(["Autorizações"]);
   });
 
   it("o menu (lateral, suspenso e do celular) acende pelo item, com as telas dele", () => {
@@ -273,7 +288,7 @@ describe("menu do Comercial", () => {
     expect(comercial.bar.map((module) => module.label)).toEqual(["Comercial"]);
     const owner = getMobileNavigation(getNavigationForProfileRole("owner", null, LIBERADO));
     expect(owner.more.flatMap(({ module, routes }) => routes.map((route) => `${module.label} · ${route.label}`))).toEqual(
-      expect.arrayContaining(["Comercial · Orçamentos", "Comercial · Clientes", "Comercial · Contratos"]),
+      expect.arrayContaining(["Comercial · Orçamentos", "Comercial · Clientes", "Comercial · Contratos", "Comercial · Autorizações"]),
     );
   });
 });
@@ -334,9 +349,9 @@ describe("abas do módulo (Orçamentos · Contratos · Autorizações · Mediç�
     expect(ABAS_DO_COMERCIAL.map((aba) => aba.rotulo)).toEqual(["Orçamentos", "Contratos", "Autorizações", "Medições"]);
   });
 
-  it("aba sem tela fica oculta: hoje Orçamentos e Contratos têm", () => {
-    expect(abasVisiveis(TELAS_DO_COMERCIAL).map((aba) => aba.id)).toEqual(["orcamentos", "contratos"]);
-    expect(abasVisiveis().map((aba) => aba.href)).toEqual([ROTA_COMERCIAL, ROTA_CONTRATOS]);
+  it("aba sem tela fica oculta: hoje Orçamentos, Contratos e Autorizações têm", () => {
+    expect(abasVisiveis(TELAS_DO_COMERCIAL).map((aba) => aba.id)).toEqual(["orcamentos", "contratos", "autorizacoes"]);
+    expect(abasVisiveis().map((aba) => aba.href)).toEqual([ROTA_COMERCIAL, ROTA_CONTRATOS, ROTA_AUTORIZACOES]);
     expect(abasVisiveis([ROTA_CLIENTES])).toEqual([]);
   });
 
@@ -345,12 +360,17 @@ describe("abas do módulo (Orçamentos · Contratos · Autorizações · Mediç�
     expect(orcamentos.tambem).toEqual([ROTA_ORCAMENTO, ROTA_APROVAR, ROTA_DOCUMENTO]);
   });
 
+  it("a aba Autorizações leva à tela de autorizações (parte 15b)", () => {
+    expect(ABAS_DO_COMERCIAL.find((aba) => aba.id === "autorizacoes")!.href).toBe(ROTA_AUTORIZACOES);
+  });
+
   it("cada tela nova acende a aba dela, na ordem", () => {
     const contratos = ABAS_DO_COMERCIAL.find((aba) => aba.id === "contratos")!;
     const orcamentos = ABAS_DO_COMERCIAL.find((aba) => aba.id === "orcamentos")!;
     expect(abasVisiveis([...TELAS_DO_COMERCIAL, contratos.href, orcamentos.href]).map((aba) => aba.id)).toEqual([
       "orcamentos",
       "contratos",
+      "autorizacoes",
     ]);
   });
 });

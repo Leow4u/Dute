@@ -6,6 +6,7 @@ import { Timestamp, getFirestore, type Firestore } from "firebase-admin/firestor
 import { HttpsError } from "firebase-functions/https";
 
 import { registrarAditivo } from "./contratos.js";
+import { recordAuthorizationFor } from "./autorizacoes.js";
 import { advanceDemandFor } from "./demandas.js";
 import { advanceMedicaoFor, saveMedicaoFor } from "./medicoes.js";
 import type { ComercialProfile } from "./profile.js";
@@ -587,11 +588,11 @@ describe("demandas de outro regime ou de outro contrato", () => {
     );
     const depois = await doc(`demands/${validada}`);
     assert.deepEqual(
-      [depois.etapa, depois.medicao_pendente, depois.autorizacao_id, depois.validacao],
+      [depois.etapa, depois.medicao_pendente, depois.autorizacao_ids, depois.validacao],
       [antes.etapa, antes.medicao_pendente, undefined, antes.validacao],
       "a demanda de outro contrato não é autorizada pela medição",
     );
-    assert.deepEqual((await doc(`client_authorizations/aut_${MEDICAO}`)).demandas, []);
+    assert.deepEqual((await doc(`client_authorizations/aut_${MEDICAO}`)).demanda_numeros, []);
   });
 });
 
@@ -690,10 +691,17 @@ describe("enviar, contestar, reabrir e aprovar", () => {
     assert.equal(autorizacao.customer_code, "SAFRA");
     assert.equal(autorizacao.contrato_id, "safra-2026");
     assert.equal(autorizacao.medicao_id, MEDICAO);
-    // As demandas autorizadas; a pendente fica no campo dela.
-    assert.deepEqual(autorizacao.demandas, [d1, d2, d3].sort());
+    // O mesmo formato da autorização registrada à mão: situação registrada, valor_cents, demanda_numeros.
+    assert.equal(autorizacao.status, "registrada");
+    assert.equal(autorizacao.origem, "medicao");
+    assert.deepEqual(autorizacao.demanda_numeros, [d1, d2, d3].sort());
+    assert.deepEqual(autorizacao.demandas, []);
     assert.deepEqual(autorizacao.demandas_pendentes, [{ numero: d4, motivo: "proposta sem fechamento" }]);
-    assert.equal(autorizacao.total_cents, enviada.total_cents);
+    assert.equal(autorizacao.valor_cents, enviada.total_cents);
+    assert.equal(autorizacao.total_cents, undefined);
+    assert.deepEqual([autorizacao.pedido, autorizacao.aceite, autorizacao.marcas, autorizacao.nf_ids], [null, null, [], []]);
+    assert.equal(autorizacao.registrada_por, comercial.uid);
+    assert.equal(autorizacao.email_link, "https://outlook.office.com/mail/id/aprovacao-medicao");
     assert.equal(autorizacao.recebida_em, "2026-11-03T13:30:00.000Z");
     assert.equal(autorizacao.contato_id, "ct_safra");
 
@@ -707,14 +715,15 @@ describe("enviar, contestar, reabrir e aprovar", () => {
     for (const dem of [dem1, dem2, dem3]) {
       assert.equal(dem.etapa, "a_faturar");
       assert.equal(dem.medicao_pendente, false);
-      assert.equal(dem.autorizacao_id, autorizacaoId);
+      assert.deepEqual(dem.autorizacao_ids, [autorizacaoId]);
+      assert.equal(dem.autorizacao_id, undefined);
       assert.equal(dem.medicao_id, MEDICAO);
     }
     assert.equal((dem2.validacao as Linha).origem, "medicao");
     assert.equal((dem2.validacao as Linha).autorizacao, "medicao_aprovada");
     assert.deepEqual([dem3.executado_de, dem3.executado_ate], ["2026-10-03", "2026-10-03"]);
     assert.equal(dem4.etapa, "aguardando_cliente", "a proposta sem fechamento fica como está");
-    assert.equal(dem4.autorizacao_id, undefined);
+    assert.equal(dem4.autorizacao_ids, undefined);
 
     const todos = await eventos();
     const tipos = todos.map((event) => event.type);
@@ -769,15 +778,16 @@ describe("enviar, contestar, reabrir e aprovar", () => {
     assert.equal(validada.etapa, "a_faturar");
     const d4Depois = await doc(`demands/${d4}`);
     assert.deepEqual(
-      [d4Depois.etapa, d4Depois.medicao_pendente, d4Depois.autorizacao_id, (d4Depois.validacao as Linha).autorizacao_id],
-      ["a_faturar", false, autorizacaoId, autorizacaoId],
+      [d4Depois.etapa, d4Depois.medicao_pendente, d4Depois.autorizacao_ids, (d4Depois.validacao as Linha).autorizacao_id],
+      ["a_faturar", false, [autorizacaoId], autorizacaoId],
     );
     const medicaoDepois = await doc(`medicoes/${MEDICAO}`);
     assert.deepEqual(medicaoDepois.demandas_pendentes, []);
     assert.deepEqual([...(medicaoDepois.demandas_a_faturar as string[])].sort(), [d1, d2, d3, d4].sort());
     assert.equal(medicaoDepois.edicao, Number(medicao.edicao) + 1);
     const autorizacaoDepois = await doc(`client_authorizations/${autorizacaoId}`);
-    assert.deepEqual([...(autorizacaoDepois.demandas as string[])].sort(), [d1, d2, d3, d4].sort());
+    assert.deepEqual([...(autorizacaoDepois.demanda_numeros as string[])].sort(), [d1, d2, d3, d4].sort());
+    assert.deepEqual(autorizacaoDepois.demandas, []);
     assert.deepEqual(autorizacaoDepois.demandas_pendentes, []);
     const validacao = (await eventos()).find((event) => event.type === "quote.validated" && event.entity_id === d4);
     assert.deepEqual(
@@ -792,6 +802,95 @@ describe("enviar, contestar, reabrir e aprovar", () => {
     await avancar("send");
     const aprovada = await avancar("approve");
     assert.deepEqual([aprovada.demandas_a_faturar, aprovada.demandas_pendentes], [[], []]);
-    assert.deepEqual((await doc(`client_authorizations/aut_${MEDICAO}`)).demandas, []);
+    assert.deepEqual((await doc(`client_authorizations/aut_${MEDICAO}`)).demanda_numeros, []);
+  });
+});
+
+describe("cancelar a autorização da medição aprovada (o mesmo recordAuthorization da autorização registrada à mão)", () => {
+  async function cancelar(id: string, extra: Record<string, unknown> = {}, caller: ComercialProfile = comercial) {
+    return recordAuthorizationFor(
+      db,
+      caller,
+      { action: "cancel", request_id: key(), autorizacao_id: id, motivo: "Aprovada por engano", ...extra },
+      { agora: NOV_03 },
+    );
+  }
+
+  it("devolve as demandas à espera da medição e cancela; de novo só devolve o estado", async () => {
+    const d1 = await fechada();
+    await demanda("register_execution", d1, { executado_de: "2026-10-05", executado_ate: "2026-10-05" }, OUT_06);
+    await demanda("validate", d1, {}, OUT_06);
+    const d2 = await fechada();
+    await demanda("register_execution", d2, { executado_de: "2026-10-16", executado_ate: "2026-10-16" }, OUT_17);
+    await abrir();
+    await salvar({ demanda_numero: d1, os: "OS 9001", solicitada_em: "2026-10-01", executada_em: "2026-10-05" });
+    await salvar({ demanda_numero: d2, os: "OS 9002", solicitada_em: "2026-10-15", executada_em: "2026-10-16" });
+    await avancar("send", {}, NOV_02);
+    await avancar("approve");
+    const id = `aut_${MEDICAO}`;
+    assert.deepEqual((await doc(`demands/${d1}`)).autorizacao_ids, [id]);
+
+    const cancelada = await cancelar(id);
+    assert.deepEqual([cancelada.status, cancelada.ja_feito, cancelada.customer_code], ["cancelada", false, "SAFRA"]);
+    assert.deepEqual(cancelada.demandas.map((item) => item.numero).sort(), [d1, d2].sort());
+    const autorizacao = await doc(`client_authorizations/${id}`);
+    assert.deepEqual([autorizacao.status, autorizacao.cancelada_por, autorizacao.motivo_cancelamento], ["cancelada", comercial.uid, "Aprovada por engano"]);
+    for (const numero of [d1, d2]) {
+      const dem = await doc(`demands/${numero}`);
+      assert.deepEqual([dem.autorizacao_ids, dem.medicao_pendente], [[], true], numero);
+      assert.equal(dem.autorizacao_id, undefined);
+    }
+    const evento = (await eventos()).find((event) => event.type === "client_authorization.cancelled");
+    assert.deepEqual(evento?.payload, {
+      autorizacao_id: id,
+      tipo: "medicao_aprovada",
+      contrato_id: "safra-2026",
+      demandas: [d1, d2].sort(),
+      devolvidas: [d1, d2].sort(),
+      marcas: [],
+      medicao_id: MEDICAO,
+    });
+
+    const repetida = await cancelar(id);
+    assert.deepEqual([repetida.status, repetida.ja_feito, repetida.events], ["cancelada", true, []]);
+  });
+
+  it("a medição sem demanda também se cancela, e o financeiro cancela como cancela a de pedido e aceite", async () => {
+    await abrir();
+    await salvar({});
+    await avancar("send");
+    await avancar("approve");
+    const id = `aut_${MEDICAO}`;
+    const cancelada = await cancelar(id, {}, financeiro);
+    assert.deepEqual([cancelada.status, cancelada.demandas], ["cancelada", []]);
+    assert.equal((await doc(`client_authorizations/${id}`)).status, "cancelada");
+  });
+
+  it("lê a autorização no formato antigo da medição (status a_faturar, demandas como números, autorizacao_id na demanda)", async () => {
+    const d1 = await fechada();
+    await demanda("register_execution", d1, { executado_de: "2026-10-05", executado_ate: "2026-10-05" }, OUT_06);
+    await demanda("validate", d1, {}, OUT_06);
+    const id = "aut_antiga";
+    await db.doc(`client_authorizations/${id}`).set({
+      id,
+      tipo: "medicao_aprovada",
+      origem: "medicao",
+      status: "a_faturar",
+      customer_code: "SAFRA",
+      contrato_id: "safra-2026",
+      medicao_id: MEDICAO,
+      demandas: [d1],
+      demandas_a_faturar: [d1],
+      demandas_pendentes: [],
+      total_cents: 118_000,
+      recebida_em: "2026-11-03T13:30:00.000Z",
+    });
+    await db.doc(`demands/${d1}`).update({ autorizacao_id: id, medicao_pendente: false });
+
+    const cancelada = await cancelar(id);
+    assert.deepEqual([cancelada.status, cancelada.valor_cents, cancelada.demandas.map((item) => item.numero)], ["cancelada", 118_000, [d1]]);
+    const dem = await doc(`demands/${d1}`);
+    assert.deepEqual([dem.autorizacao_ids, dem.autorizacao_id, dem.medicao_pendente], [[], undefined, true]);
+    assert.equal((await doc(`client_authorizations/${id}`)).status, "cancelada");
   });
 });

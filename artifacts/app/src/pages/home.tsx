@@ -7,6 +7,7 @@ import {
   ClipboardList,
   FileCheck,
   FileText,
+  Hourglass,
   PackageCheck,
   Sparkles,
   Truck,
@@ -19,10 +20,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAppUser } from "@/lib/auth";
-import { lerAlertasDosContratos, lerOrcamentosParaAprovar } from "@/lib/comercial/inicio";
+import { lerAlertasDosContratos, lerAutorizacoesDoInicio, lerOrcamentosParaAprovar } from "@/lib/comercial/inicio";
 import {
   buildHomeInbox,
   veAprovacoesNoInicio,
+  veAutorizacoesNoInicio,
   veContratosNoInicio,
   type HomeInboxItem,
   type HomeInboxTone,
@@ -62,8 +64,17 @@ const numberFormatter = new Intl.NumberFormat("pt-BR");
 
 function InboxRow({ item }: { item: HomeInboxItem }) {
   const tone = TONE_STYLE[item.tone];
-  // Alerta de contrato do Comercial: "contrato:<id>:<tipo>".
-  const Icon = ITEM_ICON[item.id] ?? (item.id.startsWith("contrato:") ? FileText : tone.icon);
+  // Comercial: alerta de contrato ("contrato:<id>:<tipo>"), prazo de perda
+  // ("autorizacoes:prazo:<numero>") e executados esperando a autorização.
+  const Icon =
+    ITEM_ICON[item.id] ??
+    (item.id.startsWith("contrato:")
+      ? FileText
+      : item.id.startsWith("autorizacoes:prazo:")
+        ? Hourglass
+        : item.id.startsWith("autorizacoes:")
+          ? FileCheck
+          : tone.icon);
   return (
     <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:gap-4 md:px-5">
       <div className="flex min-w-0 flex-1 items-center gap-4">
@@ -112,8 +123,9 @@ export default function Home() {
   const role = user?.publicMetadata.role;
   const seesWarehouse = canAccessModule(role, WMS_ROLES);
   const seesRequests = canAccessModule(role, COORDINATION_NAV_ROLES);
-  // Contratos do Comercial: só owner, admin e comercial, com a liberação.
+  // Contratos e autorizações do Comercial: só owner, admin e comercial, com a liberação.
   const seesContracts = veContratosNoInicio(role);
+  const seesAuthorizations = veAutorizacoesNoInicio(role);
   // Orçamentos para aprovar: só o owner, que aprova, com a liberação.
   const seesApprovals = veAprovacoesNoInicio(role);
 
@@ -140,6 +152,13 @@ export default function Home() {
     refetchInterval: 5 * 60_000,
     refetchOnWindowFocus: false,
   });
+  const authorizations = useQuery({
+    queryKey: ["comercial", "autorizacoes", "inicio"],
+    queryFn: () => lerAutorizacoesDoInicio(),
+    enabled: seesAuthorizations,
+    refetchInterval: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
 
   const approvals = useQuery({
     queryKey: ["comercial", "orcamentos", "para-aprovar"],
@@ -156,20 +175,23 @@ export default function Home() {
         ops: ops.data,
         requests: requests.data?.items,
         contratos: contracts.data,
+        autorizacoes: authorizations.data,
         paraAprovar: approvals.data,
       }),
-    [ops.data, requests.data, contracts.data, approvals.data, role],
+    [ops.data, requests.data, contracts.data, authorizations.data, approvals.data, role],
   );
 
   const loading =
     (seesWarehouse && ops.isLoading) ||
     (seesRequests && requests.isLoading) ||
     (seesContracts && contracts.isLoading) ||
+    (seesAuthorizations && authorizations.isLoading) ||
     (seesApprovals && approvals.isLoading);
   const failedSources = [
     seesWarehouse && ops.isError ? "armazém" : null,
     seesRequests && requests.isError ? "solicitações" : null,
     seesContracts && contracts.isError ? "contratos" : null,
+    seesAuthorizations && authorizations.isError ? "autorizações" : null,
     seesApprovals && approvals.isError ? "orçamentos" : null,
   ].filter((source): source is string => Boolean(source));
 

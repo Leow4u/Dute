@@ -3,8 +3,9 @@ import { readFileSync } from "node:fs";
 import { PAPEIS, type Papel } from "@workspace/dominio";
 import { describe, expect, it } from "vitest";
 
+import type { PendenciasDoInicio } from "./comercial/autorizacoes";
 import { alertasParaOInicio, contratoDoRegistro, type Contrato } from "./comercial/contratos";
-import { buildHomeInbox, isAwaitingTriage, veAprovacoesNoInicio, veContratosNoInicio } from "./home-inbox";
+import { buildHomeInbox, isAwaitingTriage, veAprovacoesNoInicio, veAutorizacoesNoInicio, veContratosNoInicio } from "./home-inbox";
 import type { WarehouseOpsResponse, WarehouseTask } from "./warehouse-ops/model";
 
 function task(overrides: Partial<WarehouseTask> & { id: string }): WarehouseTask {
@@ -283,5 +284,124 @@ describe("orçamentos para aprovar no Início (parte 12a)", () => {
     expect(home).toMatch(/const seesApprovals = veAprovacoesNoInicio\(role\);/);
     expect(home).toMatch(/queryFn: \(\) => lerOrcamentosParaAprovar\(\),\s*enabled: seesApprovals,/);
     expect(home).toMatch(/paraAprovar: approvals\.data/);
+  });
+});
+
+describe("autorizações do Comercial no Início (parte 15b)", () => {
+  const LIBERADO = true;
+  const DESLIGADO = false;
+  const QUEM_VE: Papel[] = ["owner", "admin", "comercial"];
+
+  const pendencias: PendenciasDoInicio = {
+    esperandoMaisDe30: [
+      { numero: "10029", rotulo: "10029 – RV02", cliente: "Itaú Unibanco", dias: 70 },
+      { numero: "10031", rotulo: "10031 – RV02", cliente: "Itaú Unibanco", dias: 49 },
+      { numero: "10036", rotulo: "10036 – RV02", cliente: "Itaú Unibanco", dias: 36 },
+      { numero: "10041", rotulo: "10041 – RV02", cliente: "BTG Pactual", dias: 112 },
+    ],
+    prazos: [
+      { numero: "10041", rotulo: "10041 – RV02", cliente: "BTG Pactual", limite: "2026-09-29", restantes: -22, vencido: true, critico: true },
+      { numero: "10040", rotulo: "10040 – RV02", cliente: "BTG Pactual", limite: "2026-11-18", restantes: 28, vencido: false, critico: false },
+    ],
+  };
+
+  const daAutorizacao = (role: Papel | null, liberado: boolean, dados: PendenciasDoInicio = pendencias) =>
+    buildHomeInbox({ role, autorizacoes: dados, comercialLiberado: liberado }).items.filter((item) => item.id.startsWith("autorizacoes:"));
+
+  it("o prazo de perda de cada demanda e os executados esperando há mais de 30 dias, levando à tela de Autorizações", () => {
+    expect(daAutorizacao("comercial", LIBERADO)).toEqual([
+      {
+        id: "autorizacoes:prazo:10041",
+        tone: "critical",
+        title: "Prazo de faturamento vencido em 29/09/2026 · BTG Pactual",
+        detail: "10041 – RV02 · há 22 dias",
+        href: "/comercial/autorizacoes",
+        actionLabel: "Abrir autorizações",
+      },
+      {
+        id: "autorizacoes:prazo:10040",
+        tone: "attention",
+        title: "Faturar até 18/11/2026 · BTG Pactual",
+        detail: "10040 – RV02 · em 28 dias",
+        href: "/comercial/autorizacoes",
+        actionLabel: "Abrir autorizações",
+      },
+      {
+        id: "autorizacoes:mais-de-30",
+        tone: "attention",
+        title: "4 executados esperando autorização há mais de 30 dias",
+        detail: "10029 – RV02 · 10031 – RV02 · 10036 – RV02 e mais 1",
+        href: "/comercial/autorizacoes",
+        actionLabel: "Abrir autorizações",
+      },
+    ]);
+  });
+
+  it("um só executado: no singular", () => {
+    const um = { esperandoMaisDe30: pendencias.esperandoMaisDe30.slice(0, 1), prazos: [] };
+    expect(daAutorizacao("owner", LIBERADO, um).map((item) => [item.title, item.detail])).toEqual([
+      ["1 executado esperando autorização há mais de 30 dias", "10029 – RV02"],
+    ]);
+  });
+
+  it.each(QUEM_VE)("%s vê os itens só com a liberação do Comercial", (role) => {
+    expect(daAutorizacao(role, LIBERADO)).toHaveLength(3);
+    expect(daAutorizacao(role, DESLIGADO)).toEqual([]);
+    expect(veAutorizacoesNoInicio(role, LIBERADO)).toBe(true);
+    expect(veAutorizacoesNoInicio(role, DESLIGADO)).toBe(false);
+  });
+
+  it.each(PAPEIS.filter((role) => !QUEM_VE.includes(role)))("%s nunca vê nem consulta as autorizações", (role) => {
+    expect(daAutorizacao(role, LIBERADO)).toEqual([]);
+    expect(veAutorizacoesNoInicio(role, LIBERADO)).toBe(false);
+    expect(veAutorizacoesNoInicio(role, DESLIGADO)).toBe(false);
+  });
+
+  it("sem papel, nada", () => {
+    expect(veAutorizacoesNoInicio(null, LIBERADO)).toBe(false);
+    expect(daAutorizacao(null, LIBERADO)).toEqual([]);
+  });
+
+  it("entram depois dos contratos e antes da fila de pedidos", () => {
+    const contrato = contratoDoRegistro("btg-2026", {
+      customer_code: "BTG_Pactual",
+      nome: "Armazenagem e serviços",
+      vigente_de: "2026-01-01",
+      vigente_ate: "2026-12-31",
+      renovacao: { tipo: "aditivo", aviso_dias: null, oposicao_ate_dias: null },
+      reajuste: { tipo: "negociado" },
+      status: "vigente",
+    })!;
+    const contratos = alertasParaOInicio([contrato], new Map([["BTG_Pactual", "BTG Pactual"]]), "2026-10-21");
+    const { items } = buildHomeInbox({ role: "admin", ops: busyOps, requests, contratos, autorizacoes: pendencias, comercialLiberado: LIBERADO });
+    expect(items.map((item) => item.id)).toEqual([
+      "blocked:ord_3",
+      "triage",
+      "contrato:btg-2026:fim_vigencia",
+      "autorizacoes:prazo:10041",
+      "autorizacoes:prazo:10040",
+      "autorizacoes:mais-de-30",
+      "to-pick",
+      "to-ship",
+      "receipts",
+      "agent",
+    ]);
+  });
+
+  it("sem pendência, o Início fica como era", () => {
+    const sem = buildHomeInbox({
+      role: "admin",
+      ops: busyOps,
+      requests,
+      autorizacoes: { esperandoMaisDe30: [], prazos: [] },
+      comercialLiberado: LIBERADO,
+    });
+    expect(sem).toEqual(buildHomeInbox({ role: "admin", ops: busyOps, requests }));
+  });
+
+  it("a página só consulta para quem vê", () => {
+    const pagina = readFileSync(new URL("../pages/home.tsx", import.meta.url), "utf8");
+    expect(pagina).toMatch(/const seesAuthorizations = veAutorizacoesNoInicio\(role\);/);
+    expect(pagina).toMatch(/queryFn: \(\) => lerAutorizacoesDoInicio\(\),\s*enabled: seesAuthorizations,/);
   });
 });

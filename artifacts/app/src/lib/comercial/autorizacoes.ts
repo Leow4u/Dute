@@ -193,52 +193,86 @@ export function demandaDoRegistro(id: string, data: Registro): DemandaDaFila | n
   };
 }
 
-/** Autorização de `client_authorizations/{id}` (parte 15a), como a tela usa. */
+/**
+ * Autorização de `client_authorizations/{id}`, como a tela usa. Um formato só
+ * (functions/comercial, documentoDaAutorizacao): a registrada à mão (parte 15a)
+ * e a da medição aprovada (parte 16a) têm `status` registrada ou cancelada,
+ * `valor_cents` e `demanda_numeros`. A leitura aceita também o que a medição
+ * gravava antes da unificação (a_faturar, demandas como números, total_cents).
+ */
 export type AutorizacaoRegistrada = {
   id: string;
   customerCode: string;
   contratoId: string | null;
   tipo: TipoAutorizacaoCliente;
+  /** manual (recordAuthorization) ou medicao (a medição aprovada). */
+  origem: "manual" | "medicao";
   pedido: string | null;
   aceite: string | null;
   recebidaEm: string | null;
   valorCents: number | null;
+  /** Uma por demanda coberta; a da medição não cita a RV nem o valor da demanda. */
   demandas: Array<{ numero: string; rv: number | null; rotulo: string; valorCents: number | null }>;
   centroCusto: string | null;
   marcas: MarcaAutorizacao[];
   status: string;
+  /** A medição de que a autorização veio (AAAA-MM), na medição aprovada. */
+  competencia: string | null;
+  medicaoId: string | null;
   registradaEm: string;
   /** Já usada no faturamento (NF, portal ou Omie, Fase 7): não está mais a faturar. */
   usada: boolean;
 };
 
+/**
+ * As situações que a consulta das autorizadas lê: registrada e, nas medições aprovadas antes da
+ * unificação, a_faturar (a mesma registrada, no formato antigo).
+ */
+export const SITUACOES_A_LER = ["registrada", "a_faturar"] as const;
+
+/** A situação gravada: registrada ou cancelada; "a_faturar" é a medição aprovada do formato antigo (a registrada). */
+function statusDoRegistro(value: unknown): string {
+  return value === "a_faturar" ? "registrada" : texto(value);
+}
+
 export function autorizacaoDoRegistro(id: string, data: Registro): AutorizacaoRegistrada | null {
   const customerCode = texto(data.customer_code);
   if (!customerCode) return null;
-  const demandas = (Array.isArray(data.demandas) ? data.demandas : [])
-    .map(registroOuNull)
-    .filter((item): item is Registro => item !== null)
-    .map((item) => {
-      const numero = texto(item.numero);
-      const rv = typeof item.rv === "number" && Number.isInteger(item.rv) ? item.rv : null;
-      return { numero, rv, rotulo: texto(item.rotulo) || rotuloDaRv(numero, rv), valorCents: centavosOuNull(item.valor_cents) };
-    })
-    .filter((item) => item.numero);
+  // Os números: demanda_numeros ou, no formato antigo da medição, `demandas` como lista de números.
+  const citadas = (Array.isArray(data.demandas) ? data.demandas : []).map(registroOuNull).filter((item): item is Registro => item !== null);
+  const numeros = Array.isArray(data.demanda_numeros)
+    ? data.demanda_numeros
+    : (Array.isArray(data.demandas) ? data.demandas : []).map((item) => (registroOuNull(item) ? registroOuNull(item)!.numero : item));
+  const demandas = [...new Set(numeros.filter((numero): numero is string => typeof numero === "string" && numero.length > 0))].map((numero) => {
+    const citada = citadas.find((item) => texto(item.numero) === numero);
+    const rv = citada && typeof citada.rv === "number" && Number.isInteger(citada.rv) ? citada.rv : null;
+    return {
+      numero,
+      rv,
+      rotulo: citada && texto(citada.rotulo) ? texto(citada.rotulo) : rotuloDaRv(numero, rv),
+      valorCents: citada ? centavosOuNull(citada.valor_cents) : null,
+    };
+  });
   const marcas = Array.isArray(data.marcas) ? MARCAS_AUTORIZACAO.filter((marca) => (data.marcas as unknown[]).includes(marca)) : [];
+  // A registrada à mão grava o dia; a da medição, o instante da aprovação (o dia em São Paulo).
   const recebida = texto(data.recebida_em);
+  const competencia = texto(data.competencia);
   return {
     id,
     customerCode,
     contratoId: textoOuNull(data.contrato_id),
     tipo: umDe(TIPOS_AUTORIZACAO_CLIENTE, data.tipo, "outro"),
+    origem: data.origem === "medicao" || data.tipo === "medicao_aprovada" ? "medicao" : "manual",
     pedido: textoOuNull(data.pedido),
     aceite: textoOuNull(data.aceite),
-    recebidaEm: dataValida(recebida) ? recebida : null,
-    valorCents: centavosOuNull(data.valor_cents),
+    recebidaEm: dataValida(recebida) ? recebida : diaEmSaoPaulo(recebida),
+    valorCents: centavosOuNull(data.valor_cents) ?? centavosOuNull(data.total_cents),
     demandas,
     centroCusto: textoOuNull(data.centro_custo),
     marcas,
-    status: texto(data.status),
+    status: statusDoRegistro(data.status),
+    competencia: /^\d{4}-\d{2}$/.test(competencia) ? competencia : null,
+    medicaoId: textoOuNull(data.medicao_id),
     registradaEm: texto(data.registrada_em),
     usada: (Array.isArray(data.nf_ids) && data.nf_ids.length > 0) || Boolean(data.enviada_portal_em) || Boolean(data.omie_lancada_em),
   };
@@ -694,6 +728,11 @@ export type LinhaAutorizada = {
   quando: string;
 };
 
+/** "2026-10" → "10/2026". */
+function competenciaBr(competencia: string): string {
+  return `${competencia.slice(5)}/${competencia.slice(0, 4)}`;
+}
+
 function subDaAutorizacao(autorizacao: AutorizacaoRegistrada): string {
   switch (autorizacao.tipo) {
     case "pedido_aceite":
@@ -755,7 +794,7 @@ export function autorizadasAFaturar(
       const limite = limiteDaAutorizacao(autorizacao, contexto.demandas, contexto.contratos);
       const linha: LinhaAutorizada = {
         id: autorizacao.id,
-        pedido: autorizacao.pedido ?? "Sem pedido",
+        pedido: autorizacao.pedido ?? (autorizacao.competencia ? `Medição ${competenciaBr(autorizacao.competencia)}` : "Sem pedido"),
         sub: subDaAutorizacao(autorizacao),
         cliente,
         demandas: autorizacao.demandas.map((demanda) => demanda.rotulo),
@@ -770,6 +809,7 @@ export function autorizadasAFaturar(
         [
           autorizacao.pedido,
           autorizacao.aceite,
+          autorizacao.competencia ? `Medição ${competenciaBr(autorizacao.competencia)}` : null,
           cliente,
           autorizacao.customerCode,
           autorizacao.centroCusto,

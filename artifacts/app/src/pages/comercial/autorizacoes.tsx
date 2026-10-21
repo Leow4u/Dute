@@ -7,6 +7,7 @@ import { chamarComercial, novaChave } from "@/lib/comercial/api";
 import {
   ETAPAS_COM_PRAZO_DE_PERDA,
   alternarMarcacao,
+  SITUACOES_A_LER,
   autorizacaoDoRegistro,
   autorizadasAFaturar,
   chaveDaRv,
@@ -96,7 +97,7 @@ export default function ComercialAutorizacoesPage() {
     (db) =>
       query(
         collection(db, "client_authorizations"),
-        where("status", "==", "registrada"),
+        where("status", "in", [...SITUACOES_A_LER]),
         orderBy("registrada_em", "desc"),
         limit(LIMITE_DE_AUTORIZADAS),
       ),

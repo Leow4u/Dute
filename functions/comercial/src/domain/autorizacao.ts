@@ -296,6 +296,129 @@ export function marcasDaAutorizacao(entrada: {
   return MARCAS_AUTORIZACAO.filter((marca) => marcas.has(marca));
 }
 
+// --- Documento único -----------------------------------------------------------------------
+
+/**
+ * O documento de `client_authorizations`, um só para as duas origens: o
+ * registro à mão (recordAuthorization) e a medição aprovada (advanceMedicao).
+ * O que uma origem não tem vai vazio (null, [] ou 0), nunca ausente: a tela,
+ * as regras e o cancelamento leem os mesmos campos. Sem os carimbos de
+ * servidor (created_at, updated_at), que quem grava acrescenta.
+ *
+ * - `status` é registrada ou cancelada. A medição aprovada nasce registrada
+ *   (antes da unificação gravava "a_faturar"; statusDaAutorizacao lê os dois).
+ * - `valor_cents` é o que o cliente autorizou: o valor do aceite, ou o total
+ *   aprovado da medição (antes, total_cents).
+ * - `demanda_numeros` é a lista de números das demandas cobertas (a da medição
+ *   cresce com a pendente que for validada depois); `demandas` guarda, por
+ *   demanda, a RV citada e o total dela, e na medição fica vazia.
+ */
+export type EntradaDoDocumento = {
+  id: string;
+  customer_code: string;
+  contrato_id: string | null;
+  tipo: TipoAutorizacaoCliente;
+  recebida_em: string;
+  valor_cents: number;
+  demanda_numeros: readonly string[];
+  registrada_por: string;
+  registrada_por_papel: string;
+  registrada_em: string;
+  operation_id: string;
+  origem?: "manual" | "medicao";
+  soma_cents?: number;
+  saldo_cents?: number | null;
+  demandas?: ReadonlyArray<{ numero: string; rv: number; rotulo: string; valor_cents: number }>;
+  pedido?: string | null;
+  aceite?: string | null;
+  chave_pedido_aceite?: string | null;
+  tomador_documento?: string | null;
+  codigo_servico?: string | null;
+  centro_custo?: string | null;
+  ref_cliente?: string | null;
+  escopo?: string | null;
+  email_link?: string | null;
+  documento?: { nome: string; referencia: string } | null;
+  marcas?: readonly MarcaAutorizacao[];
+  medicao_id?: string | null;
+  competencia?: string | null;
+  demandas_pendentes?: ReadonlyArray<{ numero: string; motivo: string }>;
+  contato_id?: string | null;
+};
+
+export function documentoDaAutorizacao(entrada: EntradaDoDocumento): Record<string, unknown> {
+  return {
+    id: entrada.id,
+    customer_code: entrada.customer_code,
+    contrato_id: entrada.contrato_id,
+    tipo: entrada.tipo,
+    origem: entrada.origem ?? "manual",
+    pedido: entrada.pedido ?? null,
+    aceite: entrada.aceite ?? null,
+    chave_pedido_aceite: entrada.chave_pedido_aceite ?? null,
+    recebida_em: entrada.recebida_em,
+    valor_cents: entrada.valor_cents,
+    soma_cents: entrada.soma_cents ?? entrada.valor_cents,
+    saldo_cents: entrada.saldo_cents ?? null,
+    demandas: [...(entrada.demandas ?? [])],
+    demanda_numeros: [...entrada.demanda_numeros],
+    demandas_pendentes: [...(entrada.demandas_pendentes ?? [])],
+    tomador_documento: entrada.tomador_documento ?? null,
+    codigo_servico: entrada.codigo_servico ?? null,
+    centro_custo: entrada.centro_custo ?? null,
+    ref_cliente: entrada.ref_cliente ?? null,
+    escopo: entrada.escopo ?? null,
+    email_link: entrada.email_link ?? null,
+    documento: entrada.documento ?? null,
+    marcas: [...(entrada.marcas ?? [])],
+    medicao_id: entrada.medicao_id ?? null,
+    competencia: entrada.competencia ?? null,
+    contato_id: entrada.contato_id ?? null,
+    status: "registrada" satisfies StatusAutorizacao,
+    registrada_por: entrada.registrada_por,
+    registrada_por_papel: entrada.registrada_por_papel,
+    registrada_em: entrada.registrada_em,
+    cancelada_por: null,
+    cancelada_em: null,
+    motivo_cancelamento: null,
+    // Reservados para a Fase 7 (NF, portal do cliente e Omie).
+    nf_ids: [],
+    enviada_portal_em: null,
+    omie_lancada_em: null,
+    operation_id: entrada.operation_id,
+    schema_version: AUTHORIZATION_SCHEMA_VERSION,
+  };
+}
+
+/**
+ * A situação gravada, lendo também o formato antigo da medição aprovada
+ * ("a_faturar", que é a registrada). null para o que não se reconhece.
+ */
+export function statusDaAutorizacao(autorizacao: { status?: unknown }): StatusAutorizacao | null {
+  if (autorizacao.status === "registrada" || autorizacao.status === "a_faturar") return "registrada";
+  if (autorizacao.status === "cancelada") return "cancelada";
+  return null;
+}
+
+/**
+ * Os números das demandas cobertas: `demanda_numeros` ou, no formato antigo da
+ * medição, `demandas` como lista de números. Sem repetição, na ordem gravada.
+ */
+export function numerosDaAutorizacao(autorizacao: { demanda_numeros?: unknown; demandas?: unknown }): string[] {
+  const lista = Array.isArray(autorizacao.demanda_numeros)
+    ? autorizacao.demanda_numeros
+    : Array.isArray(autorizacao.demandas)
+      ? autorizacao.demandas.map((item) => (item && typeof item === "object" ? (item as { numero?: unknown }).numero : item))
+      : [];
+  return [...new Set(lista.filter((numero): numero is string => typeof numero === "string" && /^\d{5,8}$/.test(numero)))];
+}
+
+/** O valor autorizado em centavos (`valor_cents`; no formato antigo da medição, `total_cents`), ou null. */
+export function valorDaAutorizacao(autorizacao: { valor_cents?: unknown; total_cents?: unknown }): number | null {
+  const valor = autorizacao.valor_cents ?? autorizacao.total_cents;
+  return typeof valor === "number" && Number.isSafeInteger(valor) && valor >= 0 ? valor : null;
+}
+
 /** Normaliza o pedido ou o aceite para comparar: maiúsculas, sem espaço, ponto, barra nem hífen. */
 export function chaveDoNumeroDoCliente(valor: string | null | undefined): string | null {
   const chave = (valor ?? "").toUpperCase().replace(/[^0-9A-Z]/g, "");
