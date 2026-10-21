@@ -233,6 +233,12 @@ export type ItemDaFila = {
   dispensada: boolean;
   /** A RV enviada de onde esta RV seguinte saiu (quotes.revisao_de); null na primeira RV. */
   revisaoDe: { rv: number; motivo: string | null } | null;
+  /** A RV do escopo fechado da demanda (escopo_rv); null enquanto não fechou. */
+  escopoRv: number | null;
+  /** A execução já foi registrada na demanda (executado_de). */
+  executada: boolean;
+  /** O cliente já validou a execução (validacao). */
+  validada: boolean;
 };
 
 function marcos(value: unknown): MarcoDaDemanda[] {
@@ -329,6 +335,9 @@ export function itemDaFila(numero: string, demanda: Registro | null, quote: Regi
     perda: perdaDe(demanda.perda),
     dispensada: isRegistro(q.dispensa) && q.dispensa.dispensada === true,
     revisaoDe: revisaoDe(q.revisao_de),
+    escopoRv: inteiro(demanda.escopo_rv),
+    executada: texto(demanda.executado_de) !== "",
+    validada: isRegistro(demanda.validacao) && inteiro(demanda.validacao.rv) !== null,
   };
 }
 

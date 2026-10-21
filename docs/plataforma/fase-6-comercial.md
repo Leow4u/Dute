@@ -393,6 +393,17 @@ Storage.
   tela é "Novo orçamento". O link da ficha para a montagem vira "Continuar
   montagem" na RV de execução em rascunho (antes dizia "Orçar execução", que
   agora é a ação).
+- **Aditivo em negociação**: o serviço não espera o aditivo, então "Registrar
+  execução" aparece entre as secundárias do aditivo (em montagem, para
+  aprovar, para enviar ou aguardando cliente) enquanto a demanda tem escopo
+  fechado, não foi executada nem validada (`escopoRv`, `executada` e
+  `validada`, lidos da demanda como o servidor lê em
+  `problemaDoRegistroDaExecucao`).
+- **Dispensa com alteração não salva**: a marca "Aprovação dispensada" só
+  vale para o que está gravado; com alteração na tela volta o "Enviar para
+  aprovação" até salvar. O aviso de recusa de concorrência sai quando a
+  pessoa volta a mexer na montagem ou troca de ficha.
+
 - **Fora do pedido**: Perdido não aparece na RV de execução nem no aditivo
   em "Aguardando cliente" (depois do fechamento só vale o cancelamento do
   cliente) e Aditivo não aparece em "Execução a orçar", embora o servidor

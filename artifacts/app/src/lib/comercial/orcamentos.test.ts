@@ -202,6 +202,17 @@ describe("item da fila", () => {
     expect(itemDaFila("10045", demanda("10045"), orcamento("10045", { dispensa: null, revisao_de: "x" }))!.revisaoDe).toBeNull();
   });
 
+  it("lê da demanda o escopo fechado, a execução registrada e a validação", () => {
+    const crua = itemDaFila("10045", demanda("10045"), orcamento("10045"))!;
+    expect(crua).toMatchObject({ escopoRv: null, executada: false, validada: false });
+    const andando = itemDaFila(
+      "10045",
+      demanda("10045", { escopo_rv: 0, executado_de: "2026-10-18", executado_ate: "2026-10-19", validacao: { rv: 0, etapa: "a_faturar" } }),
+      orcamento("10045", { rv: 1, tipo_rv: "aditivo" }),
+    )!;
+    expect(andando).toMatchObject({ escopoRv: 0, executada: true, validada: true });
+  });
+
   it("sem demanda não entra; sem orçamento entra sem total", () => {
     expect(itemDaFila("10045", null, orcamento("10045"))).toBeNull();
     const semOrcamento = itemDaFila("10045", demanda("10045"), null)!;

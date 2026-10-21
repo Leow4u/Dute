@@ -45,6 +45,9 @@ function item(parcial: Partial<ItemParaAcoes> = {}): ItemParaAcoes {
     edicao: 6,
     revisaoDe: null,
     autorUid: "u-gui",
+    escopoRv: null,
+    executada: false,
+    validada: false,
     ...parcial,
   };
 }
@@ -80,6 +83,38 @@ describe("ações por etapa, tipo de RV e papel", () => {
       principal: "orcar_execucao",
       secundarias: ["validar"],
     });
+  });
+
+  it("aditivo em negociação: o serviço não espera, Registrar execução fica entre as ações", () => {
+    const negociando = { tipoRv: "aditivo", rv: 1, escopoRv: 0, revisaoDe: { rv: 0, motivo: "aditivo" } } as const;
+    expect(acoesDepoisDoEnvio(item({ ...negociando }), COMERCIAL)).toEqual({
+      principal: "validar",
+      secundarias: ["recusar_aditivo", "revisar", "registrar_execucao"],
+    });
+    expect(acoesDepoisDoEnvio(item({ ...negociando, status: "rascunho", etapa: "em_montagem" }), COMERCIAL).secundarias).toEqual([
+      "descartar_rv",
+      "registrar_execucao",
+    ]);
+    expect(acoesDepoisDoEnvio(item({ ...negociando, status: "para_aprovar", etapa: "para_aprovar" }), COMERCIAL).secundarias).toEqual([
+      "descartar_rv",
+      "registrar_execucao",
+    ]);
+    expect(acoesDepoisDoEnvio(item({ ...negociando, status: "aprovado", etapa: "para_enviar" }), COMERCIAL).secundarias).toEqual([
+      "descartar_rv",
+      "registrar_execucao",
+    ]);
+    // Quem não pode descartar o "para aprovar" ainda registra a execução.
+    expect(
+      acoesDepoisDoEnvio(item({ ...negociando, status: "para_aprovar", etapa: "para_aprovar" }), { role: "admin", uid: "u-ana" }).secundarias,
+    ).toEqual(["registrar_execucao"]);
+  });
+
+  it("aditivo sem a execução em aberto: já executada, já validada ou sem escopo fechado não oferecem o registro", () => {
+    const base = { tipoRv: "aditivo", rv: 1, revisaoDe: { rv: 0, motivo: "aditivo" } } as const;
+    expect(acoesDepoisDoEnvio(item({ ...base, escopoRv: 0, executada: true }), COMERCIAL).secundarias).not.toContain("registrar_execucao");
+    expect(acoesDepoisDoEnvio(item({ ...base, escopoRv: 0, validada: true }), COMERCIAL).secundarias).not.toContain("registrar_execucao");
+    expect(acoesDepoisDoEnvio(item({ ...base, escopoRv: null }), COMERCIAL).secundarias).not.toContain("registrar_execucao");
+    expect(acoesDepoisDoEnvio(item({ escopoRv: 0 }), COMERCIAL).secundarias).not.toContain("registrar_execucao");
   });
 
   it("perdida: Reabrir; a cancelada e as etapas do faturamento não têm ação aqui", () => {

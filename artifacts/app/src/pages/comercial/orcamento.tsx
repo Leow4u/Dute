@@ -21,6 +21,7 @@ import {
   SINCRONIA_INICIAL,
   VARIANTE_PADRAO,
   acoesDoOrcamento,
+  esperadoDoEnvioDireto,
   avisoDeRecalculo,
   catalogoDaTabela,
   classificarErro,
@@ -199,6 +200,11 @@ function MontarOrcamento({ numero }: { numero: string }) {
   }, [versao]);
   const { base, form } = estado;
   const sujo = Boolean(base && form && formSujo(base.original, form));
+  // O aviso da recusa de concorrência fica até a pessoa voltar a mexer na montagem.
+  useEffect(() => {
+    if (sujo) depois.limparAviso();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sujo]);
 
   // --- Gravação --------------------------------------------------------------------
   const [ocupado, setOcupado] = useState(false);
@@ -390,14 +396,14 @@ function MontarOrcamento({ numero }: { numero: string }) {
       setAviso({ tipo: "erro", texto: `Falta ${faltam.join(", ")} para enviar ao cliente.` });
       return;
     }
-    let esperado = { status: base.status as StatusOrcamento, edicao: base.edicao };
+    let salvo: { edicao: number } | null = null;
     if (sujo) {
-      const salvo = await salvar();
-      if (!salvo) return;
-      if (salvo.recalculo) return;
-      esperado = { status: "rascunho", edicao: salvo.edicao };
+      const gravado = await salvar();
+      if (!gravado) return;
+      if (gravado.recalculo) return;
+      salvo = gravado;
     }
-    await enviarAoCliente("send", "Orçamento enviado", esperado);
+    await enviarAoCliente("send", "Orçamento enviado", esperadoDoEnvioDireto(base, salvo));
   }
 
   /**
@@ -496,6 +502,7 @@ function MontarOrcamento({ numero }: { numero: string }) {
     etapa: item.etapa,
     tipoRv: item.tipoRv,
     dispensada: item.dispensada,
+    sujo,
     descartavel: posEnvio.secundarias.includes("descartar_rv"),
   });
   atalhoDeSalvar.current = () => {

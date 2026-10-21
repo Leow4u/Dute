@@ -46,7 +46,7 @@ export const ROTULO_DA_ACAO: Record<AcaoDepoisDoEnvio, string> = {
 };
 
 /** O que as ações precisam saber do orçamento (a linha da fila já tem tudo isso). */
-export type ItemParaAcoes = Pick<ItemDaFila, "numero" | "rv" | "etapa" | "tipoRv" | "status" | "edicao" | "revisaoDe" | "autorUid">;
+export type ItemParaAcoes = Pick<ItemDaFila, "numero" | "rv" | "etapa" | "tipoRv" | "status" | "edicao" | "revisaoDe" | "autorUid" | "escopoRv" | "executada" | "validada">;
 
 export type AcoesDaEtapa = { principal: AcaoDepoisDoEnvio | null; secundarias: AcaoDepoisDoEnvio[] };
 
@@ -75,18 +75,19 @@ export function acoesDepoisDoEnvio(
   const { etapa, status } = item;
   if (etapa === "perdida") return { principal: "reabrir", secundarias: [] };
   if (etapa === "cancelada") return SEM_ACAO;
+  const registro: AcaoDepoisDoEnvio[] = executaComAditivoEmNegociacao(item) ? ["registrar_execucao"] : [];
 
   if (status !== "enviado") {
-    if (!item.revisaoDe) return SEM_ACAO;
     const autor = Boolean(quem.uid) && quem.uid === item.autorUid;
-    if (status === "para_aprovar" && quem.role !== "owner" && !autor) return SEM_ACAO;
-    return { principal: null, secundarias: ["descartar_rv"] };
+    const descarta = Boolean(item.revisaoDe) && !(status === "para_aprovar" && quem.role !== "owner" && !autor);
+    const secundarias: AcaoDepoisDoEnvio[] = [...(descarta ? (["descartar_rv"] as const) : []), ...registro];
+    return secundarias.length ? { principal: null, secundarias } : SEM_ACAO;
   }
 
   switch (etapa) {
     case "aguardando_cliente":
       if (item.tipoRv === "proposta") return { principal: "fechar", secundarias: ["revisar", "perder"] };
-      if (item.tipoRv === "aditivo") return { principal: "validar", secundarias: ["recusar_aditivo", "revisar"] };
+      if (item.tipoRv === "aditivo") return { principal: "validar", secundarias: ["recusar_aditivo", "revisar", ...registro] };
       return { principal: "validar", secundarias: ["revisar"] };
     case "para_planejar":
       return { principal: "registrar_execucao", secundarias: ["aditivo", "perder"] };
@@ -95,6 +96,25 @@ export function acoesDepoisDoEnvio(
     default:
       return SEM_ACAO;
   }
+}
+
+/** Etapas em que o servidor aceita registrar a execução com o aditivo em negociação (problemaDoRegistroDaExecucao). */
+const ETAPAS_DO_ADITIVO_EM_NEGOCIACAO: readonly EtapaDemanda[] = ["em_montagem", "para_aprovar", "para_enviar", "aguardando_cliente"];
+
+/**
+ * O aditivo ainda sem o sim do cliente, sobre a demanda fechada e ainda não
+ * executada: o serviço não espera o aditivo, a execução se registra mesmo
+ * assim (domain/demanda.ts, aditivoEmNegociacao).
+ */
+function executaComAditivoEmNegociacao(item: ItemParaAcoes): boolean {
+  return (
+    item.tipoRv === "aditivo" &&
+    item.escopoRv !== null &&
+    item.escopoRv !== item.rv &&
+    !item.validada &&
+    !item.executada &&
+    ETAPAS_DO_ADITIVO_EM_NEGOCIACAO.includes(item.etapa)
+  );
 }
 
 // --- Motivos -----------------------------------------------------------------------------------------

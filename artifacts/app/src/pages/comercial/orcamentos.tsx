@@ -124,6 +124,12 @@ export default function ComercialOrcamentosPage() {
   );
 
   const depois = useDepoisDoEnvio({ contatos: contatos.itens ?? [] });
+  // O aviso da recusa vale para o orçamento em que aconteceu: ao trocar de ficha, sai.
+  const numeroSelecionado = selecionado?.numero ?? null;
+  useEffect(() => {
+    depois.limparAviso();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [numeroSelecionado]);
   const acoesDaEtapa = selecionado
     ? acoesDepoisDoEnvio(selecionado, { role, uid: user?.uid })
     : { principal: null, secundarias: [] };

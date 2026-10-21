@@ -496,7 +496,7 @@ describe("montar orçamento", () => {
 });
 
 describe("montar orçamento depois do envio (parte 12b)", () => {
-  const ENVIADA: ItemParaAcoes = { numero: "10045", rv: 0, etapa: "aguardando_cliente", tipoRv: "proposta", status: "enviado", edicao: 7, revisaoDe: null, autorUid: "u-gui" };
+  const ENVIADA: ItemParaAcoes = { numero: "10045", rv: 0, etapa: "aguardando_cliente", tipoRv: "proposta", status: "enviado", edicao: 7, revisaoDe: null, autorUid: "u-gui", escopoRv: null, executada: false, validada: false };
   const quem = { role: "comercial", uid: "u-gui" };
 
   function enviada(parcial: Partial<ItemParaAcoes> = {}, dados: Partial<DadosDoOrcamento> = {}, onAcao: (acao: string) => void = noop) {

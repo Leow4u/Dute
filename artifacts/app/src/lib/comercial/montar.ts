@@ -834,6 +834,18 @@ export type AcoesDoOrcamento = {
 };
 
 /**
+ * O que o envio direto da dispensa espera do servidor: a situação e a edição
+ * que a tela viu, ou, se salvou antes, o rascunho na edição que o servidor
+ * acabou de gravar.
+ */
+export function esperadoDoEnvioDireto(
+  base: { status: StatusOrcamento | string; edicao: number },
+  salvo: { edicao: number } | null,
+): { status: StatusOrcamento; edicao: number } {
+  return salvo ? { status: "rascunho", edicao: salvo.edicao } : { status: base.status as StatusOrcamento, edicao: base.edicao };
+}
+
+/**
  * O que a tela oferece. Rascunho: montar, com "Enviar para aprovação" (ou,
  * na RV de execução com a aprovação dispensada pelo servidor, "Enviar ao
  * cliente" direto). Para aprovar: só leitura; o owner aprova (principal),
@@ -854,6 +866,8 @@ export function acoesDoOrcamento(entrada: {
   tipoRv?: string;
   /** quotes.dispensa.dispensada, do servidor. */
   dispensada?: boolean;
+  /** Há alteração não salva: a dispensa gravada não vale para o que está na tela. */
+  sujo?: boolean;
   descartavel?: boolean;
 }): AcoesDoOrcamento {
   const documento = entrada.status === "enviado" ? "enviado" : "previa";
@@ -863,7 +877,7 @@ export function acoesDoOrcamento(entrada: {
   const descartar: AcaoSecundaria[] = entrada.descartavel ? ["descartar_rv"] : [];
   switch (entrada.status) {
     case "rascunho": {
-      const dispensada = entrada.tipoRv === "execucao" && entrada.dispensada === true;
+      const dispensada = entrada.tipoRv === "execucao" && entrada.dispensada === true && entrada.sujo !== true;
       return {
         editavel: true,
         principal: dispensada ? "enviar_dispensado" : "enviar",
