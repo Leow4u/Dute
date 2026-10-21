@@ -7555,6 +7555,7 @@ export type AddCatalogPhotosInput = {
   customer_code?: string;
   photo_urls: string[];
   photo_storage_paths?: string[];
+  primary_photo_url?: string;
   idempotency_key: string;
 };
 
@@ -7584,7 +7585,7 @@ export async function addCatalogPhotosTransaction(
     throw new HttpsError("invalid-argument", "Foto com endereço inválido.");
   }
   const inputHash = digest(
-    { skuCode, clientItemCode, customerCode, newPhotos, newPaths },
+    { skuCode, clientItemCode, customerCode, newPhotos, newPaths, primaryPhoto: input.primary_photo_url },
     64,
   );
   const operationId = `op_photos_${digest({
@@ -7621,17 +7622,32 @@ export async function addCatalogPhotosTransaction(
       ]);
 
     const current = asRecord(skuSnapshot?.data() ?? productSnapshot?.data());
-    const existingPhotos = stringList(
-      current.photo_urls ?? asRecord(productSnapshot?.data()).photo_urls,
-    );
-    const photoUrls = [...new Set([...existingPhotos, ...newPhotos])].slice(0, 8);
-    const photoPaths = [
-      ...new Set([...stringList(current.photo_storage_paths), ...newPaths]),
-    ].slice(0, 8);
+    assertCatalogOwnedBy(customerCode, [skuSnapshot?.data(), productSnapshot?.data()], skuCode);
+    const existingPhotos = [...new Set([
+      ...stringList(current.photo_urls),
+      ...stringList(asRecord(productSnapshot?.data()).photo_urls),
+      ...balanceRows.flatMap((row) => stringList(row.data.photo_urls)),
+      ...[text(current.primary_photo_url), text(asRecord(productSnapshot?.data()).primary_photo_url)].filter(Boolean),
+    ])];
+    const photoUrls = [...new Set([...existingPhotos, ...newPhotos])];
+    if (photoUrls.length > 8) throw new HttpsError("failed-precondition", "O produto já atingiu o limite de 8 fotos.");
+    if (input.primary_photo_url && !photoUrls.includes(input.primary_photo_url)) {
+      throw new HttpsError("invalid-argument", "A foto principal precisa estar entre as fotos do produto.");
+    }
+    const primaryPhoto = input.primary_photo_url || text(current.primary_photo_url) || photoUrls[0];
+    if (photoUrls.includes(primaryPhoto)) photoUrls.splice(photoUrls.indexOf(primaryPhoto), 1);
+    photoUrls.unshift(primaryPhoto);
+    const pathsByUrl = new Map<string, string>();
+    for (const record of [asRecord(productSnapshot?.data()), current, { photo_urls: newPhotos, photo_storage_paths: newPaths }]) {
+      const urls = stringList(record.photo_urls);
+      const paths = stringList(record.photo_storage_paths);
+      urls.forEach((url, index) => { if (paths[index]) pathsByUrl.set(url, paths[index]!); });
+    }
+    const photoPaths = photoUrls.map((url) => pathsByUrl.get(url)).filter((path): path is string => Boolean(path));
     const added = photoUrls.length - existingPhotos.length;
     const photoFields = compact({
       photo_urls: photoUrls,
-      primary_photo_url: text(current.primary_photo_url) || photoUrls[0],
+      primary_photo_url: primaryPhoto,
       photo_storage_paths: photoPaths.length ? photoPaths : undefined,
       updated_at: FieldValue.serverTimestamp(),
     });
@@ -7680,7 +7696,7 @@ export async function addCatalogPhotosTransaction(
         entity_type: "sku",
         entity_id: skuCode,
         customer_code: customerCode,
-        payload: { added, total: photoUrls.length, client_item_code: clientItemCode },
+        payload: { added, total: photoUrls.length, client_item_code: clientItemCode, primary_photo_changed: Boolean(input.primary_photo_url), photo_storage_paths: newPaths },
       },
       actor,
     );

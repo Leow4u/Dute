@@ -133,6 +133,7 @@ import {
 } from "@/features/warehouse-ops/opening-inventory-status";
 import { customerRows } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
+import { ProductPhotoStudio } from "./product-photo-studio";
 import {
   CODE_MATCH_LABEL,
   findProductByAnyCode,
@@ -1586,6 +1587,13 @@ export function OpeningInventoryWorkspace() {
                         Produto novo precisa de ao menos uma foto.
                       </div>
                     )}
+                    {photos.length ? <div className="mt-3">
+                      <ProductPhotoStudio key={`${customerCode}:${clientCode}`} photos={photos} customerCode={customerCode} productName={productName} category={category} disabled={photoUploading || recordOpeningLine.isPending}
+                        onApprove={(generated, primaryUrl) => setPhotos((current) => {
+                          const merged = [...current, ...generated];
+                          return primaryUrl ? [...merged.filter((photo) => photo.fileUrl === primaryUrl), ...merged.filter((photo) => photo.fileUrl !== primaryUrl)] : merged;
+                        })} />
+                    </div> : null}
                   </div>
 
                   <div className="flex items-start gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4">

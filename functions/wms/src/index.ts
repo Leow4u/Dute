@@ -200,6 +200,7 @@ import {
   type DueRoutine,
 } from "./domain/agent-routines.js";
 import { PROJECT_ID } from "./project.js";
+import { ProductPhotoInput, productPhotoPath, productPhotoPrompt, generateProductPhoto } from "./domain/product-photo.js";
 
 const adminApp = initializeApp();
 setGlobalOptions({
@@ -5044,6 +5045,72 @@ export const createProductPhotoUploadTarget = onCall(async (request) => {
   });
 });
 
+export const generateCatalogPhoto = onCall({ timeoutSeconds: 180, maxInstances: 3 }, async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  const parsed = ProductPhotoInput.safeParse(request.data ?? {});
+  if (!parsed.success) throw new HttpsError("invalid-argument", "Informe a foto, o cliente e o tipo de apresentação.");
+  const input = parsed.data;
+  const customer = requireCustomerScope(profile, input.customer_code);
+  const bucketName = documentBucketName();
+  const sourcePath = productPhotoPath(input.source_url, bucketName, customer);
+  const bucket = getStorage().bucket(bucketName);
+  const source = bucket.file(sourcePath);
+  const [metadata] = await source.getMetadata();
+  const mimeType = metadata.contentType ?? "";
+  if (!["image/png", "image/jpeg", "image/webp"].includes(mimeType) || !Number(metadata.size) || Number(metadata.size) > 14 * 1024 * 1024) {
+    throw new HttpsError("invalid-argument", "Use uma foto JPEG, PNG ou WebP de até 14 MB.");
+  }
+  const job = db.collection("product_photo_generations").doc(`${profile.uid}_${input.request_id}`);
+  const hash = createHash("sha256").update(JSON.stringify({ ...input, sourcePath, customer })).digest("hex");
+  const cached = await db.runTransaction(async (transaction) => {
+    const previous = await transaction.get(job);
+    if (previous.exists) {
+      const data = previous.data()!;
+      if (data.input_hash !== hash) throw new HttpsError("already-exists", "Esta solicitação já pertence a outra foto.");
+      if (data.status === "ready") return data.result;
+      throw new HttpsError("aborted", "Esta geração já foi solicitada. Aguarde ou inicie uma nova tentativa.");
+    }
+    transaction.create(job, {
+      customer_code: customer, actor_uid: profile.uid, source_path: sourcePath,
+      mode: input.mode, input_hash: hash, status: "processing", created_at: FieldValue.serverTimestamp(),
+    });
+    return null;
+  });
+  if (cached) return cached;
+  try {
+    const [bytes] = await source.download();
+    const { access_token } = await applicationDefault().getAccessToken();
+    const model = process.env.PRODUCT_PHOTO_MODEL || "gemini-2.5-flash-image";
+    const image = await generateProductPhoto({
+      project: PROJECT_ID, model, token: access_token, bytes, mimeType,
+      prompt: productPhotoPrompt(input),
+    });
+    const extension = image.mimeType === "image/jpeg" ? "jpg" : image.mimeType === "image/webp" ? "webp" : "png";
+    const fileName = `agent-dute-${input.mode}.${extension}`;
+    const path = `product-photos/${safeDocId(customer)}/generated/${randomUUID()}.${extension}`;
+    const token = randomUUID();
+    await bucket.file(path).save(image.bytes, {
+      resumable: false,
+      metadata: {
+        contentType: image.mimeType,
+        metadata: {
+          firebaseStorageDownloadTokens: token, source_path: sourcePath, generated_by: "agent-dute",
+          model, mode: input.mode, actor_uid: profile.uid, customer_code: customer,
+        },
+      },
+    });
+    const result = { fileName, fileUrl: firebaseDownloadUrl(bucketName, path, token), storagePath: path };
+    await job.update({ status: "ready", result, model, completed_at: FieldValue.serverTimestamp() });
+    return result;
+  } catch (error) {
+    await job.update({ status: "failed", completed_at: FieldValue.serverTimestamp() });
+    if (error instanceof HttpsError) throw error;
+    console.error("Falha ao gerar foto de catálogo", { request_id: input.request_id, error });
+    throw new HttpsError("unavailable", "Não foi possível gerar a foto agora. Sua foto original foi preservada.");
+  }
+});
+
 export const createDocumentUploadTarget = onCall(async (request) => {
   const profile = await getProfile(request);
   const parsed = CreateDocumentUploadTargetSchema.safeParse(request.data ?? {});
@@ -6417,6 +6484,7 @@ const AddCatalogPhotosSchema = z.object({
   customer_code: z.string().trim().optional(),
   photo_urls: z.array(z.string().url()).min(1).max(8),
   photo_storage_paths: z.array(z.string().trim().min(1).max(900)).max(8).optional(),
+  primary_photo_url: z.string().url().optional(),
   idempotency_key: z.string().trim().min(1),
 });
 

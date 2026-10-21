@@ -48,7 +48,7 @@ function photosOf(record: AnyRecord | undefined) {
     ? (record.photo_urls as unknown[]).map(text).filter(Boolean)
     : [];
   const primary = text(record.primary_photo_url);
-  return primary && !list.includes(primary) ? [primary, ...list] : list;
+  return primary ? [primary, ...list.filter((url) => url !== primary)] : list;
 }
 
 function optionalNum(value: unknown) {

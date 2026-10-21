@@ -2,6 +2,22 @@ import { describe, expect, it } from "vitest";
 
 import { functionRoute } from "./functions-api";
 
+describe("fotos profissionais do produto", () => {
+  it("envia a geração autenticada sem transformá-la em alteração de cadastro", async () => {
+    const route = functionRoute("/api/products/generate-photo", "POST");
+    expect(route?.name).toBe("generateCatalogPhoto");
+    const body = { customer_code: "CLIENTE", source_url: "https://example.test/source.png", mode: "mannequin", request_id: "photo-request" };
+    expect(await route?.payload("/api/products/generate-photo", { body: JSON.stringify(body) })).toEqual(body);
+    expect(functionRoute("/api/products/generate-photo", "GET")).toBeNull();
+  });
+  it("mantém a aprovação separada com a foto principal e o cliente ativo", async () => {
+    const body = { customer_code: "CLIENTE", sku_code: "SKU", photo_urls: ["https://example.test/generated.png"], primary_photo_url: "https://example.test/generated.png", idempotency_key: "approve-photo" };
+    const route = functionRoute("/api/catalog/photos", "POST");
+    expect(route?.name).toBe("addCatalogPhotos");
+    expect(await route?.payload("/api/catalog/photos", { body: JSON.stringify(body) })).toEqual(body);
+  });
+});
+
 describe("rotas de faturamento", () => {
   it("prévia da competência vem do servidor, com o cálculo da emissão", async () => {
     const route = functionRoute("/api/billing/periods/2026-09", "GET");
