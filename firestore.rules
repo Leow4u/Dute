@@ -122,6 +122,13 @@ service cloud.firestore {
       return hasAnyRole(['owner', 'admin', 'interno', 'wms', 'suporte']);
     }
 
+    // Preço do Comercial (docs/plataforma/fase-6-comercial.md, "Leitura"):
+    // catálogo, tabelas, contratos e orçamentos. Operação e campo nunca veem
+    // valores, e o suporte não entra; canReadBilling não muda.
+    function canReadPrices() {
+      return hasAnyRole(['owner', 'admin', 'comercial']);
+    }
+
     function canUseAgentChat() {
       return hasAnyRole(['owner', 'admin', 'interno', 'wms', 'financeiro', 'suporte', 'cliente']);
     }
@@ -986,6 +993,19 @@ service cloud.firestore {
     // via Cloud Functions (Admin SDK).
     match /system_controls/{controlId} {
       allow read: if canReadForBilling();
+      allow create, update, delete: if false;
+    }
+
+    // Catálogo do Comercial: o item, sem preço. Na Fase 3 a operação passa
+    // a ler. Escrita só pela carga de tabela (Admin SDK).
+    match /lpu_items/{itemId} {
+      allow read: if canReadPrices();
+      allow create, update, delete: if false;
+    }
+
+    // Tabelas de preço do Comercial: imutáveis, com os preços dentro.
+    match /price_tables/{tableId} {
+      allow read: if canReadPrices();
       allow create, update, delete: if false;
     }
 

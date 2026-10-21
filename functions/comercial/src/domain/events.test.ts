@@ -55,8 +55,17 @@ const EXEMPLOS: Record<ComercialEventType, Record<string, unknown>> = {
     tabela_id: "itau-v2-comercial",
     variante: "comercial",
     linhas: 312,
+    itens_novos: 12,
     vigencia_inicio: "2026-01-01",
     vigencia_fim: "2026-12-31",
+    contrato_id: "itau-2026",
+    substitui: "itau-v1-comercial",
+  },
+  "price_table.closed": {
+    tabela_id: "itau-v1-comercial",
+    variante: "fim_de_semana",
+    vigencia_fim: "2025-12-31",
+    substituida_por: "itau-v2-comercial",
     contrato_id: "itau-2026",
   },
   "client_authorization.recorded": { autorizacao_id: "aut_0001", demandas: ["10045", "10046"] },
@@ -390,6 +399,45 @@ describe("evento gravado", () => {
       (error: unknown) => error instanceof HttpsError && /sem customer_code/.test(error.message),
     );
     assert.equal(buildComercialEvent({ ...doContrato, customer_code: "ITAU" }).customer_code, "ITAU");
+  });
+
+  it("a variante da tabela vai como código: texto livre na tabela, sem algarismo nem maiúscula no evento", () => {
+    const payload = {
+      tabela_id: "pt_1",
+      linhas: 10,
+      vigencia_inicio: "2026-01-01",
+      vigencia_fim: null,
+    };
+    for (const variante of ["comercial", "noturna", "fim_de_semana", "sp"]) {
+      assert.ok(COMERCIAL_EVENT_PAYLOADS["price_table.imported"].safeParse({ ...payload, variante }).success, variante);
+    }
+    for (const variante of ["Noturna", "Fim de semana", "noturna_2", "R$ 10", ""]) {
+      assert.equal(
+        COMERCIAL_EVENT_PAYLOADS["price_table.imported"].safeParse({ ...payload, variante }).success,
+        false,
+        variante,
+      );
+    }
+  });
+
+  it("encerrar tabela sem contrato também pode não ter cliente (a Padrão Dutelog)", () => {
+    const encerrada = {
+      operation_id: "op_table",
+      type: "price_table.closed" as const,
+      entity_id: "pt_padrao_v1",
+      customer_code: null,
+      payload: { tabela_id: "pt_padrao_v1", variante: "comercial", vigencia_fim: "2026-06-29", substituida_por: "pt_padrao_v2" },
+      actor: equipe,
+    };
+    const event = buildComercialEvent(encerrada);
+    assert.equal(event.customer_code, null);
+    assert.equal(event.entity_type, "price_table");
+    assert.equal(event.title, "Tabela de preço encerrada");
+    assert.match(event.description, /29\/06\/2026/);
+    assert.throws(
+      () => buildComercialEvent({ ...encerrada, payload: { ...encerrada.payload, contrato_id: "itau-2026" } }),
+      (error: unknown) => error instanceof HttpsError && /sem customer_code/.test(error.message),
+    );
   });
 
   it("occurred_at fora do ISO em UTC com milissegundos é recusado", () => {
