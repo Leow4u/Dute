@@ -63,7 +63,13 @@ const tipoRv = z.enum(TIPOS_RV);
 
 export const ESTAGIOS_CADASTRO = ["prospect", "cliente"] as const;
 export const REGIMES_COBRANCA = ["por_demanda", "medicao_mensal", "wms"] as const;
-export const VARIANTES_TABELA = ["comercial", "noturna"] as const;
+
+/**
+ * Variante da tabela de preço: na tabela é texto livre de letras ("Comercial",
+ * "Noturna", "Fim de semana"); no evento vai normalizada (normalizarVariante
+ * em tabelas.ts: "fim_de_semana"), como código, sem algarismo.
+ */
+const variante = codigo;
 
 const quoteStep = z.object({ numero, rv, edicao }).strict();
 
@@ -107,10 +113,24 @@ export const COMERCIAL_EVENT_PAYLOADS = {
   "price_table.imported": z
     .object({
       tabela_id: id,
-      variante: z.enum(VARIANTES_TABELA),
+      variante,
+      /** Itens com preço na tabela. */
       linhas: contagem,
+      /** Itens que a carga criou no catálogo (os outros já existiam). */
+      itens_novos: contagem.optional(),
       vigencia_inicio: data,
       vigencia_fim: data.nullable(),
+      contrato_id: id.nullable().optional(),
+      /** A tabela anterior, que esta carga encerrou (price_table.closed na mesma operação). */
+      substitui: id.nullable().optional(),
+    })
+    .strict(),
+  "price_table.closed": z
+    .object({
+      tabela_id: id,
+      variante,
+      vigencia_fim: data,
+      substituida_por: id,
       contrato_id: id.nullable().optional(),
     })
     .strict(),
@@ -143,11 +163,11 @@ const ENTITY_TYPES: Record<string, string> = {
 };
 
 /**
- * Evento sem cliente: só a importação de tabela sem contrato (a Padrão
- * Dutelog, que é de todos). Tabela com contrato é de um cliente.
+ * Evento sem cliente: só a carga e o encerramento de tabela sem contrato (a
+ * Padrão Dutelog, que é de todos). Tabela com contrato é de um cliente.
  */
 function semClienteAceito(type: ComercialEventType, payload: Record<string, unknown>): boolean {
-  return type === "price_table.imported" && !payload.contrato_id;
+  return (type === "price_table.imported" || type === "price_table.closed") && !payload.contrato_id;
 }
 
 /** Instante em ISO, em UTC e com milissegundos (o formato de toISOString): o WMS ordena e filtra por ele como texto. */
@@ -179,10 +199,10 @@ const REGIME_ROTULO: Record<(typeof REGIMES_COBRANCA)[number], string> = {
   wms: "fatura do WMS",
 };
 
-const VARIANTE_ROTULO: Record<(typeof VARIANTES_TABELA)[number], string> = {
-  comercial: "Comercial",
-  noturna: "Noturna",
-};
+/** "fim_de_semana" → "fim de semana". */
+function varianteRotulo(value: string): string {
+  return value.replace(/_/g, " ");
+}
 
 function orcamento(numeroServico: string, revisao: number): string {
   return revisao === 0 ? `Orçamento ${numeroServico}` : `Orçamento ${numeroServico} – RV${String(revisao).padStart(2, "0")}`;
@@ -279,7 +299,11 @@ const TEMPLATES: Templates = {
 
   "price_table.imported": (p) => ({
     title: "Tabela de preço importada",
-    description: `Variante ${VARIANTE_ROTULO[p.variante]}, ${p.linhas} itens, vigente desde ${dataRotulo(p.vigencia_inicio)}.`,
+    description: `Variante ${varianteRotulo(p.variante)}, ${p.linhas} itens, vigente desde ${dataRotulo(p.vigencia_inicio)}.`,
+  }),
+  "price_table.closed": (p) => ({
+    title: "Tabela de preço encerrada",
+    description: `Variante ${varianteRotulo(p.variante)}, vigente até ${dataRotulo(p.vigencia_fim)}, substituída por outra tabela.`,
   }),
 
   "client_authorization.recorded": (p) => ({
