@@ -51,6 +51,26 @@ export type PortalStatus = (typeof PORTAL_STATUSES)[number];
 export const CUSTOMER_STATUSES = ["active", "paused", "archived"] as const;
 export type CustomerStatus = (typeof CUSTOMER_STATUSES)[number];
 
+/**
+ * Estágio do cadastro (docs/plataforma/fase-6-comercial.md). `customers` é a
+ * lista única de empresas: o prospect (recebeu orçamento, ainda não é
+ * cliente) mora aqui com `stage: "prospect"`, gravado só pelo Comercial, sem
+ * sigla, modelo, módulos nem projeções. O WMS não grava `stage` e não altera
+ * nem arquiva prospect. Igual a ESTAGIOS_CADASTRO de lib/dominio: o teste
+ * platform-lists do app trava.
+ */
+export const CUSTOMER_STAGES = ["prospect", "cliente"] as const;
+export type CustomerStage = (typeof CUSTOMER_STAGES)[number];
+
+/** Leitura tolerante do estágio: sem o campo (a BTG e os cadastros de hoje), cliente. */
+export function customerStage(value: unknown): CustomerStage {
+  return text(value).toLowerCase() === "prospect" ? "prospect" : "cliente";
+}
+
+export function isProspect(record: Record<string, unknown> | null | undefined): boolean {
+  return customerStage(record?.stage) === "prospect";
+}
+
 /** Sigla do SKU: 2 a 6 letras ou números, começando por letra (BTG, ITAU, DUT). */
 export const SKU_PREFIX_PATTERN = /^[A-Z][A-Z0-9]{1,5}$/;
 
@@ -188,7 +208,23 @@ export type CustomerMutation = {
  * operação e a sigla são validados aqui, nunca confiados ao navegador.
  */
 export function buildCustomerPayload(mutation: CustomerMutation): Record<string, unknown> {
-  const { action, data, before, documentId, actorUid } = mutation;
+  const { action, before, documentId, actorUid } = mutation;
+  // O estágio é do Comercial: o WMS nunca grava `stage`.
+  const { stage: _stage, ...data } = mutation.data;
+  if (action !== "create" && isProspect(before)) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Este cadastro é um prospect do Comercial: ele não é alterado nem arquivado pelo WMS.",
+    );
+  }
+  if (action === "archive" && !canonicalSkuPrefix(before.sku_prefix)) {
+    // Arquivar grava client_profiles e client_access com os módulos padrão
+    // (wms e financeiro): o cadastro sem armazenagem ganharia acesso ao portal.
+    throw new HttpsError(
+      "failed-precondition",
+      "Cliente sem sigla do SKU não é arquivado pelo WMS: ele não tem armazenagem.",
+    );
+  }
   if (action === "archive") {
     return {
       status: "archived",
@@ -346,26 +382,89 @@ export async function assertSkuPrefixAvailable(
 }
 
 /**
+ * Código comparado na unicidade: sem acento, sem diferenciar maiúsculas e sem
+ * espaço sobrando. "Itau" e "ITAÚ" são o mesmo código (o acento vira `_` no
+ * id do documento, então só o id não pegaria a colisão).
+ */
+export function canonicalCustomerCode(value: unknown): string {
+  return text(value)
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toUpperCase()
+    .replace(/\s+/g, " ");
+}
+
+/**
+ * Raiz do CNPJ (8 primeiros dígitos), tirada de `document` só com os números.
+ * Só existe com o CNPJ inteiro (14 dígitos): CPF, texto livre ou número
+ * incompleto não têm raiz e não entram na comparação.
+ */
+export function cnpjRoot(value: unknown): string | null {
+  const digits = text(value).replace(/\D/g, "");
+  return digits.length === 14 ? digits.slice(0, 8) : null;
+}
+
+export type CustomerIdentityCandidate = {
+  code: unknown;
+  document?: unknown;
+  /** Id do documento que está sendo gravado: não conflita consigo mesmo. */
+  documentId: string;
+};
+
+export type CustomerIdentityRow = { id: string; data: Record<string, unknown> };
+
+/**
+ * Conflito de identidade de um cadastro novo contra todos os outros,
+ * inclusive arquivados e prospects: o código (canônico, contra `code` e
+ * `customer_code`) e, quando vier, a raiz do CNPJ. Mensagem do conflito, ou
+ * null. O Comercial (functions/comercial) usa a mesma regra.
+ */
+export function customerIdentityConflict(
+  candidate: CustomerIdentityCandidate,
+  rows: readonly CustomerIdentityRow[],
+): string | null {
+  const code = text(candidate.code);
+  const canonical = canonicalCustomerCode(code);
+  const root = cnpjRoot(candidate.document);
+  const others = rows.filter((row) => row.id !== candidate.documentId);
+  const nameOf = (row: CustomerIdentityRow) => text(row.data.name) || row.id;
+
+  if (canonical) {
+    for (const row of others) {
+      const taken = [row.data.code, row.data.customer_code]
+        .map(text)
+        .find((existing) => existing && canonicalCustomerCode(existing) === canonical);
+      if (taken === undefined) continue;
+      const detail = taken === code ? "" : ` (cadastrado como ${taken})`;
+      return `O código ${code} já é do cliente ${nameOf(row)}${detail}.`;
+    }
+  }
+  if (root) {
+    const conflict = others.find((row) => cnpjRoot(row.data.document) === root);
+    if (conflict) {
+      return `A raiz do CNPJ ${root} já é do cliente ${nameOf(conflict)}. Filiais ficam no mesmo cadastro.`;
+    }
+  }
+  return null;
+}
+
+/**
  * O código operacional identifica o cliente em todo o sistema e é o id de
  * `client_access`: dois cadastros com o mesmo código disputariam o mesmo
- * contrato. Vale também contra cadastro arquivado. Leitura dentro da
- * transação, antes de qualquer escrita.
+ * contrato. A raiz do CNPJ também é única: há um cadastro por empresa. Lê o
+ * cadastro inteiro (centenas de documentos) dentro da transação, antes de
+ * qualquer escrita, e compara em memória: funciona com cadastro antigo, sem
+ * campo novo.
  */
-export async function assertCustomerCodeAvailable(
+export async function assertCustomerIdentityAvailable(
   transaction: Transaction,
   db: Firestore,
-  code: string,
-  documentId: string,
+  candidate: CustomerIdentityCandidate,
 ): Promise<void> {
-  const [byCode, byCustomerCode] = await Promise.all([
-    transaction.get(db.collection(CUSTOMERS_COLLECTION).where("code", "==", code)),
-    transaction.get(db.collection(CUSTOMERS_COLLECTION).where("customer_code", "==", code)),
-  ]);
-  const conflict = [...byCode.docs, ...byCustomerCode.docs].find((row) => row.id !== documentId);
-  if (conflict) {
-    throw new HttpsError(
-      "already-exists",
-      `O código ${code} já é do cliente ${text(conflict.get("name")) || conflict.id}.`,
-    );
-  }
+  const snapshot = await transaction.get(db.collection(CUSTOMERS_COLLECTION));
+  const problem = customerIdentityConflict(
+    candidate,
+    snapshot.docs.map((row) => ({ id: row.id, data: row.data() })),
+  );
+  if (problem) throw new HttpsError("already-exists", problem);
 }

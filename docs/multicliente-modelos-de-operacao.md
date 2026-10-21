@@ -217,6 +217,31 @@ firebase deploy --only functions --project dute-btg
 tools\check_functions_invoker.ps1
 ```
 
+## Prospect do Comercial (20/10/2026): o WMS não enxerga
+
+`customers` é a lista única de empresas (desenho do Comercial,
+`docs/plataforma/fase-6-comercial.md`). O prospect, que recebeu orçamento e
+ainda não é cliente, mora ali com `stage: "prospect"`, gravado só pelo
+Comercial, sem sigla, modelo, módulos nem projeções. Sem o campo, o cadastro é
+cliente: a BTG e os cadastros de hoje não mudam. A lista dos estágios fica em
+`lib/dominio` (`ESTAGIOS_CADASTRO`), com cópia travada em `customer-profile.ts`.
+
+- **Lista de clientes** (`GET /api/customers`): esconde o prospect, como esconde
+  o arquivado, sem `include_prospects=true`. Vale para Configurações › Clientes,
+  o convite e Posições.
+- **Cadastro pelo WMS**: não grava `stage`, não altera nem arquiva prospect e não
+  arquiva cadastro sem sigla (o arquivamento gravaria `client_profiles` e
+  `client_access` com os módulos padrão). Na criação, o código é único sem
+  acento e sem maiúsculas ("Itau" colide com "ITAÚ") e, com o CNPJ inteiro em
+  `document`, a raiz (8 dígitos) também é única, contra todos os cadastros,
+  inclusive arquivados e prospects.
+- **Convite de cliente**: exige cadastro achado pelo código, não arquivado, que
+  não seja prospect e que tenha sigla (`domain/customer-invite.ts`). A BTG passa
+  sempre, com ou sem sigla e projeções.
+- **Posições** oferece como zona só cadastro com sigla, e a BTG.
+- O seletor de cliente ativo e a criação de produto não mudam: sem projeção não
+  há seletor, e sem sigla não há SKU.
+
 ## Próximos PRs
 
 1. **Mobiliário**: estado de conservação (ótimo, bom, ruim, danificado) com

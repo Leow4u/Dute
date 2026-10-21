@@ -22,7 +22,7 @@ import {
   type QueryConstraint,
 } from "firebase/firestore";
 
-import { PAPEIS_DO_WMS, isPapel } from "@workspace/dominio";
+import { PAPEIS_DO_WMS, estagioDoCadastro, isPapel } from "@workspace/dominio";
 import { firebaseAuth, firestore } from "./firebase";
 import { callFunctionsApi } from "./functions-api";
 import {
@@ -3675,6 +3675,15 @@ async function route(
         items = items.filter(
           (row) => row.archived !== true && row.status !== "archived",
         );
+      }
+      // O prospect do Comercial mora em `customers` mas não é cliente do WMS:
+      // some de Configurações › Clientes, do convite e de Posições. Mesmo
+      // filtro em memória: cadastro sem `stage` é cliente.
+      if (
+        routeConfig.name === collectionNames.customers &&
+        searchParams.get("include_prospects") !== "true"
+      ) {
+        items = items.filter((row) => estagioDoCadastro(row.stage) !== "prospect");
       }
 
       return json({

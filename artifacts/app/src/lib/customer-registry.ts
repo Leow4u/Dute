@@ -94,6 +94,36 @@ export function customerDocumentId(customer: Pick<CustomerRecord, "code" | "id">
   return String(customer.id ?? "").trim() || customerCode(customer);
 }
 
+/**
+ * Cadastro com armazenagem: tem sigla do SKU (sem sigla não há SKU, zona nem
+ * portal). A BTG conta sempre: o cadastro dela pode nunca ter sido salvo com
+ * sigla (docs/multicliente-modelos-de-operacao.md).
+ */
+export function customerHasStorage(customer: Pick<CustomerRecord, "code" | "id" | "sku_prefix">): boolean {
+  return Boolean(canonicalSkuPrefix(customer.sku_prefix)) || customerCode(customer) === LEGACY_CUSTOMER_CODE;
+}
+
+/**
+ * Clientes oferecidos no convite do perfil cliente: com portal e armazenagem.
+ * A Function recusa o resto (functions/wms/src/domain/customer-invite.ts).
+ */
+export function inviteCustomers<
+  T extends Pick<CustomerRecord, "code" | "id" | "sku_prefix" | "archived" | "portal_status">,
+>(customers: readonly T[]): T[] {
+  return customers.filter(
+    (customer) => customer.archived !== true && customer.portal_status !== "inactive" && customerHasStorage(customer),
+  );
+}
+
+/** Clientes que podem ser zona em Estoque › Posições: com código e armazenagem. */
+export function zoneCustomers<T extends Pick<CustomerRecord, "code" | "id" | "sku_prefix" | "status">>(
+  customers: readonly T[],
+): T[] {
+  return customers.filter(
+    (customer) => Boolean(customer.code) && customer.status !== "inactive" && customerHasStorage(customer),
+  );
+}
+
 export function emptyCustomerForm(): CustomerForm {
   return {
     code: "",
