@@ -58,6 +58,11 @@ export interface LinhaDeDinheiro {
 const DECIMAL = /^(-?)(\d+)(?:\.(\d+))?$/;
 const LIMITE = 9007199254740991n; // Number.MAX_SAFE_INTEGER
 
+// Teto da parte inteira, sem os zeros à esquerda. O limite seguro em reais
+// tem 14 dígitos; acima de 15 não é orçamento. Recusar antes do BigInt evita
+// gastar CPU do servidor com um texto enorme.
+const DIGITOS_DA_PARTE_INTEIRA = 15;
+
 function potenciaDeDez(expoente: number): bigint {
   return 10n ** BigInt(expoente);
 }
@@ -78,7 +83,8 @@ function conferirCentavos(valor: unknown, campo: string): number {
 
 /**
  * Lê um decimal em texto com ponto, sem passar por float. Recusa number,
- * vírgula, expoente, espaço e mais casas que o permitido.
+ * vírgula, expoente, espaço, mais casas que o permitido e parte inteira com
+ * mais de 15 dígitos.
  */
 export function lerDecimal(valor: unknown, casasMaximas: number, campo = "valor"): DecimalExato {
   if (typeof valor !== "string") {
@@ -88,9 +94,13 @@ export function lerDecimal(valor: unknown, casasMaximas: number, campo = "valor"
   if (!partes) {
     throw new ErroDinheiro("DECIMAL_INVALIDO", `${campo} deve ser decimal com ponto, como 1234.56.`);
   }
-  const [, sinal, inteiro, fracao = ""] = partes;
+  const [, sinal, inteiroEscrito, fracao = ""] = partes;
   if (fracao.length > casasMaximas) {
     throw new ErroDinheiro("CASAS_DEMAIS", `${campo} aceita até ${casasMaximas} casas decimais.`);
+  }
+  const inteiro = inteiroEscrito.replace(/^0+(?=\d)/, "");
+  if (inteiro.length > DIGITOS_DA_PARTE_INTEIRA) {
+    throw new ErroDinheiro("FORA_DO_LIMITE", `${campo} passa de ${DIGITOS_DA_PARTE_INTEIRA} dígitos na parte inteira.`);
   }
   const absoluto = BigInt(`${inteiro}${fracao}`);
   return { coeficiente: sinal === "-" ? -absoluto : absoluto, casas: fracao.length };
@@ -118,7 +128,7 @@ export function centavosDaLinha(
 ): number {
   const qtd = lerDecimal(quantidade, CASAS_DA_QUANTIDADE, "quantidade");
   const unitario = lerDecimal(preco, CASAS_DO_PRECO, "preço");
-  if (opcoes?.ajuste !== true &&(qtd.coeficiente < 0n || unitario.coeficiente < 0n)) {
+  if (opcoes?.ajuste !== true && (qtd.coeficiente < 0n || unitario.coeficiente < 0n)) {
     throw new ErroDinheiro("NEGATIVO_FORA_DE_AJUSTE", "Negativo, em quantidade ou preço, só em linha de ajuste.");
   }
   const centavos = paraCentavos({

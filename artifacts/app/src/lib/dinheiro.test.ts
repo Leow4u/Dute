@@ -132,7 +132,15 @@ describe("dinheiro: contrato", () => {
     expect(lerDecimal("12.50", CASAS_DO_PRECO)).toEqual({ coeficiente: 1250n, casas: 2 });
     expect(lerDecimal("-0.3335", CASAS_DO_PRECO)).toEqual({ coeficiente: -3335n, casas: 4 });
     expect(lerDecimal("123456789.123", CASAS_DA_QUANTIDADE)).toEqual({ coeficiente: 123456789123n, casas: 3 });
+    expect(codigoDoErro(() => lerDecimal("1.0001", CASAS_DA_QUANTIDADE))).toBe("CASAS_DEMAIS");
     expect(codigoDoErro(() => lerDecimal("1.0000", CASAS_DA_QUANTIDADE))).toBe("CASAS_DEMAIS");
+  });
+
+  it("recusa parte inteira com mais de 15 dígitos antes de fazer a conta", () => {
+    expect(lerDecimal("999999999999999", CASAS_DA_QUANTIDADE)).toEqual({ coeficiente: 999999999999999n, casas: 0 });
+    expect(lerDecimal(`${"0".repeat(100_000)}1.5`, CASAS_DA_QUANTIDADE)).toEqual({ coeficiente: 15n, casas: 1 });
+    expect(codigoDoErro(() => lerDecimal("1000000000000000", CASAS_DA_QUANTIDADE))).toBe("FORA_DO_LIMITE");
+    expect(codigoDoErro(() => lerDecimal("9".repeat(1_000_000), CASAS_DO_PRECO))).toBe("FORA_DO_LIMITE");
   });
 
   it("o erro é um Error com código e mensagem", () => {
