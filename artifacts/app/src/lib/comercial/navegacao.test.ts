@@ -8,6 +8,7 @@ import {
   getHomePathForProfile,
   getMobileNavigation,
   getNavigationForProfileRole,
+  menuDoComercial,
   getRouteAppRoles,
   getRouteProfileRoles,
   isModuleGroup,
@@ -39,11 +40,11 @@ import {
 } from "./navegacao";
 
 /**
- * Base de navegação do Comercial (docs/plataforma/fase-6-comercial.md, parte
- * 13): rotas, menu, casa do card na tela de entrada e aterrissagem do papel
- * comercial, sempre por papel E pela liberação (lib/liberacao.ts). Toda
- * chamada aqui passa a liberação explícita: o resultado não depende do .env
- * de quem roda o teste.
+ * Base de navegação do Comercial (docs/plataforma/fase-6-comercial.md):
+ * rotas, menu do ambiente (não o do WMS), casa do card na tela de entrada e
+ * aterrissagem do papel comercial, sempre por papel E pela liberação
+ * (lib/liberacao.ts). Toda chamada aqui passa a liberação explícita: o
+ * resultado não depende do .env de quem roda o teste.
  */
 
 const LIBERADO = true;
@@ -65,6 +66,12 @@ function menu(role: Papel, liberado: boolean) {
   }));
 }
 
+const TELAS_DO_MENU = ["Orçamentos", "Clientes", "Contratos", "Autorizações", "Medições"];
+
+function menuComercial(role: Papel, liberado: boolean) {
+  return menuDoComercial(role, liberado).map((module) => module.label);
+}
+
 describe("rotas do Comercial", () => {
   it("só existem com a liberação ligada", () => {
     expect(rotasDoComercial(DESLIGADO)).toEqual([]);
@@ -82,6 +89,12 @@ describe("rotas do Comercial", () => {
 
   it("o App registra exatamente as rotas do Comercial: a fila, a montagem, o documento, a aprovação, Clientes, Contratos e Autorizações", () => {
     expect(APP_PATHS.filter(doComercial)).toEqual(rotasDoComercial(LIBERADO));
+  });
+
+  it("o App desenha o Comercial no shell dele, e o WMS no shell de hoje", () => {
+    expect(APP_SOURCE).toMatch(/layout: layoutDaRota\(path\)/);
+    expect(APP_SOURCE).toMatch(/comercial: ComercialLayout/);
+    expect(APP_SOURCE).not.toMatch(/layout:\s*isSettingsPath\(path\)\s*\?\s*"settings"\s*:\s*"app"/);
   });
 
   it("toda rota do Comercial no App passa pela liberação: nenhuma fora de soComComercialLiberado", () => {
@@ -228,71 +241,79 @@ describe("link para a ficha do contrato", () => {
 });
 
 describe("menu do Comercial", () => {
-  it("comercial vê só o grupo Comercial, com Orçamentos, Clientes, Contratos, Autorizações e Medições dentro", () => {
-    expect(menu("comercial", LIBERADO)).toEqual([{ label: "Comercial", routes: ["Orçamentos", "Clientes", "Contratos", "Autorizações", "Medições"] }]);
-    const [comercial] = getNavigationForProfileRole("comercial", null, LIBERADO);
-    expect(comercial.href).toBe(ROTA_COMERCIAL);
-    expect(isModuleGroup(comercial)).toBe(true);
+  it("comercial vê só as telas do módulo, e o WMS não lista o Comercial", () => {
+    expect(menuComercial("comercial", LIBERADO)).toEqual(TELAS_DO_MENU);
+    expect(menu("comercial", LIBERADO)).toEqual([]);
+    const orcamentos = menuDoComercial("comercial", LIBERADO)[0];
+    expect(orcamentos.href).toBe(ROTA_COMERCIAL);
+    expect(orcamentos.ambiente).toBe("comercial");
+    expect(isModuleGroup(orcamentos)).toBe(false);
   });
 
   it("fora da liberação o comercial não tem menu, como antes", () => {
     expect(menu("comercial", DESLIGADO)).toEqual([]);
+    expect(menuComercial("comercial", DESLIGADO)).toEqual([]);
   });
 
-  it.each<Papel>(["owner", "admin"])("%s ganha o grupo Comercial depois do Faturamento, só com a liberação", (role) => {
+  it.each<Papel>(["owner", "admin"])("%s mantém o menu do WMS e ganha o do Comercial só com a liberação", (role) => {
     const labels = (liberado: boolean) => menu(role, liberado).map((module) => module.label);
-    expect(labels(DESLIGADO)).not.toContain("Comercial");
+    expect(labels(LIBERADO)).toEqual(labels(DESLIGADO));
     expect(labels(LIBERADO)).toEqual([
       "Início",
       "Agent Dute",
       "Pedidos",
       "Estoque",
       "Faturamento",
-      "Comercial",
       "Relatórios",
       "Documentos",
     ]);
+    expect(menuComercial(role, DESLIGADO)).toEqual([]);
+    expect(menuComercial(role, LIBERADO)).toEqual(TELAS_DO_MENU);
   });
 
   it.each(QUEM_NAO_ABRE)("%s não vê o Comercial nem com a liberação", (role) => {
     expect(menu(role, LIBERADO).map((module) => module.label)).not.toContain("Comercial");
+    expect(menuComercial(role, LIBERADO)).toEqual([]);
   });
 
   it.each(QUEM_ABRE)("todo link do menu de %s abre uma rota permitida para ele", (role) => {
-    for (const module of getNavigationForProfileRole(role, null, LIBERADO)) {
+    const modules = [...getNavigationForProfileRole(role, null, LIBERADO), ...menuDoComercial(role, LIBERADO)];
+    for (const module of modules) {
       for (const route of module.routes) {
         expect(getRouteProfileRoles(route.href!), route.href).toContain(role);
       }
     }
   });
 
-  it("Clientes, Contratos (com a ficha aberta), a fila e a montagem do orçamento acendem o grupo Comercial", () => {
-    const modules = getNavigationForProfileRole("admin", null, LIBERADO);
-    for (const path of [
-      ROTA_CLIENTES,
-      ROTA_CONTRATOS,
-      hrefDoContrato("itau-2026")!,
-      ROTA_MEDICOES,
-      hrefDaMedicao("safra", "2026-09")!,
-      ROTA_COMERCIAL,
-      ROTA_ORCAMENTO,
-      `${ROTA_DOCUMENTO}?numero=10045&rv=1`,
-      ROTA_APROVAR,
-    ]) {
-      expect(getActiveModule(modules, path).label, path).toBe("Comercial");
+  it("cada tela acende o item dela, e nenhuma entra no menu do WMS", () => {
+    const items = menuDoComercial("admin", LIBERADO);
+    const aceso = (path: string) => getActiveModule(items, path).label;
+    expect(aceso(ROTA_CLIENTES)).toBe("Clientes");
+    expect(aceso(ROTA_CONTRATOS)).toBe("Contratos");
+    expect(aceso(hrefDoContrato("itau-2026")!)).toBe("Contratos");
+    expect(aceso(ROTA_AUTORIZACOES)).toBe("Autorizações");
+    expect(aceso(ROTA_MEDICOES)).toBe("Medições");
+    expect(aceso(hrefDaMedicao("safra", "2026-09")!)).toBe("Medições");
+    expect(aceso(ROTA_COMERCIAL)).toBe("Orçamentos");
+    expect(aceso(ROTA_ORCAMENTO)).toBe("Orçamentos");
+    expect(aceso(`${ROTA_DOCUMENTO}?numero=10045&rv=1`)).toBe("Orçamentos");
+    expect(aceso(ROTA_APROVAR)).toBe("Orçamentos");
+
+    const wms = getNavigationForProfileRole("admin", null, LIBERADO);
+    for (const path of [ROTA_COMERCIAL, ROTA_CLIENTES, ROTA_CONTRATOS, ROTA_AUTORIZACOES, ROTA_MEDICOES, ROTA_ORCAMENTO]) {
+      expect(wms.some((module) => module.routes.some((route) => isNavRouteActive(path, route))), path).toBe(false);
     }
   });
 
   it("Orçamentos não acende em Clientes nem em Contratos: a rota da fila é exata", () => {
-    const [comercial] = getNavigationForProfileRole("comercial", null, LIBERADO);
-    const orcamentos = comercial.routes.find((route) => route.label === "Orçamentos")!;
+    const orcamentos = menuDoComercial("comercial", LIBERADO).find((module) => module.label === "Orçamentos")!;
     expect(orcamentos.href).toBe(ROTA_COMERCIAL);
-    expect(orcamentos.exact).toBe(true);
+    expect(orcamentos.routes[0].exact).toBe(true);
   });
 
   it("na montagem do orçamento, o item Orçamentos do menu fica aceso (e só ele)", () => {
-    const [comercial] = getNavigationForProfileRole("comercial", null, LIBERADO);
-    const acesos = (path: string) => comercial.routes.filter((route) => isNavRouteActive(path, route)).map((route) => route.label);
+    const routes = menuDoComercial("comercial", LIBERADO).flatMap((module) => module.routes);
+    const acesos = (path: string) => routes.filter((route) => isNavRouteActive(path, route)).map((route) => route.label);
     expect(acesos(ROTA_ORCAMENTO)).toEqual(["Orçamentos"]);
     expect(acesos(ROTA_DOCUMENTO)).toEqual(["Orçamentos"]);
     expect(acesos(ROTA_APROVAR)).toEqual(["Orçamentos"]);
@@ -304,7 +325,11 @@ describe("menu do Comercial", () => {
   });
 
   it("o menu (lateral, suspenso e do celular) acende pelo item, com as telas dele", () => {
-    for (const arquivo of ["../../components/layout/app-layout.tsx", "../../components/layout/mobile-tab-bar.tsx"]) {
+    for (const arquivo of [
+      "../../components/layout/app-layout.tsx",
+      "../../components/layout/mobile-tab-bar.tsx",
+      "../../components/layout/comercial-shell.tsx",
+    ]) {
       const fonte = readFileSync(new URL(arquivo, import.meta.url), "utf8");
       expect(fonte, arquivo).not.toMatch(/isRouteActive\(location, route\.href, route\.exact\)/);
       expect(fonte, arquivo).toMatch(/isNavRouteActive\(location, route\)/);
@@ -313,16 +338,23 @@ describe("menu do Comercial", () => {
 
   it("os grupos do WMS continuam como eram: grupo é quem tem mais de uma tela", () => {
     const modules = getNavigationForProfileRole("admin", null, LIBERADO);
-    expect(modules.filter(isModuleGroup).map((module) => module.label)).toEqual(["Estoque", "Comercial"]);
+    expect(modules.filter(isModuleGroup).map((module) => module.label)).toEqual(["Estoque"]);
+    expect(menuDoComercial("admin", LIBERADO).filter(isModuleGroup)).toEqual([]);
   });
 
-  it("no celular, o comercial tem o Comercial na barra; o owner o encontra em Mais", () => {
-    const comercial = getMobileNavigation(getNavigationForProfileRole("comercial", null, LIBERADO));
-    expect(comercial.bar.map((module) => module.label)).toEqual(["Comercial"]);
+  it("no celular, o Comercial tem as telas na barra; o WMS do owner não as lista", () => {
+    const comercial = getMobileNavigation(menuDoComercial("comercial", LIBERADO));
+    expect(comercial.bar.map((module) => module.label)).toEqual(["Orçamentos", "Clientes", "Contratos", "Autorizações"]);
+    expect(comercial.more.flatMap(({ routes }) => routes.map((route) => route.label))).toEqual(["Medições"]);
     const owner = getMobileNavigation(getNavigationForProfileRole("owner", null, LIBERADO));
-    expect(owner.more.flatMap(({ module, routes }) => routes.map((route) => `${module.label} · ${route.label}`))).toEqual(
-      expect.arrayContaining(["Comercial · Orçamentos", "Comercial · Clientes", "Comercial · Contratos", "Comercial · Autorizações"]),
-    );
+    const destinos = [
+      ...owner.bar.map((module) => module.label),
+      ...owner.more.flatMap(({ module, routes }) => routes.map((route) => `${module.label} · ${route.label}`)),
+    ];
+    for (const tela of ["Comercial", ...TELAS_DO_MENU]) {
+      expect(destinos, tela).not.toContain(tela);
+      expect(destinos.some((destino) => destino.includes(tela)), tela).toBe(false);
+    }
   });
 });
 
@@ -330,9 +362,12 @@ describe("abreComercial decide menu, aterrissagem e card", () => {
   it.each(PAPEIS)("%s: menu, casa e card seguem abreComercial, com e sem a liberação", (role) => {
     for (const liberado of [LIBERADO, DESLIGADO]) {
       const abre = abreComercial(role, liberado);
-      const noMenu = getNavigationForProfileRole(role, null, liberado).some((module) => module.label === "Comercial");
+      const noWms = getNavigationForProfileRole(role, null, liberado).some(
+        (module) => module.label === "Comercial" || module.ambiente === "comercial",
+      );
+      const noModulo = menuDoComercial(role, liberado).length > 0;
       const card = modulesForPerson(role, null, liberado).some((entry) => entry.module.label === "Comercial");
-      expect({ noMenu, card }, `${role} ${liberado}`).toEqual({ noMenu: abre, card: abre });
+      expect({ noWms, noModulo, card }, `${role} ${liberado}`).toEqual({ noWms: false, noModulo: abre, card: abre });
       if (role === "comercial") expect(getHomePathForProfile(role, liberado) === ROTA_COMERCIAL).toBe(abre);
     }
   });

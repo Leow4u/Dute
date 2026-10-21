@@ -3,9 +3,10 @@ import type { Papel } from "@workspace/dominio";
 import { COMERCIAL_LIBERADO } from "../liberacao";
 
 /**
- * Navegação do Comercial no app (docs/plataforma/fase-6-comercial.md, parte
- * 13). As telas entram no layout de hoje (menu e cabeçalho do app), com o
- * conteúdo na identidade v3; o shell v3 completo é da Fase 2.
+ * Navegação do Comercial no app (docs/plataforma/fase-6-comercial.md).
+ * As rotas são do ambiente Comercial (lib/ambientes.ts): menu, título e
+ * página inicial próprios, não uma seção do WMS. O conteúdo segue a
+ * identidade v3.
  *
  * Tudo aqui depende da liberação própria do Comercial (lib/liberacao.ts): fora
  * dela (produção) não há rota, item de menu, card na tela de entrada nem

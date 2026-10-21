@@ -17,6 +17,10 @@ import type { OperationProfile } from "./operations";
  * dela: hoje Armazenagem, Financeiro e, onde está liberado, o Comercial têm
  * tela. A casa de cada papel mantém a aterrissagem de antes
  * (getHomePathForProfile).
+ *
+ * O card leva à casa. O shell sai do caminho (lib/ambientes.ts): /comercial
+ * abre o ambiente do Comercial; o Faturamento continua no WMS, que é a tela
+ * que existe hoje.
  */
 
 export type PlatformModule = {
