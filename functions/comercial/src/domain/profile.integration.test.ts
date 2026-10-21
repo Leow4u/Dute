@@ -91,9 +91,10 @@ describe("perfil de quem chama o Comercial", () => {
     assert.equal(cliente.customer_code, "BTG Pactual");
   });
 
-  it("requireComercialCaller: liberado na homologação, recusado na produção", async () => {
+  it("requireComercialCaller: liberado na homologação e na produção, recusado no dute-btg", async () => {
     assert.equal((await requireComercialCaller(db, request("com-1"), "dute-homolog")).role, "comercial");
-    const error = await rejection(requireComercialCaller(db, request("com-1"), "dute-prod"));
+    assert.equal((await requireComercialCaller(db, request("com-1"), "dute-prod")).role, "comercial");
+    const error = await rejection(requireComercialCaller(db, request("com-1"), "dute-btg"));
     assert.equal(error.code, "failed-precondition");
     const denied = await rejection(requireComercialCaller(db, request("cli-1"), "dute-homolog"));
     assert.equal(denied.code, "permission-denied");
@@ -109,8 +110,10 @@ describe("perfil de quem chama o Comercial", () => {
       const error = await rejection(requireComercialCaller(db, request(uid), "dute-homolog", { financeiro: true }));
       assert.equal(error.code, "permission-denied", uid);
     }
-    // A liberação vem antes: na produção, nem o financeiro passa.
-    const producao = await rejection(requireComercialCaller(db, request("fin-1"), "dute-prod", { financeiro: true }));
-    assert.equal(producao.code, "failed-precondition");
+    const producao = await requireComercialCaller(db, request("fin-1"), "dute-prod", { financeiro: true });
+    assert.equal(producao.role, "financeiro");
+    // A liberação vem antes do papel: no dute-btg, nem o financeiro passa.
+    const antigo = await rejection(requireComercialCaller(db, request("fin-1"), "dute-btg", { financeiro: true }));
+    assert.equal(antigo.code, "failed-precondition");
   });
 });

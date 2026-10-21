@@ -3,16 +3,16 @@ import { describe, expect, it } from "vitest";
 import { COMERCIAL_AMBIENTES_LIBERADOS, comercialLiberado, plataformaLiberada } from "./liberacao";
 
 describe("liberação da plataforma por ambiente", () => {
-  it("ligada na homologação, em qualquer build", () => {
-    expect(plataformaLiberada("dute-homolog", false)).toBe(true);
-    expect(plataformaLiberada("dute-homolog", true)).toBe(true);
+  it("ligada na homologação e na produção, em qualquer build", () => {
+    for (const projectId of ["dute-homolog", "dute-prod"]) {
+      expect(plataformaLiberada(projectId, false)).toBe(true);
+      expect(plataformaLiberada(projectId, true)).toBe(true);
+    }
   });
 
-  it("desligada na produção e na produção antiga, mesmo em desenvolvimento", () => {
-    for (const projectId of ["dute-prod", "dute-btg"]) {
-      expect(plataformaLiberada(projectId, false)).toBe(false);
-      expect(plataformaLiberada(projectId, true)).toBe(false);
-    }
+  it("desligada na produção antiga, mesmo em desenvolvimento", () => {
+    expect(plataformaLiberada("dute-btg", false)).toBe(false);
+    expect(plataformaLiberada("dute-btg", true)).toBe(false);
   });
 
   it("build sem configuração (demo) fica desligado", () => {
@@ -28,13 +28,14 @@ describe("liberação da plataforma por ambiente", () => {
 });
 
 describe("liberação do Comercial por ambiente", () => {
-  it("só a homologação, a mesma lista das callables (platform-lists.test.ts)", () => {
-    expect(COMERCIAL_AMBIENTES_LIBERADOS).toEqual(["dute-homolog"]);
+  it("homologação e produção, a mesma lista das callables (platform-lists.test.ts)", () => {
+    expect(COMERCIAL_AMBIENTES_LIBERADOS).toEqual(["dute-homolog", "dute-prod"]);
     expect(comercialLiberado("dute-homolog")).toBe(true);
+    expect(comercialLiberado("dute-prod")).toBe(true);
   });
 
-  it("produção, produção antiga e projeto de teste ficam desligados, porque as callables recusam", () => {
-    for (const projectId of ["dute-prod", "dute-btg", "demo-dute", "", null, undefined]) {
+  it("produção antiga e projeto de teste ficam desligados, porque as callables recusam", () => {
+    for (const projectId of ["dute-btg", "demo-dute", "", null, undefined]) {
       expect(comercialLiberado(projectId)).toBe(false);
     }
   });

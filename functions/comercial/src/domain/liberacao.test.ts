@@ -16,23 +16,23 @@ function refusal(projectId: string | null | undefined): HttpsError {
 }
 
 describe("liberação do Comercial por ambiente", () => {
-  it("só a homologação está na lista", () => {
-    assert.deepEqual(COMERCIAL_AMBIENTES_LIBERADOS, ["dute-homolog"]);
+  it("homologação e produção estão na lista", () => {
+    assert.deepEqual(COMERCIAL_AMBIENTES_LIBERADOS, ["dute-homolog", "dute-prod"]);
   });
 
-  it("a homologação passa", () => {
-    assert.equal(comercialLiberado("dute-homolog"), true);
-    assert.doesNotThrow(() => assertLiberado("dute-homolog"));
-  });
-
-  it("a produção e a produção antiga recusam com failed-precondition e o nome do projeto", () => {
-    for (const projectId of ["dute-prod", "dute-btg"]) {
-      assert.equal(comercialLiberado(projectId), false, projectId);
-      const error = refusal(projectId);
-      assert.equal(error.code, "failed-precondition");
-      assert.match(error.message, /Comercial ainda não está liberado/);
-      assert.ok(error.message.includes(projectId), error.message);
+  it("a homologação e a produção passam", () => {
+    for (const projectId of ["dute-homolog", "dute-prod"]) {
+      assert.equal(comercialLiberado(projectId), true, projectId);
+      assert.doesNotThrow(() => assertLiberado(projectId));
     }
+  });
+
+  it("a produção antiga recusa com failed-precondition e o nome do projeto", () => {
+    assert.equal(comercialLiberado("dute-btg"), false);
+    const error = refusal("dute-btg");
+    assert.equal(error.code, "failed-precondition");
+    assert.match(error.message, /Comercial ainda não está liberado/);
+    assert.match(error.message, /dute-btg/);
   });
 
   it("projeto desconhecido, de teste ou vazio também recusa", () => {

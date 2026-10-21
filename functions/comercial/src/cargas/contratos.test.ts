@@ -61,7 +61,7 @@ describe("argumentos da carga de contratos", () => {
   it("--executar só onde o Comercial está liberado, ou no emulador", () => {
     assert.throws(
       () => lerOpcoes(["--arquivo", arquivo, "--executar", "--projeto", "dute-prod"]),
-      (error: unknown) => error instanceof ErroDeUso && /não está liberado no projeto dute-prod/.test(error.message),
+      (error: unknown) => error instanceof ErroDeUso && /não grava no projeto dute-prod/.test(error.message),
     );
     assert.equal(lerOpcoes(["--arquivo", arquivo, "--executar", "--projeto", "dute-homolog"]).projeto, "dute-homolog");
     assert.equal(lerOpcoes(["--arquivo", arquivo, "--executar", "--projeto=demo-dute-comercial"], RAIZ_DO_REPOSITORIO, EMULADOR).executar, true);

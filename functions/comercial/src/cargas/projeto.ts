@@ -18,6 +18,14 @@ function dentro(pasta: string, caminho: string): boolean {
  * ligado. Devolve o motivo da recusa, ou null. Vale para as três cargas.
  */
 export function podeGravarNoProjeto(projeto: string, env: Record<string, string | undefined>): string | null {
+  // A tela e as callables do Comercial estão na produção. A importação em
+  // massa não: ela espera um passo próprio, com dry-run e OK.
+  if (projeto === "dute-prod" || projeto === "dute-btg") {
+    return (
+      `A carga em massa não grava no projeto ${projeto}. ` +
+      "A tela e as callables podem atender; a importação espera um passo próprio, com dry-run e o OK do Leonardo."
+    );
+  }
   if (comercialLiberado(projeto)) return null;
   if (projeto.startsWith("demo-")) {
     return env.FIRESTORE_EMULATOR_HOST
