@@ -96,6 +96,12 @@ service cloud.firestore {
       return hasAnyRole(['owner', 'admin', 'comercial']);
     }
 
+    // Demanda do Comercial (parte 9): o serviço pedido, sem preço. A
+    // operação passa a ler na Fase 3; o preço fica em quotes.
+    function canReadDemands() {
+      return hasAnyRole(['owner', 'admin', 'comercial']);
+    }
+
     /**
      * O cálculo da fatura precisa das fontes operacionais (catálogo, estoque
      * publicado e ledger) além das coleções billing_*. Sem isto o financeiro
@@ -681,6 +687,25 @@ service cloud.firestore {
       allow create, update, delete: if false;
 
       match /aditivos/{aditivoId} {
+        allow read: if canReadPrices();
+        allow create, update, delete: if false;
+      }
+    }
+
+    // Demanda e orçamento do Comercial (parte 9). Só as Functions do
+    // Comercial gravam (saveQuote e advanceQuote). A demanda não tem preço;
+    // o orçamento e as RVs congeladas, sim. A subcoleção tem match próprio.
+    // demand_counters fica sem match: ninguém lê o contador.
+    match /demands/{numero} {
+      allow read: if canReadDemands();
+      allow create, update, delete: if false;
+    }
+
+    match /quotes/{numero} {
+      allow read: if canReadPrices();
+      allow create, update, delete: if false;
+
+      match /revisoes/{rv} {
         allow read: if canReadPrices();
         allow create, update, delete: if false;
       }
