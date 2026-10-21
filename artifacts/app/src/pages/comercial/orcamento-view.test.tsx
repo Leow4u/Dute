@@ -582,10 +582,11 @@ describe("montar orçamento depois do envio (parte 12b)", () => {
 
   it("sem legenda: a RV enviada só tem rótulos, dados e ações", () => {
     const lista = texts(enviada());
-    expect(lista.slice(0, 22)).toEqual([
+    expect(lista.slice(0, 23)).toEqual([
       "Comercial",
       "Orçamentos",
       "Contratos",
+      "Medições",
       "10045",
       "Aguardando cliente",
       "Proposta",
