@@ -3,7 +3,8 @@ import { getFirestore } from "firebase-admin/firestore";
 import { onCall } from "firebase-functions/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 
-import { assertAuth, comercialStatusFor, loadProfile } from "./domain/profile.js";
+import { registrarAditivo, salvarContrato } from "./domain/contratos.js";
+import { assertAuth, comercialStatusFor, loadProfile, requireComercialCaller } from "./domain/profile.js";
 import { PROJECT_ID } from "./project.js";
 
 /**
@@ -40,4 +41,23 @@ export const comercialStatus = onCall(async (request) => {
   const auth = assertAuth(request);
   const profile = await loadProfile(db, auth.uid, auth.token.email, auth.token.name);
   return comercialStatusFor(PROJECT_ID, profile.role);
+});
+
+/**
+ * Cria ou atualiza um contrato (parte 8). Contrato é de cliente: cadastro
+ * inexistente ou prospect é recusado; atualizar confere a edição lida.
+ */
+export const saveContract = onCall(async (request) => {
+  const caller = await requireComercialCaller(db, request, PROJECT_ID);
+  return salvarContrato(db, caller, request.data);
+});
+
+/**
+ * Registra um aditivo no histórico do contrato (parte 8). Prorrogação e preço
+ * com vigência nova prorrogam o contrato na mesma transação; aditivo de preço
+ * liga tabelas do mesmo contrato.
+ */
+export const recordAditivo = onCall(async (request) => {
+  const caller = await requireComercialCaller(db, request, PROJECT_ID);
+  return registrarAditivo(db, caller, request.data);
 });
