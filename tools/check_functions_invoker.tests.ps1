@@ -5,11 +5,44 @@
 $ErrorActionPreference = "Stop"
 $script = Join-Path $PSScriptRoot "check_functions_invoker.ps1"
 $failures = 0
+$fakeRepos = @()
 
 function New-FakeIndex([string[]]$names) {
   $file = New-TemporaryFile
   $names | ForEach-Object { "export const $_ = onCall(async (request) => {" } | Set-Content $file
   return $file.FullName
+}
+
+# Monta um repositorio de mentira com firebase.json e um src/index.ts por
+# codebase, em functions/<codebase>. Valor $null: a codebase nao tem
+# src/index.ts. Lista vazia: tem index.ts, mas nenhuma callable.
+function New-FakeRepo($codebases) {
+  $root = Join-Path ([System.IO.Path]::GetTempPath()) ("invoker-" + [guid]::NewGuid().ToString("N"))
+  New-Item -ItemType Directory -Path $root | Out-Null
+  $script:fakeRepos += $root
+  $functions = @()
+  foreach ($codebase in $codebases.Keys) {
+    $source = "functions/$codebase"
+    $functions += [ordered]@{ source = $source; codebase = $codebase; runtime = "nodejs22" }
+    $names = $codebases[$codebase]
+    if ($null -eq $names) { continue }
+    $src = Join-Path $root "$source/src"
+    New-Item -ItemType Directory -Path $src -Force | Out-Null
+    $lines = @('import { onCall } from "firebase-functions/v2/https";', 'export const versao = "1";')
+    $lines += @($names | ForEach-Object { "export const $_ = onCall(async (request) => {" })
+    $lines | Set-Content (Join-Path $src "index.ts")
+  }
+  $firebaseJson = Join-Path $root "firebase.json"
+  @{ functions = $functions } | ConvertTo-Json -Depth 5 | Set-Content $firebaseJson
+  return $firebaseJson
+}
+
+# Troca o src/index.ts de uma codebase do repositorio de mentira por linhas
+# escritas a mao (tipo generico, declaracao quebrada em duas linhas).
+function Set-FakeIndex([string]$firebaseJson, [string]$codebase, [string[]]$lines) {
+  $src = Join-Path (Split-Path -Parent $firebaseJson) "functions/$codebase/src"
+  New-Item -ItemType Directory -Path $src -Force | Out-Null
+  $lines | Set-Content (Join-Path $src "index.ts")
 }
 
 # Simula o gcloud real:
@@ -27,6 +60,7 @@ function New-FakeIndex([string[]]$names) {
 #   parou no timeout de descoberta), mas "run services get-iam-policy"
 #   devolveu uma politica vazia com etag como se o servico existisse. So o
 #   "run services describe" diz a verdade: nada no stdout.
+# - aprovaProposta: publica, para a segunda codebase (comercial).
 function global:gcloud {
   $global:LASTEXITCODE = 0
   if ($args[0] -eq "functions") {
@@ -41,13 +75,14 @@ function global:gcloud {
   }
   $service = $args[3]
   if ($args[2] -eq "describe") {
-    if (@("publica", "semestado", "privada", "falhou") -contains $service) { $service }
+    if (@("publica", "semestado", "privada", "falhou", "aprovaproposta") -contains $service) { $service }
     else { [Console]::Error.WriteLine("ERROR: NOT_FOUND: Resource '$service' does not exist.") }
     return
   }
   switch ($service) {
     "publica" { '{"bindings":[{"members":["allUsers"],"role":"roles/run.invoker"}],"etag":"BwY"}' }
     "semestado" { '{"bindings":[{"members":["allUsers"],"role":"roles/run.invoker"}],"etag":"BwY"}' }
+    "aprovaproposta" { '{"bindings":[{"members":["allUsers"],"role":"roles/run.invoker"}],"etag":"BwY"}' }
     "privada" { '{"etag":"ACAB"}' }
     "falhou" { '{"etag":"ACAB"}' }
     "fantasma" { '{"etag":"ACAB"}' }
@@ -59,6 +94,21 @@ function Run-Check([string[]]$names) {
   $index = New-FakeIndex $names
   $output = & $script -IndexFile $index *>&1 | Out-String
   return @{ Output = $output; Exit = $global:LASTEXITCODE }
+}
+
+# Erro do script vira falha do caso, sem derrubar os outros.
+function Invoke-Check([hashtable]$params) {
+  try {
+    $output = & $script @params *>&1 | Out-String
+    return @{ Output = $output; Exit = $global:LASTEXITCODE }
+  } catch {
+    return @{ Output = $_.ToString(); Exit = $null }
+  }
+}
+
+# Sem -IndexFile: as codebases vem do firebase.json.
+function Run-CheckCodebases($codebases) {
+  return Invoke-Check @{ FirebaseJson = (New-FakeRepo $codebases) }
 }
 
 function Expect([string]$name, [bool]$condition, [string]$detail) {
@@ -100,6 +150,138 @@ Expect "servico inexistente com politica vazia conta como nao publicada" (
 
 $result = Run-Check @("publica", "semEstado")
 Expect "sem resposta do functions describe decide pela politica" ($result.Exit -eq 0 -and $result.Output -match "OK: as 2 callable") $result.Output
+
+# Varias codebases no firebase.json (Comercial, Fase 6).
+$result = Run-CheckCodebases ([ordered]@{ default = @("publica"); comercial = @("aprovaProposta") })
+Expect "duas codebases com invoker passam" ($result.Exit -eq 0 -and $result.Output -match "OK: as 2 callable") $result.Output
+
+$result = Run-CheckCodebases ([ordered]@{ default = @("publica"); comercial = @("privada") })
+Expect "segunda codebase sem invoker falha citando a codebase" (
+  $result.Exit -eq 1 -and
+  $result.Output -match "FALTA\s+comercial: privada" -and
+  $result.Output -match "add-iam-policy-binding privada"
+) $result.Output
+
+$result = Run-CheckCodebases ([ordered]@{ default = @("publica", "falhou"); comercial = @("naoPublicada") })
+Expect "nao publicada sugere o deploy pela codebase certa" (
+  $result.Exit -eq 1 -and
+  $result.Output -match "NAO PUBLICADA\s+comercial: naopublicada" -and
+  $result.Output -match "firebase deploy --only functions:falhou,functions:comercial:naoPublicada "
+) $result.Output
+
+$result = Run-CheckCodebases ([ordered]@{ default = @("publica"); comercial = @("publica") })
+Expect "mesma callable em duas codebases falha" (
+  $result.Exit -eq 1 -and
+  $result.Output -match "default: publica" -and
+  $result.Output -match "comercial: publica" -and
+  $result.Output -notmatch "OK: as"
+) $result.Output
+
+$result = Run-CheckCodebases ([ordered]@{ default = @("publica"); comercial = @("Publica") })
+Expect "nomes que viram o mesmo servico do Cloud Run falham" (
+  $result.Exit -eq 1 -and $result.Output -match "comercial: Publica" -and $result.Output -notmatch "OK: as"
+) $result.Output
+
+$result = Run-CheckCodebases ([ordered]@{ default = @("publica"); comercial = $null })
+Expect "codebase sem src/index.ts falha" (
+  $result.Exit -eq 1 -and
+  $result.Output -match "comercial" -and
+  $result.Output -match "functions/comercial/src/index\.ts" -and
+  $result.Output -notmatch "OK: as"
+) $result.Output
+
+$result = Run-CheckCodebases ([ordered]@{ default = @("publica"); comercial = @() })
+Expect "codebase sem callable avisa e nao reprova sozinha" (
+  $result.Exit -eq 0 -and
+  $result.Output -match "AVISO\s+comercial" -and
+  $result.Output -match "OK: as 1 callable"
+) $result.Output
+
+$result = Run-CheckCodebases ([ordered]@{ default = @(); comercial = @() })
+Expect "nenhuma callable em nenhuma codebase falha" (
+  $result.Exit -eq 1 -and $result.Output -match "Nenhuma function onCall"
+) $result.Output
+
+$firebaseJson = New-FakeRepo ([ordered]@{ default = @("publica") })
+'{ "functions": { "source": "functions/default" } }' | Set-Content $firebaseJson
+$result = Invoke-Check @{ FirebaseJson = $firebaseJson }
+Expect "functions como objeto unico vale como codebase default" (
+  $result.Exit -eq 0 -and $result.Output -match "default: 1 callable" -and $result.Output -match "OK: as 1 callable"
+) $result.Output
+
+$result = Invoke-Check @{ FirebaseJson = (Join-Path ([System.IO.Path]::GetTempPath()) "nao-existe-$([guid]::NewGuid()).json") }
+Expect "firebase.json inexistente falha" ($result.Exit -eq 1 -and $result.Output -match "Nao encontrei") $result.Output
+
+$firebaseJson = New-FakeRepo ([ordered]@{ default = @("publica") })
+'{ "functions": [ { "source": "functions/default"' | Set-Content $firebaseJson
+$result = Invoke-Check @{ FirebaseJson = $firebaseJson }
+Expect "firebase.json invalido falha com mensagem clara" (
+  $result.Exit -eq 1 -and $result.Output -match "nao e um JSON valido" -and $result.Output -notmatch "OK: as"
+) $result.Output
+
+# Entrada sem source (ex.: remoteSource): nao ha index.ts para ler.
+$firebaseJson = New-FakeRepo ([ordered]@{ default = @("publica") })
+'{ "functions": [ { "source": "functions/default", "codebase": "default" }, { "codebase": "comercial" } ] }' |
+  Set-Content $firebaseJson
+$result = Invoke-Check @{ FirebaseJson = $firebaseJson }
+Expect "codebase sem source falha" (
+  $result.Exit -eq 1 -and $result.Output -match "comercial: sem source" -and $result.Output -notmatch "OK: as"
+) $result.Output
+
+# Com prefix, o firebase deploy publica <prefix>-<nome>; o script conferiria o
+# servico errado. Reprova antes de consultar o Cloud Run.
+$firebaseJson = New-FakeRepo ([ordered]@{ default = @("publica"); comercial = @("aprovaProposta") })
+'{ "functions": [ { "source": "functions/default", "codebase": "default" }, { "source": "functions/comercial", "codebase": "comercial", "prefix": "com" } ] }' |
+  Set-Content $firebaseJson
+$result = Invoke-Check @{ FirebaseJson = $firebaseJson }
+Expect "codebase com prefix falha antes de consultar o Cloud Run" (
+  $result.Exit -eq 1 -and
+  $result.Output -match "comercial: prefix" -and
+  $result.Output -notmatch "NAO PUBLICADA" -and
+  $result.Output -notmatch "OK: as"
+) $result.Output
+
+# onCall<Tipo>( tambem e callable e precisa ser conferida.
+$firebaseJson = New-FakeRepo ([ordered]@{ default = @("publica"); comercial = @() })
+Set-FakeIndex $firebaseJson "comercial" @(
+  'import { onCall } from "firebase-functions/v2/https";',
+  'export const aprovaProposta = onCall<AprovarPropostaInput>(async (request) => {'
+)
+$result = Invoke-Check @{ FirebaseJson = $firebaseJson }
+Expect "callable com tipo generico tambem e conferida" (
+  $result.Exit -eq 0 -and $result.Output -match "comercial: 1 callable" -and $result.Output -match "OK: as 2 callable"
+) $result.Output
+
+# Declaracao que o padrao nao le nao pode passar com AVISO e exit 0.
+$firebaseJson = New-FakeRepo ([ordered]@{ default = @("publica"); comercial = @() })
+Set-FakeIndex $firebaseJson "comercial" @(
+  'import { onCall } from "firebase-functions/v2/https";',
+  'export const aprovaProposta =',
+  '  onCall(async (request) => {'
+)
+$result = Invoke-Check @{ FirebaseJson = $firebaseJson }
+Expect "onCall fora do padrao falha em vez de passar sem conferir" (
+  $result.Exit -eq 1 -and
+  $result.Output -match "comercial: onCall fora do padrao em functions/comercial/src/index\.ts:3" -and
+  $result.Output -notmatch "OK: as"
+) $result.Output
+
+# Sem parametros, como no publicar.yml: le o firebase.json da raiz do repo.
+# Aqui o gcloud de mentira responde "publica" para qualquer servico.
+$fakeGcloud = ${function:gcloud}
+function global:gcloud {
+  $global:LASTEXITCODE = 0
+  if ($args[0] -eq "functions") { "ACTIVE"; return }
+  if ($args[2] -eq "describe") { $args[3]; return }
+  '{"bindings":[{"members":["allUsers"],"role":"roles/run.invoker"}],"etag":"BwY"}'
+}
+$result = Invoke-Check @{}
+Set-Item function:global:gcloud $fakeGcloud
+Expect "sem parametros le as codebases do firebase.json da raiz" (
+  $result.Exit -eq 0 -and $result.Output -match "default: \d+ callable\(s\) em functions/wms/src/index\.ts"
+) $result.Output
+
+$fakeRepos | ForEach-Object { Remove-Item -LiteralPath $_ -Recurse -Force -ErrorAction SilentlyContinue }
 
 if ($failures -gt 0) { Write-Host "$failures teste(s) falharam." -ForegroundColor Red; exit 1 }
 Write-Host "Todos os testes passaram." -ForegroundColor Green
