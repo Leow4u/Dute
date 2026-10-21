@@ -103,6 +103,19 @@ describe("callables do Comercial", () => {
     for (const block of recusados) assert.doesNotMatch(block, ENTRADA_DE_NEGOCIO, block);
   });
 
+  it("o cadastro comercial tem as três callables, cada uma no seu domínio", () => {
+    const blocks = callableBlocks();
+    for (const [name, handler] of [
+      ["saveCommercialCustomer", "saveCommercialCustomerFor"],
+      ["saveCustomerLocation", "saveCustomerLocationFor"],
+      ["saveCustomerContact", "saveCustomerContactFor"],
+    ]) {
+      const block = blocks.get(name);
+      assert.ok(block, `${name} não declarada`);
+      assert.match(block, new RegExp(`return ${handler}\\(db, caller, request\\.data\\);`), name);
+    }
+  });
+
   it("a região é a do app", () => {
     assert.match(index, /setGlobalOptions\(\{[\s\S]*?region: "southamerica-east1"/);
   });

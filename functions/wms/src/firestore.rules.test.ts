@@ -831,6 +831,13 @@ describe("papéis da plataforma (Fase 2)", () => {
         ["ai_agent_inbox", "alert-a"],
         ["agent_conversations", "conv-a"],
       ] as const) {
+        // Mudança de propósito (Comercial, parte 6): o comercial lê o
+        // cadastro de clientes; o resto da lista continua fechado para ele
+        // (comercial-cadastro.rules.test.ts).
+        if (role === "comercial" && collectionName === "customers") {
+          await assertSucceeds(getDoc(doc(database, collectionName, id)));
+          continue;
+        }
         await assertFails(getDoc(doc(database, collectionName, id)));
       }
       await assertFails(

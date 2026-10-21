@@ -3,7 +3,8 @@ import { getFirestore } from "firebase-admin/firestore";
 import { onCall } from "firebase-functions/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 
-import { assertAuth, comercialStatusFor, loadProfile } from "./domain/profile.js";
+import { saveCommercialCustomerFor, saveCustomerContactFor, saveCustomerLocationFor } from "./domain/cadastro.js";
+import { assertAuth, comercialStatusFor, loadProfile, requireComercialCaller } from "./domain/profile.js";
 import { PROJECT_ID } from "./project.js";
 
 /**
@@ -40,4 +41,28 @@ export const comercialStatus = onCall(async (request) => {
   const auth = assertAuth(request);
   const profile = await loadProfile(db, auth.uid, auth.token.email, auth.token.name);
   return comercialStatusFor(PROJECT_ID, profile.role);
+});
+
+// --- Cadastro comercial (parte 6; domain/cadastro.ts) -------------------------
+
+/**
+ * Prospect e dados comerciais em `customers`: create, update e mark_client
+ * para owner, admin e comercial; archive só para owner e admin, e só em
+ * cadastro sem armazenagem no WMS.
+ */
+export const saveCommercialCustomer = onCall(async (request) => {
+  const caller = await requireComercialCaller(db, request, PROJECT_ID);
+  return saveCommercialCustomerFor(db, caller, request.data);
+});
+
+/** Local do cliente (polo, prédio) em `customer_locations`. */
+export const saveCustomerLocation = onCall(async (request) => {
+  const caller = await requireComercialCaller(db, request, PROJECT_ID);
+  return saveCustomerLocationFor(db, caller, request.data);
+});
+
+/** Contato do cliente em `customer_contacts`, com a empresa (a gerenciadora) em texto. */
+export const saveCustomerContact = onCall(async (request) => {
+  const caller = await requireComercialCaller(db, request, PROJECT_ID);
+  return saveCustomerContactFor(db, caller, request.data);
 });
