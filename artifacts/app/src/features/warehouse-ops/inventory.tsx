@@ -27,6 +27,11 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { OpeningLineCorrection } from "./opening-line-correction";
 import { OpeningConferenceSummary } from "./opening-conference-summary";
+import { ShelfPicker, eligibleShelfPositions, isCurrentShelfPreview } from "./shelf-picker";
+import { ShelfVolumeSummary } from "./shelf-volume-summary";
+import type { WarehousePosition } from "@/lib/warehouse-positions";
+import { boxVolumeM3, formatVolumeM3 } from "@/lib/warehouse-volume";
+import { fetchWarehouseRows } from "@/lib/warehouse-rows";
 import {
   conferenceAttempt, conferenceCanEditLine, conferenceSkus, conferenceStatusLabel, isConferencePending, isConferenceRevisionConflict,
   type MutationAttempt, type OpeningConferenceLine, type OpeningConferenceResult,
@@ -259,6 +264,12 @@ export function OpeningInventoryWorkspace() {
   // A caixa: medidas digitadas, sugestão do motor, recusa e a caixa aberta na tela.
   const [boxDraft, setBoxDraft] = useState<BoxDraft>(emptyBoxDraft);
   const [suggestion, setSuggestion] = useState<SuggestionResult>();
+  const [suggestionContext, setSuggestionContext] = useState("");
+  const [putawayMode, setPutawayMode] = useState<"suggested" | "manual">("suggested");
+  const [manualLocation, setManualLocation] = useState("");
+  const [manualSuggestion, setManualSuggestion] = useState<SuggestionResult>();
+  const [manualSuggestionContext, setManualSuggestionContext] = useState("");
+  const [previewError, setPreviewError] = useState<string>();
   const [excluded, setExcluded] = useState<string[]>([]);
   const [refusal, setRefusal] = useState<BoxRefusal>();
   const [refusing, setRefusing] = useState(false);
@@ -305,15 +316,22 @@ export function OpeningInventoryWorkspace() {
     },
   });
   const boxesQuery = useQuery({
-    queryKey: ["warehouse-boxes", customerCode],
+    queryKey: ["warehouse-boxes", customerCode, "all-pages"],
     staleTime: 10_000,
     queryFn: async () =>
-      normalizeApiRows(
-        await fetchJson<unknown>(
-          `/api/warehouse/boxes?customer_code=${encodeURIComponent(customerCode)}&limit=1000`,
-        ),
-      ).map(warehouseBoxFromRecord),
+      (await fetchWarehouseRows<AnyRecord>(
+        `/api/warehouse/boxes?customer_code=${encodeURIComponent(customerCode)}&limit=1000`,
+      )).map(warehouseBoxFromRecord),
   });
+  const positionsQuery = useQuery({
+    queryKey: ["warehouse-positions", "all-pages"],
+    staleTime: 30_000,
+    queryFn: async () => ({ items: await fetchWarehouseRows<WarehousePosition>("/api/warehouse/positions?limit=2000") }),
+  });
+  const eligiblePositions = useMemo(
+    () => eligibleShelfPositions(positionsQuery.data?.items ?? [], customerCode),
+    [positionsQuery.data?.items, customerCode],
+  );
   const lookupProducts = lookupQuery.data ?? [];
   const session = sessionQuery.data;
   const sessionLines = session?.lines ?? [];
@@ -341,10 +359,12 @@ export function OpeningInventoryWorkspace() {
   const conferenceLines = conferenceQuery.data?.lines ?? [];
   useEffect(() => {
     suggestionGeneration.current += 1;
-    setSuggestion(undefined);
+    setSuggestion(undefined); setManualSuggestion(undefined); setPreviewError(undefined);
     setExcluded([]);
     setRefusal(undefined);
-  }, [currentBox?.code, currentBox?.conference_revision]);
+    setPutawayMode("suggested");
+    setManualLocation("");
+  }, [customerCode, currentBox?.code, currentBox?.conference_revision]);
 
   const isDraftBox = currentBox?.status === "counting" || currentBox?.status === "committing";
   const canEnterProduct = Boolean(currentBox &&
@@ -360,6 +380,23 @@ export function OpeningInventoryWorkspace() {
       : resolveContentSkus(boxDraft.content, lookupProducts),
     [boxDraft.content, lookupProducts, currentBox?.status, conferenceLines],
   );
+  const slottingContextKey = JSON.stringify({
+    customerCode, sessionId: session?.session_id, boxCode: currentBox?.code,
+    revision: currentBox?.conference_revision, status: currentBox?.status,
+    boxPayload, contentSkus, allowTilt, allowStacking,
+  });
+  const slottingContextRef = useRef(slottingContextKey);
+  slottingContextRef.current = slottingContextKey;
+  const automaticSuggestion = suggestionContext === slottingContextKey ? suggestion : undefined;
+  const activeSuggestion = putawayMode === "manual"
+    ? positionsQuery.isSuccess && manualSuggestionContext === slottingContextKey && manualSuggestion?.position?.code === manualLocation &&
+      eligiblePositions.some((position) => position.code === manualLocation)
+      ? manualSuggestion : undefined
+    : automaticSuggestion;
+  const activePosition = positionsQuery.data?.items.find((position) =>
+    position.code === (putawayMode === "manual" ? manualLocation : activeSuggestion?.position?.code),
+  );
+
   // O SKU não se digita (é gerado na sigla do cliente): o campo de código
   // acha o produto pelo código do cliente, pelo SKU ou pelo de barras, e o
   // código de barras sozinho também acha (lib/product-match.ts).
@@ -476,8 +513,8 @@ export function OpeningInventoryWorkspace() {
       }),
   });
 
-  const suggestPosition = useMutation<SuggestionResult, Error, { exclude: string[]; generation: number }>({
-    mutationFn: ({ exclude }) => {
+  const suggestPosition = useMutation<SuggestionResult, Error, { exclude: string[]; generation: number; contextKey: string; location_id?: string }>({
+    mutationFn: ({ exclude, location_id }) => {
       if (!boxPayload) {
         throw new Error("Informe comprimento, largura e altura da caixa em centímetros.");
       }
@@ -491,18 +528,44 @@ export function OpeningInventoryWorkspace() {
           allow_tilt: allowTilt,
           allow_stacking: allowStacking,
           exclude,
+          ...(location_id ? { location_id } : {}),
         }),
       });
     },
     onSuccess: (result, variables) => {
-      if (variables.generation === suggestionGeneration.current) setSuggestion(result);
+      if (!isCurrentShelfPreview(variables, {
+        generation: suggestionGeneration.current, contextKey: slottingContextRef.current,
+      })) return;
+      setPreviewError(undefined);
+      if (variables.location_id) {
+        if (result.position?.code !== variables.location_id) {
+          setManualSuggestion(undefined);
+          setPreviewError("A prévia não corresponde à prateleira selecionada. Confira novamente.");
+          return;
+        }
+        setManualSuggestion(result);
+        setManualSuggestionContext(variables.contextKey);
+      } else {
+        setSuggestion(result);
+        setSuggestionContext(variables.contextKey);
+      }
     },
-    onError: (error) =>
+    onError: (error, variables) => {
+      if (!isCurrentShelfPreview(variables, {
+        generation: suggestionGeneration.current, contextKey: slottingContextRef.current,
+      })) return;
+      setPreviewError(getErrorMessage(error));
+      if (variables.location_id) setManualSuggestion(undefined);
+      else {
+        setSuggestion(undefined);
+        setSuggestionContext("");
+      }
       toast({
-        title: "Não consegui sugerir a posição",
+        title: variables.location_id ? "Não consegui validar esta prateleira" : "Não consegui sugerir a posição",
         description: getErrorMessage(error),
         variant: "destructive",
-      }),
+      });
+    },
   });
 
   const createBox = useMutation<CreateBoxResult, Error, { candidate: SlottingCandidate }>({
@@ -522,11 +585,11 @@ export function OpeningInventoryWorkspace() {
           allow_stacking: allowStacking,
           orientation: candidate.placement.orientation,
           support_box_code: candidate.placement.support_box_code ?? null,
-          suggestion: suggestion
+          suggestion: automaticSuggestion
             ? {
-                position: suggestion.position?.code ?? null,
-                reason: suggestion.position?.reason ?? suggestion.rejected ?? null,
-                alternatives: suggestion.alternatives.map((item) => item.code),
+                position: automaticSuggestion.position?.code ?? null,
+                reason: automaticSuggestion.position?.reason ?? automaticSuggestion.rejected ?? null,
+                alternatives: automaticSuggestion.alternatives.map((item) => item.code),
               }
             : undefined,
           refusal,
@@ -540,7 +603,7 @@ export function OpeningInventoryWorkspace() {
       setLegacyBoxMode(false);
       setBoxAcknowledged(false);
       setBoxDraft(emptyBoxDraft());
-      setSuggestion(undefined);
+      setSuggestion(undefined); setManualSuggestion(undefined); setPreviewError(undefined);
       setExcluded([]);
       setRefusal(undefined);
       setRefusing(false);
@@ -626,7 +689,9 @@ export function OpeningInventoryWorkspace() {
     setBoxDraft(emptyBoxDraft());
     setAllowTilt(false);
     setAllowStacking(false);
-    setSuggestion(undefined);
+    setPutawayMode("suggested");
+    setManualLocation("");
+    setSuggestion(undefined); setManualSuggestion(undefined); setPreviewError(undefined);
     setExcluded([]);
     setRefusal(undefined);
     suggestionGeneration.current += 1;
@@ -662,7 +727,7 @@ export function OpeningInventoryWorkspace() {
       attempts.current.delete("store-conference");
       setReviewBoxOpen(false);
       resetProductForm();
-      setSuggestion(undefined);
+      setSuggestion(undefined); setManualSuggestion(undefined); setPreviewError(undefined);
       suggestionGeneration.current += 1;
       await refreshConference();
     },
@@ -702,8 +767,8 @@ export function OpeningInventoryWorkspace() {
             ...conferenceBody(), ...boxPayload, location_id: candidate.code,
             allow_tilt: allowTilt, allow_stacking: allowStacking, orientation: candidate.placement.orientation,
             support_box_code: candidate.placement.support_box_code ?? null,
-            suggestion: suggestion ? { position: suggestion.position?.code, reason: suggestion.position?.reason,
-              alternatives: suggestion.alternatives.map((alternative) => alternative.code) } : undefined,
+            suggestion: automaticSuggestion ? { position: automaticSuggestion.position?.code, reason: automaticSuggestion.position?.reason,
+              alternatives: automaticSuggestion.alternatives.map((alternative) => alternative.code) } : undefined,
             refusal,
           })) },
       );
@@ -711,7 +776,7 @@ export function OpeningInventoryWorkspace() {
     onSuccess: async (result) => {
       attempts.current.delete("store-conference");
       setActiveBox(warehouseBoxFromRecord(result.box));
-      setSuggestion(undefined);
+      setSuggestion(undefined); setManualSuggestion(undefined); setPreviewError(undefined);
       await refreshConference();
       toast({ title: `Caixa ${coerceText(result.box.code)} guardada em ${coerceText(result.box.location_id)}`, description: "Conferência concluída. Imprima a etiqueta e comece a próxima caixa." });
     },
@@ -919,29 +984,56 @@ export function OpeningInventoryWorkspace() {
   function updateBoxDraft(field: keyof BoxDraft, value: string) {
     setBoxDraft((current) => ({ ...current, [field]: value }));
     suggestionGeneration.current += 1;
-    setSuggestion(undefined);
+    setSuggestion(undefined); setManualSuggestion(undefined); setPreviewError(undefined);
     setExcluded([]);
     setRefusal(undefined);
   }
 
   /** "Não cabe aqui": guarda o motivo, tira a prateleira da próxima rodada e pergunta de novo. */
   function refuseSuggestedPosition() {
-    const code = suggestion?.position?.code;
+    const code = automaticSuggestion?.position?.code;
     const reason = refusalReason.trim();
     if (!code || !reason) return;
     const nextExcluded = excluded.includes(code) ? excluded : [...excluded, code];
     setRefusal({ position: code, reason });
+    setSuggestion(undefined);
+    setSuggestionContext("");
     setExcluded(nextExcluded);
     setRefusing(false);
     setRefusalReason("");
-    suggestPosition.mutate({ exclude: nextExcluded, generation: suggestionGeneration.current });
+    suggestPosition.mutate({ exclude: nextExcluded, generation: suggestionGeneration.current, contextKey: slottingContextKey });
   }
 
   const conferenceBusy = createConference.isPending || changeConferenceState.isPending ||
     removeConferenceLine.isPending || storeConference.isPending || resumeConference.isPending ||
     recordOpeningLine.isPending || conferenceQuery.isFetching;
   const boxBusy = suggestPosition.isPending || createBox.isPending || conferenceBusy;
-  const suggestedCode = suggestion?.position?.code;
+  function choosePutawayMode(mode: "suggested" | "manual") {
+    suggestionGeneration.current += 1;
+    setPutawayMode(mode);
+    setManualSuggestion(undefined);
+    setPreviewError(undefined);
+    setRefusing(false);
+  }
+
+  function previewManualPosition(code: string) {
+    setManualLocation(code);
+    setManualSuggestion(undefined);
+    setPreviewError(undefined);
+    suggestionGeneration.current += 1;
+    if (!boxPayload || !eligiblePositions.some((position) => position.code === code)) return;
+    suggestPosition.mutate({
+      exclude: excluded, generation: suggestionGeneration.current,
+      contextKey: slottingContextKey, location_id: code,
+    });
+  }
+
+  function confirmPosition(candidate: SlottingCandidate) {
+    if (!activeSuggestion || boxBusy) return;
+    if (putawayMode === "manual" && candidate.code !== manualLocation) return;
+    if (currentBox) storeConference.mutate(candidate);
+    else createBox.mutate({ candidate });
+  }
   const reviewLines = currentBox?.status === "stored" ? sessionLines.filter((line) => line.box_code === currentBox.code) : conferenceLines;
 
   return (
@@ -1114,6 +1206,7 @@ export function OpeningInventoryWorkspace() {
                       <Input id="box-weight" inputMode="decimal" value={boxDraft.weight_kg} onChange={(event) => updateBoxDraft("weight_kg", event.target.value)} placeholder="Opcional" />
                     </div>
                   </div>
+                  {boxPayload ? <p className="text-sm text-muted-foreground">Volume da caixa: {formatVolumeM3(boxVolumeM3(boxPayload))}</p> : null}
                   {!currentBox ? <div className="space-y-2">
                     <Label htmlFor="box-content">Produto de referência para a posição (opcional)</Label>
                     <Input id="box-content" value={boxDraft.content} onChange={(event) => updateBoxDraft("content", event.target.value)} placeholder="Cód. cliente ou SKU; separe por vírgula" />
@@ -1124,125 +1217,142 @@ export function OpeningInventoryWorkspace() {
 
                   <div className="flex items-start gap-3 rounded-md border border-border p-3">
                     <Checkbox id="box-allow-tilt" checked={allowTilt} disabled={boxBusy} onCheckedChange={(checked) => {
-                      setAllowTilt(checked === true); suggestionGeneration.current += 1; setSuggestion(undefined); setExcluded([]); setRefusal(undefined);
+                      setAllowTilt(checked === true); suggestionGeneration.current += 1; setSuggestion(undefined); setManualSuggestion(undefined); setPreviewError(undefined); setExcluded([]); setRefusal(undefined);
                     }} />
                     <Label htmlFor="box-allow-tilt" className="leading-6">Pode virar esta caixa de lado</Label>
                   </div>
                   <div className="flex items-start gap-3 rounded-md border border-border p-3">
                     <Checkbox id="box-allow-stacking" checked={allowStacking} disabled={boxBusy} onCheckedChange={(checked) => {
-                      setAllowStacking(checked === true); suggestionGeneration.current += 1; setSuggestion(undefined); setExcluded([]); setRefusal(undefined);
+                      setAllowStacking(checked === true); suggestionGeneration.current += 1; setSuggestion(undefined); setManualSuggestion(undefined); setPreviewError(undefined); setExcluded([]); setRefusal(undefined);
                     }} />
                     <Label htmlFor="box-allow-stacking" className="leading-6">Pode empilhar esta caixa sobre outra que suporte seu peso</Label>
                   </div>
-                  {suggestion ? (
-                    <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
-                      {suggestion.position ? (
-                        <>
-                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                            <div className="min-w-0">
-                              <div className="text-xs uppercase tracking-wide text-muted-foreground">Guardar em</div>
-                              <div className="mt-1 flex items-center gap-2 text-3xl font-semibold text-foreground">
-                                <MapPin className="size-6 text-primary" />
-                                {suggestion.position.code}
-                              </div>
-                              <p className="mt-1 text-sm text-muted-foreground">{suggestion.position.reason}</p>
-                              <p className="mt-2 font-medium">{formatBoxPlacement(suggestion.position.placement)}</p>
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                <Badge variant="outline">{tierLabel(suggestion.position.tier)}</Badge>
-                                {refusal ? <Badge variant="outline">{refusal.position} recusada</Badge> : null}
-                              </div>
-                            </div>
-                            <div className="flex flex-col gap-2 sm:items-end">
-                              <Button
-                                type="button"
-                                onClick={() => currentBox ? storeConference.mutate(suggestion.position!) : createBox.mutate({ candidate: suggestion.position! })}
-                                disabled={boxBusy}
-                              >
-                                {createBox.isPending || storeConference.isPending ? <RefreshCw data-icon="inline-start" className="animate-spin" /> : <CheckCircle2 data-icon="inline-start" />}
-                                Confirmar guarda em {suggestion.position.code}
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => setRefusing((current) => !current)}
-                                disabled={boxBusy}
-                              >
-                                Não cabe aqui
-                              </Button>
-                            </div>
-                          </div>
-                          {suggestion.alternatives.length ? (
-                            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-primary/10 pt-3 text-xs text-muted-foreground">
-                              <span>Se preferir:</span>
-                              {suggestion.alternatives.map((alternative) => (
-                                <Button
-                                  key={alternative.code}
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-auto flex-col items-start py-2"
-                                  title={`${alternative.reason} ${formatBoxPlacement(alternative.placement)}`}
-                                  onClick={() => currentBox ? storeConference.mutate(alternative) : createBox.mutate({ candidate: alternative })}
-                                  disabled={boxBusy}
-                                >
-                                  <span>Guardar em {alternative.code}</span>
-                                   <span className="text-xs font-normal">{formatBoxPlacement(alternative.placement)}</span>
-                                </Button>
-                              ))}
-                            </div>
-                          ) : null}
-                          {refusing ? (
-                            <div className="mt-3 space-y-2 border-t border-primary/10 pt-3">
-                              <Label htmlFor="box-refusal">Por que {suggestion.position.code} não serve?</Label>
-                              <Textarea
-                                id="box-refusal"
-                                rows={2}
-                                value={refusalReason}
-                                onChange={(event) => setRefusalReason(event.target.value)}
-                                placeholder="Ex.: prateleira ocupada por material fora do sistema"
-                              />
-                              <div className="flex flex-wrap gap-2">
-                                <Button type="button" size="sm" onClick={refuseSuggestedPosition} disabled={!refusalReason.trim() || boxBusy}>
-                                  Pedir outra posição
-                                </Button>
-                                <Button type="button" size="sm" variant="ghost" onClick={() => setRefusing(false)} disabled={boxBusy}>
-                                  Cancelar
-                                </Button>
-                              </div>
-                              <p className="text-xs text-muted-foreground">
-                                A recusa vale para esta caixa e fica registrada com o motivo.
-                              </p>
-                            </div>
-                          ) : null}
-                        </>
-                      ) : (
-                        <Alert variant="destructive" className="bg-destructive/10">
-                          <AlertTriangle className="size-4" />
-                          <AlertTitle>Nenhuma prateleira serve para esta caixa</AlertTitle>
-                          <AlertDescription className="flex flex-col gap-3">
-                            <span>{suggestion.rejected}</span>
-                            <Button type="button" variant="outline" className="w-fit" onClick={() => suggestPosition.mutate({ exclude: excluded, generation: suggestionGeneration.current })} disabled={boxBusy}>
-                              <RefreshCw data-icon="inline-start" />
-                              Tentar de novo
-                            </Button>
-                          </AlertDescription>
-                        </Alert>
-                      )}
-                      <div className="mt-3 text-xs text-muted-foreground">
-                        {formatNumber(suggestion.checked)} prateleira(s) da zona conferidas.
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="text-xs text-muted-foreground">
-                        {boxPayload ? formatBoxDimensions(boxPayload) : "Informe os três lados para pedir a posição."}
-                      </p>
-                      <Button type="button" onClick={() => suggestPosition.mutate({ exclude: excluded, generation: suggestionGeneration.current })} disabled={!boxPayload || boxBusy}>
-                        {suggestPosition.isPending ? <RefreshCw data-icon="inline-start" className="animate-spin" /> : <MapPin data-icon="inline-start" />}
-                        Onde guardar?
+                  <div className="@container space-y-4 rounded-lg border border-primary/20 bg-primary/5 p-4">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Guardar em</div>
+                    <div className="grid gap-2 @sm:grid-cols-2" role="group" aria-label="Escolha da prateleira">
+                      <Button type="button" variant={putawayMode === "suggested" ? "default" : "outline"} aria-pressed={putawayMode === "suggested"}
+                        onClick={() => choosePutawayMode("suggested")} disabled={boxBusy}>
+                        Sugestão do sistema
+                      </Button>
+                      <Button type="button" variant={putawayMode === "manual" ? "default" : "outline"} aria-pressed={putawayMode === "manual"}
+                        onClick={() => choosePutawayMode("manual")} disabled={boxBusy}>
+                        Escolher prateleira
                       </Button>
                     </div>
-                  )}
+                    {putawayMode === "manual" ? (
+                      <div className="space-y-3">
+                        {automaticSuggestion?.position ? <p className="text-sm text-muted-foreground">Sugestão atual: {automaticSuggestion.position.code}</p> : null}
+                        {positionsQuery.isError ? (
+                          <Alert variant="destructive">
+                            <AlertTitle>Não consegui carregar as prateleiras</AlertTitle>
+                            <AlertDescription>
+                              <Button type="button" variant="outline" onClick={() => positionsQuery.refetch()}>Tentar novamente</Button>
+                            </AlertDescription>
+                          </Alert>
+                        ) : (
+                          <ShelfPicker
+                            positions={eligiblePositions}
+                            value={manualLocation}
+                            onSelect={previewManualPosition}
+                            disabled={!boxPayload || boxBusy || positionsQuery.isFetching}
+                            loading={positionsQuery.isLoading}
+                          />
+                        )}
+                      </div>
+                    ) : null}
+                    {previewError ? (
+                      <Alert variant="destructive">
+                        <AlertTitle>{putawayMode === "manual" ? "Prateleira não validada" : "Não consegui consultar a posição"}</AlertTitle>
+                        <AlertDescription>{previewError}</AlertDescription>
+                      </Alert>
+                    ) : null}
+                    {suggestPosition.isPending ? (
+                      <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <RefreshCw className="size-4 animate-spin" />
+                        {putawayMode === "manual" ? "Conferindo o encaixe nesta prateleira…" : "Consultando a sugestão…"}
+                      </div>
+                    ) : null}
+                    {activePosition && positionsQuery.isSuccess && !positionsQuery.isFetching && boxesQuery.isSuccess && !boxesQuery.isFetching ? (
+                      <ShelfVolumeSummary position={activePosition} boxes={storedBoxes} incomingBox={boxPayload ?? undefined} unconfirmed={sessionOpen} />
+                    ) : null}
+                    {activeSuggestion?.position ? (
+                      <>
+                        <div className="flex flex-col gap-3 @sm:flex-row @sm:items-start @sm:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 text-2xl font-semibold text-foreground">
+                              <MapPin className="size-5 shrink-0 text-primary" />
+                              {activeSuggestion.position.code}
+                            </div>
+                            {putawayMode === "suggested" ? <p className="mt-1 text-sm text-muted-foreground">{activeSuggestion.position.reason}</p> : null}
+                            <p className="mt-2 text-sm font-medium">{formatBoxPlacement(activeSuggestion.position.placement)}</p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {putawayMode === "suggested" ? <Badge variant="outline">{tierLabel(activeSuggestion.position.tier)}</Badge> : null}
+                              {refusal ? <Badge variant="outline">{refusal.position} recusada</Badge> : null}
+                            </div>
+                          </div>
+                          <div className="flex flex-col gap-2 @sm:items-end">
+                            <Button type="button" onClick={() => confirmPosition(activeSuggestion.position!)} disabled={boxBusy}>
+                              {createBox.isPending || storeConference.isPending ? <RefreshCw data-icon="inline-start" className="animate-spin" /> : <CheckCircle2 data-icon="inline-start" />}
+                              Confirmar guarda em {activeSuggestion.position.code}
+                            </Button>
+                            {putawayMode === "suggested" ? (
+                              <Button type="button" variant="outline" onClick={() => setRefusing((current) => !current)} disabled={boxBusy}>
+                                Não cabe aqui
+                              </Button>
+                            ) : null}
+                          </div>
+                        </div>
+                        {putawayMode === "suggested" && activeSuggestion.alternatives.length ? (
+                          <div className="flex flex-wrap items-center gap-2 border-t border-primary/10 pt-3 text-xs text-muted-foreground">
+                            <span>Se preferir:</span>
+                            {activeSuggestion.alternatives.map((alternative) => (
+                              <Button key={alternative.code} type="button" size="sm" variant="outline" className="h-auto flex-col items-start py-2"
+                                title={`${alternative.reason} ${formatBoxPlacement(alternative.placement)}`}
+                                onClick={() => confirmPosition(alternative)} disabled={boxBusy}>
+                                <span>Guardar em {alternative.code}</span>
+                                <span className="text-xs font-normal">{formatBoxPlacement(alternative.placement)}</span>
+                              </Button>
+                            ))}
+                          </div>
+                        ) : null}
+                        {putawayMode === "suggested" && refusing ? (
+                          <div className="space-y-2 border-t border-primary/10 pt-3">
+                            <Label htmlFor="box-refusal">Por que {activeSuggestion.position.code} não serve?</Label>
+                            <Textarea id="box-refusal" rows={2} value={refusalReason} onChange={(event) => setRefusalReason(event.target.value)}
+                              placeholder="Ex.: prateleira ocupada por material fora do sistema" />
+                            <div className="flex flex-wrap gap-2">
+                              <Button type="button" size="sm" onClick={refuseSuggestedPosition} disabled={!refusalReason.trim() || boxBusy}>Pedir outra posição</Button>
+                              <Button type="button" size="sm" variant="ghost" onClick={() => setRefusing(false)} disabled={boxBusy}>Cancelar</Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground">A recusa vale para esta caixa e fica registrada com o motivo.</p>
+                          </div>
+                        ) : null}
+                      </>
+                    ) : activeSuggestion ? (
+                      <Alert variant="destructive" className="bg-destructive/10">
+                        <AlertTriangle className="size-4" />
+                        <AlertTitle>Nenhuma prateleira serve para esta caixa</AlertTitle>
+                        <AlertDescription>{activeSuggestion.rejected}</AlertDescription>
+                      </Alert>
+                    ) : null}
+                    {!activeSuggestion?.position && !suggestPosition.isPending ? (
+                      <div className="flex flex-col gap-3 @sm:flex-row @sm:items-center @sm:justify-between">
+                        <p className="text-xs text-muted-foreground">
+                          {boxPayload ? formatBoxDimensions(boxPayload) : "Informe os três lados para conferir a posição."}
+                        </p>
+                        <Button type="button" variant="outline"
+                          onClick={() => putawayMode === "manual" ? previewManualPosition(manualLocation)
+                            : suggestPosition.mutate({ exclude: excluded, generation: suggestionGeneration.current, contextKey: slottingContextKey })}
+                          disabled={!boxPayload || boxBusy || (putawayMode === "manual" && (!positionsQuery.isSuccess || !eligiblePositions.some((position) => position.code === manualLocation)))}>
+                          <MapPin data-icon="inline-start" />
+                          {putawayMode === "manual" ? "Conferir prateleira" : "Onde guardar?"}
+                        </Button>
+                      </div>
+                    ) : null}
+                    {putawayMode === "suggested" && activeSuggestion ? (
+                      <div className="text-xs text-muted-foreground">{formatNumber(activeSuggestion.checked)} prateleira(s) da zona conferidas.</div>
+                    ) : null}
+                  </div>
                 </div>
               ) : null}
 

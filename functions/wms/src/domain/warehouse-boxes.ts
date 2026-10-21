@@ -153,6 +153,11 @@ const positionCodeField = z.string().trim().min(1, "Informe a posição.").max(1
 
 export const SuggestWarehousePositionSchema = z.object({
   customer_code: z.string().trim().optional(),
+  // Prévia de uma prateleira cadastrada, sem escolher outra como alternativa.
+  location_id: positionCodeField
+    .refine((code) => !code.includes("/"), "Posição inválida.")
+    .transform((code) => code.toUpperCase())
+    .optional(),
   ...dimensionFields,
   ...placementFields,
   sku_codes: z.array(z.string().trim().min(1).max(120)).max(50).optional(),
@@ -535,12 +540,30 @@ export async function suggestWarehousePosition(
   if (!customerCode) throw new HttpsError("invalid-argument", "Informe o cliente.");
   const box = requireDimensions(input);
   const { positions, occupancy } = await readSlottingContext(db, customerCode);
+  const locationCode = String(input.location_id ?? "").trim().toUpperCase();
+  let candidates = positions;
+  if (locationCode) {
+    // A leitura já é limitada ao cliente: uma posição de outra zona não é
+    // exposta nem aceita pela prévia manual.
+    const selected = positions.find((position) => position.code === locationCode);
+    if (!selected) throw new HttpsError("not-found", "Prateleira não cadastrada na zona deste cliente.");
+    if ((selected.status ?? "active") !== "active") {
+      throw new HttpsError("failed-precondition", "Escolha uma prateleira ativa da zona do cliente.");
+    }
+    candidates = [selected];
+  }
   const result = suggestPosition(
     { ...box, allow_tilt: input.allow_tilt, allow_stacking: input.allow_stacking, support_box_code: input.support_box_code, orientation: input.orientation, customer_code: customerCode, sku_codes: input.sku_codes ?? [] },
-    positions,
+    candidates,
     occupancy,
     { exclude: input.exclude ?? [] },
   );
+  if (locationCode) {
+    if (!result.position) {
+      throw new HttpsError("failed-precondition", "A caixa não cabe nesta prateleira ou ela foi excluída da escolha. Selecione outra.");
+    }
+    result.position.reason = "Prateleira selecionada manualmente.";
+  }
   return {
     ok: true,
     customer_code: customerCode,
