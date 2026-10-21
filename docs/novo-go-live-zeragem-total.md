@@ -117,10 +117,11 @@ ordem:
    `<--export-to>/full-reset-<timestamp>` e espera concluir. Se falhar
    (bucket inexistente, permissão), **nada é apagado** e o controle volta ao
    estado anterior.
-5. Apaga os documentos em lotes de 400, menos os eventos do Comercial. Um
-   cadastro de `customers` só sai se não mudou desde a leitura (precondição
-   `updateTime`): o que ganhou `stage` durante o export fica, e o lote é
-   recusado.
+5. Com `--include-setup`, apaga primeiro os cadastros de `customers`, todos
+   num commit atômico e cada um com a precondição `updateTime`. Se algum mudou
+   desde a leitura (ganhou `stage` durante o export, por exemplo), nenhum sai,
+   **nada é apagado** e o controle volta ao estado anterior. Depois apaga o
+   resto em lotes de 400, menos os eventos do Comercial.
 6. Verifica com leituras fortes que só sobrou o preservado (inclusive
    coleções que tenham surgido durante a execução; eventos do Comercial não
    contam como sobra). Se sobrar algo, para com o estoque congelado; rodar de
@@ -145,10 +146,14 @@ URI do export. Guarde essa saída.
    (PR 68) e voltou em 16/10, depois da zeragem.
 3. Financeiro abre a competência corrente. A numeração PED-/ENV- recomeça em
    0001.
-4. Cloud Storage, opcional. Liste antes, apague depois:
+4. Cloud Storage, opcional. Apague só o que é do WMS (fotos de produto,
+   anexos de envio, documentos operacionais). **Nunca apague prefixo do
+   Comercial**, como os anexos de contrato. Liste o bucket e o conteúdo de
+   cada prefixo antes do `rm`:
 
    ```powershell
    gcloud storage ls gs://dute-btg.firebasestorage.app/
+   gcloud storage ls "gs://dute-btg.firebasestorage.app/<prefixo>/"
    gcloud storage rm -r "gs://dute-btg.firebasestorage.app/<prefixo>"
    ```
 
@@ -156,16 +161,41 @@ URI do export. Guarde essa saída.
 
 ## Rollback
 
-O export gerenciado é a cópia restaurável:
+O export gerenciado é a cópia restaurável, mas tem o banco inteiro, e o
+Comercial segue gravando durante e depois da zeragem. **Nunca importe o export
+inteiro no `(default)`.** O import sobrescreve cada documento pelo mesmo
+caminho e voltaria o Comercial ao estado da hora do export. O pior caso é
+`demand_counters`: o contador volta, as demandas criadas depois continuam e a
+numeração se repete. `quotes`, `contracts`, `customers` e as outras perderiam o
+que foi gravado depois.
+
+Volte só as coleções que a zeragem apagou. O import de coleções escolhidas só
+aceita export feito com `--collection-ids`, então o caminho passa por um banco
+novo, como em `docs/plataforma/backup-e-recuperacao.md`:
 
 ```powershell
-gcloud firestore import gs://dute-btg-firestore-backups/full-reset/full-reset-<timestamp> --project dute-btg
+$d = Get-Date -Format yyyyMMddTHHmm
+gcloud firestore databases create --database=recuperacao-zeragem --location=southamerica-east1 --project dute-btg
+gcloud firestore import gs://dute-btg-firestore-backups/full-reset/full-reset-<timestamp> --database=recuperacao-zeragem --project dute-btg
+gcloud firestore export gs://dute-btg-firestore-backups/rollback-$d --collection-ids=<colecoes> --database=recuperacao-zeragem --project dute-btg
+gcloud firestore import gs://dute-btg-firestore-backups/rollback-$d --collection-ids=<colecoes> --database="(default)" --project dute-btg
+gcloud firestore databases delete --database=recuperacao-zeragem --project dute-btg
 ```
 
-O import recria os documentos do export sobrescrevendo pelo mesmo id e não
-apaga o que foi criado depois (o `system_controls/inventory` reescrito e o
-evento de go-live). Depois do import, confira `system_controls/inventory` e
-remova o evento `evt_full-reset-<timestamp>` se não fizer sentido mantê-lo.
+`<colecoes>` são as chaves de `deleted_collections` da saída final (estão
+também no evento `evt_full-reset-<timestamp>`), separadas por vírgula. Nenhuma
+é do Comercial. Antes do último import, confira:
+
+- `events`: o import regrava pelo mesmo id os eventos do Comercial que estavam
+  no export; os gravados depois ficam.
+- `customers` (só com `--include-setup`): volta ao estado do export. Um
+  cadastro refeito depois com o mesmo id é sobrescrito.
+- `system_controls`: volta como estava no export, com as movimentações
+  congeladas (`full_reset_running`). Confira `system_controls/inventory`
+  depois do import.
+
+O import não apaga o que foi criado depois. Remova o evento
+`evt_full-reset-<timestamp>` se não fizer sentido mantê-lo.
 
 O backup JSON local é uma segunda cópia, legível com Python; não há
 restauração automática para ele (`tools/restore_btg_inventory.py` reconhece
@@ -179,7 +209,8 @@ só o formato da zeragem de estoque e recusa este).
 | Prospect criado depois do plano | nada apagado, controle restaurado | Igual à linha de cima. |
 | Antes do export | nada apagado, controle congelado | Rodar de novo; o script aceita o próprio congelamento (`full_reset_running`). |
 | Export falhou | nada apagado, controle restaurado | Corrigir bucket/permissão e rodar de novo. |
-| Durante ou após o delete | parcialmente apagado, controle congelado | Rodar de novo para concluir, ou `gcloud firestore import` do export para voltar. Se um cadastro ganhou `stage` no meio, a nova rodada para no plano: repita com os três `--keep` do cliente. |
+| Cadastro de `customers` mudou durante o export | nada apagado, controle restaurado | Rodar de novo. Se ele ganhou `stage`, a nova rodada para no plano: siga a primeira linha. |
+| Durante ou após o delete | parcialmente apagado, controle congelado | Rodar de novo para concluir. Para voltar, siga o Rollback, nunca o import do export inteiro. |
 
 ## Histórico de execuções
 

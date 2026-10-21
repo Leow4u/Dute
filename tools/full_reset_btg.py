@@ -240,7 +240,8 @@ def delete_writes(
     O controle de estoque (`system_controls/inventory`) não entra: ele fica
     congelado durante a zeragem e é reescrito no fim com o estado de go-live.
     Os eventos do Comercial também não. O cadastro de cliente só sai se não
-    mudou desde a leitura: um que tenha ganhado `stage` no meio fica.
+    mudou desde a leitura: um que tenha ganhado `stage` no meio fica. Esses
+    deletes vão num commit próprio, antes dos outros (split_customer_deletes).
     """
     writes: list[dict[str, Any]] = []
     for collection in collections:
@@ -261,6 +262,58 @@ def delete_writes(
                 write["currentDocument"] = {"updateTime": document["updateTime"]}
             writes.append(write)
     return writes
+
+
+def split_customer_deletes(
+    writes: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Separa os deletes de customers, que saem antes de tudo e de uma vez só."""
+    customers: list[dict[str, Any]] = []
+    others: list[dict[str, Any]] = []
+    for write in writes:
+        collection = document_path(str(write.get("delete", ""))).split("/", 1)[0]
+        (customers if collection == CUSTOMERS_COLLECTION else others).append(write)
+    return customers, others
+
+
+def all_still_exist(
+    deletes: list[dict[str, Any]],
+    snapshot: dict[str, list[dict[str, Any]]],
+) -> bool:
+    """Todo documento destes deletes continua no banco."""
+    names = {
+        str(document.get("name", ""))
+        for documents in snapshot.values()
+        for document in documents
+    }
+    return all(write["delete"] in names for write in deletes)
+
+
+def commit_writes(
+    writes: list[dict[str, Any]],
+    *,
+    project_id: str,
+    database: str,
+    token: str,
+) -> None:
+    """Grava tudo ou nada (:commit). Ao contrário do batchWrite, uma
+    precondição que falha recusa o lote inteiro."""
+    if not writes:
+        return
+    if len(writes) > 500:
+        raise RuntimeError(
+            f"{len(writes)} escritas passam do limite de 500 de um commit."
+        )
+    request_json(
+        (
+            f"https://firestore.googleapis.com/v1/projects/{project_id}/"
+            f"databases/{database}/documents:commit"
+        ),
+        token=token,
+        project_id=project_id,
+        method="POST",
+        payload={"writes": writes},
+    )
 
 
 def deletable_counts(
@@ -287,6 +340,18 @@ def comercial_event_count(snapshot: dict[str, list[dict[str, Any]]]) -> int:
         for document in snapshot.get(EVENTS_COLLECTION, [])
         if comercial_event(EVENTS_COLLECTION, document)
     )
+
+
+def preserved_comercial_events(
+    plan_snapshot: dict[str, list[dict[str, Any]]],
+    frozen_snapshot: dict[str, list[dict[str, Any]]],
+    to_delete: list[str],
+) -> int:
+    """Eventos do Comercial que ficaram. A leitura depois do congelamento só
+    tem o que sai; com --keep events, vale a do plano."""
+    if EVENTS_COLLECTION in to_delete:
+        return comercial_event_count(frozen_snapshot)
+    return comercial_event_count(plan_snapshot)
 
 
 def leftover_counts(
@@ -685,8 +750,52 @@ def main(argv: list[str] | None = None) -> int:
     token = access_token()
 
     writes = delete_writes(frozen_snapshot, to_delete, control_name=control_name)
+    # Com --include-setup, os cadastros de customers saem primeiro, num commit
+    # atômico: se um mudou durante o export (ganhou stage, por exemplo), nenhum
+    # sai e nada mais foi apagado. O batchWrite aplicaria o resto do lote.
+    customer_deletes, other_deletes = split_customer_deletes(writes)
+    try:
+        commit_writes(
+            customer_deletes,
+            project_id=args.project_id,
+            database=args.database,
+            token=token,
+        )
+    except RuntimeError as error:
+        # Antes de dizer que nada foi apagado e de desfazer o congelamento,
+        # confere que todos os cadastros ainda estão lá. Se algum saiu, segue
+        # congelado: rodar de novo conclui.
+        customers_now = fetch_snapshot(
+            (CUSTOMERS_COLLECTION,),
+            project_id=args.project_id,
+            database=args.database,
+            token=token,
+        )
+        if not all_still_exist(customer_deletes, customers_now):
+            raise
+        reason = (
+            "O Firestore recusou apagar os cadastros de customers, em geral "
+            "porque um deles mudou depois da leitura. Nada foi apagado. "
+            f"Detalhe: {error}."
+        )
+        try:
+            restore_control(
+                control_raw,
+                project_id=args.project_id,
+                database=args.database,
+                token=token,
+            )
+        except Exception as restore_error:  # noqa: BLE001
+            raise SystemExit(
+                f"{reason} O controle de estoque não pôde ser restaurado e as "
+                f"movimentações seguem congeladas. Restauração: {restore_error}"
+            ) from error
+        raise SystemExit(
+            f"{reason} O controle de estoque voltou ao estado anterior. Rode de "
+            "novo: se o cadastro ganhou stage, a zeragem para no plano."
+        ) from error
     batch_write(
-        writes,
+        other_deletes,
         project_id=args.project_id,
         database=args.database,
         token=token,
@@ -726,7 +835,7 @@ def main(argv: list[str] | None = None) -> int:
     completed_at = utc_now()
     event_id = "evt_" + reset_id
     delete_counts = deletable_counts(frozen_snapshot, to_delete, control_name=control_name)
-    comercial_events = comercial_event_count(frozen_snapshot)
+    comercial_events = preserved_comercial_events(snapshot, frozen_snapshot, to_delete)
     batch_write(
         [
             replace_write(

@@ -64,6 +64,7 @@ class FakeFirestore:
         self.docs: dict[str, dict[str, dict[str, Any]]] = {}
         self.exports: list[str] = []
         self.batches: list[list[dict[str, Any]]] = []
+        self.commits: list[list[dict[str, Any]]] = []
         self.ignore_deletes_in: set[str] = set()
         self.version = 0
 
@@ -148,6 +149,22 @@ class FakeFirestore:
         if refused:
             raise RuntimeError("Firestore recusou parte do lote: " + json.dumps(refused))
 
+    def commit_writes(self, writes: list[dict[str, Any]], *, project_id: str, database: str, token: str) -> None:
+        """Como o :commit: tudo ou nada. Precondição falha = HTTP 400, nada gravado."""
+        if not writes:
+            return
+        self.commits.append(copy.deepcopy(writes))
+        for write in writes:
+            name = write.get("delete") or write["update"]["name"]
+            collection, document_id = self._parse(name)
+            current = self.docs.get(collection, {}).get(document_id)
+            precondition = write.get("currentDocument", {})
+            if "updateTime" in precondition and (
+                current is None or current["updateTime"] != precondition["updateTime"]
+            ):
+                raise RuntimeError("Firestore respondeu HTTP 400: FAILED_PRECONDITION " + name)
+        self.batch_write(writes, project_id=project_id, database=database, token=token)
+
     def run_managed_export(self, destination: str, *, project_id: str, database: str, gcloud: Any = None) -> str:
         self.exports.append(destination)
         return destination
@@ -219,7 +236,9 @@ def fake_backend(fake: FakeFirestore):
         full_reset_btg, "list_root_collections", fake.list_root_collections
     ), mock.patch.object(full_reset_btg, "fetch_snapshot", fake.fetch_snapshot), mock.patch.object(
         full_reset_btg, "batch_write", fake.batch_write
-    ), mock.patch.object(full_reset_btg, "run_managed_export", fake.run_managed_export):
+    ), mock.patch.object(full_reset_btg, "commit_writes", fake.commit_writes), mock.patch.object(
+        full_reset_btg, "run_managed_export", fake.run_managed_export
+    ):
         yield
 
 
@@ -695,6 +714,10 @@ class MainTests(unittest.TestCase):
         )
 
     def test_customer_that_gains_stage_during_export_is_not_deleted(self) -> None:
+        # O batchWrite não é atômico e client_access e client_profiles vêm antes
+        # de customers: a recusa precisa acontecer antes de qualquer delete.
+        self.fake.seed("customers", "itau", {"customer_code": "Itau"})
+        before = copy.deepcopy(self.fake.docs)
         export = self.fake.run_managed_export
 
         def export_while_comercial_marks_btg(destination: str, **kwargs: Any) -> str:
@@ -706,12 +729,80 @@ class MainTests(unittest.TestCase):
 
         with fake_backend(self.fake), mock.patch.object(
             full_reset_btg, "run_managed_export", export_while_comercial_marks_btg
+        ), self.assertRaises(SystemExit) as raised:
+            run_main(self.apply_args("--include-setup"))
+        self.assertIn("nada foi apagado", str(raised.exception).lower())
+        self.assertEqual(self.fake.fields("customers", "btg")["stage"], "cliente")
+        # Nenhum cadastro sai, nem o que não mudou, e nada mais é apagado.
+        self.assertIn("itau", self.fake.docs["customers"])
+        self.assertIn("btg", self.fake.docs["client_profiles"])
+        self.assertIn("BTG Pactual", self.fake.docs["client_access"])
+        self.assertEqual(
+            {name: sorted(docs) for name, docs in self.fake.docs.items() if docs},
+            {name: sorted(docs) for name, docs in before.items() if docs},
+        )
+        # Nada apagado: o controle volta ao estado anterior ao congelamento.
+        self.assertEqual(
+            self.fake.fields("system_controls", "inventory"),
+            decode_document(before["system_controls"]["inventory"]),
+        )
+
+    def test_customers_go_first_in_one_atomic_commit(self) -> None:
+        self.fake.seed("customers", "itau", {"customer_code": "Itau"})
+        with fake_backend(self.fake):
+            code, _ = run_main(self.apply_args("--include-setup"))
+        self.assertEqual(code, 0)
+        delete_calls = [
+            [write["delete"] for write in batch if "delete" in write]
+            for batch in self.fake.batches
+            if any("delete" in write for write in batch)
+        ]
+        # O primeiro delete é o commit só com customers; o resto vem depois.
+        self.assertEqual(
+            self.fake.commits,
+            [[
+                {"delete": f"{PREFIX}customers/btg", "currentDocument": {"updateTime": "2026-10-16T00:00:00.000000Z"}},
+                {"delete": f"{PREFIX}customers/itau", "currentDocument": {"updateTime": "2026-10-16T00:00:00.000000Z"}},
+            ]],
+        )
+        self.assertEqual(delete_calls[0], [f"{PREFIX}customers/btg", f"{PREFIX}customers/itau"])
+        self.assertTrue(all(f"{PREFIX}customers/" not in name for call in delete_calls[1:] for name in call))
+        self.assertNotIn("customers", self.fake.collections())
+
+    def test_commit_error_after_customers_left_keeps_frozen(self) -> None:
+        # Erro com o commit já aplicado (prazo estourado, por exemplo): não é
+        # "nada apagado", então o estoque segue congelado e nada é desfeito.
+        commit = self.fake.commit_writes
+
+        def commit_then_fail(writes: list[dict[str, Any]], **kwargs: Any) -> None:
+            commit(writes, **kwargs)
+            raise RuntimeError("Firestore respondeu HTTP 504: DEADLINE_EXCEEDED")
+
+        with fake_backend(self.fake), mock.patch.object(
+            full_reset_btg, "commit_writes", commit_then_fail
         ), self.assertRaises(RuntimeError):
             run_main(self.apply_args("--include-setup"))
-        self.assertEqual(self.fake.fields("customers", "btg")["stage"], "cliente")
+        self.assertNotIn("customers", self.fake.collections())
         control = self.fake.fields("system_controls", "inventory")
         self.assertIs(control["movements_frozen"], True)
         self.assertEqual(control["reconciliation_status"], "full_reset_running")
+
+    def test_keep_events_still_counts_comercial_events(self) -> None:
+        # Com --keep events, a leitura depois do congelamento não inclui events.
+        seed_comercial(self.fake)
+        with fake_backend(self.fake):
+            code, output = run_main(self.apply_args("--keep", "events"))
+        self.assertEqual(code, 0)
+        result = json.loads(output.rsplit("Export gerenciado concluído", 1)[1].split("\n", 1)[1])
+        self.assertEqual(result["preserved_comercial_events"], 2)
+        self.assertIn("ecom1", self.fake.docs["events"])
+        self.assertIn("e1", self.fake.docs["events"])
+        event = decode_document(next(
+            document for name, document in self.fake.docs["events"].items()
+            if name.startswith("evt_full-reset-")
+        ))
+        self.assertEqual(event["payload"]["preserved_comercial_events"], 2)
+        self.assertIn("Eventos do Comercial preservados: 2.", event["description"])
 
     def test_rerun_is_allowed_while_a_previous_full_reset_is_still_frozen(self) -> None:
         self.fake.seed(
