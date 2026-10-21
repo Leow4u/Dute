@@ -94,6 +94,8 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/minhas-faturas", ["cliente"]],
   // Comercial (partes 13 e 14): rotas registradas só com a liberação (lib/comercial/navegacao.ts).
   ["/comercial", ["owner", "admin", "comercial"]],
+  // Parte 11: a fila é /comercial; a montagem do orçamento abre pela fila.
+  ["/comercial/orcamento", ["owner", "admin", "comercial"]],
   ["/comercial/clientes", ["owner", "admin", "comercial"]],
   ["/comercial/contratos", ["owner", "admin", "comercial"]],
 ];

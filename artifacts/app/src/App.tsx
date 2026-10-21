@@ -135,13 +135,15 @@ const ClienteEnvios = lazy(() =>
   import("./pages/client").then((m) => ({ default: m.ClienteEnvios })),
 );
 const ComercialClientes = lazy(() => import("./pages/comercial/clientes"));
+const ComercialOrcamentos = lazy(() => import("./pages/comercial/orcamentos"));
+const ComercialOrcamento = lazy(() => import("./pages/comercial/orcamento"));
 const ComercialContratos = lazy(() => import("./pages/comercial/contratos"));
 import { useRole } from "./hooks/use-role";
 import { AuthProvider, useAppUser } from "./lib/auth";
 import { ActiveCustomerProvider } from "./lib/active-customer-context";
 import { useOperationProfile } from "./lib/operation-profile";
 import { PLATAFORMA_LIBERADA } from "./lib/liberacao";
-import { DESTINO_DO_COMERCIAL, soComComercialLiberado } from "./lib/comercial/navegacao";
+import { soComComercialLiberado } from "./lib/comercial/navegacao";
 import { entrada } from "./lib/platform-modules";
 import { portalModulesFor } from "./lib/operations";
 import {
@@ -973,8 +975,6 @@ const SkusRedirect = () => <Redirect to="/catalogo/saldos" />;
 // O mapa do armazém mudou para Estoque › Mapa (16/10/2026); os endereços antigos seguem para lá.
 const WarehouseMapRedirect = () => <Redirect to="/estoque/mapa" />;
 const PriceListRedirect = () => <Redirect to="/faturamento/tabela" />;
-// Casa do Comercial: Clientes, até a fila de orçamentos (parte 11) existir.
-const ComercialRedirect = () => <Redirect to={DESTINO_DO_COMERCIAL} />;
 // A Administração virou seção da Configuração.
 const legacySettingsRedirect = (path: string) => {
   const to = LEGACY_SETTINGS_REDIRECTS[path];
@@ -1047,7 +1047,8 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   // a liberação do Comercial está ligada (lib/comercial/navegacao.ts). Toda
   // rota do Comercial entra neste bloco (comercial/navegacao.test.ts).
   ...soComComercialLiberado([
-    protectedRoute("/comercial", ComercialRedirect),
+    protectedRoute("/comercial", ComercialOrcamentos),
+    protectedRoute("/comercial/orcamento", ComercialOrcamento),
     protectedRoute("/comercial/clientes", ComercialClientes),
     protectedRoute("/comercial/contratos", ComercialContratos),
   ]),
