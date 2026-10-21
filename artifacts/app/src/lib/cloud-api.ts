@@ -23,6 +23,8 @@ import {
 } from "firebase/firestore";
 
 import { PAPEIS_DO_WMS, estagioDoCadastro, isPapel } from "@workspace/dominio";
+import { activeCustomerStorageKey, LEGACY_CUSTOMER_CODE } from "./active-customer";
+import { periodBelongsToCustomer } from "./billing-scope";
 import { canSeeCatalogPrice, canSeeMerchandiseValue } from "./permissions";
 import { firebaseAuth, firestore } from "./firebase";
 import { callFunctionsApi } from "./functions-api";
@@ -47,7 +49,6 @@ import {
   buildDerivedStockBalances,
   buildOperationalFoundationSnapshot,
 } from "./operational-foundation";
-import { LEGACY_CUSTOMER_CODE } from "./active-customer";
 
 type AnyRecord = Record<string, any>;
 type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
@@ -3877,13 +3878,21 @@ async function route(
   }
 
   if (pathname === "/api/billing/periods" && method === "GET") {
+    const profile = await getCurrentProfile();
+    const customer =
+      profile.role === "cliente"
+        ? String(profile.customer_code)
+        : (globalThis.localStorage?.getItem(activeCustomerStorageKey(profile.uid))?.trim() ||
+          LEGACY_CUSTOMER_CODE);
     const periods = await readLimited(
       collectionNames.periods,
       120,
       "competencia",
       "desc",
     );
-    return json({ items: periods });
+    return json({
+      items: periods.filter((period) => periodBelongsToCustomer(period, customer)),
+    });
   }
 
   const periodMatch = pathname.match(

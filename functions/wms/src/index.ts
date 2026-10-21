@@ -78,6 +78,7 @@ import {
   openingUsesGlobalControl,
 } from "./domain/customer-scope.js";
 import { assertManagedCatalogCreateAllowed } from "./domain/catalog-codes.js";
+import { resolveBillingDocument } from "./domain/billing-scope.js";
 import {
   canSeeCatalogPrice,
   CATALOG_PRICES,
@@ -549,6 +550,7 @@ const AgentChatSchema = z.object({
 
 const BillingCompetenciaSchema = z.object({
   competencia: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+  customer_code: z.string().trim().min(1).max(120).optional(),
 });
 
 const SaveBillingManualSchema = BillingCompetenciaSchema.extend({
@@ -3319,14 +3321,29 @@ async function loadBillingCalculation(
   // Itens criados pela Tabela de preços antes de 01/10/2026 não gravavam
   // customer_code e ficavam fora da fatura emitida (mas apareciam na prévia).
   // A lista é pequena: lê tudo e trata "sem cliente" como o cliente padrão.
-  const priceQuery = db.collection(collectionNames.billingPriceList);
-  const manualRef = db
-    .collection(collectionNames.billingManual)
-    .doc(competencia);
+  const priceQuery =
+    customerCode === DEFAULT_CUSTOMER
+      ? db.collection(collectionNames.billingPriceList)
+      : db
+          .collection(collectionNames.billingPriceList)
+          .where("customer_code", "==", customerCode);
+  const manualResolved = await resolveBillingDocument(
+    db,
+    collectionNames.billingManual,
+    customerCode,
+    competencia,
+    transaction,
+  );
+  const manualRef = manualResolved.ref;
   const configRef = db.collection(collectionNames.billingConfig).doc("default");
-  const operationalSnapshotRef = db
-    .collection(collectionNames.billingOperationalSnapshots)
-    .doc(competencia);
+  const operationalResolved = await resolveBillingDocument(
+    db,
+    collectionNames.billingOperationalSnapshots,
+    customerCode,
+    competencia,
+    transaction,
+  );
+  const operationalSnapshotRef = operationalResolved.ref;
   const inventoryControlRef = db.collection("system_controls").doc("inventory");
   const inventoryQuery = db
     .collection(collectionNames.clientInventory)
@@ -6494,13 +6511,16 @@ export const getBillingPreview = onCall(async (request) => {
   const profile = await getProfile(request);
   requireBillingRead(profile);
   const input = BillingCompetenciaSchema.parse(request.data ?? {});
-  const customerCode = DEFAULT_CUSTOMER;
+  const customerCode = requireCustomerScope(profile, input.customer_code);
   const now = new Date();
   try {
-    const periodSnapshot = await db
-      .collection(collectionNames.periods)
-      .doc(input.competencia)
-      .get();
+    const periodResolved = await resolveBillingDocument(
+      db,
+      collectionNames.periods,
+      customerCode,
+      input.competencia,
+    );
+    const periodSnapshot = await periodResolved.ref.get();
     const period = periodSnapshot.data() ?? {};
     const status = String(period.status ?? "aberto");
     const frozen = period.invoice_snapshot as Record<string, unknown> | undefined;
@@ -6713,6 +6733,7 @@ export const uploadShipmentAttachment = onCall({ timeoutSeconds: 60 }, async (re
 const ExportBillingReportSchema = z.object({
   from: z.string().trim().regex(/^\d{4}-\d{2}$/),
   to: z.string().trim().regex(/^\d{4}-\d{2}$/),
+  customer_code: z.string().trim().min(1).max(120).optional(),
 });
 
 /**
@@ -6722,13 +6743,13 @@ const ExportBillingReportSchema = z.object({
  */
 export const exportBillingReport = onCall({ timeoutSeconds: 60 }, async (request) => {
   const profile = await getProfile(request);
+  const input = ExportBillingReportSchema.parse(request.data ?? {});
   let customerCode: string;
-  if (profile.role === "cliente") customerCode = requireCustomerScope(profile);
+  if (profile.role === "cliente") customerCode = requireCustomerScope(profile, input.customer_code);
   else {
     requireBillingRead(profile);
-    customerCode = DEFAULT_CUSTOMER;
+    customerCode = requireCustomerScope(profile, input.customer_code);
   }
-  const input = ExportBillingReportSchema.parse(request.data ?? {});
   const [invoices, trackings] = await Promise.all([
     db.collection(collectionNames.clientInvoices).where("customer_code", "==", customerCode).get(),
     db.collection(collectionNames.clientOrderTracking).where("customer_code", "==", customerCode).get(),
@@ -6936,15 +6957,10 @@ export const saveBillingManual = onCall(async (request) => {
   const profile = await getProfile(request);
   requireBillingWrite(profile);
   const input = SaveBillingManualSchema.parse(request.data ?? {});
-  const customerCode = DEFAULT_CUSTOMER;
-  const periodRef = db
-    .collection(collectionNames.periods)
-    .doc(input.competencia);
-  const manualRef = db
-    .collection(collectionNames.billingManual)
-    .doc(input.competencia);
+  const customerCode = requireCustomerScope(profile, input.customer_code);
   const operationId = `billing_manual_${stableHash({
     actor: profile.uid,
+    customer: customerCode,
     nonce: input.idempotency_key ?? stableHash(input),
   }).slice(0, 40)}`;
   const operationRef = db
@@ -6978,6 +6994,22 @@ export const saveBillingManual = onCall(async (request) => {
         );
       }
 
+      const periodResolved = await resolveBillingDocument(
+        db,
+        collectionNames.periods,
+        customerCode,
+        input.competencia,
+        transaction,
+      );
+      const periodRef = periodResolved.ref;
+      const manualResolved = await resolveBillingDocument(
+        db,
+        collectionNames.billingManual,
+        customerCode,
+        input.competencia,
+        transaction,
+      );
+      const manualRef = manualResolved.ref;
       const periodSnapshot = await transaction.get(periodRef);
       if (!periodSnapshot.exists) {
         transaction.create(periodRef, {
@@ -7054,20 +7086,30 @@ export const emitBillingInvoice = onCall(async (request) => {
   const profile = await getProfile(request);
   requireBillingWrite(profile);
   const input = BillingCompetenciaSchema.parse(request.data ?? {});
-  const customerCode = DEFAULT_CUSTOMER;
-  const periodRef = db
-    .collection(collectionNames.periods)
-    .doc(input.competencia);
-  const clientRef = db
-    .collection(collectionNames.clientInvoices)
-    .doc(input.competencia);
-  const eventRef = db
-    .collection(collectionNames.events)
-    .doc(`evt_billing_emit_${safeDocId(input.competencia)}`);
+  const customerCode = requireCustomerScope(profile, input.customer_code);
   const issuedAt = new Date();
 
   try {
     const result = await db.runTransaction(async (transaction) => {
+      const periodResolved = await resolveBillingDocument(
+        db,
+        collectionNames.periods,
+        customerCode,
+        input.competencia,
+        transaction,
+      );
+      const clientResolved = await resolveBillingDocument(
+        db,
+        collectionNames.clientInvoices,
+        customerCode,
+        input.competencia,
+        transaction,
+      );
+      const periodRef = periodResolved.ref;
+      const clientRef = clientResolved.ref;
+      const eventRef = db
+        .collection(collectionNames.events)
+        .doc(`evt_billing_emit_${safeDocId(periodRef.id)}`);
       const eventSnapshot = await transaction.get(eventRef);
       // Read every billing source in the same transaction as the period. This
       // prevents a movement, manual quantity, or price change from racing the
@@ -7144,20 +7186,30 @@ export const payBillingInvoice = onCall(async (request) => {
   const profile = await getProfile(request);
   requireBillingWrite(profile);
   const input = BillingCompetenciaSchema.parse(request.data ?? {});
-  const customerCode = DEFAULT_CUSTOMER;
-  const periodRef = db
-    .collection(collectionNames.periods)
-    .doc(input.competencia);
-  const clientRef = db
-    .collection(collectionNames.clientInvoices)
-    .doc(input.competencia);
-  const eventRef = db
-    .collection(collectionNames.events)
-    .doc(`evt_billing_paid_${safeDocId(input.competencia)}`);
+  const customerCode = requireCustomerScope(profile, input.customer_code);
   const paidAt = new Date();
 
   try {
     return await db.runTransaction(async (transaction) => {
+      const periodResolved = await resolveBillingDocument(
+        db,
+        collectionNames.periods,
+        customerCode,
+        input.competencia,
+        transaction,
+      );
+      const clientResolved = await resolveBillingDocument(
+        db,
+        collectionNames.clientInvoices,
+        customerCode,
+        input.competencia,
+        transaction,
+      );
+      const periodRef = periodResolved.ref;
+      const clientRef = clientResolved.ref;
+      const eventRef = db
+        .collection(collectionNames.events)
+        .doc(`evt_billing_paid_${safeDocId(periodRef.id)}`);
       const [periodSnapshot, eventSnapshot] = await Promise.all([
         transaction.get(periodRef),
         transaction.get(eventRef),

@@ -8,6 +8,7 @@ describe("rotas de faturamento", () => {
     expect(route?.name).toBe("getBillingPreview");
     expect(await route?.payload("/api/billing/periods/2026-09")).toEqual({
       competencia: "2026-09",
+      customer_code: "BTG Pactual",
     });
   });
 
