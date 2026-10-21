@@ -132,7 +132,7 @@ C:\DEV\Dute  (GitHub Leow4u/Dute)
 └── agents/, tools/, docs/  com docs/plataforma/ (este plano) e docs/mockups/ (telas v3)
 ```
 
-- Cada pasta de functions é publicada à parte (`firebase deploy --only functions:operacao`).
+- Cada pasta de functions é uma codebase no `firebase.json`; o CI publica todas juntas (`firebase deploy --only functions`), nunca uma só (`.github/workflows/publicar.yml`).
 - O WMS não é refatorado, só muda de pasta (regra do CLAUDE.md do Dute sobre os arquivos grandes). O Agent Dute sai do WMS para o núcleo numa fase própria, com os testes que já existem.
 - As rotas atuais do WMS continuam; o menu da plataforma agrupa por módulo.
 - A implementação roda em sessões abertas em `C:\DEV\Dute`.
@@ -167,6 +167,7 @@ Precificação, faturamento, a receber e via comercial das OS; OS no portal do c
 
 ### Fase 6 — Comercial
 Orçamentos com itens da LPU, envio e aprovação, conversão em OS, sugestão a partir de orçamentos parecidos com orçado x realizado.
+Em 20/10/2026 o Leonardo adiantou o Comercial v1 para antes da Operação, com a base que os dois módulos dividem (cadastro, catálogo e tabelas, contratos, Demanda). A sugestão por orçamentos parecidos continua depois da Operação. Desenho e partes em `docs/plataforma/fase-6-comercial.md`.
 **Pronto quando:** um orçamento novo recebe itens e prazo sugeridos de casos parecidos, é aprovado e vira OS sem redigitar.
 
 ### Fase 7 — Financeiro unificado

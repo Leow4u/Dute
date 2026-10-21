@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Autorizações de faturamento</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+a{color:#0054CE;text-decoration:none}a:hover{color:#004496}
+h1,h2,h3,p{margin:0}
+.ic{width:20px;height:20px;flex:0 0 auto}
+.ic-s{width:16px;height:16px;flex:0 0 auto}
+.sb{flex:0 0 248px;background:#161616;color:#fff;display:flex;flex-direction:column;padding:26px 14px 18px;gap:4px}
+.nav{display:flex;align-items:center;gap:12px;height:48px;padding:0 14px;border-radius:10px;color:rgba(255,255,255,.72);font-weight:600;font-size:15px;text-decoration:none;position:relative}
+.nav:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav.on{background:rgba(255,255,255,.12);color:#fff}
+.nav.on::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:3px;background:#E71C23}
+.nav.agent{color:#C9B8FB}.nav.agent:hover{color:#E0D6FF}
+.main{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;padding:30px 44px 36px;gap:20px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;font:700 14px Manrope,sans-serif;border:1px solid transparent;cursor:pointer;white-space:nowrap;text-decoration:none}
+.btn-p{background:#E71C23;color:#fff}.btn-p:hover{background:#AD0015;color:#fff}
+.btn-s{background:#fff;color:#161616;border-color:#D4D4CF}.btn-s:hover{background:#F0F0ED;color:#161616}
+.btn-g{background:transparent;color:#5F6368}.btn-g:hover{background:#E8E8E4;color:#161616}
+.btn-i{width:32px;height:32px;padding:0}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px}
+.muted{color:#5F6368}
+.seg{display:inline-flex;background:#E8E8E4;border-radius:8px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg a,.seg button{height:34px;padding:0 14px;border-radius:6px;display:inline-flex;align-items:center;gap:8px;font:700 13.5px Manrope,sans-serif;color:#5F6368;text-decoration:none;background:transparent;border:1px solid transparent;cursor:pointer}
+.seg a.on,.seg button.on{background:#fff;color:#161616;border-color:#E5E5E1}
+.seg button em{font-style:normal;font-size:12px;color:#5F6368;font-variant-numeric:tabular-nums}
+.badge{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 9px;border-radius:6px;font-size:12.5px;font-weight:700;white-space:nowrap;border:1px solid transparent}
+.badge svg{width:13px;height:13px;flex:0 0 auto}
+.d-late{background:#FBE3E4;border-color:#F3C2C4;color:#8E1016}
+.d-wait{background:#FDF0D5;border-color:#F3D9A4;color:#8A4B00}
+.f-fat{background:#D5F2EF;border-color:#A9E0DA;color:#0E5F58}
+.pill{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:6px;background:#F0F0ED;border:1px solid #E5E5E1;color:#3F403F;font-size:12px;font-weight:700;white-space:nowrap}
+.av{width:36px;height:36px;border-radius:50%;background:#E71C23;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto}
+.grp{overflow:hidden}
+.ch{display:flex;align-items:center;gap:10px 14px;padding:14px 20px;border-bottom:1px solid #E5E5E1;flex-wrap:wrap}
+.ch h2{font-size:16px;font-weight:800}
+.ch em,.gh em{font-style:normal;min-width:24px;height:24px;border-radius:999px;background:#E8E8E4;color:#161616;font-size:12.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.gh{display:flex;align-items:center;gap:10px;padding:10px 20px;background:#FAFAF8;border-bottom:1px solid #E5E5E1;border-top:1px solid #E5E5E1}
+.gh:first-child{border-top:0}
+.gh h3{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
+.gh .tot{margin-left:auto;font-size:13.5px;font-weight:800;font-variant-numeric:tabular-nums}
+.qrow{display:flex;align-items:flex-start;gap:14px;padding:14px 20px;border-top:1px solid #F0F0ED}
+.gh+.qrow{border-top:0}
+.qrow.sel{background:#F3F7FE}
+.cb{width:18px;height:18px;accent-color:#161616;margin:3px 0 0;flex:0 0 auto;cursor:pointer}
+.cb-sp{width:18px;flex:0 0 auto}
+.q2{flex:1 1 260px;min-width:0;display:flex;flex-direction:column;gap:2px}
+.qr{flex:0 0 auto;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.qn{display:inline-flex;align-items:center;gap:8px;font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;flex-wrap:wrap}
+.qt{font-size:14.5px;font-weight:700}
+.qs{display:block;font-size:13px;color:#5F6368;font-weight:600}
+.qv{display:block;font-size:15px;font-weight:800;font-variant-numeric:tabular-nums}
+.frow{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding:16px 20px;border-top:1px solid #F0F0ED}
+.gh+.frow{border-top:0}
+.f1{flex:0 0 170px;display:flex;flex-direction:column}
+.f2{flex:1 1 280px;min-width:0;display:flex;flex-direction:column;gap:4px}
+.f3{flex:0 0 200px;display:flex;flex-direction:column;align-items:flex-end}
+.f4{flex:0 0 110px;display:flex;justify-content:flex-end}
+.dl{display:flex;flex-wrap:wrap;gap:6px}
+.pan{display:flex;flex-direction:column;gap:14px;padding:18px 20px 20px}
+.pan h2{font-size:16px;font-weight:800}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.fld{display:flex;flex-direction:column;min-width:0}
+.lbl{font-size:12.5px;font-weight:700;color:#3F403F;display:block;margin-bottom:6px}
+.inp{height:40px;border:1px solid #D4D4CF;border-radius:8px;padding:0 12px;font:600 14px Manrope,sans-serif;background:#fff;color:#161616;width:100%}
+.inp:focus{outline:2px solid #0054CE;outline-offset:1px}
+.inp.num{text-align:right;font-variant-numeric:tabular-nums}
+.inp::placeholder{color:#6B6F73}
+textarea.inp{height:auto;padding:10px 12px;resize:vertical;line-height:1.5}
+.ro{display:flex;align-items:center;gap:10px;min-height:40px;padding:0 12px;border:1px solid #E5E5E1;border-radius:8px;background:#FAFAF8;font-weight:700}
+.ro span{font-size:12.5px;color:#5F6368;font-weight:600;margin-left:auto}
+.file{display:flex;align-items:center;gap:10px;min-height:40px;padding:0 12px;border:1px dashed #D4D4CF;border-radius:8px;font-weight:700;font-size:13.5px}
+.file span{color:#5F6368;font-weight:600;font-size:12.5px}
+.sep{height:1px;background:#F0F0ED}
+.h4{font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#3F403F;display:flex;align-items:center;gap:8px}
+.pk{display:flex;align-items:center;gap:10px;padding:10px 6px 10px 12px;border:1px solid #E5E5E1;border-radius:8px}
+.pk .q2{gap:0}
+.pk b{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums}
+.sum{display:flex;justify-content:space-between;align-items:baseline;font-size:14px}
+.sum span{color:#5F6368;font-weight:600}
+.sum b{font-weight:800;font-variant-numeric:tabular-nums}
+.okbox,.warnbox{display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:10px;font-size:14px;font-weight:700;border:1px solid transparent}
+.okbox{background:#DDF5E4;border-color:#B6E4C4;color:#14602F}
+.warnbox{background:#FDF0D5;border-color:#F3D9A4;color:#8A4B00}
+.okbox svg,.warnbox svg{width:18px;height:18px;flex:0 0 auto}
+.hide{display:none}
+</style>
+</helmet>
+<div style="min-height: 100%; display: flex; flex-wrap: wrap">
+  <aside class="sb">
+    <a href="Inicio.dc.html" style="display: block; padding: 4px 14px 24px"><img src="/_blob/51b94b624eef7c9daa70d9dd1cfb5330" alt="Dutelog Soluções Logísticas" style="width: 148px; height: auto; display: block"></a>
+    <a class="nav" href="Inicio.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>Início</a>
+    <a class="nav on" href="ComFila.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>Comercial</a>
+    <a class="nav" href="ComClientes.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Clientes</a>
+    <a class="nav agent" href="ComFila.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></svg>Agent Dute</a>
+    <div style="margin-top: auto; padding: 14px 10px 0; border-top: 1px solid rgba(255,255,255,.1); display: flex; align-items: center; gap: 12px">
+      <span class="av">G</span>
+      <div style="min-width: 0"><div style="font-weight: 700; font-size: 14.5px">Guilherme</div><div style="font-size: 12.5px; color: rgba(255,255,255,.55)">Comercial</div></div>
+    </div>
+  </aside>
+  <div class="main">
+    <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap">
+      <h1 style="font-size: 28px; font-weight: 800; letter-spacing: -.02em; margin-right: 8px">Autorizações de faturamento</h1>
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+        <label style="position: relative; display: block"><span style="position: absolute; left: 12px; top: 12px; color: #5F6368; display: flex"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span><input aria-label="Buscar" placeholder="Buscar pedido, aceite ou demanda" style="height: 40px; width: 300px; max-width: 100%; border: 1px solid #D4D4CF; border-radius: 8px; padding: 0 12px 0 36px; font: 600 14px Manrope, sans-serif; background: #fff; color: #161616"></label>
+        <sc-if value="{{ closed }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-s" onClick="{{ openPanel }}"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Nova autorização</button></sc-if>
+      </div>
+    </div>
+    <nav class="seg" aria-label="Comercial" style="align-self: flex-start"><a href="ComFila.dc.html">Orçamentos</a><a href="ComContrato.dc.html">Contratos</a><a class="on" href="ComAutorizacoes.dc.html" aria-current="page">Autorizações</a><a href="ComMedicaoMensal.dc.html">Medições</a></nav>
+
+    <div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 20px">
+      <section class="card grp" aria-label="Executados aguardando autorização" style="flex: 1 1 560px; min-width: 0">
+        <div class="ch">
+          <h2>Executados aguardando autorização</h2><em>{{ nLive }}</em>
+          <div class="seg" role="group" aria-label="Dias desde a execução" style="margin-left: auto">
+            <sc-for list="{{ filters }}" as="f" hint-placeholder-count="4"><button type="button" class="{{ f.cls }}" onClick="{{ f.pick }}">{{ f.label }}<em>{{ f.cnt }}</em></button></sc-for>
+          </div>
+        </div>
+        <sc-for list="{{ groups }}" as="g" hint-placeholder-count="2">
+          <div class="gh"><h3>{{ g.name }}</h3><em>{{ g.cnt }}</em><span class="tot">{{ g.total }}</span></div>
+          <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="3">
+            <div class="{{ r.rowCls }}">
+              <sc-if value="{{ r.canPick }}" hint-placeholder-val="{{ true }}"><input type="checkbox" class="cb" checked="{{ r.sel }}" onChange="{{ r.toggle }}" aria-label="Incluir {{ r.n }}"></sc-if>
+              <sc-if value="{{ r.noPick }}" hint-placeholder-val="{{ false }}"><span class="cb-sp"></span></sc-if>
+              <div class="q2">
+                <span class="qn"><a href="ComOrcamento.dc.html">{{ r.n }}</a><sc-if value="{{ r.hasLeg }}" hint-placeholder-val="{{ false }}"><span class="pill">{{ r.leg }}</span></sc-if></span>
+                <span class="qt">{{ r.title }}</span>
+                <span class="qs">{{ r.ref }} · {{ r.ger }} · executada {{ r.ex }}</span>
+              </div>
+              <div class="qr">
+                <span class="qv">{{ r.val }}</span>
+                <span class="{{ r.dcls }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>{{ r.dtxt }}</span>
+              </div>
+            </div>
+          </sc-for>
+        </sc-for>
+        <sc-if value="{{ empty }}" hint-placeholder-val="{{ false }}"><div class="qrow muted" style="font-weight: 700">Nenhum executado nesta faixa</div></sc-if>
+      </section>
+
+      <section class="{{ panCls }}" aria-label="Registrar autorização de faturamento" style="flex: 1 1 400px; min-width: 0">
+        <div class="pan">
+          <div style="display: flex; align-items: center; gap: 10px">
+            <h2>Registrar autorização de faturamento</h2>
+            <button type="button" class="btn btn-g btn-i" aria-label="Fechar" onClick="{{ closePanel }}" style="margin-left: auto"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+          </div>
+
+          <sc-if value="{{ done }}" hint-placeholder-val="{{ false }}">
+            <div class="okbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Pedido 4500000412 registrado · {{ nPicked }} demandas · {{ sumTxt }}</div>
+          </sc-if>
+
+          <sc-if value="{{ editing }}" hint-placeholder-val="{{ true }}">
+            <div style="display: flex; flex-direction: column; gap: 14px">
+            <div class="fld"><span class="lbl">Cliente</span><div class="ro">Itaú Unibanco<span>Contrato até 30/06/2027</span></div></div>
+            <div class="g2">
+              <div class="fld"><label class="lbl" for="ped">Pedido</label><input class="inp" id="ped" value="4500000412"></div>
+              <div class="fld"><label class="lbl" for="ace">Aceite</label><input class="inp" id="ace" value="1000000877"></div>
+            </div>
+            <div class="g2">
+              <div class="fld"><label class="lbl" for="rec">Recebida em</label><input class="inp" id="rec" value="20/10/2026"></div>
+              <div class="fld"><label class="lbl" for="vac">Valor do aceite (R$)</label><input class="inp num" id="vac" value="{{ aceite }}" onChange="{{ onAceite }}"></div>
+            </div>
+            <div class="g2">
+              <div class="fld"><label class="lbl" for="tom">Tomador · CNPJ</label><input class="inp" id="tom" placeholder="00.000.000/0000-00"></div>
+              <div class="fld"><label class="lbl" for="cc">Centro de custo</label><input class="inp" id="cc" value="41220 · Facilities SP"></div>
+            </div>
+            <div class="fld"><span class="lbl">Código de serviço</span><div class="ro">1602 – Outros serviços de transporte de natureza municipal</div></div>
+            <div class="fld"><label class="lbl" for="esc">Escopo</label><textarea class="inp" id="esc" rows="2">Desmontagem, transporte e arquivo deslizante · Faria Lima 3400 · out/2026</textarea></div>
+            <div class="file"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>Pedido_4500000412.pdf<span>214 KB</span><a href="ComAutorizacoes.dc.html" style="margin-left: auto; font-size: 13px">Trocar</a></div>
+            <div class="sep"></div>
+            <div class="h4">Demandas<span class="pill">{{ nPicked }}</span></div>
+            <sc-for list="{{ picked }}" as="p" hint-placeholder-count="2">
+              <div class="pk">
+                <div class="q2"><a href="ComOrcamento.dc.html"><b>{{ p.n }}</b></a><span class="qs">{{ p.title }}</span></div>
+                <span class="qv" style="font-size: 14px">{{ p.val }}</span>
+                <button type="button" class="btn btn-g btn-i" aria-label="Tirar {{ p.n }}" onClick="{{ p.remove }}"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+              </div>
+            </sc-for>
+            <div class="sum"><span>Soma das RVs</span><b>{{ sumTxt }}</b></div>
+            <sc-if value="{{ ok }}" hint-placeholder-val="{{ true }}"><div class="okbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Valor confere com a soma das RVs</div></sc-if>
+            <sc-if value="{{ diverge }}" hint-placeholder-val="{{ false }}"><div class="warnbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></svg>{{ divTxt }}</div></sc-if>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap">
+              <button type="button" class="btn btn-p" onClick="{{ register }}"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Registrar autorização</button>
+              <button type="button" class="btn btn-s" onClick="{{ closePanel }}">Cancelar</button>
+            </div>
+            </div>
+          </sc-if>
+        </div>
+      </section>
+    </div>
+
+    <section class="card grp" aria-label="Autorizadas, a faturar">
+      <div class="gh"><h3>Autorizadas · a faturar</h3><em>{{ nFat }}</em><span class="tot">{{ fatTotal }}</span></div>
+      <sc-for list="{{ fat }}" as="f" hint-placeholder-count="3">
+        <div class="frow">
+          <div class="f1"><span class="qn">{{ f.ped }}</span><span class="qs">{{ f.sub }}</span></div>
+          <div class="f2"><span class="qt">{{ f.cli }}</span><div class="dl"><sc-for list="{{ f.dem }}" as="d" hint-placeholder-count="1"><a href="ComOrcamento.dc.html" class="pill" style="color: #0054CE">{{ d.n }}</a></sc-for><span class="qs">{{ f.info }}</span></div></div>
+          <div class="f3"><span class="qv">{{ f.val }}</span><span class="qs">{{ f.when }}</span></div>
+          <div class="f4"><span class="badge f-fat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg>A faturar</span></div>
+        </div>
+      </sc-for>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1460}}'>
+class Component extends DCLogic {
+  constructor(...args) {
+    super(...args);
+    this.state = this.initial();
+  }
+  initial() {
+    return { age: 'all', picked: { '10045': true, '10047': true }, aceite: '20.748,80', open: true, done: false };
+  }
+  renderVals() {
+    const s = this.state || this.initial();
+    const fmt = (v) => {
+      const t = Math.abs(v).toFixed(2).split('.');
+      return 'R$ ' + t[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + t[1];
+    };
+    const parse = (t) => {
+      const n = parseFloat(String(t).replace(/[^\d,]/g, '').replace(',', '.'));
+      return isNaN(n) ? 0 : n;
+    };
+    const base = [
+      { id: '10029', grp: 'itau', n: '10029 – RV02', leg: 'nº legado 9898', title: 'Montagem de sala de treinamento · CEIC – Torre Conceição', ref: 'CE8841', ger: 'Cushman & Wakefield', ex: '12/08', days: 70, v: 22310.00 },
+      { id: '10031', grp: 'itau', n: '10031 – RV02', title: 'Mudança do 7º andar · CEIC – Torre Olavo Setubal', ref: 'CE8977', ger: 'Souza & Lopes', ex: '02/09', days: 49, v: 18420.50 },
+      { id: '10036', grp: 'itau', n: '10036 – RV02', title: 'Retirada de 22 cadeiras giratórias · CAT', ref: 'SL.260', ger: 'Souza & Lopes', ex: '15/09', days: 36, v: 3946.40 },
+      { id: '10042', grp: 'itau', n: '10042 – RV02', title: 'Remanejamento de 36 estações · CEA', ref: 'CE9006', ger: 'MGE', ex: '22/09', days: 29, v: 9874.00 },
+      { id: '10045', grp: 'itau', n: '10045 – RV03', title: 'Desmontagem e transporte de mobiliário · Faria Lima 3400', ref: 'FL9464', ger: 'Hass & Megale', ex: '06/10', days: 15, v: 14236.80 },
+      { id: '10047', grp: 'itau', n: '10047 – RV02', title: 'Transporte de arquivo deslizante · Faria Lima 3400', ref: 'FL9471', ger: 'Hass & Megale', ex: '09/10', days: 12, v: 6512.00 },
+      { id: '10044', grp: 'btg', n: '10044 – RV02', title: 'Desmontagem de estande · Faria Lima 3477', ref: 'REQ 88213', ger: 'Direto', ex: '25/09', days: 26, v: 5480.00 }
+    ];
+    const pickedIds = Object.keys(s.picked).filter((k) => s.picked[k]);
+    const live = base.filter((r) => !(s.done && pickedIds.indexOf(r.id) >= 0));
+    const ages = [
+      { key: 'all', label: 'Todas', test: () => true },
+      { key: 'a30', label: 'Até 30 dias', test: (d) => d <= 30 },
+      { key: 'a60', label: '31–60 dias', test: (d) => d > 30 && d <= 60 },
+      { key: 'a90', label: 'Mais de 60', test: (d) => d > 60 }
+    ];
+    const age = ages.find((a) => a.key === s.age) || ages[0];
+    const pickable = s.open && !s.done;
+    const mk = (r) => {
+      const sel = pickable && !!s.picked[r.id];
+      const can = pickable && r.grp === 'itau';
+      return {
+        n: r.n, leg: r.leg || '', hasLeg: !!r.leg, title: r.title, ref: r.ref, ger: r.ger, ex: r.ex,
+        val: fmt(r.v), dtxt: r.days + ' dias', dcls: r.days > 30 ? 'badge d-late' : 'badge d-wait',
+        rowCls: sel ? 'qrow sel' : 'qrow', sel: sel, canPick: can, noPick: !can,
+        toggle: () => this.setState({ picked: Object.assign({}, this.state.picked, { [r.id]: !this.state.picked[r.id] }) })
+      };
+    };
+    const groups = [{ key: 'itau', name: 'Itaú Unibanco' }, { key: 'btg', name: 'BTG Pactual' }].map((g) => {
+      const src = live.filter((r) => r.grp === g.key && age.test(r.days));
+      return { name: g.name, cnt: src.length, total: fmt(src.reduce((a, r) => a + r.v, 0)), rows: src.map(mk) };
+    }).filter((g) => g.cnt > 0);
+    const filters = ages.map((a) => ({
+      label: a.label,
+      cnt: live.filter((r) => a.test(r.days)).length,
+      cls: a.key === age.key ? 'on' : '',
+      pick: () => this.setState({ age: a.key })
+    }));
+    const pickedRows = base.filter((r) => s.picked[r.id]);
+    const sum = pickedRows.reduce((a, r) => a + r.v, 0);
+    const diff = parse(s.aceite) - sum;
+    const ok = Math.abs(diff) < 0.005;
+    const fat = [
+      { ped: '4500000398', sub: 'Aceite 1000000861', cli: 'Itaú Unibanco', dem: [{ n: '10033 – RV02' }, { n: '10035 – RV02' }], info: 'CC 41220', v: 31204.60, when: 'autorizada 14/10' },
+      { ped: '4500000405', sub: 'Aceite 1000000870', cli: 'Itaú Unibanco', dem: [{ n: '10039 – RV02' }], info: 'CC 41305', v: 12880.00, when: 'autorizada 17/10' },
+      { ped: 'PO 7781204', sub: 'Portal do fornecedor', cli: 'BTG Pactual', dem: [{ n: '10040 – RV02' }], info: 'prazo do pedido 17/01/2027', v: 7950.00, when: 'autorizada 19/10' }
+    ];
+    if (s.done) {
+      fat.unshift({ ped: '4500000412', sub: 'Aceite 1000000877', cli: 'Itaú Unibanco', dem: pickedRows.map((r) => ({ n: r.n })), info: 'CC 41220', v: sum, when: 'autorizada 21/10' });
+    }
+    return {
+      nLive: live.length,
+      filters: filters,
+      groups: groups,
+      empty: groups.length === 0,
+      panCls: s.open ? 'card' : 'card hide',
+      closed: !s.open,
+      done: !!s.done,
+      editing: !s.done,
+      aceite: s.aceite,
+      onAceite: (e) => this.setState({ aceite: e.target.value }),
+      picked: pickedRows.map((r) => ({
+        n: r.n, title: r.title, val: fmt(r.v),
+        remove: () => this.setState({ picked: Object.assign({}, this.state.picked, { [r.id]: false }) })
+      })),
+      nPicked: pickedRows.length,
+      sumTxt: fmt(sum),
+      ok: ok,
+      diverge: !ok,
+      divTxt: 'Diverge em ' + fmt(diff),
+      register: () => this.setState({ done: true }),
+      closePanel: () => this.setState({ open: false }),
+      openPanel: () => this.setState(this.initial()),
+      fat: fat.map((f) => Object.assign({}, f, { val: fmt(f.v) })),
+      nFat: fat.length,
+      fatTotal: fmt(fat.reduce((a, f) => a + f.v, 0))
+    };
+  }
+}
+</script>
+</body>
+</html>
