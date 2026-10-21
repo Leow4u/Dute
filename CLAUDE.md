@@ -106,9 +106,9 @@ documentação de produto e operação está em `docs/`.
   do código rodar. Ver `docs/deploy-functions-manual.md`.
 - **Zeragem total para novo go-live tem roteiro próprio:**
   `docs/novo-go-live-zeragem-total.md` e `tools/full_reset_btg.py`. Descobre as
-  coleções no banco, preserva só acesso (e estrutura por padrão) e exige export
-  gerenciado antes de apagar. Sempre dry-run antes; a execução é manual, da
-  máquina do responsável.
+  coleções no banco, preserva só acesso, o Comercial (sempre, com os eventos
+  dele) e a estrutura (por padrão) e exige export gerenciado antes de apagar.
+  Sempre dry-run antes; a execução é manual, da máquina do responsável.
 - **Mapa do armazém: posições, caixas, etiquetas e mapa (fase 0, 16 e
   17/10/2026).** Cadastro em Estoque › Posições (coleção `warehouse_positions`,
   preservada na zeragem; o mapa inicial das ruas A, B e C, 43 prateleiras, está
