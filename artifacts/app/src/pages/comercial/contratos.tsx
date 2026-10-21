@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { collection, query, where } from "firebase/firestore";
 import { useLocation, useSearch } from "wouter";
 
@@ -45,6 +45,14 @@ type Dialogo =
 /** Abaixo do xl a ficha fica embaixo da lista (contratos-view.tsx). */
 const TELA_ESTREITA = "(max-width: 1279px)";
 
+/** No celular a ficha fica embaixo da lista: leva a pessoa até ela. */
+function rolarAteAFicha() {
+  if (typeof window === "undefined" || !window.matchMedia?.(TELA_ESTREITA).matches) return;
+  window.requestAnimationFrame(() =>
+    document.querySelector('[aria-label="Ficha do contrato"]')?.scrollIntoView({ behavior: "smooth", block: "start" }),
+  );
+}
+
 export default function ComercialContratosPage() {
   const { toast } = useToast();
   const busca = useSearch();
@@ -73,6 +81,15 @@ export default function ComercialContratosPage() {
   useEffect(() => {
     if (filtroDaUrl) setFiltro(filtroDaUrl === "encerrado" ? "encerrados" : "vigentes");
   }, [idDaUrl, filtroDaUrl]);
+
+  // Aberto por link (Início, ficha do cliente) ou recém-criado: quando o contrato da URL aparece, vai até a ficha, uma vez.
+  const rolouAte = useRef<string | null>(null);
+  const daUrlNaFicha = idDaUrl !== null && selecionado?.id === idDaUrl;
+  useEffect(() => {
+    if (!daUrlNaFicha || rolouAte.current === idDaUrl) return;
+    rolouAte.current = idDaUrl;
+    rolarAteAFicha();
+  }, [daUrlNaFicha, idDaUrl]);
 
   const tabelas = useLeitura(
     id ? `tabelas:${id}` : null,
@@ -112,13 +129,10 @@ export default function ComercialContratosPage() {
 
   const selecionar = (contratoId: string) => {
     const href = hrefDoContrato(contratoId);
+    // O clique já leva até a ficha (mesmo no contrato que está aberto); o efeito do link não repete.
+    rolouAte.current = contratoId;
     if (href) navigate(href, { replace: true });
-    // No celular a ficha fica embaixo da lista: leva a pessoa até ela.
-    if (typeof window !== "undefined" && window.matchMedia?.(TELA_ESTREITA).matches) {
-      window.requestAnimationFrame(() =>
-        document.querySelector('[aria-label="Ficha do contrato"]')?.scrollIntoView({ behavior: "smooth", block: "start" }),
-      );
-    }
+    rolarAteAFicha();
   };
 
   const estado = contratos.erro ? "erro" : contratos.itens === null ? "carregando" : "pronto";

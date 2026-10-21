@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { alertasDoContrato } from "@workspace/dominio";
-import { Clock, FileText, FolderOpen, Pencil, Plus, Table2, TriangleAlert } from "lucide-react";
+import { alertasDoContrato, type TipoAlerta } from "@workspace/dominio";
+import { CalendarX, Clock, FileText, FolderOpen, Pencil, Plus, RefreshCw, Table2, TrendingUp, type LucideIcon } from "lucide-react";
 
 import { AbasDoComercial } from "@/components/comercial/abas-do-comercial";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import {
   condicoesDoContrato,
   contarFiltros,
   linhaDoAditivo,
+  linkDoDocumento,
   listaDeContratos,
   nomesDosClientes,
   numerosDoContrato,
@@ -233,7 +234,7 @@ function Vigencia({ contrato, hoje }: { contrato: Contrato; hoje: string }) {
           {vigencia.renovacao ? (
             <div className="relative h-5">
               <Marcador posicao={vigencia.renovacao.posicao} className="text-warning-soft-foreground">
-                Renovação · {dataBr(vigencia.renovacao.data)}
+                {vigencia.renovacao.rotulo} · {dataBr(vigencia.renovacao.data)}
               </Marcador>
             </div>
           ) : null}
@@ -263,7 +264,7 @@ function Cabecalho({ contrato, cliente, aditivos, hoje, ocupado, acoes }: {
           <h2 className="text-2xl font-extrabold tracking-tight">{contrato.dados.nome}</h2>
           <div className="mt-0.5 flex flex-wrap items-center gap-2">
             <Selo selo={selo} />
-            {numerosDoContrato(contrato.dados).map((numero) => (
+            {numerosDoContrato(contrato.dados, cliente?.nome).map((numero) => (
               <Pill key={numero}>{numero}</Pill>
             ))}
             {ultimo ? <Pill>Aditivo {ultimo.numero}</Pill> : null}
@@ -292,6 +293,12 @@ function Cabecalho({ contrato, cliente, aditivos, hoje, ocupado, acoes }: {
   );
 }
 
+const ICONE_DO_ALERTA: Record<TipoAlerta, LucideIcon> = {
+  renovacao: RefreshCw,
+  fim_vigencia: CalendarX,
+  reajuste: TrendingUp,
+};
+
 function Alertas({ contrato, hoje }: { contrato: Contrato; hoje: string }) {
   const alertas = alertasDoContrato(contrato.dados, hoje);
   if (!alertas.length) return null;
@@ -299,10 +306,11 @@ function Alertas({ contrato, hoje }: { contrato: Contrato; hoje: string }) {
     <section aria-label="Alertas" className="grid gap-3 @xl:grid-cols-2">
       {alertas.map((alerta) => {
         const texto = textoDoAlerta(alerta, contrato.dados);
+        const Icone = ICONE_DO_ALERTA[alerta.tipo];
         return (
           <div key={`${alerta.tipo}-${alerta.data}`} className={cn("flex items-center gap-3 rounded-lg border px-4 py-3", TOM[texto.tom])}>
             <span aria-hidden="true" className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-card">
-              <TriangleAlert className="size-4" />
+              <Icone className="size-4" />
             </span>
             <span className="min-w-0">
               <b className="block text-sm font-extrabold">{texto.titulo}</b>
@@ -433,7 +441,21 @@ function Aditivos({ aditivos }: { aditivos: Carga<Aditivo> }) {
                   <b className="text-sm font-extrabold">{linha.titulo}</b>
                   <Pill>{linha.tipo}</Pill>
                 </div>
-                <p className="mt-0.5 text-xs font-semibold text-muted-foreground">{linha.detalhes.join(" · ")}</p>
+                <div className="mt-0.5 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-xs font-semibold">
+                  <span className="text-muted-foreground">{linha.detalhes.join(" · ")}</span>
+                  {linha.documento?.href ? (
+                    <a
+                      href={linha.documento.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="break-all font-bold text-foreground underline underline-offset-4"
+                    >
+                      {linha.documento.nome}
+                    </a>
+                  ) : linha.documento ? (
+                    <span className="break-all text-muted-foreground">{linha.documento.nome}</span>
+                  ) : null}
+                </div>
                 {linha.observacao ? <p className="mt-0.5 text-xs font-semibold">{linha.observacao}</p> : null}
               </li>
             );
@@ -460,7 +482,7 @@ function Documentos({ contrato }: { contrato: Contrato }) {
               </span>
               <span className="min-w-0 flex-1">
                 <b className="block text-sm font-bold">{documento.nome}</b>
-                {/^https:\/\//.test(documento.referencia) ? (
+                {linkDoDocumento(documento.referencia) ? (
                   <a
                     href={documento.referencia}
                     target="_blank"

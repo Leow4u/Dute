@@ -166,12 +166,12 @@ describe("tela de contratos", () => {
       "01/07/2026 – 30/06/2027",
       "faltam 252 dias",
       "Hoje · 21/10",
-      "Renovação · 31/05/2027",
+      "Aviso · 31/05/2027",
       // Condições
       "Condições",
       "Renovação",
       "Por aditivo",
-      "Aviso",
+      "Aviso de denúncia",
       "30 dias antes do fim",
       "Reajuste",
       "Negociado na renovação",
@@ -215,7 +215,8 @@ describe("tela de contratos", () => {
       "1",
       "Aditivo 1",
       "Prorrogação",
-      "assinado 20/06/2026 · vigência 01/07/2026 – 30/06/2027 · Aditivo 1",
+      "assinado 20/06/2026 · vigência 01/07/2026 – 30/06/2027",
+      "Aditivo 1",
       "Documentos",
       "1",
       "Contrato assinado",
@@ -243,6 +244,35 @@ describe("tela de contratos", () => {
     // Contrato sem alerta não tem a seção.
     expect(render()).not.toContain('aria-label="Alertas"');
     expect(render({ selecionado: BTG })).toContain('aria-label="Alertas"');
+  });
+
+  it("cada alerta tem o ícone do tipo: renovação, fim da vigência e reajuste", () => {
+    const comIndice = { ...ITAU, dados: { ...ITAU.dados, reajuste: { tipo: "indice" as const, indice: "IPCA", data_base: "04-01" } } };
+    // 05/03/2027: aviso em 31/05 (87 dias), fim em 30/06 (117 dias) e reajuste em 01/04 (27 dias).
+    const html = render({ selecionado: comIndice, contratos: [comIndice, BTG, RFQ], hoje: "2027-03-05" });
+    const alertas = html.match(/<section aria-label="Alertas"[\s\S]*?<\/section>/)?.[0] ?? "";
+    expect(texts(alertas)).toEqual([
+      "Reajuste IPCA em 01/04/2027",
+      "em 27 dias",
+      "Aviso de denúncia até 31/05/2027",
+      "em 87 dias",
+      "Fim da vigência em 30/06/2027",
+      "em 117 dias",
+    ]);
+    const icones = Array.from(alertas.matchAll(/class="lucide (lucide-[a-z-]+)/g), ([, icone]) => icone);
+    expect(icones).toEqual(["lucide-trending-up", "lucide-refresh-cw", "lucide-calendar-x"]);
+  });
+
+  it("documento com endereço https abre em outra aba, na lista de documentos e no aditivo", () => {
+    const link = "https://exemplo.com/aditivo-1.pdf";
+    const comLink = contratoDoRegistro("itau-2026", { ...BASE, ...ITAU.dados, documentos: [{ nome: "Contrato assinado", referencia: link }] })!;
+    const aditivo = aditivoDoRegistro("1", { numero: 1, tipo: "escopo", assinado_em: "2026-06-20", documento: { nome: "Aditivo 1", referencia: link } })!;
+    const html = render({ selecionado: comLink, contratos: [comLink, BTG, RFQ], aditivos: [aditivo] });
+    const links = Array.from(html.matchAll(/<a href="([^"]+)" target="_blank" rel="noreferrer"[^>]*>([\s\S]*?)<\/a>/g), ([, href, corpo]) => [href, texts(corpo).join(" ")]);
+    expect(links).toEqual([
+      [link, "Aditivo 1"],
+      [link, link],
+    ]);
   });
 
   it("filtro Encerrados: a lista mostra os encerrados e o atalho volta para Vigentes", () => {

@@ -24,6 +24,7 @@ import {
   formDoContrato,
   formNovoAditivo,
   linhaDoAditivo,
+  linkDoDocumento,
   listaDeContratos,
   numerosDoContrato,
   payloadAditivo,
@@ -116,6 +117,14 @@ const URGENTE = contrato("urgente", { customer_code: "BETA", nome: "Contrato Bet
 const FUTURO = contrato("futuro", { customer_code: "GAMA", nome: "Contrato Gama", vigente_de: "2027-01-01", vigente_ate: "2027-12-31" });
 const ENCERRADO_RECENTE = contrato("rfq-2021", { nome: "RFQ 2021", vigente_de: "2021-07-01", vigente_ate: "2026-06-29", status: "encerrado" });
 const ENCERRADO_ANTIGO = contrato("antigo", { customer_code: "BANCO-SAFRA", nome: "Antigo", vigente_de: "2020-01-01", vigente_ate: "2022-12-31", status: "encerrado" });
+/** Fora de TODOS: aviso de denúncia de 180 dias, maior que o primeiro marco (120). */
+const AVISO_LONGO = contrato("aviso-longo", {
+  customer_code: "DELTA",
+  nome: "Contrato Delta",
+  vigente_de: "2026-01-01",
+  vigente_ate: "2027-03-20",
+  renovacao: { tipo: "aditivo", aviso_dias: 180, oposicao_ate_dias: null },
+});
 
 const TODOS = [ITAU, SAFRA, BTG, VENCIDO, URGENTE, FUTURO, ENCERRADO_RECENTE, ENCERRADO_ANTIGO];
 
@@ -126,6 +135,7 @@ const NOMES = new Map([
   ["ALFA", "Alfa Engenharia"],
   ["BETA", "Beta Seguros"],
   ["GAMA", "Gama Varejo"],
+  ["DELTA", "Delta Logística"],
 ]);
 
 /** Lista literal `export const NOME = [ ... ]` de um arquivo das Functions. */
@@ -198,8 +208,19 @@ describe("contrato lido do Firestore", () => {
     expect(lido.edicao).toBe(1);
   });
 
-  it("os números com o tipo na frente", () => {
+  it("os números com o tipo na frente; o número no sistema do cliente leva o nome dele", () => {
+    expect(numerosDoContrato(ITAU.dados, "Itaú Unibanco")).toEqual(["Contrato CT-0003", "Nº Itaú Unibanco SC-0001"]);
     expect(numerosDoContrato(ITAU.dados)).toEqual(["Contrato CT-0003", "Nº no cliente SC-0001"]);
+  });
+
+  it("documento só vira link com endereço https", () => {
+    expect(linkDoDocumento("https://dutelog.sharepoint.com/:b:/s/comercial/itau.pdf")).toBe(
+      "https://dutelog.sharepoint.com/:b:/s/comercial/itau.pdf",
+    );
+    expect(linkDoDocumento("OneDrive/Contratos/itau.pdf")).toBeNull();
+    expect(linkDoDocumento("http://exemplo.com/a.pdf")).toBeNull();
+    expect(linkDoDocumento("javascript:alert(1)")).toBeNull();
+    expect(linkDoDocumento(" https://exemplo.com/a.pdf")).toBeNull();
   });
 });
 
@@ -225,6 +246,40 @@ describe("selo e ordem da lista", () => {
     expect(seloDoContrato(ITAU.dados, "2027-06-01")).toMatchObject({ rotulo: "Renovação em 29 dias", tom: "critico" });
     expect(seloDoContrato(ITAU.dados, "2027-06-29").rotulo).toBe("Renovação em 1 dia");
     expect(seloDoContrato(ITAU.dados, "2027-07-01").rotulo).toBe("Vencido");
+  });
+
+  it("aviso maior que 120 dias já perdido, com o fim ainda longe: renovação crítica, contando até o fim", () => {
+    // Aviso de 180 dias: prazo em 21/09/2026 (há 30 dias); o fim, a 150 dias, ainda não entrou nos alertas.
+    expect(seloDoContrato(AVISO_LONGO.dados, HOJE)).toMatchObject({ rotulo: "Renovação em 150 dias", tom: "critico" });
+    expect(seloDoContrato({ ...AVISO_LONGO.dados, renovacao: { tipo: "automatica", aviso_dias: null, oposicao_ate_dias: 180 } }, HOJE)).toMatchObject({
+      rotulo: "Renovação em 150 dias",
+      tom: "critico",
+    });
+  });
+
+  it("o que pede ação vem antes: a renovação crítica passa na frente da que só pede atenção", () => {
+    const lista = listaDeContratos([ITAU, BTG, AVISO_LONGO], NOMES, "vigentes", HOJE);
+    expect(lista.map((item) => [item.contrato.id, item.selo.rotulo, item.selo.tom])).toEqual([
+      ["aviso-longo", "Renovação em 150 dias", "critico"],
+      ["btg-2026", "Renovação em 71 dias", "atencao"],
+      ["itau-2026", "Vigente", "ok"],
+    ]);
+  });
+
+  it("renovação automática depois do fim: renovou, falta registrar o novo período", () => {
+    const depois = "2027-01-05";
+    expect(seloDoContrato(BTG.dados, depois)).toMatchObject({ rotulo: "Renovação a registrar", tom: "critico" });
+    expect(vencimentoDoContrato(BTG.dados, depois)).toBe("renovou 31/12/2026");
+    expect(vigenciaDoContrato(BTG.dados, depois).restante).toBe("renovou há 5 dias");
+    // Os outros tipos continuam vencendo.
+    expect(seloDoContrato(ITAU.dados, "2027-07-01").rotulo).toBe("Vencido");
+    expect(vencimentoDoContrato(ITAU.dados, "2027-07-01")).toBe("venceu 30/06/2027");
+    const lista = listaDeContratos([ITAU, BTG, VENCIDO], NOMES, "vigentes", depois);
+    expect(lista.map((item) => [item.contrato.id, item.selo.rotulo, item.vencimento])).toEqual([
+      ["vencido", "Vencido", "venceu 30/09/2026"],
+      ["btg-2026", "Renovação a registrar", "renovou 31/12/2026"],
+      ["itau-2026", "Vigente", "vence 30/06/2027"],
+    ]);
   });
 
   it("o reajuste não muda o selo", () => {
@@ -283,7 +338,7 @@ describe("vigência na ficha", () => {
       periodo: "01/07/2026 – 30/06/2027",
       restante: "faltam 252 dias",
       hoje: 30.8,
-      renovacao: { data: "2027-05-31", posicao: 91.8 },
+      renovacao: { data: "2027-05-31", posicao: 91.8, rotulo: "Aviso" },
     });
   });
 
@@ -304,8 +359,10 @@ describe("vigência na ficha", () => {
     expect(vigenciaDoContrato(ENCERRADO_RECENTE.dados, HOJE).restante).toBe("encerrado");
   });
 
-  it("renovação automática sem prazo de oposição não marca a barra", () => {
+  it("renovação automática sem prazo de oposição não marca a barra; com prazo, marca a oposição", () => {
     expect(vigenciaDoContrato(BTG.dados, HOJE).renovacao).toBeNull();
+    const comOposicao = { ...BTG.dados, renovacao: { tipo: "automatica" as const, aviso_dias: null, oposicao_ate_dias: 30 } };
+    expect(vigenciaDoContrato(comOposicao, HOJE).renovacao).toEqual({ data: "2026-12-01", posicao: 91.8, rotulo: "Oposição" });
   });
 });
 
@@ -313,7 +370,7 @@ describe("condições na ficha", () => {
   it("renovação, aviso, reajuste, regimes, autorização, código de serviço e impostos", () => {
     expect(condicoesDoContrato(ITAU.dados, HOJE).campos).toEqual([
       ["Renovação", "Por aditivo"],
-      ["Aviso", "30 dias antes do fim"],
+      ["Aviso de denúncia", "30 dias antes do fim"],
       ["Reajuste", "Negociado na renovação"],
       ["Regime de cobrança", "Por demanda"],
       ["Regime por serviço", "Mudança: por demanda · Equipe fixa: medição mensal"],
@@ -414,7 +471,7 @@ describe("aditivos na linha do tempo", () => {
       vigente_de: "2026-07-01",
       vigente_ate: "2027-06-30",
       tabela_ids: ["comercial", "noturna"],
-      documento: { nome: "Aditivo 4 assinado", referencia: "r" },
+      documento: { nome: "Aditivo 4 assinado", referencia: "https://exemplo.com/aditivo-4.pdf" },
       observacao: "LPU v2.0",
     })!,
     aditivoDoRegistro("3", { numero: 3, tipo: "prorrogacao", assinado_em: null, vigente_de: "2024-07-01", vigente_ate: "2026-06-30", documento: null })!,
@@ -425,16 +482,24 @@ describe("aditivos na linha do tempo", () => {
       {
         titulo: "Aditivo 4",
         tipo: "Preço e vigência",
-        detalhes: ["assinado 29/06/2026", "vigência 01/07/2026 – 30/06/2027", "2 tabelas", "Aditivo 4 assinado"],
+        detalhes: ["assinado 29/06/2026", "vigência 01/07/2026 – 30/06/2027", "2 tabelas"],
+        documento: { nome: "Aditivo 4 assinado", href: "https://exemplo.com/aditivo-4.pdf" },
         observacao: "LPU v2.0",
       },
       {
         titulo: "Aditivo 3",
         tipo: "Prorrogação",
         detalhes: ["sem data de assinatura", "vigência 01/07/2024 – 30/06/2026", "documento não localizado"],
+        documento: null,
         observacao: "",
       },
-      { titulo: "Termo de formalização", tipo: "Contrato", detalhes: ["assinado 01/07/2021", "Termo assinado"], observacao: "" },
+      {
+        titulo: "Termo de formalização",
+        tipo: "Contrato",
+        detalhes: ["assinado 01/07/2021"],
+        documento: { nome: "Termo assinado", href: null },
+        observacao: "",
+      },
     ]);
   });
 
@@ -450,9 +515,25 @@ describe("aditivos na linha do tempo", () => {
 });
 
 describe("alertas da ficha e do Início", () => {
+  it("a data do aviso tem o nome dele: aviso de denúncia, ou oposição na automática", () => {
+    expect(textoDoAlerta({ tipo: "renovacao", data: "2027-05-31", dias: 220, marco: 120 }, { ...ITAU.dados, renovacao: { tipo: "novo_documento", aviso_dias: 30, oposicao_ate_dias: null } }).titulo).toBe(
+      "Aviso de denúncia até 31/05/2027",
+    );
+  });
+
+  it("renovação automática depois do fim: registrar a renovação, crítico", () => {
+    expect(textoDoAlerta({ tipo: "fim_vigencia", data: "2026-12-31", dias: -5, marco: 0 }, BTG.dados)).toEqual({
+      titulo: "Registrar a renovação de 31/12/2026",
+      quando: "há 5 dias",
+      tom: "critico",
+    });
+    // Antes do fim, é o fim da vigência.
+    expect(textoDoAlerta({ tipo: "fim_vigencia", data: "2026-12-31", dias: 71, marco: 90 }, BTG.dados).titulo).toBe("Fim da vigência em 31/12/2026");
+  });
+
   it("o texto diz a data e o que fazer; crítico com a data passada ou a 30 dias", () => {
     expect(textoDoAlerta({ tipo: "renovacao", data: "2027-05-31", dias: 91, marco: 120 }, ITAU.dados)).toEqual({
-      titulo: "Começar renovação até 31/05/2027",
+      titulo: "Aviso de denúncia até 31/05/2027",
       quando: "em 91 dias",
       tom: "atencao",
     });
@@ -476,7 +557,7 @@ describe("alertas da ficha e do Início", () => {
     const itens = alertasParaOInicio(TODOS, NOMES, HOJE);
     expect(itens.map((item) => [item.contratoId, item.tipo, item.titulo, item.cliente, item.quando, item.tom])).toEqual([
       ["vencido", "fim_vigencia", "Fim da vigência em 30/09/2026", "Alfa Engenharia", "há 21 dias", "critico"],
-      ["urgente", "renovacao", "Começar renovação até 16/10/2026", "Beta Seguros", "há 5 dias", "critico"],
+      ["urgente", "renovacao", "Aviso de denúncia até 16/10/2026", "Beta Seguros", "há 5 dias", "critico"],
       ["urgente", "fim_vigencia", "Fim da vigência em 15/11/2026", "Beta Seguros", "em 25 dias", "critico"],
       ["btg-2026", "fim_vigencia", "Fim da vigência em 31/12/2026", "BTG Pactual", "em 71 dias", "atencao"],
     ]);

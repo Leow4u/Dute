@@ -430,7 +430,7 @@ export function ContratoDialog({
                   disabled={ocupado}
                 />
               </Campo>
-              <Campo id="contrato-aviso" rotulo="Aviso (dias antes do fim)">
+              <Campo id="contrato-aviso" rotulo="Aviso de denúncia (dias antes do fim)">
                 <Input id="contrato-aviso" value={form.avisoDias} onChange={texto("avisoDias")} inputMode="numeric" maxLength={4} />
               </Campo>
               {form.renovacao === "automatica" ? (

@@ -307,39 +307,50 @@ function emDias(dias: number): string {
   return dias === 1 ? "1 dia" : `${dias} dias`;
 }
 
+/** Renovação automática que passou do fim sem encerrar: renovou, e o novo período ainda não foi registrado. */
+function renovouSemRegistro(dados: ContratoDados, hoje: string): boolean {
+  return dados.renovacao.tipo === "automatica" && dados.vigente_ate !== null && diasEntre(hoje, dados.vigente_ate) < 0;
+}
+
 /**
- * Situação de hoje: encerrado e a iniciar pelo status e pelas datas; vencido
- * depois do fim; "Renovação em N dias" quando o prazo de renovação ou o fim
- * entram nos alertas (120 dias antes), contando até a data mais próxima que
- * ainda não passou; vigente no resto.
+ * Situação de hoje: encerrado e a iniciar pelo status e pelas datas; depois
+ * do fim, vencido (ou, na renovação automática, "Renovação a registrar");
+ * "Renovação em N dias" quando o prazo de renovação ou o fim entram nos
+ * alertas (120 dias antes), contando até a data mais próxima que ainda não
+ * passou, e crítica quando o prazo de aviso ou de oposição já passou ou falta
+ * 30 dias ou menos; vigente no resto. A `ordem` põe o que pede ação primeiro.
  */
 export function seloDoContrato(dados: ContratoDados, hoje: string): SeloDoContrato & { ordem: number; dias: number | null } {
-  if (dados.status === "encerrado") return { rotulo: "Encerrado", tom: "neutro", ordem: 4, dias: null };
-  if (diasEntre(hoje, dados.vigente_de) > 0) return { rotulo: "A iniciar", tom: "neutro", ordem: 3, dias: null };
-  if (dados.vigente_ate !== null && diasEntre(hoje, dados.vigente_ate) < 0) {
-    return { rotulo: "Vencido", tom: "critico", ordem: 0, dias: diasEntre(hoje, dados.vigente_ate) };
+  if (dados.status === "encerrado") return { rotulo: "Encerrado", tom: "neutro", ordem: 5, dias: null };
+  if (diasEntre(hoje, dados.vigente_de) > 0) return { rotulo: "A iniciar", tom: "neutro", ordem: 4, dias: null };
+  const fim = dados.vigente_ate;
+  if (fim !== null && diasEntre(hoje, fim) < 0) {
+    const rotulo = renovouSemRegistro(dados, hoje) ? "Renovação a registrar" : "Vencido";
+    return { rotulo, tom: "critico", ordem: 0, dias: diasEntre(hoje, fim) };
   }
   const prazos = alertasDoContrato(dados, hoje).filter((alerta) => alerta.tipo !== "reajuste");
   const futuros = prazos.filter((alerta) => alerta.dias >= 0).map((alerta) => alerta.dias);
-  if (futuros.length) {
-    const dias = Math.min(...futuros);
-    const perdido = prazos.some((alerta) => alerta.dias < 0);
+  const perdido = prazos.some((alerta) => alerta.dias < 0);
+  // Aviso (ou oposição) de mais de 120 dias já perdido, com o fim ainda fora dos alertas: conta até o fim.
+  if (futuros.length || (perdido && fim !== null)) {
+    const dias = futuros.length ? Math.min(...futuros) : diasEntre(hoje, fim!);
+    const critico = perdido || dias <= 30;
     return {
       rotulo: dias === 0 ? "Renovação hoje" : `Renovação em ${emDias(dias)}`,
-      tom: perdido || dias <= 30 ? "critico" : "atencao",
-      ordem: 1,
+      tom: critico ? "critico" : "atencao",
+      ordem: critico ? 1 : 2,
       dias,
     };
   }
-  return { rotulo: "Vigente", tom: "ok", ordem: 2, dias: null };
+  return { rotulo: "Vigente", tom: "ok", ordem: 3, dias: null };
 }
 
-/** "vence 30/06/2027", "renova 31/12/2026", "sem prazo" ou, no encerrado, "até 29/06/2026". */
+/** "vence 30/06/2027", "renova 31/12/2026" (e "renovou" depois do fim), "sem prazo" ou, no encerrado, "até 29/06/2026". */
 export function vencimentoDoContrato(dados: ContratoDados, hoje: string): string {
   const fim = dados.vigente_ate;
   if (dados.status === "encerrado") return fim ? `até ${dataBr(fim)}` : "encerrado";
   if (fim === null) return "sem prazo";
-  if (diasEntre(hoje, fim) < 0) return `venceu ${dataBr(fim)}`;
+  if (diasEntre(hoje, fim) < 0) return renovouSemRegistro(dados, hoje) ? `renovou ${dataBr(fim)}` : `venceu ${dataBr(fim)}`;
   return dados.renovacao.tipo === "automatica" ? `renova ${dataBr(fim)}` : `vence ${dataBr(fim)}`;
 }
 
@@ -375,10 +386,11 @@ export function nomeDoCliente(nomes: ReadonlyMap<string, string>, customerCode: 
 }
 
 /**
- * A lista da esquerda. Vigentes: o que precisa de ação primeiro (vencido,
- * depois a renovação mais próxima), depois o vencimento mais próximo (sem
- * prazo por último) e os a iniciar. Encerrados: o fim mais recente primeiro.
- * Empate pelo nome do cliente.
+ * A lista da esquerda. Vigentes: o que precisa de ação primeiro (vencido ou
+ * renovação a registrar, depois a renovação crítica e a que pede atenção, a
+ * mais próxima antes), depois o vencimento mais próximo (sem prazo por último)
+ * e os a iniciar. Encerrados: o fim mais recente primeiro. Empate pelo nome
+ * do cliente.
  */
 export function listaDeContratos(
   contratos: readonly Contrato[],
@@ -428,9 +440,17 @@ export function contratoEscolhido(itens: readonly ItemDaLista[], todos: readonly
 
 // --- Ficha ------------------------------------------------------------------------------
 
-/** "Contrato CT-0001", "Nº no cliente 4600008821". */
-export function numerosDoContrato(dados: ContratoDados): string[] {
-  return dados.numeros.map((numero) => `${ROTULO_DO_NUMERO[numero.tipo]} ${numero.numero}`);
+/** "Contrato CT-0001", "Nº Itaú 4600008821" (com o nome do cliente; sem ele, "Nº no cliente"). */
+export function numerosDoContrato(dados: ContratoDados, cliente?: string): string[] {
+  return dados.numeros.map((numero) => {
+    const rotulo = numero.tipo === "sistema_cliente" && cliente ? `Nº ${cliente}` : ROTULO_DO_NUMERO[numero.tipo];
+    return `${rotulo} ${numero.numero}`;
+  });
+}
+
+/** Referência de documento que abre como link: só endereço https, sem espaço. O resto (caminho de pasta) fica como texto. */
+export function linkDoDocumento(referencia: string): string | null {
+  return /^https:\/\/\S+$/.test(referencia) ? referencia : null;
 }
 
 export type Vigencia = {
@@ -438,8 +458,8 @@ export type Vigencia = {
   restante: string;
   /** Posição de hoje na barra, de 0 a 100; null sem prazo. */
   hoje: number | null;
-  /** O prazo de renovação na barra, quando cai dentro da vigência. */
-  renovacao: { data: string; posicao: number } | null;
+  /** O prazo de renovação na barra, quando cai dentro da vigência: o aviso de denúncia ou, na automática, a oposição. */
+  renovacao: { data: string; posicao: number; rotulo: "Aviso" | "Oposição" } | null;
 };
 
 function posicao(de: string, ate: string, data: string): number {
@@ -462,9 +482,10 @@ export function vigenciaDoContrato(dados: ContratoDados, hoje: string): Vigencia
   else if (comeca > 0) restante = `começa em ${emDias(comeca)}`;
   else if (faltam > 0) restante = faltam === 1 ? "falta 1 dia" : `faltam ${faltam} dias`;
   else if (faltam === 0) restante = "vence hoje";
-  else restante = `venceu há ${emDias(-faltam)}`;
+  else restante = renovouSemRegistro(dados, hoje) ? `renovou há ${emDias(-faltam)}` : `venceu há ${emDias(-faltam)}`;
   const prazo = prazoDeRenovacao(dados, ate);
-  const renovacao = prazo && diasEntre(de, prazo) >= 0 ? { data: prazo, posicao: posicao(de, ate, prazo) } : null;
+  const rotulo = dados.renovacao.tipo === "automatica" ? "Oposição" : "Aviso";
+  const renovacao: Vigencia["renovacao"] = prazo && diasEntre(de, prazo) >= 0 ? { data: prazo, posicao: posicao(de, ate, prazo), rotulo } : null;
   return { periodo, restante, hoje: posicao(de, ate, hoje), renovacao };
 }
 
@@ -510,7 +531,7 @@ export function condicoesDoContrato(dados: ContratoDados, hoje: string): Condico
   const { renovacao, reajuste, autorizacao, pagamento, impostos } = dados;
   const campos: Array<[string, string]> = [["Renovação", ROTULO_DA_RENOVACAO[renovacao.tipo]]];
   if (renovacao.tipo === "automatica") campos.push(["Oposição", diasAntes(renovacao.oposicao_ate_dias)]);
-  if (renovacao.tipo !== "automatica" || renovacao.aviso_dias !== null) campos.push(["Aviso", diasAntes(renovacao.aviso_dias)]);
+  if (renovacao.tipo !== "automatica" || renovacao.aviso_dias !== null) campos.push(["Aviso de denúncia", diasAntes(renovacao.aviso_dias)]);
   campos.push([
     "Reajuste",
     reajuste.tipo === "indice"
@@ -569,7 +590,14 @@ export function aditivosEmOrdem(aditivos: readonly Aditivo[]): Aditivo[] {
   return [...aditivos].sort((a, b) => b.numero - a.numero);
 }
 
-export type LinhaDoAditivo = { titulo: string; tipo: string; detalhes: string[]; observacao: string };
+export type LinhaDoAditivo = {
+  titulo: string;
+  tipo: string;
+  detalhes: string[];
+  /** O documento do aditivo; `href` só com endereço https (linkDoDocumento). */
+  documento: { nome: string; href: string | null } | null;
+  observacao: string;
+};
 
 export function linhaDoAditivo(aditivo: Aditivo): LinhaDoAditivo {
   const comVigencia = aditivo.vigenteAte !== null;
@@ -580,12 +608,16 @@ export function linhaDoAditivo(aditivo: Aditivo): LinhaDoAditivo {
     aditivo.assinadoEm ? `assinado ${dataBr(aditivo.assinadoEm)}` : "sem data de assinatura",
     comVigencia && aditivo.vigenteDe ? `vigência ${dataBr(aditivo.vigenteDe)} – ${dataBr(aditivo.vigenteAte!)}` : "",
     aditivo.tabelas ? (aditivo.tabelas === 1 ? "1 tabela" : `${aditivo.tabelas} tabelas`) : "",
-    aditivo.documento ? aditivo.documento.nome : "documento não localizado",
+    aditivo.documento ? "" : "documento não localizado",
   ].filter(Boolean);
+  const documento = aditivo.documento
+    ? { nome: aditivo.documento.nome || aditivo.documento.referencia, href: linkDoDocumento(aditivo.documento.referencia) }
+    : null;
   return {
     titulo: formalizacao ? "Termo de formalização" : `Aditivo ${aditivo.numero}`,
     tipo,
     detalhes,
+    documento,
     observacao: aditivo.observacao,
   };
 }
@@ -604,13 +636,19 @@ export function quandoEmDias(dias: number): string {
   return dias > 0 ? `em ${emDias(dias)}` : `há ${emDias(-dias)}`;
 }
 
-/** O que o alerta diz: a data e o que fazer nela; crítico quando a data passou ou falta 30 dias ou menos. */
+/**
+ * O que o alerta diz: a data e o que fazer nela; crítico quando a data passou
+ * ou falta 30 dias ou menos. O prazo de renovação é o último dia do aviso de
+ * denúncia (fim menos `aviso_dias`) ou, na automática, da oposição; começar a
+ * renovar é o alerta do fim, que aparece 120 dias antes. Na automática, depois
+ * do fim, o contrato renovou: falta registrar o novo período (aditivo).
+ */
 export function textoDoAlerta(alerta: AlertaContrato, dados: ContratoDados): TextoDoAlerta {
   const data = dataBr(alerta.data);
+  const automatica = dados.renovacao.tipo === "automatica";
   const titulos: Record<TipoAlerta, string> = {
-    fim_vigencia: `Fim da vigência em ${data}`,
-    renovacao:
-      dados.renovacao.tipo === "automatica" ? `Oposição à renovação até ${data}` : `Começar renovação até ${data}`,
+    fim_vigencia: automatica && alerta.dias < 0 ? `Registrar a renovação de ${data}` : `Fim da vigência em ${data}`,
+    renovacao: automatica ? `Oposição à renovação até ${data}` : `Aviso de denúncia até ${data}`,
     reajuste: ["Reajuste", dados.reajuste.indice, `em ${data}`].filter(Boolean).join(" "),
   };
   return {
