@@ -101,7 +101,8 @@ export default function WarehouseMapPage() {
   });
   const sessionQuery = useOpeningInventorySession();
   const openingNotice = openingInventoryNotice(sessionQuery.data);
-  const showOpeningNotice = Boolean(openingNotice) && (zone === "all" || zone === activeCustomerCode);
+  const showSessionStatus = zone === "all" || zone === activeCustomerCode;
+  const showOpeningNotice = Boolean(openingNotice) && showSessionStatus && !sessionQuery.isError;
 
   const shelves = useMemo(
     () => buildShelves(positionsQuery.data?.items ?? [], boxesQuery.data ?? []),
@@ -178,6 +179,20 @@ export default function WarehouseMapPage() {
           <AlertTitle>Não foi possível carregar o mapa</AlertTitle>
           <AlertDescription>{getErrorMessage(error)}</AlertDescription>
         </Alert>
+      ) : null}
+
+      {showSessionStatus && sessionQuery.isError ? (
+        <Alert className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
+          <AlertTitle>Situação do inventário indisponível</AlertTitle>
+          <AlertDescription className="space-y-2">
+            <p>Não foi possível confirmar se o inventário de abertura de {activeCustomer.name} está concluído.</p>
+            <Button type="button" variant="outline" disabled={sessionQuery.isFetching} onClick={() => sessionQuery.refetch()}>
+              Tentar novamente
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : showSessionStatus && sessionQuery.isLoading ? (
+        <p role="status" className="text-sm text-muted-foreground">Verificando inventário de {activeCustomer.name}…</p>
       ) : null}
 
       {showOpeningNotice ? (
