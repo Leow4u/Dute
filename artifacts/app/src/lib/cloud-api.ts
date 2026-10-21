@@ -3786,8 +3786,14 @@ async function route(
         collectionNames.clientInventory,
       ]);
       if (moneyCollections.has(routeConfig.name)) {
-        const profile = await getCurrentProfile();
-        if (!canSeeCatalogPrice(profile.role)) {
+        let showPrice = false;
+        try {
+          const profile = await getCurrentProfile();
+          showPrice = canSeeCatalogPrice(profile.role);
+        } catch {
+          showPrice = false;
+        }
+        if (!showPrice) {
           items = items.map(stripPublishedMoney);
         } else if (routeConfig.name === collectionNames.products) {
           const prices = await readCatalogPriceIndex();
