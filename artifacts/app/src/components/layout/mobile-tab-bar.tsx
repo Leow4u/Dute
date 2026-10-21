@@ -12,7 +12,7 @@ import {
 import {
   getMobileNavigation,
   isAccountPath,
-  isRouteActive,
+  isNavRouteActive,
   type AppModule,
 } from "@/lib/modules";
 import { cn } from "@/lib/utils";
@@ -94,7 +94,7 @@ export function MobileTabBar({ activeModuleId, modules }: MobileTabBarProps) {
               routes.map((route) => {
                 const Icon = route.icon;
                 const active = Boolean(
-                  route.href && isRouteActive(location, route.href, route.exact),
+                  isNavRouteActive(location, route),
                 );
                 // "Estoque · Receber": a tela secundária diz de que destino é.
                 const label =

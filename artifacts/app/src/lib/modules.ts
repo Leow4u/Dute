@@ -121,6 +121,8 @@ export type ModuleRoute = {
   roles: ProfileRole[];
   appRoles: CurrentAppRole[];
   exact?: boolean;
+  /** Telas fora do menu que acendem este item (a montagem do orçamento acende Orçamentos). */
+  tambem?: readonly string[];
 };
 
 export type AppModule = {
@@ -327,6 +329,7 @@ export const APP_MODULES: AppModule[] = [
         icon: FileText,
         roles: COMMERCIAL_ROLES,
         exact: true,
+        tambem: [ROTA_ORCAMENTO],
       }),
       navRoute({
         id: "comercial-clientes",
@@ -798,6 +801,21 @@ export function isRouteActive(
 
   if (exact) return current === target;
   return current === target || current.startsWith(`${target}/`);
+}
+
+/**
+ * O item do menu está aceso: a rota dele (exata ou com as filhas) ou uma das
+ * telas fora do menu que são dele (`tambem`, sempre exatas).
+ */
+export function isNavRouteActive(
+  currentPath: string,
+  route: Pick<ModuleRoute, "href" | "exact" | "tambem">,
+): boolean {
+  if (!route.href) return false;
+  return (
+    isRouteActive(currentPath, route.href, route.exact) ||
+    (route.tambem ?? []).some((href) => isRouteActive(currentPath, href, true))
+  );
 }
 
 /** Telas fora do menu que pertencem a um item dele. */

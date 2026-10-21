@@ -5,7 +5,7 @@ import { Router } from "wouter";
 import { contratoDoDocumento, type ContratoResumo } from "@/lib/comercial/clientes";
 import { itemDaFila, type ItemDaFila } from "@/lib/comercial/orcamentos";
 
-import { FilaView, type ContextoDaFila, type FilaViewProps } from "./orcamentos-view";
+import { FilaView, LinhaDaFila, type ContextoDaFila, type FilaViewProps } from "./orcamentos-view";
 
 /**
  * Fila de orçamentos (docs/mockups/ComFila.dc.html), só a apresentação: sem
@@ -153,6 +153,7 @@ function props(overrides: Partial<FilaViewProps> = {}): FilaViewProps {
     onVoltar: noop,
     contexto: CONTEXTO,
     onNovo: noop,
+    onAbrir: noop,
     ...overrides,
   };
 }
@@ -303,8 +304,26 @@ describe("fila de orçamentos", () => {
 
   it("a linha mostra a cor da etapa do mockup, por token do tema", () => {
     const html = render();
-    expect(html).toContain("bg-warning-soft text-warning-soft-foreground");
+    expect(html).toContain("bg-amber-soft text-amber-soft-foreground");
     expect(html).toContain("bg-muted text-foreground");
+  });
+
+  it("clique seleciona a linha; duplo clique abre o orçamento", () => {
+    const abertos: string[] = [];
+    const selecionados: string[] = [];
+    const linha = LinhaDaFila({
+      item: ITENS[0],
+      ativo: false,
+      agora: AGORA,
+      contexto: CONTEXTO,
+      onSelecionar: (numero) => selecionados.push(numero),
+      onAbrir: (numero) => abertos.push(numero),
+    });
+    linha.props.onClick();
+    expect(selecionados).toEqual([ITENS[0].numero]);
+    expect(abertos).toEqual([]);
+    linha.props.onDoubleClick();
+    expect(abertos).toEqual([ITENS[0].numero]);
   });
 
   it("a ficha leva à montagem do orçamento", () => {

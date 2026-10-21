@@ -11,6 +11,7 @@ import {
   getRouteAppRoles,
   getRouteProfileRoles,
   isModuleGroup,
+  isNavRouteActive,
 } from "../modules";
 import { entrada, modulesForPerson } from "../platform-modules";
 import {
@@ -205,6 +206,23 @@ describe("menu do Comercial", () => {
     const orcamentos = comercial.routes.find((route) => route.label === "Orçamentos")!;
     expect(orcamentos.href).toBe(ROTA_COMERCIAL);
     expect(orcamentos.exact).toBe(true);
+  });
+
+  it("na montagem do orçamento, o item Orçamentos do menu fica aceso (e só ele)", () => {
+    const [comercial] = getNavigationForProfileRole("comercial", null, LIBERADO);
+    const acesos = (path: string) => comercial.routes.filter((route) => isNavRouteActive(path, route)).map((route) => route.label);
+    expect(acesos(ROTA_ORCAMENTO)).toEqual(["Orçamentos"]);
+    expect(acesos(ROTA_COMERCIAL)).toEqual(["Orçamentos"]);
+    expect(acesos(ROTA_CLIENTES)).toEqual(["Clientes"]);
+    expect(acesos(ROTA_CONTRATOS)).toEqual(["Contratos"]);
+  });
+
+  it("o menu (lateral, suspenso e do celular) acende pelo item, com as telas dele", () => {
+    for (const arquivo of ["../../components/layout/app-layout.tsx", "../../components/layout/mobile-tab-bar.tsx"]) {
+      const fonte = readFileSync(new URL(arquivo, import.meta.url), "utf8");
+      expect(fonte, arquivo).not.toMatch(/isRouteActive\(location, route\.href, route\.exact\)/);
+      expect(fonte, arquivo).toMatch(/isNavRouteActive\(location, route\)/);
+    }
   });
 
   it("os grupos do WMS continuam como eram: grupo é quem tem mais de uma tela", () => {

@@ -67,6 +67,8 @@ export type FilaViewProps = {
   onVoltar: () => void;
   contexto: ContextoDaFila;
   onNovo: () => void;
+  /** Duplo clique na linha: abre o orçamento (o clique só seleciona). */
+  onAbrir: (numero: string) => void;
 };
 
 function Contador({ children, invertido = false }: { children: ReactNode; invertido?: boolean }) {
@@ -200,18 +202,20 @@ function Segmentos({ itens, segmento, onSegmento }: FilaViewProps) {
 
 // --- Lista ---------------------------------------------------------------------------------
 
-function LinhaDaFila({
+export function LinhaDaFila({
   item,
   ativo,
   agora,
   contexto,
   onSelecionar,
+  onAbrir,
 }: {
   item: ItemDaFila;
   ativo: boolean;
   agora: Date;
   contexto: ContextoDaFila;
   onSelecionar: (numero: string) => void;
+  onAbrir: (numero: string) => void;
 }) {
   const refLocal = [item.refCliente, locaisDoItem(item, contexto)].filter(Boolean).join(" · ");
   const para = paraDoItem(item, contexto);
@@ -220,6 +224,7 @@ function LinhaDaFila({
       type="button"
       aria-pressed={ativo}
       onClick={() => onSelecionar(item.numero)}
+      onDoubleClick={() => onAbrir(item.numero)}
       className={cn(
         "flex w-full flex-wrap items-start gap-x-4 gap-y-2 border-l-4 px-5 py-3.5 text-left transition-colors",
         ativo ? "border-l-foreground bg-background" : "border-l-transparent hover:bg-surface-hover",
@@ -261,7 +266,7 @@ function LinhaDaFila({
 }
 
 function Lista(props: FilaViewProps) {
-  const { estado, itens, segmento, busca, selecionado, agora, contexto, onSelecionar, fichaAberta } = props;
+  const { estado, itens, segmento, busca, selecionado, agora, contexto, onSelecionar, onAbrir, fichaAberta } = props;
   let conteudo: ReactNode;
   if (estado === "carregando") conteudo = <Vazio>Carregando...</Vazio>;
   else if (estado === "erro") conteudo = <Vazio>Não foi possível carregar os orçamentos.</Vazio>;
@@ -284,6 +289,7 @@ function Lista(props: FilaViewProps) {
                 agora={agora}
                 contexto={contexto}
                 onSelecionar={onSelecionar}
+                onAbrir={onAbrir}
               />
             ))}
           </div>

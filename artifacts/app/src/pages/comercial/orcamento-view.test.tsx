@@ -3,9 +3,17 @@ import { describe, expect, it } from "vitest";
 import { Router } from "wouter";
 
 import { contatoDoDocumento, localDoDocumento } from "@/lib/comercial/clientes";
-import { acoesDoOrcamento, catalogoDaTabela, formDoOrcamento, type FormOrcamento } from "@/lib/comercial/montar";
+import { acoesDoOrcamento, adicionarDaTabela, catalogoDaTabela, formDoOrcamento, type FormOrcamento } from "@/lib/comercial/montar";
 
-import { EstadoDoOrcamento, MontarView, idDaQuantidade, type DadosDoOrcamento, type MontarViewProps } from "./orcamento-view";
+import {
+  EstadoDoOrcamento,
+  ListaDaBusca,
+  MontarView,
+  idDaDescricao,
+  idDaQuantidade,
+  type DadosDoOrcamento,
+  type MontarViewProps,
+} from "./orcamento-view";
 
 /**
  * Montar orçamento (docs/mockups/ComOrcamento.dc.html), só a apresentação: sem
@@ -101,6 +109,8 @@ function props(overrides: Partial<MontarViewProps> & { form?: FormOrcamento } = 
     catalogo: CATALOGO,
     ocupado: false,
     aviso: null,
+    salvoEm: null,
+    desatualizado: false,
     handlers: {
       salvar: noop,
       enviar: noop,
@@ -165,6 +175,10 @@ const BLOCOS_RASCUNHO = [
   "Referência do cliente",
   "Título",
   "Recebido em",
+  "Canal",
+  "E-mail",
+  "Telefone",
+  "WhatsApp",
   "Assunto do e-mail",
   "Link do e-mail",
   "Abrir no Outlook",
@@ -345,6 +359,83 @@ describe("montar orçamento", () => {
     const html = render({ catalogo: [], dados: { ...DADOS, tabelaNome: null } });
     expect(texts(html)).toEqual(expect.arrayContaining(["Sem tabela"]));
     expect(html).toMatch(/<input[^>]*role="combobox"[^>]*disabled=""/);
+  });
+
+  it("mudança não salva: o cabeçalho diz; salvo, mostra a hora", () => {
+    expect(texts(render({ sujo: true }))).toContain("Alterações não salvas");
+    expect(texts(render({ salvoEm: "10:12" }))).toContain("Salvo às 10:12");
+    expect(texts(render({ sujo: true, salvoEm: "10:12" }))).not.toContain("Salvo às 10:12");
+    expect(texts(render())).not.toContain("Alterações não salvas");
+  });
+
+  it("salvando: nenhum campo, botão da grade ou busca se edita até a gravação voltar", () => {
+    const html = render({ ocupado: true, sujo: true });
+    expect(html).not.toMatch(/<(?:input|textarea|select)(?![^>]*disabled)[^>]*>/);
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>(?:<svg[\s\S]*?<\/svg>)?Item avulso<\/button>/);
+    expect(html).toMatch(/<button[^>]*aria-label="Remover · [^"]*"[^>]*disabled=""/);
+    // A grade continua a mesma (sem pular de lugar).
+    expect(texts(html)).toEqual(expect.arrayContaining(["Item avulso", "Ajuste", "↵"]));
+  });
+
+  it("linha incompleta: os totais somam as linhas válidas e só ela fica sem valor", () => {
+    const form = { ...FORM, linhas: FORM.linhas.map((linha) => (linha.chave === "ln_1" ? { ...linha, quantidade: "" } : linha)) };
+    const lista = texts(render({ form, sujo: true }));
+    expect(lista.slice(lista.indexOf("Total"), lista.indexOf("Total") + 2)).toEqual(["Total", "R$ 1.360,00"]);
+    expect(lista).toEqual(expect.arrayContaining(["Quantidade inválida.", "R$ 1.760,00", "-R$ 400,00"]));
+    expect(lista.slice(-6)).toEqual(["Subtotal", "R$ 1.760,00", "Ajustes", "-R$ 400,00", "Total", "R$ 1.360,00"]);
+  });
+
+  it("execução a definir: a caixa tracejada no lugar da data", () => {
+    const form = { ...FORM, execucao: { ...FORM.execucao, modo: "a_definir" as const } };
+    const html = render({ form });
+    const lista = texts(html);
+    const visita = lista.indexOf("Visita técnica");
+    expect(lista.slice(visita - 2, visita)).toEqual(["Data", "A definir"]);
+    expect(html).toMatch(/<div class="[^"]*border-dashed[^"]*">(?:<svg[\s\S]*?<\/svg>)?A definir<\/div>/);
+  });
+
+  it("linha nova, ainda sem id, fica destacada até salvar", () => {
+    const linhas = adicionarDaTabela(FORM.linhas, CATALOGO[1], "nova-1").linhas;
+    const html = render({ form: { ...FORM, linhas }, sujo: true });
+    const classes = Array.from(html.matchAll(/<div role="row" class="([^"]*)"/g), ([, classe]) => classe);
+    expect(classes).toHaveLength(6);
+    expect(classes.map((classe) => classe.includes("bg-info-soft"))).toEqual([false, false, false, false, false, true]);
+  });
+
+  it("item avulso e ajuste: a descrição tem id para o foco da linha nova", () => {
+    const html = render();
+    expect(html).toContain(`id="${idDaDescricao("ln_3")}"`);
+    expect(html).toContain(`id="${idDaDescricao("ln_4")}"`);
+    expect(idDaDescricao("ln_3")).toBe("desc-ln_3");
+    expect(html).toMatch(/aria-label="Item avulso"[^>]*maxLength="200"|maxLength="200"[^>]*aria-label="Item avulso"/);
+  });
+
+  it("o código da LPU (DTL-0002-T) não quebra na grade", () => {
+    const form = { ...FORM, linhas: [{ ...FORM.linhas[0], codigo: "DTL-0002-T" }] };
+    expect(render({ form })).toMatch(/<span role="cell" class="[^"]*whitespace-nowrap[^"]*">DTL-0002-T<\/span>/);
+  });
+
+  it("canal: e-mail mostra assunto e link; telefone e WhatsApp, não", () => {
+    expect(render()).toMatch(/<button[^>]*aria-pressed="true"[^>]*>E-mail<\/button>/);
+    const telefone = render({ form: { ...FORM, canal: "telefone", emailAssunto: "", emailLink: "" } });
+    expect(telefone).toMatch(/<button[^>]*aria-pressed="true"[^>]*>Telefone<\/button>/);
+    expect(texts(telefone)).not.toContain("Assunto do e-mail");
+    expect(texts(telefone)).not.toContain("Link do e-mail");
+  });
+
+  it("o orçamento mudou no servidor enquanto a pessoa editava: a tela avisa", () => {
+    const html = render({ sujo: true, desatualizado: true });
+    expect(html).toMatch(/<p role="alert"[^>]*>O orçamento mudou enquanto você editava\./);
+    expect(texts(render({ sujo: true }))).not.toContain("O orçamento mudou enquanto você editava. Ao salvar, o servidor recusa e o orçamento recarrega.");
+  });
+
+  it("busca de item: sem nada, Nenhum item; com mais do que cabe, quantos ficaram de fora", () => {
+    const lista = (itens: typeof CATALOGO, total: number) =>
+      texts(renderToStaticMarkup(<ListaDaBusca itens={itens} total={total} destacado={0} onEscolher={noop} onDestacar={noop} />));
+    expect(lista([], 0)).toEqual(["Nenhum item"]);
+    expect(lista(CATALOGO.slice(0, 2), 5).at(-1)).toBe("+3 itens");
+    expect(lista(CATALOGO.slice(0, 2), 3).at(-1)).toBe("+1 item");
+    expect(lista(CATALOGO.slice(0, 2), 2).at(-1)).not.toMatch(/^\+/);
   });
 
   it("carregando, não encontrado e erro", () => {

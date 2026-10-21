@@ -8,7 +8,7 @@ import {
 } from "@workspace/dominio";
 
 import { contratosDoCliente, type ContatoResumo, type ContratoResumo } from "./clientes";
-import type { EtapaDemanda, OrigemLinha, StatusOrcamento } from "./orcamentos";
+import { dataHoraCurta, type EtapaDemanda, type OrigemLinha, type StatusOrcamento } from "./orcamentos";
 
 /**
  * Regras puras da tela de montar orçamento do Comercial
@@ -194,29 +194,60 @@ export function catalogoDaTabela(precos: unknown, itens: ReadonlyMap<string, Ite
   );
 }
 
+const SEPARADORES = /[\s–—\-/(),;:]+/;
+
+/**
+ * Os pedaços do texto, sem acento: a vírgula entre dígitos é a decimal da
+ * medida ("1,20" fica "1.20", um pedaço só), não um separador.
+ */
+function pedacos(value: string): string[] {
+  return semAcento(value)
+    .replace(/(\d),(?=\d)/g, "$1.")
+    .split(SEPARADORES)
+    .filter(Boolean);
+}
+
+/** As palavras do item: os pedaços e, na medida "1.20x1.20m", também cada lado ("1.20", "1.20m"). */
 function palavras(value: string): string[] {
-  return semAcento(value).split(/[\s–—\-/(),;:]+/).filter(Boolean);
+  return pedacos(value).flatMap((pedaco) => (/\dx\d/.test(pedaco) ? [pedaco, ...pedaco.split(/(?<=\d)x(?=\d)/)] : [pedaco]));
 }
 
 /**
- * Busca de item da tabela pelo teclado: cada palavra digitada começa uma
- * palavra do código, do item, do serviço, da unidade ou da descrição ("3.0",
- * "estacao montagem"). O código que começa com o termo vem antes.
+ * Busca de item da tabela pelo teclado: cada termo digitado começa o código
+ * ou, pedaço a pedaço, palavras do código, do item, do serviço, da unidade ou
+ * da descrição ("3.0", "estacao montagem", "estacao 1,20", "1,40x1,20"). O
+ * código que começa com o termo vem antes. `total` é quantos acharam, além
+ * dos `limite` que a lista mostra.
  */
-export function buscarItensDaTabela(catalogo: readonly ItemDaTabela[], termo: string, limite = 8): ItemDaTabela[] {
-  const termos = semAcento(termo).split(/\s+/).filter(Boolean);
-  if (!termos.length) return [];
+export function buscaNaTabela(
+  catalogo: readonly ItemDaTabela[],
+  termo: string,
+  limite = 8,
+): { itens: ItemDaTabela[]; total: number } {
+  const termos = semAcento(termo)
+    .split(/\s+/)
+    .map((bruto) => ({ bruto, partes: pedacos(bruto) }))
+    .filter((t) => t.partes.length > 0);
+  if (!termos.length) return { itens: [], total: 0 };
   const achados = catalogo.filter((item) => {
     const codigo = semAcento(item.codigo);
     const alvo = palavras([item.codigo, item.item, item.servico, item.unidade, item.descricao, item.categoria].filter(Boolean).join(" "));
-    return termos.every((t) => codigo.startsWith(t) || alvo.some((palavra) => palavra.startsWith(t)));
+    return termos.every(
+      ({ bruto, partes }) => codigo.startsWith(bruto) || partes.every((parte) => alvo.some((palavra) => palavra.startsWith(parte))),
+    );
   });
-  const peloCodigo = (item: ItemDaTabela) => Number(semAcento(item.codigo).startsWith(termos[0]));
-  return achados
+  const peloCodigo = (item: ItemDaTabela) => Number(semAcento(item.codigo).startsWith(termos[0].bruto));
+  const itens = achados
     .map((item, indice) => ({ item, indice }))
     .sort((a, b) => peloCodigo(b.item) - peloCodigo(a.item) || a.indice - b.indice)
     .slice(0, limite)
     .map(({ item }) => item);
+  return { itens, total: achados.length };
+}
+
+/** Os itens que a lista da busca mostra (buscaNaTabela). */
+export function buscarItensDaTabela(catalogo: readonly ItemDaTabela[], termo: string, limite = 8): ItemDaTabela[] {
+  return buscaNaTabela(catalogo, termo, limite).itens;
 }
 
 /** A ordem dos serviços na sugestão: o caminho do móvel. */
@@ -384,6 +415,25 @@ export function adicionarSugestao(
   return { linhas: [...linhas.slice(0, posicao), nova, ...linhas.slice(posicao)], foco: chave };
 }
 
+/** Campo que recebe o foco depois de adicionar a linha. */
+export type CampoDoFoco = "quantidade" | "descricao";
+
+/** Item avulso no fim; o foco vai para a descrição (o item) da linha nova. */
+export function adicionarAvulsa(
+  linhas: readonly LinhaForm[],
+  chave: string,
+): { linhas: LinhaForm[]; foco: string; campo: CampoDoFoco } {
+  return { linhas: [...linhas, linhaAvulsa(chave)], foco: chave, campo: "descricao" };
+}
+
+/** Ajuste no fim; o foco vai para a descrição da linha nova. */
+export function adicionarAjuste(
+  linhas: readonly LinhaForm[],
+  chave: string,
+): { linhas: LinhaForm[]; foco: string; campo: CampoDoFoco } {
+  return { linhas: [...linhas, linhaDeAjuste(chave)], foco: chave, campo: "descricao" };
+}
+
 export function removerLinha(linhas: readonly LinhaForm[], chave: string): LinhaForm[] {
   return linhas.filter((linha) => linha.chave !== chave);
 }
@@ -451,7 +501,15 @@ export function previaDosTotais(linhas: readonly LinhaForm[]): Previa {
   };
 }
 
-const MOTIVO_MAXIMO = 300;
+/**
+ * Limites do schema da saveQuote (functions/comercial, quotes.ts,
+ * `linhaEntrada`), travados por montar.test.ts: o motivo até 300; o item
+ * avulso vai também como `item`, que aceita até 200.
+ */
+export const MOTIVO_MAXIMO = 300;
+export const ITEM_AVULSO_MAXIMO = 200;
+/** A descrição do ajuste (`descricao`, até 300). */
+export const DESCRICAO_MAXIMA = 300;
 
 /** O que falta na linha para salvar (o servidor confere de novo). */
 export function problemasDaLinha(linha: LinhaForm): string[] {
@@ -469,6 +527,9 @@ export function problemasDaLinha(linha: LinhaForm): string[] {
   }
   if (linha.origem === "avulso") {
     if (linha.descricao.trim().length < 2) problemas.push("Informe o item.");
+    else if (linha.descricao.trim().length > ITEM_AVULSO_MAXIMO) {
+      problemas.push(`O item avulso aceita até ${ITEM_AVULSO_MAXIMO} caracteres.`);
+    }
     if (!preco || preco.coeficiente < 0n) problemas.push("Informe o valor.");
     if (!linha.motivo.trim()) problemas.push("Informe o motivo do item avulso.");
   }
@@ -486,7 +547,21 @@ export type ModoExecucao = "data" | "intervalo" | "a_definir";
 
 export type LocalForm = { localId: string; complemento: string };
 
+/**
+ * Canais do pedido que a pessoa escolhe (CANAIS_DEMANDA de functions/comercial,
+ * events.ts: portal e WMS são de sistema). Sem canal gravado, o servidor usa
+ * e-mail.
+ */
+export const CANAIS_DO_PEDIDO = [
+  { valor: "email", rotulo: "E-mail" },
+  { valor: "telefone", rotulo: "Telefone" },
+  { valor: "whatsapp", rotulo: "WhatsApp" },
+] as const;
+export const CANAL_PADRAO = "email";
+
 export type FormOrcamento = {
+  /** Como o pedido chegou (CANAIS_DO_PEDIDO; portal e WMS só se já vieram assim). */
+  canal: string;
   /** O "Para": contato do cliente ("" sem contato). */
   contatoId: string;
   refCliente: string;
@@ -558,6 +633,7 @@ function execucaoDoForm(value: unknown): FormOrcamento["execucao"] {
 export function formDoOrcamento(demanda: Registro, quote: Registro): FormOrcamento {
   const solicitante = isRegistro(demanda.solicitante) ? demanda.solicitante : {};
   return {
+    canal: texto(demanda.canal) || CANAL_PADRAO,
     contatoId: texto(solicitante.contato_id),
     refCliente: texto(demanda.ref_cliente),
     titulo: texto(demanda.titulo),
@@ -647,6 +723,7 @@ export function payloadSalvar(entrada: {
     numero: entrada.numero,
     expected_edicao: entrada.edicao,
   };
+  if (form.canal && form.canal !== original.canal) payload.canal = form.canal;
   if (form.contatoId !== original.contatoId) payload.contato_id = form.contatoId || null;
   if (texto(form.refCliente) !== texto(original.refCliente)) payload.ref_cliente = opcional(form.refCliente);
   if (texto(form.titulo) !== texto(original.titulo)) payload.titulo = opcional(form.titulo);
@@ -778,25 +855,169 @@ export function acoesDoOrcamento(entrada: {
   }
 }
 
-/** Códigos em que o orçamento mudou no servidor: a tela mostra a mensagem e recarrega. */
-const CODIGOS_DE_RECARGA = ["failed-precondition", "not-found", "aborted"];
+/**
+ * As recusas de concorrência de quotes.ts (functions/comercial), pela
+ * mensagem: o servidor usa failed-precondition e not-found também para
+ * recusas de entrada (contato inativo, tabela sobreposta, local que sumiu),
+ * que não pedem recarga. Os modelos das mensagens estão travados por
+ * montar.test.ts.
+ */
+const ORCAMENTO_MUDOU = [
+  /^O orçamento mudou desde que foi aberto \(edição /,
+  /^O orçamento \S+ mudou: está /,
+  /^O orçamento \S+ está .+: só o rascunho se edita\.$/,
+];
+const ORCAMENTO_SUMIU = /^Orçamento \S+ não encontrado\.$/;
 
 /**
  * O erro da callable para a tela: situação divergente, edição velha ou
  * orçamento que sumiu recarregam o orçamento (o que a pessoa digitou é
- * descartado); entrada recusada só mostra a mensagem.
+ * descartado); qualquer outra recusa só mostra a mensagem e mantém o
+ * formulário.
  */
 export function classificarErro(error: unknown): { mensagem: string; recarregar: boolean } {
   const registro = (error ?? {}) as { codigo?: unknown; code?: unknown };
   const codigo = String(registro.codigo ?? registro.code ?? "").replace(/^functions\//, "");
   const mensagem = error instanceof Error && error.message ? error.message : "Não foi possível concluir. Tente de novo.";
-  return { mensagem, recarregar: CODIGOS_DE_RECARGA.includes(codigo) };
+  const recarregar =
+    (codigo === "failed-precondition" && ORCAMENTO_MUDOU.some((modelo) => modelo.test(mensagem))) ||
+    (codigo === "not-found" && ORCAMENTO_SUMIU.test(mensagem));
+  return { mensagem, recarregar };
+}
+
+/**
+ * A situação ao lado das ações do cabeçalho: "Com o aprovador · 21/10 09:05"
+ * enquanto espera a aprovação; "Aprovado por Leonardo · 21/10 08:50" depois
+ * (o nome só quando quem lê pode ver o perfil de quem aprovou).
+ */
+export function situacaoDoCabecalho(entrada: {
+  status: string;
+  passoEm: string | null;
+  aprovacao: { em: string | null } | null;
+  aprovador: string | null;
+}): string | null {
+  if (entrada.status === "para_aprovar") return ["Com o aprovador", dataHoraCurta(entrada.passoEm)].filter(Boolean).join(" · ");
+  if (entrada.status === "aprovado" && entrada.aprovacao) {
+    return [entrada.aprovador ? `Aprovado por ${entrada.aprovador}` : "Aprovado", dataHoraCurta(entrada.aprovacao.em)]
+      .filter(Boolean)
+      .join(" · ");
+  }
+  return null;
 }
 
 /** O total do servidor diferente da prévia: avisa com o valor que vale. */
 export function avisoDeRecalculo(previaCents: number | null, servidorCents: number): string | null {
   if (previaCents === null || previaCents === servidorCents) return null;
   return `O servidor recalculou o total: ${formatarReais(servidorCents)} (a prévia era ${formatarReais(previaCents)}).`;
+}
+
+// --- O formulário e o servidor ao vivo ---------------------------------------------------------
+
+/** O orçamento como o onSnapshot entregou: a versão (edição, situação, etapa) e o formulário dela. */
+export type VersaoDoServidor = {
+  versao: string;
+  edicao: number;
+  status: string;
+  original: FormOrcamento;
+};
+
+/**
+ * O estado da tela de montar. `servidor` é o último que o onSnapshot
+ * entregou; `base` é a versão em que o formulário se baseia: a edição e a
+ * situação dela são as que vão para a callable (expected_edicao e
+ * expected_status), nunca as do snapshot mais novo, para o servidor recusar
+ * a gravação feita sobre uma edição velha em vez de apagar a de outra
+ * pessoa. `aguardar` é a gravação desta tela que ainda não chegou pelo
+ * onSnapshot.
+ */
+export type Sincronia = {
+  servidor: VersaoDoServidor | null;
+  base: VersaoDoServidor | null;
+  form: FormOrcamento | null;
+  aguardar: { edicao: number; status: string } | null;
+};
+
+export type EventoDaSincronia =
+  | { tipo: "servidor"; servidor: VersaoDoServidor }
+  | { tipo: "editar"; muda: (form: FormOrcamento) => FormOrcamento }
+  | { tipo: "gravou"; edicao: number; status: string }
+  | { tipo: "recarregar" };
+
+export const SINCRONIA_INICIAL: Sincronia = { servidor: null, base: null, form: null, aguardar: null };
+
+function carregar(servidor: VersaoDoServidor): Sincronia {
+  return { servidor, base: servidor, form: servidor.original, aguardar: null };
+}
+
+/**
+ * A gravação desta tela já está no servidor: a edição passou, ou é a mesma
+ * com a situação esperada (o avanço não muda a edição), ou o servidor já não
+ * é a versão em que o formulário se baseava (quem grava confere a edição e a
+ * situação: depois da resposta, qualquer versão nova inclui a gravação).
+ */
+function chegou(estado: Sincronia, servidor: VersaoDoServidor, aguardar: { edicao: number; status: string }): boolean {
+  if (servidor.edicao > aguardar.edicao) return true;
+  if (servidor.edicao === aguardar.edicao && servidor.status === aguardar.status) return true;
+  return estado.base !== null && servidor.versao !== estado.base.versao;
+}
+
+/**
+ * Como o formulário acompanha o servidor. Sem mudança na tela, o que chega
+ * entra; no meio de uma mudança, o formulário fica (e a tela avisa que está
+ * desatualizado); a gravação desta tela, quando chega, volta o formulário
+ * ao que está gravado; a recarga depois de um erro usa o último que chegou.
+ */
+export function sincronia(estado: Sincronia, evento: EventoDaSincronia): Sincronia {
+  switch (evento.tipo) {
+    case "servidor": {
+      const { servidor } = evento;
+      if (!estado.base || !estado.form) return carregar(servidor);
+      if (estado.aguardar) return chegou(estado, servidor, estado.aguardar) ? carregar(servidor) : { ...estado, servidor };
+      if (servidor.versao === estado.base.versao) return { ...estado, servidor };
+      return formSujo(estado.base.original, estado.form) ? { ...estado, servidor } : carregar(servidor);
+    }
+    case "editar":
+      return estado.form ? { ...estado, form: evento.muda(estado.form) } : estado;
+    case "gravou": {
+      const aguardar = { edicao: evento.edicao, status: evento.status };
+      if (estado.servidor && chegou(estado, estado.servidor, aguardar)) return carregar(estado.servidor);
+      return { ...estado, aguardar };
+    }
+    case "recarregar":
+      return estado.servidor ? carregar(estado.servidor) : estado;
+  }
+}
+
+/** O servidor mudou enquanto a pessoa editava: salvar vai ser recusado (edição velha). */
+export function desatualizado(estado: Sincronia): boolean {
+  return Boolean(estado.base && estado.servidor && !estado.aguardar && estado.base.versao !== estado.servidor.versao);
+}
+
+// --- Sair sem salvar --------------------------------------------------------------------------------
+
+/**
+ * O clique no link sai desta tela para outra do app (aba, menu, fila): com
+ * mudança não salva, a tela pede confirmação. Link externo abre fora (e o
+ * navegador avisa pelo beforeunload); a mesma tela e âncora não saem.
+ */
+export function saidaPedeConfirmacao(
+  href: string | null | undefined,
+  atual: { origin: string; pathname: string; search: string },
+): boolean {
+  if (!href || href.startsWith("#")) return false;
+  let destino: URL;
+  try {
+    destino = new URL(href, `${atual.origin}${atual.pathname}${atual.search}`);
+  } catch {
+    return false;
+  }
+  if (destino.origin !== atual.origin) return false;
+  return destino.pathname !== atual.pathname || destino.search !== atual.search;
+}
+
+/** Ctrl+S (Cmd+S no Mac), sem Alt nem Shift: o Salvar da tela. */
+export function ehAtalhoDeSalvar(evento: { key: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean }): boolean {
+  return (evento.ctrlKey || evento.metaKey) && !evento.altKey && !evento.shiftKey && evento.key.toLowerCase() === "s";
 }
 
 // --- Cliente, contrato e contato ----------------------------------------------------------------

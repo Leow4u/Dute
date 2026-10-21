@@ -109,7 +109,7 @@ export const ORIGEM_ROTULO: Record<OrigemLinha, string> = {
  * atrasado. Nada de cor fixa (theme-colors.test.ts).
  */
 const NEUTRO = "border-border bg-muted text-foreground";
-const AMBAR = "border-warning-soft-border bg-warning-soft text-warning-soft-foreground";
+const AMBAR = "border-amber-soft-border bg-amber-soft text-amber-soft-foreground";
 const VIOLETA = "border-violet-soft-border bg-violet-soft text-violet-soft-foreground";
 const AZUL = "border-info-soft-border bg-info-soft text-info-soft-foreground";
 const VERDE = "border-success-soft-border bg-success-soft text-success-soft-foreground";
@@ -132,12 +132,12 @@ const COR_DA_ETAPA: Record<EtapaDemanda, string> = {
 
 const PONTO_DA_ETAPA: Record<EtapaDemanda, string> = {
   em_montagem: "bg-foreground",
-  para_aprovar: "bg-warning-soft-foreground",
+  para_aprovar: "bg-amber-soft-foreground",
   para_enviar: "bg-violet-soft-foreground",
   aguardando_cliente: "bg-info-soft-foreground",
   para_planejar: "bg-success-soft-foreground",
-  execucao_a_orcar: "bg-warning-soft-foreground",
-  aguardando_autorizacao: "bg-warning-soft-foreground",
+  execucao_a_orcar: "bg-amber-soft-foreground",
+  aguardando_autorizacao: "bg-amber-soft-foreground",
   a_faturar: "bg-teal-soft-foreground",
   perdida: "bg-muted-foreground",
   cancelada: "bg-muted-foreground",
@@ -463,7 +463,8 @@ export type PassoDoHistorico = {
   detalhe: string | null;
 };
 
-const CANAL_ROTULO: Record<string, string> = {
+/** Como o canal da demanda aparece no histórico e no pedido. */
+export const CANAL_ROTULO: Record<string, string> = {
   email: "e-mail",
   telefone: "telefone",
   whatsapp: "WhatsApp",
@@ -514,9 +515,16 @@ export function historicoDoOrcamento(
   );
 
   const aprovado = item.status === "aprovado" || item.status === "enviado" ? item.aprovacao : null;
+  // "Aprovado por Leonardo", como no mockup, quando quem lê pode ver o perfil de quem aprovou.
+  const aprovador = aprovado ? nomeDe(aprovado.porUid) : null;
   passos.push(
     aprovado
-      ? { rotulo: "Aprovado", estado: "feito", quando: dataHoraCurta(aprovado.em), detalhe: nomeDe(aprovado.porUid) }
+      ? {
+          rotulo: aprovador ? `Aprovado por ${aprovador}` : "Aprovado",
+          estado: "feito",
+          quando: dataHoraCurta(aprovado.em),
+          detalhe: null,
+        }
       : pendente("Aprovado"),
   );
 

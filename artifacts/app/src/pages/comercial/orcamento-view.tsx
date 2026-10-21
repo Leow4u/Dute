@@ -1,6 +1,21 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "wouter";
-import { Check, Copy, CornerDownRight, ExternalLink, FileText, Pencil, Plus, Save, Search, Send, Undo2, X } from "lucide-react";
+import {
+  CalendarDays,
+  Check,
+  CircleDot,
+  Copy,
+  CornerDownRight,
+  ExternalLink,
+  FileText,
+  Pencil,
+  Plus,
+  Save,
+  Search,
+  Send,
+  Undo2,
+  X,
+} from "lucide-react";
 
 import { formatarReais } from "@workspace/dominio";
 
@@ -11,13 +26,17 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { dataBr, type ContatoResumo, type LocalResumo } from "@/lib/comercial/clientes";
 import {
+  CANAIS_DO_PEDIDO,
+  DESCRICAO_MAXIMA,
+  ITEM_AVULSO_MAXIMO,
+  MOTIVO_MAXIMO,
   VARIANTES,
+  adicionarAjuste,
+  adicionarAvulsa,
   adicionarDaTabela,
   adicionarSugestao,
-  buscarItensDaTabela,
+  buscaNaTabela,
   formatarDecimal,
-  linhaAvulsa,
-  linhaDeAjuste,
   opcoesDoPara,
   origemDaLinha,
   previaDosTotais,
@@ -27,13 +46,21 @@ import {
   servicosIrmaos,
   teclaNaBusca,
   type AcoesDoOrcamento,
+  type CampoDoFoco,
   type FormOrcamento,
   type ItemDaTabela,
   type LinhaForm,
   type LocalForm,
   type ModoExecucao,
 } from "@/lib/comercial/montar";
-import { ORIGEM_ROTULO, TIPO_RV_ROTULO, type EtapaDemanda, type StatusOrcamento, type TipoRv } from "@/lib/comercial/orcamentos";
+import {
+  CANAL_ROTULO,
+  ORIGEM_ROTULO,
+  TIPO_RV_ROTULO,
+  type EtapaDemanda,
+  type StatusOrcamento,
+  type TipoRv,
+} from "@/lib/comercial/orcamentos";
 import { cn } from "@/lib/utils";
 
 import { SeloProspect } from "./clientes-view";
@@ -46,6 +73,8 @@ import { MarcaDaOrigem, SeloDaEtapa } from "./orcamentos-view";
  * dados e ações; uma ação principal ("Enviar para aprovação" no rascunho,
  * "Aprovar" para o owner). A grade é a do Excel do Guilherme; a busca de item
  * da tabela é pelo teclado (Enter adiciona, o foco vai para a quantidade).
+ * Enquanto uma gravação está em andamento, nada se edita: o que voltar do
+ * servidor substitui o formulário.
  */
 
 export type DadosDoOrcamento = {
@@ -69,7 +98,7 @@ export type DadosDoOrcamento = {
   subtotalCents: number | null;
   ajustesCents: number | null;
   totalCents: number | null;
-  /** "Enviado para aprovação · 21/10 09:05", "Aprovado por Leonardo · 21/10 08:50". */
+  /** "Com o aprovador · 21/10 09:05", "Aprovado por Leonardo · 21/10 08:50". */
   situacao: string | null;
   devolucao: { nota: string | null; detalhe: string } | null;
 };
@@ -84,8 +113,13 @@ export type MontarViewProps = {
   contatos: ContatoResumo[];
   locais: LocalResumo[];
   catalogo: ItemDaTabela[] | "carregando" | "erro";
+  /** Uma gravação em andamento: a tela fica travada até ela voltar. */
   ocupado: boolean;
   aviso: { tipo: "erro" | "info"; texto: string } | null;
+  /** "10:12": o último salvamento nesta tela. */
+  salvoEm: string | null;
+  /** O servidor mudou enquanto a pessoa editava (lib/comercial/montar.ts, desatualizado). */
+  desatualizado: boolean;
   handlers: {
     salvar: () => void;
     enviar: () => void;
@@ -109,7 +143,21 @@ export function idDaQuantidade(chave: string): string {
   return `qtd-${chave}`;
 }
 
+/** Id da descrição da linha avulsa ou de ajuste (o foco vai para ela quando a linha entra). */
+export function idDaDescricao(chave: string): string {
+  return `desc-${chave}`;
+}
+
+function idDoCampo(chave: string, campo: CampoDoFoco): string {
+  return campo === "descricao" ? idDaDescricao(chave) : idDaQuantidade(chave);
+}
+
 export const ID_DA_BUSCA = "adicionar-item";
+
+/** Os campos não se editam: só leitura, ou uma gravação em andamento. */
+function travado({ acoes, ocupado }: Pick<MontarViewProps, "acoes" | "ocupado">): boolean {
+  return !acoes.editavel || ocupado;
+}
 
 /** "1.008,00" (a grade, como no Excel, sem o R$). */
 function valor(centavos: number | null): string {
@@ -282,6 +330,18 @@ function Cabecalho(props: MontarViewProps & { totalCents: number | null }) {
               {dados.situacao}
             </span>
           ) : null}
+          {acoes.editavel && props.sujo ? (
+            <span className="inline-flex h-10 items-center gap-1.5 text-sm font-bold text-amber-soft-foreground">
+              <CircleDot className="size-4" aria-hidden="true" />
+              Alterações não salvas
+            </span>
+          ) : null}
+          {acoes.editavel && !props.sujo && props.salvoEm ? (
+            <span className="inline-flex h-10 items-center gap-1.5 text-sm font-semibold text-muted-foreground">
+              <Check className="size-4" aria-hidden="true" />
+              {`Salvo às ${props.salvoEm}`}
+            </span>
+          ) : null}
           {acoes.secundarias.map((acao) => (
             <Button key={acao} type="button" variant="outline" onClick={rotulos[acao].onClick} disabled={ocupado}>
               {rotulos[acao].icone}
@@ -308,8 +368,19 @@ function Cabecalho(props: MontarViewProps & { totalCents: number | null }) {
 
 // --- Pedido, execução e locais --------------------------------------------------------------
 
-function Pedido({ form, onForm, acoes, contatos, handlers }: MontarViewProps) {
-  const desabilitado = !acoes.editavel;
+/** As opções do canal: as que a pessoa escolhe e, se o pedido veio do portal ou do WMS, a dele. */
+function opcoesDoCanal(atual: string): Array<{ valor: string; rotulo: string }> {
+  const opcoes: Array<{ valor: string; rotulo: string }> = CANAIS_DO_PEDIDO.map((canal) => ({ ...canal }));
+  if (atual && !opcoes.some((opcao) => opcao.valor === atual)) {
+    const rotulo = CANAL_ROTULO[atual] ?? atual;
+    opcoes.push({ valor: atual, rotulo: rotulo.charAt(0).toUpperCase() + rotulo.slice(1) });
+  }
+  return opcoes;
+}
+
+function Pedido(props: MontarViewProps) {
+  const { form, onForm, acoes, contatos, handlers } = props;
+  const desabilitado = travado(props);
   const muda =
     (campo: "refCliente" | "titulo" | "recebidaEm" | "emailAssunto" | "emailLink") => (evento: { target: { value: string } }) =>
       onForm((atual) => ({ ...atual, [campo]: evento.target.value }));
@@ -338,7 +409,7 @@ function Pedido({ form, onForm, acoes, contatos, handlers }: MontarViewProps) {
                 {rotuloDoContato(contato)}
               </option>
             ))}
-            {desabilitado ? null : <option value={NOVO_CONTATO}>Novo contato…</option>}
+            {acoes.editavel ? <option value={NOVO_CONTATO}>Novo contato…</option> : null}
           </select>
         </Campo>
         <Campo id="pedido-ref" rotulo="Referência do cliente" className="flex-[1_1_8rem]">
@@ -359,39 +430,52 @@ function Pedido({ form, onForm, acoes, contatos, handlers }: MontarViewProps) {
           />
         </Campo>
       </div>
-      <Campo id="pedido-assunto" rotulo="Assunto do e-mail">
-        <Input
-          id="pedido-assunto"
-          value={form.emailAssunto}
-          onChange={muda("emailAssunto")}
-          maxLength={300}
+      <Campo rotulo="Canal">
+        <Alternancia
+          rotulo="Canal"
+          opcoes={opcoesDoCanal(form.canal)}
+          valor={form.canal}
           disabled={desabilitado}
+          onEscolher={(canal) => onForm((atual) => ({ ...atual, canal }))}
         />
       </Campo>
-      <Campo id="pedido-link" rotulo="Link do e-mail">
-        <div className="flex items-center gap-2.5">
-          <Input
-            id="pedido-link"
-            type="url"
-            value={form.emailLink}
-            onChange={muda("emailLink")}
-            maxLength={2000}
-            disabled={desabilitado}
-            className="min-w-0 flex-1"
-          />
-          {/^https?:\/\/\S+$/i.test(link) ? (
-            <a
-              href={link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex shrink-0 items-center gap-1 text-sm font-bold text-primary underline-offset-4 hover:underline"
-            >
-              Abrir no Outlook
-              <ExternalLink className="size-3.5" aria-hidden="true" />
-            </a>
-          ) : null}
-        </div>
-      </Campo>
+      {form.canal === "email" || form.emailAssunto.trim() || link ? (
+        <>
+          <Campo id="pedido-assunto" rotulo="Assunto do e-mail">
+            <Input
+              id="pedido-assunto"
+              value={form.emailAssunto}
+              onChange={muda("emailAssunto")}
+              maxLength={300}
+              disabled={desabilitado}
+            />
+          </Campo>
+          <Campo id="pedido-link" rotulo="Link do e-mail">
+            <div className="flex items-center gap-2.5">
+              <Input
+                id="pedido-link"
+                type="url"
+                value={form.emailLink}
+                onChange={muda("emailLink")}
+                maxLength={2000}
+                disabled={desabilitado}
+                className="min-w-0 flex-1"
+              />
+              {/^https?:\/\/\S+$/i.test(link) ? (
+                <a
+                  href={link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex shrink-0 items-center gap-1 text-sm font-bold text-primary underline-offset-4 hover:underline"
+                >
+                  Abrir no Outlook
+                  <ExternalLink className="size-3.5" aria-hidden="true" />
+                </a>
+              ) : null}
+            </div>
+          </Campo>
+        </>
+      ) : null}
     </Bloco>
   );
 }
@@ -402,8 +486,9 @@ const MODOS: ReadonlyArray<{ valor: ModoExecucao; rotulo: string }> = [
   { valor: "a_definir", rotulo: "A definir" },
 ];
 
-function Execucao({ form, onForm, acoes }: MontarViewProps) {
-  const desabilitado = !acoes.editavel;
+function Execucao(props: MontarViewProps) {
+  const { form, onForm } = props;
+  const desabilitado = travado(props);
   const exec = form.execucao;
   const muda = (campo: "data" | "de" | "ate" | "visitaTecnica") => (evento: { target: { value: string } }) =>
     onForm((atual) => ({
@@ -427,6 +512,13 @@ function Execucao({ form, onForm, acoes }: MontarViewProps) {
       {exec.modo === "data" ? (
         <Campo id="execucao-data" rotulo="Data">
           <Input id="execucao-data" type="date" value={exec.data} onChange={muda("data")} disabled={desabilitado} />
+        </Campo>
+      ) : null}
+      {exec.modo === "a_definir" ? (
+        <Campo rotulo="Data">
+          <div className="flex h-10 items-center gap-2 rounded-md border border-dashed border-input px-3 text-sm font-bold text-muted-foreground">
+            <CalendarDays className="size-4" aria-hidden="true" />A definir
+          </div>
         </Campo>
       ) : null}
       {exec.modo === "intervalo" ? (
@@ -495,8 +587,9 @@ function SeletorDeLocal({
   );
 }
 
-function Locais({ form, onForm, acoes, locais }: MontarViewProps) {
-  const desabilitado = !acoes.editavel;
+function Locais(props: MontarViewProps) {
+  const { form, onForm, locais } = props;
+  const desabilitado = travado(props);
   return (
     <Bloco rotulo="Locais" className="flex-[1.2_1_18rem]">
       <SeletorDeLocal
@@ -521,7 +614,8 @@ function Locais({ form, onForm, acoes, locais }: MontarViewProps) {
 
 // --- Grade de itens --------------------------------------------------------------------------
 
-const COLUNAS = "grid grid-cols-[4.5rem_minmax(15rem,1fr)_7.5rem_4.5rem_11rem_5.5rem_8rem_2.75rem]";
+/** O código da LPU (DTL-0002-T) cabe numa linha: a coluna tem a largura dele. */
+const COLUNAS = "grid grid-cols-[7.5rem_minmax(15rem,1fr)_7.5rem_4.5rem_11rem_5.5rem_8rem_2.75rem]";
 
 /** Célula da grade: borda à direita, menos na última coluna. */
 function celula(extra?: string, ultima = false): string {
@@ -529,6 +623,68 @@ function celula(extra?: string, ultima = false): string {
 }
 
 const CAMPO_DA_GRADE = "h-8 min-w-0 px-2 text-sm";
+
+/** A lista da busca de item: os itens achados, "Nenhum item" e quantos ficaram de fora. */
+export function ListaDaBusca({
+  itens,
+  total,
+  destacado,
+  onEscolher,
+  onDestacar,
+}: {
+  itens: ItemDaTabela[];
+  total: number;
+  destacado: number;
+  onEscolher: (item: ItemDaTabela) => void;
+  onDestacar: (indice: number) => void;
+}) {
+  const fora = total - itens.length;
+  return (
+    <ul
+      id="itens-da-tabela"
+      role="listbox"
+      aria-label="Itens da tabela"
+      className="absolute left-0 right-0 top-11 z-20 max-h-80 overflow-y-auto rounded-md border border-border bg-popover py-1 shadow-md"
+    >
+      {itens.length === 0 ? (
+        <li role="option" aria-selected={false} aria-disabled="true" className="px-3 py-2 text-sm font-bold text-muted-foreground">
+          Nenhum item
+        </li>
+      ) : null}
+      {itens.map((item, indice) => (
+        <li
+          key={item.lpuItemId}
+          id={`item-${item.lpuItemId}`}
+          role="option"
+          aria-selected={indice === destacado}
+          onMouseDown={(evento) => {
+            evento.preventDefault();
+            onEscolher(item);
+          }}
+          onMouseEnter={() => onDestacar(indice)}
+          className={cn(
+            "flex cursor-pointer items-center gap-3 px-3 py-2 text-sm",
+            indice === destacado ? "bg-surface-hover" : "bg-popover",
+          )}
+        >
+          <span className="w-24 shrink-0 whitespace-nowrap font-bold tabular-nums text-muted-foreground">{item.codigo ?? "—"}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-bold">{item.item}</span>
+            <span className="block truncate text-xs font-semibold text-muted-foreground">
+              {[item.servico, item.unidade].filter(Boolean).join(" · ")}
+            </span>
+          </span>
+          <span className="shrink-0 font-bold tabular-nums">{formatarDecimal(item.preco, 2)}</span>
+        </li>
+      ))}
+      {fora > 0 ? (
+        <li role="option" aria-selected={false} aria-disabled="true" className="px-3 py-2 text-xs font-bold text-muted-foreground">
+          {fora === 1 ? "+1 item" : `+${fora} itens`}
+        </li>
+      ) : null}
+    </ul>
+  );
+}
 
 function BuscaDeItem({
   catalogo,
@@ -542,7 +698,8 @@ function BuscaDeItem({
   const [termo, setTermo] = useState("");
   const [destacado, setDestacado] = useState(0);
   const [aberta, setAberta] = useState(false);
-  const lista = Array.isArray(catalogo) ? buscarItensDaTabela(catalogo, termo) : [];
+  const busca = Array.isArray(catalogo) ? buscaNaTabela(catalogo, termo) : { itens: [], total: 0 };
+  const lista = busca.itens;
   const adicionar = (item: ItemDaTabela | undefined) => {
     if (!item) return;
     onAdicionar(item);
@@ -551,6 +708,8 @@ function BuscaDeItem({
     setAberta(false);
   };
   const semTabela = !Array.isArray(catalogo) || catalogo.length === 0;
+  // Com termo, a lista aparece mesmo vazia ("Nenhum item").
+  const mostrar = aberta && termo.trim().length > 0;
   return (
     <div className="relative w-full max-w-md">
       <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" aria-hidden="true" />
@@ -558,9 +717,9 @@ function BuscaDeItem({
         id={ID_DA_BUSCA}
         role="combobox"
         aria-label="Adicionar item da tabela"
-        aria-expanded={aberta && lista.length > 0}
+        aria-expanded={mostrar}
         aria-controls="itens-da-tabela"
-        aria-activedescendant={aberta && lista[destacado] ? `item-${lista[destacado].lpuItemId}` : undefined}
+        aria-activedescendant={mostrar && lista[destacado] ? `item-${lista[destacado].lpuItemId}` : undefined}
         aria-autocomplete="list"
         placeholder="Adicionar item…"
         autoComplete="off"
@@ -592,40 +751,8 @@ function BuscaDeItem({
       >
         ↵
       </kbd>
-      {aberta && lista.length > 0 ? (
-        <ul
-          id="itens-da-tabela"
-          role="listbox"
-          aria-label="Itens da tabela"
-          className="absolute left-0 right-0 top-11 z-20 max-h-80 overflow-y-auto rounded-md border border-border bg-popover py-1 shadow-md"
-        >
-          {lista.map((item, indice) => (
-            <li
-              key={item.lpuItemId}
-              id={`item-${item.lpuItemId}`}
-              role="option"
-              aria-selected={indice === destacado}
-              onMouseDown={(evento) => {
-                evento.preventDefault();
-                adicionar(item);
-              }}
-              onMouseEnter={() => setDestacado(indice)}
-              className={cn(
-                "flex cursor-pointer items-center gap-3 px-3 py-2 text-sm",
-                indice === destacado ? "bg-surface-hover" : "bg-popover",
-              )}
-            >
-              <span className="w-12 shrink-0 font-bold tabular-nums text-muted-foreground">{item.codigo ?? "—"}</span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-bold">{item.item}</span>
-                <span className="block truncate text-xs font-semibold text-muted-foreground">
-                  {[item.servico, item.unidade].filter(Boolean).join(" · ")}
-                </span>
-              </span>
-              <span className="shrink-0 font-bold tabular-nums">{formatarDecimal(item.preco, 2)}</span>
-            </li>
-          ))}
-        </ul>
+      {mostrar ? (
+        <ListaDaBusca itens={lista} total={busca.total} destacado={destacado} onEscolher={adicionar} onDestacar={setDestacado} />
       ) : null}
     </div>
   );
@@ -635,13 +762,17 @@ function LinhaDaGrade({
   linha,
   totalCents,
   editavel,
+  travada,
   onMuda,
   onRemover,
   onEnterNaQuantidade,
 }: {
   linha: LinhaForm;
   totalCents: number | null;
+  /** A linha é de um rascunho: mostra o que falta e o Remover. */
   editavel: boolean;
+  /** Só leitura ou gravação em andamento: os campos não se editam. */
+  travada: boolean;
   onMuda: (linha: LinhaForm) => void;
   onRemover: () => void;
   onEnterNaQuantidade: () => void;
@@ -653,9 +784,11 @@ function LinhaDaGrade({
   const muda = (campo: keyof LinhaForm) => (evento: { target: { value: string } }) =>
     onMuda({ ...linha, [campo]: evento.target.value });
   const pedeMotivo = origem !== "tabela";
+  // Linha que ainda não foi salva (sem id do servidor) fica destacada, como .xr.new no mockup.
+  const nova = editavel && !linha.id;
   return (
-    <div role="row" className={cn(COLUNAS, "border-t border-muted")}>
-      <span role="cell" className={cn(celula(), "font-bold tabular-nums text-muted-foreground")}>
+    <div role="row" className={cn(COLUNAS, "border-t border-muted", nova && "bg-info-soft")}>
+      <span role="cell" className={cn(celula(), "whitespace-nowrap font-bold tabular-nums text-muted-foreground")}>
         {linha.codigo ?? "—"}
       </span>
       <div role="cell" className={celula("flex-col items-start justify-center gap-1")}>
@@ -665,11 +798,12 @@ function LinhaDaGrade({
             <span>{linha.item}</span>
           ) : (
             <Input
+              id={idDaDescricao(linha.chave)}
               aria-label={origem === "ajuste" ? "Descrição do ajuste" : "Item avulso"}
               value={linha.descricao}
               onChange={muda("descricao")}
-              maxLength={300}
-              disabled={!editavel}
+              maxLength={origem === "ajuste" ? DESCRICAO_MAXIMA : ITEM_AVULSO_MAXIMO}
+              disabled={travada}
               className={cn(CAMPO_DA_GRADE, "flex-1")}
             />
           )}
@@ -682,8 +816,8 @@ function LinhaDaGrade({
             placeholder="Motivo"
             value={linha.motivo}
             onChange={muda("motivo")}
-            maxLength={300}
-            disabled={!editavel}
+            maxLength={MOTIVO_MAXIMO}
+            disabled={travada}
             className={cn(CAMPO_DA_GRADE, "w-full")}
           />
         ) : null}
@@ -700,7 +834,7 @@ function LinhaDaGrade({
             value={linha.servico}
             onChange={muda("servico")}
             maxLength={120}
-            disabled={!editavel}
+            disabled={travada}
             className={CAMPO_DA_GRADE}
           />
         ) : (
@@ -714,7 +848,7 @@ function LinhaDaGrade({
             value={linha.unidade}
             onChange={muda("unidade")}
             maxLength={20}
-            disabled={!editavel}
+            disabled={travada}
             className={CAMPO_DA_GRADE}
           />
         ) : (
@@ -731,7 +865,7 @@ function LinhaDaGrade({
           inputMode="decimal"
           value={linha.preco}
           onChange={muda("preco")}
-          disabled={!editavel}
+          disabled={travada}
           className={cn(
             CAMPO_DA_GRADE,
             "w-24 text-right tabular-nums",
@@ -755,7 +889,7 @@ function LinhaDaGrade({
                 onEnterNaQuantidade();
               }
             }}
-            disabled={!editavel}
+            disabled={travada}
             className={cn(CAMPO_DA_GRADE, "w-16 text-right font-bold tabular-nums")}
           />
         )}
@@ -771,6 +905,7 @@ function LinhaDaGrade({
             size="icon"
             aria-label={`Remover · ${rotulo}`}
             onClick={onRemover}
+            disabled={travada}
             className="size-8"
           >
             <X aria-hidden="true" />
@@ -781,7 +916,15 @@ function LinhaDaGrade({
   );
 }
 
-function Sugestoes({ itens, onAdicionar }: { itens: ItemDaTabela[]; onAdicionar: (item: ItemDaTabela) => void }) {
+function Sugestoes({
+  itens,
+  desabilitado,
+  onAdicionar,
+}: {
+  itens: ItemDaTabela[];
+  desabilitado: boolean;
+  onAdicionar: (item: ItemDaTabela) => void;
+}) {
   return (
     <div
       role="row"
@@ -793,7 +936,8 @@ function Sugestoes({ itens, onAdicionar }: { itens: ItemDaTabela[]; onAdicionar:
           key={item.lpuItemId}
           type="button"
           onClick={() => onAdicionar(item)}
-          className="inline-flex h-7 items-center gap-1.5 rounded-full border border-dashed border-muted-foreground bg-card px-3 text-xs font-bold text-foreground hover:border-solid hover:bg-surface-hover"
+          disabled={desabilitado}
+          className="inline-flex h-7 items-center gap-1.5 rounded-full border border-dashed border-muted-foreground bg-card px-3 text-xs font-bold text-foreground hover:border-solid hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Plus className="size-3" aria-hidden="true" />
           {`${[item.codigo, item.servico].filter(Boolean).join(" ")} · ${formatarDecimal(item.preco, 2)}${item.unidade ? ` / ${item.unidade}` : ""}`}
@@ -803,10 +947,12 @@ function Sugestoes({ itens, onAdicionar }: { itens: ItemDaTabela[]; onAdicionar:
   );
 }
 
-function Itens({ form, onForm, acoes, catalogo, dados }: MontarViewProps) {
+function Itens(props: MontarViewProps) {
+  const { form, onForm, acoes, catalogo, dados } = props;
   const editavel = acoes.editavel;
+  const travada = travado(props);
   const contador = useRef(0);
-  const [foco, setFoco] = useState<string | null>(null);
+  const [foco, setFoco] = useState<{ chave: string; campo: CampoDoFoco } | null>(null);
   const [sugestaoDe, setSugestaoDe] = useState<string | null>(null);
   const previa = previaDosTotais(form.linhas);
   const lista = Array.isArray(catalogo) ? catalogo : [];
@@ -814,7 +960,7 @@ function Itens({ form, onForm, acoes, catalogo, dados }: MontarViewProps) {
 
   useEffect(() => {
     if (!foco) return;
-    const campo = document.getElementById(idDaQuantidade(foco));
+    const campo = document.getElementById(idDoCampo(foco.chave, foco.campo));
     if (campo instanceof HTMLInputElement) {
       campo.focus();
       campo.select();
@@ -826,9 +972,9 @@ function Itens({ form, onForm, acoes, catalogo, dados }: MontarViewProps) {
     contador.current += 1;
     return `nova-${Date.now()}-${contador.current}`;
   };
-  const adicionar = (resultado: { linhas: LinhaForm[]; foco: string }) => {
+  const adicionar = (resultado: { linhas: LinhaForm[]; foco: string; campo?: CampoDoFoco }) => {
     onForm((atual) => ({ ...atual, linhas: resultado.linhas }));
-    setFoco(resultado.foco);
+    setFoco({ chave: resultado.foco, campo: resultado.campo ?? "quantidade" });
   };
   const focarBusca = () => document.getElementById(ID_DA_BUSCA)?.focus();
   const tabelaRotulo = dados.tabelaNome ? `${dados.tabelaNome} · ${dados.variante}` : "Sem tabela";
@@ -845,7 +991,7 @@ function Itens({ form, onForm, acoes, catalogo, dados }: MontarViewProps) {
         <span className="text-sm font-bold text-muted-foreground">{tabelaRotulo}</span>
       </div>
       <div className="overflow-x-auto">
-        <div role="table" aria-label="Itens do orçamento" className="min-w-[60rem]">
+        <div role="table" aria-label="Itens do orçamento" className="min-w-[63rem]">
           <div role="row" className={cn(COLUNAS, "border-t border-muted bg-background text-sm font-bold text-muted-foreground")}>
             <span role="columnheader" className={celula()}>
               Código
@@ -879,6 +1025,7 @@ function Itens({ form, onForm, acoes, catalogo, dados }: MontarViewProps) {
                   linha={linha}
                   totalCents={previa.porLinha[linha.chave] ?? null}
                   editavel={editavel}
+                  travada={travada}
                   onMuda={(nova) =>
                     onForm((atual) => ({
                       ...atual,
@@ -896,6 +1043,7 @@ function Itens({ form, onForm, acoes, catalogo, dados }: MontarViewProps) {
                 {irmaos.length ? (
                   <Sugestoes
                     itens={irmaos}
+                    desabilitado={travada}
                     onAdicionar={(item) => adicionar(adicionarSugestao(form.linhas, linha.chave, item, novaChave()))}
                   />
                 ) : null}
@@ -908,7 +1056,7 @@ function Itens({ form, onForm, acoes, catalogo, dados }: MontarViewProps) {
         <div className="flex flex-wrap items-center gap-2.5 border-t border-muted px-5 py-3 sm:pl-20">
           <BuscaDeItem
             catalogo={catalogo}
-            desabilitado={!editavel}
+            desabilitado={travada}
             onAdicionar={(item) => {
               const resultado = adicionarDaTabela(form.linhas, item, novaChave());
               adicionar(resultado);
@@ -919,12 +1067,8 @@ function Itens({ form, onForm, acoes, catalogo, dados }: MontarViewProps) {
             type="button"
             variant="outline"
             size="sm"
-            onClick={() =>
-              adicionar({
-                linhas: [...form.linhas, linhaAvulsa(novaChave())],
-                foco: "",
-              })
-            }
+            disabled={travada}
+            onClick={() => adicionar(adicionarAvulsa(form.linhas, novaChave()))}
           >
             <Plus aria-hidden="true" />
             Item avulso
@@ -933,12 +1077,8 @@ function Itens({ form, onForm, acoes, catalogo, dados }: MontarViewProps) {
             type="button"
             variant="outline"
             size="sm"
-            onClick={() =>
-              adicionar({
-                linhas: [...form.linhas, linhaDeAjuste(novaChave())],
-                foco: "",
-              })
-            }
+            disabled={travada}
+            onClick={() => adicionar(adicionarAjuste(form.linhas, novaChave()))}
           >
             <Plus aria-hidden="true" />
             Ajuste
@@ -951,19 +1091,17 @@ function Itens({ form, onForm, acoes, catalogo, dados }: MontarViewProps) {
 
 // --- Rodapé ------------------------------------------------------------------------------
 
-function Rodape({
-  form,
-  onForm,
-  acoes,
-  totais,
-}: MontarViewProps & {
-  totais: {
-    subtotal: number | null;
-    ajustes: number | null;
-    total: number | null;
-  };
-}) {
-  const desabilitado = !acoes.editavel;
+function Rodape(
+  props: MontarViewProps & {
+    totais: {
+      subtotal: number | null;
+      ajustes: number | null;
+      total: number | null;
+    };
+  },
+) {
+  const { form, onForm, totais } = props;
+  const desabilitado = travado(props);
   return (
     <div className="flex flex-wrap items-stretch gap-5">
       <Bloco rotulo="Condições" className="flex-[1.3_1_22rem]">
@@ -1004,7 +1142,11 @@ function Rodape({
   );
 }
 
-/** Os totais que a tela mostra: os do servidor sem mudança; a prévia (lib/dominio) com mudança. */
+/**
+ * Os totais que a tela mostra: os do servidor sem mudança; com mudança, a
+ * prévia (lib/dominio) das linhas que já têm valor. A linha incompleta fica
+ * sem valor na grade e diz o que falta; não zera o resto.
+ */
 function totaisDaTela(props: MontarViewProps) {
   if (!props.sujo) {
     return {
@@ -1014,7 +1156,6 @@ function totaisDaTela(props: MontarViewProps) {
     };
   }
   const previa = previaDosTotais(props.form.linhas);
-  if (!previa.completa) return { subtotal: null, ajustes: null, total: null };
   return {
     subtotal: previa.subtotalCents,
     ajustes: previa.ajustesCents,
@@ -1032,6 +1173,14 @@ export function MontarView(props: MontarViewProps) {
         <AbasDoComercial />
       </div>
       <Cabecalho {...props} totalCents={totais.total} />
+      {props.desatualizado && props.sujo ? (
+        <p
+          role="alert"
+          className="rounded-md border border-amber-soft-border bg-amber-soft px-4 py-3 text-sm font-semibold text-amber-soft-foreground"
+        >
+          O orçamento mudou enquanto você editava. Ao salvar, o servidor recusa e o orçamento recarrega.
+        </p>
+      ) : null}
       {aviso ? (
         <p
           role={aviso.tipo === "erro" ? "alert" : "status"}

@@ -184,6 +184,7 @@ export default function ComercialOrcamentosPage() {
         onVoltar={() => setFichaAberta(false)}
         contexto={contexto}
         onNovo={abrirNovo}
+        onAbrir={(numero) => navegar(hrefDoOrcamento(numero))}
       />
       <NovoOrcamentoDialog
         aberto={dialogo !== null}

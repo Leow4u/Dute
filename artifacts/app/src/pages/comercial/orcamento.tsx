@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { useLocation, useSearch } from "wouter";
 
@@ -19,11 +19,14 @@ import {
 } from "@/lib/comercial/clientes";
 import { useDocumento, useLeitura, useNomes } from "@/lib/comercial/leitura";
 import {
+  SINCRONIA_INICIAL,
   VARIANTE_PADRAO,
   acoesDoOrcamento,
   avisoDeRecalculo,
   catalogoDaTabela,
   classificarErro,
+  desatualizado,
+  ehAtalhoDeSalvar,
   formDoOrcamento,
   formSujo,
   itemDoCatalogoDoDocumento,
@@ -33,8 +36,10 @@ import {
   pendenciasParaEnviar,
   previaDosTotais,
   problemasDoFormulario,
+  saidaPedeConfirmacao,
+  sincronia,
+  situacaoDoCabecalho,
   type AcaoDeAvanco,
-  type FormOrcamento,
   type ItemDaTabela,
   type ItemDoCatalogoDoc,
 } from "@/lib/comercial/montar";
@@ -59,9 +64,11 @@ import { EstadoDoOrcamento, MontarView, type DadosDoOrcamento } from "./orcament
  * Lê pelo Firestore (`demands`, `quotes`, `price_tables`, `lpu_items`,
  * `contracts`, `customers`, `customer_contacts`, `customer_locations`) e grava
  * só pelas callables saveQuote e advanceQuote, com `request_id`, a edição e a
- * situação que a tela viu. A prévia dos totais é de lib/dominio; o valor que
- * vale é o que o servidor devolve. Erro de situação ou edição divergente
- * mostra a mensagem do servidor e recarrega o orçamento.
+ * situação em que o formulário se baseia (lib/comercial/montar.ts,
+ * sincronia). A prévia dos totais é de lib/dominio; o valor que vale é o que
+ * o servidor devolve. Erro de situação ou edição divergente mostra a
+ * mensagem do servidor e recarrega o orçamento com o último que chegou.
+ * Mudança não salva pede confirmação para sair; Ctrl+S salva.
  */
 
 type Registro = Record<string, unknown>;
@@ -76,6 +83,21 @@ function inteiro(value: unknown): number | null {
 
 type ResultadoDoSave = { numero: string; rotulo: string; edicao: number; status: StatusOrcamento; total_cents: number };
 type ResultadoDoAvanco = { edicao: number; status: StatusOrcamento; ja_feito: boolean };
+
+/** Quanto a tela espera a própria gravação chegar pelo onSnapshot antes de destravar com o que tem. */
+const ESPERA_DA_GRAVACAO_MS = 15_000;
+
+const HORA_DE_SAO_PAULO = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: "America/Sao_Paulo",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+/** "10:12" em São Paulo: a hora do último salvamento. */
+function horaDeAgora(): string {
+  return HORA_DE_SAO_PAULO.format(new Date());
+}
 
 /** Os itens do catálogo (lpu_items), lidos uma vez quando o orçamento tem tabela. */
 function useItensDoCatalogo(ativo: boolean): Map<string, ItemDoCatalogoDoc> | "carregando" | "erro" {
@@ -194,37 +216,80 @@ function MontarOrcamento({ numero }: { numero: string }) {
   const item = demandaDoc && quoteDoc ? itemDaFila(numero, demandaDoc, quoteDoc) : null;
   const nomeDe = useNomes(item ? [item.autorUid, item.aprovacao?.porUid, item.devolucao?.porUid] : []);
 
-  // --- Formulário: o original (do servidor) e o que a pessoa está montando ---------------
+  // --- Formulário: o servidor ao vivo e o que a pessoa está montando (montar.ts, sincronia) ----
+  // A edição e a situação que vão para a callable são as da base do formulário, nunca as do
+  // snapshot mais novo: assim o servidor recusa a gravação feita sobre uma edição velha.
   const versao = item ? `${item.edicao}|${item.status}|${item.etapa}` : null;
-  const [carregado, setCarregado] = useState<{ versao: string; original: FormOrcamento } | null>(null);
-  const [form, setForm] = useState<FormOrcamento | null>(null);
-  /** A gravação que a tela espera ver chegar (edição e situação): chegou, o formulário volta ao servidor. */
-  const [aguardar, setAguardar] = useState<{ edicao: number; status: string } | null>(null);
-  const sujo = Boolean(carregado && form && formSujo(carregado.original, form));
-
-  const sincronizar = () => {
-    if (!versao || !demandaDoc || !quoteDoc) return;
-    const original = formDoOrcamento(demandaDoc, quoteDoc);
-    setCarregado({ versao, original });
-    setForm(original);
-  };
-
+  const [estado, despachar] = useReducer(sincronia, SINCRONIA_INICIAL);
   useEffect(() => {
-    if (!versao || !item) return;
-    const chegou = aguardar !== null && item.edicao >= aguardar.edicao && item.status === aguardar.status;
-    if (chegou) setAguardar(null);
-    // Mudou no servidor: volta ao que está gravado, menos quando a pessoa está no meio de uma mudança.
-    if (!carregado || chegou || (carregado.versao !== versao && !sujo)) sincronizar();
+    if (!versao || !item || !demandaDoc || !quoteDoc) return;
+    despachar({
+      tipo: "servidor",
+      servidor: { versao, edicao: item.edicao, status: item.status, original: formDoOrcamento(demandaDoc, quoteDoc) },
+    });
+    // O que chega do servidor muda a versão (edição, situação ou etapa).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [versao, aguardar]);
+  }, [versao]);
+  const { base, form } = estado;
+  const sujo = Boolean(base && form && formSujo(base.original, form));
 
   // --- Gravação --------------------------------------------------------------------
   const [ocupado, setOcupado] = useState(false);
+  // Até a gravação desta tela chegar pelo onSnapshot, nada se edita: o que voltar substitui o formulário.
+  const travado = ocupado || estado.aguardar !== null;
   const [aviso, setAviso] = useState<{ tipo: "erro" | "info"; texto: string } | null>(null);
+  const [salvoEm, setSalvoEm] = useState<string | null>(null);
   const [dialogo, setDialogo] = useState<Dialogo | null>(null);
   const [erroDoDialogo, setErroDoDialogo] = useState<string | null>(null);
   /** A chave da intenção: repetir a mesma chamada (rede caiu) reaproveita a chave; outra chamada, chave nova. */
   const tentativa = useRef<{ assinatura: string; chave: string } | null>(null);
+
+  // A gravação que não chega pelo onSnapshot (conexão caída) não trava a tela para sempre.
+  useEffect(() => {
+    if (!estado.aguardar) return undefined;
+    const espera = window.setTimeout(() => despachar({ tipo: "recarregar" }), ESPERA_DA_GRAVACAO_MS);
+    return () => window.clearTimeout(espera);
+  }, [estado.aguardar]);
+
+  // Mudança não salva: o navegador pergunta antes de fechar ou recarregar, e o link para outra
+  // tela do app (abas, menu, fila) pede confirmação.
+  useEffect(() => {
+    if (!sujo) return undefined;
+    const antesDeSair = (evento: BeforeUnloadEvent) => {
+      evento.preventDefault();
+      evento.returnValue = "";
+    };
+    const noClique = (evento: MouseEvent) => {
+      if (evento.defaultPrevented || evento.button !== 0 || evento.metaKey || evento.ctrlKey || evento.shiftKey || evento.altKey) {
+        return;
+      }
+      const link = evento.target instanceof Element ? evento.target.closest("a[href]") : null;
+      if (!(link instanceof HTMLAnchorElement) || (link.target && link.target !== "_self") || link.hasAttribute("download")) return;
+      if (!saidaPedeConfirmacao(link.getAttribute("href"), window.location)) return;
+      if (!window.confirm("Sair sem salvar? As alterações deste orçamento se perdem.")) {
+        evento.preventDefault();
+        evento.stopPropagation();
+      }
+    };
+    window.addEventListener("beforeunload", antesDeSair);
+    document.addEventListener("click", noClique, true);
+    return () => {
+      window.removeEventListener("beforeunload", antesDeSair);
+      document.removeEventListener("click", noClique, true);
+    };
+  }, [sujo]);
+
+  // Ctrl+S (Cmd+S) é o Salvar da tela, não o "salvar página" do navegador.
+  const atalhoDeSalvar = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    const tecla = (evento: KeyboardEvent) => {
+      if (!ehAtalhoDeSalvar(evento)) return;
+      evento.preventDefault();
+      atalhoDeSalvar.current();
+    };
+    window.addEventListener("keydown", tecla);
+    return () => window.removeEventListener("keydown", tecla);
+  }, []);
 
   function comChave(nome: CallableDoComercial, payload: Registro, campo: "request_id" | "idempotency_key" = "request_id"): Registro {
     const assinatura = `${nome}:${JSON.stringify({ ...payload, [campo]: null })}`;
@@ -237,31 +302,36 @@ function MontarOrcamento({ numero }: { numero: string }) {
     setAviso({ tipo: "erro", texto: recarregar ? `${mensagem} O orçamento foi recarregado.` : mensagem });
     if (recarregar) {
       tentativa.current = null;
-      sincronizar();
+      // A recarga usa o último que o onSnapshot entregou (no reducer), não o que a tela tinha no clique.
+      despachar({ tipo: "recarregar" });
     }
   }
 
-  async function salvar(variante?: string): Promise<{ edicao: number } | null> {
-    if (!form || !carregado || !item) return null;
+  async function salvar(variante?: string): Promise<{ edicao: number; recalculo: string | null } | null> {
+    if (!form || !base) return null;
+    const payload = payloadSalvar({ original: base.original, form, numero, edicao: base.edicao, chave: "", variante });
+    if (Object.keys(payload).length <= 4) {
+      toast({ title: "Sem alterações para salvar" });
+      return { edicao: base.edicao, recalculo: null };
+    }
     const problemas = problemasDoFormulario(form);
     if (problemas.length) {
       setAviso({ tipo: "erro", texto: problemas.join(" ") });
       return null;
     }
-    const payload = payloadSalvar({ original: carregado.original, form, numero, edicao: item.edicao, chave: "", variante });
-    if (Object.keys(payload).length <= 4) return { edicao: item.edicao };
     const previa = previaDosTotais(form.linhas);
     setOcupado(true);
     setAviso(null);
     try {
       const resultado = await chamarComercial<ResultadoDoSave>("saveQuote", comChave("saveQuote", payload));
       tentativa.current = null;
-      setAguardar({ edicao: resultado.edicao, status: resultado.status });
+      despachar({ tipo: "gravou", edicao: resultado.edicao, status: resultado.status });
+      setSalvoEm(horaDeAgora());
       // Trocar a tabela muda o preço de propósito; no salvamento comum, a diferença é recálculo do servidor.
       const recalculo = variante ? null : avisoDeRecalculo(previa.completa ? previa.totalCents : null, resultado.total_cents);
       if (recalculo) setAviso({ tipo: "info", texto: recalculo });
       toast({ title: variante ? `Tabela ${variante}` : "Orçamento salvo" });
-      return { edicao: resultado.edicao };
+      return { edicao: resultado.edicao, recalculo };
     } catch (error) {
       tratarErro(error);
       return null;
@@ -279,7 +349,7 @@ function MontarOrcamento({ numero }: { numero: string }) {
         comChave("advanceQuote", payloadAvancar(acao, { numero, ...esperado }, "", nota)),
       );
       tentativa.current = null;
-      setAguardar({ edicao: resultado.edicao, status: resultado.status });
+      despachar({ tipo: "gravou", edicao: resultado.edicao, status: resultado.status });
       toast({ title: sucesso });
       return true;
     } catch (error) {
@@ -290,20 +360,26 @@ function MontarOrcamento({ numero }: { numero: string }) {
     }
   }
 
+  /** A edição e a situação em que o formulário se baseia (o que a pessoa viu). */
+  const esperadoDaBase = (): { status: StatusOrcamento; edicao: number } | null =>
+    base ? { status: base.status as StatusOrcamento, edicao: base.edicao } : null;
+
   async function enviar() {
-    if (!form || !item) return;
+    if (!form || !base) return;
     const faltam = pendenciasParaEnviar(form);
     if (faltam.length) {
       setAviso({ tipo: "erro", texto: `Falta ${faltam.join(", ")} para enviar para aprovação.` });
       return;
     }
-    let edicao = item.edicao;
+    let esperado = { status: base.status as StatusOrcamento, edicao: base.edicao };
     if (sujo) {
       const salvo = await salvar();
       if (!salvo) return;
-      edicao = salvo.edicao;
+      // O servidor recalculou o total: a pessoa vê o valor que vale antes de mandar para o aprovador.
+      if (salvo.recalculo) return;
+      esperado = { status: "rascunho", edicao: salvo.edicao };
     }
-    await avancar("submit", { status: "rascunho", edicao }, "Enviado para aprovação");
+    await avancar("submit", esperado, "Enviado para aprovação");
   }
 
   async function duplicar() {
@@ -332,7 +408,7 @@ function MontarOrcamento({ numero }: { numero: string }) {
     try {
       const resultado = await chamarComercial<{ contato_id: string }>("saveCustomerContact", payloadContato(code, formContato, dialogo.chave));
       setDialogo(null);
-      setForm((atual) => (atual ? { ...atual, contatoId: resultado.contato_id } : atual));
+      despachar({ tipo: "editar", muda: (atual) => ({ ...atual, contatoId: resultado.contato_id }) });
       toast({ title: "Contato criado" });
     } catch (error) {
       setErroDoDialogo(error instanceof Error ? error.message : "Não foi possível salvar.");
@@ -344,17 +420,12 @@ function MontarOrcamento({ numero }: { numero: string }) {
   // --- Estados ---------------------------------------------------------------------
   if (demanda.erro || quote.erro) return <EstadoDoOrcamento estado="erro" />;
   if (demandaDoc === null || quoteDoc === null) return <EstadoDoOrcamento estado="nao_encontrado" />;
-  if (!item || !form || !carregado) return <EstadoDoOrcamento estado="carregando" />;
+  if (!item || !form || !base) return <EstadoDoOrcamento estado="carregando" />;
 
   const contratoLido =
     contratoId && contrato.dados ? contratoDoDocumento(contratoId, contrato.dados) : contrato.dados === null ? null : undefined;
   const autor = nomeDe(item.autorUid);
   const aprovador = item.aprovacao ? nomeDe(item.aprovacao.porUid) : null;
-  let situacao: string | null = null;
-  if (item.status === "para_aprovar") situacao = ["Enviado para aprovação", dataHoraCurta(item.passoEm)].filter(Boolean).join(" · ");
-  if (item.status === "aprovado" && item.aprovacao) {
-    situacao = [aprovador ? `Aprovado por ${aprovador}` : "Aprovado", dataHoraCurta(item.aprovacao.em)].filter(Boolean).join(" · ");
-  }
   const devolveu = item.devolucao ? nomeDe(item.devolucao.porUid) : null;
   const dados: DadosDoOrcamento = {
     numero,
@@ -375,7 +446,7 @@ function MontarOrcamento({ numero }: { numero: string }) {
     subtotalCents: inteiro(quoteDoc?.subtotal_cents),
     ajustesCents: inteiro(quoteDoc?.ajustes_cents),
     totalCents: item.totalCents,
-    situacao,
+    situacao: situacaoDoCabecalho({ status: item.status, passoEm: item.passoEm, aprovacao: item.aprovacao, aprovador }),
     devolucao: item.devolucao
       ? {
           nota: item.devolucao.nota,
@@ -384,6 +455,9 @@ function MontarOrcamento({ numero }: { numero: string }) {
       : null,
   };
   const acoes = acoesDoOrcamento({ status: item.status, role, uid: user?.uid, autorUid: item.autorUid, etapa: item.etapa });
+  atalhoDeSalvar.current = () => {
+    if (acoes.editavel && !travado) void salvar();
+  };
   const listaDeContatos = contatos.itens ?? [];
   const empresas = Array.from(new Set([item.cliente, ...listaDeContatos.map((contato) => contato.empresa ?? "")].filter(Boolean)));
 
@@ -392,23 +466,29 @@ function MontarOrcamento({ numero }: { numero: string }) {
       <MontarView
         dados={dados}
         form={form}
-        onForm={(muda) => setForm((atual) => (atual ? muda(atual) : atual))}
+        onForm={(muda) => despachar({ tipo: "editar", muda })}
         sujo={sujo}
         acoes={acoes}
         contatos={listaDeContatos}
         locais={ordenarLocais(locais.itens ?? [])}
         catalogo={catalogo}
-        ocupado={ocupado}
+        ocupado={travado}
         aviso={aviso}
+        salvoEm={salvoEm}
+        desatualizado={desatualizado(estado)}
         handlers={{
           salvar: () => void salvar(),
           enviar: () => void enviar(),
           duplicar: () => void duplicar(),
           editar: () => {
-            if (item.status === "para_aprovar") void avancar("return", { status: "para_aprovar", edicao: item.edicao }, "Voltou para a montagem");
-            if (item.status === "aprovado") void avancar("edit", { status: "aprovado", edicao: item.edicao }, "Voltou para a montagem");
+            const esperado = esperadoDaBase();
+            if (esperado?.status === "para_aprovar") void avancar("return", esperado, "Voltou para a montagem");
+            if (esperado?.status === "aprovado") void avancar("edit", esperado, "Voltou para a montagem");
           },
-          aprovar: () => void avancar("approve", { status: item.status, edicao: item.edicao }, "Orçamento aprovado"),
+          aprovar: () => {
+            const esperado = esperadoDaBase();
+            if (esperado) void avancar("approve", esperado, "Orçamento aprovado");
+          },
           devolver: () => setDialogo({ tipo: "devolver" }),
           trocarVariante: (variante) => void salvar(variante),
           novoContato: () => {
@@ -419,11 +499,13 @@ function MontarOrcamento({ numero }: { numero: string }) {
       />
       <DevolverDialog
         aberto={dialogo?.tipo === "devolver"}
-        ocupado={ocupado}
+        ocupado={travado}
         notaObrigatoria={user?.uid !== item.autorUid}
         onCancelar={() => setDialogo(null)}
         onDevolver={async (nota) => {
-          const feito = await avancar("return", { status: "para_aprovar", edicao: item.edicao }, "Devolvido para a montagem", nota);
+          const esperado = esperadoDaBase();
+          if (!esperado) return;
+          const feito = await avancar("return", esperado, "Devolvido para a montagem", nota);
           if (feito) setDialogo(null);
         }}
       />

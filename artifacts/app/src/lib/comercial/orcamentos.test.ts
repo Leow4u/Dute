@@ -311,20 +311,32 @@ describe("dias na etapa", () => {
 describe("cores das etapas (as do mockup, por token do tema)", () => {
   it("cada etapa tem a cor do mockup", () => {
     expect(corDaEtapa("em_montagem")).toContain("bg-muted");
-    expect(corDaEtapa("para_aprovar")).toContain("bg-warning-soft");
+    expect(corDaEtapa("para_aprovar")).toContain("bg-amber-soft");
     expect(corDaEtapa("para_enviar")).toContain("bg-violet-soft");
     expect(corDaEtapa("aguardando_cliente")).toContain("bg-info-soft");
     expect(corDaEtapa("para_planejar")).toContain("bg-success-soft");
-    expect(corDaEtapa("execucao_a_orcar")).toContain("bg-warning-soft");
-    expect(corDaEtapa("aguardando_autorizacao")).toContain("bg-warning-soft");
+    expect(corDaEtapa("execucao_a_orcar")).toContain("bg-amber-soft");
+    expect(corDaEtapa("aguardando_autorizacao")).toContain("bg-amber-soft");
     expect(corDaEtapa("a_faturar")).toContain("bg-teal-soft");
     expect(corDaEtapa("perdida")).toContain("text-muted-foreground");
   });
 
   it("aguardando autorização há 30 dias ou mais fica vermelho", () => {
-    expect(corDaEtapa("aguardando_autorizacao", 29)).toContain("bg-warning-soft");
+    expect(corDaEtapa("aguardando_autorizacao", 29)).toContain("bg-amber-soft");
     expect(corDaEtapa("aguardando_autorizacao", 30)).toContain("bg-destructive-soft");
-    expect(corDaEtapa("para_aprovar", 90)).toContain("bg-warning-soft");
+    expect(corDaEtapa("para_aprovar", 90)).toContain("bg-amber-soft");
+  });
+
+  it("o âmbar é o do mockup (#FDF0D5 e #8A4B00), nos dois temas, e o ponto usa a mesma cor", () => {
+    const css = readFileSync(resolve(here, "../../index.css"), "utf8");
+    expect(css).toMatch(/--color-amber-soft: hsl\(var\(--amber-soft\)\);/);
+    expect(css).toMatch(/--color-amber-soft-foreground: hsl\(var\(--amber-soft-foreground\)\);/);
+    expect(css.match(/--amber-soft: [^;]+;/g)).toEqual(["--amber-soft: 41 91% 91%;", "--amber-soft: 38 55% 12%;"]);
+    expect(css.match(/--amber-soft-foreground: [^;]+;/g)).toEqual(["--amber-soft-foreground: 33 100% 27%;", "--amber-soft-foreground: 40 90% 72%;"]);
+    expect(css.match(/--amber-soft-border: [^;]+;/g)).toHaveLength(2);
+    for (const etapa of ["para_aprovar", "execucao_a_orcar", "aguardando_autorizacao"] as const) {
+      expect(pontoDaEtapa(etapa)).toBe("bg-amber-soft-foreground");
+    }
   });
 
   it("só tokens: nenhuma cor fixa", () => {
@@ -415,8 +427,15 @@ describe("ficha resumida", () => {
     );
     const historico = historicoDoOrcamento(orc, { nomeDe, contato: null });
     expect(historico[0].detalhe).toBe("e-mail");
-    expect(historico[2]).toEqual({ rotulo: "Aprovado", estado: "feito", quando: "21/10 08:50", detalhe: "Leonardo" });
+    expect(historico[2]).toEqual({ rotulo: "Aprovado por Leonardo", estado: "feito", quando: "21/10 08:50", detalhe: null });
     expect(historico[3].estado).toBe("pendente");
+    // Quem não lê o perfil do aprovador (o comercial) vê só que foi aprovado e quando.
+    expect(historicoDoOrcamento(orc, { nomeDe: () => null, contato: null })[2]).toEqual({
+      rotulo: "Aprovado",
+      estado: "feito",
+      quando: "21/10 08:50",
+      detalhe: null,
+    });
   });
 
   it("devolvido: o passo aparece e o montado volta a pendente", () => {

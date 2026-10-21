@@ -1,16 +1,28 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { centavosDaLinha, formatarReais, totalEmCentavos } from "@workspace/dominio";
 import { describe, expect, it } from "vitest";
 
 import {
+  ITEM_AVULSO_MAXIMO,
+  MOTIVO_MAXIMO,
+  SINCRONIA_INICIAL,
   VARIANTES,
   acoesDoOrcamento,
+  adicionarAjuste,
+  adicionarAvulsa,
   adicionarDaTabela,
   adicionarSugestao,
   avisoDeRecalculo,
+  buscaNaTabela,
   buscarItensDaTabela,
   catalogoDaTabela,
   classificarErro,
   dataHoraLocal,
+  desatualizado,
+  ehAtalhoDeSalvar,
   entradasDasLinhas,
   formDoOrcamento,
   formSujo,
@@ -30,11 +42,19 @@ import {
   problemasDaLinha,
   problemasDoFormulario,
   removerLinha,
+  saidaPedeConfirmacao,
   servicosIrmaos,
+  situacaoDoCabecalho,
+  sincronia,
   teclaNaBusca,
+  type FormOrcamento,
   type ItemDoCatalogoDoc,
   type LinhaForm,
+  type Sincronia,
 } from "./montar";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const quotesDoComercial = readFileSync(resolve(here, "../../../../../functions/comercial/src/domain/quotes.ts"), "utf8");
 
 /**
  * Montar orçamento (docs/mockups/ComOrcamento.dc.html; parte 11 de
@@ -138,6 +158,50 @@ describe("catálogo da tabela e busca de item", () => {
   it("limita a lista", () => {
     expect(buscarItensDaTabela(CATALOGO, "transporte", 2)).toHaveLength(2);
   });
+
+  it("diz quantos itens acharam além dos que a lista mostra", () => {
+    expect(buscaNaTabela(CATALOGO, "transporte", 2)).toMatchObject({ total: 3 });
+    expect(buscaNaTabela(CATALOGO, "transporte", 2).itens.map((item) => item.codigo)).toEqual(["3.02", "4.12"]);
+    expect(buscaNaTabela(CATALOGO, "inexistente")).toEqual({ itens: [], total: 0 });
+    expect(buscaNaTabela(CATALOGO, "  ")).toEqual({ itens: [], total: 0 });
+  });
+
+  describe("medida com vírgula, como se digita (LPU real: DTL-0002-T)", () => {
+    const STAFF = "Estação de Trabalho Staff";
+    const REAIS = catalogoDaTabela(
+      {
+        lpu_120_t: { codigo: "DTL-0002-T", descricao_cliente: `${STAFF} 1,20x1,20m`, preco: "38" },
+        lpu_120_m: { codigo: "DTL-0002-M", descricao_cliente: `${STAFF} 1,20x1,20m`, preco: "52" },
+        lpu_140_t: { codigo: "DTL-0003-T", descricao_cliente: `${STAFF} 1,40x1,20m`, preco: "41" },
+        lpu_mesa: { codigo: "DTL-0010-T", descricao_cliente: "Mesa de reunião 2,40m", preco: "60" },
+      },
+      new Map([
+        ["lpu_120_t", { item: `${STAFF} 1,20x1,20m`, categoria: "Mobiliário", servico: "Transporte", unidade: "UN", descricao: "", orcavel: true, ativo: true }],
+        ["lpu_120_m", { item: `${STAFF} 1,20x1,20m`, categoria: "Mobiliário", servico: "Montagem", unidade: "UN", descricao: "", orcavel: true, ativo: true }],
+        ["lpu_140_t", { item: `${STAFF} 1,40x1,20m`, categoria: "Mobiliário", servico: "Transporte", unidade: "UN", descricao: "", orcavel: true, ativo: true }],
+        ["lpu_mesa", { item: "Mesa de reunião 2,40m", categoria: "Mobiliário", servico: "Transporte", unidade: "UN", descricao: "", orcavel: true, ativo: true }],
+      ]),
+    );
+    const codigos = (termo: string) => buscarItensDaTabela(REAIS, termo).map((item) => item.codigo);
+
+    it("acha pela medida com vírgula, sozinha ou com o nome", () => {
+      expect(codigos("estacao staff")).toEqual(["DTL-0002-M", "DTL-0002-T", "DTL-0003-T"]);
+      expect(codigos("estacao 1,20")).toEqual(["DTL-0002-M", "DTL-0002-T", "DTL-0003-T"]);
+      expect(codigos("1,40")).toEqual(["DTL-0003-T"]);
+      expect(codigos("mesa 2,40")).toEqual(["DTL-0010-T"]);
+    });
+
+    it("a medida inteira (1,20x1,20) separa as estações", () => {
+      expect(codigos("1,20x1,20")).toEqual(["DTL-0002-M", "DTL-0002-T"]);
+      expect(codigos("1,40x1,20")).toEqual(["DTL-0003-T"]);
+      expect(codigos("staff 1,40x1,20 transporte")).toEqual(["DTL-0003-T"]);
+    });
+
+    it("o código inteiro, com hífen, continua achando o item", () => {
+      expect(codigos("DTL-0002-T")[0]).toBe("DTL-0002-T");
+      expect(codigos("dtl-0003")).toEqual(["DTL-0003-T"]);
+    });
+  });
 });
 
 describe("grade no jeito do Excel", () => {
@@ -195,6 +259,19 @@ describe("grade no jeito do Excel", () => {
 
   it("remove a linha", () => {
     expect(removerLinha([tabela("a", "lpu_est_tran", "1"), tabela("b", "lpu_cad_tran", "1")], "a").map((l) => l.chave)).toEqual(["b"]);
+  });
+
+  it("item avulso e ajuste entram no fim e o foco vai para a descrição da linha nova", () => {
+    const linhas = [tabela("a", "lpu_est_tran", "1")];
+    const avulsa = adicionarAvulsa(linhas, "nova-1");
+    expect(avulsa).toMatchObject({ foco: "nova-1", campo: "descricao" });
+    expect(avulsa.linhas.map((linha) => [linha.chave, linha.origem])).toEqual([
+      ["a", "tabela"],
+      ["nova-1", "avulso"],
+    ]);
+    const ajuste = adicionarAjuste(avulsa.linhas, "nova-2");
+    expect(ajuste).toMatchObject({ foco: "nova-2", campo: "descricao" });
+    expect(ajuste.linhas.at(-1)).toMatchObject({ chave: "nova-2", origem: "ajuste", quantidade: "1" });
   });
 });
 
@@ -282,6 +359,24 @@ describe("linha alterada, avulsa e de ajuste", () => {
     expect(problemasDaLinha(linhaDeAjuste("y"))).toEqual(["Informe o valor do ajuste.", "Informe o motivo do ajuste."]);
     expect(problemasDaLinha({ ...linhaDeAjuste("y"), preco: "0", motivo: "x" })).toEqual(["Informe o valor do ajuste."]);
     expect(problemasDaLinha({ ...linhaDeAjuste("y"), preco: "-400", motivo: "Mesma equipe" })).toEqual([]);
+  });
+
+  it("o item avulso cabe no limite do servidor (item até 200 caracteres)", () => {
+    const avulsa = (descricao: string) => ({ ...linhaAvulsa("x"), descricao, preco: "10", motivo: "Fora da LPU" });
+    expect(problemasDaLinha(avulsa("a".repeat(ITEM_AVULSO_MAXIMO)))).toEqual([]);
+    expect(problemasDaLinha(avulsa("a".repeat(ITEM_AVULSO_MAXIMO + 1)))).toEqual([
+      `O item avulso aceita até ${ITEM_AVULSO_MAXIMO} caracteres.`,
+    ]);
+    const [entrada] = entradasDasLinhas([avulsa("a".repeat(ITEM_AVULSO_MAXIMO))]);
+    expect(String(entrada.item)).toHaveLength(ITEM_AVULSO_MAXIMO);
+  });
+
+  it("os limites são os do schema da saveQuote (functions/comercial, quotes.ts)", () => {
+    const inicio = quotesDoComercial.indexOf("const linhaEntrada");
+    const linhaEntrada = quotesDoComercial.slice(inicio, quotesDoComercial.indexOf(".strict();", inicio));
+    expect(inicio).toBeGreaterThan(-1);
+    expect(linhaEntrada).toMatch(new RegExp(`\\bitem: z\\.string\\(\\)\\.trim\\(\\)\\.max\\(${ITEM_AVULSO_MAXIMO}\\)`));
+    expect(linhaEntrada).toMatch(new RegExp(`\\bmotivo: z\\.string\\(\\)\\.trim\\(\\)\\.max\\(${MOTIVO_MAXIMO},`));
   });
 
   it("quantidade precisa ser maior que zero", () => {
@@ -459,6 +554,19 @@ describe("saveQuote e advanceQuote", () => {
     });
   });
 
+  it("o canal do pedido (e-mail, telefone, WhatsApp) vai quando muda", () => {
+    expect(original.canal).toBe("email");
+    expect(formDoOrcamento({ ...DEMANDA, canal: "telefone" }, ORCAMENTO).canal).toBe("telefone");
+    expect(payloadSalvar({ ...base, original, form: { ...original, canal: "telefone" } })).toEqual({
+      action: "update",
+      request_id: "req-1",
+      numero: "10045",
+      expected_edicao: 4,
+      canal: "telefone",
+    });
+    expect(formSujo(original, { ...original, canal: "whatsapp" })).toBe(true);
+  });
+
   it("data de execução em branco vira a definir", () => {
     const form = { ...original, execucao: { modo: "intervalo" as const, data: "", de: "", ate: "", visitaTecnica: "" } };
     expect(payloadSalvar({ ...base, original, form }).execucao).toEqual({ datas: [], de: null, ate: null, a_definir: true, visita_tecnica: null });
@@ -529,23 +637,59 @@ describe("ações da tela por situação e papel", () => {
   });
 });
 
+describe("situação no cabeçalho", () => {
+  it("para aprovar: com o aprovador desde quando foi enviado (como no mockup)", () => {
+    expect(situacaoDoCabecalho({ status: "para_aprovar", passoEm: "2026-10-21T12:05:00.000Z", aprovacao: null, aprovador: null })).toBe(
+      "Com o aprovador · 21/10 09:05",
+    );
+  });
+
+  it("aprovado: por quem, quando quem lê pode ver o nome", () => {
+    const aprovacao = { em: "2026-10-21T11:50:00.000Z" };
+    expect(situacaoDoCabecalho({ status: "aprovado", passoEm: null, aprovacao, aprovador: "Leonardo" })).toBe("Aprovado por Leonardo · 21/10 08:50");
+    expect(situacaoDoCabecalho({ status: "aprovado", passoEm: null, aprovacao, aprovador: null })).toBe("Aprovado · 21/10 08:50");
+    expect(situacaoDoCabecalho({ status: "rascunho", passoEm: null, aprovacao: null, aprovador: null })).toBeNull();
+  });
+});
+
 describe("erros do servidor", () => {
   const erro = (codigo: string, mensagem: string) => Object.assign(new Error(mensagem), { codigo });
 
+  // As mensagens de quotes.ts como o servidor as monta (o teste abaixo trava os modelos).
+  const MUDOU_NO_SALVAR = "O orçamento mudou desde que foi aberto (edição 5, não 4). Abra de novo para não perder a mudança.";
+  const MUDOU_NO_AVANCO = "O orçamento mudou desde que foi aberto (edição 5, não 4). Abra de novo.";
+  const SITUACAO_NO_AVANCO = "O orçamento 10045 mudou: está Para aprovar, não Rascunho. Abra de novo.";
+  const SITUACAO_NO_SALVAR = "O orçamento 10045 está Para aprovar: só o rascunho se edita.";
+  const SUMIU = "Orçamento 10045 não encontrado.";
+
   it("situação divergente, edição velha e orçamento sumido recarregam o orçamento", () => {
-    for (const codigo of ["failed-precondition", "not-found", "aborted"]) {
-      expect(classificarErro(erro(codigo, "O orçamento mudou desde que foi aberto (edição 5, não 4). Abra de novo."))).toEqual({
-        mensagem: "O orçamento mudou desde que foi aberto (edição 5, não 4). Abra de novo.",
-        recarregar: true,
-      });
+    for (const mensagem of [MUDOU_NO_SALVAR, MUDOU_NO_AVANCO, SITUACAO_NO_AVANCO, SITUACAO_NO_SALVAR]) {
+      expect(classificarErro(erro("failed-precondition", mensagem)), mensagem).toEqual({ mensagem, recarregar: true });
     }
+    expect(classificarErro(erro("not-found", SUMIU))).toEqual({ mensagem: SUMIU, recarregar: true });
   });
 
-  it("entrada recusada mostra a mensagem e mantém o que a pessoa digitou", () => {
-    expect(classificarErro(erro("invalid-argument", "Linha 2: o preço diferente da tabela pede um motivo."))).toEqual({
-      mensagem: "Linha 2: o preço diferente da tabela pede um motivo.",
-      recarregar: false,
-    });
+  it("os modelos dessas mensagens são os de quotes.ts", () => {
+    expect(quotesDoComercial).toContain("`O orçamento mudou desde que foi aberto (edição ${edicao}, não ${input.expected_edicao}). Abra de novo para não perder a mudança.`");
+    expect(quotesDoComercial).toContain("`O orçamento mudou desde que foi aberto (edição ${edicao}, não ${input.expected_edicao}). Abra de novo.`");
+    expect(quotesDoComercial).toContain("`O orçamento ${numero} mudou: está ${SITUACAO_ROTULO[status] ?? status}, não ");
+    expect(quotesDoComercial).toContain("`O orçamento ${numero} está ${SITUACAO_ROTULO[status] ?? status}: só o rascunho se edita.`");
+    expect(quotesDoComercial).toContain('throw new HttpsError("not-found", `Orçamento ${numero} não encontrado.`)');
+  });
+
+  it("outra recusa do servidor, mesmo failed-precondition, mostra a mensagem e mantém o que a pessoa digitou", () => {
+    for (const [codigo, mensagem] of [
+      ["failed-precondition", "O contato está inativo."],
+      ["failed-precondition", "Mais de uma tabela vale em 2026-10-14 para o contrato ct-itau (Noturna)."],
+      ["failed-precondition", "A tabela pt_itau do orçamento não existe mais. Confira as tabelas antes de editar."],
+      ["failed-precondition", "Falta Para para enviar para aprovação."],
+      ["not-found", "Contato ct_renata não encontrado."],
+      ["not-found", "Local loc_os não encontrado."],
+      ["aborted", "Muitas gravações ao mesmo tempo. Tente de novo."],
+      ["invalid-argument", "Linha 2: o preço diferente da tabela pede um motivo."],
+    ]) {
+      expect(classificarErro(erro(codigo, mensagem)), mensagem).toEqual({ mensagem, recarregar: false });
+    }
     expect(classificarErro("x").recarregar).toBe(false);
   });
 
@@ -556,5 +700,112 @@ describe("erros do servidor", () => {
       `O servidor recalculou o total: ${formatarReais(190_000)} (a prévia era ${formatarReais(186_400)}).`,
     );
     expect(formatarReais(190_000)).toMatch(/^R\$\s1\.900,00$/);
+  });
+});
+
+describe("o formulário e o servidor ao vivo (onSnapshot)", () => {
+  const v = (edicao: number, status = "rascunho", mudanca: Partial<FormOrcamento> = {}) => ({
+    versao: `${edicao}|${status}|em_montagem`,
+    edicao,
+    status,
+    original: { ...formDoOrcamento(DEMANDA, { ...ORCAMENTO, edicao, status }), ...mudanca },
+  });
+  const aberto = (edicao = 3): Sincronia => sincronia(SINCRONIA_INICIAL, { tipo: "servidor", servidor: v(edicao) });
+  const editado = (estado: Sincronia) =>
+    sincronia(estado, { tipo: "editar", muda: (form) => ({ ...form, titulo: "Remanejamento do 12º e 8º andares" }) });
+  const salvar = (estado: Sincronia) =>
+    payloadSalvar({ original: estado.base!.original, form: estado.form!, numero: "10045", edicao: estado.base!.edicao, chave: "req" });
+
+  it("abre com o que chegou do servidor", () => {
+    const estado = aberto();
+    expect(estado.base?.edicao).toBe(3);
+    expect(estado.form).toEqual(v(3).original);
+    expect(desatualizado(estado)).toBe(false);
+  });
+
+  it("sem mudança na tela, a gravação de outra pessoa entra no formulário", () => {
+    const estado = sincronia(aberto(), { tipo: "servidor", servidor: v(4, "rascunho", { titulo: "Título de B" }) });
+    expect(estado.base?.edicao).toBe(4);
+    expect(estado.form?.titulo).toBe("Título de B");
+    expect(desatualizado(estado)).toBe(false);
+  });
+
+  it("no meio de uma mudança, a gravação de outra pessoa não troca o formulário e a edição enviada é a do formulário", () => {
+    const estado = sincronia(editado(aberto(3)), { tipo: "servidor", servidor: v(4, "rascunho", { titulo: "Título de B" }) });
+    expect(estado.form?.titulo).toBe("Remanejamento do 12º e 8º andares");
+    expect(estado.base?.edicao).toBe(3);
+    expect(estado.servidor?.edicao).toBe(4);
+    expect(desatualizado(estado)).toBe(true);
+    // O servidor recusa a edição 3 (edição velha) em vez de gravar por cima da de B.
+    expect(salvar(estado)).toMatchObject({ expected_edicao: 3, titulo: "Remanejamento do 12º e 8º andares" });
+  });
+
+  it("a recarga depois do erro usa o último que chegou, mesmo que tenha chegado durante a chamada", () => {
+    // A clicou em Salvar na edição 3; a gravação de B (edição 4) chegou enquanto a callable respondia com erro.
+    const durante = sincronia(editado(aberto(3)), { tipo: "servidor", servidor: v(4, "rascunho", { titulo: "Título de B" }) });
+    const recarregado = sincronia(durante, { tipo: "recarregar" });
+    expect(recarregado.base?.edicao).toBe(4);
+    expect(recarregado.form?.titulo).toBe("Título de B");
+    expect(desatualizado(recarregado)).toBe(false);
+    expect(salvar(editado(recarregado))).toMatchObject({ expected_edicao: 4 });
+  });
+
+  it("a própria gravação: espera o onSnapshot e então o formulário volta ao que está gravado", () => {
+    const enviado = editado(aberto(3));
+    const esperando = sincronia(enviado, { tipo: "gravou", edicao: 4, status: "rascunho" });
+    expect(esperando.aguardar).toEqual({ edicao: 4, status: "rascunho" });
+    expect(esperando.form?.titulo).toBe("Remanejamento do 12º e 8º andares");
+    expect(desatualizado(esperando)).toBe(false);
+    const chegou = sincronia(esperando, {
+      tipo: "servidor",
+      servidor: v(4, "rascunho", { titulo: "Remanejamento do 12º e 8º andares" }),
+    });
+    expect(chegou.aguardar).toBeNull();
+    expect(chegou.base?.edicao).toBe(4);
+    expect(formSujo(chegou.base!.original, chegou.form!)).toBe(false);
+  });
+
+  it("o onSnapshot chegou antes da resposta da callable: a resposta já recarrega", () => {
+    const antes = sincronia(editado(aberto(3)), {
+      tipo: "servidor",
+      servidor: v(4, "rascunho", { titulo: "Remanejamento do 12º e 8º andares" }),
+    });
+    const respondeu = sincronia(antes, { tipo: "gravou", edicao: 4, status: "rascunho" });
+    expect(respondeu.aguardar).toBeNull();
+    expect(respondeu.base?.edicao).toBe(4);
+  });
+
+  it("avanço (a edição não muda, a situação sim): espera a situação nova", () => {
+    const esperando = sincronia(aberto(5), { tipo: "gravou", edicao: 5, status: "para_aprovar" });
+    expect(esperando.aguardar).toEqual({ edicao: 5, status: "para_aprovar" });
+    const chegou = sincronia(esperando, { tipo: "servidor", servidor: v(5, "para_aprovar") });
+    expect(chegou.aguardar).toBeNull();
+    expect(chegou.base?.status).toBe("para_aprovar");
+  });
+});
+
+describe("sair sem salvar e Ctrl+S", () => {
+  const aqui = { origin: "https://app.dutelog.com.br", pathname: "/comercial/orcamento", search: "?numero=10045" };
+
+  it("link para outra tela do app pede confirmação", () => {
+    expect(saidaPedeConfirmacao("/comercial", aqui)).toBe(true);
+    expect(saidaPedeConfirmacao("/comercial/clientes", aqui)).toBe(true);
+    expect(saidaPedeConfirmacao("/comercial/orcamento?numero=10046", aqui)).toBe(true);
+    expect(saidaPedeConfirmacao("https://app.dutelog.com.br/comercial/contratos?id=ct-itau", aqui)).toBe(true);
+  });
+
+  it("a mesma tela, link externo ou sem endereço não pedem", () => {
+    expect(saidaPedeConfirmacao("/comercial/orcamento?numero=10045", aqui)).toBe(false);
+    expect(saidaPedeConfirmacao("https://outlook.office.com/mail/id/AAA", aqui)).toBe(false);
+    expect(saidaPedeConfirmacao(null, aqui)).toBe(false);
+    expect(saidaPedeConfirmacao("#itens", aqui)).toBe(false);
+  });
+
+  it("Ctrl+S (ou Cmd+S) é o Salvar", () => {
+    expect(ehAtalhoDeSalvar({ key: "s", ctrlKey: true, metaKey: false, altKey: false, shiftKey: false })).toBe(true);
+    expect(ehAtalhoDeSalvar({ key: "S", ctrlKey: false, metaKey: true, altKey: false, shiftKey: false })).toBe(true);
+    expect(ehAtalhoDeSalvar({ key: "s", ctrlKey: false, metaKey: false, altKey: false, shiftKey: false })).toBe(false);
+    expect(ehAtalhoDeSalvar({ key: "s", ctrlKey: true, metaKey: false, altKey: true, shiftKey: false })).toBe(false);
+    expect(ehAtalhoDeSalvar({ key: "p", ctrlKey: true, metaKey: false, altKey: false, shiftKey: false })).toBe(false);
   });
 });
