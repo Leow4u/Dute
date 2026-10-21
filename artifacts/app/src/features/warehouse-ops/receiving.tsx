@@ -84,6 +84,7 @@ import {
 import { customerRows } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { ProductPhotoStudio } from "./product-photo-studio";
+import { photoContextFromRecord, type PhotoContext } from "./photo-context";
 import {
   barcodeKey,
   findProductByAnyCode,
@@ -114,6 +115,7 @@ function DetailField({
 }
 
 export type ReceiptDraftLine = {
+  photoContext?: PhotoContext;
   sku: string;
   clientCode: string;
   product: string;
@@ -414,6 +416,7 @@ export function UnplannedReceiptDialog({
 
   function applyExistingProduct(index: number, product: ProductLookupItem) {
     updateLine(index, {
+      photoContext: photoContextFromRecord(product.source),
       sku: product.skuCode,
       clientCode: product.clientCode,
       product: product.productName,
@@ -967,7 +970,7 @@ export function UnplannedReceiptDialog({
                               ))}
                             </div>
                           ) : null}
-                          {line.photos.length ? <ProductPhotoStudio key={`${customerCode}:${index}:${line.clientCode}`} photos={line.photos} customerCode={customerCode} productName={line.product} category={line.category} disabled={isPending || line.photoUploading}
+                          {line.photos.length ? <ProductPhotoStudio key={`${customerCode}:${index}:${line.clientCode}`} photos={line.photos} customerCode={customerCode} productName={line.product} category={line.category} context={{ ...line.photoContext, description: line.product, size: line.size || line.photoContext?.size, color: line.color || line.photoContext?.color, brand: line.brand || line.photoContext?.brand }} disabled={isPending || line.photoUploading}
                             onApprove={(generated, primaryUrl) => setLines((current) => current.map((entry, entryIndex) => {
                               if (entryIndex !== index) return entry;
                               const merged = [...entry.photos, ...generated];

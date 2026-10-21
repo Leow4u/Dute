@@ -33,8 +33,10 @@ import {
   OpeningInventoryNotice,
   useOpeningInventorySession,
 } from "@/features/warehouse-ops/opening-inventory-status";
-import { uploadProductPhoto } from "@/features/warehouse-ops/shared";
+import { type ProductPhoto, uploadProductPhoto } from "@/features/warehouse-ops/shared";
 import { ProductPhotoStudio } from "@/features/warehouse-ops/product-photo-studio";
+import { ProductPhotoManager } from "@/features/warehouse-ops/product-photo-manager";
+import { photoContextFromRecord } from "@/features/warehouse-ops/photo-context";
 import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
 import {
@@ -525,6 +527,30 @@ function ItemCard({ item }: { item: StockItem }) {
       }),
   });
 
+  const photoContext = photoContextFromRecord(item.photoContext ?? item.sku);
+  const photoCategory = String(item.photoContext?.category ?? item.photoContext?.categoria ?? item.sku.category ?? item.sku.categoria ?? "");
+  const productPhotos = item.photos.map((fileUrl, index) => ({ fileUrl, fileName: `foto-${index + 1}`, storagePath: `catalog:${fileUrl}` }));
+
+  async function savePhotoChange(path: string, change: Record<string, unknown>) {
+    await fetchJson(path, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ customer_code: customerCode, sku_code: item.skuCode, client_item_code: item.clientCode, ...change }),
+    });
+    setPhotoIndex(0);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["estoque"] }),
+      queryClient.invalidateQueries({ queryKey: ["stock-balances"] }),
+    ]);
+  }
+
+  async function approvePhotos(generated: ProductPhoto[], primaryUrl?: string) {
+    await savePhotoChange("/api/catalog/photos", {
+      photo_urls: generated.map((photo) => photo.fileUrl),
+      photo_storage_paths: generated.map((photo) => photo.storagePath), primary_photo_url: primaryUrl,
+    });
+    toast({ title: "Fotos aprovadas e adicionadas ao produto." });
+  }
+
   const photo = item.photos[photoIndex] ?? item.photos[0];
   const rows = movements.data?.items ?? [];
 
@@ -538,8 +564,8 @@ function ItemCard({ item }: { item: StockItem }) {
             <Thumb item={item} size="lg" />
           )}
           {item.photos.length > 1 ? (
-            <div className="flex gap-1">
-              {item.photos.slice(0, 4).map((url, index) => (
+            <div className="flex max-w-24 flex-wrap gap-1">
+              {item.photos.map((url, index) => (
                 <button
                   key={url}
                   type="button"
@@ -595,25 +621,14 @@ function ItemCard({ item }: { item: StockItem }) {
                     ? "Mais fotos"
                     : "Adicionar foto"}
               </Button>
-              {item.photos.length ? <div className="mt-2">
-                <ProductPhotoStudio key={`${customerCode}:${item.skuCode}`} photos={item.photos.map((fileUrl, index) => ({ fileUrl, fileName: `foto-${index + 1}`, storagePath: `catalog:${fileUrl}` }))}
-                  customerCode={customerCode} productName={item.name} category={String(item.sku.category ?? item.sku.categoria ?? "")} disabled={addPhotos.isPending}
-                  onApprove={async (generated, primaryUrl) => {
-                    await fetchJson("/api/catalog/photos", {
-                      method: "POST", headers: { "content-type": "application/json" },
-                      body: JSON.stringify({
-                        customer_code: customerCode, sku_code: item.skuCode, client_item_code: item.clientCode,
-                        photo_urls: generated.map((photo) => photo.fileUrl), photo_storage_paths: generated.map((photo) => photo.storagePath),
-                        primary_photo_url: primaryUrl,
-                      }),
-                    });
-                    setPhotoIndex(0);
-                    toast({ title: "Fotos aprovadas e adicionadas ao produto." });
-                    await Promise.all([
-                      queryClient.invalidateQueries({ queryKey: ["estoque"] }),
-                      queryClient.invalidateQueries({ queryKey: ["stock-balances"] }),
-                    ]);
-                  }} />
+              {item.photos.length ? <div className="mt-2 flex flex-wrap gap-2">
+                <ProductPhotoStudio key={`${customerCode}:${item.skuCode}`} photos={productPhotos}
+                  customerCode={customerCode} productName={item.name} category={photoCategory} context={photoContext}
+                  disabled={addPhotos.isPending} onApprove={approvePhotos} />
+                <ProductPhotoManager key={`manager:${customerCode}:${item.skuCode}`} photos={productPhotos}
+                  customerCode={customerCode} productName={item.name} category={photoCategory} context={photoContext}
+                  disabled={addPhotos.isPending} onApprove={approvePhotos}
+                  onManage={(change) => savePhotoChange("/api/catalog/photos/manage", change)} />
               </div> : null}
             </>
           ) : item.photos.length === 0 ? (

@@ -12,6 +12,8 @@ export type ProductPhoto = {
   fileName: string;
   fileUrl: string;
   storagePath: string;
+  sourceUrl?: string;
+  generated?: boolean;
 };
 
 export type ProductPhotoUploadTarget = {

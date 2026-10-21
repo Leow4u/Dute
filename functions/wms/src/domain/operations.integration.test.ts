@@ -2617,6 +2617,49 @@ describe("número do pedido e cancelamento pelo cliente", () => {
 });
 
 describe("fotos do item", () => {
+  it("gerencia principal e remoção em todas as projeções, preservando histórico e saldo", async () => {
+    const urls = ["https://example.test/original-manage.jpg", "https://example.test/generated-manage.png"];
+    const paths = ["product-photos/Cliente_Manage/original.jpg", "product-photos/Cliente_Manage/generated/first.png"];
+    const sku = db.collection("skus").doc("SKU-MANAGE");
+    const product = db.collection("products").doc("ITEM-MANAGE");
+    const balance = db.collection("stock_balances").doc("balance-manage");
+    const portal = db.collection("client_inventory").doc("cinv_Cliente_Manage__SKU-MANAGE");
+    const base = { customer_code: "Cliente Manage", photo_urls: urls, photo_storage_paths: paths, primary_photo_url: urls[0] };
+    await Promise.all([
+      sku.set({ ...base, sku_code: "SKU-MANAGE", sku_code_key: "SKU-MANAGE", estoque_atual: 9 }),
+      product.set({ ...base, cod_cliente: "ITEM-MANAGE", cod_cliente_key: "ITEM-MANAGE" }),
+      balance.set({ ...base, sku_code: "SKU-MANAGE", qty_on_hand: 9, qty_available: 9, qty_reserved: 0 }),
+      portal.set({ ...base, sku_code: "SKU-MANAGE", on_hand: 9 }),
+    ]);
+    const input = { sku_code: "SKU-MANAGE", client_item_code: "ITEM-MANAGE", customer_code: "Cliente Manage", photo_urls: [] };
+    await addCatalogPhotosTransaction(db, { ...input, primary_photo_url: urls[1], idempotency_key: "manage-primary" }, actor);
+    for (const ref of [sku, product, balance, portal]) assert.equal((await ref.get()).data()?.primary_photo_url, urls[1]);
+    const remove = { ...input, remove_photo_urls: [urls[1]!], idempotency_key: "manage-remove" };
+    await addCatalogPhotosTransaction(db, remove, actor);
+    await addCatalogPhotosTransaction(db, remove, actor);
+    for (const ref of [sku, product, balance, portal]) {
+      const data = (await ref.get()).data()!;
+      assert.deepEqual(data.photo_urls, [urls[0]]);
+      assert.deepEqual(data.photo_storage_paths, [paths[0]]);
+      assert.equal(data.primary_photo_url, urls[0]);
+    }
+    assert.equal((await sku.get()).data()?.estoque_atual, 9);
+    assert.equal((await balance.get()).data()?.qty_on_hand, 9);
+    assert.equal((await portal.get()).data()?.on_hand, 9);
+    const archive = await db.collection("catalog_photo_archive").where("sku_code", "==", "SKU-MANAGE").get();
+    assert.equal(archive.size, 1);
+    assert.deepEqual(archive.docs[0]?.data().photos, [{ url: urls[1], storage_path: paths[1] }]);
+    assert.equal(archive.docs[0]?.data().actor.uid, actor.uid);
+    await assert.rejects(addCatalogPhotosTransaction(db, { ...input, customer_code: "Outro Cliente", primary_photo_url: urls[0], idempotency_key: "manage-other-customer" }, actor), { code: "failed-precondition" });
+    await assert.rejects(addCatalogPhotosTransaction(db, { ...input, primary_photo_url: urls[1], idempotency_key: "manage-absent" }, actor), { code: "invalid-argument" });
+    await addCatalogPhotosTransaction(db, { ...input, remove_photo_urls: [urls[0]!], idempotency_key: "manage-last-photo" }, actor);
+    for (const ref of [sku, product, balance, portal]) {
+      const data = (await ref.get()).data()!;
+      assert.deepEqual(data.photo_urls, []);
+      assert.deepEqual(data.photo_storage_paths, []);
+      assert.equal(data.primary_photo_url, "");
+    }
+  });
   it("aprova foto gerada como principal, preserva original e não altera saldo", async () => {
     const original = "https://example.test/original.jpg";
     const generated = "https://example.test/generated.png";

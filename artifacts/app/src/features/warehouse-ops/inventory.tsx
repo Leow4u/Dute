@@ -1596,7 +1596,7 @@ export function OpeningInventoryWorkspace() {
                       </div>
                     )}
                     {photos.length ? <div className="mt-3">
-                      <ProductPhotoStudio key={`${customerCode}:${clientCode}`} photos={photos} customerCode={customerCode} productName={productName} category={category} disabled={photoUploading || recordOpeningLine.isPending}
+                      <ProductPhotoStudio key={`${customerCode}:${clientCode}`} photos={photos} customerCode={customerCode} productName={productName} category={category} context={{ description: productName, gender: genero, group: grupo, size, color, brand }} disabled={photoUploading || recordOpeningLine.isPending}
                         onApprove={(generated, primaryUrl) => setPhotos((current) => {
                           const merged = [...current, ...generated];
                           return primaryUrl ? [...merged.filter((photo) => photo.fileUrl === primaryUrl), ...merged.filter((photo) => photo.fileUrl !== primaryUrl)] : merged;

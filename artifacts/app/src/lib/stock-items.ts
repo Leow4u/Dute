@@ -27,6 +27,7 @@ export type StockItem = {
   low: boolean;
   zero: boolean;
   sku: AnyRecord;
+  photoContext?: AnyRecord;
 };
 
 export type StockFilter = "all" | "low" | "reserved" | "no-photo" | "zero";
@@ -162,6 +163,7 @@ export function buildStockItems({
         low: minimum !== undefined && onHand > 0 && onHand <= minimum,
         zero: onHand <= 0,
         sku,
+        photoContext: { ...product, ...Object.fromEntries(Object.entries(sku).filter(([, value]) => value !== undefined && value !== null && value !== "")) },
       };
     })
     .sort((left, right) => (left.clientCode ?? left.skuCode).localeCompare(right.clientCode ?? right.skuCode, "pt-BR"));
