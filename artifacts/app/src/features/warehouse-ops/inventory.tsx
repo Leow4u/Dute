@@ -556,6 +556,10 @@ export function OpeningInventoryWorkspace() {
       })) return;
       setPreviewError(getErrorMessage(error));
       if (variables.location_id) setManualSuggestion(undefined);
+      else {
+        setSuggestion(undefined);
+        setSuggestionContext("");
+      }
       toast({
         title: variables.location_id ? "Não consegui validar esta prateleira" : "Não consegui sugerir a posição",
         description: getErrorMessage(error),
@@ -992,6 +996,8 @@ export function OpeningInventoryWorkspace() {
     if (!code || !reason) return;
     const nextExcluded = excluded.includes(code) ? excluded : [...excluded, code];
     setRefusal({ position: code, reason });
+    setSuggestion(undefined);
+    setSuggestionContext("");
     setExcluded(nextExcluded);
     setRefusing(false);
     setRefusalReason("");

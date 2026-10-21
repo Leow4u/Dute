@@ -280,7 +280,7 @@ export default function WarehouseMapPage() {
           </div>
 
           <div className={cn("grid grid-cols-1 gap-4", desktop && panel && "lg:grid-cols-[minmax(0,1fr)_400px]")}>
-            <section className="rounded-lg border border-border bg-card">
+            <section className="@container rounded-lg border border-border bg-card">
               <div className="flex flex-col gap-2 border-b border-border/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-base font-semibold text-foreground">
@@ -309,7 +309,7 @@ export default function WarehouseMapPage() {
                           {formatNumber(group.shelves.length)} prateleira(s) · {formatNumber(group.shelves.reduce((sum, shelf) => sum + shelf.boxes.length, 0))} caixa(s)
                         </span>
                       </div>
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      <div className="grid grid-cols-1 gap-3 @lg:grid-cols-2 @3xl:grid-cols-3">
                         {group.shelves.map((shelf) => (
                           <ShelfCell
                             key={shelf.code}
