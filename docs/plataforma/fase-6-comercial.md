@@ -226,6 +226,22 @@ Storage.
     pelo cliente. Recomendo um motivo de perda "prazo de faturamento", aceito
     só com o alerta vencido, inclusive a partir de "A faturar" com a
     autorização ainda não usada na NF. (Parte 15b ou Fase 7)
+11. **A aprovação da medição fecha e valida a proposta enviada sem
+   fechamento?** Hoje não: a aprovação não registra o que o cliente não
+   respondeu. A demanda fica pendente, presa à medição, e ganha a autorização
+   dela quando for fechada, executada e validada. Recomendo um atalho na tela
+   da medição para a pendente "proposta sem fechamento", que faz os três passos
+   com o aceite sendo a própria medição aprovada. (Parte 16b)
+12. **O frete esquecido de um mês já enviado ou aprovado entra onde?** Hoje
+    a linha só entra na medição do mês da execução, que só se edita em
+    rascunho, e da enviada só se sai pela contestação do cliente. Recomendo
+    aceitar a linha na medição aberta com uma marca "execução de outro mês",
+    porque a aprovada já virou NF; a Dutelog retirar o envio (enviada para
+    rascunho) seria uma ação à parte da contestação. (Parte 16b)
+13. **O "Baixar ZIP dos pedidos" do mockup fica no v1?** O anexo da linha é
+    texto (nome e referência: o e-mail ou o OneDrive) e o Storage está fora do
+    v1. Recomendo tirar o ZIP da tela no v1 e manter o "Anexar" gravando a
+    referência. (Parte 16b)
 
 ## Registro
 
@@ -332,3 +348,91 @@ Storage.
   ao app do Comercial (hoje o `comercialStatus` e o menu só abrem a owner,
   admin e comercial). Ficam em aberto a data-base do prazo de perda do
   portal e o encerramento da demanda que o perdeu (perguntas 9 e 10).
+
+### Parte 16a: medição mensal (backend)
+
+- `medicoes/{contrato_id}_{AAAA-MM}`: uma por contrato e competência, só de
+  contrato com regime `medicao_mensal` (no regime padrão ou no de um
+  serviço). Competência repetida, futura ou fora da vigência do contrato é
+  recusada; vale a vigência atual e as anteriores, pelos aditivos
+  (`vigencia_anterior` e a vigência de cada um): o aditivo de prorrogação
+  reescreve a vigência do contrato, e a medição do mês da renovação ainda abre
+  depois dele. A variante da tabela é escolhida ao abrir (padrão: Comercial).
+- `saveMedicao` (create, upsert_line, remove_line) só no rascunho e na
+  edição vista; `advanceMedicao` faz send (rascunho → enviada), approve
+  (enviada → aprovada), contest (enviada → contestada, com nota) e reopen
+  (contestada → rascunho). Papéis: owner, admin e comercial.
+- A data da solicitação é a data-base da linha: vale a tabela do contrato
+  vigente nela, nunca a Padrão Dutelog. A linha noturna usa a tabela Noturna
+  do contrato quando ela existe na data; sem ela, e na linha diurna, vale a
+  variante da medição. Cada gravação precifica de novo todas as linhas, então
+  a tabela renovada que é carregada depois (a v1 encerrada na véspera) passa a
+  valer para as linhas pedidas na vigência dela; o evento conta as linhas que
+  mudaram. O envio só confere: se algum preço mudou desde a última gravação,
+  recusa e nada muda (grava-se a medição de novo, a pessoa confere e envia),
+  para ir ao cliente o que a pessoa viu e exportou. A conta de cada item é a
+  do orçamento: tabela, alterado (com o preço da tabela ao lado e motivo) e
+  avulso (com preço e motivo).
+- O dia da tarifa sai da data da execução (sábado, domingo ou dia útil); o
+  feriado em dia útil é informado como `domingo_feriado`. Dia útil num sábado
+  é recusado.
+- Marcas da linha: `dia_nao_bate_tarifa` quando a diária usada não cobre o
+  dia ou a janela da execução, ou quando a tabela tem uma diária que cobre
+  melhor; `rota_fora_da_tabela` para item avulso; `sem_pedido_anexo`. O dia e
+  a janela saem dos atributos do item (categoria, item, serviço, descrição, a
+  descrição do cliente na tabela e a unidade). É diária o item que diz
+  "diária", ou o de pessoa (ajudante, motorista) ou na unidade dia que diz o
+  dia da tarifa, como a tabela do Safra ("Ajudante de Sábado das 08:00 às
+  17:00", "Sáb. | 08h às 17h"). A janela sai da palavra (diurna, noturna) ou
+  do horário (das 6h às 18h é diurna; o resto, noturna). Quando a tabela tem
+  uma única diária da mesma família (o item sem dia, janela nem horário) para
+  o dia e a janela, o item guarda `trocar_por`; sem essa segurança, só a
+  marca. O servidor nunca troca o item: a tela oferece "Aplicar" e grava a
+  linha de novo. Cada item guarda a classe que o servidor calculou (`classe`:
+  diária com dias e janelas, veículo, ajudante) e a cobertura da tarifa de
+  `trocar_por` (`trocar_por_diaria`), para a tela montar "Sábado na tarifa de
+  dia útil", "Aplicar sábado" e o resumo por item sem repetir a conta.
+- A linha que cita uma demanda prende a demanda (`demands.medicao_id`): a
+  mesma demanda não entra em duas medições, e a demanda precisa ser do mesmo
+  cliente e contrato, cobrada por medição mensal (no contrato misto, a
+  demanda cobrada por demanda espera o pedido e aceite dele), sem perda nem
+  cancelamento. Retirar a última linha dela solta a demanda. A demanda presa
+  não troca de contrato (`saveQuote` recusa: seria cobrada duas vezes).
+- A aprovação cria `client_authorizations/aut_{medicao_id}` (tipo
+  `medicao_aprovada`, com as demandas autorizadas, o total aprovado, quando,
+  quem e o link) e confere de novo cada demanda (cliente, contrato, a medição
+  e a cobrança): a que não bate fica pendente sem ser tocada, e a medição
+  nunca faz as vezes da autorização de outro contrato. Vão a "a faturar" as
+  demandas que o cliente já tinha fechado: a já validada perde a pendência de
+  medição; a fechada (com ou sem a execução registrada, que então sai das
+  datas das linhas) ou com a RV de execução enviada é validada pela medição
+  (`validacao.origem: "medicao"`). Ficam pendentes, presas à medição, em
+  `demandas_pendentes` com o motivo: a perdida ou cancelada, a proposta sem
+  fechamento, a RV em montagem, o aditivo em negociação (a medição aprova as
+  linhas pela tabela, nunca o preço e o escopo do aditivo) e a que espera
+  autorização. A pendente não fica sem saída: validada depois (`validate`),
+  vai a "a faturar" com a autorização da medição, sem a pendência, e sai das
+  pendentes da medição e da autorização. A medição sem demanda também cria a
+  autorização: o que se fatura é a medição.
+- Funções puras em `domain/medicao.ts`: `competenciaAtual`,
+  `alertaMedicaoNaoEnviada` (a partir do primeiro dia do mês seguinte, com os
+  dias de atraso: o rascunho de competência anterior e, com os contratos, o
+  contrato por medição mensal sem a medição do mês que passou, só da
+  competência anterior) e `exportarDiarioDeBordo` (as 15 colunas do arquivo
+  do cliente, com o custo do veículo, o dos ajudantes e o total; o veículo e o
+  horário do ajudante são a descrição do item na tabela do cliente, a chave
+  do Diário; a linha com dois tipos de veículo sai em uma linha do Diário por
+  veículo; o solicitante é a área, nunca a pessoa; a chave orçamentária sai
+  vazia). A convenção da tabela do Safra está em `comercial-cargas.md`.
+- Eventos `medicao.created`, `line_saved`, `line_removed`, `sent`,
+  `approved`, `contested` e `reopened`, e `client_authorization.recorded`
+  com o tipo e a medição; `quote.validated` ganha a autorização da medição
+  aprovada. Sem valor, sem a OS do cliente, a área, os locais, a mercadoria
+  nem a nota da contestação. `TIPOS_AUTORIZACAO` passou para `events.ts`
+  (contratos.ts reexporta).
+- Regras: `medicoes` lê por `canReadPrices()` e ninguém grava pelo
+  navegador, como `client_authorizations` (parte 15a). A autorização da
+  medição aprovada usa o mesmo registro e o mesmo evento da 15a
+  (`client_authorization.recorded`, com `contrato_id`, `a_faturar`, `marcas`
+  e o `medicao_id`; a lista de demandas pode ser vazia).
+- Perguntas para a parte 16b: 11, 12 e 13 acima.

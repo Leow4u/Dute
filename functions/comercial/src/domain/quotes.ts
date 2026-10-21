@@ -1089,6 +1089,14 @@ async function atualizar(db: Firestore, caller: ComercialProfile, input: Atualiz
       const contratoAntes = textoOuNull(demanda.contrato_id);
       const contratoId = input.contrato_id !== undefined ? input.contrato_id : contratoAntes;
       const contratoMudou = contratoId !== contratoAntes;
+      // A demanda presa a uma medição (parte 16a) é cobrada por ela: trocar o contrato a cobraria duas vezes.
+      const medicaoDaDemanda = textoOuNull(demanda.medicao_id);
+      if (contratoMudou && medicaoDaDemanda) {
+        throw new HttpsError(
+          "failed-precondition",
+          `A demanda ${numero} está na medição ${medicaoDaDemanda}: retire a linha dela da medição antes de trocar o contrato.`,
+        );
+      }
       const contrato = contratoMudou ? await lerContrato(transaction, db, contratoId, code) : null;
       const solicitante =
         input.contato_id !== undefined ? await lerContato(transaction, db, input.contato_id, code) : undefined;

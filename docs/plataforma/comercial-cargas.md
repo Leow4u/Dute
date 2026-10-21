@@ -158,6 +158,18 @@ Código repetido em itens diferentes não é erro: vira itens distintos (o
 DTL-0126 aparece três vezes na LPU do Itaú). O relatório lista cada código
 repetido e como foi separado. Preço zero só avisa.
 
+Na tabela de contrato por medição mensal (o Safra), a medição lê o dia e a
+janela de cada tarifa nos atributos do item (fase-6-comercial.md, parte 16a):
+
+- A tarifa de ajudante diz o dia e o horário no `item` ou no `servico`, como
+  na tabela do cliente (por exemplo, "Ajudante de Segunda a Sexta das 08:00
+  às 17:00 hrs"; sábado; domingo e feriado), sem precisar da palavra
+  "diária". O horário diz a janela: depois das 18h é noturna. Cada dia e horário é um item distinto
+  (a chave do item é categoria, item, serviço e unidade, nunca a descrição).
+- A `descricao` é a chave curta que o Diário de Bordo do cliente usa: o
+  veículo ("VUC") e o dia e o horário do ajudante. O Diário exportado sai com
+  ela.
+
 ### Como gerar o CSV a partir das planilhas
 
 1. Trabalhe numa cópia da planilha, fora do repositório. Na LPU do Itaú, é a

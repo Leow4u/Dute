@@ -7,6 +7,7 @@ import { recordAuthorizationFor } from "./domain/autorizacoes.js";
 import { saveCommercialCustomerFor, saveCustomerContactFor, saveCustomerLocationFor } from "./domain/cadastro.js";
 import { registrarAditivo, salvarContrato } from "./domain/contratos.js";
 import { advanceDemandFor } from "./domain/demandas.js";
+import { advanceMedicaoFor, saveMedicaoFor } from "./domain/medicoes.js";
 import { assertAuth, comercialStatusFor, loadProfile, requireComercialCaller } from "./domain/profile.js";
 import { advanceQuoteFor, saveQuoteFor } from "./domain/quotes.js";
 import { PROJECT_ID } from "./project.js";
@@ -127,6 +128,29 @@ export const advanceQuote = onCall(async (request) => {
 export const advanceDemand = onCall(async (request) => {
   const caller = await requireComercialCaller(db, request, PROJECT_ID);
   return advanceDemandFor(db, caller, request.data);
+});
+
+// --- Medição mensal (parte 16a; domain/medicao.ts e medicoes.ts) ---------------
+
+/**
+ * A medição do mês de um contrato por medição mensal (o Safra): abrir a
+ * competência, incluir ou atualizar uma linha e retirar uma linha, só no
+ * rascunho e na edição vista. O servidor precifica cada linha pela tabela do
+ * contrato vigente na data da solicitação.
+ */
+export const saveMedicao = onCall(async (request) => {
+  const caller = await requireComercialCaller(db, request, PROJECT_ID);
+  return saveMedicaoFor(db, caller, request.data);
+});
+
+/**
+ * Enviar ao cliente, registrar a aprovação (cria a autorização de
+ * faturamento da medição e leva as demandas a "a faturar") ou a contestação
+ * do cliente, e reabrir a contestada, conferindo a situação e a edição vistas.
+ */
+export const advanceMedicao = onCall(async (request) => {
+  const caller = await requireComercialCaller(db, request, PROJECT_ID);
+  return advanceMedicaoFor(db, caller, request.data);
 });
 
 // --- Autorização de faturamento (parte 15; domain/autorizacoes.ts) ------------

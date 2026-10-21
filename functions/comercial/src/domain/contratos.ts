@@ -14,7 +14,7 @@ import {
   problemaDasFaixas,
 } from "./contratos-datas.js";
 import { isProspect } from "./customer-identity.js";
-import { REGIMES_COBRANCA, TIPOS_ADITIVO, createComercialEvent } from "./events.js";
+import { REGIMES_COBRANCA, TIPOS_ADITIVO, TIPOS_AUTORIZACAO, createComercialEvent } from "./events.js";
 import { actorPayload, canonical, compactValue, runIdempotent, type ComercialActor } from "./operations.js";
 
 /**
@@ -42,7 +42,8 @@ export const CUSTOMERS_COLLECTION = "customers";
 export const PRICE_TABLES_COLLECTION = "price_tables";
 
 export const TIPOS_NUMERO_CONTRATO = ["contrato", "sistema_cliente", "outro"] as const;
-export const TIPOS_AUTORIZACAO = ["pedido_aceite", "medicao_aprovada", "portal", "nenhuma"] as const;
+/** A lista mora em events.ts (vai no evento da autorização); daqui é reexportada. */
+export { TIPOS_AUTORIZACAO };
 export const ACOES_CONTRATO = ["criar", "atualizar"] as const;
 
 /** Tipos de aditivo que trazem vigência nova para o contrato. */

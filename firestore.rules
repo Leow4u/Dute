@@ -721,6 +721,14 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Medição mensal do Comercial (parte 16a): as linhas do mês de um
+    // contrato por medição mensal, com preço. Só as Functions do Comercial
+    // gravam (saveMedicao e advanceMedicao).
+    match /medicoes/{medicaoId} {
+      allow read: if canReadPrices();
+      allow create, update, delete: if false;
+    }
+
     match /events/{eventId} {
       allow read: if canReadObservability() || canFinanceReadEvent();
       allow create, update, delete: if false;
