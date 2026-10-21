@@ -705,6 +705,6 @@ Storage.
   emuladores (`docs/plataforma/ambiente-local.md`), como comercial, owner,
   interno e cliente. Nenhum erro de tela; os valores e as datas conferem com as
   contas. Não foi possível entrar na homologação: o login exige conta real.
-- Achados menores, sem correção nesta parte: o botão de fechar dos diálogos
-  tem o rótulo "Close" (inglês); o financeiro lê `demands` (o desenho previa
-  owner, admin e comercial; a coleção não tem preço).
+- Achado menor, sem correção nesta parte: o botão de fechar dos diálogos tem o
+  rótulo "Close" (inglês), vindo do componente de diálogo compartilhado com o
+  WMS (`components/ui/dialog.tsx`).
