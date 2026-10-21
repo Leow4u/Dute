@@ -100,6 +100,7 @@ documentação de produto e operação está em `docs/`.
   avisa) até alguém apagar com `--force`.
 - **Depois de qualquer deploy de functions, rode
   `tools/check_functions_invoker.ps1 -ProjectId <projeto>`** (padrão `dute-prod`).
+  Ele confere as callables de todas as codebases do `firebase.json`.
   Em 03/09/2026, 8 callables (incluindo `createCustomerRequest`) ficaram sem
   `roles/run.invoker` para `allUsers` e falhavam com um erro genérico antes mesmo
   do código rodar. Ver `docs/deploy-functions-manual.md`.
