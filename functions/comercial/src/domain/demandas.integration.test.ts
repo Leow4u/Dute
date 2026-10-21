@@ -711,6 +711,8 @@ describe("execução, validação e a aprovação dispensada", () => {
     const revisada = await orcamento(comercial, "revise", numero, { motivo: "execucao" }, JULHO);
     assert.deepEqual([revisada.rv, revisada.etapa, revisada.status], [1, "execucao_a_orcar", "rascunho"]);
     assert.equal((await doc(`quotes/${numero}`)).tipo_rv, "execucao");
+    // A RV de execução guarda a dispensa calculada: a tela sabe que pode oferecer "Enviar ao cliente".
+    assert.deepEqual((await doc(`quotes/${numero}`)).dispensa, { dispensada: true });
     const [mesa, cadeira] = linhasDe(await doc(`quotes/${numero}`));
     await editar(
       numero,
@@ -722,6 +724,7 @@ describe("execução, validação e a aprovação dispensada", () => {
       },
       JULHO,
     );
+    assert.deepEqual((await doc(`quotes/${numero}`)).dispensa, { dispensada: true });
 
     const enviada = await orcamento(comercial, "send", numero, {}, JULHO);
     assert.deepEqual([enviada.status, enviada.etapa], ["enviado", "aguardando_cliente"]);
@@ -759,6 +762,7 @@ describe("execução, validação e a aprovação dispensada", () => {
       },
       JULHO,
     );
+    assert.deepEqual((await doc(`quotes/${numero}`)).dispensa, { dispensada: false, motivo: "o total passa o da RV fechada" });
     await rejeita(orcamento(comercial, "send", numero, {}, JULHO), "failed-precondition", /total passa/);
     // Menos mesas, mas com uma linha avulsa: também não.
     await editar(
@@ -873,6 +877,309 @@ describe("execução, validação e a aprovação dispensada", () => {
     const validada = await demanda(comercial, "validate", criada.numero, {}, JULHO);
     assert.equal(validada.etapa, "aguardando_autorizacao");
     assert.equal(((await doc(`quotes/${criada.numero}/revisoes/0`)).resposta_cliente as Linha).tipo, "validada");
+  });
+});
+
+describe("revisão da parte 10: aditivo em negociação, recusa, descarte, dispensa e respostas", () => {
+  it("o aditivo aberto não segura a execução; recusado pelo cliente, a demanda volta ao escopo fechado e a RV seguinte não reusa o número", async () => {
+    const numero = await propostaEnviada();
+    await demanda(comercial, "close", numero);
+    const escopo = (await doc(`demands/${numero}`)).escopo;
+    const rv0 = await doc(`quotes/${numero}/revisoes/0`);
+
+    // O cliente pede um cofre a mais: RV01 de aditivo, em montagem.
+    const aberto = await orcamento(comercial, "revise", numero, { motivo: "aditivo" }, JUNHO_22);
+    assert.deepEqual([aberto.rv, aberto.etapa], [1, "em_montagem"]);
+    // O serviço é executado enquanto o aditivo é montado: a execução se registra, e a etapa segue a do aditivo.
+    const executada = await demanda(comercial, "register_execution", numero, { executado_de: "2026-06-24", executado_ate: "2026-06-25" }, JULHO);
+    assert.deepEqual([executada.etapa, executada.rv], ["em_montagem", 1]);
+    const dem = await doc(`demands/${numero}`);
+    assert.deepEqual([dem.executado_de, dem.executado_ate], ["2026-06-24", "2026-06-25"]);
+    assert.deepEqual({ ...(dem.registro_execucao as Linha), em: "x" }, { etapa_antes: "em_montagem", rv: 1, em: "x", por_uid: "com-1" });
+    const execucaoRepetida = await advanceDemandFor(
+      db,
+      comercial,
+      {
+        action: "register_execution",
+        request_id: key(),
+        numero,
+        expected_etapa: "em_montagem",
+        expected_rv: 1,
+        executado_de: "2026-06-24",
+        executado_ate: "2026-06-25",
+      },
+      { agora: JULHO },
+    );
+    assert.equal(execucaoRepetida.ja_feito, true);
+
+    // O aditivo segue: uma linha avulsa, aprovação e envio. Depois, aguardando o cliente.
+    const [mesa, cadeira] = linhasDe(await doc(`quotes/${numero}`));
+    await editar(
+      numero,
+      {
+        linhas: [
+          { id: mesa.id, origem: "tabela", lpu_item_id: "lpu_mesa", quantidade: "24" },
+          { id: cadeira.id, origem: "tabela", lpu_item_id: "lpu_cadeira", quantidade: "48" },
+          { origem: "avulso", quantidade: "1", preco: "300.00", motivo: "Fora da LPU", descricao: "Içamento de cofre" },
+        ],
+      },
+      JULHO,
+    );
+    await orcamento(comercial, "submit", numero, {}, JULHO);
+    await orcamento(owner, "approve", numero, {}, JULHO);
+    await orcamento(comercial, "send", numero, {}, JULHO);
+    assert.equal((await doc(`demands/${numero}`)).etapa, "aguardando_cliente");
+    const rv1 = await doc(`quotes/${numero}/revisoes/1`);
+
+    // A recusa não vem antes do envio do aditivo, nem é de outra coisa que não o aditivo enviado.
+    await rejeita(demanda(comercial, "refuse_addendum", numero, { em: "2026-07-14T10:00:00-03:00" }, JULHO), "invalid-argument", /antes do envio/);
+    const recusa = await demanda(comercial, "refuse_addendum", numero, { contato_id: "ct_renata", em: "2026-07-15T12:00:00-03:00" }, JULHO);
+    assert.deepEqual([recusa.etapa, recusa.rv, recusa.status, recusa.rotulo], ["execucao_a_orcar", 0, "enviado", numero]);
+
+    // O orçamento volta à RV00 como foi enviada; a RV01 guarda a recusa e nada mais muda nela.
+    const quote = await doc(`quotes/${numero}`);
+    assert.deepEqual([quote.rv, quote.tipo_rv, quote.status, quote.ultima_rv_enviada], [0, "proposta", "enviado", 1]);
+    assert.deepEqual(linhasDe(quote), linhasDe(rv0));
+    assert.deepEqual([quote.total_cents, quote.aprovacao, quote.tabela], [rv0.total_cents, rv0.aprovacao, rv0.tabela]);
+    assert.deepEqual({ ...(quote.envio as Linha) }, { por_uid: "com-1", em: rv0.enviado_em, edicao: rv0.edicao });
+    const rv1Depois = await doc(`quotes/${numero}/revisoes/1`);
+    assert.deepEqual(
+      { ...(rv1Depois.resposta_cliente as Linha), registrada_em: "x" },
+      { tipo: "recusada", em: "2026-07-15T15:00:00.000Z", contato_id: "ct_renata", link: null, registrada_por: "com-1", registrada_em: "x" },
+    );
+    assert.deepEqual({ ...rv1Depois, resposta_cliente: null }, rv1);
+    assert.deepEqual(await doc(`quotes/${numero}/revisoes/0`), rv0);
+    const depois = await doc(`demands/${numero}`);
+    assert.deepEqual([depois.escopo_rv, depois.escopo], [0, escopo]);
+    assert.deepEqual((depois.aditivos_recusados as Linha[]).map((item) => [item.rv, item.por_uid]), [[1, "com-1"]]);
+    assert.deepEqual(chavesDeDinheiro(depois), []);
+
+    // Outro toque, com outra chave: já está recusado.
+    const recusaRepetida = await advanceDemandFor(
+      db,
+      comercial,
+      { action: "refuse_addendum", request_id: key(), numero, expected_etapa: "aguardando_cliente", expected_rv: 1 },
+      { agora: JULHO },
+    );
+    assert.deepEqual([recusaRepetida.ja_feito, recusaRepetida.rv, recusaRepetida.etapa], [true, 0, "execucao_a_orcar"]);
+
+    // A RV de execução sai do escopo fechado, com o número seguinte ao do aditivo que o cliente recebeu.
+    const execucao = await orcamento(comercial, "revise", numero, { motivo: "execucao" }, JULHO);
+    assert.deepEqual([execucao.rv, execucao.etapa, execucao.rotulo], [2, "execucao_a_orcar", `${numero} – RV02`]);
+    const rv2 = await doc(`quotes/${numero}`);
+    assert.deepEqual(linhasDe(rv2).map((linha) => linha.id), linhasDe(rv0).map((linha) => linha.id));
+    assert.deepEqual(rv2.revisao_de, { rv: 0, edicao: quote.edicao, motivo: "execucao" });
+    assert.deepEqual(rv2.dispensa, { dispensada: true });
+
+    const refused = (await eventos(numero)).find((event) => event.type === "quote.refused");
+    assert.deepEqual(
+      { ...(refused?.payload as Linha), segundos_desde_anterior: 0 },
+      {
+        numero,
+        rv: 1,
+        tipo_rv: "aditivo",
+        rv_restaurada: 0,
+        etapa_antes: "aguardando_cliente",
+        etapa_depois: "execucao_a_orcar",
+        segundos_desde_anterior: 0,
+      },
+    );
+    semDinheiroNemPessoa(await eventos(numero));
+  });
+
+  it("descartar a RV seguinte não enviada: a reabertura em que o cliente aceita a RV recebida e o aditivo aberto por engano", async () => {
+    // Perdida sem resposta e reaberta (RV01 em montagem); o cliente volta aceitando a RV00 que recebeu.
+    const numero = await propostaEnviada();
+    const rv0 = await doc(`quotes/${numero}/revisoes/0`);
+    await demanda(comercial, "lose", numero, { motivo: "sem_resposta" });
+    await demanda(comercial, "reopen", numero, {}, JULHO);
+    const [mesa, cadeira] = linhasDe(await doc(`quotes/${numero}`));
+    await editar(
+      numero,
+      {
+        linhas: [
+          { id: mesa.id, origem: "tabela", lpu_item_id: "lpu_mesa", quantidade: "10" },
+          { id: cadeira.id, origem: "tabela", lpu_item_id: "lpu_cadeira", quantidade: "10" },
+        ],
+      },
+      JULHO,
+    );
+    const vista = await doc(`quotes/${numero}`);
+    const descartada = await orcamento(comercial, "discard", numero, {}, JULHO);
+    assert.deepEqual([descartada.rv, descartada.status, descartada.etapa, descartada.rotulo], [0, "enviado", "aguardando_cliente", numero]);
+    const quote = await doc(`quotes/${numero}`);
+    assert.deepEqual(linhasDe(quote), linhasDe(rv0));
+    assert.equal(quote.total_cents, rv0.total_cents);
+    assert.ok(Number(quote.edicao) > Number(vista.edicao));
+    assert.deepEqual({ ...(quote.descarte as Linha), em: "x" }, {
+      rv: 1,
+      tipo_rv: "proposta",
+      status: "rascunho",
+      edicao: vista.edicao,
+      por_uid: "com-1",
+      em: "x",
+    });
+    assert.equal(await count(`quotes/${numero}/revisoes`), 1);
+    assert.deepEqual(await doc(`quotes/${numero}/revisoes/0`), rv0);
+    const repetido = await advanceQuoteFor(
+      db,
+      comercial,
+      { action: "discard", request_id: key(), numero, expected_status: "rascunho", expected_edicao: vista.edicao },
+      { agora: JULHO },
+    );
+    assert.deepEqual([repetido.ja_feito, repetido.rv, repetido.status], [true, 0, "enviado"]);
+    // A tela velha da RV01 não grava mais.
+    await rejeita(
+      saveQuoteFor(db, comercial, { action: "update", request_id: key(), numero, expected_edicao: vista.edicao, titulo: "x" }, { agora: JULHO }),
+      "failed-precondition",
+    );
+    // A RV00 enviada recebe o fechamento.
+    const fechado = await demanda(comercial, "close", numero, {}, JULHO);
+    assert.deepEqual([fechado.etapa, fechado.rv], ["para_planejar", 0]);
+    assert.equal(((await doc(`quotes/${numero}/revisoes/0`)).resposta_cliente as Linha).tipo, "fechado");
+
+    // Aditivo aberto por engano e já aprovado: some com a cópia da aprovação; o número volta a ficar livre.
+    await orcamento(comercial, "revise", numero, { motivo: "aditivo" }, JULHO);
+    await orcamento(comercial, "submit", numero, {}, JULHO);
+    await orcamento(owner, "approve", numero, {}, JULHO);
+    assert.equal(await existe(`quotes/${numero}/revisoes/1`), true);
+    const volta = await orcamento(comercial, "discard", numero, {}, JULHO);
+    assert.deepEqual([volta.rv, volta.etapa, volta.status], [0, "para_planejar", "enviado"]);
+    assert.equal(await existe(`quotes/${numero}/revisoes/1`), false);
+    const deNovo = await orcamento(comercial, "revise", numero, { motivo: "aditivo" }, JULHO);
+    assert.equal(deNovo.rv, 1);
+
+    const descartes = (await eventos(numero)).filter((event) => event.type === "quote.discarded").map((event) => event.payload as Linha);
+    assert.deepEqual(
+      descartes.map((payload) => [payload.rv, payload.tipo_rv, payload.rv_restaurada, payload.status_antes, payload.etapa_antes, payload.etapa_depois]).sort(),
+      [
+        [1, "aditivo", 0, "aprovado", "para_enviar", "para_planejar"],
+        [1, "proposta", 0, "rascunho", "em_montagem", "aguardando_cliente"],
+      ],
+    );
+    semDinheiroNemPessoa(await eventos(numero));
+
+    // A primeira RV e a RV enviada não se descartam.
+    const { numero: novo } = await saveQuoteFor(db, comercial, proposta(), { agora: JUNHO });
+    await rejeita(orcamento(comercial, "discard", novo), "failed-precondition", /primeira RV/);
+    const enviada = await propostaEnviada();
+    await rejeita(orcamento(comercial, "discard", enviada), "failed-precondition", /enviado/);
+  });
+
+  it("dispensa: a RV de execução sem o ajuste (o desconto) da RV fechada passa pela aprovação do owner", async () => {
+    const numero = await demandaExecutada("ITAU", {
+      linhas: [
+        { origem: "tabela", lpu_item_id: "lpu_mesa", quantidade: "24" },
+        { origem: "tabela", lpu_item_id: "lpu_cadeira", quantidade: "48" },
+        { origem: "ajuste", quantidade: "1", preco: "-100.00", motivo: "Arredondamento combinado" },
+      ],
+    });
+    await orcamento(comercial, "revise", numero, { motivo: "execucao" }, JULHO);
+    const revisada = await doc(`quotes/${numero}`);
+    const [mesa, cadeira] = linhasDe(revisada);
+    // 20 mesas e sem o ajuste: 1.688,00, abaixo do fechado (1.748,00), mas o desconto aprovado sumiu.
+    await editar(
+      numero,
+      {
+        linhas: [
+          { id: mesa.id, origem: "tabela", lpu_item_id: "lpu_mesa", quantidade: "20" },
+          { id: cadeira.id, origem: "tabela", lpu_item_id: "lpu_cadeira", quantidade: "48" },
+        ],
+      },
+      JULHO,
+    );
+    await rejeita(orcamento(comercial, "send", numero, {}, JULHO), "failed-precondition", /RV fechada \(ajuste\) saiu/);
+    assert.equal(await existe(`quotes/${numero}/revisoes/1`), false);
+    assert.ok(!(await eventos(numero)).some((event) => event.type === "quote.approval_waived"));
+    // A RV guarda a dispensa calculada a cada passo: com o ajuste, e depois sem ele.
+    assert.deepEqual(revisada.dispensa, { dispensada: false, motivo: "a linha 3 é ajuste" });
+    const quote = await doc(`quotes/${numero}`);
+    assert.equal(quote.total_cents, 20 * 4000 + 48 * 1850);
+    assert.deepEqual(quote.dispensa, { dispensada: false, motivo: "a linha 3 da RV fechada (ajuste) saiu" });
+  });
+
+  it("fechado em e validado em não vêm antes do envio; validar e fechar não se confundem na repetição", async () => {
+    // Enviada em 20/06 às 12:00 (São Paulo).
+    const numero = await propostaEnviada();
+    await rejeita(demanda(comercial, "close", numero, { em: "2026-06-20T08:00:00-03:00" }), "invalid-argument", /antes do envio/);
+    // Dentro da folga do relógio (5 minutos), vale.
+    await demanda(comercial, "close", numero, { em: "2026-06-20T11:58:00-03:00" });
+    // Outra pessoa, com a tela de antes do fechamento, manda validar: não é "já feito", é recusado.
+    await rejeita(
+      advanceDemandFor(db, admin, { action: "validate", request_id: key(), numero, expected_etapa: "aguardando_cliente", expected_rv: 0 }, { agora: JUNHO_22 }),
+      "failed-precondition",
+    );
+    await demanda(comercial, "register_execution", numero, { executado_de: "2026-06-24", executado_ate: "2026-06-25" }, JULHO);
+    await orcamento(comercial, "revise", numero, { motivo: "execucao" }, JULHO);
+    await orcamento(comercial, "send", numero, {}, JULHO);
+    await rejeita(
+      demanda(comercial, "validate", numero, { em: "2026-07-14T10:00:00-03:00" }, JULHO),
+      "invalid-argument",
+      /Validado em não pode ser antes do envio/,
+    );
+
+    // O aditivo validado antes da execução vira o escopo; "fechar" repetido sobre ele não é "já feito".
+    const outra = await propostaEnviada();
+    await demanda(comercial, "close", outra);
+    await orcamento(comercial, "revise", outra, { motivo: "aditivo" }, JUNHO_22);
+    await orcamento(comercial, "submit", outra, {}, JUNHO_22);
+    await orcamento(owner, "approve", outra, {}, JUNHO_22);
+    await orcamento(comercial, "send", outra, {}, JUNHO_22);
+    const validado = await demanda(comercial, "validate", outra, {}, JUNHO_22);
+    assert.deepEqual([validado.etapa, validado.rv], ["para_planejar", 1]);
+    const dem = await doc(`demands/${outra}`);
+    assert.deepEqual([dem.escopo_rv, dem.escopo_origem], [1, "aditivo"]);
+    await rejeita(
+      advanceDemandFor(db, comercial, { action: "close", request_id: key(), numero: outra, expected_etapa: "aguardando_cliente", expected_rv: 1 }, { agora: JUNHO_22 }),
+      "failed-precondition",
+    );
+    const validaDeNovo = await advanceDemandFor(
+      db,
+      comercial,
+      { action: "validate", request_id: key(), numero: outra, expected_etapa: "aguardando_cliente", expected_rv: 1 },
+      { agora: JUNHO_22 },
+    );
+    assert.equal(validaDeNovo.ja_feito, true);
+  });
+
+  it("item inativo depois do fechamento: a RV de execução herdada continua editável; linha nova com ele, não", async () => {
+    const numero = await demandaExecutada();
+    await db.doc("lpu_items/lpu_cadeira").update({ ativo: false });
+    await orcamento(comercial, "revise", numero, { motivo: "execucao" }, JULHO);
+    await editar(numero, { titulo: "Mudança de layout · 12º andar (execução)" }, JULHO);
+    const [mesa, cadeira] = linhasDe(await doc(`quotes/${numero}`));
+    await editar(
+      numero,
+      {
+        linhas: [
+          { id: mesa.id, origem: "tabela", lpu_item_id: "lpu_mesa", quantidade: "20" },
+          { id: cadeira.id, origem: "tabela", lpu_item_id: "lpu_cadeira", quantidade: "40" },
+        ],
+      },
+      JULHO,
+    );
+    const quote = await doc(`quotes/${numero}`);
+    assert.deepEqual(
+      linhasDe(quote).map((linha) => [linha.id, linha.lpu_item_id, linha.quantidade, linha.preco]),
+      [
+        [mesa.id, "lpu_mesa", "20", "40.00"],
+        [cadeira.id, "lpu_cadeira", "40", "18.50"],
+      ],
+    );
+    await rejeita(
+      editar(
+        numero,
+        {
+          linhas: [
+            { id: mesa.id, origem: "tabela", lpu_item_id: "lpu_mesa", quantidade: "20" },
+            { origem: "tabela", lpu_item_id: "lpu_cadeira", quantidade: "1" },
+          ],
+        },
+        JULHO,
+      ),
+      "invalid-argument",
+      /inativo/,
+    );
   });
 });
 

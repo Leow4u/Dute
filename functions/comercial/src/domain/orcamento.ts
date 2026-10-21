@@ -74,6 +74,12 @@ export type ContextoDePreco = {
   itens: ReadonlyMap<string, ItemDoCatalogo>;
   /** Id da linha nova, pela posição. */
   novoId: (indice: number) => string;
+  /**
+   * A linha já gravada com este item (o mesmo id e o mesmo item da RV ou da
+   * edição anterior): o item vale como estava, mesmo se depois ficou inativo
+   * ou deixou de ser orçável no catálogo. A tabela continua conferida.
+   */
+  herdada?: (linhaId: string | undefined, lpuItemId: string) => boolean;
 };
 
 export type LinhaDoOrcamento = {
@@ -198,9 +204,12 @@ function itemConferido(
   id: string,
   contexto: ContextoDePreco,
   falha: (mensagem: string) => ErroOrcamento,
+  linhaId?: string,
 ): ItemDoCatalogo {
   const item = contexto.itens.get(id);
   if (!item) throw falha(`o item ${id} não está no catálogo.`);
+  // A linha que já tinha este item continua com ele (a RV seguinte herda as linhas da enviada).
+  if (contexto.herdada?.(linhaId, id)) return item;
   if (!item.orcavel) throw falha("armazenagem não passa por orçamento (a cobrança é do WMS).");
   if (!item.ativo) throw falha(`o item ${item.item} está inativo no catálogo.`);
   return item;
@@ -222,7 +231,7 @@ function precificarLinha(
 
   if (entrada.origem === "tabela" || entrada.origem === "alterado") {
     if (!lpuItemId) throw falha("informe o item do catálogo.");
-    const item = itemConferido(lpuItemId, contexto, falha);
+    const item = itemConferido(lpuItemId, contexto, falha, entrada.id);
     if (!contexto.tabela) throw falha("o orçamento está sem tabela; use item avulso.");
     if (!Object.prototype.hasOwnProperty.call(contexto.tabela.precos, lpuItemId)) {
       throw falha(`o item ${item.item} está fora da tabela; use item avulso.`);
@@ -260,7 +269,7 @@ function precificarLinha(
     if (descricao.length < 2) throw falha("o item avulso pede a descrição.");
     let item: ItemDoCatalogo | null = null;
     if (lpuItemId) {
-      item = itemConferido(lpuItemId, contexto, falha);
+      item = itemConferido(lpuItemId, contexto, falha, entrada.id);
       if (contexto.tabela && Object.prototype.hasOwnProperty.call(contexto.tabela.precos, lpuItemId)) {
         throw falha("o item está na tabela; use a linha da tabela (com outro preço e motivo, se for o caso).");
       }
@@ -431,8 +440,10 @@ export type Dispensa = { dispensada: true } | { dispensada: false; motivo: strin
  * desenho, recomendação aceita)? Só quando, em relação à RV fechada, mudam
  * apenas quantidades de linhas de tabela: nenhuma linha nova (todo id vem da
  * RV fechada), nenhuma alterada, avulsa ou de ajuste, o mesmo item e o mesmo
- * preço da mesma tabela, e o total não passa o da RV fechada. Linha tirada
- * vale (é quantidade zero). Fora disso, a RV passa pela aprovação do owner.
+ * preço da mesma tabela, e o total não passa o da RV fechada. Linha de tabela
+ * tirada vale (é quantidade zero). Linha alterada, avulsa ou de ajuste da RV
+ * fechada não pode sair: tirar o desconto combinado (o ajuste) subiria o
+ * preço aprovado sem o owner. Fora disso, a RV passa pela aprovação do owner.
  */
 export function dispensaDaAprovacao(atual: RvParaComparar & { tipo_rv: string }, fechada: RvParaComparar | null): Dispensa {
   if (atual.tipo_rv !== "execucao") return { dispensada: false, motivo: "só a RV de execução dispensa a aprovação" };
@@ -451,19 +462,26 @@ export function dispensaDaAprovacao(atual: RvParaComparar & { tipo_rv: string },
       return { dispensada: false, motivo: `a linha ${numero} mudou além da quantidade` };
     }
   }
+  const ficaram = new Set(atual.linhas.map((linha) => linha.id));
+  for (const [indice, linha] of fechada.linhas.entries()) {
+    if (linha.origem !== "tabela" && !ficaram.has(linha.id)) {
+      return { dispensada: false, motivo: `a linha ${indice + 1} da RV fechada (${linha.origem}) saiu` };
+    }
+  }
   if (atual.total_cents > fechada.total_cents) return { dispensada: false, motivo: "o total passa o da RV fechada" };
   return { dispensada: true };
 }
 
 // --- Transições -------------------------------------------------------------------------
 
-export const ACOES_ORCAMENTO = ["submit", "return", "approve", "edit", "send", "approve_and_send", "revise"] as const;
+export const ACOES_ORCAMENTO = ["submit", "return", "approve", "edit", "send", "approve_and_send", "revise", "discard"] as const;
 export type AcaoOrcamento = (typeof ACOES_ORCAMENTO)[number];
 
 /**
  * De onde cada ação sai e aonde chega. Até o envio, a mesma RV; "revise" abre
  * a RV seguinte em rascunho. "send" sai do aprovado e, só com a aprovação
- * dispensada (RV de execução), do rascunho.
+ * dispensada (RV de execução), do rascunho. "discard" descarta a RV seguinte
+ * ainda não enviada e volta à RV enviada de onde ela saiu.
  */
 export const TRANSICOES: Record<AcaoOrcamento, { de: readonly StatusDoOrcamento[]; para: StatusDoOrcamento }> = {
   submit: { de: ["rascunho"], para: "para_aprovar" },
@@ -473,6 +491,7 @@ export const TRANSICOES: Record<AcaoOrcamento, { de: readonly StatusDoOrcamento[
   send: { de: ["aprovado", "rascunho"], para: "enviado" },
   approve_and_send: { de: ["para_aprovar"], para: "enviado" },
   revise: { de: ["enviado"], para: "rascunho" },
+  discard: { de: ["rascunho", "para_aprovar", "aprovado"], para: "enviado" },
 };
 
 const ROTULO_STATUS: Record<StatusDoOrcamento, string> = {
@@ -494,6 +513,9 @@ export type ProblemaDaAcao = { codigo: "permission-denied" | "failed-preconditio
  *   "Aprovar e enviar" é do owner, do "para aprovar".
  * - Devolve o aprovador (com nota) ou quem montou (puxa de volta).
  * - Enviar do rascunho só com a aprovação dispensada (dispensaDaAprovacao).
+ * - Descartar a RV seguinte não enviada: qualquer um do Comercial; do "para
+ *   aprovar", como devolver, o aprovador ou quem montou. Se há RV enviada
+ *   para voltar, quem confere é a callable (revisao_de).
  */
 export function problemaDaAcao(
   acao: AcaoOrcamento,
@@ -512,6 +534,9 @@ export function problemaDaAcao(
   }
   if (acao === "return" && !aprovador && !autor) {
     return { codigo: "permission-denied", mensagem: "Devolve o aprovador ou quem montou o orçamento." };
+  }
+  if (acao === "discard" && orcamento.status === "para_aprovar" && !aprovador && !autor) {
+    return { codigo: "permission-denied", mensagem: "Do \"para aprovar\", descarta a RV o aprovador ou quem a montou." };
   }
   const transicao = TRANSICOES[acao];
   if (!transicao.de.includes(orcamento.status)) {
@@ -544,6 +569,7 @@ export function problemaDaAcao(
  * - Enviar: enviado na edição vista (o envio não muda a edição).
  * - Revisar: a RV atual saiu da edição vista, com o mesmo motivo (a revisão
  *   sobe a edição, que segue subindo de uma RV para a outra).
+ * - Descartar: o último descarte foi da edição vista.
  */
 export function acaoJaFeita(
   acao: AcaoOrcamento,
@@ -553,9 +579,13 @@ export function acaoJaFeita(
     aprovacao: { edicao: number } | null;
     envio?: { edicao: number } | null;
     revisao_de?: { edicao: number; motivo: string } | null;
+    descarte?: { edicao: number } | null;
   },
   esperado: { status: StatusDoOrcamento; edicao: number; motivo?: string | null },
 ): boolean {
+  if (acao === "discard") {
+    return TRANSICOES.discard.de.includes(esperado.status) && atual.status === "enviado" && atual.descarte?.edicao === esperado.edicao;
+  }
   if (acao === "approve") {
     if (atual.status === "aprovado") return atual.aprovacao?.edicao === esperado.edicao;
     // Aprovado e já enviado por outra pessoa: a aprovação vista também está feita.

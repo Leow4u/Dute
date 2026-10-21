@@ -107,8 +107,9 @@ export const saveQuote = onCall(async (request) => {
 /**
  * Enviar para aprovação, devolver, aprovar (só o owner; congela a RV em
  * revisoes), editar o aprovado, enviar ao cliente (congela a RV de vez),
- * aprovar e enviar (só o owner) e revisar (a RV enviada ganha a seguinte),
- * conferindo a situação e a edição vistas.
+ * aprovar e enviar (só o owner), revisar (a RV enviada ganha a seguinte) e
+ * descartar a RV seguinte ainda não enviada, conferindo a situação e a edição
+ * vistas.
  */
 export const advanceQuote = onCall(async (request) => {
   const caller = await requireComercialCaller(db, request, PROJECT_ID);
@@ -117,8 +118,8 @@ export const advanceQuote = onCall(async (request) => {
 
 /**
  * A demanda depois do envio: fechada pelo cliente (o prospect vira cliente),
- * perdida com motivo, reaberta, executada e validada pelo cliente,
- * conferindo a etapa e a RV vistas.
+ * perdida com motivo, reaberta, executada, validada pelo cliente e com o
+ * aditivo recusado, conferindo a etapa e a RV vistas.
  */
 export const advanceDemand = onCall(async (request) => {
   const caller = await requireComercialCaller(db, request, PROJECT_ID);

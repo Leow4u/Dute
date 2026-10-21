@@ -1,4 +1,4 @@
-import { FieldValue, type DocumentReference, type Firestore, type Transaction } from "firebase-admin/firestore";
+import { FieldValue, type DocumentReference, type DocumentSnapshot, type Firestore, type Transaction } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 import { z } from "zod";
 
@@ -87,14 +87,20 @@ import {
  * partes 9 e 10): as callables saveQuote (criar, orçar a execução da demanda
  * direta, editar o rascunho e duplicar) e advanceQuote (enviar para
  * aprovação, devolver, aprovar, editar o aprovado, enviar ao cliente, aprovar
- * e enviar, e abrir a RV seguinte da enviada). O que o cliente responde e o
- * que acontece com a demanda depois (fechar, perder, reabrir, registrar a
- * execução, validar) fica em demandas.ts (advanceDemand).
+ * e enviar, abrir a RV seguinte da enviada e descartá-la antes do envio). O
+ * que o cliente responde e o que acontece com a demanda depois (fechar,
+ * perder, reabrir, registrar a execução, validar, recusar o aditivo) fica em
+ * demandas.ts (advanceDemand).
  *
  * - Até o envio, corrigir regrava a mesma RV (e `revisoes/{rv}` na
  *   aprovação). O envio congela `revisoes/{rv}` de vez; mudar depois é a RV
  *   seguinte ("revise"), com as mesmas linhas e ids, a mesma data-base e a
- *   mesma tabela. A edição continua subindo de uma RV para a outra.
+ *   mesma tabela. A edição continua subindo de uma RV para a outra. A RV
+ *   seguinte ainda não enviada pode ser descartada ("discard"): o orçamento
+ *   volta à RV enviada de onde ela saiu.
+ * - A RV de execução guarda em `dispensa` se o envio dispensa a aprovação
+ *   (calculada contra a RV fechada a cada passo); quem decide é o envio, que
+ *   calcula de novo.
  *
  * - `demands/{numero}` não tem preço; `quotes/{numero}` tem, com o mesmo
  *   número, tirado de `demand_counters/geral` na transação que cria os dois.
@@ -149,8 +155,8 @@ export function instanteComFuso(rotulo: string) {
     .transform((value) => new Date(value).toISOString());
 }
 const recebidaEm = instanteComFuso("Recebido em");
-/** Folga do relógio do aparelho para instante informado no futuro. */
-const FOLGA_DO_RELOGIO_MS = 5 * 60 * 1000;
+/** Folga do relógio do aparelho para instante informado no futuro (ou antes do envio). */
+export const FOLGA_DO_RELOGIO_MS = 5 * 60 * 1000;
 /** Link de e-mail ou de portal: só https:// (ou http://). */
 export const linkDaEntrada = textoOpcional(2000).refine(
   (value) => value == null || /^https?:\/\/\S+$/i.test(value),
@@ -647,12 +653,16 @@ function precificar(
   tabela: TabelaLida | null,
   itens: ReadonlyMap<string, ItemDoCatalogo>,
   operationId: string,
+  gravadas: readonly LinhaDoOrcamento[] = [],
 ): Precificado {
+  // A linha já gravada com o mesmo item continua com ele, mesmo inativo depois (orcamento.ts, herdada).
+  const herdadas = new Set(gravadas.filter((linha) => linha.lpu_item_id).map((linha) => `${linha.id}|${linha.lpu_item_id}`));
   try {
     return precificarLinhas(entradas, {
       tabela: tabela ? { id: tabela.id, precos: tabela.precos } : null,
       itens,
       novoId: (indice) => novoIdDeLinha(operationId, indice),
+      herdada: (linhaId, lpuItemId) => linhaId !== undefined && herdadas.has(`${linhaId}|${lpuItemId}`),
     });
   } catch (error) {
     comoErroDaCallable(error);
@@ -667,7 +677,7 @@ export function linhasGravadas(valor: unknown): LinhaDoOrcamento[] {
   return Array.isArray(valor) ? (valor as LinhaDoOrcamento[]) : [];
 }
 
-const QUOTE_EVENT: Record<Exclude<AcaoOrcamento, "approve_and_send" | "revise">, ComercialEventType> = {
+const QUOTE_EVENT: Record<Exclude<AcaoOrcamento, "approve_and_send" | "revise" | "discard">, ComercialEventType> = {
   submit: "quote.submitted",
   return: "quote.returned",
   approve: "quote.approved",
@@ -683,6 +693,7 @@ const ROTULO_DA_ACAO: Record<AcaoOrcamento, string> = {
   send: "enviar ao cliente",
   approve_and_send: "aprovar e enviar",
   revise: "revisar",
+  discard: "descartar a RV",
 };
 
 // --- saveQuote: criar --------------------------------------------------------------------
@@ -797,6 +808,15 @@ async function criar(db: Firestore, caller: ComercialProfile, input: CriarInput 
           iso,
           uid: caller.uid,
         }),
+        // A RV de execução da demanda direta não tem RV fechada para comparar: passa pela aprovação.
+        ...(direta
+          ? {
+              dispensa: dispensaDaAprovacao(
+                { linhas: precificado.linhas, total_cents: precificado.total_cents, tabela_id: tabela?.id ?? null, tipo_rv: "execucao" },
+                null,
+              ),
+            }
+          : {}),
         request_id: input.request_id,
         operation_id: operationId,
       };
@@ -890,9 +910,12 @@ function demandaNova(dados: DemandaNova): Record<string, unknown> {
     duplicado_de: dados.duplicado_de,
     // Escopo fechado, execução, validação e perda (parte 10); OS (Fase 3); cancelamento (reservado).
     escopo_rv: null,
+    escopo_origem: null,
     escopo: [],
     executado_de: dados.executado?.de ?? null,
     executado_ate: dados.executado?.ate ?? null,
+    registro_execucao: null,
+    aditivos_recusados: [],
     validacao: null,
     medicao_pendente: false,
     os_seq: 0,
@@ -1104,8 +1127,13 @@ async function atualizar(db: Firestore, caller: ComercialProfile, input: Atualiz
             })
           : linhasAntes.map((linha) => entradaDaLinha(linha, true)));
 
-      // Conta.
-      const precificado = precificar(entradas, tabela, itens, operationId);
+      // A RV de execução compara com a RV fechada: a tela sabe se o envio dispensa a aprovação.
+      const escopoRv = rvFechada(demanda);
+      const fechadaSnap =
+        quote.tipo_rv === "execucao" && escopoRv !== null ? await transaction.get(revisaoRef(db, numero, escopoRv)) : null;
+
+      // Conta. O item da linha que já estava gravada com ele vale, mesmo inativo depois no catálogo.
+      const precificado = precificar(entradas, tabela, itens, operationId, linhasAntes);
       // A marca da duplicação fica enquanto a linha mantém o preço.
       const anteriores = new Map(linhasAntes.map((linha) => [linha.id, linha]));
       for (const linha of precificado.linhas) {
@@ -1158,6 +1186,13 @@ async function atualizar(db: Firestore, caller: ComercialProfile, input: Atualiz
       if (input.condicoes !== undefined) quotePatch.condicoes = input.condicoes;
       if (input.validade_dias !== undefined) quotePatch.validade_dias = input.validade_dias;
       if (input.observacoes_internas !== undefined) quotePatch.observacoes_internas = input.observacoes_internas;
+      if (quote.tipo_rv === "execucao") {
+        const fechada = fechadaSnap?.exists ? rvParaComparar(fechadaSnap.data() ?? {}) : null;
+        quotePatch.dispensa = dispensaDaAprovacao(
+          { linhas: precificado.linhas, total_cents: precificado.total_cents, tabela_id: tabela?.id ?? null, tipo_rv: "execucao" },
+          fechada,
+        );
+      }
       transaction.update(quoteRef(db, numero), quotePatch);
 
       const rv = Number(quote.rv ?? 0);
@@ -1476,15 +1511,26 @@ export type RvSeguinte = {
 };
 
 /**
+ * A maior RV já enviada ao cliente, quando o orçamento voltou a uma RV mais
+ * antiga (o aditivo recusado volta ao escopo fechado): a RV seguinte nunca
+ * reusa o número de uma RV que o cliente recebeu. -1 quando não há.
+ */
+function ultimaRvEnviada(quote: Dados): number {
+  const valor = quote.ultima_rv_enviada;
+  return typeof valor === "number" && Number.isInteger(valor) ? valor : -1;
+}
+
+/**
  * A RV seguinte da enviada, em rascunho, no mesmo `quotes/{numero}`: as
  * mesmas linhas (com os mesmos ids), a mesma data-base, a mesma tabela, as
  * mesmas condições. Quem abre passa a ser o autor. A edição continua subindo
  * (nunca volta a 1), para uma tela aberta na RV anterior não gravar na nova.
- * A RV enviada fica como está em `revisoes/{rv}`.
+ * A RV enviada fica como está em `revisoes/{rv}`. O número segue a maior RV
+ * já enviada (ultima_rv_enviada), quando o orçamento voltou a uma anterior.
  */
 export function rvSeguinte(numero: string, quote: Dados, motivo: OrigemRevisao, quem: { uid: string; iso: string }): RvSeguinte {
   const rvAnterior = Number(quote.rv ?? 0);
-  const rv = rvAnterior + 1;
+  const rv = Math.max(rvAnterior, ultimaRvEnviada(quote)) + 1;
   if (rv > 99) throw new HttpsError("failed-precondition", `O orçamento ${numero} chegou à RV99: abra um orçamento novo.`);
   const tipoAtual = (TIPOS_RV as readonly string[]).includes(String(quote.tipo_rv)) ? (quote.tipo_rv as TipoRv) : "proposta";
   const tipo = tipoDaRevisao(motivo, tipoAtual);
@@ -1504,6 +1550,7 @@ export function rvSeguinte(numero: string, quote: Dados, motivo: OrigemRevisao, 
       autor_uid: quem.uid,
       aprovacao: null,
       aprovacao_dispensada: null,
+      dispensa: null,
       devolucao: null,
       envio: null,
       revisao_de: { rv: rvAnterior, edicao: edicaoAnterior, motivo },
@@ -1512,6 +1559,72 @@ export function rvSeguinte(numero: string, quote: Dados, motivo: OrigemRevisao, 
       updated_by: quem.uid,
     },
   };
+}
+
+export type RvRestaurada = {
+  rv: number;
+  tipo_rv: TipoRv;
+  edicao: number;
+  patch: Record<string, unknown>;
+};
+
+/**
+ * O orçamento de volta a uma RV já enviada, como ela está em `revisoes/{rv}`
+ * (linhas, totais, tabela, aprovação e envio): a RV seguinte descartada antes
+ * do envio, ou o aditivo recusado pelo cliente. A edição continua subindo, e
+ * ultima_rv_enviada guarda a maior RV que o cliente recebeu, para a próxima
+ * RV não reusar o número. As observações internas ficam como estão.
+ */
+export function rvRestaurada(
+  numero: string,
+  quote: Dados,
+  enviada: Dados,
+  rvsEnviadas: readonly number[],
+  quem: { uid: string; iso: string },
+): RvRestaurada {
+  const rv = Number(enviada.rv);
+  const tipo = (TIPOS_RV as readonly string[]).includes(String(enviada.tipo_rv)) ? (enviada.tipo_rv as TipoRv) : "proposta";
+  const edicao = Number(quote.edicao) + 1;
+  return {
+    rv,
+    tipo_rv: tipo,
+    edicao,
+    patch: {
+      rv,
+      rotulo: rotuloDoOrcamento(numero, rv),
+      tipo_rv: tipo,
+      status: "enviado",
+      edicao,
+      data_base: enviada.data_base,
+      tabela: enviada.tabela,
+      linhas: enviada.linhas,
+      subtotal_cents: enviada.subtotal_cents,
+      ajustes_cents: enviada.ajustes_cents,
+      total_cents: enviada.total_cents,
+      marcas: enviada.marcas,
+      condicoes: enviada.condicoes ?? null,
+      validade_dias: enviada.validade_dias ?? null,
+      autor_uid: enviada.autor_uid ?? null,
+      aprovacao: enviada.aprovacao ?? null,
+      aprovacao_dispensada: enviada.aprovacao_dispensada ?? null,
+      dispensa: null,
+      devolucao: null,
+      envio: { por_uid: enviada.enviado_por ?? null, em: enviada.enviado_em ?? null, edicao: Number(enviada.edicao) },
+      revisao_de: enviada.revisao_de ?? null,
+      ultima_rv_enviada: Math.max(ultimaRvEnviada(quote), rv, ...rvsEnviadas),
+      passo_em: quem.iso,
+      updated_at: FieldValue.serverTimestamp(),
+      updated_by: quem.uid,
+    },
+  };
+}
+
+/** A RV congelada que serve de volta: tem de existir e ter sido enviada ao cliente. */
+export function rvEnviadaParaVoltar(snapshot: DocumentSnapshot, numero: string, rv: number): Dados {
+  if (!snapshot.exists || !snapshot.get("enviado_em")) {
+    throw new HttpsError("failed-precondition", `A ${rotuloDoOrcamento(numero, rv)} não está congelada como enviada: não há RV para voltar.`);
+  }
+  return snapshot.data() ?? {};
 }
 
 type ContextoDoPasso = {
@@ -1527,13 +1640,20 @@ type ContextoDoPasso = {
   iso: string;
 };
 
-/** "Revisar": a RV enviada ganha a seguinte, em rascunho. */
-function revisar(contexto: ContextoDoPasso, motivo: OrigemRevisao): { target_id: string; result: AdvanceQuoteResult } {
+/**
+ * "Revisar": a RV enviada ganha a seguinte, em rascunho. A RV de execução já
+ * sai com a dispensa da aprovação calculada contra a RV fechada.
+ */
+function revisar(
+  contexto: ContextoDoPasso,
+  motivo: OrigemRevisao,
+  dispensa: Dispensa | null,
+): { target_id: string; result: AdvanceQuoteResult } {
   const { transaction, db, numero, demanda, quote, caller, iso } = contexto;
   const seguinte = rvSeguinte(numero, quote, motivo, { uid: caller.uid, iso });
   const etapaAntes = demanda.etapa as EtapaDemanda;
   const etapaDepois = etapaDaDemanda(demanda, { status: "rascunho", tipo_rv: seguinte.tipo_rv, rv: seguinte.rv });
-  transaction.update(quoteRef(db, numero), seguinte.patch);
+  transaction.update(quoteRef(db, numero), { ...seguinte.patch, dispensa });
 
   const mudouEtapa = etapaDepois !== etapaAntes;
   const demandaPatch: Record<string, unknown> = { updated_at: FieldValue.serverTimestamp(), updated_by: caller.uid };
@@ -1598,10 +1718,108 @@ function revisar(contexto: ContextoDoPasso, motivo: OrigemRevisao): { target_id:
 }
 
 /**
+ * "Descartar": a RV seguinte, ainda não enviada (rascunho, para aprovar ou
+ * aprovada), sai, e o orçamento volta à RV enviada de onde ela saiu
+ * (revisao_de), como está em `revisoes/{rv}`. Serve para o aditivo aberto por
+ * engano, a revisão de que o cliente desistiu e a reabertura em que o cliente
+ * volta aceitando a RV que recebeu. A RV descartada nunca chegou ao cliente:
+ * o número fica livre, e a cópia gravada na aprovação, sem envio, sai junto.
+ */
+function descartar(
+  contexto: ContextoDoPasso,
+  enviada: Dados,
+  revisaoAtual: DocumentSnapshot | null,
+): { target_id: string; result: AdvanceQuoteResult } {
+  const { transaction, db, numero, demanda, quote, caller, iso } = contexto;
+  const rvDescartada = Number(quote.rv ?? 0);
+  const tipoDescartado = (TIPOS_RV as readonly string[]).includes(String(quote.tipo_rv)) ? (quote.tipo_rv as TipoRv) : "proposta";
+  if (revisaoAtual?.exists && revisaoAtual.get("enviado_em")) {
+    throw new HttpsError("failed-precondition", `A ${rotuloDoOrcamento(numero, rvDescartada)} já foi enviada ao cliente: não se descarta.`);
+  }
+  const restaurada = rvRestaurada(numero, quote, enviada, [], { uid: caller.uid, iso });
+  const etapaAntes = demanda.etapa as EtapaDemanda;
+  const etapaDepois = etapaDaDemanda(demanda, { status: "enviado", tipo_rv: restaurada.tipo_rv, rv: restaurada.rv });
+  transaction.update(quoteRef(db, numero), {
+    ...restaurada.patch,
+    descarte: {
+      rv: rvDescartada,
+      tipo_rv: tipoDescartado,
+      status: quote.status,
+      edicao: Number(quote.edicao),
+      por_uid: caller.uid,
+      em: iso,
+    },
+  });
+  if (revisaoAtual?.exists) transaction.delete(revisaoAtual.ref);
+
+  const mudouEtapa = etapaDepois !== etapaAntes;
+  const demandaPatch: Record<string, unknown> = { updated_at: FieldValue.serverTimestamp(), updated_by: caller.uid };
+  if (mudouEtapa) {
+    demandaPatch.etapa = etapaDepois;
+    demandaPatch.etapa_desde = iso;
+    demandaPatch.marcos = marcosComEtapa(demanda, etapaDepois, { em: iso, por_uid: caller.uid });
+  }
+  transaction.update(demandRef(db, numero), demandaPatch);
+
+  const comum = {
+    operation_id: contexto.operationId,
+    entity_id: numero,
+    customer_code: texto(demanda.customer_code),
+    actor: contexto.actor,
+    occurred_at: iso,
+  };
+  const events = [
+    createComercialEvent(transaction, db, {
+      ...comum,
+      type: "quote.discarded",
+      payload: {
+        numero,
+        rv: rvDescartada,
+        tipo_rv: tipoDescartado,
+        rv_restaurada: restaurada.rv,
+        edicao: restaurada.edicao,
+        status_antes: quote.status as StatusOrcamento,
+        etapa_antes: etapaAntes,
+        etapa_depois: etapaDepois,
+      },
+    }).id,
+  ];
+  if (mudouEtapa) {
+    events.push(
+      createComercialEvent(transaction, db, {
+        ...comum,
+        type: "demand.stage_changed",
+        payload: {
+          numero,
+          etapa_antes: etapaAntes,
+          etapa_depois: etapaDepois,
+          segundos_desde_anterior: segundosDesde(demanda.etapa_desde, contexto.instante),
+        },
+      }).id,
+    );
+  }
+  return {
+    target_id: numero,
+    result: {
+      ok: true,
+      numero,
+      rotulo: rotuloDoOrcamento(numero, restaurada.rv),
+      rv: restaurada.rv,
+      edicao: restaurada.edicao,
+      status: "enviado",
+      etapa: etapaDepois,
+      ja_feito: false,
+      events,
+    },
+  };
+}
+
+/**
  * Callable advanceQuote: enviar para aprovação, devolver, aprovar, editar o
  * aprovado, enviar ao cliente (do aprovado; do rascunho, só a RV de execução
- * com a aprovação dispensada), aprovar e enviar (owner) e revisar (a RV
- * enviada ganha a seguinte). A demanda perdida não anda até ser reaberta.
+ * com a aprovação dispensada), aprovar e enviar (owner), revisar (a RV
+ * enviada ganha a seguinte) e descartar a RV seguinte ainda não enviada. A
+ * demanda perdida não anda até ser reaberta.
  */
 export async function advanceQuoteFor(
   db: Firestore,
@@ -1653,17 +1871,22 @@ export async function advanceQuoteFor(
       });
 
       // Enviar do rascunho só com a aprovação dispensada: a RV de execução contra a RV fechada pelo cliente.
+      // A RV de execução aberta pela revisão já sai com a dispensa calculada (a tela sabe o que oferecer).
       const escopoRv = rvFechada(demanda);
+      const tipoDepois = acao === "revise" && input.motivo ? tipoDaRevisao(input.motivo, tipoRv) : tipoRv;
+      const comparaComFechada =
+        tipoDepois === "execucao" && escopoRv !== null && ((acao === "send" && status === "rascunho") || acao === "revise");
+      const fechadaSnap = comparaComFechada ? await transaction.get(revisaoRef(db, numero, escopoRv)) : null;
+      const fechada: RvParaComparar | null = fechadaSnap?.exists ? rvParaComparar(fechadaSnap.data() ?? {}) : null;
       let dispensa: Dispensa | undefined;
       if (acao === "send" && status === "rascunho") {
-        let fechada: RvParaComparar | null = null;
-        if (tipoRv === "execucao" && escopoRv !== null) {
-          const snapshot = await transaction.get(revisaoRef(db, numero, escopoRv));
-          if (snapshot.exists) fechada = rvParaComparar(snapshot.data() ?? {});
-        }
         dispensa = dispensaDaAprovacao({ ...rvParaComparar(quote), tipo_rv: tipoRv }, fechada);
       }
-      const revisaoAtual = acao === "send" ? await transaction.get(revisaoRef(db, numero, rv)) : null;
+      const revisaoAtual = acao === "send" || acao === "discard" ? await transaction.get(revisaoRef(db, numero, rv)) : null;
+      // Descartar volta à RV enviada de onde a atual saiu (revisao_de).
+      const origem = (quote.revisao_de ?? null) as { rv?: unknown } | null;
+      const rvDeVolta = acao === "discard" && typeof origem?.rv === "number" ? origem.rv : null;
+      const deVoltaSnap = rvDeVolta !== null ? await transaction.get(revisaoRef(db, numero, rvDeVolta)) : null;
 
       // Papel antes de tudo (quem não pode, não fica sabendo se já foi feito); a situação, depois da conferência.
       const problema = problemaDaAcao(acao, { uid: caller.uid, role: caller.role }, {
@@ -1680,6 +1903,7 @@ export async function advanceQuoteFor(
           aprovacao,
           envio: (quote.envio ?? null) as { edicao: number } | null,
           revisao_de: (quote.revisao_de ?? null) as { edicao: number; motivo: string } | null,
+          descarte: (quote.descarte ?? null) as { edicao: number } | null,
         },
         { status: input.expected_status, edicao: input.expected_edicao, motivo: input.motivo ?? null },
       );
@@ -1707,7 +1931,18 @@ export async function advanceQuoteFor(
         const motivo = input.motivo as (typeof MOTIVOS_REVISAO)[number];
         const problemaRevisao = problemaDaRevisao(motivo, { ...demanda, etapa: demanda.etapa as EtapaDemanda });
         if (problemaRevisao) throw new HttpsError("failed-precondition", problemaRevisao);
-        return revisar(contexto, motivo);
+        const dispensaPrevista =
+          tipoDepois === "execucao" ? dispensaDaAprovacao({ ...rvParaComparar(quote), tipo_rv: "execucao" }, fechada) : null;
+        return revisar(contexto, motivo, dispensaPrevista);
+      }
+      if (acao === "discard") {
+        if (rvDeVolta === null || !deVoltaSnap) {
+          throw new HttpsError(
+            "failed-precondition",
+            `A ${rotuloDoOrcamento(numero, rv)} é a primeira RV: não há RV enviada para voltar. Para desistir do serviço, perca a demanda.`,
+          );
+        }
+        return descartar(contexto, rvEnviadaParaVoltar(deVoltaSnap, numero, rvDeVolta), revisaoAtual);
       }
 
       const dispensada = acao === "send" && status === "rascunho";

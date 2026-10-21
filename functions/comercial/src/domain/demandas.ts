@@ -13,6 +13,8 @@ import {
   escopoDasLinhas,
   etapaDaDemanda,
   problemaDaPerda,
+  problemaDaRecusaDoAditivo,
+  problemaDoRegistroDaExecucao,
   problemaDaValidacao,
   reaberturaAbreRv,
   rotuloDaEtapa,
@@ -22,6 +24,7 @@ import {
   validacaoDaDemanda,
   type EtapaDemanda,
   type MotivoPerda,
+  type OrigemDoEscopo,
   type StatusOrcamento,
   type TipoRv,
 } from "./demanda.js";
@@ -29,6 +32,7 @@ import { createComercialEvent } from "./events.js";
 import { runIdempotent, type ComercialActor } from "./operations.js";
 import type { ComercialProfile } from "./profile.js";
 import {
+  FOLGA_DO_RELOGIO_MS,
   actorOf,
   assertComercialCaller,
   conferirNaoFuturo,
@@ -43,6 +47,8 @@ import {
   marcosComEtapa,
   quoteRef,
   revisaoRef,
+  rvEnviadaParaVoltar,
+  rvRestaurada,
   rvSeguinte,
   texto,
   textoOuNull,
@@ -64,11 +70,15 @@ import {
  * - reopen: perdida volta à etapa de antes; a proposta enviada e recusada
  *   volta a ser montada numa RV nova.
  * - register_execution: o período executado, de "para planejar" para
- *   "execução a orçar".
+ *   "execução a orçar"; também com um aditivo em negociação, que não segura
+ *   o serviço.
  * - validate: o cliente validou a RV de execução ou de aditivo enviada (ou a
  *   RV fechada, quando a execução não teve desvio). Leva a "aguardando
  *   autorização" quando o contrato exige o "pode faturar" do cliente, ou a
  *   "a faturar".
+ * - refuse_addendum: o cliente recusou o aditivo enviado. A resposta fica na
+ *   RV do aditivo e o orçamento volta à RV do escopo fechado, com a etapa
+ *   dela ("para planejar" ou "execução a orçar").
  *
  * Por que uma callable própria, e não ações no advanceQuote: estas ações
  * mudam a demanda e registram a resposta do cliente, não a situação do
@@ -121,8 +131,9 @@ const Reabrir = z.object({ action: z.literal("reopen"), ...conferencia }).strict
 const RegistrarExecucao = z
   .object({ action: z.literal("register_execution"), ...conferencia, executado_de: dataDaEntrada, executado_ate: dataDaEntrada })
   .strict();
+const RecusarAditivo = z.object({ action: z.literal("refuse_addendum"), ...conferencia, ...resposta }).strict();
 
-export const AdvanceDemandInput = z.discriminatedUnion("action", [Fechar, Validar, Perder, Reabrir, RegistrarExecucao]);
+export const AdvanceDemandInput = z.discriminatedUnion("action", [Fechar, Validar, Perder, Reabrir, RegistrarExecucao, RecusarAditivo]);
 export type AdvanceDemandInput = z.infer<typeof AdvanceDemandInput>;
 
 export type AdvanceDemandResult = {
@@ -155,17 +166,28 @@ type Contexto = {
 
 type Trabalho = { target_id: string; result: AdvanceDemandResult };
 
-/** A ação já foi feita sobre o que a tela viu: repetir só devolve o estado. */
+/** O escopo veio desta origem, nesta RV, e a demanda já saiu de "aguardando cliente". */
+function escopoJaGravado(demanda: Dados, input: AdvanceDemandInput, origem: OrigemDoEscopo): boolean {
+  return (
+    input.expected_etapa === "aguardando_cliente" &&
+    rvFechada(demanda) === input.expected_rv &&
+    demanda.escopo_origem === origem &&
+    demanda.etapa !== "aguardando_cliente"
+  );
+}
+
+/**
+ * A ação já foi feita sobre o que a tela viu: repetir só devolve o estado.
+ * Cada ação se reconhece pelo que só ela grava (o escopo do fechamento, o do
+ * aditivo, a validação, a perda, a reabertura, o registro da execução, a
+ * recusa): uma não passa pela outra.
+ */
 function acaoDaDemandaJaFeita(input: AdvanceDemandInput, demanda: Dados): boolean {
-  const etapa = demanda.etapa as EtapaDemanda;
   switch (input.action) {
     case "close":
-      return input.expected_etapa === "aguardando_cliente" && rvFechada(demanda) === input.expected_rv && etapa !== "aguardando_cliente";
+      return escopoJaGravado(demanda, input, "fechamento");
     case "validate":
-      return (
-        validacaoDaDemanda(demanda)?.rv === input.expected_rv ||
-        (input.expected_etapa === "aguardando_cliente" && rvFechada(demanda) === input.expected_rv && etapa !== "aguardando_cliente")
-      );
+      return validacaoDaDemanda(demanda)?.rv === input.expected_rv || escopoJaGravado(demanda, input, "aditivo");
     case "lose": {
       const perda = demanda.perda as { motivo?: unknown; etapa_antes?: unknown; rv?: unknown } | null | undefined;
       return Boolean(perda) && perda?.etapa_antes === input.expected_etapa && perda?.motivo === input.motivo && perda?.rv === input.expected_rv;
@@ -174,8 +196,14 @@ function acaoDaDemandaJaFeita(input: AdvanceDemandInput, demanda: Dados): boolea
       const anteriores = Array.isArray(demanda.perdas_anteriores) ? (demanda.perdas_anteriores as Array<{ rv?: unknown }>) : [];
       return input.expected_etapa === "perdida" && !demanda.perda && anteriores.at(-1)?.rv === input.expected_rv;
     }
-    case "register_execution":
-      return input.expected_etapa === "para_planejar" && demandaExecutada(demanda) && etapa !== "para_planejar" && rvFechada(demanda) === input.expected_rv;
+    case "register_execution": {
+      const registro = demanda.registro_execucao as { etapa_antes?: unknown; rv?: unknown } | null | undefined;
+      return demandaExecutada(demanda) && registro?.etapa_antes === input.expected_etapa && registro?.rv === input.expected_rv;
+    }
+    case "refuse_addendum": {
+      const recusas = Array.isArray(demanda.aditivos_recusados) ? (demanda.aditivos_recusados as Array<{ rv?: unknown }>) : [];
+      return input.expected_etapa === "aguardando_cliente" && recusas.some((recusa) => recusa.rv === input.expected_rv);
+    }
   }
 }
 
@@ -268,22 +296,44 @@ function virarCliente(contexto: Contexto, cadastro: CadastroEncontrado, events: 
  */
 type CampoDaResposta = "resposta_cliente" | "validacao_cliente";
 
-/** A RV congelada que recebe a resposta do cliente: tem de existir, estar enviada e ainda sem essa resposta. */
-function revisaoParaResponder(snapshot: DocumentSnapshot, numero: string, rv: number, campo: CampoDaResposta): void {
+/**
+ * A RV congelada que recebe a resposta do cliente: tem de existir, estar
+ * enviada e ainda sem essa resposta. A resposta não vem antes do envio (além
+ * da folga do relógio): a linha do tempo fica em ordem.
+ */
+function revisaoParaResponder(
+  snapshot: DocumentSnapshot,
+  numero: string,
+  rv: number,
+  campo: CampoDaResposta,
+  resposta: { em: string; rotulo: string },
+): void {
   if (!snapshot.exists) {
     throw new HttpsError("failed-precondition", `A RV ${rotuloDoOrcamento(numero, rv)} não foi congelada no envio. Envie antes de registrar a resposta.`);
   }
-  if (!snapshot.get("enviado_em")) {
+  const enviadoEm = snapshot.get("enviado_em");
+  if (!enviadoEm) {
     throw new HttpsError("failed-precondition", `A RV ${rotuloDoOrcamento(numero, rv)} ainda não foi enviada ao cliente.`);
   }
   if (snapshot.get(campo)) {
     throw new HttpsError("failed-precondition", `A RV ${rotuloDoOrcamento(numero, rv)} já tem essa resposta do cliente.`);
   }
+  if (Date.parse(resposta.em) < Date.parse(String(enviadoEm)) - FOLGA_DO_RELOGIO_MS) {
+    throw new HttpsError(
+      "invalid-argument",
+      `${resposta.rotulo} não pode ser antes do envio da ${rotuloDoOrcamento(numero, rv)} ao cliente.`,
+    );
+  }
 }
 
 type RespostaEntrada = { em?: string; contato_id?: string | null; link?: string | null };
 
-function respostaDoCliente(tipo: "fechado" | "validada", entrada: RespostaEntrada, contexto: Contexto, contatoId: string | null) {
+function respostaDoCliente(
+  tipo: "fechado" | "validada" | "recusada",
+  entrada: RespostaEntrada,
+  contexto: Contexto,
+  contatoId: string | null,
+) {
   return {
     tipo,
     em: entrada.em ?? contexto.iso,
@@ -311,7 +361,7 @@ async function fechar(contexto: Contexto, input: z.infer<typeof Fechar>): Promis
 
   // Leituras.
   const revisao = await transaction.get(revisaoRef(db, numero, rv));
-  revisaoParaResponder(revisao, numero, rv, "resposta_cliente");
+  revisaoParaResponder(revisao, numero, rv, "resposta_cliente", { em: input.em ?? contexto.iso, rotulo: "Fechado em" });
   const contato = input.contato_id ? await lerContato(transaction, db, input.contato_id, code) : null;
   const cadastro = await cadastroPeloCodigo(transaction, db, code);
 
@@ -320,6 +370,7 @@ async function fechar(contexto: Contexto, input: z.infer<typeof Fechar>): Promis
   transaction.update(revisao.ref, { resposta_cliente: respostaDoCliente("fechado", input, contexto, contato?.contato_id ?? null) });
   const patch: Record<string, unknown> = {
     escopo_rv: rv,
+    escopo_origem: "fechamento" satisfies OrigemDoEscopo,
     escopo: escopoDasLinhas(linhasGravadas(revisao.get("linhas"))),
   };
   const etapaDepois = etapaDaDemanda({ ...demanda, ...patch }, { status: "enviado", tipo_rv: String(quote.tipo_rv), rv });
@@ -425,18 +476,23 @@ function reabrir(contexto: Contexto): Trabalho {
   return resultado(contexto, etapaDepois, events, quoteDepois);
 }
 
-/** O período executado: de "para planejar" para "execução a orçar". */
+/**
+ * O período executado: de "para planejar" para "execução a orçar". Com um
+ * aditivo em negociação, a execução fica registrada e a etapa segue a do
+ * aditivo; recusado o aditivo, a demanda volta à execução a orçar.
+ */
 function registrarExecucao(contexto: Contexto, input: z.infer<typeof RegistrarExecucao>): Trabalho {
-  const { transaction, db, numero, demanda, quote } = contexto;
-  if (demanda.etapa !== "para_planejar") {
-    throw new HttpsError(
-      "failed-precondition",
-      `A demanda está ${rotuloDaEtapa(demanda.etapa as EtapaDemanda)}: a execução se registra na demanda fechada, para planejar.`,
-    );
-  }
-  conferirPeriodoExecutado(input.executado_de, input.executado_ate, contexto.instante);
-  const patch: Record<string, unknown> = { executado_de: input.executado_de, executado_ate: input.executado_ate };
+  const { transaction, db, numero, demanda, quote, caller, iso } = contexto;
   const rv = Number(quote.rv ?? 0);
+  const etapaAntes = demanda.etapa as EtapaDemanda;
+  const problema = problemaDoRegistroDaExecucao({ ...demanda, etapa: etapaAntes }, { tipo_rv: String(quote.tipo_rv), rv });
+  if (problema) throw new HttpsError("failed-precondition", problema);
+  conferirPeriodoExecutado(input.executado_de, input.executado_ate, contexto.instante);
+  const patch: Record<string, unknown> = {
+    executado_de: input.executado_de,
+    executado_ate: input.executado_ate,
+    registro_execucao: { etapa_antes: etapaAntes, rv, em: iso, por_uid: caller.uid },
+  };
   const etapaDepois = etapaDaDemanda({ ...demanda, ...patch }, { status: String(quote.status), tipo_rv: String(quote.tipo_rv), rv });
   const events = [
     createComercialEvent(transaction, db, {
@@ -471,7 +527,7 @@ async function validar(contexto: Contexto, input: z.infer<typeof Validar>): Prom
   const semDesvio = rvFechada(demanda) === rv;
   const campo: CampoDaResposta = semDesvio ? "validacao_cliente" : "resposta_cliente";
   const revisao = await transaction.get(revisaoRef(db, numero, rv));
-  revisaoParaResponder(revisao, numero, rv, campo);
+  revisaoParaResponder(revisao, numero, rv, campo, { em: input.em ?? iso, rotulo: "Validado em" });
   const contato = input.contato_id ? await lerContato(transaction, db, input.contato_id, code) : null;
   const contratoId = textoOuNull(demanda.contrato_id);
   let autorizacao: unknown = null;
@@ -491,6 +547,7 @@ async function validar(contexto: Contexto, input: z.infer<typeof Validar>): Prom
   if (aditivoAntesDaExecucao) {
     // O aditivo validado antes da execução amplia o escopo: a demanda volta a "para planejar" com ele.
     patch.escopo_rv = rv;
+    patch.escopo_origem = "aditivo" satisfies OrigemDoEscopo;
     patch.escopo = escopoDasLinhas(linhasGravadas(revisao.get("linhas")));
   } else {
     patch.validacao = {
@@ -527,12 +584,71 @@ async function validar(contexto: Contexto, input: z.infer<typeof Validar>): Prom
   return resultado(contexto, etapaDepois, events);
 }
 
+/**
+ * O cliente recusou o aditivo enviado: a resposta fica na RV do aditivo
+ * (resposta_cliente "recusada") e o orçamento volta à RV do escopo fechado,
+ * como ela está em `revisoes/{escopo_rv}`. A demanda volta à etapa do escopo
+ * ("para planejar", ou "execução a orçar" se a execução já foi registrada).
+ * A RV seguinte não reusa o número do aditivo, que o cliente recebeu.
+ */
+async function recusarAditivo(contexto: Contexto, input: z.infer<typeof RecusarAditivo>): Promise<Trabalho> {
+  const { transaction, db, numero, demanda, quote, caller, iso } = contexto;
+  const rv = Number(quote.rv ?? 0);
+  const code = texto(demanda.customer_code);
+  const etapaAntes = demanda.etapa as EtapaDemanda;
+  const problema = problemaDaRecusaDoAditivo(
+    { ...demanda, etapa: etapaAntes },
+    { status: String(quote.status), tipo_rv: String(quote.tipo_rv), rv },
+  );
+  if (problema) throw new HttpsError("failed-precondition", problema);
+  const escopoRv = rvFechada(demanda) as number;
+
+  // Leituras.
+  const [revisao, escopoSnap] = await transaction.getAll(revisaoRef(db, numero, rv), revisaoRef(db, numero, escopoRv));
+  revisaoParaResponder(revisao, numero, rv, "resposta_cliente", { em: input.em ?? iso, rotulo: "Recusado em" });
+  const escopo = rvEnviadaParaVoltar(escopoSnap, numero, escopoRv);
+  const contato = input.contato_id ? await lerContato(transaction, db, input.contato_id, code) : null;
+
+  // Escritas.
+  transaction.update(revisao.ref, { resposta_cliente: respostaDoCliente("recusada", input, contexto, contato?.contato_id ?? null) });
+  const restaurada = rvRestaurada(numero, quote, escopo, [rv], { uid: caller.uid, iso });
+  transaction.update(quoteRef(db, numero), restaurada.patch);
+  const recusas = Array.isArray(demanda.aditivos_recusados) ? demanda.aditivos_recusados : [];
+  const patch: Record<string, unknown> = {
+    aditivos_recusados: [...recusas, { rv, em: input.em ?? iso, por_uid: caller.uid, registrada_em: iso }],
+  };
+  const quoteDepois: Dados = { ...quote, ...restaurada.patch };
+  const etapaDepois = etapaDaDemanda(
+    { ...demanda, ...patch },
+    { status: "enviado", tipo_rv: restaurada.tipo_rv, rv: restaurada.rv },
+  );
+  const events = [
+    createComercialEvent(transaction, db, {
+      ...comum(contexto),
+      type: "quote.refused",
+      payload: {
+        numero,
+        rv,
+        tipo_rv: quote.tipo_rv as TipoRv,
+        rv_restaurada: restaurada.rv,
+        etapa_antes: etapaAntes,
+        etapa_depois: etapaDepois,
+        segundos_desde_anterior: segundosDesde(demanda.etapa_desde, contexto.instante),
+      },
+    }).id,
+  ];
+  mudarEtapa(contexto, patch, etapaDepois, events);
+  gravarDemanda(contexto, patch);
+  return resultado(contexto, etapaDepois, events, quoteDepois);
+}
+
 // --- Callable ----------------------------------------------------------------------------
 
 /**
  * Callable advanceDemand: fechar (close), perder (lose), reabrir (reopen),
- * registrar a execução (register_execution) e validar (validate), conferindo
- * a etapa e a RV que a tela viu.
+ * registrar a execução (register_execution), validar (validate) e registrar
+ * a recusa do aditivo (refuse_addendum), conferindo a etapa e a RV que a tela
+ * viu.
  */
 export async function advanceDemandFor(
   db: Firestore,
@@ -543,8 +659,9 @@ export async function advanceDemandFor(
   assertComercialCaller(caller);
   const input = parseEntrada(AdvanceDemandInput, data);
   const agora = opcoes.agora ?? (() => new Date());
-  if (input.action === "close" || input.action === "validate") {
-    conferirNaoFuturo(input.em, agora(), input.action === "close" ? "Fechado em" : "Validado em");
+  if (input.action === "close" || input.action === "validate" || input.action === "refuse_addendum") {
+    const rotulo = { close: "Fechado em", validate: "Validado em", refuse_addendum: "Recusado em" }[input.action];
+    conferirNaoFuturo(input.em, agora(), rotulo);
   }
   const actor = actorOf(caller);
   const numero = input.numero;
@@ -585,6 +702,8 @@ export async function advanceDemandFor(
           return registrarExecucao(contexto, input);
         case "validate":
           return validar(contexto, input);
+        case "refuse_addendum":
+          return recusarAditivo(contexto, input);
       }
     },
   );

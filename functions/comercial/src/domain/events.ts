@@ -235,6 +235,31 @@ export const COMERCIAL_EVENT_PAYLOADS = {
       etapa_depois: etapa.optional(),
     })
     .strict(),
+  /** A RV seguinte, ainda não enviada, descartada: o orçamento volta à RV enviada de onde ela saiu. */
+  "quote.discarded": z
+    .object({
+      numero,
+      rv,
+      tipo_rv: tipoRv,
+      rv_restaurada: rv,
+      edicao,
+      status_antes: statusOrcamento,
+      etapa_antes: etapa,
+      etapa_depois: etapa,
+    })
+    .strict(),
+  /** O aditivo enviado, recusado pelo cliente: a demanda volta ao escopo fechado (rv_restaurada). */
+  "quote.refused": z
+    .object({
+      numero,
+      rv,
+      tipo_rv: tipoRv,
+      rv_restaurada: rv,
+      etapa_antes: etapa,
+      etapa_depois: etapa,
+      segundos_desde_anterior: segundos.optional(),
+    })
+    .strict(),
   /** RV de execução ou de aditivo validada pelo cliente. */
   "quote.validated": z
     .object({
@@ -403,6 +428,11 @@ function daRevisao(revisao: number): string {
   return revisao === 0 ? "do orçamento original" : `da RV${String(revisao).padStart(2, "0")}`;
 }
 
+/** "ao orçamento original", "à RV01". */
+function aRevisao(revisao: number): string {
+  return revisao === 0 ? "ao orçamento original" : `à RV${String(revisao).padStart(2, "0")}`;
+}
+
 function dataRotulo(value: string): string {
   const [ano, mes, dia] = value.split("-");
   return `${dia}/${mes}/${ano}`;
@@ -487,6 +517,14 @@ const TEMPLATES: Templates = {
   "quote.revised": (p) => ({
     title: `${orcamento(p.numero, p.rv)} aberto`,
     description: `Revisão de ${TIPO_RV_ROTULO[p.tipo_rv]} a partir ${daRevisao(p.rv_anterior)}. Motivo: ${ORIGEM_REVISAO_ROTULO[p.motivo]}.`,
+  }),
+  "quote.discarded": (p) => ({
+    title: `${orcamento(p.numero, p.rv)} descartado`,
+    description: `Revisão de ${TIPO_RV_ROTULO[p.tipo_rv]} descartada antes do envio; o orçamento volta ${aRevisao(p.rv_restaurada)}.`,
+  }),
+  "quote.refused": (p) => ({
+    title: `${orcamento(p.numero, p.rv)} recusado pelo cliente`,
+    description: `Revisão de ${TIPO_RV_ROTULO[p.tipo_rv]} recusada; a demanda volta ao escopo ${daRevisao(p.rv_restaurada)}.`,
   }),
   "quote.validated": (p) => ({
     title: `${orcamento(p.numero, p.rv)} validado pelo cliente`,

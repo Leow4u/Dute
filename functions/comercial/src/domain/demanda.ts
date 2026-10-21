@@ -87,12 +87,18 @@ function preenchido(valor: unknown): boolean {
 export const ETAPAS_DA_VALIDACAO = ["aguardando_autorizacao", "a_faturar"] as const satisfies readonly EtapaDemanda[];
 export type EtapaDaValidacao = (typeof ETAPAS_DA_VALIDACAO)[number];
 
+/** De onde veio o escopo da demanda: o fechamento da proposta, ou o aditivo validado antes da execução. */
+export const ORIGENS_DO_ESCOPO = ["fechamento", "aditivo"] as const;
+export type OrigemDoEscopo = (typeof ORIGENS_DO_ESCOPO)[number];
+
 /** O que a demanda já registrou e muda a etapa (partes 9 e 10). */
 export type EstadoDaDemanda = {
   perda?: unknown;
   cancelamento?: unknown;
   /** A RV fechada pelo cliente (o escopo); null antes do fechamento. */
   escopo_rv?: unknown;
+  /** De onde veio o escopo (ORIGENS_DO_ESCOPO). */
+  escopo_origem?: unknown;
   /** Início da execução registrada; null antes dela. */
   executado_de?: unknown;
   /** A RV validada pelo cliente e a etapa a que a validação levou. */
@@ -275,6 +281,58 @@ export function problemaDaRevisao(motivo: MotivoRevisao, demanda: EstadoDaDemand
         ? null
         : `A demanda está ${ETAPA_ROTULO[etapa]}: o aditivo sai de para planejar ou da execução a orçar.`;
   }
+}
+
+// --- Aditivo em negociação ----------------------------------------------------------------
+
+/**
+ * A RV em curso é um aditivo ainda sem o sim do cliente, sobre a demanda
+ * fechada: em montagem, para aprovar, para enviar ou esperando o cliente. O
+ * escopo fechado continua valendo enquanto ele é negociado.
+ */
+export function aditivoEmNegociacao(
+  demanda: EstadoDaDemanda,
+  orcamento: { tipo_rv: string; rv: number; status?: string },
+): boolean {
+  const fechada = rvFechada(demanda);
+  return orcamento.tipo_rv === "aditivo" && fechada !== null && fechada !== orcamento.rv && validacaoDaDemanda(demanda) === null;
+}
+
+/**
+ * Por que a execução não pode ser registrada agora, ou null. Na demanda
+ * fechada e ainda não executada: em "para planejar" ou com um aditivo em
+ * negociação (o serviço não espera o aditivo).
+ */
+export function problemaDoRegistroDaExecucao(
+  demanda: EstadoDaDemanda & { etapa: EtapaDemanda },
+  orcamento: { tipo_rv: string; rv: number; status?: string },
+): string | null {
+  if (demandaExecutada(demanda)) return "A execução desta demanda já foi registrada.";
+  if (demanda.etapa === "para_planejar") return null;
+  if (
+    aditivoEmNegociacao(demanda, orcamento) &&
+    (["em_montagem", "para_aprovar", "para_enviar", "aguardando_cliente"] as readonly string[]).includes(demanda.etapa)
+  ) {
+    return null;
+  }
+  return `A demanda está ${ETAPA_ROTULO[demanda.etapa]}: a execução se registra na demanda fechada, para planejar (ou com o aditivo em negociação).`;
+}
+
+/**
+ * Por que o cliente não pode recusar a RV atual como aditivo, ou null: só o
+ * aditivo enviado, esperando o cliente, sobre a demanda fechada. Recusado, a
+ * demanda volta ao escopo fechado.
+ */
+export function problemaDaRecusaDoAditivo(
+  demanda: EstadoDaDemanda & { etapa: EtapaDemanda },
+  orcamento: { status: string; tipo_rv: string; rv: number },
+): string | null {
+  if (orcamento.tipo_rv !== "aditivo") return "Só o aditivo se recusa assim: a proposta recusada é perdida (lose); a execução se revisa.";
+  if (orcamento.status !== "enviado" || demanda.etapa !== "aguardando_cliente") {
+    return `A demanda está ${ETAPA_ROTULO[demanda.etapa]}: a recusa é do aditivo enviado, esperando o cliente. O que não foi enviado se descarta (discard).`;
+  }
+  if (!aditivoEmNegociacao(demanda, orcamento)) return "O aditivo já tem a resposta do cliente.";
+  return null;
 }
 
 // --- Validação do cliente -----------------------------------------------------------------

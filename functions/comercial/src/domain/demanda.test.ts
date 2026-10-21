@@ -13,9 +13,12 @@ import {
   destinoDaValidacao,
   escopoDasLinhas,
   etapaDaDemanda,
+  aditivoEmNegociacao,
   problemaDaPerda,
+  problemaDaRecusaDoAditivo,
   problemaDaRevisao,
   problemaDaValidacao,
+  problemaDoRegistroDaExecucao,
   proximoNumero,
   reaberturaAbreRv,
   rotuloDoOrcamento,
@@ -254,6 +257,41 @@ describe("revisão (RV+1) e validação", () => {
     assert.match(
       String(problemaDaValidacao({ etapa: "execucao_a_orcar", escopo_rv: 0 }, { status: "rascunho", tipo_rv: "execucao", rv: 1 })),
       /enviada/,
+    );
+  });
+
+  it("aditivo em negociação: a execução se registra mesmo com ele aberto; a recusa é só do aditivo enviado", () => {
+    const fechada = { escopo_rv: 0 };
+    const aditivo = (status: string, rv = 1) => ({ status, tipo_rv: "aditivo", rv });
+    assert.equal(aditivoEmNegociacao(fechada, aditivo("rascunho")), true);
+    assert.equal(aditivoEmNegociacao({}, aditivo("rascunho")), false);
+    // O aditivo validado antes da execução virou o escopo: não está mais em negociação.
+    assert.equal(aditivoEmNegociacao({ escopo_rv: 1 }, aditivo("enviado")), false);
+    assert.equal(aditivoEmNegociacao({ ...fechada, validacao: { rv: 1, etapa: "a_faturar" } }, aditivo("enviado")), false);
+    assert.equal(aditivoEmNegociacao(fechada, { status: "rascunho", tipo_rv: "execucao", rv: 1 }), false);
+
+    // Registrar a execução: para planejar, ou com o aditivo aberto em qualquer passo até a resposta do cliente.
+    assert.equal(problemaDoRegistroDaExecucao({ etapa: "para_planejar", ...fechada }, { tipo_rv: "proposta", rv: 0 }), null);
+    for (const etapa of ["em_montagem", "para_aprovar", "para_enviar", "aguardando_cliente"] as const) {
+      assert.equal(problemaDoRegistroDaExecucao({ etapa, ...fechada }, aditivo("rascunho")), null, etapa);
+    }
+    assert.match(String(problemaDoRegistroDaExecucao({ etapa: "aguardando_cliente" }, { tipo_rv: "proposta", rv: 0 })), /fechada/);
+    assert.match(
+      String(problemaDoRegistroDaExecucao({ etapa: "em_montagem", ...fechada, executado_de: "2026-10-16" }, aditivo("rascunho"))),
+      /já foi registrada/,
+    );
+    assert.match(
+      String(problemaDoRegistroDaExecucao({ etapa: "execucao_a_orcar", ...fechada, executado_de: "2026-10-16" }, { tipo_rv: "proposta", rv: 0 })),
+      /já foi registrada/,
+    );
+
+    // Recusar: o aditivo enviado, esperando o cliente.
+    assert.equal(problemaDaRecusaDoAditivo({ etapa: "aguardando_cliente", ...fechada }, aditivo("enviado")), null);
+    assert.match(String(problemaDaRecusaDoAditivo({ etapa: "em_montagem", ...fechada }, aditivo("rascunho"))), /descarta/);
+    assert.match(String(problemaDaRecusaDoAditivo({ etapa: "aguardando_cliente" }, { status: "enviado", tipo_rv: "proposta", rv: 0 })), /perdida/);
+    assert.match(
+      String(problemaDaRecusaDoAditivo({ etapa: "aguardando_cliente", ...fechada }, { status: "enviado", tipo_rv: "execucao", rv: 1 })),
+      /Só o aditivo/,
     );
   });
 

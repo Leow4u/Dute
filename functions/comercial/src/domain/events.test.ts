@@ -103,6 +103,25 @@ const EXEMPLOS: Record<ComercialEventType, Record<string, unknown>> = {
     etapa_antes: "execucao_a_orcar",
     etapa_depois: "execucao_a_orcar",
   },
+  "quote.discarded": {
+    numero: "10045",
+    rv: 2,
+    tipo_rv: "aditivo",
+    rv_restaurada: 1,
+    edicao: 9,
+    status_antes: "aprovado",
+    etapa_antes: "para_enviar",
+    etapa_depois: "para_planejar",
+  },
+  "quote.refused": {
+    numero: "10045",
+    rv: 2,
+    tipo_rv: "aditivo",
+    rv_restaurada: 1,
+    etapa_antes: "aguardando_cliente",
+    etapa_depois: "execucao_a_orcar",
+    segundos_desde_anterior: 86_400,
+  },
   "quote.validated": {
     numero: "10045",
     rv: 1,
@@ -583,6 +602,21 @@ describe("evento gravado", () => {
     const reaberta = buildComercialEvent({ ...base, type: "demand.reopened", payload: EXEMPLOS["demand.reopened"] as never });
     assert.equal(reaberta.description, "Volta para Em montagem, com a RV01 aberta.");
     assert.equal(reaberta.entity_type, "demand");
+  });
+
+  it("parte 10: RV descartada antes do envio e aditivo recusado, com a RV para onde o orçamento volta", () => {
+    const descartada = buildComercialEvent({ ...base, type: "quote.discarded", payload: EXEMPLOS["quote.discarded"] as never });
+    assert.equal(descartada.title, "Orçamento 10045 – RV02 descartado");
+    assert.equal(descartada.description, "Revisão de aditivo descartada antes do envio; o orçamento volta à RV01.");
+    assert.equal(descartada.entity_type, "quote");
+    const recusada = buildComercialEvent({ ...base, type: "quote.refused", payload: { ...EXEMPLOS["quote.refused"], rv_restaurada: 0 } as never });
+    assert.equal(recusada.title, "Orçamento 10045 – RV02 recusado pelo cliente");
+    assert.equal(recusada.description, "Revisão de aditivo recusada; a demanda volta ao escopo do orçamento original.");
+    assert.equal(
+      COMERCIAL_EVENT_PAYLOADS["quote.refused"].safeParse({ ...EXEMPLOS["quote.refused"], rv_restaurada: undefined }).success,
+      false,
+      "recusa sem a RV de volta",
+    );
   });
 
   it("passo do orçamento (parte 9): segundos de meses cabem, e linhas por origem são só contagens", () => {
