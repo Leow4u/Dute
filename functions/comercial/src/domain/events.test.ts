@@ -168,8 +168,31 @@ const EXEMPLOS: Record<ComercialEventType, Record<string, unknown>> = {
   },
   "client_authorization.recorded": { autorizacao_id: "aut_0001", demandas: ["10045", "10046"] },
   "medicao.created": { medicao_id: "safra-2026-10", contrato_id: "safra-2026", competencia: "2026-10", demandas: 7 },
+  "medicao.line_saved": {
+    medicao_id: "safra-2026_2026-10",
+    competencia: "2026-10",
+    linha_id: "ml_0123abcd",
+    nova: true,
+    edicao: 3,
+    demanda: "10034",
+    dia_tipo: "sabado",
+    janela: "diurna",
+    itens: 2,
+    marcas: ["dia_nao_bate_tarifa", "sem_pedido_anexo"],
+    linhas_reprecificadas: 1,
+  },
+  "medicao.line_removed": {
+    medicao_id: "safra-2026_2026-10",
+    competencia: "2026-10",
+    linha_id: "ml_0123abcd",
+    edicao: 4,
+    demanda: "10034",
+    linhas_reprecificadas: 0,
+  },
   "medicao.sent": { medicao_id: "safra-2026-10", competencia: "2026-10" },
   "medicao.approved": { medicao_id: "safra-2026-10", competencia: "2026-10" },
+  "medicao.contested": { medicao_id: "safra-2026_2026-10", competencia: "2026-10", edicao: 6, segundos_desde_anterior: 86_400 },
+  "medicao.reopened": { medicao_id: "safra-2026_2026-10", competencia: "2026-10", edicao: 7 },
 };
 
 /** Prefixos dos tipos do Comercial. Nada de billing., support. e afins, que as regras abrem a outros papéis. */
@@ -639,6 +662,52 @@ describe("evento gravado", () => {
     }
     assert.equal(passo.safeParse({ ...base, marcas: ["desconto_de_1500_reais"] }).success, false);
     assert.equal(passo.safeParse({ ...base, status_depois: "fechado" }).success, false);
+  });
+
+  it("parte 16a: medição sem valor, sem a OS nem a nota; a autorização da medição pode não ter demanda", () => {
+    const linha = buildComercialEvent({
+      ...base,
+      type: "medicao.line_saved",
+      entity_id: "safra-2026_2026-10",
+      payload: EXEMPLOS["medicao.line_saved"] as never,
+    });
+    assert.equal(linha.entity_type, "medicao");
+    assert.equal(linha.title, "Medição 10/2026: linha incluída");
+    assert.equal(
+      linha.description,
+      "2 itens, sábado, diurna; demanda 10034; marcas: dia não bate com a tarifa, sem pedido anexo; edição 3.",
+    );
+    for (const extra of [{ os: "OS 10034-01" }, { nota: "Cliente contesta o sábado" }, { area_solicitante: "Facilities" }, { total_cents: 1 }]) {
+      assert.equal(
+        COMERCIAL_EVENT_PAYLOADS["medicao.line_saved"].safeParse({ ...EXEMPLOS["medicao.line_saved"], ...extra }).success,
+        false,
+        JSON.stringify(extra),
+      );
+    }
+    assert.equal(
+      COMERCIAL_EVENT_PAYLOADS["medicao.contested"].safeParse({ ...EXEMPLOS["medicao.contested"], nota: "não reconhece a OS" }).success,
+      false,
+    );
+    const aprovada = buildComercialEvent({
+      ...base,
+      type: "medicao.approved",
+      entity_id: "safra-2026_2026-10",
+      payload: { medicao_id: "safra-2026_2026-10", competencia: "2026-10", demandas: 3, demandas_a_faturar: 2, demandas_pendentes: 1 },
+    });
+    assert.equal(aprovada.description, "Medição aprovada; 2 de 3 demandas a faturar.");
+    const autorizacao = buildComercialEvent({
+      ...base,
+      type: "client_authorization.recorded",
+      entity_id: "aut_safra-2026_2026-10",
+      payload: { autorizacao_id: "aut_safra-2026_2026-10", demandas: [], tipo: "medicao_aprovada", medicao_id: "safra-2026_2026-10" },
+    });
+    assert.equal(autorizacao.entity_type, "client_authorization");
+    assert.equal(autorizacao.description, "Medição aprovada pelo cliente; sem demanda ligada.");
+    assert.equal(
+      buildComercialEvent({ ...base, type: "client_authorization.recorded", payload: EXEMPLOS["client_authorization.recorded"] as never })
+        .description,
+      "Ligada a 2 demandas.",
+    );
   });
 
   it("a etapa cancelada tem rótulo", () => {

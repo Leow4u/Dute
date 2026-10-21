@@ -247,3 +247,58 @@ Storage.
   linha alterada, avulsa ou de ajuste da RV fechada derruba a dispensa.
 - Fechado, validado e recusado em nunca vêm antes do envio da RV (folga de 5
   minutos do relógio), nem depois de agora.
+
+### Parte 16a: medição mensal (backend)
+
+- `medicoes/{contrato_id}_{AAAA-MM}`: uma por contrato e competência, só de
+  contrato com regime `medicao_mensal` (no regime padrão ou no de um
+  serviço). Competência repetida, futura ou fora da vigência do contrato é
+  recusada. A variante da tabela é escolhida ao abrir (padrão: Comercial).
+- `saveMedicao` (create, upsert_line, remove_line) só no rascunho e na
+  edição vista; `advanceMedicao` faz send (rascunho → enviada), approve
+  (enviada → aprovada), contest (enviada → contestada, com nota) e reopen
+  (contestada → rascunho). Papéis: owner, admin e comercial.
+- A data da solicitação é a data-base da linha: vale a tabela do contrato
+  vigente nela, nunca a Padrão Dutelog. Cada gravação e o envio precificam de
+  novo todas as linhas, então a tabela renovada que é carregada depois (a v1
+  encerrada na véspera) passa a valer para as linhas pedidas na vigência dela;
+  o evento conta as linhas que mudaram. A conta de cada item é a do
+  orçamento: tabela, alterado (com o preço da tabela ao lado e motivo) e
+  avulso (com preço e motivo).
+- O dia da tarifa sai da data da execução (sábado, domingo ou dia útil); o
+  feriado em dia útil é informado como `domingo_feriado`. Dia útil num sábado
+  é recusado.
+- Marcas da linha: `dia_nao_bate_tarifa` quando a diária usada não cobre o
+  dia ou a janela da execução, ou quando a tabela tem uma diária que cobre
+  melhor; `rota_fora_da_tabela` para item avulso; `sem_pedido_anexo`. O item
+  e o dia saem dos atributos do item (categoria, item, serviço, descrição e a
+  descrição do cliente na tabela). Quando a tabela tem uma única diária da
+  mesma família para o dia e a janela, o item guarda `trocar_por`; sem essa
+  segurança, só a marca. O servidor nunca troca o item: a tela oferece
+  "Aplicar" e grava a linha de novo.
+- A linha que cita uma demanda prende a demanda (`demands.medicao_id`): a
+  mesma demanda não entra em duas medições, e a demanda precisa ser do mesmo
+  cliente e contrato, sem perda nem cancelamento. Retirar a última linha
+  dela solta a demanda.
+- A aprovação cria `client_authorizations/aut_{medicao_id}` (tipo
+  `medicao_aprovada`, com as demandas, o total aprovado, quando, quem e o
+  link) e leva a "a faturar" as demandas que o cliente já tinha fechado: a já
+  validada perde a pendência de medição; a que esperava autorização é
+  autorizada; a fechada (com ou sem a execução registrada, que então sai das
+  datas das linhas) ou com a RV de execução enviada é validada pela medição
+  (`validacao.origem: "medicao"`). A demanda perdida, sem fechamento ou com
+  uma RV em montagem fica como está, em `demandas_pendentes`, com o motivo. A
+  medição sem demanda também cria a autorização: o que se fatura é a medição.
+- Funções puras em `domain/medicao.ts`: `competenciaAtual`,
+  `alertaMedicaoNaoEnviada` (rascunho de competência anterior, a partir do
+  primeiro dia do mês seguinte, com os dias de atraso) e
+  `exportarDiarioDeBordo` (as colunas do Diário de Bordo; o solicitante é a
+  área, nunca a pessoa).
+- Eventos `medicao.created`, `line_saved`, `line_removed`, `sent`,
+  `approved`, `contested` e `reopened`, e `client_authorization.recorded`
+  com o tipo e a medição: sem valor, sem a OS do cliente, a área, os locais,
+  a mercadoria nem a nota da contestação. `TIPOS_AUTORIZACAO` passou para
+  `events.ts` (contratos.ts reexporta).
+- Regras: `medicoes` lê por `canReadPrices()` e ninguém grava pelo
+  navegador. `client_authorizations` continua sem match (ninguém lê) até a
+  parte 15.

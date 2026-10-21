@@ -103,6 +103,17 @@ export const ESTAGIOS_CADASTRO = ["prospect", "cliente"] as const;
 export const REGIMES_COBRANCA = ["por_demanda", "medicao_mensal", "wms"] as const;
 /** Tipos de aditivo do contrato (contracts/{id}/aditivos). */
 export const TIPOS_ADITIVO = ["formalizacao", "prorrogacao", "preco", "escopo", "outro"] as const;
+/** Como o cliente autoriza o faturamento (contrato e client_authorizations; contratos.ts reexporta). */
+export const TIPOS_AUTORIZACAO = ["pedido_aceite", "medicao_aprovada", "portal", "nenhuma"] as const;
+
+// --- Listas da medição mensal (parte 16a; domain/medicao.ts reexporta) ----------
+
+/** O dia da execução para a tarifa: seg–sex, sábado, ou domingo e feriado. */
+export const DIA_TIPOS = ["util", "sabado", "domingo_feriado"] as const;
+/** A janela da execução para a tarifa. */
+export const JANELAS = ["diurna", "noturna"] as const;
+/** O que a linha da medição mostra marcado para conferir antes do envio. */
+export const MARCAS_MEDICAO = ["dia_nao_bate_tarifa", "rota_fora_da_tabela", "sem_pedido_anexo"] as const;
 
 /**
  * Variante da tabela de preço: na tabela é texto livre de letras ("Comercial",
@@ -328,13 +339,73 @@ export const COMERCIAL_EVENT_PAYLOADS = {
     })
     .strict(),
 
+  /**
+   * A autorização de faturamento registrada. A da medição aprovada (tipo
+   * medicao_aprovada, parte 16a) pode não ter demanda: a medição é que se
+   * fatura, e as linhas sem demanda também entram nela.
+   */
   "client_authorization.recorded": z
-    .object({ autorizacao_id: id, demandas: z.array(numero).min(1).max(200) })
+    .object({
+      autorizacao_id: id,
+      demandas: z.array(numero).max(200),
+      tipo: z.enum(TIPOS_AUTORIZACAO).optional(),
+      medicao_id: id.optional(),
+    })
     .strict(),
 
+  // Medição mensal (parte 16a): ids, competência, contagens e marcas. Nunca o
+  // valor, a OS do cliente, a área, os locais, a mercadoria nem a nota da
+  // contestação.
   "medicao.created": z.object({ medicao_id: id, contrato_id: id, competencia, demandas: contagem }).strict(),
-  "medicao.sent": z.object({ medicao_id: id, competencia }).strict(),
-  "medicao.approved": z.object({ medicao_id: id, competencia }).strict(),
+  "medicao.line_saved": z
+    .object({
+      medicao_id: id,
+      competencia,
+      linha_id: id,
+      nova: z.boolean(),
+      edicao,
+      /** A demanda da linha, quando há. */
+      demanda: numero.optional(),
+      dia_tipo: z.enum(DIA_TIPOS),
+      janela: z.enum(JANELAS),
+      itens: contagem,
+      marcas: z.array(z.enum(MARCAS_MEDICAO)).max(MARCAS_MEDICAO.length),
+      /** Outras linhas cujo preço mudou ao precificar de novo (tabela carregada depois). */
+      linhas_reprecificadas: contagem.optional(),
+    })
+    .strict(),
+  "medicao.line_removed": z
+    .object({ medicao_id: id, competencia, linha_id: id, edicao, demanda: numero.optional(), linhas_reprecificadas: contagem.optional() })
+    .strict(),
+  "medicao.sent": z
+    .object({
+      medicao_id: id,
+      competencia,
+      edicao: edicao.optional(),
+      linhas: contagem.optional(),
+      demandas: contagem.optional(),
+      linhas_com_marca: contagem.optional(),
+      linhas_reprecificadas: contagem.optional(),
+      segundos_desde_anterior: segundos.optional(),
+    })
+    .strict(),
+  "medicao.approved": z
+    .object({
+      medicao_id: id,
+      competencia,
+      edicao: edicao.optional(),
+      autorizacao_id: id.optional(),
+      /** Demandas ligadas à medição; as que foram a "a faturar"; as que ficaram para alguém resolver. */
+      demandas: contagem.optional(),
+      demandas_a_faturar: contagem.optional(),
+      demandas_pendentes: contagem.optional(),
+      segundos_desde_anterior: segundos.optional(),
+    })
+    .strict(),
+  "medicao.contested": z
+    .object({ medicao_id: id, competencia, edicao, segundos_desde_anterior: segundos.optional() })
+    .strict(),
+  "medicao.reopened": z.object({ medicao_id: id, competencia, edicao }).strict(),
 } as const;
 
 export type ComercialEventType = keyof typeof COMERCIAL_EVENT_PAYLOADS;
@@ -454,6 +525,20 @@ function competenciaRotulo(value: string): string {
   const [ano, mes] = value.split("-");
   return `${mes}/${ano}`;
 }
+
+const DIA_TIPO_ROTULO: Record<(typeof DIA_TIPOS)[number], string> = {
+  util: "seg–sex",
+  sabado: "sábado",
+  domingo_feriado: "domingo ou feriado",
+};
+
+const JANELA_ROTULO: Record<(typeof JANELAS)[number], string> = { diurna: "diurna", noturna: "noturna" };
+
+const MARCA_MEDICAO_ROTULO: Record<(typeof MARCAS_MEDICAO)[number], string> = {
+  dia_nao_bate_tarifa: "dia não bate com a tarifa",
+  rota_fora_da_tabela: "rota fora da tabela",
+  sem_pedido_anexo: "sem pedido anexo",
+};
 
 type Text = { title: string; description: string };
 type Templates = { [T in ComercialEventType]: (payload: ComercialEventPayload<T>) => Text };
@@ -586,20 +671,59 @@ const TEMPLATES: Templates = {
 
   "client_authorization.recorded": (p) => ({
     title: "Autorização do cliente registrada",
-    description: `Ligada a ${p.demandas.length} ${p.demandas.length === 1 ? "demanda" : "demandas"}.`,
+    description: [
+      p.tipo === "medicao_aprovada" ? "Medição aprovada pelo cliente" : null,
+      p.demandas.length === 0
+        ? "sem demanda ligada"
+        : `ligada a ${p.demandas.length} ${p.demandas.length === 1 ? "demanda" : "demandas"}`,
+    ]
+      .filter(Boolean)
+      .join("; ")
+      .replace(/^./, (letra) => letra.toUpperCase())
+      .concat("."),
   }),
 
   "medicao.created": (p) => ({
     title: `Medição ${competenciaRotulo(p.competencia)} aberta`,
     description: `${p.demandas} ${p.demandas === 1 ? "demanda" : "demandas"} na medição.`,
   }),
+  "medicao.line_saved": (p) => ({
+    title: `Medição ${competenciaRotulo(p.competencia)}: linha ${p.nova ? "incluída" : "atualizada"}`,
+    description: [
+      `${p.itens} ${p.itens === 1 ? "item" : "itens"}, ${DIA_TIPO_ROTULO[p.dia_tipo]}, ${JANELA_ROTULO[p.janela]}`,
+      p.demanda ? `demanda ${p.demanda}` : "sem demanda",
+      p.marcas.length > 0 ? `marcas: ${p.marcas.map((marca) => MARCA_MEDICAO_ROTULO[marca]).join(", ")}` : null,
+      `edição ${p.edicao}`,
+    ]
+      .filter(Boolean)
+      .join("; ")
+      .concat("."),
+  }),
+  "medicao.line_removed": (p) => ({
+    title: `Medição ${competenciaRotulo(p.competencia)}: linha retirada`,
+    description: `${p.demanda ? `Demanda ${p.demanda} fora da medição` : "Linha sem demanda"}; edição ${p.edicao}.`,
+  }),
   "medicao.sent": (p) => ({
     title: `Medição ${competenciaRotulo(p.competencia)} enviada ao cliente`,
-    description: "Aguardando a aprovação do cliente.",
+    description:
+      p.linhas === undefined
+        ? "Aguardando a aprovação do cliente."
+        : `${p.linhas} ${p.linhas === 1 ? "linha" : "linhas"}; aguardando a aprovação do cliente.`,
   }),
   "medicao.approved": (p) => ({
     title: `Medição ${competenciaRotulo(p.competencia)} aprovada pelo cliente`,
-    description: "Medição aprovada.",
+    description:
+      p.demandas === undefined
+        ? "Medição aprovada."
+        : `Medição aprovada; ${p.demandas_a_faturar ?? 0} de ${p.demandas} ${p.demandas === 1 ? "demanda" : "demandas"} a faturar.`,
+  }),
+  "medicao.contested": (p) => ({
+    title: `Medição ${competenciaRotulo(p.competencia)} contestada pelo cliente`,
+    description: `Edição ${p.edicao}; reabra para ajustar.`,
+  }),
+  "medicao.reopened": (p) => ({
+    title: `Medição ${competenciaRotulo(p.competencia)} reaberta`,
+    description: `Volta ao rascunho; edição ${p.edicao}.`,
   }),
 };
 

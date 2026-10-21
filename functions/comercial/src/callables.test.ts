@@ -138,6 +138,20 @@ describe("callables do Comercial", () => {
     assert.match(index, /import \{ advanceDemandFor \} from "\.\/domain\/demandas\.js";/);
   });
 
+  it("medição mensal (parte 16a): saveMedicao e advanceMedicao, no domínio medicoes.ts", () => {
+    const blocks = callableBlocks();
+    for (const [name, handler] of [
+      ["saveMedicao", "saveMedicaoFor"],
+      ["advanceMedicao", "advanceMedicaoFor"],
+    ]) {
+      const block = blocks.get(name);
+      assert.ok(block, `${name} não declarada`);
+      assert.match(block, ENTRADA_DE_NEGOCIO, name);
+      assert.match(block, new RegExp(`return ${handler}\\(db, caller, request\\.data\\);`), name);
+    }
+    assert.match(index, /import \{ advanceMedicaoFor, saveMedicaoFor \} from "\.\/domain\/medicoes\.js";/);
+  });
+
   it("contratos (parte 8): saveContract e recordAditivo declaradas como callables de negócio", () => {
     const blocks = callableBlocks();
     for (const name of ["saveContract", "recordAditivo"]) {
