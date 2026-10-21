@@ -3,14 +3,7 @@ import { describe, it } from "node:test";
 
 import { HttpsError } from "firebase-functions/https";
 
-import {
-  alertasDoContrato,
-  diasEntre,
-  pagamentoPrevisto,
-  problemaDasFaixas,
-  type ContratoParaAlertas,
-  type FaixaPagamento,
-} from "./contratos-datas.js";
+import type { FaixaPagamento } from "./contratos-datas.js";
 import {
   ADITIVO_DADOS,
   CONTRATO_DADOS,
@@ -25,43 +18,17 @@ import {
 import { buildComercialEvent } from "./events.js";
 
 /**
- * Contratos (parte 8): alertas com datas fixas, previsão de pagamento,
- * entrada e as regras puras de vigência e cadastro. Os contratos daqui são
- * sintéticos: só datas e tipos, sem número de contrato de cliente.
+ * Contratos (parte 8): entrada e as regras puras de vigência e cadastro. Os
+ * alertas e a previsão de pagamento rodam os casos de lib/dominio em
+ * contratos-datas.test.ts (parte 14). Os contratos daqui são sintéticos: só
+ * datas e tipos, sem número de contrato de cliente.
  */
-
-const ANUAL: ContratoParaAlertas = {
-  status: "vigente",
-  vigente_de: "2026-07-01",
-  vigente_ate: "2027-06-30",
-  renovacao: { tipo: "aditivo", aviso_dias: 30, oposicao_ate_dias: null },
-  reajuste: { tipo: "negociado", indice: null, data_base: null },
-};
-
-/** Renovação automática, oposição até o fim e reajuste por IPCA na data de início. */
-const AUTOMATICO: ContratoParaAlertas = {
-  status: "vigente",
-  vigente_de: "2026-07-01",
-  vigente_ate: "2027-07-01",
-  renovacao: { tipo: "automatica", aviso_dias: null, oposicao_ate_dias: 0 },
-  reajuste: { tipo: "indice", indice: "IPCA", data_base: "07-01" },
-};
-
-const INDETERMINADO: ContratoParaAlertas = {
-  status: "vigente",
-  vigente_de: "2025-05-12",
-  vigente_ate: null,
-  renovacao: { tipo: "indeterminado", aviso_dias: null, oposicao_ate_dias: null },
-  reajuste: { tipo: "negociado", indice: null, data_base: null },
-};
 
 const FAIXAS_DO_DIA: FaixaPagamento[] = [
   { de: 1, ate: 10, dia: 30, mes: "mesmo" },
   { de: 11, ate: 20, dia: 10, mes: "seguinte" },
   { de: 21, ate: 31, dia: 30, mes: "seguinte" },
 ];
-
-const PAGA_POR_FAIXA = { pagamento: { tipo: "faixas_do_dia_da_nf" as const, faixas: FAIXAS_DO_DIA, dias: null, texto: null } };
 
 /** Contrato válido, como a tela e a carga mandam. */
 function contratoValido(overrides: Record<string, unknown> = {}) {
@@ -105,181 +72,6 @@ function erroDe(schema: typeof CONTRATO_DADOS | typeof ADITIVO_DADOS, value: unk
   assert.equal(parsed.success, false, "deveria recusar");
   return parsed.success ? "" : parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join(" | ");
 }
-
-describe("alertas do contrato", () => {
-  it("longe do fim, nenhum alerta", () => {
-    assert.deepEqual(alertasDoContrato(ANUAL, "2026-10-21"), []);
-  });
-
-  it("o prazo de aviso aparece antes do fim, a 120 dias dele", () => {
-    assert.deepEqual(alertasDoContrato(ANUAL, "2027-03-01"), [
-      { tipo: "renovacao", data: "2027-05-31", dias: 91, marco: 120 },
-    ]);
-  });
-
-  it("fim a 120 dias e prazo de aviso a 90", () => {
-    assert.deepEqual(alertasDoContrato(ANUAL, "2027-03-02"), [
-      { tipo: "renovacao", data: "2027-05-31", dias: 90, marco: 90 },
-      { tipo: "fim_vigencia", data: "2027-06-30", dias: 120, marco: 120 },
-    ]);
-  });
-
-  it("a 30 dias do fim, com o prazo de aviso já perdido", () => {
-    assert.deepEqual(alertasDoContrato(ANUAL, "2027-06-01"), [
-      { tipo: "renovacao", data: "2027-05-31", dias: -1, marco: 0 },
-      { tipo: "fim_vigencia", data: "2027-06-30", dias: 29, marco: 30 },
-    ]);
-  });
-
-  it("vencimento já passado continua no alerta, com dias negativos, sem o prazo de aviso", () => {
-    assert.deepEqual(alertasDoContrato(ANUAL, "2027-07-10"), [
-      { tipo: "fim_vigencia", data: "2027-06-30", dias: -10, marco: 0 },
-    ]);
-    assert.deepEqual(alertasDoContrato(ANUAL, "2029-01-01")[0]?.marco, 0);
-  });
-
-  it("no dia do fim, marco de 30 dias e zero dias", () => {
-    assert.deepEqual(alertasDoContrato({ ...ANUAL, renovacao: { tipo: "aditivo", aviso_dias: null, oposicao_ate_dias: null } }, "2027-06-30"), [
-      { tipo: "fim_vigencia", data: "2027-06-30", dias: 0, marco: 30 },
-    ]);
-  });
-
-  it("contrato encerrado não tem alerta", () => {
-    assert.deepEqual(alertasDoContrato({ ...ANUAL, status: "encerrado" }, "2027-07-10"), []);
-  });
-
-  it("contrato indeterminado não tem fim nem renovação", () => {
-    for (const hoje of ["2025-05-12", "2026-10-21", "2030-01-01"]) {
-      assert.deepEqual(alertasDoContrato(INDETERMINADO, hoje), [], hoje);
-    }
-  });
-
-  it("indeterminado com reajuste por índice só avisa o reajuste", () => {
-    const comIndice: ContratoParaAlertas = {
-      ...INDETERMINADO,
-      reajuste: { tipo: "indice", indice: "IGP-M", data_base: "03-01" },
-    };
-    assert.deepEqual(alertasDoContrato(comIndice, "2026-01-15"), [
-      { tipo: "reajuste", data: "2026-03-01", dias: 45, marco: 90 },
-    ]);
-  });
-
-  it("renovação automática com oposição até o fim: fim e reajuste, sem prazo à parte", () => {
-    assert.deepEqual(alertasDoContrato(AUTOMATICO, "2027-03-03"), [
-      { tipo: "fim_vigencia", data: "2027-07-01", dias: 120, marco: 120 },
-      { tipo: "reajuste", data: "2027-07-01", dias: 120, marco: 120 },
-    ]);
-  });
-
-  it("o reajuste é a primeira data-base depois do início, não o próprio início", () => {
-    assert.deepEqual(alertasDoContrato(AUTOMATICO, "2026-07-01"), []);
-  });
-
-  it("reajuste vencido aparece por 30 dias; depois vale o do ano seguinte", () => {
-    assert.deepEqual(alertasDoContrato(AUTOMATICO, "2027-07-20"), [
-      { tipo: "fim_vigencia", data: "2027-07-01", dias: -19, marco: 0 },
-      { tipo: "reajuste", data: "2027-07-01", dias: -19, marco: 0 },
-    ]);
-    assert.deepEqual(alertasDoContrato(AUTOMATICO, "2027-08-15"), [
-      { tipo: "fim_vigencia", data: "2027-07-01", dias: -45, marco: 0 },
-    ]);
-    assert.deepEqual(alertasDoContrato(AUTOMATICO, "2028-03-03"), [
-      { tipo: "fim_vigencia", data: "2027-07-01", dias: -246, marco: 0 },
-      { tipo: "reajuste", data: "2028-07-01", dias: 120, marco: 120 },
-    ]);
-  });
-
-  it("renovação automática com prazo de oposição: o último dia para se opor", () => {
-    const comOposicao: ContratoParaAlertas = {
-      ...AUTOMATICO,
-      vigente_de: "2026-01-01",
-      vigente_ate: "2026-12-31",
-      renovacao: { tipo: "automatica", aviso_dias: null, oposicao_ate_dias: 60 },
-      reajuste: { tipo: "nenhum", indice: null, data_base: null },
-    };
-    assert.deepEqual(alertasDoContrato(comOposicao, "2026-10-21"), [
-      { tipo: "renovacao", data: "2026-11-01", dias: 11, marco: 30 },
-      { tipo: "fim_vigencia", data: "2026-12-31", dias: 71, marco: 90 },
-    ]);
-  });
-
-  it("reajuste depois do fim, sem renovação automática, não aparece", () => {
-    const anualComIndice: ContratoParaAlertas = { ...ANUAL, reajuste: { tipo: "indice", indice: "IPCA", data_base: "07-01" } };
-    assert.deepEqual(
-      alertasDoContrato(anualComIndice, "2027-03-02").map((alerta) => alerta.tipo),
-      ["renovacao", "fim_vigencia"],
-    );
-  });
-
-  it("data-base em 29/02 cai em 28/02 no ano comum", () => {
-    const bissexto: ContratoParaAlertas = { ...INDETERMINADO, vigente_de: "2024-03-01", reajuste: { tipo: "indice", indice: "IPCA", data_base: "02-29" } };
-    assert.deepEqual(alertasDoContrato(bissexto, "2027-02-01"), [{ tipo: "reajuste", data: "2027-02-28", dias: 27, marco: 30 }]);
-    assert.deepEqual(alertasDoContrato(bissexto, "2028-02-01"), [{ tipo: "reajuste", data: "2028-02-29", dias: 28, marco: 30 }]);
-  });
-
-  it("hoje fora do formato é erro", () => {
-    assert.throws(() => alertasDoContrato(ANUAL, "21/10/2026"));
-    assert.throws(() => alertasDoContrato(ANUAL, "2026-02-30"));
-  });
-});
-
-describe("pagamento previsto", () => {
-  it("faixas do dia da NF: 1–10, 11–20 e 21–31", () => {
-    assert.equal(pagamentoPrevisto(PAGA_POR_FAIXA, "2026-03-05"), "2026-03-30");
-    assert.equal(pagamentoPrevisto(PAGA_POR_FAIXA, "2026-03-10"), "2026-03-30");
-    assert.equal(pagamentoPrevisto(PAGA_POR_FAIXA, "2026-03-11"), "2026-04-10");
-    assert.equal(pagamentoPrevisto(PAGA_POR_FAIXA, "2026-03-20"), "2026-04-10");
-    assert.equal(pagamentoPrevisto(PAGA_POR_FAIXA, "2026-03-21"), "2026-04-30");
-    assert.equal(pagamentoPrevisto(PAGA_POR_FAIXA, "2026-03-31"), "2026-04-30");
-  });
-
-  it("fevereiro sem dia 30 paga no último dia, inclusive no ano bissexto", () => {
-    assert.equal(pagamentoPrevisto(PAGA_POR_FAIXA, "2027-02-05"), "2027-02-28");
-    assert.equal(pagamentoPrevisto(PAGA_POR_FAIXA, "2028-02-05"), "2028-02-29");
-    assert.equal(pagamentoPrevisto(PAGA_POR_FAIXA, "2027-01-25"), "2027-02-28");
-    assert.equal(pagamentoPrevisto(PAGA_POR_FAIXA, "2027-01-31"), "2027-02-28");
-    assert.equal(pagamentoPrevisto(PAGA_POR_FAIXA, "2027-01-15"), "2027-02-10");
-  });
-
-  it("virada do ano", () => {
-    assert.equal(pagamentoPrevisto(PAGA_POR_FAIXA, "2026-12-10"), "2026-12-30");
-    assert.equal(pagamentoPrevisto(PAGA_POR_FAIXA, "2026-12-15"), "2027-01-10");
-    assert.equal(pagamentoPrevisto(PAGA_POR_FAIXA, "2026-12-31"), "2027-01-30");
-  });
-
-  it("dias depois da NF, em dias corridos", () => {
-    const trintaDias = { pagamento: { tipo: "dias_apos_nf" as const, faixas: [], dias: 30, texto: null } };
-    assert.equal(pagamentoPrevisto(trintaDias, "2026-12-20"), "2027-01-19");
-    assert.equal(pagamentoPrevisto(trintaDias, "2028-01-31"), "2028-03-01");
-    assert.equal(pagamentoPrevisto({ pagamento: { ...trintaDias.pagamento, dias: 15 } }, "2027-02-14"), "2027-03-01");
-  });
-
-  it("regra em texto não tem previsão calculada", () => {
-    assert.equal(pagamentoPrevisto({ pagamento: { tipo: "texto", faixas: [], dias: null, texto: "Conforme portal." } }, "2026-03-05"), null);
-  });
-
-  it("data da NF fora do formato é erro", () => {
-    assert.throws(() => pagamentoPrevisto(PAGA_POR_FAIXA, "2026-02-30"));
-  });
-
-  it("faixas precisam cobrir 1 a 31, sem buraco nem sobreposição", () => {
-    assert.equal(problemaDasFaixas(FAIXAS_DO_DIA), null);
-    assert.match(String(problemaDasFaixas([])), /Informe as faixas/);
-    assert.match(String(problemaDasFaixas(FAIXAS_DO_DIA.slice(0, 2))), /não cobrem o dia 21/);
-    assert.match(String(problemaDasFaixas([FAIXAS_DO_DIA[0], FAIXAS_DO_DIA[2]])), /não cobrem o dia 11/);
-    assert.match(
-      String(problemaDasFaixas([FAIXAS_DO_DIA[0], { ...FAIXAS_DO_DIA[1], de: 10 }, FAIXAS_DO_DIA[2]])),
-      /sobrepõe/,
-    );
-    assert.match(String(problemaDasFaixas([{ de: 5, ate: 1, dia: 30, mes: "mesmo" }])), /inicial passa do final/);
-  });
-
-  it("diasEntre atravessa ano bissexto", () => {
-    assert.equal(diasEntre("2028-02-28", "2028-03-01"), 2);
-    assert.equal(diasEntre("2027-02-28", "2027-03-01"), 1);
-    assert.equal(diasEntre("2027-01-01", "2026-12-31"), -1);
-  });
-});
 
 describe("entrada do contrato", () => {
   it("o contrato completo passa", () => {

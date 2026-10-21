@@ -134,6 +134,7 @@ const ClienteEnvios = lazy(() =>
   import("./pages/client").then((m) => ({ default: m.ClienteEnvios })),
 );
 const ComercialClientes = lazy(() => import("./pages/comercial/clientes"));
+const ComercialContratos = lazy(() => import("./pages/comercial/contratos"));
 import { useRole } from "./hooks/use-role";
 import { AuthProvider, useAppUser } from "./lib/auth";
 import { ActiveCustomerProvider } from "./lib/active-customer-context";
@@ -1047,6 +1048,7 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   ...soComComercialLiberado([
     protectedRoute("/comercial", ComercialRedirect),
     protectedRoute("/comercial/clientes", ComercialClientes),
+    protectedRoute("/comercial/contratos", ComercialContratos),
   ]),
 ];
 
