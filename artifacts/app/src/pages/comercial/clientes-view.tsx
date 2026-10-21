@@ -105,7 +105,8 @@ function Pill({ children }: { children: ReactNode }) {
   );
 }
 
-function SeloProspect() {
+/** Selo do prospect, também na fila de orçamentos. */
+export function SeloProspect() {
   return (
     <span className="inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-md border border-dashed border-muted-foreground bg-card px-2 text-xs font-bold text-foreground">
       <Target className="size-3" aria-hidden="true" />

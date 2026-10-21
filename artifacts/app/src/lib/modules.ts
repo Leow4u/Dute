@@ -21,7 +21,14 @@ import {
 
 import { PAPEIS, isPapel, type Papel } from "@workspace/dominio";
 
-import { COMERCIAL_ROLES, ROTA_CLIENTES, ROTA_COMERCIAL, ROTA_CONTRATOS, abreComercial } from "./comercial/navegacao";
+import {
+  COMERCIAL_ROLES,
+  ROTA_CLIENTES,
+  ROTA_COMERCIAL,
+  ROTA_CONTRATOS,
+  ROTA_ORCAMENTO,
+  abreComercial,
+} from "./comercial/navegacao";
 import { COMERCIAL_LIBERADO } from "./liberacao";
 import {
   portalModulesFor,
@@ -114,6 +121,8 @@ export type ModuleRoute = {
   roles: ProfileRole[];
   appRoles: CurrentAppRole[];
   exact?: boolean;
+  /** Telas fora do menu que acendem este item (a montagem do orçamento acende Orçamentos). */
+  tambem?: readonly string[];
 };
 
 export type AppModule = {
@@ -301,9 +310,9 @@ export const APP_MODULES: AppModule[] = [
       }),
     ],
   }),
-  // Comercial (docs/plataforma/fase-6-comercial.md, partes 13 e 14): só onde
-  // a liberação do Comercial está ligada. Clientes e Contratos são as telas de
-  // hoje; a fila de orçamentos (parte 11) entra no mesmo grupo.
+  // Comercial (docs/plataforma/fase-6-comercial.md, partes 11, 13 e 14): só
+  // onde a liberação do Comercial está ligada. A fila de orçamentos é a casa
+  // (/comercial, rota exata para não acender em Clientes e Contratos).
   appModule({
     id: "comercial",
     label: "Comercial",
@@ -313,6 +322,15 @@ export const APP_MODULES: AppModule[] = [
     liberacao: "comercial",
     group: true,
     routes: [
+      navRoute({
+        id: "comercial-orcamentos",
+        label: "Orçamentos",
+        href: ROTA_COMERCIAL,
+        icon: FileText,
+        roles: COMMERCIAL_ROLES,
+        exact: true,
+        tambem: [ROTA_ORCAMENTO],
+      }),
       navRoute({
         id: "comercial-clientes",
         label: "Clientes",
@@ -582,8 +600,8 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   { path: "/usuarios", roles: ACCESS_ADMIN_ROLES },
   { path: "/clientes", roles: ACCESS_ADMIN_ROLES },
   { path: "/suporte", roles: SUPPORT_ROLES },
-  // Casa do Comercial: leva a Clientes até a fila de orçamentos existir.
-  { path: ROTA_COMERCIAL, roles: COMMERCIAL_ROLES },
+  // Montar orçamento, aberto pela fila do Comercial (?numero=).
+  { path: ROTA_ORCAMENTO, roles: COMMERCIAL_ROLES },
 ];
 
 const MERGED_SCREEN_APP_ROLES = Object.fromEntries(
@@ -783,6 +801,21 @@ export function isRouteActive(
 
   if (exact) return current === target;
   return current === target || current.startsWith(`${target}/`);
+}
+
+/**
+ * O item do menu está aceso: a rota dele (exata ou com as filhas) ou uma das
+ * telas fora do menu que são dele (`tambem`, sempre exatas).
+ */
+export function isNavRouteActive(
+  currentPath: string,
+  route: Pick<ModuleRoute, "href" | "exact" | "tambem">,
+): boolean {
+  if (!route.href) return false;
+  return (
+    isRouteActive(currentPath, route.href, route.exact) ||
+    (route.tambem ?? []).some((href) => isRouteActive(currentPath, href, true))
+  );
 }
 
 /** Telas fora do menu que pertencem a um item dele. */
