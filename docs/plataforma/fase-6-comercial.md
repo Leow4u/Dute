@@ -242,6 +242,25 @@ Storage.
     texto (nome e referência: o e-mail ou o OneDrive) e o Storage está fora do
     v1. Recomendo tirar o ZIP da tela no v1 e manter o "Anexar" gravando a
     referência. (Parte 16b)
+14. **O "Desfazer" do ComAprovarCelular volta?** Saiu da parte 12a. Depois de
+    "Aprovar" não há volta de aprovado para "Para aprovar": `edit` leva ao
+    rascunho, e alguém precisa mandar de novo para aprovação. Fazer o desfazer
+    com `edit` e `submit` deixaria na timeline o Leonardo mandando para
+    aprovação o que o Guilherme montou. Recomendo, se o toque errado acontecer
+    no uso, uma ação própria no `advanceQuote` (aprovado, ainda não enviado,
+    volta a "Para aprovar", só o owner, com evento), numa parte de backend.
+    Depois de "Devolver", o desfazer seria o autor mandar de novo. (Parte 12a)
+15. **Razão social e CNPJ no cabeçalho do PDF.** O ComDocumento traz a razão
+    social, o CNPJ e a cidade da Dutelog; o repositório não tem o CNPJ, e o
+    cabeçalho saiu com "Dutelog Soluções Logísticas", o nome que o app usa, e o
+    e-mail do Comercial. Falta o Leonardo dizer a razão social e o CNPJ que vão
+    na proposta; entram como constantes no papel
+    (`components/comercial/orcamento-documento.tsx`). (Parte 12a)
+16. **Como o Leonardo fica sabendo que há orçamento para aprovar?** Hoje, pelo
+    e-mail do Guilherme; no app, pelo item do Início quando ele abre. Avisar
+    (notificação ou um "Copiar link" da aprovação na montagem, com
+    `hrefDaAprovacao(numero)`) não está nos mockups. Recomendo ver no uso se o
+    e-mail com o número basta. (Parte 12a)
 
 ## Registro
 
@@ -278,6 +297,56 @@ Storage.
   linha alterada, avulsa ou de ajuste da RV fechada derruba a dispensa.
 - Fechado, validado e recusado em nunca vêm antes do envio da RV (folga de 5
   minutos do relógio), nem depois de agora.
+
+### Parte 12a: aprovar no celular, Início, documento A4 e envio (telas)
+
+- **Aprovar** (`/comercial/aprovar`, `ComAprovarCelular`): só o owner (a rota
+  tem papel próprio; `aprovaOrcamento` em `lib/comercial/navegacao.ts`). Lê as
+  demandas em "Para aprovar" com a RV "para aprovar", de quem espera há mais
+  tempo; "1 de N" com anterior e próximo; depois da ação, a confirmação e
+  "Próximo" (o que vinha depois na fila que a pessoa via). O bloco Conferir
+  mostra a linha alterada (preço da tabela riscado e motivo), a avulsa, o
+  ajuste e as marcas da tabela (fora da vigência, sem tabela). "Devolver" pede
+  a nota; "Aprovar e enviar" grava e abre o documento. O "Desfazer" do mockup
+  ficou de fora (pergunta 14).
+- **O orçamento da tela não troca sozinho** (`acompanharAprovacao`): se ele
+  sai da fila enquanto o Leonardo confere (o autor puxou de volta, a demanda
+  foi perdida, outro aparelho decidiu) ou volta com outra edição, o cartão
+  fica no que ele viu, o rodapé diz "saiu da fila" (Próximo) ou "mudou"
+  (Recarregar) e nada se grava. O orçamento da tela fica na URL
+  (`?numero=`): voltar da prévia do PDF ou do orçamento cai nele; o link para
+  um orçamento fora da fila avisa, em vez de abrir outro.
+- **Início**: "N orçamentos para aprovar" só para o owner, e a consulta só sai
+  para ele (`veAprovacoesNoInicio` é o `enabled`).
+- **Documento A4** (`/comercial/orcamento/documento?numero=&rv=`,
+  `ComDocumento`): impressão do navegador, como a fatura; o papel é
+  `components/comercial/orcamento-documento.tsx` (PAPER_FILES). Até o envio é
+  a prévia do orçamento ao vivo, com a marca "Prévia", "Prévia em" no lugar
+  da emissão e o nome do arquivo começando por "Prévia"; enviada, a RV vem da
+  cópia congelada em `quotes/{numero}/revisoes/{rv}`. O título da aba é o nome
+  do PDF ("Orçamento 10045 – RV01 – CE8977 – título"). Na tela, o papel tem a
+  largura do A4 e, no celular, rola para o lado. Aberto da aprovação
+  (`&de=aprovar`), o "voltar" leva a ela. Sem CNPJ (pergunta 15).
+- **Limite da cópia congelada**: os valores, as linhas, as condições, a
+  demanda e quem montou saem da RV congelada, mas os nomes do contato, dos
+  locais e o número do contrato ainda se leem pelos ids, nos cadastros de
+  hoje. Se um deles mudar depois do envio, imprimir de novo a RV enviada mostra
+  o nome novo. Congelar esses nomes no envio (`revisaoCongelada`) é uma parte
+  de backend.
+- **Envio** (pergunta 2: os dois caminhos): "Enviar ao cliente" (aprovado →
+  enviado) na montagem e na ficha da fila, e "Aprovar e enviar" do owner na
+  montagem e na aprovação, gravam por advanceQuote e só então abrem o
+  documento, que imprime sozinho quando a cópia congelada chega (e a URL perde
+  o `imprimir`). Com erro, o documento não abre. Na ficha, "Para aprovar" não
+  tem ação, como na ComFila, e clicar de novo no mesmo envio leva a mesma
+  chave. A data do envio vem de `quotes.envio` no histórico da ficha e no
+  cabeçalho da montagem.
+- **Prévia do PDF na montagem** abre noutra aba; com alteração não salva, a
+  tela salva antes (a aba abre no clique e recebe o documento depois de
+  gravar).
+- **Quem montou**: o comercial não lê `users` de outra pessoa, então o
+  servidor grava `autor_nome` no orçamento (criar, duplicar, RV seguinte) e na
+  RV congelada; o orçamento antigo cai no perfil, quando quem lê pode.
 
 ### Parte 15a: autorização de faturamento (backend)
 

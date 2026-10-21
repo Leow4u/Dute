@@ -111,13 +111,17 @@ function props(overrides: Partial<MontarViewProps> & { form?: FormOrcamento } = 
     aviso: null,
     salvoEm: null,
     desatualizado: false,
+    documentoHref: "/comercial/orcamento/documento?numero=10045&rv=0",
     handlers: {
       salvar: noop,
+      previaSalva: noop,
       enviar: noop,
       duplicar: noop,
       editar: noop,
       aprovar: noop,
       devolver: noop,
+      enviarCliente: noop,
+      aprovarEEnviar: noop,
       trocarVariante: noop,
       novoContato: noop,
     },
@@ -162,6 +166,7 @@ const CABECALHO_RASCUNHO = [
   "R$ 1.864,00",
   "Salvar",
   "Duplicar",
+  "Prévia do PDF",
   "Enviar para aprovação",
 ];
 
@@ -290,13 +295,13 @@ describe("montar orçamento", () => {
     expect(previa).not.toContain("R$ 1.900,00");
   });
 
-  it("para aprovar, o owner vê só leitura com Aprovar (principal) e Devolver", () => {
+  it("para aprovar, o owner vê só leitura com Aprovar (principal), Devolver e Aprovar e enviar", () => {
     const html = render({
       dados: { ...DADOS, status: "para_aprovar", etapa: "para_aprovar", situacao: "Enviado para aprovação · 21/10 09:05" },
       acoes: acoesDoOrcamento({ status: "para_aprovar", role: "owner", uid: "u-leo", autorUid: "u-gui" }),
     });
     const lista = texts(html);
-    expect(lista.slice(0, 23)).toEqual([
+    expect(lista.slice(0, 25)).toEqual([
       "Comercial",
       "Orçamentos",
       "Contratos",
@@ -315,7 +320,9 @@ describe("montar orçamento", () => {
       "R$ 1.864,00",
       "Enviado para aprovação · 21/10 09:05",
       "Devolver",
+      "Aprovar e enviar",
       "Duplicar",
+      "Prévia do PDF",
       "Aprovar",
       "Pedido do cliente",
       "Para",
@@ -341,7 +348,38 @@ describe("montar orçamento", () => {
       acoes: acoesDoOrcamento({ status: "aprovado", role: "comercial", uid: "u-gui", autorUid: "u-gui" }),
     });
     expect(texts(aprovado)).toEqual(expect.arrayContaining(["Para enviar", "Editar", "Duplicar"]));
-    expect(aprovado).not.toContain("bg-primary text-primary-foreground");
+  });
+
+  it("aprovado: Enviar ao cliente é a ação principal (grava e só então abre o documento)", () => {
+    const html = render({
+      dados: { ...DADOS, status: "aprovado", etapa: "para_enviar", situacao: "Aprovado por Leonardo · 21/10 08:50" },
+      acoes: acoesDoOrcamento({ status: "aprovado", role: "comercial", uid: "u-gui", autorUid: "u-gui" }),
+    });
+    const lista = texts(html);
+    const inicio = lista.indexOf("Aprovado por Leonardo · 21/10 08:50");
+    expect(lista.slice(inicio, inicio + 6)).toEqual([
+      "Aprovado por Leonardo · 21/10 08:50",
+      "Editar",
+      "Duplicar",
+      "Prévia do PDF",
+      "Enviar ao cliente",
+      "Pedido do cliente",
+    ]);
+    expect(html.match(/bg-primary text-primary-foreground/g)).toHaveLength(1);
+    expect(html).toMatch(/bg-primary text-primary-foreground[^"]*"[^>]*>.*?Enviar ao cliente<\/button>/);
+  });
+
+  it("o documento abre noutra aba: a prévia até o envio; o PDF da RV enviada depois", () => {
+    const previa = render();
+    expect(previa).toMatch(/<a[^>]*href="\/comercial\/orcamento\/documento\?numero=10045&amp;rv=0"[^>]*target="_blank"[^>]*>.*?Prévia do PDF<\/a>/);
+    const enviado = render({
+      dados: { ...DADOS, status: "enviado", etapa: "aguardando_cliente", situacao: "Enviado · 21/10 10:02" },
+      acoes: acoesDoOrcamento({ status: "enviado", role: "comercial", uid: "u-gui", autorUid: "u-gui" }),
+    });
+    const lista = texts(enviado);
+    expect(lista).toEqual(expect.arrayContaining(["Enviado · 21/10 10:02", "PDF"]));
+    expect(lista).not.toContain("Prévia do PDF");
+    expect(enviado).not.toContain("bg-primary text-primary-foreground");
   });
 
   it("devolvido: a nota de quem devolveu aparece no rascunho", () => {

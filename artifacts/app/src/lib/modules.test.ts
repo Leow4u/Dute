@@ -96,6 +96,9 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/comercial", ["owner", "admin", "comercial"]],
   // Parte 11: a fila é /comercial; a montagem do orçamento abre pela fila.
   ["/comercial/orcamento", ["owner", "admin", "comercial"]],
+  // Parte 12a: o documento A4 do orçamento; a aprovação é só do owner.
+  ["/comercial/orcamento/documento", ["owner", "admin", "comercial"]],
+  ["/comercial/aprovar", ["owner"]],
   ["/comercial/clientes", ["owner", "admin", "comercial"]],
   ["/comercial/contratos", ["owner", "admin", "comercial"]],
 ];

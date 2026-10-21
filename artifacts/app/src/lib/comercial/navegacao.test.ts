@@ -16,14 +16,18 @@ import {
 import { entrada, modulesForPerson } from "../platform-modules";
 import {
   ABAS_DO_COMERCIAL,
+  APROVADOR_ROLES,
   COMERCIAL_ROLES,
+  ROTA_APROVAR,
   ROTA_CLIENTES,
   ROTA_COMERCIAL,
   ROTA_CONTRATOS,
+  ROTA_DOCUMENTO,
   ROTA_ORCAMENTO,
   TELAS_DO_COMERCIAL,
   abasVisiveis,
   abreComercial,
+  aprovaOrcamento,
   contratoDaBusca,
   hrefDoContrato,
   rotasDoComercial,
@@ -60,10 +64,17 @@ function menu(role: Papel, liberado: boolean) {
 describe("rotas do Comercial", () => {
   it("só existem com a liberação ligada", () => {
     expect(rotasDoComercial(DESLIGADO)).toEqual([]);
-    expect(rotasDoComercial(LIBERADO)).toEqual([ROTA_COMERCIAL, ROTA_ORCAMENTO, ROTA_CLIENTES, ROTA_CONTRATOS]);
+    expect(rotasDoComercial(LIBERADO)).toEqual([
+      ROTA_COMERCIAL,
+      ROTA_ORCAMENTO,
+      ROTA_DOCUMENTO,
+      ROTA_APROVAR,
+      ROTA_CLIENTES,
+      ROTA_CONTRATOS,
+    ]);
   });
 
-  it("o App registra exatamente as rotas do Comercial: a fila, a montagem, Clientes e Contratos", () => {
+  it("o App registra exatamente as rotas do Comercial: a fila, a montagem, o documento, a aprovação, Clientes e Contratos", () => {
     expect(APP_PATHS.filter(doComercial)).toEqual(rotasDoComercial(LIBERADO));
   });
 
@@ -79,6 +90,8 @@ describe("rotas do Comercial", () => {
     const rotas = [
       { path: ROTA_COMERCIAL },
       { path: ROTA_ORCAMENTO },
+      { path: ROTA_DOCUMENTO },
+      { path: ROTA_APROVAR },
       { path: ROTA_CLIENTES },
       { path: ROTA_CONTRATOS },
       { path: "/comercial/inexistente" },
@@ -87,6 +100,8 @@ describe("rotas do Comercial", () => {
     expect(soComComercialLiberado(rotas, LIBERADO).map((rota) => rota.path)).toEqual([
       ROTA_COMERCIAL,
       ROTA_ORCAMENTO,
+      ROTA_DOCUMENTO,
+      ROTA_APROVAR,
       ROTA_CLIENTES,
       ROTA_CONTRATOS,
     ]);
@@ -100,11 +115,22 @@ describe("rotas do Comercial", () => {
     }
   });
 
-  it("owner, admin e comercial abrem; nenhum outro papel", () => {
+  it("owner, admin e comercial abrem; nenhum outro papel (a aprovação, só o owner)", () => {
     expect([...COMERCIAL_ROLES]).toEqual(QUEM_ABRE);
-    for (const path of rotasDoComercial(LIBERADO)) {
+    for (const path of rotasDoComercial(LIBERADO).filter((rota) => rota !== ROTA_APROVAR)) {
       expect([...getRouteProfileRoles(path)].sort(), path).toEqual([...QUEM_ABRE].sort());
       expect(getRouteAppRoles(path), path).toEqual(["interno"]);
+    }
+  });
+
+  it("a tela de aprovar é só do owner (a rota e a decisão), e o documento é de quem abre o Comercial", () => {
+    expect([...APROVADOR_ROLES]).toEqual(["owner"]);
+    expect(getRouteProfileRoles(ROTA_APROVAR)).toEqual(["owner"]);
+    expect(getRouteAppRoles(ROTA_APROVAR)).toEqual(["interno"]);
+    expect([...getRouteProfileRoles(ROTA_DOCUMENTO)].sort()).toEqual([...QUEM_ABRE].sort());
+    for (const role of PAPEIS) {
+      expect(aprovaOrcamento(role, LIBERADO), role).toBe(role === "owner");
+      expect(aprovaOrcamento(role, DESLIGADO), role).toBe(false);
     }
   });
 
@@ -124,10 +150,12 @@ describe("rotas do Comercial", () => {
   });
 
   it("/comercial é a fila de orçamentos (parte 11): sem redirecionar para Clientes", () => {
-    expect(TELAS_DO_COMERCIAL).toEqual([ROTA_COMERCIAL, ROTA_ORCAMENTO, ROTA_CLIENTES, ROTA_CONTRATOS]);
+    expect(TELAS_DO_COMERCIAL).toEqual([ROTA_COMERCIAL, ROTA_ORCAMENTO, ROTA_DOCUMENTO, ROTA_APROVAR, ROTA_CLIENTES, ROTA_CONTRATOS]);
     expect(APP_SOURCE).not.toMatch(/ComercialRedirect|DESTINO_DO_COMERCIAL/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/comercial", ComercialOrcamentos\)/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/comercial\/orcamento", ComercialOrcamento\)/);
+    expect(APP_SOURCE).toMatch(/protectedRoute\("\/comercial\/orcamento\/documento", ComercialDocumento\)/);
+    expect(APP_SOURCE).toMatch(/protectedRoute\("\/comercial\/aprovar", ComercialAprovar\)/);
   });
 });
 
@@ -196,7 +224,15 @@ describe("menu do Comercial", () => {
 
   it("Clientes, Contratos (com a ficha aberta), a fila e a montagem do orçamento acendem o grupo Comercial", () => {
     const modules = getNavigationForProfileRole("admin", null, LIBERADO);
-    for (const path of [ROTA_CLIENTES, ROTA_CONTRATOS, hrefDoContrato("itau-2026")!, ROTA_COMERCIAL, ROTA_ORCAMENTO]) {
+    for (const path of [
+      ROTA_CLIENTES,
+      ROTA_CONTRATOS,
+      hrefDoContrato("itau-2026")!,
+      ROTA_COMERCIAL,
+      ROTA_ORCAMENTO,
+      `${ROTA_DOCUMENTO}?numero=10045&rv=1`,
+      ROTA_APROVAR,
+    ]) {
       expect(getActiveModule(modules, path).label, path).toBe("Comercial");
     }
   });
@@ -212,6 +248,8 @@ describe("menu do Comercial", () => {
     const [comercial] = getNavigationForProfileRole("comercial", null, LIBERADO);
     const acesos = (path: string) => comercial.routes.filter((route) => isNavRouteActive(path, route)).map((route) => route.label);
     expect(acesos(ROTA_ORCAMENTO)).toEqual(["Orçamentos"]);
+    expect(acesos(ROTA_DOCUMENTO)).toEqual(["Orçamentos"]);
+    expect(acesos(ROTA_APROVAR)).toEqual(["Orçamentos"]);
     expect(acesos(ROTA_COMERCIAL)).toEqual(["Orçamentos"]);
     expect(acesos(ROTA_CLIENTES)).toEqual(["Clientes"]);
     expect(acesos(ROTA_CONTRATOS)).toEqual(["Contratos"]);
@@ -302,9 +340,9 @@ describe("abas do módulo (Orçamentos · Contratos · Autorizações · Mediç�
     expect(abasVisiveis([ROTA_CLIENTES])).toEqual([]);
   });
 
-  it("a montagem do orçamento é da aba Orçamentos", () => {
+  it("a montagem, o documento e a aprovação do orçamento são da aba Orçamentos", () => {
     const orcamentos = ABAS_DO_COMERCIAL.find((aba) => aba.id === "orcamentos")!;
-    expect(orcamentos.tambem).toEqual([ROTA_ORCAMENTO]);
+    expect(orcamentos.tambem).toEqual([ROTA_ORCAMENTO, ROTA_APROVAR, ROTA_DOCUMENTO]);
   });
 
   it("cada tela nova acende a aba dela, na ordem", () => {

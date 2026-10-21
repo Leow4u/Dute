@@ -438,6 +438,41 @@ describe("ficha resumida", () => {
     });
   });
 
+  it("enviado: a data do envio é a do servidor (quotes.envio), mesmo quando a etapa não mudou (aditivo)", () => {
+    // O aditivo enviado com a demanda em "para planejar": nenhum marco de "aguardando cliente".
+    const orc = item(
+      "10045",
+      {
+        etapa: "para_planejar",
+        marcos: [
+          { etapa: "em_montagem", em: "2026-10-14T12:00:00.000Z", por_uid: "u-gui" },
+          { etapa: "para_planejar", em: "2026-10-16T12:00:00.000Z", por_uid: "u-gui" },
+        ],
+      },
+      {
+        rv: 1,
+        rotulo: "10045 – RV01",
+        tipo_rv: "aditivo",
+        status: "enviado",
+        aprovacao: { por_uid: "u-leo", em: "2026-10-21T11:50:00.000Z", edicao: 6 },
+        envio: { por_uid: "u-gui", em: "2026-10-21T13:02:00.000Z", edicao: 6 },
+      },
+    );
+    expect(orc.envio).toEqual({ porUid: "u-gui", em: "2026-10-21T13:02:00.000Z" });
+    expect(historicoDoOrcamento(orc, { nomeDe, contato: null })[3]).toEqual({
+      rotulo: "Enviado",
+      estado: "feito",
+      quando: "21/10 10:02",
+      detalhe: "Guilherme",
+    });
+  });
+
+  it("o nome de quem montou vem do orçamento (autor_nome): o comercial não lê o perfil dos outros", () => {
+    expect(item("10052", {}, { autor_nome: "Guilherme" }).autorNome).toBe("Guilherme");
+    expect(item("10052").autorNome).toBeNull();
+    expect(item("10052").marcas).toEqual(["preco_alterado"]);
+  });
+
   it("devolvido: o passo aparece e o montado volta a pendente", () => {
     const orc = item("10050", {}, { devolucao: { nota: "Rever a cadeira", por_uid: "u-leo", em: "2026-10-21T12:30:00.000Z" } });
     expect(historicoDoOrcamento(orc, { nomeDe, contato: null }).map((passo) => [passo.rotulo, passo.estado, passo.detalhe])).toEqual([

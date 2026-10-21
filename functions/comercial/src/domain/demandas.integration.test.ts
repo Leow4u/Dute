@@ -407,6 +407,8 @@ describe("enviar ao cliente e revisar (RV+1)", () => {
     const congelada = await doc(`quotes/${numero}/revisoes/0`);
     assert.deepEqual(congelada.aprovacao, quote.aprovacao);
     assert.equal(congelada.enviado_por, "owner-1");
+    // Quem montou continua no documento, não quem aprovou e enviou.
+    assert.equal(congelada.autor_nome, "Guilherme");
     assert.deepEqual(congelada.linhas, quote.linhas);
 
     const doPasso = (await eventos(numero)).filter((event) => resultado.events.includes(String(event.id)));

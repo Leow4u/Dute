@@ -218,9 +218,15 @@ export type ItemDaFila = {
   linhas: LinhaResumo[];
   marcos: MarcoDaDemanda[];
   autorUid: string | null;
+  /** O nome de quem montou, gravado pelo servidor (autor_nome): o comercial não lê `users`. */
+  autorNome: string | null;
   passoEm: string | null;
   aprovacao: { porUid: string | null; em: string } | null;
   devolucao: { nota: string | null; porUid: string | null; em: string } | null;
+  /** O envio ao cliente da RV em curso (quotes.envio, parte 10). */
+  envio: { porUid: string | null; em: string } | null;
+  /** As marcas que o servidor deu ao orçamento (preco_alterado, tabela_vencida...). */
+  marcas: string[];
   /** A perda (parte 10), lida sem exigir o formato: motivo e quando. */
   perda: { motivo: string | null; em: string | null } | null;
 };
@@ -304,9 +310,12 @@ export function itemDaFila(numero: string, demanda: Registro | null, quote: Regi
     linhas: linhasResumo(q.linhas),
     marcos: marcos(demanda.marcos),
     autorUid: opcional(q.autor_uid),
+    autorNome: opcional(q.autor_nome),
     passoEm: opcional(q.passo_em),
     aprovacao: passoComQuem(q.aprovacao),
     devolucao,
+    envio: passoComQuem(q.envio),
+    marcas: Array.isArray(q.marcas) ? q.marcas.map(texto).filter(Boolean) : [],
     perda: perdaDe(demanda.perda),
   };
 }
@@ -528,7 +537,9 @@ export function historicoDoOrcamento(
       : pendente("Aprovado"),
   );
 
-  const enviado = item.status === "enviado" ? ultimoMarco(item, ["aguardando_cliente", "aguardando_autorizacao"]) : null;
+  // A data do envio é a do servidor (quotes.envio); o marco da etapa só serve ao orçamento gravado antes dele.
+  const enviado =
+    item.status === "enviado" ? (item.envio ?? ultimoMarco(item, ["aguardando_cliente", "aguardando_autorizacao"])) : null;
   passos.push(
     enviado
       ? { rotulo: "Enviado", estado: "feito", quando: dataHoraCurta(enviado.em), detalhe: nomeDe(enviado.porUid) }

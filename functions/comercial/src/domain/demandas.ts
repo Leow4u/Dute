@@ -46,6 +46,7 @@ import {
   linhasGravadas,
   linkDaEntrada,
   marcosComEtapa,
+  nomeDoAutor,
   quoteRef,
   revisaoRef,
   rvEnviadaParaVoltar,
@@ -438,7 +439,7 @@ function reabrir(contexto: Contexto): Trabalho {
   const abreRv = reaberturaAbreRv(demanda, { status: String(quote.status) });
   let quoteDepois: Dados = quote;
   if (abreRv) {
-    const seguinte = rvSeguinte(numero, quote, "reabertura", { uid: caller.uid, iso });
+    const seguinte = rvSeguinte(numero, quote, "reabertura", { uid: caller.uid, nome: nomeDoAutor(caller), iso });
     transaction.update(quoteRef(db, numero), seguinte.patch);
     quoteDepois = { ...quote, ...seguinte.patch };
   }

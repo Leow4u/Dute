@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { collection } from "firebase/firestore";
 import { useLocation } from "wouter";
 
@@ -12,8 +12,17 @@ import {
   localDoDocumento,
   payloadNovoProspect,
 } from "@/lib/comercial/clientes";
+import {
+  assinaturaDoEnvio,
+  chaveDaIntencao,
+  enviarEAbrirDocumento,
+  envioDaFicha,
+  type AcaoDeEnvio,
+  type ResultadoDoEnvio,
+  type TentativaDeChamada,
+} from "@/lib/comercial/envio";
 import { useLeitura, useNomes } from "@/lib/comercial/leitura";
-import { payloadCriar } from "@/lib/comercial/montar";
+import { classificarErro, payloadCriar } from "@/lib/comercial/montar";
 import {
   contarSegmentos,
   filtrarFila,
@@ -34,7 +43,10 @@ import { FilaView, type ContextoDaFila } from "./orcamentos-view";
  * permitem a owner, admin e comercial (`demands`, `quotes`, `customers`,
  * `customer_contacts`, `customer_locations` e `contracts`), e cria o
  * orçamento só pela callable saveQuote (functions/comercial), com a chave de
- * idempotência em `request_id`.
+ * idempotência em `request_id`. Na ficha, "Enviar ao cliente" grava por
+ * advanceQuote, com a situação e a edição que a fila mostrou (e a mesma
+ * chave se a pessoa clica de novo no mesmo envio), e só então abre o
+ * documento para o PDF.
  */
 
 type Documento = { id: string; data: Record<string, unknown> };
@@ -69,6 +81,10 @@ export default function ComercialOrcamentosPage() {
   const [dialogo, setDialogo] = useState<Dialogo | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const [erroDoEnvio, setErroDoEnvio] = useState<{ numero: string; mensagem: string } | null>(null);
+  /** A chave do envio: clicar de novo no mesmo envio (a resposta se perdeu) leva a mesma request_id. */
+  const tentativaDoEnvio = useRef<TentativaDeChamada | null>(null);
 
   const demandas = useLeitura("demands", (db) => collection(db, "demands"), comoDocumento);
   const orcamentos = useLeitura("quotes", (db) => collection(db, "quotes"), comoDocumento);
@@ -137,6 +153,30 @@ export default function ComercialOrcamentosPage() {
     }
   }
 
+  async function enviar(item: ItemDaFila, acao: AcaoDeEnvio) {
+    // A situação e a edição que a fila mostra: o servidor recusa se o orçamento mudou.
+    const orcamento = { numero: item.numero, status: item.status, edicao: item.edicao };
+    tentativaDoEnvio.current = chaveDaIntencao(tentativaDoEnvio.current, assinaturaDoEnvio(acao, orcamento), novaChave);
+    setEnviando(true);
+    setErroDoEnvio(null);
+    try {
+      await enviarEAbrirDocumento({
+        acao,
+        orcamento,
+        chave: tentativaDoEnvio.current.chave,
+        chamar: (payload) => chamarComercial<ResultadoDoEnvio>("advanceQuote", payload),
+        abrir: navegar,
+      });
+      tentativaDoEnvio.current = null;
+      toast({ title: acao === "send" ? "Orçamento enviado" : "Aprovado e enviado" });
+    } catch (error) {
+      // A fila é ao vivo: depois de uma recusa de concorrência, ela já mostra o orçamento como está.
+      setErroDoEnvio({ numero: item.numero, mensagem: classificarErro(error).mensagem });
+    } finally {
+      setEnviando(false);
+    }
+  }
+
   async function criarProspect(prospect: { nome: string; cnpj: string }): Promise<string | null> {
     if (!dialogo) return null;
     setOcupado(true);
@@ -185,6 +225,12 @@ export default function ComercialOrcamentosPage() {
         contexto={contexto}
         onNovo={abrirNovo}
         onAbrir={(numero) => navegar(hrefDoOrcamento(numero))}
+        envio={{
+          acao: selecionado ? envioDaFicha(selecionado, role) : null,
+          ocupado: enviando,
+          erro: erroDoEnvio && erroDoEnvio.numero === selecionado?.numero ? erroDoEnvio.mensagem : null,
+          onEnviar: (item, acao) => void enviar(item, acao),
+        }}
       />
       <NovoOrcamentoDialog
         aberto={dialogo !== null}

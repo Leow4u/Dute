@@ -137,6 +137,8 @@ const ClienteEnvios = lazy(() =>
 const ComercialClientes = lazy(() => import("./pages/comercial/clientes"));
 const ComercialOrcamentos = lazy(() => import("./pages/comercial/orcamentos"));
 const ComercialOrcamento = lazy(() => import("./pages/comercial/orcamento"));
+const ComercialDocumento = lazy(() => import("./pages/comercial/documento"));
+const ComercialAprovar = lazy(() => import("./pages/comercial/aprovar"));
 const ComercialContratos = lazy(() => import("./pages/comercial/contratos"));
 import { useRole } from "./hooks/use-role";
 import { AuthProvider, useAppUser } from "./lib/auth";
@@ -1049,6 +1051,8 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   ...soComComercialLiberado([
     protectedRoute("/comercial", ComercialOrcamentos),
     protectedRoute("/comercial/orcamento", ComercialOrcamento),
+    protectedRoute("/comercial/orcamento/documento", ComercialDocumento),
+    protectedRoute("/comercial/aprovar", ComercialAprovar),
     protectedRoute("/comercial/clientes", ComercialClientes),
     protectedRoute("/comercial/contratos", ComercialContratos),
   ]),

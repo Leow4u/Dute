@@ -25,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { dataBr, type ContatoResumo, type LocalResumo } from "@/lib/comercial/clientes";
+import { ROTULO_DO_ENVIO } from "@/lib/comercial/envio";
 import {
   CANAIS_DO_PEDIDO,
   DESCRICAO_MAXIMA,
@@ -71,7 +72,8 @@ import { MarcaDaOrigem, SeloDaEtapa } from "./orcamentos-view";
  * os dados e as gravações chegam por props (pages/comercial/orcamento.tsx).
  * Conteúdo na identidade v3 dentro do layout de hoje. Sem legenda: rótulos,
  * dados e ações; uma ação principal ("Enviar para aprovação" no rascunho,
- * "Aprovar" para o owner). A grade é a do Excel do Guilherme; a busca de item
+ * "Aprovar" para o owner, "Enviar ao cliente" no aprovado). O documento A4
+ * abre ao lado ("Prévia do PDF" até o envio; "PDF" depois). A grade é a do Excel do Guilherme; a busca de item
  * da tabela é pelo teclado (Enter adiciona, o foco vai para a quantidade).
  * Enquanto uma gravação está em andamento, nada se edita: o que voltar do
  * servidor substitui o formulário.
@@ -120,13 +122,21 @@ export type MontarViewProps = {
   salvoEm: string | null;
   /** O servidor mudou enquanto a pessoa editava (lib/comercial/montar.ts, desatualizado). */
   desatualizado: boolean;
+  /** O documento A4 da RV em curso (lib/comercial/documento.ts, hrefDoDocumento). */
+  documentoHref: string;
   handlers: {
     salvar: () => void;
+    /** "Prévia do PDF" com alteração não salva: salva e só então leva a aba nova ao documento. */
+    previaSalva: () => void;
     enviar: () => void;
     duplicar: () => void;
     editar: () => void;
     aprovar: () => void;
     devolver: () => void;
+    /** O aprovado ao cliente (send): grava e só então abre o documento. */
+    enviarCliente: () => void;
+    /** Só o owner, do "para aprovar" (approve_and_send). */
+    aprovarEEnviar: () => void;
     trocarVariante: (variante: string) => void;
     novoContato: () => void;
   };
@@ -264,6 +274,11 @@ function Cabecalho(props: MontarViewProps & { totalCents: number | null }) {
       icone: <Undo2 aria-hidden="true" />,
       onClick: handlers.devolver,
     },
+    aprovar_e_enviar: {
+      rotulo: "Aprovar e enviar",
+      icone: <Send aria-hidden="true" />,
+      onClick: handlers.aprovarEEnviar,
+    },
   };
   return (
     <section
@@ -348,6 +363,22 @@ function Cabecalho(props: MontarViewProps & { totalCents: number | null }) {
               {rotulos[acao].rotulo}
             </Button>
           ))}
+          {/* O documento abre noutra aba: a montagem fica onde está. Com alteração não salva, salva antes: o documento lê o que está gravado. */}
+          <Button asChild variant="outline">
+            <a
+              href={props.documentoHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(evento) => {
+                if (!acoes.editavel || !props.sujo) return;
+                evento.preventDefault();
+                if (!ocupado) handlers.previaSalva();
+              }}
+            >
+              <FileText aria-hidden="true" />
+              {acoes.documento === "enviado" ? "PDF" : "Prévia do PDF"}
+            </a>
+          </Button>
           {acoes.principal === "enviar" ? (
             <Button type="button" onClick={handlers.enviar} disabled={ocupado}>
               <Send aria-hidden="true" />
@@ -358,6 +389,12 @@ function Cabecalho(props: MontarViewProps & { totalCents: number | null }) {
             <Button type="button" onClick={handlers.aprovar} disabled={ocupado}>
               <Check aria-hidden="true" />
               Aprovar
+            </Button>
+          ) : null}
+          {acoes.principal === "enviar_cliente" ? (
+            <Button type="button" onClick={handlers.enviarCliente} disabled={ocupado}>
+              <Send aria-hidden="true" />
+              {ROTULO_DO_ENVIO.send}
             </Button>
           ) : null}
         </div>

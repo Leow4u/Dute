@@ -1,5 +1,6 @@
+import type { OrcamentoParaAprovarNoInicio } from "./comercial/aprovar";
 import type { AlertaDoInicio } from "./comercial/contratos";
-import { abreComercial, hrefDoContrato } from "./comercial/navegacao";
+import { ROTA_APROVAR, abreComercial, aprovaOrcamento, hrefDoContrato } from "./comercial/navegacao";
 import { COMERCIAL_LIBERADO } from "./liberacao";
 import {
   canAccessModule,
@@ -98,6 +99,18 @@ export function veContratosNoInicio(
   return abreComercial(role, comercialLiberado);
 }
 
+/**
+ * Orçamentos para aprovar (parte 12a) só para o owner, que é quem aprova,
+ * onde a liberação do Comercial está ligada. É também o `enabled` da
+ * consulta no Início: para os outros, nada é lido.
+ */
+export function veAprovacoesNoInicio(
+  role: ProfileRole | null | undefined,
+  comercialLiberado: boolean = COMERCIAL_LIBERADO,
+): boolean {
+  return aprovaOrcamento(role, comercialLiberado);
+}
+
 /** Um item por alerta (renovação, fim da vigência, reajuste), levando à ficha do contrato. */
 function contractItems(alertas: readonly AlertaDoInicio[]): HomeInboxItem[] {
   return alertas.flatMap((alerta) => {
@@ -121,6 +134,7 @@ export function buildHomeInbox({
   ops,
   requests,
   contratos,
+  paraAprovar,
   comercialLiberado = COMERCIAL_LIBERADO,
 }: {
   role: ProfileRole | null | undefined;
@@ -128,6 +142,8 @@ export function buildHomeInbox({
   requests?: HomeRequest[];
   /** Alertas dos contratos (lib/comercial/contratos.ts, alertasParaOInicio). */
   contratos?: readonly AlertaDoInicio[];
+  /** Orçamentos em "Para aprovar" (lib/comercial/inicio.ts, lerOrcamentosParaAprovar). */
+  paraAprovar?: readonly OrcamentoParaAprovarNoInicio[];
   comercialLiberado?: boolean;
 }): HomeInbox {
   const orders = groupWarehouseOrders(ops).filter(
@@ -181,6 +197,17 @@ export function buildHomeInbox({
         listPreview(triage.map((request) => request.title ?? request.type)) ||
         "Enviadas pelos clientes",
       href: "/solicitacoes",
+      actionLabel: "Aprovar",
+    });
+  }
+
+  if (paraAprovar?.length && veAprovacoesNoInicio(role, comercialLiberado)) {
+    items.push({
+      id: "comercial:aprovar",
+      tone: "attention",
+      title: `${plural(paraAprovar.length, "orçamento", "orçamentos")} para aprovar`,
+      detail: listPreview(paraAprovar.map((orcamento) => [orcamento.numero, orcamento.cliente].filter(Boolean).join(" · "))),
+      href: ROTA_APROVAR,
       actionLabel: "Aprovar",
     });
   }
