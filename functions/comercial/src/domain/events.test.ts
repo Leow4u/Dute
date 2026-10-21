@@ -25,7 +25,15 @@ import {
 
 /** Um payload válido por tipo. O Record obriga a ter exemplo de todo tipo novo. */
 const EXEMPLOS: Record<ComercialEventType, Record<string, unknown>> = {
-  "demand.created": { numero: "10045" },
+  "demand.created": {
+    numero: "10045",
+    entrada: "comercial",
+    canal: "email",
+    tipo: "planejada",
+    cobranca: "por_demanda",
+    contrato_id: "itau-2026",
+    duplicado_de: "10012",
+  },
   "demand.stage_changed": {
     numero: "10045",
     etapa_antes: "em_montagem",
@@ -34,11 +42,53 @@ const EXEMPLOS: Record<ComercialEventType, Record<string, unknown>> = {
   },
   "demand.won": { numero: "10045", rv: 1 },
   "demand.lost": { numero: "10045", etapa_antes: "aguardando_cliente" },
-  "quote.created": { numero: "10045", rv: 0, tipo_rv: "proposta", edicao: 1 },
-  "quote.updated": { numero: "10045", rv: 0, edicao_antes: 1, edicao_depois: 2 },
-  "quote.submitted": { numero: "10045", rv: 0, edicao: 2 },
+  "quote.created": {
+    numero: "10045",
+    rv: 0,
+    tipo_rv: "proposta",
+    edicao: 1,
+    etapa: "em_montagem",
+    tabela_id: "pt_0123abcd",
+    variante: "comercial",
+    linhas: { tabela: 7, alterado: 1, avulso: 1, ajuste: 1 },
+    marcas: ["preco_alterado", "item_avulso", "ajuste"],
+    duplicado_de: "10012",
+    linhas_reprecificadas: 2,
+  },
+  "quote.updated": {
+    numero: "10045",
+    rv: 0,
+    edicao_antes: 1,
+    edicao_depois: 2,
+    tabela_id: null,
+    variante: "noturna",
+    linhas: { tabela: 0, alterado: 0, avulso: 3, ajuste: 0 },
+    marcas: ["sem_tabela", "item_avulso"],
+    segundos_desde_anterior: 45_000_000,
+  },
+  "quote.submitted": {
+    numero: "10045",
+    rv: 0,
+    edicao: 2,
+    status_antes: "rascunho",
+    status_depois: "para_aprovar",
+    etapa_antes: "em_montagem",
+    etapa_depois: "para_aprovar",
+    segundos_desde_anterior: 120,
+    linhas: { tabela: 7, alterado: 1, avulso: 1, ajuste: 1 },
+    marcas: ["tabela_vencida"],
+  },
   "quote.returned": { numero: "10045", rv: 0, edicao: 2 },
   "quote.approved": { numero: "10045", rv: 0, edicao: 3 },
+  "quote.edited": {
+    numero: "10045",
+    rv: 0,
+    edicao: 3,
+    status_antes: "aprovado",
+    status_depois: "rascunho",
+    etapa_antes: "para_enviar",
+    etapa_depois: "em_montagem",
+  },
   "quote.approval_waived": { numero: "10045", rv: 2, edicao: 1 },
   "quote.sent": { numero: "10045", rv: 0, edicao: 3 },
   "quote.revised": { numero: "10045", rv: 1, rv_anterior: 0, tipo_rv: "aditivo" },
@@ -479,6 +529,38 @@ describe("evento gravado", () => {
         }),
       HttpsError,
     );
+  });
+
+  it("passo do orçamento (parte 9): segundos de meses cabem, e linhas por origem são só contagens", () => {
+    const passo = COMERCIAL_EVENT_PAYLOADS["quote.submitted"];
+    const base = { numero: "10045", rv: 0, edicao: 2 };
+    // Um orçamento parado 200 dias ainda gera o evento (antes, o teto era de 11 dias).
+    assert.ok(passo.safeParse({ ...base, segundos_desde_anterior: 200 * 86_400 }).success);
+    assert.ok(COMERCIAL_EVENT_PAYLOADS["demand.stage_changed"].safeParse({
+      numero: "10045",
+      etapa_antes: "para_aprovar",
+      etapa_depois: "em_montagem",
+      segundos_desde_anterior: 200 * 86_400,
+    }).success);
+    for (const linhas of [
+      { tabela: 1, alterado: 0, avulso: 0, ajuste: 0, total_cents: 100 },
+      { tabela: 1.5, alterado: 0, avulso: 0, ajuste: 0 },
+      { tabela: 1, alterado: 0, avulso: 0 },
+    ]) {
+      assert.equal(passo.safeParse({ ...base, linhas }).success, false, JSON.stringify(linhas));
+    }
+    assert.equal(passo.safeParse({ ...base, marcas: ["desconto_de_1500_reais"] }).success, false);
+    assert.equal(passo.safeParse({ ...base, status_depois: "fechado" }).success, false);
+  });
+
+  it("a etapa cancelada tem rótulo", () => {
+    const event = buildComercialEvent({
+      ...base,
+      type: "demand.stage_changed",
+      entity_id: "10045",
+      payload: { numero: "10045", etapa_antes: "em_montagem", etapa_depois: "cancelada" },
+    });
+    assert.equal(event.title, "Demanda 10045: Cancelada");
   });
 
   it("o ator é sempre alguém da equipe", () => {

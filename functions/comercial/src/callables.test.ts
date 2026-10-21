@@ -116,6 +116,19 @@ describe("callables do Comercial", () => {
     }
   });
 
+  it("demanda e orçamento (parte 9): saveQuote e advanceQuote, cada uma no seu domínio", () => {
+    const blocks = callableBlocks();
+    for (const [name, handler] of [
+      ["saveQuote", "saveQuoteFor"],
+      ["advanceQuote", "advanceQuoteFor"],
+    ]) {
+      const block = blocks.get(name);
+      assert.ok(block, `${name} não declarada`);
+      assert.match(block, ENTRADA_DE_NEGOCIO, name);
+      assert.match(block, new RegExp(`return ${handler}\\(db, caller, request\\.data\\);`), name);
+    }
+  });
+
   it("contratos (parte 8): saveContract e recordAditivo declaradas como callables de negócio", () => {
     const blocks = callableBlocks();
     for (const name of ["saveContract", "recordAditivo"]) {

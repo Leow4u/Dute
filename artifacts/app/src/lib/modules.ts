@@ -1,6 +1,7 @@
 import {
   BarChart3,
   BrainCircuit,
+  Briefcase,
   CalendarDays,
   ClipboardCheck,
   FileText,
@@ -14,11 +15,14 @@ import {
   Receipt,
   Sparkles,
   Truck,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 
 import { PAPEIS, isPapel, type Papel } from "@workspace/dominio";
 
+import { COMERCIAL_ROLES, ROTA_CLIENTES, ROTA_COMERCIAL, abreComercial } from "./comercial/navegacao";
+import { COMERCIAL_LIBERADO } from "./liberacao";
 import {
   portalModulesFor,
   type OperationProfile,
@@ -60,6 +64,8 @@ export const OPERATIONS_ROLES: ProfileRole[] = [
   "suporte",
 ];
 export const SUPPORT_ROLES: ProfileRole[] = ["owner", "admin", "suporte"];
+/** Comercial (lib/comercial/navegacao.ts): só com a liberação própria. */
+export const COMMERCIAL_ROLES: ProfileRole[] = [...COMERCIAL_ROLES];
 
 /**
  * Poda da escala real (31/07/2026): o operador wms vive na bancada WMS.
@@ -125,6 +131,16 @@ export type AppModule = {
    * tem Eventos, o de Insumos não existe.
    */
   portal?: PortalModuleKey;
+  /**
+   * Liberação por ambiente do módulo (lib/liberacao.ts). Sem ela ligada, o
+   * item não existe no menu: hoje só o Comercial tem.
+   */
+  liberacao?: "comercial";
+  /**
+   * Grupo mesmo com uma tela só: o menu mostra o módulo e a tela dentro dele
+   * ("Comercial" › "Clientes"), em vez de virar o link da tela.
+   */
+  group?: boolean;
 };
 
 const CLIENT_ROLES: ProfileRole[] = ["cliente"];
@@ -282,6 +298,27 @@ export const APP_MODULES: AppModule[] = [
         href: "/faturamento",
         icon: Receipt,
         roles: FINANCE_ROLES,
+      }),
+    ],
+  }),
+  // Comercial (docs/plataforma/fase-6-comercial.md, parte 13): só onde a
+  // liberação do Comercial está ligada. Clientes é a primeira tela; a fila de
+  // orçamentos (parte 11) entra no mesmo grupo.
+  appModule({
+    id: "comercial",
+    label: "Comercial",
+    audience: "internal",
+    icon: Briefcase,
+    roles: COMMERCIAL_ROLES,
+    liberacao: "comercial",
+    group: true,
+    routes: [
+      navRoute({
+        id: "comercial-clientes",
+        label: "Clientes",
+        href: ROTA_CLIENTES,
+        icon: Users,
+        roles: COMMERCIAL_ROLES,
       }),
     ],
   }),
@@ -538,6 +575,8 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   { path: "/usuarios", roles: ACCESS_ADMIN_ROLES },
   { path: "/clientes", roles: ACCESS_ADMIN_ROLES },
   { path: "/suporte", roles: SUPPORT_ROLES },
+  // Casa do Comercial: leva a Clientes até a fila de orçamentos existir.
+  { path: ROTA_COMERCIAL, roles: COMMERCIAL_ROLES },
 ];
 
 const MERGED_SCREEN_APP_ROLES = Object.fromEntries(
@@ -597,10 +636,15 @@ export function getHomePathForAppRole(role: AppRole | null | undefined) {
  * não num dashboard genérico. O operador WMS abre a fila de Pedidos (separar
  * e entregar); o financeiro, a competência do mês.
  */
-export function getHomePathForProfile(role: ProfileRole | null | undefined) {
+export function getHomePathForProfile(
+  role: ProfileRole | null | undefined,
+  comercial: boolean = COMERCIAL_LIBERADO,
+) {
   if (role === "cliente") return "/portal";
   if (role === "wms") return "/pedidos";
   if (role === "financeiro") return "/faturamento";
+  // O comercial abre no módulo dele onde o Comercial está liberado.
+  if (role === "comercial" && abreComercial(role, comercial)) return ROTA_COMERCIAL;
   // Papel da plataforma sem tela ainda: a Conta, que todo perfil abre. Sem
   // isso o Início negado devolveria a "/" em laço.
   if (role && !INTERNAL_ROLES.includes(role)) return "/configuracoes/conta";
@@ -630,11 +674,13 @@ export function getNavigationForAppRole(
 /**
  * Menu por papel. No portal, o perfil de operação do cliente (modelo +
  * pacote, lib/operations) esconde os módulos que o modelo não tem; sem
- * perfil (área interna, ou ainda carregando) nada é escondido.
+ * perfil (área interna, ou ainda carregando) nada é escondido. O Comercial
+ * só entra com a liberação dele (padrão: a deste build).
  */
 export function getNavigationForProfileRole(
   role: ProfileRole | null | undefined,
   operation?: OperationProfile | null,
+  comercial: boolean = COMERCIAL_LIBERADO,
 ): AppModule[] {
   const appRole = appRoleForProfile(role) ?? "interno";
   const portalModules = appRole === "cliente" ? portalModulesFor(operation) : null;
@@ -643,6 +689,7 @@ export function getNavigationForProfileRole(
     (module) =>
       module.appRoles.includes(appRole) &&
       canAccessModule(role, module.roles) &&
+      (module.liberacao !== "comercial" || abreComercial(role, comercial)) &&
       (portalModules === null || !module.portal || portalModules.includes(module.portal)),
   )
     .map((module) => {
@@ -712,6 +759,11 @@ export function getMobileNavigation(modules: AppModule[]): MobileNavigation {
 
 export function isModuleEnabled(module: AppModule): boolean {
   return Boolean(module.href);
+}
+
+/** O menu mostra o módulo como grupo (com as telas dentro) ou como o link de uma tela. */
+export function isModuleGroup(module: AppModule): boolean {
+  return Boolean(module.group) || module.routes.filter((route) => route.href).length > 1;
 }
 
 export function isRouteActive(

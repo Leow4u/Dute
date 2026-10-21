@@ -33,6 +33,7 @@ import {
   getNavigationForProfileRole,
   isAccountPath,
   isModuleEnabled,
+  isModuleGroup,
   isRouteActive,
   type AppModule,
   type ModuleRoute,
@@ -218,7 +219,7 @@ function CollapsedModuleItem({
 }) {
   const Icon = module.icon;
   const enabled = isModuleEnabled(module);
-  const hasSubroutes = module.routes.filter((route) => route.href).length > 1;
+  const hasSubroutes = isModuleGroup(module);
   const triggerClassName = cn(
     "flex h-11 w-11 items-center justify-center rounded-xl outline-none transition-[background-color,color,box-shadow] duration-200",
     active
@@ -301,7 +302,7 @@ function ExpandedModuleItem({
 }) {
   const Icon = module.icon;
   const enabled = isModuleEnabled(module);
-  const hasSubroutes = module.routes.filter((route) => route.href).length > 1;
+  const hasSubroutes = isModuleGroup(module);
   const itemClassName = cn(
     "flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-left text-sm font-medium outline-none transition-[background-color,color,box-shadow] duration-200",
     active
