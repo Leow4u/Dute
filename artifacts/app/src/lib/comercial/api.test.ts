@@ -4,13 +4,13 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { CALLABLES_DO_CADASTRO, mensagemDoErro } from "./api";
+import { CALLABLES_DO_CADASTRO, CALLABLES_DO_CONTRATO, mensagemDoErro } from "./api";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const indexDoComercial = readFileSync(resolve(here, "../../../../../functions/comercial/src/index.ts"), "utf8");
 
 describe("callables do cadastro comercial", () => {
-  it.each(CALLABLES_DO_CADASTRO)("%s existe em functions/comercial", (nome) => {
+  it.each([...CALLABLES_DO_CADASTRO, ...CALLABLES_DO_CONTRATO])("%s existe em functions/comercial", (nome) => {
     expect(indexDoComercial).toMatch(new RegExp(`^export const ${nome} = onCall\\(`, "m"));
   });
 

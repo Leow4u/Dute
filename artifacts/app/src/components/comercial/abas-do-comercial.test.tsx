@@ -17,8 +17,14 @@ function render(atual: string, telas: readonly string[]) {
 const href = (id: string) => ABAS_DO_COMERCIAL.find((aba) => aba.id === id)!.href;
 
 describe("barra de abas do Comercial", () => {
-  it("sem tela de nenhuma aba, a barra não aparece (hoje)", () => {
-    expect(render("/comercial/clientes", TELAS_DO_COMERCIAL)).toBe("");
+  it("sem tela de nenhuma aba, a barra não aparece", () => {
+    expect(render("/comercial/clientes", ["/comercial/clientes"])).toBe("");
+  });
+
+  it("hoje a barra tem só Contratos, marcada na tela de contratos", () => {
+    const html = render(href("contratos"), TELAS_DO_COMERCIAL);
+    expect(html.replace(/<[^>]+>/g, "|").split("|").filter(Boolean)).toEqual(["Contratos"]);
+    expect(html).toMatch(/<a [^>]*aria-current="page"[^>]*>Contratos<\/a>/);
   });
 
   it("mostra só as abas com tela, com a atual marcada", () => {
