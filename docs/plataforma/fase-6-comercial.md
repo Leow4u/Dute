@@ -73,7 +73,7 @@ registro de cada parte entra no fim, como em `fase-2-nucleo.md`.
 | Medição mensal | As demandas do mês de um contrato com esse regime (o Safra) viram uma medição, que o cliente aprova antes da NF |
 | Dinheiro | Decimal em texto e centavos inteiros por linha, com arredondamento por linha como o cálculo do WMS (`billing.ts`). O servidor sempre recalcula |
 | Eventos | Sem valor, sem nome nem contato de cliente, título e descrição de modelo fixo. Nenhum tipo usa as palavras do roteador de avisos do WMS (`index.ts`, "order", "invoice", "receb"...) |
-| Leitura | `canReadPrices()`: owner, admin e comercial (financeiro conforme a pergunta 4). `canReadBilling` não muda |
+| Leitura | `canReadPrices()`: owner, admin, comercial e financeiro (o financeiro desde a parte 15, pergunta 4). `canReadBilling` não muda |
 | Codebase | `functions/comercial`. Catálogo e contratos moram nela até a Fase 3; a Operação lê `lpu_items` pelas regras |
 | Liberação | Chave própria do Comercial em `lib/liberacao.ts`, copiada nas callables, que recusam fora dela |
 | IA | Sem sugestão de preço no v1. Cada RV congelada, os tempos de cada passo, o resultado e a execução ficam gravados desde o primeiro dia |
@@ -87,7 +87,7 @@ registro de cada parte entra no fim, como em `fase-2-nucleo.md`.
 | `customer_contacts` | nome, e-mail, telefone, empresa | owner, admin, comercial |
 | `contracts` (e `contracts/{id}/aditivos/{numero}`, id sem zero à esquerda) | contrato e histórico; o id do contrato é interno, nunca o número do cliente | `canReadPrices()` |
 | `lpu_items`, `price_tables` | catálogo e tabelas | `canReadPrices()`; `lpu_items` abre à operação na Fase 3 |
-| `demands` | a demanda, sem preço | owner, admin, comercial; a operação na Fase 3 |
+| `demands` | a demanda, sem preço | owner, admin, comercial e financeiro (parte 15); a operação na Fase 3 |
 | `quotes` (e `revisoes`) | orçamento e RVs congeladas | `canReadPrices()` |
 | `client_authorizations` | autorizações de faturamento | `canReadPrices()` |
 | `medicoes` | medições mensais | `canReadPrices()` |
@@ -195,8 +195,9 @@ Storage.
 3. **A RV de execução sem preço novo passa de novo pela aprovação?** Recomendo
    dispensar quando só mudam quantidades de linhas de tabela e o total não passa
    o fechado; fica o marco "aprovação dispensada". (Parte 10)
-4. **Quem registra a autorização de faturamento?** Recomendo comercial e
-   financeiro, este sem editar itens nem preço. (Parte 15)
+4. **Quem registra a autorização de faturamento?** Recomendação aceita:
+   comercial e financeiro, este sem editar itens nem preço. Feito na parte
+   15a: só a recordAuthorization atende o financeiro. (Parte 15)
 5. **Contratos e Autorizações ficam no Comercial ou no Financeiro?** Recomendo
    no Comercial no v1; o Financeiro passa a ler na Fase 7. (Parte 14)
 6. **A gerenciadora vira empresa no cadastro?** Recomendo que não: ela é a
@@ -211,21 +212,51 @@ Storage.
    aceitar a linha igual à fechada (mesmo id, origem, item e preço; no ajuste,
    o mesmo valor), porque os orçamentos do Itaú quase sempre têm alterado ou
    ajuste. (Parte 11)
-9. **O "Desfazer" do ComAprovarCelular volta?** Saiu da parte 12a. Depois de
-   "Aprovar" não há volta de aprovado para "Para aprovar": `edit` leva ao
-   rascunho, e alguém precisa mandar de novo para aprovação. Fazer o desfazer
-   com `edit` e `submit` deixaria na timeline o Leonardo mandando para
-   aprovação o que o Guilherme montou. Recomendo, se o toque errado acontecer
-   no uso, uma ação própria no `advanceQuote` (aprovado, ainda não enviado,
-   volta a "Para aprovar", só o owner, com evento), numa parte de backend.
-   Depois de "Devolver", o desfazer seria o autor mandar de novo. (Parte 12a)
-10. **Razão social e CNPJ no cabeçalho do PDF.** O ComDocumento traz a razão
+9. **De que data corre o prazo de perda do portal (90 dias no BTG)?** O
+   contrato fala em atraso na solicitação no portal do fornecedor; a
+   ComAutorizacoes mostra o prazo contado do pedido do portal ("prazo do
+   pedido", 90 dias depois da autorização). Hoje o alerta conta do fim da
+   execução, que vem antes: avisa cedo e nunca deixa passar o prazo, mas
+   pode dar "vencido" antes da hora. Recomendo manter a execução até o
+   Leonardo confirmar; se valer o pedido, o alerta passa a receber a
+   autorização ativa e a 15b mostra a data do pedido. (Parte 15b)
+10. **Como se encerra a demanda que perdeu o prazo de faturamento?** O alerta
+    segue em "A faturar" depois do fim, vencido; a demanda a faturar não se
+    perde, e depois do fechamento o único motivo de perda é o cancelamento
+    pelo cliente. Recomendo um motivo de perda "prazo de faturamento", aceito
+    só com o alerta vencido, inclusive a partir de "A faturar" com a
+    autorização ainda não usada na NF. (Parte 15b ou Fase 7)
+11. **A aprovação da medição fecha e valida a proposta enviada sem
+   fechamento?** Hoje não: a aprovação não registra o que o cliente não
+   respondeu. A demanda fica pendente, presa à medição, e ganha a autorização
+   dela quando for fechada, executada e validada. Recomendo um atalho na tela
+   da medição para a pendente "proposta sem fechamento", que faz os três passos
+   com o aceite sendo a própria medição aprovada. (Parte 16b)
+12. **O frete esquecido de um mês já enviado ou aprovado entra onde?** Hoje
+    a linha só entra na medição do mês da execução, que só se edita em
+    rascunho, e da enviada só se sai pela contestação do cliente. Recomendo
+    aceitar a linha na medição aberta com uma marca "execução de outro mês",
+    porque a aprovada já virou NF; a Dutelog retirar o envio (enviada para
+    rascunho) seria uma ação à parte da contestação. (Parte 16b)
+13. **O "Baixar ZIP dos pedidos" do mockup fica no v1?** O anexo da linha é
+    texto (nome e referência: o e-mail ou o OneDrive) e o Storage está fora do
+    v1. Recomendo tirar o ZIP da tela no v1 e manter o "Anexar" gravando a
+    referência. (Parte 16b)
+14. **O "Desfazer" do ComAprovarCelular volta?** Saiu da parte 12a. Depois de
+    "Aprovar" não há volta de aprovado para "Para aprovar": `edit` leva ao
+    rascunho, e alguém precisa mandar de novo para aprovação. Fazer o desfazer
+    com `edit` e `submit` deixaria na timeline o Leonardo mandando para
+    aprovação o que o Guilherme montou. Recomendo, se o toque errado acontecer
+    no uso, uma ação própria no `advanceQuote` (aprovado, ainda não enviado,
+    volta a "Para aprovar", só o owner, com evento), numa parte de backend.
+    Depois de "Devolver", o desfazer seria o autor mandar de novo. (Parte 12a)
+15. **Razão social e CNPJ no cabeçalho do PDF.** O ComDocumento traz a razão
     social, o CNPJ e a cidade da Dutelog; o repositório não tem o CNPJ, e o
     cabeçalho saiu com "Dutelog Soluções Logísticas", o nome que o app usa, e o
     e-mail do Comercial. Falta o Leonardo dizer a razão social e o CNPJ que vão
     na proposta; entram como constantes no papel
     (`components/comercial/orcamento-documento.tsx`). (Parte 12a)
-11. **Como o Leonardo fica sabendo que há orçamento para aprovar?** Hoje, pelo
+16. **Como o Leonardo fica sabendo que há orçamento para aprovar?** Hoje, pelo
     e-mail do Guilherme; no app, pelo item do Início quando ele abre. Avisar
     (notificação ou um "Copiar link" da aprovação na montagem, com
     `hrefDaAprovacao(numero)`) não está nos mockups. Recomendo ver no uso se o
@@ -277,7 +308,7 @@ Storage.
   mostra a linha alterada (preço da tabela riscado e motivo), a avulsa, o
   ajuste e as marcas da tabela (fora da vigência, sem tabela). "Devolver" pede
   a nota; "Aprovar e enviar" grava e abre o documento. O "Desfazer" do mockup
-  ficou de fora (pergunta 9).
+  ficou de fora (pergunta 14).
 - **O orçamento da tela não troca sozinho** (`acompanharAprovacao`): se ele
   sai da fila enquanto o Leonardo confere (o autor puxou de volta, a demanda
   foi perdida, outro aparelho decidiu) ou volta com outra edição, o cartão
@@ -295,7 +326,7 @@ Storage.
   cópia congelada em `quotes/{numero}/revisoes/{rv}`. O título da aba é o nome
   do PDF ("Orçamento 10045 – RV01 – CE8977 – título"). Na tela, o papel tem a
   largura do A4 e, no celular, rola para o lado. Aberto da aprovação
-  (`&de=aprovar`), o "voltar" leva a ela. Sem CNPJ (pergunta 10).
+  (`&de=aprovar`), o "voltar" leva a ela. Sem CNPJ (pergunta 15).
 - **Limite da cópia congelada**: os valores, as linhas, as condições, a
   demanda e quem montou saem da RV congelada, mas os nomes do contato, dos
   locais e o número do contrato ainda se leem pelos ids, nos cadastros de
@@ -316,3 +347,161 @@ Storage.
 - **Quem montou**: o comercial não lê `users` de outra pessoa, então o
   servidor grava `autor_nome` no orçamento (criar, duplicar, RV seguinte) e na
   RV congelada; o orçamento antigo cai no perfil, quando quem lê pode.
+
+### Parte 15a: autorização de faturamento (backend)
+
+- `client_authorizations/{id}` guarda o "pode faturar" do cliente: tipo
+  (pedido e aceite, medição aprovada, portal ou outro), pedido, aceite,
+  recebida em, valor, as demandas com a RV citada e o total dela, tomador
+  (CNPJ inteiro, pode ser filial), código de serviço (o do contrato, se não
+  vier), centro de custo, referência, escopo, link do e-mail, documento,
+  marcas, soma e saldo e situação (registrada ou cancelada). `nf_ids`,
+  `enviada_portal_em` e `omie_lancada_em` ficam reservados para a Fase 7. O
+  id é interno (`aut_...`), nunca o número do pedido.
+- A callable `recordAuthorization` registra (record) e cancela (cancel). O
+  registro aceita demandas do mesmo cliente e do mesmo contrato em
+  "Aguardando autorização" ou, no complemento, já "A faturar" por outra
+  autorização; leva cada uma a "A faturar" e grava o id em
+  `autorizacao_ids`. Uma autorização cobre várias demandas e uma demanda pode
+  ter várias. O cancelamento devolve a "Aguardando autorização" a demanda
+  que fica sem nenhuma; a autorização já usada no faturamento (NF, portal ou
+  Omie) não se cancela. Cancelar de novo só devolve o estado.
+- O tipo segue o que o contrato pedia na validação
+  (`validacao.autorizacao`): no contrato com pedido e aceite, só pedido e
+  aceite, com os dois números (a NF do cliente leva os dois); no portal, só
+  o pedido do portal. A medição aprovada vem da medição mensal (parte 16) e
+  não entra nesta callable; "outro registro" só serve à validação sem o
+  tipo do contrato (o legado).
+- A etapa continua saindo de `etapaDaDemanda`: validada para "Aguardando
+  autorização" e com autorização ativa é "A faturar". Assim perder, reabrir
+  e cancelar a autorização chegam à mesma etapa.
+- O valor de cada demanda é o total da RV citada como foi enviada
+  (`revisoes/{rv}.total_cents`), lido pelo servidor; sem RV na entrada, vale
+  a validada. A divergência não impede o registro, vira marca:
+  `valor_diverge` (o valor informado difere da soma das RVs e do saldo, o
+  que falta autorizar nelas: a soma menos as outras autorizações ativas
+  delas; o complemento que fecha o saldo não marca; sem saldo quando outra
+  autorização também cobre demanda fora desta), `tomador_outra_raiz` (a
+  raiz do CNPJ do tomador difere da do cadastro, ou o cadastro não tem CNPJ
+  válido para conferir) e `rv_nao_validada`.
+- O tomador vem inteiro (pode ser filial) ou com a raiz mascarada, como no
+  e-mail de autorização do Itaú ("11.222.XXX/0001-81"): o servidor completa
+  com a raiz do cadastro e confere os dígitos verificadores. Se a parte à
+  mostra é de outra raiz, se os dígitos não fecham ou se o cadastro não tem
+  CNPJ, pede o CNPJ inteiro.
+- Pedido e aceite iguais (sem máscara nem caixa) a uma autorização ativa do
+  mesmo cliente são recusados (already-exists); cancelada a anterior, podem
+  ser registrados de novo.
+- Papéis: owner, admin, comercial e financeiro. O financeiro entra só nesta
+  callable, pela opção `{ financeiro: true }` de `requireComercialCaller`;
+  `callables.test.ts` reprova a opção em qualquer outra. `canReadPrices()`
+  e `canReadDemands()` passam a incluir o financeiro (preço é de owner,
+  admin, financeiro e comercial; a fila de autorizações lê as demandas); os
+  contatos (`canReadCommercialRegistry`) continuam fora dele.
+- A idade na fila conta do fim da execução (a data que a ComAutorizacoes
+  mostra) ou da validação, o que veio antes; a validação só conta sozinha no
+  legado sem período executado. Faixas: até 30 dias, de 31 a 60, mais de 60.
+- Prazo de perda (`autorizacao.prazo_perda_dias` do contrato): avisos a 60,
+  30 e 10 dias do fim (no prazo de 90, aos 30, 60 e 80 dias de espera),
+  em "Aguardando autorização" e "A faturar"; depois do fim, vencido.
+- Eventos `client_authorization.recorded` e `.cancelled` com o id, o tipo,
+  o contrato, as demandas, as que mudaram de etapa e as marcas; nunca o
+  pedido, o aceite, o tomador, o centro de custo nem valor. A mudança de
+  etapa de cada demanda gera `demand.stage_changed`. O tipo "portal" se
+  chama "Portal do fornecedor" (o portal de compras do cliente, como na
+  ComAutorizacoes), também na tela de Contrato; "Portal do cliente" é o do
+  Dute.
+- Índices: `demands` por etapa e cliente (a fila); `client_authorizations`
+  por situação e por cliente e situação, pela data do registro.
+- Fica para a parte 15b: a tela (ComAutorizacoes) e o acesso do financeiro
+  ao app do Comercial (hoje o `comercialStatus` e o menu só abrem a owner,
+  admin e comercial). Ficam em aberto a data-base do prazo de perda do
+  portal e o encerramento da demanda que o perdeu (perguntas 9 e 10).
+
+### Parte 16a: medição mensal (backend)
+
+- `medicoes/{contrato_id}_{AAAA-MM}`: uma por contrato e competência, só de
+  contrato com regime `medicao_mensal` (no regime padrão ou no de um
+  serviço). Competência repetida, futura ou fora da vigência do contrato é
+  recusada; vale a vigência atual e as anteriores, pelos aditivos
+  (`vigencia_anterior` e a vigência de cada um): o aditivo de prorrogação
+  reescreve a vigência do contrato, e a medição do mês da renovação ainda abre
+  depois dele. A variante da tabela é escolhida ao abrir (padrão: Comercial).
+- `saveMedicao` (create, upsert_line, remove_line) só no rascunho e na
+  edição vista; `advanceMedicao` faz send (rascunho → enviada), approve
+  (enviada → aprovada), contest (enviada → contestada, com nota) e reopen
+  (contestada → rascunho). Papéis: owner, admin e comercial.
+- A data da solicitação é a data-base da linha: vale a tabela do contrato
+  vigente nela, nunca a Padrão Dutelog. A linha noturna usa a tabela Noturna
+  do contrato quando ela existe na data; sem ela, e na linha diurna, vale a
+  variante da medição. Cada gravação precifica de novo todas as linhas, então
+  a tabela renovada que é carregada depois (a v1 encerrada na véspera) passa a
+  valer para as linhas pedidas na vigência dela; o evento conta as linhas que
+  mudaram. O envio só confere: se algum preço mudou desde a última gravação,
+  recusa e nada muda (grava-se a medição de novo, a pessoa confere e envia),
+  para ir ao cliente o que a pessoa viu e exportou. A conta de cada item é a
+  do orçamento: tabela, alterado (com o preço da tabela ao lado e motivo) e
+  avulso (com preço e motivo).
+- O dia da tarifa sai da data da execução (sábado, domingo ou dia útil); o
+  feriado em dia útil é informado como `domingo_feriado`. Dia útil num sábado
+  é recusado.
+- Marcas da linha: `dia_nao_bate_tarifa` quando a diária usada não cobre o
+  dia ou a janela da execução, ou quando a tabela tem uma diária que cobre
+  melhor; `rota_fora_da_tabela` para item avulso; `sem_pedido_anexo`. O dia e
+  a janela saem dos atributos do item (categoria, item, serviço, descrição, a
+  descrição do cliente na tabela e a unidade). É diária o item que diz
+  "diária", ou o de pessoa (ajudante, motorista) ou na unidade dia que diz o
+  dia da tarifa, como a tabela do Safra ("Ajudante de Sábado das 08:00 às
+  17:00", "Sáb. | 08h às 17h"). A janela sai da palavra (diurna, noturna) ou
+  do horário (das 6h às 18h é diurna; o resto, noturna). Quando a tabela tem
+  uma única diária da mesma família (o item sem dia, janela nem horário) para
+  o dia e a janela, o item guarda `trocar_por`; sem essa segurança, só a
+  marca. O servidor nunca troca o item: a tela oferece "Aplicar" e grava a
+  linha de novo. Cada item guarda a classe que o servidor calculou (`classe`:
+  diária com dias e janelas, veículo, ajudante) e a cobertura da tarifa de
+  `trocar_por` (`trocar_por_diaria`), para a tela montar "Sábado na tarifa de
+  dia útil", "Aplicar sábado" e o resumo por item sem repetir a conta.
+- A linha que cita uma demanda prende a demanda (`demands.medicao_id`): a
+  mesma demanda não entra em duas medições, e a demanda precisa ser do mesmo
+  cliente e contrato, cobrada por medição mensal (no contrato misto, a
+  demanda cobrada por demanda espera o pedido e aceite dele), sem perda nem
+  cancelamento. Retirar a última linha dela solta a demanda. A demanda presa
+  não troca de contrato (`saveQuote` recusa: seria cobrada duas vezes).
+- A aprovação cria `client_authorizations/aut_{medicao_id}` (tipo
+  `medicao_aprovada`, com as demandas autorizadas, o total aprovado, quando,
+  quem e o link) e confere de novo cada demanda (cliente, contrato, a medição
+  e a cobrança): a que não bate fica pendente sem ser tocada, e a medição
+  nunca faz as vezes da autorização de outro contrato. Vão a "a faturar" as
+  demandas que o cliente já tinha fechado: a já validada perde a pendência de
+  medição; a fechada (com ou sem a execução registrada, que então sai das
+  datas das linhas) ou com a RV de execução enviada é validada pela medição
+  (`validacao.origem: "medicao"`). Ficam pendentes, presas à medição, em
+  `demandas_pendentes` com o motivo: a perdida ou cancelada, a proposta sem
+  fechamento, a RV em montagem, o aditivo em negociação (a medição aprova as
+  linhas pela tabela, nunca o preço e o escopo do aditivo) e a que espera
+  autorização. A pendente não fica sem saída: validada depois (`validate`),
+  vai a "a faturar" com a autorização da medição, sem a pendência, e sai das
+  pendentes da medição e da autorização. A medição sem demanda também cria a
+  autorização: o que se fatura é a medição.
+- Funções puras em `domain/medicao.ts`: `competenciaAtual`,
+  `alertaMedicaoNaoEnviada` (a partir do primeiro dia do mês seguinte, com os
+  dias de atraso: o rascunho de competência anterior e, com os contratos, o
+  contrato por medição mensal sem a medição do mês que passou, só da
+  competência anterior) e `exportarDiarioDeBordo` (as 15 colunas do arquivo
+  do cliente, com o custo do veículo, o dos ajudantes e o total; o veículo e o
+  horário do ajudante são a descrição do item na tabela do cliente, a chave
+  do Diário; a linha com dois tipos de veículo sai em uma linha do Diário por
+  veículo; o solicitante é a área, nunca a pessoa; a chave orçamentária sai
+  vazia). A convenção da tabela do Safra está em `comercial-cargas.md`.
+- Eventos `medicao.created`, `line_saved`, `line_removed`, `sent`,
+  `approved`, `contested` e `reopened`, e `client_authorization.recorded`
+  com o tipo e a medição; `quote.validated` ganha a autorização da medição
+  aprovada. Sem valor, sem a OS do cliente, a área, os locais, a mercadoria
+  nem a nota da contestação. `TIPOS_AUTORIZACAO` passou para `events.ts`
+  (contratos.ts reexporta).
+- Regras: `medicoes` lê por `canReadPrices()` e ninguém grava pelo
+  navegador, como `client_authorizations` (parte 15a). A autorização da
+  medição aprovada usa o mesmo registro e o mesmo evento da 15a
+  (`client_authorization.recorded`, com `contrato_id`, `a_faturar`, `marcas`
+  e o `medicao_id`; a lista de demandas pode ser vazia).
+- Perguntas para a parte 16b: 11, 12 e 13 acima.

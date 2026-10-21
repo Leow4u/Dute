@@ -3,9 +3,11 @@ import { getFirestore } from "firebase-admin/firestore";
 import { onCall } from "firebase-functions/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 
+import { recordAuthorizationFor } from "./domain/autorizacoes.js";
 import { saveCommercialCustomerFor, saveCustomerContactFor, saveCustomerLocationFor } from "./domain/cadastro.js";
 import { registrarAditivo, salvarContrato } from "./domain/contratos.js";
 import { advanceDemandFor } from "./domain/demandas.js";
+import { advanceMedicaoFor, saveMedicaoFor } from "./domain/medicoes.js";
 import { assertAuth, comercialStatusFor, loadProfile, requireComercialCaller } from "./domain/profile.js";
 import { advanceQuoteFor, saveQuoteFor } from "./domain/quotes.js";
 import { PROJECT_ID } from "./project.js";
@@ -21,7 +23,9 @@ import { PROJECT_ID } from "./project.js";
  * parêntese na declaração: o script reprova qualquer outra linha assim, até em
  * comentário. Toda callable de negócio começa por
  * `await requireComercialCaller(db, request, PROJECT_ID)` (liberação do
- * ambiente, login, perfil e papel); a entrada passa por safeParse e
+ * ambiente, login, perfil e papel); só a recordAuthorization acrescenta
+ * `{ financeiro: true }`, que abre também ao financeiro (callables.test.ts
+ * trava). A entrada passa por safeParse e
  * invalid-argument, e a gravação por runIdempotent (domain/operations.ts) com
  * createComercialEvent (domain/events.ts) na mesma transação.
  */
@@ -124,4 +128,41 @@ export const advanceQuote = onCall(async (request) => {
 export const advanceDemand = onCall(async (request) => {
   const caller = await requireComercialCaller(db, request, PROJECT_ID);
   return advanceDemandFor(db, caller, request.data);
+});
+
+// --- Medição mensal (parte 16a; domain/medicao.ts e medicoes.ts) ---------------
+
+/**
+ * A medição do mês de um contrato por medição mensal (o Safra): abrir a
+ * competência, incluir ou atualizar uma linha e retirar uma linha, só no
+ * rascunho e na edição vista. O servidor precifica cada linha pela tabela do
+ * contrato vigente na data da solicitação.
+ */
+export const saveMedicao = onCall(async (request) => {
+  const caller = await requireComercialCaller(db, request, PROJECT_ID);
+  return saveMedicaoFor(db, caller, request.data);
+});
+
+/**
+ * Enviar ao cliente, registrar a aprovação (cria a autorização de
+ * faturamento da medição e leva as demandas a "a faturar") ou a contestação
+ * do cliente, e reabrir a contestada, conferindo a situação e a edição vistas.
+ */
+export const advanceMedicao = onCall(async (request) => {
+  const caller = await requireComercialCaller(db, request, PROJECT_ID);
+  return advanceMedicaoFor(db, caller, request.data);
+});
+
+// --- Autorização de faturamento (parte 15; domain/autorizacoes.ts) ------------
+
+/**
+ * Registra (record) a autorização de faturamento do cliente para uma ou
+ * várias demandas que a esperam, levando-as a "a faturar", ou cancela
+ * (cancel) a registrada por engano. É a única callable que também atende o
+ * financeiro (pergunta 4: registra, sem editar itens nem preço), pedido aqui
+ * de propósito; as outras continuam só com owner, admin e comercial.
+ */
+export const recordAuthorization = onCall(async (request) => {
+  const caller = await requireComercialCaller(db, request, PROJECT_ID, { financeiro: true });
+  return recordAuthorizationFor(db, caller, request.data);
 });

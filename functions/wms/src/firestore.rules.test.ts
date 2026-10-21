@@ -683,6 +683,40 @@ describe("chat do Agent Dute em tempo real", () => {
     );
   });
 
+  it("preço de catálogo fica com o financeiro e com o cliente dono", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "catalog_prices", "price-a"), {
+        customer_code: CUSTOMER_A,
+        sku_code: "SKU-1",
+        item_code: "ITEM-1",
+        preco_unit: 10,
+      });
+    });
+    const finance = testEnvironment
+      .authenticatedContext("finance-a", { email: "finance-a@example.com" })
+      .firestore();
+    const warehouse = testEnvironment
+      .authenticatedContext("wms-a", { email: "wms-a@example.com" })
+      .firestore();
+    const coordinator = testEnvironment
+      .authenticatedContext("ops-a", { email: "ops-a@example.com" })
+      .firestore();
+    const client = testEnvironment
+      .authenticatedContext("client-a", { email: "client-a@example.com" })
+      .firestore();
+    const otherClient = testEnvironment
+      .authenticatedContext("client-b", { email: "client-b@example.com" })
+      .firestore();
+    await assertSucceeds(getDoc(doc(finance, "catalog_prices", "price-a")));
+    await assertFails(getDoc(doc(warehouse, "catalog_prices", "price-a")));
+    await assertFails(getDoc(doc(coordinator, "catalog_prices", "price-a")));
+    await assertSucceeds(getDoc(doc(client, "catalog_prices", "price-a")));
+    await assertFails(getDoc(doc(otherClient, "catalog_prices", "price-a")));
+    await assertFails(
+      setDoc(doc(finance, "catalog_prices", "price-a"), { preco_unit: 99 }),
+    );
+  });
+
   it("wms não lê billing_periods (motivo do listener removido)", async () => {
     const database = testEnvironment
       .authenticatedContext("wms-a", { email: "wms-a@example.com" })
@@ -972,13 +1006,12 @@ describe("módulos contratados do cliente (Fase 2)", () => {
 });
 
 describe("contratos do Comercial (parte 8)", () => {
-  const LEITORES = ["owner-a", "admin-a", "comercial-a"] as const;
+  const LEITORES = ["owner-a", "admin-a", "comercial-a", "finance-a"] as const;
   const FORA = [
     "ops-a",
     "ops-dutelog",
     "wms-a",
     "support-a",
-    "finance-a",
     "campo-a",
     "rh-a",
     "painel-a",
@@ -1026,7 +1059,7 @@ describe("contratos do Comercial (parte 8)", () => {
     });
   }
 
-  it("operação, campo, suporte, financeiro, rh, painel, cliente e acesso removido não leem contrato nem aditivo", async () => {
+  it("operação, campo, suporte, rh, painel, cliente e acesso removido não leem contrato nem aditivo", async () => {
     for (const uid of FORA) {
       const database = signedAs(uid);
       await assertFails(getDoc(doc(database, "contracts", "ct-a")));

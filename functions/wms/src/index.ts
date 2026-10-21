@@ -78,6 +78,18 @@ import {
   openingUsesGlobalControl,
 } from "./domain/customer-scope.js";
 import { assertManagedCatalogCreateAllowed } from "./domain/catalog-codes.js";
+import {
+  resolveBillingDocument,
+  shouldFreezeCompetencia,
+} from "./domain/billing-scope.js";
+import {
+  canSeeCatalogPrice,
+  CATALOG_PRICES,
+  merchandiseValue,
+  publishedMoneyDeletes,
+  rememberCatalogPrice,
+  splitCatalogPriceBatch,
+} from "./domain/catalog-prices.js";
 import { CycleCountSchema } from "./domain/cycle-count-input.js";
 import {
   createOpeningConferenceBox as createOpeningConferenceBoxFor,
@@ -541,6 +553,7 @@ const AgentChatSchema = z.object({
 
 const BillingCompetenciaSchema = z.object({
   competencia: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+  customer_code: z.string().trim().min(1).max(120).optional(),
 });
 
 const SaveBillingManualSchema = BillingCompetenciaSchema.extend({
@@ -3311,14 +3324,29 @@ async function loadBillingCalculation(
   // Itens criados pela Tabela de preços antes de 01/10/2026 não gravavam
   // customer_code e ficavam fora da fatura emitida (mas apareciam na prévia).
   // A lista é pequena: lê tudo e trata "sem cliente" como o cliente padrão.
-  const priceQuery = db.collection(collectionNames.billingPriceList);
-  const manualRef = db
-    .collection(collectionNames.billingManual)
-    .doc(competencia);
+  const priceQuery =
+    customerCode === DEFAULT_CUSTOMER
+      ? db.collection(collectionNames.billingPriceList)
+      : db
+          .collection(collectionNames.billingPriceList)
+          .where("customer_code", "==", customerCode);
+  const manualResolved = await resolveBillingDocument(
+    db,
+    collectionNames.billingManual,
+    customerCode,
+    competencia,
+    transaction,
+  );
+  const manualRef = manualResolved.ref;
   const configRef = db.collection(collectionNames.billingConfig).doc("default");
-  const operationalSnapshotRef = db
-    .collection(collectionNames.billingOperationalSnapshots)
-    .doc(competencia);
+  const operationalResolved = await resolveBillingDocument(
+    db,
+    collectionNames.billingOperationalSnapshots,
+    customerCode,
+    competencia,
+    transaction,
+  );
+  const operationalSnapshotRef = operationalResolved.ref;
   const inventoryControlRef = db.collection("system_controls").doc("inventory");
   const inventoryQuery = db
     .collection(collectionNames.clientInventory)
@@ -3339,15 +3367,32 @@ async function loadBillingCalculation(
   const operationalSnapshot = transaction
     ? await transaction.get(operationalSnapshotRef)
     : await operationalSnapshotRef.get();
-  const inventoryControlSnapshot = transaction
-    ? await transaction.get(inventoryControlRef)
-    : await inventoryControlRef.get();
-  const inventorySnapshot = transaction
-    ? await transaction.get(inventoryQuery)
-    : await inventoryQuery.get();
-  const movementsSnapshot = transaction
-    ? await transaction.get(movementsQuery)
-    : await movementsQuery.get();
+  const operationalDataEarly = operationalSnapshot.data() ?? {};
+  const snapshotModeEarly = String(operationalDataEarly.mode ?? "");
+  const usageAlreadyFrozen = snapshotModeEarly === "frozen";
+  const inventoryControlSnapshot = usageAlreadyFrozen
+    ? null
+    : transaction
+      ? await transaction.get(inventoryControlRef)
+      : await inventoryControlRef.get();
+  const inventorySnapshot = usageAlreadyFrozen
+    ? { docs: [] as Array<{ data: () => Record<string, unknown> }> }
+    : transaction
+      ? await transaction.get(inventoryQuery)
+      : await inventoryQuery.get();
+  const catalogPriceQuery = db
+    .collection(CATALOG_PRICES)
+    .where("customer_code", "==", customerCode);
+  const catalogPriceSnapshot = usageAlreadyFrozen
+    ? { docs: [] as Array<{ data: () => Record<string, unknown> }> }
+    : transaction
+      ? await transaction.get(catalogPriceQuery)
+      : await catalogPriceQuery.get();
+  const movementsSnapshot = usageAlreadyFrozen
+    ? { docs: [] as Array<{ data: () => Record<string, unknown> }> }
+    : transaction
+      ? await transaction.get(movementsQuery)
+      : await movementsQuery.get();
 
   const priceList: LpuItem[] = pricesSnapshot.docs
     .filter(
@@ -3374,9 +3419,9 @@ async function loadBillingCalculation(
     Array.isArray(manualData.items) ? manualData.items : []
   ) as BillingManualQuantity[];
   const config = configSnapshot.data() ?? {};
-  const inventoryValue = inventorySnapshot.docs.reduce(
-    (sum, document) => sum + Number(document.data().total_cost ?? 0),
-    0,
+  const inventoryValue = merchandiseValue(
+    inventorySnapshot.docs.map((document) => document.data()),
+    catalogPriceSnapshot.docs.map((document) => document.data()),
   );
   // Virada do mês no horário de Brasília, não em UTC.
   const allMovements = movementsSnapshot.docs
@@ -3433,12 +3478,12 @@ async function loadBillingCalculation(
     saidas_pecas: outgoingPieces,
     movimentacoes: movements.length,
   };
-  const inventoryControl = inventoryControlSnapshot.data() ?? {};
+  const inventoryControl = inventoryControlSnapshot?.data() ?? {};
   const openingInventoryInProgress =
     inventoryControl.opening_inventory_required === true ||
     inventoryControl.stock_initialized === false;
   const usage =
-    snapshotMode === "replace"
+    snapshotMode === "replace" || snapshotMode === "frozen"
       ? {
           custo_estoque: billingUsageNumber(snapshotUsage.custo_estoque),
           entradas_pecas: billingUsageNumber(snapshotUsage.entradas_pecas),
@@ -3469,6 +3514,46 @@ async function loadBillingCalculation(
     adValoremRate: Number(config.ad_valorem_rate ?? 0.005),
     usage,
   };
+}
+
+/**
+ * Mês já terminou e ainda não há foto: grava custo, entradas, saídas e
+ * movimentos uma vez. Prévia e emissão seguintes leem só essa foto.
+ */
+async function ensureFrozenBillingUsage(
+  customerCode: string,
+  competencia: string,
+  now: Date,
+) {
+  if (!isCompetenciaClosed(competencia, now)) return;
+  const resolved = await resolveBillingDocument(
+    db,
+    collectionNames.billingOperationalSnapshots,
+    customerCode,
+    competencia,
+  );
+  const snap = await resolved.ref.get();
+  const mode = String(snap.data()?.mode ?? "");
+  if (!shouldFreezeCompetencia(mode, true)) return;
+  const calculation = await loadBillingCalculation(competencia, customerCode);
+  const frozenUsage = calculation.usage ?? {
+    custo_estoque: 0,
+    entradas_pecas: 0,
+    saidas_pecas: 0,
+    movimentacoes: 0,
+  };
+  await resolved.ref.set({
+    mode: "frozen",
+    customer_code: customerCode,
+    competencia,
+    usage: {
+      custo_estoque: frozenUsage.custo_estoque,
+      entradas_pecas: frozenUsage.entradas_pecas,
+      saidas_pecas: frozenUsage.saidas_pecas,
+      movimentacoes: frozenUsage.movimentacoes,
+    },
+    frozen_at: FieldValue.serverTimestamp(),
+  });
 }
 
 function billingAuditEvent(
@@ -3991,6 +4076,7 @@ function managedWritePayload(
 ) {
   if (input.resource === "products") {
     const data = allowedFields(input.data, PRODUCT_WRITE_FIELDS);
+    delete data.preco_unit;
     if (input.action === "create") {
       if (!String(data.produto ?? "").trim()) {
         throw new HttpsError(
@@ -4031,6 +4117,7 @@ function managedWritePayload(
       ...data,
       cod_cliente: catalogIdentity.clientCode,
       cod_cliente_key: catalogIdentity.clientCode,
+      ...publishedMoneyDeletes(),
       updated_by: profile.uid,
       updated_at: FieldValue.serverTimestamp(),
     };
@@ -4105,6 +4192,7 @@ function managedWritePayload(
       sku_code_key: catalogIdentity.skuCode,
       cod_cliente: catalogIdentity.clientCode,
       cod_cliente_key: catalogIdentity.clientCode,
+      ...publishedMoneyDeletes(),
       updated_by: profile.uid,
       updated_at: FieldValue.serverTimestamp(),
     };
@@ -4707,6 +4795,24 @@ export const mutateManagedEntity = onCall(async (request) => {
       transaction.create(targetRef, payload);
     } else {
       transaction.set(targetRef, payload, { merge: true });
+    }
+    if (
+      input.resource === "products" &&
+      input.action !== "archive" &&
+      canSeeCatalogPrice(profile.role)
+    ) {
+      const requested = Number(
+        (input.data as Record<string, unknown> | undefined)?.preco_unit,
+      );
+      const written = payload as Record<string, unknown>;
+      rememberCatalogPrice(transaction, db, {
+        customerCode: String(
+          written.customer_code ?? before.customer_code ?? DEFAULT_CUSTOMER,
+        ),
+        skuCode: String(written.cod_cliente ?? documentId),
+        itemCode: String(written.cod_cliente ?? documentId),
+        unitCost: requested,
+      });
     }
     // O portal não lê `customers` (observações e contrato são internos);
     // lê a projeção client_profiles, gravada na mesma transação. Os módulos
@@ -6436,6 +6542,21 @@ export const generateDailyBriefing = onCall(async (request) => {
 });
 
 /**
+ * Tira preço e custo das coleções que a operação lê e grava em catalog_prices.
+ * Repetir até done, uma vez por ambiente, depois que esta versão estiver no ar.
+ */
+export const splitCatalogPrices = onCall(async (request) => {
+  const profile = await getProfile(request);
+  if (!["owner", "admin"].includes(profile.role)) {
+    throw new HttpsError(
+      "permission-denied",
+      "Só a administração separa o preço do catálogo.",
+    );
+  }
+  return splitCatalogPriceBatch(db);
+});
+
+/**
  * Prévia da competência com o mesmo cálculo da emissão (loadBillingCalculation
  * + calculateBillingPeriod). Antes a tela recalculava no navegador por outro
  * caminho e o total exibido podia divergir do que era congelado.
@@ -6444,13 +6565,16 @@ export const getBillingPreview = onCall(async (request) => {
   const profile = await getProfile(request);
   requireBillingRead(profile);
   const input = BillingCompetenciaSchema.parse(request.data ?? {});
-  const customerCode = DEFAULT_CUSTOMER;
+  const customerCode = requireCustomerScope(profile, input.customer_code);
   const now = new Date();
   try {
-    const periodSnapshot = await db
-      .collection(collectionNames.periods)
-      .doc(input.competencia)
-      .get();
+    const periodResolved = await resolveBillingDocument(
+      db,
+      collectionNames.periods,
+      customerCode,
+      input.competencia,
+    );
+    const periodSnapshot = await periodResolved.ref.get();
     const period = periodSnapshot.data() ?? {};
     const status = String(period.status ?? "aberto");
     const frozen = period.invoice_snapshot as Record<string, unknown> | undefined;
@@ -6475,6 +6599,9 @@ export const getBillingPreview = onCall(async (request) => {
         total_cents: Number(frozen.total_cents ?? 0),
         calculated_at: frozen.issued_at ?? null,
       };
+    }
+    if (isCompetenciaClosed(input.competencia, now)) {
+      await ensureFrozenBillingUsage(customerCode, input.competencia, now);
     }
     const calculation = calculateBillingPeriod(
       await loadBillingCalculation(input.competencia, customerCode),
@@ -6663,6 +6790,7 @@ export const uploadShipmentAttachment = onCall({ timeoutSeconds: 60 }, async (re
 const ExportBillingReportSchema = z.object({
   from: z.string().trim().regex(/^\d{4}-\d{2}$/),
   to: z.string().trim().regex(/^\d{4}-\d{2}$/),
+  customer_code: z.string().trim().min(1).max(120).optional(),
 });
 
 /**
@@ -6672,13 +6800,13 @@ const ExportBillingReportSchema = z.object({
  */
 export const exportBillingReport = onCall({ timeoutSeconds: 60 }, async (request) => {
   const profile = await getProfile(request);
+  const input = ExportBillingReportSchema.parse(request.data ?? {});
   let customerCode: string;
-  if (profile.role === "cliente") customerCode = requireCustomerScope(profile);
+  if (profile.role === "cliente") customerCode = requireCustomerScope(profile, input.customer_code);
   else {
     requireBillingRead(profile);
-    customerCode = DEFAULT_CUSTOMER;
+    customerCode = requireCustomerScope(profile, input.customer_code);
   }
-  const input = ExportBillingReportSchema.parse(request.data ?? {});
   const [invoices, trackings] = await Promise.all([
     db.collection(collectionNames.clientInvoices).where("customer_code", "==", customerCode).get(),
     db.collection(collectionNames.clientOrderTracking).where("customer_code", "==", customerCode).get(),
@@ -6886,15 +7014,10 @@ export const saveBillingManual = onCall(async (request) => {
   const profile = await getProfile(request);
   requireBillingWrite(profile);
   const input = SaveBillingManualSchema.parse(request.data ?? {});
-  const customerCode = DEFAULT_CUSTOMER;
-  const periodRef = db
-    .collection(collectionNames.periods)
-    .doc(input.competencia);
-  const manualRef = db
-    .collection(collectionNames.billingManual)
-    .doc(input.competencia);
+  const customerCode = requireCustomerScope(profile, input.customer_code);
   const operationId = `billing_manual_${stableHash({
     actor: profile.uid,
+    customer: customerCode,
     nonce: input.idempotency_key ?? stableHash(input),
   }).slice(0, 40)}`;
   const operationRef = db
@@ -6928,6 +7051,22 @@ export const saveBillingManual = onCall(async (request) => {
         );
       }
 
+      const periodResolved = await resolveBillingDocument(
+        db,
+        collectionNames.periods,
+        customerCode,
+        input.competencia,
+        transaction,
+      );
+      const periodRef = periodResolved.ref;
+      const manualResolved = await resolveBillingDocument(
+        db,
+        collectionNames.billingManual,
+        customerCode,
+        input.competencia,
+        transaction,
+      );
+      const manualRef = manualResolved.ref;
       const periodSnapshot = await transaction.get(periodRef);
       if (!periodSnapshot.exists) {
         transaction.create(periodRef, {
@@ -7004,20 +7143,31 @@ export const emitBillingInvoice = onCall(async (request) => {
   const profile = await getProfile(request);
   requireBillingWrite(profile);
   const input = BillingCompetenciaSchema.parse(request.data ?? {});
-  const customerCode = DEFAULT_CUSTOMER;
-  const periodRef = db
-    .collection(collectionNames.periods)
-    .doc(input.competencia);
-  const clientRef = db
-    .collection(collectionNames.clientInvoices)
-    .doc(input.competencia);
-  const eventRef = db
-    .collection(collectionNames.events)
-    .doc(`evt_billing_emit_${safeDocId(input.competencia)}`);
+  const customerCode = requireCustomerScope(profile, input.customer_code);
   const issuedAt = new Date();
+  await ensureFrozenBillingUsage(customerCode, input.competencia, issuedAt);
 
   try {
     const result = await db.runTransaction(async (transaction) => {
+      const periodResolved = await resolveBillingDocument(
+        db,
+        collectionNames.periods,
+        customerCode,
+        input.competencia,
+        transaction,
+      );
+      const clientResolved = await resolveBillingDocument(
+        db,
+        collectionNames.clientInvoices,
+        customerCode,
+        input.competencia,
+        transaction,
+      );
+      const periodRef = periodResolved.ref;
+      const clientRef = clientResolved.ref;
+      const eventRef = db
+        .collection(collectionNames.events)
+        .doc(`evt_billing_emit_${safeDocId(periodRef.id)}`);
       const eventSnapshot = await transaction.get(eventRef);
       // Read every billing source in the same transaction as the period. This
       // prevents a movement, manual quantity, or price change from racing the
@@ -7094,20 +7244,30 @@ export const payBillingInvoice = onCall(async (request) => {
   const profile = await getProfile(request);
   requireBillingWrite(profile);
   const input = BillingCompetenciaSchema.parse(request.data ?? {});
-  const customerCode = DEFAULT_CUSTOMER;
-  const periodRef = db
-    .collection(collectionNames.periods)
-    .doc(input.competencia);
-  const clientRef = db
-    .collection(collectionNames.clientInvoices)
-    .doc(input.competencia);
-  const eventRef = db
-    .collection(collectionNames.events)
-    .doc(`evt_billing_paid_${safeDocId(input.competencia)}`);
+  const customerCode = requireCustomerScope(profile, input.customer_code);
   const paidAt = new Date();
 
   try {
     return await db.runTransaction(async (transaction) => {
+      const periodResolved = await resolveBillingDocument(
+        db,
+        collectionNames.periods,
+        customerCode,
+        input.competencia,
+        transaction,
+      );
+      const clientResolved = await resolveBillingDocument(
+        db,
+        collectionNames.clientInvoices,
+        customerCode,
+        input.competencia,
+        transaction,
+      );
+      const periodRef = periodResolved.ref;
+      const clientRef = clientResolved.ref;
+      const eventRef = db
+        .collection(collectionNames.events)
+        .doc(`evt_billing_paid_${safeDocId(periodRef.id)}`);
       const [periodSnapshot, eventSnapshot] = await Promise.all([
         transaction.get(periodRef),
         transaction.get(eventRef),

@@ -44,7 +44,7 @@ type Registro = Record<string, unknown>;
 export const TIPOS_NUMERO_CONTRATO = ["contrato", "sistema_cliente", "outro"] as const;
 export type TipoNumeroContrato = (typeof TIPOS_NUMERO_CONTRATO)[number];
 
-/** Autorização de faturamento (contratos.ts, TIPOS_AUTORIZACAO). */
+/** Autorização de faturamento (functions/comercial: events.ts, TIPOS_AUTORIZACAO, reexportada por contratos.ts). */
 export const TIPOS_AUTORIZACAO = ["pedido_aceite", "medicao_aprovada", "portal", "nenhuma"] as const;
 export type TipoAutorizacao = (typeof TIPOS_AUTORIZACAO)[number];
 
@@ -87,7 +87,7 @@ export const ROTULO_DO_REGIME: Record<RegimeCobranca, string> = {
 export const ROTULO_DA_AUTORIZACAO: Record<TipoAutorizacao, string> = {
   pedido_aceite: "Pedido e aceite",
   medicao_aprovada: "Medição aprovada",
-  portal: "Portal do cliente",
+  portal: "Portal do fornecedor",
   nenhuma: "Sem autorização",
 };
 

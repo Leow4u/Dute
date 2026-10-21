@@ -33,6 +33,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
+import { DocumentTitle } from "./components/document-title";
 import AppLayout from "./components/layout/app-layout";
 import { AppThemeProvider } from "./components/theme/theme-provider";
 import SettingsLayout from "./components/layout/settings-layout";
@@ -1105,6 +1106,7 @@ function AppRoutes() {
           <ActiveCustomerProvider>
           <TooltipProvider>
             <ChunkErrorBoundary>
+              <DocumentTitle />
               <Suspense
                 fallback={
                   <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">

@@ -151,7 +151,9 @@ describe("listas iguais às da callable (functions/comercial)", () => {
 
   it("tipos de número, de autorização, regimes, tipos de aditivo e os que mudam a vigência", () => {
     expect(listaDoBackend(contratosTs, "TIPOS_NUMERO_CONTRATO")).toEqual([...TIPOS_NUMERO_CONTRATO]);
-    expect(listaDoBackend(contratosTs, "TIPOS_AUTORIZACAO")).toEqual([...TIPOS_AUTORIZACAO]);
+    // Desde a parte 16a a lista mora em events.ts (vai no evento da autorização); contratos.ts reexporta.
+    expect(listaDoBackend(eventsTs, "TIPOS_AUTORIZACAO")).toEqual([...TIPOS_AUTORIZACAO]);
+    expect(contratosTs).toMatch(/export \{ TIPOS_AUTORIZACAO \}/);
     expect(listaDoBackend(contratosTs, "ADITIVOS_COM_VIGENCIA")).toEqual([...ADITIVOS_COM_VIGENCIA]);
     expect(listaDoBackend(eventsTs, "REGIMES_COBRANCA")).toEqual([...REGIMES_COBRANCA]);
     expect(listaDoBackend(eventsTs, "TIPOS_ADITIVO")).toEqual([...TIPOS_ADITIVO]);
@@ -379,6 +381,12 @@ describe("condições na ficha", () => {
       ["Código de serviço", "1602"],
       ["Impostos", "Inclusos no preço · ISS 5%"],
     ]);
+  });
+
+  it("o portal é o de compras do cliente (portal do fornecedor), não o Portal do cliente do Dute", () => {
+    const campos = condicoesDoContrato({ ...ITAU.dados, autorizacao: { tipo: "portal", prazo_perda_dias: 90 } }, HOJE).campos;
+    expect(campos).toContainEqual(["Autorização de faturamento", "Portal do fornecedor"]);
+    expect(campos).toContainEqual(["Prazo de perda", "90 dias"]);
   });
 
   it("regime por serviço em minúscula, sem estragar a sigla", () => {

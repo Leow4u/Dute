@@ -103,7 +103,15 @@ export type EstadoDaDemanda = {
   executado_de?: unknown;
   /** A RV validada pelo cliente e a etapa a que a validação levou. */
   validacao?: unknown;
+  /** As autorizações de faturamento registradas (e não canceladas) que cobrem a demanda (parte 15). */
+  autorizacao_ids?: unknown;
 };
+
+/** As autorizações de faturamento ativas da demanda (ids de client_authorizations). */
+export function autorizacoesDaDemanda(demanda: Pick<EstadoDaDemanda, "autorizacao_ids">): string[] {
+  const ids = demanda.autorizacao_ids;
+  return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string" && id.length > 0) : [];
+}
 
 /** A RV fechada pelo cliente, ou null. */
 export function rvFechada(demanda: Pick<EstadoDaDemanda, "escopo_rv">): number | null {
@@ -134,7 +142,9 @@ export function validacaoDaDemanda(demanda: Pick<EstadoDaDemanda, "validacao">):
  * - A RV enviada que o cliente fechou (o escopo) é "para planejar" e, depois
  *   da execução registrada, "execução a orçar".
  * - A RV validada pelo cliente leva à etapa gravada na validação: "aguardando
- *   autorização" ou "a faturar".
+ *   autorização" ou "a faturar". Aguardando, com uma autorização de
+ *   faturamento registrada (autorizacao_ids, parte 15), é "a faturar";
+ *   cancelada a última, volta a aguardar.
  */
 export function etapaDaDemanda(
   demanda: EstadoDaDemanda,
@@ -161,7 +171,10 @@ export function etapaDaDemanda(
     case "enviado": {
       const rv = orcamento.rv;
       const validacao = validacaoDaDemanda(demanda);
-      if (rv !== undefined && validacao?.rv === rv) return validacao.etapa;
+      if (rv !== undefined && validacao?.rv === rv) {
+        if (validacao.etapa === "aguardando_autorizacao" && autorizacoesDaDemanda(demanda).length > 0) return "a_faturar";
+        return validacao.etapa;
+      }
       if (rv !== undefined && rvFechada(demanda) === rv) {
         return demandaExecutada(demanda) ? "execucao_a_orcar" : "para_planejar";
       }

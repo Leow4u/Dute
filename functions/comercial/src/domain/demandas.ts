@@ -29,6 +29,7 @@ import {
   type TipoRv,
 } from "./demanda.js";
 import { createComercialEvent } from "./events.js";
+import { CLIENT_AUTHORIZATIONS_COLLECTION, MEDICOES_COLLECTION } from "./medicao.js";
 import { runIdempotent, type ComercialActor } from "./operations.js";
 import type { ComercialProfile } from "./profile.js";
 import {
@@ -508,11 +509,38 @@ function registrarExecucao(contexto: Contexto, input: z.infer<typeof RegistrarEx
 }
 
 /**
+ * A medição aprovada pelo cliente a que a demanda está presa, com a
+ * autorização dela, ou null. É a demanda que ficou pendente na aprovação
+ * (medicoes.ts): a linha dela já foi aprovada pelo cliente na medição.
+ */
+async function lerMedicaoAprovada(
+  transaction: Transaction,
+  db: Firestore,
+  demanda: Dados,
+): Promise<{ medicao: DocumentSnapshot; autorizacao: DocumentSnapshot } | null> {
+  const medicaoId = textoOuNull(demanda.medicao_id);
+  if (!medicaoId) return null;
+  const medicao = await transaction.get(db.collection(MEDICOES_COLLECTION).doc(medicaoId));
+  const autorizacaoId = medicao.exists && medicao.get("status") === "aprovada" ? textoOuNull(medicao.get("autorizacao_id")) : null;
+  if (!autorizacaoId) return null;
+  const autorizacao = await transaction.get(db.collection(CLIENT_AUTHORIZATIONS_COLLECTION).doc(autorizacaoId));
+  return autorizacao.exists ? { medicao, autorizacao } : null;
+}
+
+/** A lista de demandas pendentes ({ numero, motivo }) sem esta demanda. */
+function pendentesSem(lista: unknown, numero: string): unknown[] {
+  return Array.isArray(lista) ? lista.filter((pendente) => (pendente as { numero?: unknown } | null)?.numero !== numero) : [];
+}
+
+/**
  * O cliente validou a RV de execução ou de aditivo enviada (ou a RV fechada,
  * sem desvio na execução). O aditivo validado antes da execução amplia o
  * escopo e volta a "para planejar"; depois da execução, a validação leva a
  * "aguardando autorização" (contrato com pedido e aceite, ou portal) ou a "a
- * faturar" (marcada medicao_pendente no contrato por medição mensal).
+ * faturar" (marcada medicao_pendente no contrato por medição mensal). A
+ * demanda presa a uma medição já aprovada (ficou pendente na aprovação) vai a
+ * "a faturar" sem a pendência, com a autorização da medição, e sai das
+ * pendentes da medição e da autorização.
  */
 async function validar(contexto: Contexto, input: z.infer<typeof Validar>): Promise<Trabalho> {
   const { transaction, db, numero, demanda, quote, caller, iso } = contexto;
@@ -538,13 +566,16 @@ async function validar(contexto: Contexto, input: z.infer<typeof Validar>): Prom
     autorizacao = (contrato.get("autorizacao") as { tipo?: unknown } | undefined)?.tipo ?? null;
   }
   const cadastro = await cadastroPeloCodigo(transaction, db, code);
+  const destinoDoContrato = destinoDaValidacao({ cobranca: demanda.cobranca, autorizacao });
+  const aditivoAntesDaExecucao = quote.tipo_rv === "aditivo" && !demandaExecutada(demanda);
+  const medicaoAprovada =
+    !aditivoAntesDaExecucao && destinoDoContrato.medicao_pendente ? await lerMedicaoAprovada(transaction, db, demanda) : null;
+  const destino = medicaoAprovada ? { ...destinoDoContrato, medicao_pendente: false } : destinoDoContrato;
 
   // Escritas.
   const events: string[] = [];
   transaction.update(revisao.ref, { [campo]: respostaDoCliente("validada", input, contexto, contato?.contato_id ?? null) });
   const patch: Record<string, unknown> = {};
-  const destino = destinoDaValidacao({ cobranca: demanda.cobranca, autorizacao });
-  const aditivoAntesDaExecucao = quote.tipo_rv === "aditivo" && !demandaExecutada(demanda);
   if (aditivoAntesDaExecucao) {
     // O aditivo validado antes da execução amplia o escopo: a demanda volta a "para planejar" com ele.
     patch.escopo_rv = rv;
@@ -557,8 +588,27 @@ async function validar(contexto: Contexto, input: z.infer<typeof Validar>): Prom
       autorizacao: typeof autorizacao === "string" ? autorizacao : null,
       em: input.em ?? iso,
       por_uid: caller.uid,
+      ...(medicaoAprovada ? { autorizacao_id: medicaoAprovada.autorizacao.id, medicao_id: medicaoAprovada.medicao.id } : {}),
     };
     patch.medicao_pendente = destino.medicao_pendente;
+  }
+  if (medicaoAprovada) {
+    const { medicao, autorizacao: autorizada } = medicaoAprovada;
+    patch.autorizacao_id = autorizada.id;
+    transaction.update(medicao.ref, {
+      demandas_a_faturar: FieldValue.arrayUnion(numero),
+      demandas_pendentes: pendentesSem(medicao.get("demandas_pendentes"), numero),
+      edicao: Number(medicao.get("edicao")) + 1,
+      updated_at: FieldValue.serverTimestamp(),
+      updated_by: caller.uid,
+    });
+    transaction.update(autorizada.ref, {
+      demandas: FieldValue.arrayUnion(numero),
+      demandas_a_faturar: FieldValue.arrayUnion(numero),
+      demandas_pendentes: pendentesSem(autorizada.get("demandas_pendentes"), numero),
+      updated_at: FieldValue.serverTimestamp(),
+      updated_by: caller.uid,
+    });
   }
   const etapaAntes = demanda.etapa as EtapaDemanda;
   const etapaDepois = etapaDaDemanda({ ...demanda, ...patch }, { status: String(quote.status), tipo_rv: String(quote.tipo_rv), rv });
@@ -577,6 +627,7 @@ async function validar(contexto: Contexto, input: z.infer<typeof Validar>): Prom
         autorizacao_exigida: aditivoAntesDaExecucao ? false : destino.autorizacao_exigida,
         medicao_pendente: aditivoAntesDaExecucao ? false : destino.medicao_pendente,
         virou_cliente: virouCliente,
+        autorizacao_id: medicaoAprovada ? medicaoAprovada.autorizacao.id : undefined,
       },
     }).id,
   );
