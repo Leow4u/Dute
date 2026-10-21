@@ -12,8 +12,8 @@
     "build:test": "tsc -p tsconfig.test.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run test:unit",
-    "test:unit": "npm run build:test && node --test lib/callables.test.js lib/domain/platform-roles.test.js lib/domain/liberacao.test.js lib/domain/profile.test.js lib/domain/operations.test.js lib/domain/events.test.js lib/domain/dinheiro.test.js lib/domain/catalogo.test.js lib/domain/tabelas.test.js lib/cargas/tabela.test.js lib/domain/contratos.test.js lib/domain/contratos-datas.test.js lib/cargas/contratos.test.js lib/domain/customer-identity.test.js lib/domain/cadastro.test.js",
-    "test:integration": "npm run build:test && firebase emulators:exec --project demo-dute-comercial --only firestore \"node --test --test-concurrency=1 lib/domain/profile.integration.test.js lib/domain/operations.integration.test.js lib/cargas/tabela.integration.test.js lib/domain/contratos.integration.test.js lib/cargas/contratos.integration.test.js lib/domain/cadastro.integration.test.js\"",
+    "test:unit": "npm run build:test && node --test lib/callables.test.js lib/domain/platform-roles.test.js lib/domain/liberacao.test.js lib/domain/profile.test.js lib/domain/operations.test.js lib/domain/events.test.js lib/domain/dinheiro.test.js lib/domain/catalogo.test.js lib/domain/tabelas.test.js lib/cargas/tabela.test.js lib/domain/contratos.test.js lib/domain/contratos-datas.test.js lib/cargas/contratos.test.js lib/domain/customer-identity.test.js lib/domain/cadastro.test.js lib/domain/demanda.test.js lib/domain/orcamento.test.js",
+    "test:integration": "npm run build:test && firebase emulators:exec --project demo-dute-comercial --only firestore \"node --test --test-concurrency=1 lib/domain/profile.integration.test.js lib/domain/operations.integration.test.js lib/cargas/tabela.integration.test.js lib/domain/contratos.integration.test.js lib/cargas/contratos.integration.test.js lib/domain/cadastro.integration.test.js lib/domain/quotes.integration.test.js\"",
     "test:critical": "npm run test:unit && npm run test:integration"
   },
   "dependencies": {
