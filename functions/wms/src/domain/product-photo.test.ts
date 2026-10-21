@@ -7,6 +7,8 @@ import {
   generateProductPhoto,
   originalProductPhoto,
   reviewProductPhoto,
+  PRODUCT_PHOTO_DEFAULT_MODEL,
+  PRODUCT_PHOTO_INPUT_MAX_BYTES,
 } from "./product-photo.js";
 
 describe("apresentação comercial e conferência visual", () => {
@@ -342,7 +344,7 @@ describe("fotos profissionais do catálogo", () => {
   });
   const input = {
     project: "demo",
-    model: "gemini-2.5-flash-image",
+    model: "gemini-3-pro-image",
     token: "test",
     prompt: "edit",
     bytes: Buffer.from("source"),
@@ -353,7 +355,7 @@ describe("fotos profissionais do catálogo", () => {
     const mock: typeof fetch = async (url, init) => {
       assert.match(
         String(url),
-        /locations\/global\/publishers\/google\/models\/gemini-2.5-flash-image:generateContent$/,
+        /locations\/global\/publishers\/google\/models\/gemini-3-pro-image:generateContent$/,
       );
       sent = JSON.parse(String(init?.body));
       return new Response(
@@ -363,6 +365,13 @@ describe("fotos profissionais do catálogo", () => {
               content: {
                 parts: [
                   { text: "photo" },
+                  {
+                    thought: true,
+                    inlineData: {
+                      mimeType: "image/png",
+                      data: Buffer.from("draft").toString("base64"),
+                    },
+                  },
                   {
                     inlineData: {
                       mimeType: "image/png",
@@ -386,6 +395,45 @@ describe("fotos profissionais do catálogo", () => {
       "TEXT",
       "IMAGE",
     ]);
+    assert.deepEqual(sent.generationConfig.imageConfig, {
+      imageSize: "2K",
+      aspectRatio: "1:1",
+    });
+  });
+  it("usa Nano Banana Pro por padrão e rejeita arquivos acima do limite antes de cobrar uma geração", async () => {
+    assert.equal(PRODUCT_PHOTO_DEFAULT_MODEL, "gemini-3-pro-image");
+    let requested = "";
+    await generateProductPhoto({ ...input, model: undefined }, async (url) => {
+      requested = String(url);
+      return new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    inlineData: {
+                      mimeType: "image/png",
+                      data: Buffer.from("image").toString("base64"),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      );
+    });
+    assert.match(requested, /gemini-3-pro-image:generateContent$/);
+    await assert.rejects(
+      generateProductPhoto(
+        { ...input, bytes: Buffer.alloc(PRODUCT_PHOTO_INPUT_MAX_BYTES + 1) },
+        async () => {
+          throw new Error("Não deve enviar uma foto maior que 7 MB");
+        },
+      ),
+      { code: "invalid-argument" },
+    );
   });
   it("falha de forma explícita quando o provedor está indisponível ou não gera imagem", async () => {
     await assert.rejects(

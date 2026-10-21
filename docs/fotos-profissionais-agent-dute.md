@@ -77,10 +77,16 @@ imediatamente pelo fluxo auditável de fotos do catálogo.
 - Callable `generateCatalogPhoto`, região `southamerica-east1`, timeout de 180 s.
   Frontend: `POST /api/products/generate-photo`, via SDK autenticado de Functions.
 - Usa Vertex AI com a conta de serviço da Function, no projeto corrente e
-  localização `global`. Modelo padrão `gemini-2.5-flash-image`, configurável
-  por `PRODUCT_PHOTO_MODEL` no ambiente da codebase WMS. A conta precisa de
+  localização `global`. Modelo padrão **Nano Banana Pro** (`gemini-3-pro-image`),
+  com `generationConfig.imageConfig.imageSize = "2K"` e proporção `1:1`
+  (quadrada). O modelo é configurável por `PRODUCT_PHOTO_MODEL` no ambiente
+  da codebase WMS; se houver um valor antigo definido, substituir por
+  `gemini-3-pro-image` antes de validar o deploy. Não há fallback automático
+  para o Nano Banana original nem solicitação de 4K. A conta precisa de
   acesso ao Vertex AI, API habilitada e modelo disponível no projeto.
-- Entradas: JPEG, PNG ou WebP até 14 MB. A foto deve estar no bucket do sistema
+- Entradas para geração: JPEG, PNG ou WebP até 7 MB, limite da imagem inline
+  do Pro; arquivos maiores continuam preservados no cadastro, mas exigem
+  uma versão menor para gerar. A foto deve estar no bucket do sistema
   em `product-photos/<cliente>/` ou no prefixo histórico
   `customers/<cliente>/product-photos/`. URLs externas e de outro cliente são
   recusadas; o servidor baixa pelo Admin SDK, nunca pela URL do navegador.
@@ -88,6 +94,8 @@ imediatamente pelo fluxo auditável de fotos do catálogo.
   cliente e operador. O original não é sobrescrito. A coleção privada
   `product_photo_generations` registra solicitações, resultados e falhas;
   o mesmo UUID do operador retorna o resultado pronto sem gerar novamente.
+  O modelo e a resolução solicitada fazem parte do hash e do registro de
+  geração. Objetos gerados também guardam esses metadados.
 - Gerar não modifica catálogo ou estoque. Aprovar na ficha usa `addCatalogPhotos`
   e o evento `catalog.photos_added`, com identificação das fotos e mudança da
   principal. A transação recusa exceder o limite em vez de descartar originais.
@@ -106,6 +114,23 @@ a revisão humana é obrigatória no fluxo.
 Conferir também uma camiseta masculina (manequim masculino predefinido),
 gênero em conflito com a descrição (escolha obrigatória), dados sem gênero,
 remoção de uma foto principal, remoção da última foto e sincronização no portal.
+Verificar no pedido de geração `model = gemini-3-pro-image` e `image_size = 2K`,
+a disponibilidade do modelo no projeto e as dimensões reais do resultado.
+
+## Referência de custo
+
+Em 21/10/2026, o preço público global padrão de saída de imagem do Pro é
+US$120 por milhão de tokens: 1.120 tokens por imagem 1K/2K, ou US$0,1344
+por imagem. Trezentas saídas 2K somam US$40,32 somente de imagem gerada.
+Para planejamento, a estimativa de US$60–70 considera entrada, texto/raciocínio,
+conferência visual e margem para aproximadamente 20% de novas tentativas.
+Não é um limite garantido; não inclui impostos nem infraestrutura.
+Propostas geradas e depois rejeitadas pela conferência também consomem IA.
+O uso real deve ser aferido pelos registros de geração e pela cobrança Cloud.
+
+Referências oficiais:
+- [Modelo e limites do Pro](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-pro-image).
+- [Preços do Google Cloud](https://cloud.google.com/vertex-ai/generative-ai/pricing).
 
 O processamento em lote desta versão reúne fotos de um único produto.
 Não há processamento de todo o catálogo em uma única operação.

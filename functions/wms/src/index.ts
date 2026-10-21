@@ -200,7 +200,7 @@ import {
   type DueRoutine,
 } from "./domain/agent-routines.js";
 import { PROJECT_ID } from "./project.js";
-import { ProductPhotoInput, originalProductPhoto, productPhotoPrompt, generateProductPhoto, reviewProductPhoto } from "./domain/product-photo.js";
+import { PRODUCT_PHOTO_DEFAULT_MODEL, PRODUCT_PHOTO_IMAGE_SIZE, PRODUCT_PHOTO_INPUT_MAX_BYTES, ProductPhotoInput, originalProductPhoto, productPhotoPrompt, generateProductPhoto, reviewProductPhoto } from "./domain/product-photo.js";
 
 const adminApp = initializeApp();
 setGlobalOptions({
@@ -5062,11 +5062,12 @@ export const generateCatalogPhoto = onCall({ timeoutSeconds: 180, maxInstances: 
   const source = bucket.file(sourcePath);
   const [metadata] = await source.getMetadata();
   const mimeType = metadata.contentType ?? "";
-  if (!["image/png", "image/jpeg", "image/webp"].includes(mimeType) || !Number(metadata.size) || Number(metadata.size) > 14 * 1024 * 1024) {
-    throw new HttpsError("invalid-argument", "Use uma foto JPEG, PNG ou WebP de até 14 MB.");
+  if (!["image/png", "image/jpeg", "image/webp"].includes(mimeType) || !Number(metadata.size) || Number(metadata.size) > PRODUCT_PHOTO_INPUT_MAX_BYTES) {
+    throw new HttpsError("invalid-argument", "Para gerar em 2K, use uma foto JPEG, PNG ou WebP de até 7 MB. O original foi preservado.");
   }
   const job = db.collection("product_photo_generations").doc(`${profile.uid}_${input.request_id}`);
-  const hash = createHash("sha256").update(JSON.stringify({ ...input, sourcePath, customer, presentation_version: 2 })).digest("hex");
+  const model = process.env.PRODUCT_PHOTO_MODEL || PRODUCT_PHOTO_DEFAULT_MODEL;
+  const hash = createHash("sha256").update(JSON.stringify({ ...input, sourcePath, customer, model, image_size: PRODUCT_PHOTO_IMAGE_SIZE, presentation_version: 3 })).digest("hex");
   const cached = await db.runTransaction(async (transaction) => {
     const previous = await transaction.get(job);
     if (previous.exists) {
@@ -5077,7 +5078,7 @@ export const generateCatalogPhoto = onCall({ timeoutSeconds: 180, maxInstances: 
     }
     transaction.create(job, {
       customer_code: customer, actor_uid: profile.uid, source_path: sourcePath,
-      mode: input.mode, presentation_version: 2, context: { product_name: input.product_name, description: input.description, category: input.category, gender: input.gender, group: input.group, size: input.size, color: input.color, brand: input.brand, mannequin: input.mannequin ?? null }, input_hash: hash, status: "processing", created_at: FieldValue.serverTimestamp(),
+      mode: input.mode, model, image_size: PRODUCT_PHOTO_IMAGE_SIZE, presentation_version: 3, context: { product_name: input.product_name, description: input.description, category: input.category, gender: input.gender, group: input.group, size: input.size, color: input.color, brand: input.brand, mannequin: input.mannequin ?? null }, input_hash: hash, status: "processing", created_at: FieldValue.serverTimestamp(),
     });
     return null;
   });
@@ -5085,7 +5086,6 @@ export const generateCatalogPhoto = onCall({ timeoutSeconds: 180, maxInstances: 
   try {
     const [bytes] = await source.download();
     const { access_token } = await applicationDefault().getAccessToken();
-    const model = process.env.PRODUCT_PHOTO_MODEL || "gemini-2.5-flash-image";
     const image = await generateProductPhoto({
       project: PROJECT_ID, model, token: access_token, bytes, mimeType,
       prompt: productPhotoPrompt(input),
@@ -5105,7 +5105,7 @@ export const generateCatalogPhoto = onCall({ timeoutSeconds: 180, maxInstances: 
         contentType: image.mimeType,
         metadata: {
           firebaseStorageDownloadTokens: token, source_path: sourcePath, generated_by: "agent-dute",
-          model, mode: input.mode, actor_uid: profile.uid, customer_code: customer,
+          model, image_size: PRODUCT_PHOTO_IMAGE_SIZE, mode: input.mode, actor_uid: profile.uid, customer_code: customer,
         },
       },
     });

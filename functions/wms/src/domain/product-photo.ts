@@ -1,6 +1,10 @@
 import { HttpsError } from "firebase-functions/https";
 import { z } from "genkit";
 
+export const PRODUCT_PHOTO_DEFAULT_MODEL = "gemini-3-pro-image";
+export const PRODUCT_PHOTO_IMAGE_SIZE = "2K";
+export const PRODUCT_PHOTO_INPUT_MAX_BYTES = 7 * 1024 * 1024;
+
 export const ProductPhotoInput = z
   .object({
     customer_code: z.string().trim().min(1).max(150),
@@ -177,7 +181,7 @@ export async function originalProductPhoto(
 export async function generateProductPhoto(
   input: {
     project: string;
-    model: string;
+    model?: string;
     token: string;
     prompt: string;
     bytes: Buffer;
@@ -185,8 +189,15 @@ export async function generateProductPhoto(
   },
   fetcher: typeof fetch = fetch,
 ) {
+  const model = input.model || PRODUCT_PHOTO_DEFAULT_MODEL;
+  if (input.bytes.length > PRODUCT_PHOTO_INPUT_MAX_BYTES) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Para gerar em 2K, use uma foto JPEG, PNG ou WebP de até 7 MB. O original foi preservado.",
+    );
+  }
   const response = await fetcher(
-    `https://aiplatform.googleapis.com/v1/projects/${encodeURIComponent(input.project)}/locations/global/publishers/google/models/${encodeURIComponent(input.model)}:generateContent`,
+    `https://aiplatform.googleapis.com/v1/projects/${encodeURIComponent(input.project)}/locations/global/publishers/google/models/${encodeURIComponent(model)}:generateContent`,
     {
       method: "POST",
       signal: AbortSignal.timeout(120_000),
@@ -212,6 +223,10 @@ export async function generateProductPhoto(
         generationConfig: {
           responseModalities: ["TEXT", "IMAGE"],
           candidateCount: 1,
+          imageConfig: {
+            imageSize: PRODUCT_PHOTO_IMAGE_SIZE,
+            aspectRatio: "1:1",
+          },
         },
       }),
     },
@@ -219,7 +234,7 @@ export async function generateProductPhoto(
   if (!response.ok) {
     console.error("Vertex AI: falha na geração de foto", {
       status: response.status,
-      model: input.model,
+      model,
     });
     throw new HttpsError(
       "unavailable",
@@ -229,12 +244,15 @@ export async function generateProductPhoto(
   const body = (await response.json()) as {
     candidates?: {
       content?: {
-        parts?: { inlineData?: { mimeType?: string; data?: string } }[];
+        parts?: {
+          thought?: boolean;
+          inlineData?: { mimeType?: string; data?: string };
+        }[];
       };
     }[];
   };
   const image = body.candidates?.[0]?.content?.parts?.find(
-    (part) => part.inlineData,
+    (part) => part.inlineData && !part.thought,
   )?.inlineData;
   if (
     !image?.data ||
