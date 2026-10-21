@@ -113,6 +113,31 @@ describe("entrada do saveCommercialCustomer", () => {
     );
   });
 
+  it("responsável que o Firestore não aceita como id é invalid-argument, antes de ler o banco", async () => {
+    for (const uid of ["a/b", "__x__", ".", ".."]) {
+      await rejeita(
+        saveCommercialCustomerFor(intocavel, comercial, {
+          action: "create",
+          idempotency_key: "k",
+          name: "Itaú",
+          comercial: { responsavel_uid: uid },
+        }),
+        "invalid-argument",
+        /Responsável inválido/,
+      );
+      await rejeita(
+        saveCommercialCustomerFor(intocavel, comercial, {
+          action: "update",
+          idempotency_key: "k",
+          customer_code: "ITAU",
+          comercial: { responsavel_uid: uid },
+        }),
+        "invalid-argument",
+        /Responsável inválido/,
+      );
+    }
+  });
+
   it("texto vazio limpa o campo e a UF vem em maiúsculas", () => {
     const input = entrada(SaveCommercialCustomerInput, {
       action: "update",
@@ -184,6 +209,21 @@ describe("entrada de local e contato", () => {
       await rejeita(
         saveCustomerLocationFor(intocavel, comercial, { idempotency_key: "k", customer_code: "ITAU", nome: "CEIC", ...errado }),
         "invalid-argument",
+      );
+    }
+  });
+
+  it("local_id e contato_id no formato reservado do Firestore são invalid-argument, antes de ler o banco", async () => {
+    for (const id of ["__x__", "__loc__"]) {
+      await rejeita(
+        saveCustomerLocationFor(intocavel, comercial, { idempotency_key: "k", customer_code: "ITAU", local_id: id, nome: "CEIC" }),
+        "invalid-argument",
+        /Id inválido/,
+      );
+      await rejeita(
+        saveCustomerContactFor(intocavel, comercial, { idempotency_key: "k", customer_code: "ITAU", contato_id: id, nome: "Fulano" }),
+        "invalid-argument",
+        /Id inválido/,
       );
     }
   });

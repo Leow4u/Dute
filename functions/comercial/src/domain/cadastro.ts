@@ -110,12 +110,32 @@ const uf = z
   .optional()
   .transform((value) => (value === undefined ? undefined : value || null))
   .refine((value) => value == null || (UFS as readonly string[]).includes(value), "UF inválida.");
-const idDocumento = z.string().trim().regex(/^[A-Za-z0-9_-]{1,120}$/, "Id inválido.");
+/**
+ * Id que o Firestore aceita como documento: sem barra, diferente de "." e
+ * "..", e fora do formato reservado `__x__`. O que vira caminho de documento
+ * passa por aqui, para o erro sair como invalid-argument e nunca como o erro
+ * cru do Firestore ("internal" no app).
+ */
+export function idDeDocumentoValido(value: string): boolean {
+  return value.length > 0 && !value.includes("/") && value !== "." && value !== ".." && !/^__.*__$/.test(value);
+}
+const idDocumento = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z0-9_-]{1,120}$/, "Id inválido.")
+  .refine(idDeDocumentoValido, "Id inválido.");
 const nomeObrigatorio = z.string().trim().min(2, "Informe o nome (ao menos 2 caracteres).").max(120, "Use até 120 caracteres no nome.");
+/** Uid do responsável: vira `users/{uid}` na leitura. */
+const uidResponsavel = z
+  .string()
+  .trim()
+  .min(1, "Informe o responsável.")
+  .max(128, "Responsável inválido.")
+  .refine(idDeDocumentoValido, "Responsável inválido.");
 
 const dadosComerciais = z
   .object({
-    responsavel_uid: z.string().trim().min(1).max(128).nullable().optional(),
+    responsavel_uid: uidResponsavel.nullable().optional(),
     cidade: textoOpcional(80),
     uf,
   })
@@ -444,13 +464,29 @@ function mesmoValor(antes: unknown, depois: unknown): boolean {
   return (antes ?? null) === (depois ?? null);
 }
 
+/**
+ * O CNPJ informado é o que já está gravado? Compara sem máscara, e vale
+ * também para o que o WMS gravou sem ser um CNPJ válido (o provisório
+ * "00.000.000/0000-00"): reenviar o valor da ficha não é mudar a identidade.
+ */
+function mesmoDocumento(antes: unknown, informado: unknown): boolean {
+  const semMascara = (value: unknown) => text(value).toUpperCase().replace(/[^0-9A-Z]/g, "");
+  if (semMascara(antes) === semMascara(informado)) return true;
+  const normalizado = cnpjNormalizado(informado);
+  return normalizado !== null && normalizado === cnpjNormalizado(antes);
+}
+
+/** O mapa `comercial` inteiro, como o prospect nasce: o cadastro do WMS não tem o mapa. */
+function comercialPadrao(): Record<string, unknown> {
+  return { responsavel_uid: null, cidade: null, uf: null, omie_ids: [] };
+}
+
 async function alterarCadastro(
   db: Firestore,
   caller: ComercialProfile,
   input: z.infer<typeof AlterarCadastro>,
 ): Promise<CadastroResult & { replayed?: true }> {
   const code = input.customer_code;
-  const document = input.document === undefined ? undefined : cnpjDaEntrada(input.document);
   const actor = actorOf(caller);
 
   return runIdempotent<CadastroResult>(
@@ -467,22 +503,32 @@ async function alterarCadastro(
       const cadastro = await cadastroPeloCodigo(transaction, db, code);
       assertNaoArquivado(cadastro, code);
       const before = cadastro.data;
-      const comercialAntes = (before.comercial ?? {}) as Record<string, unknown>;
+      const comercialAntes = (
+        before.comercial && typeof before.comercial === "object" && !Array.isArray(before.comercial) ? before.comercial : {}
+      ) as Record<string, unknown>;
 
       const identidade: Record<string, unknown> = {};
       if (input.name !== undefined && !mesmoValor(text(before.name), input.name)) identidade.name = input.name;
       if (input.legal_name !== undefined && !mesmoValor(text(before.legal_name) || null, input.legal_name)) {
         identidade.legal_name = input.legal_name;
       }
-      // O WMS guarda o CNPJ como foi digitado: compara sem máscara.
-      const documentAntes = cnpjNormalizado(before.document) ?? (text(before.document) || null);
-      if (document !== undefined && !mesmoValor(documentAntes, document)) identidade.document = document;
+      // O WMS guarda o CNPJ como foi digitado: primeiro vê se mudou, e só o
+      // CNPJ novo passa pela validação (invalid-argument, antes de qualquer escrita).
+      if (input.document !== undefined && !mesmoDocumento(before.document, input.document)) {
+        identidade.document = cnpjDaEntrada(input.document);
+      }
 
       const comercial: Record<string, unknown> = {};
       for (const campo of ["responsavel_uid", "cidade", "uf"] as const) {
         const valor = input.comercial?.[campo];
         if (valor !== undefined && !mesmoValor(comercialAntes[campo], valor)) comercial[campo] = valor;
       }
+      // O que falta no mapa (o cadastro do WMS não tem nenhum) entra com o padrão do prospect.
+      const comercialCompleto: Record<string, unknown> = {};
+      for (const [campo, padrao] of Object.entries(comercialPadrao())) {
+        if (!(campo in comercialAntes)) comercialCompleto[campo] = padrao;
+      }
+      Object.assign(comercialCompleto, comercial);
 
       if (Object.keys(identidade).length) {
         if (cadastroDoWms(before, await temProjecao(transaction, db, cadastro.id))) {
@@ -522,7 +568,7 @@ async function alterarCadastro(
         cadastro.ref,
         {
           ...identidade,
-          ...(Object.keys(comercial).length ? { comercial } : {}),
+          ...(Object.keys(comercial).length ? { comercial: comercialCompleto } : {}),
           updated_by: caller.uid,
           updated_at: FieldValue.serverTimestamp(),
         },

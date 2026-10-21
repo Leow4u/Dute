@@ -284,11 +284,67 @@ describe("alteração do cadastro", () => {
     assert.equal(doc.name, "Itaú");
     assert.equal(doc.document, "98.765.432/0001-98");
     assert.equal(doc.sku_prefix, "ITAU");
-    assert.deepEqual(doc.comercial, { cidade: "São Paulo", uf: "SP" });
+    // O cadastro do WMS não tinha o mapa: ele entra inteiro, no formato do prospect.
+    assert.deepEqual(doc.comercial, { responsavel_uid: null, cidade: "São Paulo", uf: "SP", omie_ids: [] });
     assert.equal("stage" in doc, false, "o Comercial não grava estágio no cadastro do WMS");
     const evento = (await eventos()).find((row) => row.type === "commercial_customer.updated") ?? {};
     assert.equal(evento.customer_code, "Itaú");
     assert.equal(evento.entity_id, "Ita_");
+
+    // Com o mapa já gravado, a alteração seguinte só troca o campo enviado.
+    await saveCommercialCustomerFor(db, comercial, {
+      action: "update",
+      idempotency_key: key(),
+      customer_code: "Itaú",
+      comercial: { responsavel_uid: "com-2" },
+    });
+    const depois = (await db.collection("customers").doc("Ita_").get()).data() ?? {};
+    assert.deepEqual(depois.comercial, { responsavel_uid: "com-2", cidade: "São Paulo", uf: "SP", omie_ids: [] });
+  });
+
+  it("o CNPJ provisório que o WMS gravou volta igual na ficha e não é mudança de identidade", async () => {
+    await cadastroDoWms("Ita_", { code: "Itaú", name: "Itaú", sku_prefix: "ITAU", document: "00.000.000/0000-00" });
+    for (const document of ["00.000.000/0000-00", "00000000000000"]) {
+      const result = await saveCommercialCustomerFor(db, comercial, {
+        action: "update",
+        idempotency_key: key(),
+        customer_code: "Itaú",
+        name: "Itaú",
+        document,
+        comercial: { cidade: document.includes(".") ? "São Paulo" : "Campinas" },
+      });
+      assert.deepEqual(result.campos, ["cidade"]);
+    }
+    const doc = (await db.collection("customers").doc("Ita_").get()).data() ?? {};
+    assert.equal(doc.document, "00.000.000/0000-00");
+    assert.equal(doc.comercial.cidade, "Campinas");
+
+    // Um CNPJ diferente e inválido continua recusado, sem gravar nada.
+    const antes = await count("events");
+    await rejeita(
+      saveCommercialCustomerFor(db, comercial, {
+        action: "update",
+        idempotency_key: key(),
+        customer_code: "Itaú",
+        document: "00.000.000/0000-01",
+        comercial: { cidade: "Santos" },
+      }),
+      "invalid-argument",
+      /CNPJ inválido/,
+    );
+    await criar(comercial, { name: "Construtora Ômega" });
+    await rejeita(
+      saveCommercialCustomerFor(db, comercial, {
+        action: "update",
+        idempotency_key: key(),
+        customer_code: "CONSTRUTORA-OMEGA",
+        document: "12.345.678/0001-00",
+      }),
+      "invalid-argument",
+      /CNPJ inválido/,
+    );
+    assert.equal(await count("events"), antes + 1, "só o evento da criação do prospect");
+    assert.equal((await db.collection("customers").doc("Ita_").get()).get("comercial.cidade"), "Campinas");
   });
 
   it("sem sigla, mas com projeção ou sendo a BTG legada, a identidade também fica no WMS", async () => {
