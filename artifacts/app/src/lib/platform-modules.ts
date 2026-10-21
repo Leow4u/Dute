@@ -7,7 +7,7 @@ import {
 } from "@workspace/dominio";
 import { Boxes, Handshake, Receipt, Truck, Users, type LucideIcon } from "lucide-react";
 
-import { ROTA_COMERCIAL } from "./comercial/navegacao";
+import { COMERCIAL_ROLES, ROTA_COMERCIAL, abreComercial } from "./comercial/navegacao";
 import { COMERCIAL_LIBERADO } from "./liberacao";
 import type { OperationProfile } from "./operations";
 
@@ -51,7 +51,7 @@ export const PLATFORM_MODULES: readonly PlatformModule[] = [
     key: "comercial",
     label: MODULO_ROTULO.comercial,
     icon: Handshake,
-    home: { owner: ROTA_COMERCIAL, admin: ROTA_COMERCIAL, comercial: ROTA_COMERCIAL },
+    home: Object.fromEntries(COMERCIAL_ROLES.map((role) => [role, ROTA_COMERCIAL])),
     clientCard: false,
     liberacao: "comercial",
   },
@@ -83,7 +83,7 @@ export function modulesForPerson(
   return PLATFORM_MODULES.flatMap((module) => {
     if (!wanted.includes(module.key)) return [];
     if (role === "cliente" && !module.clientCard) return [];
-    if (module.liberacao === "comercial" && !comercial) return [];
+    if (module.liberacao === "comercial" && !abreComercial(role, comercial)) return [];
     const href = module.home[role];
     return href ? [{ module, href }] : [];
   });

@@ -1,5 +1,6 @@
 import { estagioDoCadastro, type EstagioCadastro } from "@workspace/dominio";
 
+import { getRouteProfileRoles } from "../modules";
 import { LEGACY_CUSTOMER_CODE, canonicalSkuPrefix } from "../operations";
 import { CUSTOMER_CODE_PATTERN } from "./codigo";
 
@@ -63,6 +64,9 @@ function paraData(value: unknown): Date | null {
   return date && !Number.isNaN(date.getTime()) ? date : null;
 }
 
+/** Leitura ao vivo do Firestore: os itens, ainda carregando ou com erro (nunca vira lista vazia). */
+export type Carga<T> = T[] | "carregando" | "erro";
+
 // --- Cadastro -------------------------------------------------------------------
 
 export type CadastroComercial = {
@@ -80,7 +84,7 @@ export type CadastroComercial = {
   cidade: string | null;
   uf: string | null;
   responsavelUid: string | null;
-  /** Mês e ano da troca de estágio (ou da criação): "10/2026". */
+  /** Mês e ano em que virou prospect ou cliente pelo Comercial: "10/2026". */
   desde: string | null;
 };
 
@@ -99,8 +103,18 @@ function temArmazenagem(data: Registro): boolean {
   return [data.code, data.customer_code].some((code) => canonico(code) === legado);
 }
 
+/**
+ * Desde quando é prospect (a troca de estágio ou a criação) ou cliente. Para
+ * cliente, só a troca que o Comercial registrou ao marcar: o cadastro do WMS
+ * não diz quando a relação começou, e a data do registro não é esse início.
+ */
 export function desdeQuando(data: Registro): string | null {
-  const date = paraData(data.stage_changed_at) ?? paraData(data.created_at);
+  const date =
+    estagioDoCadastro(data.stage) === "prospect"
+      ? (paraData(data.stage_changed_at) ?? paraData(data.created_at))
+      : texto(data.stage) === "cliente"
+        ? paraData(data.stage_changed_at)
+        : null;
   if (!date) return null;
   return `${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
 }
@@ -341,6 +355,7 @@ export const PAPEL_DO_CONTATO_ROTULO: Record<PapelDoContato, string> = {
 
 export type ContatoResumo = {
   id: string;
+  customerCode: string;
   nome: string;
   email: string | null;
   telefone: string | null;
@@ -361,6 +376,7 @@ export function contatoDoDocumento(id: string, data: Registro): ContatoResumo | 
   const papel = papelDoContato(data.papel);
   return {
     id,
+    customerCode: texto(data.customer_code),
     nome,
     email: opcional(data.email),
     telefone: opcional(data.telefone),
@@ -377,24 +393,55 @@ export type GrupoDeContatos = {
   pessoas: ContatoResumo[];
 };
 
+/** Grupo da gerenciadora sem empresa informada. */
+export const SEM_EMPRESA = "Sem empresa";
+
+/** Chave da empresa: sem acento, conectivo nem sufixo societário ("Souza e Lopes Ltda" = "Souza & Lopes"). */
+function chaveDaEmpresa(value: unknown): string {
+  return palavrasDoNome(value).join("");
+}
+
+/** A mesma empresa: chave igual, ou uma contida na outra com 4 letras ou mais ("Itaú" e "Itaú Unibanco"). */
+function mesmaEmpresa(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const [menor, maior] = a.length <= b.length ? [a, b] : [b, a];
+  return menor.length >= 4 && maior.includes(menor);
+}
+
+type IdentidadeDoCliente = Pick<CadastroComercial, "nome" | "razaoSocial">;
+
 /**
- * Contatos por empresa: a do cliente primeiro (contato sem empresa é do
- * cliente), depois as gerenciadoras por nome. Dentro do grupo, ativos
- * primeiro e por nome.
+ * Contato do próprio cliente: sem empresa ou com a empresa do cadastro (pelo
+ * nome ou pela razão social, mesmo abreviada). Quem tem papel de
+ * gerenciadora nunca é do cliente.
  */
-export function gruposDeContatos(contatos: readonly ContatoResumo[], nomeDoCliente: string): GrupoDeContatos[] {
-  const doCliente = canonico(nomeDoCliente);
+function ehDoCliente(contato: ContatoResumo, cliente: IdentidadeDoCliente): boolean {
+  if (contato.papel === "gerenciadora") return false;
+  if (!contato.empresa) return true;
+  const chave = chaveDaEmpresa(contato.empresa);
+  return [cliente.nome, cliente.razaoSocial].some((nome) => mesmaEmpresa(chave, chaveDaEmpresa(nome)));
+}
+
+/**
+ * Contatos por empresa: a do cliente primeiro, depois as gerenciadoras por
+ * nome (a mesma empresa escrita de jeitos diferentes fica num grupo só, com o
+ * nome como apareceu primeiro). Dentro do grupo, ativos primeiro e por nome.
+ */
+export function gruposDeContatos(contatos: readonly ContatoResumo[], cliente: IdentidadeDoCliente): GrupoDeContatos[] {
+  // A chave da empresa só tem letras maiúsculas e números: esta não colide.
+  const DO_CLIENTE = "#cliente";
   const grupos = new Map<string, GrupoDeContatos>();
   for (const contato of contatos) {
-    const chave = contato.empresa ? canonico(contato.empresa) : doCliente;
-    const cliente = !contato.empresa || chave === doCliente;
-    const grupo = grupos.get(cliente ? doCliente : chave) ?? {
-      empresa: cliente ? nomeDoCliente : contato.empresa!,
-      tipo: cliente ? ("Cliente" as const) : ("Gerenciadora" as const),
+    const doCliente = ehDoCliente(contato, cliente);
+    const chave = doCliente ? DO_CLIENTE : chaveDaEmpresa(contato.empresa);
+    const grupo = grupos.get(chave) ?? {
+      empresa: doCliente ? cliente.nome : (contato.empresa ?? SEM_EMPRESA),
+      tipo: doCliente ? ("Cliente" as const) : ("Gerenciadora" as const),
       pessoas: [],
     };
     grupo.pessoas.push(contato);
-    grupos.set(cliente ? doCliente : chave, grupo);
+    grupos.set(chave, grupo);
   }
   const lista = [...grupos.values()];
   for (const grupo of lista) {
@@ -407,13 +454,31 @@ export function gruposDeContatos(contatos: readonly ContatoResumo[], nomeDoClien
   );
 }
 
-/** Empresas dos contatos (para sugerir no campo Empresa), sem repetir. */
-export function empresasDosContatos(contatos: readonly ContatoResumo[]): string[] {
-  const vistas = new Map<string, string>();
-  for (const contato of contatos) {
-    if (contato.empresa && !vistas.has(canonico(contato.empresa))) vistas.set(canonico(contato.empresa), contato.empresa);
+/**
+ * Sugestões do campo Empresa: o nome do cliente e as gerenciadoras já usadas
+ * em todos os clientes, sem repetir a mesma empresa escrita de outro jeito (a
+ * forma usada neste cliente vem primeiro). A empresa própria de cada cliente
+ * não entra.
+ */
+export function empresasSugeridas(
+  contatos: readonly ContatoResumo[],
+  cadastros: readonly CadastroComercial[],
+  cliente: CadastroComercial,
+): string[] {
+  const porCodigo = new Map(cadastros.map((cadastro) => [cadastro.code, cadastro]));
+  const vistas = new Map<string, string>([[chaveDaEmpresa(cliente.nome), cliente.nome]]);
+  const ordem = [...contatos].sort(
+    (a, b) => Number(b.customerCode === cliente.code) - Number(a.customerCode === cliente.code),
+  );
+  for (const contato of ordem) {
+    if (!contato.empresa) continue;
+    const dono = porCodigo.get(contato.customerCode);
+    if (dono && ehDoCliente(contato, dono)) continue;
+    const chave = chaveDaEmpresa(contato.empresa);
+    if (chave && ![...vistas.keys()].some((vista) => mesmaEmpresa(vista, chave))) vistas.set(chave, contato.empresa);
   }
-  return [...vistas.values()].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  const [doCliente, ...gerenciadoras] = [...vistas.values()];
+  return [doCliente, ...gerenciadoras.sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }))];
 }
 
 // --- Nome parecido ---------------------------------------------------------------------
@@ -520,18 +585,66 @@ export function payloadNovoProspect(form: FormNovoProspect, idempotencyKey: stri
 export type FormEdicao = { nome: string; razaoSocial: string; cnpj: string; cidade: string; uf: string };
 
 /**
- * saveCommercialCustomer, update. Cadastro com armazenagem só muda cidade e
+ * Campos que mudaram entre o formulário de abertura e o enviado. A callable
+ * não recebe o estado esperado (entrada `.strict()`, sem versão) e mantém o
+ * que não vem: mandar só o que a pessoa mudou evita desfazer, com o valor
+ * velho da tela, o que outra pessoa gravou nesse meio-tempo.
+ */
+function alterados<F extends Record<K, string>, K extends string>(antes: F, depois: F, campos: readonly K[]): K[] {
+  return campos.filter((campo) => texto(depois[campo]) !== texto(antes[campo]));
+}
+
+/** Formulário de edição como abre: o cadastro que a pessoa vê. */
+export function formDaEdicao(cadastro: CadastroComercial): FormEdicao {
+  return {
+    nome: cadastro.nome,
+    razaoSocial: cadastro.razaoSocial ?? "",
+    cnpj: cadastro.cnpj ?? "",
+    cidade: cadastro.cidade ?? "",
+    uf: cadastro.uf ?? "",
+  };
+}
+
+/**
+ * saveCommercialCustomer, update: só o que mudou desde a abertura (`cadastro`
+ * é o de quando o diálogo abriu). Cadastro com armazenagem só muda cidade e
  * UF aqui: nome, razão social e CNPJ se editam em Configurações › Clientes.
  */
 export function payloadEdicao(cadastro: CadastroComercial, form: FormEdicao, idempotencyKey: string): Registro {
+  const antes = formDaEdicao(cadastro);
+  const identidade = cadastro.armazenagem ? [] : alterados(antes, form, ["nome", "razaoSocial", "cnpj"] as const);
+  const comercial = alterados(antes, form, ["cidade", "uf"] as const);
   return {
     action: "update",
     idempotency_key: idempotencyKey,
     customer_code: cadastro.code,
-    ...(cadastro.armazenagem
-      ? {}
-      : { name: texto(form.nome), legal_name: opcional(form.razaoSocial), document: opcional(form.cnpj) }),
-    comercial: { cidade: opcional(form.cidade), uf: opcional(form.uf) },
+    ...(identidade.includes("nome") ? { name: texto(form.nome) } : {}),
+    ...(identidade.includes("razaoSocial") ? { legal_name: opcional(form.razaoSocial) } : {}),
+    ...(identidade.includes("cnpj") ? { document: opcional(form.cnpj) } : {}),
+    ...(comercial.length ? { comercial: Object.fromEntries(comercial.map((campo) => [campo, opcional(form[campo])])) } : {}),
+  };
+}
+
+/** Tela do WMS onde se edita a identidade do cadastro com armazenagem. */
+export const ROTA_CADASTRO_DO_WMS = "/configuracoes/clientes";
+
+export type AvisoDaIdentidade = { texto: string; link: { href: string; rotulo: string } | null };
+
+/**
+ * Aviso do cadastro com armazenagem: quem abre Configurações › Clientes vai
+ * até lá pelo link; quem não abre (o comercial) fica sabendo quem edita.
+ */
+export function avisoDaIdentidade(role: unknown): AvisoDaIdentidade {
+  const quemEdita = getRouteProfileRoles(ROTA_CADASTRO_DO_WMS);
+  if ((quemEdita as readonly unknown[]).includes(role)) {
+    return {
+      texto: "Nome, razão social e CNPJ deste cadastro se editam em",
+      link: { href: ROTA_CADASTRO_DO_WMS, rotulo: "Configurações › Clientes" },
+    };
+  }
+  return {
+    texto: `Nome, razão social e CNPJ deste cadastro só o ${quemEdita.join(" ou o ")} editam, em Configurações › Clientes.`,
+    link: null,
   };
 }
 
@@ -554,18 +667,51 @@ export type FormLocal = {
 
 const CAMPOS_DO_ENDERECO = ["logradouro", "numero", "complemento", "bairro", "cidade", "uf", "cep"] as const;
 
-/** saveCustomerLocation. Sem nenhuma parte do endereço, o endereço é null. */
-export function payloadLocal(customerCode: string, form: FormLocal, idempotencyKey: string, localId?: string): Registro {
-  const endereco = Object.fromEntries(CAMPOS_DO_ENDERECO.map((campo) => [campo, opcional(form[campo])]));
-  const temEndereco = Object.values(endereco).some(Boolean);
-  const sigla = texto(form.sigla).toUpperCase();
+/** Formulário do local como abre: vazio para o novo, o local para a alteração. */
+export function formDoLocal(local: LocalResumo | null): FormLocal {
+  const endereco: Endereco = local?.endereco ?? {};
   return {
-    idempotency_key: idempotencyKey,
-    customer_code: customerCode,
-    ...(localId ? { local_id: localId } : {}),
+    nome: local?.nome ?? "",
+    sigla: local?.sigla ?? "",
+    logradouro: texto(endereco.logradouro),
+    numero: texto(endereco.numero),
+    complemento: texto(endereco.complemento),
+    bairro: texto(endereco.bairro),
+    cidade: texto(endereco.cidade),
+    uf: texto(endereco.uf),
+    cep: texto(endereco.cep),
+  };
+}
+
+/**
+ * saveCustomerLocation. Sem nenhuma parte do endereço, o endereço é null.
+ * Na alteração (`original`, o local de quando o diálogo abriu) vão o id, o
+ * nome (obrigatório na callable) e só o que mudou: a callable mantém o resto,
+ * inclusive cada parte do endereço.
+ */
+export function payloadLocal(
+  customerCode: string,
+  form: FormLocal,
+  idempotencyKey: string,
+  original?: LocalResumo | null,
+): Registro {
+  const sigla = texto(form.sigla).toUpperCase() || null;
+  const temEndereco = CAMPOS_DO_ENDERECO.some((campo) => texto(form[campo]));
+  const base = { idempotency_key: idempotencyKey, customer_code: customerCode };
+  if (!original) {
+    const endereco = Object.fromEntries(CAMPOS_DO_ENDERECO.map((campo) => [campo, opcional(form[campo])]));
+    return { ...base, nome: texto(form.nome), sigla, endereco: temEndereco ? endereco : null };
+  }
+  const antes = formDoLocal(original);
+  const endereco = alterados(antes, form, CAMPOS_DO_ENDERECO);
+  return {
+    ...base,
+    local_id: original.id,
     nome: texto(form.nome),
-    sigla: sigla || null,
-    endereco: temEndereco ? endereco : null,
+    ...(texto(antes.sigla).toUpperCase() !== (sigla ?? "") ? { sigla } : {}),
+    ...(endereco.length
+      ? { endereco: temEndereco ? Object.fromEntries(endereco.map((campo) => [campo, opcional(form[campo])])) : null }
+      : {}),
   };
 }
 
@@ -580,17 +726,42 @@ export function payloadAtivoLocal(
 
 export type FormContato = { nome: string; empresa: string; papel: string; email: string; telefone: string };
 
-/** saveCustomerContact. Papel não escolhido: "outro", o padrão do servidor. */
-export function payloadContato(customerCode: string, form: FormContato, idempotencyKey: string, contatoId?: string): Registro {
+/** Formulário do contato como abre: vazio para o novo, o contato para a alteração. */
+export function formDoContato(contato: ContatoResumo | null): FormContato {
   return {
-    idempotency_key: idempotencyKey,
-    customer_code: customerCode,
-    ...(contatoId ? { contato_id: contatoId } : {}),
-    nome: texto(form.nome),
+    nome: contato?.nome ?? "",
+    empresa: contato?.empresa ?? "",
+    papel: contato?.papel ?? "",
+    email: contato?.email ?? "",
+    telefone: contato?.telefone ?? "",
+  };
+}
+
+/**
+ * saveCustomerContact. Papel não escolhido: "outro", o padrão do servidor. Na
+ * alteração (`original`, o contato de quando o diálogo abriu) vão o id, o nome
+ * (obrigatório na callable) e só o que mudou.
+ */
+export function payloadContato(
+  customerCode: string,
+  form: FormContato,
+  idempotencyKey: string,
+  original?: ContatoResumo | null,
+): Registro {
+  const valores = {
     email: opcional(form.email),
     telefone: opcional(form.telefone),
     empresa: opcional(form.empresa),
     papel: papelDoContato(form.papel),
+  };
+  const base = { idempotency_key: idempotencyKey, customer_code: customerCode };
+  if (!original) return { ...base, nome: texto(form.nome), ...valores };
+  const campos = alterados(formDoContato(original), form, ["email", "telefone", "empresa", "papel"] as const);
+  return {
+    ...base,
+    contato_id: original.id,
+    nome: texto(form.nome),
+    ...Object.fromEntries(campos.map((campo) => [campo, valores[campo]])),
   };
 }
 

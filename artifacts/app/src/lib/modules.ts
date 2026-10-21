@@ -21,7 +21,7 @@ import {
 
 import { PAPEIS, isPapel, type Papel } from "@workspace/dominio";
 
-import { COMERCIAL_ROLES, ROTA_CLIENTES, ROTA_COMERCIAL } from "./comercial/navegacao";
+import { COMERCIAL_ROLES, ROTA_CLIENTES, ROTA_COMERCIAL, abreComercial } from "./comercial/navegacao";
 import { COMERCIAL_LIBERADO } from "./liberacao";
 import {
   portalModulesFor,
@@ -644,7 +644,7 @@ export function getHomePathForProfile(
   if (role === "wms") return "/pedidos";
   if (role === "financeiro") return "/faturamento";
   // O comercial abre no módulo dele onde o Comercial está liberado.
-  if (role === "comercial" && comercial) return ROTA_COMERCIAL;
+  if (role === "comercial" && abreComercial(role, comercial)) return ROTA_COMERCIAL;
   // Papel da plataforma sem tela ainda: a Conta, que todo perfil abre. Sem
   // isso o Início negado devolveria a "/" em laço.
   if (role && !INTERNAL_ROLES.includes(role)) return "/configuracoes/conta";
@@ -689,7 +689,7 @@ export function getNavigationForProfileRole(
     (module) =>
       module.appRoles.includes(appRole) &&
       canAccessModule(role, module.roles) &&
-      (module.liberacao !== "comercial" || comercial) &&
+      (module.liberacao !== "comercial" || abreComercial(role, comercial)) &&
       (portalModules === null || !module.portal || portalModules.includes(module.portal)),
   )
     .map((module) => {

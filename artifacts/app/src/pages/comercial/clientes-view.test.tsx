@@ -12,7 +12,7 @@ import {
 } from "@/lib/comercial/clientes";
 import { LEGACY_CUSTOMER_CODE } from "@/lib/operations";
 
-import { ClientesView, type ClientesViewProps, type FichaAba } from "./clientes-view";
+import { ABA_INICIAL, ClientesView, type ClientesViewProps, type FichaAba } from "./clientes-view";
 
 const CADASTROS = (
   [
@@ -147,7 +147,6 @@ const FICHA_ITAU = [
   "Itaú Unibanco S.A.",
   "CNPJ 60.701.190/0001-04",
   "São Paulo/SP",
-  "Cliente desde 10/2026",
   "Contrato até 30/06/2027",
   "Editar",
   "Dados",
@@ -187,6 +186,16 @@ describe("tela de Clientes e prospects", () => {
 
   it("no celular, lista e ficha empilham; no computador, ficam lado a lado", () => {
     expect(render()).toContain('class="flex flex-col gap-5 lg:flex-row lg:items-start"');
+  });
+
+  it("no computador, a lista longa rola sozinha e fica à vista ao lado da ficha", () => {
+    const lista = render().match(/<section aria-label="Lista de clientes e prospects" class="([^"]+)"/)?.[1] ?? "";
+    expect(lista.split(" ")).toEqual(expect.arrayContaining(["lg:sticky", "lg:top-4", "lg:overflow-y-auto"]));
+    expect(lista).toMatch(/lg:max-h-\[/);
+  });
+
+  it("a ficha abre em Locais, como no mockup", () => {
+    expect(ABA_INICIAL).toBe("locais");
   });
 
   it("aba Locais: sigla, nome, endereço e as ações de cada local", () => {
@@ -271,6 +280,22 @@ describe("tela de Clientes e prospects", () => {
     const vertice = CADASTROS.find((cadastro) => cadastro.id === "VERTICE")!;
     const fim = texts(render({ selecionado: vertice, aba, locais: [], contatos: [] })).at(-1);
     expect(fim).toBe(VAZIO[aba]);
+  });
+
+  it("contratos ainda carregando: a tela não afirma Sem contrato", () => {
+    const lista = texts(render({ contratos: "carregando" }));
+    for (const rotulo of ["Sem contrato", "Contrato sem prazo", "Contrato até 30/06/2027"]) expect(lista).not.toContain(rotulo);
+    expect(lista).toContain("São Paulo/SP");
+    expect(texts(render({ contratos: "carregando", aba: "contratos" })).at(-1)).toBe("Carregando...");
+  });
+
+  it("erro ao ler contratos, locais ou contatos aparece como erro, não como vazio", () => {
+    const comErro = texts(render({ contratos: "erro" }));
+    expect(comErro).not.toContain("Sem contrato");
+    expect(comErro).toContain("Erro ao ler contratos");
+    expect(texts(render({ contratos: "erro", aba: "contratos" })).at(-1)).toBe("Não foi possível carregar.");
+    expect(texts(render({ locais: "erro", aba: "locais" })).at(-1)).toBe("Não foi possível carregar.");
+    expect(texts(render({ contatos: "erro", aba: "contatos" })).at(-1)).toBe("Não foi possível carregar.");
   });
 
   it("busca sem resultado e carregamento", () => {

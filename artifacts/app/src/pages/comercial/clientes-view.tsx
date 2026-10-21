@@ -21,6 +21,7 @@ import {
   situacaoDoContrato,
   vigenciaDoContrato,
   type CadastroComercial,
+  type Carga,
   type ContatoResumo,
   type ContratoResumo,
   type LocalResumo,
@@ -38,6 +39,9 @@ import { cn } from "@/lib/utils";
 
 export type FichaAba = "dados" | "locais" | "contatos" | "contratos";
 
+/** A ficha abre em Locais, como no mockup: o que se precisa para orçar (polo e endereço). */
+export const ABA_INICIAL: FichaAba = "locais";
+
 export type AcoesDaTela = {
   novoProspect: () => void;
   editar: () => void;
@@ -53,7 +57,7 @@ export type AcoesDaTela = {
 export type ClientesViewProps = {
   estado: "carregando" | "erro" | "pronto";
   cadastros: CadastroComercial[];
-  contratos: ContratoResumo[];
+  contratos: Carga<ContratoResumo>;
   /** "AAAA-MM-DD" do dia, para o contrato vigente. */
   hoje: string;
   segmento: Segmento;
@@ -64,9 +68,8 @@ export type ClientesViewProps = {
   onSelecionar: (id: string) => void;
   aba: FichaAba;
   onAba: (aba: FichaAba) => void;
-  /** null: ainda carregando. */
-  locais: LocalResumo[] | null;
-  contatos: ContatoResumo[] | null;
+  locais: Carga<LocalResumo>;
+  contatos: Carga<ContatoResumo>;
   responsavel: string | null;
   /** Uma gravação em andamento: as ações esperam. */
   ocupado: boolean;
@@ -124,6 +127,11 @@ function Vazio({ children }: { children: ReactNode }) {
   return <p className="px-5 py-7 text-center text-sm font-bold text-muted-foreground">{children}</p>;
 }
 
+/** Carregando ou erro no lugar da lista: a tela não afirma vazio sem ter lido. */
+function SemLeitura({ carga }: { carga: "carregando" | "erro" }) {
+  return <Vazio>{carga === "erro" ? "Não foi possível carregar." : "Carregando..."}</Vazio>;
+}
+
 // --- Cabeçalho e lista -------------------------------------------------------------
 
 function Cabecalho({ cadastros, segmento, onSegmento, busca, onBusca, ocupado, acoes }: ClientesViewProps) {
@@ -178,11 +186,14 @@ function LinhaDoCadastro({
   onSelecionar,
 }: {
   cadastro: CadastroComercial;
-  contrato: ContratoResumo | null;
+  /** undefined: contratos ainda não lidos (carregando ou erro). */
+  contrato: ContratoResumo | null | undefined;
   ativo: boolean;
   onSelecionar: (id: string) => void;
 }) {
-  const detalhe = [cidadeUf(cadastro.cidade, cadastro.uf), rotuloDoContrato(contrato)].filter(Boolean).join(" · ");
+  const detalhe = [cidadeUf(cadastro.cidade, cadastro.uf), contrato === undefined ? "" : rotuloDoContrato(contrato)]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <button
       type="button"
@@ -235,7 +246,7 @@ function Lista(props: ClientesViewProps) {
       <LinhaDoCadastro
         key={cadastro.id}
         cadastro={cadastro}
-        contrato={contratoVigente(contratos, cadastro.code, hoje)}
+        contrato={Array.isArray(contratos) ? contratoVigente(contratos, cadastro.code, hoje) : undefined}
         ativo={cadastro.id === selecionado?.id}
         onSelecionar={onSelecionar}
       />
@@ -263,7 +274,7 @@ function Lista(props: ClientesViewProps) {
   return (
     <section
       aria-label="Lista de clientes e prospects"
-      className="min-w-0 overflow-hidden rounded-lg border border-border bg-card lg:w-96 lg:shrink-0"
+      className="min-w-0 overflow-hidden rounded-lg border border-border bg-card lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:w-96 lg:shrink-0 lg:overflow-y-auto"
     >
       {conteudo}
     </section>
@@ -304,7 +315,7 @@ function BarraDaAba({ children }: { children: ReactNode }) {
   return <div className="flex flex-wrap items-center justify-end gap-2.5 px-5 pb-3 pt-4">{children}</div>;
 }
 
-function Locais({ locais, ocupado, acoes }: { locais: LocalResumo[] | null; ocupado: boolean; acoes: AcoesDaTela }) {
+function Locais({ locais, ocupado, acoes }: { locais: Carga<LocalResumo>; ocupado: boolean; acoes: AcoesDaTela }) {
   return (
     <div>
       <BarraDaAba>
@@ -313,8 +324,8 @@ function Locais({ locais, ocupado, acoes }: { locais: LocalResumo[] | null; ocup
           Novo local
         </Button>
       </BarraDaAba>
-      {locais === null ? (
-        <Vazio>Carregando...</Vazio>
+      {!Array.isArray(locais) ? (
+        <SemLeitura carga={locais} />
       ) : locais.length === 0 ? (
         <Vazio>Nenhum local</Vazio>
       ) : (
@@ -350,17 +361,17 @@ function Locais({ locais, ocupado, acoes }: { locais: LocalResumo[] | null; ocup
 
 function Contatos({
   contatos,
-  nomeDoCliente,
+  cadastro,
   ocupado,
   acoes,
 }: {
-  contatos: ContatoResumo[] | null;
-  nomeDoCliente: string;
+  contatos: Carga<ContatoResumo>;
+  cadastro: CadastroComercial;
   ocupado: boolean;
   acoes: AcoesDaTela;
 }) {
-  const grupos = contatos ? gruposDeContatos(contatos, nomeDoCliente) : [];
-  const pessoas = contatos?.length ?? 0;
+  const grupos = Array.isArray(contatos) ? gruposDeContatos(contatos, cadastro) : [];
+  const pessoas = Array.isArray(contatos) ? contatos.length : 0;
   return (
     <div>
       <BarraDaAba>
@@ -376,8 +387,8 @@ function Contatos({
           Novo contato
         </Button>
       </BarraDaAba>
-      {contatos === null ? (
-        <Vazio>Carregando...</Vazio>
+      {!Array.isArray(contatos) ? (
+        <SemLeitura carga={contatos} />
       ) : contatos.length === 0 ? (
         <Vazio>Nenhum contato</Vazio>
       ) : (
@@ -425,7 +436,8 @@ function Contatos({
   );
 }
 
-function Contratos({ contratos, hoje }: { contratos: ContratoResumo[]; hoje: string }) {
+function Contratos({ contratos, hoje }: { contratos: Carga<ContratoResumo>; hoje: string }) {
+  if (!Array.isArray(contratos)) return <SemLeitura carga={contratos} />;
   if (!contratos.length) return <Vazio>Nenhum contrato</Vazio>;
   return (
     <ul aria-label="Contratos do cliente">
@@ -459,8 +471,9 @@ function Contratos({ contratos, hoje }: { contratos: ContratoResumo[]; hoje: str
 function Ficha(props: ClientesViewProps & { selecionado: CadastroComercial }) {
   const { selecionado: cadastro, contratos, hoje, aba, onAba, locais, contatos, responsavel, ocupado, acoes } = props;
   const prospect = cadastro.estagio === "prospect";
-  const vigente = contratoVigente(contratos, cadastro.code, hoje);
-  const doCliente = contratosDoCliente(contratos, cadastro.code);
+  const lidos = Array.isArray(contratos);
+  const vigente = lidos ? contratoVigente(contratos, cadastro.code, hoje) : null;
+  const doCliente: Carga<ContratoResumo> = lidos ? contratosDoCliente(contratos, cadastro.code) : contratos;
   const linkDoVigente = vigente ? hrefDoContrato(vigente.id) : null;
   const meta = [
     cadastro.razaoSocial,
@@ -470,9 +483,9 @@ function Ficha(props: ClientesViewProps & { selecionado: CadastroComercial }) {
   ].filter((item): item is string => Boolean(item));
   const contagem: Record<FichaAba, number | null> = {
     dados: null,
-    locais: locais?.length ?? null,
-    contatos: contatos?.length ?? null,
-    contratos: doCliente.length,
+    locais: Array.isArray(locais) ? locais.length : null,
+    contatos: Array.isArray(contatos) ? contatos.length : null,
+    contratos: Array.isArray(doCliente) ? doCliente.length : null,
   };
 
   return (
@@ -496,7 +509,9 @@ function Ficha(props: ClientesViewProps & { selecionado: CadastroComercial }) {
           <div className="mt-2.5 flex flex-wrap items-center gap-2">
             {prospect ? <SeloProspect /> : null}
             {cadastro.armazenagem ? <SeloArmazenagem /> : null}
-            {linkDoVigente ? (
+            {contratos === "carregando" ? null : contratos === "erro" ? (
+              <Pill>Erro ao ler contratos</Pill>
+            ) : linkDoVigente ? (
               <Link href={linkDoVigente} className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-card px-2 text-xs font-bold underline-offset-4 hover:underline">
                 <FileText className="size-3" aria-hidden="true" />
                 {rotuloDoContrato(vigente)}
@@ -547,7 +562,7 @@ function Ficha(props: ClientesViewProps & { selecionado: CadastroComercial }) {
         {aba === "dados" ? <Dados cadastro={cadastro} responsavel={responsavel} /> : null}
         {aba === "locais" ? <Locais locais={locais} ocupado={ocupado} acoes={acoes} /> : null}
         {aba === "contatos" ? (
-          <Contatos contatos={contatos} nomeDoCliente={cadastro.nome} ocupado={ocupado} acoes={acoes} />
+          <Contatos contatos={contatos} cadastro={cadastro} ocupado={ocupado} acoes={acoes} />
         ) : null}
         {aba === "contratos" ? <Contratos contratos={doCliente} hoje={hoje} /> : null}
       </div>

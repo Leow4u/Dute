@@ -8,6 +8,7 @@ import { LEGACY_CUSTOMER_CODE } from "../operations";
 import {
   PAPEIS_DO_CONTATO,
   UFS,
+  avisoDaIdentidade,
   cadastroDoDocumento,
   contarSegmentos,
   contatoDoDocumento,
@@ -15,10 +16,14 @@ import {
   contratoVigente,
   contratosDoCliente,
   desdeQuando,
+  empresasSugeridas,
   enderecoEmLinha,
   filtrarCadastros,
   formatarCnpj,
   formatarTelefone,
+  formDaEdicao,
+  formDoContato,
+  formDoLocal,
   gruposDeContatos,
   iniciais,
   localDoDocumento,
@@ -35,7 +40,9 @@ import {
   situacaoDoContrato,
   vigenciaDoContrato,
   type CadastroComercial,
+  type ContatoResumo,
   type ContratoResumo,
+  type LocalResumo,
 } from "./clientes";
 
 /** Cadastros como o Firestore entrega: o do WMS (sem stage) e os do Comercial. */
@@ -98,11 +105,18 @@ describe("cadastro lido do Firestore", () => {
     expect(cadastroDoDocumento("só-id", { name: "Sem código" })?.code).toBe("só-id");
   });
 
-  it("desde quando: a troca de estágio e, sem ela, a criação", () => {
-    expect(desdeQuando({ stage_changed_at: { toDate: () => new Date(2026, 9, 21) } })).toBe("10/2026");
-    expect(desdeQuando({ created_at: new Date(2024, 0, 5) })).toBe("01/2024");
-    expect(desdeQuando({ created_at: "2025-03-10T12:00:00.000Z" })).toBe("03/2025");
-    expect(desdeQuando({})).toBeNull();
+  it("prospect desde: a troca de estágio e, sem ela, a criação", () => {
+    expect(desdeQuando({ stage: "prospect", stage_changed_at: { toDate: () => new Date(2026, 9, 21) } })).toBe("10/2026");
+    expect(desdeQuando({ stage: "prospect", created_at: new Date(2024, 0, 5) })).toBe("01/2024");
+    expect(desdeQuando({ stage: "prospect", created_at: "2025-03-10T12:00:00.000Z" })).toBe("03/2025");
+    expect(desdeQuando({ stage: "prospect" })).toBeNull();
+  });
+
+  it("cliente desde: só quando o Comercial marcou como cliente; a data do registro não é o início da relação", () => {
+    expect(desdeQuando({ stage: "cliente", stage_changed_at: new Date(2026, 9, 21), created_at: new Date(2026, 8, 1) })).toBe("10/2026");
+    // Cadastro do WMS (sem stage) ou cliente sem a troca registrada: o sistema não sabe desde quando.
+    expect(desdeQuando({ created_at: new Date(2026, 9, 2) })).toBeNull();
+    expect(desdeQuando({ stage: "cliente", created_at: new Date(2026, 9, 2) })).toBeNull();
   });
 });
 
@@ -240,13 +254,63 @@ describe("contatos agrupados por empresa", () => {
     ["c5", { customer_code: "ITAU-UNIBANCO", nome: "Bianca Rocha", papel: "outro", empresa: "mge" }],
   ].map(([id, data]) => contatoDoDocumento(id as string, data as Record<string, unknown>)!);
 
+  const ITAU = { nome: "Itaú Unibanco", razaoSocial: "Itaú Unibanco S.A." };
+  const resumo = (lista: ContatoResumo[]) =>
+    gruposDeContatos(lista, ITAU).map((grupo) => [grupo.empresa, grupo.tipo, grupo.pessoas.map((pessoa) => pessoa.nome)]);
+  const contato = (id: string, data: Record<string, unknown>) =>
+    contatoDoDocumento(id, { customer_code: "ITAU-UNIBANCO", ...data })!;
+
   it("a empresa do cliente primeiro (sem empresa conta como do cliente), depois as gerenciadoras por nome", () => {
-    const grupos = gruposDeContatos(contatos, "Itaú Unibanco");
+    const grupos = gruposDeContatos(contatos, ITAU);
     expect(grupos.map((grupo) => [grupo.empresa, grupo.tipo, grupo.pessoas.map((pessoa) => pessoa.nome)])).toEqual([
       ["Itaú Unibanco", "Cliente", ["Marcos Teixeira", "Renata Okubo"]],
       ["MGE", "Gerenciadora", ["Bianca Rocha", "Otávio Nunes"]],
       ["Souza & Lopes", "Gerenciadora", ["Camila Duarte"]],
     ]);
+  });
+
+  it("empresa abreviada ou com a razão social é do cliente", () => {
+    expect(
+      resumo([
+        contato("a", { nome: "Ana", papel: "gestor_cliente", empresa: "Itaú" }),
+        contato("b", { nome: "Bruno", papel: "financeiro", empresa: "Itaú Unibanco S.A." }),
+        contato("c", { nome: "Carla", papel: "gestor_cliente", empresa: null }),
+      ]),
+    ).toEqual([["Itaú Unibanco", "Cliente", ["Ana", "Bruno", "Carla"]]]);
+  });
+
+  it("contato com papel de gerenciadora nunca fica no grupo do cliente", () => {
+    expect(
+      resumo([
+        contato("a", { nome: "Ana", papel: "gestor_cliente" }),
+        contato("b", { nome: "Bruno", papel: "gerenciadora", empresa: null }),
+      ]),
+    ).toEqual([
+      ["Itaú Unibanco", "Cliente", ["Ana"]],
+      ["Sem empresa", "Gerenciadora", ["Bruno"]],
+    ]);
+  });
+
+  it("a mesma gerenciadora escrita de jeitos diferentes fica num grupo só", () => {
+    expect(
+      resumo([
+        contato("a", { nome: "Ana", papel: "gerenciadora", empresa: "Souza & Lopes" }),
+        contato("b", { nome: "Bruno", papel: "gerenciadora", empresa: "Souza e Lopes" }),
+        contato("c", { nome: "Carla", papel: "gerenciadora", empresa: "SOUZA & LOPES LTDA" }),
+      ]),
+    ).toEqual([["Souza & Lopes", "Gerenciadora", ["Ana", "Bruno", "Carla"]]]);
+  });
+
+  it("sugestões do campo Empresa: o cliente e as gerenciadoras de todos os clientes, sem repetir", () => {
+    const todos = [
+      contatoDoDocumento("x1", { customer_code: "BANCO-SAFRA", nome: "Davi", papel: "gestor_cliente", empresa: "Banco Safra" })!,
+      contatoDoDocumento("x2", { customer_code: "BANCO-SAFRA", nome: "Eva", papel: "gerenciadora", empresa: "Souza e Lopes" })!,
+      contatoDoDocumento("x3", { customer_code: "GRUPO-SBF", nome: "Fábio", papel: "gerenciadora", empresa: "MGE" })!,
+      contatoDoDocumento("x4", { customer_code: "ITAU-UNIBANCO", nome: "Gil", papel: "gerenciadora", empresa: "Souza & Lopes" })!,
+      contatoDoDocumento("x5", { customer_code: "ITAU-UNIBANCO", nome: "Hugo", papel: "financeiro", empresa: "Itaú" })!,
+    ];
+    const itau = CADASTROS.find((cadastro) => cadastro.id === "ITAU-UNIBANCO")!;
+    expect(empresasSugeridas(todos, CADASTROS, itau)).toEqual(["Itaú Unibanco", "MGE", "Souza & Lopes"]);
   });
 
   it("papel com rótulo e o inativo marcado", () => {
@@ -329,22 +393,40 @@ describe("chamadas das callables (functions/comercial, entrada .strict())", () =
     });
   });
 
-  it("edição sem armazenagem leva a identidade; com armazenagem, só cidade e UF", () => {
-    const form = { nome: "Itaú", razaoSocial: "", cnpj: "60701190000104", cidade: "Osasco", uf: "SP" };
-    expect(payloadEdicao(itau, form, "k3")).toEqual({
-      action: "update",
-      idempotency_key: "k3",
-      customer_code: "ITAU-UNIBANCO",
+  it("edição manda só o que mudou desde a abertura: o resto o servidor mantém", () => {
+    const aberto = formDaEdicao(itau);
+    expect(aberto).toEqual({ nome: "Itaú Unibanco", razaoSocial: "Itaú Unibanco S.A.", cnpj: "60701190000104", cidade: "São Paulo", uf: "SP" });
+    const base = { action: "update", idempotency_key: "k3", customer_code: "ITAU-UNIBANCO" };
+    expect(payloadEdicao(itau, aberto, "k3")).toEqual(base);
+    expect(payloadEdicao(itau, { ...aberto, cidade: "Osasco" }, "k3")).toEqual({ ...base, comercial: { cidade: "Osasco" } });
+    expect(payloadEdicao(itau, { ...aberto, nome: "Itaú", razaoSocial: " " }, "k3")).toEqual({
+      ...base,
       name: "Itaú",
       legal_name: null,
-      document: "60701190000104",
-      comercial: { cidade: "Osasco", uf: "SP" },
     });
+    expect(payloadEdicao(itau, { ...aberto, cnpj: "60.701.190/0001-04 " }, "k3")).toEqual({ ...base, document: "60.701.190/0001-04" });
+  });
+
+  it("edição com armazenagem: só cidade e UF, mesmo que a identidade chegue mudada", () => {
+    const form = { nome: "Outro", razaoSocial: "Outra S.A.", cnpj: "60701190000104", cidade: "Osasco", uf: "SP" };
     expect(payloadEdicao(btg, form, "k4")).toEqual({
       action: "update",
       idempotency_key: "k4",
       customer_code: LEGACY_CUSTOMER_CODE,
       comercial: { cidade: "Osasco", uf: "SP" },
+    });
+  });
+
+  it("aviso da identidade com armazenagem: owner e admin vão a Configurações › Clientes; o comercial sabe quem edita", () => {
+    for (const role of ["owner", "admin"]) {
+      expect(avisoDaIdentidade(role)).toEqual({
+        texto: "Nome, razão social e CNPJ deste cadastro se editam em",
+        link: { href: "/configuracoes/clientes", rotulo: "Configurações › Clientes" },
+      });
+    }
+    expect(avisoDaIdentidade("comercial")).toEqual({
+      texto: "Nome, razão social e CNPJ deste cadastro só o owner ou o admin editam, em Configurações › Clientes.",
+      link: null,
     });
   });
 
@@ -361,14 +443,33 @@ describe("chamadas das callables (functions/comercial, entrada .strict())", () =
       sigla: null,
       endereco: null,
     });
-    expect(payloadLocal("GRUPO-SBF", { ...vazio, sigla: "sede", logradouro: "Av. Dra. Ruth Cardoso", numero: "7221", uf: "SP" }, "k7", "loc_1")).toEqual({
+    expect(payloadLocal("GRUPO-SBF", { ...vazio, sigla: "sede", logradouro: "Av. Dra. Ruth Cardoso", numero: "7221", uf: "SP" }, "k7")).toEqual({
       idempotency_key: "k7",
       customer_code: "GRUPO-SBF",
-      local_id: "loc_1",
       nome: "Sede",
       sigla: "SEDE",
       endereco: { logradouro: "Av. Dra. Ruth Cardoso", numero: "7221", complemento: null, bairro: null, cidade: null, uf: "SP", cep: null },
     });
+  });
+
+  it("alteração de local manda o id, o nome (obrigatório) e só o que mudou desde a abertura", () => {
+    const sede: LocalResumo = {
+      id: "loc_1",
+      nome: "Sede",
+      sigla: "SEDE",
+      endereco: { logradouro: "Av. Dra. Ruth Cardoso", numero: "7221", complemento: null, bairro: "Pinheiros", cidade: "São Paulo", uf: "SP", cep: "05425-070" },
+      ativo: true,
+    };
+    const aberto = formDoLocal(sede);
+    const base = { idempotency_key: "k12", customer_code: "GRUPO-SBF", local_id: "loc_1", nome: "Sede" };
+    expect(payloadLocal("GRUPO-SBF", aberto, "k12", sede)).toEqual(base);
+    expect(payloadLocal("GRUPO-SBF", { ...aberto, numero: "7221A", sigla: "sp" }, "k12", sede)).toEqual({
+      ...base,
+      sigla: "SP",
+      endereco: { numero: "7221A" },
+    });
+    const semEndereco = { ...aberto, logradouro: "", numero: "", bairro: "", cidade: "", uf: "", cep: "" };
+    expect(payloadLocal("GRUPO-SBF", semEndereco, "k12", sede)).toEqual({ ...base, endereco: null });
   });
 
   it("contato: vazio vira null e o papel padrão é outro", () => {
@@ -382,16 +483,34 @@ describe("chamadas das callables (functions/comercial, entrada .strict())", () =
       papel: "outro",
     });
     expect(
-      payloadContato("ITAU-UNIBANCO", { nome: "Camila", empresa: "Souza & Lopes", papel: "gerenciadora", email: "c@sl.com", telefone: "11 99999-0000" }, "k9", "ct_1"),
+      payloadContato("ITAU-UNIBANCO", { nome: "Camila", empresa: "Souza & Lopes", papel: "gerenciadora", email: "c@sl.com", telefone: "11 99999-0000" }, "k9"),
     ).toEqual({
       idempotency_key: "k9",
       customer_code: "ITAU-UNIBANCO",
-      contato_id: "ct_1",
       nome: "Camila",
       email: "c@sl.com",
       telefone: "11 99999-0000",
       empresa: "Souza & Lopes",
       papel: "gerenciadora",
+    });
+  });
+
+  it("alteração de contato manda o id, o nome (obrigatório) e só o que mudou desde a abertura", () => {
+    const camila = contatoDoDocumento("ct_1", {
+      customer_code: "ITAU-UNIBANCO",
+      nome: "Camila",
+      email: "c@sl.com",
+      telefone: "11999990000",
+      empresa: "Souza & Lopes",
+      papel: "gerenciadora",
+    })!;
+    const aberto = formDoContato(camila);
+    const base = { idempotency_key: "k13", customer_code: "ITAU-UNIBANCO", contato_id: "ct_1", nome: "Camila" };
+    expect(payloadContato("ITAU-UNIBANCO", aberto, "k13", camila)).toEqual(base);
+    expect(payloadContato("ITAU-UNIBANCO", { ...aberto, email: "", papel: "financeiro" }, "k13", camila)).toEqual({
+      ...base,
+      email: null,
+      papel: "financeiro",
     });
   });
 

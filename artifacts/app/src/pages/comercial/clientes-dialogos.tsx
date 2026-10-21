@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { Link } from "wouter";
 
 import {
   AlertDialog,
@@ -24,8 +25,12 @@ import {
   PAPEIS_DO_CONTATO,
   PAPEL_DO_CONTATO_ROTULO,
   UFS,
+  formDaEdicao,
+  formDoContato,
+  formDoLocal,
   nomesParecidos,
   problemaDoCodigo,
+  type AvisoDaIdentidade,
   type CadastroComercial,
   type ContatoResumo,
   type FormContato,
@@ -204,25 +209,23 @@ export function NovoProspectDialog({
 
 // --- Editar cadastro ----------------------------------------------------------------
 
+/**
+ * `cadastro` é o de quando o diálogo abriu (a página o guarda): uma mudança
+ * em `customers` enquanto a pessoa digita não refaz o formulário, e o envio
+ * leva só o que mudou desde a abertura.
+ */
 export function EditarCadastroDialog({
   aberto,
   ocupado,
   erro,
   onCancelar,
   cadastro,
+  aviso,
   onSalvar,
-}: BaseProps & { cadastro: CadastroComercial | null; onSalvar: (form: FormEdicao) => void }) {
+}: BaseProps & { cadastro: CadastroComercial | null; aviso: AvisoDaIdentidade; onSalvar: (form: FormEdicao) => void }) {
   const [form, setForm] = useState<FormEdicao>({ nome: "", razaoSocial: "", cnpj: "", cidade: "", uf: "" });
   useEffect(() => {
-    if (aberto && cadastro) {
-      setForm({
-        nome: cadastro.nome,
-        razaoSocial: cadastro.razaoSocial ?? "",
-        cnpj: cadastro.cnpj ?? "",
-        cidade: cadastro.cidade ?? "",
-        uf: cadastro.uf ?? "",
-      });
-    }
+    if (aberto && cadastro) setForm(formDaEdicao(cadastro));
   }, [aberto, cadastro]);
   if (!cadastro) return null;
   const identidade = !cadastro.armazenagem;
@@ -257,7 +260,18 @@ export function EditarCadastroDialog({
               </Campo>
             </>
           ) : (
-            <Aviso>Nome, razão social e CNPJ deste cadastro se editam em Configurações › Clientes.</Aviso>
+            <Aviso>
+              {aviso.texto}
+              {aviso.link ? (
+                <>
+                  {" "}
+                  <Link href={aviso.link.href} className="underline underline-offset-4">
+                    {aviso.link.rotulo}
+                  </Link>
+                  .
+                </>
+              ) : null}
+            </Aviso>
           )}
           <div className="grid gap-4 sm:grid-cols-2">
             <Campo id="cadastro-cidade" rotulo="Cidade">
@@ -312,34 +326,6 @@ export function MarcarClienteDialog({
 
 // --- Local ----------------------------------------------------------------------------
 
-const LOCAL_VAZIO: FormLocal = {
-  nome: "",
-  sigla: "",
-  logradouro: "",
-  numero: "",
-  complemento: "",
-  bairro: "",
-  cidade: "",
-  uf: "",
-  cep: "",
-};
-
-function formDoLocal(local: LocalResumo | null): FormLocal {
-  if (!local) return LOCAL_VAZIO;
-  const endereco = local.endereco ?? {};
-  return {
-    nome: local.nome,
-    sigla: local.sigla ?? "",
-    logradouro: endereco.logradouro ?? "",
-    numero: endereco.numero ?? "",
-    complemento: endereco.complemento ?? "",
-    bairro: endereco.bairro ?? "",
-    cidade: endereco.cidade ?? "",
-    uf: endereco.uf ?? "",
-    cep: endereco.cep ?? "",
-  };
-}
-
 export function LocalDialog({
   aberto,
   ocupado,
@@ -348,7 +334,7 @@ export function LocalDialog({
   local,
   onSalvar,
 }: BaseProps & { local: LocalResumo | null; onSalvar: (form: FormLocal) => void }) {
-  const [form, setForm] = useState<FormLocal>(LOCAL_VAZIO);
+  const [form, setForm] = useState<FormLocal>(() => formDoLocal(null));
   useEffect(() => {
     if (aberto) setForm(formDoLocal(local));
   }, [aberto, local]);
@@ -414,8 +400,6 @@ export function LocalDialog({
 
 // --- Contato --------------------------------------------------------------------------
 
-const CONTATO_VAZIO: FormContato = { nome: "", empresa: "", papel: "", email: "", telefone: "" };
-
 export function ContatoDialog({
   aberto,
   ocupado,
@@ -425,20 +409,9 @@ export function ContatoDialog({
   empresas,
   onSalvar,
 }: BaseProps & { contato: ContatoResumo | null; empresas: string[]; onSalvar: (form: FormContato) => void }) {
-  const [form, setForm] = useState<FormContato>(CONTATO_VAZIO);
+  const [form, setForm] = useState<FormContato>(() => formDoContato(null));
   useEffect(() => {
-    if (!aberto) return;
-    setForm(
-      contato
-        ? {
-            nome: contato.nome,
-            empresa: contato.empresa ?? "",
-            papel: contato.papel,
-            email: contato.email ?? "",
-            telefone: contato.telefone ?? "",
-          }
-        : CONTATO_VAZIO,
-    );
+    if (aberto) setForm(formDoContato(contato));
   }, [aberto, contato]);
   const valido = form.nome.trim().length >= 2;
   const muda = (campo: keyof FormContato) => (event: { target: { value: string } }) =>

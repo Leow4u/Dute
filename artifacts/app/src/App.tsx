@@ -139,7 +139,7 @@ import { AuthProvider, useAppUser } from "./lib/auth";
 import { ActiveCustomerProvider } from "./lib/active-customer-context";
 import { useOperationProfile } from "./lib/operation-profile";
 import { PLATAFORMA_LIBERADA } from "./lib/liberacao";
-import { DESTINO_DO_COMERCIAL, rotasDoComercial } from "./lib/comercial/navegacao";
+import { DESTINO_DO_COMERCIAL, soComComercialLiberado } from "./lib/comercial/navegacao";
 import { entrada } from "./lib/platform-modules";
 import { portalModulesFor } from "./lib/operations";
 import {
@@ -1042,11 +1042,12 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   // Tela antiga de faturas; /portal/faturas é a dona. Redirect preserva links salvos.
   protectedRoute("/minhas-faturas", ClientInvoicesRedirect),
   // Comercial (docs/plataforma/fase-6-comercial.md): as rotas só existem onde
-  // a liberação do Comercial está ligada (lib/comercial/navegacao.ts).
-  ...[
+  // a liberação do Comercial está ligada (lib/comercial/navegacao.ts). Toda
+  // rota do Comercial entra neste bloco (comercial/navegacao.test.ts).
+  ...soComComercialLiberado([
     protectedRoute("/comercial", ComercialRedirect),
     protectedRoute("/comercial/clientes", ComercialClientes),
-  ].filter((route) => rotasDoComercial().includes(route.path)),
+  ]),
 ];
 
 function ProtectedRoute({

@@ -13,7 +13,11 @@ import { COMERCIAL_LIBERADO } from "../liberacao";
  * padrão é a deste build) para os testes decidirem o ambiente.
  */
 
-/** Quem trabalha no Comercial: a mesma lista das callables (functions/comercial, platform-roles.ts). */
+/**
+ * Quem trabalha no Comercial: os papéis com o módulo em MODULOS_POR_PAPEL
+ * (lib/dominio), a mesma lista das callables (functions/comercial,
+ * platform-roles.ts). Travada por lib/platform-lists.test.ts.
+ */
 export const COMERCIAL_ROLES = ["owner", "admin", "comercial"] as const satisfies readonly Papel[];
 
 /** Casa do módulo: a fila de orçamentos quando a parte 11 existir. */
@@ -34,8 +38,25 @@ export function rotasDoComercial(liberado: boolean = COMERCIAL_LIBERADO): string
   return liberado ? Array.from(new Set([ROTA_COMERCIAL, ...TELAS_DO_COMERCIAL])) : [];
 }
 
-/** A pessoa abre o Comercial: papel do módulo e ambiente liberado. */
-export function abreComercial(role: Papel | null | undefined, liberado: boolean = COMERCIAL_LIBERADO): boolean {
+/**
+ * O portão das rotas no App: toda rota do Comercial passa por aqui, e fora
+ * da liberação nenhuma é registrada (cai na tela de não encontrado). O teste
+ * de navegação exige que o App.tsx não registre rota do Comercial fora dele.
+ */
+export function soComComercialLiberado<T extends { path: string }>(
+  rotas: readonly T[],
+  liberado: boolean = COMERCIAL_LIBERADO,
+): T[] {
+  const permitidas = rotasDoComercial(liberado);
+  return rotas.filter((rota) => permitidas.includes(rota.path));
+}
+
+/**
+ * A pessoa abre o Comercial: papel do módulo e ambiente liberado. É a decisão
+ * que o menu (modules.ts), a aterrissagem e o card da tela de entrada
+ * (platform-modules.ts) usam.
+ */
+export function abreComercial(role: Papel | string | null | undefined, liberado: boolean = COMERCIAL_LIBERADO): boolean {
   return liberado && Boolean(role) && (COMERCIAL_ROLES as readonly string[]).includes(role as string);
 }
 

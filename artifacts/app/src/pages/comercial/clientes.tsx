@@ -14,10 +14,11 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { chamarComercial, novaChave, type CallableDoCadastro } from "@/lib/comercial/api";
 import {
+  avisoDaIdentidade,
   cadastroDoDocumento,
   contatoDoDocumento,
   contratoDoDocumento,
-  empresasDosContatos,
+  empresasSugeridas,
   filtrarCadastros,
   hojeLocal,
   localDoDocumento,
@@ -29,6 +30,7 @@ import {
   payloadMarcarCliente,
   payloadNovoProspect,
   type CadastroComercial,
+  type Carga,
   type ContatoResumo,
   type LocalResumo,
   type Segmento,
@@ -37,7 +39,7 @@ import { useAppUser } from "@/lib/auth";
 import { firestore } from "@/lib/firebase";
 
 import { ContatoDialog, EditarCadastroDialog, LocalDialog, MarcarClienteDialog, NovoProspectDialog } from "./clientes-dialogos";
-import { ClientesView, type FichaAba } from "./clientes-view";
+import { ABA_INICIAL, ClientesView, type FichaAba } from "./clientes-view";
 
 /**
  * Comercial › Clientes e prospects (docs/mockups/ComClientes.dc.html; parte 13
@@ -78,9 +80,15 @@ function useLeitura<T>(
   return estado.chave === chave ? estado : { itens: null, erro: false };
 }
 
+/** A leitura como a tela mostra: erro e carregando nunca viram lista vazia. */
+function carga<T>(leitura: Leitura<T>): Carga<T> {
+  return leitura.erro ? "erro" : (leitura.itens ?? "carregando");
+}
+
 type Dialogo =
   | { tipo: "prospect"; chave: string }
-  | { tipo: "editar"; chave: string }
+  // O cadastro de quando o diálogo abriu: o formulário não se refaz a cada snapshot.
+  | { tipo: "editar"; chave: string; cadastro: CadastroComercial }
   | { tipo: "marcar"; chave: string }
   | { tipo: "local"; chave: string; local: LocalResumo | null }
   | { tipo: "contato"; chave: string; contato: ContatoResumo | null };
@@ -114,10 +122,11 @@ const TELA_ESTREITA = "(max-width: 1023px)";
 
 export default function ComercialClientesPage() {
   const { toast } = useToast();
+  const { user } = useAppUser();
   const [segmento, setSegmento] = useState<Segmento>("todos");
   const [busca, setBusca] = useState("");
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
-  const [aba, setAba] = useState<FichaAba>("dados");
+  const [aba, setAba] = useState<FichaAba>(ABA_INICIAL);
   const [dialogo, setDialogo] = useState<Dialogo | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
@@ -143,6 +152,12 @@ export default function ComercialClientesPage() {
   const contatos = useLeitura(
     code ? `contatos:${code}` : null,
     (db) => query(collection(db, "customer_contacts"), where("customer_code", "==", code)),
+    contatoDoDocumento,
+  );
+  // Sugestões do campo Empresa: os contatos de todos os clientes, lidos só com o diálogo aberto.
+  const todosOsContatos = useLeitura(
+    dialogo?.tipo === "contato" ? "contatos:todos" : null,
+    (db) => collection(db, "customer_contacts"),
     contatoDoDocumento,
   );
   const responsavel = useNomeDoResponsavel(selecionado?.responsavelUid ?? null);
@@ -195,7 +210,7 @@ export default function ComercialClientesPage() {
       <ClientesView
         estado={estado}
         cadastros={lista}
-        contratos={contratos.itens ?? []}
+        contratos={carga(contratos)}
         hoje={hoje}
         segmento={segmento}
         onSegmento={setSegmento}
@@ -205,13 +220,15 @@ export default function ComercialClientesPage() {
         onSelecionar={selecionar}
         aba={aba}
         onAba={setAba}
-        locais={locais.erro ? [] : locais.itens}
-        contatos={contatos.erro ? [] : contatos.itens}
+        locais={carga(locais)}
+        contatos={carga(contatos)}
         responsavel={responsavel}
         ocupado={ocupado}
         acoes={{
           novoProspect: () => abrir({ tipo: "prospect", chave: novaChave() }),
-          editar: () => abrir({ tipo: "editar", chave: novaChave() }),
+          editar: () => {
+            if (selecionado) abrir({ tipo: "editar", chave: novaChave(), cadastro: selecionado });
+          },
           marcarCliente: () => abrir({ tipo: "marcar", chave: novaChave() }),
           novoLocal: () => abrir({ tipo: "local", chave: novaChave(), local: null }),
           editarLocal: (local) => abrir({ tipo: "local", chave: novaChave(), local }),
@@ -248,7 +265,7 @@ export default function ComercialClientesPage() {
             if (typeof resultado.customer_id === "string") setSelecionadoId(resultado.customer_id);
             setSegmento("todos");
             setBusca("");
-            setAba("dados");
+            setAba(ABA_INICIAL);
           });
         }}
       />
@@ -257,10 +274,11 @@ export default function ComercialClientesPage() {
         ocupado={ocupado}
         erro={erro}
         onCancelar={fechar}
-        cadastro={selecionado}
+        cadastro={dialogo?.tipo === "editar" ? dialogo.cadastro : null}
+        aviso={avisoDaIdentidade(user?.publicMetadata.role)}
         onSalvar={(form) => {
-          if (dialogo?.tipo !== "editar" || !selecionado) return;
-          void gravar("saveCommercialCustomer", payloadEdicao(selecionado, form, dialogo.chave), "Cadastro salvo");
+          if (dialogo?.tipo !== "editar") return;
+          void gravar("saveCommercialCustomer", payloadEdicao(dialogo.cadastro, form, dialogo.chave), "Cadastro salvo");
         }}
       />
       <MarcarClienteDialog
@@ -284,7 +302,7 @@ export default function ComercialClientesPage() {
           if (dialogo?.tipo !== "local" || !selecionado) return;
           void gravar(
             "saveCustomerLocation",
-            payloadLocal(selecionado.code, form, dialogo.chave, dialogo.local?.id),
+            payloadLocal(selecionado.code, form, dialogo.chave, dialogo.local),
             dialogo.local ? "Local salvo" : "Local criado",
           );
         }}
@@ -295,12 +313,16 @@ export default function ComercialClientesPage() {
         erro={erro}
         onCancelar={fechar}
         contato={dialogo?.tipo === "contato" ? dialogo.contato : null}
-        empresas={selecionado ? Array.from(new Set([selecionado.nome, ...empresasDosContatos(contatos.itens ?? [])])) : []}
+        empresas={
+          selecionado
+            ? empresasSugeridas([...(contatos.itens ?? []), ...(todosOsContatos.itens ?? [])], lista, selecionado)
+            : []
+        }
         onSalvar={(form) => {
           if (dialogo?.tipo !== "contato" || !selecionado) return;
           void gravar(
             "saveCustomerContact",
-            payloadContato(selecionado.code, form, dialogo.chave, dialogo.contato?.id),
+            payloadContato(selecionado.code, form, dialogo.chave, dialogo.contato),
             dialogo.contato ? "Contato salvo" : "Contato criado",
           );
         }}
