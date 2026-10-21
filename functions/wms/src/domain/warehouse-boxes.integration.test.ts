@@ -94,6 +94,106 @@ function openingLine(sessionId: string, boxCode: string, overrides: Record<strin
 
 describe("caixas e endereçamento dirigido", () => {
 
+  it("prévia manual alcança uma prateleira fora das três sugestões sem gravar nada", async () => {
+    await upsertWarehousePositions(db, {
+      positions: [{ aisle: "A", shelf: 4, length_m: 1.8, depth_m: 0.75, height_m: 0.65, customer_code: BTG }],
+    }, coordenacao);
+    const automatic = await suggestWarehousePosition(db, { customer_code: BTG, ...box }, operacao);
+    assert.deepEqual([automatic.position?.code, ...automatic.alternatives.map((item) => item.code)], ["A-01", "A-02", "A-03"]);
+    const before = (await db.collection("events").get()).size;
+    const preview = await suggestWarehousePosition(db, { customer_code: BTG, ...box, location_id: " a-04 " }, operacao);
+    assert.equal(preview.position?.code, "A-04");
+    assert.equal(preview.position?.reason, "Prateleira selecionada manualmente.");
+    assert.deepEqual(preview.position?.placement, automatic.position?.placement);
+    assert.deepEqual(preview.alternatives, []);
+    assert.equal(preview.checked, 1);
+    assert.equal(preview.zone_positions, 4);
+    assert.equal(preview.rejected, null);
+    assert.equal((await db.collection("warehouse_boxes").get()).size, 0);
+    assert.equal((await db.collection("events").get()).size, before);
+    assert.equal((await db.collection("warehouse_positions").doc("A-04").get()).get("occupancy_revision"), undefined);
+  });
+
+  it("prévia manual recusa posição inexistente, de outra zona e posição inativa", async () => {
+    await db.collection("warehouse_positions").doc("A-04").update({ customer_code: "Outro cliente" });
+    const preview = (location_id: string) => suggestWarehousePosition(db, { customer_code: BTG, ...box, location_id }, operacao);
+    for (const code of ["A-99", "A-04"]) {
+      await assert.rejects(preview(code), { code: "not-found", message: "Prateleira não cadastrada na zona deste cliente." });
+    }
+    for (const status of ["blocked", "review"]) {
+      await db.collection("warehouse_positions").doc("A-02").update({ status });
+      await assert.rejects(preview("A-02"), { code: "failed-precondition" });
+    }
+    await assert.rejects(
+      suggestWarehousePosition(db, { customer_code: BTG, ...box, location_id: "A-01" }, cliente),
+      { code: "permission-denied" },
+    );
+  });
+
+  it("prévia manual respeita exclusão e caixas em guarda, sem trocar pela primeira livre", async () => {
+    await assert.rejects(
+      suggestWarehousePosition(db, { customer_code: BTG, ...box, location_id: "A-02", exclude: ["a-02"] }, operacao),
+      { code: "failed-precondition" },
+    );
+    await db.collection("warehouse_boxes").doc("CX-000099").set({
+      code: "CX-000099", customer_code: BTG, status: "committing", location_id: "A-02",
+      length_m: 1.8, width_m: 0.5, height_m: 0.35,
+      front_m: 1.8, depth_m: 0.5, placed_height_m: 0.35, gross_weight_kg: 2,
+    });
+    for (const status of ["committing", "stored"]) {
+      await db.collection("warehouse_boxes").doc("CX-000099").update({ status });
+      await assert.rejects(
+        suggestWarehousePosition(db, { customer_code: BTG, ...box, location_id: "A-02" }, operacao),
+        { code: "failed-precondition" },
+      );
+      assert.equal((await suggestWarehousePosition(db, { customer_code: BTG, ...box }, operacao)).position?.code, "A-01");
+    }
+  });
+
+  it("prévia manual preserva medidas, orientação, permissão para tombar e limite de peso", async () => {
+    await db.collection("warehouse_positions").doc("A-02").update({ length_m: 0.38 });
+    const dimensions = { length_m: 0.6, width_m: 0.4, height_m: 0.35, gross_weight_kg: 2 };
+    const input = { customer_code: BTG, ...dimensions, location_id: "A-02" };
+    await assert.rejects(suggestWarehousePosition(db, input, operacao), { code: "failed-precondition" });
+    const tilted = await suggestWarehousePosition(db, { ...input, allow_tilt: true }, operacao);
+    assert.equal(tilted.position?.code, "A-02");
+    assert.equal(tilted.position?.placement.orientation, "height_length_width");
+    await assert.rejects(
+      suggestWarehousePosition(db, { ...input, allow_tilt: true, orientation: "length_width_height" }, operacao),
+      { code: "failed-precondition" },
+    );
+    await db.collection("warehouse_positions").doc("A-02").update({ length_m: 1.8, max_weight_kg: 1 });
+    await assert.rejects(suggestWarehousePosition(db, input, operacao), { code: "failed-precondition" });
+    await db.collection("warehouse_positions").doc("A-02").update({ max_weight_kg: null, depth_m: 0.3 });
+    await assert.rejects(suggestWarehousePosition(db, input, operacao), { code: "failed-precondition" });
+    await db.collection("warehouse_positions").doc("A-02").update({ depth_m: 0.75, height_m: 0.3 });
+    await assert.rejects(suggestWarehousePosition(db, input, operacao), { code: "failed-precondition" });
+  });
+
+  it("prévia manual só empilha com autorização e preserva o apoio escolhido", async () => {
+    for (let i = 0; i < 3; i += 1) await store("A-02", `preview-support-${i}`, { length_m: 0.6, width_m: 0.6, height_m: 0.3 });
+    const input = { customer_code: BTG, length_m: 0.6, width_m: 0.6, height_m: 0.3, gross_weight_kg: 2, location_id: "A-02" };
+    await assert.rejects(suggestWarehousePosition(db, input, operacao), { code: "failed-precondition" });
+    const preview = await suggestWarehousePosition(db, { ...input, allow_stacking: true, support_box_code: "CX-000002" }, operacao);
+    assert.equal(preview.position?.placement.support_box_code, "CX-000002");
+    assert.equal(preview.position?.placement.base_height_m, 0.3);
+    await assert.rejects(
+      suggestWarehousePosition(db, { ...input, allow_stacking: true, support_box_code: null }, operacao),
+      { code: "failed-precondition" },
+    );
+    await assert.rejects(
+      suggestWarehousePosition(db, { ...input, allow_stacking: true, support_box_code: "CX-999999" }, operacao),
+      { code: "failed-precondition" },
+    );
+    const result = await createWarehouseBox(db, {
+      ...input, allow_stacking: true, support_box_code: preview.position!.placement.support_box_code,
+      orientation: preview.position!.placement.orientation, idempotency_key: "preview-confirmed",
+    }, operacao);
+    assert.equal(result.box.location_id, "A-02");
+    assert.equal(result.box.support_box_code, "CX-000002");
+  });
+
+
   it("confirma empilhamento em A-02, audita o apoio e preserva idempotência", async () => {
     for (let i = 0; i < 3; i += 1) await store("A-02", `stack-floor-${i}`, { length_m: 0.6, width_m: 0.6, height_m: 0.3 });
     const dimensions = { length_m: 0.6, width_m: 0.6, height_m: 0.3, gross_weight_kg: 2 };

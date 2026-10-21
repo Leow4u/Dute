@@ -313,3 +313,16 @@ describe("empilhamento dirigido na mesma prateleira", () => {
     }
   });
 });
+
+describe("prévia de prateleira cadastrada", () => {
+  it("mantém o endereço opcional e normaliza a seleção explícita", () => {
+    assert.equal(SuggestWarehousePositionSchema.parse(box).location_id, undefined);
+    assert.equal(SuggestWarehousePositionSchema.parse({ ...box, location_id: " a-04 " }).location_id, "A-04");
+  });
+
+  it("recusa seleção vazia, caminho de documento e código acima do limite", () => {
+    for (const location_id of ["", "  ", "A-01/caixa", "A".repeat(13)]) {
+      assert.equal(SuggestWarehousePositionSchema.safeParse({ ...box, location_id }).success, false);
+    }
+  });
+});
