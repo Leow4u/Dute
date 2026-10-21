@@ -8,6 +8,7 @@
  * lista de papéis do firestore.rules. Desenho em docs/plataforma/fase-2-nucleo.md.
  */
 
+export * from "./contratos-datas";
 export * from "./dinheiro";
 
 export const MODULOS = ["wms", "operacao", "comercial", "financeiro", "rh"] as const;

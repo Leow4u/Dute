@@ -1,14 +1,14 @@
+// Cópia literal de lib/dominio/src/contratos-datas.ts: não edite aqui (trava em contratos-datas.test.ts).
 /**
- * Datas do contrato: alertas (fim da vigência, renovação, reajuste) e a
- * previsão de pagamento pela regra do contrato (docs/plataforma/fase-6-comercial.md,
- * parte 8).
+ * Datas do contrato do Comercial: alertas (fim da vigência, renovação,
+ * reajuste), o prazo de renovação e a previsão de pagamento pela regra do
+ * contrato (docs/plataforma/fase-6-comercial.md, partes 8 e 14).
  *
- * Funções puras, sem Firestore nem zod. O app não importa de
- * functions/comercial: quando a tela de contratos e o Início (parte 14)
- * precisarem destas regras, elas vão para lib/dominio com um JSON de casos e
- * ficam aqui como cópia travada por teste, como o dinheiro
- * (lib/dominio/src/dinheiro.ts). Toda data é texto "AAAA-MM-DD", sem fuso: o
- * dia do calendário, como está no contrato e na NF.
+ * Funções puras, sem Firestore nem zod. O app usa na tela de contratos e no
+ * Início; functions/comercial guarda uma cópia literal (domain/contratos-datas.ts),
+ * e os dois rodam os mesmos casos de contratos-datas.casos.json, como o
+ * dinheiro (dinheiro.ts). Toda data é texto "AAAA-MM-DD", sem fuso: o dia do
+ * calendário, como está no contrato e na NF.
  */
 
 export const TIPOS_RENOVACAO = ["aditivo", "automatica", "novo_documento", "indeterminado"] as const;
@@ -135,7 +135,7 @@ function marcoDoAviso(dias: number): AlertaContrato["marco"] | null {
  * `oposicao_ate_dias`); nas outras, o aviso do contrato (fim menos
  * `aviso_dias`). Sem prazo antes do fim, null: o alerta do fim já cobre.
  */
-function prazoDeRenovacao(contrato: ContratoParaAlertas, fim: string): string | null {
+export function prazoDeRenovacao(contrato: Pick<ContratoParaAlertas, "renovacao">, fim: string): string | null {
   const { tipo, aviso_dias, oposicao_ate_dias } = contrato.renovacao;
   const antes = tipo === "automatica" ? oposicao_ate_dias ?? aviso_dias : aviso_dias;
   if (antes === null || antes === undefined || antes <= 0) return null;

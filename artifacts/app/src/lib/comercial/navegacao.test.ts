@@ -19,9 +19,12 @@ import {
   DESTINO_DO_COMERCIAL,
   ROTA_CLIENTES,
   ROTA_COMERCIAL,
+  ROTA_CONTRATOS,
   TELAS_DO_COMERCIAL,
   abasVisiveis,
   abreComercial,
+  contratoDaBusca,
+  hrefDoContrato,
   rotasDoComercial,
   soComComercialLiberado,
 } from "./navegacao";
@@ -56,10 +59,10 @@ function menu(role: Papel, liberado: boolean) {
 describe("rotas do Comercial", () => {
   it("só existem com a liberação ligada", () => {
     expect(rotasDoComercial(DESLIGADO)).toEqual([]);
-    expect(rotasDoComercial(LIBERADO)).toEqual([ROTA_COMERCIAL, ROTA_CLIENTES]);
+    expect(rotasDoComercial(LIBERADO)).toEqual([ROTA_COMERCIAL, ROTA_CLIENTES, ROTA_CONTRATOS]);
   });
 
-  it("o App registra exatamente as rotas do Comercial, com /comercial e /comercial/clientes", () => {
+  it("o App registra exatamente as rotas do Comercial: /comercial, Clientes e Contratos", () => {
     expect(APP_PATHS.filter(doComercial)).toEqual(rotasDoComercial(LIBERADO));
   });
 
@@ -72,9 +75,21 @@ describe("rotas do Comercial", () => {
   });
 
   it("soComComercialLiberado: na produção nenhuma rota; na homologação, só as do Comercial", () => {
-    const rotas = [{ path: ROTA_COMERCIAL }, { path: ROTA_CLIENTES }, { path: "/comercial/inexistente" }];
+    const rotas = [{ path: ROTA_COMERCIAL }, { path: ROTA_CLIENTES }, { path: ROTA_CONTRATOS }, { path: "/comercial/inexistente" }];
     expect(soComComercialLiberado(rotas, DESLIGADO)).toEqual([]);
-    expect(soComComercialLiberado(rotas, LIBERADO).map((rota) => rota.path)).toEqual([ROTA_COMERCIAL, ROTA_CLIENTES]);
+    expect(soComComercialLiberado(rotas, LIBERADO).map((rota) => rota.path)).toEqual([
+      ROTA_COMERCIAL,
+      ROTA_CLIENTES,
+      ROTA_CONTRATOS,
+    ]);
+  });
+
+  it.each(PAPEIS)("%s: a rota de Contratos existe e abre só para quem abre o Comercial, com a liberação", (role) => {
+    for (const liberado of [LIBERADO, DESLIGADO]) {
+      const registrada = rotasDoComercial(liberado).includes(ROTA_CONTRATOS);
+      const permitida = getRouteProfileRoles(ROTA_CONTRATOS).includes(role);
+      expect(registrada && permitida, `${role} ${liberado}`).toBe(abreComercial(role, liberado));
+    }
   });
 
   it("owner, admin e comercial abrem; nenhum outro papel", () => {
@@ -102,13 +117,37 @@ describe("rotas do Comercial", () => {
 
   it("/comercial leva a Clientes enquanto a fila de orçamentos (parte 11) não existe", () => {
     expect(DESTINO_DO_COMERCIAL).toBe(ROTA_CLIENTES);
-    expect(TELAS_DO_COMERCIAL).toEqual([ROTA_CLIENTES]);
+    expect(TELAS_DO_COMERCIAL).toEqual([ROTA_CLIENTES, ROTA_CONTRATOS]);
+  });
+});
+
+describe("link para a ficha do contrato", () => {
+  it("com a tela de Contratos, o link leva à ficha pelo id", () => {
+    expect(hrefDoContrato("itau-2026")).toBe("/comercial/contratos?id=itau-2026");
+    expect(hrefDoContrato("a b/c")).toBe("/comercial/contratos?id=a%20b%2Fc");
+  });
+
+  it("sem a tela de Contratos, não há link", () => {
+    expect(hrefDoContrato("itau-2026", [ROTA_CLIENTES])).toBeNull();
+  });
+
+  it("a ficha aberta vem do id da busca da URL", () => {
+    expect(contratoDaBusca("?id=itau-2026")).toBe("itau-2026");
+    expect(contratoDaBusca("id=a%20b%2Fc")).toBe("a b/c");
+    expect(contratoDaBusca("")).toBeNull();
+    expect(contratoDaBusca("?id=")).toBeNull();
+    expect(contratoDaBusca("?outro=1")).toBeNull();
+  });
+
+  it("ida e volta: o link da ficha devolve o mesmo id", () => {
+    const href = hrefDoContrato("ct_9xZ-1")!;
+    expect(contratoDaBusca(href.slice(href.indexOf("?")))).toBe("ct_9xZ-1");
   });
 });
 
 describe("menu do Comercial", () => {
-  it("comercial vê só o grupo Comercial, com Clientes dentro", () => {
-    expect(menu("comercial", LIBERADO)).toEqual([{ label: "Comercial", routes: ["Clientes"] }]);
+  it("comercial vê só o grupo Comercial, com Clientes e Contratos dentro", () => {
+    expect(menu("comercial", LIBERADO)).toEqual([{ label: "Comercial", routes: ["Clientes", "Contratos"] }]);
     const [comercial] = getNavigationForProfileRole("comercial", null, LIBERADO);
     expect(comercial.href).toBe(ROTA_CLIENTES);
     expect(isModuleGroup(comercial)).toBe(true);
@@ -145,9 +184,11 @@ describe("menu do Comercial", () => {
     }
   });
 
-  it("Clientes acende o grupo Comercial", () => {
+  it("Clientes e Contratos (com a ficha aberta) acendem o grupo Comercial", () => {
     const modules = getNavigationForProfileRole("admin", null, LIBERADO);
     expect(getActiveModule(modules, ROTA_CLIENTES).label).toBe("Comercial");
+    expect(getActiveModule(modules, ROTA_CONTRATOS).label).toBe("Comercial");
+    expect(getActiveModule(modules, hrefDoContrato("itau-2026")!).label).toBe("Comercial");
   });
 
   it("os grupos do WMS continuam como eram: grupo é quem tem mais de uma tela", () => {
@@ -159,8 +200,8 @@ describe("menu do Comercial", () => {
     const comercial = getMobileNavigation(getNavigationForProfileRole("comercial", null, LIBERADO));
     expect(comercial.bar.map((module) => module.label)).toEqual(["Comercial"]);
     const owner = getMobileNavigation(getNavigationForProfileRole("owner", null, LIBERADO));
-    expect(owner.more.flatMap(({ module, routes }) => routes.map((route) => `${module.label} · ${route.label}`))).toContain(
-      "Comercial · Clientes",
+    expect(owner.more.flatMap(({ module, routes }) => routes.map((route) => `${module.label} · ${route.label}`))).toEqual(
+      expect.arrayContaining(["Comercial · Clientes", "Comercial · Contratos"]),
     );
   });
 });
@@ -221,9 +262,10 @@ describe("abas do módulo (Orçamentos · Contratos · Autorizações · Mediç�
     expect(ABAS_DO_COMERCIAL.map((aba) => aba.rotulo)).toEqual(["Orçamentos", "Contratos", "Autorizações", "Medições"]);
   });
 
-  it("aba sem tela fica oculta: hoje nenhuma tem", () => {
-    expect(abasVisiveis(TELAS_DO_COMERCIAL)).toEqual([]);
-    expect(abasVisiveis()).toEqual([]);
+  it("aba sem tela fica oculta: hoje só Contratos tem", () => {
+    expect(abasVisiveis(TELAS_DO_COMERCIAL).map((aba) => aba.id)).toEqual(["contratos"]);
+    expect(abasVisiveis().map((aba) => aba.href)).toEqual([ROTA_CONTRATOS]);
+    expect(abasVisiveis([ROTA_CLIENTES])).toEqual([]);
   });
 
   it("cada tela nova acende a aba dela, na ordem", () => {
