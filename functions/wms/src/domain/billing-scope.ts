@@ -52,6 +52,11 @@ export async function resolveBillingDocument(
   return { ref: primary, legacy: false };
 }
 
+/** Mês fechado sem foto ainda: gravar uma vez. Foto, replace e baseline ficam. */
+export function shouldFreezeCompetencia(mode: string, closed: boolean): boolean {
+  return closed && !["frozen", "replace", "baseline"].includes(mode);
+}
+
 export function billingCustomerCode(profile: {
   role: string;
   customer_code?: string;

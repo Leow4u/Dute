@@ -78,7 +78,10 @@ import {
   openingUsesGlobalControl,
 } from "./domain/customer-scope.js";
 import { assertManagedCatalogCreateAllowed } from "./domain/catalog-codes.js";
-import { resolveBillingDocument } from "./domain/billing-scope.js";
+import {
+  resolveBillingDocument,
+  shouldFreezeCompetencia,
+} from "./domain/billing-scope.js";
 import {
   canSeeCatalogPrice,
   CATALOG_PRICES,
@@ -3364,21 +3367,32 @@ async function loadBillingCalculation(
   const operationalSnapshot = transaction
     ? await transaction.get(operationalSnapshotRef)
     : await operationalSnapshotRef.get();
-  const inventoryControlSnapshot = transaction
-    ? await transaction.get(inventoryControlRef)
-    : await inventoryControlRef.get();
-  const inventorySnapshot = transaction
-    ? await transaction.get(inventoryQuery)
-    : await inventoryQuery.get();
+  const operationalDataEarly = operationalSnapshot.data() ?? {};
+  const snapshotModeEarly = String(operationalDataEarly.mode ?? "");
+  const usageAlreadyFrozen = snapshotModeEarly === "frozen";
+  const inventoryControlSnapshot = usageAlreadyFrozen
+    ? null
+    : transaction
+      ? await transaction.get(inventoryControlRef)
+      : await inventoryControlRef.get();
+  const inventorySnapshot = usageAlreadyFrozen
+    ? { docs: [] as Array<{ data: () => Record<string, unknown> }> }
+    : transaction
+      ? await transaction.get(inventoryQuery)
+      : await inventoryQuery.get();
   const catalogPriceQuery = db
     .collection(CATALOG_PRICES)
     .where("customer_code", "==", customerCode);
-  const catalogPriceSnapshot = transaction
-    ? await transaction.get(catalogPriceQuery)
-    : await catalogPriceQuery.get();
-  const movementsSnapshot = transaction
-    ? await transaction.get(movementsQuery)
-    : await movementsQuery.get();
+  const catalogPriceSnapshot = usageAlreadyFrozen
+    ? { docs: [] as Array<{ data: () => Record<string, unknown> }> }
+    : transaction
+      ? await transaction.get(catalogPriceQuery)
+      : await catalogPriceQuery.get();
+  const movementsSnapshot = usageAlreadyFrozen
+    ? { docs: [] as Array<{ data: () => Record<string, unknown> }> }
+    : transaction
+      ? await transaction.get(movementsQuery)
+      : await movementsQuery.get();
 
   const priceList: LpuItem[] = pricesSnapshot.docs
     .filter(
@@ -3464,12 +3478,12 @@ async function loadBillingCalculation(
     saidas_pecas: outgoingPieces,
     movimentacoes: movements.length,
   };
-  const inventoryControl = inventoryControlSnapshot.data() ?? {};
+  const inventoryControl = inventoryControlSnapshot?.data() ?? {};
   const openingInventoryInProgress =
     inventoryControl.opening_inventory_required === true ||
     inventoryControl.stock_initialized === false;
   const usage =
-    snapshotMode === "replace"
+    snapshotMode === "replace" || snapshotMode === "frozen"
       ? {
           custo_estoque: billingUsageNumber(snapshotUsage.custo_estoque),
           entradas_pecas: billingUsageNumber(snapshotUsage.entradas_pecas),
@@ -3500,6 +3514,46 @@ async function loadBillingCalculation(
     adValoremRate: Number(config.ad_valorem_rate ?? 0.005),
     usage,
   };
+}
+
+/**
+ * Mês já terminou e ainda não há foto: grava custo, entradas, saídas e
+ * movimentos uma vez. Prévia e emissão seguintes leem só essa foto.
+ */
+async function ensureFrozenBillingUsage(
+  customerCode: string,
+  competencia: string,
+  now: Date,
+) {
+  if (!isCompetenciaClosed(competencia, now)) return;
+  const resolved = await resolveBillingDocument(
+    db,
+    collectionNames.billingOperationalSnapshots,
+    customerCode,
+    competencia,
+  );
+  const snap = await resolved.ref.get();
+  const mode = String(snap.data()?.mode ?? "");
+  if (!shouldFreezeCompetencia(mode, true)) return;
+  const calculation = await loadBillingCalculation(competencia, customerCode);
+  const frozenUsage = calculation.usage ?? {
+    custo_estoque: 0,
+    entradas_pecas: 0,
+    saidas_pecas: 0,
+    movimentacoes: 0,
+  };
+  await resolved.ref.set({
+    mode: "frozen",
+    customer_code: customerCode,
+    competencia,
+    usage: {
+      custo_estoque: frozenUsage.custo_estoque,
+      entradas_pecas: frozenUsage.entradas_pecas,
+      saidas_pecas: frozenUsage.saidas_pecas,
+      movimentacoes: frozenUsage.movimentacoes,
+    },
+    frozen_at: FieldValue.serverTimestamp(),
+  });
 }
 
 function billingAuditEvent(
@@ -6546,6 +6600,9 @@ export const getBillingPreview = onCall(async (request) => {
         calculated_at: frozen.issued_at ?? null,
       };
     }
+    if (isCompetenciaClosed(input.competencia, now)) {
+      await ensureFrozenBillingUsage(customerCode, input.competencia, now);
+    }
     const calculation = calculateBillingPeriod(
       await loadBillingCalculation(input.competencia, customerCode),
     );
@@ -7088,6 +7145,7 @@ export const emitBillingInvoice = onCall(async (request) => {
   const input = BillingCompetenciaSchema.parse(request.data ?? {});
   const customerCode = requireCustomerScope(profile, input.customer_code);
   const issuedAt = new Date();
+  await ensureFrozenBillingUsage(customerCode, input.competencia, issuedAt);
 
   try {
     const result = await db.runTransaction(async (transaction) => {
