@@ -4,7 +4,7 @@ import { after, before, beforeEach, describe, it } from "node:test";
 import { deleteApp, initializeApp } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 
-import { assertCustomerCodeAvailable, assertSkuPrefixAvailable, readContractedModules } from "./customer-profile.js";
+import { assertCustomerIdentityAvailable, assertSkuPrefixAvailable, readContractedModules } from "./customer-profile.js";
 
 const PROJECT_ID = "demo-dute-operations";
 
@@ -47,8 +47,10 @@ describe("sigla do SKU única entre clientes ativos", () => {
   });
 });
 
-function checkCode(code: string, documentId: string) {
-  return db.runTransaction((transaction) => assertCustomerCodeAvailable(transaction, db, code, documentId));
+function checkCode(code: string, documentId: string, document?: string) {
+  return db.runTransaction((transaction) =>
+    assertCustomerIdentityAvailable(transaction, db, { code, document, documentId }),
+  );
 }
 
 describe("código operacional único entre cadastros", () => {
@@ -67,6 +69,27 @@ describe("código operacional único entre cadastros", () => {
 
   it("aceita código livre", async () => {
     await assert.doesNotReject(checkCode("Itaú", "Ita_"));
+  });
+
+  it("compara sem acento e sem maiúsculas: Itau colide com ITAÚ", async () => {
+    await db.collection("customers").doc("ITA_").set({ code: "ITAÚ", customer_code: "ITAÚ", name: "Itaú Unibanco", sku_prefix: "ITAU" });
+    await assert.rejects(checkCode("Itau", "Itau"), /O código Itau já é do cliente Itaú Unibanco/);
+  });
+
+  it("o código do Comercial colide com o do WMS: BTG-PACTUAL e BTG Pactual", async () => {
+    await assert.rejects(checkCode("BTG-PACTUAL", "BTG-PACTUAL"), /já é do cliente BTG Pactual \(cadastrado como BTG Pactual\)/);
+  });
+
+  it("recusa o código de um prospect do Comercial", async () => {
+    await db.collection("customers").doc("ACME").set({ code: "ACME", customer_code: "ACME", name: "Acme Ltda", stage: "prospect" });
+    await assert.rejects(checkCode("acme", "acme"), /já é do prospect Acme Ltda, no Comercial/);
+  });
+
+  it("recusa a raiz de CNPJ de outro cadastro, mesmo arquivado", async () => {
+    await db.collection("customers").doc("Antigo").set({ document: "11.111.111/0001-91" }, { merge: true });
+    await assert.rejects(checkCode("Novo", "Novo", "11111111000272"), /raiz do CNPJ 11111111 já é do cliente Cliente antigo/);
+    await assert.doesNotReject(checkCode("Novo", "Novo", "22.222.222/0001-91"));
+    await assert.doesNotReject(checkCode("Novo", "Novo"));
   });
 });
 

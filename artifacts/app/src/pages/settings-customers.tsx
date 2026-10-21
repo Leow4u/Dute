@@ -366,7 +366,7 @@ export default function SettingsCustomers() {
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
                       {peopleLabel(row.people)}
-                      {!row.archived && row.profile.portalStatus === "active" ? (
+                      {row.invitable ? (
                         <Link
                           href={`/configuracoes/pessoas?convidar=cliente&cliente=${encodeURIComponent(row.code)}`}
                           className="ml-2 inline-flex items-center text-xs font-medium text-primary hover:underline"
