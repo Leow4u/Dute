@@ -5,6 +5,7 @@ import { setGlobalOptions } from "firebase-functions/v2";
 
 import { saveCommercialCustomerFor, saveCustomerContactFor, saveCustomerLocationFor } from "./domain/cadastro.js";
 import { registrarAditivo, salvarContrato } from "./domain/contratos.js";
+import { advanceDemandFor } from "./domain/demandas.js";
 import { assertAuth, comercialStatusFor, loadProfile, requireComercialCaller } from "./domain/profile.js";
 import { advanceQuoteFor, saveQuoteFor } from "./domain/quotes.js";
 import { PROJECT_ID } from "./project.js";
@@ -90,12 +91,13 @@ export const recordAditivo = onCall(async (request) => {
   return registrarAditivo(db, caller, request.data);
 });
 
-// --- Demanda e orçamento (parte 9; domain/quotes.ts) ---------------------------
+// --- Demanda e orçamento (partes 9 e 10; domain/quotes.ts e demandas.ts) -------
 
 /**
  * Cria a demanda e o orçamento juntos (número único de demand_counters),
- * edita o rascunho com a edição lida, ou duplica um orçamento com a
- * data-base de hoje. O servidor recalcula preço e totais.
+ * abre a demanda direta já executada com a RV de execução ("Orçar
+ * execução"), edita o rascunho com a edição lida, ou duplica um orçamento
+ * com a data-base de hoje. O servidor recalcula preço e totais.
  */
 export const saveQuote = onCall(async (request) => {
   const caller = await requireComercialCaller(db, request, PROJECT_ID);
@@ -104,9 +106,21 @@ export const saveQuote = onCall(async (request) => {
 
 /**
  * Enviar para aprovação, devolver, aprovar (só o owner; congela a RV em
- * revisoes) e editar o aprovado, conferindo a situação e a edição vistas.
+ * revisoes), editar o aprovado, enviar ao cliente (congela a RV de vez),
+ * aprovar e enviar (só o owner) e revisar (a RV enviada ganha a seguinte),
+ * conferindo a situação e a edição vistas.
  */
 export const advanceQuote = onCall(async (request) => {
   const caller = await requireComercialCaller(db, request, PROJECT_ID);
   return advanceQuoteFor(db, caller, request.data);
+});
+
+/**
+ * A demanda depois do envio: fechada pelo cliente (o prospect vira cliente),
+ * perdida com motivo, reaberta, executada e validada pelo cliente,
+ * conferindo a etapa e a RV vistas.
+ */
+export const advanceDemand = onCall(async (request) => {
+  const caller = await requireComercialCaller(db, request, PROJECT_ID);
+  return advanceDemandFor(db, caller, request.data);
 });

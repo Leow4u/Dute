@@ -415,17 +415,64 @@ export function marcasDoOrcamento(input: {
   return MARCAS_ORCAMENTO.filter((marca) => marcas.has(marca));
 }
 
+// --- Aprovação dispensada (RV de execução) ---------------------------------------------------
+
+/** A RV para comparar com a fechada: as linhas gravadas, o total e a tabela. */
+export type RvParaComparar = {
+  linhas: readonly LinhaDoOrcamento[];
+  total_cents: number;
+  tabela_id: string | null;
+};
+
+export type Dispensa = { dispensada: true } | { dispensada: false; motivo: string };
+
+/**
+ * A RV de execução pode ir ao cliente sem nova aprovação (pergunta 3 do
+ * desenho, recomendação aceita)? Só quando, em relação à RV fechada, mudam
+ * apenas quantidades de linhas de tabela: nenhuma linha nova (todo id vem da
+ * RV fechada), nenhuma alterada, avulsa ou de ajuste, o mesmo item e o mesmo
+ * preço da mesma tabela, e o total não passa o da RV fechada. Linha tirada
+ * vale (é quantidade zero). Fora disso, a RV passa pela aprovação do owner.
+ */
+export function dispensaDaAprovacao(atual: RvParaComparar & { tipo_rv: string }, fechada: RvParaComparar | null): Dispensa {
+  if (atual.tipo_rv !== "execucao") return { dispensada: false, motivo: "só a RV de execução dispensa a aprovação" };
+  if (!fechada) return { dispensada: false, motivo: "não há RV fechada pelo cliente para comparar" };
+  if ((atual.tabela_id ?? null) !== (fechada.tabela_id ?? null)) {
+    return { dispensada: false, motivo: "a tabela não é a da RV fechada" };
+  }
+  if (atual.linhas.length === 0) return { dispensada: false, motivo: "a RV não tem linha" };
+  const fechadas = new Map(fechada.linhas.map((linha) => [linha.id, linha]));
+  for (const [indice, linha] of atual.linhas.entries()) {
+    const numero = indice + 1;
+    if (linha.origem !== "tabela") return { dispensada: false, motivo: `a linha ${numero} é ${linha.origem}` };
+    const antes = fechadas.get(linha.id);
+    if (!antes) return { dispensada: false, motivo: `a linha ${numero} é nova` };
+    if (antes.origem !== "tabela" || antes.lpu_item_id !== linha.lpu_item_id || !mesmoPreco(antes.preco, linha.preco)) {
+      return { dispensada: false, motivo: `a linha ${numero} mudou além da quantidade` };
+    }
+  }
+  if (atual.total_cents > fechada.total_cents) return { dispensada: false, motivo: "o total passa o da RV fechada" };
+  return { dispensada: true };
+}
+
 // --- Transições -------------------------------------------------------------------------
 
-export const ACOES_ORCAMENTO = ["submit", "return", "approve", "edit"] as const;
+export const ACOES_ORCAMENTO = ["submit", "return", "approve", "edit", "send", "approve_and_send", "revise"] as const;
 export type AcaoOrcamento = (typeof ACOES_ORCAMENTO)[number];
 
-/** De onde cada ação sai e aonde chega (a RV em curso; a mesma RV em todas). */
+/**
+ * De onde cada ação sai e aonde chega. Até o envio, a mesma RV; "revise" abre
+ * a RV seguinte em rascunho. "send" sai do aprovado e, só com a aprovação
+ * dispensada (RV de execução), do rascunho.
+ */
 export const TRANSICOES: Record<AcaoOrcamento, { de: readonly StatusDoOrcamento[]; para: StatusDoOrcamento }> = {
   submit: { de: ["rascunho"], para: "para_aprovar" },
   return: { de: ["para_aprovar"], para: "rascunho" },
   approve: { de: ["para_aprovar", "rascunho"], para: "aprovado" },
   edit: { de: ["aprovado"], para: "rascunho" },
+  send: { de: ["aprovado", "rascunho"], para: "enviado" },
+  approve_and_send: { de: ["para_aprovar"], para: "enviado" },
+  revise: { de: ["enviado"], para: "rascunho" },
 };
 
 const ROTULO_STATUS: Record<StatusDoOrcamento, string> = {
@@ -440,15 +487,18 @@ export type ProblemaDaAcao = { codigo: "permission-denied" | "failed-preconditio
 /**
  * Por que a pessoa não pode fazer a ação no orçamento como ele está, ou null.
  *
- * - owner, admin e comercial montam, enviam para aprovação e editam o
- *   aprovado (volta ao rascunho na mesma RV).
+ * - owner, admin e comercial montam, enviam para aprovação, editam o
+ *   aprovado (volta ao rascunho na mesma RV), enviam ao cliente o aprovado e
+ *   abrem a RV seguinte da enviada.
  * - Só o owner aprova; do rascunho, só o orçamento que ele mesmo montou.
+ *   "Aprovar e enviar" é do owner, do "para aprovar".
  * - Devolve o aprovador (com nota) ou quem montou (puxa de volta).
+ * - Enviar do rascunho só com a aprovação dispensada (dispensaDaAprovacao).
  */
 export function problemaDaAcao(
   acao: AcaoOrcamento,
   quem: { uid: string; role: PlatformRole },
-  orcamento: { status: StatusDoOrcamento; autor_uid: string | null },
+  orcamento: { status: StatusDoOrcamento; autor_uid: string | null; aprovacao_dispensada?: Dispensa },
 ): ProblemaDaAcao | null {
   const semAcesso = comercialAccessProblem(quem.role);
   if (semAcesso) return { codigo: "permission-denied", mensagem: semAcesso };
@@ -456,6 +506,9 @@ export function problemaDaAcao(
   const autor = orcamento.autor_uid !== null && orcamento.autor_uid === quem.uid;
   if (acao === "approve" && !aprovador) {
     return { codigo: "permission-denied", mensagem: "Só o aprovador (owner) aprova o orçamento." };
+  }
+  if (acao === "approve_and_send" && !aprovador) {
+    return { codigo: "permission-denied", mensagem: "Só o aprovador (owner) aprova e envia o orçamento." };
   }
   if (acao === "return" && !aprovador && !autor) {
     return { codigo: "permission-denied", mensagem: "Devolve o aprovador ou quem montou o orçamento." };
@@ -473,20 +526,57 @@ export function problemaDaAcao(
       mensagem: "Do rascunho, o owner só aprova o orçamento que ele mesmo montou; os outros chegam por \"Enviar para aprovação\".",
     };
   }
+  if (acao === "send" && orcamento.status === "rascunho") {
+    const dispensa = orcamento.aprovacao_dispensada ?? { dispensada: false, motivo: "a RV não foi comparada com a fechada" };
+    if (!dispensa.dispensada) {
+      return {
+        codigo: "failed-precondition",
+        mensagem: `Esta RV passa pela aprovação do owner antes do envio: ${dispensa.motivo}. A aprovação só é dispensada na RV de execução que muda apenas quantidades de linhas de tabela, sem passar o total fechado.`,
+      };
+    }
+  }
   return null;
 }
 
 /**
  * A ação já foi feita sobre o que a tela viu: o orçamento já está onde a ação
  * leva, com a mesma edição. Repetir só devolve o estado atual.
+ * - Enviar: enviado na edição vista (o envio não muda a edição).
+ * - Revisar: a RV atual saiu da edição vista, com o mesmo motivo (a revisão
+ *   sobe a edição, que segue subindo de uma RV para a outra).
  */
 export function acaoJaFeita(
   acao: AcaoOrcamento,
-  atual: { status: StatusDoOrcamento; edicao: number; aprovacao: { edicao: number } | null },
-  esperado: { status: StatusDoOrcamento; edicao: number },
+  atual: {
+    status: StatusDoOrcamento;
+    edicao: number;
+    aprovacao: { edicao: number } | null;
+    envio?: { edicao: number } | null;
+    revisao_de?: { edicao: number; motivo: string } | null;
+  },
+  esperado: { status: StatusDoOrcamento; edicao: number; motivo?: string | null },
 ): boolean {
   if (acao === "approve") {
-    return atual.status === "aprovado" && atual.aprovacao?.edicao === esperado.edicao;
+    if (atual.status === "aprovado") return atual.aprovacao?.edicao === esperado.edicao;
+    // Aprovado e já enviado por outra pessoa: a aprovação vista também está feita.
+    return (
+      atual.status === "enviado" &&
+      TRANSICOES.approve.de.includes(esperado.status) &&
+      atual.envio?.edicao === esperado.edicao &&
+      atual.aprovacao?.edicao === esperado.edicao
+    );
+  }
+  if (acao === "send" || acao === "approve_and_send") {
+    return (
+      TRANSICOES[acao].de.includes(esperado.status) && atual.status === "enviado" && atual.envio?.edicao === esperado.edicao
+    );
+  }
+  if (acao === "revise") {
+    return (
+      esperado.status === "enviado" &&
+      atual.revisao_de?.edicao === esperado.edicao &&
+      atual.revisao_de.motivo === (esperado.motivo ?? null)
+    );
   }
   const transicao = TRANSICOES[acao];
   return transicao.de.includes(esperado.status) && atual.status === transicao.para && atual.edicao === esperado.edicao;

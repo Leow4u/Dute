@@ -8,6 +8,7 @@ import {
   ErroOrcamento,
   MARCAS_ORCAMENTO,
   acaoJaFeita,
+  dispensaDaAprovacao,
   entradasNaTabelaNova,
   marcasDoOrcamento,
   mesmoPreco,
@@ -407,6 +408,76 @@ describe("linhas gravadas numa tabela nova (duplicar, trocar contrato ou variant
   });
 });
 
+describe("aprovação dispensada na RV de execução (parte 10)", () => {
+  const linha = (id: string, extra: Partial<LinhaDoOrcamento> = {}): LinhaDoOrcamento => ({
+    id,
+    lpu_item_id: "lpu_mesa",
+    codigo: "DTL-0001-T",
+    item: "Mesa",
+    descricao: "Transporte de mesa",
+    servico: "Transporte",
+    unidade: "UN",
+    quantidade: "10",
+    preco: "40.00",
+    preco_tabela: "40.00",
+    origem: "tabela",
+    motivo: null,
+    origem_local: null,
+    destino_local: null,
+    total_cents: 40000,
+    preco_anterior: null,
+    ...extra,
+  });
+  const fechada = {
+    tabela_id: "pt_itau_v1",
+    total_cents: 40000 + 18500 * 2,
+    linhas: [linha("ln_mesa"), linha("ln_cadeira", { lpu_item_id: "lpu_cadeira", preco: "18.50", preco_tabela: "18.50", quantidade: "2", total_cents: 37000 })],
+  };
+  const execucao = (linhas: LinhaDoOrcamento[], extra: Partial<{ tipo_rv: string; tabela_id: string | null }> = {}) => ({
+    tipo_rv: "execucao",
+    tabela_id: "pt_itau_v1",
+    linhas,
+    total_cents: linhas.reduce((soma, item) => soma + item.total_cents, 0),
+    ...extra,
+  });
+
+  it("dispensa: só quantidades de linhas de tabela mudam, e o total não passa o fechado", () => {
+    // Menos mesas, as mesmas cadeiras.
+    assert.deepEqual(dispensaDaAprovacao(execucao([linha("ln_mesa", { quantidade: "8", total_cents: 32000 }), fechada.linhas[1]]), fechada), {
+      dispensada: true,
+    });
+    // Linha tirada (quantidade zero) e o mesmo total também dispensam.
+    assert.deepEqual(dispensaDaAprovacao(execucao([fechada.linhas[0]]), fechada), { dispensada: true });
+    assert.deepEqual(dispensaDaAprovacao(execucao(fechada.linhas), fechada), { dispensada: true });
+  });
+
+  it("não dispensa: total maior, linha nova, alterada, avulsa, ajuste, outro item, outro preço, outra tabela, outro tipo ou sem RV fechada", () => {
+    const motivo = (resultado: ReturnType<typeof dispensaDaAprovacao>) => (resultado.dispensada ? "dispensada" : resultado.motivo);
+    const casos: Array<[string, ReturnType<typeof dispensaDaAprovacao>, RegExp]> = [
+      ["total maior", dispensaDaAprovacao(execucao([linha("ln_mesa", { quantidade: "30", total_cents: 120000 })]), fechada), /total/],
+      ["linha nova", dispensaDaAprovacao(execucao([fechada.linhas[0], linha("ln_nova", { quantidade: "1", total_cents: 4000 })]), fechada), /nova/],
+      [
+        "alterada",
+        dispensaDaAprovacao(execucao([linha("ln_mesa", { origem: "alterado", preco: "35.00", motivo: "Desconto", quantidade: "1", total_cents: 3500 })]), fechada),
+        /alterado/,
+      ],
+      ["avulsa", dispensaDaAprovacao(execucao([linha("ln_mesa", { origem: "avulso", lpu_item_id: null, total_cents: 100 })]), fechada), /avulso/],
+      ["ajuste", dispensaDaAprovacao(execucao([fechada.linhas[0], linha("ln_aj", { origem: "ajuste", lpu_item_id: null, preco: "-1.00", quantidade: "1", total_cents: -100 })]), fechada), /ajuste/],
+      ["outro item", dispensaDaAprovacao(execucao([linha("ln_mesa", { lpu_item_id: "lpu_cofre" })]), fechada), /além da quantidade/],
+      ["outro preço", dispensaDaAprovacao(execucao([linha("ln_mesa", { preco: "39.00", total_cents: 39000 })]), fechada), /além da quantidade/],
+      ["outra tabela", dispensaDaAprovacao(execucao(fechada.linhas, { tabela_id: "pt_itau_v2" }), fechada), /tabela/],
+      ["aditivo", dispensaDaAprovacao(execucao(fechada.linhas, { tipo_rv: "aditivo" }), fechada), /só a RV de execução/],
+      ["proposta", dispensaDaAprovacao(execucao(fechada.linhas, { tipo_rv: "proposta" }), fechada), /só a RV de execução/],
+      ["sem RV fechada (demanda direta)", dispensaDaAprovacao(execucao(fechada.linhas), null), /RV fechada/],
+      ["sem linha", dispensaDaAprovacao(execucao([]), fechada), /não tem linha/],
+    ];
+    for (const [caso, resultado, esperado] of casos) {
+      assert.equal(resultado.dispensada, false, caso);
+      assert.match(motivo(resultado), esperado, caso);
+    }
+  });
+});
+
 describe("marcas", () => {
   const linha = (origem: string) => ({ origem }) as never;
 
@@ -464,6 +535,22 @@ describe("transições do orçamento (ação × papel × situação)", () => {
       owner: { rascunho: "failed-precondition", para_aprovar: "failed-precondition", aprovado: "ok", enviado: "failed-precondition" },
       admin: { rascunho: "failed-precondition", para_aprovar: "failed-precondition", aprovado: "ok", enviado: "failed-precondition" },
       comercial: { rascunho: "failed-precondition", para_aprovar: "failed-precondition", aprovado: "ok", enviado: "failed-precondition" },
+    },
+    // Parte 10. Enviar sai do aprovado; do rascunho, só com a aprovação dispensada (ver abaixo).
+    send: {
+      owner: { rascunho: "failed-precondition", para_aprovar: "failed-precondition", aprovado: "ok", enviado: "failed-precondition" },
+      admin: { rascunho: "failed-precondition", para_aprovar: "failed-precondition", aprovado: "ok", enviado: "failed-precondition" },
+      comercial: { rascunho: "failed-precondition", para_aprovar: "failed-precondition", aprovado: "ok", enviado: "failed-precondition" },
+    },
+    approve_and_send: {
+      owner: { rascunho: "failed-precondition", para_aprovar: "ok", aprovado: "failed-precondition", enviado: "failed-precondition" },
+      admin: { rascunho: "permission-denied", para_aprovar: "permission-denied", aprovado: "permission-denied", enviado: "permission-denied" },
+      comercial: { rascunho: "permission-denied", para_aprovar: "permission-denied", aprovado: "permission-denied", enviado: "permission-denied" },
+    },
+    revise: {
+      owner: { rascunho: "failed-precondition", para_aprovar: "failed-precondition", aprovado: "failed-precondition", enviado: "ok" },
+      admin: { rascunho: "failed-precondition", para_aprovar: "failed-precondition", aprovado: "failed-precondition", enviado: "ok" },
+      comercial: { rascunho: "failed-precondition", para_aprovar: "failed-precondition", aprovado: "failed-precondition", enviado: "ok" },
     },
   };
 
@@ -530,6 +617,38 @@ describe("transições do orçamento (ação × papel × situação)", () => {
     assert.equal(acaoJaFeita("return", { status: "rascunho", edicao: 3, aprovacao: null }, { status: "para_aprovar", edicao: 3 }), true);
     assert.equal(acaoJaFeita("edit", { status: "rascunho", edicao: 3, aprovacao: null }, { status: "aprovado", edicao: 3 }), true);
     assert.equal(acaoJaFeita("edit", { status: "rascunho", edicao: 4, aprovacao: null }, { status: "aprovado", edicao: 3 }), false);
+  });
+
+  it("enviar do rascunho: só com a aprovação dispensada, para qualquer papel do Comercial", () => {
+    for (const papel of ["owner", "admin", "comercial"] as const) {
+      assert.equal(
+        problemaDaAcao("send", { uid: "x", role: papel }, { status: "rascunho", autor_uid: AUTOR, aprovacao_dispensada: { dispensada: true } }),
+        null,
+        papel,
+      );
+      const recusado = problemaDaAcao("send", { uid: "x", role: papel }, {
+        status: "rascunho",
+        autor_uid: AUTOR,
+        aprovacao_dispensada: { dispensada: false, motivo: "o total passa o da RV fechada" },
+      });
+      assert.equal(recusado?.codigo, "failed-precondition", papel);
+      assert.match(String(recusado?.mensagem), /aprovação do owner.*o total passa o da RV fechada/);
+    }
+  });
+
+  it("repetir enviar, aprovar e enviar e revisar: reconhece pelo envio e pela RV aberta, na edição vista", () => {
+    const enviado = { status: "enviado" as const, edicao: 3, aprovacao: { edicao: 3 }, envio: { edicao: 3 }, revisao_de: null };
+    assert.equal(acaoJaFeita("send", enviado, { status: "aprovado", edicao: 3 }), true);
+    assert.equal(acaoJaFeita("send", enviado, { status: "rascunho", edicao: 3 }), true);
+    assert.equal(acaoJaFeita("send", enviado, { status: "aprovado", edicao: 2 }), false);
+    assert.equal(acaoJaFeita("approve_and_send", enviado, { status: "para_aprovar", edicao: 3 }), true);
+    assert.equal(acaoJaFeita("approve_and_send", enviado, { status: "aprovado", edicao: 3 }), false);
+    assert.equal(acaoJaFeita("approve", enviado, { status: "para_aprovar", edicao: 3 }), true);
+    const revisada = { status: "rascunho" as const, edicao: 4, aprovacao: null, envio: null, revisao_de: { edicao: 3, motivo: "correcao" } };
+    assert.equal(acaoJaFeita("revise", revisada, { status: "enviado", edicao: 3, motivo: "correcao" }), true);
+    assert.equal(acaoJaFeita("revise", revisada, { status: "enviado", edicao: 3, motivo: "aditivo" }), false);
+    assert.equal(acaoJaFeita("revise", revisada, { status: "enviado", edicao: 2, motivo: "correcao" }), false);
+    assert.equal(acaoJaFeita("revise", enviado, { status: "enviado", edicao: 3, motivo: "correcao" }), false);
   });
 
   it("para aprovar: cliente, Para, título e uma linha", () => {

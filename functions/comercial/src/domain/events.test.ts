@@ -40,8 +40,10 @@ const EXEMPLOS: Record<ComercialEventType, Record<string, unknown>> = {
     etapa_depois: "para_aprovar",
     segundos_desde_anterior: 3600,
   },
-  "demand.won": { numero: "10045", rv: 1 },
-  "demand.lost": { numero: "10045", etapa_antes: "aguardando_cliente" },
+  "demand.won": { numero: "10045", rv: 1, virou_cliente: true, segundos_desde_anterior: 86_400 },
+  "demand.lost": { numero: "10045", rv: 0, etapa_antes: "aguardando_cliente", motivo: "preco", segundos_desde_anterior: 600 },
+  "demand.reopened": { numero: "10045", rv: 1, etapa_antes: "perdida", etapa_depois: "em_montagem", rv_aberta: true },
+  "demand.execution_registered": { numero: "10045", executado_de: "2026-10-16", executado_ate: "2026-10-17", direta: false },
   "quote.created": {
     numero: "10045",
     rv: 0,
@@ -91,7 +93,26 @@ const EXEMPLOS: Record<ComercialEventType, Record<string, unknown>> = {
   },
   "quote.approval_waived": { numero: "10045", rv: 2, edicao: 1 },
   "quote.sent": { numero: "10045", rv: 0, edicao: 3 },
-  "quote.revised": { numero: "10045", rv: 1, rv_anterior: 0, tipo_rv: "aditivo" },
+  "quote.revised": {
+    numero: "10045",
+    rv: 1,
+    rv_anterior: 0,
+    tipo_rv: "execucao",
+    motivo: "execucao",
+    edicao: 4,
+    etapa_antes: "execucao_a_orcar",
+    etapa_depois: "execucao_a_orcar",
+  },
+  "quote.validated": {
+    numero: "10045",
+    rv: 1,
+    tipo_rv: "execucao",
+    etapa_antes: "aguardando_cliente",
+    etapa_depois: "aguardando_autorizacao",
+    autorizacao_exigida: true,
+    medicao_pendente: false,
+    virou_cliente: false,
+  },
   "commercial_customer.created": { stage: "prospect" },
   "commercial_customer.updated": { campos: ["razao_social", "cnpj"] },
   "commercial_customer.became_client": { numero: "10045" },
@@ -519,16 +540,49 @@ describe("evento gravado", () => {
     );
   });
 
-  it("perda sem motivo livre: o motivo entra com a lista, na parte 10", () => {
-    assert.throws(
-      () =>
-        buildComercialEvent({
-          ...base,
-          type: "demand.lost",
-          payload: { numero: "10045", etapa_antes: "aguardando_cliente", motivo: "fulano_achou_caro_acima_de_1500_reais" } as never,
-        }),
-      HttpsError,
+  it("perda: o motivo é da lista (parte 10), obrigatório e nunca texto livre", () => {
+    const perda = { numero: "10045", rv: 0, etapa_antes: "aguardando_cliente" as const };
+    for (const motivo of ["preco", "prazo", "desistencia", "sem_resposta", "cancelado_cliente", "outro"]) {
+      assert.ok(COMERCIAL_EVENT_PAYLOADS["demand.lost"].safeParse({ ...perda, motivo }).success, motivo);
+    }
+    for (const motivo of ["fulano_achou_caro_acima_de_1500_reais", "Preço", "", undefined]) {
+      assert.throws(
+        () => buildComercialEvent({ ...base, type: "demand.lost", payload: { ...perda, motivo } as never }),
+        HttpsError,
+        String(motivo),
+      );
+    }
+    const event = buildComercialEvent({ ...base, type: "demand.lost", payload: { ...perda, motivo: "cancelado_cliente" } });
+    assert.equal(event.title, "Demanda 10045 perdida");
+    assert.equal(event.description, "Perdida na etapa Aguardando cliente. Motivo: cancelado pelo cliente.");
+  });
+
+  it("parte 10: revisão com motivo, execução com datas, validação e reabertura sem valor", () => {
+    const revisada = buildComercialEvent({
+      ...base,
+      type: "quote.revised",
+      payload: { numero: "10045", rv: 2, rv_anterior: 1, tipo_rv: "execucao", motivo: "execucao" },
+    });
+    assert.equal(revisada.title, "Orçamento 10045 – RV02 aberto");
+    assert.equal(revisada.description, "Revisão de execução a partir da RV01. Motivo: orçamento da execução.");
+    assert.equal(
+      COMERCIAL_EVENT_PAYLOADS["quote.revised"].safeParse({ numero: "10045", rv: 1, rv_anterior: 0, tipo_rv: "proposta" }).success,
+      false,
+      "revisão sem motivo",
     );
+    const executada = buildComercialEvent({
+      ...base,
+      type: "demand.execution_registered",
+      payload: { numero: "10045", executado_de: "2026-10-16", executado_ate: "2026-10-17", direta: true },
+    });
+    assert.equal(executada.title, "Demanda 10045 executada");
+    assert.equal(executada.description, "Demanda direta executada de 16/10/2026 a 17/10/2026.");
+    const validada = buildComercialEvent({ ...base, type: "quote.validated", payload: EXEMPLOS["quote.validated"] as never });
+    assert.equal(validada.title, "Orçamento 10045 – RV01 validado pelo cliente");
+    assert.equal(validada.entity_type, "quote");
+    const reaberta = buildComercialEvent({ ...base, type: "demand.reopened", payload: EXEMPLOS["demand.reopened"] as never });
+    assert.equal(reaberta.description, "Volta para Em montagem, com a RV01 aberta.");
+    assert.equal(reaberta.entity_type, "demand");
   });
 
   it("passo do orçamento (parte 9): segundos de meses cabem, e linhas por origem são só contagens", () => {
