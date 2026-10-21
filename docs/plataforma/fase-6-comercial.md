@@ -348,6 +348,68 @@ Storage.
   servidor grava `autor_nome` no orçamento (criar, duplicar, RV seguinte) e na
   RV congelada; o orçamento antigo cai no perfil, quando quem lê pode.
 
+### Parte 12b: ações depois do envio (telas)
+
+- **Ações por etapa** (`lib/comercial/depois-do-envio.ts`, `acoesDepoisDoEnvio`,
+  por etapa, tipo de RV e papel; a ficha da fila e a montagem usam a mesma
+  função). Aguardando cliente: proposta, "Fechado" (principal), "Revisar" e
+  "Perdido"; RV de execução, "Validado" e "Revisar"; aditivo, "Validado",
+  "Recusar aditivo" e "Revisar". Para planejar: "Registrar execução",
+  "Aditivo" e "Perdido" (só "cancelado pelo cliente"). Execução a orçar com a
+  RV enviada: "Orçar execução" abre a RV de execução e leva à montagem;
+  "Validado" fica ao lado para a execução sem desvio (o servidor valida a RV
+  fechada como está; não estava no pedido). Perdida: "Reabrir". Rascunho de RV
+  seguinte (`quotes.revisao_de`): "Descartar RV", no "para aprovar" só do
+  owner ou de quem montou, como a devolução. A cancelada e as etapas do
+  faturamento não têm ação aqui. Owner, admin e comercial têm as mesmas ações.
+- **Um diálogo curto por ação**, com só os campos dela: Fechado, Validado e
+  Recusar aditivo pedem "Respondido em" (data e hora, de agora), o contato do
+  cliente (o do pedido já escolhido; exigido quando o cliente tem contatos) e
+  o link do e-mail; Perdido, o motivo (seis; depois do fechamento só
+  "Cancelado pelo cliente", já escolhido) e a nota ("Outro" a exige); Revisar,
+  "Pedido do cliente" ou "Correção"; Registrar execução, De e Até (até hoje).
+  Aditivo, Orçar execução, Reabrir e Descartar RV só confirmam. Os problemas
+  aparecem por campo depois da primeira tentativa; o servidor confere de novo.
+- **Escrita só pelas callables**: `advanceDemand` (fechar, perder, reabrir,
+  registrar a execução, validar, recusar o aditivo) com `expected_etapa` e
+  `expected_rv`; `advanceQuote` revise e discard com `expected_status` e
+  `expected_edicao`; os valores são os que a tela viu quando o diálogo abriu.
+  A chave de idempotência é a da intenção (a mesma ao repetir o mesmo pedido).
+  Recusa de concorrência (a demanda ou o orçamento mudou) fecha o diálogo e
+  mostra a mensagem do servidor com "O orçamento foi recarregado": as duas
+  telas são ao vivo. Outras recusas ficam no diálogo.
+- **"Orçar execução" na fila** (secundária, em contorno, ao lado de "Novo
+  orçamento"): o mesmo diálogo do novo orçamento com o período executado;
+  grava `saveQuote` create_execution e abre a montagem da RV de execução.
+- **Aprovação dispensada**: a montagem lê `quotes.dispensa` (calculada pelo
+  servidor). Com a RV de execução em rascunho e `dispensada`, mostra
+  "Aprovação dispensada" e o botão principal passa a "Enviar ao cliente"
+  (send do rascunho, que salva antes se houver alteração; o servidor calcula a
+  dispensa de novo no envio e recusa se deixou de valer). O "Enviar para
+  aprovação" não fica ao lado: para passar pelo owner, a RV precisa deixar de
+  ser dispensável. O dado vem do servidor; nada se calcula na tela.
+- **Na montagem**, a RV enviada mostra a ação principal da etapa como a ação
+  da tela; na ficha da fila elas ficam em contorno, porque a principal da
+  tela é "Novo orçamento". O link da ficha para a montagem vira "Continuar
+  montagem" na RV de execução em rascunho (antes dizia "Orçar execução", que
+  agora é a ação).
+- **Aditivo em negociação**: o serviço não espera o aditivo, então "Registrar
+  execução" aparece entre as secundárias do aditivo (em montagem, para
+  aprovar, para enviar ou aguardando cliente) enquanto a demanda tem escopo
+  fechado, não foi executada nem validada (`escopoRv`, `executada` e
+  `validada`, lidos da demanda como o servidor lê em
+  `problemaDoRegistroDaExecucao`).
+- **Dispensa com alteração não salva**: a marca "Aprovação dispensada" só
+  vale para o que está gravado; com alteração na tela volta o "Enviar para
+  aprovação" até salvar. O aviso de recusa de concorrência sai quando a
+  pessoa volta a mexer na montagem ou troca de ficha.
+
+- **Fora do pedido**: Perdido não aparece na RV de execução nem no aditivo
+  em "Aguardando cliente" (depois do fechamento só vale o cancelamento do
+  cliente) e Aditivo não aparece em "Execução a orçar", embora o servidor
+  aceite os dois; o link do e-mail, o contato e a data da resposta não
+  aparecem ainda na ficha (só na timeline do servidor).
+
 ### Parte 15a: autorização de faturamento (backend)
 
 - `client_authorizations/{id}` guarda o "pode faturar" do cliente: tipo

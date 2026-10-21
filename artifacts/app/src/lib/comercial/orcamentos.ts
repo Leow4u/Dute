@@ -229,6 +229,16 @@ export type ItemDaFila = {
   marcas: string[];
   /** A perda (parte 10), lida sem exigir o formato: motivo e quando. */
   perda: { motivo: string | null; em: string | null } | null;
+  /** A RV de execução pode ir ao cliente sem a aprovação (quotes.dispensa, calculada pelo servidor; parte 10). */
+  dispensada: boolean;
+  /** A RV enviada de onde esta RV seguinte saiu (quotes.revisao_de); null na primeira RV. */
+  revisaoDe: { rv: number; motivo: string | null } | null;
+  /** A RV do escopo fechado da demanda (escopo_rv); null enquanto não fechou. */
+  escopoRv: number | null;
+  /** A execução já foi registrada na demanda (executado_de). */
+  executada: boolean;
+  /** O cliente já validou a execução (validacao). */
+  validada: boolean;
 };
 
 function marcos(value: unknown): MarcoDaDemanda[] {
@@ -261,6 +271,12 @@ function perdaDe(value: unknown): ItemDaFila["perda"] {
   if (value === null || value === undefined || value === false) return null;
   if (!isRegistro(value)) return { motivo: opcional(value), em: null };
   return { motivo: opcional(value.motivo) ?? opcional(value.descricao), em: opcional(value.em) };
+}
+
+function revisaoDe(value: unknown): ItemDaFila["revisaoDe"] {
+  if (!isRegistro(value)) return null;
+  const rv = inteiro(value.rv);
+  return rv === null ? null : { rv, motivo: opcional(value.motivo) };
 }
 
 /**
@@ -317,6 +333,11 @@ export function itemDaFila(numero: string, demanda: Registro | null, quote: Regi
     envio: passoComQuem(q.envio),
     marcas: Array.isArray(q.marcas) ? q.marcas.map(texto).filter(Boolean) : [],
     perda: perdaDe(demanda.perda),
+    dispensada: isRegistro(q.dispensa) && q.dispensa.dispensada === true,
+    revisaoDe: revisaoDe(q.revisao_de),
+    escopoRv: inteiro(demanda.escopo_rv),
+    executada: texto(demanda.executado_de) !== "",
+    validada: isRegistro(demanda.validacao) && inteiro(demanda.validacao.rv) !== null,
   };
 }
 
@@ -567,10 +588,14 @@ export function rotuloDoContratoDoOrcamento(
   return contrato.vigenteAte ? `${contrato.nome} · até ${dataBr(contrato.vigenteAte)}` : contrato.nome;
 }
 
-/** A ação da ficha: continuar a montagem, orçar a execução ou abrir o orçamento. */
-export function acaoDaEtapa(etapa: EtapaDemanda): string {
+/**
+ * O link da ficha para a montagem: continuar a montagem (a RV em rascunho,
+ * inclusive a de execução) ou abrir o orçamento. "Orçar execução" é uma ação
+ * (lib/comercial/depois-do-envio.ts): abre a RV de execução da RV enviada.
+ */
+export function acaoDaEtapa(etapa: EtapaDemanda, status?: StatusOrcamento | string): string {
   if (etapa === "em_montagem") return "Continuar montagem";
-  if (etapa === "execucao_a_orcar") return "Orçar execução";
+  if (etapa === "execucao_a_orcar" && status === "rascunho") return "Continuar montagem";
   return "Abrir orçamento";
 }
 
