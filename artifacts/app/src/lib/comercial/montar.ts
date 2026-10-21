@@ -831,7 +831,7 @@ export type AcoesDoOrcamento = {
  * O que a tela oferece. Rascunho: montar, com "Enviar para aprovação". Para
  * aprovar: só leitura; o owner aprova (principal), devolve (com nota) e tem
  * "Aprovar e enviar"; quem montou puxa de volta com "Editar". Aprovado:
- * "Enviar" ao cliente (grava e só então abre o documento) e "Editar" volta ao
+ * "Enviar ao cliente" (grava e só então abre o documento) e "Editar" volta ao
  * rascunho. Enviado, perdido ou cancelado: só leitura (aceite e perda são da
  * parte 10). Duplicar vale sempre; o documento também (prévia até o envio).
  */

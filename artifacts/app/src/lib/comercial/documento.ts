@@ -2,8 +2,16 @@ import { formatarReais } from "@workspace/dominio";
 
 import { dataBr } from "./clientes";
 import { formatarDecimal } from "./montar";
-import { ROTA_DOCUMENTO } from "./navegacao";
-import { ORIGENS_LINHA, TIPO_RV_ROTULO, TIPOS_RV, diaEmSaoPaulo, rotuloDoOrcamento, type OrigemLinha } from "./orcamentos";
+import { ROTA_APROVAR, ROTA_DOCUMENTO, hrefDaAprovacao } from "./navegacao";
+import {
+  ORIGENS_LINHA,
+  TIPO_RV_ROTULO,
+  TIPOS_RV,
+  diaEmSaoPaulo,
+  hrefDoOrcamento,
+  rotuloDoOrcamento,
+  type OrigemLinha,
+} from "./orcamentos";
 
 /**
  * O documento A4 do orçamento (docs/mockups/ComDocumento.dc.html; parte 12a
@@ -34,15 +42,26 @@ function inteiro(value: unknown): number | null {
 
 // --- Rota ------------------------------------------------------------------------------------
 
-/** O documento de uma RV; `imprimir` abre a impressão quando a cópia congelada chega (depois do envio). */
-export function hrefDoDocumento(numero: string, rv?: number | null, opcoes: { imprimir?: boolean } = {}): string {
+/** De onde o documento foi aberto, quando não é da montagem nem da fila: a tela de aprovar. */
+export type OrigemDoDocumento = "aprovar";
+
+/**
+ * O documento de uma RV; `imprimir` abre a impressão quando a cópia
+ * congelada chega (depois do envio); `de` diz para onde ele volta.
+ */
+export function hrefDoDocumento(
+  numero: string,
+  rv?: number | null,
+  opcoes: { imprimir?: boolean; de?: OrigemDoDocumento | null } = {},
+): string {
   const busca = new URLSearchParams({ numero });
   if (typeof rv === "number") busca.set("rv", String(rv));
   if (opcoes.imprimir) busca.set("imprimir", "1");
+  if (opcoes.de) busca.set("de", opcoes.de);
   return `${ROTA_DOCUMENTO}?${busca.toString()}`;
 }
 
-export type ParametrosDoDocumento = { numero: string; rv: number | null; imprimir: boolean };
+export type ParametrosDoDocumento = { numero: string; rv: number | null; imprimir: boolean; de: OrigemDoDocumento | null };
 
 /** Os parâmetros da busca da URL; número inválido: null. Sem `rv`, a RV atual do orçamento. */
 export function parametrosDoDocumento(busca: string): ParametrosDoDocumento | null {
@@ -51,7 +70,59 @@ export function parametrosDoDocumento(busca: string): ParametrosDoDocumento | nu
   if (!/^\d{5,8}$/.test(numero)) return null;
   const rvBruto = (params.get("rv") ?? "").trim();
   const rv = /^\d{1,2}$/.test(rvBruto) ? Number(rvBruto) : null;
-  return { numero, rv, imprimir: params.get("imprimir") === "1" };
+  return { numero, rv, imprimir: params.get("imprimir") === "1", de: params.get("de") === "aprovar" ? "aprovar" : null };
+}
+
+/**
+ * Depois de abrir a impressão, a mesma página sem `imprimir` (a tela troca a
+ * URL no lugar): voltar, avançar ou recarregar não abre a impressão de novo.
+ */
+export function hrefSemImprimir(parametros: ParametrosDoDocumento): string {
+  return hrefDoDocumento(parametros.numero, parametros.rv, { de: parametros.de });
+}
+
+/**
+ * O "voltar" da barra do documento. Da montagem e da fila, ao orçamento. Da
+ * aprovação, a ela: a prévia, ao mesmo orçamento da fila; o aprovado e
+ * enviado, à fila (ele já saiu dela), como o "Próximo" do mockup.
+ */
+export function voltarDoDocumento(entrada: { numero: string; de: OrigemDoDocumento | null; enviado: boolean }): {
+  href: string;
+  rotulo: string;
+} {
+  if (entrada.de === "aprovar") {
+    return { href: entrada.enviado ? ROTA_APROVAR : hrefDaAprovacao(entrada.numero), rotulo: "Para aprovar" };
+  }
+  return { href: hrefDoOrcamento(entrada.numero), rotulo: "Orçamento" };
+}
+
+/** A aba que o navegador abre (window.open): só o que a prévia usa dela. */
+export type AbaDoNavegador = { location: { href: string }; close: () => void };
+
+/**
+ * "Prévia do PDF" na montagem com alteração não salva: o documento lê o que
+ * está gravado, então a tela salva antes. A aba abre já no clique (depois de
+ * esperar a gravação, o navegador a bloquearia como pop-up) e só recebe o
+ * endereço do documento quando a gravação volta; sem gravar, ela fecha.
+ */
+export async function abrirPreviaSalva(entrada: {
+  href: string;
+  abrirAba: () => AbaDoNavegador | null;
+  salvar: () => Promise<boolean>;
+}): Promise<boolean> {
+  const aba = entrada.abrirAba();
+  let salvou = false;
+  try {
+    salvou = await entrada.salvar();
+  } catch {
+    salvou = false;
+  }
+  if (!salvou) {
+    aba?.close();
+    return false;
+  }
+  if (aba) aba.location.href = entrada.href;
+  return true;
 }
 
 /** A impressão abre sozinha só no documento enviado (a cópia congelada), uma vez. */
@@ -72,10 +143,11 @@ const PROIBIDOS_NO_ARQUIVO = /[\\/:*?"<>|]+/g;
 /**
  * O nome do PDF (o document.title, que o navegador sugere ao salvar):
  * "Orçamento 10045 – RV01 – CE8977 – Mudança de layout". Sem referência ou
- * título, a parte fica de fora.
+ * título, a parte fica de fora. A prévia começa por "Prévia", para o PDF
+ * salvo dela não se confundir com o que foi ao cliente.
  */
-export function nomeDoArquivo(entrada: { rotulo: string; refCliente: string | null; titulo: string | null }): string {
-  const partes = [tituloDoDocumento(entrada.rotulo), entrada.refCliente, entrada.titulo]
+export function nomeDoArquivo(entrada: { rotulo: string; refCliente: string | null; titulo: string | null; previa?: boolean }): string {
+  const partes = [entrada.previa ? "Prévia" : null, tituloDoDocumento(entrada.rotulo), entrada.refCliente, entrada.titulo]
     .map((parte) => texto(parte).replace(PROIBIDOS_NO_ARQUIVO, "-").replace(/\s+/g, " ").trim())
     .filter(Boolean);
   return partes.join(" – ").slice(0, 180).trim();
@@ -326,9 +398,15 @@ export function documentoDoOrcamento(
   const dataBase = opcional(orcamento.data_base);
   const emissao = fonte.enviadoEm ? new Date(fonte.enviadoEm) : contexto.agora;
   const contrato = contexto.contrato;
+  const previa = !fonte.congelada;
 
   const campos: CampoDoDocumento[] = [
-    { rotulo: "Emissão", valor: dataBr(diaEmSaoPaulo(Number.isNaN(emissao.getTime()) ? contexto.agora : emissao)), largura: 2 },
+    // A emissão é o dia do envio; a prévia diz só de quando é.
+    {
+      rotulo: previa ? "Prévia em" : "Emissão",
+      valor: dataBr(diaEmSaoPaulo(Number.isNaN(emissao.getTime()) ? contexto.agora : emissao)),
+      largura: 2,
+    },
     { rotulo: "Data-base de preço", valor: dataBase ? dataBr(dataBase) : "—", largura: 2 },
     { rotulo: "Data de execução", valor: textoDaExecucao(demanda, tipoRv), largura: 2 },
     {
@@ -360,9 +438,9 @@ export function documentoDoOrcamento(
     rv,
     rotulo,
     titulo: tituloDoDocumento(rotulo),
-    nomeDoArquivo: nomeDoArquivo({ rotulo, refCliente, titulo: tituloDaDemanda }),
+    nomeDoArquivo: nomeDoArquivo({ rotulo, refCliente, titulo: tituloDaDemanda, previa }),
     tipo: TIPO_RV_ROTULO[tipoRv as keyof typeof TIPO_RV_ROTULO],
-    previa: !fonte.congelada,
+    previa,
     campos,
     linhas: linhasGravadas(orcamento.linhas).map(linhaDoDocumento),
     total: formatarReais(inteiro(orcamento.total_cents) ?? 0),

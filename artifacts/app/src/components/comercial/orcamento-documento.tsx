@@ -8,6 +8,12 @@ import { cn } from "@/lib/utils";
  * servidor; o navegador imprime só a área .print-area (index.css). É papel:
  * fica branco nos dois temas, por isso as cores fixas (PAPER_FILES em
  * lib/theme-colors.test.ts). Até o envio, a marca "Prévia".
+ *
+ * Na tela, o papel tem a largura do A4 (794 px) e não encolhe: no celular, a
+ * caixa em volta (documento-view.tsx) rola para o lado, porque a tabela tem
+ * colunas fixas e espremida mostraria o item uma letra por linha. Na
+ * impressão, o .print-area (index.css, fora das camadas do Tailwind) volta a
+ * ocupar a largura da página.
  */
 
 /** O e-mail do Comercial da Dutelog, o mesmo do site (artifacts/dutelog-site). */
@@ -25,7 +31,7 @@ export function OrcamentoDocumento({ documento }: { documento: DocumentoDoOrcame
   return (
     <article
       aria-label={documento.titulo}
-      className="print-area relative mx-auto flex w-full max-w-[794px] flex-col gap-3.5 overflow-hidden bg-white px-6 py-8 text-[13px] leading-[1.45] text-[#161616] sm:px-12 sm:py-11"
+      className="print-area relative mx-auto flex w-[794px] max-w-none shrink-0 flex-col gap-3.5 overflow-hidden bg-white px-12 py-11 text-[13px] leading-[1.45] text-[#161616]"
     >
       {/* A4 em pé; a margem é a do resto do app (index.css). */}
       <style>{"@media print { @page { size: A4; } }"}</style>
@@ -134,7 +140,7 @@ export function OrcamentoDocumento({ documento }: { documento: DocumentoDoOrcame
       <footer className="mt-6 flex items-end justify-between gap-4 border-t border-[#CFCFCB] pt-2.5">
         <div>
           {documento.autor ? (
-            <b className="block text-[13px] font-extrabold">{`Orçamento elaborado por ${documento.autor}`}</b>
+            <b className="block text-[13px] font-extrabold">{`Orçamento elaborado por ${documento.autor} · Comercial`}</b>
           ) : null}
           <a href={`mailto:${EMAIL_DO_COMERCIAL}`} className="block text-[12px] font-bold text-[#0054CE]">
             {EMAIL_DO_COMERCIAL}

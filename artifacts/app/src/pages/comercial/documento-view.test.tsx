@@ -62,7 +62,7 @@ function render(overrides: Partial<DocumentoViewProps> = {}) {
       <DocumentoView
         estado="pronto"
         documento={documento(false)}
-        voltarHref="/comercial/orcamento?numero=10045"
+        voltar={{ href: "/comercial/orcamento?numero=10045", rotulo: "Orçamento" }}
         onImprimir={() => undefined}
         {...overrides}
       />
@@ -85,7 +85,7 @@ const PAPEL = [
   "Proposta",
   "Orçamento 10045 – RV01",
   "Total R$ 2.994,00",
-  "Emissão",
+  "Prévia em",
   "21/10/2026",
   "Data-base de preço",
   "14/10/2026",
@@ -133,7 +133,7 @@ const PAPEL = [
   "Condições",
   "Itens sujeitos a visita técnica.",
   "Faturamento após autorização do cliente.",
-  "Orçamento elaborado por Guilherme",
+  "Orçamento elaborado por Guilherme · Comercial",
   "comercial@dutelog.com.br",
   "10045 – RV01",
 ];
@@ -163,6 +163,22 @@ describe("documento A4 do orçamento", () => {
     expect(html).toContain("@page { size: A4; }");
     // Uma ação: imprimir.
     expect(html.match(/bg-primary text-primary-foreground/g)).toHaveLength(1);
+  });
+
+  it("no celular o papel não se espreme: fica na largura do A4 e a caixa em volta rola para o lado", () => {
+    const html = render();
+    const papel = html.match(/<article aria-label="Orçamento 10045 – RV01" class="([^"]*)"/)?.[1] ?? "";
+    expect(papel.split(" ")).toEqual(expect.arrayContaining(["w-[794px]", "max-w-none", "shrink-0"]));
+    expect(papel.split(" ")).not.toContain("w-full");
+    expect(html).toMatch(/<div class="[^"]*overflow-x-auto[^"]*"><article/);
+  });
+
+  it("aberto da aprovação, volta a ela", () => {
+    const lista = texts(render({ voltar: { href: "/comercial/aprovar?numero=10045", rotulo: "Para aprovar" } }));
+    expect(lista[0]).toBe("Para aprovar");
+    expect(render({ voltar: { href: "/comercial/aprovar?numero=10045", rotulo: "Para aprovar" } })).toContain(
+      'href="/comercial/aprovar?numero=10045"',
+    );
   });
 
   it("carregando, não encontrado e erro, sem o papel nem a impressão", () => {

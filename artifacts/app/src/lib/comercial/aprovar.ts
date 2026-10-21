@@ -2,7 +2,7 @@ import { centavosDaLinha, formatarReais } from "@workspace/dominio";
 
 import { linhasGravadas, type LinhaGravada } from "./documento";
 import { formatarDecimal } from "./montar";
-import { ROTA_APROVAR } from "./navegacao";
+import { hrefDaAprovacao } from "./navegacao";
 import { ORIGEM_ROTULO, dataHoraCurta, filtrarFila, itemDaFila, type ItemDaFila, type OrigemLinha } from "./orcamentos";
 
 /**
@@ -17,15 +17,22 @@ import { ORIGEM_ROTULO, dataHoraCurta, filtrarFila, itemDaFila, type ItemDaFila,
 type Registro = Record<string, unknown>;
 type Documento = { id: string; data: Registro };
 
-/** A aprovação numa tela: "/comercial/aprovar", ou já num orçamento ("?numero=10045"). */
-export function hrefDaAprovacao(numero?: string | null): string {
-  return numero ? `${ROTA_APROVAR}?numero=${encodeURIComponent(numero)}` : ROTA_APROVAR;
-}
+export { hrefDaAprovacao };
 
 /** O orçamento da busca da URL (`?numero=10045`), ou null. */
 export function numeroDaBusca(busca: string): string | null {
   const numero = (new URLSearchParams(busca.startsWith("?") ? busca.slice(1) : busca).get("numero") ?? "").trim();
   return /^\d{5,8}$/.test(numero) ? numero : null;
+}
+
+/**
+ * A URL guarda o orçamento que está na tela (`?numero=`), para que voltar do
+ * PDF ou do orçamento caia nele, e não no primeiro da fila. Null: a URL já
+ * diz isso (ou não há orçamento na tela).
+ */
+export function hrefParaGuardarPosicao(busca: string, numeroNaTela: string | null): string | null {
+  if (!numeroNaTela || numeroDaBusca(busca) === numeroNaTela) return null;
+  return hrefDaAprovacao(numeroNaTela);
 }
 
 export type OrcamentoParaAprovar = { item: ItemDaFila; linhas: LinhaGravada[] };
@@ -76,11 +83,15 @@ export type PosicaoNaFila = {
   proximo: string | null;
 };
 
-/** Onde a pessoa está na fila: o escolhido, ou o primeiro quando ele saiu (ou nada foi escolhido). */
+/**
+ * Onde a pessoa está na fila: o escolhido, ou o primeiro quando nada foi
+ * escolhido. O escolhido que não está na fila não vira outro orçamento: fica
+ * sem posição, e o Próximo é o primeiro.
+ */
 export function posicaoNaFila(numeros: readonly string[], escolhido: string | null): PosicaoNaFila {
   if (!numeros.length) return { atual: null, indice: 0, total: 0, anterior: null, proximo: null };
-  const achado = escolhido ? numeros.indexOf(escolhido) : -1;
-  const indice = achado >= 0 ? achado : 0;
+  const indice = escolhido ? numeros.indexOf(escolhido) : 0;
+  if (indice < 0) return { atual: null, indice: 0, total: numeros.length, anterior: null, proximo: numeros[0] };
   return {
     atual: numeros[indice],
     indice: indice + 1,
@@ -99,6 +110,86 @@ export function proximoDepois(agora: readonly string[], naHora: readonly string[
   const vivos = new Set(agora.filter((numero) => numero !== decidido));
   const depois = naHora.slice(naHora.indexOf(decidido) + 1).find((numero) => vivos.has(numero));
   return depois ?? agora.find((numero) => numero !== decidido) ?? null;
+}
+
+// --- O orçamento na tela ---------------------------------------------------------------------------
+
+/** O orçamento como a pessoa o viu na tela e a fila de então: o que a tela lembra entre as leituras. */
+export type VistoNaAprovacao = { orcamento: OrcamentoParaAprovar; naHora: readonly string[] };
+
+export type AcompanhamentoDaAprovacao = {
+  /** O orçamento da tela: o escolhido (a URL), o que já estava na tela ou, sem nenhum, o primeiro da fila. */
+  numero: string | null;
+  /** O que o cartão mostra: o da fila ou, parado, o último visto (null no link para um orçamento fora da fila). */
+  orcamento: OrcamentoParaAprovar | null;
+  /**
+   * na_fila: as ações valem. saiu (deixou a fila, ou o link é de um orçamento
+   * fora dela) e mudou (voltou à fila com outra edição): o cartão fica parado
+   * e nada se grava sobre ele. vazia: nada para aprovar.
+   */
+  situacao: "na_fila" | "saiu" | "mudou" | "vazia";
+  /** O que a tela guarda para a próxima leitura da fila (o mesmo objeto quando nada mudou). */
+  visto: VistoNaAprovacao | null;
+  posicao: PosicaoNaFila;
+};
+
+function mesmaLista(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((numero, indice) => numero === b[indice]);
+}
+
+/**
+ * O orçamento da tela não troca sozinho. A fila é ao vivo: quando o
+ * orçamento que a pessoa confere sai dela (o autor puxou de volta com
+ * "Editar", a demanda foi perdida, o owner decidiu em outro aparelho) ou
+ * volta com outra edição, o cartão fica parado no que ela viu e as ações se
+ * desligam até ela navegar. Antes disso, o cartão saltava para o primeiro da
+ * fila e o "Aprovar" do rodapé valia para um orçamento que ninguém conferiu.
+ */
+export function acompanharAprovacao(
+  fila: readonly OrcamentoParaAprovar[],
+  escolhido: string | null,
+  visto: VistoNaAprovacao | null,
+): AcompanhamentoDaAprovacao {
+  const numeros = fila.map((orcamento) => orcamento.item.numero);
+  const numero = escolhido ?? visto?.orcamento.item.numero ?? numeros[0] ?? null;
+  if (!numero) return { numero: null, orcamento: null, situacao: "vazia", visto: null, posicao: posicaoNaFila([], null) };
+  const anterior = visto && visto.orcamento.item.numero === numero ? visto : null;
+  const achado = fila.find((orcamento) => orcamento.item.numero === numero) ?? null;
+  if (achado && (!anterior || anterior.orcamento.item.edicao === achado.item.edicao)) {
+    const mesmo = anterior && anterior.orcamento === achado && mesmaLista(anterior.naHora, numeros);
+    return {
+      numero,
+      orcamento: achado,
+      situacao: "na_fila",
+      visto: mesmo ? anterior : { orcamento: achado, naHora: numeros },
+      posicao: posicaoNaFila(numeros, numero),
+    };
+  }
+  const naHora = anterior?.naHora ?? numeros;
+  return {
+    numero,
+    orcamento: anterior?.orcamento ?? null,
+    situacao: achado ? "mudou" : "saiu",
+    visto: anterior,
+    posicao: {
+      atual: numero,
+      indice: anterior ? naHora.indexOf(numero) + 1 : 0,
+      total: naHora.length,
+      anterior: null,
+      proximo: anterior ? proximoDepois(numeros, naHora, numero) : (numeros.find((outro) => outro !== numero) ?? null),
+    },
+  };
+}
+
+export type AvisoDoCartaoParado = { texto: string; acao: "proximo" | "recarregar" };
+
+/** O aviso no lugar das ações quando o cartão está parado: "saiu da fila" (Próximo) ou "mudou" (Recarregar). */
+export function avisoDoCartaoParado(acompanhado: AcompanhamentoDaAprovacao): AvisoDoCartaoParado | null {
+  if (acompanhado.situacao === "na_fila" || acompanhado.situacao === "vazia") return null;
+  const rotulo = acompanhado.orcamento?.item.rotulo ?? acompanhado.numero;
+  if (acompanhado.situacao === "mudou") return { texto: `O orçamento ${rotulo} mudou`, acao: "recarregar" };
+  if (!acompanhado.orcamento) return { texto: `O orçamento ${rotulo} não está para aprovar`, acao: "proximo" };
+  return { texto: `O orçamento ${rotulo} saiu da fila`, acao: "proximo" };
 }
 
 // --- O que conferir -------------------------------------------------------------------------------

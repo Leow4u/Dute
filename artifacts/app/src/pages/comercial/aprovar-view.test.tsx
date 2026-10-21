@@ -35,7 +35,7 @@ const CARTAO: CartaoDaAprovacao = {
   tabela: "LPU Itaú v2.0 · Comercial",
   dataBase: "14/10/2026",
   quantidadeDeLinhas: 3,
-  pdfHref: "/comercial/orcamento/documento?numero=10045&rv=1",
+  pdfHref: "/comercial/orcamento/documento?numero=10045&rv=1&de=aprovar",
   orcamentoHref: "/comercial/orcamento?numero=10045",
 };
 
@@ -51,9 +51,10 @@ function props(overrides: Partial<AprovarViewProps> = {}): AprovarViewProps {
     conferir: pontosDeConferir(LINHAS, []),
     linhas: linhasCompactas(LINHAS),
     confirmacao: null,
+    parado: null,
     ocupado: false,
     aviso: null,
-    handlers: { anterior: noop, proximo: noop, aprovar: noop, devolver: noop, aprovarEEnviar: noop },
+    handlers: { anterior: noop, proximo: noop, recarregar: noop, aprovar: noop, devolver: noop, aprovarEEnviar: noop },
     ...overrides,
   };
 }
@@ -159,9 +160,9 @@ describe("aprovar no celular", () => {
     expect(ultimo).toMatch(/<button[^>]*aria-label="Próximo"[^>]*disabled=""/);
   });
 
-  it("o PDF e o orçamento abrem pelos links do cartão", () => {
+  it("o PDF (a prévia, que volta à aprovação) e o orçamento abrem pelos links do cartão", () => {
     const html = render();
-    expect(html).toContain('href="/comercial/orcamento/documento?numero=10045&amp;rv=1"');
+    expect(html).toContain('href="/comercial/orcamento/documento?numero=10045&amp;rv=1&amp;de=aprovar"');
     expect(html).toContain('href="/comercial/orcamento?numero=10045"');
   });
 
@@ -178,6 +179,35 @@ describe("aprovar no celular", () => {
     expect(lista).toContain("Para enviar");
     for (const acao of ["Aprovar", "Devolver", "Aprovar e enviar"]) expect(lista).not.toContain(acao);
     expect(html).toContain('role="status"');
+  });
+
+  it("o orçamento da tela saiu da fila: o cartão fica, o aviso e Próximo; nada que grave", () => {
+    const html = render({ parado: { texto: "O orçamento 10045 – RV01 saiu da fila", acao: "proximo" } });
+    const lista = texts(html);
+    expect(lista.slice(0, 3)).toEqual(["Para aprovar", "1 de 3", "10045 – RV01"]);
+    expect(lista.slice(-2)).toEqual(["O orçamento 10045 – RV01 saiu da fila", "Próximo"]);
+    for (const acao of ["Aprovar", "Devolver", "Aprovar e enviar"]) expect(lista).not.toContain(acao);
+    expect(html).not.toContain("bg-primary text-primary-foreground");
+    expect(html).toContain('role="status"');
+  });
+
+  it("o orçamento da tela mudou (editado e mandado de novo): Recarregar, sem Aprovar", () => {
+    const lista = texts(render({ parado: { texto: "O orçamento 10045 – RV01 mudou", acao: "recarregar" } }));
+    expect(lista.slice(-2)).toEqual(["O orçamento 10045 – RV01 mudou", "Recarregar"]);
+    for (const acao of ["Aprovar", "Devolver", "Aprovar e enviar"]) expect(lista).not.toContain(acao);
+  });
+
+  it("o link para um orçamento fora da fila: o aviso no lugar do cartão, e o Próximo leva à fila", () => {
+    const html = render({
+      cartao: null,
+      conferir: [],
+      linhas: [],
+      posicao: { indice: 0, total: 3 },
+      parado: { texto: "O orçamento 99999 não está para aprovar", acao: "proximo" },
+    });
+    expect(texts(html)).toEqual(["Para aprovar", "O orçamento 99999 não está para aprovar"]);
+    expect(html).not.toMatch(/<button[^>]*aria-label="Próximo"[^>]*disabled=""/);
+    expect(html).not.toContain("<footer");
   });
 
   it("gravando: nenhuma ação do rodapé responde", () => {

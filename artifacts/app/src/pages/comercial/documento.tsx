@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useRef } from "react";
-import { useSearch } from "wouter";
+import { useLocation, useSearch } from "wouter";
 
 import { contatoDoDocumento, contratoDoDocumento, localDoDocumento } from "@/lib/comercial/clientes";
 import {
   deveImprimir,
   documentoDoOrcamento,
   fonteDoDocumento,
+  hrefSemImprimir,
   parametrosDoDocumento,
   referenciasDoDocumento,
+  voltarDoDocumento,
   type DocumentoDoOrcamento,
+  type ParametrosDoDocumento,
 } from "@/lib/comercial/documento";
 import { useDocumento, useNomes } from "@/lib/comercial/leitura";
-import { hrefDoOrcamento } from "@/lib/comercial/orcamentos";
 
 import { DocumentoView } from "./documento-view";
 
@@ -20,9 +22,10 @@ import { DocumentoView } from "./documento-view";
  * parte 12a de docs/plataforma/fase-6-comercial.md), com
  * ?numero=10045&rv=1. Até o envio, a prévia do orçamento ao vivo, com a
  * marca; depois, a cópia congelada em `quotes/{numero}/revisoes/{rv}`. O
- * document.title é o nome do PDF. Com &imprimir=1 (o "Enviar" da fila, da
- * montagem e da aprovação, depois de gravar), a impressão abre sozinha quando
- * a cópia congelada chega. Só lê: nada se grava aqui.
+ * document.title é o nome do PDF. Com &imprimir=1 (o "Enviar ao cliente" da
+ * fila e da montagem e o "Aprovar e enviar", depois de gravar), a impressão
+ * abre sozinha quando a cópia congelada chega, e a URL perde o imprimir. Com
+ * &de=aprovar, o "voltar" leva à aprovação. Só lê: nada se grava aqui.
  */
 
 type Registro = Record<string, unknown>;
@@ -31,7 +34,9 @@ function texto(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function Documento({ numero, rv: rvPedida, imprimir }: { numero: string; rv: number | null; imprimir: boolean }) {
+function Documento({ parametros }: { parametros: ParametrosDoDocumento }) {
+  const { numero, rv: rvPedida, imprimir } = parametros;
+  const [, navegar] = useLocation();
   const quote = useDocumento(`quotes/${numero}`);
   const quoteDoc = quote.dados as Registro | null | undefined;
   const rvAtual = quoteDoc && typeof quoteDoc.rv === "number" ? quoteDoc.rv : null;
@@ -96,8 +101,11 @@ function Documento({ numero, rv: rvPedida, imprimir }: { numero: string; rv: num
     if (!documento || !apoioPronto) return;
     if (!deveImprimir({ pedido: imprimir, congelada, jaAbriu: jaAbriu.current })) return;
     jaAbriu.current = true;
+    // A URL perde o imprimir: voltar, avançar ou recarregar não abre a impressão de novo.
+    navegar(hrefSemImprimir(parametros), { replace: true });
     // Um quadro depois do render, para o título e o papel já estarem na página.
     window.setTimeout(() => window.print(), 300);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documento, apoioPronto, imprimir, congelada]);
 
   const estado = quote.erro || demanda.erro || revisao.erro ? "erro" : fonte.estado;
@@ -105,7 +113,7 @@ function Documento({ numero, rv: rvPedida, imprimir }: { numero: string; rv: num
     <DocumentoView
       estado={estado}
       documento={documento}
-      voltarHref={hrefDoOrcamento(numero)}
+      voltar={voltarDoDocumento({ numero, de: parametros.de, enviado: congelada })}
       onImprimir={() => window.print()}
     />
   );
@@ -113,13 +121,6 @@ function Documento({ numero, rv: rvPedida, imprimir }: { numero: string; rv: num
 
 export default function ComercialDocumentoPage() {
   const parametros = parametrosDoDocumento(useSearch());
-  if (!parametros) return <DocumentoView estado="nao_encontrado" documento={null} voltarHref={null} onImprimir={() => undefined} />;
-  return (
-    <Documento
-      key={`${parametros.numero}-${parametros.rv ?? "atual"}`}
-      numero={parametros.numero}
-      rv={parametros.rv}
-      imprimir={parametros.imprimir}
-    />
-  );
+  if (!parametros) return <DocumentoView estado="nao_encontrado" documento={null} voltar={null} onImprimir={() => undefined} />;
+  return <Documento key={`${parametros.numero}-${parametros.rv ?? "atual"}`} parametros={parametros} />;
 }

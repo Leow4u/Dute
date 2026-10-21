@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ROTULO_DO_ENVIO, enviarEAbrirDocumento, envioDaFicha } from "./envio";
+import { ROTULO_DO_ENVIO, assinaturaDoEnvio, chaveDaIntencao, enviarEAbrirDocumento, envioDaFicha } from "./envio";
 
 /**
  * O envio ao cliente (parte 12a): grava no servidor (advanceQuote send ou
@@ -73,23 +73,43 @@ describe("enviar e abrir o documento", () => {
       abrir: () => undefined,
     });
     expect(acao).toEqual(["approve_and_send", "para_aprovar", 3]);
-    expect(ROTULO_DO_ENVIO).toEqual({ send: "Enviar", approve_and_send: "Aprovar e enviar" });
+    expect(ROTULO_DO_ENVIO).toEqual({ send: "Enviar ao cliente", approve_and_send: "Aprovar e enviar" });
   });
 });
 
 describe("o envio na ficha da fila", () => {
-  it("Enviar no aprovado, para qualquer papel do Comercial; Aprovar e enviar só para o owner, no para aprovar", () => {
+  it("Enviar ao cliente no aprovado, para os papéis do Comercial", () => {
     for (const role of ["owner", "admin", "comercial"]) {
       expect(envioDaFicha({ status: "aprovado", etapa: "para_enviar" }, role), role).toBe("send");
     }
-    expect(envioDaFicha({ status: "para_aprovar", etapa: "para_aprovar" }, "owner")).toBe("approve_and_send");
-    expect(envioDaFicha({ status: "para_aprovar", etapa: "para_aprovar" }, "admin")).toBeNull();
-    expect(envioDaFicha({ status: "para_aprovar", etapa: "para_aprovar" }, "comercial")).toBeNull();
+    expect(envioDaFicha({ status: "aprovado", etapa: "para_enviar" }, "financeiro")).toBeNull();
+  });
+
+  it("no para aprovar, nada, nem para o owner: a ComFila não tem ação nessa etapa (aprovar e enviar fica na montagem e na aprovação)", () => {
+    for (const role of ["owner", "admin", "comercial"]) {
+      expect(envioDaFicha({ status: "para_aprovar", etapa: "para_aprovar" }, role), role).toBeNull();
+    }
   });
 
   it("rascunho, enviado e a demanda perdida não têm envio", () => {
     expect(envioDaFicha({ status: "rascunho", etapa: "em_montagem" }, "owner")).toBeNull();
     expect(envioDaFicha({ status: "enviado", etapa: "aguardando_cliente" }, "owner")).toBeNull();
     expect(envioDaFicha({ status: "aprovado", etapa: "perdida" }, "owner")).toBeNull();
+  });
+});
+
+describe("a chave de idempotência do envio", () => {
+  const ORCAMENTO = { numero: "10048", status: "aprovado", edicao: 5 };
+
+  it("clicar de novo no mesmo envio (a resposta se perdeu) leva a mesma request_id; outro envio, chave nova", () => {
+    let contador = 0;
+    const nova = () => `chave-${++contador}`;
+    const primeira = chaveDaIntencao(null, assinaturaDoEnvio("send", ORCAMENTO), nova);
+    const repetida = chaveDaIntencao(primeira, assinaturaDoEnvio("send", ORCAMENTO), nova);
+    expect(repetida.chave).toBe(primeira.chave);
+    expect(repetida).toBe(primeira);
+    expect(chaveDaIntencao(primeira, assinaturaDoEnvio("send", { ...ORCAMENTO, numero: "10052" }), nova).chave).not.toBe(primeira.chave);
+    expect(chaveDaIntencao(primeira, assinaturaDoEnvio("send", { ...ORCAMENTO, edicao: 6 }), nova).chave).not.toBe(primeira.chave);
+    expect(chaveDaIntencao(primeira, assinaturaDoEnvio("approve_and_send", ORCAMENTO), nova).chave).not.toBe(primeira.chave);
   });
 });

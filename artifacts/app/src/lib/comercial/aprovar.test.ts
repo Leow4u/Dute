@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  acompanharAprovacao,
+  avisoDoCartaoParado,
   confirmacaoDaAcao,
   filaDeAprovacao,
   hrefDaAprovacao,
+  hrefParaGuardarPosicao,
   linhasCompactas,
   numeroDaBusca,
   orcamentosParaOInicio,
@@ -108,8 +111,8 @@ describe("navegação: 1 de N, anterior e próximo", () => {
     expect(posicaoNaFila(FILA, "10052")).toEqual({ atual: "10052", indice: 3, total: 3, anterior: "10045", proximo: null });
   });
 
-  it("o escolhido que saiu da fila (aprovado em outra tela) volta ao primeiro; fila vazia, nada", () => {
-    expect(posicaoNaFila(FILA, "99999").atual).toBe("10048");
+  it("o escolhido que não está na fila não vira outro orçamento: sem posição, e o Próximo é o primeiro; fila vazia, nada", () => {
+    expect(posicaoNaFila(FILA, "99999")).toEqual({ atual: null, indice: 0, total: 3, anterior: null, proximo: "10048" });
     expect(posicaoNaFila([], "10045")).toEqual({ atual: null, indice: 0, total: 0, anterior: null, proximo: null });
   });
 
@@ -127,6 +130,91 @@ describe("navegação: 1 de N, anterior e próximo", () => {
     // Nada mais para aprovar.
     expect(proximoDepois([], FILA, "10045")).toBeNull();
     expect(proximoDepois(["10045"], ["10045"], "10045")).toBeNull();
+  });
+});
+
+describe("o orçamento na tela não troca sozinho", () => {
+  const DEMANDAS = [
+    demanda("10048", { etapa_desde: "2026-10-19T12:00:00.000Z" }),
+    demanda("10045", { etapa_desde: "2026-10-20T12:00:00.000Z" }),
+    demanda("10052", { etapa_desde: "2026-10-21T12:00:00.000Z" }),
+  ];
+  const FILA = filaDeAprovacao(DEMANDAS, [orcamento("10048"), orcamento("10045"), orcamento("10052")]);
+  const sem = (numero: string) => FILA.filter((orcamento) => orcamento.item.numero !== numero);
+
+  it("sem escolha, o primeiro; se ele sai da fila, o cartão fica parado nele, sem virar o seguinte", () => {
+    const primeiro = acompanharAprovacao(FILA, null, null);
+    expect(primeiro).toMatchObject({ numero: "10048", situacao: "na_fila", posicao: { indice: 1, total: 3 } });
+    expect(primeiro.orcamento?.item.numero).toBe("10048");
+    // Outro aparelho aprovou o 10048: a tela não troca para o 10045.
+    const saiu = acompanharAprovacao(sem("10048"), null, primeiro.visto);
+    expect(saiu).toMatchObject({ numero: "10048", situacao: "saiu", posicao: { indice: 1, total: 3, anterior: null, proximo: "10045" } });
+    expect(saiu.orcamento?.item.numero).toBe("10048");
+  });
+
+  it("o escolhido que sai da fila (puxado de volta, perdido, decidido noutro aparelho) para o cartão; o Próximo segue a fila que a pessoa via", () => {
+    const visto = acompanharAprovacao(FILA, "10045", null);
+    expect(visto).toMatchObject({ numero: "10045", situacao: "na_fila", posicao: { indice: 2, anterior: "10048", proximo: "10052" } });
+    const saiu = acompanharAprovacao(sem("10045"), "10045", visto.visto);
+    expect(saiu).toMatchObject({ numero: "10045", situacao: "saiu", posicao: { indice: 2, total: 3, anterior: null, proximo: "10052" } });
+    expect(saiu.orcamento?.item.numero).toBe("10045");
+    // Continua parado nas leituras seguintes, até a pessoa sair dele.
+    expect(acompanharAprovacao(sem("10045"), "10045", saiu.visto)).toMatchObject({ situacao: "saiu" });
+  });
+
+  it("o que volta à fila com outra edição (editado e mandado de novo) não troca o cartão: mudou; sem o visto, a edição nova", () => {
+    const visto = acompanharAprovacao(FILA, "10045", null);
+    const outra = filaDeAprovacao(DEMANDAS, [orcamento("10048"), orcamento("10045", { edicao: 4, total_cents: 700_000 }), orcamento("10052")]);
+    const mudou = acompanharAprovacao(outra, "10045", visto.visto);
+    expect(mudou).toMatchObject({ numero: "10045", situacao: "mudou" });
+    expect(mudou.orcamento?.item.totalCents).toBe(593_000);
+    const recarregado = acompanharAprovacao(outra, "10045", null);
+    expect(recarregado).toMatchObject({ situacao: "na_fila" });
+    expect(recarregado.orcamento?.item.totalCents).toBe(700_000);
+  });
+
+  it("o link para um orçamento fora da fila não abre outro no lugar", () => {
+    expect(acompanharAprovacao(FILA, "99999", null)).toMatchObject({
+      numero: "99999",
+      orcamento: null,
+      situacao: "saiu",
+      posicao: { indice: 0, total: 3, anterior: null, proximo: "10048" },
+    });
+  });
+
+  it("a fila que muda sem tirar o da tela só atualiza a posição; nada mudou, o mesmo visto", () => {
+    const visto = acompanharAprovacao(FILA, "10045", null);
+    expect(acompanharAprovacao(sem("10048"), "10045", visto.visto)).toMatchObject({ situacao: "na_fila", posicao: { indice: 1, total: 2 } });
+    expect(acompanharAprovacao(FILA, "10045", visto.visto).visto).toBe(visto.visto);
+  });
+
+  it("fila vazia, nada na tela", () => {
+    expect(acompanharAprovacao([], null, null)).toMatchObject({ numero: null, orcamento: null, situacao: "vazia", visto: null });
+  });
+
+  it("o aviso do cartão parado e o que ele oferece: Próximo, ou Recarregar o que mudou", () => {
+    const visto = acompanharAprovacao(FILA, "10045", null);
+    expect(avisoDoCartaoParado(visto)).toBeNull();
+    expect(avisoDoCartaoParado(acompanharAprovacao(sem("10045"), "10045", visto.visto))).toEqual({
+      texto: "O orçamento 10045 saiu da fila",
+      acao: "proximo",
+    });
+    const outra = filaDeAprovacao(DEMANDAS, [orcamento("10048"), orcamento("10045", { edicao: 4 }), orcamento("10052")]);
+    expect(avisoDoCartaoParado(acompanharAprovacao(outra, "10045", visto.visto))).toEqual({
+      texto: "O orçamento 10045 mudou",
+      acao: "recarregar",
+    });
+    expect(avisoDoCartaoParado(acompanharAprovacao(FILA, "99999", null))).toEqual({
+      texto: "O orçamento 99999 não está para aprovar",
+      acao: "proximo",
+    });
+  });
+
+  it("a URL guarda o orçamento da tela: voltar do PDF ou do orçamento cai nele", () => {
+    expect(hrefParaGuardarPosicao("", "10048")).toBe("/comercial/aprovar?numero=10048");
+    expect(hrefParaGuardarPosicao("?numero=10048", "10045")).toBe("/comercial/aprovar?numero=10045");
+    expect(hrefParaGuardarPosicao("?numero=10045", "10045")).toBeNull();
+    expect(hrefParaGuardarPosicao("?numero=10045", null)).toBeNull();
   });
 });
 

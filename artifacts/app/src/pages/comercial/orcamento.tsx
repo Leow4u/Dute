@@ -13,7 +13,7 @@ import {
   payloadContato,
   type FormContato,
 } from "@/lib/comercial/clientes";
-import { hrefDoDocumento } from "@/lib/comercial/documento";
+import { abrirPreviaSalva, hrefDoDocumento } from "@/lib/comercial/documento";
 import { enviarEAbrirDocumento, type AcaoDeEnvio } from "@/lib/comercial/envio";
 import { useDocumento, useLeitura, useNomes } from "@/lib/comercial/leitura";
 import {
@@ -363,6 +363,21 @@ function MontarOrcamento({ numero }: { numero: string }) {
     }
   }
 
+  /**
+   * "Prévia do PDF" com alteração não salva: o documento lê o que está
+   * gravado, então salva antes. A aba abre já no clique (o navegador
+   * bloquearia a que abrisse depois da gravação) e só recebe o documento
+   * quando o salvamento volta; sem salvar, ela fecha e o erro fica aqui.
+   */
+  async function previaSalva() {
+    const href = new URL(hrefDoDocumento(numero, item?.rv ?? null), window.location.origin).toString();
+    await abrirPreviaSalva({
+      href,
+      abrirAba: () => window.open("about:blank", "_blank"),
+      salvar: async () => Boolean(await salvar()),
+    });
+  }
+
   async function duplicar() {
     if (sujo) {
       setAviso({ tipo: "erro", texto: "Salve antes de duplicar: a cópia sai do que está gravado." });
@@ -460,6 +475,7 @@ function MontarOrcamento({ numero }: { numero: string }) {
         documentoHref={hrefDoDocumento(numero, item.rv)}
         handlers={{
           salvar: () => void salvar(),
+          previaSalva: () => void previaSalva(),
           enviar: () => void enviar(),
           duplicar: () => void duplicar(),
           editar: () => {

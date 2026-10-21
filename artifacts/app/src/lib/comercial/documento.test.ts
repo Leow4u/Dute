@@ -1,16 +1,19 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  abrirPreviaSalva,
   deveImprimir,
   documentoDoOrcamento,
   fonteDoDocumento,
   hrefDoDocumento,
+  hrefSemImprimir,
   linhasDasCondicoes,
   nomeDoArquivo,
   parametrosDoDocumento,
   referenciasDoDocumento,
   textoDaExecucao,
   tituloDoDocumento,
+  voltarDoDocumento,
 } from "./documento";
 
 /**
@@ -87,10 +90,36 @@ describe("rota do documento", () => {
     expect(hrefDoDocumento("10045", 1)).toBe("/comercial/orcamento/documento?numero=10045&rv=1");
     expect(hrefDoDocumento("10045")).toBe("/comercial/orcamento/documento?numero=10045");
     expect(hrefDoDocumento("10045", 0, { imprimir: true })).toBe("/comercial/orcamento/documento?numero=10045&rv=0&imprimir=1");
-    expect(parametrosDoDocumento("?numero=10045&rv=1&imprimir=1")).toEqual({ numero: "10045", rv: 1, imprimir: true });
-    expect(parametrosDoDocumento("numero=10045")).toEqual({ numero: "10045", rv: null, imprimir: false });
-    expect(parametrosDoDocumento("?numero=10045&rv=x")).toEqual({ numero: "10045", rv: null, imprimir: false });
+    expect(parametrosDoDocumento("?numero=10045&rv=1&imprimir=1")).toEqual({ numero: "10045", rv: 1, imprimir: true, de: null });
+    expect(parametrosDoDocumento("numero=10045")).toEqual({ numero: "10045", rv: null, imprimir: false, de: null });
+    expect(parametrosDoDocumento("?numero=10045&rv=x")).toEqual({ numero: "10045", rv: null, imprimir: false, de: null });
     expect(parametrosDoDocumento("?numero=../users")).toBeNull();
+  });
+
+  it("aberto da aprovação, o documento sabe voltar a ela", () => {
+    expect(hrefDoDocumento("10045", 1, { imprimir: true, de: "aprovar" })).toBe(
+      "/comercial/orcamento/documento?numero=10045&rv=1&imprimir=1&de=aprovar",
+    );
+    expect(parametrosDoDocumento("?numero=10045&rv=1&de=aprovar")).toEqual({ numero: "10045", rv: 1, imprimir: false, de: "aprovar" });
+    expect(parametrosDoDocumento("?numero=10045&de=outra")).toMatchObject({ de: null });
+    // Da montagem e da fila: volta ao orçamento.
+    expect(voltarDoDocumento({ numero: "10045", de: null, enviado: false })).toEqual({
+      href: "/comercial/orcamento?numero=10045",
+      rotulo: "Orçamento",
+    });
+    // Da aprovação: a prévia volta ao mesmo orçamento da fila; o aprovado e enviado, à fila (ele já saiu dela).
+    expect(voltarDoDocumento({ numero: "10045", de: "aprovar", enviado: false })).toEqual({
+      href: "/comercial/aprovar?numero=10045",
+      rotulo: "Para aprovar",
+    });
+    expect(voltarDoDocumento({ numero: "10045", de: "aprovar", enviado: true })).toEqual({ href: "/comercial/aprovar", rotulo: "Para aprovar" });
+  });
+
+  it("depois de abrir a impressão, a URL fica sem imprimir: voltar, avançar ou recarregar não imprime de novo", () => {
+    expect(hrefSemImprimir({ numero: "10045", rv: 1, imprimir: true, de: "aprovar" })).toBe(
+      "/comercial/orcamento/documento?numero=10045&rv=1&de=aprovar",
+    );
+    expect(hrefSemImprimir({ numero: "10045", rv: null, imprimir: true, de: null })).toBe("/comercial/orcamento/documento?numero=10045");
   });
 });
 
@@ -161,10 +190,11 @@ describe("o documento", () => {
     const documento = documentoDoOrcamento(fonte, CONTEXTO);
     expect(documento.previa).toBe(true);
     expect(documento.titulo).toBe("Orçamento 10045 – RV01");
-    expect(documento.nomeDoArquivo).toBe("Orçamento 10045 – RV01 – CE8977 – Mudança de 24 estações de trabalho");
+    // O PDF salvo da prévia não se confunde com o enviado: o nome começa por "Prévia" e não há data de emissão.
+    expect(documento.nomeDoArquivo).toBe("Prévia – Orçamento 10045 – RV01 – CE8977 – Mudança de 24 estações de trabalho");
     expect(documento.tipo).toBe("Proposta");
     expect(documento.campos.map((campo) => [campo.rotulo, campo.valor, campo.largura])).toEqual([
-      ["Emissão", "21/10/2026", 2],
+      ["Prévia em", "21/10/2026", 2],
       ["Data-base de preço", "14/10/2026", 2],
       ["Data de execução", "29/10/2026", 2],
       ["Cliente", "Itaú Unibanco S.A.", 2],
@@ -205,7 +235,7 @@ describe("o documento", () => {
     if (fonte.estado !== "pronto") throw new Error("fonte");
     const documento = documentoDoOrcamento(fonte, { ...CONTEXTO, contrato: null, origem: null, destino: null, autorNome: "Leonardo" });
     expect(documento.campos.map((campo) => [campo.rotulo, campo.largura])).toEqual([
-      ["Emissão", 2],
+      ["Prévia em", 2],
       ["Data-base de preço", 2],
       ["Data de execução", 2],
       ["Cliente", 3],
@@ -229,6 +259,70 @@ describe("o documento", () => {
   it("as condições: uma por linha, sem o marcador digitado e sem linha vazia", () => {
     expect(linhasDasCondicoes("  - Um\n* Dois\n\n• Três  ")).toEqual(["Um", "Dois", "Três"]);
     expect(linhasDasCondicoes(null)).toEqual([]);
+  });
+});
+
+describe("a prévia do PDF com alteração não salva", () => {
+  function aba() {
+    const passos: string[] = [];
+    return {
+      passos,
+      janela: {
+        location: {
+          set href(valor: string) {
+            passos.push(`ir ${valor}`);
+          },
+          get href() {
+            return "about:blank";
+          },
+        },
+        close: () => passos.push("fechar"),
+      },
+    };
+  }
+
+  it("a aba abre no clique e só recebe o documento depois de salvar: a prévia mostra o que a pessoa digitou", async () => {
+    const { passos, janela } = aba();
+    let liberar: (salvou: boolean) => void = () => undefined;
+    const previa = abrirPreviaSalva({
+      href: "https://app.dutelog.com.br/comercial/orcamento/documento?numero=10045&rv=1",
+      abrirAba: () => {
+        passos.push("abrir");
+        return janela;
+      },
+      salvar: () => {
+        passos.push("salvar");
+        return new Promise<boolean>((resolve) => {
+          liberar = resolve;
+        });
+      },
+    });
+    await Promise.resolve();
+    expect(passos).toEqual(["abrir", "salvar"]);
+    liberar(true);
+    await expect(previa).resolves.toBe(true);
+    expect(passos).toEqual(["abrir", "salvar", "ir https://app.dutelog.com.br/comercial/orcamento/documento?numero=10045&rv=1"]);
+  });
+
+  it("não salvou (falta algo, recusa do servidor): a aba fecha e o documento não abre", async () => {
+    const { passos, janela } = aba();
+    await expect(
+      abrirPreviaSalva({ href: "/x", abrirAba: () => janela, salvar: async () => false }),
+    ).resolves.toBe(false);
+    expect(passos).toEqual(["fechar"]);
+    const erro = aba();
+    await expect(
+      abrirPreviaSalva({ href: "/x", abrirAba: () => erro.janela, salvar: () => Promise.reject(new Error("rede")) }),
+    ).resolves.toBe(false);
+    expect(erro.passos).toEqual(["fechar"]);
+  });
+
+  it("o navegador bloqueou a aba: salva mesmo assim", async () => {
+    const salvos: string[] = [];
+    await expect(
+      abrirPreviaSalva({ href: "/x", abrirAba: () => null, salvar: async () => (salvos.push("salvar"), true) }),
+    ).resolves.toBe(true);
+    expect(salvos).toEqual(["salvar"]);
   });
 });
 

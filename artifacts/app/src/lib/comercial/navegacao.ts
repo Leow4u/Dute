@@ -26,6 +26,11 @@ export const ROTA_COMERCIAL = "/comercial";
 export const ROTA_ORCAMENTO = "/comercial/orcamento";
 /** Aprovar no celular (docs/mockups/ComAprovarCelular.dc.html, parte 12a): só o owner. */
 export const ROTA_APROVAR = "/comercial/aprovar";
+
+/** A aprovação numa tela: "/comercial/aprovar", ou já num orçamento ("?numero=10045"). */
+export function hrefDaAprovacao(numero?: string | null): string {
+  return numero ? `${ROTA_APROVAR}?numero=${encodeURIComponent(numero)}` : ROTA_APROVAR;
+}
 /** O documento A4 do orçamento (docs/mockups/ComDocumento.dc.html): ?numero=10045&rv=1. */
 export const ROTA_DOCUMENTO = "/comercial/orcamento/documento";
 export const ROTA_CLIENTES = "/comercial/clientes";

@@ -40,8 +40,8 @@ import { SeloProspect } from "./clientes-view";
  * só a apresentação; os dados e as ações chegam por props
  * (pages/comercial/orcamentos.tsx). Conteúdo na identidade v3 dentro do
  * layout de hoje. Sem legenda: rótulos, dados e ações; uma ação principal,
- * "Novo orçamento". Na ficha, o envio ao cliente ("Enviar" no aprovado;
- * "Aprovar e enviar" para o owner) e o documento A4.
+ * "Novo orçamento". Na ficha, "Enviar ao cliente" no aprovado e o
+ * documento A4.
  */
 
 /** O que a fila mostra além da demanda e do orçamento: cadastro, contatos, locais e contratos. */

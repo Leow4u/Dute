@@ -114,6 +114,7 @@ function props(overrides: Partial<MontarViewProps> & { form?: FormOrcamento } = 
     documentoHref: "/comercial/orcamento/documento?numero=10045&rv=0",
     handlers: {
       salvar: noop,
+      previaSalva: noop,
       enviar: noop,
       duplicar: noop,
       editar: noop,
@@ -361,11 +362,11 @@ describe("montar orçamento", () => {
       "Editar",
       "Duplicar",
       "Prévia do PDF",
-      "Enviar",
+      "Enviar ao cliente",
       "Pedido do cliente",
     ]);
     expect(html.match(/bg-primary text-primary-foreground/g)).toHaveLength(1);
-    expect(html).toMatch(/bg-primary text-primary-foreground[^"]*"[^>]*>.*?Enviar<\/button>/);
+    expect(html).toMatch(/bg-primary text-primary-foreground[^"]*"[^>]*>.*?Enviar ao cliente<\/button>/);
   });
 
   it("o documento abre noutra aba: a prévia até o envio; o PDF da RV enviada depois", () => {

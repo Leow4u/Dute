@@ -15,12 +15,12 @@ import type { DocumentoDoOrcamento } from "@/lib/comercial/documento";
 export type DocumentoViewProps = {
   estado: "carregando" | "nao_encontrado" | "erro" | "pronto";
   documento: DocumentoDoOrcamento | null;
-  /** A montagem do orçamento, para voltar. */
-  voltarHref: string | null;
+  /** Para onde voltar: a montagem do orçamento ou a aprovação (lib/comercial/documento.ts, voltarDoDocumento). */
+  voltar: { href: string; rotulo: string } | null;
   onImprimir: () => void;
 };
 
-export function DocumentoView({ estado, documento, voltarHref, onImprimir }: DocumentoViewProps) {
+export function DocumentoView({ estado, documento, voltar, onImprimir }: DocumentoViewProps) {
   const mensagem =
     estado === "carregando"
       ? "Carregando..."
@@ -32,11 +32,11 @@ export function DocumentoView({ estado, documento, voltarHref, onImprimir }: Doc
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">
       <div className="no-print flex flex-wrap items-center gap-3">
-        {voltarHref ? (
+        {voltar ? (
           <Button asChild variant="ghost" size="sm">
-            <Link href={voltarHref}>
+            <Link href={voltar.href}>
               <ArrowLeft aria-hidden="true" />
-              Orçamento
+              {voltar.rotulo}
             </Link>
           </Button>
         ) : null}
@@ -49,6 +49,7 @@ export function DocumentoView({ estado, documento, voltarHref, onImprimir }: Doc
       {mensagem ? (
         <p className="rounded-lg border border-border bg-card px-5 py-7 text-center text-sm font-bold text-muted-foreground">{mensagem}</p>
       ) : documento ? (
+        // O papel tem a largura do A4; no celular, a caixa rola para o lado em vez de espremer a tabela.
         <div className="overflow-x-auto rounded-lg border border-border">
           <OrcamentoDocumento documento={documento} />
         </div>

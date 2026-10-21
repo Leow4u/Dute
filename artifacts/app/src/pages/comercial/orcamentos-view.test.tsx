@@ -342,7 +342,7 @@ describe("fila de orçamentos", () => {
     expect(lista.slice(-2)).toEqual(["Abrir orçamento", "PDF"]);
   });
 
-  it("a ficha oferece o envio que a fila decidiu (Enviar ou Aprovar e enviar), sem virar a ação principal", () => {
+  it("a ficha oferece o envio ao cliente que a fila decidiu, sem virar a ação principal", () => {
     const enviados: Array<[string, string]> = [];
     const aprovado = item("10048", { etapa: "para_enviar" }, { status: "aprovado" });
     const html = render({
@@ -350,13 +350,11 @@ describe("fila de orçamentos", () => {
       selecionado: aprovado,
       envio: { acao: "send", ocupado: false, erro: null, onEnviar: (orc, acao) => enviados.push([orc.numero, acao]) },
     });
-    expect(texts(html).slice(-3)).toEqual(["Enviar", "Abrir orçamento", "Prévia do PDF"]);
+    expect(texts(html).slice(-3)).toEqual(["Enviar ao cliente", "Abrir orçamento", "Prévia do PDF"]);
     expect(html.match(/bg-primary text-primary-foreground/g)).toHaveLength(1);
-    const dono = texts(render({ envio: { acao: "approve_and_send", ocupado: false, erro: null, onEnviar: noop } }));
-    expect(dono.slice(-3)).toEqual(["Aprovar e enviar", "Abrir orçamento", "Prévia do PDF"]);
     // Enviando: o botão não responde; a recusa do servidor aparece em alerta na ficha.
     const enviando = render({ selecionado: aprovado, itens: [aprovado], envio: { acao: "send", ocupado: true, erro: null, onEnviar: noop } });
-    expect(enviando).toMatch(/<button[^>]*disabled=""[^>]*>(?:<svg[^>]*>.*?<\/svg>)?Enviar<\/button>/);
+    expect(enviando).toMatch(/<button[^>]*disabled=""[^>]*>(?:<svg[^>]*>.*?<\/svg>)?Enviar ao cliente<\/button>/);
     const recusado = render({
       selecionado: aprovado,
       itens: [aprovado],

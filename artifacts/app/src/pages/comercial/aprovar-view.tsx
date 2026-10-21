@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 import { Link } from "wouter";
-import { Check, ChevronLeft, ChevronRight, FileText, Send, TriangleAlert, Undo2 } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, FileText, RefreshCw, Send, TriangleAlert, Undo2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import type { LinhaCompacta, PontoDeConferir } from "@/lib/comercial/aprovar";
+import type { AvisoDoCartaoParado, LinhaCompacta, PontoDeConferir } from "@/lib/comercial/aprovar";
 import { ORIGEM_ROTULO, type EtapaDemanda } from "@/lib/comercial/orcamentos";
 import { cn } from "@/lib/utils";
 
@@ -14,7 +14,9 @@ import { MarcaDaOrigem, SeloDaEtapa } from "./orcamentos-view";
  * apresentação: os dados e as gravações chegam por props
  * (pages/comercial/aprovar.tsx). Feita para o celular e funcionando no
  * computador (coluna estreita no centro). Sem legenda: rótulos, dados e
- * ações; uma ação principal, "Aprovar", no rodapé que fica à vista.
+ * ações; uma ação principal, "Aprovar", no rodapé que fica à vista. Com o
+ * cartão parado (o orçamento saiu da fila ou mudou), o rodapé só oferece
+ * Próximo ou Recarregar.
  */
 
 export type CartaoDaAprovacao = {
@@ -51,11 +53,19 @@ export type AprovarViewProps = {
   linhas: LinhaCompacta[];
   /** Depois da ação: "Aprovado 17:05", "Devolvido a Guilherme". */
   confirmacao: string | null;
+  /**
+   * O orçamento da tela saiu da fila (ou voltou com outra edição): o cartão
+   * fica parado no que a pessoa viu, e o rodapé só oferece Próximo ou
+   * Recarregar (lib/comercial/aprovar.ts, avisoDoCartaoParado).
+   */
+  parado: AvisoDoCartaoParado | null;
   ocupado: boolean;
   aviso: string | null;
   handlers: {
     anterior: () => void;
     proximo: () => void;
+    /** O orçamento que mudou: mostra a edição nova. */
+    recarregar: () => void;
     aprovar: () => void;
     devolver: () => void;
     aprovarEEnviar: () => void;
@@ -114,6 +124,7 @@ function Cartao({ cartao }: { cartao: CartaoDaAprovacao }) {
           <div className="text-sm font-bold text-muted-foreground">Total</div>
           <div className="text-3xl font-extrabold tabular-nums tracking-tight">{cartao.total}</div>
         </div>
+        {/* "PDF", como no mockup: o documento já diz que é prévia (selo, "Prévia em" e o nome do arquivo), e no celular o rótulo longo aperta o total. */}
         <Button asChild variant="outline" size="sm" className="ml-auto">
           <Link href={cartao.pdfHref}>
             <FileText aria-hidden="true" />
@@ -211,10 +222,28 @@ function Linhas({ linhas, cartao }: { linhas: LinhaCompacta[]; cartao: CartaoDaA
 }
 
 function Rodape(props: AprovarViewProps) {
-  const { confirmacao, ocupado, handlers } = props;
+  const { confirmacao, parado, ocupado, handlers } = props;
   return (
     <footer className="sticky bottom-0 z-10 -mx-5 -mb-5 flex flex-col gap-1.5 border-t border-border bg-card px-4 pb-5 pt-3 md:mx-0 md:mb-0 md:rounded-lg md:border">
-      {confirmacao ? (
+      {!confirmacao && parado ? (
+        <div className="flex min-h-13 items-center gap-2">
+          <span role="status" className="inline-flex items-center gap-2 text-base font-extrabold text-amber-soft-foreground">
+            <TriangleAlert className="size-5 shrink-0" aria-hidden="true" />
+            {parado.texto}
+          </span>
+          {parado.acao === "recarregar" ? (
+            <Button type="button" variant="outline" size="sm" className="ml-auto" onClick={handlers.recarregar}>
+              <RefreshCw aria-hidden="true" />
+              Recarregar
+            </Button>
+          ) : (
+            <Button type="button" variant="outline" size="sm" className="ml-auto" onClick={handlers.proximo} disabled={!props.podeProximo}>
+              Próximo
+              <ChevronRight aria-hidden="true" />
+            </Button>
+          )}
+        </div>
+      ) : confirmacao ? (
         <div className="flex min-h-13 items-center gap-2">
           <span role="status" className="inline-flex items-center gap-2 text-base font-extrabold text-success-soft-foreground">
             <Check className="size-5" aria-hidden="true" />
@@ -254,14 +283,16 @@ export function AprovarView(props: AprovarViewProps) {
       ? "Carregando..."
       : estado === "erro"
         ? "Não foi possível carregar os orçamentos."
-        : estado === "vazio" || !cartao
-          ? "Nenhum orçamento para aprovar"
-          : null;
+        : !cartao && props.parado
+          ? props.parado.texto
+          : estado === "vazio" || !cartao
+            ? "Nenhum orçamento para aprovar"
+            : null;
   return (
     <div className="v3 mx-auto flex w-full max-w-xl flex-col gap-3 text-foreground">
       <div className="flex items-center gap-2.5">
         <h1 className="text-xl font-extrabold tracking-tight">Para aprovar</h1>
-        {posicao.total > 0 ? (
+        {posicao.indice > 0 ? (
           <span className="font-bold tabular-nums text-muted-foreground">{`${posicao.indice} de ${posicao.total}`}</span>
         ) : null}
         <div className="ml-auto flex gap-1.5">
