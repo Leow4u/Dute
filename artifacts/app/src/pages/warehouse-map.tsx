@@ -1,13 +1,13 @@
 /**
  * Estoque › Mapa: prateleiras, ocupação e caixas por zona de cliente
  * (docs/mapa-do-armazem-enderecamento-dirigido.md, seção 5.6). A posição de
- * cada caixa é decidida pelo sistema; aqui se vê o resultado e o número de
+ * cada caixa vem da guarda confirmada; aqui se vê o resultado e o número de
  * posições ocupadas que a fatura manual usa.
  */
 
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { LayoutGrid, Printer, X } from "lucide-react";
+import { LayoutGrid, PackageOpen, Printer, X } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -20,9 +20,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOpeningInventorySession } from "@/features/warehouse-ops/opening-inventory-status";
-import { normalizeApiRows } from "@/features/warehouse-ops/receiving";
+import { ShelfVolumeSummary } from "@/features/warehouse-ops/shelf-volume-summary";
 import { useIsDesktop } from "@/hooks/use-desktop";
 import { cn } from "@/lib/utils";
+import { useActiveCustomer } from "@/lib/active-customer-context";
+import { openingInventoryNotice } from "@/lib/opening-inventory";
+import { boxVolumeM3, formatVolumeM3 } from "@/lib/warehouse-volume";
+import { fetchWarehouseRows } from "@/lib/warehouse-rows";
 import { formatBoxDimensions, warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
 import { labelsUrl } from "@/lib/warehouse-labels";
 import {
@@ -69,32 +73,26 @@ function zoneLabel(zone: ZoneFilter) {
   return zone === "all" ? "todas as zonas" : zone === null ? "sem cliente" : zone;
 }
 
-function shelfNote(shelf: Shelf) {
-  if (shelf.state === "blocked" || shelf.state === "review") return SHELF_STATE_LABELS[shelf.state];
-  if (shelf.boxes.length === 0) return `livre ${formatMeters(shelf.position.length_m)}`;
-  if (shelf.remaining_reference_boxes > 0) return `cabe ${shelf.remaining_reference_boxes}`;
-  return "sem vaga na base";
-}
-
 export default function WarehouseMapPage() {
   const [, navigate] = useLocation();
   const desktop = useIsDesktop();
+  const { code: activeCustomerCode, active: activeCustomer } = useActiveCustomer();
   const [zone, setZone] = useState<ZoneFilter>("all");
   const [aisle, setAisle] = useState<string>(ALL);
   const [search, setSearch] = useState("");
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
 
   const positionsQuery = useQuery<PositionsResponse>({
-    queryKey: ["warehouse-positions"],
+    queryKey: ["warehouse-positions", "all-pages"],
     staleTime: 30_000,
     refetchInterval: 120_000,
-    queryFn: () => fetchJson<PositionsResponse>("/api/warehouse/positions?limit=2000"),
+    queryFn: async () => ({ items: await fetchWarehouseRows<WarehousePosition>("/api/warehouse/positions?limit=2000") }),
   });
   const boxesQuery = useQuery({
-    queryKey: ["warehouse-boxes", "all"],
+    queryKey: ["warehouse-boxes", "all", "all-pages"],
     staleTime: 10_000,
     refetchInterval: 120_000,
-    queryFn: async () => normalizeApiRows(await fetchJson<unknown>("/api/warehouse/boxes?limit=5000")).map(warehouseBoxFromRecord),
+    queryFn: async () => (await fetchWarehouseRows<AnyRecord>("/api/warehouse/boxes?limit=5000")).map(warehouseBoxFromRecord),
   });
   const skusQuery = useQuery({
     queryKey: ["estoque", "skus"],
@@ -102,6 +100,9 @@ export default function WarehouseMapPage() {
     queryFn: () => fetchJson<{ items: AnyRecord[] }>("/api/skus?limit=2000"),
   });
   const sessionQuery = useOpeningInventorySession();
+  const openingNotice = openingInventoryNotice(sessionQuery.data);
+  const showSessionStatus = zone === "all" || zone === activeCustomerCode;
+  const showOpeningNotice = Boolean(openingNotice) && showSessionStatus && !sessionQuery.isError;
 
   const shelves = useMemo(
     () => buildShelves(positionsQuery.data?.items ?? [], boxesQuery.data ?? []),
@@ -138,6 +139,7 @@ export default function WarehouseMapPage() {
 
   const panel = selected ? (
     <ShelfPanel
+      key={selected.code}
       shelf={selected}
       lines={sessionLines}
       skuIndex={skuIndex}
@@ -150,7 +152,7 @@ export default function WarehouseMapPage() {
     <div className="flex flex-col gap-6 pb-24">
       <PageHeader
         title="Mapa do armazém"
-        description="Prateleiras, ocupação e caixas por zona de cliente. A posição de cada caixa é decidida pelo sistema."
+        description="Prateleiras, ocupação registrada e caixas por zona de cliente."
         actions={
           <>
             <Button
@@ -179,6 +181,30 @@ export default function WarehouseMapPage() {
         </Alert>
       ) : null}
 
+      {showSessionStatus && sessionQuery.isError ? (
+        <Alert className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
+          <AlertTitle>Situação do inventário indisponível</AlertTitle>
+          <AlertDescription className="space-y-2">
+            <p>Não foi possível confirmar se o inventário de abertura de {activeCustomer.name} está concluído.</p>
+            <Button type="button" variant="outline" disabled={sessionQuery.isFetching} onClick={() => sessionQuery.refetch()}>
+              Tentar novamente
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : showSessionStatus && sessionQuery.isLoading ? (
+        <p role="status" className="text-sm text-muted-foreground">Verificando inventário de {activeCustomer.name}…</p>
+      ) : null}
+
+      {showOpeningNotice ? (
+        <Alert className="border-info-soft-border bg-info-soft text-info-soft-foreground [&>svg]:text-info-soft-foreground">
+          <PackageOpen className="size-4" />
+          <AlertTitle>
+            {sessionQuery.data?.status === "open" ? "Inventário em andamento · ocupação parcial" : "Inventário de abertura pendente · ocupação não confirmada"}
+          </AlertTitle>
+          <AlertDescription>{activeCustomer.name}</AlertDescription>
+        </Alert>
+      ) : null}
+
       {loading ? <Skeleton className="h-80 w-full rounded-lg" /> : null}
 
       {empty ? (
@@ -197,17 +223,17 @@ export default function WarehouseMapPage() {
             <Tile
               label={`Posições ocupadas · ${zoneLabel(zone)}`}
               value={formatNumber(summary.occupied)}
-              note="1 caixa guardada = 1 posição. Base da fatura, enviada à mão."
+              note="Prateleiras com caixas guardadas. Referência da fatura manual."
             />
             <Tile
               label={zone === "all" ? "Prateleiras cadastradas" : `Prateleiras na zona ${zoneLabel(zone)}`}
               value={formatNumber(summary.positions)}
-              note={`${formatNumber(summary.occupied)} com caixa · ${formatNumber(summary.empty)} vazia(s) · ${formatNumber(summary.unavailable)} indisponível(is)`}
+              note={`${formatNumber(summary.occupied)} com caixa · ${formatNumber(summary.empty)} sem caixas registradas · ${formatNumber(summary.unavailable)} indisponível(is)`}
             />
             <Tile
-              label="Espaço restante"
-              value={`${formatNumber(summary.remaining_reference_boxes)} caixa(s)`}
-              note={`Contando caixas de ${formatBoxDimensions(REFERENCE_BOX)}, uma camada.`}
+              label="Volume registrado"
+              value={formatVolumeM3(summary.occupied_volume_m3)}
+              note="Volume das caixas guardadas na zona."
             />
             <Tile
               label="Caixas guardadas"
@@ -227,7 +253,7 @@ export default function WarehouseMapPage() {
                   <SelectItem value={ALL}>Todas</SelectItem>
                   {zones.map((item) => (
                     <SelectItem key={zoneValue(item)} value={zoneValue(item)}>
-                      {item ?? "Sem cliente (livres)"}
+                      {item ?? "Sem cliente"}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -269,7 +295,7 @@ export default function WarehouseMapPage() {
           </div>
 
           <div className={cn("grid grid-cols-1 gap-4", desktop && panel && "lg:grid-cols-[minmax(0,1fr)_400px]")}>
-            <section className="rounded-lg border border-border bg-card">
+            <section className="@container rounded-lg border border-border bg-card">
               <div className="flex flex-col gap-2 border-b border-border/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-base font-semibold text-foreground">
@@ -298,7 +324,7 @@ export default function WarehouseMapPage() {
                           {formatNumber(group.shelves.length)} prateleira(s) · {formatNumber(group.shelves.reduce((sum, shelf) => sum + shelf.boxes.length, 0))} caixa(s)
                         </span>
                       </div>
-                      <div className="flex gap-2 overflow-x-auto pb-1 lg:flex-wrap lg:overflow-visible">
+                      <div className="grid grid-cols-1 gap-3 @lg:grid-cols-2 @3xl:grid-cols-3">
                         {group.shelves.map((shelf) => (
                           <ShelfCell
                             key={shelf.code}
@@ -351,27 +377,51 @@ function Tile({ label, value, note }: { label: string; value: string; note: stri
 }
 
 function ShelfCell({ shelf, selected, onClick }: { shelf: Shelf; selected: boolean; onClick: () => void }) {
+  const hasRecordedBoxes = shelf.boxes.length > 0;
+  const frontPercent = hasRecordedBoxes ? Math.round(shelf.fill * 100) : null;
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
       onClick={onClick}
       aria-pressed={selected}
       aria-label={`${shelf.code}, ${SHELF_STATE_LABELS[shelf.state]}, ${shelf.boxes.length} caixa(s)`}
       className={cn(
-        "flex w-28 shrink-0 flex-col gap-1.5 rounded-md border p-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+        "h-auto min-w-0 flex-col items-stretch justify-start gap-3 whitespace-normal rounded-lg p-3 text-left font-normal",
         STATE_CLASS[shelf.state],
-        selected && "ring-2 ring-ring/60",
+        selected && "border-primary ring-2 ring-ring/60",
       )}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-semibold text-foreground">{shelf.code}</span>
-        <span className="text-xs tabular-nums text-muted-foreground">{shelf.boxes.length} cx</span>
+        <span className="text-base font-semibold text-foreground">{shelf.code}</span>
+        <span className="text-xs tabular-nums text-muted-foreground">{formatNumber(shelf.boxes.length)} cx</span>
       </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden="true">
-        <div className="h-full rounded-full bg-primary" style={{ width: `${Math.round(shelf.fill * 100)}%` }} />
+      <div className="text-xs text-muted-foreground">{SHELF_STATE_LABELS[shelf.state]}</div>
+      {shelf.volume.pendingCount > 0 ? <div className="text-xs text-muted-foreground">Guarda em andamento</div> : null}
+      {hasRecordedBoxes ? (
+        <dl className="grid grid-cols-2 gap-2">
+            <div>
+              <dt className="text-xs text-muted-foreground">Ocupado</dt>
+              <dd className="mt-1 text-sm font-medium tabular-nums text-foreground">{formatVolumeM3(shelf.volume.occupiedM3)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">Livre estimado</dt>
+              <dd className="mt-1 text-sm font-medium tabular-nums text-foreground">{formatVolumeM3(shelf.volume.freeM3)}</dd>
+            </div>
+        </dl>
+      ) : (
+        <div className="text-sm text-muted-foreground">Ocupação não confirmada</div>
+      )}
+      <div className="border-t border-border/60 pt-2">
+        <div className="mb-1.5 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span>Frente ocupada</span>
+          <span className="tabular-nums">{frontPercent == null ? "—" : `${frontPercent}%`}</span>
+        </div>
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden="true">
+          {frontPercent != null ? <div className="h-full rounded-full bg-primary/50" style={{ width: `${frontPercent}%` }} /> : null}
+        </div>
       </div>
-      <div className="truncate text-xs text-muted-foreground">{shelfNote(shelf)}</div>
-    </button>
+    </Button>
   );
 }
 
@@ -389,6 +439,8 @@ function ShelfPanel({
   onLabels: (url: string) => void;
 }) {
   const { position } = shelf;
+  const [showAllBoxes, setShowAllBoxes] = useState(false);
+  const visibleBoxes = showAllBoxes ? shelf.boxes : shelf.boxes.slice(0, 3);
   return (
     <section className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
       <div className="flex items-start justify-between gap-3">
@@ -400,26 +452,48 @@ function ShelfPanel({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className={cn(STATE_CLASS[shelf.state], "border")}>{SHELF_STATE_LABELS[shelf.state]}</Badge>
+          <Badge variant="outline" className={cn(STATE_CLASS[shelf.state], "max-w-40 whitespace-normal border text-center")}>{SHELF_STATE_LABELS[shelf.state]}</Badge>
           <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Fechar">
             <X className="size-4" />
           </Button>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        <Tile label="Medidas úteis" value={`${formatMeters(position.length_m)} × ${formatMeters(position.depth_m)} × ${formatMeters(position.height_m)}`} note="Comprimento × largura × altura livre" />
-        <Tile label="Peso" value={formatKilos(shelf.weight_used_kg)} note={`Máximo ${formatKilos(position.max_weight_kg)}`} />
-        <Tile label="Caixas" value={formatNumber(shelf.boxes.length)} note={`Frente livre ${formatMeters(shelf.free_front_m)}`} />
-        <Tile label="Cabe ainda" value={`${formatNumber(shelf.remaining_reference_boxes)} caixa(s)`} note={`De ${formatBoxDimensions(REFERENCE_BOX)}, na base`} />
-      </div>
+      <ShelfVolumeSummary title="Volume da prateleira" position={position} boxes={shelf.volumeBoxes} unconfirmed={shelf.boxes.length === 0} />
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+        <div className="col-span-2">
+          <dt className="text-xs text-muted-foreground">Medidas úteis · comprimento × profundidade × altura</dt>
+          <dd className="mt-1 font-medium text-foreground">{formatMeters(position.length_m)} × {formatMeters(position.depth_m)} × {formatMeters(position.height_m)}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-muted-foreground">Peso registrado</dt>
+          <dd className="mt-1 font-medium text-foreground">{formatKilos(shelf.weight_used_kg)}</dd>
+          <dd className="mt-1 text-xs text-muted-foreground">Máximo {formatKilos(position.max_weight_kg)}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-muted-foreground">Caixas registradas</dt>
+          <dd className="mt-1 font-medium text-foreground">{formatNumber(shelf.boxes.length)}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-muted-foreground">Frente livre registrada</dt>
+          <dd className="mt-1 font-medium text-foreground">{shelf.boxes.length && shelf.volume.pendingCount === 0 ? formatMeters(shelf.free_front_m) : "—"}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-muted-foreground">Referência na base</dt>
+          <dd className="mt-1 font-medium text-foreground">{shelf.boxes.length && shelf.volume.pendingCount === 0 ? `${formatNumber(shelf.remaining_reference_boxes)} caixa(s)` : "—"}</dd>
+          <dd className="mt-1 text-xs text-muted-foreground">{formatBoxDimensions(REFERENCE_BOX)} · por frente e peso</dd>
+        </div>
+      </dl>
       {position.notes ? <p className="text-xs text-muted-foreground">{position.notes}</p> : null}
       <div>
-        <div className="mb-2 text-sm font-medium text-foreground">Caixas nesta prateleira</div>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-medium text-foreground">Caixas nesta prateleira</h3>
+          {shelf.boxes.length > 0 ? <span className="text-xs text-muted-foreground">{formatNumber(visibleBoxes.length)} de {formatNumber(shelf.boxes.length)}</span> : null}
+        </div>
         {shelf.boxes.length === 0 ? (
-          <div className="rounded-md border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">Nenhuma caixa guardada.</div>
+          <div className="rounded-md border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">Sem caixas registradas. Ocupação não confirmada.</div>
         ) : (
           <div className="space-y-2">
-            {shelf.boxes.map((box) => {
+            {visibleBoxes.map((box) => {
               const contents = boxContents(box, lines, skuIndex);
               return (
                 <div key={box.code} className="rounded-md border border-border bg-card p-3">
@@ -442,12 +516,17 @@ function ShelfPanel({
                     <div className="mt-1 text-xs text-muted-foreground">Conteúdo ainda não lançado.</div>
                   )}
                   <div className="mt-1 text-xs text-muted-foreground">
-                    {formatBoxDimensions(box)} · {box.session_id ? "abertura" : "manual"}
+                    {formatBoxDimensions(box)} · {formatVolumeM3(boxVolumeM3(box))} · {box.session_id ? "abertura" : "manual"}
                     {box.support_box_code ? ` · sobre ${box.support_box_code}` : ""}
                   </div>
                 </div>
               );
             })}
+            {shelf.boxes.length > 3 ? (
+              <Button type="button" variant="outline" className="w-full" onClick={() => setShowAllBoxes((current) => !current)}>
+                {showAllBoxes ? "Mostrar menos caixas" : `Ver todas as ${formatNumber(shelf.boxes.length)} caixas`}
+              </Button>
+            ) : null}
           </div>
         )}
       </div>
