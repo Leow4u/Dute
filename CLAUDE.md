@@ -51,6 +51,16 @@ documentação de produto e operação está em `docs/`.
     O nome precisa continuar `default`: com outro, o deploy trataria as
     functions já publicadas como de outro codebase. Módulo novo nasce em
     `functions/<modulo>` com codebase próprio, nunca dentro de `functions/wms`.
+  - `functions/comercial`: Functions do Comercial, codebase `comercial`. Toda
+    callable de negócio entra por `requireComercialCaller` (liberação própria do
+    Comercial em `domain/liberacao.ts`, só `dute-homolog`, igual à
+    `COMERCIAL_AMBIENTES_LIBERADOS` do app; papéis owner, admin e comercial) e
+    grava por `runIdempotent` (recibo em `comercial_operations`) com
+    `createComercialEvent` (evento sem valor nem contato de cliente, payload
+    `.strict()` por tipo). Callable escrita como `export const nome = onCall(`,
+    numa linha só, no `src/index.ts`; ali nenhuma outra linha usa `onCall(`,
+    nem comentário, porque a conferência do invoker reprova (trava em
+    `src/callables.test.ts`).
   - `lib/dominio`: tipos e regras que o app e as Functions precisam ter iguais.
 - **IA native.** Todo módulo novo grava desde o primeiro dia o que a IA precisa
   (eventos em `events`, tempos e medidas) e respeita o isolamento por cliente. A
@@ -141,8 +151,11 @@ documentação de produto e operação está em `docs/`.
   mais cadastro avulso de produto, e o código de barras não se repete dentro do
   cliente. Ver `docs/multicliente-modelos-de-operacao.md` (inclui a ordem dos
   próximos PRs: mobiliário, com patrimônio, e insumos).
-- **`pnpm` não está no PATH.** Use `corepack pnpm`. O diretório `functions/wms/`
-  usa **npm** (tem `package-lock.json` próprio), não pnpm.
+- **`pnpm` não está no PATH.** Use `corepack pnpm`. Os diretórios
+  `functions/wms/` e `functions/comercial/` usam **npm** (cada um tem
+  `package-lock.json` próprio), não pnpm. Como o `pnpm-workspace.yaml` inclui
+  `functions/*`, dependência nova numa codebase também muda o `pnpm-lock.yaml`:
+  rode `corepack pnpm install` na raiz e confira `--frozen-lockfile`.
 
 ## Comandos
 
@@ -156,7 +169,15 @@ corepack pnpm --filter "@workspace/app" run dev
 npm --prefix functions/wms run test:unit          # node --test
 npm --prefix functions/wms run test:integration   # emulador Firestore, exige Java
 npm --prefix functions/wms run test:critical      # os dois acima
+
+npm --prefix functions/comercial ci
+npm --prefix functions/comercial run test:unit         # node --test
+npm --prefix functions/comercial run test:integration  # emulador Firestore, exige Java 21
+npm --prefix functions/comercial run test:critical     # os dois acima
 ```
+
+Teste novo das Functions só roda se entrar na lista fixa do `test:unit` ou do
+`test:integration` no `package.json` da codebase.
 
 O `typecheck` do root roda `tsc --build` primeiro, gerando os `.d.ts` de
 `lib/api-client-react` e `lib/dominio`. Sem isso um checkout limpo falha com
@@ -228,7 +249,7 @@ reorganização de 19/10/2026 (`artifacts/btg-inventory` hoje é `artifacts/app`
   `src/lib/theme-colors.test.ts` trava cor fixa e valor fora da escala
   (raio, vidro, sombra e tamanho de texto arbitrários).
 - CI verde antes de publicar (`frontend-typecheck`, `functions-unit`,
-  `functions-integration`).
+  `functions-integration`, `comercial-unit`, `comercial-integration`).
 - Não refatorar os arquivos grandes (`functions/wms/src/domain/operations.ts` e
   `functions/wms/src/index.ts`, ~6.700 linhas cada) antes de haver teste nas trilhas
   de dinheiro e estoque. A camada de autorização dos callables ainda tem cobertura

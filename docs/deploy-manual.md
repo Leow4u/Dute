@@ -155,7 +155,8 @@ isso não se repetir.
 
 A publicação fica em `.github/workflows/publicar.yml` (job `Frontend (Cloud Run)`),
 chamada pelo `.github/workflows/ci.yml` sempre a partir de `main` e depois de
-`frontend-typecheck`, `functions-unit`, `functions-integration` e
+`frontend-typecheck`, `functions-unit`, `functions-integration`,
+`comercial-unit`, `comercial-integration` e
 `Testes das ferramentas Python (tools/)` passarem:
 
 - **Homologação** (`dute-homolog`, serviço `dute-app`): a cada push em `main`.

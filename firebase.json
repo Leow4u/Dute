@@ -5,6 +5,12 @@
       "codebase": "default",
       "runtime": "nodejs22",
       "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
+    },
+    {
+      "source": "functions/comercial",
+      "codebase": "comercial",
+      "runtime": "nodejs22",
+      "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
     }
   ],
   "firestore": {
