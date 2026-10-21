@@ -755,6 +755,8 @@ type ReadPagedOptions = {
   /** Max page size when client omits limit. */
   defaultLimit?: number;
   hardCap?: number;
+  /** Ocupação exige consulta paginável completa; não aceita scan limitado. */
+  requireIndexedRead?: boolean;
 };
 
 /**
@@ -820,6 +822,7 @@ async function readPaged(
   next_cursor?: string;
 }> {
   if (!firestore) {
+    if (options.requireIndexedRead) throw new Error("Firestore não configurado.");
     return { items: [], total: 0, has_more: false };
   }
 
@@ -902,6 +905,8 @@ async function readPaged(
       query(collection(firestore, name), ...constraints),
     );
   } catch (error) {
+    // Uma lista parcial de caixas faria o espaço livre parecer maior.
+    if (options.requireIndexedRead) throw error;
     console.warn(
       `[readPaged] query failed for ${name}, falling back to capped scan.`,
       error,
@@ -3398,6 +3403,7 @@ async function route(
     direction?: "asc" | "desc";
     equalityFilterFields?: string[];
     hardCap?: number;
+    requireIndexedRead?: boolean;
     /** Campo com índice que suporta busca por prefixo no servidor. */
     prefixSearchField?: string;
   };
@@ -3475,6 +3481,7 @@ async function route(
       direction: "asc",
       equalityFilterFields: ["aisle", "customer_code", "status"],
       hardCap: 2000,
+      requireIndexedRead: true,
     },
     {
       // Caixas guardadas: a mais recente primeiro (o código é sequencial).
@@ -3486,6 +3493,7 @@ async function route(
       direction: "desc",
       equalityFilterFields: ["customer_code", "location_id", "status"],
       hardCap: 5000,
+      requireIndexedRead: true,
     },
     {
       regex: /^\/api\/locations$/,
@@ -3648,6 +3656,7 @@ async function route(
         ),
         params: searchParams,
         hardCap: routeConfig.hardCap,
+        requireIndexedRead: routeConfig.requireIndexedRead,
       });
 
       // Apply remaining non-equality filters in memory on the page only.
