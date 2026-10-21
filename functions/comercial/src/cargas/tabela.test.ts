@@ -119,8 +119,8 @@ describe("argumentos da carga", () => {
 
   it("só grava em projeto com o Comercial liberado, ou no emulador", () => {
     assert.equal(podeGravarNoProjeto("dute-homolog", {}), null);
-    assert.match(String(podeGravarNoProjeto("dute-prod", {})), /não está liberado/);
-    assert.match(String(podeGravarNoProjeto("dute-btg", {})), /não está liberado/);
+    assert.match(String(podeGravarNoProjeto("dute-prod", {})), /não grava no projeto dute-prod/);
+    assert.match(String(podeGravarNoProjeto("dute-btg", {})), /não grava no projeto dute-btg/);
     assert.match(String(podeGravarNoProjeto("demo-dute-comercial", {})), /emulador/);
     assert.equal(podeGravarNoProjeto("demo-dute-comercial", { FIRESTORE_EMULATOR_HOST: "127.0.0.1:8088" }), null);
   });
@@ -356,7 +356,7 @@ describe("dry-run sem projeto", () => {
         pastaDoRelatorio: pasta,
         log: () => undefined,
       }),
-      (error: unknown) => error instanceof ErroDaCarga && /não está liberado/.test(error.message),
+      (error: unknown) => error instanceof ErroDaCarga && /não grava no projeto dute-prod/.test(error.message),
     );
     assert.equal(abriu, false);
   });

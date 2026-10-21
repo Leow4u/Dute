@@ -50,8 +50,14 @@ describe("comercialStatus: o que o app recebe", () => {
     }
   });
 
+  it("na produção, os mesmos papéis da homologação", () => {
+    assert.deepEqual(comercialStatusFor("dute-prod", "owner"), { liberado: true, papel: "owner", pode_aprovar: true });
+    assert.deepEqual(comercialStatusFor("dute-prod", "comercial"), { liberado: true, papel: "comercial", pode_aprovar: false });
+    assert.deepEqual(comercialStatusFor("dute-prod", "wms"), { liberado: false, papel: "wms", pode_aprovar: false });
+  });
+
   it("fora da lista de liberação ninguém vê, nem o owner", () => {
-    for (const projectId of ["dute-prod", "dute-btg", ""]) {
+    for (const projectId of ["dute-btg", ""]) {
       for (const role of PLATFORM_ROLES) {
         assert.deepEqual(comercialStatusFor(projectId, role), { liberado: false, papel: role, pode_aprovar: false }, `${projectId} ${role}`);
       }
@@ -61,7 +67,7 @@ describe("comercialStatus: o que o app recebe", () => {
 
 describe("entrada das callables do Comercial", () => {
   it("fora da liberação recusa antes de ler o perfil", async () => {
-    const error = await rejection(requireComercialCaller(untouchedDb, request("u1"), "dute-prod"));
+    const error = await rejection(requireComercialCaller(untouchedDb, request("u1"), "dute-btg"));
     assert.equal(error.code, "failed-precondition");
   });
 

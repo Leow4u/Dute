@@ -5,13 +5,12 @@ import { HttpsError } from "firebase-functions/https";
  * "Liberação").
  *
  * A produção recebe a `main` inteira por disparo manual, então as callables do
- * Comercial sobem para o dute-prod junto com qualquer correção do WMS. Até o
- * OK do Leonardo (parte 17), elas recusam fora desta lista. Ligar na produção
- * é um PR que acrescenta "dute-prod" aqui e em COMERCIAL_AMBIENTES_LIBERADOS
- * de artifacts/app/src/lib/liberacao.ts; o teste
- * artifacts/app/src/lib/platform-lists.test.ts exige as duas listas iguais.
+ * Comercial sobem para o dute-prod junto com qualquer correção do WMS. Com o
+ * OK do Leonardo em 21/10/2026, homologação e produção atendem. O dute-btg
+ * continua de fora. A lista é a mesma de artifacts/app/src/lib/liberacao.ts;
+ * o teste artifacts/app/src/lib/platform-lists.test.ts trava as duas.
  */
-export const COMERCIAL_AMBIENTES_LIBERADOS = ["dute-homolog"] as const;
+export const COMERCIAL_AMBIENTES_LIBERADOS = ["dute-homolog", "dute-prod"] as const;
 
 export function comercialLiberado(projectId: string | null | undefined): boolean {
   const id = String(projectId ?? "").trim();

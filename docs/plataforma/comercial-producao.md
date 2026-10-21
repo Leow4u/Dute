@@ -1,19 +1,23 @@
 # Comercial v1: roteiro para ligar no `dute-prod`
 
 Escrito na parte 17 (21/10/2026), a partir da conferência final do Comercial v1
-na `main`. Nada aqui foi executado na produção. Cada passo que grava no
-`dute-prod` precisa do OK do Leonardo na conversa. Sem dado real neste arquivo.
+na `main`. Em 21/10/2026 o Leonardo autorizou ligar as telas e as callables no
+`dute-prod` (as duas listas do Comercial e `AMBIENTES_LIBERADOS`, para o login
+ver os cards). A carga em massa continua sem gravar no `dute-prod` e no
+`dute-btg`. Cada passo que grava dado no `dute-prod` ainda precisa do OK do
+Leonardo na conversa. Sem dado real neste arquivo.
 
 ## 1. Estado de hoje
 
-- Partes 1 a 16 mergeadas. O Comercial está ligado só no `dute-homolog`: as
-  duas listas `COMERCIAL_AMBIENTES_LIBERADOS` (`lib/liberacao.ts` no app,
-  `functions/comercial/src/domain/liberacao.ts` nas Functions) têm só
-  `dute-homolog`, travadas iguais por `platform-lists.test.ts`.
-- No `dute-prod` as 12 callables do Comercial recusam com
-  `failed-precondition` (as de negócio abrem com `requireComercialCaller`, que
-  confere a liberação antes de ler qualquer coisa; `callables.test.ts` trava
-  isso), as rotas e o menu não existem e as cargas não gravam.
+- Partes 1 a 16 mergeadas. As duas listas `COMERCIAL_AMBIENTES_LIBERADOS`
+  (`lib/liberacao.ts` no app, `functions/comercial/src/domain/liberacao.ts` nas
+  Functions) incluem `dute-homolog` e `dute-prod`, travadas iguais por
+  `platform-lists.test.ts`. `AMBIENTES_LIBERADOS` também inclui os dois, para
+  o login ver os cards. O `dute-btg` continua de fora: as callables recusam
+  com `failed-precondition`.
+- No código, as telas e as callables do `dute-prod` atendem. A produção só
+  passa a atender depois da publicação manual. A carga em massa não grava
+  (`podeGravarNoProjeto`).
 - Conferido na parte 17: regras (toda coleção do Comercial tem `match`, escrita
   sempre `false`; preço só para owner, admin, comercial e financeiro; contatos
   e locais só owner, admin e comercial); eventos (todo tipo com payload
@@ -92,11 +96,13 @@ passam a ler preço, contratos e orçamentos (vazios até as cargas).
    mudou.
 5. **Conferência da BTG**: cadastro da BTG sem duplicar, portal e faturas dela
    intactos, contagem de abertura ainda salvando caixas.
-6. **PR que liga a liberação**: acrescenta `dute-prod` nas duas listas
-   `COMERCIAL_AMBIENTES_LIBERADOS`, com o OK do Leonardo, e publicar pelo mesmo
-   caminho manual. As cargas só gravam em projeto liberado, então a liberação
-   entra antes dos dados; as telas aparecem vazias para owner, admin e
-   comercial durante as cargas (aceitar, ou pedir uma trava própria da carga).
+6. **PR que liga a liberação** (autorizado em 21/10/2026): acrescenta
+   `dute-prod` nas duas listas `COMERCIAL_AMBIENTES_LIBERADOS` e em
+   `AMBIENTES_LIBERADOS`, e publica pelo mesmo caminho manual. A carga em
+   massa continua recusando `dute-prod` e `dute-btg`
+   (`functions/comercial/src/cargas/projeto.ts`), mesmo com a tela ligada. As
+   telas aparecem vazias para owner, admin e comercial até as cargas, que
+   seguem em passo próprio.
 7. **Cargas, sempre dry-run primeiro** (`docs/plataforma/comercial-cargas.md`),
    da máquina do Leonardo, com `gcloud auth application-default login` numa
    conta que grave no `dute-prod`, e relatórios conferidos em `tmp/comercial`

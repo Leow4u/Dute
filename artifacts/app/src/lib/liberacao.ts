@@ -4,14 +4,14 @@
  * A produção publica a `main` por disparo manual, então uma correção do WMS
  * levaria junto as telas novas da plataforma. Elas ficam ligadas só na
  * homologação e, no desenvolvimento, quando o projeto não é de produção.
- * Ligar na produção é um PR que acrescenta "dute-prod" em AMBIENTES_LIBERADOS,
- * com o OK do Leonardo.
+ * A produção (dute-prod) entrou na lista com o OK do Leonardo em 21/10/2026,
+ * para o login ver os cards dos módulos. O dute-btg continua de fora.
  *
  * Fica sob a liberação: papéis novos no convite, módulos contratados em
  * Configurações › Clientes e a tela de entrada por módulo (/).
  */
 
-export const AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog"];
+export const AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog", "dute-prod"];
 
 /** Projetos com dado real: nunca liberados por estar em desenvolvimento. */
 const PROJETOS_DE_PRODUCAO: readonly string[] = ["dute-prod", "dute-btg"];
@@ -34,10 +34,11 @@ export const PLATAFORMA_LIBERADA = plataformaLiberada(
  * callables de functions/comercial recusam fora de COMERCIAL_AMBIENTES_LIBERADOS
  * (functions/comercial/src/domain/liberacao.ts, travada igual a esta por
  * platform-lists.test.ts), então aqui não há exceção de desenvolvimento: a
- * tela só aparece onde as callables respondem. Ligar na produção é um PR com
- * o OK do Leonardo que muda as duas listas.
+ * tela só aparece onde as callables respondem. Produção e homologação estão
+ * na lista; a carga em massa continua sem gravar no dute-prod
+ * (functions/comercial/src/cargas/projeto.ts).
  */
-export const COMERCIAL_AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog"];
+export const COMERCIAL_AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog", "dute-prod"];
 
 export function comercialLiberado(projectId: string | null | undefined): boolean {
   return COMERCIAL_AMBIENTES_LIBERADOS.includes(String(projectId ?? "").trim());
