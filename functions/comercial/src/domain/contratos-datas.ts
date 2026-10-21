@@ -3,9 +3,12 @@
  * previsão de pagamento pela regra do contrato (docs/plataforma/fase-6-comercial.md,
  * parte 8).
  *
- * Funções puras, sem Firestore nem zod: a tela de contratos e o Início
- * (parte 14) usam as mesmas regras. Toda data é texto "AAAA-MM-DD", sem
- * fuso: o dia do calendário, como está no contrato e na NF.
+ * Funções puras, sem Firestore nem zod. O app não importa de
+ * functions/comercial: quando a tela de contratos e o Início (parte 14)
+ * precisarem destas regras, elas vão para lib/dominio com um JSON de casos e
+ * ficam aqui como cópia travada por teste, como o dinheiro
+ * (lib/dominio/src/dinheiro.ts). Toda data é texto "AAAA-MM-DD", sem fuso: o
+ * dia do calendário, como está no contrato e na NF.
  */
 
 export const TIPOS_RENOVACAO = ["aditivo", "automatica", "novo_documento", "indeterminado"] as const;

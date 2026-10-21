@@ -998,8 +998,8 @@ describe("contratos do Comercial (parte 8)", () => {
         status: "vigente",
         edicao: 1,
       });
-      await setDoc(doc(database, "contracts", "ct-a", "aditivos", "01"), {
-        id: "01",
+      await setDoc(doc(database, "contracts", "ct-a", "aditivos", "1"), {
+        id: "1",
         numero: 1,
         tipo: "prorrogacao",
         contrato_id: "ct-a",
@@ -1014,7 +1014,7 @@ describe("contratos do Comercial (parte 8)", () => {
       await assertSucceeds(getDoc(doc(database, "contracts", "ct-a")));
       await assertSucceeds(getDocs(collection(database, "contracts")));
       await assertSucceeds(getDocs(query(collection(database, "contracts"), where("customer_code", "==", CUSTOMER_A))));
-      await assertSucceeds(getDoc(doc(database, "contracts", "ct-a", "aditivos", "01")));
+      await assertSucceeds(getDoc(doc(database, "contracts", "ct-a", "aditivos", "1")));
       await assertSucceeds(getDocs(collection(database, "contracts", "ct-a", "aditivos")));
     });
   }
@@ -1024,12 +1024,12 @@ describe("contratos do Comercial (parte 8)", () => {
       const database = signedAs(uid);
       await assertFails(getDoc(doc(database, "contracts", "ct-a")));
       await assertFails(getDocs(collection(database, "contracts")));
-      await assertFails(getDoc(doc(database, "contracts", "ct-a", "aditivos", "01")));
+      await assertFails(getDoc(doc(database, "contracts", "ct-a", "aditivos", "1")));
       await assertFails(getDocs(collection(database, "contracts", "ct-a", "aditivos")));
     }
     const anonimo = testEnvironment.unauthenticatedContext().firestore();
     await assertFails(getDoc(doc(anonimo, "contracts", "ct-a")));
-    await assertFails(getDoc(doc(anonimo, "contracts", "ct-a", "aditivos", "01")));
+    await assertFails(getDoc(doc(anonimo, "contracts", "ct-a", "aditivos", "1")));
   });
 
   it("ninguém grava contrato nem aditivo pelo navegador, nem o owner", async () => {
@@ -1046,9 +1046,9 @@ describe("contratos do Comercial (parte 8)", () => {
       );
       await assertFails(updateDoc(doc(database, "contracts", "ct-a"), { vigente_ate: "2030-12-31" }));
       await assertFails(deleteDoc(doc(database, "contracts", "ct-a")));
-      await assertFails(setDoc(doc(database, "contracts", "ct-a", "aditivos", "02"), { numero: 2, tipo: "prorrogacao" }));
-      await assertFails(updateDoc(doc(database, "contracts", "ct-a", "aditivos", "01"), { tipo: "preco" }));
-      await assertFails(deleteDoc(doc(database, "contracts", "ct-a", "aditivos", "01")));
+      await assertFails(setDoc(doc(database, "contracts", "ct-a", "aditivos", "2"), { numero: 2, tipo: "prorrogacao" }));
+      await assertFails(updateDoc(doc(database, "contracts", "ct-a", "aditivos", "1"), { tipo: "preco" }));
+      await assertFails(deleteDoc(doc(database, "contracts", "ct-a", "aditivos", "1")));
     }
   });
 

@@ -93,7 +93,7 @@ describe("arquivo da carga", () => {
     assert.equal(parsed.data.contratos[0].aditivos.length, 2);
   });
 
-  it("contrato repetido, aditivo repetido e preço no contrato são recusados, com o caminho", () => {
+  it("contrato repetido, aditivo repetido, preço no contrato e id com o número do cliente são recusados, com o caminho", () => {
     const exemplo = exemploDoDocumento() as { contratos: Array<Record<string, unknown> & { aditivos: unknown[]; contrato: Record<string, unknown> }> };
     const contrato = exemplo.contratos[0];
     const casos: Array<[unknown, RegExp]> = [
@@ -101,6 +101,10 @@ describe("arquivo da carga", () => {
       [{ contratos: [{ ...contrato, aditivos: [contrato.aditivos[0], contrato.aditivos[0]] }] }, /aditivos\.1\.numero: Aditivo 1 repetido/],
       [{ contratos: [{ ...contrato, contrato: { ...contrato.contrato, valor: "1500.00" } }] }, /contratos\.0\.contrato: Unrecognized key/],
       [{ contratos: [] }, /A carga não tem contrato/],
+      [
+        { contratos: [{ ...contrato, id: "exemplo-sc-0001" }] },
+        /contratos\.0\.id: .*número do contrato no cliente/,
+      ],
     ];
     for (const [json, esperado] of casos) {
       const caminho = join(pasta, "invalido.json");
@@ -149,7 +153,7 @@ describe("main da carga", () => {
     assert.equal(relatorio.resumo.aditivos, 2);
     assert.deepEqual(
       relatorio.contratos[0].aditivos.map((aditivo: { aditivo_id: string; acao: string }) => `${aditivo.aditivo_id}:${aditivo.acao}`),
-      ["01:a_conferir", "02:a_conferir"],
+      ["1:a_conferir", "2:a_conferir"],
     );
     assert.match(linhas.join("\n"), /só o arquivo foi conferido/);
   });

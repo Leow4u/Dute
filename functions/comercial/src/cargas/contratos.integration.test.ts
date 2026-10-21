@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { deleteApp, initializeApp } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 
+import { registrarAditivo } from "../domain/contratos.js";
 import { main } from "./contratos.js";
 
 /**
@@ -111,7 +112,7 @@ describe("carga de contratos no emulador", () => {
     assert.equal(contrato.vigente_ate, "2027-06-30");
     assert.equal(contrato.edicao, 1, "os dois aditivos são o histórico da vigência atual: nenhum prorroga");
     const aditivos = await db.collection("contracts/exemplo-2026/aditivos").get();
-    assert.deepEqual(aditivos.docs.map((doc) => doc.id), ["01", "02"]);
+    assert.deepEqual(aditivos.docs.map((doc) => doc.id), ["1", "2"]);
     assert.equal(aditivos.docs[0].get("documento_localizado"), false);
     assert.deepEqual(aditivos.docs[1].get("tabela_ids"), ["exemplo-2026-comercial", "exemplo-2026-noturna"]);
     const eventos = await count("events");
@@ -148,6 +149,76 @@ describe("carga de contratos no emulador", () => {
     assert.equal((await db.collection("contracts").doc("exemplo-2026").get()).get("vigente_ate"), "2027-06-30");
   });
 
+  it("aditivo registrado fora do arquivo (pela tela) continua valendo: a carga de novo não encurta a vigência", async () => {
+    await tabelas();
+    const arquivo = salvar("com-externo.json", exemplo());
+    assert.equal((await rodar(arquivo, "--executar")).codigo, 0);
+    const prorrogado = await registrarAditivo(db, { uid: "com-1", role: "comercial", name: "Comercial" }, {
+      idempotency_key: "tela-5",
+      contrato_id: "exemplo-2026",
+      aditivo: { numero: 5, tipo: "prorrogacao", vigente_de: "2027-07-01", vigente_ate: "2028-06-30" },
+    });
+    assert.equal(prorrogado.vigencia_alterada, true);
+    const eventos = await count("events");
+
+    const dry = await rodar(arquivo);
+    assert.equal(dry.codigo, 0);
+    assert.equal(dry.conteudo?.contratos[0].acao, "sem_mudanca", JSON.stringify(dry.conteudo?.contratos[0]));
+    const segunda = await rodar(arquivo, "--executar");
+    assert.equal(segunda.codigo, 0);
+    assert.equal(segunda.conteudo?.contratos[0].acao, "sem_mudanca");
+    const contrato = (await db.collection("contracts").doc("exemplo-2026").get()).data() ?? {};
+    assert.equal(contrato.vigente_de, "2027-07-01");
+    assert.equal(contrato.vigente_ate, "2028-06-30");
+    assert.equal(contrato.edicao, 2);
+    assert.equal(await count("events"), eventos);
+  });
+
+  it("contrato encerrado: a vigência vem dos aditivos numa só carga, e os aditivos entram só no histórico", async () => {
+    await tabelas();
+    const json = exemplo();
+    json.contratos[0].contrato.status = "encerrado";
+    json.contratos[0].contrato.vigente_de = "2024-07-01";
+    json.contratos[0].contrato.vigente_ate = "2025-06-30";
+    const arquivo = salvar("encerrado.json", json);
+    const primeira = await rodar(arquivo, "--executar");
+    assert.equal(primeira.codigo, 0, JSON.stringify(primeira.conteudo?.contratos));
+    const contrato = (await db.collection("contracts").doc("exemplo-2026").get()).data() ?? {};
+    assert.equal(contrato.status, "encerrado");
+    assert.equal(contrato.vigente_de, "2026-07-01");
+    assert.equal(contrato.vigente_ate, "2027-06-30");
+    assert.equal(contrato.edicao, 1);
+    const aditivos = await db.collection("contracts/exemplo-2026/aditivos").get();
+    assert.deepEqual(aditivos.docs.map((doc) => doc.get("vigencia_alterada")), [false, false]);
+
+    const segunda = await rodar(arquivo, "--executar");
+    assert.equal(segunda.codigo, 0);
+    assert.equal(segunda.conteudo?.contratos[0].acao, "sem_mudanca");
+    assert.equal((await db.collection("contracts").doc("exemplo-2026").get()).get("edicao"), 1);
+  });
+
+  it("encerrar pelo arquivo leva junto a vigência dos aditivos novos", async () => {
+    await tabelas();
+    const json = exemplo();
+    const aditivosOriginais = json.contratos[0].aditivos;
+    json.contratos[0].aditivos = [];
+    assert.equal((await rodar(salvar("so-contrato.json", json), "--executar")).codigo, 0);
+
+    json.contratos[0].contrato.status = "encerrado";
+    json.contratos[0].aditivos = [
+      ...aditivosOriginais,
+      { numero: 3, assinado_em: null, tipo: "prorrogacao", vigente_de: "2027-07-01", vigente_ate: "2027-12-31", tabela_ids: [], documento: null, observacao: "" },
+    ];
+    const arquivo = salvar("encerrar.json", json);
+    const resultado = await rodar(arquivo, "--executar");
+    assert.equal(resultado.codigo, 0, JSON.stringify(resultado.conteudo?.contratos));
+    assert.equal(resultado.conteudo?.contratos[0].acao, "atualizar");
+    const contrato = (await db.collection("contracts").doc("exemplo-2026").get()).data() ?? {};
+    assert.equal(contrato.status, "encerrado");
+    assert.equal(contrato.vigente_ate, "2027-12-31");
+    assert.equal((await rodar(arquivo, "--executar")).conteudo?.contratos[0].acao, "sem_mudanca");
+  });
+
   it("mudança no arquivo vira atualização só dos campos alterados", async () => {
     await tabelas();
     const json = exemplo();
@@ -182,6 +253,6 @@ describe("carga de contratos no emulador", () => {
     const resultado = await rodar(salvar("b.json", json), "--executar");
     assert.equal(resultado.codigo, 1);
     assert.match(String(resultado.conteudo?.contratos[0].aditivos[0].problemas[0]), /já está registrado com outro conteúdo/);
-    assert.equal((await db.collection("contracts/exemplo-2026/aditivos").doc("01").get()).get("observacao"), "Documento não localizado.");
+    assert.equal((await db.collection("contracts/exemplo-2026/aditivos").doc("1").get()).get("observacao"), "Documento não localizado.");
   });
 });

@@ -47,9 +47,19 @@ O que a carga faz com cada contrato:
 | Existe e igual | `sem_mudanca` |
 | Existe e diferente | `atualizar` só os campos que mudaram, na edição atual |
 
-A vigência gravada é a do arquivo prorrogada pelos aditivos: um aditivo de
-prorrogação (ou de preço com vigência nova) só muda a vigência quando o fim
-novo passa do atual. Aditivo antigo entra só no histórico, em qualquer ordem.
+A vigência gravada é a do arquivo prorrogada pelos aditivos: os do arquivo e
+os já registrados no banco, inclusive o que entrou pela tela depois da carga
+(rodar de novo não desfaz a prorrogação). Um aditivo de prorrogação (ou de
+preço com vigência nova) só muda a vigência quando o fim novo passa do atual;
+no contrato por prazo indeterminado, quando começa no início do contrato ou
+depois, e aí o contrato passa a ter prazo fixo. Aditivo antigo entra só no
+histórico.
+
+Contrato encerrado não é prorrogado por aditivo: a callable `recordAditivo`
+registra o aditivo só no histórico (para prorrogar, reabra o contrato antes).
+Por isso, na carga, o contrato encerrado já é gravado com a vigência
+prorrogada por todos os aditivos (os do arquivo e os registrados), e os
+aditivos entram no histórico sem mexer nela.
 
 O que deixa um contrato de fora (os outros seguem, e a carga termina com
 código 1):
@@ -64,15 +74,20 @@ O que deixa só o aditivo de fora (o contrato e os outros aditivos seguem):
 
 ### Campos
 
-- `id`: id do documento em `contracts` (letras, números, hífen e sublinhado).
+- `id`: id interno do documento em `contracts`, por exemplo
+  `<customer_code>-2026` (letras, números, hífen e sublinhado). Nunca o número
+  do contrato no cliente: o id vai nos eventos, e a carga (como a callable)
+  recusa id que contenha um dos `numeros`, inteiro (sem separadores) ou por 5
+  ou mais algarismos seguidos dele.
 - `contrato`: os campos da callable `saveContract`. Obrigatórios:
   `customer_code` (o código do cadastro), `nome`, `vigente_de`, `vigente_ate`
   (`null` para prazo indeterminado), `renovacao.tipo`, `reajuste.tipo`,
   `regime_padrao`, `autorizacao.tipo`, `pagamento.tipo` e `status`. Preço não
   entra no contrato: as tabelas apontam para ele por `contract_id`.
 - `aditivos`: os campos da callable `recordAditivo`. `numero` é a ordem do
-  aditivo (vira o id `01`, `02`...); `documento: null` registra o aditivo com a
-  marca "documento não localizado".
+  aditivo e vira o id, sem zero à esquerda (`contracts/{id}/aditivos/1`,
+  `.../2`); `documento: null` registra o aditivo com a marca "documento não
+  localizado".
 - Datas em `AAAA-MM-DD`; a data-base do reajuste em `MM-DD`.
 - `documentos[].referencia` é texto (por exemplo, o caminho no OneDrive): o
   Storage é fechado ao Comercial no v1.

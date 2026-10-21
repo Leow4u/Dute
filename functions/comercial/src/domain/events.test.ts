@@ -52,7 +52,7 @@ const EXEMPLOS: Record<ComercialEventType, Record<string, unknown>> = {
   "contract.updated": { contrato_id: "itau-2026", campos: ["vigente_ate", "status"], edicao: 2, status: "encerrado" },
   "contract.amendment_added": {
     contrato_id: "itau-2026",
-    aditivo_id: "04",
+    aditivo_id: "4",
     tipo: "preco",
     vigencia_alterada: true,
     vigente_ate: "2027-06-30",

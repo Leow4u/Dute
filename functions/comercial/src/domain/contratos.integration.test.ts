@@ -162,6 +162,16 @@ describe("saveContract", () => {
     assert.equal((await criar("ct-antigo", { customer_code: "ANTIGO" })).criado, true);
   });
 
+  it("id com o número do contrato no cliente é invalid-argument, sem gravar nada", async () => {
+    for (const id of [NUMERO_NO_CLIENTE, "cliente-a-998877"]) {
+      const error = await rejection(criar(id, {}, `criar-numero-${id}`));
+      assert.equal(error.code, "invalid-argument", id);
+      assert.match(error.message, /^contrato_id: .*número do contrato no cliente/, id);
+    }
+    assert.equal(await count("contracts"), 0);
+    assert.equal(await count("events"), 0);
+  });
+
   it("criar com id que já existe é already-exists", async () => {
     await criar("ct-a");
     const error = await rejection(criar("ct-a", {}, "outra-chave"));
@@ -264,7 +274,7 @@ describe("recordAditivo", () => {
     await criar("ct-a");
     const result = await registrar();
     assert.equal(result.vigencia_alterada, true);
-    assert.equal(result.aditivo_id, "01");
+    assert.equal(result.aditivo_id, "1");
     assert.equal(result.edicao, 2);
 
     const doc = (await db.collection("contracts").doc("ct-a").get()).data() ?? {};
@@ -272,7 +282,7 @@ describe("recordAditivo", () => {
     assert.equal(doc.vigente_ate, "2028-06-30");
     assert.equal(doc.edicao, 2);
 
-    const historico = (await db.collection("contracts").doc("ct-a").collection("aditivos").doc("01").get()).data() ?? {};
+    const historico = (await db.collection("contracts").doc("ct-a").collection("aditivos").doc("1").get()).data() ?? {};
     assert.equal(historico.numero, 1);
     assert.equal(historico.tipo, "prorrogacao");
     assert.equal(historico.customer_code, CLIENTE);
@@ -284,7 +294,7 @@ describe("recordAditivo", () => {
     const event = (await eventos()).find((item) => item.type === "contract.amendment_added");
     assert.deepEqual(event?.payload, {
       contrato_id: "ct-a",
-      aditivo_id: "01",
+      aditivo_id: "1",
       tipo: "prorrogacao",
       vigencia_alterada: true,
       vigente_ate: "2028-06-30",
@@ -317,14 +327,41 @@ describe("recordAditivo", () => {
     assert.equal("vigente_ate" in (event?.payload ?? {}), false);
   });
 
+  it("em contrato encerrado, o aditivo entra só no histórico: a vigência e a edição não mudam", async () => {
+    await criar("ct-a", { status: "encerrado" });
+    const result = await registrar();
+    assert.equal(result.vigencia_alterada, false);
+    assert.equal(result.edicao, 1);
+    assert.equal(result.vigente_ate, "2027-06-30");
+    const doc = (await db.collection("contracts").doc("ct-a").get()).data() ?? {};
+    assert.equal(doc.status, "encerrado");
+    assert.equal(doc.vigente_de, "2026-07-01");
+    assert.equal(doc.vigente_ate, "2027-06-30");
+    assert.equal(doc.edicao, 1);
+    const historico = (await db.collection("contracts").doc("ct-a").collection("aditivos").doc("1").get()).data() ?? {};
+    assert.equal(historico.vigencia_alterada, false);
+    assert.equal(historico.vigencia_anterior, null);
+    const event = (await eventos()).find((item) => item.type === "contract.amendment_added");
+    assert.equal(event?.payload.vigencia_alterada, false);
+  });
+
+  it("contrato reaberto volta a ser prorrogado pelo aditivo", async () => {
+    await criar("ct-a", { status: "encerrado" });
+    await salvarContrato(db, equipe, { idempotency_key: "reabrir", acao: "atualizar", contrato_id: "ct-a", edicao: 1, contrato: contrato() });
+    const result = await registrar();
+    assert.equal(result.vigencia_alterada, true);
+    assert.equal(result.edicao, 3);
+    assert.equal((await db.collection("contracts").doc("ct-a").get()).get("vigente_ate"), "2028-06-30");
+  });
+
   it("aditivo de preço liga a tabela do mesmo contrato e prorroga", async () => {
     await criar("ct-a");
     await tabela("tab-com", { customer_code: CLIENTE, contract_id: "ct-a" });
     await tabela("tab-not", { customer_code: CLIENTE, contract_id: "ct-a", variante: "noturna" });
     const result = await registrar({ numero: 4, tipo: "preco", tabela_ids: ["tab-com", "tab-not"] }, "ad-4");
-    assert.equal(result.aditivo_id, "04");
+    assert.equal(result.aditivo_id, "4");
     assert.equal(result.vigencia_alterada, true);
-    const historico = (await db.collection("contracts").doc("ct-a").collection("aditivos").doc("04").get()).data() ?? {};
+    const historico = (await db.collection("contracts").doc("ct-a").collection("aditivos").doc("4").get()).data() ?? {};
     assert.deepEqual(historico.tabela_ids, ["tab-com", "tab-not"]);
     assert.equal(historico.tipo, "preco");
     const event = (await eventos()).find((item) => item.type === "contract.amendment_added");
@@ -369,7 +406,7 @@ describe("recordAditivo", () => {
   it("sem documento localizado, entra com a marca", async () => {
     await criar("ct-a");
     await registrar({ documento: null });
-    const historico = (await db.collection("contracts").doc("ct-a").collection("aditivos").doc("01").get()).data() ?? {};
+    const historico = (await db.collection("contracts").doc("ct-a").collection("aditivos").doc("1").get()).data() ?? {};
     assert.equal(historico.documento, null);
     assert.equal(historico.documento_localizado, false);
   });

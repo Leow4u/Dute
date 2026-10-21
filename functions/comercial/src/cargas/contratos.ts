@@ -17,6 +17,7 @@ import {
   aditivoDocId,
   camposAlterados,
   problemaDoCadastro,
+  problemaDoIdDoContrato,
   registrarAditivo,
   salvarContrato,
   vigenciaComAditivo,
@@ -41,7 +42,8 @@ import { canonical, digest, type ComercialActor } from "../domain/operations.js"
  * - --executar exige --projeto, e só grava onde o Comercial está liberado
  *   (ou no emulador, projeto demo-*). Grava pelas mesmas operações das
  *   callables (salvarContrato e registrarAditivo): recibo, evento e
- *   conferência na transação. Rodar de novo o mesmo arquivo não muda nada.
+ *   conferência na transação. Rodar de novo o mesmo arquivo não muda nada,
+ *   nem desfaz o aditivo registrado depois pela tela.
  * - O relatório vai para tmp/comercial/ na raiz do repositório.
  */
 
@@ -129,6 +131,8 @@ export const CARGA_CONTRATOS = z
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["contratos", index, "id"], message: `Contrato ${entrada.id} repetido.` });
       }
       ids.add(entrada.id);
+      const problemaDoId = problemaDoIdDoContrato(entrada.id, entrada.contrato.numeros);
+      if (problemaDoId) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["contratos", index, "id"], message: problemaDoId });
       const numeros = new Set<number>();
       entrada.aditivos.forEach((aditivo, aditivoIndex) => {
         if (numeros.has(aditivo.numero)) {
@@ -269,8 +273,6 @@ function planejarContrato(entrada: EntradaCarga, banco: Banco | null): Plano {
     item.problemas.push(`O contrato ${entrada.id} já é de ${String(atual.dados.customer_code)}: o cliente do contrato não muda.`);
   }
 
-  // A vigência gravada é a do arquivo prorrogada pelos aditivos já registrados.
-  let vigencia: Vigencia = { de: entrada.contrato.vigente_de, ate: entrada.contrato.vigente_ate };
   for (const [index, aditivo] of aditivosEmOrdem.entries()) {
     const destino = item.aditivos[index];
     const gravado = atual?.aditivos.get(destino.aditivo_id);
@@ -279,11 +281,6 @@ function planejarContrato(entrada: EntradaCarga, banco: Banco | null): Plano {
       if (!mesmoAditivo(gravado, aditivo)) {
         destino.problemas.push(`O aditivo ${destino.aditivo_id} já está registrado com outro conteúdo: aditivo não se altera.`);
       }
-      vigencia = vigenciaComAditivo(vigencia, {
-        tipo: gravado.tipo,
-        vigente_de: gravado.vigente_de ?? null,
-        vigente_ate: gravado.vigente_ate ?? null,
-      });
       continue;
     }
     destino.acao = "registrar";
@@ -296,10 +293,37 @@ function planejarContrato(entrada: EntradaCarga, banco: Banco | null): Plano {
     }
   }
 
+  // A vigência gravada é a do arquivo prorrogada pelos aditivos já
+  // registrados, estejam ou não no arquivo (o registrado pela tela também
+  // vale). No contrato encerrado, o aditivo entra só no histórico
+  // (registrarAditivo): por isso os aditivos que a carga vai registrar nele
+  // já entram aqui, e a vigência vai pelo próprio contrato.
+  const prorrogam: Array<Pick<AditivoDados, "numero" | "tipo" | "vigente_de" | "vigente_ate">> = [];
+  for (const gravado of atual?.aditivos.values() ?? []) {
+    prorrogam.push({
+      numero: Number(gravado.numero),
+      tipo: gravado.tipo,
+      vigente_de: gravado.vigente_de ?? null,
+      vigente_ate: gravado.vigente_ate ?? null,
+    });
+  }
+  if (entrada.contrato.status === "encerrado") {
+    aditivosEmOrdem.forEach((aditivo, index) => {
+      const destino = item.aditivos[index];
+      if (destino.acao === "registrar" && destino.problemas.length === 0) prorrogam.push(aditivo);
+    });
+  }
+  const vigencia = prorrogam
+    .sort((a, b) => a.numero - b.numero)
+    .reduce<Vigencia>((atualizada, aditivo) => vigenciaComAditivo(atualizada, aditivo), {
+      de: entrada.contrato.vigente_de,
+      ate: entrada.contrato.vigente_ate,
+    });
+
   const esperado: ContratoDados = { ...entrada.contrato, vigente_de: vigencia.de, vigente_ate: vigencia.ate };
   if (!atual) {
     item.acao = "criar";
-    return { item, entrada, esperado: entrada.contrato, edicao: null };
+    return { item, entrada, esperado, edicao: null };
   }
   item.campos = camposAlterados(atual.dados, esperado);
   item.acao = item.campos.length ? "atualizar" : "sem_mudanca";
@@ -317,10 +341,10 @@ async function executarContrato(db: Firestore, plano: Plano, ator: ComercialActo
   try {
     if (item.acao === "criar") {
       item.resultado = await salvarContrato(db, ator, {
-        idempotency_key: `carga-contratos:${entrada.id}:criar:${digest(entrada.contrato)}`,
+        idempotency_key: `carga-contratos:${entrada.id}:criar:${digest(esperado)}`,
         acao: "criar",
         contrato_id: entrada.id,
-        contrato: entrada.contrato,
+        contrato: esperado,
       });
     } else if (item.acao === "atualizar") {
       item.resultado = await salvarContrato(db, ator, {

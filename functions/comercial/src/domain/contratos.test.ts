@@ -19,6 +19,7 @@ import {
   camposAlterados,
   parseEntrada,
   problemaDoCadastro,
+  problemaDoIdDoContrato,
   vigenciaComAditivo,
 } from "./contratos.js";
 import { buildComercialEvent } from "./events.js";
@@ -391,10 +392,50 @@ describe("entrada do aditivo", () => {
     assert.equal(parsed.documento, null);
   });
 
-  it("id do aditivo com dois algarismos", () => {
-    assert.equal(aditivoDocId(1), "01");
+  it("o id do aditivo é o número: contracts/{id}/aditivos/{numero}", () => {
+    assert.equal(aditivoDocId(1), "1");
     assert.equal(aditivoDocId(12), "12");
     assert.equal(aditivoDocId(104), "104");
+  });
+});
+
+describe("id do contrato", () => {
+  const base = { idempotency_key: "k1", acao: "criar" as const };
+
+  it("o id não leva o número do contrato no cliente: ele vai nos eventos", () => {
+    const numeros = [
+      { tipo: "contrato", numero: "CT-998877" },
+      { tipo: "sistema_cliente", numero: "SC.0001/A" },
+    ];
+    for (const id of ["CT-998877", "ct998877", "cliente-a-ct-998877", "998877", "cliente-a-998877", "sc0001a", "SC-0001-A-2026"]) {
+      assert.match(String(problemaDoIdDoContrato(id, numeros)), /número do contrato no cliente/, id);
+      const parsed = SAVE_CONTRACT_INPUT.safeParse({ ...base, contrato_id: id, contrato: contratoValido({ numeros }) });
+      assert.equal(parsed.success, false, id);
+      assert.deepEqual(parsed.success ? [] : parsed.error.issues.map((issue) => issue.path.join(".")), ["contrato_id"], id);
+    }
+  });
+
+  it("id interno com o ano, ou id automático, passa", () => {
+    const numeros = [
+      { tipo: "contrato", numero: "001/2026" },
+      { tipo: "outro", numero: "12" },
+    ];
+    for (const id of ["cliente-a-2026", "cliente-a-2026-mudanca", "X7aB9cD0eF1gH2iJ3kL4"]) {
+      assert.equal(problemaDoIdDoContrato(id, numeros), null, id);
+    }
+    assert.ok(SAVE_CONTRACT_INPUT.safeParse({ ...base, contrato_id: "cliente-a-2026", contrato: contratoValido({ numeros }) }).success);
+    assert.ok(SAVE_CONTRACT_INPUT.safeParse({ ...base, contrato: contratoValido({ numeros }) }).success);
+  });
+
+  it("vale também ao atualizar", () => {
+    const parsed = SAVE_CONTRACT_INPUT.safeParse({
+      idempotency_key: "k2",
+      acao: "atualizar",
+      contrato_id: "ct-0001",
+      edicao: 1,
+      contrato: contratoValido(),
+    });
+    assert.equal(parsed.success, false);
   });
 });
 
@@ -413,8 +454,21 @@ describe("vigência depois do aditivo", () => {
     assert.deepEqual(vigenciaComAditivo(atual, { ...prorrogacao, vigente_ate: "2027-06-30" }), { ...atual, alterada: false });
   });
 
-  it("contrato sem fim recebe a vigência do aditivo", () => {
+  it("contrato sem fim recebe a vigência do aditivo que começa depois dele: vira prazo fixo", () => {
     assert.deepEqual(vigenciaComAditivo({ de: "2025-05-12", ate: null }, prorrogacao), { de: "2027-07-01", ate: "2028-06-30", alterada: true });
+    const noMesmoDia = { ...prorrogacao, vigente_de: "2025-05-12" };
+    assert.deepEqual(vigenciaComAditivo({ de: "2025-05-12", ate: null }, noMesmoDia), { de: "2025-05-12", ate: "2028-06-30", alterada: true });
+  });
+
+  it("aditivo antigo em contrato sem fim só entra no histórico: o contrato continua indeterminado", () => {
+    const indeterminado = { de: "2026-01-01", ate: null };
+    const antigo = { tipo: "prorrogacao" as const, vigente_de: "2019-01-01", vigente_ate: "2019-12-31" };
+    assert.deepEqual(vigenciaComAditivo(indeterminado, antigo), { ...indeterminado, alterada: false });
+    assert.deepEqual(
+      vigenciaComAditivo(indeterminado, { ...antigo, tipo: "preco", vigente_ate: "2030-12-31" }),
+      { ...indeterminado, alterada: false },
+      "começou antes do contrato atual: é histórico, mesmo terminando depois",
+    );
   });
 
   it("preço sem vigência e escopo não mexem na vigência", () => {
@@ -477,7 +531,7 @@ describe("eventos do contrato", () => {
       customer_code: "CLIENTE-A",
       payload: {
         contrato_id: "ct-1",
-        aditivo_id: "04",
+        aditivo_id: "4",
         tipo: "preco",
         vigencia_alterada: true,
         vigente_ate: "2027-06-30",
@@ -486,14 +540,14 @@ describe("eventos do contrato", () => {
       },
       actor: equipe,
     });
-    assert.equal(aditivo.title, "Aditivo 04 registrado no contrato");
+    assert.equal(aditivo.title, "Aditivo 4 registrado no contrato");
     assert.equal(aditivo.description, "Aditivo de preço; vigência prorrogada até 30/06/2027; 2 tabelas ligadas.");
     const semDocumento = buildComercialEvent({
       operation_id: "op_3",
       type: "contract.amendment_added",
       entity_id: "ct-1",
       customer_code: "CLIENTE-A",
-      payload: { contrato_id: "ct-1", aditivo_id: "01", tipo: "prorrogacao", vigencia_alterada: false, tabelas: 0, documento_localizado: false },
+      payload: { contrato_id: "ct-1", aditivo_id: "1", tipo: "prorrogacao", vigencia_alterada: false, tabelas: 0, documento_localizado: false },
       actor: equipe,
     });
     assert.equal(semDocumento.description, "Aditivo de prorrogação; vigência mantida; documento não localizado.");

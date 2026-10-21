@@ -27,12 +27,13 @@ import { actorPayload, canonical, compactValue, runIdempotent, type ComercialAct
  *   Comercial no v1). Preço não fica no contrato: a tabela
  *   (`price_tables.contract_id`) é que aponta para ele.
  * - `contracts/{id}/aditivos/{numero}`: o histórico, imutável. Aditivo de
- *   prorrogação ou de preço com vigência nova prorroga o contrato na mesma
- *   transação; aditivo de preço liga as tabelas do mesmo contrato.
+ *   prorrogação ou de preço com vigência nova prorroga o contrato vigente na
+ *   mesma transação; aditivo de preço liga as tabelas do mesmo contrato.
  *
  * Contrato é de cliente: cadastro inexistente ou prospect é recusado. Toda
  * escrita é das Functions (saveContract e recordAditivo), com recibo de
- * idempotência e evento `contract.*` sem número do cliente nem valor.
+ * idempotência e evento `contract.*` sem número do cliente nem valor (e o id
+ * do contrato, que vai no evento, não pode conter o número do cliente).
  */
 
 export const CONTRACTS_COLLECTION = "contracts";
@@ -157,6 +158,34 @@ export const CONTRATO_DADOS = z
 
 export type ContratoDados = z.output<typeof CONTRATO_DADOS>;
 
+/** Sem separadores e sem diferenciar maiúsculas: "CT-99.887/7" vira "ct998877". */
+function semSeparadores(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/** Número do cliente com menos caracteres que isto não é procurado no id (evita falso positivo). */
+const NUMERO_MINIMO_NO_ID = 4;
+/** Algarismos seguidos do número que já o identificam. Com 5, o ano (4) não conta. */
+const ALGARISMOS_QUE_IDENTIFICAM = /\d{5,}/g;
+
+/**
+ * Por que este id não serve para o contrato, ou null. O id é interno (ex.:
+ * `<cliente>-2026`) e vai nos eventos (`contrato_id`, `entity_id`), que nunca
+ * levam o número do contrato no cliente: o id não pode conter um dos
+ * `numeros`, inteiro (sem separadores e sem diferenciar maiúsculas) ou pela
+ * parte numérica com 5 ou mais algarismos seguidos.
+ */
+export function problemaDoIdDoContrato(id: string, numeros: readonly { numero: string }[]): string | null {
+  const alvo = semSeparadores(id);
+  const contem = numeros.some(({ numero }) => {
+    const inteiro = semSeparadores(numero);
+    if (inteiro.length >= NUMERO_MINIMO_NO_ID && alvo.includes(inteiro)) return true;
+    return (numero.match(ALGARISMOS_QUE_IDENTIFICAM) ?? []).some((trecho) => alvo.includes(trecho));
+  });
+  if (!contem) return null;
+  return "O id do contrato é interno (ex.: <cliente>-2026) e não leva o número do contrato no cliente: o id vai nos eventos.";
+}
+
 export const SAVE_CONTRACT_INPUT = z
   .object({
     idempotency_key: idempotencyKey,
@@ -169,6 +198,8 @@ export const SAVE_CONTRACT_INPUT = z
   })
   .strict()
   .superRefine((value, ctx) => {
+    const problemaDoId = value.contrato_id ? problemaDoIdDoContrato(value.contrato_id, value.contrato.numeros) : null;
+    if (problemaDoId) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["contrato_id"], message: problemaDoId });
     if (value.acao === "atualizar") {
       if (!value.contrato_id) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["contrato_id"], message: "Informe o contrato." });
       if (value.edicao === undefined) {
@@ -227,23 +258,27 @@ export function parseEntrada<S extends z.ZodTypeAny>(schema: S, value: unknown):
 
 // --- Regras puras ----------------------------------------------------------------
 
-/** Id do aditivo no histórico: o número com dois algarismos ("01", "04", "12"). */
+/** Id do aditivo no histórico, `contracts/{id}/aditivos/{numero}`: o número, sem zero à esquerda ("1", "4", "12"). */
 export function aditivoDocId(numero: number): string {
-  return String(numero).padStart(2, "0");
+  return String(numero);
 }
 
 export type Vigencia = { de: string; ate: string | null };
 
 /**
  * Vigência do contrato depois do aditivo. O aditivo de prorrogação ou de
- * preço com vigência nova só prorroga: muda quando o fim novo passa do atual
- * (ou o contrato não tinha fim). Aditivo antigo registrado depois, como na
- * carga do histórico, entra só no histórico.
+ * preço com vigência nova só prorroga: muda quando o fim novo passa do atual.
+ * No contrato sem fim (indeterminado), muda quando o aditivo começa no início
+ * do contrato ou depois, e o contrato passa a ter prazo fixo. Aditivo antigo
+ * registrado depois, como na carga do histórico, entra só no histórico.
+ * Contrato encerrado não passa por aqui: o aditivo dele entra só no histórico
+ * (registrarAditivo).
  */
 export function vigenciaComAditivo(atual: Vigencia, aditivo: Pick<AditivoDados, "tipo" | "vigente_de" | "vigente_ate">): Vigencia & { alterada: boolean } {
   const { vigente_de: de, vigente_ate: ate } = aditivo;
   if (!ADITIVOS_COM_VIGENCIA.includes(aditivo.tipo) || de === null || ate === null) return { ...atual, alterada: false };
-  if (atual.ate !== null && diasEntre(atual.ate, ate) <= 0) return { ...atual, alterada: false };
+  const prorroga = atual.ate === null ? diasEntre(atual.de, de) >= 0 : diasEntre(atual.ate, ate) > 0;
+  if (!prorroga) return { ...atual, alterada: false };
   return { de, ate, alterada: true };
 }
 
@@ -455,7 +490,10 @@ export async function registrarAditivo(db: Firestore, actor: ComercialActor, val
         de: String(contrato.vigente_de),
         ate: contrato.vigente_ate == null ? null : String(contrato.vigente_ate),
       };
-      const vigencia = vigenciaComAditivo(anterior, aditivo);
+      // Contrato encerrado não é prorrogado: o aditivo entra só no histórico.
+      // Para prorrogar, reabra o contrato (saveContract, status vigente) antes.
+      const encerrado = contrato.status === "encerrado";
+      const vigencia = encerrado ? { ...anterior, alterada: false } : vigenciaComAditivo(anterior, aditivo);
       const edicaoAtual = Number(contrato.edicao);
       const edicao = vigencia.alterada ? edicaoAtual + 1 : edicaoAtual;
       const quem = actorPayload(actor);
