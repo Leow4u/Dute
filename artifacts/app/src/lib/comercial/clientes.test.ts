@@ -47,7 +47,7 @@ import {
 
 /** Cadastros como o Firestore entrega: o do WMS (sem stage) e os do Comercial. */
 const DOCS: Array<[string, Record<string, unknown>]> = [
-  ["BTG_Pactual", { code: LEGACY_CUSTOMER_CODE, name: LEGACY_CUSTOMER_CODE, legal_name: "Banco BTG Pactual S.A.", document: "30306294000145", sku_prefix: "BTG" }],
+  ["BTG_Pactual", { code: LEGACY_CUSTOMER_CODE, name: LEGACY_CUSTOMER_CODE, legal_name: "Banco BTG Pactual S.A.", document: "12345678000195", sku_prefix: "BTG" }],
   [
     "ITAU-UNIBANCO",
     {
@@ -55,7 +55,7 @@ const DOCS: Array<[string, Record<string, unknown>]> = [
       customer_code: "ITAU-UNIBANCO",
       name: "Itaú Unibanco",
       legal_name: "Itaú Unibanco S.A.",
-      document: "60701190000104",
+      document: "11222333000181",
       stage: "cliente",
       comercial: { cidade: "São Paulo", uf: "SP", responsavel_uid: "u-gui" },
     },
@@ -95,7 +95,7 @@ describe("cadastro lido do Firestore", () => {
       code: "ITAU-UNIBANCO",
       nome: "Itaú Unibanco",
       razaoSocial: "Itaú Unibanco S.A.",
-      cnpj: "60701190000104",
+      cnpj: "11222333000181",
       estagio: "cliente",
       armazenagem: false,
       cidade: "São Paulo",
@@ -145,8 +145,8 @@ describe("segmentos e busca", () => {
   });
 
   it("busca pelo CNPJ com ou sem máscara; um algarismo só não busca CNPJ", () => {
-    expect(nomes(filtrarCadastros(CADASTROS, "todos", "60.701.190").clientes)).toEqual(["Itaú Unibanco"]);
-    expect(nomes(filtrarCadastros(CADASTROS, "todos", "30306294000145").clientes)).toEqual([LEGACY_CUSTOMER_CODE]);
+    expect(nomes(filtrarCadastros(CADASTROS, "todos", "11.222.333").clientes)).toEqual(["Itaú Unibanco"]);
+    expect(nomes(filtrarCadastros(CADASTROS, "todos", "12345678000195").clientes)).toEqual([LEGACY_CUSTOMER_CODE]);
     const um = filtrarCadastros(CADASTROS, "todos", "6");
     expect([...um.clientes, ...um.prospects]).toEqual([]);
   });
@@ -168,8 +168,8 @@ describe("apresentação", () => {
   });
 
   it("CNPJ com máscara; texto que não é CNPJ fica como está", () => {
-    expect(formatarCnpj("60701190000104")).toBe("60.701.190/0001-04");
-    expect(formatarCnpj("60.701.190/0001-04")).toBe("60.701.190/0001-04");
+    expect(formatarCnpj("11222333000181")).toBe("11.222.333/0001-81");
+    expect(formatarCnpj("11.222.333/0001-81")).toBe("11.222.333/0001-81");
     expect(formatarCnpj("12ABC34501DE35")).toBe("12.ABC.345/01DE-35");
     expect(formatarCnpj("123")).toBe("123");
     expect(formatarCnpj(null)).toBe("");
@@ -384,18 +384,18 @@ describe("chamadas das callables (functions/comercial, entrada .strict())", () =
       code: "GRUPO-SBF",
       comercial: { cidade: "São Paulo", uf: "SP" },
     });
-    expect(payloadNovoProspect({ nome: "Vértice", codigo: "", cnpj: "60.701.190/0001-04", cidade: "", uf: "" }, "k2")).toEqual({
+    expect(payloadNovoProspect({ nome: "Vértice", codigo: "", cnpj: "11.222.333/0001-81", cidade: "", uf: "" }, "k2")).toEqual({
       action: "create",
       idempotency_key: "k2",
       name: "Vértice",
-      document: "60.701.190/0001-04",
+      document: "11.222.333/0001-81",
       comercial: { cidade: null, uf: null },
     });
   });
 
   it("edição manda só o que mudou desde a abertura: o resto o servidor mantém", () => {
     const aberto = formDaEdicao(itau);
-    expect(aberto).toEqual({ nome: "Itaú Unibanco", razaoSocial: "Itaú Unibanco S.A.", cnpj: "60701190000104", cidade: "São Paulo", uf: "SP" });
+    expect(aberto).toEqual({ nome: "Itaú Unibanco", razaoSocial: "Itaú Unibanco S.A.", cnpj: "11222333000181", cidade: "São Paulo", uf: "SP" });
     const base = { action: "update", idempotency_key: "k3", customer_code: "ITAU-UNIBANCO" };
     expect(payloadEdicao(itau, aberto, "k3")).toEqual(base);
     expect(payloadEdicao(itau, { ...aberto, cidade: "Osasco" }, "k3")).toEqual({ ...base, comercial: { cidade: "Osasco" } });
@@ -404,11 +404,11 @@ describe("chamadas das callables (functions/comercial, entrada .strict())", () =
       name: "Itaú",
       legal_name: null,
     });
-    expect(payloadEdicao(itau, { ...aberto, cnpj: "60.701.190/0001-04 " }, "k3")).toEqual({ ...base, document: "60.701.190/0001-04" });
+    expect(payloadEdicao(itau, { ...aberto, cnpj: "11.222.333/0001-81 " }, "k3")).toEqual({ ...base, document: "11.222.333/0001-81" });
   });
 
   it("edição com armazenagem: só cidade e UF, mesmo que a identidade chegue mudada", () => {
-    const form = { nome: "Outro", razaoSocial: "Outra S.A.", cnpj: "60701190000104", cidade: "Osasco", uf: "SP" };
+    const form = { nome: "Outro", razaoSocial: "Outra S.A.", cnpj: "11222333000181", cidade: "Osasco", uf: "SP" };
     expect(payloadEdicao(btg, form, "k4")).toEqual({
       action: "update",
       idempotency_key: "k4",

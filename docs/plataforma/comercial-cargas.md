@@ -48,9 +48,21 @@ conta que grave no Firestore dele.
    o catálogo; depois as tabelas dos clientes, com `--contrato` apontando para
    o contrato carregado (Itaú v2.0 Comercial e Noturna; a RFQ de 2021,
    encerrada; Safra quando o arquivo chegar). O cliente precisa estar em
-   `customers` antes da tabela dele.
-3. **Contratos de novo**, com o mesmo arquivo: só registra os aditivos que
-   faltavam.
+   `customers` antes da tabela dele. O relatório de cada tabela (também o do
+   dry-run) traz `tabela.id`, no formato `pt_<resumo>`: é esse id que o aditivo
+   de preço leva em `tabela_ids` no JSON de contratos.
+3. **Contratos de novo**, com o mesmo arquivo já com os `tabela_ids` copiados
+   do relatório: só registra os aditivos que faltavam. Na primeira passada
+   (passo 1) o aditivo de preço sai com o problema "Tabela ... não encontrada"
+   e código de saída 1: é esperado enquanto a tabela não existe.
+
+As três cargas recusam arquivo de entrada dentro do repositório fora de `tmp/`
+e `.secrets/`, e só gravam em projeto liberado do Comercial ou `demo-` com o
+emulador ligado (`cargas/projeto.ts`).
+
+O contador das demandas (`demand_counters/geral`, campo `ultimo`) não tem carga:
+sem o documento, a primeira demanda é a 10001. Acertar para outro número é
+manual e está no roteiro de `comercial-producao.md`.
 
 ## Tabela de preço (`tabela.ts`)
 

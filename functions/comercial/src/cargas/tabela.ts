@@ -20,7 +20,7 @@ import { HttpsError } from "firebase-functions/https";
 import { LPU_ITEMS_COLLECTION, limparTexto, lpuItemDoc, lpuItemId, itemOrcavel, normalizarTexto } from "../domain/catalogo.js";
 import { CASAS_DO_PRECO, ErroDinheiro, lerDecimal } from "../domain/dinheiro.js";
 import { createComercialEvent } from "../domain/events.js";
-import { COMERCIAL_AMBIENTES_LIBERADOS, comercialLiberado } from "../domain/liberacao.js";
+import { podeGravarNoProjeto, problemaDoArquivoNoRepositorio } from "./projeto.js";
 import {
   COMERCIAL_OPERATIONS_COLLECTION,
   actorPayload,
@@ -246,24 +246,6 @@ export function lerArgumentos(argv: readonly string[]): ArgumentosDaCarga {
     executar,
     por,
   };
-}
-
-/**
- * Onde a carga pode gravar: projeto com o Comercial liberado
- * (domain/liberacao.ts) ou projeto de emulador ("demo-") com o emulador
- * ligado. Devolve o motivo da recusa, ou null.
- */
-export function podeGravarNoProjeto(projeto: string, env: Record<string, string | undefined>): string | null {
-  if (comercialLiberado(projeto)) return null;
-  if (projeto.startsWith("demo-")) {
-    return env.FIRESTORE_EMULATOR_HOST
-      ? null
-      : `O projeto ${projeto} é de emulador: rode com o emulador do Firestore ligado (FIRESTORE_EMULATOR_HOST).`;
-  }
-  return (
-    `O Comercial não está liberado no projeto ${projeto} (liberado em: ${COMERCIAL_AMBIENTES_LIBERADOS.join(", ")}). ` +
-    "A carga só grava onde as callables do Comercial atendem; a produção entra na parte 17, com o OK do Leonardo."
-  );
 }
 
 // --- Leitura do CSV ---------------------------------------------------------------
@@ -904,11 +886,15 @@ function escreverRelatorio(
 
 // --- Execução ---------------------------------------------------------------------------------
 
+export { podeGravarNoProjeto };
+
 export type Dependencias = {
   /** Abre o Firestore do projeto. Padrão: firebase-admin com as credenciais da máquina. */
   abrirBanco?: (projeto: string) => Firestore;
   /** Padrão: tmp/comercial/ na raiz do repositório. */
   pastaDoRelatorio?: string;
+  /** Raiz que vale para recusar CSV dentro do repositório (os testes trocam). */
+  raizDoRepositorio?: string;
   agora?: () => Date;
   env?: Record<string, string | undefined>;
   log?: (linha: string) => void;
@@ -948,6 +934,8 @@ export async function rodarCarga(argv: readonly string[], deps: Dependencias = {
   const log = deps.log ?? ((linha: string) => console.log(linha));
   const env = deps.env ?? process.env;
   const args = lerArgumentos(argv);
+  const arquivoRecusado = problemaDoArquivoNoRepositorio(args.arquivo, deps.raizDoRepositorio);
+  if (arquivoRecusado) throw new ErroDaCarga(arquivoRecusado);
   if (args.executar) {
     const problema = podeGravarNoProjeto(args.projeto as string, env);
     if (problema) throw new ErroDaCarga(problema);

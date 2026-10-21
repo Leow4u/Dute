@@ -23,6 +23,9 @@ documentação de produto e operação está em `docs/`.
   por módulo, em PR. **Comercial v1 adiantado para antes da Operação** em
   20/10/2026: desenho e ordem das partes em `docs/plataforma/fase-6-comercial.md`,
   telas aprovadas em `docs/mockups/Com*.dc.html`.
+- **Comercial v1 está na `main`, ligado só no `dute-homolog`** (no `dute-prod`
+  as callables recusam e as telas não existem). Roteiro para ligar em produção,
+  com ordem, como desfazer e decisões: `docs/plataforma/comercial-producao.md`.
 - **Papéis e módulos têm lista única em `lib/dominio`.** As Functions
   (`functions/wms/src/domain/platform-roles.ts`, `customer-profile.ts`) e o
   `firestore.rules` guardam cópias literais, travadas por
