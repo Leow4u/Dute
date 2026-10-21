@@ -1,6 +1,20 @@
 import { getFunctions, httpsCallable } from "firebase/functions";
 
-import { firebaseApp } from "./firebase";
+import { activeCustomerStorageKey, LEGACY_CUSTOMER_CODE } from "./active-customer";
+import { firebaseApp, firebaseAuth } from "./firebase";
+
+function billingCustomerCode() {
+  try {
+    const stored = globalThis.localStorage?.getItem(
+      activeCustomerStorageKey(firebaseAuth?.currentUser?.uid),
+    );
+    const code = stored?.trim();
+    if (code) return code;
+  } catch {
+    // O teste da rota roda sem navegador.
+  }
+  return LEGACY_CUSTOMER_CODE;
+}
 
 type FunctionRoute = {
   name: string;
@@ -808,7 +822,10 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     const competencia = billingPreviewMatch[1];
     return {
       name: "getBillingPreview",
-      payload: async () => ({ competencia }),
+      payload: async () => ({
+        competencia,
+        customer_code: billingCustomerCode(),
+      }),
     };
   }
 
@@ -825,6 +842,7 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
           const body = await readJsonBody(init);
           return {
             competencia,
+            customer_code: billingCustomerCode(),
             ...body,
             idempotency_key: body.idempotency_key ?? crypto.randomUUID(),
           };
@@ -834,13 +852,19 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     if (method === "POST" && action === "emit") {
       return {
         name: "emitBillingInvoice",
-        payload: async () => ({ competencia }),
+        payload: async () => ({
+          competencia,
+          customer_code: billingCustomerCode(),
+        }),
       };
     }
     if (method === "POST" && action === "pay") {
       return {
         name: "payBillingInvoice",
-        payload: async () => ({ competencia }),
+        payload: async () => ({
+          competencia,
+          customer_code: billingCustomerCode(),
+        }),
       };
     }
   }

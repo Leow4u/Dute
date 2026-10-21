@@ -23,6 +23,9 @@ import {
 } from "firebase/firestore";
 
 import { PAPEIS_DO_WMS, estagioDoCadastro, isPapel } from "@workspace/dominio";
+import { activeCustomerStorageKey, LEGACY_CUSTOMER_CODE } from "./active-customer";
+import { periodBelongsToCustomer } from "./billing-scope";
+import { canSeeCatalogPrice, canSeeMerchandiseValue } from "./permissions";
 import { firebaseAuth, firestore } from "./firebase";
 import { callFunctionsApi } from "./functions-api";
 import {
@@ -46,7 +49,6 @@ import {
   buildDerivedStockBalances,
   buildOperationalFoundationSnapshot,
 } from "./operational-foundation";
-import { LEGACY_CUSTOMER_CODE } from "./active-customer";
 
 type AnyRecord = Record<string, any>;
 type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
@@ -112,7 +114,73 @@ const collectionNames = {
   agentConversations: "agent_conversations",
   agentMessages: "agent_messages",
   opsAggregates: "ops_aggregates",
+  catalogPrices: "catalog_prices",
 };
+
+const PUBLISHED_MONEY_FIELDS = [
+  "preco_unit",
+  "unit_cost",
+  "custo_unit",
+  "custo_total",
+  "total_cost",
+  "total_value",
+] as const;
+
+function stripPublishedMoney(row: AnyRecord): AnyRecord {
+  const next = { ...row };
+  for (const field of PUBLISHED_MONEY_FIELDS) delete next[field];
+  return next;
+}
+
+type CatalogPricePoint = { unit?: number; total?: number };
+
+async function readCatalogPriceIndex(customerCode?: string) {
+  const index = new Map<string, CatalogPricePoint>();
+  if (!firestore) return index;
+  const constraints: QueryConstraint[] = [];
+  if (customerCode) constraints.push(where("customer_code", "==", customerCode));
+  constraints.push(fsLimit(CATALOG_READ_CAP));
+  try {
+    const snapshot = await getDocs(
+      query(collection(firestore, collectionNames.catalogPrices), ...constraints),
+    );
+    for (const priceDoc of snapshot.docs) {
+      const data = priceDoc.data();
+      const unit = Number(data.preco_unit);
+      const total = Number(data.total_cost);
+      const point: CatalogPricePoint = {};
+      if (Number.isFinite(unit)) point.unit = unit;
+      if (Number.isFinite(total)) point.total = total;
+      if (point.unit === undefined && point.total === undefined) continue;
+      const store = (key: string) => index.set(key, point);
+      if (typeof data.sku_code === "string" && data.sku_code) store(`sku:${data.sku_code}`);
+      if (typeof data.item_code === "string" && data.item_code) store(`item:${data.item_code}`);
+    }
+  } catch {
+    return index;
+  }
+  return index;
+}
+
+function pricePoint(
+  index: Map<string, CatalogPricePoint>,
+  skuCode: unknown,
+  itemCode: unknown,
+) {
+  if (typeof skuCode === "string") {
+    const sku = index.get(`sku:${skuCode}`);
+    if (sku) return sku;
+  }
+  return typeof itemCode === "string" ? index.get(`item:${itemCode}`) : undefined;
+}
+
+function unitFromPriceIndex(
+  index: Map<string, CatalogPricePoint>,
+  skuCode: unknown,
+  itemCode: unknown,
+) {
+  return pricePoint(index, skuCode, itemCode)?.unit;
+}
 
 const DEFAULT_LIST_LIMIT = 50;
 const HARD_LIST_CAP = 200;
@@ -1505,8 +1573,24 @@ async function getClientOverview() {
     (sum, item) => sum + Number(item.qty_on_hand ?? item.estoque_atual ?? 0),
     0,
   );
+  const showMerchandise = canSeeMerchandiseValue(String(profile.role));
+  const priceIndex = showMerchandise
+    ? await readCatalogPriceIndex(customerCode)
+    : new Map<string, CatalogPricePoint>();
+  const lineValue = (item: AnyRecord) => {
+    const qty = Number(item.qty_on_hand ?? item.estoque_atual ?? 0);
+    if (!showMerchandise) return 0;
+    const point = pricePoint(
+      priceIndex,
+      item.sku_code,
+      item.client_item_code ?? item.cod_cliente,
+    );
+    if (isClient && point?.total !== undefined) return point.total;
+    if (point?.unit !== undefined) return qty * point.unit;
+    return Number(item.total_cost ?? 0);
+  };
   const inventoryValueFromBalances = balances.reduce<number>(
-    (sum, item) => sum + Number(item.total_cost ?? 0),
+    (sum, item) => sum + lineValue(item),
     0,
   );
   const inventoryValue =
@@ -1525,7 +1609,7 @@ async function getClientOverview() {
       sku_count: 0,
     };
     current.qty_on_hand += Number(balance.qty_on_hand ?? 0);
-    current.total_cost += Number(balance.total_cost ?? 0);
+    current.total_cost += lineValue(balance);
     current.sku_count += 1;
     byCategory.set(category, current);
   }
@@ -1549,9 +1633,15 @@ async function getClientOverview() {
       qty_on_hand: Number(item.qty_on_hand ?? 0),
       qty_available: Number(item.qty_available ?? item.qty_on_hand ?? 0),
       qty_reserved: Number(item.qty_reserved ?? 0),
-      total_value: Number(item.total_cost ?? 0),
-      total_cost: Number(item.total_cost ?? 0),
-      unit_cost: Number(item.unit_cost ?? 0),
+      total_value: showMerchandise ? lineValue(item) : undefined,
+      total_cost: showMerchandise ? lineValue(item) : undefined,
+      unit_cost: showMerchandise
+        ? (unitFromPriceIndex(
+            priceIndex,
+            item.sku_code,
+            item.client_item_code ?? item.cod_cliente,
+          ) ?? Number(item.unit_cost ?? 0))
+        : undefined,
       // Fotos tiradas pelo operador na entrada/contagem — a projeção já as
       // carrega; sem repassá-las o portal só conseguia mostrar placeholder.
       primary_photo_url: item.primary_photo_url ?? item.photo_urls?.[0] ?? null,
@@ -3208,6 +3298,8 @@ function deriveAgentInsights({
 }
 
 async function getAiOverview() {
+  const viewer = await getCurrentProfile();
+  const showMoney = canSeeCatalogPrice(viewer.role);
   const [
     aggregate,
     products,
@@ -3301,10 +3393,12 @@ async function getAiOverview() {
         ? `${latestMovement.tipo_mov} - ${latestMovement.cod_sku}`
         : "Sem movimentação",
       last_event_at: toIso(latestMovement?.data),
-      summary: `Valor monitorado de ${inventoryValue.toLocaleString("pt-BR", {
-        style: "currency",
-        currency: "BRL",
-      })}.`,
+      summary: showMoney
+        ? `Valor monitorado de ${inventoryValue.toLocaleString("pt-BR", {
+            style: "currency",
+            currency: "BRL",
+          })}.`
+        : `${totalPieces.toLocaleString("pt-BR")} peça(s) em acompanhamento.`,
     },
     ...sortByDateDesc(
       knowledge.map(knowledgeMemoryView),
@@ -3318,7 +3412,7 @@ async function getAiOverview() {
       total_events: events.length,
       derived_events: actualEvents.length ? 0 : derivedTimeline.length,
       open_insights: persistentInsights.length + derivedInsights.length,
-      inventory_value: inventoryValue,
+      inventory_value: showMoney ? inventoryValue : null,
       total_pieces: totalPieces,
       missing_costs: missingCostCount,
       open_orders: openOrderCount,
@@ -3686,6 +3780,41 @@ async function route(
         items = items.filter((row) => estagioDoCadastro(row.stage) !== "prospect");
       }
 
+      const moneyCollections = new Set<string>([
+        collectionNames.products,
+        collectionNames.skus,
+        collectionNames.stockBalances,
+        collectionNames.clientInventory,
+      ]);
+      if (moneyCollections.has(routeConfig.name)) {
+        let showPrice = false;
+        try {
+          const profile = await getCurrentProfile();
+          showPrice = canSeeCatalogPrice(profile.role);
+        } catch {
+          showPrice = false;
+        }
+        if (!showPrice) {
+          items = items.map(stripPublishedMoney);
+        } else if (routeConfig.name === collectionNames.products) {
+          const prices = await readCatalogPriceIndex();
+          items = items.map((product) => {
+            const code = String(product.cod_cliente ?? "");
+            const unit =
+              unitFromPriceIndex(prices, code, code) ??
+              (product.preco_unit as number | undefined);
+            const numeric = Number(unit);
+            const qty = Number(product.estoque_btg ?? 0);
+            if (!Number.isFinite(numeric)) return product;
+            return {
+              ...product,
+              preco_unit: numeric,
+              custo_total: qty * numeric,
+            };
+          });
+        }
+      }
+
       return json({
         items,
         total: result.total,
@@ -3749,13 +3878,21 @@ async function route(
   }
 
   if (pathname === "/api/billing/periods" && method === "GET") {
+    const profile = await getCurrentProfile();
+    const customer =
+      profile.role === "cliente"
+        ? String(profile.customer_code)
+        : (globalThis.localStorage?.getItem(activeCustomerStorageKey(profile.uid))?.trim() ||
+          LEGACY_CUSTOMER_CODE);
     const periods = await readLimited(
       collectionNames.periods,
       120,
       "competencia",
       "desc",
     );
-    return json({ items: periods });
+    return json({
+      items: periods.filter((period) => periodBelongsToCustomer(period, customer)),
+    });
   }
 
   const periodMatch = pathname.match(

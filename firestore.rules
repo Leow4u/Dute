@@ -1042,6 +1042,13 @@ service cloud.firestore {
     // para esta coleção: a leitura caía no deny final e derrubava toda a
     // chamada, exibindo R$ 0,00 no lugar de um erro. Escrita segue apenas
     // via Cloud Functions (Admin SDK).
+    // Valor de mercadoria. A operação não lê. O cliente lê o próprio.
+    match /catalog_prices/{priceId} {
+      allow read: if hasAnyRole(['owner', 'admin', 'financeiro'])
+        || isOwnProjection();
+      allow create, update, delete: if false;
+    }
+
     match /system_controls/{controlId} {
       allow read: if canReadForBilling();
       allow create, update, delete: if false;

@@ -37,6 +37,16 @@ export function canWriteCatalog(role: ProfileRole | null | undefined) {
   return Boolean(role && CATALOG_WRITE_ROLES.has(role));
 }
 
+/** Preço de catálogo: owner, admin e financeiro. A operação não vê. */
+export function canSeeCatalogPrice(role: string | null | undefined) {
+  return role === "owner" || role === "admin" || role === "financeiro";
+}
+
+/** Valor da mercadoria do cliente, no portal e para quem vê preço. */
+export function canSeeMerchandiseValue(role: string | null | undefined) {
+  return role === "cliente" || canSeeCatalogPrice(role);
+}
+
 export function canDecideRequests(role: ProfileRole | null | undefined) {
   return Boolean(role && REQUEST_DECISION_ROLES.has(role));
 }
