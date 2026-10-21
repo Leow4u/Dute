@@ -20,7 +20,9 @@ Caixas armazenadas podem ser reabertas explicitamente para ajustes durante a ses
 
 ## Posição e orientação
 
-As seis orientações da caixa são consideradas quando o operador permite apoiar de lado. Sem essa permissão, a altura original é preservada. A confirmação revalida espaço e peso no servidor e grava a orientação efetiva, sem alterar as medidas originais.
+As seis orientações da caixa são consideradas quando o operador permite apoiar de lado. Sem essa permissão, a altura original é preservada. A confirmação grava a orientação efetiva, sem alterar as medidas originais.
+
+Na abertura, escolher a prateleira e confirmar a guarda não fica bloqueado pelo cálculo de encaixe. O volume da tela é estimativa: frente esgotada, uma só fileira na profundidade ou vão insuficiente para empilhar recusam o cálculo mesmo com volume livre. A sugestão automática continua por esse cálculo. A posição escolhida, as medidas e, quando o cálculo não confirmou, `opening_model_fit: false` ficam na caixa e no evento da guarda. Zona, prateleira ativa e cliente continuam obrigatórios. Fora da sessão de abertura, o encaixe calculado volta a bloquear a guarda.
 
 O cálculo considera uma fileira na profundidade. Com a permissão de empilhar,
 o motor também testa os topos livres de caixas já guardadas na mesma

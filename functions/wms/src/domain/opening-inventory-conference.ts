@@ -9,7 +9,7 @@ import { openingInventorySessionDocumentId, recordCycleCountTransaction, type Op
 import {
   BOX_COUNTER_DOC, BOX_EDITOR_ROLES, WAREHOUSE_BOXES_COLLECTION, WAREHOUSE_COUNTERS_COLLECTION,
   CreateWarehouseBoxSchema, asPosition, buildOccupancy, emptyOccupancy, formatBoxCode,
-  placementFor, requireDimensions,
+  requireDimensions, resolveOpeningPlacement,
 } from "./warehouse-boxes.js";
 
 // Rascunhos não são estoque. A reserva da prateleira começa em committing;
@@ -319,8 +319,7 @@ export async function storeOpeningConferenceBox(db: Firestore, raw: unknown, act
     if (position.customer_code !== input.customer_code || position.status !== "active") throw new HttpsError("failed-precondition", "Escolha uma posição ativa da zona do cliente.");
     if (input.refusal && (upper(input.refusal.position) === location || !refused?.exists || refused.get("customer_code") !== input.customer_code)) throw new HttpsError("failed-precondition", "Posição recusada inválida ou de outro cliente.");
     const occupancy = buildOccupancy(occupied.docs.map((doc) => doc.data()), []).get(location) ?? emptyOccupancy();
-    const placement = placementFor(position, dimensions, occupancy, input);
-    if (!placement) throw new HttpsError("failed-precondition", "A caixa não cabe mais nesta posição. Peça outra sugestão.");
+    const { model_fit: openingModelFit, ...placement } = resolveOpeningPlacement(position, dimensions, occupancy, input);
     if (drafts.empty || drafts.size > MAX_LINES) throw new HttpsError("failed-precondition", "A caixa precisa ter entre 1 e 100 produtos conferidos.");
     const skus: string[] = [];
     for (const draft of drafts.docs) skus.push(await validateCatalog(tx, db, input.customer_code, draft.data()));
@@ -332,6 +331,7 @@ export async function storeOpeningConferenceBox(db: Firestore, raw: unknown, act
       orientation: placement.orientation, allow_tilt: input.allow_tilt ?? false,
       allow_stacking: input.allow_stacking === true, support_box_code: placement.support_box_code ?? null,
       base_height_m: placement.base_height_m ?? 0,
+      ...(openingModelFit ? {} : { opening_model_fit: false }),
       opening_closed: true, conference_commit_id: commitId,
       conference_revision: input.expected_revision + 1,
       conference_store_input: clean(input), conference_commit_started_at: new Date().toISOString(),
@@ -340,7 +340,10 @@ export async function storeOpeningConferenceBox(db: Firestore, raw: unknown, act
     };
     tx.update(db.collection("warehouse_positions").doc(location), { occupancy_revision: FieldValue.increment(1) });
     tx.update(ref, { ...updates, updated_at: FieldValue.serverTimestamp() });
-    event(tx, db, "inventory.opening_box_storage_started", input, actor, { location_id: location, placement, line_count: drafts.size });
+    event(tx, db, "inventory.opening_box_storage_started", input, actor, {
+      location_id: location, placement, opening_model_fit: openingModelFit,
+      occupancy_before: { front_used_m: occupancy.front_used_m, box_count: occupancy.box_count }, line_count: drafts.size,
+    });
     if (input.refusal) event(tx, db, "warehouse.position_refused", input, actor, { position: input.refusal.position, reason: input.refusal.reason, stored_at: location });
     finish(tx, op, input, { ok: true, box: { ...box, ...updates } }, actor);
   });

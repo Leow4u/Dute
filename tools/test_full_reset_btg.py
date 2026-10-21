@@ -214,7 +214,7 @@ def seed_comercial(fake: FakeFirestore) -> None:
     fake.seed("quotes/10045/revisoes", "RV01", {"tipo": "proposta"})
     fake.seed("client_authorizations", "aut1", {"pedido": "4500001"})
     fake.seed("medicoes", "med1", {"competencia": "2026-10"})
-    fake.seed("demand_counters", "global", {"last": 10045})
+    fake.seed("demand_counters", "geral", {"ultimo": 10045})
     fake.seed("comercial_operations", "op1", {"result": {"ok": True}})
     fake.seed("events", "ecom1", {"type": "comercial.demanda_criada", "source": "functions_comercial"})
     fake.seed("events", "ecom2", {"type": "comercial.revisao_enviada", "source": "functions_comercial"})

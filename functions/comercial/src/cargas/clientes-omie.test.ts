@@ -198,6 +198,8 @@ function argumentos(...extra: string[]): string[] {
 
 // --- Argumentos ------------------------------------------------------------------
 
+const EMULADOR = { FIRESTORE_EMULATOR_HOST: "127.0.0.1:8088" };
+
 describe("argumentos da carga de clientes da Omie", () => {
   it("dry-run por padrão, sem projeto, com o relatório em tmp/comercial", () => {
     const opcoes = lerOpcoes(argumentos());
@@ -220,10 +222,10 @@ describe("argumentos da carga de clientes da Omie", () => {
   it("--executar só onde o Comercial está liberado, ou no emulador; ler a produção pode", () => {
     assert.throws(
       () => lerOpcoes(argumentos("--executar", "--projeto", "dute-prod")),
-      (error: unknown) => error instanceof ErroDeUso && /não está liberado em dute-prod/.test(error.message),
+      (error: unknown) => error instanceof ErroDeUso && /não está liberado no projeto dute-prod/.test(error.message),
     );
     assert.equal(lerOpcoes(argumentos("--executar", "--projeto", "dute-homolog")).executar, true);
-    assert.equal(lerOpcoes(argumentos("--executar", "--projeto=demo-dute-comercial")).projeto, "demo-dute-comercial");
+    assert.equal(lerOpcoes(argumentos("--executar", "--projeto=demo-dute-comercial"), RAIZ_DO_REPOSITORIO, EMULADOR).projeto, "demo-dute-comercial");
     assert.equal(lerOpcoes(argumentos("--projeto", "dute-prod")).executar, false);
   });
 

@@ -6,7 +6,8 @@ import {
   signInWithEmailAndPassword,
   updateProfile,
 } from "firebase/auth";
-import { getFunctions, httpsCallable } from "firebase/functions";
+import { httpsCallable } from "firebase/functions";
+import { functionsDoApp } from "@/lib/firebase-functions";
 import { doc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import {
   Switch,
@@ -35,6 +36,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import { DocumentTitle } from "./components/document-title";
 import AppLayout from "./components/layout/app-layout";
+import ComercialLayout from "./components/layout/comercial-layout";
 import { AppThemeProvider } from "./components/theme/theme-provider";
 import SettingsLayout from "./components/layout/settings-layout";
 import type { WarehouseOpsModuleKey } from "./lib/warehouse-ops/model";
@@ -169,7 +171,8 @@ import {
 } from "./lib/modules";
 import { queryClient } from "./lib/queryClient";
 import { RealtimeSyncBridge } from "./lib/realtime-sync";
-import { LEGACY_SETTINGS_REDIRECTS, isSettingsPath } from "./lib/settings-nav";
+import { layoutDaRota, type LayoutDaRota } from "./lib/ambientes";
+import { LEGACY_SETTINGS_REDIRECTS } from "./lib/settings-nav";
 import { INTERNAL_CUSTOMER_CODE, LEGACY_CUSTOMER_CODE } from "./lib/active-customer";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -295,7 +298,7 @@ async function fetchInvite(token: string): Promise<InviteData | null> {
   try {
     if (firebaseApp) {
       const lookup = httpsCallable<{ token: string }, InviteData>(
-        getFunctions(firebaseApp, "southamerica-east1"),
+        functionsDoApp(firebaseApp),
         "lookupInvite",
       );
       const result = await lookup({ token });
@@ -932,8 +935,15 @@ type ProtectedRouteConfig = {
   component: React.ComponentType<any>;
   appRoles: AppRole[];
   profileRoles: ProfileRole[];
-  layout: "app" | "settings";
+  layout: LayoutDaRota;
 };
+
+/** "app" é o shell do WMS. Configuração e Comercial têm o deles. */
+const LAYOUT_DA_ROTA = {
+  app: AppLayout,
+  settings: SettingsLayout,
+  comercial: ComercialLayout,
+} as const;
 
 function protectedRoute(
   path: string,
@@ -944,8 +954,7 @@ function protectedRoute(
     component,
     appRoles: getRouteAppRoles(path),
     profileRoles: getRouteProfileRoles(path),
-    // Configuração é tela própria, sem o menu do app (lib/settings-nav.ts).
-    layout: isSettingsPath(path) ? "settings" : "app",
+    layout: layoutDaRota(path),
   };
 }
 
@@ -1069,7 +1078,7 @@ function ProtectedRoute({
   layout,
   ...rest
 }: any) {
-  const Layout = layout === "settings" ? SettingsLayout : AppLayout;
+  const Layout = LAYOUT_DA_ROTA[layout as LayoutDaRota] ?? AppLayout;
   const { user, isLoaded } = useAppUser();
 
   return (

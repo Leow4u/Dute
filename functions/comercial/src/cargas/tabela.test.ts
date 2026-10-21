@@ -261,6 +261,23 @@ describe("leitura do CSV", () => {
   });
 });
 
+describe("CSV de preços dentro do repositório", () => {
+  it("é recusado antes de ler, mesmo em dry-run; fora do repositório passa", async () => {
+    const caminho = arquivo("fora.csv", csv(...BASE));
+    await assert.rejects(
+      rodarCarga(["--arquivo", caminho, ...ARGS], { raizDoRepositorio: pasta, log: () => undefined }),
+      (erro: unknown) => erro instanceof ErroDaCarga && /dentro do repositório/.test(erro.message),
+    );
+    const relatorios = mkdtempSync(join(pasta, "relatorio-"));
+    const resultado = await rodarCarga(["--arquivo", caminho, ...ARGS], {
+      raizDoRepositorio: join(pasta, "outra-raiz"),
+      pastaDoRelatorio: relatorios,
+      log: () => undefined,
+    });
+    assert.equal(resultado.ok, true);
+  });
+});
+
 describe("dry-run sem projeto", () => {
   it("não abre o banco, grava só o relatório e mostra o que entraria", async () => {
     const caminho = arquivo("base.csv", csv(...BASE));

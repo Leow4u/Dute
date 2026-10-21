@@ -13,6 +13,8 @@ vi.mock("firebase/firestore", async (importOriginal) => {
     ...original,
     collection: vi.fn((_store: unknown, path: string) => ({ path })),
     query: vi.fn((target: unknown, ...constraints: unknown[]) => ({ target, constraints })),
+    limit: vi.fn((count: number) => ({ kind: "limit", count })),
+    startAfter: vi.fn((...args: unknown[]) => ({ kind: "startAfter", args })),
     getDocs: readDocs,
     getCountFromServer: countDocs,
   };
@@ -75,5 +77,53 @@ describe("lista de clientes do WMS", () => {
   it("o filtro de prospect vale só para a lista de clientes", async () => {
     readDocs.mockResolvedValue({ docs: [document("p1", { code: "P1", stage: "prospect" })] });
     expect(await codes("/api/client-profiles?limit=500")).toEqual(["P1"]);
+  });
+
+  type Built = { constraints: Array<{ kind?: string; count?: number; args?: unknown[] }> };
+  // Firestore falso: serve `todos` em ordem, respeitando limit e startAfter.
+  function servir(todos: ReturnType<typeof document>[]) {
+    readDocs.mockImplementation(async (built: Built) => {
+      const after = built.constraints.find((c) => c.kind === "startAfter");
+      const size = built.constraints.find((c) => c.kind === "limit")?.count ?? todos.length;
+      const last = after?.args?.[0] as { id?: string } | undefined;
+      const from = last?.id ? todos.findIndex((d) => d.id === last.id) + 1 : 0;
+      return { docs: todos.slice(from, from + size) };
+    });
+  }
+
+  it("não perde cliente quando há mais prospects que o limite antes dele na ordem", async () => {
+    // 600 prospects vêm antes, em ordem alfabética, dos clientes reais e de um
+    // legado sem `stage` (a BTG): a primeira página de 500 era só prospect.
+    const prospects = Array.from({ length: 600 }, (_, i) =>
+      document(`P${String(i).padStart(4, "0")}`, {
+        code: `P${i}`,
+        name: `Aaa prospect ${String(i).padStart(4, "0")}`,
+        stage: "prospect",
+        status: "active",
+      }),
+    );
+    const reais = [
+      document("BTG_Pactual", { code: "BTG Pactual", name: "BTG Pactual", status: "active" }),
+      document("Ita_", { code: "Itaú", name: "Itaú Unibanco", stage: "cliente", status: "active" }),
+      document("Antigo", { code: "Antigo", name: "Zzz Antigo", status: "archived", archived: true }),
+    ];
+    servir([...prospects, ...reais]);
+    expect(await codes("/api/customers?limit=500")).toEqual(["BTG Pactual", "Itaú"]);
+    expect(await codes("/api/customers?limit=1")).toEqual(["BTG Pactual"]);
+    expect(await codes("/api/customers?limit=500&include_archived=true")).toEqual([
+      "BTG Pactual",
+      "Itaú",
+      "Antigo",
+    ]);
+  });
+
+  it("para de ler no teto de leituras quando só há prospects", async () => {
+    servir(
+      Array.from({ length: 5000 }, (_, i) =>
+        document(`P${String(i).padStart(5, "0")}`, { code: `P${i}`, stage: "prospect" }),
+      ),
+    );
+    expect(await codes("/api/customers?limit=100")).toEqual([]);
+    expect(readDocs.mock.calls.length).toBeLessThanOrEqual(20);
   });
 });

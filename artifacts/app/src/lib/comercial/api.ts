@@ -1,4 +1,5 @@
-import { getFunctions, httpsCallable } from "firebase/functions";
+import { httpsCallable } from "firebase/functions";
+import { functionsDoApp } from "../firebase-functions";
 
 import { firebaseApp } from "../firebase";
 
@@ -85,7 +86,7 @@ export async function chamarComercial<T = Record<string, unknown>>(
   dados: Record<string, unknown>,
 ): Promise<T> {
   if (!firebaseApp) throw new Error("Firebase não configurado.");
-  const callable = httpsCallable<Record<string, unknown>, T>(getFunctions(firebaseApp, "southamerica-east1"), nome);
+  const callable = httpsCallable<Record<string, unknown>, T>(functionsDoApp(firebaseApp), nome);
   try {
     return (await callable(dados)).data;
   } catch (error) {

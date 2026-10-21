@@ -528,6 +528,7 @@ export function OpeningInventoryWorkspace() {
           sku_codes: contentSkus,
           allow_tilt: allowTilt,
           allow_stacking: allowStacking,
+          opening_inventory: true,
           exclude,
           ...(location_id ? { location_id } : {}),
         }),
@@ -1285,7 +1286,11 @@ export function OpeningInventoryWorkspace() {
                               {activeSuggestion.position.code}
                             </div>
                             {putawayMode === "suggested" ? <p className="mt-1 text-sm text-muted-foreground">{activeSuggestion.position.reason}</p> : null}
-                            <p className="mt-2 text-sm font-medium">{formatBoxPlacement(activeSuggestion.position.placement)}</p>
+                            {activeSuggestion.position.model_fit === false ? (
+                              <p className="mt-2 text-sm text-muted-foreground">O cálculo não confirmou o encaixe. A posição escolhida fica registrada.</p>
+                            ) : (
+                              <p className="mt-2 text-sm font-medium">{formatBoxPlacement(activeSuggestion.position.placement)}</p>
+                            )}
                             <div className="mt-2 flex flex-wrap gap-2">
                               {putawayMode === "suggested" ? <Badge variant="outline">{tierLabel(activeSuggestion.position.tier)}</Badge> : null}
                               {refusal ? <Badge variant="outline">{refusal.position} recusada</Badge> : null}
@@ -1333,7 +1338,10 @@ export function OpeningInventoryWorkspace() {
                       <Alert variant="destructive" className="bg-destructive/10">
                         <AlertTriangle className="size-4" />
                         <AlertTitle>Nenhuma prateleira serve para esta caixa</AlertTitle>
-                        <AlertDescription>{activeSuggestion.rejected}</AlertDescription>
+                        <AlertDescription>
+                          {activeSuggestion.rejected}
+                          {activeSuggestion.checked > 0 ? " Escolha a prateleira onde a caixa está." : ""}
+                        </AlertDescription>
                       </Alert>
                     ) : null}
                     {!activeSuggestion?.position && !suggestPosition.isPending ? (

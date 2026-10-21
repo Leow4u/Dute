@@ -130,6 +130,17 @@ describe("caixas e endereçamento dirigido", () => {
     );
   });
 
+  it("prévia da abertura não libera encaixe sem sessão aberta", async () => {
+    await store("A-02", "frente-cheia", { length_m: 1.8, width_m: 0.5, height_m: 0.4 });
+    const incoming = {
+      customer_code: BTG, length_m: 0.5, width_m: 0.4, height_m: 0.305,
+      allow_tilt: true, allow_stacking: true, location_id: "A-02", opening_inventory: true,
+    };
+    await assert.rejects(suggestWarehousePosition(db, incoming, operacao), /não cabe/);
+    await assert.rejects(createWarehouseBox(db, { ...incoming, idempotency_key: "sem-sessao" }, operacao), /não cabe/);
+    await assert.rejects(createWarehouseBox(db, { ...incoming, session_id: "opening_fake", idempotency_key: "sessao-falsa" }, operacao), /não cabe/);
+  });
+
   it("prévia manual respeita exclusão e caixas em guarda, sem trocar pela primeira livre", async () => {
     await assert.rejects(
       suggestWarehousePosition(db, { customer_code: BTG, ...box, location_id: "A-02", exclude: ["a-02"] }, operacao),
