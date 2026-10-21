@@ -210,10 +210,16 @@ describe("correção de caixa de linha do inventário de abertura", () => {
     const balances = (await db.collection("stock_balances").get()).docs.map((doc) => doc.data());
     const source = balances.find((row) => row.location_id === "A-01")!;
     const target = balances.find((row) => row.location_id === "A-02")!;
-    assert.deepEqual([source.qty_on_hand, source.unit_cost], [18, 220]);
-    assert.deepEqual([target.qty_on_hand, target.unit_cost], [12, 189.9]);
+    assert.equal(source.qty_on_hand, 18);
+    assert.equal(target.qty_on_hand, 12);
+    assert.equal(source.unit_cost, undefined);
+    assert.equal(target.unit_cost, undefined);
     const line = (await db.collection("opening_inventory_lines").doc(String(result.opening_line_id)).get()).data()!;
     assert.equal(line.unit_cost, 189.9);
+    const lineCosts = (await db.collection("opening_inventory_lines").get()).docs
+      .map((row) => row.data().unit_cost)
+      .sort((left, right) => left - right);
+    assert.deepEqual(lineCosts, [189.9, 220]);
     assert.deepEqual(await catalog(), beforeCatalog);
   });
 

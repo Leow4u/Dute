@@ -78,6 +78,14 @@ import {
   openingUsesGlobalControl,
 } from "./domain/customer-scope.js";
 import { assertManagedCatalogCreateAllowed } from "./domain/catalog-codes.js";
+import {
+  canSeeCatalogPrice,
+  CATALOG_PRICES,
+  merchandiseValue,
+  publishedMoneyDeletes,
+  rememberCatalogPrice,
+  splitCatalogPriceBatch,
+} from "./domain/catalog-prices.js";
 import { CycleCountSchema } from "./domain/cycle-count-input.js";
 import {
   createOpeningConferenceBox as createOpeningConferenceBoxFor,
@@ -3345,6 +3353,12 @@ async function loadBillingCalculation(
   const inventorySnapshot = transaction
     ? await transaction.get(inventoryQuery)
     : await inventoryQuery.get();
+  const catalogPriceQuery = db
+    .collection(CATALOG_PRICES)
+    .where("customer_code", "==", customerCode);
+  const catalogPriceSnapshot = transaction
+    ? await transaction.get(catalogPriceQuery)
+    : await catalogPriceQuery.get();
   const movementsSnapshot = transaction
     ? await transaction.get(movementsQuery)
     : await movementsQuery.get();
@@ -3374,9 +3388,9 @@ async function loadBillingCalculation(
     Array.isArray(manualData.items) ? manualData.items : []
   ) as BillingManualQuantity[];
   const config = configSnapshot.data() ?? {};
-  const inventoryValue = inventorySnapshot.docs.reduce(
-    (sum, document) => sum + Number(document.data().total_cost ?? 0),
-    0,
+  const inventoryValue = merchandiseValue(
+    inventorySnapshot.docs.map((document) => document.data()),
+    catalogPriceSnapshot.docs.map((document) => document.data()),
   );
   // Virada do mês no horário de Brasília, não em UTC.
   const allMovements = movementsSnapshot.docs
@@ -3991,6 +4005,7 @@ function managedWritePayload(
 ) {
   if (input.resource === "products") {
     const data = allowedFields(input.data, PRODUCT_WRITE_FIELDS);
+    delete data.preco_unit;
     if (input.action === "create") {
       if (!String(data.produto ?? "").trim()) {
         throw new HttpsError(
@@ -4031,6 +4046,7 @@ function managedWritePayload(
       ...data,
       cod_cliente: catalogIdentity.clientCode,
       cod_cliente_key: catalogIdentity.clientCode,
+      ...publishedMoneyDeletes(),
       updated_by: profile.uid,
       updated_at: FieldValue.serverTimestamp(),
     };
@@ -4105,6 +4121,7 @@ function managedWritePayload(
       sku_code_key: catalogIdentity.skuCode,
       cod_cliente: catalogIdentity.clientCode,
       cod_cliente_key: catalogIdentity.clientCode,
+      ...publishedMoneyDeletes(),
       updated_by: profile.uid,
       updated_at: FieldValue.serverTimestamp(),
     };
@@ -4707,6 +4724,24 @@ export const mutateManagedEntity = onCall(async (request) => {
       transaction.create(targetRef, payload);
     } else {
       transaction.set(targetRef, payload, { merge: true });
+    }
+    if (
+      input.resource === "products" &&
+      input.action !== "archive" &&
+      canSeeCatalogPrice(profile.role)
+    ) {
+      const requested = Number(
+        (input.data as Record<string, unknown> | undefined)?.preco_unit,
+      );
+      const written = payload as Record<string, unknown>;
+      rememberCatalogPrice(transaction, db, {
+        customerCode: String(
+          written.customer_code ?? before.customer_code ?? DEFAULT_CUSTOMER,
+        ),
+        skuCode: String(written.cod_cliente ?? documentId),
+        itemCode: String(written.cod_cliente ?? documentId),
+        unitCost: requested,
+      });
     }
     // O portal não lê `customers` (observações e contrato são internos);
     // lê a projeção client_profiles, gravada na mesma transação. Os módulos
@@ -6433,6 +6468,21 @@ export const generateDailyBriefing = onCall(async (request) => {
     ...DailyBriefingSchema.parse(request.data ?? {}),
     actor: profile,
   });
+});
+
+/**
+ * Tira preço e custo das coleções que a operação lê e grava em catalog_prices.
+ * Repetir até done, uma vez por ambiente, depois que esta versão estiver no ar.
+ */
+export const splitCatalogPrices = onCall(async (request) => {
+  const profile = await getProfile(request);
+  if (!["owner", "admin"].includes(profile.role)) {
+    throw new HttpsError(
+      "permission-denied",
+      "Só a administração separa o preço do catálogo.",
+    );
+  }
+  return splitCatalogPriceBatch(db);
 });
 
 /**
