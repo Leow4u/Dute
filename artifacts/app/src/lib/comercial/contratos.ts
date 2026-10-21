@@ -495,6 +495,11 @@ function textoDaFaixa(faixa: FaixaPagamento): { quando: string; paga: string } {
   };
 }
 
+/** "Fatura do WMS" → "fatura do WMS": só a primeira letra, a sigla fica. */
+function inicialMinuscula(texto: string): string {
+  return texto.charAt(0).toLocaleLowerCase("pt-BR") + texto.slice(1);
+}
+
 export type Condicoes = {
   campos: Array<[string, string]>;
   pagamento: { faixas: Array<{ quando: string; paga: string }>; regra: string | null; previsto: string | null };
@@ -516,7 +521,7 @@ export function condicoesDoContrato(dados: ContratoDados, hoje: string): Condico
   if (dados.regimes.length) {
     campos.push([
       "Regime por serviço",
-      dados.regimes.map((item) => `${item.servico}: ${ROTULO_DO_REGIME[item.regime].toLocaleLowerCase("pt-BR")}`).join(" · "),
+      dados.regimes.map((item) => `${item.servico}: ${inicialMinuscula(ROTULO_DO_REGIME[item.regime])}`).join(" · "),
     ]);
   }
   campos.push(["Autorização de faturamento", ROTULO_DA_AUTORIZACAO[autorizacao.tipo]]);
@@ -568,7 +573,9 @@ export type LinhaDoAditivo = { titulo: string; tipo: string; detalhes: string[];
 
 export function linhaDoAditivo(aditivo: Aditivo): LinhaDoAditivo {
   const comVigencia = aditivo.vigenteAte !== null;
-  const tipo = aditivo.tipo === "preco" && comVigencia ? "Preço e vigência" : ROTULO_DO_ADITIVO[aditivo.tipo];
+  const formalizacao = aditivo.tipo === "formalizacao";
+  // A formalização é o próprio contrato (o termo), não um aditivo numerado.
+  const tipo = formalizacao ? "Contrato" : aditivo.tipo === "preco" && comVigencia ? "Preço e vigência" : ROTULO_DO_ADITIVO[aditivo.tipo];
   const detalhes = [
     aditivo.assinadoEm ? `assinado ${dataBr(aditivo.assinadoEm)}` : "sem data de assinatura",
     comVigencia && aditivo.vigenteDe ? `vigência ${dataBr(aditivo.vigenteDe)} – ${dataBr(aditivo.vigenteAte!)}` : "",
@@ -576,7 +583,7 @@ export function linhaDoAditivo(aditivo: Aditivo): LinhaDoAditivo {
     aditivo.documento ? aditivo.documento.nome : "documento não localizado",
   ].filter(Boolean);
   return {
-    titulo: aditivo.tipo === "formalizacao" ? "Formalização" : `Aditivo ${aditivo.numero}`,
+    titulo: formalizacao ? "Termo de formalização" : `Aditivo ${aditivo.numero}`,
     tipo,
     detalhes,
     observacao: aditivo.observacao,

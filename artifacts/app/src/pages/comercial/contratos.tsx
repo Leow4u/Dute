@@ -42,7 +42,8 @@ type Dialogo =
   | { tipo: "editar"; chave: string; contrato: Contrato }
   | { tipo: "aditivo"; chave: string; contrato: Contrato; aditivos: Aditivo[] };
 
-const TELA_ESTREITA = "(max-width: 1023px)";
+/** Abaixo do xl a ficha fica embaixo da lista (contratos-view.tsx). */
+const TELA_ESTREITA = "(max-width: 1279px)";
 
 export default function ComercialContratosPage() {
   const { toast } = useToast();
@@ -146,7 +147,10 @@ export default function ComercialContratosPage() {
             if (selecionado) abrir({ tipo: "editar", chave: novaChave(), contrato: selecionado });
           },
           registrarAditivo: () => {
-            if (selecionado) abrir({ tipo: "aditivo", chave: novaChave(), contrato: selecionado, aditivos: aditivos.itens ?? [] });
+            // Com o histórico lido: o número sugerido é o seguinte ao último.
+            if (selecionado && aditivos.itens) {
+              abrir({ tipo: "aditivo", chave: novaChave(), contrato: selecionado, aditivos: aditivos.itens });
+            }
           },
         }}
       />

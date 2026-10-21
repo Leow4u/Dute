@@ -163,7 +163,7 @@ function Lista(props: ContratosViewProps) {
   return (
     <section
       aria-label={`Contratos ${ROTULO_DO_FILTRO[filtro].toLocaleLowerCase("pt-BR")}`}
-      className="min-w-0 overflow-hidden rounded-lg border border-border bg-card lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:w-96 lg:shrink-0 lg:overflow-y-auto"
+      className="min-w-0 overflow-hidden rounded-lg border border-border bg-card xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:w-80 xl:shrink-0 xl:overflow-y-auto"
     >
       <div className="flex flex-wrap items-center gap-2.5 border-b border-border px-5 py-3.5">
         <span aria-hidden="true" className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-border bg-background">
@@ -210,7 +210,7 @@ function Vigencia({ contrato, hoje }: { contrato: Contrato; hoje: string }) {
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <Rotulo>Vigência</Rotulo>
         <b className="text-base font-extrabold tabular-nums">{vigencia.periodo}</b>
-        <span className="text-base font-extrabold sm:ml-auto">{vigencia.restante}</span>
+        <span className="text-base font-extrabold @md:ml-auto">{vigencia.restante}</span>
       </div>
       {vigencia.hoje === null ? null : (
         <>
@@ -274,7 +274,8 @@ function Cabecalho({ contrato, cliente, aditivos, hoje, ocupado, acoes }: {
             <Pencil aria-hidden="true" />
             Editar
           </Button>
-          <Button type="button" onClick={acoes.registrarAditivo} disabled={ocupado}>
+          {/* O número do aditivo sai do histórico: espera os aditivos serem lidos. */}
+          <Button type="button" onClick={acoes.registrarAditivo} disabled={ocupado || !Array.isArray(aditivos)}>
             <Plus aria-hidden="true" />
             Registrar aditivo
           </Button>
@@ -295,7 +296,7 @@ function Alertas({ contrato, hoje }: { contrato: Contrato; hoje: string }) {
   const alertas = alertasDoContrato(contrato.dados, hoje);
   if (!alertas.length) return null;
   return (
-    <section aria-label="Alertas" className="grid gap-3 sm:grid-cols-2">
+    <section aria-label="Alertas" className="grid gap-3 @xl:grid-cols-2">
       {alertas.map((alerta) => {
         const texto = textoDoAlerta(alerta, contrato.dados);
         return (
@@ -319,7 +320,7 @@ function Condicoes({ contrato, hoje }: { contrato: Contrato; hoje: string }) {
   return (
     <section aria-label="Condições" className="overflow-hidden rounded-lg border border-border bg-card">
       <CabecalhoDoCartao icone={<FileText className="size-4" />} titulo="Condições" />
-      <dl className="grid gap-x-7 gap-y-4 p-5 sm:grid-cols-2">
+      <dl className="grid gap-x-7 gap-y-4 p-5 @lg:grid-cols-2">
         {campos.map(([rotulo, valor]) => (
           <div key={rotulo} className="min-w-0">
             <dt className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">{rotulo}</dt>
@@ -330,7 +331,7 @@ function Condicoes({ contrato, hoje }: { contrato: Contrato; hoje: string }) {
       <div className="px-5 pb-5">
         <Rotulo>Pagamento</Rotulo>
         {pagamento.faixas.length ? (
-          <div className="mt-2 grid gap-2.5 sm:grid-cols-3">
+          <div className="mt-2 grid gap-2.5 @2xl:grid-cols-3">
             {pagamento.faixas.map((faixa) => (
               <div key={faixa.quando} className="rounded-lg border border-border bg-background px-3.5 py-3">
                 <span className="block text-xs font-bold text-muted-foreground">{faixa.quando}</span>
@@ -484,7 +485,8 @@ function Ficha(props: ContratosViewProps & { selecionado: Contrato }) {
   const { selecionado: contrato, clientes, hoje, tabelas, aditivos, ocupado, acoes } = props;
   const cliente = clientes.find((cadastro) => cadastro.code === contrato.dados.customer_code) ?? null;
   return (
-    <div aria-label="Ficha do contrato" role="region" className="flex min-w-0 flex-1 flex-col gap-5">
+    // @container: as grades da ficha seguem a largura dela (com o menu do app ao lado), não a da janela.
+    <div aria-label="Ficha do contrato" role="region" className="@container flex min-w-0 flex-1 flex-col gap-5">
       <Cabecalho contrato={contrato} cliente={cliente} aditivos={aditivos} hoje={hoje} ocupado={ocupado} acoes={acoes} />
       <Alertas contrato={contrato} hoje={hoje} />
       <Condicoes contrato={contrato} hoje={hoje} />
@@ -505,7 +507,7 @@ export function ContratosView(props: ContratosViewProps) {
         <h1 className="mr-2 text-3xl font-extrabold tracking-tight">Comercial</h1>
         <AbasDoComercial telas={telas} />
       </header>
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
+      <div className="flex flex-col gap-5 xl:flex-row xl:items-start">
         <Lista {...props} />
         {estado === "pronto" && selecionado ? <Ficha {...props} selecionado={selecionado} /> : null}
       </div>

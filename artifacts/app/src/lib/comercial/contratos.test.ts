@@ -324,6 +324,11 @@ describe("condições na ficha", () => {
     ]);
   });
 
+  it("regime por serviço em minúscula, sem estragar a sigla", () => {
+    const campos = condicoesDoContrato({ ...ITAU.dados, regimes: [{ servico: "Armazenagem", regime: "wms" }] }, HOJE).campos;
+    expect(campos).toContainEqual(["Regime por serviço", "Armazenagem: fatura do WMS"]);
+  });
+
   it("automática mostra a oposição; reajuste por índice mostra o índice e o dia", () => {
     const campos = condicoesDoContrato(
       { ...BTG.dados, reajuste: { tipo: "indice", indice: "IPCA", data_base: "07-01" }, regimes: [], impostos: { inclusos: null, texto: null }, codigo_servico: null },
@@ -429,7 +434,7 @@ describe("aditivos na linha do tempo", () => {
         detalhes: ["sem data de assinatura", "vigência 01/07/2024 – 30/06/2026", "documento não localizado"],
         observacao: "",
       },
-      { titulo: "Formalização", tipo: "Formalização", detalhes: ["assinado 01/07/2021", "Termo assinado"], observacao: "" },
+      { titulo: "Termo de formalização", tipo: "Contrato", detalhes: ["assinado 01/07/2021", "Termo assinado"], observacao: "" },
     ]);
   });
 

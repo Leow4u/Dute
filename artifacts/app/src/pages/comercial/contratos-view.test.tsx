@@ -262,11 +262,18 @@ describe("tela de contratos", () => {
     ]);
   });
 
-  it("no celular, lista e ficha empilham; no computador, ficam lado a lado e a lista rola sozinha", () => {
+  it("no celular e no notebook, lista e ficha empilham; na tela larga, ficam lado a lado e a lista rola sozinha", () => {
     const html = render();
-    expect(html).toContain('class="flex flex-col gap-5 lg:flex-row lg:items-start"');
+    expect(html).toContain('class="flex flex-col gap-5 xl:flex-row xl:items-start"');
     const lista = html.match(/<section aria-label="Contratos vigentes" class="([^"]+)"/)?.[1] ?? "";
-    expect(lista.split(" ")).toEqual(expect.arrayContaining(["lg:sticky", "lg:top-4", "lg:overflow-y-auto"]));
+    expect(lista.split(" ")).toEqual(expect.arrayContaining(["xl:sticky", "xl:top-4", "xl:overflow-y-auto", "xl:w-80"]));
+  });
+
+  it("as grades da ficha seguem a largura da ficha (container), não a da janela", () => {
+    const html = render({ selecionado: BTG });
+    expect(html).toMatch(/aria-label="Ficha do contrato" role="region" class="@container /);
+    expect(html).toContain('aria-label="Alertas" class="grid gap-3 @xl:grid-cols-2"');
+    expect(html).not.toMatch(/ (sm|md|lg):grid-cols-/);
   });
 
   it("tabelas e aditivos carregando ou com erro não viram lista vazia", () => {
@@ -276,8 +283,11 @@ describe("tela de contratos", () => {
     expect(carregando.filter((texto) => texto === "Carregando...")).toHaveLength(2);
     const comErro = texts(render({ tabelas: "erro", aditivos: "erro" }));
     expect(comErro.filter((texto) => texto === "Não foi possível carregar.")).toHaveLength(2);
-    // Sem aditivos lidos, o selo do último aditivo não aparece.
+    // Sem aditivos lidos, o selo do último aditivo não aparece e o próximo número não se sabe.
     expect(carregando).not.toContain("Aditivo 1");
+    const registrar = (html: string) => html.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*Registrar aditivo<\/button>/)?.[0] ?? "";
+    expect(registrar(render({ aditivos: "carregando" }))).toMatch(/ disabled=""/);
+    expect(registrar(render())).not.toMatch(/ disabled=""/);
   });
 
   it("vazios dizem que não há nada", () => {
