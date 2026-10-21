@@ -341,6 +341,13 @@ describe("tela de autorizações", () => {
       "A faturar",
     ]);
     expect(secaoAutorizadas.filter((texto) => texto === "Cancelar")).toHaveLength(3);
+    // O diálogo de cancelar avisa que a medição segue aprovada: a linha leva a origem.
+    expect(lista.map((linha) => linha.daMedicao)).toEqual(lista.map((linha) => linha.pedido === "Medição 09/2026"));
+  });
+
+  it("registrou as últimas demandas: a fila esvazia e a confirmação continua na tela", () => {
+    const html = render({ linhas: [], painel: painel({ aberto: false, resultado: "Pedido 4500000009 registrado · 2 demandas · R$ 20.748,80" }) });
+    expect(texts(html)).toContain("Pedido 4500000009 registrado · 2 demandas · R$ 20.748,80");
   });
 
   it("a aba Autorizações aparece marcada na barra do módulo", () => {

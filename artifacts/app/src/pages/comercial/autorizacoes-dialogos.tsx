@@ -46,6 +46,11 @@ export function CancelarAutorizacaoDialog({
             </DialogDescription>
           ) : null}
         </DialogHeader>
+        {autorizacao?.daMedicao ? (
+          <p className="text-sm font-bold text-muted-foreground">
+            A medição segue aprovada e a autorização não se refaz por aqui: as demandas voltam a esperar a medição.
+          </p>
+        ) : null}
         <div className="space-y-1.5">
           <Label htmlFor="aut-motivo">Motivo</Label>
           <Textarea id="aut-motivo" rows={3} value={motivo} onChange={(evento) => setMotivo(evento.target.value)} disabled={ocupado} />

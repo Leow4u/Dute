@@ -611,6 +611,7 @@ describe("autorizadas, a faturar", () => {
         info: "faturar até 18/11/2026",
         valorCents: 795000,
         quando: "autorizada 19/10",
+        daMedicao: false,
       },
       {
         id: "aut_1",
@@ -622,6 +623,7 @@ describe("autorizadas, a faturar", () => {
         info: "CC 41220",
         valorCents: 3120460,
         quando: "autorizada 14/10",
+        daMedicao: false,
       },
     ]);
     expect(totalDasAutorizadas(linhas)).toBe(3915460);
@@ -745,6 +747,7 @@ describe("autorização da medição aprovada: o mesmo formato da registrada à 
       info: "",
       valorCents: 480000,
       quando: "autorizada 03/11",
+      daMedicao: true,
     });
     expect(linhas[3].pedido).toBe("Medição 09/2026");
     expect(totalDasAutorizadas(linhas)).toBe(480000 + 795000 + 3120460 + 118000);

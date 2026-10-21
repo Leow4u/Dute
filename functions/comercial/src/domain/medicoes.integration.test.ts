@@ -855,6 +855,30 @@ describe("cancelar a autorização da medição aprovada (o mesmo recordAuthoriz
     assert.deepEqual([repetida.status, repetida.ja_feito, repetida.events], ["cancelada", true, []]);
   });
 
+  it("a demanda que ainda tem outra autorização ativa não volta a esperar a medição", async () => {
+    const d1 = await fechada();
+    await demanda("register_execution", d1, { executado_de: "2026-10-05", executado_ate: "2026-10-05" }, OUT_06);
+    await demanda("validate", d1, {}, OUT_06);
+    const d2 = await fechada();
+    await demanda("register_execution", d2, { executado_de: "2026-10-16", executado_ate: "2026-10-16" }, OUT_17);
+    await abrir();
+    await salvar({ demanda_numero: d1, os: "OS 9001", solicitada_em: "2026-10-01", executada_em: "2026-10-05" });
+    await salvar({ demanda_numero: d2, os: "OS 9002", solicitada_em: "2026-10-15", executada_em: "2026-10-16" });
+    await avancar("send", {}, NOV_02);
+    await avancar("approve");
+    const id = `aut_${MEDICAO}`;
+    // A d1 recebeu também uma autorização registrada à mão (complemento).
+    await db.doc(`demands/${d1}`).update({ autorizacao_ids: [id, "aut_manual"] });
+
+    const cancelada = await cancelar(id);
+    assert.deepEqual((await doc(`demands/${d1}`)).autorizacao_ids, ["aut_manual"]);
+    assert.equal((await doc(`demands/${d1}`)).medicao_pendente, false);
+    assert.deepEqual([(await doc(`demands/${d2}`)).autorizacao_ids, (await doc(`demands/${d2}`)).medicao_pendente], [[], true]);
+    const evento = (await eventos()).find((event) => event.type === "client_authorization.cancelled");
+    assert.deepEqual((evento?.payload as Linha).devolvidas, [d2]);
+    assert.equal(cancelada.status, "cancelada");
+  });
+
   it("a medição sem demanda também se cancela, e o financeiro cancela como cancela a de pedido e aceite", async () => {
     await abrir();
     await salvar({});

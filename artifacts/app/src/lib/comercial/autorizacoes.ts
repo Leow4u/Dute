@@ -726,6 +726,8 @@ export type LinhaAutorizada = {
   info: string;
   valorCents: number | null;
   quando: string;
+  /** A da medição aprovada: cancelar não reabre a medição. */
+  daMedicao: boolean;
 };
 
 /** "2026-10" → "10/2026". */
@@ -804,6 +806,7 @@ export function autorizadasAFaturar(
           .join(" · "),
         valorCents: autorizacao.valorCents,
         quando: autorizacao.recebidaEm ? `autorizada ${diaMes(autorizacao.recebidaEm, contexto.hoje)}` : "",
+        daMedicao: autorizacao.origem === "medicao",
       };
       const busca = semAcento(
         [

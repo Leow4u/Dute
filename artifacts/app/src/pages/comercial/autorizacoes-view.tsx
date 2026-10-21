@@ -469,6 +469,7 @@ export function AutorizacoesView(props: AutorizacoesViewProps) {
         <Fila {...props} marcando={painelAberto} />
         {painelAberto ? <Painel {...props} /> : null}
       </div>
+      {!painelAberto && painel.resultado ? <Caixa tom="ok">{painel.resultado}</Caixa> : null}
       <Autorizadas {...props} />
     </div>
   );

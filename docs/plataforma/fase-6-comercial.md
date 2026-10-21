@@ -268,7 +268,12 @@ Storage.
     (`medicao_pendente`), e a medição segue aprovada, como fato do cliente.
     Sem reabrir a medição, a demanda devolvida não ganha outra autorização.
     Recomendo manter assim e decidir a reabertura (aprovada para enviada,
-    desfazendo as validações da medição) se o caso aparecer. (Parte 15b)
+    desfazendo as validações da medição) se o caso aparecer. Só volta a
+    esperar a medição a demanda que fica sem nenhuma outra autorização; a que
+    tem complemento registrado à mão segue coberta. A tela avisa disso no
+    diálogo de cancelar. Limite conhecido: a lista de Autorizadas a faturar
+    traz as 200 mais recentes e filtra as já usadas depois; quando a Fase 7
+    marcar NF, portal ou Omie, o filtro passa para a consulta. (Parte 15b)
 
 ## Registro
 

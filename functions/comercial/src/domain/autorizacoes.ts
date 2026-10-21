@@ -562,18 +562,18 @@ async function cancelar(mudanca: Mudanca, input: Cancelamento): Promise<Trabalho
 
   // Escritas.
   const events: string[] = [];
-  const etapas = lidas.map((lida) =>
+  // Só a demanda que fica sem nenhuma outra autorização volta a esperar a medição.
+  const semOutra = lidas.map((lida) => autorizacoesDaDemanda(lida.demanda).filter((outra) => outra !== id).length === 0);
+  const etapas = lidas.map((lida, indice) =>
     gravarAutorizacoesDaDemanda(
       mudanca,
       lida,
       autorizacoesDaDemanda(lida.demanda).filter((outra) => outra !== id),
       events,
-      // A demanda que a medição aprovada autorizou volta a esperar a medição.
-      daMedicao ? { medicao_pendente: true } : {},
+      daMedicao && semOutra[indice] ? { medicao_pendente: true } : {},
     ),
   );
-  // A da medição aprovada devolve todas à espera da medição (a etapa delas não muda: a validação já levava a "a faturar").
-  const devolvidas = lidas.filter((lida, indice) => daMedicao || lida.demanda.etapa !== etapas[indice]).map((lida) => lida.numero);
+  const devolvidas = lidas.filter((lida, indice) => (daMedicao && semOutra[indice]) || lida.demanda.etapa !== etapas[indice]).map((lida) => lida.numero);
   transaction.update(snapshot.ref, {
     status: "cancelada" satisfies StatusAutorizacao,
     cancelada_por: caller.uid,
