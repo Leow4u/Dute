@@ -5,10 +5,11 @@ import { deleteApp, initializeApp } from "firebase-admin/app";
 import { Timestamp, getFirestore, type Firestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 
+import { registrarAditivo } from "./contratos.js";
 import { advanceDemandFor } from "./demandas.js";
 import { advanceMedicaoFor, saveMedicaoFor } from "./medicoes.js";
 import type { ComercialProfile } from "./profile.js";
-import { advanceQuoteFor, saveQuoteFor } from "./quotes.js";
+import { actorOf, advanceQuoteFor, saveQuoteFor } from "./quotes.js";
 
 /**
  * Medição mensal no emulador (parte 16a): uma medição por contrato e
@@ -332,6 +333,23 @@ describe("abrir a medição", () => {
     });
   });
 
+  it("depois do aditivo de prorrogação, a medição do último mês do período anterior ainda abre", async () => {
+    await db.doc("contracts/safra-2026").update({ vigente_de: "2025-11-01", vigente_ate: "2026-10-31" });
+    const aditivo = await registrarAditivo(db, actorOf(comercial), {
+      idempotency_key: key(),
+      contrato_id: "safra-2026",
+      aditivo: { numero: 1, tipo: "prorrogacao", vigente_de: "2026-11-01", vigente_ate: "2027-10-31", documento: null },
+    });
+    assert.equal(aditivo.vigencia_alterada, true);
+    const contrato = await doc("contracts/safra-2026");
+    assert.deepEqual([contrato.vigente_de, contrato.vigente_ate], ["2026-11-01", "2027-10-31"]);
+    const abrirEm = (competencia: string) =>
+      saveMedicaoFor(db, comercial, { action: "create", request_id: key(), contrato_id: "safra-2026", competencia }, { agora: NOV_02 });
+    assert.equal((await abrirEm("2026-10")).medicao_id, MEDICAO, "o mês da renovação");
+    assert.equal((await abrirEm("2026-11")).status, "rascunho");
+    await rejeita(abrirEm("2025-10"), "failed-precondition", /fora da vigência/);
+  });
+
   it("owner, admin e comercial; os outros papéis, não", async () => {
     await rejeita(abrir("safra-2026", "2026-10", wms), "permission-denied");
     await rejeita(abrir("safra-2026", "2026-10", financeiro), "permission-denied");
@@ -367,6 +385,24 @@ describe("linhas da medição", () => {
     const evento = (await eventos()).find((event) => event.type === "medicao.line_saved" && (event.payload as Linha).linhas_reprecificadas === 1);
     assert.ok(evento, "o evento conta as linhas precificadas de novo");
     semDinheiroNemPessoa(await eventos());
+  });
+
+  it("o envio confere os preços: a tabela carregada depois da última gravação recusa o envio, sem mudar nada, até gravar de novo", async () => {
+    await abrir();
+    const salva = await salvar({ os: "OS 9002", solicitada_em: "2026-10-15", executada_em: "2026-10-16" });
+    assert.equal(salva.total_cents, 118_000, "pela v1, a única carregada");
+    await carregarV2();
+    const antes = await doc(`medicoes/${MEDICAO}`);
+    await rejeita(avancar("send"), "failed-precondition", /O preço de 1 linha mudou desde a última gravação/);
+    const depois = await doc(`medicoes/${MEDICAO}`);
+    assert.deepEqual([depois.status, depois.edicao, depois.total_cents], ["rascunho", antes.edicao, 118_000]);
+    assert.deepEqual(depois.linhas, antes.linhas);
+    // Gravada de novo (a mesma linha), a v2 vale; a pessoa vê o total novo e envia.
+    const regravada = await salvar({ id: salva.linha_id, os: "OS 9002", solicitada_em: "2026-10-15", executada_em: "2026-10-16" });
+    assert.equal(regravada.total_cents, 122_000);
+    const enviada = await avancar("send");
+    assert.deepEqual([enviada.status, enviada.total_cents], ["enviada", 122_000]);
+    assert.equal((await doc(`medicoes/${MEDICAO}`)).total_cents, 122_000);
   });
 
   it("o preço que o app manda não vale: o servidor recalcula; sem tabela do contrato na data, só avulso; nunca a Padrão", async () => {
@@ -473,6 +509,92 @@ describe("linhas da medição", () => {
   });
 });
 
+describe("demandas de outro regime ou de outro contrato", () => {
+  it("no contrato misto, a demanda cobrada por demanda não entra na medição; a linha sem demanda entra", async () => {
+    // O regime padrão é por demanda (pedido e aceite); só a equipe fixa é por medição mensal.
+    await db.doc("contracts/safra-2026").update({
+      regime_padrao: "por_demanda",
+      regimes: [{ servico: "Equipe fixa", regime: "medicao_mensal" }],
+      autorizacao: { tipo: "pedido_aceite", prazo_perda_dias: null },
+    });
+    const porDemanda = await fechada();
+    assert.equal((await doc(`demands/${porDemanda}`)).cobranca, "por_demanda");
+    await abrir();
+    await rejeita(salvar({ demanda_numero: porDemanda }), "failed-precondition", /cobrada por demanda, com a autorização do contrato/);
+    assert.equal((await doc(`demands/${porDemanda}`)).medicao_id, undefined);
+    assert.equal((await salvar({ os: "OS 9030" })).linhas, 1);
+  });
+
+  it("a demanda presa à medição não troca de contrato; a que mudou por fora fica pendente na aprovação, sem ser tocada", async () => {
+    await db.doc("contracts/safra-eventos").set({
+      id: "safra-eventos",
+      customer_code: "SAFRA",
+      regime_padrao: "por_demanda",
+      regimes: [],
+      autorizacao: { tipo: "pedido_aceite", prazo_perda_dias: null },
+      vigente_de: "2026-01-01",
+      vigente_ate: null,
+      status: "vigente",
+      edicao: 1,
+    });
+    // Em montagem, presa à medição: o rascunho do orçamento ainda se edita, mas o contrato não troca.
+    const { numero: montagem } = await saveQuoteFor(
+      db,
+      comercial,
+      {
+        action: "create",
+        request_id: key(),
+        customer_code: "SAFRA",
+        contrato_id: "safra-2026",
+        contato_id: "ct_safra",
+        canal: "email",
+        tipo: "planejada",
+        titulo: "Transporte de arquivo",
+        recebida_em: "2026-09-30T09:42:00-03:00",
+        linhas: [{ origem: "tabela", lpu_item_id: "lpu_aj_util", quantidade: "2" }],
+      },
+      { agora: OUT_01 },
+    );
+    // Validada pelo orçamento, a faturar com a medição pendente.
+    const validada = await fechada();
+    await demanda("register_execution", validada, { executado_de: "2026-10-05", executado_ate: "2026-10-05" }, OUT_06);
+    await demanda("validate", validada, {}, OUT_06);
+    await abrir();
+    await salvar({ demanda_numero: montagem, os: "OS 9040" });
+    await salvar({ demanda_numero: validada, os: "OS 9041" });
+
+    const quote = await doc(`quotes/${montagem}`);
+    await rejeita(
+      saveQuoteFor(db, comercial, { action: "update", request_id: key(), numero: montagem, expected_edicao: quote.edicao, contrato_id: "safra-eventos" }, { agora: OUT_20 }),
+      "failed-precondition",
+      /está na medição safra-2026_2026-10: retire a linha dela da medição antes de trocar o contrato/,
+    );
+    assert.equal((await doc(`demands/${montagem}`)).contrato_id, "safra-2026");
+
+    // Por fora (dado antigo ou escrita fora das callables): a validada passou a outro contrato, por demanda.
+    await db.doc(`demands/${validada}`).update({ contrato_id: "safra-eventos", cobranca: "por_demanda" });
+    const antes = await doc(`demands/${validada}`);
+    await avancar("send", {}, NOV_02);
+    const aprovada = await avancar("approve");
+    assert.deepEqual(aprovada.demandas_a_faturar, []);
+    const porNumero = (a: { numero: string }, b: { numero: string }) => a.numero.localeCompare(b.numero);
+    assert.deepEqual(
+      [...(aprovada.demandas_pendentes ?? [])].sort(porNumero),
+      [
+        { numero: montagem, motivo: "RV em montagem, sem envio ao cliente" },
+        { numero: validada, motivo: "demanda de outro contrato" },
+      ].sort(porNumero),
+    );
+    const depois = await doc(`demands/${validada}`);
+    assert.deepEqual(
+      [depois.etapa, depois.medicao_pendente, depois.autorizacao_id, depois.validacao],
+      [antes.etapa, antes.medicao_pendente, undefined, antes.validacao],
+      "a demanda de outro contrato não é autorizada pela medição",
+    );
+    assert.deepEqual((await doc(`client_authorizations/aut_${MEDICAO}`)).demandas, []);
+  });
+});
+
 describe("enviar, contestar, reabrir e aprovar", () => {
   it("a situação e a edição vistas são conferidas a cada passo; a contestada volta ao rascunho", async () => {
     await abrir();
@@ -568,7 +690,9 @@ describe("enviar, contestar, reabrir e aprovar", () => {
     assert.equal(autorizacao.customer_code, "SAFRA");
     assert.equal(autorizacao.contrato_id, "safra-2026");
     assert.equal(autorizacao.medicao_id, MEDICAO);
-    assert.deepEqual(autorizacao.demandas, [d1, d2, d3, d4].sort());
+    // As demandas autorizadas; a pendente fica no campo dela.
+    assert.deepEqual(autorizacao.demandas, [d1, d2, d3].sort());
+    assert.deepEqual(autorizacao.demandas_pendentes, [{ numero: d4, motivo: "proposta sem fechamento" }]);
     assert.equal(autorizacao.total_cents, enviada.total_cents);
     assert.equal(autorizacao.recebida_em, "2026-11-03T13:30:00.000Z");
     assert.equal(autorizacao.contato_id, "ct_safra");
@@ -612,7 +736,7 @@ describe("enviar, contestar, reabrir e aprovar", () => {
     );
     const registrada = todos.find((event) => event.type === "client_authorization.recorded");
     assert.equal(registrada?.entity_type, "client_authorization");
-    assert.deepEqual(registrada?.payload, { autorizacao_id: autorizacaoId, demandas: [d1, d2, d3, d4].sort(), tipo: "medicao_aprovada", medicao_id: MEDICAO });
+    assert.deepEqual(registrada?.payload, { autorizacao_id: autorizacaoId, demandas: [d1, d2, d3].sort(), tipo: "medicao_aprovada", medicao_id: MEDICAO });
     const etapas = todos.filter((event) => event.type === "demand.stage_changed" && (event.payload as Linha).etapa_depois === "a_faturar");
     assert.deepEqual(
       etapas.filter((event) => [d2, d3].includes(String(event.entity_id))).map((event) => [event.entity_id, (event.payload as Linha).etapa_antes]).sort(),
@@ -627,6 +751,31 @@ describe("enviar, contestar, reabrir e aprovar", () => {
     // Aprovada, a medição não anda mais.
     for (const action of ["send", "contest", "reopen"]) await rejeita(avancar(action, action === "contest" ? { nota: "x" } : {}), "failed-precondition");
     await rejeita(salvar({ os: "OS 9020" }), "failed-precondition", /só o rascunho/);
+
+    // A pendente não fica sem saída: fechada, executada e validada depois, vai a "a faturar" com a autorização
+    // da medição (a linha dela já foi aprovada), sem a pendência, e sai das pendentes.
+    assert.equal(dem4.medicao_id, MEDICAO);
+    await demanda("close", d4, {}, NOV_03);
+    await demanda("register_execution", d4, { executado_de: "2026-10-07", executado_ate: "2026-10-07" }, NOV_03);
+    const validada = await demanda("validate", d4, {}, NOV_03);
+    assert.equal(validada.etapa, "a_faturar");
+    const d4Depois = await doc(`demands/${d4}`);
+    assert.deepEqual(
+      [d4Depois.etapa, d4Depois.medicao_pendente, d4Depois.autorizacao_id, (d4Depois.validacao as Linha).autorizacao_id],
+      ["a_faturar", false, autorizacaoId, autorizacaoId],
+    );
+    const medicaoDepois = await doc(`medicoes/${MEDICAO}`);
+    assert.deepEqual(medicaoDepois.demandas_pendentes, []);
+    assert.deepEqual([...(medicaoDepois.demandas_a_faturar as string[])].sort(), [d1, d2, d3, d4].sort());
+    assert.equal(medicaoDepois.edicao, Number(medicao.edicao) + 1);
+    const autorizacaoDepois = await doc(`client_authorizations/${autorizacaoId}`);
+    assert.deepEqual([...(autorizacaoDepois.demandas as string[])].sort(), [d1, d2, d3, d4].sort());
+    assert.deepEqual(autorizacaoDepois.demandas_pendentes, []);
+    const validacao = (await eventos()).find((event) => event.type === "quote.validated" && event.entity_id === d4);
+    assert.deepEqual(
+      [(validacao?.payload as Linha).medicao_pendente, (validacao?.payload as Linha).autorizacao_id],
+      [false, autorizacaoId],
+    );
   });
 
   it("a medição sem demanda também cria a autorização, sem demanda ligada", async () => {

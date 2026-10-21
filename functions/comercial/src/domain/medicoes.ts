@@ -5,7 +5,7 @@ import { z } from "zod";
 import { idDeDocumentoValido, parseEntrada } from "./cadastro.js";
 import { LPU_ITEMS_COLLECTION } from "./catalogo.js";
 import { dataValida } from "./contratos-datas.js";
-import { CONTRACTS_COLLECTION } from "./contratos.js";
+import { ADITIVOS_SUBCOLLECTION, CONTRACTS_COLLECTION } from "./contratos.js";
 import { etapaDaDemanda, segundosDesde, type EtapaDemanda } from "./demanda.js";
 import { ErroDinheiro } from "./dinheiro.js";
 import { createComercialEvent } from "./events.js";
@@ -34,9 +34,11 @@ import {
   execucaoNasLinhas,
   linhasReprecificadas,
   medicaoId,
+  periodosDosAditivos,
   precificarLinhaDaMedicao,
   problemaDaAcaoNaMedicao,
   problemaDaCompetencia,
+  problemaDaDemandaNaAprovacao,
   problemaDaDemandaNaMedicao,
   problemaDaEdicao,
   problemaDasDatasDaLinha,
@@ -82,16 +84,19 @@ import { ErroTabela, PRICE_TABLES_COLLECTION, STATUS_TABELA, conferirVariante, t
  *
  * - `medicoes/{contrato_id}_{AAAA-MM}`: uma por contrato e competência, só de
  *   contrato com regime medicao_mensal. A competência repetida é recusada.
- * - O servidor precifica de novo todas as linhas a cada gravação e no envio,
- *   cada uma pela tabela do contrato vigente na data da solicitação dela
+ * - O servidor precifica de novo todas as linhas a cada gravação, cada uma
+ *   pela tabela do contrato vigente na data da solicitação dela
  *   (medicao.ts); o app manda quantidade e item, e preço e motivo só no item
- *   alterado ou avulso.
+ *   alterado ou avulso. O envio confere os preços e recusa se algum mudou
+ *   desde a última gravação: vai ao cliente o que a pessoa viu.
  * - A linha que cita uma demanda prende a demanda à medição
- *   (`demands.medicao_id`): a mesma demanda não entra em duas medições.
+ *   (`demands.medicao_id`): a mesma demanda não entra em duas medições, e só
+ *   entra a demanda cobrada por medição mensal.
  * - Aprovada, a medição cria a autorização de faturamento do tipo
- *   medicao_aprovada (`client_authorizations/aut_{medicao_id}`), ligada às
- *   demandas da medição, e leva a "a faturar" as que o cliente já tinha
- *   fechado; as outras ficam listadas em `demandas_pendentes`.
+ *   medicao_aprovada (`client_authorizations/aut_{medicao_id}`) e leva a "a
+ *   faturar" as demandas que o cliente já tinha fechado, que ficam ligadas a
+ *   ela; as outras ficam presas à medição, listadas em `demandas_pendentes`,
+ *   e ganham a autorização quando forem validadas (demandas.ts).
  * - Como nas outras callables: requireComercialCaller na callable, safeParse,
  *   a situação e a edição vistas conferidas na transação, leituras antes das
  *   escritas, recibo e evento na mesma transação, e evento sem valor nem
@@ -234,7 +239,6 @@ export type AdvanceMedicaoResult = {
   autorizacao_id?: string;
   demandas_a_faturar?: string[];
   demandas_pendentes?: DemandaPendente[];
-  linhas_reprecificadas?: number;
   events: string[];
 };
 
@@ -326,7 +330,7 @@ async function precificar(
   const daTabela: string[] = [];
   try {
     for (const entrada of entradas) {
-      const tabela = tabelaDaLinha({ ...contexto, tabelas }, entrada.solicitada_em);
+      const tabela = tabelaDaLinha({ ...contexto, tabelas }, entrada.solicitada_em, entrada.janela);
       if (!tabela) continue;
       const temDiaria = entrada.itens.some((item) => {
         const doCatalogo = item.lpu_item_id ? catalogo.get(item.lpu_item_id) : undefined;
@@ -431,10 +435,8 @@ async function criar(gravacao: Gravacao, input: CriarInput): Promise<{ target_id
   const id = medicaoId(input.contrato_id, input.competencia);
 
   // Leituras.
-  const [contratoSnap, medicaoSnap] = await transaction.getAll(
-    db.collection(CONTRACTS_COLLECTION).doc(input.contrato_id),
-    medicaoRef(db, id),
-  );
+  const contratoRef = db.collection(CONTRACTS_COLLECTION).doc(input.contrato_id);
+  const [contratoSnap, medicaoSnap] = await transaction.getAll(contratoRef, medicaoRef(db, id));
   if (!contratoSnap.exists) throw new HttpsError("not-found", `Contrato ${input.contrato_id} não encontrado.`);
   const contrato = contratoSnap.data() ?? {};
   if (!contratoComMedicaoMensal(contrato)) {
@@ -443,7 +445,10 @@ async function criar(gravacao: Gravacao, input: CriarInput): Promise<{ target_id
       `O contrato ${input.contrato_id} não cobra por medição mensal: as demandas dele seguem o regime do contrato.`,
     );
   }
-  const problema = problemaDaCompetencia(contrato, input.competencia, instante);
+  // A vigência atual e as anteriores (aditivos): a prorrogação reescreve a do contrato.
+  const aditivos = await transaction.get(contratoRef.collection(ADITIVOS_SUBCOLLECTION));
+  const anteriores = periodosDosAditivos(aditivos.docs.map((aditivo) => aditivo.data()));
+  const problema = problemaDaCompetencia(contrato, input.competencia, instante, anteriores);
   if (problema) throw new HttpsError("failed-precondition", problema);
   if (medicaoSnap.exists) {
     throw new HttpsError(
@@ -727,15 +732,27 @@ function mudarSituacao(gravacao: Gravacao, medicao: Dados, status: StatusMedicao
   };
 }
 
-/** Enviar ao cliente: as linhas precificadas de novo (o que vai é o que vale na data de cada solicitação). */
+/**
+ * Enviar ao cliente o que a pessoa viu: as linhas são precificadas de novo só
+ * para conferir. Se alguma mudou de preço desde a última gravação (uma tabela
+ * do contrato carregada no meio), o envio é recusado e nada muda: gravar a
+ * medição de novo (qualquer linha) precifica todas, e a pessoa confere antes
+ * de enviar.
+ */
 async function enviar(gravacao: Gravacao, id: string, medicao: Dados): Promise<Trabalho> {
   const { transaction, db } = gravacao;
   const gravadas = linhasDaMedicao(medicao);
   const precificadas = await precificar(transaction, db, medicao, gravadas.map(entradaDaLinhaGravada));
-  const linhas = emOrdem(precificadas);
-  const resumo = resumoDasLinhas(linhas);
   const reprecificadas = linhasReprecificadas(gravadas, precificadas);
-  const patch = { ...resumo, ...mudarSituacao(gravacao, medicao, "enviada"), enviada_em: gravacao.iso, envio: { em: gravacao.iso, por_uid: gravacao.caller.uid } };
+  if (reprecificadas > 0) {
+    throw new HttpsError(
+      "failed-precondition",
+      `O preço de ${reprecificadas} ${reprecificadas === 1 ? "linha" : "linhas"} mudou desde a última gravação (tabela do contrato carregada depois). Grave a medição de novo e confira antes de enviar.`,
+    );
+  }
+  const linhas = emOrdem(gravadas);
+  const resumo = resumoDasLinhas(linhas);
+  const patch = { ...mudarSituacao(gravacao, medicao, "enviada"), enviada_em: gravacao.iso, envio: { em: gravacao.iso, por_uid: gravacao.caller.uid } };
   transaction.update(medicaoRef(db, id), patch);
   const event = createComercialEvent(transaction, db, {
     ...comum(gravacao, medicao, id),
@@ -747,18 +764,21 @@ async function enviar(gravacao: Gravacao, id: string, medicao: Dados): Promise<T
       linhas: linhas.length,
       demandas: resumo.demandas.length,
       linhas_com_marca: linhas.filter((linha) => linha.marcas.length > 0).length,
-      linhas_reprecificadas: reprecificadas,
       segundos_desde_anterior: segundosDesde(medicao.status_desde, gravacao.instante),
     },
   });
-  return resultado(id, { ...medicao, total_cents: resumo.total_cents }, "enviada", patch.edicao, [event.id], { linhas_reprecificadas: reprecificadas });
+  return resultado(id, medicao, "enviada", patch.edicao, [event.id]);
 }
 
 /**
  * O cliente aprovou a medição enviada: grava a aprovação, cria a autorização
- * de faturamento (medicao_aprovada) ligada às demandas da medição e leva a "a
- * faturar" as que o cliente já tinha fechado. A demanda que não dá para levar
- * fica como está, listada em demandas_pendentes, para alguém resolver.
+ * de faturamento (medicao_aprovada) e leva a "a faturar" as demandas que o
+ * cliente já tinha fechado, ligadas à autorização. Cada demanda é conferida de
+ * novo (cliente, contrato, a medição e a cobrança por medição mensal). A que
+ * não dá para levar fica como está, presa à medição, listada em
+ * demandas_pendentes com o motivo; validada depois, ela ganha a autorização
+ * desta medição (demandas.ts). A aprovação registra um fato do cliente e não
+ * é bloqueada pelas demandas.
  */
 async function aprovar(gravacao: Gravacao, id: string, medicao: Dados, input: AprovarInput): Promise<Trabalho> {
   const { transaction, db, caller, iso } = gravacao;
@@ -781,6 +801,7 @@ async function aprovar(gravacao: Gravacao, id: string, medicao: Dados, input: Ap
   const numeros = demandasDaMedicao(linhas);
   const refs = numeros.flatMap((numero) => [demandRef(db, numero), quoteRef(db, numero)]);
   const snapshots = refs.length ? await transaction.getAll(...refs) : [];
+  const alvo = { id, customer_code: code, contrato_id: texto(medicao.contrato_id) };
 
   // Escritas.
   const events: string[] = [];
@@ -796,6 +817,12 @@ async function aprovar(gravacao: Gravacao, id: string, medicao: Dados, input: Ap
     const demanda = demandaSnap.data() ?? {};
     const quote = quoteSnap.exists ? quoteSnap.data() ?? {} : null;
     const etapaAntes = demanda.etapa as EtapaDemanda;
+    // A demanda que mudou de contrato ou de cobrança depois de entrar na linha não é tocada.
+    const fora = problemaDaDemandaNaAprovacao(demanda, alvo);
+    if (fora) {
+      pendentes.push({ numero, motivo: fora });
+      continue;
+    }
     const orcamento = quote ? { status: String(quote.status), tipo_rv: String(quote.tipo_rv), rv: Number(quote.rv ?? 0) } : null;
     const destino = destinoNaAprovacaoDaMedicao({ ...demanda, etapa: etapaAntes }, orcamento, execucaoNasLinhas(numero, linhas));
     if (destino.tipo === "pendente") {
@@ -804,9 +831,7 @@ async function aprovar(gravacao: Gravacao, id: string, medicao: Dados, input: Ap
     }
 
     const patch: Record<string, unknown> = { medicao_pendente: false, autorizacao_id: autorizacaoId };
-    if (destino.tipo === "autorizar") {
-      patch.validacao = { ...(demanda.validacao as Dados), etapa: "a_faturar", autorizacao_id: autorizacaoId };
-    } else if (destino.tipo === "validar") {
+    if (destino.tipo === "validar") {
       if (destino.registrar_execucao) {
         patch.executado_de = destino.registrar_execucao.de;
         patch.executado_ate = destino.registrar_execucao.ate;
@@ -816,6 +841,7 @@ async function aprovar(gravacao: Gravacao, id: string, medicao: Dados, input: Ap
         rv: destino.rv,
         etapa: "a_faturar",
         autorizacao: "medicao_aprovada",
+        autorizacao_id: autorizacaoId,
         em,
         por_uid: caller.uid,
         origem: "medicao",
@@ -881,7 +907,8 @@ async function aprovar(gravacao: Gravacao, id: string, medicao: Dados, input: Ap
     contrato_id: texto(medicao.contrato_id),
     medicao_id: id,
     competencia: texto(medicao.competencia),
-    demandas: numeros,
+    // As demandas autorizadas; a pendente entra quando for validada (demandas.ts).
+    demandas: aFaturar,
     demandas_a_faturar: aFaturar,
     demandas_pendentes: pendentes,
     total_cents: Number(medicao.total_cents ?? 0),
@@ -919,7 +946,7 @@ async function aprovar(gravacao: Gravacao, id: string, medicao: Dados, input: Ap
     createComercialEvent(transaction, db, {
       ...comum(gravacao, medicao, autorizacaoId),
       type: "client_authorization.recorded",
-      payload: { autorizacao_id: autorizacaoId, demandas: numeros, tipo: "medicao_aprovada", medicao_id: id },
+      payload: { autorizacao_id: autorizacaoId, demandas: aFaturar, tipo: "medicao_aprovada", medicao_id: id },
     }).id,
   );
   return resultado(id, medicao, "aprovada", patch.edicao, events, {

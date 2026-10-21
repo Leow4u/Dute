@@ -282,6 +282,8 @@ export const COMERCIAL_EVENT_PAYLOADS = {
       autorizacao_exigida: z.boolean(),
       medicao_pendente: z.boolean(),
       virou_cliente: z.boolean().optional(),
+      /** A demanda presa à medição já aprovada: a validação fica com a autorização dela (parte 16a). */
+      autorizacao_id: id.optional(),
     })
     .strict(),
 
@@ -613,7 +615,9 @@ const TEMPLATES: Templates = {
   }),
   "quote.validated": (p) => ({
     title: `${orcamento(p.numero, p.rv)} validado pelo cliente`,
-    description: `Revisão de ${TIPO_RV_ROTULO[p.tipo_rv]}; etapa: ${ETAPA_ROTULO[p.etapa_antes]} → ${ETAPA_ROTULO[p.etapa_depois]}.`,
+    description: `Revisão de ${TIPO_RV_ROTULO[p.tipo_rv]}; etapa: ${ETAPA_ROTULO[p.etapa_antes]} → ${ETAPA_ROTULO[p.etapa_depois]}${
+      p.autorizacao_id ? "; com a autorização da medição aprovada" : ""
+    }.`,
   }),
 
   "commercial_customer.created": (p) => ({

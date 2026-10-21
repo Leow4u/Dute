@@ -622,6 +622,14 @@ describe("evento gravado", () => {
     const validada = buildComercialEvent({ ...base, type: "quote.validated", payload: EXEMPLOS["quote.validated"] as never });
     assert.equal(validada.title, "Orçamento 10045 – RV01 validado pelo cliente");
     assert.equal(validada.entity_type, "quote");
+    // Parte 16a: a demanda presa à medição já aprovada fica com a autorização dela.
+    const pelaMedicao = buildComercialEvent({
+      ...base,
+      type: "quote.validated",
+      payload: { ...EXEMPLOS["quote.validated"], medicao_pendente: false, autorizacao_id: "aut_safra-2026_2026-10" } as never,
+    });
+    assert.match(pelaMedicao.description, /com a autorização da medição aprovada\.$/);
+    assert.doesNotMatch(validada.description, /medição/);
     const reaberta = buildComercialEvent({ ...base, type: "demand.reopened", payload: EXEMPLOS["demand.reopened"] as never });
     assert.equal(reaberta.description, "Volta para Em montagem, com a RV01 aberta.");
     assert.equal(reaberta.entity_type, "demand");
