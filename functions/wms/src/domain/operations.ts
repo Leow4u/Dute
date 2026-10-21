@@ -7556,11 +7556,12 @@ export type AddCatalogPhotosInput = {
   photo_urls: string[];
   photo_storage_paths?: string[];
   primary_photo_url?: string;
+  remove_photo_urls?: string[];
   idempotency_key: string;
 };
 
 /**
- * Acrescenta fotos a um item já cadastrado. É a única edição de cadastro
+ * Gerencia fotos de um item já cadastrado. É a única edição de cadastro
  * aberta ao armazém: não toca nome, custo nem saldo, só a foto, e grava o
  * mesmo conjunto em sku, produto, saldos e na projeção do portal para que
  * todos vejam a mesma imagem.
@@ -7575,17 +7576,18 @@ export async function addCatalogPhotosTransaction(
   const customerCode = text(input.customer_code) || "BTG Pactual";
   const newPhotos = stringList(input.photo_urls);
   const newPaths = stringList(input.photo_storage_paths);
+  const removedPhotos = stringList(input.remove_photo_urls);
   if (!skuCode) {
     throw new HttpsError("invalid-argument", "Informe o SKU do item.");
   }
-  if (!newPhotos.length) {
+  if (!newPhotos.length && !removedPhotos.length && !input.primary_photo_url) {
     throw new HttpsError("invalid-argument", "Envie ao menos uma foto.");
   }
   if (newPhotos.some((url) => !/^https:\/\//.test(url))) {
     throw new HttpsError("invalid-argument", "Foto com endereço inválido.");
   }
   const inputHash = digest(
-    { skuCode, clientItemCode, customerCode, newPhotos, newPaths, primaryPhoto: input.primary_photo_url },
+    { skuCode, clientItemCode, customerCode, newPhotos, newPaths, primaryPhoto: input.primary_photo_url, removedPhotos: removedPhotos.length ? removedPhotos : undefined },
     64,
   );
   const operationId = `op_photos_${digest({
@@ -7626,29 +7628,40 @@ export async function addCatalogPhotosTransaction(
     const existingPhotos = [...new Set([
       ...stringList(current.photo_urls),
       ...stringList(asRecord(productSnapshot?.data()).photo_urls),
-      ...balanceRows.flatMap((row) => stringList(row.data.photo_urls)),
+      ...balanceRows.flatMap((row) => [...stringList(row.data.photo_urls), text(row.data.primary_photo_url)].filter(Boolean)),
+      ...stringList(clientSnapshot.data()?.photo_urls),
       ...[text(current.primary_photo_url), text(asRecord(productSnapshot?.data()).primary_photo_url)].filter(Boolean),
     ])];
-    const photoUrls = [...new Set([...existingPhotos, ...newPhotos])];
+    if (removedPhotos.some((url) => !existingPhotos.includes(url))) throw new HttpsError("failed-precondition", "A foto já mudou. Atualize a ficha do produto.");
+    const photoUrls = [...new Set([...existingPhotos, ...newPhotos])].filter((url) => !removedPhotos.includes(url));
     if (photoUrls.length > 8) throw new HttpsError("failed-precondition", "O produto já atingiu o limite de 8 fotos.");
     if (input.primary_photo_url && !photoUrls.includes(input.primary_photo_url)) {
       throw new HttpsError("invalid-argument", "A foto principal precisa estar entre as fotos do produto.");
     }
-    const primaryPhoto = input.primary_photo_url || text(current.primary_photo_url) || photoUrls[0];
-    if (photoUrls.includes(primaryPhoto)) photoUrls.splice(photoUrls.indexOf(primaryPhoto), 1);
-    photoUrls.unshift(primaryPhoto);
+    const previousPrimary = text(current.primary_photo_url);
+    const primaryPhoto = input.primary_photo_url || (photoUrls.includes(previousPrimary) ? previousPrimary : photoUrls[0]) || "";
+    if (primaryPhoto) {
+      if (photoUrls.includes(primaryPhoto)) photoUrls.splice(photoUrls.indexOf(primaryPhoto), 1);
+      photoUrls.unshift(primaryPhoto);
+    }
     const pathsByUrl = new Map<string, string>();
-    for (const record of [asRecord(productSnapshot?.data()), current, { photo_urls: newPhotos, photo_storage_paths: newPaths }]) {
+    for (const record of [...balanceRows.map((row) => row.data), asRecord(clientSnapshot.data()), asRecord(productSnapshot?.data()), current, { photo_urls: newPhotos, photo_storage_paths: newPaths }]) {
       const urls = stringList(record.photo_urls);
       const paths = stringList(record.photo_storage_paths);
       urls.forEach((url, index) => { if (paths[index]) pathsByUrl.set(url, paths[index]!); });
     }
     const photoPaths = photoUrls.map((url) => pathsByUrl.get(url)).filter((path): path is string => Boolean(path));
-    const added = photoUrls.length - existingPhotos.length;
+    const added = newPhotos.filter((url) => !existingPhotos.includes(url) && photoUrls.includes(url)).length;
+    if (removedPhotos.length) transaction.create(db.collection("catalog_photo_archive").doc(operationId), {
+      customer_code: customerCode, sku_code: skuCode, client_item_code: clientItemCode ?? null,
+      photos: removedPhotos.map((url) => ({ url, storage_path: pathsByUrl.get(url) ?? null })),
+      previous_primary_photo_url: previousPrimary || null, actor: actorPayload(actor),
+      created_at: FieldValue.serverTimestamp(), operation_id: operationId,
+    });
     const photoFields = compact({
       photo_urls: photoUrls,
       primary_photo_url: primaryPhoto,
-      photo_storage_paths: photoPaths.length ? photoPaths : undefined,
+      photo_storage_paths: photoPaths,
       updated_at: FieldValue.serverTimestamp(),
     });
 
@@ -7669,34 +7682,33 @@ export async function addCatalogPhotosTransaction(
     if (targets.productRef) transaction.update(targets.productRef, withoutMoney);
     for (const row of balanceRows) {
       transaction.update(row.ref, {
-        photo_urls: photoUrls,
-        primary_photo_url: photoFields.primary_photo_url,
+        ...photoFields,
         ...publishedMoneyDeletes(),
         updated_at: FieldValue.serverTimestamp(),
       });
     }
     if (clientSnapshot.exists) {
       transaction.update(clientInventoryRef, {
-        photo_urls: photoUrls,
-        primary_photo_url: photoFields.primary_photo_url,
+        ...photoFields,
         ...publishedMoneyDeletes(),
         updated_at: FieldValue.serverTimestamp(),
       });
     }
 
+    const eventType = removedPhotos.length || !added ? "catalog.photos_updated" : "catalog.photos_added";
     const event = createEvent(
       transaction,
       db,
       operationEventId(operationId, "photos_added"),
       {
-        type: "catalog.photos_added",
-        title: added === 1 ? "Foto adicionada ao item" : "Fotos adicionadas ao item",
-        description: `${added} foto(s) em ${skuCode}.`,
+        type: eventType,
+        title: removedPhotos.length ? "Foto removida do produto" : !added ? "Foto principal atualizada" : added === 1 ? "Foto adicionada ao item" : "Fotos adicionadas ao item",
+        description: removedPhotos.length ? `${removedPhotos.length} foto(s) removida(s) de ${skuCode}; arquivo preservado no histórico.` : !added ? `Foto principal de ${skuCode} atualizada.` : `${added} foto(s) em ${skuCode}.`,
         severity: "info",
         entity_type: "sku",
         entity_id: skuCode,
         customer_code: customerCode,
-        payload: { added, total: photoUrls.length, client_item_code: clientItemCode, primary_photo_changed: Boolean(input.primary_photo_url), photo_storage_paths: newPaths },
+        payload: { added, removed: removedPhotos.length, total: photoUrls.length, client_item_code: clientItemCode, primary_photo_changed: primaryPhoto !== previousPrimary, photo_storage_paths: newPaths, archive_id: removedPhotos.length ? operationId : undefined },
       },
       actor,
     );
@@ -7705,13 +7717,14 @@ export async function addCatalogPhotosTransaction(
       sku_code: skuCode,
       photo_urls: photoUrls,
       added,
+      removed: removedPhotos.length,
       events: [event],
     };
     createOperationReceipt(
       transaction,
       operationRef,
       inputHash,
-      "catalog.photos_added",
+      eventType,
       skuCode,
       actor,
       result,

@@ -3,6 +3,13 @@ import { describe, expect, it } from "vitest";
 import { functionRoute } from "./functions-api";
 
 describe("fotos profissionais do produto", () => {
+  it("gerencia remoção e principal em callable autenticada com recibo idempotente", async () => {
+    const route = functionRoute("/api/catalog/photos/manage", "POST");
+    expect(route?.name).toBe("manageCatalogPhotos");
+    const body = { customer_code: "Cliente A", sku_code: "SKU", remove_photo_urls: ["https://example.test/removed.jpg"], idempotency_key: "remove-photo" };
+    expect(await route?.payload("/api/catalog/photos/manage", { body: JSON.stringify(body) })).toEqual(body);
+    expect(functionRoute("/api/catalog/photos/manage", "GET")).toBeNull();
+  });
   it("envia a geração autenticada sem transformá-la em alteração de cadastro", async () => {
     const route = functionRoute("/api/products/generate-photo", "POST");
     expect(route?.name).toBe("generateCatalogPhoto");

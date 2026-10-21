@@ -305,6 +305,16 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  if (method === "POST" && pathname === "/api/catalog/photos/manage") {
+    return {
+      name: "manageCatalogPhotos",
+      payload: async (_pathname, init) => {
+        const body = await readJsonBody(init);
+        return { ...body, idempotency_key: body.idempotency_key ?? crypto.randomUUID() };
+      },
+    };
+  }
+
   if (method === "POST" && pathname === "/api/movements") {
     return {
       name: "createInventoryMovement",

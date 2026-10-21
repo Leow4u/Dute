@@ -200,7 +200,7 @@ import {
   type DueRoutine,
 } from "./domain/agent-routines.js";
 import { PROJECT_ID } from "./project.js";
-import { ProductPhotoInput, productPhotoPath, productPhotoPrompt, generateProductPhoto } from "./domain/product-photo.js";
+import { ProductPhotoInput, originalProductPhoto, productPhotoPrompt, generateProductPhoto } from "./domain/product-photo.js";
 
 const adminApp = initializeApp();
 setGlobalOptions({
@@ -5049,12 +5049,16 @@ export const generateCatalogPhoto = onCall({ timeoutSeconds: 180, maxInstances: 
   const profile = await getProfile(request);
   requireWarehouseWrite(profile);
   const parsed = ProductPhotoInput.safeParse(request.data ?? {});
-  if (!parsed.success) throw new HttpsError("invalid-argument", "Informe a foto, o cliente e o tipo de apresentação.");
+  if (!parsed.success) throw new HttpsError("invalid-argument", parsed.error.issues[0]?.message || "Informe a foto, o cliente e o tipo de apresentação.");
   const input = parsed.data;
   const customer = requireCustomerScope(profile, input.customer_code);
   const bucketName = documentBucketName();
-  const sourcePath = productPhotoPath(input.source_url, bucketName, customer);
   const bucket = getStorage().bucket(bucketName);
+  const original = await originalProductPhoto(input.source_url, bucketName, customer, async (path) => {
+    const [metadata] = await bucket.file(path).getMetadata();
+    return metadata;
+  });
+  const sourcePath = original.path;
   const source = bucket.file(sourcePath);
   const [metadata] = await source.getMetadata();
   const mimeType = metadata.contentType ?? "";
@@ -5073,7 +5077,7 @@ export const generateCatalogPhoto = onCall({ timeoutSeconds: 180, maxInstances: 
     }
     transaction.create(job, {
       customer_code: customer, actor_uid: profile.uid, source_path: sourcePath,
-      mode: input.mode, input_hash: hash, status: "processing", created_at: FieldValue.serverTimestamp(),
+      mode: input.mode, context: { product_name: input.product_name, description: input.description, category: input.category, gender: input.gender, group: input.group, size: input.size, color: input.color, brand: input.brand, mannequin: input.mannequin ?? null }, input_hash: hash, status: "processing", created_at: FieldValue.serverTimestamp(),
     });
     return null;
   });
@@ -5100,7 +5104,7 @@ export const generateCatalogPhoto = onCall({ timeoutSeconds: 180, maxInstances: 
         },
       },
     });
-    const result = { fileName, fileUrl: firebaseDownloadUrl(bucketName, path, token), storagePath: path };
+    const result = { fileName, fileUrl: firebaseDownloadUrl(bucketName, path, token), storagePath: path, sourceUrl: original.url, generated: true };
     await job.update({ status: "ready", result, model, completed_at: FieldValue.serverTimestamp() });
     return result;
   } catch (error) {
@@ -6496,6 +6500,24 @@ export const addCatalogPhotos = onCall(async (request) => {
   const input = AddCatalogPhotosSchema.parse(request.data ?? {});
   const customer_code = requireCustomerScope(profile, input.customer_code);
   return addCatalogPhotosTransaction(db, { ...input, customer_code }, profile);
+});
+
+const ManageCatalogPhotosSchema = z.object({
+  sku_code: z.string().trim().min(1),
+  client_item_code: z.string().trim().optional(),
+  customer_code: z.string().trim().min(1),
+  remove_photo_urls: z.array(z.string().url()).max(8).default([]),
+  primary_photo_url: z.string().url().optional(),
+  idempotency_key: z.string().trim().min(1),
+}).refine((input) => input.remove_photo_urls.length > 0 || Boolean(input.primary_photo_url));
+
+export const manageCatalogPhotos = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  const parsed = ManageCatalogPhotosSchema.safeParse(request.data ?? {});
+  if (!parsed.success) throw new HttpsError("invalid-argument", "Escolha uma foto para remover ou definir como principal.");
+  const input = parsed.data;
+  return addCatalogPhotosTransaction(db, { ...input, photo_urls: [], customer_code: requireCustomerScope(profile, input.customer_code) }, profile);
 });
 
 export const recordCycleCount = onCall(async (request) => {
