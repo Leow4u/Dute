@@ -89,6 +89,13 @@ service cloud.firestore {
       return hasAnyRole(['owner', 'admin', 'financeiro', 'suporte']);
     }
 
+    // Cadastro comercial do cliente (locais e contatos, com nome, e-mail e
+    // telefone): owner, admin e comercial. Lista própria, fora de
+    // canReadPrices: quem vier a ler preço não ganha os contatos junto.
+    function canReadCommercialRegistry() {
+      return hasAnyRole(['owner', 'admin', 'comercial']);
+    }
+
     /**
      * O cálculo da fatura precisa das fontes operacionais (catálogo, estoque
      * publicado e ledger) além das coleções billing_*. Sem isto o financeiro
@@ -752,8 +759,24 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // O comercial lê o cadastro (prospects e clientes) desde a parte 6 do
+    // Comercial; quem grava são as Functions do WMS e do Comercial.
     match /customers/{customerId} {
-      allow read: if canReadOperations();
+      allow read: if canReadOperations() || canReadCommercialRegistry();
+      allow create, update, delete: if false;
+    }
+
+    // Locais do cliente (polo, prédio, sigla e endereço) e contatos (nome,
+    // e-mail, telefone, empresa), gravados só pelas callables do Comercial
+    // (functions/comercial/src/domain/cadastro.ts). A operação, o suporte, o
+    // financeiro e o cliente não leem.
+    match /customer_locations/{locationId} {
+      allow read: if canReadCommercialRegistry();
+      allow create, update, delete: if false;
+    }
+
+    match /customer_contacts/{contactId} {
+      allow read: if canReadCommercialRegistry();
       allow create, update, delete: if false;
     }
 
