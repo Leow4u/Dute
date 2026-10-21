@@ -3,7 +3,7 @@ import { basename, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { deleteApp, initializeApp } from "firebase-admin/app";
-import { FieldValue, getFirestore, type Firestore } from "firebase-admin/firestore";
+import { FieldValue, Timestamp, getFirestore, type Firestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 import { z } from "zod";
 
@@ -39,14 +39,16 @@ import { ErroDoCsv, celulaCsv, decodificarUtf8, lerCsv } from "./csv.js";
  * - Entram as pessoas jurídicas com a tag Cliente e as empresas do CRM, uma
  *   por raiz de CNPJ (as filiais viram um cadastro só). Pessoa física, conta
  *   de teste, fornecedor e contato ficam fora; e-mail, telefone, endereço
- *   completo e observações não são lidos para o cadastro.
+ *   completo e observações não são lidos para o cadastro. A conta do CRM sem
+ *   CNPJ só entra com um código escrito na revisão.
  * - Quem comprou desde 2024 (título não cancelado, pela raiz do CNPJ) entra
- *   como cliente; o resto, como prospect. O cadastro que já existe (achado
- *   pelos ids da Omie, pela raiz do CNPJ ou pelo código canônico, como a BTG)
- *   só ganha `comercial.omie_ids`: identidade e estágio não mudam.
+ *   como cliente, desde a primeira compra; o resto, como prospect. O cadastro
+ *   que já existe (achado pelos ids da Omie, pela raiz do CNPJ ou pelo código
+ *   canônico) só ganha `comercial.omie_ids`: identidade e estágio não mudam. O
+ *   cadastro sem CNPJ de nome parecido (a BTG do WMS) deixa a linha a conferir.
  * - Dry-run por padrão: gera o relatório e o CSV de revisão em tmp/comercial/.
- *   A coluna `codigo` do CSV revisado volta com --codigos ("-" deixa a
- *   empresa de fora).
+ *   As colunas `codigo` e `nome` do CSV revisado voltam com --codigos ("-"
+ *   deixa a empresa de fora).
  * - --executar exige --projeto, e só grava onde o Comercial está liberado (ou
  *   no emulador). Grava com as peças das callables do cadastro
  *   (prospectPayload, customerIdentityConflict, runIdempotent e o evento), e
@@ -61,6 +63,10 @@ export const ATOR_DA_CARGA: ComercialActor = { uid: "carga-clientes-omie", role:
 
 /** A partir desta data de emissão, um título não cancelado faz da empresa um cliente. */
 export const COMPRA_DESDE = "2024-01-01";
+
+/** O nome do cadastro novo, como na callable: de 2 a 120 caracteres. */
+const NOME_MIN = 2;
+const NOME_MAX = 120;
 
 /** Pastas do repositório que o git ignora e que podem guardar os arquivos. */
 const PASTAS_IGNORADAS = ["tmp", ".secrets"];
@@ -275,8 +281,12 @@ function ordenarIds(ids: Iterable<string>): string[] {
 export type Entrada = {
   /** "cnpj-<raiz>" ou, para a conta do CRM sem CNPJ, "crm-<nCod>". Não é número, para o Excel não comer zero. */
   chave: string;
+  /** Com um CNPJ, o nome fantasia; com mais de um, o começo comum das razões sociais (o nome fantasia de cada CNPJ é o do polo). */
   nome: string;
+  /** A da matriz; com mais de um CNPJ, o começo comum das razões sociais. */
   razao_social: string | null;
+  /** Todos os nomes do grupo na Omie (nome fantasia e razão social de cada CNPJ): só para achar o cadastro parecido. */
+  nomes: string[];
   /** CNPJ inteiro sem máscara, da matriz (ou do menor CNPJ do grupo). */
   cnpj: string | null;
   raiz: string | null;
@@ -285,6 +295,8 @@ export type Entrada = {
   /** "cliente:<codigo_cliente_omie>" e "crm:<nCod>". */
   omie_ids: string[];
   estagio: CustomerStage;
+  /** Emissão do título não cancelado mais antigo, de qualquer ano: o "cliente desde". */
+  primeira_compra: string | null;
   /** Emissão do título não cancelado mais recente, de qualquer ano. */
   ultima_compra: string | null;
   cidade: string | null;
@@ -301,6 +313,22 @@ export type ForaDaCarga = {
 };
 
 export type Montagem = { entradas: Entrada[]; fora: ForaDaCarga; titulos_sem_cadastro: number };
+
+/**
+ * O começo comum, palavra por palavra (sem acento nem maiúscula), dos nomes de
+ * um grupo, sem o separador do fim: "KAPPA BANCO S.A. - SEDE" e "KAPPA BANCO
+ * S.A. - POLO NORTE" dão "KAPPA BANCO S.A.". Vazio quando não há.
+ */
+export function comecoComum(nomes: readonly unknown[]): string {
+  const listas = [...new Set(nomes.map(text).filter(Boolean))].map((nome) => nome.split(/\s+/));
+  if (!listas.length) return "";
+  const comum: string[] = [];
+  for (const [index, palavra] of listas[0].entries()) {
+    if (!listas.every((lista) => lista[index] !== undefined && semAcento(lista[index]) === semAcento(palavra))) break;
+    comum.push(palavra);
+  }
+  return comum.join(" ").replace(/[\s\-–—/,;:(|]+$/, "");
+}
 
 /** Matriz (ordem 0001) primeiro; depois o menor CNPJ; depois o menor id. */
 function porMatriz(a: ClienteOmie, b: ClienteOmie): number {
@@ -326,6 +354,7 @@ export function montarEntradas(fontes: FontesOmie, desde = COMPRA_DESDE): Montag
     const cnpj = pessoaFisica(cliente.pessoa_fisica, cliente.cnpj_cpf) ? null : cnpjNormalizado(cliente.cnpj_cpf);
     raizDoCadastro.set(cliente.codigo_cliente_omie, cnpj ? cnpj.slice(0, 8) : null);
   }
+  const primeiraCompra = new Map<string, string>();
   const ultimaCompra = new Map<string, string>();
   let semCadastro = 0;
   for (const titulo of fontes.titulos) {
@@ -336,8 +365,10 @@ export function montarEntradas(fontes: FontesOmie, desde = COMPRA_DESDE): Montag
     }
     const raiz = raizDoCadastro.get(titulo.codigo_cliente_fornecedor);
     if (!raiz) continue;
-    const anterior = ultimaCompra.get(raiz);
-    if (!anterior || titulo.data_emissao > anterior) ultimaCompra.set(raiz, titulo.data_emissao);
+    const primeira = primeiraCompra.get(raiz);
+    if (!primeira || titulo.data_emissao < primeira) primeiraCompra.set(raiz, titulo.data_emissao);
+    const ultima = ultimaCompra.get(raiz);
+    if (!ultima || titulo.data_emissao > ultima) ultimaCompra.set(raiz, titulo.data_emissao);
   }
 
   type Grupo = { clientes: ClienteOmie[]; crm: ContaCrm[] };
@@ -393,13 +424,40 @@ export function montarEntradas(fontes: FontesOmie, desde = COMPRA_DESDE): Montag
     ]);
     if (clientes.some((cliente) => semAcento(cliente.inativo) === "S")) avisos.push("Há cadastro inativo na Omie neste grupo.");
     const compra = ultimaCompra.get(raiz) ?? null;
-    const base = { raiz, filiais: cnpjs.size, omie_ids: omieIds, estagio: (compra && compra >= desde ? "cliente" : "prospect") as CustomerStage, ultima_compra: compra, avisos };
+    const nomes = [
+      ...new Set(
+        [
+          ...clientes.flatMap((cliente) => [cliente.nome_fantasia, cliente.razao_social]),
+          ...crm.flatMap((conta) => [conta.identificacao.cNomeFantasia, conta.identificacao.cNome]),
+        ]
+          .map(text)
+          .filter(Boolean),
+      ),
+    ];
+    const base = {
+      raiz,
+      nomes,
+      filiais: cnpjs.size,
+      omie_ids: omieIds,
+      estagio: (compra && compra >= desde ? "cliente" : "prospect") as CustomerStage,
+      primeira_compra: primeiraCompra.get(raiz) ?? null,
+      ultima_compra: compra,
+      avisos,
+    };
+    // Com mais de um CNPJ, o nome fantasia de cada um é o do polo, e a razão
+    // social às vezes também ("KAPPA BANCO S.A. - SEDE"): vale o começo
+    // comum das razões sociais do grupo.
+    const variosCnpjs = cnpjs.size > 1;
     if (clientes.length) {
       const [principal] = [...clientes].sort(porMatriz);
+      const fantasia = text(principal.nome_fantasia);
+      const razaoDaMatriz = text(principal.razao_social);
+      const comum = comecoComum(clientes.map((cliente) => cliente.razao_social));
+      const razao = variosCnpjs && comum.length >= NOME_MIN ? comum : razaoDaMatriz;
       entradas.push({
         chave: `cnpj-${raiz}`,
-        nome: text(principal.nome_fantasia) || text(principal.razao_social),
-        razao_social: text(principal.razao_social) || null,
+        nome: variosCnpjs ? razao || fantasia : fantasia || razao,
+        razao_social: razao || null,
         cnpj: cnpjNormalizado(principal.cnpj_cpf),
         cidade: cidadeDaOmie(principal.cidade),
         uf: ufValida(principal.estado),
@@ -407,9 +465,12 @@ export function montarEntradas(fontes: FontesOmie, desde = COMPRA_DESDE): Montag
       });
     } else {
       const [principal] = [...crm].sort((a, b) => a.identificacao.nCod - b.identificacao.nCod);
+      const fantasia = text(principal.identificacao.cNomeFantasia);
+      const comum = comecoComum(crm.map((conta) => conta.identificacao.cNome));
+      const nome = variosCnpjs && comum.length >= NOME_MIN ? comum : text(principal.identificacao.cNome);
       entradas.push({
         chave: `cnpj-${raiz}`,
-        nome: text(principal.identificacao.cNomeFantasia) || text(principal.identificacao.cNome),
+        nome: variosCnpjs ? nome || fantasia : fantasia || nome,
         razao_social: null,
         cnpj: cnpjNormalizado(principal.identificacao.cDoc),
         cidade: ufValida(principal.endereco.cUF) ? cidadeDaOmie(principal.endereco.cCidade) : null,
@@ -424,15 +485,17 @@ export function montarEntradas(fontes: FontesOmie, desde = COMPRA_DESDE): Montag
       chave: `crm-${nCod}`,
       nome: text(cNomeFantasia) || text(cNome),
       razao_social: null,
+      nomes: [...new Set([cNomeFantasia, cNome].map(text).filter(Boolean))],
       cnpj: null,
       raiz: null,
       filiais: 0,
       omie_ids: [`crm:${nCod}`],
       estagio: "prospect",
+      primeira_compra: null,
       ultima_compra: null,
       cidade: ufValida(conta.endereco.cUF) ? cidadeDaOmie(conta.endereco.cCidade) : null,
       uf: ufValida(conta.endereco.cUF),
-      avisos: ["Conta do CRM sem CNPJ: confira se é empresa."],
+      avisos: [],
     });
   }
   entradas.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR") || a.chave.localeCompare(b.chave));
@@ -450,6 +513,7 @@ export const COLUNAS_DA_REVISAO = [
   "cnpj",
   "filiais",
   "omie_ids",
+  "primeira_compra",
   "ultima_compra",
   "codigo_sugerido",
   "codigo",
@@ -462,42 +526,52 @@ function cabecalhoNormalizado(value: string): string {
   return semAcento(value).toLowerCase().replace(/[^a-z_]/g, "");
 }
 
+export type Revisao = {
+  /** Código revisado por chave ("-" deixa a empresa de fora). */
+  codigos: Map<string, string>;
+  /** Nome revisado por chave, só quando difere do nome da Omie. */
+  nomes: Map<string, string>;
+  problemas: string[];
+  avisos: string[];
+};
+
 /**
- * Lê a coluna `codigo` do CSV de revisão (o mesmo que o dry-run gerou, ou
- * qualquer CSV com ";" e as colunas `chave` e `codigo`). Código vazio é o
- * sugerido; "-" deixa a empresa de fora. O código é conferido no plano, com a
- * regra da callable.
+ * Lê o CSV de revisão (o mesmo que o dry-run gerou, ou qualquer CSV com ";" e
+ * as colunas `chave` e `codigo`). Código vazio é o sugerido; "-" deixa a
+ * empresa de fora. A coluna `nome`, quando existe, corrige o nome do cadastro
+ * novo. O código é conferido no plano, com a regra da callable.
  */
-export function lerCodigos(
-  bytes: Uint8Array,
-  entradas: readonly Entrada[],
-): { codigos: Map<string, string>; problemas: string[]; avisos: string[] } {
+export function lerCodigos(bytes: Uint8Array, entradas: readonly Entrada[]): Revisao {
   const codigos = new Map<string, string>();
+  const nomes = new Map<string, string>();
   const problemas: string[] = [];
   const avisos: string[] = [];
   let linhas;
   try {
     linhas = lerCsv(decodificarUtf8(bytes));
   } catch (error) {
-    if (error instanceof ErroDoCsv) return { codigos, problemas: [`--codigos: ${error.message}`], avisos };
+    if (error instanceof ErroDoCsv) return { codigos, nomes, problemas: [`--codigos: ${error.message}`], avisos };
     throw error;
   }
   const [cabecalho, ...resto] = linhas;
   const colunas = (cabecalho?.campos ?? []).map(cabecalhoNormalizado);
   const iChave = colunas.indexOf("chave");
   const iCodigo = colunas.indexOf("codigo");
+  const iNome = colunas.indexOf("nome");
   if (iChave < 0 || iCodigo < 0) {
     return {
       codigos,
+      nomes,
       problemas: ['--codigos: o CSV precisa das colunas "chave" e "codigo", separadas por ";" (o CSV de revisão da carga já vem assim).'],
       avisos,
     };
   }
-  const chaves = new Set(entradas.map((entrada) => entrada.chave));
+  const porChave = new Map(entradas.map((entrada) => [entrada.chave, entrada]));
   const vistas = new Set<string>();
   for (const linha of resto) {
     const chave = text(linha.campos[iChave]);
     const codigo = text(linha.campos[iCodigo]).toUpperCase();
+    const nome = iNome < 0 ? "" : text(linha.campos[iNome]).replace(/\s+/g, " ");
     if (!chave) {
       if (codigo) problemas.push(`--codigos: linha ${linha.numero}: código sem chave.`);
       continue;
@@ -507,14 +581,21 @@ export function lerCodigos(
       continue;
     }
     vistas.add(chave);
-    if (!codigo) continue;
-    if (!chaves.has(chave)) {
-      avisos.push(`--codigos: linha ${linha.numero}: a chave ${chave} não está nesta carga; o código foi ignorado.`);
+    const entrada = porChave.get(chave);
+    if (!entrada) {
+      if (codigo) avisos.push(`--codigos: linha ${linha.numero}: a chave ${chave} não está nesta carga; a linha foi ignorada.`);
       continue;
     }
-    codigos.set(chave, codigo);
+    if (codigo) codigos.set(chave, codigo);
+    if (nome && nome !== entrada.nome.replace(/\s+/g, " ")) {
+      if (nome.length < NOME_MIN || nome.length > NOME_MAX) {
+        problemas.push(`--codigos: linha ${linha.numero}: o nome precisa ter de ${NOME_MIN} a ${NOME_MAX} caracteres.`);
+      } else {
+        nomes.set(chave, nome);
+      }
+    }
   }
-  return { codigos, problemas, avisos };
+  return { codigos, nomes, problemas, avisos };
 }
 
 function cnpjComMascara(cnpj: string | null): string {
@@ -533,6 +614,7 @@ export function csvDeRevisao(itens: readonly ItemCliente[]): string {
         cnpjComMascara(item.cnpj),
         item.filiais,
         item.omie_ids.join(" "),
+        item.primeira_compra ?? "",
         item.ultima_compra ?? "",
         item.codigo_sugerido,
         item.codigo,
@@ -559,6 +641,7 @@ export type ItemCliente = {
   cnpj: string | null;
   filiais: number;
   omie_ids: string[];
+  primeira_compra: string | null;
   ultima_compra: string | null;
   /** O código que a carga usa: o do cadastro existente, o do CSV revisado ou o sugerido pelo nome. */
   codigo_sugerido: string;
@@ -578,7 +661,15 @@ export type ItemCliente = {
 };
 
 export type Operacao =
-  | { tipo: "criar"; item: ItemCliente; documentId: string; estagio: CustomerStage; dados: DadosDoProspect }
+  | {
+      tipo: "criar";
+      item: ItemCliente;
+      documentId: string;
+      estagio: CustomerStage;
+      /** Para o cliente, a primeira compra (AAAA-MM-DD): vira o `stage_changed_at`, o "cliente desde". */
+      cliente_desde: string | null;
+      dados: DadosDoProspect;
+    }
   | { tipo: "vincular"; item: ItemCliente; customer_id: string; customer_code: string; antes: string[]; depois: string[] };
 
 export type Plano = { itens: ItemCliente[]; operacoes: Operacao[] };
@@ -610,32 +701,65 @@ function semRepetir(cadastros: readonly CadastroExistente[]): CadastroExistente[
   return [...new Map(cadastros.map((cadastro) => [cadastro.id, cadastro])).values()];
 }
 
+/** Tamanho mínimo, já canônico, para um nome conter o outro: "ITAU" conta; "BTG", não. */
+const PARECIDO_MIN = 4;
+
+/**
+ * Cadastros sem CNPJ cujo código ou nome está dentro de um dos nomes da Omie
+ * (ou os contém), comparados sem acento, maiúscula nem separador: "BTG
+ * Pactual" (WMS) está em "BANCO BTG PACTUAL S.A.". O cadastro com CNPJ é
+ * achado pela raiz; com outra raiz, é outra empresa.
+ */
+export function cadastrosParecidos(nomes: readonly string[], cadastros: readonly CadastroExistente[]): CadastroExistente[] {
+  const nossos = nomes.map(canonicalCustomerCode).filter((nome) => nome.length >= PARECIDO_MIN);
+  return cadastros.filter((cadastro) => {
+    if (cnpjRoot(cadastro.data.document)) return false;
+    const deles = [cadastro.data.code, cadastro.data.customer_code, cadastro.data.name]
+      .map(canonicalCustomerCode)
+      .filter((nome) => nome.length >= PARECIDO_MIN);
+    return deles.some((dele) => nossos.some((nosso) => nosso.includes(dele) || dele.includes(nosso)));
+  });
+}
+
+/** Como a linha achou o cadastro existente. A raiz da linha achada só pelo código não é a do cadastro. */
+type Achado = "ids" | "raiz" | "codigo";
+
 /**
  * Plano da carga: para cada entrada, o cadastro que já existe (pelos ids da
  * Omie, pela raiz do CNPJ ou pelo código canônico) ou o código do cadastro
  * novo; depois junta no mesmo cadastro as entradas com o mesmo destino. Sem
  * banco (dry-run sem --projeto), `cadastros` é null e o plano supõe o
- * cadastro vazio.
+ * cadastro vazio. `nomes` traz os nomes revisados no CSV, que valem só para
+ * o cadastro novo.
  */
 export function planejar(
   entradas: readonly Entrada[],
   codigos: ReadonlyMap<string, string> | null,
   cadastros: readonly CadastroExistente[] | null,
+  nomes: ReadonlyMap<string, string> | null = null,
 ): Plano {
   const lista = cadastros ?? [];
   const itens: ItemCliente[] = [];
-  const porEntrada = new Map<ItemCliente, { entrada: Entrada; existente: CadastroExistente | null }>();
+  const porEntrada = new Map<ItemCliente, { entrada: Entrada; existente: CadastroExistente | null; achado: Achado | null }>();
+  // A raiz de cada id da Omie desta carga: diz a que empresa um cadastro sem CNPJ já está ligado.
+  const raizDoId = new Map<string, string>();
+  for (const entrada of entradas) {
+    if (entrada.raiz) for (const id of entrada.omie_ids) raizDoId.set(id, entrada.raiz);
+  }
 
   for (const entrada of entradas) {
     const revisado = codigos?.get(entrada.chave) ?? "";
+    const nomeRevisado = nomes?.get(entrada.chave) ?? null;
+    const nome = nomeRevisado ?? entrada.nome;
     const item: ItemCliente = {
       chave: entrada.chave,
-      nome: entrada.nome,
+      nome,
       cnpj: entrada.cnpj,
       filiais: entrada.filiais,
       omie_ids: entrada.omie_ids,
+      primeira_compra: entrada.primeira_compra,
       ultima_compra: entrada.ultima_compra,
-      codigo_sugerido: sugerirCodigo(entrada.nome),
+      codigo_sugerido: sugerirCodigo(nome),
       codigo: revisado,
       estagio: entrada.estagio,
       acao: "a_conferir",
@@ -651,8 +775,20 @@ export function planejar(
       item.avisos.push(`Fora pela revisão ("${CODIGO_FORA}" na coluna codigo).`);
       continue;
     }
-    if (entrada.nome.length < 2 || entrada.nome.length > 120) {
-      item.problemas.push("Nome da Omie com menos de 2 ou mais de 120 caracteres: corrija na Omie.");
+
+    const porIds = lista.filter((cadastro) => idsOmieDoCadastro(cadastro.data).some((id) => entrada.omie_ids.includes(id)));
+    const porRaiz = entrada.raiz ? lista.filter((cadastro) => cnpjRoot(cadastro.data.document) === entrada.raiz) : [];
+    const fortes = semRepetir([...porIds, ...porRaiz]);
+
+    // A conta do CRM sem CNPJ pode ser uma pessoa (LGPD): só entra com o
+    // código escrito na revisão. A que já foi ligada numa carga anterior segue.
+    if (!entrada.raiz && !fortes.length && !revisado) {
+      item.acao = "fora";
+      item.avisos.push("Conta do CRM sem CNPJ: só entra com um código na coluna codigo. Confira antes se é empresa; pessoa física fica fora.");
+      continue;
+    }
+    if (nome.length < NOME_MIN || nome.length > NOME_MAX) {
+      item.problemas.push(`Nome com menos de ${NOME_MIN} ou mais de ${NOME_MAX} caracteres: corrija na coluna nome do CSV (--codigos).`);
     }
     if (entrada.razao_social && entrada.razao_social.length > 160) {
       item.problemas.push("Razão social da Omie com mais de 160 caracteres: corrija na Omie.");
@@ -661,34 +797,49 @@ export function planejar(
     let codigoNovo: string | null = null;
     let erroDoCodigo = "";
     try {
-      codigoNovo = codigoDoNovoCadastro(revisado, entrada.nome);
+      codigoNovo = codigoDoNovoCadastro(revisado, nome);
     } catch (error) {
       erroDoCodigo = (error as Error).message;
     }
 
-    const fortes = semRepetir([
-      ...lista.filter((cadastro) => idsOmieDoCadastro(cadastro.data).some((id) => entrada.omie_ids.includes(id))),
-      ...(entrada.raiz ? lista.filter((cadastro) => cnpjRoot(cadastro.data.document) === entrada.raiz) : []),
-    ]);
     let existente: CadastroExistente | null = null;
+    let achado: Achado | null = null;
     if (fortes.length > 1) {
       item.problemas.push(
         `A Omie aponta para mais de um cadastro (${fortes.map(nomeDoCadastro).join(", ")}): confira em Configurações › Clientes.`,
       );
     } else if (fortes.length === 1) {
       existente = fortes[0];
-    } else if (codigoNovo) {
-      const porCodigo = lista.filter((cadastro) => [cadastro.data.code, cadastro.data.customer_code].some((code) => mesmoCodigo(code, codigoNovo)));
+      achado = porIds.includes(existente) ? "ids" : "raiz";
+    } else {
+      // O código revisado acha o cadastro mesmo fora do formato do código
+      // novo: "BTG Pactual", como o WMS gravou.
+      const codigoDeBusca = revisado || codigoNovo;
+      const porCodigo = codigoDeBusca
+        ? lista.filter((cadastro) => [cadastro.data.code, cadastro.data.customer_code].some((code) => mesmoCodigo(code, codigoDeBusca)))
+        : [];
       if (porCodigo.length > 1) {
-        item.problemas.push(`Há mais de um cadastro com o código ${codigoNovo}: confira em Configurações › Clientes.`);
+        item.problemas.push(`Há mais de um cadastro com o código ${codigoDeBusca}: confira em Configurações › Clientes.`);
       } else if (porCodigo.length === 1) {
         const raizDele = cnpjRoot(porCodigo[0].data.document);
         if (raizDele && entrada.raiz && raizDele !== entrada.raiz) {
           item.problemas.push(
-            `O código ${codigoNovo} já é do cadastro ${nomeDoCadastro(porCodigo[0])}, com outra raiz de CNPJ: informe outro código no CSV (--codigos).`,
+            `O código ${codigoDeBusca} já é do cadastro ${nomeDoCadastro(porCodigo[0])}, com outra raiz de CNPJ: informe outro código no CSV (--codigos).`,
           );
         } else {
           existente = porCodigo[0];
+          achado = "codigo";
+        }
+      } else if (!revisado) {
+        // Nem ids, nem raiz, nem código: o cadastro sem CNPJ de nome parecido
+        // (a BTG do WMS, achada como "BANCO BTG PACTUAL") pede a revisão.
+        const parecidos = cadastrosParecidos([nome, ...entrada.nomes], lista);
+        if (parecidos.length) {
+          const quais = parecidos.map((cadastro) => `${nomeDoCadastro(cadastro)} (código "${codigoDoCadastro(cadastro.data) || cadastro.id}")`);
+          item.problemas.push(
+            `Parece ser o cadastro ${quais.join(" ou ")}: para ligar a ele, escreva o código dele na coluna codigo; ` +
+              `para criar outro cadastro, escreva outro código; para deixar de fora, "${CODIGO_FORA}".`,
+          );
         }
       }
     }
@@ -705,22 +856,28 @@ export function planejar(
       if (revisado && !mesmoCodigo(revisado, code)) {
         item.avisos.push(`O cadastro já existe com o código ${code}: o código do CSV não vale para ele.`);
       }
+      if (nomeRevisado) {
+        item.avisos.push(`O cadastro já existe com o nome ${nomeDoCadastro(existente)}: o nome do CSV não vale para ele.`);
+      }
       if (entrada.estagio === "cliente" && item.estagio === "prospect") {
         item.avisos.push(`Comprou desde ${COMPRA_DESDE.slice(0, 4)}, mas o cadastro é prospect: marque como cliente na tela.`);
       }
       if (entrada.cnpj && !cnpjRoot(existente.data.document)) {
         item.avisos.push("O cadastro não tem CNPJ: o da Omie não é gravado (a identidade não muda).");
       }
-    } else if (!item.problemas.length) {
-      if (!codigoNovo) {
-        item.problemas.push(erroDoCodigo || "Sem código: informe no CSV (--codigos).");
-      } else {
-        item.customer_code = codigoNovo;
-        item.customer_id = safeDocId(codigoNovo);
-        item.codigo_sugerido = codigoNovo;
+    } else {
+      if (nomeRevisado) item.avisos.push(`Nome revisado no CSV (na Omie: ${entrada.nome}).`);
+      if (!item.problemas.length) {
+        if (!codigoNovo) {
+          item.problemas.push(erroDoCodigo || "Sem código: informe no CSV (--codigos).");
+        } else {
+          item.customer_code = codigoNovo;
+          item.customer_id = safeDocId(codigoNovo);
+          item.codigo_sugerido = codigoNovo;
+        }
       }
     }
-    porEntrada.set(item, { entrada, existente });
+    porEntrada.set(item, { entrada, existente, achado });
   }
 
   // Destinos: o cadastro existente, ou o código novo (canônico). Entradas com o
@@ -733,8 +890,47 @@ export function planejar(
     destinos.set(chave, [...(destinos.get(chave) ?? []), item]);
   }
 
+  const info = (item: ItemCliente) => porEntrada.get(item) as { entrada: Entrada; existente: CadastroExistente | null; achado: Achado | null };
   const operacoes: Operacao[] = [];
-  for (const membros of destinos.values()) {
+  for (const todos of destinos.values()) {
+    let membros = todos;
+    const destino = info(todos[0]).existente;
+    if (destino) {
+      // Um cadastro, uma raiz de CNPJ. As raízes firmes vêm do CNPJ gravado,
+      // dos ids que ele já tem e das linhas achadas pelos ids ou pela raiz; a
+      // linha achada só pelo código com outra raiz (ou, sem raiz firme, duas
+      // raízes pelo código) fica a conferir, como no cadastro novo.
+      const firmes = new Set<string>();
+      const raizDele = cnpjRoot(destino.data.document);
+      if (raizDele) firmes.add(raizDele);
+      for (const id of idsOmieDoCadastro(destino.data)) {
+        const raiz = raizDoId.get(id);
+        if (raiz) firmes.add(raiz);
+      }
+      for (const item of membros) {
+        const { entrada, achado } = info(item);
+        if (achado !== "codigo" && entrada.raiz) firmes.add(entrada.raiz);
+      }
+      const pelosCodigos = membros.filter((item) => info(item).achado === "codigo" && info(item).entrada.raiz);
+      const raizesPeloCodigo = new Set(pelosCodigos.map((item) => info(item).entrada.raiz as string));
+      const recusados = firmes.size
+        ? pelosCodigos.filter((item) => !firmes.has(info(item).entrada.raiz as string))
+        : raizesPeloCodigo.size > 1
+          ? pelosCodigos
+          : [];
+      if (recusados.length) {
+        const raizes = new Set([...firmes, ...raizesPeloCodigo]).size;
+        const code = codigoDoCadastro(destino.data) || destino.id;
+        for (const item of recusados) {
+          item.problemas.push(
+            `O código ${code} levaria ${raizes} raízes de CNPJ ao cadastro ${nomeDoCadastro(destino)}: informe outro código no CSV (--codigos), ou "${CODIGO_FORA}".`,
+          );
+        }
+        membros = membros.filter((item) => !recusados.includes(item));
+        if (!membros.length) continue;
+      }
+    }
+
     // O principal é o que tem CNPJ; entre iguais, a menor chave.
     const ordenados = [...membros].sort((a, b) => Number(!a.cnpj) - Number(!b.cnpj) || a.chave.localeCompare(b.chave));
     const [principal, ...outros] = ordenados;
@@ -784,6 +980,7 @@ export function planejar(
     }
     const principalEntrada = entradasDoDestino[0];
     const estagio: CustomerStage = entradasDoDestino.some((entrada) => entrada.estagio === "cliente") ? "cliente" : "prospect";
+    const primeiraCompra = entradasDoDestino.flatMap((entrada) => (entrada.primeira_compra ? [entrada.primeira_compra] : [])).sort()[0] ?? null;
     const document = principalEntrada.cnpj;
     if (lista.some((cadastro) => cadastro.id === documentId)) {
       marcar(`Já existe um cadastro com o id ${documentId}: informe outro código no CSV (--codigos).`);
@@ -805,9 +1002,10 @@ export function planejar(
       item: principal,
       documentId,
       estagio,
+      cliente_desde: estagio === "cliente" ? primeiraCompra : null,
       dados: {
         code,
-        name: principalEntrada.nome,
+        name: principal.nome,
         legal_name: principalEntrada.razao_social,
         document,
         origem: "omie",
@@ -835,20 +1033,25 @@ export async function lerCadastros(db: Firestore): Promise<CadastroExistente[]> 
 
 type ResultadoDaGravacao = { ok: true; customer_id: string; customer_code: string; stage: CustomerStage; events: string[] };
 
+/** AAAA-MM-DD da Omie no meio-dia UTC: a data não muda com o fuso de quem lê. */
+export function dataDaCompra(iso: string): Timestamp {
+  return Timestamp.fromDate(new Date(`${iso}T12:00:00.000Z`));
+}
+
 /** Cria o cadastro (prospect ou cliente) com a montagem do prospect das callables, origem "omie". */
 async function criarCadastro(
   db: Firestore,
   operacao: Extract<Operacao, { tipo: "criar" }>,
   ator: ComercialActor,
 ): Promise<ResultadoDaGravacao & { replayed?: true }> {
-  const { documentId, dados, estagio } = operacao;
+  const { documentId, dados, estagio, cliente_desde: clienteDesde } = operacao;
   return runIdempotent<ResultadoDaGravacao>(
     db,
     {
       kind: "omie_customer_create",
       scope: { customer_code: dados.code },
-      idempotency_key: `carga-clientes-omie:criar:${dados.code}:${digest({ dados, estagio })}`,
-      input: { dados, estagio },
+      idempotency_key: `carga-clientes-omie:criar:${dados.code}:${digest({ dados, estagio, cliente_desde: clienteDesde })}`,
+      input: { dados, estagio, cliente_desde: clienteDesde },
       actor: ator,
     },
     async (transaction, { operationId }) => {
@@ -868,10 +1071,12 @@ async function criarCadastro(
       }
 
       // Escritas. O prospect da callable; quem comprou desde 2024 já nasce
-      // cliente (o "vira cliente no fechamento" vale para o prospect novo).
+      // cliente (o "vira cliente no fechamento" vale para o prospect novo),
+      // cliente desde a primeira compra nos títulos.
       transaction.create(db.collection(CUSTOMERS_COLLECTION).doc(documentId), {
         ...prospectPayload(documentId, dados, ator.uid),
         stage: estagio,
+        ...(clienteDesde ? { stage_changed_at: dataDaCompra(clienteDesde) } : {}),
       });
       const event = createComercialEvent(transaction, db, {
         operation_id: operationId,
@@ -973,7 +1178,8 @@ function resumo(itens: readonly ItemCliente[], operacoes: readonly Operacao[], m
     juntar: contar("juntar"),
     sem_mudanca: contar("sem_mudanca"),
     a_conferir: contar("a_conferir"),
-    fora_pela_revisao: contar("fora"),
+    fora_pela_revisao: itens.filter((item) => item.acao === "fora" && item.codigo === CODIGO_FORA).length,
+    fora_crm_sem_cnpj: itens.filter((item) => item.acao === "fora" && item.codigo !== CODIGO_FORA).length,
     com_erro: itens.filter((item) => Boolean(item.erro)).length,
     fora_pessoa_fisica: montagem?.fora.pessoa_fisica ?? 0,
     fora_teste: montagem?.fora.teste ?? 0,
@@ -1024,6 +1230,7 @@ export async function main(argv: readonly string[], deps: DependenciasCarga = {}
   const avisos: string[] = [];
   const montagem = fontes ? montarEntradas(fontes) : null;
   let codigos: Map<string, string> | null = null;
+  let nomes: Map<string, string> | null = null;
   if (montagem && opcoes.codigos) {
     let bytes: Uint8Array | null = null;
     try {
@@ -1036,6 +1243,7 @@ export async function main(argv: readonly string[], deps: DependenciasCarga = {}
       invalido.push(...lidos.problemas);
       avisos.push(...lidos.avisos);
       codigos = lidos.codigos;
+      nomes = lidos.nomes;
     }
   }
 
@@ -1046,7 +1254,7 @@ export async function main(argv: readonly string[], deps: DependenciasCarga = {}
     if (app) db = getFirestore(app);
     try {
       const cadastros = db && opcoes.projeto ? await lerCadastros(db) : null;
-      plano = planejar(montagem.entradas, codigos, cadastros);
+      plano = planejar(montagem.entradas, codigos, cadastros, nomes);
       if (opcoes.executar && db) {
         if (deps.antesDeGravar) await deps.antesDeGravar(db);
         for (const operacao of plano.operacoes) {
@@ -1100,7 +1308,8 @@ export async function main(argv: readonly string[], deps: DependenciasCarga = {}
   if (montagem) {
     log(
       `Fora: ${r.fora_pessoa_fisica} pessoa(s) física(s), ${r.fora_teste} conta(s) de teste, ` +
-        `${r.fora_sem_tag_cliente} sem a tag Cliente, ${r.fora_documento_invalido} sem CNPJ válido.`,
+        `${r.fora_sem_tag_cliente} sem a tag Cliente, ${r.fora_documento_invalido} sem CNPJ válido, ` +
+        `${r.fora_crm_sem_cnpj} conta(s) do CRM sem CNPJ e sem código na revisão.`,
     );
   }
   if (!opcoes.projeto) log("Dry-run sem --projeto: as ações supõem o cadastro vazio. Com --projeto, a carga compara com o banco.");

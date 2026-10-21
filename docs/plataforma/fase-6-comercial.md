@@ -168,9 +168,10 @@ recusando, nada importado). A exceção é a parte 5, que muda o WMS.
 
 - Clientes: pessoas jurídicas da Omie, uma por raiz de CNPJ, a partir dos
   arquivos já baixados em `tmp/omie/`. Pessoa física, contas de teste e
-  contatos ficam fora. Quem comprou desde 2024 entra como cliente; o resto,
-  como prospect; o cadastro que já existe só ganha os ids da Omie. Roteiro em
-  `comercial-cargas.md`.
+  contatos ficam fora; a conta do CRM sem CNPJ só entra com código na
+  revisão. Quem comprou desde 2024 entra como cliente (desde a primeira
+  compra); o resto, como prospect; o cadastro que já existe só ganha os ids
+  da Omie. Roteiro em `comercial-cargas.md`.
 - Tabelas: a LPU do Itaú conferida contra o PDF assinado (o PDF prevalece), a
   Padrão Dutelog e a do Safra, cada uma com vigência; a RFQ 2021 entra encerrada.
 - Contratos: Itaú, Safra e BTG, com os PDFs como anexos.
