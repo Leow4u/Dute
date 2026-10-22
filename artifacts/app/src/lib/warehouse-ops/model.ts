@@ -252,7 +252,7 @@ export const QUEUE_META: QueueMeta[] = [
   },
   {
     key: "expedition",
-    label: "Expedição",
+    label: "Shipping",
     description: "Expedição, romaneio, coleta e liberação de saída.",
     icon: Truck,
   },
@@ -671,7 +671,8 @@ export function normalizeQueues(
 
     return {
       key: meta.key,
-      label: meta.label,
+      // Cada fonte mantém o nome que manda; só a guarda é sempre "Guarda".
+      label: meta.key === "putaway" ? meta.label : queue?.name || meta.label,
       description: meta.description,
       icon: meta.icon,
       pending,

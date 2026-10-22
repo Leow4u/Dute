@@ -421,20 +421,25 @@ function PhysicalLineChecklist({
   );
 }
 
-function PutawayDetailSection({
+export function PutawayDetailSection({
   task,
   operation,
+  query,
   positions,
   positionsStatus,
   customerCode,
   onOperationChange,
+  onQueryChange,
 }: {
   task: WarehouseTask;
   operation: AdvanceOperationPayload;
+  /** O que está no campo; só volta ao destino na troca de tarefa. */
+  query: string;
   positions: GuardPosition[];
   positionsStatus: "loading" | "error" | "ready";
   customerCode: string;
   onOperationChange: (operation: AdvanceOperationPayload) => void;
+  onQueryChange: (query: string) => void;
 }) {
   const firstItem = task.items?.[0];
   const quantity = coerceNumber(
@@ -451,10 +456,6 @@ function PutawayDetailSection({
     coerceText(operation.source_location_id, task.source_location_id, firstItem?.source_location_id) ||
     "RECEBIMENTO";
   const destination = coerceText(operation.destination_location_id, operation.location_id);
-  const [query, setQuery] = useState(destination);
-  useEffect(() => {
-    setQuery(destination);
-  }, [destination, task.id]);
   const shown = positionsForGuard(positions, query, customerCode);
   const choose = (code: string) => {
     const resolved = resolveGuardDestination(code, positions, customerCode);
@@ -466,7 +467,7 @@ function PutawayDetailSection({
       location_id: resolved.code,
       quantity: quantity || undefined,
     });
-    setQuery(resolved.code);
+    onQueryChange(resolved.code);
   };
 
   return (
@@ -479,7 +480,7 @@ function PutawayDetailSection({
           autoComplete="off"
           onChange={(event) => {
             const next = event.target.value;
-            setQuery(next);
+            onQueryChange(next);
             const resolved = resolveGuardDestination(next, positions, customerCode);
             onOperationChange({
               ...operation,
@@ -1178,6 +1179,14 @@ function ExpeditionReadinessSection({
   );
 }
 
+/** Sinal IA da tarefa: o primeiro alerta dela ou da fila dela. */
+function taskAiSignal(task: WarehouseTask, queue: NormalizedQueue, alerts: OpsAlert[]) {
+  const primaryAlert = alerts.find(
+    (alert) => alert.task_id === task.id || toQueueKey(alert.queue) === queue.key,
+  );
+  return { primaryAlert, value: primaryAlert?.title ?? "Sem alerta direto" };
+}
+
 function TaskAiEvidencePanel({
   task,
   queue,
@@ -1187,20 +1196,17 @@ function TaskAiEvidencePanel({
   queue: NormalizedQueue;
   alerts: OpsAlert[];
 }) {
-  const relatedAlerts = alerts.filter(
-    (alert) => alert.task_id === task.id || toQueueKey(alert.queue) === queue.key,
-  );
   const latestTimelineEvent = [...(task.timeline ?? [])].sort((a, b) => {
     const timeA = timelineDate(a) ? new Date(timelineDate(a) ?? "").getTime() : 0;
     const timeB = timelineDate(b) ? new Date(timelineDate(b) ?? "").getTime() : 0;
     return timeB - timeA;
   })[0];
   const exceptions = coerceNumber(task.exception_count);
-  const primaryAlert = relatedAlerts[0];
+  const { primaryAlert, value: signalValue } = taskAiSignal(task, queue, alerts);
   const evidenceItems = [
     {
       label: "Sinal IA",
-      value: primaryAlert?.title ?? "Sem alerta direto",
+      value: signalValue,
       caption:
         primaryAlert?.action ||
         primaryAlert?.message ||
@@ -1472,6 +1478,7 @@ export function TaskDetailPanel({
       location_id: "",
       quantity: undefined,
     });
+  const [putawayQuery, setPutawayQuery] = useState("");
   const [receivingAdvanceNote, setReceivingAdvanceNote] = useState("");
   const [guardEvidenceOpen, setGuardEvidenceOpen] = useState(false);
   const isPutawayTask = entry?.queue.key === "putaway";
@@ -1514,6 +1521,8 @@ export function TaskDetailPanel({
             firstItem?.expected_quantity,
         ) || undefined,
     });
+    // A busca recomeça com o destino (vazio) só na troca de tarefa; digitar e apagar mantém o que o operador escreveu.
+    setPutawayQuery("");
   }, [activeTask?.id]);
 
   if (!entry) {
@@ -1757,12 +1766,14 @@ export function TaskDetailPanel({
         {isPutaway ? (
           <button
             type="button"
-            className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2 text-left text-sm font-semibold text-foreground"
+            className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2 text-left text-sm font-semibold text-foreground"
             aria-expanded={guardEvidenceOpen}
             onClick={() => setGuardEvidenceOpen((open) => !open)}
           >
             Evidências da IA
-            <span className="font-medium text-muted-foreground">{guardEvidenceOpen ? "recolher" : "Sem alerta direto"}</span>
+            <span className="min-w-0 truncate font-medium text-muted-foreground">
+              {guardEvidenceOpen ? "recolher" : taskAiSignal(task, queue, alerts).value}
+            </span>
           </button>
         ) : (
           <TaskAiEvidencePanel task={task} queue={queue} alerts={alerts} />
@@ -1840,10 +1851,12 @@ export function TaskDetailPanel({
           <PutawayDetailSection
             task={task}
             operation={putawayOperation}
+            query={putawayQuery}
             positions={guardPositions}
             positionsStatus={positionsQuery.isLoading ? "loading" : positionsQuery.isError ? "error" : "ready"}
             customerCode={guardCustomer}
             onOperationChange={setPutawayOperation}
+            onQueryChange={setPutawayQuery}
           />
         ) : isPicking ? (
           <PickingDetailSection

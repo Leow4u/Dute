@@ -63,18 +63,34 @@ describe("quadro do Receber", () => {
 });
 
 describe("nomes das filas", () => {
+  const labelsOf = (input: WarehouseOpsResponse["queues"]) => normalizeQueues(input).map((queue) => queue.label);
+
   it("são os de antes, só a guarda mudou", () => {
-    const labels = ["Receiving", "Guarda", "Picking", "Packing", "Expedição"];
-    expect(normalizeQueues(undefined).map((queue) => queue.label)).toEqual(labels);
-    // O que o getWarehouseOps manda no name de cada fila.
-    const fromServer = normalizeQueues({
-      receiving: { key: "receiving", name: "Receiving", tasks: [] },
-      putaway: { key: "putaway", name: "Putaway", tasks: [] },
-      picking: { key: "picking", name: "Picking", tasks: [] },
-      packing: { key: "packing", name: "Packing", tasks: [] },
-      expedition: { key: "expedition", name: "Expedição", tasks: [] },
-    });
-    expect(fromServer.map((queue) => queue.label)).toEqual(labels);
+    expect(labelsOf(undefined)).toEqual(["Receiving", "Guarda", "Picking", "Packing", "Shipping"]);
+    // O que o getWarehouseOps manda no name de cada fila; a guarda vale também com o nome antigo.
+    for (const putaway of ["Guarda", "Putaway"]) {
+      expect(
+        labelsOf({
+          receiving: { key: "receiving", name: "Receiving", tasks: [] },
+          putaway: { key: "putaway", name: putaway, tasks: [] },
+          picking: { key: "picking", name: "Picking", tasks: [] },
+          packing: { key: "packing", name: "Packing", tasks: [] },
+          expedition: { key: "expedition", name: "Expedição", tasks: [] },
+        }),
+      ).toEqual(["Receiving", "Guarda", "Picking", "Packing", "Expedição"]);
+    }
+  });
+
+  it("mantêm os nomes que a demo manda", () => {
+    expect(
+      labelsOf({
+        receiving: { key: "receiving", name: "Recebimento", tasks: [] },
+        putaway: { key: "putaway", name: "Guarda", tasks: [] },
+        picking: { key: "picking", name: "Separação", tasks: [] },
+        packing: { key: "packing", name: "Embalagem", tasks: [] },
+        expedition: { key: "expedition", name: "Expedição", tasks: [] },
+      }),
+    ).toEqual(["Recebimento", "Guarda", "Separação", "Embalagem", "Expedição"]);
   });
 });
 

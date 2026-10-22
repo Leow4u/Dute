@@ -2824,13 +2824,13 @@ describe("guarda numa posição cadastrada", () => {
   }
 
   // A tarefa como o recebimento grava ao concluir: planejada, saindo do RECEBIMENTO.
-  function putawayTask(taskId: string, quantity: number) {
+  function putawayTask(taskId: string, quantity: number, customer = BTG, sku = SKU) {
     return db.collection("putaway_tasks").doc(taskId).set({
       id: taskId,
-      customer_code: BTG,
+      customer_code: customer,
       receipt_id: "inb_guarda_1",
       inbound_item_id: `${taskId}_item`,
-      sku_code: SKU,
+      sku_code: sku,
       client_item_code: "ITEM-GUARDA",
       product_name: "Caneca de teste da guarda",
       source_location_id: "RECEBIMENTO",
@@ -2873,11 +2873,11 @@ describe("guarda numa posição cadastrada", () => {
     };
   }
 
-  async function balanceAt(locationId: string) {
+  async function balanceAt(locationId: string, customer = BTG, sku = SKU) {
     const snapshot = await db
       .collection("stock_balances")
-      .where("customer_code", "==", BTG)
-      .where("sku_code", "==", SKU)
+      .where("customer_code", "==", customer)
+      .where("sku_code", "==", sku)
       .where("location_id", "==", locationId)
       .get();
     return snapshot.docs.map((document) => document.data());
@@ -2955,6 +2955,51 @@ describe("guarda numa posição cadastrada", () => {
     assert.equal((await db.collection("movements").where("putaway_task_id", "==", "put_guarda_3").get()).size, 0);
     assert.equal((await db.collection("events").where("entity_id", "==", "put_guarda_3").get()).size, 0);
     assert.equal((await db.collection("operational_operations").get()).size, 0);
+  });
+
+  it("usa a zona do cliente da tarefa, não a de quem opera", async () => {
+    const OUTRO = "Outro Cliente";
+    const OUTRO_SKU = "OUT-GUARDA-1";
+    await seedGuard();
+    await Promise.all([
+      putawayTask("put_guarda_outro", 3, OUTRO, OUTRO_SKU),
+      db.collection("stock_balances").doc("bal-guarda-outro-recebimento").set({
+        id: "bal-guarda-outro-recebimento",
+        customer_code: OUTRO,
+        sku_code: OUTRO_SKU,
+        client_item_code: "ITEM-GUARDA",
+        product_name: "Caneca de teste da guarda",
+        location_id: "RECEBIMENTO",
+        qty_on_hand: 3,
+        qty_reserved: 0,
+        qty_available: 3,
+        unit_cost: 5,
+      }),
+    ]);
+
+    // O ator é da BTG: a prateleira dela não serve para a tarefa de outro cliente.
+    await assert.rejects(advance("putaway:put_guarda_outro", "planned", guardOperation("A-01", 3)), {
+      code: "failed-precondition",
+      message: /^Esta posição não é da zona de Outro Cliente\.$/,
+    });
+    assert.equal((await db.collection("putaway_tasks").doc("put_guarda_outro").get()).get("status"), "planned");
+    assert.deepEqual(await balanceAt("A-01", OUTRO, OUTRO_SKU), []);
+
+    const result = (await advance("putaway:put_guarda_outro", "planned", guardOperation("C-01", 3))) as Record<string, unknown>;
+    assert.equal(result.status, "completed");
+    const task = (await db.collection("putaway_tasks").doc("put_guarda_outro").get()).data();
+    assert.equal(task?.status, "completed");
+    assert.equal(task?.destination_location_id, "C-01");
+
+    const [source] = await balanceAt("RECEBIMENTO", OUTRO, OUTRO_SKU);
+    assert.equal(source?.qty_on_hand, 0);
+    const shelf = await balanceAt("C-01", OUTRO, OUTRO_SKU);
+    assert.equal(shelf.length, 1);
+    assert.equal(shelf[0]?.qty_on_hand, 3);
+    // O saldo da BTG não se mexe.
+    const [btgSource] = await balanceAt("RECEBIMENTO");
+    assert.equal(btgSource?.qty_on_hand, 10);
+    assert.deepEqual(await balanceAt("C-01"), []);
   });
 
   it("recusa origem igual ao destino mesmo com o destino em minúsculas, sem inflar o saldo", async () => {
