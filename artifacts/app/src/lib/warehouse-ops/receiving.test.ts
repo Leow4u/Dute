@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeQueues, type WarehouseOpsResponse, type WarehouseTask } from "./model";
+import { getAdvanceGate, normalizeQueues, type WarehouseOpsResponse, type WarehouseTask } from "./model";
 import { buildReceivingBoard, putawayRowMeta, receivingRowMeta } from "./receiving";
 
 function task(overrides: Partial<WarehouseTask> & { id: string }): WarehouseTask {
@@ -59,5 +59,29 @@ describe("quadro do Receber", () => {
 
   it("não quebra sem filas", () => {
     expect(buildReceivingBoard(normalizeQueues(undefined))).toEqual({ check: [], store: [], done: [] });
+  });
+});
+
+describe("gate da guarda", () => {
+  it("não pede conferência de linha e o selo diz Guarda", () => {
+    const queues = normalizeQueues({
+      putaway: {
+        key: "putaway",
+        name: "Putaway",
+        tasks: [task({ id: "p1", status: "in_progress", can_advance: true, items: [{ id: "linha", quantity: 10 }] })],
+      },
+    });
+    const queue = queues.find((entry) => entry.key === "putaway")!;
+    const gate = getAdvanceGate(queue, queue.tasks[0]!, {
+      total: 1,
+      pending: 1,
+      confirmed: 0,
+      shortage: 0,
+      damaged: 0,
+    });
+    expect(queue.label).toBe("Guarda");
+    expect(gate.canAdvance).toBe(true);
+    expect(gate.blockedReason).toBeNull();
+    expect(gate.label).toBe("Concluir guarda");
   });
 });

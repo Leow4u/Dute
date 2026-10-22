@@ -1,6 +1,7 @@
 /** Task detail panel and physical-flow section helpers. */
 
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
   AlertTriangle,
@@ -49,6 +50,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  positionsForGuard,
+  resolveGuardDestination,
+  type GuardPosition,
+} from "@/lib/warehouse-positions";
 import { cn } from "@/lib/utils";
 import {
   type AdvanceOperationPayload,
@@ -75,6 +81,7 @@ import {
   formatDate,
   formatDeltaUnits,
   formatNumber,
+  fetchJson,
   formatUnits,
   getAdvanceGate,
   getLineResolution,
@@ -416,14 +423,16 @@ function PhysicalLineChecklist({
 function PutawayDetailSection({
   task,
   operation,
+  positions,
+  positionsStatus,
   onOperationChange,
 }: {
   task: WarehouseTask;
   operation: AdvanceOperationPayload;
+  positions: GuardPosition[];
+  positionsStatus: "loading" | "error" | "ready";
   onOperationChange: (operation: AdvanceOperationPayload) => void;
 }) {
-  const updateOperation = (patch: AdvanceOperationPayload) =>
-    onOperationChange({ ...operation, ...patch });
   const firstItem = task.items?.[0];
   const quantity = coerceNumber(
     Number(
@@ -436,141 +445,122 @@ function PutawayDetailSection({
     ),
   );
   const sourceLocation =
-    coerceText(
-      operation.source_location_id,
-      task.source_location_id,
-      firstItem?.source_location_id,
-    ) || "RECEBIMENTO";
-  const destinationLocation = coerceText(
-    operation.destination_location_id,
-    operation.location_id,
-    task.destination_location_id,
-    task.location,
-    firstItem?.destination_location_id,
-    firstItem?.location,
-  );
-  const sku = coerceText(task.sku_code, task.sku, firstItem?.sku_code, firstItem?.sku);
-  const clientCode = coerceText(firstItem?.client_item_code);
-  const productName = coerceText(firstItem?.product_name, firstItem?.name, task.title);
-  const sameAddress =
-    sourceLocation.length > 0 &&
-    destinationLocation.length > 0 &&
-    sourceLocation.toUpperCase() === destinationLocation.toUpperCase();
+    coerceText(operation.source_location_id, task.source_location_id, firstItem?.source_location_id) ||
+    "RECEBIMENTO";
+  const destination = coerceText(operation.destination_location_id, operation.location_id);
+  const [query, setQuery] = useState(destination);
+  useEffect(() => {
+    setQuery(destination);
+  }, [destination, task.id]);
+  const shown = positionsForGuard(positions, query);
+  const choose = (code: string) => {
+    const resolved = resolveGuardDestination(code, positions);
+    if (!("code" in resolved)) return;
+    onOperationChange({
+      ...operation,
+      source_location_id: sourceLocation,
+      destination_location_id: resolved.code,
+      location_id: resolved.code,
+      quantity: quantity || undefined,
+    });
+    setQuery(resolved.code);
+  };
 
   return (
-    <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 gap-3">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-card">
-            <Forklift className="size-4 text-primary" />
-          </div>
-          <div className="min-w-0">
-            <div className="text-sm font-semibold text-foreground">
-              Endereçamento físico
-            </div>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              Guarde a mercadoria conferida no endereço final. Esta etapa move o
-              saldo interno, sem alterar o total disponível do cliente.
-            </p>
-          </div>
-        </div>
-        <Badge variant="outline" className="border-primary/20 bg-card text-primary">
-          transferência interna
-        </Badge>
+    <div className="flex flex-col gap-4">
+      <div className="space-y-1.5">
+        <Label htmlFor={`${task.id}-putaway-destination`}>Posição</Label>
+        <Input
+          id={`${task.id}-putaway-destination`}
+          value={query}
+          autoComplete="off"
+          onChange={(event) => {
+            const next = event.target.value;
+            setQuery(next);
+            const resolved = resolveGuardDestination(next, positions);
+            onOperationChange({
+              ...operation,
+              source_location_id: sourceLocation,
+              destination_location_id: "code" in resolved ? resolved.code : "",
+              location_id: "code" in resolved ? resolved.code : "",
+              quantity: quantity || undefined,
+            });
+          }}
+          placeholder="Bipe ou busque a prateleira"
+        />
       </div>
-
-      <div className="mt-4 grid gap-2 sm:grid-cols-3">
-        <div className="rounded-md border border-border bg-card px-3 py-2">
-          <div className="text-xs text-muted-foreground">Produto</div>
-          <div className="mt-1 line-clamp-2 text-sm font-semibold text-foreground">
-            {productName || "Produto a identificar"}
-          </div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            {clientCode || sku || "Código pendente"}
-          </div>
+      {positionsStatus === "loading" ? (
+        <p className="text-sm text-muted-foreground">Carregando posições.</p>
+      ) : null}
+      {positionsStatus === "error" ? (
+        <p className="text-sm text-destructive">Não consegui consultar as posições.</p>
+      ) : null}
+      {positionsStatus === "ready" ? (
+        <div className="max-h-48 overflow-y-auto rounded-lg border border-border bg-card">
+          {shown.length ? (
+            shown.map((position) => {
+              const selected = position.code.toUpperCase() === destination.toUpperCase();
+              const shelf = String(position.shelf ?? "").padStart(2, "0");
+              return (
+                <button
+                  key={position.code}
+                  type="button"
+                  className={cn(
+                    "flex w-full items-center gap-3 border-t border-border/60 px-3 py-2.5 text-left first:border-t-0",
+                    selected && "bg-primary/10",
+                  )}
+                  onClick={() => choose(position.code)}
+                >
+                  <span
+                    className={cn(
+                      "flex size-4 shrink-0 items-center justify-center rounded-full border-2",
+                      selected ? "border-primary" : "border-input",
+                    )}
+                    aria-hidden
+                  >
+                    {selected ? <span className="size-2 rounded-full bg-primary" /> : null}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-foreground">{position.code}</span>
+                    <span className="block text-sm text-muted-foreground">
+                      {position.aisle
+                        ? `Rua ${position.aisle} · prateleira ${shelf} · livre`
+                        : "livre"}
+                    </span>
+                  </span>
+                </button>
+              );
+            })
+          ) : (
+            <p className="px-3 py-3 text-sm text-muted-foreground">Nenhuma prateleira ativa com esse código.</p>
+          )}
         </div>
-        <div className="rounded-md border border-border bg-card px-3 py-2">
-          <div className="text-xs text-muted-foreground">Quantidade</div>
-          <div className="mt-1 text-lg font-semibold text-foreground">
-            {formatUnits(quantity)}
-          </div>
-        </div>
-        <div className="rounded-md border border-border bg-card px-3 py-2">
-          <div className="text-xs text-muted-foreground">Status</div>
-          <Badge variant="outline" className={cn("mt-1", statusClass(task.status))}>
-            {statusLabel(task.status)}
-          </Badge>
-        </div>
-      </div>
-
-      <div className="@container mt-4 rounded-lg border border-border bg-card p-3">
-        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          <MapPin className="size-4 text-primary" />
-          Origem e destino
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-3 @md:grid-cols-[1fr_1fr_88px]">
-          <div className="space-y-1.5">
-            <Label htmlFor={`${task.id}-putaway-source`}>Origem</Label>
-            <Input
-              id={`${task.id}-putaway-source`}
-              value={sourceLocation}
-              onChange={(event) =>
-                updateOperation({ source_location_id: event.target.value })
-              }
-              placeholder="RECEBIMENTO"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor={`${task.id}-putaway-destination`}>
-              Endereço final
-            </Label>
-            <Input
-              id={`${task.id}-putaway-destination`}
-              value={destinationLocation}
-              onChange={(event) =>
-                updateOperation({
-                  destination_location_id: event.target.value,
-                  location_id: event.target.value,
-                })
-              }
-              placeholder="Ex.: Rua A · Prat 12 · C-113"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor={`${task.id}-putaway-qty`}>Qtd.</Label>
-            <Input
-              id={`${task.id}-putaway-qty`}
-              type="number"
-              min="1"
-              value={String(quantity || "")}
-              onChange={(event) =>
-                updateOperation({
-                  quantity: Math.max(1, Number(event.target.value) || 1),
-                })
-              }
-            />
-          </div>
+      ) : null}
+      <div className="space-y-1.5">
+        <Label htmlFor={`${task.id}-putaway-qty`}>Quantidade</Label>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() =>
+              onOperationChange({ ...operation, quantity: Math.max(1, quantity - 1) })
+            }
+          >
+            −
+          </Button>
+          <span className="min-w-8 text-center text-sm font-semibold">{quantity || 0}</span>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => onOperationChange({ ...operation, quantity: quantity + 1 })}
+          >
+            +
+          </Button>
+          <span className="text-sm text-muted-foreground">un.</span>
         </div>
       </div>
-
-      {sameAddress ? (
-        <Alert className="mt-4 border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
-          <AlertTriangle className="size-4" />
-          <AlertTitle>Endereço repetido</AlertTitle>
-          <AlertDescription>
-            O destino precisa ser diferente da origem para concluir a guarda.
-          </AlertDescription>
-        </Alert>
-      ) : (
-        <Alert className="mt-4 border-primary/20 bg-primary/10">
-          <CheckCircle2 className="size-4" />
-          <AlertTitle>Pronto para guardar</AlertTitle>
-          <AlertDescription>
-            Ao avançar, o sistema registra saída da origem, entrada no destino e
-            mantém a trilha operacional para auditoria.
-          </AlertDescription>
-        </Alert>
-      )}
     </div>
   );
 }
@@ -1480,6 +1470,14 @@ export function TaskDetailPanel({
       quantity: undefined,
     });
   const [receivingAdvanceNote, setReceivingAdvanceNote] = useState("");
+  const [guardEvidenceOpen, setGuardEvidenceOpen] = useState(false);
+  const isPutawayTask = entry?.queue.key === "putaway";
+  const positionsQuery = useQuery({
+    queryKey: ["warehouse-positions"],
+    queryFn: () => fetchJson<{ items?: GuardPosition[] }>("/api/warehouse/positions?limit=2000"),
+    enabled: isPutawayTask,
+    staleTime: 30_000,
+  });
 
   useEffect(() => {
     if (!activeTask) return;
@@ -1498,18 +1496,13 @@ export function TaskDetailPanel({
       proof_reference: coerceText(activeTask.proof_reference),
       delivery_notes: coerceText(activeTask.delivery_notes),
     });
-    const destinationLocation = coerceText(
-      activeTask.destination_location_id,
-      activeTask.location,
-      firstItem?.destination_location_id,
-      firstItem?.location,
-    );
+    setGuardEvidenceOpen(false);
     setPutawayOperation({
       source_location_id:
         coerceText(activeTask.source_location_id, firstItem?.source_location_id) ||
         "RECEBIMENTO",
-      destination_location_id: destinationLocation,
-      location_id: destinationLocation,
+      destination_location_id: "",
+      location_id: "",
       quantity:
         coerceNumber(
           activeTask.quantity ??
@@ -1602,16 +1595,25 @@ export function TaskDetailPanel({
     putawayOperation.destination_location_id,
     putawayOperation.location_id,
   );
+  const guardPositions = positionsQuery.data?.items ?? [];
+  const guardDestination = isPutaway ? resolveGuardDestination(putawayDestination, guardPositions) : null;
+  const putawayBlockReason = !isPutaway
+    ? ""
+    : positionsQuery.isLoading
+      ? "Carregando posições."
+      : positionsQuery.isError
+        ? "Não consegui consultar as posições."
+        : guardDestination && "problem" in guardDestination
+          ? guardDestination.problem
+          : putawaySource.toUpperCase() === putawayDestination.toUpperCase()
+            ? "O endereço final precisa ser diferente da origem."
+            : "";
   const operationBlockReason =
     isPacking && status === "in_progress" && !coerceText(packingOperation.seal_code)
       ? "Informe o lacre do volume antes de fechar o packing."
-      : isPutaway && status === "in_progress" && !putawayDestination
-        ? "Informe o endereço final antes de concluir a guarda."
-        : isPutaway &&
-            status === "in_progress" &&
-            putawaySource.toUpperCase() === putawayDestination.toUpperCase()
-          ? "O endereço final precisa ser diferente da origem."
-          : isExpedition &&
+      : isPutaway
+        ? putawayBlockReason
+        : isExpedition &&
               status === "ready_to_dispatch" &&
               !coerceText(shippingOperation.carrier)
             ? "Informe o responsável pela coleta antes de confirmar a saída."
@@ -1662,7 +1664,14 @@ export function TaskDetailPanel({
               </Badge>
             </div>
             <CardTitle className="mt-3 line-clamp-2 text-lg">{title}</CardTitle>
-            {task.notes ? (
+            {isPutaway ? (
+              <CardDescription className="mt-2">
+                {task.reference || task.id} ·{" "}
+                {typeof task.quantity === "number" ? `${formatNumber(task.quantity)} un.` : "quantidade aberta"} · origem{" "}
+                {putawaySource}
+              </CardDescription>
+            ) : null}
+            {task.notes && !isPutaway ? (
               <CardDescription className="mt-2 line-clamp-2">
                 {task.notes}
               </CardDescription>
@@ -1675,7 +1684,7 @@ export function TaskDetailPanel({
       </CardHeader>
 
       <CardContent className="flex flex-col gap-5 pt-5">
-        <div className="grid gap-3 sm:grid-cols-2">
+        {!isPutaway ? <div className="grid gap-3 sm:grid-cols-2">
           <DetailField icon={Hash} label="Referência" value={task.reference || task.id} />
           <DetailField
             icon={Box}
@@ -1706,9 +1715,9 @@ export function TaskDetailPanel({
             label="Prazo"
             value={formatDate(task.due_at)}
           />
-        </div>
+        </div> : null}
 
-        {task.customer || task.customer_request_id || exceptions > 0 ? (
+        {!isPutaway && (task.customer || task.customer_request_id || exceptions > 0) ? (
           <div className="grid gap-3 sm:grid-cols-3">
             {task.customer ? (
               <DetailField icon={WarehouseIcon} label="Cliente" value={task.customer} />
@@ -1738,13 +1747,28 @@ export function TaskDetailPanel({
           </Alert>
         ) : null}
 
-        <TaskAiEvidencePanel task={task} queue={queue} alerts={alerts} />
+        {isPutaway ? (
+          <button
+            type="button"
+            className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2 text-left text-sm font-semibold text-foreground"
+            aria-expanded={guardEvidenceOpen}
+            onClick={() => setGuardEvidenceOpen((open) => !open)}
+          >
+            Evidências da IA
+            <span className="font-medium text-muted-foreground">{guardEvidenceOpen ? "recolher" : "Sem alerta direto"}</span>
+          </button>
+        ) : (
+          <TaskAiEvidencePanel task={task} queue={queue} alerts={alerts} />
+        )}
+        {isPutaway && guardEvidenceOpen ? (
+          <TaskAiEvidencePanel task={task} queue={queue} alerts={alerts} />
+        ) : null}
 
-        <CustomerVisibilityPanel task={task} queue={queue} counts={lineCounts} />
+        {!isPutaway ? <CustomerVisibilityPanel task={task} queue={queue} counts={lineCounts} /> : null}
 
-        <OperatorMicrocopy queue={queue} counts={lineCounts} />
+        {!isPutaway ? <OperatorMicrocopy queue={queue} counts={lineCounts} /> : null}
 
-        {canAdvance && advanceGate.blockedReason ? (
+        {!isPutaway && canAdvance && advanceGate.blockedReason ? (
           <Alert className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
             <AlertTriangle className="size-4" />
             <AlertTitle>Conferência física pendente</AlertTitle>
@@ -1752,7 +1776,7 @@ export function TaskDetailPanel({
           </Alert>
         ) : null}
 
-        {canAdvance && !advanceGate.blockedReason && operationBlockReason ? (
+        {!isPutaway && canAdvance && !advanceGate.blockedReason && operationBlockReason ? (
           <Alert className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
             <AlertTriangle className="size-4" />
             <AlertTitle>Dados operacionais pendentes</AlertTitle>
@@ -1809,6 +1833,8 @@ export function TaskDetailPanel({
           <PutawayDetailSection
             task={task}
             operation={putawayOperation}
+            positions={guardPositions}
+            positionsStatus={positionsQuery.isLoading ? "loading" : positionsQuery.isError ? "error" : "ready"}
             onOperationChange={setPutawayOperation}
           />
         ) : isPicking ? (
@@ -1839,7 +1865,7 @@ export function TaskDetailPanel({
           />
         )}
 
-        <div className="rounded-lg border border-border bg-card px-4 py-3">
+        {!isPutaway ? <div className="rounded-lg border border-border bg-card px-4 py-3">
           <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
             <Route className="size-3.5 text-primary" />
             Próxima ação da fila
@@ -1847,13 +1873,20 @@ export function TaskDetailPanel({
           <p className="mt-2 text-sm leading-6 text-foreground">
             {task.next_action || getQueueAction(queue)}
           </p>
-        </div>
+        </div> : null}
 
         {canAdvance || showGenericExceptionAction || !hasVisibleAction ? (
-          <div className="flex flex-col gap-3 sm:flex-row">
+          <div
+            className={cn(
+              "flex flex-col gap-3 sm:flex-row",
+              isPutaway &&
+                "order-last sticky bottom-0 z-10 -mx-6 border-t border-border bg-card px-6 py-3 sm:flex-col lg:order-first lg:static lg:z-auto lg:mx-0 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0",
+            )}
+          >
             {canAdvance ? (
               <Button
                 type="button"
+                size={isPutaway ? "lg" : "default"}
                 className="w-full sm:flex-1"
                 onClick={() => onAdvance(task.id, operationForAdvance, advanceNote)}
                 disabled={advancingTaskId === task.id || !canSubmitAdvance}
@@ -1866,10 +1899,14 @@ export function TaskDetailPanel({
                 {advancingTaskId === task.id ? "Avançando" : advanceGate.label}
               </Button>
             ) : null}
+            {isPutaway && canAdvance && !canSubmitAdvance && operationBlockReason ? (
+              <p className="text-sm font-semibold text-warning-soft-foreground sm:basis-full">{operationBlockReason}</p>
+            ) : null}
             {showGenericExceptionAction ? (
               <Button
                 type="button"
                 variant="outline"
+                size={isPutaway ? "lg" : "default"}
                 className="w-full sm:flex-1"
                 onClick={() => onOpenException(task)}
                 disabled={registeringExceptionId === task.id}

@@ -48,6 +48,47 @@ export function canEditPositions(role: string | null | undefined) {
   return (POSITION_EDITOR_ROLES as readonly string[]).includes(String(role ?? ""));
 }
 
+export type GuardPosition = {
+  code: string;
+  aisle?: string;
+  shelf?: number;
+  status?: string | null;
+};
+
+function guardStatus(status: string | null | undefined) {
+  const value = String(status ?? "active").trim();
+  return value || "active";
+}
+
+/** Prateleiras em que a guarda pode concluir. Bloqueada e em verificação ficam de fora. */
+export function positionsForGuard<T extends GuardPosition>(positions: T[], query: string): T[] {
+  const needle = query.trim().toUpperCase();
+  return positions.filter((position) => {
+    if (guardStatus(position.status) !== "active") return false;
+    if (!needle) return true;
+    return position.code.toUpperCase().includes(needle);
+  });
+}
+
+/**
+ * O mesmo critério do servidor (functions/wms/src/domain/warehouse-positions.ts):
+ * só prateleira ativa, no código da etiqueta.
+ */
+export function resolveGuardDestination(
+  destination: string,
+  positions: Array<{ code?: string | null; status?: string | null }>,
+): { code: string } | { problem: string } {
+  const needle = destination.trim().toUpperCase();
+  if (!needle) return { problem: "Escolha uma posição cadastrada." };
+  const match = positions.find((position) => String(position.code ?? "").trim().toUpperCase() === needle);
+  if (!match?.code) return { problem: "Escolha uma posição cadastrada." };
+  const status = guardStatus(match.status);
+  if (status === "blocked") return { problem: "Esta posição está bloqueada." };
+  if (status === "review") return { problem: "Esta posição está em verificação." };
+  if (status !== "active") return { problem: "Escolha uma posição cadastrada." };
+  return { code: String(match.code).trim().toUpperCase() };
+}
+
 /** O mesmo código que o backend monta: rua em maiúscula e prateleira com dois dígitos. */
 export function positionCode(aisle: string, shelf: number | string) {
   const number = Number(shelf);

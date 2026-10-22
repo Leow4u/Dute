@@ -113,6 +113,39 @@ export const DeleteWarehousePositionSchema = z.object({
 export type SaveWarehousePositionsInput = z.infer<typeof SaveWarehousePositionsSchema>;
 export type CreateWarehouseAisleInput = z.infer<typeof CreateWarehouseAisleSchema>;
 
+/**
+ * Destino da guarda: o código da etiqueta de uma prateleira ativa.
+ * A tela usa a mesma frase (artifacts/app/src/lib/warehouse-positions.ts).
+ */
+export function resolveGuardDestination(
+  destination: string,
+  positions: Array<{ code?: unknown; status?: unknown }>,
+): { code: string } | { problem: string } {
+  const needle = destination.trim().toUpperCase();
+  if (!needle) return { problem: "Escolha uma posição cadastrada." };
+  const match = positions.find((position) => String(position.code ?? "").trim().toUpperCase() === needle);
+  if (!match || String(match.code ?? "").trim() === "") return { problem: "Escolha uma posição cadastrada." };
+  const status = String(match.status ?? "active").trim() || "active";
+  if (status === "blocked") return { problem: "Esta posição está bloqueada." };
+  if (status === "review") return { problem: "Esta posição está em verificação." };
+  if (status !== "active") return { problem: "Escolha uma posição cadastrada." };
+  return { code: String(match.code).trim().toUpperCase() };
+}
+
+/**
+ * Com a posição na mão, a guarda planejada conclui de uma vez.
+ * Sem posição, o primeiro avanço só inicia.
+ */
+export function putawayAdvanceStatus(currentStatus: string, destination: string) {
+  const current = currentStatus.trim().toLowerCase();
+  if (current === "completed") {
+    throw new HttpsError("already-exists", "Tarefa operacional já finalizada.");
+  }
+  if (current === "in_progress" || (current === "planned" && destination.trim())) return "completed";
+  if (current === "planned") return "in_progress";
+  throw new HttpsError("failed-precondition", `Status ${current || "vazio"} não pertence ao fluxo putaway.`);
+}
+
 /** Código legível da prateleira, o que vai na etiqueta dela: rua e prateleira (A-01). */
 export function positionCode(aisle: string, shelf: number) {
   return `${aisle.trim().toUpperCase()}-${String(shelf).padStart(2, "0")}`;

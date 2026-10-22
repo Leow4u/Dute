@@ -7,7 +7,34 @@ import {
   SaveWarehousePositionsSchema,
   normalizePosition,
   positionCode,
+  putawayAdvanceStatus,
+  resolveGuardDestination,
 } from "./warehouse-positions.js";
+
+describe("destino da guarda", () => {
+  const positions = [
+    { code: "A-01", status: "active" },
+    { code: "A-02", status: "blocked" },
+    { code: "B-01", status: "review" },
+  ];
+
+  it("aceita o código da prateleira ativa, mesmo bipado em minúsculas", () => {
+    assert.deepEqual(resolveGuardDestination("a-01", positions), { code: "A-01" });
+  });
+
+  it("com posição, a guarda planejada conclui de uma vez", () => {
+    assert.equal(putawayAdvanceStatus("planned", "A-01"), "completed");
+    assert.equal(putawayAdvanceStatus("planned", "  "), "in_progress");
+    assert.equal(putawayAdvanceStatus("in_progress", "A-01"), "completed");
+  });
+
+  it("recusa vazio, desconhecido, bloqueado e em verificação", () => {
+    assert.deepEqual(resolveGuardDestination("  ", positions), { problem: "Escolha uma posição cadastrada." });
+    assert.deepEqual(resolveGuardDestination("Z-99", positions), { problem: "Escolha uma posição cadastrada." });
+    assert.deepEqual(resolveGuardDestination("A-02", positions), { problem: "Esta posição está bloqueada." });
+    assert.deepEqual(resolveGuardDestination("B-01", positions), { problem: "Esta posição está em verificação." });
+  });
+});
 
 describe("mapa inicial do galpão (planilha de 16/10/2026)", () => {
   const codes = DEFAULT_WAREHOUSE_LAYOUT.map((position) => positionCode(position.aisle, position.shelf));

@@ -2191,7 +2191,7 @@ async function getWarehouseOps() {
     },
     {
       id: "putaway",
-      title: "Putaway",
+      title: "Guarda",
       description: "Guarda e endereçamento",
       items: derivedPutawayTasks.filter((task) => !isHistoricalLocationPutaway(task)).map((task) => {
         const quantity = Number(task.quantity ?? task.total_units ?? 0);

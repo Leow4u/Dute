@@ -8,6 +8,8 @@ import {
   formatMeters,
   parseDecimal,
   positionCode,
+  positionsForGuard,
+  resolveGuardDestination,
   sortPositions,
   summarizeZones,
 } from "./warehouse-positions";
@@ -83,6 +85,22 @@ describe("ordem e zonas", () => {
 
   it("ordena pela sequência de caminhada; sem sequência vai para o fim, por rua e prateleira", () => {
     expect(sortPositions(positions).map((position) => position.code)).toEqual(["A-01", "A-02", "B-01", "C-01"]);
+  });
+
+  it("a guarda só oferece prateleira ativa e reconhece o código bipado", () => {
+    const positions = [
+      { code: "A-01", aisle: "A", shelf: 1, status: "active" },
+      { code: "A-02", aisle: "A", shelf: 2, status: "blocked" },
+      { code: "B-01", aisle: "B", shelf: 1, status: "review" },
+      { code: "B-02", aisle: "B", shelf: 2 },
+    ];
+    expect(positionsForGuard(positions, "").map((position) => position.code)).toEqual(["A-01", "B-02"]);
+    expect(positionsForGuard(positions, "a-01").map((position) => position.code)).toEqual(["A-01"]);
+    expect(resolveGuardDestination("a-01", positions)).toEqual({ code: "A-01" });
+    expect(resolveGuardDestination("", positions)).toEqual({ problem: "Escolha uma posição cadastrada." });
+    expect(resolveGuardDestination("Z-99", positions)).toEqual({ problem: "Escolha uma posição cadastrada." });
+    expect(resolveGuardDestination("A-02", positions)).toEqual({ problem: "Esta posição está bloqueada." });
+    expect(resolveGuardDestination("B-01", positions)).toEqual({ problem: "Esta posição está em verificação." });
   });
 
   it("resume as zonas por cliente, com as livres por último", () => {
