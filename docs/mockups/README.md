@@ -46,6 +46,18 @@ o lançamento da Operação.
 |---|---|
 | Guarda, avisos, pedidos e carrinho | `ux-cinco-passos.html` |
 
+As mesmas telas em imagem, para abrir direto no editor:
+
+![Guarda com a posição A-01](ux-guarda.jpg)
+
+![Guarda no celular, sem posição](ux-guarda-celular.jpg)
+
+![Pedidos com a faixa da abertura](ux-pedidos.jpg)
+
+![Aviso de envio no Receber](ux-avisos.jpg)
+
+![Carrinho do portal](ux-carrinho.jpg)
+
 ## Regras da v3
 
 - Menu lateral preto `#161616` com logo branco e seis módulos (Início, Operação,
