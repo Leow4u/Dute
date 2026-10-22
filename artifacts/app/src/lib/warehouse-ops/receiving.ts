@@ -93,6 +93,21 @@ export function openShipmentNotices(requests: Array<Record<string, unknown>>): S
   });
 }
 
+/**
+ * Aviso já vinculado a uma chegada do quadro sai da lista: a chegada o
+ * representa até a aprovação. `keepRequestId` mantém o aviso da própria
+ * chegada na ficha dela.
+ */
+export function unlinkedShipmentNotices(
+  notices: ShipmentNotice[],
+  tasks: WarehouseTask[],
+  keepRequestId?: string | null,
+) {
+  const linked = new Set(tasks.map((task) => coerceText(task.customer_request_id)).filter(Boolean));
+  if (keepRequestId) linked.delete(keepRequestId);
+  return notices.filter((notice) => !linked.has(notice.id));
+}
+
 /** "ENV-0001 · Camisaria Alfa · NF 1842 · Avulsa · 10 un." */
 export function receivingArrivalMeta(
   task: WarehouseTask,

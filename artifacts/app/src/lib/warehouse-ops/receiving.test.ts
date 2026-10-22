@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { normalizeQueues, type WarehouseOpsResponse, type WarehouseTask } from "./model";
-import { buildReceivingBoard, openShipmentNotices, putawayRowMeta, receivingArrivalMeta, receivingRowMeta } from "./receiving";
+import { buildReceivingBoard, openShipmentNotices, putawayRowMeta, receivingArrivalMeta, receivingRowMeta, unlinkedShipmentNotices } from "./receiving";
 
 function task(overrides: Partial<WarehouseTask> & { id: string }): WarehouseTask {
   return { status: "planned", can_advance: true, exception_count: 0, ...overrides };
@@ -91,5 +91,18 @@ describe("avisos de envio no Receber", () => {
     expect(receivingArrivalMeta(task({ id: "avl", reference: "inb_avulso_1" }), notices[0])).toBe(
       "ENV-0001 · Camisaria Alfa · NF 1842 · Avulsa · qtde aberta",
     );
+  });
+
+  it("aviso já vinculado a uma chegada do quadro não vira linha própria, salvo na ficha dessa chegada", () => {
+    const notice = (id: string) => ({ id, customer_code: "BTG Pactual", number: id, supplier: "", invoice: "", units: 0 });
+    const notices = [notice("req-1"), notice("req-2"), notice("req-3")];
+    const tasks = [
+      task({ id: "avl-1", reference: "inb_avulso_1", customer_request_id: "req-1" }),
+      task({ id: "avl-2", reference: "inb_avulso_2", status: "received", customer_request_id: "req-3" }),
+      task({ id: "r1", reference: "inb_creq_9" }),
+    ];
+    expect(unlinkedShipmentNotices(notices, tasks).map((item) => item.id)).toEqual(["req-2"]);
+    expect(unlinkedShipmentNotices(notices, tasks, "req-1").map((item) => item.id)).toEqual(["req-1", "req-2"]);
+    expect(unlinkedShipmentNotices(notices, []).map((item) => item.id)).toEqual(["req-1", "req-2", "req-3"]);
   });
 });

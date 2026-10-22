@@ -33,11 +33,13 @@ import {
 } from "@/lib/warehouse-ops/model";
 import {
   buildReceivingBoard,
+  isUnplannedReceipt,
   openShipmentNotices,
   putawayRowMeta,
   receivingArrivalMeta,
   receivingRowMeta,
   type ShipmentNotice,
+  unlinkedShipmentNotices,
 } from "@/lib/warehouse-ops/receiving";
 import { formatRequestAge } from "./customer-requests";
 
@@ -79,11 +81,13 @@ export default function Receber() {
   const alerts = useMemo(() => ops.data?.alerts ?? [], [ops.data?.alerts]);
   const entries = useMemo(() => queueEntries(queues), [queues]);
   const board = useMemo(() => buildReceivingBoard(queues), [queues]);
+  const tasks = useMemo(() => entries.map((entry) => entry.task), [entries]);
+  const pendingNotices = useMemo(() => unlinkedShipmentNotices(notices, tasks), [notices, tasks]);
   const actions = useWarehouseTaskActions({
     findEntry: (taskId) => entries.find((entry) => entry.task.id === taskId),
   });
   const selected = entries.find((entry) => entry.task.id === selectedId) ?? null;
-  const selectedNotice = notices.find((notice) => notice.id === selectedNoticeId) ?? null;
+  const selectedNotice = pendingNotices.find((notice) => notice.id === selectedNoticeId) ?? null;
   const linkNotice = useMutation({
     mutationFn: (input: { receiptId: string; requestId: string | null }) =>
       fetchJson(`/api/warehouse/receipts/${encodeURIComponent(input.receiptId)}/notice`, {
@@ -91,9 +95,9 @@ export default function Receber() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ request_id: input.requestId, customer_code: customerCode }),
       }),
-    onSuccess: () => {
+    onSuccess: (_result, input) => {
       void queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
-      toast({ title: "Aviso vinculado à chegada" });
+      toast({ title: input.requestId ? "Aviso vinculado à chegada" : "Aviso desvinculado da chegada" });
     },
     onError: (error: Error) => {
       toast({ title: "Não consegui vincular o aviso", description: error.message, variant: "destructive" });
@@ -116,7 +120,7 @@ export default function Receber() {
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
   };
-  const openCount = notices.length + board.check.length + board.store.length;
+  const openCount = pendingNotices.length + board.check.length + board.store.length;
 
   const panel = selectedNotice ? (
     <NoticeCard notice={selectedNotice} />
@@ -125,9 +129,13 @@ export default function Receber() {
       entry={selected}
       alerts={alerts}
       actions={actions}
-      notices={notices}
+      notices={unlinkedShipmentNotices(notices, tasks, selected.task.customer_request_id)}
       linking={linkNotice.isPending}
-      onLinkNotice={(requestId) => linkNotice.mutate({ receiptId: selected.task.id, requestId })}
+      onLinkNotice={
+        isUnplannedReceipt(selected.task)
+          ? (requestId) => linkNotice.mutate({ receiptId: selected.task.id, requestId })
+          : undefined
+      }
       lineConfirmations={lineConfirmations}
       onLineConfirmationChange={(taskId, rowId, resolution) =>
         setLineConfirmations((current) => ({
@@ -239,10 +247,10 @@ export default function Receber() {
                 <QueueGroup
                   title="Para conferir"
                   hint="chegadas"
-                  count={notices.length + board.check.length}
+                  count={pendingNotices.length + board.check.length}
                   empty="Nenhuma chegada esperando conferência. Registre uma chegada avulsa ou aguarde o aviso do portal."
                 >
-                  {notices.map((notice) => (
+                  {pendingNotices.map((notice) => (
                     <QueueRow
                       key={notice.id}
                       icon={Inbox}
@@ -393,7 +401,7 @@ function TaskPanel({
   actions: ReturnType<typeof useWarehouseTaskActions>;
   notices: ShipmentNotice[];
   linking: boolean;
-  onLinkNotice: (requestId: string | null) => void;
+  onLinkNotice?: (requestId: string | null) => void;
   lineConfirmations: LineConfirmationMap;
   onLineConfirmationChange: Parameters<typeof TaskDetailPanel>[0]["onLineConfirmationChange"];
 }) {

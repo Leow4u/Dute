@@ -4893,6 +4893,7 @@ export async function decideCustomerRequestTransaction(
     let releaseReservationRows: Row[] = [];
     const releaseBalancesBySku = new Map<string, Row[]>();
     let inboundSkuAllocator: SkuAllocator | undefined;
+    let linkedReceipt: Row | undefined;
 
     if (input.action === "approve" && kind.outbound) {
       preReservedRows = await readRows(
@@ -5099,11 +5100,35 @@ export async function decideCustomerRequestTransaction(
           "Solicitação de recebimento precisa de itens com código ou, sem código, com o nome do produto.",
         );
       }
+      // Aviso já vinculado a uma chegada avulsa no Receber
+      // (domain/inbound-notice.ts): a mercadoria já tem recebimento. A
+      // aprovação aponta para ele e não abre um segundo.
+      const linkedReceipts = (
+        await readRows(
+          transaction,
+          db
+            .collection(collections.inboundReceipts)
+            .where("customer_request_id", "==", requestId),
+        )
+      ).filter(
+        (row) =>
+          text(row.data.customer_code) === customerCode &&
+          text(row.data.status).toLowerCase() !== "cancelled",
+      );
+      if (linkedReceipts.length > 1) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Este aviso está vinculado a mais de uma chegada (${linkedReceipts.map((row) => text(row.data.receipt_number) || row.id).join(", ")}). Desvincule no Receber antes de aprovar.`,
+        );
+      }
+      linkedReceipt = linkedReceipts[0];
       // Produto novo avisado no portal: o código digitado é o do cliente, não
       // o SKU. Código já cadastrado para o cliente liga ao SKU dele; senão o
-      // SKU é gerado na sigla do cliente (domain/catalog-codes.ts).
+      // SKU é gerado na sigla do cliente (domain/catalog-codes.ts). Com a
+      // chegada vinculada, as linhas do aviso não viram recebimento e nenhum
+      // SKU é gasto.
       for (const item of items) {
-        if (text(item.product_registration) !== "new") continue;
+        if (linkedReceipt || text(item.product_registration) !== "new") continue;
         const clientCode = normalizedIdentity(item.client_item_code || item.sku_code);
         const [skuRows, productSnapshot] = await Promise.all([
           readRows(
@@ -5438,7 +5463,43 @@ export async function decideCustomerRequestTransaction(
       }
     }
 
-    if (input.action === "approve" && kind.inbound) {
+    if (input.action === "approve" && kind.inbound && linkedReceipt) {
+      const receiptNumber = text(linkedReceipt.data.receipt_number) || linkedReceipt.id;
+      Object.assign(created, {
+        inbound_id: linkedReceipt.id,
+        receipt_number: receiptNumber,
+        item_count: items.length,
+        quantity_total: total,
+      });
+      events.push(
+        createDecisionEvent(
+          transaction,
+          db,
+          operationEventId(operationId, "inbound_linked"),
+          {
+            type: "inbound.notice_approved",
+            title: "Aviso aprovado na chegada já vinculada",
+            description: `${description} · chegada ${receiptNumber}`,
+            severity: "info",
+            entity_type: "recebimento",
+            entity_id: linkedReceipt.id,
+            customer_code: customerCode,
+            payload: {
+              customer_request_id: requestId,
+              linked_receipt: true,
+              receipt_status: text(linkedReceipt.data.status) || null,
+              quantity_total: total,
+              supplier: request.supplier,
+              invoice_number: request.invoice_number,
+              attachment_count: number(request.attachment_count),
+            },
+          },
+          actor,
+        ),
+      );
+    }
+
+    if (input.action === "approve" && kind.inbound && !linkedReceipt) {
       const inboundId = `inb_${requestId}`;
       const receiptNumber = text(request.request_number) || `SOL-${requestId.slice(-8).toUpperCase()}`;
       transaction.create(
@@ -5706,6 +5767,12 @@ export async function decideCustomerRequestTransaction(
           ),
     );
 
+    // Chegada vinculada que já foi conferida: o portal continua em "recebido",
+    // como fica quando a conferência vem depois da aprovação.
+    const linkedReceived = ["received", "completed"].includes(
+      text(linkedReceipt?.data.status).toLowerCase(),
+    );
+    const inboundStatus = linkedReceived ? "received" : "receiving_created";
     transaction.update(
       requestRef,
       compact({
@@ -5721,7 +5788,7 @@ export async function decideCustomerRequestTransaction(
         operational_status: created.pick_task_id
           ? "picking_planned"
           : created.inbound_id
-            ? "receiving_created"
+            ? inboundStatus
             : undefined,
       }),
     );
@@ -5729,11 +5796,11 @@ export async function decideCustomerRequestTransaction(
       db.collection(collections.clientRequestStatus).doc(requestId),
       compact({
         customer_code: customerCode,
-        status: nextStatus,
+        status: linkedReceived ? "closed" : nextStatus,
         operational_status: created.pick_task_id
           ? "picking_planned"
           : created.inbound_id
-            ? "receiving_created"
+            ? inboundStatus
             : nextStatus,
         decision_reason: input.reason,
         published_at: FieldValue.serverTimestamp(),
