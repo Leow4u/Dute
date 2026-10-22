@@ -26,6 +26,7 @@ const CUSTOMER_AUTHORIZED_COLLECTIONS = [
   "client_request_status",
   "client_invoices",
   "client_documents",
+  "client_portal_status",
 ] as const;
 
 type RealtimeTarget = {
@@ -187,6 +188,8 @@ const COLLECTION_QUERY_KEYS: Record<string, readonly (readonly string[])[]> = {
   client_request_status: [["client-portal-overview"]],
   client_invoices: [["client-portal-overview"]],
   client_documents: [["client-portal-overview"]],
+  // Trava de saída da abertura: o carrinho do portal libera "Enviar pedido" sem recarregar.
+  client_portal_status: [["client-portal-overview"]],
   agent_conversations: [["agent-dute-chat"]],
   agent_messages: [["agent-dute-chat"], ["agent-operational-notifications"]],
   operational_notifications: [["agent-operational-notifications"]],
