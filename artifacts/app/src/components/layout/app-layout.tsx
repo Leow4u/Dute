@@ -464,7 +464,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             {showCustomerSwitcher ? (
               <ActiveCustomerSwitcher variant="header" canManageCustomers={canManageCustomers} />
             ) : null}
-            <AccountMenu basePath={basePath} compact signOut={signOut} user={user} />
+            <AccountMenu basePath={basePath} compact cabecalho signOut={signOut} user={user} />
           </div>
         </header>
         {!isOnline ? (

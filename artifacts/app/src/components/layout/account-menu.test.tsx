@@ -6,10 +6,12 @@ import { Router } from "wouter";
 
 import { roleLabel } from "@/lib/access";
 
-import { atalhosDaConta, ContaCabecalho, ModuloLink } from "./account-menu";
+import { atalhosDaConta, ContaCabecalho, ListaDeModulos, ModuloLink, posicaoDoMenu } from "./account-menu";
 
 const MENU = readFileSync(new URL("./account-menu.tsx", import.meta.url), "utf8");
 const APP = readFileSync(new URL("./app-layout.tsx", import.meta.url), "utf8");
+const COMERCIAL = readFileSync(new URL("./comercial-layout.tsx", import.meta.url), "utf8");
+const OPERACAO_LAYOUT = readFileSync(new URL("./operacao-layout.tsx", import.meta.url), "utf8");
 const SHELL = readFileSync(new URL("./comercial-shell.tsx", import.meta.url), "utf8");
 const OPERACAO = readFileSync(new URL("./operacao-shell.tsx", import.meta.url), "utf8");
 
@@ -64,6 +66,26 @@ describe("cabeçalho da conta", () => {
     expect(html).not.toContain("Tudo, inclusive pessoas");
   });
 
+  it("no cabeçalho do celular o painel abre para baixo e os módulos ficam na mesma lista", () => {
+    expect(posicaoDoMenu(true, true)).toEqual({ side: "bottom", align: "end" });
+    expect(posicaoDoMenu(false, true)).toEqual({ side: "right", align: "start" });
+    expect(posicaoDoMenu(false, false)).toEqual({ side: "top", align: "end" });
+
+    const atalhos = atalhosDaConta("owner", null, "/dashboard", true, true);
+    const html = renderToStaticMarkup(
+      <Router ssrPath="/dashboard">
+        <ListaDeModulos atalhos={atalhos} />
+      </Router>,
+    );
+    expect(html).toContain(">Módulos<");
+    expect(html).toContain('href="/dashboard"');
+    expect(html).toContain('href="/comercial"');
+    expect(html).toContain('href="/faturamento"');
+    expect(html).toContain("min-h-11");
+    expect(html).toContain('aria-current="page"');
+    expect(html).not.toContain("DropdownMenuSub");
+  });
+
   it("o link do módulo leva direto à casa e marca o aberto", () => {
     const [armazenagem, comercial] = atalhosDaConta("owner", null, "/comercial", true, true);
     const html = renderToStaticMarkup(
@@ -84,8 +106,14 @@ describe("onde o atalho mora", () => {
   it("Módulos é item do menu da conta, e saiu das sidebars", () => {
     expect(MENU).toContain("Módulos");
     expect(MENU).toContain("DropdownMenuSub");
+    expect(MENU).toContain("cabecalho && atalhos.length > 0 ? (");
+    expect(MENU).toContain("<ListaDeModulos");
+    expect(MENU).toContain("collisionPadding={16}");
     expect(MENU).not.toContain("roleDescription");
     expect(MENU).not.toContain("Perfis são definidos");
+    expect(APP).toContain("compact cabecalho");
+    expect(COMERCIAL).toContain("compact cabecalho");
+    expect(OPERACAO_LAYOUT).toContain("compact cabecalho");
     expect(APP).not.toContain("ModulosLink");
     expect(APP).not.toContain("showModulos");
     expect(SHELL).not.toContain("ModulosLink");
