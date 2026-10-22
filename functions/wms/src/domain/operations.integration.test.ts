@@ -2804,3 +2804,156 @@ describe("fotos do item", () => {
     );
   });
 });
+
+describe("guarda numa posição cadastrada", () => {
+  const BTG = "BTG Pactual";
+  const SKU = "BTG-GUARDA-1";
+
+  function position(code: string, shelf: number, customer: string, status: string) {
+    return db.collection("warehouse_positions").doc(code).set({
+      code,
+      aisle: code.split("-")[0],
+      shelf,
+      length_m: 1.8,
+      depth_m: 0.75,
+      height_m: 0.5,
+      sequence: shelf,
+      customer_code: customer,
+      status,
+    });
+  }
+
+  // A tarefa como o recebimento grava ao concluir: planejada, saindo do RECEBIMENTO.
+  function putawayTask(taskId: string, quantity: number) {
+    return db.collection("putaway_tasks").doc(taskId).set({
+      id: taskId,
+      customer_code: BTG,
+      receipt_id: "inb_guarda_1",
+      inbound_item_id: `${taskId}_item`,
+      sku_code: SKU,
+      client_item_code: "ITEM-GUARDA",
+      product_name: "Caneca de teste da guarda",
+      source_location_id: "RECEBIMENTO",
+      quantity,
+      total_units: quantity,
+      status: "planned",
+      priority: "normal",
+      title: "Guardar Caneca de teste da guarda",
+      source: "wms_receiving",
+    });
+  }
+
+  async function seedGuard() {
+    await clearFirestore();
+    await Promise.all([
+      position("A-01", 1, BTG, "active"),
+      position("A-02", 2, BTG, "blocked"),
+      position("C-01", 1, "Outro Cliente", "active"),
+      db.collection("stock_balances").doc("bal-guarda-recebimento").set({
+        id: "bal-guarda-recebimento",
+        customer_code: BTG,
+        sku_code: SKU,
+        client_item_code: "ITEM-GUARDA",
+        product_name: "Caneca de teste da guarda",
+        location_id: "RECEBIMENTO",
+        qty_on_hand: 10,
+        qty_reserved: 0,
+        qty_available: 10,
+        unit_cost: 5,
+      }),
+    ]);
+  }
+
+  function guardOperation(destination: string, quantity: number) {
+    return {
+      source_location_id: "RECEBIMENTO",
+      destination_location_id: destination,
+      location_id: destination,
+      quantity,
+    };
+  }
+
+  async function balanceAt(locationId: string) {
+    const snapshot = await db
+      .collection("stock_balances")
+      .where("customer_code", "==", BTG)
+      .where("sku_code", "==", SKU)
+      .where("location_id", "==", locationId)
+      .get();
+    return snapshot.docs.map((document) => document.data());
+  }
+
+  it("com a posição da zona, a guarda planejada conclui de uma vez e move o saldo", async () => {
+    await seedGuard();
+    await Promise.all([putawayTask("put_guarda_1", 6), putawayTask("put_guarda_2", 4)]);
+
+    const first = (await advance("putaway:put_guarda_1", "planned", guardOperation("A-01", 6))) as Record<string, unknown>;
+    // Bipado em minúsculas, grava o código da etiqueta.
+    const second = (await advance("putaway:put_guarda_2", "planned", guardOperation("a-01", 4))) as Record<string, unknown>;
+    assert.equal(first.status, "completed");
+    assert.equal(second.status, "completed");
+
+    for (const [taskId, quantity] of [["put_guarda_1", 6], ["put_guarda_2", 4]] as const) {
+      const task = (await db.collection("putaway_tasks").doc(taskId).get()).data();
+      assert.equal(task?.status, "completed");
+      assert.equal(task?.destination_location_id, "A-01");
+      assert.equal(task?.location_id, "A-01");
+
+      const movements = await db.collection("movements").where("putaway_task_id", "==", taskId).get();
+      const byKind = Object.fromEntries(movements.docs.map((document) => [document.get("movement_kind"), document.data()]));
+      assert.equal(movements.size, 2);
+      assert.equal(byKind.putaway_transfer_out?.location_id, "RECEBIMENTO");
+      assert.equal(byKind.putaway_transfer_out?.tipo_mov, "SAIDA");
+      assert.equal(byKind.putaway_transfer_out?.quantity, quantity);
+      assert.equal(byKind.putaway_transfer_in?.location_id, "A-01");
+      assert.equal(byKind.putaway_transfer_in?.tipo_mov, "ENTRADA");
+      assert.equal(byKind.putaway_transfer_in?.quantity, quantity);
+
+      const events = await db
+        .collection("events")
+        .where("entity_id", "==", taskId)
+        .where("type", "==", "putaway.completed")
+        .get();
+      assert.equal(events.size, 1);
+      assert.equal(events.docs[0].get("payload.before_status"), "planned");
+      assert.equal(events.docs[0].get("payload.destination_location_id"), "A-01");
+    }
+
+    const [source] = await balanceAt("RECEBIMENTO");
+    assert.equal(source?.qty_on_hand, 0);
+    const destination = await balanceAt("A-01");
+    assert.equal(destination.length, 1);
+    assert.equal(destination[0]?.qty_on_hand, 10);
+    assert.equal(destination[0]?.qty_available, 10);
+  });
+
+  it("recusa posição bloqueada, desconhecida e de outra zona sem mover nada", async () => {
+    await seedGuard();
+    await putawayTask("put_guarda_3", 10);
+
+    const refused: Array<[string, RegExp]> = [
+      ["A-02", /^Esta posição está bloqueada\.$/],
+      ["Z-99", /^Escolha uma posição cadastrada\.$/],
+      ["C-01", /^Esta posição não é da zona de BTG Pactual\.$/],
+      ["c-01", /^Esta posição não é da zona de BTG Pactual\.$/],
+    ];
+    for (const [destination, message] of refused) {
+      await assert.rejects(advance("putaway:put_guarda_3", "planned", guardOperation(destination, 10)), {
+        code: "failed-precondition",
+        message,
+      });
+    }
+
+    const task = (await db.collection("putaway_tasks").doc("put_guarda_3").get()).data();
+    assert.equal(task?.status, "planned");
+    assert.equal(task?.destination_location_id, undefined);
+    const [source] = await balanceAt("RECEBIMENTO");
+    assert.equal(source?.qty_on_hand, 10);
+    for (const code of ["A-02", "Z-99", "C-01"]) {
+      assert.deepEqual(await balanceAt(code), []);
+    }
+    assert.equal((await db.collection("movements").where("putaway_task_id", "==", "put_guarda_3").get()).size, 0);
+    assert.equal((await db.collection("events").where("entity_id", "==", "put_guarda_3").get()).size, 0);
+    assert.equal((await db.collection("operational_operations").get()).size, 0);
+  });
+});

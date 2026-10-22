@@ -52,6 +52,7 @@ export type GuardPosition = {
   code: string;
   aisle?: string;
   shelf?: number;
+  customer_code?: string | null;
   status?: string | null;
 };
 
@@ -60,11 +61,17 @@ function guardStatus(status: string | null | undefined) {
   return value || "active";
 }
 
-/** Prateleiras em que a guarda pode concluir. Bloqueada e em verificação ficam de fora. */
-export function positionsForGuard<T extends GuardPosition>(positions: T[], query: string): T[] {
+/** A zona do cliente: as prateleiras dele, como no motor de caixas do servidor. */
+function inGuardZone(position: { customer_code?: string | null }, customerCode: string) {
+  return String(position.customer_code ?? "").trim() === customerCode.trim();
+}
+
+/** Prateleiras em que a guarda pode concluir: ativas e da zona do cliente. */
+export function positionsForGuard<T extends GuardPosition>(positions: T[], query: string, customerCode: string): T[] {
   const needle = query.trim().toUpperCase();
   return positions.filter((position) => {
     if (guardStatus(position.status) !== "active") return false;
+    if (!inGuardZone(position, customerCode)) return false;
     if (!needle) return true;
     return position.code.toUpperCase().includes(needle);
   });
@@ -72,16 +79,24 @@ export function positionsForGuard<T extends GuardPosition>(positions: T[], query
 
 /**
  * O mesmo critério do servidor (functions/wms/src/domain/warehouse-positions.ts):
- * só prateleira ativa, no código da etiqueta.
+ * só prateleira ativa da zona do cliente, no código da etiqueta.
  */
 export function resolveGuardDestination(
   destination: string,
-  positions: Array<{ code?: string | null; status?: string | null }>,
+  positions: Array<{ code?: string | null; status?: string | null; customer_code?: string | null }>,
+  customerCode: string,
 ): { code: string } | { problem: string } {
+  const customer = customerCode.trim();
+  if (!positions.some((position) => inGuardZone(position, customer))) {
+    return {
+      problem: `Nenhuma prateleira está na zona de ${customer}. Atribua uma rua a esse cliente em Estoque › Posições.`,
+    };
+  }
   const needle = destination.trim().toUpperCase();
   if (!needle) return { problem: "Escolha uma posição cadastrada." };
   const match = positions.find((position) => String(position.code ?? "").trim().toUpperCase() === needle);
   if (!match?.code) return { problem: "Escolha uma posição cadastrada." };
+  if (!inGuardZone(match, customer)) return { problem: `Esta posição não é da zona de ${customer}.` };
   const status = guardStatus(match.status);
   if (status === "blocked") return { problem: "Esta posição está bloqueada." };
   if (status === "review") return { problem: "Esta posição está em verificação." };

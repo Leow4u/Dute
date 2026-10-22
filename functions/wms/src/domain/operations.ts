@@ -6416,6 +6416,7 @@ export async function advanceWarehouseTaskTransaction(
       const resolvedDestination = resolveGuardDestination(
         destinationLocationId,
         positionSnapshot.docs.map((document) => document.data()),
+        customerCode,
       );
       if ("problem" in resolvedDestination) {
         throw new HttpsError("failed-precondition", resolvedDestination.problem);

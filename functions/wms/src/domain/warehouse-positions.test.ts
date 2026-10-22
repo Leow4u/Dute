@@ -13,13 +13,28 @@ import {
 
 describe("destino da guarda", () => {
   const positions = [
-    { code: "A-01", status: "active" },
-    { code: "A-02", status: "blocked" },
-    { code: "B-01", status: "review" },
+    { code: "A-01", status: "active", customer_code: "BTG Pactual" },
+    { code: "A-02", status: "blocked", customer_code: "BTG Pactual" },
+    { code: "B-01", status: "review", customer_code: "BTG Pactual" },
+    { code: "C-01", status: "active", customer_code: "Outro Cliente" },
+    { code: "D-01", status: "active" },
   ];
 
   it("aceita o código da prateleira ativa, mesmo bipado em minúsculas", () => {
-    assert.deepEqual(resolveGuardDestination("a-01", positions), { code: "A-01" });
+    assert.deepEqual(resolveGuardDestination("a-01", positions, "BTG Pactual"), { code: "A-01" });
+  });
+
+  it("só aceita prateleira da zona do cliente da tarefa", () => {
+    assert.deepEqual(resolveGuardDestination("C-01", positions, "BTG Pactual"), {
+      problem: "Esta posição não é da zona de BTG Pactual.",
+    });
+    assert.deepEqual(resolveGuardDestination("D-01", positions, "BTG Pactual"), {
+      problem: "Esta posição não é da zona de BTG Pactual.",
+    });
+    assert.deepEqual(resolveGuardDestination("C-01", positions, "Outro Cliente"), { code: "C-01" });
+    assert.deepEqual(resolveGuardDestination("A-01", positions, "Sem Zona"), {
+      problem: "Nenhuma prateleira está na zona de Sem Zona. Atribua uma rua a esse cliente em Estoque › Posições.",
+    });
   });
 
   it("com posição, a guarda planejada conclui de uma vez", () => {
@@ -29,10 +44,10 @@ describe("destino da guarda", () => {
   });
 
   it("recusa vazio, desconhecido, bloqueado e em verificação", () => {
-    assert.deepEqual(resolveGuardDestination("  ", positions), { problem: "Escolha uma posição cadastrada." });
-    assert.deepEqual(resolveGuardDestination("Z-99", positions), { problem: "Escolha uma posição cadastrada." });
-    assert.deepEqual(resolveGuardDestination("A-02", positions), { problem: "Esta posição está bloqueada." });
-    assert.deepEqual(resolveGuardDestination("B-01", positions), { problem: "Esta posição está em verificação." });
+    assert.deepEqual(resolveGuardDestination("  ", positions, "BTG Pactual"), { problem: "Escolha uma posição cadastrada." });
+    assert.deepEqual(resolveGuardDestination("Z-99", positions, "BTG Pactual"), { problem: "Escolha uma posição cadastrada." });
+    assert.deepEqual(resolveGuardDestination("A-02", positions, "BTG Pactual"), { problem: "Esta posição está bloqueada." });
+    assert.deepEqual(resolveGuardDestination("B-01", positions, "BTG Pactual"), { problem: "Esta posição está em verificação." });
   });
 });
 

@@ -50,6 +50,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
+import { LEGACY_CUSTOMER_CODE } from "@/lib/active-customer";
 import {
   positionsForGuard,
   resolveGuardDestination,
@@ -425,12 +426,14 @@ function PutawayDetailSection({
   operation,
   positions,
   positionsStatus,
+  customerCode,
   onOperationChange,
 }: {
   task: WarehouseTask;
   operation: AdvanceOperationPayload;
   positions: GuardPosition[];
   positionsStatus: "loading" | "error" | "ready";
+  customerCode: string;
   onOperationChange: (operation: AdvanceOperationPayload) => void;
 }) {
   const firstItem = task.items?.[0];
@@ -452,9 +455,9 @@ function PutawayDetailSection({
   useEffect(() => {
     setQuery(destination);
   }, [destination, task.id]);
-  const shown = positionsForGuard(positions, query);
+  const shown = positionsForGuard(positions, query, customerCode);
   const choose = (code: string) => {
-    const resolved = resolveGuardDestination(code, positions);
+    const resolved = resolveGuardDestination(code, positions, customerCode);
     if (!("code" in resolved)) return;
     onOperationChange({
       ...operation,
@@ -477,7 +480,7 @@ function PutawayDetailSection({
           onChange={(event) => {
             const next = event.target.value;
             setQuery(next);
-            const resolved = resolveGuardDestination(next, positions);
+            const resolved = resolveGuardDestination(next, positions, customerCode);
             onOperationChange({
               ...operation,
               source_location_id: sourceLocation,
@@ -522,11 +525,11 @@ function PutawayDetailSection({
                   </span>
                   <span className="min-w-0">
                     <span className="block text-sm font-semibold text-foreground">{position.code}</span>
-                    <span className="block text-sm text-muted-foreground">
-                      {position.aisle
-                        ? `Rua ${position.aisle} · prateleira ${shelf} · livre`
-                        : "livre"}
-                    </span>
+                    {position.aisle ? (
+                      <span className="block text-sm text-muted-foreground">
+                        Rua {position.aisle} · prateleira {shelf}
+                      </span>
+                    ) : null}
                   </span>
                 </button>
               );
@@ -1596,7 +1599,11 @@ export function TaskDetailPanel({
     putawayOperation.location_id,
   );
   const guardPositions = positionsQuery.data?.items ?? [];
-  const guardDestination = isPutaway ? resolveGuardDestination(putawayDestination, guardPositions) : null;
+  // Mesma regra do servidor: tarefa sem cliente é do legado.
+  const guardCustomer = coerceText(task.customer) || LEGACY_CUSTOMER_CODE;
+  const guardDestination = isPutaway
+    ? resolveGuardDestination(putawayDestination, guardPositions, guardCustomer)
+    : null;
   const putawayBlockReason = !isPutaway
     ? ""
     : positionsQuery.isLoading
@@ -1835,6 +1842,7 @@ export function TaskDetailPanel({
             operation={putawayOperation}
             positions={guardPositions}
             positionsStatus={positionsQuery.isLoading ? "loading" : positionsQuery.isError ? "error" : "ready"}
+            customerCode={guardCustomer}
             onOperationChange={setPutawayOperation}
           />
         ) : isPicking ? (

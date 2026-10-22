@@ -62,6 +62,22 @@ describe("quadro do Receber", () => {
   });
 });
 
+describe("nomes das filas", () => {
+  it("são os de antes, só a guarda mudou", () => {
+    const labels = ["Receiving", "Guarda", "Picking", "Packing", "Expedição"];
+    expect(normalizeQueues(undefined).map((queue) => queue.label)).toEqual(labels);
+    // O que o getWarehouseOps manda no name de cada fila.
+    const fromServer = normalizeQueues({
+      receiving: { key: "receiving", name: "Receiving", tasks: [] },
+      putaway: { key: "putaway", name: "Putaway", tasks: [] },
+      picking: { key: "picking", name: "Picking", tasks: [] },
+      packing: { key: "packing", name: "Packing", tasks: [] },
+      expedition: { key: "expedition", name: "Expedição", tasks: [] },
+    });
+    expect(fromServer.map((queue) => queue.label)).toEqual(labels);
+  });
+});
+
 describe("gate da guarda", () => {
   it("não pede conferência de linha e o selo diz Guarda", () => {
     const queues = normalizeQueues({

@@ -89,18 +89,39 @@ describe("ordem e zonas", () => {
 
   it("a guarda só oferece prateleira ativa e reconhece o código bipado", () => {
     const positions = [
-      { code: "A-01", aisle: "A", shelf: 1, status: "active" },
-      { code: "A-02", aisle: "A", shelf: 2, status: "blocked" },
-      { code: "B-01", aisle: "B", shelf: 1, status: "review" },
-      { code: "B-02", aisle: "B", shelf: 2 },
+      { code: "A-01", aisle: "A", shelf: 1, status: "active", customer_code: "BTG Pactual" },
+      { code: "A-02", aisle: "A", shelf: 2, status: "blocked", customer_code: "BTG Pactual" },
+      { code: "B-01", aisle: "B", shelf: 1, status: "review", customer_code: "BTG Pactual" },
+      { code: "B-02", aisle: "B", shelf: 2, customer_code: "BTG Pactual" },
     ];
-    expect(positionsForGuard(positions, "").map((position) => position.code)).toEqual(["A-01", "B-02"]);
-    expect(positionsForGuard(positions, "a-01").map((position) => position.code)).toEqual(["A-01"]);
-    expect(resolveGuardDestination("a-01", positions)).toEqual({ code: "A-01" });
-    expect(resolveGuardDestination("", positions)).toEqual({ problem: "Escolha uma posição cadastrada." });
-    expect(resolveGuardDestination("Z-99", positions)).toEqual({ problem: "Escolha uma posição cadastrada." });
-    expect(resolveGuardDestination("A-02", positions)).toEqual({ problem: "Esta posição está bloqueada." });
-    expect(resolveGuardDestination("B-01", positions)).toEqual({ problem: "Esta posição está em verificação." });
+    expect(positionsForGuard(positions, "", "BTG Pactual").map((position) => position.code)).toEqual(["A-01", "B-02"]);
+    expect(positionsForGuard(positions, "a-01", "BTG Pactual").map((position) => position.code)).toEqual(["A-01"]);
+    expect(resolveGuardDestination("a-01", positions, "BTG Pactual")).toEqual({ code: "A-01" });
+    expect(resolveGuardDestination("", positions, "BTG Pactual")).toEqual({ problem: "Escolha uma posição cadastrada." });
+    expect(resolveGuardDestination("Z-99", positions, "BTG Pactual")).toEqual({ problem: "Escolha uma posição cadastrada." });
+    expect(resolveGuardDestination("A-02", positions, "BTG Pactual")).toEqual({ problem: "Esta posição está bloqueada." });
+    expect(resolveGuardDestination("B-01", positions, "BTG Pactual")).toEqual({ problem: "Esta posição está em verificação." });
+  });
+
+  it("a guarda só usa a zona do cliente da tarefa", () => {
+    const positions = [
+      { code: "A-01", aisle: "A", shelf: 1, status: "active", customer_code: "BTG Pactual" },
+      { code: "C-01", aisle: "C", shelf: 1, status: "active", customer_code: "Outro Cliente" },
+      { code: "D-01", aisle: "D", shelf: 1, status: "active" },
+    ];
+    expect(positionsForGuard(positions, "", "BTG Pactual").map((position) => position.code)).toEqual(["A-01"]);
+    expect(positionsForGuard(positions, "", "Outro Cliente").map((position) => position.code)).toEqual(["C-01"]);
+    expect(resolveGuardDestination("c-01", positions, "BTG Pactual")).toEqual({
+      problem: "Esta posição não é da zona de BTG Pactual.",
+    });
+    expect(resolveGuardDestination("D-01", positions, "BTG Pactual")).toEqual({
+      problem: "Esta posição não é da zona de BTG Pactual.",
+    });
+    expect(resolveGuardDestination("C-01", positions, "Outro Cliente")).toEqual({ code: "C-01" });
+    expect(positionsForGuard(positions, "", "Sem Zona")).toEqual([]);
+    expect(resolveGuardDestination("A-01", positions, "Sem Zona")).toEqual({
+      problem: "Nenhuma prateleira está na zona de Sem Zona. Atribua uma rua a esse cliente em Estoque › Posições.",
+    });
   });
 
   it("resume as zonas por cliente, com as livres por último", () => {

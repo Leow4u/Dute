@@ -252,7 +252,7 @@ export const QUEUE_META: QueueMeta[] = [
   },
   {
     key: "expedition",
-    label: "Shipping",
+    label: "Expedição",
     description: "Expedição, romaneio, coleta e liberação de saída.",
     icon: Truck,
   },

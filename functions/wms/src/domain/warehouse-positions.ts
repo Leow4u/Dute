@@ -114,17 +114,27 @@ export type SaveWarehousePositionsInput = z.infer<typeof SaveWarehousePositionsS
 export type CreateWarehouseAisleInput = z.infer<typeof CreateWarehouseAisleSchema>;
 
 /**
- * Destino da guarda: o código da etiqueta de uma prateleira ativa.
+ * Destino da guarda: o código da etiqueta de uma prateleira ativa da zona do
+ * cliente, a mesma zona do motor de caixas (warehouse-boxes.ts, suggestPosition).
  * A tela usa a mesma frase (artifacts/app/src/lib/warehouse-positions.ts).
  */
 export function resolveGuardDestination(
   destination: string,
-  positions: Array<{ code?: unknown; status?: unknown }>,
+  positions: Array<{ code?: unknown; status?: unknown; customer_code?: unknown }>,
+  customerCode: string,
 ): { code: string } | { problem: string } {
+  const customer = customerCode.trim();
+  const inZone = (position: { customer_code?: unknown }) => String(position.customer_code ?? "").trim() === customer;
+  if (!positions.some(inZone)) {
+    return {
+      problem: `Nenhuma prateleira está na zona de ${customer}. Atribua uma rua a esse cliente em Estoque › Posições.`,
+    };
+  }
   const needle = destination.trim().toUpperCase();
   if (!needle) return { problem: "Escolha uma posição cadastrada." };
   const match = positions.find((position) => String(position.code ?? "").trim().toUpperCase() === needle);
   if (!match || String(match.code ?? "").trim() === "") return { problem: "Escolha uma posição cadastrada." };
+  if (!inZone(match)) return { problem: `Esta posição não é da zona de ${customer}.` };
   const status = String(match.status ?? "active").trim() || "active";
   if (status === "blocked") return { problem: "Esta posição está bloqueada." };
   if (status === "review") return { problem: "Esta posição está em verificação." };
