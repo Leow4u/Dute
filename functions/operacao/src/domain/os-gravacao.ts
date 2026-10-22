@@ -11,16 +11,18 @@ import {
   itensSemPreco,
   localDaDemanda,
   numeroDaOs,
+  problemaDaData,
   problemaParaAbrirOs,
   proximaSequencia,
   type AcaoOs,
+  type AgendaDaOs,
   type OsGravada,
 } from "./os.js";
 import { operacaoCadastroProblem } from "./platform-roles.js";
 import type { OperacaoProfile } from "./profile.js";
 
 /**
- * Abre e cancela a OS. A transação lê a demanda, o orçamento e a revisão
+ * Abre, agenda e cancela a OS. A transação lê a demanda, o orçamento e a revisão
  * fechada antes de escrever. O preço da revisão não entra na OS nem no evento.
  */
 
@@ -53,17 +55,32 @@ export async function saveServiceOrderFor(
   return runIdempotent(
     db,
     {
-      kind: acao.action === "create" ? "os_open" : "os_cancel",
+      kind: acao.action === "create" ? "os_open" : acao.action === "schedule" ? "os_schedule" : "os_cancel",
       scope: acao.action === "create" ? { demanda: acao.demanda } : { numero: acao.numero },
       idempotency_key: acao.idempotency_key,
       input: acao,
       actor: ator(caller),
     },
     async (transaction, { operationId }) => {
-      const efeito = acao.action === "create" ? await abrir(transaction, db, acao, caller) : await cancelar(transaction, db, acao, caller);
-      const payload = efeito.evento === "os.created"
-        ? { id: efeito.documento.numero, demanda: efeito.documento.demanda, seq: efeito.documento.seq, linhas: efeito.documento.itens.length }
-        : { id: efeito.documento.numero, demanda: efeito.documento.demanda };
+      const efeito =
+        acao.action === "create"
+          ? await abrir(transaction, db, acao, caller)
+          : acao.action === "schedule"
+            ? await agendar(transaction, db, acao, caller)
+            : await cancelar(transaction, db, acao, caller);
+      const payload =
+        efeito.evento === "os.created"
+          ? { id: efeito.documento.numero, demanda: efeito.documento.demanda, seq: efeito.documento.seq, linhas: efeito.documento.itens.length }
+          : efeito.evento === "os.scheduled"
+            ? {
+                id: efeito.documento.numero,
+                demanda: efeito.documento.demanda,
+                data: efeito.documento.agenda?.data ?? "",
+                hora: efeito.documento.agenda?.hora ?? null,
+                equipe: efeito.documento.agenda?.equipe ?? [],
+                veiculo_id: efeito.documento.agenda?.veiculo_id ?? "",
+              }
+            : { id: efeito.documento.numero, demanda: efeito.documento.demanda };
       createOperacaoEvent(transaction, db, {
         operation_id: operationId,
         type: efeito.evento,
@@ -119,8 +136,53 @@ async function abrir(transaction: Transaction, db: Firestore, acao: Extract<Acao
   return efeito;
 }
 
+function agendaLida(valor: unknown): AgendaDaOs | null {
+  if (valor == null) return null;
+  if (!valor || typeof valor !== "object") throw new HttpsError("failed-precondition", "OS ilegível.");
+  const agenda = valor as Record<string, unknown>;
+  if (typeof agenda.data !== "string" || typeof agenda.veiculo_id !== "string" || !Array.isArray(agenda.equipe)) {
+    throw new HttpsError("failed-precondition", "OS ilegível.");
+  }
+  return {
+    data: agenda.data,
+    hora: typeof agenda.hora === "string" ? agenda.hora : null,
+    equipe: agenda.equipe.filter((id): id is string => typeof id === "string"),
+    veiculo_id: agenda.veiculo_id,
+  };
+}
+
+function hojeEmSaoPaulo(agora = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(agora);
+}
+
+async function exigirAtivo(transaction: Transaction, db: Firestore, collection: string, id: string, mensagem: string): Promise<void> {
+  const snapshot = await transaction.get(db.collection(collection).doc(id));
+  if (!snapshot.exists || snapshot.data()?.ativo !== true) throw new HttpsError("failed-precondition", mensagem);
+}
+
+async function agendar(transaction: Transaction, db: Firestore, acao: Extract<AcaoOs, { action: "schedule" }>, caller: OperacaoProfile) {
+  const data = problemaDaData(acao.data, hojeEmSaoPaulo());
+  if (data) throw new HttpsError("invalid-argument", data);
+  const ref = db.collection(SERVICE_ORDERS_COLLECTION).doc(acao.numero);
+  const snapshot = await transaction.get(ref);
+  if (!snapshot.exists) throw new HttpsError("not-found", "OS não encontrada.");
+  for (const id of acao.equipe) await exigirAtivo(transaction, db, "collaborators", id, "Há alguém na equipe que não está ativo.");
+  await exigirAtivo(transaction, db, "vehicles", acao.veiculo_id, "O veículo não está ativo.");
+  const efeito = aplicarOs(osLida(acao.numero, snapshot.data() ?? {}), acao, null);
+  transaction.update(ref, {
+    status: efeito.documento.status,
+    edicao: efeito.documento.edicao,
+    agenda: efeito.documento.agenda,
+    atualizado_por: { uid: caller.uid, role: caller.role },
+    updated_at: FieldValue.serverTimestamp(),
+  });
+  return efeito;
+}
+
 function osLida(numero: string, data: DocumentData): OsGravada {
-  if (data.status !== "aberta" && data.status !== "cancelada") throw new HttpsError("failed-precondition", "OS ilegível.");
+  if (data.status !== "aberta" && data.status !== "agendada" && data.status !== "cancelada") {
+    throw new HttpsError("failed-precondition", "OS ilegível.");
+  }
   if (typeof data.edicao !== "number" || typeof data.demanda !== "string" || typeof data.customer_code !== "string") {
     throw new HttpsError("failed-precondition", "OS ilegível.");
   }
@@ -137,6 +199,7 @@ function osLida(numero: string, data: DocumentData): OsGravada {
     destino_local_id: typeof data.destino_local_id === "string" ? data.destino_local_id : null,
     edicao: data.edicao,
     cancelamento: cancelamento && typeof cancelamento === "object" && typeof cancelamento.motivo === "string" ? { motivo: cancelamento.motivo } : null,
+    agenda: agendaLida(data.agenda),
   };
 }
 

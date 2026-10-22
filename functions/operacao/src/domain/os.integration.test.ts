@@ -150,4 +150,41 @@ describe("OS a partir da demanda", () => {
     }));
     assert.match(deNovo.message, /cancelada/);
   });
+
+  it("agenda equipe e veículo ativos, recusa quem está desativado e não leva nome no evento", async () => {
+    await db.collection("collaborators").doc("col_aaaaaaaaaaaaaaaa").set({ ativo: true, nome: "Ana Souza" });
+    await db.collection("collaborators").doc("col_bbbbbbbbbbbbbbbb").set({ ativo: false, nome: "Bruno" });
+    await db.collection("vehicles").doc("vei_aaaaaaaaaaaaaaaa").set({ ativo: true, placa: "ABC1D23" });
+    await saveServiceOrderFor(db, interno, { action: "create", idempotency_key: "abre", demanda: NUMERO });
+    const parado = await rejection(saveServiceOrderFor(db, interno, {
+      action: "schedule",
+      idempotency_key: "ruim",
+      numero: "10045-01",
+      expected_edicao: 1,
+      data: "2099-01-01",
+      equipe: ["col_bbbbbbbbbbbbbbbb"],
+      veiculo_id: "vei_aaaaaaaaaaaaaaaa",
+    }));
+    assert.equal(parado.code, "failed-precondition");
+    const agendada = await saveServiceOrderFor(db, interno, {
+      action: "schedule",
+      idempotency_key: "boa",
+      numero: "10045-01",
+      expected_edicao: 1,
+      data: "2099-01-01",
+      hora: "15:00",
+      equipe: ["col_aaaaaaaaaaaaaaaa"],
+      veiculo_id: "vei_aaaaaaaaaaaaaaaa",
+    });
+    assert.equal(agendada.edicao, 2);
+    const os = (await db.collection(SERVICE_ORDERS_COLLECTION).doc("10045-01").get()).data() ?? {};
+    assert.equal(os.status, "agendada");
+    assert.equal(os.agenda.veiculo_id, "vei_aaaaaaaaaaaaaaaa");
+    assert.equal(JSON.stringify(os).includes("Ana"), false);
+    assert.equal(JSON.stringify(os).includes("ABC1D23"), false);
+    const evento = (await db.collection(EVENTS_COLLECTION).get()).docs.map((item) => item.data()).find((item) => item.type === "os.scheduled");
+    assert.ok(evento);
+    assert.equal(JSON.stringify(evento).includes("Ana"), false);
+    assert.equal(JSON.stringify(evento).includes("ABC1D23"), false);
+  });
 });

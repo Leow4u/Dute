@@ -81,4 +81,25 @@ e cancela a OS aberta.
 - Quem grava é o mesmo do cadastro (owner, admin, interno). Quem lê a OS:
   esses e o suporte. O interno passa a ler `demands`, `lpu_items` e
   `customer_locations`. `quotes` e `price_tables` continuam sem a operação.
-- Agendar, executar, concluir e a tela ficam na parte 3.
+- Agendar e a tela ficam na parte 3. Executar e concluir ficam para a
+  próxima parte.
+
+## Parte 3: fila do dia
+
+A tela `/operacao`, item Hoje do menu. Sem executar, concluir, foto ou
+assinatura: as colunas Em execução e Concluídas não entram enquanto essas
+transições não existem.
+
+- Para abrir lista a demanda com `etapa` Para planejar. Abrir OS chama
+  `saveServiceOrder` com `create`. A demanda continua em Para planejar e pode
+  gerar `10045-02`.
+- Para agendar é a OS `aberta`. Agendadas hoje é a OS `agendada` cuja
+  `agenda.data` é o dia em America/Sao_Paulo. Outros dias é a OS `agendada`
+  em outra data. A cancelada não aparece.
+- Agendar chama `schedule`: data (não pode ser anterior a hoje), hora
+  opcional, equipe e veículo. Os dois precisam estar ativos. A OS guarda os
+  ids; o nome e a placa vêm do cadastro na leitura.
+- Cancelar, da OS aberta ou agendada, pede o motivo. O motivo fica na OS, não
+  no evento (`os.cancelled`). Agendar grava `os.scheduled`.
+- Quem usa a tela é o mesmo do cadastro: owner, admin e interno. Campo ainda
+  não lê a OS. A Operação continua só no `dute-homolog`.

@@ -23,6 +23,7 @@ describe("shell da Operação", () => {
     const html = render("/operacao/colaboradores", true);
     expect(html).toContain('data-ambiente="operacao"');
     expect(html).toContain(">Operação<");
+    expect(html).toContain(">Hoje<");
     expect(html).toContain(">Colaboradores<");
     expect(html).toContain(">Veículos<");
     expect(html).toContain('href="/operacao/colaboradores"');
