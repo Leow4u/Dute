@@ -38,6 +38,7 @@ import {
   updateInboundReceiptConferenceTransaction,
   type OperationalActor,
 } from "./domain/operations.js";
+import { linkInboundNoticeTransaction } from "./domain/inbound-notice.js";
 import {
   BillingDomainError,
   assertBillingStatusTransition,
@@ -6307,6 +6308,22 @@ export const advanceWarehouseTask = onCall(async (request) => {
   requireWarehouseWrite(profile);
   return advanceWarehouseTaskFlow(
     AdvanceWarehouseTaskSchema.parse(request.data ?? {}),
+    profile,
+  );
+});
+
+export const linkInboundNotice = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  const body = (request.data ?? {}) as { receipt_id?: unknown; request_id?: unknown; customer_code?: unknown };
+  const customer_code = requireCustomerScope(profile, typeof body.customer_code === "string" ? body.customer_code : undefined);
+  return linkInboundNoticeTransaction(
+    db,
+    {
+      receipt_id: typeof body.receipt_id === "string" ? body.receipt_id : "",
+      request_id: typeof body.request_id === "string" ? body.request_id : null,
+      customer_code,
+    },
     profile,
   );
 });

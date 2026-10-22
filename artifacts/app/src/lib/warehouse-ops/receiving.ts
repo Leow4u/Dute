@@ -55,6 +55,56 @@ function unitsText(task: WarehouseTask) {
   return units ? `${formatNumber(units)} un.` : "qtde aberta";
 }
 
+export type ShipmentNotice = {
+  id: string;
+  customer_code: string;
+  number: string;
+  supplier: string;
+  invoice: string;
+  units: number;
+};
+
+function noticeUnits(request: Record<string, unknown>) {
+  const items = Array.isArray(request.items) ? request.items : [];
+  const fromItems = items.reduce<number>((sum, item) => {
+    const row = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+    const quantity = Number(row.quantity ?? row.qty ?? 0);
+    return sum + (Number.isFinite(quantity) ? quantity : 0);
+  }, 0);
+  if (fromItems > 0) return fromItems;
+  const total = Number(request.quantity_total ?? request.quantity ?? 0);
+  return Number.isFinite(total) ? total : 0;
+}
+
+/** Avisos de envio que a coordenação ainda não aprovou. Saída e aviso já decidido ficam de fora. */
+export function openShipmentNotices(requests: Array<Record<string, unknown>>): ShipmentNotice[] {
+  return requests.flatMap((request) => {
+    const id = coerceText(request.id);
+    const type = coerceText(request.type);
+    if (!id || !/receb|inbound/i.test(type) || coerceText(request.status) !== "open") return [];
+    return [{
+      id,
+      customer_code: coerceText(request.customer_code),
+      number: coerceText(request.request_number),
+      supplier: coerceText(request.supplier),
+      invoice: coerceText(request.invoice_number),
+      units: noticeUnits(request),
+    }];
+  });
+}
+
+/** "ENV-0001 · Camisaria Alfa · NF 1842 · Avulsa · 10 un." */
+export function receivingArrivalMeta(
+  task: WarehouseTask,
+  notice?: Pick<ShipmentNotice, "number" | "supplier" | "invoice"> | null,
+) {
+  const base = receivingRowMeta(task);
+  if (!notice) return base;
+  return [notice.number, notice.supplier, notice.invoice ? `NF ${notice.invoice}` : null, base]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 /** "Prevista · em conferência · 1 linha · 1.000 un. · prazo 09/10/2026, 14:00" */
 export function receivingRowMeta(task: WarehouseTask) {
   const lines = task.items?.length ?? 0;

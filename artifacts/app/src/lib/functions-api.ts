@@ -275,6 +275,17 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  const receiptNoticeMatch = pathname.match(/^\/api\/warehouse\/receipts\/([^/]+)\/notice$/);
+  if (method === "POST" && receiptNoticeMatch) {
+    return {
+      name: "linkInboundNotice",
+      payload: async (_pathname, init) => {
+        const body = await readJsonBody(init);
+        return { ...body, receipt_id: decodeURIComponent(receiptNoticeMatch[1] ?? "") };
+      },
+    };
+  }
+
   const receiptConferenceMatch = pathname.match(
     /^\/api\/warehouse\/receipts\/([^/]+)\/conference$/,
   );

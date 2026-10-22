@@ -75,6 +75,7 @@ import {
   fetchJson,
   TERMINAL_STATUSES,
 } from "@/lib/warehouse-ops/model";
+import { type ShipmentNotice } from "@/lib/warehouse-ops/receiving";
 import {
   type ProductLookupItem,
   type ProductPhoto,
@@ -229,20 +230,77 @@ export function receiptIdFromTask(task: WarehouseTask) {
   return task.reference || task.id.replace(/^receiving:/, "");
 }
 
+function NoticeLink({
+  notices,
+  selectedId,
+  disabled,
+  onSelect,
+}: {
+  notices: ShipmentNotice[];
+  selectedId?: string | null;
+  disabled?: boolean;
+  onSelect: (requestId: string | null) => void;
+}) {
+  const options = [
+    { id: "", title: "Sem aviso", detail: "Chegada sem ENV vinculado" },
+    ...notices.map((notice) => ({
+      id: notice.id,
+      title: [notice.number, notice.supplier].filter(Boolean).join(" · "),
+      detail: [notice.invoice ? `NF ${notice.invoice}` : null, "aguardando aprovação"].filter(Boolean).join(" · "),
+    })),
+  ];
+  return (
+    <div className="space-y-2">
+      <div className="text-sm font-semibold text-foreground">Aviso do cliente</div>
+      <div className="overflow-hidden rounded-lg border border-border bg-card">
+        {options.map((option) => {
+          const selected = (selectedId ?? "") === option.id;
+          return (
+            <button
+              key={option.id || "none"}
+              type="button"
+              disabled={disabled}
+              className={cn(
+                "flex w-full items-center gap-3 border-t border-border/60 px-3 py-2.5 text-left first:border-t-0",
+                selected && "bg-primary/10",
+              )}
+              onClick={() => onSelect(option.id || null)}
+            >
+              <span className={cn("flex size-4 shrink-0 items-center justify-center rounded-full border-2", selected ? "border-primary" : "border-input")}>
+                {selected ? <span className="size-2 rounded-full bg-primary" /> : null}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">{option.title}</span>
+                <span className="block text-sm text-muted-foreground">{option.detail}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function ReceivingTaskDetailCard({
   entry,
   alerts,
   advancingTaskId,
   registeringExceptionId,
+  notices = [],
+  linking = false,
   onAdvance,
   onOpenException,
+  onLinkNotice,
 }: {
   entry?: TaskQueueEntry;
   alerts: OpsAlert[];
   advancingTaskId?: string;
   registeringExceptionId?: string;
+  notices?: ShipmentNotice[];
+  linking?: boolean;
   onAdvance: (id: string) => void;
   onOpenException: (task: WarehouseTask, suggestedNote?: string) => void;
+  onLinkNotice?: (requestId: string | null) => void;
 }) {
   if (!entry) {
     return (
@@ -319,6 +377,14 @@ export function ReceivingTaskDetailCard({
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-5 p-5">
+        {onLinkNotice ? (
+          <NoticeLink
+            notices={notices}
+            selectedId={task.customer_request_id}
+            disabled={linking}
+            onSelect={onLinkNotice}
+          />
+        ) : null}
         <div className="grid grid-cols-2 gap-3">
           <DetailField icon={Hash} label="Referência" value={task.reference || task.id} />
           <DetailField

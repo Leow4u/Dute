@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { normalizeQueues, type WarehouseOpsResponse, type WarehouseTask } from "./model";
-import { buildReceivingBoard, putawayRowMeta, receivingRowMeta } from "./receiving";
+import { buildReceivingBoard, openShipmentNotices, putawayRowMeta, receivingArrivalMeta, receivingRowMeta } from "./receiving";
 
 function task(overrides: Partial<WarehouseTask> & { id: string }): WarehouseTask {
   return { status: "planned", can_advance: true, exception_count: 0, ...overrides };
@@ -59,5 +59,37 @@ describe("quadro do Receber", () => {
 
   it("não quebra sem filas", () => {
     expect(buildReceivingBoard(normalizeQueues(undefined))).toEqual({ check: [], store: [], done: [] });
+  });
+});
+
+describe("avisos de envio no Receber", () => {
+  it("lista só o aviso de recebimento ainda aberto e mostra o vínculo na chegada", () => {
+    const notices = openShipmentNotices([
+      {
+        id: "req-1",
+        customer_code: "BTG Pactual",
+        type: "recebimento",
+        status: "open",
+        request_number: "ENV-0001",
+        supplier: "Camisaria Alfa",
+        invoice_number: "1842",
+        items: [{ quantity: 10 }],
+      },
+      { id: "req-2", type: "retirada", status: "open", request_number: "PED-1" },
+      { id: "req-3", type: "recebimento", status: "approved", request_number: "ENV-0002" },
+    ]);
+    expect(notices).toEqual([
+      {
+        id: "req-1",
+        customer_code: "BTG Pactual",
+        number: "ENV-0001",
+        supplier: "Camisaria Alfa",
+        invoice: "1842",
+        units: 10,
+      },
+    ]);
+    expect(receivingArrivalMeta(task({ id: "avl", reference: "inb_avulso_1" }), notices[0])).toBe(
+      "ENV-0001 · Camisaria Alfa · NF 1842 · Avulsa · qtde aberta",
+    );
   });
 });
