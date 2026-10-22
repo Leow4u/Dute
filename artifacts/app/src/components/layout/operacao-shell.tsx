@@ -3,25 +3,22 @@ import { Link, useLocation } from "wouter";
 import { WifiOff } from "lucide-react";
 
 import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
-import { ModulosLink } from "@/components/layout/modulos-link";
 import { SidebarBrand } from "@/components/layout/sidebar-brand";
 import { isNavRouteActive, type AppModule } from "@/lib/modules";
 import { cn } from "@/lib/utils";
 
 /**
- * Shell da Operação: menu do cadastro, sem os destinos do WMS. Colaboradores
- * e veículos entram como itens. "Módulos" só quando a pessoa tem outro módulo.
+ * Shell da Operação: menu do dia e do cadastro, sem os destinos do WMS.
+ * A troca de módulo fica no menu da conta.
  */
 export function OperacaoShell({
   items,
-  showModulos,
   basePath,
   online,
   conta,
   children,
 }: {
   items: AppModule[];
-  showModulos: boolean;
   basePath: string;
   online: boolean;
   conta: (compact: boolean) => ReactNode;
@@ -43,7 +40,6 @@ export function OperacaoShell({
           <h2 className="px-3 text-base font-semibold text-sidebar-foreground">Operação</h2>
         </div>
         <nav aria-label="Operação" className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-4 py-3">
-          {showModulos ? <ModulosLink variant="sidebar" /> : null}
           {items.map((item) => {
             const route = item.routes[0];
             const current = route ? isNavRouteActive(location, route) : false;
@@ -82,10 +78,7 @@ export function OperacaoShell({
             aria-hidden="true"
             className="hidden h-8 w-auto min-w-0 max-w-[140px] shrink object-contain dark:block"
           />
-          <div className="flex min-w-0 items-center gap-2">
-            {showModulos ? <ModulosLink variant="header" /> : null}
-            {conta(true)}
-          </div>
+          <div className="flex min-w-0 items-center gap-2">{conta(true)}</div>
         </header>
         {online ? null : (
           <div
