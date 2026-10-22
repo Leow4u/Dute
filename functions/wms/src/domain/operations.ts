@@ -2904,10 +2904,29 @@ export async function removeOpeningInventoryLineTransaction(
         row.ref.path !== skuRef.path &&
         recordOwner(row.data) === customerCode,
     );
+    // Cartão de produto não guarda SKU: o saldo dele no ledger é o do código
+    // do cliente, em qualquer outro SKU.
+    const codeBalances = strayCatalogRows.length
+      ? await readRows(
+          transaction,
+          db
+            .collection(collections.stockBalances)
+            .where("customer_code", "==", customerCode)
+            .where("client_item_code", "==", clientItemCode),
+        )
+      : [];
+    const codeHasOtherStock = codeBalances.some(
+      (row) =>
+        normalizedIdentity(row.data.sku_code) !== skuCode &&
+        catalogRecordHasQuantity(row.data),
+    );
     const strayHasStock = await Promise.all(
       strayCatalogRows.map(async (row) => {
         if (catalogRecordHasQuantity(row.data)) return true;
         const code = catalogSkuCode(row.data);
+        if ((row.ref.parent.id === collections.products || !code) && codeHasOtherStock) {
+          return true;
+        }
         if (!code || normalizedIdentity(code) === skuCode) return false;
         const balances = await readRows(transaction, skuBalancesQuery(db, customerCode, code));
         return balances.some((balance) => catalogRecordHasQuantity(balance.data));
