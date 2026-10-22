@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import { normalizeQueues, type WarehouseOpsResponse, type WarehouseTask } from "./model";
-import { buildReceivingBoard, openShipmentNotices, putawayRowMeta, receivingArrivalMeta, receivingRowMeta, unlinkedShipmentNotices } from "./receiving";
+import {
+  buildReceivingBoard,
+  linkedShipmentNotice,
+  noticeLinkChoice,
+  openShipmentNotices,
+  putawayRowMeta,
+  receivingArrivalMeta,
+  receivingRowMeta,
+  unlinkedShipmentNotices,
+} from "./receiving";
 
 function task(overrides: Partial<WarehouseTask> & { id: string }): WarehouseTask {
   return { status: "planned", can_advance: true, exception_count: 0, ...overrides };
@@ -104,5 +113,89 @@ describe("avisos de envio no Receber", () => {
     expect(unlinkedShipmentNotices(notices, tasks).map((item) => item.id)).toEqual(["req-2"]);
     expect(unlinkedShipmentNotices(notices, tasks, "req-1").map((item) => item.id)).toEqual(["req-1", "req-2"]);
     expect(unlinkedShipmentNotices(notices, []).map((item) => item.id)).toEqual(["req-1", "req-2", "req-3"]);
+  });
+});
+
+describe("aviso na ficha da chegada avulsa", () => {
+  const open = [
+    { id: "req-1", customer_code: "BTG Pactual", number: "ENV-0001", supplier: "Camisaria Alfa", invoice: "1842", units: 10 },
+    { id: "req-2", customer_code: "BTG Pactual", number: "ENV-0002", supplier: "", invoice: "", units: 0 },
+  ];
+  const openOptions = [
+    { id: "req-1", title: "ENV-0001 · Camisaria Alfa", detail: "NF 1842 · aguardando aprovação" },
+    { id: "req-2", title: "ENV-0002", detail: "aguardando aprovação" },
+  ];
+  const none = { id: "", title: "Sem aviso", detail: "" };
+
+  it("lê número, status e a chegada da aprovação do aviso vinculado", () => {
+    expect(
+      linkedShipmentNotice({
+        id: "req-9",
+        request_number: "ENV-0009",
+        status: "approved",
+        created_entities: { inbound_id: "inb_avulso_1" },
+      }),
+    ).toEqual({ id: "req-9", number: "ENV-0009", status: "approved", inbound_id: "inb_avulso_1" });
+    expect(linkedShipmentNotice({ id: "req-9", status: "rejected" })).toEqual({
+      id: "req-9",
+      number: "",
+      status: "rejected",
+      inbound_id: "",
+    });
+  });
+
+  it("chegada avulsa aberta escolhe entre sem aviso e os avisos abertos", () => {
+    expect(noticeLinkChoice(task({ id: "inb_avulso_1" }), open)).toEqual({
+      editable: true,
+      selectedId: "",
+      options: [none, ...openOptions],
+    });
+    expect(noticeLinkChoice(task({ id: "inb_avulso_1", customer_request_id: "req-1" }), open)).toEqual({
+      editable: true,
+      selectedId: "req-1",
+      options: [none, ...openOptions],
+    });
+    // Chegada prevista nasce do aviso aprovado: sem seletor.
+    expect(noticeLinkChoice(task({ id: "inb_req-7", reference: "inb_creq_7" }), open)).toBeNull();
+  });
+
+  it("aviso vinculado recusado ou cancelado aparece selecionado pelo número e a chegada ainda troca", () => {
+    const arrival = task({ id: "receiving:inb_avulso_1", reference: "inb_avulso_1", status: "checking", customer_request_id: "req-9" });
+    // Enquanto o aviso vinculado carrega, a ficha não oferece troca.
+    expect(noticeLinkChoice(arrival, open)).toBeNull();
+    for (const [status, label] of [["rejected", "recusado"], ["cancelled", "cancelado"]]) {
+      expect(
+        noticeLinkChoice(arrival, open, { id: "req-9", number: "ENV-0009", status, inbound_id: "" }),
+      ).toEqual({
+        editable: true,
+        selectedId: "req-9",
+        options: [none, { id: "req-9", title: "ENV-0009", detail: label }, ...openOptions],
+      });
+    }
+    // Sem conseguir ler o aviso, o vínculo aparece pelo id e o desvínculo continua possível.
+    expect(noticeLinkChoice(arrival, open, null)).toEqual({
+      editable: true,
+      selectedId: "req-9",
+      options: [none, { id: "req-9", title: "req-9", detail: "" }, ...openOptions],
+    });
+  });
+
+  it("aviso aprovado com a chegada e chegada concluída só mostram o vínculo", () => {
+    const linked = { id: "req-9", number: "ENV-0009", status: "approved", inbound_id: "inb_avulso_1" };
+    const arrival = task({ id: "receiving:inb_avulso_1", reference: "inb_avulso_1", customer_request_id: "req-9" });
+    expect(noticeLinkChoice(arrival, open, linked)).toEqual({
+      editable: false,
+      selectedId: "req-9",
+      options: [{ id: "req-9", title: "ENV-0009", detail: "aprovado" }],
+    });
+    expect(noticeLinkChoice(task({ id: "inb_avulso_1", customer_request_id: "req-9" }), open, linked)?.editable).toBe(false);
+    for (const status of ["received", "completed", "cancelled"]) {
+      expect(noticeLinkChoice(task({ id: "inb_avulso_2", status, customer_request_id: "req-1" }), open)).toEqual({
+        editable: false,
+        selectedId: "req-1",
+        options: [openOptions[0]],
+      });
+      expect(noticeLinkChoice(task({ id: "inb_avulso_2", status }), open)).toBeNull();
+    }
   });
 });

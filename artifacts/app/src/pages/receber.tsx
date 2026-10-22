@@ -25,6 +25,7 @@ import {
   type OpsAlert,
   type TaskQueueEntry,
   type WarehouseOpsResponse,
+  coerceText,
   fetchJson,
   getTaskTitle,
   lineConfirmationKey,
@@ -34,6 +35,9 @@ import {
 import {
   buildReceivingBoard,
   isUnplannedReceipt,
+  linkedShipmentNotice,
+  type NoticeLinkChoice,
+  noticeLinkChoice,
   openShipmentNotices,
   putawayRowMeta,
   receivingArrivalMeta,
@@ -68,7 +72,10 @@ export default function Receber() {
   });
   const requests = useQuery({
     queryKey: ["customer-requests", "receber", customerCode],
-    queryFn: () => fetchJson<{ items?: Array<Record<string, unknown>> }>("/api/customer-requests?limit=200"),
+    queryFn: () =>
+      fetchJson<{ items?: Array<Record<string, unknown>> }>(
+        `/api/customer-requests?customer_code=${encodeURIComponent(customerCode)}&status=open&limit=200`,
+      ),
     refetchInterval: 60_000,
     refetchOnWindowFocus: false,
   });
@@ -88,6 +95,28 @@ export default function Receber() {
   });
   const selected = entries.find((entry) => entry.task.id === selectedId) ?? null;
   const selectedNotice = pendingNotices.find((notice) => notice.id === selectedNoticeId) ?? null;
+  // Aviso da chegada selecionada que já saiu dos abertos (aprovado, recusado
+  // ou cancelado): lido à parte para a ficha mostrar o vínculo.
+  const selectedRequestId =
+    selected?.queue.key === "receiving" && isUnplannedReceipt(selected.task)
+      ? coerceText(selected.task.customer_request_id)
+      : "";
+  const linkedRequestId =
+    requests.isSuccess && selectedRequestId && !noticeById.has(selectedRequestId) ? selectedRequestId : "";
+  const linkedRequest = useQuery({
+    queryKey: ["customer-requests", "receber", "vinculado", linkedRequestId],
+    queryFn: () => fetchJson<Record<string, unknown>>(`/api/customer-requests/${encodeURIComponent(linkedRequestId)}`),
+    enabled: Boolean(linkedRequestId),
+    refetchOnWindowFocus: false,
+  });
+  const noticeChoice: NoticeLinkChoice | null =
+    selected && requests.isSuccess
+      ? noticeLinkChoice(
+          selected.task,
+          unlinkedShipmentNotices(notices, tasks, selected.task.customer_request_id),
+          linkedRequest.data ? linkedShipmentNotice(linkedRequest.data) : linkedRequest.isError ? null : undefined,
+        )
+      : null;
   const linkNotice = useMutation({
     mutationFn: (input: { receiptId: string; requestId: string | null }) =>
       fetchJson(`/api/warehouse/receipts/${encodeURIComponent(input.receiptId)}/notice`, {
@@ -97,6 +126,7 @@ export default function Receber() {
       }),
     onSuccess: (_result, input) => {
       void queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
+      void queryClient.invalidateQueries({ queryKey: ["customer-requests", "receber"] });
       toast({ title: input.requestId ? "Aviso vinculado à chegada" : "Aviso desvinculado da chegada" });
     },
     onError: (error: Error) => {
@@ -129,10 +159,10 @@ export default function Receber() {
       entry={selected}
       alerts={alerts}
       actions={actions}
-      notices={unlinkedShipmentNotices(notices, tasks, selected.task.customer_request_id)}
+      noticeChoice={noticeChoice}
       linking={linkNotice.isPending}
       onLinkNotice={
-        isUnplannedReceipt(selected.task)
+        noticeChoice?.editable
           ? (requestId) => linkNotice.mutate({ receiptId: selected.task.id, requestId })
           : undefined
       }
@@ -146,14 +176,16 @@ export default function Receber() {
     />
   ) : null;
 
+  const selectEntry = (entry: TaskQueueEntry) => {
+    setSelectedNoticeId(null);
+    setSelectedId(entry.task.id);
+  };
+
   const rowAction = (entry: TaskQueueEntry, label: string) => (
     <Button
       type="button"
       variant={selected?.task.id === entry.task.id ? "secondary" : "default"}
-      onClick={() => {
-        setSelectedNoticeId(null);
-        setSelectedId(entry.task.id);
-      }}
+      onClick={() => selectEntry(entry)}
     >
       {label}
     </Button>
@@ -175,7 +207,10 @@ export default function Receber() {
           <>
             <Segmented<"open" | "done">
               value={view}
-              onChange={setView}
+              onChange={(next) => {
+                setView(next);
+                setSelectedNoticeId(null);
+              }}
               aria-label="Chegadas em aberto ou recebidas"
               options={[
                 { value: "open", label: `Em aberto${openCount ? ` · ${openCount}` : ""}` },
@@ -207,7 +242,7 @@ export default function Receber() {
         <div
           className={cn(
             "grid grid-cols-1 gap-4",
-            desktop && selected && "lg:grid-cols-[minmax(0,1fr)_480px]",
+            desktop && (selected || selectedNotice) && "lg:grid-cols-[minmax(0,1fr)_480px]",
           )}
         >
           <div className="flex min-w-0 flex-col gap-6">
@@ -234,7 +269,7 @@ export default function Receber() {
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={() => setSelectedId(entry.task.id)}
+                        onClick={() => selectEntry(entry)}
                       >
                         Ver
                       </Button>
@@ -390,7 +425,7 @@ function TaskPanel({
   entry,
   alerts,
   actions,
-  notices,
+  noticeChoice,
   linking,
   onLinkNotice,
   lineConfirmations,
@@ -399,7 +434,7 @@ function TaskPanel({
   entry: TaskQueueEntry;
   alerts: OpsAlert[];
   actions: ReturnType<typeof useWarehouseTaskActions>;
-  notices: ShipmentNotice[];
+  noticeChoice: NoticeLinkChoice | null;
   linking: boolean;
   onLinkNotice?: (requestId: string | null) => void;
   lineConfirmations: LineConfirmationMap;
@@ -410,7 +445,7 @@ function TaskPanel({
       <ReceivingTaskDetailCard
         entry={entry}
         alerts={alerts}
-        notices={notices}
+        noticeChoice={noticeChoice}
         linking={linking}
         advancingTaskId={actions.advancingTaskId}
         registeringExceptionId={actions.registeringExceptionId}

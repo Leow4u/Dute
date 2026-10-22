@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { readDocs, countDocs } = vi.hoisted(() => ({
+const { readDocs, readDoc, countDocs } = vi.hoisted(() => ({
   readDocs: vi.fn(),
+  readDoc: vi.fn(),
   countDocs: vi.fn(),
 }));
 
@@ -13,6 +14,8 @@ vi.mock("firebase/firestore", async (importOriginal) => {
     ...original,
     collection: vi.fn((_store: unknown, path: string) => ({ path })),
     query: vi.fn((target: unknown, ...constraints: unknown[]) => ({ target, constraints })),
+    doc: vi.fn((_store: unknown, path: string, id: string) => ({ path, id })),
+    getDoc: readDoc,
     getDocs: readDocs,
     getCountFromServer: countDocs,
   };
@@ -26,6 +29,7 @@ function document(id: string, data: Record<string, unknown>) {
 
 beforeEach(() => {
   readDocs.mockReset();
+  readDoc.mockReset();
   countDocs.mockReset();
   countDocs.mockResolvedValue({ data: () => ({ count: 2 }) });
   vi.stubGlobal("window", {
@@ -87,5 +91,23 @@ describe("leituras de ocupação do armazém", () => {
     expect(body.items).toHaveLength(1);
     expect(body.items[0].product_name).toBe("Produto cadastrado");
     expect(readDocs).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("leitura de um registro operacional", () => {
+  it("devolve a solicitação pelo id e 404 quando ela não existe", async () => {
+    readDoc.mockResolvedValueOnce({
+      id: "req-9",
+      exists: () => true,
+      data: () => ({ id: "req-9", request_number: "ENV-0009", status: "rejected" }),
+    });
+    const response = await window.fetch("/api/customer-requests/req-9");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ id: "req-9", request_number: "ENV-0009", status: "rejected" });
+    expect(readDoc).toHaveBeenCalledWith({ path: "customer_requests", id: "req-9" });
+
+    readDoc.mockResolvedValueOnce({ id: "sumiu", exists: () => false, data: () => undefined });
+    const missing = await window.fetch("/api/customer-requests/sumiu");
+    expect(missing.status).toBe(404);
   });
 });

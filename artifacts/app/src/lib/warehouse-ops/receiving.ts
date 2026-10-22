@@ -108,6 +108,92 @@ export function unlinkedShipmentNotices(
   return notices.filter((notice) => !linked.has(notice.id));
 }
 
+/** Aviso vinculado à chegada que já saiu de "open", lido à parte. */
+export type LinkedShipmentNotice = {
+  id: string;
+  number: string;
+  status: string;
+  inbound_id: string;
+};
+
+export function linkedShipmentNotice(request: Record<string, unknown>): LinkedShipmentNotice {
+  const created =
+    request.created_entities && typeof request.created_entities === "object"
+      ? (request.created_entities as Record<string, unknown>)
+      : {};
+  return {
+    id: coerceText(request.id),
+    number: coerceText(request.request_number),
+    status: normalizeStatus(coerceText(request.status)),
+    inbound_id: coerceText(created.inbound_id),
+  };
+}
+
+export type NoticeOption = { id: string; title: string; detail: string };
+
+export type NoticeLinkChoice = {
+  editable: boolean;
+  selectedId: string;
+  options: NoticeOption[];
+};
+
+const DECIDED_NOTICE_LABEL: Record<string, string> = {
+  approved: "aprovado",
+  rejected: "recusado",
+  cancelled: "cancelado",
+};
+
+function openNoticeOption(notice: ShipmentNotice): NoticeOption {
+  return {
+    id: notice.id,
+    title: [notice.number, notice.supplier].filter(Boolean).join(" · "),
+    detail: [notice.invoice ? `NF ${notice.invoice}` : null, "aguardando aprovação"].filter(Boolean).join(" · "),
+  };
+}
+
+/**
+ * Aviso do cliente na ficha da chegada avulsa, com as travas de
+ * linkInboundNotice (functions/wms/src/domain/inbound-notice.ts): só a
+ * chegada ainda aberta troca de aviso, e não a que já foi aprovada com ele.
+ * Fora disso a ficha só mostra o aviso vinculado. `linked` é o aviso
+ * vinculado que não está entre os abertos: `undefined` enquanto carrega,
+ * `null` se não deu para ler.
+ */
+export function noticeLinkChoice(
+  task: WarehouseTask,
+  notices: ShipmentNotice[],
+  linked?: LinkedShipmentNotice | null,
+): NoticeLinkChoice | null {
+  if (!isUnplannedReceipt(task)) return null;
+  const requestId = coerceText(task.customer_request_id);
+  const openNotice = notices.find((notice) => notice.id === requestId);
+  if (requestId && !openNotice && linked === undefined) return null;
+  const linkedOption: NoticeOption | null = !requestId
+    ? null
+    : openNotice
+      ? openNoticeOption(openNotice)
+      : {
+          id: requestId,
+          title: linked?.number || requestId,
+          detail: DECIDED_NOTICE_LABEL[linked?.status ?? ""] ?? "",
+        };
+  // A ficha recebe o id da fila ("receiving:<id>"); a aprovação grava o do recebimento.
+  const receiptId = coerceText(task.reference) || task.id.replace(/^receiving:/, "");
+  const approvedWithArrival = Boolean(linked && linked.id === requestId && linked.inbound_id === receiptId);
+  if (isTerminalTask(task) || approvedWithArrival) {
+    return linkedOption ? { editable: false, selectedId: requestId, options: [linkedOption] } : null;
+  }
+  return {
+    editable: true,
+    selectedId: requestId,
+    options: [
+      { id: "", title: "Sem aviso", detail: "" },
+      ...(linkedOption && !openNotice ? [linkedOption] : []),
+      ...notices.map(openNoticeOption),
+    ],
+  };
+}
+
 /** "ENV-0001 · Camisaria Alfa · NF 1842 · Avulsa · 10 un." */
 export function receivingArrivalMeta(
   task: WarehouseTask,
