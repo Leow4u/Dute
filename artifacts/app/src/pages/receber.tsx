@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Check, Forklift, Inbox, PackageOpen, RefreshCw, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -16,13 +16,16 @@ import {
 import { ReceivingTaskDetailCard, UnplannedReceiptDialog } from "@/features/warehouse-ops/receiving";
 import { ExceptionDialog, useWarehouseTaskActions } from "@/features/warehouse-ops/task-actions";
 import { TaskDetailPanel } from "@/features/warehouse-ops/task-detail";
+import { useToast } from "@/hooks/use-toast";
 import { useIsDesktop } from "@/hooks/use-desktop";
+import { useActiveCustomer } from "@/lib/active-customer-context";
 import { cn } from "@/lib/utils";
 import {
   type LineConfirmationMap,
   type OpsAlert,
   type TaskQueueEntry,
   type WarehouseOpsResponse,
+  coerceText,
   fetchJson,
   getTaskTitle,
   lineConfirmationKey,
@@ -31,8 +34,16 @@ import {
 } from "@/lib/warehouse-ops/model";
 import {
   buildReceivingBoard,
+  isUnplannedReceipt,
+  linkedShipmentNotice,
+  type NoticeLinkChoice,
+  noticeLinkChoice,
+  openShipmentNotices,
   putawayRowMeta,
+  receivingArrivalMeta,
   receivingRowMeta,
+  type ShipmentNotice,
+  unlinkedShipmentNotices,
 } from "@/lib/warehouse-ops/receiving";
 import { formatRequestAge } from "./customer-requests";
 
@@ -44,9 +55,12 @@ import { formatRequestAge } from "./customer-requests";
  */
 export default function Receber() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { code: customerCode } = useActiveCustomer();
   const desktop = useIsDesktop();
   const [view, setView] = useState<"open" | "done">("open");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedNoticeId, setSelectedNoticeId] = useState<string | null>(null);
   const [unplannedOpen, setUnplannedOpen] = useState(false);
   const [lineConfirmations, setLineConfirmations] = useState<LineConfirmationMap>({});
 
@@ -56,35 +70,103 @@ export default function Receber() {
     refetchInterval: 60_000,
     refetchOnWindowFocus: false,
   });
+  const requests = useQuery({
+    queryKey: ["customer-requests", "receber", customerCode],
+    queryFn: () =>
+      fetchJson<{ items?: Array<Record<string, unknown>> }>(
+        `/api/customer-requests?customer_code=${encodeURIComponent(customerCode)}&status=open&limit=200`,
+      ),
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: false,
+  });
+  const notices = useMemo(
+    () => openShipmentNotices(requests.data?.items ?? []).filter((notice) => notice.customer_code === customerCode),
+    [requests.data?.items, customerCode],
+  );
+  const noticeById = useMemo(() => new Map(notices.map((notice) => [notice.id, notice])), [notices]);
   const queues = useMemo(() => normalizeQueues(ops.data?.queues), [ops.data?.queues]);
   const alerts = useMemo(() => ops.data?.alerts ?? [], [ops.data?.alerts]);
   const entries = useMemo(() => queueEntries(queues), [queues]);
   const board = useMemo(() => buildReceivingBoard(queues), [queues]);
+  const tasks = useMemo(() => entries.map((entry) => entry.task), [entries]);
+  const pendingNotices = useMemo(() => unlinkedShipmentNotices(notices, tasks), [notices, tasks]);
   const actions = useWarehouseTaskActions({
     findEntry: (taskId) => entries.find((entry) => entry.task.id === taskId),
   });
   const selected = entries.find((entry) => entry.task.id === selectedId) ?? null;
+  const selectedNotice = pendingNotices.find((notice) => notice.id === selectedNoticeId) ?? null;
+  // Aviso da chegada selecionada que já saiu dos abertos (aprovado, recusado
+  // ou cancelado): lido à parte para a ficha mostrar o vínculo.
+  const selectedRequestId =
+    selected?.queue.key === "receiving" && isUnplannedReceipt(selected.task)
+      ? coerceText(selected.task.customer_request_id)
+      : "";
+  const linkedRequestId =
+    requests.isSuccess && selectedRequestId && !noticeById.has(selectedRequestId) ? selectedRequestId : "";
+  const linkedRequest = useQuery({
+    queryKey: ["customer-requests", "receber", "vinculado", linkedRequestId],
+    queryFn: () => fetchJson<Record<string, unknown>>(`/api/customer-requests/${encodeURIComponent(linkedRequestId)}`),
+    enabled: Boolean(linkedRequestId),
+    refetchOnWindowFocus: false,
+  });
+  const noticeChoice: NoticeLinkChoice | null =
+    selected && requests.isSuccess
+      ? noticeLinkChoice(
+          selected.task,
+          unlinkedShipmentNotices(notices, tasks, selected.task.customer_request_id),
+          linkedRequest.data ? linkedShipmentNotice(linkedRequest.data) : linkedRequest.isError ? null : undefined,
+          customerCode,
+        )
+      : null;
+  const linkNotice = useMutation({
+    mutationFn: (input: { receiptId: string; requestId: string | null }) =>
+      fetchJson(`/api/warehouse/receipts/${encodeURIComponent(input.receiptId)}/notice`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ request_id: input.requestId, customer_code: customerCode }),
+      }),
+    onSuccess: (_result, input) => {
+      void queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
+      void queryClient.invalidateQueries({ queryKey: ["customer-requests", "receber"] });
+      toast({ title: input.requestId ? "Aviso vinculado à chegada" : "Aviso desvinculado da chegada" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Não consegui vincular o aviso", description: error.message, variant: "destructive" });
+    },
+  });
 
   // Esc recolhe a ficha no desktop, como na lista de Estoque.
   useEffect(() => {
-    if (!desktop || !selectedId) return;
+    if (!desktop || (!selectedId && !selectedNoticeId)) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setSelectedId(null);
+      if (event.key === "Escape") {
+        setSelectedId(null);
+        setSelectedNoticeId(null);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [desktop, selectedId]);
+  }, [desktop, selectedId, selectedNoticeId]);
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
   };
-  const openCount = board.check.length + board.store.length;
+  const openCount = pendingNotices.length + board.check.length + board.store.length;
 
-  const panel = selected ? (
+  const panel = selectedNotice ? (
+    <NoticeCard notice={selectedNotice} />
+  ) : selected ? (
     <TaskPanel
       entry={selected}
       alerts={alerts}
       actions={actions}
+      noticeChoice={noticeChoice}
+      linking={linkNotice.isPending}
+      onLinkNotice={
+        noticeChoice?.editable
+          ? (requestId) => linkNotice.mutate({ receiptId: selected.task.id, requestId })
+          : undefined
+      }
       lineConfirmations={lineConfirmations}
       onLineConfirmationChange={(taskId, rowId, resolution) =>
         setLineConfirmations((current) => ({
@@ -95,11 +177,16 @@ export default function Receber() {
     />
   ) : null;
 
+  const selectEntry = (entry: TaskQueueEntry) => {
+    setSelectedNoticeId(null);
+    setSelectedId(entry.task.id);
+  };
+
   const rowAction = (entry: TaskQueueEntry, label: string) => (
     <Button
       type="button"
       variant={selected?.task.id === entry.task.id ? "secondary" : "default"}
-      onClick={() => setSelectedId(entry.task.id)}
+      onClick={() => selectEntry(entry)}
     >
       {label}
     </Button>
@@ -121,7 +208,10 @@ export default function Receber() {
           <>
             <Segmented<"open" | "done">
               value={view}
-              onChange={setView}
+              onChange={(next) => {
+                setView(next);
+                setSelectedNoticeId(null);
+              }}
               aria-label="Chegadas em aberto ou recebidas"
               options={[
                 { value: "open", label: `Em aberto${openCount ? ` · ${openCount}` : ""}` },
@@ -153,7 +243,7 @@ export default function Receber() {
         <div
           className={cn(
             "grid grid-cols-1 gap-4",
-            desktop && selected && "lg:grid-cols-[minmax(0,1fr)_480px]",
+            desktop && (selected || selectedNotice) && "lg:grid-cols-[minmax(0,1fr)_480px]",
           )}
         >
           <div className="flex min-w-0 flex-col gap-6">
@@ -180,7 +270,7 @@ export default function Receber() {
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={() => setSelectedId(entry.task.id)}
+                        onClick={() => selectEntry(entry)}
                       >
                         Ver
                       </Button>
@@ -193,16 +283,43 @@ export default function Receber() {
                 <QueueGroup
                   title="Para conferir"
                   hint="chegadas"
-                  count={board.check.length}
+                  count={pendingNotices.length + board.check.length}
                   empty="Nenhuma chegada esperando conferência. Registre uma chegada avulsa ou aguarde o aviso do portal."
                 >
+                  {pendingNotices.map((notice) => (
+                    <QueueRow
+                      key={notice.id}
+                      icon={Inbox}
+                      tone="check"
+                      title={[notice.number, notice.supplier].filter(Boolean).join(" · ") || "Aviso de envio"}
+                      meta={[notice.invoice ? `NF ${notice.invoice}` : null, notice.units ? `${notice.units} un.` : null]
+                        .filter(Boolean)
+                        .join(" · ")}
+                      note={
+                        <span className="text-warning-soft-foreground">Aguardando aprovação da coordenação</span>
+                      }
+                      className={cn(selectedNoticeId === notice.id && "bg-muted/60")}
+                      actions={
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            setSelectedId(null);
+                            setSelectedNoticeId(notice.id);
+                          }}
+                        >
+                          Ver
+                        </Button>
+                      }
+                    />
+                  ))}
                   {board.check.map((entry) => (
                     <QueueRow
                       key={entry.task.id}
                       icon={Inbox}
                       tone="check"
                       title={getTaskTitle(entry.task)}
-                      meta={receivingRowMeta(entry.task)}
+                      meta={receivingArrivalMeta(entry.task, noticeById.get(entry.task.customer_request_id ?? "") ?? null)}
                       age={formatRequestAge(entry.task.created_at)}
                       note={blockedNote(entry)}
                       className={cn(
@@ -241,10 +358,10 @@ export default function Receber() {
             )}
           </div>
 
-          {desktop && selected ? (
+          {desktop && (selected || selectedNotice) ? (
             <aside className="min-w-0 lg:sticky lg:top-0 lg:max-h-[calc(100dvh-160px)] lg:overflow-y-auto">
               <div className="mb-2 flex justify-end">
-                <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedId(null)} title="Recolher (Esc)">
+                <Button type="button" variant="ghost" size="sm" onClick={() => { setSelectedId(null); setSelectedNoticeId(null); }} title="Recolher (Esc)">
                   <X className="size-4" />
                   Fechar
                 </Button>
@@ -256,10 +373,10 @@ export default function Receber() {
       )}
 
       {!desktop ? (
-        <Sheet open={Boolean(selected)} onOpenChange={(open) => !open && setSelectedId(null)}>
+        <Sheet open={Boolean(selected || selectedNotice)} onOpenChange={(open) => { if (!open) { setSelectedId(null); setSelectedNoticeId(null); } }}>
           <SheetContent side="bottom" className="max-h-[88dvh] overflow-y-auto rounded-t-lg bg-card p-0">
             <SheetHeader className="sr-only">
-              <SheetTitle>{selected ? getTaskTitle(selected.task) : "Chegada"}</SheetTitle>
+              <SheetTitle>{selected ? getTaskTitle(selected.task) : selectedNotice?.number || "Aviso"}</SheetTitle>
               <SheetDescription>Ficha da chegada selecionada.</SheetDescription>
             </SheetHeader>
             {panel}
@@ -290,16 +407,37 @@ export default function Receber() {
   );
 }
 
+function NoticeCard({ notice }: { notice: ShipmentNotice }) {
+  return (
+    <div className="rounded-lg border border-border bg-card p-5">
+      <div className="text-sm font-semibold text-primary">Aviso de envio</div>
+      <h2 className="mt-2 text-lg font-semibold">{[notice.number, notice.supplier].filter(Boolean).join(" · ")}</h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {[notice.invoice ? `NF ${notice.invoice}` : null, notice.units ? `${notice.units} un.` : null]
+          .filter(Boolean)
+          .join(" · ")}
+      </p>
+      <p className="mt-4 text-sm font-semibold text-warning-soft-foreground">Aguardando aprovação da coordenação</p>
+    </div>
+  );
+}
+
 function TaskPanel({
   entry,
   alerts,
   actions,
+  noticeChoice,
+  linking,
+  onLinkNotice,
   lineConfirmations,
   onLineConfirmationChange,
 }: {
   entry: TaskQueueEntry;
   alerts: OpsAlert[];
   actions: ReturnType<typeof useWarehouseTaskActions>;
+  noticeChoice: NoticeLinkChoice | null;
+  linking: boolean;
+  onLinkNotice?: (requestId: string | null) => void;
   lineConfirmations: LineConfirmationMap;
   onLineConfirmationChange: Parameters<typeof TaskDetailPanel>[0]["onLineConfirmationChange"];
 }) {
@@ -308,10 +446,13 @@ function TaskPanel({
       <ReceivingTaskDetailCard
         entry={entry}
         alerts={alerts}
+        noticeChoice={noticeChoice}
+        linking={linking}
         advancingTaskId={actions.advancingTaskId}
         registeringExceptionId={actions.registeringExceptionId}
         onAdvance={(id) => actions.advanceTask.mutate({ id })}
         onOpenException={actions.exception.openFor}
+        onLinkNotice={onLinkNotice}
       />
     );
   }

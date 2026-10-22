@@ -75,6 +75,7 @@ import {
   fetchJson,
   TERMINAL_STATUSES,
 } from "@/lib/warehouse-ops/model";
+import { type NoticeLinkChoice } from "@/lib/warehouse-ops/receiving";
 import {
   type ProductLookupItem,
   type ProductPhoto,
@@ -229,20 +230,67 @@ export function receiptIdFromTask(task: WarehouseTask) {
   return task.reference || task.id.replace(/^receiving:/, "");
 }
 
+function NoticeLink({
+  choice,
+  disabled,
+  onSelect,
+}: {
+  choice: NoticeLinkChoice;
+  disabled?: boolean;
+  onSelect?: (requestId: string | null) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="text-sm font-semibold text-foreground">Aviso do cliente</div>
+      <div className="overflow-hidden rounded-lg border border-border bg-card">
+        {choice.options.map((option) => {
+          const selected = choice.selectedId === option.id;
+          return (
+            <button
+              key={option.id || "none"}
+              type="button"
+              disabled={disabled || !choice.editable || !onSelect}
+              className={cn(
+                "flex w-full items-center gap-3 border-t border-border/60 px-3 py-2.5 text-left first:border-t-0",
+                selected && "bg-primary/10",
+              )}
+              onClick={() => onSelect?.(option.id || null)}
+            >
+              <span className={cn("flex size-4 shrink-0 items-center justify-center rounded-full border-2", selected ? "border-primary" : "border-input")}>
+                {selected ? <span className="size-2 rounded-full bg-primary" /> : null}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">{option.title}</span>
+                {option.detail ? <span className="block text-sm text-muted-foreground">{option.detail}</span> : null}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function ReceivingTaskDetailCard({
   entry,
   alerts,
   advancingTaskId,
   registeringExceptionId,
+  noticeChoice,
+  linking = false,
   onAdvance,
   onOpenException,
+  onLinkNotice,
 }: {
   entry?: TaskQueueEntry;
   alerts: OpsAlert[];
   advancingTaskId?: string;
   registeringExceptionId?: string;
+  noticeChoice?: NoticeLinkChoice | null;
+  linking?: boolean;
   onAdvance: (id: string) => void;
   onOpenException: (task: WarehouseTask, suggestedNote?: string) => void;
+  onLinkNotice?: (requestId: string | null) => void;
 }) {
   if (!entry) {
     return (
@@ -319,6 +367,9 @@ export function ReceivingTaskDetailCard({
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-5 p-5">
+        {noticeChoice ? (
+          <NoticeLink choice={noticeChoice} disabled={linking} onSelect={onLinkNotice} />
+        ) : null}
         <div className="grid grid-cols-2 gap-3">
           <DetailField icon={Hash} label="Referência" value={task.reference || task.id} />
           <DetailField

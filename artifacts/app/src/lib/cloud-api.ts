@@ -1246,6 +1246,13 @@ async function createItem(
   return { ...payload, created_at: undefined, updated_at: undefined };
 }
 
+async function readItem(name: string, id: string) {
+  if (!firestore) throw new Error("Firestore não configurado.");
+  const snapshot = await getDoc(doc(firestore, name, id));
+  if (!snapshot.exists()) throw new RouteError("Registro não encontrado.", 404);
+  return normalizeDoc(snapshot);
+}
+
 async function updateItem(name: string, id: string | number, data: AnyRecord) {
   const ref = await findDocRef(name, id);
   const beforeSnapshot = await getDoc(ref);
@@ -4055,6 +4062,7 @@ async function route(
     const name = operationalEntityCollections[operationalEntityMatch[1]];
     const id = operationalEntityMatch[2];
 
+    if (id && method === "GET") return json(await readItem(name, decodeURIComponent(id)));
     if (method === "POST")
       return json(await createItem(name, await readBody(init)), 201);
     if (id && (method === "PATCH" || method === "PUT"))
