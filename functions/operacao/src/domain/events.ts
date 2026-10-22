@@ -1,0 +1,135 @@
+import { FieldValue, type Firestore, type Transaction } from "firebase-admin/firestore";
+import { HttpsError } from "firebase-functions/https";
+import { z } from "zod";
+
+import { actorPayload, compactValue, digest, type OperacaoActor } from "./operations.js";
+
+/**
+ * Eventos do cadastro da Operação em `events` (invariante 2). Gravados na
+ * mesma transação, com `source: functions_operacao` e `severity: info`.
+ *
+ * O payload não leva nome, CPF, telefone, CNH nem placa: interno, wms e
+ * suporte leem `events`. Título e descrição saem de um modelo fixo. Nenhum
+ * tipo usa as palavras que o roteador de avisos do WMS transforma em aviso
+ * ao cliente (notificationKindForEvent em functions/wms/src/index.ts).
+ */
+
+export const EVENTS_COLLECTION = "events";
+export const OPERACAO_EVENT_SOURCE = "functions_operacao";
+
+const id = z.string().regex(/^(?:col|vei)_[a-f0-9]{16}$/, "Id inválido.");
+const edicao = z.number().int().min(1).max(100_000);
+
+export const OPERACAO_EVENT_TYPES = [
+  "collaborator.created",
+  "collaborator.updated",
+  "collaborator.deactivated",
+  "collaborator.reactivated",
+  "vehicle.created",
+  "vehicle.updated",
+  "vehicle.deactivated",
+  "vehicle.reactivated",
+] as const;
+export type OperacaoEventType = (typeof OPERACAO_EVENT_TYPES)[number];
+
+const criado = z.object({ id }).strict();
+const alterado = z.object({ id, edicao_antes: edicao, edicao_depois: edicao }).strict();
+
+export const OPERACAO_EVENT_PAYLOADS = {
+  "collaborator.created": criado,
+  "collaborator.updated": alterado,
+  "collaborator.deactivated": criado,
+  "collaborator.reactivated": criado,
+  "vehicle.created": criado,
+  "vehicle.updated": alterado,
+  "vehicle.deactivated": criado,
+  "vehicle.reactivated": criado,
+} as const;
+
+const TEXTO: Record<OperacaoEventType, { title: string; description: string }> = {
+  "collaborator.created": { title: "Colaborador cadastrado", description: "O cadastro de colaborador foi criado." },
+  "collaborator.updated": { title: "Colaborador atualizado", description: "O cadastro de colaborador foi atualizado." },
+  "collaborator.deactivated": { title: "Colaborador desativado", description: "O cadastro de colaborador foi desativado." },
+  "collaborator.reactivated": { title: "Colaborador reativado", description: "O cadastro de colaborador foi reativado." },
+  "vehicle.created": { title: "Veículo cadastrado", description: "O cadastro de veículo foi criado." },
+  "vehicle.updated": { title: "Veículo atualizado", description: "O cadastro de veículo foi atualizado." },
+  "vehicle.deactivated": { title: "Veículo desativado", description: "O cadastro de veículo foi desativado." },
+  "vehicle.reactivated": { title: "Veículo reativado", description: "O cadastro de veículo foi reativado." },
+};
+
+export function isOperacaoEventType(value: string): value is OperacaoEventType {
+  return (OPERACAO_EVENT_TYPES as readonly string[]).includes(value);
+}
+
+export type OperacaoEventInput<T extends OperacaoEventType> = {
+  operation_id: string;
+  suffix?: string;
+  type: T;
+  entity_id: string;
+  payload: z.input<(typeof OPERACAO_EVENT_PAYLOADS)[T]>;
+  actor: OperacaoActor;
+  occurred_at?: string;
+};
+
+export type OperacaoEventRecord = {
+  id: string;
+  type: OperacaoEventType;
+  title: string;
+  description: string;
+  severity: "info";
+  entity_type: "collaborator" | "vehicle";
+  entity_id: string;
+  customer_code: null;
+  payload: Record<string, unknown>;
+  occurred_at: string;
+  source: typeof OPERACAO_EVENT_SOURCE;
+  operation_id: string;
+  actor: Record<string, string>;
+};
+
+export function operacaoEventId(operationId: string, suffix: string): string {
+  return `evt_${digest({ operationId, suffix })}`;
+}
+
+export function buildOperacaoEvent<T extends OperacaoEventType>(input: OperacaoEventInput<T>): OperacaoEventRecord {
+  if (!isOperacaoEventType(input.type)) throw new HttpsError("internal", `Tipo de evento desconhecido: ${String(input.type)}.`);
+  if (input.actor.role === "cliente") throw new HttpsError("permission-denied", "Evento da Operação é sempre de alguém da equipe.");
+  const operationId = String(input.operation_id ?? "").trim();
+  if (!operationId) throw new HttpsError("internal", `Evento ${input.type} sem a operação de origem.`);
+  const payload = OPERACAO_EVENT_PAYLOADS[input.type].safeParse(input.payload);
+  if (!payload.success) throw new HttpsError("internal", `Evento ${input.type} com payload inválido.`);
+  if (payload.data.id !== input.entity_id) throw new HttpsError("internal", `Evento ${input.type} com entity_id diferente do payload.`);
+  const occurredAt = input.occurred_at ?? new Date().toISOString();
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(occurredAt)) {
+    throw new HttpsError("internal", `Evento ${input.type} com occurred_at fora do formato ISO em UTC.`);
+  }
+  const texto = TEXTO[input.type];
+  return {
+    id: operacaoEventId(operationId, input.suffix ?? input.type),
+    type: input.type,
+    title: texto.title,
+    description: texto.description,
+    severity: "info",
+    entity_type: input.type.startsWith("vehicle") ? "vehicle" : "collaborator",
+    entity_id: input.entity_id,
+    customer_code: null,
+    payload: compactValue(payload.data) as Record<string, unknown>,
+    occurred_at: occurredAt,
+    source: OPERACAO_EVENT_SOURCE,
+    operation_id: operationId,
+    actor: actorPayload(input.actor),
+  };
+}
+
+export function createOperacaoEvent<T extends OperacaoEventType>(
+  transaction: Transaction,
+  db: Firestore,
+  input: OperacaoEventInput<T>,
+): { id: string; type: OperacaoEventType } {
+  const event = buildOperacaoEvent(input);
+  transaction.create(db.collection(EVENTS_COLLECTION).doc(event.id), {
+    ...event,
+    created_at: FieldValue.serverTimestamp(),
+  });
+  return { id: event.id, type: event.type };
+}

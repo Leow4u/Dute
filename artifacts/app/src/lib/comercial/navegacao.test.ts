@@ -390,7 +390,7 @@ describe("aterrissagem e tela de entrada", () => {
   it("owner e admin ganham o card Comercial, com casa em /comercial, só com a liberação", () => {
     for (const role of ["owner", "admin"] as const) {
       const cards = (liberado: boolean) =>
-        modulesForPerson(role, null, liberado).map((entry) => [entry.module.label, entry.href]);
+        modulesForPerson(role, null, liberado, false).map((entry) => [entry.module.label, entry.href]);
       expect(cards(DESLIGADO)).toEqual([
         ["Armazenagem", "/dashboard"],
         ["Financeiro", "/faturamento"],

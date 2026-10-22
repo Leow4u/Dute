@@ -36,7 +36,13 @@ import {
   abreComercial,
   APROVADOR_ROLES,
 } from "./comercial/navegacao";
-import { COMERCIAL_LIBERADO } from "./liberacao";
+import { COMERCIAL_LIBERADO, OPERACAO_LIBERADO } from "./liberacao";
+import {
+  OPERACAO_CADASTRO_ROLES,
+  ROTA_COLABORADORES,
+  ROTA_VEICULOS,
+  abreOperacao,
+} from "./operacao/navegacao";
 import {
   portalModulesFor,
   type OperationProfile,
@@ -80,6 +86,8 @@ export const OPERATIONS_ROLES: ProfileRole[] = [
 export const SUPPORT_ROLES: ProfileRole[] = ["owner", "admin", "suporte"];
 /** Comercial (lib/comercial/navegacao.ts): só com a liberação própria. */
 export const COMMERCIAL_ROLES: ProfileRole[] = [...COMERCIAL_ROLES];
+/** Cadastro da Operação (lib/operacao/navegacao.ts): owner, admin e interno. */
+export const OPERATION_REGISTRY_ROLES: ProfileRole[] = [...OPERACAO_CADASTRO_ROLES];
 
 /**
  * Poda da escala real (31/07/2026): o operador wms vive na bancada WMS.
@@ -149,16 +157,16 @@ export type AppModule = {
   portal?: PortalModuleKey;
   /**
    * Liberação por ambiente do módulo (lib/liberacao.ts). Sem ela ligada, o
-   * item não existe no menu: hoje só o Comercial tem.
+   * item não existe no menu. Comercial e Operação têm a sua.
    */
-  liberacao?: "comercial";
+  liberacao?: "comercial" | "operacao";
   /**
    * Ambiente de navegação. Ausente é o WMS (menu de hoje). Outro valor não
    * entra nesse menu: o shell sai do caminho da rota (lib/ambientes.ts).
    * Módulo futuro com telas próprias ganha o valor e o prefixo; sem tela,
    * não ganha ambiente.
    */
-  ambiente?: "wms" | "comercial";
+  ambiente?: "wms" | "comercial" | "operacao";
   /**
    * Grupo mesmo com uma tela só: o menu mostra o módulo e a tela dentro dele
    * ("Comercial" › "Clientes"), em vez de virar o link da tela.
@@ -374,6 +382,34 @@ export const APP_MODULES: AppModule[] = [
         href: ROTA_MEDICOES,
         icon: CalendarRange,
         roles: COMMERCIAL_ROLES,
+      }),
+    ],
+  }),
+  // Operação (docs/plataforma/fase-3-operacao.md, parte 1): o cadastro.
+  // O menu é do ambiente Operação, não do WMS.
+  appModule({
+    id: "operacao",
+    label: "Operação",
+    audience: "internal",
+    icon: Truck,
+    roles: OPERATION_REGISTRY_ROLES,
+    liberacao: "operacao",
+    ambiente: "operacao",
+    group: true,
+    routes: [
+      navRoute({
+        id: "operacao-colaboradores",
+        label: "Colaboradores",
+        href: ROTA_COLABORADORES,
+        icon: Users,
+        roles: OPERATION_REGISTRY_ROLES,
+      }),
+      navRoute({
+        id: "operacao-veiculos",
+        label: "Veículos",
+        href: ROTA_VEICULOS,
+        icon: Truck,
+        roles: OPERATION_REGISTRY_ROLES,
       }),
     ],
   }),
@@ -738,10 +774,11 @@ export function getNavigationForAppRole(
  * tem; sem perfil (área interna, ou ainda carregando) nada disso é escondido.
  */
 function navigationForAmbiente(
-  ambiente: "wms" | "comercial",
+  ambiente: "wms" | "comercial" | "operacao",
   role: ProfileRole | null | undefined,
   operation: OperationProfile | null | undefined,
   comercial: boolean,
+  operacao: boolean = OPERACAO_LIBERADO,
 ): AppModule[] {
   const appRole = appRoleForProfile(role) ?? "interno";
   const portalModules = appRole === "cliente" ? portalModulesFor(operation) : null;
@@ -752,6 +789,7 @@ function navigationForAmbiente(
       module.appRoles.includes(appRole) &&
       canAccessModule(role, module.roles) &&
       (module.liberacao !== "comercial" || abreComercial(role, comercial)) &&
+      (module.liberacao !== "operacao" || abreOperacao(role, operacao)) &&
       (portalModules === null || !module.portal || portalModules.includes(module.portal)),
   )
     .map((module) => {
@@ -805,6 +843,31 @@ export function menuDoComercial(
         roles: route.roles,
         appRoles: route.appRoles,
         ambiente: "comercial" as const,
+        routes: [route],
+      },
+    ];
+  });
+}
+
+/** Colaboradores e veículos, uma tela por item. Fora da liberação, a lista é vazia. */
+export function menuDoOperacao(
+  role: ProfileRole | null | undefined,
+  operacao: boolean = OPERACAO_LIBERADO,
+): AppModule[] {
+  const [grupo] = navigationForAmbiente("operacao", role, null, false, operacao);
+  if (!grupo) return [];
+  return grupo.routes.flatMap((route) => {
+    if (!route.href) return [];
+    return [
+      {
+        id: route.id,
+        label: route.label,
+        audience: grupo.audience,
+        href: route.href,
+        icon: route.icon,
+        roles: route.roles,
+        appRoles: route.appRoles,
+        ambiente: "operacao" as const,
         routes: [route],
       },
     ];

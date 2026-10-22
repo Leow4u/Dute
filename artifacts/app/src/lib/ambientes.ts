@@ -1,6 +1,6 @@
 import type { Papel } from "@workspace/dominio";
 
-import { COMERCIAL_LIBERADO, PLATAFORMA_LIBERADA } from "./liberacao";
+import { COMERCIAL_LIBERADO, OPERACAO_LIBERADO, PLATAFORMA_LIBERADA } from "./liberacao";
 import { normalizePath } from "./modules";
 import type { OperationProfile } from "./operations";
 import { entrada } from "./platform-modules";
@@ -17,10 +17,11 @@ import { isSettingsPath } from "./settings-nav";
  * o módulo tiver navegação própria.
  */
 
-export type Ambiente = "wms" | "comercial";
+export type Ambiente = "wms" | "comercial" | "operacao";
 
 const POR_PREFIXO: readonly { prefixo: string; ambiente: Ambiente }[] = [
   { prefixo: "/comercial", ambiente: "comercial" },
+  { prefixo: "/operacao", ambiente: "operacao" },
 ];
 
 /** Ambiente de navegação do caminho. Configuração não é módulo: use layoutDaRota. */
@@ -33,11 +34,12 @@ export function ambienteDaRota(path: string): Ambiente {
 }
 
 /** Qual shell desenha a rota. "app" é o layout do WMS e do portal. */
-export type LayoutDaRota = "app" | "settings" | "comercial";
+export type LayoutDaRota = "app" | "settings" | "comercial" | "operacao";
 
 export function layoutDaRota(path: string): LayoutDaRota {
   if (isSettingsPath(path)) return "settings";
-  if (ambienteDaRota(path) === "comercial") return "comercial";
+  const ambiente = ambienteDaRota(path);
+  if (ambiente === "comercial" || ambiente === "operacao") return ambiente;
   return "app";
 }
 
@@ -51,7 +53,8 @@ export function podeTrocarDeModulo(
   profile: Pick<OperationProfile, "modules"> | null | undefined,
   comercial: boolean = COMERCIAL_LIBERADO,
   plataforma: boolean = PLATAFORMA_LIBERADA,
+  operacao: boolean = OPERACAO_LIBERADO,
 ): boolean {
   if (!plataforma) return false;
-  return entrada(role, profile, comercial).kind === "cards";
+  return entrada(role, profile, comercial, operacao).kind === "cards";
 }

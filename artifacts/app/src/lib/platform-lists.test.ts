@@ -14,7 +14,8 @@ import {
 } from "@workspace/dominio";
 
 import { COMERCIAL_ROLES } from "./comercial/navegacao";
-import { COMERCIAL_AMBIENTES_LIBERADOS } from "./liberacao";
+import { COMERCIAL_AMBIENTES_LIBERADOS, OPERACAO_AMBIENTES_LIBERADOS } from "./liberacao";
+import { OPERACAO_CADASTRO_ROLES } from "./operacao/navegacao";
 import { INTERNAL_ROLES } from "./modules";
 import { PLATFORM_MODULES } from "./platform-modules";
 
@@ -107,5 +108,25 @@ describe("listas do Comercial iguais em todo lugar", () => {
 
   it("liberação por ambiente: a lista das callables é a do app", () => {
     expect(tsList(liberacao, "COMERCIAL_AMBIENTES_LIBERADOS")).toEqual([...COMERCIAL_AMBIENTES_LIBERADOS]);
+  });
+});
+
+describe("listas da Operação iguais em todo lugar", () => {
+  const roles = read("functions/operacao/src/domain/platform-roles.ts");
+  const liberacao = read("functions/operacao/src/domain/liberacao.ts");
+
+  it("papéis: lib/dominio e functions/operacao", () => {
+    expect(tsList(roles, "PLATFORM_ROLES")).toEqual([...PAPEIS]);
+  });
+
+  it("quem grava o cadastro é owner, admin e interno, e o app abre as mesmas telas", () => {
+    expect(tsList(roles, "OPERACAO_CADASTRO_ROLES")).toEqual(["owner", "admin", "interno"]);
+    expect([...OPERACAO_CADASTRO_ROLES]).toEqual(["owner", "admin", "interno"]);
+    const card = PLATFORM_MODULES.find((module) => module.key === "operacao")!;
+    expect(Object.keys(card.home).sort()).toEqual(["admin", "interno", "owner"]);
+  });
+
+  it("liberação por ambiente: a lista das callables é a do app", () => {
+    expect(tsList(liberacao, "OPERACAO_AMBIENTES_LIBERADOS")).toEqual([...OPERACAO_AMBIENTES_LIBERADOS]);
   });
 });

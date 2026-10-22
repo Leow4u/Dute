@@ -46,3 +46,18 @@ export function comercialLiberado(projectId: string | null | undefined): boolean
 
 /** Valor deste build, para as telas do Comercial. */
 export const COMERCIAL_LIBERADO = comercialLiberado(import.meta.env.VITE_FIREBASE_PROJECT_ID);
+
+/**
+ * Liberação própria da Operação (docs/plataforma/fase-3-operacao.md). As
+ * callables de functions/operacao recusam fora de OPERACAO_AMBIENTES_LIBERADOS
+ * (functions/operacao/src/domain/liberacao.ts, travada igual a esta por
+ * platform-lists.test.ts). Homologação atende; produção espera o OK.
+ */
+export const OPERACAO_AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog"];
+
+export function operacaoLiberada(projectId: string | null | undefined): boolean {
+  return OPERACAO_AMBIENTES_LIBERADOS.includes(String(projectId ?? "").trim());
+}
+
+/** Valor deste build, para as telas da Operação. */
+export const OPERACAO_LIBERADO = operacaoLiberada(import.meta.env.VITE_FIREBASE_PROJECT_ID);

@@ -28,7 +28,7 @@ function texts(html: string) {
 
 describe("tela de entrada", () => {
   it("um card por módulo, com link para a casa dele", () => {
-    const decision = entrada("owner", null, false);
+    const decision = entrada("owner", null, false, false);
     if (decision.kind !== "cards") throw new Error("owner deveria ver cards");
     const html = render(decision);
     expect(html).toContain('href="/dashboard"');
@@ -38,7 +38,7 @@ describe("tela de entrada", () => {
 
   // Comercial desligado, como na produção; o card dele vem no teste seguinte.
   it("sem legenda: só data, saudação, nome, iniciais e os módulos", () => {
-    const decision = entrada("admin", null, false);
+    const decision = entrada("admin", null, false, false);
     if (decision.kind !== "cards") throw new Error("admin deveria ver cards");
     expect(texts(render(decision))).toEqual([
       "Leonardo Silva",
@@ -51,7 +51,7 @@ describe("tela de entrada", () => {
   });
 
   it("com o Comercial liberado, o card Comercial leva a /comercial", () => {
-    const decision = entrada("admin", null, true);
+    const decision = entrada("admin", null, true, false);
     if (decision.kind !== "cards") throw new Error("admin deveria ver cards");
     const html = render(decision);
     expect(texts(html).slice(4)).toEqual(["Armazenagem", "Comercial", "Financeiro"]);
