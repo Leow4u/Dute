@@ -2956,4 +2956,43 @@ describe("guarda numa posição cadastrada", () => {
     assert.equal((await db.collection("events").where("entity_id", "==", "put_guarda_3").get()).size, 0);
     assert.equal((await db.collection("operational_operations").get()).size, 0);
   });
+
+  it("recusa origem igual ao destino mesmo com o destino em minúsculas, sem inflar o saldo", async () => {
+    await seedGuard();
+    await Promise.all([
+      putawayTask("put_guarda_4", 5),
+      db.collection("stock_balances").doc("bal-guarda-a01").set({
+        id: "bal-guarda-a01",
+        customer_code: BTG,
+        sku_code: SKU,
+        client_item_code: "ITEM-GUARDA",
+        product_name: "Caneca de teste da guarda",
+        location_id: "A-01",
+        qty_on_hand: 10,
+        qty_reserved: 0,
+        qty_available: 10,
+        unit_cost: 5,
+      }),
+    ]);
+
+    await assert.rejects(
+      advance("putaway:put_guarda_4", "planned", {
+        source_location_id: "A-01",
+        destination_location_id: "a-01",
+        location_id: "a-01",
+        quantity: 5,
+      }),
+      { code: "failed-precondition", message: /^Endereço de origem e destino não podem ser iguais\.$/ },
+    );
+
+    const task = (await db.collection("putaway_tasks").doc("put_guarda_4").get()).data();
+    assert.equal(task?.status, "planned");
+    const shelf = await balanceAt("A-01");
+    assert.equal(shelf.length, 1);
+    assert.equal(shelf[0]?.qty_on_hand, 10);
+    const [source] = await balanceAt("RECEBIMENTO");
+    assert.equal(source?.qty_on_hand, 10);
+    assert.equal((await db.collection("movements").where("putaway_task_id", "==", "put_guarda_4").get()).size, 0);
+    assert.equal((await db.collection("events").where("entity_id", "==", "put_guarda_4").get()).size, 0);
+  });
 });

@@ -6406,12 +6406,6 @@ export async function advanceWarehouseTaskTransaction(
           "Informe o endereço final antes de concluir o putaway.",
         );
       }
-      if (sourceLocationId === destinationLocationId) {
-        throw new HttpsError(
-          "failed-precondition",
-          "Endereço de origem e destino não podem ser iguais.",
-        );
-      }
       const positionSnapshot = await transaction.get(db.collection(WAREHOUSE_POSITIONS_COLLECTION));
       const resolvedDestination = resolveGuardDestination(
         destinationLocationId,
@@ -6422,6 +6416,13 @@ export async function advanceWarehouseTaskTransaction(
         throw new HttpsError("failed-precondition", resolvedDestination.problem);
       }
       destinationLocationId = resolvedDestination.code;
+      // Compara já com o código da etiqueta: "a-01" e "A-01" são o mesmo saldo.
+      if (sourceLocationId.toUpperCase() === destinationLocationId) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Endereço de origem e destino não podem ser iguais.",
+        );
+      }
 
       const sourceBalance = assertSingleBalance(
         await readRows(
