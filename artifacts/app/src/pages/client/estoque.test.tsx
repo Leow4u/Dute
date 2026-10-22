@@ -7,7 +7,7 @@ function renderCart(outboundBlocked: boolean) {
   const noop = () => undefined;
   return renderToStaticMarkup(
     <CartPanel
-      customerCode=""
+      cartKey=""
       seed={0}
       lines={[]}
       isSubmitting={false}

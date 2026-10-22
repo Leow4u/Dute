@@ -43,7 +43,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { cartFromDraft, dueAtFromDraft, takeDraft } from "@/lib/agent-draft";
-import { patchStoredCart, readStoredCart, type StoredCart } from "@/lib/client-cart";
+import { useAppUser } from "@/lib/auth";
+import { browserCartStorage, cartStorageKey, patchStoredCart, readStoredCart, type StoredCart } from "@/lib/client-cart";
 import { cartFromEvent, eventDateFromDueAt, eventDestination, eventDueAt, eventNotes } from "@/lib/client-events";
 import { overviewLine, productTitle, productType, stockOverview, typeOptions, typeValue } from "@/lib/portal-stock";
 import { cn } from "@/lib/utils";
@@ -136,7 +137,8 @@ const stockSortOptions: Array<{
 
 export function ClienteEstoque() {
   const overviewQuery = useClientOverview();
-  const customerCode = overviewQuery.data?.customer?.code || "";
+  const { user } = useAppUser();
+  const cartKey = cartStorageKey(overviewQuery.data?.customer?.code || "", user?.uid || "");
   const [searchTerm, setSearchTerm] = useState("");
   const [viewMode, setViewMode] = useState<StockViewMode>("cards");
   const [stockFilter, setStockFilter] = useState<StockFilter>("todos");
@@ -145,7 +147,7 @@ export function ClienteEstoque() {
   const [visibleProductLimit, setVisibleProductLimit] =
     useState(STOCK_PAGE_SIZE);
   const [cart, setCart] = useState<Record<string, number>>({});
-  const [cartCustomer, setCartCustomer] = useState("");
+  const [cartLoadedKey, setCartLoadedKey] = useState("");
   const [cartSeed, setCartSeed] = useState(0);
   const [draftQuantities, setDraftQuantities] = useState<
     Record<string, number>
@@ -172,14 +174,14 @@ export function ClienteEstoque() {
   };
   const [cartExpanded, setCartExpanded] = useState(false);
   useEffect(() => {
-    if (!customerCode || cartCustomer === customerCode) return;
-    setCart(readStoredCart(window.localStorage, customerCode).cart);
-    setCartCustomer(customerCode);
-  }, [customerCode, cartCustomer]);
+    if (!cartKey || cartLoadedKey === cartKey) return;
+    setCart(readStoredCart(browserCartStorage(), cartKey).cart);
+    setCartLoadedKey(cartKey);
+  }, [cartKey, cartLoadedKey]);
   useEffect(() => {
-    if (!customerCode || cartCustomer !== customerCode) return;
-    patchStoredCart(window.localStorage, customerCode, { cart });
-  }, [cart, cartCustomer, customerCode]);
+    if (!cartKey || cartLoadedKey !== cartKey) return;
+    patchStoredCart(browserCartStorage(), cartKey, { cart });
+  }, [cart, cartLoadedKey, cartKey]);
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -204,7 +206,7 @@ export function ClienteEstoque() {
       notes: draft.observacoes ?? "",
     };
     setCart(draftCart);
-    if (customerCode) patchStoredCart(window.localStorage, customerCode, next);
+    if (cartKey) patchStoredCart(browserCartStorage(), cartKey, next);
     setCartSeed((current) => current + 1);
     setCartOpen(true);
     toast({
@@ -237,7 +239,7 @@ export function ClienteEstoque() {
       notes: eventNotes(event),
     };
     setCart(eventCart);
-    if (customerCode) patchStoredCart(window.localStorage, customerCode, next);
+    if (cartKey) patchStoredCart(browserCartStorage(), cartKey, next);
     setCartSeed((current) => current + 1);
     setCartOpen(true);
     toast({
@@ -261,8 +263,8 @@ export function ClienteEstoque() {
       });
       setCart({});
       setCartOpen(false);
-      if (customerCode) {
-        patchStoredCart(window.localStorage, customerCode, {
+      if (cartKey) {
+        patchStoredCart(browserCartStorage(), cartKey, {
           cart: {},
           orderName: "",
           destination: "",
@@ -714,7 +716,7 @@ export function ClienteEstoque() {
             {cartOpen ? (
               <SideDrawer onClose={() => setCartOpen(false)} wide={cartExpanded}>
                 <CartPanel
-                  customerCode={customerCode}
+                  cartKey={cartKey}
                   seed={cartSeed}
                   expanded={cartExpanded}
                   onToggleExpanded={() => setCartExpanded((current) => !current)}
@@ -1452,7 +1454,7 @@ const CART_SEARCH_FROM = 8;
  * duas colunas, itens à esquerda e dados do pedido à direita.
  */
 export function CartPanel({
-  customerCode,
+  cartKey,
   seed,
   lines,
   isSubmitting,
@@ -1468,7 +1470,7 @@ export function CartPanel({
   onRemove,
   onSubmit,
 }: {
-  customerCode: string;
+  cartKey: string;
   seed: number;
   lines: CartLine[];
   isSubmitting: boolean;
@@ -1492,21 +1494,21 @@ export function CartPanel({
   const [destination, setDestination] = useState("");
   const [dueAt, setDueAt] = useState("");
   const [notes, setNotes] = useState("");
-  const [hydrated, setHydrated] = useState(false);
+  const [hydratedKey, setHydratedKey] = useState("");
   const [query, setQuery] = useState("");
   useEffect(() => {
-    if (!customerCode) return;
-    const stored = readStoredCart(window.localStorage, customerCode);
+    if (!cartKey) return;
+    const stored = readStoredCart(browserCartStorage(), cartKey);
     setOrderName(stored.orderName);
     setDestination(stored.destination);
     setDueAt(stored.dueAt);
     setNotes(stored.notes);
-    setHydrated(true);
-  }, [customerCode, seed]);
+    setHydratedKey(cartKey);
+  }, [cartKey, seed]);
   useEffect(() => {
-    if (!hydrated || !customerCode) return;
-    patchStoredCart(window.localStorage, customerCode, { orderName, destination, dueAt, notes });
-  }, [hydrated, customerCode, orderName, destination, dueAt, notes]);
+    if (!cartKey || hydratedKey !== cartKey) return;
+    patchStoredCart(browserCartStorage(), cartKey, { orderName, destination, dueAt, notes });
+  }, [hydratedKey, cartKey, orderName, destination, dueAt, notes]);
   // Salvar como evento: nome, data do evento e a chave que evita salvar duas vezes.
   const [eventDraft, setEventDraft] = useState<{ name: string; nextDate: string; key: string } | null>(null);
   const totalQuantity = lines.reduce((sum, line) => sum + line.quantity, 0);

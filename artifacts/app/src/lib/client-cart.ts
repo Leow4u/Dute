@@ -8,12 +8,25 @@ export type StoredCart = {
 
 export type CartStorage = Pick<Storage, "getItem" | "setItem">;
 
+// Sem storage (aba privada, bloqueado ou cheio), o pedido vale só nesta visita.
+const visit = new Map<string, string>();
+
 export function emptyStoredCart(): StoredCart {
   return { cart: {}, orderName: "", destination: "", dueAt: "", notes: "" };
 }
 
-export function cartStorageKey(customerCode: string) {
-  return `dute.portal.pedido.${customerCode}`;
+/** O localStorage, ou null quando o navegador bloqueia até chegar nele. */
+export function browserCartStorage(): CartStorage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+/** Por cliente e por pessoa: quem entra depois no mesmo aparelho não abre o pedido de outro. */
+export function cartStorageKey(customerCode: string, uid: string) {
+  return customerCode && uid ? `dute.portal.pedido.${customerCode}.${uid}` : "";
 }
 
 function quantities(value: unknown): Record<string, number> {
@@ -31,9 +44,10 @@ function text(value: unknown) {
   return typeof value === "string" ? value : "";
 }
 
-export function readStoredCart(storage: Pick<Storage, "getItem">, customerCode: string): StoredCart {
+export function readStoredCart(storage: Pick<Storage, "getItem"> | null, key: string): StoredCart {
+  if (!key) return emptyStoredCart();
   try {
-    const raw = storage.getItem(cartStorageKey(customerCode));
+    const raw = visit.get(key) ?? storage?.getItem(key);
     if (!raw) return emptyStoredCart();
     const parsed = JSON.parse(raw) as Partial<StoredCart>;
     return {
@@ -48,16 +62,21 @@ export function readStoredCart(storage: Pick<Storage, "getItem">, customerCode: 
   }
 }
 
-export function writeStoredCart(storage: Pick<Storage, "setItem">, customerCode: string, draft: StoredCart) {
-  storage.setItem(cartStorageKey(customerCode), JSON.stringify(draft));
+export function writeStoredCart(storage: Pick<Storage, "setItem"> | null, key: string, draft: StoredCart) {
+  if (!key) return;
+  const raw = JSON.stringify(draft);
+  visit.set(key, raw);
+  try {
+    if (!storage) return;
+    storage.setItem(key, raw);
+    visit.delete(key);
+  } catch {
+    // Storage bloqueado ou cheio: fica a cópia desta visita.
+  }
 }
 
-export function patchStoredCart(
-  storage: CartStorage,
-  customerCode: string,
-  patch: Partial<StoredCart>,
-): StoredCart {
-  const next = { ...readStoredCart(storage, customerCode), ...patch };
-  writeStoredCart(storage, customerCode, next);
+export function patchStoredCart(storage: CartStorage | null, key: string, patch: Partial<StoredCart>): StoredCart {
+  const next = { ...readStoredCart(storage, key), ...patch };
+  writeStoredCart(storage, key, next);
   return next;
 }
