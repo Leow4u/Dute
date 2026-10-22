@@ -242,6 +242,66 @@ describe("aviso de envio vinculado à chegada avulsa", () => {
     assert.equal((await db.collection("inbound_receipts").doc(`inb_${requestId}`).get()).exists, false);
   });
 
+  it("aviso recusado ou cancelado com a chegada vinculada: receber a chegada não reabre o aviso no portal", async () => {
+    const rejectedArrival = await arrival("avulsa-6a");
+    const cancelledArrival = await arrival("avulsa-6b");
+    const rejected = await notice("env-6a");
+    const cancelled = await notice("env-6b");
+    await link(rejectedArrival, rejected);
+    await link(cancelledArrival, cancelled);
+
+    await decideCustomerRequestTransaction(
+      db,
+      { request_id: rejected, action: "reject", reason: "NF divergente", expected_status: "open", idempotency_key: "reject-6a" },
+      coordenacao,
+    );
+    await decideCustomerRequestTransaction(
+      db,
+      { request_id: cancelled, action: "cancel", expected_status: "open", idempotency_key: "cancel-6b" },
+      { uid: "cli-1", role: "cliente", customer_code: BTG, name: "Cristiane" },
+    );
+
+    for (const [receiptId, requestId, status] of [
+      [rejectedArrival, rejected, "rejected"],
+      [cancelledArrival, cancelled, "cancelled"],
+    ] as const) {
+      const advance = (expected: string) =>
+        advanceWarehouseTaskTransaction(
+          db,
+          { task_uid: `receiving:${receiptId}`, expected_status: expected, idempotency_key: `${receiptId}:${expected}` },
+          operacao,
+        );
+      await advance("created");
+      const rows = await db.collection("inbound_items").where("receipt_id", "==", receiptId).get();
+      await updateInboundReceiptConferenceTransaction(
+        db,
+        {
+          receipt_id: receiptId,
+          expected_status: "checking",
+          idempotency_key: `conferencia-${receiptId}`,
+          lines: rows.docs.map((doc) => ({ inbound_item_id: doc.id, received_qty: 10, location_id: "RECEBIMENTO" })),
+        },
+        operacao,
+      );
+      await advance("checking");
+
+      // A chegada entra no estoque normalmente.
+      const receipt = (await db.collection("inbound_receipts").doc(receiptId).get()).data() ?? {};
+      assert.equal(receipt.status, "received");
+      assert.equal(receipt.qty_received, 10);
+      assert.equal((await eventsOf("inventory.received", receiptId)).length, 1);
+
+      // O aviso e o portal continuam com a decisão.
+      const request = (await db.collection("customer_requests").doc(requestId).get()).data() ?? {};
+      assert.equal(request.status, status);
+      assert.notEqual(request.operational_status, "received");
+      const portal = (await db.collection("client_request_status").doc(requestId).get()).data() ?? {};
+      assert.equal(portal.status, status);
+      assert.notEqual(portal.operational_status, "received");
+      assert.equal(portal.qty_received, undefined);
+    }
+  });
+
   it("aviso já vinculado a outra chegada não se vincula de novo", async () => {
     const first = await arrival("avulsa-3a");
     const second = await arrival("avulsa-3b");

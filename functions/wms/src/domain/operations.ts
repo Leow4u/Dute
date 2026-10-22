@@ -6912,7 +6912,13 @@ export async function advanceWarehouseTaskTransaction(
           actor,
         ),
       );
-      if (requestRow) {
+      // Aviso recusado pela coordenação ou cancelado pelo cliente com a
+      // chegada avulsa ainda vinculada (domain/inbound-notice.ts): a entrada
+      // conta no estoque, mas o portal continua mostrando a decisão.
+      const requestDecided = ["rejected", "cancelled"].includes(
+        text(requestRow?.data.status).toLowerCase(),
+      );
+      if (requestRow && !requestDecided) {
         transaction.update(requestRow.ref, {
           operational_status: "received",
           fulfillment_updated_at: FieldValue.serverTimestamp(),
