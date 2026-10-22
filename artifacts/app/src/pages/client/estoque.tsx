@@ -44,7 +44,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { cartFromDraft, dueAtFromDraft, takeDraft } from "@/lib/agent-draft";
 import { useAppUser } from "@/lib/auth";
-import { browserCartStorage, cartStorageKey, patchStoredCart, readStoredCart, type StoredCart } from "@/lib/client-cart";
+import {
+  browserCartStorage,
+  cartStorageKey,
+  isStoredCartSaved,
+  patchStoredCart,
+  readStoredCart,
+  watchStoredCart,
+  type StoredCart,
+} from "@/lib/client-cart";
 import { cartFromEvent, eventDateFromDueAt, eventDestination, eventDueAt, eventNotes } from "@/lib/client-events";
 import { overviewLine, productTitle, productType, stockOverview, typeOptions, typeValue } from "@/lib/portal-stock";
 import { cn } from "@/lib/utils";
@@ -182,6 +190,16 @@ export function ClienteEstoque() {
     if (!cartKey || cartLoadedKey !== cartKey) return;
     patchStoredCart(browserCartStorage(), cartKey, { cart });
   }, [cart, cartLoadedKey, cartKey]);
+  // Outra aba enviou ou mudou o pedido: esta aba passa a mostrar o que está guardado.
+  useEffect(
+    () =>
+      watchStoredCart(window, browserCartStorage(), cartKey, (next) => {
+        // Igual ao desta aba: não grava de volta.
+        setCart((current) => (JSON.stringify(current) === JSON.stringify(next.cart) ? current : next.cart));
+        setCartSeed((current) => current + 1);
+      }),
+    [cartKey],
+  );
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -1495,6 +1513,7 @@ export function CartPanel({
   const [dueAt, setDueAt] = useState("");
   const [notes, setNotes] = useState("");
   const [hydratedKey, setHydratedKey] = useState("");
+  const [savedKey, setSavedKey] = useState("");
   const [query, setQuery] = useState("");
   useEffect(() => {
     if (!cartKey) return;
@@ -1507,7 +1526,9 @@ export function CartPanel({
   }, [cartKey, seed]);
   useEffect(() => {
     if (!cartKey || hydratedKey !== cartKey) return;
-    patchStoredCart(browserCartStorage(), cartKey, { orderName, destination, dueAt, notes });
+    const storage = browserCartStorage();
+    patchStoredCart(storage, cartKey, { orderName, destination, dueAt, notes });
+    setSavedKey(isStoredCartSaved(storage, cartKey) ? cartKey : "");
   }, [hydratedKey, cartKey, orderName, destination, dueAt, notes]);
   // Salvar como evento: nome, data do evento e a chave que evita salvar duas vezes.
   const [eventDraft, setEventDraft] = useState<{ name: string; nextDate: string; key: string } | null>(null);
@@ -1718,7 +1739,9 @@ export function CartPanel({
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 px-4 py-3">
         <div>
           <h2 className="font-semibold">Seu pedido</h2>
-          <p className="text-xs font-semibold text-success-soft-foreground">Salvo neste aparelho</p>
+          {cartKey && savedKey === cartKey ? (
+            <p className="text-xs font-semibold text-success-soft-foreground">Salvo neste aparelho</p>
+          ) : null}
           <p className="text-xs text-muted-foreground">
             {formatNumber(lines.length)} {lines.length === 1 ? "item" : "itens"} · {formatNumber(totalQuantity)} peças
           </p>

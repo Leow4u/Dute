@@ -3,11 +3,11 @@ import { describe, expect, it } from "vitest";
 
 import { CartPanel } from "./estoque";
 
-function renderCart(outboundBlocked: boolean) {
+function renderCart(outboundBlocked: boolean, cartKey = "") {
   const noop = () => undefined;
   return renderToStaticMarkup(
     <CartPanel
-      cartKey=""
+      cartKey={cartKey}
       seed={0}
       lines={[]}
       isSubmitting={false}
@@ -36,5 +36,15 @@ describe("pedido do portal durante a abertura", () => {
 
   it("sem a trava, não mostra a faixa", () => {
     expect(renderCart(false)).not.toContain("Inventário inicial em andamento");
+  });
+});
+
+describe("pedido do portal neste aparelho", () => {
+  it("sem saber de quem é o pedido, não diz que está salvo", () => {
+    expect(renderCart(false)).not.toContain("Salvo neste aparelho");
+  });
+
+  it("antes de gravar no storage, não diz que está salvo", () => {
+    expect(renderCart(false, "dute.portal.pedido.BTG Pactual.uid-ana")).not.toContain("Salvo neste aparelho");
   });
 });

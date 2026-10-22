@@ -44,11 +44,9 @@ function text(value: unknown) {
   return typeof value === "string" ? value : "";
 }
 
-export function readStoredCart(storage: Pick<Storage, "getItem"> | null, key: string): StoredCart {
-  if (!key) return emptyStoredCart();
+function parseStoredCart(raw: string | null | undefined): StoredCart {
+  if (!raw) return emptyStoredCart();
   try {
-    const raw = visit.get(key) ?? storage?.getItem(key);
-    if (!raw) return emptyStoredCart();
     const parsed = JSON.parse(raw) as Partial<StoredCart>;
     return {
       cart: quantities(parsed.cart),
@@ -60,6 +58,20 @@ export function readStoredCart(storage: Pick<Storage, "getItem"> | null, key: st
   } catch {
     return emptyStoredCart();
   }
+}
+
+export function readStoredCart(storage: Pick<Storage, "getItem"> | null, key: string): StoredCart {
+  if (!key) return emptyStoredCart();
+  try {
+    return parseStoredCart(visit.get(key) ?? storage?.getItem(key));
+  } catch {
+    return emptyStoredCart();
+  }
+}
+
+/** O pedido está gravado no storage, e não só na cópia desta visita. */
+export function isStoredCartSaved(storage: CartStorage | null, key: string) {
+  return Boolean(key && storage) && !visit.has(key);
 }
 
 export function writeStoredCart(storage: Pick<Storage, "setItem"> | null, key: string, draft: StoredCart) {
@@ -79,4 +91,40 @@ export function patchStoredCart(storage: CartStorage | null, key: string, patch:
   const next = { ...readStoredCart(storage, key), ...patch };
   writeStoredCart(storage, key, next);
   return next;
+}
+
+type CartStorageEvent = Pick<StorageEvent, "key" | "newValue" | "storageArea">;
+
+/** Outra aba mudou ou apagou este pedido: o pedido novo, ou null quando o evento é de outra coisa. */
+export function storedCartFromStorageEvent(
+  event: CartStorageEvent,
+  storage: CartStorage | null,
+  key: string,
+): StoredCart | null {
+  if (!key || !storage || event.storageArea !== storage) return null;
+  // Sem chave, a outra aba limpou o storage inteiro.
+  if (event.key !== null && event.key !== key) return null;
+  // A outra aba gravou no storage: a cópia desta visita ficou velha.
+  visit.delete(key);
+  return parseStoredCart(event.newValue);
+}
+
+/** Ouve as outras abas; devolve como parar. Sem storage ou sem chave, não ouve nada. */
+export function watchStoredCart(
+  target: EventTarget | null,
+  storage: CartStorage | null,
+  key: string,
+  onChange: (draft: StoredCart) => void,
+): () => void {
+  if (!target || !storage || !key) return () => undefined;
+  const listener = (event: Event) => {
+    try {
+      const next = storedCartFromStorageEvent(event as StorageEvent, storage, key);
+      if (next) onChange(next);
+    } catch {
+      // Evento que não dá para ler não derruba a tela.
+    }
+  };
+  target.addEventListener("storage", listener);
+  return () => target.removeEventListener("storage", listener);
 }

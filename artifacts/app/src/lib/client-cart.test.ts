@@ -4,8 +4,11 @@ import {
   browserCartStorage,
   cartStorageKey,
   emptyStoredCart,
+  isStoredCartSaved,
   patchStoredCart,
   readStoredCart,
+  storedCartFromStorageEvent,
+  watchStoredCart,
   writeStoredCart,
 } from "./client-cart";
 
@@ -131,5 +134,110 @@ describe("pedido do portal neste aparelho", () => {
     const storage = memory();
     vi.stubGlobal("window", { localStorage: storage });
     expect(browserCartStorage()).toBe(storage);
+  });
+});
+
+describe("pedido mudado em outra aba", () => {
+  const key = cartStorageKey("BTG Pactual", "uid-ana");
+
+  function storageEvent(storageArea: unknown, eventKey: string | null, newValue: string | null) {
+    return Object.assign(new Event("storage"), { key: eventKey, newValue, storageArea });
+  }
+
+  it("outra aba enviou e limpou o pedido: esta aba fica sem os itens já enviados", () => {
+    const storage = memory();
+    const sent = { ...emptyStoredCart(), cart: {} };
+    expect(storedCartFromStorageEvent(storageEvent(storage, key, JSON.stringify(sent)), storage, key)).toEqual(
+      emptyStoredCart(),
+    );
+    expect(storedCartFromStorageEvent(storageEvent(storage, key, JSON.stringify(draft)), storage, key)).toEqual(draft);
+  });
+
+  it("pedido apagado ou storage limpo na outra aba: volta vazio", () => {
+    const storage = memory();
+    expect(storedCartFromStorageEvent(storageEvent(storage, key, null), storage, key)).toEqual(emptyStoredCart());
+    expect(storedCartFromStorageEvent(storageEvent(storage, null, null), storage, key)).toEqual(emptyStoredCart());
+  });
+
+  it("ignora o que não é este pedido", () => {
+    const storage = memory();
+    const raw = JSON.stringify(draft);
+    expect(storedCartFromStorageEvent(storageEvent(storage, cartStorageKey("BTG Pactual", "uid-bruno"), raw), storage, key)).toBeNull();
+    expect(storedCartFromStorageEvent(storageEvent(memory(), key, raw), storage, key)).toBeNull();
+    expect(storedCartFromStorageEvent(storageEvent(storage, key, raw), null, key)).toBeNull();
+    expect(storedCartFromStorageEvent(storageEvent(storage, key, raw), storage, "")).toBeNull();
+  });
+
+  it("a gravação da outra aba vale mais que a cópia desta visita", () => {
+    const storage = memory();
+    const full = {
+      getItem: storage.getItem,
+      setItem: () => {
+        throw new DOMException("cheio", "QuotaExceededError");
+      },
+    };
+    writeStoredCart(full, key, draft);
+    const other = { ...emptyStoredCart(), cart: { "sku-9": 1 } };
+    storage.setItem(key, JSON.stringify(other));
+    expect(storedCartFromStorageEvent(storageEvent(full, key, JSON.stringify(other)), full, key)).toEqual(other);
+    expect(readStoredCart(full, key)).toEqual(other);
+  });
+
+  it("ouve só este pedido, para de ouvir no fim e nunca derruba a tela", () => {
+    const storage = memory();
+    const target = new EventTarget();
+    const seen: unknown[] = [];
+    const stop = watchStoredCart(target, storage, key, (next) => seen.push(next));
+    target.dispatchEvent(storageEvent(storage, cartStorageKey("outro", "uid-ana"), "{}"));
+    target.dispatchEvent(storageEvent(storage, key, "{"));
+    target.dispatchEvent(storageEvent(storage, key, JSON.stringify(draft)));
+    expect(seen).toEqual([emptyStoredCart(), draft]);
+    const failing = watchStoredCart(target, storage, key, () => {
+      throw new Error("falhou");
+    });
+    expect(() => target.dispatchEvent(storageEvent(storage, key, null))).not.toThrow();
+    failing();
+    stop();
+    target.dispatchEvent(storageEvent(storage, key, null));
+    expect(seen).toHaveLength(3);
+  });
+
+  it("sem storage, sem pessoa ou sem janela, não ouve nada", () => {
+    const target = new EventTarget();
+    const listen = vi.spyOn(target, "addEventListener");
+    const onChange = vi.fn();
+    watchStoredCart(target, null, key, onChange)();
+    watchStoredCart(target, memory(), "", onChange)();
+    watchStoredCart(null, memory(), key, onChange)();
+    expect(listen).not.toHaveBeenCalled();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
+describe("aviso de pedido salvo neste aparelho", () => {
+  it("só quando o pedido foi gravado no storage", () => {
+    const storage = memory();
+    const key = cartStorageKey("BTG Pactual", "uid-salvo");
+    writeStoredCart(storage, key, draft);
+    expect(isStoredCartSaved(storage, key)).toBe(true);
+    expect(isStoredCartSaved(storage, "")).toBe(false);
+    expect(isStoredCartSaved(null, key)).toBe(false);
+  });
+
+  it("sem storage ou com storage cheio, o pedido vale só nesta visita", () => {
+    const key = cartStorageKey("BTG Pactual", "uid-visita");
+    writeStoredCart(null, key, draft);
+    expect(isStoredCartSaved(null, key)).toBe(false);
+    const full = {
+      getItem: () => null,
+      setItem: () => {
+        throw new DOMException("cheio", "QuotaExceededError");
+      },
+    };
+    writeStoredCart(full, key, draft);
+    expect(isStoredCartSaved(full, key)).toBe(false);
+    const storage = memory();
+    writeStoredCart(storage, key, draft);
+    expect(isStoredCartSaved(storage, key)).toBe(true);
   });
 });
