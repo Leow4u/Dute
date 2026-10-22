@@ -195,7 +195,8 @@ O resto da Fase 2:
 - shell v3, com o menu agrupado por módulo e a Administração no menu;
 - Início "Precisa de você" de todos os módulos. Até lá, o card Armazenagem leva ao Início de hoje;
 - TV em `/tv` com o papel `painel`;
-- colaboradores e veículos.
+- colaboradores e veículos, entregues na parte 1 da Fase 3
+  (`docs/plataforma/fase-3-operacao.md`).
 
 O critério de pronto da fase ("cliente só armazenagem não vê nada de OS, interno vê WMS e Operação no mesmo menu") fica provado por teste na parte 3. Na homologação, ele aparece quando a Operação tiver a primeira tela. A regra de `service_orders` com `customerHasModule('operacao')` entra na Fase 3, com a coleção.
 

@@ -54,8 +54,16 @@ describe("ambiente da rota", () => {
 
   it("toda rota protegida do App cai no shell do caminho", () => {
     expect(caminhos.filter((path) => path.startsWith("/comercial"))).not.toEqual([]);
+    expect(caminhos.filter((path) => path.startsWith("/operacao"))).not.toEqual([]);
     for (const path of caminhos) {
-      expect(layoutDaRota(path), path).toBe(path.startsWith("/comercial") ? "comercial" : path.startsWith("/configuracoes") ? "settings" : "app");
+      const esperado = path.startsWith("/comercial")
+        ? "comercial"
+        : path.startsWith("/operacao")
+          ? "operacao"
+          : path.startsWith("/configuracoes")
+            ? "settings"
+            : "app";
+      expect(layoutDaRota(path), path).toBe(esperado);
     }
   });
 
@@ -89,7 +97,7 @@ describe("troca de módulo", () => {
   it("quem tem um módulo só não vê o atalho: a entrada devolveria para a casa", () => {
     const umSo: Papel[] = ["comercial", "wms", "financeiro", "interno", "suporte"];
     for (const role of umSo) {
-      expect(podeTrocarDeModulo(role, null, true, true), role).toBe(false);
+      expect(podeTrocarDeModulo(role, null, true, true, false), role).toBe(false);
     }
     expect(podeTrocarDeModulo("comercial", null, false, true)).toBe(false);
     expect(podeTrocarDeModulo(null, null, true, true)).toBe(false);

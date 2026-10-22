@@ -823,6 +823,25 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Cadastro da Operação (docs/plataforma/fase-3-operacao.md, parte 1):
+    // colaborador (com CPF, telefone e CNH) e veículo. Só owner, admin e
+    // interno leem. Campo, suporte, comercial e cliente não. Quem grava são
+    // as callables de functions/operacao. operacao_operations não tem match:
+    // ninguém lê o recibo.
+    function canReadOperationalRegistry() {
+      return hasAnyRole(['owner', 'admin', 'interno']);
+    }
+
+    match /collaborators/{collaboratorId} {
+      allow read: if canReadOperationalRegistry();
+      allow create, update, delete: if false;
+    }
+
+    match /vehicles/{vehicleId} {
+      allow read: if canReadOperationalRegistry();
+      allow create, update, delete: if false;
+    }
+
     match /customer_accounts/{accountId} {
       allow read: if canReadOperations();
       allow create, update, delete: if false;

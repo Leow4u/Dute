@@ -11,6 +11,12 @@
       "codebase": "comercial",
       "runtime": "nodejs22",
       "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
+    },
+    {
+      "source": "functions/operacao",
+      "codebase": "operacao",
+      "runtime": "nodejs22",
+      "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
     }
   ],
   "firestore": {

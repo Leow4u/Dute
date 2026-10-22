@@ -11,9 +11,10 @@ fixa: a zeragem de julho (reset_btg_inventory.py) deixou request_counters e
 ops_aggregates para trás justamente por depender de uma lista escrita antes
 dessas coleções existirem.
 
-A zeragem é do WMS e nunca apaga dado do Comercial: as coleções dele ficam
-sempre, inclusive com --include-setup, e em `events` ficam os eventos com
-source "functions_comercial". Se a zeragem fosse apagar `customers` e algum
+A zeragem é do WMS e nunca apaga dado do Comercial nem o cadastro da
+Operação: as coleções ficam sempre, inclusive com --include-setup, e em
+`events` ficam os eventos com source "functions_comercial" ou
+"functions_operacao". Se a zeragem fosse apagar `customers` e algum
 cadastro tem o campo `stage` (do Comercial), ela para antes de alterar
 qualquer coisa.
 
@@ -90,9 +91,18 @@ COMERCIAL_COLLECTIONS = (
     "demand_counters",
     "comercial_operations",
 )
+# Operação (docs/plataforma/fase-3-operacao.md, parte 1): colaboradores,
+# veículos e recibos. Não é dado do WMS: nunca apagadas, nem com
+# --include-setup.
+OPERACAO_COLLECTIONS = (
+    "collaborators",
+    "vehicles",
+    "operacao_operations",
+)
 # Os eventos do Comercial moram em `events`, junto dos do WMS: a zeragem apaga
 # só os outros.
 COMERCIAL_EVENT_SOURCE = "functions_comercial"
+OPERACAO_EVENT_SOURCE = "functions_operacao"
 # O Comercial marca em `customers` o campo `stage` (prospect ou cliente).
 CUSTOMERS_COLLECTION = "customers"
 STAGE_FIELD = "stage"
@@ -120,7 +130,7 @@ def preserved_collections(
     include_setup: bool,
     keep: Iterable[str] = (),
 ) -> set[str]:
-    preserved = set(ACCESS_COLLECTIONS) | set(COMERCIAL_COLLECTIONS)
+    preserved = set(ACCESS_COLLECTIONS) | set(COMERCIAL_COLLECTIONS) | set(OPERACAO_COLLECTIONS)
     if not include_setup:
         preserved.update(SETUP_COLLECTIONS)
     preserved.update(name.strip() for name in keep if name.strip())
@@ -188,10 +198,26 @@ def comercial_path(name: str) -> bool:
 
 def comercial_event(collection: str, document: dict[str, Any]) -> bool:
     """Evento gravado pelas Functions do Comercial: fica na zeragem."""
+    return event_source(collection, document) == COMERCIAL_EVENT_SOURCE
+
+
+def operacao_event(collection: str, document: dict[str, Any]) -> bool:
+    """Evento gravado pelas Functions da Operação: fica na zeragem."""
+    return event_source(collection, document) == OPERACAO_EVENT_SOURCE
+
+
+def event_source(collection: str, document: dict[str, Any]) -> str:
     if collection != EVENTS_COLLECTION:
-        return False
+        return ""
     source = document.get("fields", {}).get("source")
-    return isinstance(source, dict) and source.get("stringValue") == COMERCIAL_EVENT_SOURCE
+    if isinstance(source, dict) and isinstance(source.get("stringValue"), str):
+        return source["stringValue"]
+    return ""
+
+
+def operacao_path(name: str) -> bool:
+    """Documento dentro de uma coleção do cadastro da Operação."""
+    return document_path(name).split("/", 1)[0] in OPERACAO_COLLECTIONS
 
 
 def has_stage(document: dict[str, Any]) -> bool:
@@ -226,7 +252,7 @@ def removable(collection: str, document: dict[str, Any], *, control_name: str) -
     """O que sai da coleção: tudo, menos o controle (é reescrito) e os eventos
     do Comercial."""
     name = str(document.get("name", ""))
-    return bool(name) and name != control_name and not comercial_event(collection, document)
+    return bool(name) and name != control_name and not comercial_event(collection, document) and not operacao_event(collection, document)
 
 
 def delete_writes(
@@ -252,6 +278,10 @@ def delete_writes(
             if comercial_path(name):
                 raise RuntimeError(
                     "A zeragem não apaga dado do Comercial: " + document_path(name)
+                )
+            if operacao_path(name):
+                raise RuntimeError(
+                    "A zeragem não apaga dado da Operação: " + document_path(name)
                 )
             if collection == CUSTOMERS_COLLECTION and has_stage(document):
                 raise RuntimeError(
@@ -524,6 +554,14 @@ def build_plan(
         "preserve_events": {
             "source": COMERCIAL_EVENT_SOURCE,
             "documents": comercial_event_count(snapshot),
+        },
+        "preserve_operacao_events": {
+            "source": OPERACAO_EVENT_SOURCE,
+            "documents": sum(
+                1
+                for document in snapshot.get(EVENTS_COLLECTION, [])
+                if operacao_event(EVENTS_COLLECTION, document)
+            ),
         },
         "include_setup": include_setup,
         "keep": keep,

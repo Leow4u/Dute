@@ -6,12 +6,12 @@ import { PLATFORM_MODULES, entrada, modulesForPerson } from "./platform-modules"
 
 // Comercial desligado, como na produção: o Comercial liberado está em comercial/navegacao.test.ts.
 const labels = (role: Papel, modules?: string[]) =>
-  modulesForPerson(role, modules ? { modules: modules as never } : null, false).map((entry) => entry.module.label);
+  modulesForPerson(role, modules ? { modules: modules as never } : null, false, false).map((entry) => entry.module.label);
 
 describe("tela de entrada por módulo (Fase 2, parte 2)", () => {
   it("owner e admin veem os cards de Armazenagem e Financeiro", () => {
     for (const role of ["owner", "admin"] as const) {
-      const decision = entrada(role, null, false);
+      const decision = entrada(role, null, false, false);
       expect(decision.kind).toBe("cards");
       expect(labels(role)).toEqual(["Armazenagem", "Financeiro"]);
     }
@@ -23,7 +23,7 @@ describe("tela de entrada por módulo (Fase 2, parte 2)", () => {
     ["wms", "/pedidos"],
     ["financeiro", "/faturamento"],
   ])("%s tem um módulo só e vai direto para %s, a aterrissagem de antes", (role, path) => {
-    expect(entrada(role, null)).toEqual({ kind: "redirect", to: path });
+    expect(entrada(role, null, false, false)).toEqual({ kind: "redirect", to: path });
     expect(path).toBe(getHomePathForProfile(role));
   });
 

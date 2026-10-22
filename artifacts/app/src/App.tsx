@@ -37,6 +37,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { DocumentTitle } from "./components/document-title";
 import AppLayout from "./components/layout/app-layout";
 import ComercialLayout from "./components/layout/comercial-layout";
+import OperacaoLayout from "./components/layout/operacao-layout";
 import { AppThemeProvider } from "./components/theme/theme-provider";
 import SettingsLayout from "./components/layout/settings-layout";
 import type { WarehouseOpsModuleKey } from "./lib/warehouse-ops/model";
@@ -144,12 +145,15 @@ const ComercialAprovar = lazy(() => import("./pages/comercial/aprovar"));
 const ComercialContratos = lazy(() => import("./pages/comercial/contratos"));
 const ComercialAutorizacoes = lazy(() => import("./pages/comercial/autorizacoes"));
 const ComercialMedicoes = lazy(() => import("./pages/comercial/medicoes"));
+const OperacaoColaboradores = lazy(() => import("./pages/operacao/colaboradores"));
+const OperacaoVeiculos = lazy(() => import("./pages/operacao/veiculos"));
 import { useRole } from "./hooks/use-role";
 import { AuthProvider, useAppUser } from "./lib/auth";
 import { ActiveCustomerProvider } from "./lib/active-customer-context";
 import { useOperationProfile } from "./lib/operation-profile";
 import { PLATAFORMA_LIBERADA } from "./lib/liberacao";
 import { soComComercialLiberado } from "./lib/comercial/navegacao";
+import { soComOperacaoLiberada } from "./lib/operacao/navegacao";
 import { entrada } from "./lib/platform-modules";
 import { portalModulesFor } from "./lib/operations";
 import {
@@ -943,6 +947,7 @@ const LAYOUT_DA_ROTA = {
   app: AppLayout,
   settings: SettingsLayout,
   comercial: ComercialLayout,
+  operacao: OperacaoLayout,
 } as const;
 
 function protectedRoute(
@@ -1059,6 +1064,10 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   // Comercial (docs/plataforma/fase-6-comercial.md): as rotas só existem onde
   // a liberação do Comercial está ligada (lib/comercial/navegacao.ts). Toda
   // rota do Comercial entra neste bloco (comercial/navegacao.test.ts).
+  ...soComOperacaoLiberada([
+    protectedRoute("/operacao/colaboradores", OperacaoColaboradores),
+    protectedRoute("/operacao/veiculos", OperacaoVeiculos),
+  ]),
   ...soComComercialLiberado([
     protectedRoute("/comercial", ComercialOrcamentos),
     protectedRoute("/comercial/orcamento", ComercialOrcamento),

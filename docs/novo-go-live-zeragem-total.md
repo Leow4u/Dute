@@ -19,12 +19,14 @@ A zeragem é do WMS e **nunca apaga dado do Comercial**
 |---|---|---|
 | Acesso e configuração do sistema | `users`, `invites`, `customer_accounts`, `system_settings` | **Nunca apagadas.** Sem elas ninguém entra: o login é por convite e o papel vem de `users`. |
 | Comercial | `customer_locations`, `customer_contacts`, `contracts` (e `aditivos`), `lpu_items`, `price_tables`, `demands`, `quotes` (e `revisoes`), `client_authorizations`, `medicoes`, `demand_counters`, `comercial_operations` | **Nunca apagadas**, nem com `--include-setup`. As subcoleções ficam com o pai: o script só lê e apaga documentos das coleções raiz, e recusa apagar qualquer caminho dentro destas. |
+| Operação | `collaborators`, `vehicles`, `operacao_operations` | **Nunca apagadas**, nem com `--include-setup`. É o cadastro de colaboradores e veículos. |
 | Estrutura | `customers`, `client_profiles`, `client_access`, `locations`, `warehouse_positions`, `billing_price_list`, `billing_config` | Preservadas. Com `--include-setup` são apagadas também, menos quando há cadastro com `stage` (abaixo). |
-| Tudo o mais | catálogo, saldos, movimentações, inventários, recebimentos, putaway, solicitações, pedidos, reservas, picking, packing, envios, devoluções, exceções, **faturamento** (competências, faturas, manual, snapshots), **eventos** (menos os do Comercial), caixa, notificações, conversas e conhecimento do Agent Dute, documentos, contadores PED-/ENV- e de SKU (`sku_counters`: a numeração `<SIGLA>-000001` recomeça), agregados do painel, recibos de idempotência e qualquer coleção nova | Apagadas. `--keep <coleção>` (repetível) preserva uma coleção específica depois de revisar o dry-run. |
+| Tudo o mais | catálogo, saldos, movimentações, inventários, recebimentos, putaway, solicitações, pedidos, reservas, picking, packing, envios, devoluções, exceções, **faturamento** (competências, faturas, manual, snapshots), **eventos** (menos os do Comercial e os da Operação), caixa, notificações, conversas e conhecimento do Agent Dute, documentos, contadores PED-/ENV- e de SKU (`sku_counters`: a numeração `<SIGLA>-000001` recomeça), agregados do painel, recibos de idempotência e qualquer coleção nova | Apagadas. `--keep <coleção>` (repetível) preserva uma coleção específica depois de revisar o dry-run. |
 
-**Eventos do Comercial.** Ficam em `events`, junto dos do WMS. A zeragem
-apaga só os eventos cujo `source` não é `functions_comercial`; o dry-run
-mostra quantos ficam em `preserve_events`.
+**Eventos do Comercial e da Operação.** Ficam em `events`, junto dos do WMS.
+A zeragem apaga só os eventos cujo `source` não é `functions_comercial` nem
+`functions_operacao`; o dry-run mostra quantos ficam em `preserve_events` e
+`preserve_operacao_events`.
 
 **Cadastro com `stage`.** O Comercial marca prospect e cliente com o campo
 `stage` em `customers`. Com `--include-setup`, se algum cadastro tem esse

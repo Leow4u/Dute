@@ -8,7 +8,8 @@ import {
 import { Boxes, Handshake, Receipt, Truck, Users, type LucideIcon } from "lucide-react";
 
 import { COMERCIAL_ROLES, ROTA_COMERCIAL, abreComercial } from "./comercial/navegacao";
-import { COMERCIAL_LIBERADO } from "./liberacao";
+import { COMERCIAL_LIBERADO, OPERACAO_LIBERADO } from "./liberacao";
+import { OPERACAO_CADASTRO_ROLES, ROTA_OPERACAO, abreOperacao } from "./operacao/navegacao";
 import type { OperationProfile } from "./operations";
 
 /**
@@ -32,7 +33,7 @@ export type PlatformModule = {
   /** Para o cliente o módulo é um card? As faturas fazem parte do portal, não são uma entrada. */
   clientCard: boolean;
   /** Liberação própria do módulo (lib/liberacao.ts): fora dela o módulo não tem casa. */
-  liberacao?: "comercial";
+  liberacao?: "comercial" | "operacao";
 };
 
 export const PLATFORM_MODULES: readonly PlatformModule[] = [
@@ -50,7 +51,14 @@ export const PLATFORM_MODULES: readonly PlatformModule[] = [
     },
     clientCard: true,
   },
-  { key: "operacao", label: MODULO_ROTULO.operacao, icon: Truck, home: {}, clientCard: true },
+  {
+    key: "operacao",
+    label: MODULO_ROTULO.operacao,
+    icon: Truck,
+    home: Object.fromEntries(OPERACAO_CADASTRO_ROLES.map((role) => [role, ROTA_OPERACAO])),
+    clientCard: true,
+    liberacao: "operacao",
+  },
   {
     key: "comercial",
     label: MODULO_ROTULO.comercial,
@@ -80,6 +88,7 @@ export function modulesForPerson(
   role: Papel | null | undefined,
   profile: Pick<OperationProfile, "modules"> | null | undefined,
   comercial: boolean = COMERCIAL_LIBERADO,
+  operacao: boolean = OPERACAO_LIBERADO,
 ): ModuleEntry[] {
   if (!role) return [];
   const wanted: readonly Modulo[] =
@@ -88,6 +97,7 @@ export function modulesForPerson(
     if (!wanted.includes(module.key)) return [];
     if (role === "cliente" && !module.clientCard) return [];
     if (module.liberacao === "comercial" && !abreComercial(role, comercial)) return [];
+    if (module.liberacao === "operacao" && !abreOperacao(role, operacao)) return [];
     const href = module.home[role];
     return href ? [{ module, href }] : [];
   });
@@ -103,8 +113,9 @@ export function entrada(
   role: Papel | null | undefined,
   profile: Pick<OperationProfile, "modules"> | null | undefined,
   comercial: boolean = COMERCIAL_LIBERADO,
+  operacao: boolean = OPERACAO_LIBERADO,
 ): Entrada {
-  const modules = modulesForPerson(role, profile, comercial);
+  const modules = modulesForPerson(role, profile, comercial, operacao);
   if (modules.length === 1) return { kind: "redirect", to: modules[0].href };
   if (modules.length === 0) return { kind: "nenhum" };
   return { kind: "cards", modules };

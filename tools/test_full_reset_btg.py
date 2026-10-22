@@ -41,6 +41,11 @@ COMERCIAL = (
     "demand_counters",
     "comercial_operations",
 )
+OPERACAO = (
+    "collaborators",
+    "vehicles",
+    "operacao_operations",
+)
 
 
 def raw_document(
@@ -256,7 +261,8 @@ class PlanTests(unittest.TestCase):
             preserved,
             set(full_reset_btg.ACCESS_COLLECTIONS)
             | set(full_reset_btg.SETUP_COLLECTIONS)
-            | set(COMERCIAL),
+            | set(COMERCIAL)
+            | set(OPERACAO),
         )
 
     def test_comercial_collections_are_always_preserved(self) -> None:
@@ -271,6 +277,23 @@ class PlanTests(unittest.TestCase):
                 )
                 self.assertEqual(to_delete, ["products"])
                 self.assertEqual(kept, sorted(COMERCIAL))
+
+    def test_operacao_registry_is_always_preserved(self) -> None:
+        self.assertEqual(set(full_reset_btg.OPERACAO_COLLECTIONS), set(OPERACAO))
+        for include_setup in (False, True):
+            preserved = full_reset_btg.preserved_collections(include_setup=include_setup)
+            self.assertTrue(set(OPERACAO) <= preserved)
+        control = full_reset_btg.control_document_name(PROJECT, DATABASE)
+        evento = raw_document("events", "eop1", {"source": "functions_operacao", "type": "collaborator.created"})
+        self.assertFalse(full_reset_btg.removable("events", evento, control_name=control))
+        wms = raw_document("events", "e1", {"type": "inventory.movement"})
+        self.assertTrue(full_reset_btg.removable("events", wms, control_name=control))
+        with self.assertRaises(RuntimeError):
+            full_reset_btg.delete_writes(
+                {"products": [raw_document("collaborators", "col1")]},
+                ["products"],
+                control_name=control,
+            )
 
     def test_delete_writes_refuse_any_comercial_path(self) -> None:
         # O script só lê documentos das coleções raiz; se um dia descer nas
@@ -351,7 +374,10 @@ class PlanTests(unittest.TestCase):
 
     def test_include_setup_preserves_only_access_and_comercial(self) -> None:
         preserved = full_reset_btg.preserved_collections(include_setup=True)
-        self.assertEqual(preserved, set(full_reset_btg.ACCESS_COLLECTIONS) | set(COMERCIAL))
+        self.assertEqual(
+            preserved,
+            set(full_reset_btg.ACCESS_COLLECTIONS) | set(COMERCIAL) | set(OPERACAO),
+        )
 
     def test_keep_extends_preserved(self) -> None:
         preserved = full_reset_btg.preserved_collections(
