@@ -234,7 +234,7 @@ export const QUEUE_META: QueueMeta[] = [
   },
   {
     key: "putaway",
-    label: "Putaway",
+    label: "Guarda",
     description: "Endereçamento, rua, prateleira e caixa.",
     icon: Forklift,
   },
@@ -304,7 +304,7 @@ export const WAREHOUSE_OPS_MODULES: WarehouseOpsModule[] = [
   },
   {
     key: "putaway",
-    label: "Putaway",
+    label: "Guarda",
     description: "Guarda endereçada e saldo liberado.",
     icon: Forklift,
     queueKeys: ["putaway"],
@@ -671,7 +671,8 @@ export function normalizeQueues(
 
     return {
       key: meta.key,
-      label: queue?.name || meta.label,
+      // Cada fonte mantém o nome que manda; só a guarda é sempre "Guarda".
+      label: meta.key === "putaway" ? meta.label : queue?.name || meta.label,
       description: meta.description,
       icon: meta.icon,
       pending,
@@ -1197,9 +1198,11 @@ export function getAdvanceGate(
   task: WarehouseTask,
   counts?: LineResolutionCounts,
 ) {
-  const pendingBlocked = Boolean(counts && counts.pending > 0);
+  // A guarda confirma posição e quantidade. A conferência de linha é da entrada.
+  const checksLines = queue.key !== "putaway";
+  const pendingBlocked = Boolean(checksLines && counts && counts.pending > 0);
   const issueBlocked = Boolean(
-    counts && (counts.shortage > 0 || counts.damaged > 0) && counts.pending > 0,
+    checksLines && counts && (counts.shortage > 0 || counts.damaged > 0) && counts.pending > 0,
   );
   const blocked = pendingBlocked || issueBlocked;
   const blockedReason = !canAdvanceTask(task)
@@ -1212,7 +1215,7 @@ export function getAdvanceGate(
     canSubmitAdvance: canAdvanceTask(task) && !blocked,
     blockedReason,
     reason: blockedReason,
-    label: getQueueAction(queue) || "Avançar",
+    label: queue.key === "putaway" ? "Concluir guarda" : getQueueAction(queue) || "Avançar",
   };
 }
 

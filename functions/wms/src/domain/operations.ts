@@ -15,6 +15,11 @@ import {
   recordOwner,
 } from "./customer-scope.js";
 import {
+  WAREHOUSE_POSITIONS_COLLECTION,
+  putawayAdvanceStatus,
+  resolveGuardDestination,
+} from "./warehouse-positions.js";
+import {
   assertBarcodeAvailable,
   catalogRecordHasQuantity,
   catalogSkuCode,
@@ -6019,11 +6024,17 @@ export async function advanceWarehouseTaskTransaction(
         `Status divergente: esperado ${expectedStatus}, encontrado ${currentStatus}.`,
       );
     }
-    const targetStatus = nextStatus(type, currentStatus);
+    let targetStatus = nextStatus(type, currentStatus);
     const customerCode = text(task.customer_code) || "BTG Pactual";
     const orderId = text(task.order_id);
     const requestId = text(task.customer_request_id);
     const operation = input.operation ?? {};
+    if (type === "putaway") {
+      targetStatus = putawayAdvanceStatus(
+        currentStatus,
+        text(operation.destination_location_id || operation.location_id),
+      );
+    }
 
     let inboundItems: Row[] = [];
     let pickLines: Row[] = [];
@@ -6523,7 +6534,7 @@ export async function advanceWarehouseTaskTransaction(
       const sourceLocationId =
         text(operation.source_location_id || task.source_location_id) ||
         "RECEBIMENTO";
-      const destinationLocationId = text(
+      let destinationLocationId = text(
         operation.destination_location_id ||
           operation.location_id ||
           task.destination_location_id ||
@@ -6545,7 +6556,18 @@ export async function advanceWarehouseTaskTransaction(
           "Informe o endereço final antes de concluir o putaway.",
         );
       }
-      if (sourceLocationId === destinationLocationId) {
+      const positionSnapshot = await transaction.get(db.collection(WAREHOUSE_POSITIONS_COLLECTION));
+      const resolvedDestination = resolveGuardDestination(
+        destinationLocationId,
+        positionSnapshot.docs.map((document) => document.data()),
+        customerCode,
+      );
+      if ("problem" in resolvedDestination) {
+        throw new HttpsError("failed-precondition", resolvedDestination.problem);
+      }
+      destinationLocationId = resolvedDestination.code;
+      // Compara já com o código da etiqueta: "a-01" e "A-01" são o mesmo saldo.
+      if (sourceLocationId.toUpperCase() === destinationLocationId) {
         throw new HttpsError(
           "failed-precondition",
           "Endereço de origem e destino não podem ser iguais.",
