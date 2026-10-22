@@ -147,10 +147,20 @@ describe("pedido mudado em outra aba", () => {
   it("outra aba enviou e limpou o pedido: esta aba fica sem os itens já enviados", () => {
     const storage = memory();
     const sent = { ...emptyStoredCart(), cart: {} };
+    storage.setItem(key, JSON.stringify(sent));
     expect(storedCartFromStorageEvent(storageEvent(storage, key, JSON.stringify(sent)), storage, key)).toEqual(
       emptyStoredCart(),
     );
+    storage.setItem(key, JSON.stringify(draft));
     expect(storedCartFromStorageEvent(storageEvent(storage, key, JSON.stringify(draft)), storage, key)).toEqual(draft);
+  });
+
+  it("evento atrasado não traz de volta um pedido que já mudou de novo", () => {
+    const storage = memory();
+    const first = { ...emptyStoredCart(), cart: { "sku-1": 1 } };
+    const second = { ...emptyStoredCart(), cart: { "sku-1": 2 } };
+    storage.setItem(key, JSON.stringify(second));
+    expect(storedCartFromStorageEvent(storageEvent(storage, key, JSON.stringify(first)), storage, key)).toEqual(second);
   });
 
   it("pedido apagado ou storage limpo na outra aba: volta vazio", () => {
@@ -190,6 +200,7 @@ describe("pedido mudado em outra aba", () => {
     const stop = watchStoredCart(target, storage, key, (next) => seen.push(next));
     target.dispatchEvent(storageEvent(storage, cartStorageKey("outro", "uid-ana"), "{}"));
     target.dispatchEvent(storageEvent(storage, key, "{"));
+    storage.setItem(key, JSON.stringify(draft));
     target.dispatchEvent(storageEvent(storage, key, JSON.stringify(draft)));
     expect(seen).toEqual([emptyStoredCart(), draft]);
     const failing = watchStoredCart(target, storage, key, () => {

@@ -95,7 +95,11 @@ export function patchStoredCart(storage: CartStorage | null, key: string, patch:
 
 type CartStorageEvent = Pick<StorageEvent, "key" | "newValue" | "storageArea">;
 
-/** Outra aba mudou ou apagou este pedido: o pedido novo, ou null quando o evento é de outra coisa. */
+/**
+ * Outra aba mudou ou apagou este pedido: o pedido guardado agora, ou null
+ * quando o evento é de outra coisa. Lê o storage, não o `newValue`: um evento
+ * atrasado não traz de volta um pedido que já mudou de novo.
+ */
 export function storedCartFromStorageEvent(
   event: CartStorageEvent,
   storage: CartStorage | null,
@@ -106,7 +110,7 @@ export function storedCartFromStorageEvent(
   if (event.key !== null && event.key !== key) return null;
   // A outra aba gravou no storage: a cópia desta visita ficou velha.
   visit.delete(key);
-  return parseStoredCart(event.newValue);
+  return readStoredCart(storage, key);
 }
 
 /** Ouve as outras abas; devolve como parar. Sem storage ou sem chave, não ouve nada. */
