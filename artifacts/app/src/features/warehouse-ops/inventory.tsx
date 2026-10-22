@@ -1451,7 +1451,7 @@ export function OpeningInventoryWorkspace() {
                       title="Código sem SKU"
                       note={missingSkuPrefix
                         ? `Cadastre a sigla do SKU de ${activeCustomer.name} em Configurações › Clientes antes de cadastrar produto novo: o SKU é gerado com ela.`
-                        : `O lançamento anterior foi cancelado e o cartão do produto ficou sem SKU. O Estoque lista o SKU, então o código some da busca. ${isDraftBox ? "SKU gerado ao guardar a caixa." : "SKU gerado ao salvar."}`}
+                        : `Este código não tem SKU ativo. Cadastre como novo. ${isDraftBox ? "SKU gerado ao guardar a caixa." : "SKU gerado ao salvar."}`}
                       onToggle={() => setCreateNew((current) => !current)}
                     />
                   ) : existingProduct ? (

@@ -2504,6 +2504,147 @@ describe("integridade de reservas e agregados de catálogo", () => {
     assert.equal((await db.collection("products").get()).size, 0);
     assert.equal((await db.collection("skus").get()).size, 0);
   });
+
+  it("produto novo não apaga o SKU arquivado de outro id que ainda tem saldo", async () => {
+    await clearFirestore();
+    const session = await createOpeningInventorySessionTransaction(
+      db,
+      {
+        customer_code: "BTG Pactual",
+        reference: "INVENTARIO-ABERTURA-SKU-SOLTO-SALDO",
+        idempotency_key: "opening-session-stray-sku-stock",
+      },
+      actor,
+    );
+    const input = openingCountInput(String(session.session_id), {
+      idempotency_key: "opening-count-stray-sku-stock",
+    });
+    const identity = {
+      customer_code: "BTG Pactual",
+      cod_cliente: input.client_item_code,
+      cod_cliente_key: input.client_item_code,
+      archived: true,
+      status: "archived",
+    };
+    await db.collection("products").doc(input.client_item_code!).set({
+      id: input.client_item_code,
+      ...identity,
+      estoque_btg: 0,
+    });
+    await db.collection("skus").doc("sku_legado_cliente_open").set({
+      id: "sku_legado_cliente_open",
+      ...identity,
+      cod_btg: "BTG-000050",
+      sku_code: "BTG-000050",
+      sku_code_key: "BTG-000050",
+      estoque_atual: 0,
+    });
+    await db.collection("stock_balances").doc("bal-sku-legado").set({
+      customer_code: "BTG Pactual",
+      sku_code: "BTG-000050",
+      client_item_code: input.client_item_code,
+      location_id: "RUA-B/PRAT-02",
+      qty_on_hand: 3,
+      qty_reserved: 0,
+    });
+
+    await assert.rejects(
+      recordCycleCountTransaction(db, input, actor),
+      /ainda tem saldo/,
+    );
+    assert.equal(
+      (await db.collection("skus").doc("sku_legado_cliente_open").get()).exists,
+      true,
+    );
+    assert.equal((await db.collection("skus").doc("BTG-000050").get()).exists, false);
+  });
+
+  it("remover a linha de outro cliente não apaga cartão legado nem cartão solto com saldo", async () => {
+    await clearFirestore();
+    await db.collection("customers").doc("Cliente_Solto").set({
+      code: "Cliente Solto",
+      customer_code: "Cliente Solto",
+      name: "Cliente Solto",
+      sku_prefix: "SOL",
+      status: "active",
+    });
+    const session = await createOpeningInventorySessionTransaction(
+      db,
+      {
+        customer_code: "Cliente Solto",
+        reference: "INVENTARIO-ABERTURA-CARTAO-ALHEIO",
+        idempotency_key: "opening-session-stray-owner",
+      },
+      actor,
+    );
+    const sessionId = String(session.session_id);
+    const input = openingCountInput(sessionId, {
+      customer_code: "Cliente Solto",
+      client_item_code: "SOLTO-OPEN-001",
+      idempotency_key: "opening-count-stray-owner",
+    });
+    const counted = await recordCycleCountTransaction(db, input, actor);
+    assert.equal(counted.sku_code, "SOL-000001");
+    const sameCode = {
+      cod_cliente: "SOLTO-OPEN-001",
+      cod_cliente_key: "SOLTO-OPEN-001",
+      status: "active",
+      archived: false,
+    };
+    // Sem customer_code o registro é do cliente legado (customer-scope.ts).
+    await db.collection("products").doc("product_legado_sem_dono").set({
+      ...sameCode,
+      estoque_btg: 0,
+    });
+    await db.collection("products").doc("product_solto_com_saldo").set({
+      ...sameCode,
+      customer_code: "Cliente Solto",
+      estoque_btg: 4,
+    });
+    await db.collection("skus").doc("sku_solto_com_saldo").set({
+      ...sameCode,
+      customer_code: "Cliente Solto",
+      archived: true,
+      status: "archived",
+      cod_btg: "SOL-000077",
+      sku_code: "SOL-000077",
+      estoque_atual: 0,
+    });
+    await db.collection("stock_balances").doc("bal-sku-solto").set({
+      customer_code: "Cliente Solto",
+      sku_code: "SOL-000077",
+      client_item_code: "SOLTO-OPEN-001",
+      location_id: "RUA-B/PRAT-02",
+      qty_on_hand: 2,
+      qty_reserved: 0,
+    });
+    await db.collection("products").doc("product_solto_sem_saldo").set({
+      ...sameCode,
+      customer_code: "Cliente Solto",
+      estoque_btg: 0,
+    });
+    const linhas = await db
+      .collection("opening_inventory_lines")
+      .where("session_id", "==", sessionId)
+      .get();
+    await removeOpeningInventoryLineTransaction(
+      db,
+      {
+        customer_code: "Cliente Solto",
+        session_id: sessionId,
+        opening_line_id: String(linhas.docs[0]!.id),
+        idempotency_key: "opening-remove-stray-owner",
+      },
+      actor,
+    );
+    const products = await db.collection("products").get();
+    assert.deepEqual(
+      products.docs.map((doc) => doc.id).sort(),
+      ["product_legado_sem_dono", "product_solto_com_saldo"],
+    );
+    const skus = await db.collection("skus").get();
+    assert.deepEqual(skus.docs.map((doc) => doc.id), ["sku_solto_com_saldo"]);
+  });
 });
 
 describe("número do pedido e cancelamento pelo cliente", () => {

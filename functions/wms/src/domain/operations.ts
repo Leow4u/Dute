@@ -12,9 +12,11 @@ import {
   assertCatalogOwnedBy,
   openingInventoryBlocksOutbound,
   openingUsesGlobalControl,
+  recordOwner,
 } from "./customer-scope.js";
 import {
   assertBarcodeAvailable,
+  catalogRecordHasQuantity,
   catalogSkuCode,
   clientCodeRelease,
   clientCodeStillHasStockMessage,
@@ -2129,6 +2131,38 @@ export async function recordCycleCountTransaction(
     const movementIdValue =
       adjustmentQty > 0 ? movementId(operationId, "cycle_count") : undefined;
 
+    // Produto novo grava no id canônico e apaga o cartão solto (outro id,
+    // mesmo código do cliente). Arquivado ou não, cartão solto com saldo no
+    // cadastro ou no ledger não sai: o saldo ficaria sem cadastro.
+    const productId = safeDocId(clientItemCode || skuCode);
+    const skuId = safeDocId(skuCode);
+    const strayCatalogRows =
+      mode === "opening" && wantsNewProduct
+        ? [
+            ...productRows.filter((row) => row.id !== productId),
+            ...skuRows.filter((row) => row.id !== skuId),
+          ]
+        : [];
+    if (strayCatalogRows.length) {
+      const strayBalances = await readCatalogQuantities(
+        transaction,
+        db,
+        customerCode,
+        requestedClientItemCode,
+        strayCatalogRows.map((row) => catalogSkuCode(row.data)),
+      );
+      if (
+        [...strayCatalogRows.map((row) => row.data), ...strayBalances].some(
+          (row) => catalogRecordHasQuantity(row),
+        )
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          clientCodeStillHasStockMessage(requestedClientItemCode),
+        );
+      }
+    }
+
     // Primeira escrita: o contador do SKU gerado.
     skuAllocator?.commit();
 
@@ -2169,20 +2203,13 @@ export async function recordCycleCountTransaction(
         unitCost,
       });
       if (wantsNewProduct) {
-        const productId = safeDocId(clientItemCode || skuCode);
-        const skuId = safeDocId(skuCode);
         // set (sem merge) em vez de create: a guarda catalogActiveExists já
         // barrou duplicidade ATIVA — se o doc existe aqui, está arquivado, e
         // recontar como novo é reativação com reset limpo (sem herdar
         // agregados velhos do cadastro arquivado). Cartão solto (outro id,
-        // mesmo código, sem SKU ativo) sai junto: senão a próxima contagem
-        // acha dois produtos.
-        for (const row of productRows) {
-          if (row.id !== productId) transaction.delete(row.ref);
-        }
-        for (const row of skuRows) {
-          if (row.id !== skuId) transaction.delete(row.ref);
-        }
+        // mesmo código, sem SKU ativo nem saldo) sai junto: senão a próxima
+        // contagem acha dois produtos.
+        for (const row of strayCatalogRows) transaction.delete(row.ref);
         transaction.set(db.collection(collections.products).doc(productId), {
           id: clientItemCode || skuCode,
           ...catalogPayload,
@@ -2868,6 +2895,24 @@ export async function removeOpeningInventoryLineTransaction(
     if (boxSnapshot?.get("status") === "committing") {
       throw new HttpsError("failed-precondition", "Retome e finalize a guarda da caixa antes de remover um lançamento confirmado.");
     }
+    // Cartão solto (outro id, mesmo código do cliente) só sai se for deste
+    // cliente (sem customer_code é do legado) e não tiver saldo no cadastro
+    // nem no ledger. O saldo do SKU desta linha é o que a remoção zera.
+    const strayCatalogRows = [...productsByCode, ...skusByCode].filter(
+      (row) =>
+        row.ref.path !== productRef.path &&
+        row.ref.path !== skuRef.path &&
+        recordOwner(row.data) === customerCode,
+    );
+    const strayHasStock = await Promise.all(
+      strayCatalogRows.map(async (row) => {
+        if (catalogRecordHasQuantity(row.data)) return true;
+        const code = catalogSkuCode(row.data);
+        if (!code || normalizedIdentity(code) === skuCode) return false;
+        const balances = await readRows(transaction, skuBalancesQuery(db, customerCode, code));
+        return balances.some((balance) => catalogRecordHasQuantity(balance.data));
+      }),
+    );
 
     const targetBalances = balanceRows.filter(
       (row) => text(row.data.location_id) === locationId,
@@ -2981,17 +3026,11 @@ export async function removeOpeningInventoryLineTransaction(
       // O id canônico é o código. Um cartão gravado com outro id e o mesmo
       // cod_cliente_key ficava para trás: o Estoque (que lista SKU) escondia,
       // e a Contagem travava em "sem SKU".
-      const catalogRefs = new Map<string, DocumentReference>();
-      const ownedHere = (data: Record<string, unknown>) => {
-        const owner = text(data.customer_code);
-        return !owner || owner === customerCode;
-      };
-      if (productSnapshot.exists && ownedHere(product)) catalogRefs.set(productRef.path, productRef);
-      if (skuSnapshot.exists && ownedHere(sku)) catalogRefs.set(skuRef.path, skuRef);
-      for (const row of [...productsByCode, ...skusByCode]) {
-        if (ownedHere(row.data)) catalogRefs.set(row.ref.path, row.ref);
-      }
-      for (const ref of catalogRefs.values()) transaction.delete(ref);
+      if (productSnapshot.exists && recordOwner(product) === customerCode) transaction.delete(productRef);
+      if (skuSnapshot.exists && recordOwner(sku) === customerCode) transaction.delete(skuRef);
+      strayCatalogRows.forEach((row, index) => {
+        if (!strayHasStock[index]) transaction.delete(row.ref);
+      });
     } else {
       if (productSnapshot.exists) {
         transaction.update(productRef, {
