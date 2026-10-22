@@ -154,8 +154,8 @@ function openNoticeOption(notice: ShipmentNotice): NoticeOption {
 /**
  * Aviso do cliente na ficha da chegada avulsa, com as travas de
  * linkInboundNotice (functions/wms/src/domain/inbound-notice.ts): só a
- * chegada ainda aberta troca de aviso, e não a que já foi aprovada com ele.
- * Fora disso a ficha só mostra o aviso vinculado. `linked` é o aviso
+ * chegada ainda aberta do cliente ativo troca de aviso, e não a que já foi
+ * aprovada com ele. Fora disso a ficha só mostra o aviso vinculado. `linked` é o aviso
  * vinculado que não está entre os abertos: `undefined` enquanto carrega,
  * `null` se não deu para ler.
  */
@@ -163,6 +163,7 @@ export function noticeLinkChoice(
   task: WarehouseTask,
   notices: ShipmentNotice[],
   linked?: LinkedShipmentNotice | null,
+  activeCustomer?: string,
 ): NoticeLinkChoice | null {
   if (!isUnplannedReceipt(task)) return null;
   const requestId = coerceText(task.customer_request_id);
@@ -180,7 +181,9 @@ export function noticeLinkChoice(
   // A ficha recebe o id da fila ("receiving:<id>"); a aprovação grava o do recebimento.
   const receiptId = coerceText(task.reference) || task.id.replace(/^receiving:/, "");
   const approvedWithArrival = Boolean(linked && linked.id === requestId && linked.inbound_id === receiptId);
-  if (isTerminalTask(task) || approvedWithArrival) {
+  const taskCustomer = coerceText(task.customer);
+  const otherCustomer = Boolean(activeCustomer && taskCustomer && taskCustomer !== activeCustomer);
+  if (isTerminalTask(task) || approvedWithArrival || otherCustomer) {
     return linkedOption ? { editable: false, selectedId: requestId, options: [linkedOption] } : null;
   }
   return {

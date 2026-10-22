@@ -115,6 +115,7 @@ export default function Receber() {
           selected.task,
           unlinkedShipmentNotices(notices, tasks, selected.task.customer_request_id),
           linkedRequest.data ? linkedShipmentNotice(linkedRequest.data) : linkedRequest.isError ? null : undefined,
+          customerCode,
         )
       : null;
   const linkNotice = useMutation({

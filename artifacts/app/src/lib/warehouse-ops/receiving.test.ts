@@ -180,6 +180,17 @@ describe("aviso na ficha da chegada avulsa", () => {
     });
   });
 
+  it("chegada de outro cliente só mostra o vínculo", () => {
+    const arrival = task({ id: "inb_avulso_3", customer: "Outro Cliente" });
+    expect(noticeLinkChoice(arrival, open, undefined, "BTG Pactual")).toBeNull();
+    expect(noticeLinkChoice({ ...arrival, customer_request_id: "req-8" }, open, { id: "req-8", number: "ENV-0008", status: "open", inbound_id: "" }, "BTG Pactual")).toEqual({
+      editable: false,
+      selectedId: "req-8",
+      options: [{ id: "req-8", title: "ENV-0008", detail: "" }],
+    });
+    expect(noticeLinkChoice(task({ id: "inb_avulso_3", customer: "BTG Pactual" }), open, undefined, "BTG Pactual")?.editable).toBe(true);
+  });
+
   it("aviso aprovado com a chegada e chegada concluída só mostram o vínculo", () => {
     const linked = { id: "req-9", number: "ENV-0009", status: "approved", inbound_id: "inb_avulso_1" };
     const arrival = task({ id: "receiving:inb_avulso_1", reference: "inb_avulso_1", customer_request_id: "req-9" });
