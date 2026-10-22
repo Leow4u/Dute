@@ -76,6 +76,14 @@ async function advance(
   );
 }
 
+/** Cartões apagados que o único evento do tipo registrou, ordenados. */
+async function deletedCatalogDocs(type: string) {
+  const events = await db.collection("events").where("type", "==", type).get();
+  assert.equal(events.size, 1);
+  const docs = events.docs[0]!.data().payload?.deleted_catalog_docs;
+  return docs === undefined ? undefined : [...(docs as string[])].sort();
+}
+
 type OpeningCountInput = Parameters<typeof recordCycleCountTransaction>[1];
 
 function openingCountInput(
@@ -2503,6 +2511,12 @@ describe("integridade de reservas e agregados de catálogo", () => {
     );
     assert.equal((await db.collection("products").get()).size, 0);
     assert.equal((await db.collection("skus").get()).size, 0);
+    assert.equal(await deletedCatalogDocs("inventory.opening_counted"), undefined);
+    assert.deepEqual(await deletedCatalogDocs("inventory.opening_line_removed"), [
+      "products/CLIENTE-OPEN-001",
+      "products/product_orfao_cliente_open",
+      "skus/BTG-000001",
+    ]);
   });
 
   it("produto novo não apaga o SKU arquivado de outro id que ainda tem saldo", async () => {
@@ -2626,6 +2640,11 @@ describe("integridade de reservas e agregados de catálogo", () => {
       ["product_legado_sem_dono", "product_solto_com_saldo"],
     );
     assert.equal((await db.collection("skus").get()).size, 0);
+    assert.deepEqual(await deletedCatalogDocs("inventory.opening_line_removed"), [
+      "products/SOLTO-OPEN-001",
+      "products/product_solto_sem_saldo",
+      "skus/SOL-000001",
+    ]);
   });
 
   it("remover a linha não apaga o cartão de produto solto cujo código ainda tem saldo no ledger", async () => {
@@ -2705,6 +2724,10 @@ describe("integridade de reservas e agregados de catálogo", () => {
       (await db.collection("stock_balances").doc("bal-sku-solto").get()).data()?.qty_on_hand,
       2,
     );
+    assert.deepEqual(await deletedCatalogDocs("inventory.opening_line_removed"), [
+      "products/SOLTO-OPEN-001",
+      "skus/SOL-000001",
+    ]);
   });
 });
 

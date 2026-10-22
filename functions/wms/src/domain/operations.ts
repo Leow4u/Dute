@@ -2517,6 +2517,11 @@ export async function recordCycleCountTransaction(
           adjustment_qty: adjustmentQty,
           reason,
           reference: text(input.reference) || undefined,
+          // Cartão solto apagado nesta contagem: o id dele não está no
+          // sku_code nem no client_item_code acima.
+          deleted_catalog_docs: strayCatalogRows.length
+            ? strayCatalogRows.map((row) => row.ref.path)
+            : undefined,
         },
       },
       actor,
@@ -3041,15 +3046,18 @@ export async function removeOpeningInventoryLineTransaction(
       otherActiveLines.length === 0 &&
       (text(product.opening_inventory_session_id) === sessionId ||
         text(sku.opening_inventory_session_id) === sessionId);
+    // Cartões apagados vão no evento: os soltos têm id fora do código.
+    const deletedCatalogRefs: DocumentReference<DocumentData>[] = [];
     if (removeOpeningCatalog) {
       // O id canônico é o código. Um cartão gravado com outro id e o mesmo
       // cod_cliente_key ficava para trás: o Estoque (que lista SKU) escondia,
       // e a Contagem travava em "sem SKU".
-      if (productSnapshot.exists && recordOwner(product) === customerCode) transaction.delete(productRef);
-      if (skuSnapshot.exists && recordOwner(sku) === customerCode) transaction.delete(skuRef);
+      if (productSnapshot.exists && recordOwner(product) === customerCode) deletedCatalogRefs.push(productRef);
+      if (skuSnapshot.exists && recordOwner(sku) === customerCode) deletedCatalogRefs.push(skuRef);
       strayCatalogRows.forEach((row, index) => {
-        if (!strayHasStock[index]) transaction.delete(row.ref);
+        if (!strayHasStock[index]) deletedCatalogRefs.push(row.ref);
       });
+      for (const ref of deletedCatalogRefs) transaction.delete(ref);
     } else {
       if (productSnapshot.exists) {
         transaction.update(productRef, {
@@ -3115,6 +3123,9 @@ export async function removeOpeningInventoryLineTransaction(
           counted_qty: countedQty,
           reversed_cycle_count_id: cycleCountId,
           reversed_movement_id: originalMovementId || undefined,
+          deleted_catalog_docs: deletedCatalogRefs.length
+            ? deletedCatalogRefs.map((ref) => ref.path)
+            : undefined,
         },
       },
       actor,

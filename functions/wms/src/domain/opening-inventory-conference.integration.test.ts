@@ -281,6 +281,9 @@ describe("inventário de abertura: conferir antes de guardar", () => {
     assert.equal(stock.skus[0]!.archived, false);
     assert.equal(stock.skus[0]!.cod_cliente, clientCode);
     assert.equal(stock.balances[0]!.qty_on_hand, 3);
+    const counted = (await rows("events")).filter((row) => row.type === "inventory.opening_counted");
+    assert.equal(counted.length, 1);
+    assert.deepEqual((counted[0]!.payload as Row).deleted_catalog_docs, ["products/product_orfao_a010655"]);
   });
 
   it("não recadastra código sem SKU que ainda tem saldo", async () => {
