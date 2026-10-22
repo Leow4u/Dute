@@ -74,6 +74,21 @@ describe("identificação de produto novo", () => {
     expect(html).not.toContain("Produto não localizado");
   });
 
+  it("mostra o código sem SKU ativo e oferece o cadastro de novo", () => {
+    const html = renderToStaticMarkup(
+      <NewProductNotice
+        confirmed={false}
+        title="Código sem SKU"
+        note="Este código não tem SKU ativo. Cadastre como novo. SKU gerado ao salvar."
+        onToggle={() => undefined}
+      />,
+    );
+    expect(html).toContain("Código sem SKU");
+    expect(html).toContain("Este código não tem SKU ativo.");
+    expect(html).toContain("Cadastrar como novo");
+    expect(html).not.toContain("Produto não localizado pelo código informado");
+  });
+
   it("preserva o bloqueio informado pela tela", () => {
     const html = renderToStaticMarkup(
       <NewProductNotice confirmed={false} disabled note="Cadastre a sigla do SKU." onToggle={() => undefined} />,

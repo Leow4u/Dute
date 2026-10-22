@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeQueues, type WarehouseOpsResponse, type WarehouseTask } from "./model";
+import { getAdvanceGate, normalizeQueues, type WarehouseOpsResponse, type WarehouseTask } from "./model";
 import {
   buildReceivingBoard,
   linkedShipmentNotice,
@@ -208,5 +208,61 @@ describe("aviso na ficha da chegada avulsa", () => {
       });
       expect(noticeLinkChoice(task({ id: "inb_avulso_2", status }), open)).toBeNull();
     }
+  });
+});
+
+describe("nomes das filas", () => {
+  const labelsOf = (input: WarehouseOpsResponse["queues"]) => normalizeQueues(input).map((queue) => queue.label);
+
+  it("são os de antes, só a guarda mudou", () => {
+    expect(labelsOf(undefined)).toEqual(["Receiving", "Guarda", "Picking", "Packing", "Shipping"]);
+    // O que o getWarehouseOps manda no name de cada fila; a guarda vale também com o nome antigo.
+    for (const putaway of ["Guarda", "Putaway"]) {
+      expect(
+        labelsOf({
+          receiving: { key: "receiving", name: "Receiving", tasks: [] },
+          putaway: { key: "putaway", name: putaway, tasks: [] },
+          picking: { key: "picking", name: "Picking", tasks: [] },
+          packing: { key: "packing", name: "Packing", tasks: [] },
+          expedition: { key: "expedition", name: "Expedição", tasks: [] },
+        }),
+      ).toEqual(["Receiving", "Guarda", "Picking", "Packing", "Expedição"]);
+    }
+  });
+
+  it("mantêm os nomes que a demo manda", () => {
+    expect(
+      labelsOf({
+        receiving: { key: "receiving", name: "Recebimento", tasks: [] },
+        putaway: { key: "putaway", name: "Guarda", tasks: [] },
+        picking: { key: "picking", name: "Separação", tasks: [] },
+        packing: { key: "packing", name: "Embalagem", tasks: [] },
+        expedition: { key: "expedition", name: "Expedição", tasks: [] },
+      }),
+    ).toEqual(["Recebimento", "Guarda", "Separação", "Embalagem", "Expedição"]);
+  });
+});
+
+describe("gate da guarda", () => {
+  it("não pede conferência de linha e o selo diz Guarda", () => {
+    const queues = normalizeQueues({
+      putaway: {
+        key: "putaway",
+        name: "Putaway",
+        tasks: [task({ id: "p1", status: "in_progress", can_advance: true, items: [{ id: "linha", quantity: 10 }] })],
+      },
+    });
+    const queue = queues.find((entry) => entry.key === "putaway")!;
+    const gate = getAdvanceGate(queue, queue.tasks[0]!, {
+      total: 1,
+      pending: 1,
+      confirmed: 0,
+      shortage: 0,
+      damaged: 0,
+    });
+    expect(queue.label).toBe("Guarda");
+    expect(gate.canAdvance).toBe(true);
+    expect(gate.blockedReason).toBeNull();
+    expect(gate.label).toBe("Concluir guarda");
   });
 });

@@ -1026,6 +1026,21 @@ export const cycleCounts = [
   { id: "cc_1", location_id: "A-01-2", sku_code: code(2), product_name: fullName(itemOf(2)), expected_qty: 12, counted_qty: null, status: "open", requested_by: "Agent Dute", created_at: ago(4) },
 ];
 
+/* ---------- Posições (Estoque › Posições) ---------- */
+// Prateleiras da zona da TikTok, onde a guarda da demo conclui; uma está bloqueada.
+function position(aisle: string, shelf: number, sequence: number, status = "active") {
+  const positionCode = `${aisle}-${String(shelf).padStart(2, "0")}`;
+  return { id: positionCode, code: positionCode, aisle, shelf, length_m: 1.8, depth_m: 0.75, height_m: 0.5, sequence, customer_code: CUSTOMER, status, source: "demo" };
+}
+
+export const warehousePositions = [
+  position("A", 1, 1),
+  position("A", 2, 2),
+  position("E", 1, 3),
+  position("E", 2, 4),
+  position("E", 3, 5, "blocked"),
+];
+
 /* ---------- Roteador ---------- */
 type Handler = (m: RegExpMatchArray, params: URLSearchParams, method: string, body: any) => any;
 const list = (items: unknown[]) => ({ items, total: items.length, has_more: false });
@@ -1049,6 +1064,7 @@ const routes: Array<[string | null, RegExp, Handler]> = [
   [null, /^\/api\/warehouse\/map$/, () => warehouseMap],
   [null, /^\/api\/warehouse\/opening-inventory\/session$/, () => openingInventory],
   [null, /^\/api\/warehouse\/cycle-counts$/, () => list(cycleCounts)],
+  ["GET", /^\/api\/warehouse\/positions$/, () => list(warehousePositions)],
   ["GET", /^\/api\/customer-requests$/, () => list(customerRequests())],
   [null, /^\/api\/skus$/, () => list(skus)],
   [null, /^\/api\/products$/, () => list(products)],

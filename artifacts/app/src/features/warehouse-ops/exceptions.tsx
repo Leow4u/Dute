@@ -143,7 +143,7 @@ function severityLabel(severity: AlertSeverity) {
 function taskTypeLabel(type: string) {
   const labels: Record<string, string> = {
     receiving: "Recebimento",
-    putaway: "Putaway",
+    putaway: "Guarda",
     picking: "Picking",
     packing: "Packing",
     shipping: "Expedição",

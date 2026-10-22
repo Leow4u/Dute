@@ -157,6 +157,101 @@ export async function assertBarcodeAvailable(
   }
 }
 
+export function isArchivedCatalogRecord(
+  data: Record<string, unknown> | undefined,
+): boolean {
+  if (!data) return false;
+  return data.archived === true || text(data.status) === "archived";
+}
+
+/** SKU gravado no cartão (`cod_btg`, `sku_code` ou `cod_sku`). */
+export function catalogSkuCode(data: Record<string, unknown> | undefined): string {
+  if (!data) return "";
+  return text(data.cod_btg || data.sku_code || data.cod_sku);
+}
+
+function positiveQuantity(value: unknown): boolean {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) && parsed > 0;
+}
+
+/** Saldo no cartão ou no ledger. Arquivado com quantidade ainda conta. */
+export function catalogRecordHasQuantity(
+  data: Record<string, unknown> | undefined,
+): boolean {
+  if (!data) return false;
+  return (
+    positiveQuantity(data.estoque_btg) ||
+    positiveQuantity(data.estoque_atual) ||
+    positiveQuantity(data.estoque_reservado) ||
+    positiveQuantity(data.qty_on_hand) ||
+    positiveQuantity(data.qty_reserved)
+  );
+}
+
+export type ClientCodeRelease = "sku" | "stock" | "free";
+
+/**
+ * O que impede cadastrar de novo um código de cliente.
+ * `sku`: ainda há SKU ativo — use o cadastro.
+ * `stock`: o SKU ativo sumiu (lançamento cancelado ou item arquivado só no
+ * SKU), mas ficou quantidade.
+ * `free`: o cartão que sobrou não tem SKU ativo nem saldo. A contagem pode
+ * substituí-lo. O Estoque lista SKU, então esse cartão não aparece lá.
+ */
+export function clientCodeRelease(input: {
+  products: Array<Record<string, unknown> | undefined>;
+  skus: Array<Record<string, unknown> | undefined>;
+  balances?: Array<Record<string, unknown> | undefined>;
+}): ClientCodeRelease {
+  const skus = input.skus.filter((row): row is Record<string, unknown> => Boolean(row));
+  if (skus.some((row) => !isArchivedCatalogRecord(row) && catalogSkuCode(row))) {
+    return "sku";
+  }
+  const rows = [...input.products, ...input.skus, ...(input.balances ?? [])];
+  if (rows.some((row) => catalogRecordHasQuantity(row))) return "stock";
+  return "free";
+}
+
+export function clientCodeStillHasStockMessage(code: string): string {
+  return `O código ${code} ficou sem SKU ativo, mas ainda tem saldo. Corrija o saldo antes de cadastrar de novo.`;
+}
+
+/**
+ * Saldos do código, para a decisão acima. Uma igualdade por campo: não cria
+ * índice composto. O teto é de propósito baixo — um código da abertura não
+ * chega perto disso, e estourar o teto conta como saldo para não liberar
+ * no escuro.
+ */
+export async function readCatalogQuantities(
+  transaction: Transaction,
+  db: Firestore,
+  customerCode: string,
+  clientCode: string,
+  skuCodes: string[],
+): Promise<Record<string, unknown>[]> {
+  const unique = [...new Set(skuCodes.map((code) => text(code)).filter(Boolean))];
+  const snapshots = await Promise.all([
+    transaction.get(
+      db.collection("stock_balances").where("client_item_code", "==", clientCode).limit(20),
+    ),
+    ...unique.map((code) =>
+      transaction.get(
+        db
+          .collection("stock_balances")
+          .where("customer_code", "==", customerCode)
+          .where("sku_code", "==", code)
+          .limit(20),
+      ),
+    ),
+  ]);
+  const rows = snapshots.flatMap((snapshot) => snapshot.docs.map((doc) => doc.data()));
+  if (snapshots.some((snapshot) => snapshot.size >= 20)) {
+    rows.push({ qty_on_hand: 1 });
+  }
+  return rows;
+}
+
 /**
  * Produto e SKU novos nascem só no Receber e na Contagem, que geram o SKU do
  * cliente e conferem duplicidade. O cadastro avulso (mutateManagedEntity)

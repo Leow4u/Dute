@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { positionsForGuard, resolveGuardDestination } from "../src/lib/warehouse-positions";
 import { CUSTOMER, clientOverview, customerRequests, events, kits, recipients, resetDemoState, resolve, skus } from "./data";
 
 const call = (path: string, method = "GET", body: unknown = null) => {
@@ -105,6 +106,20 @@ describe("dados da demonstração", () => {
     expect(call("/api/demo/events", "POST", { name: "Vazio", items: [] }).ok).toBe(false);
     call(`/api/demo/events/${event.id}`, "DELETE");
     expect(events()).toHaveLength(before);
+  });
+
+  it("a guarda da demo tem prateleira ativa na zona do cliente de cada tarefa", () => {
+    const positions = call("/api/warehouse/positions?limit=2000").items;
+    const tasks = call("/api/warehouse/ops").queues.putaway.tasks;
+    expect(tasks.length).toBeGreaterThan(0);
+    for (const task of tasks) {
+      const shelves = positionsForGuard(positions, "", task.customer);
+      expect(shelves.length, task.id).toBeGreaterThan(0);
+      expect(resolveGuardDestination(shelves[0].code, positions, task.customer)).toEqual({ code: shelves[0].code });
+    }
+    const blocked = positions.filter((position: { status: string }) => position.status === "blocked");
+    expect(blocked).toHaveLength(1);
+    expect(resolveGuardDestination(blocked[0].code, positions, CUSTOMER)).toEqual({ problem: "Esta posição está bloqueada." });
   });
 
   it("restaurar volta ao roteiro original", () => {

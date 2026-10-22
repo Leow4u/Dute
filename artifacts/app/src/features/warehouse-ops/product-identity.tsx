@@ -59,11 +59,13 @@ export function NewProductNotice({
   confirmed,
   disabled = false,
   note,
+  title,
   onToggle,
 }: {
   confirmed: boolean;
   disabled?: boolean;
   note: string;
+  title?: string;
   onToggle: () => void;
 }) {
   const Icon = confirmed ? CheckCircle2 : PackageSearch;
@@ -73,7 +75,7 @@ export function NewProductNotice({
         <div className="flex min-w-0 items-start gap-2">
           <Icon className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
           <div>
-            <p className="text-sm font-medium text-foreground">{confirmed ? "Produto novo confirmado" : "Produto não localizado pelo código informado"}</p>
+            <p className="text-sm font-medium text-foreground">{confirmed ? "Produto novo confirmado" : title ?? "Produto não localizado pelo código informado"}</p>
             <p className="mt-1 text-xs text-muted-foreground">{note}</p>
           </div>
         </div>

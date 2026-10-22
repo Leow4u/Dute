@@ -76,6 +76,14 @@ async function advance(
   );
 }
 
+/** Cartões apagados que o único evento do tipo registrou, ordenados. */
+async function deletedCatalogDocs(type: string) {
+  const events = await db.collection("events").where("type", "==", type).get();
+  assert.equal(events.size, 1);
+  const docs = events.docs[0]!.data().payload?.deleted_catalog_docs;
+  return docs === undefined ? undefined : [...(docs as string[])].sort();
+}
+
 type OpeningCountInput = Parameters<typeof recordCycleCountTransaction>[1];
 
 function openingCountInput(
@@ -2460,6 +2468,267 @@ describe("integridade de reservas e agregados de catálogo", () => {
     assert.equal(sku.data()?.archived, false);
     assert.equal(sku.data()?.status, "active");
   });
+
+  it("remover a linha apaga também o cartão solto do mesmo código do cliente", async () => {
+    await clearFirestore();
+    const session = await createOpeningInventorySessionTransaction(
+      db,
+      {
+        customer_code: "BTG Pactual",
+        reference: "INVENTARIO-ABERTURA-CARTAO-SOLTO",
+        idempotency_key: "opening-session-stray-product",
+      },
+      actor,
+    );
+    const sessionId = String(session.session_id);
+    const input = openingCountInput(sessionId, {
+      idempotency_key: "opening-count-stray-product",
+    });
+    await recordCycleCountTransaction(db, input, actor);
+    await db.collection("products").doc("product_orfao_cliente_open").set({
+      id: "product_orfao_cliente_open",
+      customer_code: "BTG Pactual",
+      cod_cliente: input.client_item_code,
+      cod_cliente_key: input.client_item_code,
+      produto: "Cartão que sobrou do cancelamento",
+      status: "active",
+      archived: false,
+      estoque_btg: 0,
+    });
+    const linhas = await db
+      .collection("opening_inventory_lines")
+      .where("session_id", "==", sessionId)
+      .get();
+    await removeOpeningInventoryLineTransaction(
+      db,
+      {
+        customer_code: "BTG Pactual",
+        session_id: sessionId,
+        opening_line_id: String(linhas.docs[0]!.id),
+        idempotency_key: "opening-remove-stray-product",
+      },
+      actor,
+    );
+    assert.equal((await db.collection("products").get()).size, 0);
+    assert.equal((await db.collection("skus").get()).size, 0);
+    assert.equal(await deletedCatalogDocs("inventory.opening_counted"), undefined);
+    assert.deepEqual(await deletedCatalogDocs("inventory.opening_line_removed"), [
+      "products/CLIENTE-OPEN-001",
+      "products/product_orfao_cliente_open",
+      "skus/BTG-000001",
+    ]);
+  });
+
+  it("produto novo não apaga o SKU arquivado de outro id que ainda tem saldo", async () => {
+    await clearFirestore();
+    const session = await createOpeningInventorySessionTransaction(
+      db,
+      {
+        customer_code: "BTG Pactual",
+        reference: "INVENTARIO-ABERTURA-SKU-SOLTO-SALDO",
+        idempotency_key: "opening-session-stray-sku-stock",
+      },
+      actor,
+    );
+    const input = openingCountInput(String(session.session_id), {
+      idempotency_key: "opening-count-stray-sku-stock",
+    });
+    const identity = {
+      customer_code: "BTG Pactual",
+      cod_cliente: input.client_item_code,
+      cod_cliente_key: input.client_item_code,
+      archived: true,
+      status: "archived",
+    };
+    await db.collection("products").doc(input.client_item_code!).set({
+      id: input.client_item_code,
+      ...identity,
+      estoque_btg: 0,
+    });
+    await db.collection("skus").doc("sku_legado_cliente_open").set({
+      id: "sku_legado_cliente_open",
+      ...identity,
+      cod_btg: "BTG-000050",
+      sku_code: "BTG-000050",
+      sku_code_key: "BTG-000050",
+      estoque_atual: 0,
+    });
+    await db.collection("stock_balances").doc("bal-sku-legado").set({
+      customer_code: "BTG Pactual",
+      sku_code: "BTG-000050",
+      client_item_code: input.client_item_code,
+      location_id: "RUA-B/PRAT-02",
+      qty_on_hand: 3,
+      qty_reserved: 0,
+    });
+
+    await assert.rejects(
+      recordCycleCountTransaction(db, input, actor),
+      /ainda tem saldo/,
+    );
+    assert.equal(
+      (await db.collection("skus").doc("sku_legado_cliente_open").get()).exists,
+      true,
+    );
+    assert.equal((await db.collection("skus").doc("BTG-000050").get()).exists, false);
+  });
+
+  it("remover a linha de outro cliente não apaga cartão legado nem cartão solto com saldo no cadastro", async () => {
+    await clearFirestore();
+    await db.collection("customers").doc("Cliente_Solto").set({
+      code: "Cliente Solto",
+      customer_code: "Cliente Solto",
+      name: "Cliente Solto",
+      sku_prefix: "SOL",
+      status: "active",
+    });
+    const session = await createOpeningInventorySessionTransaction(
+      db,
+      {
+        customer_code: "Cliente Solto",
+        reference: "INVENTARIO-ABERTURA-CARTAO-ALHEIO",
+        idempotency_key: "opening-session-stray-owner",
+      },
+      actor,
+    );
+    const sessionId = String(session.session_id);
+    const input = openingCountInput(sessionId, {
+      customer_code: "Cliente Solto",
+      client_item_code: "SOLTO-OPEN-001",
+      idempotency_key: "opening-count-stray-owner",
+    });
+    const counted = await recordCycleCountTransaction(db, input, actor);
+    assert.equal(counted.sku_code, "SOL-000001");
+    const sameCode = {
+      cod_cliente: "SOLTO-OPEN-001",
+      cod_cliente_key: "SOLTO-OPEN-001",
+      status: "active",
+      archived: false,
+    };
+    // Sem customer_code o registro é do cliente legado (customer-scope.ts).
+    await db.collection("products").doc("product_legado_sem_dono").set({
+      ...sameCode,
+      estoque_btg: 0,
+    });
+    await db.collection("products").doc("product_solto_com_saldo").set({
+      ...sameCode,
+      customer_code: "Cliente Solto",
+      estoque_btg: 4,
+    });
+    await db.collection("products").doc("product_solto_sem_saldo").set({
+      ...sameCode,
+      customer_code: "Cliente Solto",
+      estoque_btg: 0,
+    });
+    const linhas = await db
+      .collection("opening_inventory_lines")
+      .where("session_id", "==", sessionId)
+      .get();
+    await removeOpeningInventoryLineTransaction(
+      db,
+      {
+        customer_code: "Cliente Solto",
+        session_id: sessionId,
+        opening_line_id: String(linhas.docs[0]!.id),
+        idempotency_key: "opening-remove-stray-owner",
+      },
+      actor,
+    );
+    const products = await db.collection("products").get();
+    assert.deepEqual(
+      products.docs.map((doc) => doc.id).sort(),
+      ["product_legado_sem_dono", "product_solto_com_saldo"],
+    );
+    assert.equal((await db.collection("skus").get()).size, 0);
+    assert.deepEqual(await deletedCatalogDocs("inventory.opening_line_removed"), [
+      "products/SOLTO-OPEN-001",
+      "products/product_solto_sem_saldo",
+      "skus/SOL-000001",
+    ]);
+  });
+
+  it("remover a linha não apaga o cartão de produto solto cujo código ainda tem saldo no ledger", async () => {
+    await clearFirestore();
+    await db.collection("customers").doc("Cliente_Solto").set({
+      code: "Cliente Solto",
+      customer_code: "Cliente Solto",
+      name: "Cliente Solto",
+      sku_prefix: "SOL",
+      status: "active",
+    });
+    const session = await createOpeningInventorySessionTransaction(
+      db,
+      {
+        customer_code: "Cliente Solto",
+        reference: "INVENTARIO-ABERTURA-CARTAO-SOLTO-LEDGER",
+        idempotency_key: "opening-session-stray-ledger",
+      },
+      actor,
+    );
+    const sessionId = String(session.session_id);
+    const input = openingCountInput(sessionId, {
+      customer_code: "Cliente Solto",
+      client_item_code: "SOLTO-OPEN-001",
+      idempotency_key: "opening-count-stray-ledger",
+    });
+    const counted = await recordCycleCountTransaction(db, input, actor);
+    assert.equal(counted.sku_code, "SOL-000001");
+    const sameCode = {
+      customer_code: "Cliente Solto",
+      cod_cliente: "SOLTO-OPEN-001",
+      cod_cliente_key: "SOLTO-OPEN-001",
+    };
+    // O cartão de produto não guarda SKU: o saldo dele no ledger é o do
+    // código do cliente, aqui sob um SKU arquivado de outro id.
+    await db.collection("products").doc("product_solto_sem_saldo").set({
+      ...sameCode,
+      status: "active",
+      archived: false,
+      estoque_btg: 0,
+    });
+    await db.collection("skus").doc("sku_solto_com_saldo").set({
+      ...sameCode,
+      archived: true,
+      status: "archived",
+      cod_btg: "SOL-000077",
+      sku_code: "SOL-000077",
+      estoque_atual: 0,
+    });
+    await db.collection("stock_balances").doc("bal-sku-solto").set({
+      customer_code: "Cliente Solto",
+      sku_code: "SOL-000077",
+      client_item_code: "SOLTO-OPEN-001",
+      location_id: "RUA-B/PRAT-02",
+      qty_on_hand: 2,
+      qty_reserved: 0,
+    });
+    const linhas = await db
+      .collection("opening_inventory_lines")
+      .where("session_id", "==", sessionId)
+      .get();
+    await removeOpeningInventoryLineTransaction(
+      db,
+      {
+        customer_code: "Cliente Solto",
+        session_id: sessionId,
+        opening_line_id: String(linhas.docs[0]!.id),
+        idempotency_key: "opening-remove-stray-ledger",
+      },
+      actor,
+    );
+    const products = await db.collection("products").get();
+    assert.deepEqual(products.docs.map((doc) => doc.id), ["product_solto_sem_saldo"]);
+    const skus = await db.collection("skus").get();
+    assert.deepEqual(skus.docs.map((doc) => doc.id), ["sku_solto_com_saldo"]);
+    assert.equal(
+      (await db.collection("stock_balances").doc("bal-sku-solto").get()).data()?.qty_on_hand,
+      2,
+    );
+    assert.deepEqual(await deletedCatalogDocs("inventory.opening_line_removed"), [
+      "products/SOLTO-OPEN-001",
+      "skus/SOL-000001",
+    ]);
+  });
 });
 
 describe("número do pedido e cancelamento pelo cliente", () => {
@@ -2802,5 +3071,242 @@ describe("fotos do item", () => {
       ),
       /endereço inválido/,
     );
+  });
+});
+
+describe("guarda numa posição cadastrada", () => {
+  const BTG = "BTG Pactual";
+  const SKU = "BTG-GUARDA-1";
+
+  function position(code: string, shelf: number, customer: string, status: string) {
+    return db.collection("warehouse_positions").doc(code).set({
+      code,
+      aisle: code.split("-")[0],
+      shelf,
+      length_m: 1.8,
+      depth_m: 0.75,
+      height_m: 0.5,
+      sequence: shelf,
+      customer_code: customer,
+      status,
+    });
+  }
+
+  // A tarefa como o recebimento grava ao concluir: planejada, saindo do RECEBIMENTO.
+  function putawayTask(taskId: string, quantity: number, customer = BTG, sku = SKU) {
+    return db.collection("putaway_tasks").doc(taskId).set({
+      id: taskId,
+      customer_code: customer,
+      receipt_id: "inb_guarda_1",
+      inbound_item_id: `${taskId}_item`,
+      sku_code: sku,
+      client_item_code: "ITEM-GUARDA",
+      product_name: "Caneca de teste da guarda",
+      source_location_id: "RECEBIMENTO",
+      quantity,
+      total_units: quantity,
+      status: "planned",
+      priority: "normal",
+      title: "Guardar Caneca de teste da guarda",
+      source: "wms_receiving",
+    });
+  }
+
+  async function seedGuard() {
+    await clearFirestore();
+    await Promise.all([
+      position("A-01", 1, BTG, "active"),
+      position("A-02", 2, BTG, "blocked"),
+      position("C-01", 1, "Outro Cliente", "active"),
+      db.collection("stock_balances").doc("bal-guarda-recebimento").set({
+        id: "bal-guarda-recebimento",
+        customer_code: BTG,
+        sku_code: SKU,
+        client_item_code: "ITEM-GUARDA",
+        product_name: "Caneca de teste da guarda",
+        location_id: "RECEBIMENTO",
+        qty_on_hand: 10,
+        qty_reserved: 0,
+        qty_available: 10,
+        unit_cost: 5,
+      }),
+    ]);
+  }
+
+  function guardOperation(destination: string, quantity: number) {
+    return {
+      source_location_id: "RECEBIMENTO",
+      destination_location_id: destination,
+      location_id: destination,
+      quantity,
+    };
+  }
+
+  async function balanceAt(locationId: string, customer = BTG, sku = SKU) {
+    const snapshot = await db
+      .collection("stock_balances")
+      .where("customer_code", "==", customer)
+      .where("sku_code", "==", sku)
+      .where("location_id", "==", locationId)
+      .get();
+    return snapshot.docs.map((document) => document.data());
+  }
+
+  it("com a posição da zona, a guarda planejada conclui de uma vez e move o saldo", async () => {
+    await seedGuard();
+    await Promise.all([putawayTask("put_guarda_1", 6), putawayTask("put_guarda_2", 4)]);
+
+    const first = (await advance("putaway:put_guarda_1", "planned", guardOperation("A-01", 6))) as Record<string, unknown>;
+    // Bipado em minúsculas, grava o código da etiqueta.
+    const second = (await advance("putaway:put_guarda_2", "planned", guardOperation("a-01", 4))) as Record<string, unknown>;
+    assert.equal(first.status, "completed");
+    assert.equal(second.status, "completed");
+
+    for (const [taskId, quantity] of [["put_guarda_1", 6], ["put_guarda_2", 4]] as const) {
+      const task = (await db.collection("putaway_tasks").doc(taskId).get()).data();
+      assert.equal(task?.status, "completed");
+      assert.equal(task?.destination_location_id, "A-01");
+      assert.equal(task?.location_id, "A-01");
+
+      const movements = await db.collection("movements").where("putaway_task_id", "==", taskId).get();
+      const byKind = Object.fromEntries(movements.docs.map((document) => [document.get("movement_kind"), document.data()]));
+      assert.equal(movements.size, 2);
+      assert.equal(byKind.putaway_transfer_out?.location_id, "RECEBIMENTO");
+      assert.equal(byKind.putaway_transfer_out?.tipo_mov, "SAIDA");
+      assert.equal(byKind.putaway_transfer_out?.quantity, quantity);
+      assert.equal(byKind.putaway_transfer_in?.location_id, "A-01");
+      assert.equal(byKind.putaway_transfer_in?.tipo_mov, "ENTRADA");
+      assert.equal(byKind.putaway_transfer_in?.quantity, quantity);
+
+      const events = await db
+        .collection("events")
+        .where("entity_id", "==", taskId)
+        .where("type", "==", "putaway.completed")
+        .get();
+      assert.equal(events.size, 1);
+      assert.equal(events.docs[0].get("payload.before_status"), "planned");
+      assert.equal(events.docs[0].get("payload.destination_location_id"), "A-01");
+    }
+
+    const [source] = await balanceAt("RECEBIMENTO");
+    assert.equal(source?.qty_on_hand, 0);
+    const destination = await balanceAt("A-01");
+    assert.equal(destination.length, 1);
+    assert.equal(destination[0]?.qty_on_hand, 10);
+    assert.equal(destination[0]?.qty_available, 10);
+  });
+
+  it("recusa posição bloqueada, desconhecida e de outra zona sem mover nada", async () => {
+    await seedGuard();
+    await putawayTask("put_guarda_3", 10);
+
+    const refused: Array<[string, RegExp]> = [
+      ["A-02", /^Esta posição está bloqueada\.$/],
+      ["Z-99", /^Escolha uma posição cadastrada\.$/],
+      ["C-01", /^Esta posição não é da zona de BTG Pactual\.$/],
+      ["c-01", /^Esta posição não é da zona de BTG Pactual\.$/],
+    ];
+    for (const [destination, message] of refused) {
+      await assert.rejects(advance("putaway:put_guarda_3", "planned", guardOperation(destination, 10)), {
+        code: "failed-precondition",
+        message,
+      });
+    }
+
+    const task = (await db.collection("putaway_tasks").doc("put_guarda_3").get()).data();
+    assert.equal(task?.status, "planned");
+    assert.equal(task?.destination_location_id, undefined);
+    const [source] = await balanceAt("RECEBIMENTO");
+    assert.equal(source?.qty_on_hand, 10);
+    for (const code of ["A-02", "Z-99", "C-01"]) {
+      assert.deepEqual(await balanceAt(code), []);
+    }
+    assert.equal((await db.collection("movements").where("putaway_task_id", "==", "put_guarda_3").get()).size, 0);
+    assert.equal((await db.collection("events").where("entity_id", "==", "put_guarda_3").get()).size, 0);
+    assert.equal((await db.collection("operational_operations").get()).size, 0);
+  });
+
+  it("usa a zona do cliente da tarefa, não a de quem opera", async () => {
+    const OUTRO = "Outro Cliente";
+    const OUTRO_SKU = "OUT-GUARDA-1";
+    await seedGuard();
+    await Promise.all([
+      putawayTask("put_guarda_outro", 3, OUTRO, OUTRO_SKU),
+      db.collection("stock_balances").doc("bal-guarda-outro-recebimento").set({
+        id: "bal-guarda-outro-recebimento",
+        customer_code: OUTRO,
+        sku_code: OUTRO_SKU,
+        client_item_code: "ITEM-GUARDA",
+        product_name: "Caneca de teste da guarda",
+        location_id: "RECEBIMENTO",
+        qty_on_hand: 3,
+        qty_reserved: 0,
+        qty_available: 3,
+        unit_cost: 5,
+      }),
+    ]);
+
+    // O ator é da BTG: a prateleira dela não serve para a tarefa de outro cliente.
+    await assert.rejects(advance("putaway:put_guarda_outro", "planned", guardOperation("A-01", 3)), {
+      code: "failed-precondition",
+      message: /^Esta posição não é da zona de Outro Cliente\.$/,
+    });
+    assert.equal((await db.collection("putaway_tasks").doc("put_guarda_outro").get()).get("status"), "planned");
+    assert.deepEqual(await balanceAt("A-01", OUTRO, OUTRO_SKU), []);
+
+    const result = (await advance("putaway:put_guarda_outro", "planned", guardOperation("C-01", 3))) as Record<string, unknown>;
+    assert.equal(result.status, "completed");
+    const task = (await db.collection("putaway_tasks").doc("put_guarda_outro").get()).data();
+    assert.equal(task?.status, "completed");
+    assert.equal(task?.destination_location_id, "C-01");
+
+    const [source] = await balanceAt("RECEBIMENTO", OUTRO, OUTRO_SKU);
+    assert.equal(source?.qty_on_hand, 0);
+    const shelf = await balanceAt("C-01", OUTRO, OUTRO_SKU);
+    assert.equal(shelf.length, 1);
+    assert.equal(shelf[0]?.qty_on_hand, 3);
+    // O saldo da BTG não se mexe.
+    const [btgSource] = await balanceAt("RECEBIMENTO");
+    assert.equal(btgSource?.qty_on_hand, 10);
+    assert.deepEqual(await balanceAt("C-01"), []);
+  });
+
+  it("recusa origem igual ao destino mesmo com o destino em minúsculas, sem inflar o saldo", async () => {
+    await seedGuard();
+    await Promise.all([
+      putawayTask("put_guarda_4", 5),
+      db.collection("stock_balances").doc("bal-guarda-a01").set({
+        id: "bal-guarda-a01",
+        customer_code: BTG,
+        sku_code: SKU,
+        client_item_code: "ITEM-GUARDA",
+        product_name: "Caneca de teste da guarda",
+        location_id: "A-01",
+        qty_on_hand: 10,
+        qty_reserved: 0,
+        qty_available: 10,
+        unit_cost: 5,
+      }),
+    ]);
+
+    await assert.rejects(
+      advance("putaway:put_guarda_4", "planned", {
+        source_location_id: "A-01",
+        destination_location_id: "a-01",
+        location_id: "a-01",
+        quantity: 5,
+      }),
+      { code: "failed-precondition", message: /^Endereço de origem e destino não podem ser iguais\.$/ },
+    );
+
+    const task = (await db.collection("putaway_tasks").doc("put_guarda_4").get()).data();
+    assert.equal(task?.status, "planned");
+    const shelf = await balanceAt("A-01");
+    assert.equal(shelf.length, 1);
+    assert.equal(shelf[0]?.qty_on_hand, 10);
+    const [source] = await balanceAt("RECEBIMENTO");
+    assert.equal(source?.qty_on_hand, 10);
+    assert.equal((await db.collection("movements").where("putaway_task_id", "==", "put_guarda_4").get()).size, 0);
+    assert.equal((await db.collection("events").where("entity_id", "==", "put_guarda_4").get()).size, 0);
   });
 });

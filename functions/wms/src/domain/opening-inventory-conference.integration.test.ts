@@ -241,6 +241,87 @@ describe("inventário de abertura: conferir antes de guardar", () => {
     } as RecordCycleCountInput, actor), /fechada|conferência/);
   });
 
+  it("recadastra código cujo cartão ficou sem SKU e reaproveita o SKU arquivado", async () => {
+    const clientCode = "A.01.0655.005.G";
+    const { code } = await createBox();
+    await db.collection("products").doc("product_orfao_a010655").set({
+      id: "product_orfao_a010655",
+      customer_code: CUSTOMER,
+      cod_cliente: clientCode,
+      cod_cliente_key: clientCode,
+      produto: "Camisa cancelada",
+      status: "active",
+      archived: false,
+      estoque_btg: 0,
+    });
+    await db.collection("skus").doc("BTG-000099").set({
+      id: "BTG-000099",
+      customer_code: CUSTOMER,
+      cod_cliente: clientCode,
+      cod_cliente_key: clientCode,
+      cod_btg: "BTG-000099",
+      sku_code: "BTG-000099",
+      sku_code_key: "BTG-000099",
+      archived: true,
+      status: "archived",
+      estoque_atual: 0,
+      estoque_reservado: 0,
+    });
+    await save(code, { client_item_code: "a.01.0655.005.g", product_name: "Camisa social G" });
+    await change(code, "review");
+    const stored = await storeOpeningConferenceBox(db, await storeInput(code), actor);
+    assert.equal(stored.box.status, "stored");
+    const stock = await committedStock();
+    assert.equal(stock.products.length, 1);
+    assert.equal(stock.products[0]!.id, clientCode);
+    assert.equal(stock.products[0]!.archived, false);
+    assert.equal(stock.products[0]!.produto, "Camisa social G");
+    assert.equal(stock.skus.length, 1);
+    assert.equal(stock.skus[0]!.id, "BTG-000099");
+    assert.equal(stock.skus[0]!.archived, false);
+    assert.equal(stock.skus[0]!.cod_cliente, clientCode);
+    assert.equal(stock.balances[0]!.qty_on_hand, 3);
+    const counted = (await rows("events")).filter((row) => row.type === "inventory.opening_counted");
+    assert.equal(counted.length, 1);
+    assert.deepEqual((counted[0]!.payload as Row).deleted_catalog_docs, ["products/product_orfao_a010655"]);
+  });
+
+  it("não recadastra código sem SKU que ainda tem saldo", async () => {
+    const { code } = await createBox();
+    await db.collection("products").doc("A.01.0655.005.GG").set({
+      customer_code: CUSTOMER,
+      cod_cliente: "A.01.0655.005.GG",
+      cod_cliente_key: "A.01.0655.005.GG",
+      status: "active",
+      archived: false,
+      estoque_btg: 4,
+    });
+    await assert.rejects(
+      save(code, { client_item_code: "A.01.0655.005.GG" }),
+      /ainda tem saldo/,
+    );
+    await db.collection("products").doc("A.01.0655.005.GG").set({
+      customer_code: CUSTOMER,
+      cod_cliente: "A.01.0655.005.GG",
+      cod_cliente_key: "A.01.0655.005.GG",
+      status: "active",
+      archived: false,
+      estoque_btg: 0,
+    });
+    await db.collection("stock_balances").doc("sobra-gg").set({
+      customer_code: CUSTOMER,
+      sku_code: "BTG-000088",
+      client_item_code: "A.01.0655.005.GG",
+      location_id: "A-01",
+      qty_on_hand: 2,
+      qty_reserved: 0,
+    });
+    await assert.rejects(
+      save(code, { client_item_code: "A.01.0655.005.GG" }),
+      /ainda tem saldo/,
+    );
+  });
+
   it("valida conflito de catálogo e saldo recebido antes de reservar espaço", async () => {
     const { code } = await createBox();
     const line = await save(code);
