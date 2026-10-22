@@ -104,6 +104,16 @@ export function resolveGuardDestination(
   return { code: String(match.code).trim().toUpperCase() };
 }
 
+/** Destino do que está no campo da guarda: o código da prateleira válida, ou vazio. */
+export function guardQueryDestination(
+  query: string,
+  positions: Array<{ code?: string | null; status?: string | null; customer_code?: string | null }>,
+  customerCode: string,
+): string {
+  const resolved = resolveGuardDestination(query, positions, customerCode);
+  return "code" in resolved ? resolved.code : "";
+}
+
 /** O mesmo código que o backend monta: rua em maiúscula e prateleira com dois dígitos. */
 export function positionCode(aisle: string, shelf: number | string) {
   const number = Number(shelf);

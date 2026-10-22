@@ -9,6 +9,7 @@ import {
   parseDecimal,
   positionCode,
   positionsForGuard,
+  guardQueryDestination,
   resolveGuardDestination,
   sortPositions,
   summarizeZones,
@@ -101,6 +102,13 @@ describe("ordem e zonas", () => {
     expect(resolveGuardDestination("Z-99", positions, "BTG Pactual")).toEqual({ problem: "Escolha uma posição cadastrada." });
     expect(resolveGuardDestination("A-02", positions, "BTG Pactual")).toEqual({ problem: "Esta posição está bloqueada." });
     expect(resolveGuardDestination("B-01", positions, "BTG Pactual")).toEqual({ problem: "Esta posição está em verificação." });
+  });
+
+  it("o código bipado antes de as posições chegarem só vale com elas", () => {
+    const positions = [{ code: "A-01", status: "active", customer_code: "BTG Pactual" }];
+    expect(guardQueryDestination("a-01", [], "BTG Pactual")).toBe("");
+    expect(guardQueryDestination("a-01", positions, "BTG Pactual")).toBe("A-01");
+    expect(guardQueryDestination("a-0", positions, "BTG Pactual")).toBe("");
   });
 
   it("a guarda só usa a zona do cliente da tarefa", () => {

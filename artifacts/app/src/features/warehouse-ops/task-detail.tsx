@@ -54,6 +54,7 @@ import { LEGACY_CUSTOMER_CODE } from "@/lib/active-customer";
 import {
   positionsForGuard,
   resolveGuardDestination,
+  guardQueryDestination,
   type GuardPosition,
 } from "@/lib/warehouse-positions";
 import { cn } from "@/lib/utils";
@@ -481,12 +482,12 @@ export function PutawayDetailSection({
           onChange={(event) => {
             const next = event.target.value;
             onQueryChange(next);
-            const resolved = resolveGuardDestination(next, positions, customerCode);
+            const code = guardQueryDestination(next, positions, customerCode);
             onOperationChange({
               ...operation,
               source_location_id: sourceLocation,
-              destination_location_id: "code" in resolved ? resolved.code : "",
-              location_id: "code" in resolved ? resolved.code : "",
+              destination_location_id: code,
+              location_id: code,
               quantity: quantity || undefined,
             });
           }}
@@ -1524,6 +1525,22 @@ export function TaskDetailPanel({
     // A busca recomeça com o destino (vazio) só na troca de tarefa; digitar e apagar mantém o que o operador escreveu.
     setPutawayQuery("");
   }, [activeTask?.id]);
+
+  // Código bipado antes de as posições chegarem vale quando elas chegam.
+  useEffect(() => {
+    if (!isPutawayTask || !positionsQuery.data || !putawayQuery.trim()) return;
+    const code = guardQueryDestination(
+      putawayQuery,
+      positionsQuery.data.items ?? [],
+      coerceText(activeTask?.customer) || LEGACY_CUSTOMER_CODE,
+    );
+    if (!code) return;
+    setPutawayOperation((current) =>
+      coerceText(current.destination_location_id, current.location_id) === code
+        ? current
+        : { ...current, destination_location_id: code, location_id: code },
+    );
+  }, [positionsQuery.data]);
 
   if (!entry) {
     return (
