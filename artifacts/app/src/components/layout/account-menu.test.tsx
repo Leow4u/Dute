@@ -12,27 +12,28 @@ const MENU = readFileSync(new URL("./account-menu.tsx", import.meta.url), "utf8"
 const APP = readFileSync(new URL("./app-layout.tsx", import.meta.url), "utf8");
 const SHELL = readFileSync(new URL("./comercial-shell.tsx", import.meta.url), "utf8");
 
+// Comercial e plataforma entram explícitos: o CI roda o vitest sem VITE_FIREBASE_PROJECT_ID.
 describe("atalhos do menu da conta", () => {
   it("o owner vê Armazenagem, Comercial e Financeiro, e o aberto fica marcado", () => {
-    const noComercial = atalhosDaConta("owner", null, "/comercial");
+    const noComercial = atalhosDaConta("owner", null, "/comercial", true, true);
     expect(noComercial.map((item) => [item.label, item.href, item.atual])).toEqual([
       ["Armazenagem", "/dashboard", false],
       ["Comercial", "/comercial", true],
       ["Financeiro", "/faturamento", false],
     ]);
 
-    const noFinanceiro = atalhosDaConta("owner", null, "/faturamento/fatura");
+    const noFinanceiro = atalhosDaConta("owner", null, "/faturamento/fatura", true, true);
     expect(noFinanceiro.find((item) => item.atual)?.key).toBe("financeiro");
 
-    const naArmazenagem = atalhosDaConta("admin", null, "/estoque/mapa");
+    const naArmazenagem = atalhosDaConta("admin", null, "/estoque/mapa", true, true);
     expect(naArmazenagem.find((item) => item.atual)?.key).toBe("wms");
 
-    const naConfiguracao = atalhosDaConta("owner", null, "/configuracoes");
+    const naConfiguracao = atalhosDaConta("owner", null, "/configuracoes", true, true);
     expect(naConfiguracao.every((item) => !item.atual)).toBe(true);
   });
 
   it("sem o Comercial o owner ainda troca entre Armazenagem e Financeiro", () => {
-    expect(atalhosDaConta("owner", null, "/dashboard", false).map((item) => item.label)).toEqual([
+    expect(atalhosDaConta("owner", null, "/dashboard", false, true).map((item) => item.label)).toEqual([
       "Armazenagem",
       "Financeiro",
     ]);
@@ -40,11 +41,11 @@ describe("atalhos do menu da conta", () => {
 
   it("quem tem um módulo só, ou a plataforma desligada, não vê a lista", () => {
     for (const role of ["comercial", "financeiro", "wms", "interno", "suporte"] as const) {
-      expect(atalhosDaConta(role, null, "/dashboard"), role).toEqual([]);
+      expect(atalhosDaConta(role, null, "/dashboard", true, true), role).toEqual([]);
     }
-    expect(atalhosDaConta("cliente", { modules: ["wms", "operacao", "financeiro"] }, "/portal")).toEqual([]);
+    expect(atalhosDaConta("cliente", { modules: ["wms", "operacao", "financeiro"] }, "/portal", true, true)).toEqual([]);
     expect(atalhosDaConta("owner", null, "/comercial", true, false)).toEqual([]);
-    expect(atalhosDaConta(null, null, "/dashboard")).toEqual([]);
+    expect(atalhosDaConta(null, null, "/dashboard", true, true)).toEqual([]);
   });
 });
 
@@ -63,7 +64,7 @@ describe("cabeçalho da conta", () => {
   });
 
   it("o link do módulo leva direto à casa e marca o aberto", () => {
-    const [armazenagem, comercial] = atalhosDaConta("owner", null, "/comercial");
+    const [armazenagem, comercial] = atalhosDaConta("owner", null, "/comercial", true, true);
     const html = renderToStaticMarkup(
       <Router ssrPath="/comercial">
         <ModuloLink atalho={armazenagem} />
