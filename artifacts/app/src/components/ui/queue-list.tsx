@@ -29,7 +29,7 @@ export function QueueGroup({
   title: string;
   hint?: string;
   count: number;
-  empty: string;
+  empty: ReactNode;
   children: ReactNode;
 }) {
   return (

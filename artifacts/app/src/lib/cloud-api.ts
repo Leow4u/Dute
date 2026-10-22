@@ -80,6 +80,7 @@ const collectionNames = {
   clientInvoices: "client_invoices",
   clientDocuments: "client_documents",
   clientProfiles: "client_profiles",
+  clientPortalStatus: "client_portal_status",
   inboundReceipts: "inbound_receipts",
   inboundItems: "inbound_items",
   returns: "returns",
@@ -1708,6 +1709,16 @@ async function getClientOverview() {
   const invoiceItems = sortByDateDesc(periods, "competencia").slice(0, 6);
   const alertItems = sortByDateDesc(customerAlerts, "created_at").slice(0, 6);
 
+  let outboundBlocked = false;
+  if (firestore) {
+    try {
+      const portalStatus = await getDoc(doc(firestore, collectionNames.clientPortalStatus, customerCode));
+      outboundBlocked = portalStatus.exists() && portalStatus.data()?.outbound_blocked === true;
+    } catch {
+      outboundBlocked = false;
+    }
+  }
+
   return {
     updated_at: new Date().toISOString(),
     customer: {
@@ -1716,6 +1727,7 @@ async function getClientOverview() {
       role: profile.role,
     },
     inventory: {
+      outbound_blocked: outboundBlocked,
       total_skus: balances.length || skus.length,
       total_pieces: totalPieces,
       available_pieces: balances.reduce<number>(
