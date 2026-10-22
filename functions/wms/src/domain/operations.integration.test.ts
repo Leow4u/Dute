@@ -2460,6 +2460,50 @@ describe("integridade de reservas e agregados de catálogo", () => {
     assert.equal(sku.data()?.archived, false);
     assert.equal(sku.data()?.status, "active");
   });
+
+  it("remover a linha apaga também o cartão solto do mesmo código do cliente", async () => {
+    await clearFirestore();
+    const session = await createOpeningInventorySessionTransaction(
+      db,
+      {
+        customer_code: "BTG Pactual",
+        reference: "INVENTARIO-ABERTURA-CARTAO-SOLTO",
+        idempotency_key: "opening-session-stray-product",
+      },
+      actor,
+    );
+    const sessionId = String(session.session_id);
+    const input = openingCountInput(sessionId, {
+      idempotency_key: "opening-count-stray-product",
+    });
+    await recordCycleCountTransaction(db, input, actor);
+    await db.collection("products").doc("product_orfao_cliente_open").set({
+      id: "product_orfao_cliente_open",
+      customer_code: "BTG Pactual",
+      cod_cliente: input.client_item_code,
+      cod_cliente_key: input.client_item_code,
+      produto: "Cartão que sobrou do cancelamento",
+      status: "active",
+      archived: false,
+      estoque_btg: 0,
+    });
+    const linhas = await db
+      .collection("opening_inventory_lines")
+      .where("session_id", "==", sessionId)
+      .get();
+    await removeOpeningInventoryLineTransaction(
+      db,
+      {
+        customer_code: "BTG Pactual",
+        session_id: sessionId,
+        opening_line_id: String(linhas.docs[0]!.id),
+        idempotency_key: "opening-remove-stray-product",
+      },
+      actor,
+    );
+    assert.equal((await db.collection("products").get()).size, 0);
+    assert.equal((await db.collection("skus").get()).size, 0);
+  });
 });
 
 describe("número do pedido e cancelamento pelo cliente", () => {

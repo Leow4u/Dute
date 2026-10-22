@@ -3,6 +3,8 @@ import { describe, it } from "node:test";
 
 import {
   assertManagedCatalogCreateAllowed,
+  clientCodeRelease,
+  clientCodeStillHasStockMessage,
   formatSkuCode,
   normalizeBarcode,
 } from "./catalog-codes.js";
@@ -26,6 +28,59 @@ describe("código de barras", () => {
     assert.equal(normalizeBarcode(" 7891 0000 0001 "), "789100000001");
     assert.equal(normalizeBarcode("abc-1"), "ABC-1");
     assert.equal(normalizeBarcode(undefined), "");
+  });
+});
+
+describe("código de cliente sem SKU ativo", () => {
+  const product = {
+    cod_cliente: "A.01.0655.005.G",
+    status: "active",
+    archived: false,
+    estoque_btg: 0,
+  };
+
+  it("libera o recadastro quando só sobrou o cartão do produto", () => {
+    assert.equal(clientCodeRelease({ products: [product], skus: [] }), "free");
+    assert.equal(
+      clientCodeRelease({
+        products: [product],
+        skus: [{ ...product, cod_btg: "BTG-000010", archived: true, status: "archived", estoque_atual: 0 }],
+      }),
+      "free",
+    );
+  });
+
+  it("mantém o cadastro quando o SKU ativo existe", () => {
+    assert.equal(
+      clientCodeRelease({
+        products: [product],
+        skus: [{ cod_btg: "BTG-000010", archived: false, status: "active", estoque_atual: 0 }],
+      }),
+      "sku",
+    );
+  });
+
+  it("não libera código que ainda tem saldo, mesmo com o SKU arquivado", () => {
+    assert.equal(
+      clientCodeRelease({ products: [{ ...product, estoque_btg: 2 }], skus: [] }),
+      "stock",
+    );
+    assert.equal(
+      clientCodeRelease({
+        products: [product],
+        skus: [{ cod_btg: "BTG-000010", archived: true, status: "archived", estoque_atual: 3 }],
+      }),
+      "stock",
+    );
+    assert.equal(
+      clientCodeRelease({
+        products: [product],
+        skus: [],
+        balances: [{ qty_on_hand: 1, qty_reserved: 0 }],
+      }),
+      "stock",
+    );
+    assert.match(clientCodeStillHasStockMessage("A.01.0655.005.G"), /ainda tem saldo/);
   });
 });
 

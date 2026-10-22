@@ -15,8 +15,12 @@ import {
 } from "./customer-scope.js";
 import {
   assertBarcodeAvailable,
+  catalogSkuCode,
+  clientCodeRelease,
+  clientCodeStillHasStockMessage,
   normalizeBarcode,
   openSkuAllocator,
+  readCatalogQuantities,
   type SkuAllocator,
 } from "./catalog-codes.js";
 import {
@@ -1902,11 +1906,33 @@ export async function recordCycleCountTransaction(
           !snapshotIsArchived(productCodeSnapshot)) ||
         (Boolean(skuCodeSnapshot?.exists) &&
           !snapshotIsArchived(skuCodeSnapshot));
+      const catalogProducts = [
+        ...productRows.map((row) => row.data),
+        productCodeSnapshot?.exists ? productCodeSnapshot.data() : undefined,
+      ];
+      const catalogSkus = [
+        ...skuRows.map((row) => row.data),
+        skuCodeSnapshot?.exists ? skuCodeSnapshot.data() : undefined,
+      ];
+      // Cartão sem SKU ativo (cancelamento ou arquivamento só do SKU) não
+      // trava o código: a contagem substitui o cartão se não houver saldo.
+      const preliminaryRelease = clientCodeRelease({
+        products: catalogProducts,
+        skus: catalogSkus,
+      });
       if (productRows.length > 1 || skuRows.length > 1) {
-        throw new HttpsError(
-          "failed-precondition",
-          `O Cod. cliente ${requestedClientItemCode} possui cadastro duplicado. Corrija o catálogo antes de contar o item.`,
-        );
+        if (!(wantsNewProduct && preliminaryRelease === "free")) {
+          if (wantsNewProduct && preliminaryRelease === "stock") {
+            throw new HttpsError(
+              "failed-precondition",
+              clientCodeStillHasStockMessage(requestedClientItemCode),
+            );
+          }
+          throw new HttpsError(
+            "failed-precondition",
+            `O Cod. cliente ${requestedClientItemCode} possui cadastro duplicado. Corrija o catálogo antes de contar o item.`,
+          );
+        }
       }
       // SKU gerado nunca está entre os existentes: para produto novo, o
       // código do cliente repetido cai no "já existe" logo abaixo.
@@ -1931,10 +1957,37 @@ export async function recordCycleCountTransaction(
         }
       }
       if (wantsNewProduct && catalogActiveExists) {
-        throw new HttpsError(
-          "failed-precondition",
-          `Cod. cliente ${requestedClientItemCode} ou SKU ${skuCode} já existe. Use o cadastro encontrado para evitar duplicidade.`,
+        if (preliminaryRelease === "sku") {
+          throw new HttpsError(
+            "failed-precondition",
+            `Cod. cliente ${requestedClientItemCode} ou SKU ${skuCode} já existe. Use o cadastro encontrado para evitar duplicidade.`,
+          );
+        }
+        if (preliminaryRelease === "stock") {
+          throw new HttpsError(
+            "failed-precondition",
+            clientCodeStillHasStockMessage(requestedClientItemCode),
+          );
+        }
+        const balances = await readCatalogQuantities(
+          transaction,
+          db,
+          customerCode,
+          requestedClientItemCode,
+          catalogSkus.map(catalogSkuCode),
         );
+        if (
+          clientCodeRelease({
+            products: catalogProducts,
+            skus: catalogSkus,
+            balances,
+          }) === "stock"
+        ) {
+          throw new HttpsError(
+            "failed-precondition",
+            clientCodeStillHasStockMessage(requestedClientItemCode),
+          );
+        }
       }
       if (!wantsNewProduct && !catalogExists) {
         throw new HttpsError(
@@ -2121,7 +2174,15 @@ export async function recordCycleCountTransaction(
         // set (sem merge) em vez de create: a guarda catalogActiveExists já
         // barrou duplicidade ATIVA — se o doc existe aqui, está arquivado, e
         // recontar como novo é reativação com reset limpo (sem herdar
-        // agregados velhos do cadastro arquivado).
+        // agregados velhos do cadastro arquivado). Cartão solto (outro id,
+        // mesmo código, sem SKU ativo) sai junto: senão a próxima contagem
+        // acha dois produtos.
+        for (const row of productRows) {
+          if (row.id !== productId) transaction.delete(row.ref);
+        }
+        for (const row of skuRows) {
+          if (row.id !== skuId) transaction.delete(row.ref);
+        }
         transaction.set(db.collection(collections.products).doc(productId), {
           id: clientItemCode || skuCode,
           ...catalogPayload,
@@ -2786,7 +2847,7 @@ export async function removeOpeningInventoryLineTransaction(
     const allOpeningLinesQuery = db
       .collection(collections.openingInventoryLines)
       .where("session_id", "==", sessionId);
-    const [balanceRows, productSnapshot, skuSnapshot, projectionSnapshot, cycleSnapshot, openingLines] =
+    const [balanceRows, productSnapshot, skuSnapshot, projectionSnapshot, cycleSnapshot, openingLines, productsByCode, skusByCode] =
       await Promise.all([
         readRows(transaction, skuBalancesQuery(db, customerCode, skuCode)),
         transaction.get(productRef),
@@ -2794,6 +2855,14 @@ export async function removeOpeningInventoryLineTransaction(
         transaction.get(projectionRef),
         transaction.get(cycleCountRef),
         readRows(transaction, allOpeningLinesQuery),
+        readRows(
+          transaction,
+          db.collection(collections.products).where("cod_cliente_key", "==", clientItemCode).limit(10),
+        ),
+        readRows(
+          transaction,
+          db.collection(collections.skus).where("cod_cliente_key", "==", clientItemCode).limit(10),
+        ),
       ]);
     const boxSnapshot = boxRef ? await transaction.get(boxRef) : undefined;
     if (boxSnapshot?.get("status") === "committing") {
@@ -2909,8 +2978,20 @@ export async function removeOpeningInventoryLineTransaction(
       (text(product.opening_inventory_session_id) === sessionId ||
         text(sku.opening_inventory_session_id) === sessionId);
     if (removeOpeningCatalog) {
-      if (productSnapshot.exists) transaction.delete(productRef);
-      if (skuSnapshot.exists) transaction.delete(skuRef);
+      // O id canônico é o código. Um cartão gravado com outro id e o mesmo
+      // cod_cliente_key ficava para trás: o Estoque (que lista SKU) escondia,
+      // e a Contagem travava em "sem SKU".
+      const catalogRefs = new Map<string, DocumentReference>();
+      const ownedHere = (data: Record<string, unknown>) => {
+        const owner = text(data.customer_code);
+        return !owner || owner === customerCode;
+      };
+      if (productSnapshot.exists && ownedHere(product)) catalogRefs.set(productRef.path, productRef);
+      if (skuSnapshot.exists && ownedHere(sku)) catalogRefs.set(skuRef.path, skuRef);
+      for (const row of [...productsByCode, ...skusByCode]) {
+        if (ownedHere(row.data)) catalogRefs.set(row.ref.path, row.ref);
+      }
+      for (const ref of catalogRefs.values()) transaction.delete(ref);
     } else {
       if (productSnapshot.exists) {
         transaction.update(productRef, {
