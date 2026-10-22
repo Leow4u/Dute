@@ -3,7 +3,10 @@ import { FieldValue, type Firestore, type Transaction, type DocumentReference } 
 import { HttpsError } from "firebase-functions/https";
 import { z } from "genkit";
 import { CycleCountSchema } from "./cycle-count-input.js";
-import { assertBarcodeAvailable, normalizeBarcode, readCustomerSkuPrefix } from "./catalog-codes.js";
+import {
+  assertBarcodeAvailable, catalogSkuCode, clientCodeRelease, clientCodeStillHasStockMessage,
+  normalizeBarcode, readCatalogQuantities, readCustomerSkuPrefix,
+} from "./catalog-codes.js";
 import { assertCatalogOwnedBy, LEGACY_CUSTOMER_CODE } from "./customer-scope.js";
 import { openingInventorySessionDocumentId, recordCycleCountTransaction, type OperationalActor, type RecordCycleCountInput } from "./operations.js";
 import {
@@ -132,11 +135,26 @@ async function validateCatalog(tx: Transaction, db: Firestore, customer: string,
   const skuRows = skus.docs.map((doc) => doc.data());
   const records = [...productRows, ...skuRows, ...(productDoc.exists ? [productDoc.data()!] : []), ...(skuDoc?.exists ? [skuDoc.data()!] : [])];
   assertCatalogOwnedBy(customer, records, `O código ${code}`);
-  if (products.size > 1 || skus.size > 1) throw new HttpsError("failed-precondition", "Código do cliente com cadastro duplicado. Corrija o catálogo.");
-  const active = records.some((row) => row.archived !== true && row.status !== "archived");
+  const productRecords = [...productRows, ...(productDoc.exists ? [productDoc.data()!] : [])];
+  const skuRecords = [...skuRows, ...(skuDoc?.exists ? [skuDoc.data()!] : [])];
+  // Cartão ativo sem SKU (lançamento cancelado, ou o item arquivado só no
+  // SKU) não é cadastro: o Estoque não lista e a contagem recadastra, se
+  // não houver saldo. Vários cartões soltos do mesmo código entram juntos.
+  const release = clientCodeRelease({ products: productRecords, skus: skuRecords });
+  if (products.size > 1 || skus.size > 1) {
+    if (!(isNew && release === "free")) {
+      if (isNew && release === "stock") throw new HttpsError("failed-precondition", clientCodeStillHasStockMessage(code));
+      throw new HttpsError("failed-precondition", "Código do cliente com cadastro duplicado. Corrija o catálogo.");
+    }
+  }
   if (isNew) {
     if (!str(line.product_name) || !str(line.category) || !Array.isArray(line.photo_urls) || !line.photo_urls.length) throw new HttpsError("invalid-argument", "Produto novo exige descrição, categoria e ao menos uma foto.");
-    if (active) throw new HttpsError("failed-precondition", `O código ${code} já existe. Selecione o cadastro encontrado.`);
+    if (release === "sku") throw new HttpsError("failed-precondition", `O código ${code} já existe. Selecione o cadastro encontrado.`);
+    if (release === "stock") throw new HttpsError("failed-precondition", clientCodeStillHasStockMessage(code));
+    const balances = await readCatalogQuantities(tx, db, customer, code, skuRecords.map(catalogSkuCode));
+    if (clientCodeRelease({ products: productRecords, skus: skuRecords, balances }) === "stock") {
+      throw new HttpsError("failed-precondition", clientCodeStillHasStockMessage(code));
+    }
     await readCustomerSkuPrefix(tx, db, customer);
     await assertBarcodeAvailable(tx, db, customer, line.barcode, LEGACY_CUSTOMER_CODE);
   } else {

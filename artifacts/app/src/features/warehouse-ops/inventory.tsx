@@ -1445,13 +1445,15 @@ export function OpeningInventoryWorkspace() {
                       </AlertDescription>
                     </Alert>
                   ) : existingProduct && !existingProduct.hasSku ? (
-                    <Alert variant="destructive" className="bg-destructive/10">
-                      <AlertTriangle className="size-4" />
-                      <AlertTitle>Cadastro incompleto</AlertTitle>
-                      <AlertDescription>
-                        Este produto não possui SKU válido. Um administrador precisa corrigir o cadastro antes da contagem.
-                      </AlertDescription>
-                    </Alert>
+                    <NewProductNotice
+                      confirmed={createNew}
+                      disabled={missingSkuPrefix}
+                      title="Código sem SKU"
+                      note={missingSkuPrefix
+                        ? `Cadastre a sigla do SKU de ${activeCustomer.name} em Configurações › Clientes antes de cadastrar produto novo: o SKU é gerado com ela.`
+                        : `Este código não tem SKU ativo. Cadastre como novo. ${isDraftBox ? "SKU gerado ao guardar a caixa." : "SKU gerado ao salvar."}`}
+                      onToggle={() => setCreateNew((current) => !current)}
+                    />
                   ) : existingProduct ? (
                     <ProductIdentityCard
                       product={existingProduct}

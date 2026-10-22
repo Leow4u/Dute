@@ -12,11 +12,17 @@ import {
   assertCatalogOwnedBy,
   openingInventoryBlocksOutbound,
   openingUsesGlobalControl,
+  recordOwner,
 } from "./customer-scope.js";
 import {
   assertBarcodeAvailable,
+  catalogRecordHasQuantity,
+  catalogSkuCode,
+  clientCodeRelease,
+  clientCodeStillHasStockMessage,
   normalizeBarcode,
   openSkuAllocator,
+  readCatalogQuantities,
   type SkuAllocator,
 } from "./catalog-codes.js";
 import {
@@ -1902,11 +1908,33 @@ export async function recordCycleCountTransaction(
           !snapshotIsArchived(productCodeSnapshot)) ||
         (Boolean(skuCodeSnapshot?.exists) &&
           !snapshotIsArchived(skuCodeSnapshot));
+      const catalogProducts = [
+        ...productRows.map((row) => row.data),
+        productCodeSnapshot?.exists ? productCodeSnapshot.data() : undefined,
+      ];
+      const catalogSkus = [
+        ...skuRows.map((row) => row.data),
+        skuCodeSnapshot?.exists ? skuCodeSnapshot.data() : undefined,
+      ];
+      // Cartão sem SKU ativo (cancelamento ou arquivamento só do SKU) não
+      // trava o código: a contagem substitui o cartão se não houver saldo.
+      const preliminaryRelease = clientCodeRelease({
+        products: catalogProducts,
+        skus: catalogSkus,
+      });
       if (productRows.length > 1 || skuRows.length > 1) {
-        throw new HttpsError(
-          "failed-precondition",
-          `O Cod. cliente ${requestedClientItemCode} possui cadastro duplicado. Corrija o catálogo antes de contar o item.`,
-        );
+        if (!(wantsNewProduct && preliminaryRelease === "free")) {
+          if (wantsNewProduct && preliminaryRelease === "stock") {
+            throw new HttpsError(
+              "failed-precondition",
+              clientCodeStillHasStockMessage(requestedClientItemCode),
+            );
+          }
+          throw new HttpsError(
+            "failed-precondition",
+            `O Cod. cliente ${requestedClientItemCode} possui cadastro duplicado. Corrija o catálogo antes de contar o item.`,
+          );
+        }
       }
       // SKU gerado nunca está entre os existentes: para produto novo, o
       // código do cliente repetido cai no "já existe" logo abaixo.
@@ -1931,10 +1959,37 @@ export async function recordCycleCountTransaction(
         }
       }
       if (wantsNewProduct && catalogActiveExists) {
-        throw new HttpsError(
-          "failed-precondition",
-          `Cod. cliente ${requestedClientItemCode} ou SKU ${skuCode} já existe. Use o cadastro encontrado para evitar duplicidade.`,
+        if (preliminaryRelease === "sku") {
+          throw new HttpsError(
+            "failed-precondition",
+            `Cod. cliente ${requestedClientItemCode} ou SKU ${skuCode} já existe. Use o cadastro encontrado para evitar duplicidade.`,
+          );
+        }
+        if (preliminaryRelease === "stock") {
+          throw new HttpsError(
+            "failed-precondition",
+            clientCodeStillHasStockMessage(requestedClientItemCode),
+          );
+        }
+        const balances = await readCatalogQuantities(
+          transaction,
+          db,
+          customerCode,
+          requestedClientItemCode,
+          catalogSkus.map(catalogSkuCode),
         );
+        if (
+          clientCodeRelease({
+            products: catalogProducts,
+            skus: catalogSkus,
+            balances,
+          }) === "stock"
+        ) {
+          throw new HttpsError(
+            "failed-precondition",
+            clientCodeStillHasStockMessage(requestedClientItemCode),
+          );
+        }
       }
       if (!wantsNewProduct && !catalogExists) {
         throw new HttpsError(
@@ -2076,6 +2131,38 @@ export async function recordCycleCountTransaction(
     const movementIdValue =
       adjustmentQty > 0 ? movementId(operationId, "cycle_count") : undefined;
 
+    // Produto novo grava no id canônico e apaga o cartão solto (outro id,
+    // mesmo código do cliente). Arquivado ou não, cartão solto com saldo no
+    // cadastro ou no ledger não sai: o saldo ficaria sem cadastro.
+    const productId = safeDocId(clientItemCode || skuCode);
+    const skuId = safeDocId(skuCode);
+    const strayCatalogRows =
+      mode === "opening" && wantsNewProduct
+        ? [
+            ...productRows.filter((row) => row.id !== productId),
+            ...skuRows.filter((row) => row.id !== skuId),
+          ]
+        : [];
+    if (strayCatalogRows.length) {
+      const strayBalances = await readCatalogQuantities(
+        transaction,
+        db,
+        customerCode,
+        requestedClientItemCode,
+        strayCatalogRows.map((row) => catalogSkuCode(row.data)),
+      );
+      if (
+        [...strayCatalogRows.map((row) => row.data), ...strayBalances].some(
+          (row) => catalogRecordHasQuantity(row),
+        )
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          clientCodeStillHasStockMessage(requestedClientItemCode),
+        );
+      }
+    }
+
     // Primeira escrita: o contador do SKU gerado.
     skuAllocator?.commit();
 
@@ -2116,12 +2203,13 @@ export async function recordCycleCountTransaction(
         unitCost,
       });
       if (wantsNewProduct) {
-        const productId = safeDocId(clientItemCode || skuCode);
-        const skuId = safeDocId(skuCode);
         // set (sem merge) em vez de create: a guarda catalogActiveExists já
         // barrou duplicidade ATIVA — se o doc existe aqui, está arquivado, e
         // recontar como novo é reativação com reset limpo (sem herdar
-        // agregados velhos do cadastro arquivado).
+        // agregados velhos do cadastro arquivado). Cartão solto (outro id,
+        // mesmo código, sem SKU ativo nem saldo) sai junto: senão a próxima
+        // contagem acha dois produtos.
+        for (const row of strayCatalogRows) transaction.delete(row.ref);
         transaction.set(db.collection(collections.products).doc(productId), {
           id: clientItemCode || skuCode,
           ...catalogPayload,
@@ -2429,6 +2517,11 @@ export async function recordCycleCountTransaction(
           adjustment_qty: adjustmentQty,
           reason,
           reference: text(input.reference) || undefined,
+          // Cartão solto apagado nesta contagem: o id dele não está no
+          // sku_code nem no client_item_code acima.
+          deleted_catalog_docs: strayCatalogRows.length
+            ? strayCatalogRows.map((row) => row.ref.path)
+            : undefined,
         },
       },
       actor,
@@ -2786,7 +2879,7 @@ export async function removeOpeningInventoryLineTransaction(
     const allOpeningLinesQuery = db
       .collection(collections.openingInventoryLines)
       .where("session_id", "==", sessionId);
-    const [balanceRows, productSnapshot, skuSnapshot, projectionSnapshot, cycleSnapshot, openingLines] =
+    const [balanceRows, productSnapshot, skuSnapshot, projectionSnapshot, cycleSnapshot, openingLines, productsByCode, skusByCode] =
       await Promise.all([
         readRows(transaction, skuBalancesQuery(db, customerCode, skuCode)),
         transaction.get(productRef),
@@ -2794,11 +2887,56 @@ export async function removeOpeningInventoryLineTransaction(
         transaction.get(projectionRef),
         transaction.get(cycleCountRef),
         readRows(transaction, allOpeningLinesQuery),
+        readRows(
+          transaction,
+          db.collection(collections.products).where("cod_cliente_key", "==", clientItemCode).limit(10),
+        ),
+        readRows(
+          transaction,
+          db.collection(collections.skus).where("cod_cliente_key", "==", clientItemCode).limit(10),
+        ),
       ]);
     const boxSnapshot = boxRef ? await transaction.get(boxRef) : undefined;
     if (boxSnapshot?.get("status") === "committing") {
       throw new HttpsError("failed-precondition", "Retome e finalize a guarda da caixa antes de remover um lançamento confirmado.");
     }
+    // Cartão solto (outro id, mesmo código do cliente) só sai se for deste
+    // cliente (sem customer_code é do legado) e não tiver saldo no cadastro
+    // nem no ledger. O saldo do SKU desta linha é o que a remoção zera.
+    const strayCatalogRows = [...productsByCode, ...skusByCode].filter(
+      (row) =>
+        row.ref.path !== productRef.path &&
+        row.ref.path !== skuRef.path &&
+        recordOwner(row.data) === customerCode,
+    );
+    // Cartão de produto não guarda SKU: o saldo dele no ledger é o do código
+    // do cliente, em qualquer outro SKU.
+    const codeBalances = strayCatalogRows.length
+      ? await readRows(
+          transaction,
+          db
+            .collection(collections.stockBalances)
+            .where("customer_code", "==", customerCode)
+            .where("client_item_code", "==", clientItemCode),
+        )
+      : [];
+    const codeHasOtherStock = codeBalances.some(
+      (row) =>
+        normalizedIdentity(row.data.sku_code) !== skuCode &&
+        catalogRecordHasQuantity(row.data),
+    );
+    const strayHasStock = await Promise.all(
+      strayCatalogRows.map(async (row) => {
+        if (catalogRecordHasQuantity(row.data)) return true;
+        const code = catalogSkuCode(row.data);
+        if ((row.ref.parent.id === collections.products || !code) && codeHasOtherStock) {
+          return true;
+        }
+        if (!code || normalizedIdentity(code) === skuCode) return false;
+        const balances = await readRows(transaction, skuBalancesQuery(db, customerCode, code));
+        return balances.some((balance) => catalogRecordHasQuantity(balance.data));
+      }),
+    );
 
     const targetBalances = balanceRows.filter(
       (row) => text(row.data.location_id) === locationId,
@@ -2908,9 +3046,18 @@ export async function removeOpeningInventoryLineTransaction(
       otherActiveLines.length === 0 &&
       (text(product.opening_inventory_session_id) === sessionId ||
         text(sku.opening_inventory_session_id) === sessionId);
+    // Cartões apagados vão no evento: os soltos têm id fora do código.
+    const deletedCatalogRefs: DocumentReference<DocumentData>[] = [];
     if (removeOpeningCatalog) {
-      if (productSnapshot.exists) transaction.delete(productRef);
-      if (skuSnapshot.exists) transaction.delete(skuRef);
+      // O id canônico é o código. Um cartão gravado com outro id e o mesmo
+      // cod_cliente_key ficava para trás: o Estoque (que lista SKU) escondia,
+      // e a Contagem travava em "sem SKU".
+      if (productSnapshot.exists && recordOwner(product) === customerCode) deletedCatalogRefs.push(productRef);
+      if (skuSnapshot.exists && recordOwner(sku) === customerCode) deletedCatalogRefs.push(skuRef);
+      strayCatalogRows.forEach((row, index) => {
+        if (!strayHasStock[index]) deletedCatalogRefs.push(row.ref);
+      });
+      for (const ref of deletedCatalogRefs) transaction.delete(ref);
     } else {
       if (productSnapshot.exists) {
         transaction.update(productRef, {
@@ -2976,6 +3123,9 @@ export async function removeOpeningInventoryLineTransaction(
           counted_qty: countedQty,
           reversed_cycle_count_id: cycleCountId,
           reversed_movement_id: originalMovementId || undefined,
+          deleted_catalog_docs: deletedCatalogRefs.length
+            ? deletedCatalogRefs.map((ref) => ref.path)
+            : undefined,
         },
       },
       actor,
