@@ -97,11 +97,10 @@ service cloud.firestore {
     }
 
     // Demanda do Comercial (parte 9): o serviço pedido, sem preço. O
-    // financeiro lê desde a parte 15 (registra a autorização de faturamento
-    // e precisa da fila de executados); a operação passa a ler na Fase 3; o
+    // financeiro lê desde a parte 15; o interno lê desde a Fase 3 (a OS). O
     // preço fica em quotes.
     function canReadDemands() {
-      return hasAnyRole(['owner', 'admin', 'comercial', 'financeiro']);
+      return hasAnyRole(['owner', 'admin', 'comercial', 'financeiro', 'interno']);
     }
 
     /**
@@ -131,6 +130,24 @@ service cloud.firestore {
     // canReadBilling não muda.
     function canReadPrices() {
       return hasAnyRole(['owner', 'admin', 'comercial', 'financeiro']);
+    }
+
+    // Catálogo sem preço (lpu_items). A operação lê na Fase 3; a tabela de
+    // preço continua em canReadPrices().
+    function canReadCatalog() {
+      return canReadPrices() || hasRole('interno');
+    }
+
+    // Polo e endereço do cliente. A operação lê na Fase 3; o contato
+    // (nome, e-mail, telefone) continua só no cadastro comercial.
+    function canReadCustomerLocations() {
+      return canReadCommercialRegistry() || hasRole('interno');
+    }
+
+    // OS sem preço. Suporte lê para diagnóstico. Campo entra quando a OS
+    // tiver a equipe.
+    function canReadServiceOrders() {
+      return hasAnyRole(['owner', 'admin', 'interno', 'suporte']);
     }
 
     function canUseAgentChat() {
@@ -814,7 +831,7 @@ service cloud.firestore {
     // (functions/comercial/src/domain/cadastro.ts). A operação, o suporte, o
     // financeiro e o cliente não leem.
     match /customer_locations/{locationId} {
-      allow read: if canReadCommercialRegistry();
+      allow read: if canReadCustomerLocations();
       allow create, update, delete: if false;
     }
 
@@ -839,6 +856,13 @@ service cloud.firestore {
 
     match /vehicles/{vehicleId} {
       allow read: if canReadOperationalRegistry();
+      allow create, update, delete: if false;
+    }
+
+    // OS (parte 2): número 10045-01, itens sem preço. Quem grava é
+    // saveServiceOrder. O contador service_order_counters não tem match.
+    match /service_orders/{orderId} {
+      allow read: if canReadServiceOrders();
       allow create, update, delete: if false;
     }
 
@@ -1076,7 +1100,7 @@ service cloud.firestore {
     // Catálogo do Comercial: o item, sem preço. Na Fase 3 a operação passa
     // a ler. Escrita só pela carga de tabela (Admin SDK).
     match /lpu_items/{itemId} {
-      allow read: if canReadPrices();
+      allow read: if canReadCatalog();
       allow create, update, delete: if false;
     }
 

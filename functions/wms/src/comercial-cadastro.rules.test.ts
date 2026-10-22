@@ -158,8 +158,10 @@ describe("cadastro comercial: leitura", () => {
     }
   });
 
-  it("o cliente não lê os locais, nem os do próprio contrato; a operação também não, até a Fase 3", async () => {
+  it("o interno lê o local do cliente; os outros papéis de fora do cadastro comercial não", async () => {
+    await assertSucceeds(getDoc(doc(signedAs("ops-a"), "customer_locations", "loc_a")));
     for (const uid of NAO_LEEM_CADASTRO_COMERCIAL) {
+      if (uid === "ops-a") continue;
       const database = signedAs(uid);
       await assertFails(getDoc(doc(database, "customer_locations", "loc_a")));
       await assertFails(getDocs(query(collection(database, "customer_locations"), where("customer_code", "==", CUSTOMER))));

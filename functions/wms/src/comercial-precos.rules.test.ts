@@ -27,7 +27,6 @@ const PROJECT_ID = "demo-dute-operations";
 const COLECOES = ["lpu_items", "price_tables", "client_authorizations"] as const;
 const LEEM = ["owner-a", "admin-a", "comercial-a", "finance-a"] as const;
 const NAO_LEEM = [
-  "ops-a",
   "wms-a",
   "support-a",
   "campo-a",
@@ -193,13 +192,23 @@ describe("preços do Comercial: as funções das regras", () => {
     assert.deepEqual(roles("canReadBilling"), ["owner", "admin", "financeiro", "suporte"]);
   });
 
-  it("lpu_items, price_tables e client_authorizations leem por canReadPrices() e não aceitam escrita", () => {
-    for (const name of COLECOES) {
+  it("o interno lê o catálogo sem preço e não lê tabela nem autorização", async () => {
+    const database = signedAs("ops-a");
+    await assertSucceeds(getDoc(doc(database, "lpu_items", ALVO.lpu_items)));
+    await assertFails(getDoc(doc(database, "price_tables", ALVO.price_tables)));
+    await assertFails(getDoc(doc(database, "client_authorizations", ALVO.client_authorizations)));
+  });
+
+  it("price_tables e client_authorizations leem por canReadPrices(); lpu_items, por canReadCatalog()", () => {
+    for (const name of ["price_tables", "client_authorizations"] as const) {
       const block = rules.match(new RegExp(`match /${name}/\\{[^}]+\\} \\{([^}]*)\\}`));
       assert.ok(block, `match /${name} não encontrado`);
       assert.match(block[1], /allow read: if canReadPrices\(\);/);
       assert.match(block[1], /allow create, update, delete: if false;/);
-      assert.doesNotMatch(block[1], /canReadBilling|canReadOperations|isFinance/);
     }
+    const catalogo = rules.match(/match \/lpu_items\/\{[^}]+\} \{([^}]*)\}/);
+    assert.ok(catalogo, "match /lpu_items não encontrado");
+    assert.match(catalogo[1], /allow read: if canReadCatalog\(\);/);
+    assert.match(catalogo[1], /allow create, update, delete: if false;/);
   });
 });

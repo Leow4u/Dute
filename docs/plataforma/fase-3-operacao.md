@@ -59,6 +59,26 @@ entrada. O cliente não vê este cadastro: a OS no portal é da Fase 4.
 
 ### Zeragem
 
-`collaborators`, `vehicles` e `operacao_operations` nunca são apagadas, nem
-com `--include-setup`. Eventos `functions_operacao` ficam, como os do
-Comercial.
+`collaborators`, `vehicles`, `operacao_operations`, `service_orders` e
+`service_order_counters` nunca são apagadas, nem com `--include-setup`.
+Eventos `functions_operacao` ficam, como os do Comercial.
+
+## Parte 2: núcleo da OS
+
+Sem tela. A callable `saveServiceOrder` abre a OS da demanda em Para planejar
+e cancela a OS aberta.
+
+- O número é o da demanda com sufixo: demanda 10045, primeira OS `10045-01`.
+  A seguinte, na mesma demanda, é `10045-02`. O contador fica em
+  `service_order_counters/{demanda}`.
+- Os itens saem da revisão fechada (`quotes/{n}/revisoes/{escopo_rv}`). Preço,
+  motivo e linha de ajuste não entram. Item avulso entra sem preço.
+- A demanda ganha `os_numeros` e continua em Para planejar. O nome do cliente
+  não vai para a OS nem para o evento.
+- Eventos `os.created` e `os.cancelled`. O tipo não usa a palavra `order`: o
+  roteador de avisos do WMS transformaria isso em aviso ao cliente. O motivo
+  do cancelamento fica na OS, não no evento.
+- Quem grava é o mesmo do cadastro (owner, admin, interno). Quem lê a OS:
+  esses e o suporte. O interno passa a ler `demands`, `lpu_items` e
+  `customer_locations`. `quotes` e `price_tables` continuam sem a operação.
+- Agendar, executar, concluir e a tela ficam na parte 3.
