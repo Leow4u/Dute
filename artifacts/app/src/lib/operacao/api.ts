@@ -4,12 +4,12 @@ import { firebaseApp } from "../firebase";
 import { functionsDoApp } from "../firebase-functions";
 
 /**
- * Escrita do cadastro da Operação: só pelas callables de functions/operacao.
+ * Escrita da Operação: só pelas callables de functions/operacao.
  * Cada chamada leva a chave de idempotência (recibo em operacao_operations).
  */
 
-export const CALLABLES_DO_CADASTRO = ["saveCollaborator", "saveVehicle"] as const;
-export type CallableDoCadastro = (typeof CALLABLES_DO_CADASTRO)[number];
+export const CALLABLES_DA_OPERACAO = ["saveCollaborator", "saveVehicle", "saveServiceOrder"] as const;
+export type CallableDaOperacao = (typeof CALLABLES_DA_OPERACAO)[number];
 
 export function novaChave(): string {
   return crypto.randomUUID();
@@ -25,7 +25,7 @@ export function mensagemDoErro(error: unknown): string {
 }
 
 export async function chamarOperacao<T = Record<string, unknown>>(
-  nome: CallableDoCadastro,
+  nome: CallableDaOperacao,
   dados: Record<string, unknown>,
 ): Promise<T> {
   if (!firebaseApp) throw new Error("Firebase não configurado.");

@@ -51,7 +51,7 @@ export function OperacaoShell({
             return (
               <Link
                 key={item.id}
-                href={item.href ?? "/operacao/colaboradores"}
+                href={item.href ?? "/operacao"}
                 aria-current={current ? "page" : undefined}
                 className={cn(
                   "flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-left text-sm font-medium outline-none transition-colors duration-200",

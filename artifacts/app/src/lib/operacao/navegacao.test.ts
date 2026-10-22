@@ -6,6 +6,7 @@ import { getNavigationForProfileRole, getRouteProfileRoles, menuDoOperacao } fro
 import { entrada, modulesForPerson } from "../platform-modules";
 import {
   ROTA_COLABORADORES,
+  ROTA_OPERACAO,
   ROTA_VEICULOS,
   abreOperacao,
   rotasDaOperacao,
@@ -52,6 +53,7 @@ describe("navegação do cadastro da Operação", () => {
 
   it("o menu do módulo tem Colaboradores e Veículos para quem grava", () => {
     expect(menuDoOperacao("interno", true).map((item) => [item.label, item.href])).toEqual([
+      ["Hoje", ROTA_OPERACAO],
       ["Colaboradores", ROTA_COLABORADORES],
       ["Veículos", ROTA_VEICULOS],
     ]);
@@ -66,7 +68,8 @@ describe("navegação do cadastro da Operação", () => {
     const fora = APP_SOURCE.replace(/soComOperacaoLiberada\(\[[\s\S]*?\]\)/g, "");
     expect(caminhos(fora).filter((path) => path.startsWith("/operacao"))).toEqual([]);
     expect(soComOperacaoLiberada([{ path: ROTA_COLABORADORES }, { path: "/operacao/outra" }], DESLIGADO)).toEqual([]);
-    expect(soComOperacaoLiberada([{ path: ROTA_COLABORADORES }, { path: ROTA_VEICULOS }], LIBERADO).map((rota) => rota.path)).toEqual([
+    expect(soComOperacaoLiberada([{ path: ROTA_OPERACAO }, { path: ROTA_COLABORADORES }, { path: ROTA_VEICULOS }], LIBERADO).map((rota) => rota.path)).toEqual([
+      ROTA_OPERACAO,
       ROTA_COLABORADORES,
       ROTA_VEICULOS,
     ]);

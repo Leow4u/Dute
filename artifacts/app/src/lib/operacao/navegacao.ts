@@ -11,11 +11,11 @@ import { OPERACAO_LIBERADO } from "../liberacao";
 /** Quem grava e lê o cadastro. Campo e suporte ficam de fora: o documento tem CPF. */
 export const OPERACAO_CADASTRO_ROLES = ["owner", "admin", "interno"] as const satisfies readonly Papel[];
 
-export const ROTA_OPERACAO = "/operacao/colaboradores";
+export const ROTA_OPERACAO = "/operacao";
 export const ROTA_COLABORADORES = "/operacao/colaboradores";
 export const ROTA_VEICULOS = "/operacao/veiculos";
 
-export const TELAS_DA_OPERACAO: readonly string[] = [ROTA_COLABORADORES, ROTA_VEICULOS];
+export const TELAS_DA_OPERACAO: readonly string[] = [ROTA_OPERACAO, ROTA_COLABORADORES, ROTA_VEICULOS];
 
 export function rotasDaOperacao(liberado: boolean = OPERACAO_LIBERADO): string[] {
   return liberado ? [...TELAS_DA_OPERACAO] : [];

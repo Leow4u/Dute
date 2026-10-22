@@ -29,6 +29,14 @@ const EXEMPLOS: Record<OperacaoEventType, Record<string, unknown>> = {
   "vehicle.deactivated": { id: "vei_aaaaaaaaaaaaaaaa" },
   "vehicle.reactivated": { id: "vei_aaaaaaaaaaaaaaaa" },
   "os.created": { id: "10045-01", demanda: "10045", seq: 1, linhas: 2 },
+  "os.scheduled": {
+    id: "10045-01",
+    demanda: "10045",
+    data: "2026-10-22",
+    hora: "15:00",
+    equipe: ["col_aaaaaaaaaaaaaaaa"],
+    veiculo_id: "vei_aaaaaaaaaaaaaaaa",
+  },
   "os.cancelled": { id: "10045-01", demanda: "10045" },
 };
 

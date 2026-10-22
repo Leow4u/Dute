@@ -32,6 +32,7 @@ export const OPERACAO_EVENT_TYPES = [
   "vehicle.deactivated",
   "vehicle.reactivated",
   "os.created",
+  "os.scheduled",
   "os.cancelled",
 ] as const;
 export type OperacaoEventType = (typeof OPERACAO_EVENT_TYPES)[number];
@@ -40,6 +41,16 @@ const criado = z.object({ id }).strict();
 const alterado = z.object({ id, edicao_antes: edicao, edicao_depois: edicao }).strict();
 const osCriada = z.object({ id: osId, demanda: demandaNumero, seq: z.number().int().min(1).max(99), linhas: z.number().int().min(1).max(300) }).strict();
 const osCancelada = z.object({ id: osId, demanda: demandaNumero }).strict();
+const osAgendada = z
+  .object({
+    id: osId,
+    demanda: demandaNumero,
+    data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    hora: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable(),
+    equipe: z.array(z.string().regex(/^col_[a-f0-9]{16}$/)).min(1).max(12),
+    veiculo_id: z.string().regex(/^vei_[a-f0-9]{16}$/),
+  })
+  .strict();
 
 export const OPERACAO_EVENT_PAYLOADS = {
   "collaborator.created": criado,
@@ -51,6 +62,7 @@ export const OPERACAO_EVENT_PAYLOADS = {
   "vehicle.deactivated": criado,
   "vehicle.reactivated": criado,
   "os.created": osCriada,
+  "os.scheduled": osAgendada,
   "os.cancelled": osCancelada,
 } as const;
 
@@ -64,6 +76,7 @@ const TEXTO: Record<OperacaoEventType, { title: string; description: string }> =
   "vehicle.deactivated": { title: "Veículo desativado", description: "O cadastro de veículo foi desativado." },
   "vehicle.reactivated": { title: "Veículo reativado", description: "O cadastro de veículo foi reativado." },
   "os.created": { title: "OS aberta", description: "A OS foi aberta a partir da demanda." },
+  "os.scheduled": { title: "OS agendada", description: "A OS recebeu data, equipe e veículo." },
   "os.cancelled": { title: "OS cancelada", description: "A OS aberta foi cancelada." },
 };
 

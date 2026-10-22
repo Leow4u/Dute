@@ -2,9 +2,9 @@ import { HttpsError } from "firebase-functions/https";
 import { z } from "zod";
 
 /**
- * Núcleo da OS (docs/plataforma/fase-3-operacao.md, parte 2). A demanda em
- * Para planejar vira OS 10045-01. Os itens saem da revisão fechada, sem
- * preço. Agendar, executar e concluir ficam para a tela.
+ * Núcleo da OS (docs/plataforma/fase-3-operacao.md). A demanda em Para
+ * planejar vira OS 10045-01. Os itens saem da revisão fechada, sem preço.
+ * Agendar entra na parte 3. Executar e concluir ficam para a próxima parte.
  */
 
 export const SERVICE_ORDERS_COLLECTION = "service_orders";
@@ -26,18 +26,26 @@ export type ItemDaOs = {
   destino_local: string | null;
 };
 
+export type AgendaDaOs = {
+  data: string;
+  hora: string | null;
+  equipe: string[];
+  veiculo_id: string;
+};
+
 export type OsGravada = {
   numero: string;
   demanda: string;
   seq: number;
   customer_code: string;
-  status: "aberta" | "cancelada";
+  status: "aberta" | "agendada" | "cancelada";
   escopo_rv: number;
   itens: ItemDaOs[];
   origem_local_id: string | null;
   destino_local_id: string | null;
   edicao: number;
   cancelamento: { motivo: string } | null;
+  agenda: AgendaDaOs | null;
 };
 
 export type AberturaDaOs = {
@@ -77,14 +85,62 @@ const Cancelar = z
   })
   .strict();
 
+const idColaborador = z.string().regex(/^col_[a-f0-9]{16}$/, "Colaborador inválido.");
+const idVeiculo = z.string().regex(/^vei_[a-f0-9]{16}$/, "Veículo inválido.");
+const Agendar = z
+  .object({
+    action: z.literal("schedule"),
+    idempotency_key: chave,
+    numero,
+    expected_edicao: z.number().int().min(1).max(100_000),
+    data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida."),
+    hora: z
+      .string()
+      .trim()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Hora inválida.")
+      .nullable()
+      .optional(),
+    equipe: z.array(idColaborador).min(1, "Escolha ao menos uma pessoa.").max(12, "A equipe passa de 12 pessoas."),
+    veiculo_id: idVeiculo,
+  })
+  .strict();
+
 export type AcaoOs =
   | { action: "create"; idempotency_key: string; demanda: string }
-  | { action: "cancel"; idempotency_key: string; numero: string; expected_edicao: number; motivo: string };
+  | { action: "cancel"; idempotency_key: string; numero: string; expected_edicao: number; motivo: string }
+  | {
+      action: "schedule";
+      idempotency_key: string;
+      numero: string;
+      expected_edicao: number;
+      data: string;
+      hora?: string | null;
+      equipe: string[];
+      veiculo_id: string;
+    };
 
 export function interpretarOs(data: unknown): AcaoOs {
-  const parsed = z.discriminatedUnion("action", [Criar, Cancelar]).safeParse(data ?? {}, { errorMap: mensagens });
+  const parsed = z.discriminatedUnion("action", [Criar, Cancelar, Agendar]).safeParse(data ?? {}, { errorMap: mensagens });
   if (!parsed.success) invalid(parsed.error.issues[0]?.message ?? "Dados inválidos.");
+  if (parsed.data.action === "schedule" && new Set(parsed.data.equipe).size !== parsed.data.equipe.length) {
+    invalid("A equipe tem pessoa repetida.");
+  }
   return parsed.data;
+}
+
+function dataCalendario(value: string): boolean {
+  const ano = Number(value.slice(0, 4));
+  const mes = Number(value.slice(5, 7));
+  const dia = Number(value.slice(8, 10));
+  const data = new Date(Date.UTC(ano, mes - 1, dia));
+  return data.getUTCFullYear() === ano && data.getUTCMonth() === mes - 1 && data.getUTCDate() === dia;
+}
+
+/** A data do agendamento, comparada com o dia de hoje em AAAA-MM-DD. */
+export function problemaDaData(data: string, hoje: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data) || !dataCalendario(data)) return "Data inválida.";
+  if (data < hoje) return "A data do agendamento já passou.";
+  return null;
 }
 
 function preenchido(valor: unknown): boolean {
@@ -188,7 +244,7 @@ export function localDaDemanda(valor: unknown): string | null {
   return textoOuNull((valor as { local_id?: unknown }).local_id);
 }
 
-export type EfeitoOs = { documento: OsGravada; evento: "os.created" | "os.cancelled" };
+export type EfeitoOs = { documento: OsGravada; evento: "os.created" | "os.cancelled" | "os.scheduled" };
 
 export function aplicarOs(atual: OsGravada | null, acao: AcaoOs, abertura: AberturaDaOs | null): EfeitoOs {
   if (acao.action === "create") {
@@ -211,6 +267,32 @@ export function aplicarOs(atual: OsGravada | null, acao: AcaoOs, abertura: Abert
         destino_local_id: abertura.destino_local_id,
         edicao: 1,
         cancelamento: null,
+        agenda: null,
+      },
+    };
+  }
+  if (acao.action === "schedule") {
+    if (!atual) throw new HttpsError("not-found", "OS não encontrada.");
+    if (atual.numero !== acao.numero) throw new HttpsError("internal", "O número da OS não confere.");
+    if (atual.edicao !== acao.expected_edicao) {
+      throw new HttpsError("failed-precondition", "A OS foi atualizada. Recarregue e tente de novo.");
+    }
+    if (atual.status === "cancelada") throw new HttpsError("failed-precondition", "A OS já está cancelada.");
+    if (atual.status !== "aberta" && atual.status !== "agendada") {
+      throw new HttpsError("failed-precondition", "Só uma OS aberta ou agendada pode ser agendada.");
+    }
+    return {
+      evento: "os.scheduled",
+      documento: {
+        ...atual,
+        status: "agendada",
+        edicao: atual.edicao + 1,
+        agenda: {
+          data: acao.data,
+          hora: acao.hora ?? null,
+          equipe: acao.equipe,
+          veiculo_id: acao.veiculo_id,
+        },
       },
     };
   }
@@ -220,7 +302,9 @@ export function aplicarOs(atual: OsGravada | null, acao: AcaoOs, abertura: Abert
     throw new HttpsError("failed-precondition", "A OS foi atualizada. Recarregue e tente de novo.");
   }
   if (atual.status === "cancelada") throw new HttpsError("failed-precondition", "A OS já está cancelada.");
-  if (atual.status !== "aberta") throw new HttpsError("failed-precondition", "Só uma OS aberta pode ser cancelada.");
+  if (atual.status !== "aberta" && atual.status !== "agendada") {
+    throw new HttpsError("failed-precondition", "Só uma OS aberta ou agendada pode ser cancelada.");
+  }
   return {
     evento: "os.cancelled",
     documento: {

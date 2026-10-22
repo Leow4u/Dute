@@ -104,6 +104,7 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/comercial/autorizacoes", ["owner", "admin", "comercial"]],
   ["/comercial/medicoes", ["owner", "admin", "comercial"]],
   // Operação, parte 1: cadastro, só com a liberação (lib/operacao/navegacao.ts).
+  ["/operacao", ["owner", "admin", "interno"]],
   ["/operacao/colaboradores", ["owner", "admin", "interno"]],
   ["/operacao/veiculos", ["owner", "admin", "interno"]],
 ];

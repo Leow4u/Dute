@@ -8,6 +8,7 @@ import {
   interpretarOs,
   itensSemPreco,
   numeroDaOs,
+  problemaDaData,
   problemaParaAbrirOs,
   proximaSequencia,
   type OsGravada,
@@ -158,6 +159,7 @@ describe("documento da OS", () => {
       destino_local_id: null,
       edicao: 1,
       cancelamento: null,
+      agenda: null,
     };
     const efeito = aplicarOs(
       aberta,
@@ -176,10 +178,104 @@ describe("documento da OS", () => {
       ),
     );
     assert.match(deNovo.message, /cancelada/);
+    const agendada: OsGravada = { ...aberta, status: "agendada", agenda: { data: "2026-10-22", hora: "15:00", equipe: ["col_aaaaaaaaaaaaaaaa"], veiculo_id: "vei_aaaaaaaaaaaaaaaa" } };
+    const cancelouAgenda = aplicarOs(
+      agendada,
+      interpretarOs({ action: "cancel", idempotency_key: "k5", numero: "10045-01", expected_edicao: 1, motivo: "Adiou de novo" }),
+      null,
+    );
+    assert.equal(cancelouAgenda.documento.status, "cancelada");
+    assert.equal(cancelouAgenda.documento.agenda?.data, "2026-10-22");
+  });
+});
+
+describe("agendar a OS", () => {
+  const aberta: OsGravada = {
+    numero: "10045-01",
+    demanda: "10045",
+    seq: 1,
+    customer_code: "ITAU",
+    status: "aberta",
+    escopo_rv: 0,
+    itens: itensSemPreco([LINHA]),
+    origem_local_id: null,
+    destino_local_id: null,
+    edicao: 1,
+    cancelamento: null,
+    agenda: null,
+  };
+
+  it("marca data, equipe e veículo e recusa data que já passou", () => {
+    assert.equal(problemaDaData("2026-10-22", "2026-10-22"), null);
+    assert.equal(problemaDaData("2026-10-21", "2026-10-22"), "A data do agendamento já passou.");
+    assert.equal(problemaDaData("2026-02-31", "2026-10-22"), "Data inválida.");
+    const efeito = aplicarOs(
+      aberta,
+      interpretarOs({
+        action: "schedule",
+        idempotency_key: "ag",
+        numero: "10045-01",
+        expected_edicao: 1,
+        data: "2026-10-22",
+        hora: "15:00",
+        equipe: ["col_aaaaaaaaaaaaaaaa", "col_bbbbbbbbbbbbbbbb"],
+        veiculo_id: "vei_aaaaaaaaaaaaaaaa",
+      }),
+      null,
+    );
+    assert.equal(efeito.evento, "os.scheduled");
+    assert.equal(efeito.documento.status, "agendada");
+    assert.equal(efeito.documento.edicao, 2);
+    assert.deepEqual(efeito.documento.agenda, {
+      data: "2026-10-22",
+      hora: "15:00",
+      equipe: ["col_aaaaaaaaaaaaaaaa", "col_bbbbbbbbbbbbbbbb"],
+      veiculo_id: "vei_aaaaaaaaaaaaaaaa",
+    });
+    assert.equal(JSON.stringify(efeito.documento).includes("88.50"), false);
+  });
+
+  it("recusa equipe repetida, OS cancelada e edição velha", () => {
+    const repetida = rejeita(() =>
+      interpretarOs({
+        action: "schedule",
+        idempotency_key: "ag",
+        numero: "10045-01",
+        expected_edicao: 1,
+        data: "2026-10-22",
+        equipe: ["col_aaaaaaaaaaaaaaaa", "col_aaaaaaaaaaaaaaaa"],
+        veiculo_id: "vei_aaaaaaaaaaaaaaaa",
+      }),
+    );
+    assert.match(repetida.message, /equipe/i);
+    const cancelada = rejeita(() =>
+      aplicarOs(
+        { ...aberta, status: "cancelada" },
+        interpretarOs({
+          action: "schedule",
+          idempotency_key: "ag2",
+          numero: "10045-01",
+          expected_edicao: 1,
+          data: "2026-10-22",
+          equipe: ["col_aaaaaaaaaaaaaaaa"],
+          veiculo_id: "vei_aaaaaaaaaaaaaaaa",
+        }),
+        null,
+      ),
+    );
+    assert.match(cancelada.message, /cancelada/);
     const velha = rejeita(() =>
       aplicarOs(
         aberta,
-        interpretarOs({ action: "cancel", idempotency_key: "k4", numero: "10045-01", expected_edicao: 9, motivo: "Tarde" }),
+        interpretarOs({
+          action: "schedule",
+          idempotency_key: "ag3",
+          numero: "10045-01",
+          expected_edicao: 9,
+          data: "2026-10-22",
+          equipe: ["col_aaaaaaaaaaaaaaaa"],
+          veiculo_id: "vei_aaaaaaaaaaaaaaaa",
+        }),
         null,
       ),
     );
