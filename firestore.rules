@@ -1029,6 +1029,15 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // O portal lê se a abertura ainda trava pedido de saída. Só as Functions gravam.
+    // O tempo real do portal consulta por customer_code (list), que não enxerga
+    // o id do documento; as Functions gravam customer_code igual ao id.
+    match /client_portal_status/{customerCode} {
+      allow get: if canReadOperations() || (isCustomer() && isOwnCustomerCode(customerCode));
+      allow list: if canReadOperations() || isOwnProjection();
+      allow create, update, delete: if false;
+    }
+
     match /opening_inventory_sessions/{sessionId} {
       allow read: if canReadOperations();
       allow create, update, delete: if false;

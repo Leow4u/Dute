@@ -1264,6 +1264,26 @@ export function openingInventorySessionDocumentId(customerCode: string) {
   return safeDocId(`opening_${customerCode}`);
 }
 
+/** O portal lê este documento para travar o envio do pedido durante a abertura. */
+function publishOutboundBlock(
+  transaction: Transaction,
+  db: Firestore,
+  customerCode: string,
+  blocked: boolean,
+) {
+  const code = text(customerCode);
+  if (!code || code.includes("/")) return;
+  transaction.set(
+    db.collection("client_portal_status").doc(code),
+    {
+      customer_code: code,
+      outbound_blocked: blocked,
+      updated_at: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
 export async function createOpeningInventorySessionTransaction(
   db: Firestore,
   input: CreateOpeningInventorySessionInput,
@@ -1362,6 +1382,7 @@ export async function createOpeningInventorySessionTransaction(
         { merge: true },
       );
     }
+    publishOutboundBlock(transaction, db, customerCode, true);
 
     const event = createEvent(
       transaction,
@@ -1509,6 +1530,7 @@ export async function completeOpeningInventorySessionTransaction(
         { merge: true },
       );
     }
+    publishOutboundBlock(transaction, db, customerCode, false);
     const event = createEvent(
       transaction,
       db,
@@ -2308,6 +2330,7 @@ export async function recordCycleCountTransaction(
         last_counted_at: occurredAt,
         updated_at: FieldValue.serverTimestamp(),
       });
+      publishOutboundBlock(transaction, db, customerCode, true);
       if (boxRef) {
         transaction.update(boxRef, {
           line_count: FieldValue.increment(1),
