@@ -92,3 +92,13 @@ export function buildOrderQueue<R extends QueueRequest>({
     delivered: orders.filter((order) => order.stage === "entregue"),
   };
 }
+
+export function ordersGroupEmpty(group: "approve" | "pick" | "deliver") {
+  if (group === "approve") {
+    return "O pedido nasce no portal do cliente. Quando ele enviar, a aprovação aparece aqui.";
+  }
+  if (group === "pick") {
+    return "Nada para separar. A separação começa depois que a coordenação aprova o pedido.";
+  }
+  return "Nenhum pedido esperando entrega.";
+}

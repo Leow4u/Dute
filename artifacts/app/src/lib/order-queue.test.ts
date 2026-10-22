@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildOrderQueue, isAwaitingDecision } from "./order-queue";
+import { buildOrderQueue, isAwaitingDecision, ordersGroupEmpty } from "./order-queue";
 import type { WarehouseOpsResponse, WarehouseTask } from "./warehouse-ops/model";
 
 function task(overrides: Partial<WarehouseTask> & { id: string }): WarehouseTask {
@@ -65,5 +65,17 @@ describe("fila de pedidos", () => {
     ["closed", false],
   ])("status %s espera decisão: %s", (status, expected) => {
     expect(isAwaitingDecision(status)).toBe(expected);
+  });
+});
+
+describe("pedido vazio", () => {
+  it("explica que o pedido nasce no portal e entra depois da aprovação", () => {
+    expect(ordersGroupEmpty("approve")).toBe(
+      "O pedido nasce no portal do cliente. Quando ele enviar, a aprovação aparece aqui.",
+    );
+    expect(ordersGroupEmpty("pick")).toBe(
+      "Nada para separar. A separação começa depois que a coordenação aprova o pedido.",
+    );
+    expect(ordersGroupEmpty("deliver")).toBe("Nenhum pedido esperando entrega.");
   });
 });

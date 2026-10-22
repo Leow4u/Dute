@@ -559,6 +559,14 @@ export function ClienteEstoque() {
         }
 
         function submitCart(fields: Pick<StoredCart, "orderName" | "destination" | "dueAt" | "notes">) {
+          if (overview.inventory?.outbound_blocked === true) {
+            toast({
+              title: "Inventário inicial em andamento",
+              description: "A abertura do estoque ainda não terminou.",
+              variant: "destructive",
+            });
+            return;
+          }
           if (cartLines.length === 0) {
             toast({
               title: "Nenhum item selecionado",
@@ -713,6 +721,7 @@ export function ClienteEstoque() {
                   lines={cartLines}
                   isSubmitting={requestMutation.isPending}
                   isSavingEvent={saveEvent.isPending}
+                  outboundBlocked={overview.inventory?.outbound_blocked === true}
                   onSaveEvent={saveCartAsEvent}
                   onClose={() => setCartOpen(false)}
                   onIncrement={(product) => addSingleToCart(product)}
@@ -1448,6 +1457,7 @@ function CartPanel({
   lines,
   isSubmitting,
   isSavingEvent,
+  outboundBlocked = false,
   expanded,
   onToggleExpanded,
   onClose,
@@ -1463,6 +1473,7 @@ function CartPanel({
   lines: CartLine[];
   isSubmitting: boolean;
   isSavingEvent: boolean;
+  outboundBlocked?: boolean;
   expanded: boolean;
   onToggleExpanded: () => void;
   onClose: () => void;
@@ -1622,15 +1633,26 @@ function CartPanel({
         </span>
         <strong>{formatNumber(totalQuantity)} peças</strong>
       </div>
+      {outboundBlocked ? (
+        <div className="rounded-lg border border-warning-soft-border bg-warning-soft px-3 py-2 text-sm text-warning-soft-foreground">
+          <p className="font-semibold">Inventário inicial em andamento</p>
+          <p className="mt-1">
+            A Dutelog ainda está contando o estoque. O envio espera o fim da contagem.
+          </p>
+        </div>
+      ) : null}
       <Button
         type="button"
         className="w-full cursor-pointer"
-        disabled={isSubmitting || lines.length === 0}
+        disabled={isSubmitting || lines.length === 0 || outboundBlocked}
         onClick={() => onSubmit({ orderName, destination, dueAt, notes })}
       >
         {isSubmitting ? <Truck className="h-4 w-4 animate-pulse" /> : <CheckCircle2 className="h-4 w-4" />}
         Enviar pedido para a Dutelog
       </Button>
+      {outboundBlocked ? (
+        <p className="text-sm font-semibold text-warning-soft-foreground">A abertura do estoque ainda não terminou.</p>
+      ) : null}
       {eventDraft ? (
         <form
           className="flex flex-col gap-3 rounded-lg border border-border p-3"

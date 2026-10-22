@@ -22,6 +22,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  OpeningInventoryNotice,
+  useOpeningInventorySession,
+} from "@/features/warehouse-ops/opening-inventory-status";
 import { ExceptionDialog, useWarehouseTaskActions } from "@/features/warehouse-ops/task-actions";
 import { TaskDetailPanel } from "@/features/warehouse-ops/task-detail";
 import {
@@ -37,7 +41,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
-import { buildOrderQueue } from "@/lib/order-queue";
+import { buildOrderQueue, ordersGroupEmpty } from "@/lib/order-queue";
 import { useItemPhotos } from "@/lib/use-item-photos";
 import { canDecideRequests, humanApiError } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -108,6 +112,7 @@ type DialogState =
 export default function Pedidos() {
   const { user } = useAppUser();
   const decider = canDecideRequests(user?.publicMetadata.role);
+  const openingSession = useOpeningInventorySession();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [view, setView] = useState<"open" | "delivered">("open");
@@ -331,6 +336,15 @@ export default function Pedidos() {
         }
       />
 
+      <OpeningInventoryNotice
+        session={openingSession.data}
+        actions={
+          <Button asChild variant="outline" size="sm">
+            <Link href="/wms/contagem">Continuar contagem</Link>
+          </Button>
+        }
+      />
+
       {loading ? (
         <p className="text-sm text-muted-foreground">Carregando pedidos...</p>
       ) : view === "delivered" ? (
@@ -356,7 +370,14 @@ export default function Pedidos() {
               title="Para aprovar"
               hint="coordenação"
               count={queue.approve.length}
-              empty="Nenhuma solicitação esperando aprovação."
+              empty={
+                <>
+                  {ordersGroupEmpty("approve")}{" "}
+                  <Link href="/solicitacoes" className="font-semibold text-primary hover:underline">
+                    Ver solicitações
+                  </Link>
+                </>
+              }
             >
               {queue.approve.map((request) => {
                 const validation = buildBalanceValidation(
@@ -423,7 +444,7 @@ export default function Pedidos() {
             title="Para separar"
             hint="armazém"
             count={queue.pick.length}
-            empty="Nada para separar agora."
+            empty={ordersGroupEmpty("pick")}
           >
             {queue.pick.map((order) => (
               <OrderRow
@@ -454,7 +475,7 @@ export default function Pedidos() {
             title="Para entregar"
             hint="hoje"
             count={queue.deliver.length}
-            empty="Nenhum pedido esperando entrega."
+            empty={ordersGroupEmpty("deliver")}
           >
             {queue.deliver.map((order) => (
               <OrderRow

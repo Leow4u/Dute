@@ -67,6 +67,8 @@ export type InventorySummary = {
   by_category?: InventoryCategory[];
   top_items?: InventoryItem[];
   items?: InventoryItem[];
+  /** A abertura deste cliente ainda trava pedido de saída. */
+  outbound_blocked?: boolean;
 };
 
 export type InventoryCategory = {
