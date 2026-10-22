@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { PAPEIS, type Papel } from "@workspace/dominio";
 import { describe, expect, it } from "vitest";
 
-import { ambienteDaRota, layoutDaRota, podeTrocarDeModulo } from "./ambientes";
+import { ambienteDaRota, layoutDaRota, moduloDaRota, podeTrocarDeModulo } from "./ambientes";
 import { getNavigationForProfileRole, menuDoComercial } from "./modules";
 
 /**
@@ -38,6 +38,18 @@ describe("ambiente da rota", () => {
     expect(ambienteDaRota("/configuracoes")).toBe("wms");
     expect(layoutDaRota("/configuracoes")).toBe("settings");
     expect(layoutDaRota("/configuracoes/clientes?x=1")).toBe("settings");
+    expect(moduloDaRota("/configuracoes")).toBeNull();
+    expect(moduloDaRota("/configuracoes/aplicativo")).toBeNull();
+  });
+
+  it("marca Comercial, Financeiro ou Armazenagem conforme a casa da rota", () => {
+    expect(moduloDaRota("/comercial")).toBe("comercial");
+    expect(moduloDaRota("/comercial/orcamento?numero=1")).toBe("comercial");
+    expect(moduloDaRota("/faturamento")).toBe("financeiro");
+    expect(moduloDaRota("/faturamento/fatura")).toBe("financeiro");
+    expect(moduloDaRota("/dashboard")).toBe("wms");
+    expect(moduloDaRota("/estoque/mapa")).toBe("wms");
+    expect(moduloDaRota("/portal/faturas")).toBe("wms");
   });
 
   it("toda rota protegida do App cai no shell do caminho", () => {
