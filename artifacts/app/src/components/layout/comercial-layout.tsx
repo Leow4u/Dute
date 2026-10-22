@@ -3,10 +3,8 @@ import { useLocation } from "wouter";
 
 import { AccountMenu, SidebarAccountFooter } from "@/components/layout/account-menu";
 import { ComercialShell } from "@/components/layout/comercial-shell";
-import { podeTrocarDeModulo } from "@/lib/ambientes";
 import { useAppAuth, useAppUser } from "@/lib/auth";
 import { menuDoComercial } from "@/lib/modules";
-import { useOperationProfile } from "@/lib/operation-profile";
 import { usePwaInstall } from "@/lib/pwa-install";
 import { rememberReturnPath } from "@/lib/settings-nav";
 
@@ -19,10 +17,8 @@ export default function ComercialLayout({ children }: { children: ReactNode }) {
   const { user } = useAppUser();
   const { signOut } = useAppAuth();
   const { isOnline } = usePwaInstall();
-  const operation = useOperationProfile();
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const role = user?.publicMetadata.role;
-  const showModulos = podeTrocarDeModulo(role, operation.profile);
   const items = menuDoComercial(role);
 
   useEffect(() => {
@@ -37,7 +33,7 @@ export default function ComercialLayout({ children }: { children: ReactNode }) {
     );
 
   return (
-    <ComercialShell items={items} showModulos={showModulos} basePath={basePath} online={isOnline} conta={conta}>
+    <ComercialShell items={items} basePath={basePath} online={isOnline} conta={conta}>
       {children}
     </ComercialShell>
   );

@@ -29,10 +29,8 @@ import {
 } from "@/lib/modules";
 import { AccountMenu, SidebarAccountFooter } from "@/components/layout/account-menu";
 import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
-import { ModulosLink } from "@/components/layout/modulos-link";
 import { SidebarBrand } from "@/components/layout/sidebar-brand";
 import { agentPathFor, isAgentScreen, isAgentShortcut } from "@/lib/agent-chat";
-import { podeTrocarDeModulo } from "@/lib/ambientes";
 import { useAppAuth, useAppUser } from "@/lib/auth";
 import { ActiveCustomerSwitcher } from "@/components/layout/active-customer-switcher";
 import { useOperationProfile } from "@/lib/operation-profile";
@@ -280,7 +278,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const profileRole = user?.publicMetadata.role;
   const showCustomerSwitcher = Boolean(profileRole) && INTERNAL_ROLES.includes(profileRole!);
   const canManageCustomers = profileRole === "owner" || profileRole === "admin";
-  const showModulos = podeTrocarDeModulo(profileRole, operation.profile);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem("dute.sidebar") === "collapsed";
@@ -414,7 +411,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             collapsed ? "items-center px-3" : "px-4",
           )}
         >
-          {showModulos ? <ModulosLink variant={collapsed ? "collapsed" : "sidebar"} /> : null}
           {modules.map((module) =>
             collapsed ? (
               <CollapsedModuleItem
@@ -468,7 +464,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             {showCustomerSwitcher ? (
               <ActiveCustomerSwitcher variant="header" canManageCustomers={canManageCustomers} />
             ) : null}
-            {showModulos ? <ModulosLink variant="header" /> : null}
             <AccountMenu basePath={basePath} compact signOut={signOut} user={user} />
           </div>
         </header>

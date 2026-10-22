@@ -8,10 +8,10 @@ import { ComercialShell } from "./comercial-shell";
 
 const ITENS = menuDoComercial("owner", true);
 
-function render(path: string, showModulos: boolean, children = "Fila") {
+function render(path: string, children = "Fila") {
   return renderToStaticMarkup(
     <Router ssrPath={path}>
-      <ComercialShell items={ITENS} showModulos={showModulos} basePath="" online conta={() => null}>
+      <ComercialShell items={ITENS} basePath="" online conta={() => null}>
         {children}
       </ComercialShell>
     </Router>,
@@ -27,7 +27,7 @@ function linkAtual(html: string, href: string) {
 
 describe("shell do Comercial", () => {
   it("mostra o título e só as telas do módulo", () => {
-    const html = render("/comercial", true);
+    const html = render("/comercial");
     expect(html).toContain('data-ambiente="comercial"');
     expect(html).toContain(">Comercial<");
     for (const tela of ["Orçamentos", "Clientes", "Contratos", "Autorizações", "Medições"]) {
@@ -42,36 +42,30 @@ describe("shell do Comercial", () => {
     expect(html).toContain(">Fila<");
   });
 
-  it("Módulos volta para a entrada quando a pessoa tem mais de um módulo", () => {
-    const html = render("/comercial/contratos", true);
-    expect(html).toContain('href="/"');
-    expect(html).toContain(">Módulos<");
+  it("a troca de módulo saiu da sidebar e do cabeçalho", () => {
+    const html = render("/comercial/contratos");
+    expect(html).not.toContain(">Módulos<");
+    expect(html).not.toContain('href="/"');
     expect(html).toContain('href="/comercial/contratos"');
   });
 
-  it("quem só tem o Comercial não vê a troca", () => {
-    const html = render("/comercial", false);
-    expect(html).not.toContain(">Módulos<");
-    expect(html).not.toContain('href="/"');
-  });
-
   it("a tela aberta fica marcada, e a montagem acende Orçamentos", () => {
-    const clientes = render("/comercial/clientes", false);
+    const clientes = render("/comercial/clientes");
     expect(linkAtual(clientes, "/comercial/clientes")).toBe(true);
     expect(linkAtual(clientes, "/comercial")).toBe(false);
 
-    const montagem = render("/comercial/orcamento", false);
+    const montagem = render("/comercial/orcamento");
     expect(linkAtual(montagem, "/comercial")).toBe(true);
     expect(linkAtual(montagem, "/comercial/clientes")).toBe(false);
 
-    const aprovar = render("/comercial/aprovar", false);
+    const aprovar = render("/comercial/aprovar");
     expect(linkAtual(aprovar, "/comercial")).toBe(true);
   });
 
   it("no celular a barra leva às mesmas telas", () => {
-    const html = render("/comercial/medicoes", true);
+    const html = render("/comercial/medicoes");
     expect(html).toContain('aria-label="Navegação principal"');
     expect(html).toContain('href="/comercial/medicoes"');
-    expect(html).toContain(">Módulos<");
+    expect(html).not.toContain(">Módulos<");
   });
 });

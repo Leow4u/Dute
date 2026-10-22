@@ -1,4 +1,4 @@
-import type { Papel } from "@workspace/dominio";
+import type { Modulo, Papel } from "@workspace/dominio";
 
 import { COMERCIAL_LIBERADO, PLATAFORMA_LIBERADA } from "./liberacao";
 import { normalizePath } from "./modules";
@@ -29,6 +29,19 @@ export function ambienteDaRota(path: string): Ambiente {
   for (const item of POR_PREFIXO) {
     if (normalized === item.prefixo || normalized.startsWith(`${item.prefixo}/`)) return item.ambiente;
   }
+  return "wms";
+}
+
+/**
+ * Módulo cuja casa a rota pertence, para marcar o item aberto no menu da
+ * conta. Configuração não é módulo. O Faturamento mora no shell do WMS, mas
+ * é a casa do Financeiro. O resto desse shell é a Armazenagem.
+ */
+export function moduloDaRota(path: string): Modulo | null {
+  if (isSettingsPath(path)) return null;
+  if (ambienteDaRota(path) === "comercial") return "comercial";
+  const normalized = normalizePath(path);
+  if (normalized === "/faturamento" || normalized.startsWith("/faturamento/")) return "financeiro";
   return "wms";
 }
 

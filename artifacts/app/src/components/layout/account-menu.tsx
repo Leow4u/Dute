@@ -1,14 +1,23 @@
-import { ChevronsUpDown, Download, LogOut, Settings, User as UserIcon } from "lucide-react";
-import { Link } from "wouter";
+import type { Papel } from "@workspace/dominio";
+import { ChevronsUpDown, Download, LayoutGrid, LogOut, Settings, User as UserIcon, type LucideIcon } from "lucide-react";
+import { Link, useLocation } from "wouter";
 
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { roleDescription, roleLabel } from "@/lib/access";
+import { roleLabel } from "@/lib/access";
+import { moduloDaRota, podeTrocarDeModulo } from "@/lib/ambientes";
 import type { AppUser } from "@/lib/auth";
+import { COMERCIAL_LIBERADO, PLATAFORMA_LIBERADA } from "@/lib/liberacao";
+import { useOperationProfile } from "@/lib/operation-profile";
+import type { OperationProfile } from "@/lib/operations";
+import { modulesForPerson } from "@/lib/platform-modules";
 import { usePwaInstall } from "@/lib/pwa-install";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +27,38 @@ type AccountMenuProps = {
   signOut: (options?: { redirectUrl?: string }) => Promise<void>;
   user: AppUser | null;
 };
+
+export type AtalhoDeModulo = {
+  key: string;
+  label: string;
+  href: string;
+  icon: LucideIcon;
+  atual: boolean;
+};
+
+/**
+ * Módulos com tela, na ordem da entrada, só quando a pessoa tem mais de um.
+ * O aberto fica marcado: Comercial pelo prefixo, Financeiro pela casa
+ * /faturamento (mesmo dentro do shell do WMS) e o resto desse shell como
+ * Armazenagem. Configuração não marca nenhum.
+ */
+export function atalhosDaConta(
+  role: Papel | null | undefined,
+  profile: Pick<OperationProfile, "modules"> | null | undefined,
+  path: string,
+  comercial: boolean = COMERCIAL_LIBERADO,
+  plataforma: boolean = PLATAFORMA_LIBERADA,
+): AtalhoDeModulo[] {
+  if (!podeTrocarDeModulo(role, profile, comercial, plataforma)) return [];
+  const aberto = moduloDaRota(path);
+  return modulesForPerson(role, profile, comercial).map((entry) => ({
+    key: entry.module.key,
+    label: entry.module.label,
+    href: entry.href,
+    icon: entry.module.icon,
+    atual: entry.module.key === aberto,
+  }));
+}
 
 function UserAvatar({ user }: { user: AppUser | null }) {
   return (
@@ -31,12 +72,45 @@ function UserAvatar({ user }: { user: AppUser | null }) {
   );
 }
 
+export function ContaCabecalho({ user, name, email, papel }: { user: AppUser | null; name: string; email: string; papel: string }) {
+  return (
+    <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
+      <UserAvatar user={user} />
+      <div className="min-w-0">
+        <div className="truncate text-sm font-semibold">{name}</div>
+        <div className="truncate text-xs text-muted-foreground">{email}</div>
+        <span className="mt-1 inline-flex rounded-md bg-muted px-2 py-0.5 text-xs font-semibold">{papel}</span>
+      </div>
+    </div>
+  );
+}
+
+export function ModuloLink({ atalho }: { atalho: AtalhoDeModulo }) {
+  const Icon = atalho.icon;
+  return (
+    <Link
+      href={atalho.href}
+      aria-current={atalho.atual ? "page" : undefined}
+      className={cn(
+        "flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none",
+        atalho.atual && "bg-accent text-accent-foreground",
+      )}
+    >
+      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+      <span className="min-w-0 flex-1 truncate">{atalho.label}</span>
+      {atalho.atual ? <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-foreground" /> : null}
+    </Link>
+  );
+}
+
 export function AccountMenu({ basePath, compact = false, signOut, user }: AccountMenuProps) {
   const { isInstalled } = usePwaInstall();
+  const { profile } = useOperationProfile();
+  const [location] = useLocation();
   const role = user?.publicMetadata.role;
   const name = user?.fullName || "Usuário";
   const email = user?.primaryEmailAddress?.emailAddress || "Sem e-mail";
-  const managesAccess = role === "owner" || role === "admin";
+  const atalhos = atalhosDaConta(role, profile, location);
 
   return (
     <DropdownMenu>
@@ -60,25 +134,23 @@ export function AccountMenu({ basePath, compact = false, signOut, user }: Accoun
         )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align={compact ? "start" : "end"} side={compact ? "right" : "top"} className="w-[300px] p-0">
-        {/* A conta inteira cabe aqui; a antiga tela de Configuração repetia isto. */}
-        <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
-          <UserAvatar user={user} />
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold">{name}</div>
-            <div className="truncate text-xs text-muted-foreground">{email}</div>
-          </div>
-        </div>
-        <div className="space-y-1.5 border-b border-border/60 px-4 py-3">
-          <div className="flex items-center justify-between gap-2 text-sm">
-            <span className="text-muted-foreground">Perfil</span>
-            <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-semibold">{roleLabel(role)}</span>
-          </div>
-          <p className="text-xs leading-5 text-muted-foreground">
-            {roleDescription(role)}{" "}
-            {managesAccess ? "Perfis são definidos em Pessoas e acessos." : "Para mudar seu perfil, fale com a administração."}
-          </p>
-        </div>
+        <ContaCabecalho user={user} name={name} email={email} papel={roleLabel(role)} />
         <div className="p-1">
+          {atalhos.length > 0 ? (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className="cursor-pointer">
+                <LayoutGrid className="h-4 w-4" aria-hidden="true" />
+                Módulos
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent align="start" className="min-w-44">
+                {atalhos.map((atalho) => (
+                  <DropdownMenuItem key={atalho.key} asChild>
+                    <ModuloLink atalho={atalho} />
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          ) : null}
           <DropdownMenuItem asChild>
             <Link href="/configuracoes" className="cursor-pointer">
               <Settings className="mr-2 h-4 w-4" />
