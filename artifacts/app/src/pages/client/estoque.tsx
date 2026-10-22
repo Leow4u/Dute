@@ -43,6 +43,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { cartFromDraft, dueAtFromDraft, takeDraft } from "@/lib/agent-draft";
+import { patchStoredCart, readStoredCart, type StoredCart } from "@/lib/client-cart";
 import { cartFromEvent, eventDateFromDueAt, eventDestination, eventDueAt, eventNotes } from "@/lib/client-events";
 import { overviewLine, productTitle, productType, stockOverview, typeOptions, typeValue } from "@/lib/portal-stock";
 import { cn } from "@/lib/utils";
@@ -51,6 +52,7 @@ import { groupFamilies, variantLabel, type Family } from "@/lib/stock-variants";
 import { useClientEvents, useSaveClientEvent } from "./events-api";
 import {
   ClientDataBoundary,
+  useClientOverview,
   ClientModuleShell,
   EmptyModuleState,
   ModulePanel,
@@ -133,6 +135,8 @@ const stockSortOptions: Array<{
 ];
 
 export function ClienteEstoque() {
+  const overviewQuery = useClientOverview();
+  const customerCode = overviewQuery.data?.customer?.code || "";
   const [searchTerm, setSearchTerm] = useState("");
   const [viewMode, setViewMode] = useState<StockViewMode>("cards");
   const [stockFilter, setStockFilter] = useState<StockFilter>("todos");
@@ -141,6 +145,8 @@ export function ClienteEstoque() {
   const [visibleProductLimit, setVisibleProductLimit] =
     useState(STOCK_PAGE_SIZE);
   const [cart, setCart] = useState<Record<string, number>>({});
+  const [cartCustomer, setCartCustomer] = useState("");
+  const [cartSeed, setCartSeed] = useState(0);
   const [draftQuantities, setDraftQuantities] = useState<
     Record<string, number>
   >({});
@@ -164,11 +170,16 @@ export function ClienteEstoque() {
       // Sem storage (aba privada): vale só nesta visita.
     }
   };
-  const [orderName, setOrderName] = useState("");
   const [cartExpanded, setCartExpanded] = useState(false);
-  const [destination, setDestination] = useState("");
-  const [dueAt, setDueAt] = useState("");
-  const [notes, setNotes] = useState("");
+  useEffect(() => {
+    if (!customerCode || cartCustomer === customerCode) return;
+    setCart(readStoredCart(window.localStorage, customerCode).cart);
+    setCartCustomer(customerCode);
+  }, [customerCode, cartCustomer]);
+  useEffect(() => {
+    if (!customerCode || cartCustomer !== customerCode) return;
+    patchStoredCart(window.localStorage, customerCode, { cart });
+  }, [cart, cartCustomer, customerCode]);
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -185,11 +196,16 @@ export function ClienteEstoque() {
     const draft = takeDraft("pedido");
     if (!draft) return;
     const { cart: draftCart, missing } = cartFromDraft(products, draft);
+    const next = {
+      cart: draftCart,
+      orderName: draft.nome ?? "",
+      destination: draft.destino ?? "",
+      dueAt: dueAtFromDraft(draft.prazo, draft.hora),
+      notes: draft.observacoes ?? "",
+    };
     setCart(draftCart);
-    setDestination(draft.destino ?? "");
-    setDueAt(dueAtFromDraft(draft.prazo, draft.hora));
-    setOrderName(draft.nome ?? "");
-    setNotes(draft.observacoes ?? "");
+    if (customerCode) patchStoredCart(window.localStorage, customerCode, next);
+    setCartSeed((current) => current + 1);
     setCartOpen(true);
     toast({
       title: "Rascunho do Agent Dute no pedido",
@@ -213,11 +229,16 @@ export function ClienteEstoque() {
     }
     const { cart: eventCart, missing } = cartFromEvent(event, products);
     const due = eventDueAt(event.next_date);
+    const next = {
+      cart: eventCart,
+      orderName: event.name,
+      destination: eventDestination(event),
+      dueAt: due,
+      notes: eventNotes(event),
+    };
     setCart(eventCart);
-    setOrderName(event.name);
-    setDestination(eventDestination(event));
-    setDueAt(due);
-    setNotes(eventNotes(event));
+    if (customerCode) patchStoredCart(window.localStorage, customerCode, next);
+    setCartSeed((current) => current + 1);
     setCartOpen(true);
     toast({
       title: `${event.name} no pedido`,
@@ -240,10 +261,16 @@ export function ClienteEstoque() {
       });
       setCart({});
       setCartOpen(false);
-      setOrderName("");
-      setDestination("");
-      setDueAt("");
-      setNotes("");
+      if (customerCode) {
+        patchStoredCart(window.localStorage, customerCode, {
+          cart: {},
+          orderName: "",
+          destination: "",
+          dueAt: "",
+          notes: "",
+        });
+      }
+      setCartSeed((current) => current + 1);
       void invalidateClientData(queryClient);
       navigate("/portal/pedidos");
     },
@@ -483,8 +510,12 @@ export function ClienteEstoque() {
         }
 
         /** Guarda o pedido montado como evento: itens, "Entregar em" como local e as observações. */
-        function saveCartAsEvent(input: { name: string; nextDate: string; key: string }, onSaved: () => void) {
-          if (!destination.trim()) {
+        function saveCartAsEvent(
+          fields: Pick<StoredCart, "destination" | "notes">,
+          input: { name: string; nextDate: string; key: string },
+          onSaved: () => void,
+        ) {
+          if (!fields.destination.trim()) {
             toast({
               title: "Informe onde entregar",
               description: "É o local do evento: preencha Entregar em antes de salvar.",
@@ -497,10 +528,10 @@ export function ClienteEstoque() {
               idempotency_key: input.key,
               name: input.name.trim(),
               description: null,
-              venue: destination.trim(),
+              venue: fields.destination.trim(),
               address: null,
               next_date: input.nextDate || null,
-              schedule: notes.trim() || null,
+              schedule: fields.notes.trim() || null,
               logistics: null,
               items: cartLines.map((line) => ({
                 sku_code: line.product.sku,
@@ -527,7 +558,7 @@ export function ClienteEstoque() {
           );
         }
 
-        function submitCart() {
+        function submitCart(fields: Pick<StoredCart, "orderName" | "destination" | "dueAt" | "notes">) {
           if (cartLines.length === 0) {
             toast({
               title: "Nenhum item selecionado",
@@ -537,7 +568,7 @@ export function ClienteEstoque() {
             return;
           }
 
-          if (!destination.trim()) {
+          if (!fields.destination.trim()) {
             toast({
               title: "Informe onde entregar",
               description:
@@ -561,15 +592,15 @@ export function ClienteEstoque() {
             type: "retirada",
             priority: "normal",
             // Sem nome, o Início mostra "Pedido de dd/mm".
-            title: orderName.trim() || undefined,
+            title: fields.orderName.trim() || undefined,
             description: [
-              `Pedido montado no estoque para ${destination.trim()}`,
-              notes.trim(),
+              `Pedido montado no estoque para ${fields.destination.trim()}`,
+              fields.notes.trim(),
             ]
               .filter(Boolean)
               .join(" | "),
-            destination: destination.trim(),
-            due_at: dueAt ? new Date(dueAt).toISOString() : undefined,
+            destination: fields.destination.trim(),
+            due_at: fields.dueAt ? new Date(fields.dueAt).toISOString() : undefined,
             items: requestItems,
           });
         }
@@ -675,21 +706,15 @@ export function ClienteEstoque() {
             {cartOpen ? (
               <SideDrawer onClose={() => setCartOpen(false)} wide={cartExpanded}>
                 <CartPanel
+                  customerCode={customerCode}
+                  seed={cartSeed}
                   expanded={cartExpanded}
                   onToggleExpanded={() => setCartExpanded((current) => !current)}
                   lines={cartLines}
-                  orderName={orderName}
-                  onOrderNameChange={setOrderName}
-                  destination={destination}
-                  dueAt={dueAt}
-                  notes={notes}
                   isSubmitting={requestMutation.isPending}
                   isSavingEvent={saveEvent.isPending}
                   onSaveEvent={saveCartAsEvent}
                   onClose={() => setCartOpen(false)}
-                  onDestinationChange={setDestination}
-                  onDueAtChange={setDueAt}
-                  onNotesChange={setNotes}
                   onIncrement={(product) => addSingleToCart(product)}
                   onDecrement={(product) =>
                     setCartQuantity(product, (cart[product.key] ?? 0) - 1)
@@ -1418,49 +1443,59 @@ const CART_SEARCH_FROM = 8;
  * duas colunas, itens à esquerda e dados do pedido à direita.
  */
 function CartPanel({
+  customerCode,
+  seed,
   lines,
-  orderName,
-  destination,
-  dueAt,
-  notes,
   isSubmitting,
   isSavingEvent,
   expanded,
   onToggleExpanded,
   onClose,
   onSaveEvent,
-  onOrderNameChange,
-  onDestinationChange,
-  onDueAtChange,
-  onNotesChange,
   onIncrement,
   onDecrement,
   onQuantityChange,
   onRemove,
   onSubmit,
 }: {
+  customerCode: string;
+  seed: number;
   lines: CartLine[];
-  orderName: string;
-  destination: string;
-  dueAt: string;
-  notes: string;
   isSubmitting: boolean;
   isSavingEvent: boolean;
   expanded: boolean;
   onToggleExpanded: () => void;
   onClose: () => void;
-  onSaveEvent: (input: { name: string; nextDate: string; key: string }, onSaved: () => void) => void;
-  onOrderNameChange: (value: string) => void;
-  onDestinationChange: (value: string) => void;
-  onDueAtChange: (value: string) => void;
-  onNotesChange: (value: string) => void;
+  onSaveEvent: (
+    fields: Pick<StoredCart, "destination" | "notes">,
+    input: { name: string; nextDate: string; key: string },
+    onSaved: () => void,
+  ) => void;
   onIncrement: (product: StockProduct) => void;
   onDecrement: (product: StockProduct) => void;
   onQuantityChange: (product: StockProduct, quantity: number) => void;
   onRemove: (product: StockProduct) => void;
-  onSubmit: () => void;
+  onSubmit: (fields: Pick<StoredCart, "orderName" | "destination" | "dueAt" | "notes">) => void;
 }) {
+  const [orderName, setOrderName] = useState("");
+  const [destination, setDestination] = useState("");
+  const [dueAt, setDueAt] = useState("");
+  const [notes, setNotes] = useState("");
+  const [hydrated, setHydrated] = useState(false);
   const [query, setQuery] = useState("");
+  useEffect(() => {
+    if (!customerCode) return;
+    const stored = readStoredCart(window.localStorage, customerCode);
+    setOrderName(stored.orderName);
+    setDestination(stored.destination);
+    setDueAt(stored.dueAt);
+    setNotes(stored.notes);
+    setHydrated(true);
+  }, [customerCode, seed]);
+  useEffect(() => {
+    if (!hydrated || !customerCode) return;
+    patchStoredCart(window.localStorage, customerCode, { orderName, destination, dueAt, notes });
+  }, [hydrated, customerCode, orderName, destination, dueAt, notes]);
   // Salvar como evento: nome, data do evento e a chave que evita salvar duas vezes.
   const [eventDraft, setEventDraft] = useState<{ name: string; nextDate: string; key: string } | null>(null);
   const totalQuantity = lines.reduce((sum, line) => sum + line.quantity, 0);
@@ -1545,7 +1580,7 @@ function CartPanel({
         <Input
           id="cart-name"
           value={orderName}
-          onChange={(event) => onOrderNameChange(event.target.value)}
+          onChange={(event) => setOrderName(event.target.value)}
           placeholder="Ex.: Abastecimento loja Faria Lima"
           maxLength={120}
         />
@@ -1557,7 +1592,7 @@ function CartPanel({
         <Input
           id="cart-destination"
           value={destination}
-          onChange={(event) => onDestinationChange(event.target.value)}
+          onChange={(event) => setDestination(event.target.value)}
           placeholder="Agência, prédio ou centro de custo"
           aria-required="true"
         />
@@ -1568,7 +1603,7 @@ function CartPanel({
           id="cart-due-at"
           type="datetime-local"
           value={dueAt}
-          onChange={(event) => onDueAtChange(event.target.value)}
+          onChange={(event) => setDueAt(event.target.value)}
         />
       </div>
       <div className="space-y-1.5">
@@ -1576,7 +1611,7 @@ function CartPanel({
         <Textarea
           id="cart-notes"
           value={notes}
-          onChange={(event) => onNotesChange(event.target.value)}
+          onChange={(event) => setNotes(event.target.value)}
           placeholder="Contato, janela de entrega ou restrições"
           rows={3}
         />
@@ -1591,7 +1626,7 @@ function CartPanel({
         type="button"
         className="w-full cursor-pointer"
         disabled={isSubmitting || lines.length === 0}
-        onClick={onSubmit}
+        onClick={() => onSubmit({ orderName, destination, dueAt, notes })}
       >
         {isSubmitting ? <Truck className="h-4 w-4 animate-pulse" /> : <CheckCircle2 className="h-4 w-4" />}
         Enviar pedido para a Dutelog
@@ -1602,7 +1637,7 @@ function CartPanel({
           onSubmit={(event) => {
             event.preventDefault();
             if (!eventDraft.name.trim()) return;
-            onSaveEvent(eventDraft, () => setEventDraft(null));
+            onSaveEvent({ destination, notes }, eventDraft, () => setEventDraft(null));
           }}
         >
           <div>
@@ -1662,6 +1697,7 @@ function CartPanel({
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 px-4 py-3">
         <div>
           <h2 className="font-semibold">Seu pedido</h2>
+          <p className="text-xs font-semibold text-success-soft-foreground">Salvo neste aparelho</p>
           <p className="text-xs text-muted-foreground">
             {formatNumber(lines.length)} {lines.length === 1 ? "item" : "itens"} · {formatNumber(totalQuantity)} peças
           </p>
