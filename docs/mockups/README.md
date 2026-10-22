@@ -36,6 +36,16 @@ orçamentos e contratos" do mesmo canvas. O desenho está em
 | Autorizações de faturamento | `ComAutorizacoes.dc.html` |
 | Medição mensal | `ComMedicaoMensal.dc.html` |
 
+## Ajustes de UX para validar (22/10/2026)
+
+Mockup do visual atual do WMS e do portal, para os cinco ajustes conferidos
+no código. Não é a identidade v3: o WMS segue `docs/sistema-visual.md` até
+o lançamento da Operação.
+
+| Tela | Arquivo |
+|---|---|
+| Guarda, avisos, pedidos e carrinho | `ux-cinco-passos.html` |
+
 ## Regras da v3
 
 - Menu lateral preto `#161616` com logo branco e seis módulos (Início, Operação,

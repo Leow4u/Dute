@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Dute — ajustes de UI para validar</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<style>
+  :root {
+    --bg: #F4F5F7;
+    --fg: #1E293B;
+    --muted: #5D6877;
+    --line: #E2E6EB;
+    --card: #fff;
+    --side: #EEF0F3;
+    --primary: #2457D6;
+    --primary-hover: #1E4AB8;
+    --soft: #E8EEFC;
+    --warn-bg: #F7F4EC;
+    --warn-line: #E4D7B4;
+    --warn-fg: #8A6A22;
+    --ok-bg: #E7F6EE;
+    --ok-fg: #1F7A46;
+    --info-bg: #E8EEFC;
+    --info-fg: #2457D6;
+    --danger: #B3261E;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #E7E9EE;
+    color: var(--fg);
+    font: 14px/1.45 "Plus Jakarta Sans", sans-serif;
+  }
+  a { color: var(--primary); text-decoration: none; }
+  button, input { font: inherit; color: inherit; }
+  h1, h2, h3, p { margin: 0; }
+  .review {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 28px 24px 64px;
+  }
+  .review > header { margin-bottom: 28px; }
+  .review > header h1 { font-size: 28px; letter-spacing: -0.03em; }
+  .review > header p { margin-top: 8px; max-width: 720px; color: var(--muted); }
+  .toc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .toc a {
+    border: 1px solid #D5DAE1;
+    background: #fff;
+    border-radius: 999px;
+    padding: 6px 12px;
+    color: var(--fg);
+    font-weight: 600;
+  }
+  .block { margin-top: 36px; }
+  .cap { margin-bottom: 12px; }
+  .cap b { display: block; font-size: 16px; }
+  .cap span { color: var(--muted); }
+  .device {
+    width: 1366px;
+    height: 768px;
+    background: var(--bg);
+    border: 1px solid #D5DAE1;
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+  }
+  .phone-wrap { width: 390px; }
+  .phone {
+    width: 390px;
+    height: 780px;
+    background: var(--bg);
+    border: 1px solid #D5DAE1;
+    border-radius: 28px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .side {
+    width: 248px;
+    flex: none;
+    background: var(--side);
+    border-right: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .brand {
+    height: 72px;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .brand img { height: 28px; width: auto; }
+  .nav { padding: 12px; display: flex; flex-direction: column; gap: 2px; }
+  .nav a, .nav .item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 36px;
+    padding: 0 10px;
+    border-radius: 8px;
+    color: var(--fg);
+    font-weight: 600;
+  }
+  .nav a.on, .sub a.on { background: var(--soft); color: var(--primary); }
+  .nav svg, .sub svg { width: 18px; height: 18px; flex: none; }
+  .sub { margin: 2px 0 6px 16px; padding-left: 10px; border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
+  .sub a { display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 0 8px; border-radius: 8px; color: #6A7584; font-weight: 600; font-size: 13px; }
+  .who { margin-top: auto; padding: 12px; border-top: 1px solid var(--line); font-size: 13px; }
+  .who b { display: block; }
+  .who span { color: var(--muted); }
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 20px 20px 16px; gap: 14px; }
+  .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .top h2 { font-size: 24px; letter-spacing: -0.02em; font-weight: 700; }
+  .actions { display: flex; gap: 8px; align-items: center; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 40px; padding: 0 14px; border-radius: var(--radius-sm);
+    border: 1px solid transparent; background: var(--primary); color: #fff; font-weight: 700; cursor: default;
+  }
+  .btn.lg { min-height: 44px; }
+  .btn.ghost { background: #fff; color: var(--fg); border-color: #CED4DC; }
+  .btn.soft { background: var(--soft); color: var(--primary); }
+  .btn:disabled, .btn.off { background: #E4E8ED; color: #6A7584; cursor: default; }
+  .btn.block { width: 100%; }
+  .seg { display: inline-flex; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 3px; }
+  .seg b, .seg span { padding: 6px 10px; border-radius: 6px; font-size: 13px; }
+  .seg b { background: var(--soft); color: var(--primary); }
+  .seg span { color: var(--muted); font-weight: 600; }
+  .split { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 420px; grid-template-rows: minmax(0, 1fr); gap: 14px; }
+  .groups { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .group h3 { font-size: 15px; font-weight: 700; padding: 0 4px 8px; }
+  .group h3 em { font-style: normal; color: var(--muted); font-weight: 600; margin-left: 6px; }
+  .rows { background: #fff; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-top: 1px solid #EEF1F4; }
+  .row:first-child { border-top: 0; }
+  .row.sel { background: #F7F9FC; }
+  .ico { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; flex: none; }
+  .ico svg { width: 20px; height: 20px; }
+  .ico.info { background: var(--info-bg); color: var(--info-fg); }
+  .ico.ok { background: var(--ok-bg); color: var(--ok-fg); }
+  .ico.warn { background: var(--warn-bg); color: var(--warn-fg); }
+  .row .txt { min-width: 0; flex: 1; }
+  .row .txt b { display: block; }
+  .row .txt span, .empty { color: var(--muted); }
+  .note { margin-top: 4px; color: var(--warn-fg); font-weight: 600; font-size: 13px; }
+  .empty { padding: 16px 18px; }
+  .empty a { font-weight: 700; }
+  .card {
+    background: #fff; border: 1px solid var(--line); border-radius: 14px;
+    min-height: 0; height: 100%; display: flex; flex-direction: column; overflow: hidden;
+  }
+  .card head, .hd { padding: 16px 16px 12px; border-bottom: 1px solid #EEF1F4; }
+  .badges { display: flex; gap: 6px; flex-wrap: wrap; }
+  .badge { font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 6px; background: var(--soft); color: var(--primary); }
+  .badge.mute { background: #F1F3F6; color: var(--muted); }
+  .badge.warn { background: var(--warn-bg); color: var(--warn-fg); }
+  .hd h3 { margin-top: 8px; font-size: 18px; letter-spacing: -0.02em; }
+  .hd p { color: var(--muted); margin-top: 2px; }
+  .body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 12px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .field label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+  .box, .pick {
+    border: 1px solid #CED4DC; border-radius: var(--radius-sm); background: #fff; min-height: 44px;
+    display: flex; align-items: center; gap: 8px; padding: 0 12px;
+  }
+  .box.off { background: #F4F5F7; color: var(--muted); }
+  .pick.focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(36, 87, 214, 0.15); }
+  .positions { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .pos { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-top: 1px solid #EEF1F4; }
+  .pos:first-child { border-top: 0; }
+  .pos.on { background: var(--soft); }
+  .dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #CED4DC; flex: none; }
+  .pos.on .dot { border-color: var(--primary); box-shadow: inset 0 0 0 4px var(--primary); }
+  .pos b { display: block; }
+  .pos span { color: var(--muted); font-size: 13px; }
+  .stepper { display: flex; align-items: center; gap: 8px; }
+  .stepper i {
+    width: 36px; height: 36px; border-radius: 6px; border: 1px solid #CED4DC;
+    display: grid; place-items: center; font-style: normal; font-weight: 700; background: #fff;
+  }
+  .ai { border: 1px solid #E4DCFB; background: #F8F6FE; border-radius: 10px; padding: 10px 12px; color: #5B3FC4; font-weight: 700; display: flex; justify-content: space-between; }
+  .reason { color: var(--warn-fg); font-weight: 650; font-size: 13px; }
+  .banner {
+    background: var(--warn-bg); border: 1px solid var(--warn-line); color: var(--warn-fg);
+    border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .banner b { display: block; color: #6E5418; }
+  .sheet { margin-top: auto; background: #fff; border-top: 1px solid var(--line); padding: 12px 16px 18px; display: flex; flex-direction: column; gap: 8px; }
+  .ph-top { height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; background: #fff; border-bottom: 1px solid var(--line); font-weight: 700; }
+  .ph-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; flex: 1; }
+  .portal-grid { display: grid; grid-template-columns: 1fr 380px; grid-template-rows: minmax(0, 1fr); gap: 14px; min-height: 0; flex: 1; }
+  .products { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: start; }
+  .product { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: flex; gap: 10px; }
+  .swatch { width: 56px; height: 56px; border-radius: 8px; background: #F1F3F6; flex: none; }
+  .swatch.navy { background: #1E3A5F; }
+  .drawer { background: #fff; border: 1px solid var(--line); border-radius: 14px; display: flex; flex-direction: column; min-height: 0; height: 100%; }
+  .drawer .hd { display: flex; justify-content: space-between; align-items: flex-start; }
+  .line { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #EEF1F4; }
+  .saved { color: var(--ok-fg); font-size: 12px; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="review">
+  <header>
+    <h1>Ajustes de UI para validar</h1>
+    <p>Quatro telas do visual que está em homologação. A identidade v3 não entra aqui. Dentro de cada tela só há rótulo, dado e ação.</p>
+    <nav class="toc">
+      <a href="#guarda">1 · Guarda pronta</a>
+      <a href="#guarda-celular">1 · Guarda no celular</a>
+      <a href="#pedidos">2 e 5 · Pedidos</a>
+      <a href="#avisos">3 · Aviso de envio</a>
+      <a href="#carrinho">4 · Carrinho</a>
+    </nav>
+  </header>
+
+  <section class="block" id="guarda">
+    <div class="cap"><b>1 · Receber › Para guardar</b><span>Posição cadastrada, ação no topo, selo Guarda. A conferência de linha some desta ficha.</span></div>
+    <div class="device" data-shot="guarda">
+      <aside class="side">
+        <div class="brand"><img src="../../artifacts/app/public/dutelog-logo.png" alt="Dutelog"></div>
+        <nav class="nav">
+          <a>Início</a>
+          <a>Agent Dute</a>
+          <a>Pedidos</a>
+          <div class="item">Estoque</div>
+          <div class="sub">
+            <a>Itens</a>
+            <a class="on">Receber</a>
+            <a>Contagem</a>
+            <a>Mapa</a>
+            <a>Posições</a>
+          </div>
+          <a>Faturamento</a>
+        </nav>
+        <div class="who"><b>BTG Pactual</b><span>Cliente ativo</span></div>
+      </aside>
+      <div class="main">
+        <div class="top">
+          <h2>Receber</h2>
+          <div class="actions">
+            <div class="seg"><b>Em aberto · 2</b><span>Recebidos</span></div>
+            <button class="btn">Chegada avulsa</button>
+          </div>
+        </div>
+        <div class="split">
+          <div class="groups">
+            <section class="group">
+              <h3>Para conferir <em>chegadas · 1</em></h3>
+              <div class="rows">
+                <div class="row">
+                  <div class="ico info"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18v10H3z"/><path d="M3 7l9 6 9-6"/></svg></div>
+                  <div class="txt"><b>Camisa social azul</b><span>Avulsa · 4 un. · em conferência</span></div>
+                  <button class="btn ghost">Conferir</button>
+                </div>
+              </div>
+            </section>
+            <section class="group">
+              <h3>Para guardar <em>endereçar · 1</em></h3>
+              <div class="rows">
+                <div class="row sel">
+                  <div class="ico ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17h16M6 17V8l6-3 6 3v9"/></svg></div>
+                  <div class="txt"><b>Guardar TESTE UX Camiseta</b><span>10 un. · está em RECEBIMENTO</span></div>
+                  <button class="btn soft">Guardar</button>
+                </div>
+              </div>
+            </section>
+          </div>
+          <aside class="card">
+            <div class="hd">
+              <div class="badges"><span class="badge">Guarda</span><span class="badge mute">em execução</span></div>
+              <h3>Guardar TESTE UX Camiseta</h3>
+              <p>TESTEUX-001 · 10 un. · origem RECEBIMENTO</p>
+            </div>
+            <div class="body">
+              <div class="pair">
+                <button class="btn lg">Concluir guarda</button>
+                <button class="btn ghost lg">Registrar exceção</button>
+              </div>
+              <div class="field">
+                <label>Posição</label>
+                <div class="box pick focus"><b>A-01</b><span style="margin-left:auto;color:#5D6877">bipar</span></div>
+              </div>
+              <div class="positions">
+                <div class="pos on"><i class="dot"></i><div><b>A-01</b><span>Rua A · prateleira 01 · livre</span></div></div>
+                <div class="pos"><i class="dot"></i><div><b>A-02</b><span>Rua A · prateleira 02 · livre</span></div></div>
+                <div class="pos"><i class="dot"></i><div><b>B-01</b><span>Rua B · prateleira 01 · livre</span></div></div>
+              </div>
+              <div class="field">
+                <label>Quantidade</label>
+                <div class="stepper"><i>−</i><b>10</b><i>+</i><span style="color:#5D6877">un.</span></div>
+              </div>
+              <div class="ai"><span>Evidências da IA</span><span>Sem alerta direto</span></div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="guarda-celular">
+    <div class="cap"><b>1 · Guarda no celular, antes de bipar</b><span>A ação fica no rodapé. O motivo fica junto do botão desligado.</span></div>
+    <div class="phone" data-shot="guarda-celular">
+      <div class="ph-top"><span>Receber</span><span>Fechar</span></div>
+      <div class="ph-body">
+        <div>
+          <div class="badges"><span class="badge">Guarda</span><span class="badge mute">em execução</span></div>
+          <h3 style="margin-top:8px;font-size:20px">Guardar TESTE UX Camiseta</h3>
+          <p style="color:#5D6877">10 un. · origem RECEBIMENTO</p>
+        </div>
+        <div class="field">
+          <label>Posição</label>
+          <div class="box pick focus" style="color:#5D6877">Bipe ou busque a prateleira</div>
+        </div>
+        <div class="field">
+          <label>Quantidade</label>
+          <div class="stepper"><i>−</i><b>10</b><i>+</i><span style="color:#5D6877">un.</span></div>
+        </div>
+        <div class="ai"><span>Evidências da IA</span><span>›</span></div>
+      </div>
+      <div class="sheet">
+        <button class="btn lg block off" disabled>Concluir guarda</button>
+        <div class="reason">Escolha uma posição cadastrada.</div>
+        <button class="btn ghost lg block">Registrar exceção</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="pedidos">
+    <div class="cap"><b>2 e 5 · Pedidos, visão da administração</b><span>A faixa leva à Contagem. O vazio diz de onde o pedido nasce. A operação não vê “Para aprovar”.</span></div>
+    <div class="device" data-shot="pedidos">
+      <aside class="side">
+        <div class="brand"><img src="../../artifacts/app/public/dutelog-logo.png" alt="Dutelog"></div>
+        <nav class="nav">
+          <a>Início</a>
+          <a>Agent Dute</a>
+          <a class="on">Pedidos</a>
+          <div class="item">Estoque</div>
+          <div class="sub">
+            <a>Itens</a>
+            <a>Receber</a>
+            <a>Contagem</a>
+            <a>Mapa</a>
+            <a>Posições</a>
+          </div>
+          <a>Faturamento</a>
+        </nav>
+        <div class="who"><b>BTG Pactual</b><span>Cliente ativo</span></div>
+      </aside>
+      <div class="main">
+        <div class="top">
+          <h2>Pedidos</h2>
+          <div class="actions">
+            <div class="seg"><b>Em aberto</b><span>Entregues</span></div>
+          </div>
+        </div>
+        <div class="banner">
+          <div>
+            <b>Inventário de abertura em andamento</b>
+            2 produtos e 10 unidades confirmados. Pedidos de saída da BTG Pactual ficam bloqueados até a conclusão.
+          </div>
+          <button class="btn ghost">Continuar contagem</button>
+        </div>
+        <div class="groups">
+          <section class="group">
+            <h3>Para aprovar <em>coordenação · 0</em></h3>
+            <div class="rows">
+              <div class="empty">O pedido nasce no portal do cliente. Quando ele enviar, a aprovação aparece aqui. <a href="#pedidos">Ver solicitações</a></div>
+            </div>
+          </section>
+          <section class="group">
+            <h3>Para separar <em>armazém · 0</em></h3>
+            <div class="rows">
+              <div class="empty">Nada para separar. A separação começa depois que a coordenação aprova o pedido.</div>
+            </div>
+          </section>
+          <section class="group">
+            <h3>Para entregar <em>0</em></h3>
+            <div class="rows">
+              <div class="empty">Nenhum pedido esperando entrega.</div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="avisos">
+    <div class="cap"><b>3 · Receber › aviso do cliente</b><span>O ENV aparece com status. A chegada avulsa vincula a ele. Aprovar continua com a coordenação.</span></div>
+    <div class="device" data-shot="avisos">
+      <aside class="side">
+        <div class="brand"><img src="../../artifacts/app/public/dutelog-logo.png" alt="Dutelog"></div>
+        <nav class="nav">
+          <a>Início</a>
+          <a>Agent Dute</a>
+          <a>Pedidos</a>
+          <div class="item">Estoque</div>
+          <div class="sub">
+            <a>Itens</a>
+            <a class="on">Receber</a>
+            <a>Contagem</a>
+            <a>Mapa</a>
+            <a>Posições</a>
+          </div>
+          <a>Faturamento</a>
+        </nav>
+        <div class="who"><b>BTG Pactual</b><span>Cliente ativo</span></div>
+      </aside>
+      <div class="main">
+        <div class="top">
+          <h2>Receber</h2>
+          <div class="actions">
+            <div class="seg"><b>Em aberto · 2</b><span>Recebidos</span></div>
+            <button class="btn">Chegada avulsa</button>
+          </div>
+        </div>
+        <div class="split">
+          <div class="groups">
+            <section class="group">
+              <h3>Para conferir <em>chegadas · 2</em></h3>
+              <div class="rows">
+                <div class="row">
+                  <div class="ico warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v5M12 16h.01"/><path d="M10.3 4.8 2.8 18a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 4.8a2 2 0 0 0-3.4 0z"/></svg></div>
+                  <div class="txt">
+                    <b>ENV-0001 · Camisaria Alfa</b>
+                    <span>NF 1842 · 10 un.</span>
+                    <div class="note">Aguardando aprovação da coordenação</div>
+                  </div>
+                  <button class="btn ghost">Ver</button>
+                </div>
+                <div class="row sel">
+                  <div class="ico info"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></div>
+                  <div class="txt"><b>TESTE UX Camiseta</b><span>AVL-8125FC27 · avulsa · 10 un.</span></div>
+                  <button class="btn soft">Conferir</button>
+                </div>
+              </div>
+            </section>
+          </div>
+          <aside class="card">
+            <div class="hd">
+              <div class="badges"><span class="badge">Chegada avulsa</span></div>
+              <h3>TESTE UX Camiseta</h3>
+              <p>AVL-8125FC27 · 10 un.</p>
+            </div>
+            <div class="body">
+              <button class="btn lg block">Conferir</button>
+              <div class="field">
+                <label>Aviso do cliente</label>
+                <div class="positions">
+                  <div class="pos"><i class="dot"></i><div><b>Sem aviso</b><span>Chegada sem ENV vinculado</span></div></div>
+                  <div class="pos on"><i class="dot"></i><div><b>ENV-0001 · Camisaria Alfa</b><span>NF 1842 · aguardando aprovação</span></div></div>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="carrinho">
+    <div class="cap"><b>4 · Portal › Estoque › Seu pedido</b><span>O pedido permanece neste aparelho. O envio espera o fim da abertura. “Entregar em” continua texto.</span></div>
+    <div class="device" data-shot="carrinho">
+      <aside class="side">
+        <div class="brand"><img src="../../artifacts/app/public/dutelog-logo.png" alt="Dutelog"></div>
+        <nav class="nav">
+          <a>Início</a>
+          <a class="on">Estoque</a>
+          <a>Envios para a Dutelog</a>
+          <a>Eventos</a>
+          <a>Pedidos</a>
+          <a>Faturas</a>
+          <a>Documentos</a>
+          <a>Agent Dute</a>
+        </nav>
+        <div class="who"><b>BTG Pactual</b><span>Portal do cliente</span></div>
+      </aside>
+      <div class="main">
+        <div class="top">
+          <h2>Estoque</h2>
+          <button class="btn soft">Pedido · 1 item · 2 peças</button>
+        </div>
+        <div class="portal-grid">
+          <div class="products">
+            <article class="product">
+              <div class="swatch"></div>
+              <div><b>Camiseta polo branca</b><div style="color:#5D6877">P · 46 disponíveis</div><div style="color:#2457D6;font-weight:700;font-size:13px">2 no pedido</div></div>
+            </article>
+            <article class="product">
+              <div class="swatch"></div>
+              <div><b>Camiseta polo branca</b><div style="color:#5D6877">M · 36 disponíveis</div></div>
+            </article>
+            <article class="product">
+              <div class="swatch navy"></div>
+              <div><b>Camiseta polo azul</b><div style="color:#5D6877">M · 12 disponíveis</div></div>
+            </article>
+          </div>
+          <aside class="drawer">
+            <div class="hd">
+              <div>
+                <h3>Seu pedido</h3>
+                <div class="saved">Salvo neste aparelho</div>
+              </div>
+              <span style="color:#5D6877;font-weight:700">Fechar</span>
+            </div>
+            <div class="body">
+              <div class="line">
+                <div class="swatch" style="width:40px;height:40px"></div>
+                <div style="flex:1"><b>Camiseta polo branca</b><div style="color:#5D6877">P</div></div>
+                <div class="stepper"><i>−</i><b>2</b><i>+</i></div>
+              </div>
+              <div class="field">
+                <label>Entregar em</label>
+                <div class="box">Agência Faria Lima</div>
+              </div>
+              <div class="field">
+                <label>Para quando</label>
+                <div class="box">27/10/2026 · 07:00</div>
+              </div>
+              <div class="banner" style="display:block">
+                <b>Inventário inicial em andamento</b>
+                A Dutelog ainda está contando o estoque. O pedido fica salvo e pode ser enviado quando a contagem terminar.
+              </div>
+              <button class="btn lg block off" disabled>Enviar pedido</button>
+              <div class="reason">A abertura do estoque ainda não terminou.</div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>
