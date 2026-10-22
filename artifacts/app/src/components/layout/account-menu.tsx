@@ -1,4 +1,5 @@
 import type { Papel } from "@workspace/dominio";
+import type { ReactNode } from "react";
 import { ChevronsUpDown, Download, LayoutGrid, LogOut, Settings, User as UserIcon, type LucideIcon } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
@@ -24,9 +25,22 @@ import { cn } from "@/lib/utils";
 type AccountMenuProps = {
   basePath: string;
   compact?: boolean;
+  /**
+   * Cabeçalho do celular. O botão fica no canto direito: o painel abre para
+   * baixo, dentro da tela, e os módulos entram na mesma lista. O submenu
+   * lateral não cabe ali.
+   */
+  cabecalho?: boolean;
   signOut: (options?: { redirectUrl?: string }) => Promise<void>;
   user: AppUser | null;
 };
+
+/** Onde o painel da conta abre. A barra recolhida continua para o lado. */
+export function posicaoDoMenu(cabecalho: boolean, compact: boolean): { side: "bottom" | "right" | "top"; align: "start" | "end" } {
+  if (cabecalho) return { side: "bottom", align: "end" };
+  if (compact) return { side: "right", align: "start" };
+  return { side: "top", align: "end" };
+}
 
 export type AtalhoDeModulo = {
   key: string;
@@ -85,7 +99,7 @@ export function ContaCabecalho({ user, name, email, papel }: { user: AppUser | n
   );
 }
 
-export function ModuloLink({ atalho }: { atalho: AtalhoDeModulo }) {
+export function ModuloLink({ atalho, className }: { atalho: AtalhoDeModulo; className?: string }) {
   const Icon = atalho.icon;
   return (
     <Link
@@ -93,6 +107,7 @@ export function ModuloLink({ atalho }: { atalho: AtalhoDeModulo }) {
       aria-current={atalho.atual ? "page" : undefined}
       className={cn(
         "flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none",
+        className,
         atalho.atual && "bg-accent text-accent-foreground",
       )}
     >
@@ -103,7 +118,29 @@ export function ModuloLink({ atalho }: { atalho: AtalhoDeModulo }) {
   );
 }
 
-export function AccountMenu({ basePath, compact = false, signOut, user }: AccountMenuProps) {
+/**
+ * Módulos na mesma lista do menu. O submenu lateral não cabe no celular.
+ * `item` envolve cada link no item do menu, para o toque fechar o painel.
+ */
+export function ListaDeModulos({
+  atalhos,
+  item,
+}: {
+  atalhos: AtalhoDeModulo[];
+  item?: (link: ReactNode, key: string) => ReactNode;
+}) {
+  return (
+    <div className="border-b border-border/60 p-1">
+      <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Módulos</p>
+      {atalhos.map((atalho) => {
+        const link = <ModuloLink atalho={atalho} className="min-h-11" />;
+        return item ? item(link, atalho.key) : <div key={atalho.key}>{link}</div>;
+      })}
+    </div>
+  );
+}
+
+export function AccountMenu({ basePath, compact = false, cabecalho = false, signOut, user }: AccountMenuProps) {
   const { isInstalled } = usePwaInstall();
   const { profile } = useOperationProfile();
   const [location] = useLocation();
@@ -111,6 +148,7 @@ export function AccountMenu({ basePath, compact = false, signOut, user }: Accoun
   const name = user?.fullName || "Usuário";
   const email = user?.primaryEmailAddress?.emailAddress || "Sem e-mail";
   const atalhos = atalhosDaConta(role, profile, location);
+  const posicao = posicaoDoMenu(cabecalho, compact);
 
   return (
     <DropdownMenu>
@@ -133,10 +171,25 @@ export function AccountMenu({ basePath, compact = false, signOut, user }: Accoun
           </>
         )}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align={compact ? "start" : "end"} side={compact ? "right" : "top"} className="w-[300px] p-0">
+      <DropdownMenuContent
+        align={posicao.align}
+        side={posicao.side}
+        collisionPadding={16}
+        className={cn("p-0", cabecalho ? "w-[min(18.75rem,calc(100vw-2rem))]" : "w-[300px]")}
+      >
         <ContaCabecalho user={user} name={name} email={email} papel={roleLabel(role)} />
+        {cabecalho && atalhos.length > 0 ? (
+          <ListaDeModulos
+            atalhos={atalhos}
+            item={(link, key) => (
+              <DropdownMenuItem key={key} asChild>
+                {link}
+              </DropdownMenuItem>
+            )}
+          />
+        ) : null}
         <div className="p-1">
-          {atalhos.length > 0 ? (
+          {!cabecalho && atalhos.length > 0 ? (
             <DropdownMenuSub>
               <DropdownMenuSubTrigger className="cursor-pointer">
                 <LayoutGrid className="h-4 w-4" aria-hidden="true" />

@@ -27,7 +27,7 @@ export default function ComercialLayout({ children }: { children: ReactNode }) {
 
   const conta = (compact: boolean) =>
     compact ? (
-      <AccountMenu basePath={basePath} compact signOut={signOut} user={user} />
+      <AccountMenu basePath={basePath} compact cabecalho signOut={signOut} user={user} />
     ) : (
       <SidebarAccountFooter basePath={basePath} signOut={signOut} user={user} />
     );
