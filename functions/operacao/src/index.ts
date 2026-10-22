@@ -4,6 +4,7 @@ import { onCall } from "firebase-functions/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 
 import { saveCollaboratorFor, saveVehicleFor } from "./domain/gravacao.js";
+import { saveServiceOrderFor } from "./domain/os-gravacao.js";
 import { requireOperacaoCaller } from "./domain/profile.js";
 import { PROJECT_ID } from "./project.js";
 
@@ -36,4 +37,10 @@ export const saveCollaborator = onCall(async (request) => {
 export const saveVehicle = onCall(async (request) => {
   const caller = await requireOperacaoCaller(db, request, PROJECT_ID);
   return saveVehicleFor(db, caller, request.data);
+});
+
+/** Abre a OS da demanda em Para planejar, ou cancela a OS aberta. */
+export const saveServiceOrder = onCall(async (request) => {
+  const caller = await requireOperacaoCaller(db, request, PROJECT_ID);
+  return saveServiceOrderFor(db, caller, request.data);
 });

@@ -98,6 +98,8 @@ OPERACAO_COLLECTIONS = (
     "collaborators",
     "vehicles",
     "operacao_operations",
+    "service_orders",
+    "service_order_counters",
 )
 # Os eventos do Comercial moram em `events`, junto dos do WMS: a zeragem apaga
 # só os outros.

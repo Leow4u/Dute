@@ -24,7 +24,6 @@ import { collection, deleteDoc, doc, getDoc, getDocs, setDoc, updateDoc } from "
 const PROJECT_ID = "demo-dute-operations";
 const LEEM = ["owner-a", "admin-a", "comercial-a", "finance-a"] as const;
 const NAO_LEEM = [
-  "ops-a",
   "wms-a",
   "support-a",
   "campo-a",
@@ -151,7 +150,7 @@ describe("demanda e orçamento: leitura", () => {
   }
 
   it("ninguém lê o contador, nem o owner", async () => {
-    for (const uid of [...LEEM, ...NAO_LEEM]) {
+    for (const uid of [...LEEM, ...NAO_LEEM, "ops-a"]) {
       await assertFails(getDoc(doc(signedAs(uid), "demand_counters", "geral")));
     }
   });
@@ -186,8 +185,15 @@ describe("demanda e orçamento: as regras escritas", () => {
     return [...match[1].matchAll(/'([^']+)'/g)].map((item) => item[1]);
   }
 
-  it("canReadDemands() é owner, admin, comercial e financeiro (a operação entra na Fase 3)", () => {
-    assert.deepEqual(roles("canReadDemands"), ["owner", "admin", "comercial", "financeiro"]);
+  it("o interno lê a demanda e não lê o orçamento nem a revisão", async () => {
+    const database = signedAs("ops-a");
+    await assertSucceeds(getDoc(doc(database, "demands", "10045")));
+    await assertFails(getDoc(doc(database, "quotes", "10045")));
+    await assertFails(getDoc(doc(database, "quotes", "10045", "revisoes", "0")));
+  });
+
+  it("canReadDemands() é owner, admin, comercial, financeiro e interno", () => {
+    assert.deepEqual(roles("canReadDemands"), ["owner", "admin", "comercial", "financeiro", "interno"]);
   });
 
   it("demands lê por canReadDemands(); quotes e revisoes, por canReadPrices(); nada aceita escrita", () => {

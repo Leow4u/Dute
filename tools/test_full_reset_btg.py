@@ -45,6 +45,8 @@ OPERACAO = (
     "collaborators",
     "vehicles",
     "operacao_operations",
+    "service_orders",
+    "service_order_counters",
 )
 
 

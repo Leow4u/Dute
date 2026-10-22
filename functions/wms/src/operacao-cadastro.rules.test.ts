@@ -131,6 +131,31 @@ describe("cadastro da Operação: leitura", () => {
   });
 });
 
+describe("OS: leitura", () => {
+  it("owner, admin, interno e suporte leem a OS; campo, comercial e cliente não", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "service_orders", "10045-01"), {
+        numero: "10045-01",
+        customer_code: "ITAU",
+        status: "aberta",
+        itens: [{ id: "ln_1", quantidade: "2" }],
+      });
+    });
+    for (const uid of ["owner-a", "admin-a", "ops-a", "support-a"]) {
+      await assertSucceeds(getDoc(doc(signedAs(uid), "service_orders", "10045-01")));
+    }
+    for (const uid of ["campo-a", "comercial-a", "finance-a", "wms-a", "client-a"]) {
+      await assertFails(getDoc(doc(signedAs(uid), "service_orders", "10045-01")));
+    }
+  });
+
+  it("ninguém grava a OS nem lê o contador pelo navegador", async () => {
+    const database = signedAs("owner-a");
+    await assertFails(setDoc(doc(database, "service_orders", "10045-02"), { numero: "10045-02" }));
+    await assertFails(getDoc(doc(database, "service_order_counters", "10045")));
+  });
+});
+
 describe("cadastro da Operação: escrita", () => {
   it("nem o owner grava, altera ou apaga pelo navegador", async () => {
     const database = signedAs("owner-a");
