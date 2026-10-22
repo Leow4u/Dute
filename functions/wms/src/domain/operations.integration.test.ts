@@ -1291,6 +1291,83 @@ describe("inventário de abertura transacional", () => {
     assert.equal((await db.collection("stock_reservations").get()).size, 0);
   });
 
+  it("publica para o portal a trava de saída da abertura, da BTG e de outro cliente", async () => {
+    await clearFirestore();
+    await db.collection("customers").doc("Itau").set({
+      code: "Itaú",
+      customer_code: "Itaú",
+      name: "Itaú Unibanco",
+      sku_prefix: "ITAU",
+      status: "active",
+    });
+    async function outboundBlocked(customer: string) {
+      const status = await db.collection("client_portal_status").doc(customer).get();
+      return status.data()?.outbound_blocked;
+    }
+
+    const btgSession = String(
+      (
+        await createOpeningInventorySessionTransaction(
+          db,
+          { customer_code: "BTG Pactual", idempotency_key: "portal-status-btg-start" },
+          actor,
+        )
+      ).session_id,
+    );
+    const itauSession = String(
+      (
+        await createOpeningInventorySessionTransaction(
+          db,
+          { customer_code: "Itaú", idempotency_key: "portal-status-itau-start" },
+          actor,
+        )
+      ).session_id,
+    );
+    assert.equal(await outboundBlocked("BTG Pactual"), true);
+    assert.equal(await outboundBlocked("Itaú"), true);
+    const btgStatus = await db.collection("client_portal_status").doc("BTG Pactual").get();
+    assert.equal(btgStatus.data()?.customer_code, "BTG Pactual");
+
+    // Sessão aberta antes desta publicação: o documento aparece na próxima contagem.
+    await db.collection("client_portal_status").doc("BTG Pactual").delete();
+    await db.collection("client_portal_status").doc("Itaú").delete();
+    await recordCycleCountTransaction(
+      db,
+      openingCountInput(btgSession, { idempotency_key: "portal-status-btg-count" }),
+      actor,
+    );
+    await recordCycleCountTransaction(
+      db,
+      openingCountInput(itauSession, {
+        customer_code: "Itaú",
+        client_item_code: "7781-02",
+        barcode: "7891000000002",
+        location_id: "RUA-B/PRAT-01/CX-001",
+        idempotency_key: "portal-status-itau-count",
+      }),
+      actor,
+    );
+    assert.equal(await outboundBlocked("BTG Pactual"), true);
+    assert.equal(await outboundBlocked("Itaú"), true);
+
+    // Concluir a abertura de um cliente não libera o portal do outro.
+    await completeOpeningInventorySessionTransaction(
+      db,
+      { customer_code: "Itaú", session_id: itauSession, idempotency_key: "portal-status-itau-complete" },
+      actor,
+    );
+    assert.equal(await outboundBlocked("Itaú"), false);
+    assert.equal(await outboundBlocked("BTG Pactual"), true);
+
+    await completeOpeningInventorySessionTransaction(
+      db,
+      { customer_code: "BTG Pactual", session_id: btgSession, idempotency_key: "portal-status-btg-complete" },
+      actor,
+    );
+    assert.equal(await outboundBlocked("BTG Pactual"), false);
+    assert.equal(await outboundBlocked("Itaú"), false);
+  });
+
   it("normaliza códigos sem diferenciar caixa ou acentos e impede duplicidade", async () => {
     await clearFirestore();
 

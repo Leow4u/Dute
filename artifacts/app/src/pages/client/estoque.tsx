@@ -1426,7 +1426,7 @@ const CART_SEARCH_FROM = 8;
  * houve pedido com mais de 1.000 itens); "Tela cheia" abre a revisão em
  * duas colunas, itens à esquerda e dados do pedido à direita.
  */
-function CartPanel({
+export function CartPanel({
   lines,
   orderName,
   destination,
@@ -1615,9 +1615,6 @@ function CartPanel({
         {isSubmitting ? <Truck className="h-4 w-4 animate-pulse" /> : <CheckCircle2 className="h-4 w-4" />}
         Enviar pedido para a Dutelog
       </Button>
-      {outboundBlocked ? (
-        <p className="text-sm font-semibold text-warning-soft-foreground">A abertura do estoque ainda não terminou.</p>
-      ) : null}
       {eventDraft ? (
         <form
           className="flex flex-col gap-3 rounded-lg border border-border p-3"
