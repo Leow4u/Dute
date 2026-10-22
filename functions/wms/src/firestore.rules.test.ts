@@ -545,6 +545,30 @@ describe("isolamento entre clientes", () => {
     await assertFails(getDoc(doc(database, "client_portal_status", CUSTOMER_B)));
   });
 
+  it("cliente acompanha a própria trava de saída pela consulta do tempo real", async () => {
+    const database = testEnvironment
+      .authenticatedContext("client-a", { email: "client-a@example.com" })
+      .firestore();
+
+    // Mesma consulta do RealtimeSyncBridge: coleção filtrada por customer_code.
+    const own = await assertSucceeds(
+      getDocs(query(collection(database, "client_portal_status"), where("customer_code", "==", CUSTOMER_A))),
+    );
+    assert.equal(own.size, 1);
+    assert.equal(own.docs[0].get("outbound_blocked"), true);
+    await assertFails(
+      getDocs(query(collection(database, "client_portal_status"), where("customer_code", "==", CUSTOMER_B))),
+    );
+    await assertFails(getDocs(collection(database, "client_portal_status")));
+
+    const other = testEnvironment
+      .authenticatedContext("client-b", { email: "client-b@example.com" })
+      .firestore();
+    await assertFails(
+      getDocs(query(collection(other, "client_portal_status"), where("customer_code", "==", CUSTOMER_A))),
+    );
+  });
+
   it("operação lê a trava de saída da abertura; ninguém grava pelo navegador", async () => {
     for (const uid of ["wms-a", "ops-a", "owner-a"]) {
       const database = testEnvironment
@@ -552,6 +576,8 @@ describe("isolamento entre clientes", () => {
         .firestore();
       await assertSucceeds(getDoc(doc(database, "client_portal_status", CUSTOMER_A)));
       await assertSucceeds(getDoc(doc(database, "client_portal_status", CUSTOMER_B)));
+      const all = await assertSucceeds(getDocs(collection(database, "client_portal_status")));
+      assert.equal(all.size, 2);
     }
     for (const uid of ["client-a", "client-b", "wms-a", "owner-a"]) {
       const database = testEnvironment
