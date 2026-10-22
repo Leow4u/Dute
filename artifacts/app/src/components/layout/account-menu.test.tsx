@@ -11,6 +11,7 @@ import { atalhosDaConta, ContaCabecalho, ModuloLink } from "./account-menu";
 const MENU = readFileSync(new URL("./account-menu.tsx", import.meta.url), "utf8");
 const APP = readFileSync(new URL("./app-layout.tsx", import.meta.url), "utf8");
 const SHELL = readFileSync(new URL("./comercial-shell.tsx", import.meta.url), "utf8");
+const OPERACAO = readFileSync(new URL("./operacao-shell.tsx", import.meta.url), "utf8");
 
 // Comercial e plataforma entram explícitos: o CI roda o vitest sem VITE_FIREBASE_PROJECT_ID.
 describe("atalhos do menu da conta", () => {
@@ -89,5 +90,7 @@ describe("onde o atalho mora", () => {
     expect(APP).not.toContain("showModulos");
     expect(SHELL).not.toContain("ModulosLink");
     expect(SHELL).not.toContain("showModulos");
+    expect(OPERACAO).not.toContain("ModulosLink");
+    expect(OPERACAO).not.toContain("showModulos");
   });
 });

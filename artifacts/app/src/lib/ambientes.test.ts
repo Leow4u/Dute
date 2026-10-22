@@ -45,6 +45,8 @@ describe("ambiente da rota", () => {
   it("marca Comercial, Financeiro ou Armazenagem conforme a casa da rota", () => {
     expect(moduloDaRota("/comercial")).toBe("comercial");
     expect(moduloDaRota("/comercial/orcamento?numero=1")).toBe("comercial");
+    expect(moduloDaRota("/operacao")).toBe("operacao");
+    expect(moduloDaRota("/operacao/colaboradores")).toBe("operacao");
     expect(moduloDaRota("/faturamento")).toBe("financeiro");
     expect(moduloDaRota("/faturamento/fatura")).toBe("financeiro");
     expect(moduloDaRota("/dashboard")).toBe("wms");

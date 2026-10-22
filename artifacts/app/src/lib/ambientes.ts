@@ -40,7 +40,8 @@ export function ambienteDaRota(path: string): Ambiente {
  */
 export function moduloDaRota(path: string): Modulo | null {
   if (isSettingsPath(path)) return null;
-  if (ambienteDaRota(path) === "comercial") return "comercial";
+  const ambiente = ambienteDaRota(path);
+  if (ambiente === "comercial" || ambiente === "operacao") return ambiente;
   const normalized = normalizePath(path);
   if (normalized === "/faturamento" || normalized.startsWith("/faturamento/")) return "financeiro";
   return "wms";
