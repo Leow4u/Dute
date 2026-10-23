@@ -4,11 +4,16 @@ import { formatarData, formatarPlaca } from "./cadastro";
 
 export type ItemDaFila = { item: string; quantidade: string };
 
+/** A janela, a equipe e os veículos da OS (parte 3.4b), ou a agenda de antes dela. */
 export type AgendaDaFila = {
   data: string;
+  /** O início da janela. */
   hora: string | null;
+  fim: string | null;
+  /** Os ids do cadastro de quem está na equipe. */
   equipe: string[];
-  veiculo_id: string;
+  /** Os ids do cadastro dos veículos (zero, um ou vários). */
+  veiculos: string[];
 };
 
 /** A demanda perdida ou cancelada no Comercial: a OS dela não se agenda, só se cancela. */
@@ -59,29 +64,56 @@ function texto(valor: unknown): string {
   return typeof valor === "string" ? valor.trim() : "";
 }
 
+function idsDe(valor: unknown, campo: string): string[] {
+  if (!Array.isArray(valor)) return [];
+  return valor.flatMap((item) => {
+    if (typeof item === "string") return item ? [item] : [];
+    if (item && typeof item === "object") {
+      const id = texto((item as Record<string, unknown>)[campo]);
+      return id ? [id] : [];
+    }
+    return [];
+  });
+}
+
+/**
+ * A agenda da OS: a janela com a equipe e os veículos (parte 3.4b) ou, na OS
+ * de antes dela, `agenda` { data, hora, equipe, veiculo_id }.
+ */
+function agendaDaLeitura(data: Record<string, unknown>): AgendaDaFila | null {
+  const janela = data.janela && typeof data.janela === "object" ? (data.janela as Record<string, unknown>) : null;
+  if (janela && texto(janela.data)) {
+    return {
+      data: texto(janela.data),
+      hora: texto(janela.inicio) || null,
+      fim: texto(janela.fim) || null,
+      equipe: idsDe(data.equipe, "colaborador_id"),
+      veiculos: idsDe(data.veiculos, "veiculo_id"),
+    };
+  }
+  const antiga = data.agenda && typeof data.agenda === "object" ? (data.agenda as Record<string, unknown>) : null;
+  if (!antiga || !texto(antiga.data)) return null;
+  return {
+    data: texto(antiga.data),
+    hora: texto(antiga.hora) || null,
+    fim: null,
+    equipe: idsDe(antiga.equipe, "colaborador_id"),
+    veiculos: texto(antiga.veiculo_id) ? [texto(antiga.veiculo_id)] : [],
+  };
+}
+
 export function osDaLeitura(id: string, data: Record<string, unknown>): OsDaFila | null {
   if (data.status !== "aberta" && data.status !== "agendada" && data.status !== "cancelada") return null;
   if (typeof data.edicao !== "number" || !texto(data.customer_code) || !texto(data.demanda)) return null;
-  const agendaBruta = data.agenda;
-  let agenda: AgendaDaFila | null = null;
-  if (agendaBruta && typeof agendaBruta === "object") {
-    const agendaData = agendaBruta as Record<string, unknown>;
-    if (texto(agendaData.data) && texto(agendaData.veiculo_id) && Array.isArray(agendaData.equipe)) {
-      agenda = {
-        data: texto(agendaData.data),
-        hora: texto(agendaData.hora) || null,
-        equipe: agendaData.equipe.filter((item): item is string => typeof item === "string"),
-        veiculo_id: texto(agendaData.veiculo_id),
-      };
-    }
-  }
+  const agenda = agendaDaLeitura(data);
   const itens = Array.isArray(data.itens)
     ? data.itens.flatMap((bruto) => {
         if (!bruto || typeof bruto !== "object") return [];
         const item = bruto as Record<string, unknown>;
         const nome = texto(item.item) || texto(item.descricao);
         if (!nome) return [];
-        return [{ item: nome, quantidade: texto(item.quantidade) }];
+        // A fatia da OS (parte 3.4b) está em `planejado`; antes, em `quantidade`.
+        return [{ item: nome, quantidade: texto(item.planejado) || texto(item.quantidade) }];
       })
     : [];
   return {
@@ -149,7 +181,7 @@ export function agendaDaOs(os: OsDaFila, hoje: string): AgendaEmEdicao {
     data: os.agenda?.data || hoje,
     hora: os.agenda?.hora ?? "",
     equipe: [...(os.agenda?.equipe ?? [])],
-    veiculoId: os.agenda?.veiculo_id ?? "",
+    veiculoId: os.agenda?.veiculos[0] ?? "",
     motivo: "",
   };
 }
@@ -185,4 +217,18 @@ export function quando(agenda: AgendaDaFila): string {
 export function placaDe(id: string, placas: Readonly<Record<string, string>>): string {
   const placa = placas[id];
   return placa ? formatarPlaca(placa) : id;
+}
+
+export function placasDe(ids: readonly string[], placas: Readonly<Record<string, string>>): string {
+  return ids.map((id) => placaDe(id, placas)).join(", ");
+}
+
+/** O que o agendamento manda à callable (parte 3.4b): janela, equipe e veículos. */
+export function pedidoDeAgenda(agenda: Pick<AgendaEmEdicao, "data" | "hora" | "equipe" | "veiculoId">) {
+  return {
+    // O campo de hora do navegador pode trazer segundos (HH:MM:SS); a callable aceita HH:MM.
+    janela: { data: agenda.data, inicio: agenda.hora.trim().slice(0, 5) || null },
+    equipe: agenda.equipe.map((colaborador_id) => ({ colaborador_id })),
+    veiculos: agenda.veiculoId ? [agenda.veiculoId] : [],
+  };
 }

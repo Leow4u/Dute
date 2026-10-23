@@ -54,8 +54,8 @@ const os = (numero: string, extra: Partial<OsDaFila>): OsDaFila => ({
 const ENTRADA: EntradaDoInicio = {
   hoje: HOJE,
   ordens: [
-    os("10045-01", { agenda: { data: HOJE, hora: "17:00", equipe: ["col_pedro"], veiculo_id: "vei_velho" } }),
-    os("10046-01", { agenda: { data: HOJE, hora: "08:30", equipe: ["col_joao"], veiculo_id: "vei_van" } }),
+    os("10045-01", { agenda: { data: HOJE, hora: "17:00", equipe: ["col_pedro"], fim: null, veiculos: ["vei_velho"] } }),
+    os("10046-01", { agenda: { data: HOJE, hora: "08:30", equipe: ["col_joao"], fim: null, veiculos: ["vei_van"] } }),
     os("10050-01", { status: "aberta", edicao: 1, customer_code: "TECH" }),
   ],
   demandas: [{ numero: "10043", customer_code: "SOUZA", titulo: null, os_numeros: [] }],

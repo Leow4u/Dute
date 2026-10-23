@@ -77,7 +77,8 @@ function itensDeCadastroInativo(entrada: EntradaDoInicio): ItemDoInicio[] {
     const agenda = os.agenda;
     if (os.status !== "agendada" || !agenda || agenda.data < entrada.hoje) return [];
     const semPessoa = agenda.equipe.filter((id) => !pessoas.get(id)?.ativo);
-    const semVeiculo = !veiculos.get(agenda.veiculo_id)?.ativo;
+    const veiculosParados = agenda.veiculos.filter((id) => !veiculos.get(id)?.ativo);
+    const semVeiculo = veiculosParados.length > 0;
     if (!semPessoa.length && !semVeiculo) return [];
     const oQue = semPessoa.length && semVeiculo
       ? "pessoa e veículo desativados"
@@ -86,7 +87,7 @@ function itensDeCadastroInativo(entrada: EntradaDoInicio): ItemDoInicio[] {
         : semPessoa.length === 1
           ? "pessoa desativada"
           : `${semPessoa.length} pessoas desativadas`;
-    const quem = [...semPessoa.map((id) => nomeDe(id, nomes)), ...(semVeiculo ? [placaDe(agenda.veiculo_id, placas)] : [])];
+    const quem = [...semPessoa.map((id) => nomeDe(id, nomes)), ...veiculosParados.map((id) => placaDe(id, placas))];
     const tone: TomDoItem = agenda.data === entrada.hoje ? "critical" : "attention";
     return [
       {

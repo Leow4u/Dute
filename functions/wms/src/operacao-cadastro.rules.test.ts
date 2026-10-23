@@ -174,6 +174,34 @@ describe("OS: leitura", () => {
     await assertFails(getDoc(doc(signedAs("client-op"), "service_orders", "10046-01")));
   });
 
+  it("o campo lê só a OS em que está escalado, e lista só com o filtro dele (parte 3.4b)", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      const database = context.firestore();
+      await setDoc(doc(database, "users", "campo-b"), { nome: "campo-b", email: "campo-b@example.com", role: "campo" });
+      await setDoc(doc(database, "users", "campo-off"), { nome: "campo-off", email: "campo-off@example.com", role: "campo", access_disabled: true });
+      await setDoc(doc(database, "service_orders", "10045-01"), { numero: "10045-01", customer_code: "ITAU", status: "agendada", itens: [], equipe_uids: ["campo-a", "campo-off"] });
+      await setDoc(doc(database, "service_orders", "10045-02"), { numero: "10045-02", customer_code: "ITAU", status: "agendada", itens: [], equipe_uids: ["campo-b"] });
+      await setDoc(doc(database, "service_orders", "10045-03"), { numero: "10045-03", customer_code: "ITAU", status: "aberta", itens: [] });
+    });
+    const campoA = signedAs("campo-a");
+    await assertSucceeds(getDoc(doc(campoA, "service_orders", "10045-01")));
+    await assertFails(getDoc(doc(campoA, "service_orders", "10045-02")));
+    await assertFails(getDoc(doc(campoA, "service_orders", "10045-03")));
+    await assertSucceeds(getDocs(query(collection(campoA, "service_orders"), where("equipe_uids", "array-contains", "campo-a"))));
+    await assertFails(getDocs(query(collection(campoA, "service_orders"), where("equipe_uids", "array-contains", "campo-b"))));
+    await assertFails(getDocs(collection(campoA, "service_orders")));
+    // Acesso removido em Pessoas tira a leitura, mesmo escalado.
+    await assertFails(getDoc(doc(signedAs("campo-off"), "service_orders", "10045-01")));
+    // Escalado não vira coordenação: nem o cadastro (tem CPF) nem gravar a OS.
+    await assertFails(getDoc(doc(campoA, "collaborators", "col_aaaaaaaaaaaaaaaa")));
+    await assertFails(updateDoc(doc(campoA, "service_orders", "10045-01"), { status: "em_execucao" }));
+    // Outro papel escalado por engano não lê pela equipe.
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "service_orders", "10045-04"), { numero: "10045-04", customer_code: "ITAU", status: "agendada", itens: [], equipe_uids: ["comercial-a"] });
+    });
+    await assertFails(getDoc(doc(signedAs("comercial-a"), "service_orders", "10045-04")));
+  });
+
   it("ninguém grava a OS nem lê o contador pelo navegador", async () => {
     const database = signedAs("owner-a");
     await assertFails(setDoc(doc(database, "service_orders", "10045-02"), { numero: "10045-02" }));

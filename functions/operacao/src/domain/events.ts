@@ -32,7 +32,9 @@ export const OPERACAO_EVENT_TYPES = [
   "vehicle.deactivated",
   "vehicle.reactivated",
   "os.created",
+  "os.planned",
   "os.scheduled",
+  "os.items_changed",
   "os.cancelled",
 ] as const;
 export type OperacaoEventType = (typeof OPERACAO_EVENT_TYPES)[number];
@@ -41,15 +43,40 @@ const criado = z.object({ id }).strict();
 const alterado = z.object({ id, edicao_antes: edicao, edicao_depois: edicao }).strict();
 const osCriada = z.object({ id: osId, demanda: demandaNumero, seq: z.number().int().min(1).max(99), linhas: z.number().int().min(1).max(300) }).strict();
 const osCancelada = z.object({ id: osId, demanda: demandaNumero }).strict();
-const osAgendada = z
+const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const hora = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable();
+/**
+ * A composição da equipe sem nome: o id do cadastro, o papel e o vínculo. É o
+ * que a IA usa para medir equipe por serviço (Fase 5).
+ */
+const composicao = z
+  .array(
+    z
+      .object({
+        colaborador_id: z.string().regex(/^col_[a-f0-9]{16}$/),
+        papel: z.enum(["lider", "motorista", "montador", "ajudante"]).nullable(),
+        vinculo: z.enum(["proprio", "freelancer", "terceiro"]),
+      })
+      .strict(),
+  )
+  .max(20);
+const frota = z.array(z.string().regex(/^vei_[a-f0-9]{16}$/)).max(6);
+const osPlanejada = z
   .object({
     id: osId,
     demanda: demandaNumero,
-    data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    hora: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable(),
-    equipe: z.array(z.string().regex(/^col_[a-f0-9]{16}$/)).min(1).max(12),
-    veiculo_id: z.string().regex(/^vei_[a-f0-9]{16}$/),
+    seq: z.number().int().min(1).max(99),
+    linhas: z.number().int().min(1).max(300),
+    data: data.nullable(),
+    equipe: composicao,
+    veiculos: frota,
   })
+  .strict();
+const osAgendada = z
+  .object({ id: osId, demanda: demandaNumero, data, inicio: hora, fim: hora, equipe: composicao, veiculos: frota })
+  .strict();
+const osItens = z
+  .object({ id: osId, demanda: demandaNumero, linhas: z.number().int().min(1).max(300), edicao_antes: edicao, edicao_depois: edicao })
   .strict();
 
 export const OPERACAO_EVENT_PAYLOADS = {
@@ -62,7 +89,9 @@ export const OPERACAO_EVENT_PAYLOADS = {
   "vehicle.deactivated": criado,
   "vehicle.reactivated": criado,
   "os.created": osCriada,
+  "os.planned": osPlanejada,
   "os.scheduled": osAgendada,
+  "os.items_changed": osItens,
   "os.cancelled": osCancelada,
 } as const;
 
@@ -75,9 +104,11 @@ const TEXTO: Record<OperacaoEventType, { title: string; description: string }> =
   "vehicle.updated": { title: "Veículo atualizado", description: "O cadastro de veículo foi atualizado." },
   "vehicle.deactivated": { title: "Veículo desativado", description: "O cadastro de veículo foi desativado." },
   "vehicle.reactivated": { title: "Veículo reativado", description: "O cadastro de veículo foi reativado." },
-  "os.created": { title: "OS aberta", description: "A OS foi aberta a partir da demanda." },
-  "os.scheduled": { title: "OS agendada", description: "A OS recebeu data, equipe e veículo." },
-  "os.cancelled": { title: "OS cancelada", description: "A OS aberta foi cancelada." },
+  "os.created": { title: "OS aberta", description: "A OS foi aberta com o saldo da demanda." },
+  "os.planned": { title: "OS planejada", description: "A OS foi planejada com uma fatia do saldo da demanda." },
+  "os.scheduled": { title: "OS agendada", description: "A OS recebeu janela, equipe e veículos." },
+  "os.items_changed": { title: "Itens da OS alterados", description: "A fatia do saldo da demanda nesta OS mudou." },
+  "os.cancelled": { title: "OS cancelada", description: "A OS foi cancelada e a fatia voltou ao saldo da demanda." },
 };
 
 export function isOperacaoEventType(value: string): value is OperacaoEventType {
