@@ -1,3 +1,5 @@
+import { REGRAS_DE_PARADO, regraEmTexto } from "@workspace/dominio";
+
 import type { OperationTemplate } from "../types";
 
 /**
@@ -27,6 +29,7 @@ export const mobiliario: OperationTemplate = {
     { label: "Cobrança", value: "LPU do contrato: posição, peça, transporte por viagem e manutenção" },
     { label: "Etiqueta", value: "Peça com patrimônio e foto; volume para lotes" },
     { label: "Mapa", value: "Posições de piso com área, na zona do cliente" },
+    { label: "Dias parado", value: regraEmTexto(REGRAS_DE_PARADO.mobiliario) },
   ],
   file: "lib/operations/templates/mobiliario.ts",
 };

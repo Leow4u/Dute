@@ -332,6 +332,12 @@ class PlanTests(unittest.TestCase):
             )
         self.assertIn("Financeiro", str(raised.exception))
 
+    def test_stock_age_goes_with_the_stock(self) -> None:
+        self.assertNotIn("ai_stock_age", full_reset_btg.MEMORIA_COLLECTIONS)
+        for include_setup in (False, True):
+            preserved = full_reset_btg.preserved_collections(include_setup=include_setup)
+            self.assertNotIn("ai_stock_age", preserved)
+
     def test_memoria_is_always_preserved(self) -> None:
         self.assertEqual(set(full_reset_btg.MEMORIA_COLLECTIONS), set(MEMORIA))
         for include_setup in (False, True):

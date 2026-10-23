@@ -14,7 +14,8 @@ import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, updateDoc, 
  * da equipe não leem, nem a do próprio cliente. O cursor da rotina não abre
  * pelo navegador. As sugestões (parte 5.2a) abrem a quem pediu e a owner e
  * admin. As lembranças (parte 5.3a) têm preço e não abrem a ninguém pelo
- * navegador: só a callable do núcleo lê. Ninguém grava pelo navegador.
+ * navegador: só a callable do núcleo lê. Os dias parado (parte 5.4a) abrem a
+ * quem lê o estoque, não ao cliente. Ninguém grava pelo navegador.
  */
 
 const PROJECT_ID = "demo-dute-operations";
@@ -69,6 +70,7 @@ beforeEach(async () => {
     await setDoc(doc(database, "ai_case_memory", "10045"), { demanda: "10045", customer_code: "ITAU", orcado_cents: 120000, realizado_cents: 140000 });
     await setDoc(doc(database, "ai_suggestions", "sug_ops"), { id: "sug_ops", tipo: "duracao_os", customer_code: "ITAU", pedida_por: { uid: "ops-a", role: "interno" } });
     await setDoc(doc(database, "ai_suggestions", "sug_outro"), { id: "sug_outro", tipo: "duracao_os", customer_code: "ITAU", pedida_por: { uid: "outro-interno", role: "interno" } });
+    await setDoc(doc(database, "ai_stock_age", "item_itau"), { tipo: "item", customer_code: "ITAU", sku_code: "ITAU-000001", saldo: 30, relogio: { primeira_entrada: null, ultima_entrada: null, ultima_saida: null } });
   });
 });
 
@@ -137,6 +139,28 @@ describe("as lembranças da memória (parte 5.3a)", () => {
       await assertFails(setDoc(doc(database, "ai_case_memory", "10046"), { customer_code: "ITAU" }));
       await assertFails(updateDoc(doc(database, "ai_case_memory", "10045"), { orcado_cents: 1 }));
       await assertFails(deleteDoc(doc(database, "ai_case_memory", "10045")));
+    }
+  });
+});
+
+describe("os dias parado do estoque (parte 5.4a)", () => {
+  it("quem lê o estoque lê e consulta pelo cliente; o cliente, o comercial, o campo e o painel não, nem o item do próprio cliente", async () => {
+    for (const uid of ["owner-a", "admin-a", "ops-a", "wms-a", "support-a"]) {
+      await assertSucceeds(getDoc(doc(firestore(uid), "ai_stock_age", "item_itau")));
+      await assertSucceeds(getDocs(query(collection(firestore(uid), "ai_stock_age"), where("customer_code", "==", "ITAU"))));
+    }
+    for (const uid of ["comercial-a", "financeiro-a", "campo-a", "painel-a", "client-itau"]) {
+      await assertFails(getDoc(doc(firestore(uid), "ai_stock_age", "item_itau")));
+      await assertFails(getDocs(query(collection(firestore(uid), "ai_stock_age"), where("customer_code", "==", "ITAU"))));
+    }
+  });
+
+  it("ninguém grava pelo navegador", async () => {
+    for (const uid of ["owner-a", "wms-a", "client-itau"]) {
+      const database = firestore(uid);
+      await assertFails(setDoc(doc(database, "ai_stock_age", "item_novo"), { tipo: "item", customer_code: "ITAU" }));
+      await assertFails(updateDoc(doc(database, "ai_stock_age", "item_itau"), { saldo: 1 }));
+      await assertFails(deleteDoc(doc(database, "ai_stock_age", "item_itau")));
     }
   });
 });

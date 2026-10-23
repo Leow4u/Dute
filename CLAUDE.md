@@ -126,7 +126,10 @@ documentação de produto e operação está em `docs/`.
     `suggestDuration` e
     `answerSuggestion` dão a duração sugerida da OS e guardam a decisão em
     `ai_suggestions`; `findSimilarQuotes` dá a quem orça os orçamentos
-    parecidos do cliente da demanda. Toda callable entra por `requireCoreCaller`, no
+    parecidos do cliente da demanda. A mesma rotina guarda em `ai_stock_age` o
+    relógio de cada item do estoque, lido do razão, para os dias parado (a
+    regra mora em `lib/dominio/src/parados.ts`, com cópia literal no núcleo).
+    Toda callable entra por `requireCoreCaller`, no
     formato de uma linha do `src/index.ts` (trava em `src/callables.test.ts`).
     Liberação própria
     `MEMORIA_AMBIENTES_LIBERADOS` (só o `dute-homolog`). O Agent Dute muda

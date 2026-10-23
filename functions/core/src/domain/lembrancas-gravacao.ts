@@ -1,6 +1,7 @@
 import type { Firestore, QueryDocumentSnapshot } from "firebase-admin/firestore";
 
 import { lerLoteDoCursor, marcarCursor } from "./cursor.js";
+import { semInstante } from "./estavel.js";
 import {
   AI_CASE_MEMORY_COLLECTION,
   ETAPAS_FECHADAS,
@@ -57,24 +58,6 @@ export function demandaDoEvento(tipo: unknown, payload: Registro): string | null
     numero = texto(payload.demanda) || texto(payload.id).split("-")[0];
   }
   return /^\d{5,8}$/.test(numero) ? numero : null;
-}
-
-/** O JSON com as chaves em ordem, em qualquer nível: o Firestore não devolve os mapas na ordem gravada. */
-function estavel(valor: unknown): string {
-  if (Array.isArray(valor)) return `[${valor.map(estavel).join(",")}]`;
-  if (valor && typeof valor === "object") {
-    const registro = valor as Registro;
-    return `{${Object.keys(registro)
-      .sort()
-      .map((chave) => `${JSON.stringify(chave)}:${estavel(registro[chave])}`)
-      .join(",")}}`;
-  }
-  return JSON.stringify(valor ?? null);
-}
-
-function semInstante(dados: Registro): string {
-  const { calculada_em: _instante, ...resto } = dados;
-  return estavel(resto);
 }
 
 /** A lembrança da demanda como ela está agora; null quando a demanda não existe ou não está fechada. */

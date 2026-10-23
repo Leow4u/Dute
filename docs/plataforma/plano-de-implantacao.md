@@ -765,3 +765,8 @@ cliente ou 15 em qualquer cliente; 20, `functions/core`; desenho em
     e explicável, com o resumo em texto guardado para o Agent Dute. Seguimos
     assim desde a parte 5.3a; a semelhança é o cosseno dos itens vezes a
     razão das escalas (12 mesas contra 30 dão 75%).
+30. Dias parado (parte 5.4): os três modelos de operação com "Parado 90+
+    dias" sem entrada nem saída e "Sem giro" aos 180 dias sem saída, ou cada
+    modelo com os dele (o mobiliário fica guardado por mais tempo; o insumo
+    deveria girar mais rápido)? Seguimos com o mesmo para os três desde a
+    parte 5.4a.

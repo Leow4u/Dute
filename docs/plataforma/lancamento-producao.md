@@ -89,8 +89,9 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     (`MEMORIA_AMBIENTES_LIBERADOS`).
   - Três functions agendadas: `runDailyAlerts`, todo dia às 06:00,
     `runNotifications`, a cada 5 minutos, e `runMeasures`, a cada 15
-    minutos, que calcula as medidas e as lembranças da memória. Ela confere a
-    liberação da memória e não faz nada no `dute-prod`.
+    minutos, que calcula as medidas, as lembranças e o relógio do estoque
+    para os dias parado. Ela confere a liberação da memória e não faz nada
+    no `dute-prod`.
 - **Frontend.**
   - O shell v3 por módulo, inclusive o da Armazenagem, e as quatro telas do
     WMS na v3. A BTG passa a ver o Início, Pedidos, Estoque e Receber novos.

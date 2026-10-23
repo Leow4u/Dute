@@ -1,3 +1,5 @@
+import { REGRAS_DE_PARADO, regraEmTexto } from "@workspace/dominio";
+
 import type { OperationTemplate } from "../types";
 
 /**
@@ -19,6 +21,7 @@ export const insumos: OperationTemplate = {
     { label: "Movimento", value: "Entrada por compra e baixa por uso na operação" },
     { label: "Cobrança", value: "Nenhuma" },
     { label: "Mapa", value: "Mesma zona por cliente, nas prateleiras reservadas à Dutelog" },
+    { label: "Dias parado", value: regraEmTexto(REGRAS_DE_PARADO.insumos) },
   ],
   file: "lib/operations/templates/insumos.ts",
 };

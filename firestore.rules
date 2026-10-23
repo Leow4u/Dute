@@ -836,6 +836,15 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Os dias parado do estoque (parte 5.4a): o relógio de cada item (a
+    // primeira e a última entrada e a última saída) e o saldo, sem valor.
+    // Abrem a quem lê o estoque, como `stock_balances`; o cliente não lê. Só a
+    // rotina do núcleo grava.
+    match /ai_stock_age/{itemId} {
+      allow read: if canReadOperations();
+      allow create, update, delete: if false;
+    }
+
     match /ai_agent_memory/{memoryId} {
       allow read: if hasAnyRole(['owner', 'admin', 'interno', 'suporte']);
       allow create, update, delete: if canCoordinateOperations();
