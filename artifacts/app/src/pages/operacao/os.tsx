@@ -4,9 +4,17 @@ import { collection, doc } from "firebase/firestore";
 import { useSearch } from "wouter";
 
 import { Button } from "@/components/ui/button";
-import { andamentoInicial, pedidosDoAndamento, problemasDoAndamento, type FormularioDeAndamento } from "@/lib/operacao/andamento";
+import {
+  andamentoInicial,
+  nomeDaAssinaturaDoArquivo,
+  pedidosDoAndamento,
+  problemaDaFoto,
+  problemasDoAndamento,
+  type AnexosDaConclusao,
+  type FormularioDeAndamento,
+} from "@/lib/operacao/andamento";
 import { chamarOperacao, mensagemDoErro, novaChave } from "@/lib/operacao/api";
-import { enviarFoto, escolherFotos, type FotoEscolhida } from "@/lib/operacao/enviar-foto";
+import { enviarAssinatura, enviarFoto, escolherFotos, type FotoEscolhida } from "@/lib/operacao/enviar-foto";
 import { fichaDaLeitura } from "@/lib/operacao/ficha-da-os";
 import { clienteDaLeitura, hojeIso, nomesPorCodigo } from "@/lib/operacao/fila";
 import { demandaDoHoje } from "@/lib/operacao/hoje";
@@ -18,9 +26,11 @@ import { AndamentoView } from "./andamento-view";
 import { OsView, type EstadoDaFicha } from "./os-view";
 
 /**
- * Operação › OS (partes 3.7d e 3.7e): a OS da URL (?numero=), a demanda, o
- * cliente e as fotos sobre OsView, e o painel de Registrar andamento, que
- * chama as callables em ordem e depois sobe as fotos da ocorrência.
+ * Operação › OS (partes 3.7d, 3.7e e 3.9c): a OS da URL (?numero=), a
+ * demanda, o cliente e as fotos sobre OsView, e o painel de Registrar
+ * andamento, que chama as callables em ordem e depois sobe as fotos da
+ * ocorrência. Na conclusão, sobem antes as fotos do final (etapa Fim) e a
+ * foto da via assinada; completeServiceOrder vem por último.
  */
 
 export default function PaginaOs() {
@@ -29,7 +39,8 @@ export default function PaginaOs() {
   const demandaNumero = os.item?.demanda ?? null;
   const demanda = useDocumento(demandaNumero ? `demands/${demandaNumero}` : null, (db) => doc(db, "demands", demandaNumero ?? "-"), demandaDoHoje);
   const clientes = useLeitura("customers", (db) => collection(db, "customers"), clienteDaLeitura);
-  const urls = useUrlsDasFotos((os.item?.fotos ?? []).map((foto) => foto.caminho));
+  // As fotos e a assinatura da conclusão (as regras liberam a leitura a quem coordena).
+  const urls = useUrlsDasFotos([...(os.item?.fotos ?? []).map((foto) => foto.caminho), ...(os.item?.conclusao?.assinatura ? [os.item.conclusao.assinatura] : [])]);
 
   const estado: EstadoDaFicha = !numero || os.item === null ? "nao_encontrada" : os.erro ? "erro" : os.item === undefined ? "carregando" : "pronto";
   const ficha = os.item ?? null;
@@ -37,6 +48,8 @@ export default function PaginaOs() {
   const [form, setForm] = useState<FormularioDeAndamento | null>(null);
   const [tentou, setTentou] = useState(false);
   const [fotos, setFotos] = useState<FotoEscolhida[]>([]);
+  const [fotosDoFinal, setFotosDoFinal] = useState<FotoEscolhida[]>([]);
+  const [assinatura, setAssinatura] = useState<{ arquivo: File; nome: string } | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [erroDasFotos, setErroDasFotos] = useState<string | null>(null);
@@ -49,25 +62,36 @@ export default function PaginaOs() {
     setForm(andamentoInicial(ficha, new Date()));
     setTentou(false);
     setFotos([]);
+    setFotosDoFinal([]);
+    setAssinatura(null);
     setErro(null);
   }
 
   function fechar() {
     setForm(null);
     setFotos([]);
+    setFotosDoFinal([]);
+    setAssinatura(null);
     setErro(null);
   }
+
+  const anexos: AnexosDaConclusao = { fotosDoFinal: fotosDoFinal.length, assinatura: assinatura?.nome ?? null };
 
   async function registrar() {
     if (!ficha || !form) return;
     setTentou(true);
     const agora = new Date();
-    if (problemasDoAndamento(form, ficha, agora).length) return;
+    if (problemasDoAndamento(form, ficha, agora, anexos).length) return;
     setOcupado(true);
     setErro(null);
     try {
+      if (form.tipo === "conclusao") {
+        // A conclusão confere as fotos do final e a assinatura: elas sobem antes.
+        for (const foto of fotosDoFinal) await enviarFoto(ficha.numero, foto, { chave: `${chave.current}:fim:${foto.nome}`, etapa: "fim" });
+        if (form.aceite === "assinatura" && assinatura) await enviarAssinatura(ficha.numero, { arquivo: assinatura.arquivo, nome: assinatura.nome, contentType: assinatura.arquivo.type });
+      }
       let ocorrencia: string | null = null;
-      for (const pedido of pedidosDoAndamento(form, ficha, chave.current, agora)) {
+      for (const pedido of pedidosDoAndamento(form, ficha, chave.current, agora, assinatura?.nome ?? null)) {
         const resultado = await chamarOperacao<{ ocorrencia?: string }>(pedido.callable, pedido.dados);
         ocorrencia = resultado.ocorrencia ?? ocorrencia;
       }
@@ -124,7 +148,7 @@ export default function PaginaOs() {
             ficha={ficha}
             form={form}
             onForm={setForm}
-            problemas={tentou ? problemasDoAndamento(form, ficha, new Date()) : []}
+            problemas={tentou ? problemasDoAndamento(form, ficha, new Date(), anexos) : []}
             erro={erro}
             ocupado={ocupado}
             fotos={fotos.map((foto) => foto.arquivo.name)}
@@ -134,6 +158,23 @@ export default function PaginaOs() {
               setFotos([...fotos, ...escolha.fotos]);
             }}
             onTirarFoto={(indice) => setFotos(fotos.filter((_, atual) => atual !== indice))}
+            anexos={{
+              fotosDoFinal: fotosDoFinal.map((foto) => foto.arquivo.name),
+              assinatura: assinatura?.arquivo.name ?? null,
+              onFotosDoFinal: (arquivos) => {
+                const escolha = escolherFotos(arquivos, ficha.janela?.data ?? null);
+                setErro(escolha.problema);
+                setFotosDoFinal([...fotosDoFinal, ...escolha.fotos]);
+              },
+              onTirarFotoDoFinal: (indice) => setFotosDoFinal(fotosDoFinal.filter((_, atual) => atual !== indice)),
+              onAssinatura: (arquivo) => {
+                if (!arquivo) return setAssinatura(null);
+                const problema = problemaDaFoto(arquivo);
+                const nome = nomeDaAssinaturaDoArquivo(arquivo.type);
+                setErro(problema ? `${arquivo.name}: ${problema}` : null);
+                setAssinatura(problema || !nome ? null : { arquivo, nome });
+              },
+            }}
             onCancelar={fechar}
             onRegistrar={() => void registrar()}
           />

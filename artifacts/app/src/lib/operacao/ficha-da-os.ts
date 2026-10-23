@@ -62,6 +62,15 @@ export type LocalLido = { nome: string | null; endereco: string | null; compleme
 /** A entrada e a saída de alguém da equipe (parte 3.8a), pelo instante. */
 export type PresencaLida = { colaboradorId: string; entrada: string | null; saida: string | null };
 
+/** A conclusão no local (parte 3.9a): o aceite, quem assinou ou recebeu, a assinatura e o motivo de cada item a menos. */
+export type ConclusaoLida = RegistroLido & {
+  aceite: "assinatura" | "sem_aceite";
+  responsavel: { nome: string; cargo: string | null; documento: string | null };
+  /** O caminho da assinatura no Storage, ou null sem aceite. */
+  assinatura: string | null;
+  diferencas: Array<{ linha: string; previsto: string; executado: string; motivo: string }>;
+};
+
 export type FichaDaOs = {
   numero: string;
   demanda: string;
@@ -81,6 +90,7 @@ export type FichaDaOs = {
   ocorrencias: OcorrenciaLida[];
   fotos: FotoLida[];
   presencas: PresencaLida[];
+  conclusao: ConclusaoLida | null;
   cancelamento: string | null;
 };
 
@@ -221,7 +231,28 @@ export function fichaDaLeitura(id: string, data: Record<string, unknown>): Ficha
       const instanteDe = (marca: unknown) => (marca && typeof marca === "object" ? registro(marca as Record<string, unknown>)?.instante ?? null : null);
       return [{ colaboradorId: colaborador, entrada: instanteDe(bruto.entrada), saida: instanteDe(bruto.saida) }];
     }),
+    conclusao: conclusaoLida(data.conclusao),
     cancelamento: cancelamento || null,
+  };
+}
+
+function conclusaoLida(valor: unknown): ConclusaoLida | null {
+  if (!valor || typeof valor !== "object") return null;
+  const bruto = valor as Record<string, unknown>;
+  const base = registro(bruto);
+  const aceite = texto(bruto.aceite);
+  if (!base || (aceite !== "assinatura" && aceite !== "sem_aceite")) return null;
+  const responsavel = bruto.responsavel && typeof bruto.responsavel === "object" ? (bruto.responsavel as Record<string, unknown>) : {};
+  return {
+    ...base,
+    aceite,
+    responsavel: { nome: texto(responsavel.nome), cargo: textoOuNull(responsavel.cargo), documento: textoOuNull(responsavel.documento) },
+    assinatura: textoOuNull(bruto.assinatura),
+    diferencas: objetos(bruto.diferencas).flatMap((diferenca) =>
+      texto(diferenca.linha)
+        ? [{ linha: texto(diferenca.linha), previsto: texto(diferenca.previsto), executado: texto(diferenca.executado), motivo: texto(diferenca.motivo) }]
+        : [],
+    ),
   };
 }
 
@@ -312,11 +343,50 @@ export function passosDaOs(ficha: FichaDaOs): PassoDaOs[] {
       numero: 3,
       titulo: "Concluir",
       quem: "Líder e cliente",
-      detalhe: ["Fotos e assinatura no local", ficha.janela?.fim ? `até ${ficha.janela.fim}` : null].filter(Boolean).join(" · "),
+      detalhe: ficha.conclusao
+        ? aceiteEmTexto(ficha.conclusao)
+        : ["Fotos e assinatura no local", ficha.janela?.fim ? `até ${ficha.janela.fim}` : null].filter(Boolean).join(" · "),
       estado: estado(3),
     },
     { numero: 4, titulo: "Revisar", quem: "Coordenação", detalhe: "Itens, fotos e divergências", estado: estado(4) },
   ];
+}
+
+/** "Assinada 17:52 por Renata Campos"; "Sem aceite no local · 17:50 · recebido por Sr. Almeida". */
+export function aceiteEmTexto(conclusao: ConclusaoLida): string {
+  if (conclusao.aceite === "assinatura") return `Assinada ${horaDe(conclusao.instante)} por ${conclusao.responsavel.nome}`;
+  return ["Sem aceite no local", horaDe(conclusao.instante), conclusao.responsavel.nome ? `recebido por ${conclusao.responsavel.nome}` : null].filter(Boolean).join(" · ");
+}
+
+export type ConclusaoNaFicha = {
+  /** "Assinada 17:52 por Renata Campos". */
+  aceite: string;
+  /** "Facilities · doc. 12.345.678-9". */
+  responsavel: string | null;
+  /** "Carlos Silva · celular". */
+  origem: string;
+  assinatura: string | null;
+  /** O item a menos com o motivo: "Mesa de trabalho · 58 de 60 · 2 mesas com pé quebrado". */
+  diferencas: Array<{ linha: string; item: string; quantidade: string; motivo: string }>;
+};
+
+/** O que a ficha mostra da conclusão, ou null antes de concluir. */
+export function conclusaoNaFicha(ficha: FichaDaOs): ConclusaoNaFicha | null {
+  const conclusao = ficha.conclusao;
+  if (!conclusao) return null;
+  const { cargo, documento } = conclusao.responsavel;
+  return {
+    aceite: aceiteEmTexto(conclusao),
+    responsavel: conclusao.aceite === "assinatura" ? [cargo, documento ? `doc. ${documento}` : null].filter(Boolean).join(" · ") || null : null,
+    origem: origemEmTexto(ficha, conclusao),
+    assinatura: conclusao.assinatura,
+    diferencas: conclusao.diferencas.map((diferenca) => ({
+      linha: diferenca.linha,
+      item: ficha.itens.find((item) => item.id === diferenca.linha)?.item ?? diferenca.linha,
+      quantidade: `${diferenca.executado} de ${diferenca.previsto}`,
+      motivo: diferenca.motivo,
+    })),
+  };
 }
 
 export type EtapaNaFicha = { etapa: EtapaDaOs; rotulo: string; hora: string; quem: string | null; estado: "feita" | "atual" | "pendente" | "pulada" };
@@ -434,6 +504,16 @@ export function historicoDaOs(ficha: FichaDaOs, hoje: string): EntradaDoHistoric
       detalhe: ["Ocorrência", origemEmTexto(ficha, ocorrencia), quando(ocorrencia.instante)].join(" · "),
       instante: ocorrencia.instante,
     })),
+    ...(ficha.conclusao
+      ? [
+          {
+            chave: "conclusao",
+            titulo: ficha.conclusao.aceite === "assinatura" ? `OS concluída · assinada por ${ficha.conclusao.responsavel.nome}` : "OS concluída sem aceite no local",
+            detalhe: [origemEmTexto(ficha, ficha.conclusao), quando(ficha.conclusao.instante)].join(" · "),
+            instante: ficha.conclusao.instante,
+          },
+        ]
+      : []),
   ];
   return entradas.sort((a, b) => b.instante.localeCompare(a.instante) || a.chave.localeCompare(b.chave));
 }

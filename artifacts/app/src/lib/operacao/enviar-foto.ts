@@ -45,3 +45,15 @@ export async function enviarFoto(
     ...(contexto.linha ? { linha: contexto.linha } : {}),
   });
 }
+
+/**
+ * Sobe a assinatura (no escritório, a foto da via assinada no papel) ao
+ * Storage, em os/{numero}/assinatura (parte 3.9a); completeServiceOrder
+ * confere o arquivo depois. Repetir a tentativa não sobrescreve.
+ */
+export async function enviarAssinatura(numero: string, assinatura: { arquivo: Blob; nome: string; contentType: string }): Promise<void> {
+  if (!firebaseStorage) throw new Error("Firebase não configurado.");
+  await uploadBytes(ref(firebaseStorage, `os/${numero}/assinatura/${assinatura.nome}`), assinatura.arquivo, { contentType: assinatura.contentType }).catch((error: unknown) => {
+    if ((error as { code?: string })?.code !== "storage/unauthorized") throw error;
+  });
+}
