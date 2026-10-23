@@ -55,6 +55,10 @@ borda, `ghost` e `destructive` com borda. Tamanhos `sm` 36, padrão 40, `lg`
   (Início, Pedidos, Estoque, Agent Dute, nesta ordem; o papel sem algum deles
   completa com os próximos do menu) e "Mais" com o resto e a Configuração.
   A ordem vem de `getMobileNavigation` em `lib/modules.ts`, com teste.
+- Telas do portal no `ClientModuleShell` (Estoque, Eventos): no celular o
+  título rola junto com o conteúdo, e o que for `sticky` para no topo da área
+  que rola, colado no cabeçalho; no desktop o título fica e só o conteúdo
+  rola. As outras telas do portal já rolam a página inteira.
 - Não há botão flutuante: o Agent Dute é item da barra; no desktop, do menu.
 - Filtros de lista em painel (`FilterPanel` + `FilterGroup`): chips em linha
   no desktop; no celular, botão "Filtros · <o que está ativo>" que abre um

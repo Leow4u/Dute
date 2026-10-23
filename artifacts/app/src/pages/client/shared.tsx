@@ -507,24 +507,32 @@ export function ClientModuleShell({
 }: ClientModuleShellProps) {
   const headerLabel = firstText(eyebrow, title) ?? "Modulo";
 
+  // No celular a área inteira rola, com o título: preso, ele e a barra da
+  // tela deixavam um terço da tela para a lista. No desktop o título fica e só
+  // o conteúdo rola. O respiro de cima vai no título, não na área que rola:
+  // nela, a barra presa (sticky) pararia 20px abaixo do topo.
   return (
-    <main className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-transparent px-4 py-5 text-foreground sm:px-6 lg:px-8">
+    <main className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-transparent px-4 text-foreground sm:px-6 md:py-5 lg:px-8">
       <div
+        data-testid="client-module-scroll"
         className={cn(
-          "mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col gap-5",
+          "mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col gap-5 overflow-y-auto overflow-x-hidden overscroll-contain pb-5 md:overflow-visible md:pb-0",
           className,
         )}
       >
         <header
           aria-label={headerLabel}
-          className="shrink-0 flex flex-col gap-4 border-b border-border/60 pb-5 md:flex-row md:items-start md:justify-between"
+          className="shrink-0 flex flex-col gap-4 border-b border-border/60 pb-5 pt-5 md:flex-row md:items-start md:justify-between md:pt-0"
         >
           <div className="min-w-0 space-y-1">
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
             {description ? <p className="max-w-3xl text-sm text-muted-foreground">{description}</p> : null}
           </div>
         </header>
-        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pr-1">
+        <div
+          data-testid="client-module-content"
+          className="shrink-0 md:min-h-0 md:flex-1 md:overflow-x-hidden md:overflow-y-auto md:overscroll-contain md:pr-1"
+        >
           <div className="flex min-h-full flex-col gap-5 pb-1">{children}</div>
         </div>
       </div>
