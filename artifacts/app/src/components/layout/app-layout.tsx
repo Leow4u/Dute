@@ -17,7 +17,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  INTERNAL_ROLES,
   getActiveModule,
   getNavigationForProfileRole,
   isAccountPath,
@@ -29,16 +28,15 @@ import {
 } from "@/lib/modules";
 import { AccountMenu, SidebarAccountFooter } from "@/components/layout/account-menu";
 import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
-import { SeletorDeModulo } from "@/components/layout/seletor-de-modulo";
 import { SidebarBrand } from "@/components/layout/sidebar-brand";
 import { SinoDoPortal } from "@/components/portal/sino";
-import { agentPathFor, isAgentScreen, isAgentShortcut } from "@/lib/agent-chat";
+import WmsLayout from "@/components/layout/wms-layout";
+import { useAtalhoDoAgente } from "@/hooks/use-atalho-do-agente";
+import { isAgentScreen } from "@/lib/agent-chat";
 import { useAppAuth, useAppUser } from "@/lib/auth";
-import { ActiveCustomerSwitcher } from "@/components/layout/active-customer-switcher";
 import { OPERACAO_LIBERADO } from "@/lib/liberacao";
 import { useOperationProfile } from "@/lib/operation-profile";
 import { usePwaInstall } from "@/lib/pwa-install";
-import { moduloAberto, opcoesDoSeletor } from "@/lib/seletor-de-modulo";
 import { rememberReturnPath } from "@/lib/settings-nav";
 
 function RouteDropdownItem({
@@ -264,8 +262,20 @@ function ExpandedModuleItem({
   );
 }
 
+/**
+ * O layout das rotas do WMS e do portal: a equipe entra no shell v3 da
+ * Armazenagem (parte 4.7a); o cliente segue no layout do portal, abaixo,
+ * até o portal passar para a v3.
+ */
 export default function AppLayout({ children }: { children: ReactNode }) {
-  const [location, navigate] = useLocation();
+  const { user } = useAppUser();
+  const role = user?.publicMetadata.role;
+  if (role && role !== "cliente") return <WmsLayout>{children}</WmsLayout>;
+  return <LayoutDoPortal>{children}</LayoutDoPortal>;
+}
+
+function LayoutDoPortal({ children }: { children: ReactNode }) {
+  const [location] = useLocation();
   const { user } = useAppUser();
   const { signOut } = useAppAuth();
   const { isOnline } = usePwaInstall();
@@ -278,16 +288,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const activeId = isAccountPath(location) ? null : activeModule.id;
   const clientSurface =
     location === "/portal" || location.startsWith("/portal/");
-  // Cliente ativo: só na área interna; o portal é sempre o cliente da conta.
   const profileRole = user?.publicMetadata.role;
-  const showCustomerSwitcher = Boolean(profileRole) && INTERNAL_ROLES.includes(profileRole!);
-  const canManageCustomers = profileRole === "owner" || profileRole === "admin";
   // O sino dos avisos (parte 4.6c): só o cliente, onde a rotina dos avisos roda.
   const showSino = profileRole === "cliente" && OPERACAO_LIBERADO;
-  // Seletor de módulo no topo da barra (decisão de 23/10/2026): Armazenagem,
-  // ou Financeiro no Faturamento. Quem tem um módulo só não o vê.
-  const opcoesDeModulo = opcoesDoSeletor(profileRole, operation.profile, location);
-  const moduloDaTela = moduloAberto(location);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem("dute.sidebar") === "collapsed";
@@ -304,27 +307,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     if (agentScreen) setAgentMenuOpen((current) => !current);
     else setSidebarCollapsed((current) => !current);
   }
-  // "/": vai para o campo do Agent Dute da tela (barra do Início ou o chat);
-  // nas outras telas, abre o Agent Dute do papel.
-  const agentPath = agentPathFor(user?.publicMetadata.role);
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      const shortcut = isAgentShortcut({
-        key: event.key,
-        ctrlKey: event.ctrlKey,
-        metaKey: event.metaKey,
-        altKey: event.altKey,
-        target: event.target as HTMLElement | null,
-      });
-      if (!shortcut) return;
-      event.preventDefault();
-      const field = document.querySelector<HTMLElement>("[data-agent-input]");
-      if (field) field.focus();
-      else navigate(agentPath);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [agentPath, navigate]);
+  useAtalhoDoAgente(profileRole);
   const [openModuleIds, setOpenModuleIds] = useState<Set<string>>(
     () => new Set([activeModule.id]),
   );
@@ -406,21 +389,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </Tooltip>
         </div>
 
-        {opcoesDeModulo.length && moduloDaTela ? (
-          <div className={cn("pt-4", collapsed ? "flex justify-center px-3" : "px-4")}>
-            <SeletorDeModulo atual={moduloDaTela} opcoes={opcoesDeModulo} variante={collapsed ? "wms-compacto" : "wms"} />
-          </div>
-        ) : null}
-
-        {showCustomerSwitcher ? (
-          <div className={cn("pt-4", collapsed ? "flex justify-center px-3" : "px-4")}>
-            <ActiveCustomerSwitcher
-              variant={collapsed ? "compact" : "sidebar"}
-              canManageCustomers={canManageCustomers}
-            />
-          </div>
-        ) : null}
-
         <nav
           className={cn(
             "flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto py-5",
@@ -481,11 +449,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             className="hidden h-8 w-auto min-w-0 max-w-[168px] shrink object-contain dark:block"
           />
           <div className="flex min-w-0 items-center gap-2">
-            {showCustomerSwitcher ? (
-              <ActiveCustomerSwitcher variant="header" canManageCustomers={canManageCustomers} />
-            ) : null}
             {showSino ? <SinoDoPortal lado="bottom" /> : null}
-            <AccountMenu basePath={basePath} compact cabecalho modulos signOut={signOut} user={user} />
+            <AccountMenu basePath={basePath} compact cabecalho signOut={signOut} user={user} />
           </div>
         </header>
         {!isOnline ? (

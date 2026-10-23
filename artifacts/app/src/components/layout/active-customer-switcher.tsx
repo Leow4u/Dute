@@ -9,7 +9,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { templateStatusLabel } from "@/lib/operations";
 import { cn } from "@/lib/utils";
@@ -18,70 +17,52 @@ import { cn } from "@/lib/utils";
  * Seletor do cliente ativo na área interna. Recebimento, contagem, caixas,
  * etiquetas, documentos e notas do agente vão para o cliente escolhido, e a
  * lista de Itens mostra só os dele. Mapa, Início e Pedidos mostram todos.
+ * Fica na barra preta do shell v3 da Armazenagem (parte 4.7), logo abaixo do
+ * seletor de módulo, e no cabeçalho do celular. Sem legenda: o nome do
+ * cliente e a troca.
  */
 export function ActiveCustomerSwitcher({
   variant,
   canManageCustomers,
 }: {
-  variant: "sidebar" | "compact" | "header";
+  variant: "v3" | "v3-cabecalho";
   canManageCustomers: boolean;
 }) {
   const { options, active, setCode } = useActiveCustomer();
   const template = active.profile.template;
+  const rotulo = `Cliente ativo: ${active.name}. Trocar cliente`;
 
   const trigger =
-    variant === "sidebar" ? (
+    variant === "v3" ? (
       <DropdownMenuTrigger
-        className="flex w-full items-center gap-3 rounded-xl border border-sidebar-border bg-card px-3 py-2 text-left outline-none transition-colors duration-200 hover:border-primary/40 focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label={`Cliente ativo: ${active.name}. Trocar cliente`}
+        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left outline-none transition-colors hover:bg-v3-header-foreground/10 focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80"
+        aria-label={rotulo}
       >
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-info-soft text-info-soft-foreground">
-          <Building2 className="h-4 w-4" />
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-v3-header-foreground/15 text-v3-header-foreground">
+          <Building2 className="size-4" aria-hidden="true" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-xs text-muted-foreground">Cliente ativo</span>
-          <span className="block truncate text-sm font-semibold text-sidebar-foreground">{active.name}</span>
+          <span className="block text-xs font-semibold text-v3-header-foreground/65">Cliente ativo</span>
+          <span className="block truncate text-sm font-bold text-v3-header-foreground">{active.name}</span>
         </span>
-        <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
-      </DropdownMenuTrigger>
-    ) : variant === "header" ? (
-      <DropdownMenuTrigger
-        className="flex min-w-0 max-w-[45vw] items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label={`Cliente ativo: ${active.name}. Trocar cliente`}
-      >
-        <Building2 className="h-4 w-4 shrink-0 text-primary" />
-        <span className="truncate">{active.name}</span>
-        <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+        <ChevronsUpDown className="size-4 shrink-0 text-v3-header-foreground/70" aria-hidden="true" />
       </DropdownMenuTrigger>
     ) : (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger
-            className="flex h-11 w-11 items-center justify-center rounded-xl bg-info-soft text-info-soft-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label={`Cliente ativo: ${active.name}. Trocar cliente`}
-          >
-            <Building2 className="h-4 w-4" />
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        <TooltipContent side="right">Cliente ativo: {active.name}</TooltipContent>
-      </Tooltip>
+      <DropdownMenuTrigger
+        className="flex h-10 min-w-0 max-w-full items-center gap-2 rounded-lg px-1.5 text-sm font-bold text-v3-header-foreground outline-none focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80"
+        aria-label={rotulo}
+      >
+        <Building2 className="size-4 shrink-0" aria-hidden="true" />
+        <span className="truncate">{active.name}</span>
+        <ChevronsUpDown className="size-3.5 shrink-0 opacity-70" aria-hidden="true" />
+      </DropdownMenuTrigger>
     );
 
   return (
     <DropdownMenu>
       {trigger}
-      <DropdownMenuContent
-        align="start"
-        side={variant === "compact" ? "right" : "bottom"}
-        className="w-[300px]"
-      >
-        <DropdownMenuLabel className="space-y-0.5">
-          <div className="text-sm font-semibold">Cliente ativo</div>
-          <div className="text-xs font-normal leading-5 text-muted-foreground">
-            Recebimento, contagem, caixas, etiquetas e documentos vão para ele. Mapa, Início e Pedidos mostram
-            todos.
-          </div>
-        </DropdownMenuLabel>
+      <DropdownMenuContent align="start" side="bottom" collisionPadding={16} className="v3 w-[300px]">
+        <DropdownMenuLabel className="text-sm font-semibold">Cliente ativo</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {options.map((option) => {
           const selected = option.code === active.code;

@@ -1,9 +1,9 @@
-import { Briefcase, Truck } from "lucide-react";
+import { Boxes, Briefcase, Truck } from "lucide-react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Router } from "wouter";
 
-import { menuDoComercial, menuDoOperacao } from "@/lib/modules";
+import { getNavigationForProfileRole, menuDoComercial, menuDoOperacao } from "@/lib/modules";
 import { opcoesDoSeletor, type Liberacoes } from "@/lib/seletor-de-modulo";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosForaDaLista } from "@/test/textos";
@@ -45,6 +45,27 @@ function operacao(path: string) {
         conta={() => <button type="button">Minha conta</button>}
       >
         <h1>Início</h1>
+      </ShellDoModulo>
+    </Router>,
+  );
+}
+
+function wms(path: string, conteudoV3 = false, contadores?: Record<string, ContadorDoItem>) {
+  return renderToStaticMarkup(
+    <Router ssrPath={path}>
+      <ShellDoModulo
+        ambiente="wms"
+        atual={{ label: "Armazenagem", icon: Boxes }}
+        opcoes={opcoesDoSeletor("admin", null, path, TUDO)}
+        items={getNavigationForProfileRole("admin", null, true, false)}
+        contadores={contadores}
+        basePath=""
+        online
+        conteudoV3={conteudoV3}
+        abaixoDoSeletor={(compact) => <button type="button">{compact ? "BTG" : "Cliente ativo BTG"}</button>}
+        conta={() => <button type="button">Minha conta</button>}
+      >
+        <h1>Tela do WMS</h1>
       </ShellDoModulo>
     </Router>,
   );
@@ -141,5 +162,50 @@ describe("shell v3 do módulo", () => {
     expect(await violacoesDeAcessibilidade(comercial("/comercial/clientes"))).toEqual([]);
     expect(await violacoesDeAcessibilidade(comercial("/comercial", opcoesDoSeletor("comercial", null, "/comercial", TUDO)))).toEqual([]);
     expect(await violacoesDeAcessibilidade(operacao("/operacao"))).toEqual([]);
+  });
+
+  describe("a Armazenagem no shell v3 (parte 4.7a)", () => {
+    it("a barra e o cabeçalho ficam na v3; a tela que não passou fica com o visual do WMS", () => {
+      const html = wms("/pedidos");
+      expect(html).toContain('data-ambiente="wms"');
+      expect(html).toMatch(/<div data-ambiente="wms" class="(?![^"]*\bv3\b)[^"]*"/);
+      expect(html).toMatch(/<aside aria-label="Armazenagem" class="v3 /);
+      expect(html).toMatch(/<header class="v3 /);
+      expect(html).toContain('class="contents v3"');
+      expect(wms("/pedidos", true)).toMatch(/<div data-ambiente="wms" class="[^"]* v3"/);
+    });
+
+    it("o Estoque é um grupo: abre sozinho na tela dele, com a tela marcada", () => {
+      const barra = (html: string) => html.slice(html.indexOf("<aside"), html.indexOf("</aside>"));
+      const fechado = barra(wms("/pedidos"));
+      expect(fechado).toMatch(/<button type="button" aria-expanded="false" aria-controls="menu-inventory"[^>]*>.*?>Estoque</);
+      expect(fechado).not.toContain('id="menu-inventory"');
+      expect(linkAtual(fechado, "/pedidos")).toBe(true);
+      const aberto = barra(wms("/wms/receber"));
+      expect(aberto).toMatch(/aria-expanded="true" aria-controls="menu-inventory"/);
+      expect(aberto).toContain('id="menu-inventory"');
+      for (const href of ["/estoque", "/wms/receber", "/wms/contagem"]) expect(aberto, href).toContain(`href="${href}"`);
+      expect(linkAtual(aberto, "/wms/receber")).toBe(true);
+      expect(linkAtual(aberto, "/estoque")).toBe(false);
+    });
+
+    it("o cliente ativo fica abaixo do seletor, na barra e numa linha sob o cabeçalho do celular", () => {
+      const html = wms("/dashboard");
+      expect(html.indexOf(">Cliente ativo BTG<")).toBeGreaterThan(html.indexOf(">Armazenagem<"));
+      expect(html.indexOf(">Cliente ativo BTG<")).toBeLessThan(html.indexOf('aria-label="Telas de Armazenagem"'));
+      const cabecalho = html.slice(html.indexOf("<header"), html.indexOf("</header>"));
+      expect(cabecalho.indexOf(">BTG<")).toBeGreaterThan(cabecalho.indexOf(">Minha conta<"));
+    });
+
+    it("o contador do grupo soma as telas dele", () => {
+      const html = wms("/dashboard", false, { home: { n: 3 }, inventory: { n: 2, alerta: true } });
+      expect(html).toMatch(/>Início<\/span><span class="[^"]*bg-v3-header-foreground\/15[^"]*">3<\/span>/);
+      expect(html).toMatch(/>Estoque<\/span><span class="[^"]*bg-v3-marca[^"]*">2<\/span>/);
+    });
+
+    it("passa nas regras WCAG 2.1 A e AA do axe, com o grupo aberto e fechado", async () => {
+      expect(await violacoesDeAcessibilidade(wms("/pedidos"))).toEqual([]);
+      expect(await violacoesDeAcessibilidade(wms("/estoque", true))).toEqual([]);
+    });
   });
 });

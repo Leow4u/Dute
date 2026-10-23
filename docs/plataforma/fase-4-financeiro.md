@@ -196,7 +196,11 @@ continuam no Faturamento do WMS, e as rotas `/financeiro` não existem
 | 4.6a | A rotina dos avisos: os eventos viram o aviso no sino (`client_notifications`) e o e-mail na fila (`email_outbox`), enviado pelo Resend ou só auditado; regras, índice e zeragem | Rodar de novo não duplica; o e-mail só vai a quem ligou o modelo; a NF por e-mail só a quem lê valor; o cliente sem o módulo não recebe |
 | 4.6b | Comercial: os avisos que cada contato recebe por e-mail, no cadastro do cliente | A NF não se liga para a gerenciadora; textos listados; `axe` |
 | 4.6c | Portal: o sino com os avisos do cliente, marcados como vistos ao abrir | O cliente só vê os próprios; textos listados; `axe` |
-| 4.7 | WMS na v3, tela a tela | `theme-colors.test.ts`; render e `axe` por tela |
+| 4.7a | WMS: o shell v3 da Armazenagem (barra preta, seletor, cliente ativo, Estoque como grupo, contadores), com as telas ainda no visual do WMS | Render do shell com o grupo e `axe`; a tela fora da lista não entra no `.v3` |
+| 4.7b | WMS na v3: Início | `theme-colors.test.ts`; render e `axe` |
+| 4.7c | WMS na v3: Pedidos | `theme-colors.test.ts`; render e `axe` |
+| 4.7d | WMS na v3: Estoque | `theme-colors.test.ts`; render e `axe` |
+| 4.7e | WMS na v3: Receber | `theme-colors.test.ts`; render e `axe` |
 | 4.8 | Relatórios | Sem valor para quem não vê valor |
 | 4.9 | Lançamento em produção | Conferência de produção |
 
@@ -532,3 +536,27 @@ Feita em 23/10/2026. As regras estão em `artifacts/app/src/lib/portal/avisos.ts
   - `sino.test.tsx` cobre o botão, a lista, os vazios e `axe`.
   - `profile.integration.test.ts` e `avisos.integration.test.ts` cobrem quem marca e o visto.
   - `operacao-avisos.rules.test.ts` cobre as regras, e `callables.test.ts` trava a callable do sino.
+
+### Parte 4.7a: o shell v3 da Armazenagem
+
+Feita em 23/10/2026. O layout está em `artifacts/app/src/components/layout/wms-layout.tsx`, sobre o
+`ShellDoModulo` dos outros módulos. A lista das telas na v3 fica em `artifacts/app/src/lib/wms-v3.ts`.
+
+- **Para a equipe.** Toda rota do WMS abre no shell v3, como o Comercial, a Operação e o Financeiro.
+  - Na barra preta ficam o logo, o seletor de módulo, o cliente ativo logo abaixo e as telas do WMS, com a conta no rodapé.
+  - O Estoque é um grupo. O nome abre e fecha as telas de dentro (Itens, Receber, Contagem, Mapa, Posições), e o grupo da tela aberta abre sozinho.
+  - Cada item tem o contador, tirado do "Precisa de você" do Início do WMS (`useInicioDoWms`). O grupo soma as telas dele.
+  - No celular, o cabeçalho preto traz o seletor e a conta, com o cliente ativo numa linha abaixo. A barra de baixo tem três telas e "Mais", como nos outros módulos.
+- **Tela a tela.** A barra, o cabeçalho e a barra do celular já são v3. O conteúdo de cada tela só entra no `.v3` quando ela está em `TELAS_DO_WMS_NA_V3`, uma por PR (4.7b a 4.7e e depois as demais). Até lá, cada tela segue o `docs/sistema-visual.md`.
+- **O portal** do cliente continua no layout de antes (`app-layout.tsx`), com o sino, até passar para a v3.
+- **O que saiu.**
+  - O seletor de cliente ativo não explica mais para onde cada tela grava: é só o nome e a troca.
+  - O menu da conta não lista mais os módulos no celular, porque o seletor está no cabeçalho.
+  - O menu deixou de recolher sozinho no Agent Dute: a barra v3 é mais estreita (248 px) e fica sempre aberta.
+  - As variantes claras do seletor de módulo e do cliente ativo saíram.
+- **O atalho "/"** para o Agent Dute continua nos dois layouts (`use-atalho-do-agente.ts`).
+- **Testes.**
+  - `shell-do-modulo.test.tsx` cobre a Armazenagem: o conteúdo fora do `.v3`, o grupo fechado e aberto, a tela marcada, o cliente ativo, o contador do grupo e `axe`.
+  - `active-customer-switcher.test.tsx` cobre as variantes v3, a falta de legenda e `axe`.
+  - `wms-v3.test.ts` cobre a lista e o caminho.
+  - `account-menu.test.tsx` cobre onde a troca de módulo mora.
