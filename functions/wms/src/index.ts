@@ -42,6 +42,7 @@ import { linkInboundNoticeTransaction } from "./domain/inbound-notice.js";
 import { setOrderDeliveryTransaction } from "./domain/order-delivery.js";
 import { receiveOrderReturnFlow } from "./domain/order-return.js";
 import {
+  BILLING_AUTO_SOURCES,
   BillingDomainError,
   assertBillingStatusTransition,
   billingCustomerOf,
@@ -81,6 +82,13 @@ import {
   openingUsesGlobalControl,
 } from "./domain/customer-scope.js";
 import { assertManagedCatalogCreateAllowed } from "./domain/catalog-codes.js";
+import {
+  COMERCIAL_PRICE_TABLES,
+  dataBaseDaCompetencia,
+  dataBr,
+  precoNaTabela,
+  tabelaDoComercialLida,
+} from "./domain/billing-price-tables.js";
 import {
   billingPaidInFinanceiro,
   resolveBillingDocument,
@@ -3329,6 +3337,8 @@ async function loadBillingCalculation(
   competencia: string,
   customerCode: string,
   transaction?: Transaction,
+  // Congelar o uso não depende do preço: sem a tabela, o uso fica congelado igual.
+  { resolvePrices = true }: { resolvePrices?: boolean } = {},
 ): Promise<BillingCalculationInput> {
   // Itens criados pela Tabela de preços antes de 01/10/2026 não gravavam
   // customer_code e ficavam fora da fatura emitida (mas apareciam na prévia).
@@ -3423,6 +3433,52 @@ async function loadBillingCalculation(
       ativo: data.ativo !== false,
     };
   });
+  // O item ligado ao catálogo do Comercial tira o preço da tabela do cliente
+  // vigente no último dia da competência (parte 7.3a).
+  const linkedIds = new Map(
+    pricesSnapshot.docs.flatMap((document) => {
+      const data = document.data();
+      const lpuItemId =
+        typeof data.lpu_item_id === "string" ? data.lpu_item_id.trim() : "";
+      return lpuItemId ? [[String(data.id ?? document.id), lpuItemId] as const] : [];
+    }),
+  );
+  const linkedItems = priceList.filter(
+    (item) =>
+      item.ativo !== false &&
+      item.auto_source !== BILLING_AUTO_SOURCES.adValorem &&
+      linkedIds.has(String(item.id)),
+  );
+  if (resolvePrices && linkedItems.length) {
+    const tablesQuery = db
+      .collection(COMERCIAL_PRICE_TABLES)
+      .where("customer_code", "==", customerCode);
+    const tablesSnapshot = transaction
+      ? await transaction.get(tablesQuery)
+      : await tablesQuery.get();
+    const tables = tablesSnapshot.docs.flatMap((document) => {
+      const table = tabelaDoComercialLida(document.id, document.data());
+      return table ? [table] : [];
+    });
+    const dataBase = dataBaseDaCompetencia(competencia);
+    for (const item of linkedItems) {
+      const found = precoNaTabela(tables, linkedIds.get(String(item.id)) as string, dataBase);
+      if (found.tipo === "sem_preco") {
+        throw new BillingDomainError(
+          "PRICE_NOT_IN_TABLE",
+          `O item ${item.item} não tem preço numa tabela do Comercial vigente em ${dataBr(dataBase)}.`,
+        );
+      }
+      if (found.tipo === "ambiguo") {
+        throw new BillingDomainError(
+          "PRICE_TABLE_AMBIGUOUS",
+          `O item ${item.item} tem preço em mais de uma tabela do Comercial vigente em ${dataBr(dataBase)}.`,
+        );
+      }
+      item.valor_unit = found.preco;
+      item.tabela_id = found.tabela_id;
+    }
+  }
   const manualData = manualSnapshot.data() ?? {};
   const manualQuantities = (
     Array.isArray(manualData.items) ? manualData.items : []
@@ -3544,7 +3600,12 @@ async function ensureFrozenBillingUsage(
   const snap = await resolved.ref.get();
   const mode = String(snap.data()?.mode ?? "");
   if (!shouldFreezeCompetencia(mode, true)) return;
-  const calculation = await loadBillingCalculation(competencia, customerCode);
+  const calculation = await loadBillingCalculation(
+    competencia,
+    customerCode,
+    undefined,
+    { resolvePrices: false },
+  );
   const frozenUsage = calculation.usage ?? {
     custo_estoque: 0,
     entradas_pecas: 0,
@@ -4219,6 +4280,19 @@ function managedWritePayload(
       const amount = Number(data.valor_unit ?? before.valor_unit ?? 0);
       if (!Number.isFinite(amount) || amount < 0) {
         throw new HttpsError("invalid-argument", "Valor unitário inválido.");
+      }
+      // O item ligado ao Comercial tira o preço da tabela dele (parte 7.3a).
+      const linked =
+        typeof before.lpu_item_id === "string" && before.lpu_item_id.trim();
+      if (
+        linked &&
+        data.valor_unit !== undefined &&
+        amount !== Number(before.valor_unit ?? 0)
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          "O preço deste item vem da tabela do Comercial.",
+        );
       }
     }
     if (input.action === "archive") {
@@ -7290,9 +7364,9 @@ export const emitBillingInvoice = onCall(async (request) => {
   const input = BillingCompetenciaSchema.parse(request.data ?? {});
   const customerCode = requireCustomerScope(profile, input.customer_code);
   const issuedAt = new Date();
-  await ensureFrozenBillingUsage(customerCode, input.competencia, issuedAt);
 
   try {
+    await ensureFrozenBillingUsage(customerCode, input.competencia, issuedAt);
     const result = await db.runTransaction(async (transaction) => {
       const periodResolved = await resolveBillingDocument(
         db,

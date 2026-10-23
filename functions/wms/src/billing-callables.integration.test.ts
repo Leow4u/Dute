@@ -609,3 +609,95 @@ describe("quem fatura", () => {
     assert.equal((await db.collection("client_invoices").get()).size, 0);
   });
 });
+
+describe("o preço pela tabela do Comercial (parte 7.3a)", () => {
+  const precos = (lista: Record<string, string>) =>
+    Object.fromEntries(Object.entries(lista).map(([item, preco]) => [item, { codigo: "", descricao_cliente: "", preco }]));
+  const tabelas = async (extra: Array<[string, Record<string, unknown>]> = []) => {
+    const lote = db.batch();
+    for (const [id, tabela] of [
+      ["pt_a", { customer_code: BTG, contract_id: null, variante: "Armazenagem", vigente_de: "2026-01-01", vigente_ate: "2026-09-15", status: "encerrada", precos: precos({ lpu_entrada: "1.0000", lpu_hora: "3.0000" }) }],
+      ["pt_b", { customer_code: BTG, contract_id: null, variante: "Armazenagem", vigente_de: "2026-09-16", vigente_ate: null, status: "ativa", precos: precos({ lpu_entrada: "1.5000", lpu_hora: "4.0000" }) }],
+      ["pt_safra", { customer_code: SAFRA, contract_id: null, variante: "Armazenagem", vigente_de: "2026-01-01", vigente_ate: null, status: "ativa", precos: precos({ lpu_entrada: "9.0000", lpu_hora: "9.0000" }) }],
+      ...extra,
+    ] as Array<[string, Record<string, unknown>]>) {
+      lote.set(db.collection("price_tables").doc(id), tabela);
+    }
+    await lote.commit();
+  };
+  const ligar = async (doc: string, lpuItemId: string) =>
+    db.collection("billing_price_list").doc(doc).update({ lpu_item_id: lpuItemId });
+
+  /**
+   * A tabela vigente em 30/09 é a pt_b: entradas 27 × 1,50 = 40,50 e a hora
+   * extra 2,5 × 4,00 = 10,00, no lugar de 33,75 e 8,33. O resto não muda:
+   * 75,08 − 33,75 + 40,50 − 8,33 + 10,00 = 83,50.
+   */
+  const COM_A_TABELA = TOTAL_BTG - 3375 + 4050 - 833 + 1000;
+
+  it("o item ligado tira o preço da tabela vigente no último dia; o resto calcula igual", async () => {
+    await tabelas();
+    await ligar("btg_2", "lpu_entrada");
+    await ligar("btg_7", "lpu_hora");
+    // O ad valorem ligado segue com a taxa do billing_config.
+    await ligar("btg_1", "lpu_sem_preco");
+    await abrirSetembro();
+
+    const resultado = await previa({ competencia: SETEMBRO });
+    const porItem = linhas(resultado);
+    assert.deepEqual(
+      [porItem.get("2")?.valor_unit, porItem.get("2")?.total_cents, (porItem.get("2") as Record<string, unknown>)?.tabela_id],
+      [1.5, 4050, "pt_b"],
+    );
+    assert.deepEqual([porItem.get("7")?.valor_unit, porItem.get("7")?.total_cents], [4, 1000]);
+    assert.deepEqual([porItem.get("1")?.valor_unit, porItem.get("1")?.total_cents], [0.004, 530]);
+    assert.equal("tabela_id" in (porItem.get("3") as object), false);
+    assert.equal(resultado.total_cents, COM_A_TABELA);
+
+    const emitida = await emitir({ competencia: SETEMBRO });
+    assert.equal(emitida.invoice.total_cents, COM_A_TABELA);
+    const foto = (await db.collection("billing_periods").doc(ID_BTG).get()).get("invoice_snapshot.linhas") as Array<Record<string, unknown>>;
+    assert.equal(foto.find((linha) => linha.price_list_id === 2)?.tabela_id, "pt_b");
+  });
+
+  it("o mesmo item na tabela do outro cliente não vale para este", async () => {
+    await tabelas();
+    await ligar("btg_2", "lpu_entrada");
+    await db.collection("price_tables").doc("pt_b").delete();
+    await db.collection("price_tables").doc("pt_a").update({ vigente_ate: "2026-08-31" });
+    await recusa(previa({ competencia: SETEMBRO }), "failed-precondition", "PRICE_NOT_IN_TABLE");
+  });
+
+  it("sem a tabela com o item, ou com duas no mesmo dia, a conta recusa e nada se emite", async () => {
+    await tabelas([["pt_n", { customer_code: BTG, contract_id: null, variante: "Noturna", vigente_de: "2026-01-01", vigente_ate: null, status: "ativa", precos: precos({ lpu_entrada: "2.0000" }) }]]);
+    await abrirSetembro();
+    await ligar("btg_3", "lpu_saida");
+    await assert.rejects(previa({ competencia: SETEMBRO }), (error: unknown) => {
+      const erro = error as { code?: string; message?: string; details?: { billing_code?: string } };
+      assert.equal(erro.details?.billing_code, "PRICE_NOT_IN_TABLE");
+      assert.equal(erro.message, "O item Saída por peça não tem preço numa tabela do Comercial vigente em 30/09/2026.");
+      return true;
+    });
+    // O uso do mês fechado congela mesmo sem o preço.
+    assert.equal((await db.collection("billing_operational_snapshots").doc(ID_BTG).get()).get("mode"), "frozen");
+    await db.collection("billing_price_list").doc("btg_3").update({ lpu_item_id: null });
+    await ligar("btg_2", "lpu_entrada");
+    await recusa(emitir({ competencia: SETEMBRO }), "failed-precondition", "PRICE_TABLE_AMBIGUOUS");
+    assert.equal((await db.collection("billing_periods").doc(ID_BTG).get()).get("status"), "aberto");
+  });
+
+  it("o preço do item ligado não se muda no WMS", async () => {
+    await ligar("btg_2", "lpu_entrada");
+    const mudar = (valor: number, chave: string) =>
+      chamar(wms.mutateManagedEntity, "fin", {
+        resource: "billing_price_list",
+        action: "update",
+        id: "btg_2",
+        idempotency_key: chave,
+        data: { valor_unit: valor },
+      });
+    await recusa(mudar(2, "m-1"), "failed-precondition");
+    assert.equal((await db.collection("billing_price_list").doc("btg_2").get()).get("valor_unit"), 1.25);
+  });
+});
+
