@@ -23,9 +23,14 @@ on:
         description: "Opcional, para rollback: nome da revisão que recebe 100% do tráfego (ex.: dute-app-00012-abc). Vazio = última revisão pronta."
         type: string
         default: ""
+      semear_teste_ux:
+        description: "Gravar a massa TESTE UX só no dute-homolog (cliente BTG). Não publica produção."
+        type: boolean
+        default: false
 
 jobs:
   frontend-typecheck:
+    if: github.event_name != 'workflow_dispatch' || (inputs.semear_teste_ux != true && inputs.semear_teste_ux != 'true')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -91,6 +96,7 @@ jobs:
           retention-days: 7
 
   functions-unit:
+    if: github.event_name != 'workflow_dispatch' || (inputs.semear_teste_ux != true && inputs.semear_teste_ux != 'true')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -121,6 +127,7 @@ jobs:
 
   tools-python-tests:
     name: Testes das ferramentas Python (tools/)
+    if: github.event_name != 'workflow_dispatch' || (inputs.semear_teste_ux != true && inputs.semear_teste_ux != 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -132,6 +139,7 @@ jobs:
         run: python -m unittest discover -s tools -p "test_*.py" -v
 
   functions-integration:
+    if: github.event_name != 'workflow_dispatch' || (inputs.semear_teste_ux != true && inputs.semear_teste_ux != 'true')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -158,6 +166,7 @@ jobs:
   # Functions do Comercial (codebase "comercial", docs/plataforma/fase-6-comercial.md):
   # pacote npm próprio, como o WMS.
   comercial-unit:
+    if: github.event_name != 'workflow_dispatch' || (inputs.semear_teste_ux != true && inputs.semear_teste_ux != 'true')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -175,6 +184,7 @@ jobs:
         run: npm run test:unit
 
   comercial-integration:
+    if: github.event_name != 'workflow_dispatch' || (inputs.semear_teste_ux != true && inputs.semear_teste_ux != 'true')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -200,6 +210,7 @@ jobs:
 
   # Functions da Operação (codebase "operacao", docs/plataforma/fase-3-operacao.md).
   operacao-unit:
+    if: github.event_name != 'workflow_dispatch' || (inputs.semear_teste_ux != true && inputs.semear_teste_ux != 'true')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -217,6 +228,7 @@ jobs:
         run: npm run test:unit
 
   operacao-integration:
+    if: github.event_name != 'workflow_dispatch' || (inputs.semear_teste_ux != true && inputs.semear_teste_ux != 'true')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -242,6 +254,7 @@ jobs:
 
   # Functions do Financeiro (codebase "financeiro", docs/plataforma/fase-4-financeiro.md).
   financeiro-unit:
+    if: github.event_name != 'workflow_dispatch' || (inputs.semear_teste_ux != true && inputs.semear_teste_ux != 'true')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -259,6 +272,7 @@ jobs:
         run: npm run test:unit
 
   financeiro-integration:
+    if: github.event_name != 'workflow_dispatch' || (inputs.semear_teste_ux != true && inputs.semear_teste_ux != 'true')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -284,6 +298,7 @@ jobs:
 
   # Functions do núcleo (codebase "core", docs/plataforma/fase-5-memoria.md).
   core-unit:
+    if: github.event_name != 'workflow_dispatch' || (inputs.semear_teste_ux != true && inputs.semear_teste_ux != 'true')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -301,6 +316,7 @@ jobs:
         run: npm run test:unit
 
   core-integration:
+    if: github.event_name != 'workflow_dispatch' || (inputs.semear_teste_ux != true && inputs.semear_teste_ux != 'true')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -335,7 +351,7 @@ jobs:
   publicar-producao:
     name: Publicar na produção
     needs: [frontend-typecheck, functions-unit, functions-integration, comercial-unit, comercial-integration, operacao-unit, operacao-integration, financeiro-unit, financeiro-integration, core-unit, core-integration, tools-python-tests]
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publicar_producao
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publicar_producao && inputs.semear_teste_ux != true && inputs.semear_teste_ux != 'true'
     concurrency:
       group: publicar-producao
       cancel-in-progress: false
@@ -358,8 +374,9 @@ jobs:
     runs-on: ubuntu-latest
     # Disparo manual (Actions > CI > Run workflow), de qualquer branch. Mostra
     # geração, tráfego, template, revisões e o que as URLs servem, com a mesma
-    # credencial do deploy. Não altera nada no serviço.
-    if: github.event_name == 'workflow_dispatch'
+    # credencial do deploy. Não altera nada no serviço. A massa TESTE UX não
+    # dispara este diagnóstico: ele autentica no dute-prod.
+    if: github.event_name == 'workflow_dispatch' && inputs.semear_teste_ux != true && inputs.semear_teste_ux != 'true'
     permissions:
       contents: read
       id-token: write
@@ -408,7 +425,7 @@ jobs:
     # Só roda no disparo manual a partir da main, com "liberar_trafego" marcado.
     # Muda a produção: 100% do tráfego passa para a última revisão pronta do
     # serviço. Reversível com --to-revisions NOME=100 (ver docs/deploy-manual.md).
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.liberar_trafego
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.liberar_trafego && inputs.semear_teste_ux != true && inputs.semear_teste_ux != 'true'
     permissions:
       contents: read
       id-token: write
@@ -455,3 +472,48 @@ jobs:
             curl -sSI --max-time 20 "${url}/index.html?after=release" | grep -i -E "^(HTTP|last-modified|etag)" || true
             curl -sS --max-time 20 "${url}/index.html?after=release" | grep -o '/assets/shell-app-[^"]*\.js' || true
           done
+
+  semear-teste-ux:
+    name: Massa TESTE UX (só dute-homolog)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event_name == 'workflow_dispatch' && (inputs.semear_teste_ux == true || inputs.semear_teste_ux == 'true')
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PROJECT_ID: dute-homolog
+      GCP_SERVICE_ACCOUNT: github-actions-functions@dute-homolog.iam.gserviceaccount.com
+      WORKLOAD_IDENTITY_PROVIDER: projects/368642218894/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+      SEED_CONFIRM: HOMOLOG-BTG-TESTE-UX
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Travar o projeto
+        run: |
+          set -euo pipefail
+          test "${PROJECT_ID}" = "dute-homolog"
+          test "${GCP_SERVICE_ACCOUNT}" = "github-actions-functions@dute-homolog.iam.gserviceaccount.com"
+          echo "${WORKLOAD_IDENTITY_PROVIDER}" | grep -q "projects/368642218894/"
+          test "${GITHUB_REF}" != "refs/heads/main" || test -f tools/seed_teste_ux_homolog.py
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+
+      - name: Gravar a massa
+        env:
+          ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          SEED_SUMMARY_PATH: ${{ runner.temp }}/teste-ux-summary.json
+        run: python3 tools/seed_teste_ux_homolog.py
+
+      - name: Publicar o resumo
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: teste-ux-summary
+          path: ${{ runner.temp }}/teste-ux-summary.json
+          if-no-files-found: warn
