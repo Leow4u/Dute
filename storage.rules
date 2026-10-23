@@ -168,6 +168,10 @@ service firebase.storage {
       allow update, delete: if false;
     }
 
+    // Os arquivos do RH (rh/**, Fase 8, parte 8.2b) caem aqui de propósito:
+    // fechados a todo papel, sobem e abrem só por URL assinada das callables
+    // do RH, que conferem o papel e registram cada abertura
+    // (functions/wms/src/rh-arquivos.rules.test.ts).
     match /{allPaths=**} {
       allow read, write: if false;
     }

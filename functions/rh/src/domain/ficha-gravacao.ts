@@ -1,6 +1,7 @@
 import { FieldValue, type DocumentData, type Firestore, type Transaction } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 
+import { ID_ARQUIVO, tipoDeArquivo, type ArquivoDoRegistro } from "./arquivos.js";
 import { diaEmSaoPaulo } from "./dia.js";
 import { createRhEvent } from "./events.js";
 import {
@@ -70,6 +71,15 @@ function textoOuNull(valor: unknown): string | null {
   return valor;
 }
 
+function arquivoLido(valor: unknown): ArquivoDoRegistro | null {
+  if (valor == null) return null;
+  if (typeof valor !== "object") ilegivel();
+  const arquivo = valor as Record<string, unknown>;
+  if (typeof arquivo.id !== "string" || !ID_ARQUIVO.test(arquivo.id) || typeof arquivo.caminho !== "string") ilegivel();
+  if (!tipoDeArquivo(arquivo.content_type) || typeof arquivo.tamanho !== "number") ilegivel();
+  return { id: arquivo.id, caminho: arquivo.caminho, content_type: arquivo.content_type, tamanho: arquivo.tamanho };
+}
+
 /** O registro gravado, conferido campo a campo; o que não confere é ilegível. */
 export function registroLido(id: string, data: DocumentData): RegistroGravado {
   const categoria = data.categoria as Categoria;
@@ -93,6 +103,7 @@ export function registroLido(id: string, data: DocumentData): RegistroGravado {
     resultado: resultado as ResultadoDoExame | null,
     situacao: data.situacao as Situacao,
     substituido_por: textoOuNull(data.substituido_por),
+    arquivo: arquivoLido(data.arquivo),
     edicao: data.edicao,
   };
 }
@@ -112,7 +123,7 @@ export function atorDoRh(caller: RhProfile): RhActor {
   return { uid: caller.uid, role: caller.role, email: caller.email, name: caller.name };
 }
 
-function exigeQuemGrava(caller: RhProfile): void {
+export function exigeQuemGrava(caller: RhProfile): void {
   const problema = rhWriteProblem(caller.role);
   if (problema) throw new HttpsError("permission-denied", problema);
 }
@@ -342,7 +353,15 @@ export async function getRhPanelFor(padrao: Firestore, rh: Firestore, agora: Dat
   };
 }
 
-export type FichaDoColaborador = { hoje: string; colaborador: ColaboradorDoRh; registros: RegistroGravado[] };
+/** O registro na tela: o arquivo sem o caminho no bucket, que só a callable usa. */
+export type RegistroNaFicha = Omit<RegistroGravado, "arquivo"> & { arquivo: Omit<ArquivoDoRegistro, "caminho"> | null };
+
+export type FichaDoColaborador = { hoje: string; colaborador: ColaboradorDoRh; registros: RegistroNaFicha[] };
+
+function registroNaFicha(registro: RegistroGravado): RegistroNaFicha {
+  const { arquivo, ...resto } = registro;
+  return { ...resto, arquivo: arquivo ? { id: arquivo.id, content_type: arquivo.content_type, tamanho: arquivo.tamanho } : null };
+}
 
 const ORDEM_DA_SITUACAO: Record<Situacao, number> = { vigente: 0, substituido: 1, arquivado: 2 };
 
@@ -358,5 +377,5 @@ export async function getRhFichaFor(padrao: Firestore, rh: Firestore, data: unkn
       b.emitido_em.localeCompare(a.emitido_em) ||
       a.id.localeCompare(b.id),
   );
-  return { hoje: diaEmSaoPaulo(agora), colaborador, registros };
+  return { hoje: diaEmSaoPaulo(agora), colaborador, registros: registros.map(registroNaFicha) };
 }

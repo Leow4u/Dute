@@ -173,7 +173,10 @@ documentação de produto e operação está em `docs/`.
     ficha do colaborador (parte 8.2a): `saveRhRecord` e `archiveRhRecord`
     gravam o registro, o recibo (`rh_operations`) e o evento `rh.*` numa
     transação do banco `rh`, nunca no padrão; `getRhPanel` e `getRhFicha`
-    leem; a rotina `runRhAlerts` avisa o vencimento uma vez por marco.
+    leem; a rotina `runRhAlerts` avisa o vencimento uma vez por marco. O
+    arquivo do registro (parte 8.2b) sobe e abre só por URL assinada
+    (`requestRhUpload`, `attachRhFile`, `openRhFile`), e cada abertura vira
+    evento; `rh/**` fica fechado no `storage.rules`.
     Desenho: `docs/plataforma/fase-8-rh.md`. Usa **npm**.
   - `lib/dominio`: tipos e regras que o app e as Functions precisam ter iguais.
 - **IA native.** Todo módulo novo grava desde o primeiro dia o que a IA precisa

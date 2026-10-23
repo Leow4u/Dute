@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { HttpsError } from "firebase-functions/https";
 import { z } from "zod";
 
+import type { ArquivoDoRegistro } from "./arquivos.js";
 import { diaValido, diasAte } from "./dia.js";
 
 /**
@@ -57,6 +58,8 @@ export type RegistroGravado = {
   situacao: Situacao;
   /** O registro que tomou o lugar deste, quando substituído. */
   substituido_por: string | null;
+  /** O arquivo escaneado (parte 8.2b), ou null. */
+  arquivo: ArquivoDoRegistro | null;
   edicao: number;
 };
 
@@ -203,6 +206,7 @@ export function registroSalvo(atual: RegistroGravado | null, entrada: EntradaDoR
     resultado: entrada.resultado,
     situacao: atual?.situacao ?? "vigente",
     substituido_por: atual?.substituido_por ?? null,
+    arquivo: atual?.arquivo ?? null,
     edicao: (atual?.edicao ?? 0) + 1,
   };
 }
