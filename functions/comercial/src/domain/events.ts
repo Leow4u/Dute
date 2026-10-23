@@ -357,6 +357,15 @@ export const COMERCIAL_EVENT_PAYLOADS = {
       contrato_id: id.nullable().optional(),
     })
     .strict(),
+  // A cobrança do WMS do cliente passa a tirar o preço desta tabela (Fase 7,
+  // parte 7.3b): quantos itens foram ligados. Sem preço.
+  "price_table.wms_linked": z
+    .object({
+      tabela_id: id,
+      variante,
+      itens: contagem,
+    })
+    .strict(),
 
   // Autorização de faturamento (parte 15): o id interno, o tipo, o contrato,
   // as demandas e as marcas. Nunca o pedido, o aceite, o tomador, o centro de
@@ -741,6 +750,10 @@ const TEMPLATES: Templates = {
   "price_table.closed": (p) => ({
     title: "Tabela de preço encerrada",
     description: `Variante ${varianteRotulo(p.variante)}, vigente até ${dataRotulo(p.vigencia_fim)}, substituída por outra tabela.`,
+  }),
+  "price_table.wms_linked": (p) => ({
+    title: "Tabela ligada à armazenagem",
+    description: `Variante ${varianteRotulo(p.variante)}: ${p.itens} ${p.itens === 1 ? "item da cobrança do WMS passa" : "itens da cobrança do WMS passam"} a tirar o preço desta tabela.`,
   }),
 
   "client_authorization.recorded": (p) => ({

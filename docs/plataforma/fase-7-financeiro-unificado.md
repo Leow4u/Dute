@@ -338,3 +338,33 @@ Achada na parte 7.3a, em 23/10/2026.
 - **A correção.** A ferramenta lê como a prévia: o documento novo do cliente
   e, só na BTG, o antigo (`readBillingPeriod`, em `domain/billing-scope.ts`).
 - **Teste:** `billing-scope.integration.test.ts`.
+
+### Parte 7.3b: levar a LPU de cobrança ao Comercial
+
+Feita em 23/10/2026, na carga `functions/comercial/src/cargas/armazenagem.ts`
+(roteiro em `comercial-cargas.md`).
+
+- **Três passos, cada um com dry-run.**
+  - Exportar: só lê. Escreve o CSV da carga de tabela com os itens ativos do
+    cliente, sem o ad valorem, o código `WMS-<id>` e o preço de hoje.
+  - Carregar: a carga de tabela que já existe, na variante Armazenagem.
+  - Ligar: grava o `lpu_item_id` de cada item numa transação, com o recibo
+    e o evento `price_table.wms_linked` (sem preço).
+- **O que a ligação confere,** de novo dentro da transação:
+  - o item na tabela pelo código, com o mesmo valor (1.25 é 1.2500);
+  - a tabela do cliente, na variante Armazenagem;
+  - o item que não está ligado a outro item do catálogo;
+  - a vigência que cobre a competência anterior e a atual, enquanto
+    estiverem sem emitir, e as abertas. Sem isso, o WMS recusaria a emissão
+    delas por falta de preço (parte 7.3a).
+- **A fatura calcula igual.** O preço da tabela é o do WMS. A régua da 7.1
+  ganhou o caso: ligado à tabela com o preço de hoje, setembro dá os mesmos
+  75,08.
+- **Onde grava:** só onde a carga grava (`podeGravarNoProjeto`), nunca no
+  `dute-prod` nem no `dute-btg`.
+- **Testes:**
+  - `cargas/armazenagem.test.ts`: os argumentos, o preço em texto, os itens,
+    o CSV relido pela carga de tabela, a ligação e as recusas;
+  - `cargas/armazenagem.integration.test.ts`: exportar, carregar e ligar no
+    emulador, o dry-run, a repetição e as recusas sem gravar;
+  - `billing-callables.integration.test.ts`, no WMS: a fatura igual.
