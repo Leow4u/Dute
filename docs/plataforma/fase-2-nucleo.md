@@ -238,3 +238,41 @@ Branch `plataforma/fase-2-parte-2`. Entregue como no desenho.
 - O Início (`pages/home.tsx`) passou a usar a saudação de `lib/saudacao.ts`, a mesma da entrada.
 
 Conferido numa prévia estática com o CSS do build: claro, escuro e celular de 375 px sem rolagem lateral.
+
+### Decisão de 23/10/2026: um shell por módulo
+
+O Leonardo pediu a separação por módulo: um menu único com todos os módulos
+inflava demais. A decisão 6 deste desenho (agrupar por módulo num shell v3
+único) e a parte do item 3 que juntava tudo num menu ficam superadas. Vale o
+que está em `plano-de-implantacao.md`, seção 1.1 e seção 4: cada módulo tem o
+próprio shell; o nome do módulo no topo da barra é o seletor; o logo leva aos
+cards; Início por módulo; Clientes por módulo; Configuração no menu da conta;
+Agent Dute só no WMS até a Fase 5. A barreira por módulo contratado do cliente
+continua e entra na parte 2.7.
+
+### Parte 2.3: shell v3 por módulo
+
+- `components/layout/shell-do-modulo.tsx`: barra lateral preta (`bg-v3-header`)
+  com o logo (leva a `/`), o seletor de módulo, as telas do módulo com
+  contador opcional por item (vermelho só no alerta) e a conta no rodapé; no
+  celular, cabeçalho preto com o seletor e a conta, e a barra inferior preta
+  com o ícone aberto no vermelho da marca. Sem conexão, uma linha de status
+  "Sem conexão". O Comercial e a Operação usam esse shell; `comercial-shell` e
+  `operacao-shell` saíram.
+- `lib/seletor-de-modulo.ts` (`opcoesDoSeletor`, `moduloAberto`) e
+  `components/layout/seletor-de-modulo.tsx`: a lista do seletor é a dos cards
+  da entrada, na mesma ordem, com o aberto marcado e "Todos os módulos" no
+  fim. Quem tem um módulo só vê o nome, sem lista.
+- WMS: o seletor entra no topo da barra (aberta e recolhida); o menu da conta
+  deixa de ter o submenu Módulos no computador e mantém a lista no cabeçalho
+  do celular, que não tem o seletor. Nada mais muda no WMS.
+- Token novo `--v3-marca` (o vermelho #E71C23 nos dois temas; o `--primary`
+  do escuro é azul), para o marcador, o contador de alerta e o avatar.
+- Testes: `shell-do-modulo.test.tsx` (telas, seletor, contador, celular, sem
+  conexão, lista de textos e axe), `seletor-de-modulo.test.ts`,
+  `account-menu.test.tsx` atualizado. Ajudantes novos para as telas das
+  próximas partes: `src/test/acessibilidade.ts` (axe-core no jsdom, regras
+  WCAG 2.1 A e AA, sem o contraste, que o jsdom não calcula) e
+  `src/test/textos.ts` (a trava contra legenda), com o teste deles.
+- Conferido no Chromium com o CSS do build, a 1440 e a 390 px.
+

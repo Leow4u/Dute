@@ -680,7 +680,11 @@ regras); CNH, exame e treinamento vencendo aparecem no Início certo.
 
 Antes da fase indicada; a resposta entra no runbook dela.
 
-**Fase 2**
+**Fase 2** (respondidas pelo Leonardo em 23/10/2026: 1, a Operação fica
+ligada na produção, porque ninguém usa o sistema ainda; 2, a plataforma
+ligada para todos fica; 3, o Agent Dute só no WMS até a Fase 5; 4, a
+Configuração fica no menu da conta; 5, a quinta coluna do Hoje é "Em
+revisão")
 1. A Operação continua ligada na produção enquanto a Fase 3 anda (cadastro
    e fila do dia em uso), ou desliga até a parte 3.9 e religa como
    lançamento? Recomendo desligar: cada parte muda o modelo da OS, e OS

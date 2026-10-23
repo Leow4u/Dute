@@ -328,7 +328,7 @@ describe("menu do Comercial", () => {
     for (const arquivo of [
       "../../components/layout/app-layout.tsx",
       "../../components/layout/mobile-tab-bar.tsx",
-      "../../components/layout/comercial-shell.tsx",
+      "../../components/layout/shell-do-modulo.tsx",
     ]) {
       const fonte = readFileSync(new URL(arquivo, import.meta.url), "utf8");
       expect(fonte, arquivo).not.toMatch(/isRouteActive\(location, route\.href, route\.exact\)/);
