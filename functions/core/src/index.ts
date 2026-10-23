@@ -4,26 +4,29 @@ import { onCall } from "firebase-functions/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { setGlobalOptions } from "firebase-functions/v2";
 
+import { conversarComDute } from "./domain/agente-conversa.js";
+import { genkitDoAgente, gerarComGenkit, resumirComGenkit } from "./domain/agente-modelo.js";
 import { answerStockAlertFor, runStockFor } from "./domain/alertas-parados-gravacao.js";
 import { runCasesFor } from "./domain/lembrancas-gravacao.js";
 import { memoriaLiberada } from "./domain/liberacao.js";
 import { runMeasuresFor } from "./domain/medidas-gravacao.js";
 import { findSimilarQuotesFor } from "./domain/parecidos-gravacao.js";
-import { requireCoreCaller } from "./domain/profile.js";
+import { requireCoreCaller, requireDuteCaller } from "./domain/profile.js";
 import { answerSuggestionFor, suggestDurationFor } from "./domain/sugestao-gravacao.js";
 import { PROJECT_ID } from "./project.js";
 
 /**
  * Functions do núcleo (codebase `core` no firebase.json; desenho em
- * docs/plataforma/fase-5-memoria.md): a memória da Dute agora, o Agent Dute
- * na parte 5.5.
+ * docs/plataforma/fase-5-memoria.md): a memória da Dute e o Agent Dute.
  *
  * Toda callable fica declarada neste arquivo, numa linha só, no formato que a
  * conferência do invoker (tools/check_functions_invoker.ps1) lê; o teste
- * callables.test.ts trava o formato. Toda function confere a liberação da
- * memória antes de tudo; toda callable começa por
- * `await requireCoreCaller(db, request, PROJECT_ID)`, que confere a liberação
- * e o perfil, e cada uma confere o papel dela.
+ * callables.test.ts trava o formato. Toda function confere a liberação antes
+ * de tudo. A callable da memória começa por
+ * `await requireCoreCaller(db, request, PROJECT_ID)`, e a do Agent Dute por
+ * `await requireDuteCaller(db, request, PROJECT_ID)`, com a liberação própria
+ * do agente: as duas conferem a liberação e o perfil, e cada callable confere
+ * o papel dela.
  */
 
 initializeApp();
@@ -34,6 +37,7 @@ setGlobalOptions({
 });
 
 const db = getFirestore();
+const ai = genkitDoAgente(PROJECT_ID);
 
 /**
  * A memória, a cada 15 minutos: as medidas, recalculadas do zero quando uma OS
@@ -76,4 +80,18 @@ export const findSimilarQuotes = onCall(async (request) => {
 export const answerStockAlert = onCall(async (request) => {
   const caller = await requireCoreCaller(db, request, PROJECT_ID);
   return answerStockAlertFor(db, caller, request.data);
+});
+
+/**
+ * A conversa com o Agent Dute do núcleo (parte 5.5e), com a resposta em
+ * partes quando a tela pede. As ferramentas só leem, do cliente e do módulo da
+ * conversa; só o fluxo grava a conversa, as mensagens e o uso.
+ */
+export const chatWithDute = onCall({ timeoutSeconds: 180, memory: "512MiB" }, async (request, response) => {
+  const caller = await requireDuteCaller(db, request, PROJECT_ID);
+  return conversarComDute(db, caller, request.data, {
+    gerar: gerarComGenkit(ai),
+    resumir: resumirComGenkit(ai),
+    aoPedaco: request.acceptsStreaming ? (pedaco) => void response?.sendChunk(pedaco) : undefined,
+  });
 });

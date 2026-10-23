@@ -18,6 +18,8 @@ export const CALLABLES_DO_NUCLEO = [
   "findSimilarQuotes",
   // A decisão da coordenação sobre o alerta do item parado (parte 5.4d): aprovar com os itens ou descartar.
   "answerStockAlert",
+  // A conversa com o Agent Dute do núcleo (parte 5.5e): a tela passa a usá-la na parte 5.5h.
+  "chatWithDute",
 ] as const;
 export type CallableDoNucleo = (typeof CALLABLES_DO_NUCLEO)[number];
 

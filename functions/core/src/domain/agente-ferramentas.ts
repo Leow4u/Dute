@@ -15,6 +15,8 @@ export type ContextoDaFerramenta = {
   leitor: LeitorDoAgente;
   escopo: EscopoDoAgente;
   agora: Date;
+  /** A conversa em andamento: as conversas anteriores a deixam de fora. */
+  conversaId?: string;
 };
 
 export type FerramentaDoAgente<S extends z.ZodRawShape = z.ZodRawShape> = {

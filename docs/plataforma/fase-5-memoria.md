@@ -375,7 +375,7 @@ agente do WMS.
 | 5.5c | As ferramentas da Armazenagem pelo leitor, sem a prévia do faturamento, e a dos itens parados | Nenhuma grava; nenhuma devolve dado de outro cliente; nenhuma tem parâmetro de cliente; o razão já consultado pelo cliente |
 | 5.5d | As ferramentas da Operação, do Comercial, do Financeiro e da memória | O valor só para quem lê valor; a Operação sem valor; a memória diz quando não tem base; isolamento por cliente |
 | 5.5e | A conversa no núcleo (`chatWithDute`), com o Genkit na codebase: o prompt por papel e módulo, o histórico, o resumo, as anotações e os playbooks no prompt, a troca de modelo, o uso e os rascunhos | O prompt de cada papel e módulo; a conversa de outro cliente recusa; o modelo que falha passa ao reserva; só o fluxo grava a conversa, o uso e os playbooks usados |
-| 5.5f | Anotações, playbooks e rotinas no núcleo, com a rotina agendada; o WMS deixa de rodar as rotinas onde o núcleo roda | A rotina roda uma vez, por um só; a anotação só entra pelo cartão; só quem revisa decide |
+| 5.5f | Anotações, playbooks e rotinas no núcleo, com a rotina agendada; o WMS deixa de rodar as rotinas onde o núcleo roda; a nota fiscal anexada pelo cliente na conversa | A rotina roda uma vez, por um só; a anotação só entra pelo cartão; só quem revisa decide; a nota de outro cliente recusa |
 | 5.5g | O app com o agente do núcleo onde está liberado: o Agent Dute em cada shell, com o módulo e o cliente ativo; a tela na v3; o radar com as linhas do "Precisa de você" | Textos listados; `axe`; a equipe fala do cliente ativo; o módulo do shell vai à conversa |
 | 5.5h | O "Resumo do dia" como rotina pronta por módulo | A rotina pronta segue o papel e o módulo; só liga pela pessoa |
 | 5.6 | O painel de acerto: o erro médio da duração prevista e a taxa de aceite das sugestões | O painel sai de `ai_suggestions` |
@@ -938,3 +938,82 @@ Feita em 23/10/2026. As ferramentas estão em
     medida geral.
   - `agente-leitor.test.ts`: o que tem valor recusa quem não lê valor, sem
     consultar.
+
+### Parte 5.5e: a conversa no núcleo
+
+Feita em 23/10/2026. A callable é `chatWithDute`, em
+`functions/core/src/index.ts`. O fluxo está em
+`domain/agente-conversa.ts`, o prompt em `agente-prompt.ts`, as
+ferramentas comuns em `agente-comuns.ts` e o modelo em `agente-modelo.ts`.
+
+- **A entrada.** `requireDuteCaller`, com a liberação própria do agente, e
+  depois o escopo da parte 5.5b. A trava das callables
+  (`callables.test.ts`) passa a aceitar as duas entradas:
+  - a da memória, por `requireCoreCaller`;
+  - a do agente, por `requireDuteCaller`, que pode responder em partes.
+- **O prompt.** São as regras do agente do WMS, com algumas mudanças.
+  - Entram:
+    - o cliente da conversa;
+    - o módulo do shell, por onde o agente começa;
+    - os módulos que a pessoa vê.
+  - Novas regras:
+    - dizer de onde tirou o dado;
+    - dizer que a memória ainda não tem base, em vez de estimar;
+    - para quem não lê valor, que valores ficam com o Comercial ou o
+      Financeiro.
+  - Também entram as anotações aprovadas (o cliente só recebe as "para
+    todos") e o índice dos playbooks.
+- **As ferramentas comuns.**
+  - `conversas_anteriores`: só da mesma pessoa e do cliente, fora a
+    conversa atual.
+  - `consultar_playbook`: o uso vai para o registro da resposta, e o
+    playbook não muda.
+  - Os cartões: `sugerir_anotacao` (o cartão, sem gravar a anotação,
+    pergunta 34), `sugerir_rotina`, e `rascunho_pedido` e `rascunho_envio`
+    (para o cliente com armazenagem, pelo leitor, no formato do WMS).
+- **O fluxo.**
+  - Cada chamada de ferramenta passa pelo esquema e fica anotada. O cartão
+    e os playbooks usados saem dessas chamadas, não do formato do modelo.
+  - Só o fluxo grava, nas coleções e no formato do agente do WMS:
+    - a conversa, com o módulo;
+    - a pergunta e a resposta, com o cartão;
+    - o uso, com os playbooks abertos e o módulo;
+    - o resumo da conversa longa (10 mensagens fora da janela de 20).
+  - O cartão de pedido e de envio segue saindo pela `createCustomerRequest`
+    do WMS.
+  - A conversa de outra pessoa, de outro cliente ou de outro módulo recusa.
+    A de antes do núcleo, sem módulo, vale como da Armazenagem.
+- **O modelo.**
+  - O Gemini pelo Genkit no Vertex AI, com os modelos do WMS. O primeiro que
+    falha passa ao reserva, e a resposta em partes tem os mesmos tipos de
+    hoje.
+  - O Genkit é criado na primeira conversa, para a rotina da memória não
+    pagar a partida.
+  - `gemini-models.test.ts` do núcleo lê a lista de modelos aposentados do
+    teste do WMS e confere que os modelos são os mesmos.
+- **Ficam para a parte 5.5f.**
+  - A nota anexada pelo cliente: a conversa do núcleo recusa o anexo por
+    ora.
+  - Os cartões de anotação e de rotina gravando pelo núcleo.
+- **O evento.** A conversa não grava evento em `events`: não é transição
+  da operação. O registro dela é a conversa, as mensagens e o uso.
+- **Testes.**
+  - `agente-conversa.test.ts`:
+    - o pedido;
+    - o prompt do cliente e da equipe, com e sem valor;
+    - os cartões, que não gravam;
+    - os rascunhos de pedido e de envio pelo leitor;
+    - as conversas anteriores.
+  - `agente-conversa.integration.test.ts`, no emulador, com um modelo falso
+    que chama as ferramentas:
+    - só o fluxo grava;
+    - o playbook aberto vai ao uso, sem mudar o playbook;
+    - a anotação é só o cartão;
+    - o histórico em ordem;
+    - as recusas de dono, cliente e módulo;
+    - a equipe com o cliente ativo;
+    - a resposta de reserva;
+    - o resumo da conversa longa.
+  - `callables.test.ts`: a entrada de cada callable, e a do agente pela
+    liberação do agente.
+

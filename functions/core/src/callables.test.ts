@@ -24,19 +24,25 @@ function invokerPattern(): RegExp {
 }
 
 const ENTRADA = /^export const \w+ = onCall(?:<[^>]*>)?\(async \(request\) => \{\s*const caller = await requireCoreCaller\(db, request, PROJECT_ID\);/;
+// A do Agent Dute (parte 5.5e) entra pela liberação própria do agente e pode responder em partes.
+const ENTRADA_DO_AGENTE = /^export const \w+Dute\w* = onCall(?:<[^>]*>)?\((?:\{[^}]*\}, )?async \(request(?:, response)?\) => \{\s*const caller = await requireDuteCaller\(db, request, PROJECT_ID\);/;
 
 describe("functions do núcleo", () => {
   it("toda linha com onCall está no formato que a conferência do invoker lê, inclusive comentário", () => {
     const pattern = invokerPattern();
     const used = rawIndex.split(/\r?\n/).filter((line) => /\bonCall\s*[<(]/.test(line));
-    assert.deepEqual(used.map((line) => line.match(pattern)?.[1]), ["suggestDuration", "answerSuggestion", "findSimilarQuotes", "answerStockAlert"]);
+    assert.deepEqual(used.map((line) => line.match(pattern)?.[1]), ["suggestDuration", "answerSuggestion", "findSimilarQuotes", "answerStockAlert", "chatWithDute"]);
   });
 
-  it("as callables começam pela liberação e pelo perfil, e nada é reexportado", () => {
+  it("as callables começam pela liberação e pelo perfil, e nada é reexportado; as do Agent Dute, pela liberação do agente", () => {
     assert.doesNotMatch(index, /^export\s*\{/m);
     const blocks = index.split(/^(?=export const )/m).filter((block) => /^export const \w+ = onCall/.test(block));
-    assert.equal(blocks.length, 4);
-    for (const block of blocks) assert.match(block, ENTRADA);
+    assert.equal(blocks.length, 5);
+    for (const block of blocks) {
+      const doAgente = /^export const \w*Dute\w* = /.test(block);
+      assert.match(block, doAgente ? ENTRADA_DO_AGENTE : ENTRADA);
+      assert.doesNotMatch(block, doAgente ? /requireCoreCaller/ : /requireDuteCaller/);
+    }
   });
 
   it("a rotina da memória (partes 5.1a, 5.3a, 5.4a e 5.4d), a cada 15 minutos, uma instância, confere a liberação antes de tudo e roda as medidas, as lembranças e o estoque (o relógio e a proposta do alerta)", () => {
