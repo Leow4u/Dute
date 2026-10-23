@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { itensDoAditivoEmTexto, type ExecucaoDaOperacao } from "@/lib/comercial/aditivos-da-operacao";
 import { dataBr, type ContatoResumo, type LocalResumo } from "@/lib/comercial/clientes";
 import type { AcaoDepoisDoEnvio, AcoesDaEtapa } from "@/lib/comercial/depois-do-envio";
 import { ROTULO_DO_ENVIO } from "@/lib/comercial/envio";
@@ -107,6 +108,8 @@ export type DadosDoOrcamento = {
   /** "Com o aprovador · 21/10 09:05", "Aprovado por Leonardo · 21/10 08:50". */
   situacao: string | null;
   devolucao: { nota: string | null; detalhe: string } | null;
+  /** O que a Operação executou e revisou, e o aditivo que ela pediu (parte 3.10c). */
+  operacao: ExecucaoDaOperacao | null;
 };
 
 export type MontarViewProps = {
@@ -1235,6 +1238,52 @@ function totaisDaTela(props: MontarViewProps) {
   };
 }
 
+/** O que a Operação executou e revisou, por linha, e o aditivo que ela pediu (parte 3.10c). Sem valor. */
+function ExecucaoNaOperacao({ execucao }: { execucao: ExecucaoDaOperacao }) {
+  return (
+    <section aria-label="Execução na Operação" className="flex flex-col gap-3 rounded-lg border border-border bg-card p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-base font-extrabold">Execução na Operação</h2>
+        <span className="text-sm font-semibold text-muted-foreground">{execucao.titulo}</span>
+      </div>
+      {execucao.aditivo ? (
+        <p className="rounded-md border border-amber-soft-border bg-amber-soft px-4 py-2.5 text-sm font-semibold text-amber-soft-foreground">
+          Aditivo pedido pela Operação · {itensDoAditivoEmTexto(execucao.aditivo.itens)}
+        </p>
+      ) : null}
+      {execucao.linhas.length ? (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[36rem] text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                <th className="py-2 pr-3">Item</th>
+                <th className="px-2 py-2 text-right">Executado</th>
+                <th className="px-2 py-2 text-right">A cobrar</th>
+                <th className="px-2 py-2 text-right">Absorvido</th>
+                <th className="py-2 pl-2 text-right">Aditivo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {execucao.linhas.map((linha) => (
+                <tr key={linha.item} className="border-b border-border last:border-b-0 font-semibold">
+                  <td className="py-2 pr-3">
+                    {linha.item}
+                    {linha.unidade ? <span className="ml-1.5 text-xs text-muted-foreground">{linha.unidade}</span> : null}
+                  </td>
+                  <td className="px-2 py-2 text-right tabular-nums">{linha.executado}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{linha.aCobrar}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{linha.absorvido}</td>
+                  <td className="py-2 pl-2 text-right tabular-nums">{linha.aditivo}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 export function MontarView(props: MontarViewProps) {
   const totais = totaisDaTela(props);
   const { aviso, dados } = props;
@@ -1271,6 +1320,7 @@ export function MontarView(props: MontarViewProps) {
           {dados.devolucao.nota ? <p className="text-sm font-semibold">{dados.devolucao.nota}</p> : null}
         </section>
       ) : null}
+      {dados.operacao ? <ExecucaoNaOperacao execucao={dados.operacao} /> : null}
       <div className="flex flex-wrap items-stretch gap-5">
         <Pedido {...props} />
         <Execucao {...props} />

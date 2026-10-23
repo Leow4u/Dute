@@ -74,6 +74,7 @@ const DADOS: DadosDoOrcamento = {
   totalCents: 186_400,
   situacao: null,
   devolucao: null,
+  operacao: null,
 };
 
 const CONTATOS = [
@@ -428,6 +429,21 @@ describe("montar orçamento", () => {
     const visita = lista.indexOf("Visita técnica");
     expect(lista.slice(visita - 2, visita)).toEqual(["Data", "A definir"]);
     expect(html).toMatch(/<div class="[^"]*border-dashed[^"]*">(?:<svg[\s\S]*?<\/svg>)?A definir<\/div>/);
+  });
+
+  it("a execução na Operação: as OS revisadas, por linha o executado e o que se cobra, e o aditivo pedido (parte 3.10c)", async () => {
+    const operacao = {
+      titulo: "OS 10045-01 revisada · 22/10",
+      linhas: [{ item: "Mesa", unidade: "un", executado: "64", aCobrar: "60", absorvido: "0", aditivo: "4" }],
+      aditivo: { numero: "10045", cliente: "Itaú Unibanco", pedidoEm: "2026-10-22T21:10:00.000Z", itens: [{ item: "Mesa", quantidade: "4", unidade: "UN", os: "10045-01" }] },
+    };
+    const html = render({ dados: { ...DADOS, etapa: "execucao_a_orcar", operacao } });
+    const lista = texts(html);
+    for (const texto of ["Execução na Operação", "OS 10045-01 revisada · 22/10", "Aditivo pedido pela Operação · +4 Mesa", "Executado", "A cobrar", "Absorvido", "Aditivo", "64", "60"]) {
+      expect(lista, texto).toContain(texto);
+    }
+    const { violacoesDeAcessibilidade } = await import("@/test/acessibilidade");
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 
   it("linha nova, ainda sem id, fica destacada até salvar", () => {

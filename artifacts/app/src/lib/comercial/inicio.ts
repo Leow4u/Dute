@@ -1,4 +1,4 @@
-import { Timestamp, collection, getDocs, query, where, type QuerySnapshot } from "firebase/firestore";
+import { Timestamp, collection, doc, getDoc, getDocs, query, where, type QuerySnapshot } from "firebase/firestore";
 
 import { firestore } from "../firebase";
 import {
@@ -8,6 +8,7 @@ import {
   type DemandaDaFila,
   type PendenciasDoInicio,
 } from "./autorizacoes";
+import { ETAPAS_COM_ADITIVO_A_FAZER, aditivoAFazer, aditivoPedido, type AditivoAFazer } from "./aditivos-da-operacao";
 import { cadastroDoDocumento, hojeLocal, type CadastroComercial } from "./clientes";
 import { alertasParaOInicio, contratoDoRegistro, nomesDosClientes, type AlertaDoInicio, type Contrato } from "./contratos";
 import { orcamentosParaOInicio, type OrcamentoParaAprovarNoInicio } from "./aprovar";
@@ -203,3 +204,20 @@ export async function lerDevolvidos(uid: string): Promise<OrcamentoDevolvido[]> 
   return devolvidosDe(rascunhos.docs.map((row) => ({ id: row.id, data: row.data() })), uid);
 }
 
+/**
+ * Os aditivos que a revisão da Operação pediu e o Comercial ainda não fez
+ * (parte 3.10c): as demandas em Para planejar ou Execução a orçar com o
+ * pedido no resumo da Operação, e o orçamento de cada uma para ver se a RV de
+ * aditivo já veio. São poucas de cada vez.
+ */
+export async function lerAditivosAFazer(): Promise<AditivoAFazer[]> {
+  const db = firestore;
+  if (!db) throw new Error("Firebase não configurado.");
+  const demandas = await getDocs(query(collection(db, "demands"), where("etapa", "in", [...ETAPAS_COM_ADITIVO_A_FAZER])));
+  const comPedido = demandas.docs.filter((row) => aditivoPedido(row.data()) !== null);
+  const quotes = await Promise.all(comPedido.map((row) => getDoc(doc(db, "quotes", row.id))));
+  return comPedido
+    .map((row, indice) => aditivoAFazer(row.id, row.data(), quotes[indice].exists() ? quotes[indice].data() : null))
+    .filter((aditivo): aditivo is AditivoAFazer => aditivo !== null)
+    .sort((a, b) => a.pedidoEm.localeCompare(b.pedidoEm));
+}
