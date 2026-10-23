@@ -5,6 +5,8 @@ import { onCall } from "firebase-functions/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 
+import { REMETENTE_DOS_AVISOS, enderecoDoApp } from "./domain/avisos.js";
+import { enviarPeloResend, enviarSoAuditoria, runNotificationsFor } from "./domain/avisos-gravacao.js";
 import { completeServiceOrderFor } from "./domain/conclusao-gravacao.js";
 import { openStorageDemandFor } from "./domain/demanda-do-armazem-gravacao.js";
 import { openDirectDemandFor } from "./domain/demanda-direta-gravacao.js";
@@ -161,4 +163,19 @@ export const runDailyAlerts = onSchedule({ schedule: "every day 06:00", timeZone
   if (!operacaoLiberada(PROJECT_ID)) return;
   const resultado = await runDailyAlertsFor(db);
   console.info("runDailyAlerts", resultado);
+});
+
+/**
+ * A cada 5 minutos: os eventos novos que dão aviso viram o aviso no sino do
+ * portal e, para os contatos que ligaram o modelo, o e-mail (parte 4.6a). Sem
+ * a chave do Resend no ambiente, o e-mail fica só auditado na fila. Uma
+ * instância de cada vez. Fora da liberação da Operação, não faz nada.
+ */
+export const runNotifications = onSchedule({ schedule: "every 5 minutes", timeZone: "America/Sao_Paulo", timeoutSeconds: 240, maxInstances: 1 }, async () => {
+  if (!operacaoLiberada(PROJECT_ID)) return;
+  const origem = enderecoDoApp(PROJECT_ID);
+  if (!origem) return;
+  const chave = process.env.RESEND_API_KEY?.trim();
+  const resultado = await runNotificationsFor(db, { origem, remetente: REMETENTE_DOS_AVISOS, enviar: chave ? enviarPeloResend(chave) : enviarSoAuditoria });
+  console.info("runNotifications", resultado);
 });

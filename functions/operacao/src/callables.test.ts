@@ -55,9 +55,16 @@ describe("callables da Operação", () => {
     }
   });
 
-  it("a rotina diária (parte 3.13a) é a única function agendada e confere a liberação antes de tudo", () => {
+  it("as functions agendadas são a rotina diária (parte 3.13a) e a dos avisos (parte 4.6a), e conferem a liberação antes de tudo", () => {
     const agendadas = [...index.matchAll(/^export const (\w+) = onSchedule\(/gm)].map((match) => match[1]);
-    assert.deepEqual(agendadas, ["runDailyAlerts"]);
-    assert.match(index, /export const runDailyAlerts = onSchedule\(\{[^}]*timeZone: "America\/Sao_Paulo"[^}]*\}, async \(\) => \{\s*if \(!operacaoLiberada\(PROJECT_ID\)\) return;/);
+    assert.deepEqual(agendadas, ["runDailyAlerts", "runNotifications"]);
+    for (const nome of agendadas) {
+      assert.match(index, new RegExp(`export const ${nome} = onSchedule\\(\\{[^}]*timeZone: "America\\/Sao_Paulo"[^}]*\\}, async \\(\\) => \\{\\s*if \\(!operacaoLiberada\\(PROJECT_ID\\)\\) return;`), nome);
+    }
+  });
+
+  it("a rotina dos avisos roda uma instância de cada vez e só envia de verdade com a chave do Resend", () => {
+    assert.match(index, /export const runNotifications = onSchedule\(\{[^}]*maxInstances: 1[^}]*\}/);
+    assert.match(index, /enviar: chave \? enviarPeloResend\(chave\) : enviarSoAuditoria/);
   });
 });

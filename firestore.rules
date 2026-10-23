@@ -912,6 +912,26 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Os avisos do sino do portal (parte 4.6a): o cliente lê só os próprios.
+    // O aviso da NF leva o valor dela, então a equipe interna não lê; owner e
+    // admin leem para conferir. Só a rotina runNotifications grava.
+    match /client_notifications/{avisoId} {
+      allow read: if isPrivileged() || isOwnProjection();
+      allow create, update, delete: if false;
+    }
+
+    // A fila de e-mail dos avisos (parte 4.6a), com os endereços dos contatos
+    // e o texto: só owner e admin leem. Só a rotina grava.
+    match /email_outbox/{emailId} {
+      allow read: if isPrivileged();
+      allow create, update, delete: if false;
+    }
+
+    // O cursor da rotina dos avisos: só as Functions leem e gravam.
+    match /notification_cursors/{cursorId} {
+      allow read, write: if false;
+    }
+
     match /customer_accounts/{accountId} {
       allow read: if canReadOperations();
       allow create, update, delete: if false;

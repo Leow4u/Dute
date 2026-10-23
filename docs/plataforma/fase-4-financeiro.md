@@ -193,7 +193,9 @@ continuam no Faturamento do WMS, e as rotas `/financeiro` não existem
 | 4.5b | Operação: a entrega pela Dutelog vira demanda e OS (a ida e, com retorno, a volta), com o número de volta no pedido | Retirada pelo cliente não gera OS |
 | 4.5c | WMS: a entrega na tela do pedido (`WmsExpedicao`), com a demanda e as OS na Operação e a retirada na saída | Textos listados; `axe` |
 | 4.5d | O retorno ao armazém: a OS de volta revisada abre o recebimento do retorno no WMS | O retorno gera recebimento uma vez |
-| 4.6 | Notificações por modelo (sino e e-mail) | E-mail só com o canal ligado no perfil |
+| 4.6a | A rotina dos avisos: os eventos viram o aviso no sino (`client_notifications`) e o e-mail na fila (`email_outbox`), enviado pelo Resend ou só auditado; regras, índice e zeragem | Rodar de novo não duplica; o e-mail só vai a quem ligou o modelo; a NF por e-mail só a quem lê valor; o cliente sem o módulo não recebe |
+| 4.6b | Comercial: os avisos que cada contato recebe por e-mail, no cadastro do cliente | A NF não se liga para a gerenciadora; textos listados; `axe` |
+| 4.6c | Portal: o sino com os avisos do cliente e marcar como lido | O cliente só vê os próprios; textos listados; `axe` |
 | 4.7 | WMS na v3, tela a tela | `theme-colors.test.ts`; render e `axe` por tela |
 | 4.8 | Relatórios | Sem valor para quem não vê valor |
 | 4.9 | Lançamento em produção | Conferência de produção |
@@ -446,3 +448,43 @@ em `features/warehouse-ops/order-returns.tsx`, em Devoluções.
   - `retorno.test.ts` e `order-returns.test.tsx` cobrem a tela.
   - `functions-api.test.ts` cobre a rota.
 
+### Parte 4.6a: a rotina dos avisos
+
+Feita em 23/10/2026. Os modelos estão em `functions/operacao/src/domain/avisos.ts` e a rotina em
+`avisos-gravacao.ts`. A function agendada é `runNotifications`, que roda a cada 5 minutos, uma instância de cada vez.
+
+- **Os modelos.** O texto sai de um modelo fixo, nunca da IA. A fonte é o evento que a Operação e o Financeiro já gravam.
+
+  | Modelo | Evento | Texto |
+  |---|---|---|
+  | OS agendada | `os.scheduled`, ou `os.planned` com a data | os serviços e a janela |
+  | OS em execução | `os.started` | os serviços e desde quando |
+  | OS concluída | `os.completed` | os serviços e quando terminou |
+  | NF emitida | `nf.registered` | o número, o valor e o vencimento |
+  | Solicitação recebida | `portal.service_requested` | o tipo de serviço e o dia pedido |
+
+  - O tipo vale só da codebase que o grava. A vistoria não dá aviso.
+  - A OS não leva valor. A NF leva o valor, que o cliente já vê nas próprias faturas.
+- **A rotina.** Lê os eventos depois do cursor (`notification_cursors/avisos`, com o instante gravado e o id), em lotes de 200.
+  - Só entra o evento gravado há mais de um minuto, para nenhum ficar antes do cursor.
+  - Na primeira vez o cursor começa agora: os eventos de antes não viram aviso.
+  - O cliente recebe o modelo só com o módulo no contrato: as OS e a solicitação com a Operação, a NF com o Financeiro.
+  - Cada evento grava, numa transação, o aviso do sino (`client_notifications/ntf_<evento>`) e o e-mail na fila (`email_outbox/mail_<evento>`). Rodar de novo não duplica.
+- **Quem recebe o e-mail.** Os contatos do cliente (`customer_contacts`) ativos, com e-mail e com o modelo em `avisos`, que a parte 4.6b liga no cadastro.
+  - A NF vai só ao gestor e ao financeiro do cliente, nunca à gerenciadora.
+  - Sem contato com o modelo ligado, só o sino recebe.
+- **O envio.** A fila envia 20 por rodada e tenta de novo até 5 vezes, com o erro guardado.
+  - Sem `RESEND_API_KEY` no ambiente, o e-mail fica auditado na fila (`audit`) e não sai. É o estado de hoje nos dois ambientes.
+  - Com a chave, sai pelo Resend com o id do e-mail como chave de idempotência, de `Dutelog <avisos@dutelog.com.br>`. O link aponta para o app do ambiente.
+- **Para ligar o envio** (precisa do Leonardo):
+  1. Criar a conta no Resend e verificar o domínio `dutelog.com.br`, com os registros de DNS que ele pede na Hostinger. Os CNAMEs `_acme-challenge_*` não podem sair.
+  2. Guardar a chave no Secret Manager de cada projeto: `cd C:\DEV\Dute` e depois `firebase functions:secrets:set RESEND_API_KEY --project dute-homolog`.
+  3. Declarar o segredo na `runNotifications` (`secrets: ["RESEND_API_KEY"]`), num PR, e conferir na homologação antes da produção.
+- **Regras.** O cliente lê só os próprios avisos. A equipe interna não lê, porque o aviso da NF leva o valor; owner e admin leem. A fila de e-mail é só de owner e admin. O cursor não abre pelo navegador. Ninguém grava pelo navegador.
+- **Índice.** `events` por `type` e `created_at`.
+- **Zeragem.** `tools/full_reset_btg.py` preserva `client_notifications`, `email_outbox` e `notification_cursors`, como os eventos de que eles saem.
+- **Testes.**
+  - `avisos.test.ts` cobre o evento que vira aviso, o texto de cada modelo (nenhum da OS com valor), quem recebe e o envio pelo Resend.
+  - `avisos.integration.test.ts` cobre a primeira rodada, a repetição sem duplicar, o evento do último minuto, o cliente sem o módulo e a fila.
+  - `operacao-avisos.rules.test.ts` cobre as regras.
+  - `callables.test.ts` trava a function agendada.
