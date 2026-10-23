@@ -12,6 +12,8 @@ import { doc, setDoc } from "firebase/firestore";
  * parte 3.7c): só quem coordena a Operação ou está escalado na OS sobe foto,
  * e só na OS agendada ou em execução; suporte só lê; nada se sobrescreve nem
  * apaga. O critério do escalado é o mesmo do firestore.rules (equipe_uids).
+ * A assinatura do responsável (parte 3.9a) segue a mesma regra, só na OS em
+ * execução.
  */
 
 const PROJECT_ID = "demo-dute-operations";
@@ -69,6 +71,12 @@ function subir(uid: string, arquivo = ARQUIVO, conteudo: Uint8Array = JPEG, cont
   return storage(uid).ref(`os/${numero}/fotos/${arquivo}`).put(conteudo, { contentType }).then((snapshot) => snapshot);
 }
 
+const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+function assinar(uid: string, arquivo: string, conteudo: Uint8Array = PNG, contentType = "image/png", numero = OS) {
+  return storage(uid).ref(`os/${numero}/assinatura/${arquivo}`).put(conteudo, { contentType }).then((snapshot) => snapshot);
+}
+
 before(async () => {
   testEnvironment = await initializeTestEnvironment({
     projectId: PROJECT_ID,
@@ -124,5 +132,46 @@ describe("fotos da OS no Storage", () => {
     await assertSucceeds(subir("ops-a", QUARTO));
     await assertFails(subir("ops-a", QUARTO)).catch((error: unknown) => assert.fail(`sobrescrever: ${String(error)}`));
     await assertFails(storage("owner-a").ref(`os/${OS}/fotos/${QUARTO}`).delete()).catch((error: unknown) => assert.fail(`apagar: ${String(error)}`));
+  });
+});
+
+describe("assinatura da OS no Storage", () => {
+  beforeEach(async () => {
+    await semente("em_execucao");
+  });
+
+  it("quem coordena e quem está escalado sobem; os outros papéis e quem não está na OS, não", async () => {
+    for (const [indice, uid] of SOBEM.entries()) await assertSucceeds(assinar(uid, `as_a${String(indice).repeat(15)}.png`));
+    for (const uid of NAO_SOBEM) await assertFails(assinar(uid, "as_afffffffffffffff.png"));
+  });
+
+  it("quem coordena, o suporte e quem está escalado leem; os outros, não", async () => {
+    const ARQ = "as_b000000000000001.png";
+    await assertSucceeds(assinar("campo-a", ARQ));
+    for (const uid of LEEM) await assertSucceeds(storage(uid).ref(`os/${OS}/assinatura/${ARQ}`).getMetadata());
+    for (const uid of NAO_LEEM) await assertFails(storage(uid).ref(`os/${OS}/assinatura/${ARQ}`).getMetadata());
+  });
+
+  it("só na OS em execução", async () => {
+    for (const status of ["aberta", "agendada", "em_revisao", "revisada", "cancelada"]) {
+      await semente(status);
+      await assertFails(assinar("ops-a", "as_c000000000000001.png")).catch((error: unknown) => assert.fail(`${status}: ${String(error)}`));
+      await assertFails(assinar("campo-a", "as_c000000000000002.png")).catch((error: unknown) => assert.fail(`${status}: ${String(error)}`));
+    }
+  });
+
+  it("nome, tipo e tamanho conferidos; nada se sobrescreve nem apaga", async () => {
+    const ARQ = "as_d000000000000001.png";
+    for (const [caso, tentativa] of [
+      ["nome da foto", () => assinar("ops-a", "ft_d000000000000002.png")],
+      ["nome livre", () => assinar("ops-a", "assinatura.png")],
+      ["svg", () => assinar("ops-a", "as_d000000000000003.png", PNG, "image/svg+xml")],
+      ["tamanho", () => assinar("ops-a", "as_d000000000000004.png", new Uint8Array(8 * 1024 * 1024), "image/png")],
+    ] as const) {
+      await assertFails(tentativa()).catch((error: unknown) => assert.fail(`${caso}: ${String(error)}`));
+    }
+    await assertSucceeds(assinar("ops-a", ARQ));
+    await assertFails(assinar("ops-a", ARQ)).catch((error: unknown) => assert.fail(`sobrescrever: ${String(error)}`));
+    await assertFails(storage("owner-a").ref(`os/${OS}/assinatura/${ARQ}`).delete()).catch((error: unknown) => assert.fail(`apagar: ${String(error)}`));
   });
 });
