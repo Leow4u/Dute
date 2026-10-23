@@ -224,10 +224,13 @@ const ai = genkit({
 const DEFAULT_CUSTOMER = "BTG Pactual";
 // O Agent Dute roda no Gemini via Genkit, com ferramentas de leitura
 // (domain/agent-dute.ts). O Agent Engine em us-west1 não é mais usado.
+// O Gemini 2.5 Flash foi aposentado pelo Google em 20/10/2026 e a chamada
+// passou a falhar; o gemini-3.8-flash é o substituto indicado. Modelo
+// aposentado no código reprova em gemini-models.test.ts.
 const AGENT_DUTE_MODEL = process.env.AGENT_DUTE_MODEL ?? "gemini-3.5-flash";
-const AGENT_DUTE_FALLBACK_MODEL = "gemini-2.5-flash";
+const AGENT_DUTE_FALLBACK_MODEL = "gemini-3.8-flash";
 const DOCUMENT_VISUAL_OCR_MODEL =
-  process.env.DOCUMENT_VISUAL_OCR_MODEL ?? "gemini-2.5-flash";
+  process.env.DOCUMENT_VISUAL_OCR_MODEL ?? AGENT_DUTE_MODEL;
 // 14 MB: o arquivo vai inline em base64 para o Gemini, cuja requisição é
 // limitada a 20 MB. Fica abaixo dos 15 MB do anexo de propósito.
 const VISUAL_OCR_MAX_BYTES = Number(
@@ -2879,7 +2882,7 @@ ${stringifyCompact(context, 5000)}
 
     try {
       const response = await ai.generate({
-        model: vertexAI.model("gemini-2.5-flash"),
+        model: vertexAI.model(AGENT_DUTE_MODEL),
         prompt,
         config: {
           temperature: 0.1,
@@ -5091,9 +5094,9 @@ export const generateCatalogPhoto = onCall({ timeoutSeconds: 180, maxInstances: 
       project: PROJECT_ID, model, token: access_token, bytes, mimeType,
       prompt: productPhotoPrompt(input),
     });
-    const reviewModel = process.env.PRODUCT_PHOTO_REVIEW_MODEL || "gemini-2.5-flash";
-    const review = await reviewProductPhoto({
-      project: PROJECT_ID, model: reviewModel, token: access_token,
+    const { review, model: reviewModel } = await reviewProductPhoto({
+      project: PROJECT_ID, token: access_token,
+      models: [process.env.PRODUCT_PHOTO_REVIEW_MODEL ?? "", AGENT_DUTE_MODEL, AGENT_DUTE_FALLBACK_MODEL],
       prompt: productPhotoPrompt(input), original: { bytes, mimeType }, generated: image,
     });
     const extension = image.mimeType === "image/jpeg" ? "jpg" : image.mimeType === "image/webp" ? "webp" : "png";
