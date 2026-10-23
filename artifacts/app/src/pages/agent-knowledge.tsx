@@ -58,6 +58,9 @@ import { firestore } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 import { recordCustomerCode } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
+import { clienteDoNucleo } from "@/lib/agente/cliente";
+import { ProvedorDoAgente } from "@/lib/agente/contexto";
+import { abreAgenteDoNucleo } from "@/lib/agente/navegacao";
 
 const knowledgeCollection = "ai_agent_knowledge";
 const textChunkCollection = "ai_agent_knowledge_chunks";
@@ -300,6 +303,9 @@ export default function AgentKnowledge() {
   const { code: activeCustomerCode } = useActiveCustomer();
   // Mesmo critério do backend (NOTE_REVIEWER_ROLES); o financeiro vê só os documentos.
   const canReviewNotes = ["owner", "admin", "interno", "suporte"].includes(String(user?.publicMetadata.role ?? ""));
+  // Com o agente do núcleo (parte 5.5k), as anotações e os playbooks são os do cliente ativo, pelo núcleo.
+  const doNucleo = abreAgenteDoNucleo(user?.publicMetadata.role);
+  const agenteDoCliente = useMemo(() => clienteDoNucleo("wms", activeCustomerCode), [activeCustomerCode]);
   const queryClient = useQueryClient();
   const [form, setForm] = useState<UploadFormState>(initialForm);
   const [file, setFile] = useState<File | null>(null);
@@ -577,8 +583,14 @@ export default function AgentKnowledge() {
         }
       />
 
-      {canReviewNotes ? <AgentNotes /> : null}
-      {canReviewNotes ? <AgentPlaybooks /> : null}
+      {canReviewNotes && doNucleo ? (
+        <ProvedorDoAgente cliente={agenteDoCliente}>
+          <AgentNotes />
+          <AgentPlaybooks />
+        </ProvedorDoAgente>
+      ) : null}
+      {canReviewNotes && !doNucleo ? <AgentNotes /> : null}
+      {canReviewNotes && !doNucleo ? <AgentPlaybooks /> : null}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>

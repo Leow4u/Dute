@@ -1262,3 +1262,22 @@ nova nem item de menu, e `/agente` e o portal seguem com o agente do WMS.
     novas.
   - `active-customer.test.ts`: as opções do comercial.
   - `platform-lists.test.ts`: os papéis do agente no app são os do núcleo.
+
+### Parte 5.5k: as anotações, os playbooks e o radar pelo núcleo
+
+Feita em 23/10/2026. Vale só com a liberação do agente. Fora dela, as telas
+seguem como antes.
+
+- **As anotações e os playbooks** (Agent Dute › Conhecimento):
+  - A coordenação vê e decide os do cliente ativo, pelo núcleo: o mesmo
+    cliente do agente.
+  - A anotação escrita em "Ensinar o Agent Dute" segue pelo WMS. É a mesma
+    coleção (`ai_agent_notes`), e o núcleo lê a que vale.
+- **O radar** (Agent Dute › Painel, pergunta 35):
+  - O "Precisa de você" de cada módulo que a pessoa abre, com as mesmas
+    leituras dos Inícios e sem regra própria (`lib/agente/radar.ts`).
+  - Uma seção por módulo, na ordem do Início. A linha crítica é a única em
+    vermelho.
+  - Cada seção mostra se ainda carrega ou se não carregou.
+- **Testes.** `radar-do-agente.test.tsx`: as seções e as linhas, os textos
+  listados e o `axe`.

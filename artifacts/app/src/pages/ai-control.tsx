@@ -57,6 +57,8 @@ import type { OperationalFoundationSnapshot } from "@/lib/operational-foundation
 import { cn } from "@/lib/utils";
 import { recordCustomerCode } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
+import { RadarDoAgente } from "@/components/agent/radar-do-agente";
+import { abreAgenteDoNucleo } from "@/lib/agente/navegacao";
 
 type EventSeverity = "info" | "attention" | "critical";
 
@@ -2154,7 +2156,10 @@ export default function AiControl() {
               <CardTitle className="text-base">Radar do Agent Dute</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 pt-5">
-              {inbox.length === 0 ? (
+              {/* Com o agente do núcleo (parte 5.5k), o radar é o "Precisa de você" dos módulos da pessoa, sem regra própria. */}
+              {abreAgenteDoNucleo(user?.publicMetadata.role) ? (
+                <RadarDoAgente role={user?.publicMetadata.role} uid={user?.uid} />
+              ) : inbox.length === 0 ? (
                 <div className="py-8 text-center text-sm text-muted-foreground">
                   Nenhum alerta aberto agora.
                 </div>
