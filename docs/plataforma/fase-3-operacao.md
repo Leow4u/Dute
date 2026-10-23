@@ -51,7 +51,14 @@ de avisos do WMS.
 no app e nas callables, travada por `platform-lists.test.ts`. O `dute-prod`
 entrou com o OK do Leonardo em 22/10/2026, antes do lançamento previsto na
 Fase 4; a produção só atende depois da publicação manual. O `dute-btg`
-recusa. Desfazer é tirar `dute-prod` das duas listas e publicar de novo.
+recusa.
+
+Desligar é tirar `dute-prod` das duas listas e publicar de novo: as callables
+voltam a recusar e as telas somem. Não se desfaz o que foi gravado enquanto
+estava ligada: colaboradores, veículos, OS, o contador, `os_numeros` nas
+demandas do Comercial e os eventos `functions_operacao`. Isso continua no
+banco, legível pelas regras, e só sai restaurando o banco para um banco novo
+(PITR ou backup), com o OK do Leonardo.
 
 ### Telas
 
