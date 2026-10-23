@@ -125,7 +125,7 @@ describe("shell v3 do módulo", () => {
   it("a Operação usa o mesmo shell, com as telas dela", () => {
     const html = operacao("/operacao/veiculos");
     expect(html).toContain('data-ambiente="operacao"');
-    for (const tela of ["Início", "Hoje", "Agenda", "Demandas", "Colaboradores", "Veículos"]) expect(html, tela).toContain(`>${tela}<`);
+    for (const tela of ["Início", "Hoje", "Agenda", "Demandas", "Revisão", "Colaboradores", "Veículos"]) expect(html, tela).toContain(`>${tela}<`);
     for (const doWms of ["Pedidos", "Estoque", "Faturamento", "Orçamentos"]) expect(html, doWms).not.toContain(`>${doWms}<`);
     expect(linkAtual(html, "/operacao/veiculos")).toBe(true);
   });
@@ -134,7 +134,7 @@ describe("shell v3 do módulo", () => {
     const permitidos = ["Comercial", ...TELAS_DO_COMERCIAL, "Minha conta", "Fila", "Mais", "5", "1"];
     const html = comercial("/comercial", undefined, { "comercial-orcamentos": { n: 5 }, "comercial-autorizacoes": { n: 1, alerta: true } });
     expect(textosForaDaLista(html, permitidos)).toEqual([]);
-    expect(textosForaDaLista(operacao("/operacao"), ["Operação", "Início", "Hoje", "Agenda", "Demandas", "Colaboradores", "Veículos", "Mais", "Minha conta"])).toEqual([]);
+    expect(textosForaDaLista(operacao("/operacao"), ["Operação", "Início", "Hoje", "Agenda", "Demandas", "Revisão", "Colaboradores", "Veículos", "Mais", "Minha conta"])).toEqual([]);
   });
 
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {

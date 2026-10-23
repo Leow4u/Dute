@@ -1,9 +1,10 @@
 import { useRef, useState } from "react";
-import { ClipboardPen, ImagePlus, Printer } from "lucide-react";
+import { ClipboardCheck, ClipboardPen, ImagePlus, Printer, RotateCcw } from "lucide-react";
 import { collection, doc } from "firebase/firestore";
 import { Link, useSearch } from "wouter";
 
 import { Button } from "@/components/ui/button";
+import { useAppUser } from "@/lib/auth";
 import {
   andamentoInicial,
   nomeDaAssinaturaDoArquivo,
@@ -20,9 +21,10 @@ import { clienteDaLeitura, hojeIso, nomesPorCodigo } from "@/lib/operacao/fila";
 import { demandaDoHoje } from "@/lib/operacao/hoje";
 import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
 import { useUrlsDasFotos } from "@/lib/operacao/use-urls-das-fotos";
-import { fichaDaBusca, hrefDaImpressaoDaOs } from "@/lib/operacao/navegacao";
+import { fichaDaBusca, hrefDaImpressaoDaOs, hrefDaRevisao } from "@/lib/operacao/navegacao";
 
 import { AndamentoView } from "./andamento-view";
+import { ReabrirView } from "./reabrir-view";
 import { OsView, type EstadoDaFicha } from "./os-view";
 
 /**
@@ -55,6 +57,24 @@ export default function PaginaOs() {
   const [erroDasFotos, setErroDasFotos] = useState<string | null>(null);
   const [enviandoFotos, setEnviandoFotos] = useState(false);
   const chave = useRef<string>("");
+  const { user } = useAppUser();
+  const podeReabrir = user?.publicMetadata.role === "owner" || user?.publicMetadata.role === "admin";
+  const [reabrir, setReabrir] = useState<{ motivo: string; tentou: boolean; chave: string } | null>(null);
+
+  async function confirmarReabertura() {
+    if (!ficha || !reabrir) return;
+    if (reabrir.motivo.trim().length < 3) return setReabrir({ ...reabrir, tentou: true });
+    setOcupado(true);
+    setErro(null);
+    try {
+      await chamarOperacao("reopenServiceOrder", { idempotency_key: reabrir.chave, numero: ficha.numero, motivo: reabrir.motivo.trim() });
+      setReabrir(null);
+    } catch (error) {
+      setErro(mensagemDoErro(error));
+    } finally {
+      setOcupado(false);
+    }
+  }
 
   function abrir() {
     if (!ficha) return;
@@ -149,11 +169,42 @@ export default function PaginaOs() {
                 Registrar andamento
               </Button>
             ) : null}
+            {ficha.status === "em_revisao" ? (
+              <Button asChild>
+                <Link href={hrefDaRevisao(ficha.numero)}>
+                  <ClipboardCheck aria-hidden="true" className="size-4" />
+                  Revisar
+                </Link>
+              </Button>
+            ) : null}
+            {ficha.status === "revisada" && podeReabrir && !reabrir ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setErro(null);
+                  setReabrir({ motivo: "", tentou: false, chave: novaChave() });
+                }}
+              >
+                <RotateCcw aria-hidden="true" className="size-4" />
+                Reabrir
+              </Button>
+            ) : null}
           </>
         ) : null
       }
       painel={
-        ficha && form ? (
+        ficha && reabrir ? (
+          <ReabrirView
+            motivo={reabrir.motivo}
+            onMotivo={(motivo) => setReabrir({ ...reabrir, motivo })}
+            problema={reabrir.tentou && reabrir.motivo.trim().length < 3 ? "Informe o motivo da reabertura." : null}
+            erro={erro}
+            ocupado={ocupado}
+            onCancelar={() => setReabrir(null)}
+            onReabrir={() => void confirmarReabertura()}
+          />
+        ) : ficha && form ? (
           <AndamentoView
             ficha={ficha}
             form={form}

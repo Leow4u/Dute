@@ -16,6 +16,7 @@ import {
   itensDaFicha,
   janelaEmTexto,
   passosDaOs,
+  revisaoNaFicha,
   servicosEmTexto,
   type FichaDaOs,
   type LocalLido,
@@ -267,6 +268,28 @@ function Conclusao({ ficha, urls }: { ficha: FichaDaOs; urls: Readonly<Record<st
   );
 }
 
+function Revisao({ ficha }: { ficha: FichaDaOs }) {
+  const revisao = revisaoNaFicha(ficha);
+  if (!revisao) return null;
+  return (
+    <Cartao titulo="Revisão" acao={<span className="text-sm text-muted-foreground">{revisao.quando}</span>}>
+      {revisao.linhas.length ? (
+        <ul aria-label="Decisões" className="flex flex-col divide-y divide-border">
+          {revisao.linhas.map((linha) => (
+            <li key={linha.linha} className="flex flex-col gap-0.5 px-5 py-3">
+              <span className="text-sm font-semibold text-foreground">{linha.texto}</span>
+              {linha.motivo ? <span className="text-sm text-muted-foreground">{linha.motivo}</span> : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="px-5 py-4 text-sm text-muted-foreground">Sem divergência</p>
+      )}
+      {revisao.nota ? <p className="border-t border-border px-5 py-3 text-sm text-foreground">{revisao.nota}</p> : null}
+    </Cartao>
+  );
+}
+
 const FOTOS_A_MOSTRAR = 5;
 
 function Fotos({ ficha, urls, acao }: { ficha: FichaDaOs; urls: Readonly<Record<string, string>>; acao?: ReactNode }) {
@@ -464,6 +487,7 @@ export function OsView({
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="flex min-w-0 flex-col gap-6">
+          <Revisao ficha={ficha} />
           <Conclusao ficha={ficha} urls={urls} />
           <Locais ficha={ficha} />
           <Etapas ficha={ficha} />
