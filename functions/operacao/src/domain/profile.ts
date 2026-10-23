@@ -64,20 +64,33 @@ async function conferirClienteDoPortal(db: Firestore, profile: OperacaoProfile):
 }
 
 /**
+ * O cliente do sino do portal (parte 4.6c): o papel `cliente` com o código no
+ * perfil, qualquer que seja o módulo no contrato (o aviso da NF vai a quem
+ * tem só as faturas).
+ */
+function conferirClienteDoSino(profile: OperacaoProfile): OperacaoProfile {
+  if (profile.role !== "cliente") throw new HttpsError("permission-denied", "Só o cliente marca os avisos do portal.");
+  if (!codigoServeDeId(profile.customer_code ?? "")) throw new HttpsError("permission-denied", "Seu acesso não está ligado a um cliente.");
+  return profile;
+}
+
+/**
  * `campo`: a callable de execução também atende o campo (que só grava na OS
  * em que está escalado, parte 3.8a). `painel`: a leitura da TV (parte 3.12)
  * atende o painel e quem coordena; nenhuma outra callable atende o painel.
  * `portal`: a callable do portal (parte 4.4a) atende só o cliente com a
- * Operação no contrato; nenhuma outra callable atende o cliente. `wms`: a
- * entrega do pedido de saída (parte 4.5b) também atende a operação do
- * armazém, que define a entrega no WMS.
+ * Operação no contrato. `sino`: marcar os avisos como vistos (parte 4.6c)
+ * atende só o cliente, com qualquer módulo. Nenhuma outra callable atende o
+ * cliente. `wms`: a entrega do pedido de saída (parte 4.5b) também atende a
+ * operação do armazém, que define a entrega no WMS.
  */
-export type OpcoesDoCaller = { campo?: true; painel?: true; portal?: true; wms?: true };
+export type OpcoesDoCaller = { campo?: true; painel?: true; portal?: true; sino?: true; wms?: true };
 
 export async function getProfile(db: Firestore, request: CallableRequest<unknown>, opcoes: OpcoesDoCaller = {}): Promise<OperacaoProfile> {
   const auth = assertAuth(request);
   const profile = await loadProfile(db, auth.uid, auth.token.email, auth.token.name);
   if (opcoes.portal) return conferirClienteDoPortal(db, profile);
+  if (opcoes.sino) return conferirClienteDoSino(profile);
   if (opcoes.campo && profile.role === "campo") return profile;
   if (opcoes.wms && profile.role === "wms") return profile;
   const problem = opcoes.painel ? tvProblem(profile.role) : operacaoCadastroProblem(profile.role);

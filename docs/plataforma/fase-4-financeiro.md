@@ -195,7 +195,7 @@ continuam no Faturamento do WMS, e as rotas `/financeiro` não existem
 | 4.5d | O retorno ao armazém: a OS de volta revisada abre o recebimento do retorno no WMS | O retorno gera recebimento uma vez |
 | 4.6a | A rotina dos avisos: os eventos viram o aviso no sino (`client_notifications`) e o e-mail na fila (`email_outbox`), enviado pelo Resend ou só auditado; regras, índice e zeragem | Rodar de novo não duplica; o e-mail só vai a quem ligou o modelo; a NF por e-mail só a quem lê valor; o cliente sem o módulo não recebe |
 | 4.6b | Comercial: os avisos que cada contato recebe por e-mail, no cadastro do cliente | A NF não se liga para a gerenciadora; textos listados; `axe` |
-| 4.6c | Portal: o sino com os avisos do cliente e marcar como lido | O cliente só vê os próprios; textos listados; `axe` |
+| 4.6c | Portal: o sino com os avisos do cliente, marcados como vistos ao abrir | O cliente só vê os próprios; textos listados; `axe` |
 | 4.7 | WMS na v3, tela a tela | `theme-colors.test.ts`; render e `axe` por tela |
 | 4.8 | Relatórios | Sem valor para quem não vê valor |
 | 4.9 | Lançamento em produção | Conferência de produção |
@@ -508,3 +508,27 @@ dos modelos fica em `lib/dominio/src/avisos.ts`, e o diálogo em `artifacts/app/
   - `cadastro.test.ts` e `cadastro.integration.test.ts` (Comercial) cobrem a lista, o e-mail, a NF para quem lê valor e o que continua.
   - `clientes.test.ts` cobre o formulário e o pedido.
   - `clientes-dialogos.test.tsx` cobre o grupo: os rótulos, a NF só para quem lê valor e `axe`.
+
+### Parte 4.6c: o sino do portal
+
+Feita em 23/10/2026. As regras estão em `artifacts/app/src/lib/portal/avisos.ts`, o sino em
+`components/portal/sino.tsx` e a callable em `functions/operacao/src/domain/avisos-gravacao.ts`.
+
+- **O sino.** Para o cliente, onde a Operação está liberada: no pé do menu, ao lado da conta, e no topo do celular.
+  - O botão diz quantos avisos são novos ("Avisos: 2 novos") e mostra um ponto.
+  - A lista traz os últimos 20 avisos do cliente, ao vivo, com o título, o texto e quando. Cada um leva à tela dele, nunca para fora do portal.
+  - O novo é o que chegou depois da última vez que o login abriu o sino. Enquanto o sino fica aberto, os novos continuam marcados.
+- **Visto.** Abrir o sino com aviso novo chama `markNotificationsRead`, que grava até quando o login viu (`client_notification_reads/{uid}`).
+  - Atende o cliente com o código no perfil, com qualquer módulo, porque o aviso da NF vai a quem tem só as faturas.
+  - Não grava evento: não é transição operacional.
+  - Se falhar, o ponto volta na próxima abertura.
+- **Outra coisa.** Os `operational_notifications` do WMS são os rascunhos do Agent Dute, internos e com aprovação. O sino do cliente é `client_notifications`.
+- **O aviso não guarda mais `lida_por`.** O visto é por login, num documento só.
+- **Regras.** Cada login lê só o próprio `client_notification_reads`, e ninguém grava pelo navegador.
+- **Índice.** `client_notifications` por `customer_code` e `created_at` (decrescente).
+- **Zeragem.** `tools/full_reset_btg.py` preserva `client_notification_reads`.
+- **Testes.**
+  - `avisos.test.ts` (app) cobre o aviso lido, o link só do portal, o novo, o rótulo e o quando.
+  - `sino.test.tsx` cobre o botão, a lista, os vazios e `axe`.
+  - `profile.integration.test.ts` e `avisos.integration.test.ts` cobrem quem marca e o visto.
+  - `operacao-avisos.rules.test.ts` cobre as regras, e `callables.test.ts` trava a callable do sino.

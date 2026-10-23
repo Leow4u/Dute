@@ -31,9 +31,11 @@ import { AccountMenu, SidebarAccountFooter } from "@/components/layout/account-m
 import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { SeletorDeModulo } from "@/components/layout/seletor-de-modulo";
 import { SidebarBrand } from "@/components/layout/sidebar-brand";
+import { SinoDoPortal } from "@/components/portal/sino";
 import { agentPathFor, isAgentScreen, isAgentShortcut } from "@/lib/agent-chat";
 import { useAppAuth, useAppUser } from "@/lib/auth";
 import { ActiveCustomerSwitcher } from "@/components/layout/active-customer-switcher";
+import { OPERACAO_LIBERADO } from "@/lib/liberacao";
 import { useOperationProfile } from "@/lib/operation-profile";
 import { usePwaInstall } from "@/lib/pwa-install";
 import { moduloAberto, opcoesDoSeletor } from "@/lib/seletor-de-modulo";
@@ -280,6 +282,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const profileRole = user?.publicMetadata.role;
   const showCustomerSwitcher = Boolean(profileRole) && INTERNAL_ROLES.includes(profileRole!);
   const canManageCustomers = profileRole === "owner" || profileRole === "admin";
+  // O sino dos avisos (parte 4.6c): só o cliente, onde a rotina dos avisos roda.
+  const showSino = profileRole === "cliente" && OPERACAO_LIBERADO;
   // Seletor de módulo no topo da barra (decisão de 23/10/2026): Armazenagem,
   // ou Financeiro no Faturamento. Quem tem um módulo só não o vê.
   const opcoesDeModulo = opcoesDoSeletor(profileRole, operation.profile, location);
@@ -447,15 +451,19 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <div
           className={cn(
             "border-t border-sidebar-border/70 p-3",
-            collapsed ? "flex justify-center" : "px-4",
+            collapsed ? "flex flex-col items-center gap-2" : "flex items-center gap-2 px-4",
           )}
         >
-          <SidebarAccountFooter
-            basePath={basePath}
-            compact={collapsed}
-            signOut={signOut}
-            user={user}
-          />
+          {showSino && collapsed ? <SinoDoPortal /> : null}
+          <div className={cn("min-w-0", !collapsed && "flex-1")}>
+            <SidebarAccountFooter
+              basePath={basePath}
+              compact={collapsed}
+              signOut={signOut}
+              user={user}
+            />
+          </div>
+          {showSino && !collapsed ? <SinoDoPortal /> : null}
         </div>
       </aside>
 
@@ -476,6 +484,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             {showCustomerSwitcher ? (
               <ActiveCustomerSwitcher variant="header" canManageCustomers={canManageCustomers} />
             ) : null}
+            {showSino ? <SinoDoPortal lado="bottom" /> : null}
             <AccountMenu basePath={basePath} compact cabecalho modulos signOut={signOut} user={user} />
           </div>
         </header>

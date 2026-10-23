@@ -137,6 +137,29 @@ describe("o cliente no portal (parte 4.4a)", () => {
   });
 });
 
+describe("o cliente no sino do portal (parte 4.6c)", () => {
+  it("atende o cliente com o código, com qualquer módulo no contrato", async () => {
+    for (const [uid, codigo] of [["cli-itau", "ITAU"], ["cli-safra", "SAFRA"], ["cli-btg", "BTG"]] as const) {
+      const cliente = await requireOperacaoCaller(db, request(uid), "dute-homolog", { sino: true });
+      assert.deepEqual([cliente.role, cliente.customer_code], ["cliente", codigo], uid);
+    }
+  });
+
+  it("sem código ou da equipe, recusa; fora da liberação, também", async () => {
+    for (const [uid, mensagem] of [
+      ["cli-sem-codigo", "Seu acesso não está ligado a um cliente."],
+      ["interno-1", "Só o cliente marca os avisos do portal."],
+      ["owner-1", "Só o cliente marca os avisos do portal."],
+      ["wms-1", "Só o cliente marca os avisos do portal."],
+    ] as const) {
+      const error = await rejection(getProfile(db, request(uid), { sino: true }));
+      assert.equal(error.code, "permission-denied", uid);
+      assert.equal(error.message, mensagem, uid);
+    }
+    assert.equal((await rejection(requireOperacaoCaller(db, request("cli-itau"), "dute-btg", { sino: true }))).code, "failed-precondition");
+  });
+});
+
 describe("a operação do armazém (parte 4.5b)", () => {
   it("só a entrega do pedido de saída atende o wms, além de quem coordena; as outras callables, não", async () => {
     assert.equal((await getProfile(db, request("wms-1"), { wms: true })).role, "wms");

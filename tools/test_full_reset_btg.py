@@ -51,6 +51,7 @@ OPERACAO = (
     "client_notifications",
     "email_outbox",
     "notification_cursors",
+    "client_notification_reads",
 )
 FINANCEIRO = (
     "faturas",

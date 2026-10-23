@@ -1,4 +1,5 @@
 import { FieldPath, FieldValue, Timestamp, type Firestore } from "firebase-admin/firestore";
+import { HttpsError } from "firebase-functions/https";
 
 import {
   EVENTOS_DE_AVISO,
@@ -14,7 +15,7 @@ import {
 } from "./avisos.js";
 import { EVENTS_COLLECTION } from "./events.js";
 import { contractedModulesFrom } from "./platform-roles.js";
-import { CLIENT_ACCESS_COLLECTION } from "./profile.js";
+import { CLIENT_ACCESS_COLLECTION, type OperacaoProfile } from "./profile.js";
 
 /**
  * A rotina dos avisos (parte 4.6a): a cada poucos minutos, lê os eventos
@@ -35,6 +36,8 @@ export const EMAIL_OUTBOX_COLLECTION = "email_outbox";
 export const NOTIFICATION_CURSORS_COLLECTION = "notification_cursors";
 export const CUSTOMER_CONTACTS_COLLECTION = "customer_contacts";
 export const CURSOR_ID = "avisos";
+/** Até quando cada login viu os avisos do sino (parte 4.6c), um documento por login. */
+export const CLIENT_NOTIFICATION_READS_COLLECTION = "client_notification_reads";
 export const LOTE_DE_EVENTOS = 200;
 export const LOTE_DE_EMAILS = 20;
 export const TENTATIVAS_DO_EMAIL = 5;
@@ -136,7 +139,6 @@ export async function gerarAvisos(
         evento_id: evento.id,
         evento_tipo: evento.type,
         ocorrido_em: evento.occurred_at,
-        lida_por: [],
         created_at: FieldValue.serverTimestamp(),
       });
       if (email) {
@@ -233,4 +235,30 @@ export function enviarPeloResend(chave: string, buscar: typeof fetch = fetch): E
     if (!resposta.ok) throw new Error(`Resend recusou o envio (${resposta.status}): ${texto(corpo.message) || "sem mensagem"}`);
     return { status: "sent", provider_id: texto(corpo.id) || null };
   };
+}
+
+/**
+ * O cliente abriu o sino (parte 4.6c): os avisos até agora ficam vistos para
+ * este login. Repetir só avança o instante; não grava evento, porque não é
+ * transição operacional.
+ */
+export async function markNotificationsReadFor(
+  db: Firestore,
+  caller: OperacaoProfile,
+  data: unknown,
+  agora: () => Date = () => new Date(),
+): Promise<{ lidos_ate: string }> {
+  if (data != null && (typeof data !== "object" || Array.isArray(data) || Object.keys(data).length)) {
+    throw new HttpsError("invalid-argument", "Campo não aceito.");
+  }
+  const customerCode = caller.customer_code;
+  if (caller.role !== "cliente" || !customerCode) throw new HttpsError("permission-denied", "Só o cliente marca os avisos do portal.");
+  const instante = agora();
+  await db.collection(CLIENT_NOTIFICATION_READS_COLLECTION).doc(caller.uid).set({
+    uid: caller.uid,
+    customer_code: customerCode,
+    lidos_ate: Timestamp.fromDate(instante),
+    updated_at: FieldValue.serverTimestamp(),
+  });
+  return { lidos_ate: instante.toISOString() };
 }
