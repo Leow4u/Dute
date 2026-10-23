@@ -56,7 +56,7 @@ describe("OS de demanda perdida no Comercial", () => {
       cancelamento: null,
       os_numeros: ["10045-01"],
     });
-    expect(perdida).toEqual({ numero: "10045", fora: "perdida", paraAbrir: null });
+    expect(perdida).toEqual({ numero: "10045", fora: "perdida", paraAbrir: null, executarAte: null });
     expect(demandaDaFila("10046", { etapa: "cancelada", customer_code: "ITAU", perda: null, cancelamento: { motivo: "cliente" } }).fora).toBe("cancelada");
     const planejar = demandaDaFila("10047", { etapa: "para_planejar", customer_code: "ITAU", perda: null, os_numeros: [] });
     expect(planejar.fora).toBeNull();
@@ -68,6 +68,15 @@ describe("OS de demanda perdida no Comercial", () => {
       ["10045-01", "perdida"],
       ["10047-01", null],
     ]);
+  });
+
+  it("a OS leva o prazo da demanda direta (parte 3.13b)", () => {
+    const direta = demandaDaFila("10053", { etapa: "para_planejar", entrada: "direta", customer_code: "ITAU", executar_ate: "2026-10-23T19:00:00-03:00" });
+    expect(direta.executarAte).toBe("2026-10-23T19:00:00-03:00");
+    expect(demandaDaFila("10054", { etapa: "para_planejar", customer_code: "ITAU", executar_ate: "amanhã" }).executarAte).toBeNull();
+    const [os] = comDemanda([{ ...aberta, numero: "10053-01", demanda: "10053" }], [direta]);
+    expect(os.prazo).toBe("2026-10-23T19:00:00-03:00");
+    expect(comDemanda([aberta], [])[0].prazo).toBeNull();
   });
 });
 

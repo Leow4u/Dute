@@ -15,7 +15,8 @@ import { rotuloDaDemandaFora, type AgendaEmEdicao, type OsDaFila } from "@/lib/o
 
 export type PessoaDaEquipe = { id: string; nome: string; funcao: string; ativo: boolean };
 
-export type VeiculoDaAgenda = { id: string; placa: string; tipo: string; ativo: boolean };
+/** `revisaoEm`: o dia da revisão preventiva; nesse dia o veículo não se escolhe (parte 3.13b). */
+export type VeiculoDaAgenda = { id: string; placa: string; tipo: string; ativo: boolean; revisaoEm?: string | null };
 
 /** O painel de escalar aberto: o título, o cliente, o formulário e como fechar. */
 export type EscalaAberta = { titulo: string; cliente: string; conteudo: ReactNode; onFechar: () => void };
@@ -58,7 +59,9 @@ export function EscalaDaOs({
   erro: string | null;
 }) {
   const fora = os.demandaFora ?? null;
-  const podeSalvar = !fora && Boolean(agenda.data);
+  const naRevisao = (veiculo: VeiculoDaAgenda) => Boolean(agenda.data) && veiculo.revisaoEm === agenda.data;
+  const escolhidoNaRevisao = veiculos.find((veiculo) => veiculo.id === agenda.veiculoId && naRevisao(veiculo)) ?? null;
+  const podeSalvar = !fora && Boolean(agenda.data) && !escolhidoNaRevisao;
   function alternar(id: string, marcado: boolean) {
     const equipe = marcado ? [...agenda.equipe, id] : agenda.equipe.filter((atual) => atual !== id);
     onAgenda({ ...agenda, equipe });
@@ -119,12 +122,17 @@ export function EscalaDaOs({
             >
               <option value="">Sem veículo</option>
               {veiculos.map((veiculo) => (
-                <option key={veiculo.id} value={veiculo.id}>
-                  {veiculo.ativo ? `${veiculo.placa} · ${veiculo.tipo}` : `${veiculo.placa} · ${veiculo.tipo} · Desativado`}
+                <option key={veiculo.id} value={veiculo.id} disabled={naRevisao(veiculo) && veiculo.id !== agenda.veiculoId}>
+                  {[veiculo.placa, veiculo.tipo, !veiculo.ativo ? "Desativado" : null, naRevisao(veiculo) ? "Revisão preventiva" : null].filter(Boolean).join(" · ")}
                 </option>
               ))}
             </select>
           </Campo>
+          {escolhidoNaRevisao ? (
+            <p role="alert" className="-mt-3 text-sm text-destructive">
+              {escolhidoNaRevisao.placa} em revisão preventiva no dia
+            </p>
+          ) : null}
           <Button type="submit" disabled={ocupado || !podeSalvar}>
             {os.status === "agendada" ? "Salvar" : "Agendar"}
           </Button>

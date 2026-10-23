@@ -144,6 +144,16 @@ export function colaboradorDaBusca(busca: string): string | null {
   return parametro(busca, "id");
 }
 
+/** A ficha do veículo aberta direto no cadastro: "/operacao/veiculos?id=vei_..." (parte 3.13b). */
+export function hrefDoVeiculo(id: string): string {
+  return `${ROTA_VEICULOS}?id=${encodeURIComponent(id)}`;
+}
+
+/** O veículo pedido na busca da URL do cadastro (`?id=`), ou null. */
+export function veiculoDaBusca(busca: string): string | null {
+  return parametro(busca, "id");
+}
+
 export function rotasDaOperacao(liberado: boolean = OPERACAO_LIBERADO): string[] {
   return liberado ? [...TELAS_DA_OPERACAO] : [];
 }

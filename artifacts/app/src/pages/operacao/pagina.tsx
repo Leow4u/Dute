@@ -12,7 +12,7 @@ import {
 } from "@/lib/operacao/cadastro";
 import { chamarOperacao, mensagemDoErro, novaChave } from "@/lib/operacao/api";
 import { useLeitura } from "@/lib/operacao/leitura";
-import { colaboradorDaBusca } from "@/lib/operacao/navegacao";
+import { colaboradorDaBusca, veiculoDaBusca } from "@/lib/operacao/navegacao";
 
 import {
   ColaboradoresView,
@@ -151,6 +151,17 @@ export function PaginaVeiculos() {
   const [aberta, setAberta] = useState<(FichaAberta<FichaVeiculo> & { veiculo: VeiculoDaLista | null }) | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+
+  // O Início leva direto à ficha (/operacao/veiculos?id=vei_..., parte 3.13b):
+  // abre quando o cadastro chega, uma vez por pedido.
+  const pedido = veiculoDaBusca(useSearch());
+  const atendido = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pedido || atendido.current === pedido || !leitura.itens) return;
+    atendido.current = pedido;
+    const veiculo = leitura.itens.find((item) => item.id === pedido);
+    if (veiculo) setAberta({ chave: novaChave(), veiculo, valores: fichaDoVeiculo(veiculo) });
+  }, [pedido, leitura.itens]);
 
   async function gravar(dados: Record<string, unknown>) {
     setOcupado(true);

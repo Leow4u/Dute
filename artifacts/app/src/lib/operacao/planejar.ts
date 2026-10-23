@@ -168,6 +168,23 @@ export function problemasDoPlano(form: FormularioDoPlano, saldo: readonly LinhaD
 }
 
 /**
+ * O veículo no dia da revisão preventiva (parte 3.13b): agendando, a OS do
+ * dia não leva o veículo; o servidor recusa do mesmo jeito.
+ */
+export function revisoesNoPlano(form: FormularioDoPlano, veiculos: readonly VeiculoDaLista[], unico = "A OS"): string[] {
+  const porId = new Map(veiculos.map((veiculo) => [veiculo.id, veiculo]));
+  const total = form.ordens.length;
+  return form.ordens.flatMap((os, indice) => {
+    if (!os.data) return [];
+    return form.veiculos.flatMap((item) => {
+      const veiculo = porId.get(item.veiculoId);
+      if (!item.ordens.includes(indice) || !veiculo || veiculo.revisaoEm !== os.data) return [];
+      return [`${rotuloDaOs(indice, total, unico)}: ${veiculo.placa} está em revisão preventiva no dia.`];
+    });
+  });
+}
+
+/**
  * O que merece atenção e não impede: sem equipe, sem veículo, sem líder e
  * conflito no dia. `unico` nomeia a OS quando o plano tem uma só ("A
  * vistoria", parte 3.11c).

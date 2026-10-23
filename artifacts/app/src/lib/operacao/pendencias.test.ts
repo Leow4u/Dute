@@ -1,4 +1,6 @@
-import { Truck, UserX } from "lucide-react";
+import { readFileSync } from "node:fs";
+
+import { CalendarClock, Truck, UserX, Wrench } from "lucide-react";
 import { describe, expect, it } from "vitest";
 
 import type { ItemDoInicio } from "../inicio-do-modulo";
@@ -6,6 +8,7 @@ import type { ColaboradorDaLista, VeiculoDaLista } from "./cadastro";
 import type { DemandaParaAbrir, OsDaFila } from "./fila";
 import {
   DIAS_PARA_A_CNH,
+  DIAS_PARA_A_REVISAO,
   diasAte,
   equipeDeHoje,
   hojeNaOperacao,
@@ -339,3 +342,88 @@ describe("o dia e a equipe", () => {
     expect(diasAte("2026-10-23", "2027-03-01")).toBe(129);
   });
 });
+
+describe("os alertas da rotina no Início (parte 3.13b)", () => {
+  const AGORA = new Date("2026-10-23T17:20:00.000Z"); // 14:20 em São Paulo
+  const comServico = (os: OsDaFila, servicos: string[]): OsDaFila => ({ ...os, servicos });
+  const semVeiculo = (os: OsDaFila): OsDaFila => ({ ...os, agenda: { ...os.agenda!, veiculos: [] } });
+
+  it("as janelas são as da rotina diária das Functions", () => {
+    const rotina = readFileSync(new URL("../../../../../functions/operacao/src/domain/rotina.ts", import.meta.url), "utf8");
+    expect(rotina).toContain(`export const DIAS_PARA_A_CNH = ${DIAS_PARA_A_CNH};`);
+    expect(rotina).toContain(`export const DIAS_PARA_A_REVISAO = ${DIAS_PARA_A_REVISAO};`);
+  });
+
+  it("a OS de hoje ou de amanhã sem equipe, ou de transporte sem veículo; hoje é crítico", () => {
+    const itens = pendenciasDaOperacao(
+      entrada({
+        agora: AGORA,
+        ordens: [
+          comServico(agendada("10045-01", "HORIZONTE", HOJE, [], "vei_van", "15:00"), ["transporte"]),
+          comServico(semVeiculo(agendada("10046-01", "TECH", "2026-10-24", ["col_pedro"], "vei_van", "08:00")), ["transporte", "montagem"]),
+          // Montagem no local e vistoria não pedem veículo; depois de amanhã ainda não entra.
+          comServico(semVeiculo(agendada("10047-01", "SOUZA", HOJE, ["col_pedro"], "vei_van")), ["montagem"]),
+          comServico(semVeiculo(agendada("10048-01", "VIDA", HOJE, ["col_joao"], "vei_van")), ["vistoria"]),
+          comServico(agendada("10049-01", "VIDA", "2026-10-25", [], "vei_van"), ["transporte"]),
+        ],
+      }),
+    );
+    expect(semIcone(itens).filter((item) => item.id.startsWith("os-desfalcada"))).toEqual([
+      { id: "os-desfalcada:10045-01", tone: "critical", title: "OS 10045-01 sem equipe", detail: "Construtora Horizonte · 23/10/2026 15:00", href: "/operacao/hoje?os=10045-01", actionLabel: "Escalar" },
+      { id: "os-desfalcada:10046-01", tone: "attention", title: "OS 10046-01 sem veículo", detail: "TechPrime Escritórios · 24/10/2026 08:00", href: "/operacao/hoje?os=10046-01", actionLabel: "Escalar" },
+    ]);
+    expect(itens.find((item) => item.id === "os-desfalcada:10045-01")?.icon).toBe(UserX);
+    expect(itens.find((item) => item.id === "os-desfalcada:10046-01")?.icon).toBe(Truck);
+    const ambos = pendenciasDaOperacao(entrada({ agora: AGORA, ordens: [comServico(semVeiculo(agendada("10045-01", "HORIZONTE", HOJE, [], "vei_van")), ["transporte"])] }));
+    expect(ambos[0].title).toBe("OS 10045-01 sem equipe e sem veículo");
+  });
+
+  it("a aberta da demanda direta com o prazo em até 24 horas tem item próprio e sai da conta das para agendar", () => {
+    const itens = pendenciasDaOperacao(
+      entrada({
+        agora: AGORA,
+        ordens: [
+          aberta("10053-01", "HORIZONTE", { prazo: "2026-10-23T22:00:00.000Z" }),
+          aberta("10054-01", "TECH", { prazo: "2026-10-26T22:00:00.000Z" }),
+          aberta("10055-01", "SOUZA"),
+        ],
+      }),
+    );
+    expect(semIcone(itens).slice(0, 2)).toEqual([
+      { id: "os-sem-agenda:10053-01", tone: "critical", title: "OS 10053-01 sem agenda", detail: "Construtora Horizonte · Hoje até 19:00 · faltam 4h40", href: "/operacao/hoje?os=10053-01", actionLabel: "Escalar" },
+      expect.objectContaining({ id: "os-para-agendar", title: "2 OS para agendar" }),
+    ]);
+    expect(itens[0].icon).toBe(CalendarClock);
+  });
+
+  it(`a revisão do veículo em até ${DIAS_PARA_A_REVISAO} dias, hoje ou passada; a OS no dia da revisão é crítica`, () => {
+    const comRevisao = (base: VeiculoDaLista, revisaoEm: string) => ({ ...base, revisaoEm });
+    const itens = pendenciasDaOperacao(
+      entrada({
+        agora: AGORA,
+        veiculos: [
+          comRevisao(VAN, "2026-10-28"),
+          comRevisao(veiculo("vei_truck", "DEF-4G56"), HOJE),
+          comRevisao(veiculo("vei_fiorino", "GHI-7J89"), "2026-10-20"),
+          comRevisao(veiculo("vei_longe", "JKL-0M12"), "2026-11-08"),
+          comRevisao(veiculo("vei_parado", "MNO-3P45", false), HOJE),
+        ],
+        ordens: [agendada("10045-01", "HORIZONTE", "2026-10-28", ["col_pedro"], "vei_van", "09:00")],
+      }),
+    );
+    expect(semIcone(itens).filter((item) => item.id.startsWith("revisao:"))).toEqual([
+      { id: "revisao:vei_truck", tone: "critical", title: "Revisão do DEF-4G56 é hoje", detail: "Caminhão 3/4 · revisão preventiva 23/10/2026", href: "/operacao/veiculos?id=vei_truck", actionLabel: "Ver cadastro" },
+      {
+        id: "revisao:vei_van",
+        tone: "critical",
+        title: "Revisão do ABC1D23 em 5 dias",
+        detail: "Caminhão 3/4 · revisão preventiva 28/10/2026 · na OS 10045-01 no dia",
+        href: "/operacao/hoje?os=10045-01",
+        actionLabel: "Reagendar",
+      },
+      { id: "revisao:vei_fiorino", tone: "attention", title: "Revisão do GHI-7J89 passou em 20/10/2026", detail: "Caminhão 3/4 · revisão preventiva 20/10/2026", href: "/operacao/veiculos?id=vei_fiorino", actionLabel: "Ver cadastro" },
+    ]);
+    expect(itens.find((item) => item.id === "revisao:vei_van")?.icon).toBe(Wrench);
+  });
+});
+
