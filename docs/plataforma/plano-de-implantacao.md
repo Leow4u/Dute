@@ -762,4 +762,6 @@ cliente ou 15 em qualquer cliente; 20, `functions/core`; desenho em
     trajeto. Vale, ou a sugestão estima o trajeto também?
 29. Orçamentos parecidos (parte 5.3): comparar pelos itens da LPU e pelas
     quantidades, em vez do vetor do texto? Recomendo pelos itens, mais exato
-    e explicável, com o resumo em texto guardado para o Agent Dute.
+    e explicável, com o resumo em texto guardado para o Agent Dute. Seguimos
+    assim desde a parte 5.3a; a semelhança é o cosseno dos itens vezes a
+    razão das escalas (12 mesas contra 30 dão 75%).

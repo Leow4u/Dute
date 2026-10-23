@@ -667,3 +667,112 @@ describe("a vistoria da Operação na montagem (parte 3.11e)", () => {
     expect(texts(aprovar)).toContain("Vistoria da Operação");
   });
 });
+
+describe("os orçamentos parecidos na montagem (parte 5.3c)", () => {
+  const PARECIDOS = {
+    lembrancas: 9,
+    casos: [
+      {
+        demanda: "10031",
+        titulo: "Remanejamento do 10º andar",
+        itens: [
+          { lpu_item_id: "lpu_est_tran", item: E, unidade: "UN", orcado: "20", realizado: "24" },
+          { lpu_item_id: "lpu_cad_tran", item: "Cadeira giratória", unidade: "UN", orcado: "60", realizado: "64" },
+          { lpu_item_id: null, item: "Caixa", unidade: null, orcado: null, realizado: "3" },
+        ],
+        orcado_cents: 180_000,
+        realizado_cents: 196_000,
+        executado_de: "2026-09-10",
+        executado_ate: "2026-09-11",
+        os: 2,
+        minutos_de_trabalho: 420,
+        fechada_em: "2026-09-15T15:00:00.000Z",
+        semelhanca_pct: 96,
+        itens_em_comum: 2,
+      },
+      {
+        // As 24 estações já estão no orçamento.
+        demanda: "10032",
+        titulo: null,
+        itens: [{ lpu_item_id: "lpu_est_tran", item: E, unidade: "UN", orcado: "24", realizado: "24" }],
+        orcado_cents: 50_400,
+        realizado_cents: 50_400,
+        executado_de: null,
+        executado_ate: null,
+        os: 0,
+        minutos_de_trabalho: null,
+        fechada_em: null,
+        semelhanca_pct: 71,
+        itens_em_comum: 1,
+      },
+    ],
+  };
+
+  it("cada caso com a semelhança, os itens orçados e realizados, os valores, o período e o trabalho; usar não é a ação principal", async () => {
+    const html = render({ parecidos: PARECIDOS });
+    const lidos = texts(html);
+    const inicio = lidos.indexOf("Orçamentos parecidos");
+    expect(lidos.slice(inicio, lidos.indexOf("Quantidades da demanda 10032 no orçamento") + 1)).toEqual([
+      "Orçamentos parecidos",
+      "Demanda 10031",
+      "96% parecido",
+      "Remanejamento do 10º andar",
+      "Fechada em 15/09/2026",
+      "Itens da demanda 10031",
+      "Item",
+      "Orçado",
+      "Realizado",
+      E,
+      "20 un",
+      "24 un",
+      "Cadeira giratória",
+      "60 un",
+      "64 un",
+      "Caixa",
+      "—",
+      "3 un",
+      "Orçado",
+      "R$ 1.800,00",
+      "Realizado",
+      "R$ 1.960,00",
+      "Executado",
+      "10/09/2026 a 11/09/2026",
+      "Trabalho",
+      "7h em 2 OS",
+      "Usar as quantidades",
+      "Demanda 10032",
+      "71% parecido",
+      "Itens da demanda 10032",
+      "Item",
+      "Orçado",
+      "Realizado",
+      E,
+      "24 un",
+      "24 un",
+      "Orçado",
+      "R$ 504,00",
+      "Realizado",
+      "R$ 504,00",
+      "Quantidades da demanda 10032 no orçamento",
+    ]);
+    expect(html).toContain('href="/comercial/orcamento?numero=10031"');
+    // O vermelho é só da ação principal e dos alertas: o link do caso não é vermelho.
+    expect(html.match(/<a[^>]*numero=10031[^>]*>/)?.[0]).not.toMatch(/text-primary|destructive/);
+    expect(html).toContain('aria-label="Usar as quantidades da demanda 10031"');
+    // A ação principal da tela continua uma só (Enviar para aprovação).
+    expect(html.match(/bg-primary text-primary-foreground/g)).toHaveLength(1);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("vem depois dos itens; sem caso, fora da montagem ou sem a memória, não aparece", () => {
+    const lidos = texts(render({ parecidos: PARECIDOS }));
+    expect(lidos.indexOf("Orçamentos parecidos")).toBeGreaterThan(lidos.indexOf("Cadeira giratória"));
+    for (const parecidos of [undefined, null, { lembrancas: 3, casos: [] }]) expect(texts(render({ parecidos }))).not.toContain("Orçamentos parecidos");
+    const aprovar = render({ parecidos: PARECIDOS, acoes: acoesDoOrcamento({ status: "para_aprovar", role: "owner", uid: "u-leo", autorUid: "u-gui" }) });
+    expect(texts(aprovar)).not.toContain("Orçamentos parecidos");
+  });
+
+  it("ocupado, não oferece usar", () => {
+    expect(texts(render({ parecidos: PARECIDOS, ocupado: true }))).not.toContain("Usar as quantidades");
+  });
+});

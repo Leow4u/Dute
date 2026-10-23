@@ -29,6 +29,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { itensDoAditivoEmTexto, type ExecucaoDaOperacao } from "@/lib/comercial/aditivos-da-operacao";
 import { carregarVistoria, foraDaTabelaDaVistoria, itensDaVistoriaEmTexto, type VistoriaNoComercial } from "@/lib/comercial/vistoria-da-operacao";
 import { dataBr, type ContatoResumo, type LocalResumo } from "@/lib/comercial/clientes";
+import {
+  fechamentoEmTexto,
+  itensParaUsar,
+  periodoEmTexto,
+  quantidadeDoCaso,
+  quantidadesUsadas,
+  semelhancaEmTexto,
+  trabalhoEmTexto,
+  usarQuantidades,
+  valorDoCaso,
+  type Parecidos,
+} from "@/lib/memoria/parecidos";
 import type { AcaoDepoisDoEnvio, AcoesDaEtapa } from "@/lib/comercial/depois-do-envio";
 import { ROTULO_DO_ENVIO } from "@/lib/comercial/envio";
 import {
@@ -63,6 +75,7 @@ import {
   CANAL_ROTULO,
   ORIGEM_ROTULO,
   TIPO_RV_ROTULO,
+  hrefDoOrcamento,
   type EtapaDemanda,
   type StatusOrcamento,
   type TipoRv,
@@ -139,6 +152,8 @@ export type MontarViewProps = {
   documentoHref: string;
   /** As ações depois do envio da etapa em que o orçamento está (lib/comercial/depois-do-envio.ts). */
   posEnvio: { acoes: AcoesDaEtapa; onAcao: (acao: AcaoDepoisDoEnvio) => void };
+  /** Os orçamentos parecidos do mesmo cliente (parte 5.3c), na montagem; fora da liberação da memória, nada. */
+  parecidos?: Parecidos | null;
   handlers: {
     salvar: () => void;
     /** "Prévia do PDF" com alteração não salva: salva e só então leva a aba nova ao documento. */
@@ -1394,6 +1409,113 @@ function VistoriaNoOrcamento(props: MontarViewProps & { vistoria: VistoriaNoCome
   );
 }
 
+/**
+ * Os orçamentos parecidos na montagem (parte 5.3c): as demandas fechadas do
+ * mesmo cliente com os mesmos itens, em quantidades parecidas, com o orçado e
+ * o realizado de cada uma. "Usar as quantidades" só preenche as linhas; quem
+ * salva é a pessoa.
+ */
+function OrcamentosParecidos(props: MontarViewProps & { parecidos: Parecidos }) {
+  const { parecidos, form, onForm, catalogo } = props;
+  const contador = useRef(0);
+  const lista = Array.isArray(catalogo) ? catalogo : [];
+  return (
+    <section aria-label="Orçamentos parecidos" className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5">
+      <h2 className="text-base font-extrabold">Orçamentos parecidos</h2>
+      <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+        {parecidos.casos.map((caso) => {
+          const fechamento = fechamentoEmTexto(caso);
+          const usadas = quantidadesUsadas(form.linhas, caso, lista);
+          const pode = !travado(props) && !usadas && itensParaUsar(caso, lista).length > 0;
+          const dados = (
+            [
+              ["Orçado", valorDoCaso(caso.orcado_cents)],
+              ["Realizado", valorDoCaso(caso.realizado_cents)],
+              ["Executado", periodoEmTexto(caso)],
+              ["Trabalho", trabalhoEmTexto(caso)],
+            ] as Array<[string, string | null]>
+          ).filter((linha): linha is [string, string] => linha[1] !== null);
+          return (
+            <li key={caso.demanda} className="flex flex-col gap-3 rounded-md border border-border p-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <Link href={hrefDoOrcamento(caso.demanda)} className="text-sm font-extrabold text-foreground underline underline-offset-2">
+                  Demanda {caso.demanda}
+                </Link>
+                <span className="text-sm font-bold">{semelhancaEmTexto(caso)}</span>
+              </div>
+              {caso.titulo || fechamento ? (
+                <div className="flex flex-col gap-0.5">
+                  {caso.titulo ? <span className="text-sm font-semibold">{caso.titulo}</span> : null}
+                  {fechamento ? <span className="text-xs font-semibold text-muted-foreground">{fechamento}</span> : null}
+                </div>
+              ) : null}
+              <table className="w-full text-sm">
+                <caption className="sr-only">Itens da demanda {caso.demanda}</caption>
+                <thead>
+                  <tr className="text-xs text-muted-foreground">
+                    <th scope="col" className="py-1 pr-2 text-left font-semibold">
+                      Item
+                    </th>
+                    <th scope="col" className="py-1 pr-2 text-right font-semibold">
+                      Orçado
+                    </th>
+                    <th scope="col" className="py-1 text-right font-semibold">
+                      Realizado
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {caso.itens.map((item) => (
+                    <tr key={item.lpu_item_id ?? item.item} className="border-t border-border">
+                      <th scope="row" className="py-1 pr-2 text-left font-semibold">
+                        {item.item}
+                      </th>
+                      <td className="whitespace-nowrap py-1 pr-2 text-right tabular-nums">{quantidadeDoCaso(item.orcado, item.unidade)}</td>
+                      <td className="whitespace-nowrap py-1 text-right tabular-nums">{quantidadeDoCaso(item.realizado, item.unidade)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
+                {dados.map(([rotulo, texto]) => (
+                  <div key={rotulo} className="contents">
+                    <dt className="font-semibold text-muted-foreground">{rotulo}</dt>
+                    <dd className="font-semibold tabular-nums">{texto}</dd>
+                  </div>
+                ))}
+              </dl>
+              {usadas ? (
+                <p className="text-sm font-semibold text-success-soft-foreground">Quantidades da demanda {caso.demanda} no orçamento</p>
+              ) : pode ? (
+                <div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-label={`Usar as quantidades da demanda ${caso.demanda}`}
+                    onClick={() =>
+                      onForm((atual) => ({
+                        ...atual,
+                        linhas: usarQuantidades(atual.linhas, caso, lista, () => {
+                          contador.current += 1;
+                          return `parecido-${Date.now()}-${contador.current}`;
+                        }),
+                      }))
+                    }
+                  >
+                    <Copy aria-hidden="true" />
+                    Usar as quantidades
+                  </Button>
+                </div>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
 export function MontarView(props: MontarViewProps) {
   const totais = totaisDaTela(props);
   const { aviso, dados } = props;
@@ -1438,6 +1560,7 @@ export function MontarView(props: MontarViewProps) {
         <Locais {...props} />
       </div>
       <Itens {...props} />
+      {props.acoes.editavel && props.parecidos?.casos.length ? <OrcamentosParecidos {...props} parecidos={props.parecidos} /> : null}
       <Rodape {...props} totais={totais} />
     </div>
   );
