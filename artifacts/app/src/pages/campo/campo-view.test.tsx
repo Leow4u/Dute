@@ -152,7 +152,7 @@ describe("OS em execução no celular", () => {
         /^(Etapas|Saída do pátio|Chegada na origem|Carregamento|Saída da origem|Chegada no destino|Montagem|Fim|\d|\d{2}:\d{2}|Registrar carregamento|Outra etapa)$/,
         /^(Itens · 2|3\.05 · Transporte|2\.02 · Montagem|Cadeira Flexform|Mesa de trabalho|\d+|de \d+ un|Além do planejado · Incluir|Incluir item executado)$/,
         /^(Equipe no local · 2|Carlos Silva|Diego Alves|Líder · desde 07:30|Freelancer · Montador|Entrada|Saída|de .+|[A-Z]{2})$/,
-        /^(Fotos · 0|Tirar foto|Registrar ocorrência)$/,
+        /^(Fotos · 0|Tirar foto|Registrar ocorrência|Concluir OS)$/,
       ]),
     ).toEqual([]);
   });

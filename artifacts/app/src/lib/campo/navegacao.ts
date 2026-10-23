@@ -16,11 +16,17 @@ export const CAMPO_ROLES = ["campo", "owner", "admin"] as const satisfies readon
 export const ROTA_CAMPO = "/campo";
 /** A OS no celular: ?numero=10045-01. */
 export const ROTA_CAMPO_OS = "/campo/os";
+/** Concluir a OS no celular (parte 3.9b): ?numero=10045-01. */
+export const ROTA_CAMPO_CONCLUIR = "/campo/concluir";
 
-export const TELAS_DO_CAMPO: readonly string[] = [ROTA_CAMPO, ROTA_CAMPO_OS];
+export const TELAS_DO_CAMPO: readonly string[] = [ROTA_CAMPO, ROTA_CAMPO_OS, ROTA_CAMPO_CONCLUIR];
 
 export function hrefDaOsNoCampo(numero: string): string {
   return `${ROTA_CAMPO_OS}?numero=${encodeURIComponent(numero)}`;
+}
+
+export function hrefDaConclusaoNoCampo(numero: string): string {
+  return `${ROTA_CAMPO_CONCLUIR}?numero=${encodeURIComponent(numero)}`;
 }
 
 /** A OS pedida na busca da URL (`?numero=`), ou null. */

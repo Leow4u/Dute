@@ -828,3 +828,29 @@ gravação em `domain/conclusao-gravacao.ts`.
   `os.completed_without_acceptance`, e `os.step_recorded` do Fim quando a
   conclusão o registra. O nome, o cargo e o documento do responsável e os
   motivos ficam só na OS.
+
+### Parte 3.9b: concluir no celular
+
+Feita em 23/10/2026, no desenho aprovado `Campo2Concluir`, em
+`/campo/concluir?numero=`. Na OS em execução, "Concluir OS" aparece para o
+líder (ou para qualquer um da equipe quando a OS não tem líder). Regras em
+`lib/campo/concluir.ts`; a callable confere de novo (parte 3.9a).
+
+- **Itens.** O feito contra o previsto, com o que ainda está na fila por
+  cima; o item a menos mostra a diferença ("−2") e pede o motivo; a inclusão
+  em campo aparece na linha. "Corrigir" volta à OS.
+- **Fotos do final.** As da etapa Fim, gravadas e guardadas; "Tirar foto"
+  anexa com a etapa Fim, pela fila.
+- **Responsável.** O nome vem do contato do destino (ou da origem); cargo e
+  CPF ou RG. A assinatura é no dedo, num quadro que não rola a página: na
+  tela, o traço tem a cor do tema; a imagem que sobe ao Storage é tinta
+  escura no branco, como no papel. Um toque sem traço não conta; "Limpar"
+  apaga.
+- **Sem responsável no local.** Pede só quem recebeu e conclui "sem aceite
+  no local".
+- **Pela fila.** A conclusão vai depois das fotos e dos feitos tocados
+  antes, com a assinatura subindo ao Storage antes da callable. A tela
+  confirma ali mesmo, sem trocar de rota no mesmo toque, para a fila
+  guardar o registro no aparelho antes de a pessoa sair. Guardada a
+  conclusão, a OS para de receber registros no celular ("OS concluída ·
+  guardada").

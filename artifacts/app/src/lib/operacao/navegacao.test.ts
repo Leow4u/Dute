@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { ROTA_CAMPO, ROTA_CAMPO_OS } from "../campo/navegacao";
+import { ROTA_CAMPO, ROTA_CAMPO_CONCLUIR, ROTA_CAMPO_OS } from "../campo/navegacao";
 import { getNavigationForProfileRole, getRouteProfileRoles, menuDoOperacao } from "../modules";
 import { entrada, modulesForPerson } from "../platform-modules";
 import {
@@ -101,7 +101,7 @@ describe("navegação do cadastro da Operação", () => {
   });
 
   it("/operacao é o Início (parte 2.6) e o Hoje (parte 3.5a) mora em /operacao/hoje", () => {
-    expect(rotasDaOperacao(LIBERADO)).toEqual([ROTA_OPERACAO, ROTA_HOJE, ROTA_AGENDA, ROTA_DEMANDAS, ROTA_DEMANDA, ROTA_NOVA_DEMANDA, ROTA_PLANEJAR, ROTA_OS, ROTA_COLABORADORES, ROTA_VEICULOS, ROTA_CAMPO, ROTA_CAMPO_OS]);
+    expect(rotasDaOperacao(LIBERADO)).toEqual([ROTA_OPERACAO, ROTA_HOJE, ROTA_AGENDA, ROTA_DEMANDAS, ROTA_DEMANDA, ROTA_NOVA_DEMANDA, ROTA_PLANEJAR, ROTA_OS, ROTA_COLABORADORES, ROTA_VEICULOS, ROTA_CAMPO, ROTA_CAMPO_OS, ROTA_CAMPO_CONCLUIR]);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao", OperacaoInicio\)/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/hoje", OperacaoHoje\)/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/agenda", OperacaoAgenda\)/);
