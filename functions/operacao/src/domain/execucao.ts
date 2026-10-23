@@ -47,7 +47,8 @@ const INSTANTE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2
 
 export type QuemRegistrou = { uid: string; role: string };
 
-type Registro = {
+/** O que todo registro da execução guarda: quando, por onde, quem informou e quem registrou. */
+export type RegistroDaExecucao = {
   /** Quando aconteceu, em UTC (ISO). */
   instante: string;
   canal: CanalDoRegistro;
@@ -59,8 +60,8 @@ type Registro = {
   registrado_em: string;
 };
 
-export type EtapaRegistrada = Registro & { etapa: EtapaDaOs };
-export type OcorrenciaRegistrada = Registro & { id: string; descricao: string };
+export type EtapaRegistrada = RegistroDaExecucao & { etapa: EtapaDaOs };
+export type OcorrenciaRegistrada = RegistroDaExecucao & { id: string; descricao: string };
 
 export type ExecucaoDaOs = { etapas: EtapaRegistrada[]; ocorrencias: OcorrenciaRegistrada[] };
 
@@ -74,24 +75,24 @@ const mensagens: z.ZodErrorMap = (issue) => {
   return { message: `${campo}: valor inválido.` };
 };
 
-function invalid(message: string): never {
+export function invalid(message: string): never {
   throw new HttpsError("invalid-argument", message);
 }
 
-function falha(message: string): never {
+export function falha(message: string): never {
   throw new HttpsError("failed-precondition", message);
 }
 
-const chave = z.string().trim().min(1, "Informe a chave de idempotência.").max(200);
-const numero = z.string().trim().regex(NUMERO, "Número da OS inválido.");
-const instante = z.string().trim().regex(INSTANTE, "Hora inválida: informe data, hora e fuso.");
-const informadoPor = z
+export const chave = z.string().trim().min(1, "Informe a chave de idempotência.").max(200);
+export const numero = z.string().trim().regex(NUMERO, "Número da OS inválido.");
+export const instante = z.string().trim().regex(INSTANTE, "Hora inválida: informe data, hora e fuso.");
+export const informadoPor = z
   .string()
   .regex(/^col_[a-f0-9]{16}$/, "Quem informou: colaborador inválido.")
   .nullable()
   .optional()
   .transform((valor) => valor ?? null);
-const meio = z
+export const meio = z
   .enum(MEIOS_DO_ESCRITORIO)
   .nullable()
   .optional()
@@ -119,7 +120,7 @@ const RegistrarOcorrencia = z
 export type PedidoDeEtapa = z.infer<typeof RegistrarEtapa>;
 export type PedidoDeOcorrencia = z.infer<typeof RegistrarOcorrencia>;
 
-function interpretar<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, data: unknown): T {
+export function interpretar<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, data: unknown): T {
   const parsed = schema.safeParse(data, { errorMap: mensagens });
   if (!parsed.success) invalid(parsed.error.issues[0]?.message ?? "Entrada inválida.");
   return parsed.data;
@@ -176,7 +177,7 @@ export function instanteDoRegistro(pedido: string, os: Pick<OsGravada, "janela">
 }
 
 /** Quem informou precisa estar na equipe da OS; o meio só vale no escritório. */
-function origemDoRegistro(os: Pick<OsGravada, "equipe">, pedido: { informado_por: string | null; meio: MeioDoEscritorio | null }, canal: CanalDoRegistro) {
+export function origemDoRegistro(os: Pick<OsGravada, "equipe">, pedido: { informado_por: string | null; meio: MeioDoEscritorio | null }, canal: CanalDoRegistro) {
   if (pedido.informado_por && !os.equipe.some((pessoa) => pessoa.colaborador_id === pedido.informado_por)) {
     invalid("Quem informou não está na equipe da OS.");
   }
@@ -246,7 +247,7 @@ function texto(valor: unknown): string {
   return typeof valor === "string" ? valor.trim() : "";
 }
 
-function registroLido(bruto: Record<string, unknown>): Registro | null {
+export function registroLido(bruto: Record<string, unknown>): RegistroDaExecucao | null {
   const instanteLido = texto(bruto.instante);
   if (!instanteLido || Number.isNaN(new Date(instanteLido).getTime())) return null;
   const quem = bruto.registrado_por && typeof bruto.registrado_por === "object" ? (bruto.registrado_por as Record<string, unknown>) : {};

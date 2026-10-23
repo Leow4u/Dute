@@ -6,7 +6,7 @@ import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 
 import { EVENTS_COLLECTION } from "./events.js";
-import { registerOccurrenceFor, registerStepFor } from "./execucao-gravacao.js";
+import { registerItemFor, registerOccurrenceFor, registerStepFor } from "./execucao-gravacao.js";
 import { SERVICE_ORDERS_COLLECTION } from "./os.js";
 import type { OperacaoProfile } from "./profile.js";
 
@@ -14,6 +14,8 @@ import type { OperacaoProfile } from "./profile.js";
  * O andamento da OS pelo escritório no emulador (parte 3.7a): a etapa grava
  * o instante e põe a OS Em execução, com o evento; repetir não duplica;
  * fora de ordem nada se grava; a ocorrência não leva o texto ao evento.
+ * Os itens (parte 3.7b): o feito vai até o previsto e a inclusão em campo
+ * soma a ele, sem mexer no saldo da demanda.
  */
 
 const PROJECT_ID = "demo-dute-operacao";
@@ -171,5 +173,78 @@ describe("ocorrências pelo escritório", () => {
     assert.doesNotMatch(JSON.stringify(evento), /elevador|Ana Lima/);
     await registerOccurrenceFor(db, interno, pedido, AGORA);
     assert.equal((await lerOs()).ocorrencias.length, 1);
+  });
+});
+
+describe("itens pela execução", () => {
+  const feito = (executado: string, chave = `f-${executado}`) => ({
+    action: "executed",
+    idempotency_key: chave,
+    numero: "10045-01",
+    linha: "ln_1",
+    executado,
+    instante: "2026-10-22T11:20-03:00",
+    informado_por: ANA,
+  });
+
+  it("antes da primeira etapa recusa; depois grava o feito e o evento com o anterior", async () => {
+    await recusa(registerItemFor(db, interno, feito("10"), AGORA), "failed-precondition", "Registre a primeira etapa antes dos itens.");
+    await registerStepFor(db, interno, passo("saida_patio", "2026-10-22T07:05-03:00"), AGORA);
+    const resultado = await registerItemFor(db, interno, feito("128"), AGORA);
+    assert.deepEqual(resultado, { numero: "10045-01", edicao: 4, status: "em_execucao", linha: "ln_1" });
+    const [item] = (await lerOs()).itens;
+    assert.equal(item.executado, "128");
+    assert.equal(item.executado_em, "2026-10-22T14:20:00.000Z");
+    assert.equal(item.planejado, "160");
+    const [evento] = await eventos("os.item_executed");
+    assert.deepEqual(evento.payload, {
+      id: "10045-01",
+      demanda: "10045",
+      linha: "ln_1",
+      quantidade: "128",
+      anterior: null,
+      instante: "2026-10-22T14:20:00.000Z",
+      canal: "escritorio",
+      informado_por: ANA,
+    });
+    await recusa(
+      registerItemFor(db, interno, feito("161"), AGORA),
+      "failed-precondition",
+      "Cadeira: o feito (161) passa do previsto (160). Inclua o que foi além do planejado.",
+    );
+  });
+
+  it("a inclusão em campo cria a linha nova uma vez só, soma ao feito e não leva quem pediu ao evento", async () => {
+    await db.doc("lpu_items/lpu_giratoria").set({ item: "Cadeira giratória", descricao: "Transporte de cadeira giratória", servico: "Transporte", unidade: "UN", ativo: true, orcavel: true });
+    await registerStepFor(db, interno, passo("saida_patio", "2026-10-22T07:05-03:00"), AGORA);
+    const pedido = {
+      action: "added",
+      idempotency_key: "inc-1",
+      numero: "10045-01",
+      lpu_item_id: "lpu_giratoria",
+      quantidade: "4",
+      pedido_por: "Renata Campos · Facilities",
+      motivo: "Cadeiras a mais na sala 412",
+      instante: "2026-10-22T09:32-03:00",
+    };
+    const primeira = await registerItemFor(db, interno, pedido, AGORA);
+    const repetida = await registerItemFor(db, interno, pedido, AGORA);
+    assert.equal(repetida.linha, primeira.linha);
+    assert.match(primeira.linha, /^cp_[a-f0-9]{16}$/);
+    const itens = (await lerOs()).itens;
+    assert.equal(itens.length, 2);
+    const nova = itens[1];
+    assert.deepEqual([nova.item, nova.planejado, nova.executado, nova.incluido_em_campo], ["Cadeira giratória", "0", "4", true]);
+    assert.deepEqual(nova.incluidos.map((inclusao: { pedido_por: string; quantidade: string }) => [inclusao.pedido_por, inclusao.quantidade]), [["Renata Campos · Facilities", "4"]]);
+    const [evento] = await eventos("os.item_added_in_field");
+    assert.equal(evento.payload.nova_linha, true);
+    assert.equal(evento.payload.lpu_item_id, "lpu_giratoria");
+    assert.doesNotMatch(JSON.stringify(evento), /Renata|sala 412/);
+    // O feito da linha nova vai até o incluído.
+    await recusa(
+      registerItemFor(db, interno, { ...feito("5"), linha: primeira.linha }, AGORA),
+      "failed-precondition",
+      "Cadeira giratória: o feito (5) passa do previsto (4). Inclua o que foi além do planejado.",
+    );
   });
 });
