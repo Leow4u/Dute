@@ -1,10 +1,10 @@
 /**
  * Estoque do portal: nomes, tipos e resumo da vitrine.
  *
- * Nos dados da BTG o nome do produto é o TIPO ("POLO", "SACOLA") e a
- * categoria é o nome legível ("Polo piquet riscos"). O título do cartão usa a
- * categoria; o filtro agrupa pelo tipo (filtrar pela categoria dava uma opção
- * por produto: 373 para 124 produtos).
+ * A Contagem e o Receber gravam o nome como a descrição ("Polo masculino
+ * pima preta SW") e a categoria como o tipo ("Polo", "Sacola"). O título do
+ * cartão usa o nome; o filtro agrupa pela categoria (agrupar pelo nome dava
+ * uma opção por produto).
  */
 
 import { displayName } from "./stock-variants";
@@ -21,22 +21,26 @@ function slug(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
-/** Nome que a pessoa reconhece: a categoria, quando existe; senão o nome. */
-export function productTitle(product: Pick<StockLike, "name" | "category">) {
+function categoryOf(product: Pick<StockLike, "category">) {
   const category = product.category?.trim();
-  return displayName(category && category !== "Sem categoria" ? category : product.name);
+  return category && category !== "Sem categoria" ? category : "";
 }
 
-/** Tipo do produto (POLO → Polo), para o filtro e a linha de apoio. */
-export function productType(product: Pick<StockLike, "name">) {
-  return displayName(product.name || "Outros");
+/** Nome que a pessoa reconhece: a descrição; sem ela, a categoria. */
+export function productTitle(product: Pick<StockLike, "name" | "category">) {
+  return displayName(product.name?.trim() || categoryOf(product));
 }
 
-export function typeValue(product: Pick<StockLike, "name">) {
-  return slug(product.name) || "outros";
+/** Tipo do produto, a categoria (POLO → Polo), para o filtro e a linha de apoio. */
+export function productType(product: Pick<StockLike, "category">) {
+  return displayName(categoryOf(product) || "Outros");
 }
 
-export function typeOptions(products: Array<Pick<StockLike, "name">>) {
+export function typeValue(product: Pick<StockLike, "category">) {
+  return slug(categoryOf(product)) || "outros";
+}
+
+export function typeOptions(products: Array<Pick<StockLike, "category">>) {
   const counts = new Map<string, { value: string; label: string; count: number }>();
   for (const product of products) {
     const value = typeValue(product);
