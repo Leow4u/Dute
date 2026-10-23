@@ -45,6 +45,7 @@ const registro: RegistroGravado = {
   situacao: "vigente",
   substituido_por: null,
   arquivo: null,
+  criado_em: "2026-01-01T12:00:00.000Z",
   edicao: 1,
 };
 

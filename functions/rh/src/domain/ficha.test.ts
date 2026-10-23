@@ -54,6 +54,7 @@ function registro(id: string, extra: Partial<RegistroGravado> = {}): RegistroGra
     situacao: "vigente",
     substituido_por: null,
     arquivo: null,
+    criado_em: "2026-01-01T12:00:00.000Z",
     edicao: 1,
     ...extra,
   };
@@ -135,17 +136,17 @@ describe("salvar e arquivar", () => {
   const exame = entradaDoRegistro(entrada({ categoria: "exame", tipo: "periodico", resultado: "apto", id: REG_A, expected_edicao: 1 }), HOJE);
 
   it("alterar sobe a edição e mantém a situação", () => {
-    const salvo = registroSalvo(registro(REG_A, { situacao: "substituido", substituido_por: REG_B }), exame, REG_A);
+    const salvo = registroSalvo(registro(REG_A, { situacao: "substituido", substituido_por: REG_B }), exame, REG_A, "2026-10-23T12:00:00.000Z");
     assert.equal(salvo.edicao, 2);
     assert.equal(salvo.situacao, "substituido");
     assert.equal(salvo.vence_em, "2027-11-10");
   });
 
   it("a edição velha, o arquivado, o tipo trocado e o colaborador de outro recusam", () => {
-    recusa(() => registroSalvo(registro(REG_A, { edicao: 3 }), exame, REG_A), "O registro foi atualizado. Recarregue e tente de novo.", "failed-precondition");
-    recusa(() => registroSalvo(registro(REG_A, { situacao: "arquivado" }), exame, REG_A), "O registro está arquivado.", "failed-precondition");
-    recusa(() => registroSalvo(registro(REG_A, { tipo: "admissional" }), exame, REG_A), "O tipo do registro não muda. Arquive e registre de novo.");
-    recusa(() => registroSalvo(registro(REG_A, { colaborador_id: OUTRO_COL }), exame, REG_A), "Registro não encontrado.", "not-found");
+    recusa(() => registroSalvo(registro(REG_A, { edicao: 3 }), exame, REG_A, "2026-10-23T12:00:00.000Z"), "O registro foi atualizado. Recarregue e tente de novo.", "failed-precondition");
+    recusa(() => registroSalvo(registro(REG_A, { situacao: "arquivado" }), exame, REG_A, "2026-10-23T12:00:00.000Z"), "O registro está arquivado.", "failed-precondition");
+    recusa(() => registroSalvo(registro(REG_A, { tipo: "admissional" }), exame, REG_A, "2026-10-23T12:00:00.000Z"), "O tipo do registro não muda. Arquive e registre de novo.");
+    recusa(() => registroSalvo(registro(REG_A, { colaborador_id: OUTRO_COL }), exame, REG_A, "2026-10-23T12:00:00.000Z"), "Registro não encontrado.", "not-found");
   });
 
   it("arquivar sobe a edição; arquivar de novo recusa", () => {
@@ -167,6 +168,15 @@ describe("o vigente de cada tipo", () => {
     assert.deepEqual(situacoes.get(REG_B), { situacao: "vigente", substituido_por: null });
     assert.deepEqual(situacoes.get(REG_A), { situacao: "substituido", substituido_por: REG_B });
     assert.deepEqual(situacoes.get(REG_C), { situacao: "substituido", substituido_por: REG_B });
+  });
+
+  it("no empate da data e do vencimento, vale o lançado por último, qualquer que seja o id", () => {
+    const situacoes = situacoesDoGrupo([
+      registro(REG_C, { criado_em: "2026-01-01T12:00:00.000Z" }),
+      registro(REG_A, { criado_em: "2026-03-01T12:00:00.000Z" }),
+    ]);
+    assert.equal(situacoes.get(REG_A)?.situacao, "vigente");
+    assert.equal(situacoes.get(REG_C)?.substituido_por, REG_A);
   });
 
   it("no empate da data, vale o que vence depois; o arquivado fica de fora", () => {

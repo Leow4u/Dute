@@ -104,6 +104,7 @@ export function registroLido(id: string, data: DocumentData): RegistroGravado {
     situacao: data.situacao as Situacao,
     substituido_por: textoOuNull(data.substituido_por),
     arquivo: arquivoLido(data.arquivo),
+    criado_em: typeof data.criado_em === "string" ? data.criado_em : "",
     edicao: data.edicao,
   };
 }
@@ -206,7 +207,7 @@ export async function saveRhRecordFor(padrao: Firestore, rh: Firestore, caller: 
       const atual = entrada.id ? ficha.find((registro) => registro.id === entrada.id) ?? null : null;
       if (entrada.id && !atual) throw new HttpsError("not-found", "Registro não encontrado.");
       const id = entrada.id ?? novoIdDeRegistro();
-      const salvo = registroSalvo(atual, entrada, id);
+      const salvo = registroSalvo(atual, entrada, id, agora.toISOString());
       const grupo = [...ficha.filter((registro) => registro.id !== id && grupoDoRegistro(registro) === grupoDoRegistro(salvo)), salvo];
       const situacoes = situacoesDoGrupo(grupo);
       const registro: RegistroGravado = { ...salvo, ...situacoes.get(id) };

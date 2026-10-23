@@ -352,3 +352,13 @@ Feita em 23/10/2026, da revisão do código do RH.
   `rotina.integration.test.ts` (um registro gravado antes do limite não para
   os outros).
 
+### Correção: o vigente no empate das datas
+
+Feita em 23/10/2026, da revisão do código do RH. Quando o RH lançava de novo
+um exame ou um documento com as mesmas datas (para corrigir o anterior), o
+desempate era o id sorteado: metade das vezes, o lançamento novo nascia
+substituído pelo antigo. Agora o registro guarda o `criado_em` (o instante do
+lançamento), e no empate vale o lançado por último. Testes: `ficha.test.ts`
+(o empate com o id ao contrário) e `ficha.integration.test.ts` (o exame
+lançado de novo com as mesmas datas).
+
