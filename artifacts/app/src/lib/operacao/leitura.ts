@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { onSnapshot, type DocumentData, type Firestore, type Query } from "firebase/firestore";
+import { onSnapshot, type DocumentData, type DocumentReference, type Firestore, type Query } from "firebase/firestore";
 
 import { firestore } from "../firebase";
 
@@ -36,4 +36,30 @@ export function useLeitura<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chave]);
   return estado.chave === chave ? estado : { itens: null, erro: false };
+}
+
+/** Um documento ao vivo: undefined enquanto carrega, null quando não existe (ou o mapeamento recusa). */
+export type LeituraDeDocumento<T> = { item: T | null | undefined; erro: boolean };
+
+export function useDocumento<T>(
+  chave: string | null,
+  referencia: (db: Firestore) => DocumentReference<DocumentData>,
+  mapear: (id: string, data: DocumentData) => T | null,
+): LeituraDeDocumento<T> {
+  const [estado, setEstado] = useState<LeituraDeDocumento<T> & { chave: string | null }>({ chave: null, item: undefined, erro: false });
+  useEffect(() => {
+    if (!chave) return undefined;
+    if (!firestore) {
+      setEstado({ chave, item: undefined, erro: true });
+      return undefined;
+    }
+    return onSnapshot(
+      referencia(firestore),
+      (snapshot) => setEstado({ chave, item: snapshot.exists() ? mapear(snapshot.id, snapshot.data()) : null, erro: false }),
+      () => setEstado({ chave, item: undefined, erro: true }),
+    );
+    // A referência e o mapeamento dependem só da chave.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chave]);
+  return estado.chave === chave ? estado : { item: undefined, erro: false };
 }

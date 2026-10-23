@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { Router } from "wouter";
 
 import type { OsDaFila } from "@/lib/operacao/fila";
 import { SEM_FILTRO, quadroDoHoje, type DemandaDoHoje } from "@/lib/operacao/hoje";
@@ -71,6 +72,7 @@ function quadro() {
 
 function render(extra: Partial<Parameters<typeof HojeView>[0]> = {}) {
   return renderToStaticMarkup(
+    <Router ssrPath="/operacao/hoje">
     <HojeView
       estado="pronto"
       resumo="Sexta, 23 de outubro · 2 OS · 1 demanda para planejar"
@@ -86,7 +88,8 @@ function render(extra: Partial<Parameters<typeof HojeView>[0]> = {}) {
       erro={null}
       escala={null}
       {...extra}
-    />,
+    />
+    </Router>,
   );
 }
 

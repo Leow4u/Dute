@@ -462,3 +462,29 @@ dia da parte 3 (`pages/operacao/fila.tsx` virou `hoje.tsx`).
   veículos entram na tela de Planejar OS (parte 3.6).
 - **Ainda não.** O botão Nova demanda chega com a tela dela (parte 3.5c); a
   TV, na parte 3.12.
+
+### Parte 3.5b: Demandas e a ficha da Demanda
+
+Feita em 23/10/2026, nos desenhos aprovados `OpDemandas` e `OpDemanda`.
+Demandas entrou no menu da Operação, depois do Hoje.
+
+- **Etapa na Operação.** Fora de Para planejar vale a do Comercial,
+  agrupada (no comercial, aguardando cliente, execução a orçar, a faturar,
+  perdida, cancelada). Em Para planejar, a OS que mais avançou diz onde a
+  demanda está: em execução, em revisão, agendada ou para agendar; sem OS,
+  ou com todas revisadas, é Para planejar.
+- **Lista** (`/operacao/demandas`). Número e título, cliente, tipo, entrada,
+  etapa, o resumo das OS ("3 · 1 em execução") e o próximo passo (Planejar
+  OS, a próxima OS agendada ou o prazo da direta), mais recentes primeiro.
+  Filtros por tipo, entrada, cliente e etapa; a busca acha também pelo
+  número da OS. Tabela no desktop, cartões no celular.
+- **Ficha** (`/operacao/demanda?numero=`). O escopo linha a linha com o que
+  está nas OS (e em quais) e o saldo, a mesma conta da callable; as OS da
+  demanda com data, equipe, placas, serviços e o status; na direta, quem
+  pediu, a chegada e o prazo; e os locais com o endereço do cadastro do
+  cliente. Com saldo, "Abrir OS com o saldo" até a tela de Planejar OS
+  (parte 3.6).
+- **Ainda não.** A linha do tempo (pedido, vistoria, orçamento, execução,
+  revisão e faturamento), as pessoas e o histórico da ficha aprovada entram
+  com a revisão (parte 3.10), quando os marcos da execução existirem. A
+  coluna Executado do escopo entra na parte 3.7.

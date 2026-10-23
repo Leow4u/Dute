@@ -1,4 +1,5 @@
 import { useId, useState, type FormEvent, type ReactNode } from "react";
+import { Link } from "wouter";
 import { ChevronDown, Clock, MapPin, Search, Truck, UserPlus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -10,18 +11,17 @@ import { rotuloDaDemandaFora, type AgendaEmEdicao, type OsDaFila } from "@/lib/o
 import {
   ENTRADAS_DA_DEMANDA,
   ENTRADA_ROTULO,
-  SERVICO_ROTULO,
   TIPOS_DA_DEMANDA,
   TIPO_ROTULO,
   equipeCurta,
-  iniciais,
   type CartaoDeDemanda,
   type CartaoDeOs,
   type FiltrosDoHoje,
   type PrazoDoHoje,
   type QuadroDoHoje,
-  type TipoDaDemanda,
 } from "@/lib/operacao/hoje";
+import { Avatar, Filtro, SeloDoTipo, Servicos, selo, seloAlerta, type OpcaoDeFiltro } from "@/components/operacao/partes";
+import { hrefDaDemanda } from "@/lib/operacao/navegacao";
 import { cn } from "@/lib/utils";
 
 /**
@@ -37,66 +37,6 @@ export type EstadoDoHoje = "carregando" | "erro" | "pronto";
 export type PessoaDaEquipe = { id: string; nome: string; funcao: string; ativo: boolean };
 
 export type VeiculoDaAgenda = { id: string; placa: string; tipo: string; ativo: boolean };
-
-export type OpcaoDeFiltro = { valor: string; rotulo: string };
-
-const COR_DO_TIPO: Record<TipoDaDemanda, string> = {
-  paraquedas: "border-destructive-soft-border bg-destructive-soft text-destructive-soft-foreground",
-  emergencial: "border-amber-soft-border bg-amber-soft text-amber-soft-foreground",
-  planejada: "border-info-soft-border bg-info-soft text-info-soft-foreground",
-};
-
-const selo = "inline-flex h-6 shrink-0 items-center rounded-md border px-2 text-xs font-semibold";
-const seloNeutro = "border-border bg-muted text-foreground";
-const seloAlerta = "border-amber-soft-border bg-amber-soft text-amber-soft-foreground";
-
-function SeloDoTipo({ tipo }: { tipo: TipoDaDemanda }) {
-  return <span className={cn(selo, COR_DO_TIPO[tipo])}>{TIPO_ROTULO[tipo]}</span>;
-}
-
-function Avatar({ nome }: { nome: string }) {
-  return (
-    <span aria-hidden="true" className="flex size-7 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-bold text-background">
-      {iniciais(nome)}
-    </span>
-  );
-}
-
-function Filtro({
-  rotulo,
-  todos,
-  valor,
-  opcoes,
-  onChange,
-}: {
-  rotulo: string;
-  todos: string;
-  valor: string;
-  opcoes: readonly OpcaoDeFiltro[];
-  onChange: (valor: string) => void;
-}) {
-  return (
-    <label className="relative inline-flex">
-      <span className="sr-only">{rotulo}</span>
-      <select
-        value={valor}
-        onChange={(event) => onChange(event.target.value)}
-        className={cn(
-          "h-9 appearance-none rounded-full border bg-card pl-3.5 pr-9 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
-          valor ? "border-foreground" : "border-border",
-        )}
-      >
-        <option value="">{todos}</option>
-        {opcoes.map((opcao) => (
-          <option key={opcao.valor} value={opcao.valor}>
-            {opcao.rotulo}
-          </option>
-        ))}
-      </select>
-      <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-    </label>
-  );
-}
 
 function Coluna({ titulo, ponto, contagem, vazio, children }: { titulo: string; ponto: string; contagem: number; vazio: string; children?: ReactNode }) {
   const id = useId();
@@ -126,19 +66,6 @@ function Prazo({ prazo }: { prazo: PrazoDoHoje }) {
   );
 }
 
-function Servicos({ servicos }: { servicos: readonly string[] }) {
-  if (!servicos.length) return null;
-  return (
-    <p className="flex flex-wrap gap-1.5">
-      {servicos.map((servico) => (
-        <span key={servico} className={cn(selo, seloNeutro, "font-medium")}>
-          {SERVICO_ROTULO[servico] ?? servico}
-        </span>
-      ))}
-    </p>
-  );
-}
-
 function resumoDaOs(cartao: CartaoDeOs): string {
   return [cartao.demanda?.titulo ?? cartao.os.itens[0]?.item ?? null, cartao.os.rota ?? null].filter(Boolean).join(" · ");
 }
@@ -149,7 +76,12 @@ function CartaoDaDemanda({ cartao, ocupado, onAbrir }: { cartao: CartaoDeDemanda
     <li className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4">
       <div className="flex items-start justify-between gap-2">
         <SeloDoTipo tipo={demanda.tipo} />
-        <span className="text-sm font-semibold tabular-nums text-muted-foreground">{demanda.numero}</span>
+        <Link
+          href={hrefDaDemanda(demanda.numero)}
+          className="rounded text-sm font-semibold tabular-nums text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+        >
+          {demanda.numero}
+        </Link>
       </div>
       <p className="text-base font-semibold leading-snug text-foreground">{cartao.cliente}</p>
       {demanda.titulo ? <p className="text-sm text-muted-foreground">{demanda.titulo}</p> : null}

@@ -87,7 +87,7 @@ describe("leitura da demanda", () => {
       entrada: "comercial",
       escopo: [{ linha_id: "ln_1", item: "Cadeira", quantidade: "160", preco: "10.00" }],
     });
-    expect(comercial?.escopo).toEqual([{ id: "ln_1", item: "Cadeira", quantidade: "160" }]);
+    expect(comercial?.escopo).toEqual([{ id: "ln_1", item: "Cadeira", quantidade: "160", unidade: null }]);
     expect(JSON.stringify(comercial)).not.toContain("10.00");
     const direta = demandaDoHoje("10053", {
       customer_code: "ITAU",
@@ -97,7 +97,7 @@ describe("leitura da demanda", () => {
       executar_ate: "2026-10-23T22:00:00.000Z",
       itens_pedidos: [{ id: "ln_x", item: "Cadeira", quantidade: "6" }],
     });
-    expect(direta).toMatchObject({ tipo: "paraquedas", entrada: "direta", executarAte: "2026-10-23T22:00:00.000Z", escopo: [{ id: "ln_x", item: "Cadeira", quantidade: "6" }] });
+    expect(direta).toMatchObject({ tipo: "paraquedas", entrada: "direta", executarAte: "2026-10-23T22:00:00.000Z", escopo: [{ id: "ln_x", item: "Cadeira", quantidade: "6", unidade: null }] });
     expect(demandaDoHoje("1", { etapa: "para_planejar", tipo: "urgente" })).toBeNull();
     expect(demandaDoHoje("2", { customer_code: "ITAU", tipo: "urgente", entrada: "outra" })).toMatchObject({ tipo: "planejada", entrada: "comercial" });
   });

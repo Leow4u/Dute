@@ -148,6 +148,8 @@ const ComercialAutorizacoes = lazy(() => import("./pages/comercial/autorizacoes"
 const ComercialMedicoes = lazy(() => import("./pages/comercial/medicoes"));
 const OperacaoInicio = lazy(() => import("./pages/operacao/inicio"));
 const OperacaoHoje = lazy(() => import("./pages/operacao/hoje"));
+const OperacaoDemandas = lazy(() => import("./pages/operacao/demandas"));
+const OperacaoDemanda = lazy(() => import("./pages/operacao/demanda"));
 const OperacaoColaboradores = lazy(() => import("./pages/operacao/colaboradores"));
 const OperacaoVeiculos = lazy(() => import("./pages/operacao/veiculos"));
 import { useRole } from "./hooks/use-role";
@@ -1070,6 +1072,8 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   ...soComOperacaoLiberada([
     protectedRoute("/operacao", OperacaoInicio),
     protectedRoute("/operacao/hoje", OperacaoHoje),
+    protectedRoute("/operacao/demandas", OperacaoDemandas),
+    protectedRoute("/operacao/demanda", OperacaoDemanda),
     protectedRoute("/operacao/colaboradores", OperacaoColaboradores),
     protectedRoute("/operacao/veiculos", OperacaoVeiculos),
   ]),
