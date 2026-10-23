@@ -158,6 +158,31 @@ describe("shell v3 do módulo", () => {
     expect(textosForaDaLista(operacao("/operacao"), ["Operação", "Início", "Hoje", "Agenda", "Demandas", "Revisão", "Relatórios", "Colaboradores", "Veículos", "Mais", "Minha conta"])).toEqual([]);
   });
 
+  it("com a liberação do agente (parte 5.5j), o Agent Dute é a última tela do módulo, com o cliente ativo logo abaixo do seletor na tela dele", async () => {
+    const html = renderToStaticMarkup(
+      <Router ssrPath="/comercial/agente">
+        <ShellDoModulo
+          ambiente="comercial"
+          atual={{ label: "Comercial", icon: Briefcase }}
+          opcoes={opcoesDoSeletor("comercial", null, "/comercial/agente", TUDO)}
+          items={menuDoComercial("comercial", true, true)}
+          basePath=""
+          online
+          abaixoDoSeletor={(compact) => <button type="button">{compact ? "BTG" : "Cliente ativo BTG"}</button>}
+          conta={() => <button type="button">Minha conta</button>}
+        >
+          <h1>Agent Dute</h1>
+        </ShellDoModulo>
+      </Router>,
+    );
+    expect(linkAtual(html, "/comercial/agente")).toBe(true);
+    expect([...html.matchAll(/<a [^>]*href="(\/comercial[^"]*)"/g)].map((match) => match[1]).filter((href, indice, todos) => todos.indexOf(href) === indice).at(-1)).toBe("/comercial/agente");
+    // A tela do chat ocupa a altura do shell.
+    expect(html).toMatch(/class="mx-auto w-full max-w-\[1600px\][^"]*h-full"/);
+    expect(textosForaDaLista(html, ["Comercial", ...TELAS_DO_COMERCIAL, "Agent Dute", "Cliente ativo BTG", "BTG", "Minha conta", "Mais"])).toEqual([]);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
     expect(await violacoesDeAcessibilidade(comercial("/comercial/clientes"))).toEqual([]);
     expect(await violacoesDeAcessibilidade(comercial("/comercial", opcoesDoSeletor("comercial", null, "/comercial", TUDO)))).toEqual([]);

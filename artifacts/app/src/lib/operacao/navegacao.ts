@@ -1,7 +1,8 @@
 import type { Papel } from "@workspace/dominio";
 
+import { rotaDoAgenteNoModulo } from "../agente/navegacao";
 import { TELAS_DO_CAMPO } from "../campo/navegacao";
-import { OPERACAO_LIBERADO } from "../liberacao";
+import { AGENTE_LIBERADO, OPERACAO_LIBERADO } from "../liberacao";
 import { ROTA_TV } from "../tv/navegacao";
 
 /**
@@ -157,15 +158,17 @@ export function veiculoDaBusca(busca: string): string | null {
   return parametro(busca, "id");
 }
 
-export function rotasDaOperacao(liberado: boolean = OPERACAO_LIBERADO): string[] {
-  return liberado ? [...TELAS_DA_OPERACAO] : [];
+/** O Agent Dute da Operação entra só com a liberação dele (parte 5.5j). */
+export function rotasDaOperacao(liberado: boolean = OPERACAO_LIBERADO, agente: boolean = AGENTE_LIBERADO): string[] {
+  return liberado ? [...TELAS_DA_OPERACAO, ...rotaDoAgenteNoModulo("operacao", agente)] : [];
 }
 
 export function soComOperacaoLiberada<T extends { path: string }>(
   rotas: readonly T[],
   liberado: boolean = OPERACAO_LIBERADO,
+  agente: boolean = AGENTE_LIBERADO,
 ): T[] {
-  const permitidas = rotasDaOperacao(liberado);
+  const permitidas = rotasDaOperacao(liberado, agente);
   return rotas.filter((rota) => permitidas.includes(rota.path));
 }
 

@@ -3,13 +3,19 @@ import { Link } from "wouter";
 
 import { AgentScreen } from "@/components/agent/agent-screen";
 import { TEAM_AGENT_PATH, teamSuggestions } from "@/lib/agent-chat";
+import { ProvedorDoAgente } from "@/lib/agente/contexto";
+import { abreAgenteDoNucleo } from "@/lib/agente/navegacao";
 import { useAppUser } from "@/lib/auth";
 import { canAccessModule, getRouteProfileRoles } from "@/lib/modules";
+
+import { useAgenteDoClienteAtivo } from "./agente-do-modulo";
 
 /**
  * Agent Dute da equipe Dutelog: a mesma tela do portal, com sugestões do
  * papel. O painel (notificações, riscos, memória) e o Conhecimento ficam a
- * um clique, para quem tem acesso a eles.
+ * um clique, para quem tem acesso a eles. Onde o agente do núcleo está
+ * liberado (parte 5.5j), a conversa é com ele, na Armazenagem e no cliente
+ * ativo.
  */
 const INTRO = {
   wms: "Eu consulto as tarefas do armazém, os recebimentos, os endereços e o estoque, em tempo real.",
@@ -26,11 +32,13 @@ const PLACEHOLDER = {
 export default function AgentePage() {
   const { user } = useAppUser();
   const role = user?.publicMetadata.role;
+  const doNucleo = abreAgenteDoNucleo(role);
+  const nucleo = useAgenteDoClienteAtivo("wms", doNucleo);
   const links = [
     { href: "/agente/painel", label: "Painel", icon: LayoutDashboard },
     { href: "/agente/conhecimento", label: "Conhecimento", icon: BookOpen },
   ].filter((link) => canAccessModule(role, getRouteProfileRoles(link.href)));
-  return (
+  const tela = (
     <AgentScreen
       basePath={TEAM_AGENT_PATH}
       suggestions={teamSuggestions(role)}
@@ -49,4 +57,5 @@ export default function AgentePage() {
       ))}
     />
   );
+  return doNucleo ? <ProvedorDoAgente cliente={nucleo}>{tela}</ProvedorDoAgente> : tela;
 }

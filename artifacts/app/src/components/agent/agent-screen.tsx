@@ -68,6 +68,7 @@ type AttachControls = {
 };
 
 const MAX_CHAT_FILES = 3;
+const AVISO_DA_CONVERSA = "O Agent Dute monta pedidos para você conferir; quem envia é você. Confira as informações importantes.";
 const RAIL_KEY = "dute.agent.rail";
 
 /** Barra lateral aberta ou recolhida (só ícones), lembrado neste navegador. */
@@ -103,14 +104,18 @@ export type AgentScreenProps = {
   /** Rota da tela: /portal/agente (cliente) ou /agente (equipe). */
   basePath: string;
   suggestions: Suggestion[];
-  /** Frase sob o "Como posso ajudar?". */
-  intro: string;
+  /** Frase sob o "Como posso ajudar?". A tela na v3 (parte 5.5j) não tem: sem legenda. */
+  intro?: string;
+  /** A linha sob o campo da conversa. A tela na v3 não tem. */
+  aviso?: string | null;
+  /** O item "WhatsApp (em breve)" da barra. A tela na v3 não tem: é anúncio, não ação. */
+  whatsapp?: boolean;
   placeholder: string;
   /** Atalhos no topo (ex.: Painel do agente). */
   actions?: ReactNode;
 };
 
-export function AgentScreen({ basePath, suggestions, intro, placeholder, actions }: AgentScreenProps) {
+export function AgentScreen({ basePath, suggestions, intro, placeholder, actions, aviso = AVISO_DA_CONVERSA, whatsapp = true }: AgentScreenProps) {
   const { user } = useAppUser();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -281,6 +286,7 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
       onView={openView}
       collapsed={collapsed}
       onToggle={() => setRailCollapsed(!railCollapsed)}
+      whatsapp={whatsapp}
     />
   );
 
@@ -336,6 +342,7 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
             onSend={send}
             busy={Boolean(streaming)}
             attach={attach}
+            aviso={aviso}
           />
         )}
       </section>
@@ -389,6 +396,7 @@ function AgentRail({
   onView,
   collapsed,
   onToggle,
+  whatsapp,
 }: {
   conversations: ConversationSummary[];
   history: RoutineHistoryItem[];
@@ -399,6 +407,7 @@ function AgentRail({
   onView: (view: Exclude<AgentView, "chat">) => void;
   collapsed: boolean;
   onToggle: () => void;
+  whatsapp: boolean;
 }) {
   const [query, setQuery] = useState("");
   const groups = groupConversations(filterConversations(conversations, query), new Date());
@@ -407,7 +416,7 @@ function AgentRail({
     <>
       <RailButton icon={<Plus />} label="Nova conversa" active={view === "chat" && !activeId} collapsed={collapsed} onClick={() => onOpen(null)} />
       <RailButton icon={<CalendarClock />} label="Rotinas" active={view === "rotinas"} collapsed={collapsed} onClick={() => onView("rotinas")} />
-      <RailButton icon={<MessageCircle />} label="WhatsApp" badge="em breve" active={view === "whatsapp"} collapsed={collapsed} onClick={() => onView("whatsapp")} />
+      {whatsapp ? <RailButton icon={<MessageCircle />} label="WhatsApp" badge="em breve" active={view === "whatsapp"} collapsed={collapsed} onClick={() => onView("whatsapp")} /> : null}
     </>
   );
 
@@ -636,7 +645,7 @@ function Welcome({
 }: {
   name: string;
   suggestions: Suggestion[];
-  intro: string;
+  intro?: string;
   placeholder: string;
   disabled: boolean;
   draft: string;
@@ -650,9 +659,7 @@ function Welcome({
       <h2 className="mt-4 text-center text-2xl font-semibold tracking-tight md:text-3xl">
         {name ? `Olá, ${name}. Como posso ajudar?` : "Como posso ajudar?"}
       </h2>
-      <p className="mt-1.5 max-w-xl text-center text-sm text-muted-foreground">
-        {intro}
-      </p>
+      {intro ? <p className="mt-1.5 max-w-xl text-center text-sm text-muted-foreground">{intro}</p> : null}
       <div className="mt-7 w-full max-w-[720px]">
         <Composer
           value={draft}
@@ -674,7 +681,7 @@ function Welcome({
             className="rounded-2xl border border-border/80 bg-card px-4 py-3 text-left text-sm transition-colors hover:border-primary/40 hover:bg-primary/[0.03] disabled:opacity-60"
           >
             <span className="block">{suggestion.prompt}</span>
-            <span className="mt-0.5 block text-xs text-muted-foreground">{suggestion.hint}</span>
+            {suggestion.hint ? <span className="mt-0.5 block text-xs text-muted-foreground">{suggestion.hint}</span> : null}
           </button>
         ))}
       </div>
@@ -691,6 +698,7 @@ function Conversation({
   onSend,
   busy,
   attach,
+  aviso,
 }: {
   messages: ChatMessage[];
   loading: boolean;
@@ -700,6 +708,7 @@ function Conversation({
   onSend: (value: string) => void;
   busy: boolean;
   attach?: AttachControls;
+  aviso: string | null;
 }) {
   const viewport = useRef<HTMLDivElement | null>(null);
   const pinned = useRef(true);
@@ -790,9 +799,7 @@ function Conversation({
       <div className="shrink-0 px-4 pb-4 md:px-7">
         <div className="mx-auto w-full max-w-[780px]">
           <Composer value={draft} onChange={onDraft} onSend={onSend} disabled={busy} placeholder="Responder…" attach={attach} />
-          <p className="mt-2 text-center text-xs text-muted-foreground">
-            O Agent Dute monta pedidos para você conferir; quem envia é você. Confira as informações importantes.
-          </p>
+          {aviso ? <p className="mt-2 text-center text-xs text-muted-foreground">{aviso}</p> : null}
         </div>
       </div>
     </>

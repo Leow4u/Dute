@@ -91,13 +91,21 @@ describe("navegação do cadastro da Operação", () => {
     // O Início é a casa: rota exata, para não acender nas outras telas.
     expect(menuDoOperacao("interno", true)[0].routes[0].exact).toBe(true);
     expect(menuDoOperacao("campo", true)).toEqual([]);
+    // O Agent Dute (parte 5.5j): só com a liberação dele, por último.
+    expect(menuDoOperacao("interno", true, false).some((item) => item.label === "Agent Dute")).toBe(false);
+    expect(menuDoOperacao("interno", true, true).at(-1)).toMatchObject({ id: "operacao-agente", label: "Agent Dute", href: "/operacao/agente" });
+    expect(menuDoOperacao("campo", true, true)).toEqual([]);
     expect(getRouteProfileRoles(ROTA_VEICULOS)).toEqual(["owner", "admin", "interno"]);
   });
 
   it("toda rota da Operação no App passa pela liberação", () => {
     const blocos = Array.from(APP_SOURCE.matchAll(/soComOperacaoLiberada\(\[([\s\S]*?)\]\)/g), ([, bloco]) => bloco);
     expect(blocos).toHaveLength(1);
-    expect(caminhos(blocos[0])).toEqual(rotasDaOperacao(LIBERADO));
+    expect(caminhos(blocos[0])).toEqual(rotasDaOperacao(LIBERADO, true));
+    // O Agent Dute da Operação (parte 5.5j) só com a liberação dele.
+    expect(rotasDaOperacao(LIBERADO, false)).not.toContain("/operacao/agente");
+    expect(rotasDaOperacao(LIBERADO, true).at(-1)).toBe("/operacao/agente");
+    expect(soComOperacaoLiberada([{ path: "/operacao/agente" }], LIBERADO, false)).toEqual([]);
     const fora = APP_SOURCE.replace(/soComOperacaoLiberada\(\[[\s\S]*?\]\)/g, "");
     expect(caminhos(fora).filter((path) => path.startsWith("/operacao"))).toEqual([]);
     expect(soComOperacaoLiberada([{ path: ROTA_COLABORADORES }, { path: "/operacao/outra" }], DESLIGADO)).toEqual([]);

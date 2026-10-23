@@ -33,6 +33,7 @@ import {
 
 import { PAPEIS, isPapel, type Papel } from "@workspace/dominio";
 
+import { ROTA_AGENTE_DA_OPERACAO, ROTA_AGENTE_DO_COMERCIAL, ROTA_AGENTE_DO_FINANCEIRO } from "./agente/navegacao";
 import {
   COMERCIAL_ROLES,
   ROTA_AUTORIZACOES,
@@ -59,7 +60,7 @@ import {
   ROTA_VENCIDOS,
   abreFinanceiro,
 } from "./financeiro/navegacao";
-import { COMERCIAL_LIBERADO, FINANCEIRO_LIBERADO, OPERACAO_LIBERADO } from "./liberacao";
+import { AGENTE_LIBERADO, COMERCIAL_LIBERADO, FINANCEIRO_LIBERADO, OPERACAO_LIBERADO } from "./liberacao";
 import {
   OPERACAO_CADASTRO_ROLES,
   ROTA_COLABORADORES,
@@ -172,6 +173,8 @@ export type ModuleRoute = {
   exact?: boolean;
   /** Telas fora do menu que acendem este item (a montagem do orçamento acende Orçamentos). */
   tambem?: readonly string[];
+  /** Só com a liberação do Agent Dute do núcleo (parte 5.5j): fora dela, o item não existe no menu. */
+  liberacao?: "agente";
 };
 
 export type AppModule = {
@@ -432,6 +435,14 @@ export const APP_MODULES: AppModule[] = [
         icon: BarChart3,
         roles: FINANCE_ROLES,
       }),
+      navRoute({
+        id: "financeiro-agente",
+        label: "Agent Dute",
+        href: ROTA_AGENTE_DO_FINANCEIRO,
+        icon: Sparkles,
+        roles: FINANCE_ROLES,
+        liberacao: "agente",
+      }),
     ],
   }),
   // Comercial (docs/plataforma/fase-6-comercial.md). As rotas e os papéis
@@ -491,6 +502,14 @@ export const APP_MODULES: AppModule[] = [
         href: ROTA_MEDICOES,
         icon: CalendarRange,
         roles: COMMERCIAL_ROLES,
+      }),
+      navRoute({
+        id: "comercial-agente",
+        label: "Agent Dute",
+        href: ROTA_AGENTE_DO_COMERCIAL,
+        icon: Sparkles,
+        roles: COMMERCIAL_ROLES,
+        liberacao: "agente",
       }),
     ],
   }),
@@ -566,6 +585,14 @@ export const APP_MODULES: AppModule[] = [
         href: ROTA_VEICULOS,
         icon: Truck,
         roles: OPERATION_REGISTRY_ROLES,
+      }),
+      navRoute({
+        id: "operacao-agente",
+        label: "Agent Dute",
+        href: ROTA_AGENTE_DA_OPERACAO,
+        icon: Sparkles,
+        roles: OPERATION_REGISTRY_ROLES,
+        liberacao: "agente",
       }),
     ],
   }),
@@ -976,6 +1003,7 @@ function navigationForAmbiente(
   comercial: boolean,
   operacao: boolean = OPERACAO_LIBERADO,
   financeiro: boolean = FINANCEIRO_LIBERADO,
+  agente: boolean = AGENTE_LIBERADO,
 ): AppModule[] {
   const appRole = appRoleForProfile(role) ?? "interno";
   const portalModules = appRole === "cliente" ? portalModulesFor(operation) : null;
@@ -992,7 +1020,7 @@ function navigationForAmbiente(
   )
     .map((module) => {
       const routes = module.routes.filter((route) =>
-        canAccessModule(role, route.roles),
+        canAccessModule(role, route.roles) && (route.liberacao !== "agente" || agente),
       );
       // Um grupo que o papel reduziu a uma tela só vira o link dessa tela:
       // o operador WMS vê "Documentos", não um "Mais" com um item dentro.
@@ -1043,8 +1071,9 @@ const VOLTA_AO_FINANCEIRO: AppModule = appModule({
 export function menuDoComercial(
   role: ProfileRole | null | undefined,
   comercial: boolean = COMERCIAL_LIBERADO,
+  agente: boolean = AGENTE_LIBERADO,
 ): AppModule[] {
-  const [grupo] = navigationForAmbiente("comercial", role, null, comercial);
+  const [grupo] = navigationForAmbiente("comercial", role, null, comercial, OPERACAO_LIBERADO, FINANCEIRO_LIBERADO, agente);
   if (!grupo) return [];
   return grupo.routes.flatMap((route) => {
     if (!route.href) return [];
@@ -1068,8 +1097,9 @@ export function menuDoComercial(
 export function menuDoOperacao(
   role: ProfileRole | null | undefined,
   operacao: boolean = OPERACAO_LIBERADO,
+  agente: boolean = AGENTE_LIBERADO,
 ): AppModule[] {
-  const [grupo] = navigationForAmbiente("operacao", role, null, false, operacao);
+  const [grupo] = navigationForAmbiente("operacao", role, null, false, operacao, FINANCEIRO_LIBERADO, agente);
   if (!grupo) return [];
   return grupo.routes.flatMap((route) => {
     if (!route.href) return [];
@@ -1097,8 +1127,9 @@ export function menuDoOperacao(
 export function menuDoFinanceiro(
   role: ProfileRole | null | undefined,
   financeiro: boolean = FINANCEIRO_LIBERADO,
+  agente: boolean = AGENTE_LIBERADO,
 ): AppModule[] {
-  const [grupo] = navigationForAmbiente("financeiro", role, null, false, false, financeiro);
+  const [grupo] = navigationForAmbiente("financeiro", role, null, false, false, financeiro, agente);
   if (!grupo) return [];
   const telas = grupo.routes.flatMap((route) => {
     if (!route.href) return [];
@@ -1117,8 +1148,10 @@ export function menuDoFinanceiro(
     ];
   });
   const armazenagem = navRoute({ id: "financeiro-armazenagem", label: "Armazenagem", href: ROTA_FATURAMENTO_WMS, icon: Boxes, roles: FINANCE_ROLES });
+  // O Agent Dute fica por último, como nos outros módulos (parte 5.5j).
+  const doAgente = telas.filter((tela) => tela.routes[0]?.liberacao === "agente");
   return [
-    ...telas,
+    ...telas.filter((tela) => !doAgente.includes(tela)),
     {
       id: armazenagem.id,
       label: armazenagem.label,
@@ -1130,6 +1163,7 @@ export function menuDoFinanceiro(
       ambiente: "financeiro" as const,
       routes: [armazenagem],
     },
+    ...doAgente,
   ];
 }
 

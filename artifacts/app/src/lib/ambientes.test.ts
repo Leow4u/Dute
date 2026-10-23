@@ -69,6 +69,8 @@ describe("ambiente da rota", () => {
       "/financeiro/faturas",
       "/financeiro/nf",
       "/financeiro/relatorios",
+      // O Agent Dute do Financeiro (parte 5.5j), no shell dele.
+      "/financeiro/agente",
     ]);
     for (const path of caminhos) {
       const esperado = path.startsWith("/financeiro")

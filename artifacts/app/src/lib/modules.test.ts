@@ -107,6 +107,8 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/comercial/contratos", ["owner", "admin", "comercial"]],
   ["/comercial/autorizacoes", ["owner", "admin", "comercial"]],
   ["/comercial/medicoes", ["owner", "admin", "comercial"]],
+  // O Agent Dute de cada módulo (parte 5.5j): quem abre o módulo.
+  ["/comercial/agente", ["owner", "admin", "comercial"]],
   // Operação, parte 1: cadastro, só com a liberação (lib/operacao/navegacao.ts).
   ["/operacao", ["owner", "admin", "interno"]],
   ["/operacao/hoje", ["owner", "admin", "interno"]],
@@ -126,6 +128,7 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/tv", ["painel", "owner", "admin", "interno"]],
   ["/operacao/colaboradores", ["owner", "admin", "interno"]],
   ["/operacao/veiculos", ["owner", "admin", "interno"]],
+  ["/operacao/agente", ["owner", "admin", "interno"]],
   // Financeiro da demanda (parte 4.1b): só com a liberação (lib/financeiro/navegacao.ts).
   ["/financeiro", ["owner", "admin", "financeiro"]],
   ["/financeiro/a-faturar", ["owner", "admin", "financeiro"]],
@@ -135,6 +138,7 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/financeiro/pagos", ["owner", "admin", "financeiro"]],
   ["/financeiro/faturas", ["owner", "admin", "financeiro"]],
   ["/financeiro/relatorios", ["owner", "admin", "financeiro"]],
+  ["/financeiro/agente", ["owner", "admin", "financeiro"]],
   // A via comercial da NF (parte 4.2d).
   ["/financeiro/nf", ["owner", "admin", "financeiro"]],
   // As OS do cliente no portal (parte 4.3b).

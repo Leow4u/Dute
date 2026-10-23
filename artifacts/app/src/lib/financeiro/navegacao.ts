@@ -1,6 +1,7 @@
 import type { Papel } from "@workspace/dominio";
 
-import { FINANCEIRO_LIBERADO } from "../liberacao";
+import { rotaDoAgenteNoModulo } from "../agente/navegacao";
+import { AGENTE_LIBERADO, FINANCEIRO_LIBERADO } from "../liberacao";
 
 /**
  * Navegação do Financeiro no app (docs/plataforma/fase-4-financeiro.md): o
@@ -57,12 +58,13 @@ export function nfDaBusca(busca: string): string | null {
   return ID_DA_NF.test(id) ? id : null;
 }
 
-export function rotasDoFinanceiro(liberado: boolean = FINANCEIRO_LIBERADO): string[] {
-  return liberado ? [...TELAS_DO_FINANCEIRO] : [];
+/** O Agent Dute do Financeiro entra só com a liberação dele (parte 5.5j). */
+export function rotasDoFinanceiro(liberado: boolean = FINANCEIRO_LIBERADO, agente: boolean = AGENTE_LIBERADO): string[] {
+  return liberado ? [...TELAS_DO_FINANCEIRO, ...rotaDoAgenteNoModulo("financeiro", agente)] : [];
 }
 
-export function soComFinanceiroLiberado<T extends { path: string }>(rotas: readonly T[], liberado: boolean = FINANCEIRO_LIBERADO): T[] {
-  const permitidas = rotasDoFinanceiro(liberado);
+export function soComFinanceiroLiberado<T extends { path: string }>(rotas: readonly T[], liberado: boolean = FINANCEIRO_LIBERADO, agente: boolean = AGENTE_LIBERADO): T[] {
+  const permitidas = rotasDoFinanceiro(liberado, agente);
   return rotas.filter((rota) => permitidas.includes(rota.path));
 }
 

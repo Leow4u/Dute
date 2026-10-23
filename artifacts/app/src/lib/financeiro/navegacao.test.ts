@@ -76,6 +76,12 @@ describe("navegação do Financeiro", () => {
     // O Início é a casa: rota exata, para não acender nas outras telas.
     expect(menuDoFinanceiro("financeiro", LIBERADO)[0].routes[0].exact).toBe(true);
     expect(menuDoFinanceiro("owner", LIBERADO)).toHaveLength(8);
+    // O Agent Dute (parte 5.5j): só com a liberação dele, por último, depois da Armazenagem.
+    expect(menuDoFinanceiro("financeiro", LIBERADO, false).some((item) => item.label === "Agent Dute")).toBe(false);
+    expect(menuDoFinanceiro("financeiro", LIBERADO, true).slice(-2).map((item) => [item.label, item.href])).toEqual([
+      ["Armazenagem", "/faturamento"],
+      ["Agent Dute", "/financeiro/agente"],
+    ]);
     for (const role of ["interno", "comercial", "campo", "cliente"] as const) expect(menuDoFinanceiro(role, LIBERADO), role).toEqual([]);
     expect(menuDoFinanceiro("financeiro", DESLIGADO)).toEqual([]);
     for (const item of menuDoFinanceiro("financeiro", LIBERADO)) expect(getRouteProfileRoles(item.href!), item.href).toEqual(["owner", "admin", "financeiro"]);
@@ -110,10 +116,13 @@ describe("navegação do Financeiro", () => {
   it("toda rota do Financeiro no App passa pela liberação", () => {
     const blocos = Array.from(APP_SOURCE.matchAll(/soComFinanceiroLiberado\(\[([\s\S]*?)\]\)/g), ([, bloco]) => bloco);
     expect(blocos).toHaveLength(1);
-    expect(caminhos(blocos[0])).toEqual(rotasDoFinanceiro(LIBERADO));
+    expect(caminhos(blocos[0])).toEqual(rotasDoFinanceiro(LIBERADO, true));
     const fora = APP_SOURCE.replace(/soComFinanceiroLiberado\(\[[\s\S]*?\]\)/g, "");
     expect(caminhos(fora).filter((path) => path.startsWith("/financeiro"))).toEqual([]);
-    expect(rotasDoFinanceiro(LIBERADO)).toEqual([ROTA_FINANCEIRO, ROTA_A_FATURAR, ROTA_A_RECEBER, ROTA_VENCIDOS, ROTA_PAGOS, ROTA_FATURAS, ROTA_NF, ROTA_RELATORIOS_DO_FINANCEIRO]);
+    expect(rotasDoFinanceiro(LIBERADO, false)).toEqual([ROTA_FINANCEIRO, ROTA_A_FATURAR, ROTA_A_RECEBER, ROTA_VENCIDOS, ROTA_PAGOS, ROTA_FATURAS, ROTA_NF, ROTA_RELATORIOS_DO_FINANCEIRO]);
+    // O Agent Dute do Financeiro (parte 5.5j) só com a liberação dele.
+    expect(rotasDoFinanceiro(LIBERADO, true).at(-1)).toBe("/financeiro/agente");
+    expect(soComFinanceiroLiberado([{ path: "/financeiro/agente" }], LIBERADO, false)).toEqual([]);
     expect(rotasDoFinanceiro(DESLIGADO)).toEqual([]);
     expect(soComFinanceiroLiberado([{ path: ROTA_FINANCEIRO }, { path: "/financeiro/outra" }], LIBERADO).map((rota) => rota.path)).toEqual([ROTA_FINANCEIRO]);
     expect(soComFinanceiroLiberado([{ path: ROTA_FINANCEIRO }], DESLIGADO)).toEqual([]);

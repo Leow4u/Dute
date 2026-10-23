@@ -88,8 +88,20 @@ describe("rotas do Comercial", () => {
     ]);
   });
 
-  it("o App registra exatamente as rotas do Comercial: o Início, a fila, a montagem, o documento, a aprovação e as outras telas", () => {
-    expect(APP_PATHS.filter(doComercial)).toEqual(rotasDoComercial(LIBERADO));
+  it("o App registra exatamente as rotas do Comercial: o Início, a fila, a montagem, o documento, a aprovação, as outras telas e o Agent Dute", () => {
+    expect(APP_PATHS.filter(doComercial)).toEqual(rotasDoComercial(LIBERADO, true));
+  });
+
+  it("o Agent Dute do Comercial (parte 5.5j) só existe com a liberação dele, por último no menu", () => {
+    expect(rotasDoComercial(LIBERADO, false)).not.toContain("/comercial/agente");
+    expect(rotasDoComercial(LIBERADO, true).at(-1)).toBe("/comercial/agente");
+    expect(rotasDoComercial(DESLIGADO, true)).toEqual([]);
+    expect(soComComercialLiberado([{ path: "/comercial/agente" }], LIBERADO, false)).toEqual([]);
+    for (const role of QUEM_ABRE) {
+      expect(menuDoComercial(role, LIBERADO, false).map((item) => item.label)).toEqual(TELAS_DO_MENU);
+      expect(menuDoComercial(role, LIBERADO, true).map((item) => [item.id, item.label, item.href])).toContainEqual(["comercial-agente", "Agent Dute", "/comercial/agente"]);
+      expect(menuDoComercial(role, LIBERADO, true).at(-1)?.label).toBe("Agent Dute");
+    }
   });
 
   it("o App desenha o Comercial no shell dele, e o WMS no shell de hoje", () => {
@@ -101,7 +113,7 @@ describe("rotas do Comercial", () => {
   it("toda rota do Comercial no App passa pela liberação: nenhuma fora de soComComercialLiberado", () => {
     const blocos = Array.from(APP_SOURCE.matchAll(/soComComercialLiberado\(\[([\s\S]*?)\]\)/g), ([, bloco]) => bloco);
     expect(blocos).toHaveLength(1);
-    expect(caminhos(blocos[0])).toEqual(rotasDoComercial(LIBERADO));
+    expect(caminhos(blocos[0])).toEqual(rotasDoComercial(LIBERADO, true));
     const fora = APP_SOURCE.replace(/soComComercialLiberado\(\[[\s\S]*?\]\)/g, "");
     expect(caminhos(fora).filter(doComercial)).toEqual([]);
   });

@@ -1,3 +1,5 @@
+import { estagioDoCadastro } from "@workspace/dominio";
+
 import {
   LEGACY_CUSTOMER_CODE,
   resolveOperationProfile,
@@ -84,6 +86,17 @@ export function activeCustomerOptions(
     });
   }
   return [...byCode.values()].sort((left, right) => left.name.localeCompare(right.name, "pt-BR"));
+}
+
+/**
+ * As opções do comercial, que não lê `client_profiles` (parte 5.5j): o
+ * cadastro de clientes, sem os prospects. É o cliente do Agent Dute do
+ * Comercial, e o servidor confere de novo.
+ */
+export function commercialCustomerOptions(
+  records: Array<CustomerProfileRecord & { id?: string; stage?: unknown }> | null | undefined,
+): ActiveCustomerOption[] {
+  return activeCustomerOptions((records ?? []).filter((record) => estagioDoCadastro(record.stage) !== "prospect"));
 }
 
 /** O guardado neste aparelho, se ainda existir; senão o legado; senão o primeiro. */
