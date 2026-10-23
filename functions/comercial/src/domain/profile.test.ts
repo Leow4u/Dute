@@ -5,7 +5,7 @@ import type { Firestore } from "firebase-admin/firestore";
 import { HttpsError, type CallableRequest } from "firebase-functions/https";
 
 import { PLATFORM_ROLES } from "./platform-roles.js";
-import { comercialStatusFor, getProfile, requireComercialCaller } from "./profile.js";
+import { comercialStatusDaChamada, comercialStatusFor, getProfile, requireComercialCaller } from "./profile.js";
 
 /** Banco que falha se for lido: prova que a recusa vem antes de qualquer leitura. */
 const untouchedDb = new Proxy({} as Firestore, {
@@ -62,6 +62,25 @@ describe("comercialStatus: o que o app recebe", () => {
         assert.deepEqual(comercialStatusFor(projectId, role), { liberado: false, papel: role, pode_aprovar: false }, `${projectId} ${role}`);
       }
     }
+  });
+});
+
+describe("comercialStatus da chamada (parte 6.22)", () => {
+  it("fora da liberação responde sem ler o perfil", async () => {
+    let leu = false;
+    const lerPapel = async () => {
+      leu = true;
+      return "owner" as const;
+    };
+    for (const projectId of ["dute-btg", ""]) {
+      assert.deepEqual(await comercialStatusDaChamada(projectId, lerPapel), { liberado: false, papel: null, pode_aprovar: false });
+    }
+    assert.equal(leu, false);
+  });
+
+  it("dentro da liberação lê o papel de quem chama", async () => {
+    assert.deepEqual(await comercialStatusDaChamada("dute-homolog", async () => "owner"), { liberado: true, papel: "owner", pode_aprovar: true });
+    assert.deepEqual(await comercialStatusDaChamada("dute-prod", async () => "wms"), { liberado: false, papel: "wms", pode_aprovar: false });
   });
 });
 

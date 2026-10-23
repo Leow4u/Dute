@@ -30,8 +30,8 @@ const CONTATOS = [
 const AGORA = new Date("2026-10-21T15:00:00.000Z");
 const noop = () => undefined;
 
-function form(acao: AcaoDepoisDoEnvio, parcial: Partial<FormDoDialogo> = {}, etapa = "aguardando_cliente" as const): FormDoDialogo {
-  return { ...formInicialDoDialogo(acao, { agora: AGORA, contatoId: "ct_marina", contatos: CONTATOS, etapa }), ...parcial };
+function form(acao: AcaoDepoisDoEnvio, parcial: Partial<FormDoDialogo> = {}, comprometida = false): FormDoDialogo {
+  return { ...formInicialDoDialogo(acao, { agora: AGORA, contatoId: "ct_marina", contatos: CONTATOS, comprometida }), ...parcial };
 }
 
 function corpo(acao: AcaoDepoisDoEnvio, f: FormDoDialogo, extra: Partial<Parameters<typeof CorpoDoDialogo>[0]> = {}) {
@@ -52,7 +52,7 @@ function corpo(acao: AcaoDepoisDoEnvio, f: FormDoDialogo, extra: Partial<Paramet
       onForm={noop}
       problemas={{}}
       contatos={CONTATOS}
-      motivosDePerda={motivosDePerdaPermitidos("aguardando_cliente")}
+      motivosDePerda={motivosDePerdaPermitidos(false)}
       hoje="2026-10-21"
       desabilitado={false}
       {...extra}
@@ -93,7 +93,7 @@ describe("diálogo da resposta do cliente (Fechado, Validado, Recusar aditivo)",
 
   it("mostra o problema de cada campo, com alerta, e marca o campo", () => {
     const f = form("fechar", { em: "", contatoId: "", link: "outlook" });
-    const problemas = problemasDoDialogo("fechar", f, { agora: AGORA, hoje: "2026-10-21", envioEm: null, contatos: CONTATOS, etapa: "aguardando_cliente" });
+    const problemas = problemasDoDialogo("fechar", f, { agora: AGORA, hoje: "2026-10-21", envioEm: null, contatos: CONTATOS, comprometida: false });
     const html = corpo("fechar", f, { problemas });
     expect(texts(html)).toEqual(
       expect.arrayContaining(["Informe quando o cliente respondeu.", "Escolha o contato do cliente.", "Informe o link que começa com https://."]),
@@ -122,14 +122,14 @@ describe("diálogo de Perdido", () => {
   });
 
   it("depois do fechamento só tem o cancelamento pelo cliente, já escolhido, sem a opção vazia", () => {
-    const html = corpo("perder", form("perder", {}, "para_planejar" as never), { motivosDePerda: motivosDePerdaPermitidos("para_planejar") });
+    const html = corpo("perder", form("perder", {}, true), { motivosDePerda: motivosDePerdaPermitidos(true) });
     expect(texts(html)).toEqual(["Motivo", "Cancelado pelo cliente", "Nota"]);
     expect(html).toMatch(/<option value="cancelado_cliente" selected="">/);
   });
 
   it("outro sem nota mostra o que falta", () => {
     const f = form("perder", { motivo: "outro" });
-    const problemas = problemasDoDialogo("perder", f, { agora: AGORA, hoje: "2026-10-21", envioEm: null, contatos: CONTATOS, etapa: "aguardando_cliente" });
+    const problemas = problemasDoDialogo("perder", f, { agora: AGORA, hoje: "2026-10-21", envioEm: null, contatos: CONTATOS, comprometida: false });
     expect(texts(corpo("perder", f, { problemas }))).toContain("Conte o motivo na nota.");
   });
 });

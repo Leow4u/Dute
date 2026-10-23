@@ -255,6 +255,20 @@ Menores:
   `medicao_mensal` entra na medição sem número de demanda.
 - `tools/omie/` solto fora de qualquer PR (não rastreado, sem credencial).
 
+Corrigidos na parte 6.22 do plano de implantação (23/10/2026):
+- A demanda "A faturar" entra na fila, num segmento próprio, com ou sem
+  autorização registrada.
+- O `contrato_id` do contrato novo é sempre gerado no servidor pela callable;
+  só a carga, com credencial de administrador, cria com o id que escolheu
+  (`idNaCriacao`), para rodar de novo sem duplicar.
+- O `comercialStatus` responde fora da liberação sem ler o perfil. Ele não
+  foi removido: a publicação roda `firebase deploy` sem `--force`, que recusa
+  apagar função em modo não interativo.
+- "Perdido" ganhou botão no rascunho e no aprovado ainda não enviado
+  (recomendação da pergunta 10 do plano), com os motivos pela regra do
+  servidor: antes do fechamento, todos; depois, só o cancelamento do cliente.
+  O aditivo em execução a orçar continua sem botão, à espera do uso.
+
 Corrigidos na parte 17: CNPJs reais nos testes do app (agora fictícios);
 trava de projeto igual nas três cargas (`demo-` só com o emulador); a carga de
 tabela recusa CSV dentro do repositório fora de `tmp/` e `.secrets/`; roteiro

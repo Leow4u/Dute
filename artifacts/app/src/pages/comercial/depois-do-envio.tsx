@@ -7,6 +7,7 @@ import { hojeLocal, type ContatoResumo } from "@/lib/comercial/clientes";
 import {
   chaveDoPedido,
   classificarErroDepoisDoEnvio,
+  demandaComprometida,
   pedidoDaAcao,
   type AcaoDepoisDoEnvio,
   type PedidoDaAcao,
@@ -91,7 +92,7 @@ export function useDepoisDoEnvio(entrada: {
     <DialogoDepoisDoEnvio
       acao={aberta?.acao ?? null}
       rotulo={aberta?.item.rotulo ?? ""}
-      etapa={aberta?.item.etapa ?? "em_montagem"}
+      comprometida={aberta ? demandaComprometida(aberta.item) : false}
       contatoId={aberta?.item.contatoId ?? null}
       contatos={contatosDoCliente}
       envioEm={aberta?.item.envio?.em ?? null}

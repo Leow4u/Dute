@@ -80,7 +80,14 @@ export function acoesDepoisDoEnvio(
   if (status !== "enviado") {
     const autor = Boolean(quem.uid) && quem.uid === item.autorUid;
     const descarta = Boolean(item.revisaoDe) && !(status === "para_aprovar" && quem.role !== "owner" && !autor);
-    const secundarias: AcaoDepoisDoEnvio[] = [...(descarta ? (["descartar_rv"] as const) : []), ...registro];
+    // Perdido também no rascunho e no aprovado ainda não enviado (pergunta 10
+    // do plano de implantação, parte 6.22): o servidor já aceitava.
+    const perde = (status === "rascunho" || status === "aprovado") && (ETAPAS_QUE_PERDEM as readonly string[]).includes(etapa);
+    const secundarias: AcaoDepoisDoEnvio[] = [
+      ...(descarta ? (["descartar_rv"] as const) : []),
+      ...registro,
+      ...(perde ? (["perder"] as const) : []),
+    ];
     return secundarias.length ? { principal: null, secundarias } : SEM_ACAO;
   }
 
@@ -140,10 +147,29 @@ export const MOTIVOS_DE_REVISAO: readonly Motivo[] = [
   { valor: "correcao", rotulo: "Correção" },
 ];
 
-/** Depois do fechamento (para planejar em diante) o único motivo de perda é o cancelamento pelo cliente. */
-export function motivosDePerdaPermitidos(etapa: EtapaDemanda): readonly Motivo[] {
-  return etapa === "aguardando_cliente" ? MOTIVOS_DE_PERDA : MOTIVOS_DE_PERDA.filter((motivo) => motivo.valor === "cancelado_cliente");
+/** Depois do fechamento (ou da execução, ou da validação) o único motivo de perda é o cancelamento pelo cliente. */
+export function motivosDePerdaPermitidos(comprometida: boolean): readonly Motivo[] {
+  return comprometida ? MOTIVOS_DE_PERDA.filter((motivo) => motivo.valor === "cancelado_cliente") : MOTIVOS_DE_PERDA;
 }
+
+/**
+ * A demanda já foi fechada, executada ou validada: a perda só vale por
+ * cancelamento do cliente (demandaComprometida em functions/comercial).
+ */
+export function demandaComprometida(item: Pick<ItemDaFila, "escopoRv" | "executada" | "validada">): boolean {
+  return item.escopoRv !== null || item.executada || item.validada;
+}
+
+/** As etapas em que a demanda ainda se perde (ETAPAS_QUE_PERDEM em functions/comercial): antes de faturar. */
+export const ETAPAS_QUE_PERDEM = [
+  "em_montagem",
+  "para_aprovar",
+  "para_enviar",
+  "aguardando_cliente",
+  "para_planejar",
+  "execucao_a_orcar",
+  "aguardando_autorizacao",
+] as const satisfies readonly EtapaDemanda[];
 
 // --- Validação dos diálogos ------------------------------------------------------------------
 
@@ -263,9 +289,9 @@ export type FormDoDialogo = FormDaResposta & { motivo: string; nota: string; de:
  */
 export function formInicialDoDialogo(
   acao: AcaoDepoisDoEnvio,
-  contexto: { agora: Date; contatoId: string | null; contatos: ReadonlyArray<{ id: string }>; etapa: EtapaDemanda },
+  contexto: { agora: Date; contatoId: string | null; contatos: ReadonlyArray<{ id: string }>; comprometida: boolean },
 ): FormDoDialogo {
-  const permitidos = acao === "perder" ? motivosDePerdaPermitidos(contexto.etapa) : [];
+  const permitidos = acao === "perder" ? motivosDePerdaPermitidos(contexto.comprometida) : [];
   return {
     em: dataHoraLocal(contexto.agora.toISOString()),
     contatoId: contexto.contatoId && contexto.contatos.some((contato) => contato.id === contexto.contatoId) ? contexto.contatoId : "",
@@ -281,13 +307,13 @@ export function formInicialDoDialogo(
 export function problemasDoDialogo(
   acao: AcaoDepoisDoEnvio,
   form: FormDoDialogo,
-  contexto: { agora: Date; hoje: string; envioEm: string | null; contatos: ReadonlyArray<{ id: string }>; etapa: EtapaDemanda },
+  contexto: { agora: Date; hoje: string; envioEm: string | null; contatos: ReadonlyArray<{ id: string }>; comprometida: boolean },
 ): Record<string, string> {
   switch (camposDoDialogo(acao)) {
     case "resposta":
       return problemasDaResposta(form, contexto);
     case "perda":
-      return problemasDaPerda(form, motivosDePerdaPermitidos(contexto.etapa));
+      return problemasDaPerda(form, motivosDePerdaPermitidos(contexto.comprometida));
     case "revisao":
       return problemasDaRevisao(form);
     case "execucao":

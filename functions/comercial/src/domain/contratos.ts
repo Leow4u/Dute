@@ -191,7 +191,7 @@ export const SAVE_CONTRACT_INPUT = z
   .object({
     idempotency_key: idempotencyKey,
     acao: z.enum(ACOES_CONTRATO),
-    /** Criar: opcional (sem ele, id automático). Atualizar: obrigatório. */
+    /** Criar: só pela carga (salvarContrato com idNaCriacao); sem ele, id gerado no servidor. Atualizar: obrigatório. */
     contrato_id: idDocumento.optional(),
     /** Atualizar: a edição que a pessoa leu. Muda a cada alteração gravada. */
     edicao: z.number().int().min(1).optional(),
@@ -329,11 +329,24 @@ export type SaveContractResult = {
   events: string[];
 };
 
-/** Cria ou atualiza o contrato (callable saveContract). */
-export async function salvarContrato(db: Firestore, actor: ComercialActor, value: unknown) {
+export type OpcoesDeSalvarContrato = {
+  /**
+   * Só a carga (cargas/contratos.ts, com credencial de administrador) cria
+   * com o id que escolheu, para rodar de novo sem duplicar. Pela callable o
+   * id do contrato novo é sempre gerado no servidor: ele vai nos eventos
+   * (pendência da conferência da parte 17; parte 6.22 do plano).
+   */
+  idNaCriacao?: boolean;
+};
+
+/** Cria ou atualiza o contrato (callable saveContract e carga de contratos). */
+export async function salvarContrato(db: Firestore, actor: ComercialActor, value: unknown, opcoes: OpcoesDeSalvarContrato = {}) {
   const input = parseEntrada(SAVE_CONTRACT_INPUT, value);
   const contrato = input.contrato;
   const criando = input.acao === "criar";
+  if (criando && input.contrato_id && !opcoes.idNaCriacao) {
+    throw new HttpsError("invalid-argument", "O id do contrato novo é gerado no servidor: crie sem contrato_id.");
+  }
   const scope = criando ? { acao: input.acao, customer_code: contrato.customer_code } : { contrato_id: input.contrato_id };
 
   return runIdempotent<SaveContractResult>(

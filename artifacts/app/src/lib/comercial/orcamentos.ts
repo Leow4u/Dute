@@ -41,9 +41,10 @@ export const ORIGENS_LINHA = ["tabela", "alterado", "avulso", "ajuste"] as const
 export type OrigemLinha = (typeof ORIGENS_LINHA)[number];
 
 /**
- * As etapas da fila, na ordem do mockup. "A faturar" e "Cancelada" ficam
- * fora: a demanda já saiu do Comercial (autorização e faturamento têm tela
- * própria).
+ * As etapas da fila, na ordem do mockup, mais "A faturar" (parte 6.22 do plano
+ * de implantação): a demanda a faturar sem autorização registrada (contrato
+ * sem exigência de autorização, sem contrato ou com a medição pendente) não
+ * aparecia em lista nenhuma. "Cancelada" fica fora.
  */
 export const ETAPAS_DA_FILA = [
   "em_montagem",
@@ -53,6 +54,7 @@ export const ETAPAS_DA_FILA = [
   "para_planejar",
   "execucao_a_orcar",
   "aguardando_autorizacao",
+  "a_faturar",
   "perdida",
 ] as const satisfies readonly EtapaDemanda[];
 export type EtapaDaFila = (typeof ETAPAS_DA_FILA)[number];
@@ -84,6 +86,7 @@ export const SEGMENTO_ROTULO: Record<SegmentoDaFila, string> = {
   para_planejar: "Para planejar",
   execucao_a_orcar: "Execução a orçar",
   aguardando_autorizacao: "Aguardando autorização",
+  a_faturar: "A faturar",
   perdida: "Perdidas",
 };
 

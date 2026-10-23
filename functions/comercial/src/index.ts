@@ -8,7 +8,7 @@ import { saveCommercialCustomerFor, saveCustomerContactFor, saveCustomerLocation
 import { registrarAditivo, salvarContrato } from "./domain/contratos.js";
 import { advanceDemandFor } from "./domain/demandas.js";
 import { advanceMedicaoFor, saveMedicaoFor } from "./domain/medicoes.js";
-import { assertAuth, comercialStatusFor, loadProfile, requireComercialCaller } from "./domain/profile.js";
+import { assertAuth, comercialStatusDaChamada, loadProfile, requireComercialCaller } from "./domain/profile.js";
 import { advanceQuoteFor, saveQuoteFor } from "./domain/quotes.js";
 import { PROJECT_ID } from "./project.js";
 
@@ -41,13 +41,13 @@ const db = getFirestore();
 
 /**
  * Se o Comercial aparece para quem chama: ambiente liberado e papel do
- * Comercial. Só lê o perfil da própria pessoa; é a única callable que
- * responde fora da liberação (com `liberado: false`).
+ * Comercial. É a única callable que responde fora da liberação (com
+ * `liberado: false`), e aí sem ler nada; dentro dela, lê só o perfil da
+ * própria pessoa.
  */
 export const comercialStatus = onCall(async (request) => {
   const auth = assertAuth(request);
-  const profile = await loadProfile(db, auth.uid, auth.token.email, auth.token.name);
-  return comercialStatusFor(PROJECT_ID, profile.role);
+  return comercialStatusDaChamada(PROJECT_ID, async () => (await loadProfile(db, auth.uid, auth.token.email, auth.token.name)).role);
 });
 
 // --- Cadastro comercial (parte 6; domain/cadastro.ts) -------------------------

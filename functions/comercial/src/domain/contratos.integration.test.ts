@@ -74,8 +74,9 @@ function contrato(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/** Cria com o id escolhido, como a carga de contratos (a callable não aceita id na criação). */
 async function criar(id: string, overrides: Record<string, unknown> = {}, key = `criar-${id}`) {
-  return salvarContrato(db, equipe, { idempotency_key: key, acao: "criar", contrato_id: id, contrato: contrato(overrides) });
+  return salvarContrato(db, equipe, { idempotency_key: key, acao: "criar", contrato_id: id, contrato: contrato(overrides) }, { idNaCriacao: true });
 }
 
 async function rejection(promise: Promise<unknown>): Promise<HttpsError> {
@@ -131,6 +132,15 @@ describe("saveContract", () => {
     assert.deepEqual(event.payload, { contrato_id: "ct-a", regime: "por_demanda", vigente_de: "2026-07-01", vigente_ate: "2027-06-30" });
     assert.equal(JSON.stringify(event).includes(NUMERO_NO_CLIENTE), false, "o evento não leva o número do cliente");
     assert.equal(await count(COMERCIAL_OPERATIONS_COLLECTION), 1);
+  });
+
+  it("pela callable, o contrato novo não aceita id: o servidor gera (parte 6.22)", async () => {
+    const error = await rejection(
+      salvarContrato(db, equipe, { idempotency_key: "com-id", acao: "criar", contrato_id: "cliente-a-2026", contrato: contrato() }),
+    );
+    assert.equal(error.code, "invalid-argument");
+    assert.match(error.message, /gerado no servidor/);
+    assert.equal((await db.collection("contracts").doc("cliente-a-2026").get()).exists, false);
   });
 
   it("sem id, o contrato ganha id automático", async () => {

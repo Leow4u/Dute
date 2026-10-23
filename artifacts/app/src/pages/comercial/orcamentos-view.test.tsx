@@ -199,6 +199,8 @@ const CABECALHO = [
   "0",
   "Aguardando autorização",
   "0",
+  "A faturar",
+  "0",
   "Perdidas",
   "0",
 ];
@@ -445,9 +447,9 @@ describe("a ficha depois do envio (parte 12b)", () => {
 
   it("rascunho de RV seguinte: Descartar RV e Continuar montagem; a RV de execução em rascunho também continua a montagem", () => {
     const seguinte = item("10048", { etapa: "em_montagem" }, { rv: 1, revisao_de: { rv: 0, edicao: 3, motivo: "correcao" } });
-    expect(texts(comAcoes(seguinte)).slice(-3)).toEqual(["Descartar RV", "Continuar montagem", "Prévia do PDF"]);
+    expect(texts(comAcoes(seguinte)).slice(-4)).toEqual(["Descartar RV", "Perdido", "Continuar montagem", "Prévia do PDF"]);
     const execucao = item("10049", { etapa: "execucao_a_orcar" }, { rv: 2, tipo_rv: "execucao", revisao_de: { rv: 1, edicao: 5, motivo: "execucao" } });
-    expect(texts(comAcoes(execucao)).slice(-3)).toEqual(["Descartar RV", "Continuar montagem", "Prévia do PDF"]);
+    expect(texts(comAcoes(execucao)).slice(-4)).toEqual(["Descartar RV", "Perdido", "Continuar montagem", "Prévia do PDF"]);
   });
 
   it("nenhum botão da etapa é a ação principal da tela: só Novo orçamento é", () => {
