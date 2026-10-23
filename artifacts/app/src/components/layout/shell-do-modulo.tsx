@@ -5,6 +5,7 @@ import { ChevronDown, WifiOff, type LucideIcon } from "lucide-react";
 import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { SeletorDeModulo } from "@/components/layout/seletor-de-modulo";
 import { isModuleGroup, isNavRouteActive, type AppModule } from "@/lib/modules";
+import { NaV3 } from "@/lib/na-v3";
 import type { ContadorDoItem } from "@/lib/resumo-do-modulo";
 import type { OpcaoDeModulo } from "@/lib/seletor-de-modulo";
 import { cn } from "@/lib/utils";
@@ -221,7 +222,10 @@ export function ShellDoModulo({
         )}
         <main className="min-h-0 flex-1 overflow-auto overscroll-contain">
           {/* No WMS a tela ocupa a altura (o chat do Agent Dute, as filas). */}
-          <div className={cn("mx-auto w-full max-w-[1600px] p-4 md:p-8 lg:px-11 lg:py-9", ambiente === "wms" && "h-full")}>{children}</div>
+          <div className={cn("mx-auto w-full max-w-[1600px] p-4 md:p-8 lg:px-11 lg:py-9", ambiente === "wms" && "h-full")}>
+            {/* O que a tela abre em portal (diálogo, painel, menu) leva o .v3 junto. */}
+            <NaV3.Provider value={conteudoV3}>{children}</NaV3.Provider>
+          </div>
         </main>
         <div className={cn("contents", !conteudoV3 && "v3")}>
           <MobileTabBar activeModuleId={aberto?.id ?? null} modules={items} variante="v3" />

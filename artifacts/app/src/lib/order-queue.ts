@@ -93,12 +93,21 @@ export function buildOrderQueue<R extends QueueRequest>({
   };
 }
 
+/** O grupo vazio diz o dado, sem ensinar o fluxo (sem legenda, parte 4.7c). */
 export function ordersGroupEmpty(group: "approve" | "pick" | "deliver") {
-  if (group === "approve") {
-    return "O pedido nasce no portal do cliente. Quando ele enviar, a aprovação aparece aqui.";
-  }
-  if (group === "pick") {
-    return "Nada para separar. A separação começa depois que a coordenação aprova o pedido.";
-  }
-  return "Nenhum pedido esperando entrega.";
+  if (group === "approve") return "Nenhum pedido para aprovar.";
+  if (group === "pick") return "Nenhum pedido para separar.";
+  return "Nenhum pedido para entregar.";
+}
+
+/**
+ * A linha da ação principal da tela (v3, parte 4.7c): a primeira da fila, na
+ * ordem aprovar (para quem decide), separar e entregar. As outras ações da
+ * fila são secundárias. "approve:<id>", "pick:<pedido>" ou "deliver:<pedido>".
+ */
+export function chaveDaPrincipal<R extends QueueRequest>(queue: Pick<OrderQueue<R>, "approve" | "pick" | "deliver">, decider: boolean): string | null {
+  if (decider && queue.approve[0]) return `approve:${queue.approve[0].id}`;
+  if (queue.pick[0]) return `pick:${queue.pick[0].key}`;
+  if (queue.deliver[0]) return `deliver:${queue.deliver[0].key}`;
+  return null;
 }
