@@ -45,6 +45,7 @@ import {
   ROTA_DEMANDA,
   ROTA_DEMANDAS,
   ROTA_HOJE,
+  ROTA_NOVA_DEMANDA,
   ROTA_OPERACAO,
   ROTA_VEICULOS,
   abreOperacao,
@@ -432,7 +433,7 @@ export const APP_MODULES: AppModule[] = [
         href: ROTA_DEMANDAS,
         icon: ClipboardList,
         roles: OPERATION_REGISTRY_ROLES,
-        tambem: [ROTA_DEMANDA],
+        tambem: [ROTA_DEMANDA, ROTA_NOVA_DEMANDA],
       }),
       navRoute({
         id: "operacao-colaboradores",
@@ -708,8 +709,9 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   // O documento A4 do orçamento (prévia e PDF) e a aprovação, que é só do owner.
   { path: ROTA_DOCUMENTO, roles: COMMERCIAL_ROLES },
   { path: ROTA_APROVAR, roles: [...APROVADOR_ROLES] },
-  // A ficha da demanda na Operação, aberta pela lista (?numero=).
+  // A ficha da demanda na Operação, aberta pela lista (?numero=), e a nova demanda direta.
   { path: ROTA_DEMANDA, roles: OPERATION_REGISTRY_ROLES },
+  { path: ROTA_NOVA_DEMANDA, roles: OPERATION_REGISTRY_ROLES },
 ];
 
 const MERGED_SCREEN_APP_ROLES = Object.fromEntries(

@@ -152,6 +152,7 @@ describe("Hoje", () => {
       "Hoje",
       "Sexta, 23 de outubro · 2 OS · 1 demanda para planejar",
       "Buscar OS, demanda ou cliente",
+      "Nova demanda",
       "Tipo",
       "Entrada",
       "Cliente",

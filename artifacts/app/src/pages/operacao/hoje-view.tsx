@@ -1,6 +1,6 @@
 import { useId, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "wouter";
-import { ChevronDown, Clock, MapPin, Search, Truck, UserPlus } from "lucide-react";
+import { ChevronDown, Clock, MapPin, Plus, Search, Truck, UserPlus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,7 @@ import {
   type QuadroDoHoje,
 } from "@/lib/operacao/hoje";
 import { Avatar, Filtro, SeloDoTipo, Servicos, selo, seloAlerta, type OpcaoDeFiltro } from "@/components/operacao/partes";
-import { hrefDaDemanda } from "@/lib/operacao/navegacao";
+import { ROTA_NOVA_DEMANDA, hrefDaDemanda } from "@/lib/operacao/navegacao";
 import { cn } from "@/lib/utils";
 
 /**
@@ -374,17 +374,25 @@ export function HojeView({
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Hoje</h1>
           {estado === "pronto" ? <p className="text-sm font-medium text-muted-foreground">{resumo}</p> : null}
         </div>
-        <label className="relative block w-full lg:w-80">
-          <span className="sr-only">Buscar OS, demanda ou cliente</span>
-          <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="search"
-            value={busca}
-            placeholder="Buscar OS, demanda ou cliente"
-            className="pl-9"
-            onChange={(event) => onBusca(event.target.value)}
-          />
-        </label>
+        <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
+          <label className="relative block w-full lg:w-80">
+            <span className="sr-only">Buscar OS, demanda ou cliente</span>
+            <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              value={busca}
+              placeholder="Buscar OS, demanda ou cliente"
+              className="pl-9"
+              onChange={(event) => onBusca(event.target.value)}
+            />
+          </label>
+          <Button asChild className="shrink-0">
+            <Link href={ROTA_NOVA_DEMANDA}>
+              <Plus aria-hidden="true" className="size-4" />
+              Nova demanda
+            </Link>
+          </Button>
+        </div>
       </header>
 
       <div className="flex flex-wrap items-center gap-2">

@@ -488,3 +488,26 @@ Demandas entrou no menu da Operação, depois do Hoje.
   revisão e faturamento), as pessoas e o histórico da ficha aprovada entram
   com a revisão (parte 3.10), quando os marcos da execução existirem. A
   coluna Executado do escopo entra na parte 3.7.
+
+### Parte 3.5c: Nova demanda direta
+
+Feita em 23/10/2026, no desenho aprovado `OpDemandaNova`, em
+`/operacao/nova-demanda`. O botão Nova demanda entrou no Hoje e em Demandas.
+
+- **Pedido.** Cliente, título, quem pediu (nome e telefone), canal
+  (telefone, WhatsApp, e-mail, portal), recebida em e executar até (data e
+  hora, no fuso de São Paulo). O tipo sai da hora na hora, com a mesma regra
+  da callable (o teste trava as 48 horas e os canais contra
+  `functions/operacao`); "Corrigir" escolhe outro, e só a correção vai à
+  callable.
+- **Locais.** Origem e destino entre os locais do cliente, com andar ou sala.
+- **Itens.** A busca no catálogo (só item ativo e orçável, sem preço) inclui
+  a linha; "Item avulso" abre nome, unidade e quantidade. A vírgula da
+  quantidade vira ponto.
+- **Resumo.** O tipo, o cliente, quem pediu, o canal, a recebida, o prazo
+  ("Hoje até 19:00 · faltam 5h54") e quantos itens. "Abrir demanda" confere
+  antes e diz o que falta; aberta, a tela vai para a ficha da demanda nova.
+- **Ainda não.** "Escalar agora", da tela aprovada, fica para a tela de
+  Planejar OS (parte 3.6): por enquanto a ficha abre a OS com o saldo e o
+  Hoje escala. A entrada "Pelo comercial" não é da Operação: o Comercial abre
+  a demanda dele.
