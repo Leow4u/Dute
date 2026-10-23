@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { collection } from "firebase/firestore";
+import { useSearch } from "wouter";
 
 import {
   colaboradorDaLeitura,
@@ -10,6 +11,7 @@ import {
 } from "@/lib/operacao/cadastro";
 import { chamarOperacao, mensagemDoErro, novaChave } from "@/lib/operacao/api";
 import { useLeitura } from "@/lib/operacao/leitura";
+import { colaboradorDaBusca } from "@/lib/operacao/navegacao";
 
 import {
   ColaboradoresView,
@@ -38,6 +40,17 @@ export function PaginaColaboradores() {
   const [aberta, setAberta] = useState<(FichaAberta<FichaColaborador> & { pessoa: ColaboradorDaLista | null }) | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+
+  // O Início leva direto à ficha (/operacao/colaboradores?id=col_...): abre
+  // quando o cadastro chega, uma vez por pedido.
+  const pedido = colaboradorDaBusca(useSearch());
+  const atendido = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pedido || atendido.current === pedido || !leitura.itens) return;
+    atendido.current = pedido;
+    const pessoa = leitura.itens.find((item) => item.id === pedido);
+    if (pessoa) setAberta({ chave: novaChave(), pessoa, valores: fichaDoColaborador(pessoa) });
+  }, [pedido, leitura.itens]);
 
   async function gravar(dados: Record<string, unknown>) {
     setOcupado(true);

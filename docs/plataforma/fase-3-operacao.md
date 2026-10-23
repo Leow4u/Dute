@@ -95,7 +95,7 @@ e cancela a OS aberta.
 
 ## Parte 3: fila do dia
 
-A tela `/operacao`, item Hoje do menu. Sem executar, concluir, foto ou
+A tela `/operacao/hoje` (até a parte 2.6 da Fase 2, `/operacao`), item Hoje do menu. Sem executar, concluir, foto ou
 assinatura: as colunas Em execução e Concluídas não entram enquanto essas
 transições não existem.
 

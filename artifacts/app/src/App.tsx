@@ -146,6 +146,7 @@ const ComercialAprovar = lazy(() => import("./pages/comercial/aprovar"));
 const ComercialContratos = lazy(() => import("./pages/comercial/contratos"));
 const ComercialAutorizacoes = lazy(() => import("./pages/comercial/autorizacoes"));
 const ComercialMedicoes = lazy(() => import("./pages/comercial/medicoes"));
+const OperacaoInicio = lazy(() => import("./pages/operacao/inicio"));
 const OperacaoFila = lazy(() => import("./pages/operacao/fila"));
 const OperacaoColaboradores = lazy(() => import("./pages/operacao/colaboradores"));
 const OperacaoVeiculos = lazy(() => import("./pages/operacao/veiculos"));
@@ -1067,7 +1068,8 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   // a liberação do Comercial está ligada (lib/comercial/navegacao.ts). Toda
   // rota do Comercial entra neste bloco (comercial/navegacao.test.ts).
   ...soComOperacaoLiberada([
-    protectedRoute("/operacao", OperacaoFila),
+    protectedRoute("/operacao", OperacaoInicio),
+    protectedRoute("/operacao/hoje", OperacaoFila),
     protectedRoute("/operacao/colaboradores", OperacaoColaboradores),
     protectedRoute("/operacao/veiculos", OperacaoVeiculos),
   ]),

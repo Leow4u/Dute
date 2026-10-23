@@ -315,3 +315,36 @@ segunda regra de contagem.
   devolvidos), `inicio-view.test.tsx` (textos na ordem, lista contra legenda,
   estados e axe), navegação e telas atualizadas.
 - Conferido no Chromium com o CSS do build, a 1440 e a 390 px.
+
+### Parte 2.6: Início da Operação
+
+- `/operacao` passa a ser o Início (`pages/operacao/inicio.tsx`), como em
+  `docs/mockups/ModOpInicio.dc.html`; a fila do dia mudou para
+  `/operacao/hoje`. O menu da Operação ganhou Início no topo.
+- O "Precisa de você" (`lib/operacao/pendencias.ts`) usa só o que a OS já
+  grava (aberta, agendada com data, hora, equipe e veículo, cancelada):
+  - OS aberta ou agendada de demanda que o Comercial perdeu ou cancelou
+    (crítico, "Cancelar OS");
+  - OS agendada para hoje ou depois com alguém da equipe ou o veículo
+    desativado no cadastro: é a "OS sem equipe ou veículo" do modelo de hoje,
+    porque agendar exige os dois (crítico no dia, "Reagendar");
+  - OS para agendar e demandas em Para planejar sem OS;
+  - CNH vencida ou vencendo em até 30 dias (`DIAS_PARA_A_CNH`), de quem está
+    ativo, com quantas OS a pessoa tem até a validade.
+- Ao lado, "Hoje na operação" (agendadas hoje, para agendar, próximos dias,
+  com "Abrir o Hoje") e "Equipe hoje" (quem está escalado, pela hora da
+  primeira OS, e quem está livre).
+- Ficam para as partes da Fase 3 que criam os estados: "OS em revisão",
+  "Em execução" e "Atrasadas" no "Hoje na operação", o prazo da OS e a
+  equipe "agora" (a caminho, em campo), que depende do registro do campo.
+  Até lá, a seção se chama "Equipe hoje", porque mostra a escala, não a
+  posição.
+- Links diretos: `/operacao/hoje?os=10045-01` abre a ficha da OS e
+  `/operacao/colaboradores?id=col_...` abre a do colaborador
+  (`hrefDaOs`, `hrefDoColaborador`).
+- As leituras são ao vivo, como no resto do módulo, e só para owner, admin e
+  interno; as OS lidas são só as abertas e agendadas. Enquanto uma leitura
+  não chega, a lista não aparece, para não dizer "nada parado" sem saber.
+- Testes: `lib/operacao/pendencias.test.ts` (cada fonte, ordem por tom, o dia
+  e a equipe, nenhum valor), `pages/operacao/inicio-view.test.tsx` (textos na
+  ordem, lista contra legenda, ações, estados e axe), navegação atualizada.

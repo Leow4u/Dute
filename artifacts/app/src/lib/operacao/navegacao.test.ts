@@ -6,9 +6,14 @@ import { getNavigationForProfileRole, getRouteProfileRoles, menuDoOperacao } fro
 import { entrada, modulesForPerson } from "../platform-modules";
 import {
   ROTA_COLABORADORES,
+  ROTA_HOJE,
   ROTA_OPERACAO,
   ROTA_VEICULOS,
   abreOperacao,
+  colaboradorDaBusca,
+  hrefDaOs,
+  hrefDoColaborador,
+  osDaBusca,
   rotasDaOperacao,
   soComOperacaoLiberada,
 } from "./navegacao";
@@ -51,12 +56,15 @@ describe("navegação do cadastro da Operação", () => {
     expect(getNavigationForProfileRole("owner", null, false).some((module) => module.ambiente === "operacao")).toBe(false);
   });
 
-  it("o menu do módulo tem Colaboradores e Veículos para quem grava", () => {
+  it("o menu do módulo tem o Início, o Hoje, Colaboradores e Veículos para quem grava", () => {
     expect(menuDoOperacao("interno", true).map((item) => [item.label, item.href])).toEqual([
-      ["Hoje", ROTA_OPERACAO],
+      ["Início", ROTA_OPERACAO],
+      ["Hoje", ROTA_HOJE],
       ["Colaboradores", ROTA_COLABORADORES],
       ["Veículos", ROTA_VEICULOS],
     ]);
+    // O Início é a casa: rota exata, para não acender nas outras telas.
+    expect(menuDoOperacao("interno", true)[0].routes[0].exact).toBe(true);
     expect(menuDoOperacao("campo", true)).toEqual([]);
     expect(getRouteProfileRoles(ROTA_VEICULOS)).toEqual(["owner", "admin", "interno"]);
   });
@@ -68,10 +76,27 @@ describe("navegação do cadastro da Operação", () => {
     const fora = APP_SOURCE.replace(/soComOperacaoLiberada\(\[[\s\S]*?\]\)/g, "");
     expect(caminhos(fora).filter((path) => path.startsWith("/operacao"))).toEqual([]);
     expect(soComOperacaoLiberada([{ path: ROTA_COLABORADORES }, { path: "/operacao/outra" }], DESLIGADO)).toEqual([]);
-    expect(soComOperacaoLiberada([{ path: ROTA_OPERACAO }, { path: ROTA_COLABORADORES }, { path: ROTA_VEICULOS }], LIBERADO).map((rota) => rota.path)).toEqual([
-      ROTA_OPERACAO,
-      ROTA_COLABORADORES,
-      ROTA_VEICULOS,
-    ]);
+    expect(
+      soComOperacaoLiberada([{ path: ROTA_OPERACAO }, { path: ROTA_HOJE }, { path: ROTA_COLABORADORES }, { path: ROTA_VEICULOS }], LIBERADO).map(
+        (rota) => rota.path,
+      ),
+    ).toEqual([ROTA_OPERACAO, ROTA_HOJE, ROTA_COLABORADORES, ROTA_VEICULOS]);
+  });
+
+  it("/operacao é o Início (parte 2.6) e a fila do dia mora em /operacao/hoje", () => {
+    expect(rotasDaOperacao(LIBERADO)).toEqual([ROTA_OPERACAO, ROTA_HOJE, ROTA_COLABORADORES, ROTA_VEICULOS]);
+    expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao", OperacaoInicio\)/);
+    expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/hoje", OperacaoFila\)/);
+  });
+
+  it("links diretos: a OS na fila e o colaborador no cadastro, de ida e volta", () => {
+    expect(hrefDaOs("10045-01")).toBe("/operacao/hoje?os=10045-01");
+    expect(osDaBusca("?os=10045-01")).toBe("10045-01");
+    expect(osDaBusca("os=")).toBeNull();
+    expect(osDaBusca("")).toBeNull();
+    const href = hrefDoColaborador("col_0123456789abcdef");
+    expect(href).toBe("/operacao/colaboradores?id=col_0123456789abcdef");
+    expect(colaboradorDaBusca(href.slice(href.indexOf("?")))).toBe("col_0123456789abcdef");
+    expect(colaboradorDaBusca("?outro=1")).toBeNull();
   });
 });
