@@ -1,0 +1,156 @@
+{
+  "_leia": "Casos de referência dos dias parado (lib/dominio/src/parados.ts). Rodam no vitest do app e no node --test de functions/core, contra a cópia de lá. Itens sintéticos: só datas e saldo. O dia de hoje é sempre 2026-10-20; o instante é ISO de UTC e o dia é o de São Paulo (UTC-3). Erro: true quando a função deve recusar.",
+  "regras": [
+    { "caso": "uniformes", "modelo": "uniformes", "regra": { "parado_dias": 90, "sem_giro_dias": 180 } },
+    { "caso": "mobiliário", "modelo": "mobiliario", "regra": { "parado_dias": 90, "sem_giro_dias": 180 } },
+    { "caso": "insumos", "modelo": "insumos", "regra": { "parado_dias": 90, "sem_giro_dias": 180 } },
+    { "caso": "o cadastro sem o modelo é o da BTG", "modelo": null, "regra": { "parado_dias": 90, "sem_giro_dias": 180 } },
+    { "caso": "o modelo com espaço em volta", "modelo": " insumos ", "regra": { "parado_dias": 90, "sem_giro_dias": 180 } },
+    { "caso": "o modelo que não existe fica com o padrão", "modelo": "outro", "regra": { "parado_dias": 90, "sem_giro_dias": 180 } }
+  ],
+  "sentidos": [
+    { "caso": "o recebimento é entrada", "origem": "wms_receiving", "tipo_mov": "ENTRADA", "sentido": "entrada" },
+    { "caso": "a expedição é saída", "origem": "wms_shipping", "tipo_mov": "SAIDA", "sentido": "saida" },
+    { "caso": "o lançamento manual de entrada", "origem": "functions_manual_inventory", "tipo_mov": "ENTRADA", "sentido": "entrada" },
+    { "caso": "o lançamento manual de saída", "origem": "functions_manual_inventory", "tipo_mov": "SAIDA", "sentido": "saida" },
+    { "caso": "a devolução que volta ao estoque", "origem": "functions_return_disposition", "tipo_mov": "ENTRADA", "sentido": "entrada" },
+    { "caso": "a contagem de abertura é a entrada do que já estava no armazém", "origem": "functions_opening_inventory", "tipo_mov": "ENTRADA", "sentido": "entrada" },
+    { "caso": "a guarda só muda o lugar", "origem": "wms_putaway", "tipo_mov": "ENTRADA", "sentido": null },
+    { "caso": "a troca de caixa da abertura só muda o lugar", "origem": "functions_opening_inventory_transfer", "tipo_mov": "SAIDA", "sentido": null },
+    { "caso": "a contagem cíclica corrige o saldo", "origem": "functions_cycle_count", "tipo_mov": "ENTRADA", "sentido": null },
+    { "caso": "o estorno da abertura corrige o saldo", "origem": "functions_opening_inventory_reversal", "tipo_mov": "SAIDA", "sentido": null },
+    { "caso": "o movimento sem origem", "origem": null, "tipo_mov": "SAIDA", "sentido": null },
+    { "caso": "o recebimento sem o tipo", "origem": "wms_receiving", "tipo_mov": null, "sentido": null }
+  ],
+  "relogios": [
+    { "caso": "sem movimento", "movimentos": [], "relogio": { "primeira_entrada": null, "ultima_entrada": null, "ultima_saida": null } },
+    {
+      "caso": "entradas e saída fora de ordem",
+      "movimentos": [
+        { "sentido": "entrada", "em": "2026-09-01T12:00:00.000Z" },
+        { "sentido": "saida", "em": "2026-09-15T12:00:00.000Z" },
+        { "sentido": "entrada", "em": "2026-08-01T12:00:00.000Z" },
+        { "sentido": "saida", "em": "2026-09-10T12:00:00.000Z" }
+      ],
+      "relogio": { "primeira_entrada": "2026-08-01T12:00:00.000Z", "ultima_entrada": "2026-09-01T12:00:00.000Z", "ultima_saida": "2026-09-15T12:00:00.000Z" }
+    },
+    {
+      "caso": "o mesmo movimento lido duas vezes não muda nada",
+      "movimentos": [
+        { "sentido": "entrada", "em": "2026-09-01T12:00:00.000Z" },
+        { "sentido": "entrada", "em": "2026-09-01T12:00:00.000Z" }
+      ],
+      "relogio": { "primeira_entrada": "2026-09-01T12:00:00.000Z", "ultima_entrada": "2026-09-01T12:00:00.000Z", "ultima_saida": null }
+    },
+    {
+      "caso": "o instante com fuso vira UTC",
+      "movimentos": [{ "sentido": "saida", "em": "2026-09-01T09:00:00-03:00" }],
+      "relogio": { "primeira_entrada": null, "ultima_entrada": null, "ultima_saida": "2026-09-01T12:00:00.000Z" }
+    },
+    {
+      "caso": "o instante que não é data não muda nada",
+      "movimentos": [
+        { "sentido": "entrada", "em": "2026-09-01T12:00:00.000Z" },
+        { "sentido": "saida", "em": "ontem" },
+        { "sentido": "entrada", "em": null }
+      ],
+      "relogio": { "primeira_entrada": "2026-09-01T12:00:00.000Z", "ultima_entrada": "2026-09-01T12:00:00.000Z", "ultima_saida": null }
+    }
+  ],
+  "dias": [
+    { "caso": "o fim da noite em São Paulo ainda é o dia de antes", "instante": "2026-10-21T02:30:00.000Z", "dia": "2026-10-20" },
+    { "caso": "a meia-noite em São Paulo já é o dia seguinte", "instante": "2026-10-21T03:00:00.000Z", "dia": "2026-10-21" },
+    { "caso": "o que não é data", "instante": "amanhã", "dia": null }
+  ],
+  "dias_corridos": [
+    { "caso": "o mesmo dia", "de": "2026-10-20", "ate": "2026-10-20", "dias": 0 },
+    { "caso": "noventa dias", "de": "2026-07-22", "ate": "2026-10-20", "dias": 90 },
+    { "caso": "a virada do ano", "de": "2026-12-31", "ate": "2027-01-01", "dias": 1 },
+    { "caso": "o segundo antes do primeiro", "de": "2026-10-20", "ate": "2026-10-10", "dias": -10 },
+    { "caso": "o dia inválido recusa", "de": "20/10/2026", "ate": "2026-10-20", "erro": true }
+  ],
+  "idades": [
+    {
+      "caso": "sem saldo não há o que estar parado",
+      "relogio": { "primeira_entrada": "2026-04-03T15:00:00.000Z", "ultima_entrada": "2026-04-03T15:00:00.000Z", "ultima_saida": null },
+      "saldo": 0,
+      "modelo": "uniformes",
+      "idade": { "dias_parado": null, "dias_sem_saida": null, "etiquetas": [] }
+    },
+    {
+      "caso": "entrou há 89 dias: ainda não está parado",
+      "relogio": { "primeira_entrada": "2026-07-23T15:00:00.000Z", "ultima_entrada": "2026-07-23T15:00:00.000Z", "ultima_saida": null },
+      "saldo": 12,
+      "modelo": "uniformes",
+      "idade": { "dias_parado": 89, "dias_sem_saida": 89, "etiquetas": [] }
+    },
+    {
+      "caso": "entrou há 90 dias: o limite da regra dá o Parado",
+      "relogio": { "primeira_entrada": "2026-07-22T15:00:00.000Z", "ultima_entrada": "2026-07-22T15:00:00.000Z", "ultima_saida": null },
+      "saldo": 12,
+      "modelo": "uniformes",
+      "idade": { "dias_parado": 90, "dias_sem_saida": 90, "etiquetas": ["parado"] }
+    },
+    {
+      "caso": "o dia é o de São Paulo: a entrada das 23h conta no dia dela",
+      "relogio": { "primeira_entrada": "2026-07-23T02:00:00.000Z", "ultima_entrada": "2026-07-23T02:00:00.000Z", "ultima_saida": null },
+      "saldo": 12,
+      "modelo": "uniformes",
+      "idade": { "dias_parado": 90, "dias_sem_saida": 90, "etiquetas": ["parado"] }
+    },
+    {
+      "caso": "saiu há 100 dias e entrou há 10: a entrada tira o Parado, e o giro conta da saída",
+      "relogio": { "primeira_entrada": "2026-04-03T15:00:00.000Z", "ultima_entrada": "2026-10-10T15:00:00.000Z", "ultima_saida": "2026-07-12T15:00:00.000Z" },
+      "saldo": 30,
+      "modelo": "uniformes",
+      "idade": { "dias_parado": 10, "dias_sem_saida": 100, "etiquetas": [] }
+    },
+    {
+      "caso": "sem saída há 180 dias, com entrada há 30: Sem giro",
+      "relogio": { "primeira_entrada": "2026-01-10T15:00:00.000Z", "ultima_entrada": "2026-09-20T15:00:00.000Z", "ultima_saida": "2026-04-23T15:00:00.000Z" },
+      "saldo": 30,
+      "modelo": "uniformes",
+      "idade": { "dias_parado": 30, "dias_sem_saida": 180, "etiquetas": ["sem_giro"] }
+    },
+    {
+      "caso": "nunca saiu: o giro conta da primeira entrada",
+      "relogio": { "primeira_entrada": "2026-04-03T15:00:00.000Z", "ultima_entrada": "2026-09-20T15:00:00.000Z", "ultima_saida": null },
+      "saldo": 30,
+      "modelo": "uniformes",
+      "idade": { "dias_parado": 30, "dias_sem_saida": 200, "etiquetas": ["sem_giro"] }
+    },
+    {
+      "caso": "parado e sem giro",
+      "relogio": { "primeira_entrada": "2026-04-03T15:00:00.000Z", "ultima_entrada": "2026-04-03T15:00:00.000Z", "ultima_saida": null },
+      "saldo": 5,
+      "modelo": "mobiliario",
+      "idade": { "dias_parado": 200, "dias_sem_saida": 200, "etiquetas": ["parado", "sem_giro"] }
+    },
+    {
+      "caso": "com saldo e sem movimento que conte: sem base",
+      "relogio": { "primeira_entrada": null, "ultima_entrada": null, "ultima_saida": null },
+      "saldo": 5,
+      "modelo": "uniformes",
+      "idade": { "dias_parado": null, "dias_sem_saida": null, "etiquetas": [] }
+    },
+    {
+      "caso": "o movimento depois de hoje conta como de hoje",
+      "relogio": { "primeira_entrada": "2026-10-22T15:00:00.000Z", "ultima_entrada": "2026-10-22T15:00:00.000Z", "ultima_saida": null },
+      "saldo": 5,
+      "modelo": "uniformes",
+      "idade": { "dias_parado": 0, "dias_sem_saida": 0, "etiquetas": [] }
+    },
+    {
+      "caso": "o dia de hoje inválido recusa",
+      "relogio": { "primeira_entrada": null, "ultima_entrada": null, "ultima_saida": null },
+      "saldo": 5,
+      "modelo": "uniformes",
+      "hoje": "20/10/2026",
+      "erro": true
+    }
+  ],
+  "rotulos": [
+    { "caso": "o Parado traz o limite da regra", "etiqueta": "parado", "modelo": "uniformes", "rotulo": "Parado 90+ dias" },
+    { "caso": "o Sem giro", "etiqueta": "sem_giro", "modelo": "uniformes", "rotulo": "Sem giro" }
+  ]
+}

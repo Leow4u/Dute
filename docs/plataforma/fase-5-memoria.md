@@ -20,6 +20,7 @@ Seguem a recomendação do plano até a resposta do Leonardo:
 | 19 | A sugestão pede 5 execuções do mesmo item no mesmo cliente. Sem elas, vale a média interna, com 15 execuções do item em qualquer cliente. Abaixo disso, a sugestão diz que ainda não tem base. |
 | 20 | A codebase nova `functions/core`, como no repositório do plano (`plano.md`). Ela recebe a memória agora e o Agent Dute na parte 5.5. |
 | 29 | A semelhança dos orçamentos compara os itens da LPU e as quantidades. O resumo em texto fica guardado para o Agent Dute. |
+| 30 | Os dias parado têm os mesmos limites nos três modelos: "Parado 90+ dias" sem entrada nem saída e "Sem giro" aos 180 dias sem saída. |
 
 - **Três camadas**, como no plano:
   - os fatos são os eventos e os documentos que as callables gravam;
@@ -88,19 +89,66 @@ de fora.
 | `ai_measures/{id}` | `functions/core` | Uma medida: o tipo, o escopo (cliente ou geral), a chave (o item da LPU), os números, as execuções e as OS mais recentes |
 | `ai_suggestions/{id}` | `functions/core` | A sugestão mostrada: o tipo, o contexto (a demanda, a OS, quem pediu), o valor sugerido, a base, a decisão e o valor real |
 | `ai_case_memory/{demanda}` | `functions/core` | A demanda fechada: os itens e as quantidades, os serviços, o prazo, o orçado e o realizado, o resumo em texto e o vetor de semelhança |
-| `ai_cursors/{rotina}` | `functions/core` | Até onde cada rotina leu os eventos |
+| `ai_stock_age/{item}` | `functions/core` | O item do estoque, um por cliente e SKU: o relógio (a primeira e a última entrada e a última saída que contam) e o saldo das posições |
+| `ai_cursors/{rotina}` | `functions/core` | Até onde cada rotina leu os eventos ou o razão do estoque |
 | `core_operations/{id}` | `functions/core` | O recibo de idempotência das callables |
 
 - **Regras.** As medidas abrem à equipe interna que planeja e orça: owner,
   admin, interno e comercial. As sugestões abrem a quem as pediu e a owner e
-  admin. As lembranças não abrem pelo navegador. O cliente, o campo e o
-  painel não leem nada delas. Ninguém grava pelo navegador.
+  admin. As lembranças não abrem pelo navegador. Os dias parado abrem a quem
+  lê o estoque (owner, admin, interno, wms e suporte), como `stock_balances`.
+  O cliente, o campo e o painel não leem nada delas. Ninguém grava pelo
+  navegador.
 - **Preço.** A medida de duração e a do planejamento não têm valor. A
   lembrança tem o orçado e o realizado, então só a callable da parte 5.3b a
   lê, pelo cliente e pelo papel de quem lê preço.
 - **Zeragem.** As medidas, as sugestões e as lembranças saem das OS e das
   demandas. `tools/full_reset_btg.py` preserva as quatro coleções, como
-  preserva a Operação e o Comercial de onde elas saem.
+  preserva a Operação e o Comercial de onde elas saem. Os dias parado saem do
+  estoque e vão embora com ele; o cursor fica, e a rotina segue dos
+  movimentos novos.
+
+## Os dias parado (parte 5.4)
+
+Por item, caixa e peça, como o plano pede. A peça não existe ainda: o
+patrimônio entra com o modelo Mobiliário (`docs/multicliente-modelos-de-operacao.md`),
+e os dias parado da peça entram com ele.
+
+- **A fonte é o razão.** Nenhum documento do estoque guarda a última
+  movimentação: o `updated_at` do saldo, do SKU e da projeção do portal muda
+  também com foto, reserva e mínimo de estoque. Só `movements` diz quando o
+  item entrou e saiu.
+- **O que conta.**
+  - Contam a entrada e a saída de verdade: o recebimento, a expedição, o
+    lançamento manual e a devolução que volta ao estoque.
+  - A contagem de abertura conta como a entrada: o estoque que já estava no
+    armazém entra no dia em que foi contado.
+  - A guarda e a troca de caixa da abertura só mudam o lugar. A contagem
+    cíclica e o estorno da abertura corrigem o saldo. Nenhuma delas é giro.
+- **O relógio do item.** A rotina guarda, por cliente e SKU, a primeira e a
+  última entrada, a última saída e o saldo das posições.
+  - Guarda só o menor e o maior instante: o resultado não depende da ordem
+    dos movimentos nem de ler um deles duas vezes.
+  - Não guarda a idade nem a etiqueta. A regra vale na hora, com o dia de
+    hoje (`lib/dominio/src/parados.ts`), e a etiqueta nunca fica velha.
+- **As etiquetas.**
+  - "Parado 90+ dias": sem entrada nem saída há 90 dias. A entrada nova
+    tira o Parado.
+  - "Sem giro": sem saída há 180 dias, ou desde a primeira entrada quando
+    nunca saiu. A entrada nova não tira o Sem giro.
+  - O dia é o de São Paulo. Sem saldo, não há o que estar parado.
+- **A regra é a do modelo de operação.** Cada modelo tem os limites dele, e
+  a ficha do modelo em Configurações › Clientes mostra a regra.
+  - A regra mora em `lib/dominio`, e `functions/core` guarda uma cópia
+    literal. Os dois rodam os mesmos casos de `parados.casos.json`.
+  - Os três modelos têm os mesmos limites até a resposta da pergunta 30.
+  - Regra própria de um cliente é PR, com teste, nunca configuração de tela.
+- **A caixa.** As caixas guardam o que foi contado na abertura. O
+  recebimento e a expedição não mexem nelas, então o conteúdo só vale até a
+  primeira saída. A parte 5.4b conta a caixa desde a guarda dela ou desde a
+  última saída de um SKU dela pela posição dela.
+- **O cliente.** Os dias parado não abrem ao cliente. O cliente fica sabendo
+  pelo alerta, e o alerta só sai depois que uma pessoa aprova (parte 5.4d).
 
 ## Liberação
 
@@ -120,8 +168,10 @@ Leonardo.
 | 5.3a | `ai_case_memory`: a lembrança de cada demanda fechada, com o resumo e o vetor | A lembrança bate com a demanda; nada de outro cliente |
 | 5.3b | `findSimilarQuotes`: os orçamentos parecidos do cliente da demanda, com os itens, as quantidades, o prazo e o preço, e o orçado e o realizado de cada caso | Caso de outro cliente nunca aparece; só quem orça pede; nada grava |
 | 5.3c | Os orçamentos parecidos na montagem do orçamento, com "Usar as quantidades" | Textos listados; usar só preenche o formulário; `axe` |
-| 5.4a | Os dias parado no WMS por item, caixa e peça; as etiquetas pela regra do perfil do cliente | O limite do perfil vale; a etiqueta sai da regra |
-| 5.4b | O alerta do item parado, no portal e por e-mail, só depois da aprovação | O alerta não sai sem aprovação |
+| 5.4a | A regra dos dias parado por modelo de operação, em `lib/dominio`, com a cópia no núcleo; o relógio de cada item em `ai_stock_age`, pela rotina `runMeasures`, a partir do razão; as regras | A etiqueta sai da regra do modelo; o mesmo SKU em dois clientes são dois itens; o cliente não lê |
+| 5.4b | Os dias parado da caixa, desde a guarda ou a última saída de um SKU dela pela posição dela | A caixa conta da guarda; a saída pela posição dela zera |
+| 5.4c | Os dias parado e as etiquetas em Estoque, por item e por caixa | Textos listados; a etiqueta sai da regra do modelo do cliente; `axe` |
+| 5.4d | O alerta do item parado, no portal e por e-mail, só depois da aprovação | O alerta não sai sem aprovação |
 | 5.5 | O Agent Dute no núcleo, com as ferramentas de leitura dos módulos; o WMS passa a usar o do núcleo. Desenho próprio antes do código | Ferramenta nunca escreve; isolamento por cliente nas respostas |
 | 5.6 | O painel de acerto: o erro médio da duração prevista e a taxa de aceite das sugestões | O painel sai de `ai_suggestions` |
 
@@ -139,6 +189,11 @@ Leonardo.
   mais exata e explicável que a do texto. Recomendo comparar pelos itens
   (o vetor é o dos itens) e guardar o resumo em texto para o Agent Dute.
   Seguimos assim desde a parte 5.3a.
+- **Os limites dos dias parado (parte 5.4).** Os três modelos têm "Parado
+  90+ dias" sem entrada nem saída e "Sem giro" aos 180 dias sem saída. O
+  mobiliário costuma ficar guardado por mais tempo, e o insumo deveria girar
+  mais rápido. Vale o mesmo para os três, ou cada modelo tem os dele?
+  Seguimos com o mesmo até a resposta.
 
 ## Registro
 
@@ -316,3 +371,40 @@ Feita em 23/10/2026. O pedido, os textos e o "Usar as quantidades" estão em
 - **Testes.**
   - `memoria/parecidos.test.ts` cobre o pedido, os textos, os itens que dá para usar e o "Usar as quantidades".
   - `orcamento-view.test.tsx` cobre os textos na ordem, a ação principal, o link sem vermelho, quando não aparece, o ocupado e `axe`.
+
+### Parte 5.4a: o relógio do estoque e a regra dos dias parado
+
+Feita em 23/10/2026. A regra está em `lib/dominio/src/parados.ts`, com a
+cópia em `functions/core/src/domain/parados.ts`; a rotina em
+`functions/core/src/domain/parados-gravacao.ts`.
+
+- **A regra.** O limite de cada modelo de operação, os movimentos que contam,
+  o relógio e a idade do item com as etiquetas, em funções puras.
+  - O app e o núcleo rodam os mesmos casos de `parados.casos.json`, e a trava
+    confere que a cópia do núcleo é idêntica.
+  - A ficha de cada modelo, em Configurações › Clientes, mostra "Dias parado"
+    com a regra dele.
+- **A rotina.** `runMeasures` passou a fazer também o relógio do estoque, com
+  o cursor `parados`. A falha de uma das três não para as outras.
+  - Lê o razão em ordem de gravação, até 10 lotes de 300 movimentos por vez.
+    Na primeira vez, lê do começo.
+  - Cada movimento relê o saldo do item nas posições do mesmo cliente, até o
+    que não conta no relógio.
+  - O cursor guarda a versão da rotina (`VERSAO_DOS_PARADOS`). Quando o que o
+    item guarda mudar, a versão sobe e a rotina relê o razão inteiro.
+  - Grava só o item novo ou o que mudou.
+- **Regras.** `ai_stock_age` abre a quem lê o estoque (`canReadOperations`).
+  O cliente, o comercial, o financeiro, o campo e o painel não leem.
+  Ninguém grava pelo navegador.
+- **Zeragem.** `ai_stock_age` vai embora com o estoque
+  (`tools/full_reset_btg.py`), e o teste da ferramenta trava.
+- **Testes.**
+  - `parados.test.ts`, no app e no núcleo: os casos de referência e a cópia.
+  - `parados.integration.test.ts`, no emulador:
+    - o relógio e o saldo por cliente e SKU;
+    - a guarda e a contagem cíclica mudam o saldo, não o relógio;
+    - o movimento do último minuto espera;
+    - ler de novo, sem cursor ou com outra versão, não muda nada;
+    - o razão maior que um lote é lido na mesma vez;
+    - nada grava fora da memória.
+  - `memoria-medidas.rules.test.ts`: quem lê e quem não lê `ai_stock_age`.

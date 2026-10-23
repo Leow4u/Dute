@@ -123,7 +123,9 @@ FINANCEIRO_COLLECTIONS = (
 # 5.3a): as medidas, os cursores das rotinas, as sugestões com a decisão e o
 # valor real e as lembranças das demandas fechadas. Saem das OS revisadas e das
 # demandas, que a zeragem preserva com a Operação e o Comercial: nunca
-# apagadas, nem com --include-setup.
+# apagadas, nem com --include-setup. Os dias parado (`ai_stock_age`, parte
+# 5.4a) saem do estoque e vão embora com ele; o cursor fica em `ai_cursors`, e
+# a rotina segue dos movimentos novos.
 MEMORIA_COLLECTIONS = (
     "ai_measures",
     "ai_cursors",

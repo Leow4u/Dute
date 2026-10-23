@@ -1,3 +1,5 @@
+import { REGRAS_DE_PARADO, regraEmTexto } from "@workspace/dominio";
+
 import type { OperationTemplate } from "../types";
 
 /**
@@ -23,6 +25,7 @@ export const uniformes: OperationTemplate = {
     { label: "Cobrança", value: "LPU: posição ocupada, movimentação e serviços da tabela de preços" },
     { label: "Etiqueta", value: "Caixa (CX-000001) e posição, impressas em Estoque › Etiquetas" },
     { label: "Mapa", value: "Prateleiras por zona; a caixa é a unidade de manuseio" },
+    { label: "Dias parado", value: regraEmTexto(REGRAS_DE_PARADO.uniformes) },
   ],
   file: "lib/operations/templates/uniformes.ts",
 };
