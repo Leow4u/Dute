@@ -401,3 +401,21 @@ Feita em 23/10/2026. As regras estão em `functions/operacao/src/domain/demanda-
   - `demanda-do-armazem.integration.test.ts` cobre a demanda, as duas OS, o número no pedido, os eventos sem texto livre, o saldo, outra chave, a OS única sem retorno e a retirada sem demanda, OS nem contador.
   - `profile.integration.test.ts` cobre o wms só nesta callable.
 
+
+### Parte 4.5c: a entrega na tela de Pedidos do WMS
+
+Feita em 23/10/2026. As regras estão em `artifacts/app/src/lib/warehouse-ops/entrega.ts`, o formulário em
+`features/warehouse-ops/order-delivery.tsx` e a tela em `pages/pedidos.tsx`. A tela segue o
+`docs/sistema-visual.md` do WMS até a v3 (parte 4.7).
+
+- **Com a Operação liberada**, cada pedido em "Para separar" e "Para entregar" (antes da saída) mostra a entrega em uma linha.
+  - Por exemplo: "Entrega pela Dutelog · Qua 28/10 13:00 · montagem · retorno Sex 30/10 18:00 · Demanda 10050 · OS 10050-01 e 10050-02".
+  - A ação é "Entrega", "Alterar entrega" ou, com a entrega pela Dutelog salva sem a demanda, "Abrir na Operação".
+- **O diálogo** tem a escolha entre a entrega pela Dutelog e a retirada pelo cliente e os campos do desenho de cada uma. O que falta aparece no campo, pela régua de `setOrderDelivery`.
+  - A entrega pela Dutelog salva (`/api/orders/{id}/delivery`) e abre a demanda na Operação (`openStorageDemand`), com a mesma chave até sair.
+  - A retirada só salva.
+- **Na saída** da retirada pelo cliente, quem leva e a placa vêm da entrega.
+- **Testes.**
+  - `warehouse-ops/entrega.test.ts` cobre os modos iguais aos do WMS, o resumo, a Operação, o formulário, o que falta, o pedido e a saída.
+  - `order-delivery.test.tsx` cobre os textos dos dois modos, o problema no campo e o `axe`.
+  - `functions-api.test.ts` cobre a rota.

@@ -9,6 +9,8 @@ export type OrderGroup = {
   key: string;
   orderNumber: string;
   requestId?: string;
+  /** O pedido de saída (orders/{id}), quando a tarefa o traz. */
+  orderId?: string;
   pick?: WarehouseTask;
   pack?: WarehouseTask;
   ship?: WarehouseTask;
@@ -70,6 +72,7 @@ export function groupWarehouseOrders(
     };
     group[slot] = task;
     group.orderNumber = String(task.title ?? group.orderNumber);
+    if (task.order_id) group.orderId = String(task.order_id);
     if (task.customer_request_id) {
       group.requestId = String(task.customer_request_id);
     }

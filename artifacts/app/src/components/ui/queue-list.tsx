@@ -58,6 +58,7 @@ export function QueueRow({
   meta,
   age,
   note,
+  detail,
   actions,
   onToggle,
   open,
@@ -72,6 +73,8 @@ export function QueueRow({
   meta: string;
   age?: string;
   note?: ReactNode;
+  /** Uma linha de dado neutra abaixo do meta (a entrega do pedido, por exemplo). */
+  detail?: ReactNode;
   actions?: ReactNode;
   onToggle?: () => void;
   open?: boolean;
@@ -93,6 +96,7 @@ export function QueueRow({
             {meta}
             {age ? <span className="text-foreground/45"> · {age}</span> : null}
           </p>
+          {detail ? <p className="mt-1 text-sm text-foreground/75">{detail}</p> : null}
           {note ? (
             <p className="mt-1.5 flex items-center gap-1.5 text-sm text-warning-soft-foreground">{note}</p>
           ) : null}
