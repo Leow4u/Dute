@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { getNavigationForProfileRole, getRouteProfileRoles, menuDoOperacao } from "../modules";
 import { entrada, modulesForPerson } from "../platform-modules";
 import {
+  ROTA_AGENDA,
   ROTA_COLABORADORES,
   ROTA_DEMANDA,
   ROTA_DEMANDAS,
@@ -18,10 +19,12 @@ import {
   demandaDaBusca,
   demandaDoPlanoDaBusca,
   hrefDaOs,
+  hrefDaSemana,
   hrefDaDemanda,
   hrefDoPlano,
   hrefDoColaborador,
   osDaBusca,
+  semanaDaBusca,
   rotasDaOperacao,
   soComOperacaoLiberada,
 } from "./navegacao";
@@ -64,10 +67,11 @@ describe("navegação do cadastro da Operação", () => {
     expect(getNavigationForProfileRole("owner", null, false).some((module) => module.ambiente === "operacao")).toBe(false);
   });
 
-  it("o menu do módulo tem o Início, o Hoje, Demandas, Colaboradores e Veículos para quem grava", () => {
+  it("o menu do módulo tem o Início, o Hoje, a Agenda, Demandas, Colaboradores e Veículos para quem grava", () => {
     expect(menuDoOperacao("interno", true).map((item) => [item.label, item.href])).toEqual([
       ["Início", ROTA_OPERACAO],
       ["Hoje", ROTA_HOJE],
+      ["Agenda", ROTA_AGENDA],
       ["Demandas", ROTA_DEMANDAS],
       ["Colaboradores", ROTA_COLABORADORES],
       ["Veículos", ROTA_VEICULOS],
@@ -93,9 +97,10 @@ describe("navegação do cadastro da Operação", () => {
   });
 
   it("/operacao é o Início (parte 2.6) e o Hoje (parte 3.5a) mora em /operacao/hoje", () => {
-    expect(rotasDaOperacao(LIBERADO)).toEqual([ROTA_OPERACAO, ROTA_HOJE, ROTA_DEMANDAS, ROTA_DEMANDA, ROTA_NOVA_DEMANDA, ROTA_PLANEJAR, ROTA_COLABORADORES, ROTA_VEICULOS]);
+    expect(rotasDaOperacao(LIBERADO)).toEqual([ROTA_OPERACAO, ROTA_HOJE, ROTA_AGENDA, ROTA_DEMANDAS, ROTA_DEMANDA, ROTA_NOVA_DEMANDA, ROTA_PLANEJAR, ROTA_COLABORADORES, ROTA_VEICULOS]);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao", OperacaoInicio\)/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/hoje", OperacaoHoje\)/);
+    expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/agenda", OperacaoAgenda\)/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/demandas", OperacaoDemandas\)/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/demanda", OperacaoDemanda\)/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/nova-demanda", OperacaoDemandaNova\)/);
@@ -118,5 +123,9 @@ describe("navegação do cadastro da Operação", () => {
     expect(hrefDoPlano("10045")).toBe("/operacao/planejar?demanda=10045");
     expect(demandaDoPlanoDaBusca("?demanda=10045")).toBe("10045");
     expect(demandaDoPlanoDaBusca("?demanda=abc")).toBeNull();
+    expect(hrefDaSemana("2026-10-19")).toBe("/operacao/agenda?semana=2026-10-19");
+    expect(semanaDaBusca("?semana=2026-10-19")).toBe("2026-10-19");
+    expect(semanaDaBusca("?semana=19/10/2026")).toBeNull();
+    expect(semanaDaBusca("")).toBeNull();
   });
 });

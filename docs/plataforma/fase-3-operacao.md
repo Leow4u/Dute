@@ -541,3 +541,37 @@ levam a ela; "Abrir OS com o saldo" saiu.
 - **Ainda não.** A sugestão do Agent Dute da tela aprovada é da Fase 5. Mudar
   a fatia de uma OS já criada (`set_items`) entra com a tela da OS (parte
   3.7).
+
+### Parte 3.6b: Agenda da semana
+
+Feita em 23/10/2026, no desenho aprovado `OpAgenda`, em
+`/operacao/agenda?semana=` (sem a semana, a de hoje). Entra no menu da
+Operação depois do Hoje.
+
+- **Semana.** Segunda a sábado; o domingo aparece só quando tem OS. As
+  setas mudam a semana pela URL, e "Hoje" volta para a atual. Cada dia diz
+  quantas OS tem e, em destaque, quantas estão sem equipe e quantas pessoas
+  estão em duas OS no dia.
+- **Linhas.** Equipe própria, freelancers, terceiros e veículos, cada grupo
+  recolhível. A pessoa mostra o papel da semana (o da OS) e, no terceiro, a
+  empresa. Entram os ativos e os desativados com OS na semana. Cada OS
+  (agendada, em execução, em revisão ou revisada) fica no dia dela, pela
+  hora, na cor do status do Hoje; quem está em duas OS no mesmo dia aparece
+  com as duas na mesma célula.
+- **Sem equipe.** A OS agendada na semana sem ninguém fica acima da agenda,
+  com o tipo, o cliente, o título e quando, e "Escalar" abre o mesmo painel
+  do Hoje.
+- **Seleção.** Escolher uma OS acende ela em todas as linhas e mostra o
+  status, o cliente, quando, a equipe e as placas, com "Reagendar" (se
+  agendada) e o atalho para a demanda.
+- **Busca.** Pessoa, placa, OS ou cliente, sem acento.
+- **Celular.** Um dia embaixo do outro, com o status, a janela, a equipe, as
+  placas e as mesmas ações de cada OS.
+- **Código.** O painel de escalar saiu da tela do Hoje para
+  `components/operacao/escala.tsx` e a gravação para
+  `pages/operacao/use-escala.tsx`, usados pelas duas telas. O rótulo e a cor
+  do status da OS ficaram em `components/operacao/partes.tsx`.
+- **Ainda não.** O bloqueio do veículo em revisão preventiva, da tela
+  aprovada, entra com os alertas da rotina (parte 3.13). "Abrir OS" e
+  "Abrir revisão" entram com a tela da OS (parte 3.7) e a revisão (parte
+  3.10).

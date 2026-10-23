@@ -1,5 +1,6 @@
 import { ChevronDown } from "lucide-react";
 
+import type { StatusDaOs } from "@/lib/operacao/fila";
 import { SERVICO_ROTULO, TIPO_ROTULO, iniciais, type TipoDaDemanda } from "@/lib/operacao/hoje";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +15,25 @@ export const COR_DO_TIPO: Record<TipoDaDemanda, string> = {
   paraquedas: "border-destructive-soft-border bg-destructive-soft text-destructive-soft-foreground",
   emergencial: "border-amber-soft-border bg-amber-soft text-amber-soft-foreground",
   planejada: "border-info-soft-border bg-info-soft text-info-soft-foreground",
+};
+
+export const ROTULO_DO_STATUS: Record<StatusDaOs, string> = {
+  aberta: "Para agendar",
+  agendada: "Agendada",
+  em_execucao: "Em execução",
+  em_revisao: "Em revisão",
+  revisada: "Revisada",
+  cancelada: "Cancelada",
+};
+
+/** A cor do status da OS, a mesma das colunas do Hoje. */
+export const COR_DO_STATUS: Record<StatusDaOs, string> = {
+  aberta: "border-info-soft-border bg-info-soft text-info-soft-foreground",
+  agendada: "border-violet-soft-border bg-violet-soft text-violet-soft-foreground",
+  em_execucao: "border-amber-soft-border bg-amber-soft text-amber-soft-foreground",
+  em_revisao: "border-teal-soft-border bg-teal-soft text-teal-soft-foreground",
+  revisada: "border-success-soft-border bg-success-soft text-success-soft-foreground",
+  cancelada: "border-transparent bg-muted text-muted-foreground",
 };
 
 export const selo = "inline-flex h-6 shrink-0 items-center rounded-md border px-2 text-xs font-semibold";

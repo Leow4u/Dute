@@ -17,6 +17,8 @@ export const ROTA_OPERACAO = "/operacao";
 export const ROTA_HOJE = "/operacao/hoje";
 export const ROTA_COLABORADORES = "/operacao/colaboradores";
 export const ROTA_VEICULOS = "/operacao/veiculos";
+/** A agenda da semana (parte 3.6b, docs/mockups/OpAgenda.dc.html): ?semana=2026-10-19. */
+export const ROTA_AGENDA = "/operacao/agenda";
 /** As demandas (parte 3.5b, docs/mockups/OpDemandas.dc.html). */
 export const ROTA_DEMANDAS = "/operacao/demandas";
 /** A ficha da demanda, aberta pela lista: ?numero=10045 (docs/mockups/OpDemanda.dc.html). */
@@ -29,6 +31,7 @@ export const ROTA_PLANEJAR = "/operacao/planejar";
 export const TELAS_DA_OPERACAO: readonly string[] = [
   ROTA_OPERACAO,
   ROTA_HOJE,
+  ROTA_AGENDA,
   ROTA_DEMANDAS,
   ROTA_DEMANDA,
   ROTA_NOVA_DEMANDA,
@@ -50,6 +53,17 @@ export function hrefDaOs(numero: string): string {
 /** A OS pedida na busca da URL da fila (`?os=`), ou null. */
 export function osDaBusca(busca: string): string | null {
   return parametro(busca, "os");
+}
+
+/** A semana da agenda pela segunda-feira: "/operacao/agenda?semana=2026-10-19". */
+export function hrefDaSemana(segunda: string): string {
+  return `${ROTA_AGENDA}?semana=${encodeURIComponent(segunda)}`;
+}
+
+/** A data pedida na busca da URL da agenda (`?semana=`), ou null; a tela acha a segunda dela. */
+export function semanaDaBusca(busca: string): string | null {
+  const valor = parametro(busca, "semana");
+  return valor && /^\d{4}-\d{2}-\d{2}$/.test(valor) ? valor : null;
 }
 
 /** A ficha da demanda: "/operacao/demanda?numero=10045". */
