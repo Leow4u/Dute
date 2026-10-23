@@ -6,6 +6,15 @@ import { setGlobalOptions } from "firebase-functions/v2";
 
 import { conversarComDute } from "./domain/agente-conversa.js";
 import { genkitDoAgente, gerarComGenkit, resumirComGenkit } from "./domain/agente-modelo.js";
+import {
+  decideDuteNoteFor,
+  decideDutePlaybookFor,
+  listDuteNotesFor,
+  listDutePlaybooksFor,
+  saveDutePlaybookFor,
+  seedDutePlaybooksFor,
+  suggestDuteNoteFor,
+} from "./domain/agente-revisao.js";
 import { answerStockAlertFor, runStockFor } from "./domain/alertas-parados-gravacao.js";
 import { runCasesFor } from "./domain/lembrancas-gravacao.js";
 import { memoriaLiberada } from "./domain/liberacao.js";
@@ -94,4 +103,46 @@ export const chatWithDute = onCall({ timeoutSeconds: 180, memory: "512MiB" }, as
     resumir: resumirComGenkit(ai),
     aoPedaco: request.acceptsStreaming ? (pedaco) => void response?.sendChunk(pedaco) : undefined,
   });
+});
+
+/** O envio da anotação pelo cartão da conversa, pela pessoa que conversou: fica pendente até a coordenação aprovar (parte 5.5f). */
+export const suggestDuteNote = onCall(async (request) => {
+  const caller = await requireDuteCaller(db, request, PROJECT_ID);
+  return suggestDuteNoteFor(db, caller, request.data);
+});
+
+/** As anotações pendentes e as que valem, do cliente ativo, para a coordenação (parte 5.5f). */
+export const listDuteNotes = onCall(async (request) => {
+  const caller = await requireDuteCaller(db, request, PROJECT_ID);
+  return listDuteNotesFor(db, caller, request.data);
+});
+
+/** A coordenação aprova, recusa ou arquiva a anotação, com o evento (parte 5.5f). */
+export const decideDuteNote = onCall(async (request) => {
+  const caller = await requireDuteCaller(db, request, PROJECT_ID);
+  return decideDuteNoteFor(db, caller, request.data);
+});
+
+/** Os playbooks pendentes e os que valem, do cliente ativo, para a coordenação (parte 5.5f). */
+export const listDutePlaybooks = onCall(async (request) => {
+  const caller = await requireDuteCaller(db, request, PROJECT_ID);
+  return listDutePlaybooksFor(db, caller, request.data);
+});
+
+/** A coordenação escreve ou edita o playbook, com o evento (parte 5.5f). */
+export const saveDutePlaybook = onCall(async (request) => {
+  const caller = await requireDuteCaller(db, request, PROJECT_ID);
+  return saveDutePlaybookFor(db, caller, request.data);
+});
+
+/** A coordenação aprova, recusa ou arquiva o playbook, com o evento (parte 5.5f). */
+export const decideDutePlaybook = onCall(async (request) => {
+  const caller = await requireDuteCaller(db, request, PROJECT_ID);
+  return decideDutePlaybookFor(db, caller, request.data);
+});
+
+/** Os playbooks iniciais no cliente ativo, pendentes (parte 5.5f). */
+export const seedDutePlaybooks = onCall(async (request) => {
+  const caller = await requireDuteCaller(db, request, PROJECT_ID);
+  return seedDutePlaybooksFor(db, caller, request.data);
 });

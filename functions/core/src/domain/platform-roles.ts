@@ -42,6 +42,9 @@ export const ALERTA_ROLES = ["owner", "admin", "interno"] as const satisfies rea
  */
 export const AGENTE_ROLES = ["owner", "admin", "interno", "wms", "comercial", "financeiro", "suporte", "cliente"] as const satisfies readonly PlatformRole[];
 
+/** Quem revisa as anotações e os playbooks do Agent Dute (parte 5.5f): a mesma lista de NOTE_REVIEWER_ROLES do WMS. */
+export const AGENTE_REVISAO_ROLES = ["owner", "admin", "interno", "suporte"] as const satisfies readonly PlatformRole[];
+
 /** Quem lê valor (preço, total, fatura): a mesma lista de canReadPrices do firestore.rules. O cliente lê só o das próprias faturas e OS. */
 export const VALOR_ROLES = ["owner", "admin", "comercial", "financeiro"] as const satisfies readonly PlatformRole[];
 
@@ -105,4 +108,10 @@ export function agenteProblem(role: PlatformRole): string | null {
 /** A pessoa lê valor? O cliente lê o dos próprios documentos, que o leitor já restringe a ele. */
 export function leValor(role: PlatformRole): boolean {
   return role === "cliente" || (VALOR_ROLES as readonly string[]).includes(role);
+}
+
+/** Por que a pessoa não revisa as anotações e os playbooks do agente, ou null quando revisa. Nega o resto. */
+export function revisaoDoAgenteProblem(role: PlatformRole): string | null {
+  if ((AGENTE_REVISAO_ROLES as readonly string[]).includes(role)) return null;
+  return "Só a coordenação aprova as anotações e os playbooks do Agent Dute.";
 }

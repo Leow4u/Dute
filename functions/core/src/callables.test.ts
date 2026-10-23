@@ -31,13 +31,26 @@ describe("functions do núcleo", () => {
   it("toda linha com onCall está no formato que a conferência do invoker lê, inclusive comentário", () => {
     const pattern = invokerPattern();
     const used = rawIndex.split(/\r?\n/).filter((line) => /\bonCall\s*[<(]/.test(line));
-    assert.deepEqual(used.map((line) => line.match(pattern)?.[1]), ["suggestDuration", "answerSuggestion", "findSimilarQuotes", "answerStockAlert", "chatWithDute"]);
+    assert.deepEqual(used.map((line) => line.match(pattern)?.[1]), [
+      "suggestDuration",
+      "answerSuggestion",
+      "findSimilarQuotes",
+      "answerStockAlert",
+      "chatWithDute",
+      "suggestDuteNote",
+      "listDuteNotes",
+      "decideDuteNote",
+      "listDutePlaybooks",
+      "saveDutePlaybook",
+      "decideDutePlaybook",
+      "seedDutePlaybooks",
+    ]);
   });
 
   it("as callables começam pela liberação e pelo perfil, e nada é reexportado; as do Agent Dute, pela liberação do agente", () => {
     assert.doesNotMatch(index, /^export\s*\{/m);
     const blocks = index.split(/^(?=export const )/m).filter((block) => /^export const \w+ = onCall/.test(block));
-    assert.equal(blocks.length, 5);
+    assert.equal(blocks.length, 12);
     for (const block of blocks) {
       const doAgente = /^export const \w*Dute\w* = /.test(block);
       assert.match(block, doAgente ? ENTRADA_DO_AGENTE : ENTRADA);
