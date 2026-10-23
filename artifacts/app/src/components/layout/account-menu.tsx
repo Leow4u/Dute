@@ -1,6 +1,5 @@
-import type { ReactNode } from "react";
 import { ChevronsUpDown, Download, LogOut, Settings, User as UserIcon } from "lucide-react";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 
 import {
   DropdownMenu,
@@ -10,9 +9,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { roleLabel } from "@/lib/access";
 import type { AppUser } from "@/lib/auth";
-import { useOperationProfile } from "@/lib/operation-profile";
 import { usePwaInstall } from "@/lib/pwa-install";
-import { opcoesDoSeletor, type OpcaoDeModulo } from "@/lib/seletor-de-modulo";
 import { cn } from "@/lib/utils";
 
 type AccountMenuProps = {
@@ -20,12 +17,10 @@ type AccountMenuProps = {
   compact?: boolean;
   /**
    * Cabeçalho do celular. O botão fica no canto direito: o painel abre para
-   * baixo, dentro da tela. Com `modulos`, a lista de módulos entra no painel
-   * (o cabeçalho do WMS não tem o seletor; o da v3 tem).
+   * baixo, dentro da tela. A troca de módulo fica no seletor do shell.
    */
   cabecalho?: boolean;
-  modulos?: boolean;
-  /** "v3": barra e cabeçalho pretos do Comercial e da Operação. */
+  /** "v3": barra e cabeçalho pretos de cada módulo. */
   variante?: "padrao" | "v3";
   signOut: (options?: { redirectUrl?: string }) => Promise<void>;
   user: AppUser | null;
@@ -81,47 +76,6 @@ export function ContaCabecalho({ user, name, email, papel }: { user: AppUser | n
   );
 }
 
-export function ModuloLink({ atalho, className }: { atalho: OpcaoDeModulo; className?: string }) {
-  const Icon = atalho.icon;
-  return (
-    <Link
-      href={atalho.href}
-      aria-current={atalho.atual ? "page" : undefined}
-      className={cn(
-        "flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none",
-        className,
-        atalho.atual && "bg-accent text-accent-foreground",
-      )}
-    >
-      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-      <span className="min-w-0 flex-1 truncate">{atalho.label}</span>
-      {atalho.atual ? <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-foreground" /> : null}
-    </Link>
-  );
-}
-
-/**
- * Módulos na mesma lista do menu, no cabeçalho do celular do WMS.
- * `item` envolve cada link no item do menu, para o toque fechar o painel.
- */
-export function ListaDeModulos({
-  atalhos,
-  item,
-}: {
-  atalhos: readonly OpcaoDeModulo[];
-  item?: (link: ReactNode, key: string) => ReactNode;
-}) {
-  return (
-    <div className="border-b border-border/60 p-1">
-      <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Módulos</p>
-      {atalhos.map((atalho) => {
-        const link = <ModuloLink atalho={atalho} className="min-h-11" />;
-        return item ? item(link, atalho.key) : <div key={atalho.key}>{link}</div>;
-      })}
-    </div>
-  );
-}
-
 const GATILHO_V3 = {
   rodape:
     "flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left outline-none transition-colors hover:bg-v3-header-foreground/10 focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80",
@@ -133,18 +87,14 @@ export function AccountMenu({
   basePath,
   compact = false,
   cabecalho = false,
-  modulos = false,
   variante = "padrao",
   signOut,
   user,
 }: AccountMenuProps) {
   const { isInstalled } = usePwaInstall();
-  const { profile } = useOperationProfile();
-  const [location] = useLocation();
   const role = user?.publicMetadata.role;
   const name = user?.fullName || "Usuário";
   const email = user?.primaryEmailAddress?.emailAddress || "Sem e-mail";
-  const atalhos = cabecalho && modulos ? opcoesDoSeletor(role, profile, location) : [];
   const posicao = posicaoDoMenu(cabecalho, compact);
   const v3 = variante === "v3";
 
@@ -190,16 +140,6 @@ export function AccountMenu({
         className={cn("p-0", cabecalho ? "w-[min(18.75rem,calc(100vw-2rem))]" : "w-[300px]", v3 && "v3")}
       >
         <ContaCabecalho user={user} name={name} email={email} papel={roleLabel(role)} />
-        {atalhos.length > 0 ? (
-          <ListaDeModulos
-            atalhos={atalhos}
-            item={(link, key) => (
-              <DropdownMenuItem key={key} asChild>
-                {link}
-              </DropdownMenuItem>
-            )}
-          />
-        ) : null}
         <div className="p-1">
           <DropdownMenuItem asChild>
             <Link href="/configuracoes" className="min-h-11 cursor-pointer">
