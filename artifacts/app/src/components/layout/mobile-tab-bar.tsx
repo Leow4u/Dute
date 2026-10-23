@@ -10,6 +10,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
+  MOBILE_BAR_SLOTS,
+  MOBILE_BAR_SLOTS_DO_MODULO,
   getMobileNavigation,
   isAccountPath,
   isNavRouteActive,
@@ -33,7 +35,7 @@ export function MobileTabBar({ activeModuleId, modules, variante = "padrao" }: M
   const v3 = variante === "v3";
   const [location] = useLocation();
   const [moreOpen, setMoreOpen] = useState(false);
-  const { bar, more } = getMobileNavigation(modules);
+  const { bar, more } = getMobileNavigation(modules, v3 ? MOBILE_BAR_SLOTS_DO_MODULO : MOBILE_BAR_SLOTS);
   const moreActive =
     isAccountPath(location) ||
     (activeModuleId !== null && !bar.some((module) => module.id === activeModuleId));

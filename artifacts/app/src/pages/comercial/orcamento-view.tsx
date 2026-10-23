@@ -20,7 +20,6 @@ import {
 
 import { formatarReais } from "@workspace/dominio";
 
-import { AbasDoComercial } from "@/components/comercial/abas-do-comercial";
 import { AcoesDepoisDoEnvio } from "@/components/comercial/acoes-depois-do-envio";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -303,7 +302,7 @@ function Cabecalho(props: MontarViewProps & { totalCents: number | null }) {
     >
       <div className="flex min-w-0 flex-1 basis-96 flex-col gap-2.5">
         <div className="flex flex-wrap items-center gap-3">
-          <h2 className="text-3xl font-extrabold tabular-nums tracking-tight">{dados.rotulo}</h2>
+          <h1 className="text-3xl font-extrabold tabular-nums tracking-tight">{dados.rotulo}</h1>
           <SeloDaEtapa etapa={dados.etapa} dias={dados.diasNaEtapa} />
           <Pill>{TIPO_RV_ROTULO[dados.tipoRv]}</Pill>
         </div>
@@ -1241,10 +1240,6 @@ export function MontarView(props: MontarViewProps) {
   const { aviso, dados } = props;
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">
-      <div className="flex flex-col items-start gap-3.5">
-        <h1 className="text-3xl font-extrabold tracking-tight">Comercial</h1>
-        <AbasDoComercial />
-      </div>
       <Cabecalho {...props} totalCents={totais.total} />
       {props.desatualizado && props.sujo ? (
         <p
@@ -1297,10 +1292,7 @@ export function EstadoDoOrcamento({ estado }: { estado: "carregando" | "nao_enco
         : "Não foi possível carregar o orçamento.";
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">
-      <div className="flex flex-col items-start gap-3.5">
-        <h1 className="text-3xl font-extrabold tracking-tight">Comercial</h1>
-        <AbasDoComercial />
-      </div>
+      <h1 className="text-3xl font-extrabold tracking-tight">Orçamento</h1>
       <p className="rounded-lg border border-border bg-card px-5 py-7 text-center text-sm font-bold text-muted-foreground">
         {texto}
       </p>

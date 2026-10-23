@@ -138,6 +138,7 @@ const ClienteEnvios = lazy(() =>
   import("./pages/client").then((m) => ({ default: m.ClienteEnvios })),
 );
 const ComercialClientes = lazy(() => import("./pages/comercial/clientes"));
+const ComercialInicio = lazy(() => import("./pages/comercial/inicio"));
 const ComercialOrcamentos = lazy(() => import("./pages/comercial/orcamentos"));
 const ComercialOrcamento = lazy(() => import("./pages/comercial/orcamento"));
 const ComercialDocumento = lazy(() => import("./pages/comercial/documento"));
@@ -1071,7 +1072,8 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
     protectedRoute("/operacao/veiculos", OperacaoVeiculos),
   ]),
   ...soComComercialLiberado([
-    protectedRoute("/comercial", ComercialOrcamentos),
+    protectedRoute("/comercial", ComercialInicio),
+    protectedRoute("/comercial/orcamentos", ComercialOrcamentos),
     protectedRoute("/comercial/orcamento", ComercialOrcamento),
     protectedRoute("/comercial/orcamento/documento", ComercialDocumento),
     protectedRoute("/comercial/aprovar", ComercialAprovar),

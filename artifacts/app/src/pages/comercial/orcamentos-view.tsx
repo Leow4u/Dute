@@ -4,7 +4,6 @@ import { ArrowLeft, FilePlus, FileText, MapPin, Plus, Search, Send, User } from 
 
 import { formatarReais } from "@workspace/dominio";
 
-import { AbasDoComercial } from "@/components/comercial/abas-do-comercial";
 import { AcoesDepoisDoEnvio } from "@/components/comercial/acoes-depois-do-envio";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -175,7 +174,7 @@ function paraDoItem(item: ItemDaFila, contexto: ContextoDaFila): string | null {
 function Cabecalho({ busca, onBusca, onNovo, onOrcarExecucao }: FilaViewProps) {
   return (
     <header className="flex flex-wrap items-center gap-4">
-      <h1 className="mr-2 text-3xl font-extrabold tracking-tight">Comercial</h1>
+      <h1 className="mr-2 text-3xl font-extrabold tracking-tight">Orçamentos</h1>
       <div className="flex w-full flex-wrap items-center gap-2.5 sm:ml-auto sm:w-auto">
         <label className="relative block min-w-0 flex-1 sm:flex-none">
           <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" aria-hidden="true" />
@@ -481,7 +480,6 @@ export function FilaView(props: FilaViewProps) {
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">
       <Cabecalho {...props} />
-      <AbasDoComercial />
       <Segmentos {...props} />
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
         <Lista {...props} />

@@ -299,8 +299,8 @@ function secao(html: string, rotulo: string): string {
 }
 
 describe("tela de autorizações", () => {
-  it("sem legenda: abas, fila, painel e autorizadas só têm rótulos, dados e ações", () => {
-    expect(texts(render())).toEqual(["Comercial", "Orçamentos", "Contratos", "Autorizações", "Medições", ...FILA, ...PAINEL, ...AUTORIZADAS_TEXTOS]);
+  it("sem legenda: fila, painel e autorizadas só têm rótulos, dados e ações", () => {
+    expect(texts(render())).toEqual(["Autorizações", ...FILA, ...PAINEL, ...AUTORIZADAS_TEXTOS]);
   });
 
   it("identidade v3 dentro do layout do app, e uma ação principal só: Registrar autorização", () => {
@@ -350,8 +350,10 @@ describe("tela de autorizações", () => {
     expect(texts(html)).toContain("Pedido 4500000009 registrado · 2 demandas · R$ 20.748,80");
   });
 
-  it("a aba Autorizações aparece marcada na barra do módulo", () => {
-    expect(render()).toMatch(/<a [^>]*aria-current="page"[^>]*>Autorizações<\/a>/);
+  it("o título é o da tela, e a troca de tela fica no menu do módulo, sem abas dentro dela", () => {
+    const html = render();
+    expect(html).toMatch(/<h1[^>]*>Autorizações<\/h1>/);
+    expect(html).not.toContain('aria-current="page"');
   });
 
   it("o filtro de idade marca o escolhido e mostra só a faixa", () => {
@@ -420,7 +422,7 @@ describe("tela de autorizações", () => {
     expect(html).not.toContain('role="checkbox"');
     expect(html).not.toContain('aria-label="Registrar autorização de faturamento"');
     expect(html).not.toMatch(/bg-primary text-primary-foreground/);
-    expect(texts(html).slice(0, 6)).toEqual(["Comercial", "Orçamentos", "Contratos", "Autorizações", "Medições", "Nova autorização"]);
+    expect(texts(html).slice(0, 2)).toEqual(["Autorizações", "Nova autorização"]);
   });
 
   it("registrada: a confirmação aparece no painel; o erro do servidor também", () => {

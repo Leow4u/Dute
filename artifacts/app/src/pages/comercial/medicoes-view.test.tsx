@@ -106,10 +106,6 @@ function texts(html: string) {
 }
 
 const CABECALHO_E_COMPETENCIAS = [
-  "Comercial",
-  "Orçamentos",
-  "Contratos",
-  "Autorizações",
   "Medições",
   // Competências
   "Agosto/2026",
@@ -124,7 +120,7 @@ const CABECALHO_E_COMPETENCIAS = [
 ];
 
 describe("tela de medições", () => {
-  it("sem legenda: abas, competências, cabeçalho, linhas, resumo e anexos só têm rótulos, dados e ações", () => {
+  it("sem legenda: competências, cabeçalho, linhas, resumo e anexos só têm rótulos, dados e ações", () => {
     expect(texts(render())).toEqual([
       ...CABECALHO_E_COMPETENCIAS,
       // Cabeçalho da medição
@@ -237,8 +233,10 @@ describe("tela de medições", () => {
     expect(texts(principais[0] ?? "")).toEqual(["Enviar ao cliente"]);
   });
 
-  it("a aba Medições aparece marcada na barra do módulo", () => {
-    expect(render()).toMatch(/<a [^>]*aria-current="page"[^>]*>Medições<\/a>/);
+  it("o título é o da tela, e a troca de tela fica no menu do módulo, sem abas dentro dela", () => {
+    const html = render();
+    expect(html).toMatch(/<h1[^>]*>Medições<\/h1>/);
+    expect(html).not.toContain('aria-current="page"');
   });
 
   it("a competência aberta fica marcada (aria-pressed) e as outras levam a ela", () => {
@@ -349,18 +347,14 @@ describe("tela de medições: marcas e estados", () => {
     expect(texts(render({ medicao: "carregando" })).slice(CABECALHO_E_COMPETENCIAS.length)).toEqual(["Carregando..."]);
     expect(texts(render({ medicao: "erro" })).slice(CABECALHO_E_COMPETENCIAS.length)).toEqual(["Não foi possível carregar a medição."]);
     expect(texts(render({ estado: "carregando", contrato: null, medicao: "carregando", chips: [] }))).toEqual([
-      "Comercial",
-      "Orçamentos",
-      "Contratos",
-      "Autorizações",
       "Medições",
       "Carregando...",
     ]);
-    expect(texts(render({ estado: "erro", contrato: null, medicao: "carregando", chips: [] })).slice(5)).toEqual(["Não foi possível carregar os contratos."]);
+    expect(texts(render({ estado: "erro", contrato: null, medicao: "carregando", chips: [] })).slice(1)).toEqual(["Não foi possível carregar os contratos."]);
   });
 
   it("sem contrato por medição mensal, diz que não há", () => {
-    expect(texts(render({ contratos: [], contrato: null, medicao: "carregando", chips: [] })).slice(5)).toEqual([
+    expect(texts(render({ contratos: [], contrato: null, medicao: "carregando", chips: [] })).slice(1)).toEqual([
       "Nenhum contrato cobra por medição mensal",
     ]);
   });

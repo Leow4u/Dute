@@ -33,6 +33,7 @@ import {
   ROTA_DOCUMENTO,
   ROTA_MEDICOES,
   ROTA_ORCAMENTO,
+  ROTA_ORCAMENTOS,
   abreComercial,
   APROVADOR_ROLES,
 } from "./comercial/navegacao";
@@ -334,8 +335,8 @@ export const APP_MODULES: AppModule[] = [
     ],
   }),
   // Comercial (docs/plataforma/fase-6-comercial.md). As rotas e os papéis
-  // ficam aqui; o menu é do ambiente Comercial, não do WMS. A fila é a casa
-  // (/comercial, rota exata para não acender em Clientes e Contratos).
+  // ficam aqui; o menu é do ambiente Comercial, não do WMS. O Início é a
+  // casa (/comercial, rota exata para não acender nas outras telas).
   appModule({
     id: "comercial",
     label: "Comercial",
@@ -347,12 +348,19 @@ export const APP_MODULES: AppModule[] = [
     group: true,
     routes: [
       navRoute({
-        id: "comercial-orcamentos",
-        label: "Orçamentos",
+        id: "comercial-inicio",
+        label: "Início",
         href: ROTA_COMERCIAL,
-        icon: FileText,
+        icon: Home,
         roles: COMMERCIAL_ROLES,
         exact: true,
+      }),
+      navRoute({
+        id: "comercial-orcamentos",
+        label: "Orçamentos",
+        href: ROTA_ORCAMENTOS,
+        icon: Briefcase,
+        roles: COMMERCIAL_ROLES,
         // A montagem, a aprovação e o documento do orçamento são da fila.
         tambem: [ROTA_ORCAMENTO, ROTA_APROVAR, ROTA_DOCUMENTO],
       }),
@@ -908,15 +916,21 @@ const MOBILE_BAR_PRIORITY = [
 
 export const MOBILE_BAR_SLOTS = 4;
 
-export function getMobileNavigation(modules: AppModule[]): MobileNavigation {
+/**
+ * A barra do celular nos shells v3 de módulo (docs/mockups/ModCelularCom.dc.html
+ * e ModCelularOp.dc.html): três telas e "Mais", para o rótulo caber inteiro.
+ */
+export const MOBILE_BAR_SLOTS_DO_MODULO = 3;
+
+export function getMobileNavigation(modules: AppModule[], slots: number = MOBILE_BAR_SLOTS): MobileNavigation {
   const enabled = modules.filter(isModuleEnabled);
   const bar: AppModule[] = [];
   for (const id of MOBILE_BAR_PRIORITY) {
     const match = enabled.find((module) => module.id === id);
-    if (match && bar.length < MOBILE_BAR_SLOTS) bar.push(match);
+    if (match && bar.length < slots) bar.push(match);
   }
   for (const module of enabled) {
-    if (bar.length >= MOBILE_BAR_SLOTS) break;
+    if (bar.length >= slots) break;
     if (!bar.includes(module)) bar.push(module);
   }
   const more: MobileNavigation["more"] = [];
@@ -1014,11 +1028,9 @@ export function getActiveModule(
   const currentPath =
     ACTIVE_ALIASES[normalized] ??
     (normalized.startsWith("/wms/") ? "/estoque" : path);
+  // A mesma regra do menu: a rota do item e as telas dele (`tambem`).
   const exactMatch = modules.find((module) =>
-    module.routes.some(
-      (route) =>
-        route.href && isRouteActive(currentPath, route.href, route.exact),
-    ),
+    module.routes.some((route) => isNavRouteActive(currentPath, route)),
   );
   if (exactMatch) return exactMatch;
 

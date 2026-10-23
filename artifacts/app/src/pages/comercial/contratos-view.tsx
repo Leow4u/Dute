@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { alertasDoContrato, type TipoAlerta } from "@workspace/dominio";
 import { CalendarX, Clock, FileText, FolderOpen, Pencil, Plus, RefreshCw, Table2, TrendingUp, type LucideIcon } from "lucide-react";
 
-import { AbasDoComercial } from "@/components/comercial/abas-do-comercial";
 import { Button } from "@/components/ui/button";
 import { dataBr, type CadastroComercial, type Carga } from "@/lib/comercial/clientes";
 import {
@@ -526,8 +525,7 @@ export function ContratosView(props: ContratosViewProps) {
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">
       <header className="flex flex-wrap items-center gap-4">
-        <h1 className="mr-2 text-3xl font-extrabold tracking-tight">Comercial</h1>
-        <AbasDoComercial telas={telas} />
+        <h1 className="mr-2 text-3xl font-extrabold tracking-tight">Contratos</h1>
       </header>
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start">
         <Lista {...props} />
