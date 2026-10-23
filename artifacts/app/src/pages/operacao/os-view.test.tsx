@@ -216,6 +216,28 @@ describe("OS", () => {
     expect(textos).not.toContain("Assinatura");
   });
 
+  it("revisada: a decisão de cada divergência e a nota", () => {
+    const revisada = fichaDaLeitura("10045-01", {
+      status: "revisada",
+      edicao: 13,
+      demanda: "10045",
+      customer_code: "ITAU",
+      itens: [{ id: "ln_2", item: "Montagem de mesa de trabalho", unidade: "UN", planejado: "60", executado: "58" }],
+      revisao: {
+        instante: "2026-10-22T21:10:00.000Z",
+        nota: "Elevador lento",
+        linhas: [
+          { linha: "ln_2", item: "Montagem de mesa de trabalho", diferenca: "-2", corrigido: null, decisao: "proxima_os", motivo: null },
+          { linha: "ln_1", item: "Cadeira", diferenca: "10", corrigido: "155", decisao: "absorver", motivo: "Cortesia do contrato" },
+        ],
+      },
+    }) as FichaDaOs;
+    const textos = textosDaTela(render({ ficha: revisada }));
+    for (const texto of ["Revisão", "Revisada 18:10", "−2 Montagem de mesa de trabalho · próxima OS", "+10 Cadeira · corrigido para 155 · absorvido sem cobrar", "Cortesia do contrato", "Elevador lento", "OS revisada"]) {
+      expect(textos, texto).toContain(texto);
+    }
+  });
+
   it("carregando, erro e não encontrada", () => {
     expect(textosDaTela(render({ estado: "carregando", ficha: null }))).toContain("Carregando");
     expect(textosDaTela(render({ estado: "erro", ficha: null }))).toContain("Não foi possível carregar a OS.");

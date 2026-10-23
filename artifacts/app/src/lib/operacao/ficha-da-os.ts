@@ -71,6 +71,13 @@ export type ConclusaoLida = RegistroLido & {
   diferencas: Array<{ linha: string; previsto: string; executado: string; motivo: string }>;
 };
 
+/** A revisão interna (parte 3.10a): quando, e a decisão de cada linha que divergiu. */
+export type RevisaoLida = {
+  instante: string;
+  nota: string | null;
+  linhas: Array<{ linha: string; item: string; diferenca: string; corrigido: string | null; decisao: string | null; motivo: string | null }>;
+};
+
 export type FichaDaOs = {
   numero: string;
   demanda: string;
@@ -91,6 +98,7 @@ export type FichaDaOs = {
   fotos: FotoLida[];
   presencas: PresencaLida[];
   conclusao: ConclusaoLida | null;
+  revisao: RevisaoLida | null;
   cancelamento: string | null;
 };
 
@@ -232,7 +240,33 @@ export function fichaDaLeitura(id: string, data: Record<string, unknown>): Ficha
       return [{ colaboradorId: colaborador, entrada: instanteDe(bruto.entrada), saida: instanteDe(bruto.saida) }];
     }),
     conclusao: conclusaoLida(data.conclusao),
+    revisao: revisaoLida(data.revisao),
     cancelamento: cancelamento || null,
+  };
+}
+
+function revisaoLida(valor: unknown): RevisaoLida | null {
+  if (!valor || typeof valor !== "object") return null;
+  const bruto = valor as Record<string, unknown>;
+  const instante = texto(bruto.instante);
+  if (!instante || Number.isNaN(Date.parse(instante))) return null;
+  return {
+    instante,
+    nota: textoOuNull(bruto.nota),
+    linhas: objetos(bruto.linhas).flatMap((linha) =>
+      texto(linha.linha)
+        ? [
+            {
+              linha: texto(linha.linha),
+              item: texto(linha.item),
+              diferenca: texto(linha.diferenca),
+              corrigido: textoOuNull(linha.corrigido),
+              decisao: textoOuNull(linha.decisao),
+              motivo: textoOuNull(linha.motivo),
+            },
+          ]
+        : [],
+    ),
   };
 }
 
@@ -348,7 +382,13 @@ export function passosDaOs(ficha: FichaDaOs): PassoDaOs[] {
         : ["Fotos e assinatura no local", ficha.janela?.fim ? `até ${ficha.janela.fim}` : null].filter(Boolean).join(" · "),
       estado: estado(3),
     },
-    { numero: 4, titulo: "Revisar", quem: "Coordenação", detalhe: "Itens, fotos e divergências", estado: estado(4) },
+    {
+      numero: 4,
+      titulo: "Revisar",
+      quem: "Coordenação",
+      detalhe: ficha.revisao ? `Revisada ${horaDe(ficha.revisao.instante)}` : "Itens, fotos e divergências",
+      estado: estado(4),
+    },
   ];
 }
 
@@ -386,6 +426,40 @@ export function conclusaoNaFicha(ficha: FichaDaOs): ConclusaoNaFicha | null {
       quantidade: `${diferenca.executado} de ${diferenca.previsto}`,
       motivo: diferenca.motivo,
     })),
+  };
+}
+
+const DECISAO_NA_FICHA: Record<string, string> = {
+  cobrar: "cobrar na execução",
+  aditivo: "aditivo ao Comercial",
+  absorver: "absorvido sem cobrar",
+  proxima_os: "próxima OS",
+  encerrar: "encerrado sem executar",
+};
+
+/** A revisão na ficha: a decisão de cada linha que divergiu ("+10 Cadeira · aditivo ao Comercial") e a nota. */
+export function revisaoNaFicha(ficha: FichaDaOs): { quando: string; linhas: Array<{ linha: string; texto: string; motivo: string | null }>; nota: string | null } | null {
+  const revisao = ficha.revisao;
+  if (!revisao) return null;
+  return {
+    quando: `Revisada ${horaDe(revisao.instante)}`,
+    linhas: revisao.linhas
+      .filter((linha) => linha.decisao || linha.corrigido)
+      .map((linha) => {
+        const diferenca = linha.diferenca.startsWith("-") ? `−${linha.diferenca.slice(1)}` : `+${linha.diferenca}`;
+        return {
+          linha: linha.linha,
+          texto: [
+            linha.decisao ? `${diferenca} ${linha.item}` : linha.item,
+            linha.corrigido ? `corrigido para ${linha.corrigido}` : null,
+            linha.decisao ? (DECISAO_NA_FICHA[linha.decisao] ?? linha.decisao) : null,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+          motivo: linha.motivo,
+        };
+      }),
+    nota: revisao.nota,
   };
 }
 
@@ -504,6 +578,16 @@ export function historicoDaOs(ficha: FichaDaOs, hoje: string): EntradaDoHistoric
       detalhe: ["Ocorrência", origemEmTexto(ficha, ocorrencia), quando(ocorrencia.instante)].join(" · "),
       instante: ocorrencia.instante,
     })),
+    ...(ficha.revisao
+      ? [
+          {
+            chave: "revisao",
+            titulo: "OS revisada",
+            detalhe: [`${ficha.revisao.linhas.filter((linha) => linha.decisao).length} ${ficha.revisao.linhas.filter((linha) => linha.decisao).length === 1 ? "divergência decidida" : "divergências decididas"}`, quando(ficha.revisao.instante)].join(" · "),
+            instante: ficha.revisao.instante,
+          },
+        ]
+      : []),
     ...(ficha.conclusao
       ? [
           {

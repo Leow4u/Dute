@@ -939,3 +939,28 @@ Regras em `domain/revisao.ts`, gravação em `domain/revisao-gravacao.ts`.
 - **Cancelar em execução.** A OS em execução não se cancela: conclui com o
   que foi feito, e a revisão devolve o resto ao saldo (Passar para a próxima
   OS) ou o encerra. Cancelar perderia o executado, que é cobrança e medida.
+
+### Parte 3.10b: tela Revisão
+
+Feita em 23/10/2026, no desenho aprovado `OpRevisao`, em
+`/operacao/revisao` (owner, admin e interno; item Revisão no menu da
+Operação; "Revisar" na ficha da OS em revisão). Regras em
+`lib/operacao/revisao.ts`; a callable confere de novo (parte 3.10a).
+
+- **Para revisar.** As OS em revisão, quem espera há mais tempo primeiro, com
+  as divergências e o aceite.
+- **A OS da vez.** A conclusão em texto ("Concluída em campo 17:20 · assinada
+  17:52 por"), "Ver OS" e "Imprimir"; as conferências (as fotos, a
+  assinatura, as horas reais contra as planejadas e a equipe, e os itens com
+  divergência); e os itens com o planejado, o executado, a diferença, o
+  orçado (ou o pedido, na direta) e o saldo da demanda, que segue a decisão.
+- **Divergências.** Cada uma com o que aconteceu (a inclusão em campo, o
+  motivo dito na conclusão) e só as decisões que valem para ela: acima do
+  orçado, aditivo ou absorver; dentro do saldo livre, cobrar também; na
+  direta, cobrar ou absorver; a menos, próxima OS ou encerrar; e "Corrigir
+  quantidade", que pede a quantidade e o motivo e decide o que resta. O botão
+  diz "Concluir revisão e pedir aditivo" quando há aditivo. A sugestão do
+  Agent Dute do desenho entra na Fase 5.
+- **Na ficha.** A OS revisada mostra o cartão Revisão (a decisão de cada
+  divergência e a nota), o passo Revisar e o histórico. Owner e admin veem
+  "Reabrir", com o motivo.

@@ -30,6 +30,8 @@ export const ROTA_NOVA_DEMANDA = "/operacao/nova-demanda";
 export const ROTA_OS = "/operacao/os";
 /** A OS impressa, via operacional (parte 3.9d, docs/mockups/OSImpressao.dc.html): ?numero=10045-01. */
 export const ROTA_OS_IMPRESSAO = "/operacao/os/impressao";
+/** A revisão interna (parte 3.10b, docs/mockups/OpRevisao.dc.html): ?os=10045-01 abre a OS da vez. */
+export const ROTA_REVISAO = "/operacao/revisao";
 /** Planejar as OS de uma demanda (parte 3.6a, docs/mockups/OpOSPlanejar.dc.html): ?demanda=10045. */
 export const ROTA_PLANEJAR = "/operacao/planejar";
 
@@ -43,6 +45,7 @@ export const TELAS_DA_OPERACAO: readonly string[] = [
   ROTA_PLANEJAR,
   ROTA_OS,
   ROTA_OS_IMPRESSAO,
+  ROTA_REVISAO,
   ROTA_COLABORADORES,
   ROTA_VEICULOS,
   // O app do campo é da Operação: só existe com a liberação dela (parte 3.8b).
@@ -67,6 +70,11 @@ export function osDaBusca(busca: string): string | null {
 /** A ficha da OS: "/operacao/os?numero=10045-01". */
 export function hrefDaFichaDaOs(numero: string): string {
   return `${ROTA_OS}?numero=${encodeURIComponent(numero)}`;
+}
+
+/** A revisão com a OS da vez: "/operacao/revisao?os=10045-01". */
+export function hrefDaRevisao(numero: string): string {
+  return `${ROTA_REVISAO}?os=${encodeURIComponent(numero)}`;
 }
 
 /** A OS impressa: "/operacao/os/impressao?numero=10045-01". */
