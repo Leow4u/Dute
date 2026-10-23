@@ -166,6 +166,22 @@ describe("listas da Operação iguais em todo lugar", () => {
   });
 });
 
+describe("listas do RH iguais em todo lugar (Fase 8)", () => {
+  const roles = read("functions/rh/src/domain/platform-roles.ts");
+  const liberacao = read("functions/rh/src/domain/liberacao.ts");
+
+  it("papéis: lib/dominio e functions/rh; abrem o RH os papéis que têm o módulo, e só o rh grava (pergunta 23)", () => {
+    expect(tsList(roles, "PLATFORM_ROLES")).toEqual([...PAPEIS]);
+    const comRh = PAPEIS.filter((papel) => papel !== "cliente" && MODULOS_POR_PAPEL[papel].includes("rh"));
+    expect(tsList(roles, "RH_ROLES")).toEqual(comRh);
+    expect(tsList(roles, "RH_WRITE_ROLES")).toEqual(["rh"]);
+  });
+
+  it("liberação por ambiente: só a homologação até o lançamento da fase", () => {
+    expect(tsList(liberacao, "RH_AMBIENTES_LIBERADOS")).toEqual(["dute-homolog"]);
+  });
+});
+
 describe("listas do Financeiro iguais em todo lugar (Fase 4)", () => {
   const roles = read("functions/financeiro/src/domain/platform-roles.ts");
   const liberacao = read("functions/financeiro/src/domain/liberacao.ts");

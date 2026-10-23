@@ -549,6 +549,16 @@ class MainTests(unittest.TestCase):
         self.assertEqual(self.fake.exports, [])
         self.assertFalse(self.backup.exists())
 
+    def test_rh_database_is_never_reset(self) -> None:
+        before = copy.deepcopy(self.fake.docs)
+        for database in ("rh", " rh "):
+            with fake_backend(self.fake), self.assertRaises(SystemExit) as raised:
+                run_main(["--database", database, *self.apply_args()])
+            self.assertIn("banco do RH nunca é zerado", str(raised.exception))
+        self.assertEqual(self.fake.docs, before)
+        self.assertEqual(self.fake.batches, [])
+        self.assertEqual(self.fake.exports, [])
+
     def test_apply_requires_confirmation(self) -> None:
         with fake_backend(self.fake), self.assertRaises(SystemExit):
             run_main(["--apply", "--export-to", "gs://b/p", "--confirm", "errada"])

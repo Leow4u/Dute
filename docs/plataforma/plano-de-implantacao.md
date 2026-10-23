@@ -624,6 +624,7 @@ fatura; a NF sai pela integração; o a receber é um só.
 
 **Objetivo.** Documentos, CNH, exames e treinamentos dos colaboradores, com
 vencimentos avisados, num banco à parte; folha e eSocial por integração.
+Desenho e registro das partes: `docs/plataforma/fase-8-rh.md`.
 
 **Decisões.** Banco Firestore `rh`, separado, com regras próprias: lê e
 grava `rh`; `admin` e `owner` leem (proposta, resolvendo a divergência do

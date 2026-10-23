@@ -1,0 +1,13 @@
+rules_version = '2';
+
+// O banco `rh` (docs/plataforma/fase-8-rh.md): fechado ao navegador. As
+// regras de um banco nomeado não leem o `users` do banco padrão, então não
+// sabem o papel de quem pede. Quem lê e grava é a codebase functions/rh,
+// pelas callables, que conferem o papel (owner, admin e rh leem; só rh grava).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

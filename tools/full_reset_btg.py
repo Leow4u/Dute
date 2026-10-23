@@ -696,8 +696,18 @@ def parser() -> argparse.ArgumentParser:
     return result
 
 
+# O banco do RH (docs/plataforma/fase-8-rh.md) nunca é zerado: os documentos,
+# os exames e os treinamentos dos colaboradores não fazem parte do go-live.
+PROTECTED_DATABASES = ("rh",)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
+    if args.database.strip() in PROTECTED_DATABASES:
+        raise SystemExit(
+            f"--database {args.database.strip()} não é permitido: o banco do RH "
+            "nunca é zerado (docs/plataforma/fase-8-rh.md)."
+        )
     keep = [name.strip() for name in args.keep if name.strip()]
     if CONTROL_COLLECTION in keep:
         raise SystemExit(
