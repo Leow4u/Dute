@@ -86,6 +86,23 @@ service firebase.storage {
       allow update, delete: if false;
     }
 
+    // Assinatura do responsável do cliente (parte 3.9a): a mesma regra das
+    // fotos, só na OS em execução (é o aceite da conclusão). Vale na OS
+    // depois de completeServiceOrder, que confere o arquivo.
+    match /os/{numero}/assinatura/{arquivo} {
+      allow read: if coordenaOperacao()
+        || (hasProfile() && profileRole() == 'suporte')
+        || escaladoNaOs(numero);
+      allow create: if resource == null
+        && (coordenaOperacao() || escaladoNaOs(numero))
+        && numero.matches('^[0-9]{5,8}-[0-9]{2}$')
+        && arquivo.matches('^as_[a-f0-9]{16}[.](jpg|png|webp)$')
+        && ordemDeServico(numero).data.status == 'em_execucao'
+        && request.resource.size < 8 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+      allow update, delete: if false;
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

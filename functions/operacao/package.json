@@ -12,8 +12,8 @@
     "build:test": "tsc -p tsconfig.test.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run test:unit",
-    "test:unit": "npm run build:test && node --test lib/callables.test.js lib/domain/platform-roles.test.js lib/domain/liberacao.test.js lib/domain/profile.test.js lib/domain/operations.test.js lib/domain/events.test.js lib/domain/cadastro.test.js lib/domain/os.test.js lib/domain/demanda-direta.test.js lib/domain/execucao.test.js lib/domain/itens-executados.test.js lib/domain/fotos.test.js lib/domain/presencas.test.js",
-    "test:integration": "npm run build:test && firebase emulators:exec --project demo-dute-operacao --only firestore \"node --test --test-concurrency=1 lib/domain/profile.integration.test.js lib/domain/cadastro.integration.test.js lib/domain/os.integration.test.js lib/domain/demanda-direta.integration.test.js lib/domain/execucao.integration.test.js\"",
+    "test:unit": "npm run build:test && node --test lib/callables.test.js lib/domain/platform-roles.test.js lib/domain/liberacao.test.js lib/domain/profile.test.js lib/domain/operations.test.js lib/domain/events.test.js lib/domain/cadastro.test.js lib/domain/os.test.js lib/domain/demanda-direta.test.js lib/domain/execucao.test.js lib/domain/itens-executados.test.js lib/domain/fotos.test.js lib/domain/presencas.test.js lib/domain/conclusao.test.js",
+    "test:integration": "npm run build:test && firebase emulators:exec --project demo-dute-operacao --only firestore \"node --test --test-concurrency=1 lib/domain/profile.integration.test.js lib/domain/cadastro.integration.test.js lib/domain/os.integration.test.js lib/domain/demanda-direta.integration.test.js lib/domain/execucao.integration.test.js lib/domain/conclusao.integration.test.js\"",
     "test:critical": "npm run test:unit && npm run test:integration"
   },
   "dependencies": {

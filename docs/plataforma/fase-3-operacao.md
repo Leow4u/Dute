@@ -166,7 +166,10 @@ registros guardados" é dado, não legenda.
 | 3.8a | Campo no backend: as callables da execução atendem o campo escalado (canal celular, informa o colaborador do login), `registerPresence`, o nome do cliente na OS e o catálogo sem preço para o campo | Campo grava só na OS escalada; quem não é líder marca só a própria presença; vale a primeira marca |
 | 3.8b | Campo no celular (`/campo`): Minhas OS e a OS em execução, com etapas, itens, incluir item, presença, fotos e ocorrência | Campo lê só a OS escalada; textos listados; `axe` |
 | 3.8c | Fila sem sinal: os registros guardados no aparelho (IndexedDB) e reenviados quando o sinal volta, "Sem sinal · N registros guardados" | Dois envios do mesmo registro gravam um; instante original guardado |
-| 3.9 | Concluir com assinatura ou "sem aceite no local", Em revisão; impressão da OS | Concluir sem motivo para item a menos recusado; assinatura no Storage com regra |
+| 3.9a | Conclusão no backend: `completeServiceOrder` (assinatura ou "sem aceite no local", responsável, fotos do final, motivo por item a menos), assinatura no Storage com regra, status Em revisão | Concluir sem motivo para item a menos recusado; assinatura no Storage com regra |
+| 3.9b | Concluir no celular (`Campo2Concluir`): itens com a diferença e o motivo, fotos do final, responsável, assinatura no dedo, "sem aceite no local", pela fila | Textos listados; `axe`; o formulário manda o formato de `completeServiceOrder` |
+| 3.9c | Concluir pelo escritório e a conclusão na ficha da OS (aceite, responsável, assinatura e diferenças) | Textos listados; `axe`; o formulário manda o formato de `completeServiceOrder` |
+| 3.9d | Impressão da OS (`OSImpressao`, via operacional) | Sem valor; textos listados |
 | 3.10 | Revisão interna, Revisada, reabrir; aditivo na fila do Comercial; demanda direta em Execução a orçar | Divergência sem decisão não conclui; `demands.revisao` só pela Operação |
 | 3.11 | Vistoria como OS e "Enviar vistoria ao comercial" | Vistoria não passa pela revisão; orçamento nasce com os itens dela |
 | 3.12 | TV da sala (`/tv`, papel `painel`) | `painel` só lê o que a TV mostra; sem valor; sem ação |
@@ -791,3 +794,37 @@ idempotência e o instante do toque.
   desenvolvimento do app). O teste da fila no navegador simulado registra sem
   sinal, fecha e abre o app, devolve o sinal e confere a chamada única com a
   chave e o instante originais.
+
+### Parte 3.9a: conclusão no backend
+
+Feita em 23/10/2026. `completeServiceOrder` em `functions/operacao` (owner,
+admin, interno e o campo escalado), regras em `domain/conclusao.ts` e
+gravação em `domain/conclusao-gravacao.ts`.
+
+- **Aceite.** Com assinatura, o responsável do cliente (nome; cargo e
+  documento quando houver) assina e a imagem sobe antes ao Storage, em
+  `os/{numero}/assinatura/as_<16 hex>.png` (ou `.jpg`, `.webp`, até 8 MB):
+  sobe quem coordena ou está escalado, só com a OS em execução, sem
+  sobrescrever nem apagar; lê também o suporte (teste no emulador em
+  `functions/wms/src/operacao-fotos.rules.test.ts`). A callable confere que o
+  arquivo chegou e é imagem. Sem responsável, a OS conclui "sem aceite no
+  local" com o nome de quem recebeu, e o aceite vem pela validação do
+  cliente no Comercial (resposta 4).
+- **O que a conclusão pede.** A OS em execução; a hora não vem antes da
+  última etapa; ao menos uma foto do final (as da etapa Fim, anexadas antes
+  por `attachPhoto`); e o motivo de cada item feito a menos que o previsto (o
+  item sem feito conta zero). O motivo de um item que já não tem diferença
+  (o feito chegou antes por outro aparelho) fica de fora, sem recusar: o
+  responsável não precisa assinar de novo. No
+  celular, quando a OS tem líder, só ele conclui; o escritório conclui com
+  quem informou e o meio.
+- **O que grava.** `conclusao` na OS (o instante, o canal, quem informou, o
+  aceite, o responsável, o caminho da assinatura e as diferenças com o
+  previsto, o feito e o motivo), a etapa Fim quando ainda não estava
+  registrada e o status Em revisão. Depois disso a OS não recebe mais
+  andamento; a revisão (parte 3.10) decide as diferenças.
+- **Eventos.** `os.completed` (o instante, o canal, quem informou, o aceite,
+  quantos itens ficaram a menos e quantas fotos do final), `os.signed` ou
+  `os.completed_without_acceptance`, e `os.step_recorded` do Fim quando a
+  conclusão o registra. O nome, o cargo e o documento do responsável e os
+  motivos ficam só na OS.

@@ -4,6 +4,7 @@ import { getStorage } from "firebase-admin/storage";
 import { onCall } from "firebase-functions/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 
+import { completeServiceOrderFor } from "./domain/conclusao-gravacao.js";
 import { openDirectDemandFor } from "./domain/demanda-direta-gravacao.js";
 import { registerItemFor, registerOccurrenceFor, registerPresenceFor, registerStepFor } from "./domain/execucao-gravacao.js";
 import { attachPhotoFor, type ConferirArquivo } from "./domain/fotos-gravacao.js";
@@ -92,4 +93,10 @@ export const attachPhoto = onCall(async (request) => {
 export const registerPresence = onCall(async (request) => {
   const caller = await requireOperacaoCaller(db, request, PROJECT_ID, { campo: true });
   return registerPresenceFor(db, caller, request.data);
+});
+
+/** Conclui a OS em execução com a assinatura do responsável ou "sem aceite no local"; a OS vai para Em revisão. */
+export const completeServiceOrder = onCall(async (request) => {
+  const caller = await requireOperacaoCaller(db, request, PROJECT_ID, { campo: true });
+  return completeServiceOrderFor(db, caller, request.data, conferirArquivo);
 });

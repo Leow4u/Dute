@@ -43,6 +43,9 @@ export const OPERACAO_EVENT_TYPES = [
   "os.item_added_in_field",
   "os.photo_attached",
   "os.presence_recorded",
+  "os.completed",
+  "os.signed",
+  "os.completed_without_acceptance",
   "demand.direct_opened",
 ] as const;
 export type OperacaoEventType = (typeof OPERACAO_EVENT_TYPES)[number];
@@ -152,6 +155,27 @@ const presencaRegistrada = z
   .object({ id: osId, demanda: demandaNumero, colaborador_id: z.string().regex(/^col_[a-f0-9]{16}$/), tipo: z.enum(["entrada", "saida"]), instante, canal })
   .strict();
 
+/**
+ * A conclusão (parte 3.9a): o fim, por onde, quem informou, o aceite, quantos
+ * itens ficaram a menos e quantas fotos do final. Sem o nome nem o documento
+ * do responsável do cliente (ficam só na OS).
+ */
+const osConcluida = z
+  .object({
+    id: osId,
+    demanda: demandaNumero,
+    instante,
+    canal,
+    informado_por: informante,
+    aceite: z.enum(["assinatura", "sem_aceite"]),
+    itens_a_menos: z.number().int().min(0).max(300),
+    fotos_do_final: z.number().int().min(1).max(200),
+  })
+  .strict();
+
+/** O aceite no local: a assinatura do responsável ou a falta dela. */
+const aceiteNoLocal = z.object({ id: osId, demanda: demandaNumero, instante, canal }).strict();
+
 export const OPERACAO_EVENT_PAYLOADS = {
   "collaborator.created": criado,
   "collaborator.updated": alterado,
@@ -173,6 +197,9 @@ export const OPERACAO_EVENT_PAYLOADS = {
   "os.item_added_in_field": itemIncluido,
   "os.photo_attached": fotoAnexada,
   "os.presence_recorded": presencaRegistrada,
+  "os.completed": osConcluida,
+  "os.signed": aceiteNoLocal,
+  "os.completed_without_acceptance": aceiteNoLocal,
   "demand.direct_opened": demandaDireta,
 } as const;
 
@@ -197,6 +224,12 @@ const TEXTO: Record<OperacaoEventType, { title: string; description: string }> =
   "os.item_added_in_field": { title: "Item incluído em campo", description: "Um item foi executado além do planejado na OS." },
   "os.photo_attached": { title: "Foto anexada à OS", description: "Uma foto da execução foi anexada à OS." },
   "os.presence_recorded": { title: "Presença na OS", description: "A entrada ou a saída de alguém da equipe foi registrada na OS." },
+  "os.completed": { title: "OS concluída", description: "A execução da OS terminou no local e a OS foi para a revisão interna." },
+  "os.signed": { title: "Aceite assinado no local", description: "O responsável do cliente assinou o aceite dos itens executados." },
+  "os.completed_without_acceptance": {
+    title: "OS concluída sem aceite no local",
+    description: "Não havia responsável para assinar; o aceite vem pela validação do cliente no Comercial.",
+  },
   "demand.direct_opened": { title: "Demanda direta aberta", description: "A demanda chegou direto na Operação e se orça depois da execução." },
 };
 
