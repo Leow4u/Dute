@@ -1373,7 +1373,7 @@ function FamilyCard({
         ) : null}
         <div className="min-w-0">
           <p className="truncate text-xs uppercase tracking-wide text-muted-foreground">
-            {product.name} · {family.base || product.clientCode}
+            {productType(product)} · {family.base || product.clientCode}
           </p>
           <button
             type="button"
