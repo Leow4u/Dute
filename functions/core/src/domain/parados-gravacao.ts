@@ -4,13 +4,23 @@ import type { Firestore, QueryDocumentSnapshot } from "firebase-admin/firestore"
 
 import { LOTE_DE_MOVIMENTOS, lerLoteDeMovimentos, marcarCursor } from "./cursor.js";
 import { semInstante } from "./estavel.js";
-import { instanteValido, marcarMovimento, sentidoDoMovimento, type RelogioDoItem, type SentidoDoMovimento } from "./parados.js";
+import {
+  instanteValido,
+  marcarMovimento,
+  marcarSaidaNaPosicao,
+  posicaoNormalizada,
+  sentidoDoMovimento,
+  type RelogioDoItem,
+  type SaidasPorPosicao,
+  type SentidoDoMovimento,
+} from "./parados.js";
 
 /**
  * A rotina dos dias parado (docs/plataforma/fase-5-memoria.md, parte 5.4a).
  * Lê o razão do estoque (`movements`) depois do cursor e refaz, em
  * `ai_stock_age`, o item de cada movimento: o relógio (a primeira e a última
- * entrada e a última saída que contam) e o saldo, lido de `stock_balances`.
+ * entrada e a última saída que contam), a última saída em cada posição, para
+ * a idade da caixa (parte 5.4b), e o saldo, lido de `stock_balances`.
  * Não grava a idade nem a etiqueta: a regra do modelo do cliente vale na hora,
  * com o dia de hoje, na tela e no alerta (lib/dominio/src/parados.ts).
  *
@@ -26,8 +36,8 @@ export const AI_STOCK_AGE_COLLECTION = "ai_stock_age";
 export const STOCK_BALANCES_COLLECTION = "stock_balances";
 export const CURSOR_DOS_PARADOS = "parados";
 
-/** Sobe quando o que o item guarda muda: a rotina relê o razão inteiro. */
-export const VERSAO_DOS_PARADOS = 1;
+/** Sobe quando o que o item guarda muda: a rotina relê o razão inteiro. A 2 trouxe a saída por posição. */
+export const VERSAO_DOS_PARADOS = 2;
 
 /** Os lotes de cada vez da rotina: até 3.000 movimentos a cada 15 minutos. */
 const LOTES_POR_VEZ = 10;
@@ -41,6 +51,7 @@ const CAMPOS_DO_MOVIMENTO = [
   "cod_sku",
   "client_item_code",
   "product_name",
+  "location_id",
   "source",
   "tipo_mov",
   "occurred_at",
@@ -56,6 +67,8 @@ export type ItemParado = {
   /** A soma de `qty_on_hand` do item em todas as posições. */
   saldo: number;
   relogio: RelogioDoItem;
+  /** A última saída que conta em cada posição, para a idade da caixa que está nela. */
+  saidas_por_posicao: SaidasPorPosicao;
   calculada_em: string;
 };
 
@@ -66,6 +79,7 @@ export type MovimentoLido = {
   sku_code: string;
   client_item_code: string | null;
   product_name: string | null;
+  posicao: string;
   /** null para o movimento que só muda o saldo. */
   sentido: SentidoDoMovimento | null;
   em: string | null;
@@ -91,9 +105,15 @@ export function movimentoLido(dados: Registro): MovimentoLido | null {
     sku_code: skuCode,
     client_item_code: texto(dados.client_item_code) || null,
     product_name: texto(dados.product_name) || null,
+    posicao: posicaoNormalizada(dados.location_id),
     sentido: sentidoDoMovimento(dados.source, dados.tipo_mov),
     em: instanteValido(dados.occurred_at) ?? instanteValido(dados.data),
   };
+}
+
+function saidasGravadas(valor: unknown): SaidasPorPosicao {
+  const registro = valor && typeof valor === "object" ? (valor as Registro) : {};
+  return Object.entries(registro).reduce<SaidasPorPosicao>((saidas, [posicao, em]) => marcarSaidaNaPosicao(saidas, posicao, em), {});
 }
 
 function relogioGravado(valor: unknown): RelogioDoItem {
@@ -113,7 +133,12 @@ export function itemDepoisDosMovimentos(atual: Registro | null, movimentos: read
   const [primeiro] = movimentos;
   if (!primeiro) return null;
   let relogio = relogioGravado(atual?.relogio);
-  for (const movimento of movimentos) if (movimento.sentido) relogio = marcarMovimento(relogio, movimento.sentido, movimento.em);
+  let saidas = saidasGravadas(atual?.saidas_por_posicao);
+  for (const movimento of movimentos) {
+    if (!movimento.sentido) continue;
+    relogio = marcarMovimento(relogio, movimento.sentido, movimento.em);
+    if (movimento.sentido === "saida") saidas = marcarSaidaNaPosicao(saidas, movimento.posicao, movimento.em);
+  }
   const maisNovo = (campo: "client_item_code" | "product_name") =>
     movimentos.reduce<string | null>((achado, movimento) => movimento[campo] ?? achado, null) ?? (texto(atual?.[campo]) || null);
   return {
@@ -124,6 +149,7 @@ export function itemDepoisDosMovimentos(atual: Registro | null, movimentos: read
     product_name: maisNovo("product_name"),
     saldo,
     relogio,
+    saidas_por_posicao: saidas,
     calculada_em: calculadaEm,
   };
 }
