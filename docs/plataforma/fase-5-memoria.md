@@ -118,7 +118,8 @@ Leonardo.
 | 5.2a | `suggestDuration` e `answerSuggestion`, com `ai_suggestions`; a rotina grava o valor real quando a OS é revisada | Sugestão só com o mínimo de execuções; a base gravada; nada grava na OS |
 | 5.2b | A duração sugerida e a divisão em OS no Planejar OS, com a base e o aviso de plano otimista | Textos listados; aceitar só preenche; `axe` |
 | 5.3a | `ai_case_memory`: a lembrança de cada demanda fechada, com o resumo e o vetor | A lembrança bate com a demanda; nada de outro cliente |
-| 5.3b | Orçamentos parecidos no Comercial: os itens, as quantidades, o prazo e o preço, com o orçado e o realizado de cada caso | Caso de outro cliente nunca aparece; nada grava no orçamento sem a pessoa aceitar |
+| 5.3b | `findSimilarQuotes`: os orçamentos parecidos do cliente da demanda, com os itens, as quantidades, o prazo e o preço, e o orçado e o realizado de cada caso | Caso de outro cliente nunca aparece; só quem orça pede; nada grava |
+| 5.3c | Os orçamentos parecidos na montagem do orçamento, com "Usar as quantidades" | Textos listados; usar só preenche o formulário; `axe` |
 | 5.4a | Os dias parado no WMS por item, caixa e peça; as etiquetas pela regra do perfil do cliente | O limite do perfil vale; a etiqueta sai da regra |
 | 5.4b | O alerta do item parado, no portal e por e-mail, só depois da aprovação | O alerta não sai sem aprovação |
 | 5.5 | O Agent Dute no núcleo, com as ferramentas de leitura dos módulos; o WMS passa a usar o do núcleo. Desenho próprio antes do código | Ferramenta nunca escreve; isolamento por cliente nas respostas |
@@ -270,3 +271,22 @@ a rotina em `lembrancas-gravacao.ts`.
   - `lembrancas.test.ts` resolve à mão um caso: no Itaú, 12 mesas e 40 cadeiras orçadas por R$ 5.000,00 e 14 mesas, 40 cadeiras e 3 caixas avulsas validadas por R$ 5.600,00, em duas OS de 3 horas e 420 homem-minutos. Cobre também o vetor, o resumo, a demanda direta, o fechamento depois da reabertura, a semelhança e os eventos que contam.
   - `lembrancas.integration.test.ts` cobre a primeira vez, a OS de outro cliente que nunca entra, a reabertura, o fechamento, a lembrança que não mudou e o evento do último minuto.
   - `memoria-medidas.rules.test.ts` cobre a regra; `callables.test.ts`, a rotina que roda as duas.
+
+### Parte 5.3b: os orçamentos parecidos no backend
+
+Feita em 23/10/2026. As contas estão em `functions/core/src/domain/parecidos.ts`;
+a leitura em `parecidos-gravacao.ts`.
+
+- **`findSimilarQuotes`** só lê. Recebe a demanda em montagem e os itens da LPU do orçamento, com as quantidades.
+  - O cliente vem da demanda, nunca do pedido. Só as lembranças desse cliente entram, as 300 fechadas mais recentes.
+  - A própria demanda nunca aparece.
+  - Devolve os três mais parecidos, a partir de 50%. Empatados, o fechado mais recente vem primeiro.
+  - Cada caso leva a semelhança, os itens em comum, os itens com o orçado e o realizado, o valor dos dois, o período executado, as OS e o tempo de trabalho. Não leva o vetor nem o cliente.
+- **A semelhança** passa a ser o cosseno vezes a razão dos tamanhos dos vetores. O cosseno sozinho dá 100% para 12 e para 300 mesas, porque compara só a proporção. Com a razão, 12 mesas contra 14 dão 95%, e contra 30 dão 75%.
+- **Quem pede.** Owner, admin e comercial: quem orça e lê preço. É a lista `ORCAMENTO_ROLES`, igual à `COMERCIAL_ROLES` do Comercial (`platform-lists.test.ts` trava as duas).
+- **O índice.** `ai_case_memory` por `customer_code` e `fechada_em`, no `firestore.indexes.json`.
+- **Produção.** A callable sobe com a próxima publicação e recusa no `dute-prod`. O roteiro do lançamento conta 117 callables e três índices novos.
+- **Testes.**
+  - `parecidos.test.ts` resolve à mão o pedido de 12 mesas e 40 cadeiras contra três casos do Itaú e um idêntico do Safra. Cobre também a ordem dos empatados, o limite de três, a própria demanda e o pedido.
+  - `parecidos.integration.test.ts` cobre o cliente da demanda, o caso idêntico do outro cliente, quem pede e que nada grava.
+  - `callables.test.ts` trava o formato; `memoria/api.test.ts`, a lista do app.

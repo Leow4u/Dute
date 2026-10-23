@@ -7,6 +7,7 @@ import { setGlobalOptions } from "firebase-functions/v2";
 import { runCasesFor } from "./domain/lembrancas-gravacao.js";
 import { memoriaLiberada } from "./domain/liberacao.js";
 import { runMeasuresFor } from "./domain/medidas-gravacao.js";
+import { findSimilarQuotesFor } from "./domain/parecidos-gravacao.js";
 import { requireCoreCaller } from "./domain/profile.js";
 import { answerSuggestionFor, suggestDurationFor } from "./domain/sugestao-gravacao.js";
 import { PROJECT_ID } from "./project.js";
@@ -59,4 +60,10 @@ export const suggestDuration = onCall(async (request) => {
 export const answerSuggestion = onCall(async (request) => {
   const caller = await requireCoreCaller(db, request, PROJECT_ID);
   return answerSuggestionFor(db, caller, request.data);
+});
+
+/** Os orçamentos parecidos do mesmo cliente, com o orçado e o realizado de cada um. Só lê (parte 5.3b). */
+export const findSimilarQuotes = onCall(async (request) => {
+  const caller = await requireCoreCaller(db, request, PROJECT_ID);
+  return findSimilarQuotesFor(db, caller, request.data);
 });

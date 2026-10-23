@@ -125,7 +125,8 @@ documentação de produto e operação está em `docs/`.
     lembrança por demanda fechada (tem preço: não abre pelo navegador), e
     `suggestDuration` e
     `answerSuggestion` dão a duração sugerida da OS e guardam a decisão em
-    `ai_suggestions`. Toda callable entra por `requireCoreCaller`, no
+    `ai_suggestions`; `findSimilarQuotes` dá a quem orça os orçamentos
+    parecidos do cliente da demanda. Toda callable entra por `requireCoreCaller`, no
     formato de uma linha do `src/index.ts` (trava em `src/callables.test.ts`).
     Liberação própria
     `MEMORIA_AMBIENTES_LIBERADOS` (só o `dute-homolog`). O Agent Dute muda

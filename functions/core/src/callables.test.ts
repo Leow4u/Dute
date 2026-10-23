@@ -29,13 +29,13 @@ describe("functions do núcleo", () => {
   it("toda linha com onCall está no formato que a conferência do invoker lê, inclusive comentário", () => {
     const pattern = invokerPattern();
     const used = rawIndex.split(/\r?\n/).filter((line) => /\bonCall\s*[<(]/.test(line));
-    assert.deepEqual(used.map((line) => line.match(pattern)?.[1]), ["suggestDuration", "answerSuggestion"]);
+    assert.deepEqual(used.map((line) => line.match(pattern)?.[1]), ["suggestDuration", "answerSuggestion", "findSimilarQuotes"]);
   });
 
   it("as callables começam pela liberação e pelo perfil, e nada é reexportado", () => {
     assert.doesNotMatch(index, /^export\s*\{/m);
     const blocks = index.split(/^(?=export const )/m).filter((block) => /^export const \w+ = onCall/.test(block));
-    assert.equal(blocks.length, 2);
+    assert.equal(blocks.length, 3);
     for (const block of blocks) assert.match(block, ENTRADA);
   });
 

@@ -889,6 +889,20 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "ai_case_memory",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "customer_code",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechada_em",
+          "order": "DESCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

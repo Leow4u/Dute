@@ -70,20 +70,23 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   - O anexo da solicitação do portal (`portal/{code}/solicitacoes/`).
   - O cliente da OS concluída lê a assinatura e as fotos do final (parte
     4.3c).
-- **Índices.** Dois novos: `events` por `type` e `created_at`, e
-  `client_notifications` por `customer_code` e `created_at`.
+- **Índices.** Três novos: `events` por `type` e `created_at`,
+  `client_notifications` por `customer_code` e `created_at`, e
+  `ai_case_memory` por `customer_code` e `fechada_em` (a memória, parte
+  5.3b).
   - O de `events` se constrói sobre a coleção que já existe. Até ficar
     pronto, a rotina dos avisos falha e tenta de novo a cada 5 minutos.
-- **Functions.** São 116 callables: 82 do WMS, 12 do Comercial, 18 da
-  Operação, 2 do Financeiro e 2 do núcleo.
+- **Functions.** São 117 callables: 82 do WMS, 12 do Comercial, 18 da
+  Operação, 2 do Financeiro e 3 do núcleo.
   - Do WMS, entram `setOrderDelivery` e `receiveOrderReturn`.
   - Da Operação, entram as da Fase 3 e `requestService`,
     `declineServiceRequest`, `openStorageDemand` e `markNotificationsRead`.
   - Do Financeiro, entram `registerNf` e `advanceFatura`, numa codebase nova
     (`financeiro`). Recusam no `dute-prod` até a parte 4.9b.
-  - Do núcleo, entram `suggestDuration` e `answerSuggestion`, na codebase
-    nova `core` (Fase 5). Recusam no `dute-prod`: a memória só vale no
-    `dute-homolog` (`MEMORIA_AMBIENTES_LIBERADOS`).
+  - Do núcleo, entram `suggestDuration`, `answerSuggestion` e
+    `findSimilarQuotes`, na codebase nova `core` (Fase 5). Recusam no
+    `dute-prod`: a memória só vale no `dute-homolog`
+    (`MEMORIA_AMBIENTES_LIBERADOS`).
   - Três functions agendadas: `runDailyAlerts`, todo dia às 06:00,
     `runNotifications`, a cada 5 minutos, e `runMeasures`, a cada 15
     minutos, que calcula as medidas e as lembranças da memória. Ela confere a
@@ -111,7 +114,7 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.
-- **Conferência do invoker.** Passa a conferir 116 callables, das cinco
+- **Conferência do invoker.** Passa a conferir 117 callables, das cinco
   codebases.
 
 ## 3. Antes de publicar (conferir na homologação)
@@ -160,7 +163,7 @@ contato com os avisos ligados (Comercial › Clientes).
 4. **Disparo.** Actions > CI > Run workflow, com `publicar_producao`
    marcado, do HEAD. O job só vale verde com as conferências do fim:
    - `check_rules_deployed.sh`;
-   - o invoker das 116 callables;
+   - o invoker das 117 callables;
    - `check_frontend_deployed.sh`;
    - o smoke.
 
@@ -176,7 +179,7 @@ contato com os avisos ligados (Comercial › Clientes).
    Precisam aparecer `firebase-schedule-runDailyAlerts-southamerica-east1`,
    `firebase-schedule-runNotifications-southamerica-east1` e
    `firebase-schedule-runMeasures-southamerica-east1`.
-2. **Os índices ficaram prontos.** Os dois novos aparecem com `READY`:
+2. **Os índices ficaram prontos.** Os três novos aparecem com `READY`:
 
    ```powershell
    cd C:\DEV\Dute

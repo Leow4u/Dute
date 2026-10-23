@@ -84,7 +84,8 @@ async function calcular(leitor: Leitor, db: Firestore, customerCode: string, ped
   return sugerirDuracao(pedido, bases, historico);
 }
 
-function clienteDaDemanda(snapshot: DocumentSnapshot, numero: string): string {
+/** O cliente da demanda, de onde vem o isolamento: nunca do pedido. */
+export function clienteDaDemanda(snapshot: DocumentSnapshot, numero: string): string {
   if (!snapshot.exists) throw new HttpsError("not-found", `A demanda ${numero} não existe.`);
   const customerCode = texto(snapshot.get("customer_code"));
   if (!customerCode) throw new HttpsError("failed-precondition", `A demanda ${numero} não tem cliente.`);

@@ -14,6 +14,8 @@ export const CALLABLES_DO_NUCLEO = [
   "suggestDuration",
   // O que a pessoa fez com a sugestão, gravado quando a OS é salva.
   "answerSuggestion",
+  // Os orçamentos parecidos do mesmo cliente, na montagem do orçamento (parte 5.3b): só lê.
+  "findSimilarQuotes",
 ] as const;
 export type CallableDoNucleo = (typeof CALLABLES_DO_NUCLEO)[number];
 

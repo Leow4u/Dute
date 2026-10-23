@@ -160,10 +160,7 @@ export function lembrancaDaDemanda(
   }));
   // O que foi feito: o realizado, quando o cliente validou uma RV; senão, o orçado.
   const feitos = linhas.map((linha) => ({ ...linha, feito: realizada ? linha.realizado : linha.orcado })).filter((linha) => linha.feito > 0);
-  const vetor: Record<string, number> = {};
-  for (const linha of feitos) {
-    if (linha.lpuItemId) vetor[linha.lpuItemId] = Math.round(Math.log1p(linha.feito / 1000) * 1000) / 1000;
-  }
+  const vetor = vetorDosItens(feitos.map((linha) => ({ lpuItemId: linha.lpuItemId, milesimos: linha.feito })));
   const servicos = [...new Set([...(orcada?.linhas ?? []), ...(realizada?.linhas ?? [])].map((linha) => linha.servico).filter((servico): servico is string => Boolean(servico)))].sort();
   const comTempo = ordens.filter((os) => os.minutos !== null);
   const minutos = comTempo.length ? comTempo.reduce((soma, os) => soma + (os.minutos ?? 0), 0) : null;
@@ -208,11 +205,29 @@ export function lembrancaDaDemanda(
   };
 }
 
-/** A semelhança de dois vetores de itens (cosseno), de 0 a 1. Sem item em comum, 0. */
+/**
+ * O vetor de semelhança dos itens: o item da LPU e o log da quantidade, para a
+ * mesa a mais pesar menos que o item que falta. O item avulso fica de fora; o
+ * mesmo item em mais de uma linha soma.
+ */
+export function vetorDosItens(itens: ReadonlyArray<{ lpuItemId: string | null; milesimos: number }>): Record<string, number> {
+  const porItem = new Map<string, number>();
+  for (const item of itens) {
+    if (item.lpuItemId && item.milesimos > 0) porItem.set(item.lpuItemId, (porItem.get(item.lpuItemId) ?? 0) + item.milesimos);
+  }
+  return Object.fromEntries([...porItem].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([lpu, total]) => [lpu, Math.round(Math.log1p(total / 1000) * 1000) / 1000]));
+}
+
+/**
+ * A semelhança de dois vetores de itens, de 0 a 1: o cosseno (os mesmos
+ * itens, na mesma proporção) vezes a razão dos tamanhos (na mesma escala: 12
+ * mesas não são 300). Sem item em comum, 0.
+ */
 export function semelhanca(a: Readonly<Record<string, number>>, b: Readonly<Record<string, number>>): number {
   let produto = 0;
   for (const [chave, valor] of Object.entries(a)) produto += valor * (b[chave] ?? 0);
   const norma = (vetor: Readonly<Record<string, number>>) => Math.sqrt(Object.values(vetor).reduce((soma, valor) => soma + valor * valor, 0));
-  const denominador = norma(a) * norma(b);
-  return denominador > 0 ? produto / denominador : 0;
+  const [na, nb] = [norma(a), norma(b)];
+  if (!(na > 0 && nb > 0)) return 0;
+  return (produto / (na * nb)) * (Math.min(na, nb) / Math.max(na, nb));
 }
