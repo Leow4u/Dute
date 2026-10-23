@@ -111,3 +111,26 @@ export function agenteLiberado(projectId: string | null | undefined): boolean {
 
 /** Valor deste build: o app fala com o Agent Dute do núcleo, e não com o do WMS. */
 export const AGENTE_LIBERADO = agenteLiberado(import.meta.env.VITE_FIREBASE_PROJECT_ID);
+
+/**
+ * Liberação própria do RH (docs/plataforma/fase-8-rh.md). As callables de
+ * functions/rh recusam fora de RH_AMBIENTES_LIBERADOS
+ * (functions/rh/src/domain/liberacao.ts, travada igual a esta por
+ * platform-lists.test.ts). Só a homologação atende até o lançamento da fase.
+ *
+ * O RH só existe no app quando a codebase `rh` e o banco `rh` estão na
+ * publicação (parte 8.1b, depois de o Leonardo criar o banco): RH_PUBLICADO
+ * acompanha o firebase.json, e o platform-lists.test.ts trava os dois juntos.
+ * Antes disso, as telas não aparecem em ambiente nenhum.
+ */
+export const RH_AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog"];
+
+/** A codebase `rh` está no firebase.json (parte 8.1b). */
+export const RH_PUBLICADO = false;
+
+export function rhLiberado(projectId: string | null | undefined, publicado: boolean = RH_PUBLICADO): boolean {
+  return publicado && RH_AMBIENTES_LIBERADOS.includes(String(projectId ?? "").trim());
+}
+
+/** Valor deste build, para as telas do RH. */
+export const RH_LIBERADO = rhLiberado(import.meta.env.VITE_FIREBASE_PROJECT_ID);

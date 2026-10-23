@@ -9,7 +9,6 @@ import { armazemDoBucket, attachRhFileFor, openRhFileFor, requestRhUploadFor } f
 import { RH_DATABASE } from "./domain/banco.js";
 import { archiveRhRecordFor, getRhFichaFor, getRhPanelFor, saveRhRecordFor } from "./domain/ficha-gravacao.js";
 import { rhLiberado } from "./domain/liberacao.js";
-import { rhWriteProblem } from "./domain/platform-roles.js";
 import { requireRhCaller } from "./domain/profile.js";
 import { runRhAlertsFor } from "./domain/rotina-gravacao.js";
 import { PROJECT_ID } from "./project.js";
@@ -34,12 +33,6 @@ setGlobalOptions({
 
 const db = getFirestore();
 const rh = getFirestore(RH_DATABASE);
-
-/** Quem abre o RH e se grava: o shell do RH pergunta antes de mostrar as ações. */
-export const rhStatus = onCall(async (request) => {
-  const caller = await requireRhCaller(db, request, PROJECT_ID);
-  return { ok: true, papel: caller.role, grava: rhWriteProblem(caller.role) === null };
-});
 
 /** O Início e a lista do RH: quem está ativo, com a ficha resumida, e os vencimentos (parte 8.2a). */
 export const getRhPanel = onCall(async (request) => {

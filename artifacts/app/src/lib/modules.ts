@@ -62,7 +62,7 @@ import {
   ROTA_VENCIDOS,
   abreFinanceiro,
 } from "./financeiro/navegacao";
-import { AGENTE_LIBERADO, COMERCIAL_LIBERADO, FINANCEIRO_LIBERADO, OPERACAO_LIBERADO } from "./liberacao";
+import { AGENTE_LIBERADO, COMERCIAL_LIBERADO, FINANCEIRO_LIBERADO, OPERACAO_LIBERADO, RH_LIBERADO } from "./liberacao";
 import {
   OPERACAO_CADASTRO_ROLES,
   ROTA_COLABORADORES,
@@ -85,6 +85,7 @@ import {
   type OperationProfile,
   type PortalModuleKey,
 } from "./operations";
+import { RH_ROLES, ROTA_FICHA, ROTA_PESSOAS, ROTA_RH, abreRh } from "./rh/navegacao";
 
 /** Os 11 papéis da plataforma (lib/dominio, PAPEIS). */
 export type ProfileRole = Papel;
@@ -121,6 +122,8 @@ export const OPERATIONS_ROLES: ProfileRole[] = [
   "suporte",
 ];
 export const SUPPORT_ROLES: ProfileRole[] = ["owner", "admin", "suporte"];
+/** RH (lib/rh/navegacao.ts): owner e admin leem, o rh grava; só com a liberação própria. */
+export const HR_ROLES: ProfileRole[] = [...RH_ROLES];
 /** Comercial (lib/comercial/navegacao.ts): só com a liberação própria. */
 export const COMMERCIAL_ROLES: ProfileRole[] = [...COMERCIAL_ROLES];
 /** Cadastro da Operação (lib/operacao/navegacao.ts): owner, admin e interno. */
@@ -198,14 +201,14 @@ export type AppModule = {
    * Liberação por ambiente do módulo (lib/liberacao.ts). Sem ela ligada, o
    * item não existe no menu. Comercial, Operação e Financeiro têm a sua.
    */
-  liberacao?: "comercial" | "operacao" | "financeiro";
+  liberacao?: "comercial" | "operacao" | "financeiro" | "rh";
   /**
    * Ambiente de navegação. Ausente é o WMS (menu de hoje). Outro valor não
    * entra nesse menu: o shell sai do caminho da rota (lib/ambientes.ts).
    * Módulo futuro com telas próprias ganha o valor e o prefixo; sem tela,
    * não ganha ambiente.
    */
-  ambiente?: "wms" | "comercial" | "operacao" | "financeiro";
+  ambiente?: "wms" | "comercial" | "operacao" | "financeiro" | "rh";
   /**
    * Grupo mesmo com uma tela só: o menu mostra o módulo e a tela dentro dele
    * ("Comercial" › "Clientes"), em vez de virar o link da tela.
@@ -459,6 +462,36 @@ export const APP_MODULES: AppModule[] = [
         icon: Sparkles,
         roles: FINANCE_ROLES,
         liberacao: "agente",
+      }),
+    ],
+  }),
+  // RH (docs/plataforma/fase-8-rh.md): o Início e Pessoas. O menu é do
+  // ambiente RH; a ficha de cada pessoa acende Pessoas.
+  appModule({
+    id: "rh",
+    label: "RH",
+    audience: "internal",
+    icon: Users,
+    roles: HR_ROLES,
+    liberacao: "rh",
+    ambiente: "rh",
+    group: true,
+    routes: [
+      navRoute({
+        id: "rh-inicio",
+        label: "Início",
+        href: ROTA_RH,
+        icon: Home,
+        roles: HR_ROLES,
+        exact: true,
+      }),
+      navRoute({
+        id: "rh-pessoas",
+        label: "Pessoas",
+        href: ROTA_PESSOAS,
+        icon: Users,
+        roles: HR_ROLES,
+        tambem: [ROTA_FICHA],
       }),
     ],
   }),
@@ -907,6 +940,8 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   { path: ROTA_CAMPO, roles: [...CAMPO_ROLES] },
   { path: ROTA_CAMPO_OS, roles: [...CAMPO_ROLES] },
   { path: ROTA_CAMPO_CONCLUIR, roles: [...CAMPO_ROLES] },
+  // A ficha da pessoa no RH, aberta por Pessoas e pelo Início (?colaborador=).
+  { path: ROTA_FICHA, roles: HR_ROLES },
   // A TV da sala (parte 3.12b): o painel e quem coordena.
   { path: ROTA_TV, roles: [...TV_ROLES] },
 ];
@@ -972,6 +1007,7 @@ export function getHomePathForProfile(
   role: ProfileRole | null | undefined,
   comercial: boolean = COMERCIAL_LIBERADO,
   financeiro: boolean = FINANCEIRO_LIBERADO,
+  rh: boolean = RH_LIBERADO,
 ) {
   if (role === "cliente") return "/portal";
   if (role === "wms") return "/pedidos";
@@ -979,6 +1015,8 @@ export function getHomePathForProfile(
   if (role === "financeiro") return abreFinanceiro(role, financeiro) ? ROTA_FINANCEIRO : "/faturamento";
   // O comercial abre no módulo dele onde o Comercial está liberado.
   if (role === "comercial" && abreComercial(role, comercial)) return ROTA_COMERCIAL;
+  // O rh abre no módulo dele onde o RH está liberado.
+  if (role === "rh" && abreRh(role, rh)) return ROTA_RH;
   // Papel da plataforma sem tela ainda: a Conta, que todo perfil abre. Sem
   // isso o Início negado devolveria a "/" em laço.
   if (role && !INTERNAL_ROLES.includes(role)) return "/configuracoes/conta";
@@ -1014,13 +1052,14 @@ export function getNavigationForAppRole(
  * tem; sem perfil (área interna, ou ainda carregando) nada disso é escondido.
  */
 function navigationForAmbiente(
-  ambiente: "wms" | "comercial" | "operacao" | "financeiro",
+  ambiente: "wms" | "comercial" | "operacao" | "financeiro" | "rh",
   role: ProfileRole | null | undefined,
   operation: OperationProfile | null | undefined,
   comercial: boolean,
   operacao: boolean = OPERACAO_LIBERADO,
   financeiro: boolean = FINANCEIRO_LIBERADO,
   agente: boolean = AGENTE_LIBERADO,
+  rh: boolean = RH_LIBERADO,
 ): AppModule[] {
   const appRole = appRoleForProfile(role) ?? "interno";
   const portalModules = appRole === "cliente" ? portalModulesFor(operation) : null;
@@ -1033,6 +1072,7 @@ function navigationForAmbiente(
       (module.liberacao !== "comercial" || abreComercial(role, comercial)) &&
       (module.liberacao !== "operacao" || abreOperacao(role, operacao)) &&
       (module.liberacao !== "financeiro" || abreFinanceiro(role, financeiro)) &&
+      (module.liberacao !== "rh" || abreRh(role, rh)) &&
       (portalModules === null || !module.portal || portalModules.includes(module.portal)),
   )
     .map((module) => {
@@ -1182,6 +1222,28 @@ export function menuDoFinanceiro(
     },
     ...doAgente,
   ];
+}
+
+/** Início e Pessoas, uma tela por item. Fora da liberação do RH, a lista é vazia. */
+export function menuDoRh(role: ProfileRole | null | undefined, rh: boolean = RH_LIBERADO): AppModule[] {
+  const [grupo] = navigationForAmbiente("rh", role, null, false, false, false, false, rh);
+  if (!grupo) return [];
+  return grupo.routes.flatMap((route) => {
+    if (!route.href) return [];
+    return [
+      {
+        id: route.id,
+        label: route.label,
+        audience: grupo.audience,
+        href: route.href,
+        icon: route.icon,
+        roles: route.roles,
+        appRoles: route.appRoles,
+        ambiente: "rh" as const,
+        routes: [route],
+      },
+    ];
+  });
 }
 
 /**
