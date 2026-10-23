@@ -1162,7 +1162,7 @@ leitura em `tv-leitura.ts`.
   etapa Fim no dia de São Paulo). A aberta sem data, a cancelada, a agendada
   para outro dia e a concluída antes de hoje ficam fora.
 - **Campo a campo.** Por OS: número, tipo, coluna, cliente, serviços, a rota
-  pelo nome dos locais, a hora marcada, o prazo (o da demanda direta ou o
+  pelo nome dos locais, o dia e a hora marcados, o prazo (o da demanda direta ou o
   fim da janela), a última etapa, as etapas feitas e previstas, a hora do
   Fim e o aceite, os nomes da equipe e as placas. Nada de valor, contato,
   telefone, endereço, instruções, ocorrência, foto, motivo de cancelamento,

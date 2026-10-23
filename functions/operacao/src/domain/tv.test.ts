@@ -67,6 +67,7 @@ describe("a OS na TV", () => {
       cliente: "Itaú Unibanco",
       servicos: ["transporte"],
       rota: "CEIC → Faria Lima",
+      dia: HOJE,
       inicio: "2026-10-23T18:00:00.000Z",
       ate: "2026-10-23T21:00:00.000Z",
       etapa: null,
@@ -132,7 +133,7 @@ describe("a OS na TV", () => {
   it("sem equipe, veículo, hora ou locais, os campos vêm vazios; documento ilegível fica de fora", () => {
     const vazia = osNaTv("10045-02", os({ equipe: [], veiculos: [], janela: { data: HOJE, inicio: null, fim: null }, locais: { origem: null, destino: null }, cliente_nome: null }), null, HOJE);
     assert.equal(vazia?.cliente, "ITAU");
-    assert.deepEqual([vazia?.equipe, vazia?.placas, vazia?.inicio, vazia?.ate, vazia?.rota], [[], [], null, null, null]);
+    assert.deepEqual([vazia?.equipe, vazia?.placas, vazia?.inicio, vazia?.ate, vazia?.rota, vazia?.dia], [[], [], null, null, null, HOJE]);
     assert.equal(osNaTv("10045-03", { status: "agendada" }, null, HOJE), null);
   });
 });

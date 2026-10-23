@@ -27,6 +27,8 @@ export type OsNaTv = {
   servicos: ServicoDaOs[];
   /** "Agência Rebouças → Faria Lima": só o nome dos locais. */
   rota: string | null;
+  /** O dia da janela (AAAA-MM-DD): a agendada de um dia que passou está atrasada. */
+  dia: string | null;
   /** A hora marcada para começar, em UTC; null sem hora. */
   inicio: string | null;
   /** Até quando: o prazo da demanda direta ou o fim da janela, em UTC; null sem prazo. */
@@ -146,6 +148,7 @@ export function osNaTv(numero: string, data: Record<string, unknown>, demanda: D
     cliente: os.cliente_nome ?? os.customer_code,
     servicos: [...os.servicos],
     rota: rotaDaOs(os),
+    dia: os.janela?.data ?? null,
     inicio: os.janela ? instanteDaJanela(os.janela.data, os.janela.inicio) : null,
     ate: prazo ?? (os.janela ? instanteDaJanela(os.janela.data, os.janela.fim) : null),
     etapa: ultima ? { etapa: ultima.etapa, instante: new Date(ultima.instante).toISOString() } : null,
