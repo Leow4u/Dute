@@ -52,6 +52,8 @@ Seguem a recomendação do plano até a resposta do Leonardo:
   - O plano dizia `entrada: armazenagem`. Seguimos a direta com o canal `wms`, como na solicitação do portal: o ciclo é o mesmo (executa, a Operação revisa, o Comercial orça a execução).
   - **Pergunta ao Leonardo.** A entrega do WMS fatura pela demanda (orçada depois da execução, como a direta), ou na fatura mensal do WMS (o grupo "Abastecimento / Transporte")? Seguimos a demanda até a resposta. A BTG hoje fatura o transporte na fatura do WMS, então cuidado para não cobrar duas vezes.
 - **A armazenagem** continua na fatura do WMS (`billing_periods` e `client_invoices`) até a Fase 7.
+- **Os relatórios do Financeiro (parte 4.8b).** A receita é por cliente, pelos pagamentos. O mockup tinha também a receita por serviço, mas a NF registrada guarda só o total e as demandas, sem o valor de cada serviço.
+  - **Pergunta ao Leonardo.** A receita por serviço vale o rateio da NF pelas linhas do orçamento de cada demanda? Seguimos sem ela, com as NFs emitidas por mês no lugar, até a resposta (pergunta 26 do plano).
 - **Omie** continua fora.
 
 ## Dados
@@ -202,7 +204,7 @@ continuam no Faturamento do WMS, e as rotas `/financeiro` não existem
 | 4.7d | WMS na v3: Estoque | `theme-colors.test.ts`; render e `axe` |
 | 4.7e | WMS na v3: Receber | `theme-colors.test.ts`; render e `axe` |
 | 4.8a | Operação › Relatórios: OS por período, cliente e tipo, produtividade da equipe, uso dos veículos e solicitações do portal, com Excel e PDF | Nenhum valor; no prazo pela janela; textos listados; `axe` |
-| 4.8b | Financeiro › Relatórios: receita por cliente e por serviço e contas a receber, com Excel e PDF | Só quem lê preço abre; o estorno fica fora da receita; `axe` |
+| 4.8b | Financeiro › Relatórios: receita por cliente, NFs emitidas por mês e contas a receber, com Excel e PDF | Só quem lê preço abre; o estorno fica fora da receita; `axe` |
 | 4.9 | Lançamento em produção | Conferência de produção |
 
 ## Registro
@@ -651,7 +653,7 @@ Feita em 23/10/2026. As regras estão em `artifacts/app/src/lib/operacao/relator
   - Concluída é a em revisão ou revisada. A reaberta deixa de contar até concluir de novo.
   - No prazo é a concluída até o dia agendado e, quando o fim da janela foi marcado, até ele.
 - **A tela.**
-  - Ao lado da lista ficam o período (as últimas quatro semanas no começo, de até um ano), o cliente e, nas OS por período, o agrupamento.
+  - Abaixo da lista ficam o período (as últimas quatro semanas no começo, de até um ano), o cliente e, nas OS por período, o agrupamento. A lista era uma coluna ao lado e passou a uma linha no alto na parte 4.8b, para a tabela larga caber.
   - Abaixo vêm os números do período e a tabela.
   - "Excel" baixa a tabela (`planilha-xlsx.ts`), com os números como número.
   - "PDF" imprime só o relatório (`.print-area`), sem a lista, os filtros e os botões.
@@ -661,3 +663,24 @@ Feita em 23/10/2026. As regras estão em `artifacts/app/src/lib/operacao/relator
   - `relatorios.test.ts` cobre a leitura (nenhum valor), o no prazo, o resumo, cada tabela, o filtro e a planilha.
   - `relatorios-view.test.tsx` cobre os textos na ordem, nenhum valor, o relatório marcado, o que vai para o PDF, o filtro errado, os estados e `axe`.
   - `navegacao.test.ts`, `modules.test.ts` e `shell-do-modulo.test.tsx` cobrem o menu, a rota e o papel.
+
+### Parte 4.8b: os relatórios do Financeiro
+
+Feita em 23/10/2026. As regras estão em `artifacts/app/src/lib/financeiro/relatorios.ts`, e a tela em
+`pages/financeiro/relatorios-view.tsx`. A rota é `/financeiro/relatorios` (`?relatorio=`), no menu do Financeiro, depois de Faturas.
+
+- **Os relatórios.**
+  - **Receita por cliente**: os pagamentos recebidos no período, pelo dia do recebimento, sem os estornados. Os números são o recebido, os pagamentos, os clientes e os estornos.
+  - **NFs emitidas por mês**: as NFs do período pela emissão, sem as canceladas, com o emitido, o recebido e o saldo de cada mês.
+  - **Contas a receber**: a posição de hoje, sem período. As NFs com saldo entram por cliente e pela idade: a vencer até o dia do vencimento, depois de 1 a 30, de 31 a 60, de 61 a 90 e mais de 90 dias.
+  - A receita por serviço do mockup ficou de fora: a NF não guarda o valor de cada serviço (pergunta 26 do plano).
+- **A tela comum.** A Operação e o Financeiro usam a mesma tela (`components/relatorios/tela-de-relatorios.tsx`).
+  - No alto vêm a lista dos relatórios numa linha, os filtros e os números do período. A tabela vem abaixo, com a largura toda.
+  - A célula é texto, número ou reais; o PDF e o Excel saem da mesma tabela. Na planilha, o valor sai em reais com duas casas, como número.
+  - Os números do período ocupam as colunas pela largura do relatório, não da janela. Valor em reais fica numa coluna no telefone, duas na tela média e quatro na larga, sem quebrar no meio.
+- **Valor só para quem lê preço.** A rota é de owner, admin e financeiro, a mesma lista das callables. As regras de `faturas` e `pagamentos` já fecham a leitura nos mesmos papéis (`canReadPrices`).
+- **Leitura.** As NFs vêm ao vivo, como nas outras telas do Financeiro. Os pagamentos da receita vêm por intervalo em `recebido_em`, num campo só, sem índice novo.
+- **Testes.**
+  - `relatorios.test.ts` cobre o período, o estorno fora da receita, as canceladas fora, a idade de cada NF, cada tabela, o resumo e a planilha.
+  - `relatorios-view.test.tsx` cobre os textos na ordem, o período só onde vale, o relatório marcado, as colunas dos números e `axe`.
+  - `navegacao.test.ts`, `modules.test.ts` e `ambientes.test.ts` cobrem o menu, a rota e o papel.

@@ -53,6 +53,7 @@ import {
   ROTA_FATURAS,
   ROTA_FINANCEIRO,
   ROTA_NF,
+  ROTA_RELATORIOS_DO_FINANCEIRO,
   ROTA_PAGOS,
   ROTA_VENCIDOS,
   abreFinanceiro,
@@ -421,6 +422,14 @@ export const APP_MODULES: AppModule[] = [
         icon: FileText,
         roles: FINANCE_ROLES,
         tambem: [ROTA_NF],
+      }),
+      // Os relatórios do Financeiro (parte 4.8b): a receita, as NFs emitidas e as contas a receber.
+      navRoute({
+        id: "financeiro-relatorios",
+        label: "Relatórios",
+        href: ROTA_RELATORIOS_DO_FINANCEIRO,
+        icon: BarChart3,
+        roles: FINANCE_ROLES,
       }),
     ],
   }),
