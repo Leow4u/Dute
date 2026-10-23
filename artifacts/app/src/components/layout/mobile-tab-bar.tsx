@@ -20,6 +20,8 @@ import { cn } from "@/lib/utils";
 type MobileTabBarProps = {
   activeModuleId: string | null;
   modules: AppModule[];
+  /** "v3": barra preta do Comercial e da Operação, com o ícone aberto no vermelho da marca. */
+  variante?: "padrao" | "v3";
 };
 
 /**
@@ -27,7 +29,8 @@ type MobileTabBarProps = {
  * "Mais" com o resto do menu e a Configuração. Substitui a régua rolável
  * que ficava sob o cabeçalho e o botão flutuante do Agent Dute.
  */
-export function MobileTabBar({ activeModuleId, modules }: MobileTabBarProps) {
+export function MobileTabBar({ activeModuleId, modules, variante = "padrao" }: MobileTabBarProps) {
+  const v3 = variante === "v3";
   const [location] = useLocation();
   const [moreOpen, setMoreOpen] = useState(false);
   const { bar, more } = getMobileNavigation(modules);
@@ -42,14 +45,22 @@ export function MobileTabBar({ activeModuleId, modules }: MobileTabBarProps) {
 
   const itemClassName = (active: boolean) =>
     cn(
-      "flex h-14 min-w-0 flex-col items-center justify-center gap-1 text-xs font-medium outline-none transition-colors duration-150 focus-visible:bg-surface-hover",
-      active ? "text-primary" : "text-muted-foreground",
+      "flex h-14 min-w-0 flex-col items-center justify-center gap-1 text-xs font-medium outline-none transition-colors duration-150",
+      v3
+        ? cn(
+            "font-bold focus-visible:bg-v3-header-foreground/10",
+            active ? "text-v3-header-foreground [&>svg]:text-v3-marca" : "text-v3-header-foreground/70",
+          )
+        : cn("focus-visible:bg-surface-hover", active ? "text-primary" : "text-muted-foreground"),
     );
 
   return (
     <nav
       aria-label="Navegação principal"
-      className="safe-bottom shrink-0 border-t border-border bg-card md:hidden"
+      className={cn(
+        "safe-bottom shrink-0 md:hidden",
+        v3 ? "bg-v3-header" : "border-t border-border bg-card",
+      )}
     >
       <ul className="flex items-stretch">
         {bar.map((module) => {
@@ -84,7 +95,7 @@ export function MobileTabBar({ activeModuleId, modules }: MobileTabBarProps) {
       </ul>
 
       <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
-        <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto rounded-t-xl bg-card p-0">
+        <SheetContent side="bottom" className={cn("max-h-[85dvh] overflow-y-auto rounded-t-xl bg-card p-0", v3 && "v3")}>
           <SheetHeader className="border-b border-border px-5 py-4 text-left">
             <SheetTitle>Mais</SheetTitle>
             <SheetDescription className="sr-only">Outras telas do sistema.</SheetDescription>

@@ -29,12 +29,14 @@ import {
 } from "@/lib/modules";
 import { AccountMenu, SidebarAccountFooter } from "@/components/layout/account-menu";
 import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
+import { SeletorDeModulo } from "@/components/layout/seletor-de-modulo";
 import { SidebarBrand } from "@/components/layout/sidebar-brand";
 import { agentPathFor, isAgentScreen, isAgentShortcut } from "@/lib/agent-chat";
 import { useAppAuth, useAppUser } from "@/lib/auth";
 import { ActiveCustomerSwitcher } from "@/components/layout/active-customer-switcher";
 import { useOperationProfile } from "@/lib/operation-profile";
 import { usePwaInstall } from "@/lib/pwa-install";
+import { moduloAberto, opcoesDoSeletor } from "@/lib/seletor-de-modulo";
 import { rememberReturnPath } from "@/lib/settings-nav";
 
 function RouteDropdownItem({
@@ -278,6 +280,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const profileRole = user?.publicMetadata.role;
   const showCustomerSwitcher = Boolean(profileRole) && INTERNAL_ROLES.includes(profileRole!);
   const canManageCustomers = profileRole === "owner" || profileRole === "admin";
+  // Seletor de módulo no topo da barra (decisão de 23/10/2026): Armazenagem,
+  // ou Financeiro no Faturamento. Quem tem um módulo só não o vê.
+  const opcoesDeModulo = opcoesDoSeletor(profileRole, operation.profile, location);
+  const moduloDaTela = moduloAberto(location);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem("dute.sidebar") === "collapsed";
@@ -396,6 +402,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </Tooltip>
         </div>
 
+        {opcoesDeModulo.length && moduloDaTela ? (
+          <div className={cn("pt-4", collapsed ? "flex justify-center px-3" : "px-4")}>
+            <SeletorDeModulo atual={moduloDaTela} opcoes={opcoesDeModulo} variante={collapsed ? "wms-compacto" : "wms"} />
+          </div>
+        ) : null}
+
         {showCustomerSwitcher ? (
           <div className={cn("pt-4", collapsed ? "flex justify-center px-3" : "px-4")}>
             <ActiveCustomerSwitcher
@@ -464,7 +476,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             {showCustomerSwitcher ? (
               <ActiveCustomerSwitcher variant="header" canManageCustomers={canManageCustomers} />
             ) : null}
-            <AccountMenu basePath={basePath} compact cabecalho signOut={signOut} user={user} />
+            <AccountMenu basePath={basePath} compact cabecalho modulos signOut={signOut} user={user} />
           </div>
         </header>
         {!isOnline ? (
