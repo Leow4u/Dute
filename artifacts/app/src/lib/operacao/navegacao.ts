@@ -11,11 +11,39 @@ import { OPERACAO_LIBERADO } from "../liberacao";
 /** Quem grava e lê o cadastro. Campo e suporte ficam de fora: o documento tem CPF. */
 export const OPERACAO_CADASTRO_ROLES = ["owner", "admin", "interno"] as const satisfies readonly Papel[];
 
+/** Casa do módulo: o Início da Operação (parte 2.6, docs/mockups/ModOpInicio.dc.html). */
 export const ROTA_OPERACAO = "/operacao";
+/** A fila do dia (parte 3 da Fase 3); era a casa até a parte 2.6. */
+export const ROTA_HOJE = "/operacao/hoje";
 export const ROTA_COLABORADORES = "/operacao/colaboradores";
 export const ROTA_VEICULOS = "/operacao/veiculos";
 
-export const TELAS_DA_OPERACAO: readonly string[] = [ROTA_OPERACAO, ROTA_COLABORADORES, ROTA_VEICULOS];
+export const TELAS_DA_OPERACAO: readonly string[] = [ROTA_OPERACAO, ROTA_HOJE, ROTA_COLABORADORES, ROTA_VEICULOS];
+
+function parametro(busca: string, nome: string): string | null {
+  const valor = new URLSearchParams(busca.startsWith("?") ? busca.slice(1) : busca).get(nome)?.trim();
+  return valor ? valor : null;
+}
+
+/** A OS aberta direto na fila do dia: "/operacao/hoje?os=10045-01". */
+export function hrefDaOs(numero: string): string {
+  return `${ROTA_HOJE}?os=${encodeURIComponent(numero)}`;
+}
+
+/** A OS pedida na busca da URL da fila (`?os=`), ou null. */
+export function osDaBusca(busca: string): string | null {
+  return parametro(busca, "os");
+}
+
+/** A ficha do colaborador aberta direto no cadastro: "/operacao/colaboradores?id=col_...". */
+export function hrefDoColaborador(id: string): string {
+  return `${ROTA_COLABORADORES}?id=${encodeURIComponent(id)}`;
+}
+
+/** O colaborador pedido na busca da URL do cadastro (`?id=`), ou null. */
+export function colaboradorDaBusca(busca: string): string | null {
+  return parametro(busca, "id");
+}
 
 export function rotasDaOperacao(liberado: boolean = OPERACAO_LIBERADO): string[] {
   return liberado ? [...TELAS_DA_OPERACAO] : [];

@@ -41,6 +41,7 @@ import { COMERCIAL_LIBERADO, OPERACAO_LIBERADO } from "./liberacao";
 import {
   OPERACAO_CADASTRO_ROLES,
   ROTA_COLABORADORES,
+  ROTA_HOJE,
   ROTA_OPERACAO,
   ROTA_VEICULOS,
   abreOperacao,
@@ -394,8 +395,9 @@ export const APP_MODULES: AppModule[] = [
       }),
     ],
   }),
-  // Operação (docs/plataforma/fase-3-operacao.md): a fila do dia e o cadastro.
-  // O menu é do ambiente Operação, não do WMS.
+  // Operação (docs/plataforma/fase-3-operacao.md): o Início, a fila do dia e o
+  // cadastro. O menu é do ambiente Operação, não do WMS. O Início é a casa
+  // (/operacao, rota exata para não acender nas outras telas).
   appModule({
     id: "operacao",
     label: "Operação",
@@ -407,12 +409,19 @@ export const APP_MODULES: AppModule[] = [
     group: true,
     routes: [
       navRoute({
-        id: "operacao-hoje",
-        label: "Hoje",
+        id: "operacao-inicio",
+        label: "Início",
         href: ROTA_OPERACAO,
-        icon: CalendarDays,
+        icon: Home,
         roles: OPERATION_REGISTRY_ROLES,
         exact: true,
+      }),
+      navRoute({
+        id: "operacao-hoje",
+        label: "Hoje",
+        href: ROTA_HOJE,
+        icon: CalendarDays,
+        roles: OPERATION_REGISTRY_ROLES,
       }),
       navRoute({
         id: "operacao-colaboradores",

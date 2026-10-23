@@ -1,5 +1,6 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { collection } from "firebase/firestore";
+import { useSearch } from "wouter";
 
 import { colaboradorDaLeitura, veiculoDaLeitura } from "@/lib/operacao/cadastro";
 import { chamarOperacao, mensagemDoErro, novaChave } from "@/lib/operacao/api";
@@ -16,6 +17,7 @@ import {
   type OsDaFila,
 } from "@/lib/operacao/fila";
 import { useLeitura } from "@/lib/operacao/leitura";
+import { osDaBusca } from "@/lib/operacao/navegacao";
 
 import { FilaView, type EstadoDaFila } from "./fila-view";
 
@@ -74,6 +76,19 @@ export default function PaginaFila() {
     setSelecionada(item.numero);
     setAgenda(agendaDaOs(item, hoje));
   }
+
+  // O Início leva direto à OS (/operacao/hoje?os=10045-01): abre a ficha
+  // quando a OS chega, uma vez por pedido.
+  const pedida = osDaBusca(useSearch());
+  const atendida = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pedida || atendida.current === pedida || !ordens.itens || !demandas.itens) return;
+    atendida.current = pedida;
+    const item = lista.find((os) => os.numero === pedida && os.status !== "cancelada");
+    if (item) abrirOs(item);
+    // Só o pedido e a chegada das leituras disparam; abrirOs e lista mudam a cada render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pedida, ordens.itens, demandas.itens]);
 
   return (
     <FilaView
