@@ -131,8 +131,8 @@ describe("perfil de operação", () => {
 describe("telas do portal pelos módulos contratados (parte 2.7)", () => {
   const comModulos = (modules: string[]) => resolveOperationProfile({ customer_code: "ACME", operation_template: "uniformes", modules });
 
-  it("só com a Operação: o portal fica com o Início, sem nada do armazém nem faturas", () => {
-    expect(portalModulesFor(comModulos(["operacao"]))).toEqual(["home"]);
+  it("só com a Operação: o portal fica com o Início e as OS (parte 4.3b), sem nada do armazém nem faturas", () => {
+    expect(portalModulesFor(comModulos(["operacao"]))).toEqual(["home", "services"]);
   });
 
   it("sem o financeiro, sem Faturas; sem a armazenagem, sem estoque, pedidos, documentos e Agent Dute", () => {
@@ -143,9 +143,12 @@ describe("telas do portal pelos módulos contratados (parte 2.7)", () => {
       "events",
       "requests",
       "orders",
+      "services",
       "documents",
     ]);
     expect(portalModulesFor(comModulos(["financeiro"]))).toEqual(["home", "invoices"]);
+    // Sem a Operação, sem as OS.
+    expect(portalModulesFor(comModulos(["wms", "financeiro"]))).not.toContain("services");
   });
 
   it("cada tela do portal depende de um módulo, o Início de nenhum: a mesma régua das regras", () => {
@@ -157,6 +160,7 @@ describe("telas do portal pelos módulos contratados (parte 2.7)", () => {
       requests: "wms",
       orders: "wms",
       documents: "wms",
+      services: "operacao",
       invoices: "financeiro",
     });
     for (const tela of Object.keys(MODULO_DA_TELA_DO_PORTAL) as Array<keyof typeof MODULO_DA_TELA_DO_PORTAL>) {
@@ -175,11 +179,13 @@ describe("telas do portal pelos módulos contratados (parte 2.7)", () => {
       pedidos: exige("client_order_tracking"),
       solicitacoes: exige("client_request_status"),
       documentos: exige("client_documents"),
+      servicos: exige("service_orders"),
       faturas: exige("client_invoices"),
-    }).toEqual({ estoque: "wms", pedidos: "wms", solicitacoes: "wms", documentos: "wms", faturas: "financeiro" });
-    expect(leiturasDoPortal(["wms"])).toEqual({ estoque: true, pedidos: true, solicitacoes: true, documentos: true, faturas: false });
-    expect(leiturasDoPortal(["financeiro"])).toEqual({ estoque: false, pedidos: false, solicitacoes: false, documentos: false, faturas: true });
-    expect(leiturasDoPortal(["operacao"])).toEqual({ estoque: false, pedidos: false, solicitacoes: false, documentos: false, faturas: false });
+      nfs: exige("client_faturas"),
+    }).toEqual({ estoque: "wms", pedidos: "wms", solicitacoes: "wms", documentos: "wms", servicos: "operacao", faturas: "financeiro", nfs: "financeiro" });
+    expect(leiturasDoPortal(["wms"])).toEqual({ estoque: true, pedidos: true, solicitacoes: true, documentos: true, servicos: false, faturas: false });
+    expect(leiturasDoPortal(["financeiro"])).toEqual({ estoque: false, pedidos: false, solicitacoes: false, documentos: false, servicos: false, faturas: true });
+    expect(leiturasDoPortal(["operacao"])).toEqual({ estoque: false, pedidos: false, solicitacoes: false, documentos: false, servicos: true, faturas: false });
   });
 });
 

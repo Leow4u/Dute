@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { FileBarChart2, Sparkles } from "lucide-react";
 import { Link } from "wouter";
 
+import { NfsDosServicos } from "@/components/portal/nfs-dos-servicos";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { Segmented } from "@/components/ui/segmented";
@@ -14,6 +15,11 @@ import {
   shiftCompetencia,
   type ClosedInvoice,
 } from "@/lib/billing-insights";
+import { useAppUser } from "@/lib/auth";
+import { hojeIso } from "@/lib/operacao/fila";
+import { useOperationProfile } from "@/lib/operation-profile";
+import { leiturasDoPortal } from "@/lib/operations";
+import { useNfsDoCliente } from "@/lib/portal/use-servicos";
 import { cn } from "@/lib/utils";
 
 import { ClientDataBoundary, formatMoney, getInvoices, getOrders } from "./shared";
@@ -22,7 +28,8 @@ import { MonthlyBars, moneyShort } from "./billing-charts";
 /**
  * Faturas do portal: quanto a operação na Dutelog custa, mês a mês, para
  * onde vai o dinheiro e as faturas fechadas. "Gerar relatório" abre o
- * extrato do período para salvar em PDF ou baixar em planilha.
+ * extrato do período para salvar em PDF ou baixar em planilha. As NFs dos
+ * serviços da Operação (parte 4.3b) vêm primeiro, quando há.
  */
 
 const dateBr = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" });
@@ -34,6 +41,11 @@ function shortDate(iso: string) {
 
 export function ClienteFaturas() {
   const [span, setSpan] = useState(6);
+  const { user } = useAppUser();
+  const { profile } = useOperationProfile();
+  const comFaturas = profile ? leiturasDoPortal(profile.modules).faturas : false;
+  const { nfs } = useNfsDoCliente(user?.publicMetadata.customer_code, comFaturas);
+  const hoje = hojeIso(new Date());
   return (
     <ClientDataBoundary>
       {(overview) => {
@@ -68,6 +80,8 @@ export function ClienteFaturas() {
                   </>
                 ) : null}
               />
+
+              <NfsDosServicos nfs={nfs ?? []} hoje={hoje} />
 
               {!latest ? (
                 <p className="rounded-lg border border-dashed border-border bg-card px-5 py-8 text-sm text-muted-foreground">

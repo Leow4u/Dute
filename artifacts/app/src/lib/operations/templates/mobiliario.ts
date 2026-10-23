@@ -14,7 +14,7 @@ export const mobiliario: OperationTemplate = {
     "Por peça, com patrimônio, foto e estado de conservação; solicitações de retirada, devolução, manutenção e descarte; posição de piso.",
   status: "building",
   control: "piece",
-  portal: ["assistant", "home", "inventory", "requests", "orders", "invoices", "documents"],
+  portal: ["assistant", "home", "inventory", "requests", "orders", "services", "invoices", "documents"],
   defines: [
     {
       label: "Portal",

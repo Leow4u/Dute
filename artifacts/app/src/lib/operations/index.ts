@@ -114,7 +114,8 @@ export function resolveOperationProfile(
  * O módulo contratado de que cada tela do portal depende (parte 2.7 da Fase
  * 2). O Início é de todos. As regras do Firestore negam o resto: as
  * projeções do armazém e os documentos exigem `wms`, as faturas exigem
- * `financeiro`, e o Agent Dute do portal ainda é do WMS (Fase 5).
+ * `financeiro`, as OS (parte 4.3b) exigem `operacao`, e o Agent Dute do
+ * portal ainda é do WMS (Fase 5).
  */
 export const MODULO_DA_TELA_DO_PORTAL: Readonly<Record<PortalModuleKey, ModuloContratavel | null>> = {
   home: null,
@@ -124,6 +125,7 @@ export const MODULO_DA_TELA_DO_PORTAL: Readonly<Record<PortalModuleKey, ModuloCo
   requests: "wms",
   orders: "wms",
   documents: "wms",
+  services: "operacao",
   invoices: "financeiro",
 };
 
@@ -144,6 +146,7 @@ export function leiturasDoPortal(modules: readonly ModuloContratavel[]) {
     pedidos: armazenagem,
     solicitacoes: armazenagem,
     documentos: armazenagem,
+    servicos: modules.includes("operacao"),
     faturas: modules.includes("financeiro"),
   };
 }

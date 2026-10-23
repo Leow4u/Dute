@@ -133,6 +133,8 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/financeiro/faturas", ["owner", "admin", "financeiro"]],
   // A via comercial da NF (parte 4.2d).
   ["/financeiro/nf", ["owner", "admin", "financeiro"]],
+  // As OS do cliente no portal (parte 4.3b).
+  ["/portal/servicos", ["cliente"]],
 ];
 
 // Menu com o Comercial desligado, como na produção (o liberado: comercial/navegacao.test.ts).
@@ -271,6 +273,8 @@ describe("menu do portal da BTG", () => {
       ["Eventos", "/portal/eventos"],
       ["Envios para a Dutelog", "/portal/recebimentos"],
       ["Pedidos", "/portal/pedidos"],
+      // As OS do cliente (parte 4.3b): sem perfil carregado nada é escondido; o contrato tira.
+      ["Minhas OS", "/portal/servicos"],
       ["Faturas", "/portal/faturas"],
       ["Documentos", "/portal/documentos"],
     ]);
@@ -318,15 +322,16 @@ describe("menu do portal por modelo de operação", () => {
         "cliente",
         resolveOperationProfile({ customer_code: "Cliente X", operation_template: "uniformes", modules }),
       ).map((module) => module.label);
-    expect(comModulos(["operacao"])).toEqual(["Início"]);
+    expect(comModulos(["operacao"])).toEqual(["Início", "Minhas OS"]);
+    expect(comModulos(["wms", "financeiro"])).not.toContain("Minhas OS");
     expect(comModulos(["wms", "operacao"])).not.toContain("Faturas");
     expect(comModulos(["financeiro"])).toEqual(["Início", "Faturas"]);
     expect(comModulos(["wms", "financeiro"])).toEqual(labels("uniformes"));
   });
 
   it("sem perfil carregado nada é escondido; o perfil não mexe no menu interno", () => {
-    expect(getNavigationForProfileRole("cliente", null).length).toBe(8);
-    expect(getNavigationForProfileRole("cliente", undefined).length).toBe(8);
+    expect(getNavigationForProfileRole("cliente", null).length).toBe(9);
+    expect(getNavigationForProfileRole("cliente", undefined).length).toBe(9);
     expect(getNavigationForProfileRole("admin", profileFor("insumos")).map((module) => module.label)).toEqual(
       getNavigationForProfileRole("admin").map((module) => module.label),
     );
@@ -338,6 +343,7 @@ describe("menu do portal por modelo de operação", () => {
     expect(portalModuleForPath("/portal/faturas/fatura")).toBe("invoices");
     expect(portalModuleForPath("/portal/faturas/relatorio?de=2026-05&ate=2026-10")).toBe("invoices");
     expect(portalModuleForPath("/portal/agente?x=1")).toBe("assistant");
+    expect(portalModuleForPath("/portal/servicos?os=10045-01")).toBe("services");
     expect(portalModuleForPath("/estoque")).toBeNull();
     expect(portalModuleForPath("/configuracoes/conta")).toBeNull();
   });
@@ -391,6 +397,7 @@ describe("barra inferior do celular", () => {
     expect(more("cliente")).toEqual([
       "Eventos · Eventos",
       "Envios para a Dutelog · Envios para a Dutelog",
+      "Minhas OS · Minhas OS",
       "Faturas · Faturas",
       "Documentos · Documentos",
     ]);

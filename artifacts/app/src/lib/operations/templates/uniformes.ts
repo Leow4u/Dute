@@ -11,7 +11,7 @@ export const uniformes: OperationTemplate = {
     "Quantidade por SKU, pedidos e eventos que se repetem, cobrança por posição ocupada e caixa como unidade de manuseio.",
   status: "ready",
   control: "quantity",
-  portal: ["assistant", "home", "inventory", "events", "requests", "orders", "invoices", "documents"],
+  portal: ["assistant", "home", "inventory", "events", "requests", "orders", "services", "invoices", "documents"],
   defines: [
     {
       label: "Portal",

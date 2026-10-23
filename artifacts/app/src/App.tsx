@@ -122,6 +122,9 @@ const ClienteEstoque = lazy(() =>
 const ClienteEventos = lazy(() =>
   import("./pages/client").then((m) => ({ default: m.ClienteEventos })),
 );
+const ClienteServicos = lazy(() =>
+  import("./pages/client").then((m) => ({ default: m.ClienteServicos })),
+);
 const ClienteFaturas = lazy(() =>
   import("./pages/client").then((m) => ({ default: m.ClienteFaturas })),
 );
@@ -1084,6 +1087,8 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/portal/pedidos", ClientePedidos),
   protectedRoute("/portal/faturas/fatura", ClienteFatura),
   protectedRoute("/portal/faturas/relatorio", ClienteRelatorio),
+  // As OS do cliente (parte 4.3b): a barreira por módulo do portal pede a Operação no contrato.
+  protectedRoute("/portal/servicos", ClienteServicos),
   protectedRoute("/portal/faturas", ClienteFaturas),
   protectedRoute("/portal/documentos", ClienteDocumentos),
   protectedRoute("/portal/agente/operacional", ClientAgentRedirect),
