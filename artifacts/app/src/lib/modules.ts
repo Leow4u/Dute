@@ -69,6 +69,7 @@ import {
   ROTA_OPERACAO,
   ROTA_OS,
   ROTA_OS_IMPRESSAO,
+  ROTA_RELATORIOS,
   ROTA_REVISAO,
   ROTA_PLANEJAR,
   ROTA_VEICULOS,
@@ -532,6 +533,14 @@ export const APP_MODULES: AppModule[] = [
         label: "Revisão",
         href: ROTA_REVISAO,
         icon: ClipboardCheck,
+        roles: OPERATION_REGISTRY_ROLES,
+      }),
+      // Os relatórios da Operação (parte 4.8a): as OS do período, a equipe, os veículos e o portal, sem valor.
+      navRoute({
+        id: "operacao-relatorios",
+        label: "Relatórios",
+        href: ROTA_RELATORIOS,
+        icon: BarChart3,
         roles: OPERATION_REGISTRY_ROLES,
       }),
       navRoute({

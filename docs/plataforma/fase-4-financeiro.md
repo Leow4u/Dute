@@ -201,7 +201,8 @@ continuam no Faturamento do WMS, e as rotas `/financeiro` não existem
 | 4.7c | WMS na v3: Pedidos | `theme-colors.test.ts`; render e `axe` |
 | 4.7d | WMS na v3: Estoque | `theme-colors.test.ts`; render e `axe` |
 | 4.7e | WMS na v3: Receber | `theme-colors.test.ts`; render e `axe` |
-| 4.8 | Relatórios | Sem valor para quem não vê valor |
+| 4.8a | Operação › Relatórios: OS por período, cliente e tipo, produtividade da equipe, uso dos veículos e solicitações do portal, com Excel e PDF | Nenhum valor; no prazo pela janela; textos listados; `axe` |
+| 4.8b | Financeiro › Relatórios: receita por cliente e por serviço e contas a receber, com Excel e PDF | Só quem lê preço abre; o estorno fica fora da receita; `axe` |
 | 4.9 | Lançamento em produção | Conferência de produção |
 
 ## Registro
@@ -632,3 +633,31 @@ Feita em 23/10/2026. A tela é `artifacts/app/src/pages/receber.tsx`, e a chegad
 - **Testes.**
   - `receber.test.tsx` cobre a falta de legenda, a ação principal, a chegada avulsa e o aviso de envio renderizado com `axe`.
   - `receiving.test.ts` cobre a tarefa principal.
+
+### Parte 4.8a: os relatórios da Operação
+
+Feita em 23/10/2026. As regras estão em `artifacts/app/src/lib/operacao/relatorios.ts`, e a tela em
+`pages/operacao/relatorios-view.tsx`. O mockup é `docs/mockups/Relatorios.dc.html`. A rota é `/operacao/relatorios` (`?relatorio=`), no menu da Operação.
+
+- **Os relatórios.**
+  - **OS por período**, por semana ou por mês, com o total.
+  - **OS por cliente**, do maior para o menor.
+  - **OS por tipo**: a OS com mais de um serviço conta em cada um, e a vistoria é o serviço dela.
+  - **Produtividade da equipe**: as OS, as concluídas e as no prazo de cada pessoa escalada.
+  - **Uso dos veículos**: as OS, os dias em uso e as concluídas de cada veículo.
+  - **Solicitações do portal**: as recebidas no período, as que viraram demanda, as recusadas e as em aberto, por cliente.
+- **As regras.**
+  - A OS entra pelo dia agendado (`janela.data`).
+  - Concluída é a em revisão ou revisada. A reaberta deixa de contar até concluir de novo.
+  - No prazo é a concluída até o dia agendado e, quando o fim da janela foi marcado, até ele.
+- **A tela.**
+  - Ao lado da lista ficam o período (as últimas quatro semanas no começo, de até um ano), o cliente e, nas OS por período, o agrupamento.
+  - Abaixo vêm os números do período e a tabela.
+  - "Excel" baixa a tabela (`planilha-xlsx.ts`), com os números como número.
+  - "PDF" imprime só o relatório (`.print-area`), sem a lista, os filtros e os botões.
+- **Sem valor.** A OS não tem preço, e o relatório não lê nenhum campo de valor. A receita fica no Financeiro (4.8b).
+- **Leitura.** As OS e as solicitações vêm do Firestore pelas regras de hoje (quem coordena a Operação). As consultas são por intervalo num campo só, sem índice novo.
+- **Testes.**
+  - `relatorios.test.ts` cobre a leitura (nenhum valor), o no prazo, o resumo, cada tabela, o filtro e a planilha.
+  - `relatorios-view.test.tsx` cobre os textos na ordem, nenhum valor, o relatório marcado, o que vai para o PDF, o filtro errado, os estados e `axe`.
+  - `navegacao.test.ts`, `modules.test.ts` e `shell-do-modulo.test.tsx` cobrem o menu, a rota e o papel.

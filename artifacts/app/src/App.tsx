@@ -169,6 +169,7 @@ const OperacaoPlanejar = lazy(() => import("./pages/operacao/planejar"));
 const OperacaoOs = lazy(() => import("./pages/operacao/os"));
 const OperacaoOsImpressao = lazy(() => import("./pages/operacao/os-impressao"));
 const OperacaoRevisao = lazy(() => import("./pages/operacao/revisao"));
+const OperacaoRelatorios = lazy(() => import("./pages/operacao/relatorios"));
 const CampoHoje = lazy(() => import("./pages/campo/hoje"));
 const CampoOs = lazy(() => import("./pages/campo/os"));
 const CampoConcluir = lazy(() => import("./pages/campo/concluir"));
@@ -1109,6 +1110,7 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
     protectedRoute("/operacao/os", OperacaoOs),
     protectedRoute("/operacao/os/impressao", OperacaoOsImpressao),
     protectedRoute("/operacao/revisao", OperacaoRevisao),
+    protectedRoute("/operacao/relatorios", OperacaoRelatorios),
     protectedRoute("/operacao/colaboradores", OperacaoColaboradores),
     protectedRoute("/operacao/veiculos", OperacaoVeiculos),
     // O app do campo é da Operação (parte 3.8b).
