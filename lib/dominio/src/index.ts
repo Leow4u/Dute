@@ -68,7 +68,8 @@ export const MODULOS_POR_PAPEL: Record<PapelEquipe, readonly Modulo[]> = {
   financeiro: ["financeiro"],
   rh: ["rh"],
   suporte: ["wms", "operacao"],
-  painel: [],
+  // O painel é a TV da sala, da Operação (parte 3.12).
+  painel: ["operacao"],
 };
 
 /** Módulos que o cliente contrata. `financeiro` são as faturas no portal. */

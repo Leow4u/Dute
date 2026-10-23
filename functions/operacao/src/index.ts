@@ -3,15 +3,19 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { onCall } from "firebase-functions/https";
 import { setGlobalOptions } from "firebase-functions/v2";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 
 import { completeServiceOrderFor } from "./domain/conclusao-gravacao.js";
 import { openDirectDemandFor } from "./domain/demanda-direta-gravacao.js";
 import { registerItemFor, registerOccurrenceFor, registerPresenceFor, registerStepFor } from "./domain/execucao-gravacao.js";
 import { attachPhotoFor, type ConferirArquivo } from "./domain/fotos-gravacao.js";
 import { saveCollaboratorFor, saveVehicleFor } from "./domain/gravacao.js";
+import { operacaoLiberada } from "./domain/liberacao.js";
 import { saveServiceOrderFor } from "./domain/os-gravacao.js";
 import { reopenServiceOrderFor, reviewServiceOrderFor } from "./domain/revisao-gravacao.js";
 import { requireOperacaoCaller } from "./domain/profile.js";
+import { runDailyAlertsFor } from "./domain/rotina-gravacao.js";
+import { getRoomBoardFor } from "./domain/tv-leitura.js";
 import { sendSurveyToCommercialFor } from "./domain/vistoria-gravacao.js";
 import { PROJECT_ID } from "./project.js";
 
@@ -119,4 +123,21 @@ export const reopenServiceOrder = onCall(async (request) => {
 export const sendSurveyToCommercial = onCall(async (request) => {
   const caller = await requireOperacaoCaller(db, request, PROJECT_ID, { campo: true });
   return sendSurveyToCommercialFor(db, caller, request.data);
+});
+
+/** O quadro do dia para a TV da sala: agendadas, em execução e concluídas, sem valor nem contato. Só lê; o painel não grava nada. */
+export const getRoomBoard = onCall(async (request) => {
+  const caller = await requireOperacaoCaller(db, request, PROJECT_ID, { painel: true });
+  return getRoomBoardFor(db, caller);
+});
+
+/**
+ * Todo dia às 06:00 de São Paulo: a CNH vencendo e a revisão preventiva do
+ * veículo viram um evento cada, uma vez por dia por item (parte 3.13a). Fora
+ * da liberação da Operação, não faz nada.
+ */
+export const runDailyAlerts = onSchedule({ schedule: "every day 06:00", timeZone: "America/Sao_Paulo", timeoutSeconds: 300 }, async () => {
+  if (!operacaoLiberada(PROJECT_ID)) return;
+  const resultado = await runDailyAlertsFor(db);
+  console.info("runDailyAlerts", resultado);
 });

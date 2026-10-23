@@ -45,6 +45,8 @@ export type OsDaFila = {
   /** "Origem → Destino", pelo nome do local ou pelo complemento. */
   rota?: string | null;
   demandaFora?: DemandaFora | null;
+  /** Até quando executar (ISO), o prazo da demanda direta; null nas outras (comDemanda). */
+  prazo?: string | null;
 };
 
 export type DemandaParaAbrir = {
@@ -200,18 +202,28 @@ function preenchido(valor: unknown): boolean {
   return valor !== undefined && valor !== null && valor !== false;
 }
 
-export type DemandaDaFila = { numero: string; fora: DemandaFora | null; paraAbrir: DemandaParaAbrir | null };
+export type DemandaDaFila = {
+  numero: string;
+  fora: DemandaFora | null;
+  paraAbrir: DemandaParaAbrir | null;
+  /** O prazo da demanda direta (`executar_ate`, ISO), ou null. */
+  executarAte: string | null;
+};
 
 /** A demanda como a fila usa: a que vira OS e a que saiu (a mesma regra de functions/operacao, problemaParaAgendarOs). */
 export function demandaDaFila(id: string, data: Record<string, unknown>): DemandaDaFila {
   const fora: DemandaFora | null = preenchido(data.cancelamento) ? "cancelada" : preenchido(data.perda) ? "perdida" : null;
-  return { numero: id, fora, paraAbrir: demandaParaAbrir(id, data) };
+  const prazo = texto(data.executar_ate);
+  return { numero: id, fora, paraAbrir: demandaParaAbrir(id, data), executarAte: prazo && !Number.isNaN(Date.parse(prazo)) ? prazo : null };
 }
 
-/** Marca na OS a demanda perdida ou cancelada no Comercial. */
+/** Marca na OS a demanda perdida ou cancelada no Comercial e o prazo da demanda direta. */
 export function comDemanda(ordens: readonly OsDaFila[], demandas: readonly DemandaDaFila[]): OsDaFila[] {
-  const fora = new Map(demandas.flatMap((demanda) => (demanda.fora ? [[demanda.numero, demanda.fora] as const] : [])));
-  return ordens.map((os) => ({ ...os, demandaFora: fora.get(os.demanda) ?? null }));
+  const porNumero = new Map(demandas.map((demanda) => [demanda.numero, demanda]));
+  return ordens.map((os) => {
+    const demanda = porNumero.get(os.demanda);
+    return { ...os, demandaFora: demanda?.fora ?? null, prazo: demanda?.executarAte ?? null };
+  });
 }
 
 export function rotuloDaDemandaFora(fora: DemandaFora): string {

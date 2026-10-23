@@ -17,13 +17,15 @@ import { isSettingsPath } from "./settings-nav";
  * o módulo tiver navegação própria.
  */
 
-export type Ambiente = "wms" | "comercial" | "operacao" | "campo";
+export type Ambiente = "wms" | "comercial" | "operacao" | "campo" | "tv";
 
 const POR_PREFIXO: readonly { prefixo: string; ambiente: Ambiente }[] = [
   { prefixo: "/comercial", ambiente: "comercial" },
   { prefixo: "/operacao", ambiente: "operacao" },
   // O app do campo, no celular (parte 3.8b): é da Operação, com shell próprio.
   { prefixo: "/campo", ambiente: "campo" },
+  // A TV da sala (parte 3.12b): é da Operação, em tela cheia e sem menu.
+  { prefixo: "/tv", ambiente: "tv" },
 ];
 
 /** Ambiente de navegação do caminho. Configuração não é módulo: use layoutDaRota. */
@@ -44,19 +46,19 @@ export function moduloDaRota(path: string): Modulo | null {
   if (isSettingsPath(path)) return null;
   const ambiente = ambienteDaRota(path);
   if (ambiente === "comercial" || ambiente === "operacao") return ambiente;
-  if (ambiente === "campo") return "operacao";
+  if (ambiente === "campo" || ambiente === "tv") return "operacao";
   const normalized = normalizePath(path);
   if (normalized === "/faturamento" || normalized.startsWith("/faturamento/")) return "financeiro";
   return "wms";
 }
 
 /** Qual shell desenha a rota. "app" é o layout do WMS e do portal. */
-export type LayoutDaRota = "app" | "settings" | "comercial" | "operacao" | "campo";
+export type LayoutDaRota = "app" | "settings" | "comercial" | "operacao" | "campo" | "tv";
 
 export function layoutDaRota(path: string): LayoutDaRota {
   if (isSettingsPath(path)) return "settings";
   const ambiente = ambienteDaRota(path);
-  if (ambiente === "comercial" || ambiente === "operacao" || ambiente === "campo") return ambiente;
+  if (ambiente === "comercial" || ambiente === "operacao" || ambiente === "campo" || ambiente === "tv") return ambiente;
   return "app";
 }
 

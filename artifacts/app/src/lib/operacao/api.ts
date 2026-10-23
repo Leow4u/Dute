@@ -22,6 +22,8 @@ export const CALLABLES_DA_OPERACAO = [
   "reviewServiceOrder",
   "reopenServiceOrder",
   "sendSurveyToCommercial",
+  // A leitura da TV da sala (parte 3.12): só lê.
+  "getRoomBoard",
 ] as const;
 export type CallableDaOperacao = (typeof CALLABLES_DA_OPERACAO)[number];
 

@@ -80,7 +80,7 @@ export function useEscala({
             .map((pessoa) => ({ id: pessoa.id, nome: pessoa.nome, funcao: pessoa.funcao, ativo: pessoa.ativo }))}
           veiculos={veiculos
             .filter((veiculo) => veiculo.ativo || veiculo.id === agenda.veiculoId)
-            .map((veiculo) => ({ id: veiculo.id, placa: veiculo.placa, tipo: veiculo.tipo, ativo: veiculo.ativo }))}
+            .map((veiculo) => ({ id: veiculo.id, placa: veiculo.placa, tipo: veiculo.tipo, ativo: veiculo.ativo, revisaoEm: veiculo.revisaoEm || null }))}
           agenda={agenda}
           onAgenda={setAgenda}
           ocupado={ocupado}

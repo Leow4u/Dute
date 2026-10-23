@@ -14,6 +14,7 @@ import {
   problemasDoPlano,
   removerOs,
   restantes,
+  revisoesNoPlano,
   type FormularioDoPlano,
 } from "./planejar";
 
@@ -124,6 +125,19 @@ describe("o que só merece atenção", () => {
     };
     expect(alertasDoPlano(plano, [ANA, BRUNO], [VAN], outras)).toEqual(["Ana Lima já está na OS 10049-01 no dia", "DEF-4G56 já está na OS 10049-01 no dia"]);
     expect(alertasDoPlano({ ...plano, ordens: [{ ...plano.ordens[0], data: "2026-10-28" }] }, [ANA], [VAN], outras)).toEqual([]);
+  });
+});
+
+describe("o veículo no dia da revisão preventiva (parte 3.13b)", () => {
+  it("impede agendar a OS do dia com o veículo; nos outros dias, não", () => {
+    const naRevisao = { ...VAN, revisaoEm: HOJE } as VeiculoDaLista;
+    const plano: FormularioDoPlano = { ...planoInicial(SALDO, HOJE), veiculos: [{ veiculoId: "vei_van", ordens: [0] }] };
+    expect(revisoesNoPlano(plano, [naRevisao])).toEqual(["A OS: DEF-4G56 está em revisão preventiva no dia."]);
+    expect(revisoesNoPlano(plano, [naRevisao], "A vistoria")).toEqual(["A vistoria: DEF-4G56 está em revisão preventiva no dia."]);
+    expect(revisoesNoPlano({ ...plano, ordens: [{ ...plano.ordens[0], data: "2026-10-28" }] }, [naRevisao])).toEqual([]);
+    expect(revisoesNoPlano({ ...plano, veiculos: [] }, [naRevisao])).toEqual([]);
+    const duas: FormularioDoPlano = { ...plano, ordens: [plano.ordens[0], { ...plano.ordens[0], data: "2026-10-28" }], veiculos: [{ veiculoId: "vei_van", ordens: [0, 1] }] };
+    expect(revisoesNoPlano(duas, [naRevisao])).toEqual(["OS 1: DEF-4G56 está em revisão preventiva no dia."]);
   });
 });
 

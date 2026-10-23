@@ -140,6 +140,8 @@ const EXEMPLOS: Record<OperacaoEventType, Record<string, unknown>> = {
   "demand.execution_reviewed": { id: "10045", de: "2026-10-22", ate: "2026-10-22", os: 1 },
   "os.occurrence_recorded": { id: "10045-01", demanda: "10045", ocorrencia: "oc_01", instante: "2026-10-22T11:00:00.000Z", canal: "celular" },
   "demand.direct_opened": { id: "10053", tipo: "paraquedas", tipo_calculado: "emergencial", linhas: 1 },
+  "collaborator.cnh_expiring": { id: "col_aaaaaaaaaaaaaaaa", dia: "2026-10-23", dias: 12 },
+  "vehicle.maintenance_due": { id: "vei_aaaaaaaaaaaaaaaa", dia: "2026-10-23", dias: -2 },
 };
 
 function wmsNoticeWords(): string[] {

@@ -102,7 +102,8 @@ esses dois casos (parte 3.4).
 - Comercial lê `demands` e o resumo da execução, nunca `service_orders`.
 - Cliente lê as próprias OS, com a Operação contratada (regra da parte 2.7 da
   Fase 2), e a tela dele é da Fase 4.
-- Painel lê só o que a TV mostra.
+- Painel não lê nenhuma coleção pelo navegador: a TV recebe o quadro do
+  dia pela callable `getRoomBoard`, com só o que ela mostra (parte 3.12a).
 
 ## Callables
 
@@ -110,7 +111,10 @@ Em `functions/operacao`, cada uma numa linha e começando por
 `requireOperacaoCaller`: `saveServiceOrder` (create, schedule, cancel; ganha
 `plan`), `openDirectDemand`, `registerStep`, `registerItem`, `attachPhoto`,
 `registerPresence`, `registerOccurrence`, `completeServiceOrder`,
-`reviewServiceOrder`, `reopenServiceOrder` e `sendSurveyToCommercial`.
+`reviewServiceOrder`, `reopenServiceOrder`, `sendSurveyToCommercial` e
+`getRoomBoard` (a leitura da TV, a única que atende o painel; não grava).
+A rotina diária `runDailyAlerts` (Cloud Scheduler, 06:00 de São Paulo) não é
+callable: confere a liberação e grava os alertas do dia (parte 3.13a).
 
 ## Eventos
 
@@ -181,9 +185,11 @@ registros guardados" é dado, não legenda.
 | 3.11c | Planejar a vistoria pelo escritório: a visita técnica pedida em Para planejar no Hoje, "Planejar vistoria" na ficha da demanda e a tela de Planejar numa OS só, sem itens | Textos listados; `axe`; o formulário manda o formato de `saveServiceOrder` survey |
 | 3.11d | A vistoria na ficha da OS e no Registrar andamento: "Enviada ao Comercial", os passos dela, a vistoria enviada, sem itens, conclusão nem reabertura | Textos listados; `axe`; só as etapas da vistoria no andamento |
 | 3.11e | No Comercial: "Vistoria concluída" no Início e na montagem, com os itens levantados carregados no orçamento | O orçamento nasce com os itens da vistoria, sem redigitar |
-| 3.12 | TV da sala (`/tv`, papel `painel`) | `painel` só lê o que a TV mostra; sem valor; sem ação |
-| 3.13 | Alertas no Início e rotina diária (CNH, revisão do veículo, OS sem equipe ou veículo perto do prazo) | O evento sai uma vez por dia por item |
-| 3.14 | Produção e registro | Conferência de produção |
+| 3.12a | Quadro da TV no backend: `getRoomBoard` (painel, owner, admin e interno) | `painel` só lê o que a TV mostra; sem valor; sem ação; as regras não abrem coleção ao painel |
+| 3.12b | TV da sala (`/tv`): o painel entra direto, modo escuro, colunas, indicadores, próxima saída, relógio e atualização sozinha | Textos listados; sem valor; nenhum botão nem link; `axe` |
+| 3.13a | Rotina diária no backend (CNH e revisão do veículo viram evento) e o veículo fora no dia da revisão preventiva | O evento sai uma vez por dia por item; o agendamento recusa o veículo no dia da revisão |
+| 3.13b | Alertas no Início (revisão do veículo, OS sem equipe ou veículo perto do prazo) e a revisão preventiva na escala e na Agenda | Textos listados; o veículo no dia da revisão não se escolhe; `axe` |
+| 3.14 | Produção e registro: o ciclo completo no emulador e o roteiro `operacao-producao.md` | O ciclo da direta e do Comercial passa no emulador sem valor na OS; a publicação espera o OK do Leonardo |
 
 **Pronto quando.** Uma demanda do Comercial e uma direta percorrem pedido →
 OS → planejamento com várias OS → execução → assinatura no celular, sem
@@ -1144,3 +1150,130 @@ Feita em 23/10/2026. Regras em `lib/comercial/vistoria-da-operacao.ts`.
 - **No Início.** "Vistoria concluída" (cliente, itens levantados e o dia do
   envio) espera, na montagem, até o orçamento carregar os itens dela. Uma
   vistoria nova, enviada depois, espera de novo. Owner, admin e comercial.
+
+### Parte 3.12a: o quadro da TV no backend
+
+Feita em 23/10/2026. Regras em `functions/operacao/src/domain/tv.ts`; a
+leitura em `tv-leitura.ts`.
+
+- **`getRoomBoard`.** Atende o papel `painel` e quem coordena (owner, admin e
+  interno, para conferir). É a única callable que atende o painel: as
+  outras o recusam ("Seu perfil não grava o cadastro da Operação"), inclusive
+  as do campo. Só lê: nenhum recibo, evento ou gravação.
+- **O quadro do dia.** Três colunas: a agendada para hoje (ou para um dia
+  que já passou, sem ter começado), a em execução e a concluída hoje (a
+  etapa Fim no dia de São Paulo). A aberta sem data, a cancelada, a agendada
+  para outro dia e a concluída antes de hoje ficam fora.
+- **Campo a campo.** Por OS: número, tipo, coluna, cliente, serviços, a rota
+  pelo nome dos locais, o dia e a hora marcados, o prazo (o da demanda direta ou o
+  fim da janela), a última etapa, as etapas feitas e previstas, a hora do
+  Fim e o aceite, os nomes da equipe e as placas. Nada de valor, contato,
+  telefone, endereço, instruções, ocorrência, foto, motivo de cancelamento,
+  CPF ou documento de quem assinou.
+- **Sem índice novo.** Duas consultas de um campo só: o status (agendada e
+  em execução) e `updated_at` desde o começo do dia (a conclusão grava).
+- **Regras.** O painel continua sem ler coleção nenhuma pelo navegador: OS,
+  demanda, cliente, evento, colaborador e veículo recusam (teste no
+  emulador).
+
+### Parte 3.12b: a TV da sala
+
+Feita em 23/10/2026. Regras em `lib/tv/quadro.ts`; a tela em
+`pages/tv/tv-view.tsx` (`docs/mockups/TVSala.dc.html`).
+
+- **Entrada.** O papel `painel` passa a ter a Operação
+  (`MODULOS_POR_PAPEL`) e a casa dele é `/tv`: entra direto na TV onde a
+  Operação está liberada. Owner, admin e interno abrem `/tv` para conferir;
+  o resto do app continua fechado ao painel.
+- **Tela cheia, escura e sem ação.** Sem menu, sem botão, sem link e sem
+  campo. O escuro vale só dentro da TV: o tema de quem abre para conferir
+  não muda. A tela pede ao navegador para não apagar (Screen Wake Lock),
+  onde ele deixa. Para sair, o painel abre `/configuracoes/conta`.
+- **O que mostra.** A data, o relógio, os indicadores (OS hoje, agendadas,
+  em execução, concluídas, atrasadas e a próxima saída) e três colunas. Cada
+  cartão traz a hora, o número, o cliente, o serviço com a rota e o prazo,
+  a equipe e a placa. A em execução mostra as etapas e a última, com a
+  hora. A concluída mostra a hora do Fim e "Assinada", "Concluída" ou
+  "Enviada ao Comercial". Sem valor.
+- **Atraso pelo relógio da TV.** A agendada que passou da hora (ou de um
+  dia que já foi) sem começar e a em execução que passou do prazo ficam
+  "Atrasada 32 min" e sobem para o topo da coluna. "Sem equipe" e "Sem
+  veículo" (só no transporte) alertam a agendada.
+- **Atualiza sozinha.** Relê o quadro a cada 30 segundos e anda o relógio a
+  cada 15. Sem conexão, segue com o último quadro e o rodapé diz "Sem
+  conexão · atualizado às 14:31". Coluna cheia mostra "+ 2 OS"; quantos
+  cartões cabem sai da altura da tela (três a 1080 px).
+- **Sessão longa.** O login do Firebase fica guardado no navegador e se
+  renova sozinho: a TV continua entrando até alguém sair ou desligar o
+  acesso em Pessoas.
+
+### Parte 3.13a: a rotina diária no backend
+
+Feita em 23/10/2026. Regras em `functions/operacao/src/domain/rotina.ts`; a
+gravação em `rotina-gravacao.ts`.
+
+- **`runDailyAlerts`.** Todo dia às 06:00 de São Paulo (Cloud Scheduler,
+  como a rotina do Agent Dute no WMS). Fora da liberação da Operação, não
+  faz nada.
+- **Os alertas.** A CNH de quem está ativo que vence em até 30 dias, ou já
+  venceu, vira `collaborator.cnh_expiring`. A revisão preventiva do veículo
+  ativo em até 15 dias, ou com a data já passada, vira
+  `vehicle.maintenance_due`. As janelas são as do Início. Cadastro ilegível
+  fica de fora.
+- **Uma vez por dia por item.** O id do evento sai do dia e do item: rodar
+  de novo no mesmo dia não duplica; no dia seguinte, sai de novo enquanto o
+  alerta valer. O payload é o id, o dia e quantos dias faltam (negativo: já
+  passou), sem nome, CPF, categoria, validade nem placa. O ator é
+  `rotina-diaria`.
+- **O veículo no dia da revisão.** `revisao_em` é o dia da revisão
+  preventiva: o planejamento, o agendamento e a vistoria recusam o veículo
+  nesse dia ("O veículo DEF-4G56 está em revisão preventiva em 01/01/2099.").
+  No dia seguinte, ele volta. Para tirar o bloqueio, muda-se a data no
+  cadastro do veículo.
+
+### Parte 3.13b: os alertas no Início e a revisão na escala e na Agenda
+
+Feita em 23/10/2026. Regras em `lib/operacao/pendencias.ts`,
+`lib/operacao/planejar.ts` e `lib/operacao/agenda.ts`.
+
+- **OS perto do prazo, desfalcada.** A agendada para hoje ou amanhã sem
+  equipe, ou com transporte e sem veículo, vira "OS 10045-01 sem equipe",
+  "sem veículo" ou "sem equipe e sem veículo", com "Escalar"; hoje é
+  crítica. A vistoria e a montagem no local não pedem veículo.
+- **A aberta da demanda direta perto do prazo.** Com o prazo em até 24
+  horas, ou passado, vira "OS 10053-01 sem agenda" com o prazo e quanto
+  falta ("Hoje até 19:00 · faltam 4h40"), crítica, e sai da conta de "OS
+  para agendar". A OS passa a ler o prazo da demanda (`executar_ate`).
+- **Revisão do veículo.** O veículo ativo com a revisão preventiva em até 15
+  dias, hoje ou com a data passada vira "Revisão do DEF-4G56 em 5 dias", "é
+  hoje" ou "passou em 20/10/2026", com "Ver cadastro" (a ficha abre direto,
+  `/operacao/veiculos?id=`). A OS agendada com o veículo no dia da revisão
+  deixa o item crítico, com "Reagendar". As janelas de 30 dias da CNH e 15
+  da revisão são as da rotina diária (o teste lê as duas).
+- **Escala e planejamento.** No dia da revisão, o veículo aparece como
+  "Revisão preventiva" e não se escolhe; escolhido antes de mudar a data, a
+  escala diz "DEF-4G56 em revisão preventiva no dia" e não salva. Agendando
+  pelo planejamento, o mesmo impede ("A OS: DEF-4G56 está em revisão
+  preventiva no dia."). O servidor recusa do mesmo jeito (parte 3.13a).
+- **Agenda.** A linha do veículo mostra "Revisão preventiva" no dia, como no
+  mockup `OpAgenda`.
+
+### Parte 3.14: produção e registro
+
+Feita em 23/10/2026, até onde não depende do Leonardo.
+
+- **O ciclo no emulador.** O "pronto quando" da Fase 3 virou teste em
+  `functions/operacao/src/domain/ciclo.integration.test.ts`:
+  - a demanda direta vai do pedido a duas OS, à execução no celular com item incluído em campo, à assinatura, à revisão e a Execução a orçar;
+  - a demanda do Comercial vai do escopo fechado à OS, ao item a mais e ao aditivo pedido;
+  - a TV mostra a agendada de manhã e a assinada no fim do dia;
+  - cada etapa fica com o instante;
+  - nenhuma OS guarda preço, total ou valor.
+  - O ciclo roda no dia de hoje: a TV acha as concluídas pelo `updated_at` que o servidor grava.
+- **O roteiro.** Em `docs/plataforma/operacao-producao.md`:
+  - o que muda no `dute-prod` desde a última publicação (`fde9ba0`);
+  - o que conferir na homologação antes;
+  - como publicar e o que conferir depois (o job da rotina, o login da TV e o do campo);
+  - como desligar a Operação ou só a rotina.
+- **Falta.** O OK do Leonardo para publicar (marco 3 do plano de implantação) e a conferência na homologação, que é de uma pessoa.
+

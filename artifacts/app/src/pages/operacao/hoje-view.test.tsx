@@ -223,6 +223,18 @@ describe("escalar a OS", () => {
     expect(perdida).toContain("Cancelar OS");
   });
 
+  it("o veículo no dia da revisão preventiva não se escolhe; escolhido antes, impede salvar (parte 3.13b)", () => {
+    const veiculos = [{ id: "vei_a", placa: "ABC-1D23", tipo: "Fiorino", ativo: true, revisaoEm: HOJE }];
+    const livre = formulario({ veiculos });
+    expect(textosDaTela(livre)).toContain("ABC-1D23 · Fiorino · Revisão preventiva");
+    expect(livre).toMatch(/<option value="vei_a" disabled="">/);
+    expect(livre).toMatch(/<button[^>]*type="submit"(?![^>]*disabled)[^>]*>Agendar/);
+    const escolhido = formulario({ veiculos, agenda: { ...agenda, veiculoId: "vei_a" } });
+    expect(textosDaTela(escolhido)).toContain("ABC-1D23 em revisão preventiva no dia");
+    expect(escolhido).toMatch(/<button[^>]*disabled=""[^>]*>Agendar/);
+    expect(textosDaTela(formulario({ veiculos, agenda: { ...agenda, data: "2026-10-24", veiculoId: "vei_a" } }))).not.toContain("ABC-1D23 em revisão preventiva no dia");
+  });
+
   it("não tem problema de acessibilidade", async () => {
     expect(await violacoesDeAcessibilidade(formulario({ erro: "A data do agendamento já passou." }))).toEqual([]);
   });

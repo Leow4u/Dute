@@ -31,18 +31,19 @@ documentação de produto e operação está em `docs/`.
   continua sem gravar no `dute-prod` e no `dute-btg`. O `dute-btg` fica de fora
   das duas listas. Roteiro, ordem e como desfazer:
   `docs/plataforma/comercial-producao.md`.
-- **Operação (Fase 3, partes 1 a 3) está na `main`, ligada no `dute-homolog` e
-  no `dute-prod`** (OK do Leonardo em 22/10/2026): colaboradores, veículos e a
-  fila do dia (abrir, agendar e cancelar a OS). Desde a parte 3.4b a OS
-  tem fatia do saldo, janela, equipe com papel e veículos, e o campo lê só a
-  OS em que está escalado; desde a 3.4d a demanda direta nasce na Operação
-  (`openDirectDemand`), sem orçamento; desde a 3.7a o escritório registra
-  etapas, itens, ocorrências e fotos e a OS fica Em execução; desde a 3.8a o
-  campo escalado grava o andamento e a presença pelas mesmas callables, e
-  desde a 3.8b pelo app `/campo` (celular, fila de registros). Concluir
-  ainda não existe. O `dute-btg` fica de fora das duas listas
-  `OPERACAO_AMBIENTES_LIBERADOS`. Desenho e como desligar:
-  `docs/plataforma/fase-3-operacao.md`.
+- **Operação (Fase 3, partes 3.0 a 3.14) está na `main`, ligada no
+  `dute-homolog` e no `dute-prod`** (OK do Leonardo em 22/10/2026 e "pode
+  deixar ligada" em 23/10): demanda direta, planejar com várias OS, Agenda,
+  execução pelo escritório e pelo app `/campo` (fila sem sinal, assinatura no
+  dedo), revisão com divergência, aditivo e orçamento da execução no
+  Comercial, vistoria como OS, TV da sala (`/tv`, papel `painel`, que só lê o
+  quadro da callable `getRoomBoard`) e a rotina diária `runDailyAlerts`
+  (Cloud Scheduler, 06:00, CNH e revisão do veículo viram evento uma vez por
+  dia por item). A produção serve o que foi publicado até `fde9ba0` (23/10,
+  02:16 UTC); publicar a Fase 3 completa é o marco 3 e espera o OK do
+  Leonardo: roteiro em `docs/plataforma/operacao-producao.md`. O `dute-btg`
+  fica de fora das duas listas `OPERACAO_AMBIENTES_LIBERADOS`. Desenho,
+  registro de cada parte e como desligar: `docs/plataforma/fase-3-operacao.md`.
 - **Alinhamento do Comercial e da Operação recuperado em 23/10/2026**:
   `docs/plataforma/alinhamento-comercial-operacao.md` compara o desenho
   aprovado (plano, Fase 2, Fase 6 e mockups) com o que entrou na `main` de 21

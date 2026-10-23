@@ -44,7 +44,7 @@ Fica em `lib/dominio`, ao lado da lista única de papéis.
 | financeiro | financeiro |
 | rh | rh |
 | suporte | wms, operacao |
-| painel | nenhum; vai para `/tv` quando ela existir |
+| painel | nenhum; vai para `/tv` quando ela existir (existe desde a parte 3.12b da Fase 3: o painel tem a Operação e entra direto na TV) |
 | cliente | os contratados |
 
 Um módulo só aparece se tiver tela no app. Desde as partes 2.5 e 2.6 são

@@ -26,8 +26,20 @@ export type PlatformRole = (typeof PLATFORM_ROLES)[number];
 /** Quem grava o cadastro de colaboradores e veículos. */
 export const OPERACAO_CADASTRO_ROLES = ["owner", "admin", "interno"] as const satisfies readonly PlatformRole[];
 
+/**
+ * Quem abre a TV da sala (parte 3.12): o papel `painel`, que só lê o quadro
+ * do dia, e quem coordena, para conferir. O painel não grava nada.
+ */
+export const TV_ROLES = ["owner", "admin", "interno", "painel"] as const satisfies readonly PlatformRole[];
+
 export function isPlatformRole(value: unknown): value is PlatformRole {
   return typeof value === "string" && (PLATFORM_ROLES as readonly string[]).includes(value);
+}
+
+/** Por que a pessoa não vê a TV, ou null quando vê. Nega o resto. */
+export function tvProblem(role: PlatformRole): string | null {
+  if ((TV_ROLES as readonly string[]).includes(role)) return null;
+  return "Seu perfil não abre a TV da sala.";
 }
 
 /** Por que a pessoa não grava o cadastro, ou null quando pode. Nega o resto. */

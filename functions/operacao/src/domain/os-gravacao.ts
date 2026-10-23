@@ -335,7 +335,7 @@ async function abrir(
         janela: ordem.janela ?? null,
         equipe,
         equipe_uids,
-        veiculos: veiculosDaOs(ordem.veiculos ?? [], frota),
+        veiculos: veiculosDaOs(ordem.veiculos ?? [], frota, ordem.janela?.data ?? null),
         instrucoes: ordem.instrucoes ?? null,
       }),
     );
@@ -406,7 +406,7 @@ async function abrirVistoria(
     janela: acao.janela ?? null,
     equipe,
     equipe_uids,
-    veiculos: veiculosDaOs(acao.veiculos ?? [], frota),
+    veiculos: veiculosDaOs(acao.veiculos ?? [], frota, acao.janela?.data ?? null),
     instrucoes: acao.instrucoes ?? null,
   });
 
@@ -446,7 +446,7 @@ async function agendar(
     janela: acao.janela,
     equipe,
     equipe_uids,
-    veiculos: veiculosDaOs(acao.veiculos, frota),
+    veiculos: veiculosDaOs(acao.veiculos, frota, acao.janela.data),
     instrucoes: acao.instrucoes,
     contatos: acao.contatos,
   });
