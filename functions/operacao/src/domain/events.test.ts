@@ -137,6 +137,7 @@ const EXEMPLOS: Record<OperacaoEventType, Record<string, unknown>> = {
     pessoas: 8,
   },
   "os.addendum_requested": { id: "10045-01", demanda: "10045", linhas: 1 },
+  "os.warehouse_return_due": { id: "10050-02", demanda: "10050", instante: "2026-10-30T21:40:00.000Z", pedido: "ord_118" },
   "os.reopened": { id: "10045-01", demanda: "10045", demanda_reaberta: false },
   "demand.execution_reviewed": { id: "10045", de: "2026-10-22", ate: "2026-10-22", os: 1 },
   "os.occurrence_recorded": { id: "10045-01", demanda: "10045", ocorrencia: "oc_01", instante: "2026-10-22T11:00:00.000Z", canal: "celular" },

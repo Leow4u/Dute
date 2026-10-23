@@ -64,7 +64,7 @@ Seguem a recomendação do plano até a resposta do Leonardo:
 | `financeiro_operations` | Financeiro | O recibo de idempotência. Ninguém lê. |
 | `demands` | Comercial | O Financeiro escreve `etapa: "faturada"`, `etapa_desde`, o marco em `marcos` e `faturamento`: a fatura, a NF e o vencimento, sem valor. |
 | `client_authorizations` | Comercial | O Financeiro escreve só `nf_ids`. |
-| `orders` | WMS | O pedido de saída ganha `entrega` (parte 4.5a). Pela Dutelog guarda o destino, a data e a hora, o contato, a montagem e o retorno ao armazém. Na retirada pelo cliente guarda a data e a hora, quem retira, o documento e a placa. Também guarda quem definiu e quando, e `demanda` e `os_numeros`, que a Operação grava ao abrir a demanda (parte 4.5b). |
+| `orders` | WMS | O pedido de saída ganha `entrega` (parte 4.5a). Pela Dutelog guarda o destino, a data e a hora, o contato, a montagem e o retorno ao armazém. Na retirada pelo cliente guarda a data e a hora, quem retira, o documento e a placa. Também guarda quem definiu e quando, e `demanda` e `os_numeros`, que a Operação grava ao abrir a demanda (parte 4.5b). E `retorno` (parte 4.5d): a OS de volta concluída grava a OS, a demanda, quando chegou e o status a receber. O WMS recebe e grava recebido, a devolução, quando e quem. |
 | `service_requests` | Operação | A solicitação de OS pelo portal (parte 4.4a). Guarda o tipo de serviço (transporte, armazenagem, serviço em campo ou mudança), a data e o horário pedidos, a origem, o destino e o que será feito, os anexos (o caminho no Storage, o nome, o tipo e o tamanho) e o contato (o login de quem pediu). Também o status (recebida, aceita ou recusada), a demanda aberta com ela e a recusa com o motivo. Sem preço. |
 
 Preço só em `faturas`, `pagamentos` e `client_faturas`, lidos por
@@ -96,6 +96,7 @@ e começando por `requireFinanceiroCaller`:
 
 A entrega do pedido de saída (parte 4.5a) fica no WMS (`functions/wms`):
 
+- `receiveOrderReturn` (parte 4.5d): owner, admin, interno e wms recebem o retorno a receber do pedido, uma vez. O que voltou vira a devolução do pedido (`returns`, com a chave do pedido), que segue para a disposição física.
 - `setOrderDelivery`: owner, admin, interno e wms definem a entrega pela Dutelog ou a retirada pelo cliente. Só antes da saída (o pedido expedido, entregue ou cancelado recusa) e enquanto a Operação não abriu a demanda. Repetir a mesma escolha não grava de novo.
 
 A solicitação do portal (parte 4.4a) fica em `functions/operacao`:
@@ -117,6 +118,11 @@ fatura (`entity_type: fatura`), com o `customer_code`.
 - `cobranca.payment_reversed`: a fatura, o pagamento e se reabriu a NF paga.
 - Nenhum evento leva o valor, o número da NF ou o motivo, que é texto livre.
 - O financeiro lê os `nf.*` e os `cobranca.*`, como lê os `billing.*` do WMS.
+
+O retorno recebido grava no WMS `expedicao.return_linked` (`source:
+functions_order_return`): o pedido, a devolução, a OS e quantas linhas. Na
+Operação, a conclusão da volta grava `os.warehouse_return_due`: a OS, a
+demanda, quando chegou e o pedido.
 
 A entrega do pedido grava no WMS `expedicao.delivery_set` (`source:
 functions_order_delivery`, `entity_type: pedido`): o pedido, o modo, o dia, a
@@ -419,3 +425,24 @@ Feita em 23/10/2026. As regras estão em `artifacts/app/src/lib/warehouse-ops/en
   - `warehouse-ops/entrega.test.ts` cobre os modos iguais aos do WMS, o resumo, a Operação, o formulário, o que falta, o pedido e a saída.
   - `order-delivery.test.tsx` cobre os textos dos dois modos, o problema no campo e o `axe`.
   - `functions-api.test.ts` cobre a rota.
+
+### Parte 4.5d: o retorno ao armazém
+
+Feita em 23/10/2026. A Operação grava o retorno em `functions/operacao/src/domain/conclusao-gravacao.ts`
+(com `demanda-do-armazem.ts`). O WMS recebe em `functions/wms/src/domain/order-return.ts`. A tela fica
+em `features/warehouse-ops/order-returns.tsx`, em Devoluções.
+
+- **A chegada.** A conclusão da OS de volta (`retorno_ao_armazem`) grava no pedido, na mesma transação, o retorno a receber com a OS, a demanda e quando chegou.
+  - O caminhão chegou ao armazém. Não espera a revisão da OS, que é do escritório.
+  - O retorno já recebido não volta a ser esperado, nem com a OS reaberta e concluída de novo.
+- **O recebimento.** Em Devoluções, os Retornos da Operação do cliente ativo mostram o pedido, a OS e quando chegou, com "Receber retorno".
+  - O diálogo traz as linhas do pedido com o que saiu. O armazém diz quantos voltaram de cada (inteiro, até o que saiu, ao menos um).
+  - `receiveOrderReturn` cria a devolução do pedido (a mesma `createReturnReceipt`, com a chave do pedido e a referência "PED-0118 · OS 10050-02") e marca o retorno recebido.
+  - Segue para a disposição física como as outras devoluções. O retorno se recebe uma vez.
+- **Testes.**
+  - `conclusao.integration.test.ts` cobre o retorno a receber e o já recebido.
+  - `demanda-do-armazem.test.ts` cobre a leitura da volta e a marca.
+  - `order-return.test.ts` e `order-return.integration.test.ts` cobrem a devolução do pedido, uma vez, e o pedido sem retorno.
+  - `retorno.test.ts` e `order-returns.test.tsx` cobrem a tela.
+  - `functions-api.test.ts` cobre a rota.
+

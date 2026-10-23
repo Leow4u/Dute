@@ -51,6 +51,7 @@ export const OPERACAO_EVENT_TYPES = [
   "os.reopened",
   "os.survey_opened",
   "os.survey_sent",
+  "os.warehouse_return_due",
   "demand.direct_opened",
   "demand.storage_opened",
   "demand.execution_reviewed",
@@ -250,6 +251,10 @@ const servicoPedido = z
   .object({ id: solicitacaoId, tipo_servico: z.enum(["transporte", "armazenagem", "servico_em_campo", "mudanca"]), data, anexos: z.number().int().min(0).max(3) })
   .strict();
 const servicoAceito = z.object({ id: solicitacaoId, demanda: demandaNumero }).strict();
+/** A volta da entrega do WMS concluída (parte 4.5d): o retorno a receber no pedido de saída. */
+const retornoAoArmazem = z
+  .object({ id: osId, demanda: demandaNumero, instante, pedido: z.string().min(1).max(200).regex(/^[^/]+$/) })
+  .strict();
 /** A entrega do pedido de saída do WMS (parte 4.5b): o tipo, quantas linhas e OS, e se tem o retorno ao armazém. */
 const demandaDoArmazem = z
   .object({ id: demandaNumero, tipo: tipoDemanda, linhas: z.number().int().min(1).max(10), os: z.number().int().min(1).max(2), retorno: z.boolean() })
@@ -285,6 +290,7 @@ export const OPERACAO_EVENT_PAYLOADS = {
   "os.reopened": osReaberta,
   "os.survey_opened": vistoriaAberta,
   "os.survey_sent": vistoriaEnviada,
+  "os.warehouse_return_due": retornoAoArmazem,
   "demand.direct_opened": demandaDireta,
   "demand.storage_opened": demandaDoArmazem,
   "demand.execution_reviewed": execucaoRevisada,
@@ -329,6 +335,10 @@ const TEXTO: Record<OperacaoEventType, { title: string; description: string }> =
   "os.survey_sent": {
     title: "Vistoria enviada ao Comercial",
     description: "A vistoria levantou ambientes, itens e medidas no local e foi direto ao Comercial, sem revisão.",
+  },
+  "os.warehouse_return_due": {
+    title: "Retorno ao armazém",
+    description: "A OS de volta da entrega do WMS terminou: o WMS confere e recebe o que voltou.",
   },
   "demand.direct_opened": { title: "Demanda direta aberta", description: "A demanda chegou direto na Operação e se orça depois da execução." },
   "demand.storage_opened": {

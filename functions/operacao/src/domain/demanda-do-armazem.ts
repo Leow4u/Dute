@@ -140,3 +140,23 @@ export function itensDaEntrega(pedido: Pick<PedidoDoWms, "numero">, entrega: Pic
 export function tituloDaEntrega(pedido: Pick<PedidoDoWms, "numero">): string {
   return `Entrega do pedido ${pedido.numero}`.slice(0, 120);
 }
+
+/** O pedido do WMS a que a OS de volta retorna (`retorno_ao_armazem`, gravado pela abertura da entrega), ou null. */
+export function retornoAoArmazem(os: Record<string, unknown>): { order_id: string; order_number: string } | null {
+  const retorno = registro(os.retorno_ao_armazem);
+  const orderId = texto(retorno?.order_id);
+  if (!orderId || orderId.includes("/")) return null;
+  return { order_id: orderId, order_number: texto(retorno?.order_number) || orderId };
+}
+
+/**
+ * O retorno que a conclusão da volta grava no pedido do WMS (parte 4.5d): a
+ * OS, a demanda e quando chegou, a receber no WMS. O retorno já recebido não
+ * volta a ser esperado (a OS reaberta e concluída de novo não o repete).
+ */
+export function retornoNoPedido(pedido: Record<string, unknown>, os: { numero: string; demanda: string }, instante: string): Record<string, unknown> | null {
+  const atual = registro(pedido.retorno);
+  if (texto(atual?.status) === "recebido") return null;
+  return { status: "a_receber", os: os.numero, demanda: os.demanda, chegou_em: instante, return_id: null };
+}
+

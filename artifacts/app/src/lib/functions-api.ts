@@ -183,6 +183,23 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  // Devoluções › o retorno do pedido de saída (parte 4.5d): o pedido vem do caminho, o que voltou do corpo.
+  const orderReturnMatch = pathname.match(/^\/api\/orders\/([^/]+)\/return$/);
+  if (method === "POST" && orderReturnMatch) {
+    return {
+      name: "receiveOrderReturn",
+      payload: async (_pathname, init) => {
+        const body = await readJsonBody(init);
+        return {
+          order_id: decodeURIComponent(orderReturnMatch[1]),
+          items: Array.isArray(body.items) ? body.items : [],
+          ...(typeof body.notes === "string" && body.notes.trim() ? { notes: body.notes.trim() } : {}),
+          ...(typeof body.idempotency_key === "string" ? { idempotency_key: body.idempotency_key } : {}),
+        };
+      },
+    };
+  }
+
   // Expedição › a entrega do pedido de saída (parte 4.5a): o pedido vem do caminho, a escolha do corpo.
   const orderDeliveryMatch = pathname.match(/^\/api\/orders\/([^/]+)\/delivery$/);
   if (method === "POST" && orderDeliveryMatch) {

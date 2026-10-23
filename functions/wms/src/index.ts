@@ -40,6 +40,7 @@ import {
 } from "./domain/operations.js";
 import { linkInboundNoticeTransaction } from "./domain/inbound-notice.js";
 import { setOrderDeliveryTransaction } from "./domain/order-delivery.js";
+import { receiveOrderReturnFlow } from "./domain/order-return.js";
 import {
   BillingDomainError,
   assertBillingStatusTransition,
@@ -6325,6 +6326,17 @@ export const setOrderDelivery = onCall(async (request) => {
   const profile = await getProfile(request);
   requireWarehouseWrite(profile);
   return setOrderDeliveryTransaction(db, request.data, profile);
+});
+
+/**
+ * Devoluções › o retorno do pedido (parte 4.5d): a OS de volta da entrega
+ * pela Dutelog concluída deixa o retorno a receber; o armazém confere o que
+ * voltou e recebe uma vez, numa devolução para a disposição física.
+ */
+export const receiveOrderReturn = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  return receiveOrderReturnFlow(db, request.data, profile);
 });
 
 export const linkInboundNotice = onCall(async (request) => {
