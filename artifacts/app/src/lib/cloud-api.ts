@@ -1367,6 +1367,17 @@ async function getDashboard() {
   };
 }
 
+/**
+ * Os dias parado do cliente (docs/plataforma/fase-5-memoria.md, parte 5.4c):
+ * o item que a rotina do núcleo grava em `ai_stock_age`. Só o filtro do
+ * cliente, sem ordenação: a tela junta pelo SKU.
+ */
+async function getStockAge(customerCode: string) {
+  if (!firestore || !customerCode) return { items: [] };
+  const snapshot = await getDocs(query(collection(firestore, "ai_stock_age"), where("customer_code", "==", customerCode)));
+  return { items: snapshot.docs.map(normalizeDoc) };
+}
+
 async function getWarehouseMap() {
   const skus = await readLimited(collectionNames.skus, CATALOG_READ_CAP);
   const ruas = new Map<string, AnyRecord>();
@@ -3934,6 +3945,7 @@ async function route(
   }
 
   if (pathname === "/api/warehouse/map") return json(await getWarehouseMap());
+  if (pathname === "/api/stock-age" && method === "GET") return json(await getStockAge(searchParams.get("customer_code") ?? ""));
 
   // Relatórios (pages/reports.tsx): período filtrado na consulta, não na
   // tela. O ledger grava `data` em ISO; os pedidos, `created_at` Timestamp.

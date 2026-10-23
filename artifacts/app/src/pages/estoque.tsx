@@ -54,8 +54,24 @@ import {
 import { cn } from "@/lib/utils";
 import Movements, { MovementModal } from "./movements";
 import { DeleteSkuButton, SkuModal } from "./skus";
+import { regraDoModelo, rotuloDaEtiqueta } from "@workspace/dominio";
+
 import { customerRows } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
+import { MEMORIA_LIBERADA } from "@/lib/liberacao";
+import {
+  caixasDoSku,
+  dataDoRelogio,
+  diasEmTexto,
+  giroPorSku,
+  hojeEmSaoPaulo,
+  itemParadoLido,
+  type CaixaParada,
+  type GiroDoItem,
+  type ItemParadoLido,
+} from "@/lib/memoria/parados";
+import { warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
+import { fetchWarehouseRows } from "@/lib/warehouse-rows";
 
 type AnyRecord = Record<string, unknown>;
 
@@ -89,6 +105,13 @@ const FILTERS: Array<{ value: StockFilter; label: string }> = [
   { value: "reserved", label: "Reservados" },
   { value: "no-photo", label: "Sem foto" },
   { value: "zero", label: "Zerados" },
+  // Os dias parado (parte 5.4c) só valem onde a memória roda.
+  ...(MEMORIA_LIBERADA
+    ? ([
+        { value: "idle", label: "Parados" },
+        { value: "no-turnover", label: "Sem giro" },
+      ] as const)
+    : []),
 ];
 
 export default function Estoque() {
@@ -125,6 +148,30 @@ export default function Estoque() {
     queryFn: () => fetchJson<{ items: AnyRecord[] }>("/api/products?limit=2000"),
     refetchInterval: 300_000,
   });
+  // Os dias parado do cliente ativo: o item que a rotina do núcleo grava e as
+  // caixas, com a regra do modelo dele (parte 5.4c).
+  const stockAge = useQuery({
+    queryKey: ["stock-age", customerCode],
+    queryFn: () => fetchJson<{ items: AnyRecord[] }>(`/api/stock-age?customer_code=${encodeURIComponent(customerCode)}`),
+    enabled: MEMORIA_LIBERADA,
+    refetchInterval: 300_000,
+  });
+  const boxes = useQuery({
+    queryKey: ["warehouse-boxes", customerCode, "estoque"],
+    queryFn: async () =>
+      (await fetchWarehouseRows<AnyRecord>(`/api/warehouse/boxes?customer_code=${encodeURIComponent(customerCode)}&limit=1000`)).map(warehouseBoxFromRecord),
+    enabled: MEMORIA_LIBERADA,
+    staleTime: 60_000,
+  });
+  const regra = regraDoModelo(activeCustomer.profile.template.key);
+  const hoje = hojeEmSaoPaulo();
+  const parados = useMemo(
+    () => new Map((stockAge.data?.items ?? []).map(itemParadoLido).filter((item): item is ItemParadoLido => item !== null).map((item) => [item.skuCode, item])),
+    [stockAge.data?.items],
+  );
+  const giro = useMemo(() => giroPorSku([...parados.values()], regra, hoje), [hoje, parados, regra]);
+  const caixasDoItem = (item: StockItem) => caixasDoSku(item.skuCode, boxes.data ?? [], parados, regra, hoje);
+  const rotuloDaCaixaParada = rotuloDaEtiqueta("parado", regra);
   // Enquanto a abertura estiver pendente ou em curso, a lista avisa e leva
   // para a Contagem; quem não pode contar (suporte) não vê a faixa.
   const openingSession = useOpeningInventorySession();
@@ -135,8 +182,8 @@ export default function Estoque() {
         skus: customerRows(skus.data?.items, customerCode),
         balances: customerRows(balances.data?.items, customerCode),
         products: customerRows(products.data?.items, customerCode),
-      }),
-    [balances.data?.items, customerCode, products.data?.items, skus.data?.items],
+      }).map((item) => ({ ...item, giro: giro.get(item.skuCode) })),
+    [balances.data?.items, customerCode, giro, products.data?.items, skus.data?.items],
   );
   const counts = useMemo(() => {
     const result = {} as Record<StockFilter, number>;
@@ -279,7 +326,7 @@ export default function Estoque() {
                   >
                     <X className="h-4 w-4" />
                   </button>
-                  <ItemCard key={panelItem.key} item={panelItem} />
+                  <ItemCard key={panelItem.key} item={panelItem} caixas={caixasDoItem(panelItem)} rotuloDaCaixaParada={rotuloDaCaixaParada} />
                 </section>
               ) : null}
             </div>
@@ -292,7 +339,7 @@ export default function Estoque() {
                   <SheetTitle>{selected?.name ?? "Item"}</SheetTitle>
                   <SheetDescription>Ficha do item</SheetDescription>
                 </SheetHeader>
-                {selected ? <ItemCard key={selected.key} item={selected} /> : null}
+                {selected ? <ItemCard key={selected.key} item={selected} caixas={caixasDoItem(selected)} rotuloDaCaixaParada={rotuloDaCaixaParada} /> : null}
               </SheetContent>
             </Sheet>
           ) : null}
@@ -335,6 +382,11 @@ function StatusChips({ item }: { item: StockItem }) {
         <Chip tone="warn">{numberFormatter.format(item.reserved)} reservados</Chip>
       ) : null}
       {item.zero ? <Chip tone="bad">Zerado</Chip> : item.low ? <Chip tone="bad">Baixo</Chip> : null}
+      {item.giro?.rotulos.map((rotulo) => (
+        <Chip key={rotulo} tone="warn">
+          {rotulo}
+        </Chip>
+      ))}
       {item.photos.length === 0 ? <Chip tone="muted">Sem foto</Chip> : null}
     </div>
   );
@@ -476,7 +528,7 @@ function movementDate(value: unknown) {
   return Number.isNaN(date.getTime()) ? "" : dateFormatter.format(date);
 }
 
-function ItemCard({ item }: { item: StockItem }) {
+function ItemCard({ item, caixas, rotuloDaCaixaParada }: { item: StockItem; caixas: CaixaParada[]; rotuloDaCaixaParada: string }) {
   const { user } = useAppUser();
   // O item listado é do cliente ativo (a lista é filtrada por ele).
   const { code: customerCode } = useActiveCustomer();
@@ -677,6 +729,8 @@ function ItemCard({ item }: { item: StockItem }) {
           )}
         </Section>
 
+        <SecaoDoGiro giro={item.giro} caixas={caixas} rotuloDaCaixaParada={rotuloDaCaixaParada} />
+
         {item.reserved > 0 ? (
           <Section title="Reservado">
             <div className="flex items-center justify-between text-sm">
@@ -771,6 +825,57 @@ function ItemCard({ item }: { item: StockItem }) {
         ) : null}
       </div>
     </div>
+  );
+}
+
+/** O giro do item e as caixas dele, com os dias parado de cada uma (parte 5.4c). */
+export function SecaoDoGiro({ giro, caixas, rotuloDaCaixaParada }: { giro?: GiroDoItem; caixas: CaixaParada[]; rotuloDaCaixaParada: string }) {
+  return (
+    <>
+      {giro ? (
+        <Section title="Giro">
+          <dl className="grid grid-cols-3 gap-2 text-sm">
+            <div>
+              <dt className="text-xs text-foreground/60">Última entrada</dt>
+              <dd className="tabular-nums">{dataDoRelogio(giro.relogio.ultima_entrada)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-foreground/60">Última saída</dt>
+              <dd className="tabular-nums">{dataDoRelogio(giro.relogio.ultima_saida)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-foreground/60">Sem movimento</dt>
+              <dd className="tabular-nums">{giro.diasParado === null ? "—" : diasEmTexto(giro.diasParado)}</dd>
+            </div>
+          </dl>
+          {giro.rotulos.length ? (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {giro.rotulos.map((rotulo) => (
+                <Chip key={rotulo} tone="warn">
+                  {rotulo}
+                </Chip>
+              ))}
+            </div>
+          ) : null}
+        </Section>
+      ) : null}
+      {caixas.length ? (
+        <Section title="Caixas">
+          {caixas.map((caixa) => (
+            <div key={caixa.code} className="flex min-w-0 items-center justify-between gap-3 py-1 text-sm">
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="font-mono font-semibold">{caixa.code}</span>
+                {caixa.posicao ? <LocationTag id={caixa.posicao} /> : null}
+              </span>
+              <span className="flex shrink-0 items-center gap-2">
+                <span className="tabular-nums text-foreground/70">{caixa.diasParado === null ? "—" : diasEmTexto(caixa.diasParado)}</span>
+                {caixa.parada ? <Chip tone="warn">{rotuloDaCaixaParada}</Chip> : null}
+              </span>
+            </div>
+          ))}
+        </Section>
+      ) : null}
+    </>
   );
 }
 
