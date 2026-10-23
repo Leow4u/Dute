@@ -2,6 +2,7 @@ import { MESES_PAGAMENTO, TIPOS_PAGAMENTO, dataValida, formatarReais, pagamentoP
 import { ClipboardCheck, FileText, Hourglass } from "lucide-react";
 
 import { rotuloDaRv } from "../comercial/autorizacoes";
+import { LEGACY_CUSTOMER_CODE } from "../operations";
 import type { ItemDoInicio } from "../inicio-do-modulo";
 
 /**
@@ -11,6 +12,11 @@ import type { ItemDoInicio } from "../inicio-do-modulo";
  * ler e conferir: o servidor (registerNf) lê de novo e decide. A regra é a
  * mesma: a RV validada (que as autorizações citam) ou, na medição mensal, a
  * soma das linhas da demanda na medição aprovada.
+ *
+ * Desde a parte 7.2b (docs/plataforma/fase-7-financeiro-unificado.md), a fila
+ * também traz a armazenagem que o WMS emitiu e ainda não está numa NF, pelo
+ * total congelado na emissão. Ela vira uma linha como a da demanda, com o
+ * `periodoId`; o servidor (registerNf, parte 7.2a) confere de novo.
  */
 
 type Registro = Record<string, unknown>;
@@ -144,7 +150,13 @@ export const SITUACAO_ROTULO: Record<Exclude<SituacaoNaFila, "pronta">, string> 
 };
 
 export type LinhaAFaturar = {
+  /**
+   * O item da linha. Na armazenagem, `numero` é o id do período no WMS (nunca
+   * só dígitos, então não colide com a demanda) e o resto vem do período.
+   */
   demanda: DemandaDoFinanceiro;
+  /** O id de `billing_periods` na armazenagem; null na demanda. */
+  periodoId: string | null;
   situacao: SituacaoNaFila;
   valorCents: number | null;
   /** "RV 2" ou "Medição 10/2026". */
@@ -203,11 +215,87 @@ export function linhaAFaturar(
               : "pronta";
   return {
     demanda,
+    periodoId: null,
     situacao,
     valorCents,
     origem: demanda.medicaoId ? rotuloDaMedicao(demanda.medicaoId) : demanda.rv !== null ? `RV ${demanda.rv}` : "Sem RV validada",
     autorizacaoTexto: textoDaAutorizacao(demanda, validas),
   };
+}
+
+// --- A armazenagem do WMS -----------------------------------------------------------------
+
+/** O id do período no WMS: `{cliente}__{AAAA-MM}`, ou o antigo da BTG, só `AAAA-MM`. */
+const PERIODO_ID = /^(?:([\w.-]{1,200})__)?(\d{4}-(?:0[1-9]|1[0-2]))$/;
+
+export type CompetenciaDoFinanceiro = {
+  periodoId: string;
+  customerCode: string;
+  competencia: string;
+  /** Quando o WMS emitiu (ISO). */
+  emitidaEm: string | null;
+  /** O total congelado na emissão; null sem a foto. */
+  valorCents: number | null;
+};
+
+/** "09/2026". */
+export function rotuloDaCompetencia(competencia: string): string {
+  const [ano, mes] = competencia.split("-");
+  return ano && mes ? `${mes}/${ano}` : competencia;
+}
+
+/**
+ * O período como o Financeiro lê de `billing_periods`: só o emitido no WMS e
+ * fora de NF. O valor é o da foto da emissão, nunca o total solto do período.
+ */
+export function competenciaDoFinanceiro(id: string, dados: Registro): CompetenciaDoFinanceiro | null {
+  if (texto(dados.status) !== "emitido") return null;
+  const faturamento = dados.faturamento && typeof dados.faturamento === "object" ? (dados.faturamento as Registro) : {};
+  if (texto(faturamento.fatura_id)) return null;
+  const casado = PERIODO_ID.exec(id);
+  if (!casado) return null;
+  // O id antigo (`AAAA-MM`) é só da BTG, que nem sempre gravou o cliente.
+  const customerCode = texto(dados.customer_code) || (casado[1] ? "" : LEGACY_CUSTOMER_CODE);
+  if (!customerCode) return null;
+  const foto = dados.invoice_snapshot && typeof dados.invoice_snapshot === "object" ? (dados.invoice_snapshot as Registro) : {};
+  const total = inteiro(foto.total_cents);
+  return {
+    periodoId: id,
+    customerCode,
+    competencia: texto(dados.competencia) || casado[2],
+    emitidaEm: texto(dados.emitido_em) || null,
+    valorCents: total !== null && total >= 0 ? total : null,
+  };
+}
+
+/** A competência emitida como uma linha da fila: pronta com o total da foto. */
+export function linhaDaArmazenagem(competencia: CompetenciaDoFinanceiro): LinhaAFaturar {
+  return {
+    demanda: {
+      numero: competencia.periodoId,
+      customerCode: competencia.customerCode,
+      cliente: competencia.customerCode,
+      titulo: null,
+      etapa: "a_faturar",
+      desde: competencia.emitidaEm,
+      contratoId: null,
+      rv: null,
+      autorizacao: null,
+      medicaoId: null,
+      medicaoPendente: false,
+      autorizacaoIds: [],
+    },
+    periodoId: competencia.periodoId,
+    situacao: competencia.valorCents === null ? "sem_valor" : "pronta",
+    valorCents: competencia.valorCents,
+    origem: "Fatura do WMS",
+    autorizacaoTexto: "Emitida na Armazenagem",
+  };
+}
+
+/** A competência da linha da armazenagem ("2026-09"), ou null na demanda. */
+function competenciaDaLinha(linha: LinhaAFaturar): string | null {
+  return linha.periodoId ? (PERIODO_ID.exec(linha.periodoId)?.[2] ?? null) : null;
 }
 
 /** De onde sai o valor da demanda: a RV validada ou a medição aprovada. O caminho do documento, ou null. */
@@ -223,8 +311,10 @@ export function valorDaFonte(demanda: DemandaDoFinanceiro, documento: Registro |
   return demanda.medicaoId ? valorNaMedicao(demanda.numero, documento) : valorDaRv(documento);
 }
 
-/** "10045 – RV02" como o cliente cita; na medição, só o número. */
+/** "10045 – RV02" como o cliente cita; na medição, só o número; na armazenagem, "Armazenagem 09/2026". */
 export function rotuloDaLinha(linha: LinhaAFaturar): string {
+  const competencia = competenciaDaLinha(linha);
+  if (competencia) return `Armazenagem ${rotuloDaCompetencia(competencia)}`;
   return linha.demanda.medicaoId ? linha.demanda.numero : rotuloDaRv(linha.demanda.numero, linha.demanda.rv);
 }
 
@@ -237,7 +327,7 @@ export function filtrarLinhas(linhas: readonly LinhaAFaturar[], busca: string): 
   const termo = semAcento(busca.trim());
   if (!termo) return [...linhas];
   return linhas.filter((linha) =>
-    [linha.demanda.numero, linha.demanda.cliente, linha.demanda.titulo ?? "", linha.autorizacaoTexto].some((campo) => semAcento(campo).includes(termo)),
+    [rotuloDaLinha(linha), linha.demanda.numero, linha.demanda.cliente, linha.demanda.titulo ?? "", linha.autorizacaoTexto].some((campo) => semAcento(campo).includes(termo)),
   );
 }
 
@@ -255,6 +345,8 @@ export function gruposPorCliente(linhas: readonly LinhaAFaturar[]): GrupoDaFila[
   const grupos = new Map<string, GrupoDaFila>();
   for (const linha of linhas) {
     const atual = grupos.get(linha.demanda.customerCode) ?? { customerCode: linha.demanda.customerCode, cliente: linha.demanda.cliente, linhas: [], totalCents: 0 };
+    // A armazenagem só tem o código; o nome vem da demanda do mesmo cliente.
+    if (atual.cliente === atual.customerCode) atual.cliente = linha.demanda.cliente;
     atual.linhas.push(linha);
     atual.totalCents += linha.valorCents ?? 0;
     grupos.set(linha.demanda.customerCode, atual);
@@ -336,11 +428,13 @@ export function problemasDaNf(form: FormDaNf, marcadas: readonly LinhaAFaturar[]
   return problemas;
 }
 
-/** O pedido para `registerNf`. Sem valor: o servidor calcula. */
+/** O pedido para `registerNf`. Sem valor: o servidor calcula. A armazenagem vai em `armazenagem`, só quando há. */
 export function pedidoDaNf(form: FormDaNf, marcadas: readonly LinhaAFaturar[], chave: string): Record<string, unknown> {
+  const armazenagem = marcadas.flatMap((linha) => (linha.periodoId ? [linha.periodoId] : []));
   return {
     idempotency_key: chave,
-    demandas: marcadas.map((linha) => linha.demanda.numero),
+    demandas: marcadas.filter((linha) => !linha.periodoId).map((linha) => linha.demanda.numero),
+    ...(armazenagem.length ? { armazenagem } : {}),
     nf: { numero: form.numero.trim(), serie: form.serie.trim().toUpperCase(), emitida_em: form.emissao },
     vencimento: form.vencimento,
     forma: form.forma,
@@ -348,11 +442,26 @@ export function pedidoDaNf(form: FormDaNf, marcadas: readonly LinhaAFaturar[], c
   };
 }
 
-/** A confirmação depois de registerNf: a NF, quantas demandas e o total que o servidor calculou. */
-export function textoDoRegistro(form: FormDaNf, resultado: { valor_cents?: unknown; demandas?: unknown }): string {
+/** A confirmação depois de registerNf: a NF, quantas demandas, as competências de armazenagem e o total que o servidor calculou. */
+export function textoDoRegistro(form: FormDaNf, resultado: { valor_cents?: unknown; demandas?: unknown; armazenagem?: unknown }): string {
   const quantas = Array.isArray(resultado.demandas) ? resultado.demandas.length : 0;
+  const meses = (Array.isArray(resultado.armazenagem) ? resultado.armazenagem : []).flatMap((id) => {
+    const competencia = typeof id === "string" ? PERIODO_ID.exec(id)?.[2] : undefined;
+    return competencia ? [rotuloDaCompetencia(competencia)] : [];
+  });
   const valor = typeof resultado.valor_cents === "number" ? ` · ${formatarReais(resultado.valor_cents)}` : "";
-  return `NF ${form.numero.trim()} registrada: ${plural(quantas, "demanda faturada", "demandas faturadas")}${valor}`;
+  const armazenagem = meses.length ? `a armazenagem de ${juntar(meses)}` : "";
+  const itens = !meses.length
+    ? plural(quantas, "demanda faturada", "demandas faturadas")
+    : quantas
+      ? `${plural(quantas, "demanda", "demandas")} e ${armazenagem} faturadas`
+      : `${armazenagem} faturada`;
+  return `NF ${form.numero.trim()} registrada: ${itens}${valor}`;
+}
+
+/** "08/2026", "08/2026 e 09/2026", "07/2026, 08/2026 e 09/2026". */
+function juntar(valores: readonly string[]): string {
+  return valores.length < 2 ? (valores[0] ?? "") : `${valores.slice(0, -1).join(", ")} e ${valores.at(-1)}`;
 }
 
 export function totalDasMarcadas(marcadas: readonly LinhaAFaturar[]): number {
@@ -390,6 +499,13 @@ function plural(quantos: number, singular: string, pluralForm: string) {
   return `${quantos} ${quantos === 1 ? singular : pluralForm}`;
 }
 
+/** "2 demandas", "1 armazenagem" ou "2 demandas e 1 armazenagem". */
+function contagemDaFila(linhas: readonly LinhaAFaturar[]): string {
+  const armazenagem = linhas.filter((linha) => linha.periodoId).length;
+  const demandas = linhas.length - armazenagem;
+  return [demandas ? plural(demandas, "demanda", "demandas") : null, armazenagem ? plural(armazenagem, "armazenagem", "armazenagens") : null].filter(Boolean).join(" e ");
+}
+
 /** O "Precisa de você" do Financeiro: a faturar (crítico depois de DIAS_PARA_FATURAR) e o que espera. */
 export function pendenciasDoFinanceiro(linhas: readonly LinhaAFaturar[], agora: Date, rota: string): ItemDoInicio[] {
   const prontas = linhas.filter((linha) => linha.situacao === "pronta");
@@ -400,7 +516,7 @@ export function pendenciasDoFinanceiro(linhas: readonly LinhaAFaturar[], agora: 
       id: "financeiro-a-faturar",
       tone: antiga ? "critical" : "attention",
       icon: FileText,
-      title: `${plural(prontas.length, "demanda", "demandas")} a faturar`,
+      title: `${contagemDaFila(prontas)} a faturar`,
       detail: [previa(prontas.map((linha) => linha.demanda.cliente)), formatarReais(totalDasMarcadas(prontas))].join(" · "),
       href: rota,
       actionLabel: "Faturar",
@@ -424,7 +540,7 @@ export function pendenciasDoFinanceiro(linhas: readonly LinhaAFaturar[], agora: 
       id: "financeiro-medicao",
       tone: "info",
       icon: Hourglass,
-      title: `${plural(medicao.length, "demanda", "demandas")} sem valor para faturar`,
+      title: `${contagemDaFila(medicao)} sem valor para faturar`,
       detail: previa(medicao.map((linha) => linha.demanda.cliente)),
       href: rota,
       actionLabel: "Ver",

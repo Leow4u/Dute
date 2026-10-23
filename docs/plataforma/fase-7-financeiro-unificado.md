@@ -211,3 +211,35 @@ publicação.
     recusas sem gravar nada e o cancelamento;
   - `billing-callables.integration.test.ts`: o WMS não paga a competência que
     está numa NF.
+
+### Parte 7.2b: a armazenagem na fila e na NF do app
+
+Feita em 23/10/2026, em `artifacts/app/src/lib/financeiro/a-faturar.ts` e na
+tela Financeiro › A faturar.
+
+- **A leitura.** A fila lê ao vivo `billing_periods` com `status: emitido`.
+  As regras abrem a coleção a quem lê o faturamento, o que inclui os papéis
+  do Financeiro.
+  - Fica de fora o período que já tem `faturamento` (está numa NF) e o de id
+    fora do formato.
+  - O id antigo vale como BTG, pelo `LEGACY_CUSTOMER_CODE` do pacote dela.
+- **A linha.** A competência vira uma linha da fila, com o `periodoId`:
+  - "Armazenagem 09/2026", "Fatura do WMS · Emitida na Armazenagem";
+  - o total da foto da emissão. Sem a foto, fica em Esperando, sem valor;
+  - os dias desde a emissão, com o mesmo prazo da demanda.
+- **A NF.** A linha entra no grupo do cliente dela, com o nome que a demanda
+  do mesmo cliente traz. Só se marca com o mesmo cliente.
+  - O pedido leva `armazenagem` à parte, e só quando há: o servidor sem a
+    parte 7.2a recusaria o campo.
+  - O vencimento pelo contrato sai da primeira demanda que tem contrato.
+  - A confirmação diz a armazenagem de cada mês.
+- **Os textos.**
+  - O painel diz "Na NF", no lugar de "Demandas".
+  - A fila vazia diz "Nada a faturar", e a busca sem resultado, "Nada
+    encontrado".
+  - No Início, a contagem separa as demandas da armazenagem.
+- **Testes:**
+  - `a-faturar.test.ts`: a leitura do período, a linha, a NF, o pedido, a
+    confirmação e o Início;
+  - `a-faturar-view.test.tsx`: a linha no grupo do cliente, no painel, os
+    textos e o `axe`.

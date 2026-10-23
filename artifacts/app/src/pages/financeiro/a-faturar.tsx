@@ -28,9 +28,10 @@ import { AFaturarView } from "./a-faturar-view";
  * cada uma (lib/financeiro/use-a-faturar.ts), e o contrato do cliente marcado
  * para sugerir o vencimento. Grava só pela callable registerNf, com chave de
  * idempotência; o servidor confere de novo cada demanda e calcula o valor.
+ * A armazenagem emitida no WMS entra na mesma NF (parte 7.2b).
  */
 
-type ResultadoDoRegistro = { valor_cents?: unknown; demandas?: unknown };
+type ResultadoDoRegistro = { valor_cents?: unknown; demandas?: unknown; armazenagem?: unknown };
 
 export default function FinanceiroAFaturarPage() {
   const { toast } = useToast();
@@ -52,7 +53,8 @@ export default function FinanceiroAFaturarPage() {
 
   const linhas = fila.linhas ?? [];
   const linhasMarcadas = linhas.filter((linha) => linha.situacao === "pronta" && marcadas.includes(linha.demanda.numero));
-  const contratoId = linhasMarcadas[0]?.demanda.contratoId ?? null;
+  // A armazenagem não tem contrato: o vencimento sai da primeira demanda que tem.
+  const contratoId = linhasMarcadas.find((linha) => linha.demanda.contratoId)?.demanda.contratoId ?? null;
   const contrato = useQuery({
     queryKey: ["financeiro", "contrato", contratoId],
     queryFn: async () => {
