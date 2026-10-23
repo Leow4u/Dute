@@ -235,6 +235,11 @@ function Grupo({
               {dias.map((dia) => (
                 <td key={dia.data} className={cn("border-l border-border/60 p-1.5 align-top", dia.hoje ? "bg-muted/40" : null)}>
                   <span className="flex min-w-0 flex-col gap-1">
+                    {linha.fora?.[dia.data] ? (
+                      <span className="block rounded-md border border-dashed border-amber-soft-border bg-amber-soft px-2 py-1 text-xs font-semibold text-amber-soft-foreground">
+                        {linha.fora[dia.data]}
+                      </span>
+                    ) : null}
                     {(linha.dias[dia.data] ?? []).map((os) => (
                       <Bloco key={os.numero} os={os} selecionada={selecionada} onSelecionar={onSelecionar} />
                     ))}

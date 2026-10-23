@@ -175,6 +175,22 @@ describe("Agenda", () => {
     expect(textosDaTela(render({ agenda: vazia, busca: "zzz" }))).toContain("Nada encontrado");
   });
 
+  it("o veículo no dia da revisão preventiva mostra o dia fora (parte 3.13b)", async () => {
+    const comRevisao = agendaDaSemana({
+      segunda: SEGUNDA,
+      hoje: HOJE,
+      ordens: ORDENS,
+      pessoas: PESSOAS,
+      veiculos: [{ ...VEICULOS[0], revisaoEm: "2026-10-23" }],
+      nomesClientes: { ITAU: "Itaú Unibanco" },
+      demandas: { "10050": { titulo: "Troca de cadeiras", tipo: "paraquedas" } },
+      busca: "",
+    });
+    const html = render({ agenda: comRevisao });
+    expect(textosDaTela(html)).toContain("Revisão preventiva");
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
   it("não tem problema de acessibilidade", async () => {
     expect(await violacoesDeAcessibilidade(render({ selecionada: "10045-01" }))).toEqual([]);
   });

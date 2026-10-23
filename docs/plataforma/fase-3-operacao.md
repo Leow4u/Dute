@@ -1231,3 +1231,30 @@ gravação em `rotina-gravacao.ts`.
   No dia seguinte, ele volta. Para tirar o bloqueio, muda-se a data no
   cadastro do veículo.
 
+### Parte 3.13b: os alertas no Início e a revisão na escala e na Agenda
+
+Feita em 23/10/2026. Regras em `lib/operacao/pendencias.ts`,
+`lib/operacao/planejar.ts` e `lib/operacao/agenda.ts`.
+
+- **OS perto do prazo, desfalcada.** A agendada para hoje ou amanhã sem
+  equipe, ou com transporte e sem veículo, vira "OS 10045-01 sem equipe",
+  "sem veículo" ou "sem equipe e sem veículo", com "Escalar"; hoje é
+  crítica. A vistoria e a montagem no local não pedem veículo.
+- **A aberta da demanda direta perto do prazo.** Com o prazo em até 24
+  horas, ou passado, vira "OS 10053-01 sem agenda" com o prazo e quanto
+  falta ("Hoje até 19:00 · faltam 4h40"), crítica, e sai da conta de "OS
+  para agendar". A OS passa a ler o prazo da demanda (`executar_ate`).
+- **Revisão do veículo.** O veículo ativo com a revisão preventiva em até 15
+  dias, hoje ou com a data passada vira "Revisão do DEF-4G56 em 5 dias", "é
+  hoje" ou "passou em 20/10/2026", com "Ver cadastro" (a ficha abre direto,
+  `/operacao/veiculos?id=`). A OS agendada com o veículo no dia da revisão
+  deixa o item crítico, com "Reagendar". As janelas de 30 dias da CNH e 15
+  da revisão são as da rotina diária (o teste lê as duas).
+- **Escala e planejamento.** No dia da revisão, o veículo aparece como
+  "Revisão preventiva" e não se escolhe; escolhido antes de mudar a data, a
+  escala diz "DEF-4G56 em revisão preventiva no dia" e não salva. Agendando
+  pelo planejamento, o mesmo impede ("A OS: DEF-4G56 está em revisão
+  preventiva no dia."). O servidor recusa do mesmo jeito (parte 3.13a).
+- **Agenda.** A linha do veículo mostra "Revisão preventiva" no dia, como no
+  mockup `OpAgenda`.
+

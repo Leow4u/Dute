@@ -18,6 +18,7 @@ import {
   planoInicial,
   problemasDaVistoriaNoPlano,
   problemasDoPlano,
+  revisoesNoPlano,
   removerOs,
   restantes,
   vistoriaInicial,
@@ -119,7 +120,12 @@ export default function PaginaPlanejar() {
     chave.current = null;
   }
 
-  const problemasDe = (agendar: boolean) => (!form ? [] : vistoria ? problemasDaVistoriaNoPlano(form, hoje, agendar) : problemasDoPlano(form, saldo, hoje, agendar));
+  // Agendando, o veículo no dia da revisão preventiva também impede (parte 3.13b); no rascunho não há data.
+  const problemasDe = (agendar: boolean) => {
+    if (!form) return [];
+    const doPlano = vistoria ? problemasDaVistoriaNoPlano(form, hoje, agendar) : problemasDoPlano(form, saldo, hoje, agendar);
+    return agendar ? [...doPlano, ...revisoesNoPlano(form, veiculos.itens ?? [], vistoria ? "A vistoria" : undefined)] : doPlano;
+  };
   const problemasAgendando = problemasDe(true);
   const [agendando, setAgendando] = useState(true);
   const problemas = tentou ? problemasDe(agendando) : [];

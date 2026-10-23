@@ -124,6 +124,13 @@ describe("as linhas", () => {
     expect(comParado.grupos[0].linhas.map((linha) => linha.nome)).toContain("Xavier Parado");
   });
 
+  it("o veículo fica fora no dia da revisão preventiva (parte 3.13b)", () => {
+    const agenda = agendaDaSemana({ ...entrada(ordens), veiculos: [{ ...DEF, revisaoEm: "2026-10-23" }, GHI] });
+    const linhas = agenda.grupos.find((grupo) => grupo.titulo === "Veículos")!.linhas;
+    expect(linhas[0].fora).toEqual({ "2026-10-23": "Revisão preventiva" });
+    expect(linhas[1].fora).toBeUndefined();
+  });
+
   it("a OS leva o que a barra da seleção mostra, sem valor", () => {
     const agenda = agendaDaSemana(entrada(ordens));
     expect(agenda.ordens["10045-01"]).toEqual({

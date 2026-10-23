@@ -91,6 +91,8 @@ export type LinhaDaAgenda = {
   detalhe: string | null;
   /** As OS de cada dia (pela data), pela hora. */
   dias: Record<string, OsNaAgenda[]>;
+  /** O dia em que a linha está fora: o veículo na revisão preventiva (parte 3.13b). */
+  fora?: Record<string, string>;
 };
 
 export type GrupoDaAgenda = { titulo: string; linhas: LinhaDaAgenda[] };
@@ -222,6 +224,7 @@ export function agendaDaSemana(entrada: EntradaDaAgenda): Agenda {
       nome: veiculo.placa,
       detalhe: [veiculo.tipo, veiculo.dono === "terceiro" ? veiculo.empresa || null : null].filter(Boolean).join(" · ") || null,
       dias: diasDe(porVeiculo.get(veiculo.id) ?? []),
+      ...(/^\d{4}-\d{2}-\d{2}$/.test(veiculo.revisaoEm) ? { fora: { [veiculo.revisaoEm]: "Revisão preventiva" } } : {}),
     }));
   const grupos: GrupoDaAgenda[] = [
     { titulo: "Equipe própria", linhas: linhasDoVinculo("proprio") },

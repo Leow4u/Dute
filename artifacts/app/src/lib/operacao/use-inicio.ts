@@ -59,6 +59,7 @@ export function useInicioDaOperacao(role: ProfileRole | null | undefined, agora:
 
   const entrada: EntradaDoInicio = {
     hoje: hojeIso(agora),
+    agora,
     ordens: comDemanda(ordens.itens ?? [], demandas.itens ?? []),
     demandas: (demandas.itens ?? []).flatMap((demanda) => (demanda.paraAbrir ? [demanda.paraAbrir] : [])),
     pessoas: pessoas.itens ?? [],
