@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { formatarReais } from "@workspace/dominio";
-import { Check, Search, Send, X } from "lucide-react";
+import { Check, Download, Search, Send, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import {
   acoesDaNf,
   faturasDoFiltro,
   rotuloDaNf,
+  rotuloDoMes,
   situacaoDaCobranca,
   textoDaSituacao,
   textoDoPagamento,
@@ -25,6 +26,7 @@ import {
   type FormDoPagamento,
   type MeioDeEnvio,
   type PagamentoDaNf,
+  type ReceitaPorCliente,
   type SituacaoDaCobranca,
 } from "@/lib/financeiro/faturas";
 import { cn } from "@/lib/utils";
@@ -34,8 +36,10 @@ import { cn } from "@/lib/utils";
  * docs/mockups/Financeiro.dc.html), só a apresentação: os dados e as ações
  * chegam por props (pages/financeiro/faturas.tsx). A lista do filtro e o
  * painel da NF aberta: os valores, o envio, os pagamentos (com o estorno) e o
- * cancelamento do registro. Sem legenda: rótulos, dados e ações; uma ação
- * principal, "Registrar pagamento", quando a NF tem saldo.
+ * cancelamento do registro. Em Pagos, sem NF aberta, a receita do mês por
+ * cliente (parte 4.2c). Toda lista exporta para XLSX. Sem legenda: rótulos,
+ * dados e ações; uma ação principal, "Registrar pagamento", quando a NF tem
+ * saldo.
  */
 
 export type AcoesDasFaturas = {
@@ -52,7 +56,13 @@ export type AcoesDasFaturas = {
   pedirCancelamento: () => void;
   confirmarCancelamento: () => void;
   desistir: () => void;
+  /** Baixa a lista do filtro (com a busca) em XLSX. */
+  exportar: () => void;
+  mudarMes: (mes: string) => void;
 };
+
+/** A receita por cliente do mês, só em Pagos. `dados` null enquanto carrega. */
+export type ReceitaDoMes = { mes: string; dados: ReceitaPorCliente | null; erro: boolean };
 
 export type PainelDaNfAberta = {
   pagamento: FormDoPagamento;
@@ -78,6 +88,7 @@ export type FaturasViewProps = {
   resultado: string | null;
   ocupado: boolean;
   acoes: AcoesDasFaturas;
+  receita?: ReceitaDoMes | null;
 };
 
 const TOM_DA_SITUACAO: Record<SituacaoDaCobranca, string> = {
@@ -385,18 +396,64 @@ function Painel({ aberta: fatura, hoje, pagamentos, painel, ocupado, acoes }: Fa
   );
 }
 
+// --- Receita por cliente ------------------------------------------------------------------
+
+function Receita({ receita, hoje, acoes }: { receita: ReceitaDoMes; hoje: string; acoes: AcoesDasFaturas }) {
+  const mes = rotuloDoMes(receita.mes);
+  const dados = receita.dados;
+  let conteudo: ReactNode;
+  if (receita.erro) conteudo = <p className="text-sm font-bold text-muted-foreground">Não foi possível carregar os pagamentos.</p>;
+  else if (!dados) conteudo = <p className="text-sm font-bold text-muted-foreground">Carregando...</p>;
+  else if (!dados.pagamentos) conteudo = <p className="text-sm font-bold text-muted-foreground">{`Nenhum pagamento em ${mes}`}</p>;
+  else {
+    conteudo = (
+      <>
+        <dl className="flex flex-col gap-1.5">
+          {dados.linhas.map((linha) => (
+            <Par key={linha.customerCode} rotulo={linha.cliente} valor={formatarReais(linha.cents)} />
+          ))}
+          {dados.outros ? <Par rotulo={`Outros ${dados.outros.clientes} clientes`} valor={formatarReais(dados.outros.cents)} /> : null}
+        </dl>
+        <div aria-hidden="true" className="h-px bg-muted" />
+        <dl className="flex flex-col gap-1.5">
+          <Par rotulo={`Recebido em ${mes}`} valor={formatarReais(dados.totalCents)} forte />
+          <Par rotulo="Pagamentos" valor={String(dados.pagamentos)} />
+        </dl>
+      </>
+    );
+  }
+  return (
+    <section aria-label="Receita por cliente" className="flex min-w-0 flex-col gap-3.5 rounded-lg border border-border bg-card p-5 xl:w-96 xl:shrink-0">
+      <h2 className="text-base font-extrabold">Receita por cliente</h2>
+      <Campo id="receita-mes" rotulo="Mês">
+        <Input id="receita-mes" type="month" max={hoje.slice(0, 7)} value={receita.mes} onChange={(evento) => acoes.mudarMes(evento.target.value)} />
+      </Campo>
+      {conteudo}
+    </section>
+  );
+}
+
 // --- Tela ----------------------------------------------------------------------------------
 
 export function FaturasView(props: FaturasViewProps) {
-  const { filtro, busca, aberta, resultado, acoes } = props;
+  const { filtro, estado, faturas, busca, hoje, aberta, resultado, acoes, receita } = props;
+  const exporta = estado === "pronto" && faturasDoFiltro(faturas, filtro, hoje, busca).length > 0;
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">
       <header className="flex flex-wrap items-center gap-4">
         <h1 className="mr-2 text-3xl font-extrabold tracking-tight">{TITULO_DO_FILTRO[filtro]}</h1>
-        <label className="relative block w-full min-w-0 md:ml-auto md:w-72">
-          <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input type="search" aria-label="Buscar" placeholder="Buscar NF, cliente ou demanda" value={busca} onChange={(evento) => acoes.buscar(evento.target.value)} className="pl-9" />
-        </label>
+        <div className="flex w-full flex-wrap items-center gap-2.5 md:ml-auto md:w-auto">
+          <label className="relative block min-w-0 flex-1 md:w-72 md:flex-none">
+            <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input type="search" aria-label="Buscar" placeholder="Buscar NF, cliente ou demanda" value={busca} onChange={(evento) => acoes.buscar(evento.target.value)} className="pl-9" />
+          </label>
+          {exporta ? (
+            <Button type="button" variant="outline" onClick={acoes.exportar}>
+              <Download aria-hidden="true" />
+              Exportar XLSX
+            </Button>
+          ) : null}
+        </div>
       </header>
       {resultado ? (
         <div role="status" className={cn("flex items-center gap-2.5 rounded-lg border px-3.5 py-2.5 text-sm font-bold", TOM_OK)}>
@@ -406,7 +463,7 @@ export function FaturasView(props: FaturasViewProps) {
       ) : null}
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start">
         <Lista {...props} />
-        {aberta ? <Painel {...props} aberta={aberta} /> : null}
+        {aberta ? <Painel {...props} aberta={aberta} /> : receita ? <Receita receita={receita} hoje={hoje} acoes={acoes} /> : null}
       </div>
     </div>
   );

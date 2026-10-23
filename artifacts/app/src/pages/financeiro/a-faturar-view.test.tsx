@@ -128,10 +128,10 @@ const ESPERANDO = [
 const PRINCIPAL = /<button[^>]*class="[^"]*bg-primary text-primary-foreground[^"]*"[^>]*>[\s\S]*?<\/button>/g;
 
 function secao(html: string, rotulo: string): string {
-  const inicio = html.indexOf(`aria-label="${rotulo}"`);
-  expect(inicio, rotulo).toBeGreaterThan(-1);
-  const fim = html.indexOf("</section>", inicio);
-  return html.slice(inicio, fim);
+  const rotuloEm = html.indexOf(`aria-label="${rotulo}"`);
+  expect(rotuloEm, rotulo).toBeGreaterThan(-1);
+  // Do começo da tag da seção até o fim dela.
+  return html.slice(html.lastIndexOf("<", rotuloEm), html.indexOf("</section>", rotuloEm));
 }
 
 const FECHADO = { aberto: false, marcadas: [], form: formInicial(HOJE, null), resultado: null, erro: null };
