@@ -96,8 +96,8 @@ export type OsGravada = {
   seq: number;
   customer_code: string;
   status: StatusDaOs;
-  /** A RV do escopo fechado de onde saiu a fatia. */
-  escopo_rv: number;
+  /** A RV do escopo fechado de onde saiu a fatia; null na demanda direta (os itens pedidos são o escopo). */
+  escopo_rv: number | null;
   itens: ItemDaOs[];
   servicos: ServicoDaOs[];
   locais: LocaisDaOs;
@@ -302,6 +302,7 @@ function textoOuNull(valor: unknown): string | null {
 }
 
 export type DemandaParaOs = {
+  entrada?: unknown;
   customer_code?: unknown;
   escopo_rv?: unknown;
   executado_de?: unknown;
@@ -324,6 +325,13 @@ export type OrcamentoParaOs = {
  * demanda executada, validada, perdida ou cancelada não recebe OS.
  */
 export function problemaParaAbrirOs(demanda: DemandaParaOs, orcamento: OrcamentoParaOs | null): string | null {
+  if (demandaDiretaSemEscopo(demanda)) {
+    // A direta (parte 3.4d) não tem orçamento até a execução: os itens pedidos são o escopo.
+    if (orcamento || texto(demanda.executado_de) || preenchido(demanda.perda) || preenchido(demanda.cancelamento)) {
+      return "A OS nasce de uma demanda em Para planejar.";
+    }
+    return null;
+  }
   if (!orcamento) return "A demanda não tem orçamento para virar OS.";
   const code = texto(demanda.customer_code);
   if (!code || code !== texto(orcamento.customer_code)) return "A demanda e o orçamento não são do mesmo cliente.";
@@ -341,6 +349,11 @@ export function problemaParaAbrirOs(demanda: DemandaParaOs, orcamento: Orcamento
     return "A OS nasce de uma demanda em Para planejar.";
   }
   return null;
+}
+
+/** A demanda direta aberta pela Operação, ainda sem escopo fechado: as OS saem dos itens pedidos. */
+export function demandaDiretaSemEscopo(demanda: DemandaParaOs): boolean {
+  return demanda.entrada === "direta" && (demanda.escopo_rv === null || demanda.escopo_rv === undefined);
 }
 
 /**
@@ -401,21 +414,22 @@ export function deMilesimos(milesimos: number): string {
 }
 
 /**
- * O escopo fechado: as linhas de serviço da revisão, sem preço, motivo nem a
- * linha de ajuste (que é só dinheiro). `planejado` é a quantidade contratada.
+ * O escopo: as linhas de serviço da revisão fechada (ou os itens pedidos da
+ * demanda direta), sem preço, motivo nem a linha de ajuste (que é só
+ * dinheiro). `planejado` é a quantidade contratada ou pedida.
  */
 export function itensSemPreco(valor: unknown): ItemDaOs[] {
-  if (!Array.isArray(valor)) falha("A revisão fechada não tem itens.");
+  if (!Array.isArray(valor)) falha("O escopo da demanda não tem itens.");
   const itens: ItemDaOs[] = [];
   for (const bruto of valor) {
-    if (!bruto || typeof bruto !== "object") falha("Um item da revisão fechada está incompleto.");
+    if (!bruto || typeof bruto !== "object") falha("Um item do escopo da demanda está incompleto.");
     const linha = bruto as Record<string, unknown>;
     if (linha.origem === "ajuste") continue;
     const id = texto(linha.id);
     const item = texto(linha.item);
     const quantidade = texto(linha.quantidade);
-    if (!id || !item || !quantidade) falha("Um item da revisão fechada está incompleto.");
-    if (emMilesimos(quantidade) === null) falha(`A quantidade da linha ${id} da revisão fechada está fora do formato.`);
+    if (!id || !item || !quantidade) falha("Um item do escopo da demanda está incompleto.");
+    if (emMilesimos(quantidade) === null) falha(`A quantidade da linha ${id} do escopo da demanda está fora do formato.`);
     itens.push({
       id,
       lpu_item_id: textoOuNull(linha.lpu_item_id),
@@ -429,7 +443,7 @@ export function itensSemPreco(valor: unknown): ItemDaOs[] {
       destino_local: textoOuNull(linha.destino_local),
     });
   }
-  if (itens.length === 0) falha("A demanda fechada não tem item de serviço.");
+  if (itens.length === 0) falha("O escopo da demanda não tem item de serviço.");
   return itens;
 }
 
@@ -612,7 +626,7 @@ export type NovaOs = {
   demanda: string;
   seq: number;
   customer_code: string;
-  escopo_rv: number;
+  escopo_rv: number | null;
   itens: ItemDaOs[];
   locais: LocaisDaOs;
   janela: JanelaDaOs | null;
@@ -680,7 +694,7 @@ export function agendada(atual: OsGravada, agenda: AgendaResolvida): OsGravada {
   };
 }
 
-export function comItens(atual: OsGravada, itens: ItemDaOs[], escopoRv: number): OsGravada {
+export function comItens(atual: OsGravada, itens: ItemDaOs[], escopoRv: number | null): OsGravada {
   return { ...atual, itens, servicos: servicosDosItens(itens), escopo_rv: escopoRv, edicao: atual.edicao + 1 };
 }
 
@@ -800,7 +814,7 @@ export function osLida(numeroDaLeitura: string, data: Record<string, unknown>): 
     seq: typeof data.seq === "number" ? data.seq : 1,
     customer_code: data.customer_code,
     status: data.status as StatusDaOs,
-    escopo_rv: typeof data.escopo_rv === "number" ? data.escopo_rv : 0,
+    escopo_rv: typeof data.escopo_rv === "number" ? data.escopo_rv : null,
     itens,
     servicos: Array.isArray(data.servicos)
       ? SERVICOS_DA_OS.filter((servico) => (data.servicos as unknown[]).includes(servico))
