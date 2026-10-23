@@ -708,7 +708,7 @@ function ilegivel(): never {
   throw new HttpsError("failed-precondition", "OS ilegível.");
 }
 
-function itemLido(bruto: unknown): ItemDaOs {
+export function itemLido(bruto: unknown): ItemDaOs {
   if (!bruto || typeof bruto !== "object") ilegivel();
   const item = bruto as Record<string, unknown>;
   // OS de antes da parte 3.4: a quantidade estava em `quantidade`.

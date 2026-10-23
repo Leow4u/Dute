@@ -1,6 +1,7 @@
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 
+import { lerCatalogo } from "./demanda-direta-gravacao.js";
 import { createOperacaoEvent } from "./events.js";
 import {
   execucaoLida,
@@ -11,7 +12,8 @@ import {
   type CanalDoRegistro,
   type ContextoDoRegistro,
 } from "./execucao.js";
-import { runIdempotent } from "./operations.js";
+import { interpretarItem, itensEmExecucao, registrarFeito, registrarInclusao } from "./itens-executados.js";
+import { digest, runIdempotent } from "./operations.js";
 import { ator, autoria, exigirPapel } from "./os-gravacao.js";
 import { SERVICE_ORDERS_COLLECTION, osLida, type StatusDaOs } from "./os.js";
 import type { OperacaoProfile } from "./profile.js";
@@ -37,7 +39,7 @@ async function lerParaRegistrar(transaction: Transaction, db: Firestore, numero:
   const snapshot = await transaction.get(ref);
   if (!snapshot.exists) throw new HttpsError("not-found", "OS não encontrada.");
   const data = snapshot.data() ?? {};
-  return { ref, os: osLida(numero, data), execucao: execucaoLida(data) };
+  return { ref, os: osLida(numero, data), execucao: execucaoLida(data), itens: itensEmExecucao(data) };
 }
 
 export async function registerStepFor(
@@ -116,6 +118,84 @@ export async function registerOccurrenceFor(
         occurred_at: registro.instante,
       });
       return { target_id: os.numero, result: { numero: os.numero, edicao, status: os.status, ocorrencia: registro.id } };
+    },
+  );
+}
+
+/**
+ * O feito de uma linha (absoluto, até o previsto) ou a inclusão em campo além
+ * do planejado (na linha, na linha do mesmo item do catálogo ou numa linha
+ * nova). A linha nova ganha o id da operação: repetir dá a mesma.
+ */
+export async function registerItemFor(
+  db: Firestore,
+  caller: OperacaoProfile,
+  data: unknown,
+  agora: () => Date = () => new Date(),
+): Promise<ResultadoDoRegistro & { linha: string; replayed?: true }> {
+  exigirPapel(caller);
+  const pedido = interpretarItem(data);
+  return runIdempotent(
+    db,
+    {
+      kind: pedido.action === "executed" ? "os_item" : "os_item_added",
+      scope: { numero: pedido.numero },
+      idempotency_key: pedido.idempotency_key,
+      input: pedido,
+      actor: ator(caller),
+    },
+    async (transaction, { operationId }) => {
+      const catalogo =
+        pedido.action === "added" && pedido.lpu_item_id ? (await lerCatalogo(transaction, db, [pedido.lpu_item_id])).get(pedido.lpu_item_id) ?? null : null;
+      const { ref, os, itens } = await lerParaRegistrar(transaction, db, pedido.numero);
+      const edicao = os.edicao + 1;
+      const base = { id: os.numero, demanda: os.demanda };
+      if (pedido.action === "executed") {
+        const feito = registrarFeito(os, itens, pedido, contexto(caller, agora()));
+        transaction.update(ref, { itens: feito.itens, edicao, ...autoria(caller) });
+        createOperacaoEvent(transaction, db, {
+          operation_id: operationId,
+          type: "os.item_executed",
+          entity_id: os.numero,
+          customer_code: os.customer_code,
+          payload: {
+            ...base,
+            linha: feito.item.id,
+            quantidade: feito.item.executado ?? "0",
+            anterior: feito.anterior,
+            instante: feito.registro.instante,
+            canal: feito.registro.canal,
+            informado_por: feito.registro.informado_por,
+          },
+          actor: ator(caller),
+          occurred_at: feito.registro.instante,
+        });
+        return { target_id: os.numero, result: { numero: os.numero, edicao, status: os.status, linha: feito.item.id } };
+      }
+      const incluido = registrarInclusao(os, itens, pedido, contexto(caller, agora()), {
+        catalogo,
+        idDaLinhaNova: `cp_${digest({ operationId }, 16)}`,
+      });
+      transaction.update(ref, { itens: incluido.itens, edicao, ...autoria(caller) });
+      createOperacaoEvent(transaction, db, {
+        operation_id: operationId,
+        type: "os.item_added_in_field",
+        entity_id: os.numero,
+        customer_code: os.customer_code,
+        payload: {
+          ...base,
+          linha: incluido.item.id,
+          quantidade: incluido.inclusao.quantidade,
+          nova_linha: incluido.nova,
+          lpu_item_id: incluido.item.lpu_item_id,
+          instante: incluido.inclusao.instante,
+          canal: incluido.inclusao.canal,
+          informado_por: incluido.inclusao.informado_por,
+        },
+        actor: ator(caller),
+        occurred_at: incluido.inclusao.instante,
+      });
+      return { target_id: os.numero, result: { numero: os.numero, edicao, status: os.status, linha: incluido.item.id } };
     },
   );
 }

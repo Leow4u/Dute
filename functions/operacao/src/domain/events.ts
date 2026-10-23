@@ -39,6 +39,8 @@ export const OPERACAO_EVENT_TYPES = [
   "os.started",
   "os.step_recorded",
   "os.occurrence_recorded",
+  "os.item_executed",
+  "os.item_added_in_field",
   "demand.direct_opened",
 ] as const;
 export type OperacaoEventType = (typeof OPERACAO_EVENT_TYPES)[number];
@@ -107,6 +109,28 @@ const ocorrenciaRegistrada = z
   .object({ id: osId, demanda: demandaNumero, ocorrencia: z.string().regex(/^oc_\d{2,3}$/), instante, canal })
   .strict();
 
+const linhaDaOs = z.string().min(1).max(64);
+const quantidadeDoItem = z.string().regex(/^\d{1,9}(\.\d{1,3})?$/);
+const informante = z.string().regex(/^col_[a-f0-9]{16}$/).nullable();
+/** O feito da linha (absoluto) e o de antes: a IA mede quanto e quando (parte 3.7b). */
+const itemExecutado = z
+  .object({ id: osId, demanda: demandaNumero, linha: linhaDaOs, quantidade: quantidadeDoItem, anterior: quantidadeDoItem.nullable(), instante, canal, informado_por: informante })
+  .strict();
+/** A inclusão em campo sem quem pediu nem o motivo (texto livre, fica na OS). */
+const itemIncluido = z
+  .object({
+    id: osId,
+    demanda: demandaNumero,
+    linha: linhaDaOs,
+    quantidade: quantidadeDoItem,
+    nova_linha: z.boolean(),
+    lpu_item_id: z.string().min(1).max(120).nullable(),
+    instante,
+    canal,
+    informado_por: informante,
+  })
+  .strict();
+
 export const OPERACAO_EVENT_PAYLOADS = {
   "collaborator.created": criado,
   "collaborator.updated": alterado,
@@ -124,6 +148,8 @@ export const OPERACAO_EVENT_PAYLOADS = {
   "os.started": osIniciada,
   "os.step_recorded": etapaRegistrada,
   "os.occurrence_recorded": ocorrenciaRegistrada,
+  "os.item_executed": itemExecutado,
+  "os.item_added_in_field": itemIncluido,
   "demand.direct_opened": demandaDireta,
 } as const;
 
@@ -144,6 +170,8 @@ const TEXTO: Record<OperacaoEventType, { title: string; description: string }> =
   "os.started": { title: "OS em execução", description: "A primeira etapa da OS foi registrada." },
   "os.step_recorded": { title: "Etapa da OS registrada", description: "Uma etapa da execução da OS foi registrada com o instante em que aconteceu." },
   "os.occurrence_recorded": { title: "Ocorrência na OS", description: "Uma ocorrência foi registrada na execução da OS." },
+  "os.item_executed": { title: "Item da OS executado", description: "O feito de um item da OS foi informado." },
+  "os.item_added_in_field": { title: "Item incluído em campo", description: "Um item foi executado além do planejado na OS." },
   "demand.direct_opened": { title: "Demanda direta aberta", description: "A demanda chegou direto na Operação e se orça depois da execução." },
 };
 

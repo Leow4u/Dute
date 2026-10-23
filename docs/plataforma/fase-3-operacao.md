@@ -607,3 +607,27 @@ gravação em `domain/execucao-gravacao.ts`.
   de idempotência: repetir devolve o mesmo resultado sem duplicar.
 - **Ainda não.** Cancelar a OS em execução (o plano permite até Revisada)
   fica para a revisão (parte 3.10), que decide o que volta ao saldo.
+
+### Parte 3.7b: itens executados
+
+Feita em 23/10/2026. `registerItem` em `functions/operacao` (owner, admin e
+interno; o campo entra na parte 3.8), regras em `domain/itens-executados.ts`.
+
+- **Feito.** Quanto da linha já foi executado, em número absoluto, com o
+  instante e quem da equipe informou. O escritório corrige para mais ou
+  para menos, até o previsto da linha: o planejado mais o que foi incluído
+  em campo. Passar do previsto é recusado com o pedido de incluir. Só com a
+  OS em execução (a primeira etapa registrada).
+- **Incluído em campo.** O executado além do planejado, com a quantidade,
+  quem pediu no local, o motivo e o instante. Entra na linha da OS, na linha
+  do mesmo item do catálogo ou numa linha nova (do catálogo ou avulsa, com o
+  planejado zero e o id `cp_` da operação, que repetir não duplica). Soma ao
+  feito. É a divergência que a revisão decide (parte 3.10). Não mexe no
+  saldo da demanda: só o planejado conta nele.
+- **Eventos.** `os.item_executed` (linha, feito, o feito de antes, instante,
+  canal e quem informou) e `os.item_added_in_field` (linha, quantidade, se a
+  linha é nova e o item do catálogo). Quem pediu e o motivo são texto livre e
+  ficam só na OS.
+- **Planejamento.** Mudar os itens pelo planejamento (`set_items`) continua
+  só para a OS aberta ou agendada, então o feito e as inclusões nunca se
+  perdem numa troca de fatia.

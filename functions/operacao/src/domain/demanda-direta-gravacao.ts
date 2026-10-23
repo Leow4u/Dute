@@ -63,7 +63,7 @@ async function conferirLocais(transaction: Transaction, db: Firestore, ids: read
   }
 }
 
-async function lerCatalogo(transaction: Transaction, db: Firestore, ids: readonly string[]): Promise<Map<string, ItemDoCatalogo>> {
+export async function lerCatalogo(transaction: Transaction, db: Firestore, ids: readonly string[]): Promise<Map<string, ItemDoCatalogo>> {
   const catalogo = new Map<string, ItemDoCatalogo>();
   if (ids.length === 0) return catalogo;
   const snapshots = await transaction.getAll(...ids.map((id) => db.collection(LPU_ITEMS).doc(id)));
