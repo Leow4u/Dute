@@ -47,6 +47,8 @@ const contagem = z.number().int().min(0).max(1_000_000);
 const segundos = z.number().int().min(0).max(1_000_000_000);
 const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida (AAAA-MM-DD).");
 const competencia = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Competência inválida (AAAA-MM).");
+/** O que o contador das demandas guarda: o último número usado (até 8 algarismos). */
+const numeroDoContador = z.number().int().min(0).max(99_999_999);
 
 // --- Listas da Demanda e do orçamento (domain/demanda.ts e orcamento.ts) -------
 // Ficam aqui porque vão nos eventos; os módulos de domínio reexportam.
@@ -437,6 +439,17 @@ export const COMERCIAL_EVENT_PAYLOADS = {
     .object({ medicao_id: id, competencia, edicao, segundos_desde_anterior: segundos.optional() })
     .strict(),
   "medicao.reopened": z.object({ medicao_id: id, competencia, edicao }).strict(),
+
+  // Contador das demandas (parte 6.21 do plano de implantação): a ferramenta
+  // da máquina do responsável grava o último número já usado, nunca abaixo
+  // do que o banco já tem. Sem cliente.
+  "demand_counter.set": z
+    .object({
+      anterior: numeroDoContador.nullable(),
+      ultimo: numeroDoContador,
+      maior_demanda: numeroDoContador.nullable(),
+    })
+    .strict(),
 } as const;
 
 export type ComercialEventType = keyof typeof COMERCIAL_EVENT_PAYLOADS;
@@ -455,13 +468,16 @@ const ENTITY_TYPES: Record<string, string> = {
   price_table: "price_table",
   client_authorization: "client_authorization",
   medicao: "medicao",
+  demand_counter: "demand_counter",
 };
 
 /**
- * Evento sem cliente: só a carga e o encerramento de tabela sem contrato (a
- * Padrão Dutelog, que é de todos). Tabela com contrato é de um cliente.
+ * Evento sem cliente: a carga e o encerramento de tabela sem contrato (a
+ * Padrão Dutelog, que é de todos) e o contador das demandas, que é de todas.
+ * Tabela com contrato é de um cliente.
  */
 function semClienteAceito(type: ComercialEventType, payload: Record<string, unknown>): boolean {
+  if (type === "demand_counter.set") return true;
   return (type === "price_table.imported" || type === "price_table.closed") && !payload.contrato_id;
 }
 
@@ -785,6 +801,11 @@ const TEMPLATES: Templates = {
   "medicao.reopened": (p) => ({
     title: `Medição ${competenciaRotulo(p.competencia)} reaberta`,
     description: `Volta ao rascunho; edição ${p.edicao}.`,
+  }),
+
+  "demand_counter.set": (p) => ({
+    title: "Contador das demandas ajustado",
+    description: `A próxima demanda é a ${p.ultimo + 1}.`,
   }),
 };
 
