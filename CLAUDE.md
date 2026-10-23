@@ -207,7 +207,7 @@ corepack pnpm --filter "@workspace/app" run test    # vitest
 corepack pnpm --filter "@workspace/app" run dev
 
 npm --prefix functions/wms run test:unit          # node --test
-npm --prefix functions/wms run test:integration   # emulador Firestore, exige Java
+npm --prefix functions/wms run test:integration   # emuladores Firestore e Storage, exige Java
 npm --prefix functions/wms run test:critical      # os dois acima
 
 npm --prefix functions/comercial ci

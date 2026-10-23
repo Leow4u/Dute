@@ -7,6 +7,7 @@ import { HttpsError } from "firebase-functions/https";
 
 import { EVENTS_COLLECTION } from "./events.js";
 import { registerItemFor, registerOccurrenceFor, registerStepFor } from "./execucao-gravacao.js";
+import { attachPhotoFor } from "./fotos-gravacao.js";
 import { SERVICE_ORDERS_COLLECTION } from "./os.js";
 import type { OperacaoProfile } from "./profile.js";
 
@@ -246,5 +247,38 @@ describe("itens pela execução", () => {
       "failed-precondition",
       "Cadeira giratória: o feito (5) passa do previsto (4). Inclua o que foi além do planejado.",
     );
+  });
+});
+
+describe("fotos pela execução", () => {
+  const foto = (arquivo: string, extra: Record<string, unknown> = {}) => ({
+    idempotency_key: `foto-${arquivo}`,
+    numero: "10045-01",
+    arquivo,
+    instante: "2026-10-22T07:52-03:00",
+    etapa: "carregamento",
+    legenda: "Carga na doca",
+    ...extra,
+  });
+  const noStorage = new Map([["os/10045-01/fotos/ft_0123456789abcdef.jpg", { contentType: "image/jpeg", size: 240_000 }]]);
+  const conferir = async (caminho: string) => noStorage.get(caminho) ?? null;
+
+  it("anexa a foto conferida uma vez só e o evento não leva a legenda", async () => {
+    const pedido = foto("ft_0123456789abcdef.jpg");
+    const resultado = await attachPhotoFor(db, interno, pedido, conferir, AGORA);
+    assert.deepEqual(resultado, { numero: "10045-01", edicao: 3, status: "agendada", foto: "ft_0123456789abcdef" });
+    await attachPhotoFor(db, interno, pedido, conferir, AGORA);
+    const fotos = (await lerOs()).fotos;
+    assert.equal(fotos.length, 1);
+    assert.deepEqual([fotos[0].caminho, fotos[0].etapa, fotos[0].legenda], ["os/10045-01/fotos/ft_0123456789abcdef.jpg", "carregamento", "Carga na doca"]);
+    const [evento] = await eventos("os.photo_attached");
+    assert.deepEqual(evento.payload, { id: "10045-01", demanda: "10045", foto: "ft_0123456789abcdef", etapa: "carregamento", ocorrencia: null, linha: null, instante: "2026-10-22T10:52:00.000Z", canal: "escritorio" });
+    assert.doesNotMatch(JSON.stringify(evento), /doca/);
+  });
+
+  it("o arquivo que não está no Storage não entra na OS", async () => {
+    await recusa(attachPhotoFor(db, interno, foto("ft_ffffffffffffffff.jpg"), conferir, AGORA), "failed-precondition", "A foto não chegou ao armazenamento. Envie de novo.");
+    assert.equal((await lerOs()).fotos, undefined);
+    assert.equal((await eventos("os.photo_attached")).length, 0);
   });
 });

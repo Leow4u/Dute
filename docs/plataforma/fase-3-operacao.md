@@ -631,3 +631,26 @@ interno; o campo entra na parte 3.8), regras em `domain/itens-executados.ts`.
 - **Planejamento.** Mudar os itens pelo planejamento (`set_items`) continua
   só para a OS aberta ou agendada, então o feito e as inclusões nunca se
   perdem numa troca de fatia.
+
+### Parte 3.7c: fotos da OS
+
+Feita em 23/10/2026. A foto sobe do navegador direto para o Storage e
+`attachPhoto` (owner, admin e interno; o campo entra na parte 3.8) a grava na
+OS. Regras em `domain/fotos.ts`, gravação em `domain/fotos-gravacao.ts`.
+
+- **Storage.** `os/{numero}/fotos/ft_<16 hex>.jpg` (ou `.png`, `.webp`), até
+  8 MB, só imagem. Sobe quem coordena a Operação (owner, admin, interno) ou
+  quem está escalado na OS (`equipe_uids`, o mesmo critério do
+  `firestore.rules`), com a OS agendada ou em execução. Lê também o suporte.
+  Nada se sobrescreve nem apaga. As regras têm teste no emulador
+  (`functions/wms/src/operacao-fotos.rules.test.ts`); a integração do WMS
+  sobe agora o Firestore e o Storage.
+- **`attachPhoto`.** Confere no Storage que o arquivo chegou e é imagem e
+  grava a foto na OS com o instante em que foi tirada, a etapa, a ocorrência
+  ou o item a que se refere (os dois precisam existir na OS) e a legenda, até
+  200 por OS. Repetir não duplica. Sem o arquivo, nada entra na OS.
+- **Evento.** `os.photo_attached` com o id da foto, a etapa, a ocorrência, o
+  item, o instante e o canal; a legenda é texto livre e fica só na OS.
+- **Rodar local.** O emulador do Storage lê o Firestore por HTTP e usa o
+  proxy do ambiente quando há um: numa máquina com proxy, rode a integração
+  com `HTTPS_PROXY` vazio.

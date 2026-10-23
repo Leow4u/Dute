@@ -82,6 +82,16 @@ const EXEMPLOS: Record<OperacaoEventType, Record<string, unknown>> = {
     canal: "celular",
     informado_por: null,
   },
+  "os.photo_attached": {
+    id: "10045-01",
+    demanda: "10045",
+    foto: "ft_0123456789abcdef",
+    etapa: "carregamento",
+    ocorrencia: null,
+    linha: "ln_1",
+    instante: "2026-10-22T10:52:00.000Z",
+    canal: "escritorio",
+  },
   "os.occurrence_recorded": { id: "10045-01", demanda: "10045", ocorrencia: "oc_01", instante: "2026-10-22T11:00:00.000Z", canal: "celular" },
   "demand.direct_opened": { id: "10053", tipo: "paraquedas", tipo_calculado: "emergencial", linhas: 1 },
 };
