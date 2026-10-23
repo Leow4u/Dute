@@ -46,8 +46,8 @@ async function evento(id: string, type: string, numero: string, criadoEm: Date) 
   await db.collection(EVENTS_COLLECTION).doc(id).set({ id, type, source: "functions_operacao", customer_code: "ITAU", payload: { id: numero }, created_at: Timestamp.fromDate(criadoEm) });
 }
 
-async function medidas() {
-  return (await db.collection(AI_MEASURES_COLLECTION).get()).docs
+async function medidas(tipo = "duracao_item") {
+  return (await db.collection(AI_MEASURES_COLLECTION).where("tipo", "==", tipo).get()).docs
     .map((doc) => doc.data())
     .map((medida) => [medida.escopo, medida.customer_code, medida.lpu_item_id, medida.homem_minuto_por_unidade, medida.execucoes])
     .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
@@ -71,7 +71,8 @@ beforeEach(async () => {
 describe("a rotina das medidas", () => {
   it("a primeira vez recalcula com o histórico e marca o cursor; sem evento novo, nada muda", async () => {
     const primeira = await runMeasuresFor(db, { agora: () => T0 });
-    assert.deepEqual([primeira.recalculou, primeira.amostras, primeira.medidas, primeira.gravadas, primeira.apagadas], [true, 3, 5, 5, 0]);
+    // 5 de tempo por item e 5 de passar do planejado (as OS sem janela não dão erro do planejamento).
+    assert.deepEqual([primeira.recalculou, primeira.amostras, primeira.medidas, primeira.gravadas, primeira.apagadas], [true, 3, 10, 10, 0]);
     assert.deepEqual(await medidas(), [
       ["cliente", "ITAU", "lpu_a", 20, 2],
       ["cliente", "ITAU", "lpu_b", 20, 1],
@@ -97,7 +98,8 @@ describe("a rotina das medidas", () => {
     assert.equal((await runMeasuresFor(db, { agora: () => depois(1.5) })).recalculou, false);
 
     const rodada = await runMeasuresFor(db, { agora: () => depois(5) });
-    assert.deepEqual([rodada.recalculou, rodada.eventos, rodada.amostras, rodada.apagadas], [true, 1, 2, 2]);
+    // Saem o tempo e o passar do planejado de B, no Itaú e na geral.
+    assert.deepEqual([rodada.recalculou, rodada.eventos, rodada.amostras, rodada.apagadas], [true, 1, 2, 4]);
     assert.deepEqual(await medidas(), [
       ["cliente", "ITAU", "lpu_a", 20, 1],
       ["cliente", "SAFRA", "lpu_a", 30, 1],
@@ -115,6 +117,32 @@ describe("a rotina das medidas", () => {
     await runMeasuresFor(db, { agora: () => T0 });
     await evento("evt_revisada", "os.reviewed", "10045-01", depois(1));
     const rodada = await runMeasuresFor(db, { agora: () => depois(5) });
-    assert.deepEqual([rodada.recalculou, rodada.medidas, rodada.gravadas, rodada.apagadas], [true, 5, 0, 0]);
+    assert.deepEqual([rodada.recalculou, rodada.medidas, rodada.gravadas, rodada.apagadas], [true, 10, 0, 0]);
+  });
+
+  it("a demanda fechada pelo cliente recalcula o prazo de aprovação; a janela da OS dá o erro do planejamento (parte 5.1b)", async () => {
+    await runMeasuresFor(db, { agora: () => T0 });
+    await db.collection(SERVICE_ORDERS_COLLECTION).doc("10045-01").update({ "revisao.minutos_planejados": 80, "revisao.minutos_reais": 100 });
+    await db.collection(EVENTS_COLLECTION).doc("evt_ganha").set({
+      id: "evt_ganha",
+      type: "demand.won",
+      source: "functions_comercial",
+      customer_code: "ITAU",
+      occurred_at: depois(1).toISOString(),
+      payload: { numero: "10050", rv: 0, segundos_desde_anterior: 3 * 86_400 },
+      created_at: Timestamp.fromDate(depois(1)),
+    });
+    const rodada = await runMeasuresFor(db, { agora: () => depois(5) });
+    assert.deepEqual([rodada.recalculou, rodada.eventos], [true, 1]);
+    const prazo = (await db.collection(AI_MEASURES_COLLECTION).where("tipo", "==", "prazo_aprovacao").get()).docs.map((doc) => doc.data());
+    assert.deepEqual(prazo.map((medida) => [medida.escopo, medida.customer_code, medida.mediana_dias, medida.demandas_recentes]).sort(), [
+      ["cliente", "ITAU", 3, ["10050"]],
+      ["geral", null, 3, ["10050"]],
+    ]);
+    const planejamento = (await db.collection(AI_MEASURES_COLLECTION).where("tipo", "==", "erro_planejamento").get()).docs.map((doc) => doc.data());
+    assert.deepEqual(planejamento.map((medida) => [medida.escopo, medida.erro_medio_pct, medida.acima_da_janela]).sort(), [
+      ["cliente", 25, 1],
+      ["geral", 25, 1],
+    ]);
   });
 });
