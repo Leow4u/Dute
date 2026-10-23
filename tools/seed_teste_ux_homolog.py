@@ -47,8 +47,12 @@ def assert_homolog(value: str) -> str:
     return value
 
 
-def firestore_root() -> str:
+def resource_root() -> str:
     assert_homolog(PROJECT_ID)
+    return f"projects/{PROJECT_ID}/databases/{DATABASE}"
+
+
+def firestore_root() -> str:
     return (
         "https://firestore.googleapis.com/v1/projects/"
         f"{PROJECT_ID}/databases/{urllib.parse.quote(DATABASE, safe='')}"
@@ -56,9 +60,17 @@ def firestore_root() -> str:
 
 
 def doc_name(collection: str, doc_id: str) -> str:
-    if "/" in doc_id or not doc_id:
+    """Nome de recurso do Firestore, não a URL. O commit e o batchGet exigem assim."""
+    if "/" in doc_id or not doc_id or doc_id in FORBIDDEN_LOCATIONS:
         die(f"Id de documento inválido: {collection}/{doc_id}")
-    return f"{firestore_root()}/documents/{collection}/{urllib.parse.quote(doc_id, safe='')}"
+    return f"{resource_root()}/documents/{collection}/{doc_id}"
+
+
+def document_url(name: str) -> str:
+    prefix = f"{resource_root()}/"
+    if not name.startswith(prefix):
+        die(f"Nome de recurso fora do {PROJECT_ID}: {name}")
+    return f"{firestore_root()}/{name[len(resource_root()) + 1:]}"
 
 
 def fs_value(value: Any) -> dict[str, Any]:
@@ -166,7 +178,7 @@ class Firestore:
             die(f"Banco inesperado: {name or '(vazio)'}. Esperado {expected}.")
 
     def get(self, collection: str, doc_id: str) -> dict[str, Any] | None:
-        url = doc_name(collection, doc_id)
+        url = document_url(doc_name(collection, doc_id))
         request = urllib.request.Request(
             url,
             method="GET",
@@ -459,8 +471,9 @@ def main() -> None:
     if not token:
         die("ACCESS_TOKEN ausente.")
     account = os.environ.get("GCP_SERVICE_ACCOUNT", "")
-    if account != f"github-actions-functions@{PROJECT_ID}.iam.gserviceaccount.com":
-        die(f"Conta recusada: {account or '(vazia)'}.")
+    expected_account = f"github-actions-functions@{PROJECT_ID}.iam.gserviceaccount.com"
+    if account and account != expected_account:
+        die(f"Conta recusada: {account}.")
     if os.environ.get("FIRESTORE_EMULATOR_HOST"):
         die("FIRESTORE_EMULATOR_HOST está definido. Este script não usa emulador.")
 
@@ -555,6 +568,31 @@ def main() -> None:
         sku = already(doc_name("skus", item["sku"]))
         if sku and sku.get("seed_id") != SEED_ID:
             die(f"SKU {item['sku']} já existe fora desta massa. Nada foi gravado.")
+
+    if os.environ.get("SEED_DRY_RUN") == "1":
+        print(
+            json.dumps(
+                {
+                    "dry_run": True,
+                    "project": PROJECT_ID,
+                    "customer": CUSTOMER,
+                    "products": len(items),
+                    "qty_each": QTY_EACH,
+                    "qty_total": len(items) * QTY_EACH,
+                    "sku_from": items[0]["sku"],
+                    "sku_to": items[-1]["sku"],
+                    "positions": positions,
+                    "position_reason": position_reason,
+                    "session_open": session_open,
+                    "would_open_portal_gate": opening_blocks(control, session)
+                    and not session_open
+                    and bool(control_doc),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
 
     photo_url = upload_photo(token)
     writes: list[dict[str, Any]] = []
