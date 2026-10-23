@@ -23,7 +23,7 @@ import {
   milesimos,
   type PrazoDoHoje,
 } from "@/lib/operacao/hoje";
-import { ROTA_DEMANDAS, hrefDaOs } from "@/lib/operacao/navegacao";
+import { ROTA_DEMANDAS, hrefDaOs, hrefDoPlano } from "@/lib/operacao/navegacao";
 import { cn } from "@/lib/utils";
 
 import { Etapa } from "./demandas-view";
@@ -236,17 +236,15 @@ function quandoDaOs(os: OsDaFila): string {
 }
 
 function OrdensDaDemanda({
+  numeroDaDemanda,
   ordens,
   linhasComSaldo,
   podeAbrir,
-  ocupado,
-  onAbrirOs,
 }: {
+  numeroDaDemanda: string;
   ordens: readonly OsDaFila[];
   linhasComSaldo: number;
   podeAbrir: boolean;
-  ocupado: boolean;
-  onAbrirOs: () => void;
 }) {
   return (
     <Cartao titulo={`OS desta demanda · ${ordens.length}`}>
@@ -300,14 +298,11 @@ function OrdensDaDemanda({
               Saldo de {linhasComSaldo}{" "}
               {linhasComSaldo === 1 ? "item" : "itens"}
             </span>
-            <Button
-              type="button"
-              size="sm"
-              disabled={ocupado}
-              onClick={onAbrirOs}
-            >
-              <Plus aria-hidden="true" className="size-4" />
-              Abrir OS com o saldo
+            <Button asChild size="sm">
+              <Link href={hrefDoPlano(numeroDaDemanda)}>
+                <Plus aria-hidden="true" className="size-4" />
+                Planejar OS
+              </Link>
             </Button>
           </li>
         ) : null}
@@ -424,9 +419,7 @@ export function DemandaView({
   linhasComSaldo,
   locais,
   prazo,
-  ocupado,
   erro,
-  onAbrirOs,
 }: {
   estado: EstadoDaDemanda;
   numero: string | null;
@@ -438,9 +431,7 @@ export function DemandaView({
   linhasComSaldo: number;
   locais: readonly LocalDaFicha[];
   prazo: PrazoDoHoje | null;
-  ocupado: boolean;
   erro: string | null;
-  onAbrirOs: () => void;
 }) {
   const voltar = (
     <Link
@@ -510,11 +501,10 @@ export function DemandaView({
         <div className="flex min-w-0 flex-col gap-6">
           <Escopo linhas={escopo} entrada={demanda.entrada} />
           <OrdensDaDemanda
+            numeroDaDemanda={demanda.numero}
             ordens={ordens}
             linhasComSaldo={linhasComSaldo}
             podeAbrir={podeAbrir}
-            ocupado={ocupado}
-            onAbrirOs={onAbrirOs}
           />
         </div>
         <div className="flex flex-col gap-6">

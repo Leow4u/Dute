@@ -21,7 +21,7 @@ import {
   type QuadroDoHoje,
 } from "@/lib/operacao/hoje";
 import { Avatar, Filtro, SeloDoTipo, Servicos, selo, seloAlerta, type OpcaoDeFiltro } from "@/components/operacao/partes";
-import { ROTA_NOVA_DEMANDA, hrefDaDemanda } from "@/lib/operacao/navegacao";
+import { ROTA_NOVA_DEMANDA, hrefDaDemanda, hrefDoPlano } from "@/lib/operacao/navegacao";
 import { cn } from "@/lib/utils";
 
 /**
@@ -70,7 +70,7 @@ function resumoDaOs(cartao: CartaoDeOs): string {
   return [cartao.demanda?.titulo ?? cartao.os.itens[0]?.item ?? null, cartao.os.rota ?? null].filter(Boolean).join(" · ");
 }
 
-function CartaoDaDemanda({ cartao, ocupado, onAbrir }: { cartao: CartaoDeDemanda; ocupado: boolean; onAbrir: (numero: string) => void }) {
+function CartaoDaDemanda({ cartao }: { cartao: CartaoDeDemanda }) {
   const { demanda } = cartao;
   return (
     <li className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4">
@@ -90,8 +90,8 @@ function CartaoDaDemanda({ cartao, ocupado, onAbrir }: { cartao: CartaoDeDemanda
         {[ENTRADA_ROTULO[demanda.entrada], demanda.osNumeros.length ? `${demanda.osNumeros.length} OS` : null, `${cartao.linhasComSaldo} ${cartao.linhasComSaldo === 1 ? "item" : "itens"} com saldo`].filter(Boolean).join(" · ")}
       </p>
       <div>
-        <Button type="button" size="sm" disabled={ocupado} onClick={() => onAbrir(demanda.numero)}>
-          Abrir OS
+        <Button asChild size="sm">
+          <Link href={hrefDoPlano(demanda.numero)}>Planejar OS</Link>
         </Button>
       </div>
     </li>
@@ -345,9 +345,7 @@ export function HojeView({
   busca,
   onBusca,
   onFiltros,
-  onAbrirDemanda,
   onEscalar,
-  ocupado,
   erro,
   escala,
 }: {
@@ -359,9 +357,7 @@ export function HojeView({
   busca: string;
   onBusca: (busca: string) => void;
   onFiltros: (filtros: FiltrosDoHoje) => void;
-  onAbrirDemanda: (numero: string) => void;
   onEscalar: (os: OsDaFila) => void;
-  ocupado: boolean;
   erro: string | null;
   /** O painel de escalar aberto, com o formulário (EscalaDaOs) e como fechar. */
   escala: { titulo: string; cliente: string; conteudo: ReactNode; onFechar: () => void } | null;
@@ -435,7 +431,7 @@ export function HojeView({
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-5 xl:gap-4">
           <Coluna titulo="Para planejar" ponto="bg-muted-foreground" contagem={quadro.paraPlanejar.length} vazio="Nenhuma demanda">
             {quadro.paraPlanejar.map((cartao) => (
-              <CartaoDaDemanda key={cartao.demanda.numero} cartao={cartao} ocupado={ocupado} onAbrir={onAbrirDemanda} />
+              <CartaoDaDemanda key={cartao.demanda.numero} cartao={cartao} />
             ))}
           </Coluna>
           <Coluna titulo="Para agendar" ponto="bg-info-soft-foreground" contagem={quadro.paraAgendar.length} vazio="Nenhuma OS">

@@ -82,9 +82,7 @@ function render(extra: Partial<Parameters<typeof HojeView>[0]> = {}) {
       busca=""
       onBusca={noop}
       onFiltros={noop}
-      onAbrirDemanda={noop}
       onEscalar={noop}
-      ocupado={false}
       erro={null}
       escala={null}
       {...extra}
@@ -117,9 +115,9 @@ describe("Hoje", () => {
     expect(textos).not.toContain("Limpar filtros");
   });
 
-  it("a demanda para planejar mostra tipo, número, cliente, entrada e saldo, com Abrir OS", () => {
+  it("a demanda para planejar mostra tipo, número, cliente, entrada e saldo, com Planejar OS", () => {
     const textos = textosDaTela(render());
-    for (const texto of ["Planejada", "10043", "Instalação de 40 lockers", "Comercial · 1 item com saldo", "Abrir OS"]) expect(textos, texto).toContain(texto);
+    for (const texto of ["Planejada", "10043", "Instalação de 40 lockers", "Comercial · 1 item com saldo", "Planejar OS"]) expect(textos, texto).toContain(texto);
   });
 
   it("a OS para agendar mostra o prazo da direta, os serviços, Sem equipe e Escalar", () => {
@@ -168,7 +166,7 @@ describe("Hoje", () => {
       /^(Comercial|Direta)( · \d+ OS)? · \d+ (item|itens) com saldo$/,
       /^(Hoje até 19:00|· faltam 4h40)$/,
       /^(Transporte|Sem equipe|Sem veículo|15:00)$/,
-      /^(Abrir OS|Escalar|Próximos dias · 1|Nenhuma OS|Nenhuma demanda)$/,
+      /^(Planejar OS|Escalar|Próximos dias · 1|Nenhuma OS|Nenhuma demanda)$/,
     ]);
     expect(fora).toEqual([]);
   });
