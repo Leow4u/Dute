@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { after, before, beforeEach, describe, it } from "node:test";
 
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from "@firebase/rules-unit-testing";
-import { deleteDoc, doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from "firebase/firestore";
 
 /**
  * A fatura da demanda (docs/plataforma/fase-4-financeiro.md, parte 4.1a):
@@ -14,7 +14,8 @@ import { deleteDoc, doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
  * o cliente não leem, e ninguém grava pelo navegador: só as callables
  * registerNf e advanceFatura. Os `pagamentos` (parte 4.2a) seguem a mesma
  * regra. O financeiro lê os eventos nf.* e cobranca.* (sem valor), como lê os
- * billing.* do WMS.
+ * billing.* do WMS. A projeção do portal (`client_faturas`, parte 4.3a) o
+ * cliente dono lê, com as faturas no contrato.
  */
 
 const PROJECT_ID = "demo-dute-operations";
@@ -70,6 +71,12 @@ beforeEach(async () => {
     await setDoc(doc(database, "events", "evt_cobranca"), { type: "cobranca.payment_registered", customer_code: "ITAU", source: "functions_financeiro", payload: { id: "fat_000000000000000000000001" } });
     await setDoc(doc(database, "pagamentos", "pag_000000000000000000000001"), { id: "pag_000000000000000000000001", fatura_id: "fat_000000000000000000000001", customer_code: "ITAU", status: "registrado", valor_cents: 500_000 });
     await setDoc(doc(database, "financeiro_operations", "op_1"), { kind: "nf_register" });
+    await setDoc(doc(database, "client_faturas", "fat_000000000000000000000001"), { id: "fat_000000000000000000000001", customer_code: "ITAU", status: "emitida", valor_cents: 1_484_500 });
+    await setDoc(doc(database, "client_faturas", "fat_000000000000000000000009"), { id: "fat_000000000000000000000009", customer_code: "SAFRA", status: "emitida", valor_cents: 10_000 });
+    // Outro cliente do Itaú, sem as faturas no contrato.
+    await setDoc(doc(database, "users", "client-sem"), { nome: "client-sem", email: "sem@example.com", role: "cliente", customer_code: "SANTANDER" });
+    await setDoc(doc(database, "client_access", "SANTANDER"), { customer_code: "SANTANDER", modules: ["wms", "operacao"] });
+    await setDoc(doc(database, "client_faturas", "fat_000000000000000000000005"), { id: "fat_000000000000000000000005", customer_code: "SANTANDER", status: "emitida", valor_cents: 1 });
   });
 });
 
@@ -101,6 +108,27 @@ describe("faturas: leitura", () => {
     await assertSucceeds(getDoc(doc(signedAs("finance-a"), "events", "evt_nf")));
     await assertSucceeds(getDoc(doc(signedAs("finance-a"), "events", "evt_cobranca")));
     await assertFails(getDoc(doc(signedAs("owner-a"), "financeiro_operations", "op_1")));
+  });
+});
+
+describe("client_faturas: a NF no portal", () => {
+  it("o cliente dono lê as próprias, com as faturas no contrato; nunca as de outro cliente", async () => {
+    const cliente = signedAs("client-a");
+    const propria = await assertSucceeds(getDoc(doc(cliente, "client_faturas", "fat_000000000000000000000001")));
+    assert.equal(propria.data()?.valor_cents, 1_484_500);
+    await assertFails(getDoc(doc(cliente, "client_faturas", "fat_000000000000000000000009")));
+    await assertSucceeds(getDocs(query(collection(cliente, "client_faturas"), where("customer_code", "==", "ITAU"))));
+    await assertFails(getDocs(collection(cliente, "client_faturas")));
+  });
+
+  it("o cliente sem as faturas no contrato não lê nem as próprias; a operação e o campo não leem; ninguém grava", async () => {
+    await assertFails(getDoc(doc(signedAs("client-sem"), "client_faturas", "fat_000000000000000000000005")));
+    for (const uid of ["ops-a", "wms-a", "campo-a", "support-a", "painel-a"]) await assertFails(getDoc(doc(signedAs(uid), "client_faturas", "fat_000000000000000000000001")));
+    for (const uid of LEEM) await assertSucceeds(getDoc(doc(signedAs(uid), "client_faturas", "fat_000000000000000000000001")));
+    for (const uid of ["owner-a", "finance-a", "client-a"]) {
+      await assertFails(setDoc(doc(signedAs(uid), "client_faturas", "fat_000000000000000000000002"), { customer_code: "ITAU", valor_cents: 1 }));
+      await assertFails(updateDoc(doc(signedAs(uid), "client_faturas", "fat_000000000000000000000001"), { status: "paga" }));
+    }
   });
 });
 

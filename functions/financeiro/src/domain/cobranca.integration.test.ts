@@ -10,6 +10,7 @@ import { PAGAMENTOS_COLLECTION } from "./cobranca.js";
 import { EVENTS_COLLECTION } from "./events.js";
 import { registerNfFor } from "./fatura-gravacao.js";
 import { FATURAS_COLLECTION } from "./fatura.js";
+import { CLIENT_FATURAS_COLLECTION } from "./projecao.js";
 import type { FinanceiroProfile } from "./profile.js";
 
 /**
@@ -40,6 +41,7 @@ after(async () => {
 
 const demanda = (numero: string) => ({
   numero,
+  titulo: `Desmontagem ${numero}`,
   customer_code: "ITAU",
   customer_name: "Itaú Unibanco",
   etapa: "a_faturar",
@@ -93,6 +95,7 @@ async function recusa(promessa: Promise<unknown>, codigo: string, mensagem: stri
 }
 
 const faturaAgora = async () => (await db.collection(FATURAS_COLLECTION).doc(faturaId).get()).data() ?? {};
+const doPortal = async () => (await db.collection(CLIENT_FATURAS_COLLECTION).doc(faturaId).get()).data() ?? null;
 const etapas = async () => Promise.all(["10045", "10046"].map(async (numero) => (await db.doc(`demands/${numero}`).get()).get("etapa")));
 // O relógio do teste é fixo: os eventos têm o mesmo instante, então a ordem não diz nada. Compara-se por tipo.
 const eventos = async () => (await db.collection(EVENTS_COLLECTION).get()).docs.map((doc) => doc.data());
@@ -102,8 +105,13 @@ const doTipo = async (tipo: string) => (await eventos()).filter((evento) => even
 
 describe("a cobrança da NF", () => {
   it("o pagamento parcial deixa o saldo; o que quita deixa a fatura e as demandas pagas; repetir não duplica", async () => {
+    // O portal nasce no registro, com o título da demanda e sem o que é interno.
+    const registrada = await doPortal();
+    assert.deepEqual([registrada?.status, registrada?.valor_cents, registrada?.saldo_cents, registrada?.demandas[0].titulo], ["emitida", 1_484_500, 1_484_500, "Desmontagem 10045"]);
+    assert.doesNotMatch(JSON.stringify(registrada), /registrada_por|fin-1|aut_itau|operation_id/);
     const parcial = await pagar("pag-1", "5000");
     assert.deepEqual([parcial.status, parcial.recebido_cents, parcial.saldo_cents], ["emitida", 500_000, 984_500]);
+    assert.deepEqual([(await doPortal())?.recebido_cents, (await doPortal())?.saldo_cents], [500_000, 984_500]);
     assert.deepEqual(await etapas(), ["faturada", "faturada"]);
     assert.equal((await pagar("pag-1", "5000")).replayed, true);
     assert.equal((await db.collection(PAGAMENTOS_COLLECTION).get()).size, 1);
@@ -114,6 +122,8 @@ describe("a cobrança da NF", () => {
     const fatura = await faturaAgora();
     assert.deepEqual([fatura.status, fatura.recebido_cents, fatura.paga_em, fatura.pagamento_ids.length], ["paga", 1_484_500, "2026-10-22", 2]);
     assert.deepEqual(await etapas(), ["paga", "paga"]);
+    const pagaNoPortal = await doPortal();
+    assert.deepEqual([pagaNoPortal?.status, pagaNoPortal?.saldo_cents, pagaNoPortal?.paga_em, pagaNoPortal?.demandas[0].titulo], ["paga", 0, "2026-10-22", "Desmontagem 10045"]);
     const paga = (await db.doc("demands/10045").get()).data() ?? {};
     assert.equal(paga.faturamento.paga_em, "2026-10-22");
     assert.deepEqual(paga.marcos.at(-1), { etapa: "paga", em: "2026-10-23T15:00:00.000Z", por_uid: "fin-1" });
@@ -157,6 +167,8 @@ describe("a cobrança da NF", () => {
     await advanceFaturaFor(db, financeiro, { acao: "reverse_payment", idempotency_key: "est-1", fatura_id: faturaId, pagamento_id: parcial.pagamento_id, motivo: "Valor digitado errado" }, AGORA);
     const cancelada = await advanceFaturaFor(db, financeiro, { acao: "cancel", idempotency_key: "can-2", fatura_id: faturaId, motivo: "Registro com a demanda errada" }, AGORA);
     assert.equal(cancelada.status, "cancelada");
+    // O registro cancelado era um erro: some do portal.
+    assert.equal(await doPortal(), null);
     assert.deepEqual(await etapas(), ["a_faturar", "a_faturar"]);
     assert.equal((await db.doc("demands/10045").get()).get("faturamento"), undefined);
     assert.deepEqual((await db.doc("client_authorizations/aut_itau").get()).get("nf_ids"), []);
@@ -176,12 +188,15 @@ describe("a cobrança da NF", () => {
     assert.equal(fatura.anteriores.length, 1);
     assert.deepEqual(fatura.anteriores[0].demanda_numeros, ["10045", "10046"]);
     assert.deepEqual(await etapas(), ["faturada", "a_faturar"]);
+    // De novo no portal, só com a 10045.
+    assert.deepEqual((await doPortal())?.demanda_numeros, ["10045"]);
   });
 
   it("enviar uma vez; a NF que não existe, a operação e o comercial recusam", async () => {
     const enviar = (chave: string, extra: Record<string, unknown> = {}) =>
       advanceFaturaFor(db, financeiro, { acao: "send", idempotency_key: chave, fatura_id: faturaId, enviada_em: "2026-10-21", meio: "portal_do_cliente", ...extra }, AGORA);
     await enviar("env-1");
+    assert.deepEqual([(await doPortal())?.status, (await doPortal())?.enviada_em], ["enviada", "2026-10-21"]);
     await recusa(enviar("env-2"), "failed-precondition", "A NF já foi enviada ao cliente.");
     await recusa(enviar("env-3", { fatura_id: "fat_ffffffffffffffffffffffff" }), "not-found", "NF não encontrada.");
     for (const role of ["interno", "comercial", "campo", "cliente"] as const) {
