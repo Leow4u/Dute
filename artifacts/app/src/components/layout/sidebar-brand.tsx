@@ -32,7 +32,7 @@ export function SidebarBrand({ basePath, collapsed }: { basePath: string; collap
         alt={collapsed ? "Dutelog" : ""}
         aria-hidden={collapsed ? undefined : "true"}
         className={cn(
-          "pointer-events-none absolute left-0 top-1/2 h-8 w-8 -translate-y-1/2 object-contain transition-opacity duration-200 ease-out motion-reduce:transition-none",
+          "pointer-events-none absolute left-0 top-1/2 h-8 w-8 -translate-y-1/2 rounded-lg object-contain transition-opacity duration-200 ease-out motion-reduce:transition-none",
           collapsed ? "opacity-100" : "opacity-0",
         )}
       />

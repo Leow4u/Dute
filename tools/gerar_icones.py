@@ -3,9 +3,11 @@
 
 Uso (da raiz do repositório):
 
-    python tools/gerar_icones.py caminho/da/arte-1024.png
+    python tools/gerar_icones.py artifacts/app/brand/dutelog-icon-1024.png
 
-A arte deve ser quadrada (1024 × 1024 ou maior), já com o fundo: é ela que
+A arte em uso fica em `artifacts/app/brand/dutelog-icon-1024.png` (entregue
+pelo Leonardo em 23/10/2026); fora de `public/`, para não ir ao build. Ela
+deve ser quadrada (1024 × 1024 ou maior), já com o fundo: é ela que
 vira o ícone do PWA (`any maskable`), o ícone da tela inicial do iPhone e o
 favicon. Saídas, sobrescritas:
 
