@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 export type { ContadorDoItem } from "@/lib/resumo-do-modulo";
 
 export type ShellDoModuloProps = {
-  ambiente: "comercial" | "operacao";
+  ambiente: "comercial" | "operacao" | "financeiro";
   atual: { label: string; icon: LucideIcon };
   opcoes: readonly OpcaoDeModulo[];
   items: AppModule[];

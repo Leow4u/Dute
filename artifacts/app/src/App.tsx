@@ -40,6 +40,7 @@ import ComercialLayout from "./components/layout/comercial-layout";
 import OperacaoLayout from "./components/layout/operacao-layout";
 import CampoLayout from "./components/layout/campo-layout";
 import TvLayout from "./components/layout/tv-layout";
+import FinanceiroLayout from "./components/layout/financeiro-layout";
 import { AppThemeProvider } from "./components/theme/theme-provider";
 import SettingsLayout from "./components/layout/settings-layout";
 import type { WarehouseOpsModuleKey } from "./lib/warehouse-ops/model";
@@ -141,6 +142,8 @@ const ClienteEnvios = lazy(() =>
 );
 const ComercialClientes = lazy(() => import("./pages/comercial/clientes"));
 const ComercialInicio = lazy(() => import("./pages/comercial/inicio"));
+const FinanceiroInicio = lazy(() => import("./pages/financeiro/inicio"));
+const FinanceiroAFaturar = lazy(() => import("./pages/financeiro/a-faturar"));
 const ComercialOrcamentos = lazy(() => import("./pages/comercial/orcamentos"));
 const ComercialOrcamento = lazy(() => import("./pages/comercial/orcamento"));
 const ComercialDocumento = lazy(() => import("./pages/comercial/documento"));
@@ -171,6 +174,7 @@ import { useOperationProfile } from "./lib/operation-profile";
 import { PLATAFORMA_LIBERADA } from "./lib/liberacao";
 import { soComComercialLiberado } from "./lib/comercial/navegacao";
 import { soComOperacaoLiberada } from "./lib/operacao/navegacao";
+import { soComFinanceiroLiberado } from "./lib/financeiro/navegacao";
 import { entrada } from "./lib/platform-modules";
 import { portalModulesFor } from "./lib/operations";
 import {
@@ -959,7 +963,7 @@ type ProtectedRouteConfig = {
   layout: LayoutDaRota;
 };
 
-/** "app" é o shell do WMS. Configuração e Comercial têm o deles. */
+/** "app" é o shell do WMS. Configuração e cada módulo novo têm o deles. */
 const LAYOUT_DA_ROTA = {
   app: AppLayout,
   settings: SettingsLayout,
@@ -967,6 +971,7 @@ const LAYOUT_DA_ROTA = {
   operacao: OperacaoLayout,
   campo: CampoLayout,
   tv: TvLayout,
+  financeiro: FinanceiroLayout,
 } as const;
 
 function protectedRoute(
@@ -1113,6 +1118,12 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
     protectedRoute("/comercial/contratos", ComercialContratos),
     protectedRoute("/comercial/autorizacoes", ComercialAutorizacoes),
     protectedRoute("/comercial/medicoes", ComercialMedicoes),
+  ]),
+  // Financeiro da demanda (docs/plataforma/fase-4-financeiro.md): as rotas só
+  // existem onde a liberação do Financeiro está ligada (lib/financeiro/navegacao.ts).
+  ...soComFinanceiroLiberado([
+    protectedRoute("/financeiro", FinanceiroInicio),
+    protectedRoute("/financeiro/a-faturar", FinanceiroAFaturar),
   ]),
 ];
 

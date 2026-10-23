@@ -44,6 +44,12 @@ documentação de produto e operação está em `docs/`.
   Leonardo: roteiro em `docs/plataforma/operacao-producao.md`. O `dute-btg`
   fica de fora das duas listas `OPERACAO_AMBIENTES_LIBERADOS`. Desenho,
   registro de cada parte e como desligar: `docs/plataforma/fase-3-operacao.md`.
+- **Financeiro (Fase 4) em andamento, ligado só no `dute-homolog`**
+  (`FINANCEIRO_AMBIENTES_LIBERADOS`, no app e nas callables): `registerNf`
+  registra a NF da demanda A faturar (parte 4.1a) e o shell `/financeiro` tem
+  o Início e A faturar (parte 4.1b). O Faturamento do WMS continua no shell da
+  Armazenagem até a Fase 7: o menu do Financeiro leva até ele e o do WMS traz
+  o financeiro de volta. Runbook: `docs/plataforma/fase-4-financeiro.md`.
 - **Alinhamento do Comercial e da Operação recuperado em 23/10/2026**:
   `docs/plataforma/alinhamento-comercial-operacao.md` compara o desenho
   aprovado (plano, Fase 2, Fase 6 e mockups) com o que entrou na `main` de 21

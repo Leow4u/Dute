@@ -12,6 +12,8 @@ import { useAppAuth, useAppUser } from "@/lib/auth";
 import { useInicioDoComercial } from "@/lib/comercial/use-inicio";
 import { fraseDoInicio } from "@/lib/inicio-do-modulo";
 import { useInicioDaOperacao } from "@/lib/operacao/use-inicio";
+import { abreFinanceiro } from "@/lib/financeiro/navegacao";
+import { useInicioDoFinanceiro } from "@/lib/financeiro/use-a-faturar";
 import type { Entrada } from "@/lib/platform-modules";
 import { resumoDoModulo, type ResumoDoModulo } from "@/lib/resumo-do-modulo";
 import { formatToday, greeting } from "@/lib/saudacao";
@@ -170,10 +172,14 @@ function useResumosDaEntrada(decision: EntradaTela): { resumos: ResumosDaEntrada
   const wms = useInicioDoWms(role, chaves.includes("wms"));
   const comercial = useInicioDoComercial(role, user?.uid, chaves.includes("comercial"));
   const operacao = useInicioDaOperacao(role, new Date(), chaves.includes("operacao"));
+  // O card do Financeiro só conta onde leva ao shell dele; fora da liberação leva ao Faturamento do WMS, sem contador.
+  const comFinanceiro = chaves.includes("financeiro") && abreFinanceiro(role);
+  const financeiro = useInicioDoFinanceiro(role, new Date(), comFinanceiro);
   const fontes: Array<[(typeof chaves)[number], FonteDoResumo]> = [
     ["wms", { itens: wms.items, carregando: wms.carregando, falhas: wms.falhas }],
     ["comercial", comercial],
     ["operacao", operacao],
+    ...(comFinanceiro ? ([["financeiro", financeiro]] as Array<[(typeof chaves)[number], FonteDoResumo]>) : []),
   ];
   const resumos: ResumosDaEntrada = {};
   let prontos = true;

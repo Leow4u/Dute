@@ -1,6 +1,6 @@
 import type { Modulo, Papel } from "@workspace/dominio";
 
-import { COMERCIAL_LIBERADO, OPERACAO_LIBERADO, PLATAFORMA_LIBERADA } from "./liberacao";
+import { COMERCIAL_LIBERADO, FINANCEIRO_LIBERADO, OPERACAO_LIBERADO, PLATAFORMA_LIBERADA } from "./liberacao";
 import { normalizePath } from "./modules";
 import type { OperationProfile } from "./operations";
 import { entrada } from "./platform-modules";
@@ -12,12 +12,11 @@ import { isSettingsPath } from "./settings-nav";
  * mantêm o módulo. Módulo novo com telas próprias entra em POR_PREFIXO e
  * ganha um layout em App.tsx; sem tela, não entra.
  *
- * O Faturamento continua no WMS: é a tela que existe hoje, e tirá-la do
- * menu da Armazenagem mudaria o WMS. O prefixo /financeiro fica para quando
- * o módulo tiver navegação própria.
+ * O Faturamento do WMS continua na Armazenagem até a Fase 7. O Financeiro da
+ * demanda (Fase 4) tem shell próprio em /financeiro.
  */
 
-export type Ambiente = "wms" | "comercial" | "operacao" | "campo" | "tv";
+export type Ambiente = "wms" | "comercial" | "operacao" | "campo" | "tv" | "financeiro";
 
 const POR_PREFIXO: readonly { prefixo: string; ambiente: Ambiente }[] = [
   { prefixo: "/comercial", ambiente: "comercial" },
@@ -26,6 +25,8 @@ const POR_PREFIXO: readonly { prefixo: string; ambiente: Ambiente }[] = [
   { prefixo: "/campo", ambiente: "campo" },
   // A TV da sala (parte 3.12b): é da Operação, em tela cheia e sem menu.
   { prefixo: "/tv", ambiente: "tv" },
+  // O Financeiro da demanda (Fase 4), com shell próprio.
+  { prefixo: "/financeiro", ambiente: "financeiro" },
 ];
 
 /** Ambiente de navegação do caminho. Configuração não é módulo: use layoutDaRota. */
@@ -47,18 +48,19 @@ export function moduloDaRota(path: string): Modulo | null {
   const ambiente = ambienteDaRota(path);
   if (ambiente === "comercial" || ambiente === "operacao") return ambiente;
   if (ambiente === "campo" || ambiente === "tv") return "operacao";
+  if (ambiente === "financeiro") return "financeiro";
   const normalized = normalizePath(path);
   if (normalized === "/faturamento" || normalized.startsWith("/faturamento/")) return "financeiro";
   return "wms";
 }
 
 /** Qual shell desenha a rota. "app" é o layout do WMS e do portal. */
-export type LayoutDaRota = "app" | "settings" | "comercial" | "operacao" | "campo" | "tv";
+export type LayoutDaRota = "app" | "settings" | "comercial" | "operacao" | "campo" | "tv" | "financeiro";
 
 export function layoutDaRota(path: string): LayoutDaRota {
   if (isSettingsPath(path)) return "settings";
   const ambiente = ambienteDaRota(path);
-  if (ambiente === "comercial" || ambiente === "operacao" || ambiente === "campo" || ambiente === "tv") return ambiente;
+  if (ambiente !== "wms") return ambiente;
   return "app";
 }
 
@@ -73,7 +75,8 @@ export function podeTrocarDeModulo(
   comercial: boolean = COMERCIAL_LIBERADO,
   plataforma: boolean = PLATAFORMA_LIBERADA,
   operacao: boolean = OPERACAO_LIBERADO,
+  financeiro: boolean = FINANCEIRO_LIBERADO,
 ): boolean {
   if (!plataforma) return false;
-  return entrada(role, profile, comercial, operacao).kind === "cards";
+  return entrada(role, profile, comercial, operacao, financeiro).kind === "cards";
 }

@@ -1,7 +1,9 @@
 import { CAMPO_ROLES, ROTA_CAMPO, ROTA_CAMPO_CONCLUIR, ROTA_CAMPO_OS } from "./campo/navegacao";
 import { ROTA_TV, TV_ROLES } from "./tv/navegacao";
 import {
+  Banknote,
   BarChart3,
+  Boxes,
   BrainCircuit,
   Briefcase,
   CalendarCheck,
@@ -41,7 +43,8 @@ import {
   abreComercial,
   APROVADOR_ROLES,
 } from "./comercial/navegacao";
-import { COMERCIAL_LIBERADO, OPERACAO_LIBERADO } from "./liberacao";
+import { ROTA_A_FATURAR, ROTA_FATURAMENTO_WMS, ROTA_FINANCEIRO, abreFinanceiro } from "./financeiro/navegacao";
+import { COMERCIAL_LIBERADO, FINANCEIRO_LIBERADO, OPERACAO_LIBERADO } from "./liberacao";
 import {
   OPERACAO_CADASTRO_ROLES,
   ROTA_COLABORADORES,
@@ -172,16 +175,16 @@ export type AppModule = {
   portal?: PortalModuleKey;
   /**
    * Liberação por ambiente do módulo (lib/liberacao.ts). Sem ela ligada, o
-   * item não existe no menu. Comercial e Operação têm a sua.
+   * item não existe no menu. Comercial, Operação e Financeiro têm a sua.
    */
-  liberacao?: "comercial" | "operacao";
+  liberacao?: "comercial" | "operacao" | "financeiro";
   /**
    * Ambiente de navegação. Ausente é o WMS (menu de hoje). Outro valor não
    * entra nesse menu: o shell sai do caminho da rota (lib/ambientes.ts).
    * Módulo futuro com telas próprias ganha o valor e o prefixo; sem tela,
    * não ganha ambiente.
    */
-  ambiente?: "wms" | "comercial" | "operacao";
+  ambiente?: "wms" | "comercial" | "operacao" | "financeiro";
   /**
    * Grupo mesmo com uma tela só: o menu mostra o módulo e a tela dentro dele
    * ("Comercial" › "Clientes"), em vez de virar o link da tela.
@@ -343,6 +346,37 @@ export const APP_MODULES: AppModule[] = [
         label: "Faturamento",
         href: "/faturamento",
         icon: Receipt,
+        roles: FINANCE_ROLES,
+      }),
+    ],
+  }),
+  // Financeiro da demanda (docs/plataforma/fase-4-financeiro.md): o Início e
+  // a fila A faturar. O menu é do ambiente Financeiro, não do WMS. O
+  // Faturamento da armazenagem continua no WMS até a Fase 7 (menuDoFinanceiro
+  // leva até ele).
+  appModule({
+    id: "financeiro",
+    label: "Financeiro",
+    audience: "internal",
+    icon: Banknote,
+    roles: FINANCE_ROLES,
+    liberacao: "financeiro",
+    ambiente: "financeiro",
+    group: true,
+    routes: [
+      navRoute({
+        id: "financeiro-inicio",
+        label: "Início",
+        href: ROTA_FINANCEIRO,
+        icon: Home,
+        roles: FINANCE_ROLES,
+        exact: true,
+      }),
+      navRoute({
+        id: "financeiro-a-faturar",
+        label: "A faturar",
+        href: ROTA_A_FATURAR,
+        icon: FileCheck,
         roles: FINANCE_ROLES,
       }),
     ],
@@ -808,10 +842,12 @@ export function getHomePathForAppRole(role: AppRole | null | undefined) {
 export function getHomePathForProfile(
   role: ProfileRole | null | undefined,
   comercial: boolean = COMERCIAL_LIBERADO,
+  financeiro: boolean = FINANCEIRO_LIBERADO,
 ) {
   if (role === "cliente") return "/portal";
   if (role === "wms") return "/pedidos";
-  if (role === "financeiro") return "/faturamento";
+  // O financeiro abre no módulo dele onde o Financeiro está liberado.
+  if (role === "financeiro") return abreFinanceiro(role, financeiro) ? ROTA_FINANCEIRO : "/faturamento";
   // O comercial abre no módulo dele onde o Comercial está liberado.
   if (role === "comercial" && abreComercial(role, comercial)) return ROTA_COMERCIAL;
   // Papel da plataforma sem tela ainda: a Conta, que todo perfil abre. Sem
@@ -849,11 +885,12 @@ export function getNavigationForAppRole(
  * tem; sem perfil (área interna, ou ainda carregando) nada disso é escondido.
  */
 function navigationForAmbiente(
-  ambiente: "wms" | "comercial" | "operacao",
+  ambiente: "wms" | "comercial" | "operacao" | "financeiro",
   role: ProfileRole | null | undefined,
   operation: OperationProfile | null | undefined,
   comercial: boolean,
   operacao: boolean = OPERACAO_LIBERADO,
+  financeiro: boolean = FINANCEIRO_LIBERADO,
 ): AppModule[] {
   const appRole = appRoleForProfile(role) ?? "interno";
   const portalModules = appRole === "cliente" ? portalModulesFor(operation) : null;
@@ -865,6 +902,7 @@ function navigationForAmbiente(
       canAccessModule(role, module.roles) &&
       (module.liberacao !== "comercial" || abreComercial(role, comercial)) &&
       (module.liberacao !== "operacao" || abreOperacao(role, operacao)) &&
+      (module.liberacao !== "financeiro" || abreFinanceiro(role, financeiro)) &&
       (portalModules === null || !module.portal || portalModules.includes(module.portal)),
   )
     .map((module) => {
@@ -891,9 +929,26 @@ export function getNavigationForProfileRole(
   role: ProfileRole | null | undefined,
   operation?: OperationProfile | null,
   comercial: boolean = COMERCIAL_LIBERADO,
+  financeiro: boolean = FINANCEIRO_LIBERADO,
 ): AppModule[] {
-  return navigationForAmbiente("wms", role, operation, comercial);
+  const menu = navigationForAmbiente("wms", role, operation, comercial);
+  // O financeiro tem um módulo só e por isso não tem seletor: no menu do WMS,
+  // logo antes do Faturamento da armazenagem, um item leva de volta ao
+  // Financeiro.
+  if (role !== "financeiro" || !abreFinanceiro(role, financeiro)) return menu;
+  const posicao = menu.findIndex((module) => module.id === "billing");
+  return posicao === -1 ? [...menu, VOLTA_AO_FINANCEIRO] : [...menu.slice(0, posicao), VOLTA_AO_FINANCEIRO, ...menu.slice(posicao)];
 }
+
+/** O link do menu do WMS para o shell do Financeiro. Fora de APP_MODULES: a rota já tem os papéis dela. */
+const VOLTA_AO_FINANCEIRO: AppModule = appModule({
+  id: "financeiro-volta",
+  label: "Financeiro",
+  audience: "internal",
+  icon: Banknote,
+  roles: ["financeiro"],
+  routes: [navRoute({ id: "financeiro-volta-inicio", label: "Financeiro", href: ROTA_FINANCEIRO, icon: Banknote, roles: ["financeiro"] })],
+});
 
 /**
  * Funcionalidades do Comercial, uma por tela, para o menu do ambiente.
@@ -947,6 +1002,49 @@ export function menuDoOperacao(
       },
     ];
   });
+}
+
+/**
+ * Início e A faturar, uma tela por item, e o Faturamento da armazenagem, que
+ * continua no shell do WMS até a Fase 7. Fora da liberação, a lista é vazia.
+ */
+export function menuDoFinanceiro(
+  role: ProfileRole | null | undefined,
+  financeiro: boolean = FINANCEIRO_LIBERADO,
+): AppModule[] {
+  const [grupo] = navigationForAmbiente("financeiro", role, null, false, false, financeiro);
+  if (!grupo) return [];
+  const telas = grupo.routes.flatMap((route) => {
+    if (!route.href) return [];
+    return [
+      {
+        id: route.id,
+        label: route.label,
+        audience: grupo.audience,
+        href: route.href,
+        icon: route.icon,
+        roles: route.roles,
+        appRoles: route.appRoles,
+        ambiente: "financeiro" as const,
+        routes: [route],
+      },
+    ];
+  });
+  const armazenagem = navRoute({ id: "financeiro-armazenagem", label: "Armazenagem", href: ROTA_FATURAMENTO_WMS, icon: Boxes, roles: FINANCE_ROLES });
+  return [
+    ...telas,
+    {
+      id: armazenagem.id,
+      label: armazenagem.label,
+      audience: grupo.audience,
+      href: armazenagem.href,
+      icon: armazenagem.icon,
+      roles: armazenagem.roles,
+      appRoles: armazenagem.appRoles,
+      ambiente: "financeiro" as const,
+      routes: [armazenagem],
+    },
+  ];
 }
 
 /**
