@@ -34,6 +34,10 @@ documentação de produto e operação está em `docs/`.
   existem; campo não lê a OS. O `dute-btg` fica de fora das duas listas
   `OPERACAO_AMBIENTES_LIBERADOS`. Desenho e como desfazer:
   `docs/plataforma/fase-3-operacao.md`.
+- **Alinhamento do Comercial e da Operação recuperado em 23/10/2026**:
+  `docs/plataforma/alinhamento-comercial-operacao.md` compara o desenho
+  aprovado (plano, Fase 2, Fase 6 e mockups) com o que entrou na `main` de 21
+  a 23/10 e lista as divergências e as decisões que esperam o Leonardo.
 - **Papéis e módulos têm lista única em `lib/dominio`.** As Functions
   (`functions/wms/src/domain/platform-roles.ts`, `customer-profile.ts`) e o
   `firestore.rules` guardam cópias literais, travadas por
