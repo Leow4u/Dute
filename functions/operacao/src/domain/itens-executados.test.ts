@@ -55,7 +55,7 @@ const OS: OsGravada = {
   servicos: ["transporte", "montagem"],
   locais: { origem: null, destino: null },
   janela: { data: "2026-10-22", inicio: "07:30", fim: "18:00" },
-  equipe: [{ colaborador_id: ANA, nome: "Ana Lima", papel: "lider", vinculo: "proprio", empresa: null, no_app: true }],
+  equipe: [{ colaborador_id: ANA, nome: "Ana Lima", papel: "lider", vinculo: "proprio", empresa: null, no_app: true, usuario_uid: "uid-ana" }],
   equipe_uids: [],
   veiculos: [],
   instrucoes: null,

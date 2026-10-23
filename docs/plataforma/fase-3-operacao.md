@@ -733,3 +733,7 @@ Feita em 23/10/2026.
   que a parte 3.4b deixou para esta). O evento continua sem nome.
 - **Catálogo.** O campo lê `lpu_items` (sem preço) para incluir o item
   executado além do planejado; tabela de preço e autorização continuam fora.
+- **Quem é quem no celular.** Cada pessoa da `equipe` da OS leva o
+  `usuario_uid` do login ligado no cadastro (o mesmo que vai para
+  `equipe_uids`): é como o app do campo sabe qual pessoa da equipe é quem
+  está nele (o líder, por exemplo). CPF continua fora.

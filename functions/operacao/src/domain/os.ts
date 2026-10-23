@@ -79,6 +79,8 @@ export type PessoaDaOs = {
   empresa: string | null;
   /** A pessoa tem o login do app ligado ao cadastro (o uid fica em equipe_uids). */
   no_app: boolean;
+  /** O login ligado (parte 3.8a): é como o celular sabe qual pessoa da equipe é quem está nele. */
+  usuario_uid: string | null;
 };
 
 export type VeiculoDaOs = {
@@ -603,6 +605,7 @@ export function equipeDaOs(
       vinculo: colaborador.vinculo,
       empresa: colaborador.empresa,
       no_app: Boolean(colaborador.usuario_uid),
+      usuario_uid: colaborador.usuario_uid ?? null,
     } satisfies PessoaDaOs;
   });
   const uids = pedido.flatMap((pessoa) => {
@@ -769,7 +772,7 @@ function janelaLida(bruto: unknown, agendaAntiga: unknown): JanelaDaOs | null {
 function pessoaLida(bruto: unknown): PessoaDaOs {
   if (typeof bruto === "string") {
     // OS de antes da parte 3.4: só o id; o nome volta no próximo agendamento.
-    return { colaborador_id: bruto, nome: "", papel: null, vinculo: "proprio", empresa: null, no_app: false };
+    return { colaborador_id: bruto, nome: "", papel: null, vinculo: "proprio", empresa: null, no_app: false, usuario_uid: null };
   }
   if (!bruto || typeof bruto !== "object") ilegivel();
   const pessoa = bruto as Record<string, unknown>;
@@ -782,6 +785,7 @@ function pessoaLida(bruto: unknown): PessoaDaOs {
     vinculo,
     empresa: textoOuNull(pessoa.empresa),
     no_app: pessoa.no_app === true,
+    usuario_uid: typeof pessoa.usuario_uid === "string" && pessoa.usuario_uid ? pessoa.usuario_uid : null,
   };
 }
 

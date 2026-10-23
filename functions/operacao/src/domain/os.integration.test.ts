@@ -184,8 +184,8 @@ describe("planejar várias OS com fatias do saldo", () => {
     assert.equal(primeira.status, "agendada");
     assert.deepEqual(primeira.janela, JANELA);
     assert.deepEqual(primeira.equipe, [
-      { colaborador_id: ANA, nome: "Ana Souza", papel: "lider", vinculo: "proprio", empresa: null, no_app: true },
-      { colaborador_id: VALTER, nome: "Valter Moreira", papel: "motorista", vinculo: "terceiro", empresa: "Rota Sul", no_app: false },
+      { colaborador_id: ANA, nome: "Ana Souza", papel: "lider", vinculo: "proprio", empresa: null, no_app: true, usuario_uid: "uid-ana" },
+      { colaborador_id: VALTER, nome: "Valter Moreira", papel: "motorista", vinculo: "terceiro", empresa: "Rota Sul", no_app: false, usuario_uid: null },
     ]);
     assert.deepEqual(primeira.equipe_uids, ["uid-ana"]);
     assert.deepEqual(primeira.veiculos.map((item: { placa: string; dono: string }) => [item.placa, item.dono]), [["DEF4G56", "proprio"], ["FGH2B34", "terceiro"]]);

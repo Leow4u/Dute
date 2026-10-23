@@ -42,8 +42,8 @@ const OS: OsGravada = {
   locais: { origem: null, destino: null },
   janela: { data: "2026-10-22", inicio: "07:30", fim: "18:00" },
   equipe: [
-    { colaborador_id: ANA, nome: "Ana Lima", papel: "lider", vinculo: "proprio", empresa: null, no_app: true },
-    { colaborador_id: BRUNO, nome: "Bruno Teixeira", papel: "motorista", vinculo: "terceiro", empresa: "Rota Sul", no_app: false },
+    { colaborador_id: ANA, nome: "Ana Lima", papel: "lider", vinculo: "proprio", empresa: null, no_app: true, usuario_uid: "uid-ana" },
+    { colaborador_id: BRUNO, nome: "Bruno Teixeira", papel: "motorista", vinculo: "terceiro", empresa: "Rota Sul", no_app: false, usuario_uid: null },
   ],
   equipe_uids: ["uid-ana"],
   veiculos: [],

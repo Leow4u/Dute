@@ -361,8 +361,8 @@ describe("equipe, veículos e locais copiados do cadastro", () => {
   it("a OS leva nome, papel, vínculo e empresa, nunca o CPF; o login vai em equipe_uids", () => {
     const { equipe, equipe_uids } = equipeDaOs([{ colaborador_id: ANA.id, papel: "lider" }, { colaborador_id: VALTER.id }], pessoas);
     assert.deepEqual(equipe, [
-      { colaborador_id: ANA.id, nome: "Ana Souza", papel: "lider", vinculo: "proprio", empresa: null, no_app: true },
-      { colaborador_id: VALTER.id, nome: "Valter Moreira", papel: null, vinculo: "terceiro", empresa: "Rota Sul", no_app: false },
+      { colaborador_id: ANA.id, nome: "Ana Souza", papel: "lider", vinculo: "proprio", empresa: null, no_app: true, usuario_uid: "uid-ana" },
+      { colaborador_id: VALTER.id, nome: "Valter Moreira", papel: null, vinculo: "terceiro", empresa: "Rota Sul", no_app: false, usuario_uid: null },
     ]);
     assert.deepEqual(equipe_uids, ["uid-ana"]);
     assert.equal(JSON.stringify(equipe).includes("52998224725"), false);
