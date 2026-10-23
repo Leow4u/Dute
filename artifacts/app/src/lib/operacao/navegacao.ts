@@ -35,6 +35,8 @@ export const ROTA_OS_IMPRESSAO = "/operacao/os/impressao";
 export const ROTA_REVISAO = "/operacao/revisao";
 /** Planejar as OS de uma demanda (parte 3.6a, docs/mockups/OpOSPlanejar.dc.html): ?demanda=10045. */
 export const ROTA_PLANEJAR = "/operacao/planejar";
+/** Os relatórios da Operação (parte 4.8a, docs/mockups/Relatorios.dc.html): ?relatorio=equipe. */
+export const ROTA_RELATORIOS = "/operacao/relatorios";
 
 export const TELAS_DA_OPERACAO: readonly string[] = [
   ROTA_OPERACAO,
@@ -47,6 +49,7 @@ export const TELAS_DA_OPERACAO: readonly string[] = [
   ROTA_OS,
   ROTA_OS_IMPRESSAO,
   ROTA_REVISAO,
+  ROTA_RELATORIOS,
   ROTA_COLABORADORES,
   ROTA_VEICULOS,
   // O app do campo é da Operação: só existe com a liberação dela (parte 3.8b).

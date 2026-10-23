@@ -16,6 +16,7 @@ import {
   ROTA_OPERACAO,
   ROTA_OS,
   ROTA_OS_IMPRESSAO,
+  ROTA_RELATORIOS,
   ROTA_REVISAO,
   ROTA_VEICULOS,
   abreOperacao,
@@ -76,13 +77,14 @@ describe("navegação do cadastro da Operação", () => {
     expect(getNavigationForProfileRole("owner", null, false).some((module) => module.ambiente === "operacao")).toBe(false);
   });
 
-  it("o menu do módulo tem o Início, o Hoje, a Agenda, Demandas, Revisão, Colaboradores e Veículos para quem grava", () => {
+  it("o menu do módulo tem o Início, o Hoje, a Agenda, Demandas, Revisão, Relatórios, Colaboradores e Veículos para quem grava", () => {
     expect(menuDoOperacao("interno", true).map((item) => [item.label, item.href])).toEqual([
       ["Início", ROTA_OPERACAO],
       ["Hoje", ROTA_HOJE],
       ["Agenda", ROTA_AGENDA],
       ["Demandas", ROTA_DEMANDAS],
       ["Revisão", ROTA_REVISAO],
+      ["Relatórios", ROTA_RELATORIOS],
       ["Colaboradores", ROTA_COLABORADORES],
       ["Veículos", ROTA_VEICULOS],
     ]);
@@ -107,7 +109,7 @@ describe("navegação do cadastro da Operação", () => {
   });
 
   it("/operacao é o Início (parte 2.6) e o Hoje (parte 3.5a) mora em /operacao/hoje", () => {
-    expect(rotasDaOperacao(LIBERADO)).toEqual([ROTA_OPERACAO, ROTA_HOJE, ROTA_AGENDA, ROTA_DEMANDAS, ROTA_DEMANDA, ROTA_NOVA_DEMANDA, ROTA_PLANEJAR, ROTA_OS, ROTA_OS_IMPRESSAO, ROTA_REVISAO, ROTA_COLABORADORES, ROTA_VEICULOS, ROTA_CAMPO, ROTA_CAMPO_OS, ROTA_CAMPO_CONCLUIR, ROTA_TV]);
+    expect(rotasDaOperacao(LIBERADO)).toEqual([ROTA_OPERACAO, ROTA_HOJE, ROTA_AGENDA, ROTA_DEMANDAS, ROTA_DEMANDA, ROTA_NOVA_DEMANDA, ROTA_PLANEJAR, ROTA_OS, ROTA_OS_IMPRESSAO, ROTA_REVISAO, ROTA_RELATORIOS, ROTA_COLABORADORES, ROTA_VEICULOS, ROTA_CAMPO, ROTA_CAMPO_OS, ROTA_CAMPO_CONCLUIR, ROTA_TV]);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao", OperacaoInicio\)/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/hoje", OperacaoHoje\)/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/agenda", OperacaoAgenda\)/);
