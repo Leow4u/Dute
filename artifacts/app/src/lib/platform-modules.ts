@@ -9,7 +9,8 @@ import { Boxes, Handshake, Receipt, Truck, Users, type LucideIcon } from "lucide
 
 import { ROTA_CAMPO, abreCampo } from "./campo/navegacao";
 import { COMERCIAL_ROLES, ROTA_COMERCIAL, abreComercial } from "./comercial/navegacao";
-import { COMERCIAL_LIBERADO, OPERACAO_LIBERADO } from "./liberacao";
+import { ROTA_FINANCEIRO, abreFinanceiro } from "./financeiro/navegacao";
+import { COMERCIAL_LIBERADO, FINANCEIRO_LIBERADO, OPERACAO_LIBERADO } from "./liberacao";
 import { OPERACAO_CADASTRO_ROLES, ROTA_OPERACAO, abreOperacao } from "./operacao/navegacao";
 import { ROTA_TV, abreTv } from "./tv/navegacao";
 import type { OperationProfile } from "./operations";
@@ -92,6 +93,7 @@ export function modulesForPerson(
   profile: Pick<OperationProfile, "modules"> | null | undefined,
   comercial: boolean = COMERCIAL_LIBERADO,
   operacao: boolean = OPERACAO_LIBERADO,
+  financeiro: boolean = FINANCEIRO_LIBERADO,
 ): ModuleEntry[] {
   if (!role) return [];
   const wanted: readonly Modulo[] =
@@ -101,7 +103,8 @@ export function modulesForPerson(
     if (role === "cliente" && !module.clientCard) return [];
     if (module.liberacao === "comercial" && !abreComercial(role, comercial)) return [];
     if (module.liberacao === "operacao" && !abreOperacao(role, operacao) && !abreCampo(role, operacao) && !abreTv(role, operacao)) return [];
-    const href = module.home[role];
+    // Com o Financeiro liberado, a casa dele é o shell próprio (Fase 4); fora, o Faturamento do WMS.
+    const href = module.key === "financeiro" && abreFinanceiro(role, financeiro) ? ROTA_FINANCEIRO : module.home[role];
     return href ? [{ module, href }] : [];
   });
 }
@@ -117,8 +120,9 @@ export function entrada(
   profile: Pick<OperationProfile, "modules"> | null | undefined,
   comercial: boolean = COMERCIAL_LIBERADO,
   operacao: boolean = OPERACAO_LIBERADO,
+  financeiro: boolean = FINANCEIRO_LIBERADO,
 ): Entrada {
-  const modules = modulesForPerson(role, profile, comercial, operacao);
+  const modules = modulesForPerson(role, profile, comercial, operacao, financeiro);
   if (modules.length === 1) return { kind: "redirect", to: modules[0].href };
   if (modules.length === 0) return { kind: "nenhum" };
   return { kind: "cards", modules };

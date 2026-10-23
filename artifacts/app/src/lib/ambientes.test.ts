@@ -4,7 +4,8 @@ import { PAPEIS, type Papel } from "@workspace/dominio";
 import { describe, expect, it } from "vitest";
 
 import { ambienteDaRota, layoutDaRota, moduloDaRota, podeTrocarDeModulo } from "./ambientes";
-import { getNavigationForProfileRole, menuDoComercial } from "./modules";
+import { ROTA_FATURAMENTO_WMS, ROTA_FINANCEIRO } from "./financeiro/navegacao";
+import { getNavigationForProfileRole, menuDoComercial, menuDoFinanceiro } from "./modules";
 
 /**
  * O caminho escolhe o ambiente. A liberação entra explícita: o resultado não
@@ -59,8 +60,11 @@ describe("ambiente da rota", () => {
     expect(caminhos.filter((path) => path.startsWith("/operacao"))).not.toEqual([]);
     expect(caminhos.filter((path) => path.startsWith("/campo"))).toEqual(["/campo", "/campo/os", "/campo/concluir"]);
     expect(caminhos.filter((path) => path.startsWith("/tv"))).toEqual(["/tv"]);
+    expect(caminhos.filter((path) => path.startsWith("/financeiro"))).toEqual(["/financeiro", "/financeiro/a-faturar"]);
     for (const path of caminhos) {
-      const esperado = path.startsWith("/comercial")
+      const esperado = path.startsWith("/financeiro")
+        ? "financeiro"
+        : path.startsWith("/comercial")
         ? "comercial"
         : path.startsWith("/operacao")
           ? "operacao"
@@ -77,7 +81,8 @@ describe("ambiente da rota", () => {
 
   it("o menu do WMS nunca aponta para o shell do Comercial, e o do Comercial nunca aponta para o WMS", () => {
     for (const role of PAPEIS) {
-      for (const module of getNavigationForProfileRole(role, null, true)) {
+      // Sem a liberação do Financeiro: com ela, o financeiro tem o link de volta (teste abaixo).
+      for (const module of getNavigationForProfileRole(role, null, true, false)) {
         expect(module.ambiente ?? "wms", `${role} ${module.label}`).toBe("wms");
         for (const route of module.routes) {
           if (!route.href) continue;
@@ -87,6 +92,21 @@ describe("ambiente da rota", () => {
       for (const item of menuDoComercial(role, true)) {
         expect(ambienteDaRota(item.href!), item.href).toBe("comercial");
         expect(layoutDaRota(item.href!), item.href).toBe("comercial");
+      }
+    }
+  });
+
+  it("o Financeiro e o Faturamento da armazenagem se alcançam: são os únicos links entre os dois shells", () => {
+    for (const role of PAPEIS) {
+      for (const module of getNavigationForProfileRole(role, null, true, true)) {
+        for (const route of module.routes) {
+          if (!route.href) continue;
+          const esperado = role === "financeiro" && route.href === ROTA_FINANCEIRO ? "financeiro" : "app";
+          expect(layoutDaRota(route.href), `${role} ${route.href}`).toBe(esperado);
+        }
+      }
+      for (const item of menuDoFinanceiro(role, true)) {
+        expect(layoutDaRota(item.href!), item.href).toBe(item.href === ROTA_FATURAMENTO_WMS ? "app" : "financeiro");
       }
     }
   });

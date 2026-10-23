@@ -71,11 +71,31 @@ fatura (`entity_type: fatura`), com o `customer_code`.
 - O evento não leva o valor nem o número da NF.
 - O financeiro lê os `nf.*`, como lê os `billing.*` do WMS.
 
+## Telas
+
+O shell v3 do Financeiro fica em `/financeiro`, para owner, admin e
+financeiro (`FINANCE_ROLES`, a mesma lista das callables). O menu tem:
+
+- **Início** (`/financeiro`): o "Precisa de você" e a fila em números.
+  - As prontas viram "N demandas a faturar", com os clientes e o total. Ficam críticas depois de 15 dias A faturar (`DIAS_PARA_FATURAR`).
+  - As que esperam a autorização e as sem valor viram itens de informação.
+  - O mesmo cálculo dá os contadores do menu e o card da entrada.
+- **A faturar** (`/financeiro/a-faturar`): as prontas por cliente, as que esperam e o painel de registrar a NF.
+- **Armazenagem**: leva ao Faturamento do WMS (`/faturamento`), que continua no shell do WMS até a Fase 7.
+
+O financeiro tem um módulo só e por isso não tem seletor. No menu do WMS, logo
+antes do Faturamento, o item "Financeiro" leva de volta. Owner e admin trocam
+pelo seletor.
+
 ## Liberação
 
 `FINANCEIRO_AMBIENTES_LIBERADOS = ["dute-homolog"]`, no app
 (`lib/liberacao.ts`) e nas callables, travada por `platform-lists.test.ts`. O
 `dute-prod` entra no lançamento (parte 4.9), com o OK do Leonardo.
+
+Fora da liberação, nada muda: o card do Financeiro e a casa do financeiro
+continuam no Faturamento do WMS, e as rotas `/financeiro` não existem
+(`soComFinanceiroLiberado`).
 
 ## Partes
 
@@ -114,3 +134,21 @@ gravação em `fatura-gravacao.ts`.
   - No app, a etapa ganha rótulo e cor no Comercial e na Operação.
 - **Regras.** `faturas` só para quem lê preço, e nada se grava pelo navegador. O financeiro lê os eventos `nf.*`. O teste de regras é `functions/wms/src/financeiro-faturas.rules.test.ts`.
 - **Zeragem.** `tools/full_reset_btg.py` preserva `faturas`, `financeiro_operations` e os eventos `functions_financeiro`.
+
+### Parte 4.1b: o shell do Financeiro, o Início e A faturar
+
+Feita em 23/10/2026. Regras da fila em `artifacts/app/src/lib/financeiro/a-faturar.ts`;
+as leituras em `use-a-faturar.ts`; as telas em `artifacts/app/src/pages/financeiro/`.
+
+- **A fila.** Lê ao vivo as demandas A faturar e Aguardando autorização. Lê pelo id cada autorização que elas citam e lê o valor de cada uma: a RV validada ou a medição aprovada.
+- **Pronta para faturar.** A tela confere o mesmo que `registerNf`, na mesma ordem: etapa, medição pendente, autorização registrada do mesmo cliente, RV citada e valor.
+  - A que não passa fica em "Esperando", com o motivo.
+  - O servidor confere tudo de novo e calcula o valor.
+- **O painel da NF.**
+  - Uma NF é de um cliente só. Marcada a primeira demanda, só as prontas do mesmo cliente ganham caixa.
+  - Os campos são número, série, emissão (até hoje), vencimento, forma de pagamento e observação.
+  - O vencimento segue a regra de pagamento do contrato até a pessoa mexer nele.
+  - O pedido leva as demandas e a NF, nunca o valor. Leva a chave de idempotência, nova a cada registro.
+- **O Início e a entrada.** Os itens saem da mesma fila. O card do Financeiro na entrada conta só onde leva ao shell novo.
+- **Navegação.** O card do Financeiro e a casa do financeiro (`getHomePathForProfile`) levam a `/financeiro` com a liberação.
+- **Testes.** A regra da fila e do formulário está em `a-faturar.test.ts`, e a navegação em `navegacao.test.ts` e `ambientes.test.ts`. As telas estão em `inicio-view.test.tsx` e `a-faturar-view.test.tsx`: textos listados, sem legenda, uma ação principal e `axe`.
