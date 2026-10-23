@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { buildOrderQueue, isAwaitingDecision, ordersGroupEmpty } from "./order-queue";
+import { buildOrderQueue, chaveDaPrincipal, isAwaitingDecision, ordersGroupEmpty } from "./order-queue";
+import type { OrderGroup } from "./warehouse-ops/orders";
 import type { WarehouseOpsResponse, WarehouseTask } from "./warehouse-ops/model";
 
 function task(overrides: Partial<WarehouseTask> & { id: string }): WarehouseTask {
@@ -69,13 +70,21 @@ describe("fila de pedidos", () => {
 });
 
 describe("pedido vazio", () => {
-  it("explica que o pedido nasce no portal e entra depois da aprovação", () => {
-    expect(ordersGroupEmpty("approve")).toBe(
-      "O pedido nasce no portal do cliente. Quando ele enviar, a aprovação aparece aqui.",
-    );
-    expect(ordersGroupEmpty("pick")).toBe(
-      "Nada para separar. A separação começa depois que a coordenação aprova o pedido.",
-    );
-    expect(ordersGroupEmpty("deliver")).toBe("Nenhum pedido esperando entrega.");
+  it("o grupo vazio diz o dado, sem ensinar o fluxo", () => {
+    expect(ordersGroupEmpty("approve")).toBe("Nenhum pedido para aprovar.");
+    expect(ordersGroupEmpty("pick")).toBe("Nenhum pedido para separar.");
+    expect(ordersGroupEmpty("deliver")).toBe("Nenhum pedido para entregar.");
+  });
+});
+
+describe("a ação principal da tela (v3)", () => {
+  const pedido = (key: string) => ({ key }) as OrderGroup;
+
+  it("é a da primeira linha da fila: aprovar (para quem decide), separar e entregar", () => {
+    const fila = { approve: [{ id: "req_1" }], pick: [pedido("PED-1"), pedido("PED-2")], deliver: [pedido("PED-3")] };
+    expect(chaveDaPrincipal(fila, true)).toBe("approve:req_1");
+    expect(chaveDaPrincipal(fila, false)).toBe("pick:PED-1");
+    expect(chaveDaPrincipal({ ...fila, pick: [] }, false)).toBe("deliver:PED-3");
+    expect(chaveDaPrincipal({ approve: [], pick: [], deliver: [] }, true)).toBeNull();
   });
 });

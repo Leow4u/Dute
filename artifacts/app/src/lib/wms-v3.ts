@@ -10,6 +10,8 @@ import { normalizePath } from "./modules";
 export const TELAS_DO_WMS_NA_V3: readonly string[] = [
   // Parte 4.7b: o Início, no molde do Início dos outros módulos.
   "/dashboard",
+  // Parte 4.7c: os Pedidos (aprovar, separar e entregar).
+  "/pedidos",
 ];
 
 /** A tela aberta já segue a v3 (o caminho exato ou uma tela dentro dele). */

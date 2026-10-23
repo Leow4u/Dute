@@ -5,7 +5,8 @@ import { cn } from "@/lib/utils";
 
 /**
  * Lista de fila (Pedidos, Receber): grupos com título e contagem, linhas com
- * ícone, título, apoio e ações. O mesmo desenho nas duas telas.
+ * ícone, título, apoio e ações. O mesmo desenho nas duas telas. Dentro do
+ * `.v3` (parte 4.7), o título e a linha seguem a v3.
  */
 
 export const QUEUE_TONE = {
@@ -35,12 +36,12 @@ export function QueueGroup({
   return (
     <section className="flex flex-col gap-2.5">
       <h2 className="flex items-baseline gap-2 px-1">
-        <span className="text-base font-semibold text-foreground">{title}</span>
+        <span className="text-base font-semibold text-foreground in-[.v3]:text-lg in-[.v3]:font-bold">{title}</span>
         <span className="text-sm text-foreground/50">
           {[hint, count ? String(count) : null].filter(Boolean).join(" · ")}
         </span>
       </h2>
-      <div className="overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="overflow-hidden rounded-2xl border border-border bg-card in-[.v3]:rounded-lg">
         {count > 0 ? (
           <div className="divide-y divide-border/60">{children}</div>
         ) : (
@@ -87,11 +88,11 @@ export function QueueRow({
       )}
     >
       <div className="flex min-w-0 flex-1 items-start gap-3.5">
-        <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-xl", QUEUE_TONE[tone])}>
+        <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-xl in-[.v3]:size-11 in-[.v3]:rounded-lg", QUEUE_TONE[tone])}>
           <Icon className="size-5" aria-hidden="true" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="font-semibold text-foreground">{title}</p>
+          <p className="font-semibold text-foreground in-[.v3]:text-base in-[.v3]:font-bold">{title}</p>
           <p className="mt-0.5 text-sm text-foreground/60">
             {meta}
             {age ? <span className="text-foreground/45"> · {age}</span> : null}

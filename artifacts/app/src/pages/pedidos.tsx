@@ -19,7 +19,6 @@ import { Segmented } from "@/components/ui/segmented";
 import {
   Sheet,
   SheetContent,
-  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
@@ -33,7 +32,6 @@ import { TaskDetailPanel } from "@/features/warehouse-ops/task-detail";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -47,7 +45,7 @@ import { OPERACAO_LIBERADO } from "@/lib/liberacao";
 import { chamarOperacao, novaChave } from "@/lib/operacao/api";
 import { hojeIso } from "@/lib/operacao/fila";
 import { useLeitura } from "@/lib/operacao/leitura";
-import { buildOrderQueue, ordersGroupEmpty } from "@/lib/order-queue";
+import { buildOrderQueue, chaveDaPrincipal, ordersGroupEmpty } from "@/lib/order-queue";
 import { useItemPhotos } from "@/lib/use-item-photos";
 import { canDecideRequests, humanApiError } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -388,6 +386,9 @@ export default function Pedidos() {
       ),
     };
   };
+  // Na v3, só a primeira linha da fila tem a ação principal; as outras são secundárias.
+  const principal = chaveDaPrincipal(queue, decider);
+  const variante = (chave: string) => (principal === chave ? "default" : "outline");
   const openCount =
     (decider ? queue.approve.length : 0) + queue.pick.length + queue.deliver.length;
   const loading = ops.isLoading || (decider && requests.isLoading);
@@ -430,7 +431,6 @@ export default function Pedidos() {
         <>
           <QueueGroup
             title="Entregues"
-            hint="recentes"
             count={queue.delivered.length}
             empty="Nenhuma entrega recente."
           >
@@ -447,7 +447,6 @@ export default function Pedidos() {
           {decider ? (
             <QueueGroup
               title="Para aprovar"
-              hint="coordenação"
               count={queue.approve.length}
               empty={
                 <>
@@ -477,7 +476,7 @@ export default function Pedidos() {
                       validation.canApprove ? undefined : (
                         <>
                           <AlertTriangle className="size-3.5" />
-                          {validation.detail} Confira antes de aprovar.
+                          {validation.detail}
                         </>
                       )
                     }
@@ -498,6 +497,7 @@ export default function Pedidos() {
                           </Button>
                           <Button
                             type="button"
+                            variant={variante(`approve:${request.id}`)}
                             disabled={busy}
                             onClick={() => decide.mutate({ request, action: "approve" })}
                           >
@@ -521,7 +521,6 @@ export default function Pedidos() {
 
           <QueueGroup
             title="Para separar"
-            hint="armazém"
             count={queue.pick.length}
             empty={ordersGroupEmpty("pick")}
           >
@@ -537,6 +536,7 @@ export default function Pedidos() {
                 action={
                   <Button
                     type="button"
+                    variant={variante(`pick:${order.key}`)}
                     disabled={busy}
                     onClick={() => {
                       setSeal("");
@@ -553,7 +553,6 @@ export default function Pedidos() {
 
           <QueueGroup
             title="Para entregar"
-            hint="hoje"
             count={queue.deliver.length}
             empty={ordersGroupEmpty("deliver")}
           >
@@ -568,6 +567,7 @@ export default function Pedidos() {
                 action={
                   <Button
                     type="button"
+                    variant={variante(`deliver:${order.key}`)}
                     disabled={busy}
                     onClick={() => {
                       setReceivedBy("");
@@ -591,21 +591,21 @@ export default function Pedidos() {
       )}
 
       <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent className="sm:max-w-[440px]">
+        <DialogContent className="sm:max-w-[440px]" aria-describedby={undefined}>
           {dialog?.kind === "reject" ? (
             <>
               <DialogHeader>
                 <DialogTitle>Recusar solicitação</DialogTitle>
-                <DialogDescription>
-                  O motivo fica registrado e aparece para o cliente.
-                </DialogDescription>
               </DialogHeader>
-              <Textarea
-                value={rejectReason}
-                onChange={(event) => setRejectReason(event.target.value)}
-                placeholder="Ex.: sem saldo de 2 itens. Confirme os códigos e envie de novo."
-                rows={3}
-              />
+              <div className="grid gap-2">
+                <Label htmlFor="motivo-da-recusa">Motivo</Label>
+                <Textarea
+                  id="motivo-da-recusa"
+                  value={rejectReason}
+                  onChange={(event) => setRejectReason(event.target.value)}
+                  rows={3}
+                />
+              </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setDialog(null)}>
                   Voltar
@@ -630,9 +630,6 @@ export default function Pedidos() {
             <>
               <DialogHeader>
                 <DialogTitle>{dialog.order.orderNumber}: separado</DialogTitle>
-                <DialogDescription>
-                  Anote o lacre do volume para conferir na entrega.
-                </DialogDescription>
               </DialogHeader>
               <div className="grid gap-2">
                 <Label htmlFor="lacre">Número do lacre</Label>
@@ -660,9 +657,6 @@ export default function Pedidos() {
             <>
               <DialogHeader>
                 <DialogTitle>{dialog.order.orderNumber}: entregue</DialogTitle>
-                <DialogDescription>
-                  Confirma a saída e a entrega de uma vez. O estoque é baixado.
-                </DialogDescription>
               </DialogHeader>
               <div className="grid gap-3">
                 {dialog.order.stage === "enviar" ? (
@@ -691,7 +685,6 @@ export default function Pedidos() {
                     id="recebido"
                     value={receivedBy}
                     onChange={(event) => setReceivedBy(event.target.value)}
-                    placeholder="Nome de quem assinou"
                   />
                 </div>
               </div>
@@ -756,12 +749,9 @@ export default function Pedidos() {
       </Dialog>
 
       <Sheet open={treating !== null} onOpenChange={(open) => !open && setTreating(null)}>
-        <SheetContent side="right" className="w-full overflow-y-auto bg-background p-4 sm:max-w-xl sm:p-5">
+        <SheetContent side="right" className="w-full overflow-y-auto bg-background p-4 sm:max-w-xl sm:p-5" aria-describedby={undefined}>
           <SheetHeader className="mb-3 text-left">
             <SheetTitle>{treating ? `Tratar ${treating.orderNumber}` : "Tratar pedido"}</SheetTitle>
-            <SheetDescription>
-              Marque o que faltou ou avariou por item, registre a exceção ou avance a etapa. Tudo fica na trilha do pedido.
-            </SheetDescription>
           </SheetHeader>
           <TaskDetailPanel
             entry={treatingEntry}

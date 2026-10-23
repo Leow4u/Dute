@@ -574,3 +574,25 @@ outros módulos. Os itens e o ícone de cada um vêm de `lib/inicio-do-wms.ts`.
   - A falha diz o que não carregou.
 - **Na v3.** `/dashboard` entra em `TELAS_DO_WMS_NA_V3`.
 - **Testes.** `home-view.test.tsx` cobre os textos na ordem, só rótulos, a ação principal, o vazio, o carregando, a falha, o financeiro sem a coluna, o ícone e `axe`.
+
+### Parte 4.7c: os Pedidos na v3
+
+Feita em 23/10/2026. A tela é `artifacts/app/src/pages/pedidos.tsx`. As peças comuns estão em
+`components/ui/page-header.tsx` e `queue-list.tsx`, e o `.v3` dos portais em `lib/na-v3.ts`.
+
+- **As peças comuns na v3.** Dentro do `.v3` (`in-[.v3]:`), o título da página, o título do grupo da fila e a linha seguem a v3. A tela que ainda não passou fica como era. O Receber (4.7e) ganha o mesmo de graça.
+- **Os portais.** O diálogo, o alerta, o painel lateral, o menu, o popover e a lista de opções abrem fora do `.v3` da tela no DOM.
+  - O shell diz à tela se ela está na v3 (`NaV3`, pelo contexto do React, que atravessa o portal).
+  - Cada um desses componentes leva o `.v3` junto. Os diálogos de exceção e o painel de tratar o pedido também.
+- **Sem legenda.**
+  - O grupo mostra só o título e a contagem, sem a dica ("coordenação", "armazém", "hoje").
+  - O vazio diz o dado ("Nenhum pedido para separar.").
+  - Os diálogos de recusar, separar e entregar e o painel de tratar não explicam o que vai acontecer.
+  - O motivo da recusa ganhou o rótulo "Motivo", e os campos perderam os exemplos.
+- **Uma ação principal.** Só a primeira linha da fila (aprovar para quem decide, senão separar, senão entregar) tem a ação em vermelho. As outras são secundárias.
+- **Na v3.** `/pedidos` entra em `TELAS_DO_WMS_NA_V3`.
+- **Testes.**
+  - `queue-list.test.tsx` cobre a fila e o cabeçalho na v3 e `axe`.
+  - `na-v3.test.tsx` cobre o shell e os portais.
+  - `pedidos.test.ts` cobre a falta de legenda, o rótulo do motivo e a ação principal.
+  - `order-queue.test.ts` cobre o vazio e a linha principal.
