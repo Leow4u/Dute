@@ -21,8 +21,18 @@ export const ROTA_VEICULOS = "/operacao/veiculos";
 export const ROTA_DEMANDAS = "/operacao/demandas";
 /** A ficha da demanda, aberta pela lista: ?numero=10045 (docs/mockups/OpDemanda.dc.html). */
 export const ROTA_DEMANDA = "/operacao/demanda";
+/** A nova demanda direta (parte 3.5c, docs/mockups/OpDemandaNova.dc.html). */
+export const ROTA_NOVA_DEMANDA = "/operacao/nova-demanda";
 
-export const TELAS_DA_OPERACAO: readonly string[] = [ROTA_OPERACAO, ROTA_HOJE, ROTA_DEMANDAS, ROTA_DEMANDA, ROTA_COLABORADORES, ROTA_VEICULOS];
+export const TELAS_DA_OPERACAO: readonly string[] = [
+  ROTA_OPERACAO,
+  ROTA_HOJE,
+  ROTA_DEMANDAS,
+  ROTA_DEMANDA,
+  ROTA_NOVA_DEMANDA,
+  ROTA_COLABORADORES,
+  ROTA_VEICULOS,
+];
 
 function parametro(busca: string, nome: string): string | null {
   const valor = new URLSearchParams(busca.startsWith("?") ? busca.slice(1) : busca).get(nome)?.trim();

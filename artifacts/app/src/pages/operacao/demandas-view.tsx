@@ -1,7 +1,8 @@
 import { Link } from "wouter";
-import { Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 
 import { Filtro, SeloDoTipo, type OpcaoDeFiltro } from "@/components/operacao/partes";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   ETAPAS_NA_OPERACAO,
@@ -11,7 +12,7 @@ import {
   type LinhaDeDemanda,
 } from "@/lib/operacao/demandas";
 import { ENTRADAS_DA_DEMANDA, ENTRADA_ROTULO, TIPOS_DA_DEMANDA, TIPO_ROTULO } from "@/lib/operacao/hoje";
-import { hrefDaDemanda } from "@/lib/operacao/navegacao";
+import { ROTA_NOVA_DEMANDA, hrefDaDemanda } from "@/lib/operacao/navegacao";
 import { cn } from "@/lib/utils";
 
 /**
@@ -88,11 +89,19 @@ export function DemandasView({
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Demandas</h1>
           {estado === "pronto" ? <p className="text-sm font-medium text-muted-foreground">{resumo}</p> : null}
         </div>
-        <label className="relative block w-full lg:w-80">
-          <span className="sr-only">Buscar demanda, OS ou cliente</span>
-          <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input type="search" value={busca} placeholder="Buscar demanda, OS ou cliente" className="pl-9" onChange={(event) => onBusca(event.target.value)} />
-        </label>
+        <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
+          <label className="relative block w-full lg:w-80">
+            <span className="sr-only">Buscar demanda, OS ou cliente</span>
+            <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input type="search" value={busca} placeholder="Buscar demanda, OS ou cliente" className="pl-9" onChange={(event) => onBusca(event.target.value)} />
+          </label>
+          <Button asChild className="shrink-0">
+            <Link href={ROTA_NOVA_DEMANDA}>
+              <Plus aria-hidden="true" className="size-4" />
+              Nova demanda
+            </Link>
+          </Button>
+        </div>
       </header>
 
       <div className="flex flex-wrap items-center gap-2">

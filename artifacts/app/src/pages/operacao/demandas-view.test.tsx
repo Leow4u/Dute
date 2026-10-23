@@ -79,6 +79,7 @@ describe("Demandas", () => {
         "Demandas",
         "Sexta, 23 de outubro · 14:20 · 2 demandas",
         "Buscar demanda, OS ou cliente",
+        "Nova demanda",
         /^(Tipo|Entrada|Cliente|Etapa)$/,
         /^(Todos os tipos|Todas as entradas|Todos os clientes|Todas as etapas)$/,
         /^(Paraquedas|Emergencial|Planejada|Comercial|Direta|Armazenagem|Itaú Unibanco|Banco Safra)$/,
