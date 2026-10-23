@@ -1,0 +1,242 @@
+# Lançamento da Fase 4: roteiro para publicar no `dute-prod`
+
+Escrito na parte 4.9a (23/10/2026), no fim da Fase 4. É o marco 4 do plano de
+implantação ("Lançamento: WMS na v3, portal com OS, financeiro da
+operação"). A publicação na produção espera o OK do Leonardo; nada aqui é
+disparado sem ele. Sem dado real neste arquivo.
+
+## 1. Estado de hoje
+
+- **Na `main`.** As partes 4.1a a 4.8b, com o desenho e o registro de cada
+  uma em `fase-4-financeiro.md`:
+  - o Financeiro da operação: A faturar, o registro da NF, a cobrança, a via
+    comercial e os relatórios;
+  - o portal com as OS, o comprovante da OS concluída, as NFs dos serviços e
+    o Solicitar OS;
+  - a entrega do pedido de saída do WMS pela Operação e o retorno ao armazém;
+  - os avisos no sino e por e-mail, com os modelos de cada contato;
+  - o shell da Armazenagem e as quatro telas do WMS na v3: Início, Pedidos,
+    Estoque e Receber;
+  - os relatórios da Operação e do Financeiro.
+- **Liberação.**
+  - `FINANCEIRO_AMBIENTES_LIBERADOS` tem só o `dute-homolog`, no app e nas
+    Functions. O Financeiro entra no `dute-prod` pela parte 4.9b, com o OK
+    (seção 6).
+  - A Operação e o Comercial já estão liberados no `dute-prod`. Por isso o
+    portal com as OS, a solicitação, a entrega do WMS e os avisos entram na
+    produção só por publicar a `main`.
+  - O `dute-btg` recusa tudo.
+- **Última publicação de produção.** Foi o commit `fde9ba0` (PR 177), em
+  23/10 às 02:16 UTC. O roteiro da Operação (`operacao-producao.md`, marco
+  3) não foi disparado. A próxima publicação leva juntos os marcos 2, 3 e 4:
+  - a Fase 2 inteira, com o shell e o Início por módulo;
+  - a Fase 3 da parte 3.4a à 3.14;
+  - a Fase 4.
+  - Até a parte 4.3d, foram 80 merges. Confirmar a base antes de disparar.
+- **Ciclos conferidos no emulador.**
+  - `functions/operacao/src/domain/ciclo-do-cliente.integration.test.ts`
+    (parte 4.9a). O cliente pede a OS pelo portal, a coordenação abre a
+    demanda e agenda a OS, e a líder executa e conclui com a assinatura. O
+    Financeiro registra a NF. A rotina dos avisos lê os eventos de verdade e
+    dá o sino e o e-mail de cada passo a quem ligou o modelo. O da conclusão
+    leva ao comprovante, e o da NF só vai a quem lê valor.
+  - `functions/financeiro/src/domain/cobranca.integration.test.ts`. A demanda
+    vai de A faturar a paga, com o pagamento parcial e a NF do portal em
+    cada passo, sem valor nos eventos.
+  - `functions/operacao/src/domain/ciclo.integration.test.ts`, o ciclo da
+    Fase 3.
+  - Os testes de regras: a Operação não lê `faturas`, e o cliente lê só o
+    que é dele (`functions/wms/src/financeiro-faturas.rules.test.ts`,
+    `operacao-*.rules.test.ts`).
+
+## 2. O que muda no `dute-prod` só por publicar a `main`
+
+O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
+
+- **Regras do Firestore.**
+  - `faturas` e `pagamentos` abrem só a quem lê preço. `client_faturas`
+    abre também ao cliente com as faturas no contrato.
+  - `service_requests` abre a quem coordena a Operação e ao cliente com a
+    Operação no contrato.
+  - `client_notifications` abre ao cliente dono e a owner e admin.
+    `email_outbox` abre só a owner e admin. `notification_cursors` não abre
+    pelo navegador. `client_notification_reads/{uid}` é só do próprio login.
+  - O financeiro lê os eventos `nf.*` e `cobranca.*`, como os do faturamento
+    do WMS. Nenhum leva valor.
+  - Ninguém grava pelo navegador em nenhuma delas.
+- **Regras do Storage.**
+  - O anexo da solicitação do portal (`portal/{code}/solicitacoes/`).
+  - O cliente da OS concluída lê a assinatura e as fotos do final (parte
+    4.3c).
+- **Índices.** Dois novos: `events` por `type` e `created_at`, e
+  `client_notifications` por `customer_code` e `created_at`.
+  - O de `events` se constrói sobre a coleção que já existe. Até ficar
+    pronto, a rotina dos avisos falha e tenta de novo a cada 5 minutos.
+- **Functions.** São 114 callables: 82 do WMS, 12 do Comercial, 18 da
+  Operação e 2 do Financeiro.
+  - Do WMS, entram `setOrderDelivery` e `receiveOrderReturn`.
+  - Da Operação, entram as da Fase 3 e `requestService`,
+    `declineServiceRequest`, `openStorageDemand` e `markNotificationsRead`.
+  - Do Financeiro, entram `registerNf` e `advanceFatura`, numa codebase nova
+    (`financeiro`). Recusam no `dute-prod` até a parte 4.9b.
+  - Duas functions agendadas: `runDailyAlerts`, todo dia às 06:00, e
+    `runNotifications`, a cada 5 minutos.
+- **Frontend.**
+  - O shell v3 por módulo, inclusive o da Armazenagem, e as quatro telas do
+    WMS na v3. A BTG passa a ver o Início, Pedidos, Estoque e Receber novos.
+  - Pedidos ganha a entrega: pela Dutelog ou retirada pelo cliente.
+  - O portal ganha Minhas OS, o comprovante, o Solicitar OS e o sino, para o
+    cliente com a Operação no contrato.
+  - A Operação ganha Relatórios.
+  - O shell do Financeiro não aparece: fora da liberação, o card do
+    Financeiro continua no Faturamento do WMS.
+- **Os avisos ligam sozinhos.** A rotina confere a liberação da Operação, que
+  já vale no `dute-prod`.
+  - A primeira rodada só marca o cursor: os eventos de antes não viram aviso.
+  - Sem `RESEND_API_KEY`, o e-mail fica auditado em `email_outbox` e não
+    sai. Só o sino recebe.
+  - O aviso da NF só existe com o Financeiro ligado.
+- **A entrega do WMS.** A entrega pela Dutelog abre a demanda direta e as OS
+  na Operação. A BTG hoje fatura o transporte na fatura do WMS, e a demanda
+  da entrega vai ao Comercial para orçar. Até o Leonardo responder como a
+  entrega fatura (seção 8), o Comercial não orça a demanda da entrega da
+  BTG, para não cobrar duas vezes.
+- **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
+  comprovante sem as fotos.
+- **Papéis.** Nenhum novo.
+- **Conferência do invoker.** Passa a conferir 114 callables, das quatro
+  codebases.
+
+## 3. Antes de publicar (conferir na homologação)
+
+Com o HEAD da `main` verde e publicado no `dute-homolog`, use um owner, um
+interno, um financeiro, um login `campo` ligado a um colaborador e um login
+de cliente. O cliente precisa ter a Operação e as faturas no contrato e um
+contato com os avisos ligados (Comercial › Clientes).
+
+1. **Portal.** Com o cliente, pedir a OS em Minhas OS › Solicitar OS, com um
+   anexo. Ela aparece em Solicitações.
+2. **Operação.** A solicitação aparece em Para planejar. Abrir a demanda por
+   ela e agendar a OS com a equipe e o veículo.
+3. **Campo.** Executar e concluir com a foto do final e a assinatura.
+4. **Sino e fila.** Em até 6 minutos, o sino do portal mostra a solicitação
+   recebida, a OS agendada, em execução e concluída. No console do
+   Firestore, `email_outbox` tem os e-mails auditados.
+5. **Comprovante.** O aviso de OS concluída abre o comprovante, com o feito,
+   quem recebeu, a assinatura e a foto do final. "Baixar PDF" salva só o
+   papel.
+6. **Até a NF.** Revisar a OS, orçar a execução no Comercial e autorizar. A
+   demanda chega a A faturar.
+7. **Financeiro.** Registrar a NF, marcar como enviada, lançar um pagamento
+   parcial e o que quita. A demanda fica Paga.
+   - Em Faturas do portal, o cliente vê a NF com o saldo e depois paga.
+   - O sino mostra "NF emitida".
+8. **Relatórios.** Os da Operação e os do Financeiro abrem, com o Excel e o
+   PDF.
+9. **WMS na v3.** Com o interno, abrir o Início, Pedidos, Estoque e Receber.
+   Em Pedidos, definir a entrega pela Dutelog num pedido e a retirada em
+   outro. Só a pela Dutelog vira demanda na Operação.
+10. **Valores.** O interno e o campo não veem valor em nenhuma tela da
+    Operação, nem no comprovante.
+11. **A BTG.** Com um login da BTG, o portal mostra o estoque, os pedidos e
+    as faturas do WMS como antes. Sem a Operação no contrato, Minhas OS não
+    aparece.
+
+## 4. Publicar
+
+1. **Base.** HEAD da `main` com CI verde e a homologação publicada nele.
+2. **Backup.** PITR de 7 dias e backup diário ligados
+   (`backup-e-recuperacao.md`). Anotar o instante de antes do deploy.
+3. **Janela.** Combinar com a contagem de abertura da BTG, que roda no
+   `dute-prod`. O deploy de functions leva de 11 a 15 minutos, agora com
+   quatro codebases.
+4. **Disparo.** Actions > CI > Run workflow, com `publicar_producao`
+   marcado, do HEAD. O job só vale verde com as conferências do fim:
+   - `check_rules_deployed.sh`;
+   - o invoker das 114 callables;
+   - `check_frontend_deployed.sh`;
+   - o smoke.
+
+## 5. Depois de publicar (a conferência de produção)
+
+1. **As duas rotinas existem:**
+
+   ```powershell
+   cd C:\DEV\Dute
+   gcloud scheduler jobs list --project dute-prod --location southamerica-east1
+   ```
+
+   Precisam aparecer `firebase-schedule-runDailyAlerts-southamerica-east1`
+   e `firebase-schedule-runNotifications-southamerica-east1`.
+2. **Os índices ficaram prontos.** Os dois novos aparecem com `READY`:
+
+   ```powershell
+   cd C:\DEV\Dute
+   gcloud firestore indexes composite list --project dute-prod
+   ```
+
+3. **A primeira rodada dos avisos.** A primeira linha diz `iniciou: true`. As
+   seguintes não têm erro:
+
+   ```powershell
+   cd C:\DEV\Dute
+   gcloud functions logs read runNotifications --gen2 --region southamerica-east1 --project dute-prod --limit 20
+   ```
+
+4. **O Financeiro continua desligado.** `/financeiro` não abre, e o card do
+   Financeiro leva ao Faturamento do WMS.
+5. **A BTG intacta.** Portal, faturas do WMS e contagem de abertura
+   funcionando. Pedidos na v3 com o mesmo fluxo de aprovar, separar e
+   entregar.
+6. **Treinamento**, como o plano pede a cada marco: a coordenação nos
+   Relatórios e na entrega do WMS, e o cliente com a Operação no Minhas OS e
+   no comprovante.
+
+## 6. Ligar o Financeiro no `dute-prod` (parte 4.9b, com o OK)
+
+Um PR pequeno, depois da conferência da seção 5:
+
+1. Pôr `dute-prod` nas duas listas `FINANCEIRO_AMBIENTES_LIBERADOS`, em
+   `artifacts/app/src/lib/liberacao.ts` e em
+   `functions/financeiro/src/domain/liberacao.ts`.
+   `platform-lists.test.ts` trava as duas iguais.
+2. Atualizar os testes que esperam a recusa na produção:
+   - `functions/financeiro/src/domain/liberacao.test.ts`;
+   - `functions/financeiro/src/domain/profile.integration.test.ts`;
+   - os do app que leem a liberação.
+3. Publicar e conferir:
+   - `/financeiro` abre para owner, admin e financeiro, e o card leva a ele;
+   - `registerNf` e `advanceFatura` respondem;
+   - o primeiro registro de NF dá o aviso "NF emitida" a quem lê valor.
+
+## 7. Como desligar
+
+- **O Financeiro.** Tirar `dute-prod` das duas listas e publicar de novo.
+  As telas somem, as callables recusam, e o que foi gravado continua no
+  banco.
+- **Só os avisos:**
+
+  ```powershell
+  cd C:\DEV\Dute
+  gcloud scheduler jobs pause firebase-schedule-runNotifications-southamerica-east1 --project dute-prod --location southamerica-east1
+  ```
+
+  Ao religar (`resume`), a rotina continua do cursor, sem repetir aviso.
+- **O envio de e-mail**, quando ligado: tirar o segredo da `runNotifications`
+  num PR. Os e-mails voltam a ficar auditados.
+- **Uma tela do WMS na v3.** Tirar o caminho de `TELAS_DO_WMS_NA_V3`
+  (`artifacts/app/src/lib/wms-v3.ts`) e publicar. A tela volta ao visual de
+  antes; o shell continua o v3.
+- **Tudo da Operação**, como em `operacao-producao.md`, seção 6. Os avisos
+  param junto.
+
+## 8. O que espera o Leonardo
+
+- O OK para a publicação, que leva os marcos 2, 3 e 4.
+- O OK para ligar o Financeiro no `dute-prod` (parte 4.9b).
+- A conta no Resend, o domínio verificado na Hostinger e a chave, para o
+  e-mail sair (`fase-4-financeiro.md`, parte 4.6a).
+- A entrega do WMS fatura pela demanda ou na fatura mensal do WMS?
+  (`fase-4-financeiro.md`, decisões).
+- A receita por serviço (pergunta 26 do plano).
+- As perguntas 12 a 14 da Fase 3, em `operacao-producao.md`, seção 7.

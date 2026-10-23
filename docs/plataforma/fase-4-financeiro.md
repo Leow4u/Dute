@@ -170,7 +170,8 @@ pelo seletor.
 
 `FINANCEIRO_AMBIENTES_LIBERADOS = ["dute-homolog"]`, no app
 (`lib/liberacao.ts`) e nas callables, travada por `platform-lists.test.ts`. O
-`dute-prod` entra no lançamento (parte 4.9), com o OK do Leonardo.
+`dute-prod` entra no lançamento (parte 4.9b), com o OK do Leonardo, pelo
+roteiro em `lancamento-producao.md`.
 
 Fora da liberação, nada muda: o card do Financeiro e a casa do financeiro
 continuam no Faturamento do WMS, e as rotas `/financeiro` não existem
@@ -207,7 +208,8 @@ continuam no Faturamento do WMS, e as rotas `/financeiro` não existem
 | 4.7e | WMS na v3: Receber | `theme-colors.test.ts`; render e `axe` |
 | 4.8a | Operação › Relatórios: OS por período, cliente e tipo, produtividade da equipe, uso dos veículos e solicitações do portal, com Excel e PDF | Nenhum valor; no prazo pela janela; textos listados; `axe` |
 | 4.8b | Financeiro › Relatórios: receita por cliente, NFs emitidas por mês e contas a receber, com Excel e PDF | Só quem lê preço abre; o estorno fica fora da receita; `axe` |
-| 4.9 | Lançamento em produção | Conferência de produção |
+| 4.9a | O roteiro do lançamento (`lancamento-producao.md`) e o ciclo do cliente no emulador, do portal ao comprovante e à NF, com os avisos | O aviso de cada passo sai dos eventos gravados pelas callables de verdade |
+| 4.9b | Com o OK do Leonardo: o `dute-prod` nas listas do Financeiro, depois da conferência de produção | `platform-lists.test.ts`; a recusa na produção vira o atendimento |
 
 ## Registro
 
@@ -724,3 +726,23 @@ Feita em 23/10/2026. As regras estão em `artifacts/app/src/lib/financeiro/relat
   - `relatorios.test.ts` cobre o período, o estorno fora da receita, as canceladas fora, a idade de cada NF, cada tabela, o resumo e a planilha.
   - `relatorios-view.test.tsx` cobre os textos na ordem, o período só onde vale, o relatório marcado, as colunas dos números e `axe`.
   - `navegacao.test.ts`, `modules.test.ts` e `ambientes.test.ts` cobrem o menu, a rota e o papel.
+
+### Parte 4.9a: o roteiro do lançamento e o ciclo do cliente
+
+Feita em 23/10/2026. O roteiro está em `docs/plataforma/lancamento-producao.md`:
+o estado de hoje, o que muda no `dute-prod` só por publicar a `main`, o que
+conferir na homologação, a publicação, a conferência de produção, a parte
+4.9b, como desligar e o que espera o Leonardo.
+
+- **A próxima publicação leva três marcos.** A produção serve o commit `fde9ba0` (PR 177). O roteiro da Operação (marco 3) não foi disparado, então os marcos 2, 3 e 4 vão juntos.
+- **O que entra sem o Financeiro.** O portal com as OS, o Solicitar OS, os avisos, a entrega do WMS e as telas do WMS na v3 dependem da liberação da Operação, que já vale no `dute-prod`.
+  - Os avisos ligam com a publicação. A primeira rodada só marca o cursor, e o e-mail fica auditado até a chave do Resend.
+  - A entrega do WMS pela Dutelog abre demanda. Até a resposta sobre o faturamento da entrega, o Comercial não orça a da BTG.
+- **O ciclo do cliente no emulador** (`functions/operacao/src/domain/ciclo-do-cliente.integration.test.ts`).
+  - O cliente pede pelo portal, a coordenação abre a demanda direta e agenda a OS, e a líder executa no celular e conclui com a assinatura.
+  - A NF entra como o Financeiro a grava: a NF do portal e o evento, no formato travado em `fatura.integration.test.ts`.
+  - A rotina dos avisos lê os eventos gravados pelas callables de verdade. Ela dá um aviso por passo: a solicitação, a OS agendada, em execução e concluída, e a NF.
+  - O e-mail vai a quem ligou o modelo. O da NF, que tem valor, só vai a quem lê valor, e o contato inativo fica de fora.
+  - O da conclusão leva ao comprovante, e a conclusão guarda a assinatura e a foto do final.
+  - Nenhum aviso ou e-mail de OS leva valor, endereço ou o que o cliente escreveu. Rodar de novo não repete nada.
+- **Ficou registrado no teste.** A OS que nasce de item livre do portal não tem serviço da tabela, e o aviso diz só o dia e o horário (pergunta 12 do plano, o tipo da OS).
