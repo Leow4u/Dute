@@ -112,7 +112,7 @@ Leonardo.
 
 | Parte | Entrega | Teste que falha antes |
 |---|---|---|
-| 5.1a | A codebase `functions/core` (liberação, papéis, perfil, idempotência, eventos), no `firebase.json`, no CI e na publicação; a rotina `runMeasures` com o cursor e a medida do tempo por item | A medida bate com as OS revisadas de um caso conhecido; o cliente A não entra na medida do cliente B |
+| 5.1a | A codebase `functions/core` com a liberação, no `firebase.json`, no CI e na publicação; a rotina `runMeasures` com o cursor e a medida do tempo por item. O perfil e a idempotência entram com a primeira callable (5.2a) | A medida bate com as OS revisadas de um caso conhecido; o cliente A não entra na medida do cliente B |
 | 5.1b | As medidas do erro do planejamento, dos itens que passam do planejado e do prazo de aprovação; as regras de `ai_measures` | Cada medida bate com o caso conhecido; o cliente não lê nenhuma |
 | 5.2a | `suggestDuration` e `answerSuggestion`, com `ai_suggestions`; a rotina grava o valor real quando a OS é revisada | Sugestão só com o mínimo de execuções; a base gravada; nada grava na OS |
 | 5.2b | A duração sugerida e a divisão em OS no Planejar OS, com a base e o aviso de plano otimista | Textos listados; aceitar só preenche; `axe` |
@@ -138,3 +138,31 @@ Leonardo.
   (o vetor é o dos itens) e guardar o resumo em texto para o Agent Dute.
 
 ## Registro
+
+### Parte 5.1a: a codebase do núcleo e o tempo por item
+
+Feita em 23/10/2026. As contas estão em `functions/core/src/domain/medidas.ts`;
+a rotina em `medidas-gravacao.ts`.
+
+- **A codebase.** `functions/core`, codebase `core`, no molde do Financeiro.
+  - Entra no `firebase.json`, no CI (`core-unit` e `core-integration`) e na publicação.
+  - A liberação é `MEMORIA_AMBIENTES_LIBERADOS`, só o `dute-homolog`, igual à do app (`platform-lists.test.ts`).
+  - Ainda não tem callable. O perfil e a idempotência entram com a primeira, na parte 5.2a.
+- **A rotina `runMeasures`**, a cada 15 minutos, uma instância, só com a liberação.
+  - Lê os eventos `os.reviewed` e `os.reopened` depois do cursor (`ai_cursors/medidas`). Só entra o evento gravado há mais de um minuto, como na dos avisos.
+  - Com evento novo, recalcula do zero, a partir das OS revisadas. A medida que não mudou não se grava de novo. A do item que ficou sem OS sai.
+  - Na primeira vez, recalcula com o histórico que existe e marca o cursor.
+- **A amostra.** A OS revisada de serviço, com a equipe, o tempo de trabalho e algum item feito.
+  - O tempo de trabalho vai da chegada na origem ao fim, menos o trajeto até o destino.
+  - O feito é o corrigido na revisão, senão o registrado no local.
+  - O item livre, sem LPU, ocupa o tempo dele na OS, mas não vira medida.
+- **O ajuste.** O tempo de cada OS se reparte pelos itens na proporção do tempo típico de cada um, até estabilizar. Começa pela quantidade.
+  - Itens que sempre aparecem juntos, na mesma proporção, dividem o tempo pela quantidade até uma OS os separar.
+- **A medida** (`ai_measures`, tipo `duracao_item`), uma por item e cliente e uma geral por item.
+  - Guarda o homem-minuto por unidade, as execuções, as unidades e as dez OS mais recentes.
+  - A do cliente só usa as OS dele. O id sai do tipo, do cliente e do item.
+- **Zeragem.** `tools/full_reset_btg.py` preserva `ai_measures` e `ai_cursors`.
+- **Testes.**
+  - `medidas.test.ts` resolve à mão um caso de dois clientes: no Itaú, A e B em 20; no Safra, A em 30; na geral, A em 25 e B em 17,5. Cobre também o tempo de trabalho, a amostra, a ordem das OS e o item livre.
+  - `medidas.integration.test.ts` cobre a primeira vez, o evento que não muda, o do último minuto, a OS reaberta e a medida que não mudou.
+  - `callables.test.ts` trava a rotina e a falta de callable.

@@ -78,3 +78,19 @@ export function financeiroLiberado(projectId: string | null | undefined): boolea
 
 /** Valor deste build, para as telas do Financeiro. */
 export const FINANCEIRO_LIBERADO = financeiroLiberado(import.meta.env.VITE_FIREBASE_PROJECT_ID);
+
+/**
+ * Liberação própria da memória da Dute (docs/plataforma/fase-5-memoria.md).
+ * A rotina e as callables de functions/core recusam fora de
+ * MEMORIA_AMBIENTES_LIBERADOS (functions/core/src/domain/liberacao.ts,
+ * travada igual a esta por platform-lists.test.ts). Só a homologação atende
+ * até o fim da Fase 5, com o OK do Leonardo.
+ */
+export const MEMORIA_AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog"];
+
+export function memoriaLiberada(projectId: string | null | undefined): boolean {
+  return MEMORIA_AMBIENTES_LIBERADOS.includes(String(projectId ?? "").trim());
+}
+
+/** Valor deste build, para as sugestões da memória nas telas. */
+export const MEMORIA_LIBERADA = memoriaLiberada(import.meta.env.VITE_FIREBASE_PROJECT_ID);

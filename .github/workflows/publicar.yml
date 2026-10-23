@@ -152,6 +152,7 @@ jobs:
             functions/comercial/package-lock.json
             functions/operacao/package-lock.json
             functions/financeiro/package-lock.json
+            functions/core/package-lock.json
 
       # O predeploy de cada codebase (firebase.json) roda tsc na pasta dela, que
       # precisa do node_modules local.
@@ -169,6 +170,10 @@ jobs:
 
       - name: Install functions deps (Financeiro)
         working-directory: functions/financeiro
+        run: npm ci
+
+      - name: Install functions deps (núcleo)
+        working-directory: functions/core
         run: npm ci
 
       - id: auth
@@ -195,7 +200,7 @@ jobs:
         run: gcloud services enable cloudscheduler.googleapis.com --project "${PROJECT_ID}"
 
       # Sempre o lote inteiro (todas as codebases do firebase.json: "default", o
-      # WMS, "comercial", "operacao" e "financeiro"), nunca "firebase deploy --only functions:nome": foi
+      # WMS, "comercial", "operacao", "financeiro" e "core"), nunca "firebase deploy --only functions:nome": foi
       # deploy parcial que causou o incidente de 03/09/2026 (8 callables sem
       # invoker, um mês sem ninguém perceber). Timeout de descoberta já subido de
       # cara — na máquina do Leonardo precisou de 60-180s dependendo do dia (ver

@@ -119,6 +119,11 @@ documentação de produto e operação está em `docs/`.
     financeiro) e grava por `runIdempotent` (recibo em
     `financeiro_operations`) com o evento `nf.*` sem valor. Desenho e registro:
     `docs/plataforma/fase-4-financeiro.md`.
+  - `functions/core`: Functions do núcleo (Fase 5), codebase `core`. Hoje a
+    memória da Dute: a rotina `runMeasures` (a cada 15 minutos) recalcula
+    `ai_measures` a partir das OS revisadas. Liberação própria
+    `MEMORIA_AMBIENTES_LIBERADOS` (só o `dute-homolog`). O Agent Dute muda
+    para cá na parte 5.5. Usa **npm**, como as outras codebases.
   - `lib/dominio`: tipos e regras que o app e as Functions precisam ter iguais.
 - **IA native.** Todo módulo novo grava desde o primeiro dia o que a IA precisa
   (eventos em `events`, tempos e medidas) e respeita o isolamento por cliente. A
@@ -243,6 +248,10 @@ npm --prefix functions/comercial ci
 npm --prefix functions/comercial run test:unit         # node --test
 npm --prefix functions/comercial run test:integration  # emulador Firestore, exige Java 21
 npm --prefix functions/comercial run test:critical     # os dois acima
+
+npm --prefix functions/core ci
+npm --prefix functions/core run test:unit              # node --test
+npm --prefix functions/core run test:integration       # emulador Firestore, exige Java 21
 ```
 
 Teste novo das Functions só roda se entrar na lista fixa do `test:unit` ou do
