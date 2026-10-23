@@ -114,7 +114,7 @@ Seguem a recomendação até a resposta do Leonardo:
 | 7.2c | Receber e estornar a fatura da armazenagem marcam a competência do WMS, com o evento; o pagar do WMS sai onde o Financeiro está liberado | A competência fica paga uma vez; o estorno volta a emitida |
 | 7.3a | O item da LPU de cobrança ligado ao catálogo do Comercial tira o preço da tabela do cliente vigente no último dia da competência | O item sem ligação calcula igual (a régua da 7.1); sem tabela ou com duas, recusa; a foto guarda a tabela |
 | 7.3b | Levar a LPU de cobrança de um cliente ao Comercial: os itens no catálogo, a tabela "Armazenagem" com os preços de hoje e a ligação de cada item, numa transação | A fatura calcula igual antes e depois da passagem |
-| 7.3c | A Tabela de preços do WMS mostra de onde vem o preço e leva o cliente ao Comercial | O item ligado não edita o preço no WMS |
+| 7.3c | A Tabela de preços do WMS mostra de onde vem o preço | O item ligado não edita o preço no WMS |
 | 7.4 | A integração da NF e a exportação contábil, com o fornecedor escolhido | Emissão idempotente; a falha não marca a fatura como emitida |
 | 7.5 | Contratos e Autorizações no shell do Financeiro, só leitura; a perda por prazo de faturamento | O Financeiro lê sem editar itens nem preço |
 
@@ -368,3 +368,15 @@ Feita em 23/10/2026, na carga `functions/comercial/src/cargas/armazenagem.ts`
   - `cargas/armazenagem.integration.test.ts`: exportar, carregar e ligar no
     emulador, o dry-run, a repetição e as recusas sem gravar;
   - `billing-callables.integration.test.ts`, no WMS: a fatura igual.
+
+### Parte 7.3c: o preço do Comercial na Tabela de preços do WMS
+
+Feita em 23/10/2026, em `artifacts/app/src/lib/preco-da-cobranca.ts` e na
+tela Faturamento › Tabela de preços.
+
+- O item ligado (`lpu_item_id`) mostra "Tabela do Comercial" no lugar do
+  valor do WMS, que não vale mais para ele. O ad valorem segue mostrando a
+  taxa, ligado ou não.
+- No formulário, o valor do item ligado não se edita, e salvar não manda o
+  `valor_unit`. O servidor já recusava (parte 7.3a).
+- **Teste:** `lib/preco-da-cobranca.test.ts`.
