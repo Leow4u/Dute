@@ -202,3 +202,31 @@ describe("concluir a OS", () => {
     assert.equal((await eventos("os.completed")).length, 0);
   });
 });
+
+describe("a volta da entrega do WMS (parte 4.5d)", () => {
+  it("a conclusão marca o retorno a receber no pedido de saída, com o evento; o já recebido não volta a ser esperado", async () => {
+    await db.collection(SERVICE_ORDERS_COLLECTION).doc("10045-01").update({ retorno_ao_armazem: { order_id: "ord_118", order_number: "PED-0118" } });
+    await db.doc("orders/ord_118").set({ id: "ord_118", customer_code: "ITAU", order_number: "PED-0118", status: "ENTREGUE" });
+    await fotoDoFinal();
+    await completeServiceOrderFor(db, lider, conclusao(), conferir, AGORA);
+    assert.deepEqual((await db.doc("orders/ord_118").get()).get("retorno"), {
+      status: "a_receber",
+      os: "10045-01",
+      demanda: "10045",
+      chegou_em: "2026-10-22T20:50:00.000Z",
+      return_id: null,
+    });
+    const [devido] = await eventos("os.warehouse_return_due");
+    assert.deepEqual(devido.payload, { id: "10045-01", demanda: "10045", instante: "2026-10-22T20:50:00.000Z", pedido: "ord_118" });
+  });
+
+  it("o retorno já recebido fica como está; a OS sem retorno não toca o pedido", async () => {
+    await db.collection(SERVICE_ORDERS_COLLECTION).doc("10045-01").update({ retorno_ao_armazem: { order_id: "ord_118", order_number: "PED-0118" } });
+    const recebido = { status: "recebido", os: "10045-01", demanda: "10045", chegou_em: "2026-10-21T20:00:00.000Z", return_id: "ret_1" };
+    await db.doc("orders/ord_118").set({ id: "ord_118", customer_code: "ITAU", status: "ENTREGUE", retorno: recebido });
+    await fotoDoFinal();
+    await completeServiceOrderFor(db, lider, conclusao(), conferir, AGORA);
+    assert.deepEqual((await db.doc("orders/ord_118").get()).get("retorno"), recebido);
+    assert.equal((await eventos("os.warehouse_return_due")).length, 0);
+  });
+});

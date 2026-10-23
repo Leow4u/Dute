@@ -237,3 +237,17 @@ describe("a entrega do pedido de saída (parte 4.5a)", () => {
   });
 });
 
+describe("o retorno do pedido de saída (parte 4.5d)", () => {
+  it("o pedido vem do caminho e o que voltou do corpo, para receiveOrderReturn", async () => {
+    const route = functionRoute("/api/orders/ord_118/return", "POST");
+    expect(route?.name).toBe("receiveOrderReturn");
+    const items = [{ sku_code: "BTG-EST-1", client_item_code: "EST-1", quantity: 12 }];
+    expect(await route?.payload("/api/orders/ord_118/return", { body: JSON.stringify({ items, notes: " riscado ", idempotency_key: "k1" }) })).toEqual({
+      order_id: "ord_118",
+      items,
+      notes: "riscado",
+      idempotency_key: "k1",
+    });
+  });
+});
+

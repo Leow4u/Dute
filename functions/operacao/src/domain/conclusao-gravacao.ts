@@ -1,6 +1,7 @@
-import type { Firestore } from "firebase-admin/firestore";
+import { FieldValue, type Firestore } from "firebase-admin/firestore";
 
 import { caminhoDaAssinatura, concluirOs, interpretarConclusao } from "./conclusao.js";
+import { ORDERS_COLLECTION, retornoAoArmazem, retornoNoPedido } from "./demanda-do-armazem.js";
 import { createOperacaoEvent } from "./events.js";
 import { exigirQuemExecuta, lerParaRegistrar, type ResultadoDoRegistro } from "./execucao-gravacao.js";
 import { fotosLidas } from "./fotos.js";
@@ -17,6 +18,10 @@ import type { OperacaoProfile } from "./profile.js";
  * `os.step_recorded` (o Fim registrado aqui), `os.completed` e o aceite,
  * `os.signed` ou `os.completed_without_acceptance`. O nome e o documento do
  * responsável ficam só na OS.
+ *
+ * A OS de volta da entrega do WMS (`retorno_ao_armazem`, parte 4.5d) marca,
+ * na mesma transação, o retorno a receber no pedido de saída: o caminhão
+ * chegou ao armazém e o WMS confere e recebe o que voltou (`os.warehouse_return_due`).
  */
 export async function completeServiceOrderFor(
   db: Firestore,
@@ -33,6 +38,9 @@ export async function completeServiceOrderFor(
     { kind: "os_complete", scope: { numero: pedido.numero }, idempotency_key: pedido.idempotency_key, input: pedido, actor: ator(caller) },
     async (transaction, { operationId }) => {
       const { ref, os, execucao, itens, data: bruto, contexto } = await lerParaRegistrar(transaction, db, pedido.numero, caller, agora());
+      const retorno = retornoAoArmazem(bruto);
+      const pedidoRef = retorno ? db.collection(ORDERS_COLLECTION).doc(retorno.order_id) : null;
+      const pedidoSnap = pedidoRef ? await transaction.get(pedidoRef) : null;
       const { conclusao, etapas, fim, fotosDoFinal } = concluirOs(os, { etapas: execucao.etapas, itens, fotos: fotosLidas(bruto), assinatura }, pedido, contexto);
       const status: StatusDaOs = "em_revisao";
       const edicao = os.edicao + 1;
@@ -62,6 +70,11 @@ export async function completeServiceOrderFor(
         createOperacaoEvent(transaction, db, { ...comum, type: "os.signed", payload: base });
       } else {
         createOperacaoEvent(transaction, db, { ...comum, type: "os.completed_without_acceptance", payload: base });
+      }
+      const noPedido = pedidoRef && pedidoSnap?.exists ? retornoNoPedido(pedidoSnap.data() ?? {}, os, conclusao.instante) : null;
+      if (pedidoRef && noPedido) {
+        transaction.update(pedidoRef, { retorno: noPedido, updated_at: FieldValue.serverTimestamp() });
+        createOperacaoEvent(transaction, db, { ...comum, type: "os.warehouse_return_due", payload: { id: os.numero, demanda: os.demanda, instante: conclusao.instante, pedido: pedidoRef.id } });
       }
       return { target_id: os.numero, result: { numero: os.numero, edicao, status } };
     },

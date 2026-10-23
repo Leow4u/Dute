@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { entregaDoPedido, instanteDeSaoPaulo, interpretarDemandaDoArmazem, itensDaEntrega, pedidoDoWms, tituloDaEntrega } from "./demanda-do-armazem.js";
+import { entregaDoPedido, instanteDeSaoPaulo, interpretarDemandaDoArmazem, itensDaEntrega, pedidoDoWms, retornoAoArmazem, retornoNoPedido, tituloDaEntrega } from "./demanda-do-armazem.js";
 
 /**
  * A entrega do pedido de saída pela Dutelog na Operação (parte 4.5b): só a
@@ -66,3 +66,15 @@ describe("a entrega do pedido na Operação", () => {
     assert.equal(interpretarDemandaDoArmazem({ idempotency_key: "k", order_id: "ord_118" }).order_id, "ord_118");
   });
 });
+
+describe("o retorno ao armazém (parte 4.5d)", () => {
+  it("a volta sabe o pedido; a conclusão marca a receber, menos o que já foi recebido", () => {
+    assert.deepEqual(retornoAoArmazem({ retorno_ao_armazem: { order_id: "ord_118", order_number: "PED-0118" } }), { order_id: "ord_118", order_number: "PED-0118" });
+    assert.equal(retornoAoArmazem({}), null);
+    assert.equal(retornoAoArmazem({ retorno_ao_armazem: { order_id: "a/b" } }), null);
+    const os = { numero: "10050-02", demanda: "10050" };
+    assert.deepEqual(retornoNoPedido({}, os, "2026-10-30T21:40:00.000Z"), { status: "a_receber", os: "10050-02", demanda: "10050", chegou_em: "2026-10-30T21:40:00.000Z", return_id: null });
+    assert.equal(retornoNoPedido({ retorno: { status: "recebido" } }, os, "2026-10-30T21:40:00.000Z"), null);
+  });
+});
+
