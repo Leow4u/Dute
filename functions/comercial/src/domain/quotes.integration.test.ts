@@ -978,3 +978,33 @@ describe("enviar para aprovação, devolver, aprovar e editar", () => {
     );
   });
 });
+
+describe("a vistoria da Operação na montagem (parte 3.11e)", () => {
+  it("o orçamento guarda a vistoria cujos itens carregou: só a enviada para a demanda", async () => {
+    const { numero } = await saveQuoteFor(db, comercial, criar(), { agora: JUNHO });
+    await db.doc(`demands/${numero}`).update({
+      vistoria: { os: `${numero}-01`, enviada_em: "2026-06-20T14:00:00.000Z", ambientes: [], itens: [{ lpu_item_id: "lpu_mesa", item: "Mesa", unidade: "UN", quantidade: "30" }] },
+    });
+    const atualizar = (extra: Record<string, unknown>, edicao: number) =>
+      saveQuoteFor(db, comercial, { action: "update", request_id: key(), numero, expected_edicao: edicao, ...extra }, { agora: JUNHO });
+    await rejeita(atualizar({ vistoria_os: `${numero}-02` }, 1), "failed-precondition", /não é a enviada pela Operação/);
+    await rejeita(atualizar({ vistoria_os: "x" }, 1), "invalid-argument", /OS da vistoria inválida/);
+    const salvo = await atualizar(
+      {
+        vistoria_os: `${numero}-01`,
+        linhas: [
+          { origem: "tabela", lpu_item_id: "lpu_mesa", quantidade: "30" },
+          { origem: "tabela", lpu_item_id: "lpu_cadeira", quantidade: "48" },
+        ],
+      },
+      1,
+    );
+    assert.equal(salvo.edicao, 2);
+    assert.equal((await doc(`quotes/${numero}`)).vistoria_os, `${numero}-01`);
+    const atualizado = (await eventos()).find((evento) => evento.type === "quote.updated");
+    assert.equal((atualizado?.payload as Record<string, unknown>).vistoria_os, `${numero}-01`);
+    // Sem o campo, a vistoria marcada fica.
+    await atualizar({ titulo: "Mudança de layout · 12º andar e 13º" }, 2);
+    assert.equal((await doc(`quotes/${numero}`)).vistoria_os, `${numero}-01`);
+  });
+});

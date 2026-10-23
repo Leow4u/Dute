@@ -9,6 +9,7 @@ import {
   type PendenciasDoInicio,
 } from "./autorizacoes";
 import { ETAPAS_COM_ADITIVO_A_FAZER, aditivoAFazer, aditivoPedido, type AditivoAFazer } from "./aditivos-da-operacao";
+import { ETAPAS_COM_VISTORIA_A_USAR, vistoriaAUsar, vistoriaDaDemanda, type VistoriaAUsar } from "./vistoria-da-operacao";
 import { cadastroDoDocumento, hojeLocal, type CadastroComercial } from "./clientes";
 import { alertasParaOInicio, contratoDoRegistro, nomesDosClientes, type AlertaDoInicio, type Contrato } from "./contratos";
 import { orcamentosParaOInicio, type OrcamentoParaAprovarNoInicio } from "./aprovar";
@@ -220,4 +221,17 @@ export async function lerAditivosAFazer(): Promise<AditivoAFazer[]> {
     .map((row, indice) => aditivoAFazer(row.id, row.data(), quotes[indice].exists() ? quotes[indice].data() : null))
     .filter((aditivo): aditivo is AditivoAFazer => aditivo !== null)
     .sort((a, b) => a.pedidoEm.localeCompare(b.pedidoEm));
+}
+
+/** As vistorias que a Operação enviou e o orçamento ainda não carregou, a mais antiga primeiro (parte 3.11e). */
+export async function lerVistoriasAUsar(): Promise<VistoriaAUsar[]> {
+  const db = firestore;
+  if (!db) throw new Error("Firebase não configurado.");
+  const demandas = await getDocs(query(collection(db, "demands"), where("etapa", "in", [...ETAPAS_COM_VISTORIA_A_USAR])));
+  const comVistoria = demandas.docs.filter((row) => vistoriaDaDemanda(row.data()) !== null);
+  const quotes = await Promise.all(comVistoria.map((row) => getDoc(doc(db, "quotes", row.id))));
+  return comVistoria
+    .map((row, indice) => vistoriaAUsar(row.id, row.data(), quotes[indice].exists() ? quotes[indice].data() : null))
+    .filter((vistoria): vistoria is VistoriaAUsar => vistoria !== null)
+    .sort((a, b) => a.enviadaEm.localeCompare(b.enviadaEm));
 }

@@ -1125,3 +1125,22 @@ Feita em 23/10/2026, no app da Operação e do campo.
 - **Registrar andamento.** Na vistoria, só a etapa (saída do pátio e
   chegada) e a ocorrência; os itens, a conclusão e o Fim não, porque a
   vistoria vai ao Comercial pelo celular.
+
+### Parte 3.11e: a vistoria no Comercial
+
+Feita em 23/10/2026. Regras em `lib/comercial/vistoria-da-operacao.ts`.
+
+- **Na montagem.** O orçamento mostra "Vistoria da Operação": a OS e a hora
+  do envio, os itens levantados (somados), o que a tabela não precifica
+  ("Fora da tabela", para lançar à mão), os ambientes com as fotos (o
+  comercial lê as da OS de vistoria), as medidas, o acesso e as
+  observações. Sem valor.
+- **Carregar itens no orçamento.** No rascunho, o botão põe os itens nas
+  linhas pela tabela: o item que já está numa linha da tabela fica com a
+  quantidade levantada; o outro entra numa linha nova. Ao salvar, o
+  orçamento guarda a vistoria que carregou (`vistoria_os`); o servidor
+  confere que é a enviada para a demanda e o evento `quote.updated` leva a
+  OS. Carregada, o cartão diz "Itens carregados no orçamento".
+- **No Início.** "Vistoria concluída" (cliente, itens levantados e o dia do
+  envio) espera, na montagem, até o orçamento carregar os itens dela. Uma
+  vistoria nova, enviada depois, espera de novo. Owner, admin e comercial.

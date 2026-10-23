@@ -5,6 +5,8 @@ import { Router } from "wouter";
 import { contatoDoDocumento, localDoDocumento } from "@/lib/comercial/clientes";
 import { acoesDepoisDoEnvio, type ItemParaAcoes } from "@/lib/comercial/depois-do-envio";
 import { acoesDoOrcamento, adicionarDaTabela, catalogoDaTabela, formDoOrcamento, type FormOrcamento } from "@/lib/comercial/montar";
+import { vistoriaDaDemanda } from "@/lib/comercial/vistoria-da-operacao";
+import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 
 import {
   EstadoDoOrcamento,
@@ -611,5 +613,57 @@ describe("montar orçamento depois do envio (parte 12b)", () => {
       "Revisar",
       "Perdido",
     ]);
+  });
+});
+
+describe("a vistoria da Operação na montagem (parte 3.11e)", () => {
+  const VISTORIA = vistoriaDaDemanda({
+    vistoria: {
+      os: "10045-01",
+      enviada_em: "2026-10-22T18:40:00.000Z",
+      ambientes: [{ nome: "Recepção", itens: [{ lpu_item_id: "lpu_cad_tran", item: "Cadeira giratória", unidade: "UN", quantidade: "64" }], fotos: ["os/10045-01/fotos/ft_a000000000000001.jpg"] }],
+      itens: [
+        { lpu_item_id: "lpu_cad_tran", item: "Cadeira giratória", unidade: "UN", quantidade: "64" },
+        { lpu_item_id: "lpu_cofre", item: "Cofre", unidade: "VB", quantidade: "1" },
+      ],
+      medidas: [{ nome: "Porta", valor: "0,90 m" }],
+      acesso: { horario_de_carga: "Depois das 18h", vaga_de_carga: null },
+      observacoes: "Elevador de serviço só até as 19h.",
+    },
+  })!;
+  const vistoria = (overrides: Partial<MontarViewProps> & { form?: FormOrcamento } = {}) =>
+    render({ dados: { ...DADOS, vistoria: VISTORIA }, fotosDaVistoria: { "os/10045-01/fotos/ft_a000000000000001.jpg": "https://exemplo.test/foto.jpg" }, ...overrides });
+
+  it("os itens levantados, o fora da tabela, os ambientes com as fotos, as medidas e o acesso; carregar no rascunho", async () => {
+    const html = vistoria();
+    const lidos = texts(html);
+    const inicio = lidos.indexOf("Vistoria da Operação");
+    expect(lidos.slice(inicio, inicio + 13)).toEqual([
+      "Vistoria da Operação",
+      "OS 10045-01 · 22/10 15:40",
+      "64 Cadeira giratória · 1 vb Cofre",
+      "Fora da tabela · 1 vb Cofre",
+      "Carregar itens no orçamento",
+      "Recepção",
+      "64 Cadeira giratória",
+      "Porta",
+      "0,90 m",
+      "Horário de carga",
+      "Depois das 18h",
+      "Elevador de serviço só até as 19h.",
+      expect.any(String),
+    ]);
+    expect(html).toContain('alt="Recepção · foto 1"');
+    // A ação principal da tela continua uma só (Enviar para aprovação).
+    expect(html.match(/bg-primary text-primary-foreground/g)).toHaveLength(1);
+    expect(html).not.toMatch(/Vistoria da Operação[\s\S]*R\$[\s\S]*Carregar itens/);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("carregada, diz que os itens estão no orçamento; fora do rascunho, não oferece carregar", () => {
+    expect(texts(vistoria({ form: { ...FORM, vistoriaOs: "10045-01" } }))).toContain("Itens carregados no orçamento");
+    const aprovar = vistoria({ acoes: acoesDoOrcamento({ status: "para_aprovar", role: "owner", uid: "u-leo", autorUid: "u-gui" }) });
+    expect(texts(aprovar)).not.toContain("Carregar itens no orçamento");
+    expect(texts(aprovar)).toContain("Vistoria da Operação");
   });
 });
