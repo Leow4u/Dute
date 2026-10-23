@@ -177,7 +177,7 @@ export default function PaginaOs() {
                 </Link>
               </Button>
             ) : null}
-            {ficha.status === "revisada" && podeReabrir && !reabrir ? (
+            {ficha.status === "revisada" && ficha.tipo !== "vistoria" && podeReabrir && !reabrir ? (
               <Button
                 type="button"
                 variant="outline"

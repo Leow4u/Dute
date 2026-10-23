@@ -249,3 +249,37 @@ describe("OS", () => {
     expect(await violacoesDeAcessibilidade(render({ ficha: CONCLUIDA, urls: { "os/10045-01/assinatura/as_0123456789abcdef.png": "https://example.test/a.png" } }))).toEqual([]);
   });
 });
+
+describe("a OS de vistoria (parte 3.11d)", () => {
+  const VISTORIA = fichaDaLeitura("10060-01", {
+    tipo: "vistoria",
+    status: "revisada",
+    edicao: 5,
+    demanda: "10060",
+    customer_code: "ITAU",
+    servicos: ["vistoria"],
+    janela: { data: HOJE, inicio: "14:00", fim: "16:00" },
+    locais: { origem: { nome: "CEIC", endereco: "Av. Paulista, 1842", complemento: "12º andar", contato: null }, destino: null },
+    equipe: [{ colaborador_id: CARLOS, nome: "Carlos Silva", papel: "lider", vinculo: "proprio" }],
+    etapas: [registro("2026-10-22T17:05:00.000Z", CARLOS, { etapa: "chegada_origem" }), registro("2026-10-22T18:40:00.000Z", CARLOS, { etapa: "fim" })],
+    fotos: [{ id: "ft_a000000000000001", caminho: "os/10060-01/fotos/ft_a000000000000001.jpg", legenda: "Recepção", ...registro("2026-10-22T17:20:00.000Z", CARLOS) }],
+    vistoria: {
+      ...registro("2026-10-22T18:40:00.000Z", CARLOS),
+      ambientes: [{ nome: "Recepção", itens: [{ lpu_item_id: "lpu_cadeira", item: "Transporte de cadeira", unidade: "UN", quantidade: "8" }], fotos: ["ft_a000000000000001"] }],
+      medidas: [{ nome: "Porta", valor: "0,90 m" }],
+      acesso: { horario_de_carga: "Depois das 18h", vaga_de_carga: null },
+      observacoes: null,
+    },
+  }) as FichaDaOs;
+
+  it("enviada ao Comercial: os três passos, a vistoria como foi, sem itens", async () => {
+    const html = render({ ficha: VISTORIA, numero: "10060-01", cabecalho: { cliente: "Itaú Unibanco", titulo: "Mudança do 12º andar", tipo: "planejada" }, urls: {} });
+    const textos = textosDaTela(html);
+    for (const texto of ["OS 10060-01", "Enviada ao Comercial", "Vistoria", "Agendar", "Executar", "Chegada na origem 14:05", "Enviar ao Comercial", "Enviada 15:40", "Recepção", "Transporte de cadeira", "8 un", "Porta", "0,90 m", "Horário de carga", "Depois das 18h"]) {
+      expect(textos, texto).toContain(texto);
+    }
+    for (const ausente of ["Concluir", "Revisar", "Itens", "Revisada"]) expect(textos, ausente).not.toContain(ausente);
+    expect(html).not.toMatch(/R\$|preço/i);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+});

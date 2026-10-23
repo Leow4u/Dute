@@ -2,7 +2,8 @@ import type { ReactNode } from "react";
 import { Link } from "wouter";
 import { AlertTriangle, ArrowLeft, Check, ExternalLink, ImageIcon, MapPin, Truck } from "lucide-react";
 
-import { Avatar, COR_DO_STATUS, ROTULO_DO_STATUS, SeloDoTipo, selo, seloAlerta, seloNeutro } from "@/components/operacao/partes";
+import { Avatar, COR_DO_STATUS, SeloDoTipo, rotuloDoStatusDaOs, selo, seloAlerta, seloNeutro } from "@/components/operacao/partes";
+import { VistoriaEnviada } from "@/components/operacao/vistoria-lida";
 import { Button } from "@/components/ui/button";
 import {
   conclusaoNaFicha,
@@ -52,9 +53,10 @@ function Cartao({ titulo, acao, children, className }: { titulo: string; acao?: 
 }
 
 function Passos({ ficha }: { ficha: FichaDaOs }) {
+  const passos = passosDaOs(ficha);
   return (
-    <ol aria-label="Passos da OS" className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
-      {passosDaOs(ficha).map((passo) => (
+    <ol aria-label="Passos da OS" className={cn("grid grid-cols-2 gap-2 sm:gap-3", passos.length === 3 ? "xl:grid-cols-3" : "xl:grid-cols-4")}>
+      {passos.map((passo) => (
         <li
           key={passo.numero}
           aria-current={passo.estado === "atual" ? "step" : undefined}
@@ -457,7 +459,7 @@ export function OsView({
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <h1 className="text-3xl font-bold tracking-tight text-foreground">OS {ficha.numero}</h1>
-            <span className={cn(selo, COR_DO_STATUS[ficha.status])}>{ROTULO_DO_STATUS[ficha.status]}</span>
+            <span className={cn(selo, COR_DO_STATUS[ficha.status])}>{rotuloDoStatusDaOs(ficha)}</span>
             {cabecalho.tipo ? <SeloDoTipo tipo={cabecalho.tipo} /> : null}
           </div>
           <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
@@ -487,11 +489,18 @@ export function OsView({
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="flex min-w-0 flex-col gap-6">
+          {ficha.vistoria ? (
+            <Cartao titulo="Vistoria">
+              <div className="px-5 py-4">
+                <VistoriaEnviada vistoria={ficha.vistoria} fotos={ficha.fotos} urls={urls} />
+              </div>
+            </Cartao>
+          ) : null}
           <Revisao ficha={ficha} />
           <Conclusao ficha={ficha} urls={urls} />
           <Locais ficha={ficha} />
           <Etapas ficha={ficha} />
-          <Itens ficha={ficha} />
+          {ficha.tipo === "vistoria" ? null : <Itens ficha={ficha} />}
           <Fotos ficha={ficha} urls={urls} acao={anexarFotos} />
         </div>
         <div className="flex min-w-0 flex-col gap-6">

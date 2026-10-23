@@ -133,6 +133,7 @@ describe("as linhas", () => {
       cliente: "Itaú Unibanco",
       titulo: "Mudança do 5º andar",
       tipo: "planejada",
+      vistoria: false,
       janela: "07:30–18:00",
       quando: "Ter 20/10 07:30–18:00",
       equipe: ["Carlos Silva", "Diego Alves"],

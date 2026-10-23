@@ -1,7 +1,7 @@
 import { collection, doc } from "firebase/firestore";
 import { useSearch } from "wouter";
 
-import { ROTULO_DO_STATUS } from "@/components/operacao/partes";
+import { rotuloDoStatusDaOs } from "@/components/operacao/partes";
 import { fichaDaLeitura } from "@/lib/operacao/ficha-da-os";
 import { clienteDaLeitura, nomesPorCodigo } from "@/lib/operacao/fila";
 import { demandaDoHoje } from "@/lib/operacao/hoje";
@@ -32,7 +32,7 @@ export default function PaginaOsImpressao() {
     ? documentoDaOs(ficha, {
         cliente: nomesPorCodigo(clientes.itens ?? [])[ficha.customerCode] || "",
         titulo: demanda.item?.titulo ?? null,
-        status: ROTULO_DO_STATUS[ficha.status],
+        status: rotuloDoStatusDaOs(ficha),
         agora: new Date(),
       })
     : null;

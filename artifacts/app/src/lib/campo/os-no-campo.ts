@@ -52,6 +52,8 @@ export type CartaoDoCampo = {
   equipe: number;
   placas: string[];
   status: FichaDaOs["status"];
+  /** Serviço ou vistoria (parte 3.11b). */
+  tipo: FichaDaOs["tipo"];
 };
 
 export type MinhasOs = { agora: CartaoDoCampo[]; depois: CartaoDoCampo[]; feito: CartaoDoCampo[] };
@@ -83,6 +85,7 @@ function cartao(ficha: FichaDaOs, hoje: string): CartaoDoCampo {
     equipe: ficha.equipe.length,
     placas: ficha.veiculos.map((veiculo) => (veiculo.dono === "terceiro" && veiculo.empresa ? `${veiculo.placa} · ${veiculo.empresa}` : veiculo.placa)),
     status: ficha.status,
+    tipo: ficha.tipo,
   };
 }
 

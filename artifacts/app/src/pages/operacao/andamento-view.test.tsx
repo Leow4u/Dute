@@ -147,3 +147,13 @@ describe("Registrar andamento", () => {
     }
   });
 });
+
+describe("Registrar andamento na vistoria (parte 3.11d)", () => {
+  it("só a etapa e a ocorrência; das etapas, só ir e chegar", () => {
+    const vistoria = { ...FICHA, tipo: "vistoria" as const, itens: [], etapas: [] };
+    const html = render(andamentoInicial(vistoria, AGORA), { ficha: vistoria });
+    const textos = textosDaTela(html);
+    expect(textos).toEqual(expect.arrayContaining(["Etapa", "Ocorrência", "Saída do pátio", "Chegada na origem"]));
+    for (const ausente of ["Itens", "Conclusão", "Carregamento", "Montagem", "Fim"]) expect(textos, ausente).not.toContain(ausente);
+  });
+});

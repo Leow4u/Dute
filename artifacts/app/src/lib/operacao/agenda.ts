@@ -75,6 +75,8 @@ export type OsNaAgenda = {
   cliente: string;
   titulo: string | null;
   tipo: TipoDaDemanda | null;
+  /** A OS é uma vistoria (parte 3.11a). */
+  vistoria: boolean;
   /** "07:30–18:00", "13:00" ou null (sem hora). */
   janela: string | null;
   /** "Ter 20/10 07:30–18:00". */
@@ -165,6 +167,7 @@ export function agendaDaSemana(entrada: EntradaDaAgenda): Agenda {
       cliente: entrada.nomesClientes[os.customer_code] || os.customer_code,
       titulo: demanda?.titulo ?? null,
       tipo: demanda?.tipo ?? null,
+      vistoria: os.tipo === "vistoria",
       janela,
       quando: [`${DIA_DA_SEMANA[emUtc(agenda.data).getUTCDay()]} ${agenda.data.slice(8, 10)}/${agenda.data.slice(5, 7)}`, janela].filter(Boolean).join(" "),
       equipe: os.pessoas?.length ? os.pessoas.map((pessoa) => pessoa.nome) : agenda.equipe.map((id) => nomes.get(id) ?? id),

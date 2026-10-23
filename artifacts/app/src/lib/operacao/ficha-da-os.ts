@@ -383,8 +383,46 @@ function placasEmTexto(veiculos: readonly VeiculoLido[]): string | null {
   return placas.length === 1 ? placas[0] : `${placas.slice(0, -1).join(", ")} e ${placas.at(-1)}`;
 }
 
-/** Os quatro passos da OS: agendar, executar, concluir e revisar. */
+/**
+ * Os três passos da vistoria (parte 3.11d): agendar, executar e enviar ao
+ * Comercial, sem conclusão com aceite nem revisão.
+ */
+function passosDaVistoria(ficha: FichaDaOs): PassoDaOs[] {
+  const ordem: StatusDaOs[] = ["aberta", "agendada", "em_execucao", "revisada"];
+  const posicao = ficha.status === "cancelada" ? -1 : ordem.indexOf(ficha.status);
+  const atual = posicao <= 0 ? 1 : posicao === 3 ? 4 : 2;
+  const estado = (passo: number): EstadoDoPasso => (posicao < 0 ? "pendente" : passo < atual ? "feito" : passo === atual ? "atual" : "pendente");
+  const lider = ficha.equipe.find((pessoa) => pessoa.papel === "lider");
+  const pessoas = ficha.equipe.length;
+  const ultima = ficha.etapas.filter((etapa) => etapa.etapa !== "fim").at(-1);
+  return [
+    {
+      numero: 1,
+      titulo: "Agendar",
+      quem: "Coordenação",
+      detalhe: [pessoas ? `${pessoas} ${pessoas === 1 ? "pessoa" : "pessoas"}` : "Sem equipe", placasEmTexto(ficha.veiculos)].filter(Boolean).join(" · "),
+      estado: estado(1),
+    },
+    {
+      numero: 2,
+      titulo: "Executar",
+      quem: lider ? `Líder · ${lider.nome}` : "Equipe",
+      detalhe: ultima ? `${ETAPA_ROTULO[ultima.etapa]} ${horaDe(ultima.instante)}` : null,
+      estado: estado(2),
+    },
+    {
+      numero: 3,
+      titulo: "Enviar ao Comercial",
+      quem: lider ? "Líder" : "Equipe",
+      detalhe: ficha.vistoria ? `Enviada ${horaDe(ficha.vistoria.instante)}` : "Ambientes, fotos e itens",
+      estado: estado(3),
+    },
+  ];
+}
+
+/** Os quatro passos da OS: agendar, executar, concluir e revisar; os três da vistoria. */
 export function passosDaOs(ficha: FichaDaOs): PassoDaOs[] {
+  if (ficha.tipo === "vistoria") return passosDaVistoria(ficha);
   const ordem: StatusDaOs[] = ["aberta", "agendada", "em_execucao", "em_revisao", "revisada"];
   const posicao = ficha.status === "cancelada" ? -1 : ordem.indexOf(ficha.status);
   const estado = (passo: number): EstadoDoPasso => {
