@@ -38,9 +38,13 @@ export async function loadProfile(db: Firestore, uid: string, email?: string, to
   return profile;
 }
 
-export async function getProfile(db: Firestore, request: CallableRequest<unknown>): Promise<OperacaoProfile> {
+/** `campo`: a callable de execução também atende o campo (que só grava na OS em que está escalado, parte 3.8a). */
+export type OpcoesDoCaller = { campo?: true };
+
+export async function getProfile(db: Firestore, request: CallableRequest<unknown>, opcoes: OpcoesDoCaller = {}): Promise<OperacaoProfile> {
   const auth = assertAuth(request);
   const profile = await loadProfile(db, auth.uid, auth.token.email, auth.token.name);
+  if (opcoes.campo && profile.role === "campo") return profile;
   const problem = operacaoCadastroProblem(profile.role);
   if (problem) throw new HttpsError("permission-denied", problem);
   return profile;
@@ -51,7 +55,8 @@ export async function requireOperacaoCaller(
   db: Firestore,
   request: CallableRequest<unknown>,
   projectId: string,
+  opcoes: OpcoesDoCaller = {},
 ): Promise<OperacaoProfile> {
   assertLiberado(projectId);
-  return getProfile(db, request);
+  return getProfile(db, request, opcoes);
 }

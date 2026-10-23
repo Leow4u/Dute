@@ -24,19 +24,25 @@ function invokerPattern(): RegExp {
   return new RegExp(literals[0]);
 }
 
-const ENTRADA = /^export const \w+ = onCall(?:<[^>]*>)?\(async \(request\) => \{\s*const caller = await requireOperacaoCaller\(db, request, PROJECT_ID\);/;
+const ENTRADA = /^export const \w+ = onCall(?:<[^>]*>)?\(async \(request\) => \{\s*const caller = await requireOperacaoCaller\(db, request, PROJECT_ID(?:, \{ campo: true \})?\);/;
+/** As callables da execução também atendem o campo escalado (parte 3.8a); o cadastro e o planejamento, não. */
+const DO_CAMPO = ["registerStep", "registerOccurrence", "registerItem", "attachPhoto", "registerPresence", "completeServiceOrder", "sendSurveyToCommercial"];
 
 describe("callables da Operação", () => {
   it("toda linha com onCall está no formato que a conferência do invoker lê, inclusive comentário", () => {
     const pattern = invokerPattern();
     const used = rawIndex.split(/\r?\n/).map((line, i) => [i + 1, line] as const).filter(([, line]) => ON_CALL_USE.test(line));
-    assert.deepEqual(used.map(([, line]) => line.match(pattern)?.[1]), ["saveCollaborator", "saveVehicle", "saveServiceOrder"]);
+    assert.deepEqual(used.map(([, line]) => line.match(pattern)?.[1]), ["saveCollaborator", "saveVehicle", "saveServiceOrder", "openDirectDemand", "registerStep", "registerOccurrence", "registerItem", "attachPhoto", "registerPresence", "completeServiceOrder", "reviewServiceOrder", "reopenServiceOrder", "sendSurveyToCommercial"]);
   });
 
   it("as callables começam pela liberação e pelo perfil, e nada é reexportado", () => {
     assert.doesNotMatch(index, /^export\s*\{/m);
     const blocks = index.split(/^(?=export const )/m).filter((block) => /^export const \w+ = onCall/.test(block));
-    assert.equal(blocks.length, 3);
-    for (const block of blocks) assert.match(block, ENTRADA);
+    assert.equal(blocks.length, 13);
+    for (const block of blocks) {
+      assert.match(block, ENTRADA);
+      const nome = /^export const (\w+)/.exec(block)?.[1] ?? "";
+      assert.equal(block.includes("{ campo: true }"), DO_CAMPO.includes(nome), nome);
+    }
   });
 });

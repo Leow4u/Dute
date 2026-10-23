@@ -92,9 +92,11 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/portal/agente", ["cliente"]],
   ["/portal/agente/operacional", ["cliente"]],
   ["/minhas-faturas", ["cliente"]],
-  // Comercial (partes 13, 14 e 15b): rotas registradas só com a liberação (lib/comercial/navegacao.ts).
+  // Comercial: rotas registradas só com a liberação (lib/comercial/navegacao.ts).
+  // Parte 2.5: /comercial é o Início; a fila (parte 11) é /comercial/orcamentos.
   ["/comercial", ["owner", "admin", "comercial"]],
-  // Parte 11: a fila é /comercial; a montagem do orçamento abre pela fila.
+  ["/comercial/orcamentos", ["owner", "admin", "comercial"]],
+  // A montagem do orçamento abre pela fila.
   ["/comercial/orcamento", ["owner", "admin", "comercial"]],
   // Parte 12a: o documento A4 do orçamento; a aprovação é só do owner.
   ["/comercial/orcamento/documento", ["owner", "admin", "comercial"]],
@@ -105,6 +107,18 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/comercial/medicoes", ["owner", "admin", "comercial"]],
   // Operação, parte 1: cadastro, só com a liberação (lib/operacao/navegacao.ts).
   ["/operacao", ["owner", "admin", "interno"]],
+  ["/operacao/hoje", ["owner", "admin", "interno"]],
+  ["/operacao/agenda", ["owner", "admin", "interno"]],
+  ["/operacao/demandas", ["owner", "admin", "interno"]],
+  ["/operacao/demanda", ["owner", "admin", "interno"]],
+  ["/operacao/nova-demanda", ["owner", "admin", "interno"]],
+  ["/operacao/planejar", ["owner", "admin", "interno"]],
+  ["/operacao/os", ["owner", "admin", "interno"]],
+  ["/operacao/os/impressao", ["owner", "admin", "interno"]],
+  ["/operacao/revisao", ["owner", "admin", "interno"]],
+  ["/campo", ["campo", "owner", "admin"]],
+  ["/campo/os", ["campo", "owner", "admin"]],
+  ["/campo/concluir", ["campo", "owner", "admin"]],
   ["/operacao/colaboradores", ["owner", "admin", "interno"]],
   ["/operacao/veiculos", ["owner", "admin", "interno"]],
 ];
@@ -284,6 +298,18 @@ describe("menu do portal por modelo de operação", () => {
 
   it("insumos não tem portal: uma conta de cliente por engano vê só o Início", () => {
     expect(labels("insumos")).toEqual(["Início"]);
+  });
+
+  it("os módulos contratados tiram do menu as telas de fora do contrato (parte 2.7)", () => {
+    const comModulos = (modules: string[]) =>
+      getNavigationForProfileRole(
+        "cliente",
+        resolveOperationProfile({ customer_code: "Cliente X", operation_template: "uniformes", modules }),
+      ).map((module) => module.label);
+    expect(comModulos(["operacao"])).toEqual(["Início"]);
+    expect(comModulos(["wms", "operacao"])).not.toContain("Faturas");
+    expect(comModulos(["financeiro"])).toEqual(["Início", "Faturas"]);
+    expect(comModulos(["wms", "financeiro"])).toEqual(labels("uniformes"));
   });
 
   it("sem perfil carregado nada é escondido; o perfil não mexe no menu interno", () => {

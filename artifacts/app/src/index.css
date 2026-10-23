@@ -100,6 +100,10 @@
   /* Cabeçalho preto da identidade v3 (só existe dentro de .v3). */
   --color-v3-header: hsl(var(--v3-header));
   --color-v3-header-foreground: hsl(var(--v3-header-foreground));
+  /* Vermelho da marca da v3: marcador do item aberto e contador de alerta,
+     o mesmo nos dois temas (o --primary do escuro é azul). */
+  --color-v3-marca: hsl(var(--v3-marca));
+  --color-v3-marca-foreground: hsl(var(--v3-marca-foreground));
 
   --color-sidebar: hsl(var(--sidebar));
   --color-sidebar-foreground: hsl(var(--sidebar-foreground));
@@ -375,6 +379,8 @@
   --radius: 12px;
   --v3-header: 0 0% 9%; /* #161616 */
   --v3-header-foreground: 0 0% 100%;
+  --v3-marca: 358 81% 51%; /* #E71C23 */
+  --v3-marca-foreground: 0 0% 100%;
   font-family: var(--app-font-sans);
 }
 

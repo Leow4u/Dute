@@ -17,10 +17,13 @@ documentação de produto e operação está em `docs/`.
   19/10/2026. Fase 1, migração do WMS para o `dute-prod`, feita em 20/10/2026,
   antes da contagem de abertura do inventário (roteiro e registro em
   `docs/plataforma/fase-1-corte.md`; ferramentas `tools/migracao_firestore.py` e
-  `tools/congelar_projeto.ps1`). Fase 2, núcleo e app único, em andamento
-  (desenho e registro em `docs/plataforma/fase-2-nucleo.md`): parte 1, papéis
-  da plataforma e módulos contratados, na homologação; parte 2, tela de entrada
-  por módulo, em PR. **Comercial v1 adiantado para antes da Operação** em
+  `tools/congelar_projeto.ps1`). Fase 2, núcleo e app único, com as partes 1 a
+  2.7 na `main` (desenho, registro e "quem cai onde" em
+  `docs/plataforma/fase-2-nucleo.md`): papéis e módulos contratados, entrada
+  com contadores, um shell v3 por módulo com o seletor no topo, Início do
+  Comercial (`/comercial`, a fila em `/comercial/orcamentos`) e da Operação
+  (`/operacao`, a fila em `/operacao/hoje`) e a barreira por módulo
+  contratado do cliente. Produção só com o OK do Leonardo. **Comercial v1 adiantado para antes da Operação** em
   20/10/2026: desenho e ordem das partes em `docs/plataforma/fase-6-comercial.md`,
   telas aprovadas em `docs/mockups/Com*.dc.html`.
 - **Comercial v1 está na `main`, ligado no `dute-homolog` e no `dute-prod`**
@@ -30,8 +33,14 @@ documentação de produto e operação está em `docs/`.
   `docs/plataforma/comercial-producao.md`.
 - **Operação (Fase 3, partes 1 a 3) está na `main`, ligada no `dute-homolog` e
   no `dute-prod`** (OK do Leonardo em 22/10/2026): colaboradores, veículos e a
-  fila do dia (abrir, agendar e cancelar a OS). Executar e concluir ainda não
-  existem; campo não lê a OS. O `dute-btg` fica de fora das duas listas
+  fila do dia (abrir, agendar e cancelar a OS). Desde a parte 3.4b a OS
+  tem fatia do saldo, janela, equipe com papel e veículos, e o campo lê só a
+  OS em que está escalado; desde a 3.4d a demanda direta nasce na Operação
+  (`openDirectDemand`), sem orçamento; desde a 3.7a o escritório registra
+  etapas, itens, ocorrências e fotos e a OS fica Em execução; desde a 3.8a o
+  campo escalado grava o andamento e a presença pelas mesmas callables, e
+  desde a 3.8b pelo app `/campo` (celular, fila de registros). Concluir
+  ainda não existe. O `dute-btg` fica de fora das duas listas
   `OPERACAO_AMBIENTES_LIBERADOS`. Desenho e como desligar:
   `docs/plataforma/fase-3-operacao.md`.
 - **Alinhamento do Comercial e da Operação recuperado em 23/10/2026**:
@@ -41,6 +50,12 @@ documentação de produto e operação está em `docs/`.
   Decididos em 23/10/2026: um shell por módulo é pedido do Leonardo (um menu
   único inflava demais); a carga de clientes da Omie e o legado da planilha
   saem do plano; antes de qualquer PR de tela, novo alinhamento de UX e UI.
+- **Plano de implantação das fases 2 a 8** em
+  `docs/plataforma/plano-de-implantacao.md` (23/10/2026): desenho, partes em
+  ordem, critério de pronto e produção de cada fase, as regras que valem em
+  todas (um shell por módulo, sem legenda, acessibilidade, engenharia) e as
+  perguntas que cada fase espera do Leonardo. O runbook de cada fase
+  (`fase-N-*.md`) registra as partes; este plano as ordena.
 - **Papéis e módulos têm lista única em `lib/dominio`.** As Functions
   (`functions/wms/src/domain/platform-roles.ts`, `customer-profile.ts`) e o
   `firestore.rules` guardam cópias literais, travadas por
@@ -85,7 +100,11 @@ documentação de produto e operação está em `docs/`.
   IA recomenda e mostra de onde tirou; uma pessoa decide (invariante 3).
 - **Telas novas seguem a v3** (`docs/mockups/README.md`); as do WMS seguem
   `docs/sistema-visual.md` até adotarem a v3 no lançamento da Operação. Nada de
-  legenda nas telas: só rótulos, dados e ações.
+  legenda nas telas: só rótulos, dados e ações. Toda tela nova tem teste com a
+  lista dos textos (`src/test/textos.ts`, a trava contra legenda) e com o
+  `axe` (`src/test/acessibilidade.ts`, WCAG 2.1 A e AA). O "Precisa de você"
+  de cada Início é a única regra de contagem: a entrada e o menu contam por
+  ela (`lib/resumo-do-modulo.ts`).
 - **Operação e campo nunca veem valores.** Preço só para `owner`, `admin`,
   `financeiro` e `comercial`; o cliente vê os das próprias OS e faturas.
 
@@ -190,7 +209,7 @@ corepack pnpm --filter "@workspace/app" run test    # vitest
 corepack pnpm --filter "@workspace/app" run dev
 
 npm --prefix functions/wms run test:unit          # node --test
-npm --prefix functions/wms run test:integration   # emulador Firestore, exige Java
+npm --prefix functions/wms run test:integration   # emuladores Firestore e Storage, exige Java
 npm --prefix functions/wms run test:critical      # os dois acima
 
 npm --prefix functions/comercial ci

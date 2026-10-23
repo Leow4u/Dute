@@ -32,8 +32,27 @@ export const OPERACAO_EVENT_TYPES = [
   "vehicle.deactivated",
   "vehicle.reactivated",
   "os.created",
+  "os.planned",
   "os.scheduled",
+  "os.items_changed",
   "os.cancelled",
+  "os.started",
+  "os.step_recorded",
+  "os.occurrence_recorded",
+  "os.item_executed",
+  "os.item_added_in_field",
+  "os.photo_attached",
+  "os.presence_recorded",
+  "os.completed",
+  "os.signed",
+  "os.completed_without_acceptance",
+  "os.reviewed",
+  "os.addendum_requested",
+  "os.reopened",
+  "os.survey_opened",
+  "os.survey_sent",
+  "demand.direct_opened",
+  "demand.execution_reviewed",
 ] as const;
 export type OperacaoEventType = (typeof OPERACAO_EVENT_TYPES)[number];
 
@@ -41,16 +60,173 @@ const criado = z.object({ id }).strict();
 const alterado = z.object({ id, edicao_antes: edicao, edicao_depois: edicao }).strict();
 const osCriada = z.object({ id: osId, demanda: demandaNumero, seq: z.number().int().min(1).max(99), linhas: z.number().int().min(1).max(300) }).strict();
 const osCancelada = z.object({ id: osId, demanda: demandaNumero }).strict();
-const osAgendada = z
+const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const hora = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable();
+/**
+ * A composição da equipe sem nome: o id do cadastro, o papel e o vínculo. É o
+ * que a IA usa para medir equipe por serviço (Fase 5).
+ */
+const composicao = z
+  .array(
+    z
+      .object({
+        colaborador_id: z.string().regex(/^col_[a-f0-9]{16}$/),
+        papel: z.enum(["lider", "motorista", "montador", "ajudante"]).nullable(),
+        vinculo: z.enum(["proprio", "freelancer", "terceiro"]),
+      })
+      .strict(),
+  )
+  .max(20);
+const frota = z.array(z.string().regex(/^vei_[a-f0-9]{16}$/)).max(6);
+const osPlanejada = z
   .object({
     id: osId,
     demanda: demandaNumero,
-    data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    hora: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable(),
-    equipe: z.array(z.string().regex(/^col_[a-f0-9]{16}$/)).min(1).max(12),
-    veiculo_id: z.string().regex(/^vei_[a-f0-9]{16}$/),
+    seq: z.number().int().min(1).max(99),
+    linhas: z.number().int().min(1).max(300),
+    data: data.nullable(),
+    equipe: composicao,
+    veiculos: frota,
   })
   .strict();
+const osAgendada = z
+  .object({ id: osId, demanda: demandaNumero, data, inicio: hora, fim: hora, equipe: composicao, veiculos: frota })
+  .strict();
+const tipoDemanda = z.enum(["planejada", "emergencial", "paraquedas"]);
+const demandaDireta = z
+  .object({ id: demandaNumero, tipo: tipoDemanda, tipo_calculado: tipoDemanda, linhas: z.number().int().min(1).max(100) })
+  .strict();
+const osItens = z
+  .object({ id: osId, demanda: demandaNumero, linhas: z.number().int().min(1).max(300), edicao_antes: edicao, edicao_depois: edicao })
+  .strict();
+
+/** O instante em UTC, como o servidor grava (parte 3.7a). */
+const instante = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+const canal = z.enum(["escritorio", "celular"]);
+const osIniciada = z.object({ id: osId, demanda: demandaNumero, instante }).strict();
+/** A etapa, quando aconteceu, por onde chegou e quem da equipe informou (id do cadastro). */
+const etapaRegistrada = z
+  .object({
+    id: osId,
+    demanda: demandaNumero,
+    etapa: z.enum(["saida_patio", "chegada_origem", "carregamento", "saida_origem", "chegada_destino", "montagem", "fim"]),
+    instante,
+    canal,
+    informado_por: z.string().regex(/^col_[a-f0-9]{16}$/).nullable(),
+  })
+  .strict();
+/** A ocorrência sem a descrição: o texto é livre e pode ter nome; fica só na OS. */
+const ocorrenciaRegistrada = z
+  .object({ id: osId, demanda: demandaNumero, ocorrencia: z.string().regex(/^oc_\d{2,3}$/), instante, canal })
+  .strict();
+
+const linhaDaOs = z.string().min(1).max(64);
+const quantidadeDoItem = z.string().regex(/^\d{1,9}(\.\d{1,3})?$/);
+const informante = z.string().regex(/^col_[a-f0-9]{16}$/).nullable();
+/** O feito da linha (absoluto) e o de antes: a IA mede quanto e quando (parte 3.7b). */
+const itemExecutado = z
+  .object({ id: osId, demanda: demandaNumero, linha: linhaDaOs, quantidade: quantidadeDoItem, anterior: quantidadeDoItem.nullable(), instante, canal, informado_por: informante })
+  .strict();
+/** A inclusão em campo sem quem pediu nem o motivo (texto livre, fica na OS). */
+const itemIncluido = z
+  .object({
+    id: osId,
+    demanda: demandaNumero,
+    linha: linhaDaOs,
+    quantidade: quantidadeDoItem,
+    nova_linha: z.boolean(),
+    lpu_item_id: z.string().min(1).max(120).nullable(),
+    instante,
+    canal,
+    informado_por: informante,
+  })
+  .strict();
+
+/** A foto anexada (id do arquivo) e a que se refere, sem a legenda (parte 3.7c). */
+const fotoAnexada = z
+  .object({
+    id: osId,
+    demanda: demandaNumero,
+    foto: z.string().regex(/^ft_[a-f0-9]{16}$/),
+    etapa: z.enum(["saida_patio", "chegada_origem", "carregamento", "saida_origem", "chegada_destino", "montagem", "fim"]).nullable(),
+    ocorrencia: z.string().regex(/^oc_\d{2,3}$/).nullable(),
+    linha: linhaDaOs.nullable(),
+    instante,
+    canal,
+  })
+  .strict();
+
+/** A entrada ou a saída de alguém da equipe, pelo id do cadastro (parte 3.8a): o que paga a diária. */
+const presencaRegistrada = z
+  .object({ id: osId, demanda: demandaNumero, colaborador_id: z.string().regex(/^col_[a-f0-9]{16}$/), tipo: z.enum(["entrada", "saida"]), instante, canal })
+  .strict();
+
+/**
+ * A conclusão (parte 3.9a): o fim, por onde, quem informou, o aceite, quantos
+ * itens ficaram a menos e quantas fotos do final. Sem o nome nem o documento
+ * do responsável do cliente (ficam só na OS).
+ */
+const osConcluida = z
+  .object({
+    id: osId,
+    demanda: demandaNumero,
+    instante,
+    canal,
+    informado_por: informante,
+    aceite: z.enum(["assinatura", "sem_aceite"]),
+    itens_a_menos: z.number().int().min(0).max(300),
+    fotos_do_final: z.number().int().min(1).max(200),
+  })
+  .strict();
+
+/** O aceite no local: a assinatura do responsável ou a falta dela. */
+const aceiteNoLocal = z.object({ id: osId, demanda: demandaNumero, instante, canal }).strict();
+
+/**
+ * A revisão (parte 3.10a): quantas linhas, quantas divergiam e a decisão de
+ * cada uma, quantas foram corrigidas, as horas planejadas e reais e o tamanho
+ * da equipe. É a matéria do erro do planejamento (Fase 5). Sem motivo nem nota.
+ */
+const contagem = z.number().int().min(0).max(300);
+const osRevisada = z
+  .object({
+    id: osId,
+    demanda: demandaNumero,
+    linhas: contagem,
+    divergencias: contagem,
+    corrigidas: contagem,
+    decisoes: z.object({ cobrar: contagem, aditivo: contagem, absorver: contagem, proxima_os: contagem, encerrar: contagem }).strict(),
+    minutos_planejados: z.number().int().min(0).max(100_000).nullable(),
+    minutos_reais: z.number().int().min(0).max(100_000).nullable(),
+    pessoas: z.number().int().min(0).max(20),
+  })
+  .strict();
+const aditivoPedido = z.object({ id: osId, demanda: demandaNumero, linhas: z.number().int().min(1).max(300) }).strict();
+const osReaberta = z.object({ id: osId, demanda: demandaNumero, demanda_reaberta: z.boolean() }).strict();
+/** A vistoria aberta (parte 3.11a): a OS sem itens, com a janela e a equipe quando já vem agendada. */
+const vistoriaAberta = z
+  .object({ id: osId, demanda: demandaNumero, seq: z.number().int().min(1).max(99), data: data.nullable(), equipe: composicao, veiculos: frota })
+  .strict();
+/**
+ * A vistoria enviada ao Comercial: quando, por onde e quantos ambientes,
+ * itens levantados, fotos e medidas. Os nomes, as medidas e as observações
+ * ficam só na OS e na demanda.
+ */
+const vistoriaEnviada = z
+  .object({
+    id: osId,
+    demanda: demandaNumero,
+    instante,
+    canal,
+    informado_por: z.string().regex(/^col_[a-f0-9]{16}$/).nullable(),
+    ambientes: z.number().int().min(1).max(30),
+    itens: z.number().int().min(1).max(300),
+    fotos: z.number().int().min(1).max(200),
+    medidas: z.number().int().min(0).max(30),
+  })
+  .strict();
+/** A demanda direta foi executada e revisada: vai ao Comercial orçar a execução. */
+const execucaoRevisada = z.object({ id: demandaNumero, de: data, ate: data, os: z.number().int().min(1).max(99) }).strict();
 
 export const OPERACAO_EVENT_PAYLOADS = {
   "collaborator.created": criado,
@@ -62,8 +238,27 @@ export const OPERACAO_EVENT_PAYLOADS = {
   "vehicle.deactivated": criado,
   "vehicle.reactivated": criado,
   "os.created": osCriada,
+  "os.planned": osPlanejada,
   "os.scheduled": osAgendada,
+  "os.items_changed": osItens,
   "os.cancelled": osCancelada,
+  "os.started": osIniciada,
+  "os.step_recorded": etapaRegistrada,
+  "os.occurrence_recorded": ocorrenciaRegistrada,
+  "os.item_executed": itemExecutado,
+  "os.item_added_in_field": itemIncluido,
+  "os.photo_attached": fotoAnexada,
+  "os.presence_recorded": presencaRegistrada,
+  "os.completed": osConcluida,
+  "os.signed": aceiteNoLocal,
+  "os.completed_without_acceptance": aceiteNoLocal,
+  "os.reviewed": osRevisada,
+  "os.addendum_requested": aditivoPedido,
+  "os.reopened": osReaberta,
+  "os.survey_opened": vistoriaAberta,
+  "os.survey_sent": vistoriaEnviada,
+  "demand.direct_opened": demandaDireta,
+  "demand.execution_reviewed": execucaoRevisada,
 } as const;
 
 const TEXTO: Record<OperacaoEventType, { title: string; description: string }> = {
@@ -75,9 +270,34 @@ const TEXTO: Record<OperacaoEventType, { title: string; description: string }> =
   "vehicle.updated": { title: "Veículo atualizado", description: "O cadastro de veículo foi atualizado." },
   "vehicle.deactivated": { title: "Veículo desativado", description: "O cadastro de veículo foi desativado." },
   "vehicle.reactivated": { title: "Veículo reativado", description: "O cadastro de veículo foi reativado." },
-  "os.created": { title: "OS aberta", description: "A OS foi aberta a partir da demanda." },
-  "os.scheduled": { title: "OS agendada", description: "A OS recebeu data, equipe e veículo." },
-  "os.cancelled": { title: "OS cancelada", description: "A OS aberta foi cancelada." },
+  "os.created": { title: "OS aberta", description: "A OS foi aberta com o saldo da demanda." },
+  "os.planned": { title: "OS planejada", description: "A OS foi planejada com uma fatia do saldo da demanda." },
+  "os.scheduled": { title: "OS agendada", description: "A OS recebeu janela, equipe e veículos." },
+  "os.items_changed": { title: "Itens da OS alterados", description: "A fatia do saldo da demanda nesta OS mudou." },
+  "os.cancelled": { title: "OS cancelada", description: "A OS foi cancelada e a fatia voltou ao saldo da demanda." },
+  "os.started": { title: "OS em execução", description: "A primeira etapa da OS foi registrada." },
+  "os.step_recorded": { title: "Etapa da OS registrada", description: "Uma etapa da execução da OS foi registrada com o instante em que aconteceu." },
+  "os.occurrence_recorded": { title: "Ocorrência na OS", description: "Uma ocorrência foi registrada na execução da OS." },
+  "os.item_executed": { title: "Item da OS executado", description: "O feito de um item da OS foi informado." },
+  "os.item_added_in_field": { title: "Item incluído em campo", description: "Um item foi executado além do planejado na OS." },
+  "os.photo_attached": { title: "Foto anexada à OS", description: "Uma foto da execução foi anexada à OS." },
+  "os.presence_recorded": { title: "Presença na OS", description: "A entrada ou a saída de alguém da equipe foi registrada na OS." },
+  "os.completed": { title: "OS concluída", description: "A execução da OS terminou no local e a OS foi para a revisão interna." },
+  "os.signed": { title: "Aceite assinado no local", description: "O responsável do cliente assinou o aceite dos itens executados." },
+  "os.completed_without_acceptance": {
+    title: "OS concluída sem aceite no local",
+    description: "Não havia responsável para assinar; o aceite vem pela validação do cliente no Comercial.",
+  },
+  "os.reviewed": { title: "OS revisada", description: "A coordenação revisou a OS e decidiu cada divergência entre o planejado e o executado." },
+  "os.addendum_requested": { title: "Aditivo pedido ao Comercial", description: "A revisão da OS pediu ao Comercial o aditivo do que passou do orçado." },
+  "os.reopened": { title: "OS reaberta", description: "A OS revisada voltou à execução." },
+  "os.survey_opened": { title: "Vistoria aberta", description: "A vistoria da demanda foi aberta como OS, antes do orçamento fechado." },
+  "os.survey_sent": {
+    title: "Vistoria enviada ao Comercial",
+    description: "A vistoria levantou ambientes, itens e medidas no local e foi direto ao Comercial, sem revisão.",
+  },
+  "demand.direct_opened": { title: "Demanda direta aberta", description: "A demanda chegou direto na Operação e se orça depois da execução." },
+  "demand.execution_reviewed": { title: "Execução revisada", description: "A última OS da demanda direta foi revisada: a execução vai ao Comercial para orçar." },
 };
 
 export function isOperacaoEventType(value: string): value is OperacaoEventType {
@@ -91,7 +311,7 @@ export type OperacaoEventInput<T extends OperacaoEventType> = {
   entity_id: string;
   payload: z.input<(typeof OPERACAO_EVENT_PAYLOADS)[T]>;
   actor: OperacaoActor;
-  /** Código do cliente na OS. O cadastro da equipe deixa vazio. */
+  /** Código do cliente na OS e na demanda. O cadastro da equipe deixa vazio. */
   customer_code?: string | null;
   occurred_at?: string;
 };
@@ -102,7 +322,7 @@ export type OperacaoEventRecord = {
   title: string;
   description: string;
   severity: "info";
-  entity_type: "collaborator" | "vehicle" | "os";
+  entity_type: "collaborator" | "vehicle" | "os" | "demand";
   entity_id: string;
   customer_code: string | null;
   payload: Record<string, unknown>;
@@ -130,7 +350,8 @@ export function buildOperacaoEvent<T extends OperacaoEventType>(input: OperacaoE
   if (!payload.success) throw new HttpsError("internal", `Evento ${input.type} com payload inválido.`);
   if (payload.data.id !== input.entity_id) throw new HttpsError("internal", `Evento ${input.type} com entity_id diferente do payload.`);
   const customerCode = textoDoCliente(input.customer_code);
-  if (input.type.startsWith("os.") && !customerCode) {
+  const doCliente = input.type.startsWith("os.") || input.type.startsWith("demand.");
+  if (doCliente && !customerCode) {
     throw new HttpsError("internal", `Evento ${input.type} sem customer_code.`);
   }
   const occurredAt = input.occurred_at ?? new Date().toISOString();
@@ -144,9 +365,15 @@ export function buildOperacaoEvent<T extends OperacaoEventType>(input: OperacaoE
     title: texto.title,
     description: texto.description,
     severity: "info",
-    entity_type: input.type.startsWith("vehicle") ? "vehicle" : input.type.startsWith("os.") ? "os" : "collaborator",
+    entity_type: input.type.startsWith("vehicle")
+      ? "vehicle"
+      : input.type.startsWith("os.")
+        ? "os"
+        : input.type.startsWith("demand.")
+          ? "demand"
+          : "collaborator",
     entity_id: input.entity_id,
-    customer_code: input.type.startsWith("os.") ? customerCode : null,
+    customer_code: doCliente ? customerCode : null,
     payload: compactValue(payload.data) as Record<string, unknown>,
     occurred_at: occurredAt,
     source: OPERACAO_EVENT_SOURCE,

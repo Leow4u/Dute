@@ -1,25 +1,18 @@
-import type { Papel } from "@workspace/dominio";
 import type { ReactNode } from "react";
-import { ChevronsUpDown, Download, LayoutGrid, LogOut, Settings, User as UserIcon, type LucideIcon } from "lucide-react";
+import { ChevronsUpDown, Download, LogOut, Settings, User as UserIcon } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { roleLabel } from "@/lib/access";
-import { moduloDaRota, podeTrocarDeModulo } from "@/lib/ambientes";
 import type { AppUser } from "@/lib/auth";
-import { COMERCIAL_LIBERADO, PLATAFORMA_LIBERADA } from "@/lib/liberacao";
 import { useOperationProfile } from "@/lib/operation-profile";
-import type { OperationProfile } from "@/lib/operations";
-import { modulesForPerson } from "@/lib/platform-modules";
 import { usePwaInstall } from "@/lib/pwa-install";
+import { opcoesDoSeletor, type OpcaoDeModulo } from "@/lib/seletor-de-modulo";
 import { cn } from "@/lib/utils";
 
 type AccountMenuProps = {
@@ -27,10 +20,13 @@ type AccountMenuProps = {
   compact?: boolean;
   /**
    * Cabeçalho do celular. O botão fica no canto direito: o painel abre para
-   * baixo, dentro da tela, e os módulos entram na mesma lista. O submenu
-   * lateral não cabe ali.
+   * baixo, dentro da tela. Com `modulos`, a lista de módulos entra no painel
+   * (o cabeçalho do WMS não tem o seletor; o da v3 tem).
    */
   cabecalho?: boolean;
+  modulos?: boolean;
+  /** "v3": barra e cabeçalho pretos do Comercial e da Operação. */
+  variante?: "padrao" | "v3";
   signOut: (options?: { redirectUrl?: string }) => Promise<void>;
   user: AppUser | null;
 };
@@ -42,47 +38,33 @@ export function posicaoDoMenu(cabecalho: boolean, compact: boolean): { side: "bo
   return { side: "top", align: "end" };
 }
 
-export type AtalhoDeModulo = {
-  key: string;
-  label: string;
-  href: string;
-  icon: LucideIcon;
-  atual: boolean;
-};
-
-/**
- * Módulos com tela, na ordem da entrada, só quando a pessoa tem mais de um.
- * O aberto fica marcado: Comercial pelo prefixo, Financeiro pela casa
- * /faturamento (mesmo dentro do shell do WMS) e o resto desse shell como
- * Armazenagem. Configuração não marca nenhum.
- */
-export function atalhosDaConta(
-  role: Papel | null | undefined,
-  profile: Pick<OperationProfile, "modules"> | null | undefined,
-  path: string,
-  comercial: boolean = COMERCIAL_LIBERADO,
-  plataforma: boolean = PLATAFORMA_LIBERADA,
-): AtalhoDeModulo[] {
-  if (!podeTrocarDeModulo(role, profile, comercial, plataforma)) return [];
-  const aberto = moduloDaRota(path);
-  return modulesForPerson(role, profile, comercial).map((entry) => ({
-    key: entry.module.key,
-    label: entry.module.label,
-    href: entry.href,
-    icon: entry.module.icon,
-    atual: entry.module.key === aberto,
-  }));
+/** Duas letras do nome, para o avatar sem foto. */
+export function iniciais(nome: string): string {
+  const partes = nome.split(/\s+/).filter((parte) => /^\p{L}/u.test(parte));
+  const letras = partes.length > 1 ? partes[0][0] + partes[partes.length - 1][0] : (partes[0] ?? "").slice(0, 2);
+  return letras.toUpperCase() || "?";
 }
 
 function UserAvatar({ user }: { user: AppUser | null }) {
   return (
     <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-sidebar-border bg-sidebar-accent">
       {user?.imageUrl ? (
-        <img src={user.imageUrl} alt="Avatar" className="h-full w-full object-cover" />
+        <img src={user.imageUrl} alt="" className="h-full w-full object-cover" />
       ) : (
-        <UserIcon className="h-4 w-4" />
+        <UserIcon className="h-4 w-4" aria-hidden="true" />
       )}
     </div>
+  );
+}
+
+function AvatarV3({ user, nome }: { user: AppUser | null; nome: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-v3-marca text-sm font-bold text-v3-marca-foreground"
+    >
+      {user?.imageUrl ? <img src={user.imageUrl} alt="" className="size-full object-cover" /> : iniciais(nome)}
+    </span>
   );
 }
 
@@ -99,7 +81,7 @@ export function ContaCabecalho({ user, name, email, papel }: { user: AppUser | n
   );
 }
 
-export function ModuloLink({ atalho, className }: { atalho: AtalhoDeModulo; className?: string }) {
+export function ModuloLink({ atalho, className }: { atalho: OpcaoDeModulo; className?: string }) {
   const Icon = atalho.icon;
   return (
     <Link
@@ -119,14 +101,14 @@ export function ModuloLink({ atalho, className }: { atalho: AtalhoDeModulo; clas
 }
 
 /**
- * Módulos na mesma lista do menu. O submenu lateral não cabe no celular.
+ * Módulos na mesma lista do menu, no cabeçalho do celular do WMS.
  * `item` envolve cada link no item do menu, para o toque fechar o painel.
  */
 export function ListaDeModulos({
   atalhos,
   item,
 }: {
-  atalhos: AtalhoDeModulo[];
+  atalhos: readonly OpcaoDeModulo[];
   item?: (link: ReactNode, key: string) => ReactNode;
 }) {
   return (
@@ -140,45 +122,75 @@ export function ListaDeModulos({
   );
 }
 
-export function AccountMenu({ basePath, compact = false, cabecalho = false, signOut, user }: AccountMenuProps) {
+const GATILHO_V3 = {
+  rodape:
+    "flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left outline-none transition-colors hover:bg-v3-header-foreground/10 focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80",
+  compacto:
+    "flex size-11 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80",
+};
+
+export function AccountMenu({
+  basePath,
+  compact = false,
+  cabecalho = false,
+  modulos = false,
+  variante = "padrao",
+  signOut,
+  user,
+}: AccountMenuProps) {
   const { isInstalled } = usePwaInstall();
   const { profile } = useOperationProfile();
   const [location] = useLocation();
   const role = user?.publicMetadata.role;
   const name = user?.fullName || "Usuário";
   const email = user?.primaryEmailAddress?.emailAddress || "Sem e-mail";
-  const atalhos = atalhosDaConta(role, profile, location);
+  const atalhos = cabecalho && modulos ? opcoesDoSeletor(role, profile, location) : [];
   const posicao = posicaoDoMenu(cabecalho, compact);
+  const v3 = variante === "v3";
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        className={cn(
-          "flex items-center gap-3 rounded-xl text-sm font-medium text-sidebar-foreground/80 outline-none transition-colors duration-200 hover:bg-card hover:text-sidebar-foreground",
-          compact ? "h-11 w-11 justify-center" : "w-full px-2 py-2",
-        )}
-      >
-        <UserAvatar user={user} />
-        {compact ? (
-          <span className="sr-only">Minha conta</span>
-        ) : (
-          <>
-            <div className="min-w-0 flex-1 text-left">
-              <div className="truncate text-sm font-semibold text-sidebar-foreground">{name}</div>
-              <div className="truncate text-xs text-sidebar-foreground/55">{email}</div>
-            </div>
-            <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
-          </>
-        )}
-      </DropdownMenuTrigger>
+      {v3 ? (
+        <DropdownMenuTrigger className={compact ? GATILHO_V3.compacto : GATILHO_V3.rodape}>
+          <AvatarV3 user={user} nome={name} />
+          {compact ? (
+            <span className="sr-only">Minha conta</span>
+          ) : (
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-bold text-v3-header-foreground">{name}</span>
+              <span className="block truncate text-xs text-v3-header-foreground/65">{roleLabel(role)}</span>
+            </span>
+          )}
+        </DropdownMenuTrigger>
+      ) : (
+        <DropdownMenuTrigger
+          className={cn(
+            "flex items-center gap-3 rounded-xl text-sm font-medium text-sidebar-foreground/80 outline-none transition-colors duration-200 hover:bg-card hover:text-sidebar-foreground",
+            compact ? "h-11 w-11 justify-center" : "w-full px-2 py-2",
+          )}
+        >
+          <UserAvatar user={user} />
+          {compact ? (
+            <span className="sr-only">Minha conta</span>
+          ) : (
+            <>
+              <div className="min-w-0 flex-1 text-left">
+                <div className="truncate text-sm font-semibold text-sidebar-foreground">{name}</div>
+                <div className="truncate text-xs text-sidebar-foreground/55">{email}</div>
+              </div>
+              <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" aria-hidden="true" />
+            </>
+          )}
+        </DropdownMenuTrigger>
+      )}
       <DropdownMenuContent
         align={posicao.align}
         side={posicao.side}
         collisionPadding={16}
-        className={cn("p-0", cabecalho ? "w-[min(18.75rem,calc(100vw-2rem))]" : "w-[300px]")}
+        className={cn("p-0", cabecalho ? "w-[min(18.75rem,calc(100vw-2rem))]" : "w-[300px]", v3 && "v3")}
       >
         <ContaCabecalho user={user} name={name} email={email} papel={roleLabel(role)} />
-        {cabecalho && atalhos.length > 0 ? (
+        {atalhos.length > 0 ? (
           <ListaDeModulos
             atalhos={atalhos}
             item={(link, key) => (
@@ -189,40 +201,25 @@ export function AccountMenu({ basePath, compact = false, cabecalho = false, sign
           />
         ) : null}
         <div className="p-1">
-          {!cabecalho && atalhos.length > 0 ? (
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger className="cursor-pointer">
-                <LayoutGrid className="h-4 w-4" aria-hidden="true" />
-                Módulos
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent align="start" className="min-w-44">
-                {atalhos.map((atalho) => (
-                  <DropdownMenuItem key={atalho.key} asChild>
-                    <ModuloLink atalho={atalho} />
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-          ) : null}
           <DropdownMenuItem asChild>
-            <Link href="/configuracoes" className="cursor-pointer">
-              <Settings className="mr-2 h-4 w-4" />
+            <Link href="/configuracoes" className="min-h-11 cursor-pointer">
+              <Settings className="mr-2 h-4 w-4" aria-hidden="true" />
               Configuração
             </Link>
           </DropdownMenuItem>
           {!isInstalled ? (
             <DropdownMenuItem asChild>
-              <Link href="/configuracoes/aplicativo" className="cursor-pointer">
-                <Download className="mr-2 h-4 w-4" />
+              <Link href="/configuracoes/aplicativo" className="min-h-11 cursor-pointer">
+                <Download className="mr-2 h-4 w-4" aria-hidden="true" />
                 Instalar no celular
               </Link>
             </DropdownMenuItem>
           ) : null}
           <DropdownMenuItem
             onClick={() => signOut({ redirectUrl: basePath || "/" })}
-            className="cursor-pointer text-destructive focus:text-destructive"
+            className="min-h-11 cursor-pointer text-destructive focus:text-destructive"
           >
-            <LogOut className="mr-2 h-4 w-4" />
+            <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
             Sair
           </DropdownMenuItem>
         </div>

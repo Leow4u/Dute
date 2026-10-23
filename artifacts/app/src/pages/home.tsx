@@ -1,13 +1,8 @@
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useGetDashboard } from "@workspace/api-client-react";
 import {
   AlertTriangle,
   CheckCircle2,
   ClipboardList,
-  FileCheck,
-  FileText,
-  Hourglass,
   PackageCheck,
   Sparkles,
   Truck,
@@ -20,34 +15,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAppUser } from "@/lib/auth";
-import { lerAlertasDeMedicao, lerAlertasDosContratos, lerAutorizacoesDoInicio, lerOrcamentosParaAprovar } from "@/lib/comercial/inicio";
-import {
-  buildHomeInbox,
-  veAprovacoesNoInicio,
-  veAutorizacoesNoInicio,
-  veContratosNoInicio,
-  veMedicoesNoInicio,
-  type HomeInboxItem,
-  type HomeInboxTone,
-  type HomeRequest,
-} from "@/lib/home-inbox";
-import {
-  canAccessModule,
-  COORDINATION_NAV_ROLES,
-  WMS_ROLES,
-} from "@/lib/modules";
+import { type HomeInboxItem, type HomeInboxTone } from "@/lib/home-inbox";
+import { canAccessModule, WMS_ROLES } from "@/lib/modules";
 import { formatToday, greeting } from "@/lib/saudacao";
+import { useInicioDoWms } from "@/lib/use-inicio-do-wms";
 import { cn } from "@/lib/utils";
-import type { WarehouseOpsResponse } from "@/lib/warehouse-ops/model";
-
-async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url);
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({}));
-    throw new Error(payload.message ?? "Falha ao carregar dados.");
-  }
-  return response.json() as Promise<T>;
-}
 
 const TONE_STYLE: Record<HomeInboxTone, { icon: LucideIcon; box: string }> = {
   critical: { icon: AlertTriangle, box: "bg-destructive-soft text-destructive-soft-foreground" },
@@ -58,24 +30,13 @@ const TONE_STYLE: Record<HomeInboxTone, { icon: LucideIcon; box: string }> = {
 
 const ITEM_ICON: Record<string, LucideIcon> = {
   receipts: PackageCheck,
-  "comercial:aprovar": FileCheck,
 };
 
 const numberFormatter = new Intl.NumberFormat("pt-BR");
 
 function InboxRow({ item }: { item: HomeInboxItem }) {
   const tone = TONE_STYLE[item.tone];
-  // Comercial: alerta de contrato ("contrato:<id>:<tipo>"), prazo de perda
-  // ("autorizacoes:prazo:<numero>") e executados esperando a autorização.
-  const Icon =
-    ITEM_ICON[item.id] ??
-    (item.id.startsWith("contrato:")
-      ? FileText
-      : item.id.startsWith("autorizacoes:prazo:")
-        ? Hourglass
-        : item.id.startsWith("autorizacoes:")
-          ? FileCheck
-          : tone.icon);
+  const Icon = ITEM_ICON[item.id] ?? tone.icon;
   return (
     <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:gap-4 md:px-5">
       <div className="flex min-w-0 flex-1 items-center gap-4">
@@ -122,92 +83,12 @@ function SummaryRow({ label, value }: { label: string; value: number }) {
 export default function Home() {
   const { user } = useAppUser();
   const role = user?.publicMetadata.role;
+
   const seesWarehouse = canAccessModule(role, WMS_ROLES);
-  const seesRequests = canAccessModule(role, COORDINATION_NAV_ROLES);
-  // Contratos e autorizações do Comercial: só owner, admin e comercial, com a liberação.
-  const seesContracts = veContratosNoInicio(role);
-  const seesAuthorizations = veAutorizacoesNoInicio(role);
-  // Orçamentos para aprovar: só o owner, que aprova, com a liberação.
-  const seesApprovals = veAprovacoesNoInicio(role);
-  // Medição do mês que passou sem envio: owner, admin e comercial, com a liberação.
-  const seesMeasurements = veMedicoesNoInicio(role);
-
   const dashboard = useGetDashboard();
-  const ops = useQuery({
-    queryKey: ["warehouse-ops"],
-    queryFn: () => fetchJson<WarehouseOpsResponse>("/api/warehouse/ops"),
-    enabled: seesWarehouse,
-    refetchInterval: 60_000,
-    refetchOnWindowFocus: false,
-  });
-  const requests = useQuery({
-    queryKey: ["customer-requests", "home"],
-    queryFn: () =>
-      fetchJson<{ items?: HomeRequest[] }>("/api/customer-requests?limit=200"),
-    enabled: seesRequests,
-    refetchInterval: 60_000,
-    refetchOnWindowFocus: false,
-  });
-  const contracts = useQuery({
-    queryKey: ["comercial", "contratos", "inicio"],
-    queryFn: () => lerAlertasDosContratos(),
-    enabled: seesContracts,
-    refetchInterval: 5 * 60_000,
-    refetchOnWindowFocus: false,
-  });
-  const authorizations = useQuery({
-    queryKey: ["comercial", "autorizacoes", "inicio"],
-    queryFn: () => lerAutorizacoesDoInicio(),
-    enabled: seesAuthorizations,
-    refetchInterval: 5 * 60_000,
-    refetchOnWindowFocus: false,
-  });
-
-  const approvals = useQuery({
-    queryKey: ["comercial", "orcamentos", "para-aprovar"],
-    queryFn: () => lerOrcamentosParaAprovar(),
-    enabled: seesApprovals,
-    refetchInterval: 60_000,
-    refetchOnWindowFocus: false,
-  });
-
-  const measurements = useQuery({
-    queryKey: ["comercial", "medicoes", "inicio"],
-    queryFn: () => lerAlertasDeMedicao(),
-    enabled: seesMeasurements,
-    refetchInterval: 5 * 60_000,
-    refetchOnWindowFocus: false,
-  });
-
-  const inbox = useMemo(
-    () =>
-      buildHomeInbox({
-        role,
-        ops: ops.data,
-        requests: requests.data?.items,
-        contratos: contracts.data,
-        autorizacoes: authorizations.data,
-        paraAprovar: approvals.data,
-        medicoes: measurements.data,
-      }),
-    [ops.data, requests.data, contracts.data, authorizations.data, approvals.data, measurements.data, role],
-  );
-
-  const loading =
-    (seesWarehouse && ops.isLoading) ||
-    (seesRequests && requests.isLoading) ||
-    (seesContracts && contracts.isLoading) ||
-    (seesAuthorizations && authorizations.isLoading) ||
-    (seesApprovals && approvals.isLoading) ||
-    (seesMeasurements && measurements.isLoading);
-  const failedSources = [
-    seesWarehouse && ops.isError ? "armazém" : null,
-    seesRequests && requests.isError ? "solicitações" : null,
-    seesContracts && contracts.isError ? "contratos" : null,
-    seesAuthorizations && authorizations.isError ? "autorizações" : null,
-    seesApprovals && approvals.isError ? "orçamentos" : null,
-    seesMeasurements && measurements.isError ? "medições" : null,
-  ].filter((source): source is string => Boolean(source));
+  const inbox = useInicioDoWms(role);
+  const loading = inbox.carregando;
+  const failedSources = inbox.falhas;
 
   const now = new Date();
   const firstName = user?.fullName?.split(" ")[0] ?? "";

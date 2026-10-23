@@ -9,16 +9,15 @@ import {
   contratoVigente,
   filtrarCadastros,
   formatarCnpj,
-  vigenciaDoContrato,
   type CadastroComercial,
   type ContratoResumo,
 } from "@/lib/comercial/clientes";
 import { problemasDaExecucao } from "@/lib/comercial/depois-do-envio";
-import { VARIANTES, VARIANTE_PADRAO, contratosParaOrcamento } from "@/lib/comercial/montar";
+import { VARIANTE_PADRAO, contratosParaOrcamento } from "@/lib/comercial/montar";
 import { cn } from "@/lib/utils";
 
 import { SeloProspect } from "./clientes-view";
-import { CamposDoPeriodo } from "./depois-do-envio-dialogos";
+import { CamposDoContrato, CamposDoPeriodo } from "./depois-do-envio-dialogos";
 
 /**
  * Novo orçamento (parte 11): o cliente (busca por nome ou CNPJ, ou um
@@ -29,9 +28,6 @@ import { CamposDoPeriodo } from "./depois-do-envio-dialogos";
  * A gravação é da página; o diálogo abre fora do contêiner da tela (portal), então leva
  * a classe .v3.
  */
-
-const CAMPO_SELECT =
-  "flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/25 disabled:opacity-50";
 
 export type NovoOrcamento = { customerCode: string; contratoId: string | null; variante: string; de?: string; ate?: string };
 
@@ -226,45 +222,15 @@ export function NovoOrcamentoDialog({
           ) : null}
 
           {escolhido ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Campo id="novo-contrato" rotulo="Contrato">
-                <select
-                  id="novo-contrato"
-                  value={estado.contratoId}
-                  onChange={(evento) => setEstado((atual) => ({ ...atual, contratoId: evento.target.value }))}
-                  disabled={ocupado}
-                  className={CAMPO_SELECT}
-                >
-                  <option value="">Sem contrato</option>
-                  {doCliente.map((contrato) => (
-                    <option key={contrato.id} value={contrato.id}>
-                      {`${contrato.nome} · ${vigenciaDoContrato(contrato)}`}
-                    </option>
-                  ))}
-                </select>
-              </Campo>
-              <div className="min-w-0 space-y-1.5">
-                <span className="text-sm font-medium">Tabela</span>
-                <div role="group" aria-label="Tabela" className="flex gap-0.5 rounded-lg bg-muted p-1">
-                  {VARIANTES.map((variante) => (
-                    <button
-                      key={variante}
-                      type="button"
-                      aria-pressed={estado.variante === variante}
-                      onClick={() => setEstado((atual) => ({ ...atual, variante }))}
-                      className={cn(
-                        "inline-flex h-8 flex-1 items-center justify-center rounded-md border px-3 text-sm font-bold transition-colors",
-                        estado.variante === variante
-                          ? "border-border bg-card text-foreground"
-                          : "border-transparent text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      {variante}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <CamposDoContrato
+              prefixo="novo"
+              contratoId={estado.contratoId}
+              variante={estado.variante}
+              contratos={doCliente}
+              desabilitado={ocupado}
+              onContrato={(contratoId) => setEstado((atual) => ({ ...atual, contratoId }))}
+              onVariante={(variante) => setEstado((atual) => ({ ...atual, variante }))}
+            />
           ) : null}
 
           {execucao && escolhido ? (

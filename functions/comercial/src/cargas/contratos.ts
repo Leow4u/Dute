@@ -350,7 +350,7 @@ async function executarContrato(db: Firestore, plano: Plano, ator: ComercialActo
         acao: "criar",
         contrato_id: entrada.id,
         contrato: esperado,
-      });
+      }, { idNaCriacao: true });
     } else if (item.acao === "atualizar") {
       item.resultado = await salvarContrato(db, ator, {
         idempotency_key: `carga-contratos:${entrada.id}:atualizar:${edicao}:${digest(esperado)}`,

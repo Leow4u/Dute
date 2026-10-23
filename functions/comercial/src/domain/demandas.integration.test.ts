@@ -591,6 +591,21 @@ describe("fechar, perder e reabrir", () => {
     semDinheiroNemPessoa(await eventos());
   });
 
+  it("a demanda direta da Operação, sem orçamento, não anda pelo Comercial e diz por quê (parte 3.4c)", async () => {
+    await db.doc("demands/10090").set({ numero: "10090", customer_code: "ITAU", entrada: "direta", tipo: "paraquedas", etapa: "para_planejar" });
+    const recusa = await rejeita(
+      advanceDemandFor(db, comercial, { action: "lose", request_id: key(), numero: "10090", expected_etapa: "para_planejar", expected_rv: 0, motivo: "cancelado_cliente" }),
+      "failed-precondition",
+      /direta e ainda não tem orçamento/,
+    );
+    assert.match(recusa.message, /Operação/);
+    await rejeita(
+      advanceDemandFor(db, comercial, { action: "lose", request_id: key(), numero: "10091", expected_etapa: "para_planejar", expected_rv: 0, motivo: "preco" }),
+      "not-found",
+    );
+    assert.equal((await doc("demands/10090")).etapa, "para_planejar");
+  });
+
   it("reabrir: a proposta enviada e recusada volta numa RV nova; a perdida antes do envio e a fechada voltam com a mesma RV", async () => {
     // Enviada e sem resposta: RV01 em montagem; a RV00 enviada não muda.
     const enviada = await propostaEnviada();
@@ -1291,5 +1306,149 @@ describe("o caso real do Itaú, de ponta a ponta", () => {
     assert.equal(tipos.filter((tipo) => tipo === "quote.sent").length, 2);
     assert.ok(!tipos.includes("commercial_customer.became_client"));
     semDinheiroNemPessoa(todos);
+  });
+});
+
+describe("orçar a execução da direta aberta pela Operação (parte 3.10d)", () => {
+  /**
+   * A direta que a Operação abriu (operacao/demanda-direta.ts) e revisou
+   * (operacao/revisao-gravacao.ts): sem contrato, em Execução a orçar, com o
+   * período executado e o resumo por linha do que se cobra.
+   */
+  async function diretaDaOperacao(numero: string, customer = "ITAU", extra: Record<string, unknown> = {}) {
+    await db.doc(`demands/${numero}`).set({
+      numero,
+      customer_code: customer,
+      customer_name: customer === "ITAU" ? "Itaú Unibanco" : customer,
+      contrato_id: null,
+      cobranca: "por_demanda",
+      entrada: "direta",
+      canal: "telefone",
+      tipo: "paraquedas",
+      titulo: "Retirada de mobiliário",
+      recebida_em: "2026-07-10T10:30:00.000Z",
+      execucao: { datas: [], de: null, ate: null, a_definir: true, visita_tecnica: null },
+      etapa: "execucao_a_orcar",
+      etapa_desde: "2026-07-12T21:00:00.000Z",
+      marcos: [
+        { etapa: "para_planejar", em: "2026-07-10T10:30:00.000Z", por_uid: "coord-1" },
+        { etapa: "execucao_a_orcar", em: "2026-07-12T21:00:00.000Z", por_uid: "coord-1" },
+      ],
+      escopo_rv: null,
+      escopo: [],
+      executado_de: "2026-07-11",
+      executado_ate: "2026-07-12",
+      registro_execucao: { etapa_antes: "para_planejar", rv: null, em: "2026-07-12T21:00:00.000Z", por_uid: "coord-1", origem: "operacao" },
+      aditivos_recusados: [],
+      validacao: null,
+      os_numeros: [`${numero}-01`],
+      perda: null,
+      cancelamento: null,
+      aberta_pela: "operacao",
+      operacao: {
+        os_revisadas: [`${numero}-01`],
+        os_em_aberto: [],
+        periodo: { de: "2026-07-11", ate: "2026-07-12" },
+        itens: [
+          { linha: "ip_1", lpu_item_id: "lpu_mesa", item: "Mesa de escritório", unidade: "UN", executado: "12", a_cobrar: "12", absorvido: "0", aditivo: "0" },
+          { linha: "ip_2", lpu_item_id: "lpu_cadeira", item: "Cadeira giratória", unidade: "UN", executado: "40", a_cobrar: "38", absorvido: "2", aditivo: "0" },
+          { linha: "ip_3", lpu_item_id: "lpu_cofre", item: "Cofre", unidade: "VB", executado: "1", a_cobrar: "1", absorvido: "0", aditivo: "0" },
+          { linha: "cp_1", lpu_item_id: null, item: "Içamento pela fachada", unidade: "VB", executado: "1", a_cobrar: "1", absorvido: "0", aditivo: "0" },
+          { linha: "ip_4", lpu_item_id: "lpu_mesa", item: "Mesa de escritório", unidade: "UN", executado: "1", a_cobrar: "0", absorvido: "1", aditivo: "0" },
+        ],
+        aditivo: [],
+        atualizado_em: "2026-07-12T21:00:00.000Z",
+      },
+      ...extra,
+    });
+  }
+
+  function orcar(numero: string, extra: Record<string, unknown> = {}) {
+    return { action: "price_execution", request_id: key(), numero, ...extra };
+  }
+
+  it("o orçamento nasce com o que a Operação manda cobrar, pela tabela do contrato escolhido; o resto volta para lançar", async () => {
+    await diretaDaOperacao("10301");
+    const entrada = orcar("10301", { contrato_id: "itau-2026" });
+    const criado = await saveQuoteFor(db, comercial, entrada, { agora: JULHO });
+    assert.deepEqual([criado.rv, criado.status, criado.etapa, criado.rotulo], [0, "rascunho", "execucao_a_orcar", "10301"]);
+    assert.deepEqual(criado.fora_da_tabela, [
+      { item: "Cofre", unidade: "VB", quantidade: "1" },
+      { item: "Içamento pela fachada", unidade: "VB", quantidade: "1" },
+    ]);
+
+    const quote = await doc("quotes/10301");
+    assert.deepEqual([quote.rv, quote.tipo_rv, quote.status, quote.data_base, (quote.tabela as Linha).id], [0, "execucao", "rascunho", "2026-07-15", "pt_itau_v1"]);
+    assert.deepEqual(
+      linhasDe(quote).map((linha) => [linha.origem, linha.lpu_item_id, linha.quantidade, linha.preco]),
+      [
+        ["tabela", "lpu_mesa", "12", "40.00"],
+        ["tabela", "lpu_cadeira", "38", "18.50"],
+      ],
+    );
+    assert.equal(quote.total_cents, 12 * 4000 + 38 * 1850);
+
+    // A demanda passa a ter o contrato; a etapa, a execução e o resumo da Operação ficam como estavam.
+    const dem = await doc("demands/10301");
+    assert.deepEqual([dem.contrato_id, dem.cobranca, dem.etapa, dem.executado_de, dem.executado_ate], ["itau-2026", "por_demanda", "execucao_a_orcar", "2026-07-11", "2026-07-12"]);
+    assert.equal((dem.operacao as Linha).atualizado_em, "2026-07-12T21:00:00.000Z");
+
+    const daDemanda = await eventos("10301");
+    assert.deepEqual(daDemanda.map((event) => [event.type, (event.payload as Linha).tipo_rv]), [["quote.created", "execucao"]]);
+    semDinheiroNemPessoa(daDemanda);
+
+    // O app repetindo a chamada: o recibo devolve o mesmo resultado, sem outro orçamento nem evento.
+    const repetido = await saveQuoteFor(db, comercial, entrada, { agora: JULHO });
+    assert.deepEqual([repetido.replayed, repetido.events, repetido.fora_da_tabela], [true, criado.events, criado.fora_da_tabela]);
+    assert.equal((await eventos("10301")).length, 1);
+    // Outro toque, com outra chave: já tem orçamento.
+    await rejeita(saveQuoteFor(db, comercial, orcar("10301"), { agora: JULHO }), "failed-precondition", /já tem orçamento/);
+
+    // Daí em diante, o caminho de toda RV de execução: o "Para" na montagem, aprovação, envio e validação.
+    await rejeita(orcamento(comercial, "submit", "10301", {}, JULHO), "failed-precondition", /Falta Para/);
+    await editar("10301", { contato_id: "ct_renata" }, JULHO);
+    await rejeita(orcamento(comercial, "send", "10301", {}, JULHO), "failed-precondition", /RV fechada/);
+    await orcamento(comercial, "submit", "10301", {}, JULHO);
+    await orcamento(owner, "approve", "10301", {}, JULHO);
+    assert.equal((await orcamento(comercial, "send", "10301", {}, JULHO)).etapa, "aguardando_cliente");
+    assert.equal((await demanda(comercial, "validate", "10301", {}, JULHO)).etapa, "aguardando_autorizacao");
+  });
+
+  it("o cliente com tabela própria não cai na padrão: sem contrato, tudo volta para lançar; sem tabela própria, vale a padrão", async () => {
+    await diretaDaOperacao("10302");
+    const semContrato = await saveQuoteFor(db, comercial, orcar("10302"), { agora: JULHO });
+    assert.equal(semContrato.fora_da_tabela?.length, 4);
+    const quote = await doc("quotes/10302");
+    assert.deepEqual([(quote.tabela as Linha).id, linhasDe(quote).length, quote.total_cents], [null, 0, 0]);
+    assert.equal((await doc("demands/10302")).contrato_id, null);
+
+    await diretaDaOperacao("10303", "PROSP", { customer_name: "Prospect Novo" });
+    await saveQuoteFor(db, comercial, orcar("10303"), { agora: JULHO });
+    const padrao = await doc("quotes/10303");
+    assert.equal((padrao.tabela as Linha).id, "pt_padrao");
+    assert.deepEqual(linhasDe(padrao).map((linha) => linha.preco), ["50.00", "20.00"]);
+
+    // O contrato de medição mensal: a cobrança da demanda passa a ser a dele.
+    await diretaDaOperacao("10308", "SAFRA", { customer_name: "Safra" });
+    await saveQuoteFor(db, comercial, orcar("10308", { contrato_id: "safra-2026" }), { agora: JULHO });
+    const dem = await doc("demands/10308");
+    assert.deepEqual([dem.contrato_id, dem.cobranca], ["safra-2026", "medicao_mensal"]);
+  });
+
+  it("só a direta aberta pela Operação, já executada, sem orçamento e com contrato do próprio cliente", async () => {
+    await rejeita(saveQuoteFor(db, comercial, orcar("10399"), { agora: JULHO }), "not-found");
+    await diretaDaOperacao("10304", "ITAU", { aberta_pela: null });
+    await rejeita(saveQuoteFor(db, comercial, orcar("10304"), { agora: JULHO }), "failed-precondition", /aberta pela Operação/);
+    await diretaDaOperacao("10305", "ITAU", { etapa: "para_planejar", executado_de: null, executado_ate: null });
+    await rejeita(saveQuoteFor(db, comercial, orcar("10305"), { agora: JULHO }), "failed-precondition", /com a Operação até a execução/);
+    await diretaDaOperacao("10306", "ITAU", { cancelamento: { motivo: "cliente" } });
+    await rejeita(saveQuoteFor(db, comercial, orcar("10306"), { agora: JULHO }), "failed-precondition", /cancelada/);
+    await diretaDaOperacao("10307");
+    await rejeita(saveQuoteFor(db, comercial, orcar("10307", { contrato_id: "safra-2026" }), { agora: JULHO }), "failed-precondition", /outro cliente/);
+    await rejeita(saveQuoteFor(db, wms, orcar("10307"), { agora: JULHO }), "permission-denied");
+    await rejeita(saveQuoteFor(db, comercial, orcar("10307", { linhas: [] }), { agora: JULHO }), "invalid-argument", /linhas/);
+    assert.equal(await count("quotes"), 0);
+    assert.equal(await eventos().then((todos) => todos.length), 0);
+    assert.equal((await doc("demands/10307")).contrato_id, null);
   });
 });

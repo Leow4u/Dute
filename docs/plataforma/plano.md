@@ -1,6 +1,6 @@
 # Plano: Plataforma Dute (IA native)
 
-Aprovado pelo Leonardo em 19/10/2026. O andamento das fases fica no `CLAUDE.md` da raiz; as telas, em `docs/mockups/`.
+Aprovado pelo Leonardo em 19/10/2026. O andamento das fases fica no `CLAUDE.md` da raiz; as telas, em `docs/mockups/`. O desenho de cada fase, com as partes em ordem e as decisões posteriores a este plano (shell por módulo, proposta da Operação, Omie e legado fora), está em `plano-de-implantacao.md` (23/10/2026); onde os dois divergem, vale o plano de implantação.
 
 ## Contexto
 
@@ -180,6 +180,11 @@ Colaboradores, documentos, CNH, exames e treinamentos no banco `rh`, com acesso 
 Backups do Firestore com teste de restauração (PITR e backup diário ligados no `dute-prod` em 20/10/2026; teste de restauração pendente, roteiro em `docs/plataforma/backup-e-recuperacao.md`), monitoramento e alertas, LGPD (retenção e exclusão), manual do usuário e treinamento.
 
 ## Módulo Operação — especificação
+
+> **Substituída** pelo desenho de `docs/plataforma/fase-3-operacao.md` (parte
+> 3.0 do plano de implantação, 23/10/2026), que parte da proposta "Demanda: do
+> pedido ao faturamento" e das decisões de 23/10. Onde divergem, vale o
+> runbook da Fase 3. O texto abaixo fica como histórico.
 
 ### Tipos de OS
 Transporte/frete, armazenagem/movimentação, serviço em campo e mudança/transporte dedicado, cada um com seus campos.

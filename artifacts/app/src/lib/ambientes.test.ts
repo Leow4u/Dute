@@ -57,14 +57,17 @@ describe("ambiente da rota", () => {
   it("toda rota protegida do App cai no shell do caminho", () => {
     expect(caminhos.filter((path) => path.startsWith("/comercial"))).not.toEqual([]);
     expect(caminhos.filter((path) => path.startsWith("/operacao"))).not.toEqual([]);
+    expect(caminhos.filter((path) => path.startsWith("/campo"))).toEqual(["/campo", "/campo/os", "/campo/concluir"]);
     for (const path of caminhos) {
       const esperado = path.startsWith("/comercial")
         ? "comercial"
         : path.startsWith("/operacao")
           ? "operacao"
-          : path.startsWith("/configuracoes")
-            ? "settings"
-            : "app";
+          : path.startsWith("/campo")
+            ? "campo"
+            : path.startsWith("/configuracoes")
+              ? "settings"
+              : "app";
       expect(layoutDaRota(path), path).toBe(esperado);
     }
   });

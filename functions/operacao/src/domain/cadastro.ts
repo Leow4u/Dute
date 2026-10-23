@@ -22,6 +22,28 @@ export type CategoriaCnh = (typeof CATEGORIAS_CNH)[number];
 
 export type Cnh = { categoria: CategoriaCnh; validade: string };
 
+/**
+ * Vínculo da pessoa com a Dutelog (parte 3.4): própria, freelancer ou
+ * terceiro (motorista de transportadora). Freelancer e terceiro não precisam
+ * de login: o líder registra a presença deles na OS.
+ */
+export const VINCULOS = ["proprio", "freelancer", "terceiro"] as const;
+export type Vinculo = (typeof VINCULOS)[number];
+
+/**
+ * O que a pessoa faz na OS. Com papéis marcados, o papel dela em cada OS sai
+ * desta lista; sem nenhum, a coordenação escolhe qualquer um.
+ */
+export const PAPEIS_DE_CAMPO = ["lider", "motorista", "montador", "ajudante"] as const;
+export type PapelDeCampo = (typeof PAPEIS_DE_CAMPO)[number];
+
+/** De quem é o veículo: da Dutelog ou de um terceiro (transportadora). */
+export const DONOS_DE_VEICULO = ["proprio", "terceiro"] as const;
+export type DonoDeVeiculo = (typeof DONOS_DE_VEICULO)[number];
+
+/** Quem pode ter o app do campo ligado ao cadastro. */
+export const PAPEIS_COM_APP = ["campo", "interno"] as const;
+
 export type ColaboradorGravado = {
   id: string;
   nome: string;
@@ -29,6 +51,13 @@ export type ColaboradorGravado = {
   funcao: string;
   telefone: string | null;
   cnh: Cnh | null;
+  vinculo: Vinculo;
+  /** A empresa do terceiro; null para própria e freelancer. */
+  empresa: string | null;
+  papeis: PapelDeCampo[];
+  /** O login do app (users/{uid}) da pessoa, quando ela tem; é o que deixa o campo ler a própria OS. */
+  usuario_uid: string | null;
+  usuario_email: string | null;
   ativo: boolean;
   edicao: number;
 };
@@ -40,6 +69,11 @@ export type VeiculoGravado = {
   modelo: string | null;
   capacidade_kg: number;
   capacidade_m3: number;
+  dono: DonoDeVeiculo;
+  /** A empresa dona do veículo de terceiro; null no próprio. */
+  empresa: string | null;
+  /** Data da próxima revisão (AAAA-MM-DD), para o alerta do Início. */
+  revisao_em: string | null;
   ativo: boolean;
   edicao: number;
 };
@@ -58,6 +92,8 @@ const mensagens: z.ZodErrorMap = (issue) => {
       return { message: `Campo não aceito: ${issue.keys.join(", ")}.` };
     case z.ZodIssueCode.invalid_union_discriminator:
       return { message: `${campo}: use ${issue.options.map(String).join(", ")}.` };
+    case z.ZodIssueCode.invalid_enum_value:
+      return { message: `${campo.replace(/\.\d+$/, "")}: use ${issue.options.map(String).join(", ")}.` };
     case z.ZodIssueCode.invalid_type:
       return { message: issue.received === "undefined" ? `Informe ${campo}.` : `${campo}: tipo inválido.` };
     case z.ZodIssueCode.too_small:
@@ -110,6 +146,33 @@ const modelo = z
     if (value == null) return null;
     return value.replace(/\s+/g, " ") || null;
   });
+
+const empresa = z
+  .string()
+  .trim()
+  .max(80, "Use até 80 caracteres na empresa.")
+  .nullable()
+  .optional()
+  .transform((value) => {
+    if (value === undefined) return undefined;
+    if (value == null) return null;
+    return value.replace(/\s+/g, " ") || null;
+  });
+const vinculo = z.enum(VINCULOS);
+const papeis = z
+  .array(z.enum(PAPEIS_DE_CAMPO))
+  .max(PAPEIS_DE_CAMPO.length)
+  .transform((lista) => PAPEIS_DE_CAMPO.filter((papel) => lista.includes(papel)));
+const emailDoApp = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .max(200)
+  .nullable()
+  .optional()
+  .transform((value) => (value === undefined ? undefined : value || null))
+  .refine((value) => value == null || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value), "E-mail do app inválido.");
+const dono = z.enum(DONOS_DE_VEICULO);
 
 function digitos(value: string): string {
   return value.replace(/\D/g, "");
@@ -193,6 +256,10 @@ const CriarColaborador = z
     telefone: telefoneCampo,
     cnh_categoria: categoriaCampo,
     cnh_validade: validadeCampo,
+    vinculo: vinculo.optional(),
+    empresa,
+    papeis: papeis.optional(),
+    usuario_email: emailDoApp,
   })
   .strict();
 
@@ -208,6 +275,10 @@ const AlterarColaborador = z
     telefone: telefoneCampo,
     cnh_categoria: categoriaCampo,
     cnh_validade: validadeCampo,
+    vinculo: vinculo.optional(),
+    empresa,
+    papeis: papeis.optional(),
+    usuario_email: emailDoApp,
   })
   .strict();
 
@@ -230,6 +301,10 @@ export type AcaoColaborador =
       funcao: string;
       telefone: string | null;
       cnh: Cnh | null;
+      vinculo: Vinculo;
+      empresa: string | null;
+      papeis: PapelDeCampo[];
+      usuario_email: string | null;
     }
   | {
       action: "update";
@@ -241,6 +316,10 @@ export type AcaoColaborador =
       funcao?: string;
       telefone?: string | null;
       cnh?: Cnh | null;
+      vinculo?: Vinculo;
+      empresa?: string | null;
+      papeis?: PapelDeCampo[];
+      usuario_email?: string | null;
     }
   | { action: "set_active"; idempotency_key: string; id: string; expected_edicao: number; ativo: boolean };
 
@@ -257,6 +336,10 @@ export function interpretarColaborador(data: unknown): AcaoColaborador {
       funcao: entrada.funcao,
       telefone: entrada.telefone ?? null,
       cnh: cnh ?? null,
+      vinculo: entrada.vinculo ?? "proprio",
+      empresa: entrada.empresa ?? null,
+      papeis: entrada.papeis ?? [],
+      usuario_email: entrada.usuario_email ?? null,
     };
   }
   const alteracao: AcaoColaborador = {
@@ -270,9 +353,12 @@ export function interpretarColaborador(data: unknown): AcaoColaborador {
   if (entrada.funcao !== undefined) alteracao.funcao = entrada.funcao;
   if (entrada.telefone !== undefined) alteracao.telefone = entrada.telefone;
   if (cnh !== undefined) alteracao.cnh = cnh;
-  if (alteracao.nome === undefined && alteracao.cpf === undefined && alteracao.funcao === undefined && alteracao.telefone === undefined && alteracao.cnh === undefined) {
-    invalid("Nada para alterar.");
-  }
+  if (entrada.vinculo !== undefined) alteracao.vinculo = entrada.vinculo;
+  if (entrada.empresa !== undefined) alteracao.empresa = entrada.empresa;
+  if (entrada.papeis !== undefined) alteracao.papeis = entrada.papeis;
+  if (entrada.usuario_email !== undefined) alteracao.usuario_email = entrada.usuario_email;
+  const { action: _action, idempotency_key: _chave, id: _id, expected_edicao: _edicao, ...mudancas } = alteracao;
+  if (Object.keys(mudancas).length === 0) invalid("Nada para alterar.");
   return alteracao;
 }
 
@@ -304,6 +390,10 @@ export function aplicarColaborador(atual: ColaboradorGravado | null, acao: AcaoC
         funcao: acao.funcao,
         telefone: acao.telefone,
         cnh: acao.cnh,
+        ...vinculoConferido(acao.vinculo, acao.empresa),
+        papeis: acao.papeis,
+        usuario_uid: null,
+        usuario_email: acao.usuario_email,
         ativo: true,
         edicao: 1,
       },
@@ -324,6 +414,10 @@ export function aplicarColaborador(atual: ColaboradorGravado | null, acao: AcaoC
         funcao: acao.funcao ?? atual.funcao,
         telefone: acao.telefone === undefined ? atual.telefone : acao.telefone,
         cnh: acao.cnh === undefined ? atual.cnh : acao.cnh,
+        ...vinculoConferido(acao.vinculo ?? atual.vinculo, acao.empresa === undefined ? atual.empresa : acao.empresa),
+        papeis: acao.papeis ?? atual.papeis,
+        usuario_uid: acao.usuario_email === undefined ? atual.usuario_uid : null,
+        usuario_email: acao.usuario_email === undefined ? atual.usuario_email : acao.usuario_email,
         edicao: atual.edicao + 1,
       },
     };
@@ -335,6 +429,29 @@ export function aplicarColaborador(atual: ColaboradorGravado | null, acao: AcaoC
     evento: acao.ativo ? "collaborator.reactivated" : "collaborator.deactivated",
     documento: { ...atual, ativo: acao.ativo, edicao: atual.edicao + 1 },
   };
+}
+
+/** O terceiro tem empresa; própria e freelancer, não (a empresa some). */
+export function vinculoConferido(vinculoPedido: Vinculo, empresaPedida: string | null): { vinculo: Vinculo; empresa: string | null } {
+  if (vinculoPedido === "terceiro") {
+    if (!empresaPedida) invalid("Informe a empresa do terceiro.");
+    return { vinculo: vinculoPedido, empresa: empresaPedida };
+  }
+  return { vinculo: vinculoPedido, empresa: null };
+}
+
+/** O dono terceiro tem empresa; o próprio, não. */
+export function donoConferido(donoPedido: DonoDeVeiculo, empresaPedida: string | null): { dono: DonoDeVeiculo; empresa: string | null } {
+  if (donoPedido === "terceiro") {
+    if (!empresaPedida) invalid("Informe a empresa dona do veículo.");
+    return { dono: donoPedido, empresa: empresaPedida };
+  }
+  return { dono: donoPedido, empresa: null };
+}
+
+/** Outro colaborador já está ligado a este login do app. */
+export function conflitoDeUsuario(proprioId: string, ids: readonly string[]): string | null {
+  return ids.some((id) => id !== proprioId) ? "Este login do app já está ligado a outro colaborador." : null;
 }
 
 export function conflitoDeCpf(proprioId: string | null, ids: readonly string[]): string | null {
@@ -370,6 +487,14 @@ const metros = z.number({ invalid_type_error: "Informe a capacidade em metros c�
   }
 });
 
+const revisaoCampo = z
+  .string()
+  .trim()
+  .nullable()
+  .optional()
+  .transform((value) => (value === undefined ? undefined : value || null))
+  .refine((value) => value == null || dataCalendario(value), "Data da revisão inválida.");
+
 const CriarVeiculo = z
   .object({
     action: z.literal("create"),
@@ -379,6 +504,9 @@ const CriarVeiculo = z
     modelo,
     capacidade_kg: quilos,
     capacidade_m3: metros,
+    dono: dono.optional(),
+    empresa,
+    revisao_em: revisaoCampo,
   })
   .strict();
 
@@ -393,6 +521,9 @@ const AlterarVeiculo = z
     modelo,
     capacidade_kg: quilos.optional(),
     capacidade_m3: metros.optional(),
+    dono: dono.optional(),
+    empresa,
+    revisao_em: revisaoCampo,
   })
   .strict();
 
@@ -415,6 +546,9 @@ export type AcaoVeiculo =
       modelo: string | null;
       capacidade_kg: number;
       capacidade_m3: number;
+      dono: DonoDeVeiculo;
+      empresa: string | null;
+      revisao_em: string | null;
     }
   | {
       action: "update";
@@ -426,13 +560,22 @@ export type AcaoVeiculo =
       modelo?: string | null;
       capacidade_kg?: number;
       capacidade_m3?: number;
+      dono?: DonoDeVeiculo;
+      empresa?: string | null;
+      revisao_em?: string | null;
     }
   | { action: "set_active"; idempotency_key: string; id: string; expected_edicao: number; ativo: boolean };
 
 export function interpretarVeiculo(data: unknown): AcaoVeiculo {
   const entrada = parseEntrada(z.discriminatedUnion("action", [CriarVeiculo, AlterarVeiculo, AtivarVeiculo]), data);
   if (entrada.action === "create") {
-    return { ...entrada, modelo: entrada.modelo ?? null };
+    return {
+      ...entrada,
+      modelo: entrada.modelo ?? null,
+      dono: entrada.dono ?? "proprio",
+      empresa: entrada.empresa ?? null,
+      revisao_em: entrada.revisao_em ?? null,
+    };
   }
   if (entrada.action === "set_active") return entrada;
   const alteracao: AcaoVeiculo = {
@@ -446,15 +589,11 @@ export function interpretarVeiculo(data: unknown): AcaoVeiculo {
   if (entrada.modelo !== undefined) alteracao.modelo = entrada.modelo;
   if (entrada.capacidade_kg !== undefined) alteracao.capacidade_kg = entrada.capacidade_kg;
   if (entrada.capacidade_m3 !== undefined) alteracao.capacidade_m3 = entrada.capacidade_m3;
-  if (
-    alteracao.placa === undefined &&
-    alteracao.tipo === undefined &&
-    alteracao.modelo === undefined &&
-    alteracao.capacidade_kg === undefined &&
-    alteracao.capacidade_m3 === undefined
-  ) {
-    invalid("Nada para alterar.");
-  }
+  if (entrada.dono !== undefined) alteracao.dono = entrada.dono;
+  if (entrada.empresa !== undefined) alteracao.empresa = entrada.empresa;
+  if (entrada.revisao_em !== undefined) alteracao.revisao_em = entrada.revisao_em;
+  const { action: _action, idempotency_key: _chave, id: _id, expected_edicao: _edicao, ...mudancas } = alteracao;
+  if (Object.keys(mudancas).length === 0) invalid("Nada para alterar.");
   return alteracao;
 }
 
@@ -476,6 +615,8 @@ export function aplicarVeiculo(atual: VeiculoGravado | null, acao: AcaoVeiculo, 
         modelo: acao.modelo,
         capacidade_kg: acao.capacidade_kg,
         capacidade_m3: acao.capacidade_m3,
+        ...donoConferido(acao.dono, acao.empresa),
+        revisao_em: acao.revisao_em,
         ativo: true,
         edicao: 1,
       },
@@ -496,6 +637,8 @@ export function aplicarVeiculo(atual: VeiculoGravado | null, acao: AcaoVeiculo, 
         modelo: acao.modelo === undefined ? atual.modelo : acao.modelo,
         capacidade_kg: acao.capacidade_kg ?? atual.capacidade_kg,
         capacidade_m3: acao.capacidade_m3 ?? atual.capacidade_m3,
+        ...donoConferido(acao.dono ?? atual.dono, acao.empresa === undefined ? atual.empresa : acao.empresa),
+        revisao_em: acao.revisao_em === undefined ? atual.revisao_em : acao.revisao_em,
         edicao: atual.edicao + 1,
       },
     };

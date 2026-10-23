@@ -5,6 +5,8 @@ import { Router } from "wouter";
 import { contatoDoDocumento, localDoDocumento } from "@/lib/comercial/clientes";
 import { acoesDepoisDoEnvio, type ItemParaAcoes } from "@/lib/comercial/depois-do-envio";
 import { acoesDoOrcamento, adicionarDaTabela, catalogoDaTabela, formDoOrcamento, type FormOrcamento } from "@/lib/comercial/montar";
+import { vistoriaDaDemanda } from "@/lib/comercial/vistoria-da-operacao";
+import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 
 import {
   EstadoDoOrcamento,
@@ -74,6 +76,7 @@ const DADOS: DadosDoOrcamento = {
   totalCents: 186_400,
   situacao: null,
   devolucao: null,
+  operacao: null,
 };
 
 const CONTATOS = [
@@ -151,11 +154,6 @@ function texts(html: string) {
 }
 
 const CABECALHO_RASCUNHO = [
-  "Comercial",
-  "Orçamentos",
-  "Contratos",
-  "Autorizações",
-  "Medições",
   "10045",
   "Em montagem",
   "Proposta",
@@ -307,12 +305,7 @@ describe("montar orçamento", () => {
       acoes: acoesDoOrcamento({ status: "para_aprovar", role: "owner", uid: "u-leo", autorUid: "u-gui" }),
     });
     const lista = texts(html);
-    expect(lista.slice(0, 27)).toEqual([
-      "Comercial",
-      "Orçamentos",
-      "Contratos",
-      "Autorizações",
-      "Medições",
+    expect(lista.slice(0, 22)).toEqual([
       "10045",
       "Para aprovar",
       "Proposta",
@@ -440,6 +433,21 @@ describe("montar orçamento", () => {
     expect(html).toMatch(/<div class="[^"]*border-dashed[^"]*">(?:<svg[\s\S]*?<\/svg>)?A definir<\/div>/);
   });
 
+  it("a execução na Operação: as OS revisadas, por linha o executado e o que se cobra, e o aditivo pedido (parte 3.10c)", async () => {
+    const operacao = {
+      titulo: "OS 10045-01 revisada · 22/10",
+      linhas: [{ item: "Mesa", unidade: "un", executado: "64", aCobrar: "60", absorvido: "0", aditivo: "4" }],
+      aditivo: { numero: "10045", cliente: "Itaú Unibanco", pedidoEm: "2026-10-22T21:10:00.000Z", itens: [{ item: "Mesa", quantidade: "4", unidade: "UN", os: "10045-01" }] },
+    };
+    const html = render({ dados: { ...DADOS, etapa: "execucao_a_orcar", operacao } });
+    const lista = texts(html);
+    for (const texto of ["Execução na Operação", "OS 10045-01 revisada · 22/10", "Aditivo pedido pela Operação · +4 Mesa", "Executado", "A cobrar", "Absorvido", "Aditivo", "64", "60"]) {
+      expect(lista, texto).toContain(texto);
+    }
+    const { violacoesDeAcessibilidade } = await import("@/test/acessibilidade");
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
   it("linha nova, ainda sem id, fica destacada até salvar", () => {
     const linhas = adicionarDaTabela(FORM.linhas, CATALOGO[1], "nova-1").linhas;
     const html = render({ form: { ...FORM, linhas }, sujo: true });
@@ -493,14 +501,14 @@ describe("montar orçamento", () => {
           </Router>,
         ),
       );
-    expect(estado("carregando")).toEqual(["Comercial", "Orçamentos", "Contratos", "Autorizações", "Medições", "Carregando..."]);
-    expect(estado("nao_encontrado")).toEqual(["Comercial", "Orçamentos", "Contratos", "Autorizações", "Medições", "Orçamento não encontrado"]);
-    expect(estado("erro")).toEqual(["Comercial", "Orçamentos", "Contratos", "Autorizações", "Medições", "Não foi possível carregar o orçamento."]);
+    expect(estado("carregando")).toEqual(["Orçamento", "Carregando..."]);
+    expect(estado("nao_encontrado")).toEqual(["Orçamento", "Orçamento não encontrado"]);
+    expect(estado("erro")).toEqual(["Orçamento", "Não foi possível carregar o orçamento."]);
   });
 });
 
 describe("montar orçamento depois do envio (parte 12b)", () => {
-  const ENVIADA: ItemParaAcoes = { numero: "10045", rv: 0, etapa: "aguardando_cliente", tipoRv: "proposta", status: "enviado", edicao: 7, revisaoDe: null, autorUid: "u-gui", escopoRv: null, executada: false, validada: false };
+  const ENVIADA: ItemParaAcoes = { numero: "10045", rv: 0, etapa: "aguardando_cliente", tipoRv: "proposta", status: "enviado", edicao: 7, revisaoDe: null, autorUid: "u-gui", escopoRv: null, executada: false, validada: false, semOrcamento: false, daOperacao: false };
   const quem = { role: "comercial", uid: "u-gui" };
 
   function enviada(parcial: Partial<ItemParaAcoes> = {}, dados: Partial<DadosDoOrcamento> = {}, onAcao: (acao: string) => void = noop) {
@@ -584,12 +592,7 @@ describe("montar orçamento depois do envio (parte 12b)", () => {
 
   it("sem legenda: a RV enviada só tem rótulos, dados e ações", () => {
     const lista = texts(enviada());
-    expect(lista.slice(0, 24)).toEqual([
-      "Comercial",
-      "Orçamentos",
-      "Contratos",
-      "Autorizações",
-      "Medições",
+    expect(lista.slice(0, 19)).toEqual([
       "10045",
       "Aguardando cliente",
       "Proposta",
@@ -610,5 +613,57 @@ describe("montar orçamento depois do envio (parte 12b)", () => {
       "Revisar",
       "Perdido",
     ]);
+  });
+});
+
+describe("a vistoria da Operação na montagem (parte 3.11e)", () => {
+  const VISTORIA = vistoriaDaDemanda({
+    vistoria: {
+      os: "10045-01",
+      enviada_em: "2026-10-22T18:40:00.000Z",
+      ambientes: [{ nome: "Recepção", itens: [{ lpu_item_id: "lpu_cad_tran", item: "Cadeira giratória", unidade: "UN", quantidade: "64" }], fotos: ["os/10045-01/fotos/ft_a000000000000001.jpg"] }],
+      itens: [
+        { lpu_item_id: "lpu_cad_tran", item: "Cadeira giratória", unidade: "UN", quantidade: "64" },
+        { lpu_item_id: "lpu_cofre", item: "Cofre", unidade: "VB", quantidade: "1" },
+      ],
+      medidas: [{ nome: "Porta", valor: "0,90 m" }],
+      acesso: { horario_de_carga: "Depois das 18h", vaga_de_carga: null },
+      observacoes: "Elevador de serviço só até as 19h.",
+    },
+  })!;
+  const vistoria = (overrides: Partial<MontarViewProps> & { form?: FormOrcamento } = {}) =>
+    render({ dados: { ...DADOS, vistoria: VISTORIA }, fotosDaVistoria: { "os/10045-01/fotos/ft_a000000000000001.jpg": "https://exemplo.test/foto.jpg" }, ...overrides });
+
+  it("os itens levantados, o fora da tabela, os ambientes com as fotos, as medidas e o acesso; carregar no rascunho", async () => {
+    const html = vistoria();
+    const lidos = texts(html);
+    const inicio = lidos.indexOf("Vistoria da Operação");
+    expect(lidos.slice(inicio, inicio + 13)).toEqual([
+      "Vistoria da Operação",
+      "OS 10045-01 · 22/10 15:40",
+      "64 Cadeira giratória · 1 vb Cofre",
+      "Fora da tabela · 1 vb Cofre",
+      "Carregar itens no orçamento",
+      "Recepção",
+      "64 Cadeira giratória",
+      "Porta",
+      "0,90 m",
+      "Horário de carga",
+      "Depois das 18h",
+      "Elevador de serviço só até as 19h.",
+      expect.any(String),
+    ]);
+    expect(html).toContain('alt="Recepção · foto 1"');
+    // A ação principal da tela continua uma só (Enviar para aprovação).
+    expect(html.match(/bg-primary text-primary-foreground/g)).toHaveLength(1);
+    expect(html).not.toMatch(/Vistoria da Operação[\s\S]*R\$[\s\S]*Carregar itens/);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("carregada, diz que os itens estão no orçamento; fora do rascunho, não oferece carregar", () => {
+    expect(texts(vistoria({ form: { ...FORM, vistoriaOs: "10045-01" } }))).toContain("Itens carregados no orçamento");
+    const aprovar = vistoria({ acoes: acoesDoOrcamento({ status: "para_aprovar", role: "owner", uid: "u-leo", autorUid: "u-gui" }) });
+    expect(texts(aprovar)).not.toContain("Carregar itens no orçamento");
+    expect(texts(aprovar)).toContain("Vistoria da Operação");
   });
 });

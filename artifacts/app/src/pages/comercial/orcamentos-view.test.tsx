@@ -5,6 +5,7 @@ import { Router } from "wouter";
 import { contratoDoDocumento, type ContratoResumo } from "@/lib/comercial/clientes";
 import { acoesDepoisDoEnvio } from "@/lib/comercial/depois-do-envio";
 import { itemDaFila, type ItemDaFila } from "@/lib/comercial/orcamentos";
+import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 
 import { FilaView, LinhaDaFila, type ContextoDaFila, type FilaViewProps } from "./orcamentos-view";
 
@@ -180,13 +181,9 @@ function texts(html: string) {
 }
 
 const CABECALHO = [
-  "Comercial",
+  "Orçamentos",
   "Orçar execução",
   "Novo orçamento",
-  "Orçamentos",
-  "Contratos",
-  "Autorizações",
-  "Medições",
   "Todas",
   "3",
   "Em montagem",
@@ -202,6 +199,8 @@ const CABECALHO = [
   "Execução a orçar",
   "0",
   "Aguardando autorização",
+  "0",
+  "A faturar",
   "0",
   "Perdidas",
   "0",
@@ -449,9 +448,9 @@ describe("a ficha depois do envio (parte 12b)", () => {
 
   it("rascunho de RV seguinte: Descartar RV e Continuar montagem; a RV de execução em rascunho também continua a montagem", () => {
     const seguinte = item("10048", { etapa: "em_montagem" }, { rv: 1, revisao_de: { rv: 0, edicao: 3, motivo: "correcao" } });
-    expect(texts(comAcoes(seguinte)).slice(-3)).toEqual(["Descartar RV", "Continuar montagem", "Prévia do PDF"]);
+    expect(texts(comAcoes(seguinte)).slice(-4)).toEqual(["Descartar RV", "Perdido", "Continuar montagem", "Prévia do PDF"]);
     const execucao = item("10049", { etapa: "execucao_a_orcar" }, { rv: 2, tipo_rv: "execucao", revisao_de: { rv: 1, edicao: 5, motivo: "execucao" } });
-    expect(texts(comAcoes(execucao)).slice(-3)).toEqual(["Descartar RV", "Continuar montagem", "Prévia do PDF"]);
+    expect(texts(comAcoes(execucao)).slice(-4)).toEqual(["Descartar RV", "Perdido", "Continuar montagem", "Prévia do PDF"]);
   });
 
   it("nenhum botão da etapa é a ação principal da tela: só Novo orçamento é", () => {
@@ -477,5 +476,38 @@ describe("a ficha depois do envio (parte 12b)", () => {
       selecionado: item("10041", { etapa: "aguardando_cliente" }, { status: "enviado" }),
     });
     expect(texts(sem).slice(-2)).toEqual(["Abrir orçamento", "PDF"]);
+  });
+
+  it("a direta que a Operação executou, ainda sem orçamento: só Orçar execução, sem linhas, total nem PDF (parte 3.10d)", async () => {
+    const daOperacao = itemDaFila(
+      "10301",
+      {
+        numero: "10301",
+        customer_code: "ITAU-UNIBANCO",
+        customer_name: "Itaú Unibanco",
+        contrato_id: null,
+        entrada: "direta",
+        aberta_pela: "operacao",
+        canal: "telefone",
+        titulo: "Retirada de mobiliário",
+        solicitante: null,
+        etapa: "execucao_a_orcar",
+        etapa_desde: "2026-10-21T10:00:00.000Z",
+        marcos: [{ etapa: "execucao_a_orcar", em: "2026-10-21T10:00:00.000Z", por_uid: "u-coord" }],
+        executado_de: "2026-10-20",
+      },
+      null,
+    )!;
+    const html = comAcoes(daOperacao);
+    const lidos = texts(html);
+    expect(lidos).toContain("Sem orçamento");
+    expect(lidos).not.toContain("Linhas");
+    expect(lidos).not.toContain("Total");
+    expect(lidos.at(-1)).toBe("Orçar execução");
+    expect(lidos).not.toContain("Abrir orçamento");
+    expect(lidos).not.toContain("Prévia do PDF");
+    // O número não leva a uma montagem que ainda não existe.
+    expect(html).not.toMatch(/href="[^"]*numero=10301/);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 });

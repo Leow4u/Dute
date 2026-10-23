@@ -1,4 +1,5 @@
 import type { DocumentoDoOrcamento } from "@/lib/comercial/documento";
+import { EMISSOR_DO_DOCUMENTO, NOME_DA_DUTELOG, cabecalhoDoEmissor, type Emissor } from "@/lib/comercial/emissor";
 import { cn } from "@/lib/utils";
 
 /**
@@ -27,7 +28,8 @@ const LARGURA: Record<number, string> = {
   6: "col-span-6",
 };
 
-export function OrcamentoDocumento({ documento }: { documento: DocumentoDoOrcamento }) {
+export function OrcamentoDocumento({ documento, emissor = EMISSOR_DO_DOCUMENTO }: { documento: DocumentoDoOrcamento; emissor?: Emissor }) {
+  const cabecalho = cabecalhoDoEmissor(emissor);
   return (
     <article
       aria-label={documento.titulo}
@@ -45,8 +47,13 @@ export function OrcamentoDocumento({ documento }: { documento: DocumentoDoOrcame
 
       <header className="flex items-start justify-between gap-6 border-b-2 border-[#161616] pb-3.5">
         <div className="flex flex-col gap-2">
-          <img src="/dutelog-logo.png" alt="Dutelog Soluções Logísticas" className="h-9 w-auto self-start" />
-          <b className="block text-[13.5px] font-extrabold">Dutelog Soluções Logísticas</b>
+          <img src="/dutelog-logo.png" alt={NOME_DA_DUTELOG} className="h-9 w-auto self-start" />
+          <div>
+            <b className="block text-[13.5px] font-extrabold">{cabecalho.nome}</b>
+            {cabecalho.linha ? (
+              <span className="block text-[12px] font-semibold tabular-nums text-[#3F403F]">{cabecalho.linha}</span>
+            ) : null}
+          </div>
         </div>
         <div className="flex flex-col items-end gap-1.5 text-right">
           <div className="flex items-center gap-1.5">

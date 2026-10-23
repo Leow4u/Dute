@@ -4,6 +4,7 @@ import {
   CalendarDays,
   Check,
   CircleDot,
+  ClipboardList,
   Copy,
   CornerDownRight,
   ExternalLink,
@@ -20,12 +21,13 @@ import {
 
 import { formatarReais } from "@workspace/dominio";
 
-import { AbasDoComercial } from "@/components/comercial/abas-do-comercial";
 import { AcoesDepoisDoEnvio } from "@/components/comercial/acoes-depois-do-envio";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { itensDoAditivoEmTexto, type ExecucaoDaOperacao } from "@/lib/comercial/aditivos-da-operacao";
+import { carregarVistoria, foraDaTabelaDaVistoria, itensDaVistoriaEmTexto, type VistoriaNoComercial } from "@/lib/comercial/vistoria-da-operacao";
 import { dataBr, type ContatoResumo, type LocalResumo } from "@/lib/comercial/clientes";
 import type { AcaoDepoisDoEnvio, AcoesDaEtapa } from "@/lib/comercial/depois-do-envio";
 import { ROTULO_DO_ENVIO } from "@/lib/comercial/envio";
@@ -108,10 +110,16 @@ export type DadosDoOrcamento = {
   /** "Com o aprovador · 21/10 09:05", "Aprovado por Leonardo · 21/10 08:50". */
   situacao: string | null;
   devolucao: { nota: string | null; detalhe: string } | null;
+  /** O que a Operação executou e revisou, e o aditivo que ela pediu (parte 3.10c). */
+  operacao: ExecucaoDaOperacao | null;
+  /** A vistoria que a Operação enviou para a demanda (parte 3.11e). */
+  vistoria?: VistoriaNoComercial | null;
 };
 
 export type MontarViewProps = {
   dados: DadosDoOrcamento;
+  /** A URL de cada foto da vistoria pelo caminho no Storage (o comercial lê as da OS de vistoria). */
+  fotosDaVistoria?: Readonly<Record<string, string>>;
   form: FormOrcamento;
   onForm: (muda: (form: FormOrcamento) => FormOrcamento) => void;
   /** A pessoa mudou algo desde o último salvamento: os totais são a prévia. */
@@ -303,7 +311,7 @@ function Cabecalho(props: MontarViewProps & { totalCents: number | null }) {
     >
       <div className="flex min-w-0 flex-1 basis-96 flex-col gap-2.5">
         <div className="flex flex-wrap items-center gap-3">
-          <h2 className="text-3xl font-extrabold tabular-nums tracking-tight">{dados.rotulo}</h2>
+          <h1 className="text-3xl font-extrabold tabular-nums tracking-tight">{dados.rotulo}</h1>
           <SeloDaEtapa etapa={dados.etapa} dias={dados.diasNaEtapa} />
           <Pill>{TIPO_RV_ROTULO[dados.tipoRv]}</Pill>
         </div>
@@ -1236,15 +1244,161 @@ function totaisDaTela(props: MontarViewProps) {
   };
 }
 
+/** O que a Operação executou e revisou, por linha, e o aditivo que ela pediu (parte 3.10c). Sem valor. */
+function ExecucaoNaOperacao({ execucao }: { execucao: ExecucaoDaOperacao }) {
+  return (
+    <section aria-label="Execução na Operação" className="flex flex-col gap-3 rounded-lg border border-border bg-card p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-base font-extrabold">Execução na Operação</h2>
+        <span className="text-sm font-semibold text-muted-foreground">{execucao.titulo}</span>
+      </div>
+      {execucao.aditivo ? (
+        <p className="rounded-md border border-amber-soft-border bg-amber-soft px-4 py-2.5 text-sm font-semibold text-amber-soft-foreground">
+          Aditivo pedido pela Operação · {itensDoAditivoEmTexto(execucao.aditivo.itens)}
+        </p>
+      ) : null}
+      {execucao.linhas.length ? (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[36rem] text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                <th className="py-2 pr-3">Item</th>
+                <th className="px-2 py-2 text-right">Executado</th>
+                <th className="px-2 py-2 text-right">A cobrar</th>
+                <th className="px-2 py-2 text-right">Absorvido</th>
+                <th className="py-2 pl-2 text-right">Aditivo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {execucao.linhas.map((linha) => (
+                <tr key={linha.item} className="border-b border-border last:border-b-0 font-semibold">
+                  <td className="py-2 pr-3">
+                    {linha.item}
+                    {linha.unidade ? <span className="ml-1.5 text-xs text-muted-foreground">{linha.unidade}</span> : null}
+                  </td>
+                  <td className="px-2 py-2 text-right tabular-nums">{linha.executado}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{linha.aCobrar}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{linha.absorvido}</td>
+                  <td className="py-2 pl-2 text-right tabular-nums">{linha.aditivo}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function dataHoraDaVistoria(instante: string): string {
+  const data = new Date(instante);
+  if (Number.isNaN(data.getTime())) return instante;
+  return new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+    .format(data)
+    .replace(",", "");
+}
+
+/**
+ * A vistoria da Operação na montagem (parte 3.11e): os itens levantados, os
+ * ambientes com as fotos, as medidas, o acesso e as observações. "Carregar
+ * itens no orçamento" põe os itens nas linhas pela tabela; o que a tabela
+ * não tem fica dito, para lançar à mão. Sem valor.
+ */
+function VistoriaNoOrcamento(props: MontarViewProps & { vistoria: VistoriaNoComercial }) {
+  const { vistoria, form, onForm, catalogo, fotosDaVistoria = {} } = props;
+  const contador = useRef(0);
+  const lista = Array.isArray(catalogo) ? catalogo : [];
+  const fora = Array.isArray(catalogo) ? foraDaTabelaDaVistoria(vistoria, catalogo) : [];
+  const carregada = form.vistoriaOs === vistoria.os;
+  const pode = !travado(props) && Array.isArray(catalogo) && !carregada && vistoria.itens.length > fora.length;
+  const dados: Array<[string, string]> = [
+    ...vistoria.medidas.map((medida): [string, string] => [medida.nome, medida.valor]),
+    ...([
+      ["Horário de carga", vistoria.acesso.horarioDeCarga],
+      ["Vaga de carga", vistoria.acesso.vagaDeCarga],
+    ].filter((linha): linha is [string, string] => Boolean(linha[1])) as Array<[string, string]>),
+  ];
+  return (
+    <section aria-label="Vistoria da Operação" className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-base font-extrabold">Vistoria da Operação</h2>
+        <span className="text-sm font-semibold text-muted-foreground">
+          OS {vistoria.os} · {dataHoraDaVistoria(vistoria.enviadaEm)}
+        </span>
+      </div>
+      {vistoria.itens.length ? <p className="text-sm font-semibold">{itensDaVistoriaEmTexto(vistoria.itens)}</p> : null}
+      {fora.length ? (
+        <p className="rounded-md border border-amber-soft-border bg-amber-soft px-4 py-2.5 text-sm font-semibold text-amber-soft-foreground">
+          Fora da tabela · {itensDaVistoriaEmTexto(fora)}
+        </p>
+      ) : null}
+      {carregada ? (
+        <p className="text-sm font-semibold text-success-soft-foreground">Itens carregados no orçamento</p>
+      ) : pode ? (
+        <div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              onForm((atual) => ({
+                ...atual,
+                linhas: carregarVistoria(atual.linhas, vistoria, lista, () => {
+                  contador.current += 1;
+                  return `vistoria-${Date.now()}-${contador.current}`;
+                }),
+                vistoriaOs: vistoria.os,
+              }))
+            }
+          >
+            <ClipboardList aria-hidden="true" />
+            Carregar itens no orçamento
+          </Button>
+        </div>
+      ) : null}
+      {vistoria.ambientes.length ? (
+        <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {vistoria.ambientes.map((ambiente) => (
+            <li key={ambiente.nome} className="flex flex-col gap-2 rounded-md border border-border p-3">
+              <span className="text-sm font-bold">{ambiente.nome}</span>
+              {ambiente.itens.length ? <span className="text-xs font-semibold text-muted-foreground">{itensDaVistoriaEmTexto(ambiente.itens)}</span> : null}
+              {ambiente.fotos.length ? (
+                <ul className="grid grid-cols-4 gap-1.5">
+                  {ambiente.fotos.map((caminho, indice) => (
+                    <li key={caminho} className="aspect-square overflow-hidden rounded border border-border bg-muted">
+                      {fotosDaVistoria[caminho] ? (
+                        <img src={fotosDaVistoria[caminho]} alt={`${ambiente.nome} · foto ${indice + 1}`} className="size-full object-cover" loading="lazy" />
+                      ) : (
+                        <span className="sr-only">{`${ambiente.nome} · foto ${indice + 1}`}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {dados.length ? (
+        <dl className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-sm sm:grid-cols-[12rem_minmax(0,1fr)]">
+          {dados.map(([rotulo, valor]) => (
+            <div key={rotulo} className="contents">
+              <dt className="font-semibold text-muted-foreground">{rotulo}</dt>
+              <dd className="font-semibold">{valor}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+      {vistoria.observacoes ? <p className="whitespace-pre-line text-sm">{vistoria.observacoes}</p> : null}
+    </section>
+  );
+}
+
 export function MontarView(props: MontarViewProps) {
   const totais = totaisDaTela(props);
   const { aviso, dados } = props;
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">
-      <div className="flex flex-col items-start gap-3.5">
-        <h1 className="text-3xl font-extrabold tracking-tight">Comercial</h1>
-        <AbasDoComercial />
-      </div>
       <Cabecalho {...props} totalCents={totais.total} />
       {props.desatualizado && props.sujo ? (
         <p
@@ -1276,6 +1430,8 @@ export function MontarView(props: MontarViewProps) {
           {dados.devolucao.nota ? <p className="text-sm font-semibold">{dados.devolucao.nota}</p> : null}
         </section>
       ) : null}
+      {dados.operacao ? <ExecucaoNaOperacao execucao={dados.operacao} /> : null}
+      {dados.vistoria ? <VistoriaNoOrcamento {...props} vistoria={dados.vistoria} /> : null}
       <div className="flex flex-wrap items-stretch gap-5">
         <Pedido {...props} />
         <Execucao {...props} />
@@ -1297,10 +1453,7 @@ export function EstadoDoOrcamento({ estado }: { estado: "carregando" | "nao_enco
         : "Não foi possível carregar o orçamento.";
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">
-      <div className="flex flex-col items-start gap-3.5">
-        <h1 className="text-3xl font-extrabold tracking-tight">Comercial</h1>
-        <AbasDoComercial />
-      </div>
+      <h1 className="text-3xl font-extrabold tracking-tight">Orçamento</h1>
       <p className="rounded-lg border border-border bg-card px-5 py-7 text-center text-sm font-bold text-muted-foreground">
         {texto}
       </p>

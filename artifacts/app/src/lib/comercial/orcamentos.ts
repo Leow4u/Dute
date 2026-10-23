@@ -41,9 +41,10 @@ export const ORIGENS_LINHA = ["tabela", "alterado", "avulso", "ajuste"] as const
 export type OrigemLinha = (typeof ORIGENS_LINHA)[number];
 
 /**
- * As etapas da fila, na ordem do mockup. "A faturar" e "Cancelada" ficam
- * fora: a demanda já saiu do Comercial (autorização e faturamento têm tela
- * própria).
+ * As etapas da fila, na ordem do mockup, mais "A faturar" (parte 6.22 do plano
+ * de implantação): a demanda a faturar sem autorização registrada (contrato
+ * sem exigência de autorização, sem contrato ou com a medição pendente) não
+ * aparecia em lista nenhuma. "Cancelada" fica fora.
  */
 export const ETAPAS_DA_FILA = [
   "em_montagem",
@@ -53,6 +54,7 @@ export const ETAPAS_DA_FILA = [
   "para_planejar",
   "execucao_a_orcar",
   "aguardando_autorizacao",
+  "a_faturar",
   "perdida",
 ] as const satisfies readonly EtapaDemanda[];
 export type EtapaDaFila = (typeof ETAPAS_DA_FILA)[number];
@@ -84,6 +86,7 @@ export const SEGMENTO_ROTULO: Record<SegmentoDaFila, string> = {
   para_planejar: "Para planejar",
   execucao_a_orcar: "Execução a orçar",
   aguardando_autorizacao: "Aguardando autorização",
+  a_faturar: "A faturar",
   perdida: "Perdidas",
 };
 
@@ -92,6 +95,11 @@ export const TIPO_RV_ROTULO: Record<TipoRv, string> = {
   aditivo: "Aditivo",
   execucao: "Execução",
 };
+
+/** O tipo na fila: a RV em curso, ou "Sem orçamento" na direta que a Operação executou e o Comercial ainda vai orçar. */
+export function tipoDoItem(item: Pick<ItemDaFila, "tipoRv" | "semOrcamento">): string {
+  return item.semOrcamento ? "Sem orçamento" : TIPO_RV_ROTULO[item.tipoRv];
+}
 
 export const ORIGEM_ROTULO: Record<OrigemLinha, string> = {
   tabela: "Tabela",
@@ -239,6 +247,10 @@ export type ItemDaFila = {
   executada: boolean;
   /** O cliente já validou a execução (validacao). */
   validada: boolean;
+  /** A demanda ainda não tem orçamento (quotes/{numero}): a direta que a Operação abriu e executou. */
+  semOrcamento: boolean;
+  /** A demanda direta que a Operação abriu (aberta_pela), para o Comercial orçar o que ela executou. */
+  daOperacao: boolean;
 };
 
 function marcos(value: unknown): MarcoDaDemanda[] {
@@ -280,12 +292,23 @@ function revisaoDe(value: unknown): ItemDaFila["revisaoDe"] {
 }
 
 /**
+ * A demanda direta aberta pela Operação (paraquedas e emergencial) que ainda
+ * não foi executada: está em Para planejar, sem orçamento, e é da Operação.
+ * Vem ao Comercial quando vira execução a orçar (docs/plataforma/fase-3-operacao.md,
+ * parte 3.4c). A direta do "Orçar execução" já nasce executada e não entra aqui.
+ */
+export function demandaDiretaNaOperacao(demanda: Record<string, unknown>): boolean {
+  return demanda.entrada === "direta" && demanda.etapa === "para_planejar";
+}
+
+/**
  * A linha da fila a partir de `demands/{numero}` e `quotes/{numero}`. Sem a
  * demanda (ou com etapa desconhecida) não há linha; sem o orçamento, a linha
- * aparece sem total.
+ * aparece sem total. A demanda direta ainda na Operação não entra.
  */
 export function itemDaFila(numero: string, demanda: Registro | null, quote: Registro | null): ItemDaFila | null {
   if (!demanda) return null;
+  if (demandaDiretaNaOperacao(demanda)) return null;
   const etapa = texto(demanda.etapa);
   if (!(ETAPAS_DEMANDA as readonly string[]).includes(etapa)) return null;
   const q = quote ?? {};
@@ -338,6 +361,8 @@ export function itemDaFila(numero: string, demanda: Registro | null, quote: Regi
     escopoRv: inteiro(demanda.escopo_rv),
     executada: texto(demanda.executado_de) !== "",
     validada: isRegistro(demanda.validacao) && inteiro(demanda.validacao.rv) !== null,
+    semOrcamento: quote === null,
+    daOperacao: demanda.entrada === "direta" && demanda.aberta_pela === "operacao",
   };
 }
 

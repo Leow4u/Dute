@@ -3,6 +3,9 @@ import { collection, getDocs, query, where } from "firebase/firestore";
 import { useLocation, useSearch } from "wouter";
 
 import { useToast } from "@/hooks/use-toast";
+import { execucaoDaOperacao } from "@/lib/comercial/aditivos-da-operacao";
+import { vistoriaDaDemanda } from "@/lib/comercial/vistoria-da-operacao";
+import { useUrlsDasFotos } from "@/lib/operacao/use-urls-das-fotos";
 import { chamarComercial, novaChave, type CallableDoComercial } from "@/lib/comercial/api";
 import { acoesDepoisDoEnvio } from "@/lib/comercial/depois-do-envio";
 import {
@@ -200,6 +203,9 @@ function MontarOrcamento({ numero }: { numero: string }) {
   }, [versao]);
   const { base, form } = estado;
   const sujo = Boolean(base && form && formSujo(base.original, form));
+  // A vistoria que a Operação enviou (parte 3.11e) e as fotos dela, que o comercial lê no Storage.
+  const vistoria = vistoriaDaDemanda(demandaDoc ?? null);
+  const fotosDaVistoria = useUrlsDasFotos(vistoria ? vistoria.ambientes.flatMap((ambiente) => ambiente.fotos) : []);
   // O aviso da recusa de concorrência fica até a pessoa voltar a mexer na montagem.
   useEffect(() => {
     if (sujo) depois.limparAviso();
@@ -492,6 +498,8 @@ function MontarOrcamento({ numero }: { numero: string }) {
           detalhe: [devolveu ? `Devolvido por ${devolveu}` : "Devolvido", dataHoraCurta(item.devolucao.em)].filter(Boolean).join(" · "),
         }
       : null,
+    operacao: execucaoDaOperacao(numero, demandaDoc ?? null, quoteDoc ?? null),
+    vistoria,
   };
   const posEnvio = acoesDepoisDoEnvio(item, { role, uid: user?.uid });
   const acoes = acoesDoOrcamento({
@@ -515,6 +523,7 @@ function MontarOrcamento({ numero }: { numero: string }) {
     <>
       <MontarView
         dados={dados}
+        fotosDaVistoria={fotosDaVistoria}
         form={form}
         onForm={(muda) => despachar({ tipo: "editar", muda })}
         sujo={sujo}

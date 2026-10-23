@@ -132,10 +132,11 @@ service cloud.firestore {
       return hasAnyRole(['owner', 'admin', 'comercial', 'financeiro']);
     }
 
-    // Catálogo sem preço (lpu_items). A operação lê na Fase 3; a tabela de
+    // Catálogo sem preço (lpu_items). A operação lê na Fase 3; o campo, para
+    // incluir o item executado além do planejado (parte 3.8a). A tabela de
     // preço continua em canReadPrices().
     function canReadCatalog() {
-      return canReadPrices() || hasRole('interno');
+      return canReadPrices() || hasRole('interno') || hasRole('campo');
     }
 
     // Polo e endereço do cliente. A operação lê na Fase 3; o contato
@@ -144,10 +145,16 @@ service cloud.firestore {
       return canReadCommercialRegistry() || hasRole('interno');
     }
 
-    // OS sem preço. Suporte lê para diagnóstico. Campo entra quando a OS
-    // tiver a equipe.
+    // OS sem preço. Suporte lê para diagnóstico.
     function canReadServiceOrders() {
       return hasAnyRole(['owner', 'admin', 'interno', 'suporte']);
+    }
+
+    // Campo lê só a OS em que está escalado: o login do app do colaborador
+    // vai em equipe_uids quando a OS é planejada ou agendada (parte 3.4b). A
+    // consulta do app precisa filtrar por equipe_uids (array-contains).
+    function isEscaladoNaOs() {
+      return hasRole('campo') && request.auth.uid in resource.data.get('equipe_uids', []);
     }
 
     function canUseAgentChat() {
@@ -861,8 +868,11 @@ service cloud.firestore {
 
     // OS (parte 2): número 10045-01, itens sem preço. Quem grava é
     // saveServiceOrder. O contador service_order_counters não tem match.
+    // O cliente lê só as próprias OS e só com a Operação contratada
+    // (client_access); a tela dele entra na Fase 4 (parte 2.7 da Fase 2).
+    // O campo lê a OS em que está escalado (parte 3.4b).
     match /service_orders/{orderId} {
-      allow read: if canReadServiceOrders();
+      allow read: if canReadServiceOrders() || isOwnProjectionWith('operacao') || isEscaladoNaOs();
       allow create, update, delete: if false;
     }
 

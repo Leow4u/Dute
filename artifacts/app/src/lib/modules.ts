@@ -1,10 +1,13 @@
+import { CAMPO_ROLES, ROTA_CAMPO, ROTA_CAMPO_CONCLUIR, ROTA_CAMPO_OS } from "./campo/navegacao";
 import {
   BarChart3,
   BrainCircuit,
   Briefcase,
+  CalendarCheck,
   CalendarDays,
   CalendarRange,
   ClipboardCheck,
+  ClipboardList,
   FileCheck,
   FileText,
   Home,
@@ -33,6 +36,7 @@ import {
   ROTA_DOCUMENTO,
   ROTA_MEDICOES,
   ROTA_ORCAMENTO,
+  ROTA_ORCAMENTOS,
   abreComercial,
   APROVADOR_ROLES,
 } from "./comercial/navegacao";
@@ -40,7 +44,16 @@ import { COMERCIAL_LIBERADO, OPERACAO_LIBERADO } from "./liberacao";
 import {
   OPERACAO_CADASTRO_ROLES,
   ROTA_COLABORADORES,
+  ROTA_DEMANDA,
+  ROTA_AGENDA,
+  ROTA_DEMANDAS,
+  ROTA_HOJE,
+  ROTA_NOVA_DEMANDA,
   ROTA_OPERACAO,
+  ROTA_OS,
+  ROTA_OS_IMPRESSAO,
+  ROTA_REVISAO,
+  ROTA_PLANEJAR,
   ROTA_VEICULOS,
   abreOperacao,
 } from "./operacao/navegacao";
@@ -334,8 +347,8 @@ export const APP_MODULES: AppModule[] = [
     ],
   }),
   // Comercial (docs/plataforma/fase-6-comercial.md). As rotas e os papéis
-  // ficam aqui; o menu é do ambiente Comercial, não do WMS. A fila é a casa
-  // (/comercial, rota exata para não acender em Clientes e Contratos).
+  // ficam aqui; o menu é do ambiente Comercial, não do WMS. O Início é a
+  // casa (/comercial, rota exata para não acender nas outras telas).
   appModule({
     id: "comercial",
     label: "Comercial",
@@ -347,12 +360,19 @@ export const APP_MODULES: AppModule[] = [
     group: true,
     routes: [
       navRoute({
-        id: "comercial-orcamentos",
-        label: "Orçamentos",
+        id: "comercial-inicio",
+        label: "Início",
         href: ROTA_COMERCIAL,
-        icon: FileText,
+        icon: Home,
         roles: COMMERCIAL_ROLES,
         exact: true,
+      }),
+      navRoute({
+        id: "comercial-orcamentos",
+        label: "Orçamentos",
+        href: ROTA_ORCAMENTOS,
+        icon: Briefcase,
+        roles: COMMERCIAL_ROLES,
         // A montagem, a aprovação e o documento do orçamento são da fila.
         tambem: [ROTA_ORCAMENTO, ROTA_APROVAR, ROTA_DOCUMENTO],
       }),
@@ -386,8 +406,9 @@ export const APP_MODULES: AppModule[] = [
       }),
     ],
   }),
-  // Operação (docs/plataforma/fase-3-operacao.md): a fila do dia e o cadastro.
-  // O menu é do ambiente Operação, não do WMS.
+  // Operação (docs/plataforma/fase-3-operacao.md): o Início, a fila do dia e o
+  // cadastro. O menu é do ambiente Operação, não do WMS. O Início é a casa
+  // (/operacao, rota exata para não acender nas outras telas).
   appModule({
     id: "operacao",
     label: "Operação",
@@ -399,12 +420,42 @@ export const APP_MODULES: AppModule[] = [
     group: true,
     routes: [
       navRoute({
-        id: "operacao-hoje",
-        label: "Hoje",
+        id: "operacao-inicio",
+        label: "Início",
         href: ROTA_OPERACAO,
-        icon: CalendarDays,
+        icon: Home,
         roles: OPERATION_REGISTRY_ROLES,
         exact: true,
+      }),
+      navRoute({
+        id: "operacao-hoje",
+        label: "Hoje",
+        href: ROTA_HOJE,
+        icon: CalendarCheck,
+        roles: OPERATION_REGISTRY_ROLES,
+        tambem: [ROTA_OS, ROTA_OS_IMPRESSAO],
+      }),
+      navRoute({
+        id: "operacao-agenda",
+        label: "Agenda",
+        href: ROTA_AGENDA,
+        icon: CalendarDays,
+        roles: OPERATION_REGISTRY_ROLES,
+      }),
+      navRoute({
+        id: "operacao-demandas",
+        label: "Demandas",
+        href: ROTA_DEMANDAS,
+        icon: ClipboardList,
+        roles: OPERATION_REGISTRY_ROLES,
+        tambem: [ROTA_DEMANDA, ROTA_NOVA_DEMANDA, ROTA_PLANEJAR],
+      }),
+      navRoute({
+        id: "operacao-revisao",
+        label: "Revisão",
+        href: ROTA_REVISAO,
+        icon: ClipboardCheck,
+        roles: OPERATION_REGISTRY_ROLES,
       }),
       navRoute({
         id: "operacao-colaboradores",
@@ -680,6 +731,18 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   // O documento A4 do orçamento (prévia e PDF) e a aprovação, que é só do owner.
   { path: ROTA_DOCUMENTO, roles: COMMERCIAL_ROLES },
   { path: ROTA_APROVAR, roles: [...APROVADOR_ROLES] },
+  // A ficha da demanda na Operação, aberta pela lista (?numero=), e a nova demanda direta.
+  { path: ROTA_DEMANDA, roles: OPERATION_REGISTRY_ROLES },
+  { path: ROTA_NOVA_DEMANDA, roles: OPERATION_REGISTRY_ROLES },
+  { path: ROTA_PLANEJAR, roles: OPERATION_REGISTRY_ROLES },
+  // A ficha da OS, aberta pela Agenda, pela demanda e pelo Hoje (?numero=).
+  { path: ROTA_OS, roles: OPERATION_REGISTRY_ROLES },
+  { path: ROTA_OS_IMPRESSAO, roles: OPERATION_REGISTRY_ROLES },
+  { path: ROTA_REVISAO, roles: OPERATION_REGISTRY_ROLES },
+  // O app do campo (parte 3.8b): Minhas OS e a OS no celular.
+  { path: ROTA_CAMPO, roles: [...CAMPO_ROLES] },
+  { path: ROTA_CAMPO_OS, roles: [...CAMPO_ROLES] },
+  { path: ROTA_CAMPO_CONCLUIR, roles: [...CAMPO_ROLES] },
 ];
 
 const MERGED_SCREEN_APP_ROLES = Object.fromEntries(
@@ -908,15 +971,21 @@ const MOBILE_BAR_PRIORITY = [
 
 export const MOBILE_BAR_SLOTS = 4;
 
-export function getMobileNavigation(modules: AppModule[]): MobileNavigation {
+/**
+ * A barra do celular nos shells v3 de módulo (docs/mockups/ModCelularCom.dc.html
+ * e ModCelularOp.dc.html): três telas e "Mais", para o rótulo caber inteiro.
+ */
+export const MOBILE_BAR_SLOTS_DO_MODULO = 3;
+
+export function getMobileNavigation(modules: AppModule[], slots: number = MOBILE_BAR_SLOTS): MobileNavigation {
   const enabled = modules.filter(isModuleEnabled);
   const bar: AppModule[] = [];
   for (const id of MOBILE_BAR_PRIORITY) {
     const match = enabled.find((module) => module.id === id);
-    if (match && bar.length < MOBILE_BAR_SLOTS) bar.push(match);
+    if (match && bar.length < slots) bar.push(match);
   }
   for (const module of enabled) {
-    if (bar.length >= MOBILE_BAR_SLOTS) break;
+    if (bar.length >= slots) break;
     if (!bar.includes(module)) bar.push(module);
   }
   const more: MobileNavigation["more"] = [];
@@ -1014,11 +1083,9 @@ export function getActiveModule(
   const currentPath =
     ACTIVE_ALIASES[normalized] ??
     (normalized.startsWith("/wms/") ? "/estoque" : path);
+  // A mesma regra do menu: a rota do item e as telas dele (`tambem`).
   const exactMatch = modules.find((module) =>
-    module.routes.some(
-      (route) =>
-        route.href && isRouteActive(currentPath, route.href, route.exact),
-    ),
+    module.routes.some((route) => isNavRouteActive(currentPath, route)),
   );
   if (exactMatch) return exactMatch;
 

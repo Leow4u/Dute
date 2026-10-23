@@ -111,13 +111,52 @@ export function resolveOperationProfile(
 }
 
 /**
- * Módulos que o portal mostra para o perfil. Sem perfil (ainda carregando,
- * ou área interna) não há filtro. Modelo sem portal mostra só o Início, para
- * uma conta de cliente criada por engano não abrir uma tela em branco.
+ * O módulo contratado de que cada tela do portal depende (parte 2.7 da Fase
+ * 2). O Início é de todos. As regras do Firestore negam o resto: as
+ * projeções do armazém e os documentos exigem `wms`, as faturas exigem
+ * `financeiro`, e o Agent Dute do portal ainda é do WMS (Fase 5).
+ */
+export const MODULO_DA_TELA_DO_PORTAL: Readonly<Record<PortalModuleKey, ModuloContratavel | null>> = {
+  home: null,
+  assistant: "wms",
+  inventory: "wms",
+  events: "wms",
+  requests: "wms",
+  orders: "wms",
+  documents: "wms",
+  invoices: "financeiro",
+};
+
+/** A tela do portal cabe no contrato: o Início sempre; as outras, com o módulo delas. */
+export function telaNoContrato(tela: PortalModuleKey, modules: readonly ModuloContratavel[]): boolean {
+  const modulo = MODULO_DA_TELA_DO_PORTAL[tela];
+  return modulo === null || modules.includes(modulo);
+}
+
+/**
+ * As projeções do portal que o contrato deixa ler, as mesmas das regras do
+ * Firestore (`isOwnProjectionWith`): o portal não pede o que vai ser negado.
+ */
+export function leiturasDoPortal(modules: readonly ModuloContratavel[]) {
+  const armazenagem = modules.includes("wms");
+  return {
+    estoque: armazenagem,
+    pedidos: armazenagem,
+    solicitacoes: armazenagem,
+    documentos: armazenagem,
+    faturas: modules.includes("financeiro"),
+  };
+}
+
+/**
+ * Módulos que o portal mostra para o perfil: os do modelo de operação que
+ * cabem nos módulos contratados. Sem perfil (ainda carregando, ou área
+ * interna) não há filtro. Modelo sem portal mostra só o Início, para uma
+ * conta de cliente criada por engano não abrir uma tela em branco.
  */
 export function portalModulesFor(profile: OperationProfile | null | undefined): readonly PortalModuleKey[] | null {
   if (!profile) return null;
-  return profile.template.portal ?? ["home"];
+  return (profile.template.portal ?? ["home"]).filter((tela) => telaNoContrato(tela, profile.modules));
 }
 
 /** Sigla do SKU: 2 a 6 letras ou números, começando por letra. Igual às Functions. */

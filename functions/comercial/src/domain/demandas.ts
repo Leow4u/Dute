@@ -729,7 +729,14 @@ export async function advanceDemandFor(
 
       // Leituras (cada ação lê o resto antes de escrever).
       const [demandaSnap, quoteSnap] = await transaction.getAll(demandRef(db, numero), quoteRef(db, numero));
-      if (!demandaSnap.exists || !quoteSnap.exists) throw new HttpsError("not-found", `Demanda ${numero} não encontrada.`);
+      if (!demandaSnap.exists) throw new HttpsError("not-found", `Demanda ${numero} não encontrada.`);
+      if (!quoteSnap.exists) {
+        // A demanda direta aberta pela Operação não tem orçamento até a execução ser orçada (parte 3.4c).
+        if (demandaSnap.get("entrada") === "direta") {
+          throw new HttpsError("failed-precondition", `A demanda ${numero} é direta e ainda não tem orçamento: está com a Operação até a execução.`);
+        }
+        throw new HttpsError("not-found", `Demanda ${numero} não encontrada.`);
+      }
       const demanda = demandaSnap.data() ?? {};
       const quote = quoteSnap.data() ?? {};
       const contexto: Contexto = { transaction, db, operationId, actor, caller, numero, demanda, quote, instante, iso };

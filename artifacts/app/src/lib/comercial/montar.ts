@@ -576,6 +576,8 @@ export type FormOrcamento = {
   linhas: LinhaForm[];
   condicoes: string;
   observacoes: string;
+  /** A vistoria da Operação cujos itens o orçamento carregou (parte 3.11e), ou "". */
+  vistoriaOs: string;
 };
 
 const FUSO = "America/Sao_Paulo";
@@ -646,6 +648,7 @@ export function formDoOrcamento(demanda: Registro, quote: Registro): FormOrcamen
     linhas: Array.isArray(quote.linhas) ? quote.linhas.filter(isRegistro).map(linhaDoServidor) : [],
     condicoes: texto(quote.condicoes),
     observacoes: texto(quote.observacoes_internas),
+    vistoriaOs: texto(quote.vistoria_os),
   };
 }
 
@@ -743,6 +746,8 @@ export function payloadSalvar(entrada: {
   if (!igual(linhas, entradasDasLinhas(original.linhas))) payload.linhas = linhas;
   if (texto(form.condicoes) !== texto(original.condicoes)) payload.condicoes = opcional(form.condicoes);
   if (texto(form.observacoes) !== texto(original.observacoes)) payload.observacoes_internas = opcional(form.observacoes);
+  // A vistoria carregada vai uma vez: o servidor confere que é a enviada para a demanda.
+  if (form.vistoriaOs && form.vistoriaOs !== original.vistoriaOs) payload.vistoria_os = form.vistoriaOs;
   if (entrada.variante) payload.variante = entrada.variante;
   return payload;
 }

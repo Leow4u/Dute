@@ -27,6 +27,7 @@ import {
   rotuloDoContratoDoOrcamento,
   segmentoInicial,
   tempoNaEtapa,
+  tipoDoItem,
   type ItemDaFila,
 } from "./orcamentos";
 
@@ -141,7 +142,7 @@ describe("listas iguais às de functions/comercial", () => {
     expect([...lista]).toEqual(tsList(eventsDoComercial, nome));
   });
 
-  it("a fila tem as oito etapas do mockup, na ordem, e Todas na frente", () => {
+  it("a fila tem as oito etapas do mockup e A faturar (parte 6.22), na ordem, e Todas na frente", () => {
     expect(ETAPAS_DA_FILA.map((etapa) => SEGMENTO_ROTULO[etapa])).toEqual([
       "Em montagem",
       "Para aprovar",
@@ -150,6 +151,7 @@ describe("listas iguais às de functions/comercial", () => {
       "Para planejar",
       "Execução a orçar",
       "Aguardando autorização",
+      "A faturar",
       "Perdidas",
     ]);
     expect(SEGMENTOS_DA_FILA[0]).toBe("todas");
@@ -224,12 +226,27 @@ describe("item da fila", () => {
   it("etapa desconhecida não entra na fila", () => {
     expect(itemDaFila("10045", demanda("10045", { etapa: "xyz" }), orcamento("10045"))).toBeNull();
   });
+
+  it("a demanda direta ainda na Operação não entra; executada, entra para orçar a execução (parte 3.4c)", () => {
+    expect(itemDaFila("10050", demanda("10050", { entrada: "direta", etapa: "para_planejar" }), null)).toBeNull();
+    expect(itemDaFila("10050", demanda("10050", { entrada: "direta", etapa: "execucao_a_orcar" }), null)?.etapa).toBe("execucao_a_orcar");
+    expect(itemDaFila("10045", demanda("10045", { entrada: "comercial", etapa: "para_planejar" }), orcamento("10045"))?.etapa).toBe("para_planejar");
+  });
+
+  it("a direta que a Operação abriu, executada e sem orçamento: Sem orçamento, para o Comercial orçar (parte 3.10d)", () => {
+    const daOperacao = itemDaFila("10301", demanda("10301", { entrada: "direta", aberta_pela: "operacao", etapa: "execucao_a_orcar" }), null)!;
+    expect([daOperacao.semOrcamento, daOperacao.daOperacao, tipoDoItem(daOperacao)]).toEqual([true, true, "Sem orçamento"]);
+    const orcada = itemDaFila("10301", demanda("10301", { entrada: "direta", aberta_pela: "operacao", etapa: "execucao_a_orcar" }), orcamento("10301", { tipo_rv: "execucao" }))!;
+    expect([orcada.semOrcamento, orcada.daOperacao, tipoDoItem(orcada)]).toEqual([false, true, "Execução"]);
+    // A direta do "Orçar execução" do Comercial já nasce com orçamento e não é da Operação.
+    expect(itemDaFila("10045", demanda("10045", { entrada: "direta", etapa: "execucao_a_orcar" }), orcamento("10045"))!.daOperacao).toBe(false);
+  });
 });
 
 describe("segmentos e contagens", () => {
   it("conta cada etapa da fila; Todas soma só as etapas da fila", () => {
     expect(contarSegmentos(FILA)).toEqual({
-      todas: 10,
+      todas: 11,
       em_montagem: 2,
       para_aprovar: 2,
       para_enviar: 1,
@@ -237,6 +254,7 @@ describe("segmentos e contagens", () => {
       para_planejar: 0,
       execucao_a_orcar: 1,
       aguardando_autorizacao: 1,
+      a_faturar: 1,
       perdida: 2,
     });
   });
@@ -250,7 +268,7 @@ describe("grupos da fila", () => {
   const grupos = (segmento: Parameters<typeof filtrarFila>[1], busca = "") =>
     filtrarFila(FILA, segmento, busca).map((grupo) => [grupo.etapa, grupo.rotulo, grupo.itens.map((orc) => orc.numero)]);
 
-  it("Todas: grupos na ordem das etapas, só os que têm orçamento; a_faturar e cancelada ficam fora", () => {
+  it("Todas: grupos na ordem das etapas, só os que têm orçamento; a faturar entra (parte 6.22) e cancelada fica fora", () => {
     expect(grupos("todas")).toEqual([
       ["em_montagem", "Em montagem", ["10052", "10053"]],
       ["para_aprovar", "Para aprovar", ["10050", "10045"]],
@@ -258,6 +276,7 @@ describe("grupos da fila", () => {
       ["aguardando_cliente", "Aguardando cliente", ["10041"]],
       ["execucao_a_orcar", "Execução a orçar", ["10036"]],
       ["aguardando_autorizacao", "Aguardando autorização", ["10031"]],
+      ["a_faturar", "A faturar", ["10020"]],
       ["perdida", "Perdidas", ["10034", "10030"]],
     ]);
   });

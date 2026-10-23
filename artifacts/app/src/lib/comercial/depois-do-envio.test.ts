@@ -8,7 +8,9 @@ import {
   MOTIVOS_DE_PERDA,
   MOTIVOS_DE_REVISAO,
   ROTULO_DA_ACAO,
+  ETAPAS_QUE_PERDEM,
   acoesDepoisDoEnvio,
+  demandaComprometida,
   camposDoDialogo,
   formInicialDoDialogo,
   problemasDoDialogo,
@@ -17,6 +19,8 @@ import {
   motivosDePerdaPermitidos,
   pedidoDaAcao,
   pedidoDeExecucaoDireta,
+  foraDaTabelaEmTexto,
+  problemasDoContrato,
   problemasDaExecucao,
   problemasDaPerda,
   problemasDaResposta,
@@ -34,6 +38,7 @@ import {
 
 const here = dirname(fileURLToPath(import.meta.url));
 const eventsDoComercial = readFileSync(resolve(here, "../../../../../functions/comercial/src/domain/events.ts"), "utf8");
+const quotesDoComercial = readFileSync(resolve(here, "../../../../../functions/comercial/src/domain/quotes.ts"), "utf8");
 
 function item(parcial: Partial<ItemParaAcoes> = {}): ItemParaAcoes {
   return {
@@ -48,6 +53,8 @@ function item(parcial: Partial<ItemParaAcoes> = {}): ItemParaAcoes {
     escopoRv: null,
     executada: false,
     validada: false,
+    semOrcamento: false,
+    daOperacao: false,
     ...parcial,
   };
 }
@@ -94,6 +101,7 @@ describe("ações por etapa, tipo de RV e papel", () => {
     expect(acoesDepoisDoEnvio(item({ ...negociando, status: "rascunho", etapa: "em_montagem" }), COMERCIAL).secundarias).toEqual([
       "descartar_rv",
       "registrar_execucao",
+      "perder",
     ]);
     expect(acoesDepoisDoEnvio(item({ ...negociando, status: "para_aprovar", etapa: "para_aprovar" }), COMERCIAL).secundarias).toEqual([
       "descartar_rv",
@@ -102,6 +110,7 @@ describe("ações por etapa, tipo de RV e papel", () => {
     expect(acoesDepoisDoEnvio(item({ ...negociando, status: "aprovado", etapa: "para_enviar" }), COMERCIAL).secundarias).toEqual([
       "descartar_rv",
       "registrar_execucao",
+      "perder",
     ]);
     // Quem não pode descartar o "para aprovar" ainda registra a execução.
     expect(
@@ -126,11 +135,28 @@ describe("ações por etapa, tipo de RV e papel", () => {
 
   it("rascunho de RV seguinte: Descartar RV; a primeira RV não tem de onde voltar", () => {
     const seguinte = item({ status: "rascunho", etapa: "em_montagem", rv: 1, revisaoDe: { rv: 0, motivo: "pedido_cliente" } });
-    expect(acoesDepoisDoEnvio(seguinte, COMERCIAL)).toEqual({ principal: null, secundarias: ["descartar_rv"] });
-    expect(acoesDepoisDoEnvio(item({ status: "rascunho", etapa: "em_montagem" }), COMERCIAL)).toEqual({ principal: null, secundarias: [] });
+    expect(acoesDepoisDoEnvio(seguinte, COMERCIAL)).toEqual({ principal: null, secundarias: ["descartar_rv", "perder"] });
+    expect(acoesDepoisDoEnvio(item({ status: "rascunho", etapa: "em_montagem" }), COMERCIAL)).toEqual({ principal: null, secundarias: ["perder"] });
     // A RV de execução em rascunho (execução a orçar) também se descarta.
     const execucao = item({ status: "rascunho", etapa: "execucao_a_orcar", tipoRv: "execucao", rv: 2, revisaoDe: { rv: 1, motivo: "execucao" } });
-    expect(acoesDepoisDoEnvio(execucao, COMERCIAL)).toEqual({ principal: null, secundarias: ["descartar_rv"] });
+    expect(acoesDepoisDoEnvio(execucao, COMERCIAL)).toEqual({ principal: null, secundarias: ["descartar_rv", "perder"] });
+  });
+
+  it("Perdido no rascunho e no aprovado ainda não enviado (parte 6.22); no para aprovar, não", () => {
+    expect(acoesDepoisDoEnvio(item({ status: "rascunho", etapa: "em_montagem" }), COMERCIAL).secundarias).toEqual(["perder"]);
+    expect(acoesDepoisDoEnvio(item({ status: "aprovado", etapa: "para_enviar" }), COMERCIAL).secundarias).toEqual(["perder"]);
+    expect(acoesDepoisDoEnvio(item({ status: "para_aprovar", etapa: "para_aprovar" }), COMERCIAL)).toEqual({ principal: null, secundarias: [] });
+    // Antes do fechamento, todos os motivos; depois, só o cancelamento do cliente.
+    expect(demandaComprometida(item({ status: "rascunho", etapa: "em_montagem" }))).toBe(false);
+    expect(demandaComprometida(item({ status: "rascunho", etapa: "em_montagem", escopoRv: 0 }))).toBe(true);
+    expect(demandaComprometida(item({ executada: true }))).toBe(true);
+    expect(demandaComprometida(item({ validada: true }))).toBe(true);
+  });
+
+  it("as etapas que perdem são as do servidor (ETAPAS_QUE_PERDEM, functions/comercial)", () => {
+    const fonte = readFileSync(new URL("../../../../../functions/comercial/src/domain/demanda.ts", import.meta.url), "utf8");
+    const lista = fonte.match(/export const ETAPAS_QUE_PERDEM = \[([\s\S]*?)\]/)?.[1] ?? "";
+    expect([...lista.matchAll(/"([a-z_]+)"/g)].map(([, etapa]) => etapa)).toEqual([...ETAPAS_QUE_PERDEM]);
   });
 
   it("descartar a RV que está para aprovar é de quem montou ou do owner; as outras pessoas não", () => {
@@ -139,7 +165,7 @@ describe("ações por etapa, tipo de RV e papel", () => {
     expect(acoesDepoisDoEnvio(aprovar, OWNER).secundarias).toEqual(["descartar_rv"]);
     expect(acoesDepoisDoEnvio(aprovar, { role: "admin", uid: "u-ana" }).secundarias).toEqual([]);
     const aprovada = item({ status: "aprovado", etapa: "para_enviar", rv: 1, revisaoDe: { rv: 0, motivo: "correcao" } });
-    expect(acoesDepoisDoEnvio(aprovada, { role: "admin", uid: "u-ana" }).secundarias).toEqual(["descartar_rv"]);
+    expect(acoesDepoisDoEnvio(aprovada, { role: "admin", uid: "u-ana" }).secundarias).toEqual(["descartar_rv", "perder"]);
   });
 
   it("a demanda perdida não descarta RV: reabre antes", () => {
@@ -169,6 +195,7 @@ describe("ações por etapa, tipo de RV e papel", () => {
       registrar_execucao: "Registrar execução",
       aditivo: "Aditivo",
       orcar_execucao: "Orçar execução",
+      orcar_da_operacao: "Orçar execução",
       reabrir: "Reabrir",
       descartar_rv: "Descartar RV",
     });
@@ -199,8 +226,8 @@ describe("motivos", () => {
   });
 
   it("depois do fechamento, Perdido só com cancelado pelo cliente; antes dele, todos", () => {
-    expect(motivosDePerdaPermitidos("para_planejar").map((motivo) => motivo.valor)).toEqual(["cancelado_cliente"]);
-    expect(motivosDePerdaPermitidos("aguardando_cliente")).toEqual(MOTIVOS_DE_PERDA);
+    expect(motivosDePerdaPermitidos(true).map((motivo) => motivo.valor)).toEqual(["cancelado_cliente"]);
+    expect(motivosDePerdaPermitidos(false)).toEqual(MOTIVOS_DE_PERDA);
   });
 });
 
@@ -439,6 +466,8 @@ describe("o formulário do diálogo", () => {
       nota: "",
       de: "",
       ate: "",
+      contratoId: "",
+      variante: "Comercial",
     });
     expect(formInicialDoDialogo("fechar", { ...base, contatoId: "ct_apagado" }).contatoId).toBe("");
     expect(formInicialDoDialogo("fechar", { ...base, contatoId: null }).contatoId).toBe("");
@@ -446,17 +475,77 @@ describe("o formulário do diálogo", () => {
 
   it("Perdido depois do fechamento já vem com o único motivo possível", () => {
     const base = { agora, contatos, contatoId: null };
-    expect(formInicialDoDialogo("perder", { ...base, etapa: "para_planejar" }).motivo).toBe("cancelado_cliente");
-    expect(formInicialDoDialogo("perder", { ...base, etapa: "aguardando_cliente" }).motivo).toBe("");
+    expect(formInicialDoDialogo("perder", { ...base, comprometida: true }).motivo).toBe("cancelado_cliente");
+    expect(formInicialDoDialogo("perder", { ...base, comprometida: false }).motivo).toBe("");
   });
 
   it("os problemas seguem a ação: resposta, perda, revisão, execução; confirmar não tem campo", () => {
-    const contexto = { agora, hoje: "2026-10-21", envioEm: null, contatos, etapa: "aguardando_cliente" as const };
-    const vazio = formInicialDoDialogo("fechar", { agora, contatos, contatoId: null, etapa: "aguardando_cliente" });
+    const contexto = { agora, hoje: "2026-10-21", envioEm: null, contatos, comprometida: false };
+    const vazio = formInicialDoDialogo("fechar", { agora, contatos, contatoId: null, comprometida: false });
     expect(problemasDoDialogo("fechar", vazio, contexto)).toEqual({ contato: "Escolha o contato do cliente." });
     expect(problemasDoDialogo("perder", vazio, contexto)).toEqual({ motivo: "Escolha o motivo." });
     expect(problemasDoDialogo("revisar", vazio, contexto)).toEqual({ motivo: "Escolha o motivo." });
     expect(problemasDoDialogo("registrar_execucao", vazio, contexto)).toEqual({ de: "Informe o início.", ate: "Informe o fim." });
     expect(problemasDoDialogo("reabrir", vazio, contexto)).toEqual({});
+  });
+});
+
+describe("a direta que a Operação abriu e executou (parte 3.10d)", () => {
+  const DA_OPERACAO = item({ numero: "10301", etapa: "execucao_a_orcar", status: "rascunho", semOrcamento: true, daOperacao: true });
+
+  it("sem orçamento, só ela, em Execução a orçar, tem ação: Orçar execução", () => {
+    expect(acoesDepoisDoEnvio(DA_OPERACAO, COMERCIAL)).toEqual({ principal: "orcar_da_operacao", secundarias: [] });
+    expect(acoesDepoisDoEnvio(DA_OPERACAO, OWNER).principal).toBe("orcar_da_operacao");
+    expect(acoesDepoisDoEnvio(DA_OPERACAO, { role: "interno", uid: "u-x" })).toEqual({ principal: null, secundarias: [] });
+    // As outras ações pedem o orçamento: sem ele, nada (nem Perdido).
+    expect(acoesDepoisDoEnvio({ ...DA_OPERACAO, daOperacao: false }, COMERCIAL)).toEqual({ principal: null, secundarias: [] });
+    expect(acoesDepoisDoEnvio({ ...DA_OPERACAO, etapa: "aguardando_autorizacao" }, COMERCIAL)).toEqual({ principal: null, secundarias: [] });
+    // Com o orçamento criado, é a RV de execução em rascunho como qualquer outra.
+    expect(acoesDepoisDoEnvio({ ...DA_OPERACAO, semOrcamento: false, tipoRv: "execucao" }, COMERCIAL).principal).toBeNull();
+  });
+
+  it("o diálogo pede o contrato do cliente e a tabela, com o vigente sugerido", () => {
+    expect(camposDoDialogo("orcar_da_operacao")).toBe("contrato");
+    const contratos = [{ id: "itau-2026" }];
+    const base = { agora: new Date("2026-10-21T15:00:00.000Z"), contatoId: null, contatos: [], comprometida: false, contratos };
+    expect(formInicialDoDialogo("orcar_da_operacao", { ...base, contratoId: "itau-2026" })).toMatchObject({ contratoId: "itau-2026", variante: "Comercial" });
+    expect(formInicialDoDialogo("orcar_da_operacao", { ...base, contratoId: "itau-antigo" }).contratoId).toBe("");
+    expect(problemasDoContrato({ contratoId: "", variante: "Noturna" }, contratos)).toEqual({});
+    expect(problemasDoContrato({ contratoId: "safra-2026", variante: "Diurna" }, contratos)).toEqual({
+      contrato: "Escolha um contrato do cliente.",
+      variante: "Escolha a tabela.",
+    });
+    const contexto = { agora: base.agora, hoje: "2026-10-21", envioEm: null, contatos: [], comprometida: false, contratos };
+    expect(problemasDoDialogo("orcar_da_operacao", { ...formInicialDoDialogo("orcar_da_operacao", base), contratoId: "safra-2026" }, contexto)).toEqual({
+      contrato: "Escolha um contrato do cliente.",
+    });
+  });
+
+  it("o pedido é saveQuote price_execution, com os campos que o servidor aceita, e abre a montagem", () => {
+    const pedido = pedidoDaAcao("orcar_da_operacao", DA_OPERACAO, { contratoId: "itau-2026", variante: "Noturna" }, "k-1");
+    expect(pedido).toEqual({
+      callable: "saveQuote",
+      payload: { action: "price_execution", request_id: "k-1", numero: "10301", contrato_id: "itau-2026", variante: "Noturna" },
+      sucesso: "Orçamento de execução criado",
+      abreMontagem: true,
+    });
+    expect(pedidoDaAcao("orcar_da_operacao", DA_OPERACAO, { contratoId: "" }, "k-2").payload).toMatchObject({ contrato_id: null, variante: "Comercial" });
+    // O schema do servidor (functions/comercial, OrcarExecucaoDaOperacao) é .strict(): campo a mais é recusado.
+    const schema = /const OrcarExecucaoDaOperacao = z\s*\.object\(\{([\s\S]*?)\}\)\s*\.strict\(\)/.exec(quotesDoComercial)?.[1] ?? "";
+    const aceitos = Array.from(schema.matchAll(/^\s*(\w+):/gm), ([, chave]) => chave);
+    expect(aceitos).toEqual(["action", "request_id", "numero", "contrato_id", "variante"]);
+    expect(Object.keys(pedido.payload).every((chave) => aceitos.includes(chave))).toBe(true);
+    expect(quotesDoComercial).toContain('action: z.literal("price_execution")');
+  });
+
+  it("o que a tabela não precificou, para lançar à mão", () => {
+    expect(
+      foraDaTabelaEmTexto([
+        { item: "Cofre", unidade: "VB", quantidade: "1" },
+        { item: "Içamento pela fachada", unidade: null, quantidade: "1.5" },
+      ]),
+    ).toBe("Cofre 1 vb · Içamento pela fachada 1,5");
+    expect(foraDaTabelaEmTexto([])).toBeNull();
+    expect(foraDaTabelaEmTexto(undefined)).toBeNull();
   });
 });

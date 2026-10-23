@@ -23,6 +23,7 @@ const ICONE: Record<AcaoDepoisDoEnvio, ReactNode> = {
   registrar_execucao: <CalendarCheck aria-hidden="true" />,
   aditivo: <Plus aria-hidden="true" />,
   orcar_execucao: <FilePlus aria-hidden="true" />,
+  orcar_da_operacao: <FilePlus aria-hidden="true" />,
   reabrir: <Undo2 aria-hidden="true" />,
   descartar_rv: <Trash2 aria-hidden="true" />,
 };

@@ -8,7 +8,21 @@ import { functionsDoApp } from "../firebase-functions";
  * Cada chamada leva a chave de idempotência (recibo em operacao_operations).
  */
 
-export const CALLABLES_DA_OPERACAO = ["saveCollaborator", "saveVehicle", "saveServiceOrder"] as const;
+export const CALLABLES_DA_OPERACAO = [
+  "saveCollaborator",
+  "saveVehicle",
+  "saveServiceOrder",
+  "openDirectDemand",
+  "registerStep",
+  "registerItem",
+  "registerOccurrence",
+  "attachPhoto",
+  "registerPresence",
+  "completeServiceOrder",
+  "reviewServiceOrder",
+  "reopenServiceOrder",
+  "sendSurveyToCommercial",
+] as const;
 export type CallableDaOperacao = (typeof CALLABLES_DA_OPERACAO)[number];
 
 export function novaChave(): string {
@@ -24,6 +38,17 @@ export function mensagemDoErro(error: unknown): string {
   return message;
 }
 
+/** O erro da callable com a mensagem já em português e o código (a fila do campo decide pelo código). */
+export class ErroDaOperacao extends Error {
+  readonly code: string;
+
+  constructor(message: string, code: string) {
+    super(message);
+    this.name = "ErroDaOperacao";
+    this.code = code;
+  }
+}
+
 export async function chamarOperacao<T = Record<string, unknown>>(
   nome: CallableDaOperacao,
   dados: Record<string, unknown>,
@@ -33,6 +58,6 @@ export async function chamarOperacao<T = Record<string, unknown>>(
   try {
     return (await callable(dados)).data;
   } catch (error) {
-    throw new Error(mensagemDoErro(error));
+    throw new ErroDaOperacao(mensagemDoErro(error), String((error as { code?: unknown })?.code ?? "").replace(/^functions\//, ""));
   }
 }

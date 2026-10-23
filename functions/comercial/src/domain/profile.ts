@@ -110,3 +110,16 @@ export function comercialStatusFor(projectId: string, role: PlatformRole): Comer
   const liberado = comercialLiberado(projectId) && comercialAccessProblem(role) === null;
   return { liberado, papel: role, pode_aprovar: liberado && canApproveQuote(role) };
 }
+
+/**
+ * O comercialStatus da chamada: fora da liberação responde sem ler o perfil
+ * (pendência da conferência da parte 17; parte 6.22 do plano de
+ * implantação). Só onde o Comercial atende ele lê quem chama.
+ */
+export async function comercialStatusDaChamada(
+  projectId: string,
+  lerPapel: () => Promise<PlatformRole>,
+): Promise<ComercialStatus | { liberado: false; papel: null; pode_aprovar: false }> {
+  if (!comercialLiberado(projectId)) return { liberado: false, papel: null, pode_aprovar: false };
+  return comercialStatusFor(projectId, await lerPapel());
+}

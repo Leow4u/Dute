@@ -107,7 +107,8 @@ Leonardo.
   só, valem pelo conteúdo, não pelo menu.
 - Conteúdo `#F5F5F3`, cartões brancos com borda `#E5E5E1` e raio 12.
 - Vermelho da marca `#E71C23` (hover `#AD0015`) só na ação principal da tela, uma
-  por tela, e em alertas. Links no azul da marca `#0054CE`.
+  por tela, e em alertas. No app ele é o token `--v3-marca` (igual nos dois temas) e,
+  no claro, o `--primary` dentro de `.v3`. Links no azul da marca `#0054CE`.
 - Fonte Manrope.
 - Status (fundo/texto): agendada `#ECE6FA`/`#5B21B6`, em execução
   `#FDF0D5`/`#8A4B00`, concluída `#DDF5E4`/`#14602F`, faturada `#D5F2EF`/`#0E5F58`,

@@ -38,6 +38,7 @@ import { DocumentTitle } from "./components/document-title";
 import AppLayout from "./components/layout/app-layout";
 import ComercialLayout from "./components/layout/comercial-layout";
 import OperacaoLayout from "./components/layout/operacao-layout";
+import CampoLayout from "./components/layout/campo-layout";
 import { AppThemeProvider } from "./components/theme/theme-provider";
 import SettingsLayout from "./components/layout/settings-layout";
 import type { WarehouseOpsModuleKey } from "./lib/warehouse-ops/model";
@@ -138,6 +139,7 @@ const ClienteEnvios = lazy(() =>
   import("./pages/client").then((m) => ({ default: m.ClienteEnvios })),
 );
 const ComercialClientes = lazy(() => import("./pages/comercial/clientes"));
+const ComercialInicio = lazy(() => import("./pages/comercial/inicio"));
 const ComercialOrcamentos = lazy(() => import("./pages/comercial/orcamentos"));
 const ComercialOrcamento = lazy(() => import("./pages/comercial/orcamento"));
 const ComercialDocumento = lazy(() => import("./pages/comercial/documento"));
@@ -145,7 +147,19 @@ const ComercialAprovar = lazy(() => import("./pages/comercial/aprovar"));
 const ComercialContratos = lazy(() => import("./pages/comercial/contratos"));
 const ComercialAutorizacoes = lazy(() => import("./pages/comercial/autorizacoes"));
 const ComercialMedicoes = lazy(() => import("./pages/comercial/medicoes"));
-const OperacaoFila = lazy(() => import("./pages/operacao/fila"));
+const OperacaoInicio = lazy(() => import("./pages/operacao/inicio"));
+const OperacaoHoje = lazy(() => import("./pages/operacao/hoje"));
+const OperacaoAgenda = lazy(() => import("./pages/operacao/agenda"));
+const OperacaoDemandas = lazy(() => import("./pages/operacao/demandas"));
+const OperacaoDemanda = lazy(() => import("./pages/operacao/demanda"));
+const OperacaoDemandaNova = lazy(() => import("./pages/operacao/demanda-nova"));
+const OperacaoPlanejar = lazy(() => import("./pages/operacao/planejar"));
+const OperacaoOs = lazy(() => import("./pages/operacao/os"));
+const OperacaoOsImpressao = lazy(() => import("./pages/operacao/os-impressao"));
+const OperacaoRevisao = lazy(() => import("./pages/operacao/revisao"));
+const CampoHoje = lazy(() => import("./pages/campo/hoje"));
+const CampoOs = lazy(() => import("./pages/campo/os"));
+const CampoConcluir = lazy(() => import("./pages/campo/concluir"));
 const OperacaoColaboradores = lazy(() => import("./pages/operacao/colaboradores"));
 const OperacaoVeiculos = lazy(() => import("./pages/operacao/veiculos"));
 import { useRole } from "./hooks/use-role";
@@ -949,6 +963,7 @@ const LAYOUT_DA_ROTA = {
   settings: SettingsLayout,
   comercial: ComercialLayout,
   operacao: OperacaoLayout,
+  campo: CampoLayout,
 } as const;
 
 function protectedRoute(
@@ -1066,12 +1081,26 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   // a liberação do Comercial está ligada (lib/comercial/navegacao.ts). Toda
   // rota do Comercial entra neste bloco (comercial/navegacao.test.ts).
   ...soComOperacaoLiberada([
-    protectedRoute("/operacao", OperacaoFila),
+    protectedRoute("/operacao", OperacaoInicio),
+    protectedRoute("/operacao/hoje", OperacaoHoje),
+    protectedRoute("/operacao/agenda", OperacaoAgenda),
+    protectedRoute("/operacao/demandas", OperacaoDemandas),
+    protectedRoute("/operacao/demanda", OperacaoDemanda),
+    protectedRoute("/operacao/nova-demanda", OperacaoDemandaNova),
+    protectedRoute("/operacao/planejar", OperacaoPlanejar),
+    protectedRoute("/operacao/os", OperacaoOs),
+    protectedRoute("/operacao/os/impressao", OperacaoOsImpressao),
+    protectedRoute("/operacao/revisao", OperacaoRevisao),
     protectedRoute("/operacao/colaboradores", OperacaoColaboradores),
     protectedRoute("/operacao/veiculos", OperacaoVeiculos),
+    // O app do campo é da Operação (parte 3.8b).
+    protectedRoute("/campo", CampoHoje),
+    protectedRoute("/campo/os", CampoOs),
+    protectedRoute("/campo/concluir", CampoConcluir),
   ]),
   ...soComComercialLiberado([
-    protectedRoute("/comercial", ComercialOrcamentos),
+    protectedRoute("/comercial", ComercialInicio),
+    protectedRoute("/comercial/orcamentos", ComercialOrcamentos),
     protectedRoute("/comercial/orcamento", ComercialOrcamento),
     protectedRoute("/comercial/orcamento/documento", ComercialDocumento),
     protectedRoute("/comercial/aprovar", ComercialAprovar),

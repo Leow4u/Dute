@@ -29,7 +29,6 @@ const LEEM = ["owner-a", "admin-a", "comercial-a", "finance-a"] as const;
 const NAO_LEEM = [
   "wms-a",
   "support-a",
-  "campo-a",
   "rh-a",
   "painel-a",
   "client-a",
@@ -192,12 +191,15 @@ describe("preços do Comercial: as funções das regras", () => {
     assert.deepEqual(roles("canReadBilling"), ["owner", "admin", "financeiro", "suporte"]);
   });
 
-  it("o interno lê o catálogo sem preço e não lê tabela nem autorização", async () => {
-    const database = signedAs("ops-a");
-    await assertSucceeds(getDoc(doc(database, "lpu_items", ALVO.lpu_items)));
-    await assertFails(getDoc(doc(database, "price_tables", ALVO.price_tables)));
-    await assertFails(getDoc(doc(database, "client_authorizations", ALVO.client_authorizations)));
-  });
+  for (const uid of ["ops-a", "campo-a"]) {
+    it(`${uid} lê o catálogo sem preço e não lê tabela nem autorização`, async () => {
+      const database = signedAs(uid);
+      await assertSucceeds(getDoc(doc(database, "lpu_items", ALVO.lpu_items)));
+      await assertSucceeds(getDocs(collection(database, "lpu_items")));
+      await assertFails(getDoc(doc(database, "price_tables", ALVO.price_tables)));
+      await assertFails(getDoc(doc(database, "client_authorizations", ALVO.client_authorizations)));
+    });
+  }
 
   it("price_tables e client_authorizations leem por canReadPrices(); lpu_items, por canReadCatalog()", () => {
     for (const name of ["price_tables", "client_authorizations"] as const) {

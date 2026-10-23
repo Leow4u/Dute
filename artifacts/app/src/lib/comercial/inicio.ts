@@ -1,4 +1,4 @@
-import { collection, getDocs, query, where, type QuerySnapshot } from "firebase/firestore";
+import { Timestamp, collection, doc, getDoc, getDocs, query, where, type QuerySnapshot } from "firebase/firestore";
 
 import { firestore } from "../firebase";
 import {
@@ -8,6 +8,8 @@ import {
   type DemandaDaFila,
   type PendenciasDoInicio,
 } from "./autorizacoes";
+import { ETAPAS_COM_ADITIVO_A_FAZER, aditivoAFazer, aditivoPedido, type AditivoAFazer } from "./aditivos-da-operacao";
+import { ETAPAS_COM_VISTORIA_A_USAR, vistoriaAUsar, vistoriaDaDemanda, type VistoriaAUsar } from "./vistoria-da-operacao";
 import { cadastroDoDocumento, hojeLocal, type CadastroComercial } from "./clientes";
 import { alertasParaOInicio, contratoDoRegistro, nomesDosClientes, type AlertaDoInicio, type Contrato } from "./contratos";
 import { orcamentosParaOInicio, type OrcamentoParaAprovarNoInicio } from "./aprovar";
@@ -23,6 +25,20 @@ import {
   type ContratoParaAlertaDeMedicao,
   type Medicao,
 } from "./medicoes";
+import { ETAPAS_DEMANDA } from "./orcamentos";
+import {
+  ETAPAS_DO_RESUMO,
+  contagemPorEtapa,
+  demandaDoResumo,
+  devolvidosDe,
+  inicioDaCompetencia,
+  numerosDoMes,
+  propostasSemResposta,
+  type DemandaDoResumo,
+  type NumerosDoMes,
+  type OrcamentoDevolvido,
+  type PropostaSemResposta,
+} from "./pendencias";
 
 const VALIDADE_DA_LEITURA_MS = 15_000;
 const leiturasRecentes = new Map<string, { em: number; leitura: Promise<QuerySnapshot> }>();
@@ -140,4 +156,82 @@ export async function lerAlertasDeMedicao(hoje: string = hojeLocal()): Promise<A
     .filter((cadastro): cadastro is CadastroComercial => cadastro !== null);
   const alertas = alertaMedicaoNaoEnviada(hoje, [...medicoes.values()], paraAlerta);
   return alertasDeMedicaoParaOInicio(alertas, contratos, nomesDosClientes(cadastros));
+}
+
+export type ResumoDoComercial = {
+  competencia: string;
+  porEtapa: ReturnType<typeof contagemPorEtapa>;
+  mes: NumerosDoMes;
+  /** As propostas aguardando o cliente há mais de DIAS_SEM_RESPOSTA dias, para o "Precisa de você". */
+  semResposta: PropostaSemResposta[];
+};
+
+/**
+ * A coluna ao lado do Início do Comercial (parte 2.5): as demandas nas etapas
+ * ativas (a contagem por etapa) e as que mudaram no mês (enviadas, fechadas e
+ * perdidas nele). Toda escrita da demanda grava `updated_at`, então quem foi
+ * enviada, fechada ou perdida no mês foi atualizada no mês. A mesma leitura
+ * das etapas ativas dá as propostas sem resposta. Só para quem abre o
+ * Comercial: a página não consulta para os outros papéis.
+ */
+export async function lerResumoDoComercial(hoje: string = hojeLocal()): Promise<ResumoDoComercial> {
+  const db = firestore;
+  if (!db) throw new Error("Firebase não configurado.");
+  const competencia = competenciaAtual(hoje);
+  const [ativas, doMes] = await Promise.all([
+    getDocs(query(collection(db, "demands"), where("etapa", "in", [...ETAPAS_DO_RESUMO]))),
+    getDocs(query(collection(db, "demands"), where("updated_at", ">=", Timestamp.fromDate(inicioDaCompetencia(competencia))))),
+  ]);
+  const lidas = (docs: typeof ativas.docs, etapas: readonly string[]) =>
+    docs.map((row) => demandaDoResumo(row.id, row.data(), etapas)).filter((demanda): demanda is DemandaDoResumo => demanda !== null);
+  const doMesPorId = new Map([...lidas(ativas.docs, ETAPAS_DEMANDA), ...lidas(doMes.docs, ETAPAS_DEMANDA)].map((demanda) => [demanda.numero, demanda]));
+  const ativasLidas = lidas(ativas.docs, ETAPAS_DO_RESUMO);
+  return {
+    competencia,
+    porEtapa: contagemPorEtapa(ativasLidas),
+    mes: numerosDoMes([...doMesPorId.values()], competencia),
+    semResposta: propostasSemResposta(ativasLidas, hoje),
+  };
+}
+
+/**
+ * Os orçamentos que a pessoa montou e o owner devolveu (parte 2.5): os
+ * `quotes` em rascunho, filtrados pela devolução e pelo autor. Rascunhos são
+ * poucos de cada vez; a leitura não cresce com o histórico.
+ */
+export async function lerDevolvidos(uid: string): Promise<OrcamentoDevolvido[]> {
+  if (!firestore) throw new Error("Firebase não configurado.");
+  const rascunhos = await getDocs(query(collection(firestore, "quotes"), where("status", "==", "rascunho")));
+  return devolvidosDe(rascunhos.docs.map((row) => ({ id: row.id, data: row.data() })), uid);
+}
+
+/**
+ * Os aditivos que a revisão da Operação pediu e o Comercial ainda não fez
+ * (parte 3.10c): as demandas em Para planejar ou Execução a orçar com o
+ * pedido no resumo da Operação, e o orçamento de cada uma para ver se a RV de
+ * aditivo já veio. São poucas de cada vez.
+ */
+export async function lerAditivosAFazer(): Promise<AditivoAFazer[]> {
+  const db = firestore;
+  if (!db) throw new Error("Firebase não configurado.");
+  const demandas = await getDocs(query(collection(db, "demands"), where("etapa", "in", [...ETAPAS_COM_ADITIVO_A_FAZER])));
+  const comPedido = demandas.docs.filter((row) => aditivoPedido(row.data()) !== null);
+  const quotes = await Promise.all(comPedido.map((row) => getDoc(doc(db, "quotes", row.id))));
+  return comPedido
+    .map((row, indice) => aditivoAFazer(row.id, row.data(), quotes[indice].exists() ? quotes[indice].data() : null))
+    .filter((aditivo): aditivo is AditivoAFazer => aditivo !== null)
+    .sort((a, b) => a.pedidoEm.localeCompare(b.pedidoEm));
+}
+
+/** As vistorias que a Operação enviou e o orçamento ainda não carregou, a mais antiga primeiro (parte 3.11e). */
+export async function lerVistoriasAUsar(): Promise<VistoriaAUsar[]> {
+  const db = firestore;
+  if (!db) throw new Error("Firebase não configurado.");
+  const demandas = await getDocs(query(collection(db, "demands"), where("etapa", "in", [...ETAPAS_COM_VISTORIA_A_USAR])));
+  const comVistoria = demandas.docs.filter((row) => vistoriaDaDemanda(row.data()) !== null);
+  const quotes = await Promise.all(comVistoria.map((row) => getDoc(doc(db, "quotes", row.id))));
+  return comVistoria
+    .map((row, indice) => vistoriaAUsar(row.id, row.data(), quotes[indice].exists() ? quotes[indice].data() : null))
+    .filter((vistoria): vistoria is VistoriaAUsar => vistoria !== null)
+    .sort((a, b) => a.enviadaEm.localeCompare(b.enviadaEm));
 }

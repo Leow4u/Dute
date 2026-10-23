@@ -6,51 +6,18 @@ import { Router } from "wouter";
 
 import { roleLabel } from "@/lib/access";
 
-import { atalhosDaConta, ContaCabecalho, ListaDeModulos, ModuloLink, posicaoDoMenu } from "./account-menu";
+import { opcoesDoSeletor, type Liberacoes } from "@/lib/seletor-de-modulo";
+
+import { ContaCabecalho, iniciais, ListaDeModulos, ModuloLink, posicaoDoMenu } from "./account-menu";
 
 const MENU = readFileSync(new URL("./account-menu.tsx", import.meta.url), "utf8");
 const APP = readFileSync(new URL("./app-layout.tsx", import.meta.url), "utf8");
 const COMERCIAL = readFileSync(new URL("./comercial-layout.tsx", import.meta.url), "utf8");
 const OPERACAO_LAYOUT = readFileSync(new URL("./operacao-layout.tsx", import.meta.url), "utf8");
-const SHELL = readFileSync(new URL("./comercial-shell.tsx", import.meta.url), "utf8");
-const OPERACAO = readFileSync(new URL("./operacao-shell.tsx", import.meta.url), "utf8");
+const SHELL = readFileSync(new URL("./shell-do-modulo.tsx", import.meta.url), "utf8");
 
-// Comercial e plataforma entram explícitos: o CI roda o vitest sem VITE_FIREBASE_PROJECT_ID.
-describe("atalhos do menu da conta", () => {
-  it("o owner vê Armazenagem, Comercial e Financeiro, e o aberto fica marcado", () => {
-    const noComercial = atalhosDaConta("owner", null, "/comercial", true, true);
-    expect(noComercial.map((item) => [item.label, item.href, item.atual])).toEqual([
-      ["Armazenagem", "/dashboard", false],
-      ["Comercial", "/comercial", true],
-      ["Financeiro", "/faturamento", false],
-    ]);
-
-    const noFinanceiro = atalhosDaConta("owner", null, "/faturamento/fatura", true, true);
-    expect(noFinanceiro.find((item) => item.atual)?.key).toBe("financeiro");
-
-    const naArmazenagem = atalhosDaConta("admin", null, "/estoque/mapa", true, true);
-    expect(naArmazenagem.find((item) => item.atual)?.key).toBe("wms");
-
-    const naConfiguracao = atalhosDaConta("owner", null, "/configuracoes", true, true);
-    expect(naConfiguracao.every((item) => !item.atual)).toBe(true);
-  });
-
-  it("sem o Comercial o owner ainda troca entre Armazenagem e Financeiro", () => {
-    expect(atalhosDaConta("owner", null, "/dashboard", false, true).map((item) => item.label)).toEqual([
-      "Armazenagem",
-      "Financeiro",
-    ]);
-  });
-
-  it("quem tem um módulo só, ou a plataforma desligada, não vê a lista", () => {
-    for (const role of ["comercial", "financeiro", "wms", "interno", "suporte"] as const) {
-      expect(atalhosDaConta(role, null, "/dashboard", true, true), role).toEqual([]);
-    }
-    expect(atalhosDaConta("cliente", { modules: ["wms", "operacao", "financeiro"] }, "/portal", true, true)).toEqual([]);
-    expect(atalhosDaConta("owner", null, "/comercial", true, false)).toEqual([]);
-    expect(atalhosDaConta(null, null, "/dashboard", true, true)).toEqual([]);
-  });
-});
+const SEM_OPERACAO: Liberacoes = { comercial: true, plataforma: true, operacao: false };
+const atalhos = (role: Parameters<typeof opcoesDoSeletor>[0], path: string) => opcoesDoSeletor(role, null, path, SEM_OPERACAO);
 
 describe("cabeçalho da conta", () => {
   it("mostra o papel num selo e não repete a legenda", () => {
@@ -71,10 +38,10 @@ describe("cabeçalho da conta", () => {
     expect(posicaoDoMenu(false, true)).toEqual({ side: "right", align: "start" });
     expect(posicaoDoMenu(false, false)).toEqual({ side: "top", align: "end" });
 
-    const atalhos = atalhosDaConta("owner", null, "/dashboard", true, true);
+    const lista = atalhos("owner", "/dashboard");
     const html = renderToStaticMarkup(
       <Router ssrPath="/dashboard">
-        <ListaDeModulos atalhos={atalhos} />
+        <ListaDeModulos atalhos={lista} />
       </Router>,
     );
     expect(html).toContain(">Módulos<");
@@ -87,7 +54,7 @@ describe("cabeçalho da conta", () => {
   });
 
   it("o link do módulo leva direto à casa e marca o aberto", () => {
-    const [armazenagem, comercial] = atalhosDaConta("owner", null, "/comercial", true, true);
+    const [armazenagem, comercial] = atalhos("owner", "/comercial");
     const html = renderToStaticMarkup(
       <Router ssrPath="/comercial">
         <ModuloLink atalho={armazenagem} />
@@ -102,23 +69,29 @@ describe("cabeçalho da conta", () => {
   });
 });
 
-describe("onde o atalho mora", () => {
-  it("Módulos é item do menu da conta, e saiu das sidebars", () => {
-    expect(MENU).toContain("Módulos");
-    expect(MENU).toContain("DropdownMenuSub");
-    expect(MENU).toContain("cabecalho && atalhos.length > 0 ? (");
+describe("iniciais do avatar", () => {
+  it("primeira e última letra do nome, ou as duas primeiras", () => {
+    expect(iniciais("Leonardo Duarte")).toBe("LD");
+    expect(iniciais("Guilherme")).toBe("GU");
+    expect(iniciais("  ")).toBe("?");
+  });
+});
+
+describe("onde a troca de módulo mora", () => {
+  it("no seletor do topo de cada shell; o menu da conta só lista os módulos no cabeçalho do WMS no celular", () => {
+    expect(MENU).not.toContain("DropdownMenuSub");
+    expect(MENU).toContain("cabecalho && modulos ? opcoesDoSeletor(");
     expect(MENU).toContain("<ListaDeModulos");
     expect(MENU).toContain("collisionPadding={16}");
     expect(MENU).not.toContain("roleDescription");
-    expect(MENU).not.toContain("Perfis são definidos");
-    expect(APP).toContain("compact cabecalho");
-    expect(COMERCIAL).toContain("compact cabecalho");
-    expect(OPERACAO_LAYOUT).toContain("compact cabecalho");
-    expect(APP).not.toContain("ModulosLink");
-    expect(APP).not.toContain("showModulos");
-    expect(SHELL).not.toContain("ModulosLink");
-    expect(SHELL).not.toContain("showModulos");
-    expect(OPERACAO).not.toContain("ModulosLink");
-    expect(OPERACAO).not.toContain("showModulos");
+    expect(APP).toContain("<SeletorDeModulo");
+    expect(APP).toContain("compact cabecalho modulos");
+    expect(SHELL).toContain('variante="v3"');
+    expect(SHELL).toContain('variante="v3-cabecalho"');
+    for (const layout of [COMERCIAL, OPERACAO_LAYOUT]) {
+      expect(layout).toContain("<ShellDoModulo");
+      expect(layout).toContain('variante="v3"');
+      expect(layout).not.toContain("modulos");
+    }
   });
 });

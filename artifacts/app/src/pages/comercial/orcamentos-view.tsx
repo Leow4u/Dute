@@ -4,7 +4,6 @@ import { ArrowLeft, FilePlus, FileText, MapPin, Plus, Search, Send, User } from 
 
 import { formatarReais } from "@workspace/dominio";
 
-import { AbasDoComercial } from "@/components/comercial/abas-do-comercial";
 import { AcoesDepoisDoEnvio } from "@/components/comercial/acoes-depois-do-envio";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +15,7 @@ import {
   ETAPA_ROTULO,
   SEGMENTOS_DA_FILA,
   SEGMENTO_ROTULO,
-  TIPO_RV_ROTULO,
+  tipoDoItem,
   acaoDaEtapa,
   contarSegmentos,
   corDaEtapa,
@@ -175,7 +174,7 @@ function paraDoItem(item: ItemDaFila, contexto: ContextoDaFila): string | null {
 function Cabecalho({ busca, onBusca, onNovo, onOrcarExecucao }: FilaViewProps) {
   return (
     <header className="flex flex-wrap items-center gap-4">
-      <h1 className="mr-2 text-3xl font-extrabold tracking-tight">Comercial</h1>
+      <h1 className="mr-2 text-3xl font-extrabold tracking-tight">Orçamentos</h1>
       <div className="flex w-full flex-wrap items-center gap-2.5 sm:ml-auto sm:w-auto">
         <label className="relative block min-w-0 flex-1 sm:flex-none">
           <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" aria-hidden="true" />
@@ -260,7 +259,7 @@ export function LinhaDaFila({
     >
       <span className="flex w-28 shrink-0 flex-col items-start gap-1.5">
         <span className="whitespace-nowrap text-base font-extrabold tabular-nums">{item.rotulo}</span>
-        <Pill>{TIPO_RV_ROTULO[item.tipoRv]}</Pill>
+        <Pill>{tipoDoItem(item)}</Pill>
         {item.numeroLegado ? (
           <span className="whitespace-nowrap text-xs font-bold text-muted-foreground">nº legado {item.numeroLegado}</span>
         ) : null}
@@ -385,10 +384,14 @@ function Ficha(props: FilaViewProps & { selecionado: ItemDaFila }) {
       </div>
       <div className="flex flex-col gap-2 border-b border-muted px-5 pb-4 pt-5">
         <div className="flex flex-wrap items-center gap-2.5">
-          <Link href={href} className="text-xl font-extrabold tabular-nums text-foreground underline-offset-4 hover:underline">
-            {item.rotulo}
-          </Link>
-          <Pill>{TIPO_RV_ROTULO[item.tipoRv]}</Pill>
+          {item.semOrcamento ? (
+            <span className="text-xl font-extrabold tabular-nums text-foreground">{item.rotulo}</span>
+          ) : (
+            <Link href={href} className="text-xl font-extrabold tabular-nums text-foreground underline-offset-4 hover:underline">
+              {item.rotulo}
+            </Link>
+          )}
+          <Pill>{tipoDoItem(item)}</Pill>
           <SeloDaEtapa etapa={item.etapa} dias={diasNaEtapa(item.etapaDesde, agora)} />
         </div>
         {item.titulo ? <p className="text-base font-bold">{item.titulo}</p> : null}
@@ -404,19 +407,21 @@ function Ficha(props: FilaViewProps & { selecionado: ItemDaFila }) {
           ))}
         </dl>
       </Secao>
-      <Secao titulo="Linhas">
-        {linhas.map((grupo) => (
-          <div key={grupo.origem} className="flex items-center gap-2.5 py-1.5">
-            <MarcaDaOrigem origem={grupo.origem} rotulo={grupo.rotulo} />
-            <span className="text-xs font-bold text-muted-foreground">{grupo.quantidade === 1 ? "1 linha" : `${grupo.quantidade} linhas`}</span>
-            <b className="ml-auto whitespace-nowrap font-extrabold tabular-nums">{formatarReais(grupo.totalCents)}</b>
+      {item.semOrcamento ? null : (
+        <Secao titulo="Linhas">
+          {linhas.map((grupo) => (
+            <div key={grupo.origem} className="flex items-center gap-2.5 py-1.5">
+              <MarcaDaOrigem origem={grupo.origem} rotulo={grupo.rotulo} />
+              <span className="text-xs font-bold text-muted-foreground">{grupo.quantidade === 1 ? "1 linha" : `${grupo.quantidade} linhas`}</span>
+              <b className="ml-auto whitespace-nowrap font-extrabold tabular-nums">{formatarReais(grupo.totalCents)}</b>
+            </div>
+          ))}
+          <div className="mt-1 flex items-baseline justify-between gap-2.5 border-t border-border pt-2.5 font-extrabold">
+            <span>Total</span>
+            <b className="text-xl tabular-nums">{totalEmReais(item)}</b>
           </div>
-        ))}
-        <div className="mt-1 flex items-baseline justify-between gap-2.5 border-t border-border pt-2.5 font-extrabold">
-          <span>Total</span>
-          <b className="text-xl tabular-nums">{totalEmReais(item)}</b>
-        </div>
-      </Secao>
+        </Secao>
+      )}
       <Secao titulo="Histórico">
         <ol>
           {passos.map((passo, indice) => (
@@ -453,15 +458,19 @@ function Ficha(props: FilaViewProps & { selecionado: ItemDaFila }) {
           </Button>
         ) : null}
         <AcoesDepoisDoEnvio acoes={depois.acoes} onAcao={depois.onAcao} ocupado={depois.ocupado} tamanho="sm" />
-        <Button asChild variant="outline" size="sm">
-          <Link href={href}>{acaoDaEtapa(item.etapa, item.status)}</Link>
-        </Button>
-        <Button asChild variant="outline" size="sm">
-          <Link href={hrefDoDocumento(item.numero, item.rv)}>
-            <FileText aria-hidden="true" />
-            {item.status === "enviado" ? "PDF" : "Prévia do PDF"}
-          </Link>
-        </Button>
+        {item.semOrcamento ? null : (
+          <>
+            <Button asChild variant="outline" size="sm">
+              <Link href={href}>{acaoDaEtapa(item.etapa, item.status)}</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href={hrefDoDocumento(item.numero, item.rv)}>
+                <FileText aria-hidden="true" />
+                {item.status === "enviado" ? "PDF" : "Prévia do PDF"}
+              </Link>
+            </Button>
+          </>
+        )}
         {[envio.erro, depois.aviso].filter(Boolean).map((mensagem) => (
           <p
             key={mensagem}
@@ -481,7 +490,6 @@ export function FilaView(props: FilaViewProps) {
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">
       <Cabecalho {...props} />
-      <AbasDoComercial />
       <Segmentos {...props} />
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
         <Lista {...props} />

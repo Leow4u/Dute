@@ -21,8 +21,10 @@ import { COMERCIAL_LIBERADO } from "../liberacao";
  */
 export const COMERCIAL_ROLES = ["owner", "admin", "comercial"] as const satisfies readonly Papel[];
 
-/** Casa do módulo: a fila de orçamentos (parte 11, docs/mockups/ComFila.dc.html). */
+/** Casa do módulo: o Início do Comercial (parte 2.5, docs/mockups/ModComInicio.dc.html). */
 export const ROTA_COMERCIAL = "/comercial";
+/** A fila de orçamentos (parte 11, docs/mockups/ComFila.dc.html); era a casa até a parte 2.5. */
+export const ROTA_ORCAMENTOS = "/comercial/orcamentos";
 /** Montar orçamento (docs/mockups/ComOrcamento.dc.html), aberto pela fila: ?numero=10045. */
 export const ROTA_ORCAMENTO = "/comercial/orcamento";
 /** Aprovar no celular (docs/mockups/ComAprovarCelular.dc.html, parte 12a): só o owner. */
@@ -53,6 +55,7 @@ export const ROTA_MEDICOES = "/comercial/medicoes";
  */
 export const TELAS_DO_COMERCIAL: readonly string[] = [
   ROTA_COMERCIAL,
+  ROTA_ORCAMENTOS,
   ROTA_ORCAMENTO,
   ROTA_DOCUMENTO,
   ROTA_APROVAR,
@@ -98,27 +101,6 @@ export const APROVADOR_ROLES = ["owner"] as const satisfies readonly Papel[];
 
 export function aprovaOrcamento(role: Papel | string | null | undefined, liberado: boolean = COMERCIAL_LIBERADO): boolean {
   return abreComercial(role, liberado) && (APROVADOR_ROLES as readonly string[]).includes(role as string);
-}
-
-export type AbaDoComercial = {
-  id: "orcamentos" | "contratos" | "autorizacoes" | "medicoes";
-  rotulo: string;
-  href: string;
-  /** Outras telas em que a aba fica marcada (a montagem é da aba Orçamentos). */
-  tambem?: readonly string[];
-};
-
-/** Barra de abas do módulo, na ordem dos mockups (ComFila e ComContrato). */
-export const ABAS_DO_COMERCIAL: readonly AbaDoComercial[] = [
-  { id: "orcamentos", rotulo: "Orçamentos", href: ROTA_COMERCIAL, tambem: [ROTA_ORCAMENTO, ROTA_APROVAR, ROTA_DOCUMENTO] },
-  { id: "contratos", rotulo: "Contratos", href: ROTA_CONTRATOS },
-  { id: "autorizacoes", rotulo: "Autorizações", href: ROTA_AUTORIZACOES },
-  { id: "medicoes", rotulo: "Medições", href: ROTA_MEDICOES },
-];
-
-/** Abas com tela; a que ainda não tem fica oculta. */
-export function abasVisiveis(telas: readonly string[] = TELAS_DO_COMERCIAL): AbaDoComercial[] {
-  return ABAS_DO_COMERCIAL.filter((aba) => telas.includes(aba.href));
 }
 
 /** Link para a ficha do contrato na aba Contratos (parte 14), quando a tela existe. */

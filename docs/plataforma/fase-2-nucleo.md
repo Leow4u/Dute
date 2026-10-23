@@ -47,29 +47,41 @@ Fica em `lib/dominio`, ao lado da lista única de papéis.
 | painel | nenhum; vai para `/tv` quando ela existir |
 | cliente | os contratados |
 
-Um módulo só aparece se tiver tela no app. Hoje são `wms` e `financeiro` (o Faturamento). Para o cliente, `financeiro` nunca vira card: as Faturas são parte do portal.
+Um módulo só aparece se tiver tela no app. Desde as partes 2.5 e 2.6 são
+`wms`, `operacao`, `comercial` e `financeiro` (o Faturamento). Para o
+cliente, `financeiro` nunca vira card: as Faturas são parte do portal.
 
-A casa de cada módulo mantém as aterrissagens de hoje:
+A casa de cada módulo (atualizada na parte 2.8):
 
 | Módulo | Papel | Casa |
 |---|---|---|
 | wms | owner, admin, interno, suporte | `/dashboard` |
 | wms | wms | `/pedidos` |
 | wms | cliente | `/portal` |
+| operacao | owner, admin, interno | `/operacao` (Início da Operação) |
+| comercial | owner, admin, comercial | `/comercial` (Início do Comercial) |
 | financeiro | owner, admin, financeiro | `/faturamento` |
 
-Na homologação, com a liberação ligada:
+Quem cai onde, na homologação e na produção (as liberações do Comercial, da
+Operação e da plataforma estão ligadas nas duas; o `dute-btg` fica de fora):
 
 | Quem | Para onde vai |
 |---|---|
-| owner, admin | tela de entrada com Armazenagem e Financeiro |
-| interno, suporte | `/dashboard` direto |
+| owner, admin | entrada com Armazenagem, Operação, Comercial e Financeiro, com os contadores |
+| interno | entrada com Armazenagem e Operação |
+| suporte | `/dashboard` direto (a Operação do suporte é só leitura da OS, sem tela) |
 | wms | `/pedidos` direto |
+| comercial | `/comercial` direto, o Início do Comercial |
 | financeiro | `/faturamento` direto |
-| cliente BTG, sem o campo | `/portal` direto |
-| cliente com wms e operacao | `/portal` direto, porque a Operação ainda não tem tela |
-| cliente só com operacao | "Nenhum módulo liberado" |
+| campo, rh, painel | "Nenhum módulo liberado" (o app do campo, o RH e a TV têm fase própria) |
+| cliente BTG, sem o campo | `/portal` direto, com armazenagem e faturas |
+| cliente com wms e operacao | `/portal` direto, sem Faturas; a OS no portal entra na Fase 4 |
+| cliente só com operacao | "Nenhum módulo liberado" até a Fase 4 |
+| cliente só com financeiro | "Nenhum módulo liberado": o portal só abre com a armazenagem; muda se esse contrato existir |
 | papel novo | "Nenhum módulo liberado" |
+
+Dentro de cada módulo, o nome no topo da barra é o seletor (parte 2.3), e o
+logo leva aos cards.
 
 ## Parte 1: papéis da plataforma e módulos contratados (um PR)
 
@@ -238,3 +250,182 @@ Branch `plataforma/fase-2-parte-2`. Entregue como no desenho.
 - O Início (`pages/home.tsx`) passou a usar a saudação de `lib/saudacao.ts`, a mesma da entrada.
 
 Conferido numa prévia estática com o CSS do build: claro, escuro e celular de 375 px sem rolagem lateral.
+
+### Decisão de 23/10/2026: um shell por módulo
+
+O Leonardo pediu a separação por módulo: um menu único com todos os módulos
+inflava demais. A decisão 6 deste desenho (agrupar por módulo num shell v3
+único) e a parte do item 3 que juntava tudo num menu ficam superadas. Vale o
+que está em `plano-de-implantacao.md`, seção 1.1 e seção 4: cada módulo tem o
+próprio shell; o nome do módulo no topo da barra é o seletor; o logo leva aos
+cards; Início por módulo; Clientes por módulo; Configuração no menu da conta;
+Agent Dute só no WMS até a Fase 5. A barreira por módulo contratado do cliente
+continua e entra na parte 2.7.
+
+### Parte 2.3: shell v3 por módulo
+
+- `components/layout/shell-do-modulo.tsx`: barra lateral preta (`bg-v3-header`)
+  com o logo (leva a `/`), o seletor de módulo, as telas do módulo com
+  contador opcional por item (vermelho só no alerta) e a conta no rodapé; no
+  celular, cabeçalho preto com o seletor e a conta, e a barra inferior preta
+  com o ícone aberto no vermelho da marca. Sem conexão, uma linha de status
+  "Sem conexão". O Comercial e a Operação usam esse shell; `comercial-shell` e
+  `operacao-shell` saíram.
+- `lib/seletor-de-modulo.ts` (`opcoesDoSeletor`, `moduloAberto`) e
+  `components/layout/seletor-de-modulo.tsx`: a lista do seletor é a dos cards
+  da entrada, na mesma ordem, com o aberto marcado e "Todos os módulos" no
+  fim. Quem tem um módulo só vê o nome, sem lista.
+- WMS: o seletor entra no topo da barra (aberta e recolhida); o menu da conta
+  deixa de ter o submenu Módulos no computador e mantém a lista no cabeçalho
+  do celular, que não tem o seletor. Nada mais muda no WMS.
+- Token novo `--v3-marca` (o vermelho #E71C23 nos dois temas; o `--primary`
+  do escuro é azul), para o marcador, o contador de alerta e o avatar.
+- Testes: `shell-do-modulo.test.tsx` (telas, seletor, contador, celular, sem
+  conexão, lista de textos e axe), `seletor-de-modulo.test.ts`,
+  `account-menu.test.tsx` atualizado. Ajudantes novos para as telas das
+  próximas partes: `src/test/acessibilidade.ts` (axe-core no jsdom, regras
+  WCAG 2.1 A e AA, sem o contraste, que o jsdom não calcula) e
+  `src/test/textos.ts` (a trava contra legenda), com o teste deles.
+- Conferido no Chromium com o CSS do build, a 1440 e a 390 px.
+
+
+### Ordem das partes 2.4 a 2.6
+
+A entrada com contadores (2.4) conta o que o Início de cada módulo mostra.
+Por isso a ordem ficou 2.5 (Início do Comercial), 2.6 (Início da Operação) e
+depois 2.4: os contadores leem as mesmas consultas dos Inícios, sem uma
+segunda regra de contagem.
+
+### Parte 2.5: Início do Comercial
+
+- `/comercial` passa a ser o Início (`pages/comercial/inicio.tsx`), como em
+  `docs/mockups/ModComInicio.dc.html`; a fila de orçamentos mudou para
+  `/comercial/orcamentos`. O menu do Comercial ganhou Início no topo; a
+  montagem, a aprovação e o documento continuam acendendo Orçamentos.
+- O "Precisa de você" saiu do Início do WMS (`lib/home-inbox.ts` e
+  `pages/home.tsx` não leem mais nada do Comercial) e mora em
+  `lib/comercial/pendencias.ts`: orçamentos para aprovar (só o owner),
+  orçamento devolvido (só para quem montou), alertas de contrato, prazo de
+  faturamento e executados há mais de 30 dias, medição do mês que passou sem
+  envio e proposta aguardando o cliente há mais de 5 dias corridos
+  (`DIAS_SEM_RESPOSTA`, a confirmar com o Leonardo). O mais urgente primeiro:
+  crítico, atenção e informação; no mesmo tom, a ordem das fontes.
+- Ao lado, "Orçamentos por etapa" (as oito etapas ativas, com "Abrir a fila")
+  e o mês: enviados (primeiro envio), fechados (primeira entrada em "Para
+  planejar") e perdidos, no fuso de São Paulo. Duas consultas a `demands`
+  (etapas ativas; `updated_at` desde o início do mês) e uma a `quotes` em
+  rascunho, para os devolvidos.
+- As telas do Comercial deixaram as abas internas (`abas-do-comercial.tsx`
+  saiu): a barra do módulo é a única navegação entre elas, e o título de cada
+  tela é o nome dela (Orçamentos, Contratos, Autorizações, Medições; na
+  montagem, o número do orçamento).
+- O shell v3 do módulo usa três telas e "Mais" na barra do celular, como nos
+  mockups (`MOBILE_BAR_SLOTS_DO_MODULO`); o WMS continua com quatro.
+- `getActiveModule` passou a respeitar as telas de cada item (`tambem`), como
+  o menu: com a fila fora de `/comercial`, a montagem acenderia o Início.
+- Testes: `pendencias.test.ts` (cada fonte, quem vê, a ordem, sem resposta e
+  devolvidos), `inicio-view.test.tsx` (textos na ordem, lista contra legenda,
+  estados e axe), navegação e telas atualizadas.
+- Conferido no Chromium com o CSS do build, a 1440 e a 390 px.
+
+### Parte 2.6: Início da Operação
+
+- `/operacao` passa a ser o Início (`pages/operacao/inicio.tsx`), como em
+  `docs/mockups/ModOpInicio.dc.html`; a fila do dia mudou para
+  `/operacao/hoje`. O menu da Operação ganhou Início no topo.
+- O "Precisa de você" (`lib/operacao/pendencias.ts`) usa só o que a OS já
+  grava (aberta, agendada com data, hora, equipe e veículo, cancelada):
+  - OS aberta ou agendada de demanda que o Comercial perdeu ou cancelou
+    (crítico, "Cancelar OS");
+  - OS agendada para hoje ou depois com alguém da equipe ou o veículo
+    desativado no cadastro: é a "OS sem equipe ou veículo" do modelo de hoje,
+    porque agendar exige os dois (crítico no dia, "Reagendar");
+  - OS para agendar e demandas em Para planejar sem OS;
+  - CNH vencida ou vencendo em até 30 dias (`DIAS_PARA_A_CNH`), de quem está
+    ativo, com quantas OS a pessoa tem até a validade.
+- Ao lado, "Hoje na operação" (agendadas hoje, para agendar, próximos dias,
+  com "Abrir o Hoje") e "Equipe hoje" (quem está escalado, pela hora da
+  primeira OS, e quem está livre).
+- Ficam para as partes da Fase 3 que criam os estados: "OS em revisão",
+  "Em execução" e "Atrasadas" no "Hoje na operação", o prazo da OS e a
+  equipe "agora" (a caminho, em campo), que depende do registro do campo.
+  Até lá, a seção se chama "Equipe hoje", porque mostra a escala, não a
+  posição.
+- Links diretos: `/operacao/hoje?os=10045-01` abre a ficha da OS e
+  `/operacao/colaboradores?id=col_...` abre a do colaborador
+  (`hrefDaOs`, `hrefDoColaborador`).
+- As leituras são ao vivo, como no resto do módulo, e só para owner, admin e
+  interno; as OS lidas são só as abertas e agendadas. Enquanto uma leitura
+  não chega, a lista não aparece, para não dizer "nada parado" sem saber.
+- Testes: `lib/operacao/pendencias.test.ts` (cada fonte, ordem por tom, o dia
+  e a equipe, nenhum valor), `pages/operacao/inicio-view.test.tsx` (textos na
+  ordem, lista contra legenda, ações, estados e axe), navegação atualizada.
+
+### Parte 2.4: entrada e menus com contadores
+
+- Os contadores saem da mesma lista do "Precisa de você" de cada Início, sem
+  segunda regra de contagem (`lib/resumo-do-modulo.ts`):
+  - na entrada, cada card mostra quantas linhas o Início do módulo tem e a
+    primeira delas; a frase soma tudo ("6 coisas precisam de você hoje.")
+    e só aparece quando todos os módulos responderam. O número fica
+    vermelho só quando há item crítico; sem nada parado, sem número;
+    carregando ou com falha, o card fica só com o nome (não inventa zero);
+  - no menu do Comercial e da Operação, o Início conta todas as linhas e
+    cada tela conta as linhas cuja ação leva a ela (Orçamentos, Autorizações,
+    Medições; Hoje, Colaboradores).
+- As leituras são as mesmas dos Inícios: `useInicioDoWms` (extraído de
+  `pages/home.tsx`), `useInicioDoComercial` e `useInicioDaOperacao`, com um
+  parâmetro `ligado` para a entrada só consultar os módulos dos cards. O
+  Comercial ganhou um minuto de validade nas consultas, para o menu e o
+  Início não repetirem a leitura; na Operação, o SDK do Firestore junta as
+  assinaturas iguais.
+- O Financeiro não tem Início ainda (Fase 7): o card dele fica só com o nome.
+- Testes: `resumo-do-modulo.test.ts` (o contador bate com a lista do Início
+  do Comercial e da Operação), `entrada.test.tsx` (cards, frase, vermelho só
+  no crítico, carregando, lista de textos e axe) e
+  `entrada-leituras.test.tsx` (no jsdom, com o Firestore e o fetch
+  espionados: o papel comercial não assina nada da Operação, o interno não
+  lê nada do Comercial, e a entrada só lê os módulos dos cards).
+- Conferido no Chromium com o CSS do build, a 1440 e a 390 px.
+
+### Parte 2.7: barreira por módulo contratado do cliente
+
+- Cada tela do portal depende de um módulo contratado
+  (`MODULO_DA_TELA_DO_PORTAL` em `lib/operations`): o Início é de todos;
+  estoque, eventos, envios, pedidos, documentos e o Agent Dute do portal são
+  da armazenagem (`wms`); faturas, do `financeiro`. `portalModulesFor` passa
+  a cruzar o modelo de operação com os módulos do perfil publicado
+  (`client_profiles`): o menu esconde, e o `RoleGate` devolve ao Início do
+  portal a tela de fora do contrato, mesmo por link direto.
+- O portal só lê as projeções do contrato (`leiturasDoPortal`, em
+  `/api/client/overview`), a mesma régua das regras (`isOwnProjectionWith`):
+  sem armazenagem, nada de `client_inventory`, `client_order_tracking`,
+  `client_request_status`, `client_documents` nem do valor da mercadoria
+  (`catalog_prices`); sem financeiro, nada de `client_invoices`. Antes o
+  portal pedia tudo e as regras negavam.
+- O Início do portal esconde as seções de fora do contrato.
+- Regra: `service_orders` ganha o ramo do cliente, só as próprias OS e só com
+  a Operação contratada (`isOwnProjectionWith('operacao')`). Sem tela que leia
+  até a Fase 4.
+- Testes: `operations.test.ts` (telas por contrato e a régua conferida contra
+  o `firestore.rules`), `modules.test.ts` (menu), `portal-leituras.test.ts`
+  (no jsdom, o que o portal pede para cada contrato),
+  `pages/client/inicio.test.tsx` (seções) e
+  `functions/wms/src/operacao-cadastro.rules.test.ts` (no emulador, o cliente
+  lê a própria OS só com a Operação no contrato; falha com a regra antiga).
+
+### Parte 2.8: registro
+
+- "Quem cai onde" e a casa de cada módulo atualizados acima, com a Operação e
+  o Comercial.
+- `CLAUDE.md`: o estado da Fase 2 e a regra das telas novas (lista de textos,
+  `axe` e a contagem única pelo "Precisa de você").
+- Fica em aberto o cliente só com `financeiro`, que hoje cai em "Nenhum
+  módulo liberado" porque o portal só abre com a armazenagem.
+
+**Pronto da Fase 2 na homologação** (plano, seção 4): o owner entra pelos
+cards com os contadores e troca de módulo pelo seletor; o Guilherme cai no
+Início do Comercial e não vê seletor; o interno vê Armazenagem e Operação; um
+cliente só com armazenagem não vê nada de OS; as telas novas passam no `axe`
+e no teste de textos; o WMS não mudou além do seletor. A produção recebe com
+o OK do Leonardo, pela publicação manual.
