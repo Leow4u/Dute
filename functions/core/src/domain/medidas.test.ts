@@ -1,7 +1,21 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { ajustarTempos, amostraDaOs, idDaMedida, medidasDeDuracao, milesimos, minutosDeTrabalho, type AmostraDaOs } from "./medidas.js";
+import {
+  ajustarTempos,
+  amostraDaOs,
+  aprovacaoDoEvento,
+  idDaMedida,
+  linhasDaOs,
+  medidasDeDuracao,
+  medidasDoPlanejado,
+  medidasDoPlanejamento,
+  medidasDoPrazo,
+  milesimos,
+  minutosDeTrabalho,
+  planejamentoDaOs,
+  type AmostraDaOs,
+} from "./medidas.js";
 
 /**
  * O tempo por item da LPU (parte 5.1a), num caso resolvido à mão:
@@ -108,5 +122,98 @@ describe("o homem-minuto por unidade", () => {
       ["cliente", "lpu_a", 15],
       ["geral", "lpu_a", 15],
     ]);
+  });
+});
+
+describe("o erro do planejamento (parte 5.1b)", () => {
+  const revisada = (customer: string, planejados: number | null, reais: number | null, revisadaEm: string, extra: Record<string, unknown> = {}) => ({
+    status: "revisada",
+    tipo: "servico",
+    customer_code: customer,
+    revisao: { instante: revisadaEm, pessoas: 2, minutos_planejados: planejados, minutos_reais: reais, linhas: [] },
+    ...extra,
+  });
+
+  it("no Itaú, +25%, −25% e +50% dão 17% de erro médio, duas acima da janela; no Safra, 0; na geral, 13%", () => {
+    const lista = [
+      planejamentoDaOs("10045-01", revisada("ITAU", 240, 300, "2026-10-20T20:00:00.000Z")),
+      planejamentoDaOs("10046-01", revisada("ITAU", 240, 180, "2026-10-21T20:00:00.000Z")),
+      planejamentoDaOs("10047-01", revisada("ITAU", 120, 180, "2026-10-22T20:00:00.000Z")),
+      planejamentoDaOs("20001-01", revisada("SAFRA", 60, 60, "2026-10-22T20:00:00.000Z")),
+    ].filter((item) => item !== null);
+    assert.deepEqual(
+      medidasDoPlanejamento(lista, "x").map((medida) => [medida.escopo, medida.customer_code, medida.execucoes, medida.erro_medio_pct, medida.acima_da_janela, medida.os_recentes]),
+      [
+        ["cliente", "ITAU", 3, 17, 2, ["10047-01", "10046-01", "10045-01"]],
+        ["cliente", "SAFRA", 1, 0, 0, ["20001-01"]],
+        ["geral", null, 4, 13, 2, ["20001-01", "10047-01", "10046-01", "10045-01"]],
+      ],
+    );
+  });
+
+  it("sem a janela ou sem o tempo real, a vistoria e a OS não revisada ficam de fora", () => {
+    assert.equal(planejamentoDaOs("1", revisada("ITAU", null, 300, "x")), null);
+    assert.equal(planejamentoDaOs("1", revisada("ITAU", 240, null, "x")), null);
+    assert.equal(planejamentoDaOs("1", revisada("ITAU", 240, 300, "x", { tipo: "vistoria" })), null);
+    assert.equal(planejamentoDaOs("1", revisada("ITAU", 240, 300, "x", { status: "em_revisao" })), null);
+    assert.deepEqual(medidasDoPlanejamento([], "x"), []);
+  });
+});
+
+describe("os itens que passam do planejado (parte 5.1b)", () => {
+  const comLinhas = (customer: string, revisadaEm: string, linhas: Array<Record<string, unknown>>) => ({
+    status: "revisada",
+    tipo: "servico",
+    customer_code: customer,
+    revisao: { instante: revisadaEm, pessoas: 1, linhas },
+  });
+  const planejada = (lpu: string | null, planejado: string, executado: string, corrigido: string | null = null) => ({ linha: "ln", lpu_item_id: lpu, item: "Cadeira", unidade: "UN", planejado, executado, corrigido });
+
+  it("A passou em duas de três OS (+20% e +60%): excesso médio de 40%; o corrigido vale; o item livre fica de fora", () => {
+    const lista = [
+      linhasDaOs("10045-01", comLinhas("ITAU", "2026-10-20T20:00:00.000Z", [planejada("lpu_a", "10", "12"), planejada(null, "5", "9")])),
+      linhasDaOs("10046-01", comLinhas("ITAU", "2026-10-21T20:00:00.000Z", [planejada("lpu_a", "10", "12", "10")])),
+      linhasDaOs("10047-01", comLinhas("ITAU", "2026-10-22T20:00:00.000Z", [planejada("lpu_a", "5", "8")])),
+    ].filter((item) => item !== null);
+    assert.deepEqual(
+      medidasDoPlanejado(lista, "x").map((medida) => [medida.escopo, medida.lpu_item_id, medida.execucoes, medida.passaram, medida.excesso_medio_pct, medida.os_recentes]),
+      [
+        ["cliente", "lpu_a", 3, 2, 40, ["10047-01", "10045-01"]],
+        ["geral", "lpu_a", 3, 2, 40, ["10047-01", "10045-01"]],
+      ],
+    );
+    assert.equal(linhasDaOs("1", comLinhas("ITAU", "x", [planejada("lpu_a", "0", "3")])), null);
+  });
+});
+
+describe("o prazo de aprovação do orçamento (parte 5.1b)", () => {
+  const ganha = (numero: string, customer: string, dias: number, occurredAt: string, extra: Record<string, unknown> = {}) => ({
+    type: "demand.won",
+    source: "functions_comercial",
+    customer_code: customer,
+    occurred_at: occurredAt,
+    payload: { numero, rv: 1, segundos_desde_anterior: dias * 86_400 },
+    ...extra,
+  });
+
+  it("no Itaú, 2, 6 e 9 dias dão mediana 6 e média 5,7; a demanda reaberta conta o último fechamento; o evento de outra codebase não conta", () => {
+    const eventos = [
+      ganha("10045", "ITAU", 2, "2026-10-01T12:00:00.000Z"),
+      ganha("10046", "ITAU", 4, "2026-10-02T12:00:00.000Z"),
+      ganha("10046", "ITAU", 6, "2026-10-10T12:00:00.000Z"),
+      ganha("10047", "ITAU", 9, "2026-10-11T12:00:00.000Z"),
+      ganha("20001", "SAFRA", 1, "2026-10-05T12:00:00.000Z"),
+      ganha("10048", "ITAU", 30, "2026-10-12T12:00:00.000Z", { source: "functions_operacao" }),
+      ganha("10049", "ITAU", 30, "2026-10-12T12:00:00.000Z", { payload: { numero: "10049" } }),
+    ].map(aprovacaoDoEvento).filter((item) => item !== null);
+    assert.deepEqual(
+      medidasDoPrazo(eventos, "x").map((medida) => [medida.escopo, medida.customer_code, medida.execucoes, medida.mediana_dias, medida.media_dias, medida.demandas_recentes]),
+      [
+        ["cliente", "ITAU", 3, 6, 5.7, ["10047", "10046", "10045"]],
+        ["cliente", "SAFRA", 1, 1, 1, ["20001"]],
+        ["geral", null, 4, 4, 4.5, ["10047", "10046", "20001", "10045"]],
+      ],
+    );
+    assert.deepEqual(medidasDoPrazo([], "x"), []);
   });
 });

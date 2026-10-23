@@ -1,15 +1,17 @@
 import { createHash } from "node:crypto";
 
 /**
- * As medidas da memória da Dute (docs/plataforma/fase-5-memoria.md, parte
- * 5.1a): o homem-minuto por unidade de cada item da LPU, a partir das OS
- * revisadas. Funções puras: a rotina (medidas-gravacao.ts) lê as OS, chama
- * estas contas e grava o resultado. Nada aqui tem valor.
+ * As medidas da memória da Dute (docs/plataforma/fase-5-memoria.md, partes
+ * 5.1a e 5.1b): o homem-minuto por unidade de cada item da LPU, o erro do
+ * planejamento e os itens que passam do planejado, a partir das OS
+ * revisadas, e o prazo de aprovação do orçamento, a partir das demandas
+ * fechadas pelo cliente. Funções puras: a rotina (medidas-gravacao.ts) lê,
+ * chama estas contas e grava o resultado. Nada aqui tem valor.
  */
 
 export const AI_MEASURES_COLLECTION = "ai_measures";
 
-export const TIPOS_DE_MEDIDA = ["duracao_item"] as const;
+export const TIPOS_DE_MEDIDA = ["duracao_item", "erro_planejamento", "passa_do_planejado", "prazo_aprovacao"] as const;
 export type TipoDeMedida = (typeof TIPOS_DE_MEDIDA)[number];
 
 /** Quantas OS a medida mostra como origem, das mais recentes. */
@@ -236,3 +238,206 @@ export function medidasDeDuracao(amostras: readonly AmostraDaOs[], calculadaEm: 
   const doCliente = [...porCliente.entries()].sort(([a], [b]) => a.localeCompare(b)).flatMap(([code, lista]) => medidasDoEscopo(lista, code, calculadaEm));
   return [...doCliente, ...medidasDoEscopo(amostras, null, calculadaEm)];
 }
+
+// --- O erro do planejamento (parte 5.1b) --------------------------------------------------
+
+/** A OS revisada com a janela planejada e o tempo real, os dois em minutos, como a revisão grava. */
+export type PlanejamentoDaOs = { numero: string; customerCode: string; revisadaEm: string; planejados: number; reais: number };
+
+function minutosDaRevisao(valor: unknown): number | null {
+  return typeof valor === "number" && Number.isInteger(valor) && valor > 0 ? valor : null;
+}
+
+function revisaoDa(dados: Record<string, unknown>): Record<string, unknown> | null {
+  if (texto(dados.status) !== "revisada" || texto(dados.tipo) === "vistoria" || !texto(dados.customer_code)) return null;
+  return dados.revisao && typeof dados.revisao === "object" ? (dados.revisao as Record<string, unknown>) : null;
+}
+
+export function planejamentoDaOs(numero: string, dados: Record<string, unknown>): PlanejamentoDaOs | null {
+  const revisao = revisaoDa(dados);
+  const planejados = minutosDaRevisao(revisao?.minutos_planejados);
+  const reais = minutosDaRevisao(revisao?.minutos_reais);
+  if (!revisao || planejados === null || reais === null) return null;
+  return { numero, customerCode: texto(dados.customer_code), revisadaEm: texto(revisao.instante), planejados, reais };
+}
+
+export type MedidaDoPlanejamento = {
+  id: string;
+  tipo: "erro_planejamento";
+  escopo: EscopoDaMedida;
+  customer_code: string | null;
+  /** As OS revisadas com a janela e o tempo real. */
+  execucoes: number;
+  /** A média de (real − planejado) ÷ planejado, em pontos percentuais inteiros; positivo é plano otimista. */
+  erro_medio_pct: number;
+  /** As OS que passaram da janela. */
+  acima_da_janela: number;
+  os_recentes: string[];
+  calculada_em: string;
+};
+
+function porRecencia<T extends { revisadaEm: string; numero: string }>(lista: readonly T[]): T[] {
+  return [...lista].sort((a, b) => b.revisadaEm.localeCompare(a.revisadaEm) || b.numero.localeCompare(a.numero));
+}
+
+function porCliente<T extends { customerCode: string }>(lista: readonly T[]): Array<[string, T[]]> {
+  const grupos = new Map<string, T[]>();
+  for (const item of lista) grupos.set(item.customerCode, [...(grupos.get(item.customerCode) ?? []), item]);
+  return [...grupos.entries()].sort(([a], [b]) => a.localeCompare(b));
+}
+
+function medidaDoPlanejamento(lista: readonly PlanejamentoDaOs[], customerCode: string | null, calculadaEm: string): MedidaDoPlanejamento {
+  const erros = lista.map((os) => (os.reais - os.planejados) / os.planejados);
+  return {
+    id: idDaMedida("erro_planejamento", customerCode, "os"),
+    tipo: "erro_planejamento",
+    escopo: customerCode ? "cliente" : "geral",
+    customer_code: customerCode,
+    execucoes: lista.length,
+    erro_medio_pct: Math.round((erros.reduce((soma, erro) => soma + erro, 0) / lista.length) * 100),
+    acima_da_janela: lista.filter((os) => os.reais > os.planejados).length,
+    os_recentes: porRecencia(lista).slice(0, OS_NA_ORIGEM).map((os) => os.numero),
+    calculada_em: calculadaEm,
+  };
+}
+
+/** O erro do planejamento por cliente e o geral. */
+export function medidasDoPlanejamento(lista: readonly PlanejamentoDaOs[], calculadaEm: string): MedidaDoPlanejamento[] {
+  if (!lista.length) return [];
+  return [...porCliente(lista).map(([code, doCliente]) => medidaDoPlanejamento(doCliente, code, calculadaEm)), medidaDoPlanejamento(lista, null, calculadaEm)];
+}
+
+// --- Os itens que passam do planejado (parte 5.1b) ----------------------------------------
+
+/** Uma linha da revisão com o planejado e o feito, em milésimos. Só as linhas da LPU com planejado. */
+export type LinhaPlanejada = { lpuItemId: string; item: string; unidade: string | null; planejado: number; feito: number };
+export type LinhasDaOs = { numero: string; customerCode: string; revisadaEm: string; linhas: LinhaPlanejada[] };
+
+export function linhasDaOs(numero: string, dados: Record<string, unknown>): LinhasDaOs | null {
+  const revisao = revisaoDa(dados);
+  if (!revisao) return null;
+  const linhas = objetos(revisao.linhas).flatMap((linha): LinhaPlanejada[] => {
+    const lpuItemId = texto(linha.lpu_item_id);
+    const planejado = milesimos(linha.planejado);
+    if (!lpuItemId || planejado <= 0) return [];
+    return [{ lpuItemId, item: texto(linha.item), unidade: texto(linha.unidade) || null, planejado, feito: milesimos(texto(linha.corrigido) || linha.executado) }];
+  });
+  return linhas.length ? { numero, customerCode: texto(dados.customer_code), revisadaEm: texto(revisao.instante), linhas } : null;
+}
+
+export type MedidaDoPlanejado = {
+  id: string;
+  tipo: "passa_do_planejado";
+  escopo: EscopoDaMedida;
+  customer_code: string | null;
+  lpu_item_id: string;
+  item: string;
+  unidade: string | null;
+  /** As OS revisadas com o item planejado. */
+  execucoes: number;
+  /** Em quantas o feito passou do planejado. */
+  passaram: number;
+  /** Nas que passaram, a média do excesso sobre o planejado, em pontos percentuais inteiros; 0 quando nenhuma passou. */
+  excesso_medio_pct: number;
+  /** As OS mais recentes em que o item passou do planejado. */
+  os_recentes: string[];
+  calculada_em: string;
+};
+
+function medidasDoPlanejadoNoEscopo(lista: readonly LinhasDaOs[], customerCode: string | null, calculadaEm: string): MedidaDoPlanejado[] {
+  const porItem = new Map<string, Array<{ os: LinhasDaOs; linha: LinhaPlanejada }>>();
+  for (const os of lista) for (const linha of os.linhas) porItem.set(linha.lpuItemId, [...(porItem.get(linha.lpuItemId) ?? []), { os, linha }]);
+  return [...porItem.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([lpuItemId, ocorrencias]): MedidaDoPlanejado => {
+      const passaram = ocorrencias.filter(({ linha }) => linha.feito > linha.planejado);
+      const excessos = passaram.map(({ linha }) => (linha.feito - linha.planejado) / linha.planejado);
+      const recente = porRecencia(ocorrencias.map(({ os }) => os))[0];
+      const descricao = recente?.linhas.find((linha) => linha.lpuItemId === lpuItemId);
+      return {
+        id: idDaMedida("passa_do_planejado", customerCode, lpuItemId),
+        tipo: "passa_do_planejado",
+        escopo: customerCode ? "cliente" : "geral",
+        customer_code: customerCode,
+        lpu_item_id: lpuItemId,
+        item: descricao?.item ?? "",
+        unidade: descricao?.unidade ?? null,
+        execucoes: new Set(ocorrencias.map(({ os }) => os.numero)).size,
+        passaram: new Set(passaram.map(({ os }) => os.numero)).size,
+        excesso_medio_pct: excessos.length ? Math.round((excessos.reduce((soma, excesso) => soma + excesso, 0) / excessos.length) * 100) : 0,
+        os_recentes: [...new Set(porRecencia(passaram.map(({ os }) => os)).map((os) => os.numero))].slice(0, OS_NA_ORIGEM),
+        calculada_em: calculadaEm,
+      };
+    });
+}
+
+/** Os itens que passam do planejado, por item e cliente e geral. */
+export function medidasDoPlanejado(lista: readonly LinhasDaOs[], calculadaEm: string): MedidaDoPlanejado[] {
+  return [...porCliente(lista).flatMap(([code, doCliente]) => medidasDoPlanejadoNoEscopo(doCliente, code, calculadaEm)), ...medidasDoPlanejadoNoEscopo(lista, null, calculadaEm)];
+}
+
+// --- O prazo de aprovação do orçamento (parte 5.1b) ---------------------------------------
+
+/**
+ * A demanda fechada pelo cliente (`demand.won`, do Comercial): os segundos
+ * desde que ela passou a esperar o cliente, que é o envio da RV que fechou.
+ */
+export type AprovacaoDoOrcamento = { demanda: string; customerCode: string; fechadaEm: string; segundos: number };
+
+export function aprovacaoDoEvento(dados: Record<string, unknown>): AprovacaoDoOrcamento | null {
+  if (texto(dados.type) !== "demand.won" || texto(dados.source) !== "functions_comercial") return null;
+  const payload = dados.payload && typeof dados.payload === "object" ? (dados.payload as Record<string, unknown>) : {};
+  const segundos = payload.segundos_desde_anterior;
+  const customerCode = texto(dados.customer_code);
+  const demanda = texto(payload.numero);
+  if (!customerCode || !demanda || typeof segundos !== "number" || !Number.isFinite(segundos) || segundos < 0) return null;
+  return { demanda, customerCode, fechadaEm: texto(dados.occurred_at), segundos };
+}
+
+export type MedidaDoPrazo = {
+  id: string;
+  tipo: "prazo_aprovacao";
+  escopo: EscopoDaMedida;
+  customer_code: string | null;
+  /** As demandas fechadas pelo cliente. */
+  execucoes: number;
+  /** A mediana e a média dos dias entre o envio e o fechamento, com uma casa. */
+  mediana_dias: number;
+  media_dias: number;
+  demandas_recentes: string[];
+  calculada_em: string;
+};
+
+function mediana(valores: readonly number[]): number {
+  const ordenados = [...valores].sort((a, b) => a - b);
+  const meio = Math.floor(ordenados.length / 2);
+  return ordenados.length % 2 ? ordenados[meio] : (ordenados[meio - 1] + ordenados[meio]) / 2;
+}
+
+function medidaDoPrazo(lista: readonly AprovacaoDoOrcamento[], customerCode: string | null, calculadaEm: string): MedidaDoPrazo {
+  const dias = lista.map((aprovacao) => aprovacao.segundos / 86_400);
+  return {
+    id: idDaMedida("prazo_aprovacao", customerCode, "orcamento"),
+    tipo: "prazo_aprovacao",
+    escopo: customerCode ? "cliente" : "geral",
+    customer_code: customerCode,
+    execucoes: lista.length,
+    mediana_dias: umaCasa(mediana(dias)),
+    media_dias: umaCasa(dias.reduce((soma, valor) => soma + valor, 0) / dias.length),
+    demandas_recentes: [...lista].sort((a, b) => b.fechadaEm.localeCompare(a.fechadaEm) || b.demanda.localeCompare(a.demanda)).slice(0, OS_NA_ORIGEM).map((aprovacao) => aprovacao.demanda),
+    calculada_em: calculadaEm,
+  };
+}
+
+/** O prazo de aprovação por cliente e o geral. A demanda fechada duas vezes (reaberta) conta a última. */
+export function medidasDoPrazo(eventos: readonly AprovacaoDoOrcamento[], calculadaEm: string): MedidaDoPrazo[] {
+  const ultima = new Map<string, AprovacaoDoOrcamento>();
+  for (const aprovacao of [...eventos].sort((a, b) => a.fechadaEm.localeCompare(b.fechadaEm))) ultima.set(aprovacao.demanda, aprovacao);
+  const lista = [...ultima.values()];
+  if (!lista.length) return [];
+  return [...porCliente(lista).map(([code, doCliente]) => medidaDoPrazo(doCliente, code, calculadaEm)), medidaDoPrazo(lista, null, calculadaEm)];
+}
+
+// --- Todas ------------------------------------------------------------------------------
+
+export type Medida = MedidaDeDuracao | MedidaDoPlanejamento | MedidaDoPlanejado | MedidaDoPrazo;

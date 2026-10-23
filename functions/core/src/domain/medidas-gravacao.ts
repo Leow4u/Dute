@@ -1,11 +1,24 @@
 import { FieldPath, Timestamp, type Firestore, type WriteBatch } from "firebase-admin/firestore";
 
-import { AI_MEASURES_COLLECTION, amostraDaOs, medidasDeDuracao, type AmostraDaOs, type MedidaDeDuracao } from "./medidas.js";
+import {
+  AI_MEASURES_COLLECTION,
+  TIPOS_DE_MEDIDA,
+  amostraDaOs,
+  aprovacaoDoEvento,
+  linhasDaOs,
+  medidasDeDuracao,
+  medidasDoPlanejado,
+  medidasDoPlanejamento,
+  medidasDoPrazo,
+  planejamentoDaOs,
+  type Medida,
+} from "./medidas.js";
 
 /**
- * A rotina das medidas (docs/plataforma/fase-5-memoria.md, parte 5.1a). Lê os
- * eventos depois do cursor, como a dos avisos. Quando chega uma OS revisada
- * ou reaberta, recalcula as medidas do zero, a partir das OS revisadas: o
+ * A rotina das medidas (docs/plataforma/fase-5-memoria.md, partes 5.1a e
+ * 5.1b). Lê os eventos depois do cursor, como a dos avisos. Quando chega uma
+ * OS revisada ou reaberta, ou uma demanda fechada pelo cliente, recalcula as
+ * medidas do zero, a partir das OS revisadas e das demandas fechadas: o
  * resultado não depende da ordem dos eventos nem de rodar duas vezes. Na
  * primeira vez, recalcula com o histórico que existe e marca o cursor.
  */
@@ -15,8 +28,11 @@ export const CURSOR_DAS_MEDIDAS = "medidas";
 export const EVENTS_COLLECTION = "events";
 export const SERVICE_ORDERS_COLLECTION = "service_orders";
 
-/** Os eventos que mudam as medidas: a OS revisada entra; a reaberta sai até ser revisada de novo. */
-export const EVENTOS_DAS_MEDIDAS = ["os.reviewed", "os.reopened"] as const;
+/**
+ * Os eventos que mudam as medidas: a OS revisada entra; a reaberta sai até ser
+ * revisada de novo; a demanda fechada pelo cliente entra no prazo de aprovação.
+ */
+export const EVENTOS_DAS_MEDIDAS = ["os.reviewed", "os.reopened", "demand.won"] as const;
 
 /** Só entra o evento gravado há mais de um minuto, para nenhum ficar antes do cursor (o mesmo da rotina dos avisos). */
 export const ESPERA_DO_EVENTO_MS = 60_000;
@@ -43,17 +59,27 @@ function semInstante(dados: Record<string, unknown>): string {
   return JSON.stringify(Object.keys(resto).sort().map((chave) => [chave, resto[chave]]));
 }
 
-async function amostrasRevisadas(db: Firestore): Promise<AmostraDaOs[]> {
-  const revisadas = await db.collection(SERVICE_ORDERS_COLLECTION).where("status", "==", "revisada").get();
-  return revisadas.docs.flatMap((doc) => {
-    const amostra = amostraDaOs(doc.id, doc.data());
-    return amostra ? [amostra] : [];
-  });
+function semNulos<T>(lista: ReadonlyArray<T | null>): T[] {
+  return lista.filter((item): item is T => item !== null);
+}
+
+/** Todas as medidas, do zero: as das OS revisadas e a das demandas fechadas pelo cliente. */
+async function calcularMedidas(db: Firestore, calculadaEm: string): Promise<{ amostras: number; medidas: Medida[] }> {
+  const revisadas = (await db.collection(SERVICE_ORDERS_COLLECTION).where("status", "==", "revisada").get()).docs.map((doc) => [doc.id, doc.data()] as const);
+  const fechadas = (await db.collection(EVENTS_COLLECTION).where("type", "==", "demand.won").get()).docs.map((doc) => doc.data());
+  const amostras = semNulos(revisadas.map(([numero, dados]) => amostraDaOs(numero, dados)));
+  const medidas: Medida[] = [
+    ...medidasDeDuracao(amostras, calculadaEm),
+    ...medidasDoPlanejamento(semNulos(revisadas.map(([numero, dados]) => planejamentoDaOs(numero, dados))), calculadaEm),
+    ...medidasDoPlanejado(semNulos(revisadas.map(([numero, dados]) => linhasDaOs(numero, dados))), calculadaEm),
+    ...medidasDoPrazo(semNulos(fechadas.map(aprovacaoDoEvento)), calculadaEm),
+  ];
+  return { amostras: amostras.length, medidas };
 }
 
 /** Grava as medidas novas e as que mudaram e apaga as que não existem mais (a OS reaberta, o item que saiu). */
-async function gravarMedidas(db: Firestore, medidas: readonly MedidaDeDuracao[]): Promise<{ gravadas: number; apagadas: number }> {
-  const existentes = await db.collection(AI_MEASURES_COLLECTION).where("tipo", "==", "duracao_item").get();
+async function gravarMedidas(db: Firestore, medidas: readonly Medida[]): Promise<{ gravadas: number; apagadas: number }> {
+  const existentes = await db.collection(AI_MEASURES_COLLECTION).where("tipo", "in", [...TIPOS_DE_MEDIDA]).get();
   const atuais = new Map(existentes.docs.map((doc) => [doc.id, doc.data()]));
   const novas = new Set(medidas.map((medida) => medida.id));
   const operacoes: Array<(batch: WriteBatch) => void> = [];
@@ -102,9 +128,8 @@ export async function runMeasuresFor(db: Firestore, opcoes: { agora?: () => Date
     novoCursor = { created_at: ultimoCriado, evento_id: ultimo.id };
   }
 
-  const amostras = await amostrasRevisadas(db);
-  const medidas = medidasDeDuracao(amostras, instante.toISOString());
+  const { amostras, medidas } = await calcularMedidas(db, instante.toISOString());
   const { gravadas, apagadas } = await gravarMedidas(db, medidas);
   await cursorRef.set({ ...novoCursor, atualizado_em: instante.toISOString() });
-  return { recalculou: true, eventos, amostras: amostras.length, medidas: medidas.length, gravadas, apagadas };
+  return { recalculou: true, eventos, amostras, medidas: medidas.length, gravadas, apagadas };
 }

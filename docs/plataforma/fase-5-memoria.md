@@ -166,3 +166,25 @@ a rotina em `medidas-gravacao.ts`.
   - `medidas.test.ts` resolve à mão um caso de dois clientes: no Itaú, A e B em 20; no Safra, A em 30; na geral, A em 25 e B em 17,5. Cobre também o tempo de trabalho, a amostra, a ordem das OS e o item livre.
   - `medidas.integration.test.ts` cobre a primeira vez, o evento que não muda, o do último minuto, a OS reaberta e a medida que não mudou.
   - `callables.test.ts` trava a rotina e a falta de callable.
+
+### Parte 5.1b: as outras medidas e as regras
+
+Feita em 23/10/2026. As contas estão em `functions/core/src/domain/medidas.ts`,
+ao lado do tempo por item. A rotina `runMeasures` calcula as quatro do zero, numa
+leitura das OS revisadas e dos fechamentos.
+
+- **O erro do planejamento** (`erro_planejamento`), por cliente e geral.
+  - A amostra é a OS revisada de serviço com a janela e o tempo real, como a revisão grava (`minutos_planejados` e `minutos_reais`).
+  - O erro de cada OS é (real − planejado) ÷ planejado. A medida guarda a média em pontos percentuais (positiva é plano otimista), as OS que passaram da janela e as mais recentes.
+- **Os itens que passam do planejado** (`passa_do_planejado`), por item e cliente e geral.
+  - A amostra é a linha da LPU com planejado na revisão. O feito é o corrigido, senão o registrado.
+  - A medida guarda as OS com o item, em quantas o feito passou, o excesso médio delas e as mais recentes que passaram.
+- **O prazo de aprovação do orçamento** (`prazo_aprovacao`), por cliente e geral.
+  - A amostra é o fechamento pelo cliente (`demand.won`, do Comercial), com os segundos desde que a demanda passou a esperar o cliente, que é o envio da RV que fechou.
+  - A medida guarda a mediana e a média dos dias e as demandas mais recentes. A demanda reaberta e fechada de novo conta o último fechamento.
+  - O fechamento também acorda a rotina: `demand.won` entra nos eventos dela.
+- **As regras.** `ai_measures` abre a owner, admin, interno e comercial, a do cliente e a geral. O cliente, o campo, o painel e o resto da equipe não leem. `ai_cursors` não abre. Ninguém grava pelo navegador.
+- **Testes.**
+  - `medidas.test.ts` resolve à mão cada medida: o erro de +25%, −25% e +50% dá 17%; o excesso de +20% e +60% dá 40%; os prazos de 2, 6 e 9 dias dão mediana 6.
+  - `medidas.integration.test.ts` cobre o fechamento que acorda a rotina e a janela que dá o erro.
+  - `memoria-medidas.rules.test.ts` cobre as regras.

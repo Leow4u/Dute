@@ -804,6 +804,21 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // A memória da Dute (docs/plataforma/fase-5-memoria.md, parte 5.1): as
+    // medidas saem das OS revisadas e das demandas fechadas, sem valor. A do
+    // cliente tem o customer_code dele; a geral junta os clientes. As duas
+    // abrem à equipe interna que planeja e orça (owner, admin, interno e
+    // comercial); o cliente, o campo, o painel e o resto da equipe não leem.
+    // Só a rotina do núcleo grava. O cursor dela não abre pelo navegador.
+    match /ai_measures/{medidaId} {
+      allow read: if hasAnyRole(['owner', 'admin', 'interno', 'comercial']);
+      allow create, update, delete: if false;
+    }
+
+    match /ai_cursors/{cursorId} {
+      allow read, write: if false;
+    }
+
     match /ai_agent_memory/{memoryId} {
       allow read: if hasAnyRole(['owner', 'admin', 'interno', 'suporte']);
       allow create, update, delete: if canCoordinateOperations();
