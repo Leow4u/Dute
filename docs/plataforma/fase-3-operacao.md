@@ -153,7 +153,9 @@ registros guardados" é dado, não legenda.
 | 3.4b | Modelo completo da OS no backend: campos novos, tipo calculado, `plan` com várias OS e fatia do saldo, equipe com papéis, freelancers e terceiros, regras e índices | Saldo nunca negativo; campo sem `collaborators`; schema sem preço |
 | 3.4c | O Comercial reconhece a demanda direta da Operação: `etapaDaDemanda` sem orçamento, fila e resumo sem ela, recusa clara nas ações | Direta sem orçamento é Para planejar; executada, Execução a orçar; fora da fila do Comercial |
 | 3.4d | Demanda direta na Operação: `openDirectDemand` (número do contador do Comercial, tipo calculado e corrigido, itens sem preço) e a OS que nasce dela sem RV | Demanda direta nasce em Para planejar; tipo pela hora; OS com a fatia dos itens pedidos |
-| 3.5 | Hoje completo, Demandas, Demanda e Nova demanda direta | Textos listados; `axe`; filtros por tipo, entrada e cliente |
+| 3.5a | Hoje completo (`ModOpHoje`): cinco colunas, filtros por tipo, entrada, cliente e equipe, busca, prazo da direta e escalar no painel | Textos listados; `axe`; filtros por tipo, entrada, cliente e pessoa |
+| 3.5b | Demandas (`OpDemandas`) e Demanda (`OpDemanda`): lista com filtros e a ficha com escopo, saldo e OS | Textos listados; `axe`; saldo igual ao da callable |
+| 3.5c | Nova demanda direta (`OpDemandaNova`) e o botão Nova demanda no Hoje | Tipo pela hora na tela; o formulário manda o formato de `openDirectDemand` |
 | 3.6 | Planejar OS a partir do saldo e Agenda da semana | Duas OS da mesma demanda somam no máximo o saldo; sem equipe e sem veículo são alertas |
 | 3.7 | Execução pelo escritório: `registerStep`, `registerItem`, `registerOccurrence`, fotos no Storage, Em execução, tela da OS | Etapa fora de ordem recusada; instante gravado; foto só de quem está na OS ou coordena |
 | 3.8 | Campo (PWA): Minhas OS, execução, incluir item, presença, fila sem sinal | Campo lê só a OS escalada; dois envios do mesmo registro gravam um; instante original guardado |
@@ -432,3 +434,31 @@ parte 3.5; a fila já mostra a direta em Para planejar e abre a OS dela.
 - **Cópias do Comercial** (contador, faixa, versão do esquema, tipos e
   canais) ficam em `functions/operacao/src/domain/demanda-direta.ts`,
   travadas por `demanda-direta.test.ts`, que lê a fonte do Comercial.
+
+### Parte 3.5a: o Hoje completo
+
+Feita em 23/10/2026, no desenho aprovado `ModOpHoje`. Substitui a fila do
+dia da parte 3 (`pages/operacao/fila.tsx` virou `hoje.tsx`).
+
+- **Colunas.** Para planejar (as demandas com saldo), Para agendar (abertas),
+  Agendadas hoje (pela hora, com os próximos dias recolhidos embaixo), Em
+  execução e Em revisão. As duas últimas ficam vazias até as partes 3.7 e
+  3.9 gravarem esses estados.
+- **Saldo sem preço.** A coluna Para planejar conta as linhas com saldo pelo
+  escopo que a demanda grava sem preço (`escopo`, no fechamento, ou
+  `itens_pedidos`, na direta) menos a fatia das OS não canceladas: a mesma
+  conta da callable. A demanda sem saldo sai da coluna.
+- **Cartões.** O tipo (paraquedas, emergencial, planejada), o número, o
+  cliente, o título e a rota (dos locais copiados na OS), o prazo da direta
+  ("Hoje até 19:00 · faltam 4h40", ou "atrasada"), os serviços, a equipe e a
+  placa copiadas na OS, e "Sem equipe" e "Sem veículo" como dado. O mais
+  urgente primeiro em Para agendar.
+- **Filtros e busca.** Tipo, entrada, cliente e pessoa da equipe; a busca
+  acha OS, demanda, cliente e título, sem acento. "Limpar filtros" só com
+  filtro.
+- **Escalar.** O número da OS abre o painel lateral (o mesmo de antes, com
+  data, hora, equipe, veículo e cancelar com motivo). Sem equipe ou sem
+  veículo, agenda: a falta é alerta. O papel de cada pessoa e vários
+  veículos entram na tela de Planejar OS (parte 3.6).
+- **Ainda não.** O botão Nova demanda chega com a tela dela (parte 3.5c); a
+  TV, na parte 3.12.

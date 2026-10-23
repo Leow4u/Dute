@@ -2,7 +2,8 @@ import { formatarData, formatarPlaca } from "./cadastro";
 
 /** A fila do dia (docs/plataforma/fase-3-operacao.md, parte 3). Sem preço. */
 
-export type ItemDaFila = { item: string; quantidade: string };
+/** O item da OS: o nome, a fatia planejada e o id da linha do escopo (a chave do saldo). */
+export type ItemDaFila = { item: string; quantidade: string; id?: string };
 
 /** A janela, a equipe e os veículos da OS (parte 3.4b), ou a agenda de antes dela. */
 export type AgendaDaFila = {
@@ -19,21 +20,29 @@ export type AgendaDaFila = {
 /** A demanda perdida ou cancelada no Comercial: a OS dela não se agenda, só se cancela. */
 export type DemandaFora = "perdida" | "cancelada";
 
+export const STATUS_DA_OS = ["aberta", "agendada", "em_execucao", "em_revisao", "revisada", "cancelada"] as const;
+export type StatusDaOs = (typeof STATUS_DA_OS)[number];
+
+/** Quem está na OS, com o nome e o papel copiados no agendamento (parte 3.4b). */
+export type PessoaNaOs = { id: string; nome: string; papel: string | null };
+
 export type OsDaFila = {
   numero: string;
   demanda: string;
   customer_code: string;
-  status: "aberta" | "agendada" | "cancelada";
+  status: StatusDaOs;
   edicao: number;
   itens: ItemDaFila[];
   agenda: AgendaDaFila | null;
+  /** A equipe copiada na OS; na OS de antes da parte 3.4, vazia (o nome vem do cadastro). */
+  pessoas?: PessoaNaOs[];
+  /** As placas copiadas na OS. */
+  placas?: string[];
+  /** Os serviços derivados dos itens (transporte, montagem...). */
+  servicos?: string[];
+  /** "Origem → Destino", pelo nome do local ou pelo complemento. */
+  rota?: string | null;
   demandaFora?: DemandaFora | null;
-};
-
-export type QuadroDoDia = {
-  paraAgendar: OsDaFila[];
-  agendadasHoje: OsDaFila[];
-  outrosDias: OsDaFila[];
 };
 
 export type DemandaParaAbrir = {
@@ -102,8 +111,42 @@ function agendaDaLeitura(data: Record<string, unknown>): AgendaDaFila | null {
   };
 }
 
+function pessoasDaOs(valor: unknown): PessoaNaOs[] {
+  if (!Array.isArray(valor)) return [];
+  return valor.flatMap((bruto) => {
+    if (!bruto || typeof bruto !== "object") return [];
+    const pessoa = bruto as Record<string, unknown>;
+    const id = texto(pessoa.colaborador_id);
+    const nome = texto(pessoa.nome);
+    return id && nome ? [{ id, nome, papel: texto(pessoa.papel) || null }] : [];
+  });
+}
+
+function placasDaOs(valor: unknown): string[] {
+  if (!Array.isArray(valor)) return [];
+  return valor.flatMap((bruto) => {
+    if (!bruto || typeof bruto !== "object") return [];
+    const placa = texto((bruto as Record<string, unknown>).placa);
+    return placa ? [formatarPlaca(placa)] : [];
+  });
+}
+
+function nomeDoLocal(valor: unknown): string | null {
+  if (!valor || typeof valor !== "object") return null;
+  const local = valor as Record<string, unknown>;
+  return texto(local.nome) || texto(local.complemento) || texto(local.endereco) || null;
+}
+
+/** "Faria Lima → Centro Empresarial", ou só um dos dois. */
+function rotaDaOs(valor: unknown): string | null {
+  if (!valor || typeof valor !== "object") return null;
+  const locais = valor as Record<string, unknown>;
+  const partes = [nomeDoLocal(locais.origem), nomeDoLocal(locais.destino)].filter((parte): parte is string => Boolean(parte));
+  return partes.length ? partes.join(" → ") : null;
+}
+
 export function osDaLeitura(id: string, data: Record<string, unknown>): OsDaFila | null {
-  if (data.status !== "aberta" && data.status !== "agendada" && data.status !== "cancelada") return null;
+  if (!(STATUS_DA_OS as readonly string[]).includes(String(data.status))) return null;
   if (typeof data.edicao !== "number" || !texto(data.customer_code) || !texto(data.demanda)) return null;
   const agenda = agendaDaLeitura(data);
   const itens = Array.isArray(data.itens)
@@ -113,31 +156,26 @@ export function osDaLeitura(id: string, data: Record<string, unknown>): OsDaFila
         const nome = texto(item.item) || texto(item.descricao);
         if (!nome) return [];
         // A fatia da OS (parte 3.4b) está em `planejado`; antes, em `quantidade`.
-        return [{ item: nome, quantidade: texto(item.planejado) || texto(item.quantidade) }];
+        const linha = texto(item.id);
+        return [{ item: nome, quantidade: texto(item.planejado) || texto(item.quantidade), ...(linha ? { id: linha } : {}) }];
       })
     : [];
   return {
     numero: id,
     demanda: texto(data.demanda),
     customer_code: texto(data.customer_code),
-    status: data.status,
+    status: data.status as StatusDaOs,
     edicao: data.edicao,
     itens,
     agenda,
+    pessoas: pessoasDaOs(data.equipe),
+    placas: placasDaOs(data.veiculos),
+    servicos: Array.isArray(data.servicos) ? data.servicos.filter((servico): servico is string => typeof servico === "string") : [],
+    rota: rotaDaOs(data.locais),
   };
 }
 
-function porNumero<T extends { numero: string }>(itens: readonly T[]): T[] {
-  return [...itens].sort((esquerda, direita) => esquerda.numero.localeCompare(direita.numero, "pt-BR"));
-}
 
-export function quadroDoDia(ordens: readonly OsDaFila[], hoje: string): QuadroDoDia {
-  return {
-    paraAgendar: porNumero(ordens.filter((os) => os.status === "aberta")),
-    agendadasHoje: porNumero(ordens.filter((os) => os.status === "agendada" && os.agenda?.data === hoje)),
-    outrosDias: porNumero(ordens.filter((os) => os.status === "agendada" && os.agenda?.data !== hoje)),
-  };
-}
 
 function numeros(valor: unknown): string[] {
   if (!Array.isArray(valor)) return [];

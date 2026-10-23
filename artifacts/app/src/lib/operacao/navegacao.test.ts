@@ -83,10 +83,10 @@ describe("navegação do cadastro da Operação", () => {
     ).toEqual([ROTA_OPERACAO, ROTA_HOJE, ROTA_COLABORADORES, ROTA_VEICULOS]);
   });
 
-  it("/operacao é o Início (parte 2.6) e a fila do dia mora em /operacao/hoje", () => {
+  it("/operacao é o Início (parte 2.6) e o Hoje (parte 3.5a) mora em /operacao/hoje", () => {
     expect(rotasDaOperacao(LIBERADO)).toEqual([ROTA_OPERACAO, ROTA_HOJE, ROTA_COLABORADORES, ROTA_VEICULOS]);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao", OperacaoInicio\)/);
-    expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/hoje", OperacaoFila\)/);
+    expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/hoje", OperacaoHoje\)/);
   });
 
   it("links diretos: a OS na fila e o colaborador no cadastro, de ida e volta", () => {
