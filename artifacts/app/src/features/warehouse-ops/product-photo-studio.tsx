@@ -12,7 +12,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { fetchJson } from "@/lib/warehouse-ops/model";
+import { fetchJson, getErrorMessage } from "@/lib/warehouse-ops/model";
 import { type ProductPhoto } from "./shared";
 import {
   type PhotoContext,
@@ -110,7 +110,7 @@ export function ProductPhotoStudio({
     } catch (err) {
       setError(
         err instanceof Error
-          ? err.message
+          ? getErrorMessage(err)
           : "Não foi possível gerar a foto. Tente novamente.",
       );
     } finally {
@@ -129,7 +129,7 @@ export function ProductPhotoStudio({
     } catch (err) {
       setError(
         err instanceof Error
-          ? err.message
+          ? getErrorMessage(err)
           : "Não foi possível salvar as fotos.",
       );
     } finally {

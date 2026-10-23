@@ -20,11 +20,18 @@ orienta a não inventar o formato escondido de uma roupa dobrada. Se necessário
 o resultado mantém a apresentação original em vez de reconstruir a peça aberta.
 
 Antes de armazenar e retornar uma proposta ao navegador, o backend compara
-original e proposta em uma chamada visual separada, usando
-`PRODUCT_PHOTO_REVIEW_MODEL` (padrão `gemini-2.5-flash`). A conferência avalia
+original e proposta em uma chamada visual separada. Os modelos são tentados em
+ordem: `PRODUCT_PHOTO_REVIEW_MODEL`, se definido, e depois os do Agent Dute
+(`gemini-3.5-flash` e `gemini-3.8-flash`). Um modelo que responde com erro
+(aposentado, sem cota ou indisponível) passa para o próximo dentro do mesmo
+prazo, e o log da Function registra status, modelo e a mensagem do Vertex AI.
+Antes desta correção o padrão era o Gemini 2.5 Flash, aposentado pelo Google
+em 20/10/2026: desde então toda conferência falhava com "Não foi possível conferir
+a qualidade da foto agora". A conferência avalia
 apresentação comercial, fidelidade da peça, marcas e enquadramento. Todos os
 critérios precisam passar. Reprovação, resposta incompleta ou indisponibilidade
 da conferência impedem salvar e exibir a proposta; o original permanece intacto.
+Uma reprovação encerra a conferência: outro modelo não dá segunda opinião.
 Não há nova geração automática que gere custos adicionais sem uma nova ação.
 
 A conferência acrescenta uma chamada de IA por proposta e admite até 14 MB

@@ -75,7 +75,7 @@ describe("apresentação comercial e conferência visual", () => {
   });
   const input = {
     project: "demo",
-    model: "gemini-2.5-flash",
+    models: ["gemini-3.5-flash", "gemini-3.8-flash"],
     token: "test",
     prompt: "Busto de tricô masculino",
     original: { bytes: Buffer.from("original"), mimeType: "image/jpeg" },
@@ -98,11 +98,11 @@ describe("apresentação comercial e conferência visual", () => {
   it("confere original e proposta juntos antes de aprovar, incluindo logos e enquadramento", async () => {
     let sent: Record<string, any> = {};
     const review = await reviewProductPhoto(input, async (url, init) => {
-      assert.match(String(url), /gemini-2.5-flash:generateContent$/);
+      assert.match(String(url), /gemini-3.5-flash:generateContent$/);
       sent = JSON.parse(String(init?.body));
       return result(approved);
     });
-    assert.deepEqual(review, approved);
+    assert.deepEqual(review, { review: approved, model: "gemini-3.5-flash" });
     const images = sent.contents[0].parts.filter(
       (part: any) => part.inlineData,
     );
@@ -117,19 +117,53 @@ describe("apresentação comercial e conferência visual", () => {
   });
   it("recusa anatomia inadequada, peça ou logo alterados e enquadramento incorreto", async () => {
     for (const criterion of Object.keys(approved)) {
+      let calls = 0;
       await assert.rejects(
-        reviewProductPhoto(input, async () =>
-          result({ ...approved, [criterion]: false }),
-        ),
+        reviewProductPhoto(input, async () => {
+          calls += 1;
+          return result({ ...approved, [criterion]: false });
+        }),
         (error: any) => {
           assert.equal(error.code, "failed-precondition");
           assert.equal(error.details.photo_quality_rejected, true);
           return true;
         },
       );
+      // Reprovação encerra: outro modelo não dá segunda opinião.
+      assert.equal(calls, 1);
     }
   });
-  it("não libera a proposta se a conferência falhar ou responder dados incompletos", async () => {
+  it("passa ao próximo modelo quando um está aposentado e registra o motivo do Vertex AI", async (t) => {
+    const logged = t.mock.method(console, "error", () => undefined);
+    const requested: string[] = [];
+    const review = await reviewProductPhoto(
+      { ...input, models: ["", "gemini-3.5-flash", "gemini-3.5-flash", "gemini-3.8-flash"] },
+      async (url) => {
+        requested.push(String(url).replace(/.*\/models\/|:generateContent$/g, ""));
+        return requested.length === 1
+          ? new Response(
+              JSON.stringify({
+                error: {
+                  code: 404,
+                  message: "Publisher Model `gemini-3.5-flash` was not found or your project does not have access to it.",
+                  status: "NOT_FOUND",
+                },
+              }),
+              { status: 404 },
+            )
+          : result(approved);
+      },
+    );
+    assert.deepEqual(requested, ["gemini-3.5-flash", "gemini-3.8-flash"]);
+    assert.deepEqual(review, { review: approved, model: "gemini-3.8-flash" });
+    assert.equal(logged.mock.callCount(), 1);
+    const [, details] = logged.mock.calls[0]!.arguments as [string, Record<string, unknown>];
+    assert.equal(details.status, 404);
+    assert.equal(details.model, "gemini-3.5-flash");
+    assert.match(String(details.detail), /^NOT_FOUND: Publisher Model .* was not found/);
+  });
+  it("não libera a proposta se a conferência falhar ou responder dados incompletos", async (t) => {
+    t.mock.method(console, "error", () => undefined);
     for (const invalid of [
       {},
       { ...approved, commercial_presentation: "true" },
@@ -140,13 +174,15 @@ describe("apresentação comercial e conferência visual", () => {
         { code: "unavailable" },
       );
     }
+    let calls = 0;
     await assert.rejects(
-      reviewProductPhoto(
-        input,
-        async () => new Response("denied", { status: 403 }),
-      ),
+      reviewProductPhoto(input, async () => {
+        calls += 1;
+        return new Response("denied", { status: 403 });
+      }),
       { code: "unavailable" },
     );
+    assert.equal(calls, input.models.length);
     await assert.rejects(
       reviewProductPhoto(input, async () => new Response('{"candidates":[]}')),
       { code: "unavailable" },
@@ -435,14 +471,21 @@ describe("fotos profissionais do catálogo", () => {
       { code: "invalid-argument" },
     );
   });
-  it("falha de forma explícita quando o provedor está indisponível ou não gera imagem", async () => {
+  it("falha de forma explícita quando o provedor está indisponível ou não gera imagem", async (t) => {
+    const logged = t.mock.method(console, "error", () => undefined);
     await assert.rejects(
       generateProductPhoto(
         input,
-        async () => new Response("error", { status: 503 }),
+        async () =>
+          new Response(
+            JSON.stringify({ error: { message: "Quota exceeded", status: "RESOURCE_EXHAUSTED" } }),
+            { status: 429 },
+          ),
       ),
       { code: "unavailable" },
     );
+    const [, details] = logged.mock.calls[0]!.arguments as [string, Record<string, unknown>];
+    assert.equal(details.detail, "RESOURCE_EXHAUSTED: Quota exceeded");
     await assert.rejects(
       generateProductPhoto(
         input,

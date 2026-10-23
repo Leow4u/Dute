@@ -20,6 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { getErrorMessage } from "@/lib/warehouse-ops/model";
 import { ProductPhotoStudio } from "./product-photo-studio";
 import { type PhotoContext, isGeneratedPhoto } from "./photo-context";
 import { type ProductPhoto } from "./shared";
@@ -66,7 +67,7 @@ export function ProductPhotoManager({
     } catch (err) {
       setError(
         err instanceof Error
-          ? err.message
+          ? getErrorMessage(err)
           : "Não foi possível atualizar as fotos.",
       );
     } finally {
