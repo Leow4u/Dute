@@ -61,6 +61,13 @@ documentação de produto e operação está em `docs/`.
   (23/10/2026). A codebase nova é `functions/core`, com a liberação própria
   `MEMORIA_AMBIENTES_LIBERADOS` (só o `dute-homolog`); as medidas saem das
   OS revisadas e a sugestão nunca grava sem a pessoa.
+- **Fase 7 (financeiro unificado) em andamento**:
+  `docs/plataforma/fase-7-financeiro-unificado.md` (23/10/2026). O a receber
+  é um só (`faturas`); o WMS continua calculando a armazenagem, e a
+  competência emitida nele vira um "A faturar" do Financeiro. A régua das
+  trilhas de dinheiro do WMS é `functions/wms/src/billing-callables.integration.test.ts`
+  (as callables de verdade, pelo `.run`, no emulador): nenhuma parte mexe
+  no faturamento do WMS sem ela verde.
 - **Alinhamento do Comercial e da Operação recuperado em 23/10/2026**:
   `docs/plataforma/alinhamento-comercial-operacao.md` compara o desenho
   aprovado (plano, Fase 2, Fase 6 e mockups) com o que entrou na `main` de 21

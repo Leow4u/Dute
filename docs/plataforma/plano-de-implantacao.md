@@ -593,10 +593,11 @@ mostra o erro médio.
 
 **Objetivo.** Um só lugar para faturar armazenagem e OS, um só a receber,
 uma só fatura por cliente e competência, e a NF e a contabilidade por
-integração.
+integração. Desenho e registro das partes:
+`docs/plataforma/fase-7-financeiro-unificado.md`.
 
 **Decisões.** Antes de tocar nas trilhas de dinheiro do WMS
-(`functions/wms/src/domain/billing.ts`, `operations.ts`, `index.ts`), testes
+(`functions/wms/src/billing.ts`, `domain/operations.ts`, `index.ts`), testes
 nessas trilhas, como o `CLAUDE.md` exige. A LPU de cobrança do WMS
 (`billing_price_list`) unifica-se ao catálogo e às tabelas do Comercial. A
 integração de NF-e e NFS-e e a contabilidade escolhem fornecedor nesta fase
