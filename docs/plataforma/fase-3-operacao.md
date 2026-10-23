@@ -189,7 +189,7 @@ registros guardados" é dado, não legenda.
 | 3.12b | TV da sala (`/tv`): o painel entra direto, modo escuro, colunas, indicadores, próxima saída, relógio e atualização sozinha | Textos listados; sem valor; nenhum botão nem link; `axe` |
 | 3.13a | Rotina diária no backend (CNH e revisão do veículo viram evento) e o veículo fora no dia da revisão preventiva | O evento sai uma vez por dia por item; o agendamento recusa o veículo no dia da revisão |
 | 3.13b | Alertas no Início (revisão do veículo, OS sem equipe ou veículo perto do prazo) e a revisão preventiva na escala e na Agenda | Textos listados; o veículo no dia da revisão não se escolhe; `axe` |
-| 3.14 | Produção e registro | Conferência de produção |
+| 3.14 | Produção e registro: o ciclo completo no emulador e o roteiro `operacao-producao.md` | O ciclo da direta e do Comercial passa no emulador sem valor na OS; a publicação espera o OK do Leonardo |
 
 **Pronto quando.** Uma demanda do Comercial e uma direta percorrem pedido →
 OS → planejamento com várias OS → execução → assinatura no celular, sem
@@ -1257,4 +1257,23 @@ Feita em 23/10/2026. Regras em `lib/operacao/pendencias.ts`,
   preventiva no dia."). O servidor recusa do mesmo jeito (parte 3.13a).
 - **Agenda.** A linha do veículo mostra "Revisão preventiva" no dia, como no
   mockup `OpAgenda`.
+
+### Parte 3.14: produção e registro
+
+Feita em 23/10/2026, até onde não depende do Leonardo.
+
+- **O ciclo no emulador.** O "pronto quando" da Fase 3 virou teste em
+  `functions/operacao/src/domain/ciclo.integration.test.ts`:
+  - a demanda direta vai do pedido a duas OS, à execução no celular com item incluído em campo, à assinatura, à revisão e a Execução a orçar;
+  - a demanda do Comercial vai do escopo fechado à OS, ao item a mais e ao aditivo pedido;
+  - a TV mostra a agendada de manhã e a assinada no fim do dia;
+  - cada etapa fica com o instante;
+  - nenhuma OS guarda preço, total ou valor.
+  - O ciclo roda no dia de hoje: a TV acha as concluídas pelo `updated_at` que o servidor grava.
+- **O roteiro.** Em `docs/plataforma/operacao-producao.md`:
+  - o que muda no `dute-prod` desde a última publicação (`fde9ba0`);
+  - o que conferir na homologação antes;
+  - como publicar e o que conferir depois (o job da rotina, o login da TV e o do campo);
+  - como desligar a Operação ou só a rotina.
+- **Falta.** O OK do Leonardo para publicar (marco 3 do plano de implantação) e a conferência na homologação, que é de uma pessoa.
 

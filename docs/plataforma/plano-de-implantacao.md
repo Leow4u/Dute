@@ -155,7 +155,7 @@ Como se garante, em cada PR de tela:
 | 0 Projetos e repositório | Feita em 19/10 |
 | 1 Migração do WMS | Feita em 20/10; `dute-btg` congelado até 02/12 |
 | 2 Núcleo e app único | Partes 1 e 2 feitas (papéis, módulos contratados, entrada). O resto é redesenhado abaixo com o shell por módulo |
-| 3 Operação | Partes 1 a 3 (colaboradores, veículos, OS aberta, agendada e cancelada) na `main` e no `dute-prod` desde 22/10, no visual do WMS |
+| 3 Operação | Partes 3.0 a 3.14 na `main` (23/10): o ciclo completo, o campo, a vistoria, a TV e a rotina diária. A produção tem até `fde9ba0`; a publicação da fase espera o OK do Leonardo (`operacao-producao.md`) |
 | 4 Financeiro da operação, portal e lançamento | Não iniciada |
 | 5 Memória da Dute | Não iniciada |
 | 6 Comercial | v1 (partes 1 a 19) na `main` e ligado no `dute-prod` desde 21/10, sem dado carregado |
