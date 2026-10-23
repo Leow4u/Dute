@@ -13,6 +13,7 @@ import {
   planejamentoDaOs,
   type Medida,
 } from "./medidas.js";
+import { registrarValoresReais } from "./sugestao-gravacao.js";
 
 /**
  * A rotina das medidas (docs/plataforma/fase-5-memoria.md, partes 5.1a e
@@ -47,6 +48,8 @@ export type ResultadoDasMedidas = {
   medidas: number;
   gravadas: number;
   apagadas: number;
+  /** As sugestões que ganharam o valor real, das OS revisadas no lote (parte 5.2a). */
+  reais: number;
 };
 
 function texto(valor: unknown): string {
@@ -109,6 +112,7 @@ export async function runMeasuresFor(db: Firestore, opcoes: { agora?: () => Date
   const primeira = !(cursor.exists && createdAt instanceof Timestamp);
 
   let eventos = 0;
+  let revisadasNoLote: string[] = [];
   let novoCursor: { created_at: Timestamp; evento_id: string } = { created_at: limite, evento_id: "" };
   if (!primeira) {
     const ordenados = db
@@ -122,14 +126,16 @@ export async function runMeasuresFor(db: Firestore, opcoes: { agora?: () => Date
     const depois = eventoId ? ordenados.startAfter(createdAt, eventoId) : ordenados.startAfter(createdAt);
     const lote = await depois.limit(LOTE_DE_EVENTOS).get();
     eventos = lote.size;
+    revisadasNoLote = lote.docs.filter((doc) => doc.get("type") === "os.reviewed").map((doc) => texto(doc.get("payload.id"))).filter(Boolean);
     const ultimo = lote.docs.at(-1);
     const ultimoCriado = ultimo?.get("created_at");
-    if (!ultimo || !(ultimoCriado instanceof Timestamp)) return { recalculou: false, eventos: 0, amostras: 0, medidas: 0, gravadas: 0, apagadas: 0 };
+    if (!ultimo || !(ultimoCriado instanceof Timestamp)) return { recalculou: false, eventos: 0, amostras: 0, medidas: 0, gravadas: 0, apagadas: 0, reais: 0 };
     novoCursor = { created_at: ultimoCriado, evento_id: ultimo.id };
   }
 
   const { amostras, medidas } = await calcularMedidas(db, instante.toISOString());
   const { gravadas, apagadas } = await gravarMedidas(db, medidas);
+  const reais = await registrarValoresReais(db, revisadasNoLote, instante);
   await cursorRef.set({ ...novoCursor, atualizado_em: instante.toISOString() });
-  return { recalculou: true, eventos, amostras, medidas: medidas.length, gravadas, apagadas };
+  return { recalculou: true, eventos, amostras, medidas: medidas.length, gravadas, apagadas, reais };
 }

@@ -188,3 +188,30 @@ leitura das OS revisadas e dos fechamentos.
   - `medidas.test.ts` resolve à mão cada medida: o erro de +25%, −25% e +50% dá 17%; o excesso de +20% e +60% dá 40%; os prazos de 2, 6 e 9 dias dão mediana 6.
   - `medidas.integration.test.ts` cobre o fechamento que acorda a rotina e a janela que dá o erro.
   - `memoria-medidas.rules.test.ts` cobre as regras.
+
+### Parte 5.2a: a duração sugerida no backend
+
+Feita em 23/10/2026. As regras estão em `functions/core/src/domain/sugestao.ts`;
+as leituras e a gravação em `sugestao-gravacao.ts`.
+
+- **`suggestDuration`** só lê. Recebe a demanda, a equipe e os itens da OS (o item da LPU, o nome e a quantidade).
+  - O cliente vem da demanda, nunca do pedido.
+  - A base de cada item é a medida do cliente com 5 execuções; sem ela, a geral com 15. Abaixo disso, o item fica sem base.
+  - Cada item com base leva o homem-minuto por unidade vezes a quantidade, dividido pela equipe. O total soma os itens com base e arredonda para cima, de 5 em 5 minutos.
+  - Acima da jornada de 8 horas, sugere dividir: em quantas OS e quanto em cada uma.
+  - Com o erro médio do planejamento do cliente a partir de 15% (com o mesmo mínimo de execuções), avisa que os planos dele costumam ser otimistas.
+  - Devolve a base de cada item: do cliente ou geral, as execuções, o homem-minuto e as OS mais recentes.
+- **`answerSuggestion`** grava, quando a OS é salva, o que a pessoa fez: aceitou, mudou ou recusou, e os minutos escolhidos.
+  - O sugerido é recalculado no servidor, nunca o que a tela mandou.
+  - A OS precisa ser da demanda e do mesmo cliente. A callable não toca na OS: quem salva é a da Operação.
+  - Sem base em nenhum item, não houve sugestão e nada se grava.
+  - Repetir a mesma chave devolve a mesma resposta. A chave com outra resposta recusa.
+- **O valor real.** Quando a OS é revisada, a rotina das medidas grava o tempo de trabalho dela (a mesma conta das medidas) e o erro contra o sugerido. Revisada de novo, vale a última revisão.
+- **Quem pede.** Owner, admin e interno, a mesma lista de quem planeja a OS na Operação (`platform-lists.test.ts` trava as duas).
+- **Regras.** `ai_suggestions` abre a quem pediu e a owner e admin. Ninguém grava pelo navegador.
+- **Zeragem.** `tools/full_reset_btg.py` preserva `ai_suggestions`.
+- **Produção.** As duas callables sobem com a próxima publicação e recusam no `dute-prod`. O roteiro do lançamento (`lancamento-producao.md`) conta 116 callables e três rotinas.
+- **Testes.**
+  - `sugestao.test.ts` cobre a base, o tempo com a equipe, o arredondamento, a divisão, o aviso, o erro e o pedido.
+  - `sugestao.integration.test.ts` cobre o cliente da demanda, a base geral do outro cliente, quem pede, a resposta gravada sem tocar na OS, a repetição, a OS de outra demanda e o valor real depois da revisão.
+  - `memoria-medidas.rules.test.ts` cobre as regras; `callables.test.ts`, o formato das callables.

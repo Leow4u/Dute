@@ -31,7 +31,9 @@ disparado sem ele. Sem dado real neste arquivo.
   3) não foi disparado. A próxima publicação leva juntos os marcos 2, 3 e 4:
   - a Fase 2 inteira, com o shell e o Início por módulo;
   - a Fase 3 da parte 3.4a à 3.14;
-  - a Fase 4.
+  - a Fase 4;
+  - o que já entrou da Fase 5 (`fase-5-memoria.md`), desligado na produção
+    pela liberação própria.
   - Até a parte 4.3d, foram 80 merges. Confirmar a base antes de disparar.
 - **Ciclos conferidos no emulador.**
   - `functions/operacao/src/domain/ciclo-do-cliente.integration.test.ts`
@@ -72,15 +74,20 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   `client_notifications` por `customer_code` e `created_at`.
   - O de `events` se constrói sobre a coleção que já existe. Até ficar
     pronto, a rotina dos avisos falha e tenta de novo a cada 5 minutos.
-- **Functions.** São 114 callables: 82 do WMS, 12 do Comercial, 18 da
-  Operação e 2 do Financeiro.
+- **Functions.** São 116 callables: 82 do WMS, 12 do Comercial, 18 da
+  Operação, 2 do Financeiro e 2 do núcleo.
   - Do WMS, entram `setOrderDelivery` e `receiveOrderReturn`.
   - Da Operação, entram as da Fase 3 e `requestService`,
     `declineServiceRequest`, `openStorageDemand` e `markNotificationsRead`.
   - Do Financeiro, entram `registerNf` e `advanceFatura`, numa codebase nova
     (`financeiro`). Recusam no `dute-prod` até a parte 4.9b.
-  - Duas functions agendadas: `runDailyAlerts`, todo dia às 06:00, e
-    `runNotifications`, a cada 5 minutos.
+  - Do núcleo, entram `suggestDuration` e `answerSuggestion`, na codebase
+    nova `core` (Fase 5). Recusam no `dute-prod`: a memória só vale no
+    `dute-homolog` (`MEMORIA_AMBIENTES_LIBERADOS`).
+  - Três functions agendadas: `runDailyAlerts`, todo dia às 06:00,
+    `runNotifications`, a cada 5 minutos, e `runMeasures`, a cada 15
+    minutos. A das medidas confere a liberação da memória e não faz nada no
+    `dute-prod`.
 - **Frontend.**
   - O shell v3 por módulo, inclusive o da Armazenagem, e as quatro telas do
     WMS na v3. A BTG passa a ver o Início, Pedidos, Estoque e Receber novos.
@@ -104,7 +111,7 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.
-- **Conferência do invoker.** Passa a conferir 114 callables, das quatro
+- **Conferência do invoker.** Passa a conferir 116 callables, das cinco
   codebases.
 
 ## 3. Antes de publicar (conferir na homologação)
@@ -149,11 +156,11 @@ contato com os avisos ligados (Comercial › Clientes).
    (`backup-e-recuperacao.md`). Anotar o instante de antes do deploy.
 3. **Janela.** Combinar com a contagem de abertura da BTG, que roda no
    `dute-prod`. O deploy de functions leva de 11 a 15 minutos, agora com
-   quatro codebases.
+   cinco codebases.
 4. **Disparo.** Actions > CI > Run workflow, com `publicar_producao`
    marcado, do HEAD. O job só vale verde com as conferências do fim:
    - `check_rules_deployed.sh`;
-   - o invoker das 114 callables;
+   - o invoker das 116 callables;
    - `check_frontend_deployed.sh`;
    - o smoke.
 
@@ -166,8 +173,9 @@ contato com os avisos ligados (Comercial › Clientes).
    gcloud scheduler jobs list --project dute-prod --location southamerica-east1
    ```
 
-   Precisam aparecer `firebase-schedule-runDailyAlerts-southamerica-east1`
-   e `firebase-schedule-runNotifications-southamerica-east1`.
+   Precisam aparecer `firebase-schedule-runDailyAlerts-southamerica-east1`,
+   `firebase-schedule-runNotifications-southamerica-east1` e
+   `firebase-schedule-runMeasures-southamerica-east1`.
 2. **Os índices ficaram prontos.** Os dois novos aparecem com `READY`:
 
    ```powershell
