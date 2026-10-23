@@ -10,6 +10,7 @@ import { registerItemFor, registerOccurrenceFor, registerPresenceFor, registerSt
 import { attachPhotoFor, type ConferirArquivo } from "./domain/fotos-gravacao.js";
 import { saveCollaboratorFor, saveVehicleFor } from "./domain/gravacao.js";
 import { saveServiceOrderFor } from "./domain/os-gravacao.js";
+import { reopenServiceOrderFor, reviewServiceOrderFor } from "./domain/revisao-gravacao.js";
 import { requireOperacaoCaller } from "./domain/profile.js";
 import { PROJECT_ID } from "./project.js";
 
@@ -99,4 +100,16 @@ export const registerPresence = onCall(async (request) => {
 export const completeServiceOrder = onCall(async (request) => {
   const caller = await requireOperacaoCaller(db, request, PROJECT_ID, { campo: true });
   return completeServiceOrderFor(db, caller, request.data, conferirArquivo);
+});
+
+/** Revisa a OS concluída: decide cada divergência; a OS vai para Revisada e a demanda recebe o resumo da Operação. */
+export const reviewServiceOrder = onCall(async (request) => {
+  const caller = await requireOperacaoCaller(db, request, PROJECT_ID);
+  return reviewServiceOrderFor(db, caller, request.data);
+});
+
+/** Reabre a OS revisada (owner e admin): volta a Em execução, com a revisão e a conclusão guardadas no histórico. */
+export const reopenServiceOrder = onCall(async (request) => {
+  const caller = await requireOperacaoCaller(db, request, PROJECT_ID);
+  return reopenServiceOrderFor(db, caller, request.data);
 });

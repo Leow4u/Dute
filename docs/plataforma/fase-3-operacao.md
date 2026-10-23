@@ -79,7 +79,7 @@ que a usa.
 
 | Coleção | Dono | O que a Operação faz |
 |---|---|---|
-| `demands` | Comercial | Lê; escreve só `os_numeros`, `execucao` (período, OS revisadas) e `revisao` (divergências com decisão). Cria a demanda direta pela callable dela (parte 3.4d), no mesmo esquema, sem RV, com `itens_pedidos` (o escopo das OS, sem preço), `pedido_por`, `executar_ate`, `tipo_calculado`, `tipo_corrigido_por` e `aberta_pela: "operacao"`. O Comercial só lê esses campos. |
+| `demands` | Comercial | Lê; escreve só `os_numeros` e `operacao` (o resumo da execução e da revisão: OS revisadas e em aberto, o período, por linha o executado, o que se cobra, o absorvido e o aditivo, e o aditivo pedido; parte 3.10a). O desenho dizia `execucao` e `revisao`, mas `execucao` já é do Comercial (as datas pedidas para a execução) e `revisao` se confundiria com a RV: o resumo fica num campo só, `operacao`. Na demanda direta que ela abriu, quando a última OS é revisada, também `executado_de`, `executado_ate`, `registro_execucao`, `etapa` e `marcos`, os mesmos campos que o Comercial lê (parte 3.4c). Cria a demanda direta pela callable dela (parte 3.4d), no mesmo esquema, sem RV, com `itens_pedidos` (o escopo das OS, sem preço), `pedido_por`, `executar_ate`, `tipo_calculado`, `tipo_corrigido_por` e `aberta_pela: "operacao"`. O Comercial só lê esses campos. |
 | `service_orders` | Operação | Tudo, pelas callables. Desde a parte 3.4b: `itens` com `planejado`, `servicos`, `locais` (endereço copiado e contato no local), `janela`, `equipe` com papel, vínculo e empresa por pessoa (nome copiado no agendamento; freelancer e terceiro entram aqui), `equipe_uids`, `veiculos`, `instrucoes`, `status` e `cancelamento`. Nas partes 3.7 a 3.10: `etapas`, `executado` e `incluido_em_campo` nos itens, `fotos`, `ocorrencias`, `presencas`, `conclusao` e `revisao`. Nenhum valor. |
 | `service_order_counters` | Operação | O sufixo da OS por demanda. |
 | `collaborators` | Operação | Ganha `vinculo`, `empresa` (terceiro) e `papeis` (líder, motorista, montador, ajudante). |
@@ -170,7 +170,9 @@ registros guardados" é dado, não legenda.
 | 3.9b | Concluir no celular (`Campo2Concluir`): itens com a diferença e o motivo, fotos do final, responsável, assinatura no dedo, "sem aceite no local", pela fila | Textos listados; `axe`; o formulário manda o formato de `completeServiceOrder` |
 | 3.9c | Concluir pelo escritório e a conclusão na ficha da OS (aceite, responsável, assinatura e diferenças) | Textos listados; `axe`; o formulário manda o formato de `completeServiceOrder` |
 | 3.9d | Impressão da OS (`OSImpressao`, via operacional) | Sem valor; textos listados |
-| 3.10 | Revisão interna, Revisada, reabrir; aditivo na fila do Comercial; demanda direta em Execução a orçar | Divergência sem decisão não conclui; `demands.revisao` só pela Operação |
+| 3.10a | Revisão no backend: `reviewServiceOrder` (cada divergência com decisão: cobrar, aditivo, absorver, próxima OS, encerrar; correção do executado), o consumido no saldo, o resumo `operacao` na demanda, a direta em Execução a orçar; `reopenServiceOrder` (owner e admin) | Divergência sem decisão não conclui; o resumo só pela Operação |
+| 3.10b | Tela Revisão (`OpRevisao`): para revisar, a OS com fotos, assinatura, horas e itens, as decisões; reabrir na ficha | Textos listados; `axe`; o formulário manda o formato de `reviewServiceOrder` |
+| 3.10c | No Comercial: "Aditivos a fazer" na fila, a partir do resumo da Operação; orçar a execução da direta aberta pela Operação | O aditivo pedido aparece até a RV de aditivo; o orçamento da direta nasce com o executado |
 | 3.11 | Vistoria como OS e "Enviar vistoria ao comercial" | Vistoria não passa pela revisão; orçamento nasce com os itens dela |
 | 3.12 | TV da sala (`/tv`, papel `painel`) | `painel` só lê o que a TV mostra; sem valor; sem ação |
 | 3.13 | Alertas no Início e rotina diária (CNH, revisão do veículo, OS sem equipe ou veículo perto do prazo) | O evento sai uma vez por dia por item |
@@ -201,6 +203,10 @@ Do plano de implantação, seção 13, com a parte que espera a resposta:
   coordenação? (pergunta 13; partes 3.8 e 3.11; até lá, só pela coordenação)
 - A TV fica em `/tv` com o papel `painel` e sessão longa? (pergunta 14; parte
   3.12)
+- A OS em execução se cancela? O desenho dizia "cancelada com motivo antes de
+  Revisada"; a parte 3.10a decidiu que não: ela conclui com o que foi feito e
+  a revisão devolve o resto ao saldo ou o encerra, para o executado não se
+  perder. Mudar é um PR pequeno na `saveServiceOrder`.
 
 ## Registro
 
@@ -894,3 +900,42 @@ cliente assina quando não há o celular.
 - **Impressão.** É a do navegador (Imprimir → Salvar como PDF), como o
   orçamento: só a área `.print-area` sai, em A4. O papel fica branco nos dois
   temas (`PAPER_FILES` no teste do tema).
+
+### Parte 3.10a: revisão no backend
+
+Feita em 23/10/2026. `reviewServiceOrder` e `reopenServiceOrder` em
+`functions/operacao` (owner, admin e interno; reabrir, só owner e admin).
+Regras em `domain/revisao.ts`, gravação em `domain/revisao-gravacao.ts`.
+
+- **Decisões.** Cada linha em que o executado difere do planejado leva uma
+  decisão; a que não difere não leva. Feito a mais: cobrar na execução (na
+  demanda direta, ou quando o saldo livre do escopo cobre o que passou),
+  pedir aditivo ao Comercial (só a demanda com escopo fechado) ou absorver
+  sem cobrar, com motivo. Feito a menos: passar para a próxima OS (o que
+  falta volta ao saldo) ou encerrar sem executar. Antes de decidir, o
+  executado pode ser corrigido, com motivo, até o previsto; decide-se o que
+  resta. Divergência sem decisão não revisa nada.
+- **Consumido e a cobrar.** Cada linha guarda o `consumido` (o executado
+  quando se cobra o a mais ou o a menos volta ao saldo; o planejado nos
+  outros casos), que é o que o saldo passa a contar, no backend e no app; o
+  planejado fica, para a IA medir o erro do planejamento. E o `a_cobrar`, o
+  que a execução fatura (o aditivo se fatura com o aceite dele).
+- **Horas.** A janela planejada e o real (da primeira etapa à conclusão), em
+  minutos, e o tamanho da equipe, na revisão e no evento.
+- **Na demanda.** O resumo `operacao` é recontado a cada revisão a partir de
+  todas as OS da demanda: as revisadas e as em aberto, o período, por linha o
+  executado, o que se cobra, o absorvido e o aditivo, e os aditivos pedidos.
+  O Comercial só lê (o teste lê o código do Comercial e trava). A demanda
+  direta aberta pela Operação vai à Execução a orçar quando a última OS dela
+  é revisada: `executado_de` e `executado_ate` (o período), o registro da
+  execução com `origem: "operacao"`, a etapa e o marco.
+- **Reabrir.** A OS revisada volta a Em execução; a revisão e a conclusão
+  ficam em `revisoes_anteriores`, com quem reabriu e o motivo. A demanda
+  direta volta a Para planejar. Não reabre com a execução já validada pelo
+  cliente, nem com o orçamento da execução da direta já aberto no Comercial.
+- **Eventos.** `os.reviewed` (linhas, divergências, corrigidas, a contagem de
+  cada decisão, minutos planejados e reais, pessoas), `os.addendum_requested`,
+  `os.reopened` e `demand.execution_reviewed`. Sem motivo nem nota.
+- **Cancelar em execução.** A OS em execução não se cancela: conclui com o
+  que foi feito, e a revisão devolve o resto ao saldo (Passar para a próxima
+  OS) ou o encerra. Cancelar perderia o executado, que é cobrança e medida.

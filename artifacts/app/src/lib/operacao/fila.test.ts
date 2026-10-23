@@ -95,6 +95,11 @@ describe("OS do modelo da parte 3.4b", () => {
     expect(os?.agenda).toEqual({ data: "2026-10-27", hora: "07:30", fim: "18:00", equipe: ["col_a", "col_b"], veiculos: ["vei_a", "vei_b"] });
   });
 
+  it("revisada, o saldo conta o consumido (parte 3.10a), como a callable", () => {
+    const os = osDaLeitura("10045-02", { ...BASE, status: "revisada", itens: [{ id: "ln_1", item: "Estação", planejado: "30", consumido: "28" }] });
+    expect(os?.itens).toEqual([{ id: "ln_1", item: "Estação", quantidade: "28" }]);
+  });
+
   it("a OS de antes da parte 3.4 continua lida pela agenda antiga", () => {
     const os = osDaLeitura("10045-01", {
       ...BASE,
