@@ -395,6 +395,31 @@ export function adicionarDaTabela(
 }
 
 /**
+ * Carrega itens nas linhas pela tabela: o item que já está numa linha da
+ * tabela fica com a quantidade nova; o outro entra numa linha nova. O que a
+ * tabela não tem fica de fora. A quantidade vem em decimal com ponto.
+ */
+export function carregarItens(
+  linhas: readonly LinhaForm[],
+  itens: ReadonlyArray<{ lpuItemId: string; quantidade: string }>,
+  catalogo: readonly ItemDaTabela[],
+  novaChave: () => string,
+): LinhaForm[] {
+  const porId = new Map(catalogo.map((item) => [item.lpuItemId, item]));
+  let resultado = [...linhas];
+  for (const carregado of itens) {
+    const daTabela = porId.get(carregado.lpuItemId);
+    if (!daTabela) continue;
+    const quantidade = formatarDecimal(carregado.quantidade, 0);
+    const existente = resultado.find((linha) => linha.origem === "tabela" && linha.lpuItemId === carregado.lpuItemId);
+    resultado = existente
+      ? resultado.map((linha) => (linha.chave === existente.chave ? { ...linha, quantidade } : linha))
+      : [...resultado, linhaDaTabela(daTabela, novaChave(), quantidade)];
+  }
+  return resultado;
+}
+
+/**
  * Adiciona o serviço sugerido com a mesma quantidade da linha de origem, logo
  * depois dela (e dos serviços do mesmo item que já vieram atrás).
  */

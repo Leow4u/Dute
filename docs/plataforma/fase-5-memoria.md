@@ -290,3 +290,29 @@ a leitura em `parecidos-gravacao.ts`.
   - `parecidos.test.ts` resolve à mão o pedido de 12 mesas e 40 cadeiras contra três casos do Itaú e um idêntico do Safra. Cobre também a ordem dos empatados, o limite de três, a própria demanda e o pedido.
   - `parecidos.integration.test.ts` cobre o cliente da demanda, o caso idêntico do outro cliente, quem pede e que nada grava.
   - `callables.test.ts` trava o formato; `memoria/api.test.ts`, a lista do app.
+
+### Parte 5.3c: os orçamentos parecidos na montagem
+
+Feita em 23/10/2026. O pedido, os textos e o "Usar as quantidades" estão em
+`artifacts/app/src/lib/memoria/parecidos.ts`; a tela em
+`pages/comercial/orcamento-view.tsx`.
+
+- **O pedido.** As linhas da tabela do orçamento com o item da LPU e quantidade. A linha avulsa e o ajuste ficam de fora.
+  - A tela pede só na montagem (o rascunho que não foi perdido nem cancelado) e com a memória liberada.
+  - Pede depois que as linhas param de mudar. Enquanto o pedido novo carrega, fica a resposta anterior, para o painel não piscar.
+- **Depois dos itens**, cada caso parecido aparece com estes dados:
+  - "Demanda 10031", que abre o orçamento dela, e "96% parecido";
+  - o título e "Fechada em 15/09/2026";
+  - os itens com o orçado e o realizado;
+  - o orçado, o realizado, o período executado e "7h em 2 OS".
+  - Sem caso parecido, o painel não aparece.
+- **"Usar as quantidades" só preenche.** O item do caso que já está numa linha fica com a quantidade realizada; o que não está entra pela tabela.
+  - O item que a tabela não tem e o que não foi feito ficam de fora.
+  - Quem salva é a pessoa, e "Enviar para aprovação" continua a única ação principal.
+  - Quando as linhas já têm as quantidades do caso, o botão dá lugar a "Quantidades da demanda 10031 no orçamento".
+- **O código comum.**
+  - A espera, a memória das respostas e a nova tentativa ficaram num hook só (`use-nucleo.ts`), que a duração sugerida também usa.
+  - Carregar itens nas linhas (`carregarItens`, em `montar.ts`) serve à vistoria e aos parecidos.
+- **Testes.**
+  - `memoria/parecidos.test.ts` cobre o pedido, os textos, os itens que dá para usar e o "Usar as quantidades".
+  - `orcamento-view.test.tsx` cobre os textos na ordem, a ação principal, o link sem vermelho, quando não aparece, o ocupado e `axe`.

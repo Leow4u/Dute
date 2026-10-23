@@ -57,6 +57,9 @@ import {
 } from "@/lib/comercial/orcamentos";
 import { useAppUser } from "@/lib/auth";
 import { firestore } from "@/lib/firebase";
+import { MEMORIA_LIBERADA } from "@/lib/liberacao";
+import { pedidoDosParecidos } from "@/lib/memoria/parecidos";
+import { useParecidos } from "@/lib/memoria/use-parecidos";
 
 import { ContatoDialog } from "./clientes-dialogos";
 import { useDepoisDoEnvio } from "./depois-do-envio";
@@ -462,6 +465,10 @@ function MontarOrcamento({ numero }: { numero: string }) {
     }
   }
 
+  // Os orçamentos parecidos do mesmo cliente (parte 5.3c): só na montagem, com a memória liberada.
+  const montando = item?.status === "rascunho" && item.etapa !== "perdida" && item.etapa !== "cancelada";
+  const parecidos = useParecidos(montando && form ? pedidoDosParecidos(numero, form.linhas) : null, MEMORIA_LIBERADA);
+
   // --- Estados ---------------------------------------------------------------------
   if (demanda.erro || quote.erro) return <EstadoDoOrcamento estado="erro" />;
   if (demandaDoc === null || quoteDoc === null) return <EstadoDoOrcamento estado="nao_encontrado" />;
@@ -537,6 +544,7 @@ function MontarOrcamento({ numero }: { numero: string }) {
         desatualizado={desatualizado(estado)}
         documentoHref={hrefDoDocumento(numero, item.rv)}
         posEnvio={{ acoes: posEnvio, onAcao: (acao) => depois.abrir(acao, item) }}
+        parecidos={parecidos}
         handlers={{
           salvar: () => void salvar(),
           previaSalva: () => void previaSalva(),

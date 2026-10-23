@@ -1,4 +1,4 @@
-import { formatarDecimal, linhaDaTabela, type ItemDaTabela, type LinhaForm } from "./montar";
+import { carregarItens, formatarDecimal, type ItemDaTabela, type LinhaForm } from "./montar";
 
 /**
  * A vistoria que a Operação enviou ao Comercial (docs/plataforma/fase-3-operacao.md,
@@ -107,16 +107,5 @@ export function carregarVistoria(
   catalogo: readonly ItemDaTabela[],
   novaChave: () => string,
 ): LinhaForm[] {
-  const porId = new Map(catalogo.map((item) => [item.lpuItemId, item]));
-  let resultado = [...linhas];
-  for (const levantado of vistoria.itens) {
-    const daTabela = porId.get(levantado.lpuItemId);
-    if (!daTabela) continue;
-    const quantidade = formatarDecimal(levantado.quantidade, 0);
-    const existente = resultado.find((linha) => linha.origem === "tabela" && linha.lpuItemId === levantado.lpuItemId);
-    resultado = existente
-      ? resultado.map((linha) => (linha.chave === existente.chave ? { ...linha, quantidade } : linha))
-      : [...resultado, linhaDaTabela(daTabela, novaChave(), quantidade)];
-  }
-  return resultado;
+  return carregarItens(linhas, vistoria.itens, catalogo, novaChave);
 }
