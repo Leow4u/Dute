@@ -5,6 +5,7 @@ export { ClienteEnvios } from "./envios";
 export { ClientePedidos } from "./pedidos";
 export { ClienteFaturas } from "./faturas";
 export { ClienteServicos } from "./servicos";
+export { ClienteComprovante } from "./comprovante";
 export { ClienteFatura } from "./fatura";
 export { ClienteRelatorio } from "./relatorio";
 export { ClienteDocumentos } from "./documentos";

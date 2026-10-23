@@ -66,7 +66,8 @@ function emitidaEm(agora: Date): string {
   return `${data} às ${hora}`;
 }
 
-function quantidade(valor: number): string {
+/** A quantidade em milésimos como o papel mostra: "12", "12,5". */
+export function quantidadeEmTexto(valor: number): string {
   const inteiro = Math.trunc(valor / 1000);
   const resto = valor % 1000;
   return resto ? `${inteiro},${String(resto).padStart(3, "0").replace(/0+$/, "")}` : String(inteiro);
@@ -115,8 +116,8 @@ export function documentoDaOs(ficha: FichaDaOs, contexto: { cliente: string; tit
         codigo: item.codigo,
         item: item.item,
         unidade: (item.unidade ?? "").toLocaleLowerCase("pt-BR"),
-        previsto: quantidade(previsto),
-        feito: concluida ? quantidade(item.executado ? milesimos(item.executado) : 0) : null,
+        previsto: quantidadeEmTexto(previsto),
+        feito: concluida ? quantidadeEmTexto(item.executado ? milesimos(item.executado) : 0) : null,
       };
     }),
     instrucoes: ficha.instrucoes,

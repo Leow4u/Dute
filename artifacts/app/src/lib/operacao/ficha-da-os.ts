@@ -69,6 +69,8 @@ export type ConclusaoLida = RegistroLido & {
   /** O caminho da assinatura no Storage, ou null sem aceite. */
   assinatura: string | null;
   diferencas: Array<{ linha: string; previsto: string; executado: string; motivo: string }>;
+  /** Os arquivos das fotos do final (parte 4.3c), que vão ao comprovante do cliente; a OS de antes não tem. */
+  arquivosDoFinal: string[];
 };
 
 /** A revisão interna (parte 3.10a): quando, e a decisão de cada linha que divergiu. */
@@ -325,6 +327,7 @@ function conclusaoLida(valor: unknown): ConclusaoLida | null {
         ? [{ linha: texto(diferenca.linha), previsto: texto(diferenca.previsto), executado: texto(diferenca.executado), motivo: texto(diferenca.motivo) }]
         : [],
     ),
+    arquivosDoFinal: (Array.isArray(bruto.arquivos_do_final) ? bruto.arquivos_do_final : []).map(texto).filter((arquivo) => /^ft_[a-f0-9]{16}\.(jpg|png|webp)$/.test(arquivo)),
   };
 }
 

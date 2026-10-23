@@ -137,6 +137,8 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/financeiro/nf", ["owner", "admin", "financeiro"]],
   // As OS do cliente no portal (parte 4.3b).
   ["/portal/servicos", ["cliente"]],
+  // O comprovante da OS concluída (parte 4.3d).
+  ["/portal/servicos/comprovante", ["cliente"]],
 ];
 
 // Menu com o Comercial desligado, como na produção (o liberado: comercial/navegacao.test.ts).
@@ -346,6 +348,7 @@ describe("menu do portal por modelo de operação", () => {
     expect(portalModuleForPath("/portal/faturas/relatorio?de=2026-05&ate=2026-10")).toBe("invoices");
     expect(portalModuleForPath("/portal/agente?x=1")).toBe("assistant");
     expect(portalModuleForPath("/portal/servicos?os=10045-01")).toBe("services");
+    expect(portalModuleForPath("/portal/servicos/comprovante?os=10045-01")).toBe("services");
     expect(portalModuleForPath("/estoque")).toBeNull();
     expect(portalModuleForPath("/configuracoes/conta")).toBeNull();
   });

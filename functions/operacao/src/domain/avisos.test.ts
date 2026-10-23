@@ -106,6 +106,9 @@ describe("o texto de cada modelo", () => {
     assert.equal(avisoDoEvento(evento("os.started", { id: "10050-01", instante: "2026-10-28T11:05:00.000Z" }), OS)?.texto, "Desmontagem, transporte e montagem · desde 08:05");
     assert.equal(avisoDoEvento(evento("os.completed", { id: "10050-01", instante: "2026-10-28T14:40:00.000Z" }), OS)?.texto, "Desmontagem, transporte e montagem · concluída em 28/10/2026 11:40");
     assert.equal(avisoDoEvento(evento("os.completed", { id: "10050-01" }), OS)?.titulo, "OS 10050-01 concluída");
+    // A concluída abre o comprovante do portal (parte 4.3d); as outras, o andamento.
+    assert.equal(avisoDoEvento(evento("os.completed", { id: "10050-01" }), OS)?.link, "/portal/servicos/comprovante?os=10050-01");
+    assert.equal(avisoDoEvento(evento("os.started", { id: "10050-01" }), OS)?.link, "/portal/servicos?os=10050-01");
   });
 
   it("nenhum aviso da OS leva valor", () => {
@@ -187,6 +190,14 @@ describe("o e-mail", () => {
       subject: "OS 10050-01 agendada · Dutelog",
       text: "OS 10050-01 agendada\nDesmontagem, transporte e montagem · 28/10/2026 08:00–12:00\n\nhttps://app.dutelog.com.br/portal/servicos?os=10050-01\n\nDutelog Soluções Logísticas",
     });
+  });
+
+  it("o da OS concluída diz que o comprovante, com a assinatura e as fotos do final, está no link", () => {
+    const concluida = avisoDoEvento(evento("os.completed", { id: "10050-01", instante: "2026-10-28T14:40:00.000Z" }), OS)!;
+    assert.equal(
+      emailDoAviso(concluida, ["gestora@itau.com"], "https://app.dutelog.com.br")?.text,
+      "OS 10050-01 concluída\nDesmontagem, transporte e montagem · concluída em 28/10/2026 11:40\n\nO comprovante, com a assinatura e as fotos do final, está no portal:\nhttps://app.dutelog.com.br/portal/servicos/comprovante?os=10050-01\n\nDutelog Soluções Logísticas",
+    );
   });
 
   it("o endereço do app por ambiente; o dute-btg fica de fora", () => {
