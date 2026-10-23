@@ -4,6 +4,7 @@ import { onCall } from "firebase-functions/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 
 import { openDirectDemandFor } from "./domain/demanda-direta-gravacao.js";
+import { registerOccurrenceFor, registerStepFor } from "./domain/execucao-gravacao.js";
 import { saveCollaboratorFor, saveVehicleFor } from "./domain/gravacao.js";
 import { saveServiceOrderFor } from "./domain/os-gravacao.js";
 import { requireOperacaoCaller } from "./domain/profile.js";
@@ -50,4 +51,16 @@ export const saveServiceOrder = onCall(async (request) => {
 export const openDirectDemand = onCall(async (request) => {
   const caller = await requireOperacaoCaller(db, request, PROJECT_ID);
   return openDirectDemandFor(db, caller, request.data);
+});
+
+/** Registra a etapa da OS com o instante em que aconteceu; a primeira põe a OS Em execução. */
+export const registerStep = onCall(async (request) => {
+  const caller = await requireOperacaoCaller(db, request, PROJECT_ID);
+  return registerStepFor(db, caller, request.data);
+});
+
+/** Registra uma ocorrência na OS agendada ou em execução. */
+export const registerOccurrence = onCall(async (request) => {
+  const caller = await requireOperacaoCaller(db, request, PROJECT_ID);
+  return registerOccurrenceFor(db, caller, request.data);
 });

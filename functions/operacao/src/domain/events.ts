@@ -36,6 +36,9 @@ export const OPERACAO_EVENT_TYPES = [
   "os.scheduled",
   "os.items_changed",
   "os.cancelled",
+  "os.started",
+  "os.step_recorded",
+  "os.occurrence_recorded",
   "demand.direct_opened",
 ] as const;
 export type OperacaoEventType = (typeof OPERACAO_EVENT_TYPES)[number];
@@ -84,6 +87,26 @@ const osItens = z
   .object({ id: osId, demanda: demandaNumero, linhas: z.number().int().min(1).max(300), edicao_antes: edicao, edicao_depois: edicao })
   .strict();
 
+/** O instante em UTC, como o servidor grava (parte 3.7a). */
+const instante = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+const canal = z.enum(["escritorio", "celular"]);
+const osIniciada = z.object({ id: osId, demanda: demandaNumero, instante }).strict();
+/** A etapa, quando aconteceu, por onde chegou e quem da equipe informou (id do cadastro). */
+const etapaRegistrada = z
+  .object({
+    id: osId,
+    demanda: demandaNumero,
+    etapa: z.enum(["saida_patio", "chegada_origem", "carregamento", "saida_origem", "chegada_destino", "montagem", "fim"]),
+    instante,
+    canal,
+    informado_por: z.string().regex(/^col_[a-f0-9]{16}$/).nullable(),
+  })
+  .strict();
+/** A ocorrência sem a descrição: o texto é livre e pode ter nome; fica só na OS. */
+const ocorrenciaRegistrada = z
+  .object({ id: osId, demanda: demandaNumero, ocorrencia: z.string().regex(/^oc_\d{2,3}$/), instante, canal })
+  .strict();
+
 export const OPERACAO_EVENT_PAYLOADS = {
   "collaborator.created": criado,
   "collaborator.updated": alterado,
@@ -98,6 +121,9 @@ export const OPERACAO_EVENT_PAYLOADS = {
   "os.scheduled": osAgendada,
   "os.items_changed": osItens,
   "os.cancelled": osCancelada,
+  "os.started": osIniciada,
+  "os.step_recorded": etapaRegistrada,
+  "os.occurrence_recorded": ocorrenciaRegistrada,
   "demand.direct_opened": demandaDireta,
 } as const;
 
@@ -115,6 +141,9 @@ const TEXTO: Record<OperacaoEventType, { title: string; description: string }> =
   "os.scheduled": { title: "OS agendada", description: "A OS recebeu janela, equipe e veículos." },
   "os.items_changed": { title: "Itens da OS alterados", description: "A fatia do saldo da demanda nesta OS mudou." },
   "os.cancelled": { title: "OS cancelada", description: "A OS foi cancelada e a fatia voltou ao saldo da demanda." },
+  "os.started": { title: "OS em execução", description: "A primeira etapa da OS foi registrada." },
+  "os.step_recorded": { title: "Etapa da OS registrada", description: "Uma etapa da execução da OS foi registrada com o instante em que aconteceu." },
+  "os.occurrence_recorded": { title: "Ocorrência na OS", description: "Uma ocorrência foi registrada na execução da OS." },
   "demand.direct_opened": { title: "Demanda direta aberta", description: "A demanda chegou direto na Operação e se orça depois da execução." },
 };
 
