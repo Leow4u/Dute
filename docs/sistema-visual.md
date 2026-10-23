@@ -59,6 +59,14 @@ borda, `ghost` e `destructive` com borda. Tamanhos `sm` 36, padrão 40, `lg`
 - Filtros de lista em painel (`FilterPanel` + `FilterGroup`): chips em linha
   no desktop; no celular, botão "Filtros · <o que está ativo>" que abre um
   sheet com os grupos. `StockToolbar` já faz isso para quem passa chips.
+- Barra presa no topo da lista cabe numa linha no celular: a busca e o
+  `FilterSheet`, botão só com o ícone e a contagem do que está ativo, que abre
+  o mesmo sheet com todos os grupos (inclusive formato e ordem). O que está
+  ativo aparece em etiquetas acima da lista, que rolam com ela. Exemplo:
+  Estoque do portal (`docs/mockups/PortalEstoqueCelular.dc.html`).
+- Campo e seletor com texto de 16px no celular (o padrão do `Input`, que só
+  cai para 14px a partir de `md`): abaixo disso o Safari aproxima a tela
+  quando a pessoa toca no campo. Não passe `text-sm` sem o `md:`.
 - Tabela com mais de quatro colunas vira lista de cartões no celular
   (Documentos, Histórico); a tabela fica `hidden md:block` e a lista
   `md:hidden`, com as mesmas ações.

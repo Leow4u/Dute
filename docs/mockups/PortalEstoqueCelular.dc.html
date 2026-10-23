@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Estoque · proposta</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 710px; overflow: hidden; display: flex; flex-direction: column; background: #F4F5F7; color: #1E293B; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: 14px; line-height: 1.45; box-sizing: border-box">
+
+  <header style="flex: 0 0 64px; height: 64px; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; background: #FFFFFF; border-bottom: 1px solid #E2E6EB">
+    <img src="/_blob/ec589aa4bad9c999eb668962c287f022" alt="Dutelog Soluções Logísticas" style="height: 32px; width: auto; display: block">
+    <button type="button" aria-label="Conta" style="width: 40px; height: 40px; border-radius: 999px; border: 1px solid #E2E6EB; background: #EEF2F7; color: #1E293B; display: flex; align-items: center; justify-content: center; padding: 0">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+    </button>
+  </header>
+
+  <div ref="{{ setScroller }}" style="flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden">
+
+    <div style="padding: 20px 16px 12px">
+      <h1 style="margin: 0; font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -0.01em">Estoque</h1>
+      <p style="margin: 4px 0 0; font-size: 14px; color: #5D6877">7.314 peças em 168 itens</p>
+    </div>
+
+    <div style="position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: #F4F5F7; border-bottom: 1px solid #E2E6EB">
+      <label style="position: relative; flex: 1 1 auto; min-width: 0; display: block">
+        <span style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); display: flex; color: #5D6877; pointer-events: none">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+        </span>
+        <input type="search" aria-label="Buscar por nome ou código" placeholder="Buscar por nome ou código" value="{{ busca }}" onChange="{{ onBusca }}" style="width: 100%; box-sizing: border-box; height: 44px; border: 1px solid #CED4DC; border-radius: 10px; background: #FFFFFF; padding: 0 12px 0 42px; font-family: inherit; font-size: 16px; color: #1E293B; outline: none">
+      </label>
+      <button type="button" aria-label="{{ filtrosAria }}" aria-expanded="{{ sheetOpen }}" onClick="{{ abrir }}" style="position: relative; flex: 0 0 44px; width: 44px; height: 44px; box-sizing: border-box; border-radius: 10px; border: 1px solid {{ filtroBorda }}; background: {{ filtroFundo }}; color: {{ filtroCor }}; display: flex; align-items: center; justify-content: center; padding: 0">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="21" x2="14" y1="4" y2="4"></line><line x1="10" x2="3" y1="4" y2="4"></line><line x1="21" x2="12" y1="12" y2="12"></line><line x1="8" x2="3" y1="12" y2="12"></line><line x1="21" x2="16" y1="20" y2="20"></line><line x1="12" x2="3" y1="20" y2="20"></line><line x1="14" x2="14" y1="2" y2="6"></line><line x1="8" x2="8" y1="10" y2="14"></line><line x1="16" x2="16" y1="18" y2="22"></line></svg>
+        <sc-if value="{{ temContagem }}" hint-placeholder-val="{{ false }}">
+          <span style="position: absolute; top: -7px; right: -7px; min-width: 20px; height: 20px; padding: 0 5px; box-sizing: border-box; border-radius: 999px; background: #2457D6; color: #FFFFFF; font-size: 12px; font-weight: 700; line-height: 1; display: flex; align-items: center; justify-content: center; border: 2px solid #F4F5F7">{{ contagem }}</span>
+        </sc-if>
+      </button>
+    </div>
+
+    <sc-if value="{{ temContagem }}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px 0">
+        <sc-for list="{{ ativos }}" as="a" hint-placeholder-count="1">
+          <button type="button" aria-label="Tirar o filtro {{ a.label }}" onClick="{{ a.remover }}" style="display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 10px 0 12px; border-radius: 6px; border: 1px solid #C9D6F5; background: #E8EEFC; color: #1E46B0; font-family: inherit; font-size: 13px; font-weight: 600">
+            {{ a.label }}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+          </button>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <div style="display: flex; flex-direction: column; gap: 12px; padding: 12px 16px 20px">
+
+      <sc-if value="{{ modoCards }}" hint-placeholder-val="{{ true }}">
+        <sc-for list="{{ produtos }}" as="p" hint-placeholder-count="3">
+          <article style="background: #FFFFFF; border: 1px solid #E2E6EB; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column">
+            <div style="position: relative; height: 170px; background: #EEF1F5; border-bottom: 1px solid #E2E6EB; display: flex; align-items: center; justify-content: center; color: #8A94A3">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Foto do produto"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg>
+              <sc-if value="{{ p.seloPedido }}" hint-placeholder-val="{{ false }}">
+                <span style="position: absolute; left: 16px; top: 16px; display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; background: #2457D6; color: #FFFFFF; font-size: 12px; font-weight: 600; box-shadow: 0 1px 2px rgba(15,23,42,.12)">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="21" r="1"></circle><circle cx="19" cy="21" r="1"></circle><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"></path></svg>
+                  {{ p.seloPedidoTexto }}
+                </span>
+              </sc-if>
+              <sc-if value="{{ p.seloZero }}" hint-placeholder-val="{{ false }}">
+                <span style="position: absolute; left: 16px; top: 16px; display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; background: #FFFFFF; color: #BE123C; font-size: 12px; font-weight: 600; box-shadow: 0 1px 2px rgba(15,23,42,.12)">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+                  Sem saldo
+                </span>
+              </sc-if>
+              <sc-if value="{{ p.seloBaixo }}" hint-placeholder-val="{{ false }}">
+                <span style="position: absolute; left: 16px; top: 16px; display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; background: #FFFFFF; color: #7A5D1E; font-size: 12px; font-weight: 600; box-shadow: 0 1px 2px rgba(15,23,42,.12)">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"></path></svg>
+                  Baixo estoque
+                </span>
+              </sc-if>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 10px; padding: 14px">
+              <div style="min-width: 0">
+                <p style="margin: 0; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: #5D6877; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{ p.rotuloTopo }}</p>
+                <p style="margin: 2px 0 0; font-size: 14px; line-height: 20px; font-weight: 600">{{ p.nome }}</p>
+              </div>
+              <sc-if value="{{ p.temTamanhos }}" hint-placeholder-val="{{ false }}">
+                <div role="group" aria-label="Tamanho" style="display: flex; flex-wrap: wrap; gap: 6px">
+                  <sc-for list="{{ p.tamanhos }}" as="t" hint-placeholder-count="4">
+                    <button type="button" aria-pressed="{{ t.ativo }}" onClick="{{ t.escolher }}" style="min-width: 52px; min-height: 44px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px 8px; border-radius: 6px; border: 1px solid {{ t.borda }}; background: {{ t.fundo }}; color: {{ t.cor }}; font-family: inherit; line-height: 1.2">
+                      <span style="font-size: 12px; font-weight: 700; text-decoration: {{ t.risco }}">{{ t.rotulo }}</span>
+                      <span style="font-size: 12px; color: #5D6877">{{ t.detalhe }}</span>
+                    </button>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <sc-if value="{{ p.temSaldo }}" hint-placeholder-val="{{ true }}">
+                <p style="margin: 0; font-size: 12px; color: #5D6877"><span style="font-size: 16px; font-weight: 600; color: #1E293B">{{ p.disp }}</span> {{ p.dispTexto }}</p>
+                <div style="display: flex; align-items: center; gap: 8px; padding-top: 2px">
+                  <div style="display: flex; align-items: center; border: 1px solid #E2E6EB; border-radius: 6px; padding: 2px; background: #FFFFFF">
+                    <button type="button" aria-label="Diminuir quantidade de {{ p.nome }}" disabled="{{ p.menosOff }}" onClick="{{ p.menos }}" style="width: 36px; height: 36px; border: 0; border-radius: 6px; background: transparent; color: #5D6877; display: flex; align-items: center; justify-content: center; padding: 0; opacity: {{ p.menosOpacidade }}">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path></svg>
+                    </button>
+                    <span aria-live="polite" style="min-width: 32px; text-align: center; font-size: 14px; font-weight: 600">{{ p.qtd }}</span>
+                    <button type="button" aria-label="Aumentar quantidade de {{ p.nome }}" disabled="{{ p.maisOff }}" onClick="{{ p.mais }}" style="width: 36px; height: 36px; border: 0; border-radius: 6px; background: transparent; color: #5D6877; display: flex; align-items: center; justify-content: center; padding: 0; opacity: {{ p.maisOpacidade }}">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+                    </button>
+                  </div>
+                  <button type="button" onClick="{{ p.adicionar }}" style="flex: 1 1 auto; min-width: 0; height: 40px; border: 0; border-radius: 6px; background: #2457D6; color: #FFFFFF; font-family: inherit; font-size: 14px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="21" r="1"></circle><circle cx="19" cy="21" r="1"></circle><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"></path></svg>
+                    Adicionar
+                  </button>
+                </div>
+              </sc-if>
+              <sc-if value="{{ p.semSaldo }}" hint-placeholder-val="{{ false }}">
+                <p style="margin: 0; font-size: 12px; color: #5D6877">Sem saldo no momento</p>
+                <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+                  <button type="button" style="height: 40px; border: 1px solid #CED4DC; border-radius: 6px; background: #FFFFFF; color: #1E293B; font-family: inherit; font-size: 14px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"></path><path d="M15 18H9"></path><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"></path><circle cx="17" cy="18" r="2"></circle><circle cx="7" cy="18" r="2"></circle></svg>
+                    Avisar reposição
+                  </button>
+                  <button type="button" style="height: 40px; border: 0; border-radius: 6px; background: transparent; color: #5D6877; font-family: inherit; font-size: 14px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="5" x="2" y="3" rx="1"></rect><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"></path><path d="M10 12h4"></path></svg>
+                    Arquivar
+                  </button>
+                </div>
+              </sc-if>
+            </div>
+          </article>
+        </sc-for>
+      </sc-if>
+
+      <sc-if value="{{ modoLista }}" hint-placeholder-val="{{ false }}">
+        <sc-for list="{{ produtos }}" as="p" hint-placeholder-count="5">
+          <div style="background: #FFFFFF; border: 1px solid #E2E6EB; border-radius: 10px; padding: 12px 12px 12px 14px; display: flex; align-items: center; gap: 12px">
+            <div style="flex: 1 1 auto; min-width: 0">
+              <p style="margin: 0; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: #5D6877; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{ p.rotuloTopo }}</p>
+              <p style="margin: 2px 0 0; font-size: 14px; line-height: 20px; font-weight: 600">{{ p.nome }}</p>
+              <sc-if value="{{ p.temSaldo }}" hint-placeholder-val="{{ true }}">
+                <p style="margin: 2px 0 0; font-size: 12px; color: #5D6877"><span style="font-weight: 700; color: #1E293B">{{ p.disp }}</span> disponíveis<sc-if value="{{ p.seloPedido }}" hint-placeholder-val="{{ false }}"> · <span style="font-weight: 700; color: #1E46B0">{{ p.seloPedidoTexto }}</span></sc-if></p>
+              </sc-if>
+              <sc-if value="{{ p.semSaldo }}" hint-placeholder-val="{{ false }}">
+                <p style="margin: 2px 0 0; font-size: 12px; font-weight: 600; color: #BE123C">Sem saldo</p>
+              </sc-if>
+            </div>
+            <sc-if value="{{ p.temSaldo }}" hint-placeholder-val="{{ true }}">
+              <button type="button" aria-label="Adicionar {{ p.nome }}" onClick="{{ p.adicionar }}" style="flex: 0 0 auto; width: 44px; height: 44px; border: 0; border-radius: 6px; background: #2457D6; color: #FFFFFF; display: flex; align-items: center; justify-content: center; padding: 0">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+              </button>
+            </sc-if>
+          </div>
+        </sc-for>
+      </sc-if>
+
+      <sc-if value="{{ vazio }}" hint-placeholder-val="{{ false }}">
+        <div style="background: #FFFFFF; border: 1px solid #E2E6EB; border-radius: 10px; padding: 28px 16px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center">
+          <span style="display: flex; color: #5D6877">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+          </span>
+          <p style="margin: 0; font-size: 14px; font-weight: 600">Nenhum produto encontrado</p>
+          <button type="button" onClick="{{ limpar }}" style="height: 40px; padding: 0 16px; border: 1px solid #CED4DC; border-radius: 6px; background: #FFFFFF; color: #1E293B; font-family: inherit; font-size: 14px; font-weight: 600">Limpar filtros</button>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ temResultado }}" hint-placeholder-val="{{ true }}">
+        <div style="background: #FFFFFF; border: 1px solid #E2E6EB; border-radius: 10px; padding: 12px 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center">
+          <p style="margin: 0; font-size: 12px; color: #5D6877">Exibindo <span style="font-weight: 600; color: #1E293B">{{ exibindo }}</span> de <span style="font-weight: 600; color: #1E293B">168</span> produto(s)</p>
+          <button type="button" style="height: 36px; padding: 0 14px; border: 1px solid #CED4DC; border-radius: 6px; background: #FFFFFF; color: #1E293B; font-family: inherit; font-size: 14px; font-weight: 600">Carregar mais 48</button>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+
+  <nav aria-label="Navegação principal" style="flex: 0 0 auto; display: flex; background: #FFFFFF; border-top: 1px solid #E2E6EB">
+    <a href="#inicio" style="flex: 1 1 0; min-width: 0; height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 12px; font-weight: 500; color: #5D6877; text-decoration: none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+      <span>Início</span>
+    </a>
+    <a href="#pedidos" style="flex: 1 1 0; min-width: 0; height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 12px; font-weight: 500; color: #5D6877; text-decoration: none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"></path><path d="M15 18H9"></path><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"></path><circle cx="17" cy="18" r="2"></circle><circle cx="7" cy="18" r="2"></circle></svg>
+      <span>Pedidos</span>
+    </a>
+    <a href="#estoque" aria-current="page" style="flex: 1 1 0; min-width: 0; height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 12px; font-weight: 500; color: #2457D6; text-decoration: none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"></path><path d="m7.5 4.27 9 5.15"></path><polyline points="3.29 7 12 12 20.71 7"></polyline><line x1="12" x2="12" y1="22" y2="12"></line><circle cx="18.5" cy="15.5" r="2.5"></circle><path d="M20.27 17.27 22 19"></path></svg>
+      <span>Estoque</span>
+    </a>
+    <a href="#agent" style="flex: 1 1 0; min-width: 0; height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 12px; font-weight: 500; color: #5D6877; text-decoration: none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"></path><path d="M9 13a4.5 4.5 0 0 0 3-4"></path><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"></path><path d="M3.477 10.896a4 4 0 0 1 .585-.396"></path><path d="M6 18a4 4 0 0 1-1.967-.516"></path><path d="M12 13h4"></path><path d="M12 18h6a2 2 0 0 1 2 2v1"></path><path d="M12 8h8"></path><path d="M16 8V5a2 2 0 0 1 2-2"></path><circle cx="16" cy="13" r=".5"></circle><circle cx="18" cy="3" r=".5"></circle><circle cx="20" cy="21" r=".5"></circle><circle cx="20" cy="8" r=".5"></circle></svg>
+      <span>Agent Dute</span>
+    </a>
+    <a href="#mais" style="flex: 1 1 0; min-width: 0; height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 12px; font-weight: 500; color: #5D6877; text-decoration: none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="14" rx="1"></rect><rect width="7" height="7" x="3" y="14" rx="1"></rect></svg>
+      <span>Mais</span>
+    </a>
+  </nav>
+
+  <sc-if value="{{ sheetOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 50; display: flex; flex-direction: column; justify-content: flex-end">
+      <button type="button" aria-label="Fechar filtros" onClick="{{ fechar }}" style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; border: 0; padding: 0; margin: 0; background: rgba(15,23,42,.42)"></button>
+      <div role="dialog" aria-modal="true" aria-label="Filtros" style="position: relative; max-height: 90%; overflow-y: auto; background: #FFFFFF; border-radius: 14px 14px 0 0; padding: 8px 16px 16px; box-shadow: 0 -10px 30px rgba(15,23,42,.18); display: flex; flex-direction: column; gap: 18px">
+        <div>
+          <div style="width: 36px; height: 4px; border-radius: 999px; background: #CED4DC; margin: 0 auto 6px"></div>
+          <div style="display: flex; align-items: center; justify-content: space-between">
+            <h2 style="margin: 0; font-size: 18px; line-height: 24px; font-weight: 700">Filtros</h2>
+            <button type="button" aria-label="Fechar" onClick="{{ fechar }}" style="width: 44px; height: 44px; margin-right: -10px; border: 0; border-radius: 6px; background: transparent; color: #5D6877; display: flex; align-items: center; justify-content: center; padding: 0">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+            </button>
+          </div>
+        </div>
+
+        <div role="group" aria-label="Situação" style="display: flex; flex-direction: column; gap: 8px">
+          <p style="margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #5D6877">Situação</p>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px">
+            <sc-for list="{{ chipsSituacao }}" as="c" hint-placeholder-count="5">
+              <button type="button" aria-pressed="{{ c.ativo }}" onClick="{{ c.escolher }}" style="height: 36px; padding: 0 12px; border-radius: 6px; border: 1px solid {{ c.borda }}; background: {{ c.fundo }}; color: {{ c.cor }}; font-family: inherit; font-size: 13px; font-weight: 600">{{ c.texto }}</button>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <label for="filtro-tipo" style="font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #5D6877">Tipo</label>
+          <div style="position: relative">
+            <select id="filtro-tipo" value="{{ tipo }}" onChange="{{ onTipo }}" style="width: 100%; height: 44px; box-sizing: border-box; appearance: none; -webkit-appearance: none; border: 1px solid #CED4DC; border-radius: 10px; background: #FFFFFF; padding: 0 40px 0 14px; font-family: inherit; font-size: 16px; font-weight: 500; color: #1E293B">
+              <sc-for list="{{ opcoesTipo }}" as="o" hint-placeholder-count="7">
+                <option value="{{ o.v }}">{{ o.texto }}</option>
+              </sc-for>
+            </select>
+            <span style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%); display: flex; color: #5D6877; pointer-events: none">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+            </span>
+          </div>
+        </div>
+
+        <div role="group" aria-label="Ordenar" style="display: flex; flex-direction: column; gap: 8px">
+          <p style="margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #5D6877">Ordenar</p>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px">
+            <sc-for list="{{ chipsOrdem }}" as="c" hint-placeholder-count="4">
+              <button type="button" aria-pressed="{{ c.ativo }}" onClick="{{ c.escolher }}" style="height: 36px; padding: 0 12px; border-radius: 6px; border: 1px solid {{ c.borda }}; background: {{ c.fundo }}; color: {{ c.cor }}; font-family: inherit; font-size: 13px; font-weight: 600">{{ c.texto }}</button>
+            </sc-for>
+          </div>
+        </div>
+
+        <div role="group" aria-label="Exibição" style="display: flex; flex-direction: column; gap: 8px">
+          <p style="margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #5D6877">Exibição</p>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid #E2E6EB; border-radius: 10px; background: #F1F3F6">
+            <button type="button" aria-pressed="{{ cardsAtivo }}" onClick="{{ verCards }}" style="height: 40px; border: 0; border-radius: 6px; background: {{ cardsFundo }}; color: {{ cardsCor }}; box-shadow: {{ cardsSombra }}; font-family: inherit; font-size: 14px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M3 12h18"></path><path d="M12 3v18"></path></svg>
+              Cards
+            </button>
+            <button type="button" aria-pressed="{{ listaAtivo }}" onClick="{{ verLista }}" style="height: 40px; border: 0; border-radius: 6px; background: {{ listaFundo }}; color: {{ listaCor }}; box-shadow: {{ listaSombra }}; font-family: inherit; font-size: 14px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h.01"></path><path d="M3 18h.01"></path><path d="M3 6h.01"></path><path d="M8 12h13"></path><path d="M8 18h13"></path><path d="M8 6h13"></path></svg>
+              Lista
+            </button>
+          </div>
+          <sc-if value="{{ modoCards }}" hint-placeholder-val="{{ true }}">
+            <button type="button" role="switch" aria-checked="{{ agrupar }}" onClick="{{ alternarAgrupar }}" style="height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 2px; border: 0; background: transparent; color: #1E293B; font-family: inherit; font-size: 14px; font-weight: 500; text-align: left">
+              Agrupar tamanhos
+              <span style="position: relative; flex: 0 0 auto; width: 40px; height: 24px; border-radius: 999px; background: {{ trilho }}">
+                <span style="position: absolute; top: 3px; left: {{ bolinha }}; width: 18px; height: 18px; border-radius: 999px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(15,23,42,.25)"></span>
+              </span>
+            </button>
+          </sc-if>
+        </div>
+
+        <div style="display: flex; gap: 8px; padding-top: 4px">
+          <button type="button" onClick="{{ limpar }}" style="flex: 0 0 auto; height: 44px; padding: 0 18px; border: 1px solid #CED4DC; border-radius: 6px; background: #FFFFFF; color: #1E293B; font-family: inherit; font-size: 14px; font-weight: 600">Limpar</button>
+          <button type="button" onClick="{{ fechar }}" style="flex: 1 1 auto; height: 44px; border: 0; border-radius: 6px; background: #2457D6; color: #FFFFFF; font-family: inherit; font-size: 14px; font-weight: 600">Ver resultados</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"estado":{"editor":"enum","options":["topo","rolada","filtros"],"default":"topo"},"$preview":{"width":390,"height":710}}'>
+class Component extends DCLogic {
+  familias() {
+    return [
+      { id: 't1', tipo: 'Toalha', tipoKey: 'toalha', codigo: 'C.0659.001', nome: 'Toalha de academia', minimo: 100,
+        variantes: [{ id: 't1', rotulo: 'U', codigo: 'C.0659.001', disp: 672 }] },
+      { id: 'p1', tipo: 'Camisa polo', tipoKey: 'polo', codigo: 'C.0412', nome: 'Camisa polo azul-marinho', minimo: 50,
+        variantes: [
+          { id: 'p1-p', rotulo: 'P', codigo: 'C.0412.001', disp: 120 },
+          { id: 'p1-m', rotulo: 'M', codigo: 'C.0412.002', disp: 214 },
+          { id: 'p1-g', rotulo: 'G', codigo: 'C.0412.003', disp: 180 },
+          { id: 'p1-gg', rotulo: 'GG', codigo: 'C.0412.004', disp: 0 }
+        ] },
+      { id: 's1', tipo: 'Sacola', tipoKey: 'sacola', codigo: 'C.0733.002', nome: 'Sacola de algodão cru', minimo: 200,
+        variantes: [{ id: 's1', rotulo: 'U', codigo: 'C.0733.002', disp: 1250 }] },
+      { id: 'g1', tipo: 'Garrafa', tipoKey: 'garrafa', codigo: 'C.0581.001', nome: 'Garrafa térmica 500 ml', minimo: 60,
+        variantes: [{ id: 'g1', rotulo: 'U', codigo: 'C.0581.001', disp: 38 }] },
+      { id: 'b1', tipo: 'Boné', tipoKey: 'bone', codigo: 'C.0290.004', nome: 'Boné aba curva', minimo: 20,
+        variantes: [{ id: 'b1', rotulo: 'U', codigo: 'C.0290.004', disp: 0 }] },
+      { id: 'c1', tipo: 'Caneca', tipoKey: 'caneca', codigo: 'C.0811.001', nome: 'Caneca de cerâmica 300 ml', minimo: 30,
+        variantes: [{ id: 'c1', rotulo: 'U', codigo: 'C.0811.001', disp: 96 }] }
+    ];
+  }
+
+  fmt(n) {
+    return Number(n).toLocaleString('pt-BR');
+  }
+
+  normalizar(t) {
+    return String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  }
+
+  chip(ativo) {
+    return ativo
+      ? { borda: '#2457D6', fundo: '#E8EEFC', cor: '#1E46B0' }
+      : { borda: '#E2E6EB', fundo: '#FFFFFF', cor: '#1E293B' };
+  }
+
+  renderVals() {
+    const estado = this.props.estado ?? 'topo';
+    const s = this.state || {};
+    const set = (patch) => this.setState(patch);
+
+    const sheetOpen = s.sheet ?? (estado === 'filtros');
+    const situacao = s.situacao ?? (estado === 'filtros' ? 'disponiveis' : 'todos');
+    const tipo = s.tipo ?? 'todos';
+    const ordem = s.ordem ?? 'relevancia';
+    const exibicao = s.exibicao ?? 'cards';
+    const agrupar = s.agrupar ?? true;
+    const busca = s.busca ?? '';
+    const escolhido = s.escolhido || {};
+    const qtd = s.qtd || {};
+    const pedido = s.pedido || {};
+
+    const situacoes = [
+      { v: 'todos', l: 'Todos', n: '168' },
+      { v: 'disponiveis', l: 'Com saldo', n: '151' },
+      { v: 'baixo', l: 'Abaixo do mínimo', n: '9' },
+      { v: 'zerado', l: 'Sem saldo', n: '17' },
+      { v: 'arquivados', l: 'Arquivados', n: '' }
+    ];
+    const tipos = [
+      { v: 'todos', l: 'Todos os tipos', n: '168' },
+      { v: 'bone', l: 'Boné', n: '10' },
+      { v: 'polo', l: 'Camisa polo', n: '24' },
+      { v: 'caneca', l: 'Caneca', n: '14' },
+      { v: 'garrafa', l: 'Garrafa', n: '8' },
+      { v: 'sacola', l: 'Sacola', n: '12' },
+      { v: 'toalha', l: 'Toalha', n: '6' }
+    ];
+    const ordens = [
+      { v: 'relevancia', l: 'Mais relevantes' },
+      { v: 'maior-saldo', l: 'Maior saldo' },
+      { v: 'menor-saldo', l: 'Menor saldo' },
+      { v: 'nome', l: 'Nome: A-Z' }
+    ];
+
+    const separar = exibicao === 'lista' || !agrupar;
+    let itens = [];
+    this.familias().forEach((f) => {
+      if (separar && f.variantes.length > 1) {
+        f.variantes.forEach((v) => itens.push({
+          chave: v.id, tipo: f.tipo, tipoKey: f.tipoKey, codigo: v.codigo,
+          nome: f.nome + ' · ' + v.rotulo, minimo: f.minimo, variantes: [v]
+        }));
+      } else {
+        itens.push({
+          chave: f.id, tipo: f.tipo, tipoKey: f.tipoKey, codigo: f.codigo,
+          nome: f.nome, minimo: f.minimo, variantes: f.variantes
+        });
+      }
+    });
+
+    const total = (it) => it.variantes.reduce((soma, v) => soma + v.disp, 0);
+    const termo = this.normalizar(busca.trim());
+    itens = itens.filter((it) => {
+      const t = total(it);
+      if (situacao === 'disponiveis' && t <= 0) return false;
+      if (situacao === 'baixo' && !(t > 0 && t < it.minimo)) return false;
+      if (situacao === 'zerado' && t > 0) return false;
+      if (situacao === 'arquivados') return false;
+      if (tipo !== 'todos' && it.tipoKey !== tipo) return false;
+      if (termo && !this.normalizar(it.nome + ' ' + it.codigo + ' ' + it.tipo).includes(termo)) return false;
+      return true;
+    });
+    if (ordem === 'maior-saldo') itens.sort((a, b) => total(b) - total(a));
+    if (ordem === 'menor-saldo') itens.sort((a, b) => total(a) - total(b));
+    if (ordem === 'nome') itens.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
+    const produtos = itens.map((it) => {
+      const t = total(it);
+      const primeiro = it.variantes.find((v) => v.disp > 0) || it.variantes[0];
+      const selId = escolhido[it.chave] ?? primeiro.id;
+      const sel = it.variantes.find((v) => v.id === selId) || primeiro;
+      const q = sel.disp > 0 ? Math.min(qtd[sel.id] ?? 1, sel.disp) : 0;
+      const noPedido = it.variantes.reduce((soma, v) => soma + (pedido[v.id] || 0), 0);
+      const temTamanhos = it.variantes.length > 1;
+      return {
+        rotuloTopo: it.tipo + ' · ' + it.codigo,
+        nome: it.nome,
+        temTamanhos,
+        tamanhos: it.variantes.map((v) => {
+          const ativo = v.id === sel.id;
+          return {
+            rotulo: v.rotulo,
+            detalhe: v.disp > 0 ? this.fmt(v.disp) + ' disp.' : 'esgotado',
+            ativo,
+            borda: ativo ? '#2457D6' : '#E2E6EB',
+            fundo: ativo ? '#E8EEFC' : '#FFFFFF',
+            cor: ativo ? '#1E46B0' : (v.disp > 0 ? '#1E293B' : '#5D6877'),
+            risco: v.disp > 0 ? 'none' : 'line-through',
+            escolher: () => set({ escolhido: { ...escolhido, [it.chave]: v.id } })
+          };
+        }),
+        temSaldo: sel.disp > 0,
+        semSaldo: sel.disp <= 0,
+        disp: this.fmt(sel.disp),
+        dispTexto: temTamanhos ? 'disponíveis neste tamanho' : 'disponíveis',
+        qtd: q,
+        menosOff: q <= 1,
+        maisOff: q >= sel.disp,
+        menosOpacidade: q <= 1 ? '0.4' : '1',
+        maisOpacidade: q >= sel.disp ? '0.4' : '1',
+        menos: () => set({ qtd: { ...qtd, [sel.id]: Math.max(1, q - 1) } }),
+        mais: () => set({ qtd: { ...qtd, [sel.id]: Math.min(sel.disp, q + 1) } }),
+        adicionar: () => set({
+          pedido: { ...pedido, [sel.id]: (pedido[sel.id] || 0) + Math.max(q, 1) },
+          qtd: { ...qtd, [sel.id]: 1 }
+        }),
+        seloPedido: noPedido > 0,
+        seloPedidoTexto: this.fmt(noPedido) + ' no pedido',
+        seloZero: noPedido === 0 && t === 0,
+        seloBaixo: noPedido === 0 && t > 0 && t < it.minimo
+      };
+    });
+
+    const ativos = [];
+    if (situacao !== 'todos') {
+      ativos.push({ label: situacoes.find((x) => x.v === situacao).l, remover: () => set({ situacao: 'todos' }) });
+    }
+    if (tipo !== 'todos') {
+      ativos.push({ label: tipos.find((x) => x.v === tipo).l, remover: () => set({ tipo: 'todos' }) });
+    }
+    const contagem = ativos.length;
+    const filtro = contagem > 0
+      ? { borda: '#2457D6', fundo: '#E8EEFC', cor: '#1E46B0' }
+      : { borda: '#CED4DC', fundo: '#FFFFFF', cor: '#1E293B' };
+
+    const segmento = (ativo) => ativo
+      ? { fundo: '#FFFFFF', cor: '#2457D6', sombra: '0 1px 2px rgba(15,23,42,.12)' }
+      : { fundo: 'transparent', cor: '#5D6877', sombra: 'none' };
+    const cards = segmento(exibicao === 'cards');
+    const lista = segmento(exibicao === 'lista');
+
+    return {
+      setScroller: (el) => {
+        if (el && estado === 'rolada' && !this.jaRolou) {
+          this.jaRolou = true;
+          setTimeout(() => { el.scrollTop = 420; }, 60);
+        }
+      },
+      busca,
+      onBusca: (e) => set({ busca: e.target.value }),
+      sheetOpen,
+      abrir: () => set({ sheet: true }),
+      fechar: () => set({ sheet: false }),
+      filtrosAria: contagem > 0 ? 'Filtros, ' + contagem + ' ativo(s)' : 'Filtros',
+      filtroBorda: filtro.borda,
+      filtroFundo: filtro.fundo,
+      filtroCor: filtro.cor,
+      temContagem: contagem > 0,
+      contagem,
+      ativos,
+      produtos,
+      modoCards: exibicao === 'cards',
+      modoLista: exibicao === 'lista',
+      vazio: produtos.length === 0,
+      temResultado: produtos.length > 0,
+      exibindo: produtos.length,
+      limpar: () => set({ situacao: 'todos', tipo: 'todos', ordem: 'relevancia', busca: '' }),
+      chipsSituacao: situacoes.map((x) => ({
+        ...this.chip(x.v === situacao),
+        ativo: x.v === situacao,
+        texto: x.n ? x.l + ' · ' + x.n : x.l,
+        escolher: () => set({ situacao: x.v })
+      })),
+      tipo,
+      onTipo: (e) => set({ tipo: e.target.value }),
+      opcoesTipo: tipos.map((x) => ({ v: x.v, texto: x.l + ' (' + x.n + ')' })),
+      chipsOrdem: ordens.map((x) => ({
+        ...this.chip(x.v === ordem),
+        ativo: x.v === ordem,
+        texto: x.l,
+        escolher: () => set({ ordem: x.v })
+      })),
+      cardsAtivo: exibicao === 'cards',
+      listaAtivo: exibicao === 'lista',
+      cardsFundo: cards.fundo,
+      cardsCor: cards.cor,
+      cardsSombra: cards.sombra,
+      listaFundo: lista.fundo,
+      listaCor: lista.cor,
+      listaSombra: lista.sombra,
+      verCards: () => set({ exibicao: 'cards' }),
+      verLista: () => set({ exibicao: 'lista' }),
+      agrupar,
+      alternarAgrupar: () => set({ agrupar: !agrupar }),
+      trilho: agrupar ? '#2457D6' : '#B8C0CB',
+      bolinha: agrupar ? '19px' : '3px'
+    };
+  }
+}
+</script>
+</body>
+</html>
