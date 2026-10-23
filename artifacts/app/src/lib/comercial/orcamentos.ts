@@ -26,6 +26,8 @@ export const ETAPAS_DEMANDA = [
   "execucao_a_orcar",
   "aguardando_autorizacao",
   "a_faturar",
+  // A NF registrada no Financeiro (Fase 4); a demanda sai da fila do Comercial.
+  "faturada",
   "perdida",
   "cancelada",
 ] as const;
@@ -72,6 +74,7 @@ export const ETAPA_ROTULO: Record<EtapaDemanda, string> = {
   execucao_a_orcar: "Execução a orçar",
   aguardando_autorizacao: "Aguardando autorização",
   a_faturar: "A faturar",
+  faturada: "Faturada",
   perdida: "Perdida",
   cancelada: "Cancelada",
 };
@@ -134,6 +137,7 @@ const COR_DA_ETAPA: Record<EtapaDemanda, string> = {
   execucao_a_orcar: AMBAR,
   aguardando_autorizacao: AMBAR,
   a_faturar: VERDE_AGUA,
+  faturada: VERDE,
   perdida: APAGADO,
   cancelada: APAGADO,
 };
@@ -147,6 +151,7 @@ const PONTO_DA_ETAPA: Record<EtapaDemanda, string> = {
   execucao_a_orcar: "bg-amber-soft-foreground",
   aguardando_autorizacao: "bg-amber-soft-foreground",
   a_faturar: "bg-teal-soft-foreground",
+  faturada: "bg-success-soft-foreground",
   perdida: "bg-muted-foreground",
   cancelada: "bg-muted-foreground",
 };

@@ -34,6 +34,7 @@ const COR_DA_ETAPA: Record<EtapaNaOperacao, string> = {
   em_revisao: "bg-teal-soft-foreground",
   execucao_a_orcar: "bg-amber-soft-foreground",
   a_faturar: "bg-success-soft-foreground",
+  faturada: "bg-success-soft-foreground",
   perdida: "bg-muted-foreground",
   cancelada: "bg-muted-foreground",
 };
