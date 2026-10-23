@@ -39,6 +39,9 @@ Sombra só em overlay (`shadow-lg` em diálogo e menu) e no painel flutuante
 - `warning-soft` atenção, `success-soft` concluído, `info-soft` em andamento,
   `muted` para tipo e categoria.
 - `agent-*` é a identidade do Agent Dute (violeta).
+- `gender-fem-*` e `gender-masc-*` só no chip de gênero do Estoque do portal
+  (FEM rosa, MASC azul-petróleo; `docs/mockups/PortalEstoqueGenero.dc.html`).
+  Não são cor de status.
 
 ## Botões
 
