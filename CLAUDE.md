@@ -28,6 +28,12 @@ documentação de produto e operação está em `docs/`.
   continua sem gravar no `dute-prod` e no `dute-btg`. O `dute-btg` fica de fora
   das duas listas. Roteiro, ordem e como desfazer:
   `docs/plataforma/comercial-producao.md`.
+- **Operação (Fase 3, partes 1 a 3) está na `main`, ligada no `dute-homolog` e
+  no `dute-prod`** (OK do Leonardo em 22/10/2026): colaboradores, veículos e a
+  fila do dia (abrir, agendar e cancelar a OS). Executar e concluir ainda não
+  existem; campo não lê a OS. O `dute-btg` fica de fora das duas listas
+  `OPERACAO_AMBIENTES_LIBERADOS`. Desenho e como desfazer:
+  `docs/plataforma/fase-3-operacao.md`.
 - **Papéis e módulos têm lista única em `lib/dominio`.** As Functions
   (`functions/wms/src/domain/platform-roles.ts`, `customer-profile.ts`) e o
   `firestore.rules` guardam cópias literais, travadas por
