@@ -48,6 +48,9 @@ OPERACAO = (
     "service_orders",
     "service_order_counters",
     "service_requests",
+    "client_notifications",
+    "email_outbox",
+    "notification_cursors",
 )
 FINANCEIRO = (
     "faturas",

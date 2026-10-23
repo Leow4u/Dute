@@ -92,8 +92,10 @@ COMERCIAL_COLLECTIONS = (
     "comercial_operations",
 )
 # Operação (docs/plataforma/fase-3-operacao.md, parte 1): colaboradores,
-# veículos, OS, recibos e as solicitações do portal (fase 4, parte 4.4a). Não
-# é dado do WMS: nunca apagadas, nem com --include-setup.
+# veículos, OS, recibos, as solicitações do portal (fase 4, parte 4.4a) e os
+# avisos do portal, a fila de e-mail e o cursor da rotina deles (parte 4.6a),
+# que saem dos eventos da Operação e do Financeiro, também preservados. Não é
+# dado do WMS: nunca apagadas, nem com --include-setup.
 OPERACAO_COLLECTIONS = (
     "collaborators",
     "vehicles",
@@ -101,6 +103,9 @@ OPERACAO_COLLECTIONS = (
     "service_orders",
     "service_order_counters",
     "service_requests",
+    "client_notifications",
+    "email_outbox",
+    "notification_cursors",
 )
 # Financeiro (docs/plataforma/fase-4-financeiro.md, partes 4.1a, 4.2a e
 # 4.3a): a fatura da demanda, os pagamentos dela, a projeção do portal e os
