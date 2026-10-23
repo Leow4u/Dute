@@ -4,7 +4,7 @@ import { after, before, beforeEach, describe, it } from "node:test";
 import { deleteApp, initializeApp } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 
-import { billingDocumentId, resolveBillingDocument } from "./billing-scope.js";
+import { billingDocumentId, readBillingPeriod, resolveBillingDocument } from "./billing-scope.js";
 
 const PROJECT_ID = "demo-dute-operations";
 
@@ -64,5 +64,24 @@ describe("documento da fatura por cliente", () => {
       (await db.collection("billing_periods").doc(acme.ref.id).get()).data()?.total,
       99,
     );
+  });
+
+  it("a prévia do agente lê o período do próprio cliente: o id do mês é só da BTG", async () => {
+    await db.collection("billing_periods").doc("2026-08").set({
+      customer_code: "BTG Pactual",
+      competencia: "2026-08",
+      status: "emitido",
+      invoice_snapshot: { total: 12.34 },
+    });
+    await db.collection("billing_periods").doc(billingDocumentId("Banco Safra", "2026-07")).set({
+      customer_code: "Banco Safra",
+      competencia: "2026-07",
+      status: "pago",
+    });
+
+    assert.equal((await readBillingPeriod(db, "billing_periods", "BTG Pactual", "2026-08")).status, "emitido");
+    assert.deepEqual(await readBillingPeriod(db, "billing_periods", "Banco Safra", "2026-08"), {});
+    assert.equal((await readBillingPeriod(db, "billing_periods", "Banco Safra", "2026-07")).status, "pago");
+    assert.deepEqual(await readBillingPeriod(db, "billing_periods", "BTG Pactual", "2026-07"), {});
   });
 });
