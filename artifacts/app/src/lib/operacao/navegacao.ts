@@ -28,6 +28,8 @@ export const ROTA_DEMANDA = "/operacao/demanda";
 export const ROTA_NOVA_DEMANDA = "/operacao/nova-demanda";
 /** A ficha da OS (parte 3.7d, docs/mockups/OpOS.dc.html): ?numero=10045-01. */
 export const ROTA_OS = "/operacao/os";
+/** A OS impressa, via operacional (parte 3.9d, docs/mockups/OSImpressao.dc.html): ?numero=10045-01. */
+export const ROTA_OS_IMPRESSAO = "/operacao/os/impressao";
 /** Planejar as OS de uma demanda (parte 3.6a, docs/mockups/OpOSPlanejar.dc.html): ?demanda=10045. */
 export const ROTA_PLANEJAR = "/operacao/planejar";
 
@@ -40,6 +42,7 @@ export const TELAS_DA_OPERACAO: readonly string[] = [
   ROTA_NOVA_DEMANDA,
   ROTA_PLANEJAR,
   ROTA_OS,
+  ROTA_OS_IMPRESSAO,
   ROTA_COLABORADORES,
   ROTA_VEICULOS,
   // O app do campo é da Operação: só existe com a liberação dela (parte 3.8b).
@@ -64,6 +67,11 @@ export function osDaBusca(busca: string): string | null {
 /** A ficha da OS: "/operacao/os?numero=10045-01". */
 export function hrefDaFichaDaOs(numero: string): string {
   return `${ROTA_OS}?numero=${encodeURIComponent(numero)}`;
+}
+
+/** A OS impressa: "/operacao/os/impressao?numero=10045-01". */
+export function hrefDaImpressaoDaOs(numero: string): string {
+  return `${ROTA_OS_IMPRESSAO}?numero=${encodeURIComponent(numero)}`;
 }
 
 /** A OS pedida na busca da URL da ficha (`?numero=`), ou null. */

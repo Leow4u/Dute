@@ -872,3 +872,25 @@ Feita em 23/10/2026, no desenho aprovado `OpOS`.
   por"), o cargo e o documento, por onde veio, a imagem da assinatura e o
   motivo de cada item a menos. O passo Concluir mostra o aceite, e o
   histórico ganha a conclusão.
+
+### Parte 3.9d: OS impressa
+
+Feita em 23/10/2026, no desenho `OSImpressao`, em
+`/operacao/os/impressao?numero=` (owner, admin e interno; "Imprimir" na
+ficha da OS). É a via operacional: o papel que a equipe leva ao local e o
+cliente assina quando não há o celular.
+
+- **O que tem.** O emissor (o mesmo do orçamento do Comercial, com o CNPJ
+  quando o Leonardo informar), o número, os serviços, a emissão e o status;
+  o cliente, a demanda e o pedido; a data e a janela, o líder, a equipe com o
+  papel e o vínculo e os veículos; a origem e o destino com o contato; os
+  itens com o previsto e o feito em branco; as instruções; e as linhas de
+  assinatura do líder, do motorista e do cliente.
+- **Concluída**, o feito entra na coluna e o aceite (com a imagem da
+  assinatura) no lugar da linha do cliente.
+- **Sem valor.** O mockup de 19/10 tinha o valor da mercadoria; fica de fora,
+  porque a Operação nunca vê valores. O teste trava "R$", valor, preço e
+  total.
+- **Impressão.** É a do navegador (Imprimir → Salvar como PDF), como o
+  orçamento: só a área `.print-area` sai, em A4. O papel fica branco nos dois
+  temas (`PAPER_FILES` no teste do tema).
