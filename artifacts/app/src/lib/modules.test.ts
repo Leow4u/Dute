@@ -137,6 +137,8 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/financeiro/vencidos", ["owner", "admin", "financeiro"]],
   ["/financeiro/pagos", ["owner", "admin", "financeiro"]],
   ["/financeiro/faturas", ["owner", "admin", "financeiro"]],
+  ["/financeiro/contratos", ["owner", "admin", "financeiro"]],
+  ["/financeiro/autorizacoes", ["owner", "admin", "financeiro"]],
   ["/financeiro/relatorios", ["owner", "admin", "financeiro"]],
   ["/financeiro/agente", ["owner", "admin", "financeiro"]],
   // A via comercial da NF (parte 4.2d).

@@ -60,6 +60,8 @@ export type ContratosViewProps = {
   acoes: AcoesDosContratos;
   /** Telas do Comercial que já existem (barra de abas); o padrão é a do app. */
   telas?: readonly string[];
+  /** No shell do Financeiro (parte 7.5c): só leitura, sem Novo contrato, Editar nem Registrar aditivo. */
+  somenteLeitura?: boolean;
 };
 
 const TOM: Record<TomDoSelo, string> = {
@@ -124,7 +126,7 @@ function CabecalhoDoCartao({ icone, titulo, contagem, children }: { icone: React
 const ROTULO_DO_FILTRO: Record<FiltroDaLista, string> = { vigentes: "Vigentes", encerrados: "Encerrados" };
 
 function Lista(props: ContratosViewProps) {
-  const { estado, contratos, clientes, hoje, filtro, onFiltro, selecionado, onSelecionar, ocupado, acoes } = props;
+  const { estado, contratos, clientes, hoje, filtro, onFiltro, selecionado, onSelecionar, ocupado, acoes, somenteLeitura } = props;
   const contagem = contarFiltros(contratos);
   const outro: FiltroDaLista = filtro === "vigentes" ? "encerrados" : "vigentes";
   let conteudo: ReactNode;
@@ -171,10 +173,12 @@ function Lista(props: ContratosViewProps) {
         </span>
         <h2 className="text-sm font-extrabold uppercase tracking-wider">{ROTULO_DO_FILTRO[filtro]}</h2>
         <Contador>{contagem[filtro]}</Contador>
-        <Button type="button" variant="outline" size="sm" className="ml-auto" onClick={acoes.novoContrato} disabled={ocupado}>
-          <Plus aria-hidden="true" />
-          Novo contrato
-        </Button>
+        {somenteLeitura ? null : (
+          <Button type="button" variant="outline" size="sm" className="ml-auto" onClick={acoes.novoContrato} disabled={ocupado}>
+            <Plus aria-hidden="true" />
+            Novo contrato
+          </Button>
+        )}
       </div>
       <div className="[&>button:first-child]:border-t-0">{conteudo}</div>
       {estado === "pronto" ? (
@@ -243,13 +247,14 @@ function Vigencia({ contrato, hoje }: { contrato: Contrato; hoje: string }) {
   );
 }
 
-function Cabecalho({ contrato, cliente, aditivos, hoje, ocupado, acoes }: {
+function Cabecalho({ contrato, cliente, aditivos, hoje, ocupado, acoes, somenteLeitura }: {
   contrato: Contrato;
   cliente: CadastroComercial | null;
   aditivos: Carga<Aditivo>;
   hoje: string;
   ocupado: boolean;
   acoes: AcoesDosContratos;
+  somenteLeitura?: boolean;
 }) {
   const ultimo = Array.isArray(aditivos) ? ultimoAditivo(aditivos) : null;
   const { ordem: _ordem, dias: _dias, ...selo } = seloDoContrato(contrato.dados, hoje);
@@ -269,17 +274,19 @@ function Cabecalho({ contrato, cliente, aditivos, hoje, ocupado, acoes }: {
             {ultimo ? <Pill>Aditivo {ultimo.numero}</Pill> : null}
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" onClick={acoes.editar} disabled={ocupado}>
-            <Pencil aria-hidden="true" />
-            Editar
-          </Button>
-          {/* O número do aditivo sai do histórico: espera os aditivos serem lidos. */}
-          <Button type="button" onClick={acoes.registrarAditivo} disabled={ocupado || !Array.isArray(aditivos)}>
-            <Plus aria-hidden="true" />
-            Registrar aditivo
-          </Button>
-        </div>
+        {somenteLeitura ? null : (
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={acoes.editar} disabled={ocupado}>
+              <Pencil aria-hidden="true" />
+              Editar
+            </Button>
+            {/* O número do aditivo sai do histórico: espera os aditivos serem lidos. */}
+            <Button type="button" onClick={acoes.registrarAditivo} disabled={ocupado || !Array.isArray(aditivos)}>
+              <Plus aria-hidden="true" />
+              Registrar aditivo
+            </Button>
+          </div>
+        )}
       </div>
       {contrato.dados.objeto ? (
         <div>
@@ -503,12 +510,12 @@ function Documentos({ contrato }: { contrato: Contrato }) {
 }
 
 function Ficha(props: ContratosViewProps & { selecionado: Contrato }) {
-  const { selecionado: contrato, clientes, hoje, tabelas, aditivos, ocupado, acoes } = props;
+  const { selecionado: contrato, clientes, hoje, tabelas, aditivos, ocupado, acoes, somenteLeitura } = props;
   const cliente = clientes.find((cadastro) => cadastro.code === contrato.dados.customer_code) ?? null;
   return (
     // @container: as grades da ficha seguem a largura dela (com o menu do app ao lado), não a da janela.
     <div aria-label="Ficha do contrato" role="region" className="@container flex min-w-0 flex-1 flex-col gap-5">
-      <Cabecalho contrato={contrato} cliente={cliente} aditivos={aditivos} hoje={hoje} ocupado={ocupado} acoes={acoes} />
+      <Cabecalho contrato={contrato} cliente={cliente} aditivos={aditivos} hoje={hoje} ocupado={ocupado} acoes={acoes} somenteLeitura={somenteLeitura} />
       <Alertas contrato={contrato} hoje={hoje} />
       <Condicoes contrato={contrato} hoje={hoje} />
       <Tabelas tabelas={tabelas} hoje={hoje} />

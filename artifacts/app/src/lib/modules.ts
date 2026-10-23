@@ -55,6 +55,8 @@ import {
   ROTA_FATURAS,
   ROTA_FINANCEIRO,
   ROTA_NF,
+  ROTA_AUTORIZACOES_DO_FINANCEIRO,
+  ROTA_CONTRATOS_DO_FINANCEIRO,
   ROTA_RELATORIOS_DO_FINANCEIRO,
   ROTA_PAGOS,
   ROTA_VENCIDOS,
@@ -426,6 +428,21 @@ export const APP_MODULES: AppModule[] = [
         icon: FileText,
         roles: FINANCE_ROLES,
         tambem: [ROTA_NF],
+      }),
+      // Os contratos e as autorizações do Comercial, só leitura (Fase 7, parte 7.5c).
+      navRoute({
+        id: "financeiro-contratos",
+        label: "Contratos",
+        href: ROTA_CONTRATOS_DO_FINANCEIRO,
+        icon: FileText,
+        roles: FINANCE_ROLES,
+      }),
+      navRoute({
+        id: "financeiro-autorizacoes",
+        label: "Autorizações",
+        href: ROTA_AUTORIZACOES_DO_FINANCEIRO,
+        icon: FileCheck,
+        roles: FINANCE_ROLES,
       }),
       // Os relatórios do Financeiro (parte 4.8b): a receita, as NFs emitidas e as contas a receber.
       navRoute({

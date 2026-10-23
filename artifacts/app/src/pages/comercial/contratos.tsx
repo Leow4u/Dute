@@ -53,7 +53,8 @@ function rolarAteAFicha() {
   );
 }
 
-export default function ComercialContratosPage() {
+/** `somenteLeitura`: a mesma tela no shell do Financeiro (Fase 7, parte 7.5c), sem gravar nada. */
+export default function ComercialContratosPage({ somenteLeitura = false }: { somenteLeitura?: boolean } = {}) {
   const { toast } = useToast();
   const busca = useSearch();
   const [, navigate] = useLocation();
@@ -140,6 +141,7 @@ export default function ComercialContratosPage() {
   return (
     <>
       <ContratosView
+        somenteLeitura={somenteLeitura}
         estado={estado}
         contratos={lista}
         clientes={clientes}
