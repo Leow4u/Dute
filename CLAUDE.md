@@ -17,10 +17,13 @@ documentação de produto e operação está em `docs/`.
   19/10/2026. Fase 1, migração do WMS para o `dute-prod`, feita em 20/10/2026,
   antes da contagem de abertura do inventário (roteiro e registro em
   `docs/plataforma/fase-1-corte.md`; ferramentas `tools/migracao_firestore.py` e
-  `tools/congelar_projeto.ps1`). Fase 2, núcleo e app único, em andamento
-  (desenho e registro em `docs/plataforma/fase-2-nucleo.md`): parte 1, papéis
-  da plataforma e módulos contratados, na homologação; parte 2, tela de entrada
-  por módulo, em PR. **Comercial v1 adiantado para antes da Operação** em
+  `tools/congelar_projeto.ps1`). Fase 2, núcleo e app único, com as partes 1 a
+  2.7 na `main` (desenho, registro e "quem cai onde" em
+  `docs/plataforma/fase-2-nucleo.md`): papéis e módulos contratados, entrada
+  com contadores, um shell v3 por módulo com o seletor no topo, Início do
+  Comercial (`/comercial`, a fila em `/comercial/orcamentos`) e da Operação
+  (`/operacao`, a fila em `/operacao/hoje`) e a barreira por módulo
+  contratado do cliente. Produção só com o OK do Leonardo. **Comercial v1 adiantado para antes da Operação** em
   20/10/2026: desenho e ordem das partes em `docs/plataforma/fase-6-comercial.md`,
   telas aprovadas em `docs/mockups/Com*.dc.html`.
 - **Comercial v1 está na `main`, ligado no `dute-homolog` e no `dute-prod`**
@@ -91,7 +94,11 @@ documentação de produto e operação está em `docs/`.
   IA recomenda e mostra de onde tirou; uma pessoa decide (invariante 3).
 - **Telas novas seguem a v3** (`docs/mockups/README.md`); as do WMS seguem
   `docs/sistema-visual.md` até adotarem a v3 no lançamento da Operação. Nada de
-  legenda nas telas: só rótulos, dados e ações.
+  legenda nas telas: só rótulos, dados e ações. Toda tela nova tem teste com a
+  lista dos textos (`src/test/textos.ts`, a trava contra legenda) e com o
+  `axe` (`src/test/acessibilidade.ts`, WCAG 2.1 A e AA). O "Precisa de você"
+  de cada Início é a única regra de contagem: a entrada e o menu contam por
+  ela (`lib/resumo-do-modulo.ts`).
 - **Operação e campo nunca veem valores.** Preço só para `owner`, `admin`,
   `financeiro` e `comercial`; o cliente vê os das próprias OS e faturas.
 
