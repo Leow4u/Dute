@@ -246,6 +246,28 @@ Agora o script decide se o serviço existe pelo `gcloud run services describe`
 (sem saída quando não existe) antes de olhar a política. Serviço inexistente
 aparece como **NAO PUBLICADA** e sugere o `firebase deploy`.
 
+## 23/10/2026 — conferência em lote, direto nas APIs (7 min → menos de 1 min)
+
+Com 95 callables, o script fazia 285 chamadas ao `gcloud` em série (`run
+services describe`, `get-iam-policy` e `functions describe` por callable), de
+~1,5 s cada, porque o `gcloud` demora para abrir: 7 min em toda publicação.
+Agora ele pede um token ao `gcloud` uma vez (`gcloud auth print-access-token`)
+e lê as APIs REST, como o painel do sistema já fazia: uma listagem dos serviços
+do Cloud Run, uma das functions e a política de cada callable (`run.googleapis.com`
+e `cloudfunctions.googleapis.com`, v2).
+
+Os critérios são os mesmos dos incidentes acima: fora da listagem dos serviços
+é **NAO PUBLICADA**, estado diferente de `ACTIVE` também, e sem a listagem das
+functions vale só a política. Mudou o que antes caía no lugar errado: erro HTTP
+ao ler uma política (403 de permissão, por exemplo) aparece como **ERRO** e
+falha, sem sugerir `firebase deploy`; sem a listagem dos serviços, o script
+falha antes de conferir qualquer callable; e `allUsers` só vale com o papel
+`roles/run.invoker`, no mesmo binding. 429, 5xx e falha de rede são repetidos
+até 3 vezes. A conta precisa de `run.services.list`, `run.services.getIamPolicy`
+e `cloudfunctions.functions.list`, que a `github-actions-functions` já tem
+(`roles/run.admin` e `roles/cloudfunctions.developer`). Continua rodando no
+Windows PowerShell 5.1, pelo mesmo comando.
+
 ## Deploy automático pelo GitHub Actions
 
 O job `Cloud Functions` em `.github/workflows/publicar.yml` publica

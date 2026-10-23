@@ -2,7 +2,10 @@ param(
   [string]$ProjectId = "dute-prod",
   [string]$Region = "southamerica-east1",
   [string]$IndexFile,
-  [string]$FirebaseJson = (Join-Path (Split-Path -Parent $PSScriptRoot) "firebase.json")
+  [string]$FirebaseJson = (Join-Path (Split-Path -Parent $PSScriptRoot) "firebase.json"),
+  # So para os testes: recebe uma URL das APIs do Google e devolve
+  # @{ Status = <codigo HTTP, 0 sem resposta>; Json = <corpo> }.
+  [scriptblock]$GcpGet
 )
 
 # Incidente de 03/09/2026: createCustomerRequest, decideCustomerRequest e
@@ -50,6 +53,18 @@ param(
 # Tambem reprova: codebase com prefix (o servico viraria <prefix>-<nome> e o
 # script conferiria o nome errado) e linha com onCall( ou onCall<...>( que o
 # padrao nao le (sem isso ela passaria sem conferencia, so com AVISO).
+#
+# 23/10/2026: o script chamava o gcloud 3 vezes por callable, uma depois da
+# outra (run services describe, get-iam-policy e functions describe). Com 95
+# callables eram 285 chamadas de ~1,5 s (o gcloud demora para abrir): 7 min
+# em toda publicacao. Agora pede um token ao gcloud uma vez e le as APIs REST,
+# como o painel do sistema (functions/wms/src/domain/system-infra.ts): uma
+# listagem dos servicos do Cloud Run, uma das functions e a politica de cada
+# callable. Os criterios sao os mesmos: fora da listagem dos servicos e
+# NAO PUBLICADA (o caso do painel do sistema acima), estado diferente de
+# ACTIVE tambem, e sem a listagem das functions vale so a politica. Erro HTTP
+# ao ler uma politica (permissao, por exemplo) falha como erro de leitura, nao
+# como NAO PUBLICADA. Continua rodando no Windows PowerShell 5.1.
 
 $ErrorActionPreference = "Continue"
 $callablePattern = '^export const (\w+) = onCall(<.*>)?\('
@@ -161,35 +176,111 @@ if ($callables.Count -eq 0) {
   exit 1
 }
 
+if (-not $GcpGet) {
+  # O Windows PowerShell 5.1 nem sempre liga o TLS 1.2.
+  if ($PSVersionTable.PSEdition -eq "Desktop") {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+  }
+  $token = (gcloud auth print-access-token 2>$null | Out-String).Trim()
+  if (-not $token) {
+    Write-Host "Nao consegui um token do gcloud (gcloud auth print-access-token). Rode gcloud auth login e tente de novo." -ForegroundColor Red
+    exit 1
+  }
+  $GcpGet = {
+    param([string]$Url)
+    # Sem isso o 5.1 desenha a barra de progresso a cada chamada e fica varias
+    # vezes mais lento. Fica aqui dentro: o GetNewClosure tem escopo proprio.
+    $ProgressPreference = "SilentlyContinue"
+    try {
+      $response = Invoke-WebRequest -Uri $Url -Headers @{ Authorization = "Bearer $token" } -UseBasicParsing -TimeoutSec 30 -ErrorAction Stop
+      @{ Status = [int]$response.StatusCode; Json = ($response.Content | ConvertFrom-Json) }
+    } catch {
+      $status = 0
+      if ($_.Exception.Response) { $status = [int]$_.Exception.Response.StatusCode }
+      @{ Status = $status; Json = $null }
+    }
+  }.GetNewClosure()
+}
+
+# 429, 5xx e falha de rede: tenta de novo, ate 3 vezes.
+function Invoke-GcpGet([string]$url) {
+  for ($attempt = 1; ; $attempt++) {
+    $response = & $GcpGet $url
+    $transient = $response.Status -eq 0 -or $response.Status -eq 429 -or $response.Status -ge 500
+    if (-not $transient -or $attempt -ge 3) { return $response }
+    Start-Sleep -Milliseconds (500 * $attempt)
+  }
+}
+
+# Todas as paginas de uma listagem, pelo nome curto (ultimo pedaco de "name").
+function Get-Listing([string]$url, [string]$field) {
+  $items = @{}
+  $pageToken = ""
+  for ($page = 0; $page -lt 20; $page++) {
+    $pageUrl = $url
+    if ($pageToken) { $pageUrl = "$url&pageToken=$([uri]::EscapeDataString($pageToken))" }
+    $response = Invoke-GcpGet $pageUrl
+    if ($response.Status -ne 200) { return @{ Status = $response.Status; Items = $null } }
+    foreach ($item in @($response.Json.$field | Where-Object { $_ })) {
+      $items[($item.name -split "/")[-1]] = $item
+    }
+    $pageToken = $response.Json.nextPageToken
+    if (-not $pageToken) { break }
+  }
+  return @{ Status = 200; Items = $items }
+}
+
+$runApi = "https://run.googleapis.com/v2/projects/$ProjectId/locations/$Region"
+$functionsApi = "https://cloudfunctions.googleapis.com/v2/projects/$ProjectId/locations/$Region"
+
 Write-Host "$($callables.Count) callables encontradas. Verificando roles/run.invoker (allUsers) em cada Cloud Run service..."
 Write-Host ""
 
+$services = Get-Listing "$runApi/services?pageSize=50" "services"
+if ($services.Status -ne 200) {
+  Write-Host "FALHOU: nao consegui listar os servicos do Cloud Run de $ProjectId (HTTP $($services.Status)). Nada foi conferido." -ForegroundColor Red
+  exit 1
+}
+$functions = Get-Listing "$functionsApi/functions?pageSize=50" "functions"
+if ($functions.Status -ne 200) {
+  Write-Host "AVISO: nao consegui listar as functions de $ProjectId (HTTP $($functions.Status)); vale so a politica de cada servico." -ForegroundColor Yellow
+}
+
 $missing = @()
 $notFound = @()
+$unreadable = @()
 
 foreach ($callable in $callables) {
   $fn = $callable.Name
   $service = $callable.Service
   $label = Get-Label $callable
-  $exists = (gcloud run services describe $service `
-    --project $ProjectId --region $Region --format="value(metadata.name)" 2>$null | Out-String).Trim()
-  $json = if ($exists) {
-    (gcloud run services get-iam-policy $service `
-      --project $ProjectId --region $Region --format=json 2>$null | Out-String).Trim()
-  }
-  if (-not $exists -or -not $json -or $json -notmatch '"etag"') {
+  if (-not $services.Items.ContainsKey($service)) {
     Write-Host "NAO PUBLICADA $label - nao existe no Cloud Run" -ForegroundColor Red
     $notFound += $callable
     continue
   }
-  $state = (gcloud functions describe $fn `
-    --project $ProjectId --region $Region --format="value(state)" 2>$null | Out-String).Trim()
+  $state = $null
+  if ($functions.Items -and $functions.Items.ContainsKey($fn)) { $state = $functions.Items[$fn].state }
   if ($state -and $state -ne "ACTIVE") {
     Write-Host "NAO PUBLICADA $label - deploy nao terminou (estado $state)" -ForegroundColor Red
     $notFound += $callable
     continue
   }
-  if (($json -match '"allUsers"') -and ($json -match 'roles/run\.invoker')) {
+  $policy = Invoke-GcpGet "$runApi/services/${service}:getIamPolicy"
+  if ($policy.Status -eq 404) {
+    Write-Host "NAO PUBLICADA $label - nao existe no Cloud Run" -ForegroundColor Red
+    $notFound += $callable
+    continue
+  }
+  if ($policy.Status -ne 200) {
+    Write-Host "ERRO  $label - nao consegui ler a politica (HTTP $($policy.Status))" -ForegroundColor Red
+    $unreadable += $callable
+    continue
+  }
+  $public = @($policy.Json.bindings | Where-Object {
+    $_.role -eq "roles/run.invoker" -and @($_.members) -contains "allUsers"
+  }).Count -gt 0
+  if ($public) {
     Write-Host "OK    $label"
   } else {
     Write-Host "FALTA $label - sem allUsers/roles.run.invoker" -ForegroundColor Red
@@ -199,6 +290,13 @@ foreach ($callable in $callables) {
 
 Write-Host ""
 $failed = $false
+if ($unreadable.Count -gt 0) {
+  $failed = $true
+  Write-Host "FALHOU: nao consegui ler a politica de $($unreadable.Count) callable(s); nada foi decidido sobre elas." -ForegroundColor Red
+  $unreadable | ForEach-Object { Write-Host "  - $(Get-Label $_)" -ForegroundColor Red }
+  Write-Host "Confira se a conta tem run.services.getIamPolicy no $ProjectId (roles/run.admin, por exemplo) e rode este script de novo."
+  Write-Host ""
+}
 if ($notFound.Count -gt 0) {
   $failed = $true
   Write-Host "FALHOU: $($notFound.Count) callable(s) do codigo nao estao publicadas. O portal recebe erro generico ao chama-las." -ForegroundColor Red

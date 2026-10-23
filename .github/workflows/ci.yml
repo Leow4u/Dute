@@ -51,11 +51,15 @@ jobs:
         run: pnpm run typecheck
       - name: Frontend unit tests
         run: pnpm run test
+      # Só o Chromium, sem --with-deps: o runner já tem as bibliotecas (vem com
+      # o Google Chrome), e o --with-deps baixava pelo apt fontes e xvfb que o
+      # teste headless não usa. Em 22/10/2026 esse apt levou 12 min a 25 kB/s;
+      # o download do Chromium leva uns 6 s.
       - name: Install isolated browser test tools
         working-directory: .
         run: |
           npm install --prefix "$RUNNER_TEMP/dute-browser-smoke" --no-audit --no-fund --no-package-lock playwright@1.56.1
-          node "$RUNNER_TEMP/dute-browser-smoke/node_modules/playwright/cli.js" install --with-deps chromium
+          node "$RUNNER_TEMP/dute-browser-smoke/node_modules/playwright/cli.js" install chromium
       - name: Build production frontend
         env:
           VITE_FIREBASE_API_KEY: "AIzaSyBPaH5X0wHbF_geH1zit0rwyJWmdb3Q7Ds"

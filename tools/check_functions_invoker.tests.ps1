@@ -1,5 +1,5 @@
-# Testes do check_functions_invoker.ps1 sem tocar no Google Cloud: um
-# "gcloud" de mentira responde como o real. Rode com:
+# Testes do check_functions_invoker.ps1 sem tocar no Google Cloud: as APIs
+# do Google de mentira respondem como as reais. Rode com:
 #   pwsh -NoProfile -File tools/check_functions_invoker.tests.ps1
 
 $ErrorActionPreference = "Stop"
@@ -45,59 +45,101 @@ function Set-FakeIndex([string]$firebaseJson, [string]$codebase, [string[]]$line
   $lines | Set-Content (Join-Path $src "index.ts")
 }
 
-# Simula o gcloud real:
-# - publica: política com allUsers/roles/run.invoker;
-# - privada: política sem o invoker (servico existe);
-# - inexistente: erro no stderr e NADA no stdout. No Windows o wrapper do
-#   gcloud nem sempre devolve exit code diferente de 0, entao o script nao
-#   pode depender do $LASTEXITCODE para saber se o servico existe.
+# Simula as APIs REST do Google como as reais (listagens paginadas e
+# getIamPolicy do Cloud Run), pelo -GcpGet do script:
+# - publica: politica com allUsers/roles/run.invoker;
+# - privada: politica sem o invoker (servico existe);
+# - naoPublicada: fora da listagem dos servicos e das functions.
 # - falhou: o servico do Cloud Run existe (politica sem invoker), mas a
 #   function ficou FAILED no deploy (02/10/2026, primeiro deploy das rotinas,
 #   com a API do Cloud Scheduler desligada). Minutos depois o servico sumiu.
-# - semEstado: "functions describe" nao responde (versao/permissao do
-#   gcloud); o script nao pode reprovar so por isso.
+# - semEstado: a function nao aparece na listagem das functions; o script nao
+#   pode reprovar so por isso.
 # - fantasma: nunca foi publicada (02/10/2026, deploy do painel do sistema
-#   parou no timeout de descoberta), mas "run services get-iam-policy"
-#   devolveu uma politica vazia com etag como se o servico existisse. So o
-#   "run services describe" diz a verdade: nada no stdout.
+#   parou no timeout de descoberta), mas a politica responde vazia com etag
+#   como se o servico existisse. So a listagem dos servicos diz a verdade.
+# - sumiu: esta na listagem, mas a politica responde 404 (o servico saiu entre
+#   uma chamada e outra).
+# - negada: a politica responde 403 (conta sem permissao).
+# - instavel: a politica responde 503 na primeira vez e publica depois.
+# - outroPapel: allUsers num papel e o invoker para outra conta.
 # - aprovaProposta: publica, para a segunda codebase (comercial).
-function global:gcloud {
-  $global:LASTEXITCODE = 0
-  if ($args[0] -eq "functions") {
-    $name = $args[2]
-    switch ($name) {
-      "falhou" { "FAILED" }
-      "semEstado" { [Console]::Error.WriteLine("ERROR: describe indisponivel.") }
-      "naoPublicada" { [Console]::Error.WriteLine("ERROR: NOT_FOUND: function '$name' does not exist.") }
-      default { "ACTIVE" }
+$publicPolicy = '{"bindings":[{"members":["allUsers"],"role":"roles/run.invoker"}],"etag":"BwY"}'
+
+function Reset-FakeGcp {
+  $global:gcpCalls = @()
+  $global:fakeGcp = @{
+    Services = @("publica", "semestado", "privada", "falhou", "aprovaproposta", "sumiu", "negada", "instavel", "outropapel")
+    Functions = @{
+      publica = "ACTIVE"; privada = "ACTIVE"; falhou = "FAILED"; aprovaProposta = "ACTIVE"
+      sumiu = "ACTIVE"; negada = "ACTIVE"; instavel = "ACTIVE"; outroPapel = "ACTIVE"
     }
-    return
-  }
-  $service = $args[3]
-  if ($args[2] -eq "describe") {
-    if (@("publica", "semestado", "privada", "falhou", "aprovaproposta") -contains $service) { $service }
-    else { [Console]::Error.WriteLine("ERROR: NOT_FOUND: Resource '$service' does not exist.") }
-    return
-  }
-  switch ($service) {
-    "publica" { '{"bindings":[{"members":["allUsers"],"role":"roles/run.invoker"}],"etag":"BwY"}' }
-    "semestado" { '{"bindings":[{"members":["allUsers"],"role":"roles/run.invoker"}],"etag":"BwY"}' }
-    "aprovaproposta" { '{"bindings":[{"members":["allUsers"],"role":"roles/run.invoker"}],"etag":"BwY"}' }
-    "privada" { '{"etag":"ACAB"}' }
-    "falhou" { '{"etag":"ACAB"}' }
-    "fantasma" { '{"etag":"ACAB"}' }
-    default { [Console]::Error.WriteLine("ERROR: NOT_FOUND: Resource '$service' does not exist.") }
+    Policies = @{
+      publica = $publicPolicy; semestado = $publicPolicy; aprovaproposta = $publicPolicy; instavel = $publicPolicy
+      privada = '{"etag":"ACAB"}'; falhou = '{"etag":"ACAB"}'; fantasma = '{"etag":"ACAB"}'
+      outropapel = '{"bindings":[{"members":["allUsers"],"role":"roles/run.viewer"},{"members":["serviceAccount:x@y.iam.gserviceaccount.com"],"role":"roles/run.invoker"}],"etag":"BwY"}'
+    }
+    PolicyStatus = @{ sumiu = 404; negada = 403 }
+    ServicesStatus = 200
+    FunctionsStatus = 200
+    PageSize = 1000
+    Flaky = @{ instavel = 1 }
   }
 }
+
+# Uma pagina de uma listagem, no formato das APIs v2 (name com o caminho todo).
+function Get-FakePage([string]$url, [string]$kind, $entries) {
+  $offset = 0
+  if ($url -match "pageToken=(\d+)") { $offset = [int]$Matches[1] }
+  $size = $global:fakeGcp.PageSize
+  $page = @($entries | Select-Object -Skip $offset -First $size)
+  $body = @{ $kind = $page }
+  if ($offset + $size -lt @($entries).Count) { $body.nextPageToken = "$($offset + $size)" }
+  return @{ Status = 200; Json = ($body | ConvertTo-Json -Depth 5 | ConvertFrom-Json) }
+}
+
+$fakeGcpGet = {
+  param([string]$Url)
+  $global:gcpCalls += $Url
+  $fake = $global:fakeGcp
+  if ($Url -match "^https://run\.googleapis\.com/v2/projects/[^/]+/locations/[^/]+/services\?pageSize=\d+") {
+    if ($fake.ServicesStatus -ne 200) { return @{ Status = $fake.ServicesStatus; Json = $null } }
+    $entries = @($fake.Services | ForEach-Object { @{ name = "projects/p/locations/r/services/$_" } })
+    return Get-FakePage $Url "services" $entries
+  }
+  if ($Url -match "^https://cloudfunctions\.googleapis\.com/v2/projects/[^/]+/locations/[^/]+/functions\?pageSize=\d+") {
+    if ($fake.FunctionsStatus -ne 200) { return @{ Status = $fake.FunctionsStatus; Json = $null } }
+    $entries = @($fake.Functions.Keys | Sort-Object | ForEach-Object {
+      @{ name = "projects/p/locations/r/functions/$_"; state = $fake.Functions[$_] }
+    })
+    return Get-FakePage $Url "functions" $entries
+  }
+  if ($Url -match "^https://run\.googleapis\.com/v2/projects/[^/]+/locations/[^/]+/services/([a-z0-9-]+):getIamPolicy$") {
+    $service = $Matches[1]
+    if ($fake.Flaky.ContainsKey($service) -and $fake.Flaky[$service] -gt 0) {
+      $fake.Flaky[$service]--
+      return @{ Status = 503; Json = $null }
+    }
+    if ($fake.PolicyStatus.ContainsKey($service)) { return @{ Status = $fake.PolicyStatus[$service]; Json = $null } }
+    if (-not $fake.Policies.ContainsKey($service)) { return @{ Status = 404; Json = $null } }
+    return @{ Status = 200; Json = ($fake.Policies[$service] | ConvertFrom-Json) }
+  }
+  throw "URL inesperada: $Url"
+}
+
+# Com -GcpGet o script nao pode chamar o gcloud.
+function global:gcloud { throw "gcloud chamado: $args" }
 
 function Run-Check([string[]]$names) {
-  $index = New-FakeIndex $names
-  $output = & $script -IndexFile $index *>&1 | Out-String
-  return @{ Output = $output; Exit = $global:LASTEXITCODE }
+  return Invoke-Check @{ IndexFile = (New-FakeIndex $names) }
 }
 
-# Erro do script vira falha do caso, sem derrubar os outros.
-function Invoke-Check([hashtable]$params) {
+# Erro do script vira falha do caso, sem derrubar os outros. Cada caso comeca
+# com as APIs de mentira no estado padrao; -Fake muda algo antes de rodar.
+function Invoke-Check([hashtable]$params, [scriptblock]$Fake, [switch]$RealApi) {
+  Reset-FakeGcp
+  if ($Fake) { & $Fake }
+  if (-not $RealApi) { $params.GcpGet = $fakeGcpGet }
   try {
     $output = & $script @params *>&1 | Out-String
     return @{ Output = $output; Exit = $global:LASTEXITCODE }
@@ -149,7 +191,7 @@ Expect "servico inexistente com politica vazia conta como nao publicada" (
 ) $result.Output
 
 $result = Run-Check @("publica", "semEstado")
-Expect "sem resposta do functions describe decide pela politica" ($result.Exit -eq 0 -and $result.Output -match "OK: as 2 callable") $result.Output
+Expect "function fora da listagem das functions decide pela politica" ($result.Exit -eq 0 -and $result.Output -match "OK: as 2 callable") $result.Output
 
 # Varias codebases no firebase.json (Comercial, Fase 6).
 $result = Run-CheckCodebases ([ordered]@{ default = @("publica"); comercial = @("aprovaProposta") })
@@ -267,19 +309,120 @@ Expect "onCall fora do padrao falha em vez de passar sem conferir" (
 ) $result.Output
 
 # Sem parametros, como no publicar.yml: le o firebase.json da raiz do repo.
-# Aqui o gcloud de mentira responde "publica" para qualquer servico.
-$fakeGcloud = ${function:gcloud}
-function global:gcloud {
-  $global:LASTEXITCODE = 0
-  if ($args[0] -eq "functions") { "ACTIVE"; return }
-  if ($args[2] -eq "describe") { $args[3]; return }
-  '{"bindings":[{"members":["allUsers"],"role":"roles/run.invoker"}],"etag":"BwY"}'
+# Aqui toda callable do codigo esta publicada, ativa e com invoker.
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$realNames = @(Get-ChildItem (Join-Path $repoRoot "functions/*/src/index.ts") |
+  Select-String -Pattern '^export const (\w+) = onCall(<.*>)?\(' |
+  ForEach-Object { $_.Matches[0].Groups[1].Value })
+$result = Invoke-Check @{} -Fake {
+  $global:fakeGcp.Services = @($realNames | ForEach-Object { $_.ToLower() })
+  $global:fakeGcp.Functions = @{}
+  $realNames | ForEach-Object { $global:fakeGcp.Functions[$_] = "ACTIVE"; $global:fakeGcp.Policies[$_.ToLower()] = $publicPolicy }
 }
-$result = Invoke-Check @{}
-Set-Item function:global:gcloud $fakeGcloud
 Expect "sem parametros le as codebases do firebase.json da raiz" (
-  $result.Exit -eq 0 -and $result.Output -match "default: \d+ callable\(s\) em functions/wms/src/index\.ts"
+  $result.Exit -eq 0 -and
+  $result.Output -match "default: \d+ callable\(s\) em functions/wms/src/index\.ts" -and
+  $result.Output -match "OK: as $($realNames.Count) callable"
 ) $result.Output
+
+# 23/10/2026: eram 3 chamadas ao gcloud por callable (7 min com 95). Agora
+# sao duas listagens e uma politica por callable, sem abrir o gcloud.
+$result = Run-Check @("publica", "privada", "aprovaProposta")
+Expect "consulta em lote: duas listagens e uma politica por callable" (
+  $result.Exit -eq 1 -and
+  $global:gcpCalls.Count -eq 5 -and
+  @($global:gcpCalls | Where-Object { $_ -match "/services\?pageSize=" }).Count -eq 1 -and
+  @($global:gcpCalls | Where-Object { $_ -match "/functions\?pageSize=" }).Count -eq 1 -and
+  @($global:gcpCalls | Where-Object { $_ -match ":getIamPolicy$" }).Count -eq 3
+) ($result.Output + "`nchamadas:`n" + ($global:gcpCalls -join "`n"))
+
+$result = Run-Check @("publica", "naoPublicada", "falhou")
+Expect "nao publicada e deploy falho nao leem a politica" (
+  $result.Exit -eq 1 -and
+  @($global:gcpCalls | Where-Object { $_ -match ":getIamPolicy$" }).Count -eq 1
+) ($result.Output + "`nchamadas:`n" + ($global:gcpCalls -join "`n"))
+
+$result = Invoke-Check @{ IndexFile = (New-FakeIndex @("publica", "aprovaProposta", "privada")) } -Fake { $global:fakeGcp.PageSize = 2 }
+Expect "listagens com mais de uma pagina sao lidas inteiras" (
+  $result.Exit -eq 1 -and
+  $result.Output -match "OK\s+publica" -and
+  $result.Output -match "OK\s+aprovaproposta" -and
+  $result.Output -match "FALTA\s+privada" -and
+  $result.Output -notmatch "NAO PUBLICADA"
+) $result.Output
+
+$result = Run-Check @("publica", "sumiu")
+Expect "politica com 404 conta como nao publicada" (
+  $result.Exit -eq 1 -and
+  $result.Output -match "NAO PUBLICADA\s+sumiu" -and
+  $result.Output -match "firebase deploy --only functions:sumiu"
+) $result.Output
+
+$result = Run-Check @("publica", "negada")
+Expect "politica com 403 falha como erro de leitura, nao como nao publicada" (
+  $result.Exit -eq 1 -and
+  $result.Output -match "ERRO\s+negada.*HTTP 403" -and
+  $result.Output -match "run\.services\.getIamPolicy" -and
+  $result.Output -notmatch "NAO PUBLICADA" -and
+  $result.Output -notmatch "add-iam-policy-binding negada"
+) $result.Output
+
+$result = Run-Check @("publica", "instavel")
+Expect "503 na politica tenta de novo" ($result.Exit -eq 0 -and $result.Output -match "OK: as 2 callable") $result.Output
+
+$result = Run-Check @("publica", "outroPapel")
+Expect "allUsers em outro papel nao vale como invoker publico" (
+  $result.Exit -eq 1 -and $result.Output -match "FALTA\s+outropapel"
+) $result.Output
+
+$result = Invoke-Check @{ IndexFile = (New-FakeIndex @("publica")) } -Fake { $global:fakeGcp.ServicesStatus = 403 }
+Expect "sem a listagem dos servicos falha sem conferir nada" (
+  $result.Exit -eq 1 -and
+  $result.Output -match "nao consegui listar os servicos do Cloud Run.*HTTP 403" -and
+  $result.Output -notmatch "OK\s+publica"
+) $result.Output
+
+$result = Invoke-Check @{ IndexFile = (New-FakeIndex @("publica", "falhou")) } -Fake { $global:fakeGcp.FunctionsStatus = 403 }
+Expect "sem a listagem das functions avisa e vale a politica" (
+  $result.Exit -eq 1 -and
+  $result.Output -match "AVISO: nao consegui listar as functions" -and
+  $result.Output -match "OK\s+publica" -and
+  $result.Output -match "FALTA\s+falhou"
+) $result.Output
+
+# Caminho real (sem -GcpGet): token do gcloud uma vez e Invoke-WebRequest com
+# Bearer. O gcloud e o Invoke-WebRequest de mentira respondem como os reais.
+function global:gcloud {
+  $global:gcloudCalls += "$args"
+  if ("$args" -eq "auth print-access-token") { "tok-123" }
+}
+function global:Invoke-WebRequest {
+  param([string]$Uri, $Headers, [switch]$UseBasicParsing, $TimeoutSec, $ErrorAction)
+  if ($Headers.Authorization -ne "Bearer tok-123") { throw "sem o token" }
+  if (-not $TimeoutSec) { throw "sem tempo limite" }
+  $response = & $fakeGcpGet $Uri
+  if ($response.Status -ne 200) {
+    $message = [System.Net.Http.HttpResponseMessage]::new([System.Net.HttpStatusCode]$response.Status)
+    throw [Microsoft.PowerShell.Commands.HttpResponseException]::new("HTTP $($response.Status)", $message)
+  }
+  [pscustomobject]@{ StatusCode = 200; Content = ($response.Json | ConvertTo-Json -Depth 10) }
+}
+$global:gcloudCalls = @()
+$result = Invoke-Check @{ IndexFile = (New-FakeIndex @("publica", "negada", "naoPublicada")) } -RealApi
+Expect "caminho real: um token do gcloud e o codigo HTTP dos erros" (
+  $result.Exit -eq 1 -and
+  $global:gcloudCalls.Count -eq 1 -and
+  $result.Output -match "OK\s+publica" -and
+  $result.Output -match "ERRO\s+negada.*HTTP 403" -and
+  $result.Output -match "NAO PUBLICADA\s+naopublicada"
+) ($result.Output + "`ngcloud:`n" + ($global:gcloudCalls -join "`n"))
+
+function global:gcloud { }
+$result = Invoke-Check @{ IndexFile = (New-FakeIndex @("publica")) } -RealApi
+Expect "sem token do gcloud falha pedindo login" (
+  $result.Exit -eq 1 -and $result.Output -match "gcloud auth login"
+) $result.Output
+Remove-Item function:global:Invoke-WebRequest
 
 $fakeRepos | ForEach-Object { Remove-Item -LiteralPath $_ -Recurse -Force -ErrorAction SilentlyContinue }
 

@@ -264,10 +264,12 @@ jobs:
             exit 1
           fi
 
+      # Sem --with-deps, como no ci.yml: o apt das fontes e do xvfb levou 12 min
+      # numa publicação de 22/10/2026; o Chromium sozinho baixa em uns 6 s.
       - name: Install isolated browser test tools
         run: |
           npm install --prefix "$RUNNER_TEMP/dute-browser-smoke" --no-audit --no-fund --no-package-lock playwright@1.56.1
-          node "$RUNNER_TEMP/dute-browser-smoke/node_modules/playwright/cli.js" install --with-deps chromium
+          node "$RUNNER_TEMP/dute-browser-smoke/node_modules/playwright/cli.js" install chromium
 
       - id: auth
         uses: google-github-actions/auth@v2
