@@ -28,6 +28,11 @@ const pessoa = (id: string, nome: string, extra: Partial<ColaboradorDaLista> = {
   cnhCategoria: "",
   cnhValidade: "",
   cnh: null,
+  vinculo: "proprio",
+  empresa: "",
+  papeis: [],
+  usuarioEmail: "",
+  noApp: false,
   ...extra,
 });
 
@@ -40,7 +45,7 @@ const veiculo = (id: string, placa: string, ativo = true): VeiculoDaLista => ({
   modelo: "",
   capacidadeKg: "3000",
   capacidadeM3: "20",
-  resumo: "",
+  resumo: "", dono: "proprio", empresa: "", revisaoEm: "",
 });
 
 const aberta = (numero: string, cliente: string, extra: Partial<OsDaFila> = {}): OsDaFila => ({
