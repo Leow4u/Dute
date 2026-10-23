@@ -13,7 +13,8 @@ import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, updateDoc, 
  * comercial), a do cliente e a geral; o cliente, o campo, o painel e o resto
  * da equipe não leem, nem a do próprio cliente. O cursor da rotina não abre
  * pelo navegador. As sugestões (parte 5.2a) abrem a quem pediu e a owner e
- * admin. Ninguém grava pelo navegador.
+ * admin. As lembranças (parte 5.3a) têm preço e não abrem a ninguém pelo
+ * navegador: só a callable do núcleo lê. Ninguém grava pelo navegador.
  */
 
 const PROJECT_ID = "demo-dute-operations";
@@ -65,6 +66,7 @@ beforeEach(async () => {
     await setDoc(doc(database, "ai_measures", DO_ITAU), { id: DO_ITAU, tipo: "duracao_item", escopo: "cliente", customer_code: "ITAU", lpu_item_id: "lpu_a", homem_minuto_por_unidade: 20, execucoes: 2 });
     await setDoc(doc(database, "ai_measures", GERAL), { id: GERAL, tipo: "duracao_item", escopo: "geral", customer_code: null, lpu_item_id: "lpu_a", homem_minuto_por_unidade: 25, execucoes: 3 });
     await setDoc(doc(database, "ai_cursors", "medidas"), { evento_id: "evt_x" });
+    await setDoc(doc(database, "ai_case_memory", "10045"), { demanda: "10045", customer_code: "ITAU", orcado_cents: 120000, realizado_cents: 140000 });
     await setDoc(doc(database, "ai_suggestions", "sug_ops"), { id: "sug_ops", tipo: "duracao_os", customer_code: "ITAU", pedida_por: { uid: "ops-a", role: "interno" } });
     await setDoc(doc(database, "ai_suggestions", "sug_outro"), { id: "sug_outro", tipo: "duracao_os", customer_code: "ITAU", pedida_por: { uid: "outro-interno", role: "interno" } });
   });
@@ -122,6 +124,19 @@ describe("as sugestões da memória (parte 5.2a)", () => {
     for (const uid of ["owner-a", "ops-a"]) {
       await assertFails(setDoc(doc(firestore(uid), "ai_suggestions", "sug_novo"), { pedida_por: { uid } }));
       await assertFails(updateDoc(doc(firestore(uid), "ai_suggestions", "sug_ops"), { decisao: "aceitou" }));
+    }
+  });
+});
+
+describe("as lembranças da memória (parte 5.3a)", () => {
+  it("ninguém lê nem grava pelo navegador, nem owner, nem o cliente da demanda", async () => {
+    for (const uid of [...LEEM, ...NAO_LEEM]) {
+      const database = firestore(uid);
+      await assertFails(getDoc(doc(database, "ai_case_memory", "10045")));
+      await assertFails(getDocs(query(collection(database, "ai_case_memory"), where("customer_code", "==", "ITAU"))));
+      await assertFails(setDoc(doc(database, "ai_case_memory", "10046"), { customer_code: "ITAU" }));
+      await assertFails(updateDoc(doc(database, "ai_case_memory", "10045"), { orcado_cents: 1 }));
+      await assertFails(deleteDoc(doc(database, "ai_case_memory", "10045")));
     }
   });
 });

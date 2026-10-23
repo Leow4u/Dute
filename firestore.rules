@@ -819,6 +819,14 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // As lembranças da memória (parte 5.3a): uma por demanda fechada, com o
+    // orçado e o realizado. Têm preço e são de cada cliente: só a callable do
+    // núcleo lê (parte 5.3b), pelo cliente e pelo papel. Nada abre pelo
+    // navegador.
+    match /ai_case_memory/{demandaId} {
+      allow read, write: if false;
+    }
+
     // As sugestões da memória (parte 5.2a): o que foi sugerido, a decisão da
     // pessoa e o valor real. Quem pediu lê as próprias; owner e admin leem
     // todas, para o painel de acerto. Só as callables do núcleo gravam.

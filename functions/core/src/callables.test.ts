@@ -39,12 +39,12 @@ describe("functions do núcleo", () => {
     for (const block of blocks) assert.match(block, ENTRADA);
   });
 
-  it("a rotina das medidas (parte 5.1a), a cada 15 minutos, uma instância, confere a liberação antes de tudo", () => {
+  it("a rotina da memória (partes 5.1a e 5.3a), a cada 15 minutos, uma instância, confere a liberação antes de tudo e roda as medidas e as lembranças", () => {
     const agendadas = [...index.matchAll(/^export const (\w+) = onSchedule\(/gm)].map((match) => match[1]);
     assert.deepEqual(agendadas, ["runMeasures"]);
     assert.match(
       index,
-      /export const runMeasures = onSchedule\(\{[^}]*schedule: "every 15 minutes"[^}]*timeZone: "America\/Sao_Paulo"[^}]*maxInstances: 1[^}]*\}, async \(\) => \{\s*if \(!memoriaLiberada\(PROJECT_ID\)\) return;/,
+      /export const runMeasures = onSchedule\(\{[^}]*schedule: "every 15 minutes"[^}]*timeZone: "America\/Sao_Paulo"[^}]*maxInstances: 1[^}]*\}, async \(\) => \{\s*if \(!memoriaLiberada\(PROJECT_ID\)\) return;\s*const \[medidas, lembrancas\] = await Promise\.allSettled\(\[runMeasuresFor\(db\), runCasesFor\(db\)\]\);/,
     );
   });
 });
