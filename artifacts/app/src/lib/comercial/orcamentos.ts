@@ -283,12 +283,23 @@ function revisaoDe(value: unknown): ItemDaFila["revisaoDe"] {
 }
 
 /**
+ * A demanda direta aberta pela Operação (paraquedas e emergencial) que ainda
+ * não foi executada: está em Para planejar, sem orçamento, e é da Operação.
+ * Vem ao Comercial quando vira execução a orçar (docs/plataforma/fase-3-operacao.md,
+ * parte 3.4c). A direta do "Orçar execução" já nasce executada e não entra aqui.
+ */
+export function demandaDiretaNaOperacao(demanda: Record<string, unknown>): boolean {
+  return demanda.entrada === "direta" && demanda.etapa === "para_planejar";
+}
+
+/**
  * A linha da fila a partir de `demands/{numero}` e `quotes/{numero}`. Sem a
  * demanda (ou com etapa desconhecida) não há linha; sem o orçamento, a linha
- * aparece sem total.
+ * aparece sem total. A demanda direta ainda na Operação não entra.
  */
 export function itemDaFila(numero: string, demanda: Registro | null, quote: Registro | null): ItemDaFila | null {
   if (!demanda) return null;
+  if (demandaDiretaNaOperacao(demanda)) return null;
   const etapa = texto(demanda.etapa);
   if (!(ETAPAS_DEMANDA as readonly string[]).includes(etapa)) return null;
   const q = quote ?? {};
