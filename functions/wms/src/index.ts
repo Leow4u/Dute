@@ -39,6 +39,7 @@ import {
   type OperationalActor,
 } from "./domain/operations.js";
 import { linkInboundNoticeTransaction } from "./domain/inbound-notice.js";
+import { setOrderDeliveryTransaction } from "./domain/order-delivery.js";
 import {
   BillingDomainError,
   assertBillingStatusTransition,
@@ -6313,6 +6314,17 @@ export const advanceWarehouseTask = onCall(async (request) => {
     AdvanceWarehouseTaskSchema.parse(request.data ?? {}),
     profile,
   );
+});
+
+/**
+ * Expedição › entrega do pedido (parte 4.5a): pela Dutelog (vira demanda e OS
+ * na Operação, parte 4.5b) ou retirada pelo cliente (não gera OS). Só antes
+ * da saída e enquanto a Operação não abriu a demanda.
+ */
+export const setOrderDelivery = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  return setOrderDeliveryTransaction(db, request.data, profile);
 });
 
 export const linkInboundNotice = onCall(async (request) => {
