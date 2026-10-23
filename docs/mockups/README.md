@@ -102,6 +102,25 @@ filtro por gênero da prancha principal ficou fora; entra se o Leonardo pedir.
 | Alternativas: A suave, B sólido, C só na linha de apoio | `PortalEstoqueGeneroAlternativas.dc.html` |
 | Estoque · lista | `PortalEstoqueGeneroLista.dc.html` |
 
+A página "Portal · Estoque no celular" tem canvas próprio (privado,
+https://claude.ai/artifact/6A71eDbVNzN48CyVQiEJda), aprovado pelo Leonardo em
+23/10/2026. No celular, a barra de busca e filtros ocupava quatro linhas presas
+no topo, e com o título também preso sobrava um terço da tela para os
+produtos. Na proposta, só a busca e o botão de filtros (com a contagem do que
+está ativo) ficam presos; situação, tipo, ordem, cards ou lista e agrupar
+tamanhos vão para o painel "Filtros", e o que está ativo aparece em etiquetas
+acima da lista. O título rola junto com a lista em todas as telas do cliente
+no celular. As telas seguem o visual do WMS e medem 390 × 710, a área útil do
+Safari no print que motivou a mudança. No app, os botões de situação e ordem
+usam o `Chip` do sistema (selecionado em tinta), não o azul do mockup.
+
+| Tela | Arquivo |
+|---|---|
+| Hoje (igual ao print) | `PortalEstoqueCelularHoje.dc.html` |
+| Proposta, interativa (busca, filtros, cards ou lista) | `PortalEstoqueCelular.dc.html` |
+| Proposta rolando a lista | `PortalEstoqueCelularRolando.dc.html` |
+| Proposta com o painel Filtros aberto | `PortalEstoqueCelularFiltros.dc.html` |
+
 ## Regras da v3
 
 - Menu lateral preto `#161616` com logo branco; item ativo com marcador

@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Estoque · hoje</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 710px; overflow: hidden; display: flex; flex-direction: column; background: #F4F5F7; color: #1E293B; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: 14px; line-height: 1.45; box-sizing: border-box">
+
+  <header style="flex: 0 0 64px; height: 64px; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; background: #FFFFFF; border-bottom: 1px solid #E2E6EB">
+    <img src="/_blob/ec589aa4bad9c999eb668962c287f022" alt="Dutelog Soluções Logísticas" style="height: 32px; width: auto; display: block">
+    <button type="button" aria-label="Conta" style="width: 40px; height: 40px; border-radius: 999px; border: 1px solid #E2E6EB; background: #EEF2F7; color: #1E293B; display: flex; align-items: center; justify-content: center; padding: 0">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+    </button>
+  </header>
+
+  <main style="flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 20px; padding: 20px 16px 20px; box-sizing: border-box">
+    <div style="flex: 0 0 auto; padding-bottom: 20px; border-bottom: 1px solid #E2E6EB">
+      <h1 style="margin: 0; font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -0.01em">Estoque</h1>
+      <p style="margin: 4px 0 0; font-size: 14px; color: #5D6877">7.314 peças em 168 itens</p>
+    </div>
+
+    <div style="flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden">
+      <div style="display: flex; flex-direction: column; gap: 20px; padding-bottom: 4px">
+
+        <section style="position: sticky; top: 0; z-index: 20; background: #FFFFFF; border: 1px solid #E2E6EB; border-radius: 10px; padding: 12px">
+          <label style="position: relative; display: block">
+            <span style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); display: flex; color: #5D6877; pointer-events: none">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+            </span>
+            <input type="search" aria-label="Buscar por nome, código ou tipo" placeholder="Buscar por nome, código ou tipo" style="width: 100%; box-sizing: border-box; height: 44px; border: 1px solid #E2E6EB; border-radius: 10px; background: #FFFFFF; padding: 0 12px 0 44px; font-family: inherit; font-size: 14px; color: #1E293B; outline: none">
+          </label>
+
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 12px">
+            <div role="group" aria-label="Formato de visualização" style="display: flex; align-items: center; gap: 4px; border: 1px solid #E2E6EB; border-radius: 6px; padding: 4px; background: #FFFFFF">
+              <button type="button" aria-pressed="true" style="height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 0; border-radius: 6px; background: #FFFFFF; color: #2457D6; font-family: inherit; font-size: 14px">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M3 12h18"></path><path d="M12 3v18"></path></svg>
+                Cards
+              </button>
+              <button type="button" aria-pressed="false" style="height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; color: #5D6877; font-family: inherit; font-size: 14px">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h.01"></path><path d="M3 18h.01"></path><path d="M3 6h.01"></path><path d="M8 12h13"></path><path d="M8 18h13"></path><path d="M8 6h13"></path></svg>
+                Lista
+              </button>
+            </div>
+            <button type="button" role="switch" aria-checked="true" style="height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid #E2E6EB; border-radius: 6px; background: #FFFFFF; color: #1E293B; font-family: inherit; font-size: 14px">
+              <span style="position: relative; width: 36px; height: 20px; border-radius: 999px; background: #2457D6">
+                <span style="position: absolute; top: 2px; left: 18px; width: 16px; height: 16px; border-radius: 999px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(15,23,42,.25)"></span>
+              </span>
+              Tamanhos
+            </button>
+          </div>
+
+          <button type="button" style="width: 100%; height: 40px; margin-top: 12px; display: flex; align-items: center; gap: 8px; padding: 0 16px; border: 1px solid #CED4DC; border-radius: 6px; background: #FFFFFF; color: #1E293B; font-family: inherit; font-size: 14px; font-weight: 600; text-align: left">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="21" x2="14" y1="4" y2="4"></line><line x1="10" x2="3" y1="4" y2="4"></line><line x1="21" x2="12" y1="12" y2="12"></line><line x1="8" x2="3" y1="12" y2="12"></line><line x1="21" x2="16" y1="20" y2="20"></line><line x1="12" x2="3" y1="20" y2="20"></line><line x1="14" x2="14" y1="2" y2="6"></line><line x1="8" x2="8" y1="10" y2="14"></line><line x1="16" x2="16" y1="18" y2="22"></line></svg>
+            Filtros
+          </button>
+
+          <div style="display: flex; gap: 8px; margin-top: 10px">
+            <div style="flex: 1 1 0; min-width: 0; height: 36px; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid #E2E6EB; border-radius: 6px; background: #FFFFFF; font-size: 12px; font-weight: 500; color: #1E293B; white-space: nowrap; overflow: hidden">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5D6877" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="21" x2="14" y1="4" y2="4"></line><line x1="10" x2="3" y1="4" y2="4"></line><line x1="21" x2="12" y1="12" y2="12"></line><line x1="8" x2="3" y1="12" y2="12"></line><line x1="21" x2="16" y1="20" y2="20"></line><line x1="12" x2="3" y1="20" y2="20"></line><line x1="14" x2="14" y1="2" y2="6"></line><line x1="8" x2="8" y1="10" y2="14"></line><line x1="16" x2="16" y1="18" y2="22"></line></svg>
+              Todos os tipos (168)
+            </div>
+            <div style="flex: 1 1 0; min-width: 0; height: 36px; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid #E2E6EB; border-radius: 6px; background: #FFFFFF; font-size: 12px; font-weight: 500; color: #1E293B; white-space: nowrap; overflow: hidden">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5D6877" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 16 4 4 4-4"></path><path d="M7 20V4"></path><path d="M11 4h10"></path><path d="M11 8h7"></path><path d="M11 12h4"></path></svg>
+              Mais relevantes
+            </div>
+          </div>
+        </section>
+
+        <div style="display: flex; flex-direction: column; gap: 12px">
+          <sc-for list="{{ produtos }}" as="p" hint-placeholder-count="3">
+            <article style="background: #FFFFFF; border: 1px solid #E2E6EB; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column">
+              <div style="position: relative; height: 170px; background: #EEF1F5; border-bottom: 1px solid #E2E6EB; display: flex; align-items: center; justify-content: center; color: #8A94A3">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Foto do produto"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg>
+                <sc-if value="{{ p.seloBaixo }}" hint-placeholder-val="{{ false }}">
+                  <span style="position: absolute; left: 16px; top: 16px; display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; background: #FFFFFF; color: #7A5D1E; font-size: 12px; font-weight: 600; box-shadow: 0 1px 2px rgba(15,23,42,.12)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"></path></svg>
+                    Baixo estoque
+                  </span>
+                </sc-if>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 10px; padding: 14px">
+                <div style="min-width: 0">
+                  <p style="margin: 0; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: #5D6877; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{ p.rotuloTopo }}</p>
+                  <p style="margin: 2px 0 0; font-size: 14px; line-height: 20px; font-weight: 600">{{ p.nome }}</p>
+                </div>
+                <sc-if value="{{ p.temTamanhos }}" hint-placeholder-val="{{ false }}">
+                  <div role="group" aria-label="Tamanho" style="display: flex; flex-wrap: wrap; gap: 6px">
+                    <sc-for list="{{ p.tamanhos }}" as="t" hint-placeholder-count="4">
+                      <button type="button" aria-pressed="{{ t.ativo }}" style="min-width: 44px; display: flex; flex-direction: column; align-items: center; padding: 4px 8px; border-radius: 6px; border: 1px solid {{ t.borda }}; background: {{ t.fundo }}; color: {{ t.cor }}; font-family: inherit; line-height: 1.2">
+                        <span style="font-size: 12px; font-weight: 600; text-decoration: {{ t.risco }}">{{ t.rotulo }}</span>
+                        <span style="font-size: 12px; color: #5D6877">{{ t.detalhe }}</span>
+                      </button>
+                    </sc-for>
+                  </div>
+                </sc-if>
+                <p style="margin: 0; font-size: 12px; color: #5D6877"><span style="font-size: 16px; font-weight: 600; color: #1E293B">{{ p.disp }}</span> {{ p.dispTexto }}</p>
+                <div style="display: flex; align-items: center; gap: 8px; padding-top: 2px">
+                  <div style="display: flex; align-items: center; border: 1px solid #E2E6EB; border-radius: 6px; padding: 2px; background: #FFFFFF">
+                    <button type="button" aria-label="Diminuir quantidade de {{ p.nome }}" style="width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: #5D6877; display: flex; align-items: center; justify-content: center; padding: 0; opacity: 0.4">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path></svg>
+                    </button>
+                    <span style="min-width: 40px; text-align: center; font-size: 14px; font-weight: 600">1</span>
+                    <button type="button" aria-label="Aumentar quantidade de {{ p.nome }}" style="width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: #5D6877; display: flex; align-items: center; justify-content: center; padding: 0">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+                    </button>
+                  </div>
+                  <button type="button" style="flex: 1 1 auto; min-width: 0; height: 36px; border: 0; border-radius: 6px; background: #2457D6; color: #FFFFFF; font-family: inherit; font-size: 14px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="21" r="1"></circle><circle cx="19" cy="21" r="1"></circle><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"></path></svg>
+                    Adicionar
+                  </button>
+                </div>
+              </div>
+            </article>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <nav aria-label="Navegação principal" style="flex: 0 0 auto; display: flex; background: #FFFFFF; border-top: 1px solid #E2E6EB">
+    <a href="#inicio" style="flex: 1 1 0; min-width: 0; height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 12px; font-weight: 500; color: #5D6877; text-decoration: none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+      <span>Início</span>
+    </a>
+    <a href="#pedidos" style="flex: 1 1 0; min-width: 0; height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 12px; font-weight: 500; color: #5D6877; text-decoration: none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"></path><path d="M15 18H9"></path><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"></path><circle cx="17" cy="18" r="2"></circle><circle cx="7" cy="18" r="2"></circle></svg>
+      <span>Pedidos</span>
+    </a>
+    <a href="#estoque" aria-current="page" style="flex: 1 1 0; min-width: 0; height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 12px; font-weight: 500; color: #2457D6; text-decoration: none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"></path><path d="m7.5 4.27 9 5.15"></path><polyline points="3.29 7 12 12 20.71 7"></polyline><line x1="12" x2="12" y1="22" y2="12"></line><circle cx="18.5" cy="15.5" r="2.5"></circle><path d="M20.27 17.27 22 19"></path></svg>
+      <span>Estoque</span>
+    </a>
+    <a href="#agent" style="flex: 1 1 0; min-width: 0; height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 12px; font-weight: 500; color: #5D6877; text-decoration: none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"></path><path d="M9 13a4.5 4.5 0 0 0 3-4"></path><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"></path><path d="M3.477 10.896a4 4 0 0 1 .585-.396"></path><path d="M6 18a4 4 0 0 1-1.967-.516"></path><path d="M12 13h4"></path><path d="M12 18h6a2 2 0 0 1 2 2v1"></path><path d="M12 8h8"></path><path d="M16 8V5a2 2 0 0 1 2-2"></path><circle cx="16" cy="13" r=".5"></circle><circle cx="18" cy="3" r=".5"></circle><circle cx="20" cy="21" r=".5"></circle><circle cx="20" cy="8" r=".5"></circle></svg>
+      <span>Agent Dute</span>
+    </a>
+    <a href="#mais" style="flex: 1 1 0; min-width: 0; height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 12px; font-weight: 500; color: #5D6877; text-decoration: none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="14" rx="1"></rect><rect width="7" height="7" x="3" y="14" rx="1"></rect></svg>
+      <span>Mais</span>
+    </a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":710}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const tamanho = (rotulo, detalhe, ativo, esgotado) => ({
+      rotulo,
+      detalhe,
+      ativo,
+      borda: ativo ? '#2457D6' : '#E2E6EB',
+      fundo: ativo ? '#E8EEFC' : '#FFFFFF',
+      cor: ativo ? '#1E46B0' : (esgotado ? '#5D6877' : '#1E293B'),
+      risco: esgotado ? 'line-through' : 'none'
+    });
+    return {
+      produtos: [
+        { rotuloTopo: 'Toalha · C.0659.001', nome: 'Toalha de academia', temTamanhos: false, tamanhos: [], disp: '672', dispTexto: 'disponíveis', seloBaixo: false },
+        { rotuloTopo: 'Camisa polo · C.0412', nome: 'Camisa polo azul-marinho', temTamanhos: true,
+          tamanhos: [
+            tamanho('P', '120 disp.', true, false),
+            tamanho('M', '214 disp.', false, false),
+            tamanho('G', '180 disp.', false, false),
+            tamanho('GG', 'esgotado', false, true)
+          ],
+          disp: '120', dispTexto: 'disponíveis neste tamanho', seloBaixo: false },
+        { rotuloTopo: 'Sacola · C.0733.002', nome: 'Sacola de algodão cru', temTamanhos: false, tamanhos: [], disp: '1.250', dispTexto: 'disponíveis', seloBaixo: false },
+        { rotuloTopo: 'Garrafa · C.0581.001', nome: 'Garrafa térmica 500 ml', temTamanhos: false, tamanhos: [], disp: '38', dispTexto: 'disponíveis', seloBaixo: true }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

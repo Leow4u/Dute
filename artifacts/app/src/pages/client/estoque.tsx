@@ -31,7 +31,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Chip as UiChip } from "@/components/ui/chip";
-import { FilterGroup, FilterPanel } from "@/components/ui/filter-panel";
+import { FilterGroup, FilterSheet } from "@/components/ui/filter-panel";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -417,6 +417,12 @@ export function ClienteEstoque() {
           stockFilter !== "todos" ||
           categoryFilter !== "todos" ||
           sortMode !== "relevancia";
+        const activeFilters = activeCatalogFilters({
+          stockFilter,
+          categoryFilter,
+          categories,
+          sortMode,
+        });
 
         function resetVisibleProducts() {
           setVisibleProductLimit(STOCK_PAGE_SIZE);
@@ -448,6 +454,12 @@ export function ClienteEstoque() {
           setCategoryFilter("todos");
           setSortMode("relevancia");
           resetVisibleProducts();
+        }
+
+        function removeCatalogFilter(key: CatalogFilterKey) {
+          if (key === "situacao") updateStockFilter("todos");
+          if (key === "tipo") updateCategoryFilter("todos");
+          if (key === "ordem") updateSortMode("relevancia");
         }
         function getDraftQuantity(product: StockProduct) {
           const max = liveAvailableForProduct(product, cart);
@@ -666,6 +678,7 @@ export function ClienteEstoque() {
                 cartQuantity={cartQuantity}
                 cartOpen={cartOpen}
                 filterCounts={filterCounts}
+                activeFilterCount={activeFilters.length}
                 hasActiveFilters={hasActiveFilters}
                 onSearchChange={updateSearch}
                 onStockFilterChange={updateStockFilter}
@@ -682,6 +695,9 @@ export function ClienteEstoque() {
 
             <section className="min-h-0 flex-1 overflow-x-hidden">
               <div className="min-w-0 space-y-4 overflow-x-hidden">
+                {products.length > 0 ? (
+                  <ActiveFilterChips filters={activeFilters} onRemove={removeCatalogFilter} />
+                ) : null}
                 {products.length > 0 ? (
                   filteredProducts.length > 0 ? (
                     viewMode === "lista" ? (
@@ -835,7 +851,42 @@ function OpeningInventoryState({
   );
 }
 
-function MarketplaceToolbar({
+type CatalogFilterKey = "situacao" | "tipo" | "ordem";
+type CatalogFilter = { key: CatalogFilterKey; label: string };
+
+/**
+ * O que o painel de filtros tem fora do padrão, na ordem do painel: vira a
+ * contagem do botão e as etiquetas do celular. A busca fica de fora porque
+ * está sempre à vista.
+ */
+export function activeCatalogFilters({
+  stockFilter,
+  categoryFilter,
+  categories,
+  sortMode,
+}: {
+  stockFilter: StockFilter;
+  categoryFilter: string;
+  categories: Array<{ value: string; label: string }>;
+  sortMode: StockSort;
+}): CatalogFilter[] {
+  const active: CatalogFilter[] = [];
+  if (stockFilter !== "todos") {
+    const option = stockFilterOptions.find((item) => item.value === stockFilter);
+    active.push({ key: "situacao", label: option?.label ?? stockFilter });
+  }
+  if (categoryFilter !== "todos") {
+    const category = categories.find((item) => item.value === categoryFilter);
+    active.push({ key: "tipo", label: category?.label ?? categoryFilter });
+  }
+  if (sortMode !== "relevancia") {
+    const option = stockSortOptions.find((item) => item.value === sortMode);
+    active.push({ key: "ordem", label: option?.label ?? sortMode });
+  }
+  return active;
+}
+
+export function MarketplaceToolbar({
   searchTerm,
   stockFilter,
   categoryFilter,
@@ -847,6 +898,7 @@ function MarketplaceToolbar({
   cartQuantity,
   cartOpen,
   filterCounts,
+  activeFilterCount,
   hasActiveFilters,
   onSearchChange,
   onStockFilterChange,
@@ -867,6 +919,7 @@ function MarketplaceToolbar({
   cartQuantity: number;
   cartOpen: boolean;
   filterCounts: Record<StockFilter, number>;
+  activeFilterCount: number;
   hasActiveFilters: boolean;
   onSearchChange: (value: string) => void;
   onStockFilterChange: (value: StockFilter) => void;
@@ -876,74 +929,62 @@ function MarketplaceToolbar({
   onClearFilters: () => void;
   onCartToggle: () => void;
 }) {
+  // No celular a barra presa é uma linha só, a busca e o botão de filtros; o
+  // resto mora no painel (docs/mockups/PortalEstoqueCelular.dc.html).
   return (
     <section
       data-testid="stock-toolbar"
-      className="sticky top-0 z-20 shrink-0 rounded-lg border border-border bg-card p-3 sm:p-4"
+      className="sticky top-0 z-20 shrink-0 border-b border-border bg-background py-2 md:rounded-lg md:border md:bg-card md:p-4"
     >
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-        <div className="relative min-w-0 flex-1">
-          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={searchTerm}
-            onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="Buscar por nome, código ou tipo"
-            aria-label="Buscar por nome, código ou tipo"
-            className="h-11 rounded-lg border-border bg-card pl-11 text-sm"
-          />
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <div
-            role="group"
-            aria-label="Formato de visualização"
-            className="flex items-center gap-1 rounded-md border border-border bg-card p-1"
-          >
-            <ViewModeButton
-              active={viewMode === "cards"}
-              icon={Grid2X2}
-              label="Cards"
-              onClick={() => onViewModeChange("cards")}
-            />
-            <ViewModeButton
-              active={viewMode === "lista"}
-              icon={List}
-              label="Lista"
-              onClick={() => onViewModeChange("lista")}
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            {/* Texto de 16px no celular (o padrão do Input): abaixo disso o
+                Safari aproxima a tela quando a pessoa toca no campo. */}
+            <Input
+              value={searchTerm}
+              onChange={(event) => onSearchChange(event.target.value)}
+              placeholder="Buscar por nome ou código"
+              aria-label="Buscar por nome ou código"
+              className="h-11 rounded-lg border-border bg-card pl-11"
             />
           </div>
-          {viewMode === "cards" ? (
-            <button
-              type="button"
-              role="switch"
-              aria-checked={groupVariants}
-              onClick={() => onGroupVariantsChange(!groupVariants)}
-              title="Junta as variações (P, M, G…) do mesmo produto num card só"
-              className="flex h-11 cursor-pointer items-center gap-2 rounded-md border border-border bg-card px-3 text-sm"
-            >
-              <span
-                className={cn(
-                  "relative h-5 w-9 rounded-full transition-colors",
-                  groupVariants ? "bg-primary" : "bg-muted-foreground/30",
-                )}
-              >
-                <span
-                  className={cn(
-                    "absolute top-0.5 h-4 w-4 rounded-full bg-card shadow transition-[left]",
-                    groupVariants ? "left-[18px]" : "left-0.5",
-                  )}
-                />
-              </span>
-              <span className="hidden sm:inline">Agrupar tamanhos</span>
-              <span className="sm:hidden">Tamanhos</span>
-            </button>
-          ) : null}
+          <FilterSheet
+            className="md:hidden"
+            count={activeFilterCount}
+            onClear={hasActiveFilters ? onClearFilters : undefined}
+          >
+            <StockFilterGroups
+              stockFilter={stockFilter}
+              filterCounts={filterCounts}
+              categoryFilter={categoryFilter}
+              categories={categories}
+              sortMode={sortMode}
+              viewMode={viewMode}
+              groupVariants={groupVariants}
+              onStockFilterChange={onStockFilterChange}
+              onCategoryFilterChange={onCategoryFilterChange}
+              onSortModeChange={onSortModeChange}
+              onViewModeChange={onViewModeChange}
+              onGroupVariantsChange={onGroupVariantsChange}
+            />
+          </FilterSheet>
+        </div>
+        <div className="hidden shrink-0 items-center gap-2 md:flex">
+          <ViewControls
+            viewMode={viewMode}
+            groupVariants={groupVariants}
+            onViewModeChange={onViewModeChange}
+            onGroupVariantsChange={onGroupVariantsChange}
+          />
           <button
             type="button"
             onClick={onCartToggle}
             aria-expanded={cartOpen}
             aria-label={`Abrir pedido de abastecimento com ${formatNumber(cartQuantity)} item(ns)`}
             className={cn(
-              "relative hidden h-11 cursor-pointer items-center gap-2 rounded-lg border px-3.5 text-sm font-medium transition hover:bg-surface-hover active:translate-y-px md:flex",
+              "relative flex h-11 cursor-pointer items-center gap-2 rounded-lg border px-3.5 text-sm font-medium transition hover:bg-surface-hover active:translate-y-px",
               cartOpen
                 ? "border-primary/25 bg-primary/10 text-primary"
                 : "border-border bg-card text-foreground",
@@ -965,28 +1006,18 @@ function MarketplaceToolbar({
         </div>
       </div>
 
-      {/* Uma linha só: situação à esquerda (rola se faltar espaço), tipo e
-          ordem à direita. No celular a situação vira o painel "Filtros". */}
-      <div className="mt-3 flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
-        <FilterPanel
-          className="min-w-0 flex-1 md:flex-nowrap md:overflow-x-auto md:pb-0.5"
-          summary={
-            stockFilter === "todos"
-              ? undefined
-              : stockFilterOptions.find((option) => option.value === stockFilter)?.label
-          }
-        >
-          <FilterGroup label="Situação" className="md:flex-nowrap">
-            {stockFilterOptions.map((option) => (
-              <FilterChip
-                key={option.value}
-                active={stockFilter === option.value}
-                label={option.value === "arquivados" && !filterCounts.arquivados ? option.label : `${option.label} · ${formatNumber(filterCounts[option.value])}`}
-                onClick={() => onStockFilterChange(option.value)}
-              />
-            ))}
+      {/* Desktop, uma linha só: situação à esquerda (rola se faltar espaço),
+          tipo e ordem à direita. */}
+      <div className="mt-3 hidden flex-col gap-2.5 md:flex lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto pb-0.5">
+          <FilterGroup label="Situação" className="flex-nowrap">
+            <SituationChips
+              stockFilter={stockFilter}
+              filterCounts={filterCounts}
+              onStockFilterChange={onStockFilterChange}
+            />
           </FilterGroup>
-        </FilterPanel>
+        </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2 lg:flex-nowrap">
           {/* Tipo (POLO, SACOLA…) sempre como seletor: em chips disputava a linha com a situação. */}
@@ -1023,8 +1054,195 @@ function MarketplaceToolbar({
           ) : null}
         </div>
       </div>
-
     </section>
+  );
+}
+
+/** Os grupos do painel de filtros do celular: tudo o que no desktop fica na barra. */
+export function StockFilterGroups({
+  stockFilter,
+  filterCounts,
+  categoryFilter,
+  categories,
+  sortMode,
+  viewMode,
+  groupVariants,
+  onStockFilterChange,
+  onCategoryFilterChange,
+  onSortModeChange,
+  onViewModeChange,
+  onGroupVariantsChange,
+}: {
+  stockFilter: StockFilter;
+  filterCounts: Record<StockFilter, number>;
+  categoryFilter: string;
+  categories: Array<{ value: string; label: string; count: number }>;
+  sortMode: StockSort;
+  viewMode: StockViewMode;
+  groupVariants: boolean;
+  onStockFilterChange: (value: StockFilter) => void;
+  onCategoryFilterChange: (value: string) => void;
+  onSortModeChange: (value: StockSort) => void;
+  onViewModeChange: (value: StockViewMode) => void;
+  onGroupVariantsChange: (value: boolean) => void;
+}) {
+  return (
+    <>
+      <FilterGroup label="Situação">
+        <SituationChips
+          stockFilter={stockFilter}
+          filterCounts={filterCounts}
+          onStockFilterChange={onStockFilterChange}
+        />
+      </FilterGroup>
+      {/* O tipo pode ter dezenas de opções: seletor nativo, que no celular abre a roda do sistema. */}
+      {categories.length > 2 ? (
+        <FilterGroup label="Tipo">
+          <select
+            aria-label="Filtrar por tipo"
+            value={categoryFilter}
+            onChange={(event) => onCategoryFilterChange(event.target.value)}
+            className="h-11 w-full cursor-pointer rounded-lg border border-input bg-card px-3 text-base text-foreground"
+          >
+            {categories.map((category) => (
+              <option key={category.value} value={category.value}>
+                {`${category.label} (${formatNumber(category.count)})`}
+              </option>
+            ))}
+          </select>
+        </FilterGroup>
+      ) : null}
+      <FilterGroup label="Ordenar">
+        {stockSortOptions.map((option) => (
+          <FilterChip
+            key={option.value}
+            active={sortMode === option.value}
+            label={option.label}
+            onClick={() => onSortModeChange(option.value)}
+          />
+        ))}
+      </FilterGroup>
+      <FilterGroup label="Exibição">
+        <ViewControls
+          viewMode={viewMode}
+          groupVariants={groupVariants}
+          onViewModeChange={onViewModeChange}
+          onGroupVariantsChange={onGroupVariantsChange}
+        />
+      </FilterGroup>
+    </>
+  );
+}
+
+/** Celular: o que o painel tem ativo, logo acima da lista, para tirar com um toque. */
+export function ActiveFilterChips({
+  filters,
+  onRemove,
+}: {
+  filters: CatalogFilter[];
+  onRemove: (key: CatalogFilterKey) => void;
+}) {
+  if (filters.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-2 md:hidden">
+      {filters.map((filter) => (
+        <Button
+          key={filter.key}
+          type="button"
+          variant="outline"
+          size="sm"
+          aria-label={`Tirar o filtro ${filter.label}`}
+          onClick={() => onRemove(filter.key)}
+          className="border-primary/25 bg-primary/10 text-primary"
+        >
+          {filter.label}
+          <X aria-hidden="true" />
+        </Button>
+      ))}
+    </div>
+  );
+}
+
+function SituationChips({
+  stockFilter,
+  filterCounts,
+  onStockFilterChange,
+}: {
+  stockFilter: StockFilter;
+  filterCounts: Record<StockFilter, number>;
+  onStockFilterChange: (value: StockFilter) => void;
+}) {
+  return (
+    <>
+      {stockFilterOptions.map((option) => (
+        <FilterChip
+          key={option.value}
+          active={stockFilter === option.value}
+          label={option.value === "arquivados" && !filterCounts.arquivados ? option.label : `${option.label} · ${formatNumber(filterCounts[option.value])}`}
+          onClick={() => onStockFilterChange(option.value)}
+        />
+      ))}
+    </>
+  );
+}
+
+function ViewControls({
+  viewMode,
+  groupVariants,
+  onViewModeChange,
+  onGroupVariantsChange,
+}: {
+  viewMode: StockViewMode;
+  groupVariants: boolean;
+  onViewModeChange: (value: StockViewMode) => void;
+  onGroupVariantsChange: (value: boolean) => void;
+}) {
+  return (
+    <>
+      <div
+        role="group"
+        aria-label="Formato de visualização"
+        className="flex items-center gap-1 rounded-md border border-border bg-card p-1"
+      >
+        <ViewModeButton
+          active={viewMode === "cards"}
+          icon={Grid2X2}
+          label="Cards"
+          onClick={() => onViewModeChange("cards")}
+        />
+        <ViewModeButton
+          active={viewMode === "lista"}
+          icon={List}
+          label="Lista"
+          onClick={() => onViewModeChange("lista")}
+        />
+      </div>
+      {viewMode === "cards" ? (
+        <button
+          type="button"
+          role="switch"
+          aria-checked={groupVariants}
+          onClick={() => onGroupVariantsChange(!groupVariants)}
+          title="Junta as variações (P, M, G…) do mesmo produto num card só"
+          className="flex h-11 cursor-pointer items-center gap-2 rounded-md border border-border bg-card px-3 text-sm"
+        >
+          <span
+            className={cn(
+              "relative h-5 w-9 rounded-full transition-colors",
+              groupVariants ? "bg-primary" : "bg-muted-foreground/30",
+            )}
+          >
+            <span
+              className={cn(
+                "absolute top-0.5 h-4 w-4 rounded-full bg-card shadow transition-[left]",
+                groupVariants ? "left-[18px]" : "left-0.5",
+              )}
+            />
+          </span>
+          Agrupar tamanhos
+        </button>
+      ) : null}
+    </>
   );
 }
 
