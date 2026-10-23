@@ -1,7 +1,7 @@
 import { vertexAI } from "@genkit-ai/google-genai";
 import { genkit, tool, type Genkit } from "genkit";
 
-import { promptDoResumo, type GerarResposta, type Resumir } from "./agente-conversa.js";
+import { FONTE_SEM_MODELO, promptDoResumo, type GerarResposta, type Resumir } from "./agente-conversa.js";
 
 /**
  * O modelo do Agent Dute do núcleo (parte 5.5e): o Gemini pelo Genkit, no
@@ -65,7 +65,7 @@ export function gerarComGenkit(ai: () => Genkit): GerarResposta {
         erros.push(`${modelo}: ${erro instanceof Error ? erro.message : String(erro)}`.slice(0, 500));
       }
     }
-    return { texto: TEXTO_SEM_MODELO, fonte: "fallback_indisponivel", erro: erros.join(" | ") };
+    return { texto: TEXTO_SEM_MODELO, fonte: FONTE_SEM_MODELO, erro: erros.join(" | ") };
   };
 }
 

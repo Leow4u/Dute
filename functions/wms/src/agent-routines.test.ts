@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { buildRoutineSuggestion, nextRun, RoutineInputSchema, scheduleOf } from "./domain/agent-routines.js";
+import { buildRoutineSuggestion, nextRun, RoutineInputSchema, routinesRunInCore, scheduleOf } from "./domain/agent-routines.js";
 
 // 2026-10-02 é sexta-feira. 11:00 UTC = 08:00 em São Paulo.
 const friday0700 = new Date("2026-10-02T10:00:00Z");
@@ -55,5 +55,14 @@ describe("sugestão de rotina no chat", () => {
   it("semanal sem dia vira segunda; mensal limita a 28", () => {
     assert.deepEqual(buildRoutineSuggestion({ nome: "x", pergunta: "y", frequencia: "semanal" }).days, [1]);
     assert.equal(buildRoutineSuggestion({ nome: "x", pergunta: "y", frequencia: "mensal", dia_do_mes: 31 }).day_of_month, 28);
+  });
+});
+
+describe("quem roda as rotinas agendadas", () => {
+  it("onde o agente do núcleo está liberado, o WMS não roda; na produção, roda", () => {
+    assert.equal(routinesRunInCore("dute-homolog"), true);
+    assert.equal(routinesRunInCore("dute-prod"), false);
+    assert.equal(routinesRunInCore("dute-btg"), false);
+    assert.equal(routinesRunInCore(undefined), false);
   });
 });

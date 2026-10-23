@@ -44,13 +44,17 @@ describe("functions do núcleo", () => {
       "saveDutePlaybook",
       "decideDutePlaybook",
       "seedDutePlaybooks",
+      "listDuteRoutines",
+      "saveDuteRoutine",
+      "deleteDuteRoutine",
+      "runDuteRoutineNow",
     ]);
   });
 
   it("as callables começam pela liberação e pelo perfil, e nada é reexportado; as do Agent Dute, pela liberação do agente", () => {
     assert.doesNotMatch(index, /^export\s*\{/m);
     const blocks = index.split(/^(?=export const )/m).filter((block) => /^export const \w+ = onCall/.test(block));
-    assert.equal(blocks.length, 12);
+    assert.equal(blocks.length, 16);
     for (const block of blocks) {
       const doAgente = /^export const \w*Dute\w* = /.test(block);
       assert.match(block, doAgente ? ENTRADA_DO_AGENTE : ENTRADA);
@@ -60,10 +64,17 @@ describe("functions do núcleo", () => {
 
   it("a rotina da memória (partes 5.1a, 5.3a, 5.4a e 5.4d), a cada 15 minutos, uma instância, confere a liberação antes de tudo e roda as medidas, as lembranças e o estoque (o relógio e a proposta do alerta)", () => {
     const agendadas = [...index.matchAll(/^export const (\w+) = onSchedule\(/gm)].map((match) => match[1]);
-    assert.deepEqual(agendadas, ["runMeasures"]);
+    assert.deepEqual(agendadas, ["runMeasures", "runDuteRoutines"]);
     assert.match(
       index,
       /export const runMeasures = onSchedule\(\{[^}]*schedule: "every 15 minutes"[^}]*timeZone: "America\/Sao_Paulo"[^}]*maxInstances: 1[^}]*\}, async \(\) => \{\s*if \(!memoriaLiberada\(PROJECT_ID\)\) return;\s*const \[medidas, lembrancas, estoque\] = await Promise\.allSettled\(\[runMeasuresFor\(db\), runCasesFor\(db\), runStockFor\(db\)\]\);/,
+    );
+  });
+
+  it("a rotina do Agent Dute (parte 5.5g), a cada 15 minutos, uma instância, confere a liberação do agente antes de tudo", () => {
+    assert.match(
+      index,
+      /export const runDuteRoutines = onSchedule\(\{[^}]*schedule: "every 15 minutes"[^}]*timeZone: "America\/Sao_Paulo"[^}]*maxInstances: 1[^}]*\}, async \(\) => \{\s*if \(!agenteLiberado\(PROJECT_ID\)\) return;\s*console\.info\("runDuteRoutines", await rodarRotinasVencidas\(db, /,
     );
   });
 });

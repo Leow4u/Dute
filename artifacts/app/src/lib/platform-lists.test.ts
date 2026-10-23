@@ -214,6 +214,10 @@ describe("o Agent Dute do núcleo igual em todo lugar (parte 5.5)", () => {
     expect([agenteLiberado("dute-homolog"), agenteLiberado("dute-prod"), agenteLiberado("dute-btg"), agenteLiberado(undefined)]).toEqual([true, false, false, false]);
   });
 
+  it("onde o núcleo roda as rotinas, a rotina agendada do WMS não roda (parte 5.5g)", () => {
+    expect(tsList(read("functions/wms/src/domain/agent-routines.ts"), "CORE_AGENT_PROJECTS")).toEqual([...AGENTE_AMBIENTES_LIBERADOS]);
+  });
+
   it("quem lê valor no agente é quem lê preço nas regras", () => {
     expect(tsList(papeis, "VALOR_ROLES")).toEqual(rulesList(rules, /function canReadPrices\(\) \{\s*return hasAnyRole\(\[([^\]]*)\]\)/));
   });

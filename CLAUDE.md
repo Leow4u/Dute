@@ -140,8 +140,10 @@ documentação de produto e operação está em `docs/`.
     `MEMORIA_AMBIENTES_LIBERADOS` (só o `dute-homolog`). O Agent Dute muda
     para cá na parte 5.5, com a liberação própria `AGENTE_AMBIENTES_LIBERADOS`
     e as ferramentas só de leitura, pelo leitor por cliente (desenho em
-    `docs/plataforma/fase-5-memoria.md`). Usa **npm**, como as outras
-    codebases.
+    `docs/plataforma/fase-5-memoria.md`). Onde o agente do núcleo está
+    liberado, as rotinas rodam pela `runDuteRoutines` e a `runAgentRoutines`
+    do WMS não roda (`CORE_AGENT_PROJECTS`, cópia travada da liberação). Usa
+    **npm**, como as outras codebases.
   - `lib/dominio`: tipos e regras que o app e as Functions precisam ter iguais.
 - **IA native.** Todo módulo novo grava desde o primeiro dia o que a IA precisa
   (eventos em `events`, tempos e medidas) e respeita o isolamento por cliente. A
