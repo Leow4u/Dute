@@ -79,7 +79,7 @@ que a usa.
 
 | Coleção | Dono | O que a Operação faz |
 |---|---|---|
-| `demands` | Comercial | Lê; escreve só `os_numeros`, `execucao` (período, OS revisadas) e `revisao` (divergências com decisão). Cria a demanda direta pela callable dela, no mesmo esquema, sem RV. O Comercial só lê esses três campos. |
+| `demands` | Comercial | Lê; escreve só `os_numeros`, `execucao` (período, OS revisadas) e `revisao` (divergências com decisão). Cria a demanda direta pela callable dela (parte 3.4d), no mesmo esquema, sem RV, com `itens_pedidos` (o escopo das OS, sem preço), `pedido_por`, `executar_ate`, `tipo_calculado`, `tipo_corrigido_por` e `aberta_pela: "operacao"`. O Comercial só lê esses campos. |
 | `service_orders` | Operação | Tudo, pelas callables. Desde a parte 3.4b: `itens` com `planejado`, `servicos`, `locais` (endereço copiado e contato no local), `janela`, `equipe` com papel, vínculo e empresa por pessoa (nome copiado no agendamento; freelancer e terceiro entram aqui), `equipe_uids`, `veiculos`, `instrucoes`, `status` e `cancelamento`. Nas partes 3.7 a 3.10: `etapas`, `executado` e `incluido_em_campo` nos itens, `fotos`, `ocorrencias`, `presencas`, `conclusao` e `revisao`. Nenhum valor. |
 | `service_order_counters` | Operação | O sufixo da OS por demanda. |
 | `collaborators` | Operação | Ganha `vinculo`, `empresa` (terceiro) e `papeis` (líder, motorista, montador, ajudante). |
@@ -402,3 +402,33 @@ uma demanda sem orçamento sem saber o que fazer com ela.
   Operação até a execução", em vez de "demanda não encontrada".
 - Quem marca a execução da direta (o `executado_de` ou um resumo próprio da
   Operação) se decide na parte 3.10, com a revisão.
+
+### Parte 3.4d: demanda direta na Operação
+
+Feita em 23/10/2026. A tela (Nova demanda direta, `OpDemandaNova`) é da
+parte 3.5; a fila já mostra a direta em Para planejar e abre a OS dela.
+
+- **`openDirectDemand`** (owner, admin e interno). Numa transação: o número
+  sai do contador do Comercial (`demand_counters/geral`, a mesma regra de
+  `proximoNumero`), confere que a demanda e o orçamento com esse número não
+  existem, acha o cadastro pelo código (arquivado recusa), confere que os
+  locais são do cliente e lê os itens do catálogo (`lpu_items`). Grava o
+  contador, a demanda e o evento `demand.direct_opened` (número, tipo, tipo
+  calculado e quantas linhas; sem nome, telefone, item nem local).
+- **A demanda direta** nasce no esquema do Comercial (`entrada: "direta"`,
+  Para planejar, sem orçamento, `escopo_rv` vazio), com o que é dela: quem
+  pediu (nome e telefone digitados: a Operação não lê os contatos do
+  cadastro comercial), recebida em, executar até, o tipo e os itens pedidos
+  sem preço, com o id de linha no formato do Comercial. O teste lê a
+  `demandaNova` do Comercial e confere que a direta tem todos os campos dela.
+- **Tipo pela hora**: paraquedas no mesmo dia em São Paulo, emergencial até
+  48 horas corridas, planejada depois. O coordenador corrige; o calculado e
+  quem corrigiu ficam na demanda.
+- **Itens**: do catálogo, com nome, serviço e unidade dele (inativo ou de
+  armazenagem recusa), ou avulso, com nome e unidade digitados.
+- **A OS da direta** sai dos itens pedidos, com a mesma fatia do saldo da
+  parte 3.4b e `escopo_rv` vazio. Executada, perdida, cancelada ou já com o
+  orçamento da execução, a direta não recebe OS nova.
+- **Cópias do Comercial** (contador, faixa, versão do esquema, tipos e
+  canais) ficam em `functions/operacao/src/domain/demanda-direta.ts`,
+  travadas por `demanda-direta.test.ts`, que lê a fonte do Comercial.

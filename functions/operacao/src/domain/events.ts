@@ -36,6 +36,7 @@ export const OPERACAO_EVENT_TYPES = [
   "os.scheduled",
   "os.items_changed",
   "os.cancelled",
+  "demand.direct_opened",
 ] as const;
 export type OperacaoEventType = (typeof OPERACAO_EVENT_TYPES)[number];
 
@@ -75,6 +76,10 @@ const osPlanejada = z
 const osAgendada = z
   .object({ id: osId, demanda: demandaNumero, data, inicio: hora, fim: hora, equipe: composicao, veiculos: frota })
   .strict();
+const tipoDemanda = z.enum(["planejada", "emergencial", "paraquedas"]);
+const demandaDireta = z
+  .object({ id: demandaNumero, tipo: tipoDemanda, tipo_calculado: tipoDemanda, linhas: z.number().int().min(1).max(100) })
+  .strict();
 const osItens = z
   .object({ id: osId, demanda: demandaNumero, linhas: z.number().int().min(1).max(300), edicao_antes: edicao, edicao_depois: edicao })
   .strict();
@@ -93,6 +98,7 @@ export const OPERACAO_EVENT_PAYLOADS = {
   "os.scheduled": osAgendada,
   "os.items_changed": osItens,
   "os.cancelled": osCancelada,
+  "demand.direct_opened": demandaDireta,
 } as const;
 
 const TEXTO: Record<OperacaoEventType, { title: string; description: string }> = {
@@ -109,6 +115,7 @@ const TEXTO: Record<OperacaoEventType, { title: string; description: string }> =
   "os.scheduled": { title: "OS agendada", description: "A OS recebeu janela, equipe e veículos." },
   "os.items_changed": { title: "Itens da OS alterados", description: "A fatia do saldo da demanda nesta OS mudou." },
   "os.cancelled": { title: "OS cancelada", description: "A OS foi cancelada e a fatia voltou ao saldo da demanda." },
+  "demand.direct_opened": { title: "Demanda direta aberta", description: "A demanda chegou direto na Operação e se orça depois da execução." },
 };
 
 export function isOperacaoEventType(value: string): value is OperacaoEventType {
@@ -122,7 +129,7 @@ export type OperacaoEventInput<T extends OperacaoEventType> = {
   entity_id: string;
   payload: z.input<(typeof OPERACAO_EVENT_PAYLOADS)[T]>;
   actor: OperacaoActor;
-  /** Código do cliente na OS. O cadastro da equipe deixa vazio. */
+  /** Código do cliente na OS e na demanda. O cadastro da equipe deixa vazio. */
   customer_code?: string | null;
   occurred_at?: string;
 };
@@ -133,7 +140,7 @@ export type OperacaoEventRecord = {
   title: string;
   description: string;
   severity: "info";
-  entity_type: "collaborator" | "vehicle" | "os";
+  entity_type: "collaborator" | "vehicle" | "os" | "demand";
   entity_id: string;
   customer_code: string | null;
   payload: Record<string, unknown>;
@@ -161,7 +168,8 @@ export function buildOperacaoEvent<T extends OperacaoEventType>(input: OperacaoE
   if (!payload.success) throw new HttpsError("internal", `Evento ${input.type} com payload inválido.`);
   if (payload.data.id !== input.entity_id) throw new HttpsError("internal", `Evento ${input.type} com entity_id diferente do payload.`);
   const customerCode = textoDoCliente(input.customer_code);
-  if (input.type.startsWith("os.") && !customerCode) {
+  const doCliente = input.type.startsWith("os.") || input.type.startsWith("demand.");
+  if (doCliente && !customerCode) {
     throw new HttpsError("internal", `Evento ${input.type} sem customer_code.`);
   }
   const occurredAt = input.occurred_at ?? new Date().toISOString();
@@ -175,9 +183,15 @@ export function buildOperacaoEvent<T extends OperacaoEventType>(input: OperacaoE
     title: texto.title,
     description: texto.description,
     severity: "info",
-    entity_type: input.type.startsWith("vehicle") ? "vehicle" : input.type.startsWith("os.") ? "os" : "collaborator",
+    entity_type: input.type.startsWith("vehicle")
+      ? "vehicle"
+      : input.type.startsWith("os.")
+        ? "os"
+        : input.type.startsWith("demand.")
+          ? "demand"
+          : "collaborator",
     entity_id: input.entity_id,
-    customer_code: input.type.startsWith("os.") ? customerCode : null,
+    customer_code: doCliente ? customerCode : null,
     payload: compactValue(payload.data) as Record<string, unknown>,
     occurred_at: occurredAt,
     source: OPERACAO_EVENT_SOURCE,

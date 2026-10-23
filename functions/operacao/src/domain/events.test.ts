@@ -52,6 +52,7 @@ const EXEMPLOS: Record<OperacaoEventType, Record<string, unknown>> = {
   },
   "os.items_changed": { id: "10045-01", demanda: "10045", linhas: 2, edicao_antes: 2, edicao_depois: 3 },
   "os.cancelled": { id: "10045-01", demanda: "10045" },
+  "demand.direct_opened": { id: "10053", tipo: "paraquedas", tipo_calculado: "emergencial", linhas: 1 },
 };
 
 function wmsNoticeWords(): string[] {
@@ -83,11 +84,11 @@ describe("eventos do cadastro da Operação", () => {
         entity_id: EXEMPLOS[type].id as string,
         payload: EXEMPLOS[type] as never,
         actor: { uid: "u1", role: "interno", name: "Leonardo", email: "leonardo@dutelog.com.br" },
-        customer_code: type.startsWith("os.") ? "ITAU" : null,
+        customer_code: type.startsWith("os.") || type.startsWith("demand.") ? "ITAU" : null,
         occurred_at: "2026-10-22T03:00:00.000Z",
       });
       assert.equal(event.source, OPERACAO_EVENT_SOURCE);
-      assert.equal(event.customer_code, type.startsWith("os.") ? "ITAU" : null);
+      assert.equal(event.customer_code, type.startsWith("os.") || type.startsWith("demand.") ? "ITAU" : null);
       assert.equal(event.severity, "info");
       for (const text of [event.title, event.description, JSON.stringify(event.payload)]) {
         assert.equal(text.includes("Ana"), false, text);

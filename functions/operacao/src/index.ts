@@ -3,6 +3,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { onCall } from "firebase-functions/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 
+import { openDirectDemandFor } from "./domain/demanda-direta-gravacao.js";
 import { saveCollaboratorFor, saveVehicleFor } from "./domain/gravacao.js";
 import { saveServiceOrderFor } from "./domain/os-gravacao.js";
 import { requireOperacaoCaller } from "./domain/profile.js";
@@ -43,4 +44,10 @@ export const saveVehicle = onCall(async (request) => {
 export const saveServiceOrder = onCall(async (request) => {
   const caller = await requireOperacaoCaller(db, request, PROJECT_ID);
   return saveServiceOrderFor(db, caller, request.data);
+});
+
+/** Abre a demanda direta (paraquedas e emergencial), sem orçamento, em Para planejar. */
+export const openDirectDemand = onCall(async (request) => {
+  const caller = await requireOperacaoCaller(db, request, PROJECT_ID);
+  return openDirectDemandFor(db, caller, request.data);
 });

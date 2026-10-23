@@ -12,6 +12,7 @@ import {
   cancelada,
   comContatos,
   comItens,
+  demandaDiretaSemEscopo,
   equipeDaOs,
   exigirPlanejavel,
   fatiaDoSaldo,
@@ -179,23 +180,31 @@ async function executar(transaction: Transaction, db: Firestore, acao: AcaoOs, c
 
 // --- Leituras -----------------------------------------------------------------------------
 
-type Escopo = { demanda: DocumentData; escopoRv: number; escopo: ItemDaOs[]; ordens: OsGravada[] };
+type Escopo = { demanda: DocumentData; escopoRv: number | null; escopo: ItemDaOs[]; ordens: OsGravada[] };
 
-/** O escopo fechado da demanda (sem preço) e as OS que já existem dela. */
+/**
+ * O escopo da demanda (sem preço) e as OS que já existem dela: a revisão
+ * fechada ou, na demanda direta sem escopo fechado, os itens pedidos.
+ */
 async function lerEscopo(transaction: Transaction, db: Firestore, numero: string, demanda: DocumentData): Promise<Escopo> {
   const escopoRv = demanda.escopo_rv;
-  if (typeof escopoRv !== "number" || !Number.isInteger(escopoRv)) {
+  let linhas: unknown;
+  if (typeof escopoRv === "number" && Number.isInteger(escopoRv)) {
+    const revisao = dados(
+      await transaction.get(db.collection(QUOTES).doc(numero).collection("revisoes").doc(String(escopoRv))),
+      "A revisão fechada não está gravada.",
+    );
+    linhas = revisao.linhas;
+  } else if (demandaDiretaSemEscopo(demanda)) {
+    linhas = demanda.itens_pedidos;
+  } else {
     throw new HttpsError("failed-precondition", "A demanda não tem escopo fechado.");
   }
-  const revisao = dados(
-    await transaction.get(db.collection(QUOTES).doc(numero).collection("revisoes").doc(String(escopoRv))),
-    "A revisão fechada não está gravada.",
-  );
   const existentes = await transaction.get(db.collection(SERVICE_ORDERS_COLLECTION).where("demanda", "==", numero));
   return {
     demanda,
-    escopoRv,
-    escopo: itensSemPreco(revisao.linhas),
+    escopoRv: typeof escopoRv === "number" ? escopoRv : null,
+    escopo: itensSemPreco(linhas),
     ordens: existentes.docs.map((doc) => osLida(doc.id, doc.data())),
   };
 }
