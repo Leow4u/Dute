@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
-import { ClipboardPen, ImagePlus } from "lucide-react";
+import { ClipboardPen, ImagePlus, Printer } from "lucide-react";
 import { collection, doc } from "firebase/firestore";
-import { useSearch } from "wouter";
+import { Link, useSearch } from "wouter";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -20,7 +20,7 @@ import { clienteDaLeitura, hojeIso, nomesPorCodigo } from "@/lib/operacao/fila";
 import { demandaDoHoje } from "@/lib/operacao/hoje";
 import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
 import { useUrlsDasFotos } from "@/lib/operacao/use-urls-das-fotos";
-import { fichaDaBusca } from "@/lib/operacao/navegacao";
+import { fichaDaBusca, hrefDaImpressaoDaOs } from "@/lib/operacao/navegacao";
 
 import { AndamentoView } from "./andamento-view";
 import { OsView, type EstadoDaFicha } from "./os-view";
@@ -135,11 +135,21 @@ export default function PaginaOs() {
       hoje={hojeIso()}
       urls={urls}
       acoes={
-        recebeAndamento && !form ? (
-          <Button type="button" onClick={abrir}>
-            <ClipboardPen aria-hidden="true" className="size-4" />
-            Registrar andamento
-          </Button>
+        ficha && ficha.status !== "cancelada" ? (
+          <>
+            <Button asChild variant="outline">
+              <Link href={hrefDaImpressaoDaOs(ficha.numero)}>
+                <Printer aria-hidden="true" className="size-4" />
+                Imprimir
+              </Link>
+            </Button>
+            {recebeAndamento && !form ? (
+              <Button type="button" onClick={abrir}>
+                <ClipboardPen aria-hidden="true" className="size-4" />
+                Registrar andamento
+              </Button>
+            ) : null}
+          </>
         ) : null
       }
       painel={

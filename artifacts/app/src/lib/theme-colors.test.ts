@@ -25,6 +25,8 @@ const PAPER_FILES = new Set([
   "components/billing/invoice-document.tsx",
   // O orçamento A4 do Comercial (parte 12a, docs/mockups/ComDocumento.dc.html).
   "components/comercial/orcamento-documento.tsx",
+  // A OS impressa, via operacional (parte 3.9d, docs/mockups/OSImpressao.dc.html).
+  "components/operacao/os-documento.tsx",
   "pages/client/relatorio.tsx",
 ]);
 

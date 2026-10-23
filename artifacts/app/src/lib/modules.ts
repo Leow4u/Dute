@@ -51,6 +51,7 @@ import {
   ROTA_NOVA_DEMANDA,
   ROTA_OPERACAO,
   ROTA_OS,
+  ROTA_OS_IMPRESSAO,
   ROTA_PLANEJAR,
   ROTA_VEICULOS,
   abreOperacao,
@@ -431,7 +432,7 @@ export const APP_MODULES: AppModule[] = [
         href: ROTA_HOJE,
         icon: CalendarCheck,
         roles: OPERATION_REGISTRY_ROLES,
-        tambem: [ROTA_OS],
+        tambem: [ROTA_OS, ROTA_OS_IMPRESSAO],
       }),
       navRoute({
         id: "operacao-agenda",
@@ -728,6 +729,7 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   { path: ROTA_PLANEJAR, roles: OPERATION_REGISTRY_ROLES },
   // A ficha da OS, aberta pela Agenda, pela demanda e pelo Hoje (?numero=).
   { path: ROTA_OS, roles: OPERATION_REGISTRY_ROLES },
+  { path: ROTA_OS_IMPRESSAO, roles: OPERATION_REGISTRY_ROLES },
   // O app do campo (parte 3.8b): Minhas OS e a OS no celular.
   { path: ROTA_CAMPO, roles: [...CAMPO_ROLES] },
   { path: ROTA_CAMPO_OS, roles: [...CAMPO_ROLES] },
