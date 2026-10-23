@@ -58,6 +58,12 @@ export type ConclusaoDaOs = RegistroDaExecucao & {
   /** O caminho da assinatura no Storage, ou null sem aceite. */
   assinatura: string | null;
   diferencas: DiferencaNaConclusao[];
+  /**
+   * Os arquivos das fotos do final ("ft_….jpg"), que vão ao comprovante do
+   * cliente (parte 4.3c). A regra do Storage abre ao cliente só estes e a
+   * assinatura; as fotos das ocorrências e das outras etapas ficam internas.
+   */
+  arquivos_do_final: string[];
 };
 
 // --- Entrada ------------------------------------------------------------------------------
@@ -135,6 +141,11 @@ export function itensAMenos(itens: readonly ItemEmExecucao[]): Array<{ item: Ite
   });
 }
 
+/** O nome do arquivo no fim do caminho ("os/10045-01/fotos/ft_….jpg" dá "ft_….jpg"). */
+export function arquivoDaFoto(caminho: string): string {
+  return caminho.slice(caminho.lastIndexOf("/") + 1);
+}
+
 /** As fotos do final: as da etapa Fim. */
 export function fotosDoFinal(fotos: readonly FotoRegistrada[]): FotoRegistrada[] {
   return fotos.filter((foto) => foto.etapa === "fim");
@@ -201,8 +212,8 @@ export function concluirOs(
     return { linha: item.id, previsto: deMilesimos(limite), executado: deMilesimos(executado), motivo };
   });
 
-  const doFinal = fotosDoFinal(entrada.fotos).length;
-  if (doFinal === 0) falha("Tire ao menos uma foto do final.");
+  const doFinal = fotosDoFinal(entrada.fotos);
+  if (doFinal.length === 0) falha("Tire ao menos uma foto do final.");
 
   let assinatura: string | null = null;
   if (pedido.aceite === "assinatura" && pedido.assinatura) {
@@ -227,8 +238,9 @@ export function concluirOs(
     responsavel: { nome: pedido.responsavel.nome, cargo: pedido.responsavel.cargo, documento: pedido.responsavel.documento },
     assinatura,
     diferencas,
+    arquivos_do_final: doFinal.map((foto) => arquivoDaFoto(foto.caminho)),
   };
-  return { conclusao, etapas: fim ? [...entrada.etapas, fim] : [...entrada.etapas], fim, fotosDoFinal: doFinal };
+  return { conclusao, etapas: fim ? [...entrada.etapas, fim] : [...entrada.etapas], fim, fotosDoFinal: doFinal.length };
 }
 
 // --- Leitura ------------------------------------------------------------------------------
@@ -260,5 +272,7 @@ export function conclusaoLida(data: Record<string, unknown>): ConclusaoDaOs | nu
         ? [{ linha, previsto: texto(diferenca.previsto), executado: texto(diferenca.executado), motivo: texto(diferenca.motivo) }]
         : [];
     }),
+    // A OS concluída antes da parte 4.3c não tem a lista: o comprovante sai sem as fotos.
+    arquivos_do_final: (Array.isArray(conclusao.arquivos_do_final) ? conclusao.arquivos_do_final : []).map(texto).filter(Boolean),
   };
 }

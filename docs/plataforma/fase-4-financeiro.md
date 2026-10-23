@@ -188,6 +188,8 @@ continuam no Faturamento do WMS, e as rotas `/financeiro` não existem
 | 4.2d | Via comercial da NF em PDF (impressão do navegador) | Só quem lê preço abre; os valores batem com a fatura |
 | 4.3a | A NF do portal (`client_faturas`), gravada com cada mudança da fatura; regras e zeragem | O cliente só lê as próprias NFs, com as faturas no contrato; nada interno vai para o portal |
 | 4.3b | Portal: as OS do cliente (andamento com etapas) e as NFs da demanda em Faturas | Cliente só vê as próprias OS e faturas; cliente sem `operacao` não vê OS |
+| 4.3c | As fotos do final na conclusão da OS e a leitura do cliente no Storage: a assinatura e essas fotos, da própria OS concluída | O cliente não lê as outras fotos, a OS de outro cliente, a OS aberta nem a vistoria |
+| 4.3d | Portal: o comprovante da OS concluída (itens feitos, quem recebeu, a assinatura e as fotos do final), com o PDF; o e-mail da conclusão leva a ele | Textos listados; sem valor; nada interno; `axe` |
 | 4.4a | `requestService` e `declineServiceRequest`, `service_requests`, a solicitação em `openDirectDemand`, `portal.*`, regras do Firestore e do Storage e zeragem | O pedido do portal nunca cria OS sozinho; vira demanda uma vez, do mesmo cliente; o cliente sem a Operação não pede |
 | 4.4b | Portal: Solicitar OS em Minhas OS (tipo de serviço, data e horário, origem, destino, o que será feito e anexo) e as solicitações com a situação | Textos listados; sem legenda; uma ação principal; `axe` |
 | 4.4c | Operação: as solicitações em Para planejar do Hoje e no Início; abrir a demanda com o formulário preenchido ou recusar | A solicitação aparece em Para planejar; a demanda sai com a solicitação |
@@ -330,6 +332,24 @@ Feita em 23/10/2026. As regras estão em `artifacts/app/src/lib/portal/servicos.
   - As abertas vêm pelo vencimento, depois as pagas. Cada NF traz as demandas com o título e o valor, o saldo do pagamento parcial e a situação.
   - A situação usa a mesma régua das telas internas: vence hoje, vencida há N dias, paga em.
 - **Testes.** `portal/servicos.test.ts` cobre a situação, o andamento, o que fica de fora, a ordem e as NFs. `servicos-view.test.tsx` cobre os textos listados, nada interno, sem ação principal e o `axe`, nas duas telas. `operations.test.ts` e `modules.test.ts` cobrem a tela no contrato e no menu.
+
+### Parte 4.3c: as fotos do final e a assinatura para o cliente
+
+Feita em 23/10/2026, na preparação do lançamento (parte 4.9). O plano pede o
+andamento "com comprovantes e PDF" no portal e o PDF ao cliente na conclusão.
+A parte 4.3b deixou as fotos de fora. Esta parte abre ao cliente o que vai ao
+comprovante; a tela entra na 4.3d.
+
+- **A conclusão lista as fotos do final.** `completeServiceOrder` grava em `conclusao.arquivos_do_final` os arquivos das fotos da etapa Fim (`functions/operacao/src/domain/conclusao.ts`).
+  - O evento continua só com a contagem (`fotos_do_final`).
+  - A OS concluída antes desta parte fica sem a lista, e o comprovante dela sai sem as fotos.
+- **O Storage abre ao cliente** a assinatura e essas fotos, da OS do próprio cliente, em revisão ou revisada (`storage.rules`).
+  - As fotos das ocorrências e das outras etapas ficam internas, e a vistoria também.
+  - A OS reaberta ou cancelada fecha de novo.
+  - A fronteira é o `customer_code` da OS. O Storage lê no máximo dois documentos do Firestore por avaliação: o perfil e a OS. O módulo da Operação no contrato já vale na leitura da OS pelo `firestore.rules`, de onde o portal tira o nome dos arquivos.
+- **Testes.**
+  - `conclusao.test.ts` e `conclusao.integration.test.ts` cobrem a lista, só com as fotos do final.
+  - `operacao-fotos.rules.test.ts` cobre o cliente da OS concluída, as outras fotos, o outro cliente, a OS aberta, reaberta ou cancelada, a conclusão sem aceite e a vistoria.
 
 ### Parte 4.4a: a solicitação de OS pelo portal no backend
 

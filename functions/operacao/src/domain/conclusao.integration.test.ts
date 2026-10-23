@@ -138,6 +138,7 @@ describe("concluir a OS", () => {
       responsavel: { nome: "Renata Campos", cargo: "Facilities", documento: "12.345.678-9" },
       assinatura: "os/10045-01/assinatura/as_0123456789abcdef.png",
       diferencas: [{ linha: "ln_2", previsto: "60", executado: "58", motivo: "2 mesas com pé quebrado" }],
+      arquivos_do_final: ["ft_f000000000000001.jpg"],
     });
 
     const [concluida] = await eventos("os.completed");
