@@ -3,7 +3,10 @@ import { Receipt } from "lucide-react";
 import { useLocation } from "wouter";
 
 import { AccountMenu } from "@/components/layout/account-menu";
+import { ActiveCustomerSwitcher } from "@/components/layout/active-customer-switcher";
 import { ShellDoModulo } from "@/components/layout/shell-do-modulo";
+import { useAtalhoDoAgente } from "@/hooks/use-atalho-do-agente";
+import { abreAgenteDoNucleo, ehTelaDoAgente, ROTA_AGENTE_DO_FINANCEIRO } from "@/lib/agente/navegacao";
 import { useAppAuth, useAppUser } from "@/lib/auth";
 import { useInicioDoFinanceiro } from "@/lib/financeiro/use-a-faturar";
 import { menuDoFinanceiro } from "@/lib/modules";
@@ -26,6 +29,10 @@ export default function FinanceiroLayout({ children }: { children: ReactNode }) 
   // Os contadores do menu saem da lista do Início do módulo (parte 2.4).
   const inicio = useInicioDoFinanceiro(role);
 
+  // O Agent Dute do módulo (parte 5.5j): o "/" leva a ele, e a tela dele mostra o cliente ativo.
+  useAtalhoDoAgente(role, abreAgenteDoNucleo(role) ? ROTA_AGENTE_DO_FINANCEIRO : null);
+  const gerenciaClientes = role === "owner" || role === "admin";
+
   useEffect(() => {
     rememberReturnPath(`${location}${window.location.search}`);
   }, [location]);
@@ -39,6 +46,11 @@ export default function FinanceiroLayout({ children }: { children: ReactNode }) 
       contadores={contadoresDoMenu(inicio.itens, menu, "financeiro-inicio")}
       basePath={basePath}
       online={isOnline}
+      abaixoDoSeletor={
+        ehTelaDoAgente(location)
+          ? (compact) => <ActiveCustomerSwitcher variant={compact ? "v3-cabecalho" : "v3"} canManageCustomers={gerenciaClientes} />
+          : undefined
+      }
       conta={(compact) => (
         <AccountMenu basePath={basePath} compact={compact} cabecalho={compact} variante="v3" signOut={signOut} user={user} />
       )}

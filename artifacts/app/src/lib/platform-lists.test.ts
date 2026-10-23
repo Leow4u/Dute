@@ -29,6 +29,7 @@ import {
   memoriaLiberada,
 } from "./liberacao";
 import { MODULOS_DO_AGENTE } from "./agente/cliente";
+import { AGENTE_ROLES } from "./agente/navegacao";
 import { OPERACAO_CADASTRO_ROLES } from "./operacao/navegacao";
 import { FINANCE_ROLES, INTERNAL_ROLES } from "./modules";
 import { PLATFORM_MODULES } from "./platform-modules";
@@ -241,6 +242,8 @@ describe("o Agent Dute do núcleo igual em todo lugar (parte 5.5)", () => {
   it("quem tem o agente lê a própria conversa nas regras, e os módulos do app são os do núcleo (parte 5.5i)", () => {
     expect(rulesList(rules, /function canReadAgentChat\(\) \{\s*return hasAnyRole\(\[([^\]]*)\]\)/)).toEqual(tsList(papeis, "AGENTE_ROLES"));
     expect([...MODULOS_DO_AGENTE]).toEqual(tsList(read("functions/core/src/domain/agente-escopo.ts"), "MODULOS_DO_AGENTE"));
+    // O app abre a tela do agente do núcleo para os mesmos papéis (parte 5.5j).
+    expect([...AGENTE_ROLES]).toEqual(tsList(papeis, "AGENTE_ROLES"));
   });
 });
 

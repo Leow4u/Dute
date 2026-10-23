@@ -1,6 +1,7 @@
 import type { Papel } from "@workspace/dominio";
 
-import { COMERCIAL_LIBERADO } from "../liberacao";
+import { rotaDoAgenteNoModulo } from "../agente/navegacao";
+import { AGENTE_LIBERADO, COMERCIAL_LIBERADO } from "../liberacao";
 
 /**
  * Navegação do Comercial no app (docs/plataforma/fase-6-comercial.md).
@@ -65,9 +66,9 @@ export const TELAS_DO_COMERCIAL: readonly string[] = [
   ROTA_MEDICOES,
 ];
 
-/** Rotas do Comercial que o App registra: nenhuma fora da liberação. */
-export function rotasDoComercial(liberado: boolean = COMERCIAL_LIBERADO): string[] {
-  return liberado ? Array.from(new Set([ROTA_COMERCIAL, ...TELAS_DO_COMERCIAL])) : [];
+/** Rotas do Comercial que o App registra: nenhuma fora da liberação; o Agent Dute, só com a dele (parte 5.5j). */
+export function rotasDoComercial(liberado: boolean = COMERCIAL_LIBERADO, agente: boolean = AGENTE_LIBERADO): string[] {
+  return liberado ? Array.from(new Set([ROTA_COMERCIAL, ...TELAS_DO_COMERCIAL, ...rotaDoAgenteNoModulo("comercial", agente)])) : [];
 }
 
 /**
@@ -78,8 +79,9 @@ export function rotasDoComercial(liberado: boolean = COMERCIAL_LIBERADO): string
 export function soComComercialLiberado<T extends { path: string }>(
   rotas: readonly T[],
   liberado: boolean = COMERCIAL_LIBERADO,
+  agente: boolean = AGENTE_LIBERADO,
 ): T[] {
-  const permitidas = rotasDoComercial(liberado);
+  const permitidas = rotasDoComercial(liberado, agente);
   return rotas.filter((rota) => permitidas.includes(rota.path));
 }
 

@@ -145,7 +145,9 @@ documentação de produto e operação está em `docs/`.
     do WMS não roda (`CORE_AGENT_PROJECTS`, cópia travada da liberação). A
     leitura da nota anexada usa `invoice-reading.ts` e `agent-attachments.ts`
     do WMS em cópia literal, travada em `agente-nota.test.ts`: mudou um, muda
-    o outro. Usa **npm**, como as outras codebases.
+    o outro. No app, o agente do núcleo entra em cada shell (`lib/agente`,
+    rota `/<modulo>/agente`) só com a liberação dele; fora dela, segue o do
+    WMS. Usa **npm**, como as outras codebases.
   - `lib/dominio`: tipos e regras que o app e as Functions precisam ter iguais.
 - **IA native.** Todo módulo novo grava desde o primeiro dia o que a IA precisa
   (eventos em `events`, tempos e medidas) e respeita o isolamento por cliente. A

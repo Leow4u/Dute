@@ -98,6 +98,10 @@ const SettingsApp = lazy(() =>
 );
 const AiControl = lazy(() => import("./pages/ai-control"));
 const AgentePage = lazy(() => import("./pages/agente"));
+// O Agent Dute no shell de cada módulo (parte 5.5j): só com a liberação dele.
+const AgenteDoComercial = lazy(() => import("./pages/agente-do-modulo").then((m) => ({ default: m.AgenteDoComercial })));
+const AgenteDaOperacao = lazy(() => import("./pages/agente-do-modulo").then((m) => ({ default: m.AgenteDaOperacao })));
+const AgenteDoFinanceiro = lazy(() => import("./pages/agente-do-modulo").then((m) => ({ default: m.AgenteDoFinanceiro })));
 const AgentKnowledge = lazy(() => import("./pages/agent-knowledge"));
 const SettingsSystem = lazy(() => import("./pages/settings-system"));
 const CustomerRequests = lazy(() => import("./pages/customer-requests"));
@@ -1127,6 +1131,8 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
     protectedRoute("/campo/concluir", CampoConcluir),
     // A TV da sala é da Operação (parte 3.12b).
     protectedRoute("/tv", TvDaSala),
+    // O Agent Dute da Operação (parte 5.5j), só com a liberação dele.
+    protectedRoute("/operacao/agente", AgenteDaOperacao),
   ]),
   ...soComComercialLiberado([
     protectedRoute("/comercial", ComercialInicio),
@@ -1138,6 +1144,7 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
     protectedRoute("/comercial/contratos", ComercialContratos),
     protectedRoute("/comercial/autorizacoes", ComercialAutorizacoes),
     protectedRoute("/comercial/medicoes", ComercialMedicoes),
+    protectedRoute("/comercial/agente", AgenteDoComercial),
   ]),
   // Financeiro da demanda (docs/plataforma/fase-4-financeiro.md): as rotas só
   // existem onde a liberação do Financeiro está ligada (lib/financeiro/navegacao.ts).
@@ -1150,6 +1157,7 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
     protectedRoute("/financeiro/faturas", FinanceiroFaturas),
     protectedRoute("/financeiro/nf", FinanceiroNf),
     protectedRoute("/financeiro/relatorios", FinanceiroRelatorios),
+    protectedRoute("/financeiro/agente", AgenteDoFinanceiro),
   ]),
 ];
 

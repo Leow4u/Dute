@@ -1222,3 +1222,43 @@ Feita em 23/10/2026. O cliente está em `artifacts/app/src/lib/agente/`
     estados; nada no agente do WMS.
   - `firestore.rules.test.ts` do WMS: o comercial lê a própria conversa, e o
     campo não. Nenhum dos dois grava.
+
+### Parte 5.5j: o Agent Dute em cada shell
+
+Feita em 23/10/2026. Tudo depende da liberação do agente
+(`AGENTE_AMBIENTES_LIBERADOS`, só o `dute-homolog`). Fora dela, não há rota
+nova nem item de menu, e `/agente` e o portal seguem com o agente do WMS.
+
+- **As rotas** (`lib/agente/navegacao.ts`):
+  - `/comercial/agente`, `/operacao/agente` e `/financeiro/agente`, cada uma
+    no shell do módulo e com os papéis dele.
+  - Cada uma entra na lista de rotas do módulo só com a liberação do agente.
+  - A Armazenagem segue em `/agente`. Com a liberação, a conversa passa a ser
+    com o agente do núcleo, no cliente ativo.
+- **O menu.** O Agent Dute é a última tela do Comercial, da Operação e do
+  Financeiro (no Financeiro, depois da Armazenagem), como no mockup.
+- **O cliente ativo.**
+  - Na tela do agente, o seletor do cliente ativo aparece logo abaixo do
+    seletor de módulo, como na Armazenagem.
+  - O comercial, que não lê `client_profiles`, escolhe no cadastro de
+    clientes, sem os prospects. A lista só é lida com a liberação.
+  - Trocar o cliente fecha a conversa aberta, que era do outro.
+- **O portal.** Com a liberação, o cliente conversa com o agente do núcleo
+  na Armazenagem, no cliente da conta. O servidor confere de novo.
+- **A tela.**
+  - É a mesma tela de conversa, sem legenda: sem a frase de apresentação,
+    sem as dicas das sugestões, sem a linha sob o campo e sem o anúncio do
+    WhatsApp. As sugestões são só as perguntas do módulo.
+  - O shell dá a altura toda ao chat.
+  - O "/" leva ao agente do módulo.
+- **Testes.**
+  - `pages/agente-do-modulo.test.tsx`: as rotas e, em cada módulo, os
+    textos listados e o `axe`.
+  - `shell-do-modulo.test.tsx`: o Agent Dute como a última tela, aceso na
+    tela dele, com o cliente ativo e a altura do chat; os textos e o `axe`.
+  - Os testes de navegação de cada módulo: a rota e o item só com a
+    liberação do agente; o App registra cada rota no bloco do módulo.
+  - `modules.test.ts` e `ambientes.test.ts`: os papéis e o shell das rotas
+    novas.
+  - `active-customer.test.ts`: as opções do comercial.
+  - `platform-lists.test.ts`: os papéis do agente no app são os do núcleo.

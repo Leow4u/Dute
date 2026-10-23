@@ -5,6 +5,7 @@ import {
   activeCustomerOptions,
   activeCustomerStorageKey,
   belongsToCustomer,
+  commercialCustomerOptions,
   customerRows,
   recordCustomerCode,
   resolveActiveCustomerCode,
@@ -37,6 +38,18 @@ describe("opções do seletor", () => {
     expect(options.filter((option) => option.code === LEGACY_CUSTOMER_CODE)).toHaveLength(1);
     expect(options[0].profile.skuPrefix).toBe("BTG");
     expect(options[0].profile.source).toBe("published");
+  });
+});
+
+describe("opções do comercial (parte 5.5j)", () => {
+  it("o cadastro de clientes, sem os prospects e os arquivados; a BTG entra sempre", () => {
+    const options = commercialCustomerOptions([
+      { ...itau, stage: "cliente" },
+      { customer_code: "SAFRA", name: "Banco Safra" },
+      { customer_code: "NOVO", name: "Prospect novo", stage: "prospect" },
+      { customer_code: "Antigo", name: "Cliente antigo", stage: "cliente", archived: true },
+    ]);
+    expect(options.map((option) => option.name)).toEqual(["Banco Safra", "BTG Pactual", "Itaú Unibanco"]);
   });
 });
 
