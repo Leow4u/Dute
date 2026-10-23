@@ -62,7 +62,7 @@ export type PapelContato = (typeof PAPEIS_CONTATO)[number];
  * lib/dominio e de functions/operacao (domain/avisos.ts), travada por
  * artifacts/app/src/lib/platform-lists.test.ts.
  */
-export const MODELOS_DE_AVISO = ["os_agendada", "os_iniciada", "os_concluida", "nf_emitida", "pedido_do_portal"] as const;
+export const MODELOS_DE_AVISO = ["os_agendada", "os_iniciada", "os_concluida", "nf_emitida", "pedido_do_portal", "estoque_parado"] as const;
 export type ModeloDeAviso = (typeof MODELOS_DE_AVISO)[number];
 /** A NF leva o valor: só o gestor e o financeiro do cliente recebem, nunca a gerenciadora. */
 export const MODELOS_DE_AVISO_COM_VALOR = ["nf_emitida"] as const;

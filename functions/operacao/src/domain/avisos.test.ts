@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   ENDERECO_DO_APP,
   EVENTOS_DE_AVISO,
+  FONTE_DO_EVENTO,
   MODELOS_DE_AVISO,
   avisoDoEvento,
   clienteRecebeOModelo,
@@ -27,7 +30,7 @@ import { OPERACAO_EVENT_TYPES } from "./events.js";
  */
 
 function evento(type: string, payload: Record<string, unknown>, extra: Partial<EventoLido> = {}): EventoLido {
-  const source = type.startsWith("nf.") ? "functions_financeiro" : "functions_operacao";
+  const source = type.startsWith("nf.") ? "functions_financeiro" : type.startsWith("estoque_parado.") ? "functions_core" : "functions_operacao";
   return { id: "evt_0123456789abcdef01234567", type, source, customer_code: "ITAU", payload, occurred_at: "2026-10-23T13:00:00.000Z", ...extra };
 }
 
@@ -45,6 +48,19 @@ const FATURA = { id: "fat_0123456789abcdef01234567", customer_code: "ITAU", nf: 
 
 const SOLICITACAO = { id: "sol_0123456789abcdef", customer_code: "ITAU", tipo_servico: "mudanca", data: "2026-10-30", horario: "09:00" };
 
+// O alerta do item parado aprovado no núcleo (parte 5.4f): os itens que a coordenação escolheu.
+const ALERTA = {
+  id: "alerta_0123456789abcdef01234567",
+  customer_code: "ITAU",
+  status: "aprovada",
+  regra: { parado_dias: 90, sem_giro_dias: 180 },
+  itens: [{ sku_code: "ITAU-000001" }, { sku_code: "ITAU-000002" }, { sku_code: "ITAU-000003" }],
+  itens_enviados: [
+    { sku_code: "ITAU-000001", client_item_code: "POLO-M", saldo: 30 },
+    { sku_code: "ITAU-000002", client_item_code: null, saldo: 4 },
+  ],
+};
+
 describe("qual evento vira aviso", () => {
   it("a OS agendada (ou planejada com a data), iniciada e concluída, a NF registrada e a solicitação do portal", () => {
     assert.equal(modeloDoEvento(evento("os.scheduled", { id: "10050-01" })), "os_agendada");
@@ -54,23 +70,29 @@ describe("qual evento vira aviso", () => {
     assert.equal(modeloDoEvento(evento("os.completed", { id: "10050-01" })), "os_concluida");
     assert.equal(modeloDoEvento(evento("nf.registered", { id: FATURA.id })), "nf_emitida");
     assert.equal(modeloDoEvento(evento("portal.service_requested", { id: SOLICITACAO.id })), "pedido_do_portal");
-    for (const type of ["os.cancelled", "os.reviewed", "nf.sent", "expedicao.delivery_set"]) assert.equal(modeloDoEvento(evento(type, { id: "x" })), null, type);
+    assert.equal(modeloDoEvento(evento("estoque_parado.aprovado", { id: ALERTA.id, itens: 2 })), "estoque_parado");
+    for (const type of ["os.cancelled", "os.reviewed", "nf.sent", "expedicao.delivery_set", "estoque_parado.descartado"]) assert.equal(modeloDoEvento(evento(type, { id: "x" })), null, type);
   });
 
   it("o tipo vale só da codebase que grava o tipo", () => {
     assert.equal(modeloDoEvento(evento("os.completed", { id: "10050-01" }, { source: "functions_wms" })), null);
     assert.equal(modeloDoEvento(evento("nf.registered", { id: FATURA.id }, { source: "functions_operacao" })), null);
     assert.equal(modeloDoEvento(evento("os.completed", { id: "10050-01" }, { source: "" })), null);
+    assert.equal(modeloDoEvento(evento("estoque_parado.aprovado", { id: ALERTA.id }, { source: "functions_operacao" })), null);
   });
 
-  it("os tipos da Operação que dão aviso existem na lista de eventos da Operação", () => {
-    for (const type of EVENTOS_DE_AVISO.filter((tipo) => !tipo.startsWith("nf."))) assert.ok((OPERACAO_EVENT_TYPES as readonly string[]).includes(type), type);
+  it("os tipos da Operação que dão aviso existem na lista de eventos da Operação; o do núcleo, na do núcleo", () => {
+    for (const type of EVENTOS_DE_AVISO.filter((tipo) => FONTE_DO_EVENTO[tipo] === "functions_operacao")) assert.ok((OPERACAO_EVENT_TYPES as readonly string[]).includes(type), type);
+    const doNucleo = readFileSync(fileURLToPath(new URL("../../../core/src/domain/eventos.ts", import.meta.url)), "utf8");
+    for (const type of EVENTOS_DE_AVISO.filter((tipo) => FONTE_DO_EVENTO[tipo] === "functions_core")) assert.ok(doNucleo.includes(`"${type}"`), type);
+    assert.match(doNucleo, /CORE_EVENT_SOURCE = "functions_core"/);
   });
 
   it("o documento de cada modelo, nunca um caminho", () => {
     assert.deepEqual(documentoDoModelo("os_agendada", evento("os.scheduled", { id: "10050-01" })), { colecao: "service_orders", id: "10050-01" });
     assert.deepEqual(documentoDoModelo("nf_emitida", evento("nf.registered", { id: FATURA.id })), { colecao: "client_faturas", id: FATURA.id });
     assert.deepEqual(documentoDoModelo("pedido_do_portal", evento("portal.service_requested", { id: SOLICITACAO.id })), { colecao: "service_requests", id: SOLICITACAO.id });
+    assert.deepEqual(documentoDoModelo("estoque_parado", evento("estoque_parado.aprovado", { id: ALERTA.id })), { colecao: "ai_stock_alerts", id: ALERTA.id });
     assert.equal(documentoDoModelo("os_agendada", evento("os.scheduled", { id: "a/b" })), null);
     assert.equal(documentoDoModelo("os_agendada", evento("os.scheduled", {})), null);
   });
@@ -135,6 +157,30 @@ describe("o texto de cada modelo", () => {
     assert.equal(avisoDoEvento(evento("portal.service_requested", { id: SOLICITACAO.id }), SOLICITACAO)?.texto, "Mudança / transporte dedicado · 30/10/2026 09:00");
   });
 
+  it("o alerta aprovado: quantos itens, o limite da regra e os códigos que a coordenação escolheu", () => {
+    assert.deepEqual(avisoDoEvento(evento("estoque_parado.aprovado", { id: ALERTA.id, itens: 2 }), ALERTA), {
+      modelo: "estoque_parado",
+      customer_code: "ITAU",
+      titulo: "2 itens parados no estoque",
+      texto: "Sem movimento há 90 dias ou mais · POLO-M e ITAU-000002",
+      link: "/portal/estoque",
+      entidade: ALERTA.id,
+    });
+    const um = avisoDoEvento(evento("estoque_parado.aprovado", { id: ALERTA.id, itens: 1 }), { ...ALERTA, regra: { parado_dias: 120 }, itens_enviados: ALERTA.itens_enviados.slice(0, 1) });
+    assert.equal(um?.titulo, "1 item parado no estoque");
+    assert.equal(um?.texto, "Sem movimento há 120 dias ou mais · POLO-M");
+    const muitos = Array.from({ length: 5 }, (_, i) => ({ sku_code: `ITAU-00000${i + 1}` }));
+    assert.equal(avisoDoEvento(evento("estoque_parado.aprovado", { id: ALERTA.id, itens: 5 }), { ...ALERTA, itens_enviados: muitos })?.texto, "Sem movimento há 90 dias ou mais · ITAU-000001, ITAU-000002, ITAU-000003 e mais 2");
+  });
+
+  it("o alerta ainda proposto, descartado ou sem item enviado não vira aviso; nenhum leva o saldo", () => {
+    for (const status of ["proposta", "descartada"]) assert.equal(avisoDoEvento(evento("estoque_parado.aprovado", { id: ALERTA.id }), { ...ALERTA, status }), null, status);
+    assert.equal(avisoDoEvento(evento("estoque_parado.aprovado", { id: ALERTA.id }), { ...ALERTA, itens_enviados: [] }), null);
+    assert.equal(avisoDoEvento(evento("estoque_parado.aprovado", { id: ALERTA.id }), { ...ALERTA, itens_enviados: [{ sku_code: "" }] }), null);
+    const aviso = avisoDoEvento(evento("estoque_parado.aprovado", { id: ALERTA.id }), ALERTA);
+    assert.doesNotMatch(`${aviso?.titulo} ${aviso?.texto}`, /\b30\b|\b4\b|saldo/i);
+  });
+
   it("sem o documento, de outro cliente, sem cliente ou na vistoria, não há aviso", () => {
     assert.equal(avisoDoEvento(evento("os.scheduled", { id: "10050-01" }), null), null);
     assert.equal(avisoDoEvento(evento("os.scheduled", { id: "10050-01" }), { ...OS, customer_code: "SAFRA" }), null);
@@ -173,6 +219,8 @@ describe("quem recebe", () => {
     assert.equal(clienteRecebeOModelo("pedido_do_portal", ["financeiro"]), false);
     assert.equal(clienteRecebeOModelo("nf_emitida", ["wms", "financeiro"]), true);
     assert.equal(clienteRecebeOModelo("nf_emitida", ["operacao"]), false);
+    assert.equal(clienteRecebeOModelo("estoque_parado", ["wms"]), true);
+    assert.equal(clienteRecebeOModelo("estoque_parado", ["operacao", "financeiro"]), false);
     for (const modelo of MODELOS_DE_AVISO) assert.equal(clienteRecebeOModelo(modelo, []), false, modelo);
   });
 });

@@ -39,14 +39,14 @@ describe("avisos por e-mail do contato", () => {
 
   it("o gestor do cliente vê os cinco modelos, com os marcados", () => {
     const container = render(form({ email: "renata@itau.com", papel: "gestor_cliente", avisos: ["os_agendada", "nf_emitida"] }));
-    expect(textos(container)).toEqual(["Avisos por e-mail", "OS agendada", "OS em execução", "OS concluída", "NF emitida", "Solicitação recebida"]);
+    expect(textos(container)).toEqual(["Avisos por e-mail", "OS agendada", "OS em execução", "OS concluída", "NF emitida", "Solicitação recebida", "Itens parados"]);
     const marcados = [...container.querySelectorAll('[role="checkbox"][aria-checked="true"]')].map((item) => item.id);
     expect(marcados).toEqual(["contato-aviso-os_agendada", "contato-aviso-nf_emitida"]);
   });
 
   it("a gerenciadora não vê a NF, que leva o valor", () => {
     const container = render(form({ email: "camila@sl.com", papel: "gerenciadora", avisos: ["nf_emitida"] }));
-    expect(textos(container)).toEqual(["Avisos por e-mail", "OS agendada", "OS em execução", "OS concluída", "Solicitação recebida"]);
+    expect(textos(container)).toEqual(["Avisos por e-mail", "OS agendada", "OS em execução", "OS concluída", "Solicitação recebida", "Itens parados"]);
   });
 
   it("sem violações de acessibilidade", async () => {

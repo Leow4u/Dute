@@ -5,7 +5,9 @@
  * e, para os contatos do cliente que ligaram o modelo no cadastro
  * (`customer_contacts.avisos`, parte 4.6b), um e-mail. O texto sai de um
  * modelo fixo, nunca da IA (a mensagem escrita pela IA é da Fase 5, com
- * aprovação). A fonte é o evento que cada módulo já grava em `events`.
+ * aprovação). A fonte é o evento que cada módulo já grava em `events`. O
+ * alerta dos itens parados (docs/plataforma/fase-5-memoria.md, parte 5.4f)
+ * é o que a coordenação aprovou no núcleo: só o aprovado vira aviso.
  *
  * O aviso vai só ao cliente dono (`customer_code`) e só com o módulo do
  * modelo no contrato (`client_access.modules`). A OS não leva valor. A NF
@@ -14,7 +16,7 @@
  * gerenciadora.
  */
 
-export const MODELOS_DE_AVISO = ["os_agendada", "os_iniciada", "os_concluida", "nf_emitida", "pedido_do_portal"] as const;
+export const MODELOS_DE_AVISO = ["os_agendada", "os_iniciada", "os_concluida", "nf_emitida", "pedido_do_portal", "estoque_parado"] as const;
 export type ModeloDeAviso = (typeof MODELOS_DE_AVISO)[number];
 
 export const MODELO_ROTULO: Record<ModeloDeAviso, string> = {
@@ -23,15 +25,17 @@ export const MODELO_ROTULO: Record<ModeloDeAviso, string> = {
   os_concluida: "OS concluída",
   nf_emitida: "NF emitida",
   pedido_do_portal: "Solicitação recebida",
+  estoque_parado: "Itens parados",
 };
 
 /** O módulo que o cliente precisa ter no contrato para receber o modelo. */
-export const MODULO_DO_MODELO: Record<ModeloDeAviso, "operacao" | "financeiro"> = {
+export const MODULO_DO_MODELO: Record<ModeloDeAviso, "operacao" | "financeiro" | "wms"> = {
   os_agendada: "operacao",
   os_iniciada: "operacao",
   os_concluida: "operacao",
   nf_emitida: "financeiro",
   pedido_do_portal: "operacao",
+  estoque_parado: "wms",
 };
 
 /** Os modelos que levam valor: por e-mail, só aos papéis de contato que leem valor. */
@@ -46,6 +50,7 @@ export const FONTE_DO_EVENTO = {
   "os.completed": "functions_operacao",
   "nf.registered": "functions_financeiro",
   "portal.service_requested": "functions_operacao",
+  "estoque_parado.aprovado": "functions_core",
 } as const;
 export const EVENTOS_DE_AVISO = Object.keys(FONTE_DO_EVENTO) as Array<keyof typeof FONTE_DO_EVENTO>;
 
@@ -86,6 +91,8 @@ export function modeloDoEvento(evento: Pick<EventoLido, "type" | "source" | "pay
       return "nf_emitida";
     case "portal.service_requested":
       return "pedido_do_portal";
+    case "estoque_parado.aprovado":
+      return "estoque_parado";
     default:
       return null;
   }
@@ -97,6 +104,7 @@ export function documentoDoModelo(modelo: ModeloDeAviso, evento: Pick<EventoLido
   if (!id || id.includes("/")) return null;
   if (modelo === "nf_emitida") return { colecao: "client_faturas", id };
   if (modelo === "pedido_do_portal") return { colecao: "service_requests", id };
+  if (modelo === "estoque_parado") return { colecao: "ai_stock_alerts", id };
   return { colecao: "service_orders", id };
 }
 
@@ -228,7 +236,29 @@ export function avisoDoEvento(evento: EventoLido, documento: Record<string, unkn
         entidade: id,
       };
     }
+    case "estoque_parado": {
+      // Só o alerta aprovado, com os itens que a coordenação escolheu.
+      if (documento.status !== "aprovada") return null;
+      const itens = (Array.isArray(documento.itens_enviados) ? documento.itens_enviados : []).map(registro).filter((item) => texto(item.sku_code));
+      if (!itens.length) return null;
+      const dias = Number(registro(documento.regra).parado_dias) || 90;
+      const codigos = itens.map((item) => texto(item.client_item_code) || texto(item.sku_code));
+      return {
+        modelo,
+        customer_code: customerCode,
+        titulo: itens.length === 1 ? "1 item parado no estoque" : `${itens.length} itens parados no estoque`,
+        texto: [`Sem movimento há ${dias} dias ou mais`, codigosEmTexto(codigos)].join(" · "),
+        link: "/portal/estoque",
+        entidade: id,
+      };
+    }
   }
+}
+
+/** "POLO-M", "POLO-M e JAQ-G", "POLO-M, JAQ-G, CAL-42 e mais 2". */
+function codigosEmTexto(codigos: readonly string[]): string {
+  if (codigos.length > 3) return `${codigos.slice(0, 3).join(", ")} e mais ${codigos.length - 3}`;
+  return codigos.length === 1 ? (codigos[0] ?? "") : `${codigos.slice(0, -1).join(", ")} e ${codigos.at(-1)}`;
 }
 
 /** O módulo está no contrato do cliente? `modulos` é o que vale de `client_access.modules`. */
