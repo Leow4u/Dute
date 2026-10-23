@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { agendaDaOs, clienteDaLeitura, demandaParaAbrir, equipeDe, osDaLeitura, quadroDoDia, type OsDaFila } from "./fila";
+import {
+  agendaDaOs,
+  clienteDaLeitura,
+  comDemanda,
+  demandaDaFila,
+  demandaParaAbrir,
+  equipeDe,
+  osDaLeitura,
+  quadroDoDia,
+  type OsDaFila,
+} from "./fila";
 
 const aberta: OsDaFila = {
   numero: "10045-01",
@@ -52,5 +62,30 @@ describe("quadro do dia", () => {
     expect(clienteDaLeitura("cli", { customer_code: "ITAU", name: "Itaú" })).toEqual({ code: "ITAU", nome: "Itaú" });
     expect(equipeDe(["col_a", "col_b"], { col_a: "Ana Souza" })).toBe("Ana Souza +1");
     expect(agendaDaOs(aberta, "2026-10-22")).toMatchObject({ data: "2026-10-22", equipe: [], veiculoId: "" });
+  });
+});
+
+describe("OS de demanda perdida no Comercial", () => {
+  it("marca a OS da demanda perdida ou cancelada e deixa as outras como estão", () => {
+    const perdida = demandaDaFila("10045", {
+      etapa: "perdida",
+      customer_code: "ITAU",
+      perda: { motivo: "cancelado_cliente", etapa_antes: "para_planejar", rv: 0 },
+      cancelamento: null,
+      os_numeros: ["10045-01"],
+    });
+    expect(perdida).toEqual({ numero: "10045", fora: "perdida", paraAbrir: null });
+    expect(demandaDaFila("10046", { etapa: "cancelada", customer_code: "ITAU", perda: null, cancelamento: { motivo: "cliente" } }).fora).toBe("cancelada");
+    const planejar = demandaDaFila("10047", { etapa: "para_planejar", customer_code: "ITAU", perda: null, os_numeros: [] });
+    expect(planejar.fora).toBeNull();
+    expect(planejar.paraAbrir?.numero).toBe("10047");
+
+    const outra: OsDaFila = { ...aberta, numero: "10047-01", demanda: "10047" };
+    const ordens = comDemanda([aberta, outra], [perdida, planejar]);
+    expect(ordens.map((os) => [os.numero, os.demandaFora])).toEqual([
+      ["10045-01", "perdida"],
+      ["10047-01", null],
+    ]);
+    expect(quadroDoDia(ordens, "2026-10-22").paraAgendar.map((os) => os.numero)).toEqual(["10045-01", "10047-01"]);
   });
 });

@@ -187,4 +187,78 @@ describe("OS a partir da demanda", () => {
     assert.equal(JSON.stringify(evento).includes("Ana"), false);
     assert.equal(JSON.stringify(evento).includes("ABC1D23"), false);
   });
+
+  it("demanda perdida no Comercial não agenda nem reagenda, mas cancela; reaberta, agenda de novo", async () => {
+    await db.collection("collaborators").doc("col_aaaaaaaaaaaaaaaa").set({ ativo: true, nome: "Ana Souza" });
+    await db.collection("vehicles").doc("vei_aaaaaaaaaaaaaaaa").set({ ativo: true, placa: "ABC1D23" });
+    const agenda = { data: "2099-01-01", equipe: ["col_aaaaaaaaaaaaaaaa"], veiculo_id: "vei_aaaaaaaaaaaaaaaa" };
+    await saveServiceOrderFor(db, interno, { action: "create", idempotency_key: "um", demanda: NUMERO });
+    await saveServiceOrderFor(db, interno, { action: "create", idempotency_key: "dois", demanda: NUMERO });
+    await saveServiceOrderFor(db, interno, { action: "schedule", idempotency_key: "ag-1", numero: "10045-01", expected_edicao: 1, ...agenda });
+
+    await db.collection("demands").doc(NUMERO).update({
+      etapa: "perdida",
+      perda: { motivo: "cancelado_cliente", nota: null, etapa_antes: "para_planejar", rv: 0 },
+    });
+    const reagendar = await rejection(saveServiceOrderFor(db, interno, {
+      action: "schedule",
+      idempotency_key: "ag-1b",
+      numero: "10045-01",
+      expected_edicao: 2,
+      ...agenda,
+      data: "2099-01-02",
+    }));
+    assert.equal(reagendar.code, "failed-precondition");
+    assert.equal(reagendar.message, "A demanda foi perdida no Comercial. Cancele a OS.");
+    const agendar = await rejection(saveServiceOrderFor(db, interno, {
+      action: "schedule",
+      idempotency_key: "ag-2",
+      numero: "10045-02",
+      expected_edicao: 1,
+      ...agenda,
+    }));
+    assert.match(agendar.message, /perdida/);
+    const intacta = (await db.collection(SERVICE_ORDERS_COLLECTION).doc("10045-01").get()).data() ?? {};
+    assert.equal(intacta.edicao, 2);
+    assert.equal(intacta.agenda.data, "2099-01-01");
+    const agendamentos = (await db.collection(EVENTS_COLLECTION).get()).docs.filter((item) => item.data().type === "os.scheduled");
+    assert.equal(agendamentos.length, 1);
+
+    const cancelada = await saveServiceOrderFor(db, interno, {
+      action: "cancel",
+      idempotency_key: "cancela",
+      numero: "10045-01",
+      expected_edicao: 2,
+      motivo: "Demanda perdida",
+    });
+    assert.equal(cancelada.edicao, 3);
+
+    await db.collection("demands").doc(NUMERO).update({ etapa: "para_planejar", perda: null });
+    const reaberta = await saveServiceOrderFor(db, interno, {
+      action: "schedule",
+      idempotency_key: "ag-2b",
+      numero: "10045-02",
+      expected_edicao: 1,
+      ...agenda,
+    });
+    assert.equal(reaberta.edicao, 2);
+  });
+
+  it("aditivo em negociação não trava o agendamento: o escopo fechado continua valendo", async () => {
+    await db.collection("collaborators").doc("col_aaaaaaaaaaaaaaaa").set({ ativo: true, nome: "Ana Souza" });
+    await db.collection("vehicles").doc("vei_aaaaaaaaaaaaaaaa").set({ ativo: true, placa: "ABC1D23" });
+    await saveServiceOrderFor(db, interno, { action: "create", idempotency_key: "abre", demanda: NUMERO });
+    await db.collection("quotes").doc(NUMERO).set({ status: "rascunho", rv: 1, customer_code: "ITAU", tipo_rv: "aditivo" });
+    await db.collection("demands").doc(NUMERO).update({ etapa: "em_montagem" });
+    const agendada = await saveServiceOrderFor(db, interno, {
+      action: "schedule",
+      idempotency_key: "ag",
+      numero: "10045-01",
+      expected_edicao: 1,
+      data: "2099-01-01",
+      equipe: ["col_aaaaaaaaaaaaaaaa"],
+      veiculo_id: "vei_aaaaaaaaaaaaaaaa",
+    });
+    assert.equal(agendada.edicao, 2);
+  });
 });

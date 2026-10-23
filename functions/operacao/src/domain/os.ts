@@ -190,6 +190,18 @@ export function problemaParaAbrirOs(demanda: DemandaParaOs, orcamento: Orcamento
   return null;
 }
 
+/**
+ * Por que a OS não pode ser agendada pela demanda dela, ou null. A demanda
+ * perdida ou cancelada no Comercial não leva equipe nem veículo: a OS só se
+ * cancela. Reaberta, volta a agendar. O aditivo em negociação não trava: o
+ * escopo fechado continua valendo e o serviço não espera o aditivo.
+ */
+export function problemaParaAgendarOs(demanda: Pick<DemandaParaOs, "perda" | "cancelamento">): string | null {
+  if (preenchido(demanda.cancelamento)) return "A demanda foi cancelada no Comercial. Cancele a OS.";
+  if (preenchido(demanda.perda)) return "A demanda foi perdida no Comercial. Cancele a OS.";
+  return null;
+}
+
 export function numeroDaOs(demanda: string, seq: number): string {
   if (!DEMANDA.test(demanda)) throw new HttpsError("internal", `Número da demanda inválido: ${demanda}.`);
   if (!Number.isInteger(seq) || seq < 1 || seq > 99) throw new HttpsError("internal", `Sequência da OS inválida: ${seq}.`);
