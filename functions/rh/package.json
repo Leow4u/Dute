@@ -12,13 +12,14 @@
     "build:test": "tsc -p tsconfig.test.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run test:unit",
-    "test:unit": "npm run build:test && node --test lib/callables.test.js lib/domain/platform-roles.test.js lib/domain/liberacao.test.js",
-    "test:integration": "npm run build:test && firebase emulators:exec --project demo-dute-rh --only firestore \"node --test --test-concurrency=1 lib/domain/profile.integration.test.js\"",
+    "test:unit": "npm run build:test && node --test lib/callables.test.js lib/domain/platform-roles.test.js lib/domain/liberacao.test.js lib/domain/ficha.test.js lib/domain/events.test.js",
+    "test:integration": "npm run build:test && firebase emulators:exec --project demo-dute-rh --only firestore \"node --test --test-concurrency=1 lib/domain/profile.integration.test.js lib/domain/ficha.integration.test.js lib/domain/rotina.integration.test.js\"",
     "test:critical": "npm run test:unit && npm run test:integration"
   },
   "dependencies": {
     "firebase-admin": "^13.0.0",
-    "firebase-functions": "^6.0.0"
+    "firebase-functions": "^6.0.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "typescript": "~5.9.3",

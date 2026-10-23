@@ -169,8 +169,12 @@ documentação de produto e operação está em `docs/`.
     Toda callable entra por `requireRhCaller` (liberação
     `RH_AMBIENTES_LIBERADOS`, só o `dute-homolog`; owner, admin e rh leem, só
     rh grava). O banco `rh` é fechado ao navegador (`firestore-rh.rules`): as
-    regras de um banco nomeado não leem o `users` do banco padrão. Desenho:
-    `docs/plataforma/fase-8-rh.md`. Usa **npm**.
+    regras de um banco nomeado não leem o `users` do banco padrão. Hoje a
+    ficha do colaborador (parte 8.2a): `saveRhRecord` e `archiveRhRecord`
+    gravam o registro, o recibo (`rh_operations`) e o evento `rh.*` numa
+    transação do banco `rh`, nunca no padrão; `getRhPanel` e `getRhFicha`
+    leem; a rotina `runRhAlerts` avisa o vencimento uma vez por marco.
+    Desenho: `docs/plataforma/fase-8-rh.md`. Usa **npm**.
   - `lib/dominio`: tipos e regras que o app e as Functions precisam ter iguais.
 - **IA native.** Todo módulo novo grava desde o primeiro dia o que a IA precisa
   (eventos em `events`, tempos e medidas) e respeita o isolamento por cliente. A
