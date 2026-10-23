@@ -19,7 +19,15 @@ import {
 
 import { COMERCIAL_ROLES } from "./comercial/navegacao";
 import { ALERTA_PARADO_ROLES } from "./memoria/alertas";
-import { COMERCIAL_AMBIENTES_LIBERADOS, FINANCEIRO_AMBIENTES_LIBERADOS, MEMORIA_AMBIENTES_LIBERADOS, OPERACAO_AMBIENTES_LIBERADOS, memoriaLiberada } from "./liberacao";
+import {
+  AGENTE_AMBIENTES_LIBERADOS,
+  COMERCIAL_AMBIENTES_LIBERADOS,
+  FINANCEIRO_AMBIENTES_LIBERADOS,
+  MEMORIA_AMBIENTES_LIBERADOS,
+  OPERACAO_AMBIENTES_LIBERADOS,
+  agenteLiberado,
+  memoriaLiberada,
+} from "./liberacao";
 import { OPERACAO_CADASTRO_ROLES } from "./operacao/navegacao";
 import { FINANCE_ROLES, INTERNAL_ROLES } from "./modules";
 import { PLATFORM_MODULES } from "./platform-modules";
@@ -192,6 +200,37 @@ describe("a liberação da memória igual em todo lugar (Fase 5)", () => {
     expect(tsList(liberacao, "MEMORIA_AMBIENTES_LIBERADOS")).toEqual([...MEMORIA_AMBIENTES_LIBERADOS]);
     expect([...MEMORIA_AMBIENTES_LIBERADOS]).toEqual(["dute-homolog"]);
     expect([memoriaLiberada("dute-homolog"), memoriaLiberada("dute-prod"), memoriaLiberada("dute-btg"), memoriaLiberada(undefined)]).toEqual([true, false, false, false]);
+  });
+});
+
+describe("o Agent Dute do núcleo igual em todo lugar (parte 5.5)", () => {
+  const liberacao = read("functions/core/src/domain/liberacao.ts");
+  const papeis = read("functions/core/src/domain/platform-roles.ts");
+  const rules = read("firestore.rules");
+
+  it("a liberação própria do agente é a do app, só a homologação até o lançamento da fase", () => {
+    expect(tsList(liberacao, "AGENTE_AMBIENTES_LIBERADOS")).toEqual([...AGENTE_AMBIENTES_LIBERADOS]);
+    expect([...AGENTE_AMBIENTES_LIBERADOS]).toEqual(["dute-homolog"]);
+    expect([agenteLiberado("dute-homolog"), agenteLiberado("dute-prod"), agenteLiberado("dute-btg"), agenteLiberado(undefined)]).toEqual([true, false, false, false]);
+  });
+
+  it("quem lê valor no agente é quem lê preço nas regras", () => {
+    expect(tsList(papeis, "VALOR_ROLES")).toEqual(rulesList(rules, /function canReadPrices\(\) \{\s*return hasAnyRole\(\[([^\]]*)\]\)/));
+  });
+
+  it("os módulos de cada papel e os que o cliente contrata são os de lib/dominio", () => {
+    const bloco = papeis.match(/MODULOS_POR_PAPEL = \{([\s\S]*?)\n\}/);
+    expect(bloco).not.toBeNull();
+    const copia = Object.fromEntries([...bloco![1].matchAll(/(\w+): \[([^\]]*)\]/g)].map((linha) => [linha[1], [...linha[2].matchAll(/"([^"]+)"/g)].map((item) => item[1])]));
+    expect(copia).toEqual(Object.fromEntries(Object.entries(MODULOS_POR_PAPEL).map(([papel, modulos]) => [papel, [...modulos]])));
+    expect(tsList(papeis, "CONTRACTED_MODULE_KEYS")).toEqual([...MODULOS_CONTRATAVEIS]);
+    expect(tsList(papeis, "DEFAULT_CONTRACTED_MODULES")).toEqual([...MODULOS_PADRAO_CLIENTE]);
+  });
+
+  it("quem tem o agente: papéis da plataforma, sem o campo, o painel e o RH", () => {
+    const agente = tsList(papeis, "AGENTE_ROLES");
+    expect(agente.every((papel) => (PAPEIS as readonly string[]).includes(papel))).toBe(true);
+    expect(PAPEIS.filter((papel) => !agente.includes(papel))).toEqual(["campo", "rh", "painel"]);
   });
 });
 

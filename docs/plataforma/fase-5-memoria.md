@@ -253,7 +253,7 @@ Seis problemas a resolver na mudança:
   - **A conversa** é da pessoa, do cliente e do módulo, e fica gravada com
     os três. A de outro cliente ou de outra pessoa recusa.
 - **As ferramentas só leem, por construção.**
-  - Cada ferramenta recebe o leitor do agente (`domain/agente/leitor.ts`),
+  - Cada ferramenta recebe o leitor do agente (`domain/agente-leitor.ts`),
     não o banco:
     - `doCliente(coleção)` sempre consulta com `customer_code` igual ao do
       escopo;
@@ -371,10 +371,10 @@ agente do WMS.
 | 5.4e | Estoque › Alertas, com o alerta de cada cliente e os itens para escolher, e a linha no "Precisa de você" da Armazenagem | Textos listados; uma ação principal; aprovar pede os itens; só a coordenação vê; `axe` |
 | 5.4f | O aviso do alerta aprovado ao cliente, no sino do portal e por e-mail, pela rotina dos avisos | Só o aprovado vira aviso; só ao cliente dele, com a armazenagem no contrato |
 | 5.5a | O desenho do Agent Dute no núcleo (esta seção) | — |
-| 5.5b | O escopo e o leitor do agente no núcleo: o cliente do perfil, o cliente ativo da equipe e o módulo do shell; o leitor só de leitura e por cliente; a liberação `AGENTE_AMBIENTES_LIBERADOS`; o Genkit na codebase | O leitor não grava; o documento de outro cliente volta vazio; o cliente ativo inexistente, arquivado ou prospect recusa; o módulo fora do papel recusa |
+| 5.5b | O escopo e o leitor do agente no núcleo: o cliente do perfil, o cliente ativo da equipe e o módulo do shell; o leitor só de leitura e por cliente; a liberação `AGENTE_AMBIENTES_LIBERADOS` | O leitor não grava; o documento de outro cliente volta vazio; o cliente ativo inexistente, arquivado ou prospect recusa; o módulo fora do papel recusa |
 | 5.5c | As ferramentas da Armazenagem pelo leitor, sem a prévia do faturamento, e a dos itens parados | Nenhuma grava; nenhuma devolve dado de outro cliente; nenhuma tem parâmetro de cliente; o razão já consultado pelo cliente |
 | 5.5d | As ferramentas da Operação, do Comercial, do Financeiro e da memória | O valor só para quem lê valor; a Operação sem valor; a memória diz quando não tem base; isolamento por cliente |
-| 5.5e | A conversa no núcleo (`chatWithDute`): o prompt por papel e módulo, o histórico, o resumo, as anotações e os playbooks no prompt, a troca de modelo, o uso e os rascunhos | O prompt de cada papel e módulo; a conversa de outro cliente recusa; o modelo que falha passa ao reserva; só o fluxo grava a conversa, o uso e os playbooks usados |
+| 5.5e | A conversa no núcleo (`chatWithDute`), com o Genkit na codebase: o prompt por papel e módulo, o histórico, o resumo, as anotações e os playbooks no prompt, a troca de modelo, o uso e os rascunhos | O prompt de cada papel e módulo; a conversa de outro cliente recusa; o modelo que falha passa ao reserva; só o fluxo grava a conversa, o uso e os playbooks usados |
 | 5.5f | Anotações, playbooks e rotinas no núcleo, com a rotina agendada; o WMS deixa de rodar as rotinas onde o núcleo roda | A rotina roda uma vez, por um só; a anotação só entra pelo cartão; só quem revisa decide |
 | 5.5g | O app com o agente do núcleo onde está liberado: o Agent Dute em cada shell, com o módulo e o cliente ativo; a tela na v3; o radar com as linhas do "Precisa de você" | Textos listados; `axe`; a equipe fala do cliente ativo; o módulo do shell vai à conversa |
 | 5.5h | O "Resumo do dia" como rotina pronta por módulo | A rotina pronta segue o papel e o módulo; só liga pela pessoa |
@@ -781,3 +781,59 @@ OS, da NF e da solicitação.
     outra codebase, não.
   - `clientes.test.ts` e `clientes-dialogos.test.tsx`, no app: o modelo novo
     no diálogo do contato.
+
+### Parte 5.5b: o escopo e o leitor do agente
+
+Feita em 23/10/2026. O escopo está em
+`functions/core/src/domain/agente-escopo.ts` e o leitor em
+`agente-leitor.ts`. Nenhuma callable ainda: a conversa entra na parte 5.5e.
+
+- **A liberação própria.** `AGENTE_AMBIENTES_LIBERADOS` (só o
+  `dute-homolog`), no núcleo e no app (`AGENTE_LIBERADO`), travada em
+  `platform-lists.test.ts`.
+  - A entrada das callables do agente é `requireDuteCaller`: a liberação do
+    agente, o login, o perfil e o papel.
+  - Têm o agente owner, admin, interno, wms, comercial, financeiro, suporte e
+    o cliente (`AGENTE_ROLES`). O perfil passa a trazer o cliente do login
+    de cliente.
+- **O escopo.**
+  - O cliente fala do próprio cadastro. Pedir outro recusa.
+  - A equipe fala do cliente ativo. Ele precisa estar em `customers`, não
+    arquivado e não prospect.
+  - Os módulos são os do papel (cópia de `MODULOS_POR_PAPEL`).
+    Armazenagem, Operação e Financeiro só valem com o cliente contratando
+    (`client_access`, com o padrão sem a lista). O Comercial vale para todo
+    cliente.
+  - O módulo do shell precisa ser um deles.
+  - Lê valor quem lê preço nas regras (`VALOR_ROLES`, a lista de
+    `canReadPrices`), e o cliente, nos documentos dele.
+- **O leitor.** É o que as ferramentas recebem no lugar do banco, congelado
+  e sem gravação, lote nem transação.
+  - `doCliente` consulta sempre com o cliente do escopo e confere de novo o
+    que volta.
+  - A ferramenta não filtra pelo cliente, não passa de 5.000 documentos e só
+    lê as coleções da lista.
+  - `documento` devolve vazio para o de outro cliente.
+  - `geral` é só da equipe, com o filtro de cada coleção: a medida geral,
+    nunca a de um cliente.
+  - O que volta vai em JSON puro, com o instante em ISO.
+  - A lista não tem acesso, papel, convite, cadastro, preço nem o uso do
+    agente.
+- **Testes.**
+  - `agente-leitor.test.ts`, num banco falso que recusa qualquer gravação e
+    devolve os dois clientes de propósito:
+    - a forma do leitor;
+    - o cliente primeiro em toda consulta;
+    - as recusas;
+    - o documento de outro cliente;
+    - o geral;
+    - o JSON puro.
+  - `agente-escopo.test.ts`: a liberação, quem tem o agente, quem lê valor e
+    os módulos de cada papel em cada contrato.
+  - `agente-escopo.integration.test.ts`, no emulador:
+    - o escopo do cliente e da equipe, com as recusas;
+    - a entrada das callables;
+    - o leitor de um cliente, que não devolve o dado de outro.
+  - `platform-lists.test.ts`: a liberação, `VALOR_ROLES` contra as regras e
+    as cópias dos módulos.
+

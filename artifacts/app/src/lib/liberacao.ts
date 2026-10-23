@@ -94,3 +94,20 @@ export function memoriaLiberada(projectId: string | null | undefined): boolean {
 
 /** Valor deste build, para as sugestões da memória nas telas. */
 export const MEMORIA_LIBERADA = memoriaLiberada(import.meta.env.VITE_FIREBASE_PROJECT_ID);
+
+/**
+ * Liberação própria do Agent Dute do núcleo (docs/plataforma/fase-5-memoria.md,
+ * parte 5.5). As callables do agente em functions/core recusam fora de
+ * AGENTE_AMBIENTES_LIBERADOS (functions/core/src/domain/liberacao.ts, travada
+ * igual a esta por platform-lists.test.ts). Fora dela, o app segue com o
+ * agente do WMS. Só a homologação atende até o lançamento da Fase 5, com o OK
+ * do Leonardo.
+ */
+export const AGENTE_AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog"];
+
+export function agenteLiberado(projectId: string | null | undefined): boolean {
+  return AGENTE_AMBIENTES_LIBERADOS.includes(String(projectId ?? "").trim());
+}
+
+/** Valor deste build: o app fala com o Agent Dute do núcleo, e não com o do WMS. */
+export const AGENTE_LIBERADO = agenteLiberado(import.meta.env.VITE_FIREBASE_PROJECT_ID);
