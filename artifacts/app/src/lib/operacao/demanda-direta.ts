@@ -159,16 +159,20 @@ function local(localId: string, complemento: string) {
   return { local_id: localId || null, complemento: complemento.trim() || null };
 }
 
-/** O pedido no formato de openDirectDemand. Chame só sem problemas. */
-export function pedidoDaDemanda(form: FormularioDaDemanda, idempotencyKey: string): Record<string, unknown> {
+/**
+ * O pedido no formato de openDirectDemand. Chame só sem problemas. Com a
+ * solicitação do portal (parte 4.4c), vai o id dela no lugar de "recebida
+ * em" (a callable usa o instante da solicitação) e o canal é o portal.
+ */
+export function pedidoDaDemanda(form: FormularioDaDemanda, idempotencyKey: string, solicitacaoId: string | null = null): Record<string, unknown> {
   const { calculado } = tipoDoFormulario(form);
   return {
     idempotency_key: idempotencyKey,
     customer_code: form.customerCode,
     titulo: form.titulo.trim(),
-    canal: form.canal,
+    canal: solicitacaoId ? "portal" : form.canal,
     pedido_por: form.pedidoPorNome.trim() ? { nome: form.pedidoPorNome.trim(), telefone: form.pedidoPorTelefone.trim() || null } : null,
-    recebida_em: instanteDeSaoPaulo(form.recebidaData, form.recebidaHora),
+    ...(solicitacaoId ? { solicitacao_id: solicitacaoId } : { recebida_em: instanteDeSaoPaulo(form.recebidaData, form.recebidaHora) }),
     executar_ate: instanteDeSaoPaulo(form.executarData, form.executarHora),
     ...(form.tipoCorrigido && form.tipoCorrigido !== calculado ? { tipo: form.tipoCorrigido } : {}),
     origem: local(form.origemLocalId, form.origemComplemento),

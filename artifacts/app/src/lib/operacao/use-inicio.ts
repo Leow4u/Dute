@@ -6,6 +6,7 @@ import { colaboradorDaLeitura, veiculoDaLeitura } from "./cadastro";
 import { clienteDaLeitura, comDemanda, demandaDaFila, hojeIso, nomesPorCodigo, osDaLeitura } from "./fila";
 import { useLeitura } from "./leitura";
 import { abreOperacao } from "./navegacao";
+import { solicitacaoDaOperacao } from "./solicitacoes";
 import {
   equipeDeHoje,
   hojeNaOperacao,
@@ -45,6 +46,11 @@ export function useInicioDaOperacao(role: ProfileRole | null | undefined, agora:
   const pessoas = useLeitura(chave("collaborators"), (db) => collection(db, "collaborators"), colaboradorDaLeitura);
   const veiculos = useLeitura(chave("vehicles"), (db) => collection(db, "vehicles"), veiculoDaLeitura);
   const clientes = useLeitura(chave("customers"), (db) => collection(db, "customers"), clienteDaLeitura);
+  const solicitacoes = useLeitura(
+    chave("service_requests:recebidas"),
+    (db) => query(collection(db, "service_requests"), where("status", "==", "recebida")),
+    solicitacaoDaOperacao,
+  );
 
   const leituras = [
     { leitura: ordens, nome: "ordens de serviço" },
@@ -52,6 +58,7 @@ export function useInicioDaOperacao(role: ProfileRole | null | undefined, agora:
     { leitura: pessoas, nome: "colaboradores" },
     { leitura: veiculos, nome: "veículos" },
     { leitura: clientes, nome: "clientes" },
+    { leitura: solicitacoes, nome: "solicitações do portal" },
   ];
   const falhas = abre ? leituras.filter(({ leitura }) => leitura.erro).map(({ nome }) => nome) : [];
   const carregando = abre && leituras.some(({ leitura }) => !leitura.erro && !leitura.itens);
@@ -62,6 +69,7 @@ export function useInicioDaOperacao(role: ProfileRole | null | undefined, agora:
     agora,
     ordens: comDemanda(ordens.itens ?? [], demandas.itens ?? []),
     demandas: (demandas.itens ?? []).flatMap((demanda) => (demanda.paraAbrir ? [demanda.paraAbrir] : [])),
+    solicitacoes: solicitacoes.itens ?? [],
     pessoas: pessoas.itens ?? [],
     veiculos: veiculos.itens ?? [],
     nomesClientes: nomesPorCodigo(clientes.itens ?? []),

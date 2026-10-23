@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { collection } from "firebase/firestore";
+import { collection, query, where } from "firebase/firestore";
 import { useSearch } from "wouter";
 
 import { colaboradorDaLeitura, veiculoDaLeitura } from "@/lib/operacao/cadastro";
@@ -7,6 +7,7 @@ import { clienteDaLeitura, comDemanda, demandaDaFila, hojeIso, nomesPorCodigo, o
 import { SEM_FILTRO, demandaDoHoje, opcoesDosFiltros, quadroDoHoje, resumoDoHoje, type FiltrosDoHoje } from "@/lib/operacao/hoje";
 import { useLeitura } from "@/lib/operacao/leitura";
 import { osDaBusca } from "@/lib/operacao/navegacao";
+import { solicitacaoDaOperacao } from "@/lib/operacao/solicitacoes";
 
 import { HojeView, type EstadoDoHoje } from "./hoje-view";
 import { useEscala } from "./use-escala";
@@ -25,6 +26,12 @@ export default function PaginaHoje() {
   const veiculos = useLeitura("vehicles", (db) => collection(db, "vehicles"), veiculoDaLeitura);
   const demandas = useLeitura("demands", (db) => collection(db, "demands"), (id, data) => ({ fila: demandaDaFila(id, data), hoje: demandaDoHoje(id, data) }));
   const clientes = useLeitura("customers", (db) => collection(db, "customers"), clienteDaLeitura);
+  // As solicitações do portal que esperam a Operação (parte 4.4c).
+  const solicitacoes = useLeitura(
+    "service_requests:recebidas",
+    (db) => query(collection(db, "service_requests"), where("status", "==", "recebida")),
+    solicitacaoDaOperacao,
+  );
   const [filtros, setFiltros] = useState<FiltrosDoHoje>(SEM_FILTRO);
   const [busca, setBusca] = useState("");
 
@@ -38,12 +45,12 @@ export default function PaginaHoje() {
   const placas = Object.fromEntries((veiculos.itens ?? []).map((veiculo) => [veiculo.id, veiculo.placa]));
   const demandasDoHoje = (demandas.itens ?? []).flatMap((demanda) => (demanda.hoje ? [demanda.hoje] : []));
   const agora = new Date();
-  const quadro = quadroDoHoje({ hoje, agora, demandas: demandasDoHoje, ordens: lista, nomesClientes, nomesPessoas, placas, filtros, busca });
+  const quadro = quadroDoHoje({ hoje, agora, demandas: demandasDoHoje, ordens: lista, solicitacoes: solicitacoes.itens ?? [], nomesClientes, nomesPessoas, placas, filtros, busca });
   const opcoes = useMemo(
-    () => opcoesDosFiltros({ demandas: demandasDoHoje, ordens: lista, nomesClientes, nomesPessoas }),
+    () => opcoesDosFiltros({ demandas: demandasDoHoje, ordens: lista, solicitacoes: solicitacoes.itens ?? [], nomesClientes, nomesPessoas }),
     // As opções só mudam com as leituras.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ordens.itens, demandas.itens, clientes.itens, pessoas.itens],
+    [ordens.itens, demandas.itens, clientes.itens, pessoas.itens, solicitacoes.itens],
   );
   const { escalar, escala, erro } = useEscala({ lista, pessoas: pessoas.itens ?? [], veiculos: veiculos.itens ?? [], nomesClientes, hoje });
 
@@ -62,7 +69,7 @@ export default function PaginaHoje() {
 
   return (
     <HojeView
-      estado={estadoDe([ordens, pessoas, veiculos, demandas, clientes])}
+      estado={estadoDe([ordens, pessoas, veiculos, demandas, clientes, solicitacoes])}
       resumo={resumoDoHoje(agora, quadro)}
       quadro={quadro}
       filtros={filtros}

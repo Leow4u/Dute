@@ -1,10 +1,11 @@
-import { Ban, CalendarClock, CalendarPlus, ClipboardList, IdCard, Truck, UserX, Wrench } from "lucide-react";
+import { Ban, CalendarClock, CalendarPlus, ClipboardList, IdCard, Inbox, Truck, UserX, Wrench } from "lucide-react";
 
 import type { ItemDoInicio, TomDoItem } from "../inicio-do-modulo";
 import { formatarData, type ColaboradorDaLista, type VeiculoDaLista } from "./cadastro";
 import { nomeDe, placaDe, quando, type DemandaParaAbrir, type OsDaFila } from "./fila";
 import { prazoDaDemanda } from "./hoje";
 import { ROTA_HOJE, hrefDaOs, hrefDoColaborador, hrefDoVeiculo } from "./navegacao";
+import { hrefDeAtender, pedidoEmTexto, solicitacoesRecebidas, type SolicitacaoDaOperacao } from "./solicitacoes";
 
 /**
  * O "Precisa de você" do Início da Operação (docs/plataforma/plano-de-implantacao.md,
@@ -31,6 +32,8 @@ export type EntradaDoInicio = {
   ordens: readonly OsDaFila[];
   /** As demandas em Para planejar (demandaDaFila → paraAbrir). */
   demandas: readonly DemandaParaAbrir[];
+  /** As solicitações de OS do portal (parte 4.4c). */
+  solicitacoes?: readonly SolicitacaoDaOperacao[];
   pessoas: readonly ColaboradorDaLista[];
   veiculos: readonly VeiculoDaLista[];
   nomesClientes: Readonly<Record<string, string>>;
@@ -204,6 +207,29 @@ function itemDePlanejar(entrada: EntradaDoInicio): ItemDoInicio[] {
   ];
 }
 
+/**
+ * As solicitações do portal que esperam a Operação (parte 4.4c). Críticas
+ * quando a data pedida chega em até 24 horas (ou já passou): o cliente
+ * espera a resposta antes disso.
+ */
+function itemDeSolicitacoes(entrada: EntradaDoInicio): ItemDoInicio[] {
+  const recebidas = solicitacoesRecebidas(entrada.solicitacoes ?? []);
+  if (!recebidas.length) return [];
+  const agora = agoraDe(entrada);
+  const perto = recebidas.some((item) => Date.parse(item.desejadaEm) - agora.getTime() <= PRAZO_PERTO_MS);
+  return [
+    {
+      id: "solicitacoes-do-portal",
+      tone: perto ? "critical" : "attention",
+      icon: Inbox,
+      title: `${plural(recebidas.length, "solicitação", "solicitações")} do portal`,
+      detail: previa(recebidas.map((item) => `${entrada.nomesClientes[item.customerCode] || item.cliente} · ${pedidoEmTexto(item)}`), 1),
+      href: recebidas.length === 1 ? hrefDeAtender(recebidas[0].id) : ROTA_HOJE,
+      actionLabel: "Atender",
+    },
+  ];
+}
+
 /** CNH vencida ou vencendo em até DIAS_PARA_A_CNH dias, de quem está ativo. */
 function itensDeCnh(entrada: EntradaDoInicio): ItemDoInicio[] {
   const agendadas = ativas(entrada.ordens).filter((os) => os.status === "agendada" && os.agenda && os.agenda.data >= entrada.hoje);
@@ -283,14 +309,15 @@ const PESO_DO_TOM: Record<TomDoItem, number> = { critical: 0, attention: 1, info
 /**
  * As pendências da Operação, o mais urgente primeiro (crítico, atenção). No
  * mesmo tom, a ordem das fontes: OS de demanda que saiu, OS com cadastro
- * desativado, OS perto do prazo sem equipe ou veículo, OS para agendar,
- * demandas para planejar, CNH e revisão do veículo.
+ * desativado, OS perto do prazo sem equipe ou veículo, solicitações do
+ * portal, OS para agendar, demandas para planejar, CNH e revisão do veículo.
  */
 export function pendenciasDaOperacao(entrada: EntradaDoInicio): ItemDoInicio[] {
   const itens = [
     ...itensDeDemandaFora(entrada),
     ...itensDeCadastroInativo(entrada),
     ...itensDeOsDesfalcada(entrada),
+    ...itemDeSolicitacoes(entrada),
     ...itemDeParaAgendar(entrada),
     ...itemDePlanejar(entrada),
     ...itensDeCnh(entrada),

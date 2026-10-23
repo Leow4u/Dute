@@ -5,6 +5,7 @@ import { Router } from "wouter";
 import { EscalaDaOs } from "@/components/operacao/escala";
 import type { OsDaFila } from "@/lib/operacao/fila";
 import { SEM_FILTRO, quadroDoHoje, type DemandaDoHoje } from "@/lib/operacao/hoje";
+import { solicitacaoDaOperacao } from "@/lib/operacao/solicitacoes";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
@@ -252,5 +253,51 @@ describe("a vistoria pedida no Hoje (parte 3.11c)", () => {
     expect(textos).not.toContain("Planejar OS");
     expect(html).toContain('href="/operacao/planejar?demanda=10060&amp;vistoria=1"');
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+});
+
+describe("a solicitação do portal em Para planejar (parte 4.4c)", () => {
+  const solicitacao = solicitacaoDaOperacao("sol_0123456789abcdef", {
+    status: "recebida",
+    customer_code: "ITAU",
+    customer_name: "Itaú Unibanco",
+    tipo_servico: "transporte",
+    data: "2026-10-24",
+    horario: "08:00",
+    desejada_em: "2026-10-24T11:00:00.000Z",
+    recebida_em: "2026-10-23T12:30:00.000Z",
+    origem: "Rua das Indústrias, 450",
+    destino: "Av. Paulista, 1000",
+    descricao: "Levar 12 paletes de mobiliário.",
+    contato: { nome: "Roberto Souza", email: "roberto@itau.example" },
+  })!;
+  const comSolicitacao = () =>
+    render({
+      quadro: quadroDoHoje({ hoje: HOJE, agora: AGORA, demandas: [PLANEJAR], ordens: [], solicitacoes: [solicitacao], nomesClientes: { ITAU: "Itaú Unibanco" }, nomesPessoas: {}, placas: {}, filtros: SEM_FILTRO, busca: "" }),
+    });
+
+  it("vem antes das demandas, com o tipo, Portal, o cliente, o pedido, os endereços e o texto do cliente; Atender leva ao formulário", () => {
+    const html = comSolicitacao();
+    const coluna = html.slice(html.indexOf("Para planejar"), html.indexOf("Para agendar"));
+    const textos = textosDaTela(coluna);
+    expect(textos.slice(0, 10)).toEqual([
+      "Para planejar",
+      "2",
+      "Emergencial",
+      "Portal",
+      "Itaú Unibanco",
+      "Transporte / frete · Sáb 24/10 08:00",
+      "Rua das Indústrias, 450 → Av. Paulista, 1000",
+      "Levar 12 paletes de mobiliário.",
+      "Atender",
+      "Planejada",
+    ]);
+    expect(html).toContain('href="/operacao/nova-demanda?solicitacao=sol_0123456789abcdef"');
+    // O contato do cliente fica na solicitação, não no cartão.
+    expect(html).not.toMatch(/Roberto|roberto@/);
+  });
+
+  it("não tem problema de acessibilidade", async () => {
+    expect(await violacoesDeAcessibilidade(comSolicitacao())).toEqual([]);
   });
 });

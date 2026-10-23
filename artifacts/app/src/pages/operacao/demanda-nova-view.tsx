@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Segmented } from "@/components/ui/segmented";
+import { Textarea } from "@/components/ui/textarea";
 import {
   CANAIS_DA_DIRETA,
   CANAL_ROTULO,
@@ -18,18 +19,37 @@ import {
   type LinhaDoPedido,
 } from "@/lib/operacao/demanda-direta";
 import { TIPOS_DA_DEMANDA, TIPO_ROTULO, prazoDaDemanda, type TipoDaDemanda } from "@/lib/operacao/hoje";
-import { ROTA_HOJE } from "@/lib/operacao/navegacao";
+import { ROTA_HOJE, hrefDaDemanda } from "@/lib/operacao/navegacao";
+import { pedidoEmTexto, type SolicitacaoDaOperacao } from "@/lib/operacao/solicitacoes";
 import { cn } from "@/lib/utils";
 
 /**
  * Operação › Nova demanda direta (docs/plataforma/fase-3-operacao.md, parte
  * 3.5c; docs/mockups/OpDemandaNova.dc.html): o paraquedas e o emergencial que
  * chegam direto na Operação e se orçam depois da execução. O tipo sai da hora;
- * o coordenador corrige. Só apresentação: o estado e a gravação chegam por
- * props (pages/operacao/demanda-nova.tsx). Sem legenda e sem preço.
+ * o coordenador corrige. Aberta pela solicitação do portal (parte 4.4c,
+ * `?solicitacao=`), o formulário vem preenchido por ela, o canal é o portal,
+ * "recebida em" é o instante da solicitação e, ao lado, a solicitação do
+ * cliente com os anexos e a recusa com o motivo. Só apresentação: o estado e
+ * a gravação chegam por props (pages/operacao/demanda-nova.tsx). Sem legenda
+ * e sem preço.
  */
 
-const campoClasse = "flex h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground";
+/** A solicitação do portal ao lado do formulário (parte 4.4c). */
+export type PainelDaSolicitacao = {
+  solicitacao: SolicitacaoDaOperacao;
+  /** A URL de cada anexo pelo caminho no Storage. */
+  urls: Readonly<Record<string, string>>;
+  /** "Já virou a demanda 10050" ou "Recusada": não se atende mais. */
+  resolvida: string | null;
+  recusa: { aberta: boolean; motivo: string; problema: string | null; ocupado: boolean; erro: string | null };
+  onRecusar: () => void;
+  onMotivo: (motivo: string) => void;
+  onConfirmarRecusa: () => void;
+  onVoltar: () => void;
+};
+
+const campoClasse = "flex h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground disabled:cursor-not-allowed disabled:opacity-50";
 
 function Campo({ id, rotulo, children, className }: { id: string; rotulo: string; children: ReactNode; className?: string }) {
   return (
@@ -91,6 +111,93 @@ function LinhaDoItem({
   );
 }
 
+function PainelDoPortal({ painel }: { painel: PainelDaSolicitacao }) {
+  const { solicitacao, recusa } = painel;
+  const linhas: Array<[string, ReactNode]> = [
+    ["Cliente", solicitacao.cliente],
+    ["Contato", [solicitacao.contato.nome, solicitacao.contato.email].filter(Boolean).join(" · ") || "—"],
+    ["Pedido", pedidoEmTexto(solicitacao)],
+    ["Origem", solicitacao.origem || "—"],
+    ["Destino", solicitacao.destino ?? "—"],
+  ];
+  return (
+    <section aria-label="Solicitação do portal" className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5">
+      <h2 className="text-lg font-bold text-foreground">Solicitação do portal</h2>
+      <dl className="flex flex-col gap-2.5">
+        {linhas.map(([rotulo, valor]) => (
+          <div key={rotulo} className="flex items-start justify-between gap-4 text-sm">
+            <dt className="shrink-0 text-muted-foreground">{rotulo}</dt>
+            <dd className="min-w-0 break-words text-right font-medium text-foreground">{valor}</dd>
+          </div>
+        ))}
+        <div className="flex flex-col gap-1 text-sm">
+          <dt className="text-muted-foreground">O que será feito</dt>
+          <dd className="whitespace-pre-line break-words font-medium text-foreground">{solicitacao.descricao}</dd>
+        </div>
+        {solicitacao.anexos.length ? (
+          <div className="flex flex-col gap-1 text-sm">
+            <dt className="text-muted-foreground">Anexos</dt>
+            <dd>
+              <ul className="flex flex-col gap-1">
+                {solicitacao.anexos.map((anexo) => (
+                  <li key={anexo.caminho} className="min-w-0 break-words">
+                    {painel.urls[anexo.caminho] ? (
+                      <a href={painel.urls[anexo.caminho]} target="_blank" rel="noopener noreferrer" className="font-medium text-foreground underline underline-offset-4">
+                        {anexo.nome}
+                      </a>
+                    ) : (
+                      <span className="font-medium text-foreground">{anexo.nome}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </dd>
+          </div>
+        ) : null}
+      </dl>
+      {painel.resolvida ? (
+        <p role="status" className="text-sm font-semibold text-foreground">
+          {solicitacao.demanda ? <Link href={hrefDaDemanda(solicitacao.demanda)} className="underline underline-offset-4">{painel.resolvida}</Link> : painel.resolvida}
+        </p>
+      ) : recusa.aberta ? (
+        <div className="flex flex-col gap-3 border-t border-border pt-4">
+          <Campo id="recusa-motivo" rotulo="Motivo">
+            <Textarea
+              id="recusa-motivo"
+              rows={3}
+              value={recusa.motivo}
+              onChange={(event) => painel.onMotivo(event.target.value)}
+              {...(recusa.problema ? { "aria-invalid": true, "aria-describedby": "recusa-motivo-problema" } : {})}
+            />
+          </Campo>
+          {recusa.problema ? (
+            <p id="recusa-motivo-problema" className="text-sm text-destructive">
+              {recusa.problema}
+            </p>
+          ) : null}
+          {recusa.erro ? (
+            <p role="alert" className="text-sm text-destructive">
+              {recusa.erro}
+            </p>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="destructive" disabled={recusa.ocupado} onClick={painel.onConfirmarRecusa}>
+              Recusar solicitação
+            </Button>
+            <Button type="button" variant="ghost" onClick={painel.onVoltar}>
+              Voltar
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button type="button" variant="outline" className="self-start" onClick={painel.onRecusar}>
+          Recusar
+        </Button>
+      )}
+    </section>
+  );
+}
+
 function Resumo({
   form,
   cliente,
@@ -125,7 +232,7 @@ function Resumo({
     ["Itens", String(form.linhas.length)],
   ];
   return (
-    <aside className="flex flex-col gap-4 self-start rounded-lg border border-border bg-card p-5 xl:sticky xl:top-6">
+    <aside className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-lg font-bold text-foreground">Nova demanda</h2>
         {tipo ? <SeloDoTipo tipo={tipo} /> : null}
@@ -177,6 +284,7 @@ export function DemandaNovaView({
   ocupado,
   erro,
   onAbrir,
+  solicitacao = null,
 }: {
   agora: Date;
   form: FormularioDaDemanda;
@@ -197,7 +305,10 @@ export function DemandaNovaView({
   ocupado: boolean;
   erro: string | null;
   onAbrir: () => void;
+  /** A solicitação do portal que a demanda atende, ou null. */
+  solicitacao?: PainelDaSolicitacao | null;
 }) {
+  const doPortal = Boolean(solicitacao && !solicitacao.resolvida);
   const { calculado, tipo } = tipoDoFormulario(form);
   const cliente = clientes.find((opcao) => opcao.valor === form.customerCode)?.rotulo ?? null;
   const set = <K extends keyof FormularioDaDemanda>(campo: K, valor: FormularioDaDemanda[K]) => onForm({ ...form, [campo]: valor });
@@ -225,6 +336,7 @@ export function DemandaNovaView({
                   id="demanda-cliente"
                   className={campoClasse}
                   value={form.customerCode}
+                  disabled={doPortal}
                   onChange={(event) => onForm({ ...form, customerCode: event.target.value, origemLocalId: "", destinoLocalId: "" })}
                 >
                   <option value="">Escolha</option>
@@ -247,20 +359,24 @@ export function DemandaNovaView({
             </div>
             <div className="flex flex-col gap-2">
               <span className="text-sm font-medium text-foreground">Canal</span>
-              <Segmented<CanalDaDireta>
-                aria-label="Canal"
-                className="self-start"
-                options={CANAIS_DA_DIRETA.map((canal) => ({ value: canal, label: CANAL_ROTULO[canal] }))}
-                value={form.canal}
-                onChange={(canal) => set("canal", canal)}
-              />
+              {doPortal ? (
+                <span className="text-sm font-semibold text-foreground">{CANAL_ROTULO.portal}</span>
+              ) : (
+                <Segmented<CanalDaDireta>
+                  aria-label="Canal"
+                  className="self-start"
+                  options={CANAIS_DA_DIRETA.map((canal) => ({ value: canal, label: CANAL_ROTULO[canal] }))}
+                  value={form.canal}
+                  onChange={(canal) => set("canal", canal)}
+                />
+              )}
             </div>
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-[1fr_7rem_1fr_7rem]">
               <Campo id="demanda-recebida-data" rotulo="Recebida em">
-                <Input id="demanda-recebida-data" type="date" value={form.recebidaData} onChange={(event) => set("recebidaData", event.target.value)} />
+                <Input id="demanda-recebida-data" type="date" value={form.recebidaData} disabled={doPortal} onChange={(event) => set("recebidaData", event.target.value)} />
               </Campo>
               <Campo id="demanda-recebida-hora" rotulo="Hora">
-                <Input id="demanda-recebida-hora" type="time" value={form.recebidaHora} onChange={(event) => set("recebidaHora", event.target.value)} />
+                <Input id="demanda-recebida-hora" type="time" value={form.recebidaHora} disabled={doPortal} onChange={(event) => set("recebidaHora", event.target.value)} />
               </Campo>
               <Campo id="demanda-executar-data" rotulo="Executar até">
                 <Input id="demanda-executar-data" type="date" value={form.executarData} onChange={(event) => set("executarData", event.target.value)} />
@@ -373,7 +489,10 @@ export function DemandaNovaView({
           </Secao>
         </form>
 
-        <Resumo form={form} cliente={cliente} agora={agora} ocupado={ocupado} erro={erro} problemas={problemas} />
+        <div className="flex min-w-0 flex-col gap-6 self-start xl:sticky xl:top-6">
+          {solicitacao ? <PainelDoPortal painel={solicitacao} /> : null}
+          <Resumo form={form} cliente={cliente} agora={agora} ocupado={ocupado} erro={erro} problemas={problemas} />
+        </div>
       </div>
     </section>
   );
