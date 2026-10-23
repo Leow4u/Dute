@@ -1,10 +1,12 @@
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 import { onCall } from "firebase-functions/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 
 import { openDirectDemandFor } from "./domain/demanda-direta-gravacao.js";
 import { registerItemFor, registerOccurrenceFor, registerStepFor } from "./domain/execucao-gravacao.js";
+import { attachPhotoFor, type ConferirArquivo } from "./domain/fotos-gravacao.js";
 import { saveCollaboratorFor, saveVehicleFor } from "./domain/gravacao.js";
 import { saveServiceOrderFor } from "./domain/os-gravacao.js";
 import { requireOperacaoCaller } from "./domain/profile.js";
@@ -28,6 +30,15 @@ setGlobalOptions({
 });
 
 const db = getFirestore();
+
+/** O tipo e o tamanho do arquivo no bucket padrão do projeto, ou null quando ele não existe. */
+const conferirArquivo: ConferirArquivo = async (caminho) => {
+  const arquivo = getStorage().bucket().file(caminho);
+  const [existe] = await arquivo.exists();
+  if (!existe) return null;
+  const [metadados] = await arquivo.getMetadata();
+  return { contentType: String(metadados.contentType ?? ""), size: Number(metadados.size ?? 0) };
+};
 
 /** Cria, atualiza, desativa ou reativa um colaborador. */
 export const saveCollaborator = onCall(async (request) => {
@@ -69,4 +80,10 @@ export const registerOccurrence = onCall(async (request) => {
 export const registerItem = onCall(async (request) => {
   const caller = await requireOperacaoCaller(db, request, PROJECT_ID);
   return registerItemFor(db, caller, request.data);
+});
+
+/** Anexa à OS a foto que já subiu ao Storage, depois de conferir o arquivo. */
+export const attachPhoto = onCall(async (request) => {
+  const caller = await requireOperacaoCaller(db, request, PROJECT_ID);
+  return attachPhotoFor(db, caller, request.data, conferirArquivo);
 });

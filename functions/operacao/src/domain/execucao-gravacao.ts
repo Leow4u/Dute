@@ -29,17 +29,17 @@ import type { OperacaoProfile } from "./profile.js";
 export type ResultadoDoRegistro = { numero: string; edicao: number; status: StatusDaOs };
 
 /** No escritório, quem registra é a coordenação; o celular (parte 3.8) é do campo. */
-function contexto(caller: OperacaoProfile, agora: Date): ContextoDoRegistro {
+export function contexto(caller: OperacaoProfile, agora: Date): ContextoDoRegistro {
   const canal: CanalDoRegistro = caller.role === "campo" ? "celular" : "escritorio";
   return { agora, canal, registrado_por: { uid: caller.uid, role: caller.role } };
 }
 
-async function lerParaRegistrar(transaction: Transaction, db: Firestore, numero: string) {
+export async function lerParaRegistrar(transaction: Transaction, db: Firestore, numero: string) {
   const ref = db.collection(SERVICE_ORDERS_COLLECTION).doc(numero);
   const snapshot = await transaction.get(ref);
   if (!snapshot.exists) throw new HttpsError("not-found", "OS não encontrada.");
   const data = snapshot.data() ?? {};
-  return { ref, os: osLida(numero, data), execucao: execucaoLida(data), itens: itensEmExecucao(data) };
+  return { ref, data, os: osLida(numero, data), execucao: execucaoLida(data), itens: itensEmExecucao(data) };
 }
 
 export async function registerStepFor(
