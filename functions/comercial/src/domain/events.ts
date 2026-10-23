@@ -64,6 +64,8 @@ export const ETAPAS_DEMANDA = [
   "a_faturar",
   // A NF registrada no Financeiro (functions/financeiro, Fase 4): só o Financeiro leva a demanda a esta etapa.
   "faturada",
+  // A NF quitada (parte 4.2a): também só o Financeiro.
+  "paga",
   "perdida",
   "cancelada",
 ] as const;
@@ -500,6 +502,7 @@ const ETAPA_ROTULO: Record<(typeof ETAPAS_DEMANDA)[number], string> = {
   aguardando_autorizacao: "Aguardando autorização",
   a_faturar: "A faturar",
   faturada: "Faturada",
+  paga: "Paga",
   perdida: "Perdida",
   cancelada: "Cancelada",
 };

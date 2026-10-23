@@ -336,6 +336,7 @@ describe("quem pode receber a autorização", () => {
       problemaDaDemandaParaAutorizar("10045", { etapa: "faturada", customer_code: "ITAU", autorizacao_ids: ["aut_1"] }, "ITAU") ?? "",
       /está faturada/,
     );
+    assert.match(problemaDaDemandaParaAutorizar("10045", { etapa: "paga", customer_code: "ITAU", autorizacao_ids: ["aut_1"] }, "ITAU") ?? "", /está paga/);
   });
 
   it("pedido e aceite comparam sem máscara nem caixa", () => {

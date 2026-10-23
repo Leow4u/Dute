@@ -33,10 +33,15 @@ Seguem a recomendação do plano até a resposta do Leonardo:
   - A demanda cujo contrato pede autorização (pedido e aceite, portal ou medição aprovada) só fatura com a autorização registrada, do mesmo cliente.
   - A demanda sem essa exigência fatura sem autorização: a validação do cliente é o registro.
   - A NF marca a autorização como usada (`nf_ids`, reservado desde a parte 15 do Comercial). A partir daí o Comercial não a cancela.
-- **A etapa "faturada".**
-  - Entra em `ETAPAS_DEMANDA`, e só o Financeiro leva a demanda a ela.
-  - Ela não se perde (`ETAPAS_QUE_PERDEM`) nem recebe autorização ou complemento.
-  - Sai da fila do Comercial. A Operação a mostra como "Faturada".
+- **As etapas "faturada" e "paga".**
+  - Entram em `ETAPAS_DEMANDA`, e só o Financeiro leva a demanda a elas: a NF registrada faz a faturada, a NF quitada faz a paga.
+  - Elas não se perdem (`ETAPAS_QUE_PERDEM`) nem recebem autorização ou complemento.
+  - Saem da fila do Comercial. A Operação as mostra como "Faturada" e "Paga".
+- **A cobrança.**
+  - A NF registrada é enviada ao cliente e recebe pagamentos, parciais ou o total. O pagamento não passa do saldo.
+  - Vencida não é status gravado: é a NF com saldo e vencimento antes de hoje.
+  - O pagamento lançado errado se estorna. A NF paga volta a enviada (ou emitida) e as demandas, a faturadas.
+  - O registro errado, sem pagamento, se cancela. As demandas voltam a A faturar, a autorização perde a NF e a mesma NF pode ser registrada de novo.
 - **A armazenagem** continua na fatura do WMS (`billing_periods` e `client_invoices`) até a Fase 7.
 - **Omie** continua fora.
 
@@ -44,16 +49,17 @@ Seguem a recomendação do plano até a resposta do Leonardo:
 
 | Coleção | Dono | O que guarda |
 |---|---|---|
-| `faturas` | Financeiro | A NF registrada. Guarda as demandas, cada uma com a RV ou a medição, as autorizações citadas e o valor em centavos, e o total. Também a NF (número, série, emissão), `nf_chave` (série e número), o vencimento, a forma de pagamento, a observação, o status (emitida; enviada, paga e cancelada vêm na parte 4.2) e quem registrou. O id sai da série e do número da NF, então a mesma NF não se registra duas vezes. |
+| `faturas` | Financeiro | A NF registrada. Guarda as demandas, cada uma com a RV ou a medição, as autorizações citadas e o valor em centavos, e o total. Também a NF (número, série, emissão), `nf_chave` (série e número), o vencimento, a forma de pagamento, a observação, o status (emitida, enviada, paga ou cancelada) e quem registrou. A cobrança (parte 4.2a) acrescenta `recebido_cents`, `pagamento_ids`, `enviada` (dia e meio), `paga_em`, `cancelada` (quando, quem e o motivo) e `anteriores` (os registros cancelados da mesma NF). O id sai da série e do número da NF, então a mesma NF não fica registrada duas vezes. |
+| `pagamentos` | Financeiro | Um pagamento da fatura: o valor em centavos, o dia, a forma, a observação, o status (registrado ou estornado, com o motivo) e quem registrou. |
 | `financeiro_operations` | Financeiro | O recibo de idempotência. Ninguém lê. |
 | `demands` | Comercial | O Financeiro escreve `etapa: "faturada"`, `etapa_desde`, o marco em `marcos` e `faturamento`: a fatura, a NF e o vencimento, sem valor. |
 | `client_authorizations` | Comercial | O Financeiro escreve só `nf_ids`. |
 
-Preço só em `faturas`, lido por `canReadPrices()`: owner, admin, financeiro e
+Preço só em `faturas` e `pagamentos`, lidos por `canReadPrices()`: owner, admin, financeiro e
 comercial. A operação, o campo, o suporte, o painel e o cliente não leem. O
 cliente dono lê as próprias faturas na parte 4.3. Nada se grava pelo
-navegador. A zeragem do WMS nunca apaga `faturas`, `financeiro_operations` nem
-os eventos do Financeiro.
+navegador. A zeragem do WMS nunca apaga `faturas`, `pagamentos`,
+`financeiro_operations` nem os eventos do Financeiro.
 
 ## Callables
 
@@ -61,6 +67,11 @@ Ficam em `functions/financeiro` (codebase `financeiro`), cada uma numa linha
 e começando por `requireFinanceiroCaller`:
 
 - `registerNf` (parte 4.1a).
+- `advanceFatura` (parte 4.2a), com quatro ações:
+  - `send`: o dia e o meio do envio (e-mail, portal do cliente, correio ou em mãos);
+  - `pay`: o valor, o dia e a forma;
+  - `reverse_payment`: o pagamento e o motivo;
+  - `cancel`: o motivo.
 
 ## Eventos
 
@@ -68,8 +79,12 @@ O `source` é `functions_financeiro`, a severidade é `info` e o evento é da
 fatura (`entity_type: fatura`), com o `customer_code`.
 
 - `nf.registered`: a fatura, as demandas, quantas autorizações, a emissão, o vencimento e a forma.
-- O evento não leva o valor nem o número da NF.
-- O financeiro lê os `nf.*`, como lê os `billing.*` do WMS.
+- `nf.sent`: a fatura, o dia e o meio do envio.
+- `nf.cancelled`: a fatura e as demandas que voltaram a A faturar.
+- `cobranca.payment_registered`: a fatura, o pagamento, o dia, a forma e se quitou.
+- `cobranca.payment_reversed`: a fatura, o pagamento e se reabriu a NF paga.
+- Nenhum evento leva o valor, o número da NF ou o motivo, que é texto livre.
+- O financeiro lê os `nf.*` e os `cobranca.*`, como lê os `billing.*` do WMS.
 
 ## Telas
 
@@ -103,7 +118,9 @@ continuam no Faturamento do WMS, e as rotas `/financeiro` não existem
 |---|---|---|
 | 4.1a | Codebase `functions/financeiro`, `registerNf`, `faturas`, a demanda Faturada, `nf.registered`, regras e zeragem | Sem autorização não fatura; o valor é o da RV validada e autorizada (ou da medição); a operação não lê `faturas` |
 | 4.1b | Shell do Financeiro (v3) em `/financeiro`: Início e A faturar, com o painel de registrar a NF | Textos listados; sem legenda; uma ação principal; `axe` |
-| 4.2 | A receber, vencidos, pagos, receita por cliente, XLSX, via comercial do PDF | Vencido pelo vencimento; pagamento parcial |
+| 4.2a | `advanceFatura` (enviar, pagar, estornar, cancelar), `pagamentos`, a demanda Paga, `cobranca.*`, regras e zeragem | Pagamento parcial; não passa do saldo; com pagamento não cancela |
+| 4.2b | Telas A receber, Vencidos e Pagos, com o painel da NF, a receita por cliente e o XLSX | Vencido pelo vencimento; sem legenda; `axe` |
+| 4.2c | Via comercial da NF em PDF (impressão do navegador) | Só quem lê preço abre; os valores batem com a fatura |
 | 4.3 | Portal: OS do cliente e faturas da demanda | Cliente só vê as próprias OS e faturas |
 | 4.4 | Solicitação de OS pelo portal | O pedido do portal nunca cria OS sozinho |
 | 4.5 | Expedição do WMS com entrega pela Dutelog gera demanda e OS | Retirada pelo cliente não gera OS |
@@ -152,3 +169,18 @@ as leituras em `use-a-faturar.ts`; as telas em `artifacts/app/src/pages/financei
 - **O Início e a entrada.** Os itens saem da mesma fila. O card do Financeiro na entrada conta só onde leva ao shell novo.
 - **Navegação.** O card do Financeiro e a casa do financeiro (`getHomePathForProfile`) levam a `/financeiro` com a liberação.
 - **Testes.** A regra da fila e do formulário está em `a-faturar.test.ts`, e a navegação em `navegacao.test.ts` e `ambientes.test.ts`. As telas estão em `inicio-view.test.tsx` e `a-faturar-view.test.tsx`: textos listados, sem legenda, uma ação principal e `axe`.
+
+### Parte 4.2a: a cobrança no backend
+
+Feita em 23/10/2026. As regras estão em `functions/financeiro/src/domain/cobranca.ts` e
+a gravação em `cobranca-gravacao.ts`.
+
+- **`advanceFatura`.** Cada ação é uma transação com recibo de idempotência e o evento sem valor.
+  - `send`: só a NF emitida, uma vez, num dia entre a emissão e hoje.
+  - `pay`: grava `pagamentos/{id}` e soma em `recebido_cents`. O pagamento não passa do saldo, não é zero e cai entre a emissão e hoje. Quitada, a NF fica paga com `paga_em` e as demandas ficam pagas, com o marco.
+  - `reverse_payment`: o pagamento fica estornado, com o motivo, e sai do recebido. A NF paga volta a enviada (ou emitida) e as demandas, a faturadas.
+  - `cancel`: só sem pagamento. A NF fica cancelada, as demandas voltam a A faturar sem o `faturamento` e as autorizações perdem a NF.
+- **De novo a mesma NF.** `registerNf` aceita a NF cujo registro foi cancelado e guarda o registro anterior em `anteriores`.
+- **Comercial e app.** "paga" entra em `ETAPAS_DEMANDA`, com rótulo e cor no Comercial e na Operação. O teste trava que ela não se perde nem recebe autorização.
+- **Regras.** `pagamentos` só para quem lê preço, e nada se grava pelo navegador. O financeiro lê os `cobranca.*`.
+- **Zeragem.** `tools/full_reset_btg.py` preserva `pagamentos`.

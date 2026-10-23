@@ -21,6 +21,7 @@ export const ETAPAS_NA_OPERACAO = [
   "execucao_a_orcar",
   "a_faturar",
   "faturada",
+  "paga",
   "perdida",
   "cancelada",
 ] as const;
@@ -37,6 +38,7 @@ export const ETAPA_NA_OPERACAO_ROTULO: Record<EtapaNaOperacao, string> = {
   execucao_a_orcar: "Execução a orçar",
   a_faturar: "A faturar",
   faturada: "Faturada",
+  paga: "Paga",
   perdida: "Perdida",
   cancelada: "Cancelada",
 };
@@ -107,6 +109,8 @@ export function etapaNaOperacao(demanda: Pick<DemandaDoHoje, "numero" | "etapa" 
       return "a_faturar";
     case "faturada":
       return "faturada";
+    case "paga":
+      return "paga";
     case "perdida":
       return "perdida";
     case "cancelada":

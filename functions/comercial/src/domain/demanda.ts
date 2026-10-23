@@ -224,6 +224,7 @@ const ETAPA_ROTULO: Record<EtapaDemanda, string> = {
   aguardando_autorizacao: "aguardando autorização",
   a_faturar: "a faturar",
   faturada: "faturada",
+  paga: "paga",
   perdida: "perdida",
   cancelada: "cancelada",
 };

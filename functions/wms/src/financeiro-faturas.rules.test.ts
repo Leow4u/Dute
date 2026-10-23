@@ -11,8 +11,9 @@ import { deleteDoc, doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
  * A fatura da demanda (docs/plataforma/fase-4-financeiro.md, parte 4.1a):
  * `faturas` tem o valor de cada demanda, então só quem lê preço lê (owner,
  * admin, financeiro e comercial). A operação, o campo, o suporte, o painel e
- * o cliente não leem, e ninguém grava pelo navegador: só a callable
- * registerNf. O financeiro lê os eventos nf.* (sem valor), como lê os
+ * o cliente não leem, e ninguém grava pelo navegador: só as callables
+ * registerNf e advanceFatura. Os `pagamentos` (parte 4.2a) seguem a mesma
+ * regra. O financeiro lê os eventos nf.* e cobranca.* (sem valor), como lê os
  * billing.* do WMS.
  */
 
@@ -66,6 +67,8 @@ beforeEach(async () => {
     await setDoc(doc(database, "client_access", "ITAU"), { customer_code: "ITAU", modules: ["wms", "operacao", "financeiro"] });
     await setDoc(doc(database, "faturas", "fat_000000000000000000000001"), { id: "fat_000000000000000000000001", customer_code: "ITAU", status: "emitida", valor_cents: 1_484_500, demanda_numeros: ["10045"] });
     await setDoc(doc(database, "events", "evt_nf"), { type: "nf.registered", customer_code: "ITAU", source: "functions_financeiro", payload: { id: "fat_000000000000000000000001" } });
+    await setDoc(doc(database, "events", "evt_cobranca"), { type: "cobranca.payment_registered", customer_code: "ITAU", source: "functions_financeiro", payload: { id: "fat_000000000000000000000001" } });
+    await setDoc(doc(database, "pagamentos", "pag_000000000000000000000001"), { id: "pag_000000000000000000000001", fatura_id: "fat_000000000000000000000001", customer_code: "ITAU", status: "registrado", valor_cents: 500_000 });
     await setDoc(doc(database, "financeiro_operations", "op_1"), { kind: "nf_register" });
   });
 });
@@ -86,8 +89,17 @@ describe("faturas: leitura", () => {
     for (const uid of NAO_LEEM) await assertFails(getDoc(doc(signedAs(uid), "faturas", "fat_000000000000000000000001")));
   });
 
-  it("o financeiro lê o evento nf.*; ninguém lê o recibo", async () => {
+  it("owner, admin, financeiro e comercial leem o pagamento; os outros, nem o cliente dono, não", async () => {
+    for (const uid of LEEM) {
+      const pagamento = await assertSucceeds(getDoc(doc(signedAs(uid), "pagamentos", "pag_000000000000000000000001")));
+      assert.equal(pagamento.data()?.valor_cents, 500_000, uid);
+    }
+    for (const uid of NAO_LEEM) await assertFails(getDoc(doc(signedAs(uid), "pagamentos", "pag_000000000000000000000001")));
+  });
+
+  it("o financeiro lê os eventos nf.* e cobranca.*; ninguém lê o recibo", async () => {
     await assertSucceeds(getDoc(doc(signedAs("finance-a"), "events", "evt_nf")));
+    await assertSucceeds(getDoc(doc(signedAs("finance-a"), "events", "evt_cobranca")));
     await assertFails(getDoc(doc(signedAs("owner-a"), "financeiro_operations", "op_1")));
   });
 });
@@ -99,6 +111,8 @@ describe("faturas: escrita", () => {
       await assertFails(setDoc(doc(database, "faturas", "fat_000000000000000000000002"), { customer_code: "ITAU", valor_cents: 1 }));
       await assertFails(updateDoc(doc(database, "faturas", "fat_000000000000000000000001"), { status: "paga" }));
       await assertFails(deleteDoc(doc(database, "faturas", "fat_000000000000000000000001")));
+      await assertFails(setDoc(doc(database, "pagamentos", "pag_000000000000000000000002"), { fatura_id: "fat_000000000000000000000001", valor_cents: 1 }));
+      await assertFails(updateDoc(doc(database, "pagamentos", "pag_000000000000000000000001"), { status: "estornado" }));
     }
   });
 });
