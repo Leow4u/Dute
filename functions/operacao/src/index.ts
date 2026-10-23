@@ -15,6 +15,7 @@ import { saveServiceOrderFor } from "./domain/os-gravacao.js";
 import { reopenServiceOrderFor, reviewServiceOrderFor } from "./domain/revisao-gravacao.js";
 import { requireOperacaoCaller } from "./domain/profile.js";
 import { runDailyAlertsFor } from "./domain/rotina-gravacao.js";
+import { declineServiceRequestFor, requestServiceFor } from "./domain/solicitacao-gravacao.js";
 import { getRoomBoardFor } from "./domain/tv-leitura.js";
 import { sendSurveyToCommercialFor } from "./domain/vistoria-gravacao.js";
 import { PROJECT_ID } from "./project.js";
@@ -26,7 +27,8 @@ import { PROJECT_ID } from "./project.js";
  * Toda callable fica declarada neste arquivo, numa linha só, no formato que a
  * conferência do invoker (tools/check_functions_invoker.ps1) lê; o teste
  * callables.test.ts trava o formato. Toda callable começa por
- * `await requireOperacaoCaller(db, request, PROJECT_ID)`.
+ * `await requireOperacaoCaller(db, request, PROJECT_ID)`; a do portal, com
+ * `{ portal: true }`, só atende o cliente.
  */
 
 initializeApp();
@@ -123,6 +125,18 @@ export const reopenServiceOrder = onCall(async (request) => {
 export const sendSurveyToCommercial = onCall(async (request) => {
   const caller = await requireOperacaoCaller(db, request, PROJECT_ID, { campo: true });
   return sendSurveyToCommercialFor(db, caller, request.data);
+});
+
+/** O cliente pede uma OS pelo portal: a solicitação cai em Para planejar; nunca abre demanda nem OS sozinha. */
+export const requestService = onCall(async (request) => {
+  const caller = await requireOperacaoCaller(db, request, PROJECT_ID, { portal: true });
+  return requestServiceFor(db, caller, request.data, conferirArquivo);
+});
+
+/** Recusa a solicitação do portal com o motivo, que o cliente lê. */
+export const declineServiceRequest = onCall(async (request) => {
+  const caller = await requireOperacaoCaller(db, request, PROJECT_ID);
+  return declineServiceRequestFor(db, caller, request.data);
 });
 
 /** O quadro do dia para a TV da sala: agendadas, em execução e concluídas, sem valor nem contato. Só lê; o painel não grava nada. */

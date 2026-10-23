@@ -113,6 +113,38 @@ service firebase.storage {
       allow update, delete: if false;
     }
 
+    // Anexo da solicitação de OS pelo portal (Fase 4, parte 4.4a): o cliente
+    // com a Operação no contrato (client_access, o mesmo critério do
+    // firestore.rules; sem o documento valem armazenagem e faturas) sobe a
+    // nota fiscal ou o documento no caminho do próprio código. Quem coordena
+    // e o suporte leem; o cliente lê os próprios. O anexo só vale na
+    // solicitação depois de requestService, que confere o arquivo. Nada se
+    // sobrescreve nem apaga.
+    function modulosDoCliente(code) {
+      return firestore.exists(/databases/(default)/documents/client_access/$(code))
+        ? firestore.get(/databases/(default)/documents/client_access/$(code)).data.get('modules', ['wms', 'financeiro'])
+        : ['wms', 'financeiro'];
+    }
+
+    function clienteComOperacao(code) {
+      return hasProfile()
+        && profileRole() == 'cliente'
+        && firestore.get(userDoc()).data.get('customer_code', '') == code
+        && 'operacao' in modulosDoCliente(code);
+    }
+
+    match /portal/{code}/solicitacoes/{arquivo} {
+      allow read: if coordenaOperacao()
+        || (hasProfile() && profileRole() == 'suporte')
+        || clienteComOperacao(code);
+      allow create: if resource == null
+        && clienteComOperacao(code)
+        && arquivo.matches('^an_[a-f0-9]{16}[.](pdf|jpg|png|webp)$')
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType.matches('application/pdf|image/(jpeg|png|webp)');
+      allow update, delete: if false;
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

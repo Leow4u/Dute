@@ -97,6 +97,9 @@ const itemPedido = z
   .refine((valor) => Number(valor.quantidade) > 0, "Informe uma quantidade maior que zero.")
   .refine((valor) => Boolean(valor.lpu_item_id) || Boolean(valor.item && valor.unidade), "Item avulso: informe o nome e a unidade.");
 
+/** O id da solicitação do portal (parte 4.4a), como `service_requests` grava. */
+export const SOLICITACAO_ID = /^sol_[a-f0-9]{16}$/;
+
 const AbrirDemandaDireta = z
   .object({
     idempotency_key: z.string().trim().min(1, "Informe a chave de idempotência.").max(200),
@@ -118,14 +121,25 @@ const AbrirDemandaDireta = z
       .transform((valor) => ({ nome: valor.nome.replace(/\s+/g, " "), telefone: valor.telefone ?? null }))
       .nullable()
       .optional(),
-    recebida_em: instante("Recebida em"),
+    /** Sem a solicitação do portal, quando o pedido chegou; com ela, o instante da solicitação vale. */
+    recebida_em: instante("Recebida em").optional(),
     executar_ate: instante("Executar até"),
     tipo: z.enum(TIPOS_DEMANDA).optional(),
     origem: localPedido.nullable().optional(),
     destino: localPedido.nullable().optional(),
     itens: z.array(itemPedido).min(1, "Informe ao menos um item.").max(100, "A demanda passa de 100 itens."),
+    /** A solicitação do portal que esta demanda atende (parte 4.4a). */
+    solicitacao_id: z.string().trim().regex(SOLICITACAO_ID, "Solicitação do portal inválida.").nullable().optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((valor, contexto) => {
+    if (valor.solicitacao_id) {
+      if (valor.canal !== "portal") contexto.addIssue({ code: z.ZodIssueCode.custom, path: ["canal"], message: "A demanda da solicitação do portal chega pelo portal." });
+      if (valor.recebida_em) contexto.addIssue({ code: z.ZodIssueCode.custom, path: ["recebida_em"], message: "A solicitação do portal já diz quando foi recebida." });
+    } else if (!valor.recebida_em) {
+      contexto.addIssue({ code: z.ZodIssueCode.custom, path: ["recebida_em"], message: "Informe recebida_em." });
+    }
+  });
 
 export type PedidoDeDemandaDireta = z.infer<typeof AbrirDemandaDireta>;
 export type ItemDoPedido = z.infer<typeof itemPedido>;
@@ -221,11 +235,15 @@ export function itensDoPedido(
   });
 }
 
+/** A solicitação do portal que a demanda atende: o instante em que chegou e quem pediu (o login do cliente). */
+export type SolicitacaoDaDemanda = { id: string; recebida_em: string; pedido_por: { nome: string; telefone: string | null } | null };
+
 export type DemandaDiretaNova = {
   numero: string;
   customer_code: string;
   customer_name: string;
   pedido: PedidoDeDemandaDireta;
+  solicitacao?: SolicitacaoDaDemanda | null;
   tipo: TipoDemanda;
   tipo_calculado: TipoDemanda;
   itens: ItemPedidoGravado[];
@@ -237,11 +255,15 @@ export type DemandaDiretaNova = {
  * O documento da demanda direta, no esquema do Comercial (demandaNova em
  * functions/comercial/src/domain/quotes.ts), com o que é da direta: quem
  * pediu (sem contato do cadastro, que a Operação não lê), executar até, o
- * tipo calculado e a correção, e os itens pedidos.
+ * tipo calculado e a correção, e os itens pedidos. Da solicitação do portal
+ * (parte 4.4a) vêm o instante em que chegou, quem pediu (quando a
+ * coordenação não diz outro) e o id.
  */
 export function documentoDaDemandaDireta(dados: DemandaDiretaNova): Record<string, unknown> {
   const etapa = "para_planejar";
   const corrigido = dados.tipo !== dados.tipo_calculado;
+  const recebidaEm = dados.solicitacao?.recebida_em ?? dados.pedido.recebida_em;
+  if (!recebidaEm) throw new HttpsError("internal", "A demanda direta sem o instante em que foi recebida.");
   return {
     numero: dados.numero,
     customer_code: dados.customer_code,
@@ -256,9 +278,9 @@ export function documentoDaDemandaDireta(dados: DemandaDiretaNova): Record<strin
     titulo: dados.pedido.titulo,
     ref_cliente: null,
     solicitante: null,
-    pedido_por: dados.pedido.pedido_por ?? null,
-    recebida_em: dados.pedido.recebida_em,
-    pedido_em: dados.pedido.recebida_em,
+    pedido_por: dados.pedido.pedido_por ?? dados.solicitacao?.pedido_por ?? null,
+    recebida_em: recebidaEm,
+    pedido_em: recebidaEm,
     executar_ate: dados.pedido.executar_ate,
     email_assunto: null,
     email_link: null,
@@ -287,6 +309,7 @@ export function documentoDaDemandaDireta(dados: DemandaDiretaNova): Record<strin
     perdas_anteriores: [],
     cancelamento: null,
     aberta_pela: "operacao",
+    solicitacao_id: dados.solicitacao?.id ?? null,
     schema_version: DEMAND_SCHEMA_VERSION,
   };
 }

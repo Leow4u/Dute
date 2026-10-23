@@ -138,6 +138,17 @@ describe("listas da Operação iguais em todo lugar", () => {
   it("liberação por ambiente: a lista das callables é a do app", () => {
     expect(tsList(liberacao, "OPERACAO_AMBIENTES_LIBERADOS")).toEqual([...OPERACAO_AMBIENTES_LIBERADOS]);
   });
+
+  it("módulos contratados que o portal confere (parte 4.4a): as Functions e o storage.rules", () => {
+    expect(tsList(roles, "CONTRACTED_MODULE_KEYS")).toEqual([...MODULOS_CONTRATAVEIS]);
+    expect(tsList(roles, "DEFAULT_CONTRACTED_MODULES")).toEqual([...MODULOS_PADRAO_CLIENTE]);
+    const storage = read("storage.rules");
+    const modulos = storage.match(/function modulosDoCliente\(code\) \{([\s\S]*?)\n    \}/);
+    expect(modulos).not.toBeNull();
+    const padroes = [...modulos![1].matchAll(/\[([^\]]*)\]/g)].map((match) => [...match[1].matchAll(/'([^']+)'/g)].map((item) => item[1]));
+    expect(padroes).toHaveLength(2);
+    for (const lista of padroes) expect(lista).toEqual([...MODULOS_PADRAO_CLIENTE]);
+  });
 });
 
 describe("listas do Financeiro iguais em todo lugar (Fase 4)", () => {

@@ -902,6 +902,16 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Solicitação de OS pelo portal (Fase 4, parte 4.4a): o pedido do
+    // cliente, sem preço, em Para planejar. Quem coordena a Operação e o
+    // suporte leem; o cliente lê só as próprias, com a Operação no contrato.
+    // O campo não lê. Só as callables gravam (requestService,
+    // openDirectDemand e declineServiceRequest).
+    match /service_requests/{solicitacaoId} {
+      allow read: if canReadServiceOrders() || isOwnProjectionWith('operacao');
+      allow create, update, delete: if false;
+    }
+
     match /customer_accounts/{accountId} {
       allow read: if canReadOperations();
       allow create, update, delete: if false;

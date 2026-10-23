@@ -19,6 +19,7 @@ import { createOperacaoEvent } from "./events.js";
 import { runIdempotent, type OperacaoActor } from "./operations.js";
 import { operacaoCadastroProblem } from "./platform-roles.js";
 import type { OperacaoProfile } from "./profile.js";
+import { SERVICE_REQUESTS_COLLECTION, problemaDaSolicitacao, solicitacaoLida } from "./solicitacao.js";
 
 /**
  * Abre a demanda direta (parte 3.4d). Numa transação: lê o contador do
@@ -26,6 +27,12 @@ import type { OperacaoProfile } from "./profile.js";
  * cadastro do cliente, confere os locais e lê os itens do catálogo; depois
  * grava o contador, a demanda e o evento `demand.direct_opened`, sem nome,
  * contato, item nem preço.
+ *
+ * Com a solicitação do portal (parte 4.4a), a mesma transação lê a
+ * solicitação, confere que está recebida e é do mesmo cliente, usa o instante
+ * em que ela chegou e quem pediu, e a marca como aceita com o número da
+ * demanda (evento `portal.service_accepted`). É o único caminho de uma
+ * solicitação até a demanda; a OS sai depois, pelo planejamento.
  */
 
 const CUSTOMERS = "customers";
@@ -92,8 +99,10 @@ export async function openDirectDemandFor(
   const problemaDoPapel = operacaoCadastroProblem(caller.role);
   if (problemaDoPapel) throw new HttpsError("permission-denied", problemaDoPapel);
   const pedido = interpretarDemandaDireta(data);
-  const problema = problemaDosInstantes(pedido.recebida_em, pedido.executar_ate, agora());
-  if (problema) throw new HttpsError("invalid-argument", problema);
+  if (pedido.recebida_em) {
+    const problema = problemaDosInstantes(pedido.recebida_em, pedido.executar_ate, agora());
+    if (problema) throw new HttpsError("invalid-argument", problema);
+  }
   const code = pedido.customer_code;
 
   return runIdempotent(
@@ -111,6 +120,17 @@ export async function openDirectDemandFor(
       if (demandaSnap.exists || orcamentoSnap.exists) {
         throw new HttpsError("failed-precondition", `O número ${numero} já existe. Confira o contador ${DEMAND_COUNTERS_COLLECTION}/${DEMAND_COUNTER_ID} antes de continuar.`);
       }
+      const solicitacaoRef = pedido.solicitacao_id ? db.collection(SERVICE_REQUESTS_COLLECTION).doc(pedido.solicitacao_id) : null;
+      const solicitacaoSnap = solicitacaoRef ? await transaction.get(solicitacaoRef) : null;
+      if (solicitacaoSnap && !solicitacaoSnap.exists) throw new HttpsError("not-found", "Solicitação do portal não encontrada.");
+      const solicitacao = solicitacaoSnap ? solicitacaoLida(solicitacaoSnap.id, solicitacaoSnap.data() ?? {}) : null;
+      if (solicitacao) {
+        const problemaDaSol = problemaDaSolicitacao(solicitacao, code);
+        if (problemaDaSol) throw new HttpsError("failed-precondition", problemaDaSol);
+      }
+      const recebidaEm = solicitacao?.recebida_em ?? pedido.recebida_em ?? "";
+      const problemaDoPrazo = problemaDosInstantes(recebidaEm, pedido.executar_ate, agora());
+      if (problemaDoPrazo) throw new HttpsError("invalid-argument", problemaDoPrazo);
       const cadastro = await cadastroPeloCodigo(transaction, db, code);
       const origem = pedido.origem?.local_id ?? null;
       const destino = pedido.destino?.local_id ?? null;
@@ -122,7 +142,7 @@ export async function openDirectDemandFor(
       );
 
       // Conta.
-      const tipoCalculado = tipoPelaHora(pedido.recebida_em, pedido.executar_ate);
+      const tipoCalculado = tipoPelaHora(recebidaEm, pedido.executar_ate);
       const tipo = pedido.tipo ?? tipoCalculado;
       const itens = itensDoPedido(pedido.itens, catalogo, operationId, { origem, destino });
       const documento = documentoDaDemandaDireta({
@@ -130,6 +150,9 @@ export async function openDirectDemandFor(
         customer_code: code,
         customer_name: texto(cadastro.name) || code,
         pedido,
+        solicitacao: solicitacao
+          ? { id: solicitacao.id, recebida_em: solicitacao.recebida_em, pedido_por: solicitacao.contato.nome.length >= 2 ? { nome: solicitacao.contato.nome.slice(0, 80), telefone: null } : null }
+          : null,
         tipo,
         tipo_calculado: tipoCalculado,
         itens,
@@ -156,6 +179,25 @@ export async function openDirectDemandFor(
         occurred_at: iso,
         actor: ator(caller),
       });
+      if (solicitacaoRef && solicitacao) {
+        transaction.update(solicitacaoRef, {
+          status: "aceita",
+          demanda: numero,
+          aceita_em: iso,
+          aceita_por_uid: caller.uid,
+          updated_at: FieldValue.serverTimestamp(),
+          updated_by: caller.uid,
+        });
+        createOperacaoEvent(transaction, db, {
+          operation_id: operationId,
+          type: "portal.service_accepted",
+          entity_id: solicitacao.id,
+          customer_code: code,
+          payload: { id: solicitacao.id, demanda: numero },
+          occurred_at: iso,
+          actor: ator(caller),
+        });
+      }
       return { target_id: numero, result: { numero, tipo, linhas: itens.length } };
     },
   );

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { OPERACAO_CADASTRO_ROLES, PLATFORM_ROLES, operacaoCadastroProblem } from "./platform-roles.js";
+import { OPERACAO_CADASTRO_ROLES, PLATFORM_ROLES, contractedModulesFrom, operacaoCadastroProblem } from "./platform-roles.js";
 
 describe("papéis do cadastro da Operação", () => {
   it("a plataforma tem os 11 papéis e o cadastro é de owner, admin e interno", () => {
@@ -14,5 +14,14 @@ describe("papéis do cadastro da Operação", () => {
     for (const role of ["campo", "suporte", "comercial", "wms", "financeiro", "rh", "painel", "cliente"] as const) {
       assert.match(operacaoCadastroProblem(role) ?? "", /não grava/, role);
     }
+  });
+});
+
+describe("módulos contratados do cliente (parte 4.4a)", () => {
+  it("sem a lista ou sem módulo conhecido vale o padrão, que não inclui a Operação", () => {
+    assert.deepEqual(contractedModulesFrom(undefined), ["wms", "financeiro"]);
+    assert.deepEqual(contractedModulesFrom(["rh"]), ["wms", "financeiro"]);
+    assert.deepEqual(contractedModulesFrom(["operacao", "x"]), ["operacao"]);
+    assert.deepEqual(contractedModulesFrom(["financeiro", "operacao", "wms"]), ["wms", "operacao", "financeiro"]);
   });
 });

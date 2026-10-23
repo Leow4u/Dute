@@ -18,7 +18,7 @@ Seguem a recomendação do plano até a resposta do Leonardo:
 | Pergunta | Recomendação seguida |
 |---|---|
 | 15 | A NF é emitida fora do sistema, que só a registra. |
-| 16 | O pedido do portal vira demanda `portal` em Para planejar. |
+| 16 | O pedido do portal cai em Para planejar e vira demanda pela coordenação, com o canal portal. O contato é o login de quem pediu. |
 | 17 | Os e-mails seguem as preferências do perfil do cliente. |
 | 18 | O WMS vai para a v3 começando por Início, Pedidos, Estoque e Receber. |
 
@@ -42,6 +42,11 @@ Seguem a recomendação do plano até a resposta do Leonardo:
   - Vencida não é status gravado: é a NF com saldo e vencimento antes de hoje.
   - O pagamento lançado errado se estorna. A NF paga volta a enviada (ou emitida) e as demandas, a faturadas.
   - O registro errado, sem pagamento, se cancela. As demandas voltam a A faturar, a autorização perde a NF e a mesma NF pode ser registrada de novo.
+- **A solicitação do portal (parte 4.4).**
+  - O cliente pede pelo portal e a solicitação fica em `service_requests`, recebida, em Para planejar da Operação. Ela nunca abre demanda nem OS sozinha.
+  - Quem coordena abre a demanda direta a partir dela, no mesmo formulário do pedido por telefone, com o escopo do catálogo. Ou recusa com o motivo, que o cliente lê.
+  - A demanda nasce `entrada: direta`, `canal: portal`, com `solicitacao_id`. O plano dizia "demanda `portal`". O ciclo é o da direta (executa e o Comercial orça depois), então o Comercial e a Operação não mudam, e o pedido errado ou repetido não vira demanda para cancelar no Comercial.
+  - O instante em que a demanda foi recebida é o da solicitação. Quem pediu é o login do cliente, quando a coordenação não diz outro.
 - **A armazenagem** continua na fatura do WMS (`billing_periods` e `client_invoices`) até a Fase 7.
 - **Omie** continua fora.
 
@@ -55,6 +60,7 @@ Seguem a recomendação do plano até a resposta do Leonardo:
 | `financeiro_operations` | Financeiro | O recibo de idempotência. Ninguém lê. |
 | `demands` | Comercial | O Financeiro escreve `etapa: "faturada"`, `etapa_desde`, o marco em `marcos` e `faturamento`: a fatura, a NF e o vencimento, sem valor. |
 | `client_authorizations` | Comercial | O Financeiro escreve só `nf_ids`. |
+| `service_requests` | Operação | A solicitação de OS pelo portal (parte 4.4a). Guarda o tipo de serviço (transporte, armazenagem, serviço em campo ou mudança), a data e o horário pedidos, a origem, o destino e o que será feito, os anexos (o caminho no Storage, o nome, o tipo e o tamanho) e o contato (o login de quem pediu). Também o status (recebida, aceita ou recusada), a demanda aberta com ela e a recusa com o motivo. Sem preço. |
 
 Preço só em `faturas`, `pagamentos` e `client_faturas`, lidos por
 `canReadPrices()`: owner, admin, financeiro e comercial. A operação, o campo,
@@ -62,6 +68,14 @@ o suporte e o painel não leem. O cliente dono lê só `client_faturas`, e só
 com as faturas no contrato (`isOwnProjectionWith('financeiro')`). Nada se grava
 pelo navegador. A zeragem do WMS nunca apaga `faturas`, `pagamentos`,
 `client_faturas`, `financeiro_operations` nem os eventos do Financeiro.
+
+`service_requests` é lida por quem coordena a Operação e pelo suporte
+(`canReadServiceOrders()`) e pelo cliente dono, com a Operação no contrato
+(`isOwnProjectionWith('operacao')`). O anexo sobe para
+`portal/{customer_code}/solicitacoes/an_<16 hex>.<pdf|jpg|png|webp>` no
+Storage: só o cliente dono com a Operação no contrato, até 10 MB, sem
+sobrescrever. Quem coordena, o suporte e o cliente dono leem. A zeragem do
+WMS nunca apaga `service_requests`, que fica com a Operação.
 
 ## Callables
 
@@ -75,6 +89,12 @@ e começando por `requireFinanceiroCaller`:
   - `reverse_payment`: o pagamento e o motivo;
   - `cancel`: o motivo.
 
+A solicitação do portal (parte 4.4a) fica em `functions/operacao`:
+
+- `requestService`: a única callable que atende o cliente (`{ portal: true }`). Pede o papel cliente, o código no perfil e a Operação no contrato (`client_access`). Confere os anexos no Storage e grava a solicitação recebida.
+- `declineServiceRequest`: quem coordena recusa a solicitação recebida, com o motivo.
+- `openDirectDemand` ganha `solicitacao_id`. A mesma transação confere a solicitação recebida e do mesmo cliente e a marca como aceita com o número da demanda.
+
 ## Eventos
 
 O `source` é `functions_financeiro`, a severidade é `info` e o evento é da
@@ -87,6 +107,14 @@ fatura (`entity_type: fatura`), com o `customer_code`.
 - `cobranca.payment_reversed`: a fatura, o pagamento e se reabriu a NF paga.
 - Nenhum evento leva o valor, o número da NF ou o motivo, que é texto livre.
 - O financeiro lê os `nf.*` e os `cobranca.*`, como lê os `billing.*` do WMS.
+
+A solicitação do portal grava eventos da Operação (`source: functions_operacao`,
+`entity_type: service_request`), com o `customer_code`:
+
+- `portal.service_requested`: a solicitação, o tipo de serviço, o dia e quantos anexos. É o único evento da Operação gravado pelo cliente.
+- `portal.service_accepted`: a solicitação e a demanda aberta com ela.
+- `portal.service_declined`: a solicitação.
+- Os locais, o que será feito, o nome dos anexos e o motivo da recusa são texto livre e ficam só na solicitação.
 
 ## Telas
 
@@ -136,7 +164,9 @@ continuam no Faturamento do WMS, e as rotas `/financeiro` não existem
 | 4.2d | Via comercial da NF em PDF (impressão do navegador) | Só quem lê preço abre; os valores batem com a fatura |
 | 4.3a | A NF do portal (`client_faturas`), gravada com cada mudança da fatura; regras e zeragem | O cliente só lê as próprias NFs, com as faturas no contrato; nada interno vai para o portal |
 | 4.3b | Portal: as OS do cliente (andamento com etapas) e as NFs da demanda em Faturas | Cliente só vê as próprias OS e faturas; cliente sem `operacao` não vê OS |
-| 4.4 | Solicitação de OS pelo portal | O pedido do portal nunca cria OS sozinho |
+| 4.4a | `requestService` e `declineServiceRequest`, `service_requests`, a solicitação em `openDirectDemand`, `portal.*`, regras do Firestore e do Storage e zeragem | O pedido do portal nunca cria OS sozinho; vira demanda uma vez, do mesmo cliente; o cliente sem a Operação não pede |
+| 4.4b | Portal: Solicitar OS em Minhas OS (tipo de serviço, data e horário, origem, destino, o que será feito e anexo) e as solicitações com a situação | Textos listados; sem legenda; uma ação principal; `axe` |
+| 4.4c | Operação: as solicitações em Para planejar do Hoje e no Início; abrir a demanda com o formulário preenchido ou recusar | A solicitação aparece em Para planejar; a demanda sai com a solicitação |
 | 4.5 | Expedição do WMS com entrega pela Dutelog gera demanda e OS | Retirada pelo cliente não gera OS |
 | 4.6 | Notificações por modelo (sino e e-mail) | E-mail só com o canal ligado no perfil |
 | 4.7 | WMS na v3, tela a tela | `theme-colors.test.ts`; render e `axe` por tela |
@@ -266,3 +296,21 @@ Feita em 23/10/2026. As regras estão em `artifacts/app/src/lib/portal/servicos.
   - As abertas vêm pelo vencimento, depois as pagas. Cada NF traz as demandas com o título e o valor, o saldo do pagamento parcial e a situação.
   - A situação usa a mesma régua das telas internas: vence hoje, vencida há N dias, paga em.
 - **Testes.** `portal/servicos.test.ts` cobre a situação, o andamento, o que fica de fora, a ordem e as NFs. `servicos-view.test.tsx` cobre os textos listados, nada interno, sem ação principal e o `axe`, nas duas telas. `operations.test.ts` e `modules.test.ts` cobrem a tela no contrato e no menu.
+
+### Parte 4.4a: a solicitação de OS pelo portal no backend
+
+Feita em 23/10/2026. As regras estão em `functions/operacao/src/domain/solicitacao.ts`, a gravação em
+`solicitacao-gravacao.ts` e o atendimento em `demanda-direta-gravacao.ts`.
+
+- **O pedido.** O tipo de serviço, a data e o horário (em São Paulo, nem no passado nem a mais de um ano), a origem, o destino (opcional), o que será feito e até três anexos.
+  - O anexo é PDF, JPG, PNG ou WEBP, até 10 MB. Só vale depois de subir: `requestService` confere no Storage o tipo e o tamanho.
+  - O caminho do anexo sai do código do perfil, então o cliente não cita arquivo de outro cliente.
+- **Quem pede.** Só o papel cliente, com o código no perfil e a Operação no contrato. Sem `client_access` vale o padrão (armazenagem e faturas), que não inclui a Operação. Nenhuma outra callable da Operação atende o cliente.
+- **Nunca abre OS sozinho.** A solicitação não usa o contador de demandas nem cria demanda ou OS. A demanda sai só de `openDirectDemand` com a solicitação, uma vez, e a OS só do planejamento.
+- **A recusa** pede o motivo (5 a 300 caracteres) e encerra a solicitação. A recusada não vira demanda.
+- **Testes.**
+  - `solicitacao.test.ts` cobre o pedido, a data, o anexo, a solicitação que vira demanda uma vez, a demanda que chega pelo portal e o evento sem texto livre.
+  - `solicitacao.integration.test.ts` cobre a solicitação sem demanda nem OS, o anexo conferido, a demanda com o instante e quem pediu, a OS pelo planejamento, outro cliente e a recusa.
+  - `profile.integration.test.ts` cobre o cliente com e sem a Operação no contrato e a equipe recusada.
+  - `operacao-solicitacoes.rules.test.ts` cobre a leitura no Firestore e o anexo no Storage.
+
