@@ -36,6 +36,7 @@ import {
   rotasDaOperacao,
   soComOperacaoLiberada,
 } from "./navegacao";
+import { ROTA_TV } from "../tv/navegacao";
 
 const APP_SOURCE = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
 const caminhos = (source: string) => Array.from(source.matchAll(/protectedRoute\(\s*"([^"]+)"/g), ([, path]) => path);
@@ -106,7 +107,7 @@ describe("navegação do cadastro da Operação", () => {
   });
 
   it("/operacao é o Início (parte 2.6) e o Hoje (parte 3.5a) mora em /operacao/hoje", () => {
-    expect(rotasDaOperacao(LIBERADO)).toEqual([ROTA_OPERACAO, ROTA_HOJE, ROTA_AGENDA, ROTA_DEMANDAS, ROTA_DEMANDA, ROTA_NOVA_DEMANDA, ROTA_PLANEJAR, ROTA_OS, ROTA_OS_IMPRESSAO, ROTA_REVISAO, ROTA_COLABORADORES, ROTA_VEICULOS, ROTA_CAMPO, ROTA_CAMPO_OS, ROTA_CAMPO_CONCLUIR]);
+    expect(rotasDaOperacao(LIBERADO)).toEqual([ROTA_OPERACAO, ROTA_HOJE, ROTA_AGENDA, ROTA_DEMANDAS, ROTA_DEMANDA, ROTA_NOVA_DEMANDA, ROTA_PLANEJAR, ROTA_OS, ROTA_OS_IMPRESSAO, ROTA_REVISAO, ROTA_COLABORADORES, ROTA_VEICULOS, ROTA_CAMPO, ROTA_CAMPO_OS, ROTA_CAMPO_CONCLUIR, ROTA_TV]);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao", OperacaoInicio\)/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/hoje", OperacaoHoje\)/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/agenda", OperacaoAgenda\)/);

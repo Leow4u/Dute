@@ -18,6 +18,7 @@ import { COMERCIAL_AMBIENTES_LIBERADOS, OPERACAO_AMBIENTES_LIBERADOS } from "./l
 import { OPERACAO_CADASTRO_ROLES } from "./operacao/navegacao";
 import { INTERNAL_ROLES } from "./modules";
 import { PLATFORM_MODULES } from "./platform-modules";
+import { TV_ROLES } from "./tv/navegacao";
 
 /**
  * As Functions e as regras do Firestore não importam lib/dominio: guardam
@@ -123,9 +124,15 @@ describe("listas da Operação iguais em todo lugar", () => {
     expect(tsList(roles, "OPERACAO_CADASTRO_ROLES")).toEqual(["owner", "admin", "interno"]);
     expect([...OPERACAO_CADASTRO_ROLES]).toEqual(["owner", "admin", "interno"]);
     const card = PLATFORM_MODULES.find((module) => module.key === "operacao")!;
-    // O campo entra no app dele (parte 3.8b); a coordenação, no Início da Operação.
-    expect(Object.keys(card.home).sort()).toEqual(["admin", "campo", "interno", "owner"]);
+    // O campo entra no app dele (parte 3.8b); o painel, na TV (parte 3.12b); a coordenação, no Início da Operação.
+    expect(Object.keys(card.home).sort()).toEqual(["admin", "campo", "interno", "owner", "painel"]);
     expect(card.home.campo).toBe("/campo");
+    expect(card.home.painel).toBe("/tv");
+  });
+
+  it("quem abre a TV: o mesmo nas Functions e no app (parte 3.12)", () => {
+    expect(tsList(roles, "TV_ROLES")).toEqual([...TV_ROLES]);
+    expect([...TV_ROLES]).toEqual(["owner", "admin", "interno", "painel"]);
   });
 
   it("liberação por ambiente: a lista das callables é a do app", () => {

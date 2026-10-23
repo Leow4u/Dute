@@ -39,6 +39,7 @@ import AppLayout from "./components/layout/app-layout";
 import ComercialLayout from "./components/layout/comercial-layout";
 import OperacaoLayout from "./components/layout/operacao-layout";
 import CampoLayout from "./components/layout/campo-layout";
+import TvLayout from "./components/layout/tv-layout";
 import { AppThemeProvider } from "./components/theme/theme-provider";
 import SettingsLayout from "./components/layout/settings-layout";
 import type { WarehouseOpsModuleKey } from "./lib/warehouse-ops/model";
@@ -160,6 +161,7 @@ const OperacaoRevisao = lazy(() => import("./pages/operacao/revisao"));
 const CampoHoje = lazy(() => import("./pages/campo/hoje"));
 const CampoOs = lazy(() => import("./pages/campo/os"));
 const CampoConcluir = lazy(() => import("./pages/campo/concluir"));
+const TvDaSala = lazy(() => import("./pages/tv/tv"));
 const OperacaoColaboradores = lazy(() => import("./pages/operacao/colaboradores"));
 const OperacaoVeiculos = lazy(() => import("./pages/operacao/veiculos"));
 import { useRole } from "./hooks/use-role";
@@ -964,6 +966,7 @@ const LAYOUT_DA_ROTA = {
   comercial: ComercialLayout,
   operacao: OperacaoLayout,
   campo: CampoLayout,
+  tv: TvLayout,
 } as const;
 
 function protectedRoute(
@@ -1097,6 +1100,8 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
     protectedRoute("/campo", CampoHoje),
     protectedRoute("/campo/os", CampoOs),
     protectedRoute("/campo/concluir", CampoConcluir),
+    // A TV da sala é da Operação (parte 3.12b).
+    protectedRoute("/tv", TvDaSala),
   ]),
   ...soComComercialLiberado([
     protectedRoute("/comercial", ComercialInicio),

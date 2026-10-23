@@ -133,7 +133,8 @@ function diaCurto(iso: string): string {
   return `${semana.charAt(0).toUpperCase()}${semana.slice(1)} ${dia}/${mes}`;
 }
 
-function duracao(ms: number): string {
+/** "32 min", "1h05", "2h". */
+export function duracao(ms: number): string {
   const minutos = Math.max(1, Math.round(ms / 60_000));
   const horas = Math.floor(minutos / 60);
   const resto = minutos % 60;

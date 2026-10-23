@@ -58,6 +58,7 @@ describe("ambiente da rota", () => {
     expect(caminhos.filter((path) => path.startsWith("/comercial"))).not.toEqual([]);
     expect(caminhos.filter((path) => path.startsWith("/operacao"))).not.toEqual([]);
     expect(caminhos.filter((path) => path.startsWith("/campo"))).toEqual(["/campo", "/campo/os", "/campo/concluir"]);
+    expect(caminhos.filter((path) => path.startsWith("/tv"))).toEqual(["/tv"]);
     for (const path of caminhos) {
       const esperado = path.startsWith("/comercial")
         ? "comercial"
@@ -65,9 +66,11 @@ describe("ambiente da rota", () => {
           ? "operacao"
           : path.startsWith("/campo")
             ? "campo"
-            : path.startsWith("/configuracoes")
-              ? "settings"
-              : "app";
+            : path.startsWith("/tv")
+              ? "tv"
+              : path.startsWith("/configuracoes")
+                ? "settings"
+                : "app";
       expect(layoutDaRota(path), path).toBe(esperado);
     }
   });

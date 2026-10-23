@@ -1173,3 +1173,34 @@ leitura em `tv-leitura.ts`.
   demanda, cliente, evento, colaborador e veículo recusam (teste no
   emulador).
 
+### Parte 3.12b: a TV da sala
+
+Feita em 23/10/2026. Regras em `lib/tv/quadro.ts`; a tela em
+`pages/tv/tv-view.tsx` (`docs/mockups/TVSala.dc.html`).
+
+- **Entrada.** O papel `painel` passa a ter a Operação
+  (`MODULOS_POR_PAPEL`) e a casa dele é `/tv`: entra direto na TV onde a
+  Operação está liberada. Owner, admin e interno abrem `/tv` para conferir;
+  o resto do app continua fechado ao painel.
+- **Tela cheia, escura e sem ação.** Sem menu, sem botão, sem link e sem
+  campo. O escuro vale só dentro da TV: o tema de quem abre para conferir
+  não muda. A tela pede ao navegador para não apagar (Screen Wake Lock),
+  onde ele deixa. Para sair, o painel abre `/configuracoes/conta`.
+- **O que mostra.** A data, o relógio, os indicadores (OS hoje, agendadas,
+  em execução, concluídas, atrasadas e a próxima saída) e três colunas. Cada
+  cartão traz a hora, o número, o cliente, o serviço com a rota e o prazo,
+  a equipe e a placa. A em execução mostra as etapas e a última, com a
+  hora. A concluída mostra a hora do Fim e "Assinada", "Concluída" ou
+  "Enviada ao Comercial". Sem valor.
+- **Atraso pelo relógio da TV.** A agendada que passou da hora (ou de um
+  dia que já foi) sem começar e a em execução que passou do prazo ficam
+  "Atrasada 32 min" e sobem para o topo da coluna. "Sem equipe" e "Sem
+  veículo" (só no transporte) alertam a agendada.
+- **Atualiza sozinha.** Relê o quadro a cada 30 segundos e anda o relógio a
+  cada 15. Sem conexão, segue com o último quadro e o rodapé diz "Sem
+  conexão · atualizado às 14:31". Coluna cheia mostra "+ 2 OS"; quantos
+  cartões cabem sai da altura da tela (três a 1080 px).
+- **Sessão longa.** O login do Firebase fica guardado no navegador e se
+  renova sozinho: a TV continua entrando até alguém sair ou desligar o
+  acesso em Pessoas.
+

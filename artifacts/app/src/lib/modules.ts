@@ -1,4 +1,5 @@
 import { CAMPO_ROLES, ROTA_CAMPO, ROTA_CAMPO_CONCLUIR, ROTA_CAMPO_OS } from "./campo/navegacao";
+import { ROTA_TV, TV_ROLES } from "./tv/navegacao";
 import {
   BarChart3,
   BrainCircuit,
@@ -743,6 +744,8 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   { path: ROTA_CAMPO, roles: [...CAMPO_ROLES] },
   { path: ROTA_CAMPO_OS, roles: [...CAMPO_ROLES] },
   { path: ROTA_CAMPO_CONCLUIR, roles: [...CAMPO_ROLES] },
+  // A TV da sala (parte 3.12b): o painel e quem coordena.
+  { path: ROTA_TV, roles: [...TV_ROLES] },
 ];
 
 const MERGED_SCREEN_APP_ROLES = Object.fromEntries(
