@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Nova demanda direta</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+a{color:#0054CE;text-decoration:none}a:hover{color:#004496}
+h1,h2,h3,p{margin:0}
+.ic{width:20px;height:20px;flex:0 0 auto}
+.ic-s{width:16px;height:16px;flex:0 0 auto}
+.sb{flex:0 0 248px;background:#161616;color:#fff;display:flex;flex-direction:column;padding:26px 14px 18px;gap:4px}
+.nav{display:flex;align-items:center;gap:12px;height:48px;padding:0 14px;border-radius:10px;color:rgba(255,255,255,.72);font-weight:600;font-size:15px;text-decoration:none;position:relative}
+.nav:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav.on{background:rgba(255,255,255,.12);color:#fff}
+.nav.on::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:3px;background:#E71C23}
+.nav .cnt{margin-left:auto;min-width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.nav .cnt.red{background:#E71C23;color:#fff}
+.nav.agent{color:#C9B8FB}.nav.agent:hover{color:#E0D6FF}
+.main{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;padding:28px 44px 36px;gap:20px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;font:700 14px Manrope,sans-serif;border:1px solid transparent;cursor:pointer;white-space:nowrap;text-decoration:none}
+.btn-p{background:#E71C23;color:#fff}.btn-p:hover{background:#AD0015;color:#fff}
+.btn-s{background:#fff;color:#161616;border-color:#D4D4CF}.btn-s:hover{background:#F0F0ED;color:#161616}
+.btn-g{background:transparent;color:#5F6368}.btn-g:hover{background:#E8E8E4;color:#161616}
+.btn-sm{height:32px;padding:0 12px;font-size:13px}
+.lnk{background:none;border:0;padding:0;font:700 13.5px Manrope,sans-serif;color:#0054CE;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.lnk:hover{color:#004496}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px}
+.inp{height:40px;border:1px solid #D4D4CF;border-radius:8px;padding:0 12px;font:600 14px Manrope,sans-serif;background:#fff;color:#161616;width:100%;min-width:0}
+.inp:focus{outline:2px solid #0054CE;outline-offset:1px}
+.lbl{font-size:12.5px;font-weight:700;color:#3F403F;display:block;margin-bottom:6px}
+.fld{display:flex;flex-direction:column;min-width:0}
+.muted{color:#5F6368}
+.sec{display:flex;flex-direction:column;gap:16px;padding:22px 24px;border-top:1px solid #F0F0ED}
+.sec h3{font-size:15px;font-weight:800;display:flex;align-items:center;gap:10px}
+.sec h3 span{width:28px;height:28px;border-radius:8px;background:#F0F0ED;color:#161616;display:inline-flex;align-items:center;justify-content:center}
+.grid{display:flex;flex-wrap:wrap;gap:14px}
+.grid .w3{flex:1 1 260px}
+.grid .w2{flex:1 1 170px}
+.grid .w6{flex:1 1 100%}
+.chk{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600;min-height:24px;cursor:pointer}
+.chk input{width:18px;height:18px;accent-color:#161616;margin:0}
+.row{display:flex;justify-content:space-between;gap:12px;font-size:13.5px}
+.row span{color:#5F6368;font-weight:600;flex:0 0 auto}
+.row b{font-weight:700;text-align:right;min-width:0}
+.av{width:36px;height:36px;border-radius:50%;background:#E71C23;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto}
+.badge{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:6px;font-size:13px;font-weight:700;white-space:nowrap;border:1px solid transparent}
+.badge svg{width:14px;height:14px;flex:0 0 auto}
+.t-para{background:#FBE3E4;border-color:#F3C2C4;color:#8E1016}
+.s-agendar{background:#E6EEFB;border-color:#C7D7F5;color:#0B3F8F}
+.pill{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:6px;background:#F0F0ED;border:1px solid #E5E5E1;color:#161616;font-size:12.5px;font-weight:700;white-space:nowrap}
+.segb{display:inline-flex;background:#E8E8E4;border-radius:8px;padding:3px;gap:2px;flex-wrap:wrap;align-self:flex-start}
+.segb button{height:34px;padding:0 14px;border-radius:6px;border:1px solid transparent;background:transparent;font:700 13.5px Manrope,sans-serif;color:#5F6368;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.segb button:hover{color:#161616}
+.segb button.on{background:#fff;color:#161616;border-color:#E5E5E1}
+.opt{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border:1px solid #D4D4CF;border-radius:10px;cursor:pointer;flex:1 1 240px;min-width:0;background:#fff}
+.opt.on{border-color:#161616;box-shadow:0 0 0 1px #161616}
+.opt input{width:18px;height:18px;accent-color:#161616;margin:2px 0 0;flex:0 0 auto}
+.opt b{display:flex;align-items:center;gap:8px;font-size:14.5px;font-weight:800}
+.opt b svg{width:16px;height:16px}
+.opt .ot{display:block;min-width:0}
+.opt .od{display:block;font-size:13px;color:#5F6368;font-weight:600}
+.loc{display:flex;flex-direction:column;gap:12px;min-width:0}
+.loc h4{margin:0;font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:8px}
+.pin{width:26px;height:26px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+.it{display:flex;align-items:center;gap:14px;padding:12px 14px;border:1px solid #E5E5E1;border-radius:10px;flex-wrap:wrap}
+.it .cd{font-size:13px;font-weight:800;color:#5F6368;font-variant-numeric:tabular-nums;flex:0 0 auto}
+.it .ds{flex:1 1 220px;min-width:0;font-size:14.5px;font-weight:700}
+.it .un{font-size:13px;color:#5F6368;font-weight:600}
+.qty{display:inline-flex;align-items:center;border:1px solid #D4D4CF;border-radius:8px;overflow:hidden;height:40px;background:#fff}
+.qty button{width:40px;height:38px;border:0;background:#fff;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;color:#161616}
+.qty button:hover{background:#F0F0ED}
+.qty input{width:56px;height:38px;border:0;border-left:1px solid #E5E5E1;border-right:1px solid #E5E5E1;text-align:center;font:800 15px Manrope,sans-serif;color:#161616;background:#fff}
+.pick{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid #D4D4CF;border-radius:10px;cursor:pointer;background:#fff;min-width:0}
+.pick.on{border-color:#161616;box-shadow:0 0 0 1px #161616}
+.pick input{width:18px;height:18px;accent-color:#161616;margin:0;flex:0 0 auto}
+.pick b{display:block;font-size:14.5px;font-weight:700}
+.pick span.d{display:block;font-size:13px;color:#5F6368;font-weight:600}
+.ava{width:36px;height:36px;border-radius:50%;background:#161616;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto}
+.veh{width:36px;height:36px;border-radius:9px;background:#F0F0ED;color:#161616;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+</style>
+</helmet>
+<div style="min-height: 100%; display: flex; flex-wrap: wrap">
+  <aside class="sb">
+    <a href="Inicio.dc.html" style="display: block; padding: 4px 14px 24px"><img src="/_blob/51b94b624eef7c9daa70d9dd1cfb5330" alt="Dutelog Soluções Logísticas" style="width: 148px; height: auto; display: block"></a>
+    <a class="nav" href="Inicio.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>Início</a>
+    <a class="nav on" href="OpHoje.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Operação<span class="cnt red">1</span></a>
+    <a class="nav" href="WmsExpedicao.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 8.35V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8.35A2 2 0 0 1 3.26 6.5l8-3.2a2 2 0 0 1 1.48 0l8 3.2A2 2 0 0 1 22 8.35Z"/><path d="M6 18h12M6 14h12"/><rect x="6" y="10" width="12" height="12"/></svg>Armazenagem</a>
+    <a class="nav" href="Cadastros.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Clientes</a>
+    <a class="nav agent" href="OpDemandaNova.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></svg>Agent Dute</a>
+    <div style="margin-top: auto; padding: 14px 10px 0; border-top: 1px solid rgba(255,255,255,.1); display: flex; align-items: center; gap: 12px">
+      <span class="av">PR</span>
+      <div style="min-width: 0"><div style="font-weight: 700; font-size: 14.5px">Paula Ramos</div><div style="font-size: 12.5px; color: rgba(255,255,255,.55)">Coordenação</div></div>
+    </div>
+  </aside>
+  <div class="main">
+    <a href="OpHoje.dc.html" style="display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 13.5px; color: #5F6368; align-self: flex-start"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7M19 12H5"/></svg>Operação</a>
+    <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap">
+      <h1 style="font-size: 30px; font-weight: 800; letter-spacing: -.02em">Nova demanda</h1>
+      <span class="muted" style="font-size: 14px; font-weight: 600">Terça, 20 de outubro · 13:06</span>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+      <form class="card" style="flex: 3 1 620px; min-width: 0; display: flex; flex-direction: column">
+        <div class="sec" style="border-top: 0">
+          <h3><span><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></span>Pedido</h3>
+          <div class="grid">
+            <div class="fld w3"><label class="lbl" for="cli">Cliente</label><div style="position: relative"><input class="inp" id="cli" value="Itaú Unibanco" style="padding-right: 124px"><span class="pill" style="position: absolute; right: 7px; top: 7px; height: 26px">LPU · 231 itens</span></div></div>
+            <div class="fld w3"><label class="lbl" for="sol">Solicitante</label><input class="inp" id="sol" value="Renata Campos · Facilities"></div>
+            <div class="fld w6"><span class="lbl" id="lcanal">Canal</span>
+              <div class="segb" role="group" aria-labelledby="lcanal">
+                <button type="button" class="{{ cTel }}" aria-pressed="{{ pTel }}" onClick="{{ canalTel }}"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg>Telefone</button>
+                <button type="button" class="{{ cWpp }}" aria-pressed="{{ pWpp }}" onClick="{{ canalWpp }}"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>WhatsApp</button>
+                <button type="button" class="{{ cMail }}" aria-pressed="{{ pMail }}" onClick="{{ canalMail }}"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>E-mail</button>
+                <button type="button" class="{{ cPortal }}" aria-pressed="{{ pPortal }}" onClick="{{ canalPortal }}"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Portal</button>
+              </div>
+            </div>
+            <div class="fld w2"><label class="lbl" for="rec">Recebida em</label><div style="display: flex; gap: 8px"><input class="inp" id="rec" value="20/10/2026"><input class="inp" value="13:05" aria-label="Hora do pedido" style="width: 80px; flex: 0 0 80px"></div></div>
+            <div class="fld w2"><label class="lbl" for="ate">Executar até</label><div style="display: flex; gap: 8px"><input class="inp" id="ate" value="20/10/2026"><input class="inp" value="19:00" aria-label="Hora limite" style="width: 80px; flex: 0 0 80px"></div></div>
+            <div class="fld w2"><span class="lbl">Tipo</span><div style="display: flex; align-items: center; gap: 10px; min-height: 40px; flex-wrap: wrap"><span class="badge t-para"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>Paraquedas</span><button type="button" class="lnk">Corrigir</button></div></div>
+            <div class="fld w6"><label class="lbl" for="tit">Título</label><input class="inp" id="tit" value="Transporte de 6 cadeiras Flexform · Agência Rebouças → Faria Lima 3500"></div>
+          </div>
+        </div>
+        <div class="sec">
+          <h3><span><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg></span>Entrada</h3>
+          <div style="display: flex; gap: 12px; flex-wrap: wrap" role="radiogroup" aria-label="Entrada">
+            <label class="{{ optDireta }}"><input type="radio" name="entrada" checked="{{ isDireta }}" onChange="{{ pickDireta }}"><span class="ot"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg>Direto na operação</b><span class="od">Orçamento depois da execução</span></span></label>
+            <label class="{{ optCom }}"><input type="radio" name="entrada" checked="{{ isCom }}" onChange="{{ pickCom }}"><span class="ot"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>Pelo comercial</b><span class="od">Orçamento e aprovação antes da execução</span></span></label>
+          </div>
+          <label class="chk"><input type="checkbox" checked="{{ vistoria }}" onChange="{{ toggleVistoria }}">Precisa de vistoria</label>
+        </div>
+        <div class="sec">
+          <h3><span><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>Locais</h3>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 24px">
+            <div class="loc">
+              <h4><span class="pin" style="background: #F0F0ED; color: #161616"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/></svg></span>Origem</h4>
+              <div class="fld"><label class="lbl" for="o-loc">Local</label><input class="inp" id="o-loc" value="Agência Rebouças"></div>
+              <div class="fld"><label class="lbl" for="o-end">Endereço</label><input class="inp" id="o-end" value="Av. Rebouças, 3.970"></div>
+              <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+                <div class="fld"><label class="lbl" for="o-and">Andar ou sala</label><input class="inp" id="o-and"></div>
+                <div class="fld"><label class="lbl" for="o-con">Contato no local</label><input class="inp" id="o-con"></div>
+              </div>
+            </div>
+            <div class="loc">
+              <h4><span class="pin" style="background: #161616; color: #fff"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>Destino</h4>
+              <div class="fld"><label class="lbl" for="d-loc">Local</label><input class="inp" id="d-loc" value="Faria Lima 3500"></div>
+              <div class="fld"><label class="lbl" for="d-end">Endereço</label><input class="inp" id="d-end" value="Av. Brig. Faria Lima, 3.500 · doca pelo subsolo 2"></div>
+              <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+                <div class="fld"><label class="lbl" for="d-and">Andar ou sala</label><input class="inp" id="d-and" value="4º andar"></div>
+                <div class="fld"><label class="lbl" for="d-con">Contato no local</label><input class="inp" id="d-con" value="Renata Campos"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="sec">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap">
+            <h3><span><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>O que fazer</h3>
+            <span style="display: inline-flex; align-items: center; gap: 8px"><span class="muted" style="font-size: 12.5px; font-weight: 700">Serviços</span><span class="pill">Transporte</span></span>
+          </div>
+          <label style="position: relative; display: block"><span style="position: absolute; left: 12px; top: 12px; color: #5F6368"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span><input class="inp" aria-label="Buscar na LPU do Itaú" placeholder="Buscar na LPU do Itaú" style="padding-left: 36px"></label>
+          <div class="it">
+            <span class="cd">3.05</span>
+            <span class="ds">Transporte de cadeira Flexform</span>
+            <span class="un">un</span>
+            <div class="qty">
+              <button type="button" aria-label="Diminuir quantidade" onClick="{{ menos }}"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+              <input inputmode="numeric" aria-label="Quantidade" value="{{ qtd }}" onChange="{{ onQtd }}">
+              <button type="button" aria-label="Aumentar quantidade" onClick="{{ mais }}"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+            </div>
+            <button type="button" class="btn btn-g" style="width: 40px; padding: 0" aria-label="Remover item"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+          </div>
+          <button type="button" class="lnk" style="align-self: flex-start"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Item avulso</button>
+        </div>
+        <sc-if value="{{ isDireta }}" hint-placeholder-val="{{ true }}">
+          <div class="sec">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap">
+              <h3><span><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>Escalar agora<em class="muted" style="font-style: normal; font-size: 13px; font-weight: 600">opcional</em></h3>
+              <a href="OpAgenda.dc.html" style="font-size: 13.5px; font-weight: 700">Ver agenda</a>
+            </div>
+            <span class="lbl" style="margin: 0">Livres às 15:00</span>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 12px">
+              <label class="{{ pickPessoaCls }}"><input type="checkbox" checked="{{ pessoa }}" onChange="{{ togglePessoa }}"><span class="ava">LF</span><span style="min-width: 0"><b>Lucas Ferreira</b><span class="d">Montador</span></span></label>
+              <label class="{{ pickVeiculoCls }}"><input type="checkbox" checked="{{ veiculo }}" onChange="{{ toggleVeiculo }}"><span class="veh"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg></span><span style="min-width: 0"><b>Fiat Fiorino · ABC-1D23</b><span class="d">650 kg · 3 m³</span></span></label>
+            </div>
+          </div>
+        </sc-if>
+      </form>
+      <aside style="flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+        <div class="card" style="padding: 20px; display: flex; flex-direction: column; gap: 14px">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap">
+            <h3 style="font-size: 19px; font-weight: 800; letter-spacing: -.01em">DM 000053</h3>
+            <span class="badge t-para"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>Paraquedas</span>
+          </div>
+          <div class="row"><span>Cliente</span><b>Itaú Unibanco</b></div>
+          <div class="row"><span>Solicitante</span><b>Renata Campos · Facilities</b></div>
+          <div class="row"><span>Canal</span><b>{{ canalTxt }}</b></div>
+          <div class="row"><span>Recebida</span><b>20/10 13:05</b></div>
+          <div class="row"><span>Prazo</span><b>hoje 19:00 · <span style="color: #8E1016; font-weight: 800">faltam 5h54</span></b></div>
+          <div style="height: 1px; background: #F0F0ED"></div>
+          <div class="row"><span>Entrada</span><b>{{ entradaTxt }}</b></div>
+          <div class="row"><span>Orçamento</span><b>{{ orcTxt }}</b></div>
+          <div class="row"><span>Vistoria</span><b>{{ vistTxt }}</b></div>
+          <div style="height: 1px; background: #F0F0ED"></div>
+          <div class="row"><span>Itens</span><b>{{ qtd }} × Transporte de cadeira Flexform</b></div>
+          <div class="row"><span>OS</span><b>{{ osTxt }}</b></div>
+          <sc-if value="{{ isDireta }}" hint-placeholder-val="{{ true }}">
+            <div class="row"><span>Equipe</span><b>{{ equipeTxt }}</b></div>
+          </sc-if>
+          <div class="row"><span>Coordenação</span><b>Paula Ramos</b></div>
+          <div style="display: flex; flex-direction: column; gap: 8px; padding-top: 6px">
+            <a href="OpHoje.dc.html" class="btn btn-p" style="width: 100%; height: 46px; font-size: 15px"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>{{ ctaTxt }}</a>
+            <a href="OpHoje.dc.html" class="btn btn-g" style="width: 100%">Cancelar</a>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1600}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const s = Object.assign({ canal: 'whatsapp', entrada: 'direta', vistoria: false, qtd: 6, pessoa: false, veiculo: false }, this.state || {});
+    const canais = { telefone: 'Telefone', whatsapp: 'WhatsApp', email: 'E-mail', portal: 'Portal' };
+    const direta = s.entrada === 'direta';
+    const agendada = s.pessoa && s.veiculo;
+    const escalados = [];
+    if (s.pessoa) escalados.push('Lucas Ferreira');
+    if (s.veiculo) escalados.push('ABC-1D23');
+    let osTxt;
+    if (direta) osTxt = s.vistoria ? 'OS de vistoria e OS de execução a criar' : 'OS 000222 a criar · ' + (agendada ? 'Agendada' : 'Para agendar');
+    else osTxt = s.vistoria ? 'OS de vistoria a criar' : 'Depois da aprovação';
+    const canal = (k) => () => this.setState({ canal: k });
+    const seg = (k) => (s.canal === k ? 'on' : '');
+    const press = (k) => (s.canal === k ? 'true' : 'false');
+    return {
+      cTel: seg('telefone'), cWpp: seg('whatsapp'), cMail: seg('email'), cPortal: seg('portal'),
+      pTel: press('telefone'), pWpp: press('whatsapp'), pMail: press('email'), pPortal: press('portal'),
+      canalTel: canal('telefone'), canalWpp: canal('whatsapp'), canalMail: canal('email'), canalPortal: canal('portal'),
+      canalTxt: canais[s.canal],
+      isDireta: direta,
+      isCom: !direta,
+      optDireta: direta ? 'opt on' : 'opt',
+      optCom: direta ? 'opt' : 'opt on',
+      pickDireta: () => this.setState({ entrada: 'direta' }),
+      pickCom: () => this.setState({ entrada: 'comercial' }),
+      vistoria: s.vistoria,
+      toggleVistoria: () => this.setState({ vistoria: !s.vistoria }),
+      entradaTxt: direta ? 'Direto na operação' : 'Pelo comercial',
+      orcTxt: direta ? 'Depois da execução' : 'Antes da execução · Fernanda Lopes',
+      vistTxt: s.vistoria ? 'OS de vistoria a criar' : 'Não precisa',
+      qtd: s.qtd,
+      menos: () => this.setState({ qtd: Math.max(1, s.qtd - 1) }),
+      mais: () => this.setState({ qtd: s.qtd + 1 }),
+      onQtd: (e) => { const n = parseInt(e.target.value, 10); this.setState({ qtd: isNaN(n) ? 1 : Math.max(1, n) }); },
+      pessoa: s.pessoa,
+      veiculo: s.veiculo,
+      togglePessoa: () => this.setState({ pessoa: !s.pessoa }),
+      toggleVeiculo: () => this.setState({ veiculo: !s.veiculo }),
+      pickPessoaCls: s.pessoa ? 'pick on' : 'pick',
+      pickVeiculoCls: s.veiculo ? 'pick on' : 'pick',
+      equipeTxt: escalados.length ? escalados.join(' · ') : 'Escalar depois',
+      osTxt: osTxt,
+      ctaTxt: direta ? 'Criar demanda' : 'Criar e enviar ao comercial'
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -185,6 +185,74 @@ Storage.
   `customer_locations` na Fase 3; `quotes` e `price_tables` continuam fechados
   para a operação.
 
+### 2.5 Operação: a proposta "Demanda: do pedido ao faturamento" (recuperada em 23/10)
+
+O canvas dos mockups tem uma página, "Operação · demandas e OS", com 18
+telas e duas notas que nunca chegaram ao repositório: só a página "Identidade
+v3" (19/10) e a do Comercial (20/10) tinham sido copiadas para
+`docs/mockups/`. É a proposta feita entre 17 e 19/10/2026, depois do plano e
+antes do desenho do Comercial, e é dela que vêm a Demanda, a RV de execução e
+o aditivo da Fase 6. Os arquivos foram copiados em 23/10 (`docs/mockups/Op*`,
+`Campo2*`, `ComAditivo`, `ComMedicao`, `ComOrcamentos`, `WmsExpedicao`). Quem
+implementou as partes 1 a 3 da Operação não a viu.
+
+**Premissas da proposta** (nota da página):
+
+- A demanda agrupa o pedido, o orçamento, os aditivos e as várias OS.
+- OS é uma ida a campo (uma equipe, um dia). Vistoria é uma OS.
+- O tipo da demanda (paraquedas, execução no mesmo dia; emergencial, em até
+  48 h; planejada, depois de 48 h) é calculado pela hora do pedido e pela hora
+  pedida para a execução; o coordenador corrige.
+- Expedição do WMS com entrega pela Dutelog gera OS; retirada pelo cliente
+  não.
+- Cliente spot sem LPU usa o Catálogo Dutelog e item avulso.
+- Fatura-se a demanda (orçamento aprovado mais aditivos), não cada OS.
+- O celular guarda os registros sem sinal e envia depois.
+- Freelancers e motoristas terceiros não têm login: o líder registra a
+  presença deles.
+- Operação, campo e armazém nunca veem valores.
+
+**Fluxo e status da OS:** pedido (comercial, direto na operação ou expedição
+do WMS) → demanda e OS → planejar e agendar (equipe, veículo, terceiros; uma
+ou várias OS por demanda) → executar no campo (etapas, itens, inclusão de item
+executado) → concluir (fotos e assinatura no local valem como aceite) →
+revisão interna (coordenação confere fotos, horários e itens; divergência vira
+pedido de aditivo ao comercial, absorção sem cobrar ou correção) → orçamento
+da execução ou aditivo, com aprovação do cliente → faturar a demanda. Status
+da OS: Para agendar, Agendada, Em execução, Em revisão, Revisada; Cancelada
+com motivo antes de Revisada; Revisada volta a Em execução só por owner ou
+admin. Atraso e falta de equipe são alertas, não status.
+
+**Telas:** fluxo da demanda; nova demanda direta; fila do Comercial da
+proposta (pedidos de orçamento, vistorias concluídas, aditivos a fazer,
+orçamentos da execução, aguardando cliente, aprovados para enviar à
+operação); pedido de saída do WMS com entrega Dutelog; Operação com as abas
+Hoje (kanban Para agendar, Agendadas, Em execução, Em revisão), Agenda da
+semana (sem equipe, grade da semana, equipe própria, freelancers, veículos e
+terceiros), Demandas (tabela por etapa, com "Para planejar · vindas do
+comercial") e Revisão; demanda planejada com escopo, saldo e várias OS;
+planejar OS a partir do saldo (com sugestão do Agent Dute de dividir em duas
+OS); OS em execução no escritório (etapas com horários, itens, fotos, equipe
+com presença, histórico); campo do líder (minhas OS, execução com etapas e
+itens, incluir item executado, concluir com assinatura, vistoria); revisão
+interna com divergências; aditivo de orçamento; orçamento da execução.
+
+**Para validar com a operação** (nota da página, ainda sem resposta
+registrada): faturamento só no fim da demanda ou por medição parcial, e PO
+do Itaú na fatura e no aditivo; a assinatura no local cobre os itens
+incluídos em campo ou o aditivo sempre precisa de aprovação formal; quem
+decide item absorvido ou executado a menos; o que vale como aceite sem o
+responsável; vistoria pede assinatura e passa pela revisão; paraquedas,
+noturno ou sábado mudam o preço; registro de entrada e saída de freelancer e
+terceiro; 48 h corridas ou úteis; o líder marca a presença de toda a equipe.
+
+**O que isso muda na comparação:** a fila do dia e o modelo da OS que o
+código tem (4.3 e 4.4) estão abaixo tanto do plano quanto desta proposta; o
+desenho da Fase 3 (seção 5, item 3) parte daqui, não do zero. Em 23/10 as
+decisões de UX e UI (seção 6) foram tomadas em cima desta página: a quinta
+coluna do Hoje é "Em revisão", como aqui, e não "Concluídas hoje", como na
+v3 de 19/10.
+
 ## 3. O que entrou na `main` de 21 a 23/10
 
 | PR | Autor | O que | Relação com o alinhado |
@@ -300,7 +368,8 @@ caminho de volta. A ordem é a da importância para o uso.
   `service_order.*`.
 - **Caminho.** Antes da parte 4, escrever o desenho da Fase 3 no padrão da
   Fase 6 (pedido, decisões, coleções, partes, perguntas abertas, registro),
-  reconciliando com o plano: tipos e `details`, `origin` interno e portal,
+  reconciliando com o plano e com a proposta da seção 2.5: tipos e
+  `details`, `origin` interno e portal,
   "Nova OS" sem demanda, `execution` com tempos, anexos, os status que
   faltam, e a lista de eventos com os nomes `os.*`. A `fase-3-operacao.md`
   de hoje vira o registro das partes 1 a 3 desse desenho.
@@ -424,11 +493,9 @@ Fase 7) também fica fora até nova decisão.
 ## 5. Caminho recomendado, em ordem
 
 1. **Alinhamento de UX e UI antes de qualquer PR de tela** (pedido do
-   Leonardo em 23/10). Com um shell por módulo, decidir o visual dos shells,
-   a troca de módulo, o que cada shell tem (Início do módulo, Clientes,
-   Agent Dute, Administração), a fila do dia e as telas da Operação. O
-   resultado são mockups novos por módulo, aprovados como os de 19 e 20/10,
-   e um registro em `fase-2-nucleo.md` superando a decisão 6.
+   Leonardo em 23/10). Feito no mesmo dia: decisões na seção 6 e mockups na
+   página "Shell por módulo · 23/10" do canvas. Falta a aprovação das telas
+   e o registro em `fase-2-nucleo.md` superando a decisão 6.
 2. Fechar o uso do Comercial na produção: CNPJ e razão social do PDF
    (pergunta 15), contador, cargas de tabelas e contratos com dry-run e
    export antes, clientes à mão pela tela de Clientes, papel do Guilherme, e
@@ -452,7 +519,16 @@ Tomadas em 23/10/2026:
   por ora. Os clientes entram pela tela de Clientes do Comercial.
 - **Legado:** não se carrega. Os orçamentos em andamento e o histórico ficam
   na planilha.
-- **Antes de seguir, um novo alinhamento de UX e UI** (seção 5, item 1).
+- **UX e UI, alinhadas em 23/10** (seção 5, item 1): (1) os shells do
+  Comercial e da Operação na v3 já, o WMS como está até a adoção dele; (2) o
+  nome do módulo no topo da barra lateral é o seletor e o logo leva aos
+  cards; (3) Início em cada módulo, com o "Precisa de você" dele, e os cards
+  da entrada com o contador de pendências; (4) Clientes dentro de cada
+  módulo, com a visão do módulo; (5) fila do dia com "Para planejar"
+  (demandas vindas do comercial) antes de Para agendar, Agendadas hoje, Em
+  execução e Em revisão, sem "Outros dias"; (6) celular com a barra inferior
+  por módulo e o seletor no cabeçalho, campo como tela própria. Mockups na
+  página "Shell por módulo · 23/10" do canvas e em `docs/mockups/Mod*.dc.html`.
 
 Ainda em aberto:
 
@@ -468,3 +544,20 @@ Ainda em aberto:
    antes de qualquer orçamento sair, a **15** (CNPJ e razão social).
 6. **Eventos da OS:** confirmar os nomes `os.*` (motivo técnico) e atualizar
    o plano.
+7. As **nove perguntas da proposta da Operação** (seção 2.5), que o desenho
+   da Fase 3 precisa responder.
+
+## 7. Fases do plano e estado em 23/10/2026
+
+| Fase | Escopo (plano de 19/10) | Estado |
+|---|---|---|
+| 0 Projetos e repositório | `dute-homolog` e `dute-prod`, repositório por módulos, CI por ambiente | Feita em 19/10 |
+| 1 Migração do WMS | Ensaio, corte, `app.dutelog.com.br` no `dute-prod`, `dute-btg` congelado | Feita em 20/10 |
+| 2 Núcleo e app único | Papéis, módulos contratados, entrada, menu por papel e perfil, LPU no núcleo, shell v3, Início "Precisa de você", TV, colaboradores e veículos | Partes 1 e 2 feitas em 20/10. A parte 3 foi substituída pelo shell por módulo (23/10). Shell v3, Início por módulo e TV pendentes; colaboradores e veículos entregues na Fase 3 |
+| 3 Operação | OS, kanban do dia, nova OS, execução, impressão, campo com fotos e assinatura, tempo real por item | Partes 1 a 3 (cadastro, núcleo da OS, fila do dia) na `main` e no `dute-prod` desde 22/10. Executar, concluir, campo e tempos pendentes. Desenho a escrever sobre a proposta da seção 2.5 |
+| 4 Financeiro da operação, portal e lançamento | Precificação, faturamento, a receber, OS no portal, sino e e-mails; lançamento da Operação e da v3 em produção | Não iniciada. A Operação foi à produção antes, em parte |
+| 5 Memória da Dute | `ai_measures`, `ai_case_memory`, `ai_suggestions`, duração sugerida, dias parado e alertas no WMS, Agent Dute no núcleo | Não iniciada; a captura de tempos depende da Fase 3 |
+| 6 Comercial | Orçamentos, envio, aprovação, conversão em OS, sugestão por orçamentos parecidos | v1 (partes 1 a 19) na `main` e ligado no `dute-prod` em 21/10, sem cargas. Gerar OS vai pela Fase 3; sugestão por IA pela Fase 5. Omie e legado fora desde 23/10 |
+| 7 Financeiro unificado | Faturamento de armazenagem e OS no mesmo lugar, a receber único, LPU de cobrança unificada, NF-e e contabilidade por integração | Não iniciada |
+| 8 RH | Colaboradores, documentos, CNH, exames e treinamentos no banco `rh`; folha e eSocial por integração | Não iniciada |
+| Contínuo | Backups com teste de restauração, monitoramento e alertas, LGPD, manual e treinamento | PITR e backup diário ligados em 20/10; teste de restauração e o resto pendentes |

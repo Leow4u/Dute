@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>OS em execução</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+a{color:#0054CE;text-decoration:none}a:hover{color:#004496}
+h1,h2,h3,p{margin:0}
+.ic{width:20px;height:20px;flex:0 0 auto}
+.ic-s{width:16px;height:16px;flex:0 0 auto}
+.sb{flex:0 0 248px;background:#161616;color:#fff;display:flex;flex-direction:column;padding:26px 14px 18px;gap:4px}
+.nav{display:flex;align-items:center;gap:12px;height:48px;padding:0 14px;border-radius:10px;color:rgba(255,255,255,.72);font-weight:600;font-size:15px;text-decoration:none;position:relative}
+.nav:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav.on{background:rgba(255,255,255,.12);color:#fff}
+.nav.on::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:3px;background:#E71C23}
+.nav .cnt{margin-left:auto;min-width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.nav .cnt.red{background:#E71C23;color:#fff}
+.nav.agent{color:#C9B8FB}.nav.agent:hover{color:#E0D6FF}
+.main{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;padding:28px 44px 36px;gap:20px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;font:700 14px Manrope,sans-serif;border:1px solid transparent;cursor:pointer;white-space:nowrap;text-decoration:none}
+.btn-p{background:#E71C23;color:#fff}.btn-p:hover{background:#AD0015;color:#fff}
+.btn-s{background:#fff;color:#161616;border-color:#D4D4CF}.btn-s:hover{background:#F0F0ED;color:#161616}
+.btn-g{background:transparent;color:#5F6368}.btn-g:hover{background:#E8E8E4;color:#161616}
+.btn-lg{height:44px;padding:0 20px;font-size:15px}
+.btn-sm{height:32px;padding:0 12px;font-size:13px}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px}
+.ct{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 22px 0}
+.ct h3{font-size:15px;font-weight:800}
+.badge{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:6px;font-size:13px;font-weight:700;white-space:nowrap;border:1px solid transparent}
+.badge svg{width:14px;height:14px;flex:0 0 auto}
+.badge.sm{height:24px;padding:0 8px;font-size:12.5px}
+.s-exec{background:#FDF0D5;border-color:#F3DCA3;color:#8A4B00}
+.t-plan{background:#F0F0ED;border-color:#E5E5E1;color:#3F403F}
+.s-div{background:#fff;border-color:#E71C23;color:#AD0015}
+.muted{color:#5F6368}
+.step{flex:1 1 200px;min-width:0;display:flex;gap:14px;padding:20px 22px}
+.step+.step{border-left:1px solid #E5E5E1}
+.step i{width:34px;height:34px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-style:normal;font-weight:800;font-size:14px;flex:0 0 auto}
+.step b{display:block;font-size:16px;font-weight:800}
+.step .who{display:block;font-size:12px;color:#5F6368;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin:2px 0 6px}
+.step .what{font-size:14px;color:#161616}
+.step.done i{background:#DDF5E4;color:#14602F;border:1px solid #B6E4C4}
+.step.cur i{background:#E71C23;color:#fff;box-shadow:0 0 0 4px #FBE3E4}
+.step.todo i{background:#F0F0ED;color:#5F6368;border:1px solid #E5E5E1}
+.step.todo b,.step.todo .what{color:#5F6368}
+.kv{display:flex;flex-direction:column;gap:2px;min-width:0}
+.kv span{font-size:12.5px;color:#5F6368;font-weight:700}
+.kv b{font-size:15px;font-weight:700}
+.av{width:36px;height:36px;border-radius:50%;background:#161616;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto}
+.av.g{background:#F0F0ED;color:#3F403F;border:1px solid #E5E5E1}
+.tl{display:flex;gap:12px;padding:0 22px}
+.tl .dot{width:10px;height:10px;border-radius:50%;background:#D4D4CF;margin-top:6px;flex:0 0 auto}
+.tl .dot.amber{background:#D98B00}
+.tl .dot.red{background:#E71C23}
+.tl .line{width:2px;background:#F0F0ED;flex:1 1 auto;margin:4px 0 0 4px}
+.tl b{display:block;font-size:14px;font-weight:700}
+.tl span{display:block;font-size:13px;color:#5F6368}
+.thumb{width:88px;height:66px;border-radius:8px;background:#F0F0ED;border:1px solid #E5E5E1;display:flex;align-items:center;justify-content:center;color:#5F6368;flex:0 0 auto;position:relative}
+.thumb svg{width:22px;height:22px}
+.thumb em{position:absolute;left:6px;bottom:6px;font-style:normal;font-size:11px;font-weight:700;background:#161616;color:#fff;padding:2px 6px;border-radius:4px}
+.addr{display:flex;gap:14px;align-items:flex-start}
+.addr .pin{width:36px;height:36px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+.addr b{display:block;font-size:16px;font-weight:700}
+.addr span{display:block;font-size:13.5px;color:#5F6368}
+.et{display:flex;gap:10px;align-items:flex-start;min-width:0}
+.et i{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;margin-top:1px}
+.et i svg{width:14px;height:14px}
+.et b{display:block;font-size:15px;font-weight:800;font-variant-numeric:tabular-nums}
+.et .nm{display:block;font-size:13.5px;font-weight:700;line-height:1.35}
+.et .by{display:block;font-size:12.5px;color:#5F6368;font-weight:600}
+.et.done i{background:#DDF5E4;color:#14602F;border:1px solid #B6E4C4}
+.et.cur i{background:#FDF0D5;color:#8A4B00;border:1px solid #F3DCA3}
+.et.cur b{color:#8A4B00}
+.et.todo i{background:#F0F0ED;color:#5F6368;border:1px solid #E5E5E1}
+.et.todo b,.et.todo .nm{color:#5F6368}
+.tb{width:100%;border-collapse:collapse;font-size:14px}
+.tb th{font-size:12px;font-weight:700;color:#5F6368;text-align:left;padding:0 10px 10px;white-space:nowrap}
+.tb td{padding:12px 10px;border-top:1px solid #F0F0ED;vertical-align:middle}
+.tb th:first-child,.tb td:first-child{padding-left:0}
+.tb th:last-child,.tb td:last-child{padding-right:0}
+.tb .r{text-align:right;font-variant-numeric:tabular-nums}
+.tb tr.sub td{border-top:0;padding-top:0}
+.it{display:flex;align-items:baseline;gap:8px;font-weight:700}
+.cd{flex:0 0 34px;color:#5F6368;font-weight:700;font-variant-numeric:tabular-nums}
+.prog{display:flex;align-items:center;gap:10px}
+.prog .bar{flex:1 1 auto}
+.prog b{font-size:13.5px;font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums;min-width:76px;text-align:right}
+.bar{height:6px;border-radius:999px;background:#F0F0ED;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:999px}
+.incl{display:inline-flex;align-items:center;gap:6px;min-height:26px;padding:3px 10px;border-radius:6px;background:#F0F0ED;border:1px solid #E5E5E1;font-size:12.5px;font-weight:700;color:#3F403F}
+.incl svg{width:14px;height:14px;flex:0 0 auto}
+.tag{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;border-radius:6px;background:#F0F0ED;border:1px solid #E5E5E1;font-size:12px;font-weight:700;color:#3F403F;white-space:nowrap}
+.tag svg{width:12px;height:12px;flex:0 0 auto}
+.tag.app{background:#fff;border-color:#D4D4CF;color:#161616}
+.mem{display:flex;align-items:center;gap:12px}
+.mem .mn{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px}
+.mem .mn b{font-size:15px;font-weight:700}
+.mem .rl{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px;color:#5F6368;font-weight:600}
+.seg{display:inline-flex;background:#E8E8E4;border-radius:8px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg button{height:34px;padding:0 14px;border-radius:6px;border:1px solid transparent;background:transparent;font:700 13.5px Manrope,sans-serif;color:#5F6368;cursor:pointer}
+.seg button.on{background:#fff;color:#161616;border-color:#E5E5E1}
+.inp{height:40px;border:1px solid #D4D4CF;border-radius:8px;padding:0 12px;font:600 14px Manrope,sans-serif;background:#fff;color:#161616;width:100%}
+.inp:focus{outline:2px solid #0054CE;outline-offset:1px}
+textarea.inp{height:auto;padding:10px 12px;resize:vertical}
+.lbl{font-size:12.5px;font-weight:700;color:#3F403F;display:block;margin-bottom:6px}
+.fld{display:flex;flex-direction:column;min-width:0}
+.qrow{display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid #F0F0ED}
+.qrow:first-child{border-top:0}
+.qrow span{flex:1 1 auto;min-width:0;font-weight:700}
+.qrow em{font-style:normal;font-size:13px;font-weight:700;color:#5F6368;white-space:nowrap}
+</style>
+</helmet>
+<div style="min-height: 100%; display: flex; flex-wrap: wrap">
+  <aside class="sb">
+    <a href="Inicio.dc.html" style="display: block; padding: 4px 14px 24px"><img src="/_blob/51b94b624eef7c9daa70d9dd1cfb5330" alt="Dutelog Soluções Logísticas" style="width: 148px; height: auto; display: block"></a>
+    <a class="nav" href="Inicio.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>Início</a>
+    <a class="nav on" href="OpHoje.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Operação<span class="cnt red">1</span></a>
+    <a class="nav" href="WmsExpedicao.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 8.35V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8.35A2 2 0 0 1 3.26 6.5l8-3.2a2 2 0 0 1 1.48 0l8 3.2A2 2 0 0 1 22 8.35Z"/><path d="M6 18h12M6 14h12"/><rect x="6" y="10" width="12" height="12"/></svg>Armazenagem</a>
+    <a class="nav" href="Cadastros.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Clientes</a>
+    <a class="nav agent" href="OpOS.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></svg>Agent Dute</a>
+    <div style="margin-top: auto; padding: 14px 10px 0; border-top: 1px solid rgba(255,255,255,.1); display: flex; align-items: center; gap: 12px">
+      <span class="av" style="background: #E71C23">PR</span>
+      <div style="min-width: 0"><div style="font-weight: 700; font-size: 14.5px">Paula Ramos</div><div style="font-size: 12.5px; color: rgba(255,255,255,.55)">Coordenação</div></div>
+    </div>
+  </aside>
+  <div class="main">
+    <a href="OpHoje.dc.html" style="display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 13.5px; color: #5F6368; align-self: flex-start"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7M19 12H5"/></svg>Hoje</a>
+    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap">
+      <div style="display: flex; flex-direction: column; gap: 6px; min-width: 0">
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap"><h1 style="font-size: 30px; font-weight: 800; letter-spacing: -.02em">OS 000211</h1><span class="badge s-exec"><i style="width: 7px; height: 7px; border-radius: 50%; background: #D98B00; display: inline-block"></i>Em execução</span><span class="badge t-plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Planejada</span></div>
+        <p style="font-size: 16px; color: #5F6368"><a href="OpDemanda.dc.html" style="font-weight: 700">DM 000045</a> · Itaú Unibanco · Transporte e montagem · hoje 07:30–18:00</p>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+        <a href="OSImpressao.dc.html" class="btn btn-s"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Imprimir</a>
+        <button type="button" class="btn btn-s" style="width: 40px; padding: 0" aria-label="Mais ações"><svg class="ic" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/><circle cx="5" cy="12" r="1.6"/></svg></button>
+        <sc-if value="{{ fechado }}" hint-placeholder-val="{{ true }}">
+          <button type="button" class="btn btn-p btn-lg" onClick="{{ abrir }}"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Registrar andamento</button>
+        </sc-if>
+      </div>
+    </div>
+    <sc-if value="{{ painel }}" hint-placeholder-val="{{ false }}">
+      <div class="card" style="display: flex; flex-direction: column; gap: 16px; padding: 20px 22px">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap">
+          <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap"><h3 style="font-size: 15px; font-weight: 800">Registrar andamento</h3><span class="muted" style="font-size: 13px; font-weight: 700">Paula Ramos · escritório</span></div>
+          <div class="seg" role="group" aria-label="O que registrar">
+            <button type="button" class="{{ segEtapa }}" aria-pressed="{{ pEtapa }}" onClick="{{ verEtapa }}">Etapa</button>
+            <button type="button" class="{{ segItens }}" aria-pressed="{{ pItens }}" onClick="{{ verItens }}">Itens</button>
+            <button type="button" class="{{ segOcor }}" aria-pressed="{{ pOcor }}" onClick="{{ verOcor }}">Ocorrência</button>
+          </div>
+        </div>
+        <sc-if value="{{ isEtapa }}" hint-placeholder-val="{{ true }}">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 14px">
+            <div class="fld"><label class="lbl" for="etp">Etapa</label><select class="inp" id="etp"><option>Fim da montagem</option><option>Assinatura do cliente</option></select></div>
+            <div class="fld"><label class="lbl" for="hra">Hora</label><input class="inp" id="hra" placeholder="hh:mm"></div>
+            <div class="fld"><label class="lbl" for="inf">Informado por</label><select class="inp" id="inf"><option>Carlos Silva · líder</option><option>João Pereira · motorista</option></select></div>
+            <div class="fld"><label class="lbl" for="meio">Meio</label><select class="inp" id="meio"><option>Telefone</option><option>WhatsApp</option></select></div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ isItens }}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; flex-direction: column">
+            <div class="qrow"><span>3.05 Transporte de cadeira Flexform</span><em>de 160</em><input class="inp" aria-label="Feito: Transporte de cadeira Flexform" value="128" style="width: 96px; flex: 0 0 96px"></div>
+            <div class="qrow"><span>3.07 Transporte de gaveteiro volante</span><em>de 60</em><input class="inp" aria-label="Feito: Transporte de gaveteiro volante" value="60" style="width: 96px; flex: 0 0 96px"></div>
+            <div class="qrow"><span>3.12 Transporte de armário alto</span><em>de 12</em><input class="inp" aria-label="Feito: Transporte de armário alto" value="12" style="width: 96px; flex: 0 0 96px"></div>
+            <div class="qrow"><span>3.20 Transporte de caixa de arquivo</span><em>de 95</em><input class="inp" aria-label="Feito: Transporte de caixa de arquivo" value="95" style="width: 96px; flex: 0 0 96px"></div>
+            <div class="qrow"><span>2.02 Montagem de mesa de trabalho</span><em>de 60</em><input class="inp" aria-label="Feito: Montagem de mesa de trabalho" value="22" style="width: 96px; flex: 0 0 96px"></div>
+          </div>
+          <div class="fld" style="max-width: 320px"><label class="lbl" for="inf2">Informado por</label><select class="inp" id="inf2"><option>Carlos Silva · líder</option><option>João Pereira · motorista</option></select></div>
+        </sc-if>
+        <sc-if value="{{ isOcor }}" hint-placeholder-val="{{ false }}">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 14px">
+            <div class="fld" style="grid-column: 1 / -1"><label class="lbl" for="oco">Descrição</label><textarea class="inp" id="oco" rows="3"></textarea></div>
+            <div class="fld"><label class="lbl" for="inf3">Informado por</label><select class="inp" id="inf3"><option>Carlos Silva · líder</option><option>João Pereira · motorista</option></select></div>
+            <div class="fld"><span class="lbl">Fotos</span><button type="button" class="btn btn-s" style="align-self: flex-start"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>Anexar</button></div>
+          </div>
+        </sc-if>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid #F0F0ED; padding-top: 16px">
+          <button type="button" class="btn btn-g" onClick="{{ fechar }}">Cancelar</button>
+          <button type="button" class="btn btn-p" onClick="{{ fechar }}"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Registrar</button>
+        </div>
+      </div>
+    </sc-if>
+    <div class="card" style="display: flex; flex-wrap: wrap">
+      <div class="step done"><i><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i><div><b>Agendar</b><span class="who">Coordenação · Paula Ramos</span><span class="what">8 pessoas · DEF-4G56 e FGH-2B34</span></div></div>
+      <div class="step cur"><i>2</i><div><b>Executar</b><span class="who">Líder · Carlos Silva</span><span class="what">Montagem desde 11:20 · 22 de 60 mesas</span></div></div>
+      <div class="step todo"><i>3</i><div><b>Concluir</b><span class="who">Líder e cliente</span><span class="what">Fotos e assinatura no local · até 18:00</span></div></div>
+      <div class="step todo"><i>4</i><div><b>Revisar</b><span class="who">Coordenação · Paula Ramos</span><span class="what">Itens, fotos e divergências</span></div></div>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+      <div style="flex: 1.6 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+        <div class="card" style="display: flex; flex-direction: column; gap: 18px; padding-bottom: 20px">
+          <div class="ct"><h3>Locais</h3><a href="#" style="font-size: 13.5px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Abrir no Maps</a></div>
+          <div style="display: flex; flex-wrap: wrap; gap: 20px; padding: 0 22px">
+            <div class="addr" style="flex: 1 1 240px"><span class="pin" style="background: #DDF5E4; color: #14602F"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><div><span>Origem · saída 10:20</span><b>Av. Brig. Faria Lima, 3.500 · 4º andar</b><span>Doca pelo subsolo 2 · São Paulo/SP</span></div></div>
+            <div class="addr" style="flex: 1 1 240px"><span class="pin" style="background: #FDF0D5; color: #8A4B00"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span><div><span>Destino · chegada 11:05</span><b>Centro Empresarial · Torre B · 12º andar</b><span>Jabaquara · São Paulo/SP</span></div></div>
+          </div>
+          <div style="display: flex; gap: 28px; flex-wrap: wrap; padding: 0 22px">
+            <div class="kv"><span>Contato do cliente</span><b>Renata Campos · Facilities</b></div>
+          </div>
+        </div>
+        <div class="card" style="display: flex; flex-direction: column; gap: 18px; padding-bottom: 22px">
+          <div class="ct"><h3>Etapas</h3><span class="muted" style="font-size: 13px; font-weight: 700">Janela 07:30–18:00</span></div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr)); gap: 18px 14px; padding: 0 22px">
+            <div class="et done"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i><div><b>07:05</b><span class="nm">Saída do pátio</span><span class="by">João Pereira</span></div></div>
+            <div class="et done"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i><div><b>07:40</b><span class="nm">Chegada na origem</span><span class="by">João Pereira</span></div></div>
+            <div class="et done"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i><div><b>07:50</b><span class="nm">Carregamento</span><span class="by">Carlos Silva</span></div></div>
+            <div class="et done"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i><div><b>10:20</b><span class="nm">Saída da origem</span><span class="by">João Pereira</span></div></div>
+            <div class="et done"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i><div><b>11:05</b><span class="nm">Chegada no destino</span><span class="by">Paula Ramos · escritório</span></div></div>
+            <div class="et cur"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></i><div><b>desde 11:20</b><span class="nm">Montagem</span><span class="by">Carlos Silva</span></div></div>
+            <div class="et todo"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg></i><div><b>até 18:00</b><span class="nm">Fim da montagem</span></div></div>
+            <div class="et todo"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg></i><div><b>—</b><span class="nm">Assinatura do cliente</span></div></div>
+          </div>
+        </div>
+        <div class="card" style="display: flex; flex-direction: column; gap: 14px; padding-bottom: 14px">
+          <div class="ct"><h3>Itens</h3><a href="OpDemanda.dc.html" style="font-size: 13.5px; font-weight: 700">Escopo e saldo da DM 000045</a></div>
+          <div style="overflow-x: auto; padding: 0 22px">
+            <table class="tb" style="min-width: 560px">
+              <thead><tr><th>Item</th><th>Un</th><th class="r">Planejado</th><th style="width: 200px; text-align: right">Feito às 14:20</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><span class="it"><span class="cd">3.05</span>Transporte de cadeira Flexform</span></td>
+                  <td class="muted">un</td>
+                  <td class="r"><b style="display: block">160</b><span class="muted" style="font-size: 12.5px; font-weight: 600">150 + 10</span></td>
+                  <td><div class="prog"><div class="bar"><i style="width: 80%; background: #D98B00"></i></div><b>128 de 160</b></div></td>
+                </tr>
+                <tr class="sub">
+                  <td colspan="4"><div style="display: flex; gap: 8px; flex-wrap: wrap; padding-left: 42px">
+                    <span class="incl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>+10 incluídas em campo · Carlos Silva · 09:32 · pedido por Renata Campos · 2 fotos</span>
+                    <span class="badge sm s-div"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></svg>+10 além do planejado</span>
+                  </div></td>
+                </tr>
+                <tr>
+                  <td><span class="it"><span class="cd">3.07</span>Transporte de gaveteiro volante</span></td>
+                  <td class="muted">un</td>
+                  <td class="r"><b>60</b></td>
+                  <td><div class="prog"><div class="bar"><i style="width: 100%; background: #1F8A4C"></i></div><b>60 de 60</b></div></td>
+                </tr>
+                <tr>
+                  <td><span class="it"><span class="cd">3.12</span>Transporte de armário alto</span></td>
+                  <td class="muted">un</td>
+                  <td class="r"><b>12</b></td>
+                  <td><div class="prog"><div class="bar"><i style="width: 100%; background: #1F8A4C"></i></div><b>12 de 12</b></div></td>
+                </tr>
+                <tr>
+                  <td><span class="it"><span class="cd">3.20</span>Transporte de caixa de arquivo</span></td>
+                  <td class="muted">cx</td>
+                  <td class="r"><b>95</b></td>
+                  <td><div class="prog"><div class="bar"><i style="width: 100%; background: #1F8A4C"></i></div><b>95 de 95</b></div></td>
+                </tr>
+                <tr>
+                  <td><span class="it"><span class="cd">2.02</span>Montagem de mesa de trabalho</span></td>
+                  <td class="muted">un</td>
+                  <td class="r"><b>60</b></td>
+                  <td><div class="prog"><div class="bar"><i style="width: 37%; background: #D98B00"></i></div><b>22 de 60</b></div></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card" style="display: flex; flex-direction: column; gap: 14px; padding-bottom: 22px">
+          <div class="ct"><h3>Fotos · 12</h3><button type="button" class="btn btn-s btn-sm"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>Anexar</button></div>
+          <div style="display: flex; gap: 12px; padding: 0 22px; flex-wrap: wrap">
+            <div class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><em>Origem</em></div>
+            <div class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><em>Carga</em></div>
+            <div class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><em>Sala 412</em></div>
+            <div class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><em>Sala 412</em></div>
+            <div class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><em>Destino</em></div>
+            <button type="button" class="thumb" style="background: #fff; border-style: dashed; cursor: pointer; font: 800 15px Manrope, sans-serif; color: #161616" aria-label="+7 fotos">+7</button>
+          </div>
+        </div>
+      </div>
+      <div style="flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+        <div class="card" style="display: flex; flex-direction: column; gap: 14px; padding-bottom: 20px">
+          <div class="ct"><h3>Equipe · 8</h3><button type="button" class="btn btn-g btn-sm">Alterar</button></div>
+          <div style="display: flex; flex-direction: column; gap: 12px; padding: 0 22px">
+            <div class="mem"><span class="av">CS</span><div class="mn"><b>Carlos Silva</b><span class="rl"><span class="tag">Líder</span><span class="tag app"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>no app</span></span></div><a href="#" class="btn btn-s" style="width: 40px; padding: 0" aria-label="Ligar para Carlos Silva"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg></a></div>
+            <div class="mem"><span class="av">JP</span><div class="mn"><b>João Pereira</b><span class="rl"><span class="tag">Motorista</span><span class="tag app"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>no app</span>DEF-4G56</span></div><a href="#" class="btn btn-s" style="width: 40px; padding: 0" aria-label="Ligar para João Pereira"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg></a></div>
+            <div class="mem"><span class="av">RC</span><div class="mn"><b>Rafael Costa</b><span class="rl">Montador</span></div></div>
+            <div class="mem"><span class="av">BT</span><div class="mn"><b>Bruno Teixeira</b><span class="rl">Montador</span></div></div>
+            <div class="mem"><span class="av">TS</span><div class="mn"><b>Thiago Souza</b><span class="rl">Ajudante</span></div></div>
+            <div class="mem"><span class="av g">DA</span><div class="mn"><b>Diego Alves</b><span class="rl"><span class="tag">Freelancer</span>Montador · presença por Carlos Silva</span></div></div>
+            <div class="mem"><span class="av g">WS</span><div class="mn"><b>Wesley Santos</b><span class="rl"><span class="tag">Freelancer</span>Ajudante · presença por Carlos Silva</span></div></div>
+            <div class="mem"><span class="av g">VM</span><div class="mn"><b>Valter Moreira</b><span class="rl"><span class="tag">Terceiro</span>Motorista · Rota Sul · presença por Carlos Silva</span></div></div>
+            <div style="height: 1px; background: #F0F0ED; margin: 4px 0"></div>
+            <span style="font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: #5F6368">Veículos · 2</span>
+            <div class="mem"><span class="av g"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg></span><div class="mn"><b>VW Delivery 11.180 baú</b><span class="rl">DEF-4G56 · 5.000 kg · 30 m³</span></div></div>
+            <div class="mem"><span class="av g"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg></span><div class="mn"><b>Baú truck · Rota Sul</b><span class="rl"><span class="tag">Terceiro</span>FGH-2B34 · 8.000 kg · 45 m³</span></div></div>
+          </div>
+        </div>
+        <div class="card" style="display: flex; flex-direction: column; gap: 14px; padding-bottom: 18px">
+          <div class="ct"><h3>Histórico</h3></div>
+          <div style="display: flex; flex-direction: column">
+            <div class="tl"><div style="display: flex; flex-direction: column; align-items: center"><span class="dot amber"></span><span class="line"></span></div><div style="padding-bottom: 14px"><b>Início da montagem</b><span>Carlos Silva · líder · celular · 11:20</span></div></div>
+            <div class="tl"><div style="display: flex; flex-direction: column; align-items: center"><span class="dot"></span><span class="line"></span></div><div style="padding-bottom: 14px"><b>Chegada no destino</b><span>Paula Ramos · escritório · informado por João Pereira · 11:05</span></div></div>
+            <div class="tl"><div style="display: flex; flex-direction: column; align-items: center"><span class="dot"></span><span class="line"></span></div><div style="padding-bottom: 14px"><b>Saída da origem</b><span>João Pereira · motorista · celular · 10:20</span></div></div>
+            <div class="tl"><div style="display: flex; flex-direction: column; align-items: center"><span class="dot red"></span><span class="line"></span></div><div style="padding-bottom: 14px"><b>+10 Transporte de cadeira Flexform incluídas</b><span>Carlos Silva · líder · celular · pedido por Renata Campos · 2 fotos · 09:32</span></div></div>
+            <div class="tl"><div style="display: flex; flex-direction: column; align-items: center"><span class="dot"></span><span class="line"></span></div><div style="padding-bottom: 14px"><b>Início do carregamento</b><span>Carlos Silva · líder · celular · 07:50</span></div></div>
+            <div class="tl"><div style="display: flex; flex-direction: column; align-items: center"><span class="dot"></span><span class="line"></span></div><div style="padding-bottom: 14px"><b>Chegada na origem</b><span>João Pereira · motorista · celular · 07:40</span></div></div>
+            <div class="tl"><div style="display: flex; flex-direction: column; align-items: center"><span class="dot"></span></div><div><b>Saída do pátio</b><span>João Pereira · motorista · celular · 07:05</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1720}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const s = this.state || {};
+    const painel = s.painel === true;
+    const tipo = s.tipo || 'etapa';
+    const set = (o) => () => this.setState(o);
+    const on = (t) => (tipo === t ? 'on' : '');
+    const pr = (t) => (tipo === t ? 'true' : 'false');
+    return {
+      painel: painel,
+      fechado: !painel,
+      abrir: set({ painel: true }),
+      fechar: set({ painel: false, tipo: 'etapa' }),
+      isEtapa: tipo === 'etapa',
+      isItens: tipo === 'itens',
+      isOcor: tipo === 'ocorrencia',
+      segEtapa: on('etapa'),
+      segItens: on('itens'),
+      segOcor: on('ocorrencia'),
+      pEtapa: pr('etapa'),
+      pItens: pr('itens'),
+      pOcor: pr('ocorrencia'),
+      verEtapa: set({ tipo: 'etapa' }),
+      verItens: set({ tipo: 'itens' }),
+      verOcor: set({ tipo: 'ocorrencia' })
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Revisão interna da OS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+a{color:#0054CE;text-decoration:none}a:hover{color:#004496}
+h1,h2,h3,p{margin:0}
+.ic{width:20px;height:20px;flex:0 0 auto}
+.ic-s{width:16px;height:16px;flex:0 0 auto}
+.sb{flex:0 0 248px;background:#161616;color:#fff;display:flex;flex-direction:column;padding:26px 14px 18px;gap:4px}
+.nav{display:flex;align-items:center;gap:12px;height:48px;padding:0 14px;border-radius:10px;color:rgba(255,255,255,.72);font-weight:600;font-size:15px;text-decoration:none;position:relative}
+.nav:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav.on{background:rgba(255,255,255,.12);color:#fff}
+.nav.on::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:3px;background:#E71C23}
+.nav .cnt{margin-left:auto;min-width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.nav .cnt.red{background:#E71C23;color:#fff}
+.nav.agent{color:#C9B8FB}.nav.agent:hover{color:#E0D6FF}
+.main{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;padding:30px 44px 36px;gap:20px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;font:700 14px Manrope,sans-serif;border:1px solid transparent;cursor:pointer;white-space:nowrap;text-decoration:none}
+.btn-p{background:#E71C23;color:#fff}.btn-p:hover{background:#AD0015;color:#fff}
+.btn-s{background:#fff;color:#161616;border-color:#D4D4CF}.btn-s:hover{background:#F0F0ED;color:#161616}
+.btn-g{background:transparent;color:#5F6368}.btn-g:hover{background:#E8E8E4;color:#161616}
+.btn-lg{height:46px;padding:0 20px;font-size:15px}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px}
+.ct{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 22px 0}
+.ct h3{font-size:15px;font-weight:800}
+.muted{color:#5F6368}
+.seg{display:inline-flex;background:#E8E8E4;border-radius:8px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg a{height:34px;padding:0 14px;border-radius:6px;display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:13.5px;color:#5F6368;text-decoration:none}
+.seg a.on{background:#fff;color:#161616;border:1px solid #E5E5E1}
+.seg a em{font-style:normal;min-width:20px;height:20px;border-radius:999px;background:rgba(0,0,0,.07);font-size:11.5px;display:inline-flex;align-items:center;justify-content:center;padding:0 6px}
+.badge{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:6px;font-size:13px;font-weight:700;white-space:nowrap;border:1px solid transparent}
+.badge svg{width:14px;height:14px;flex:0 0 auto}
+.badge.sm{height:24px;padding:0 8px;font-size:12.5px}
+.s-rev{background:#DDF1F8;border-color:#B5DFEE;color:#0B5566}
+.t-plan{background:#F0F0ED;border-color:#E5E5E1;color:#3F403F}
+.s-div{background:#fff;border-color:#E71C23;color:#AD0015}
+.s-agent{background:#F3EEFF;border-color:#D9CCFB;color:#5B3FC4}
+.colh{display:flex;align-items:center;gap:8px;padding:0 4px;min-height:32px}
+.colh h2{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;display:inline-flex;align-items:center;gap:8px;color:#0B5566}
+.colh h2 i{width:9px;height:9px;border-radius:50%;display:inline-block;background:#0E8AA8}
+.colh em{font-style:normal;min-width:24px;height:24px;border-radius:999px;background:#E8E8E4;color:#161616;font-size:12.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.qi{display:flex;flex-direction:column;gap:6px;padding:16px 18px;border-top:1px solid #F0F0ED;color:#161616;text-decoration:none;position:relative}
+.qi:first-child{border-top:0}
+.qi:hover{background:#FAFAF8;color:#161616}
+.qi.sel{background:#FFFBFB}
+.qi.sel::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:3px;background:#E71C23}
+.qi .t{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.qi .t b{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums}
+.qi .c{font-size:14px;font-weight:700}
+.qi .d{font-size:13px;color:#5F6368;font-weight:600}
+.qi .f{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:8px;border-top:1px solid #F0F0ED;font-size:13px;color:#5F6368;font-weight:600}
+.ck{display:flex;flex-direction:column;gap:8px;padding:16px 18px;min-width:0}
+.ck+.ck{border-left:1px solid #F0F0ED}
+.ck .h{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:800}
+.ck .h i{width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+.ck .h i svg{width:13px;height:13px}
+.ck .h i.ok{background:#DDF5E4;color:#14602F;border:1px solid #B6E4C4}
+.ck .h i.no{background:#fff;color:#AD0015;border:1px solid #E71C23}
+.ck .big{font-size:20px;font-weight:800;line-height:1.2;font-variant-numeric:tabular-nums}
+.ck .sm{font-size:12.5px;color:#5F6368;font-weight:600}
+.mini{width:52px;height:40px;border-radius:6px;background:#F0F0ED;border:1px solid #E5E5E1;display:inline-flex;align-items:center;justify-content:center;color:#5F6368;flex:0 0 auto}
+.mini svg{width:18px;height:18px}
+.tb{width:100%;border-collapse:collapse;font-size:14px}
+.tb th{font-size:12px;font-weight:700;color:#5F6368;text-align:left;padding:0 10px 10px;white-space:nowrap}
+.tb td{padding:12px 10px;border-top:1px solid #F0F0ED;vertical-align:middle;font-variant-numeric:tabular-nums}
+.tb th:first-child,.tb td:first-child{padding-left:0}
+.tb th:last-child,.tb td:last-child{padding-right:0}
+.tb .r{text-align:right}
+.tb td.r b{font-weight:800}
+.it{display:flex;align-items:baseline;gap:8px;font-weight:700}
+.cd{flex:0 0 34px;color:#5F6368;font-weight:700}
+.dv{display:flex;flex-direction:column;gap:14px;padding:18px 22px}
+.dv .h{display:flex;align-items:flex-start;gap:10px}
+.dv .h svg{width:20px;height:20px;color:#AD0015;flex:0 0 auto;margin-top:1px}
+.dv .h b{display:block;font-size:15.5px;font-weight:800}
+.dv .h span{display:block;font-size:13.5px;color:#5F6368;font-weight:600}
+.opts{display:flex;flex-wrap:wrap;gap:10px}
+.opt{display:inline-flex;align-items:center;gap:10px;min-height:44px;padding:0 16px 0 14px;border:1px solid #D4D4CF;border-radius:10px;background:#fff;font:700 14px Manrope,sans-serif;color:#161616;cursor:pointer;text-align:left}
+.opt:hover{background:#FAFAF8}
+.opt i{width:18px;height:18px;border-radius:50%;border:2px solid #B9B9B3;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center}
+.opt.on{border-color:#161616;background:#FAFAF8}
+.opt.on i{border-color:#E71C23}
+.opt.on i::after{content:"";width:8px;height:8px;border-radius:50%;background:#E71C23}
+.inp{height:40px;border:1px solid #D4D4CF;border-radius:8px;padding:0 12px;font:600 14px Manrope,sans-serif;background:#fff;color:#161616;width:100%}
+.inp:focus{outline:2px solid #0054CE;outline-offset:1px}
+.lbl{font-size:12.5px;font-weight:700;color:#3F403F;display:block;margin-bottom:6px}
+.fld{display:flex;flex-direction:column;min-width:0}
+.res{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.res span{display:inline-flex;align-items:center;height:24px;padding:0 8px;border-radius:6px;background:#F0F0ED;border:1px solid #E5E5E1;font-size:12px;font-weight:700;color:#3F403F;white-space:nowrap}
+.res b{font-size:14.5px;font-weight:700}
+.av{width:36px;height:36px;border-radius:50%;background:#E71C23;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto}
+</style>
+</helmet>
+<div style="min-height: 100%; display: flex; flex-wrap: wrap">
+  <aside class="sb">
+    <a href="Inicio.dc.html" style="display: block; padding: 4px 14px 24px"><img src="/_blob/51b94b624eef7c9daa70d9dd1cfb5330" alt="Dutelog Soluções Logísticas" style="width: 148px; height: auto; display: block"></a>
+    <a class="nav" href="Inicio.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>Início</a>
+    <a class="nav on" href="OpHoje.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Operação<span class="cnt red">2</span></a>
+    <a class="nav" href="WmsExpedicao.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 8.35V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8.35A2 2 0 0 1 3.26 6.5l8-3.2a2 2 0 0 1 1.48 0l8 3.2A2 2 0 0 1 22 8.35Z"/><path d="M6 18h12M6 14h12"/><rect x="6" y="10" width="12" height="12"/></svg>Armazenagem</a>
+    <a class="nav" href="Cadastros.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Clientes</a>
+    <a class="nav agent" href="OpRevisao.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></svg>Agent Dute</a>
+    <div style="margin-top: auto; padding: 14px 10px 0; border-top: 1px solid rgba(255,255,255,.1); display: flex; align-items: center; gap: 12px">
+      <span class="av">PR</span>
+      <div style="min-width: 0"><div style="font-weight: 700; font-size: 14.5px">Paula Ramos</div><div style="font-size: 12.5px; color: rgba(255,255,255,.55)">Coordenação</div></div>
+    </div>
+  </aside>
+  <div class="main">
+    <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap">
+      <h1 style="font-size: 28px; font-weight: 800; letter-spacing: -.02em; margin-right: 8px">Operação</h1>
+      <nav class="seg" aria-label="Visões da operação"><a href="OpHoje.dc.html">Hoje</a><a href="OpAgenda.dc.html">Agenda</a><a href="OpDemandas.dc.html">Demandas</a><a class="on" href="OpRevisao.dc.html" aria-current="page">Revisão<em>2</em></a></nav>
+      <span class="muted" style="margin-left: auto; font-size: 13.5px; font-weight: 700">Terça, 20 de outubro · 18:10</span>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+      <section style="flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+        <div class="colh"><h2><i></i>Para revisar</h2><em>2</em></div>
+        <div class="card" style="overflow: hidden">
+          <a class="qi sel" href="OpRevisao.dc.html">
+            <span class="t"><b>OS 000211</b><span class="badge sm s-div"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></svg>2 divergências</span></span>
+            <span class="c">Itaú Unibanco · DM 000045</span>
+            <span class="d">Transporte e montagem · 4º andar → Torre B, 12º andar</span>
+            <span class="f"><span class="badge sm t-plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Planejada</span>Assinada 17:52 · há 18 min</span>
+          </a>
+          <a class="qi" href="OpRevisao.dc.html">
+            <span class="t"><b>OS 000213</b></span>
+            <span class="c">Itaú Unibanco · DM 000047</span>
+            <span class="d">Montagem de 20 mesas · Agência Moema · Ana Lima, Lucas Ferreira</span>
+            <span class="f"><span class="badge sm t-plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Planejada</span>Assinada 12:40 por Sérgio Matos · há 5h30</span>
+          </a>
+        </div>
+      </section>
+      <div style="flex: 3 1 640px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap">
+          <div style="display: flex; flex-direction: column; gap: 6px; min-width: 0">
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap"><h2 style="font-size: 26px; font-weight: 800; letter-spacing: -.02em">OS 000211</h2><span class="badge s-rev"><i style="width: 7px; height: 7px; border-radius: 50%; background: #0E8AA8; display: inline-block"></i>Em revisão</span><span class="badge t-plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Planejada</span></div>
+            <p style="font-size: 15px; color: #5F6368"><a href="OpDemanda.dc.html" style="font-weight: 700">DM 000045</a> · Itaú Unibanco · Transporte e montagem · hoje 07:30–18:00 · líder Carlos Silva</p>
+            <p style="font-size: 14px; font-weight: 600">Concluída em campo 17:45 · assinada 17:52 por Renata Campos (Facilities, Itaú Unibanco)</p>
+          </div>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap">
+            <a href="OpOS.dc.html" class="btn btn-s">Ver OS</a>
+            <a href="OSImpressao.dc.html" class="btn btn-s"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Imprimir</a>
+          </div>
+        </div>
+        <div class="card" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr))">
+          <div class="ck">
+            <span class="h"><i class="ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>Fotos · 18</span>
+            <div style="display: flex; align-items: center; gap: 6px">
+              <span class="mini"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
+              <span class="mini"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
+              <a href="OpOS.dc.html" style="font-size: 13px; font-weight: 800; padding: 0 4px">+16</a>
+            </div>
+          </div>
+          <div class="ck">
+            <span class="h"><i class="ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>Assinatura</span>
+            <div style="height: 48px; border: 1px solid #E5E5E1; border-radius: 8px; background: #FAFAF8; display: flex; align-items: center; justify-content: center">
+              <svg viewBox="0 0 300 100" style="width: 130px; height: 42px" role="img" aria-label="Assinatura de Renata Campos"><path d="M18 62 C 34 20, 52 78, 72 46 S 108 18, 124 54 S 158 86, 178 42 S 214 20, 232 58 S 262 70, 284 40" stroke="#161616" stroke-width="3" fill="none" stroke-linecap="round"/></svg>
+            </div>
+            <span class="sm">Renata Campos · 17:52</span>
+          </div>
+          <div class="ck">
+            <span class="h"><i class="ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>Equipe e horários</span>
+            <span class="big">10h15</span>
+            <span class="sm">contra 10h30 planejadas · 8 pessoas</span>
+          </div>
+          <div class="ck">
+            <span class="h"><i class="no"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></svg></i>Itens com divergência</span>
+            <span class="big" style="color: #AD0015">2</span>
+            <span class="sm">+10 cadeiras · −2 montagens</span>
+          </div>
+        </div>
+        <div class="card" style="display: flex; flex-direction: column; gap: 14px; padding-bottom: 10px">
+          <div class="ct"><h3>Itens · executado e saldo</h3><a href="OpDemanda.dc.html" style="font-size: 13.5px; font-weight: 700">Escopo da DM 000045</a></div>
+          <div style="overflow-x: auto; padding: 0 22px">
+            <table class="tb" style="min-width: 660px">
+              <thead><tr><th>Item</th><th>Un</th><th class="r">Planejado</th><th class="r">Executado</th><th class="r">Diferença</th><th class="r">Orçado na DM</th><th class="r">Saldo na DM</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><span class="it"><span class="cd">3.05</span>Transporte de cadeira Flexform</span></td>
+                  <td class="muted">un</td>
+                  <td class="r">150</td>
+                  <td class="r"><b>160</b></td>
+                  <td class="r"><span class="badge sm s-div">+10</span></td>
+                  <td class="r">300</td>
+                  <td class="r"><b>140</b></td>
+                </tr>
+                <tr>
+                  <td><span class="it"><span class="cd">3.07</span>Transporte de gaveteiro volante</span></td>
+                  <td class="muted">un</td>
+                  <td class="r">60</td>
+                  <td class="r"><b>60</b></td>
+                  <td class="r muted">—</td>
+                  <td class="r">120</td>
+                  <td class="r"><b>60</b></td>
+                </tr>
+                <tr>
+                  <td><span class="it"><span class="cd">3.12</span>Transporte de armário alto</span></td>
+                  <td class="muted">un</td>
+                  <td class="r">12</td>
+                  <td class="r"><b>12</b></td>
+                  <td class="r muted">—</td>
+                  <td class="r">24</td>
+                  <td class="r"><b>12</b></td>
+                </tr>
+                <tr>
+                  <td><span class="it"><span class="cd">3.20</span>Transporte de caixa de arquivo</span></td>
+                  <td class="muted">cx</td>
+                  <td class="r">95</td>
+                  <td class="r"><b>95</b></td>
+                  <td class="r muted">—</td>
+                  <td class="r">180</td>
+                  <td class="r"><b>85</b></td>
+                </tr>
+                <tr>
+                  <td><span class="it"><span class="cd">2.02</span>Montagem de mesa de trabalho</span></td>
+                  <td class="muted">un</td>
+                  <td class="r">60</td>
+                  <td class="r"><b>58</b></td>
+                  <td class="r"><span class="badge sm s-div">−2</span></td>
+                  <td class="r">120</td>
+                  <td class="r"><b>{{ saldoMontagem }}</b></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 4px 4px 0"><h3 style="font-size: 15px; font-weight: 800">Divergências</h3><span class="badge sm s-div">2</span></div>
+        <div class="card dv">
+          <div class="h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></svg><div><b>+10 Transporte de cadeira Flexform · acima do orçado (310 de 300)</b><span>Incluídas em campo por Carlos Silva às 09:32 · pedido por Renata Campos no local, sala 412 · 2 fotos</span><span>4º andar 160 + 5º andar 150 · orçado 300</span></div></div>
+          <div class="opts" role="radiogroup" aria-label="Decisão sobre as 10 cadeiras">
+            <button type="button" role="radio" aria-checked="{{ a1Aditivo }}" class="{{ o1Aditivo }}" onClick="{{ pick1Aditivo }}"><i></i>Pedir aditivo ao comercial</button>
+            <button type="button" role="radio" aria-checked="{{ a1Absorver }}" class="{{ o1Absorver }}" onClick="{{ pick1Absorver }}"><i></i>Absorver sem cobrar</button>
+            <button type="button" role="radio" aria-checked="{{ a1Corrigir }}" class="{{ o1Corrigir }}" onClick="{{ pick1Corrigir }}"><i></i>Corrigir quantidade</button>
+          </div>
+          <sc-if value="{{ d1Absorver }}" hint-placeholder-val="{{ false }}">
+            <div class="fld" style="max-width: 460px"><label class="lbl" for="mot1">Motivo</label><input class="inp" id="mot1"></div>
+          </sc-if>
+          <sc-if value="{{ d1Corrigir }}" hint-placeholder-val="{{ false }}">
+            <div class="fld" style="max-width: 220px"><label class="lbl" for="qtd1">Quantidade executada</label><input class="inp" id="qtd1" value="160"></div>
+          </sc-if>
+        </div>
+        <div class="card dv">
+          <div class="h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></svg><div><b>−2 Montagem de mesa de trabalho · pé quebrado</b><span>Carlos Silva às 17:50: 2 mesas com pé quebrado; ficam para o 5º andar</span></div></div>
+          <div class="opts" role="radiogroup" aria-label="Decisão sobre as 2 montagens">
+            <button type="button" role="radio" aria-checked="{{ a2Proxima }}" class="{{ o2Proxima }}" onClick="{{ pick2Proxima }}"><i></i>Passar para a próxima OS do 5º andar</button>
+            <button type="button" role="radio" aria-checked="{{ a2Encerrar }}" class="{{ o2Encerrar }}" onClick="{{ pick2Encerrar }}"><i></i>Encerrar sem executar</button>
+          </div>
+        </div>
+        <div class="card" style="background: #F7F4FF; border-color: #D9CCFB; padding: 18px 22px; display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap">
+          <span style="width: 40px; height: 40px; border-radius: 10px; background: #fff; border: 1px solid #D9CCFB; color: #5B3FC4; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></svg></span>
+          <div style="flex: 1 1 380px; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap"><b style="color: #5B3FC4; font-size: 14px; font-weight: 800">Agent Dute</b><span class="badge sm s-agent">sugestão</span></div>
+            <p style="font-size: 15px; font-weight: 700">Montagem de mesa: 26 min por unidade com 3 montadores e o líder (média do Itaú: 25 min em 3 OS)</p>
+            <span style="font-size: 13px; color: #5F6368; font-weight: 600">base: OS 000211 · 58 mesas de 11:20 a 17:45 · 3 OS de montagem do Itaú</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; align-self: center">
+            <sc-if value="{{ agNovo }}" hint-placeholder-val="{{ true }}">
+              <button type="button" class="btn btn-s" onClick="{{ usar }}">Usar no planejamento do 5º andar</button>
+              <button type="button" class="btn btn-g" onClick="{{ ignorar }}">Ignorar</button>
+            </sc-if>
+            <sc-if value="{{ agUsado }}" hint-placeholder-val="{{ false }}">
+              <span style="display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: #14602F"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>No planejamento do 5º andar</span>
+              <button type="button" class="btn btn-g" onClick="{{ desfazer }}">Desfazer</button>
+            </sc-if>
+            <sc-if value="{{ agIgnorado }}" hint-placeholder-val="{{ false }}">
+              <span class="muted" style="font-weight: 700">Ignorada</span>
+              <button type="button" class="btn btn-g" onClick="{{ desfazer }}">Desfazer</button>
+            </sc-if>
+          </div>
+        </div>
+        <div class="card" style="padding: 18px 22px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap">
+          <div style="flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+            <div class="res"><span>{{ r1Onde }}</span><b>{{ r1 }}</b></div>
+            <div class="res"><span>{{ r2Onde }}</span><b>{{ r2 }}</b></div>
+          </div>
+          <sc-if value="{{ comAditivo }}" hint-placeholder-val="{{ true }}">
+            <a href="OpHoje.dc.html" class="btn btn-p btn-lg"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Concluir revisão e pedir aditivo</a>
+          </sc-if>
+          <sc-if value="{{ semAditivo }}" hint-placeholder-val="{{ false }}">
+            <a href="OpHoje.dc.html" class="btn btn-p btn-lg"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Concluir revisão</a>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1550}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const s = this.state || {};
+    const d1 = s.d1 || 'aditivo';
+    const d2 = s.d2 || 'proxima';
+    const ag = s.ag || 'novo';
+    const set = (o) => () => this.setState(o);
+    const opt = (on) => (on ? 'opt on' : 'opt');
+    const aria = (on) => (on ? 'true' : 'false');
+    const r1 = {
+      aditivo: ['Comercial · Fernanda Lopes', 'Aditivo de +10 Transporte de cadeira Flexform'],
+      absorver: ['Sem cobrança', '+10 Transporte de cadeira Flexform absorvidas'],
+      corrigir: ['Correção', 'Transporte de cadeira Flexform com a quantidade corrigida']
+    }[d1];
+    const r2 = {
+      proxima: ['Próxima OS · 5º andar', '+2 Montagem de mesa de trabalho no saldo'],
+      encerrar: ['Encerrada', '2 Montagem de mesa de trabalho sem executar']
+    }[d2];
+    return {
+      o1Aditivo: opt(d1 === 'aditivo'), a1Aditivo: aria(d1 === 'aditivo'), pick1Aditivo: set({ d1: 'aditivo' }),
+      o1Absorver: opt(d1 === 'absorver'), a1Absorver: aria(d1 === 'absorver'), pick1Absorver: set({ d1: 'absorver' }),
+      o1Corrigir: opt(d1 === 'corrigir'), a1Corrigir: aria(d1 === 'corrigir'), pick1Corrigir: set({ d1: 'corrigir' }),
+      o2Proxima: opt(d2 === 'proxima'), a2Proxima: aria(d2 === 'proxima'), pick2Proxima: set({ d2: 'proxima' }),
+      o2Encerrar: opt(d2 === 'encerrar'), a2Encerrar: aria(d2 === 'encerrar'), pick2Encerrar: set({ d2: 'encerrar' }),
+      d1Absorver: d1 === 'absorver',
+      d1Corrigir: d1 === 'corrigir',
+      saldoMontagem: d2 === 'proxima' ? '62' : '60',
+      r1Onde: r1[0], r1: r1[1],
+      r2Onde: r2[0], r2: r2[1],
+      comAditivo: d1 === 'aditivo',
+      semAditivo: d1 !== 'aditivo',
+      agNovo: ag === 'novo',
+      agUsado: ag === 'usado',
+      agIgnorado: ag === 'ignorado',
+      usar: set({ ag: 'usado' }),
+      ignorar: set({ ag: 'ignorado' }),
+      desfazer: set({ ag: 'novo' })
+    };
+  }
+}
+</script>
+</body>
+</html>
