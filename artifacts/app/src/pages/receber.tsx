@@ -43,6 +43,7 @@ import {
   receivingArrivalMeta,
   receivingRowMeta,
   type ShipmentNotice,
+  tarefaPrincipal,
   unlinkedShipmentNotices,
 } from "@/lib/warehouse-ops/receiving";
 import { formatRequestAge } from "./customer-requests";
@@ -182,10 +183,12 @@ export default function Receber() {
     setSelectedId(entry.task.id);
   };
 
+  // Na v3, só a primeira tarefa da fila tem a ação principal; as outras são secundárias.
+  const principal = tarefaPrincipal(board);
   const rowAction = (entry: TaskQueueEntry, label: string) => (
     <Button
       type="button"
-      variant={selected?.task.id === entry.task.id ? "secondary" : "default"}
+      variant={selected?.task.id === entry.task.id ? "secondary" : principal === entry.task.id ? "default" : "outline"}
       onClick={() => selectEntry(entry)}
     >
       {label}
@@ -218,7 +221,7 @@ export default function Receber() {
                 { value: "done", label: "Recebidos" },
               ]}
             />
-            <Button type="button" onClick={() => setUnplannedOpen(true)}>
+            <Button type="button" variant="outline" onClick={() => setUnplannedOpen(true)}>
               <PackageOpen className="size-4" />
               Chegada avulsa
             </Button>
@@ -250,9 +253,8 @@ export default function Receber() {
             {view === "done" ? (
               <QueueGroup
                 title="Recebidos"
-                hint="recentes"
                 count={board.done.length}
-                empty="Nenhuma chegada concluída ainda."
+                empty="Nenhuma chegada recebida."
               >
                 {board.done.map((entry) => (
                   <QueueRow
@@ -282,9 +284,8 @@ export default function Receber() {
               <>
                 <QueueGroup
                   title="Para conferir"
-                  hint="chegadas"
                   count={pendingNotices.length + board.check.length}
-                  empty="Nenhuma chegada esperando conferência. Registre uma chegada avulsa ou aguarde o aviso do portal."
+                  empty="Nenhuma chegada para conferir."
                 >
                   {pendingNotices.map((notice) => (
                     <QueueRow
@@ -333,9 +334,8 @@ export default function Receber() {
 
                 <QueueGroup
                   title="Para guardar"
-                  hint="endereçar"
                   count={board.store.length}
-                  empty="Nada esperando guarda. O que foi conferido já está no endereço."
+                  empty="Nada para guardar."
                 >
                   {board.store.map((entry) => (
                     <QueueRow
@@ -407,10 +407,10 @@ export default function Receber() {
   );
 }
 
-function NoticeCard({ notice }: { notice: ShipmentNotice }) {
+export function NoticeCard({ notice }: { notice: ShipmentNotice }) {
   return (
     <div className="rounded-lg border border-border bg-card p-5">
-      <div className="text-sm font-semibold text-primary">Aviso de envio</div>
+      <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Aviso de envio</div>
       <h2 className="mt-2 text-lg font-semibold">{[notice.number, notice.supplier].filter(Boolean).join(" · ")}</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         {[notice.invoice ? `NF ${notice.invoice}` : null, notice.units ? `${notice.units} un.` : null]

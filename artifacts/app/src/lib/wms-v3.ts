@@ -14,6 +14,8 @@ export const TELAS_DO_WMS_NA_V3: readonly string[] = [
   "/pedidos",
   // Parte 4.7d: o Estoque (os itens com a ficha e o histórico).
   "/estoque",
+  // Parte 4.7e: o Receber (conferir e guardar as chegadas).
+  "/wms/receber",
 ];
 
 /**

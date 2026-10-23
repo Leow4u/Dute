@@ -36,7 +36,6 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -658,30 +657,26 @@ export function UnplannedReceiptDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-6xl">
+      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-6xl" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>Registrar chegada avulsa · {activeCustomer.name}</DialogTitle>
-          <DialogDescription>
-            Use quando o fornecedor entregou sem aviso da cliente. Isso cria a tarefa de conferência, não lança estoque ainda.
-            A chegada entra para {activeCustomer.name}, o cliente ativo no menu.
-          </DialogDescription>
         </DialogHeader>
         <form className="space-y-5" onSubmit={submit}>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label>Fornecedor</Label>
+              <Label htmlFor="chegada-fornecedor">Fornecedor</Label>
               <Input
+                id="chegada-fornecedor"
                 value={supplier}
                 onChange={(event) => setSupplier(event.target.value)}
-                placeholder="Nome do fornecedor"
               />
             </div>
             <div className="space-y-2">
-              <Label>NF / pedido</Label>
+              <Label htmlFor="chegada-documento">NF / pedido</Label>
               <Input
+                id="chegada-documento"
                 value={invoiceNumber}
                 onChange={(event) => setInvoiceNumber(event.target.value)}
-                placeholder="Documento recebido"
               />
             </div>
           </div>

@@ -46,6 +46,14 @@ export function buildReceivingBoard(queues: NormalizedQueue[]): ReceivingBoard {
   };
 }
 
+/**
+ * A tarefa da ação principal da tela (v3, parte 4.7e): a primeira a conferir,
+ * senão a primeira a guardar. As outras ações da fila são secundárias.
+ */
+export function tarefaPrincipal(board: Pick<ReceivingBoard, "check" | "store">): string | null {
+  return (board.check[0] ?? board.store[0])?.task.id ?? null;
+}
+
 export function isUnplannedReceipt(task: WarehouseTask) {
   return String(task.reference || task.id).includes("inb_avulso");
 }
