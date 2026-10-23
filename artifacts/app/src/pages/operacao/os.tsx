@@ -1,11 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { ClipboardPen, ImagePlus } from "lucide-react";
 import { collection, doc } from "firebase/firestore";
-import { getDownloadURL, ref } from "firebase/storage";
 import { useSearch } from "wouter";
 
 import { Button } from "@/components/ui/button";
-import { firebaseStorage } from "@/lib/firebase";
 import { andamentoInicial, pedidosDoAndamento, problemasDoAndamento, type FormularioDeAndamento } from "@/lib/operacao/andamento";
 import { chamarOperacao, mensagemDoErro, novaChave } from "@/lib/operacao/api";
 import { enviarFoto, escolherFotos, type FotoEscolhida } from "@/lib/operacao/enviar-foto";
@@ -13,6 +11,7 @@ import { fichaDaLeitura } from "@/lib/operacao/ficha-da-os";
 import { clienteDaLeitura, hojeIso, nomesPorCodigo } from "@/lib/operacao/fila";
 import { demandaDoHoje } from "@/lib/operacao/hoje";
 import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
+import { useUrlsDasFotos } from "@/lib/operacao/use-urls-das-fotos";
 import { fichaDaBusca } from "@/lib/operacao/navegacao";
 
 import { AndamentoView } from "./andamento-view";
@@ -23,34 +22,6 @@ import { OsView, type EstadoDaFicha } from "./os-view";
  * cliente e as fotos sobre OsView, e o painel de Registrar andamento, que
  * chama as callables em ordem e depois sobe as fotos da ocorrência.
  */
-
-/** A URL de cada foto pelo caminho no Storage (as regras liberam a leitura a quem coordena). */
-function useUrlsDasFotos(caminhos: readonly string[]): Record<string, string> {
-  const [urls, setUrls] = useState<Record<string, string>>({});
-  const chave = caminhos.join("|");
-  useEffect(() => {
-    if (!firebaseStorage || !caminhos.length) return undefined;
-    let vivo = true;
-    const storage = firebaseStorage;
-    void Promise.all(
-      caminhos.map(async (caminho) => {
-        try {
-          return [caminho, await getDownloadURL(ref(storage, caminho))] as const;
-        } catch {
-          return null;
-        }
-      }),
-    ).then((pares) => {
-      if (vivo) setUrls(Object.fromEntries(pares.filter((par): par is readonly [string, string] => par !== null)));
-    });
-    return () => {
-      vivo = false;
-    };
-    // Os caminhos mudam só quando a lista de fotos muda.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chave]);
-  return urls;
-}
 
 export default function PaginaOs() {
   const numero = fichaDaBusca(useSearch()) ?? "";

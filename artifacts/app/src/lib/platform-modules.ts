@@ -7,6 +7,7 @@ import {
 } from "@workspace/dominio";
 import { Boxes, Handshake, Receipt, Truck, Users, type LucideIcon } from "lucide-react";
 
+import { ROTA_CAMPO, abreCampo } from "./campo/navegacao";
 import { COMERCIAL_ROLES, ROTA_COMERCIAL, abreComercial } from "./comercial/navegacao";
 import { COMERCIAL_LIBERADO, OPERACAO_LIBERADO } from "./liberacao";
 import { OPERACAO_CADASTRO_ROLES, ROTA_OPERACAO, abreOperacao } from "./operacao/navegacao";
@@ -55,7 +56,8 @@ export const PLATFORM_MODULES: readonly PlatformModule[] = [
     key: "operacao",
     label: MODULO_ROTULO.operacao,
     icon: Truck,
-    home: Object.fromEntries(OPERACAO_CADASTRO_ROLES.map((role) => [role, ROTA_OPERACAO])),
+    // A coordenação entra no Início da Operação; o campo, no app dele (parte 3.8b).
+    home: { ...Object.fromEntries(OPERACAO_CADASTRO_ROLES.map((role) => [role, ROTA_OPERACAO])), campo: ROTA_CAMPO },
     clientCard: true,
     liberacao: "operacao",
   },
@@ -97,7 +99,7 @@ export function modulesForPerson(
     if (!wanted.includes(module.key)) return [];
     if (role === "cliente" && !module.clientCard) return [];
     if (module.liberacao === "comercial" && !abreComercial(role, comercial)) return [];
-    if (module.liberacao === "operacao" && !abreOperacao(role, operacao)) return [];
+    if (module.liberacao === "operacao" && !abreOperacao(role, operacao) && !abreCampo(role, operacao)) return [];
     const href = module.home[role];
     return href ? [{ module, href }] : [];
   });

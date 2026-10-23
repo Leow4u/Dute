@@ -38,6 +38,7 @@ import { DocumentTitle } from "./components/document-title";
 import AppLayout from "./components/layout/app-layout";
 import ComercialLayout from "./components/layout/comercial-layout";
 import OperacaoLayout from "./components/layout/operacao-layout";
+import CampoLayout from "./components/layout/campo-layout";
 import { AppThemeProvider } from "./components/theme/theme-provider";
 import SettingsLayout from "./components/layout/settings-layout";
 import type { WarehouseOpsModuleKey } from "./lib/warehouse-ops/model";
@@ -154,6 +155,8 @@ const OperacaoDemanda = lazy(() => import("./pages/operacao/demanda"));
 const OperacaoDemandaNova = lazy(() => import("./pages/operacao/demanda-nova"));
 const OperacaoPlanejar = lazy(() => import("./pages/operacao/planejar"));
 const OperacaoOs = lazy(() => import("./pages/operacao/os"));
+const CampoHoje = lazy(() => import("./pages/campo/hoje"));
+const CampoOs = lazy(() => import("./pages/campo/os"));
 const OperacaoColaboradores = lazy(() => import("./pages/operacao/colaboradores"));
 const OperacaoVeiculos = lazy(() => import("./pages/operacao/veiculos"));
 import { useRole } from "./hooks/use-role";
@@ -957,6 +960,7 @@ const LAYOUT_DA_ROTA = {
   settings: SettingsLayout,
   comercial: ComercialLayout,
   operacao: OperacaoLayout,
+  campo: CampoLayout,
 } as const;
 
 function protectedRoute(
@@ -1084,6 +1088,9 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
     protectedRoute("/operacao/os", OperacaoOs),
     protectedRoute("/operacao/colaboradores", OperacaoColaboradores),
     protectedRoute("/operacao/veiculos", OperacaoVeiculos),
+    // O app do campo é da Operação (parte 3.8b).
+    protectedRoute("/campo", CampoHoje),
+    protectedRoute("/campo/os", CampoOs),
   ]),
   ...soComComercialLiberado([
     protectedRoute("/comercial", ComercialInicio),

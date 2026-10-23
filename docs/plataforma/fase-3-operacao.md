@@ -737,3 +737,35 @@ Feita em 23/10/2026.
   `usuario_uid` do login ligado no cadastro (o mesmo que vai para
   `equipe_uids`): é como o app do campo sabe qual pessoa da equipe é quem
   está nele (o líder, por exemplo). CPF continua fora.
+
+### Parte 3.8b: campo no celular
+
+Feita em 23/10/2026, nos desenhos aprovados `Campo2Hoje`, `Campo2Execucao` e
+`Campo2IncluirItem`, em `/campo` e `/campo/os?numero=`, com shell próprio de
+celular (sem barra lateral). O papel `campo` entra direto nele; owner e admin
+abrem para conferir. Só existe onde a Operação está liberada.
+
+- **Minhas OS.** O dia e a saudação; Agora (em execução e agendada até hoje,
+  com a etapa em curso, o local, o destino, a equipe e a frota, e "Continuar
+  OS"), Depois (os próximos dias) e Feito (concluídas nos últimos 7 dias). A
+  consulta é só por `equipe_uids`, o filtro que as regras pedem.
+- **OS no celular.** A duração desde a saída do pátio e a janela; as sete
+  etapas com a próxima num botão grande ("Registrar saída da origem") e
+  "Outra etapa" para pular; os itens com + e − até o previsto e "Além do
+  planejado · Incluir"; "Incluir item executado" com a busca na OS e no
+  catálogo sem preço, o item avulso, a quantidade, quem pediu no local (os
+  contatos da OS ou outra pessoa) e o motivo; a equipe com entrada e saída
+  (o líder marca todos, os outros só a própria, pela pessoa da equipe ligada
+  ao login); "Tirar foto" com a câmera; e "Registrar ocorrência" com fotos.
+- **Fila.** Cada toque vira um registro com a própria chave e o instante do
+  toque, enviado um de cada vez, na ordem. O feito de uma linha é absoluto:
+  toques seguidos viram um registro só. Sem sinal ou com o servidor fora, o
+  registro espera e tenta de novo (2 s, 4 s, 8 s... até 1 minuto, e já
+  quando o sinal volta); recusado pela callable, sai da fila e aparece no
+  topo como falha. O que espera aparece como guardado na tela e no aviso
+  "Sem sinal · N registros guardados". Por enquanto a fila vive na memória
+  do app; guardá-la no aparelho é a parte 3.8c.
+- **Fotos.** O nome `ft_` e o instante saem na hora da foto; a foto sobe ao
+  Storage antes do `attachPhoto`. A da ocorrência e a da inclusão vão com a
+  legenda, porque o número da ocorrência e o da linha nova só existem depois
+  que o registro chega.

@@ -34,6 +34,17 @@ export function mensagemDoErro(error: unknown): string {
   return message;
 }
 
+/** O erro da callable com a mensagem já em português e o código (a fila do campo decide pelo código). */
+export class ErroDaOperacao extends Error {
+  readonly code: string;
+
+  constructor(message: string, code: string) {
+    super(message);
+    this.name = "ErroDaOperacao";
+    this.code = code;
+  }
+}
+
 export async function chamarOperacao<T = Record<string, unknown>>(
   nome: CallableDaOperacao,
   dados: Record<string, unknown>,
@@ -43,6 +54,6 @@ export async function chamarOperacao<T = Record<string, unknown>>(
   try {
     return (await callable(dados)).data;
   } catch (error) {
-    throw new Error(mensagemDoErro(error));
+    throw new ErroDaOperacao(mensagemDoErro(error), String((error as { code?: unknown })?.code ?? "").replace(/^functions\//, ""));
   }
 }
