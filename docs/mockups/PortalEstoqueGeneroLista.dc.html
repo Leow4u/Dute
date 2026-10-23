@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Estoque do portal em lista com chip de gênero</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F4F5F7;color:#1E293B;font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+a{color:#2457D6;text-decoration:none}a:hover{color:#1C45AB}
+h1,h2,p{margin:0}
+button{font-family:inherit}
+.ic{width:16px;height:16px;flex:0 0 auto;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.muted{color:#5D6877}
+.card{background:#fff;border:1px solid #E2E6EB;border-radius:10px;overflow:hidden}
+table{width:100%;border-collapse:collapse}
+th{height:44px;padding:0 16px;text-align:left;font-size:12px;font-weight:600;color:#5D6877;border-bottom:1px solid #E2E6EB;white-space:nowrap}
+td{padding:12px 16px;vertical-align:middle;border-top:1px solid #E2E6EB}
+tr:first-child td{border-top:0}
+.r{text-align:right}
+.code{font-weight:500}
+.ttl{background:none;border:0;padding:0;font-size:14px;font-weight:500;color:#1E293B;cursor:pointer;text-align:left}
+.type{font-size:12px;color:#5D6877;margin-left:8px}
+.gc{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 7px 0 5px;border-radius:6px;border:1px solid transparent;font-size:10px;font-weight:800;letter-spacing:.05em;margin-left:8px;vertical-align:middle}
+.gc .ic{width:12px;height:12px;stroke-width:2.4}
+.g-fem{background:#FCE7F3;border-color:#F3B4D3;color:#9D174D}
+.g-masc{background:#CCFBF1;border-color:#8FE0D0;color:#115E59}
+.sb{display:inline-flex;align-items:center;gap:4px;height:26px;padding:0 10px;border-radius:6px;background:#fff;font-size:12px;font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.sb .ic{width:14px;height:14px}
+.sb-low{color:#8A6A22}.sb-zero{color:#BF1247}
+.tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 14px;border-radius:6px;border:1px solid transparent;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+.btn-p{background:#2457D6;color:#fff}
+.btn-o{background:#fff;color:#1E293B;border-color:#E2E6EB}
+.btn-g{background:transparent;color:#5D6877}
+.step{display:inline-flex;align-items:center;height:36px;border:1px solid #E2E6EB;border-radius:6px;background:#fff;overflow:hidden}
+.step button{width:34px;height:34px;border:0;background:#fff;color:#1E293B;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.step output{min-width:36px;text-align:center;font-size:14px;font-weight:600}
+.acts{display:flex;justify-content:flex-end;gap:8px}
+</style>
+</helmet>
+<div style="width: 1180px; min-height: 430px; background: #F4F5F7; padding: 0 0 16px">
+<svg width="0" height="0" style="position: absolute" aria-hidden="true">
+  <symbol id="i-cart" viewBox="0 0 24 24"><circle cx="8" cy="21" r="1"></circle><circle cx="19" cy="21" r="1"></circle><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"></path></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"></path><path d="M12 5v14"></path></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"></path></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M9.9 3.8 11.6 8.4 16 10l-4.4 1.6-1.7 4.6-1.7-4.6L4 10l4.2-1.6Z"></path><path d="M19 2v4"></path><path d="M21 4h-4"></path><path d="M18 17v4"></path><path d="M20 19h-4"></path></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.7 18-8-14a2 2 0 0 0-3.5 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></symbol>
+  <symbol id="i-truck" viewBox="0 0 24 24"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"></path><path d="M15 18H9"></path><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"></path><circle cx="17" cy="18" r="2"></circle><circle cx="7" cy="18" r="2"></circle></symbol>
+  <symbol id="i-archive" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"></rect><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"></path><path d="M10 12h4"></path></symbol>
+  <symbol id="i-fem" viewBox="0 0 24 24"><circle cx="12" cy="8" r="5"></circle><path d="M12 13v8"></path><path d="M9 18h6"></path></symbol>
+  <symbol id="i-masc" viewBox="0 0 24 24"><circle cx="10" cy="14" r="5"></circle><path d="M13.5 10.5 20 4"></path><path d="M15 4h5v5"></path></symbol>
+</svg>
+<div class="card">
+<div style="overflow-x: auto">
+<table>
+  <thead>
+    <tr>
+      <th style="width: 170px">Código</th>
+      <th>Produto</th>
+      <th class="r" style="width: 110px">Disponível</th>
+      <th class="r" style="width: 110px">Reservado</th>
+      <th class="r" style="width: 270px">Pedido</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="code">C.0659.001</td>
+      <td><button class="ttl" type="button">Toalha de academia</button><span class="type">Toalha</span></td>
+      <td class="r"><b>672</b></td>
+      <td class="r muted">0</td>
+      <td><div class="acts"><div class="step"><button type="button" aria-label="Menos"><svg class="ic" aria-hidden="true"><use href="#i-minus"></use></svg></button><output>1</output><button type="button" aria-label="Mais"><svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg></button></div><button class="btn btn-p" type="button"><svg class="ic" aria-hidden="true"><use href="#i-cart"></use></svg>Adicionar</button></div></td>
+    </tr>
+    <tr>
+      <td class="code">A.01.0809.002</td>
+      <td><button class="ttl" type="button">Polo masculino piquet arpoador PP</button><span class="gc g-masc"><svg class="ic" aria-hidden="true"><use href="#i-masc"></use></svg>MASC</span><span class="type">Polo</span></td>
+      <td class="r"><b>18</b></td>
+      <td class="r muted">2</td>
+      <td><div class="acts"><div class="step"><button type="button" aria-label="Menos"><svg class="ic" aria-hidden="true"><use href="#i-minus"></use></svg></button><output>1</output><button type="button" aria-label="Mais"><svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg></button></div><button class="btn btn-p" type="button"><svg class="ic" aria-hidden="true"><use href="#i-cart"></use></svg>Adicionar</button></div></td>
+    </tr>
+    <tr>
+      <td class="code">A.01.0805.002</td>
+      <td><button class="ttl" type="button">Polo feminina piquet azul marinho PP</button><span class="gc g-fem"><svg class="ic" aria-hidden="true"><use href="#i-fem"></use></svg>FEM</span><span class="type">Polo</span></td>
+      <td class="r"><b>12</b></td>
+      <td class="r muted">0</td>
+      <td><div class="acts"><div class="step"><button type="button" aria-label="Menos"><svg class="ic" aria-hidden="true"><use href="#i-minus"></use></svg></button><output>1</output><button type="button" aria-label="Mais"><svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg></button></div><button class="btn btn-p" type="button"><svg class="ic" aria-hidden="true"><use href="#i-cart"></use></svg>Adicionar</button></div></td>
+    </tr>
+    <tr>
+      <td class="code">A.02.0311.006</td>
+      <td><button class="ttl" type="button">Camiseta feminina piquet preto GG</button><span class="gc g-fem"><svg class="ic" aria-hidden="true"><use href="#i-fem"></use></svg>FEM</span><span class="type">Camiseta</span><div class="tags"><span class="sb sb-low"><svg class="ic" aria-hidden="true"><use href="#i-spark"></use></svg>Baixo estoque</span></div></td>
+      <td class="r"><b>6</b></td>
+      <td class="r muted">0</td>
+      <td><div class="acts"><div class="step"><button type="button" aria-label="Menos"><svg class="ic" aria-hidden="true"><use href="#i-minus"></use></svg></button><output>1</output><button type="button" aria-label="Mais"><svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg></button></div><button class="btn btn-p" type="button"><svg class="ic" aria-hidden="true"><use href="#i-cart"></use></svg>Adicionar</button></div></td>
+    </tr>
+    <tr>
+      <td class="code">J.0231.001</td>
+      <td><button class="ttl" type="button">Mochila executiva – BTG</button><span class="type">Mochila</span><div class="tags"><span class="sb sb-zero"><svg class="ic" aria-hidden="true"><use href="#i-alert"></use></svg>Sem saldo</span></div></td>
+      <td class="r"><b>0</b></td>
+      <td class="r muted">0</td>
+      <td><div class="acts"><button class="btn btn-o" type="button"><svg class="ic" aria-hidden="true"><use href="#i-truck"></use></svg>Avisar reposição</button><button class="btn btn-g" type="button"><svg class="ic" aria-hidden="true"><use href="#i-archive"></use></svg>Arquivar</button></div></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1180,"height":430}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

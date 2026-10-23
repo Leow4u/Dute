@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Alternativas do chip de gênero</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F4F5F7;color:#1E293B;font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+a{color:#2457D6;text-decoration:none}a:hover{color:#1C45AB}
+h1,h2,h3,p{margin:0}
+button{font-family:inherit}
+.ic{width:16px;height:16px;flex:0 0 auto;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.muted{color:#5D6877}
+.card{background:#fff;border:1px solid #E2E6EB;border-radius:10px}
+.col{display:flex;flex-direction:column;gap:12px;min-width:0}
+.hd{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#5D6877}
+.hd b{color:#1E293B}
+.rec{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:999px;background:#E8EEFC;color:#2457D6;font-size:11px;font-weight:700;letter-spacing:.02em;text-transform:none}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 14px;border-radius:6px;border:1px solid transparent;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+.btn-p{background:#2457D6;color:#fff;flex:1}
+.pc{display:flex;flex-direction:column;overflow:hidden;width:300px}
+.photo{position:relative;height:170px;border-bottom:1px solid #E2E6EB;background:#EDE8DF;display:flex;align-items:center;justify-content:center}
+.art{width:150px;height:128px}
+.gc{position:absolute;right:12px;top:12px;display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px 0 7px;border-radius:6px;border:1px solid transparent;font-size:11px;font-weight:800;letter-spacing:.06em;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.gc .ic{width:13px;height:13px;stroke-width:2.4}
+.g-fem{background:#FCE7F3;border-color:#F3B4D3;color:#9D174D}
+.g-masc{background:#CCFBF1;border-color:#8FE0D0;color:#115E59}
+.sol.g-fem{background:#BE185D;border-color:#BE185D;color:#fff}
+.sol.g-masc{background:#0F766E;border-color:#0F766E;color:#fff}
+.gc.st{position:static;box-shadow:none}
+.gt{display:inline-flex;align-items:center;gap:5px;font-weight:700}
+.gt i{width:7px;height:7px;border-radius:50%;display:inline-block}
+.gt-fem{color:#9D174D}.gt-fem i{background:#DB2777}
+.gt-masc{color:#115E59}.gt-masc i{background:#0D9488}
+.body{display:flex;flex-direction:column;gap:10px;padding:14px;flex:1}
+.type{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#5D6877;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:4px}
+.ttl{font-size:14px;font-weight:600;line-height:20px;margin-top:2px;text-align:left;background:none;border:0;padding:0;color:#1E293B;cursor:pointer;display:block;width:100%}
+.sizes{display:flex;flex-wrap:wrap;gap:6px}
+.sz{display:flex;flex-direction:column;align-items:center;min-width:44px;padding:4px 8px;border:1px solid #E2E6EB;border-radius:6px;background:#fff;line-height:1.25;cursor:pointer}
+.sz b{font-size:12px;font-weight:700;color:#1E293B}
+.sz span{font-size:12px;color:#5D6877}
+.sz.on{border-color:#2457D6;background:#E8EEFC}
+.sz.on b,.sz.on span{color:#2457D6}
+.av{font-size:12px;color:#5D6877}
+.av b{font-size:16px;font-weight:600;color:#1E293B}
+.act{display:flex;align-items:center;gap:8px;margin-top:auto;padding-top:4px}
+.step{display:inline-flex;align-items:center;height:36px;border:1px solid #E2E6EB;border-radius:6px;background:#fff;overflow:hidden}
+.step button{width:34px;height:34px;border:0;background:#fff;color:#1E293B;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.step output{min-width:36px;text-align:center;font-size:14px;font-weight:600}
+.pair{display:flex;align-items:center;gap:8px;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+</style>
+</helmet>
+<div style="width: 1180px; min-height: 600px; background: #F4F5F7; padding: 24px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+<svg width="0" height="0" style="position: absolute" aria-hidden="true">
+  <symbol id="i-cart" viewBox="0 0 24 24"><circle cx="8" cy="21" r="1"></circle><circle cx="19" cy="21" r="1"></circle><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"></path></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"></path><path d="M12 5v14"></path></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"></path></symbol>
+  <symbol id="i-fem" viewBox="0 0 24 24"><circle cx="12" cy="8" r="5"></circle><path d="M12 13v8"></path><path d="M9 18h6"></path></symbol>
+  <symbol id="i-masc" viewBox="0 0 24 24"><circle cx="10" cy="14" r="5"></circle><path d="M13.5 10.5 20 4"></path><path d="M15 4h5v5"></path></symbol>
+  <symbol id="a-polo" viewBox="0 0 200 170"><path fill="currentColor" d="M62 38 28 52 18 92l34 8v62h96v-62l34-8-10-40-34-14-14 20-24 8-24-8Z"></path><path fill="#000" fill-opacity=".22" d="M76 58 62 38l22-8 16 18 16-18 22 8-14 20-24 8Z"></path><path fill="#000" fill-opacity=".1" d="m18 92 34 8 2-9-30-7Zm164 0-34 8-2-9 30-7Z"></path><rect x="95" y="62" width="10" height="34" fill="#000" fill-opacity=".14"></rect><circle cx="100" cy="72" r="2.3" fill="#fff" fill-opacity=".85"></circle><circle cx="100" cy="85" r="2.3" fill="#fff" fill-opacity=".85"></circle></symbol>
+</svg>
+
+  <div class="col">
+    <h2 class="hd"><b>A</b> · Chip suave sobre a foto<span class="rec">Recomendada</span></h2>
+    <article class="card pc">
+      <div class="photo"><svg class="art" style="color: #243B6E" role="img" aria-label="Polo feminina azul marinho"><use href="#a-polo"></use></svg><span class="gc g-fem"><svg class="ic" aria-hidden="true"><use href="#i-fem"></use></svg>FEM</span></div>
+      <div class="body">
+        <div>
+          <p class="type">POLO · A.01.0805.002</p>
+          <button class="ttl" type="button">Polo feminina piquet azul marinho PP</button>
+        </div>
+        <div class="sizes" role="group" aria-label="Tamanho">
+          <button class="sz on" type="button" aria-pressed="true"><b>PP</b><span>12 disp.</span></button>
+          <button class="sz" type="button" aria-pressed="false"><b>P</b><span>78 disp.</span></button>
+          <button class="sz" type="button" aria-pressed="false"><b>M</b><span>248 disp.</span></button>
+          <button class="sz" type="button" aria-pressed="false"><b>G</b><span>229 disp.</span></button>
+          <button class="sz" type="button" aria-pressed="false"><b>GG</b><span>100 disp.</span></button>
+          <button class="sz" type="button" aria-pressed="false"><b>XG</b><span>64 disp.</span></button>
+          <button class="sz" type="button" aria-pressed="false"><b>XGG</b><span>13 disp.</span></button>
+        </div>
+        <p class="av"><b>12</b> disponíveis neste tamanho</p>
+        <div class="act">
+          <div class="step"><button type="button" aria-label="Menos"><svg class="ic" aria-hidden="true"><use href="#i-minus"></use></svg></button><output>1</output><button type="button" aria-label="Mais"><svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg></button></div>
+          <button class="btn btn-p" type="button"><svg class="ic" aria-hidden="true"><use href="#i-cart"></use></svg>Adicionar</button>
+        </div>
+      </div>
+    </article>
+    <div class="pair">
+      <span class="gc st g-fem"><svg class="ic" aria-hidden="true"><use href="#i-fem"></use></svg>FEM</span>
+      <span class="gc st g-masc"><svg class="ic" aria-hidden="true"><use href="#i-masc"></use></svg>MASC</span>
+    </div>
+  </div>
+
+  <div class="col">
+    <h2 class="hd"><b>B</b> · Chip sólido sobre a foto</h2>
+    <article class="card pc">
+      <div class="photo"><svg class="art" style="color: #243B6E" role="img" aria-label="Polo feminina azul marinho"><use href="#a-polo"></use></svg><span class="gc sol g-fem"><svg class="ic" aria-hidden="true"><use href="#i-fem"></use></svg>FEM</span></div>
+      <div class="body">
+        <div>
+          <p class="type">POLO · A.01.0805.002</p>
+          <button class="ttl" type="button">Polo feminina piquet azul marinho PP</button>
+        </div>
+        <div class="sizes" role="group" aria-label="Tamanho">
+          <button class="sz on" type="button" aria-pressed="true"><b>PP</b><span>12 disp.</span></button>
+          <button class="sz" type="button" aria-pressed="false"><b>P</b><span>78 disp.</span></button>
+          <button class="sz" type="button" aria-pressed="false"><b>M</b><span>248 disp.</span></button>
+          <button class="sz" type="button" aria-pressed="false"><b>G</b><span>229 disp.</span></button>
+          <button class="sz" type="button" aria-pressed="false"><b>GG</b><span>100 disp.</span></button>
+          <button class="sz" type="button" aria-pressed="false"><b>XG</b><span>64 disp.</span></button>
+          <button class="sz" type="button" aria-pressed="false"><b>XGG</b><span>13 disp.</span></button>
+        </div>
+        <p class="av"><b>12</b> disponíveis neste tamanho</p>
+        <div class="act">
+          <div class="step"><button type="button" aria-label="Menos"><svg class="ic" aria-hidden="true"><use href="#i-minus"></use></svg></button><output>1</output><button type="button" aria-label="Mais"><svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg></button></div>
+          <button class="btn btn-p" type="button"><svg class="ic" aria-hidden="true"><use href="#i-cart"></use></svg>Adicionar</button>
+        </div>
+      </div>
+    </article>
+    <div class="pair">
+      <span class="gc st sol g-fem"><svg class="ic" aria-hidden="true"><use href="#i-fem"></use></svg>FEM</span>
+      <span class="gc st sol g-masc"><svg class="ic" aria-hidden="true"><use href="#i-masc"></use></svg>MASC</span>
+    </div>
+  </div>
+
+  <div class="col">
+    <h2 class="hd"><b>C</b> · Só na linha de apoio</h2>
+    <article class="card pc">
+      <div class="photo"><svg class="art" style="color: #243B6E" role="img" aria-label="Polo feminina azul marinho"><use href="#a-polo"></use></svg></div>
+      <div class="body">
+        <div>
+          <p class="type">POLO · <span class="gt gt-fem"><i aria-hidden="true"></i>Feminino</span> · A.01.0805.002</p>
+          <button class="ttl" type="button">Polo feminina piquet azul marinho PP</button>
+        </div>
+        <div class="sizes" role="group" aria-label="Tamanho">
+          <button class="sz on" type="button" aria-pressed="true"><b>PP</b><span>12 disp.</span></button>
+          <button class="sz" type="button" aria-pressed="false"><b>P</b><span>78 disp.</span></button>
+          <button class="sz" type="button" aria-pressed="false"><b>M</b><span>248 disp.</span></button>
+          <button class="sz" type="button" aria-pressed="false"><b>G</b><span>229 disp.</span></button>
+          <button class="sz" type="button" aria-pressed="false"><b>GG</b><span>100 disp.</span></button>
+          <button class="sz" type="button" aria-pressed="false"><b>XG</b><span>64 disp.</span></button>
+          <button class="sz" type="button" aria-pressed="false"><b>XGG</b><span>13 disp.</span></button>
+        </div>
+        <p class="av"><b>12</b> disponíveis neste tamanho</p>
+        <div class="act">
+          <div class="step"><button type="button" aria-label="Menos"><svg class="ic" aria-hidden="true"><use href="#i-minus"></use></svg></button><output>1</output><button type="button" aria-label="Mais"><svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg></button></div>
+          <button class="btn btn-p" type="button"><svg class="ic" aria-hidden="true"><use href="#i-cart"></use></svg>Adicionar</button>
+        </div>
+      </div>
+    </article>
+    <div class="pair">
+      <span class="gt gt-fem"><i aria-hidden="true"></i>Feminino</span>
+      <span class="gt gt-masc"><i aria-hidden="true"></i>Masculino</span>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1180,"height":600}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

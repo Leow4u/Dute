@@ -80,6 +80,23 @@ seletor abre no clique.
 | Celular · Comercial (Guilherme, um módulo) | `ModCelularCom.dc.html` |
 | Celular · Operação (seletor no cabeçalho) | `ModCelularOp.dc.html` |
 
+A página "Portal · gênero no cartão do estoque" tem canvas próprio (privado,
+https://claude.ai/artifact/2NH76ezJdQkmF6ZvDrCBtZ): a proposta de 23/10/2026
+para o Estoque do portal mostrar o que é feminino e o que é masculino sem
+depender de ler o nome. Chip com símbolo e cor no canto da foto (FEM rosa,
+MASC azul-petróleo; sem gênero, sem chip), filtro por gênero na barra e o
+mesmo chip na lista. O dado é o campo Gênero do cadastro (Contagem e
+Receber); o prefixo do código não basta (a polo feminina A.01.0805.002 tem
+prefixo masculino). As telas seguem o visual do WMS (`docs/sistema-visual.md`),
+não a v3, porque o Estoque do portal ainda é tela do WMS. Espera o OK do
+Leonardo.
+
+| Tela | Arquivo |
+|---|---|
+| Estoque · cartões com o chip de gênero (A, recomendada) | `PortalEstoqueGenero.dc.html` |
+| Alternativas: A suave, B sólido, C só na linha de apoio | `PortalEstoqueGeneroAlternativas.dc.html` |
+| Estoque · lista | `PortalEstoqueGeneroLista.dc.html` |
+
 ## Regras da v3
 
 - Menu lateral preto `#161616` com logo branco; item ativo com marcador
