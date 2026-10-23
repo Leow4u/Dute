@@ -2,7 +2,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Router } from "wouter";
 
-import { filtroInicial, osDoRelatorio, resumoDasOs, tabelaDaEquipe, tabelaPorPeriodo, type OsDoRelatorio } from "@/lib/operacao/relatorios";
+import { RELATORIO_DO_ACERTO, resumoDoAcerto, sugestaoDoAcerto, tabelaDoAcerto } from "@/lib/memoria/acerto";
+import { RELATORIOS_DA_OPERACAO, filtroInicial, osDoRelatorio, resumoDasOs, tabelaDaEquipe, tabelaPorPeriodo, type OsDoRelatorio } from "@/lib/operacao/relatorios";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
@@ -129,3 +130,36 @@ describe("Relatórios da Operação", () => {
     expect(await violacoesDeAcessibilidade(render({ relatorio: "equipe", tabela: tabelaDaEquipe(OSS) }))).toEqual([]);
   });
 });
+
+describe("o acerto da memória (parte 5.6)", () => {
+  const sugestoes = [
+    sugestaoDoAcerto("a", { tipo: "duracao_os", customer_code: "ITAU", criada_em: "2026-10-10T12:00:00.000Z", decisao: "aceitou", sugestao: { minutos_total: 180 }, minutos_escolhidos: 180, valor_real: 210 })!,
+    sugestaoDoAcerto("b", { tipo: "duracao_os", customer_code: "ITAU", criada_em: "2026-10-12T12:00:00.000Z", decisao: "mudou", sugestao: { minutos_total: 120 }, minutos_escolhidos: 240, valor_real: 240 })!,
+  ];
+  const html = () =>
+    render({
+      relatorio: RELATORIO_DO_ACERTO,
+      relatorios: [...RELATORIOS_DA_OPERACAO, RELATORIO_DO_ACERTO],
+      resumo: resumoDoAcerto(sugestoes),
+      tabela: tabelaDoAcerto(sugestoes, () => "Itaú Unibanco"),
+    });
+
+  it("é o último da lista, com o link dele, os números e a tabela por cliente, sem legenda", () => {
+    expect(hrefDoRelatorio(RELATORIO_DO_ACERTO)).toBe("/operacao/relatorios?relatorio=acerto");
+    const textos = textosDaTela(html());
+    expect(textos.slice(0, 10)).toEqual(["Relatórios", "Excel", "PDF", "OS por período", "OS por cliente", "OS por tipo", "Produtividade da equipe", "Uso dos veículos", "Solicitações do portal", "Acerto da memória"]);
+    expect(
+      textosForaDaLista(html(), [
+        "Relatórios", "Excel", "PDF", "OS por período", "OS por cliente", "OS por tipo", "Produtividade da equipe", "Uso dos veículos", "Solicitações do portal", "Acerto da memória",
+        "De", "Até", "Cliente", "Todos", "Itaú Unibanco", "01/10/2026 a 23/10/2026",
+        "Sugestões", "Aceite", "Erro da sugestão", "Erro do planejado", "Aceitas", "Mudadas", "Recusadas", "Aceite (%)", "Com o tempo real", "Erro da sugestão (%)", "Erro do planejado (%)", "Total",
+        /^\d+%?$/,
+      ]),
+    ).toEqual([]);
+  });
+
+  it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
+    expect(await violacoesDeAcessibilidade(html())).toEqual([]);
+  });
+});
+

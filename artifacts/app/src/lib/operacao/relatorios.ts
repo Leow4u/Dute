@@ -356,6 +356,6 @@ export function linhasDaPlanilha(tabela: TabelaDoRelatorio): Celula[][] {
   return [...tabela.linhas.map((linha) => [...linha.celulas]), ...(tabela.total ? [[...tabela.total]] : [])];
 }
 
-export function nomeDaPlanilha(relatorio: RelatorioDaOperacao, filtro: Pick<FiltroDoRelatorio, "de" | "ate">): string {
+export function nomeDaPlanilha(relatorio: string, filtro: Pick<FiltroDoRelatorio, "de" | "ate">): string {
   return `relatorio-${relatorio}-${filtro.de}-a-${filtro.ate}.xlsx`;
 }

@@ -1,6 +1,7 @@
 import { CAMPO_SELECT, TelaDeRelatorios, dataBr, type NumeroDoResumo } from "@/components/relatorios/tela-de-relatorios";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RELATORIO_DO_ACERTO, ROTULO_DO_ACERTO } from "@/lib/memoria/acerto";
 import { ROTA_RELATORIOS } from "@/lib/operacao/navegacao";
 import {
   RELATORIOS_DA_OPERACAO,
@@ -15,17 +16,27 @@ import { cn } from "@/lib/utils";
 /**
  * Relatórios da Operação (parte 4.8a; docs/mockups/Relatorios.dc.html): a
  * tela de relatórios comum (components/relatorios) com os relatórios da
- * Operação, o período, o cliente e o agrupamento. Sem valor.
+ * Operação, o período, o cliente e o agrupamento. Sem valor. Onde a memória
+ * roda, owner e admin veem também o acerto da memória (parte 5.6).
  */
 
-export function hrefDoRelatorio(relatorio: RelatorioDaOperacao): string {
+/** Os relatórios da Operação e, para owner e admin onde a memória roda, o acerto da memória. */
+export type RelatorioDaTela = RelatorioDaOperacao | typeof RELATORIO_DO_ACERTO;
+
+export function rotuloDoRelatorio(relatorio: RelatorioDaTela): string {
+  return relatorio === RELATORIO_DO_ACERTO ? ROTULO_DO_ACERTO : RELATORIO_ROTULO[relatorio];
+}
+
+export function hrefDoRelatorio(relatorio: RelatorioDaTela): string {
   return relatorio === "periodo" ? ROTA_RELATORIOS : `${ROTA_RELATORIOS}?relatorio=${relatorio}`;
 }
 
 export type ResumoDoRelatorio = NumeroDoResumo[];
 
 export type RelatoriosViewProps = {
-  relatorio: RelatorioDaOperacao;
+  relatorio: RelatorioDaTela;
+  /** Os relatórios da lista; sem ele, os da Operação. */
+  relatorios?: readonly RelatorioDaTela[];
   filtro: FiltroDoRelatorio;
   clientes: ReadonlyArray<{ code: string; nome: string }>;
   estado: "carregando" | "erro" | "pronto";
@@ -90,21 +101,21 @@ function Filtros({ relatorio, filtro, clientes, acoes }: Pick<RelatoriosViewProp
   );
 }
 
-export function RelatoriosView({ relatorio, filtro, clientes, estado, problema, resumo, tabela, acoes }: RelatoriosViewProps) {
+export function RelatoriosView({ relatorio, relatorios = RELATORIOS_DA_OPERACAO, filtro, clientes, estado, problema, resumo, tabela, acoes }: RelatoriosViewProps) {
   const cliente = filtro.cliente ? (clientes.find((item) => item.code === filtro.cliente)?.nome ?? filtro.cliente) : null;
   return (
     <TelaDeRelatorios
       rotuloDaLista="Relatórios da Operação"
-      relatorios={RELATORIOS_DA_OPERACAO.map((item) => ({ id: item, rotulo: RELATORIO_ROTULO[item], href: hrefDoRelatorio(item) }))}
+      relatorios={relatorios.map((item) => ({ id: item, rotulo: rotuloDoRelatorio(item), href: hrefDoRelatorio(item) }))}
       atual={relatorio}
-      titulo={RELATORIO_ROTULO[relatorio]}
+      titulo={rotuloDoRelatorio(relatorio)}
       subtitulo={[`${dataBr(filtro.de)} a ${dataBr(filtro.ate)}`, cliente].filter(Boolean).join(" · ")}
       filtros={<Filtros relatorio={relatorio} filtro={filtro} clientes={clientes} acoes={acoes} />}
       estado={estado}
       problema={problema}
       resumo={resumo}
       tabela={tabela}
-      vazio={relatorio === "solicitacoes" ? "Nenhuma solicitação no período." : "Nenhuma OS no período."}
+      vazio={relatorio === "solicitacoes" ? "Nenhuma solicitação no período." : relatorio === RELATORIO_DO_ACERTO ? "Nenhuma sugestão no período." : "Nenhuma OS no período."}
       acoes={acoes}
     />
   );

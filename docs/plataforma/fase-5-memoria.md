@@ -1308,3 +1308,63 @@ Publicar na produção é a decisão do lançamento da Fase 5, com o OK do
 Leonardo: ligar `AGENTE_AMBIENTES_LIBERADOS` no `dute-prod`, no app, no
 núcleo e na guarda das rotinas do WMS (`CORE_AGENT_PROJECTS`), que a trava
 mantém iguais.
+
+### Parte 5.6: o painel de acerto
+
+Feita em 23/10/2026. A conta está em `artifacts/app/src/lib/memoria/acerto.ts`;
+a tela é a dos Relatórios da Operação (`/operacao/relatorios?relatorio=acerto`).
+
+- **O relatório "Acerto da memória"** é o último da lista dos Relatórios da
+  Operação. Só owner e admin o veem, e só onde a memória roda: as regras de
+  `ai_suggestions` abrem a lista inteira só a eles.
+- **O que lê.** As sugestões de duração criadas no período, com o filtro do
+  cliente dos outros relatórios.
+- **Os números:**
+  - as sugestões e quantas foram aceitas, mudadas e recusadas;
+  - a taxa de aceite;
+  - quantas já têm o tempo real da OS revisada.
+- **Os erros:**
+  - O erro médio da sugestão e o do que a pessoa planejou, os dois contra o
+    tempo real. Comparar os dois mostra se a memória acerta mais que o
+    planejamento.
+  - O erro é o desvio absoluto em porcentagem do previsto. Sem o tempo
+    real, fica em traço.
+- **A tabela** tem uma linha por cliente, da que tem mais sugestões, e o
+  total. Exporta para Excel e PDF como os outros relatórios.
+- **Testes.**
+  - `lib/memoria/acerto.test.ts`:
+    - a leitura da sugestão;
+    - o aceite e os dois erros, resolvidos à mão;
+    - a tabela por cliente;
+    - os números do topo;
+    - quem vê.
+  - `relatorios-view.test.tsx`: o relatório na lista, os textos listados e o
+    `axe`.
+
+Com a 5.6, as partes da Fase 5 estão completas no `dute-homolog`.
+
+## Lançamento na produção
+
+Espera o OK do Leonardo. Até lá, a memória e o Agent Dute do núcleo só
+valem no `dute-homolog`, e a produção segue com o agente do WMS.
+
+1. **Um PR liga as listas:**
+   - `MEMORIA_AMBIENTES_LIBERADOS` e `AGENTE_AMBIENTES_LIBERADOS` ganham o
+     `dute-prod`, no app (`lib/liberacao.ts`) e no núcleo
+     (`domain/liberacao.ts`);
+   - `CORE_AGENT_PROJECTS` também, no WMS (`domain/agent-routines.ts`).
+   - `platform-lists.test.ts` exige as três listas iguais.
+2. **A homologação.** Depois do merge, conferir que nada muda lá, que já
+   tinha tudo ligado.
+3. **A publicação na produção** é pelo disparo manual do CI, com o OK. As
+   regras, os índices e as functions do núcleo já sobem com a `main`.
+4. **Depois de publicar:**
+   - as 16 callables do núcleo respondem;
+   - a `runMeasures` e a `runDuteRoutines` rodam;
+   - a `runAgentRoutines` do WMS para de rodar as rotinas;
+   - as conversas de antes continuam na Armazenagem.
+5. **O custo.** O agente e a leitura da nota passam a usar o Gemini do
+   `dute-prod`, com o uso registrado em `agent_usage`, como hoje.
+6. **Para desfazer:** reverter o PR das listas e publicar de novo. O
+   agente do WMS volta a responder, e as rotinas voltam para ele. O que o
+   núcleo gravou fica nas mesmas coleções.
