@@ -4,10 +4,10 @@ import { onCall } from "firebase-functions/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { setGlobalOptions } from "firebase-functions/v2";
 
+import { answerStockAlertFor, runStockFor } from "./domain/alertas-parados-gravacao.js";
 import { runCasesFor } from "./domain/lembrancas-gravacao.js";
 import { memoriaLiberada } from "./domain/liberacao.js";
 import { runMeasuresFor } from "./domain/medidas-gravacao.js";
-import { runStockAgeFor } from "./domain/parados-gravacao.js";
 import { findSimilarQuotesFor } from "./domain/parecidos-gravacao.js";
 import { requireCoreCaller } from "./domain/profile.js";
 import { answerSuggestionFor, suggestDurationFor } from "./domain/sugestao-gravacao.js";
@@ -38,18 +38,19 @@ const db = getFirestore();
 /**
  * A memória, a cada 15 minutos: as medidas, recalculadas do zero quando uma OS
  * é revisada ou reaberta (parte 5.1a), as lembranças das demandas fechadas
- * (parte 5.3a) e o relógio dos itens do estoque, para os dias parado (parte
- * 5.4a). Cada uma tem o cursor dela; a falha de uma não para as outras.
+ * (parte 5.3a), o relógio dos itens do estoque, para os dias parado (parte
+ * 5.4a), e depois dele a proposta do dia do alerta do item parado (parte
+ * 5.4d). Cada uma tem o cursor dela; a falha de uma não para as outras.
  */
 export const runMeasures = onSchedule({ schedule: "every 15 minutes", timeZone: "America/Sao_Paulo", timeoutSeconds: 300, maxInstances: 1 }, async () => {
   if (!memoriaLiberada(PROJECT_ID)) return;
-  const [medidas, lembrancas, parados] = await Promise.allSettled([runMeasuresFor(db), runCasesFor(db), runStockAgeFor(db)]);
+  const [medidas, lembrancas, estoque] = await Promise.allSettled([runMeasuresFor(db), runCasesFor(db), runStockFor(db)]);
   console.info("runMeasures", {
     medidas: medidas.status === "fulfilled" ? medidas.value : "falhou",
     lembrancas: lembrancas.status === "fulfilled" ? lembrancas.value : "falhou",
-    parados: parados.status === "fulfilled" ? parados.value : "falhou",
+    estoque: estoque.status === "fulfilled" ? estoque.value : "falhou",
   });
-  const falha = [medidas, lembrancas, parados].find((resultado): resultado is PromiseRejectedResult => resultado.status === "rejected");
+  const falha = [medidas, lembrancas, estoque].find((resultado): resultado is PromiseRejectedResult => resultado.status === "rejected");
   if (falha) throw falha.reason;
 });
 
@@ -69,4 +70,10 @@ export const answerSuggestion = onCall(async (request) => {
 export const findSimilarQuotes = onCall(async (request) => {
   const caller = await requireCoreCaller(db, request, PROJECT_ID);
   return findSimilarQuotesFor(db, caller, request.data);
+});
+
+/** A decisão da coordenação sobre o alerta do item parado: aprovar com os itens ou descartar. Grava o evento (parte 5.4d). */
+export const answerStockAlert = onCall(async (request) => {
+  const caller = await requireCoreCaller(db, request, PROJECT_ID);
+  return answerStockAlertFor(db, caller, request.data);
 });

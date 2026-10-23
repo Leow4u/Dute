@@ -29,22 +29,22 @@ describe("functions do núcleo", () => {
   it("toda linha com onCall está no formato que a conferência do invoker lê, inclusive comentário", () => {
     const pattern = invokerPattern();
     const used = rawIndex.split(/\r?\n/).filter((line) => /\bonCall\s*[<(]/.test(line));
-    assert.deepEqual(used.map((line) => line.match(pattern)?.[1]), ["suggestDuration", "answerSuggestion", "findSimilarQuotes"]);
+    assert.deepEqual(used.map((line) => line.match(pattern)?.[1]), ["suggestDuration", "answerSuggestion", "findSimilarQuotes", "answerStockAlert"]);
   });
 
   it("as callables começam pela liberação e pelo perfil, e nada é reexportado", () => {
     assert.doesNotMatch(index, /^export\s*\{/m);
     const blocks = index.split(/^(?=export const )/m).filter((block) => /^export const \w+ = onCall/.test(block));
-    assert.equal(blocks.length, 3);
+    assert.equal(blocks.length, 4);
     for (const block of blocks) assert.match(block, ENTRADA);
   });
 
-  it("a rotina da memória (partes 5.1a, 5.3a e 5.4a), a cada 15 minutos, uma instância, confere a liberação antes de tudo e roda as medidas, as lembranças e o relógio do estoque", () => {
+  it("a rotina da memória (partes 5.1a, 5.3a, 5.4a e 5.4d), a cada 15 minutos, uma instância, confere a liberação antes de tudo e roda as medidas, as lembranças e o estoque (o relógio e a proposta do alerta)", () => {
     const agendadas = [...index.matchAll(/^export const (\w+) = onSchedule\(/gm)].map((match) => match[1]);
     assert.deepEqual(agendadas, ["runMeasures"]);
     assert.match(
       index,
-      /export const runMeasures = onSchedule\(\{[^}]*schedule: "every 15 minutes"[^}]*timeZone: "America\/Sao_Paulo"[^}]*maxInstances: 1[^}]*\}, async \(\) => \{\s*if \(!memoriaLiberada\(PROJECT_ID\)\) return;\s*const \[medidas, lembrancas, parados\] = await Promise\.allSettled\(\[runMeasuresFor\(db\), runCasesFor\(db\), runStockAgeFor\(db\)\]\);/,
+      /export const runMeasures = onSchedule\(\{[^}]*schedule: "every 15 minutes"[^}]*timeZone: "America\/Sao_Paulo"[^}]*maxInstances: 1[^}]*\}, async \(\) => \{\s*if \(!memoriaLiberada\(PROJECT_ID\)\) return;\s*const \[medidas, lembrancas, estoque\] = await Promise\.allSettled\(\[runMeasuresFor\(db\), runCasesFor\(db\), runStockFor\(db\)\]\);/,
     );
   });
 });

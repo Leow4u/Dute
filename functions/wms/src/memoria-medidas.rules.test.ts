@@ -15,7 +15,8 @@ import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, updateDoc, 
  * pelo navegador. As sugestões (parte 5.2a) abrem a quem pediu e a owner e
  * admin. As lembranças (parte 5.3a) têm preço e não abrem a ninguém pelo
  * navegador: só a callable do núcleo lê. Os dias parado (parte 5.4a) abrem a
- * quem lê o estoque, não ao cliente. Ninguém grava pelo navegador.
+ * quem lê o estoque, não ao cliente; o alerta do item parado (parte 5.4d),
+ * só à coordenação. Ninguém grava pelo navegador.
  */
 
 const PROJECT_ID = "demo-dute-operations";
@@ -70,6 +71,7 @@ beforeEach(async () => {
     await setDoc(doc(database, "ai_case_memory", "10045"), { demanda: "10045", customer_code: "ITAU", orcado_cents: 120000, realizado_cents: 140000 });
     await setDoc(doc(database, "ai_suggestions", "sug_ops"), { id: "sug_ops", tipo: "duracao_os", customer_code: "ITAU", pedida_por: { uid: "ops-a", role: "interno" } });
     await setDoc(doc(database, "ai_suggestions", "sug_outro"), { id: "sug_outro", tipo: "duracao_os", customer_code: "ITAU", pedida_por: { uid: "outro-interno", role: "interno" } });
+    await setDoc(doc(database, "ai_stock_alerts", "alerta_itau"), { id: "alerta_itau", customer_code: "ITAU", status: "proposta", itens: [{ sku_code: "ITAU-000001", dias_parado: 120 }] });
     await setDoc(doc(database, "ai_stock_age", "item_itau"), { tipo: "item", customer_code: "ITAU", sku_code: "ITAU-000001", saldo: 30, relogio: { primeira_entrada: null, ultima_entrada: null, ultima_saida: null } });
   });
 });
@@ -161,6 +163,28 @@ describe("os dias parado do estoque (parte 5.4a)", () => {
       await assertFails(setDoc(doc(database, "ai_stock_age", "item_novo"), { tipo: "item", customer_code: "ITAU" }));
       await assertFails(updateDoc(doc(database, "ai_stock_age", "item_itau"), { saldo: 1 }));
       await assertFails(deleteDoc(doc(database, "ai_stock_age", "item_itau")));
+    }
+  });
+});
+
+describe("o alerta do item parado (parte 5.4d)", () => {
+  it("a coordenação lê e consulta pelo cliente; o resto da equipe e o cliente, não", async () => {
+    for (const uid of ["owner-a", "admin-a", "ops-a"]) {
+      await assertSucceeds(getDoc(doc(firestore(uid), "ai_stock_alerts", "alerta_itau")));
+      await assertSucceeds(getDocs(query(collection(firestore(uid), "ai_stock_alerts"), where("status", "==", "proposta"))));
+    }
+    for (const uid of ["wms-a", "support-a", "comercial-a", "financeiro-a", "campo-a", "painel-a", "client-itau"]) {
+      await assertFails(getDoc(doc(firestore(uid), "ai_stock_alerts", "alerta_itau")));
+      await assertFails(getDocs(query(collection(firestore(uid), "ai_stock_alerts"), where("customer_code", "==", "ITAU"))));
+    }
+  });
+
+  it("ninguém grava pelo navegador, nem a coordenação", async () => {
+    for (const uid of ["owner-a", "ops-a", "client-itau"]) {
+      const database = firestore(uid);
+      await assertFails(setDoc(doc(database, "ai_stock_alerts", "alerta_novo"), { customer_code: "ITAU", status: "proposta" }));
+      await assertFails(updateDoc(doc(database, "ai_stock_alerts", "alerta_itau"), { status: "aprovada" }));
+      await assertFails(deleteDoc(doc(database, "ai_stock_alerts", "alerta_itau")));
     }
   });
 });

@@ -90,13 +90,15 @@ de fora.
 | `ai_suggestions/{id}` | `functions/core` | A sugestão mostrada: o tipo, o contexto (a demanda, a OS, quem pediu), o valor sugerido, a base, a decisão e o valor real |
 | `ai_case_memory/{demanda}` | `functions/core` | A demanda fechada: os itens e as quantidades, os serviços, o prazo, o orçado e o realizado, o resumo em texto e o vetor de semelhança |
 | `ai_stock_age/{item}` | `functions/core` | O item do estoque, um por cliente e SKU: o relógio (a primeira e a última entrada e a última saída que contam), a última saída em cada posição e o saldo das posições |
-| `ai_cursors/{rotina}` | `functions/core` | Até onde cada rotina leu os eventos ou o razão do estoque |
+| `ai_stock_alerts/{alerta}` | `functions/core` | O alerta do item parado de um cliente: a proposta do dia com os itens, a regra, e a decisão (quem, quando e os itens enviados) |
+| `ai_cursors/{rotina}` | `functions/core` | Até onde cada rotina leu os eventos ou o razão do estoque, e o dia da última proposta do alerta |
 | `core_operations/{id}` | `functions/core` | O recibo de idempotência das callables |
 
 - **Regras.** As medidas abrem à equipe interna que planeja e orça: owner,
   admin, interno e comercial. As sugestões abrem a quem as pediu e a owner e
   admin. As lembranças não abrem pelo navegador. Os dias parado abrem a quem
-  lê o estoque (owner, admin, interno, wms e suporte), como `stock_balances`.
+  lê o estoque (owner, admin, interno, wms e suporte), como `stock_balances`;
+  o alerta do item parado, à coordenação (owner, admin e interno).
   O cliente, o campo e o painel não leem nada delas. Ninguém grava pelo
   navegador.
 - **Preço.** A medida de duração e a do planejamento não têm valor. A
@@ -154,7 +156,21 @@ e os dias parado da peça entram com ele.
   - O item guarda a última saída em cada posição, e a idade da caixa sai na
     hora, como a do item. A caixa só tem o "Parado"; o giro é do item.
 - **O cliente.** Os dias parado não abrem ao cliente. O cliente fica sabendo
-  pelo alerta, e o alerta só sai depois que uma pessoa aprova (parte 5.4d).
+  pelo alerta, e o alerta só sai depois que uma pessoa aprova.
+- **O alerta.**
+  - Uma vez por dia, a rotina propõe a cada cliente ativo, com portal e que
+    não é prospect, um alerta com os itens que passaram do "Parado" da regra
+    do modelo dele, os mais parados primeiro (até 200).
+  - Uma proposta aberta por cliente. A rotina a refaz todo dia, e a tira
+    quando não sobra item.
+  - A coordenação (owner, admin e interno) aprova escolhendo os itens, ou
+    descarta. A decisão grava o evento `estoque_parado.aprovado` ou
+    `estoque_parado.descartado`, sem valor nem nome de item, na mesma
+    transação. A mesma decisão de novo não muda nada; outra recusa.
+  - O item decidido, enviado ou não, não volta enquanto não se mexer: a
+    chave dele é o SKU com o último movimento.
+  - Só o aprovado vira aviso ao cliente, no sino do portal e por e-mail,
+    pela rotina dos avisos da Operação (parte 5.4f).
 
 ## Liberação
 
@@ -177,7 +193,9 @@ Leonardo.
 | 5.4a | A regra dos dias parado por modelo de operação, em `lib/dominio`, com a cópia no núcleo; o relógio de cada item em `ai_stock_age`, pela rotina `runMeasures`, a partir do razão; as regras | A etiqueta sai da regra do modelo; o mesmo SKU em dois clientes são dois itens; o cliente não lê |
 | 5.4b | Os dias parado da caixa: o item guarda a última saída em cada posição, e a idade da caixa sai da guarda dela e das saídas dos SKUs dela pela posição dela | A caixa conta da guarda; só a saída de um SKU dela pela posição dela zera |
 | 5.4c | Os dias parado e as etiquetas em Estoque, por item e por caixa | Textos listados; a etiqueta sai da regra do modelo do cliente; `axe` |
-| 5.4d | O alerta do item parado, no portal e por e-mail, só depois da aprovação | O alerta não sai sem aprovação |
+| 5.4d | A proposta do dia do alerta do item parado e a decisão (`answerStockAlert`), com o evento; `ai_stock_alerts` e as regras | O alerta não sai sem aprovação; o item decidido não volta sem se mexer; só a coordenação decide |
+| 5.4e | O alerta para aprovar no Início da Armazenagem, com os itens para escolher | Textos listados; aprovar pede os itens; `axe` |
+| 5.4f | O aviso do alerta aprovado ao cliente, no sino do portal e por e-mail, pela rotina dos avisos | Só o aprovado vira aviso; só ao cliente dele, com a armazenagem no contrato |
 | 5.5 | O Agent Dute no núcleo, com as ferramentas de leitura dos módulos; o WMS passa a usar o do núcleo. Desenho próprio antes do código | Ferramenta nunca escreve; isolamento por cliente nas respostas |
 | 5.6 | O painel de acerto: o erro médio da duração prevista e a taxa de aceite das sugestões | O painel sai de `ai_suggestions` |
 
@@ -457,3 +475,44 @@ Feita em 23/10/2026. A leitura e os textos estão em
     filtros, as caixas e os textos.
   - `estoque.test.tsx`: a etiqueta na lista sem o vermelho, os textos da ficha
     na ordem, quando não aparece e `axe`.
+
+### Parte 5.4d: o alerta do item parado no backend
+
+Feita em 23/10/2026. A conta está em
+`functions/core/src/domain/alertas-parados.ts`; a rotina e a decisão em
+`alertas-parados-gravacao.ts`; o evento em `eventos.ts`.
+
+- **A proposta.** `runMeasures` roda o relógio do estoque e, depois dele, a
+  proposta (`runStockFor`), uma vez por dia de São Paulo (o dia fica no
+  cursor `alertas_parados`).
+  - O cliente pausado, arquivado, prospect ou sem portal (o modelo Insumos,
+    da própria Dutelog) não recebe proposta, e a aberta dele sai.
+  - A proposta guarda a regra do modelo e cada item com o saldo, o último
+    movimento e os dias parado.
+- **A decisão.** `answerStockAlert` recebe o alerta, aprovar ou descartar, e
+  os itens. Na transação:
+  - confere que a proposta está aberta e que os itens são dela;
+  - grava a decisão, quem decidiu e os itens enviados;
+  - grava o evento.
+  - Só a coordenação decide (`ALERTA_ROLES`, owner, admin e interno).
+- **Os eventos do núcleo.** O primeiro evento do núcleo (`source:
+  functions_core`). Os tipos `estoque_parado.*` ficam fora do roteador de
+  avisos do WMS, para nada ir ao cliente antes da parte 5.4f.
+- **Regras e zeragem.** `ai_stock_alerts` abre só à coordenação; ninguém
+  grava pelo navegador. Vai embora com o estoque na zeragem, com os eventos
+  do núcleo.
+- **Testes.**
+  - `alertas-parados.test.ts`:
+    - os itens da proposta, com o limite da regra e o teto;
+    - o decidido que não volta e o que se mexeu, que volta;
+    - a escolha na aprovação;
+    - a resposta e o evento sem valor.
+  - `alertas-parados.integration.test.ts`, no emulador:
+    - uma vez por dia;
+    - só o cliente com portal;
+    - aprovar e descartar com o evento;
+    - a decisão que não se refaz;
+    - o item que volta depois de se mexer;
+    - o cliente pausado perde a proposta;
+    - só a coordenação decide.
+  - `memoria-medidas.rules.test.ts`: quem lê e quem não lê `ai_stock_alerts`.
