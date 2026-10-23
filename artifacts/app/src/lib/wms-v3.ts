@@ -7,7 +7,10 @@ import { normalizePath } from "./modules";
  * Início, Pedidos, Estoque e Receber, e depois as demais. As outras seguem
  * o docs/sistema-visual.md até a vez delas.
  */
-export const TELAS_DO_WMS_NA_V3: readonly string[] = [];
+export const TELAS_DO_WMS_NA_V3: readonly string[] = [
+  // Parte 4.7b: o Início, no molde do Início dos outros módulos.
+  "/dashboard",
+];
 
 /** A tela aberta já segue a v3 (o caminho exato ou uma tela dentro dele). */
 export function telaDoWmsNaV3(location: string, telas: readonly string[] = TELAS_DO_WMS_NA_V3): boolean {

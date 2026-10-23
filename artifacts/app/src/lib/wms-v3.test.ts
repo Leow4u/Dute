@@ -15,8 +15,8 @@ describe("telas do WMS na v3", () => {
     expect(telaDoWmsNaV3("/pedidos", telas)).toBe(false);
   });
 
-  it("a parte 4.7a só troca o shell: nenhuma tela ainda", () => {
-    expect(TELAS_DO_WMS_NA_V3).toEqual([]);
+  it("as telas na v3, na ordem da pergunta 18", () => {
+    expect(TELAS_DO_WMS_NA_V3).toEqual(["/dashboard"]);
   });
 
   it("o layout do WMS usa a lista", () => {

@@ -1,185 +1,31 @@
 import { useGetDashboard } from "@workspace/api-client-react";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  ClipboardList,
-  PackageCheck,
-  Sparkles,
-  Truck,
-  type LucideIcon,
-} from "lucide-react";
-import { Link } from "wouter";
 
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useAppUser } from "@/lib/auth";
-import { type HomeInboxItem, type HomeInboxTone } from "@/lib/home-inbox";
+import { itensDoInicioDoWms } from "@/lib/inicio-do-wms";
 import { canAccessModule, WMS_ROLES } from "@/lib/modules";
-import { formatToday, greeting } from "@/lib/saudacao";
 import { useInicioDoWms } from "@/lib/use-inicio-do-wms";
-import { cn } from "@/lib/utils";
 
-const TONE_STYLE: Record<HomeInboxTone, { icon: LucideIcon; box: string }> = {
-  critical: { icon: AlertTriangle, box: "bg-destructive-soft text-destructive-soft-foreground" },
-  attention: { icon: ClipboardList, box: "bg-warning-soft text-warning-soft-foreground" },
-  info: { icon: Truck, box: "bg-info-soft text-info-soft-foreground" },
-  agent: { icon: Sparkles, box: "bg-agent-soft text-agent" },
-};
+import { InicioDoWmsView } from "./home-view";
 
-const ITEM_ICON: Record<string, LucideIcon> = {
-  receipts: PackageCheck,
-};
-
-const numberFormatter = new Intl.NumberFormat("pt-BR");
-
-function InboxRow({ item }: { item: HomeInboxItem }) {
-  const tone = TONE_STYLE[item.tone];
-  const Icon = ITEM_ICON[item.id] ?? tone.icon;
-  return (
-    <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:gap-4 md:px-5">
-      <div className="flex min-w-0 flex-1 items-center gap-4">
-        <div
-          className={cn(
-            "flex size-11 shrink-0 items-center justify-center rounded-md",
-            tone.box,
-          )}
-        >
-          <Icon className="size-5" aria-hidden="true" />
-        </div>
-        <div className="min-w-0">
-          <p className="font-semibold text-foreground">{item.title}</p>
-          {item.detail ? (
-            <p className="mt-0.5 truncate text-sm text-foreground/65">
-              {item.detail}
-            </p>
-          ) : null}
-        </div>
-      </div>
-      <Button
-        asChild
-        size="sm"
-        variant={item.tone === "agent" ? "outline" : "default"}
-        className="shrink-0 self-start sm:self-auto"
-      >
-        <Link href={item.href}>{item.actionLabel}</Link>
-      </Button>
-    </div>
-  );
-}
-
-function SummaryRow({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="flex items-center justify-between py-3 text-sm">
-      <span className="text-foreground/75">{label}</span>
-      <span className="text-lg font-semibold text-foreground">
-        {numberFormatter.format(value)}
-      </span>
-    </div>
-  );
-}
-
+/** /dashboard: o Início da Armazenagem, com as leituras de quem abre o módulo. */
 export default function Home() {
   const { user } = useAppUser();
   const role = user?.publicMetadata.role;
-
   const seesWarehouse = canAccessModule(role, WMS_ROLES);
   const dashboard = useGetDashboard();
   const inbox = useInicioDoWms(role);
-  const loading = inbox.carregando;
-  const failedSources = inbox.falhas;
-
-  const now = new Date();
-  const firstName = user?.fullName?.split(" ")[0] ?? "";
-  const pending = inbox.items.length;
-  const skuTotal = Number(
-    (dashboard.data as { total_skus?: number } | undefined)?.total_skus ?? 0,
-  );
+  const skus = Number((dashboard.data as { total_skus?: number } | undefined)?.total_skus ?? 0);
 
   return (
-    <div className="flex flex-col gap-6">
-      <header>
-        <p className="text-sm text-foreground/60">{formatToday(now)}</p>
-        <h1 className="mt-1 text-2xl font-semibold text-foreground md:text-3xl">
-          {greeting(now)}
-          {firstName ? `, ${firstName}` : ""}
-        </h1>
-        {!loading ? (
-          <p className="mt-1 text-foreground/70">
-            {pending === 0 ? (
-              "Nada parado esperando por você."
-            ) : (
-              <>
-                <span className="font-semibold text-destructive-soft-foreground">
-                  {pending === 1 ? "1 item" : `${pending} itens`}
-                </span>{" "}
-                {pending === 1 ? "precisa" : "precisam"} de você.
-              </>
-            )}
-          </p>
-        ) : null}
-      </header>
-
-      {failedSources.length ? (
-        <Alert>
-          <AlertTriangle className="size-4" />
-          <AlertDescription>
-            Não foi possível carregar {failedSources.join(" e ")}. A lista abaixo
-            pode estar incompleta.
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <section className="flex min-w-0 flex-col gap-3">
-          <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-foreground/60">
-            Precisa de você
-          </h2>
-          <Card>
-            <CardContent className="p-0">
-              {loading ? (
-                <div className="flex flex-col gap-3 p-5">
-                  {[0, 1, 2].map((row) => (
-                    <Skeleton key={row} className="h-14 rounded-2xl" />
-                  ))}
-                </div>
-              ) : pending === 0 ? (
-                <div className="flex items-center gap-3 px-5 py-8 text-success-soft-foreground">
-                  <CheckCircle2 className="size-5" aria-hidden="true" />
-                  <span className="font-medium">Tudo em dia.</span>
-                </div>
-              ) : (
-                <div className="divide-y divide-border/70">
-                  {inbox.items.map((item) => (
-                    <InboxRow key={item.id} item={item} />
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </section>
-
-        {seesWarehouse ? (
-          <section className="flex min-w-0 flex-col gap-3">
-            <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-foreground/60">
-              Hoje no armazém
-            </h2>
-            <Card>
-              <CardContent className="divide-y divide-border/70 px-5 py-2">
-                <SummaryRow label="Pedidos para separar" value={inbox.summary.toPick} />
-                <SummaryRow label="Prontos para envio" value={inbox.summary.toShip} />
-                <SummaryRow label="Em rota de entrega" value={inbox.summary.inTransit} />
-                <SummaryRow
-                  label="Recebimentos em aberto"
-                  value={inbox.summary.openReceipts}
-                />
-                <SummaryRow label="SKUs em estoque" value={skuTotal} />
-              </CardContent>
-            </Card>
-          </section>
-        ) : null}
-      </div>
-    </div>
+    <InicioDoWmsView
+      nome={user?.fullName ?? ""}
+      hoje={new Date()}
+      inicio={{
+        itens: itensDoInicioDoWms(inbox.items),
+        carregando: inbox.carregando,
+        falhas: inbox.falhas,
+        hoje: seesWarehouse ? { ...inbox.summary, skus } : null,
+      }}
+    />
   );
 }
