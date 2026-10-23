@@ -194,7 +194,7 @@ Leonardo.
 | 5.4b | Os dias parado da caixa: o item guarda a última saída em cada posição, e a idade da caixa sai da guarda dela e das saídas dos SKUs dela pela posição dela | A caixa conta da guarda; só a saída de um SKU dela pela posição dela zera |
 | 5.4c | Os dias parado e as etiquetas em Estoque, por item e por caixa | Textos listados; a etiqueta sai da regra do modelo do cliente; `axe` |
 | 5.4d | A proposta do dia do alerta do item parado e a decisão (`answerStockAlert`), com o evento; `ai_stock_alerts` e as regras | O alerta não sai sem aprovação; o item decidido não volta sem se mexer; só a coordenação decide |
-| 5.4e | O alerta para aprovar no Início da Armazenagem, com os itens para escolher | Textos listados; aprovar pede os itens; `axe` |
+| 5.4e | Estoque › Alertas, com o alerta de cada cliente e os itens para escolher, e a linha no "Precisa de você" da Armazenagem | Textos listados; uma ação principal; aprovar pede os itens; só a coordenação vê; `axe` |
 | 5.4f | O aviso do alerta aprovado ao cliente, no sino do portal e por e-mail, pela rotina dos avisos | Só o aprovado vira aviso; só ao cliente dele, com a armazenagem no contrato |
 | 5.5 | O Agent Dute no núcleo, com as ferramentas de leitura dos módulos; o WMS passa a usar o do núcleo. Desenho próprio antes do código | Ferramenta nunca escreve; isolamento por cliente nas respostas |
 | 5.6 | O painel de acerto: o erro médio da duração prevista e a taxa de aceite das sugestões | O painel sai de `ai_suggestions` |
@@ -516,3 +516,39 @@ Feita em 23/10/2026. A conta está em
     - o cliente pausado perde a proposta;
     - só a coordenação decide.
   - `memoria-medidas.rules.test.ts`: quem lê e quem não lê `ai_stock_alerts`.
+
+### Parte 5.4e: o alerta para aprovar
+
+Feita em 23/10/2026. A tela está em `artifacts/app/src/pages/estoque-alertas-view.tsx`
+(só a apresentação) e `estoque-alertas.tsx`; a leitura e a escolha em
+`lib/memoria/alertas.ts`.
+
+- **Estoque › Alertas** (`/estoque/alertas`), tela nova na v3, só da
+  coordenação (`ALERTA_PARADO_ROLES`, a mesma lista do núcleo, travada em
+  `platform-lists.test.ts`).
+  - Mostra as propostas abertas de todos os clientes, uma por vez. Com mais
+    de um cliente, a escolha fica no topo, com a contagem de itens.
+  - O alerta traz o cliente, quantos itens e o "Parado 90+ dias" da regra.
+    Cada item tem o código, o nome, o saldo, o último movimento e os dias
+    sem movimento, com a caixa de marcar; todos começam marcados.
+  - "Enviar ao cliente" é a única ação principal e espera sem item marcado;
+    "Descartar" fica ao lado. A decisão vai à callable `answerStockAlert`.
+    O erro dela aparece embaixo das ações.
+- **O Início da Armazenagem.**
+  - O "Precisa de você" ganha "Alerta de 2 itens parados para aprovar", com
+    o cliente, ou "2 alertas de itens parados para aprovar", com os clientes.
+  - A linha leva a Estoque › Alertas, e quem não decide não a vê.
+  - A leitura é a mesma da tela, então a decisão atualiza o Início.
+- **Fora do `dute-homolog`** nada disso é lido.
+- **Testes.**
+  - `memoria/alertas.test.ts`:
+    - a proposta aberta lida;
+    - a escolha dos itens;
+    - a linha do Início para quem decide.
+  - `estoque-alertas-view.test.tsx`:
+    - os textos na ordem;
+    - uma ação principal;
+    - sem item marcado e gravando;
+    - a escolha do cliente;
+    - vazio, carregando e erro;
+    - `axe`.

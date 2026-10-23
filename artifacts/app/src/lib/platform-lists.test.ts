@@ -18,6 +18,7 @@ import {
 } from "@workspace/dominio";
 
 import { COMERCIAL_ROLES } from "./comercial/navegacao";
+import { ALERTA_PARADO_ROLES } from "./memoria/alertas";
 import { COMERCIAL_AMBIENTES_LIBERADOS, FINANCEIRO_AMBIENTES_LIBERADOS, MEMORIA_AMBIENTES_LIBERADOS, OPERACAO_AMBIENTES_LIBERADOS, memoriaLiberada } from "./liberacao";
 import { OPERACAO_CADASTRO_ROLES } from "./operacao/navegacao";
 import { FINANCE_ROLES, INTERNAL_ROLES } from "./modules";
@@ -181,6 +182,10 @@ describe("a liberação da memória igual em todo lugar (Fase 5)", () => {
     expect(tsList(papeis, "PLANEJAMENTO_ROLES")).toEqual(tsList(operacao, "OPERACAO_CADASTRO_ROLES"));
     expect(tsList(papeis, "ORCAMENTO_ROLES")).toEqual(tsList(comercial, "COMERCIAL_ROLES"));
     expect(tsList(papeis, "ORCAMENTO_ROLES")).toEqual([...COMERCIAL_ROLES]);
+  });
+
+  it("quem decide o alerta do item parado: functions/core e o app (parte 5.4e)", () => {
+    expect(tsList(papeis, "ALERTA_ROLES")).toEqual([...ALERTA_PARADO_ROLES]);
   });
 
   it("a lista da rotina e das callables do núcleo é a do app, só a homologação até o fim da fase", () => {

@@ -144,7 +144,7 @@ documentação de produto e operação está em `docs/`.
 - **Telas novas seguem a v3** (`docs/mockups/README.md`). O WMS está no shell
   v3 da Armazenagem desde a parte 4.7a; cada tela dele entra na v3 pela lista
   `TELAS_DO_WMS_NA_V3` (`artifacts/app/src/lib/wms-v3.ts`): Início, Pedidos,
-  Estoque e Receber até aqui. As que não estão na lista seguem
+  Estoque e Receber até aqui, e a tela nova Estoque › Alertas (parte 5.4e). As que não estão na lista seguem
   `docs/sistema-visual.md`. Nada de legenda nas telas: só rótulos, dados e ações. Toda tela nova tem teste com a
   lista dos textos (`src/test/textos.ts`, a trava contra legenda) e com o
   `axe` (`src/test/acessibilidade.ts`, WCAG 2.1 A e AA). O "Precisa de você"

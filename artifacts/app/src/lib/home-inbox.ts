@@ -37,6 +37,9 @@ export type HomeSummary = {
   openReceipts: number;
 };
 
+/** O alerta do item parado aberto de um cliente (parte 5.4e), com quantos itens. */
+export type HomeStockAlert = { id: string; customer_code: string; itens: number };
+
 export type HomeInbox = {
   items: HomeInboxItem[];
   summary: HomeSummary;
@@ -91,10 +94,12 @@ export function buildHomeInbox({
   role,
   ops,
   requests,
+  stockAlerts,
 }: {
   role: ProfileRole | null | undefined;
   ops?: WarehouseOpsResponse;
   requests?: HomeRequest[];
+  stockAlerts?: HomeStockAlert[];
 }): HomeInbox {
   const orders = groupWarehouseOrders(ops).filter(
     (order) => order.stage !== "entregue",
@@ -148,6 +153,22 @@ export function buildHomeInbox({
         "Enviadas pelos clientes",
       href: "/solicitacoes",
       actionLabel: "Aprovar",
+    });
+  }
+
+  const alerts = (stockAlerts ?? []).filter((alert) => alert.itens > 0);
+  if (alerts.length) {
+    const total = alerts.reduce((sum, alert) => sum + alert.itens, 0);
+    items.push({
+      id: "stock-alerts",
+      tone: "attention",
+      title:
+        alerts.length === 1
+          ? `Alerta de ${plural(total, "item parado", "itens parados")} para aprovar`
+          : `${alerts.length} alertas de itens parados para aprovar`,
+      detail: listPreview(alerts.map((alert) => alert.customer_code), 3),
+      href: "/estoque/alertas",
+      actionLabel: "Revisar",
     });
   }
 

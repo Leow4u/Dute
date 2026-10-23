@@ -1378,6 +1378,16 @@ async function getStockAge(customerCode: string) {
   return { items: snapshot.docs.map(normalizeDoc) };
 }
 
+/**
+ * O alerta do item parado para aprovar (parte 5.4e): as propostas abertas de
+ * todos os clientes em `ai_stock_alerts`. As regras só abrem à coordenação.
+ */
+async function getStockAlerts() {
+  if (!firestore) return { items: [] };
+  const snapshot = await getDocs(query(collection(firestore, "ai_stock_alerts"), where("status", "==", "proposta")));
+  return { items: snapshot.docs.map(normalizeDoc) };
+}
+
 async function getWarehouseMap() {
   const skus = await readLimited(collectionNames.skus, CATALOG_READ_CAP);
   const ruas = new Map<string, AnyRecord>();
@@ -3945,6 +3955,7 @@ async function route(
   }
 
   if (pathname === "/api/warehouse/map") return json(await getWarehouseMap());
+  if (pathname === "/api/stock-alerts" && method === "GET") return json(await getStockAlerts());
   if (pathname === "/api/stock-age" && method === "GET") return json(await getStockAge(searchParams.get("customer_code") ?? ""));
 
   // Relatórios (pages/reports.tsx): período filtrado na consulta, não na

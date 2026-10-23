@@ -16,6 +16,8 @@ export const TELAS_DO_WMS_NA_V3: readonly string[] = [
   "/estoque",
   // Parte 4.7e: o Receber (conferir e guardar as chegadas).
   "/wms/receber",
+  // Parte 5.4e: os Alertas de itens parados, tela nova já na v3.
+  "/estoque/alertas",
 ];
 
 /**
