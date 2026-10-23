@@ -262,8 +262,10 @@ Storage.
     social, o CNPJ e a cidade da Dutelog; o repositório não tem o CNPJ, e o
     cabeçalho saiu com "Dutelog Soluções Logísticas", o nome que o app usa, e o
     e-mail do Comercial. Falta o Leonardo dizer a razão social e o CNPJ que vão
-    na proposta; entram como constantes no papel
-    (`components/comercial/orcamento-documento.tsx`). (Parte 12a)
+    na proposta. Desde a parte 6.20 do plano de implantação, o cabeçalho
+    mostra os dois e a cidade assim que `EMISSOR_DO_DOCUMENTO`
+    (`lib/comercial/emissor.ts`) for preenchido; o teste confere os dígitos
+    do CNPJ. (Parte 12a)
 16. **Como o Leonardo fica sabendo que há orçamento para aprovar?** Hoje, pelo
     e-mail do Guilherme; no app, pelo item do Início quando ele abre. Avisar
     (notificação ou um "Copiar link" da aprovação na montagem, com

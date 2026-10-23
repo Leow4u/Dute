@@ -4,6 +4,8 @@ import { Router } from "wouter";
 
 import { documentoDoOrcamento, fonteDoDocumento } from "@/lib/comercial/documento";
 
+import { OrcamentoDocumento } from "@/components/comercial/orcamento-documento";
+
 import { DocumentoView, type DocumentoViewProps } from "./documento-view";
 
 /**
@@ -179,6 +181,21 @@ describe("documento A4 do orçamento", () => {
     expect(render({ voltar: { href: "/comercial/aprovar?numero=10045", rotulo: "Para aprovar" } })).toContain(
       'href="/comercial/aprovar?numero=10045"',
     );
+  });
+
+  it("com a razão social e o CNPJ (parte 6.20), o cabeçalho os mostra com a cidade; sem eles, só o nome", () => {
+    const comEmissor = texts(
+      renderToStaticMarkup(
+        <OrcamentoDocumento
+          documento={documento(true)}
+          emissor={{ razaoSocial: "Empresa Exemplo Ltda.", cnpj: "11222333000181", cidade: "São Paulo/SP" }}
+        />,
+      ),
+    );
+    expect(comEmissor.slice(0, 2)).toEqual(["Empresa Exemplo Ltda.", "CNPJ 11.222.333/0001-81 · São Paulo/SP"]);
+    const semEmissor = texts(renderToStaticMarkup(<OrcamentoDocumento documento={documento(true)} emissor={{ razaoSocial: "", cnpj: "", cidade: "" }} />));
+    expect(semEmissor[0]).toBe("Dutelog Soluções Logísticas");
+    expect(semEmissor.some((texto) => texto.startsWith("CNPJ"))).toBe(false);
   });
 
   it("carregando, não encontrado e erro, sem o papel nem a impressão", () => {
