@@ -166,6 +166,11 @@ const EXEMPLOS: Record<ComercialEventType, Record<string, unknown>> = {
     substituida_por: "itau-v2-comercial",
     contrato_id: "itau-2026",
   },
+  "price_table.wms_linked": {
+    tabela_id: "btg-armazenagem-2026",
+    variante: "armazenagem",
+    itens: 6,
+  },
   "client_authorization.recorded": {
     autorizacao_id: "aut_0001",
     tipo: "pedido_aceite",

@@ -210,6 +210,46 @@ janela de cada tarifa nos atributos do item (fase-6-comercial.md, parte 16a):
    contrato e a vigência (o que entra ativo e o que encerra).
 9. Rode com `--projeto dute-homolog --executar --por <seu e-mail>`.
 
+## A armazenagem do WMS (`armazenagem.ts`, Fase 7, parte 7.3b)
+
+Leva a LPU de cobrança do WMS de um cliente ao Comercial. Desenho em
+`fase-7-financeiro-unificado.md`, partes 7.3a e 7.3b. Três passos, na pasta
+`C:\DEV\Dute`:
+
+1. **Exportar** (só lê o banco):
+
+   ```powershell
+   cd C:\DEV\Dute
+   node functions/comercial/lib/cargas/armazenagem.js --cliente "BTG Pactual" --projeto dute-homolog --exportar
+   ```
+
+   Escreve em `tmp/comercial/` o CSV da carga de tabela. São os itens ativos
+   da cobrança do cliente, sem o ad valorem, com:
+   - a categoria "Armazenagem" e o serviço igual ao grupo;
+   - o código `WMS-<id>` e o preço de hoje.
+2. **Carregar** o CSV com a carga de tabela (seção acima), na variante
+   `Armazenagem`, com o `--cliente` e a vigência que cobre toda competência
+   ainda por emitir. O comando sai pronto no fim do passo 1.
+3. **Ligar** (dry-run, depois `--executar`):
+
+   ```powershell
+   cd C:\DEV\Dute
+   node functions/comercial/lib/cargas/armazenagem.js --cliente "BTG Pactual" --projeto dute-homolog --ligar --tabela <pt_...>
+   ```
+
+   Confere cada item da cobrança na tabela, pelo código e com o mesmo
+   preço. Depois grava o `lpu_item_id` de cada um, numa transação, com o
+   recibo e o evento `price_table.wms_linked`. A ligação recusa:
+   - o preço mudado no WMS depois da exportação;
+   - o item fora da tabela;
+   - a tabela de outro cliente ou variante;
+   - a tabela que não cobre a competência anterior ou a atual, enquanto
+     estiverem sem emitir, nem as abertas.
+
+Ligado, o WMS tira o preço da tabela (parte 7.3a), e a fatura calcula igual.
+O reajuste é uma tabela nova da variante Armazenagem com os mesmos itens: a
+carga encerra a anterior na véspera.
+
 ## Clientes da Omie (`clientes-omie.ts`, parte 13)
 
 Carga do cadastro comercial a partir dos JSON já baixados da Omie, sem tela e

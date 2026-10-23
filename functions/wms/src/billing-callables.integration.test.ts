@@ -660,6 +660,28 @@ describe("o preço pela tabela do Comercial (parte 7.3a)", () => {
     assert.equal(foto.find((linha) => linha.price_list_id === 2)?.tabela_id, "pt_b");
   });
 
+  it("ligado à tabela com o preço de hoje, a fatura é a mesma (o que a passagem da 7.3b grava)", async () => {
+    // A tabela que a exportação gera: o preço de cada item igual ao do WMS, desde 01/09.
+    await db.collection("price_tables").doc("pt_hoje").set({
+      customer_code: BTG,
+      contract_id: null,
+      variante: "Armazenagem",
+      vigente_de: "2026-09-01",
+      vigente_ate: null,
+      status: "ativa",
+      precos: precos({ lpu_entrada: "1.25", lpu_saida: "2.1", lpu_mov: "0.5", lpu_pallet: "15", lpu_hora: "3.333" }),
+    });
+    for (const [doc, lpu] of [["btg_2", "lpu_entrada"], ["btg_3", "lpu_saida"], ["btg_4", "lpu_mov"], ["btg_5", "lpu_pallet"], ["btg_7", "lpu_hora"]]) await ligar(doc, lpu);
+    await abrirSetembro();
+    const resultado = await previa({ competencia: SETEMBRO });
+    assert.equal(resultado.total_cents, TOTAL_BTG);
+    assert.equal(resultado.total, 75.08);
+    assert.deepEqual(
+      [...linhas(resultado).values()].map((linha) => (linha as Record<string, unknown>).tabela_id ?? null),
+      [null, "pt_hoje", "pt_hoje", "pt_hoje", "pt_hoje", "pt_hoje"],
+    );
+  });
+
   it("o mesmo item na tabela do outro cliente não vale para este", async () => {
     await tabelas();
     await ligar("btg_2", "lpu_entrada");
