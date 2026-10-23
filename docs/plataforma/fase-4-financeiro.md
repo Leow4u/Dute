@@ -60,6 +60,7 @@ Seguem a recomendação do plano até a resposta do Leonardo:
 | `financeiro_operations` | Financeiro | O recibo de idempotência. Ninguém lê. |
 | `demands` | Comercial | O Financeiro escreve `etapa: "faturada"`, `etapa_desde`, o marco em `marcos` e `faturamento`: a fatura, a NF e o vencimento, sem valor. |
 | `client_authorizations` | Comercial | O Financeiro escreve só `nf_ids`. |
+| `orders` | WMS | O pedido de saída ganha `entrega` (parte 4.5a). Pela Dutelog guarda o destino, a data e a hora, o contato, a montagem e o retorno ao armazém. Na retirada pelo cliente guarda a data e a hora, quem retira, o documento e a placa. Também guarda quem definiu e quando, e `demanda` e `os_numeros`, que a Operação grava ao abrir a demanda (parte 4.5b). |
 | `service_requests` | Operação | A solicitação de OS pelo portal (parte 4.4a). Guarda o tipo de serviço (transporte, armazenagem, serviço em campo ou mudança), a data e o horário pedidos, a origem, o destino e o que será feito, os anexos (o caminho no Storage, o nome, o tipo e o tamanho) e o contato (o login de quem pediu). Também o status (recebida, aceita ou recusada), a demanda aberta com ela e a recusa com o motivo. Sem preço. |
 
 Preço só em `faturas`, `pagamentos` e `client_faturas`, lidos por
@@ -89,6 +90,10 @@ e começando por `requireFinanceiroCaller`:
   - `reverse_payment`: o pagamento e o motivo;
   - `cancel`: o motivo.
 
+A entrega do pedido de saída (parte 4.5a) fica no WMS (`functions/wms`):
+
+- `setOrderDelivery`: owner, admin, interno e wms definem a entrega pela Dutelog ou a retirada pelo cliente. Só antes da saída (o pedido expedido, entregue ou cancelado recusa) e enquanto a Operação não abriu a demanda. Repetir a mesma escolha não grava de novo.
+
 A solicitação do portal (parte 4.4a) fica em `functions/operacao`:
 
 - `requestService`: a única callable que atende o cliente (`{ portal: true }`). Pede o papel cliente, o código no perfil e a Operação no contrato (`client_access`). Confere os anexos no Storage e grava a solicitação recebida.
@@ -107,6 +112,11 @@ fatura (`entity_type: fatura`), com o `customer_code`.
 - `cobranca.payment_reversed`: a fatura, o pagamento e se reabriu a NF paga.
 - Nenhum evento leva o valor, o número da NF ou o motivo, que é texto livre.
 - O financeiro lê os `nf.*` e os `cobranca.*`, como lê os `billing.*` do WMS.
+
+A entrega do pedido grava no WMS `expedicao.delivery_set` (`source:
+functions_order_delivery`, `entity_type: pedido`): o pedido, o modo, o dia, a
+montagem e se tem retorno. O destino, o contato, quem retira, o documento e a
+placa ficam só no pedido. O tipo não tem as palavras do roteador de avisos.
 
 A solicitação do portal grava eventos da Operação (`source: functions_operacao`,
 `entity_type: service_request`), com o `customer_code`:
@@ -167,7 +177,10 @@ continuam no Faturamento do WMS, e as rotas `/financeiro` não existem
 | 4.4a | `requestService` e `declineServiceRequest`, `service_requests`, a solicitação em `openDirectDemand`, `portal.*`, regras do Firestore e do Storage e zeragem | O pedido do portal nunca cria OS sozinho; vira demanda uma vez, do mesmo cliente; o cliente sem a Operação não pede |
 | 4.4b | Portal: Solicitar OS em Minhas OS (tipo de serviço, data e horário, origem, destino, o que será feito e anexo) e as solicitações com a situação | Textos listados; sem legenda; uma ação principal; `axe` |
 | 4.4c | Operação: as solicitações em Para planejar do Hoje e no Início; abrir a demanda com o formulário preenchido ou recusar | A solicitação aparece em Para planejar; a demanda sai com a solicitação |
-| 4.5 | Expedição do WMS com entrega pela Dutelog gera demanda e OS | Retirada pelo cliente não gera OS |
+| 4.5a | WMS: a entrega do pedido de saída (`setOrderDelivery`, `orders.entrega`), pela Dutelog ou retirada pelo cliente, e `expedicao.delivery_set` | A entrega não muda depois da saída nem depois da demanda; o evento não leva texto livre |
+| 4.5b | Operação: a entrega pela Dutelog vira demanda e OS (a ida e, com retorno, a volta), com o número de volta no pedido | Retirada pelo cliente não gera OS |
+| 4.5c | WMS: a entrega na tela do pedido (`WmsExpedicao`), com a demanda e as OS na Operação e a retirada na saída | Textos listados; `axe` |
+| 4.5d | O retorno ao armazém: a OS de volta revisada abre o recebimento do retorno no WMS | O retorno gera recebimento uma vez |
 | 4.6 | Notificações por modelo (sino e e-mail) | E-mail só com o canal ligado no perfil |
 | 4.7 | WMS na v3, tela a tela | `theme-colors.test.ts`; render e `axe` por tela |
 | 4.8 | Relatórios | Sem valor para quem não vê valor |
@@ -349,3 +362,18 @@ Feita em 23/10/2026. As regras estão em `artifacts/app/src/lib/operacao/solicit
   - `operacao/solicitacoes.test.ts` cobre a leitura, o tipo, o formulário preenchido, o pedido com a solicitação, a resolvida, o motivo, o Hoje com os filtros e o resumo, e o Início.
   - `hoje-view.test.tsx` e `demanda-nova-view.test.tsx` cobrem os textos listados, o contato fora do cartão, os campos travados, a única ação principal, a recusa e o `axe`.
   - `entrada-leituras.test.tsx` cobre a leitura nova do Início.
+
+### Parte 4.5a: a entrega do pedido de saída no WMS
+
+Feita em 23/10/2026. As regras e a gravação estão em `functions/wms/src/domain/order-delivery.ts`.
+
+- **A escolha.** É feita em cada pedido de saída.
+  - Pela Dutelog: o destino, a data e a hora, o contato (opcional), a montagem e o retorno ao armazém (a desmontagem e a volta, com a data e a hora).
+  - Retirada pelo cliente: a data e a hora, quem retira, o documento e a placa.
+- **Quando muda.** Só antes da saída: o pedido expedido, entregue ou cancelado recusa.
+  - A data é de hoje em diante, e o retorno vem depois da entrega.
+  - Depois que a Operação abre a demanda, a entrega muda na Operação, não no WMS.
+  - A mesma escolha repetida não grava nem gera evento.
+- **Sem mudar o fluxo de hoje.** O pedido sem `entrega` segue como antes. A saída continua pedindo quem coleta, o motorista e a placa, e a entrega o comprovante.
+- **Testes.** `order-delivery.test.ts` cobre os dois modos, o que recusa, quando muda e a mesma escolha lida de volta. `order-delivery.integration.test.ts` cobre a gravação, a troca, a recusa depois da demanda e o pedido que saiu.
+
