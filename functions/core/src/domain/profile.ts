@@ -1,8 +1,8 @@
 import type { Firestore } from "firebase-admin/firestore";
 import { HttpsError, type CallableRequest } from "firebase-functions/https";
 
-import { assertLiberado } from "./liberacao.js";
-import { isPlatformRole, type PlatformRole } from "./platform-roles.js";
+import { assertAgenteLiberado, assertLiberado } from "./liberacao.js";
+import { agenteProblem, isPlatformRole, type PlatformRole } from "./platform-roles.js";
 
 /**
  * Perfil de quem chama o núcleo. Cópia mínima do getProfile do Financeiro:
@@ -16,6 +16,8 @@ export type CoreProfile = {
   email?: string;
   role: PlatformRole;
   name?: string;
+  /** O cliente do login de cliente (`users.customer_code`); a equipe não tem. */
+  customerCode?: string;
 };
 
 export function assertAuth(request: CallableRequest<unknown>) {
@@ -35,6 +37,8 @@ export async function loadProfile(db: Firestore, uid: string, email?: string, to
   if (profileEmail) profile.email = profileEmail;
   const name = typeof data.nome === "string" ? data.nome : tokenName;
   if (name) profile.name = name;
+  const customerCode = typeof data.customer_code === "string" ? data.customer_code.trim() : "";
+  if (role === "cliente" && customerCode) profile.customerCode = customerCode;
   return profile;
 }
 
@@ -46,4 +50,17 @@ export async function requireCoreCaller(db: Firestore, request: CallableRequest<
   assertLiberado(projectId);
   const auth = assertAuth(request);
   return loadProfile(db, auth.uid, auth.token.email, auth.token.name);
+}
+
+/**
+ * Entrada de toda callable do Agent Dute do núcleo (parte 5.5): a liberação
+ * do agente, que é própria, login e perfil, e o papel de quem tem o agente.
+ */
+export async function requireDuteCaller(db: Firestore, request: CallableRequest<unknown>, projectId: string): Promise<CoreProfile> {
+  assertAgenteLiberado(projectId);
+  const auth = assertAuth(request);
+  const profile = await loadProfile(db, auth.uid, auth.token.email, auth.token.name);
+  const problema = agenteProblem(profile.role);
+  if (problema) throw new HttpsError("permission-denied", problema);
+  return profile;
 }

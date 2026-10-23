@@ -21,3 +21,23 @@ export function assertLiberado(projectId: string | null | undefined): void {
   const id = String(projectId ?? "").trim() || "projeto não identificado";
   throw new HttpsError("failed-precondition", `A memória da Dute ainda não está liberada neste ambiente (${id}).`);
 }
+
+/**
+ * Liberação própria do Agent Dute no núcleo (parte 5.5), separada da memória
+ * para o Leonardo ligar uma sem a outra. Fora dela, o app segue com o agente
+ * do WMS. A lista é a mesma de AGENTE_AMBIENTES_LIBERADOS do app, travada por
+ * platform-lists.test.ts.
+ */
+export const AGENTE_AMBIENTES_LIBERADOS = ["dute-homolog"] as const;
+
+export function agenteLiberado(projectId: string | null | undefined): boolean {
+  const id = String(projectId ?? "").trim();
+  return (AGENTE_AMBIENTES_LIBERADOS as readonly string[]).includes(id);
+}
+
+/** Primeira coisa de toda callable e rotina do Agent Dute do núcleo. */
+export function assertAgenteLiberado(projectId: string | null | undefined): void {
+  if (agenteLiberado(projectId)) return;
+  const id = String(projectId ?? "").trim() || "projeto não identificado";
+  throw new HttpsError("failed-precondition", `O Agent Dute do núcleo ainda não está liberado neste ambiente (${id}).`);
+}
