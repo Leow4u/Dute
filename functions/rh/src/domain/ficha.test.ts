@@ -115,6 +115,9 @@ describe("a entrada do registro", () => {
     assert.equal(entradaDoRegistro(entrada({ emitido_em: HOJE }), HOJE).emitido_em, HOJE);
     recusa(() => entradaDoRegistro(entrada({ vence_em: "2025-11-10" }), HOJE), "O vencimento vem depois da data do registro.");
     recusa(() => entradaDoRegistro(entrada({ emitido_em: "2026-02-30" }), HOJE), "Data inválida.");
+    // O ano de dois dígitos no campo de data vira 0025: fora do intervalo, não entra.
+    recusa(() => entradaDoRegistro(entrada({ emitido_em: "0025-01-10", vence_em: "0026-01-10" }), HOJE), "Use uma data entre 1900 e 2100.");
+    recusa(() => entradaDoRegistro(entrada({ vence_em: "2101-01-01" }), HOJE), "Use uma data entre 1900 e 2100.");
     assert.equal(entradaDoRegistro(entrada({ vence_em: null }), HOJE).vence_em, null);
   });
 

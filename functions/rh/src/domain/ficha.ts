@@ -100,7 +100,19 @@ function invalid(message: string): never {
 
 const chave = z.string().trim().min(1, "Informe a chave de idempotência.").max(200);
 const edicao = z.number().int().min(1).max(100_000);
-const dia = z.string().trim().refine(diaValido, "Data inválida.");
+/**
+ * O intervalo das datas do RH. O campo de data do navegador aceita o ano de
+ * dois dígitos como 0025; fora daqui, a data não entra (e o prazo cabe no
+ * evento do vencimento).
+ */
+export const PRIMEIRO_DIA = "1900-01-01";
+export const ULTIMO_DIA = "2100-12-31";
+
+const dia = z
+  .string()
+  .trim()
+  .refine(diaValido, "Data inválida.")
+  .refine((valor) => valor >= PRIMEIRO_DIA && valor <= ULTIMO_DIA, "Use uma data entre 1900 e 2100.");
 const colaboradorId = z.string().regex(ID_COLABORADOR, "Colaborador inválido.");
 const registroId = z.string().regex(ID_REGISTRO, "Registro inválido.");
 

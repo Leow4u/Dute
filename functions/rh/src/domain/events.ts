@@ -61,7 +61,8 @@ export const RH_EVENT_PAYLOADS = {
     .object({ ...doRegistro, antes: situacao, depois: situacao, por: id.nullable() })
     .strict(),
   "rh.record_expiring": z.object({ ...doRegistro, vence_em: dia, dias: z.number().int().min(0).max(DIAS_PARA_O_VENCIMENTO) }).strict(),
-  "rh.record_expired": z.object({ ...doRegistro, vence_em: dia, dias: z.number().int().min(-36_600).max(-1) }).strict(),
+  /** O vencido mais antigo que a entrada aceita (1900) num dia até 2100 cabe em -80 mil dias. */
+  "rh.record_expired": z.object({ ...doRegistro, vence_em: dia, dias: z.number().int().min(-80_000).max(-1) }).strict(),
   /** O arquivo ligado ao registro; `substituiu` quando havia outro, que continua no bucket. */
   "rh.file_attached": z.object({ ...doRegistro, substituiu: z.boolean() }).strict(),
   "rh.file_opened": z.object(doRegistro).strict(),

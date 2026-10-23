@@ -334,3 +334,21 @@ mais antiga entre os vigentes, inclusive a que já tinha passado. Agora é a
 próxima que ainda não venceu. O vencido já conta na marca "N vencidos". O
 `ficha.integration.test.ts` falhava antes e passa depois.
 
+### Correção: as datas fora do intervalo e a rotina que parava
+
+Feita em 23/10/2026, da revisão do código do RH.
+
+- **O defeito.** O campo de data do navegador aceita o ano de dois dígitos
+  como 0025, e a entrada aceitava qualquer ano. Um vencimento em 0026 não
+  cabia no evento `rh.record_expired`. Como era o mais atrasado, a rotina
+  tentava esse registro primeiro, e a falha dele parava a rotina inteira,
+  todo dia.
+- **A entrada** agora só aceita datas de 1900 a 2100 ("Use uma data entre
+  1900 e 2100."). O evento do vencido cabe nesse intervalo.
+- **A rotina** trata cada registro à parte. O registro que não vira evento
+  conta em `falhas`, fica no log e tenta de novo no dia seguinte; os outros
+  seguem.
+- **Testes:** `ficha.test.ts` (a data fora do intervalo) e
+  `rotina.integration.test.ts` (um registro gravado antes do limite não para
+  os outros).
+
