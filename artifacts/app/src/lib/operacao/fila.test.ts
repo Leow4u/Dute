@@ -10,7 +10,6 @@ import {
   osDaLeitura,
   pedidoDeAgenda,
   placasDe,
-  quadroDoDia,
   type OsDaFila,
 } from "./fila";
 
@@ -24,26 +23,7 @@ const aberta: OsDaFila = {
   agenda: null,
 };
 
-describe("quadro do dia", () => {
-  it("separa o que falta agendar, o de hoje e os outros dias, e esconde a cancelada", () => {
-    const hoje: OsDaFila = {
-      ...aberta,
-      numero: "10045-02",
-      status: "agendada",
-      agenda: { data: "2026-10-22", hora: "15:00", equipe: ["col_a"], fim: null, veiculos: ["vei_a"] },
-    };
-    const outro: OsDaFila = {
-      ...hoje,
-      numero: "10045-03",
-      agenda: { ...hoje.agenda!, data: "2026-10-23" },
-    };
-    const cancelada: OsDaFila = { ...aberta, numero: "10045-04", status: "cancelada" };
-    const quadro = quadroDoDia([aberta, hoje, outro, cancelada], "2026-10-22");
-    expect(quadro.paraAgendar.map((os) => os.numero)).toEqual(["10045-01"]);
-    expect(quadro.agendadasHoje.map((os) => os.numero)).toEqual(["10045-02"]);
-    expect(quadro.outrosDias.map((os) => os.numero)).toEqual(["10045-03"]);
-  });
-
+describe("leitura da fila", () => {
   it("lê a OS sem preço e a demanda em Para planejar", () => {
     const os = osDaLeitura("10045-01", {
       status: "aberta",
@@ -88,7 +68,6 @@ describe("OS de demanda perdida no Comercial", () => {
       ["10045-01", "perdida"],
       ["10047-01", null],
     ]);
-    expect(quadroDoDia(ordens, "2026-10-22").paraAgendar.map((os) => os.numero)).toEqual(["10045-01", "10047-01"]);
   });
 });
 
@@ -107,7 +86,12 @@ describe("OS do modelo da parte 3.4b", () => {
       ],
       veiculos: [{ veiculo_id: "vei_a", placa: "DEF4G56" }, { veiculo_id: "vei_b", placa: "FGH2B34" }],
     });
-    expect(os?.itens).toEqual([{ item: "Estação", quantidade: "30" }]);
+    expect(os?.itens).toEqual([{ id: "ln_1", item: "Estação", quantidade: "30" }]);
+    expect(os?.pessoas).toEqual([
+      { id: "col_a", nome: "Ana Souza", papel: "lider" },
+      { id: "col_b", nome: "Valter Moreira", papel: null },
+    ]);
+    expect(os?.placas).toEqual(["DEF-4G56", "FGH-2B34"]);
     expect(os?.agenda).toEqual({ data: "2026-10-27", hora: "07:30", fim: "18:00", equipe: ["col_a", "col_b"], veiculos: ["vei_a", "vei_b"] });
   });
 
@@ -120,6 +104,20 @@ describe("OS do modelo da parte 3.4b", () => {
     });
     expect(os?.agenda).toEqual({ data: "2026-10-22", hora: "15:00", fim: null, equipe: ["col_a"], veiculos: ["vei_a"] });
     expect(os?.itens[0].quantidade).toBe("2");
+  });
+
+  it("a rota sai dos locais copiados; as OS em execução e revisão também são lidas", () => {
+    const os = osDaLeitura("10045-04", {
+      ...BASE,
+      status: "em_execucao",
+      itens: [],
+      servicos: ["transporte", "montagem"],
+      locais: { origem: { nome: "Faria Lima", complemento: "4º andar" }, destino: { nome: null, complemento: "12º andar" } },
+    });
+    expect(os?.status).toBe("em_execucao");
+    expect(os?.rota).toBe("Faria Lima → 12º andar");
+    expect(os?.servicos).toEqual(["transporte", "montagem"]);
+    expect(osDaLeitura("10045-05", { ...BASE, status: "pausada", itens: [] })).toBeNull();
   });
 
   it("aberta, sem janela, não tem agenda mesmo com equipe planejada", () => {
