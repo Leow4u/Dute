@@ -142,7 +142,9 @@ describe("registrar a NF", () => {
     assert.equal(eventos.length, 1);
     assert.deepEqual([eventos[0].type, eventos[0].source, eventos[0].entity_type, eventos[0].customer_code], ["nf.registered", FINANCEIRO_EVENT_SOURCE, "fatura", "ITAU"]);
     assert.deepEqual(eventos[0].payload, { id, demandas: ["10045", "10046"], autorizacoes: 1, emitida_em: "2026-10-23", vencimento: "2026-11-20", forma: "boleto" });
-    assert.doesNotMatch(JSON.stringify(eventos[0]), /1234500|4500000009|1234"/);
+    // Sem o carimbo do servidor: os nanossegundos dele podem conter qualquer sequência de dígitos.
+    const { created_at: _carimbo, ...semCarimbo } = eventos[0];
+    assert.doesNotMatch(JSON.stringify(semCarimbo), /1234500|4500000009|1234"/);
 
     assert.equal((await registerNfFor(db, financeiro, pedido(), AGORA)).replayed, true);
     assert.equal((await db.collection(EVENTS_COLLECTION).get()).size, 1);

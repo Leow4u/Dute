@@ -96,6 +96,8 @@ const faturaAgora = async () => (await db.collection(FATURAS_COLLECTION).doc(fat
 const etapas = async () => Promise.all(["10045", "10046"].map(async (numero) => (await db.doc(`demands/${numero}`).get()).get("etapa")));
 // O relógio do teste é fixo: os eventos têm o mesmo instante, então a ordem não diz nada. Compara-se por tipo.
 const eventos = async () => (await db.collection(EVENTS_COLLECTION).get()).docs.map((doc) => doc.data());
+/** O evento como texto, sem o carimbo do servidor: os nanossegundos dele podem conter qualquer sequência de dígitos. */
+const semCarimbo = (lista: Array<Record<string, unknown>>) => JSON.stringify(lista.map(({ created_at: _carimbo, ...resto }) => resto));
 const doTipo = async (tipo: string) => (await eventos()).filter((evento) => evento.type === tipo);
 
 describe("a cobrança da NF", () => {
@@ -119,7 +121,7 @@ describe("a cobrança da NF", () => {
 
     const tipos = (await eventos()).map((evento) => `${evento.type}:${evento.payload.quitada ?? "-"}`).sort();
     assert.deepEqual(tipos, ["cobranca.payment_registered:false", "cobranca.payment_registered:true", "nf.registered:-"]);
-    assert.doesNotMatch(JSON.stringify(await eventos()), /500000|984500|1484500|cents|valor/);
+    assert.doesNotMatch(semCarimbo(await eventos()), /500000|984500|1484500|cents|valor/);
   });
 
   it("o estorno reabre a paga e devolve as demandas a faturadas; a enviada volta a enviada", async () => {
@@ -142,7 +144,7 @@ describe("a cobrança da NF", () => {
     );
     const estornos = await doTipo("cobranca.payment_reversed");
     assert.deepEqual(estornos.map((evento) => evento.payload), [{ id: faturaId, pagamento_id: quitou.pagamento_id, reaberta: true }]);
-    assert.doesNotMatch(JSON.stringify(estornos), /errada/);
+    assert.doesNotMatch(semCarimbo(estornos), /errada/);
   });
 
   it("com pagamento não cancela; sem, cancelar devolve as demandas, libera a autorização e a mesma NF se registra de novo", async () => {
