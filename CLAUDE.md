@@ -41,6 +41,12 @@ documentação de produto e operação está em `docs/`.
   Decididos em 23/10/2026: um shell por módulo é pedido do Leonardo (um menu
   único inflava demais); a carga de clientes da Omie e o legado da planilha
   saem do plano; antes de qualquer PR de tela, novo alinhamento de UX e UI.
+- **Plano de implantação das fases 2 a 8** em
+  `docs/plataforma/plano-de-implantacao.md` (23/10/2026): desenho, partes em
+  ordem, critério de pronto e produção de cada fase, as regras que valem em
+  todas (um shell por módulo, sem legenda, acessibilidade, engenharia) e as
+  perguntas que cada fase espera do Leonardo. O runbook de cada fase
+  (`fase-N-*.md`) registra as partes; este plano as ordena.
 - **Papéis e módulos têm lista única em `lib/dominio`.** As Functions
   (`functions/wms/src/domain/platform-roles.ts`, `customer-profile.ts`) e o
   `firestore.rules` guardam cópias literais, travadas por
