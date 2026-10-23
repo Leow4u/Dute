@@ -307,7 +307,7 @@ export type ColaboradorNoPainel = ColaboradorDoRh & {
   registros: number;
   vencendo: number;
   vencidos: number;
-  /** O vencimento mais próximo entre os vigentes, ou null. */
+  /** O vencimento mais próximo entre os vigentes que ainda não venceram, ou null. */
   proximo_vencimento: string | null;
 };
 
@@ -336,7 +336,8 @@ export async function getRhPanelFor(padrao: Firestore, rh: Firestore, agora: Dat
     .map((colaborador): ColaboradorNoPainel => {
       const daFicha = registros.filter((registro) => registro.colaborador_id === colaborador.id);
       const seus = vencimentos.filter((vencimento) => vencimento.colaborador_id === colaborador.id);
-      const datas = daFicha.flatMap((registro) => (registro.vence_em ? [registro.vence_em] : [])).sort();
+      // O próximo é o que ainda não venceu; o vencido já conta em `vencidos`.
+      const datas = daFicha.flatMap((registro) => (registro.vence_em && registro.vence_em >= hoje ? [registro.vence_em] : [])).sort();
       return {
         ...colaborador,
         registros: daFicha.length,

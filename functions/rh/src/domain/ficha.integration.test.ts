@@ -163,7 +163,7 @@ describe("o painel do RH", () => {
     assert.deepEqual(
       painel.colaboradores.map((colaborador) => [colaborador.nome, colaborador.registros, colaborador.vencendo, colaborador.vencidos, colaborador.proximo_vencimento]),
       [
-        ["Ana Souza", 3, 1, 1, "2026-10-01"],
+        ["Ana Souza", 3, 1, 1, "2026-11-01"],
         ["Bruno Lima", 0, 0, 0, null],
       ],
     );
