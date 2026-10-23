@@ -107,7 +107,7 @@ describe("a entrada das callables do agente", () => {
 
 describe("o leitor no banco", () => {
   it("o de um cliente nunca devolve o dado de outro", async () => {
-    const daItau = leitorDoAgente(db, { customerCode: "ITAU", audiencia: "cliente" });
+    const daItau = leitorDoAgente(db, { customerCode: "ITAU", audiencia: "cliente", leValor: true });
     assert.deepEqual(
       (await daItau.doCliente("client_inventory", { limite: 50 })).map((item) => item.id),
       ["itau_1"],
@@ -117,7 +117,7 @@ describe("o leitor no banco", () => {
   });
 
   it("o geral é só a medida geral, nunca a de um cliente", async () => {
-    const daEquipe = leitorDoAgente(db, { customerCode: "SAFRA", audiencia: "equipe" });
+    const daEquipe = leitorDoAgente(db, { customerCode: "SAFRA", audiencia: "equipe", leValor: false });
     assert.deepEqual((await daEquipe.geral("ai_measures", { limite: 50 })).map((medida) => medida.id), ["m_geral"]);
   });
 });

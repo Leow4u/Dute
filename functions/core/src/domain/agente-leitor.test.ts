@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import type { Firestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 
-import { COLECOES_DO_CLIENTE, LIMITE_DA_CONSULTA, leitorDoAgente, valorLimpo } from "./agente-leitor.js";
+import { COLECOES_COM_VALOR, COLECOES_DO_CLIENTE, LIMITE_DA_CONSULTA, leitorDoAgente, valorLimpo } from "./agente-leitor.js";
 
 /**
  * O leitor do Agent Dute (parte 5.5b) num banco falso que anota cada
@@ -84,8 +84,8 @@ function falhaDoLeitor(padrao: RegExp) {
 describe("o leitor só lê", () => {
   it("não tem gravação, lote nem transação, e não se muda", () => {
     const { db } = bancoFalso({});
-    const leitor = leitorDoAgente(db, { customerCode: "ITAU", audiencia: "equipe" });
-    assert.deepEqual(Object.keys(leitor).sort(), ["audiencia", "customerCode", "doCliente", "documento", "geral"]);
+    const leitor = leitorDoAgente(db, { customerCode: "ITAU", audiencia: "equipe", leValor: false });
+    assert.deepEqual(Object.keys(leitor).sort(), ["audiencia", "customerCode", "doCliente", "documento", "geral", "leValor"]);
     assert.equal(Object.isFrozen(leitor), true);
     assert.throws(() => {
       (leitor as unknown as Record<string, unknown>).customerCode = "SAFRA";
@@ -94,7 +94,7 @@ describe("o leitor só lê", () => {
 
   it("toda consulta começa pelo cliente do escopo e leva o resto da ferramenta", async () => {
     const { db, chamadas } = bancoFalso({ client_inventory: ESTOQUE });
-    const leitor = leitorDoAgente(db, { customerCode: "ITAU", audiencia: "cliente" });
+    const leitor = leitorDoAgente(db, { customerCode: "ITAU", audiencia: "cliente", leValor: true });
     const lidos = await leitor.doCliente("client_inventory", { onde: [["archived", "==", false]], ordem: [["sku_code", "asc"]], limite: 50 });
     assert.deepEqual(chamadas, [{ colecao: "client_inventory", onde: [["customer_code", "==", "ITAU"], ["archived", "==", false]], ordem: [["sku_code", "asc"]], limite: 50 }]);
     // O documento de outro cliente que a consulta deixasse passar cai na segunda trava.
@@ -103,7 +103,7 @@ describe("o leitor só lê", () => {
 
   it("a ferramenta não filtra pelo cliente, não passa do limite e não lê fora da lista", async () => {
     const { db, chamadas } = bancoFalso({ client_inventory: ESTOQUE });
-    const leitor = leitorDoAgente(db, { customerCode: "ITAU", audiencia: "equipe" });
+    const leitor = leitorDoAgente(db, { customerCode: "ITAU", audiencia: "equipe", leValor: false });
     await assert.rejects(leitor.doCliente("client_inventory", { onde: [["customer_code", "==", "SAFRA"]], limite: 10 }), falhaDoLeitor(/cliente vem do escopo/));
     for (const limite of [0, -1, 1.5, LIMITE_DA_CONSULTA + 1]) await assert.rejects(leitor.doCliente("client_inventory", { limite }), falhaDoLeitor(/limite/), String(limite));
     await assert.rejects(leitor.doCliente("users" as never, { limite: 10 }), falhaDoLeitor(/fora da lista/));
@@ -115,7 +115,7 @@ describe("o leitor só lê", () => {
 
   it("o documento de outro cliente, o que não existe e o id com caminho voltam vazios", async () => {
     const { db, lidosPorId } = bancoFalso({ client_inventory: ESTOQUE });
-    const leitor = leitorDoAgente(db, { customerCode: "ITAU", audiencia: "cliente" });
+    const leitor = leitorDoAgente(db, { customerCode: "ITAU", audiencia: "cliente", leValor: true });
     assert.deepEqual(await leitor.documento("client_inventory", "itau_1"), { customer_code: "ITAU", sku_code: "ITAU-000001", saldo: 30, id: "itau_1" });
     assert.equal(await leitor.documento("client_inventory", "safra_1"), null);
     assert.equal(await leitor.documento("client_inventory", "nao_existe"), null);
@@ -125,21 +125,36 @@ describe("o leitor só lê", () => {
 
   it("o geral só para a equipe, sempre com o filtro da coleção", async () => {
     const { db, chamadas } = bancoFalso({ ai_measures: [{ id: "m1", dados: { escopo: "geral", tipo: "duracao_item" } }] });
-    const daEquipe = leitorDoAgente(db, { customerCode: "ITAU", audiencia: "equipe" });
+    const daEquipe = leitorDoAgente(db, { customerCode: "ITAU", audiencia: "equipe", leValor: false });
     assert.deepEqual(await daEquipe.geral("ai_measures", { onde: [["tipo", "==", "duracao_item"]], limite: 20 }), [{ escopo: "geral", tipo: "duracao_item", id: "m1" }]);
     assert.deepEqual(chamadas.at(-1)?.onde, [["escopo", "==", "geral"], ["tipo", "==", "duracao_item"]]);
-    const doCliente = leitorDoAgente(db, { customerCode: "ITAU", audiencia: "cliente" });
+    const doCliente = leitorDoAgente(db, { customerCode: "ITAU", audiencia: "cliente", leValor: true });
     await assert.rejects(doCliente.geral("ai_measures", { limite: 20 }), (erro: unknown) => erro instanceof HttpsError && erro.code === "permission-denied");
     await assert.rejects(daEquipe.geral("users" as never, { limite: 20 }), falhaDoLeitor(/fora da lista/));
   });
 
+  it("o que tem valor só abre para quem lê valor, antes de consultar", async () => {
+    const { db, chamadas, lidosPorId } = bancoFalso({ quotes: [{ id: "10050", dados: { customer_code: "ITAU", total_cents: 100 } }] });
+    const semValor = leitorDoAgente(db, { customerCode: "ITAU", audiencia: "equipe", leValor: false });
+    const negado = (erro: unknown) => erro instanceof HttpsError && erro.code === "permission-denied" && /não lê valor/.test(erro.message);
+    for (const colecao of COLECOES_COM_VALOR.filter((nome) => (COLECOES_DO_CLIENTE as readonly string[]).includes(nome))) {
+      await assert.rejects(semValor.doCliente(colecao as never, { limite: 1 }), negado, colecao);
+      await assert.rejects(semValor.documento(colecao as never, "10050"), negado, colecao);
+    }
+    await assert.rejects(semValor.geral("price_tables", { limite: 1 }), negado);
+    assert.deepEqual([chamadas.length, lidosPorId.length], [0, 0]);
+    const comValor = leitorDoAgente(db, { customerCode: "ITAU", audiencia: "equipe", leValor: true });
+    assert.deepEqual(await comValor.documento("quotes", "10050"), { customer_code: "ITAU", total_cents: 100, id: "10050" });
+    assert.deepEqual([...COLECOES_COM_VALOR], ["quotes", "price_tables", "client_invoices", "client_faturas", "faturas", "ai_case_memory"]);
+  });
+
   it("sem cliente no escopo, não há leitor", () => {
     const { db } = bancoFalso({});
-    assert.throws(() => leitorDoAgente(db, { customerCode: "  ", audiencia: "equipe" }), falhaDoLeitor(/sem cliente/));
+    assert.throws(() => leitorDoAgente(db, { customerCode: "  ", audiencia: "equipe", leValor: false }), falhaDoLeitor(/sem cliente/));
   });
 
   it("nenhuma coleção da lista guarda acesso, papel ou convite", () => {
-    for (const proibida of ["users", "invites", "client_access", "customers", "system_settings", "agent_usage", "price_tables"]) {
+    for (const proibida of ["users", "invites", "client_access", "customers", "system_settings", "agent_usage", "collaborators", "vehicles"]) {
       assert.equal((COLECOES_DO_CLIENTE as readonly string[]).includes(proibida), false, proibida);
     }
   });

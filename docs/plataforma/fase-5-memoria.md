@@ -877,3 +877,64 @@ Feita em 23/10/2026. O registro das ferramentas está em
   - `agente-armazenagem.integration.test.ts`, no emulador: as consultas de
     verdade, com o período do razão na ordem e os instantes gravados como
     Timestamp.
+
+### Parte 5.5d: as ferramentas da Operação, do Comercial, do Financeiro e da memória
+
+Feita em 23/10/2026. As ferramentas estão em
+`functions/core/src/domain/agente-operacao.ts`, `agente-comercial.ts` e
+`agente-financeiro.ts`. O catálogo com todas, por módulo, está em
+`agente-catalogo.ts`.
+
+- **Operação**, sem valor: a demanda e a OS não guardam preço.
+  - `demandas`: as abertas ou todas, com a etapa, a execução prevista, as
+    OS e a NF. O cliente não vê a proposta ainda em montagem na Dutelog.
+  - `ver_demanda`: o escopo fechado e as OS.
+  - `agenda`: as OS de um período, de até 31 dias. O padrão é hoje e os
+    próximos 7.
+  - `ver_os`: os itens planejados e executados, as etapas e a conclusão.
+  - Nas duas últimas, a equipe e o veículo aparecem só para a equipe
+    Dutelog. Saem da cópia que a OS guarda, nunca do cadastro de
+    colaboradores, que tem CPF.
+  - `tempo_dos_itens` (memória da parte 5.1), para quem planeja:
+    - o homem-minuto por unidade, com a mesma base da duração sugerida: 5
+      execuções do cliente, ou 15 na média geral; abaixo disso, "ainda sem
+      base";
+    - o aviso de plano otimista;
+    - a medida geral não mostra as OS de origem, que são de outros
+      clientes.
+- **Comercial**, para quem orça (`ORCAMENTO_ROLES`), com o preço:
+  - `orcamentos` e `ver_orcamento`, com as linhas, os ajustes, as condições
+    e a validade;
+  - `lpu`, com o preço da tabela ativa do cliente, ou da Padrão Dutelog;
+  - `orcamentos_parecidos` (memória da parte 5.3), com a mesma conta da
+    `findSimilarQuotes`, o orçado e o realizado de cada caso.
+- **Financeiro**, com valor:
+  - `faturas`, para o cliente e para quem lê valor: as mensais da
+    armazenagem e as dos serviços por NF;
+  - `a_receber`, para a equipe que lê valor: o saldo das faturas emitidas e
+    enviadas, o vencido, os dias em atraso e a armazenagem sem pagamento.
+- **O valor no leitor.** As coleções com valor (`quotes`, `price_tables`,
+  `client_invoices`, `client_faturas`, `faturas` e `ai_case_memory`, cujo
+  resumo tem R$) só abrem para quem lê valor. O leitor de quem não lê recusa
+  antes de consultar.
+  - A trava de "o valor só para quem lê valor" passa a ser do leitor, e não
+    só da escolha das ferramentas.
+  - O geral ganha o catálogo da LPU (só os itens ativos) e a tabela Padrão
+    (a sem cliente).
+- **Os índices.** Entram dois em `firestore.indexes.json`:
+  - `service_orders` por `customer_code` e `janela.data`, para a agenda;
+  - `client_faturas` por `customer_code` e `vencimento`.
+- **Testes.**
+  - `agente-modulos.test.ts`, no banco em memória que recusa gravação, com
+    dois clientes. Para cada papel com o agente, as ferramentas que ele
+    recebe:
+    - não gravam;
+    - não trazem o outro cliente;
+    - nunca tocam valor sem ler valor.
+  - O mesmo teste confere o que cada papel recebe e o que cada ferramenta
+    responde.
+  - `agente-modulos.integration.test.ts`, no emulador: a agenda pelo dia da
+    janela, as listas na ordem, o `in` do a receber, a tabela Padrão e a
+    medida geral.
+  - `agente-leitor.test.ts`: o que tem valor recusa quem não lê valor, sem
+    consultar.
