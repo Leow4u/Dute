@@ -184,13 +184,13 @@ async function executar(transaction: Transaction, db: Firestore, acao: AcaoOs, c
 
 // --- Leituras -----------------------------------------------------------------------------
 
-type Escopo = { demanda: DocumentData; escopoRv: number | null; escopo: ItemDaOs[]; ordens: OsGravada[] };
+export type Escopo = { demanda: DocumentData; escopoRv: number | null; escopo: ItemDaOs[]; ordens: OsGravada[]; brutos: Map<string, DocumentData> };
 
 /**
  * O escopo da demanda (sem preço) e as OS que já existem dela: a revisão
  * fechada ou, na demanda direta sem escopo fechado, os itens pedidos.
  */
-async function lerEscopo(transaction: Transaction, db: Firestore, numero: string, demanda: DocumentData): Promise<Escopo> {
+export async function lerEscopo(transaction: Transaction, db: Firestore, numero: string, demanda: DocumentData): Promise<Escopo> {
   const escopoRv = demanda.escopo_rv;
   let linhas: unknown;
   if (typeof escopoRv === "number" && Number.isInteger(escopoRv)) {
@@ -210,6 +210,7 @@ async function lerEscopo(transaction: Transaction, db: Firestore, numero: string
     escopoRv: typeof escopoRv === "number" ? escopoRv : null,
     escopo: itensSemPreco(linhas),
     ordens: existentes.docs.map((doc) => osLida(doc.id, doc.data())),
+    brutos: new Map(existentes.docs.map((doc) => [doc.id, doc.data()])),
   };
 }
 

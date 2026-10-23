@@ -156,8 +156,9 @@ export function osDaLeitura(id: string, data: Record<string, unknown>): OsDaFila
         const nome = texto(item.item) || texto(item.descricao);
         if (!nome) return [];
         // A fatia da OS (parte 3.4b) está em `planejado`; antes, em `quantidade`.
+        // Revisada, o saldo conta o consumido (parte 3.10a), como a callable.
         const linha = texto(item.id);
-        return [{ item: nome, quantidade: texto(item.planejado) || texto(item.quantidade), ...(linha ? { id: linha } : {}) }];
+        return [{ item: nome, quantidade: texto(item.consumido) || texto(item.planejado) || texto(item.quantidade), ...(linha ? { id: linha } : {}) }];
       })
     : [];
   return {

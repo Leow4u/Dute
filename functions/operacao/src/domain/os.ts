@@ -52,6 +52,12 @@ export type ItemDaOs = {
   unidade: string | null;
   /** Quanto desta linha vai nesta OS (no escopo, quanto foi contratado). */
   planejado: string;
+  /**
+   * Quanto do saldo a OS revisada levou (parte 3.10a): o executado quando o
+   * feito a mais se cobra ou o a menos volta ao saldo; o planejado nos outros
+   * casos. Só existe depois da revisão; é o que o saldo conta.
+   */
+  consumido?: string;
   origem_local: string | null;
   destino_local: string | null;
 };
@@ -451,12 +457,13 @@ export function itensSemPreco(valor: unknown): ItemDaOs[] {
   return itens;
 }
 
-export type OsParaSaldo = { numero: string; status: string; itens: readonly { id: string; planejado: string }[] };
+export type OsParaSaldo = { numero: string; status: string; itens: readonly { id: string; planejado: string; consumido?: string }[] };
 
 /**
  * Quanto de cada linha do escopo ainda não está em OS (em milésimos). A OS
- * cancelada devolve a fatia; `exceto` deixa de fora a OS que está sendo
- * alterada. Linha planejada que saiu do escopo (num aditivo) não conta.
+ * cancelada devolve a fatia; a revisada conta o consumido (parte 3.10a);
+ * `exceto` deixa de fora a OS que está sendo alterada. Linha planejada que
+ * saiu do escopo (num aditivo) não conta.
  */
 export function saldoDoEscopo(escopo: readonly ItemDaOs[], ordens: readonly OsParaSaldo[], exceto?: string): Map<string, number> {
   const saldo = new Map<string, number>();
@@ -466,7 +473,7 @@ export function saldoDoEscopo(escopo: readonly ItemDaOs[], ordens: readonly OsPa
     for (const item of os.itens) {
       const restante = saldo.get(item.id);
       if (restante === undefined) continue;
-      saldo.set(item.id, restante - (emMilesimos(item.planejado) ?? 0));
+      saldo.set(item.id, restante - (emMilesimos(item.consumido ?? item.planejado) ?? 0));
     }
   }
   return saldo;
@@ -733,6 +740,7 @@ export function itemLido(bruto: unknown): ItemDaOs {
     planejado,
     origem_local: textoOuNull(item.origem_local),
     destino_local: textoOuNull(item.destino_local),
+    ...(emMilesimos(texto(item.consumido)) !== null ? { consumido: texto(item.consumido) } : {}),
   };
 }
 

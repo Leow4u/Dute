@@ -46,7 +46,11 @@ export const OPERACAO_EVENT_TYPES = [
   "os.completed",
   "os.signed",
   "os.completed_without_acceptance",
+  "os.reviewed",
+  "os.addendum_requested",
+  "os.reopened",
   "demand.direct_opened",
+  "demand.execution_reviewed",
 ] as const;
 export type OperacaoEventType = (typeof OPERACAO_EVENT_TYPES)[number];
 
@@ -176,6 +180,30 @@ const osConcluida = z
 /** O aceite no local: a assinatura do responsável ou a falta dela. */
 const aceiteNoLocal = z.object({ id: osId, demanda: demandaNumero, instante, canal }).strict();
 
+/**
+ * A revisão (parte 3.10a): quantas linhas, quantas divergiam e a decisão de
+ * cada uma, quantas foram corrigidas, as horas planejadas e reais e o tamanho
+ * da equipe. É a matéria do erro do planejamento (Fase 5). Sem motivo nem nota.
+ */
+const contagem = z.number().int().min(0).max(300);
+const osRevisada = z
+  .object({
+    id: osId,
+    demanda: demandaNumero,
+    linhas: contagem,
+    divergencias: contagem,
+    corrigidas: contagem,
+    decisoes: z.object({ cobrar: contagem, aditivo: contagem, absorver: contagem, proxima_os: contagem, encerrar: contagem }).strict(),
+    minutos_planejados: z.number().int().min(0).max(100_000).nullable(),
+    minutos_reais: z.number().int().min(0).max(100_000).nullable(),
+    pessoas: z.number().int().min(0).max(20),
+  })
+  .strict();
+const aditivoPedido = z.object({ id: osId, demanda: demandaNumero, linhas: z.number().int().min(1).max(300) }).strict();
+const osReaberta = z.object({ id: osId, demanda: demandaNumero, demanda_reaberta: z.boolean() }).strict();
+/** A demanda direta foi executada e revisada: vai ao Comercial orçar a execução. */
+const execucaoRevisada = z.object({ id: demandaNumero, de: data, ate: data, os: z.number().int().min(1).max(99) }).strict();
+
 export const OPERACAO_EVENT_PAYLOADS = {
   "collaborator.created": criado,
   "collaborator.updated": alterado,
@@ -200,7 +228,11 @@ export const OPERACAO_EVENT_PAYLOADS = {
   "os.completed": osConcluida,
   "os.signed": aceiteNoLocal,
   "os.completed_without_acceptance": aceiteNoLocal,
+  "os.reviewed": osRevisada,
+  "os.addendum_requested": aditivoPedido,
+  "os.reopened": osReaberta,
   "demand.direct_opened": demandaDireta,
+  "demand.execution_reviewed": execucaoRevisada,
 } as const;
 
 const TEXTO: Record<OperacaoEventType, { title: string; description: string }> = {
@@ -230,7 +262,11 @@ const TEXTO: Record<OperacaoEventType, { title: string; description: string }> =
     title: "OS concluída sem aceite no local",
     description: "Não havia responsável para assinar; o aceite vem pela validação do cliente no Comercial.",
   },
+  "os.reviewed": { title: "OS revisada", description: "A coordenação revisou a OS e decidiu cada divergência entre o planejado e o executado." },
+  "os.addendum_requested": { title: "Aditivo pedido ao Comercial", description: "A revisão da OS pediu ao Comercial o aditivo do que passou do orçado." },
+  "os.reopened": { title: "OS reaberta", description: "A OS revisada voltou à execução." },
   "demand.direct_opened": { title: "Demanda direta aberta", description: "A demanda chegou direto na Operação e se orça depois da execução." },
+  "demand.execution_reviewed": { title: "Execução revisada", description: "A última OS da demanda direta foi revisada: a execução vai ao Comercial para orçar." },
 };
 
 export function isOperacaoEventType(value: string): value is OperacaoEventType {

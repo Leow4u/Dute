@@ -19,6 +19,8 @@ export const CALLABLES_DA_OPERACAO = [
   "attachPhoto",
   "registerPresence",
   "completeServiceOrder",
+  "reviewServiceOrder",
+  "reopenServiceOrder",
 ] as const;
 export type CallableDaOperacao = (typeof CALLABLES_DA_OPERACAO)[number];
 
