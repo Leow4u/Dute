@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  # Push na main: os testes que o homologacao.yml espera antes de publicar.
   push:
     branches: [main]
   pull_request:
@@ -235,30 +236,10 @@ jobs:
       - name: Integration tests
         run: npm run test:integration
 
-  # Todo push mergeado na main vai para a homologação (dute-homolog), com os
-  # testes verdes. É onde se confere a main antes de publicar na produção.
-  # Uma publicação por ambiente de cada vez, sem cancelar a que está rodando:
-  # um "firebase deploy" cortado no meio deixa functions pela metade e pula a
-  # conferência do invoker. O GitHub mantém só a mais nova na espera.
-  publicar-homologacao:
-    name: Publicar na homologação
-    needs: [frontend-typecheck, functions-unit, functions-integration, comercial-unit, comercial-integration, operacao-unit, operacao-integration, tools-python-tests]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    concurrency:
-      group: publicar-homologacao
-      cancel-in-progress: false
-    permissions:
-      contents: read
-      id-token: write
-    uses: ./.github/workflows/publicar.yml
-    with:
-      ambiente: homologacao
-      project_id: dute-homolog
-      project_number: "368642218894"
-      service: dute-app
-      repository: dute
-      firebase_api_key: "AIzaSyBPaH5X0wHbF_geH1zit0rwyJWmdb3Q7Ds"
-      firebase_app_id: "1:368642218894:web:13790f72c76fbb21af22df"
+  # A homologação (dute-homolog) recebe cada push na main pelo homologacao.yml,
+  # que espera este workflow terminar verde no mesmo commit. Aqui ela não entra:
+  # a fila de um job só pega a vaga quando os testes acabam, fora da ordem dos
+  # commits, e em 22/10/2026 perdeu o commit mais novo (ver homologacao.yml).
 
   # Produção só por disparo manual a partir da main, com "publicar_producao"
   # marcado. Desde o corte da Fase 1 (docs/plataforma/fase-1-corte.md) a

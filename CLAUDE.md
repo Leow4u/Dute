@@ -86,7 +86,11 @@ documentação de produto e operação está em `docs/`.
   Firebase Hosting **não** é produção nem fallback.
 - **Publicação pelo GitHub Actions, em dois ambientes.** Cada push em `main`
   publica regras e índices, frontend e functions na homologação
-  (`dute-homolog`); a produção só recebe por disparo manual (Actions > CI > Run
+  (`dute-homolog`) pelo `.github/workflows/homologacao.yml`, que espera o CI do
+  commit ficar verde (`tools/esperar_ci.py`); a fila dele é do workflow inteiro,
+  em ordem de push, então dá para mergear PRs seguidos sem esperar (em
+  22/10/2026 a fila de job do `ci.yml` perdeu o commit mais novo). A produção
+  só recebe por disparo manual (Actions > CI > Run
   workflow com `publicar_producao` marcado), depois de conferir na homologação.
   Nenhum passo da publicação depende da máquina de alguém. O fluxo fica em
   `.github/workflows/publicar.yml`: o job `regras` publica `firestore.rules`,
@@ -103,7 +107,8 @@ documentação de produto e operação está em `docs/`.
   pública (`tools/check_functions_invoker.ps1`). **Verde sem essa verificação
   não vale**: em 09/10/2026 o job ficou verde oito vezes seguidas sem mudar a
   produção. O build usa a configuração web pública do Firebase de cada projeto,
-  definida no `ci.yml`; sem ela o login quebra com "Firebase não configurado"
+  definida no `ci.yml` (produção) e no `homologacao.yml`; sem ela o login
+  quebra com "Firebase não configurado"
   (aconteceu em 09/10/2026). Ver `docs/deploy-manual.md` (inclui o roteiro
   manual de reserva e o que checar quando a verificação falha) e
   `docs/deploy-functions-manual.md`.

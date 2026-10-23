@@ -1,0 +1,63 @@
+name: Homologação
+
+# Cada push na main vai para a homologação (dute-homolog), depois que o CI do
+# mesmo commit (ci.yml, com os testes) termina verde.
+#
+# A fila é do workflow inteiro, não de um job: o GitHub põe cada execução na
+# fila no momento do push, então ela anda em ordem de commit. Uma publicação de
+# cada vez, sem cancelar a que está rodando (cancel-in-progress: false; um
+# "firebase deploy" cortado no meio deixa functions pela metade). Na espera fica
+# só a execução do push mais novo: as mais antigas aparecem como canceladas sem
+# ter publicado nada, e o que elas traziam sobe junto com a mais nova. Dá para
+# mergear vários PRs seguidos sem esperar a publicação anterior terminar.
+#
+# Até 22/10/2026 a fila era do job "Publicar na homologação" do ci.yml, que só
+# entrava nela quando os testes do commit acabavam, e os testes terminam fora de
+# ordem. O #172 entrou depois do #170, tirou o #170 da espera e, na vez dele,
+# não publicou porque o HEAD da main era o #170: a homologação ficou dois PRs
+# atrás até alguém rodar o #170 de novo à mão (ver tools/esperar_ci.py).
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: publicar-homologacao
+  cancel-in-progress: false
+
+jobs:
+  # Os testes rodam no ci.yml assim que o push chega, em paralelo com a
+  # publicação anterior; aqui só se espera o resultado. Se a main andar durante
+  # a espera, este job sai verde sem publicar e libera a vaga para o push novo.
+  ci-verde:
+    name: CI deste commit verde
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      publicar: ${{ steps.esperar.outputs.publicar }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: esperar
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 tools/esperar_ci.py
+
+  publicar:
+    name: Publicar na homologação
+    needs: ci-verde
+    if: needs.ci-verde.outputs.publicar == 'true'
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/publicar.yml
+    with:
+      ambiente: homologacao
+      project_id: dute-homolog
+      project_number: "368642218894"
+      service: dute-app
+      repository: dute
+      firebase_api_key: "AIzaSyBPaH5X0wHbF_geH1zit0rwyJWmdb3Q7Ds"
+      firebase_app_id: "1:368642218894:web:13790f72c76fbb21af22df"
