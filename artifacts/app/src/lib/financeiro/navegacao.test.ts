@@ -13,10 +13,12 @@ import {
   ROTA_FATURAMENTO_WMS,
   ROTA_FATURAS,
   ROTA_FINANCEIRO,
+  ROTA_NF,
   ROTA_PAGOS,
   ROTA_VENCIDOS,
   abreFinanceiro,
   hrefDaNf,
+  hrefDaViaComercial,
   nfDaBusca,
   rotasDoFinanceiro,
   soComFinanceiroLiberado,
@@ -109,7 +111,7 @@ describe("navegação do Financeiro", () => {
     expect(caminhos(blocos[0])).toEqual(rotasDoFinanceiro(LIBERADO));
     const fora = APP_SOURCE.replace(/soComFinanceiroLiberado\(\[[\s\S]*?\]\)/g, "");
     expect(caminhos(fora).filter((path) => path.startsWith("/financeiro"))).toEqual([]);
-    expect(rotasDoFinanceiro(LIBERADO)).toEqual([ROTA_FINANCEIRO, ROTA_A_FATURAR, ROTA_A_RECEBER, ROTA_VENCIDOS, ROTA_PAGOS, ROTA_FATURAS]);
+    expect(rotasDoFinanceiro(LIBERADO)).toEqual([ROTA_FINANCEIRO, ROTA_A_FATURAR, ROTA_A_RECEBER, ROTA_VENCIDOS, ROTA_PAGOS, ROTA_FATURAS, ROTA_NF]);
     expect(rotasDoFinanceiro(DESLIGADO)).toEqual([]);
     expect(soComFinanceiroLiberado([{ path: ROTA_FINANCEIRO }, { path: "/financeiro/outra" }], LIBERADO).map((rota) => rota.path)).toEqual([ROTA_FINANCEIRO]);
     expect(soComFinanceiroLiberado([{ path: ROTA_FINANCEIRO }], DESLIGADO)).toEqual([]);
@@ -124,5 +126,8 @@ describe("navegação do Financeiro", () => {
     expect(nfDaBusca(`?nf=${id}`)).toBe(id);
     expect(nfDaBusca("?nf=fat_x")).toBeNull();
     expect(nfDaBusca("")).toBeNull();
+    expect(hrefDaViaComercial(id)).toBe(`/financeiro/nf?nf=${id}`);
+    // A via comercial tem valor: só quem fatura, e ela acende Faturas no menu.
+    expect(getRouteProfileRoles(ROTA_NF)).toEqual(["owner", "admin", "financeiro"]);
   });
 });

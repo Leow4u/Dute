@@ -120,6 +120,7 @@ describe("A receber, Vencidos, Pagos e Faturas", () => {
       "de R$ 14.845,00",
       "Para enviar",
       "Vence em 28 dias",
+      "Via comercial",
       "Valor da NF",
       "R$ 14.845,00",
       "Recebido",
@@ -168,7 +169,7 @@ describe("A receber, Vencidos, Pagos e Faturas", () => {
       ...MEIOS,
       /^\d{2}\/\d{2}\/\d{4} · (Boleto|Pix|Transferência|Cartão|Dinheiro)$/,
       "Primeira parcela",
-      /^(Marcar como enviada|Estornar|Registrar pagamento|Cancelar registro|Exportar XLSX)$/,
+      /^(Marcar como enviada|Estornar|Registrar pagamento|Cancelar registro|Exportar XLSX|Via comercial)$/,
     ];
     expect(textosForaDaLista(render(), permitidos)).toEqual([]);
   });
@@ -180,6 +181,8 @@ describe("A receber, Vencidos, Pagos e Faturas", () => {
     expect(principais).toHaveLength(1);
     expect(textosDaTela(principais[0] ?? "")).toEqual(["Registrar pagamento"]);
     expect(textosDaTela(html)).not.toContain("Cancelar registro");
+    // A via comercial abre a NF para imprimir.
+    expect(html).toContain(`href="/financeiro/nf?nf=${PARCIAL.id}"`);
     // A NF aberta fica marcada na lista.
     expect(secao(html, "NFs: A receber")).toMatch(/<button[^>]*aria-pressed="true"[^>]*>[\s\S]*?NF 1234/);
   });

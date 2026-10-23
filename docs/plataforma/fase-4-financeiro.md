@@ -105,6 +105,7 @@ financeiro (`FINANCE_ROLES`, a mesma lista das callables). O menu tem:
   - O estorno e o cancelamento pedem o motivo antes de confirmar.
   - Toda lista exporta para XLSX ("Exportar XLSX"), com a busca aplicada.
   - Em Pagos, sem NF aberta, o lado direito mostra a receita por cliente do mês escolhido.
+- **Via comercial** (`/financeiro/nf?nf=`, aberta pelo painel da NF): o demonstrativo que acompanha a NF, para imprimir ou salvar em PDF.
 - **Armazenagem**: leva ao Faturamento do WMS (`/faturamento`), que continua no shell do WMS até a Fase 7.
 
 O financeiro tem um módulo só e por isso não tem seletor. No menu do WMS, logo
@@ -221,3 +222,19 @@ Feita em 23/10/2026.
   - Os reais saem com duas casas e as datas como data de verdade (dd/mm/aaaa).
   - Conferida no openpyxl, que leu as datas como datas e o formato de moeda.
 - **Testes.** `planilha-xlsx.test.ts` lê o zip pelo diretório central e confere o CRC com o zlib do Node, o escape e os formatos. `faturas.test.ts` cobre as linhas da planilha, o mês e a receita. `faturas-view.test.tsx` cobre o bloco da receita e o botão de exportar.
+
+### Parte 4.2d: a via comercial da NF
+
+Feita em 23/10/2026. O demonstrativo sai de `artifacts/app/src/lib/financeiro/nf-documento.ts`,
+o papel de `components/financeiro/nf-documento.tsx` e a tela de `pages/financeiro/nf-view.tsx`.
+
+- **O papel** mostra o cabeçalho da Dutelog, a NF e o cliente, e a cobrança (emissão, vencimento e forma).
+  - Cada demanda vem com o título e a referência do cliente como a RV foi enviada, e com a autorização (pedido e aceite).
+  - As linhas da RV congelada aparecem com unidade, quantidade, valor unitário e total. Na medição mensal, aparecem as linhas da demanda na medição aprovada.
+  - O papel termina no total da demanda e no total da NF.
+  - O valor de cada demanda e o total são os da fatura, calculados pelo servidor. As linhas só mostram de onde eles saíram.
+- **A tela** tem uma ação principal, Imprimir, que usa a impressão do navegador (Salvar como PDF), como a OS e o orçamento. Só o papel sai na impressão. O nome sugerido para o PDF é "NF 1234 - Cliente".
+- **Acesso.** A rota é só de owner, admin e financeiro, e acende Faturas no menu. As leituras (`faturas`, `quotes`, `medicoes`, `client_authorizations`, `demands`) seguem as regras de quem lê preço.
+- **Testes.**
+  - `nf-documento.test.ts`: os valores batem com a fatura, as linhas da RV e da medição, e o caso em que as linhas não chegaram.
+  - `nf-view.test.tsx`: textos listados, uma ação principal e `axe`.
