@@ -5,6 +5,8 @@
  * contagem ou addCatalogPhotos); vale a primeira que existir.
  */
 
+import type { GiroDoItem } from "./memoria/parados";
+
 type AnyRecord = Record<string, unknown>;
 
 export type StockLocation = { id: string; qty: number };
@@ -26,11 +28,13 @@ export type StockItem = {
   photos: string[];
   low: boolean;
   zero: boolean;
+  /** Os dias parado e as etiquetas, quando a memória tem o item (parte 5.4c). */
+  giro?: GiroDoItem;
   sku: AnyRecord;
   photoContext?: AnyRecord;
 };
 
-export type StockFilter = "all" | "low" | "reserved" | "no-photo" | "zero";
+export type StockFilter = "all" | "low" | "reserved" | "no-photo" | "zero" | "idle" | "no-turnover";
 
 function text(value: unknown) {
   return typeof value === "string" || typeof value === "number"
@@ -174,6 +178,8 @@ export function matchesFilter(item: StockItem, filter: StockFilter) {
   if (filter === "zero") return item.zero;
   if (filter === "reserved") return item.reserved > 0;
   if (filter === "no-photo") return item.photos.length === 0;
+  if (filter === "idle") return item.giro?.etiquetas.includes("parado") ?? false;
+  if (filter === "no-turnover") return item.giro?.etiquetas.includes("sem_giro") ?? false;
   return true;
 }
 

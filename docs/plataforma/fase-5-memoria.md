@@ -433,3 +433,27 @@ saída do item em cada posição (`saidas_por_posicao`).
   - Os casos de referência das saídas por posição e da caixa, no app e no
     núcleo.
   - No emulador, a saída por posição gravada no item e a idade de duas caixas.
+
+### Parte 5.4c: os dias parado em Estoque
+
+Feita em 23/10/2026. A leitura e os textos estão em
+`artifacts/app/src/lib/memoria/parados.ts`; a tela em `pages/estoque.tsx`.
+
+- **Os dados.** A tela lê os itens do cliente ativo em `ai_stock_age`
+  (`/api/stock-age`, só o filtro do cliente) e as caixas dele. A regra é a do
+  modelo do cliente ativo, e o dia é o de São Paulo. Fora do `dute-homolog`,
+  onde a memória não roda, a tela não lê nada disso.
+- **A lista.** "Parado 90+ dias" e "Sem giro" entram junto das outras
+  etiquetas do item, no tom de atenção: o vermelho continua só de Zerado e
+  Baixo. Os filtros "Parados" e "Sem giro" entram em Mostrar, com a contagem.
+- **A ficha.**
+  - Giro: a última entrada, a última saída e há quantos dias o item está
+    sem movimento, com as etiquetas.
+  - Caixas: as caixas guardadas com o SKU, as mais paradas primeiro, com a
+    posição, os dias e o "Parado 90+ dias" da que passou do limite.
+  - Sem o item na memória e sem caixa, nenhuma das duas aparece.
+- **Testes.**
+  - `memoria/parados.test.ts`: a leitura do item, o giro pela regra, os
+    filtros, as caixas e os textos.
+  - `estoque.test.tsx`: a etiqueta na lista sem o vermelho, os textos da ficha
+    na ordem, quando não aparece e `axe`.

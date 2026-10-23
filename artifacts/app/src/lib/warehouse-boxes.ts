@@ -41,6 +41,8 @@ export type WarehouseBox = {
   unit_count: number;
   total_cost: number;
   sku_codes: string[];
+  /** Quando a caixa foi guardada na posição; null antes da guarda. */
+  stored_at: string | null;
   session_id: string | null;
   suggestion: {
     position: string | null;
@@ -189,6 +191,7 @@ export function warehouseBoxFromRecord(record: AnyRecord): WarehouseBox {
     unit_count: number(record.unit_count),
     total_cost: number(record.total_cost),
     sku_codes: Array.isArray(record.sku_codes) ? record.sku_codes.map((sku) => text(sku)).filter(Boolean) : [],
+    stored_at: text(record.stored_at) || null,
     session_id: text(origin.session_id) || null,
     suggestion: suggestion
       ? {

@@ -9,12 +9,13 @@ import { telaDoWmsNaV3 } from "@/lib/wms-v3";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela } from "@/test/textos";
 
-import { ItemList } from "./estoque";
+import { ItemList, SecaoDoGiro } from "./estoque";
 
 /**
  * O Estoque na v3 (parte 4.7d): a lista de itens com o código, o nome, o
  * endereço e os saldos; a busca com rótulo; o código sem o vermelho, que na
- * v3 é só da ação principal e do alerta.
+ * v3 é só da ação principal e do alerta. Os dias parado (parte 5.4c): as
+ * etiquetas na lista e o giro e as caixas na ficha.
  */
 
 const item = (key: string, extra: Partial<StockItem> = {}): StockItem => ({
@@ -92,5 +93,66 @@ describe("Estoque na v3", () => {
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
     expect(await violacoesDeAcessibilidade(lista("000001"))).toEqual([]);
     expect(await violacoesDeAcessibilidade(renderToStaticMarkup(<StockToolbar search="" onSearchChange={() => undefined} placeholder="Buscar por SKU interno da movimentação" />))).toEqual([]);
+  });
+});
+
+const GIRO = {
+  relogio: { primeira_entrada: "2026-04-03T15:00:00.000Z", ultima_entrada: "2026-04-03T15:00:00.000Z", ultima_saida: "2026-07-12T15:00:00.000Z" },
+  diasParado: 100,
+  etiquetas: ["parado" as const, "sem_giro" as const],
+  rotulos: ["Parado 90+ dias", "Sem giro"],
+};
+
+const CAIXAS = [
+  { code: "CX-000001", posicao: "A-01", diasParado: 100, parada: true },
+  { code: "CX-000003", posicao: "B-09", diasParado: 19, parada: false },
+];
+
+function giro(semGiro = false) {
+  return renderToStaticMarkup(
+    <div className="v3">
+      {semGiro ? <SecaoDoGiro caixas={[]} rotuloDaCaixaParada="Parado 90+ dias" /> : <SecaoDoGiro giro={GIRO} caixas={CAIXAS} rotuloDaCaixaParada="Parado 90+ dias" />}
+    </div>,
+  );
+}
+
+describe("os dias parado no Estoque (parte 5.4c)", () => {
+  it("a etiqueta na lista, junto das outras do item, sem o vermelho", () => {
+    const html = renderToStaticMarkup(
+      <div className="v3">
+        <ItemList items={[item("000001", { clientCode: "POLO-M-AZ", giro: GIRO })]} onSelect={() => undefined} />
+      </div>,
+    );
+    expect(textosDaTela(html)).toEqual(["Item", "Endereço", "Saldo", "Disponível", "POLO-M-AZ", "Camisa polo", "· M · azul", "A-01-02", "Parado 90+ dias", "Sem giro", "12"]);
+    expect(html).toMatch(/bg-warning-soft text-warning-soft-foreground">Parado 90\+ dias</);
+    expect(html).not.toMatch(/destructive[^"]*">Parado/);
+  });
+
+  it("a ficha mostra o giro e as caixas, com os dias de cada uma", () => {
+    expect(textosDaTela(giro())).toEqual([
+      "Giro",
+      "Última entrada",
+      "03/04/2026",
+      "Última saída",
+      "12/07/2026",
+      "Sem movimento",
+      "100 dias",
+      "Parado 90+ dias",
+      "Sem giro",
+      "Caixas",
+      "CX-000001",
+      "A-01",
+      "CX-000003",
+      "B-09",
+      "19 dias",
+    ]);
+  });
+
+  it("sem a memória do item e sem caixa, a ficha não mostra nada", () => {
+    expect(textosDaTela(giro(true))).toEqual([]);
+  });
+
+  it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
+    expect(await violacoesDeAcessibilidade(giro())).toEqual([]);
   });
 });
