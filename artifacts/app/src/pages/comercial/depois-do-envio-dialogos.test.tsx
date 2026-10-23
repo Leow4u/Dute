@@ -5,7 +5,6 @@ import { describe, expect, it } from "vitest";
 import { AcoesDepoisDoEnvio } from "@/components/comercial/acoes-depois-do-envio";
 import { contatoDoDocumento, contratoDoDocumento, type ContratoResumo } from "@/lib/comercial/clientes";
 import {
-  MOTIVOS_DE_PERDA,
   formInicialDoDialogo,
   motivosDePerdaPermitidos,
   problemasDoDialogo,
@@ -121,7 +120,8 @@ describe("diálogo da resposta do cliente (Fechado, Validado, Recusar aditivo)",
 describe("diálogo de Perdido", () => {
   it("motivo e nota; antes do fechamento escolhe entre os seis", () => {
     const html = corpo("perder", form("perder"));
-    expect(texts(html)).toEqual(["Motivo", "Escolher…", ...MOTIVOS_DE_PERDA.map((motivo) => motivo.rotulo), "Nota"]);
+    expect(texts(html)).toEqual(["Motivo", "Escolher…", ...motivosDePerdaPermitidos(false).map((motivo) => motivo.rotulo), "Nota"]);
+    expect(texts(html)).not.toContain("Prazo de faturamento");
   });
 
   it("depois do fechamento só tem o cancelamento pelo cliente, já escolhido, sem a opção vazia", () => {

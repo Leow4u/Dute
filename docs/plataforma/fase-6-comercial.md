@@ -237,8 +237,8 @@ Storage.
     perde, e depois do fechamento o único motivo de perda é o cancelamento
     pelo cliente. Recomendo um motivo de perda "prazo de faturamento", aceito
     só com o alerta vencido, inclusive a partir de "A faturar" com a
-    autorização ainda não usada na NF. (Fase 7: a 15b ficou na tela e na
-    unificação das autorizações, sem este motivo)
+    autorização ainda não usada na NF. (Feita na Fase 7, parte 7.5a, com a
+    recomendação: docs/plataforma/fase-7-financeiro-unificado.md)
 11. **A aprovação da medição fecha e valida a proposta enviada sem
    fechamento?** Hoje não: a aprovação não registra o que o cliente não
    respondeu. A demanda fica pendente, presa à medição, e ganha a autorização

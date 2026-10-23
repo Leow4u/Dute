@@ -9,6 +9,7 @@ import {
   ETAPAS_DEMANDA,
   MOTIVOS_PERDA,
   autorizacoesDaDemanda,
+  dataDeHoje,
   destinoDaValidacao,
   demandaExecutada,
   escopoDasLinhas,
@@ -29,7 +30,7 @@ import {
   type StatusOrcamento,
   type TipoRv,
 } from "./demanda.js";
-import { statusDaAutorizacao } from "./autorizacao.js";
+import { alertaDePrazoDePerda, statusDaAutorizacao } from "./autorizacao.js";
 import { createComercialEvent } from "./events.js";
 import { CLIENT_AUTHORIZATIONS_COLLECTION, MEDICOES_COLLECTION } from "./medicao.js";
 import { runIdempotent, type ComercialActor } from "./operations.js";
@@ -392,11 +393,18 @@ async function fechar(contexto: Contexto, input: z.infer<typeof Fechar>): Promis
 }
 
 /** Perdida, com motivo: de qualquer etapa antes de faturar; depois do fechamento, só cancelado pelo cliente. */
-function perder(contexto: Contexto, input: z.infer<typeof Perder>): Trabalho {
+async function perder(contexto: Contexto, input: z.infer<typeof Perder>): Promise<Trabalho> {
   const { transaction, db, numero, demanda, quote, caller, iso } = contexto;
   const etapaAntes = demanda.etapa as EtapaDemanda;
   const nota = input.nota?.trim() || null;
-  const problema = problemaDaPerda(input.motivo as MotivoPerda, { ...demanda, etapa: etapaAntes }, nota);
+  // O prazo de faturamento vencido se confere aqui, pelo contrato da demanda (parte 7.5a).
+  let prazoVencido = false;
+  if (input.motivo === "prazo_faturamento") {
+    const contratoId = textoOuNull(demanda.contrato_id);
+    const contrato = contratoId ? (await transaction.get(db.collection(CONTRACTS_COLLECTION).doc(contratoId))).data() : undefined;
+    prazoVencido = alertaDePrazoDePerda(contrato, { ...demanda, etapa: etapaAntes }, dataDeHoje(contexto.instante))?.vencido === true;
+  }
+  const problema = problemaDaPerda(input.motivo as MotivoPerda, { ...demanda, etapa: etapaAntes }, nota, prazoVencido);
   if (problema) throw new HttpsError("failed-precondition", problema);
   const rv = Number(quote.rv ?? 0);
 

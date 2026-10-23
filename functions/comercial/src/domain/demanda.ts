@@ -247,13 +247,23 @@ export function demandaComprometida(demanda: EstadoDaDemanda): boolean {
  * - De qualquer etapa antes de "a faturar".
  * - Depois do fechamento (ou da execução, na demanda direta), só
  *   "cancelado_cliente": preço e prazo já foram aceitos.
+ * - "prazo_faturamento" (Fase 7, parte 7.5a, pergunta 22): só com o prazo de
+ *   perda do contrato vencido, que só existe aguardando a autorização ou a
+ *   faturar (alertaDePrazoDePerda); vale também a partir de "a faturar",
+ *   antes de a NF ser registrada.
  * - "outro" pede uma nota.
  */
 export function problemaDaPerda(
   motivo: MotivoPerda,
   demanda: EstadoDaDemanda & { etapa: EtapaDemanda },
   nota: string | null | undefined,
+  prazoDeFaturamentoVencido = false,
 ): string | null {
+  if (motivo === "prazo_faturamento") {
+    return prazoDeFaturamentoVencido
+      ? null
+      : "A perda por prazo de faturamento só vale com o prazo do contrato vencido, na demanda que espera a autorização ou está a faturar.";
+  }
   if (!(ETAPAS_QUE_PERDEM as readonly string[]).includes(demanda.etapa)) {
     return `A demanda está ${ETAPA_ROTULO[demanda.etapa]}: só se perde antes de faturar.`;
   }

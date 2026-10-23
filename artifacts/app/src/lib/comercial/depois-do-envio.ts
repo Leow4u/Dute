@@ -148,8 +148,15 @@ export const MOTIVOS_DE_PERDA: readonly Motivo[] = [
   { valor: "desistencia", rotulo: "Desistência" },
   { valor: "sem_resposta", rotulo: "Sem resposta" },
   { valor: "cancelado_cliente", rotulo: "Cancelado pelo cliente" },
+  { valor: "prazo_faturamento", rotulo: "Prazo de faturamento" },
   { valor: "outro", rotulo: "Outro" },
 ];
+
+/**
+ * A perda por prazo de faturamento (Fase 7, parte 7.5a) só vale com o prazo do
+ * contrato vencido: sai em ação própria, nunca na lista do Perdido.
+ */
+export const MOTIVO_PRAZO_DE_FATURAMENTO = "prazo_faturamento";
 
 /**
  * "Revisar" com a RV esperando o cliente: ele pediu a mudança ou a Dutelog
@@ -162,7 +169,8 @@ export const MOTIVOS_DE_REVISAO: readonly Motivo[] = [
 
 /** Depois do fechamento (ou da execução, ou da validação) o único motivo de perda é o cancelamento pelo cliente. */
 export function motivosDePerdaPermitidos(comprometida: boolean): readonly Motivo[] {
-  return comprometida ? MOTIVOS_DE_PERDA.filter((motivo) => motivo.valor === "cancelado_cliente") : MOTIVOS_DE_PERDA;
+  const lista = MOTIVOS_DE_PERDA.filter((motivo) => motivo.valor !== MOTIVO_PRAZO_DE_FATURAMENTO);
+  return comprometida ? lista.filter((motivo) => motivo.valor === "cancelado_cliente") : lista;
 }
 
 /**

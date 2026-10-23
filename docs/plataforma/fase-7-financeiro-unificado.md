@@ -116,7 +116,9 @@ Seguem a recomendação até a resposta do Leonardo:
 | 7.3b | Levar a LPU de cobrança de um cliente ao Comercial: os itens no catálogo, a tabela "Armazenagem" com os preços de hoje e a ligação de cada item, numa transação | A fatura calcula igual antes e depois da passagem |
 | 7.3c | A Tabela de preços do WMS mostra de onde vem o preço | O item ligado não edita o preço no WMS |
 | 7.4 | A integração da NF e a exportação contábil, com o fornecedor escolhido | Emissão idempotente; a falha não marca a fatura como emitida |
-| 7.5 | Contratos e Autorizações no shell do Financeiro, só leitura; a perda por prazo de faturamento | O Financeiro lê sem editar itens nem preço |
+| 7.5a | O motivo de perda "prazo de faturamento" no servidor, aceito só com o prazo do contrato vencido, também a partir de A faturar | Sem o prazo vencido recusa; os outros motivos seguem só antes de faturar |
+| 7.5b | A ação "Perder por prazo" na tela Autorizações, na demanda com o prazo vencido | Só a linha vencida tem a ação; o motivo vem fixo |
+| 7.5c | Contratos e Autorizações no shell do Financeiro, só leitura | O Financeiro lê sem editar itens nem preço |
 
 **Pronto quando** uma competência fecha com a armazenagem e as OS na mesma
 fatura, a NF sai pela integração e o a receber é um só.
@@ -380,3 +382,26 @@ tela Faturamento › Tabela de preços.
 - No formulário, o valor do item ligado não se edita, e salvar não manda o
   `valor_unit`. O servidor já recusava (parte 7.3a).
 - **Teste:** `lib/preco-da-cobranca.test.ts`.
+
+### Parte 7.5a: a perda por prazo de faturamento
+
+Feita em 23/10/2026, no Comercial (pergunta 22, que segue a recomendação; é
+a pergunta 10 do desenho do Comercial).
+
+- **O motivo** `prazo_faturamento` ("prazo de faturamento vencido") entra em
+  `MOTIVOS_PERDA`.
+- **Quando vale.** Só com o prazo de perda do contrato
+  (`autorizacao.prazo_perda_dias`) vencido, conferido no servidor pelo
+  `alertaDePrazoDePerda`, que só existe aguardando a autorização ou a
+  faturar.
+  - Vale também a partir de "A faturar", antes de a NF ser registrada. A
+    faturada já não se perde.
+  - Os outros motivos seguem só antes de faturar.
+- **Reabrir** devolve a demanda à etapa de antes, como em toda perda.
+- **No app,** o motivo entra na lista travada, mas fica fora do diálogo de
+  Perdido. Ele sai numa ação própria (parte 7.5b).
+- **Testes:**
+  - `demanda.test.ts`: a regra;
+  - `demandas.integration.test.ts`: antes e depois do prazo, o contrato
+    sem prazo, o evento e a reabertura;
+  - `depois-do-envio.test.ts`: a lista travada e o diálogo sem o motivo.

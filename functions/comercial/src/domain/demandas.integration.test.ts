@@ -1452,3 +1452,42 @@ describe("orçar a execução da direta aberta pela Operação (parte 3.10d)", (
     assert.equal((await doc("demands/10307")).contrato_id, null);
   });
 });
+
+describe("a perda por prazo de faturamento (Fase 7, parte 7.5a, pergunta 22)", () => {
+  const AGOSTO = () => new Date("2026-08-15T15:00:00.000Z");
+  const OUTUBRO = () => new Date("2026-10-15T15:00:00.000Z");
+
+  /** Executada em 24 e 25/06, validada e a faturar; o contrato perde o direito de faturar em 90 dias. */
+  async function aFaturar(): Promise<string> {
+    const numero = await demandaExecutada();
+    await db.doc(`demands/${numero}`).update({ etapa: "a_faturar", validacao: { rv: 0, etapa: "a_faturar", autorizacao: "nenhuma", em: "2026-06-26T12:00:00.000Z" } });
+    await db.doc("contracts/itau-2026").update({ "autorizacao.prazo_perda_dias": 90 });
+    return numero;
+  }
+
+  it("só com o prazo do contrato vencido, também a partir de A faturar; reabrir volta a A faturar", async () => {
+    const numero = await aFaturar();
+    // 25/06 + 90 dias = 23/09: em 15/08 o prazo ainda corre.
+    await rejeita(demanda(comercial, "lose", numero, { motivo: "prazo_faturamento" }, AGOSTO), "failed-precondition", /prazo do contrato vencido/);
+    // Os outros motivos seguem só antes de faturar.
+    await rejeita(demanda(comercial, "lose", numero, { motivo: "preco" }, OUTUBRO), "failed-precondition", /antes de faturar/);
+
+    const perdida = await demanda(comercial, "lose", numero, { motivo: "prazo_faturamento" }, OUTUBRO);
+    assert.equal(perdida.etapa, "perdida");
+    const gravada = await doc(`demands/${numero}`);
+    assert.deepEqual([(gravada.perda as Record<string, unknown>).motivo, (gravada.perda as Record<string, unknown>).etapa_antes], ["prazo_faturamento", "a_faturar"]);
+    const perdas = (await eventos(numero)).filter((evento) => evento.type === "demand.lost");
+    assert.deepEqual(perdas.map((evento) => (evento.payload as Record<string, unknown>).motivo), ["prazo_faturamento"]);
+
+    await demanda(comercial, "reopen", numero, {}, OUTUBRO);
+    assert.equal((await doc(`demands/${numero}`)).etapa, "a_faturar");
+  });
+
+  it("o contrato sem prazo de perda não deixa perder por prazo", async () => {
+    const numero = await aFaturar();
+    await db.doc("contracts/itau-2026").update({ "autorizacao.prazo_perda_dias": null });
+    await rejeita(demanda(comercial, "lose", numero, { motivo: "prazo_faturamento" }, OUTUBRO), "failed-precondition", /prazo do contrato vencido/);
+    assert.equal((await doc(`demands/${numero}`)).etapa, "a_faturar");
+  });
+});
+
