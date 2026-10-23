@@ -258,7 +258,8 @@ export type DialogoDepoisDoEnvioProps = {
   acao: AcaoDepoisDoEnvio | null;
   /** "10045 – RV01": entra no título. */
   rotulo: string;
-  etapa: EtapaDemanda;
+  /** A demanda já fechada (ou executada, ou validada): a perda só por cancelamento do cliente. */
+  comprometida: boolean;
   /** O contato do pedido, que abre escolhido na resposta. */
   contatoId: string | null;
   /** Os contatos do cliente do orçamento. */
@@ -291,19 +292,19 @@ export function tituloDoDialogo(acao: AcaoDepoisDoEnvio, rotulo: string): string
  * campo (Aditivo, Orçar execução, Reabrir, Descartar RV), só a confirmação.
  */
 export function DialogoDepoisDoEnvio(props: DialogoDepoisDoEnvioProps) {
-  const { acao, rotulo, etapa, contatoId, contatos, envioEm, agora, hoje, ocupado, erro, onCancelar, onConfirmar } = props;
+  const { acao, rotulo, comprometida, contatoId, contatos, envioEm, agora, hoje, ocupado, erro, onCancelar, onConfirmar } = props;
   const [form, setForm] = useState<FormDoDialogo | null>(null);
   const [tentou, setTentou] = useState(false);
   useEffect(() => {
     setTentou(false);
-    setForm(acao ? formInicialDoDialogo(acao, { agora: new Date(), contatoId, contatos, etapa }) : null);
+    setForm(acao ? formInicialDoDialogo(acao, { agora: new Date(), contatoId, contatos, comprometida }) : null);
     // O formulário recomeça a cada abertura, não a cada leitura nova dos contatos.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [acao]);
 
   if (!acao || !form) return <Dialog open={false}>{null}</Dialog>;
   const campos = camposDoDialogo(acao);
-  const problemas = problemasDoDialogo(acao, form, { agora, hoje, envioEm, contatos, etapa });
+  const problemas = problemasDoDialogo(acao, form, { agora, hoje, envioEm, contatos, comprometida });
   const mostrados = tentou ? problemas : {};
   return (
     <Dialog open onOpenChange={(open) => (!open && !ocupado ? onCancelar() : undefined)}>
@@ -325,7 +326,7 @@ export function DialogoDepoisDoEnvio(props: DialogoDepoisDoEnvioProps) {
             onForm={(muda) => setForm((atual) => (atual ? muda(atual) : atual))}
             problemas={mostrados}
             contatos={contatos}
-            motivosDePerda={motivosDePerdaPermitidos(etapa)}
+            motivosDePerda={motivosDePerdaPermitidos(comprometida)}
             hoje={hoje}
             desabilitado={ocupado}
           />

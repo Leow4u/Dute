@@ -141,7 +141,7 @@ describe("listas iguais às de functions/comercial", () => {
     expect([...lista]).toEqual(tsList(eventsDoComercial, nome));
   });
 
-  it("a fila tem as oito etapas do mockup, na ordem, e Todas na frente", () => {
+  it("a fila tem as oito etapas do mockup e A faturar (parte 6.22), na ordem, e Todas na frente", () => {
     expect(ETAPAS_DA_FILA.map((etapa) => SEGMENTO_ROTULO[etapa])).toEqual([
       "Em montagem",
       "Para aprovar",
@@ -150,6 +150,7 @@ describe("listas iguais às de functions/comercial", () => {
       "Para planejar",
       "Execução a orçar",
       "Aguardando autorização",
+      "A faturar",
       "Perdidas",
     ]);
     expect(SEGMENTOS_DA_FILA[0]).toBe("todas");
@@ -229,7 +230,7 @@ describe("item da fila", () => {
 describe("segmentos e contagens", () => {
   it("conta cada etapa da fila; Todas soma só as etapas da fila", () => {
     expect(contarSegmentos(FILA)).toEqual({
-      todas: 10,
+      todas: 11,
       em_montagem: 2,
       para_aprovar: 2,
       para_enviar: 1,
@@ -237,6 +238,7 @@ describe("segmentos e contagens", () => {
       para_planejar: 0,
       execucao_a_orcar: 1,
       aguardando_autorizacao: 1,
+      a_faturar: 1,
       perdida: 2,
     });
   });
@@ -250,7 +252,7 @@ describe("grupos da fila", () => {
   const grupos = (segmento: Parameters<typeof filtrarFila>[1], busca = "") =>
     filtrarFila(FILA, segmento, busca).map((grupo) => [grupo.etapa, grupo.rotulo, grupo.itens.map((orc) => orc.numero)]);
 
-  it("Todas: grupos na ordem das etapas, só os que têm orçamento; a_faturar e cancelada ficam fora", () => {
+  it("Todas: grupos na ordem das etapas, só os que têm orçamento; a faturar entra (parte 6.22) e cancelada fica fora", () => {
     expect(grupos("todas")).toEqual([
       ["em_montagem", "Em montagem", ["10052", "10053"]],
       ["para_aprovar", "Para aprovar", ["10050", "10045"]],
@@ -258,6 +260,7 @@ describe("grupos da fila", () => {
       ["aguardando_cliente", "Aguardando cliente", ["10041"]],
       ["execucao_a_orcar", "Execução a orçar", ["10036"]],
       ["aguardando_autorizacao", "Aguardando autorização", ["10031"]],
+      ["a_faturar", "A faturar", ["10020"]],
       ["perdida", "Perdidas", ["10034", "10030"]],
     ]);
   });
