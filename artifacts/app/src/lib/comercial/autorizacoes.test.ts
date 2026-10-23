@@ -34,7 +34,9 @@ import {
   linhasMarcadas,
   marcosDoPrazoDePerda,
   payloadCancelar,
+  payloadPerderPorPrazo,
   payloadRegistrar,
+  prazosVencidos,
   podeMarcar,
   rotulosDoTipo,
   somaDasLinhas,
@@ -813,3 +815,34 @@ describe("itens do Início", () => {
     expect(autorizacoesParaOInicio([perto], CONTRATOS, NOMES, HOJE).prazos[0]).toMatchObject({ restantes: 8, critico: true });
   });
 });
+
+describe("o prazo de faturamento vencido (parte 7.5b)", () => {
+  const NOMES_DO_PRAZO = new Map([[BTG, "BTG Pactual"]]);
+  // O contrato da BTG perde o direito de faturar em 90 dias: executada em 15/07 venceu em 13/10.
+  const vencida = demandaDoRegistro("10040", registro("10040", { customer_code: BTG, etapa: "a_faturar", executado_ate: "2026-07-15" }))!;
+  const noPrazo = demandaDoRegistro("10041", registro("10041", { customer_code: BTG, executado_ate: "2026-09-01" }))!;
+  const semPrazo = demandaDoRegistro("10042", registro("10042", { executado_ate: "2026-01-15" }))!;
+  const aguardando = demandaDoRegistro("10043", registro("10043", { customer_code: BTG, executado_ate: "2026-07-10" }))!;
+
+  it("só as demandas com o prazo do contrato vencido, a que venceu antes primeiro", () => {
+    const linhas = prazosVencidos([vencida, noPrazo, semPrazo, aguardando], CONTRATOS, NOMES_DO_PRAZO, HOJE);
+    expect(linhas.map((linha) => [linha.numero, linha.etapa, linha.limite, linha.rotulo, linha.cliente])).toEqual([
+      ["10043", "aguardando_autorizacao", "2026-10-08", "10043 – RV02", "BTG Pactual"],
+      ["10040", "a_faturar", "2026-10-13", "10040 – RV02", "BTG Pactual"],
+    ]);
+  });
+
+  it("o pedido perde pelo prazo, com a etapa e a RV que a tela viu, e a nota só quando há", () => {
+    const [linha] = prazosVencidos([vencida], CONTRATOS, NOMES_DO_PRAZO, HOJE);
+    expect(payloadPerderPorPrazo(linha, "  ", "k-1")).toEqual({
+      action: "lose",
+      request_id: "k-1",
+      numero: "10040",
+      expected_etapa: "a_faturar",
+      expected_rv: 2,
+      motivo: "prazo_faturamento",
+    });
+    expect(payloadPerderPorPrazo(linha, " Cliente não pagaria ", "k-2").nota).toBe("Cliente não pagaria");
+  });
+});
+

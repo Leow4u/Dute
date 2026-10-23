@@ -16,19 +16,22 @@ import {
   linhasDaFila,
   linhasMarcadas,
   payloadCancelar,
+  payloadPerderPorPrazo,
   payloadRegistrar,
+  prazosVencidos,
   somaDasLinhas,
   textoDoRegistro,
   type FiltroDeIdade,
   type FormAutorizacao,
   type LinhaAutorizada,
+  type LinhaDoPrazoVencido,
 } from "@/lib/comercial/autorizacoes";
 import { cadastroDoDocumento, hojeLocal, type Carga } from "@/lib/comercial/clientes";
 import { contratoDoRegistro, nomesDosClientes } from "@/lib/comercial/contratos";
 import { useLeitura } from "@/lib/comercial/leitura";
 import { firestore } from "@/lib/firebase";
 
-import { CancelarAutorizacaoDialog } from "./autorizacoes-dialogos";
+import { CancelarAutorizacaoDialog, PerderPorPrazoDialog } from "./autorizacoes-dialogos";
 import { AutorizacoesView } from "./autorizacoes-view";
 
 /**
@@ -86,6 +89,9 @@ export default function ComercialAutorizacoesPage() {
   const [ocupado, setOcupado] = useState(false);
   const [cancelando, setCancelando] = useState<{ autorizacao: LinhaAutorizada; chave: string } | null>(null);
   const [erroDoCancelamento, setErroDoCancelamento] = useState<string | null>(null);
+  // A perda por prazo de faturamento (parte 7.5b): a linha e a chave da intenção.
+  const [perdendo, setPerdendo] = useState<{ linha: LinhaDoPrazoVencido; chave: string } | null>(null);
+  const [erroDaPerda, setErroDaPerda] = useState<string | null>(null);
 
   const demandas = useLeitura(
     "demands:autorizacao",
@@ -128,6 +134,7 @@ export default function ComercialAutorizacoesPage() {
           busca,
         });
   const estado = demandas.erro ? "erro" : demandas.itens === null ? "carregando" : "pronto";
+  const vencidos = contratos.itens ? prazosVencidos(demandas.itens ?? [], contratos.itens, nomes, hoje) : [];
 
   /** Recomeça o painel: nada marcado, formulário vazio e chave nova. */
   function limparPainel() {
@@ -187,6 +194,21 @@ export default function ComercialAutorizacoesPage() {
     }
   }
 
+  async function perderPorPrazo(nota: string) {
+    if (!perdendo) return;
+    setOcupado(true);
+    setErroDaPerda(null);
+    try {
+      await chamarComercial("advanceDemand", payloadPerderPorPrazo(perdendo.linha, nota, perdendo.chave));
+      toast({ title: `${perdendo.linha.rotulo} perdida por prazo de faturamento` });
+      setPerdendo(null);
+    } catch (error) {
+      setErroDaPerda(error instanceof Error ? error.message : "Não foi possível registrar a perda.");
+    } finally {
+      setOcupado(false);
+    }
+  }
+
   return (
     <>
       <AutorizacoesView
@@ -197,6 +219,7 @@ export default function ComercialAutorizacoesPage() {
         painel={{ aberto, marcadas, form, resultado, erro }}
         contratos={contratos.itens ?? []}
         autorizadas={autorizadas}
+        vencidos={vencidos}
         hoje={hoje}
         ocupado={ocupado}
         acoes={{
@@ -231,7 +254,22 @@ export default function ComercialAutorizacoesPage() {
             setErroDoCancelamento(null);
             setCancelando({ autorizacao, chave: novaChave() });
           },
+          perderPorPrazo: (numero) => {
+            const linha = vencidos.find((item) => item.numero === numero);
+            if (!linha) return;
+            setErroDaPerda(null);
+            setPerdendo({ linha, chave: novaChave() });
+          },
         }}
+      />
+      <PerderPorPrazoDialog
+        linha={perdendo?.linha ?? null}
+        ocupado={ocupado}
+        erro={erroDaPerda}
+        onVoltar={() => {
+          if (!ocupado) setPerdendo(null);
+        }}
+        onConfirmar={(nota) => void perderPorPrazo(nota)}
       />
       <CancelarAutorizacaoDialog
         autorizacao={cancelando?.autorizacao ?? null}

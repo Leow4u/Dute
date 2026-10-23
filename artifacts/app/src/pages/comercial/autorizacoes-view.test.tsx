@@ -17,6 +17,8 @@ import {
 import { contratoDoRegistro } from "@/lib/comercial/contratos";
 import { ROTA_AUTORIZACOES, TELAS_DO_COMERCIAL } from "@/lib/comercial/navegacao";
 
+import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+
 import { AutorizacoesView, type AutorizacoesViewProps } from "./autorizacoes-view";
 
 /**
@@ -143,6 +145,7 @@ function props(overrides: Partial<AutorizacoesViewProps> = {}): AutorizacoesView
     },
     contratos: CONTRATOS,
     autorizadas: AUTORIZADAS,
+    vencidos: [],
     hoje: HOJE,
     ocupado: false,
     acoes: {
@@ -154,6 +157,7 @@ function props(overrides: Partial<AutorizacoesViewProps> = {}): AutorizacoesView
       editar: noop,
       registrar: noop,
       cancelarAutorizacao: noop,
+      perderPorPrazo: noop,
     },
     telas: TELAS_DO_COMERCIAL,
     ...overrides,
@@ -486,4 +490,35 @@ describe("tela de autorizações", () => {
     expect(fonte).not.toMatch(/\b(?:bg|text|border)-(?:white|black|gray|slate|zinc|red|green|amber|yellow|teal|emerald|blue)-?\d*\b/);
     expect(fonte).not.toMatch(/-\[#[0-9a-fA-F]{3,8}\]|\b(?:rounded|shadow|text)-\[/);
   });
+
+  it("o prazo de faturamento vencido: a demanda, a etapa, o dia e a ação, sem legenda e no axe (parte 7.5b)", async () => {
+    const vencidos = [
+      { numero: "10040", rv: 0, etapa: "a_faturar" as const, rotulo: "10040 – RV00", titulo: "Guarda de arquivo", cliente: "BTG Pactual", limite: "2026-09-18" },
+      { numero: "10051", rv: 2, etapa: "aguardando_autorizacao" as const, rotulo: "10051 – RV02", titulo: "", cliente: "Itaú Unibanco", limite: "2026-10-01" },
+    ];
+    const html = render({ vencidos, painel: { ...props().painel, aberto: false } });
+    const secaoInicio = html.indexOf('aria-label="Prazo de faturamento vencido"');
+    expect(secaoInicio).toBeGreaterThan(-1);
+    const secao = html.slice(html.lastIndexOf("<", secaoInicio), html.indexOf("</section>", secaoInicio));
+    expect(texts(secao)).toEqual([
+      "Prazo de faturamento vencido",
+      "2",
+      "10040 – RV00",
+      "Guarda de arquivo",
+      "BTG Pactual",
+      "A faturar",
+      "Venceu em 18/09/2026",
+      "Perder por prazo",
+      "10051 – RV02",
+      "Itaú Unibanco",
+      "Aguardando autorização",
+      "Venceu em 01/10/2026",
+      "Perder por prazo",
+    ]);
+    expect(secao).toContain('aria-label="Perder 10040 – RV00 por prazo"');
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+    // Sem prazo vencido, a seção não aparece.
+    expect(render().includes("Prazo de faturamento vencido")).toBe(false);
+  });
 });
+
