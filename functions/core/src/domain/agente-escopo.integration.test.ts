@@ -35,7 +35,7 @@ beforeEach(async () => {
   if (!host) throw new Error("FIRESTORE_EMULATOR_HOST não definido.");
   await fetch(`http://${host}/emulator/v1/projects/${PROJECT_ID}/databases/(default)/documents`, { method: "DELETE" });
   const batch = db.batch();
-  batch.set(db.collection("customers").doc("cus_itau"), { customer_code: "ITAU", name: "Itaú", stage: "cliente" });
+  batch.set(db.collection("customers").doc("cus_itau"), { customer_code: "ITAU", name: "Itaú", stage: "cliente", operation_template: "uniformes" });
   batch.set(db.collection("customers").doc("cus_safra"), { customer_code: "SAFRA", name: "Safra" });
   batch.set(db.collection("customers").doc("cus_velho"), { customer_code: "VELHO", archived: true });
   batch.set(db.collection("customers").doc("cus_novo"), { customer_code: "NOVO", stage: "prospect" });
@@ -67,6 +67,7 @@ describe("o escopo da conversa", () => {
       modulo: "operacao",
       modulos: ["wms", "operacao", "financeiro"],
       leValor: true,
+      modeloDeOperacao: "uniformes",
     });
     await assert.rejects(escopoDoAgente(db, cliente, { modulo: "wms", customer_code: "SAFRA" }), negado(/só do próprio cadastro/));
     await assert.rejects(escopoDoAgente(db, cliente, { modulo: "comercial" }), negado(/não atende esse módulo/));
@@ -75,7 +76,7 @@ describe("o escopo da conversa", () => {
 
   it("a equipe fala do cliente ativo, que precisa estar no cadastro, ativo e não prospect", async () => {
     const escopo = await escopoDoAgente(db, interno, { modulo: "wms", customer_code: "SAFRA" });
-    assert.deepEqual([escopo.audiencia, escopo.customerCode, escopo.modulos, escopo.leValor], ["equipe", "SAFRA", ["wms"], false]);
+    assert.deepEqual([escopo.audiencia, escopo.customerCode, escopo.modulos, escopo.leValor, escopo.modeloDeOperacao], ["equipe", "SAFRA", ["wms"], false, null]);
     await assert.rejects(escopoDoAgente(db, interno, { modulo: "wms" }), negado(/Escolha o cliente/, "invalid-argument"));
     await assert.rejects(escopoDoAgente(db, interno, { modulo: "wms", customer_code: "NADA" }), negado(/não está no cadastro/, "not-found"));
     await assert.rejects(escopoDoAgente(db, interno, { modulo: "wms", customer_code: "VELHO" }), negado(/arquivado/, "failed-precondition"));
