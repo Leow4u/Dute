@@ -1281,3 +1281,30 @@ seguem como antes.
   - Cada seção mostra se ainda carrega ou se não carregou.
 - **Testes.** `radar-do-agente.test.tsx`: as seções e as linhas, os textos
   listados e o `axe`.
+
+### Parte 5.5l: o Resumo do dia
+
+Feita em 23/10/2026 (`artifacts/app/src/lib/agente/resumo-do-dia.ts`).
+
+- **O modelo.**
+  - O briefing do dia vira a rotina pronta "Resumo do dia" de cada módulo,
+    nos dias úteis às 7h.
+  - A pergunta é a do módulo para a equipe. Para o cliente, é sobre a conta
+    dele: pedidos, envios, itens abaixo do mínimo e faturas.
+  - A tela Rotinas do agente do núcleo mostra o Resumo do dia primeiro. Na
+    Armazenagem, os modelos de sempre vêm depois.
+  - O agente do WMS segue com os modelos de sempre.
+- **Só liga pela pessoa.** É um modelo: nada é criado até ela confirmar na
+  janela da rotina, onde pode mudar o horário. A resposta chega na conversa
+  da rotina, pela rotina agendada do núcleo (parte 5.5g).
+- **Testes.** `lib/agente/resumo-do-dia.test.ts`:
+  - os modelos de cada alvo;
+  - a pergunta de cada módulo e a do cliente;
+  - a agenda;
+  - o corpo da rotina, válido e dentro do limite do núcleo.
+
+Com a 5.5l, o Agent Dute do núcleo está completo no `dute-homolog`.
+Publicar na produção é a decisão do lançamento da Fase 5, com o OK do
+Leonardo: ligar `AGENTE_AMBIENTES_LIBERADOS` no `dute-prod`, no app, no
+núcleo e na guarda das rotinas do WMS (`CORE_AGENT_PROJECTS`), que a trava
+mantém iguais.
