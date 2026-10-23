@@ -15,6 +15,9 @@ import type { AudienciaDoAgente } from "./agente-escopo.js";
  *   leva o filtro dela (a medida geral, nunca a de um cliente). O cliente
  *   não lê nada geral.
  *
+ * - As coleções com valor (preço, total, fatura) só abrem para quem lê
+ *   valor: o leitor de quem não lê recusa antes de consultar.
+ *
  * As listas crescem com as ferramentas (partes 5.5c e 5.5d). Coleção fora
  * delas não se lê.
  */
@@ -33,8 +36,19 @@ export const COLECOES_DO_CLIENTE = [
   "stock_balances",
   "events",
   "ai_stock_age",
-  // Faturas da Armazenagem
+  // Operação (sem valor)
+  "demands",
+  "service_orders",
+  // Comercial (com valor: só para quem orça)
+  "quotes",
+  "price_tables",
+  // Financeiro: as faturas da Armazenagem, as da Operação e a cobrança interna
   "client_invoices",
+  "client_faturas",
+  "faturas",
+  // Memória (parte 5.1 e 5.3)
+  "ai_measures",
+  "ai_case_memory",
   // O próprio agente
   "agent_conversations",
   "agent_messages",
@@ -49,8 +63,15 @@ export type ColecaoDoCliente = (typeof COLECOES_DO_CLIENTE)[number];
 export const COLECOES_GERAIS = {
   /** A medida geral, que junta os clientes e serve só à equipe (parte 5.1). */
   ai_measures: ["escopo", "==", "geral"],
+  /** O catálogo da LPU, sem preço: só os itens ativos. */
+  lpu_items: ["ativo", "==", true],
+  /** A tabela Padrão Dutelog, a que não é de nenhum cliente. */
+  price_tables: ["customer_code", "==", null],
 } as const satisfies Record<string, Filtro>;
 export type ColecaoGeral = keyof typeof COLECOES_GERAIS;
+
+/** As coleções que guardam valor: só para quem lê valor (`VALOR_ROLES` e o cliente, nos documentos dele). */
+export const COLECOES_COM_VALOR: ReadonlyArray<ColecaoDoCliente | ColecaoGeral> = ["quotes", "price_tables", "client_invoices", "client_faturas", "faturas", "ai_case_memory"];
 
 export const OPERADORES = ["==", "in", ">=", ">", "<=", "<", "array-contains"] as const;
 export type Operador = (typeof OPERADORES)[number];
@@ -70,6 +91,7 @@ export type RegistroLido = Record<string, unknown> & { id: string };
 export interface LeitorDoAgente {
   readonly customerCode: string;
   readonly audiencia: AudienciaDoAgente;
+  readonly leValor: boolean;
   doCliente(colecao: ColecaoDoCliente, consulta: Consulta): Promise<RegistroLido[]>;
   documento(colecao: ColecaoDoCliente, id: string): Promise<RegistroLido | null>;
   geral(colecao: ColecaoGeral, consulta: Consulta): Promise<RegistroLido[]>;
@@ -128,15 +150,21 @@ function registro(id: string, dados: Record<string, unknown>): RegistroLido {
 }
 
 /** O leitor do escopo. O banco fica dentro dele: a ferramenta não o alcança. */
-export function leitorDoAgente(db: Firestore, escopo: { customerCode: string; audiencia: AudienciaDoAgente }): LeitorDoAgente {
+export function leitorDoAgente(db: Firestore, escopo: { customerCode: string; audiencia: AudienciaDoAgente; leValor: boolean }): LeitorDoAgente {
   const customerCode = escopo.customerCode.trim();
   if (!customerCode) throw erroDoLeitor("escopo sem cliente.");
   const audiencia = escopo.audiencia;
+  const leValor = escopo.leValor === true;
+  const conferirValor = (colecao: string) => {
+    if (!leValor && (COLECOES_COM_VALOR as readonly string[]).includes(colecao)) throw new HttpsError("permission-denied", "Seu perfil não lê valor.");
+  };
   const leitor: LeitorDoAgente = {
     customerCode,
     audiencia,
+    leValor,
     async doCliente(colecao, consulta) {
       if (!(COLECOES_DO_CLIENTE as readonly string[]).includes(colecao)) throw erroDoLeitor(`coleção fora da lista (${colecao}).`);
+      conferirValor(colecao);
       conferirConsulta(consulta);
       const lidos = await montar(db.collection(colecao).where("customer_code", "==", customerCode), consulta).get();
       // A consulta já leva o cliente; a conferência de novo é a segunda trava.
@@ -144,6 +172,7 @@ export function leitorDoAgente(db: Firestore, escopo: { customerCode: string; au
     },
     async documento(colecao, id) {
       if (!(COLECOES_DO_CLIENTE as readonly string[]).includes(colecao)) throw erroDoLeitor(`coleção fora da lista (${colecao}).`);
+      conferirValor(colecao);
       const chave = typeof id === "string" ? id.trim() : "";
       if (!chave || chave.length > 200 || chave.includes("/")) return null;
       const lido = await db.collection(colecao).doc(chave).get();
@@ -154,6 +183,7 @@ export function leitorDoAgente(db: Firestore, escopo: { customerCode: string; au
       if (audiencia !== "equipe") throw new HttpsError("permission-denied", "O cliente não lê o que é geral.");
       const obrigatorio = (COLECOES_GERAIS as Record<string, Filtro>)[colecao];
       if (!obrigatorio) throw erroDoLeitor(`coleção fora da lista (${colecao}).`);
+      conferirValor(colecao);
       conferirConsulta(consulta);
       const [campo, operador, valor] = obrigatorio;
       const lidos = await montar(db.collection(colecao).where(campo, operador, valor), consulta).get();

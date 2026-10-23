@@ -917,6 +917,34 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "service_orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "customer_code",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "janela.data",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "client_faturas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "customer_code",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "vencimento",
+          "order": "DESCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

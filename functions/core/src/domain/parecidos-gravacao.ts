@@ -40,12 +40,16 @@ function itemLido(valor: unknown): ItemDoCaso | null {
 
 /** A lembrança como a tela usa; null quando não tem o cliente ou o vetor. */
 export function casoLido(snapshot: DocumentSnapshot): CasoLido | null {
-  const dados = snapshot.data();
+  return casoDoRegistro(snapshot.id, snapshot.data());
+}
+
+/** A mesma leitura, do registro já lido (o leitor do Agent Dute, parte 5.5d). */
+export function casoDoRegistro(id: string, dados: Registro | undefined): CasoLido | null {
   const customerCode = texto(dados?.customer_code);
   if (!dados || !customerCode || !dados.vetor || typeof dados.vetor !== "object") return null;
   const vetor = Object.fromEntries(Object.entries(dados.vetor as Registro).filter((par): par is [string, number] => typeof par[1] === "number" && par[1] > 0));
   return {
-    demanda: snapshot.id,
+    demanda: id,
     customer_code: customerCode,
     titulo: texto(dados.titulo),
     itens: (Array.isArray(dados.itens) ? dados.itens : []).map(itemLido).filter((item): item is ItemDoCaso => item !== null),
