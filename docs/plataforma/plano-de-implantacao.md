@@ -747,3 +747,7 @@ revisão")
 23. `owner` e `admin` leem o banco `rh`? O plano diz "tudo" para eles e "só
     rh e admin" para o banco. Recomendo que leiam; só `rh` grava.
 24. Fornecedor da folha e do eSocial.
+
+**Surgidas na implantação**
+25. Proposta sem resposta (parte 2.5): o Início do Comercial a mostra depois
+    de 5 dias corridos aguardando o cliente. São 5 dias, ou outro prazo?

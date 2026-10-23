@@ -1,4 +1,4 @@
-import { collection, getDocs, query, where, type QuerySnapshot } from "firebase/firestore";
+import { Timestamp, collection, getDocs, query, where, type QuerySnapshot } from "firebase/firestore";
 
 import { firestore } from "../firebase";
 import {
@@ -23,6 +23,20 @@ import {
   type ContratoParaAlertaDeMedicao,
   type Medicao,
 } from "./medicoes";
+import { ETAPAS_DEMANDA } from "./orcamentos";
+import {
+  ETAPAS_DO_RESUMO,
+  contagemPorEtapa,
+  demandaDoResumo,
+  devolvidosDe,
+  inicioDaCompetencia,
+  numerosDoMes,
+  propostasSemResposta,
+  type DemandaDoResumo,
+  type NumerosDoMes,
+  type OrcamentoDevolvido,
+  type PropostaSemResposta,
+} from "./pendencias";
 
 const VALIDADE_DA_LEITURA_MS = 15_000;
 const leiturasRecentes = new Map<string, { em: number; leitura: Promise<QuerySnapshot> }>();
@@ -141,3 +155,51 @@ export async function lerAlertasDeMedicao(hoje: string = hojeLocal()): Promise<A
   const alertas = alertaMedicaoNaoEnviada(hoje, [...medicoes.values()], paraAlerta);
   return alertasDeMedicaoParaOInicio(alertas, contratos, nomesDosClientes(cadastros));
 }
+
+export type ResumoDoComercial = {
+  competencia: string;
+  porEtapa: ReturnType<typeof contagemPorEtapa>;
+  mes: NumerosDoMes;
+  /** As propostas aguardando o cliente há mais de DIAS_SEM_RESPOSTA dias, para o "Precisa de você". */
+  semResposta: PropostaSemResposta[];
+};
+
+/**
+ * A coluna ao lado do Início do Comercial (parte 2.5): as demandas nas etapas
+ * ativas (a contagem por etapa) e as que mudaram no mês (enviadas, fechadas e
+ * perdidas nele). Toda escrita da demanda grava `updated_at`, então quem foi
+ * enviada, fechada ou perdida no mês foi atualizada no mês. A mesma leitura
+ * das etapas ativas dá as propostas sem resposta. Só para quem abre o
+ * Comercial: a página não consulta para os outros papéis.
+ */
+export async function lerResumoDoComercial(hoje: string = hojeLocal()): Promise<ResumoDoComercial> {
+  const db = firestore;
+  if (!db) throw new Error("Firebase não configurado.");
+  const competencia = competenciaAtual(hoje);
+  const [ativas, doMes] = await Promise.all([
+    getDocs(query(collection(db, "demands"), where("etapa", "in", [...ETAPAS_DO_RESUMO]))),
+    getDocs(query(collection(db, "demands"), where("updated_at", ">=", Timestamp.fromDate(inicioDaCompetencia(competencia))))),
+  ]);
+  const lidas = (docs: typeof ativas.docs, etapas: readonly string[]) =>
+    docs.map((row) => demandaDoResumo(row.id, row.data(), etapas)).filter((demanda): demanda is DemandaDoResumo => demanda !== null);
+  const doMesPorId = new Map([...lidas(ativas.docs, ETAPAS_DEMANDA), ...lidas(doMes.docs, ETAPAS_DEMANDA)].map((demanda) => [demanda.numero, demanda]));
+  const ativasLidas = lidas(ativas.docs, ETAPAS_DO_RESUMO);
+  return {
+    competencia,
+    porEtapa: contagemPorEtapa(ativasLidas),
+    mes: numerosDoMes([...doMesPorId.values()], competencia),
+    semResposta: propostasSemResposta(ativasLidas, hoje),
+  };
+}
+
+/**
+ * Os orçamentos que a pessoa montou e o owner devolveu (parte 2.5): os
+ * `quotes` em rascunho, filtrados pela devolução e pelo autor. Rascunhos são
+ * poucos de cada vez; a leitura não cresce com o histórico.
+ */
+export async function lerDevolvidos(uid: string): Promise<OrcamentoDevolvido[]> {
+  if (!firestore) throw new Error("Firebase não configurado.");
+  const rascunhos = await getDocs(query(collection(firestore, "quotes"), where("status", "==", "rascunho")));
+  return devolvidosDe(rascunhos.docs.map((row) => ({ id: row.id, data: row.data() })), uid);
+}
+

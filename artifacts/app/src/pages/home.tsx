@@ -5,9 +5,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   ClipboardList,
-  FileCheck,
-  FileText,
-  Hourglass,
   PackageCheck,
   Sparkles,
   Truck,
@@ -20,13 +17,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAppUser } from "@/lib/auth";
-import { lerAlertasDeMedicao, lerAlertasDosContratos, lerAutorizacoesDoInicio, lerOrcamentosParaAprovar } from "@/lib/comercial/inicio";
 import {
   buildHomeInbox,
-  veAprovacoesNoInicio,
-  veAutorizacoesNoInicio,
-  veContratosNoInicio,
-  veMedicoesNoInicio,
   type HomeInboxItem,
   type HomeInboxTone,
   type HomeRequest,
@@ -58,24 +50,13 @@ const TONE_STYLE: Record<HomeInboxTone, { icon: LucideIcon; box: string }> = {
 
 const ITEM_ICON: Record<string, LucideIcon> = {
   receipts: PackageCheck,
-  "comercial:aprovar": FileCheck,
 };
 
 const numberFormatter = new Intl.NumberFormat("pt-BR");
 
 function InboxRow({ item }: { item: HomeInboxItem }) {
   const tone = TONE_STYLE[item.tone];
-  // Comercial: alerta de contrato ("contrato:<id>:<tipo>"), prazo de perda
-  // ("autorizacoes:prazo:<numero>") e executados esperando a autorização.
-  const Icon =
-    ITEM_ICON[item.id] ??
-    (item.id.startsWith("contrato:")
-      ? FileText
-      : item.id.startsWith("autorizacoes:prazo:")
-        ? Hourglass
-        : item.id.startsWith("autorizacoes:")
-          ? FileCheck
-          : tone.icon);
+  const Icon = ITEM_ICON[item.id] ?? tone.icon;
   return (
     <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:gap-4 md:px-5">
       <div className="flex min-w-0 flex-1 items-center gap-4">
@@ -124,13 +105,6 @@ export default function Home() {
   const role = user?.publicMetadata.role;
   const seesWarehouse = canAccessModule(role, WMS_ROLES);
   const seesRequests = canAccessModule(role, COORDINATION_NAV_ROLES);
-  // Contratos e autorizações do Comercial: só owner, admin e comercial, com a liberação.
-  const seesContracts = veContratosNoInicio(role);
-  const seesAuthorizations = veAutorizacoesNoInicio(role);
-  // Orçamentos para aprovar: só o owner, que aprova, com a liberação.
-  const seesApprovals = veAprovacoesNoInicio(role);
-  // Medição do mês que passou sem envio: owner, admin e comercial, com a liberação.
-  const seesMeasurements = veMedicoesNoInicio(role);
 
   const dashboard = useGetDashboard();
   const ops = useQuery({
@@ -148,65 +122,22 @@ export default function Home() {
     refetchInterval: 60_000,
     refetchOnWindowFocus: false,
   });
-  const contracts = useQuery({
-    queryKey: ["comercial", "contratos", "inicio"],
-    queryFn: () => lerAlertasDosContratos(),
-    enabled: seesContracts,
-    refetchInterval: 5 * 60_000,
-    refetchOnWindowFocus: false,
-  });
-  const authorizations = useQuery({
-    queryKey: ["comercial", "autorizacoes", "inicio"],
-    queryFn: () => lerAutorizacoesDoInicio(),
-    enabled: seesAuthorizations,
-    refetchInterval: 5 * 60_000,
-    refetchOnWindowFocus: false,
-  });
-
-  const approvals = useQuery({
-    queryKey: ["comercial", "orcamentos", "para-aprovar"],
-    queryFn: () => lerOrcamentosParaAprovar(),
-    enabled: seesApprovals,
-    refetchInterval: 60_000,
-    refetchOnWindowFocus: false,
-  });
-
-  const measurements = useQuery({
-    queryKey: ["comercial", "medicoes", "inicio"],
-    queryFn: () => lerAlertasDeMedicao(),
-    enabled: seesMeasurements,
-    refetchInterval: 5 * 60_000,
-    refetchOnWindowFocus: false,
-  });
-
   const inbox = useMemo(
     () =>
       buildHomeInbox({
         role,
         ops: ops.data,
         requests: requests.data?.items,
-        contratos: contracts.data,
-        autorizacoes: authorizations.data,
-        paraAprovar: approvals.data,
-        medicoes: measurements.data,
       }),
-    [ops.data, requests.data, contracts.data, authorizations.data, approvals.data, measurements.data, role],
+    [ops.data, requests.data, role],
   );
 
   const loading =
     (seesWarehouse && ops.isLoading) ||
-    (seesRequests && requests.isLoading) ||
-    (seesContracts && contracts.isLoading) ||
-    (seesAuthorizations && authorizations.isLoading) ||
-    (seesApprovals && approvals.isLoading) ||
-    (seesMeasurements && measurements.isLoading);
+    (seesRequests && requests.isLoading);
   const failedSources = [
     seesWarehouse && ops.isError ? "armazém" : null,
     seesRequests && requests.isError ? "solicitações" : null,
-    seesContracts && contracts.isError ? "contratos" : null,
-    seesAuthorizations && authorizations.isError ? "autorizações" : null,
-    seesApprovals && approvals.isError ? "orçamentos" : null,
-    seesMeasurements && measurements.isError ? "medições" : null,
   ].filter((source): source is string => Boolean(source));
 
   const now = new Date();

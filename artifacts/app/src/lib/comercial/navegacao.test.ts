@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   getActiveModule,
   getHomePathForProfile,
+  MOBILE_BAR_SLOTS_DO_MODULO,
   getMobileNavigation,
   getNavigationForProfileRole,
   menuDoComercial,
@@ -16,7 +17,6 @@ import {
 } from "../modules";
 import { entrada, modulesForPerson } from "../platform-modules";
 import {
-  ABAS_DO_COMERCIAL,
   APROVADOR_ROLES,
   COMERCIAL_ROLES,
   ROTA_APROVAR,
@@ -27,8 +27,8 @@ import {
   ROTA_MEDICOES,
   ROTA_DOCUMENTO,
   ROTA_ORCAMENTO,
+  ROTA_ORCAMENTOS,
   TELAS_DO_COMERCIAL,
-  abasVisiveis,
   abreComercial,
   aprovaOrcamento,
   contratoDaBusca,
@@ -66,7 +66,7 @@ function menu(role: Papel, liberado: boolean) {
   }));
 }
 
-const TELAS_DO_MENU = ["Orçamentos", "Clientes", "Contratos", "Autorizações", "Medições"];
+const TELAS_DO_MENU = ["Início", "Orçamentos", "Clientes", "Contratos", "Autorizações", "Medições"];
 
 function menuComercial(role: Papel, liberado: boolean) {
   return menuDoComercial(role, liberado).map((module) => module.label);
@@ -77,6 +77,7 @@ describe("rotas do Comercial", () => {
     expect(rotasDoComercial(DESLIGADO)).toEqual([]);
     expect(rotasDoComercial(LIBERADO)).toEqual([
       ROTA_COMERCIAL,
+      ROTA_ORCAMENTOS,
       ROTA_ORCAMENTO,
       ROTA_DOCUMENTO,
       ROTA_APROVAR,
@@ -87,7 +88,7 @@ describe("rotas do Comercial", () => {
     ]);
   });
 
-  it("o App registra exatamente as rotas do Comercial: a fila, a montagem, o documento, a aprovação, Clientes, Contratos e Autorizações", () => {
+  it("o App registra exatamente as rotas do Comercial: o Início, a fila, a montagem, o documento, a aprovação e as outras telas", () => {
     expect(APP_PATHS.filter(doComercial)).toEqual(rotasDoComercial(LIBERADO));
   });
 
@@ -108,6 +109,7 @@ describe("rotas do Comercial", () => {
   it("soComComercialLiberado: na produção nenhuma rota; na homologação, só as do Comercial", () => {
     const rotas = [
       { path: ROTA_COMERCIAL },
+      { path: ROTA_ORCAMENTOS },
       { path: ROTA_ORCAMENTO },
       { path: ROTA_DOCUMENTO },
       { path: ROTA_APROVAR },
@@ -120,6 +122,7 @@ describe("rotas do Comercial", () => {
     expect(soComComercialLiberado(rotas, DESLIGADO)).toEqual([]);
     expect(soComComercialLiberado(rotas, LIBERADO).map((rota) => rota.path)).toEqual([
       ROTA_COMERCIAL,
+      ROTA_ORCAMENTOS,
       ROTA_ORCAMENTO,
       ROTA_DOCUMENTO,
       ROTA_APROVAR,
@@ -182,10 +185,21 @@ describe("rotas do Comercial", () => {
     expect(abreComercial(undefined, LIBERADO)).toBe(false);
   });
 
-  it("/comercial é a fila de orçamentos (parte 11): sem redirecionar para Clientes", () => {
-    expect(TELAS_DO_COMERCIAL).toEqual([ROTA_COMERCIAL, ROTA_ORCAMENTO, ROTA_DOCUMENTO, ROTA_APROVAR, ROTA_CLIENTES, ROTA_CONTRATOS, ROTA_AUTORIZACOES, ROTA_MEDICOES]);
+  it("/comercial é o Início (parte 2.5) e a fila de orçamentos mora em /comercial/orcamentos", () => {
+    expect(TELAS_DO_COMERCIAL).toEqual([
+      ROTA_COMERCIAL,
+      ROTA_ORCAMENTOS,
+      ROTA_ORCAMENTO,
+      ROTA_DOCUMENTO,
+      ROTA_APROVAR,
+      ROTA_CLIENTES,
+      ROTA_CONTRATOS,
+      ROTA_AUTORIZACOES,
+      ROTA_MEDICOES,
+    ]);
     expect(APP_SOURCE).not.toMatch(/ComercialRedirect|DESTINO_DO_COMERCIAL/);
-    expect(APP_SOURCE).toMatch(/protectedRoute\("\/comercial", ComercialOrcamentos\)/);
+    expect(APP_SOURCE).toMatch(/protectedRoute\("\/comercial", ComercialInicio\)/);
+    expect(APP_SOURCE).toMatch(/protectedRoute\("\/comercial\/orcamentos", ComercialOrcamentos\)/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/comercial\/orcamento", ComercialOrcamento\)/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/comercial\/orcamento\/documento", ComercialDocumento\)/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/comercial\/aprovar", ComercialAprovar\)/);
@@ -244,10 +258,10 @@ describe("menu do Comercial", () => {
   it("comercial vê só as telas do módulo, e o WMS não lista o Comercial", () => {
     expect(menuComercial("comercial", LIBERADO)).toEqual(TELAS_DO_MENU);
     expect(menu("comercial", LIBERADO)).toEqual([]);
-    const orcamentos = menuDoComercial("comercial", LIBERADO)[0];
-    expect(orcamentos.href).toBe(ROTA_COMERCIAL);
-    expect(orcamentos.ambiente).toBe("comercial");
-    expect(isModuleGroup(orcamentos)).toBe(false);
+    const inicio = menuDoComercial("comercial", LIBERADO)[0];
+    expect(inicio.href).toBe(ROTA_COMERCIAL);
+    expect(inicio.ambiente).toBe("comercial");
+    expect(isModuleGroup(inicio)).toBe(false);
   });
 
   it("fora da liberação o comercial não tem menu, como antes", () => {
@@ -294,21 +308,24 @@ describe("menu do Comercial", () => {
     expect(aceso(ROTA_AUTORIZACOES)).toBe("Autorizações");
     expect(aceso(ROTA_MEDICOES)).toBe("Medições");
     expect(aceso(hrefDaMedicao("safra", "2026-09")!)).toBe("Medições");
-    expect(aceso(ROTA_COMERCIAL)).toBe("Orçamentos");
+    expect(aceso(ROTA_COMERCIAL)).toBe("Início");
+    expect(aceso(ROTA_ORCAMENTOS)).toBe("Orçamentos");
     expect(aceso(ROTA_ORCAMENTO)).toBe("Orçamentos");
     expect(aceso(`${ROTA_DOCUMENTO}?numero=10045&rv=1`)).toBe("Orçamentos");
     expect(aceso(ROTA_APROVAR)).toBe("Orçamentos");
 
     const wms = getNavigationForProfileRole("admin", null, LIBERADO);
-    for (const path of [ROTA_COMERCIAL, ROTA_CLIENTES, ROTA_CONTRATOS, ROTA_AUTORIZACOES, ROTA_MEDICOES, ROTA_ORCAMENTO]) {
+    for (const path of [ROTA_COMERCIAL, ROTA_ORCAMENTOS, ROTA_CLIENTES, ROTA_CONTRATOS, ROTA_AUTORIZACOES, ROTA_MEDICOES, ROTA_ORCAMENTO]) {
       expect(wms.some((module) => module.routes.some((route) => isNavRouteActive(path, route))), path).toBe(false);
     }
   });
 
-  it("Orçamentos não acende em Clientes nem em Contratos: a rota da fila é exata", () => {
+  it("o Início não acende nas outras telas: a rota da casa é exata", () => {
+    const inicio = menuDoComercial("comercial", LIBERADO).find((module) => module.label === "Início")!;
+    expect(inicio.href).toBe(ROTA_COMERCIAL);
+    expect(inicio.routes[0].exact).toBe(true);
     const orcamentos = menuDoComercial("comercial", LIBERADO).find((module) => module.label === "Orçamentos")!;
-    expect(orcamentos.href).toBe(ROTA_COMERCIAL);
-    expect(orcamentos.routes[0].exact).toBe(true);
+    expect(orcamentos.href).toBe(ROTA_ORCAMENTOS);
   });
 
   it("na montagem do orçamento, o item Orçamentos do menu fica aceso (e só ele)", () => {
@@ -317,7 +334,8 @@ describe("menu do Comercial", () => {
     expect(acesos(ROTA_ORCAMENTO)).toEqual(["Orçamentos"]);
     expect(acesos(ROTA_DOCUMENTO)).toEqual(["Orçamentos"]);
     expect(acesos(ROTA_APROVAR)).toEqual(["Orçamentos"]);
-    expect(acesos(ROTA_COMERCIAL)).toEqual(["Orçamentos"]);
+    expect(acesos(ROTA_COMERCIAL)).toEqual(["Início"]);
+    expect(acesos(ROTA_ORCAMENTOS)).toEqual(["Orçamentos"]);
     expect(acesos(ROTA_CLIENTES)).toEqual(["Clientes"]);
     expect(acesos(ROTA_CONTRATOS)).toEqual(["Contratos"]);
     expect(acesos(ROTA_AUTORIZACOES)).toEqual(["Autorizações"]);
@@ -343,15 +361,16 @@ describe("menu do Comercial", () => {
   });
 
   it("no celular, o Comercial tem as telas na barra; o WMS do owner não as lista", () => {
-    const comercial = getMobileNavigation(menuDoComercial("comercial", LIBERADO));
-    expect(comercial.bar.map((module) => module.label)).toEqual(["Orçamentos", "Clientes", "Contratos", "Autorizações"]);
-    expect(comercial.more.flatMap(({ routes }) => routes.map((route) => route.label))).toEqual(["Medições"]);
+    // O shell v3 do módulo usa três vagas e "Mais" (docs/mockups/ModCelularCom.dc.html).
+    const comercial = getMobileNavigation(menuDoComercial("comercial", LIBERADO), MOBILE_BAR_SLOTS_DO_MODULO);
+    expect(comercial.bar.map((module) => module.label)).toEqual(["Início", "Orçamentos", "Clientes"]);
+    expect(comercial.more.flatMap(({ routes }) => routes.map((route) => route.label))).toEqual(["Contratos", "Autorizações", "Medições"]);
     const owner = getMobileNavigation(getNavigationForProfileRole("owner", null, LIBERADO));
     const destinos = [
       ...owner.bar.map((module) => module.label),
       ...owner.more.flatMap(({ module, routes }) => routes.map((route) => `${module.label} · ${route.label}`)),
     ];
-    for (const tela of ["Comercial", ...TELAS_DO_MENU]) {
+    for (const tela of ["Comercial", ...TELAS_DO_MENU.filter((tela) => tela !== "Início")]) {
       expect(destinos, tela).not.toContain(tela);
       expect(destinos.some((destino) => destino.includes(tela)), tela).toBe(false);
     }
@@ -412,34 +431,11 @@ describe("aterrissagem e tela de entrada", () => {
   });
 });
 
-describe("abas do módulo (Orçamentos · Contratos · Autorizações · Medições)", () => {
-  it("as quatro abas, na ordem dos mockups", () => {
-    expect(ABAS_DO_COMERCIAL.map((aba) => aba.rotulo)).toEqual(["Orçamentos", "Contratos", "Autorizações", "Medições"]);
-  });
-
-  it("aba sem tela fica oculta: hoje Orçamentos, Contratos, Autorizações e Medições têm", () => {
-    expect(abasVisiveis(TELAS_DO_COMERCIAL).map((aba) => aba.id)).toEqual(["orcamentos", "contratos", "autorizacoes", "medicoes"]);
-    expect(abasVisiveis().map((aba) => aba.href)).toEqual([ROTA_COMERCIAL, ROTA_CONTRATOS, ROTA_AUTORIZACOES, ROTA_MEDICOES]);
-    expect(abasVisiveis([ROTA_CLIENTES])).toEqual([]);
-  });
-
-  it("a montagem, o documento e a aprovação do orçamento são da aba Orçamentos", () => {
-    const orcamentos = ABAS_DO_COMERCIAL.find((aba) => aba.id === "orcamentos")!;
-    expect(orcamentos.tambem).toEqual([ROTA_ORCAMENTO, ROTA_APROVAR, ROTA_DOCUMENTO]);
-  });
-
-  it("a aba Autorizações leva à tela de autorizações (parte 15b)", () => {
-    expect(ABAS_DO_COMERCIAL.find((aba) => aba.id === "autorizacoes")!.href).toBe(ROTA_AUTORIZACOES);
-  });
-
-  it("cada tela nova acende a aba dela, na ordem", () => {
-    const contratos = ABAS_DO_COMERCIAL.find((aba) => aba.id === "contratos")!;
-    const orcamentos = ABAS_DO_COMERCIAL.find((aba) => aba.id === "orcamentos")!;
-    expect(abasVisiveis([...TELAS_DO_COMERCIAL, contratos.href, orcamentos.href]).map((aba) => aba.id)).toEqual([
-      "orcamentos",
-      "contratos",
-      "autorizacoes",
-      "medicoes",
-    ]);
+describe("sem abas dentro da tela (parte 2.5)", () => {
+  it("as telas do Comercial não repetem o menu: a barra lateral é a única navegação entre elas", () => {
+    for (const arquivo of ["orcamentos-view.tsx", "contratos-view.tsx", "autorizacoes-view.tsx", "medicoes-view.tsx", "orcamento-view.tsx"]) {
+      const fonte = readFileSync(new URL(`../../pages/comercial/${arquivo}`, import.meta.url), "utf8");
+      expect(fonte, arquivo).not.toMatch(/AbasDoComercial|abas-do-comercial/);
+    }
   });
 });

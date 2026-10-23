@@ -276,3 +276,42 @@ continua e entra na parte 2.7.
   `src/test/textos.ts` (a trava contra legenda), com o teste deles.
 - Conferido no Chromium com o CSS do build, a 1440 e a 390 px.
 
+
+### Ordem das partes 2.4 a 2.6
+
+A entrada com contadores (2.4) conta o que o Início de cada módulo mostra.
+Por isso a ordem ficou 2.5 (Início do Comercial), 2.6 (Início da Operação) e
+depois 2.4: os contadores leem as mesmas consultas dos Inícios, sem uma
+segunda regra de contagem.
+
+### Parte 2.5: Início do Comercial
+
+- `/comercial` passa a ser o Início (`pages/comercial/inicio.tsx`), como em
+  `docs/mockups/ModComInicio.dc.html`; a fila de orçamentos mudou para
+  `/comercial/orcamentos`. O menu do Comercial ganhou Início no topo; a
+  montagem, a aprovação e o documento continuam acendendo Orçamentos.
+- O "Precisa de você" saiu do Início do WMS (`lib/home-inbox.ts` e
+  `pages/home.tsx` não leem mais nada do Comercial) e mora em
+  `lib/comercial/pendencias.ts`: orçamentos para aprovar (só o owner),
+  orçamento devolvido (só para quem montou), alertas de contrato, prazo de
+  faturamento e executados há mais de 30 dias, medição do mês que passou sem
+  envio e proposta aguardando o cliente há mais de 5 dias corridos
+  (`DIAS_SEM_RESPOSTA`, a confirmar com o Leonardo). O mais urgente primeiro:
+  crítico, atenção e informação; no mesmo tom, a ordem das fontes.
+- Ao lado, "Orçamentos por etapa" (as oito etapas ativas, com "Abrir a fila")
+  e o mês: enviados (primeiro envio), fechados (primeira entrada em "Para
+  planejar") e perdidos, no fuso de São Paulo. Duas consultas a `demands`
+  (etapas ativas; `updated_at` desde o início do mês) e uma a `quotes` em
+  rascunho, para os devolvidos.
+- As telas do Comercial deixaram as abas internas (`abas-do-comercial.tsx`
+  saiu): a barra do módulo é a única navegação entre elas, e o título de cada
+  tela é o nome dela (Orçamentos, Contratos, Autorizações, Medições; na
+  montagem, o número do orçamento).
+- O shell v3 do módulo usa três telas e "Mais" na barra do celular, como nos
+  mockups (`MOBILE_BAR_SLOTS_DO_MODULO`); o WMS continua com quatro.
+- `getActiveModule` passou a respeitar as telas de cada item (`tambem`), como
+  o menu: com a fila fora de `/comercial`, a montagem acenderia o Início.
+- Testes: `pendencias.test.ts` (cada fonte, quem vê, a ordem, sem resposta e
+  devolvidos), `inicio-view.test.tsx` (textos na ordem, lista contra legenda,
+  estados e axe), navegação e telas atualizadas.
+- Conferido no Chromium com o CSS do build, a 1440 e a 390 px.

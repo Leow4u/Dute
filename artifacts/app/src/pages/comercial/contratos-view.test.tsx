@@ -133,11 +133,7 @@ function texts(html: string) {
 }
 
 const CABECALHO_E_LISTA = [
-  "Comercial",
-  "Orçamentos",
   "Contratos",
-  "Autorizações",
-  "Medições",
   "Vigentes",
   "2",
   "Novo contrato",
@@ -152,7 +148,7 @@ const CABECALHO_E_LISTA = [
 ];
 
 describe("tela de contratos", () => {
-  it("sem legenda: abas, lista e ficha só têm rótulos, dados e ações", () => {
+  it("sem legenda: lista e ficha só têm rótulos, dados e ações", () => {
     expect(texts(render())).toEqual([
       ...CABECALHO_E_LISTA,
       // Ficha
@@ -235,8 +231,10 @@ describe("tela de contratos", () => {
     expect(texts(principais[0] ?? "")).toEqual(["Registrar aditivo"]);
   });
 
-  it("a aba Contratos aparece marcada na barra do módulo", () => {
-    expect(render()).toMatch(/<a [^>]*aria-current="page"[^>]*>Contratos<\/a>/);
+  it("o título é o da tela, e a troca de tela fica no menu do módulo, sem abas dentro dela", () => {
+    const html = render();
+    expect(html).toMatch(/<h1[^>]*>Contratos<\/h1>/);
+    expect(html).not.toContain('aria-current="page"');
   });
 
   it("contrato com alerta: os alertas aparecem na ficha, com a data e quando", () => {
@@ -280,12 +278,8 @@ describe("tela de contratos", () => {
 
   it("filtro Encerrados: a lista mostra os encerrados e o atalho volta para Vigentes", () => {
     const lista = texts(render({ filtro: "encerrados", selecionado: RFQ }));
-    expect(lista.slice(0, 14)).toEqual([
-      "Comercial",
-      "Orçamentos",
+    expect(lista.slice(0, 10)).toEqual([
       "Contratos",
-      "Autorizações",
-      "Medições",
       "Encerrados",
       "1",
       "Novo contrato",
@@ -333,11 +327,11 @@ describe("tela de contratos", () => {
 
   it("sem contrato nenhum, a lista diz que não há e a ficha não aparece", () => {
     const tela = texts(render({ contratos: [], selecionado: null }));
-    expect(tela).toEqual(["Comercial", "Orçamentos", "Contratos", "Autorizações", "Medições", "Vigentes", "0", "Novo contrato", "Nenhum contrato vigente", "Encerrados", "0"]);
+    expect(tela).toEqual(["Contratos", "Vigentes", "0", "Novo contrato", "Nenhum contrato vigente", "Encerrados", "0"]);
   });
 
   it("carregando e erro na lista", () => {
-    expect(texts(render({ estado: "carregando", selecionado: null })).slice(8)).toEqual(["Carregando..."]);
-    expect(texts(render({ estado: "erro", selecionado: null })).slice(8)).toEqual(["Não foi possível carregar os contratos."]);
+    expect(texts(render({ estado: "carregando", selecionado: null })).slice(4)).toEqual(["Carregando..."]);
+    expect(texts(render({ estado: "erro", selecionado: null })).slice(4)).toEqual(["Não foi possível carregar os contratos."]);
   });
 });

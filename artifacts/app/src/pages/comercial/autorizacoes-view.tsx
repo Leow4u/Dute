@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { formatarReais } from "@workspace/dominio";
 import { AlertTriangle, Check, Clock, FileText, Plus, Search, X } from "lucide-react";
 
-import { AbasDoComercial } from "@/components/comercial/abas-do-comercial";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -443,8 +442,7 @@ export function AutorizacoesView(props: AutorizacoesViewProps) {
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">
       <header className="flex flex-wrap items-center gap-4">
-        <h1 className="mr-2 text-3xl font-extrabold tracking-tight">Comercial</h1>
-        <AbasDoComercial telas={telas} />
+        <h1 className="mr-2 text-3xl font-extrabold tracking-tight">Autorizações</h1>
         <div className="flex w-full flex-wrap items-center gap-2.5 md:ml-auto md:w-auto">
           <label className="relative block min-w-0 flex-1 md:w-72 md:flex-none">
             <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />

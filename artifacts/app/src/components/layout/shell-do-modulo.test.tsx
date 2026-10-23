@@ -57,7 +57,7 @@ function linkAtual(html: string, href: string) {
   });
 }
 
-const TELAS_DO_COMERCIAL = ["Orçamentos", "Clientes", "Contratos", "Autorizações", "Medições"];
+const TELAS_DO_COMERCIAL = ["Início", "Orçamentos", "Clientes", "Contratos", "Autorizações", "Medições"];
 
 describe("shell v3 do módulo", () => {
   it("o Comercial mostra só as telas dele, na v3, sem nada do WMS", () => {
@@ -65,10 +65,10 @@ describe("shell v3 do módulo", () => {
     expect(html).toContain('data-ambiente="comercial"');
     expect(html).toMatch(/class="v3 /);
     for (const tela of TELAS_DO_COMERCIAL) expect(html, tela).toContain(`>${tela}<`);
-    for (const href of ["/comercial", "/comercial/clientes", "/comercial/contratos", "/comercial/autorizacoes", "/comercial/medicoes"]) {
+    for (const href of ["/comercial", "/comercial/orcamentos", "/comercial/clientes", "/comercial/contratos", "/comercial/autorizacoes", "/comercial/medicoes"]) {
       expect(html, href).toContain(`href="${href}"`);
     }
-    for (const doWms of ["Início", "Pedidos", "Estoque", "Faturamento", "Relatórios", "Documentos", "Agent Dute", "Cliente ativo"]) {
+    for (const doWms of ["Pedidos", "Estoque", "Faturamento", "Relatórios", "Documentos", "Agent Dute", "Cliente ativo"]) {
       expect(html, doWms).not.toContain(`>${doWms}<`);
     }
     expect(html).toContain(">Fila<");
@@ -87,11 +87,14 @@ describe("shell v3 do módulo", () => {
     expect(html).toMatch(/<p [^>]*>.*?<span[^>]*>Comercial<\/span><\/p>/);
   });
 
-  it("a tela aberta fica marcada, e a montagem acende Orçamentos", () => {
+  it("a tela aberta fica marcada, e a montagem acende Orçamentos, não o Início", () => {
+    expect(linkAtual(comercial("/comercial"), "/comercial")).toBe(true);
     expect(linkAtual(comercial("/comercial/clientes"), "/comercial/clientes")).toBe(true);
     expect(linkAtual(comercial("/comercial/clientes"), "/comercial")).toBe(false);
-    expect(linkAtual(comercial("/comercial/orcamento"), "/comercial")).toBe(true);
-    expect(linkAtual(comercial("/comercial/aprovar"), "/comercial")).toBe(true);
+    for (const montagem of ["/comercial/orcamento", "/comercial/aprovar", "/comercial/orcamento/documento"]) {
+      expect(linkAtual(comercial(montagem), "/comercial/orcamentos"), montagem).toBe(true);
+      expect(linkAtual(comercial(montagem), "/comercial"), montagem).toBe(false);
+    }
   });
 
   it("o contador aparece no item, vermelho só no alerta", () => {
@@ -105,11 +108,13 @@ describe("shell v3 do módulo", () => {
     expect(html).toMatch(/>Medições<\/span><\/a>/);
   });
 
-  it("no celular, cabeçalho preto com o seletor e a barra com as telas", () => {
+  it("no celular, cabeçalho preto com o seletor e a barra com três telas e Mais, como nos mockups", () => {
     const html = comercial("/comercial/medicoes");
-    expect(html).toContain('aria-label="Navegação principal"');
     expect(html).toMatch(/<nav aria-label="Navegação principal" class="[^"]*bg-v3-header/);
-    expect(html).toContain('href="/comercial/medicoes"');
+    const barra = html.slice(html.indexOf('<nav aria-label="Navegação principal"'));
+    const links = [...barra.matchAll(/<a [^>]*href="([^"]+)"/g)].map(([, href]) => href);
+    expect(links).toEqual(["/comercial", "/comercial/orcamentos", "/comercial/clientes"]);
+    expect(barra).toMatch(/<button[^>]*aria-expanded="false"[^>]*>.*<span>Mais<\/span><\/button>/);
   });
 
   it("sem conexão, uma linha de status e mais nada", () => {

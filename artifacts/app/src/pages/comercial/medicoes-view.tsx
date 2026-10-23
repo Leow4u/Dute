@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { BookOpen, Check, MapPin, Paperclip, Plus, RotateCcw, Send, TriangleAlert } from "lucide-react";
 
-import { AbasDoComercial } from "@/components/comercial/abas-do-comercial";
 import { Button } from "@/components/ui/button";
 import { dataBr, type CadastroComercial, type Carga } from "@/lib/comercial/clientes";
 import { nomeDoCliente, nomesDosClientes, type Contrato } from "@/lib/comercial/contratos";
@@ -573,8 +572,7 @@ export function MedicoesView(props: MedicoesViewProps) {
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">
       <header className="flex flex-wrap items-center gap-4">
-        <h1 className="mr-2 text-3xl font-extrabold tracking-tight">Comercial</h1>
-        <AbasDoComercial telas={telas} />
+        <h1 className="mr-2 text-3xl font-extrabold tracking-tight">Medições</h1>
       </header>
       {conteudo}
     </div>

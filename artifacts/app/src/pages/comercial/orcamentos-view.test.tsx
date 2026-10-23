@@ -180,13 +180,9 @@ function texts(html: string) {
 }
 
 const CABECALHO = [
-  "Comercial",
+  "Orçamentos",
   "Orçar execução",
   "Novo orçamento",
-  "Orçamentos",
-  "Contratos",
-  "Autorizações",
-  "Medições",
   "Todas",
   "3",
   "Em montagem",
