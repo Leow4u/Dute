@@ -103,6 +103,8 @@ financeiro (`FINANCE_ROLES`, a mesma lista das callables). O menu tem:
   - O painel mostra o valor, o recebido e o saldo, as datas, as demandas, o envio e os pagamentos.
   - Dali a pessoa marca a NF como enviada, registra o pagamento (começa pelo saldo), estorna um pagamento e cancela o registro sem pagamento.
   - O estorno e o cancelamento pedem o motivo antes de confirmar.
+  - Toda lista exporta para XLSX ("Exportar XLSX"), com a busca aplicada.
+  - Em Pagos, sem NF aberta, o lado direito mostra a receita por cliente do mês escolhido.
 - **Armazenagem**: leva ao Faturamento do WMS (`/faturamento`), que continua no shell do WMS até a Fase 7.
 
 O financeiro tem um módulo só e por isso não tem seletor. No menu do WMS, logo
@@ -126,8 +128,9 @@ continuam no Faturamento do WMS, e as rotas `/financeiro` não existem
 | 4.1a | Codebase `functions/financeiro`, `registerNf`, `faturas`, a demanda Faturada, `nf.registered`, regras e zeragem | Sem autorização não fatura; o valor é o da RV validada e autorizada (ou da medição); a operação não lê `faturas` |
 | 4.1b | Shell do Financeiro (v3) em `/financeiro`: Início e A faturar, com o painel de registrar a NF | Textos listados; sem legenda; uma ação principal; `axe` |
 | 4.2a | `advanceFatura` (enviar, pagar, estornar, cancelar), `pagamentos`, a demanda Paga, `cobranca.*`, regras e zeragem | Pagamento parcial; não passa do saldo; com pagamento não cancela |
-| 4.2b | Telas A receber, Vencidos e Pagos, com o painel da NF, a receita por cliente e o XLSX | Vencido pelo vencimento; sem legenda; `axe` |
-| 4.2c | Via comercial da NF em PDF (impressão do navegador) | Só quem lê preço abre; os valores batem com a fatura |
+| 4.2b | Telas A receber, Vencidos, Pagos e Faturas, com o painel da NF | Vencido pelo vencimento; sem legenda; `axe` |
+| 4.2c | Receita por cliente no mês (Pagos) e a exportação XLSX de cada lista | O estorno fica fora da receita; a planilha abre com reais e datas de verdade |
+| 4.2d | Via comercial da NF em PDF (impressão do navegador) | Só quem lê preço abre; os valores batem com a fatura |
 | 4.3 | Portal: OS do cliente e faturas da demanda | Cliente só vê as próprias OS e faturas |
 | 4.4 | Solicitação de OS pelo portal | O pedido do portal nunca cria OS sozinho |
 | 4.5 | Expedição do WMS com entrega pela Dutelog gera demanda e OS | Retirada pelo cliente não gera OS |
@@ -205,3 +208,16 @@ leituras em `use-faturas.ts` e a tela em `artifacts/app/src/pages/financeiro/fat
   - `faturas.test.ts`: vencida pelo vencimento, pagamento parcial, listas, totais, formulários e pedidos.
   - `faturas-view.test.tsx`: textos listados, sem legenda, uma ação principal (Registrar pagamento, só com saldo) e `axe`.
   - `inicio-view.test.tsx`: a ordem e o card A receber.
+
+### Parte 4.2c: receita por cliente e XLSX
+
+Feita em 23/10/2026.
+
+- **A receita por cliente** soma os pagamentos registrados no mês por cliente (`usePagamentosDoMes`, pelo dia do pagamento). O estorno fica fora.
+  - Mostra os maiores primeiro. Os demais viram "Outros N clientes" quando são dois ou mais.
+  - Mostra o total recebido no mês e quantos pagamentos.
+- **O XLSX** sai da lista na tela, com a busca: NF, série, cliente, emissão, vencimento, situação, valor, recebido, saldo, paga em, forma, enviada em e demandas.
+  - A planilha é gerada no navegador, sem dependência (`artifacts/app/src/lib/planilha-xlsx.ts`). É um zip sem compressão com uma aba e o cabeçalho em negrito e congelado.
+  - Os reais saem com duas casas e as datas como data de verdade (dd/mm/aaaa).
+  - Conferida no openpyxl, que leu as datas como datas e o formato de moeda.
+- **Testes.** `planilha-xlsx.test.ts` lê o zip pelo diretório central e confere o CRC com o zlib do Node, o escape e os formatos. `faturas.test.ts` cobre as linhas da planilha, o mês e a receita. `faturas-view.test.tsx` cobre o bloco da receita e o botão de exportar.

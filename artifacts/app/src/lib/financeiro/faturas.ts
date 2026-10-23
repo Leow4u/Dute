@@ -2,6 +2,7 @@ import { centavosDaLinha, dataValida, diasEntre, formatarReais } from "@workspac
 import { AlarmClock, Send } from "lucide-react";
 
 import { valorDaTela } from "../comercial/autorizacoes";
+import type { Celula } from "../planilha-xlsx";
 import { dataBr } from "../comercial/clientes";
 import type { ItemDoInicio } from "../inicio-do-modulo";
 import { FORMAS_DE_PAGAMENTO, FORMA_ROTULO, type FormaDePagamento } from "./a-faturar";
@@ -193,6 +194,7 @@ export function numerosDaCobranca(faturas: readonly FaturaDoFinanceiro[], hoje: 
 export type PagamentoDaNf = {
   id: string;
   faturaId: string;
+  customerCode: string;
   valorCents: number;
   recebidoEm: string;
   forma: FormaDePagamento;
@@ -208,6 +210,7 @@ export function pagamentoDaNf(id: string, dados: Registro): PagamentoDaNf | null
   return {
     id,
     faturaId,
+    customerCode: texto(dados.customer_code),
     valorCents: centavos(dados.valor_cents),
     recebidoEm: texto(dados.recebido_em),
     forma: (FORMAS_DE_PAGAMENTO as readonly string[]).includes(forma) ? (forma as FormaDePagamento) : "boleto",
@@ -224,6 +227,89 @@ export function pagamentosDaNf(pagamentos: readonly PagamentoDaNf[], faturaId: s
 /** "22/10/2026 · Pix". */
 export function textoDoPagamento(pagamento: PagamentoDaNf): string {
   return `${dataBr(pagamento.recebidoEm)} · ${FORMA_ROTULO[pagamento.forma]}`;
+}
+
+// --- A planilha e a receita -----------------------------------------------------------------
+
+export const CABECALHO_DA_PLANILHA = ["NF", "Série", "Cliente", "Emissão", "Vencimento", "Situação", "Valor", "Recebido", "Saldo", "Paga em", "Forma", "Enviada em", "Demandas"] as const;
+
+/** As linhas da planilha da lista, na ordem da tela; valores em reais e datas de verdade. */
+export function linhasDaPlanilha(faturas: readonly FaturaDoFinanceiro[], hoje: string): Celula[][] {
+  return faturas.map((fatura) => [
+    fatura.nf.numero,
+    fatura.nf.serie,
+    fatura.cliente,
+    { data: fatura.nf.emitidaEm },
+    { data: fatura.vencimento },
+    textoDaSituacao(fatura, hoje),
+    { reais: fatura.valorCents },
+    { reais: fatura.recebidoCents },
+    { reais: fatura.saldoCents },
+    fatura.pagaEm ? { data: fatura.pagaEm } : null,
+    FORMA_ROTULO[fatura.forma],
+    fatura.enviada ? { data: fatura.enviada.em } : null,
+    fatura.demandas.map((demanda) => demanda.numero).join(", "),
+  ]);
+}
+
+const ARQUIVO_DO_FILTRO: Record<FiltroDeFaturas, string> = { a_receber: "a-receber", vencidos: "vencidos", pagos: "pagos", todas: "faturas" };
+
+/** "financeiro-vencidos-2026-10-23.xlsx". */
+export function nomeDaPlanilha(filtro: FiltroDeFaturas, hoje: string): string {
+  return `financeiro-${ARQUIVO_DO_FILTRO[filtro]}-${hoje}.xlsx`;
+}
+
+/** O mês da tela ("2026-10") e o intervalo de dias dele, para a consulta dos pagamentos. */
+export function diasDoMes(mes: string): { de: string; ate: string } | null {
+  const partes = /^(\d{4})-(\d{2})$/.exec(mes);
+  if (!partes) return null;
+  const numero = Number(partes[2]);
+  if (numero < 1 || numero > 12) return null;
+  const ultimo = new Date(Date.UTC(Number(partes[1]), numero, 0)).getUTCDate();
+  return { de: `${mes}-01`, ate: `${mes}-${String(ultimo).padStart(2, "0")}` };
+}
+
+const NOME_DO_MES = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" });
+
+/** "outubro de 2026". */
+export function rotuloDoMes(mes: string): string {
+  const dias = diasDoMes(mes);
+  if (!dias) return mes;
+  return `${NOME_DO_MES.format(new Date(`${dias.de}T12:00:00Z`))} de ${mes.slice(0, 4)}`;
+}
+
+export type ReceitaPorCliente = {
+  linhas: Array<{ customerCode: string; cliente: string; cents: number }>;
+  /** Os clientes além dos primeiros, somados. */
+  outros: { clientes: number; cents: number } | null;
+  totalCents: number;
+  pagamentos: number;
+};
+
+/**
+ * O recebido no mês por cliente: os pagamentos registrados (não os
+ * estornados), do maior para o menor; depois dos primeiros, "Outros".
+ */
+export function receitaPorCliente(pagamentos: readonly PagamentoDaNf[], nomes: ReadonlyMap<string, string>, mostrar = 4): ReceitaPorCliente {
+  const validos = pagamentos.filter((pagamento) => !pagamento.estornado);
+  const porCliente = new Map<string, number>();
+  for (const pagamento of validos) porCliente.set(pagamento.customerCode, (porCliente.get(pagamento.customerCode) ?? 0) + pagamento.valorCents);
+  const ordenadas = [...porCliente.entries()]
+    .map(([customerCode, cents]) => ({ customerCode, cliente: nomes.get(customerCode) ?? customerCode, cents }))
+    .sort((a, b) => b.cents - a.cents || a.cliente.localeCompare(b.cliente, "pt-BR"));
+  const cabem = ordenadas.length > mostrar + 1 ? ordenadas.slice(0, mostrar) : ordenadas;
+  const resto = ordenadas.slice(cabem.length);
+  return {
+    linhas: cabem,
+    outros: resto.length ? { clientes: resto.length, cents: resto.reduce((soma, linha) => soma + linha.cents, 0) } : null,
+    totalCents: ordenadas.reduce((soma, linha) => soma + linha.cents, 0),
+    pagamentos: validos.length,
+  };
+}
+
+/** O nome de cada cliente, das NFs lidas. */
+export function nomesDosClientes(faturas: readonly FaturaDoFinanceiro[]): Map<string, string> {
+  return new Map(faturas.map((fatura) => [fatura.customerCode, fatura.cliente]));
 }
 
 // --- Os formulários ------------------------------------------------------------------------

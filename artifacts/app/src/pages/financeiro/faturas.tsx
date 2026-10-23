@@ -5,8 +5,14 @@ import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
 import { chamarFinanceiro, novaChave } from "@/lib/financeiro/api";
 import {
+  CABECALHO_DA_PLANILHA,
+  TITULO_DO_FILTRO,
+  faturasDoFiltro,
   formDoEnvio,
   formDoPagamento,
+  linhasDaPlanilha,
+  nomeDaPlanilha,
+  nomesDosClientes,
   pagamentosDaNf,
   pedidoDoCancelamento,
   pedidoDoEnvio,
@@ -15,13 +21,15 @@ import {
   problemasDoEnvio,
   problemasDoMotivo,
   problemasDoPagamento,
+  receitaPorCliente,
   rotuloDaNf,
   type FaturaDoFinanceiro,
   type FiltroDeFaturas,
 } from "@/lib/financeiro/faturas";
 import { ROTA_A_RECEBER, ROTA_FATURAS, ROTA_PAGOS, ROTA_VENCIDOS, hrefDaNf, nfDaBusca } from "@/lib/financeiro/navegacao";
-import { useFaturas, usePagamentosDaNf } from "@/lib/financeiro/use-faturas";
+import { useFaturas, usePagamentosDaNf, usePagamentosDoMes } from "@/lib/financeiro/use-faturas";
 import { hojeIso } from "@/lib/operacao/fila";
+import { baixarPlanilha, planilhaXlsx } from "@/lib/planilha-xlsx";
 
 import { FaturasView, type PainelDaNfAberta } from "./faturas-view";
 
@@ -68,6 +76,9 @@ function FaturasPage({ filtro }: { filtro: FiltroDeFaturas }) {
   const [chave, setChave] = useState(novaChave);
   const [resultado, setResultado] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  // A receita por cliente (parte 4.2c), só em Pagos: o mês de hoje até a pessoa trocar.
+  const [mes, setMes] = useState(() => hoje.slice(0, 7));
+  const doMes = usePagamentosDoMes(user?.publicMetadata.role, mes, filtro === "pagos");
 
   // NF nova aberta (ou o saldo dela mudou depois de um pagamento): o painel recomeça.
   useEffect(() => {
@@ -112,6 +123,11 @@ function FaturasPage({ filtro }: { filtro: FiltroDeFaturas }) {
       painel={painel}
       resultado={resultado}
       ocupado={ocupado}
+      receita={
+        filtro === "pagos"
+          ? { mes, dados: doMes.pagamentos && leitura.faturas ? receitaPorCliente(doMes.pagamentos, nomesDosClientes(faturas)) : null, erro: doMes.erro }
+          : null
+      }
       acoes={{
         buscar: setBusca,
         abrir: (id) => {
@@ -149,6 +165,13 @@ function FaturasPage({ filtro }: { filtro: FiltroDeFaturas }) {
           void gravar(pedidoDoCancelamento(aberta, pedido.motivo, chave), `Registro da ${rotuloDaNf(aberta)} cancelado: as demandas voltaram a A faturar`);
         },
         desistir: () => setPainel((atual) => ({ ...atual, erro: null, confirmando: null })),
+        exportar: () => {
+          const lista = faturasDoFiltro(faturas, filtro, hoje, busca);
+          baixarPlanilha(nomeDaPlanilha(filtro, hoje), planilhaXlsx(TITULO_DO_FILTRO[filtro], [...CABECALHO_DA_PLANILHA], linhasDaPlanilha(lista, hoje)));
+        },
+        mudarMes: (novo) => {
+          if (/^\d{4}-\d{2}$/.test(novo)) setMes(novo);
+        },
       }}
     />
   );

@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Router } from "wouter";
 
-import { faturaDoFinanceiro, formDoEnvio, formDoPagamento, pagamentoDaNf, type FaturaDoFinanceiro } from "@/lib/financeiro/faturas";
+import { faturaDoFinanceiro, formDoEnvio, formDoPagamento, pagamentoDaNf, receitaPorCliente, type FaturaDoFinanceiro } from "@/lib/financeiro/faturas";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
@@ -72,6 +72,8 @@ function props(extra: Partial<FaturasViewProps> = {}): FaturasViewProps {
       pedirCancelamento: noop,
       confirmarCancelamento: noop,
       desistir: noop,
+      exportar: noop,
+      mudarMes: noop,
     },
     ...extra,
   };
@@ -88,9 +90,11 @@ function render(extra: Partial<FaturasViewProps> = {}): string {
 const PRINCIPAL = /<button[^>]*class="[^"]*bg-primary text-primary-foreground[^"]*"[^>]*>[\s\S]*?<\/button>/g;
 
 function secao(html: string, rotulo: string): string {
-  const inicio = html.indexOf(`aria-label="${rotulo}"`);
-  expect(inicio, rotulo).toBeGreaterThan(-1);
-  return html.slice(inicio, html.indexOf("</section>", inicio));
+  const rotuloEm = html.indexOf(`aria-label="${rotulo}"`);
+  expect(rotuloEm, rotulo).toBeGreaterThan(-1);
+  // Do começo da tag da seção até o fim dela.
+  const inicio = html.lastIndexOf("<", rotuloEm);
+  return html.slice(inicio, html.indexOf("</section>", rotuloEm));
 }
 
 const FORMAS = ["Boleto", "Pix", "Transferência", "Cartão", "Dinheiro"];
@@ -100,6 +104,7 @@ describe("A receber, Vencidos, Pagos e Faturas", () => {
   it("A receber: a lista pelo vencimento e o painel da NF com pagamento parcial, sem legenda", () => {
     expect(textosDaTela(render())).toEqual([
       "A receber",
+      "Exportar XLSX",
       "NFs",
       "2",
       "R$ 10.345,00",
@@ -163,7 +168,7 @@ describe("A receber, Vencidos, Pagos e Faturas", () => {
       ...MEIOS,
       /^\d{2}\/\d{2}\/\d{4} · (Boleto|Pix|Transferência|Cartão|Dinheiro)$/,
       "Primeira parcela",
-      /^(Marcar como enviada|Estornar|Registrar pagamento|Cancelar registro)$/,
+      /^(Marcar como enviada|Estornar|Registrar pagamento|Cancelar registro|Exportar XLSX)$/,
     ];
     expect(textosForaDaLista(render(), permitidos)).toEqual([]);
   });
@@ -182,7 +187,7 @@ describe("A receber, Vencidos, Pagos e Faturas", () => {
   it("Vencidos: a NF vencida sem pagamento pode ser enviada, receber pagamento ou ter o registro cancelado", () => {
     const html = render({ filtro: "vencidos", aberta: FATURAS[2], pagamentos: [] });
     const textos = textosDaTela(html);
-    expect(textos.slice(0, 9)).toEqual(["Vencidos", "NFs", "1", "R$ 14.845,00", "NF 1190 · série 2", "Itaú Unibanco", "Emitida 10/09/2026 · vence 10/10/2026", "Para enviar", "Vencida há 13 dias"]);
+    expect(textos.slice(0, 10)).toEqual(["Vencidos", "Exportar XLSX", "NFs", "1", "R$ 14.845,00", "NF 1190 · série 2", "Itaú Unibanco", "Emitida 10/09/2026 · vence 10/10/2026", "Para enviar", "Vencida há 13 dias"]);
     expect(textos).toContain("Nenhum pagamento");
     expect(textos).toContain("Cancelar registro");
     expect((html.match(PRINCIPAL) ?? []).length).toBe(1);
@@ -218,12 +223,49 @@ describe("A receber, Vencidos, Pagos e Faturas", () => {
     expect(textosDaTela(render({ aberta: null, estado: "erro", faturas: [] }))).toEqual(["A receber", "NFs", "0", "Não foi possível carregar as NFs."]);
     expect(textosDaTela(render({ aberta: null, filtro: "vencidos", faturas: [PARCIAL] }))).toEqual(["Vencidos", "NFs", "0", "Nenhuma NF vencida"]);
     expect(textosDaTela(render({ aberta: null, busca: "nada assim" }))).toContain("Nenhuma NF encontrada");
-    expect(textosDaTela(render({ aberta: null, resultado: "Pagamento registrado na NF 1234" })).slice(0, 2)).toEqual(["A receber", "Pagamento registrado na NF 1234"]);
+    expect(textosDaTela(render({ aberta: null, resultado: "Pagamento registrado na NF 1234" })).slice(0, 3)).toEqual(["A receber", "Exportar XLSX", "Pagamento registrado na NF 1234"]);
+  });
+
+  it("Pagos sem NF aberta: a receita do mês por cliente, com os outros somados, o total e quantos pagamentos", () => {
+    const nomes = new Map([["ITAU", "Itaú Unibanco"], ["SAFRA", "Banco Safra"], ["BTG", "BTG Pactual"], ["XP", "XP"], ["C6", "C6 Bank"], ["INTER", "Banco Inter"]]);
+    const pagamento = (id: string, cliente: string, cents: number, extra: Record<string, unknown> = {}) =>
+      pagamentoDaNf(`pag_${id.padStart(24, "0")}`, { fatura_id: "fat_x", customer_code: cliente, valor_cents: cents, recebido_em: "2026-10-10", forma: "pix", ...extra })!;
+    const dados = receitaPorCliente(
+      [pagamento("1", "ITAU", 900_000), pagamento("2", "ITAU", 100_000), pagamento("3", "SAFRA", 500_000), pagamento("4", "BTG", 300_000), pagamento("5", "XP", 200_000), pagamento("6", "C6", 50_000), pagamento("7", "INTER", 40_000), pagamento("8", "SAFRA", 999_999, { status: "estornado" })],
+      nomes,
+    );
+    const html = render({ filtro: "pagos", aberta: null, receita: { mes: "2026-10", dados, erro: false } });
+    const textos = textosDaTela(secao(html, "Receita por cliente"));
+    expect(textos).toEqual([
+      "Receita por cliente",
+      "Mês",
+      "Itaú Unibanco",
+      "R$ 10.000,00",
+      "Banco Safra",
+      "R$ 5.000,00",
+      "BTG Pactual",
+      "R$ 3.000,00",
+      "XP",
+      "R$ 2.000,00",
+      "Outros 2 clientes",
+      "R$ 900,00",
+      "Recebido em outubro de 2026",
+      "R$ 20.900,00",
+      "Pagamentos",
+      "7",
+    ]);
+    expect(html).toMatch(/id="receita-mes"[^>]*type="month"|type="month"[^>]*id="receita-mes"/);
+    // Com a NF aberta, o painel dela ocupa o lugar da receita.
+    expect(render({ filtro: "pagos", aberta: FATURAS[3], pagamentos: [], receita: { mes: "2026-10", dados, erro: false } })).not.toContain('aria-label="Receita por cliente"');
+    expect(textosDaTela(secao(render({ filtro: "pagos", aberta: null, receita: { mes: "2026-09", dados: receitaPorCliente([], nomes), erro: false } }), "Receita por cliente"))).toContain("Nenhum pagamento em setembro de 2026");
+    expect(textosDaTela(secao(render({ filtro: "pagos", aberta: null, receita: { mes: "2026-10", dados: null, erro: false } }), "Receita por cliente"))).toContain("Carregando...");
+    expect(textosDaTela(secao(render({ filtro: "pagos", aberta: null, receita: { mes: "2026-10", dados: null, erro: true } }), "Receita por cliente"))).toContain("Não foi possível carregar os pagamentos.");
   });
 
   it("passa nas regras WCAG 2.1 A e AA do axe, com e sem NF aberta", async () => {
     expect(await violacoesDeAcessibilidade(render())).toEqual([]);
     expect(await violacoesDeAcessibilidade(render({ filtro: "vencidos", aberta: FATURAS[2], pagamentos: [] }))).toEqual([]);
     expect(await violacoesDeAcessibilidade(render({ aberta: null }))).toEqual([]);
+    expect(await violacoesDeAcessibilidade(render({ filtro: "pagos", aberta: null, receita: { mes: "2026-10", dados: receitaPorCliente([], new Map()), erro: false } }))).toEqual([]);
   });
 });

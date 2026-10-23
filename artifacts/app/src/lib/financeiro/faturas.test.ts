@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  CABECALHO_DA_PLANILHA,
   acoesDaNf,
+  diasDoMes,
+  linhasDaPlanilha,
+  nomeDaPlanilha,
+  receitaPorCliente,
+  rotuloDoMes,
   faturaDoFinanceiro,
   faturasDoFiltro,
   formDoEnvio,
@@ -171,5 +177,51 @@ describe("o painel da NF", () => {
       ["pag_b", "22/10/2026 · Pix", null],
     ]);
     expect(pagamentoDaNf("pag_x", {})).toBeNull();
+  });
+});
+
+describe("a planilha e a receita (parte 4.2c)", () => {
+  it("cada NF vira uma linha com reais e datas de verdade, na ordem do cabeçalho", () => {
+    const parcial = fatura("1234", { recebido_cents: 500_000, status: "enviada", enviada: { em: "2026-10-02", meio: "email" } });
+    const [linha] = linhasDaPlanilha([parcial], HOJE);
+    expect(linha).toHaveLength(CABECALHO_DA_PLANILHA.length);
+    expect(linha).toEqual([
+      "1234",
+      "1",
+      "Itaú Unibanco",
+      { data: "2026-10-01" },
+      { data: "2026-10-30" },
+      "Vence em 7 dias",
+      { reais: 1_484_500 },
+      { reais: 500_000 },
+      { reais: 984_500 },
+      null,
+      "Boleto",
+      { data: "2026-10-02" },
+      "10045, 10046",
+    ]);
+    expect(nomeDaPlanilha("vencidos", HOJE)).toBe("financeiro-vencidos-2026-10-23.xlsx");
+    expect(nomeDaPlanilha("todas", HOJE)).toBe("financeiro-faturas-2026-10-23.xlsx");
+  });
+
+  it("o mês vira o intervalo de dias e o rótulo", () => {
+    expect(diasDoMes("2026-02")).toEqual({ de: "2026-02-01", ate: "2026-02-28" });
+    expect(diasDoMes("2028-02")).toEqual({ de: "2028-02-01", ate: "2028-02-29" });
+    expect(diasDoMes("2026-13")).toBeNull();
+    expect(diasDoMes("outubro")).toBeNull();
+    expect(rotuloDoMes("2026-10")).toBe("outubro de 2026");
+  });
+
+  it("a receita soma os pagamentos registrados por cliente; o estorno fica fora; 'Outros' só junta dois ou mais", () => {
+    const pagamento = (id: string, cliente: string, cents: number, extra: Record<string, unknown> = {}) =>
+      pagamentoDaNf(id, { fatura_id: "fat_x", customer_code: cliente, valor_cents: cents, recebido_em: "2026-10-10", forma: "pix", ...extra })!;
+    const nomes = new Map([["ITAU", "Itaú Unibanco"]]);
+    const cinco = ["A", "B", "C", "D", "E"].map((cliente, indice) => pagamento(`p${indice}`, cliente, 100 * (indice + 1)));
+    expect(receitaPorCliente(cinco, nomes).linhas).toHaveLength(5);
+    expect(receitaPorCliente(cinco, nomes).outros).toBeNull();
+    const seis = [...cinco, pagamento("p9", "F", 1)];
+    expect(receitaPorCliente(seis, nomes).outros).toEqual({ clientes: 2, cents: 101 });
+    const comEstorno = receitaPorCliente([pagamento("a", "ITAU", 1000), pagamento("b", "ITAU", 500, { status: "estornado" })], nomes);
+    expect(comEstorno).toEqual({ linhas: [{ customerCode: "ITAU", cliente: "Itaú Unibanco", cents: 1000 }], outros: null, totalCents: 1000, pagamentos: 1 });
   });
 });
