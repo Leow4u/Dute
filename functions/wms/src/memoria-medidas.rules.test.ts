@@ -12,7 +12,8 @@ import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, updateDoc, 
  * 5.1): abrem à equipe interna que planeja e orça (owner, admin, interno e
  * comercial), a do cliente e a geral; o cliente, o campo, o painel e o resto
  * da equipe não leem, nem a do próprio cliente. O cursor da rotina não abre
- * pelo navegador. Ninguém grava pelo navegador.
+ * pelo navegador. As sugestões (parte 5.2a) abrem a quem pediu e a owner e
+ * admin. Ninguém grava pelo navegador.
  */
 
 const PROJECT_ID = "demo-dute-operations";
@@ -64,6 +65,8 @@ beforeEach(async () => {
     await setDoc(doc(database, "ai_measures", DO_ITAU), { id: DO_ITAU, tipo: "duracao_item", escopo: "cliente", customer_code: "ITAU", lpu_item_id: "lpu_a", homem_minuto_por_unidade: 20, execucoes: 2 });
     await setDoc(doc(database, "ai_measures", GERAL), { id: GERAL, tipo: "duracao_item", escopo: "geral", customer_code: null, lpu_item_id: "lpu_a", homem_minuto_por_unidade: 25, execucoes: 3 });
     await setDoc(doc(database, "ai_cursors", "medidas"), { evento_id: "evt_x" });
+    await setDoc(doc(database, "ai_suggestions", "sug_ops"), { id: "sug_ops", tipo: "duracao_os", customer_code: "ITAU", pedida_por: { uid: "ops-a", role: "interno" } });
+    await setDoc(doc(database, "ai_suggestions", "sug_outro"), { id: "sug_outro", tipo: "duracao_os", customer_code: "ITAU", pedida_por: { uid: "outro-interno", role: "interno" } });
   });
 });
 
@@ -100,6 +103,25 @@ describe("as medidas da memória", () => {
       await assertFails(deleteDoc(doc(database, "ai_measures", GERAL)));
       await assertFails(getDoc(doc(database, "ai_cursors", "medidas")));
       await assertFails(setDoc(doc(database, "ai_cursors", "medidas"), { evento_id: "evt_y" }));
+    }
+  });
+});
+
+describe("as sugestões da memória (parte 5.2a)", () => {
+  it("quem pediu lê as próprias; owner e admin leem todas; o resto, não", async () => {
+    await assertSucceeds(getDoc(doc(firestore("ops-a"), "ai_suggestions", "sug_ops")));
+    await assertFails(getDoc(doc(firestore("ops-a"), "ai_suggestions", "sug_outro")));
+    for (const uid of ["owner-a", "admin-a"]) {
+      await assertSucceeds(getDoc(doc(firestore(uid), "ai_suggestions", "sug_outro")));
+      await assertSucceeds(getDocs(query(collection(firestore(uid), "ai_suggestions"), where("customer_code", "==", "ITAU"))));
+    }
+    for (const uid of ["comercial-a", "support-a", "campo-a", "painel-a", "client-itau"]) await assertFails(getDoc(doc(firestore(uid), "ai_suggestions", "sug_ops")));
+  });
+
+  it("ninguém grava pelo navegador, nem quem pediu", async () => {
+    for (const uid of ["owner-a", "ops-a"]) {
+      await assertFails(setDoc(doc(firestore(uid), "ai_suggestions", "sug_novo"), { pedida_por: { uid } }));
+      await assertFails(updateDoc(doc(firestore(uid), "ai_suggestions", "sug_ops"), { decisao: "aceitou" }));
     }
   });
 });

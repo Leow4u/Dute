@@ -172,6 +172,13 @@ describe("listas do Financeiro iguais em todo lugar (Fase 4)", () => {
 
 describe("a liberação da memória igual em todo lugar (Fase 5)", () => {
   const liberacao = read("functions/core/src/domain/liberacao.ts");
+  const papeis = read("functions/core/src/domain/platform-roles.ts");
+  const operacao = read("functions/operacao/src/domain/platform-roles.ts");
+
+  it("papéis: lib/dominio e functions/core; quem recebe a sugestão é quem planeja a OS na Operação", () => {
+    expect(tsList(papeis, "PLATFORM_ROLES")).toEqual([...PAPEIS]);
+    expect(tsList(papeis, "PLANEJAMENTO_ROLES")).toEqual(tsList(operacao, "OPERACAO_CADASTRO_ROLES"));
+  });
 
   it("a lista da rotina e das callables do núcleo é a do app, só a homologação até o fim da fase", () => {
     expect(tsList(liberacao, "MEMORIA_AMBIENTES_LIBERADOS")).toEqual([...MEMORIA_AMBIENTES_LIBERADOS]);

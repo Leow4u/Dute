@@ -121,7 +121,11 @@ documentação de produto e operação está em `docs/`.
     `docs/plataforma/fase-4-financeiro.md`.
   - `functions/core`: Functions do núcleo (Fase 5), codebase `core`. Hoje a
     memória da Dute: a rotina `runMeasures` (a cada 15 minutos) recalcula
-    `ai_measures` a partir das OS revisadas. Liberação própria
+    `ai_measures` a partir das OS revisadas, e `suggestDuration` e
+    `answerSuggestion` dão a duração sugerida da OS e guardam a decisão em
+    `ai_suggestions`. Toda callable entra por `requireCoreCaller`, no
+    formato de uma linha do `src/index.ts` (trava em `src/callables.test.ts`).
+    Liberação própria
     `MEMORIA_AMBIENTES_LIBERADOS` (só o `dute-homolog`). O Agent Dute muda
     para cá na parte 5.5. Usa **npm**, como as outras codebases.
   - `lib/dominio`: tipos e regras que o app e as Functions precisam ter iguais.

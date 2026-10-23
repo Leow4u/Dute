@@ -819,6 +819,15 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // As sugestões da memória (parte 5.2a): o que foi sugerido, a decisão da
+    // pessoa e o valor real. Quem pediu lê as próprias; owner e admin leem
+    // todas, para o painel de acerto. Só as callables do núcleo gravam.
+    match /ai_suggestions/{sugestaoId} {
+      allow read: if hasAnyRole(['owner', 'admin'])
+        || (hasProfile() && resource.data.get('pedida_por', {}).get('uid', '') == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
     match /ai_agent_memory/{memoryId} {
       allow read: if hasAnyRole(['owner', 'admin', 'interno', 'suporte']);
       allow create, update, delete: if canCoordinateOperations();

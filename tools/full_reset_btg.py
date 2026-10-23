@@ -119,12 +119,14 @@ FINANCEIRO_COLLECTIONS = (
     "client_faturas",
     "financeiro_operations",
 )
-# A memória da Dute (docs/plataforma/fase-5-memoria.md, parte 5.1a): as
-# medidas e o cursor da rotina delas. Saem das OS revisadas, que a zeragem
-# preserva com a Operação: nunca apagadas, nem com --include-setup.
+# A memória da Dute (docs/plataforma/fase-5-memoria.md, partes 5.1a e 5.2a):
+# as medidas, o cursor da rotina delas e as sugestões com a decisão e o valor
+# real. Saem das OS revisadas, que a zeragem preserva com a Operação: nunca
+# apagadas, nem com --include-setup.
 MEMORIA_COLLECTIONS = (
     "ai_measures",
     "ai_cursors",
+    "ai_suggestions",
 )
 # Os eventos do Comercial moram em `events`, junto dos do WMS: a zeragem apaga
 # só os outros.
