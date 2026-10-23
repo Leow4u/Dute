@@ -596,3 +596,21 @@ Feita em 23/10/2026. A tela é `artifacts/app/src/pages/pedidos.tsx`. As peças 
   - `na-v3.test.tsx` cobre o shell e os portais.
   - `pedidos.test.ts` cobre a falta de legenda, o rótulo do motivo e a ação principal.
   - `order-queue.test.ts` cobre o vazio e a linha principal.
+
+### Parte 4.7d: o Estoque na v3
+
+Feita em 23/10/2026. A tela é `artifacts/app/src/pages/estoque.tsx`: os itens com a ficha e a aba Histórico (`movements.tsx`).
+
+- **Só a tela do Estoque.** A lista da v3 passou a conferir o caminho exato. O Mapa, as Posições e as Etiquetas, que ficam dentro do Estoque, entram cada um na sua vez.
+- **Na v3.**
+  - O código do item fica no texto, sem o vermelho, que na v3 é só da ação principal e do alerta.
+  - O painel da ficha perdeu a borda colorida: o item aberto fica marcado na lista.
+  - A lista e o vazio usam o raio da v3.
+  - O diálogo de movimentação e o painel da ficha no celular levam o `.v3` pelo portal (4.7c).
+- **Acessível.** A busca do Estoque e a do Histórico (`StockToolbar`) ganharam rótulo.
+- **Sem legenda.** O motivo da movimentação perdeu o exemplo, e o tipo começa em "—".
+- **Na v3.** `/estoque` entra em `TELAS_DO_WMS_NA_V3`.
+- **Testes.** `estoque.test.tsx` cobre:
+  - a lista (código, nome, endereço, saldos e selos), o código sem o vermelho e `axe`;
+  - a busca com rótulo e o motivo sem exemplo;
+  - só o Estoque na lista, sem o Mapa, as Posições e as Etiquetas.

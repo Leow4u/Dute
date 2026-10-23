@@ -7,16 +7,17 @@ import { TELAS_DO_WMS_NA_V3, telaDoWmsNaV3 } from "./wms-v3";
 /** As telas da Armazenagem na v3 (parte 4.7): a lista e o caminho que entra nela. */
 
 describe("telas do WMS na v3", () => {
-  it("a tela entra pelo caminho exato ou por uma tela dentro dele, sem a busca", () => {
+  it("a tela entra pelo caminho exato, sem a busca; a tela dentro de outra entra por si", () => {
     const telas = ["/dashboard", "/estoque"];
     expect(telaDoWmsNaV3("/dashboard", telas)).toBe(true);
-    expect(telaDoWmsNaV3("/estoque/SKU-1?aba=historico", telas)).toBe(true);
+    expect(telaDoWmsNaV3("/estoque?item=SKU-1#historico", telas)).toBe(true);
+    expect(telaDoWmsNaV3("/estoque/mapa", telas)).toBe(false);
     expect(telaDoWmsNaV3("/estoques", telas)).toBe(false);
     expect(telaDoWmsNaV3("/pedidos", telas)).toBe(false);
   });
 
   it("as telas na v3, na ordem da pergunta 18", () => {
-    expect(TELAS_DO_WMS_NA_V3).toEqual(["/dashboard", "/pedidos"]);
+    expect(TELAS_DO_WMS_NA_V3).toEqual(["/dashboard", "/pedidos", "/estoque"]);
   });
 
   it("o layout do WMS usa a lista", () => {

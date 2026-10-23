@@ -223,15 +223,17 @@ export default function Estoque() {
       ) : (
         <>
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <label className="relative flex-1">
+              <span className="sr-only">Buscar por código, nome ou endereço</span>
+              <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
+                type="search"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Buscar por código, nome ou endereço"
                 className="pl-9"
               />
-            </div>
+            </label>
             <FilterPanel
               summary={filter === "all" ? undefined : FILTERS.find((option) => option.value === filter)?.label}
             >
@@ -267,7 +269,7 @@ export default function Estoque() {
                 onSelect={toggleItem}
               />
               {desktop && panelItem ? (
-                <section className="relative overflow-hidden rounded-lg border border-primary/50 bg-card lg:sticky lg:top-0 lg:max-h-[calc(100dvh-160px)] lg:overflow-y-auto">
+                <section className="relative overflow-hidden rounded-lg border border-border bg-card lg:sticky lg:top-0 lg:max-h-[calc(100dvh-160px)] lg:overflow-y-auto">
                   <button
                     type="button"
                     onClick={() => setSelectedKey(null)}
@@ -366,7 +368,7 @@ function LocationTag({ id }: { id: string }) {
   );
 }
 
-function ItemList({
+export function ItemList({
   items,
   selectedKey,
   onSelect,
@@ -378,7 +380,7 @@ function ItemList({
   const [limit, setLimit] = useState(100);
   if (!items.length) {
     return (
-      <div className="rounded-2xl border border-border bg-card px-5 py-6 text-sm text-muted-foreground">
+      <div className="rounded-lg border border-border bg-card px-5 py-6 text-sm text-muted-foreground">
         Nenhum item encontrado.
       </div>
     );
@@ -386,7 +388,7 @@ function ItemList({
   const shown = items.slice(0, limit);
   return (
     <div className="flex flex-col gap-2">
-      <div className="overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="overflow-hidden rounded-lg border border-border bg-card">
         <div className="hidden grid-cols-[minmax(0,1fr)_200px_64px_84px] gap-3 border-b border-border/70 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50 md:grid">
           <span>Item</span>
           <span>Endereço</span>
@@ -407,7 +409,7 @@ function ItemList({
               <div className="col-span-2 flex min-w-0 items-center gap-3 md:col-span-1">
                 <Thumb item={item} />
                 <div className="min-w-0">
-                  <p className="font-mono text-sm font-semibold text-primary">
+                  <p className="font-mono text-sm font-bold text-foreground">
                     {item.clientCode ?? item.skuCode}
                   </p>
                   <p className="truncate text-sm font-medium text-foreground">
