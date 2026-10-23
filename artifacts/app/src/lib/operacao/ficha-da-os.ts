@@ -78,12 +78,26 @@ export type RevisaoLida = {
   linhas: Array<{ linha: string; item: string; diferenca: string; corrigido: string | null; decisao: string | null; motivo: string | null }>;
 };
 
+/**
+ * A vistoria enviada ao Comercial (parte 3.11a): por ambiente, os itens do
+ * catálogo e as fotos (os ids das fotos da OS); as medidas, o acesso e as
+ * observações. Sem valor.
+ */
+export type VistoriaLida = RegistroLido & {
+  ambientes: Array<{ nome: string; itens: Array<{ lpuItemId: string; item: string; unidade: string | null; quantidade: string }>; fotos: string[] }>;
+  medidas: Array<{ nome: string; valor: string }>;
+  acesso: { horarioDeCarga: string | null; vagaDeCarga: string | null };
+  observacoes: string | null;
+};
+
 export type FichaDaOs = {
   numero: string;
   demanda: string;
   customerCode: string;
   /** O nome do cliente copiado da demanda (parte 3.8a); a OS de antes não tem. */
   clienteNome: string | null;
+  /** Serviço ou vistoria (parte 3.11a); a OS de antes é de serviço. */
+  tipo: "servico" | "vistoria";
   status: StatusDaOs;
   edicao: number;
   servicos: string[];
@@ -99,6 +113,7 @@ export type FichaDaOs = {
   presencas: PresencaLida[];
   conclusao: ConclusaoLida | null;
   revisao: RevisaoLida | null;
+  vistoria: VistoriaLida | null;
   cancelamento: string | null;
 };
 
@@ -156,6 +171,7 @@ export function fichaDaLeitura(id: string, data: Record<string, unknown>): Ficha
     demanda: texto(data.demanda),
     customerCode: texto(data.customer_code),
     clienteNome: textoOuNull(data.cliente_nome),
+    tipo: data.tipo === "vistoria" ? "vistoria" : "servico",
     status: texto(data.status) as StatusDaOs,
     edicao: data.edicao,
     servicos: Array.isArray(data.servicos) ? data.servicos.filter((servico): servico is string => typeof servico === "string") : [],
@@ -241,7 +257,29 @@ export function fichaDaLeitura(id: string, data: Record<string, unknown>): Ficha
     }),
     conclusao: conclusaoLida(data.conclusao),
     revisao: revisaoLida(data.revisao),
+    vistoria: vistoriaLida(data.vistoria),
     cancelamento: cancelamento || null,
+  };
+}
+
+function vistoriaLida(valor: unknown): VistoriaLida | null {
+  if (!valor || typeof valor !== "object") return null;
+  const bruto = valor as Record<string, unknown>;
+  const lido = registro(bruto);
+  if (!lido) return null;
+  const acesso = bruto.acesso && typeof bruto.acesso === "object" ? (bruto.acesso as Record<string, unknown>) : {};
+  return {
+    ...lido,
+    ambientes: objetos(bruto.ambientes).map((ambiente) => ({
+      nome: texto(ambiente.nome),
+      itens: objetos(ambiente.itens).flatMap((item) =>
+        texto(item.lpu_item_id) ? [{ lpuItemId: texto(item.lpu_item_id), item: texto(item.item), unidade: textoOuNull(item.unidade), quantidade: texto(item.quantidade) }] : [],
+      ),
+      fotos: Array.isArray(ambiente.fotos) ? ambiente.fotos.filter((foto): foto is string => typeof foto === "string") : [],
+    })),
+    medidas: objetos(bruto.medidas).flatMap((medida) => (texto(medida.nome) ? [{ nome: texto(medida.nome), valor: texto(medida.valor) }] : [])),
+    acesso: { horarioDeCarga: textoOuNull(acesso.horario_de_carga), vagaDeCarga: textoOuNull(acesso.vaga_de_carga) },
+    observacoes: textoOuNull(bruto.observacoes),
   };
 }
 

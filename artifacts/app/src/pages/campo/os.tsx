@@ -13,11 +13,13 @@ import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
 import { useUrlsDasFotos } from "@/lib/operacao/use-urls-das-fotos";
 
 import { CampoOsView, type EstadoDaOsNoCampo, type ExtraDaFoto } from "./os-view";
+import { VistoriaNoCampo } from "./vistoria";
 
 /**
  * Campo › OS em execução (parte 3.8b): a OS da URL (?numero=), o catálogo sem
  * preço (para incluir o item além do planejado) e a fila do campo. Cada
- * toque vira um registro na fila, com o instante do toque.
+ * toque vira um registro na fila, com o instante do toque. A OS de vistoria
+ * (parte 3.11b) abre a tela da vistoria.
  */
 export default function PaginaCampoOs() {
   const numero = osDoCampoDaBusca(useSearch()) ?? "";
@@ -38,6 +40,10 @@ export default function PaginaCampoOs() {
     for (const foto of escolha.fotos) {
       fila.enviar(registroDeFoto(ficha, { arquivo: foto.arquivo, nome: foto.nome, contentType: foto.arquivo.type, instante: foto.instante }, extra));
     }
+  }
+
+  if (estado === "pronto" && ficha?.tipo === "vistoria") {
+    return <VistoriaNoCampo key={ficha.numero} ficha={ficha} uid={user?.uid ?? null} pendentes={fila.pendentes} urls={urls} catalogo={catalogo.itens ?? []} enviar={fila.enviar} />;
   }
 
   return (

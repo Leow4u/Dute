@@ -89,6 +89,8 @@ export function conclusaoGuardada(ficha: Pick<FichaDaOs, "numero">, pendentes: r
 
 /** Por que quem está no celular não conclui, ou null: só a OS em execução, e só o líder quando a OS tem um. */
 export function problemaParaConcluir(ficha: FichaDaOs, pendentes: readonly RegistroNaFila[], uid: string | null | undefined): string | null {
+  // A vistoria (parte 3.11b) não se conclui com aceite: vai ao Comercial pela tela da OS.
+  if (ficha.tipo === "vistoria") return "A vistoria vai ao Comercial pela tela da OS.";
   if (conclusaoGuardada(ficha, pendentes)) return "A conclusão já está guardada.";
   if (ficha.status === "em_revisao" || ficha.status === "revisada") return "OS concluída";
   if (ficha.status === "cancelada") return "OS cancelada";

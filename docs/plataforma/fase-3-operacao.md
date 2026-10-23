@@ -1059,3 +1059,31 @@ escopo fechado. Regras em `domain/vistoria.ts`.
   `operacao` (parte 3.10a) não a conta entre as OS revisadas nem em aberto.
 - **Trava.** O teste que impede o Comercial de escrever `operacao` na
   demanda passa a impedir `vistoria` também.
+
+### Parte 3.11b: vistoria no celular
+
+Feita em 23/10/2026, no app do campo (`/campo/os` abre a tela da vistoria
+quando a OS é de vistoria; `docs/mockups/Campo2Vistoria.dc.html`). Regras
+em `lib/campo/vistoria.ts`.
+
+- **Quem faz.** O líder, ou qualquer um da equipe quando ela não tem líder:
+  é quem o servidor deixa enviar pelo celular. Os outros veem com quem está
+  a vistoria.
+- **Chegada.** "Registrar chegada" vai pela fila; o envio pede a chegada,
+  gravada ou guardada.
+- **Ambientes.** O líder cria o ambiente pelo nome (único, sem olhar acento
+  nem caixa), e o novo passa a ser o atual. No atual, as fotos (pela fila,
+  com o nome do ambiente na legenda), os itens levantados do catálogo sem
+  preço, com + e −, e "Concluir ambiente", que leva ao próximo a fazer.
+- **Medidas, acesso e observações.** Elevador de serviço, carga do elevador
+  e porta já vêm na lista; "Nova medida" pede o nome e o valor. A medida sem
+  valor não vai.
+- **Rascunho no aparelho.** O que se levanta fica guardado no navegador por
+  OS e volta ao recarregar; sai quando a OS chega a Revisada. Armazenamento
+  bloqueado não quebra a tela.
+- **Enviar.** "Enviar vistoria ao comercial" mostra o que falta (chegada, um
+  ambiente, uma foto, um item, o nome de cada medida) e vai pela fila,
+  depois das fotos. Guardada, a vistoria fica só para ler.
+- **Enviada.** A OS mostra a vistoria como foi ao Comercial
+  (`components/operacao/vistoria-lida.tsx`, que o escritório também usa).
+- A tela de conclusão recusa a OS de vistoria.
