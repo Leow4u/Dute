@@ -17,7 +17,7 @@ import {
   type FaturaLida,
   type StatusDaFatura,
 } from "./cobranca.js";
-import { BILLING_PERIODS_COLLECTION, periodoLido, problemaDoPeriodoNaFatura } from "./armazenagem.js";
+import { BILLING_PERIODS_COLLECTION, CLIENT_INVOICES_COLLECTION, idsDoPortal, periodoLido, problemaDoPeriodoNaFatura } from "./armazenagem.js";
 import { createFinanceiroEvent } from "./events.js";
 import { AUTHORIZATIONS_COLLECTION, DEMANDS_COLLECTION, FATURAS_COLLECTION } from "./fatura.js";
 import { runIdempotent, type FinanceiroActor } from "./operations.js";
@@ -30,9 +30,10 @@ import type { FinanceiroProfile } from "./profile.js";
  * idempotência e o evento sem valor:
  *
  * - send: a NF enviada ao cliente (o dia e o meio).
- * - pay: um pagamento; quitada, a fatura fica paga e as demandas também.
+ * - pay: um pagamento; quitada, a fatura fica paga e as demandas também, e a
+ *   armazenagem dela fica paga no WMS (parte 7.2c).
  * - reverse_payment: estorna um pagamento; a paga volta a enviada (ou
- *   emitida) e as demandas, a faturada.
+ *   emitida), as demandas, a faturada, e a armazenagem, a emitida no WMS.
  * - cancel: cancela o registro sem pagamento; as demandas voltam a A
  *   faturar, a armazenagem volta à fila (parte 7.2a) e as autorizações
  *   perdem a NF.
@@ -71,17 +72,49 @@ async function demandasDaFatura({ db, transaction, fatura }: Contexto, etapa: "f
   return refs;
 }
 
-/** Lê a armazenagem da fatura e confere que cada competência está nesta NF antes de qualquer escrita. */
-async function periodosDaFatura({ db, transaction, fatura }: Contexto) {
+type PeriodoDaFatura = { ref: DocumentReference; competencia: string; portal: DocumentReference };
+
+/**
+ * Lê a armazenagem da fatura e confere que cada competência está nesta NF, no
+ * status do WMS que a ação pede, antes de qualquer escrita. Acha também o
+ * documento do portal (`client_invoices`) como o WMS acha: o id novo e, na
+ * BTG, o antigo; sem nenhum, o novo.
+ */
+async function periodosDaFatura({ db, transaction, fatura }: Contexto, status: "emitido" | "pago"): Promise<PeriodoDaFatura[]> {
   const refs = fatura.periodo_ids.map((id) => db.collection(BILLING_PERIODS_COLLECTION).doc(id));
   if (!refs.length) return [];
   const snaps = await transaction.getAll(...refs);
-  return snaps.map((snap, indice) => {
+  const lidos = snaps.map((snap, indice) => {
     const dados = snap.exists ? (snap.data() ?? {}) : null;
-    const problema = problemaDoPeriodoNaFatura(fatura.periodo_ids[indice], dados, fatura.id);
+    const problema = problemaDoPeriodoNaFatura(fatura.periodo_ids[indice], dados, fatura.id, status);
     if (problema) throw new HttpsError("failed-precondition", problema);
-    return { ref: refs[indice], competencia: periodoLido(snap.id, dados ?? {}).competencia };
+    const periodo = periodoLido(snap.id, dados ?? {});
+    return { ref: refs[indice], competencia: periodo.competencia, candidatos: idsDoPortal(periodo.customer_code, periodo.competencia).map((id) => db.collection(CLIENT_INVOICES_COLLECTION).doc(id)) };
   });
+  const portais = await transaction.getAll(...lidos.flatMap((lido) => lido.candidatos));
+  const existe = new Set(portais.filter((snap) => snap.exists).map((snap) => snap.ref.path));
+  return lidos.map(({ ref, competencia, candidatos }) => ({ ref, competencia, portal: candidatos.find((candidato) => existe.has(candidato.path)) ?? candidatos[0] }));
+}
+
+/** A competência paga (ou de volta a emitida) no WMS e no portal, como o payBillingInvoice do WMS grava. */
+function marcarArmazenagem({ transaction, caller, fatura, iso }: Contexto, periodos: readonly PeriodoDaFatura[], paga: { recebidoEm: string } | null) {
+  for (const periodo of periodos) {
+    transaction.update(periodo.ref, paga
+      ? { status: "pago", pago_em: iso, paid_by: caller.uid, "faturamento.paga_em": paga.recebidoEm, updated_at: FieldValue.serverTimestamp() }
+      : { status: "emitido", pago_em: FieldValue.delete(), paid_by: FieldValue.delete(), "faturamento.paga_em": FieldValue.delete(), updated_at: FieldValue.serverTimestamp() });
+    transaction.set(
+      periodo.portal,
+      {
+        customer_code: fatura.customer_code,
+        status: paga ? "pago" : "emitido",
+        payment_status: paga ? "paid" : "issued",
+        pago_em: paga ? iso : FieldValue.delete(),
+        published_at: FieldValue.serverTimestamp(),
+        updated_at: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+  }
 }
 
 function moverDemandas({ transaction, caller, iso }: Contexto, refs: DocumentReference[], etapa: string, extra: Record<string, unknown>) {
@@ -142,6 +175,7 @@ export async function advanceFaturaFor(
         const valorCents = centavosDoTexto(pedido.valor);
         const resultado = aplicarPagamento(fatura, valorCents, pedido.recebido_em, hoje);
         const demandas = resultado.quitada ? await demandasDaFatura(contexto, "faturada") : [];
+        const periodos = resultado.quitada ? await periodosDaFatura(contexto, "emitido") : [];
         const pagamentoId = pagamentoIdDaOperacao(fatura.id, operationId);
         transaction.create(db.collection(PAGAMENTOS_COLLECTION).doc(pagamentoId), {
           id: pagamentoId,
@@ -166,10 +200,18 @@ export async function advanceFaturaFor(
         });
         projetar({ status: resultado.status, recebido_cents: resultado.recebido_cents, ...(resultado.quitada ? { paga_em: pedido.recebido_em } : {}) });
         if (resultado.quitada) moverDemandas(contexto, demandas, "paga", { "faturamento.paga_em": pedido.recebido_em });
+        marcarArmazenagem(contexto, periodos, { recebidoEm: pedido.recebido_em });
         createFinanceiroEvent(transaction, db, {
           ...evento,
           type: "cobranca.payment_registered",
-          payload: { id: fatura.id, pagamento_id: pagamentoId, recebido_em: pedido.recebido_em, forma: pedido.forma, quitada: resultado.quitada },
+          payload: {
+            id: fatura.id,
+            pagamento_id: pagamentoId,
+            recebido_em: pedido.recebido_em,
+            forma: pedido.forma,
+            quitada: resultado.quitada,
+            competencias: periodos.map((periodo) => periodo.competencia),
+          },
         });
         return { target_id: pagamentoId, result: { id: fatura.id, acao: pedido.acao, status: resultado.status, recebido_cents: resultado.recebido_cents, saldo_cents: resultado.saldo_cents, pagamento_id: pagamentoId } };
       }
@@ -179,6 +221,7 @@ export async function advanceFaturaFor(
         const pagamentoSnap = await transaction.get(pagamentoRef);
         const resultado = aplicarEstorno(fatura, pagamentoSnap.exists ? pagamentoLido(pagamentoSnap.id, pagamentoSnap.data() ?? {}) : null);
         const demandas = resultado.reaberta ? await demandasDaFatura(contexto, "paga") : [];
+        const periodos = resultado.reaberta ? await periodosDaFatura(contexto, "pago") : [];
         transaction.update(pagamentoRef, { status: "estornado", estornado: { em: iso, por_uid: caller.uid, motivo: pedido.motivo }, updated_at: FieldValue.serverTimestamp() });
         transaction.update(faturaRef, {
           status: resultado.status,
@@ -188,14 +231,19 @@ export async function advanceFaturaFor(
         });
         projetar({ status: resultado.status, recebido_cents: resultado.recebido_cents, ...(resultado.reaberta ? { paga_em: null } : {}) });
         if (resultado.reaberta) moverDemandas(contexto, demandas, "faturada", { "faturamento.paga_em": FieldValue.delete() });
-        createFinanceiroEvent(transaction, db, { ...evento, type: "cobranca.payment_reversed", payload: { id: fatura.id, pagamento_id: pedido.pagamento_id, reaberta: resultado.reaberta } });
+        marcarArmazenagem(contexto, periodos, null);
+        createFinanceiroEvent(transaction, db, {
+          ...evento,
+          type: "cobranca.payment_reversed",
+          payload: { id: fatura.id, pagamento_id: pedido.pagamento_id, reaberta: resultado.reaberta, competencias: periodos.map((periodo) => periodo.competencia) },
+        });
         return { target_id: pedido.pagamento_id, result: { id: fatura.id, acao: pedido.acao, status: resultado.status, recebido_cents: resultado.recebido_cents, saldo_cents: resultado.saldo_cents, pagamento_id: pedido.pagamento_id } };
       }
 
       // cancel
       conferirCancelamento(fatura);
       const demandas = await demandasDaFatura(contexto, "faturada");
-      const periodos = await periodosDaFatura(contexto);
+      const periodos = await periodosDaFatura(contexto, "emitido");
       transaction.update(faturaRef, { status: "cancelada", cancelada: { em: iso, por_uid: caller.uid, motivo: pedido.motivo }, ...atualizado });
       moverDemandas(contexto, demandas, "a_faturar", { faturamento: FieldValue.delete() });
       for (const periodo of periodos) {

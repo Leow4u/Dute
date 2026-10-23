@@ -179,6 +179,10 @@ describe("listas do Financeiro iguais em todo lugar (Fase 4)", () => {
     expect(tsList(liberacao, "FINANCEIRO_AMBIENTES_LIBERADOS")).toEqual([...FINANCEIRO_AMBIENTES_LIBERADOS]);
     expect([...FINANCEIRO_AMBIENTES_LIBERADOS]).toEqual(["dute-homolog"]);
   });
+
+  it("onde o Financeiro está ligado, o WMS não marca o pagamento da armazenagem (parte 7.2c)", () => {
+    expect(tsList(read("functions/wms/src/domain/billing-scope.ts"), "FINANCEIRO_PROJECTS")).toEqual([...FINANCEIRO_AMBIENTES_LIBERADOS]);
+  });
 });
 
 describe("a liberação da memória igual em todo lugar (Fase 5)", () => {

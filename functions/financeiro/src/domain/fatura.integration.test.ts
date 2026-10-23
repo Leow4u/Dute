@@ -5,7 +5,7 @@ import { deleteApp, initializeApp } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 
-import { BILLING_PERIODS_COLLECTION } from "./armazenagem.js";
+import { BILLING_PERIODS_COLLECTION, CLIENT_INVOICES_COLLECTION } from "./armazenagem.js";
 import { advanceFaturaFor } from "./cobranca-gravacao.js";
 import { EVENTS_COLLECTION, FINANCEIRO_EVENT_SOURCE } from "./events.js";
 import { registerNfFor } from "./fatura-gravacao.js";
@@ -108,6 +108,9 @@ beforeEach(async () => {
   set(`${BILLING_PERIODS_COLLECTION}/ITAU__2026-10`, periodo("ITAU", "2026-10", "aberto", 0));
   set(`${BILLING_PERIODS_COLLECTION}/SAFRA__2026-09`, periodo("SAFRA", "2026-09", "emitido", 3_000));
   set(`${BILLING_PERIODS_COLLECTION}/2026-07`, periodo(null, "2026-07", "emitido", 1_234));
+  // O portal do WMS: o id novo e, na BTG antiga, o id do mês.
+  set(`${CLIENT_INVOICES_COLLECTION}/ITAU__2026-09`, { customer_code: "ITAU", competencia: "2026-09", status: "emitido", payment_status: "issued", total_cents: 7_508 });
+  set(`${CLIENT_INVOICES_COLLECTION}/2026-07`, { competencia: "2026-07", status: "emitido", payment_status: "issued", total_cents: 1_234 });
   await batch.commit();
 });
 
@@ -277,5 +280,52 @@ describe("a armazenagem na NF (parte 7.2a)", () => {
       "A armazenagem de 09/2026 não está nesta NF.",
     );
     assert.equal((await db.collection(FATURAS_COLLECTION).doc(registro.id).get()).get("status"), "emitida");
+  });
+
+  it("o pagamento que quita marca a competência paga no WMS e no portal; o estorno a devolve a emitida (parte 7.2c)", async () => {
+    const registro = await registerNfFor(db, financeiro, pedido({ demandas: ["10045"], armazenagem: ["ITAU__2026-09"], nf: { numero: "900", emitida_em: "2026-10-20" } }), AGORA);
+    const pagar = (chave: string, valor: string) =>
+      advanceFaturaFor(db, financeiro, { acao: "pay", idempotency_key: chave, fatura_id: registro.id, valor, recebido_em: "2026-10-22", forma: "pix" }, AGORA);
+    const portal = async () => (await db.collection(CLIENT_INVOICES_COLLECTION).doc("ITAU__2026-09").get()).data() ?? {};
+    const pagamentos = async () => (await db.collection(EVENTS_COLLECTION).where("type", "==", "cobranca.payment_registered").get()).docs.map((doc) => doc.data().payload);
+
+    await pagar("p-1", "100");
+    assert.equal((await periodoAgora("ITAU__2026-09")).status, "emitido");
+    const quitou = await pagar("p-2", "12320.08");
+    assert.equal(quitou.status, "paga");
+
+    const paga = await periodoAgora("ITAU__2026-09");
+    assert.deepEqual([paga.status, paga.pago_em, paga.paid_by, paga.faturamento.paga_em, paga.faturamento.fatura_id], ["pago", "2026-10-23T15:00:00.000Z", "fin-1", "2026-10-22", registro.id]);
+    assert.deepEqual([(await portal()).status, (await portal()).payment_status, (await portal()).pago_em, (await portal()).total_cents], ["pago", "paid", "2026-10-23T15:00:00.000Z", 7_508]);
+    assert.deepEqual((await pagamentos()).map((payload) => [payload.quitada, payload.competencias]).sort(), [[false, []], [true, ["2026-09"]]]);
+
+    await advanceFaturaFor(db, financeiro, { acao: "reverse_payment", idempotency_key: "e-1", fatura_id: registro.id, pagamento_id: quitou.pagamento_id, motivo: "Pix devolvido" }, AGORA);
+    const reaberta = await periodoAgora("ITAU__2026-09");
+    assert.deepEqual([reaberta.status, reaberta.pago_em, reaberta.paid_by, reaberta.faturamento.paga_em, reaberta.faturamento.fatura_id], ["emitido", undefined, undefined, undefined, registro.id]);
+    assert.deepEqual([(await portal()).status, (await portal()).payment_status, (await portal()).pago_em], ["emitido", "issued", undefined]);
+    const estorno = (await db.collection(EVENTS_COLLECTION).where("type", "==", "cobranca.payment_reversed").get()).docs[0]?.data().payload;
+    assert.deepEqual([estorno?.reaberta, estorno?.competencias], [true, ["2026-09"]]);
+  });
+
+  it("na BTG antiga, o portal pago é o do id do mês, sem criar o novo", async () => {
+    const registro = await registerNfFor(db, financeiro, pedido({ demandas: [], armazenagem: ["2026-07"], nf: { numero: "901", emitida_em: "2026-10-20" } }), AGORA);
+    await advanceFaturaFor(db, financeiro, { acao: "pay", idempotency_key: "p-3", fatura_id: registro.id, valor: "12.34", recebido_em: "2026-10-22", forma: "boleto" }, AGORA);
+    assert.equal((await periodoAgora("2026-07")).status, "pago");
+    const antigo = (await db.collection(CLIENT_INVOICES_COLLECTION).doc("2026-07").get()).data() ?? {};
+    assert.deepEqual([antigo.status, antigo.payment_status, antigo.customer_code], ["pago", "paid", "BTG Pactual"]);
+    assert.equal((await db.collection(CLIENT_INVOICES_COLLECTION).doc("BTG_Pactual__2026-07").get()).exists, false);
+  });
+
+  it("a competência que saiu de emitida no WMS não deixa quitar, e nada se grava", async () => {
+    const registro = await registerNfFor(db, financeiro, pedido({ demandas: [], armazenagem: ["ITAU__2026-09"], nf: { numero: "902", emitida_em: "2026-10-20" } }), AGORA);
+    await db.collection(BILLING_PERIODS_COLLECTION).doc("ITAU__2026-09").update({ status: "pago" });
+    await recusa(
+      advanceFaturaFor(db, financeiro, { acao: "pay", idempotency_key: "p-4", fatura_id: registro.id, valor: "75.08", recebido_em: "2026-10-22", forma: "pix" }, AGORA),
+      "failed-precondition",
+      "A armazenagem de 09/2026 não está emitida no WMS.",
+    );
+    const fatura = (await db.collection(FATURAS_COLLECTION).doc(registro.id).get()).data() ?? {};
+    assert.deepEqual([fatura.status, fatura.recebido_cents], ["emitida", undefined]);
+    assert.equal((await db.collection("pagamentos").get()).size, 0);
   });
 });

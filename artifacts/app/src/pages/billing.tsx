@@ -26,6 +26,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useAppUser } from "@/lib/auth";
+import { acaoDaArmazenagem } from "@/lib/financeiro/armazenagem";
 import { humanApiError } from "@/lib/permissions";
 import {
   STATUS_META,
@@ -64,6 +66,8 @@ type Period = {
   grupos: Array<{ grupo: string; total: number; itens: Line[] }>;
   emitido_em?: string | null;
   pago_em?: string | null;
+  /** A NF do Financeiro em que a competência está (parte 7.2a). */
+  fatura_id?: string | null;
   emission?: { can_emit: boolean; available_from: string };
 };
 
@@ -104,6 +108,7 @@ export default function Billing() {
   );
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAppUser();
 
   const { data: raw, isLoading, error } = useGetBillingPeriod(competencia);
   const data = raw as unknown as Period | undefined;
@@ -225,6 +230,8 @@ export default function Billing() {
     );
 
   const status = data?.status ?? "aberto";
+  // Onde o Financeiro está ligado, a emitida se fatura e se recebe lá (parte 7.2c).
+  const acao = acaoDaArmazenagem(status, data?.fatura_id, user?.publicMetadata.role);
   const statusMeta = STATUS_META[status] ?? STATUS_META.aberto;
   const canEmit = aberto && data?.emission?.can_emit === true && !dirty;
   const monthName = competenciaLabel(competencia).split(" de ")[0];
@@ -494,10 +501,18 @@ export default function Billing() {
                     </AlertDialogContent>
                   </AlertDialog>
                 ) : null}
-                {status === "emitido" ? (
+                {acao?.tipo === "pagar_no_wms" ? (
                   <Button variant="outline" onClick={handlePay} disabled={pay.isPending}>
                     <CheckCircle2 className="mr-2 h-4 w-4" />
                     Marcar como paga
+                  </Button>
+                ) : null}
+                {acao?.tipo === "abrir_no_financeiro" ? (
+                  <Button asChild variant="outline">
+                    <Link href={acao.href}>
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                      {acao.rotulo}
+                    </Link>
                   </Button>
                 ) : null}
               </div>

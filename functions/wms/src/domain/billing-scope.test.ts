@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  billingPaidInFinanceiro,
   billingCustomerCode,
   billingDocumentId,
   legacyBillingDocumentId,
@@ -47,6 +48,13 @@ describe("fatura por cliente", () => {
     assert.throws(
       () => billingCustomerCode({ role: "cliente" }),
       /Cliente sem código/,
+    );
+  });
+
+  it("onde o Financeiro está ligado, o WMS não marca pagamento (parte 7.2c)", () => {
+    assert.deepEqual(
+      ["dute-homolog", "dute-prod", "dute-btg", "demo-dute-operations", undefined].map(billingPaidInFinanceiro),
+      [true, false, false, false, false],
     );
   });
 });

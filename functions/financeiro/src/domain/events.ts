@@ -58,13 +58,22 @@ const nfCancelada = z
   .object({ id: faturaId, demandas: z.array(demanda).max(50), competencias: z.array(competencia).max(12).default([]) })
   .strict();
 
-/** Um pagamento da fatura (parcial ou o que quita), sem o valor. */
+/** Um pagamento da fatura (parcial ou o que quita), sem o valor; `competencias`, a armazenagem que ficou paga no WMS (parte 7.2c). */
 const pagamentoRegistrado = z
-  .object({ id: faturaId, pagamento_id: pagamentoId, recebido_em: data, forma: z.enum(["boleto", "pix", "transferencia", "cartao", "dinheiro"]), quitada: z.boolean() })
+  .object({
+    id: faturaId,
+    pagamento_id: pagamentoId,
+    recebido_em: data,
+    forma: z.enum(["boleto", "pix", "transferencia", "cartao", "dinheiro"]),
+    quitada: z.boolean(),
+    competencias: z.array(competencia).max(12).default([]),
+  })
   .strict();
 
-/** O estorno de um pagamento lançado errado; `reaberta` quando a fatura estava paga. Sem o motivo. */
-const pagamentoEstornado = z.object({ id: faturaId, pagamento_id: pagamentoId, reaberta: z.boolean() }).strict();
+/** O estorno de um pagamento lançado errado; `reaberta` quando a fatura estava paga, e `competencias`, a armazenagem que voltou a emitida. Sem o motivo. */
+const pagamentoEstornado = z
+  .object({ id: faturaId, pagamento_id: pagamentoId, reaberta: z.boolean(), competencias: z.array(competencia).max(12).default([]) })
+  .strict();
 
 export const FINANCEIRO_EVENT_PAYLOADS = {
   "nf.registered": nfRegistrada,
