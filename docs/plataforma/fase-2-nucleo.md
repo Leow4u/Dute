@@ -348,3 +348,30 @@ segunda regra de contagem.
 - Testes: `lib/operacao/pendencias.test.ts` (cada fonte, ordem por tom, o dia
   e a equipe, nenhum valor), `pages/operacao/inicio-view.test.tsx` (textos na
   ordem, lista contra legenda, ações, estados e axe), navegação atualizada.
+
+### Parte 2.4: entrada e menus com contadores
+
+- Os contadores saem da mesma lista do "Precisa de você" de cada Início, sem
+  segunda regra de contagem (`lib/resumo-do-modulo.ts`):
+  - na entrada, cada card mostra quantas linhas o Início do módulo tem e a
+    primeira delas; a frase soma tudo ("6 coisas precisam de você hoje.")
+    e só aparece quando todos os módulos responderam. O número fica
+    vermelho só quando há item crítico; sem nada parado, sem número;
+    carregando ou com falha, o card fica só com o nome (não inventa zero);
+  - no menu do Comercial e da Operação, o Início conta todas as linhas e
+    cada tela conta as linhas cuja ação leva a ela (Orçamentos, Autorizações,
+    Medições; Hoje, Colaboradores).
+- As leituras são as mesmas dos Inícios: `useInicioDoWms` (extraído de
+  `pages/home.tsx`), `useInicioDoComercial` e `useInicioDaOperacao`, com um
+  parâmetro `ligado` para a entrada só consultar os módulos dos cards. O
+  Comercial ganhou um minuto de validade nas consultas, para o menu e o
+  Início não repetirem a leitura; na Operação, o SDK do Firestore junta as
+  assinaturas iguais.
+- O Financeiro não tem Início ainda (Fase 7): o card dele fica só com o nome.
+- Testes: `resumo-do-modulo.test.ts` (o contador bate com a lista do Início
+  do Comercial e da Operação), `entrada.test.tsx` (cards, frase, vermelho só
+  no crítico, carregando, lista de textos e axe) e
+  `entrada-leituras.test.tsx` (no jsdom, com o Firestore e o fetch
+  espionados: o papel comercial não assina nada da Operação, o interno não
+  lê nada do Comercial, e a entrada só lê os módulos dos cards).
+- Conferido no Chromium com o CSS do build, a 1440 e a 390 px.
