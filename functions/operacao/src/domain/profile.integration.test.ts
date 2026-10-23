@@ -73,10 +73,9 @@ describe("perfil de quem grava o cadastro da Operação", () => {
     assert.match(removido.message, /Acesso removido/);
   });
 
-  it("requireOperacaoCaller só passa na homologação", async () => {
+  it("requireOperacaoCaller passa na homologação e na produção, recusa no dute-btg", async () => {
     assert.equal((await requireOperacaoCaller(db, request("interno-1"), "dute-homolog")).role, "interno");
-    const producao = await rejection(requireOperacaoCaller(db, request("interno-1"), "dute-prod"));
-    assert.equal(producao.code, "failed-precondition");
+    assert.equal((await requireOperacaoCaller(db, request("interno-1"), "dute-prod")).role, "interno");
     const antiga = await rejection(requireOperacaoCaller(db, request("owner-1"), "dute-btg"));
     assert.equal(antiga.code, "failed-precondition");
   });
