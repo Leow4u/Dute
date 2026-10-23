@@ -2,8 +2,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Router } from "wouter";
 
-import { autorizacaoDoFinanceiro, demandaDoFinanceiro, linhaAFaturar, pendenciasDoFinanceiro, type LinhaAFaturar } from "@/lib/financeiro/a-faturar";
-import { ROTA_A_FATURAR } from "@/lib/financeiro/navegacao";
+import { autorizacaoDoFinanceiro, demandaDoFinanceiro, linhaAFaturar, type LinhaAFaturar } from "@/lib/financeiro/a-faturar";
+import { faturaDoFinanceiro, type FaturaDoFinanceiro } from "@/lib/financeiro/faturas";
+import { itensDoInicioDoFinanceiro } from "@/lib/financeiro/inicio";
+import { ROTA_A_FATURAR, ROTA_A_RECEBER, ROTA_VENCIDOS } from "@/lib/financeiro/navegacao";
 import type { InicioDoFinanceiro } from "@/lib/financeiro/use-a-faturar";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
@@ -11,8 +13,8 @@ import { textosDaTela, textosForaDaLista } from "@/test/textos";
 import { InicioDoFinanceiroView } from "./inicio-view";
 
 /**
- * Início do Financeiro (parte 4.1b): o que espera a pessoa e, ao lado, a fila
- * A faturar em números. Sem legenda. Dados sintéticos.
+ * Início do Financeiro (partes 4.1b e 4.2b): o que espera a pessoa e, ao lado,
+ * a fila A faturar e a cobrança em números. Sem legenda. Dados sintéticos.
  */
 
 // Sexta, 23/10/2026, 9h no fuso de quem roda: a saudação é "Bom dia".
@@ -39,10 +41,32 @@ const LINHAS = [
   linha("10047", { etapa: "aguardando_autorizacao" }, 90_000),
 ];
 
+function fatura(id: string, extra: Record<string, unknown>): FaturaDoFinanceiro {
+  return faturaDoFinanceiro(`fat_${id.padStart(24, "0")}`, {
+    customer_code: "ITAU",
+    customer_name: "Itaú Unibanco",
+    status: "emitida",
+    valor_cents: 100_000,
+    nf: { numero: id, serie: "1", emitida_em: "2026-09-20" },
+    vencimento: "2026-10-20",
+    forma: "boleto",
+    ...extra,
+  })!;
+}
+
+const FATURAS = [
+  // Vencida em 20/10, enviada e com R$ 400,00 recebidos: saldo de R$ 600,00.
+  fatura("1201", { status: "enviada", enviada: { em: "2026-09-21", meio: "email" }, recebido_cents: 40_000 }),
+  // A vencer e ainda não enviada.
+  fatura("1202", { customer_code: "SAFRA", customer_name: "Banco Safra", valor_cents: 250_000, nf: { numero: "1202", emitida_em: "2026-10-21" }, vencimento: "2026-11-20" }),
+  fatura("1203", { status: "paga", recebido_cents: 100_000, paga_em: "2026-10-15" }),
+];
+
 function render(inicio: Partial<InicioDoFinanceiro> = {}, nome = "Carla Mendes") {
   const completo: InicioDoFinanceiro = {
-    itens: pendenciasDoFinanceiro(LINHAS, new Date("2026-10-23T12:00:00.000Z"), ROTA_A_FATURAR),
+    itens: itensDoInicioDoFinanceiro(LINHAS, FATURAS, new Date("2026-10-23T12:00:00.000Z")),
     linhas: LINHAS,
+    faturas: FATURAS,
     carregando: false,
     falhas: [],
     ...inicio,
@@ -55,16 +79,22 @@ function render(inicio: Partial<InicioDoFinanceiro> = {}, nome = "Carla Mendes")
 }
 
 describe("Início do Financeiro", () => {
-  it("data, saudação, quantas coisas esperam, o que precisa de você e a fila em números, na ordem", () => {
+  it("data, saudação, quantas coisas esperam, o que precisa de você e os números, o mais urgente primeiro", () => {
     expect(textosDaTela(render())).toEqual([
       "Sexta-feira, 23 de outubro",
       "Bom dia, Carla",
-      "2 coisas",
+      "4 coisas",
       "precisam de você no Financeiro.",
       "Precisa de você",
+      "1 NF vencida",
+      "Itaú Unibanco · R$ 600,00",
+      "Cobrar",
       "2 demandas a faturar",
       "Itaú Unibanco · Banco Safra · R$ 14.845,00",
       "Faturar",
+      "1 NF para enviar ao cliente",
+      "Banco Safra",
+      "Enviar",
       "1 demanda aguardando autorização",
       "Itaú Unibanco",
       "Ver",
@@ -77,6 +107,12 @@ describe("Início do Financeiro", () => {
       "Sem valor para faturar",
       "0",
       "Abrir a fila",
+      "A receber",
+      "R$ 3.100,00",
+      "A vencer",
+      "Vencidas",
+      "Para enviar",
+      "Abrir A receber",
     ]);
   });
 
@@ -89,6 +125,16 @@ describe("Início do Financeiro", () => {
       "Precisa de você",
       /^\d+ demandas? a faturar$/,
       /^\d+ demandas? aguardando autorização$/,
+      /^\d+ NFs? vencidas?$/,
+      /^\d+ NFs? para enviar ao cliente$/,
+      "Banco Safra",
+      "Cobrar",
+      "Enviar",
+      "A receber",
+      "A vencer",
+      "Vencidas",
+      "Para enviar",
+      "Abrir A receber",
       /^[^·]+( · [^·]+)* · R\$ [\d.]+,\d{2}$/,
       "Itaú Unibanco",
       "Faturar",
@@ -104,24 +150,23 @@ describe("Início do Financeiro", () => {
     expect(textosForaDaLista(render(), permitidos)).toEqual([]);
   });
 
-  it("a primeira ação é a principal e leva à fila; as outras, secundárias", () => {
+  it("a primeira ação, a da NF vencida, é a principal; as outras, secundárias, cada uma na tela dela", () => {
     const html = render();
-    const faturar = html.match(/<a [^>]*class="([^"]*)"[^>]*>Faturar<\/a>/);
-    expect(faturar?.[1]).toContain("bg-primary");
-    expect(html.match(/<a [^>]*class="([^"]*)"[^>]*>Ver<\/a>/)?.[1]).not.toContain("bg-primary");
-    expect(html.match(/<a [^>]*class="([^"]*)"[^>]*>Abrir a fila<\/a>/)?.[1]).not.toContain("bg-primary");
-    expect(html).toContain(`href="${ROTA_A_FATURAR}"`);
+    const classe = (rotulo: string) => html.match(new RegExp(`<a [^>]*class="([^"]*)"[^>]*>${rotulo}</a>`))?.[1] ?? "";
+    expect(classe("Cobrar")).toContain("bg-primary");
+    for (const rotulo of ["Faturar", "Enviar", "Ver", "Abrir a fila", "Abrir A receber"]) expect(classe(rotulo), rotulo).not.toContain("bg-primary");
+    for (const rota of [ROTA_VENCIDOS, ROTA_A_FATURAR, ROTA_A_RECEBER]) expect(html).toContain(`href="${rota}"`);
   });
 
   it("carregando não diz que não há nada; erro diz o que não carregou", () => {
-    expect(textosDaTela(render({ itens: [], linhas: undefined, carregando: true }))).toEqual(["Sexta-feira, 23 de outubro", "Bom dia, Carla", "Precisa de você"]);
-    const erro = render({ itens: [], linhas: undefined, falhas: ["autorizações"] });
+    expect(textosDaTela(render({ itens: [], linhas: undefined, faturas: undefined, carregando: true }))).toEqual(["Sexta-feira, 23 de outubro", "Bom dia, Carla", "Precisa de você"]);
+    const erro = render({ itens: [], linhas: undefined, faturas: undefined, falhas: ["autorizações"] });
     expect(erro).toMatch(/<p role="alert"[^>]*>Não foi possível carregar: autorizações\.<\/p>/);
     expect(textosDaTela(erro)).not.toContain("Prontas para faturar");
   });
 
   it("nada parado: a frase diz, e os números continuam", () => {
-    const textos = textosDaTela(render({ itens: [], linhas: [] }));
+    const textos = textosDaTela(render({ itens: [], linhas: [], faturas: [] }));
     expect(textos).toContain("Nada parado no Financeiro.");
     expect(textos).not.toContain("Precisa de você");
     expect(textos).toContain("Prontas para faturar");
@@ -129,6 +174,6 @@ describe("Início do Financeiro", () => {
 
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
     expect(await violacoesDeAcessibilidade(render())).toEqual([]);
-    expect(await violacoesDeAcessibilidade(render({ itens: [], linhas: undefined, carregando: true }))).toEqual([]);
+    expect(await violacoesDeAcessibilidade(render({ itens: [], linhas: undefined, faturas: undefined, carregando: true }))).toEqual([]);
   });
 });

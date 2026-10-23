@@ -60,7 +60,14 @@ describe("ambiente da rota", () => {
     expect(caminhos.filter((path) => path.startsWith("/operacao"))).not.toEqual([]);
     expect(caminhos.filter((path) => path.startsWith("/campo"))).toEqual(["/campo", "/campo/os", "/campo/concluir"]);
     expect(caminhos.filter((path) => path.startsWith("/tv"))).toEqual(["/tv"]);
-    expect(caminhos.filter((path) => path.startsWith("/financeiro"))).toEqual(["/financeiro", "/financeiro/a-faturar"]);
+    expect(caminhos.filter((path) => path.startsWith("/financeiro"))).toEqual([
+      "/financeiro",
+      "/financeiro/a-faturar",
+      "/financeiro/a-receber",
+      "/financeiro/vencidos",
+      "/financeiro/pagos",
+      "/financeiro/faturas",
+    ]);
     for (const path of caminhos) {
       const esperado = path.startsWith("/financeiro")
         ? "financeiro"

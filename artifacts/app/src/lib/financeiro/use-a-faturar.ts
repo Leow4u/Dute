@@ -12,12 +12,14 @@ import {
   demandaDoFinanceiro,
   fonteDoValor,
   linhaAFaturar,
-  pendenciasDoFinanceiro,
   valorDaFonte,
   type AutorizacaoDoFinanceiro,
   type LinhaAFaturar,
 } from "./a-faturar";
-import { ROTA_A_FATURAR, abreFinanceiro } from "./navegacao";
+import type { FaturaDoFinanceiro } from "./faturas";
+import { itensDoInicioDoFinanceiro } from "./inicio";
+import { abreFinanceiro } from "./navegacao";
+import { useFaturas } from "./use-faturas";
 
 /**
  * As leituras do Financeiro, ao vivo como o resto da plataforma, e só para
@@ -109,16 +111,29 @@ export function useFilaDoFinanceiro(role: ProfileRole | null | undefined, ligado
   return { linhas, carregando: false, falhas: [] };
 }
 
-export type InicioDoFinanceiro = { itens: ItemDoInicio[]; linhas: LinhaAFaturar[] | undefined; carregando: boolean; falhas: string[] };
+export type InicioDoFinanceiro = {
+  itens: ItemDoInicio[];
+  linhas: LinhaAFaturar[] | undefined;
+  faturas: FaturaDoFinanceiro[] | undefined;
+  carregando: boolean;
+  falhas: string[];
+};
 
-/** O "Precisa de você" do Financeiro, das mesmas leituras da fila. `ligado` falso não assina nada. */
+/**
+ * O "Precisa de você" do Financeiro (lib/financeiro/inicio.ts), das mesmas
+ * leituras das telas. `ligado` falso não assina nada.
+ */
 export function useInicioDoFinanceiro(role: ProfileRole | null | undefined, agora: Date = new Date(), ligado = true): InicioDoFinanceiro {
   const fila = useFilaDoFinanceiro(role, ligado);
+  const cobranca = useFaturas(role, ligado);
+  const falhas = [...fila.falhas, ...cobranca.falhas];
+  const itens = fila.linhas && cobranca.faturas ? itensDoInicioDoFinanceiro(fila.linhas, cobranca.faturas, agora) : [];
   return {
     // Sem todas as leituras, uma lista parcial diria "nada parado" sem saber.
-    itens: fila.linhas ? pendenciasDoFinanceiro(fila.linhas, agora, ROTA_A_FATURAR) : [],
+    itens: falhas.length ? [] : itens,
     linhas: fila.linhas,
-    carregando: fila.carregando,
-    falhas: fila.falhas,
+    faturas: cobranca.faturas,
+    carregando: !falhas.length && (fila.carregando || cobranca.carregando),
+    falhas,
   };
 }

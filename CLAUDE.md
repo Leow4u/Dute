@@ -46,8 +46,10 @@ documentação de produto e operação está em `docs/`.
   registro de cada parte e como desligar: `docs/plataforma/fase-3-operacao.md`.
 - **Financeiro (Fase 4) em andamento, ligado só no `dute-homolog`**
   (`FINANCEIRO_AMBIENTES_LIBERADOS`, no app e nas callables): `registerNf`
-  registra a NF da demanda A faturar (parte 4.1a) e o shell `/financeiro` tem
-  o Início e A faturar (parte 4.1b). O Faturamento do WMS continua no shell da
+  registra a NF da demanda A faturar (parte 4.1a), `advanceFatura` envia,
+  recebe, estorna e cancela (parte 4.2a; quitada, a demanda fica "paga") e o
+  shell `/financeiro` tem Início, A faturar, A receber, Vencidos, Pagos e
+  Faturas (partes 4.1b e 4.2b). O Faturamento do WMS continua no shell da
   Armazenagem até a Fase 7: o menu do Financeiro leva até ele e o do WMS traz
   o financeiro de volta. Runbook: `docs/plataforma/fase-4-financeiro.md`.
 - **Alinhamento do Comercial e da Operação recuperado em 23/10/2026**:
