@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { formatarReais } from "@workspace/dominio";
-import { Check, Download, Search, Send, X } from "lucide-react";
+import { Check, Download, FileText, Search, Send, X } from "lucide-react";
+import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +30,7 @@ import {
   type ReceitaPorCliente,
   type SituacaoDaCobranca,
 } from "@/lib/financeiro/faturas";
+import { hrefDaViaComercial } from "@/lib/financeiro/navegacao";
 import { cn } from "@/lib/utils";
 
 /**
@@ -278,7 +280,15 @@ function Painel({ aberta: fatura, hoje, pagamentos, painel, ocupado, acoes }: Fa
           <X aria-hidden="true" />
         </Button>
       </div>
-      <Pill className={cn("self-start", TOM_DA_SITUACAO[situacao])}>{textoDaSituacao(fatura, hoje)}</Pill>
+      <div className="flex flex-wrap items-center gap-2.5">
+        <Pill className={TOM_DA_SITUACAO[situacao]}>{textoDaSituacao(fatura, hoje)}</Pill>
+        <Button asChild variant="outline" size="sm" className="ml-auto">
+          <Link href={hrefDaViaComercial(fatura.id)}>
+            <FileText aria-hidden="true" />
+            Via comercial
+          </Link>
+        </Button>
+      </div>
 
       <dl className="flex flex-col gap-1.5">
         <Par rotulo="Valor da NF" valor={formatarReais(fatura.valorCents)} />

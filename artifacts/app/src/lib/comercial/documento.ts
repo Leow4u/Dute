@@ -337,7 +337,8 @@ export function linhasDasCondicoes(condicoes: unknown): string[] {
     .filter(Boolean);
 }
 
-function linhaDoDocumento(linha: LinhaGravada): LinhaDoDocumento {
+/** A linha como o papel mostra (o orçamento e a via comercial da NF, lib/financeiro/nf-documento.ts). */
+export function linhaDoDocumento(linha: LinhaGravada): LinhaDoDocumento {
   if (linha.origem === "ajuste") {
     return {
       chave: linha.id,

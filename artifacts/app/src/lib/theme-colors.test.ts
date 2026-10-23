@@ -27,6 +27,8 @@ const PAPER_FILES = new Set([
   "components/comercial/orcamento-documento.tsx",
   // A OS impressa, via operacional (parte 3.9d, docs/mockups/OSImpressao.dc.html).
   "components/operacao/os-documento.tsx",
+  // A via comercial da NF (parte 4.2d do Financeiro), no molde da OS impressa.
+  "components/financeiro/nf-documento.tsx",
   "pages/client/relatorio.tsx",
 ]);
 

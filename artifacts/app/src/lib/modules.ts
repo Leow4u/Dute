@@ -52,6 +52,7 @@ import {
   ROTA_FATURAMENTO_WMS,
   ROTA_FATURAS,
   ROTA_FINANCEIRO,
+  ROTA_NF,
   ROTA_PAGOS,
   ROTA_VENCIDOS,
   abreFinanceiro,
@@ -418,6 +419,7 @@ export const APP_MODULES: AppModule[] = [
         href: ROTA_FATURAS,
         icon: FileText,
         roles: FINANCE_ROLES,
+        tambem: [ROTA_NF],
       }),
     ],
   }),
@@ -813,6 +815,8 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   // A ficha da OS, aberta pela Agenda, pela demanda e pelo Hoje (?numero=).
   { path: ROTA_OS, roles: OPERATION_REGISTRY_ROLES },
   { path: ROTA_OS_IMPRESSAO, roles: OPERATION_REGISTRY_ROLES },
+  // A via comercial da NF (parte 4.2d): tem valor, só quem fatura.
+  { path: ROTA_NF, roles: FINANCE_ROLES },
   { path: ROTA_REVISAO, roles: OPERATION_REGISTRY_ROLES },
   // O app do campo (parte 3.8b): Minhas OS e a OS no celular.
   { path: ROTA_CAMPO, roles: [...CAMPO_ROLES] },

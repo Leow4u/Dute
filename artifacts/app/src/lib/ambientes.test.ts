@@ -67,6 +67,7 @@ describe("ambiente da rota", () => {
       "/financeiro/vencidos",
       "/financeiro/pagos",
       "/financeiro/faturas",
+      "/financeiro/nf",
     ]);
     for (const path of caminhos) {
       const esperado = path.startsWith("/financeiro")

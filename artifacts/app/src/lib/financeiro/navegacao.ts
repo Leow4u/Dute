@@ -27,17 +27,25 @@ export const ROTA_VENCIDOS = "/financeiro/vencidos";
 export const ROTA_PAGOS = "/financeiro/pagos";
 export const ROTA_FATURAS = "/financeiro/faturas";
 
+/** A via comercial da NF para imprimir (parte 4.2d): `?nf=`. Fora do menu; acende Faturas. */
+export const ROTA_NF = "/financeiro/nf";
+
 /** O Faturamento da armazenagem, que continua no shell do WMS até a Fase 7. */
 export const ROTA_FATURAMENTO_WMS = "/faturamento";
 
 /** Telas do Financeiro que já existem no app. Cada parte nova acrescenta a dela. */
-export const TELAS_DO_FINANCEIRO: readonly string[] = [ROTA_FINANCEIRO, ROTA_A_FATURAR, ROTA_A_RECEBER, ROTA_VENCIDOS, ROTA_PAGOS, ROTA_FATURAS];
+export const TELAS_DO_FINANCEIRO: readonly string[] = [ROTA_FINANCEIRO, ROTA_A_FATURAR, ROTA_A_RECEBER, ROTA_VENCIDOS, ROTA_PAGOS, ROTA_FATURAS, ROTA_NF];
 
 const ID_DA_NF = /^fat_[a-f0-9]{24}$/;
 
 /** A lista com a NF aberta no painel: `/financeiro/vencidos?nf=fat_...`. */
 export function hrefDaNf(rota: string, id: string): string {
   return `${rota}?nf=${encodeURIComponent(id)}`;
+}
+
+/** A via comercial da NF. */
+export function hrefDaViaComercial(id: string): string {
+  return hrefDaNf(ROTA_NF, id);
 }
 
 /** A NF aberta pela busca da URL, ou null. */

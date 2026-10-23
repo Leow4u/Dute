@@ -41,7 +41,8 @@ export const MEIO_ROTULO: Record<MeioDeEnvio, string> = {
   em_maos: "Em mãos",
 };
 
-export type DemandaDaNf = { numero: string; valorCents: number };
+/** A demanda como a fatura guardou: o valor calculado no servidor e de onde ele saiu. */
+export type DemandaDaNf = { numero: string; valorCents: number; rv: number | null; medicaoId: string | null; autorizacaoIds: string[] };
 
 export type FaturaDoFinanceiro = {
   id: string;
@@ -88,7 +89,18 @@ export function faturaDoFinanceiro(id: string, dados: Registro): FaturaDoFinance
     demandas: (Array.isArray(dados.demandas) ? dados.demandas : []).flatMap((item) => {
       const demanda = objeto(item);
       const numeroDaDemanda = texto(demanda?.numero);
-      return numeroDaDemanda ? [{ numero: numeroDaDemanda, valorCents: centavos(demanda?.valor_cents) }] : [];
+      if (!numeroDaDemanda) return [];
+      const rv = demanda?.rv;
+      const ids = Array.isArray(demanda?.autorizacao_ids) ? demanda.autorizacao_ids : [];
+      return [
+        {
+          numero: numeroDaDemanda,
+          valorCents: centavos(demanda?.valor_cents),
+          rv: typeof rv === "number" && Number.isInteger(rv) ? rv : null,
+          medicaoId: texto(demanda?.medicao_id) || null,
+          autorizacaoIds: ids.filter((id): id is string => typeof id === "string" && id.length > 0),
+        },
+      ];
     }),
     enviada: enviada && (MEIOS_DE_ENVIO as readonly string[]).includes(meio) ? { em: texto(enviada.em), meio: meio as MeioDeEnvio } : null,
     pagaEm: texto(dados.paga_em) || null,
