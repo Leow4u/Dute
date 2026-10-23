@@ -21,6 +21,7 @@ import {
   type DemandaNaFatura,
 } from "./fatura.js";
 import { runIdempotent } from "./operations.js";
+import { CLIENT_FATURAS_COLLECTION, demandaParaOCliente, projecaoDaFatura } from "./projecao.js";
 import { financeiroProblem } from "./platform-roles.js";
 import type { FinanceiroProfile } from "./profile.js";
 
@@ -31,7 +32,8 @@ import type { FinanceiroProfile } from "./profile.js";
  * marco e o resumo `faturamento`, marca as autorizações citadas (`nf_ids`,
  * reservado desde a parte 15 do Comercial) e grava o evento `nf.registered`.
  * A NF cujo registro foi cancelado (parte 4.2a) se registra de novo por cima,
- * guardando o registro anterior em `anteriores`.
+ * guardando o registro anterior em `anteriores`. A projeção do portal
+ * (`client_faturas`, parte 4.3a) nasce na mesma transação.
  */
 
 const DIA_EM_SAO_PAULO = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" });
@@ -124,6 +126,10 @@ export async function registerNfFor(
         registrada_em: iso,
         operation_id: operationId,
       });
+      transaction.set(
+        db.collection(CLIENT_FATURAS_COLLECTION).doc(id),
+        projecaoDaFatura(documento, { demandas: new Map(demandaSnaps.map((snap) => [snap.id, demandaParaOCliente(snap.data() ?? {})])), atualizadaEm: iso }),
+      );
       if (anterior) {
         const resumo = { registrada_em: anterior.registrada_em ?? null, cancelada: anterior.cancelada ?? null, demanda_numeros: anterior.demanda_numeros ?? [], operation_id: anterior.operation_id ?? null };
         const anteriores = Array.isArray(anterior.anteriores) ? anterior.anteriores : [];

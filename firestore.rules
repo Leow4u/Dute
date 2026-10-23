@@ -756,6 +756,14 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // A NF como o cliente vê no portal (parte 4.3a): a projeção sem o que é
+    // interno. Quem lê preço lê; o cliente lê só as próprias, com as faturas
+    // no contrato (o módulo financeiro do portal). Só as callables gravam.
+    match /client_faturas/{faturaId} {
+      allow read: if canReadPrices() || isOwnProjectionWith('financeiro');
+      allow create, update, delete: if false;
+    }
+
     // Os pagamentos da fatura (parte 4.2a), com o valor: o mesmo acesso de
     // faturas. Só a callable advanceFatura grava.
     match /pagamentos/{pagamentoId} {

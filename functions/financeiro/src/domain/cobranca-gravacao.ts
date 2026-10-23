@@ -20,6 +20,7 @@ import {
 import { createFinanceiroEvent } from "./events.js";
 import { AUTHORIZATIONS_COLLECTION, DEMANDS_COLLECTION, FATURAS_COLLECTION } from "./fatura.js";
 import { runIdempotent, type FinanceiroActor } from "./operations.js";
+import { CLIENT_FATURAS_COLLECTION, projecaoDaFatura } from "./projecao.js";
 import { financeiroProblem } from "./platform-roles.js";
 import type { FinanceiroProfile } from "./profile.js";
 
@@ -33,6 +34,9 @@ import type { FinanceiroProfile } from "./profile.js";
  *   emitida) e as demandas, a faturada.
  * - cancel: cancela o registro sem pagamento; as demandas voltam a A
  *   faturar e as autorizações perdem a NF.
+ *
+ * Cada ação regrava a projeção do portal (`client_faturas`, parte 4.3a) a
+ * partir da fatura como ela fica; o cancelamento a apaga.
  */
 
 const DIA_EM_SAO_PAULO = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" });
@@ -98,15 +102,22 @@ export async function advanceFaturaFor(
       const faturaRef = db.collection(FATURAS_COLLECTION).doc(pedido.fatura_id);
       const snap = await transaction.get(faturaRef);
       if (!snap.exists) throw new HttpsError("not-found", "NF não encontrada.");
-      const fatura = faturaLida(snap.id, snap.data() ?? {});
+      const dadosAtuais = snap.data() ?? {};
+      const fatura = faturaLida(snap.id, dadosAtuais);
       const iso = instante.toISOString();
+      const projecaoRef = db.collection(CLIENT_FATURAS_COLLECTION).doc(fatura.id);
+      const projecaoAnterior = (await transaction.get(projecaoRef)).data() ?? null;
+      const projetar = (mudancas: Record<string, unknown>) =>
+        transaction.set(projecaoRef, projecaoDaFatura({ ...dadosAtuais, ...mudancas }, { anterior: projecaoAnterior, atualizadaEm: iso }));
       const contexto: Contexto = { db, transaction, caller, ator, operationId, fatura, iso };
       const evento = { operation_id: operationId, entity_id: fatura.id, customer_code: fatura.customer_code, actor: ator, occurred_at: iso };
       const atualizado = { updated_at: FieldValue.serverTimestamp(), updated_by: caller.uid };
 
       if (pedido.acao === "send") {
         conferirEnvio(fatura, pedido.enviada_em, hoje);
-        transaction.update(faturaRef, { status: "enviada", enviada: { em: pedido.enviada_em, meio: pedido.meio, por_uid: caller.uid, registrada_em: iso }, ...atualizado });
+        const enviada = { em: pedido.enviada_em, meio: pedido.meio, por_uid: caller.uid, registrada_em: iso };
+        transaction.update(faturaRef, { status: "enviada", enviada, ...atualizado });
+        projetar({ status: "enviada", enviada });
         createFinanceiroEvent(transaction, db, { ...evento, type: "nf.sent", payload: { id: fatura.id, enviada_em: pedido.enviada_em, meio: pedido.meio } });
         const result = { id: fatura.id, acao: pedido.acao, status: "enviada" as const, recebido_cents: fatura.recebido_cents, saldo_cents: fatura.valor_cents - fatura.recebido_cents };
         return { target_id: fatura.id, result };
@@ -138,6 +149,7 @@ export async function advanceFaturaFor(
           ...(resultado.quitada ? { paga_em: pedido.recebido_em } : {}),
           ...atualizado,
         });
+        projetar({ status: resultado.status, recebido_cents: resultado.recebido_cents, ...(resultado.quitada ? { paga_em: pedido.recebido_em } : {}) });
         if (resultado.quitada) moverDemandas(contexto, demandas, "paga", { "faturamento.paga_em": pedido.recebido_em });
         createFinanceiroEvent(transaction, db, {
           ...evento,
@@ -159,6 +171,7 @@ export async function advanceFaturaFor(
           ...(resultado.reaberta ? { paga_em: FieldValue.delete() } : {}),
           ...atualizado,
         });
+        projetar({ status: resultado.status, recebido_cents: resultado.recebido_cents, ...(resultado.reaberta ? { paga_em: null } : {}) });
         if (resultado.reaberta) moverDemandas(contexto, demandas, "faturada", { "faturamento.paga_em": FieldValue.delete() });
         createFinanceiroEvent(transaction, db, { ...evento, type: "cobranca.payment_reversed", payload: { id: fatura.id, pagamento_id: pedido.pagamento_id, reaberta: resultado.reaberta } });
         return { target_id: pedido.pagamento_id, result: { id: fatura.id, acao: pedido.acao, status: resultado.status, recebido_cents: resultado.recebido_cents, saldo_cents: resultado.saldo_cents, pagamento_id: pedido.pagamento_id } };
@@ -169,6 +182,8 @@ export async function advanceFaturaFor(
       const demandas = await demandasDaFatura(contexto, "faturada");
       transaction.update(faturaRef, { status: "cancelada", cancelada: { em: iso, por_uid: caller.uid, motivo: pedido.motivo }, ...atualizado });
       moverDemandas(contexto, demandas, "a_faturar", { faturamento: FieldValue.delete() });
+      // O registro cancelado era um erro: some do portal.
+      transaction.delete(projecaoRef);
       for (const autorizacao of fatura.autorizacao_ids) {
         transaction.update(db.collection(AUTHORIZATIONS_COLLECTION).doc(autorizacao), { nf_ids: FieldValue.arrayRemove(fatura.id) });
       }

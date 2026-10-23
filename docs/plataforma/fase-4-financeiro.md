@@ -51,15 +51,17 @@ Seguem a recomendação do plano até a resposta do Leonardo:
 |---|---|---|
 | `faturas` | Financeiro | A NF registrada. Guarda as demandas, cada uma com a RV ou a medição, as autorizações citadas e o valor em centavos, e o total. Também a NF (número, série, emissão), `nf_chave` (série e número), o vencimento, a forma de pagamento, a observação, o status (emitida, enviada, paga ou cancelada) e quem registrou. A cobrança (parte 4.2a) acrescenta `recebido_cents`, `pagamento_ids`, `enviada` (dia e meio), `paga_em`, `cancelada` (quando, quem e o motivo) e `anteriores` (os registros cancelados da mesma NF). O id sai da série e do número da NF, então a mesma NF não fica registrada duas vezes. |
 | `pagamentos` | Financeiro | Um pagamento da fatura: o valor em centavos, o dia, a forma, a observação, o status (registrado ou estornado, com o motivo) e quem registrou. |
+| `client_faturas` | Financeiro | A NF como o cliente vê no portal (parte 4.3a): a NF, o vencimento, a forma, o valor, o recebido, o saldo, a situação, o envio e as demandas com o valor, o título e a referência. Não guarda quem registrou, a observação, as autorizações, os registros anteriores nem o motivo do cancelamento. Cada gravação do Financeiro a regrava na mesma transação, e o cancelamento a apaga. |
 | `financeiro_operations` | Financeiro | O recibo de idempotência. Ninguém lê. |
 | `demands` | Comercial | O Financeiro escreve `etapa: "faturada"`, `etapa_desde`, o marco em `marcos` e `faturamento`: a fatura, a NF e o vencimento, sem valor. |
 | `client_authorizations` | Comercial | O Financeiro escreve só `nf_ids`. |
 
-Preço só em `faturas` e `pagamentos`, lidos por `canReadPrices()`: owner, admin, financeiro e
-comercial. A operação, o campo, o suporte, o painel e o cliente não leem. O
-cliente dono lê as próprias faturas na parte 4.3. Nada se grava pelo
-navegador. A zeragem do WMS nunca apaga `faturas`, `pagamentos`,
-`financeiro_operations` nem os eventos do Financeiro.
+Preço só em `faturas`, `pagamentos` e `client_faturas`, lidos por
+`canReadPrices()`: owner, admin, financeiro e comercial. A operação, o campo,
+o suporte e o painel não leem. O cliente dono lê só `client_faturas`, e só
+com as faturas no contrato (`isOwnProjectionWith('financeiro')`). Nada se grava
+pelo navegador. A zeragem do WMS nunca apaga `faturas`, `pagamentos`,
+`client_faturas`, `financeiro_operations` nem os eventos do Financeiro.
 
 ## Callables
 
@@ -132,7 +134,8 @@ continuam no Faturamento do WMS, e as rotas `/financeiro` não existem
 | 4.2b | Telas A receber, Vencidos, Pagos e Faturas, com o painel da NF | Vencido pelo vencimento; sem legenda; `axe` |
 | 4.2c | Receita por cliente no mês (Pagos) e a exportação XLSX de cada lista | O estorno fica fora da receita; a planilha abre com reais e datas de verdade |
 | 4.2d | Via comercial da NF em PDF (impressão do navegador) | Só quem lê preço abre; os valores batem com a fatura |
-| 4.3 | Portal: OS do cliente e faturas da demanda | Cliente só vê as próprias OS e faturas |
+| 4.3a | A NF do portal (`client_faturas`), gravada com cada mudança da fatura; regras e zeragem | O cliente só lê as próprias NFs, com as faturas no contrato; nada interno vai para o portal |
+| 4.3b | Portal: as OS do cliente (andamento com etapas) e as NFs da demanda em Faturas | Cliente só vê as próprias OS e faturas; cliente sem `operacao` não vê OS |
 | 4.4 | Solicitação de OS pelo portal | O pedido do portal nunca cria OS sozinho |
 | 4.5 | Expedição do WMS com entrega pela Dutelog gera demanda e OS | Retirada pelo cliente não gera OS |
 | 4.6 | Notificações por modelo (sino e e-mail) | E-mail só com o canal ligado no perfil |
@@ -238,3 +241,13 @@ o papel de `components/financeiro/nf-documento.tsx` e a tela de `pages/financeir
 - **Testes.**
   - `nf-documento.test.ts`: os valores batem com a fatura, as linhas da RV e da medição, e o caso em que as linhas não chegaram.
   - `nf-view.test.tsx`: textos listados, uma ação principal e `axe`.
+
+### Parte 4.3a: a NF do portal
+
+Feita em 23/10/2026. A projeção está em `functions/financeiro/src/domain/projecao.ts`.
+
+- **`client_faturas/{id}`** nasce no registro da NF, com o título e a referência de cada demanda lidos na mesma transação.
+  - Cada ação da cobrança a regrava a partir da fatura como ela fica: envio, pagamento parcial, quitação e estorno.
+  - O cancelamento a apaga. O registro cancelado era um erro e não aparece para o cliente. A NF registrada de novo volta ao portal.
+- **Regras.** Leem quem lê preço e o cliente dono, este com as faturas no contrato. O cliente nunca lê `faturas` nem `pagamentos`.
+- **Testes.** `projecao.test.ts` confere o que vai e o que fica de fora. `cobranca.integration.test.ts` segue a projeção no registro, no pagamento, na quitação, no envio, no cancelamento e no novo registro. `financeiro-faturas.rules.test.ts` cobre o cliente dono, o de outro cliente, o sem o módulo, a operação e a escrita.

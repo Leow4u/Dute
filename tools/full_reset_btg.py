@@ -101,12 +101,14 @@ OPERACAO_COLLECTIONS = (
     "service_orders",
     "service_order_counters",
 )
-# Financeiro (docs/plataforma/fase-4-financeiro.md, partes 4.1a e 4.2a): a
-# fatura da demanda, os pagamentos dela e os recibos. É dinheiro da Operação,
-# não dado do WMS: nunca apagados, nem com --include-setup.
+# Financeiro (docs/plataforma/fase-4-financeiro.md, partes 4.1a, 4.2a e
+# 4.3a): a fatura da demanda, os pagamentos dela, a projeção do portal e os
+# recibos. É dinheiro da Operação, não dado do WMS: nunca apagados, nem com
+# --include-setup.
 FINANCEIRO_COLLECTIONS = (
     "faturas",
     "pagamentos",
+    "client_faturas",
     "financeiro_operations",
 )
 # Os eventos do Comercial moram em `events`, junto dos do WMS: a zeragem apaga

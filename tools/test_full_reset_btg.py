@@ -51,6 +51,7 @@ OPERACAO = (
 FINANCEIRO = (
     "faturas",
     "pagamentos",
+    "client_faturas",
     "financeiro_operations",
 )
 
