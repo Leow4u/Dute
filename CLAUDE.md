@@ -57,6 +57,10 @@ documentação de produto e operação está em `docs/`.
   até a Fase 7. Roteiro do lançamento (marcos 2, 3 e 4 juntos, e a parte
   4.9b, que liga o Financeiro): `docs/plataforma/lancamento-producao.md`.
   Desenho e registro: `docs/plataforma/fase-4-financeiro.md`.
+- **Fase 5 (memória da Dute) em desenho**: `docs/plataforma/fase-5-memoria.md`
+  (23/10/2026). A codebase nova é `functions/core`, com a liberação própria
+  `MEMORIA_AMBIENTES_LIBERADOS` (só o `dute-homolog`); as medidas saem das
+  OS revisadas e a sugestão nunca grava sem a pessoa.
 - **Alinhamento do Comercial e da Operação recuperado em 23/10/2026**:
   `docs/plataforma/alinhamento-comercial-operacao.md` compara o desenho
   aprovado (plano, Fase 2, Fase 6 e mockups) com o que entrou na `main` de 21

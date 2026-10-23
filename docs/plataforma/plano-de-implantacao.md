@@ -732,7 +732,9 @@ revisão")
 18. A ordem de migração das telas do WMS para a v3: Início, Pedidos,
     Estoque, Receber primeiro?
 
-**Fase 5**
+**Fase 5** (seguimos a recomendação até a resposta: 19, 5 do mesmo item e
+cliente ou 15 em qualquer cliente; 20, `functions/core`; desenho em
+`fase-5-memoria.md`)
 19. Mínimo de execuções para a IA sugerir duração (recomendo 5 do mesmo
     item e cliente, ou 15 do item em qualquer cliente para a média interna).
 20. O Agent Dute no núcleo: codebase `functions/core` ou dentro de uma
@@ -754,3 +756,10 @@ revisão")
 26. Receita por serviço (parte 4.8b): a NF registrada guarda só o total. O
     relatório vale o rateio da NF pelas linhas do orçamento de cada demanda?
     Até a resposta, o Financeiro mostra as NFs emitidas por mês no lugar.
+27. O tempo por item (parte 5.1) é em homem-minuto: 2 pessoas fazem na
+    metade do tempo de 1. Vale para montagem e carga?
+28. O tempo de trabalho deixa o deslocamento de fora, e quem planeja soma o
+    trajeto. Vale, ou a sugestão estima o trajeto também?
+29. Orçamentos parecidos (parte 5.3): comparar pelos itens da LPU e pelas
+    quantidades, em vez do vetor do texto? Recomendo pelos itens, mais exato
+    e explicável, com o resumo em texto guardado para o Agent Dute.
