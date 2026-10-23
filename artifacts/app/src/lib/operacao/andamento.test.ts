@@ -15,8 +15,11 @@ import {
   pedidosDoAndamento,
   problemaDaFoto,
   problemasDoAndamento,
+  tiposDeAndamento,
   type FormularioDeAndamento,
 } from "./andamento";
+import { passosDaOs, fichaDaLeitura as lerFicha, type FichaDaOs as Ficha } from "./ficha-da-os";
+import { rotuloDoStatusDaOs } from "@/components/operacao/partes";
 import { CALLABLES_DA_OPERACAO } from "./api";
 import { fichaDaLeitura, type FichaDaOs } from "./ficha-da-os";
 
@@ -249,5 +252,37 @@ describe("as callables", () => {
     const fonte = readFileSync(new URL("../../../../../functions/operacao/src/index.ts", import.meta.url), "utf8");
     const exportadas = Array.from(fonte.matchAll(/^export const (\w+) = onCall\(/gm), (match) => match[1]);
     expect([...CALLABLES_DA_OPERACAO].sort()).toEqual([...exportadas].sort());
+  });
+});
+
+describe("a vistoria no escritório (parte 3.11d)", () => {
+  const vistoria = (extra: Record<string, unknown> = {}) =>
+    lerFicha("10060-01", { tipo: "vistoria", status: "agendada", edicao: 2, demanda: "10060", customer_code: "ITAU", servicos: ["vistoria"], equipe: [{ colaborador_id: "col_cccccccccccccccc", nome: "Carlos Silva", papel: "lider" }], ...extra }) as Ficha;
+
+  it("o andamento é só etapa e ocorrência; as etapas, só ir e chegar", () => {
+    expect(tiposDeAndamento(vistoria())).toEqual(["etapa", "ocorrencia"]);
+    expect(etapasPossiveis(vistoria())).toEqual(["saida_patio", "chegada_origem"]);
+    expect(etapasPossiveis(vistoria({ etapas: [{ etapa: "chegada_origem", instante: "2026-10-22T17:05:00.000Z" }] }))).toEqual([]);
+    expect(tiposDeAndamento(lerFicha("10045-01", { status: "agendada", edicao: 2, demanda: "10045", customer_code: "ITAU" }) as Ficha)).toEqual(["etapa", "itens", "ocorrencia", "conclusao"]);
+  });
+
+  it("os três passos: agendar, executar e enviar ao Comercial; enviada, todos feitos", () => {
+    const agendada = passosDaOs(vistoria());
+    expect(agendada.map((passo) => [passo.titulo, passo.estado])).toEqual([
+      ["Agendar", "feito"],
+      ["Executar", "atual"],
+      ["Enviar ao Comercial", "pendente"],
+    ]);
+    expect(agendada[1].quem).toBe("Líder · Carlos Silva");
+    const enviada = passosDaOs(vistoria({ status: "revisada", vistoria: { instante: "2026-10-22T18:40:00.000Z", canal: "celular", ambientes: [] } }));
+    expect(enviada.map((passo) => passo.estado)).toEqual(["feito", "feito", "feito"]);
+    expect(enviada[2].detalhe).toBe("Enviada 15:40");
+    expect(passosDaOs(vistoria({ status: "aberta" }))[0].estado).toBe("atual");
+  });
+
+  it("a vistoria revisada diz que foi enviada ao Comercial; a OS de serviço continua revisada", () => {
+    expect(rotuloDoStatusDaOs({ status: "revisada", tipo: "vistoria" })).toBe("Enviada ao Comercial");
+    expect(rotuloDoStatusDaOs({ status: "agendada", tipo: "vistoria" })).toBe("Agendada");
+    expect(rotuloDoStatusDaOs({ status: "revisada" })).toBe("Revisada");
   });
 });

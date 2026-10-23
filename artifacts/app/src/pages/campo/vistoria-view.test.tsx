@@ -164,7 +164,7 @@ describe("a vistoria no celular", () => {
       textosForaDaLista(html, [
         "Minhas OS",
         "OS 10045-01",
-        "Revisada",
+        "Enviada ao Comercial",
         "Vistoria · Demanda 10045",
         "Itaú Unibanco",
         "Av. Paulista, 1842 · São Paulo/SP · 12º andar",

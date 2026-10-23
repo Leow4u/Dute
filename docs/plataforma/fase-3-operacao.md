@@ -1109,3 +1109,19 @@ servidor (o teste confere as mensagens).
 - **Ainda não.** Enviar a vistoria pelo escritório (a equipe sem ninguém com
   o app): por ora a vistoria vai pelo celular do líder, ou de qualquer um da
   equipe sem líder.
+
+### Parte 3.11d: a vistoria na ficha da OS e no andamento
+
+Feita em 23/10/2026, no app da Operação e do campo.
+
+- **O status.** A vistoria revisada aparece como "Enviada ao Comercial" na
+  ficha da OS, na demanda, na Agenda, na impressão e no celular
+  (`rotuloDoStatusDaOs`). A OS de serviço continua "Revisada".
+- **Os passos.** A vistoria tem três: Agendar, Executar (a última etapa) e
+  Enviar ao Comercial (a hora do envio).
+- **A ficha.** Enviada, a ficha mostra a vistoria como foi ao Comercial
+  (ambientes, itens, fotos, medidas, acesso e observações), sem o cartão de
+  itens. "Reabrir" não aparece na vistoria (o servidor recusa).
+- **Registrar andamento.** Na vistoria, só a etapa (saída do pátio e
+  chegada) e a ocorrência; os itens, a conclusão e o Fim não, porque a
+  vistoria vai ao Comercial pelo celular.

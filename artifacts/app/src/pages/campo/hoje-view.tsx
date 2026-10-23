@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "wouter";
 import { MapPin, Truck, Users } from "lucide-react";
 
-import { COR_DO_STATUS, ROTULO_DO_STATUS, selo } from "@/components/operacao/partes";
+import { COR_DO_STATUS, rotuloDoStatusDaOs, selo } from "@/components/operacao/partes";
 import { Button } from "@/components/ui/button";
 import { hrefDaOsNoCampo } from "@/lib/campo/navegacao";
 import type { CartaoDoCampo, MinhasOs } from "@/lib/campo/os-no-campo";
@@ -30,7 +30,7 @@ function CartaoAgora({ cartao }: { cartao: CartaoDoCampo }) {
     <article className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-semibold tabular-nums text-muted-foreground">OS {cartao.numero}</span>
-        <span className={cn(selo, COR_DO_STATUS[cartao.status])}>{ROTULO_DO_STATUS[cartao.status]}</span>
+        <span className={cn(selo, COR_DO_STATUS[cartao.status])}>{rotuloDoStatusDaOs(cartao)}</span>
       </div>
       <div className="flex flex-col">
         <span className="text-lg font-bold leading-snug text-foreground">{cartao.cliente}</span>

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   AVULSO,
-  TIPOS_DE_ANDAMENTO,
+  tiposDeAndamento,
   TIPO_DE_ANDAMENTO_ROTULO,
   etapasPossiveis,
   fotosDoFinalNaOs,
@@ -297,7 +297,7 @@ export function AndamentoView({
           <span className="text-sm text-muted-foreground">escritório</span>
         </div>
         <div role="group" aria-label="O que registrar" className="inline-flex rounded-md bg-muted p-1">
-          {TIPOS_DE_ANDAMENTO.map((tipo) => (
+          {tiposDeAndamento(ficha).map((tipo) => (
             <button
               key={tipo}
               type="button"

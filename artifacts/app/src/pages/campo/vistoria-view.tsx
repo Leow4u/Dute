@@ -2,7 +2,7 @@ import { useId, useState } from "react";
 import { Link } from "wouter";
 import { ArrowLeft, Check, Minus, Plus, Search, Send, X } from "lucide-react";
 
-import { COR_DO_STATUS, ROTULO_DO_STATUS, selo, seloAlerta } from "@/components/operacao/partes";
+import { COR_DO_STATUS, rotuloDoStatusDaOs, selo, seloAlerta } from "@/components/operacao/partes";
 import { VistoriaEnviada } from "@/components/operacao/vistoria-lida";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -331,7 +331,7 @@ export function CampoVistoriaView({ ficha, uid, pendentes, urls, catalogo, rascu
       <header className="flex flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-bold tracking-tight text-foreground">OS {ficha.numero}</h1>
-          <span className={cn(selo, COR_DO_STATUS[ficha.status])}>{ROTULO_DO_STATUS[ficha.status]}</span>
+          <span className={cn(selo, COR_DO_STATUS[ficha.status])}>{rotuloDoStatusDaOs(ficha)}</span>
         </div>
         <p className="text-sm text-muted-foreground">Vistoria · Demanda {ficha.demanda}</p>
         <p className="text-sm font-semibold text-foreground">{ficha.clienteNome ?? ficha.customerCode}</p>

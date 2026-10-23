@@ -4,7 +4,7 @@ import { ArrowLeft, Flag, MapPin, Plus } from "lucide-react";
 
 import {
   COR_DO_STATUS,
-  ROTULO_DO_STATUS,
+  rotuloDoStatusDaOs,
   SeloDoTipo,
   Servicos,
   selo,
@@ -265,7 +265,7 @@ function OrdensDaDemanda({
               <span
                 className={cn(selo, COR_DO_STATUS[os.status], "self-start")}
               >
-                {ROTULO_DO_STATUS[os.status]}
+                {rotuloDoStatusDaOs(os)}
               </span>
             </li>
           );

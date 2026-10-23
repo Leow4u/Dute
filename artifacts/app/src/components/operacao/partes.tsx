@@ -26,6 +26,11 @@ export const ROTULO_DO_STATUS: Record<StatusDaOs, string> = {
   cancelada: "Cancelada",
 };
 
+/** O status como a tela diz: a vistoria revisada (parte 3.11a) foi enviada ao Comercial, sem revisão. */
+export function rotuloDoStatusDaOs(os: { status: StatusDaOs; tipo?: "servico" | "vistoria" }): string {
+  return os.tipo === "vistoria" && os.status === "revisada" ? "Enviada ao Comercial" : ROTULO_DO_STATUS[os.status];
+}
+
 /** A cor do status da OS, a mesma das colunas do Hoje. */
 export const COR_DO_STATUS: Record<StatusDaOs, string> = {
   aberta: "border-info-soft-border bg-info-soft text-info-soft-foreground",

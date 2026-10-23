@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { ChevronDown, ChevronLeft, ChevronRight, Clock, Plus, Search, Truck, UserPlus, X } from "lucide-react";
 
 import { PainelDaEscala, type EscalaAberta } from "@/components/operacao/escala";
-import { Avatar, COR_DO_STATUS, ROTULO_DO_STATUS, SeloDoTipo, selo, seloAlerta } from "@/components/operacao/partes";
+import { Avatar, COR_DO_STATUS, SeloDoTipo, rotuloDoStatusDaOs, selo, seloAlerta } from "@/components/operacao/partes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { resumoDoDiaEmPartes, type Agenda, type DiaDaAgenda, type GrupoDaAgenda, type OsNaAgenda, type ParteDoResumo } from "@/lib/operacao/agenda";
@@ -91,7 +91,7 @@ function ListaPorDia({ agenda, vazio, onEscalar }: { agenda: Agenda; vazio: stri
             {agenda.porDia[dia.data].map((os) => (
               <li key={os.numero} className="flex flex-col gap-1.5 rounded-md border border-border bg-card p-3 text-sm">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className={cn(selo, COR_DO_STATUS[os.status])}>{ROTULO_DO_STATUS[os.status]}</span>
+                  <span className={cn(selo, COR_DO_STATUS[os.status])}>{rotuloDoStatusDaOs({ status: os.status, tipo: os.vistoria ? "vistoria" : "servico" })}</span>
                   <Link href={hrefDaFichaDaOs(os.numero)} className="rounded font-bold tabular-nums text-foreground underline-offset-4 hover:underline">
                     OS {os.numero}
                   </Link>
@@ -127,7 +127,7 @@ function ListaPorDia({ agenda, vazio, onEscalar }: { agenda: Agenda; vazio: stri
 function Selecao({ os, onEscalar, onFechar }: { os: OsNaAgenda; onEscalar: (numero: string) => void; onFechar: () => void }) {
   return (
     <div role="region" aria-label={`OS ${os.numero}`} className="mx-4 mb-4 hidden flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm sm:flex">
-      <span className={cn(selo, COR_DO_STATUS[os.status])}>{ROTULO_DO_STATUS[os.status]}</span>
+      <span className={cn(selo, COR_DO_STATUS[os.status])}>{rotuloDoStatusDaOs({ status: os.status, tipo: os.vistoria ? "vistoria" : "servico" })}</span>
       <span className="font-bold tabular-nums text-foreground">OS {os.numero}</span>
       <span className="font-semibold text-foreground">{os.cliente}</span>
       {os.titulo ? <span className="text-foreground">{os.titulo}</span> : null}
@@ -177,7 +177,7 @@ function Bloco({ os, selecionada, onSelecionar }: { os: OsNaAgenda; selecionada:
     >
       <span className="text-xs font-bold tabular-nums">
         OS {os.numero}
-        <span className="sr-only"> · {ROTULO_DO_STATUS[os.status]}</span>
+        <span className="sr-only"> · {rotuloDoStatusDaOs({ status: os.status, tipo: os.vistoria ? "vistoria" : "servico" })}</span>
       </span>
       <span className="w-full truncate text-xs font-medium">{[os.cliente, os.janela].filter(Boolean).join(" · ")}</span>
     </button>

@@ -16,6 +16,14 @@ export const TIPOS_DE_ANDAMENTO = ["etapa", "itens", "ocorrencia", "conclusao"] 
 export type TipoDeAndamento = (typeof TIPOS_DE_ANDAMENTO)[number];
 export const TIPO_DE_ANDAMENTO_ROTULO: Record<TipoDeAndamento, string> = { etapa: "Etapa", itens: "Itens", ocorrencia: "Ocorrência", conclusao: "Conclusão" };
 
+/** O que se registra pelo escritório: na vistoria (parte 3.11d), só a etapa e a ocorrência; ela vai ao Comercial pelo celular. */
+export function tiposDeAndamento(ficha: Pick<FichaDaOs, "tipo">): readonly TipoDeAndamento[] {
+  return ficha.tipo === "vistoria" ? ["etapa", "ocorrencia"] : TIPOS_DE_ANDAMENTO;
+}
+
+/** As etapas da vistoria que o escritório registra: ir e chegar (o Fim vem com o envio ao Comercial). */
+export const ETAPAS_DA_VISTORIA_NO_ESCRITORIO = ["saida_patio", "chegada_origem"] as const satisfies readonly EtapaDaOs[];
+
 /** O aceite da conclusão (parte 3.9c): a via assinada no papel (a foto dela é a assinatura) ou sem aceite no local. */
 export type AceiteDoEscritorio = "assinatura" | "sem_aceite";
 
@@ -55,11 +63,12 @@ function horaAgora(agora: Date): string {
   return new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(agora);
 }
 
-/** As etapas que ainda se registram: as que vêm depois da última registrada. */
-export function etapasPossiveis(ficha: Pick<FichaDaOs, "etapas">): EtapaDaOs[] {
+/** As etapas que ainda se registram: as que vêm depois da última registrada (na vistoria, só ir e chegar). */
+export function etapasPossiveis(ficha: Pick<FichaDaOs, "etapas"> & Partial<Pick<FichaDaOs, "tipo">>): EtapaDaOs[] {
   const ultima = ficha.etapas.at(-1);
   const depois = ultima ? ETAPAS_DA_OS.indexOf(ultima.etapa) + 1 : 0;
-  return ETAPAS_DA_OS.slice(depois);
+  const seguintes = ETAPAS_DA_OS.slice(depois);
+  return ficha.tipo === "vistoria" ? seguintes.filter((etapa) => (ETAPAS_DA_VISTORIA_NO_ESCRITORIO as readonly string[]).includes(etapa)) : seguintes;
 }
 
 export function andamentoInicial(ficha: FichaDaOs, agora: Date): FormularioDeAndamento {
