@@ -769,3 +769,25 @@ abrem para conferir. Só existe onde a Operação está liberada.
   Storage antes do `attachPhoto`. A da ocorrência e a da inclusão vão com a
   legenda, porque o número da ocorrência e o da linha nova só existem depois
   que o registro chega.
+
+### Parte 3.8c: fila sem sinal
+
+Feita em 23/10/2026. A fila do campo (parte 3.8b) passa a viver no
+aparelho: `lib/campo/fila-guardada.ts` guarda cada registro que ainda não
+chegou no IndexedDB do navegador, com a foto dentro, a chave de
+idempotência e o instante do toque.
+
+- **Fechar o app sem sinal não perde nada.** Ao abrir, a fila guardada da
+  pessoa volta antes do que já foi tocado, e nada sai antes de ela carregar
+  (a ordem continua a dos toques). O que chega sai do aparelho.
+- **Dois envios, um registro.** O registro reenviado depois de fechar o app
+  vai com a mesma chave: a callable devolve o mesmo resultado sem gravar de
+  novo (partes 3.7 e 3.8a). O instante é sempre o do toque, nunca o do envio.
+- **Por pessoa.** O celular pode ser de mais de um: cada login vê só os
+  registros dele.
+- **Sem IndexedDB** (aba privada, navegador antigo), a fila fica só na
+  memória, como na 3.8b.
+- **Testes.** O IndexedDB dos testes é o `fake-indexeddb` (dependência de
+  desenvolvimento do app). O teste da fila no navegador simulado registra sem
+  sinal, fecha e abre o app, devolve o sinal e confere a chamada única com a
+  chave e o instante originais.

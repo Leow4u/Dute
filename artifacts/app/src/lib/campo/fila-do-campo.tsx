@@ -1,15 +1,18 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ref, uploadBytes } from "firebase/storage";
 
+import { useAppUser } from "../auth";
 import { firebaseStorage } from "../firebase";
 import { chamarOperacao, mensagemDoErro, novaChave } from "../operacao/api";
 import { adiado, avisoDaFila, destinoDoErro, enfileirar, faltaParaEnviar, registroNovo, type NovoRegistro, type RegistroNaFila } from "./fila";
+import { armazemNoAparelho, type ArmazemDaFila } from "./fila-guardada";
 
 /**
- * A fila do campo no aparelho (parte 3.8b): envia um registro de cada vez,
- * na ordem; sem sinal, espera e tenta de novo; recusado pela callable, sai da
- * fila e aparece como falha. A parte 3.8c guarda a fila no IndexedDB para
- * sobreviver a fechar o app.
+ * A fila do campo no aparelho (partes 3.8b e 3.8c): envia um registro de cada
+ * vez, na ordem; sem sinal, espera e tenta de novo; recusado pela callable,
+ * sai da fila e aparece como falha. A fila fica guardada no IndexedDB (por
+ * pessoa): fechar o app sem sinal não perde nada, e ela volta ao abrir. Nada
+ * sai antes de a fila guardada carregar, para a ordem continuar a dos toques.
  */
 
 export type FalhaDaFila = { chave: string; rotulo: string; mensagem: string };
@@ -51,12 +54,40 @@ async function enviarRegistro(registro: RegistroNaFila): Promise<void> {
   await chamarOperacao(registro.callable, registro.dados);
 }
 
-export function FilaDoCampoProvider({ children }: { children: ReactNode }) {
+export function FilaDoCampoProvider({ children, armazem: armazemDado }: { children: ReactNode; armazem?: ArmazemDaFila }) {
   const online = useOnline();
+  const { user } = useAppUser();
+  const uid = user?.uid ?? null;
+  const armazem = useMemo(() => armazemDado ?? armazemNoAparelho(), [armazemDado]);
   const [fila, setFila] = useState<RegistroNaFila[]>([]);
+  const [carregada, setCarregada] = useState(false);
   const [falhas, setFalhas] = useState<FalhaDaFila[]>([]);
   const [relogio, setRelogio] = useState(0);
   const enviando = useRef<string | null>(null);
+
+  // Ao abrir: a fila guardada da pessoa vem antes do que já foi tocado agora.
+  useEffect(() => {
+    if (!uid) return undefined;
+    let vivo = true;
+    setCarregada(false);
+    void armazem
+      .carregar(uid)
+      .catch(() => [] as RegistroNaFila[])
+      .then((guardada) => {
+        if (!vivo) return;
+        setFila((atual) => [...guardada, ...atual.filter((registro) => !guardada.some((outro) => outro.chave === registro.chave))]);
+        setCarregada(true);
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [armazem, uid]);
+
+  // A cada mudança, a fila guardada passa a ser a atual (o que chegou sai).
+  useEffect(() => {
+    if (!uid || !carregada) return;
+    void armazem.guardar(uid, fila).catch(() => undefined);
+  }, [armazem, uid, carregada, fila]);
 
   const enviar = useCallback((novo: NovoRegistro) => {
     setFila((atual) => enfileirar(atual, registroNovo(novo, novaChave(), new Date()), enviando.current));
@@ -64,7 +95,7 @@ export function FilaDoCampoProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const proximo = fila[0];
-    if (!online || !proximo || enviando.current) return undefined;
+    if (!carregada || !online || !proximo || enviando.current) return undefined;
     // Depois de uma falha de rede, espera a vez dele (o sinal voltando também dispara).
     const falta = faltaParaEnviar(proximo, new Date());
     if (falta > 0) {
@@ -88,7 +119,7 @@ export function FilaDoCampoProvider({ children }: { children: ReactNode }) {
       });
     return undefined;
     // O relógio dispara a próxima tentativa; a fila e o sinal, o próximo envio.
-  }, [fila, online, relogio]);
+  }, [fila, online, relogio, carregada]);
 
   // O sinal voltou: quem esperava a vez tenta já.
   useEffect(() => {
