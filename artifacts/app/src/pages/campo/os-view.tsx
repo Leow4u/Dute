@@ -45,7 +45,7 @@ export type EstadoDaOsNoCampo = "carregando" | "erro" | "nao_encontrada" | "pron
 /** O que acompanha a foto: a etapa em curso, a linha ou a legenda (da inclusão e da ocorrência). */
 export type ExtraDaFoto = { etapa?: EtapaDaOs | null; linha?: string | null; legenda?: string | null };
 
-function Cartao({ titulo, children, acao }: { titulo: string; children: ReactNode; acao?: ReactNode }) {
+export function Cartao({ titulo, children, acao }: { titulo: string; children: ReactNode; acao?: ReactNode }) {
   return (
     <section aria-label={titulo} className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
       <div className="flex items-center justify-between gap-2">
@@ -57,7 +57,7 @@ function Cartao({ titulo, children, acao }: { titulo: string; children: ReactNod
   );
 }
 
-function BotaoDeFoto({ rotulo, onFotos, variante = "outline" }: { rotulo: string; onFotos: (arquivos: File[]) => void; variante?: "outline" | "primario" }) {
+export function BotaoDeFoto({ rotulo, onFotos, variante = "outline" }: { rotulo: string; onFotos: (arquivos: File[]) => void; variante?: "outline" | "primario" }) {
   return (
     <label
       className={cn(
@@ -262,7 +262,7 @@ function Equipe({ ficha, pendentes, uid, recebe, onRegistrar, agora }: { ficha: 
   );
 }
 
-function useUrlsGuardadas(pendentes: readonly RegistroNaFila[], numero: string): Array<{ chave: string; url: string }> {
+export function useUrlsGuardadas(pendentes: readonly RegistroNaFila[], numero: string): Array<{ chave: string; url: string }> {
   const fotos = useMemo(() => pendentes.filter((registro) => registro.foto && registro.dados.numero === numero), [pendentes, numero]);
   const [urls, setUrls] = useState<Array<{ chave: string; url: string }>>([]);
   useEffect(() => {
