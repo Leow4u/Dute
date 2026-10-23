@@ -1,6 +1,6 @@
 # Plano: Plataforma Dute (IA native)
 
-Aprovado pelo Leonardo em 19/10/2026. O andamento das fases fica no `CLAUDE.md` da raiz; as telas, em `docs/mockups/`.
+Aprovado pelo Leonardo em 19/10/2026. O andamento das fases fica no `CLAUDE.md` da raiz; as telas, em `docs/mockups/`. O desenho de cada fase, com as partes em ordem e as decisões posteriores a este plano (shell por módulo, proposta da Operação, Omie e legado fora), está em `plano-de-implantacao.md` (23/10/2026); onde os dois divergem, vale o plano de implantação.
 
 ## Contexto
 
