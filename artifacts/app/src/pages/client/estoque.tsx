@@ -12,6 +12,7 @@ import {
   Eye,
   Grid2X2,
   List,
+  Mars,
   Minus,
   Package,
   PackageCheck,
@@ -23,6 +24,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Truck,
+  Venus,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -54,7 +56,16 @@ import {
   type StoredCart,
 } from "@/lib/client-cart";
 import { cartFromEvent, eventDateFromDueAt, eventDestination, eventDueAt, eventNotes } from "@/lib/client-events";
-import { overviewLine, productTitle, productType, stockOverview, typeOptions, typeValue } from "@/lib/portal-stock";
+import {
+  overviewLine,
+  productGender,
+  productTitle,
+  productType,
+  stockOverview,
+  typeOptions,
+  typeValue,
+  type ProductGender,
+} from "@/lib/portal-stock";
 import { cn } from "@/lib/utils";
 import { groupFamilies, variantLabel, type Family } from "@/lib/stock-variants";
 
@@ -1093,7 +1104,7 @@ function CatalogProgress({
   );
 }
 
-function StockList({
+export function StockList({
   products,
   cart,
   draftQuantities,
@@ -1133,6 +1144,7 @@ function StockList({
               draftQuantities,
             );
             const status = productStatus(product, liveAvailable);
+            const gender = productGender(product);
 
             return (
               <TableRow key={product.key}>
@@ -1148,6 +1160,7 @@ function StockList({
                   >
                     {productTitle(product)}
                   </button>
+                  {gender ? <GenderChip gender={gender} className="ml-2 align-middle" /> : null}
                   <span className="ml-2 text-xs text-muted-foreground">{productType(product)}</span>
                   <div className="mt-1 flex flex-wrap gap-2">
                     <StockBadge status={status} />
@@ -1309,7 +1322,7 @@ function FamilyGrid({
  * Um card por produto. Com tamanhos agrupados, a pessoa escolhe a variação
  * nos botões (cada um com o disponível) e adiciona daquele tamanho.
  */
-function FamilyCard({
+export function FamilyCard({
   family,
   cart,
   draftQuantities,
@@ -1344,6 +1357,7 @@ function FamilyCard({
     family.variants.reduce((sum, entry) => sum + liveAvailableForProduct(entry.item, cart), 0),
   );
   const title = productTitle(product);
+  const gender = productGender(product);
   // Tamanho único ("U") não precisa de botão: o disponível já diz tudo.
   const showVariants = family.variants.length > 1;
   const hasPhoto = Boolean(photo.photoUrl);
@@ -1361,7 +1375,7 @@ function FamilyCard({
           className="cursor-pointer text-left"
           aria-label={`Ver detalhes de ${title}`}
         >
-          <ProductVisual product={photo} status={status} inCart={inCart} />
+          <ProductVisual product={photo} status={status} inCart={inCart} gender={gender} />
         </button>
       ) : null}
 
@@ -1372,9 +1386,12 @@ function FamilyCard({
           </div>
         ) : null}
         <div className="min-w-0">
-          <p className="truncate text-xs uppercase tracking-wide text-muted-foreground">
-            {productType(product)} · {family.base || product.clientCode}
-          </p>
+          <div className="flex min-w-0 items-center gap-2">
+            <p className="min-w-0 truncate text-xs uppercase tracking-wide text-muted-foreground">
+              {productType(product)} · {family.base || product.clientCode}
+            </p>
+            {!hasPhoto && gender ? <GenderChip gender={gender} /> : null}
+          </div>
           <button
             type="button"
             onClick={() => onDetails(product)}
@@ -1800,6 +1817,7 @@ function ProductDetailPanel({
   const remaining = Math.max(0, liveAvailable - draftQuantity);
   const status = productStatus(product, liveAvailable);
   const showPhysicalTotal = product.total > liveAvailable;
+  const gender = productGender(product);
 
   return (
     <ModulePanel
@@ -1833,6 +1851,7 @@ function ProductDetailPanel({
             <span className="rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground">
               {productType(product)}
             </span>
+            {gender ? <GenderChip gender={gender} className="self-center" /> : null}
             <StockBadge status={status} />
           </div>
         </div>
@@ -1917,14 +1936,29 @@ function ProductVisual({
   large = false,
   compact = false,
   inCart = 0,
+  gender = null,
 }: {
   product: StockProduct;
   status: ReturnType<typeof productStatus>;
   large?: boolean;
   compact?: boolean;
   inCart?: number;
+  gender?: ProductGender | null;
 }) {
   const initials = product.category.slice(0, 2).toUpperCase();
+  // Situação à esquerda e gênero à direita, numa faixa só: não se sobrepõem
+  // nem no cartão mais estreito.
+  const badges = (
+    <div
+      className={cn(
+        "absolute flex flex-wrap items-start gap-2",
+        compact ? "inset-x-3 top-3" : "inset-x-4 top-4",
+      )}
+    >
+      <StockBadge status={status} compact={compact} inCart={inCart} />
+      {gender ? <GenderChip gender={gender} onPhoto className="ml-auto" /> : null}
+    </div>
+  );
 
   // Foto real tirada pelo operador na entrada; sem foto, mantém o
   // placeholder atual.
@@ -1949,11 +1983,7 @@ function ProductVisual({
                 : "h-[170px]",
           )}
         />
-        <div
-          className={cn("absolute", compact ? "left-3 top-3" : "left-4 top-4")}
-        >
-          <StockBadge status={status} compact={compact} inCart={inCart} />
-        </div>
+        {badges}
       </div>
     );
   }
@@ -2003,11 +2033,7 @@ function ProductVisual({
           </div>
         ) : null}
       </div>
-      <div
-        className={cn("absolute", compact ? "left-3 top-3" : "left-4 top-4")}
-      >
-        <StockBadge status={status} compact={compact} inCart={inCart} />
-      </div>
+      {badges}
     </div>
   );
 }
@@ -2235,6 +2261,54 @@ function StockBadge({
     );
   }
   return null;
+}
+
+const genderChips: Record<ProductGender, { short: string; label: string; icon: LucideIcon; className: string }> = {
+  feminino: {
+    short: "FEM",
+    label: "Feminino",
+    icon: Venus,
+    className: "border-gender-fem-soft-border bg-gender-fem-soft text-gender-fem-soft-foreground",
+  },
+  masculino: {
+    short: "MASC",
+    label: "Masculino",
+    icon: Mars,
+    className: "border-gender-masc-soft-border bg-gender-masc-soft text-gender-masc-soft-foreground",
+  },
+};
+
+/**
+ * Gênero do produto em cor, para não depender de ler o nome
+ * (docs/mockups/PortalEstoqueGenero.dc.html, opção A). Sobre a foto leva a
+ * sombra do selo de situação; na linha do tipo, na lista e no detalhe, não.
+ */
+function GenderChip({
+  gender,
+  onPhoto = false,
+  className,
+}: {
+  gender: ProductGender;
+  onPhoto?: boolean;
+  className?: string;
+}) {
+  const chip = genderChips[gender];
+  const Icon = chip.icon;
+  return (
+    <span
+      title={chip.label}
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 text-xs font-bold uppercase tracking-wide",
+        onPhoto ? "h-6 shadow-sm" : "h-5",
+        chip.className,
+        className,
+      )}
+    >
+      <Icon className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden="true" />
+      <span aria-hidden="true">{chip.short}</span>
+      <span className="sr-only">{chip.label}</span>
+    </span>
+  );
 }
 
 /** Aplica o rascunho uma vez, quando o estoque já carregou. */

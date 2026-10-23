@@ -5,6 +5,10 @@
  * pima preta SW") e a categoria como o tipo ("Polo", "Sacola"). O título do
  * cartão usa o nome; o filtro agrupa pela categoria (agrupar pelo nome dava
  * uma opção por produto).
+ *
+ * O gênero do chip FEM/MASC vem do mesmo texto do título, não do campo Gênero
+ * do cadastro: a Contagem pré-preenche esse campo pelo prefixo do código (A.01
+ * vira Masculino), e a BTG usa A.01 também em polo feminina (A.01.0805.002).
  */
 
 import { displayName } from "./stock-variants";
@@ -34,6 +38,26 @@ export function productTitle(product: Pick<StockLike, "name" | "category">) {
 /** Tipo do produto, a categoria (POLO → Polo), para o filtro e a linha de apoio. */
 export function productType(product: Pick<StockLike, "category">) {
   return displayName(categoryOf(product) || "Outros");
+}
+
+export type ProductGender = "feminino" | "masculino";
+
+const FEMININO = /\b(?:feminin[oa]s?|fem)\b/;
+const MASCULINO = /\b(?:masculin[oa]s?|masc)\b/;
+
+/**
+ * Gênero dito no nome que o cartão mostra ("Polo feminina…", "Camiseta
+ * masculino…", "fem."/"masc."). Sem a palavra, ou com as duas, não marca.
+ */
+export function productGender(product: Pick<StockLike, "name" | "category">): ProductGender | null {
+  const text = productTitle(product)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  const feminino = FEMININO.test(text);
+  const masculino = MASCULINO.test(text);
+  if (feminino === masculino) return null;
+  return feminino ? "feminino" : "masculino";
 }
 
 export function typeValue(product: Pick<StockLike, "category">) {

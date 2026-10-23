@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { overviewLine, productTitle, productType, stockOverview, typeOptions, typeValue } from "./portal-stock";
+import { overviewLine, productGender, productTitle, productType, stockOverview, typeOptions, typeValue } from "./portal-stock";
 
 // Como a Contagem e o Receber gravam: nome é a descrição, categoria é o tipo.
 const products = [
@@ -36,5 +36,34 @@ describe("estoque do portal", () => {
     expect(overview).toEqual({ items: 5, pieces: 724, withStock: 4, low: 1, zero: 1, archived: 1 });
     expect(overviewLine(overview)).toBe("724 peças em 5 itens · 1 abaixo do mínimo · 1 sem saldo");
     expect(overviewLine(stockOverview([products[2]!]))).toBe("435 peças em 1 item");
+  });
+});
+
+describe("gênero do produto, pelo nome que o cartão mostra", () => {
+  it("lê feminino e masculino no nome, com ou sem acento, em qualquer caixa e abreviado", () => {
+    expect(productGender(products[1]!)).toBe("feminino");
+    expect(productGender(products[0]!)).toBe("masculino");
+    expect(productGender({ name: "Polo feminina piquet azul marinho PP", category: "Polo" })).toBe("feminino");
+    expect(productGender({ name: "Camiseta feminino piquet preto GG", category: "Camiseta" })).toBe("feminino");
+    expect(productGender({ name: "CAMISETA MASCULINA FIO EGÍPCIO", category: "" })).toBe("masculino");
+    expect(productGender({ name: "Jaqueta copa masculina azul G", category: "Jaqueta" })).toBe("masculino");
+    expect(productGender({ name: "Blusa Femínina de tricot", category: "" })).toBe("feminino");
+    expect(productGender({ name: "Camiseta fem. piquet", category: "" })).toBe("feminino");
+    expect(productGender({ name: "Polo MASC azul", category: "" })).toBe("masculino");
+  });
+
+  it("sem gênero no nome, ou com os dois, não marca", () => {
+    expect(productGender(products[2]!)).toBeNull();
+    expect(productGender(products[3]!)).toBeNull();
+    expect(productGender({ name: "Tricot meio zíper preto M", category: "Tricot" })).toBeNull();
+    expect(productGender({ name: "Kit polo masculina e feminina", category: "" })).toBeNull();
+    expect(productGender({ name: "Polo unissex", category: "" })).toBeNull();
+    expect(productGender({ name: "Máscara de proteção", category: "" })).toBeNull();
+    expect(productGender({ name: "Femme Fatale", category: "" })).toBeNull();
+  });
+
+  it("a categoria só conta quando o nome falta, como no título", () => {
+    expect(productGender({ name: "", category: "Polo feminina" })).toBe("feminino");
+    expect(productGender({ name: "Polo piquet", category: "Feminino" })).toBeNull();
   });
 });

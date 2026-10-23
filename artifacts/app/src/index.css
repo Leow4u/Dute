@@ -68,6 +68,12 @@
   --color-amber-soft: hsl(var(--amber-soft));
   --color-amber-soft-border: hsl(var(--amber-soft-border));
   --color-amber-soft-foreground: hsl(var(--amber-soft-foreground));
+  --color-gender-fem-soft: hsl(var(--gender-fem-soft));
+  --color-gender-fem-soft-border: hsl(var(--gender-fem-soft-border));
+  --color-gender-fem-soft-foreground: hsl(var(--gender-fem-soft-foreground));
+  --color-gender-masc-soft: hsl(var(--gender-masc-soft));
+  --color-gender-masc-soft-border: hsl(var(--gender-masc-soft-border));
+  --color-gender-masc-soft-foreground: hsl(var(--gender-masc-soft-foreground));
 
   --color-agent: hsl(var(--agent));
   --color-agent-hover: hsl(var(--agent-hover));
@@ -214,6 +220,15 @@
   --amber-soft: 41 91% 91%; /* #FDF0D5 */
   --amber-soft-border: 41 80% 80%;
   --amber-soft-foreground: 33 100% 27%; /* #8A4B00 */
+  /* Gênero no Estoque do portal (docs/mockups/PortalEstoqueGenero.dc.html,
+     opção A, aprovada em 23/10/2026): rosa para feminino, azul-petróleo para
+     masculino. Só o chip FEM/MASC usa; não é cor de status. */
+  --gender-fem-soft: 326 78% 95%; /* #FCE7F3 */
+  --gender-fem-soft-border: 330 72% 83%; /* #F3B4D3 */
+  --gender-fem-soft-foreground: 336 74% 35%; /* #9D174D */
+  --gender-masc-soft: 167 85% 89%; /* #CCFBF1 */
+  --gender-masc-soft-border: 168 57% 72%; /* #8FE0D0 */
+  --gender-masc-soft-foreground: 176 69% 22%; /* #115E59 */
 
   /* Identidade do Agente Dute (roxo). Antes hex solto: #5b3fc4, #4c33a8,
      #3b2a85, #7a66c9, #8b5cf6, #faf8ff, #c9b8fb. */
@@ -336,6 +351,12 @@
   --amber-soft: 38 55% 12%;
   --amber-soft-border: 38 50% 27%;
   --amber-soft-foreground: 40 90% 72%;
+  --gender-fem-soft: 330 45% 14%;
+  --gender-fem-soft-border: 330 40% 30%;
+  --gender-fem-soft-foreground: 327 87% 82%;
+  --gender-masc-soft: 176 50% 11%;
+  --gender-masc-soft-border: 176 40% 25%;
+  --gender-masc-soft-foreground: 168 70% 72%;
 
   --agent: 253 65% 62%;
   --agent-hover: 253 65% 56%;
