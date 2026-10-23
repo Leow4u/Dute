@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Campo · OS de vistoria</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:15px;line-height:1.45}
+a{color:#0054CE;text-decoration:none}a:hover{color:#004496}
+h1,h2,h3,p{margin:0}
+.ic{width:20px;height:20px;flex:0 0 auto}
+.ic-s{width:16px;height:16px;flex:0 0 auto}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.card h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:800;color:#5F6368}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 16px;border-radius:8px;font:700 15px Manrope,sans-serif;border:1px solid transparent;cursor:pointer;white-space:nowrap;text-decoration:none}
+.btn-p{background:#E71C23;color:#fff}.btn-p:hover{background:#AD0015;color:#fff}
+.btn-s{background:#fff;color:#161616;border-color:#D4D4CF}.btn-s:hover{background:#F0F0ED;color:#161616}
+.btn-add{background:#fff;color:#161616;border:1.5px dashed #D4D4CF}.btn-add:hover{background:#F0F0ED}
+.badge{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:6px;font-size:12.5px;font-weight:700;white-space:nowrap;border:1px solid transparent}
+.s-exec{background:#FDF0D5;border-color:#F3DCA3;color:#8A4B00}
+.s-ok{background:#DDF5E4;border-color:#B6E4C4;color:#14602F}
+.inp{height:46px;border:1px solid #D4D4CF;border-radius:8px;padding:0 14px;font:600 15px Manrope,sans-serif;background:#fff;color:#161616;width:100%}
+.inp:focus{outline:2px solid #0054CE;outline-offset:1px}
+textarea.inp{height:auto;padding:10px 14px;resize:vertical;line-height:1.45}
+.lbl{font-size:12.5px;font-weight:700;color:#3F403F;display:block;margin-bottom:6px}
+.fld{display:flex;flex-direction:column;min-width:0}
+.muted{color:#5F6368}
+.thumb{width:100%;height:64px;border-radius:8px;background:#F0F0ED;border:1px solid #E5E5E1;display:flex;align-items:center;justify-content:center;color:#5F6368;position:relative}
+.thumb svg{width:22px;height:22px}
+.thumb em{position:absolute;left:5px;bottom:5px;font-style:normal;font-size:10.5px;font-weight:800;background:#161616;color:#fff;padding:1px 5px;border-radius:4px}
+.mk{width:28px;height:28px;flex:0 0 auto;display:inline-flex}
+.ok{width:28px;height:28px;border-radius:50%;background:#DDF5E4;color:#14602F;border:1px solid #B6E4C4;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+.cur{width:28px;height:28px;border-radius:50%;background:#161616;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex:0 0 auto}
+.todo{width:28px;height:28px;border-radius:50%;background:#fff;border:1.5px solid #D4D4CF;color:#5F6368;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex:0 0 auto}
+.amb{display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid #EFEFEC}
+.amb:first-child{border-top:0;padding-top:2px}
+.amb b{display:block;font-size:15px;font-weight:700}
+.amb .sb{display:block;font-size:13px;font-weight:600;color:#5F6368}
+.lv{display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid #EFEFEC}
+.lv:first-child{border-top:0;padding-top:0}
+.lv .nm{display:block;font-size:14.5px;font-weight:700;line-height:1.3}
+.lv .un{display:block;font-size:12.5px;font-weight:700;color:#5F6368}
+.stp{display:inline-flex;align-items:center;border:1px solid #D4D4CF;border-radius:10px;overflow:hidden;flex:0 0 auto;background:#fff}
+.stp button{width:44px;height:44px;border:0;background:#fff;color:#161616;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.stp button:hover{background:#F0F0ED}
+.stp b{min-width:42px;text-align:center;font-size:17px;font-weight:800;font-variant-numeric:tabular-nums}
+.bn{height:78px;background:#161616;display:flex;justify-content:space-around;align-items:stretch;padding:8px 8px 12px;flex:0 0 auto}
+.bn a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:11.5px;font-weight:700;color:rgba(255,255,255,.6);min-width:68px;min-height:44px;border-radius:8px;text-decoration:none}
+.bn a.on{color:#fff}
+.bn a.on svg{color:#E71C23}
+.bn a.agent{color:#C9B8FB}
+.bn a:hover{color:#fff}
+</style>
+</helmet>
+<div style="width: 390px; height: 1790px; background: #F5F5F3; display: flex; flex-direction: column; overflow: hidden">
+  <header style="background: #161616; color: #fff; padding: 16px 16px 18px; display: flex; flex-direction: column; gap: 12px; border-radius: 0 0 20px 20px; flex: 0 0 auto">
+    <div style="display: flex; align-items: center; gap: 12px">
+      <a href="Campo2Hoje.dc.html" aria-label="Voltar" style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,.1); display: inline-flex; align-items: center; justify-content: center; color: #fff; flex: 0 0 auto"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7M19 12H5"/></svg></a>
+      <div style="flex: 1 1 auto; min-width: 0"><h1 style="font-size: 21px; font-weight: 800; letter-spacing: -.01em">OS 000216</h1><span style="font-size: 13px; color: rgba(255,255,255,.62); font-weight: 600">Vistoria · DM 000049</span></div>
+      <span class="badge s-exec"><i style="width: 7px; height: 7px; border-radius: 50%; background: #D98B00; display: inline-block"></i>Em execução</span>
+    </div>
+    <div style="display: flex; align-items: flex-start; gap: 12px; background: rgba(255,255,255,.08); border-radius: 10px; padding: 10px 14px">
+      <svg class="ic-s" style="margin-top: 4px; color: rgba(255,255,255,.7)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      <div style="min-width: 0"><b style="font-size: 16px; font-weight: 800; display: block">Andrade &amp; Lemos Advocacia</b><span style="font-size: 13px; color: rgba(255,255,255,.62); font-weight: 600">Av. Paulista, 1.842</span></div>
+    </div>
+  </header>
+  <main style="flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 12px">
+    <section class="card" aria-labelledby="t-amb">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px"><h2 id="t-amb">Ambientes</h2><span class="muted" style="font-size: 13px; font-weight: 700">{{ feitos }}</span></div>
+      <div style="display: flex; flex-direction: column">
+        <div class="amb"><span class="ok"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><div style="flex: 1 1 auto; min-width: 0"><b>Recepção</b><span class="sb">8 fotos</span></div></div>
+        <div class="amb"><span class="ok"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><div style="flex: 1 1 auto; min-width: 0"><b>Sala de reunião</b><span class="sb">6 fotos</span></div></div>
+        <div class="amb">
+          <span class="mk">
+            <sc-if value="{{ estFeito }}" hint-placeholder-val="{{ false }}"><span class="ok"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span></sc-if>
+            <sc-if value="{{ estAberto }}" hint-placeholder-val="{{ true }}"><span class="cur">3</span></sc-if>
+          </span>
+          <div style="flex: 1 1 auto; min-width: 0"><b>Estações · 12</b><span class="sb">{{ estStatus }} · 3 fotos</span></div>
+        </div>
+        <div class="amb"><span class="todo">4</span><div style="flex: 1 1 auto; min-width: 0"><b>Arquivo</b><span class="sb">A fazer</span></div></div>
+      </div>
+    </section>
+    <section class="card" aria-labelledby="t-atual" style="border-color: #F3DCA3">
+      <h2>Ambiente atual</h2>
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+        <h3 id="t-atual" style="font-size: 19px; font-weight: 800; letter-spacing: -.01em">Estações · 12</h3>
+        <span style="display: inline-flex; flex: 0 0 auto">
+          <sc-if value="{{ estAberto }}" hint-placeholder-val="{{ true }}"><span class="badge s-exec">Em andamento</span></sc-if>
+          <sc-if value="{{ estFeito }}" hint-placeholder-val="{{ false }}"><span class="badge s-ok">Feito</span></sc-if>
+        </span>
+      </div>
+      <div>
+        <span class="lbl">Fotos · 3</span>
+        <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+          <div class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><em>16:31</em></div>
+          <div class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><em>16:34</em></div>
+          <div class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><em>16:38</em></div>
+          <button type="button" class="thumb" style="background: #fff; border: 1.5px dashed #D4D4CF; cursor: pointer; flex-direction: column; gap: 3px; font: 700 11.5px Manrope, sans-serif; color: #161616"><svg viewBox="0 0 24 24" fill="none" stroke="#E71C23" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Tirar foto</button>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px"><span class="lbl" style="margin: 0">Itens levantados</span><span class="muted" style="font-size: 12.5px; font-weight: 700">Catálogo Dutelog</span></div>
+        <div style="display: flex; flex-direction: column">
+          <div class="lv">
+            <div style="flex: 1 1 auto; min-width: 0"><span class="nm">Desmontagem de estação</span><span class="un">un</span></div>
+            <div class="stp"><button type="button" onClick="{{ menosEst }}" aria-label="Diminuir desmontagem de estação"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button><b>{{ est }}</b><button type="button" onClick="{{ maisEst }}" aria-label="Aumentar desmontagem de estação"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div>
+          </div>
+          <div class="lv">
+            <div style="flex: 1 1 auto; min-width: 0"><span class="nm">Transporte de cadeira</span><span class="un">un</span></div>
+            <div class="stp"><button type="button" onClick="{{ menosCad }}" aria-label="Diminuir transporte de cadeira"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button><b>{{ cad }}</b><button type="button" onClick="{{ maisCad }}" aria-label="Aumentar transporte de cadeira"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div>
+          </div>
+          <div class="lv">
+            <div style="flex: 1 1 auto; min-width: 0"><span class="nm">Transporte de armário</span><span class="un">un</span></div>
+            <div class="stp"><button type="button" onClick="{{ menosArm }}" aria-label="Diminuir transporte de armário"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button><b>{{ arm }}</b><button type="button" onClick="{{ maisArm }}" aria-label="Aumentar transporte de armário"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-add" style="width: 100%"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Adicionar item</button>
+      </div>
+      <button type="button" class="btn btn-s" onClick="{{ alternar }}" style="width: 100%"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>{{ botaoAmbiente }}</button>
+    </section>
+    <section class="card" aria-labelledby="t-med">
+      <h2 id="t-med">Medidas</h2>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+        <div class="fld"><label class="lbl" for="elev">Elevador de serviço</label><input class="inp" id="elev" value="1,10 × 2,10 m"></div>
+        <div class="fld"><label class="lbl" for="carga">Carga do elevador</label><input class="inp" id="carga" value="600 kg"></div>
+        <div class="fld"><label class="lbl" for="porta">Porta</label><input class="inp" id="porta" value="0,90 m"></div>
+        <div style="display: flex; align-items: flex-end; min-width: 0"><button type="button" class="btn btn-s" style="width: 100%; height: 46px; padding: 0 12px; font-size: 14px"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Nova medida</button></div>
+      </div>
+    </section>
+    <section class="card" aria-labelledby="t-ac">
+      <h2 id="t-ac">Acesso</h2>
+      <div class="fld"><label class="lbl" for="hcarga">Horário de carga</label><input class="inp" id="hcarga" value="Depois das 19:00 ou sábado"></div>
+      <div class="fld"><label class="lbl" for="vaga">Vaga de carga</label><input class="inp" id="vaga" value="Rua Pamplona"></div>
+    </section>
+    <section class="card">
+      <div class="fld"><label class="lbl" for="obs">Observações</label><textarea class="inp" id="obs" rows="3"></textarea></div>
+    </section>
+    <a href="Campo2Hoje.dc.html" class="btn btn-p" style="width: 100%; height: 54px; font-size: 16px; flex: 0 0 auto"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>Enviar vistoria ao comercial</a>
+  </main>
+  <nav class="bn" aria-label="Menu">
+    <a href="Campo2Hoje.dc.html"><svg class="ic" style="width: 22px; height: 22px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>Início</a>
+    <a class="on" href="Campo2Hoje.dc.html"><svg class="ic" style="width: 22px; height: 22px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h6"/></svg>Minhas OS</a>
+    <a class="agent" href="Campo2Hoje.dc.html"><svg class="ic" style="width: 22px; height: 22px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></svg>Agent Dute</a>
+    <a href="Campo2Hoje.dc.html"><svg class="ic" style="width: 22px; height: 22px" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/><circle cx="5" cy="12" r="1.8"/></svg>Mais</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1790}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const s = this.state || {};
+    const q = Object.assign({ est: 12, cad: 24, arm: 6 }, s.q || {});
+    const muda = (k, d) => () => {
+      const novo = Object.assign({}, q);
+      novo[k] = Math.max(0, q[k] + d);
+      this.setState({ q: novo });
+    };
+    const feito = s.feito === true;
+    return {
+      est: q.est,
+      cad: q.cad,
+      arm: q.arm,
+      menosEst: muda('est', -1),
+      maisEst: muda('est', 1),
+      menosCad: muda('cad', -1),
+      maisCad: muda('cad', 1),
+      menosArm: muda('arm', -1),
+      maisArm: muda('arm', 1),
+      estFeito: feito,
+      estAberto: !feito,
+      estStatus: feito ? 'Feito' : 'Em andamento',
+      feitos: feito ? '3 de 4 feitos' : '2 de 4 feitos',
+      botaoAmbiente: feito ? 'Reabrir ambiente' : 'Concluir ambiente',
+      alternar: () => this.setState({ feito: !feito })
+    };
+  }
+}
+</script>
+</body>
+</html>

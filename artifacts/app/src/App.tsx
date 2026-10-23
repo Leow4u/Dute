@@ -355,7 +355,7 @@ function AuthShell({
           <img
             src={markPath}
             alt="Dutelog"
-            className="h-9 w-9 object-contain"
+            className="h-9 w-9 rounded-lg object-contain"
           />
         </header>
 

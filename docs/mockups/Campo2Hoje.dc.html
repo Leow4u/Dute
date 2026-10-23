@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Campo · minhas OS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:15px;line-height:1.45}
+a{color:#0054CE;text-decoration:none}a:hover{color:#004496}
+h1,h2,h3,p{margin:0}
+.ic{width:22px;height:22px;flex:0 0 auto}
+.ic-s{width:16px;height:16px;flex:0 0 auto}
+.sec{font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:800;color:#5F6368;padding:0 4px}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 16px;border-radius:8px;font:700 15px Manrope,sans-serif;border:1px solid transparent;cursor:pointer;white-space:nowrap;text-decoration:none}
+.btn-p{background:#E71C23;color:#fff}.btn-p:hover{background:#AD0015;color:#fff}
+.btn-s{background:#fff;color:#161616;border-color:#D4D4CF}.btn-s:hover{background:#F0F0ED;color:#161616}
+.badge{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 9px;border-radius:6px;font-size:12.5px;font-weight:700;white-space:nowrap;border:1px solid transparent}
+.t-plan{background:#F0F0ED;border-color:#E5E5E1;color:#3F403F}
+.pill{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:6px;background:#F0F0ED;border:1px solid #E5E5E1;color:#161616;font-size:12.5px;font-weight:700;white-space:nowrap}
+.muted{color:#5F6368}
+.av{width:40px;height:40px;border-radius:50%;background:#161616;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex:0 0 auto}
+.net{display:inline-flex;align-items:center;gap:8px;height:30px;padding:0 12px;border-radius:8px;background:rgba(217,139,0,.16);border:1px solid rgba(217,139,0,.5);color:#FFC861;font-size:13px;font-weight:700;align-self:flex-start}
+.bn{height:78px;background:#161616;display:flex;justify-content:space-around;align-items:stretch;padding:8px 8px 12px;flex:0 0 auto}
+.bn a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:11.5px;font-weight:700;color:rgba(255,255,255,.6);min-width:68px;min-height:44px;border-radius:8px;text-decoration:none}
+.bn a.on{color:#fff}
+.bn a.on svg{color:#E71C23}
+.bn a.agent{color:#C9B8FB}
+.bn a:hover{color:#fff}
+.later{display:flex;align-items:center;gap:12px;padding:12px 16px;color:#161616;text-decoration:none;min-height:64px}
+.later+.later{border-top:1px solid #F0F0ED}
+.later b{display:block;font-size:15px;font-weight:700}
+.later span{display:block;font-size:13px;color:#5F6368}
+.later .d{flex:0 0 58px;display:flex;flex-direction:column}
+.later .d small{font-size:12px;font-weight:700;color:#5F6368;white-space:nowrap}
+.later .d strong{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.2}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; background: #F5F5F3; display: flex; flex-direction: column; overflow: hidden">
+  <header style="background: #161616; color: #fff; padding: 16px 20px 16px; display: flex; flex-direction: column; gap: 12px; border-radius: 0 0 20px 20px">
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+      <div><span style="font-size: 13px; font-weight: 600; color: rgba(255,255,255,.6)">Terça, 20 de outubro</span><h1 style="font-size: 26px; font-weight: 800; letter-spacing: -.02em">Olá, Carlos</h1></div>
+      <span class="av" style="background: #E71C23">CS</span>
+    </div>
+    <span class="net"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h.01"/><path d="M8.5 16.43a5 5 0 0 1 7 0"/><path d="M5 12.86a10 10 0 0 1 5.17-2.69"/><path d="M19 12.86a10 10 0 0 0-2-1.52"/><path d="M2 8.82a15 15 0 0 1 4.18-2.64"/><path d="M22 8.82a15 15 0 0 0-11.29-3.76"/><path d="m2 2 20 20"/></svg>Sem sinal · 4 registros guardados</span>
+  </header>
+  <main style="flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 14px 16px 0; display: flex; flex-direction: column; gap: 8px">
+    <span class="sec">Agora</span>
+    <div class="card" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px"><span class="muted" style="font-size: 13px; font-weight: 700">OS 000211</span><span class="badge t-plan"><svg class="ic-s" style="width: 14px; height: 14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Planejada</span></div>
+      <div><b style="font-size: 19px; font-weight: 800; display: block; line-height: 1.25">Itaú Unibanco</b><span class="muted" style="font-size: 14px">Transporte e montagem · DM 000045</span></div>
+      <div style="display: flex; gap: 12px; align-items: flex-start; padding: 10px 14px; background: #F5F5F3; border-radius: 8px">
+        <span style="width: 34px; height: 34px; border-radius: 8px; background: #FDF0D5; color: #8A4B00; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></span>
+        <div style="min-width: 0"><span style="font-size: 12.5px; font-weight: 700; display: block; color: #8A4B00">Carregando na origem · desde 07:50</span><b style="font-size: 15px; display: block">Faria Lima 3500 · 4º andar</b><span class="muted" style="font-size: 13px">Destino Torre B · 12º andar</span></div>
+      </div>
+      <div style="display: flex; gap: 6px; flex-wrap: wrap">
+        <span class="pill"><svg class="ic-s" style="width: 14px; height: 14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Equipe 8</span>
+        <span class="pill">DEF-4G56</span>
+        <span class="pill">FGH-2B34 · Rota Sul</span>
+      </div>
+      <a href="Campo2Execucao.dc.html" class="btn btn-p" style="width: 100%; height: 52px; font-size: 16px">Continuar OS<svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
+    </div>
+    <span class="sec">Depois</span>
+    <div class="card">
+      <a class="later" href="#"><span class="d"><small>qui 22/10</small><strong>19:00</strong></span><div style="flex: 1 1 auto; min-width: 0"><b>Itaú Unibanco · OS 000214</b><span>Faria Lima 3500, 2º andar · noturna</span></div><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="#5F6368" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
+      <a class="later" href="#"><span class="d"><small>sáb 24/10</small><strong>08:00</strong></span><div style="flex: 1 1 auto; min-width: 0"><b>Itaú Unibanco · OS 000217</b><span>Montagem de 30 estações · 2º andar</span></div><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="#5F6368" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
+    </div>
+    <span class="sec">Feito</span>
+    <div class="card">
+      <div class="later"><span class="d"><small>sáb</small><strong style="color: #14602F">17/10</strong></span><div style="flex: 1 1 auto; min-width: 0"><b>Itaú Unibanco · OS 000210</b><span>Desmontagem · revisada</span></div><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="#14602F" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></div>
+    </div>
+  </main>
+  <nav class="bn" aria-label="Menu">
+    <a class="on" href="Campo2Hoje.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>Início</a>
+    <a href="Campo2Hoje.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h6"/></svg>Minhas OS</a>
+    <a class="agent" href="Campo2Hoje.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></svg>Agent Dute</a>
+    <a href="Campo2Hoje.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/><circle cx="5" cy="12" r="1.8"/></svg>Mais</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Operação · demandas</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+a{color:#0054CE;text-decoration:none}a:hover{color:#004496}
+h1,h2,h3,p{margin:0}
+.ic{width:20px;height:20px;flex:0 0 auto}
+.ic-s{width:16px;height:16px;flex:0 0 auto}
+.sb{flex:0 0 248px;background:#161616;color:#fff;display:flex;flex-direction:column;padding:26px 14px 18px;gap:4px}
+.nav{display:flex;align-items:center;gap:12px;height:48px;padding:0 14px;border-radius:10px;color:rgba(255,255,255,.72);font-weight:600;font-size:15px;text-decoration:none;position:relative}
+.nav:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav.on{background:rgba(255,255,255,.12);color:#fff}
+.nav.on::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:3px;background:#E71C23}
+.nav .cnt{margin-left:auto;min-width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.nav .cnt.red{background:#E71C23;color:#fff}
+.nav.agent{color:#C9B8FB}.nav.agent:hover{color:#E0D6FF}
+.main{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;padding:30px 44px 36px;gap:20px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;font:700 14px Manrope,sans-serif;border:1px solid transparent;cursor:pointer;white-space:nowrap;text-decoration:none}
+.btn-p{background:#E71C23;color:#fff}.btn-p:hover{background:#AD0015;color:#fff}
+.btn-s{background:#fff;color:#161616;border-color:#D4D4CF}.btn-s:hover{background:#F0F0ED;color:#161616}
+.btn-sm{height:34px;padding:0 12px;font-size:13px}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px}
+.muted{color:#5F6368}
+.seg{display:inline-flex;background:#E8E8E4;border-radius:8px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg a{height:34px;padding:0 14px;border-radius:6px;display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:13.5px;color:#5F6368;text-decoration:none}
+.seg a.on{background:#fff;color:#161616;border:1px solid #E5E5E1}
+.seg a em{font-style:normal;min-width:20px;height:20px;border-radius:999px;background:rgba(0,0,0,.07);font-size:11.5px;display:inline-flex;align-items:center;justify-content:center;padding:0 6px}
+.chip{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:999px;background:#fff;border:1px solid #D4D4CF;font:600 13.5px Manrope,sans-serif;color:#161616;cursor:pointer}
+.badge{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;border-radius:6px;font-size:12.5px;font-weight:700;white-space:nowrap;border:1px solid transparent}
+.badge svg{width:14px;height:14px;flex:0 0 auto}
+.t-para{background:#FBE3E4;border-color:#F3C2C4;color:#8E1016}
+.t-emer{background:#FDE8D7;border-color:#F6CBA9;color:#8A3A0B}
+.t-plan{background:#F0F0ED;border-color:#E5E5E1;color:#3F403F}
+.s-alerta{background:#FBE3E4;border-color:#F3C2C4;color:#8E1016}
+.s-div{background:#fff;border-color:#E71C23;color:#AD0015}
+.ent{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;border-radius:6px;background:#fff;border:1px solid #D4D4CF;color:#3F403F;font-size:12.5px;font-weight:700;white-space:nowrap}
+.ent svg{width:14px;height:14px;flex:0 0 auto}
+.tw{overflow-x:auto}
+.tbl{width:100%;min-width:1040px;border-collapse:collapse}
+.tbl th{text-align:left;font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#5F6368;padding:12px 12px;background:#FAFAF8;border-bottom:1px solid #E5E5E1;white-space:nowrap}
+.tbl th:first-child,.tbl td:first-child{padding-left:20px}
+.tbl th:last-child,.tbl td:last-child{padding-right:20px}
+.tbl td{padding:13px 12px;border-top:1px solid #F0F0ED;vertical-align:top;font-size:13.5px}
+.tbl tr:first-child td{border-top:0}
+.tbl tbody tr:hover td{background:#FAFAF8}
+.dm b,.dm a{display:block;font-size:14.5px;font-weight:800;color:#161616;font-variant-numeric:tabular-nums}
+.dm a:hover{color:#0054CE}
+.dm span{display:block;color:#5F6368;font-size:13px;font-weight:600;line-height:1.4}
+.sub{display:block;color:#5F6368;font-size:12.5px;font-weight:600;margin-top:4px;line-height:1.35}
+.et{display:block;font-weight:700;font-size:13.5px}
+.ms{display:inline-flex;align-items:center;gap:6px;margin-top:7px;height:12px}
+.ms i{display:block;width:8px;height:8px;border-radius:50%;background:#fff;border:1.5px solid #B9B9B3}
+.ms i.ok{background:#5F6368;border-color:#5F6368}
+.ms i.cur{background:#161616;border-color:#161616;box-shadow:0 0 0 3px #E5E5E1}
+.who{display:inline-flex;align-items:center;gap:8px;font-weight:600;white-space:nowrap}
+.avs{width:26px;height:26px;border-radius:50%;background:#161616;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:10.5px;flex:0 0 auto}
+.avs.g{background:#F0F0ED;color:#3F403F;border:1px solid #E5E5E1}
+.nx{font-weight:600}
+.nx a{font-weight:700;display:block}
+.av{width:36px;height:36px;border-radius:50%;background:#E71C23;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto}
+.gh{display:flex;align-items:center;gap:10px;padding:14px 20px;border-bottom:1px solid #F0F0ED}
+.gh h2{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#0B3F8F;display:inline-flex;align-items:center;gap:8px}
+.gh h2 i{width:9px;height:9px;border-radius:50%;display:inline-block;background:#0054CE}
+.gh em{font-style:normal;min-width:24px;height:24px;border-radius:999px;background:#E8E8E4;color:#161616;font-size:12.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.grow{display:flex;align-items:center;gap:20px;padding:16px 20px;flex-wrap:wrap}
+</style>
+</helmet>
+<div style="min-height: 100%; display: flex; flex-wrap: wrap">
+  <aside class="sb">
+    <a href="Inicio.dc.html" style="display: block; padding: 4px 14px 24px"><img src="/_blob/51b94b624eef7c9daa70d9dd1cfb5330" alt="Dutelog Soluções Logísticas" style="width: 148px; height: auto; display: block"></a>
+    <a class="nav" href="Inicio.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>Início</a>
+    <a class="nav on" href="OpHoje.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Operação<span class="cnt red">1</span></a>
+    <a class="nav" href="WmsExpedicao.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 8.35V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8.35A2 2 0 0 1 3.26 6.5l8-3.2a2 2 0 0 1 1.48 0l8 3.2A2 2 0 0 1 22 8.35Z"/><path d="M6 18h12M6 14h12"/><rect x="6" y="10" width="12" height="12"/></svg>Armazenagem</a>
+    <a class="nav" href="Cadastros.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Clientes</a>
+    <a class="nav agent" href="OpDemandas.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></svg>Agent Dute</a>
+    <div style="margin-top: auto; padding: 14px 10px 0; border-top: 1px solid rgba(255,255,255,.1); display: flex; align-items: center; gap: 12px">
+      <span class="av">PR</span>
+      <div style="min-width: 0"><div style="font-weight: 700; font-size: 14.5px">Paula Ramos</div><div style="font-size: 12.5px; color: rgba(255,255,255,.55)">Coordenação</div></div>
+    </div>
+  </aside>
+  <div class="main">
+    <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap">
+      <h1 style="font-size: 28px; font-weight: 800; letter-spacing: -.02em; margin-right: 8px">Operação</h1>
+      <nav class="seg" aria-label="Visões da operação"><a href="OpHoje.dc.html">Hoje</a><a href="OpAgenda.dc.html">Agenda</a><a class="on" href="OpDemandas.dc.html" aria-current="page">Demandas</a><a href="OpRevisao.dc.html">Revisão<em>1</em></a></nav>
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+        <label style="position: relative"><span style="position: absolute; left: 12px; top: 11px; color: #5F6368"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span><input aria-label="Buscar" placeholder="Buscar demanda, OS ou cliente" style="height: 40px; width: 280px; border: 1px solid #D4D4CF; border-radius: 8px; padding: 0 12px 0 36px; font: 600 14px Manrope, sans-serif; background: #fff; color: #161616"></label>
+        <a href="OpDemandaNova.dc.html" class="btn btn-p"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Nova demanda</a>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+      <button type="button" class="chip">Todos os tipos<svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+      <button type="button" class="chip">Todas as entradas<svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+      <button type="button" class="chip">Todos os clientes<svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+      <button type="button" class="chip">Todas as etapas<svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+      <span class="muted" style="margin-left: auto; font-size: 13.5px; font-weight: 700">Terça, 20 de outubro · 14:20 · 13 demandas</span>
+    </div>
+
+    <section class="card" style="overflow: hidden">
+      <div class="gh"><h2><i></i>Para planejar · vindas do comercial</h2><em>1</em></div>
+      <div class="grow">
+        <div class="dm" style="flex: 1 1 260px; min-width: 0"><b>DM 000043</b><span>Instalação de 40 lockers · Agência Pinheiros</span></div>
+        <div style="flex: 0 1 160px; min-width: 0"><b style="display: block; font-size: 14px; font-weight: 700">Itaú Unibanco</b><span class="badge t-plan" style="margin-top: 4px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Planejada</span></div>
+        <div style="flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+          <span class="ent" style="align-self: flex-start"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>Comercial · ORC 000043</span>
+          <span style="font-size: 13px; font-weight: 600; color: #5F6368">Aprovado 20/10 · enviado à operação 20/10 11:30 · Fernanda Lopes</span>
+        </div>
+        <button type="button" class="btn btn-s"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M12 14v4M10 16h4"/></svg>Planejar OS</button>
+      </div>
+    </section>
+
+    <section class="card" style="overflow: hidden">
+      <div class="tw">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th style="width: 23%">Demanda</th>
+              <th>Cliente</th>
+              <th>Tipo</th>
+              <th>Entrada</th>
+              <th>Etapa</th>
+              <th>OS</th>
+              <th>Próximo</th>
+              <th>Responsável</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="dm"><b>DM 000054</b><span>Mudança do arquivo · Agência Augusta</span></td>
+              <td style="font-weight: 700">Banco Safra</td>
+              <td><span class="badge t-plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Planejada</span></td>
+              <td><span class="ent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>Comercial</span><span class="sub">e-mail · hoje 10:20</span></td>
+              <td><span class="et">Pedido de orçamento</span><span class="ms" role="img" aria-label="Pedido, etapa 1 de 6"><i class="cur"></i><i></i><i></i><i></i><i></i><i></i></span></td>
+              <td class="muted">—</td>
+              <td class="nx">Vistoria ou orçamento</td>
+              <td><span class="who"><span class="avs">FL</span>Fernanda Lopes</span></td>
+            </tr>
+            <tr>
+              <td class="dm"><b>DM 000053</b><span>Transporte de 6 cadeiras Flexform · Agência Rebouças → Faria Lima 3500</span></td>
+              <td style="font-weight: 700">Itaú Unibanco</td>
+              <td><span class="badge t-para"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>Paraquedas</span></td>
+              <td><span class="ent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg>Direta</span><span class="sub">WhatsApp · hoje 13:05</span></td>
+              <td><span class="et">Para agendar</span><span class="ms" role="img" aria-label="Execução, etapa 2 de 6"><i class="ok"></i><i class="cur"></i><i></i><i></i><i></i><i></i></span></td>
+              <td>1 · sem equipe</td>
+              <td class="nx"><a href="OpHoje.dc.html">Escalar até 19:00</a><span class="badge s-alerta" style="margin-top: 6px">Faltam 4h40</span></td>
+              <td><span class="who"><span class="avs">PR</span>Paula Ramos</span></td>
+            </tr>
+            <tr>
+              <td class="dm"><b>DM 000052</b><span>Transporte de mobiliário · Agência Paulista → sede Safra</span></td>
+              <td style="font-weight: 700">Banco Safra</td>
+              <td><span class="badge t-para"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>Paraquedas</span></td>
+              <td><span class="ent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg>Direta</span><span class="sub">telefone · hoje 08:40</span></td>
+              <td><span class="et">Em execução</span><span class="ms" role="img" aria-label="Execução, etapa 2 de 6"><i class="ok"></i><i class="cur"></i><i></i><i></i><i></i><i></i></span></td>
+              <td>1 · em execução</td>
+              <td class="nx">Executar até 18:00</td>
+              <td><span class="who"><span class="avs">PR</span>Paula Ramos</span></td>
+            </tr>
+            <tr>
+              <td class="dm"><b>DM 000051</b><span>Desmontagem de 8 estações · Agência Berrini → armazém Dutelog</span></td>
+              <td style="font-weight: 700">Itaú Unibanco</td>
+              <td><span class="badge t-emer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M5 3 2 6M22 6l-3-3"/></svg>Emergencial</span></td>
+              <td><span class="ent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg>Direta</span><span class="sub">e-mail · 19/10 18:40</span></td>
+              <td><span class="et">Para agendar</span><span class="ms" role="img" aria-label="Execução, etapa 2 de 6"><i class="ok"></i><i class="cur"></i><i></i><i></i><i></i><i></i></span></td>
+              <td>1 · sem equipe</td>
+              <td class="nx">Escalar para qua 21/10</td>
+              <td><span class="who"><span class="avs">PR</span>Paula Ramos</span></td>
+            </tr>
+            <tr>
+              <td class="dm"><b>DM 000050</b><span>Evento no Transamerica Expo · estande e mobiliário</span></td>
+              <td style="font-weight: 700">BTG Pactual</td>
+              <td><span class="badge t-emer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M5 3 2 6M22 6l-3-3"/></svg>Emergencial</span></td>
+              <td><span class="ent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 8.35V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8.35A2 2 0 0 1 3.26 6.5l8-3.2a2 2 0 0 1 1.48 0l8 3.2A2 2 0 0 1 22 8.35Z"/><path d="M6 18h12M6 14h12"/><rect x="6" y="10" width="12" height="12"/></svg>Armazenagem</span><span class="sub">PED-0118 · portal 19/10 15:50</span></td>
+              <td><span class="et">Agendada</span><span class="ms" role="img" aria-label="Execução, etapa 2 de 6"><i class="ok"></i><i class="cur"></i><i></i><i></i><i></i><i></i></span></td>
+              <td>2 · 1 sem equipe</td>
+              <td class="nx">Escalar retorno de sex 23/10</td>
+              <td><span class="who"><span class="avs">PR</span>Paula Ramos</span></td>
+            </tr>
+            <tr>
+              <td class="dm"><b>DM 000049</b><span>Mudança de escritório · Av. Paulista, 1.842 → Rua Funchal, 418</span></td>
+              <td><b style="display: block; font-weight: 700">Andrade &amp; Lemos Advocacia</b><span class="sub">spot</span></td>
+              <td><span class="badge t-plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Planejada</span></td>
+              <td><span class="ent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>Comercial</span><span class="sub">pedido de orçamento 15/10</span></td>
+              <td><span class="et">Em vistoria</span><span class="ms" role="img" aria-label="Vistoria, etapa 2 de 6"><i class="ok"></i><i class="cur"></i><i></i><i></i><i></i><i></i></span></td>
+              <td>1 · vistoria agendada</td>
+              <td class="nx">Vistoria hoje 16:00 · Ana Lima</td>
+              <td><span class="who"><span class="avs">PR</span>Paula Ramos</span></td>
+            </tr>
+            <tr>
+              <td class="dm"><b>DM 000048</b><span>Retirada de 14 cadeiras e 2 armários · Agência Augusta → sede</span></td>
+              <td style="font-weight: 700">Banco Safra</td>
+              <td><span class="badge t-para"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>Paraquedas</span></td>
+              <td><span class="ent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg>Direta</span><span class="sub">telefone · 16/10 08:10</span></td>
+              <td><span class="et">Orçamento da execução</span><span class="ms" role="img" aria-label="Orçamento, etapa 4 de 6"><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="cur"></i><i></i><i></i></span></td>
+              <td>1 · revisada</td>
+              <td class="nx">Orçamento com o comercial</td>
+              <td><span class="who"><span class="avs">FL</span>Fernanda Lopes</span></td>
+            </tr>
+            <tr>
+              <td class="dm"><b>DM 000047</b><span>Montagem de 20 mesas · Agência Moema</span></td>
+              <td style="font-weight: 700">Itaú Unibanco</td>
+              <td><span class="badge t-plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Planejada</span></td>
+              <td><span class="ent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>Comercial</span><span class="sub">ORC 000039</span></td>
+              <td><span class="et">Em revisão</span><span class="ms" role="img" aria-label="Revisão, etapa 5 de 6"><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="cur"></i><i></i></span></td>
+              <td>1 · em revisão</td>
+              <td class="nx"><a href="OpRevisao.dc.html">Revisar OS 000213</a></td>
+              <td><span class="who"><span class="avs">PR</span>Paula Ramos</span></td>
+            </tr>
+            <tr>
+              <td class="dm"><b>DM 000046</b><span>Mudança do 3º andar · Av. Paulista, 2.100</span></td>
+              <td style="font-weight: 700">Banco Safra</td>
+              <td><span class="badge t-plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Planejada</span></td>
+              <td><span class="ent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>Comercial</span><span class="sub">ORC 000041</span></td>
+              <td><span class="et">Aguardando cliente</span><span class="ms" role="img" aria-label="Orçamento, etapa 3 de 6"><i class="ok"></i><i class="ok"></i><i class="cur"></i><i></i><i></i><i></i></span></td>
+              <td>1 · vistoria revisada</td>
+              <td class="nx">Aguardando aprovação há 4 dias</td>
+              <td><span class="who"><span class="avs">FL</span>Fernanda Lopes</span></td>
+            </tr>
+            <tr>
+              <td class="dm"><a href="OpDemanda.dc.html">DM 000045</a><span>Mudança do 4º e 5º andares · Faria Lima 3500 → Centro Empresarial, Torre B, 12º andar</span></td>
+              <td style="font-weight: 700">Itaú Unibanco</td>
+              <td><span class="badge t-plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Planejada</span></td>
+              <td><span class="ent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>Comercial</span><span class="sub">ORC 000038 v2</span></td>
+              <td><span class="et">Em execução</span><span class="ms" role="img" aria-label="Execução, etapa 4 de 6"><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="cur"></i><i></i><i></i></span></td>
+              <td>3 · 1 em execução</td>
+              <td class="nx"><a href="OpOSPlanejar.dc.html">Planejar 5º andar</a><span class="badge s-div" style="margin-top: 6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></svg>+10 além do planejado</span></td>
+              <td><span class="who"><span class="avs">PR</span>Paula Ramos</span></td>
+            </tr>
+            <tr>
+              <td class="dm"><b>DM 000044</b><span>Armazenagem de mobiliário pós-evento</span></td>
+              <td style="font-weight: 700">BTG Pactual</td>
+              <td><span class="badge t-plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Planejada</span></td>
+              <td><span class="ent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>Comercial</span></td>
+              <td><span class="et">Faturada</span><span class="ms" role="img" aria-label="Faturamento, etapa 6 de 6"><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="cur"></i></span></td>
+              <td class="muted">—</td>
+              <td class="nx">Aguardando pagamento</td>
+              <td><span class="who"><span class="avs g">FI</span>Financeiro</span></td>
+            </tr>
+            <tr>
+              <td class="dm"><b>DM 000043</b><span>Instalação de 40 lockers · Agência Pinheiros</span></td>
+              <td style="font-weight: 700">Itaú Unibanco</td>
+              <td><span class="badge t-plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Planejada</span></td>
+              <td><span class="ent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>Comercial</span><span class="sub">ORC 000043</span></td>
+              <td><span class="et">Para planejar</span><span class="ms" role="img" aria-label="Execução, etapa 4 de 6"><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="cur"></i><i></i><i></i></span></td>
+              <td class="muted">Nenhuma</td>
+              <td class="nx">Planejar OS</td>
+              <td><span class="who"><span class="avs">PR</span>Paula Ramos</span></td>
+            </tr>
+            <tr>
+              <td class="dm"><b>DM 000042</b><span>Remanejamento de 30 estações · Faria Lima 3500, 2º andar</span></td>
+              <td style="font-weight: 700">Itaú Unibanco</td>
+              <td><span class="badge t-plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Planejada</span></td>
+              <td><span class="ent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>Comercial</span><span class="sub">ORC 000035</span></td>
+              <td><span class="et">Agendada</span><span class="ms" role="img" aria-label="Execução, etapa 4 de 6"><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="cur"></i><i></i><i></i></span></td>
+              <td>2 · agendadas</td>
+              <td class="nx">OS 000214 qui 22/10 19:00</td>
+              <td><span class="who"><span class="avs">PR</span>Paula Ramos</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1650}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

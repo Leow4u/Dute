@@ -52,7 +52,7 @@ export default function DemoLogin() {
         <div aria-hidden className="auth-glow pointer-events-none absolute inset-x-0 top-0 h-[420px] lg:hidden" />
 
         <header className="relative flex items-center gap-3">
-          <img src={markUrl} alt="Dutelog" className="h-9 w-9 object-contain" />
+          <img src={markUrl} alt="Dutelog" className="h-9 w-9 rounded-lg object-contain" />
           <span className="demo-pill">
             Ambiente de demonstração
           </span>

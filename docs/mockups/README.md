@@ -36,11 +36,58 @@ orçamentos e contratos" do mesmo canvas. O desenho está em
 | Autorizações de faturamento | `ComAutorizacoes.dc.html` |
 | Medição mensal | `ComMedicaoMensal.dc.html` |
 
+A página "Operação · demandas e OS" do canvas traz a proposta "Demanda: do
+pedido ao faturamento", feita entre 17 e 19/10/2026 e recuperada para o
+repositório em 23/10/2026 (até então só existia no canvas). As premissas e as
+nove perguntas "para validar com a operação" estão nas notas da página e em
+`docs/plataforma/alinhamento-comercial-operacao.md`, seção 2.5.
+
+| Tela | Arquivo |
+|---|---|
+| Fluxo da demanda | `OpFluxo.dc.html` |
+| Nova demanda direta (paraquedas) | `OpDemandaNova.dc.html` |
+| Comercial · fila (versão da proposta) | `ComOrcamentos.dc.html` |
+| Armazenagem · pedido de saída com entrega Dutelog | `WmsExpedicao.dc.html` |
+| Operação · hoje (kanban) | `OpHoje.dc.html` |
+| Operação · agenda da semana | `OpAgenda.dc.html` |
+| Operação · demandas | `OpDemandas.dc.html` |
+| Demanda planejada (várias OS) | `OpDemanda.dc.html` |
+| Planejar OS a partir do saldo | `OpOSPlanejar.dc.html` |
+| OS em execução (escritório) | `OpOS.dc.html` |
+| Campo · minhas OS (líder) | `Campo2Hoje.dc.html` |
+| Campo · OS em execução | `Campo2Execucao.dc.html` |
+| Campo · incluir item executado | `Campo2IncluirItem.dc.html` |
+| Campo · concluir com assinatura | `Campo2Concluir.dc.html` |
+| Campo · OS de vistoria | `Campo2Vistoria.dc.html` |
+| Revisão interna da OS | `OpRevisao.dc.html` |
+| Comercial · aditivo de orçamento | `ComAditivo.dc.html` |
+| Comercial · orçamento da execução (paraquedas) | `ComMedicao.dc.html` |
+
+A página "Shell por módulo · 23/10" registra as decisões de UX e UI de
+23/10/2026 (um shell por módulo na v3, seletor de módulo no topo da barra,
+Início por módulo, cards da entrada com contadores, Clientes por módulo, fila
+do dia com "Para planejar", celular por módulo). As telas são interativas: o
+seletor abre no clique.
+
+| Tela | Arquivo |
+|---|---|
+| Entrada · cards com contadores | `ModEntrada.dc.html` |
+| Comercial · Início (shell v3, seletor no topo) | `ModComInicio.dc.html` |
+| Operação · Início (shell v3, seletor no topo) | `ModOpInicio.dc.html` |
+| Operação · Hoje (Para planejar, agendar, agendadas, execução, revisão) | `ModOpHoje.dc.html` |
+| Operação · Clientes (locais, só leitura) | `ModOpClientes.dc.html` |
+| Armazenagem · barra de hoje, só ganha o seletor | `ModWms.dc.html` |
+| Celular · Comercial (Guilherme, um módulo) | `ModCelularCom.dc.html` |
+| Celular · Operação (seletor no cabeçalho) | `ModCelularOp.dc.html` |
+
 ## Regras da v3
 
-- Menu lateral preto `#161616` com logo branco e seis módulos (Início, Operação,
-  Clientes, Financeiro, Agent Dute, Administração); item ativo com marcador
-  vermelho.
+- Menu lateral preto `#161616` com logo branco; item ativo com marcador
+  vermelho. Desde 23/10/2026 cada módulo tem o próprio shell (Armazenagem,
+  Comercial, Operação): o menu lista o Início e as telas daquele módulo, o
+  nome do módulo no topo da barra é o seletor para trocar de módulo e o logo
+  leva à entrada por cards. As telas anteriores, com os seis módulos num menu
+  só, valem pelo conteúdo, não pelo menu.
 - Conteúdo `#F5F5F3`, cartões brancos com borda `#E5E5E1` e raio 12.
 - Vermelho da marca `#E71C23` (hover `#AD0015`) só na ação principal da tela, uma
   por tela, e em alertas. Links no azul da marca `#0054CE`.

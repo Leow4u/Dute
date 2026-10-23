@@ -7,6 +7,14 @@ ver os cards). A carga em massa continua sem gravar no `dute-prod` e no
 `dute-btg`. Cada passo que grava dado no `dute-prod` ainda precisa do OK do
 Leonardo na conversa. Sem dado real neste arquivo.
 
+Decisões do Leonardo em 23/10/2026: a carga dos clientes da Omie (passo 7.1)
+e a carga do legado (passo 10) saem do plano por ora; a integração com a Omie
+para lançar a NF fica fora até nova decisão. Os clientes entram à mão pela
+tela de Clientes do Comercial (Itaú, Safra e BTG primeiro; prospect quando o
+pedido chegar). Tabelas e contratos continuam entrando pelas cargas. O passo
+1 foi feito no #152 (21/10). A comparação do que foi feito com o que estava
+alinhado está em `alinhamento-comercial-operacao.md`.
+
 ## 1. Estado de hoje
 
 - Partes 1 a 16 mergeadas. As duas listas `COMERCIAL_AMBIENTES_LIBERADOS`
@@ -107,9 +115,9 @@ passam a ler preço, contratos e orçamentos (vazios até as cargas).
    da máquina do Leonardo, com `gcloud auth application-default login` numa
    conta que grave no `dute-prod`, e relatórios conferidos em `tmp/comercial`
    antes de cada `--executar`:
-   1. clientes da Omie (revisar o CSV de revisão: a linha da BTG fica a
-      conferir e só entra com código; a conta do CRM sem CNPJ só entra com
-      código);
+   1. clientes: à mão, pela tela de Clientes do Comercial. A carga da Omie
+      saiu do plano em 23/10/2026 (o roteiro dela segue em
+      `comercial-cargas.md` como registro);
    2. contratos (Itaú, Safra, BTG), sem o aditivo de preço;
    3. tabelas (Padrão Dutelog, depois LPU do Itaú Comercial e Noturna
       conferida contra o PDF, RFQ 2021 encerrada; Safra quando o arquivo
@@ -126,8 +134,8 @@ passam a ler preço, contratos e orçamentos (vazios até as cargas).
    (`AMBIENTES_LIBERADOS` de `lib/liberacao.ts`), que também liga a tela de
    entrada por módulo e o campo de módulos em Clientes para todos. Escolher
    entre ligar a plataforma ou dar o papel por roteiro controlado.
-10. **Orçamentos em andamento e histórico da planilha como legado**: ainda não
-    existe código. Definir o formato antes (ver decisões).
+10. **Legado**: fora do plano desde 23/10/2026. Os orçamentos em andamento e
+    o histórico ficam na planilha; nada é carregado.
 11. **Uma semana em paralelo com o Excel**: o Guilherme orça nos dois; no fim,
     comparar números, totais e tempo, e só então desligar a planilha.
 
@@ -164,8 +172,7 @@ parênteses). Recomendação em cada uma.
   roteiro controlado, para não mudar a entrada de todos no mesmo dia.
 - Trava própria da carga, para não abrir as telas antes dos dados. Recomendo
   aceitar telas vazias por algumas horas: é mais simples e reversível.
-- Formato da carga do legado (orçamentos em andamento e histórico). Recomendo
-  CSV simples, só leitura, com dry-run, em PR próprio depois do go-live.
+- Formato da carga do legado: decidido em 23/10/2026, não há carga.
 - Teste de restauração do backup, hoje pendente. Recomendo fazer antes da
   primeira carga.
 

@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Operação · hoje</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+a{color:#0054CE;text-decoration:none}a:hover{color:#004496}
+h1,h2,h3,p{margin:0}
+.ic{width:20px;height:20px;flex:0 0 auto}
+.ic-s{width:16px;height:16px;flex:0 0 auto}
+.sb{flex:0 0 248px;background:#161616;color:#fff;display:flex;flex-direction:column;padding:26px 14px 18px;gap:4px}
+.nav{display:flex;align-items:center;gap:12px;height:48px;padding:0 14px;border-radius:10px;color:rgba(255,255,255,.72);font-weight:600;font-size:15px;text-decoration:none;position:relative}
+.nav:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav.on{background:rgba(255,255,255,.12);color:#fff}
+.nav.on::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:3px;background:#E71C23}
+.nav .cnt{margin-left:auto;min-width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.nav .cnt.red{background:#E71C23;color:#fff}
+.nav.agent{color:#C9B8FB}.nav.agent:hover{color:#E0D6FF}
+.av2{width:36px;height:36px;border-radius:50%;background:#E71C23;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto}
+.main{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;padding:30px 44px 40px;gap:18px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;font:700 14px Manrope,sans-serif;border:1px solid transparent;cursor:pointer;white-space:nowrap;text-decoration:none}
+.btn-p{background:#E71C23;color:#fff}.btn-p:hover{background:#AD0015;color:#fff}
+.btn-s{background:#fff;color:#161616;border-color:#D4D4CF}.btn-s:hover{background:#F0F0ED;color:#161616}
+.btn-g{background:transparent;color:#5F6368}.btn-g:hover{background:#E8E8E4;color:#161616}
+.btn-sm{height:32px;padding:0 12px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.seg{display:inline-flex;background:#E8E8E4;border-radius:8px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg a{height:34px;padding:0 14px;border-radius:6px;display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:13.5px;color:#5F6368;text-decoration:none}
+.seg a:hover{color:#161616}
+.seg a.on{background:#fff;color:#161616;border:1px solid #E5E5E1}
+.seg a em{font-style:normal;min-width:20px;height:20px;border-radius:999px;background:rgba(0,0,0,.07);font-size:11.5px;display:inline-flex;align-items:center;justify-content:center;padding:0 6px}
+.dd{position:relative}
+.chip{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:999px;background:#fff;border:1px solid #D4D4CF;font:600 13.5px Manrope,sans-serif;color:#161616;cursor:pointer}
+.chip:hover{background:#F0F0ED}
+.chip.on{border-color:#161616;box-shadow:inset 0 0 0 1px #161616}
+.menu{position:absolute;top:40px;left:0;z-index:5;min-width:240px;background:#fff;border:1px solid #E5E5E1;border-radius:10px;box-shadow:0 10px 28px rgba(22,22,22,.14);padding:6px;display:flex;flex-direction:column;gap:2px}
+.mi{display:flex;align-items:center;justify-content:space-between;gap:12px;height:38px;padding:0 10px;border:0;border-radius:6px;background:transparent;font:600 14px Manrope,sans-serif;color:#161616;text-align:left;cursor:pointer}
+.mi:hover{background:#F0F0ED}
+.cols{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
+.col{flex:1 1 230px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.colh{display:flex;align-items:center;gap:8px;padding:0 4px;min-height:32px}
+.colh h2{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;display:inline-flex;align-items:center;gap:8px}
+.colh h2 i{width:9px;height:9px;border-radius:50%;display:inline-block}
+.colh em{font-style:normal;min-width:24px;height:24px;border-radius:999px;background:#E8E8E4;color:#161616;font-size:12.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.add{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;border:1px solid #D4D4CF;background:#fff;color:#161616;margin-left:auto}
+.add:hover{background:#F0F0ED;color:#161616}
+.kcard{background:#fff;border:1px solid #E5E5E1;border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;color:#161616;text-decoration:none}
+a.kcard:hover{border-color:#B9B9B3;color:#161616}
+.kcard.late{border-color:#F3C2C4;background:#FFFBFB}
+.kcard .t{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.kcard .n{font-size:12.5px;color:#5F6368;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.kcard .c{font-size:15px;font-weight:800;line-height:1.3}
+.kcard .ti{font-size:13.5px;font-weight:600;line-height:1.4;color:#161616}
+.kcard .ti b{font-weight:800}
+.kcard .d{font-size:13px;color:#5F6368;display:flex;align-items:flex-start;gap:6px;line-height:1.4}
+.kcard .d svg{color:#161616;width:15px;height:15px;flex:0 0 auto;margin-top:1px}
+.kcard .d b{color:#161616;font-weight:700}
+.kcard .tags{display:flex;flex-wrap:wrap;gap:6px}
+.kcard .f{display:flex;flex-direction:column;gap:6px;padding-top:9px;border-top:1px solid #F0F0ED;font-size:13px;color:#5F6368}
+.kcard .fr{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.who{display:inline-flex;align-items:center;gap:8px;color:#161616;font-weight:700}
+.veh{display:inline-flex;align-items:center;gap:6px;color:#5F6368;font-weight:600}
+.veh svg{width:15px;height:15px;color:#161616;flex:0 0 auto}
+.av{width:24px;height:24px;border-radius:50%;background:#161616;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;flex:0 0 auto}
+.badge{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:6px;font-size:12px;font-weight:700;white-space:nowrap;border:1px solid transparent}
+.bi{width:13px;height:13px;flex:0 0 auto}
+.t-para{background:#FBE3E4;border-color:#F3C2C4;color:#8E1016}
+.t-emer{background:#FDE8D7;border-color:#F6CBA9;color:#8A3A0B}
+.t-plan{background:#F0F0ED;border-color:#E5E5E1;color:#3F403F}
+.s-alerta{background:#FBE3E4;border-color:#F3C2C4;color:#8E1016}
+.s-aviso{background:#FDF0D5;border-color:#F3DCA3;color:#8A4B00}
+.s-rev{background:#DDF1F8;border-color:#B5DFEE;color:#0B5566}
+.s-muted{background:#F0F0ED;border-color:#E5E5E1;color:#5F6368}
+.dv{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border-radius:6px;background:#fff;border:1px solid #E71C23;color:#AD0015;font-size:12px;font-weight:800;white-space:nowrap;align-self:flex-start}
+.sv{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:6px;background:#F0F0ED;color:#3F403F;font-size:12px;font-weight:700;white-space:nowrap}
+.ent{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px;border-radius:999px;background:#fff;border:1px solid #D4D4CF;color:#3F403F;font-size:12px;font-weight:600;white-space:nowrap}
+.prog{display:flex;flex-direction:column;gap:5px}
+.prog .pl{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;color:#5F6368;font-weight:600}
+.prog .pl b{color:#161616;font-weight:800;font-variant-numeric:tabular-nums}
+.bar{height:6px;border-radius:999px;background:#F0F0ED;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:999px;background:#D98B00}
+.esc{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:10px;background:#fff;border:1px solid #E5E5E1}
+.esc .lbl{font-size:12px;font-weight:800;color:#3F403F;text-transform:uppercase;letter-spacing:.06em}
+.opt{display:flex;align-items:center;gap:10px;min-height:44px;padding:4px 8px;border-radius:8px;border:1px solid #E5E5E1;cursor:pointer}
+.opt:hover{background:#F5F5F3}
+.opt input{width:18px;height:18px;accent-color:#161616;margin:0;flex:0 0 auto}
+.opt b{display:block;font-size:13.5px;font-weight:700;line-height:1.3}
+.opt span.sub{display:block;font-size:12px;color:#5F6368;line-height:1.3}
+.tile{width:24px;height:24px;border-radius:6px;background:#F0F0ED;color:#161616;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+.tile svg{width:14px;height:14px}
+.empty{border:1px dashed #D4D4CF;border-radius:12px;padding:18px;text-align:center;font-size:13px;font-weight:600;color:#5F6368}
+.muted{color:#5F6368}
+.srch{height:40px;width:220px;border:1px solid #D4D4CF;border-radius:8px;padding:0 12px 0 36px;font:600 14px Manrope,sans-serif;background:#fff;color:#161616}
+</style>
+</helmet>
+<div style="min-height: 100%; display: flex; flex-wrap: wrap">
+  <aside class="sb">
+    <a href="Inicio.dc.html" style="display: block; padding: 4px 14px 24px"><img src="/_blob/51b94b624eef7c9daa70d9dd1cfb5330" alt="Dutelog Soluções Logísticas" style="width: 148px; height: auto; display: block"></a>
+    <a class="nav" href="Inicio.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>Início</a>
+    <a class="nav on" href="OpHoje.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Operação<span class="cnt red">1</span></a>
+    <a class="nav" href="WmsExpedicao.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 8.35V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8.35A2 2 0 0 1 3.26 6.5l8-3.2a2 2 0 0 1 1.48 0l8 3.2A2 2 0 0 1 22 8.35Z"/><path d="M6 18h12M6 14h12"/><rect x="6" y="10" width="12" height="12"/></svg>Armazenagem</a>
+    <a class="nav" href="Cadastros.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Clientes</a>
+    <a class="nav agent" href="OpHoje.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></svg>Agent Dute</a>
+    <div style="margin-top: auto; padding: 14px 10px 0; border-top: 1px solid rgba(255,255,255,.1); display: flex; align-items: center; gap: 12px">
+      <span class="av2">PR</span>
+      <div style="min-width: 0"><div style="font-weight: 700; font-size: 14.5px">Paula Ramos</div><div style="font-size: 12.5px; color: rgba(255,255,255,.55)">Coordenação</div></div>
+    </div>
+  </aside>
+  <div class="main">
+    <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap">
+      <h1 style="font-size: 28px; font-weight: 800; letter-spacing: -.02em; margin-right: 8px">Operação</h1>
+      <nav class="seg" aria-label="Visões da operação"><a class="on" href="OpHoje.dc.html" aria-current="page">Hoje</a><a href="OpAgenda.dc.html">Agenda</a><a href="OpDemandas.dc.html">Demandas</a><a href="OpRevisao.dc.html">Revisão<em>1</em></a></nav>
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+        <label style="position: relative"><span style="position: absolute; left: 12px; top: 11px; color: #5F6368"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span><input class="srch" aria-label="Buscar OS, demanda ou cliente" placeholder="Buscar OS, DM ou cliente"></label>
+        <a href="TVSala.dc.html" class="btn btn-s"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>TV</a>
+        <a href="OpDemandaNova.dc.html" class="btn btn-p"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Nova demanda</a>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+      <div class="dd">
+        <button type="button" class="{{ fTipo.cls }}" aria-haspopup="true" aria-expanded="{{ fTipo.open }}" onClick="{{ fTipo.toggle }}">{{ fTipo.label }}<svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+        <sc-if value="{{ fTipo.open }}" hint-placeholder-val="{{ false }}">
+          <div class="menu" role="menu" aria-label="Tipo de demanda">
+            <sc-for list="{{ fTipo.opts }}" as="o" hint-placeholder-count="4">
+              <button type="button" class="mi" role="menuitemradio" aria-checked="{{ o.on }}" onClick="{{ o.pick }}"><span>{{ o.label }}</span><sc-if value="{{ o.on }}" hint-placeholder-val="{{ false }}"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></sc-if></button>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+      <div class="dd">
+        <button type="button" class="{{ fCliente.cls }}" aria-haspopup="true" aria-expanded="{{ fCliente.open }}" onClick="{{ fCliente.toggle }}">{{ fCliente.label }}<svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+        <sc-if value="{{ fCliente.open }}" hint-placeholder-val="{{ false }}">
+          <div class="menu" role="menu" aria-label="Cliente">
+            <sc-for list="{{ fCliente.opts }}" as="o" hint-placeholder-count="5">
+              <button type="button" class="mi" role="menuitemradio" aria-checked="{{ o.on }}" onClick="{{ o.pick }}"><span>{{ o.label }}</span><sc-if value="{{ o.on }}" hint-placeholder-val="{{ false }}"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></sc-if></button>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+      <div class="dd">
+        <button type="button" class="{{ fCoord.cls }}" aria-haspopup="true" aria-expanded="{{ fCoord.open }}" onClick="{{ fCoord.toggle }}">{{ fCoord.label }}<svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+        <sc-if value="{{ fCoord.open }}" hint-placeholder-val="{{ false }}">
+          <div class="menu" role="menu" aria-label="Coordenador">
+            <sc-for list="{{ fCoord.opts }}" as="o" hint-placeholder-count="2">
+              <button type="button" class="mi" role="menuitemradio" aria-checked="{{ o.on }}" onClick="{{ o.pick }}"><span>{{ o.label }}</span><sc-if value="{{ o.on }}" hint-placeholder-val="{{ false }}"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></sc-if></button>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+      <div class="dd">
+        <button type="button" class="{{ fEntrada.cls }}" aria-haspopup="true" aria-expanded="{{ fEntrada.open }}" onClick="{{ fEntrada.toggle }}">{{ fEntrada.label }}<svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+        <sc-if value="{{ fEntrada.open }}" hint-placeholder-val="{{ false }}">
+          <div class="menu" role="menu" aria-label="Entrada">
+            <sc-for list="{{ fEntrada.opts }}" as="o" hint-placeholder-count="4">
+              <button type="button" class="mi" role="menuitemradio" aria-checked="{{ o.on }}" onClick="{{ o.pick }}"><span>{{ o.label }}</span><sc-if value="{{ o.on }}" hint-placeholder-val="{{ false }}"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></sc-if></button>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+      <sc-if value="{{ anyFilter }}" hint-placeholder-val="{{ false }}">
+        <button type="button" class="btn btn-g btn-sm" onClick="{{ clearFilters }}">Limpar filtros</button>
+      </sc-if>
+      <div style="margin-left: auto; display: flex; align-items: baseline; gap: 8px">
+        <h2 style="font-size: 15px; font-weight: 800">Terça, 20 de outubro</h2>
+        <span class="muted" style="font-size: 13.5px; font-weight: 700">{{ total }} OS</span>
+      </div>
+    </div>
+
+    <div class="cols">
+      <section class="col" aria-label="Para agendar">
+        <div class="colh"><h2 style="color: #0B3F8F"><i style="background: #0054CE"></i>Para agendar</h2><em>{{ nAgendar }}</em><a class="add" href="OpDemandaNova.dc.html" aria-label="Nova demanda"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></a></div>
+
+        <sc-if value="{{ show222a }}" hint-placeholder-val="{{ true }}">
+          <div class="kcard late">
+            <div class="t"><span class="badge t-para"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>Paraquedas</span><span class="n">OS 000222</span></div>
+            <div class="c">Itaú Unibanco</div>
+            <div class="ti"><b>DM 000053</b> · Transporte de 6 cadeiras Flexform</div>
+            <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Agência Rebouças → Faria Lima 3500, 4º andar</div>
+            <div class="d" style="align-items: center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><b>Hoje até 19:00</b><span class="badge s-alerta" style="margin-left: auto">Faltam 4h40</span></div>
+            <div class="tags"><span class="sv">Transporte</span><span class="ent"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg>Direta</span></div>
+            <div class="f">
+              <div class="fr"><span class="badge s-alerta">Sem equipe</span><button type="button" class="btn btn-s btn-sm" aria-expanded="{{ escOpen }}" onClick="{{ toggleEsc }}"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>Escalar</button></div>
+            </div>
+            <sc-if value="{{ escOpen }}" hint-placeholder-val="{{ false }}">
+              <div class="esc">
+                <span class="lbl">Livres às 15:00</span>
+                <label class="opt"><input type="checkbox" checked="{{ pLucas }}" onChange="{{ toggleLucas }}"><span class="av">LF</span><span style="min-width: 0"><b>Lucas Ferreira</b><span class="sub">Montador</span></span></label>
+                <label class="opt"><input type="checkbox" checked="{{ pFior }}" onChange="{{ toggleFior }}"><span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg></span><span style="min-width: 0"><b>ABC-1D23</b><span class="sub">Fiat Fiorino · 650 kg · 3 m³</span></span></label>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                  <button type="button" class="btn btn-s btn-sm" disabled="{{ cantAgendar }}" onClick="{{ agendar }}"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Agendar 15:00</button>
+                  <button type="button" class="btn btn-g btn-sm" onClick="{{ toggleEsc }}">Cancelar</button>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ v220 }}" hint-placeholder-val="{{ true }}">
+          <div class="kcard">
+            <div class="t"><span class="badge t-emer"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M5 3 2 6M22 6l-3-3"/></svg>Emergencial</span><span class="n">OS 000220</span></div>
+            <div class="c">Itaú Unibanco</div>
+            <div class="ti"><b>DM 000051</b> · Desmontagem de 8 estações</div>
+            <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Agência Berrini → armazém Dutelog</div>
+            <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><b>Qua 21/10 até 18:00</b></div>
+            <div class="tags"><span class="sv">Desmontagem</span><span class="sv">Transporte</span><span class="ent"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg>Direta</span></div>
+            <div class="f"><div class="fr"><span class="badge s-muted">Sem equipe</span></div></div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ v219 }}" hint-placeholder-val="{{ true }}">
+          <div class="kcard">
+            <div class="t"><span class="badge t-emer"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M5 3 2 6M22 6l-3-3"/></svg>Emergencial</span><span class="n">OS 000219</span></div>
+            <div class="c">BTG Pactual</div>
+            <div class="ti"><b>DM 000050</b> · Desmontagem e retorno ao armazém</div>
+            <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Transamerica Expo, Pavilhão B → armazém Dutelog</div>
+            <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><b>Sex 23/10 18:00</b></div>
+            <div class="tags"><span class="sv">Desmontagem</span><span class="sv">Transporte</span><span class="ent"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 8.35V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8.35A2 2 0 0 1 3.26 6.5l8-3.2a2 2 0 0 1 1.48 0l8 3.2A2 2 0 0 1 22 8.35Z"/><path d="M6 18h12M6 14h12"/><rect x="6" y="10" width="12" height="12"/></svg>Armazenagem · PED-0118</span></div>
+            <div class="f"><div class="fr"><span class="badge s-muted">Sem equipe</span></div></div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ emptyAgendar }}" hint-placeholder-val="{{ false }}"><div class="empty">Nenhuma OS</div></sc-if>
+      </section>
+
+      <section class="col" aria-label="Agendadas">
+        <div class="colh"><h2 style="color: #5B21B6"><i style="background: #7C3AED"></i>Agendadas</h2><em>{{ nAgendadas }}</em></div>
+
+        <sc-if value="{{ show222b }}" hint-placeholder-val="{{ false }}">
+          <div class="kcard">
+            <div class="t"><span class="badge t-para"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>Paraquedas</span><span class="n">OS 000222</span></div>
+            <div class="c">Itaú Unibanco</div>
+            <div class="ti"><b>DM 000053</b> · Transporte de 6 cadeiras Flexform</div>
+            <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Agência Rebouças → Faria Lima 3500, 4º andar</div>
+            <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><b>Hoje 15:00</b> · até 19:00</div>
+            <div class="tags"><span class="sv">Transporte</span><span class="ent"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg>Direta</span></div>
+            <div class="f">
+              <sc-if value="{{ pLucas }}" hint-placeholder-val="{{ true }}"><span class="who"><span class="av">LF</span>Lucas Ferreira</span></sc-if>
+              <sc-if value="{{ noLucas }}" hint-placeholder-val="{{ false }}"><span class="badge s-aviso" style="align-self: flex-start">Sem equipe</span></sc-if>
+              <sc-if value="{{ pFior }}" hint-placeholder-val="{{ true }}"><span class="veh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>ABC-1D23</span></sc-if>
+              <sc-if value="{{ noFior }}" hint-placeholder-val="{{ false }}"><span class="badge s-aviso" style="align-self: flex-start">Sem veículo</span></sc-if>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ v216 }}" hint-placeholder-val="{{ true }}">
+          <div class="kcard">
+            <div class="t"><span class="badge t-plan"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Planejada</span><span class="n">OS 000216</span></div>
+            <div class="c">Andrade &amp; Lemos Advocacia</div>
+            <div class="ti"><b>DM 000049</b> · Vistoria da mudança de escritório</div>
+            <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Av. Paulista, 1.842</div>
+            <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><b>Hoje 16:00</b></div>
+            <div class="tags"><span class="sv">Vistoria</span><span class="ent"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>Comercial</span></div>
+            <div class="f">
+              <span class="who"><span class="av">AL</span>Ana Lima</span>
+              <span class="veh">Sem veículo · vistoria</span>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ v218 }}" hint-placeholder-val="{{ true }}">
+          <div class="kcard">
+            <div class="t"><span class="badge t-emer"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M5 3 2 6M22 6l-3-3"/></svg>Emergencial</span><span class="n">OS 000218</span></div>
+            <div class="c">BTG Pactual</div>
+            <div class="ti"><b>DM 000050</b> · Transporte do armazém e montagem do estande</div>
+            <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Armazém Dutelog → Transamerica Expo, Pavilhão B</div>
+            <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><b>Amanhã 13:00</b></div>
+            <div class="tags"><span class="sv">Transporte</span><span class="sv">Montagem</span><span class="ent"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 8.35V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8.35A2 2 0 0 1 3.26 6.5l8-3.2a2 2 0 0 1 1.48 0l8 3.2A2 2 0 0 1 22 8.35Z"/><path d="M6 18h12M6 14h12"/><rect x="6" y="10" width="12" height="12"/></svg>Armazenagem · PED-0118</span></div>
+            <div class="f">
+              <span class="who"><span class="av">PN</span>Pedro Nunes +2</span>
+              <span class="veh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>GHI-7J89</span>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ emptyAgendadas }}" hint-placeholder-val="{{ false }}"><div class="empty">Nenhuma OS</div></sc-if>
+      </section>
+
+      <section class="col" aria-label="Em execução">
+        <div class="colh"><h2 style="color: #8A4B00"><i style="background: #D98B00"></i>Em execução</h2><em>{{ nExec }}</em></div>
+
+        <sc-if value="{{ v211 }}" hint-placeholder-val="{{ true }}">
+          <a class="kcard" href="OpOS.dc.html">
+            <div class="t"><span class="badge t-plan"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Planejada</span><span class="n">OS 000211</span></div>
+            <div class="c">Itaú Unibanco</div>
+            <div class="ti"><b>DM 000045</b> · Transporte e montagem, 4º andar → 12º andar</div>
+            <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Faria Lima 3500 → Centro Empresarial, Torre B</div>
+            <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><b>07:30–18:00</b> · montagem desde 11:20</div>
+            <div class="prog"><div class="pl"><span>Cadeiras Flexform</span><b>128 de 160</b></div><div class="bar"><i style="width: 80%"></i></div></div>
+            <span class="dv"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></svg>+10 além do planejado</span>
+            <div class="tags"><span class="sv">Transporte</span><span class="sv">Montagem</span><span class="ent"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>Comercial</span></div>
+            <div class="f">
+              <span class="who"><span class="av">CS</span>Carlos Silva +7</span>
+              <span class="veh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>DEF-4G56 · Rota Sul FGH-2B34</span>
+            </div>
+          </a>
+        </sc-if>
+
+        <sc-if value="{{ v221 }}" hint-placeholder-val="{{ true }}">
+          <div class="kcard">
+            <div class="t"><span class="badge t-para"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>Paraquedas</span><span class="n">OS 000221</span></div>
+            <div class="c">Banco Safra</div>
+            <div class="ti"><b>DM 000052</b> · Transporte de mobiliário</div>
+            <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Agência Paulista → sede Safra</div>
+            <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><b>Saiu 14:00</b> · até 18:00</div>
+            <div class="tags"><span class="sv">Transporte</span><span class="ent"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg>Direta</span></div>
+            <div class="f">
+              <span class="who"><span class="av">PN</span>Pedro Nunes +1</span>
+              <span class="veh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>GHI-7J89</span>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ emptyExec }}" hint-placeholder-val="{{ false }}"><div class="empty">Nenhuma OS</div></sc-if>
+      </section>
+
+      <section class="col" aria-label="Em revisão">
+        <div class="colh"><h2 style="color: #0B5566"><i style="background: #0E8AA8"></i>Em revisão</h2><em>{{ nRev }}</em></div>
+
+        <sc-if value="{{ v213 }}" hint-placeholder-val="{{ true }}">
+          <a class="kcard" href="OpRevisao.dc.html">
+            <div class="t"><span class="badge t-plan"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Planejada</span><span class="n">OS 000213</span></div>
+            <div class="c">Itaú Unibanco</div>
+            <div class="ti"><b>DM 000047</b> · Montagem de 20 mesas</div>
+            <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Agência Moema</div>
+            <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><b>08:00–12:40</b></div>
+            <span class="badge s-rev" style="align-self: flex-start"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Assinada 12:40 · Sérgio Matos</span>
+            <div class="tags"><span class="sv">Montagem</span><span class="ent"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>Comercial</span></div>
+            <div class="f">
+              <span class="who"><span class="av">AL</span>Ana Lima +1</span>
+              <span class="veh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>ABC-1D23</span>
+            </div>
+          </a>
+        </sc-if>
+
+        <sc-if value="{{ emptyRev }}" hint-placeholder-val="{{ false }}"><div class="empty">Nenhuma OS</div></sc-if>
+      </section>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1350}}'>
+class Component extends DCLogic {
+  constructor(...a) {
+    super(...a);
+    this.state = Object.assign(this.defaults(), this.state || {});
+  }
+  defaults() {
+    return { menu: null, tipo: 'todos', cliente: 'todos', coord: 'todos', entrada: 'todos', escOpen: false, esc: false, pLucas: true, pFior: true };
+  }
+  renderVals() {
+    const s = Object.assign(this.defaults(), this.state || {});
+    const F = {
+      tipo: [['todos', 'Todos os tipos'], ['paraquedas', 'Paraquedas'], ['emergencial', 'Emergencial'], ['planejada', 'Planejada']],
+      cliente: [['todos', 'Todos os clientes'], ['itau', 'Itaú Unibanco'], ['btg', 'BTG Pactual'], ['safra', 'Banco Safra'], ['andrade', 'Andrade & Lemos Advocacia']],
+      coord: [['todos', 'Todos os coordenadores'], ['paula', 'Paula Ramos']],
+      entrada: [['todos', 'Todas as entradas'], ['direta', 'Direta'], ['comercial', 'Comercial'], ['armazenagem', 'Armazenagem']]
+    };
+    const keys = ['tipo', 'cliente', 'coord', 'entrada'];
+    const OS = {
+      os222: ['paraquedas', 'itau', 'paula', 'direta'],
+      os220: ['emergencial', 'itau', 'paula', 'direta'],
+      os219: ['emergencial', 'btg', 'paula', 'armazenagem'],
+      os216: ['planejada', 'andrade', 'paula', 'comercial'],
+      os218: ['emergencial', 'btg', 'paula', 'armazenagem'],
+      os211: ['planejada', 'itau', 'paula', 'comercial'],
+      os221: ['paraquedas', 'safra', 'paula', 'direta'],
+      os213: ['planejada', 'itau', 'paula', 'comercial']
+    };
+    const ok = (id) => keys.every((k, i) => s[k] === 'todos' || OS[id][i] === s[k]);
+    const v = {};
+    Object.keys(OS).forEach((id) => { v[id] = ok(id); });
+    const show222a = v.os222 && !s.esc;
+    const show222b = v.os222 && s.esc;
+    const count = (list) => list.filter(Boolean).length;
+    const nAgendar = count([show222a, v.os220, v.os219]);
+    const nAgendadas = count([show222b, v.os216, v.os218]);
+    const nExec = count([v.os211, v.os221]);
+    const nRev = count([v.os213]);
+
+    const menu = (k) => {
+      const cur = F[k].find((o) => o[0] === s[k]) || F[k][0];
+      const active = s[k] !== 'todos';
+      return {
+        label: cur[1],
+        open: s.menu === k,
+        cls: active ? 'chip on' : 'chip',
+        toggle: () => this.setState({ menu: s.menu === k ? null : k }),
+        opts: F[k].map((o) => ({ label: o[1], on: o[0] === s[k], pick: () => this.setState({ [k]: o[0], menu: null }) }))
+      };
+    };
+
+    return {
+      fTipo: menu('tipo'),
+      fCliente: menu('cliente'),
+      fCoord: menu('coord'),
+      fEntrada: menu('entrada'),
+      anyFilter: keys.some((k) => s[k] !== 'todos'),
+      clearFilters: () => this.setState({ tipo: 'todos', cliente: 'todos', coord: 'todos', entrada: 'todos', menu: null }),
+      total: nAgendar + nAgendadas + nExec + nRev,
+      nAgendar, nAgendadas, nExec, nRev,
+      emptyAgendar: nAgendar === 0,
+      emptyAgendadas: nAgendadas === 0,
+      emptyExec: nExec === 0,
+      emptyRev: nRev === 0,
+      show222a, show222b,
+      v220: v.os220, v219: v.os219, v216: v.os216, v218: v.os218, v211: v.os211, v221: v.os221, v213: v.os213,
+      escOpen: s.escOpen,
+      toggleEsc: () => this.setState({ escOpen: !s.escOpen }),
+      pLucas: s.pLucas,
+      pFior: s.pFior,
+      noLucas: !s.pLucas,
+      noFior: !s.pFior,
+      toggleLucas: () => this.setState({ pLucas: !s.pLucas }),
+      toggleFior: () => this.setState({ pFior: !s.pFior }),
+      cantAgendar: !s.pLucas,
+      agendar: () => this.setState({ esc: true, escOpen: false })
+    };
+  }
+}
+</script>
+</body>
+</html>

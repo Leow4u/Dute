@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Campo · incluir item executado</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:15px;line-height:1.45}
+a{color:#0054CE;text-decoration:none}a:hover{color:#004496}
+h1,h2,h3,p{margin:0}
+.ic{width:20px;height:20px;flex:0 0 auto}
+.ic-s{width:16px;height:16px;flex:0 0 auto}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.card h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:800;color:#5F6368}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 16px;border-radius:8px;font:700 15px Manrope,sans-serif;border:1px solid transparent;cursor:pointer;white-space:nowrap;text-decoration:none}
+.btn-p{background:#E71C23;color:#fff}.btn-p:hover{background:#AD0015;color:#fff}
+.btn-s{background:#fff;color:#161616;border-color:#D4D4CF}.btn-s:hover{background:#F0F0ED;color:#161616}
+.badge{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:6px;font-size:12.5px;font-weight:700;white-space:nowrap;border:1px solid transparent}
+.s-exec{background:#FDF0D5;border-color:#F3DCA3;color:#8A4B00}
+.muted{color:#5F6368}
+.inp{height:46px;border:1px solid #D4D4CF;border-radius:8px;padding:0 14px;font:600 15px Manrope,sans-serif;background:#fff;color:#161616;width:100%}
+.inp:focus{outline:2px solid #0054CE;outline-offset:1px}
+select.inp{appearance:none;-webkit-appearance:none;padding-right:42px;cursor:pointer}
+.lbl{font-size:12.5px;font-weight:700;color:#3F403F;display:block;margin-bottom:6px}
+.fld{display:flex;flex-direction:column;min-width:0}
+.lnk{border:0;background:transparent;font:700 13.5px Manrope,sans-serif;color:#0054CE;cursor:pointer;min-height:44px;padding:0 2px;display:inline-flex;align-items:center;gap:6px}
+.lnk:hover{color:#004496}
+.res{border:1px solid #E5E5E1;border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
+.ro{display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 14px;border:0;border-left:3px solid transparent;background:#fff;text-align:left;cursor:pointer;font-family:Manrope,sans-serif;color:#161616;width:100%}
+.ro+.ro{border-top:1px solid #F0F0ED}
+.ro:hover{background:#FAFAF8}
+.ro.on{background:#FAFAF8;border-left-color:#161616}
+.ro .tx{flex:1 1 auto;min-width:0;display:flex;flex-direction:column}
+.ro .tx b{font-size:14.5px;font-weight:700;line-height:1.3}
+.ro .tx b i{font-style:normal;color:#5F6368;font-weight:700;margin-right:4px}
+.ro .tx span{font-size:12.5px;font-weight:600;color:#5F6368}
+.rk-on{width:24px;height:24px;border-radius:50%;background:#161616;color:#fff;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+.rk-off{width:24px;height:24px;border-radius:50%;border:2px solid #D4D4CF;background:#fff;display:inline-block;flex:0 0 auto}
+.add{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border-radius:6px;background:#F0F0ED;border:1px solid #E5E5E1;color:#3F403F;font-size:12px;font-weight:700;white-space:nowrap}
+.cnt{display:flex;align-items:stretch;border:1px solid #D4D4CF;border-radius:10px;overflow:hidden;flex:0 0 auto;height:48px;background:#fff}
+.cnt button{width:48px;border:0;background:#fff;color:#161616;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0}
+.cnt button:hover{background:#F0F0ED}
+.cnt .num{width:60px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-left:1px solid #E5E5E1;border-right:1px solid #E5E5E1;line-height:1.15}
+.cnt .num b{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums}
+.cnt .num span{font-size:11.5px;font-weight:700;color:#5F6368}
+.thumb{width:92px;height:64px;border-radius:8px;background:#F0F0ED;border:1px solid #E5E5E1;display:flex;align-items:center;justify-content:center;color:#5F6368;flex:0 0 auto;position:relative}
+.thumb svg{width:22px;height:22px}
+.thumb em{position:absolute;left:6px;bottom:6px;font-style:normal;font-size:10.5px;font-weight:800;background:#161616;color:#fff;padding:2px 6px;border-radius:4px}
+.net{display:inline-flex;align-items:center;gap:8px;height:30px;padding:0 12px;border-radius:8px;background:rgba(217,139,0,.16);border:1px solid rgba(217,139,0,.5);color:#FFC861;font-size:13px;font-weight:700;align-self:flex-start}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; background: #F5F5F3; position: relative; overflow: hidden">
+  <div aria-hidden="true" style="position: absolute; inset: 0; display: flex; flex-direction: column">
+    <div style="background: #161616; color: #fff; padding: 16px 16px 18px; display: flex; flex-direction: column; gap: 12px; border-radius: 0 0 20px 20px">
+      <div style="display: flex; align-items: center; gap: 12px">
+        <span style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,.1); display: inline-flex; align-items: center; justify-content: center; color: #fff; flex: 0 0 auto"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7M19 12H5"/></svg></span>
+        <div style="flex: 1 1 auto; min-width: 0"><b style="font-size: 21px; font-weight: 800; letter-spacing: -.01em; display: block">OS 000211</b><span style="font-size: 13px; color: rgba(255,255,255,.62); font-weight: 600">Itaú Unibanco · DM 000045</span></div>
+        <span class="badge s-exec">Em execução</span>
+      </div>
+      <span class="net">Sem sinal · 4 registros guardados</span>
+    </div>
+    <div style="padding: 14px 16px">
+      <div class="card"><h2>Itens · 5</h2></div>
+    </div>
+  </div>
+  <div style="position: absolute; inset: 0; background: rgba(22,22,22,.58)"></div>
+  <section role="dialog" aria-modal="true" aria-labelledby="inc-t" style="position: absolute; left: 0; right: 0; bottom: 0; background: #fff; border-radius: 20px 20px 0 0; box-shadow: 0 -10px 30px rgba(0,0,0,.2); padding: 10px 16px 16px; display: flex; flex-direction: column; gap: 12px">
+    <span style="width: 40px; height: 4px; border-radius: 2px; background: #D4D4CF; align-self: center; display: block"></span>
+    <div style="display: flex; align-items: center; gap: 12px">
+      <div style="flex: 1 1 auto; min-width: 0"><h2 id="inc-t" style="font-size: 20px; font-weight: 800; letter-spacing: -.01em; line-height: 1.3">Incluir item executado</h2><span class="muted" style="font-size: 13px; font-weight: 600">OS 000211 · Itaú Unibanco</span></div>
+      <a href="Campo2Execucao.dc.html" aria-label="Fechar" style="width: 44px; height: 44px; border-radius: 50%; background: #F0F0ED; display: inline-flex; align-items: center; justify-content: center; color: #161616; flex: 0 0 auto"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></a>
+    </div>
+    <div class="fld">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px"><label class="lbl" for="busca" style="margin: 0">Buscar na LPU do Itaú</label><button type="button" class="lnk"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Item avulso</button></div>
+      <div style="position: relative">
+        <svg class="ic-s" style="position: absolute; left: 14px; top: 15px; color: #5F6368" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input class="inp" id="busca" type="search" value="cadeira" style="padding-left: 40px">
+      </div>
+    </div>
+    <div class="res">
+      <button type="button" class="ro {{ cls_a }}" aria-pressed="{{ sel_a }}" onClick="{{ pick_a }}">
+        <sc-if value="{{ sel_a }}" hint-placeholder-val="{{ true }}"><span class="rk-on"><svg class="ic-s" style="width: 14px; height: 14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span></sc-if>
+        <sc-if value="{{ nsel_a }}" hint-placeholder-val="{{ false }}"><span class="rk-off"></span></sc-if>
+        <span class="tx"><b><i>3.05</i>Transporte de cadeira Flexform</b><span>un · nesta OS 96 de 150</span></span>
+      </button>
+      <button type="button" class="ro {{ cls_b }}" aria-pressed="{{ sel_b }}" onClick="{{ pick_b }}">
+        <sc-if value="{{ sel_b }}" hint-placeholder-val="{{ false }}"><span class="rk-on"><svg class="ic-s" style="width: 14px; height: 14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span></sc-if>
+        <sc-if value="{{ nsel_b }}" hint-placeholder-val="{{ true }}"><span class="rk-off"></span></sc-if>
+        <span class="tx"><b><i>3.06</i>Transporte de cadeira giratória</b><span>un</span></span>
+      </button>
+      <button type="button" class="ro {{ cls_c }}" aria-pressed="{{ sel_c }}" onClick="{{ pick_c }}">
+        <sc-if value="{{ sel_c }}" hint-placeholder-val="{{ false }}"><span class="rk-on"><svg class="ic-s" style="width: 14px; height: 14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span></sc-if>
+        <sc-if value="{{ nsel_c }}" hint-placeholder-val="{{ true }}"><span class="rk-off"></span></sc-if>
+        <span class="tx"><b><i>3.08</i>Transporte de cadeira fixa</b><span>un</span></span>
+      </button>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+      <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px"><span class="lbl" id="qtd-l" style="margin: 0">Quantidade</span><span class="add"><svg class="ic-s" style="width: 12px; height: 12px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Fora do planejado</span></div>
+      <div class="cnt" role="group" aria-labelledby="qtd-l">
+        <button type="button" aria-label="Diminuir quantidade" onClick="{{ dec }}"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+        <div class="num"><b>{{ qty }}</b><span>un</span></div>
+        <button type="button" aria-label="Aumentar quantidade" onClick="{{ inc }}"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+      </div>
+    </div>
+    <div class="fld">
+      <label class="lbl" for="quem">Quem pediu no local</label>
+      <div style="position: relative">
+        <select class="inp" id="quem"><option>Renata Campos · Facilities</option><option>Outra pessoa</option></select>
+        <svg class="ic-s" style="position: absolute; right: 14px; top: 15px; color: #5F6368; pointer-events: none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      </div>
+    </div>
+    <div class="fld"><label class="lbl" for="mot">Motivo</label><input class="inp" id="mot" value="Cadeiras a mais no 4º andar, sala 412"></div>
+    <div class="fld">
+      <span class="lbl">Fotos · 2</span>
+      <div style="display: flex; gap: 10px; align-items: center">
+        <div class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><em>09:30</em></div>
+        <div class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><em>09:31</em></div>
+        <button type="button" class="thumb" style="background: #fff; border: 1.5px dashed #D4D4CF; cursor: pointer; flex-direction: column; gap: 2px; font: 700 11.5px Manrope, sans-serif; color: #161616"><svg viewBox="0 0 24 24" fill="none" stroke="#E71C23" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Tirar foto</button>
+      </div>
+    </div>
+    <div style="display: flex; gap: 10px">
+      <a href="Campo2Execucao.dc.html" class="btn btn-s" style="flex: 1 1 0; height: 52px">Cancelar</a>
+      <a href="Campo2Execucao.dc.html" class="btn btn-p" style="flex: 2 1 0; height: 52px; font-size: 16px"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Incluir item</a>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(...args) {
+    super(...args);
+    this.state = { pick: 'a', qty: 10 };
+  }
+  renderVals() {
+    const s = this.state;
+    const v = {
+      qty: s.qty,
+      dec: () => this.setState((st) => ({ qty: Math.max(1, st.qty - 1) })),
+      inc: () => this.setState((st) => ({ qty: st.qty + 1 })),
+    };
+    ['a', 'b', 'c'].forEach((k) => {
+      v['sel_' + k] = s.pick === k;
+      v['nsel_' + k] = s.pick !== k;
+      v['cls_' + k] = s.pick === k ? 'on' : '';
+      v['pick_' + k] = () => this.setState({ pick: k });
+    });
+    return v;
+  }
+}
+</script>
+</body>
+</html>

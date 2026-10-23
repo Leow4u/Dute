@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Comercial · fila</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+a{color:#0054CE;text-decoration:none}a:hover{color:#004496}
+h1,h2,h3,p{margin:0}
+.ic{width:20px;height:20px;flex:0 0 auto}
+.ic-s{width:16px;height:16px;flex:0 0 auto}
+.sb{flex:0 0 248px;background:#161616;color:#fff;display:flex;flex-direction:column;padding:26px 14px 18px;gap:4px}
+.nav{display:flex;align-items:center;gap:12px;height:48px;padding:0 14px;border-radius:10px;color:rgba(255,255,255,.72);font-weight:600;font-size:15px;text-decoration:none;position:relative}
+.nav:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav.on{background:rgba(255,255,255,.12);color:#fff}
+.nav.on::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:3px;background:#E71C23}
+.nav .cnt{margin-left:auto;min-width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.nav.agent{color:#C9B8FB}.nav.agent:hover{color:#E0D6FF}
+.main{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;padding:30px 44px 36px;gap:20px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;font:700 14px Manrope,sans-serif;border:1px solid transparent;cursor:pointer;white-space:nowrap;text-decoration:none}
+.btn-p{background:#E71C23;color:#fff}.btn-p:hover{background:#AD0015;color:#fff}
+.btn-s{background:#fff;color:#161616;border-color:#D4D4CF}.btn-s:hover{background:#F0F0ED;color:#161616}
+.btn-sm{height:34px;padding:0 12px;font-size:13px}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px}
+.muted{color:#5F6368}
+.seg{display:inline-flex;background:#E8E8E4;border-radius:8px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg a{height:34px;padding:0 14px;border-radius:6px;display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:13.5px;color:#5F6368;text-decoration:none}
+.seg a.on{background:#fff;color:#161616;border:1px solid #E5E5E1}
+.chip{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:999px;background:#fff;border:1px solid #D4D4CF;font:600 13.5px Manrope,sans-serif;color:#161616;cursor:pointer}
+.badge{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 9px;border-radius:6px;font-size:12.5px;font-weight:700;white-space:nowrap;border:1px solid transparent}
+.badge svg{width:13px;height:13px;flex:0 0 auto}
+.t-para{background:#FBE3E4;border-color:#F3C2C4;color:#8E1016}
+.t-plan{background:#F0F0ED;border-color:#E5E5E1;color:#3F403F}
+.s-div{background:#fff;border-color:#E71C23;color:#AD0015}
+.pill{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:6px;background:#F0F0ED;border:1px solid #E5E5E1;color:#3F403F;font-size:12px;font-weight:700;white-space:nowrap}
+.av{width:36px;height:36px;border-radius:50%;background:#E71C23;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto}
+.grp{overflow:hidden}
+.gh{display:flex;align-items:center;gap:10px;padding:12px 20px;background:#FAFAF8;border-bottom:1px solid #E5E5E1}
+.gh .gi{width:28px;height:28px;border-radius:8px;background:#fff;border:1px solid #E5E5E1;display:inline-flex;align-items:center;justify-content:center;color:#161616;flex:0 0 auto}
+.gh h2{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
+.gh em{font-style:normal;min-width:24px;height:24px;border-radius:999px;background:#E8E8E4;color:#161616;font-size:12.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.qrow{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:16px 20px;border-top:1px solid #F0F0ED}
+.gh+.qrow{border-top:0}
+.q1{flex:0 0 120px;display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+.q2{flex:1 1 300px;min-width:0}
+.q3{flex:1 1 260px;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:2px}
+.qa{flex:0 0 300px;display:flex;justify-content:flex-end;align-items:center;gap:8px;flex-wrap:wrap}
+.qn{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums}
+.qt{display:flex;align-items:center;gap:6px;font-size:15px;font-weight:700;flex-wrap:wrap}
+.qt svg{width:15px;height:15px;flex:0 0 auto;color:#5F6368}
+.qs{display:block;font-size:13px;color:#5F6368;font-weight:600}
+.qv{display:block;font-size:15px;font-weight:800;font-variant-numeric:tabular-nums}
+.done{display:inline-flex;align-items:center;gap:6px;font-size:13.5px;font-weight:700}
+.done svg{width:16px;height:16px;flex:0 0 auto;color:#1F8A4C}
+</style>
+</helmet>
+<div style="min-height: 100%; display: flex; flex-wrap: wrap">
+  <aside class="sb">
+    <a href="Inicio.dc.html" style="display: block; padding: 4px 14px 24px"><img src="/_blob/51b94b624eef7c9daa70d9dd1cfb5330" alt="Dutelog Soluções Logísticas" style="width: 148px; height: auto; display: block"></a>
+    <a class="nav" href="Inicio.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>Início</a>
+    <a class="nav on" href="ComOrcamentos.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>Comercial<span class="cnt">{{ nFila }}</span></a>
+    <a class="nav" href="Cadastros.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Clientes</a>
+    <a class="nav agent" href="ComOrcamentos.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></svg>Agent Dute</a>
+    <div style="margin-top: auto; padding: 14px 10px 0; border-top: 1px solid rgba(255,255,255,.1); display: flex; align-items: center; gap: 12px">
+      <span class="av">FL</span>
+      <div style="min-width: 0"><div style="font-weight: 700; font-size: 14.5px">Fernanda Lopes</div><div style="font-size: 12.5px; color: rgba(255,255,255,.55)">Comercial</div></div>
+    </div>
+  </aside>
+  <div class="main">
+    <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap">
+      <h1 style="font-size: 28px; font-weight: 800; letter-spacing: -.02em; margin-right: 8px">Comercial</h1>
+      <nav class="seg" aria-label="Comercial"><a class="on" href="ComOrcamentos.dc.html">Fila</a><a href="ComOrcamentos.dc.html">Orçamentos</a><a href="ComOrcamentos.dc.html">LPU</a></nav>
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+        <label style="position: relative; display: block"><span style="position: absolute; left: 12px; top: 11px; color: #5F6368; display: flex"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span><input aria-label="Buscar" placeholder="Buscar demanda, orçamento ou cliente" style="height: 40px; width: 300px; max-width: 100%; border: 1px solid #D4D4CF; border-radius: 8px; padding: 0 12px 0 36px; font: 600 14px Manrope, sans-serif; background: #fff; color: #161616"></label>
+        <button type="button" class="btn btn-p"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Novo orçamento</button>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+      <button type="button" class="chip">Todos os clientes<svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+      <button type="button" class="chip">Responsável: Fernanda Lopes<svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+      <span class="muted" style="margin-left: auto; font-size: 13.5px; font-weight: 700">Quarta, 21 de outubro · {{ nFila }} para fazer</span>
+    </div>
+
+    <section class="card grp" aria-label="Pedidos de orçamento">
+      <div class="gh"><span class="gi"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></span><h2>Pedidos de orçamento</h2><em>1</em></div>
+      <div class="qrow">
+        <div class="q1"><span class="qn">DM 000054</span><span class="badge t-plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Planejada</span></div>
+        <div class="q2"><span class="qt">Banco Safra</span><span class="qs">Mudança do arquivo · Agência Augusta</span></div>
+        <div class="q3"><span class="qt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/></svg>Pedido por e-mail</span><span class="qs">20/10 às 10:20</span></div>
+        <div class="qa"><button type="button" class="btn btn-s btn-sm">Pedir vistoria</button><button type="button" class="btn btn-s btn-sm">Montar orçamento</button></div>
+      </div>
+    </section>
+
+    <section class="card grp" aria-label="Vistorias concluídas">
+      <div class="gh"><span class="gi"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></span><h2>Vistorias concluídas</h2><em>1</em></div>
+      <div class="qrow">
+        <div class="q1"><span class="qn">DM 000049</span><span class="badge t-plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Planejada</span></div>
+        <div class="q2"><span class="qt">Andrade &amp; Lemos Advocacia<span class="pill">Spot</span></span><span class="qs">Mudança de escritório · Av. Paulista, 1.842 → Rua Funchal, 418</span></div>
+        <div class="q3"><span class="qt">Vistoria OS 000216 · 20/10 17:10</span><span class="qs">Ana Lima · 36 fotos · 4 itens levantados</span></div>
+        <div class="qa"><button type="button" class="btn btn-s btn-sm">Montar orçamento</button></div>
+      </div>
+    </section>
+
+    <section class="card grp" aria-label="Aditivos a fazer">
+      <div class="gh"><span class="gi"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 18v-6M9 15h6"/></svg></span><h2>Aditivos a fazer</h2><em>1</em></div>
+      <div class="qrow">
+        <div class="q1"><span class="qn">DM 000045</span><span class="badge t-plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Planejada</span></div>
+        <div class="q2"><span class="qt">Itaú Unibanco</span><span class="qs">Mudança do 4º e 5º andares · ORC 000038 v2</span></div>
+        <div class="q3"><span class="badge s-div"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></svg>+10 acima do orçado</span><span class="qs" style="color: #161616; margin-top: 4px">3.05 Transporte de cadeira Flexform</span><span class="qs">revisão da OS 000211 · 20/10 18:10</span></div>
+        <div class="qa"><a href="ComAditivo.dc.html" class="btn btn-s btn-sm">Fazer aditivo</a></div>
+      </div>
+    </section>
+
+    <section class="card grp" aria-label="Orçamentos da execução">
+      <div class="gh"><span class="gi"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span><h2>Orçamentos da execução</h2><em>1</em></div>
+      <div class="qrow">
+        <div class="q1"><span class="qn">DM 000048</span><span class="badge t-para"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>Paraquedas</span></div>
+        <div class="q2"><span class="qt">Banco Safra</span><span class="qs">Retirada de 14 cadeiras e 2 armários · Agência Augusta → sede</span></div>
+        <div class="q3"><span class="qt">OS 000215 · executada 16/10</span><span class="qs">pedido por telefone 16/10 08:10 · revisada 17/10</span></div>
+        <div class="qa"><a href="ComMedicao.dc.html" class="btn btn-s btn-sm">Orçar execução</a></div>
+      </div>
+    </section>
+
+    <section class="card grp" aria-label="Aguardando cliente">
+      <div class="gh"><span class="gi"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span><h2>Aguardando cliente</h2><em>1</em></div>
+      <div class="qrow">
+        <div class="q1"><span class="qn">ORC 000041</span><span class="badge t-plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Planejada</span></div>
+        <div class="q2"><span class="qt">Banco Safra</span><span class="qs">DM 000046 · Mudança do 3º andar · Av. Paulista, 2.100</span></div>
+        <div class="q3"><span class="qv">R$ 48.600,00</span><span class="qs">enviado 16/10 · há 5 dias</span></div>
+        <div class="qa">
+          <sc-if value="{{ notRemind41 }}" hint-placeholder-val="{{ true }}"><button type="button" class="btn btn-s btn-sm" onClick="{{ remind }}"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>Lembrar cliente</button></sc-if>
+          <sc-if value="{{ remind41 }}" hint-placeholder-val="{{ false }}"><span class="done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Lembrete enviado 09:30</span></sc-if>
+        </div>
+      </div>
+    </section>
+
+    <section class="card grp" aria-label="Aprovados, enviar à operação">
+      <div class="gh"><span class="gi"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg></span><h2>Aprovados · enviar à operação</h2><em>{{ nAprov }}</em></div>
+      <div class="qrow">
+        <div class="q1"><span class="qn">ORC 000040</span><span class="badge t-plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Planejada</span></div>
+        <div class="q2"><span class="qt">BTG Pactual</span><span class="qs">Montagem de sala VIP</span></div>
+        <div class="q3"><span class="qv">R$ 7.950,00</span><span class="qs">aprovado hoje 08:50</span></div>
+        <div class="qa">
+          <sc-if value="{{ notSent40 }}" hint-placeholder-val="{{ true }}"><button type="button" class="btn btn-s btn-sm" onClick="{{ send40 }}"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>Enviar à operação</button></sc-if>
+          <sc-if value="{{ sent40 }}" hint-placeholder-val="{{ false }}"><a href="OpDemandas.dc.html" class="done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Enviado à operação 21/10 09:30</a></sc-if>
+        </div>
+      </div>
+      <div class="qrow">
+        <div class="q1"><span class="qn">ORC 000043</span><span class="badge t-plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Planejada</span></div>
+        <div class="q2"><span class="qt">Itaú Unibanco</span><span class="qs">DM 000043 · Instalação de 40 lockers · Agência Pinheiros</span></div>
+        <div class="q3"><span class="qv">R$ 12.380,00</span><span class="qs">aprovado 20/10</span></div>
+        <div class="qa"><a href="OpDemandas.dc.html" class="done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Enviado à operação 20/10 11:30</a></div>
+      </div>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1320}}'>
+class Component extends DCLogic {
+  constructor(...args) {
+    super(...args);
+    this.state = { sent40: false, remind41: false };
+  }
+  renderVals() {
+    const s = this.state || {};
+    const sent40 = !!s.sent40;
+    const remind41 = !!s.remind41;
+    return {
+      sent40: sent40,
+      notSent40: !sent40,
+      remind41: remind41,
+      notRemind41: !remind41,
+      nAprov: sent40 ? 0 : 1,
+      nFila: sent40 ? 5 : 6,
+      send40: () => this.setState({ sent40: true }),
+      remind: () => this.setState({ remind41: true })
+    };
+  }
+}
+</script>
+</body>
+</html>
