@@ -228,10 +228,10 @@ function Itens({ ficha }: { ficha: FichaDaOs }) {
 
 const FOTOS_A_MOSTRAR = 5;
 
-function Fotos({ ficha, urls }: { ficha: FichaDaOs; urls: Readonly<Record<string, string>> }) {
+function Fotos({ ficha, urls, acao }: { ficha: FichaDaOs; urls: Readonly<Record<string, string>>; acao?: ReactNode }) {
   const fotos = [...ficha.fotos].sort((a, b) => b.instante.localeCompare(a.instante));
   return (
-    <Cartao titulo={`Fotos · ${fotos.length}`}>
+    <Cartao titulo={`Fotos · ${fotos.length}`} acao={acao}>
       {fotos.length ? (
         <ul className="grid grid-cols-3 gap-2 px-5 py-4 sm:grid-cols-6">
           {fotos.slice(0, FOTOS_A_MOSTRAR).map((foto) => {
@@ -347,6 +347,8 @@ export function OsView({
   hoje,
   urls,
   acoes,
+  painel,
+  anexarFotos,
 }: {
   estado: EstadoDaFicha;
   numero: string;
@@ -357,6 +359,10 @@ export function OsView({
   urls: Readonly<Record<string, string>>;
   /** As ações do cabeçalho (Registrar andamento, parte 3.7e). */
   acoes?: ReactNode;
+  /** O painel aberto de Registrar andamento (parte 3.7e). */
+  painel?: ReactNode;
+  /** Anexar fotos à OS, no cartão das fotos (parte 3.7e). */
+  anexarFotos?: ReactNode;
 }) {
   const voltar = (
     <Link href={ROTA_HOJE} className="inline-flex items-center gap-1.5 self-start text-sm font-medium text-muted-foreground hover:text-foreground">
@@ -407,6 +413,8 @@ export function OsView({
         {acoes ? <div className="flex shrink-0 flex-wrap gap-2">{acoes}</div> : null}
       </header>
 
+      {painel}
+
       {ficha.status === "cancelada" ? (
         <p className={cn(selo, seloNeutro, "h-auto self-start py-1.5 text-sm")}>Cancelada{ficha.cancelamento ? ` · ${ficha.cancelamento}` : ""}</p>
       ) : (
@@ -418,7 +426,7 @@ export function OsView({
           <Locais ficha={ficha} />
           <Etapas ficha={ficha} />
           <Itens ficha={ficha} />
-          <Fotos ficha={ficha} urls={urls} />
+          <Fotos ficha={ficha} urls={urls} acao={anexarFotos} />
         </div>
         <div className="flex min-w-0 flex-col gap-6">
           <Equipe ficha={ficha} />

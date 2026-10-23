@@ -8,7 +8,16 @@ import { functionsDoApp } from "../firebase-functions";
  * Cada chamada leva a chave de idempotência (recibo em operacao_operations).
  */
 
-export const CALLABLES_DA_OPERACAO = ["saveCollaborator", "saveVehicle", "saveServiceOrder", "openDirectDemand"] as const;
+export const CALLABLES_DA_OPERACAO = [
+  "saveCollaborator",
+  "saveVehicle",
+  "saveServiceOrder",
+  "openDirectDemand",
+  "registerStep",
+  "registerItem",
+  "registerOccurrence",
+  "attachPhoto",
+] as const;
 export type CallableDaOperacao = (typeof CALLABLES_DA_OPERACAO)[number];
 
 export function novaChave(): string {
