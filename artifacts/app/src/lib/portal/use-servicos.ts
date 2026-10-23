@@ -3,6 +3,7 @@ import { collection, query, where } from "firebase/firestore";
 import { fichaDaLeitura, type FichaDaOs } from "../operacao/ficha-da-os";
 import { useLeitura } from "../operacao/leitura";
 import { nfDoPortal, type NfDoPortal } from "./servicos";
+import { solicitacaoDoPortal, type SolicitacaoDoPortal } from "./solicitacao";
 
 /**
  * As leituras do portal com a Operação e o Financeiro (parte 4.3b), ao vivo e
@@ -29,4 +30,15 @@ export function useNfsDoCliente(customerCode: string | null | undefined, ligado:
     nfDoPortal,
   );
   return { nfs: leitura.itens, erro: leitura.erro };
+}
+
+/** As solicitações de OS do cliente pelo portal (parte 4.4b), ao vivo, pelo código do cliente da conta. */
+export function useSolicitacoesDoCliente(customerCode: string | null | undefined, ligado: boolean): { solicitacoes: SolicitacaoDoPortal[] | null; erro: boolean } {
+  const codigo = customerCode?.trim() || null;
+  const leitura = useLeitura(
+    ligado && codigo ? `portal:service_requests:${codigo}` : null,
+    (db) => query(collection(db, "service_requests"), where("customer_code", "==", codigo)),
+    solicitacaoDoPortal,
+  );
+  return { solicitacoes: leitura.itens, erro: leitura.erro };
 }

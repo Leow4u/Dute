@@ -5,15 +5,17 @@ import { Router } from "wouter";
 import { NfsDosServicos } from "@/components/portal/nfs-dos-servicos";
 import { fichaDaLeitura } from "@/lib/operacao/ficha-da-os";
 import { cobrancaPorDemanda, nfDoPortal, numerosDasOs, ordenarOs, osDoPortal } from "@/lib/portal/servicos";
+import { formularioInicial, solicitacaoDoPortal, type FormularioDaSolicitacao } from "@/lib/portal/solicitacao";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
-import { ServicosView, type ServicosViewProps } from "./servicos-view";
+import { ServicosView, type PedidoNaTela, type ServicosViewProps } from "./servicos-view";
 
 /**
- * Portal › Minhas OS e as NFs dos serviços em Faturas (parte 4.3b): só
- * rótulos, dados e ações, sem nada interno da OS, e a identidade v3.
- * Dados sintéticos.
+ * Portal › Minhas OS e as NFs dos serviços em Faturas (parte 4.3b) e o
+ * Solicitar OS com as solicitações em aberto (parte 4.4b): só rótulos,
+ * dados e ações, sem nada interno da OS, e a identidade v3. Dados
+ * sintéticos.
  */
 
 const HOJE = "2026-10-23";
@@ -65,10 +67,67 @@ function props(extra: Partial<ServicosViewProps> = {}): ServicosViewProps {
     cobrancas: cobrancaPorDemanda(NFS, HOJE),
     busca: "",
     aberta: OS.find((os) => os.numero === "10045-01") ?? null,
-    acoes: { buscar: () => undefined, abrir: () => undefined, fechar: () => undefined },
+    solicitacoes: [],
+    pedido: null,
+    acoes: {
+      buscar: () => undefined,
+      abrir: () => undefined,
+      fechar: () => undefined,
+      solicitar: () => undefined,
+      mudar: () => undefined,
+      anexar: () => undefined,
+      removerAnexo: () => undefined,
+      enviar: () => undefined,
+      cancelar: () => undefined,
+    },
     ...extra,
   };
 }
+
+function pedido(extra: Partial<PedidoNaTela> = {}, form: Partial<FormularioDaSolicitacao> = {}): PedidoNaTela {
+  return {
+    aberto: true,
+    form: { ...formularioInicial(HOJE), ...form },
+    problemas: {},
+    enviando: false,
+    erro: null,
+    problemaDoAnexo: null,
+    enviada: false,
+    hoje: HOJE,
+    ...extra,
+  };
+}
+
+const SOLICITACOES = [
+  solicitacaoDoPortal("sol_0000000000000001", {
+    tipo_servico: "transporte",
+    status: "recebida",
+    data: "2026-10-27",
+    horario: "08:00",
+    origem: "Rua das Indústrias, 450",
+    destino: "Av. Paulista, 1000",
+    descricao: "Levar 12 paletes",
+    recebida_em: "2026-10-23T12:00:00.000Z",
+  })!,
+  solicitacaoDoPortal("sol_0000000000000002", {
+    tipo_servico: "mudanca",
+    status: "aceita",
+    demanda: "10050",
+    data: "2026-10-30",
+    horario: "07:00",
+    origem: "Rua Funchal, 200",
+    recebida_em: "2026-10-22T12:00:00.000Z",
+  })!,
+  solicitacaoDoPortal("sol_0000000000000003", {
+    tipo_servico: "servico_em_campo",
+    status: "recusada",
+    data: "2026-10-25",
+    horario: "10:00",
+    origem: "Rua Augusta, 10",
+    recusa: { motivo: "Fora da área atendida", em: "2026-10-22T18:00:00.000Z" },
+    recebida_em: "2026-10-21T12:00:00.000Z",
+  })!,
+];
 
 function render(extra: Partial<ServicosViewProps> = {}) {
   return renderToStaticMarkup(
@@ -154,6 +213,88 @@ describe("Minhas OS", () => {
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
     expect(await violacoesDeAcessibilidade(render())).toEqual([]);
     expect(await violacoesDeAcessibilidade(render({ aberta: null }))).toEqual([]);
+  });
+});
+
+describe("Solicitar OS (parte 4.4b)", () => {
+  const principais = (html: string) => (html.match(/<button[^>]*class="[^"]*bg-primary text-primary-foreground[^"]*"[^>]*>[\s\S]*?<\/button>/g) ?? []).map((botao) => textosDaTela(botao).join(" "));
+
+  it("com a Operação liberada, Solicitar OS é a única ação principal; sem ela, não aparece", () => {
+    expect(principais(render({ pedido: pedido({ aberto: false }) }))).toEqual(["Solicitar OS"]);
+    expect(principais(render())).toEqual([]);
+  });
+
+  it("o formulário no lugar do painel: os campos do desenho, Enviar solicitação a única ação principal", () => {
+    const html = render({ pedido: pedido() });
+    const formulario = html.slice(html.indexOf('<form aria-label="Solicitar OS"'));
+    expect(textosDaTela(formulario)).toEqual([
+      "Solicitar OS",
+      "Tipo de serviço",
+      "Transporte / frete",
+      "Armazenagem / movimentação",
+      "Serviço em campo",
+      "Mudança / transporte dedicado",
+      "Data",
+      "Horário",
+      "Origem",
+      "Destino",
+      "O que será feito",
+      "Anexar nota fiscal ou documento",
+      "Enviar solicitação",
+    ]);
+    expect(principais(html)).toEqual(["Enviar solicitação"]);
+    // O painel da OS aberta dá lugar ao formulário.
+    expect(html).not.toContain('aria-label="OS 10045-01"');
+    expect(html).toContain('min="2026-10-23"');
+    expect(html).toContain('value="2026-10-24"');
+  });
+
+  it("o que falta aparece no campo, os anexos se tiram, o erro da callable e o enviando dizem o que é", () => {
+    const arquivo = new File(["%PDF"], "NF 4498.pdf", { type: "application/pdf" });
+    const html = render({
+      pedido: pedido(
+        { problemas: { quando: "A data e o horário já passaram.", origem: "Informe a origem." }, erro: "A Operação não está no contrato do seu acesso." },
+        { anexos: [{ arquivo, nome: "an_0123456789abcdef.pdf", rotulo: "NF 4498.pdf" }] },
+      ),
+    });
+    const textos = textosDaTela(html);
+    expect(textos).toEqual(expect.arrayContaining(["A data e o horário já passaram.", "Informe a origem.", "NF 4498.pdf", "A Operação não está no contrato do seu acesso."]));
+    expect(html).toMatch(/<input[^>]*aria-invalid="true"[^>]*aria-describedby="solicitar-origem-problema"[^>]*id="solicitar-origem"|<input[^>]*id="solicitar-origem"[^>]*aria-invalid="true"/);
+    expect(html).toContain('aria-label="Tirar NF 4498.pdf"');
+    expect(html).toMatch(/<p role="alert"[^>]*>A Operação não está no contrato do seu acesso\.<\/p>/);
+    const enviando = render({ pedido: pedido({ enviando: true }) });
+    expect(principais(enviando)).toEqual(["Enviando..."]);
+    expect(enviando).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
+    const cheio = Array.from({ length: 3 }, (_, indice) => ({ arquivo, nome: `an_000000000000000${indice}.pdf`, rotulo: `Doc ${indice}` }));
+    expect(textosDaTela(render({ pedido: pedido({}, { anexos: cheio }) }))).not.toContain("Anexar nota fiscal ou documento");
+  });
+
+  it("as solicitações em aberto antes das OS, com a situação, a demanda e o motivo; a que acabou de sair avisa", () => {
+    const html = render({ solicitacoes: SOLICITACOES, aberta: null, pedido: pedido({ aberto: false, enviada: true }) });
+    const secao = html.slice(html.indexOf('<section aria-label="Solicitações"'), html.indexOf('<section aria-label="OS"'));
+    expect(textosDaTela(secao)).toEqual([
+      "Solicitações",
+      "Solicitação enviada",
+      "Transporte / frete · 27/10/2026 08:00",
+      "Rua das Indústrias, 450 → Av. Paulista, 1000",
+      "Aguardando a Dutelog",
+      "Mudança / transporte dedicado · 30/10/2026 07:00",
+      "Rua Funchal, 200",
+      "Demanda 10050",
+      "Em planejamento",
+      "Serviço em campo · 25/10/2026 10:00",
+      "Rua Augusta, 10",
+      "Fora da área atendida",
+      "Não atendida",
+    ]);
+    expect(secao).toMatch(/<p role="status"[^>]*>Solicitação enviada<\/p>/);
+    expect(textosDaTela(render({ solicitacoes: [], aberta: null }))).not.toContain("Solicitações");
+  });
+
+  it("passa nas regras WCAG 2.1 A e AA do axe, com o formulário e as solicitações", async () => {
+    expect(await violacoesDeAcessibilidade(render({ solicitacoes: SOLICITACOES, pedido: pedido() }))).toEqual([]);
+    expect(await violacoesDeAcessibilidade(render({ solicitacoes: SOLICITACOES, pedido: pedido({ problemas: { origem: "Informe a origem.", quando: "A data e o horário já passaram." } }) }))).toEqual([]);
+    expect(await violacoesDeAcessibilidade(render({ pedido: pedido({ aberto: false }) }))).toEqual([]);
   });
 });
 

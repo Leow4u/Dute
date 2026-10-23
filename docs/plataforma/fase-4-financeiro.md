@@ -314,3 +314,19 @@ Feita em 23/10/2026. As regras estão em `functions/operacao/src/domain/solicita
   - `profile.integration.test.ts` cobre o cliente com e sem a Operação no contrato e a equipe recusada.
   - `operacao-solicitacoes.rules.test.ts` cobre a leitura no Firestore e o anexo no Storage.
 
+
+### Parte 4.4b: Solicitar OS no portal
+
+Feita em 23/10/2026. As regras estão em `artifacts/app/src/lib/portal/solicitacao.ts`, o envio em
+`enviar-solicitacao.ts` e a tela em `pages/client/servicos-view.tsx`.
+
+- **Solicitar OS** é a ação principal de Minhas OS, só com a Operação liberada no ambiente e no contrato.
+  - O formulário abre no lugar do painel da OS (no celular, antes da lista), com os campos do desenho: tipo de serviço, data e horário, origem, destino, o que será feito e até três anexos.
+  - Começa em transporte, amanhã às 08:00. O que falta aparece no campo depois da primeira tentativa, pela mesma régua da callable.
+  - Os anexos sobem ao Storage com nome aleatório antes da chamada. A mesma chave vale até a solicitação sair, então repetir a tentativa não cria outra.
+- **Solicitações** aparecem antes das OS. A situação é aguardando a Dutelog, em planejamento (com a demanda) ou não atendida (com o motivo).
+  - A atendida sai da lista quando a demanda ganha a primeira OS. A não atendida fica 30 dias.
+  - Depois do envio, "Solicitação enviada" avisa em `role="status"`.
+- **Testes.**
+  - `portal/solicitacao.test.ts` cobre as listas e os limites iguais aos de functions/operacao, o que falta, os anexos, o pedido e as solicitações em aberto.
+  - `servicos-view.test.tsx` cobre a única ação principal em cada estado, os textos listados do formulário e das solicitações, o problema no campo, o erro da callable e o `axe`.
