@@ -861,8 +861,10 @@ service cloud.firestore {
 
     // OS (parte 2): número 10045-01, itens sem preço. Quem grava é
     // saveServiceOrder. O contador service_order_counters não tem match.
+    // O cliente lê só as próprias OS e só com a Operação contratada
+    // (client_access); a tela dele entra na Fase 4 (parte 2.7 da Fase 2).
     match /service_orders/{orderId} {
-      allow read: if canReadServiceOrders();
+      allow read: if canReadServiceOrders() || isOwnProjectionWith('operacao');
       allow create, update, delete: if false;
     }
 

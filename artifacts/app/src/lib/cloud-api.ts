@@ -22,9 +22,10 @@ import {
   type QueryConstraint,
 } from "firebase/firestore";
 
-import { PAPEIS_DO_WMS, estagioDoCadastro, isPapel } from "@workspace/dominio";
+import { PAPEIS_DO_WMS, estagioDoCadastro, isPapel, modulosContratados } from "@workspace/dominio";
 import { activeCustomerStorageKey, LEGACY_CUSTOMER_CODE } from "./active-customer";
 import { periodBelongsToCustomer } from "./billing-scope";
+import { leiturasDoPortal } from "./operations";
 import { canSeeCatalogPrice, canSeeMerchandiseValue } from "./permissions";
 import { firebaseAuth, firestore } from "./firebase";
 import { callFunctionsApi } from "./functions-api";
@@ -1479,6 +1480,16 @@ async function getClientOverview() {
   const profile = await getCurrentProfile();
   const customerCode = String(profile.customer_code || DEFAULT_CUSTOMER.code);
   const isClient = profile.role === "cliente";
+  // O cliente lê só as projeções dos módulos contratados (parte 2.7): os
+  // módulos vêm da mesma projeção client_profiles que monta o menu dele.
+  const leituras = isClient
+    ? leiturasDoPortal(
+        modulosContratados(
+          (await readOptionalWhereEqual(collectionNames.clientProfiles, "customer_code", customerCode, { maxDocs: 1 }))[0]?.modules,
+        ),
+      )
+    : null;
+  const nada = () => Promise.resolve([] as AnyRecord[]);
   const [
     products,
     skus,
@@ -1496,44 +1507,54 @@ async function getClientOverview() {
           Promise.resolve([]),
           // readOptional*: um índice ainda em construção não pode derrubar
           // as cinco seções do portal.
-          readOptionalWhereEqual(
-            collectionNames.clientInventory,
-            "customer_code",
-            customerCode,
-            { maxDocs: CATALOG_READ_CAP, orderByField: "sku_code", direction: "asc" },
-          ),
-          readOptionalWhereEqual(
-            collectionNames.clientOrderTracking,
-            "customer_code",
-            customerCode,
-            { maxDocs: PORTAL_READ_CAP, orderByField: "updated_at" },
-          ),
+          leituras?.estoque
+            ? readOptionalWhereEqual(
+                collectionNames.clientInventory,
+                "customer_code",
+                customerCode,
+                { maxDocs: CATALOG_READ_CAP, orderByField: "sku_code", direction: "asc" },
+              )
+            : nada(),
+          leituras?.pedidos
+            ? readOptionalWhereEqual(
+                collectionNames.clientOrderTracking,
+                "customer_code",
+                customerCode,
+                { maxDocs: PORTAL_READ_CAP, orderByField: "updated_at" },
+              )
+            : nada(),
           Promise.resolve([]),
-          readOptionalWhereEqual(
-            collectionNames.clientRequestStatus,
-            "customer_code",
-            customerCode,
-            { maxDocs: PORTAL_READ_CAP, orderByField: "updated_at" },
-          ),
-          readOptionalWhereEqual(
-            collectionNames.clientInvoices,
-            "customer_code",
-            customerCode,
-            { maxDocs: PORTAL_READ_CAP, orderByField: "competencia" },
-          ),
+          leituras?.solicitacoes
+            ? readOptionalWhereEqual(
+                collectionNames.clientRequestStatus,
+                "customer_code",
+                customerCode,
+                { maxDocs: PORTAL_READ_CAP, orderByField: "updated_at" },
+              )
+            : nada(),
+          leituras?.faturas
+            ? readOptionalWhereEqual(
+                collectionNames.clientInvoices,
+                "customer_code",
+                customerCode,
+                { maxDocs: PORTAL_READ_CAP, orderByField: "competencia" },
+              )
+            : nada(),
           Promise.resolve([]),
-          readOptionalWhereEqual(
-            collectionNames.clientDocuments,
-            "customer_code",
-            customerCode,
-            {
-              maxDocs: PORTAL_READ_CAP,
-              orderByField: "created_at",
-              // A regra exige customer_visible == true; a consulta precisa
-              // declarar isso ou o Firestore nega a lista inteira.
-              extraEquals: [{ field: "customer_visible", value: true }],
-            },
-          ),
+          leituras?.documentos
+            ? readOptionalWhereEqual(
+                collectionNames.clientDocuments,
+                "customer_code",
+                customerCode,
+                {
+                  maxDocs: PORTAL_READ_CAP,
+                  orderByField: "created_at",
+                  // A regra exige customer_visible == true; a consulta precisa
+                  // declarar isso ou o Firestore nega a lista inteira.
+                  extraEquals: [{ field: "customer_visible", value: true }],
+                },
+              )
+            : nada(),
         ]
       : [
           readLimited(collectionNames.products, CATALOG_READ_CAP),
@@ -1589,7 +1610,8 @@ async function getClientOverview() {
     0,
   );
   const showMerchandise = canSeeMerchandiseValue(String(profile.role));
-  const priceIndex = showMerchandise
+  // O valor da mercadoria é do estoque: sem armazenagem no contrato, nada a ler.
+  const priceIndex = showMerchandise && (leituras?.estoque ?? true)
     ? await readCatalogPriceIndex(customerCode)
     : new Map<string, CatalogPricePoint>();
   const lineValue = (item: AnyRecord) => {
