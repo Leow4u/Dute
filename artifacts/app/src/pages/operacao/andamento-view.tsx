@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from "react";
-import { ImagePlus, Plus, X } from "lucide-react";
+import { FileSignature, ImagePlus, Plus, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,9 @@ import {
   TIPOS_DE_ANDAMENTO,
   TIPO_DE_ANDAMENTO_ROTULO,
   etapasPossiveis,
+  fotosDoFinalNaOs,
   inclusaoVazia,
+  itensAMenos,
   rotuloDaEtapa,
   type FormularioDeAndamento,
   type InclusaoNoFormulario,
@@ -20,10 +22,22 @@ import { cn } from "@/lib/utils";
 
 /**
  * "Registrar andamento" na ficha da OS (parte 3.7e; docs/mockups/OpOS.dc.html):
- * a etapa, o feito dos itens (com o que passou do planejado) ou a ocorrência
- * com fotos. Só apresentação: o formulário e o envio estão em
+ * a etapa, o feito dos itens (com o que passou do planejado), a ocorrência
+ * com fotos ou a conclusão (parte 3.9c: a hora do fim, o motivo de cada item
+ * a menos, as fotos do final e a via assinada no papel ou "sem aceite no
+ * local"). Só apresentação: o formulário e o envio estão em
  * pages/operacao/os.tsx. Sem legenda e sem valor.
  */
+
+/** As fotos do final e a assinatura escolhidas para a conclusão. */
+export type AnexosNoPainel = {
+  fotosDoFinal: readonly string[];
+  /** O nome do arquivo da via assinada, ou null. */
+  assinatura: string | null;
+  onFotosDoFinal: (arquivos: File[]) => void;
+  onTirarFotoDoFinal: (indice: number) => void;
+  onAssinatura: (arquivo: File | null) => void;
+};
 
 const campoClasse = "flex h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground";
 
@@ -115,6 +129,131 @@ function Inclusao({
   );
 }
 
+function Arquivos({ nomes, rotulo, multiplos = true, onEscolher, onTirar }: { nomes: readonly string[]; rotulo: string; multiplos?: boolean; onEscolher: (arquivos: File[]) => void; onTirar: (indice: number) => void }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {nomes.map((nome, indice) => (
+        <span key={nome} className="inline-flex h-8 items-center gap-1 rounded-md border border-border bg-muted pl-2.5 text-xs font-medium text-foreground">
+          {nome}
+          <button type="button" aria-label={`Tirar ${nome}`} onClick={() => onTirar(indice)} className="flex size-8 items-center justify-center rounded-md hover:bg-background">
+            <X aria-hidden="true" className="size-3.5" />
+          </button>
+        </span>
+      ))}
+      {multiplos || !nomes.length ? (
+        <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-card px-3 text-sm font-semibold text-foreground hover:bg-muted focus-within:ring-2 focus-within:ring-ring/40">
+          <ImagePlus aria-hidden="true" className="size-4" />
+          {rotulo}
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple={multiplos}
+            className="sr-only"
+            onChange={(event) => {
+              onEscolher(Array.from(event.target.files ?? []));
+              event.target.value = "";
+            }}
+          />
+        </label>
+      ) : null}
+    </div>
+  );
+}
+
+function Conclusao({ ficha, form, onForm, anexos, prefixo }: { ficha: FichaDaOs; form: FormularioDeAndamento; onForm: (form: FormularioDeAndamento) => void; anexos: AnexosNoPainel; prefixo: string }) {
+  const aMenos = itensAMenos(ficha);
+  const comAssinatura = form.aceite === "assinatura";
+  const naOs = fotosDoFinalNaOs(ficha);
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Campo id={`${prefixo}-data`} rotulo="Data do fim">
+          <Input id={`${prefixo}-data`} type="date" value={form.data} onChange={(event) => onForm({ ...form, data: event.target.value })} />
+        </Campo>
+        <Campo id={`${prefixo}-hora`} rotulo="Hora do fim">
+          <Input id={`${prefixo}-hora`} type="time" value={form.hora} onChange={(event) => onForm({ ...form, hora: event.target.value })} />
+        </Campo>
+        <Origem ficha={ficha} form={form} onForm={onForm} prefixo={prefixo} />
+      </div>
+
+      {aMenos.length ? (
+        <fieldset className="flex flex-col gap-3 rounded-md border border-border p-4">
+          <legend className="px-1 text-sm font-semibold text-foreground">Motivo dos itens a menos</legend>
+          {aMenos.map((item) => (
+            <Campo key={item.id} id={`${prefixo}-motivo-${item.id}`} rotulo={`${item.item} · ${String(item.feito / 1000)} de ${String(item.previsto / 1000)}`}>
+              <Input
+                id={`${prefixo}-motivo-${item.id}`}
+                value={form.motivos[item.id] ?? ""}
+                onChange={(event) => onForm({ ...form, motivos: { ...form.motivos, [item.id]: event.target.value } })}
+              />
+            </Campo>
+          ))}
+        </fieldset>
+      ) : null}
+
+      <div className="flex flex-col gap-2">
+        <span className="text-sm font-medium text-foreground">
+          Fotos do final{naOs ? ` · ${naOs} na OS` : ""}
+        </span>
+        <Arquivos nomes={anexos.fotosDoFinal} rotulo="Anexar" onEscolher={anexos.onFotosDoFinal} onTirar={anexos.onTirarFotoDoFinal} />
+      </div>
+
+      <fieldset className="flex flex-col gap-3">
+        <legend className="mb-2 text-sm font-medium text-foreground">Aceite</legend>
+        <div role="radiogroup" aria-label="Aceite" className="flex flex-wrap gap-2">
+          {(
+            [
+              ["assinatura", "Via assinada no papel"],
+              ["sem_aceite", "Sem aceite no local"],
+            ] as const
+          ).map(([aceite, rotulo]) => (
+            <label
+              key={aceite}
+              className={cn(
+                "inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border px-3 text-sm font-semibold focus-within:ring-2 focus-within:ring-ring/40",
+                form.aceite === aceite ? "border-foreground bg-muted text-foreground" : "border-border text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <input type="radio" name={`${prefixo}-aceite`} className="sr-only" checked={form.aceite === aceite} onChange={() => onForm({ ...form, aceite })} />
+              {rotulo}
+            </label>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Campo id={`${prefixo}-nome`} rotulo={comAssinatura ? "Responsável do cliente" : "Quem recebeu"}>
+            <Input id={`${prefixo}-nome`} autoComplete="off" value={form.nome} onChange={(event) => onForm({ ...form, nome: event.target.value })} />
+          </Campo>
+          {comAssinatura ? (
+            <>
+              <Campo id={`${prefixo}-cargo`} rotulo="Cargo">
+                <Input id={`${prefixo}-cargo`} autoComplete="off" value={form.cargo} onChange={(event) => onForm({ ...form, cargo: event.target.value })} />
+              </Campo>
+              <Campo id={`${prefixo}-documento`} rotulo="CPF ou RG">
+                <Input id={`${prefixo}-documento`} autoComplete="off" value={form.documento} onChange={(event) => onForm({ ...form, documento: event.target.value })} />
+              </Campo>
+            </>
+          ) : null}
+        </div>
+        {comAssinatura ? (
+          <div className="flex flex-col gap-2">
+            <span className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground">
+              <FileSignature aria-hidden="true" className="size-4" />
+              Via assinada
+            </span>
+            <Arquivos
+              nomes={anexos.assinatura ? [anexos.assinatura] : []}
+              rotulo="Anexar"
+              multiplos={false}
+              onEscolher={(arquivos) => anexos.onAssinatura(arquivos[0] ?? null)}
+              onTirar={() => anexos.onAssinatura(null)}
+            />
+          </div>
+        ) : null}
+      </fieldset>
+    </div>
+  );
+}
+
 export function AndamentoView({
   ficha,
   form,
@@ -125,6 +264,7 @@ export function AndamentoView({
   fotos,
   onFotos,
   onTirarFoto,
+  anexos,
   onCancelar,
   onRegistrar,
 }: {
@@ -139,6 +279,8 @@ export function AndamentoView({
   fotos: readonly string[];
   onFotos: (arquivos: File[]) => void;
   onTirarFoto: (indice: number) => void;
+  /** As fotos do final e a via assinada da conclusão. */
+  anexos: AnexosNoPainel;
   onCancelar: () => void;
   onRegistrar: () => void;
 }) {
@@ -245,33 +387,12 @@ export function AndamentoView({
           </div>
           <div className="flex flex-col gap-2">
             <span className="text-sm font-medium text-foreground">Fotos</span>
-            <div className="flex flex-wrap items-center gap-2">
-              {fotos.map((nome, indice) => (
-                <span key={nome} className="inline-flex h-8 items-center gap-1 rounded-md border border-border bg-muted pl-2.5 text-xs font-medium text-foreground">
-                  {nome}
-                  <button type="button" aria-label={`Tirar ${nome}`} onClick={() => onTirarFoto(indice)} className="flex size-8 items-center justify-center rounded-md hover:bg-background">
-                    <X aria-hidden="true" className="size-3.5" />
-                  </button>
-                </span>
-              ))}
-              <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-card px-3 text-sm font-semibold text-foreground hover:bg-muted focus-within:ring-2 focus-within:ring-ring/40">
-                <ImagePlus aria-hidden="true" className="size-4" />
-                Anexar
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  multiple
-                  className="sr-only"
-                  onChange={(event) => {
-                    onFotos(Array.from(event.target.files ?? []));
-                    event.target.value = "";
-                  }}
-                />
-              </label>
-            </div>
+            <Arquivos nomes={fotos} rotulo="Anexar" onEscolher={onFotos} onTirar={onTirarFoto} />
           </div>
         </div>
       ) : null}
+
+      {form.tipo === "conclusao" ? <Conclusao ficha={ficha} form={form} onForm={onForm} anexos={anexos} prefixo={`${id}-conclusao`} /> : null}
 
       {problemas.length ? (
         <div role="alert">
@@ -293,7 +414,7 @@ export function AndamentoView({
           Cancelar
         </Button>
         <Button type="button" onClick={onRegistrar} disabled={ocupado}>
-          Registrar
+          {form.tipo === "conclusao" ? "Concluir OS" : "Registrar"}
         </Button>
       </div>
     </section>

@@ -44,6 +44,7 @@ function render(form: FormularioDeAndamento, extra: Partial<Parameters<typeof An
       fotos={[]}
       onFotos={noop}
       onTirarFoto={noop}
+      anexos={{ fotosDoFinal: [], assinatura: null, onFotosDoFinal: noop, onTirarFotoDoFinal: noop, onAssinatura: noop }}
       onCancelar={noop}
       onRegistrar={noop}
       {...extra}
@@ -76,6 +77,40 @@ describe("Registrar andamento", () => {
     for (const texto of ["Descrição", "Informado por", "Fotos", "IMG_0931.jpg", "Anexar"]) expect(textos, texto).toContain(texto);
   });
 
+  it("conclusão: a hora do fim, o motivo dos itens a menos, as fotos do final e a via assinada", () => {
+    const conclusao = { ...INICIAL, tipo: "conclusao" as const, nome: "Renata Campos" };
+    const anexos = { fotosDoFinal: ["IMG_0950.jpg"], assinatura: "via-assinada.jpg", onFotosDoFinal: noop, onTirarFotoDoFinal: noop, onAssinatura: noop };
+    const html = render(conclusao, { anexos });
+    const textos = textosDaTela(html);
+    for (const texto of [
+      "Conclusão",
+      "Data do fim",
+      "Hora do fim",
+      "Informado por",
+      "Meio",
+      "Motivo dos itens a menos",
+      "Cadeira Flexform · 96 de 160",
+      "Mesa de trabalho · 0 de 60",
+      "Fotos do final",
+      "IMG_0950.jpg",
+      "Aceite",
+      "Via assinada no papel",
+      "Sem aceite no local",
+      "Responsável do cliente",
+      "Cargo",
+      "CPF ou RG",
+      "Via assinada",
+      "via-assinada.jpg",
+      "Concluir OS",
+    ]) {
+      expect(textos, texto).toContain(texto);
+    }
+    const sem = textosDaTela(render({ ...conclusao, aceite: "sem_aceite" }, { anexos }));
+    expect(sem).toContain("Quem recebeu");
+    expect(sem).not.toContain("CPF ou RG");
+    expect(sem).not.toContain("via-assinada.jpg");
+  });
+
   it("o que impede e o erro da callable aparecem como alerta", () => {
     const textos = textosDaTela(render(INICIAL, { problemas: ["Escolha a etapa."], erro: "A OS foi atualizada." }));
     expect(textos).toContain("Escolha a etapa.");
@@ -85,7 +120,7 @@ describe("Registrar andamento", () => {
   it("sem legenda: só rótulos, dados e ações", () => {
     expect(
       textosForaDaLista(render({ ...INICIAL, tipo: "itens", inclusao: inclusaoVazia(FICHA) }), [
-        /^(Registrar andamento|escritório|Etapa|Itens|Ocorrência)$/,
+        /^(Registrar andamento|escritório|Etapa|Itens|Ocorrência|Conclusão)$/,
         /^(Cadeira Flexform|Mesa de trabalho|de \d+)$/,
         /^(Além do planejado|Item|Item avulso|Quantidade|Quem pediu no local|Motivo|Tirar)$/,
         /^(Informado por|Ninguém da equipe|Carlos Silva · Líder|João Pereira · Motorista|Meio|Sem meio|Telefone|WhatsApp|Presencial)$/,
@@ -94,8 +129,20 @@ describe("Registrar andamento", () => {
     ).toEqual([]);
   });
 
+  it("conclusão sem legenda: só rótulos, dados e ações", () => {
+    expect(
+      textosForaDaLista(render({ ...INICIAL, tipo: "conclusao" }), [
+        /^(Registrar andamento|escritório|Etapa|Itens|Ocorrência|Conclusão)$/,
+        /^(Data do fim|Hora do fim|Motivo dos itens a menos|Cadeira Flexform · 96 de 160|Mesa de trabalho · 0 de 60|Fotos do final|Anexar)$/,
+        /^(Aceite|Via assinada no papel|Sem aceite no local|Responsável do cliente|Cargo|CPF ou RG|Via assinada)$/,
+        /^(Informado por|Ninguém da equipe|Carlos Silva · Líder|João Pereira · Motorista|Meio|Sem meio|Telefone|WhatsApp|Presencial)$/,
+        /^(Cancelar|Concluir OS)$/,
+      ]),
+    ).toEqual([]);
+  });
+
   it("não tem problema de acessibilidade", async () => {
-    for (const form of [INICIAL, { ...INICIAL, tipo: "itens" as const, inclusao: inclusaoVazia(FICHA) }, { ...INICIAL, tipo: "ocorrencia" as const }]) {
+    for (const form of [INICIAL, { ...INICIAL, tipo: "itens" as const, inclusao: inclusaoVazia(FICHA) }, { ...INICIAL, tipo: "ocorrencia" as const }, { ...INICIAL, tipo: "conclusao" as const }]) {
       expect(await violacoesDeAcessibilidade(render(form, { fotos: ["IMG_0931.jpg"], problemas: ["Descreva a ocorrência."] }))).toEqual([]);
     }
   });

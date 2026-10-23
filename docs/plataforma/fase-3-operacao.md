@@ -854,3 +854,21 @@ líder (ou para qualquer um da equipe quando a OS não tem líder). Regras em
   guardar o registro no aparelho antes de a pessoa sair. Guardada a
   conclusão, a OS para de receber registros no celular ("OS concluída ·
   guardada").
+
+### Parte 3.9c: concluir pelo escritório e a conclusão na ficha
+
+Feita em 23/10/2026, no desenho aprovado `OpOS`.
+
+- **Pelo escritório.** "Registrar andamento" ganha a aba Conclusão, na OS em
+  execução: a data e a hora do fim, quem informou e o meio, o motivo de cada
+  item a menos, as fotos do final e o aceite. "Via assinada no papel" pede o
+  responsável (nome; cargo e CPF ou RG) e a foto da via assinada, que vira a
+  assinatura no Storage; "Sem aceite no local" pede quem recebeu. Sobem
+  antes as fotos do final (etapa Fim) e a via assinada; `completeServiceOrder`
+  vem por último, com a chave da tentativa (repetir não duplica). A tela
+  confere antes (`lib/operacao/andamento.ts`); a callable confere de novo.
+- **Na ficha.** Concluída, a OS mostra o cartão Conclusão: o aceite
+  ("Assinada 17:52 por Renata Campos" ou "Sem aceite no local · recebido
+  por"), o cargo e o documento, por onde veio, a imagem da assinatura e o
+  motivo de cada item a menos. O passo Concluir mostra o aceite, e o
+  histórico ganha a conclusão.

@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 import { Link } from "wouter";
-import { ArrowLeft, Check, ExternalLink, ImageIcon, MapPin, Truck } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, ExternalLink, ImageIcon, MapPin, Truck } from "lucide-react";
 
 import { Avatar, COR_DO_STATUS, ROTULO_DO_STATUS, SeloDoTipo, selo, seloAlerta, seloNeutro } from "@/components/operacao/partes";
 import { Button } from "@/components/ui/button";
 import {
+  conclusaoNaFicha,
   detalheDaPessoa,
   detalheDoVeiculo,
   enderecoNoMaps,
@@ -27,8 +28,10 @@ import { cn } from "@/lib/utils";
  * Operação › OS (docs/plataforma/fase-3-operacao.md, parte 3.7d;
  * docs/mockups/OpOS.dc.html): os quatro passos, os locais com a hora da
  * saída e da chegada, as etapas, os itens com o feito e o incluído em campo,
- * as fotos, a equipe, os veículos e o histórico. Só apresentação: os dados
- * chegam por props (pages/operacao/os.tsx). Sem legenda e sem valor.
+ * as fotos, a equipe, os veículos e o histórico; concluída, o aceite, quem
+ * assinou ou recebeu, a assinatura e o motivo de cada item a menos (parte
+ * 3.9c). Só apresentação: os dados chegam por props (pages/operacao/os.tsx).
+ * Sem legenda e sem valor.
  */
 
 export type EstadoDaFicha = "carregando" | "erro" | "nao_encontrada" | "pronto";
@@ -222,6 +225,44 @@ function Itens({ ficha }: { ficha: FichaDaOs }) {
           </li>
         ))}
       </ul>
+    </Cartao>
+  );
+}
+
+function Conclusao({ ficha, urls }: { ficha: FichaDaOs; urls: Readonly<Record<string, string>> }) {
+  const conclusao = conclusaoNaFicha(ficha);
+  if (!conclusao) return null;
+  const assinatura = conclusao.assinatura ? urls[conclusao.assinatura] : null;
+  return (
+    <Cartao titulo="Conclusão">
+      <div className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 flex-col gap-1">
+          <span className="text-sm font-semibold text-foreground">{conclusao.aceite}</span>
+          {conclusao.responsavel ? <span className="text-sm text-muted-foreground">{conclusao.responsavel}</span> : null}
+          <span className="text-xs text-muted-foreground">{conclusao.origem}</span>
+        </div>
+        {conclusao.assinatura ? (
+          <figure className="flex w-full max-w-64 flex-col gap-1 sm:w-64">
+            <div className="flex h-24 items-center justify-center overflow-hidden rounded-md border border-border bg-muted">
+              {assinatura ? <img src={assinatura} alt={conclusao.aceite} className="size-full object-contain" /> : <ImageIcon aria-hidden="true" className="size-5 text-muted-foreground" />}
+            </div>
+            <figcaption className="sr-only">Assinatura</figcaption>
+          </figure>
+        ) : null}
+      </div>
+      {conclusao.diferencas.length ? (
+        <ul aria-label="Itens a menos" className="flex flex-col divide-y divide-border border-t border-border">
+          {conclusao.diferencas.map((diferenca) => (
+            <li key={diferenca.linha} className="flex flex-col gap-0.5 px-5 py-3">
+              <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <AlertTriangle aria-hidden="true" className="size-4 text-destructive" />
+                {diferenca.item} · {diferenca.quantidade}
+              </span>
+              <span className="pl-6 text-sm text-muted-foreground">{diferenca.motivo}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </Cartao>
   );
 }
@@ -423,6 +464,7 @@ export function OsView({
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="flex min-w-0 flex-col gap-6">
+          <Conclusao ficha={ficha} urls={urls} />
           <Locais ficha={ficha} />
           <Etapas ficha={ficha} />
           <Itens ficha={ficha} />

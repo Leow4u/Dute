@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  conclusaoNaFicha,
   ETAPAS_DA_OS,
   ETAPA_ROTULO,
   detalheDaPessoa,
@@ -202,5 +203,36 @@ describe("histórico, locais, equipe e veículos", () => {
     expect(enderecoNoMaps(FICHA)).toBe("https://www.google.com/maps/search/?api=1&query=Av.%20Eng.%20Armando%20de%20Arruda%20Pereira%2C%202937");
     expect(FICHA.equipe.map(detalheDaPessoa)).toEqual(["Líder · no app", "Motorista · no app", "Freelancer · Montador", "Terceiro · Motorista · Rota Sul"]);
     expect(FICHA.veiculos.map(detalheDoVeiculo)).toEqual(["VW Delivery 11.180 · Baú", "Truck · Terceiro · Rota Sul"]);
+  });
+});
+
+describe("conclusão (parte 3.9c)", () => {
+  const base = { status: "em_revisao", edicao: 3, demanda: "10045", customer_code: "ITAU", itens: [{ id: "ln_2", item: "Mesa", planejado: "60", executado: "58" }] };
+  const conclusao = {
+    instante: "2026-10-22T20:52:00.000Z",
+    canal: "escritorio",
+    meio: "whatsapp",
+    informado_por: null,
+    aceite: "sem_aceite",
+    responsavel: { nome: "Sr. Almeida" },
+    assinatura: null,
+    diferencas: [{ linha: "ln_2", previsto: "60", executado: "58", motivo: "Quebrada" }],
+  };
+
+  it("lê a conclusão gravada e mostra o aceite, a origem e os itens a menos", () => {
+    const ficha = fichaDaLeitura("10045-01", { ...base, conclusao })!;
+    expect(conclusaoNaFicha(ficha)).toEqual({
+      aceite: "Sem aceite no local · 17:52 · recebido por Sr. Almeida",
+      responsavel: null,
+      origem: "escritório · whatsapp",
+      assinatura: null,
+      diferencas: [{ linha: "ln_2", item: "Mesa", quantidade: "58 de 60", motivo: "Quebrada" }],
+    });
+  });
+
+  it("sem conclusão, ou ilegível, não há o que mostrar", () => {
+    expect(conclusaoNaFicha(fichaDaLeitura("10045-01", base)!)).toBeNull();
+    expect(fichaDaLeitura("10045-01", { ...base, conclusao: { ...conclusao, aceite: "talvez" } })!.conclusao).toBeNull();
+    expect(fichaDaLeitura("10045-01", { ...base, conclusao: { ...conclusao, instante: "ontem" } })!.conclusao).toBeNull();
   });
 });

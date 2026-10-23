@@ -12,9 +12,12 @@ import { milesimos } from "./hoje";
  * confere de novo. Sem valor.
  */
 
-export const TIPOS_DE_ANDAMENTO = ["etapa", "itens", "ocorrencia"] as const;
+export const TIPOS_DE_ANDAMENTO = ["etapa", "itens", "ocorrencia", "conclusao"] as const;
 export type TipoDeAndamento = (typeof TIPOS_DE_ANDAMENTO)[number];
-export const TIPO_DE_ANDAMENTO_ROTULO: Record<TipoDeAndamento, string> = { etapa: "Etapa", itens: "Itens", ocorrencia: "Ocorrência" };
+export const TIPO_DE_ANDAMENTO_ROTULO: Record<TipoDeAndamento, string> = { etapa: "Etapa", itens: "Itens", ocorrencia: "Ocorrência", conclusao: "Conclusão" };
+
+/** O aceite da conclusão (parte 3.9c): a via assinada no papel (a foto dela é a assinatura) ou sem aceite no local. */
+export type AceiteDoEscritorio = "assinatura" | "sem_aceite";
 
 /** O item que passou do planejado: uma linha da OS ou um item avulso. */
 export type InclusaoNoFormulario = { linha: string; item: string; unidade: string; quantidade: string; pedidoPor: string; motivo: string };
@@ -32,7 +35,17 @@ export type FormularioDeAndamento = {
   feitos: Record<string, string>;
   inclusao: InclusaoNoFormulario | null;
   descricao: string;
+  /** A conclusão (parte 3.9c). */
+  aceite: AceiteDoEscritorio;
+  nome: string;
+  cargo: string;
+  documento: string;
+  /** O motivo por linha a menos. */
+  motivos: Record<string, string>;
 };
+
+/** O que vai anexado à conclusão: quantas fotos do final foram escolhidas e o nome da assinatura no Storage. */
+export type AnexosDaConclusao = { fotosDoFinal: number; assinatura: string | null };
 
 /** Quanto o relógio pode estar adiantado (o mesmo da callable). */
 const TOLERANCIA_MS = 5 * 60_000;
@@ -61,6 +74,11 @@ export function andamentoInicial(ficha: FichaDaOs, agora: Date): FormularioDeAnd
     feitos: Object.fromEntries(ficha.itens.map((item) => [item.id, item.executado ?? "0"])),
     inclusao: null,
     descricao: "",
+    aceite: "assinatura",
+    nome: ficha.locais.destino?.contato?.nome ?? ficha.locais.origem?.contato?.nome ?? "",
+    cargo: "",
+    documento: "",
+    motivos: {},
   };
 }
 
@@ -82,17 +100,56 @@ export function feitosAlterados(form: Pick<FormularioDeAndamento, "feitos">, fic
   });
 }
 
+/** Os itens feitos a menos que o previsto: a conclusão pede o motivo de cada um. */
+export function itensAMenos(ficha: Pick<FichaDaOs, "itens">): Array<{ id: string; item: string; feito: number; previsto: number }> {
+  return ficha.itens.flatMap((item) => {
+    const feito = item.executado ? milesimos(item.executado) : 0;
+    const limite = previsto(item);
+    return feito < limite ? [{ id: item.id, item: item.item, feito, previsto: limite }] : [];
+  });
+}
+
+/** Quantas fotos do final (etapa Fim) a OS já tem. */
+export function fotosDoFinalNaOs(ficha: Pick<FichaDaOs, "fotos">): number {
+  return ficha.fotos.filter((foto) => foto.etapa === "fim").length;
+}
+
+function problemasDaHora(form: FormularioDeAndamento, ficha: FichaDaOs, agora: Date): string[] {
+  const instante = instanteDeSaoPaulo(form.data, form.hora);
+  if (!instante) return ["Informe a data e a hora."];
+  if (Date.parse(instante) > agora.getTime() + TOLERANCIA_MS) return ["A hora informada ainda não chegou."];
+  if (ficha.janela && form.data < ficha.janela.data) return ["A data é de antes do dia da OS."];
+  return [];
+}
+
 /** O que impede registrar; a lista vazia libera. */
-export function problemasDoAndamento(form: FormularioDeAndamento, ficha: FichaDaOs, agora: Date): string[] {
+export function problemasDoAndamento(
+  form: FormularioDeAndamento,
+  ficha: FichaDaOs,
+  agora: Date,
+  anexos: AnexosDaConclusao = { fotosDoFinal: 0, assinatura: null },
+): string[] {
   const problemas: string[] = [];
   if (ficha.status !== "agendada" && ficha.status !== "em_execucao") return ["A OS não recebe andamento."];
   if (form.tipo === "etapa") {
     if (!form.etapa) problemas.push("Escolha a etapa.");
-    const instante = instanteDeSaoPaulo(form.data, form.hora);
-    if (!instante) problemas.push("Informe a data e a hora.");
-    else if (Date.parse(instante) > agora.getTime() + TOLERANCIA_MS) problemas.push("A hora informada ainda não chegou.");
-    else if (ficha.janela && form.data < ficha.janela.data) problemas.push("A data é de antes do dia da OS.");
+    problemas.push(...problemasDaHora(form, ficha, agora));
     if (ficha.status === "agendada" && ficha.equipe.length === 0) problemas.push("Escale a equipe antes de iniciar a OS.");
+    return problemas;
+  }
+  if (form.tipo === "conclusao") {
+    if (ficha.status !== "em_execucao") return ["Registre a primeira etapa antes de concluir."];
+    const daHora = problemasDaHora(form, ficha, agora);
+    problemas.push(...daHora);
+    const ultima = ficha.etapas.at(-1);
+    const instante = instanteDeSaoPaulo(form.data, form.hora);
+    if (!daHora.length && ultima && instante && Date.parse(instante) < Date.parse(ultima.instante)) problemas.push(`A hora vem antes de ${ETAPA_ROTULO[ultima.etapa]}.`);
+    for (const item of itensAMenos(ficha)) {
+      if ((form.motivos[item.id] ?? "").trim().length < 3) problemas.push(`Informe o motivo da diferença em ${item.item}.`);
+    }
+    if (fotosDoFinalNaOs(ficha) + anexos.fotosDoFinal === 0) problemas.push("Anexe ao menos uma foto do final.");
+    if (form.nome.trim().length < 2) problemas.push(form.aceite === "assinatura" ? "Informe o nome do responsável." : "Informe quem recebeu.");
+    if (form.aceite === "assinatura" && !anexos.assinatura) problemas.push("Anexe a foto da via assinada.");
     return problemas;
   }
   if (form.tipo === "itens") {
@@ -129,8 +186,28 @@ function origem(form: FormularioDeAndamento) {
  * inclusão; ou a ocorrência. Cada uma com a chave derivada da tentativa
  * (repetir a tentativa não duplica).
  */
-export function pedidosDoAndamento(form: FormularioDeAndamento, ficha: FichaDaOs, chave: string, agora: Date): PedidoDeAndamento[] {
+export function pedidosDoAndamento(form: FormularioDeAndamento, ficha: FichaDaOs, chave: string, agora: Date, assinatura: string | null = null): PedidoDeAndamento[] {
   const numero = ficha.numero;
+  if (form.tipo === "conclusao") {
+    const comAssinatura = form.aceite === "assinatura";
+    const cargo = form.cargo.trim();
+    const documento = form.documento.trim();
+    return [
+      {
+        callable: "completeServiceOrder",
+        dados: {
+          idempotency_key: chave,
+          numero,
+          instante: instanteDeSaoPaulo(form.data, form.hora),
+          aceite: form.aceite,
+          responsavel: { nome: form.nome.trim(), ...(comAssinatura && cargo ? { cargo } : {}), ...(comAssinatura && documento ? { documento } : {}) },
+          ...(comAssinatura && assinatura ? { assinatura } : {}),
+          diferencas: itensAMenos(ficha).map((item) => ({ linha: item.id, motivo: (form.motivos[item.id] ?? "").trim() })),
+          ...origem(form),
+        },
+      },
+    ];
+  }
   if (form.tipo === "etapa") {
     return [
       {
@@ -188,6 +265,11 @@ export function nomeDaFoto(tipo: string, aleatorio: () => Uint8Array = () => cry
   if (!extensao) return null;
   const hex = Array.from(aleatorio(), (byte) => byte.toString(16).padStart(2, "0")).join("");
   return `ft_${hex}.${extensao}`;
+}
+
+/** O nome da assinatura no Storage (a foto da via assinada): as_ com 16 hex (parte 3.9a). */
+export function nomeDaAssinaturaDoArquivo(tipo: string, aleatorio?: () => Uint8Array): string | null {
+  return nomeDaFoto(tipo, aleatorio)?.replace(/^ft_/, "as_") ?? null;
 }
 
 /** Quando a foto foi tirada: a data do arquivo, se é do dia da OS em diante e não está no futuro; senão, agora. */
