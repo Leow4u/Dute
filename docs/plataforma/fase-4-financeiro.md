@@ -560,3 +560,17 @@ Feita em 23/10/2026. O layout está em `artifacts/app/src/components/layout/wms-
   - `active-customer-switcher.test.tsx` cobre as variantes v3, a falta de legenda e `axe`.
   - `wms-v3.test.ts` cobre a lista e o caminho.
   - `account-menu.test.tsx` cobre onde a troca de módulo mora.
+
+### Parte 4.7b: o Início da Armazenagem na v3
+
+Feita em 23/10/2026. A tela está em `artifacts/app/src/pages/home-view.tsx`, sobre o `InicioDoModulo` dos
+outros módulos. Os itens e o ícone de cada um vêm de `lib/inicio-do-wms.ts`.
+
+- **O mesmo Início dos outros módulos.**
+  - A tela traz a data e a saudação, e uma frase diz quantas coisas precisam de você na Armazenagem.
+  - O "Precisa de você" sai da mesma lista de antes (`lib/home-inbox.ts`), agora com o ícone de cada item. Só a primeira ação é a principal.
+  - Ao lado fica "Hoje no armazém": pedidos para separar, prontos para envio, em rota de entrega, recebimentos em aberto e SKUs em estoque. O financeiro, que não vê o armazém, fica sem a coluna.
+  - Nada parado: a frase diz "Nada parado na Armazenagem." e o "Precisa de você" some.
+  - A falha diz o que não carregou.
+- **Na v3.** `/dashboard` entra em `TELAS_DO_WMS_NA_V3`.
+- **Testes.** `home-view.test.tsx` cobre os textos na ordem, só rótulos, a ação principal, o vazio, o carregando, a falha, o financeiro sem a coluna, o ícone e `axe`.
