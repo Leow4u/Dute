@@ -47,6 +47,7 @@ OPERACAO = (
     "operacao_operations",
     "service_orders",
     "service_order_counters",
+    "service_requests",
 )
 FINANCEIRO = (
     "faturas",

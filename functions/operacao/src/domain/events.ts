@@ -55,6 +55,9 @@ export const OPERACAO_EVENT_TYPES = [
   "demand.execution_reviewed",
   "collaborator.cnh_expiring",
   "vehicle.maintenance_due",
+  "portal.service_requested",
+  "portal.service_accepted",
+  "portal.service_declined",
 ] as const;
 export type OperacaoEventType = (typeof OPERACAO_EVENT_TYPES)[number];
 
@@ -235,6 +238,19 @@ const alertaDoDia = z.object({ id, dia: data, dias: z.number().int().min(-3650).
 /** A demanda direta foi executada e revisada: vai ao Comercial orçar a execução. */
 const execucaoRevisada = z.object({ id: demandaNumero, de: data, ate: data, os: z.number().int().min(1).max(99) }).strict();
 
+/**
+ * A solicitação do portal (parte 4.4a): o tipo de serviço, o dia pedido e
+ * quantos anexos. Os locais, o que será feito, o nome dos anexos e o motivo
+ * da recusa são texto livre do cliente ou da coordenação: ficam só na
+ * solicitação.
+ */
+const solicitacaoId = z.string().regex(/^sol_[a-f0-9]{16}$/, "Id inválido.");
+const servicoPedido = z
+  .object({ id: solicitacaoId, tipo_servico: z.enum(["transporte", "armazenagem", "servico_em_campo", "mudanca"]), data, anexos: z.number().int().min(0).max(3) })
+  .strict();
+const servicoAceito = z.object({ id: solicitacaoId, demanda: demandaNumero }).strict();
+const servicoRecusado = z.object({ id: solicitacaoId }).strict();
+
 export const OPERACAO_EVENT_PAYLOADS = {
   "collaborator.created": criado,
   "collaborator.updated": alterado,
@@ -268,6 +284,9 @@ export const OPERACAO_EVENT_PAYLOADS = {
   "demand.execution_reviewed": execucaoRevisada,
   "collaborator.cnh_expiring": alertaDoDia,
   "vehicle.maintenance_due": alertaDoDia,
+  "portal.service_requested": servicoPedido,
+  "portal.service_accepted": servicoAceito,
+  "portal.service_declined": servicoRecusado,
 } as const;
 
 const TEXTO: Record<OperacaoEventType, { title: string; description: string }> = {
@@ -309,7 +328,13 @@ const TEXTO: Record<OperacaoEventType, { title: string; description: string }> =
   "demand.execution_reviewed": { title: "Execução revisada", description: "A última OS da demanda direta foi revisada: a execução vai ao Comercial para orçar." },
   "collaborator.cnh_expiring": { title: "CNH vencendo", description: "A CNH de um colaborador ativo vence em até 30 dias ou já venceu." },
   "vehicle.maintenance_due": { title: "Revisão do veículo", description: "A revisão preventiva de um veículo ativo é em até 15 dias ou a data já passou." },
+  "portal.service_requested": { title: "OS pedida pelo portal", description: "O cliente pediu uma OS pelo portal; a solicitação está em Para planejar." },
+  "portal.service_accepted": { title: "Solicitação do portal atendida", description: "A coordenação abriu a demanda direta a partir da solicitação do portal." },
+  "portal.service_declined": { title: "Solicitação do portal recusada", description: "A coordenação recusou a solicitação do portal com o motivo, que o cliente lê." },
 };
+
+/** O único evento da Operação gravado pelo cliente: a solicitação dele pelo portal. */
+export const EVENTOS_DO_CLIENTE: readonly OperacaoEventType[] = ["portal.service_requested"];
 
 export function isOperacaoEventType(value: string): value is OperacaoEventType {
   return (OPERACAO_EVENT_TYPES as readonly string[]).includes(value);
@@ -333,7 +358,7 @@ export type OperacaoEventRecord = {
   title: string;
   description: string;
   severity: "info";
-  entity_type: "collaborator" | "vehicle" | "os" | "demand";
+  entity_type: "collaborator" | "vehicle" | "os" | "demand" | "service_request";
   entity_id: string;
   customer_code: string | null;
   payload: Record<string, unknown>;
@@ -354,14 +379,17 @@ function textoDoCliente(valor: string | null | undefined): string | null {
 
 export function buildOperacaoEvent<T extends OperacaoEventType>(input: OperacaoEventInput<T>): OperacaoEventRecord {
   if (!isOperacaoEventType(input.type)) throw new HttpsError("internal", `Tipo de evento desconhecido: ${String(input.type)}.`);
-  if (input.actor.role === "cliente") throw new HttpsError("permission-denied", "Evento da Operação é sempre de alguém da equipe.");
+  const doPortal = EVENTOS_DO_CLIENTE.includes(input.type);
+  if ((input.actor.role === "cliente") !== doPortal) {
+    throw new HttpsError("permission-denied", doPortal ? "A solicitação do portal é sempre do cliente." : "Evento da Operação é sempre de alguém da equipe.");
+  }
   const operationId = String(input.operation_id ?? "").trim();
   if (!operationId) throw new HttpsError("internal", `Evento ${input.type} sem a operação de origem.`);
   const payload = OPERACAO_EVENT_PAYLOADS[input.type].safeParse(input.payload);
   if (!payload.success) throw new HttpsError("internal", `Evento ${input.type} com payload inválido.`);
   if (payload.data.id !== input.entity_id) throw new HttpsError("internal", `Evento ${input.type} com entity_id diferente do payload.`);
   const customerCode = textoDoCliente(input.customer_code);
-  const doCliente = input.type.startsWith("os.") || input.type.startsWith("demand.");
+  const doCliente = input.type.startsWith("os.") || input.type.startsWith("demand.") || input.type.startsWith("portal.");
   if (doCliente && !customerCode) {
     throw new HttpsError("internal", `Evento ${input.type} sem customer_code.`);
   }
@@ -382,7 +410,9 @@ export function buildOperacaoEvent<T extends OperacaoEventType>(input: OperacaoE
         ? "os"
         : input.type.startsWith("demand.")
           ? "demand"
-          : "collaborator",
+          : input.type.startsWith("portal.")
+            ? "service_request"
+            : "collaborator",
     entity_id: input.entity_id,
     customer_code: doCliente ? customerCode : null,
     payload: compactValue(payload.data) as Record<string, unknown>,

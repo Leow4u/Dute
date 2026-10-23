@@ -30,6 +30,12 @@ beforeEach(async () => {
     users.doc("comercial-1").set({ role: "comercial", nome: "Guilherme" }),
     users.doc("painel-1").set({ role: "painel", nome: "TV da sala" }),
     users.doc("off-1").set({ role: "interno", nome: "Desligado", access_disabled: true }),
+    users.doc("cli-itau").set({ role: "cliente", nome: "Roberto Souza", customer_code: "ITAU" }),
+    users.doc("cli-btg").set({ role: "cliente", nome: "Cristiane", customer_code: "BTG" }),
+    users.doc("cli-safra").set({ role: "cliente", nome: "Carla", customer_code: "SAFRA" }),
+    users.doc("cli-sem-codigo").set({ role: "cliente", nome: "Convite antigo" }),
+    db.doc("client_access/ITAU").set({ customer_code: "ITAU", modules: ["wms", "operacao", "financeiro"] }),
+    db.doc("client_access/SAFRA").set({ customer_code: "SAFRA", modules: ["wms", "financeiro"] }),
   ]);
 });
 
@@ -98,6 +104,34 @@ describe("o painel da TV (parte 3.12)", () => {
       const error = await rejection(getProfile(db, request(uid), { painel: true }));
       assert.equal(error.code, "permission-denied", uid);
       assert.equal(error.message, "Seu perfil não abre a TV da sala.", uid);
+    }
+  });
+});
+
+describe("o cliente no portal (parte 4.4a)", () => {
+  it("a callable do portal atende o cliente com a Operação no contrato, com o código do perfil", async () => {
+    const roberto = await requireOperacaoCaller(db, request("cli-itau"), "dute-homolog", { portal: true });
+    assert.deepEqual([roberto.role, roberto.customer_code, roberto.name], ["cliente", "ITAU", "Roberto Souza"]);
+  });
+
+  it("sem a Operação no contrato (ou sem client_access, que vale o padrão), sem código ou da equipe, recusa", async () => {
+    for (const [uid, mensagem] of [
+      ["cli-safra", "A Operação não está no contrato do seu acesso."],
+      ["cli-btg", "A Operação não está no contrato do seu acesso."],
+      ["cli-sem-codigo", "Seu acesso não está ligado a um cliente."],
+      ["interno-1", "Só o cliente pede OS pelo portal."],
+      ["owner-1", "Só o cliente pede OS pelo portal."],
+    ] as const) {
+      const error = await rejection(getProfile(db, request(uid), { portal: true }));
+      assert.equal(error.code, "permission-denied", uid);
+      assert.equal(error.message, mensagem, uid);
+    }
+  });
+
+  it("nenhuma outra callable atende o cliente, nem com a Operação no contrato", async () => {
+    for (const opcoes of [{}, { campo: true as const }, { painel: true as const }]) {
+      const error = await rejection(getProfile(db, request("cli-itau"), opcoes));
+      assert.equal(error.code, "permission-denied");
     }
   });
 });

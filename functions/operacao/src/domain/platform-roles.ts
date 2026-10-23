@@ -32,6 +32,23 @@ export const OPERACAO_CADASTRO_ROLES = ["owner", "admin", "interno"] as const sa
  */
 export const TV_ROLES = ["owner", "admin", "interno", "painel"] as const satisfies readonly PlatformRole[];
 
+/**
+ * Os módulos que o cliente contrata e o padrão sem o campo: cópias literais
+ * de MODULOS_CONTRATAVEIS e MODULOS_PADRAO_CLIENTE (lib/dominio), travadas
+ * por artifacts/app/src/lib/platform-lists.test.ts. O portal pede OS só com a
+ * Operação no contrato (client_access/{customer_code}).
+ */
+export const CONTRACTED_MODULE_KEYS = ["wms", "operacao", "financeiro"] as const;
+export const DEFAULT_CONTRACTED_MODULES = ["wms", "financeiro"] as const;
+export type ContractedModule = (typeof CONTRACTED_MODULE_KEYS)[number];
+
+/** Os módulos que valem de `client_access.modules`: sem a lista, ou sem nenhum conhecido, o padrão. */
+export function contractedModulesFrom(value: unknown): ContractedModule[] {
+  if (!Array.isArray(value)) return [...DEFAULT_CONTRACTED_MODULES];
+  const known = CONTRACTED_MODULE_KEYS.filter((key) => value.includes(key));
+  return known.length ? known : [...DEFAULT_CONTRACTED_MODULES];
+}
+
 export function isPlatformRole(value: unknown): value is PlatformRole {
   return typeof value === "string" && (PLATFORM_ROLES as readonly string[]).includes(value);
 }

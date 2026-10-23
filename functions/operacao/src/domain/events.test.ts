@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 import {
+  EVENTOS_DO_CLIENTE,
   OPERACAO_EVENT_PAYLOADS,
   OPERACAO_EVENT_SOURCE,
   OPERACAO_EVENT_TYPES,
@@ -142,7 +143,12 @@ const EXEMPLOS: Record<OperacaoEventType, Record<string, unknown>> = {
   "demand.direct_opened": { id: "10053", tipo: "paraquedas", tipo_calculado: "emergencial", linhas: 1 },
   "collaborator.cnh_expiring": { id: "col_aaaaaaaaaaaaaaaa", dia: "2026-10-23", dias: 12 },
   "vehicle.maintenance_due": { id: "vei_aaaaaaaaaaaaaaaa", dia: "2026-10-23", dias: -2 },
+  "portal.service_requested": { id: "sol_aaaaaaaaaaaaaaaa", tipo_servico: "transporte", data: "2026-10-24", anexos: 1 },
+  "portal.service_accepted": { id: "sol_aaaaaaaaaaaaaaaa", demanda: "10053" },
+  "portal.service_declined": { id: "sol_aaaaaaaaaaaaaaaa" },
 };
+
+const doCliente = (type: OperacaoEventType) => type.startsWith("os.") || type.startsWith("demand.") || type.startsWith("portal.");
 
 function wmsNoticeWords(): string[] {
   const source = readFileSync(fileURLToPath(new URL("../../../wms/src/index.ts", import.meta.url)), "utf8");
@@ -172,12 +178,14 @@ describe("eventos do cadastro da Operação", () => {
         type,
         entity_id: EXEMPLOS[type].id as string,
         payload: EXEMPLOS[type] as never,
-        actor: { uid: "u1", role: "interno", name: "Leonardo", email: "leonardo@dutelog.com.br" },
-        customer_code: type.startsWith("os.") || type.startsWith("demand.") ? "ITAU" : null,
+        actor: EVENTOS_DO_CLIENTE.includes(type)
+          ? { uid: "c1", role: "cliente", name: "Roberto", email: "roberto@itau.example" }
+          : { uid: "u1", role: "interno", name: "Leonardo", email: "leonardo@dutelog.com.br" },
+        customer_code: doCliente(type) ? "ITAU" : null,
         occurred_at: "2026-10-22T03:00:00.000Z",
       });
       assert.equal(event.source, OPERACAO_EVENT_SOURCE);
-      assert.equal(event.customer_code, type.startsWith("os.") || type.startsWith("demand.") ? "ITAU" : null);
+      assert.equal(event.customer_code, doCliente(type) ? "ITAU" : null);
       assert.equal(event.severity, "info");
       for (const text of [event.title, event.description, JSON.stringify(event.payload)]) {
         assert.equal(text.includes("Ana"), false, text);
