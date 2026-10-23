@@ -7420,6 +7420,14 @@ export const payBillingInvoice = onCall(async (request) => {
         );
       }
       const period = periodSnapshot.data() ?? {};
+      // Na NF do Financeiro (parte 7.2a), o pagamento se registra lá.
+      const faturamento = period.faturamento as { fatura_id?: unknown } | undefined;
+      if (typeof faturamento?.fatura_id === "string" && faturamento.fatura_id) {
+        throw new BillingDomainError(
+          "PERIOD_INVOICED",
+          `A competência ${input.competencia} está numa NF do Financeiro: o pagamento se registra lá.`,
+        );
+      }
       assertBillingStatusTransition(
         String(period.status) as "aberto" | "emitido" | "pago",
         "pago",

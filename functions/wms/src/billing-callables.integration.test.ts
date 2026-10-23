@@ -449,6 +449,18 @@ describe("o pagamento", () => {
     assert.equal(resultado.total_cents, TOTAL_BTG);
   });
 
+  it("a competência numa NF do Financeiro não se paga no WMS (parte 7.2a)", async () => {
+    await abrirSetembro();
+    await emitir({ competencia: SETEMBRO });
+    await db.collection("billing_periods").doc(ID_BTG).update({
+      faturamento: { fatura_id: "fat_0123456789abcdef01234567", vencimento: "2026-11-10" },
+    });
+    await recusa(pagar({ competencia: SETEMBRO }), "failed-precondition", "PERIOD_INVOICED");
+    assert.equal((await db.collection("billing_periods").doc(ID_BTG).get()).get("status"), "emitido");
+    assert.equal((await db.collection("client_invoices").doc(ID_BTG).get()).get("payment_status"), "issued");
+    assert.equal(await contar("events", "type", "billing.invoice_paid"), 0);
+  });
+
   it("a competência antiga da BTG, no id do mês, é paga no mesmo documento", async () => {
     const snapshot = {
       schema_version: 1,

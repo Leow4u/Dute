@@ -172,7 +172,7 @@ describe("a cobrança da NF", () => {
     assert.deepEqual(await etapas(), ["a_faturar", "a_faturar"]);
     assert.equal((await db.doc("demands/10045").get()).get("faturamento"), undefined);
     assert.deepEqual((await db.doc("client_authorizations/aut_itau").get()).get("nf_ids"), []);
-    assert.deepEqual((await doTipo("nf.cancelled")).map((evento) => evento.payload), [{ id: faturaId, demandas: ["10045", "10046"] }]);
+    assert.deepEqual((await doTipo("nf.cancelled")).map((evento) => evento.payload), [{ id: faturaId, demandas: ["10045", "10046"], competencias: [] }]);
 
     await recusa(pagar("pag-2", "1"), "failed-precondition", "A NF está cancelada.");
     // A mesma NF, agora só com a 10045: o registro anterior fica guardado.

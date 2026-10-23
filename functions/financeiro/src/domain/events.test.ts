@@ -41,6 +41,15 @@ describe("eventos do Financeiro", () => {
     }
   });
 
+  it("a NF registrada e a cancelada levam as competências de armazenagem, só o mês (parte 7.2a)", () => {
+    for (const type of ["nf.registered", "nf.cancelled"] as const) {
+      const schema = FINANCEIRO_EVENT_PAYLOADS[type];
+      assert.equal(schema.safeParse({ ...EXEMPLOS[type], demandas: [], competencias: ["2026-09"] }).success, true, type);
+      assert.equal(schema.safeParse({ ...EXEMPLOS[type], competencias: ["BTG_Pactual__2026-09"] }).success, false, type);
+      assert.equal(schema.safeParse({ ...EXEMPLOS[type], competencias: ["2026-13"] }).success, false, type);
+    }
+  });
+
   it("título e descrição fixos; o evento é da fatura, com o cliente", () => {
     const event = buildFinanceiroEvent({
       operation_id: "op_teste",

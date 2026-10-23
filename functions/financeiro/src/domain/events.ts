@@ -22,19 +22,23 @@ export const FINANCEIRO_EVENT_SOURCE = "functions_financeiro";
 const faturaId = z.string().regex(/^fat_[a-f0-9]{24}$/, "Fatura inválida.");
 const demanda = z.string().regex(/^\d{5,8}$/, "Demanda inválida.");
 const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+/** A competência da armazenagem (parte 7.2a), só o mês: o cliente já está no evento. */
+const competencia = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
 
 export const FINANCEIRO_EVENT_TYPES = ["nf.registered", "nf.sent", "nf.cancelled", "cobranca.payment_registered", "cobranca.payment_reversed"] as const;
 export type FinanceiroEventType = (typeof FINANCEIRO_EVENT_TYPES)[number];
 
 /**
- * A NF registrada (parte 4.1a): a fatura, as demandas que ela fecha, quantas
- * autorizações cita, a emissão, o vencimento e a forma de pagamento. Sem
- * valor e sem o número da NF.
+ * A NF registrada (parte 4.1a): a fatura, as demandas e as competências de
+ * armazenagem que ela fecha (parte 7.2a), quantas autorizações cita, a
+ * emissão, o vencimento e a forma de pagamento. Sem valor e sem o número da
+ * NF.
  */
 const nfRegistrada = z
   .object({
     id: faturaId,
-    demandas: z.array(demanda).min(1).max(50),
+    demandas: z.array(demanda).max(50),
+    competencias: z.array(competencia).max(12).default([]),
     autorizacoes: z.number().int().min(0).max(50),
     emitida_em: data,
     vencimento: data,
@@ -49,8 +53,10 @@ const nfEnviada = z
   .object({ id: faturaId, enviada_em: data, meio: z.enum(["email", "portal_do_cliente", "correio", "em_maos"]) })
   .strict();
 
-/** O registro da NF cancelado: as demandas voltam a A faturar. Sem o motivo, que é texto livre. */
-const nfCancelada = z.object({ id: faturaId, demandas: z.array(demanda).min(1).max(50) }).strict();
+/** O registro da NF cancelado: as demandas voltam a A faturar e as competências, à fila. Sem o motivo, que é texto livre. */
+const nfCancelada = z
+  .object({ id: faturaId, demandas: z.array(demanda).max(50), competencias: z.array(competencia).max(12).default([]) })
+  .strict();
 
 /** Um pagamento da fatura (parcial ou o que quita), sem o valor. */
 const pagamentoRegistrado = z

@@ -3,8 +3,8 @@
  * parte 4.3a): `client_faturas/{id}`, uma projeção de `faturas/{id}` gravada
  * pelo Financeiro na mesma transação de cada mudança, como o WMS faz com
  * `client_invoices`. Leva só o que é do cliente: a NF, o vencimento, a forma,
- * o valor, o recebido e o saldo, a situação e as demandas com o valor e o
- * título. Fica de fora o que é interno: quem registrou, a observação, as
+ * o valor, o recebido e o saldo, a situação, as demandas com o valor e o
+ * título e a armazenagem de cada competência (parte 7.2a). Fica de fora o que é interno: quem registrou, a observação, as
  * autorizações, os registros anteriores e o motivo de cancelamento.
  *
  * A NF cancelada some do portal: o cancelamento é a correção de um registro
@@ -65,6 +65,12 @@ export function projecaoDaFatura(fatura: Registro, contexto: { demandas?: Readon
       return [{ numero, valor_cents: centavos(linha.valor_cents), titulo: daDemanda.titulo, ref_cliente: daDemanda.ref_cliente }];
     }),
     demanda_numeros: Array.isArray(fatura.demanda_numeros) ? fatura.demanda_numeros : [],
+    armazenagem: (Array.isArray(fatura.armazenagem) ? fatura.armazenagem : []).flatMap((item) => {
+      if (!item || typeof item !== "object") return [];
+      const linha = item as Registro;
+      const competencia = texto(linha.competencia);
+      return competencia ? [{ competencia, valor_cents: centavos(linha.valor_cents) }] : [];
+    }),
     atualizada_em: contexto.atualizadaEm,
   };
 }

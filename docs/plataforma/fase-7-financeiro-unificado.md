@@ -101,8 +101,8 @@ Seguem a recomendação até a resposta do Leonardo:
 |---|---|---|
 | 7.0 | O desenho (este documento) | — |
 | 7.1 | Os testes das trilhas de dinheiro do WMS: a prévia, o uso congelado, a emissão, o pagamento, as quantidades manuais, a virada e o isolamento por cliente | Os casos fixam o comportamento de hoje, com os números resolvidos à mão |
-| 7.2a | A competência emitida no WMS no "A faturar" do Financeiro, com o total congelado | Só a emitida e sem NF entra; o total é o da foto; outro cliente não aparece |
-| 7.2b | `registerNf` registra a NF da armazenagem e das demandas do mês numa fatura só, com a origem de cada linha | A competência faturada não fatura de novo; o total é a soma das origens |
+| 7.2a | `registerNf` registra a NF da armazenagem que o WMS emitiu, sozinha ou com as demandas do mesmo cliente, pelo total congelado; cancelar devolve a competência; o WMS não paga a competência que está numa NF | Só a emitida e fora de NF entra; o total é o da foto; outro cliente recusa; a faturada não fatura de novo |
+| 7.2b | A competência emitida no "A faturar" do Financeiro e na NF, no app | Só a emitida e sem NF aparece, no grupo do cliente dela, com o total da foto |
 | 7.2c | Receber e estornar a fatura da armazenagem marcam a competência do WMS, com o evento; o pagar do WMS sai onde o Financeiro está liberado | A competência fica paga uma vez; o estorno volta a emitida |
 | 7.3 | A LPU de cobrança do WMS no catálogo e nas tabelas do Comercial, com vigência | A fatura do WMS calcula igual antes e depois (a régua da 7.1) |
 | 7.4 | A integração da NF e a exportação contábil, com o fornecedor escolhido | Emissão idempotente; a falha não marca a fatura como emitida |
@@ -171,3 +171,43 @@ Feita em 23/10/2026, em
     documento, sem criar o `{cliente}__{competência}`.
 - **A régua morde.** Tirar o filtro `billable` do cálculo reprova 9 dos 15
   casos.
+
+### Parte 7.2a: a armazenagem na NF
+
+Feita em 23/10/2026. A callable vem antes da tela (parte 7.2b), como na
+publicação.
+
+- **O pedido.** `registerNf` aceita `armazenagem`: os ids de
+  `billing_periods` (`{cliente}__{AAAA-MM}`, ou o antigo da BTG, só
+  `AAAA-MM`).
+  - Até 12 competências por NF.
+  - A NF leva ao menos uma demanda ou uma competência.
+- **O que confere,** na transação, antes de qualquer escrita:
+  - a competência existe e está `emitido` no WMS;
+  - tem a foto da emissão e não está noutra NF;
+  - é do mesmo cliente das demandas. O id antigo vale como BTG.
+- **O valor.** É o `invoice_snapshot.total_cents` da emissão. O Financeiro
+  não recalcula e não lê o total solto do período.
+- **O que grava:**
+  - a fatura leva `armazenagem` (o período, o mês e o total) e
+    `periodo_ids`, e o `valor_cents` soma as demandas e a armazenagem;
+  - o período ganha o mesmo resumo `faturamento` da demanda. O status do WMS
+    fica `emitido` até a parte 7.2c;
+  - o evento `nf.registered` leva `competencias`, só o mês, sem valor;
+  - a projeção do portal (`client_faturas`) leva a armazenagem com o total,
+    sem o id do período.
+- **Cancelar o registro** confere que cada competência está nesta NF, tira o
+  `faturamento` e grava `competencias` no `nf.cancelled`. A competência volta
+  à fila e entra em outra NF.
+- **O WMS** recusa pagar a competência que está numa NF
+  (`PERIOD_INVOICED`): o pagamento se registra no Financeiro.
+- **As cópias literais do WMS** (a coleção, o cliente do id antigo e o formato
+  do id) ficam em `functions/financeiro/src/domain/armazenagem.ts`. A trava é
+  o `armazenagem.test.ts`, que lê os arquivos do WMS.
+- **Testes:**
+  - `armazenagem.test.ts`: a leitura do período, o total da foto e os
+    motivos de recusa;
+  - `fatura.integration.test.ts`: com as demandas, sozinha, o id antigo, as
+    recusas sem gravar nada e o cancelamento;
+  - `billing-callables.integration.test.ts`: o WMS não paga a competência que
+    está numa NF.

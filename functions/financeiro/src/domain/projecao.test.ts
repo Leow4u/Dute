@@ -57,9 +57,19 @@ describe("a NF do portal", () => {
         { numero: "10046", valor_cents: 484_500, titulo: null, ref_cliente: null },
       ],
       demanda_numeros: ["10045", "10046"],
+      armazenagem: [],
       atualizada_em: "2026-10-23T15:00:00.000Z",
     });
     assert.doesNotMatch(JSON.stringify(projecao), /fin-1|desconto|aut_itau|Registro errado|op_1|pag_1|nf_chave|observacao|registrada_por/);
+  });
+
+  it("leva a armazenagem de cada competência com o total, sem o id do período (parte 7.2a)", () => {
+    const armazenagem = [{ periodo_id: "BTG_Pactual__2026-09", competencia: "2026-09", valor_cents: 7508 }];
+    const projecao = projecaoDaFatura({ ...FATURA, demandas: [], demanda_numeros: [], armazenagem, valor_cents: 7508 }, { atualizadaEm: "2026-10-23T15:00:00.000Z" });
+    assert.deepEqual(projecao.armazenagem, [{ competencia: "2026-09", valor_cents: 7508 }]);
+    assert.deepEqual(projecao.demandas, []);
+    assert.equal(projecao.valor_cents, 7508);
+    assert.doesNotMatch(JSON.stringify(projecao), /BTG_Pactual__/);
   });
 
   it("nas mudanças seguintes, o título vem da projeção anterior", () => {
