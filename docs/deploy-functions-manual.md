@@ -246,7 +246,7 @@ Agora o script decide se o serviço existe pelo `gcloud run services describe`
 (sem saída quando não existe) antes de olhar a política. Serviço inexistente
 aparece como **NAO PUBLICADA** e sugere o `firebase deploy`.
 
-## 23/10/2026 — conferência em lote, direto nas APIs (7 min → menos de 1 min)
+## 23/10/2026 — conferência em lote, direto nas APIs (7 min → 1,5 min)
 
 Com 95 callables, o script fazia 285 chamadas ao `gcloud` em série (`run
 services describe`, `get-iam-policy` e `functions describe` por callable), de
@@ -254,7 +254,9 @@ services describe`, `get-iam-policy` e `functions describe` por callable), de
 Agora ele pede um token ao `gcloud` uma vez (`gcloud auth print-access-token`)
 e lê as APIs REST, como o painel do sistema já fazia: uma listagem dos serviços
 do Cloud Run, uma das functions e a política de cada callable (`run.googleapis.com`
-e `cloudfunctions.googleapis.com`, v2).
+e `cloudfunctions.googleapis.com`, v2). Na primeira publicação da homologação com
+o script novo (23/10/2026, 95 callables), a conferência levou 1 min 33 s: cada
+política responde em cerca de 1 s.
 
 Os critérios são os mesmos dos incidentes acima: fora da listagem dos serviços
 é **NAO PUBLICADA**, estado diferente de `ACTIVE` também, e sem a listagem das
