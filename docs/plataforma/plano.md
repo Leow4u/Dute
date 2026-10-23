@@ -181,6 +181,11 @@ Backups do Firestore com teste de restauração (PITR e backup diário ligados n
 
 ## Módulo Operação — especificação
 
+> **Substituída** pelo desenho de `docs/plataforma/fase-3-operacao.md` (parte
+> 3.0 do plano de implantação, 23/10/2026), que parte da proposta "Demanda: do
+> pedido ao faturamento" e das decisões de 23/10. Onde divergem, vale o
+> runbook da Fase 3. O texto abaixo fica como histórico.
+
 ### Tipos de OS
 Transporte/frete, armazenagem/movimentação, serviço em campo e mudança/transporte dedicado, cada um com seus campos.
 

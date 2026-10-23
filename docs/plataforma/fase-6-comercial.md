@@ -717,3 +717,25 @@ Storage.
 - Achado menor, sem correção nesta parte: o botão de fechar dos diálogos tem o
   rótulo "Close" (inglês), vindo do componente de diálogo compartilhado com o
   WMS (`components/ui/dialog.tsx`).
+
+### Fechamento do v1 (plano de implantação, partes 6.20 a 6.25; 23/10/2026)
+
+- **Decisões do Leonardo em 23/10**: sem carga de clientes da Omie, sem
+  integração com a Omie e sem legado da planilha. Os clientes entram pela tela
+  de Clientes; tabelas e contratos continuam pelas cargas. O código da carga
+  da Omie (`cargas/clientes-omie.ts`) fica sem uso.
+- **6.20**: o cabeçalho do PDF mostra a razão social, o CNPJ e a cidade quando
+  `EMISSOR_DO_DOCUMENTO` (`lib/comercial/emissor.ts`) for preenchido; o teste
+  confere os dígitos do CNPJ. Espera o dado (pergunta 15 acima).
+- **6.21**: a ferramenta `cargas/contador.ts` grava o ponto de partida do
+  contador das demandas, com dry-run, conferência na transação e o evento
+  `demand_counter.set`.
+- **6.22**: segmento "A faturar" na fila; `contrato_id` do contrato novo
+  gerado no servidor pela callable; `comercialStatus` sem ler o perfil fora
+  da liberação; "Perdido" no rascunho e no aprovado (recomendação da pergunta
+  10 do plano). Registro em `comercial-producao.md`, seção 7.
+- **Achado da conferência local** corrigido: o fechar do diálogo e da gaveta
+  diz "Fechar" ao leitor de tela.
+- **6.23 e 6.24** dependem do Leonardo: o go-live das cargas e do contador na
+  produção (roteiro em `comercial-producao.md`; as cargas ainda não gravam no
+  `dute-prod`) e a semana em paralelo com o Excel.
