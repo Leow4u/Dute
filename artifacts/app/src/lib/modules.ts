@@ -1,3 +1,4 @@
+import { CAMPO_ROLES, ROTA_CAMPO, ROTA_CAMPO_OS } from "./campo/navegacao";
 import {
   BarChart3,
   BrainCircuit,
@@ -727,6 +728,9 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   { path: ROTA_PLANEJAR, roles: OPERATION_REGISTRY_ROLES },
   // A ficha da OS, aberta pela Agenda, pela demanda e pelo Hoje (?numero=).
   { path: ROTA_OS, roles: OPERATION_REGISTRY_ROLES },
+  // O app do campo (parte 3.8b): Minhas OS e a OS no celular.
+  { path: ROTA_CAMPO, roles: [...CAMPO_ROLES] },
+  { path: ROTA_CAMPO_OS, roles: [...CAMPO_ROLES] },
 ];
 
 const MERGED_SCREEN_APP_ROLES = Object.fromEntries(

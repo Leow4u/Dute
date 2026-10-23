@@ -1,5 +1,6 @@
 import type { Papel } from "@workspace/dominio";
 
+import { TELAS_DO_CAMPO } from "../campo/navegacao";
 import { OPERACAO_LIBERADO } from "../liberacao";
 
 /**
@@ -41,6 +42,8 @@ export const TELAS_DA_OPERACAO: readonly string[] = [
   ROTA_OS,
   ROTA_COLABORADORES,
   ROTA_VEICULOS,
+  // O app do campo é da Operação: só existe com a liberação dela (parte 3.8b).
+  ...TELAS_DO_CAMPO,
 ];
 
 function parametro(busca: string, nome: string): string | null {

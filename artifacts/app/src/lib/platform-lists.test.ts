@@ -123,7 +123,9 @@ describe("listas da Operação iguais em todo lugar", () => {
     expect(tsList(roles, "OPERACAO_CADASTRO_ROLES")).toEqual(["owner", "admin", "interno"]);
     expect([...OPERACAO_CADASTRO_ROLES]).toEqual(["owner", "admin", "interno"]);
     const card = PLATFORM_MODULES.find((module) => module.key === "operacao")!;
-    expect(Object.keys(card.home).sort()).toEqual(["admin", "interno", "owner"]);
+    // O campo entra no app dele (parte 3.8b); a coordenação, no Início da Operação.
+    expect(Object.keys(card.home).sort()).toEqual(["admin", "campo", "interno", "owner"]);
+    expect(card.home.campo).toBe("/campo");
   });
 
   it("liberação por ambiente: a lista das callables é a do app", () => {

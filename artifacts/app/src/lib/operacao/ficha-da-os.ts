@@ -46,14 +46,28 @@ export type ItemLido = {
   incluidoEmCampo: boolean;
 };
 
-export type PessoaLida = { id: string; nome: string; papel: PapelDeCampo | null; vinculo: Vinculo; empresa: string | null; noApp: boolean };
+export type PessoaLida = {
+  id: string;
+  nome: string;
+  papel: PapelDeCampo | null;
+  vinculo: Vinculo;
+  empresa: string | null;
+  noApp: boolean;
+  /** O login ligado (parte 3.8a): o celular sabe qual pessoa da equipe é quem está nele. */
+  uid: string | null;
+};
 export type VeiculoLido = { id: string; placa: string; tipo: string; modelo: string | null; dono: "proprio" | "terceiro"; empresa: string | null };
 export type LocalLido = { nome: string | null; endereco: string | null; complemento: string | null; contato: { nome: string; telefone: string | null } | null };
+
+/** A entrada e a saída de alguém da equipe (parte 3.8a), pelo instante. */
+export type PresencaLida = { colaboradorId: string; entrada: string | null; saida: string | null };
 
 export type FichaDaOs = {
   numero: string;
   demanda: string;
   customerCode: string;
+  /** O nome do cliente copiado da demanda (parte 3.8a); a OS de antes não tem. */
+  clienteNome: string | null;
   status: StatusDaOs;
   edicao: number;
   servicos: string[];
@@ -66,6 +80,7 @@ export type FichaDaOs = {
   etapas: EtapaLida[];
   ocorrencias: OcorrenciaLida[];
   fotos: FotoLida[];
+  presencas: PresencaLida[];
   cancelamento: string | null;
 };
 
@@ -122,6 +137,7 @@ export function fichaDaLeitura(id: string, data: Record<string, unknown>): Ficha
     numero: id,
     demanda: texto(data.demanda),
     customerCode: texto(data.customer_code),
+    clienteNome: textoOuNull(data.cliente_nome),
     status: texto(data.status) as StatusDaOs,
     edicao: data.edicao,
     servicos: Array.isArray(data.servicos) ? data.servicos.filter((servico): servico is string => typeof servico === "string") : [],
@@ -132,7 +148,9 @@ export function fichaDaLeitura(id: string, data: Record<string, unknown>): Ficha
       if (!idDaPessoa) return [];
       const papel = (PAPEIS_DE_CAMPO as readonly string[]).includes(texto(pessoa.papel)) ? (texto(pessoa.papel) as PapelDeCampo) : null;
       const vinculo: Vinculo = pessoa.vinculo === "freelancer" || pessoa.vinculo === "terceiro" ? pessoa.vinculo : "proprio";
-      return [{ id: idDaPessoa, nome: texto(pessoa.nome) || idDaPessoa, papel, vinculo, empresa: textoOuNull(pessoa.empresa), noApp: pessoa.no_app === true }];
+      return [
+        { id: idDaPessoa, nome: texto(pessoa.nome) || idDaPessoa, papel, vinculo, empresa: textoOuNull(pessoa.empresa), noApp: pessoa.no_app === true, uid: textoOuNull(pessoa.usuario_uid) },
+      ];
     }),
     veiculos: objetos(data.veiculos).flatMap((veiculo): VeiculoLido[] => {
       const idDoVeiculo = texto(veiculo.veiculo_id);
@@ -196,6 +214,12 @@ export function fichaDaLeitura(id: string, data: Record<string, unknown>): Ficha
           legenda: textoOuNull(bruto.legenda),
         },
       ];
+    }),
+    presencas: objetos(data.presencas).flatMap((bruto): PresencaLida[] => {
+      const colaborador = texto(bruto.colaborador_id);
+      if (!colaborador) return [];
+      const instanteDe = (marca: unknown) => (marca && typeof marca === "object" ? registro(marca as Record<string, unknown>)?.instante ?? null : null);
+      return [{ colaboradorId: colaborador, entrada: instanteDe(bruto.entrada), saida: instanteDe(bruto.saida) }];
     }),
     cancelamento: cancelamento || null,
   };

@@ -51,6 +51,11 @@ describe("tela de entrada por módulo (Fase 2, parte 2)", () => {
     }
   });
 
+  it("o campo, com a Operação liberada, vai direto para o app dele (parte 3.8b)", () => {
+    expect(entrada("campo", null, false, true)).toEqual({ kind: "redirect", to: "/campo" });
+    expect(entrada("campo", null, false, false)).toEqual({ kind: "nenhum" });
+  });
+
   it("sem papel, nenhum módulo", () => {
     expect(entrada(null, null)).toEqual({ kind: "nenhum" });
   });

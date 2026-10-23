@@ -38,8 +38,9 @@ documentação de produto e operação está em `docs/`.
   OS em que está escalado; desde a 3.4d a demanda direta nasce na Operação
   (`openDirectDemand`), sem orçamento; desde a 3.7a o escritório registra
   etapas, itens, ocorrências e fotos e a OS fica Em execução; desde a 3.8a o
-  campo escalado grava o andamento e a presença pelas mesmas callables.
-  Concluir ainda não existe. O `dute-btg` fica de fora das duas listas
+  campo escalado grava o andamento e a presença pelas mesmas callables, e
+  desde a 3.8b pelo app `/campo` (celular, fila de registros). Concluir
+  ainda não existe. O `dute-btg` fica de fora das duas listas
   `OPERACAO_AMBIENTES_LIBERADOS`. Desenho e como desligar:
   `docs/plataforma/fase-3-operacao.md`.
 - **Alinhamento do Comercial e da Operação recuperado em 23/10/2026**:
