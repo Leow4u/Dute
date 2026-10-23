@@ -104,6 +104,8 @@ export type WarehouseTask = {
   items?: WarehouseTaskItem[];
   timeline?: WarehouseTaskTimelineEvent[];
   customer_request_id?: string | null;
+  /** O pedido de saída da separação, do packing e da expedição (orders/{id}). */
+  order_id?: string | null;
   can_advance?: boolean | null;
   can_register_exception?: boolean | null;
 };

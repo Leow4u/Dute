@@ -183,6 +183,22 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  // Expedição › a entrega do pedido de saída (parte 4.5a): o pedido vem do caminho, a escolha do corpo.
+  const orderDeliveryMatch = pathname.match(/^\/api\/orders\/([^/]+)\/delivery$/);
+  if (method === "POST" && orderDeliveryMatch) {
+    return {
+      name: "setOrderDelivery",
+      payload: async (_pathname, init) => {
+        const body = await readJsonBody(init);
+        return {
+          order_id: decodeURIComponent(orderDeliveryMatch[1]),
+          entrega: body.entrega ?? null,
+          ...(typeof body.idempotency_key === "string" ? { idempotency_key: body.idempotency_key } : {}),
+        };
+      },
+    };
+  }
+
   const orderCancelMatch = pathname.match(/^\/api\/client\/orders\/([^/]+)\/cancel$/);
   if (method === "POST" && orderCancelMatch) {
     return {

@@ -222,3 +222,18 @@ describe("conferência persistente antes da guarda", () => {
     });
   });
 });
+
+describe("a entrega do pedido de saída (parte 4.5a)", () => {
+  it("o pedido vem do caminho e a escolha do corpo, para setOrderDelivery", async () => {
+    const route = functionRoute("/api/orders/ord_118/delivery", "POST");
+    expect(route?.name).toBe("setOrderDelivery");
+    const entrega = { modo: "retirada", data: "2026-10-24", hora: "09:00", quem_retira: "Carlos Lima" };
+    expect(await route?.payload("/api/orders/ord_118/delivery", { body: JSON.stringify({ entrega, idempotency_key: "k1", order_id: "outro" }) })).toEqual({
+      order_id: "ord_118",
+      entrega,
+      idempotency_key: "k1",
+    });
+    expect(functionRoute("/api/orders/ord_118/delivery", "GET")).toBeNull();
+  });
+});
+

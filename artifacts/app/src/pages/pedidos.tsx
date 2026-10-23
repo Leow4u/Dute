@@ -1,5 +1,6 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { collection, query, where } from "firebase/firestore";
 import {
   AlertTriangle,
   Check,
@@ -26,6 +27,7 @@ import {
   OpeningInventoryNotice,
   useOpeningInventorySession,
 } from "@/features/warehouse-ops/opening-inventory-status";
+import { FormularioDaEntregaView } from "@/features/warehouse-ops/order-delivery";
 import { ExceptionDialog, useWarehouseTaskActions } from "@/features/warehouse-ops/task-actions";
 import { TaskDetailPanel } from "@/features/warehouse-ops/task-detail";
 import {
@@ -41,6 +43,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
+import { OPERACAO_LIBERADO } from "@/lib/liberacao";
+import { chamarOperacao, novaChave } from "@/lib/operacao/api";
+import { hojeIso } from "@/lib/operacao/fila";
+import { useLeitura } from "@/lib/operacao/leitura";
 import { buildOrderQueue, ordersGroupEmpty } from "@/lib/order-queue";
 import { useItemPhotos } from "@/lib/use-item-photos";
 import { canDecideRequests, humanApiError } from "@/lib/permissions";
@@ -53,6 +59,18 @@ import {
   normalizeQueues,
   queueEntries,
 } from "@/lib/warehouse-ops/model";
+import {
+  entregaDoPedido,
+  faltaAbrirNaOperacao,
+  formularioDaEntrega,
+  naOperacao,
+  pedidoDaEntrega,
+  problemasDaEntrega,
+  resumoDaEntrega,
+  saidaPelaEntrega,
+  type EntregaDoPedido,
+  type FormularioDaEntrega,
+} from "@/lib/warehouse-ops/entrega";
 import { queueTasks, type OrderGroup } from "@/lib/warehouse-ops/orders";
 import {
   buildBalanceValidation,
@@ -107,7 +125,11 @@ type DialogState =
   | { kind: "reject"; request: CustomerRequest }
   | { kind: "pick"; order: OrderGroup }
   | { kind: "deliver"; order: OrderGroup }
+  | { kind: "entrega"; order: OrderGroup; orderId: string }
   | null;
+
+/** Os pedidos de saída que ainda não saíram: a entrega de cada um (parte 4.5c). */
+const PEDIDOS_EM_ABERTO = ["PENDENTE", "SEPARACAO", "EM_EXPEDICAO"];
 
 export default function Pedidos() {
   const { user } = useAppUser();
@@ -125,6 +147,18 @@ export default function Pedidos() {
   // "Tratar": a tarefa bloqueada do pedido abre aqui mesmo, num painel.
   const [treating, setTreating] = useState<OrderGroup | null>(null);
   const [lineConfirmations, setLineConfirmations] = useState<LineConfirmationMap>({});
+  // A entrega do pedido (parte 4.5c): só com a Operação liberada, que abre a demanda da entrega pela Dutelog.
+  const [entregaForm, setEntregaForm] = useState<FormularioDaEntrega | null>(null);
+  const [entregaTentou, setEntregaTentou] = useState(false);
+  const [entregaErro, setEntregaErro] = useState<string | null>(null);
+  const chaveDaEntrega = useRef<string | null>(null);
+  const entregas = useLeitura(
+    OPERACAO_LIBERADO ? "orders:em_aberto" : null,
+    (db) => query(collection(db, "orders"), where("status", "in", PEDIDOS_EM_ABERTO)),
+    (id, data) => ({ id, entrega: entregaDoPedido(data) }),
+  );
+  const entregaPorPedido = useMemo(() => new Map((entregas.itens ?? []).map((item) => [item.id, item.entrega])), [entregas.itens]);
+  const entregaDe = (order: OrderGroup): EntregaDoPedido | null => (order.orderId ? entregaPorPedido.get(order.orderId) ?? null : null);
 
   const ops = useQuery({
     queryKey: ["warehouse-ops"],
@@ -233,6 +267,36 @@ export default function Pedidos() {
       }),
     });
 
+  const salvarEntrega = useMutation({
+    mutationFn: async ({ orderId, form }: { orderId: string; form: FormularioDaEntrega }) => {
+      chaveDaEntrega.current ??= novaChave();
+      await fetchJson(`/api/orders/${encodeURIComponent(orderId)}/delivery`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(pedidoDaEntrega(form, orderId, chaveDaEntrega.current)),
+      });
+      // A entrega pela Dutelog vira demanda e OS na Operação; a retirada pelo cliente, não.
+      if (form.modo !== "dutelog") return null;
+      return chamarOperacao<{ numero: string }>("openStorageDemand", { idempotency_key: chaveDaEntrega.current, order_id: orderId });
+    },
+    onSuccess: (aberta) => {
+      chaveDaEntrega.current = null;
+      setDialog(null);
+      toast({ title: aberta ? `Demanda ${aberta.numero} aberta na Operação` : "Entrega salva" });
+      refreshAll();
+    },
+    onError: (error: Error) => setEntregaErro(humanApiError(error, "Tente novamente em instantes.")),
+  });
+
+  const abrirEntrega = (order: OrderGroup) => {
+    if (!order.orderId) return;
+    chaveDaEntrega.current = null;
+    setEntregaForm(formularioDaEntrega(entregaDe(order), hojeIso()));
+    setEntregaTentou(false);
+    setEntregaErro(null);
+    setDialog({ kind: "entrega", order, orderId: order.orderId });
+  };
+
   const pick = useMutation({
     mutationFn: async ({ order, sealCode }: { order: OrderGroup; sealCode: string }) => {
       const pickTask = order.pick;
@@ -308,7 +372,22 @@ export default function Pedidos() {
     onError,
   });
 
-  const busy = decide.isPending || pick.isPending || deliver.isPending;
+  const busy = decide.isPending || pick.isPending || deliver.isPending || salvarEntrega.isPending;
+
+  /** A entrega do pedido na linha e a ação de definir (ou abrir na Operação), com a Operação liberada. */
+  const daEntrega = (order: OrderGroup) => {
+    if (!OPERACAO_LIBERADO || !order.orderId) return {};
+    const entrega = entregaDe(order);
+    const resumo = entrega ? [resumoDaEntrega(entrega), naOperacao(entrega)].filter(Boolean).join(" · ") : null;
+    return {
+      detail: resumo,
+      secondary: (
+        <Button type="button" variant="outline" disabled={busy} onClick={() => abrirEntrega(order)}>
+          {faltaAbrirNaOperacao(entrega) ? "Abrir na Operação" : entrega ? "Alterar entrega" : "Entrega"}
+        </Button>
+      ),
+    };
+  };
   const openCount =
     (decider ? queue.approve.length : 0) + queue.pick.length + queue.deliver.length;
   const loading = ops.isLoading || (decider && requests.isLoading);
@@ -454,6 +533,7 @@ export default function Pedidos() {
                 tone="pick"
                 defaultOpen
                 onTreat={() => setTreating(order)}
+                {...daEntrega(order)}
                 action={
                   <Button
                     type="button"
@@ -484,12 +564,19 @@ export default function Pedidos() {
                 icon={Truck}
                 tone="deliver"
                 onTreat={() => setTreating(order)}
+                {...(order.stage === "enviar" ? daEntrega(order) : {})}
                 action={
                   <Button
                     type="button"
                     disabled={busy}
                     onClick={() => {
                       setReceivedBy("");
+                      // Na retirada pelo cliente, quem leva e a placa vêm da entrega do pedido.
+                      const saida = saidaPelaEntrega(entregaDe(order));
+                      if (saida) {
+                        setDriver(saida.motorista);
+                        setPlate(saida.placa);
+                      }
                       setDialog({ kind: "deliver", order });
                     }}
                   >
@@ -624,6 +711,46 @@ export default function Pedidos() {
                 </Button>
               </DialogFooter>
             </>
+          ) : dialog?.kind === "entrega" && entregaForm ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>{dialog.order.orderNumber}: entrega</DialogTitle>
+              </DialogHeader>
+              <form
+                id="entrega-do-pedido"
+                noValidate
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  setEntregaTentou(true);
+                  if (Object.keys(problemasDaEntrega(entregaForm, new Date())).length) return;
+                  setEntregaErro(null);
+                  salvarEntrega.mutate({ orderId: dialog.orderId, form: entregaForm });
+                }}
+              >
+                <FormularioDaEntregaView
+                  form={entregaForm}
+                  problemas={entregaTentou ? problemasDaEntrega(entregaForm, new Date()) : {}}
+                  onForm={(form) => {
+                    setEntregaForm(form);
+                    setEntregaErro(null);
+                    chaveDaEntrega.current = null;
+                  }}
+                />
+              </form>
+              {entregaErro ? (
+                <p role="alert" className="text-sm text-destructive">
+                  {entregaErro}
+                </p>
+              ) : null}
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setDialog(null)}>
+                  Voltar
+                </Button>
+                <Button type="submit" form="entrega-do-pedido" disabled={busy}>
+                  {salvarEntrega.isPending ? "Salvando..." : entregaForm.modo === "dutelog" ? "Salvar e abrir na Operação" : "Salvar entrega"}
+                </Button>
+              </DialogFooter>
+            </>
           ) : null}
         </DialogContent>
       </Dialog>
@@ -672,6 +799,8 @@ function OrderRow({
   icon,
   tone,
   action,
+  secondary,
+  detail,
   defaultOpen = false,
   onTreat,
 }: {
@@ -679,9 +808,19 @@ function OrderRow({
   icon: LucideIcon;
   tone: QueueTone;
   action?: ReactNode;
+  /** A ação de definir a entrega (parte 4.5c), ao lado da principal. */
+  secondary?: ReactNode;
+  /** A entrega do pedido em uma linha. */
+  detail?: ReactNode;
   defaultOpen?: boolean;
   onTreat?: () => void;
 }) {
+  const acoes = action || secondary ? (
+    <>
+      {secondary}
+      {action}
+    </>
+  ) : null;
   const [open, setOpen] = useState(defaultOpen);
   const items = orderItems(order);
   const units = orderUnits(order);
@@ -716,15 +855,16 @@ function OrderRow({
             </span>
           ) : undefined
         }
+        detail={detail}
         onToggle={items.length ? () => setOpen((value) => !value) : undefined}
         open={open}
-        actions={action}
+        actions={acoes}
         actionsClassName="hidden sm:flex"
       />
       {open && items.length ? <ItemList items={items} /> : null}
-      {/* No celular o botão vem depois da lista do que separar. */}
-      {action ? (
-        <div className="flex px-4 pb-4 pt-3 sm:hidden [&>*]:flex-1">{action}</div>
+      {/* No celular os botões vêm depois da lista do que separar. */}
+      {acoes ? (
+        <div className="flex gap-2 px-4 pb-4 pt-3 sm:hidden [&>*]:flex-1">{acoes}</div>
       ) : null}
     </div>
   );
