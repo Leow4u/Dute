@@ -156,7 +156,8 @@ registros guardados" é dado, não legenda.
 | 3.5a | Hoje completo (`ModOpHoje`): cinco colunas, filtros por tipo, entrada, cliente e equipe, busca, prazo da direta e escalar no painel | Textos listados; `axe`; filtros por tipo, entrada, cliente e pessoa |
 | 3.5b | Demandas (`OpDemandas`) e Demanda (`OpDemanda`): lista com filtros e a ficha com escopo, saldo e OS | Textos listados; `axe`; saldo igual ao da callable |
 | 3.5c | Nova demanda direta (`OpDemandaNova`) e o botão Nova demanda no Hoje | Tipo pela hora na tela; o formulário manda o formato de `openDirectDemand` |
-| 3.6 | Planejar OS a partir do saldo e Agenda da semana | Duas OS da mesma demanda somam no máximo o saldo; sem equipe e sem veículo são alertas |
+| 3.6a | Planejar OS (`OpOSPlanejar`): várias OS com a fatia do saldo, janela, equipe com papel (inclusive freelancer e terceiro), veículos, contatos e instruções | Duas OS da mesma demanda somam no máximo o saldo; sem equipe e sem veículo são alertas |
+| 3.6b | Agenda da semana (`OpAgenda`) | Cada OS no dia dela; quem está em duas OS no mesmo dia aparece |
 | 3.7 | Execução pelo escritório: `registerStep`, `registerItem`, `registerOccurrence`, fotos no Storage, Em execução, tela da OS | Etapa fora de ordem recusada; instante gravado; foto só de quem está na OS ou coordena |
 | 3.8 | Campo (PWA): Minhas OS, execução, incluir item, presença, fila sem sinal | Campo lê só a OS escalada; dois envios do mesmo registro gravam um; instante original guardado |
 | 3.9 | Concluir com assinatura ou "sem aceite no local", Em revisão; impressão da OS | Concluir sem motivo para item a menos recusado; assinatura no Storage com regra |
@@ -511,3 +512,32 @@ Feita em 23/10/2026, no desenho aprovado `OpDemandaNova`, em
   Planejar OS (parte 3.6): por enquanto a ficha abre a OS com o saldo e o
   Hoje escala. A entrada "Pelo comercial" não é da Operação: o Comercial abre
   a demanda dele.
+
+### Parte 3.6a: Planejar OS
+
+Feita em 23/10/2026, no desenho aprovado `OpOSPlanejar`, em
+`/operacao/planejar?demanda=`. O Hoje (Para planejar) e a ficha da demanda
+levam a ela; "Abrir OS com o saldo" saiu.
+
+- **Plano.** Nasce com uma OS hoje e todo o saldo. "Mais uma OS" abre a
+  seguinte no dia seguinte, sem itens, com quem já está no plano; cada OS
+  tem data, início e fim e pode sair. Cada linha do saldo tem a quantidade
+  de cada OS e o restante, em vermelho quando passa; "Igualar ao saldo"
+  completa a OS com o que sobra.
+- **Equipe e veículos.** A pessoa entra pelo cadastro, agrupada por vínculo
+  (equipe própria, freelancer, terceiro), com o papel entre os marcados no
+  cadastro (ou qualquer um, sem nenhum marcado) e, com mais de uma OS, as
+  OS de que participa. O mesmo para os veículos, com o dono terceiro.
+- **Locais e instruções.** O contato no local (nome e telefone) de origem e
+  destino e as instruções para a equipe vão em todas as OS do plano.
+- **O que impede** (a callable confere de novo): as OS somarem mais que o
+  saldo de uma linha (aparece enquanto se digita), OS sem item, quantidade
+  fora do formato, data passada, janela invertida e, ao agendar, OS sem
+  data. **O que só avisa:** OS sem equipe, sem líder ou sem veículo, e
+  pessoa ou veículo já em outra OS no mesmo dia.
+- **Gravar.** "Agendar" manda o plano com a janela de cada OS (agendadas);
+  "Salvar rascunho" manda sem janela (ficam Para agendar). Gravado, volta à
+  ficha da demanda.
+- **Ainda não.** A sugestão do Agent Dute da tela aprovada é da Fase 5. Mudar
+  a fatia de uma OS já criada (`set_items`) entra com a tela da OS (parte
+  3.7).

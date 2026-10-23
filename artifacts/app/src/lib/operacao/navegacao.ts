@@ -23,6 +23,8 @@ export const ROTA_DEMANDAS = "/operacao/demandas";
 export const ROTA_DEMANDA = "/operacao/demanda";
 /** A nova demanda direta (parte 3.5c, docs/mockups/OpDemandaNova.dc.html). */
 export const ROTA_NOVA_DEMANDA = "/operacao/nova-demanda";
+/** Planejar as OS de uma demanda (parte 3.6a, docs/mockups/OpOSPlanejar.dc.html): ?demanda=10045. */
+export const ROTA_PLANEJAR = "/operacao/planejar";
 
 export const TELAS_DA_OPERACAO: readonly string[] = [
   ROTA_OPERACAO,
@@ -30,6 +32,7 @@ export const TELAS_DA_OPERACAO: readonly string[] = [
   ROTA_DEMANDAS,
   ROTA_DEMANDA,
   ROTA_NOVA_DEMANDA,
+  ROTA_PLANEJAR,
   ROTA_COLABORADORES,
   ROTA_VEICULOS,
 ];
@@ -57,6 +60,17 @@ export function hrefDaDemanda(numero: string): string {
 /** A demanda pedida na busca da URL da ficha (`?numero=`), ou null. */
 export function demandaDaBusca(busca: string): string | null {
   const numero = parametro(busca, "numero");
+  return numero && /^\d{5,8}$/.test(numero) ? numero : null;
+}
+
+/** Planejar as OS da demanda: "/operacao/planejar?demanda=10045". */
+export function hrefDoPlano(numero: string): string {
+  return `${ROTA_PLANEJAR}?demanda=${encodeURIComponent(numero)}`;
+}
+
+/** A demanda pedida na busca da URL do planejamento (`?demanda=`), ou null. */
+export function demandaDoPlanoDaBusca(busca: string): string | null {
+  const numero = parametro(busca, "demanda");
   return numero && /^\d{5,8}$/.test(numero) ? numero : null;
 }
 

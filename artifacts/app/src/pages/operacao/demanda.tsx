@@ -1,8 +1,6 @@
-import { useRef, useState } from "react";
 import { collection, doc, query, where } from "firebase/firestore";
 import { useSearch } from "wouter";
 
-import { chamarOperacao, mensagemDoErro, novaChave } from "@/lib/operacao/api";
 import { escopoComSaldo, etapaNaOperacao, demandaDaOperacao, osDaDemanda } from "@/lib/operacao/demandas";
 import { clienteDaLeitura, nomesPorCodigo, osDaLeitura } from "@/lib/operacao/fila";
 import { linhasComSaldo, prazoDaDemanda } from "@/lib/operacao/hoje";
@@ -41,9 +39,6 @@ export default function PaginaDemanda() {
     (db) => query(collection(db, "customer_locations"), where("customer_code", "==", codigo ?? "-")),
     (id, data) => ({ id, nome: texto(data.nome) || null, endereco: enderecoEmLinha(data.endereco) }),
   );
-  const [erro, setErro] = useState<string | null>(null);
-  const [ocupado, setOcupado] = useState(false);
-  const chave = useRef<string | null>(null);
 
   const estado: EstadoDaDemanda = !numero
     ? "nao_encontrada"
@@ -70,20 +65,7 @@ export default function PaginaDemanda() {
       })
     : [];
 
-  async function abrirOs() {
-    if (!ficha) return;
-    setOcupado(true);
-    setErro(null);
-    chave.current ??= novaChave();
-    try {
-      await chamarOperacao("saveServiceOrder", { action: "create", demanda: ficha.numero, idempotency_key: chave.current });
-      chave.current = null;
-    } catch (error) {
-      setErro(mensagemDoErro(error));
-    } finally {
-      setOcupado(false);
-    }
-  }
+
 
   return (
     <DemandaView
@@ -97,9 +79,7 @@ export default function PaginaDemanda() {
       linhasComSaldo={ficha ? linhasComSaldo(ficha, lista) : 0}
       locais={locaisDaFicha}
       prazo={ficha?.entrada === "direta" ? prazoDaDemanda(ficha.executarAte, new Date()) : null}
-      ocupado={ocupado}
-      erro={erro}
-      onAbrirOs={() => void abrirOs()}
+      erro={null}
     />
   );
 }

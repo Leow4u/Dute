@@ -47,6 +47,7 @@ import {
   ROTA_HOJE,
   ROTA_NOVA_DEMANDA,
   ROTA_OPERACAO,
+  ROTA_PLANEJAR,
   ROTA_VEICULOS,
   abreOperacao,
 } from "./operacao/navegacao";
@@ -433,7 +434,7 @@ export const APP_MODULES: AppModule[] = [
         href: ROTA_DEMANDAS,
         icon: ClipboardList,
         roles: OPERATION_REGISTRY_ROLES,
-        tambem: [ROTA_DEMANDA, ROTA_NOVA_DEMANDA],
+        tambem: [ROTA_DEMANDA, ROTA_NOVA_DEMANDA, ROTA_PLANEJAR],
       }),
       navRoute({
         id: "operacao-colaboradores",
@@ -712,6 +713,7 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   // A ficha da demanda na Operação, aberta pela lista (?numero=), e a nova demanda direta.
   { path: ROTA_DEMANDA, roles: OPERATION_REGISTRY_ROLES },
   { path: ROTA_NOVA_DEMANDA, roles: OPERATION_REGISTRY_ROLES },
+  { path: ROTA_PLANEJAR, roles: OPERATION_REGISTRY_ROLES },
 ];
 
 const MERGED_SCREEN_APP_ROLES = Object.fromEntries(

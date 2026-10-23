@@ -10,13 +10,16 @@ import {
   ROTA_DEMANDAS,
   ROTA_HOJE,
   ROTA_NOVA_DEMANDA,
+  ROTA_PLANEJAR,
   ROTA_OPERACAO,
   ROTA_VEICULOS,
   abreOperacao,
   colaboradorDaBusca,
   demandaDaBusca,
+  demandaDoPlanoDaBusca,
   hrefDaOs,
   hrefDaDemanda,
+  hrefDoPlano,
   hrefDoColaborador,
   osDaBusca,
   rotasDaOperacao,
@@ -90,12 +93,13 @@ describe("navegação do cadastro da Operação", () => {
   });
 
   it("/operacao é o Início (parte 2.6) e o Hoje (parte 3.5a) mora em /operacao/hoje", () => {
-    expect(rotasDaOperacao(LIBERADO)).toEqual([ROTA_OPERACAO, ROTA_HOJE, ROTA_DEMANDAS, ROTA_DEMANDA, ROTA_NOVA_DEMANDA, ROTA_COLABORADORES, ROTA_VEICULOS]);
+    expect(rotasDaOperacao(LIBERADO)).toEqual([ROTA_OPERACAO, ROTA_HOJE, ROTA_DEMANDAS, ROTA_DEMANDA, ROTA_NOVA_DEMANDA, ROTA_PLANEJAR, ROTA_COLABORADORES, ROTA_VEICULOS]);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao", OperacaoInicio\)/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/hoje", OperacaoHoje\)/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/demandas", OperacaoDemandas\)/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/demanda", OperacaoDemanda\)/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/nova-demanda", OperacaoDemandaNova\)/);
+    expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/planejar", OperacaoPlanejar\)/);
   });
 
   it("links diretos: a OS na fila e o colaborador no cadastro, de ida e volta", () => {
@@ -111,5 +115,8 @@ describe("navegação do cadastro da Operação", () => {
     expect(demandaDaBusca("?numero=10045")).toBe("10045");
     expect(demandaDaBusca("?numero=10045-01")).toBeNull();
     expect(demandaDaBusca("")).toBeNull();
+    expect(hrefDoPlano("10045")).toBe("/operacao/planejar?demanda=10045");
+    expect(demandaDoPlanoDaBusca("?demanda=10045")).toBe("10045");
+    expect(demandaDoPlanoDaBusca("?demanda=abc")).toBeNull();
   });
 });

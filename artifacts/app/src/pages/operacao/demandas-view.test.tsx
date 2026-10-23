@@ -138,9 +138,7 @@ function ficha(extra: Partial<Parameters<typeof DemandaView>[0]> = {}) {
         linhasComSaldo={1}
         locais={[{ rotulo: "Origem", nome: "Faria Lima", endereco: "Av. Brig. Faria Lima, 3500 · São Paulo/SP", complemento: "5º andar" }]}
         prazo={{ texto: "Hoje até 19:00", falta: "faltam 4h40", atrasada: false }}
-        ocupado={false}
         erro={null}
-        onAbrirOs={noop}
         {...extra}
       />
     </Router>,
@@ -171,7 +169,7 @@ describe("Demanda", () => {
       "OS desta demanda · 1",
       "23/10/2026 15:00–19:00 · Lucas Ferreira · Sem veículo",
       "Saldo de 1 item",
-      "Abrir OS com o saldo",
+      "Planejar OS",
       "Pedido por",
       "Renata Campos · 11987654321",
       "Recebida",
@@ -187,13 +185,14 @@ describe("Demanda", () => {
     }
     expect(html).toContain('href="/operacao/hoje?os=10053-01"');
     expect(html).toContain('href="/operacao/demandas"');
+    expect(html).toContain('href="/operacao/planejar?demanda=10053"');
     expect(html).not.toContain("R$");
   });
 
   it("a demanda do Comercial diz Orçado; fora de Para planejar, sem abrir OS", () => {
     const textos = textosDaTela(ficha({ demanda: { ...DIRETA, entrada: "comercial", pedidoPor: null, recebidaEm: null, canal: null }, etapa: "execucao_a_orcar", prazo: null }));
     expect(textos).toContain("Orçado");
-    expect(textos).not.toContain("Abrir OS com o saldo");
+    expect(textos).not.toContain("Planejar OS");
     expect(textos).not.toContain("Pedido por");
   });
 

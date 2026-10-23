@@ -152,11 +152,7 @@ export default function PaginaHoje() {
       busca={busca}
       onBusca={setBusca}
       onFiltros={setFiltros}
-      ocupado={ocupado}
       erro={erro}
-      onAbrirDemanda={(numero) => {
-        void gravar(`open:${numero}`, { action: "create", demanda: numero });
-      }}
       onEscalar={escalar}
       escala={
         os && conteudo
