@@ -128,15 +128,17 @@ export function StockToolbar({
   return (
     <section className="rounded-lg border border-border bg-card p-5">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-        <div className="relative min-w-0 flex-1">
-          <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <label className="relative min-w-0 flex-1">
+          <span className="sr-only">{placeholder}</span>
+          <Search aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
+            type="search"
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder={placeholder}
             className="h-12 rounded-lg border-border bg-card pl-11 text-sm shadow-none"
           />
-        </div>
+        </label>
         {children ? (
           <FilterPanel summary={filterSummary}>
             <FilterGroup label={filterLabel}>{children}</FilterGroup>

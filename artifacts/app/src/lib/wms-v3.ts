@@ -12,10 +12,15 @@ export const TELAS_DO_WMS_NA_V3: readonly string[] = [
   "/dashboard",
   // Parte 4.7c: os Pedidos (aprovar, separar e entregar).
   "/pedidos",
+  // Parte 4.7d: o Estoque (os itens com a ficha e o histórico).
+  "/estoque",
 ];
 
-/** A tela aberta já segue a v3 (o caminho exato ou uma tela dentro dele). */
+/**
+ * A tela aberta já segue a v3: o caminho exato, sem a busca. As telas dentro
+ * de outra (Estoque › Mapa, Posições e Etiquetas) entram cada uma por si.
+ */
 export function telaDoWmsNaV3(location: string, telas: readonly string[] = TELAS_DO_WMS_NA_V3): boolean {
-  const caminho = normalizePath(location.split(/[?#]/)[0] ?? "");
-  return telas.some((tela) => caminho === tela || caminho.startsWith(`${tela}/`));
+  const caminho = normalizePath(location);
+  return telas.includes(caminho);
 }

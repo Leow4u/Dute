@@ -451,7 +451,7 @@ export function MovementModal({ defaultSku, trigger }: { defaultSku?: string; tr
                     defaultValue={field.value}
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Selecione o tipo" />
+                      <SelectValue placeholder="—" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="ENTRADA">Entrada (+)</SelectItem>
@@ -472,7 +472,6 @@ export function MovementModal({ defaultSku, trigger }: { defaultSku?: string; tr
               <Label htmlFor="motivo">Motivo *</Label>
               <Input
                 id="motivo"
-                placeholder="Ex.: ajuste após contagem física"
                 {...register("motivo")}
               />
               {errors.motivo && (
