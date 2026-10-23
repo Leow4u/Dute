@@ -23,6 +23,12 @@
       "codebase": "financeiro",
       "runtime": "nodejs22",
       "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
+    },
+    {
+      "source": "functions/core",
+      "codebase": "core",
+      "runtime": "nodejs22",
+      "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
     }
   ],
   "firestore": {

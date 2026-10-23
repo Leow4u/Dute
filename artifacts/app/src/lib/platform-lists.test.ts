@@ -18,7 +18,7 @@ import {
 } from "@workspace/dominio";
 
 import { COMERCIAL_ROLES } from "./comercial/navegacao";
-import { COMERCIAL_AMBIENTES_LIBERADOS, FINANCEIRO_AMBIENTES_LIBERADOS, OPERACAO_AMBIENTES_LIBERADOS } from "./liberacao";
+import { COMERCIAL_AMBIENTES_LIBERADOS, FINANCEIRO_AMBIENTES_LIBERADOS, MEMORIA_AMBIENTES_LIBERADOS, OPERACAO_AMBIENTES_LIBERADOS, memoriaLiberada } from "./liberacao";
 import { OPERACAO_CADASTRO_ROLES } from "./operacao/navegacao";
 import { FINANCE_ROLES, INTERNAL_ROLES } from "./modules";
 import { PLATFORM_MODULES } from "./platform-modules";
@@ -167,6 +167,16 @@ describe("listas do Financeiro iguais em todo lugar (Fase 4)", () => {
   it("liberação por ambiente: a lista das callables é a do app, só a homologação até o lançamento", () => {
     expect(tsList(liberacao, "FINANCEIRO_AMBIENTES_LIBERADOS")).toEqual([...FINANCEIRO_AMBIENTES_LIBERADOS]);
     expect([...FINANCEIRO_AMBIENTES_LIBERADOS]).toEqual(["dute-homolog"]);
+  });
+});
+
+describe("a liberação da memória igual em todo lugar (Fase 5)", () => {
+  const liberacao = read("functions/core/src/domain/liberacao.ts");
+
+  it("a lista da rotina e das callables do núcleo é a do app, só a homologação até o fim da fase", () => {
+    expect(tsList(liberacao, "MEMORIA_AMBIENTES_LIBERADOS")).toEqual([...MEMORIA_AMBIENTES_LIBERADOS]);
+    expect([...MEMORIA_AMBIENTES_LIBERADOS]).toEqual(["dute-homolog"]);
+    expect([memoriaLiberada("dute-homolog"), memoriaLiberada("dute-prod"), memoriaLiberada("dute-btg"), memoriaLiberada(undefined)]).toEqual([true, false, false, false]);
   });
 });
 

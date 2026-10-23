@@ -119,6 +119,13 @@ FINANCEIRO_COLLECTIONS = (
     "client_faturas",
     "financeiro_operations",
 )
+# A memória da Dute (docs/plataforma/fase-5-memoria.md, parte 5.1a): as
+# medidas e o cursor da rotina delas. Saem das OS revisadas, que a zeragem
+# preserva com a Operação: nunca apagadas, nem com --include-setup.
+MEMORIA_COLLECTIONS = (
+    "ai_measures",
+    "ai_cursors",
+)
 # Os eventos do Comercial moram em `events`, junto dos do WMS: a zeragem apaga
 # só os outros.
 COMERCIAL_EVENT_SOURCE = "functions_comercial"
@@ -151,7 +158,13 @@ def preserved_collections(
     include_setup: bool,
     keep: Iterable[str] = (),
 ) -> set[str]:
-    preserved = set(ACCESS_COLLECTIONS) | set(COMERCIAL_COLLECTIONS) | set(OPERACAO_COLLECTIONS) | set(FINANCEIRO_COLLECTIONS)
+    preserved = (
+        set(ACCESS_COLLECTIONS)
+        | set(COMERCIAL_COLLECTIONS)
+        | set(OPERACAO_COLLECTIONS)
+        | set(FINANCEIRO_COLLECTIONS)
+        | set(MEMORIA_COLLECTIONS)
+    )
     if not include_setup:
         preserved.update(SETUP_COLLECTIONS)
     preserved.update(name.strip() for name in keep if name.strip())
@@ -251,6 +264,11 @@ def financeiro_path(name: str) -> bool:
     return document_path(name).split("/", 1)[0] in FINANCEIRO_COLLECTIONS
 
 
+def memoria_path(name: str) -> bool:
+    """Documento dentro de uma coleção da memória da Dute."""
+    return document_path(name).split("/", 1)[0] in MEMORIA_COLLECTIONS
+
+
 def has_stage(document: dict[str, Any]) -> bool:
     return STAGE_FIELD in document.get("fields", {})
 
@@ -323,6 +341,10 @@ def delete_writes(
             if financeiro_path(name):
                 raise RuntimeError(
                     "A zeragem não apaga dado do Financeiro: " + document_path(name)
+                )
+            if memoria_path(name):
+                raise RuntimeError(
+                    "A zeragem não apaga a memória da Dute: " + document_path(name)
                 )
             if collection == CUSTOMERS_COLLECTION and has_stage(document):
                 raise RuntimeError(
