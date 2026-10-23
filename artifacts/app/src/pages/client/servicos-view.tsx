@@ -1,12 +1,14 @@
 import type { FormEvent, ReactNode } from "react";
 import { formatarReais } from "@workspace/dominio";
-import { Check, Paperclip, Plus, Search, X } from "lucide-react";
+import { Check, FileText, Paperclip, Plus, Search, X } from "lucide-react";
+import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { SituacaoDaCobranca } from "@/lib/financeiro/faturas";
+import { hrefDoComprovante } from "@/lib/portal/comprovante";
 import { SITUACAO_NO_PORTAL_ROTULO, type CobrancaDaOs, type NumerosDoPortal, type OsDoPortal, type SituacaoNoPortal } from "@/lib/portal/servicos";
 import {
   MAX_ANEXOS,
@@ -193,6 +195,14 @@ function Painel({ os, cobranca, onFechar }: { os: OsDoPortal; cobranca: Cobranca
         {os.recebimento ? <Par rotulo="Recebimento" valor={os.recebimento} /> : null}
         {cobranca ? <Par rotulo="Faturamento" valor={cobranca.texto} /> : null}
       </dl>
+      {os.comprovante ? (
+        <Button asChild variant="outline" className="h-11 self-start">
+          <Link href={hrefDoComprovante(os.numero)}>
+            <FileText aria-hidden="true" />
+            Comprovante
+          </Link>
+        </Button>
+      ) : null}
     </section>
   );
 }

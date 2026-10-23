@@ -196,7 +196,8 @@ export function avisoDoEvento(evento: EventoLido, documento: Record<string, unkn
         customer_code: customerCode,
         titulo: `OS ${id} concluída`,
         texto: [servicosEmTexto(documento.servicos), instante ? `concluída em ${instanteBr(instante)}` : null].filter(Boolean).join(" · "),
-        link: `/portal/servicos?os=${encodeURIComponent(id)}`,
+        // O comprovante do portal (parte 4.3d): o feito, quem recebeu, a assinatura e as fotos do final, para salvar em PDF.
+        link: `/portal/servicos/comprovante?os=${encodeURIComponent(id)}`,
         entidade: id,
       };
     }
@@ -253,14 +254,23 @@ export function destinatariosDoModelo(modelo: ModeloDeAviso, contatos: ReadonlyA
 
 export type EmailDoAviso = { to: string[]; subject: string; text: string };
 
+/** O que o link do e-mail abre, quando não é só a tela do portal. */
+const CHAMADA_DO_LINK: Partial<Record<ModeloDeAviso, string>> = {
+  os_concluida: "O comprovante, com a assinatura e as fotos do final, está no portal:",
+};
+
 /** O e-mail do aviso, ou null sem destinatário: o e-mail só sai com o modelo ligado no cadastro. */
 export function emailDoAviso(aviso: Aviso, destinatarios: readonly string[], origem: string): EmailDoAviso | null {
   if (!destinatarios.length) return null;
   const endereco = origem.replace(/\/$/, "");
+  const chamada = CHAMADA_DO_LINK[aviso.modelo] ?? null;
   return {
     to: [...destinatarios],
     subject: `${aviso.titulo} · Dutelog`,
-    text: [aviso.titulo, aviso.texto, "", `${endereco}${aviso.link}`, "", "Dutelog Soluções Logísticas"].filter((linha, indice, linhas) => linha || linhas[indice - 1]).join("\n"),
+    text: [aviso.titulo, aviso.texto, "", chamada, `${endereco}${aviso.link}`, "", "Dutelog Soluções Logísticas"]
+      .filter((linha): linha is string => linha !== null)
+      .filter((linha, indice, linhas) => linha || linhas[indice - 1])
+      .join("\n"),
   };
 }
 

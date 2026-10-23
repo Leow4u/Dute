@@ -29,6 +29,8 @@ const PAPER_FILES = new Set([
   "components/operacao/os-documento.tsx",
   // A via comercial da NF (parte 4.2d do Financeiro), no molde da OS impressa.
   "components/financeiro/nf-documento.tsx",
+  // O comprovante da OS no portal (parte 4.3d), no molde da OS impressa.
+  "components/portal/comprovante-documento.tsx",
   "pages/client/relatorio.tsx",
 ]);
 

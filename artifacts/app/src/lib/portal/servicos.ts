@@ -2,14 +2,15 @@ import { formatarReais } from "@workspace/dominio";
 
 import { faturaDoFinanceiro, rotuloDaNf, situacaoDaCobranca, textoDaSituacao, type FaturaDoFinanceiro, type SituacaoDaCobranca } from "../financeiro/faturas";
 import { ETAPA_ROTULO, horaDe, janelaEmTexto, servicosEmTexto, type FichaDaOs } from "../operacao/ficha-da-os";
+import { temComprovante } from "./comprovante";
 
 /**
  * O portal do cliente com a Operação e o Financeiro (docs/plataforma/fase-4-financeiro.md,
  * parte 4.3b): as OS dele, com o andamento em etapas, e as NFs dos serviços
  * (`client_faturas`). O cliente vê o que é dele: o número, o serviço, a data,
- * os locais, o motorista e a placa, o andamento e quem recebeu. Fica de fora
- * o que é interno: a revisão, as ocorrências, as presenças, os itens
- * previstos e as fotos. As regras já limitam a leitura às OS e NFs do
+ * os locais, o motorista e a placa, o andamento e quem recebeu; concluída, o
+ * comprovante (parte 4.3d). Fica de fora o que é interno: a revisão, as
+ * ocorrências, as presenças, os itens previstos e as fotos fora do final. As regras já limitam a leitura às OS e NFs do
  * próprio cliente, com o módulo no contrato.
  */
 
@@ -60,6 +61,8 @@ export type OsDoPortal = {
   andamento: MarcoNoPortal[];
   /** "Recebido por Ana Souza · 22/10/2026 11:40". */
   recebimento: string | null;
+  /** A OS concluída tem o comprovante (parte 4.3d), com a assinatura e as fotos do final. */
+  comprovante: boolean;
 };
 
 function endereco(local: FichaDaOs["locais"]["origem"]): string | null {
@@ -106,6 +109,7 @@ export function osDoPortal(ficha: FichaDaOs, hoje: string): OsDoPortal {
       conclusao && conclusao.aceite === "assinatura" && conclusao.responsavel.nome
         ? `Recebido por ${conclusao.responsavel.nome} · ${instanteEmTexto(conclusao.instante)}`
         : null,
+    comprovante: temComprovante(ficha),
   };
 }
 

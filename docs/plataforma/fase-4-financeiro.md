@@ -351,6 +351,26 @@ comprovante; a tela entra na 4.3d.
   - `conclusao.test.ts` e `conclusao.integration.test.ts` cobrem a lista, só com as fotos do final.
   - `operacao-fotos.rules.test.ts` cobre o cliente da OS concluída, as outras fotos, o outro cliente, a OS aberta, reaberta ou cancelada, a conclusão sem aceite e a vistoria.
 
+### Parte 4.3d: o comprovante da OS no portal
+
+Feita em 23/10/2026. As regras estão em `artifacts/app/src/lib/portal/comprovante.ts`; o papel em
+`components/portal/comprovante-documento.tsx` e a tela em `pages/client/comprovante-view.tsx`. A rota é
+`/portal/servicos/comprovante?os=`, do cliente, dentro de Minhas OS (o mesmo módulo no contrato).
+
+- **O comprovante.** Para a OS de serviço concluída (em revisão ou revisada), no molde da OS impressa:
+  - o número, o serviço e quando foi concluída;
+  - o cliente e a demanda, a data e a janela, o motorista e a placa, a origem e o destino;
+  - os itens com o feito;
+  - quem recebeu, com o cargo, o documento e a assinatura, ou "Sem aceite no local";
+  - as fotos do final.
+- **Fica de fora** o que é interno, como na parte 4.3b: a revisão, as ocorrências, o previsto, a equipe além do motorista e as outras fotos. Sem valor, como toda OS.
+- **O PDF.** "Baixar PDF" é a impressão do navegador, só do papel (`.print-area`). É a única ação principal da tela.
+- **De onde se abre.** O painel da OS concluída em Minhas OS ganha "Comprovante". O aviso de OS concluída abre o comprovante, e o e-mail diz que ele está no link, com a assinatura e as fotos do final.
+- **Testes.**
+  - `portal/comprovante.test.ts` cobre o comprovante, sem nada interno nem valor, o sem aceite, a OS sem a lista de fotos e as OS sem comprovante.
+  - `comprovante-view.test.tsx` cobre os textos na ordem, as imagens, o que vai ao PDF, a ação principal, os estados e `axe`.
+  - `avisos.test.ts` cobre o link e o e-mail da OS concluída; `modules.test.ts`, a rota e o módulo; `theme-colors.test.ts`, o papel.
+
 ### Parte 4.4a: a solicitação de OS pelo portal no backend
 
 Feita em 23/10/2026. As regras estão em `functions/operacao/src/domain/solicitacao.ts`, a gravação em
@@ -486,7 +506,7 @@ Feita em 23/10/2026. Os modelos estão em `functions/operacao/src/domain/avisos.
   |---|---|---|
   | OS agendada | `os.scheduled`, ou `os.planned` com a data | os serviços e a janela |
   | OS em execução | `os.started` | os serviços e desde quando |
-  | OS concluída | `os.completed` | os serviços e quando terminou |
+  | OS concluída | `os.completed` | os serviços e quando terminou; o link abre o comprovante (parte 4.3d) |
   | NF emitida | `nf.registered` | o número, o valor e o vencimento |
   | Solicitação recebida | `portal.service_requested` | o tipo de serviço e o dia pedido |
 

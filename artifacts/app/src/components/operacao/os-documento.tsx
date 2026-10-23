@@ -12,7 +12,8 @@ import type { DocumentoDaOs, LocalNoDocumento } from "@/lib/operacao/os-document
  * Sem valor.
  */
 
-function Secao({ titulo, children, className }: { titulo: string; children: ReactNode; className?: string }) {
+/** Uma seção do papel, com o título na faixa cinza. Também no comprovante do portal (parte 4.3d). */
+export function Secao({ titulo, children, className }: { titulo: string; children: ReactNode; className?: string }) {
   return (
     <section aria-label={titulo} className={`break-inside-avoid overflow-hidden rounded-[6px] border border-[#CFCFCB] ${className ?? ""}`}>
       <h2 className="border-b border-[#CFCFCB] bg-[#F5F5F3] px-3 py-[5px] text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#3F403F]">{titulo}</h2>
@@ -21,7 +22,7 @@ function Secao({ titulo, children, className }: { titulo: string; children: Reac
   );
 }
 
-function Campo({ rotulo, children }: { rotulo: string; children: ReactNode }) {
+export function Campo({ rotulo, children }: { rotulo: string; children: ReactNode }) {
   return (
     <div className="min-w-0">
       <span className="block text-[11px] font-bold leading-4 text-[#5F6368]">{rotulo}</span>

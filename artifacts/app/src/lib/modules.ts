@@ -820,6 +820,8 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   { path: "/portal/faturas/fatura", roles: CLIENT_ROLES },
   // Extrato do período, aberto por "Gerar relatório" em Faturas.
   { path: "/portal/faturas/relatorio", roles: CLIENT_ROLES },
+  // O comprovante da OS concluída, aberto pelo painel de Minhas OS (parte 4.3d).
+  { path: "/portal/servicos/comprovante", roles: CLIENT_ROLES },
   // Endereços antigos do portal que redirecionam.
   { path: "/portal/solicitacoes", roles: CLIENT_ROLES },
   { path: "/portal/agente/operacional", roles: CLIENT_ROLES },
