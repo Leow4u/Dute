@@ -137,8 +137,8 @@ export function papeisDaPessoa(pessoa: Pick<ColaboradorDaLista, "papeis">): Pape
   return pessoa.papeis.length ? [...pessoa.papeis] : (Object.keys(PAPEL_ROTULO) as PapelDeCampo[]);
 }
 
-function rotuloDaOs(indice: number, total: number): string {
-  return total > 1 ? `OS ${indice + 1}` : "A OS";
+function rotuloDaOs(indice: number, total: number, unico = "A OS"): string {
+  return total > 1 ? `OS ${indice + 1}` : unico;
 }
 
 /**
@@ -167,19 +167,24 @@ export function problemasDoPlano(form: FormularioDoPlano, saldo: readonly LinhaD
   return problemas;
 }
 
-/** O que merece atenção e não impede: sem equipe, sem veículo, sem líder e conflito no dia. */
+/**
+ * O que merece atenção e não impede: sem equipe, sem veículo, sem líder e
+ * conflito no dia. `unico` nomeia a OS quando o plano tem uma só ("A
+ * vistoria", parte 3.11c).
+ */
 export function alertasDoPlano(
   form: FormularioDoPlano,
   pessoas: readonly ColaboradorDaLista[],
   veiculos: readonly VeiculoDaLista[],
   outras: readonly OsDaFila[],
+  unico = "A OS",
 ): string[] {
   const alertas: string[] = [];
   const total = form.ordens.length;
   const nomes = new Map(pessoas.map((pessoa) => [pessoa.id, pessoa.nome]));
   const placas = new Map(veiculos.map((veiculo) => [veiculo.id, veiculo.placa]));
   form.ordens.forEach((os, indice) => {
-    const rotulo = rotuloDaOs(indice, total);
+    const rotulo = rotuloDaOs(indice, total, unico);
     const equipe = form.equipe.filter((pessoa) => pessoa.ordens.includes(indice));
     if (!equipe.length) alertas.push(`${rotulo} sem equipe`);
     else if (!equipe.some((pessoa) => pessoa.papel === "lider")) alertas.push(`${rotulo} sem líder`);
@@ -235,5 +240,46 @@ export function pedidoDoPlano(
       ...(form.instrucoes.trim() ? { instrucoes: form.instrucoes.trim() } : {}),
       ...(contatos ? { contatos } : {}),
     })),
+  };
+}
+
+// --- A vistoria (parte 3.11c) --------------------------------------------------------------
+
+/** A vistoria no plano: uma OS, sem itens, para o dia da visita técnica pedida (ou hoje). */
+export function vistoriaInicial(dia: string): FormularioDoPlano {
+  return { ordens: [{ ...osVazia(dia), inicio: "09:00" }], equipe: [], veiculos: [], instrucoes: "", contatoOrigem: { nome: "", telefone: "" }, contatoDestino: { nome: "", telefone: "" } };
+}
+
+/** O que impede de gravar a vistoria: só a janela (a vistoria não tem itens). */
+export function problemasDaVistoriaNoPlano(form: FormularioDoPlano, hoje: string, agendar: boolean): string[] {
+  const os = form.ordens[0];
+  if (!os) return ["Informe a data."];
+  const problemas: string[] = [];
+  if (agendar && !os.data) problemas.push("A vistoria: informe a data.");
+  if (os.data && os.data < hoje) problemas.push("A vistoria: a data já passou.");
+  if (os.fim && !os.inicio) problemas.push("A vistoria: informe o início antes do fim.");
+  if (os.inicio && os.fim && os.fim <= os.inicio) problemas.push("A vistoria: o fim vem depois do início.");
+  return problemas;
+}
+
+/**
+ * O pedido para `saveServiceOrder` (action `survey`). Agendando, leva a
+ * janela; no rascunho, a vistoria fica Para agendar. O contato é o do local
+ * de origem, onde se faz a vistoria.
+ */
+export function pedidoDaVistoria(form: FormularioDoPlano, demanda: string, idempotencyKey: string, agendar: boolean): Record<string, unknown> {
+  const os = form.ordens[0];
+  const contatoOrigem = contato(form.contatoOrigem);
+  return {
+    action: "survey",
+    idempotency_key: idempotencyKey,
+    demanda,
+    ...(agendar && os?.data ? { janela: { data: os.data, inicio: os.inicio || null, fim: os.fim || null } } : {}),
+    equipe: form.equipe
+      .filter((pessoa) => pessoa.ordens.includes(0))
+      .map((pessoa) => ({ colaborador_id: pessoa.colaboradorId, ...(pessoa.papel ? { papel: pessoa.papel } : {}) })),
+    veiculos: form.veiculos.filter((veiculo) => veiculo.ordens.includes(0)).map((veiculo) => veiculo.veiculoId),
+    ...(form.instrucoes.trim() ? { instrucoes: form.instrucoes.trim() } : {}),
+    ...(contatoOrigem ? { contatos: { origem: contatoOrigem } } : {}),
   };
 }

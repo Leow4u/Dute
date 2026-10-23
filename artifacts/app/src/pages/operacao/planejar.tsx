@@ -8,23 +8,32 @@ import { demandaDaOperacao, escopoComSaldo, osDaDemanda } from "@/lib/operacao/d
 import { clienteDaLeitura, hojeIso, nomesPorCodigo, osDaLeitura } from "@/lib/operacao/fila";
 import { milesimos } from "@/lib/operacao/hoje";
 import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
-import { demandaDoPlanoDaBusca, hrefDaDemanda } from "@/lib/operacao/navegacao";
+import { demandaDoPlanoDaBusca, hrefDaDemanda, vistoriaNoPlanoDaBusca } from "@/lib/operacao/navegacao";
 import {
   alertasDoPlano,
   dividir,
   igualarAoSaldo,
+  pedidoDaVistoria,
   pedidoDoPlano,
   planoInicial,
+  problemasDaVistoriaNoPlano,
   problemasDoPlano,
   removerOs,
   restantes,
+  vistoriaInicial,
   type FormularioDoPlano,
 } from "@/lib/operacao/planejar";
+import { problemaParaAbrirVistoria } from "@/lib/operacao/vistoria";
 
 import type { LocalDaFicha } from "./demanda-view";
 import { PlanejarView, type EstadoDoPlano } from "./planejar-view";
 
-/** Operação › Planejar OS (parte 3.6a): a demanda pedida em ?demanda=, o plano e saveServiceOrder (plan). */
+/**
+ * Operação › Planejar OS (parte 3.6a): a demanda pedida em ?demanda=, o plano
+ * e saveServiceOrder (plan). Com &vistoria=1 (parte 3.11c), a vistoria da
+ * demanda: uma OS sem itens, no dia da visita técnica, e saveServiceOrder
+ * (survey).
+ */
 
 function texto(valor: unknown): string {
   return typeof valor === "string" ? valor.trim() : "";
@@ -39,7 +48,9 @@ function enderecoEmLinha(endereco: unknown): string | null {
 
 export default function PaginaPlanejar() {
   const [, navegar] = useLocation();
-  const numero = demandaDoPlanoDaBusca(useSearch());
+  const busca = useSearch();
+  const numero = demandaDoPlanoDaBusca(busca);
+  const vistoria = vistoriaNoPlanoDaBusca(busca);
   const demanda = useDocumento(numero ? `demands/${numero}` : null, (db) => doc(db, "demands", numero ?? "-"), demandaDaOperacao);
   const ordens = useLeitura("service_orders", (db) => collection(db, "service_orders"), osDaLeitura);
   const pessoas = useLeitura("collaborators", (db) => collection(db, "collaborators"), colaboradorDaLeitura);
@@ -60,12 +71,15 @@ export default function PaginaPlanejar() {
   const hoje = hojeIso();
   const ficha = demanda.item ?? null;
   const daDemanda = ficha ? osDaDemanda(ficha.numero, ordens.itens ?? []) : [];
-  const saldo = ficha ? escopoComSaldo(ficha, daDemanda).filter((linha) => milesimos(linha.saldo) > 0) : [];
+  const saldo = ficha && !vistoria ? escopoComSaldo(ficha, daDemanda).filter((linha) => milesimos(linha.saldo) > 0) : [];
   const carregou = Boolean(ficha && ordens.itens);
+  const motivo = ficha && vistoria ? problemaParaAbrirVistoria(ficha, osDaDemanda(ficha.numero, ordens.itens ?? [], true)) : null;
 
-  // O plano nasce uma vez, quando a demanda e as OS chegam: todo o saldo numa OS, hoje.
+  // O plano nasce uma vez, quando a demanda e as OS chegam: todo o saldo numa OS, hoje; a vistoria, no dia da visita técnica.
   useEffect(() => {
-    if (!form && carregou && saldo.length) setForm(planoInicial(saldo, hoje));
+    if (form || !carregou || !ficha) return;
+    if (vistoria) setForm(vistoriaInicial(ficha.visitaTecnica && ficha.visitaTecnica >= hoje ? ficha.visitaTecnica : hoje));
+    else if (saldo.length) setForm(planoInicial(saldo, hoje));
     // Só a chegada das leituras dispara.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [carregou]);
@@ -78,11 +92,13 @@ export default function PaginaPlanejar() {
         ? "carregando"
         : demanda.item === null
           ? "nao_encontrada"
-          : !saldo.length
-            ? "sem_saldo"
-            : form
-              ? "pronto"
-              : "carregando";
+          : vistoria && motivo
+            ? "indisponivel"
+            : !vistoria && !saldo.length
+              ? "sem_saldo"
+              : form
+                ? "pronto"
+                : "carregando";
 
   const porLocal = new Map((locais.itens ?? []).map((local) => [local.id, local]));
   const locaisDaFicha: LocalDaFicha[] = ficha
@@ -103,20 +119,24 @@ export default function PaginaPlanejar() {
     chave.current = null;
   }
 
-  const problemasAgendando = form ? problemasDoPlano(form, saldo, hoje, true) : [];
+  const problemasDe = (agendar: boolean) => (!form ? [] : vistoria ? problemasDaVistoriaNoPlano(form, hoje, agendar) : problemasDoPlano(form, saldo, hoje, agendar));
+  const problemasAgendando = problemasDe(true);
   const [agendando, setAgendando] = useState(true);
-  const problemas = form && tentou ? problemasDoPlano(form, saldo, hoje, agendando) : [];
+  const problemas = tentou ? problemasDe(agendando) : [];
 
   async function gravar(agendar: boolean) {
     if (!form || !ficha) return;
     setTentou(true);
     setAgendando(agendar);
     setErro(null);
-    if (problemasDoPlano(form, saldo, hoje, agendar).length) return;
+    if (problemasDe(agendar).length) return;
     setOcupado(true);
     chave.current ??= novaChave();
     try {
-      await chamarOperacao("saveServiceOrder", pedidoDoPlano(form, ficha.numero, saldo, chave.current, agendar));
+      await chamarOperacao(
+        "saveServiceOrder",
+        vistoria ? pedidoDaVistoria(form, ficha.numero, chave.current, agendar) : pedidoDoPlano(form, ficha.numero, saldo, chave.current, agendar),
+      );
       chave.current = null;
       navegar(hrefDaDemanda(ficha.numero));
     } catch (error) {
@@ -146,11 +166,13 @@ export default function PaginaPlanejar() {
       onRemoverOs={(indice) => form && mudar(removerOs(form, indice))}
       pessoas={pessoas.itens ?? []}
       veiculos={veiculos.itens ?? []}
-      alertas={form ? alertasDoPlano(form, pessoas.itens ?? [], veiculos.itens ?? [], (ordens.itens ?? []).filter((os) => os.demanda !== ficha?.numero)) : []}
+      alertas={form ? alertasDoPlano(form, pessoas.itens ?? [], veiculos.itens ?? [], (ordens.itens ?? []).filter((os) => os.demanda !== ficha?.numero), vistoria ? "A vistoria" : undefined) : []}
       problemas={tentou ? problemas : problemasAgendando.filter((problema) => problema.includes("as OS somam"))}
       ocupado={ocupado}
       erro={erro}
       onGravar={(agendar) => void gravar(agendar)}
+      vistoria={vistoria}
+      motivo={motivo}
     />
   );
 }

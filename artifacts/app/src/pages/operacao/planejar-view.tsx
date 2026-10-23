@@ -26,10 +26,11 @@ import type { LocalDaFicha } from "./demanda-view";
  * fatia do saldo, a janela, a equipe com o papel de cada pessoa (inclusive
  * freelancer e terceiro), os veículos, os contatos no local e as instruções.
  * Só apresentação: o estado e a gravação chegam por props
- * (pages/operacao/planejar.tsx). Sem legenda e sem preço.
+ * (pages/operacao/planejar.tsx). Sem legenda e sem preço. A vistoria (parte
+ * 3.11c) usa a mesma tela, numa OS só, sem itens e só com o local de origem.
  */
 
-export type EstadoDoPlano = "carregando" | "erro" | "nao_encontrada" | "sem_saldo" | "pronto";
+export type EstadoDoPlano = "carregando" | "erro" | "nao_encontrada" | "sem_saldo" | "indisponivel" | "pronto";
 
 const campoClasse = "flex h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground";
 
@@ -67,16 +68,19 @@ function Quando({
   ordens: readonly OsNoPlano[];
   onOs: (indice: number, os: OsNoPlano) => void;
   onRemover: (indice: number) => void;
-  onDividir: () => void;
+  /** Mais uma OS; sem ela (a vistoria), o plano fica numa OS só. */
+  onDividir?: () => void;
 }) {
   return (
     <Cartao
       titulo="Quando"
       acao={
-        <Button type="button" variant="outline" size="sm" onClick={onDividir}>
-          <Plus aria-hidden="true" className="size-4" />
-          Mais uma OS
-        </Button>
+        onDividir ? (
+          <Button type="button" variant="outline" size="sm" onClick={onDividir}>
+            <Plus aria-hidden="true" className="size-4" />
+            Mais uma OS
+          </Button>
+        ) : undefined
       }
     >
       <ul className="flex flex-col gap-4 px-5 py-4">
@@ -112,15 +116,18 @@ function Locais({
   locais,
   form,
   onForm,
+  rotulos = ["Origem", "Destino"],
 }: {
   locais: readonly LocalDaFicha[];
   form: FormularioDoPlano;
   onForm: (form: FormularioDoPlano) => void;
+  /** A vistoria é só no local de origem. */
+  rotulos?: ReadonlyArray<"Origem" | "Destino">;
 }) {
   return (
-    <Cartao titulo="Locais">
-      <div className="grid grid-cols-1 gap-4 px-5 py-4 lg:grid-cols-2">
-        {(["Origem", "Destino"] as const).map((rotulo) => {
+    <Cartao titulo={rotulos.length === 1 ? "Local" : "Locais"}>
+      <div className={cn("grid grid-cols-1 gap-4 px-5 py-4", rotulos.length > 1 ? "lg:grid-cols-2" : null)}>
+        {rotulos.map((rotulo) => {
           const local = locais.find((item) => item.rotulo === rotulo) ?? null;
           const campo = rotulo === "Origem" ? "contatoOrigem" : "contatoDestino";
           const id = rotulo.toLocaleLowerCase("pt-BR");
@@ -444,6 +451,7 @@ function Resumo({
   ocupado,
   voltar,
   onGravar,
+  vistoria,
 }: {
   form: FormularioDoPlano;
   pessoas: readonly ColaboradorDaLista[];
@@ -455,6 +463,7 @@ function Resumo({
   ocupado: boolean;
   voltar: string;
   onGravar: (agendar: boolean) => void;
+  vistoria: boolean;
 }) {
   const porId = new Map(pessoas.map((pessoa) => [pessoa.id, pessoa]));
   const equipe = form.equipe.map((item) => porId.get(item.colaboradorId)).filter((pessoa): pessoa is ColaboradorDaLista => Boolean(pessoa));
@@ -464,9 +473,9 @@ function Resumo({
   const linhas = saldo.filter((linha) => form.ordens.some((os) => Number((os.itens[linha.id] ?? "").replace(",", ".")) > 0)).length;
   const quando = form.ordens.map((os) => (os.data ? formatarData(os.data) : "Sem data")).join(" · ");
   const itens: Array<[string, string]> = [
-    ["OS", String(form.ordens.length)],
+    ...(vistoria ? [] : ([["OS", String(form.ordens.length)]] as Array<[string, string]>)),
     ["Quando", quando],
-    ["Itens", String(linhas)],
+    ...(vistoria ? [] : ([["Itens", String(linhas)]] as Array<[string, string]>)),
     ["Equipe", [String(equipe.length), freelancers ? `${freelancers} ${freelancers === 1 ? "freelancer" : "freelancers"}` : null, terceiros ? `${terceiros} ${terceiros === 1 ? "terceiro" : "terceiros"}` : null].filter(Boolean).join(" · ")],
     ["Veículos", placas.length ? placas.join(" · ") : "Nenhum"],
   ];
@@ -537,6 +546,8 @@ export function PlanejarView({
   ocupado,
   erro,
   onGravar,
+  vistoria = false,
+  motivo = null,
 }: {
   estado: EstadoDoPlano;
   numero: string | null;
@@ -559,6 +570,10 @@ export function PlanejarView({
   erro: string | null;
   /** Agendar (com a janela) ou salvar o rascunho (Para agendar). */
   onGravar: (agendar: boolean) => void;
+  /** Planejar a vistoria (parte 3.11c): uma OS, sem itens. */
+  vistoria?: boolean;
+  /** Por que a demanda não recebe a vistoria (estado indisponivel). */
+  motivo?: string | null;
 }) {
   const voltar = numero ? hrefDaDemanda(numero) : "/operacao/demandas";
   const linkDeVolta = (
@@ -579,6 +594,7 @@ export function PlanejarView({
         ) : null}
         {estado === "nao_encontrada" ? <p className="text-sm text-muted-foreground">{numero ? `Demanda ${numero} não encontrada` : "Demanda não encontrada"}</p> : null}
         {estado === "sem_saldo" ? <p className="text-sm text-muted-foreground">Todo o saldo da demanda já está em OS</p> : null}
+        {estado === "indisponivel" && motivo ? <p className="text-sm text-muted-foreground">{motivo}</p> : null}
       </section>
     );
   }
@@ -587,7 +603,9 @@ export function PlanejarView({
       {linkDeVolta}
       <header className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Planejar OS · Demanda {demanda.numero}</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">
+            {vistoria ? "Planejar vistoria" : "Planejar OS"} · Demanda {demanda.numero}
+          </h1>
           <SeloDoTipo tipo={demanda.tipo} />
         </div>
         <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
@@ -609,11 +627,16 @@ export function PlanejarView({
             onGravar(true);
           }}
         >
-          <Quando ordens={form.ordens} onOs={(indice, os) => onForm({ ...form, ordens: form.ordens.map((atual, posicao) => (posicao === indice ? os : atual)) })} onRemover={onRemoverOs} onDividir={onDividir} />
-          <Itens saldo={saldo} form={form} restante={restante} onQuantidade={onQuantidade} onIgualar={onIgualar} />
+          <Quando
+            ordens={form.ordens}
+            onOs={(indice, os) => onForm({ ...form, ordens: form.ordens.map((atual, posicao) => (posicao === indice ? os : atual)) })}
+            onRemover={onRemoverOs}
+            onDividir={vistoria ? undefined : onDividir}
+          />
+          {vistoria ? null : <Itens saldo={saldo} form={form} restante={restante} onQuantidade={onQuantidade} onIgualar={onIgualar} />}
           <Equipe form={form} pessoas={pessoas} onForm={onForm} />
           <Veiculos form={form} veiculos={veiculos} onForm={onForm} />
-          <Locais locais={locais} form={form} onForm={onForm} />
+          <Locais locais={locais} form={form} onForm={onForm} rotulos={vistoria ? ["Origem"] : undefined} />
           <Cartao titulo="Instruções">
             <div className="px-5 py-4">
               <Campo id="planejar-instrucoes" rotulo="Para a equipe">
@@ -633,6 +656,7 @@ export function PlanejarView({
           ocupado={ocupado}
           voltar={voltar}
           onGravar={onGravar}
+          vistoria={vistoria}
         />
       </div>
     </section>

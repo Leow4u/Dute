@@ -27,6 +27,8 @@ const DIRETA: DemandaDoHoje = {
   osNumeros: ["10053-01"],
   escopo: [{ id: "ln_1", item: "Cadeira", quantidade: "6" }],
   fora: null,
+  visitaTecnica: null,
+  escopoRv: null,
 };
 
 const PLANEJAR: DemandaDoHoje = { ...DIRETA, numero: "10043", tipo: "planejada", entrada: "comercial", titulo: "Instalação de 40 lockers", executarAte: null, osNumeros: [] };
@@ -223,5 +225,20 @@ describe("escalar a OS", () => {
 
   it("não tem problema de acessibilidade", async () => {
     expect(await violacoesDeAcessibilidade(formulario({ erro: "A data do agendamento já passou." }))).toEqual([]);
+  });
+});
+
+describe("a vistoria pedida no Hoje (parte 3.11c)", () => {
+  it("o cartão diz a vistoria e o dia, e leva a planejar a vistoria; sem legenda", async () => {
+    const pedida = { ...PLANEJAR, numero: "10060", etapa: "em_montagem", escopo: [], osNumeros: [], entrada: "comercial" as const, visitaTecnica: "2026-10-28", escopoRv: null };
+    const html = render({
+      quadro: quadroDoHoje({ hoje: HOJE, agora: AGORA, demandas: [pedida], ordens: [], nomesClientes: { ITAU: "Itaú Unibanco" }, nomesPessoas: {}, placas: {}, filtros: SEM_FILTRO, busca: "" }),
+    });
+    const textos = textosDaTela(html);
+    expect(textos).toContain("Vistoria · 28/10/2026");
+    expect(textos).toContain("Planejar vistoria");
+    expect(textos).not.toContain("Planejar OS");
+    expect(html).toContain('href="/operacao/planejar?demanda=10060&amp;vistoria=1"');
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 });

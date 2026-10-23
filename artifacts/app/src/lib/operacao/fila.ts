@@ -40,6 +40,8 @@ export type OsDaFila = {
   placas?: string[];
   /** Os serviços derivados dos itens (transporte, montagem...). */
   servicos?: string[];
+  /** Serviço ou vistoria (parte 3.11a); a OS de antes é de serviço. */
+  tipo?: "servico" | "vistoria";
   /** "Origem → Destino", pelo nome do local ou pelo complemento. */
   rota?: string | null;
   demandaFora?: DemandaFora | null;
@@ -173,6 +175,7 @@ export function osDaLeitura(id: string, data: Record<string, unknown>): OsDaFila
     placas: placasDaOs(data.veiculos),
     servicos: Array.isArray(data.servicos) ? data.servicos.filter((servico): servico is string => typeof servico === "string") : [],
     rota: rotaDaOs(data.locais),
+    tipo: data.tipo === "vistoria" ? "vistoria" : "servico",
   };
 }
 

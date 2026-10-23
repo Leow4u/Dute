@@ -115,6 +115,16 @@ export function hrefDoPlano(numero: string): string {
   return `${ROTA_PLANEJAR}?demanda=${encodeURIComponent(numero)}`;
 }
 
+/** Planejar a vistoria da demanda (parte 3.11c): a mesma tela, numa OS só, sem itens. */
+export function hrefDoPlanoDaVistoria(numero: string): string {
+  return `${ROTA_PLANEJAR}?demanda=${encodeURIComponent(numero)}&vistoria=1`;
+}
+
+/** O planejamento pedido é o da vistoria (`&vistoria=1`). */
+export function vistoriaNoPlanoDaBusca(busca: string): boolean {
+  return parametro(busca, "vistoria") === "1";
+}
+
 /** A demanda pedida na busca da URL do planejamento (`?demanda=`), ou null. */
 export function demandaDoPlanoDaBusca(busca: string): string | null {
   const numero = parametro(busca, "demanda");

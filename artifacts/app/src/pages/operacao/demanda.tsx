@@ -6,6 +6,7 @@ import { clienteDaLeitura, nomesPorCodigo, osDaLeitura } from "@/lib/operacao/fi
 import { linhasComSaldo, prazoDaDemanda } from "@/lib/operacao/hoje";
 import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
 import { demandaDaBusca } from "@/lib/operacao/navegacao";
+import { problemaParaAbrirVistoria } from "@/lib/operacao/vistoria";
 
 import { DemandaView, type EstadoDaDemanda, type LocalDaFicha } from "./demanda-view";
 
@@ -80,6 +81,7 @@ export default function PaginaDemanda() {
       locais={locaisDaFicha}
       prazo={ficha?.entrada === "direta" ? prazoDaDemanda(ficha.executarAte, new Date()) : null}
       erro={null}
+      vistoria={ficha && problemaParaAbrirVistoria(ficha, lista) === null ? (ficha.visitaTecnica ?? "") : null}
     />
   );
 }

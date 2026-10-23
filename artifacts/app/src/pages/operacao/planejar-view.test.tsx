@@ -4,7 +4,7 @@ import { Router } from "wouter";
 
 import type { ColaboradorDaLista, VeiculoDaLista } from "@/lib/operacao/cadastro";
 import type { DemandaDaOperacao, LinhaDoSaldo } from "@/lib/operacao/demandas";
-import { dividir, planoInicial, restantes, type FormularioDoPlano } from "@/lib/operacao/planejar";
+import { dividir, planoInicial, restantes, vistoriaInicial, type FormularioDoPlano } from "@/lib/operacao/planejar";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
@@ -26,6 +26,8 @@ const DEMANDA: DemandaDaOperacao = {
   osNumeros: ["10045-01"],
   escopo: [],
   fora: null,
+  visitaTecnica: null,
+  escopoRv: null,
   recebidaEm: null,
   canal: null,
   pedidoPor: null,
@@ -178,5 +180,23 @@ describe("Planejar OS", () => {
 
   it("não tem problema de acessibilidade", async () => {
     expect(await violacoesDeAcessibilidade(render(dividir(COM_EQUIPE), { alertas: ["OS 2 sem líder"] }))).toEqual([]);
+  });
+});
+
+describe("Planejar vistoria (parte 3.11c)", () => {
+  const vistoria = () => render(vistoriaInicial("2026-10-28"), { vistoria: true, saldo: [], restante: new Map() });
+
+  it("uma OS só, sem itens, com a equipe, os veículos, o local de origem e as instruções; sem legenda", async () => {
+    const html = vistoria();
+    const textos = textosDaTela(html);
+    expect(textos).toContain("Planejar vistoria · Demanda 10045");
+    for (const ausente of ["Mais uma OS", "Itens do saldo", "Destino", "Itens", "Planejar OS · Demanda 10045"]) expect(textos, ausente).not.toContain(ausente);
+    expect(textos).toEqual(expect.arrayContaining(["Quando", "Local", "Origem", "Faria Lima", "Contato no local", "Agendar", "Salvar rascunho"]));
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("indisponível: mostra por que a demanda não recebe vistoria", () => {
+    const html = render(vistoriaInicial("2026-10-28"), { estado: "indisponivel", vistoria: true, motivo: "A demanda já tem a vistoria 10045-01 em aberto." });
+    expect(textosDaTela(html)).toEqual(["Demanda 10045", "A demanda já tem a vistoria 10045-01 em aberto."]);
   });
 });
