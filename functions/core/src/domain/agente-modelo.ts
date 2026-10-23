@@ -2,6 +2,8 @@ import { vertexAI } from "@genkit-ai/google-genai";
 import { genkit, tool, type Genkit } from "genkit";
 
 import { FONTE_SEM_MODELO, promptDoResumo, type GerarResposta, type Resumir } from "./agente-conversa.js";
+import { InvoiceExtractionSchema, type LerNota } from "./agente-nota.js";
+import { INVOICE_PROMPT } from "./invoice-reading.js";
 
 /**
  * O modelo do Agent Dute do núcleo (parte 5.5e): o Gemini pelo Genkit, no
@@ -82,5 +84,34 @@ export function resumirComGenkit(ai: () => Genkit): Resumir {
       }
     }
     return "";
+  };
+}
+
+/** A leitura da nota anexada (parte 5.5h): o pedido e o esquema do WMS, com os mesmos modelos. Sem os dois, falha. */
+export function extrairNotaComGenkit(ai: () => Genkit): LerNota["extrair"] {
+  return async ({ bytes, contentType }) => {
+    const erros: string[] = [];
+    for (const modelo of [MODELO_DO_AGENTE, MODELO_RESERVA]) {
+      const inicio = Date.now();
+      try {
+        const resposta = await ai().generate({
+          model: vertexAI.model(modelo),
+          messages: [{ role: "user", content: [{ text: INVOICE_PROMPT }, { media: { url: `data:${contentType};base64,${bytes.toString("base64")}`, contentType } }] }],
+          output: { schema: InvoiceExtractionSchema },
+          config: { temperature: 0, maxOutputTokens: 8192 },
+        });
+        return {
+          saida: resposta.output,
+          modelo,
+          tokens_entrada: resposta.usage?.inputTokens,
+          tokens_saida: resposta.usage?.outputTokens,
+          latencia_ms: Date.now() - inicio,
+          erro: erros.length ? erros.join(" | ") : undefined,
+        };
+      } catch (erro) {
+        erros.push(`${modelo}: ${erro instanceof Error ? erro.message : String(erro)}`.slice(0, 500));
+      }
+    }
+    throw new Error(erros.join(" | "));
   };
 }

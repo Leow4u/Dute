@@ -35,12 +35,12 @@ function palavras(busca: string): string[] {
   return [...new Set(normalizado(busca).split(/[^a-z0-9.-]+/).filter((palavra) => palavra.length >= 3))];
 }
 
-type MensagemLida = { papel: "user" | "assistant"; conteudo: string; em: string };
+type MensagemLida = { papel: "user" | "assistant"; conteudo: string; em: string; contexto: string };
 
 /** As mensagens em ordem; no empate do horário, a pergunta antes da resposta. */
 export function emOrdem(mensagens: readonly RegistroLido[]): MensagemLida[] {
   return mensagens
-    .map((mensagem) => ({ papel: mensagem.role === "assistant" ? ("assistant" as const) : ("user" as const), conteudo: texto(mensagem.content), em: texto(mensagem.created_at_iso) }))
+    .map((mensagem) => ({ papel: mensagem.role === "assistant" ? ("assistant" as const) : ("user" as const), conteudo: texto(mensagem.content), em: texto(mensagem.created_at_iso), contexto: texto(mensagem.context) }))
     .sort((a, b) => a.em.localeCompare(b.em) || (a.papel === b.papel ? 0 : a.papel === "user" ? -1 : 1));
 }
 

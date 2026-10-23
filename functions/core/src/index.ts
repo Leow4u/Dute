@@ -5,7 +5,8 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { setGlobalOptions } from "firebase-functions/v2";
 
 import { conversarComDute } from "./domain/agente-conversa.js";
-import { genkitDoAgente, gerarComGenkit, resumirComGenkit } from "./domain/agente-modelo.js";
+import { extrairNotaComGenkit, genkitDoAgente, gerarComGenkit, resumirComGenkit } from "./domain/agente-modelo.js";
+import { baixarDoStorage } from "./domain/agente-nota.js";
 import {
   decideDuteNoteFor,
   decideDutePlaybookFor,
@@ -95,13 +96,15 @@ export const answerStockAlert = onCall(async (request) => {
 /**
  * A conversa com o Agent Dute do núcleo (parte 5.5e), com a resposta em
  * partes quando a tela pede. As ferramentas só leem, do cliente e do módulo da
- * conversa; só o fluxo grava a conversa, as mensagens e o uso.
+ * conversa; só o fluxo grava a conversa, as mensagens e o uso. A nota anexada
+ * pelo cliente é lida do Storage dele (parte 5.5h).
  */
 export const chatWithDute = onCall({ timeoutSeconds: 180, memory: "512MiB" }, async (request, response) => {
   const caller = await requireDuteCaller(db, request, PROJECT_ID);
   return conversarComDute(db, caller, request.data, {
     gerar: gerarComGenkit(ai),
     resumir: resumirComGenkit(ai),
+    lerNota: { baixar: baixarDoStorage(PROJECT_ID), extrair: extrairNotaComGenkit(ai) },
     aoPedaco: request.acceptsStreaming ? (pedaco) => void response?.sendChunk(pedaco) : undefined,
   });
 });

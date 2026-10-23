@@ -6,6 +6,8 @@ import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 
 import { atualizarResumo, conversarComDute, type GerarResposta, type PedidoAoModelo } from "./agente-conversa.js";
+import type { AgentAttachment } from "./agent-attachments.js";
+import type { LerNota } from "./agente-nota.js";
 import type { CoreProfile } from "./profile.js";
 
 /**
@@ -186,6 +188,66 @@ describe("a conversa no núcleo", () => {
     assert.equal(resposta.messages[1].source, "fallback_indisponivel");
     const [uso] = await todos("agent_usage");
     assert.deepEqual([uso.source, uso.error, uso.tool_calls], ["fallback_indisponivel", "x: falhou", 0]);
+  });
+});
+
+describe("a nota anexada pelo cliente (parte 5.5h)", () => {
+  const nota: AgentAttachment = { file_name: "NF 2471.pdf", file_url: "https://storage.test/nf.pdf", storage_path: "operational-documents/ITAU/envios/nf-2471.pdf", content_type: "application/pdf", size_bytes: 120_000 };
+  const baixados: string[] = [];
+  const lerNota: LerNota = {
+    baixar: async (caminho) => (baixados.push(caminho), Buffer.from("pdf")),
+    extrair: async () => ({
+      saida: { supplier: "Confecções Exemplo", invoice_number: "2471", items: [{ supplier_code: "POLO-M", description: "CAMISA POLO M", quantity: 30, unit: "UN" }] },
+      modelo: "teste",
+      tokens_entrada: 900,
+      tokens_saida: 80,
+      latencia_ms: 12,
+    }),
+  };
+  const envio = { fornecedor: "Confecções Exemplo", nota_fiscal: "2471", itens: [{ codigo: "POLO-M", quantidade: 30 }] };
+
+  it("a leitura vai ao modelo com a mensagem e fica na pergunta; o aviso leva a nota, também na mensagem seguinte", async () => {
+    let primeiroPedido: PedidoAoModelo | undefined;
+    const primeira = await conversarComDute(
+      db,
+      cliente,
+      { message: "Chegou esta nota, pode avisar o envio?", conversation_id: "conv_nf", modulo: "wms", attachments: [nota] },
+      { gerar: modelo([["rascunho_envio", envio]], "Montei o aviso.", (pedido) => (primeiroPedido = pedido)), lerNota, agora: () => AGORA, novoId },
+    );
+    assert.deepEqual(baixados, ["operational-documents/ITAU/envios/nf-2471.pdf"]);
+    assert.match(primeiroPedido!.mensagem, /^Chegou esta nota, pode avisar o envio\?\n\n\[Nota fiscal anexada pela pessoa: "NF 2471\.pdf"/);
+    assert.match(primeiroPedido!.mensagem, /- código do fornecedor POLO-M \| CAMISA POLO M \| 30 UN \| no estoque como POLO-M \(Camisa polo\)/);
+    assert.deepEqual(primeira.messages[0].attachments, [nota]);
+    assert.deepEqual((primeira.messages[1].draft as Record<string, unknown>).anexos, [nota]);
+
+    const pergunta = (await todos("agent_messages")).find((mensagem) => mensagem.role === "user");
+    assert.equal(pergunta?.content, "Chegou esta nota, pode avisar o envio?");
+    assert.deepEqual(pergunta?.attachments, [nota]);
+    assert.match(String(pergunta?.context), /^\[Nota fiscal anexada pela pessoa/);
+    const leitura = (await todos("agent_usage")).find((uso) => uso.source === "leitura_nota_chat");
+    assert.deepEqual([leitura?.model, leitura?.items_read, leitura?.customer_code, leitura?.user_id, leitura?.modulo, String(leitura?.id).endsWith("_nota")], ["teste", 1, "ITAU", "cli-itau", "wms", true]);
+
+    let segundoPedido: PedidoAoModelo | undefined;
+    const segunda = await conversarComDute(
+      db,
+      cliente,
+      { message: "Pode pôr a chegada na sexta?", conversation_id: "conv_nf", modulo: "wms" },
+      { gerar: modelo([["rascunho_envio", { ...envio, chegada: "2026-10-30" }]], "Atualizei.", (pedido) => (segundoPedido = pedido)), lerNota, agora: () => new Date(AGORA.getTime() + 60_000), novoId },
+    );
+    assert.equal(segundoPedido!.mensagem, "Pode pôr a chegada na sexta?");
+    assert.match(segundoPedido!.historico[0]!.texto, /^Chegou esta nota, pode avisar o envio\?\n\n\[Nota fiscal anexada/);
+    assert.deepEqual((segunda.messages[1].draft as Record<string, unknown>).anexos, [nota]);
+    assert.equal(baixados.length, 1);
+  });
+
+  it("a equipe não anexa; o cliente anexa só da pasta dele e na Armazenagem; a recusa não grava", async () => {
+    const opcoes = { gerar: modelo([]), lerNota, agora: () => AGORA, novoId };
+    const negado = (codigo: string) => (erro: unknown) => erro instanceof HttpsError && erro.code === codigo;
+    await assert.rejects(conversarComDute(db, interno, { message: "Nota", modulo: "wms", customer_code: "ITAU", attachments: [nota] }, opcoes), negado("permission-denied"));
+    await assert.rejects(conversarComDute(db, cliente, { message: "Nota", modulo: "wms", attachments: [{ ...nota, storage_path: "operational-documents/SAFRA/nf.pdf" }] }, opcoes), negado("permission-denied"));
+    await assert.rejects(conversarComDute(db, cliente, { message: "Nota", modulo: "operacao", attachments: [nota] }, opcoes), negado("failed-precondition"));
+    assert.equal((await todos("agent_messages")).length, 0);
+    assert.equal((await todos("agent_usage")).length, 0);
   });
 });
 
