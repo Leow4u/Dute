@@ -18,6 +18,7 @@ export type PortalModuleKey =
   | "events"
   | "requests"
   | "orders"
+  | "services"
   | "invoices"
   | "documents";
 

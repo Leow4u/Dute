@@ -251,3 +251,18 @@ Feita em 23/10/2026. A projeção está em `functions/financeiro/src/domain/proj
   - O cancelamento a apaga. O registro cancelado era um erro e não aparece para o cliente. A NF registrada de novo volta ao portal.
 - **Regras.** Leem quem lê preço e o cliente dono, este com as faturas no contrato. O cliente nunca lê `faturas` nem `pagamentos`.
 - **Testes.** `projecao.test.ts` confere o que vai e o que fica de fora. `cobranca.integration.test.ts` segue a projeção no registro, no pagamento, na quitação, no envio, no cancelamento e no novo registro. `financeiro-faturas.rules.test.ts` cobre o cliente dono, o de outro cliente, o sem o módulo, a operação e a escrita.
+
+### Parte 4.3b: as OS e as NFs dos serviços no portal
+
+Feita em 23/10/2026. As regras estão em `artifacts/app/src/lib/portal/servicos.ts`; as telas em
+`pages/client/servicos-view.tsx` e `components/portal/nfs-dos-servicos.tsx`.
+
+- **Minhas OS** (`/portal/servicos`) é uma tela nova do portal (`services`) que depende da Operação no contrato. A barreira por módulo do portal e as regras (`isOwnProjectionWith('operacao')`) já valiam desde a parte 2.7.
+  - Os números: em execução, agendadas, concluídas e, com as faturas no contrato, o que falta pagar.
+  - A lista vem em andamento primeiro e as concluídas da mais recente. Cada OS traz a situação e a NF da demanda dela ("NF 1234 · Vence em 7 dias").
+  - O painel da OS aberta (`?os=`) mostra o andamento em quatro marcos: pedido recebido, agendada, em execução (com a última etapa e a hora) e concluída. Mostra também a data, os locais, o motorista e a placa, quem recebeu e o faturamento.
+  - A revisão é interna: para o cliente, a OS em revisão ou revisada está concluída. Ficam de fora as ocorrências, a revisão, a equipe além do motorista, os itens previstos e as fotos.
+- **Faturas** ganha as NFs dos serviços (`client_faturas`), antes da fatura mensal da armazenagem.
+  - As abertas vêm pelo vencimento, depois as pagas. Cada NF traz as demandas com o título e o valor, o saldo do pagamento parcial e a situação.
+  - A situação usa a mesma régua das telas internas: vence hoje, vencida há N dias, paga em.
+- **Testes.** `portal/servicos.test.ts` cobre a situação, o andamento, o que fica de fora, a ordem e as NFs. `servicos-view.test.tsx` cobre os textos listados, nada interno, sem ação principal e o `axe`, nas duas telas. `operations.test.ts` e `modules.test.ts` cobrem a tela no contrato e no menu.

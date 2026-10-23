@@ -693,6 +693,24 @@ export const APP_MODULES: AppModule[] = [
       }),
     ],
   }),
+  // As OS do cliente (parte 4.3b da Fase 4): só com a Operação no contrato.
+  appModule({
+    id: "client-services",
+    portal: "services",
+    label: "Minhas OS",
+    audience: "client",
+    icon: ClipboardList,
+    roles: CLIENT_ROLES,
+    routes: [
+      navRoute({
+        id: "client-services-list",
+        label: "Minhas OS",
+        href: "/portal/servicos",
+        icon: ClipboardList,
+        roles: CLIENT_ROLES,
+      }),
+    ],
+  }),
   appModule({
     id: "client-invoices",
     portal: "invoices",
