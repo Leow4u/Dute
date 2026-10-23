@@ -47,29 +47,41 @@ Fica em `lib/dominio`, ao lado da lista única de papéis.
 | painel | nenhum; vai para `/tv` quando ela existir |
 | cliente | os contratados |
 
-Um módulo só aparece se tiver tela no app. Hoje são `wms` e `financeiro` (o Faturamento). Para o cliente, `financeiro` nunca vira card: as Faturas são parte do portal.
+Um módulo só aparece se tiver tela no app. Desde as partes 2.5 e 2.6 são
+`wms`, `operacao`, `comercial` e `financeiro` (o Faturamento). Para o
+cliente, `financeiro` nunca vira card: as Faturas são parte do portal.
 
-A casa de cada módulo mantém as aterrissagens de hoje:
+A casa de cada módulo (atualizada na parte 2.8):
 
 | Módulo | Papel | Casa |
 |---|---|---|
 | wms | owner, admin, interno, suporte | `/dashboard` |
 | wms | wms | `/pedidos` |
 | wms | cliente | `/portal` |
+| operacao | owner, admin, interno | `/operacao` (Início da Operação) |
+| comercial | owner, admin, comercial | `/comercial` (Início do Comercial) |
 | financeiro | owner, admin, financeiro | `/faturamento` |
 
-Na homologação, com a liberação ligada:
+Quem cai onde, na homologação e na produção (as liberações do Comercial, da
+Operação e da plataforma estão ligadas nas duas; o `dute-btg` fica de fora):
 
 | Quem | Para onde vai |
 |---|---|
-| owner, admin | tela de entrada com Armazenagem e Financeiro |
-| interno, suporte | `/dashboard` direto |
+| owner, admin | entrada com Armazenagem, Operação, Comercial e Financeiro, com os contadores |
+| interno | entrada com Armazenagem e Operação |
+| suporte | `/dashboard` direto (a Operação do suporte é só leitura da OS, sem tela) |
 | wms | `/pedidos` direto |
+| comercial | `/comercial` direto, o Início do Comercial |
 | financeiro | `/faturamento` direto |
-| cliente BTG, sem o campo | `/portal` direto |
-| cliente com wms e operacao | `/portal` direto, porque a Operação ainda não tem tela |
-| cliente só com operacao | "Nenhum módulo liberado" |
+| campo, rh, painel | "Nenhum módulo liberado" (o app do campo, o RH e a TV têm fase própria) |
+| cliente BTG, sem o campo | `/portal` direto, com armazenagem e faturas |
+| cliente com wms e operacao | `/portal` direto, sem Faturas; a OS no portal entra na Fase 4 |
+| cliente só com operacao | "Nenhum módulo liberado" até a Fase 4 |
+| cliente só com financeiro | "Nenhum módulo liberado": o portal só abre com a armazenagem; muda se esse contrato existir |
 | papel novo | "Nenhum módulo liberado" |
+
+Dentro de cada módulo, o nome no topo da barra é o seletor (parte 2.3), e o
+logo leva aos cards.
 
 ## Parte 1: papéis da plataforma e módulos contratados (um PR)
 
@@ -401,3 +413,19 @@ segunda regra de contagem.
   `pages/client/inicio.test.tsx` (seções) e
   `functions/wms/src/operacao-cadastro.rules.test.ts` (no emulador, o cliente
   lê a própria OS só com a Operação no contrato; falha com a regra antiga).
+
+### Parte 2.8: registro
+
+- "Quem cai onde" e a casa de cada módulo atualizados acima, com a Operação e
+  o Comercial.
+- `CLAUDE.md`: o estado da Fase 2 e a regra das telas novas (lista de textos,
+  `axe` e a contagem única pelo "Precisa de você").
+- Fica em aberto o cliente só com `financeiro`, que hoje cai em "Nenhum
+  módulo liberado" porque o portal só abre com a armazenagem.
+
+**Pronto da Fase 2 na homologação** (plano, seção 4): o owner entra pelos
+cards com os contadores e troca de módulo pelo seletor; o Guilherme cai no
+Início do Comercial e não vê seletor; o interno vê Armazenagem e Operação; um
+cliente só com armazenagem não vê nada de OS; as telas novas passam no `axe`
+e no teste de textos; o WMS não mudou além do seletor. A produção recebe com
+o OK do Leonardo, pela publicação manual.

@@ -208,11 +208,13 @@ const EXEMPLOS: Record<ComercialEventType, Record<string, unknown>> = {
   "medicao.approved": { medicao_id: "safra-2026-10", competencia: "2026-10" },
   "medicao.contested": { medicao_id: "safra-2026_2026-10", competencia: "2026-10", edicao: 6, segundos_desde_anterior: 86_400 },
   "medicao.reopened": { medicao_id: "safra-2026_2026-10", competencia: "2026-10", edicao: 7 },
+  "demand_counter.set": { anterior: 10050, ultimo: 10500, maior_demanda: 10049 },
 };
 
 /** Prefixos dos tipos do Comercial. Nada de billing., support. e afins, que as regras abrem a outros papéis. */
 const PREFIXOS = [
   "demand.",
+  "demand_counter.",
   "quote.",
   "commercial_customer.",
   "customer_contact.",
@@ -523,6 +525,18 @@ describe("evento gravado", () => {
       actor: equipe,
     };
     assert.equal(buildComercialEvent(padrao).customer_code, null);
+    // O contador das demandas é de todas: não tem cliente.
+    const contador = buildComercialEvent({
+      operation_id: "op_demand_counter",
+      type: "demand_counter.set",
+      entity_id: "geral",
+      customer_code: null,
+      payload: { anterior: null, ultimo: 10500, maior_demanda: null },
+      actor: equipe,
+    });
+    assert.equal(contador.customer_code, null);
+    assert.equal(contador.entity_type, "demand_counter");
+    assert.equal(contador.description, "A próxima demanda é a 10501.");
     assert.equal(buildComercialEvent({ ...padrao, payload: { ...padrao.payload, contrato_id: null } }).customer_code, null);
     // Tabela com contrato é de um cliente.
     const doContrato = {

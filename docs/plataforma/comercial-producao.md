@@ -125,10 +125,22 @@ passam a ler preço, contratos e orçamentos (vazios até as cargas).
    4. contratos de novo, com os `tabela_ids`, para os aditivos.
 8. **Contador das demandas**: `demand_counters/geral`, campo `ultimo`. Sem o
    documento a primeira demanda é a 10001. Se o Leonardo quiser outro ponto de
-   partida, gravar `ultimo` com o último número já usado na planilha (a
-   próxima é `ultimo + 1`, nunca menor que 10001), à mão, no console ou com o
-   Admin SDK, e conferir que não é menor que o maior `demands/{numero}`. Não
-   existe ferramenta para isso.
+   partida, a ferramenta `cargas/contador.ts` (parte 6.21 do plano de
+   implantação) grava o último número já usado na planilha; a próxima é
+   `ultimo + 1`. Ela recusa valor abaixo de 10000, abaixo do maior
+   `demands/{numero}` e abaixo do que o contador já guarda, confere tudo de
+   novo na transação da gravação e grava o evento `demand_counter.set`. Mesmo
+   valor não grava nada. Dry-run antes, sempre:
+
+   ```powershell
+   cd C:\DEV\Dute
+   npm --prefix functions/comercial run build
+   node functions/comercial/lib/cargas/contador.js --ultimo 10872 --projeto dute-homolog
+   node functions/comercial/lib/cargas/contador.js --ultimo 10872 --projeto dute-homolog --executar
+   ```
+
+   Como as outras cargas, ela não grava no `dute-prod` enquanto a carga em
+   massa não for liberada lá (`cargas/projeto.ts`).
 9. **Papel `comercial` para o Guilherme**, depois do primeiro login dele. O
    convite só oferece `comercial` com a liberação da plataforma ligada
    (`AMBIENTES_LIBERADOS` de `lib/liberacao.ts`), que também liga a tela de
