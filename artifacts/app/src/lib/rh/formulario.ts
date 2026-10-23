@@ -68,6 +68,10 @@ export function pedidoDoFormulario(formulario: FormularioDoRegistro, colaborador
   };
 }
 
+/** O intervalo das datas: o mesmo de functions/rh (ficha.ts), travado pelo platform-lists.test.ts. */
+export const PRIMEIRO_DIA = "1900-01-01";
+export const ULTIMO_DIA = "2100-12-31";
+
 /** Os tipos de arquivo que a ficha aceita: os mesmos de functions/rh (arquivos.ts). */
 export const TIPOS_DE_ARQUIVO = ["application/pdf", "image/jpeg", "image/png", "image/webp"] as const;
 export const TAMANHO_MAXIMO_DO_ARQUIVO = 10 * 1024 * 1024;
