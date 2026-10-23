@@ -20,7 +20,7 @@ import {
 } from "@/lib/operacao/hoje";
 import { PainelDaEscala, type EscalaAberta } from "@/components/operacao/escala";
 import { Avatar, Filtro, SeloDoTipo, Servicos, selo, seloAlerta, type OpcaoDeFiltro } from "@/components/operacao/partes";
-import { ROTA_NOVA_DEMANDA, hrefDaDemanda, hrefDaFichaDaOs, hrefDoPlano } from "@/lib/operacao/navegacao";
+import { ROTA_NOVA_DEMANDA, hrefDaDemanda, hrefDaFichaDaOs, hrefDoPlano, hrefDoPlanoDaVistoria } from "@/lib/operacao/navegacao";
 import { cn } from "@/lib/utils";
 
 /**
@@ -81,12 +81,16 @@ function CartaoDaDemanda({ cartao }: { cartao: CartaoDeDemanda }) {
       <p className="text-base font-semibold leading-snug text-foreground">{cartao.cliente}</p>
       {demanda.titulo ? <p className="text-sm text-muted-foreground">{demanda.titulo}</p> : null}
       {cartao.prazo ? <Prazo prazo={cartao.prazo} /> : null}
-      <p className="text-sm text-muted-foreground">
-        {[ENTRADA_ROTULO[demanda.entrada], demanda.osNumeros.length ? `${demanda.osNumeros.length} OS` : null, `${cartao.linhasComSaldo} ${cartao.linhasComSaldo === 1 ? "item" : "itens"} com saldo`].filter(Boolean).join(" · ")}
-      </p>
+      {cartao.vistoria ? (
+        <p className="text-sm text-muted-foreground">Vistoria · {formatarData(cartao.vistoria)}</p>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          {[ENTRADA_ROTULO[demanda.entrada], demanda.osNumeros.length ? `${demanda.osNumeros.length} OS` : null, `${cartao.linhasComSaldo} ${cartao.linhasComSaldo === 1 ? "item" : "itens"} com saldo`].filter(Boolean).join(" · ")}
+        </p>
+      )}
       <div>
         <Button asChild size="sm">
-          <Link href={hrefDoPlano(demanda.numero)}>Planejar OS</Link>
+          {cartao.vistoria ? <Link href={hrefDoPlanoDaVistoria(demanda.numero)}>Planejar vistoria</Link> : <Link href={hrefDoPlano(demanda.numero)}>Planejar OS</Link>}
         </Button>
       </div>
     </li>

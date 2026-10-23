@@ -25,6 +25,8 @@ const DIRETA: DemandaDaOperacao = {
   osNumeros: ["10053-01"],
   escopo: [{ id: "ln_1", item: "Cadeira Flexform", quantidade: "40", unidade: "UN" }],
   fora: null,
+  visitaTecnica: null,
+  escopoRv: null,
   recebidaEm: "2026-10-23T16:05:00.000Z",
   canal: "whatsapp",
   pedidoPor: { nome: "Renata Campos", telefone: "11987654321" },
@@ -204,5 +206,16 @@ describe("Demanda", () => {
 
   it("não tem problema de acessibilidade", async () => {
     expect(await violacoesDeAcessibilidade(ficha())).toEqual([]);
+  });
+});
+
+describe("a vistoria na ficha da demanda (parte 3.11c)", () => {
+  it("antes do escopo fechado, a ficha oferece planejar a vistoria, com o dia da visita técnica", () => {
+    const comDia = ficha({ ordens: [], linhasComSaldo: 0, etapa: "no_comercial", vistoria: "2026-10-28" });
+    expect(textosDaTela(comDia)).toEqual(expect.arrayContaining(["Vistoria · 28/10/2026", "Planejar vistoria"]));
+    expect(textosDaTela(comDia)).not.toContain("Nenhuma OS");
+    expect(comDia).toContain('href="/operacao/planejar?demanda=10053&amp;vistoria=1"');
+    expect(textosDaTela(ficha({ ordens: [], linhasComSaldo: 0, etapa: "no_comercial", vistoria: "" }))).toContain("Vistoria");
+    expect(textosDaTela(ficha())).not.toContain("Planejar vistoria");
   });
 });

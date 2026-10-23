@@ -1,4 +1,5 @@
 import type { OsDaFila } from "./fila";
+import { vistoriaPedida } from "./vistoria";
 
 /**
  * O Hoje da Operação (docs/plataforma/fase-3-operacao.md, parte 3.5a;
@@ -40,6 +41,10 @@ export type DemandaDoHoje = {
   escopo: LinhaDoEscopo[];
   /** Perdida ou cancelada no Comercial: as OS dela só se cancelam. */
   fora: "perdida" | "cancelada" | null;
+  /** O dia da visita técnica que o Comercial pediu (`execucao.visita_tecnica`), ou null (parte 3.11c). */
+  visitaTecnica: string | null;
+  /** A RV do escopo fechado pelo cliente, ou null antes do fechamento. */
+  escopoRv: number | null;
 };
 
 function texto(valor: unknown): string {
@@ -82,7 +87,15 @@ export function demandaDoHoje(id: string, data: Record<string, unknown>): Demand
     osNumeros: Array.isArray(data.os_numeros) ? data.os_numeros.filter((numero): numero is string => typeof numero === "string" && Boolean(numero)) : [],
     escopo: fechado.length ? fechado : linhasDoEscopo(data.itens_pedidos, "id"),
     fora: preenchido(data.cancelamento) ? "cancelada" : preenchido(data.perda) ? "perdida" : null,
+    visitaTecnica: visitaTecnicaDa(data.execucao),
+    escopoRv: typeof data.escopo_rv === "number" && Number.isInteger(data.escopo_rv) ? data.escopo_rv : null,
   };
+}
+
+function visitaTecnicaDa(execucao: unknown): string | null {
+  if (!execucao || typeof execucao !== "object") return null;
+  const dia = texto((execucao as Record<string, unknown>).visita_tecnica);
+  return /^\d{4}-\d{2}-\d{2}$/.test(dia) ? dia : null;
 }
 
 /** "12.5" → 12500 (milésimos), como a callable conta o saldo. */
@@ -154,7 +167,14 @@ export type FiltrosDoHoje = {
 
 export const SEM_FILTRO: FiltrosDoHoje = { tipo: "", entrada: "", cliente: "", pessoa: "" };
 
-export type CartaoDeDemanda = { demanda: DemandaDoHoje; cliente: string; linhasComSaldo: number; prazo: PrazoDoHoje | null };
+export type CartaoDeDemanda = {
+  demanda: DemandaDoHoje;
+  cliente: string;
+  linhasComSaldo: number;
+  prazo: PrazoDoHoje | null;
+  /** A vistoria que espera a Operação (parte 3.11c): o dia da visita técnica pedida; null na demanda a planejar. */
+  vistoria: string | null;
+};
 
 export type CartaoDeOs = {
   os: OsDaFila;
@@ -253,15 +273,28 @@ export function quadroDoHoje(entrada: EntradaDoQuadro): QuadroDoHoje {
 
   const paraPlanejar = entrada.demandas
     .filter((demanda) => demanda.etapa === "para_planejar" && !demanda.fora)
-    .map((demanda) => ({
+    .map((demanda): CartaoDeDemanda => ({
       demanda,
       cliente: nomeDoCliente(demanda.customerCode, entrada.nomesClientes),
       linhasComSaldo: demanda.escopo.length ? linhasComSaldo(demanda, entrada.ordens) : demanda.osNumeros.length ? 0 : 1,
       prazo: demanda.entrada === "direta" ? prazoDaDemanda(demanda.executarAte, entrada.agora) : null,
+      vistoria: null,
     }))
+    .concat(
+      // A visita técnica que o Comercial pediu e ainda não virou vistoria (parte 3.11c).
+      entrada.demandas
+        .filter((demanda) => vistoriaPedida(demanda, entrada.ordens))
+        .map((demanda): CartaoDeDemanda => ({
+          demanda,
+          cliente: nomeDoCliente(demanda.customerCode, entrada.nomesClientes),
+          linhasComSaldo: 0,
+          prazo: null,
+          vistoria: demanda.visitaTecnica,
+        })),
+    )
     .filter(
       (cartao) =>
-        cartao.linhasComSaldo > 0 &&
+        (cartao.linhasComSaldo > 0 || cartao.vistoria !== null) &&
         !pessoa &&
         passaDemanda(cartao.demanda, cartao.demanda.customerCode) &&
         busca(cartao.demanda.numero, cartao.cliente, cartao.demanda.titulo),

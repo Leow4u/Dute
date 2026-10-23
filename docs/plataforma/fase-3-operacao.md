@@ -178,8 +178,9 @@ registros guardados" é dado, não legenda.
 | 3.10d | Orçar a execução da direta aberta pela Operação: o orçamento nasce com o que ela executou e cobra | O orçamento da direta nasce com o executado a cobrar, pela tabela |
 | 3.11a | Vistoria no backend: a OS de vistoria (`tipo`, sem itens) aberta pela coordenação antes do escopo fechado, só ir, chegar e terminar, e `sendSurveyToCommercial` (ambientes com fotos e itens do catálogo, medidas, acesso e observações; o resumo `vistoria` na demanda; as fotos para o Comercial) | Vistoria não passa pela revisão nem pede aceite; o resumo só pela Operação |
 | 3.11b | Vistoria no celular (`Campo2Vistoria`): ambientes, fotos, itens do catálogo, medidas, acesso e o envio pela fila sem sinal | Textos listados; `axe`; o formulário manda o formato de `sendSurveyToCommercial` |
-| 3.11c | Vistoria no escritório: abrir e agendar a vistoria da demanda com visita técnica, a vistoria na ficha da OS e na demanda | Textos listados; `axe`; o formulário manda o formato de `saveServiceOrder` survey |
-| 3.11d | No Comercial: "Vistoria concluída" no Início e na montagem, com os itens levantados carregados no orçamento | O orçamento nasce com os itens da vistoria, sem redigitar |
+| 3.11c | Planejar a vistoria pelo escritório: a visita técnica pedida em Para planejar no Hoje, "Planejar vistoria" na ficha da demanda e a tela de Planejar numa OS só, sem itens | Textos listados; `axe`; o formulário manda o formato de `saveServiceOrder` survey |
+| 3.11d | A vistoria na ficha da OS e no Registrar andamento: "Enviada ao Comercial", os passos dela, a vistoria enviada, sem itens, conclusão nem reabertura | Textos listados; `axe`; só as etapas da vistoria no andamento |
+| 3.11e | No Comercial: "Vistoria concluída" no Início e na montagem, com os itens levantados carregados no orçamento | O orçamento nasce com os itens da vistoria, sem redigitar |
 | 3.12 | TV da sala (`/tv`, papel `painel`) | `painel` só lê o que a TV mostra; sem valor; sem ação |
 | 3.13 | Alertas no Início e rotina diária (CNH, revisão do veículo, OS sem equipe ou veículo perto do prazo) | O evento sai uma vez por dia por item |
 | 3.14 | Produção e registro | Conferência de produção |
@@ -1087,3 +1088,24 @@ em `lib/campo/vistoria.ts`.
 - **Enviada.** A OS mostra a vistoria como foi ao Comercial
   (`components/operacao/vistoria-lida.tsx`, que o escritório também usa).
 - A tela de conclusão recusa a OS de vistoria.
+
+### Parte 3.11c: planejar a vistoria pelo escritório
+
+Feita em 23/10/2026. Regras em `lib/operacao/vistoria.ts`, as mesmas do
+servidor (o teste confere as mensagens).
+
+- **No Hoje.** A visita técnica que o Comercial pediu (`execucao.visita_tecnica`)
+  entra em Para planejar enquanto a demanda recebe vistoria e nenhuma foi
+  aberta (a cancelada não conta). O cartão diz "Vistoria" e o dia e leva a
+  "Planejar vistoria".
+- **Na ficha da demanda.** Antes do escopo fechado, as OS da demanda
+  oferecem "Planejar vistoria", com o dia da visita técnica quando há.
+- **Planejar vistoria.** A tela de Planejar OS com `&vistoria=1`: uma OS só,
+  sem itens, no dia da visita técnica (ou hoje), com a equipe, os veículos,
+  o contato no local de origem e as instruções. Agendar ou salvar o rascunho
+  (Para agendar) chama `saveServiceOrder` (survey). Os alertas falam da
+  vistoria (sem equipe, sem líder, sem veículo, alguém já escalado no dia).
+  Quando a demanda não recebe vistoria, a tela diz por quê.
+- **Ainda não.** Enviar a vistoria pelo escritório (a equipe sem ninguém com
+  o app): por ora a vistoria vai pelo celular do líder, ou de qualquer um da
+  equipe sem líder.

@@ -25,7 +25,7 @@ import {
   milesimos,
   type PrazoDoHoje,
 } from "@/lib/operacao/hoje";
-import { ROTA_DEMANDAS, hrefDaFichaDaOs, hrefDoPlano } from "@/lib/operacao/navegacao";
+import { ROTA_DEMANDAS, hrefDaFichaDaOs, hrefDoPlano, hrefDoPlanoDaVistoria } from "@/lib/operacao/navegacao";
 import { cn } from "@/lib/utils";
 
 import { Etapa } from "./demandas-view";
@@ -221,11 +221,14 @@ function OrdensDaDemanda({
   ordens,
   linhasComSaldo,
   podeAbrir,
+  vistoria,
 }: {
   numeroDaDemanda: string;
   ordens: readonly OsDaFila[];
   linhasComSaldo: number;
   podeAbrir: boolean;
+  /** A vistoria que se pode abrir (parte 3.11c): o dia da visita técnica pedida, ou "" sem dia; null quando não se abre. */
+  vistoria: string | null;
 }) {
   return (
     <Cartao titulo={`OS desta demanda · ${ordens.length}`}>
@@ -281,7 +284,18 @@ function OrdensDaDemanda({
             </Button>
           </li>
         ) : null}
-        {ordens.length === 0 && !(podeAbrir && linhasComSaldo > 0) ? (
+        {vistoria !== null ? (
+          <li className="flex flex-col gap-3 rounded-lg border border-dashed border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <span className="text-sm font-semibold text-foreground">{vistoria ? `Vistoria · ${formatarData(vistoria)}` : "Vistoria"}</span>
+            <Button asChild size="sm">
+              <Link href={hrefDoPlanoDaVistoria(numeroDaDemanda)}>
+                <Plus aria-hidden="true" className="size-4" />
+                Planejar vistoria
+              </Link>
+            </Button>
+          </li>
+        ) : null}
+        {ordens.length === 0 && !(podeAbrir && linhasComSaldo > 0) && vistoria === null ? (
           <li className="text-sm text-muted-foreground">Nenhuma OS</li>
         ) : null}
       </ul>
@@ -395,6 +409,7 @@ export function DemandaView({
   locais,
   prazo,
   erro,
+  vistoria = null,
 }: {
   estado: EstadoDaDemanda;
   numero: string | null;
@@ -407,6 +422,8 @@ export function DemandaView({
   locais: readonly LocalDaFicha[];
   prazo: PrazoDoHoje | null;
   erro: string | null;
+  /** A vistoria que se pode abrir: o dia da visita técnica, "" sem dia, ou null (parte 3.11c). */
+  vistoria?: string | null;
 }) {
   const voltar = (
     <Link
@@ -480,6 +497,7 @@ export function DemandaView({
             ordens={ordens}
             linhasComSaldo={linhasComSaldo}
             podeAbrir={podeAbrir}
+            vistoria={vistoria}
           />
         </div>
         <div className="flex flex-col gap-6">
