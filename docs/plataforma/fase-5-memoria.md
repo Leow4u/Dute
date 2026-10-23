@@ -1133,3 +1133,48 @@ no formato dele, mais o módulo.
   - `callables.test.ts`: as callables e a rotina agendada pela liberação do
     agente.
   - `agent-routines.test.ts` do WMS: a guarda por projeto.
+
+### Parte 5.5h: a nota anexada pelo cliente
+
+Feita em 23/10/2026. A conta está em `functions/core/src/domain/agente-nota.ts`,
+e a leitura pelo Gemini em `agente-modelo.ts`.
+
+- **Quem anexa.**
+  - Só o cliente, na conversa da Armazenagem. O cartão de aviso de envio é
+    dessa conversa.
+  - No máximo 3 arquivos, já na pasta do cliente no Storage
+    (`operational-documents/<cliente>/`). O caminho de outro cliente recusa
+    antes de qualquer leitura.
+  - A equipe não anexa.
+- **A leitura.**
+  - A primeira nota legível (PDF ou foto, até 14 MB) é baixada do Storage e
+    lida pelo Gemini, com o pedido e o esquema do WMS e os mesmos modelos.
+  - Os itens são casados com o estoque do cliente, pelo leitor: primeiro
+    pelo código, depois pelo nome, sem empate.
+  - O texto da leitura vai ao modelo com a mensagem. A pessoa não vê.
+  - A pergunta guarda o anexo e a leitura (`attachments` e `context`, como
+    no WMS), e as próximas mensagens da conversa levam a leitura no
+    histórico.
+  - Qualquer falha (sem modelo, arquivo grande, Storage) vira o texto de
+    "não consegui ler a nota": o agente pede os dados à pessoa, e a
+    conversa segue.
+  - A leitura tem o uso dela (`leitura_nota_chat`), gravado pelo fluxo com
+    a resposta.
+- **O cartão.** O aviso de envio leva a nota da mensagem, ou a da última
+  mensagem que trouxe anexo (`anexos`, no formato do WMS). A pessoa confere
+  e envia pela `createCustomerRequest` do WMS.
+- **As cópias do WMS.** `invoice-reading.ts` e `agent-attachments.ts` são os
+  arquivos do WMS, letra por letra. O esquema da extração e o tamanho máximo
+  também são os do WMS. `agente-nota.test.ts` trava as quatro cópias.
+- **O app** ainda anexa pelo agente do WMS. Passa ao núcleo na parte 5.5i.
+- **Testes.**
+  - `agente-nota.test.ts`:
+    - as cópias travadas;
+    - quem anexa;
+    - a leitura casada com o estoque do próprio cliente;
+    - o uso;
+    - as falhas que viram "não consegui ler".
+  - `agente-conversa.integration.test.ts`, no emulador:
+    - a leitura na mensagem ao modelo e na pergunta;
+    - o aviso com a nota, também na mensagem seguinte;
+    - as recusas, sem gravar nada.

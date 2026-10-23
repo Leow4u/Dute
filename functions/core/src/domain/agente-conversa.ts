@@ -4,11 +4,13 @@ import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 import { z } from "zod";
 
+import { AgentAttachmentSchema, attachmentsForDraft, type AgentAttachment } from "./agent-attachments.js";
 import { FERRAMENTAS_DO_AGENTE } from "./agente-catalogo.js";
 import { cartaoDasRespostas, emOrdem, notasDoPrompt, playbooksDoPrompt, playbooksUsados } from "./agente-comuns.js";
 import { escopoDoAgente, type EscopoDoAgente } from "./agente-escopo.js";
 import { executarFerramenta, ferramentasDoEscopo, texto, type FerramentaDoAgente } from "./agente-ferramentas.js";
 import { leitorDoAgente } from "./agente-leitor.js";
+import { anexosDaMensagem, lerNotaAnexada, type LerNota } from "./agente-nota.js";
 import { promptDoAgente } from "./agente-prompt.js";
 import type { CoreProfile } from "./profile.js";
 
@@ -17,7 +19,8 @@ import type { CoreProfile } from "./profile.js";
  * parte 5.5e). O escopo vem do servidor; as ferramentas só leem, pelo leitor
  * do escopo; o modelo só escolhe o que perguntar. Quem grava é este fluxo, e
  * só o registro da própria conversa: a conversa, as duas mensagens, o uso (com
- * os playbooks abertos) e o resumo da conversa longa.
+ * os playbooks abertos e, com a nota anexada, o da leitura dela) e o resumo da
+ * conversa longa.
  *
  * As coleções e os formatos são os do agente do WMS, para o histórico seguir
  * e o cartão de pedido e de envio sair pela createCustomerRequest do WMS.
@@ -81,7 +84,8 @@ const PedidoDeConversa = z.object({
     .trim()
     .regex(/^[A-Za-z0-9_-]{1,160}$/, "Conversa inválida.")
     .nullish(),
-  attachments: z.array(z.unknown()).max(0, "O anexo ainda não é lido pelo Agent Dute do núcleo.").nullish(),
+  // A nota anexada pelo cliente (parte 5.5h), já no Storage dele.
+  attachments: z.array(AgentAttachmentSchema).max(3, "Anexe até 3 arquivos.").nullish(),
 });
 
 export function interpretarConversa(data: unknown) {
@@ -107,6 +111,8 @@ export type OpcoesDaConversa = {
   novoId?: (prefixo: string) => string;
   /** A rotina agendada (parte 5.5g): sem histórico, com o dia na pergunta e a origem "rotina". */
   rotina?: { id: string; nome: string };
+  /** A leitura da nota anexada (parte 5.5h): sem ela, o agente pede os dados da nota à pessoa. */
+  lerNota?: LerNota;
 };
 
 /** A fonte da resposta de reserva, quando nenhum modelo respondeu. */
@@ -124,6 +130,20 @@ function novoIdPadrao(prefixo: string): string {
 }
 
 /** A conversa da pessoa: a mesma pessoa, o mesmo cliente e o mesmo módulo. A de antes do núcleo não tem módulo: vale a Armazenagem. */
+function comContexto(mensagem: string, contexto: string): string {
+  return contexto ? `${mensagem}\n\n${contexto}` : mensagem;
+}
+
+/** O aviso de envio leva a nota anexada, nesta mensagem ou na última que trouxe anexo. */
+function comAnexos(cartao: Record<string, unknown> | undefined, atuais: AgentAttachment[], historico: ReadonlyArray<Record<string, unknown>>) {
+  if (cartao?.tipo !== "envio") return cartao;
+  const antes = [...historico]
+    .sort((a, b) => texto(a.created_at_iso).localeCompare(texto(b.created_at_iso)))
+    .map((mensagem) => ({ role: texto(mensagem.role), attachments: Array.isArray(mensagem.attachments) ? (mensagem.attachments as AgentAttachment[]) : undefined }));
+  const anexos = attachmentsForDraft(atuais, antes);
+  return anexos.length ? { ...cartao, anexos } : cartao;
+}
+
 function conferirDono(dados: Record<string, unknown>, escopo: EscopoDoAgente): void {
   if (dados.user_id !== escopo.uid || dados.customer_code !== escopo.customerCode) throw new HttpsError("permission-denied", "Esta conversa pertence a outro usuário.");
   if ((texto(dados.modulo) || "wms") !== escopo.modulo) throw new HttpsError("failed-precondition", "Esta conversa é de outro módulo.");
@@ -141,9 +161,10 @@ export async function conversarComDute(db: Firestore, caller: CoreProfile, data:
   const conversa = await conversaRef.get();
   if (conversa.exists) conferirDono(conversa.data() ?? {}, escopo);
 
+  const anexos = anexosDaMensagem(escopo, pedido.attachments ?? []);
   const leitor = leitorDoAgente(db, escopo);
   const rotina = opcoes.rotina;
-  const [mensagens, notas, playbooks] = await Promise.all([
+  const [mensagens, notas, playbooks, nota] = await Promise.all([
     // A rotina responde sempre do zero: o histórico dela são as respostas de antes.
     rotina
       ? Promise.resolve([])
@@ -157,6 +178,7 @@ export async function conversarComDute(db: Firestore, caller: CoreProfile, data:
         }),
     notasDoPrompt(leitor).catch(() => [] as string[]),
     playbooksDoPrompt(leitor).catch(() => []),
+    lerNotaAnexada(leitor, escopo, anexos, opcoes.lerNota),
   ]);
   const resumo = conversa.exists ? texto(conversa.get("summary")).slice(0, TAMANHO_DO_RESUMO) : "";
 
@@ -178,8 +200,9 @@ export async function conversarComDute(db: Firestore, caller: CoreProfile, data:
     sistema: promptDoAgente({ escopo, agora: contexto.agora, notas, playbooks, resumo }),
     historico: emOrdem(mensagens)
       .filter((mensagem) => mensagem.conteudo.trim())
-      .map((mensagem) => ({ papel: mensagem.papel === "assistant" ? ("model" as const) : ("user" as const), texto: mensagem.conteudo.slice(0, TAMANHO_DA_MENSAGEM_NO_MODELO) })),
-    mensagem: rotina ? perguntaDaRotina(rotina, pedido.message, contexto.agora) : pedido.message,
+      // A leitura da nota anexada antes segue com a pergunta dela, como no WMS.
+      .map((mensagem) => ({ papel: mensagem.papel === "assistant" ? ("model" as const) : ("user" as const), texto: (mensagem.contexto ? `${mensagem.conteudo}\n\n${mensagem.contexto}` : mensagem.conteudo).slice(0, TAMANHO_DA_MENSAGEM_NO_MODELO) })),
+    mensagem: comContexto(rotina ? perguntaDaRotina(rotina, pedido.message, contexto.agora) : pedido.message, nota.contexto),
     ferramentas,
     aoPedaco: opcoes.aoPedaco,
   });
@@ -190,7 +213,7 @@ export async function conversarComDute(db: Firestore, caller: CoreProfile, data:
   // A resposta grava depois da pergunta, para a ordem do histórico nunca empatar.
   const respostaEm = new Date(Math.max(agora().getTime(), Date.parse(perguntaEm) + 1)).toISOString();
   const ferramentasUsadas = chamadas.map((chamada) => chamada.nome);
-  const cartao = cartaoDasRespostas(chamadas);
+  const cartao = comAnexos(cartaoDasRespostas(chamadas), anexos, mensagens);
   const usados = playbooksUsados(chamadas);
   const perguntaId = novoId("msg_user");
   const respostaId = novoId("msg_agent");
@@ -224,6 +247,9 @@ export async function conversarComDute(db: Firestore, caller: CoreProfile, data:
     modulo: escopo.modulo,
     role: "user",
     content: pedido.message,
+    ...(anexos.length ? { attachments: anexos } : {}),
+    // A leitura da nota: só o modelo lê, nas próximas mensagens da conversa.
+    ...(nota.contexto ? { context: nota.contexto } : {}),
     created_at_iso: perguntaEm,
     created_at: FieldValue.serverTimestamp(),
     source: origem,
@@ -269,6 +295,23 @@ export async function conversarComDute(db: Firestore, caller: CoreProfile, data:
       created_at: FieldValue.serverTimestamp(),
     }),
   );
+  // A leitura da nota tem o uso dela, como a do WMS ("leitura_nota_chat").
+  if (nota.uso) {
+    lote.set(
+      db.collection(USAGE_COLLECTION).doc(`${respostaId}_nota`),
+      compacto({
+        id: `${respostaId}_nota`,
+        conversation_id: conversaId,
+        customer_code: escopo.customerCode,
+        user_id: escopo.uid,
+        role: escopo.role,
+        modulo: escopo.modulo,
+        ...nota.uso,
+        created_at_iso: perguntaEm,
+        created_at: FieldValue.serverTimestamp(),
+      }),
+    );
+  }
   await lote.commit();
 
   // Conversa longa: o que sai da janela vira resumo. A falha aqui nunca derruba a resposta, que já foi gravada.
@@ -279,7 +322,7 @@ export async function conversarComDute(db: Firestore, caller: CoreProfile, data:
   return {
     conversation: { id: conversaId, customer_code: escopo.customerCode, modulo: escopo.modulo, status: "active", last_message_at: respostaEm },
     messages: [
-      { id: perguntaId, role: "user", content: pedido.message, created_at: perguntaEm, source: origem },
+      compacto({ id: perguntaId, role: "user", content: pedido.message, attachments: anexos.length ? anexos : undefined, created_at: perguntaEm, source: origem }),
       compacto({ id: respostaId, role: "assistant", content: resposta.texto, created_at: respostaEm, source: resposta.fonte, tools_used: ferramentasUsadas, draft: cartao }),
     ],
   };

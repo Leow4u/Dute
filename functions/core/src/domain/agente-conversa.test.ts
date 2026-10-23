@@ -29,14 +29,17 @@ function escopo(role: PlatformRole, modulo: EscopoDoAgente["modulo"] = "wms"): E
 }
 
 describe("o pedido da conversa", () => {
-  it("a mensagem, a conversa sem caminho e, por ora, sem anexo", () => {
+  it("a mensagem, a conversa sem caminho e até 3 anexos no formato do WMS", () => {
     assert.deepEqual(interpretarConversa({ message: " Oi ", conversation_id: "conv_1", modulo: "wms" }), { message: "Oi", conversation_id: "conv_1" });
     const recusa = (padrao: RegExp) => (erro: unknown) => erro instanceof HttpsError && erro.code === "invalid-argument" && padrao.test(erro.message);
     assert.throws(() => interpretarConversa({ message: "" }), recusa(/Escreva a mensagem/));
     assert.throws(() => interpretarConversa({ message: "x".repeat(4001) }), recusa(/longa demais/));
     assert.throws(() => interpretarConversa({ message: "oi", conversation_id: "a/b" }), recusa(/Conversa inválida/));
-    assert.throws(() => interpretarConversa({ message: "oi", attachments: [{ storage_path: "x" }] }), recusa(/anexo ainda não é lido/));
-    assert.deepEqual(interpretarConversa({ message: "oi", attachments: [] }), { message: "oi", attachments: [] });
+    const nota = { file_name: "nf.pdf", file_url: "https://storage.test/nf.pdf", storage_path: "operational-documents/ITAU/nf.pdf", content_type: "application/pdf", size_bytes: 1200 };
+    assert.throws(() => interpretarConversa({ message: "oi", attachments: [{ storage_path: "x" }] }), recusa(/./));
+    assert.throws(() => interpretarConversa({ message: "oi", attachments: [nota, nota, nota, nota] }), recusa(/até 3 arquivos/));
+    assert.throws(() => interpretarConversa({ message: "oi", attachments: [{ ...nota, size_bytes: 31 * 1024 * 1024 }] }), recusa(/./));
+    assert.deepEqual(interpretarConversa({ message: "oi", attachments: [nota] }), { message: "oi", attachments: [nota] });
   });
 });
 
