@@ -15,6 +15,10 @@ import { FINANCEIRO_EVENT_PAYLOADS, FINANCEIRO_EVENT_SOURCE, FINANCEIRO_EVENT_TY
 
 const EXEMPLOS: Record<FinanceiroEventType, Record<string, unknown>> = {
   "nf.registered": { id: "fat_0123456789abcdef01234567", demandas: ["10045"], autorizacoes: 1, emitida_em: "2026-10-23", vencimento: "2026-11-20", forma: "boleto" },
+  "nf.sent": { id: "fat_0123456789abcdef01234567", enviada_em: "2026-10-23", meio: "email" },
+  "nf.cancelled": { id: "fat_0123456789abcdef01234567", demandas: ["10045"] },
+  "cobranca.payment_registered": { id: "fat_0123456789abcdef01234567", pagamento_id: "pag_0123456789abcdef01234567", recebido_em: "2026-10-23", forma: "pix", quitada: false },
+  "cobranca.payment_reversed": { id: "fat_0123456789abcdef01234567", pagamento_id: "pag_0123456789abcdef01234567", reaberta: true },
 };
 
 function wmsNoticeWords(): string[] {
@@ -31,7 +35,7 @@ describe("eventos do Financeiro", () => {
       const schema = FINANCEIRO_EVENT_PAYLOADS[type] as z.ZodTypeAny;
       assert.ok(schema instanceof z.ZodObject, type);
       assert.equal(FINANCEIRO_EVENT_PAYLOADS[type].safeParse(EXEMPLOS[type]).success, true, type);
-      for (const extra of [{ valor_cents: 100 }, { nf: "1234" }, { numero: "1234" }, { customer_name: "Itaú" }]) {
+      for (const extra of [{ valor_cents: 100 }, { nf: "1234" }, { numero: "1234" }, { customer_name: "Itaú" }, { motivo: "Valor de R$ 100,00 errado" }, { saldo_cents: 1 }]) {
         assert.equal(FINANCEIRO_EVENT_PAYLOADS[type].safeParse({ ...EXEMPLOS[type], ...extra }).success, false, `${type} ${Object.keys(extra)[0]}`);
       }
     }

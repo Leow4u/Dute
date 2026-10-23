@@ -389,9 +389,9 @@ service cloud.firestore {
     }
 
     // O financeiro lê os eventos do faturamento do WMS (billing.*) e os do
-    // Financeiro novo (nf.*, Fase 4); nenhum leva valor.
+    // Financeiro novo (nf.* e cobranca.*, Fase 4); nenhum leva valor.
     function isBillingEventType(eventType) {
-      return eventType.matches('^(billing|nf)[.].*');
+      return eventType.matches('^(billing|nf|cobranca)[.].*');
     }
 
     function isSupportEventType(eventType) {
@@ -752,6 +752,13 @@ service cloud.firestore {
     // o suporte não. Só a callable registerNf grava. financeiro_operations
     // fica sem match: ninguém lê o recibo.
     match /faturas/{faturaId} {
+      allow read: if canReadPrices();
+      allow create, update, delete: if false;
+    }
+
+    // Os pagamentos da fatura (parte 4.2a), com o valor: o mesmo acesso de
+    // faturas. Só a callable advanceFatura grava.
+    match /pagamentos/{pagamentoId} {
       allow read: if canReadPrices();
       allow create, update, delete: if false;
     }

@@ -50,6 +50,7 @@ OPERACAO = (
 )
 FINANCEIRO = (
     "faturas",
+    "pagamentos",
     "financeiro_operations",
 )
 

@@ -10,7 +10,8 @@ import { functionsDoApp } from "../firebase-functions";
  * a etapa, o cliente, a autorização e o valor de cada demanda.
  */
 
-export const CALLABLES_DO_FINANCEIRO = ["registerNf"] as const;
+/** registerNf (parte 4.1a) e advanceFatura (parte 4.2a: enviar, pagar, estornar e cancelar). */
+export const CALLABLES_DO_FINANCEIRO = ["registerNf", "advanceFatura"] as const;
 export type CallableDoFinanceiro = (typeof CALLABLES_DO_FINANCEIRO)[number];
 
 /** Chave nova por intenção de gravar (um painel aberto). */

@@ -40,7 +40,8 @@ export function falha(message: string): never {
 
 // --- Entrada ------------------------------------------------------------------------------
 
-const data = (rotulo: string) =>
+/** Data AAAA-MM-DD que existe no calendário. */
+export const data = (rotulo: string) =>
   z
     .string()
     .trim()
@@ -129,7 +130,7 @@ export function demandaLida(numero: string, dados: Registro): DemandaParaFaturar
     autorizacao: texto(validacao.autorizacao) || null,
     medicao_id: texto(validacao.medicao_id) || texto(dados.medicao_id) || null,
     autorizacao_ids: [...new Set([...ids, ...antigo].filter((id): id is string => typeof id === "string" && id.length > 0))],
-    faturada: Boolean(dados.faturamento) || texto(dados.etapa) === "faturada",
+    faturada: Boolean(dados.faturamento) || texto(dados.etapa) === "faturada" || texto(dados.etapa) === "paga",
   };
 }
 

@@ -3,6 +3,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { onCall } from "firebase-functions/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 
+import { advanceFaturaFor } from "./domain/cobranca-gravacao.js";
 import { registerNfFor } from "./domain/fatura-gravacao.js";
 import { requireFinanceiroCaller } from "./domain/profile.js";
 import { PROJECT_ID } from "./project.js";
@@ -30,4 +31,10 @@ const db = getFirestore();
 export const registerNf = onCall(async (request) => {
   const caller = await requireFinanceiroCaller(db, request, PROJECT_ID);
   return registerNfFor(db, caller, request.data);
+});
+
+/** A cobrança da NF registrada: enviar ao cliente, registrar e estornar pagamento, cancelar o registro sem pagamento. */
+export const advanceFatura = onCall(async (request) => {
+  const caller = await requireFinanceiroCaller(db, request, PROJECT_ID);
+  return advanceFaturaFor(db, caller, request.data);
 });

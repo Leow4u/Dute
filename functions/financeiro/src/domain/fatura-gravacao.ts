@@ -30,6 +30,8 @@ import type { FinanceiroProfile } from "./profile.js";
  * valor no servidor, grava `faturas/{id}`, leva as demandas a Faturada com o
  * marco e o resumo `faturamento`, marca as autorizações citadas (`nf_ids`,
  * reservado desde a parte 15 do Comercial) e grava o evento `nf.registered`.
+ * A NF cujo registro foi cancelado (parte 4.2a) se registra de novo por cima,
+ * guardando o registro anterior em `anteriores`.
  */
 
 const DIA_EM_SAO_PAULO = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" });
@@ -58,7 +60,10 @@ export async function registerNfFor(
     { kind: "nf_register", scope: { fatura: id }, idempotency_key: pedido.idempotency_key, input: pedido, actor: ator },
     async (transaction, { operationId }) => {
       const faturaRef = db.collection(FATURAS_COLLECTION).doc(id);
-      if ((await transaction.get(faturaRef)).exists) falha(`A NF ${pedido.nf.numero} da série ${serie} já está registrada.`);
+      // A NF cujo registro foi cancelado (parte 4.2a) pode ser registrada de novo; o registro anterior fica em `anteriores`.
+      const existente = await transaction.get(faturaRef);
+      const anterior = existente.exists ? (existente.data() ?? {}) : null;
+      if (anterior && anterior.status !== "cancelada") falha(`A NF ${pedido.nf.numero} da série ${serie} já está registrada.`);
 
       const demandaRefs = pedido.demandas.map((numero) => db.collection(DEMANDS_COLLECTION).doc(numero));
       const demandaSnaps = await transaction.getAll(...demandaRefs);
@@ -119,7 +124,13 @@ export async function registerNfFor(
         registrada_em: iso,
         operation_id: operationId,
       });
-      transaction.create(faturaRef, { ...documento, created_at: FieldValue.serverTimestamp() });
+      if (anterior) {
+        const resumo = { registrada_em: anterior.registrada_em ?? null, cancelada: anterior.cancelada ?? null, demanda_numeros: anterior.demanda_numeros ?? [], operation_id: anterior.operation_id ?? null };
+        const anteriores = Array.isArray(anterior.anteriores) ? anterior.anteriores : [];
+        transaction.set(faturaRef, { ...documento, anteriores: [...anteriores, resumo], created_at: anterior.created_at ?? FieldValue.serverTimestamp(), updated_at: FieldValue.serverTimestamp() });
+      } else {
+        transaction.create(faturaRef, { ...documento, created_at: FieldValue.serverTimestamp() });
+      }
 
       const faturamento = { fatura_id: id, nf: { numero: pedido.nf.numero, serie, emitida_em: pedido.nf.emitida_em }, vencimento: pedido.vencimento, registrada_em: iso };
       for (const ref of demandaRefs) {
