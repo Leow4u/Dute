@@ -289,6 +289,18 @@ describe("menu do portal por modelo de operação", () => {
     expect(labels("insumos")).toEqual(["Início"]);
   });
 
+  it("os módulos contratados tiram do menu as telas de fora do contrato (parte 2.7)", () => {
+    const comModulos = (modules: string[]) =>
+      getNavigationForProfileRole(
+        "cliente",
+        resolveOperationProfile({ customer_code: "Cliente X", operation_template: "uniformes", modules }),
+      ).map((module) => module.label);
+    expect(comModulos(["operacao"])).toEqual(["Início"]);
+    expect(comModulos(["wms", "operacao"])).not.toContain("Faturas");
+    expect(comModulos(["financeiro"])).toEqual(["Início", "Faturas"]);
+    expect(comModulos(["wms", "financeiro"])).toEqual(labels("uniformes"));
+  });
+
   it("sem perfil carregado nada é escondido; o perfil não mexe no menu interno", () => {
     expect(getNavigationForProfileRole("cliente", null).length).toBe(8);
     expect(getNavigationForProfileRole("cliente", undefined).length).toBe(8);

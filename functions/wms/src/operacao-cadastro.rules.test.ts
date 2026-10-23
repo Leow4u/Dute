@@ -5,7 +5,7 @@ import { after, before, beforeEach, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from "@firebase/rules-unit-testing";
-import { deleteDoc, doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from "firebase/firestore";
 
 /**
  * Regras do cadastro da Operação (docs/plataforma/fase-3-operacao.md, parte 1):
@@ -147,6 +147,31 @@ describe("OS: leitura", () => {
     for (const uid of ["campo-a", "comercial-a", "finance-a", "wms-a", "client-a"]) {
       await assertFails(getDoc(doc(signedAs(uid), "service_orders", "10045-01")));
     }
+  });
+
+  it("o cliente com a Operação contratada lê só as próprias OS, e só com ela no contrato (parte 2.7)", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      const database = context.firestore();
+      await setDoc(doc(database, "service_orders", "10046-01"), { numero: "10046-01", customer_code: "BTG Pactual", status: "aberta", itens: [] });
+      await setDoc(doc(database, "service_orders", "10047-01"), { numero: "10047-01", customer_code: "ITAU", status: "aberta", itens: [] });
+      await setDoc(doc(database, "users", "client-op"), { nome: "client-op", email: "op@example.com", role: "cliente", customer_code: "BTG Pactual" });
+    });
+    // Sem client_access vale o padrão (armazenagem e faturas): a OS não abre.
+    await assertFails(getDoc(doc(signedAs("client-op"), "service_orders", "10046-01")));
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "client_access", "BTG Pactual"), { customer_code: "BTG Pactual", modules: ["wms", "operacao"] });
+    });
+    const cliente = signedAs("client-op");
+    await assertSucceeds(getDoc(doc(cliente, "service_orders", "10046-01")));
+    await assertFails(getDoc(doc(cliente, "service_orders", "10047-01")));
+    await assertSucceeds(getDocs(query(collection(cliente, "service_orders"), where("customer_code", "==", "BTG Pactual"))));
+    await assertFails(getDocs(collection(cliente, "service_orders")));
+    await assertFails(setDoc(doc(cliente, "service_orders", "10046-02"), { numero: "10046-02", customer_code: "BTG Pactual" }));
+    // Tirar a Operação do contrato tira a leitura.
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "client_access", "BTG Pactual"), { customer_code: "BTG Pactual", modules: ["wms", "financeiro"] });
+    });
+    await assertFails(getDoc(doc(signedAs("client-op"), "service_orders", "10046-01")));
   });
 
   it("ninguém grava a OS nem lê o contador pelo navegador", async () => {

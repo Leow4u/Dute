@@ -5,12 +5,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_OPERATION_TEMPLATE,
+  MODULO_DA_TELA_DO_PORTAL,
   OPERATION_PACKS,
   OPERATION_TEMPLATES,
   OPERATION_TEMPLATE_KEYS,
   SKU_PREFIX_PATTERN,
   canonicalSkuPrefix,
   isOperationTemplateKey,
+  leiturasDoPortal,
   operationTemplate,
   packForCustomer,
   portalModulesFor,
@@ -18,6 +20,7 @@ import {
   skuExample,
   skuPrefixProblem,
   suggestSkuPrefix,
+  telaNoContrato,
   templateStatusLabel,
 } from "./index";
 
@@ -122,6 +125,61 @@ describe("perfil de operação", () => {
     expect(portalModulesFor(internal)).toEqual(["home"]);
     expect(resolveOperationProfile({ customer_code: "X", archived: true }).portalStatus).toBe("inactive");
     expect(portalModulesFor(null)).toBeNull();
+  });
+});
+
+describe("telas do portal pelos módulos contratados (parte 2.7)", () => {
+  const comModulos = (modules: string[]) => resolveOperationProfile({ customer_code: "ACME", operation_template: "uniformes", modules });
+
+  it("só com a Operação: o portal fica com o Início, sem nada do armazém nem faturas", () => {
+    expect(portalModulesFor(comModulos(["operacao"]))).toEqual(["home"]);
+  });
+
+  it("sem o financeiro, sem Faturas; sem a armazenagem, sem estoque, pedidos, documentos e Agent Dute", () => {
+    expect(portalModulesFor(comModulos(["wms", "operacao"]))).toEqual([
+      "assistant",
+      "home",
+      "inventory",
+      "events",
+      "requests",
+      "orders",
+      "documents",
+    ]);
+    expect(portalModulesFor(comModulos(["financeiro"]))).toEqual(["home", "invoices"]);
+  });
+
+  it("cada tela do portal depende de um módulo, o Início de nenhum: a mesma régua das regras", () => {
+    expect(MODULO_DA_TELA_DO_PORTAL).toEqual({
+      home: null,
+      assistant: "wms",
+      inventory: "wms",
+      events: "wms",
+      requests: "wms",
+      orders: "wms",
+      documents: "wms",
+      invoices: "financeiro",
+    });
+    for (const tela of Object.keys(MODULO_DA_TELA_DO_PORTAL) as Array<keyof typeof MODULO_DA_TELA_DO_PORTAL>) {
+      expect(telaNoContrato(tela, ["wms", "operacao", "financeiro"]), tela).toBe(true);
+    }
+    expect(telaNoContrato("home", [])).toBe(true);
+  });
+
+  it("as leituras do portal seguem as regras do Firestore (isOwnProjectionWith)", () => {
+    const regras = readFileSync(new URL("../../../../../firestore.rules", import.meta.url), "utf8");
+    const exige = (colecao: string) =>
+      // O bloco do match até a primeira chave que fecha: a leitura do cliente exige o módulo.
+      new RegExp(`match /${colecao}/\\{[^}]+\\} \\{[^}]*?allow read:[^;]*isOwnProjectionWith\\('(\\w+)'\\)`).exec(regras)?.[1];
+    expect({
+      estoque: exige("client_inventory"),
+      pedidos: exige("client_order_tracking"),
+      solicitacoes: exige("client_request_status"),
+      documentos: exige("client_documents"),
+      faturas: exige("client_invoices"),
+    }).toEqual({ estoque: "wms", pedidos: "wms", solicitacoes: "wms", documentos: "wms", faturas: "financeiro" });
+    expect(leiturasDoPortal(["wms"])).toEqual({ estoque: true, pedidos: true, solicitacoes: true, documentos: true, faturas: false });
+    expect(leiturasDoPortal(["financeiro"])).toEqual({ estoque: false, pedidos: false, solicitacoes: false, documentos: false, faturas: true });
+    expect(leiturasDoPortal(["operacao"])).toEqual({ estoque: false, pedidos: false, solicitacoes: false, documentos: false, faturas: false });
   });
 });
 

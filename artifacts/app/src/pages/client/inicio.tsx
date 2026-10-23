@@ -8,6 +8,9 @@ import { agentAskHref, type ConversationSummary } from "@/lib/agent-chat";
 import { isUnreadRoutine } from "@/lib/agent-routines";
 import { useAppUser } from "@/lib/auth";
 import { invoiceLines } from "@/lib/client-home";
+import { useOperationProfile } from "@/lib/operation-profile";
+import { portalModulesFor } from "@/lib/operations";
+import type { PortalModuleKey } from "@/lib/operations/types";
 import { ORDER_STEPS, homeOrderViews, orderStepIndex, type OrderStage, type OrderView } from "@/lib/orders";
 import { stockOverview } from "@/lib/portal-stock";
 import { splitShipments } from "@/lib/shipments";
@@ -52,6 +55,11 @@ function pieces(value: number) {
 export function ClienteInicio() {
   const { user } = useAppUser();
   const name = firstName(user?.fullName);
+  // Só as seções das telas que o contrato abre (parte 2.7): sem armazenagem,
+  // nada de estoque, pedidos, envios nem Agent Dute; sem financeiro, sem faturas.
+  const { profile } = useOperationProfile();
+  const telas = portalModulesFor(profile);
+  const ve = (tela: PortalModuleKey) => !telas || telas.includes(tela);
 
   return (
     <ClientDataBoundary>
@@ -86,127 +94,148 @@ export function ClienteInicio() {
                 </p>
               </header>
 
-              <AskAgent />
-              <RoutineNews />
+              {ve("assistant") ? (
+                <>
+                  <AskAgent />
+                  <RoutineNews />
+                </>
+              ) : null}
 
-              <section className="grid gap-3 md:grid-cols-2">
-                <Action
-                  href="/portal/estoque"
-                  icon={Box}
-                  title="Pedir itens do estoque"
-                  detail={
-                    stockReady
-                      ? `${pieces(available)} disponíveis em ${formatNumber(itemCount)} ${itemCount === 1 ? "item" : "itens"}`
-                      : "Disponível depois da contagem inicial"
-                  }
-                  disabled={!stockReady}
-                />
-                <Action
-                  href="/portal/recebimentos"
-                  icon={PackagePlus}
-                  title="Avisar um envio"
-                  detail="O fornecedor vai entregar na Dutelog? Avise e anexe a NF"
-                />
-              </section>
+              {ve("inventory") || ve("requests") ? (
+                <section className="grid gap-3 md:grid-cols-2">
+                  {ve("inventory") ? (
+                    <Action
+                      href="/portal/estoque"
+                      icon={Box}
+                      title="Pedir itens do estoque"
+                      detail={
+                        stockReady
+                          ? `${pieces(available)} disponíveis em ${formatNumber(itemCount)} ${itemCount === 1 ? "item" : "itens"}`
+                          : "Disponível depois da contagem inicial"
+                      }
+                      disabled={!stockReady}
+                    />
+                  ) : null}
+                  {ve("requests") ? (
+                    <Action
+                      href="/portal/recebimentos"
+                      icon={PackagePlus}
+                      title="Avisar um envio"
+                      detail="O fornecedor vai entregar na Dutelog? Avise e anexe a NF"
+                    />
+                  ) : null}
+                </section>
+              ) : null}
 
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-                <section className="min-w-0">
-                  <div className="mb-3 flex items-center justify-between px-1">
-                    <h2 className="text-sm font-semibold">Pedidos em andamento</h2>
-                    <Link href="/portal/pedidos" className="text-sm font-medium text-primary hover:underline">
-                      Ver todos ›
-                    </Link>
-                  </div>
-                  {orders.length ? (
-                    <ul className="flex flex-col gap-3">
-                      {orders.map((order) => (
-                        <OrderCard key={order.id} order={order} />
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="rounded-lg border border-dashed border-border px-5 py-6 text-sm text-muted-foreground">
-                      Nenhum pedido em andamento. Use "Pedir itens do estoque" para fazer um.
-                    </p>
-                  )}
-                </section>
+                {ve("orders") ? (
+                  <section className="min-w-0">
+                    <div className="mb-3 flex items-center justify-between px-1">
+                      <h2 className="text-sm font-semibold">Pedidos em andamento</h2>
+                      <Link href="/portal/pedidos" className="text-sm font-medium text-primary hover:underline">
+                        Ver todos ›
+                      </Link>
+                    </div>
+                    {orders.length ? (
+                      <ul className="flex flex-col gap-3">
+                        {orders.map((order) => (
+                          <OrderCard key={order.id} order={order} />
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="rounded-lg border border-dashed border-border px-5 py-6 text-sm text-muted-foreground">
+                        Nenhum pedido em andamento. Use "Pedir itens do estoque" para fazer um.
+                      </p>
+                    )}
+                  </section>
+                ) : null}
 
                 <div className="flex flex-col gap-4">
-                  <Panel title="Envios a caminho" href="/portal/recebimentos" linkLabel="Ver">
-                    {shipments.length ? (
-                      <ul>
-                        {shipments.map((shipment) => (
-                          <Row
-                            key={shipment.id}
-                            title={
-                              <>
-                                {shipment.number ? <span className="font-semibold">{shipment.number} · </span> : null}
-                                {shipment.title}
-                              </>
-                            }
-                            detail={shipment.summary || shipment.detail}
-                            aside={
-                              shipment.arrival ? (
-                                <span className="rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-semibold text-warning-soft-foreground">
-                                  chega {shipment.arrival}
-                                </span>
-                              ) : null
-                            }
-                          />
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="px-5 py-4 text-sm text-muted-foreground">Nenhum envio a caminho.</p>
-                    )}
-                  </Panel>
+                  {ve("requests") ? (
+                    <Panel title="Envios a caminho" href="/portal/recebimentos" linkLabel="Ver">
+                      {shipments.length ? (
+                        <ul>
+                          {shipments.map((shipment) => (
+                            <Row
+                              key={shipment.id}
+                              title={
+                                <>
+                                  {shipment.number ? <span className="font-semibold">{shipment.number} · </span> : null}
+                                  {shipment.title}
+                                </>
+                              }
+                              detail={shipment.summary || shipment.detail}
+                              aside={
+                                shipment.arrival ? (
+                                  <span className="rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-semibold text-warning-soft-foreground">
+                                    chega {shipment.arrival}
+                                  </span>
+                                ) : null
+                              }
+                            />
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="px-5 py-4 text-sm text-muted-foreground">Nenhum envio a caminho.</p>
+                      )}
+                    </Panel>
+                  ) : null}
 
-                  <Panel title="Seu estoque" href="/portal/estoque" linkLabel="Abrir">
-                    <ul>
-                      <Row
-                        title="Valor do estoque"
-                        detail="custo · base do seguro ad valorem"
-                        aside={<span className="text-lg font-semibold">{formatMoney(value)}</span>}
-                      />
-                      <Row title="Disponível" aside={<span className="font-semibold">{pieces(available)}</span>} />
-                      <Row title="Reservado em pedidos" aside={<span className="font-semibold">{pieces(reserved)}</span>} />
-                      <Row
-                        title="Abaixo do mínimo"
-                        aside={
-                          low ? (
-                            <span className="rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-semibold text-warning-soft-foreground">
-                              {formatNumber(low)} {low === 1 ? "item" : "itens"}
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">nenhum</span>
-                          )
-                        }
-                      />
-                    </ul>
-                  </Panel>
-
-                  <Panel title="Faturas" href="/portal/faturas" linkLabel="Ver">
-                    {bills.length ? (
+                  {ve("inventory") ? (
+                    <Panel title="Seu estoque" href="/portal/estoque" linkLabel="Abrir">
                       <ul>
-                        {bills.map((bill) => (
-                          <Row
-                            key={bill.competencia}
-                            title={bill.label}
-                            detail={bill.detail}
-                            aside={
-                              bill.amount !== undefined ? (
-                                <span className="font-semibold">{formatMoney(bill.amount)}</span>
-                              ) : (
-                                <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground/70">
-                                  Em fechamento
-                                </span>
-                              )
-                            }
-                          />
-                        ))}
+                        <Row
+                          title="Valor do estoque"
+                          detail="custo · base do seguro ad valorem"
+                          aside={<span className="text-lg font-semibold">{formatMoney(value)}</span>}
+                        />
+                        <Row title="Disponível" aside={<span className="font-semibold">{pieces(available)}</span>} />
+                        <Row
+                          title="Reservado em pedidos"
+                          aside={<span className="font-semibold">{pieces(reserved)}</span>}
+                        />
+                        <Row
+                          title="Abaixo do mínimo"
+                          aside={
+                            low ? (
+                              <span className="rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-semibold text-warning-soft-foreground">
+                                {formatNumber(low)} {low === 1 ? "item" : "itens"}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">nenhum</span>
+                            )
+                          }
+                        />
                       </ul>
-                    ) : (
-                      <p className="px-5 py-4 text-sm text-muted-foreground">Nenhuma fatura fechada ainda.</p>
-                    )}
-                  </Panel>
+                    </Panel>
+                  ) : null}
+
+                  {ve("invoices") ? (
+                    <Panel title="Faturas" href="/portal/faturas" linkLabel="Ver">
+                      {bills.length ? (
+                        <ul>
+                          {bills.map((bill) => (
+                            <Row
+                              key={bill.competencia}
+                              title={bill.label}
+                              detail={bill.detail}
+                              aside={
+                                bill.amount !== undefined ? (
+                                  <span className="font-semibold">{formatMoney(bill.amount)}</span>
+                                ) : (
+                                  <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground/70">
+                                    Em fechamento
+                                  </span>
+                                )
+                              }
+                            />
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="px-5 py-4 text-sm text-muted-foreground">Nenhuma fatura fechada ainda.</p>
+                      )}
+                    </Panel>
+                  ) : null}
                 </div>
               </div>
             </div>

@@ -375,3 +375,29 @@ segunda regra de contagem.
   espionados: o papel comercial não assina nada da Operação, o interno não
   lê nada do Comercial, e a entrada só lê os módulos dos cards).
 - Conferido no Chromium com o CSS do build, a 1440 e a 390 px.
+
+### Parte 2.7: barreira por módulo contratado do cliente
+
+- Cada tela do portal depende de um módulo contratado
+  (`MODULO_DA_TELA_DO_PORTAL` em `lib/operations`): o Início é de todos;
+  estoque, eventos, envios, pedidos, documentos e o Agent Dute do portal são
+  da armazenagem (`wms`); faturas, do `financeiro`. `portalModulesFor` passa
+  a cruzar o modelo de operação com os módulos do perfil publicado
+  (`client_profiles`): o menu esconde, e o `RoleGate` devolve ao Início do
+  portal a tela de fora do contrato, mesmo por link direto.
+- O portal só lê as projeções do contrato (`leiturasDoPortal`, em
+  `/api/client/overview`), a mesma régua das regras (`isOwnProjectionWith`):
+  sem armazenagem, nada de `client_inventory`, `client_order_tracking`,
+  `client_request_status`, `client_documents` nem do valor da mercadoria
+  (`catalog_prices`); sem financeiro, nada de `client_invoices`. Antes o
+  portal pedia tudo e as regras negavam.
+- O Início do portal esconde as seções de fora do contrato.
+- Regra: `service_orders` ganha o ramo do cliente, só as próprias OS e só com
+  a Operação contratada (`isOwnProjectionWith('operacao')`). Sem tela que leia
+  até a Fase 4.
+- Testes: `operations.test.ts` (telas por contrato e a régua conferida contra
+  o `firestore.rules`), `modules.test.ts` (menu), `portal-leituras.test.ts`
+  (no jsdom, o que o portal pede para cada contrato),
+  `pages/client/inicio.test.tsx` (seções) e
+  `functions/wms/src/operacao-cadastro.rules.test.ts` (no emulador, o cliente
+  lê a própria OS só com a Operação no contrato; falha com a regra antiga).
