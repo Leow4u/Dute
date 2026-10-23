@@ -16,8 +16,8 @@ describe("telas do WMS na v3", () => {
     expect(telaDoWmsNaV3("/pedidos", telas)).toBe(false);
   });
 
-  it("as telas na v3, na ordem da pergunta 18", () => {
-    expect(TELAS_DO_WMS_NA_V3).toEqual(["/dashboard", "/pedidos", "/estoque", "/wms/receber"]);
+  it("as telas na v3, na ordem da pergunta 18, e a tela nova dos alertas (parte 5.4e)", () => {
+    expect(TELAS_DO_WMS_NA_V3).toEqual(["/dashboard", "/pedidos", "/estoque", "/wms/receber", "/estoque/alertas"]);
   });
 
   it("o layout do WMS usa a lista", () => {

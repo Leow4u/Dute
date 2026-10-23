@@ -54,6 +54,8 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/skus", ["owner", "admin", "interno", "wms", "suporte"]],
   ["/estoque", ["owner", "admin", "interno", "wms", "suporte"]],
   ["/estoque/etiquetas", ["owner", "admin", "interno", "wms", "suporte"]],
+  // O alerta do item parado: só a coordenação decide (parte 5.4e).
+  ["/estoque/alertas", ["owner", "admin", "interno"]],
   ["/estoque/mapa", ["owner", "admin", "interno", "wms", "suporte"]],
   ["/estoque/posicoes", ["owner", "admin", "interno", "wms", "suporte"]],
   ["/movements", ["owner", "admin", "interno", "suporte"]],
@@ -234,6 +236,7 @@ describe("grupo ativo", () => {
     ["/wms/receber", "Estoque"],
     ["/wms/contagem", "Estoque"],
     ["/estoque/etiquetas", "Estoque"],
+    ["/estoque/alertas", "Estoque"],
     ["/estoque/mapa", "Estoque"],
     ["/catalogo/mapa", "Estoque"],
     ["/wms/qualidade", "Estoque"],

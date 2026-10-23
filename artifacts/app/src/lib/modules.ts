@@ -1,5 +1,6 @@
 import { CAMPO_ROLES, ROTA_CAMPO, ROTA_CAMPO_CONCLUIR, ROTA_CAMPO_OS } from "./campo/navegacao";
 import { ROTA_TV, TV_ROLES } from "./tv/navegacao";
+import { ALERTA_PARADO_ROLES } from "./memoria/alertas";
 import {
   AlarmClock,
   Banknote,
@@ -814,6 +815,8 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   { path: "/skus", roles: WMS_ROLES },
   // Etiquetas de caixa e de posição para imprimir, abertas pela Contagem e por Posições.
   { path: "/estoque/etiquetas", roles: WMS_ROLES },
+  // O alerta do item parado para aprovar, aberto pelo Início (parte 5.4e): só a coordenação decide.
+  { path: "/estoque/alertas", roles: ALERTA_PARADO_ROLES },
   { path: "/faturamento/tabela", roles: FINANCE_ROLES },
   // Fatura (prévia ou emitida) para imprimir/salvar PDF.
   { path: "/faturamento/fatura", roles: FINANCE_ROLES },
@@ -1233,6 +1236,7 @@ const ACTIVE_ALIASES: Record<string, string> = {
   "/catalogo/saldos": "/estoque",
   "/catalogo/mapa": "/estoque",
   "/movements": "/estoque",
+  "/estoque/alertas": "/estoque",
 };
 
 /** Módulo do portal a que uma rota pertence (/portal/eventos → events). */
