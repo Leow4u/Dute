@@ -375,9 +375,10 @@ agente do WMS.
 | 5.5c | As ferramentas da Armazenagem pelo leitor, sem a prévia do faturamento, e a dos itens parados | Nenhuma grava; nenhuma devolve dado de outro cliente; nenhuma tem parâmetro de cliente; o razão já consultado pelo cliente |
 | 5.5d | As ferramentas da Operação, do Comercial, do Financeiro e da memória | O valor só para quem lê valor; a Operação sem valor; a memória diz quando não tem base; isolamento por cliente |
 | 5.5e | A conversa no núcleo (`chatWithDute`), com o Genkit na codebase: o prompt por papel e módulo, o histórico, o resumo, as anotações e os playbooks no prompt, a troca de modelo, o uso e os rascunhos | O prompt de cada papel e módulo; a conversa de outro cliente recusa; o modelo que falha passa ao reserva; só o fluxo grava a conversa, o uso e os playbooks usados |
-| 5.5f | Anotações, playbooks e rotinas no núcleo, com a rotina agendada; o WMS deixa de rodar as rotinas onde o núcleo roda; a nota fiscal anexada pelo cliente na conversa | A rotina roda uma vez, por um só; a anotação só entra pelo cartão; só quem revisa decide; a nota de outro cliente recusa |
-| 5.5g | O app com o agente do núcleo onde está liberado: o Agent Dute em cada shell, com o módulo e o cliente ativo; a tela na v3; o radar com as linhas do "Precisa de você" | Textos listados; `axe`; a equipe fala do cliente ativo; o módulo do shell vai à conversa |
-| 5.5h | O "Resumo do dia" como rotina pronta por módulo | A rotina pronta segue o papel e o módulo; só liga pela pessoa |
+| 5.5f | As anotações e os playbooks no núcleo, do cliente ativo: a anotação enviada pelo cartão, a decisão da coordenação e os playbooks com os iniciais | A anotação só entra pelo cartão de quem conversou; só a coordenação decide, do cliente ativo; o evento só com o id |
+| 5.5g | As rotinas no núcleo, com a rotina agendada; o WMS deixa de rodar as rotinas onde o núcleo roda; a nota fiscal anexada pelo cliente na conversa | A rotina roda uma vez, por um só; a rotina segue o perfil atual de quem criou; a nota de outro cliente recusa |
+| 5.5h | O app com o agente do núcleo onde está liberado: o Agent Dute em cada shell, com o módulo e o cliente ativo; a tela na v3; as anotações e os playbooks do cliente ativo; o radar com as linhas do "Precisa de você" | Textos listados; `axe`; a equipe fala do cliente ativo; o módulo do shell vai à conversa |
+| 5.5i | O "Resumo do dia" como rotina pronta por módulo | A rotina pronta segue o papel e o módulo; só liga pela pessoa |
 | 5.6 | O painel de acerto: o erro médio da duração prevista e a taxa de aceite das sugestões | O painel sai de `ai_suggestions` |
 
 ## Perguntas abertas
@@ -991,10 +992,10 @@ ferramentas comuns em `agente-comuns.ts` e o modelo em `agente-modelo.ts`.
     pagar a partida.
   - `gemini-models.test.ts` do núcleo lê a lista de modelos aposentados do
     teste do WMS e confere que os modelos são os mesmos.
-- **Ficam para a parte 5.5f.**
-  - A nota anexada pelo cliente: a conversa do núcleo recusa o anexo por
-    ora.
-  - Os cartões de anotação e de rotina gravando pelo núcleo.
+- **Ficam para depois.**
+  - A anotação enviada pelo cartão: parte 5.5f.
+  - A nota anexada pelo cliente e a rotina criada pelo cartão: parte 5.5g.
+    A conversa do núcleo recusa o anexo por ora.
 - **O evento.** A conversa não grava evento em `events`: não é transição
   da operação. O registro dela é a conversa, as mensagens e o uso.
 - **Testes.**
@@ -1016,4 +1017,51 @@ ferramentas comuns em `agente-comuns.ts` e o modelo em `agente-modelo.ts`.
     - o resumo da conversa longa.
   - `callables.test.ts`: a entrada de cada callable, e a do agente pela
     liberação do agente.
+
+### Parte 5.5f: as anotações e os playbooks no núcleo
+
+Feita em 23/10/2026. As callables estão em `functions/core/src/index.ts` e a
+conta em `domain/agente-revisao.ts`. As coleções são as do WMS
+(`ai_agent_notes` e `ai_agent_playbooks`).
+
+- **A anotação pelo cartão** (`suggestDuteNote`).
+  - Quem conversou envia o cartão de anotação da resposta do agente.
+  - A callable confere que a mensagem é do agente, dessa pessoa e do
+    cliente dela, com o cartão de anotação ainda não enviado.
+  - A anotação fica pendente, com o evento, e a mensagem guarda o envio.
+  - A mesma anotação, já pendente ou valendo, não vira outra. O id sai do
+    cliente e do texto, igual ao do WMS.
+  - Há no máximo 30 pendentes por cliente.
+- **A decisão** (`listDuteNotes` e `decideDuteNote`).
+  - Só a coordenação decide (`AGENTE_REVISAO_ROLES`, a lista do WMS,
+    travada), sempre do cliente ativo.
+  - Aprova, podendo ajustar o texto e para quem vale, ou recusa a pendente,
+    ou arquiva a que vale.
+  - A anotação de outro cliente não aparece. A mesma decisão de novo não
+    grava.
+- **Os playbooks** (`listDutePlaybooks`, `saveDutePlaybook`,
+  `decideDutePlaybook` e `seedDutePlaybooks`).
+  - O escrito pela coordenação vale direto, e a mesma chave não cria dois.
+  - O recusado ou arquivado não se edita mais.
+  - Os iniciais são a cópia literal do WMS, travada letra por letra, com o
+    mesmo id. Entram pendentes no cliente ativo, uma vez só.
+- **Os eventos.** `agente.anotacao_*` e `agente.playbook_*` levam só o id (e,
+  no playbook, quantos passos e para quem). O texto da anotação pode ter o
+  nome de um contato e fica no documento dela.
+  - A anotação sugerida é o único evento do núcleo que o cliente grava.
+  - A edição do playbook e cada decisão têm o evento delas.
+- **O app** ainda fala com o WMS nas anotações e nos playbooks. Passa ao
+  núcleo na parte 5.5h.
+- **Testes.**
+  - `agente-revisao.test.ts`:
+    - as cópias travadas contra o WMS (os playbooks iniciais e quem revisa);
+    - os ids iguais aos do WMS;
+    - os eventos só com o id, e o do cliente só na anotação sugerida.
+  - `agente-revisao.integration.test.ts`, no emulador:
+    - a anotação pelo cartão e as recusas;
+    - a mesma anotação, que não vira outra;
+    - a decisão, com o ajuste e a repetição;
+    - só a coordenação, só do cliente ativo;
+    - o playbook escrito, a chave e a edição;
+    - os iniciais uma vez só.
 

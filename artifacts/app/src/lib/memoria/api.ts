@@ -20,6 +20,14 @@ export const CALLABLES_DO_NUCLEO = [
   "answerStockAlert",
   // A conversa com o Agent Dute do núcleo (parte 5.5e): a tela passa a usá-la na parte 5.5h.
   "chatWithDute",
+  // As anotações e os playbooks do Agent Dute, do cliente ativo (parte 5.5f): a tela passa a usá-los na parte 5.5h.
+  "suggestDuteNote",
+  "listDuteNotes",
+  "decideDuteNote",
+  "listDutePlaybooks",
+  "saveDutePlaybook",
+  "decideDutePlaybook",
+  "seedDutePlaybooks",
 ] as const;
 export type CallableDoNucleo = (typeof CALLABLES_DO_NUCLEO)[number];
 

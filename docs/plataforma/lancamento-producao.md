@@ -76,8 +76,8 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   5.3b).
   - O de `events` se constrói sobre a coleção que já existe. Até ficar
     pronto, a rotina dos avisos falha e tenta de novo a cada 5 minutos.
-- **Functions.** São 119 callables: 82 do WMS, 12 do Comercial, 18 da
-  Operação, 2 do Financeiro e 5 do núcleo.
+- **Functions.** São 126 callables: 82 do WMS, 12 do Comercial, 18 da
+  Operação, 2 do Financeiro e 12 do núcleo.
   - Do WMS, entram `setOrderDelivery` e `receiveOrderReturn`.
   - Da Operação, entram as da Fase 3 e `requestService`,
     `declineServiceRequest`, `openStorageDemand` e `markNotificationsRead`.
@@ -87,9 +87,10 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     `findSimilarQuotes` e `answerStockAlert`, na codebase nova `core`
     (Fase 5). Recusam no
     `dute-prod`: a memória só vale no `dute-homolog`
-    (`MEMORIA_AMBIENTES_LIBERADOS`). Também entra `chatWithDute`, o Agent
-    Dute do núcleo, que recusa fora de `AGENTE_AMBIENTES_LIBERADOS` (só o
-    `dute-homolog`): na produção segue o agente do WMS.
+    (`MEMORIA_AMBIENTES_LIBERADOS`). Também entram as callables do Agent
+    Dute do núcleo (`chatWithDute`, as anotações e os playbooks), que recusam
+    fora de `AGENTE_AMBIENTES_LIBERADOS` (só o `dute-homolog`): na produção
+    segue o agente do WMS.
   - Três functions agendadas: `runDailyAlerts`, todo dia às 06:00,
     `runNotifications`, a cada 5 minutos, e `runMeasures`, a cada 15
     minutos, que calcula as medidas, as lembranças e o relógio do estoque
@@ -118,7 +119,7 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.
-- **Conferência do invoker.** Passa a conferir 119 callables, das cinco
+- **Conferência do invoker.** Passa a conferir 126 callables, das cinco
   codebases.
 
 ## 3. Antes de publicar (conferir na homologação)
@@ -167,7 +168,7 @@ contato com os avisos ligados (Comercial › Clientes).
 4. **Disparo.** Actions > CI > Run workflow, com `publicar_producao`
    marcado, do HEAD. O job só vale verde com as conferências do fim:
    - `check_rules_deployed.sh`;
-   - o invoker das 119 callables;
+   - o invoker das 126 callables;
    - `check_frontend_deployed.sh`;
    - o smoke.
 
