@@ -98,7 +98,7 @@ export const MARCAS_ORCAMENTO = [
 const marcas = z.array(z.enum(MARCAS_ORCAMENTO)).max(MARCAS_ORCAMENTO.length);
 
 /** Por que a demanda foi perdida (parte 10). Depois do fechamento, só "cancelado_cliente". */
-export const MOTIVOS_PERDA = ["preco", "prazo", "desistencia", "sem_resposta", "cancelado_cliente", "outro"] as const;
+export const MOTIVOS_PERDA = ["preco", "prazo", "desistencia", "sem_resposta", "cancelado_cliente", "prazo_faturamento", "outro"] as const;
 
 /** Por que uma RV enviada ganha a RV seguinte ("Revisar", parte 10). */
 export const MOTIVOS_REVISAO = ["pedido_cliente", "correcao", "execucao", "aditivo"] as const;
@@ -528,6 +528,7 @@ const MOTIVO_PERDA_ROTULO: Record<(typeof MOTIVOS_PERDA)[number], string> = {
   desistencia: "desistência do cliente",
   sem_resposta: "sem resposta do cliente",
   cancelado_cliente: "cancelado pelo cliente",
+  prazo_faturamento: "prazo de faturamento vencido",
   outro: "outro motivo",
 };
 

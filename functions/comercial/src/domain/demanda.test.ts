@@ -160,7 +160,7 @@ describe("etapa da demanda", () => {
 
 describe("perda e reabertura", () => {
   it("lista de motivos e as etapas antes de faturar", () => {
-    assert.deepEqual([...MOTIVOS_PERDA], ["preco", "prazo", "desistencia", "sem_resposta", "cancelado_cliente", "outro"]);
+    assert.deepEqual([...MOTIVOS_PERDA], ["preco", "prazo", "desistencia", "sem_resposta", "cancelado_cliente", "prazo_faturamento", "outro"]);
     assert.deepEqual(
       [...ETAPAS_QUE_PERDEM],
       ["em_montagem", "para_aprovar", "para_enviar", "aguardando_cliente", "para_planejar", "execucao_a_orcar", "aguardando_autorizacao"],
@@ -191,7 +191,8 @@ describe("perda e reabertura", () => {
       { etapa: "perdida", demanda: { perda: { motivo: "preco" } } },
       { etapa: "cancelada", demanda: {} },
     ];
-    for (const motivo of MOTIVOS_PERDA) {
+    // O prazo de faturamento tem regra própria (logo abaixo).
+    for (const motivo of MOTIVOS_PERDA.filter((motivo) => motivo !== "prazo_faturamento")) {
       const nota = motivo === "outro" ? "Cliente fechou o andar." : null;
       for (const caso of antes) assert.equal(problemaDaPerda(motivo, { ...caso.demanda, etapa: caso.etapa }, nota), null, `${motivo} em ${caso.etapa}`);
       for (const caso of depois) {
@@ -202,6 +203,14 @@ describe("perda e reabertura", () => {
       for (const caso of nunca) assert.match(String(problemaDaPerda(motivo, { ...caso.demanda, etapa: caso.etapa }, nota)), /antes de faturar/);
     }
     assert.match(String(problemaDaPerda("outro", { etapa: "em_montagem" }, "  ")), /nota/);
+  });
+
+  it("o prazo de faturamento só perde com o prazo do contrato vencido, também a faturar (parte 7.5a)", () => {
+    const aFaturar = { etapa: "a_faturar" as const, escopo_rv: 0, validacao: { rv: 0, etapa: "a_faturar" } };
+    assert.equal(problemaDaPerda("prazo_faturamento", aFaturar, null, true), null);
+    assert.equal(problemaDaPerda("prazo_faturamento", { ...aFaturar, etapa: "aguardando_autorizacao" }, null, true), null);
+    assert.match(String(problemaDaPerda("prazo_faturamento", aFaturar, null, false)), /prazo do contrato vencido/);
+    assert.match(String(problemaDaPerda("prazo_faturamento", { etapa: "em_montagem" }, null)), /prazo do contrato vencido/);
   });
 
   it("reabrir abre RV nova só quando a RV enviada ainda não tinha o sim do cliente", () => {

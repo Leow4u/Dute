@@ -132,7 +132,7 @@ Perguntas abertas de `fase-6-comercial.md` (número e situação):
 | 7 | Reabrir na mesma RV ou na seguinte? | Aberta; hoje abre a seguinte, com "Descartar RV" |
 | 8 | A dispensa aceita linha alterada igual à da RV fechada? | Aberta; hoje não aceita |
 | 9 | Prazo de perda do portal conta de que data? | Aberta; hoje conta do fim da execução |
-| 10 | Como encerrar a demanda que perdeu o prazo de faturamento? | Aberta (Fase 7) |
+| 10 | Como encerrar a demanda que perdeu o prazo de faturamento? | Segue a recomendação (Fase 7, parte 7.5a) |
 | 11 | A aprovação da medição fecha a proposta sem fechamento? | Aberta; a tela mostra as pendentes, sem atalho |
 | 12 | Frete esquecido de mês já enviado entra onde? | Aberta; hoje não aceita linha de outro mês |
 | 13 | O ZIP dos pedidos fica no v1? | Aplicada: fora do v1 |

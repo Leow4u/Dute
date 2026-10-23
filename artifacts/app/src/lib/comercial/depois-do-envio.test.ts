@@ -213,6 +213,7 @@ describe("motivos", () => {
       "Desistência",
       "Sem resposta",
       "Cancelado pelo cliente",
+      "Prazo de faturamento",
       "Outro",
     ]);
   });
@@ -225,9 +226,9 @@ describe("motivos", () => {
     expect(MOTIVOS_DE_REVISAO.map((motivo) => motivo.rotulo)).toEqual(["Pedido do cliente", "Correção"]);
   });
 
-  it("depois do fechamento, Perdido só com cancelado pelo cliente; antes dele, todos", () => {
+  it("depois do fechamento, Perdido só com cancelado pelo cliente; antes dele, todos menos o prazo de faturamento", () => {
     expect(motivosDePerdaPermitidos(true).map((motivo) => motivo.valor)).toEqual(["cancelado_cliente"]);
-    expect(motivosDePerdaPermitidos(false)).toEqual(MOTIVOS_DE_PERDA);
+    expect(motivosDePerdaPermitidos(false).map((motivo) => motivo.valor)).toEqual(["preco", "prazo", "desistencia", "sem_resposta", "cancelado_cliente", "outro"]);
   });
 });
 
