@@ -837,3 +837,43 @@ Feita em 23/10/2026. O escopo está em
   - `platform-lists.test.ts`: a liberação, `VALOR_ROLES` contra as regras e
     as cópias dos módulos.
 
+
+### Parte 5.5c: as ferramentas da Armazenagem
+
+Feita em 23/10/2026. O registro das ferramentas está em
+`functions/core/src/domain/agente-ferramentas.ts` e as da Armazenagem em
+`agente-armazenagem.ts`. A conversa que as oferece ao modelo entra na parte
+5.5e.
+
+- **As ferramentas.** As do agente do WMS, pelo leitor, com as mesmas
+  respostas:
+  - `resumo_estoque`, `buscar_itens`, `listar_pedidos`, `ver_pedido`,
+    `movimentacoes` e `documentos`, para o cliente com armazenagem e a
+    equipe da Armazenagem;
+  - `recebimentos`, `tarefas_armazem`, `enderecos` e `itens_parados` (novo,
+    da parte 5.4), para a equipe;
+  - `fila_solicitacoes` e `eventos`, para a coordenação (owner, admin,
+    interno e suporte).
+- **As diferenças do WMS.**
+  - O razão do período é consultado já pelo cliente, com o índice novo de
+    `movements` (`customer_code` e `data`).
+  - O conhecimento dos documentos vem pelo leitor. O cliente só recebe o
+    trecho de documento publicado para ele.
+  - `itens_parados` usa a regra do modelo de operação do cliente, que o
+    escopo passa a trazer do cadastro.
+  - A prévia do faturamento fica de fora (pergunta 33). As faturas entram
+    com o Financeiro, na parte 5.5d.
+- **Quem recebe.** Sai do módulo e do papel, no servidor
+  (`ferramentasDoEscopo`). A entrada do modelo passa pelo esquema; a
+  inválida volta como erro, sem ler nada.
+- **Testes.**
+  - `agente-armazenagem.test.ts`, num banco em memória que recusa qualquer
+    gravação, com dois clientes:
+    - nenhuma ferramenta grava;
+    - nenhuma devolve dado do outro;
+    - nenhuma tem parâmetro de cliente;
+    - quem recebe cada uma;
+    - o que cada uma responde.
+  - `agente-armazenagem.integration.test.ts`, no emulador: as consultas de
+    verdade, com o período do razão na ordem e os instantes gravados como
+    Timestamp.

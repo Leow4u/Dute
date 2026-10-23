@@ -33,6 +33,8 @@ export type EscopoDoAgente = {
   /** Os módulos que a pessoa vê neste cliente: as ferramentas saem deles. */
   modulos: ModuloDoAgente[];
   leValor: boolean;
+  /** O modelo de operação do cadastro (`operation_template`): a regra dos dias parado sai dele. */
+  modeloDeOperacao: string | null;
 };
 
 export const CUSTOMERS_COLLECTION = "customers";
@@ -92,14 +94,17 @@ async function modulosContratados(db: Firestore, customerCode: string): Promise<
 export async function escopoDoAgente(db: Firestore, caller: CoreProfile, data: unknown): Promise<EscopoDoAgente> {
   const pedido = interpretarEscopo(data);
   let customerCode: string;
+  let cadastro: Registro | null;
   if (caller.role === "cliente") {
     customerCode = caller.customerCode ?? "";
     if (!customerCode) throw new HttpsError("permission-denied", "Login de cliente sem cliente.");
     if (pedido.customer_code && pedido.customer_code !== customerCode) throw new HttpsError("permission-denied", "O cliente fala só do próprio cadastro.");
+    // O acesso do cliente já foi conferido no login; o cadastro aqui só dá o modelo.
+    cadastro = await cadastroDoClienteAtivo(db, customerCode).catch(() => null);
   } else {
     if (!pedido.customer_code) throw new HttpsError("invalid-argument", "Escolha o cliente.");
     customerCode = pedido.customer_code;
-    await cadastroDoClienteAtivo(db, customerCode);
+    cadastro = await cadastroDoClienteAtivo(db, customerCode);
   }
   const modulos = modulosDoEscopo(caller.role, await modulosContratados(db, customerCode));
   if (!modulos.length) throw new HttpsError("permission-denied", "O Agent Dute não tem módulo para você neste cliente.");
@@ -113,5 +118,6 @@ export async function escopoDoAgente(db: Firestore, caller: CoreProfile, data: u
     modulo: pedido.modulo,
     modulos,
     leValor: leValor(caller.role),
+    modeloDeOperacao: texto(cadastro?.operation_template) || null,
   };
 }

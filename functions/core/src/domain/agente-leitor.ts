@@ -41,6 +41,7 @@ export const COLECOES_DO_CLIENTE = [
   "ai_agent_notes",
   "ai_agent_playbooks",
   "ai_agent_knowledge",
+  "ai_agent_knowledge_chunks",
 ] as const;
 export type ColecaoDoCliente = (typeof COLECOES_DO_CLIENTE)[number];
 

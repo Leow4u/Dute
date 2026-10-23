@@ -229,6 +229,20 @@
       ]
     },
     {
+      "collectionGroup": "movements",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "customer_code",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "data",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "inbound_receipts",
       "queryScope": "COLLECTION",
       "fields": [
