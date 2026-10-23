@@ -166,6 +166,13 @@ recusando, nada importado). A exceção é a parte 5, que muda o WMS.
 
 ## Importação inicial
 
+Decisão do Leonardo em 23/10/2026: a carga dos clientes da Omie e a carga do
+legado (orçamentos em andamento e histórico da planilha) saem do plano por
+ora, e a integração com a Omie para lançar a NF (Fase 7) fica fora até nova
+decisão. Os clientes entram pela tela de Clientes do Comercial, à mão; o
+histórico fica na planilha. Tabelas e contratos continuam entrando pelas
+cargas. Os itens abaixo ficam como registro do desenho original.
+
 - Clientes: pessoas jurídicas da Omie, uma por raiz de CNPJ, a partir dos
   arquivos já baixados em `tmp/omie/`. Pessoa física, contas de teste e
   contatos ficam fora; a conta do CRM sem CNPJ só entra com código na

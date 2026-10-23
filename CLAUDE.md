@@ -38,6 +38,9 @@ documentação de produto e operação está em `docs/`.
   `docs/plataforma/alinhamento-comercial-operacao.md` compara o desenho
   aprovado (plano, Fase 2, Fase 6 e mockups) com o que entrou na `main` de 21
   a 23/10 e lista as divergências e as decisões que esperam o Leonardo.
+  Decididos em 23/10/2026: um shell por módulo é pedido do Leonardo (um menu
+  único inflava demais); a carga de clientes da Omie e o legado da planilha
+  saem do plano; antes de qualquer PR de tela, novo alinhamento de UX e UI.
 - **Papéis e módulos têm lista única em `lib/dominio`.** As Functions
   (`functions/wms/src/domain/platform-roles.ts`, `customer-profile.ts`) e o
   `firestore.rules` guardam cópias literais, travadas por

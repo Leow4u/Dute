@@ -7,7 +7,9 @@ a ligação do Comercial na produção e as três primeiras partes da Operação
 Este documento recupera o que estava alinhado antes disso, a partir dos
 documentos aprovados e dos mockups, e compara com o que está no código hoje.
 Nada aqui muda código: as divergências viram decisões do Leonardo (seção 6)
-e, depois, PRs.
+e, depois, PRs. Atualizado no mesmo dia com as três primeiras decisões dele:
+um shell por módulo é pedido seu, a Omie sai do plano por ora e o legado não
+é carregado.
 
 ## 1. Onde o alinhamento está registrado
 
@@ -18,7 +20,7 @@ e, depois, PRs.
 | `docs/plataforma/fase-2-nucleo.md` | 20/10, aprovado | Papéis da plataforma, módulos contratados, tela de entrada, menu por papel e por perfil; decisões 1 a 6; registro das partes 1 e 2 |
 | `docs/plataforma/fase-6-comercial.md` | 20/10, aprovado; registros até 21/10 | O pedido (12 pontos), as decisões, coleções, etapas, as 17 partes, as perguntas abertas 1 a 17 e o registro de cada parte |
 | `docs/plataforma/comercial-producao.md` | 21/10 (parte 17); alterado no #157 | Ordem exata para ligar o Comercial no `dute-prod`, como desfazer, as decisões que esperam o Leonardo e as pendências da conferência |
-| `docs/plataforma/comercial-cargas.md` | 21/10 | Roteiro das cargas: clientes da Omie, contratos e tabelas |
+| `docs/plataforma/comercial-cargas.md` | 21/10 | Roteiro das cargas: tabelas e contratos. A carga de clientes da Omie saiu do plano em 23/10 |
 | `docs/plataforma/fase-3-operacao.md` | 22/10, escrito pelo outro agente; alterado no #176; correção no #177 (aberto) | O que ele implementou nas partes 1 a 3 da Operação. Não é um desenho aprovado antes do código, como são o da Fase 2 e o da Fase 6 |
 | `CLAUDE.md` | contínuo | Regras de trabalho: um problema por PR com teste, telas novas na v3, operação sem valores, módulo novo em `functions/<modulo>`, liberação por ambiente com OK para a produção |
 
@@ -189,7 +191,7 @@ Storage.
 |---|---|---|---|
 | #125, #130 a #152, #154 | sessões do Leonardo | Desenho da Fase 6 e as partes 1 a 19 do Comercial | Conforme o desenho (seção 2.3) |
 | #126 a #129 | Cursor Agent | Preço sai de `products`, `skus`, `stock_balances` e `client_inventory` para `catalog_prices` (callable `splitCatalogPrices`); fatura por cliente na própria competência; valor da competência fechada congelado; título da aba | Atende a invariante "operação não vê preço". `splitCatalogPrices` precisa rodar depois da publicação, sem roteiro nem cursor (pendência da parte 17) |
-| #153 | Cursor Agent | `/comercial` ganha shell próprio (`comercial-shell.tsx`), o Comercial sai do menu do WMS, atalho "Módulos" volta aos cards | Resolve um erro real (o card abria o Comercial dentro do layout do WMS), mas no visual atual e com um shell por módulo (ver 4.1) |
+| #153 | Cursor Agent | `/comercial` ganha shell próprio (`comercial-shell.tsx`), o Comercial sai do menu do WMS, atalho "Módulos" volta aos cards | Resolve um erro real (o card abria o Comercial dentro do layout do WMS). Um shell por módulo é pedido do Leonardo, confirmado em 23/10 (ver 4.1) |
 | #157 | Cursor Agent | `dute-prod` entra em `COMERCIAL_AMBIENTES_LIBERADOS` (app e Functions) e em `AMBIENTES_LIBERADOS` | OK do Leonardo em 21/10. Liga também a plataforma inteira na produção (ver 4.6) |
 | #159 | Cursor Agent | Operação parte 1: codebase `functions/operacao`, `saveCollaborator` e `saveVehicle`, telas `/operacao/colaboradores` e `/operacao/veiculos`, CI, zeragem | Cadastro conforme o plano; telas no visual do WMS (ver 4.2) |
 | #160, #165, #166 | Cursor Agent | Menu da conta sem legenda, com "Módulos" no hover; o shell da Operação deixa de importar `modulos-link` (o typecheck da `main` quebrou entre os merges); menu no celular | Ver 4.1 |
@@ -206,31 +208,35 @@ Storage.
 Cada item traz o que estava combinado, o que está no código, o efeito e o
 caminho de volta. A ordem é a da importância para o uso.
 
-### 4.1 Navegação: um shell v3 x um shell por módulo
+### 4.1 Navegação: um shell por módulo é decisão do Leonardo
 
-- **Alinhado.** Um shell só para a plataforma, na v3: menu lateral preto com
-  os módulos que o papel abre (no `ComFila.dc.html` o Guilherme vê Início,
-  Comercial, Clientes e Agent Dute; no `Operacao.dc.html` o Leonardo vê os
-  seis). A Fase 2 decidiu (decisão 6) que o agrupamento por módulo fica para
-  esse shell v3 e que não se faz um agrupamento no visual atual, e que a
-  parte 3 entrega o filtro por papel e por perfil e a barreira de rota.
+- **O que os documentos diziam.** Um shell só para a plataforma, na v3, com
+  o menu lateral preto listando os módulos que o papel abre; a decisão 6 da
+  Fase 2 deixava o agrupamento por módulo para esse shell e dizia para não
+  agrupar no visual atual.
+- **O que o Leonardo decidiu** (confirmado em 23/10/2026). Um shell por
+  módulo: foi ele quem pediu a separação, porque um menu único inflava
+  demais. Não é desvio. O que falta é o registro: a decisão 6 e a parte da
+  parte 3 da Fase 2 que agrupava tudo num menu só ficam superadas, e os
+  mockups que mostram um menu com os seis módulos (`Operacao.dc.html`,
+  `Inicio.dc.html` e os demais da v3) precisam ser relidos com um shell por
+  módulo. Os mockups do Comercial já estão nesse formato: para o Guilherme a
+  barra tem Início, Comercial, Clientes e Agent Dute.
 - **No código.** Três shells no visual do WMS, escolhidos pelo prefixo da
   rota (`lib/ambientes.ts`): o do WMS (`app-layout.tsx`), o do Comercial
   (`comercial-shell.tsx`, #153) e o da Operação (`operacao-shell.tsx`, #159).
   Cada um lista só as telas do próprio módulo; a troca de módulo fica no
   menu da conta, no item "Módulos" (hover no computador, lista no celular:
-  #160, #165, #166). O Faturamento continua dentro do shell do WMS. A parte 3
-  da Fase 2 não foi feita.
-- **Efeito.** Quem tem mais de um módulo sai de um menu para entrar em outro,
-  e o Início "Precisa de você" de um módulo não aparece nos outros. É o
-  agrupamento no visual atual que a decisão 6 quis evitar; o shell v3 vai
-  substituir os três.
-- **Caminho.** Decidir entre (a) tratar os shells por módulo como ponte até o
-  shell v3, e então fazer a parte 3 da Fase 2 e o shell v3 como desenhados,
-  com as três áreas (WMS, Comercial, Operação) como itens de um menu só; ou
-  (b) manter um shell por módulo e registrar a decisão em
-  `fase-2-nucleo.md`, revendo a decisão 6 e os mockups. A recomendação é (a):
-  é o que o plano e as 22 telas aprovadas mostram.
+  #160, #165, #166). O Faturamento continua dentro do shell do WMS.
+- **O que fica para o alinhamento de UX e UI** (seção 5, item 1): o visual
+  dos shells (a v3 ou o atual do WMS); como se troca de módulo (o menu da
+  conta, um seletor no topo do menu lateral ou os cards); o que cada shell
+  tem além das próprias telas (Início do módulo, Clientes, Agent Dute,
+  Administração); onde fica o Início do Comercial, já que hoje os itens
+  "orçamentos para aprovar", autorizações e medições estão no Início do WMS,
+  que o papel `comercial` não abre; e o Faturamento, que mora no shell do
+  WMS. A barreira por módulo contratado do cliente (o resto da parte 3 da
+  Fase 2) continua válida para o portal e não depende dessa decisão.
 
 ### 4.2 Telas da Operação no visual do WMS
 
@@ -353,16 +359,18 @@ mostra:
 | 4. Conferências depois da publicação e `splitCatalogPrices` até `done` | A confirmar; sem roteiro nem cursor (pendência da parte 17) |
 | 5. Conferência da BTG | A confirmar |
 | 6. PR que liga a liberação | Feito (#157), com a plataforma inteira (4.6) |
-| 7. Cargas (clientes da Omie, contratos, tabelas, aditivos) | **Não podem ter rodado pelo código**: `functions/comercial/src/cargas/projeto.ts` recusa `dute-prod` e `dute-btg`. Se nada foi feito por fora, o Comercial em produção está ligado e vazio |
+| 7. Cargas | Tabelas, contratos e aditivos: **não podem ter rodado pelo código**, `functions/comercial/src/cargas/projeto.ts` recusa `dute-prod` e `dute-btg`. Se nada foi feito por fora, o Comercial em produção está ligado e vazio. Clientes da Omie: fora do plano desde 23/10; os clientes entram à mão pela tela de Clientes do Comercial (Itaú, Safra e BTG primeiro; prospect quando o pedido chegar) |
 | 8. Contador `demand_counters/geral` | Sem ferramenta; a confirmar. Sem o documento a primeira demanda é a 10001 |
 | 9. Papel `comercial` para o Guilherme | A confirmar; o convite já oferece o papel porque a plataforma está ligada |
-| 10. Orçamentos em andamento e histórico como legado | Sem código |
+| 10. Orçamentos em andamento e histórico como legado | Fora do plano desde 23/10: nada é carregado, o histórico fica na planilha |
 | 11. Uma semana em paralelo com o Excel | Depende dos anteriores |
 
 As decisões da seção 6 do mesmo documento (publicar com #126 a #129, ponto de
 partida do contador, CNPJ do PDF, forma de dar o papel ao Guilherme, trava da
-carga, formato do legado, teste de restauração) não têm resposta registrada,
-exceto a da forma de dar o papel, que o #157 decidiu ligando a plataforma.
+carga, teste de restauração) não têm resposta registrada, exceto a da forma de
+dar o papel, que o #157 decidiu ligando a plataforma, e a do legado, que em
+23/10 saiu do plano. A integração com a Omie (lançar a NF, prevista para a
+Fase 7) também fica fora até nova decisão.
 
 ### 4.8 Documentação e contrato de trabalho
 
@@ -397,8 +405,8 @@ exceto a da forma de dar o papel, que o #157 decidiu ligando a plataforma.
   coleção existe e a regra não tem o ramo do cliente. Só importa quando a OS
   chegar ao portal (Fase 4), mas o desenho da Fase 3 deve prever.
 - A tela Hoje lê a coleção `demands` inteira no navegador e filtra a etapa na
-  memória. Funciona com o volume de hoje; com a carga da Omie e um ano de
-  demandas, vira consulta com índice.
+  memória. Funciona com o volume de hoje; com um ano de demandas, vira
+  consulta com índice.
 
 ### 4.10 Processo
 
@@ -415,34 +423,48 @@ exceto a da forma de dar o papel, que o #157 decidiu ligando a plataforma.
 
 ## 5. Caminho recomendado, em ordem
 
-1. O Leonardo responde as decisões da seção 6. Sem a 1 e a 2 não vale abrir
-   PR de tela.
+1. **Alinhamento de UX e UI antes de qualquer PR de tela** (pedido do
+   Leonardo em 23/10). Com um shell por módulo, decidir o visual dos shells,
+   a troca de módulo, o que cada shell tem (Início do módulo, Clientes,
+   Agent Dute, Administração), a fila do dia e as telas da Operação. O
+   resultado são mockups novos por módulo, aprovados como os de 19 e 20/10,
+   e um registro em `fase-2-nucleo.md` superando a decisão 6.
 2. Fechar o uso do Comercial na produção: CNPJ e razão social do PDF
-   (pergunta 15), contador, cargas com dry-run e export antes, papel do
-   Guilherme, e registrar em `comercial-producao.md` o que foi feito de cada
-   passo. É o que faz o módulo ligado ter dado.
+   (pergunta 15), contador, cargas de tabelas e contratos com dry-run e
+   export antes, clientes à mão pela tela de Clientes, papel do Guilherme, e
+   registrar em `comercial-producao.md` o que foi feito de cada passo. Sem
+   Omie e sem legado.
 3. Escrever o desenho da Fase 3 no padrão da Fase 6, reconciliado com o
-   plano (4.4 e 4.5), antes de qualquer parte nova da Operação. A
-   `fase-3-operacao.md` de hoje vira o registro das partes 1 a 3.
-4. Telas da Operação em `.v3` (4.2): um PR pequeno, enquanto são três telas.
-5. Navegação (4.1): se a decisão for o shell v3 único, fazer a parte 3 da
-   Fase 2 como desenhada e o shell v3 em seguida, aposentando os shells por
-   módulo; se for manter, registrar.
-6. Atualizar `CLAUDE.md` e `plano.md` com o que a seção 4.8 lista.
+   plano (4.4 e 4.5) e com o alinhamento de UX e UI, antes de qualquer parte
+   nova da Operação. A `fase-3-operacao.md` de hoje vira o registro das
+   partes 1 a 3.
+4. Telas da Operação conforme o alinhamento de UX e UI (4.2 e 4.3).
+5. Atualizar `CLAUDE.md`, `plano.md` e `fase-2-nucleo.md` com o que a seção
+   4.8 lista e com as decisões da seção 6.
 
-## 6. Decisões que só o Leonardo toma
+## 6. Decisões do Leonardo
 
-1. **Navegação:** shell v3 único com menu por papel (como alinhado) ou um
-   shell por módulo com "Módulos" no menu da conta (como está)?
-2. **Operação na produção:** manter ligada como está (cadastro e fila, sem
+Tomadas em 23/10/2026:
+
+- **Navegação:** um shell por módulo, como está. Um menu único inflava
+  demais. Registrar em `fase-2-nucleo.md` e reler os mockups (4.1).
+- **Omie:** a carga de clientes e a integração para lançar a NF saem do plano
+  por ora. Os clientes entram pela tela de Clientes do Comercial.
+- **Legado:** não se carrega. Os orçamentos em andamento e o histórico ficam
+  na planilha.
+- **Antes de seguir, um novo alinhamento de UX e UI** (seção 5, item 1).
+
+Ainda em aberto:
+
+1. **Operação na produção:** manter ligada como está (cadastro e fila, sem
    executar e concluir, no visual antigo) ou desligar até a Fase 3 fechar?
-3. **Plataforma ligada para todos na produção** (tela de cards para owner,
+2. **Plataforma ligada para todos na produção** (tela de cards para owner,
    admin e interno): fica, ou volta ao roteiro controlado da parte 17?
-4. **"Para abrir" na fila do dia:** fica como ponte com o Comercial (e entra
-   no mockup) ou vai para o Início "Precisa de você"?
-5. **Roteiro de produção do Comercial:** quais dos passos 3, 4, 5, 8 e 9 da
+3. **"Para abrir" na fila do dia:** fica como ponte com o Comercial ou vai
+   para o Início do módulo? Entra no alinhamento de UX e UI.
+4. **Roteiro de produção do Comercial:** quais dos passos 3, 4, 5, 8 e 9 da
    seção 4.7 já foram feitos fora do repositório?
-6. As **perguntas abertas** 1, 7, 8, 9, 11, 12, 14, 16 e 17 do Comercial e,
+5. As **perguntas abertas** 1, 7, 8, 9, 11, 12, 14, 16 e 17 do Comercial e,
    antes de qualquer orçamento sair, a **15** (CNPJ e razão social).
-7. **Eventos da OS:** confirmar os nomes `os.*` (motivo técnico) e atualizar
+6. **Eventos da OS:** confirmar os nomes `os.*` (motivo técnico) e atualizar
    o plano.
