@@ -199,6 +199,7 @@ import {
   ROUTINES_COLLECTION,
   RoutineInputSchema,
   routinePrompt,
+  routinesRunInCore,
   saveRoutine,
   type DueRoutine,
 } from "./domain/agent-routines.js";
@@ -7615,6 +7616,8 @@ export const runAgentRoutineNow = onCall({ timeoutSeconds: 180 }, async (request
 export const runAgentRoutines = onSchedule(
   { schedule: "every 15 minutes", timeZone: "America/Sao_Paulo", timeoutSeconds: 540, memory: "512MiB" },
   async () => {
+    // Onde o agente do núcleo está liberado, as rotinas rodam lá (runDuteRoutines).
+    if (routinesRunInCore(PROJECT_ID)) return;
     const started = Date.now();
     const due = await claimDueRoutines(db, new Date());
     for (const routine of due) {

@@ -18,9 +18,9 @@ export const CALLABLES_DO_NUCLEO = [
   "findSimilarQuotes",
   // A decisão da coordenação sobre o alerta do item parado (parte 5.4d): aprovar com os itens ou descartar.
   "answerStockAlert",
-  // A conversa com o Agent Dute do núcleo (parte 5.5e): a tela passa a usá-la na parte 5.5h.
+  // A conversa com o Agent Dute do núcleo (parte 5.5e): a tela passa a usá-la na parte 5.5i.
   "chatWithDute",
-  // As anotações e os playbooks do Agent Dute, do cliente ativo (parte 5.5f): a tela passa a usá-los na parte 5.5h.
+  // As anotações e os playbooks do Agent Dute, do cliente ativo (parte 5.5f): a tela passa a usá-los na parte 5.5i.
   "suggestDuteNote",
   "listDuteNotes",
   "decideDuteNote",
@@ -28,6 +28,11 @@ export const CALLABLES_DO_NUCLEO = [
   "saveDutePlaybook",
   "decideDutePlaybook",
   "seedDutePlaybooks",
+  // As rotinas do Agent Dute, da própria pessoa (parte 5.5g): a tela passa a usá-las na parte 5.5i.
+  "listDuteRoutines",
+  "saveDuteRoutine",
+  "deleteDuteRoutine",
+  "runDuteRoutineNow",
 ] as const;
 export type CallableDoNucleo = (typeof CALLABLES_DO_NUCLEO)[number];
 

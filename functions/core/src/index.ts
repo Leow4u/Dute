@@ -15,9 +15,10 @@ import {
   seedDutePlaybooksFor,
   suggestDuteNoteFor,
 } from "./domain/agente-revisao.js";
+import { deleteDuteRoutineFor, listDuteRoutinesFor, rodarRotinasVencidas, runDuteRoutineNowFor, saveDuteRoutineFor } from "./domain/agente-rotinas.js";
 import { answerStockAlertFor, runStockFor } from "./domain/alertas-parados-gravacao.js";
 import { runCasesFor } from "./domain/lembrancas-gravacao.js";
-import { memoriaLiberada } from "./domain/liberacao.js";
+import { agenteLiberado, memoriaLiberada } from "./domain/liberacao.js";
 import { runMeasuresFor } from "./domain/medidas-gravacao.js";
 import { findSimilarQuotesFor } from "./domain/parecidos-gravacao.js";
 import { requireCoreCaller, requireDuteCaller } from "./domain/profile.js";
@@ -145,4 +146,38 @@ export const decideDutePlaybook = onCall(async (request) => {
 export const seedDutePlaybooks = onCall(async (request) => {
   const caller = await requireDuteCaller(db, request, PROJECT_ID);
   return seedDutePlaybooksFor(db, caller, request.data);
+});
+
+/** As rotinas da pessoa no cliente da conversa (parte 5.5g). */
+export const listDuteRoutines = onCall(async (request) => {
+  const caller = await requireDuteCaller(db, request, PROJECT_ID);
+  return listDuteRoutinesFor(db, caller, request.data);
+});
+
+/** A pessoa cria ou altera a própria rotina, pela tela ou pelo cartão da conversa; a mesma mensagem não cria duas (parte 5.5g). */
+export const saveDuteRoutine = onCall(async (request) => {
+  const caller = await requireDuteCaller(db, request, PROJECT_ID);
+  return saveDuteRoutineFor(db, caller, request.data);
+});
+
+/** A pessoa exclui a própria rotina (parte 5.5g). */
+export const deleteDuteRoutine = onCall(async (request) => {
+  const caller = await requireDuteCaller(db, request, PROJECT_ID);
+  return deleteDuteRoutineFor(db, caller, request.data);
+});
+
+/** "Rodar agora": a rotina roda já, sem mexer na agenda, no máximo uma vez a cada 5 minutos (parte 5.5g). */
+export const runDuteRoutineNow = onCall({ timeoutSeconds: 180, memory: "512MiB" }, async (request) => {
+  const caller = await requireDuteCaller(db, request, PROJECT_ID);
+  return runDuteRoutineNowFor(db, caller, request.data, { gerar: gerarComGenkit(ai) });
+});
+
+/**
+ * As rotinas vencidas, a cada 15 minutos, uma de cada vez, com o perfil atual
+ * de quem criou (parte 5.5g). Onde o agente do núcleo está liberado, a rotina
+ * agendada do WMS (runAgentRoutines) não roda.
+ */
+export const runDuteRoutines = onSchedule({ schedule: "every 15 minutes", timeZone: "America/Sao_Paulo", timeoutSeconds: 540, memory: "512MiB", maxInstances: 1 }, async () => {
+  if (!agenteLiberado(PROJECT_ID)) return;
+  console.info("runDuteRoutines", await rodarRotinasVencidas(db, { gerar: gerarComGenkit(ai) }));
 });

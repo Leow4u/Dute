@@ -14,6 +14,18 @@ import { z } from "genkit";
 
 export const ROUTINES_COLLECTION = "agent_routines";
 export const MAX_ROUTINES_PER_USER = 5;
+
+/**
+ * Onde o Agent Dute do núcleo (functions/core, parte 5.5g) roda as rotinas:
+ * a cópia literal de AGENTE_AMBIENTES_LIBERADOS, travada em
+ * artifacts/app/src/lib/platform-lists.test.ts. Ali a rotina agendada do
+ * WMS não roda, para uma rotina rodar por um só.
+ */
+export const CORE_AGENT_PROJECTS = ["dute-homolog"];
+
+export function routinesRunInCore(projectId: string | undefined) {
+  return !!projectId && CORE_AGENT_PROJECTS.includes(projectId);
+}
 /** São Paulo não tem horário de verão desde 2019. */
 const SAO_PAULO_OFFSET_MS = -3 * 60 * 60 * 1000;
 const DAY_MS = 86_400_000;

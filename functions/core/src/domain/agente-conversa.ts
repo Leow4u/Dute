@@ -105,7 +105,19 @@ export type OpcoesDaConversa = {
   aoPedaco?: (pedaco: PedacoDaResposta) => void;
   agora?: () => Date;
   novoId?: (prefixo: string) => string;
+  /** A rotina agendada (parte 5.5g): sem histórico, com o dia na pergunta e a origem "rotina". */
+  rotina?: { id: string; nome: string };
 };
+
+/** A fonte da resposta de reserva, quando nenhum modelo respondeu. */
+export const FONTE_SEM_MODELO = "fallback_indisponivel";
+
+const diaDaRotina = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric", timeZone: "America/Sao_Paulo" });
+
+/** A pergunta da rotina ao modelo: o texto dela, com o dia, para ele responder sobre o período certo. */
+export function perguntaDaRotina(rotina: { nome: string }, pergunta: string, agora: Date): string {
+  return `${pergunta}\n\n(Rotina agendada "${rotina.nome}", ${diaDaRotina.format(agora)}. Responda direto, sem perguntas de volta: ninguém está esperando na conversa agora.)`;
+}
 
 function novoIdPadrao(prefixo: string): string {
   return `${prefixo}_${Date.now().toString(36)}_${randomUUID().replace(/-/g, "").slice(0, 10)}`;
@@ -130,15 +142,19 @@ export async function conversarComDute(db: Firestore, caller: CoreProfile, data:
   if (conversa.exists) conferirDono(conversa.data() ?? {}, escopo);
 
   const leitor = leitorDoAgente(db, escopo);
+  const rotina = opcoes.rotina;
   const [mensagens, notas, playbooks] = await Promise.all([
-    leitor.doCliente("agent_messages", {
-      onde: [
-        ["conversation_id", "==", conversaId],
-        ["user_id", "==", escopo.uid],
-      ],
-      ordem: [["created_at_iso", "desc"]],
-      limite: JANELA_DO_HISTORICO,
-    }),
+    // A rotina responde sempre do zero: o histórico dela são as respostas de antes.
+    rotina
+      ? Promise.resolve([])
+      : leitor.doCliente("agent_messages", {
+          onde: [
+            ["conversation_id", "==", conversaId],
+            ["user_id", "==", escopo.uid],
+          ],
+          ordem: [["created_at_iso", "desc"]],
+          limite: JANELA_DO_HISTORICO,
+        }),
     notasDoPrompt(leitor).catch(() => [] as string[]),
     playbooksDoPrompt(leitor).catch(() => []),
   ]);
@@ -163,10 +179,13 @@ export async function conversarComDute(db: Firestore, caller: CoreProfile, data:
     historico: emOrdem(mensagens)
       .filter((mensagem) => mensagem.conteudo.trim())
       .map((mensagem) => ({ papel: mensagem.papel === "assistant" ? ("model" as const) : ("user" as const), texto: mensagem.conteudo.slice(0, TAMANHO_DA_MENSAGEM_NO_MODELO) })),
-    mensagem: pedido.message,
+    mensagem: rotina ? perguntaDaRotina(rotina, pedido.message, contexto.agora) : pedido.message,
     ferramentas,
     aoPedaco: opcoes.aoPedaco,
   });
+
+  // A rotina sem modelo não grava a resposta de reserva: falha e tenta de novo em 15 minutos.
+  if (rotina && resposta.fonte === FONTE_SEM_MODELO) throw new Error(resposta.erro || "Nenhum modelo respondeu.");
 
   // A resposta grava depois da pergunta, para a ordem do histórico nunca empatar.
   const respostaEm = new Date(Math.max(agora().getTime(), Date.parse(perguntaEm) + 1)).toISOString();
@@ -175,7 +194,7 @@ export async function conversarComDute(db: Firestore, caller: CoreProfile, data:
   const usados = playbooksUsados(chamadas);
   const perguntaId = novoId("msg_user");
   const respostaId = novoId("msg_agent");
-  const origem = escopo.audiencia === "cliente" ? "portal_cliente" : "painel_interno";
+  const origem = rotina ? "rotina" : escopo.audiencia === "cliente" ? "portal_cliente" : "painel_interno";
 
   const lote = db.batch();
   lote.set(
@@ -187,8 +206,9 @@ export async function conversarComDute(db: Firestore, caller: CoreProfile, data:
       user_email: caller.email,
       user_name: caller.name,
       modulo: escopo.modulo,
-      // O título é a primeira pergunta; não muda a cada mensagem.
-      title: conversa.exists ? undefined : pedido.message.slice(0, 90),
+      // O título é a primeira pergunta (ou o nome da rotina); não muda a cada mensagem.
+      title: conversa.exists ? undefined : (rotina ? `Rotina: ${rotina.nome}` : pedido.message).slice(0, 90),
+      routine_id: rotina?.id,
       status: "active",
       last_message_at: respostaEm,
       updated_at: FieldValue.serverTimestamp(),
@@ -236,7 +256,8 @@ export async function conversarComDute(db: Firestore, caller: CoreProfile, data:
       role: escopo.role,
       modulo: escopo.modulo,
       model: resposta.modelo,
-      source: resposta.fonte,
+      // O painel de custo separa a rotina da conversa pela origem, como no WMS.
+      source: rotina ? "rotina" : resposta.fonte,
       tools_used: ferramentasUsadas,
       tool_calls: ferramentasUsadas.length,
       playbooks: usados,
@@ -251,7 +272,7 @@ export async function conversarComDute(db: Firestore, caller: CoreProfile, data:
   await lote.commit();
 
   // Conversa longa: o que sai da janela vira resumo. A falha aqui nunca derruba a resposta, que já foi gravada.
-  if (opcoes.resumir) {
+  if (opcoes.resumir && !rotina) {
     await atualizarResumo(db, escopo, conversaId, opcoes.resumir).catch((erro) => console.warn("[agente] resumo da conversa não atualizado", erro));
   }
 
