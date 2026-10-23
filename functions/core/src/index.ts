@@ -4,6 +4,7 @@ import { onCall } from "firebase-functions/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { setGlobalOptions } from "firebase-functions/v2";
 
+import { runCasesFor } from "./domain/lembrancas-gravacao.js";
 import { memoriaLiberada } from "./domain/liberacao.js";
 import { runMeasuresFor } from "./domain/medidas-gravacao.js";
 import { requireCoreCaller } from "./domain/profile.js";
@@ -32,11 +33,20 @@ setGlobalOptions({
 
 const db = getFirestore();
 
-/** As medidas da memória, a cada 15 minutos: recalcula do zero quando uma OS é revisada ou reaberta (parte 5.1a). */
+/**
+ * A memória, a cada 15 minutos: as medidas, recalculadas do zero quando uma OS
+ * é revisada ou reaberta (parte 5.1a), e as lembranças das demandas fechadas
+ * (parte 5.3a). Cada uma tem o cursor dela; a falha de uma não para a outra.
+ */
 export const runMeasures = onSchedule({ schedule: "every 15 minutes", timeZone: "America/Sao_Paulo", timeoutSeconds: 300, maxInstances: 1 }, async () => {
   if (!memoriaLiberada(PROJECT_ID)) return;
-  const resultado = await runMeasuresFor(db);
-  console.info("runMeasures", resultado);
+  const [medidas, lembrancas] = await Promise.allSettled([runMeasuresFor(db), runCasesFor(db)]);
+  console.info("runMeasures", {
+    medidas: medidas.status === "fulfilled" ? medidas.value : "falhou",
+    lembrancas: lembrancas.status === "fulfilled" ? lembrancas.value : "falhou",
+  });
+  const falha = [medidas, lembrancas].find((resultado): resultado is PromiseRejectedResult => resultado.status === "rejected");
+  if (falha) throw falha.reason;
 });
 
 /** A duração sugerida para a OS em planejamento, com a base de cada item. Só lê (parte 5.2a). */

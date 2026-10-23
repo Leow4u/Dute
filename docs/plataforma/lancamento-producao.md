@@ -86,8 +86,8 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     `dute-homolog` (`MEMORIA_AMBIENTES_LIBERADOS`).
   - Três functions agendadas: `runDailyAlerts`, todo dia às 06:00,
     `runNotifications`, a cada 5 minutos, e `runMeasures`, a cada 15
-    minutos. A das medidas confere a liberação da memória e não faz nada no
-    `dute-prod`.
+    minutos, que calcula as medidas e as lembranças da memória. Ela confere a
+    liberação da memória e não faz nada no `dute-prod`.
 - **Frontend.**
   - O shell v3 por módulo, inclusive o da Armazenagem, e as quatro telas do
     WMS na v3. A BTG passa a ver o Início, Pedidos, Estoque e Receber novos.
@@ -166,7 +166,7 @@ contato com os avisos ligados (Comercial › Clientes).
 
 ## 5. Depois de publicar (a conferência de produção)
 
-1. **As duas rotinas existem:**
+1. **As três rotinas existem:**
 
    ```powershell
    cd C:\DEV\Dute

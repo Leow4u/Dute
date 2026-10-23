@@ -121,7 +121,9 @@ documentação de produto e operação está em `docs/`.
     `docs/plataforma/fase-4-financeiro.md`.
   - `functions/core`: Functions do núcleo (Fase 5), codebase `core`. Hoje a
     memória da Dute: a rotina `runMeasures` (a cada 15 minutos) recalcula
-    `ai_measures` a partir das OS revisadas, e `suggestDuration` e
+    `ai_measures` a partir das OS revisadas e refaz `ai_case_memory`, uma
+    lembrança por demanda fechada (tem preço: não abre pelo navegador), e
+    `suggestDuration` e
     `answerSuggestion` dão a duração sugerida da OS e guardam a decisão em
     `ai_suggestions`. Toda callable entra por `requireCoreCaller`, no
     formato de uma linha do `src/index.ts` (trava em `src/callables.test.ts`).

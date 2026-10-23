@@ -19,6 +19,7 @@ Seguem a recomendação do plano até a resposta do Leonardo:
 |---|---|
 | 19 | A sugestão pede 5 execuções do mesmo item no mesmo cliente. Sem elas, vale a média interna, com 15 execuções do item em qualquer cliente. Abaixo disso, a sugestão diz que ainda não tem base. |
 | 20 | A codebase nova `functions/core`, como no repositório do plano (`plano.md`). Ela recebe a memória agora e o Agent Dute na parte 5.5. |
+| 29 | A semelhança dos orçamentos compara os itens da LPU e as quantidades. O resumo em texto fica guardado para o Agent Dute. |
 
 - **Três camadas**, como no plano:
   - os fatos são os eventos e os documentos que as callables gravam;
@@ -90,13 +91,13 @@ de fora.
 | `ai_cursors/{rotina}` | `functions/core` | Até onde cada rotina leu os eventos |
 | `core_operations/{id}` | `functions/core` | O recibo de idempotência das callables |
 
-- **Regras.** As medidas e as lembranças abrem à equipe interna que planeja
-  e orça: owner, admin, interno e comercial. As sugestões abrem a quem as
-  pediu e a owner e admin. O cliente, o campo e o painel não leem nada
-  delas. Ninguém grava pelo navegador.
-- **Preço.** A medida de duração e a do planejamento não têm valor. O orçado
-  e o preço da lembrança só abrem a quem lê preço, numa leitura pela
-  callable (parte 5.3).
+- **Regras.** As medidas abrem à equipe interna que planeja e orça: owner,
+  admin, interno e comercial. As sugestões abrem a quem as pediu e a owner e
+  admin. As lembranças não abrem pelo navegador. O cliente, o campo e o
+  painel não leem nada delas. Ninguém grava pelo navegador.
+- **Preço.** A medida de duração e a do planejamento não têm valor. A
+  lembrança tem o orçado e o realizado, então só a callable da parte 5.3b a
+  lê, pelo cliente e pelo papel de quem lê preço.
 - **Zeragem.** As medidas, as sugestões e as lembranças saem das OS e das
   demandas. `tools/full_reset_btg.py` preserva as quatro coleções, como
   preserva a Operação e o Comercial de onde elas saem.
@@ -136,6 +137,7 @@ Leonardo.
   feitos de itens da LPU, e a semelhança pelos itens e pelas quantidades é
   mais exata e explicável que a do texto. Recomendo comparar pelos itens
   (o vetor é o dos itens) e guardar o resumo em texto para o Agent Dute.
+  Seguimos assim desde a parte 5.3a.
 
 ## Registro
 
@@ -243,3 +245,28 @@ os pedidos em `use-sugestoes.ts`; a tela em `pages/operacao/planejar-view.tsx`.
   - `memoria/sugestao.test.ts` cobre o pedido, os textos, o "Usar", a decisão e a resposta.
   - `planejar-view.test.tsx` cobre os textos do Quando, a ação principal, sem base, a divisão, o que não aparece e `axe`.
   - `memoria/api.test.ts` trava a lista das callables contra as exportadas pelo núcleo.
+
+### Parte 5.3a: as lembranças das demandas fechadas
+
+Feita em 23/10/2026. As contas estão em `functions/core/src/domain/lembrancas.ts`;
+a rotina em `lembrancas-gravacao.ts`.
+
+- **A lembrança** (`ai_case_memory/{demanda}`), uma por demanda fechada: A faturar, faturada ou paga.
+  - O orçado é a RV que fechou o escopo. O realizado é a RV que o cliente validou, ou a mesma quando o executado não mudou. A demanda direta não tem orçado.
+  - Cada item guarda a quantidade orçada e a realizada. O ajuste fica de fora, porque é só dinheiro.
+  - Guarda o valor dos dois em centavos, os serviços, o período executado e as OS revisadas da demanda e do mesmo cliente, com o tempo de trabalho e o homem-minuto.
+  - O resumo em texto junta a demanda, o cliente, o título, os serviços, o feito, os valores e o tempo. Fica para o Agent Dute.
+  - O fechamento é a entrada na etapa fechada depois da última reabertura. Sem marco, vale a data da validação.
+- **O vetor de semelhança** é o dos itens da LPU feitos, com o log da quantidade (pergunta 29). O item avulso fica de fora. A semelhança de dois casos é o cosseno dos vetores; a busca entra na parte 5.3b.
+- **A rotina.** Roda na mesma `runMeasures`, a cada 15 minutos, com o cursor próprio (`ai_cursors/lembrancas`). As medidas e as lembranças rodam juntas, e a falha de uma não para a outra.
+  - Lê a mudança de etapa que entra ou sai das etapas fechadas e a OS revisada ou reaberta.
+  - Refaz a lembrança da demanda como ela está agora: a fechada ganha, a reaberta perde. A que não mudou não se grava de novo.
+  - O Financeiro leva a demanda a faturada e a paga sem mudança de etapa no evento. A lembrança não guarda a etapa, então nada muda nela.
+  - Na primeira vez, refaz as de todas as demandas fechadas e marca o cursor.
+  - O cursor das duas rotinas mora em `cursor.ts`.
+- **As regras.** `ai_case_memory` não abre pelo navegador, nem a owner, porque tem preço e é de cada cliente. A callable da parte 5.3b lê pelo cliente e pelo papel.
+- **Zeragem.** `tools/full_reset_btg.py` preserva `ai_case_memory`.
+- **Testes.**
+  - `lembrancas.test.ts` resolve à mão um caso: no Itaú, 12 mesas e 40 cadeiras orçadas por R$ 5.000,00 e 14 mesas, 40 cadeiras e 3 caixas avulsas validadas por R$ 5.600,00, em duas OS de 3 horas e 420 homem-minutos. Cobre também o vetor, o resumo, a demanda direta, o fechamento depois da reabertura, a semelhança e os eventos que contam.
+  - `lembrancas.integration.test.ts` cobre a primeira vez, a OS de outro cliente que nunca entra, a reabertura, o fechamento, a lembrança que não mudou e o evento do último minuto.
+  - `memoria-medidas.rules.test.ts` cobre a regra; `callables.test.ts`, a rotina que roda as duas.

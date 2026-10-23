@@ -1,4 +1,6 @@
-import { FieldPath, Timestamp, type Firestore, type WriteBatch } from "firebase-admin/firestore";
+import type { Firestore, WriteBatch } from "firebase-admin/firestore";
+
+import { AI_CURSORS_COLLECTION, EVENTS_COLLECTION, lerLoteDoCursor, marcarCursor } from "./cursor.js";
 
 import {
   AI_MEASURES_COLLECTION,
@@ -24,9 +26,8 @@ import { registrarValoresReais } from "./sugestao-gravacao.js";
  * primeira vez, recalcula com o histórico que existe e marca o cursor.
  */
 
-export const AI_CURSORS_COLLECTION = "ai_cursors";
+export { AI_CURSORS_COLLECTION, EVENTS_COLLECTION };
 export const CURSOR_DAS_MEDIDAS = "medidas";
-export const EVENTS_COLLECTION = "events";
 export const SERVICE_ORDERS_COLLECTION = "service_orders";
 
 /**
@@ -35,9 +36,6 @@ export const SERVICE_ORDERS_COLLECTION = "service_orders";
  */
 export const EVENTOS_DAS_MEDIDAS = ["os.reviewed", "os.reopened", "demand.won"] as const;
 
-/** Só entra o evento gravado há mais de um minuto, para nenhum ficar antes do cursor (o mesmo da rotina dos avisos). */
-export const ESPERA_DO_EVENTO_MS = 60_000;
-export const LOTE_DE_EVENTOS = 200;
 /** As gravações de um lote do Firestore, com folga para o limite de 500. */
 const GRAVACOES_POR_LOTE = 400;
 
@@ -105,37 +103,13 @@ async function gravarMedidas(db: Firestore, medidas: readonly Medida[]): Promise
 
 export async function runMeasuresFor(db: Firestore, opcoes: { agora?: () => Date } = {}): Promise<ResultadoDasMedidas> {
   const instante = (opcoes.agora ?? (() => new Date()))();
-  const limite = Timestamp.fromMillis(instante.getTime() - ESPERA_DO_EVENTO_MS);
-  const cursorRef = db.collection(AI_CURSORS_COLLECTION).doc(CURSOR_DAS_MEDIDAS);
-  const cursor = await cursorRef.get();
-  const createdAt = cursor.get("created_at");
-  const primeira = !(cursor.exists && createdAt instanceof Timestamp);
-
-  let eventos = 0;
-  let revisadasNoLote: string[] = [];
-  let novoCursor: { created_at: Timestamp; evento_id: string } = { created_at: limite, evento_id: "" };
-  if (!primeira) {
-    const ordenados = db
-      .collection(EVENTS_COLLECTION)
-      .where("type", "in", [...EVENTOS_DAS_MEDIDAS])
-      .where("created_at", "<=", limite)
-      .orderBy("created_at", "asc")
-      .orderBy(FieldPath.documentId(), "asc");
-    const eventoId = texto(cursor.get("evento_id"));
-    // Sem o id (o cursor de começo), parte do instante: o que foi gravado nele também fica antes.
-    const depois = eventoId ? ordenados.startAfter(createdAt, eventoId) : ordenados.startAfter(createdAt);
-    const lote = await depois.limit(LOTE_DE_EVENTOS).get();
-    eventos = lote.size;
-    revisadasNoLote = lote.docs.filter((doc) => doc.get("type") === "os.reviewed").map((doc) => texto(doc.get("payload.id"))).filter(Boolean);
-    const ultimo = lote.docs.at(-1);
-    const ultimoCriado = ultimo?.get("created_at");
-    if (!ultimo || !(ultimoCriado instanceof Timestamp)) return { recalculou: false, eventos: 0, amostras: 0, medidas: 0, gravadas: 0, apagadas: 0, reais: 0 };
-    novoCursor = { created_at: ultimoCriado, evento_id: ultimo.id };
-  }
+  const lote = await lerLoteDoCursor(db, CURSOR_DAS_MEDIDAS, EVENTOS_DAS_MEDIDAS, instante);
+  if (!lote.proximo) return { recalculou: false, eventos: 0, amostras: 0, medidas: 0, gravadas: 0, apagadas: 0, reais: 0 };
+  const revisadasNoLote = lote.eventos.filter((doc) => doc.get("type") === "os.reviewed").map((doc) => texto(doc.get("payload.id"))).filter(Boolean);
 
   const { amostras, medidas } = await calcularMedidas(db, instante.toISOString());
   const { gravadas, apagadas } = await gravarMedidas(db, medidas);
   const reais = await registrarValoresReais(db, revisadasNoLote, instante);
-  await cursorRef.set({ ...novoCursor, atualizado_em: instante.toISOString() });
-  return { recalculou: true, eventos, amostras, medidas: medidas.length, gravadas, apagadas, reais };
+  await marcarCursor(db, CURSOR_DAS_MEDIDAS, lote.proximo, instante);
+  return { recalculou: true, eventos: lote.eventos.length, amostras, medidas: medidas.length, gravadas, apagadas, reais };
 }

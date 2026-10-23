@@ -63,6 +63,7 @@ MEMORIA = (
     "ai_measures",
     "ai_cursors",
     "ai_suggestions",
+    "ai_case_memory",
 )
 
 
