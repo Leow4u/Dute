@@ -39,7 +39,7 @@ export const saveVehicle = onCall(async (request) => {
   return saveVehicleFor(db, caller, request.data);
 });
 
-/** Abre a OS da demanda em Para planejar, ou cancela a OS aberta. */
+/** Abre (todo o saldo), planeja (várias OS com fatias), agenda, muda os itens ou cancela a OS. */
 export const saveServiceOrder = onCall(async (request) => {
   const caller = await requireOperacaoCaller(db, request, PROJECT_ID);
   return saveServiceOrderFor(db, caller, request.data);

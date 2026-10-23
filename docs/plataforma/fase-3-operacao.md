@@ -80,7 +80,7 @@ que a usa.
 | Coleção | Dono | O que a Operação faz |
 |---|---|---|
 | `demands` | Comercial | Lê; escreve só `os_numeros`, `execucao` (período, OS revisadas) e `revisao` (divergências com decisão). Cria a demanda direta pela callable dela, no mesmo esquema, sem RV. O Comercial só lê esses três campos. |
-| `service_orders` | Operação | Tudo, pelas callables. Campos novos na parte 3.4: `servicos`, `janela`, `locais` (endereço copiado e contato no local), `equipe` com papel por pessoa (nome e papel copiados no agendamento), `equipe_uids`, `freelancers`, `terceiros`, `veiculos`, `instrucoes`, `observacoes_internas`, `etapas`, `itens` com `planejado`, `executado` e `incluido_em_campo`, `fotos`, `ocorrencias`, `presencas`, `conclusao`, `revisao`, `status` e `cancelamento`. Nenhum valor. |
+| `service_orders` | Operação | Tudo, pelas callables. Desde a parte 3.4b: `itens` com `planejado`, `servicos`, `locais` (endereço copiado e contato no local), `janela`, `equipe` com papel, vínculo e empresa por pessoa (nome copiado no agendamento; freelancer e terceiro entram aqui), `equipe_uids`, `veiculos`, `instrucoes`, `status` e `cancelamento`. Nas partes 3.7 a 3.10: `etapas`, `executado` e `incluido_em_campo` nos itens, `fotos`, `ocorrencias`, `presencas`, `conclusao` e `revisao`. Nenhum valor. |
 | `service_order_counters` | Operação | O sufixo da OS por demanda. |
 | `collaborators` | Operação | Ganha `vinculo`, `empresa` (terceiro) e `papeis` (líder, motorista, montador, ajudante). |
 | `vehicles` | Operação | Ganha `dono` (próprio ou terceiro) e `revisao_em`. |
@@ -328,3 +328,58 @@ primeiro, porque a equipe da OS copia o nome e o papel de cada pessoa.
   Sem legenda; `axe` sem violação nas duas fichas.
 - **Eventos.** Os mesmos de antes (`collaborator.*`, `vehicle.*`), sem nome,
   CPF, placa nem e-mail.
+
+### Parte 3.4b: modelo da OS para o planejamento
+
+Feita em 23/10/2026, no backend e na leitura da fila. As telas novas
+(Planejar OS, Demanda, Agenda) são das partes 3.5 e 3.6.
+
+- **Fatia do saldo.** O escopo é a revisão fechada (`escopo_rv`); cada linha
+  é contada pelo id, que é o mesmo em todas as RV. Saldo = escopo menos a
+  fatia das OS que não foram canceladas, em milésimos (quantidade com até 3
+  casas, como no orçamento). Abrir pela fila (`create`) põe todo o saldo
+  numa OS; `plan` cria até 10 OS de uma vez, cada uma com a fatia pedida;
+  `set_items` muda a fatia de uma OS aberta ou agendada. Acima do saldo,
+  nada é gravado. Cancelar devolve a fatia.
+- **Concorrência.** Quem muda o saldo grava no contador da demanda
+  (`service_order_counters`), que a transação também lê: dois planejamentos
+  ao mesmo tempo conflitam ali e o segundo relê o saldo. O teste dispara três
+  ao mesmo tempo e só um grava. A sequência da OS parte do maior entre o
+  contador e as OS que existem, para nunca repetir um número.
+- **Aditivo em negociação não trava.** A demanda com escopo fechado recebe OS
+  enquanto a RV seguinte está em curso; executada, validada, perdida ou
+  cancelada, não recebe.
+- **Documento.** `itens` com `planejado`, `servicos` (vistoria, desmontagem,
+  embalagem, transporte, montagem e armazenagem, pelo serviço, item e
+  descrição), `locais` (origem e destino com nome e endereço do cadastro de
+  locais do mesmo cliente, complemento da demanda e o contato no local),
+  `janela` (data, início e fim), `equipe` (nome, papel, vínculo, empresa e se
+  tem o app), `equipe_uids`, `veiculos` (placa, tipo, modelo, dono e empresa)
+  e `instrucoes`. Aberta sem janela, agendada com ela. O teste de schema
+  percorre todas as chaves e recusa qualquer uma de preço, valor, total,
+  custo ou diária.
+- **Decisões no caminho.**
+  - Freelancer e terceiro entram na `equipe` como qualquer pessoa, com o
+    vínculo e a empresa copiados (como na tela aprovada `OpOSPlanejar`), em
+    vez de listas separadas `freelancers` e `terceiros`.
+  - A OS passa a levar nome e placa (a parte 3 não levava), porque o campo
+    lê a OS e não o cadastro. CPF nunca; o evento continua sem nome e placa.
+  - Sem papel pedido, vale o primeiro papel do cadastro da pessoa; quem tem
+    papéis marcados só entra num deles.
+  - Sem equipe e sem veículo, a OS agenda: a falta é alerta (parte 3.13), não
+    bloqueio. A tela de agendamento da fila ainda pede os dois até a parte 3.6.
+  - `observacoes_internas` ficou de fora: o campo e o cliente leem o
+    documento da OS e a regra não esconde campo. Entra numa subcoleção só da
+    coordenação quando uma tela pedir.
+  - O nome do cliente continua fora da OS (como na parte 2); a tela do campo
+    (parte 3.8) decide como mostrar.
+  - O índice da lista do campo (`equipe_uids` com status) entra com a
+    consulta, na parte 3.8.
+- **Regras.** O campo lê a OS em que está escalado (`equipe_uids`) e lista só
+  com esse filtro; acesso removido não lê; continua sem ler o cadastro.
+- **Eventos.** `os.planned` (um por OS, com a composição da equipe por id,
+  papel e vínculo, e os veículos por id), `os.scheduled` com janela,
+  composição e veículos, e `os.items_changed`. Nenhum leva nome, placa,
+  contato ou instrução.
+- **OS de antes.** A leitura aceita a `agenda` antiga, a `quantidade` e os
+  ids dos locais; agendar de novo grava o modelo novo e apaga a `agenda`.

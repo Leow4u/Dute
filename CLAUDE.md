@@ -33,8 +33,9 @@ documentação de produto e operação está em `docs/`.
   `docs/plataforma/comercial-producao.md`.
 - **Operação (Fase 3, partes 1 a 3) está na `main`, ligada no `dute-homolog` e
   no `dute-prod`** (OK do Leonardo em 22/10/2026): colaboradores, veículos e a
-  fila do dia (abrir, agendar e cancelar a OS). Executar e concluir ainda não
-  existem; campo não lê a OS. O `dute-btg` fica de fora das duas listas
+  fila do dia (abrir, agendar e cancelar a OS). Desde a parte 3.4b a OS
+  tem fatia do saldo, janela, equipe com papel e veículos, e o campo lê só a
+  OS em que está escalado; executar e concluir ainda não existem. O `dute-btg` fica de fora das duas listas
   `OPERACAO_AMBIENTES_LIBERADOS`. Desenho e como desligar:
   `docs/plataforma/fase-3-operacao.md`.
 - **Alinhamento do Comercial e da Operação recuperado em 23/10/2026**:

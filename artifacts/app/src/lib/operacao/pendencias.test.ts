@@ -61,7 +61,7 @@ const aberta = (numero: string, cliente: string, extra: Partial<OsDaFila> = {}):
 });
 
 const agendada = (numero: string, cliente: string, data: string, equipe: string[], veiculoId: string, hora: string | null = null): OsDaFila =>
-  aberta(numero, cliente, { status: "agendada", edicao: 2, agenda: { data, hora, equipe, veiculo_id: veiculoId } });
+  aberta(numero, cliente, { status: "agendada", edicao: 2, agenda: { data, hora, equipe, fim: null, veiculos: [veiculoId] } });
 
 const PEDRO = pessoa("col_pedro", "Pedro Nunes");
 const JOAO = pessoa("col_joao", "João Pereira");
@@ -125,6 +125,23 @@ describe("pendências do Início da Operação", () => {
         actionLabel: "Reagendar",
       },
     ]);
+  });
+
+  it("com vários veículos, só o desativado aparece; sem veículo não é este alerta", () => {
+    const [item, ...resto] = pendenciasDaOperacao(
+      entrada({
+        ordens: [
+          aberta("10045-01", "HORIZONTE", {
+            status: "agendada",
+            edicao: 2,
+            agenda: { data: HOJE, hora: null, fim: null, equipe: ["col_pedro"], veiculos: ["vei_van", "vei_velho"] },
+          }),
+          aberta("10046-01", "TECH", { status: "agendada", edicao: 2, agenda: { data: HOJE, hora: null, fim: null, equipe: ["col_pedro"], veiculos: [] } }),
+        ],
+      }),
+    );
+    expect(item).toMatchObject({ id: "os-cadastro:10045-01", title: "OS 10045-01 com veículo desativado", detail: "Construtora Horizonte · 23/10/2026 · XYZ-9876" });
+    expect(resto.filter((outro) => outro.id.startsWith("os-cadastro"))).toEqual([]);
   });
 
   it("o ícone diz o que falta: pessoa ou veículo", () => {

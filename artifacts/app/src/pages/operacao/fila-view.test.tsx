@@ -22,7 +22,7 @@ const HOJE: OsDaFila = {
   status: "agendada",
   edicao: 2,
   itens: [{ item: "Transporte", quantidade: "1" }],
-  agenda: { data: "2026-10-22", hora: "15:00", equipe: ["col_aaaaaaaaaaaaaaaa", "col_bbbbbbbbbbbbbbbb"], veiculo_id: "vei_aaaaaaaaaaaaaaaa" },
+  agenda: { data: "2026-10-22", hora: "15:00", equipe: ["col_aaaaaaaaaaaaaaaa", "col_bbbbbbbbbbbbbbbb"], fim: null, veiculos: ["vei_aaaaaaaaaaaaaaaa"] },
 };
 
 const DEMANDA: DemandaParaAbrir = {

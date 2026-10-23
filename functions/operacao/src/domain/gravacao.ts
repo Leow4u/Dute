@@ -55,7 +55,7 @@ function texto(data: DocumentData, campo: string): string {
   return value;
 }
 
-function colaboradorLido(id: string, data: DocumentData): ColaboradorGravado {
+export function colaboradorLido(id: string, data: DocumentData): ColaboradorGravado {
   const cnh = data.cnh;
   let lida: Cnh | null = null;
   if (cnh != null) {
@@ -90,7 +90,7 @@ function textoOuNull(valor: unknown): string | null {
   return typeof valor === "string" && valor.trim() ? valor.trim() : null;
 }
 
-function veiculoLido(id: string, data: DocumentData): VeiculoGravado {
+export function veiculoLido(id: string, data: DocumentData): VeiculoGravado {
   const modelo = data.modelo;
   if (modelo != null && typeof modelo !== "string") throw new HttpsError("failed-precondition", "Cadastro ilegível.");
   if (typeof data.capacidade_kg !== "number" || typeof data.capacidade_m3 !== "number") {

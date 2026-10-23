@@ -6,6 +6,7 @@ import { colaboradorDaLeitura, veiculoDaLeitura } from "@/lib/operacao/cadastro"
 import { chamarOperacao, mensagemDoErro, novaChave } from "@/lib/operacao/api";
 import {
   agendaDaOs,
+  pedidoDeAgenda,
   clienteDaLeitura,
   comDemanda,
   demandaDaFila,
@@ -138,10 +139,7 @@ export default function PaginaFila() {
             action: "schedule",
             numero: os.numero,
             expected_edicao: os.edicao,
-            data: agenda.data,
-            hora: hora ? hora.slice(0, 5) : null,
-            equipe: agenda.equipe,
-            veiculo_id: agenda.veiculoId,
+            ...pedidoDeAgenda(agenda),
           },
           () => {
             setSelecionada(null);

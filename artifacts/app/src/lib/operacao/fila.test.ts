@@ -8,6 +8,8 @@ import {
   demandaParaAbrir,
   equipeDe,
   osDaLeitura,
+  pedidoDeAgenda,
+  placasDe,
   quadroDoDia,
   type OsDaFila,
 } from "./fila";
@@ -28,7 +30,7 @@ describe("quadro do dia", () => {
       ...aberta,
       numero: "10045-02",
       status: "agendada",
-      agenda: { data: "2026-10-22", hora: "15:00", equipe: ["col_a"], veiculo_id: "vei_a" },
+      agenda: { data: "2026-10-22", hora: "15:00", equipe: ["col_a"], fim: null, veiculos: ["vei_a"] },
     };
     const outro: OsDaFila = {
       ...hoje,
@@ -87,5 +89,58 @@ describe("OS de demanda perdida no Comercial", () => {
       ["10047-01", null],
     ]);
     expect(quadroDoDia(ordens, "2026-10-22").paraAgendar.map((os) => os.numero)).toEqual(["10045-01", "10047-01"]);
+  });
+});
+
+describe("OS do modelo da parte 3.4b", () => {
+  const BASE = { demanda: "10045", customer_code: "ITAU", edicao: 2 };
+
+  it("lê a janela, a equipe e os veículos copiados, e a fatia em planejado", () => {
+    const os = osDaLeitura("10045-02", {
+      ...BASE,
+      status: "agendada",
+      itens: [{ id: "ln_1", item: "Estação", planejado: "30" }],
+      janela: { data: "2026-10-27", inicio: "07:30", fim: "18:00" },
+      equipe: [
+        { colaborador_id: "col_a", nome: "Ana Souza", papel: "lider" },
+        { colaborador_id: "col_b", nome: "Valter Moreira", papel: null },
+      ],
+      veiculos: [{ veiculo_id: "vei_a", placa: "DEF4G56" }, { veiculo_id: "vei_b", placa: "FGH2B34" }],
+    });
+    expect(os?.itens).toEqual([{ item: "Estação", quantidade: "30" }]);
+    expect(os?.agenda).toEqual({ data: "2026-10-27", hora: "07:30", fim: "18:00", equipe: ["col_a", "col_b"], veiculos: ["vei_a", "vei_b"] });
+  });
+
+  it("a OS de antes da parte 3.4 continua lida pela agenda antiga", () => {
+    const os = osDaLeitura("10045-01", {
+      ...BASE,
+      status: "agendada",
+      itens: [{ item: "Estação", quantidade: "2" }],
+      agenda: { data: "2026-10-22", hora: "15:00", equipe: ["col_a"], veiculo_id: "vei_a" },
+    });
+    expect(os?.agenda).toEqual({ data: "2026-10-22", hora: "15:00", fim: null, equipe: ["col_a"], veiculos: ["vei_a"] });
+    expect(os?.itens[0].quantidade).toBe("2");
+  });
+
+  it("aberta, sem janela, não tem agenda mesmo com equipe planejada", () => {
+    const os = osDaLeitura("10045-03", { ...BASE, status: "aberta", itens: [], equipe: [{ colaborador_id: "col_a" }] });
+    expect(os?.agenda).toBeNull();
+  });
+
+  it("o agendamento manda janela, equipe e veículos no formato da callable", () => {
+    expect(pedidoDeAgenda({ data: "2026-10-27", hora: "07:30:00", equipe: ["col_a", "col_b"], veiculoId: "vei_a" })).toEqual({
+      janela: { data: "2026-10-27", inicio: "07:30" },
+      equipe: [{ colaborador_id: "col_a" }, { colaborador_id: "col_b" }],
+      veiculos: ["vei_a"],
+    });
+    expect(pedidoDeAgenda({ data: "2026-10-27", hora: " ", equipe: [], veiculoId: "" })).toEqual({
+      janela: { data: "2026-10-27", inicio: null },
+      equipe: [],
+      veiculos: [],
+    });
+  });
+
+  it("as placas dos veículos da OS, na ordem", () => {
+    expect(placasDe(["vei_a", "vei_x"], { vei_a: "DEF4G56" })).toBe("DEF-4G56, vei_x");
   });
 });

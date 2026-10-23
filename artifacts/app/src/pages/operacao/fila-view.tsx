@@ -7,7 +7,7 @@ import { formatarData } from "@/lib/operacao/cadastro";
 import {
   equipeDe,
   nomeDe,
-  placaDe,
+  placasDe,
   quando,
   rotuloDaDemandaFora,
   type AgendaEmEdicao,
@@ -51,7 +51,7 @@ function Cartao({
   const item = os.itens[0];
   const servico = item ? (item.quantidade ? `${item.item} · ${item.quantidade}` : item.item) : "Sem item";
   const escala = os.agenda
-    ? [quando(os.agenda), equipeDe(os.agenda.equipe, pessoas), placaDe(os.agenda.veiculo_id, placas)].filter(Boolean).join(" · ")
+    ? [quando(os.agenda), equipeDe(os.agenda.equipe, pessoas), placasDe(os.agenda.veiculos, placas)].filter(Boolean).join(" · ")
     : "";
   return (
     <li>
