@@ -388,8 +388,10 @@ service cloud.firestore {
       return eventType.matches('^(inbound|receiving|putaway|picking|packing|shipment|shipping|inventory|warehouse|tarefa_picking|linha_picking|tarefa_packing|volume|item_volume|expedicao|item_expedicao|comprovante_entrega|movimentacao|saldo_estoque|localizacao|excecao_qualidade)[.].*');
     }
 
+    // O financeiro lê os eventos do faturamento do WMS (billing.*) e os do
+    // Financeiro novo (nf.*, Fase 4); nenhum leva valor.
     function isBillingEventType(eventType) {
-      return eventType.matches('^billing[.].*');
+      return eventType.matches('^(billing|nf)[.].*');
     }
 
     function isSupportEventType(eventType) {
@@ -741,6 +743,15 @@ service cloud.firestore {
     // Autorizações de faturamento do cliente (parte 15): pedido, aceite,
     // valor e tomador. Só a callable recordAuthorization grava.
     match /client_authorizations/{autorizacaoId} {
+      allow read: if canReadPrices();
+      allow create, update, delete: if false;
+    }
+
+    // Fatura da demanda (Fase 4, parte 4.1a): a NF registrada no Financeiro,
+    // com o valor de cada demanda. Só quem lê preço lê; a operação, o campo e
+    // o suporte não. Só a callable registerNf grava. financeiro_operations
+    // fica sem match: ninguém lê o recibo.
+    match /faturas/{faturaId} {
       allow read: if canReadPrices();
       allow create, update, delete: if false;
     }

@@ -62,3 +62,19 @@ export function operacaoLiberada(projectId: string | null | undefined): boolean 
 
 /** Valor deste build, para as telas da Operação. */
 export const OPERACAO_LIBERADO = operacaoLiberada(import.meta.env.VITE_FIREBASE_PROJECT_ID);
+
+/**
+ * Liberação própria do Financeiro (docs/plataforma/fase-4-financeiro.md). As
+ * callables de functions/financeiro recusam fora de
+ * FINANCEIRO_AMBIENTES_LIBERADOS (functions/financeiro/src/domain/liberacao.ts,
+ * travada igual a esta por platform-lists.test.ts). Só a homologação atende
+ * até o lançamento da Fase 4 (parte 4.9), com o OK do Leonardo.
+ */
+export const FINANCEIRO_AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog"];
+
+export function financeiroLiberado(projectId: string | null | undefined): boolean {
+  return FINANCEIRO_AMBIENTES_LIBERADOS.includes(String(projectId ?? "").trim());
+}
+
+/** Valor deste build, para as telas do Financeiro. */
+export const FINANCEIRO_LIBERADO = financeiroLiberado(import.meta.env.VITE_FIREBASE_PROJECT_ID);

@@ -95,6 +95,13 @@ documentação de produto e operação está em `docs/`.
     numa linha só, no `src/index.ts`; ali nenhuma outra linha usa `onCall(`,
     nem comentário, porque a conferência do invoker reprova (trava em
     `src/callables.test.ts`).
+  - `functions/financeiro`: Functions do Financeiro (Fase 4), codebase
+    `financeiro`, no molde da Operação: toda callable entra por
+    `requireFinanceiroCaller` (liberação em `domain/liberacao.ts`, só o
+    `dute-homolog` até o lançamento da Fase 4; papéis owner, admin e
+    financeiro) e grava por `runIdempotent` (recibo em
+    `financeiro_operations`) com o evento `nf.*` sem valor. Desenho e registro:
+    `docs/plataforma/fase-4-financeiro.md`.
   - `lib/dominio`: tipos e regras que o app e as Functions precisam ter iguais.
 - **IA native.** Todo módulo novo grava desde o primeiro dia o que a IA precisa
   (eventos em `events`, tempos e medidas) e respeita o isolamento por cliente. A

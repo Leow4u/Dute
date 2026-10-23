@@ -85,7 +85,7 @@ describe("Demandas", () => {
         /^(Tipo|Entrada|Cliente|Etapa)$/,
         /^(Todos os tipos|Todas as entradas|Todos os clientes|Todas as etapas)$/,
         /^(Paraquedas|Emergencial|Planejada|Comercial|Direta|Armazenagem|Itaú Unibanco|Banco Safra)$/,
-        /^(No comercial|Aguardando cliente|Para planejar|Para agendar|Agendada|Em execução|Em revisão|Execução a orçar|A faturar|Perdida|Cancelada)$/,
+        /^(No comercial|Aguardando cliente|Para planejar|Para agendar|Agendada|Em execução|Em revisão|Execução a orçar|A faturar|Faturada|Perdida|Cancelada)$/,
         /^(Demanda|OS|Próximo)$/,
         /^\d{5}$/,
         /^(Troca de cadeiras|Instalação de 40 lockers)$/,

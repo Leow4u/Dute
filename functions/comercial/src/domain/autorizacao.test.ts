@@ -331,6 +331,13 @@ describe("quem pode receber a autorização", () => {
     }
   });
 
+  it("a demanda faturada no Financeiro (Fase 4) não recebe autorização nem complemento", () => {
+    assert.match(
+      problemaDaDemandaParaAutorizar("10045", { etapa: "faturada", customer_code: "ITAU", autorizacao_ids: ["aut_1"] }, "ITAU") ?? "",
+      /está faturada/,
+    );
+  });
+
   it("pedido e aceite comparam sem máscara nem caixa", () => {
     assert.equal(chaveDoNumeroDoCliente("PO 7781-204"), "PO7781204");
     assert.equal(chaveDoNumeroDoCliente(" po.7781/204 "), "PO7781204");

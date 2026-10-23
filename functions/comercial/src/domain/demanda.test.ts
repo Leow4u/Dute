@@ -67,7 +67,7 @@ describe("numeração única", () => {
 describe("etapa da demanda", () => {
   const sem = {};
 
-  it("a lista tem as etapas do desenho, inclusive cancelada", () => {
+  it("a lista tem as etapas do desenho, inclusive cancelada e a faturada do Financeiro (Fase 4)", () => {
     assert.deepEqual(
       [...ETAPAS_DEMANDA],
       [
@@ -79,6 +79,7 @@ describe("etapa da demanda", () => {
         "execucao_a_orcar",
         "aguardando_autorizacao",
         "a_faturar",
+        "faturada",
         "perdida",
         "cancelada",
       ],
@@ -163,6 +164,10 @@ describe("perda e reabertura", () => {
       [...ETAPAS_QUE_PERDEM],
       ["em_montagem", "para_aprovar", "para_enviar", "aguardando_cliente", "para_planejar", "execucao_a_orcar", "aguardando_autorizacao"],
     );
+  });
+
+  it("a faturada não se perde: o Financeiro já registrou a NF (Fase 4)", () => {
+    assert.equal((ETAPAS_QUE_PERDEM as readonly string[]).includes("faturada"), false);
   });
 
   it("motivo × etapa: qualquer motivo antes do fechamento; depois, só cancelado_cliente; a faturar e perdida, nenhum", () => {

@@ -101,10 +101,18 @@ OPERACAO_COLLECTIONS = (
     "service_orders",
     "service_order_counters",
 )
+# Financeiro (docs/plataforma/fase-4-financeiro.md, parte 4.1a): a fatura da
+# demanda e os recibos. É dinheiro da Operação, não dado do WMS: nunca
+# apagadas, nem com --include-setup.
+FINANCEIRO_COLLECTIONS = (
+    "faturas",
+    "financeiro_operations",
+)
 # Os eventos do Comercial moram em `events`, junto dos do WMS: a zeragem apaga
 # só os outros.
 COMERCIAL_EVENT_SOURCE = "functions_comercial"
 OPERACAO_EVENT_SOURCE = "functions_operacao"
+FINANCEIRO_EVENT_SOURCE = "functions_financeiro"
 # O Comercial marca em `customers` o campo `stage` (prospect ou cliente).
 CUSTOMERS_COLLECTION = "customers"
 STAGE_FIELD = "stage"
@@ -132,7 +140,7 @@ def preserved_collections(
     include_setup: bool,
     keep: Iterable[str] = (),
 ) -> set[str]:
-    preserved = set(ACCESS_COLLECTIONS) | set(COMERCIAL_COLLECTIONS) | set(OPERACAO_COLLECTIONS)
+    preserved = set(ACCESS_COLLECTIONS) | set(COMERCIAL_COLLECTIONS) | set(OPERACAO_COLLECTIONS) | set(FINANCEIRO_COLLECTIONS)
     if not include_setup:
         preserved.update(SETUP_COLLECTIONS)
     preserved.update(name.strip() for name in keep if name.strip())
@@ -208,6 +216,11 @@ def operacao_event(collection: str, document: dict[str, Any]) -> bool:
     return event_source(collection, document) == OPERACAO_EVENT_SOURCE
 
 
+def financeiro_event(collection: str, document: dict[str, Any]) -> bool:
+    """Evento gravado pelas Functions do Financeiro: fica na zeragem."""
+    return event_source(collection, document) == FINANCEIRO_EVENT_SOURCE
+
+
 def event_source(collection: str, document: dict[str, Any]) -> str:
     if collection != EVENTS_COLLECTION:
         return ""
@@ -220,6 +233,11 @@ def event_source(collection: str, document: dict[str, Any]) -> str:
 def operacao_path(name: str) -> bool:
     """Documento dentro de uma coleção do cadastro da Operação."""
     return document_path(name).split("/", 1)[0] in OPERACAO_COLLECTIONS
+
+
+def financeiro_path(name: str) -> bool:
+    """Documento dentro de uma coleção do Financeiro."""
+    return document_path(name).split("/", 1)[0] in FINANCEIRO_COLLECTIONS
 
 
 def has_stage(document: dict[str, Any]) -> bool:
@@ -254,7 +272,13 @@ def removable(collection: str, document: dict[str, Any], *, control_name: str) -
     """O que sai da coleção: tudo, menos o controle (é reescrito) e os eventos
     do Comercial."""
     name = str(document.get("name", ""))
-    return bool(name) and name != control_name and not comercial_event(collection, document) and not operacao_event(collection, document)
+    return (
+        bool(name)
+        and name != control_name
+        and not comercial_event(collection, document)
+        and not operacao_event(collection, document)
+        and not financeiro_event(collection, document)
+    )
 
 
 def delete_writes(
@@ -284,6 +308,10 @@ def delete_writes(
             if operacao_path(name):
                 raise RuntimeError(
                     "A zeragem não apaga dado da Operação: " + document_path(name)
+                )
+            if financeiro_path(name):
+                raise RuntimeError(
+                    "A zeragem não apaga dado do Financeiro: " + document_path(name)
                 )
             if collection == CUSTOMERS_COLLECTION and has_stage(document):
                 raise RuntimeError(
@@ -563,6 +591,14 @@ def build_plan(
                 1
                 for document in snapshot.get(EVENTS_COLLECTION, [])
                 if operacao_event(EVENTS_COLLECTION, document)
+            ),
+        },
+        "preserve_financeiro_events": {
+            "source": FINANCEIRO_EVENT_SOURCE,
+            "documents": sum(
+                1
+                for document in snapshot.get(EVENTS_COLLECTION, [])
+                if financeiro_event(EVENTS_COLLECTION, document)
             ),
         },
         "include_setup": include_setup,

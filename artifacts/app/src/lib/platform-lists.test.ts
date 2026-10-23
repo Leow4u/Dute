@@ -14,9 +14,9 @@ import {
 } from "@workspace/dominio";
 
 import { COMERCIAL_ROLES } from "./comercial/navegacao";
-import { COMERCIAL_AMBIENTES_LIBERADOS, OPERACAO_AMBIENTES_LIBERADOS } from "./liberacao";
+import { COMERCIAL_AMBIENTES_LIBERADOS, FINANCEIRO_AMBIENTES_LIBERADOS, OPERACAO_AMBIENTES_LIBERADOS } from "./liberacao";
 import { OPERACAO_CADASTRO_ROLES } from "./operacao/navegacao";
-import { INTERNAL_ROLES } from "./modules";
+import { FINANCE_ROLES, INTERNAL_ROLES } from "./modules";
 import { PLATFORM_MODULES } from "./platform-modules";
 import { TV_ROLES } from "./tv/navegacao";
 
@@ -139,3 +139,19 @@ describe("listas da Operação iguais em todo lugar", () => {
     expect(tsList(liberacao, "OPERACAO_AMBIENTES_LIBERADOS")).toEqual([...OPERACAO_AMBIENTES_LIBERADOS]);
   });
 });
+
+describe("listas do Financeiro iguais em todo lugar (Fase 4)", () => {
+  const roles = read("functions/financeiro/src/domain/platform-roles.ts");
+  const liberacao = read("functions/financeiro/src/domain/liberacao.ts");
+
+  it("papéis: lib/dominio e functions/financeiro; quem grava é quem abre o Faturamento", () => {
+    expect(tsList(roles, "PLATFORM_ROLES")).toEqual([...PAPEIS]);
+    expect(tsList(roles, "FINANCEIRO_ROLES")).toEqual([...FINANCE_ROLES]);
+  });
+
+  it("liberação por ambiente: a lista das callables é a do app, só a homologação até o lançamento", () => {
+    expect(tsList(liberacao, "FINANCEIRO_AMBIENTES_LIBERADOS")).toEqual([...FINANCEIRO_AMBIENTES_LIBERADOS]);
+    expect([...FINANCEIRO_AMBIENTES_LIBERADOS]).toEqual(["dute-homolog"]);
+  });
+});
+
