@@ -59,11 +59,11 @@ const VEHICLES = "vehicles";
 
 export type ResultadoDaOs = { numero: string; edicao: number; demanda: string; numeros: string[] };
 
-function ator(caller: OperacaoProfile): OperacaoActor {
+export function ator(caller: OperacaoProfile): OperacaoActor {
   return { uid: caller.uid, role: caller.role, email: caller.email, name: caller.name };
 }
 
-function exigirPapel(caller: OperacaoProfile): void {
+export function exigirPapel(caller: OperacaoProfile): void {
   const problem = operacaoCadastroProblem(caller.role);
   if (problem) throw new HttpsError("permission-denied", problem);
 }
@@ -247,7 +247,7 @@ async function lerOs(transaction: Transaction, db: Firestore, numero: string): P
   return osLida(numero, snapshot.data() ?? {});
 }
 
-function autoria(caller: OperacaoProfile) {
+export function autoria(caller: OperacaoProfile) {
   return { atualizado_por: { uid: caller.uid, role: caller.role }, updated_at: FieldValue.serverTimestamp() };
 }
 

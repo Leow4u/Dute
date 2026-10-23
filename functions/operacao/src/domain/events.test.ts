@@ -52,6 +52,16 @@ const EXEMPLOS: Record<OperacaoEventType, Record<string, unknown>> = {
   },
   "os.items_changed": { id: "10045-01", demanda: "10045", linhas: 2, edicao_antes: 2, edicao_depois: 3 },
   "os.cancelled": { id: "10045-01", demanda: "10045" },
+  "os.started": { id: "10045-01", demanda: "10045", instante: "2026-10-22T10:05:00.000Z" },
+  "os.step_recorded": {
+    id: "10045-01",
+    demanda: "10045",
+    etapa: "chegada_origem",
+    instante: "2026-10-22T10:40:00.000Z",
+    canal: "escritorio",
+    informado_por: "col_aaaaaaaaaaaaaaaa",
+  },
+  "os.occurrence_recorded": { id: "10045-01", demanda: "10045", ocorrencia: "oc_01", instante: "2026-10-22T11:00:00.000Z", canal: "celular" },
   "demand.direct_opened": { id: "10053", tipo: "paraquedas", tipo_calculado: "emergencial", linhas: 1 },
 };
 

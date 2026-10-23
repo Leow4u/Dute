@@ -158,7 +158,10 @@ registros guardados" é dado, não legenda.
 | 3.5c | Nova demanda direta (`OpDemandaNova`) e o botão Nova demanda no Hoje | Tipo pela hora na tela; o formulário manda o formato de `openDirectDemand` |
 | 3.6a | Planejar OS (`OpOSPlanejar`): várias OS com a fatia do saldo, janela, equipe com papel (inclusive freelancer e terceiro), veículos, contatos e instruções | Duas OS da mesma demanda somam no máximo o saldo; sem equipe e sem veículo são alertas |
 | 3.6b | Agenda da semana (`OpAgenda`) | Cada OS no dia dela; quem está em duas OS no mesmo dia aparece |
-| 3.7 | Execução pelo escritório: `registerStep`, `registerItem`, `registerOccurrence`, fotos no Storage, Em execução, tela da OS | Etapa fora de ordem recusada; instante gravado; foto só de quem está na OS ou coordena |
+| 3.7a | Execução no backend: `registerStep` (etapas na ordem do serviço, com o instante, o canal, o meio e quem informou; a primeira põe a OS Em execução) e `registerOccurrence` | Etapa fora de ordem recusada; instante gravado; repetir não duplica |
+| 3.7b | Itens executados: `registerItem` (feito por linha e incluído em campo, com quem pediu e o motivo) | Feito acima do planejado sem inclusão recusado; incluído vira divergência |
+| 3.7c | Fotos: `attachPhoto` e `storage.rules` em `os/{numero}/fotos/` | Foto só de quem está na OS ou coordena |
+| 3.7d | Tela da OS (`OpOS`) em quatro passos, com "Registrar andamento" (etapa, itens e ocorrência) | Textos listados; `axe`; o formulário manda o formato das callables |
 | 3.8 | Campo (PWA): Minhas OS, execução, incluir item, presença, fila sem sinal | Campo lê só a OS escalada; dois envios do mesmo registro gravam um; instante original guardado |
 | 3.9 | Concluir com assinatura ou "sem aceite no local", Em revisão; impressão da OS | Concluir sem motivo para item a menos recusado; assinatura no Storage com regra |
 | 3.10 | Revisão interna, Revisada, reabrir; aditivo na fila do Comercial; demanda direta em Execução a orçar | Divergência sem decisão não conclui; `demands.revisao` só pela Operação |
@@ -575,3 +578,32 @@ Operação depois do Hoje.
   aprovada, entra com os alertas da rotina (parte 3.13). "Abrir OS" e
   "Abrir revisão" entram com a tela da OS (parte 3.7) e a revisão (parte
   3.10).
+
+### Parte 3.7a: execução no backend
+
+Feita em 23/10/2026. Duas callables novas em `functions/operacao`, com
+`requireOperacaoCaller` e o papel de quem grava a Operação (owner, admin e
+interno; o campo entra na parte 3.8). Regras em `domain/execucao.ts`,
+gravação em `domain/execucao-gravacao.ts`.
+
+- **`registerStep`.** Etapas na ordem do serviço: saída do pátio, chegada
+  na origem, carregamento, saída da origem, chegada no destino, montagem e
+  fim. Pular vale; voltar não: a etapa que vem antes de uma já registrada,
+  a repetida e a hora antes da última são recusadas. O instante é o de
+  quando aconteceu (com fuso, gravado em UTC), nunca no futuro (5 minutos de
+  folga para o relógio) nem antes do dia da OS. Cada etapa guarda o canal
+  (escritório ou celular), como a informação chegou ao escritório
+  (telefone, WhatsApp ou presencial), quem da equipe informou e quem
+  registrou. A primeira etapa pede a equipe escalada e põe a OS Em
+  execução; depois disso a OS não se reagenda nem muda os itens pelo
+  planejamento.
+- **`registerOccurrence`.** Descrição de 3 a 1000 caracteres, o instante e
+  quem informou, numerada na OS (`oc_01`), na OS agendada ou em execução,
+  até 50 por OS. Não muda o status.
+- **Eventos.** `os.started` (uma vez), `os.step_recorded` (etapa, instante,
+  canal e o id de quem informou) e `os.occurrence_recorded` (só o número da
+  ocorrência: a descrição é texto livre e fica na OS). O `occurred_at` é o
+  instante do registro, não o do envio. Cada registro tem a própria chave
+  de idempotência: repetir devolve o mesmo resultado sem duplicar.
+- **Ainda não.** Cancelar a OS em execução (o plano permite até Revisada)
+  fica para a revisão (parte 3.10), que decide o que volta ao saldo.

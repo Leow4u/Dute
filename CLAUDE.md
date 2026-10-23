@@ -36,7 +36,9 @@ documentação de produto e operação está em `docs/`.
   fila do dia (abrir, agendar e cancelar a OS). Desde a parte 3.4b a OS
   tem fatia do saldo, janela, equipe com papel e veículos, e o campo lê só a
   OS em que está escalado; desde a 3.4d a demanda direta nasce na Operação
-  (`openDirectDemand`), sem orçamento. Executar e concluir ainda não existem. O `dute-btg` fica de fora das duas listas
+  (`openDirectDemand`), sem orçamento; desde a 3.7a o escritório registra
+  etapas e ocorrências (`registerStep`, `registerOccurrence`) e a OS fica Em
+  execução. Concluir ainda não existe. O `dute-btg` fica de fora das duas listas
   `OPERACAO_AMBIENTES_LIBERADOS`. Desenho e como desligar:
   `docs/plataforma/fase-3-operacao.md`.
 - **Alinhamento do Comercial e da Operação recuperado em 23/10/2026**:
