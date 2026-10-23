@@ -1,5 +1,5 @@
 import { chaveDaIntencao, type TentativaDeChamada } from "./envio";
-import { classificarErro, dataHoraLocal, instanteComFuso } from "./montar";
+import { VARIANTES, VARIANTE_PADRAO, classificarErro, dataHoraLocal, instanteComFuso } from "./montar";
 import { COMERCIAL_ROLES } from "./navegacao";
 import { dataHoraCurta, type EtapaDemanda, type ItemDaFila, type StatusOrcamento } from "./orcamentos";
 
@@ -10,7 +10,9 @@ import { dataHoraCurta, type EtapaDemanda, type ItemDaFila, type StatusOrcamento
  * validação dos diálogos e o pedido de cada ação às callables advanceDemand
  * (fechar, perder, reabrir, registrar a execução, validar, recusar o aditivo)
  * e advanceQuote (revisar, descartar a RV seguinte), sempre com a etapa e a RV
- * (ou a situação e a edição) que a tela viu: o servidor recusa se mudou.
+ * (ou a situação e a edição) que a tela viu: o servidor recusa se mudou. A
+ * direta que a Operação abriu e executou nasce o orçamento por saveQuote
+ * (price_execution, parte 3.10d de docs/plataforma/fase-3-operacao.md).
  *
  * O servidor confere tudo de novo (functions/comercial, domain/demandas.ts e
  * domain/quotes.ts); aqui a tela só deixa de oferecer o que ele recusaria e
@@ -28,6 +30,7 @@ export type AcaoDepoisDoEnvio =
   | "registrar_execucao"
   | "aditivo"
   | "orcar_execucao"
+  | "orcar_da_operacao"
   | "reabrir"
   | "descartar_rv";
 
@@ -41,12 +44,16 @@ export const ROTULO_DA_ACAO: Record<AcaoDepoisDoEnvio, string> = {
   registrar_execucao: "Registrar execução",
   aditivo: "Aditivo",
   orcar_execucao: "Orçar execução",
+  orcar_da_operacao: "Orçar execução",
   reabrir: "Reabrir",
   descartar_rv: "Descartar RV",
 };
 
 /** O que as ações precisam saber do orçamento (a linha da fila já tem tudo isso). */
-export type ItemParaAcoes = Pick<ItemDaFila, "numero" | "rv" | "etapa" | "tipoRv" | "status" | "edicao" | "revisaoDe" | "autorUid" | "escopoRv" | "executada" | "validada">;
+export type ItemParaAcoes = Pick<
+  ItemDaFila,
+  "numero" | "rv" | "etapa" | "tipoRv" | "status" | "edicao" | "revisaoDe" | "autorUid" | "escopoRv" | "executada" | "validada" | "semOrcamento" | "daOperacao"
+>;
 
 export type AcoesDaEtapa = { principal: AcaoDepoisDoEnvio | null; secundarias: AcaoDepoisDoEnvio[] };
 
@@ -64,6 +71,9 @@ const SEM_ACAO: AcoesDaEtapa = { principal: null, secundarias: [] };
  *   execução; Validado fica ao lado para a execução sem desvio (a RV fechada
  *   validada como está).
  * - Perdida: Reabrir. A cancelada e as etapas do faturamento não têm ação.
+ * - Sem orçamento: só a direta que a Operação abriu, já em Execução a orçar,
+ *   tem ação, Orçar execução (o orçamento nasce com o que ela executou). As
+ *   outras ações pedem o orçamento.
  * - RV seguinte ainda não enviada (tem de onde voltar): Descartar RV. No "para
  *   aprovar", como a devolução, só do aprovador (owner) ou de quem montou.
  */
@@ -73,6 +83,9 @@ export function acoesDepoisDoEnvio(
 ): AcoesDaEtapa {
   if (!quem.role || !(COMERCIAL_ROLES as readonly string[]).includes(quem.role)) return SEM_ACAO;
   const { etapa, status } = item;
+  if (item.semOrcamento) {
+    return item.daOperacao && etapa === "execucao_a_orcar" ? { principal: "orcar_da_operacao", secundarias: [] } : SEM_ACAO;
+  }
   if (etapa === "perdida") return { principal: "reabrir", secundarias: [] };
   if (etapa === "cancelada") return SEM_ACAO;
   const registro: AcaoDepoisDoEnvio[] = executaComAditivoEmNegociacao(item) ? ["registrar_execucao"] : [];
@@ -260,8 +273,11 @@ export function problemasDaExecucao(form: { de: string; ate: string }, hoje: str
 
 // --- O formulário do diálogo ---------------------------------------------------------------------
 
-/** Que campos o diálogo da ação pede: a resposta do cliente, o motivo da perda, o da revisão, o período ou só a confirmação. */
-export type CamposDoDialogo = "resposta" | "perda" | "revisao" | "execucao" | "confirmar";
+/**
+ * Que campos o diálogo da ação pede: a resposta do cliente, o motivo da
+ * perda, o da revisão, o período, o contrato e a tabela, ou só a confirmação.
+ */
+export type CamposDoDialogo = "resposta" | "perda" | "revisao" | "execucao" | "contrato" | "confirmar";
 
 export function camposDoDialogo(acao: AcaoDepoisDoEnvio): CamposDoDialogo {
   switch (acao) {
@@ -275,21 +291,32 @@ export function camposDoDialogo(acao: AcaoDepoisDoEnvio): CamposDoDialogo {
       return "revisao";
     case "registrar_execucao":
       return "execucao";
+    case "orcar_da_operacao":
+      return "contrato";
     default:
       return "confirmar";
   }
 }
 
-export type FormDoDialogo = FormDaResposta & { motivo: string; nota: string; de: string; ate: string };
+export type FormDoDialogo = FormDaResposta & { motivo: string; nota: string; de: string; ate: string; contratoId: string; variante: string };
 
 /**
  * O diálogo abre com a hora de agora e o contato que fez o pedido (se ainda
  * for um contato do cliente); o motivo só vem escolhido quando é o único
- * possível (Perdido depois do fechamento).
+ * possível (Perdido depois do fechamento); o contrato, com o vigente do
+ * cliente (ou o da demanda), e a tabela Comercial.
  */
 export function formInicialDoDialogo(
   acao: AcaoDepoisDoEnvio,
-  contexto: { agora: Date; contatoId: string | null; contatos: ReadonlyArray<{ id: string }>; comprometida: boolean },
+  contexto: {
+    agora: Date;
+    contatoId: string | null;
+    contatos: ReadonlyArray<{ id: string }>;
+    comprometida: boolean;
+    /** O contrato que o diálogo sugere, se for um dos contratos que o cliente pode usar. */
+    contratoId?: string | null;
+    contratos?: ReadonlyArray<{ id: string }>;
+  },
 ): FormDoDialogo {
   const permitidos = acao === "perder" ? motivosDePerdaPermitidos(contexto.comprometida) : [];
   return {
@@ -300,14 +327,34 @@ export function formInicialDoDialogo(
     nota: "",
     de: "",
     ate: "",
+    contratoId: contexto.contratoId && (contexto.contratos ?? []).some((contrato) => contrato.id === contexto.contratoId) ? contexto.contratoId : "",
+    variante: VARIANTE_PADRAO,
   };
+}
+
+/** O contrato (vazio: sem contrato) é um dos do cliente, e a tabela é Comercial ou Noturna. */
+export function problemasDoContrato(
+  form: { contratoId: string; variante: string },
+  contratos: ReadonlyArray<{ id: string }>,
+): Problemas<"contrato" | "variante"> {
+  const problemas: Problemas<"contrato" | "variante"> = {};
+  if (form.contratoId && !contratos.some((contrato) => contrato.id === form.contratoId)) problemas.contrato = "Escolha um contrato do cliente.";
+  if (!(VARIANTES as readonly string[]).includes(form.variante)) problemas.variante = "Escolha a tabela.";
+  return problemas;
 }
 
 /** Os problemas do formulário da ação, por campo (vazio: pode gravar). */
 export function problemasDoDialogo(
   acao: AcaoDepoisDoEnvio,
   form: FormDoDialogo,
-  contexto: { agora: Date; hoje: string; envioEm: string | null; contatos: ReadonlyArray<{ id: string }>; comprometida: boolean },
+  contexto: {
+    agora: Date;
+    hoje: string;
+    envioEm: string | null;
+    contatos: ReadonlyArray<{ id: string }>;
+    comprometida: boolean;
+    contratos?: ReadonlyArray<{ id: string }>;
+  },
 ): Record<string, string> {
   switch (camposDoDialogo(acao)) {
     case "resposta":
@@ -318,6 +365,8 @@ export function problemasDoDialogo(
       return problemasDaRevisao(form);
     case "execucao":
       return problemasDaExecucao(form, contexto.hoje);
+    case "contrato":
+      return problemasDoContrato(form, contexto.contratos ?? []);
     case "confirmar":
       return {};
   }
@@ -333,6 +382,8 @@ export type ValoresDaAcao = {
   nota?: string;
   de?: string;
   ate?: string;
+  contratoId?: string;
+  variante?: string;
 };
 
 export type PedidoDaAcao = {
@@ -362,6 +413,7 @@ const SUCESSO: Record<AcaoDepoisDoEnvio, string> = {
   registrar_execucao: "Execução registrada",
   aditivo: "Aditivo aberto",
   orcar_execucao: "RV de execução aberta",
+  orcar_da_operacao: "Orçamento de execução criado",
   reabrir: "Orçamento reaberto",
   descartar_rv: "RV descartada",
 };
@@ -380,6 +432,17 @@ export function pedidoDaAcao(
   chave: string,
 ): PedidoDaAcao {
   const sucesso = SUCESSO[acao];
+  if (acao === "orcar_da_operacao") {
+    // A demanda e a execução já existem: o servidor confere que ainda não há orçamento.
+    const payload: Registro = {
+      action: "price_execution",
+      request_id: chave,
+      numero: item.numero,
+      contrato_id: valores.contratoId || null,
+      variante: valores.variante || VARIANTE_PADRAO,
+    };
+    return { callable: "saveQuote", payload, sucesso, abreMontagem: true };
+  }
   if (acao === "revisar" || acao === "aditivo" || acao === "orcar_execucao" || acao === "descartar_rv") {
     const payload: Registro = {
       action: acao === "descartar_rv" ? "discard" : "revise",
@@ -442,6 +505,19 @@ export function pedidoDeExecucaoDireta(
     sucesso: "Orçamento de execução criado",
     abreMontagem: true,
   };
+}
+
+export type LinhaForaDaTabela = { item: string; unidade: string | null; quantidade: string };
+
+/**
+ * O que a Operação executou e a tabela não precifica, para o Comercial
+ * lançar à mão na montagem: "Cofre 1 vb · Içamento pela fachada 1 vb".
+ */
+export function foraDaTabelaEmTexto(linhas: readonly LinhaForaDaTabela[] | null | undefined): string | null {
+  if (!linhas?.length) return null;
+  return linhas
+    .map((linha) => [linha.item, linha.quantidade.replace(".", ","), linha.unidade?.toLocaleLowerCase("pt-BR")].filter(Boolean).join(" "))
+    .join(" · ");
 }
 
 /**

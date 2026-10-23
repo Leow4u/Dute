@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { AcoesDepoisDoEnvio } from "@/components/comercial/acoes-depois-do-envio";
-import { contatoDoDocumento } from "@/lib/comercial/clientes";
+import { contatoDoDocumento, contratoDoDocumento, type ContratoResumo } from "@/lib/comercial/clientes";
 import {
   MOTIVOS_DE_PERDA,
   formInicialDoDialogo,
@@ -13,7 +13,9 @@ import {
   type FormDoDialogo,
 } from "@/lib/comercial/depois-do-envio";
 
-import { CamposDoPeriodo, CorpoDoDialogo, tituloDoDialogo, valoresDoDialogo } from "./depois-do-envio-dialogos";
+import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+
+import { CamposDoContrato, CamposDoPeriodo, CorpoDoDialogo, tituloDoDialogo, valoresDoDialogo } from "./depois-do-envio-dialogos";
 
 /**
  * Os diálogos das ações depois do envio (parte 12b), só a apresentação dos
@@ -43,7 +45,8 @@ function corpo(acao: AcaoDepoisDoEnvio, f: FormDoDialogo, extra: Partial<Paramet
       perder: "perda",
       revisar: "revisao",
       registrar_execucao: "execucao",
-    } as Record<string, "resposta" | "perda" | "revisao" | "execucao" | "confirmar">
+      orcar_da_operacao: "contrato",
+    } as Record<string, "resposta" | "perda" | "revisao" | "execucao" | "contrato" | "confirmar">
   )[acao] ?? "confirmar";
   return renderToStaticMarkup(
     <CorpoDoDialogo
@@ -205,5 +208,37 @@ describe("os botões das ações", () => {
       AcoesDepoisDoEnvio({ acoes: { principal: "fechar", secundarias: ["revisar"] }, onAcao: noop, ocupado: true }) as ReactElement,
     );
     expect(html.match(/disabled=""/g)).toHaveLength(2);
+  });
+});
+
+describe("diálogo do Orçar execução da direta da Operação (parte 3.10d)", () => {
+  const CONTRATOS = [
+    contratoDoDocumento("itau-2026", { customer_code: "ITAU-UNIBANCO", nome: "Contrato Itaú", vigente_de: "2025-07-01", vigente_ate: "2027-06-30" }) as ContratoResumo,
+  ];
+  const inicial = () =>
+    formInicialDoDialogo("orcar_da_operacao", { agora: AGORA, contatoId: null, contatos: [], comprometida: false, contratoId: "itau-2026", contratos: CONTRATOS });
+
+  it("o contrato do cliente, já com o vigente, e a tabela; sem legenda", async () => {
+    const html = corpo("orcar_da_operacao", inicial(), { contratos: CONTRATOS });
+    expect(texts(html)).toEqual(["Contrato", "Sem contrato", "Contrato Itaú · 01/07/2025 a 30/06/2027", "Tabela", "Comercial", "Noturna"]);
+    expect(html).toMatch(/<option value="itau-2026" selected="">/);
+    expect(html).toMatch(/aria-pressed="true"[^>]*>Comercial</);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("o problema aparece ao lado do campo, e os valores seguem para o pedido", () => {
+    const html = corpo("orcar_da_operacao", { ...inicial(), contratoId: "outro" }, { contratos: CONTRATOS, problemas: { contrato: "Escolha um contrato do cliente." } });
+    expect(texts(html)).toContain("Escolha um contrato do cliente.");
+    expect(html).toContain('aria-invalid="true"');
+    expect(valoresDoDialogo({ ...inicial(), variante: "Noturna" })).toMatchObject({ contratoId: "itau-2026", variante: "Noturna" });
+  });
+
+  it("o mesmo campo do Novo orçamento: ocupado desliga o contrato e a tabela", () => {
+    const html = renderToStaticMarkup(
+      <CamposDoContrato prefixo="novo" contratoId="" variante="Noturna" contratos={CONTRATOS} desabilitado onContrato={noop} onVariante={noop} />,
+    );
+    expect(html).toContain('id="novo-contrato"');
+    expect(html.match(/disabled=""/g)).toHaveLength(3);
+    expect(tituloDoDialogo("orcar_da_operacao", "10301")).toBe("Orçar execução · 10301");
   });
 });

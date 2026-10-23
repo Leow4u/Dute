@@ -3,17 +3,20 @@ import { useLocation } from "wouter";
 
 import { useToast } from "@/hooks/use-toast";
 import { chamarComercial, novaChave } from "@/lib/comercial/api";
-import { hojeLocal, type ContatoResumo } from "@/lib/comercial/clientes";
+import { contratoVigente, hojeLocal, type ContatoResumo, type ContratoResumo } from "@/lib/comercial/clientes";
 import {
   chaveDoPedido,
   classificarErroDepoisDoEnvio,
   demandaComprometida,
+  foraDaTabelaEmTexto,
   pedidoDaAcao,
   type AcaoDepoisDoEnvio,
+  type LinhaForaDaTabela,
   type PedidoDaAcao,
   type ValoresDaAcao,
 } from "@/lib/comercial/depois-do-envio";
 import type { TentativaDeChamada } from "@/lib/comercial/envio";
+import { contratosParaOrcamento } from "@/lib/comercial/montar";
 import { hrefDoOrcamento, type ItemDaFila } from "@/lib/comercial/orcamentos";
 
 import { DialogoDepoisDoEnvio } from "./depois-do-envio-dialogos";
@@ -25,16 +28,19 @@ import { DialogoDepoisDoEnvio } from "./depois-do-envio-dialogos";
  * o diálogo, e a chave de idempotência da intenção (a mesma se a pessoa clica
  * de novo no mesmo pedido). A recusa de concorrência fecha o diálogo e mostra
  * a mensagem do servidor: as telas são ao vivo e já mostram o orçamento como
- * está. O valor que vale é o do servidor.
+ * está. O valor que vale é o do servidor. O Orçar execução da direta da
+ * Operação (parte 3.10d) avisa, ao criar, o que a tabela não precificou.
  */
 
 type Aberta = { acao: AcaoDepoisDoEnvio; item: ItemDaFila };
 
-export type ResultadoDaGravacao = { edicao?: number; status?: string };
+export type ResultadoDaGravacao = { edicao?: number; status?: string; fora_da_tabela?: LinhaForaDaTabela[] };
 
 export function useDepoisDoEnvio(entrada: {
   /** Os contatos do cliente (de qualquer cliente: o hook filtra pelo do orçamento aberto). */
   contatos: readonly ContatoResumo[];
+  /** Os contratos (de qualquer cliente: o hook filtra pelo do orçamento aberto), para o Orçar execução da direta da Operação. */
+  contratos?: readonly ContratoResumo[];
   /** Depois de gravar uma ação do orçamento (advanceQuote): a montagem espera a gravação chegar. */
   aoGravar?: (pedido: PedidoDaAcao, resultado: ResultadoDaGravacao) => void;
 }): {
@@ -57,6 +63,11 @@ export function useDepoisDoEnvio(entrada: {
     () => (aberta ? entrada.contatos.filter((contato) => contato.customerCode === aberta.item.customerCode && contato.ativo) : []),
     [entrada.contatos, aberta],
   );
+  const contratosDoCliente = useMemo(
+    () => (aberta ? contratosParaOrcamento(entrada.contratos ?? [], aberta.item.customerCode) : []),
+    [entrada.contratos, aberta],
+  );
+  const contratoSugerido = aberta ? (contratoVigente(entrada.contratos ?? [], aberta.item.customerCode, hojeLocal())?.id ?? aberta.item.contratoId) : null;
 
   async function confirmar(acao: AcaoDepoisDoEnvio, valores: ValoresDaAcao) {
     if (!aberta) return;
@@ -71,7 +82,8 @@ export function useDepoisDoEnvio(entrada: {
       tentativa.current = null;
       setAberta(null);
       setAviso(null);
-      toast({ title: pedido.sucesso });
+      const fora = foraDaTabelaEmTexto(resultado?.fora_da_tabela);
+      toast(fora ? { title: pedido.sucesso, description: `Fora da tabela, para lançar: ${fora}` } : { title: pedido.sucesso });
       entrada.aoGravar?.(pedido, resultado);
       if (pedido.abreMontagem) navegar(hrefDoOrcamento(item.numero));
     } catch (error) {
@@ -95,6 +107,8 @@ export function useDepoisDoEnvio(entrada: {
       comprometida={aberta ? demandaComprometida(aberta.item) : false}
       contatoId={aberta?.item.contatoId ?? null}
       contatos={contatosDoCliente}
+      contratos={contratosDoCliente}
+      contratoId={contratoSugerido}
       envioEm={aberta?.item.envio?.em ?? null}
       agora={new Date()}
       hoje={hojeLocal()}
