@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { collection, doc, query, where } from "firebase/firestore";
 import { useLocation, useSearch } from "wouter";
 
+import { MEMORIA_LIBERADA } from "@/lib/liberacao";
+import { chamarNucleo } from "@/lib/memoria/api";
+import { janelaComSugestao, pedidoDaSugestao, respostaDaSugestao, type DecisaoNaTela } from "@/lib/memoria/sugestao";
+import { useSugestoes } from "@/lib/memoria/use-sugestoes";
 import { chamarOperacao, mensagemDoErro, novaChave } from "@/lib/operacao/api";
 import { colaboradorDaLeitura, veiculoDaLeitura } from "@/lib/operacao/cadastro";
 import { demandaDaOperacao, escopoComSaldo, osDaDemanda } from "@/lib/operacao/demandas";
@@ -33,7 +37,9 @@ import { PlanejarView, type EstadoDoPlano } from "./planejar-view";
  * Operação › Planejar OS (parte 3.6a): a demanda pedida em ?demanda=, o plano
  * e saveServiceOrder (plan). Com &vistoria=1 (parte 3.11c), a vistoria da
  * demanda: uma OS sem itens, no dia da visita técnica, e saveServiceOrder
- * (survey).
+ * (survey). Com a memória liberada (parte 5.2b), cada OS recebe a duração
+ * sugerida (suggestDuration); salvo o plano, o que a pessoa fez com cada uma
+ * vai ao answerSuggestion, sem segurar a volta à demanda se falhar.
  */
 
 function texto(valor: unknown): string {
@@ -68,6 +74,7 @@ export default function PaginaPlanejar() {
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const chave = useRef<string | null>(null);
+  const [decisoes, setDecisoes] = useState<Record<number, DecisaoNaTela>>({});
 
   const hoje = hojeIso();
   const ficha = demanda.item ?? null;
@@ -115,6 +122,9 @@ export default function PaginaPlanejar() {
       })
     : [];
 
+  const pedidosDeSugestao = form && ficha && !vistoria ? form.ordens.map((_, indice) => pedidoDaSugestao(form, indice, saldo, ficha.numero)) : [];
+  const sugestoes = useSugestoes(pedidosDeSugestao, MEMORIA_LIBERADA && !vistoria);
+
   function mudar(novo: FormularioDoPlano) {
     setForm(novo);
     chave.current = null;
@@ -139,17 +149,47 @@ export default function PaginaPlanejar() {
     setOcupado(true);
     chave.current ??= novaChave();
     try {
-      await chamarOperacao(
+      const gravado = await chamarOperacao<{ numeros?: string[] }>(
         "saveServiceOrder",
         vistoria ? pedidoDaVistoria(form, ficha.numero, chave.current, agendar) : pedidoDoPlano(form, ficha.numero, saldo, chave.current, agendar),
       );
       chave.current = null;
+      await responderSugestoes(gravado.numeros ?? []);
       navegar(hrefDaDemanda(ficha.numero));
     } catch (error) {
       setErro(mensagemDoErro(error));
     } finally {
       setOcupado(false);
     }
+  }
+
+  /** O que a pessoa fez com a sugestão de cada OS salva. É a memória que aprende: falhar não segura a volta à demanda. */
+  async function responderSugestoes(numeros: readonly string[]) {
+    if (!MEMORIA_LIBERADA || !form) return;
+    const respostas = pedidosDeSugestao.flatMap((pedido, indice) => {
+      const sugestao = sugestoes[indice];
+      const numeroDaOs = numeros[indice];
+      if (!pedido || !numeroDaOs || sugestao?.estado !== "pronto" || sugestao.sugestao?.minutos_total == null) return [];
+      return [chamarNucleo("answerSuggestion", respostaDaSugestao(pedido, numeroDaOs, form.ordens[indice], decisoes[indice], novaChave()))];
+    });
+    await Promise.allSettled(respostas);
+  }
+
+  function usarSugestao(indice: number) {
+    const sugestao = sugestoes[indice];
+    const os = form?.ordens[indice];
+    const minutos = sugestao?.sugestao?.minutos_total;
+    if (!form || !os || !sugestao || minutos == null) return;
+    const janela = janelaComSugestao(os, minutos);
+    if (!janela) return;
+    mudar({ ...form, ordens: form.ordens.map((atual, posicao) => (posicao === indice ? janela : atual)) });
+    setDecisoes((atuais) => ({ ...atuais, [indice]: { chave: sugestao.chave, usou: janela.fim, ignorou: false } }));
+  }
+
+  function ignorarSugestao(indice: number) {
+    const sugestao = sugestoes[indice];
+    if (!sugestao) return;
+    setDecisoes((atuais) => ({ ...atuais, [indice]: { chave: sugestao.chave, usou: null, ignorou: true } }));
   }
 
   return (
@@ -179,6 +219,10 @@ export default function PaginaPlanejar() {
       onGravar={(agendar) => void gravar(agendar)}
       vistoria={vistoria}
       motivo={motivo}
+      sugestoes={sugestoes}
+      ignoradas={sugestoes.map((sugestao, indice) => Boolean(sugestao && decisoes[indice]?.chave === sugestao.chave && decisoes[indice]?.ignorou))}
+      onUsarSugestao={usarSugestao}
+      onIgnorarSugestao={ignorarSugestao}
     />
   );
 }

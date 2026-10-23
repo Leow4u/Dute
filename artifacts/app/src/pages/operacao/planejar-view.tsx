@@ -8,6 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PAPEL_ROTULO, VINCULO_ROTULO, formatarData, type ColaboradorDaLista, type PapelDeCampo, type VeiculoDaLista } from "@/lib/operacao/cadastro";
+import {
+  divisaoEmTexto,
+  duracaoSugeridaEmTexto,
+  itemEmTexto,
+  planoOtimistaEmTexto,
+  type Sugestao,
+  type SugestaoNaTela,
+} from "@/lib/memoria/sugestao";
 import type { DemandaDaOperacao, LinhaDoSaldo } from "@/lib/operacao/demandas";
 import { hrefDaDemanda } from "@/lib/operacao/navegacao";
 import {
@@ -28,6 +36,7 @@ import type { LocalDaFicha } from "./demanda-view";
  * Só apresentação: o estado e a gravação chegam por props
  * (pages/operacao/planejar.tsx). Sem legenda e sem preço. A vistoria (parte
  * 3.11c) usa a mesma tela, numa OS só, sem itens e só com o local de origem.
+ * Com a memória liberada (parte 5.2b), cada OS mostra a duração sugerida.
  */
 
 export type EstadoDoPlano = "carregando" | "erro" | "nao_encontrada" | "sem_saldo" | "indisponivel" | "pronto";
@@ -59,17 +68,68 @@ function rotuloDaOs(indice: number, total: number) {
   return total > 1 ? `OS ${indice + 1}` : "Nesta OS";
 }
 
+/**
+ * A duração sugerida pela memória da Dute para a OS (parte 5.2b), com a base
+ * de cada item: de onde veio, quantas execuções e as OS mais recentes. "Usar"
+ * só preenche a janela; quem salva é a pessoa.
+ */
+function SugestaoDaOs({ sugestao, rotulo, onUsar, onIgnorar }: { sugestao: Sugestao; rotulo: string; onUsar: () => void; onIgnorar: () => void }) {
+  const titulo = duracaoSugeridaEmTexto(sugestao);
+  return (
+    <div role="group" aria-label={`Duração sugerida · ${rotulo}`} className="flex flex-col gap-2 rounded-md border border-border bg-background px-3 py-2.5 text-sm">
+      {titulo ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-semibold text-foreground">{titulo}</span>
+          <div className="ml-auto flex gap-1">
+            <Button type="button" variant="outline" size="sm" onClick={onUsar}>
+              Usar
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={onIgnorar}>
+              Ignorar
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <span className="text-muted-foreground">Sem base para sugerir a duração</span>
+      )}
+      {titulo ? (
+        <ul className="flex flex-col gap-0.5 text-muted-foreground">
+          {sugestao.itens.map((item, indice) => (
+            <li key={`${item.lpu_item_id ?? "livre"}-${indice}`}>{itemEmTexto(item, sugestao.pessoas)}</li>
+          ))}
+        </ul>
+      ) : null}
+      {sugestao.divisao ? <p className="text-muted-foreground">{divisaoEmTexto(sugestao.divisao)}</p> : null}
+      {sugestao.plano_otimista ? (
+        <p className="flex items-start gap-2 rounded-md border border-amber-soft-border bg-amber-soft px-2.5 py-1.5 text-amber-soft-foreground">
+          <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+          {planoOtimistaEmTexto(sugestao.plano_otimista)}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function Quando({
   ordens,
   onOs,
   onRemover,
   onDividir,
+  sugestoes = [],
+  ignoradas = [],
+  onUsarSugestao,
+  onIgnorarSugestao,
 }: {
   ordens: readonly OsNoPlano[];
   onOs: (indice: number, os: OsNoPlano) => void;
   onRemover: (indice: number) => void;
   /** Mais uma OS; sem ela (a vistoria), o plano fica numa OS só. */
   onDividir?: () => void;
+  /** A duração sugerida de cada OS, pelo índice (parte 5.2b). */
+  sugestoes?: ReadonlyArray<SugestaoNaTela | null>;
+  ignoradas?: readonly boolean[];
+  onUsarSugestao?: (indice: number) => void;
+  onIgnorarSugestao?: (indice: number) => void;
 }) {
   return (
     <Cartao
@@ -84,29 +144,42 @@ function Quando({
       }
     >
       <ul className="flex flex-col gap-4 px-5 py-4">
-        {ordens.map((os, indice) => (
-          <li key={indice} className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            {ordens.length > 1 ? (
-              <span className="flex h-10 shrink-0 items-center text-sm font-semibold text-foreground sm:w-14">OS {indice + 1}</span>
-            ) : null}
-            <Campo id={`os-${indice}-data`} rotulo="Data" className="flex-1">
-              <Input id={`os-${indice}-data`} type="date" value={os.data} onChange={(event) => onOs(indice, { ...os, data: event.target.value })} />
-            </Campo>
-            <div className="grid grid-cols-2 gap-3 sm:contents">
-              <Campo id={`os-${indice}-inicio`} rotulo="Início" className="sm:w-32">
-                <Input id={`os-${indice}-inicio`} type="time" value={os.inicio} onChange={(event) => onOs(indice, { ...os, inicio: event.target.value.slice(0, 5) })} />
-              </Campo>
-              <Campo id={`os-${indice}-fim`} rotulo="Fim" className="sm:w-32">
-                <Input id={`os-${indice}-fim`} type="time" value={os.fim} onChange={(event) => onOs(indice, { ...os, fim: event.target.value.slice(0, 5) })} />
-              </Campo>
-            </div>
-            {ordens.length > 1 ? (
-              <Button type="button" variant="ghost" size="icon" aria-label={`Tirar a OS ${indice + 1}`} onClick={() => onRemover(indice)}>
-                <Trash2 aria-hidden="true" className="size-4" />
-              </Button>
-            ) : null}
-          </li>
-        ))}
+        {ordens.map((os, indice) => {
+          const sugestao = sugestoes[indice];
+          return (
+            <li key={indice} className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                {ordens.length > 1 ? (
+                  <span className="flex h-10 shrink-0 items-center text-sm font-semibold text-foreground sm:w-14">OS {indice + 1}</span>
+                ) : null}
+                <Campo id={`os-${indice}-data`} rotulo="Data" className="flex-1">
+                  <Input id={`os-${indice}-data`} type="date" value={os.data} onChange={(event) => onOs(indice, { ...os, data: event.target.value })} />
+                </Campo>
+                <div className="grid grid-cols-2 gap-3 sm:contents">
+                  <Campo id={`os-${indice}-inicio`} rotulo="Início" className="sm:w-32">
+                    <Input id={`os-${indice}-inicio`} type="time" value={os.inicio} onChange={(event) => onOs(indice, { ...os, inicio: event.target.value.slice(0, 5) })} />
+                  </Campo>
+                  <Campo id={`os-${indice}-fim`} rotulo="Fim" className="sm:w-32">
+                    <Input id={`os-${indice}-fim`} type="time" value={os.fim} onChange={(event) => onOs(indice, { ...os, fim: event.target.value.slice(0, 5) })} />
+                  </Campo>
+                </div>
+                {ordens.length > 1 ? (
+                  <Button type="button" variant="ghost" size="icon" aria-label={`Tirar a OS ${indice + 1}`} onClick={() => onRemover(indice)}>
+                    <Trash2 aria-hidden="true" className="size-4" />
+                  </Button>
+                ) : null}
+              </div>
+              {sugestao?.estado === "pronto" && sugestao.sugestao && !ignoradas[indice] && onUsarSugestao && onIgnorarSugestao ? (
+                <SugestaoDaOs
+                  sugestao={sugestao.sugestao}
+                  rotulo={ordens.length > 1 ? `OS ${indice + 1}` : "Nesta OS"}
+                  onUsar={() => onUsarSugestao(indice)}
+                  onIgnorar={() => onIgnorarSugestao(indice)}
+                />
+              ) : null}
+            </li>
+          );
+        })}
       </ul>
     </Cartao>
   );
@@ -548,6 +621,10 @@ export function PlanejarView({
   onGravar,
   vistoria = false,
   motivo = null,
+  sugestoes,
+  ignoradas,
+  onUsarSugestao,
+  onIgnorarSugestao,
 }: {
   estado: EstadoDoPlano;
   numero: string | null;
@@ -574,6 +651,11 @@ export function PlanejarView({
   vistoria?: boolean;
   /** Por que a demanda não recebe a vistoria (estado indisponivel). */
   motivo?: string | null;
+  /** A duração sugerida de cada OS, pelo índice, e as que a pessoa ignorou (parte 5.2b). */
+  sugestoes?: ReadonlyArray<SugestaoNaTela | null>;
+  ignoradas?: readonly boolean[];
+  onUsarSugestao?: (indice: number) => void;
+  onIgnorarSugestao?: (indice: number) => void;
 }) {
   const voltar = numero ? hrefDaDemanda(numero) : "/operacao/demandas";
   const linkDeVolta = (
@@ -632,6 +714,10 @@ export function PlanejarView({
             onOs={(indice, os) => onForm({ ...form, ordens: form.ordens.map((atual, posicao) => (posicao === indice ? os : atual)) })}
             onRemover={onRemoverOs}
             onDividir={vistoria ? undefined : onDividir}
+            sugestoes={sugestoes}
+            ignoradas={ignoradas}
+            onUsarSugestao={onUsarSugestao}
+            onIgnorarSugestao={onIgnorarSugestao}
           />
           {vistoria ? null : <Itens saldo={saldo} form={form} restante={restante} onQuantidade={onQuantidade} onIgualar={onIgualar} />}
           <Equipe form={form} pessoas={pessoas} onForm={onForm} />

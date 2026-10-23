@@ -126,8 +126,8 @@ describe("escopo com saldo", () => {
       os("10045-03", "cancelada", [{ id: "ln_1", item: "Cadeira", quantidade: "50" }]),
     ]);
     expect(linhas).toEqual([
-      { id: "ln_1", item: "Cadeira", unidade: "UN", escopo: "160", nasOs: "100.5", osNumeros: ["10045-01", "10045-02"], saldo: "59.5" },
-      { id: "ln_2", item: "Mesa", unidade: "UN", escopo: "12.5", nasOs: "12.5", osNumeros: ["10045-02"], saldo: "0" },
+      { id: "ln_1", lpuItemId: null, item: "Cadeira", unidade: "UN", escopo: "160", nasOs: "100.5", osNumeros: ["10045-01", "10045-02"], saldo: "59.5" },
+      { id: "ln_2", lpuItemId: null, item: "Mesa", unidade: "UN", escopo: "12.5", nasOs: "12.5", osNumeros: ["10045-02"], saldo: "0" },
     ]);
   });
 });

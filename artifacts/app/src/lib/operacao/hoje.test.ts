@@ -85,9 +85,10 @@ describe("leitura da demanda", () => {
       etapa: "para_planejar",
       tipo: "planejada",
       entrada: "comercial",
-      escopo: [{ linha_id: "ln_1", item: "Cadeira", quantidade: "160", preco: "10.00" }],
+      escopo: [{ linha_id: "ln_1", lpu_item_id: "lpu_cadeira", item: "Cadeira", quantidade: "160", preco: "10.00" }],
     });
-    expect(comercial?.escopo).toEqual([{ id: "ln_1", item: "Cadeira", quantidade: "160", unidade: null }]);
+    // O item da tabela vai junto: é por ele que a memória sugere a duração (parte 5.2b).
+    expect(comercial?.escopo).toEqual([{ id: "ln_1", item: "Cadeira", quantidade: "160", unidade: null, lpuItemId: "lpu_cadeira" }]);
     expect(JSON.stringify(comercial)).not.toContain("10.00");
     const direta = demandaDoHoje("10053", {
       customer_code: "ITAU",
