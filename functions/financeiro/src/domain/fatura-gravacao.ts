@@ -1,6 +1,13 @@
 import { FieldValue, type DocumentReference, type Firestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 
+import {
+  BILLING_PERIODS_COLLECTION,
+  armazenagemNaFatura,
+  periodoLido,
+  problemaDaArmazenagem,
+  rotuloDaCompetencia,
+} from "./armazenagem.js";
 import { createFinanceiroEvent } from "./events.js";
 import {
   AUTHORIZATIONS_COLLECTION,
@@ -34,11 +41,15 @@ import type { FinanceiroProfile } from "./profile.js";
  * A NF cujo registro foi cancelado (parte 4.2a) se registra de novo por cima,
  * guardando o registro anterior em `anteriores`. A projeção do portal
  * (`client_faturas`, parte 4.3a) nasce na mesma transação.
+ *
+ * A competência de armazenagem emitida no WMS (parte 7.2a) entra pelo total
+ * congelado na emissão e ganha o mesmo resumo `faturamento` da demanda. O
+ * status do WMS fica `emitido` até o pagamento.
  */
 
 const DIA_EM_SAO_PAULO = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" });
 
-export type ResultadoDoRegistro = { id: string; valor_cents: number; demandas: string[] };
+export type ResultadoDoRegistro = { id: string; valor_cents: number; demandas: string[]; armazenagem: string[] };
 
 export async function registerNfFor(
   db: Firestore,
@@ -68,15 +79,29 @@ export async function registerNfFor(
       if (anterior && anterior.status !== "cancelada") falha(`A NF ${pedido.nf.numero} da série ${serie} já está registrada.`);
 
       const demandaRefs = pedido.demandas.map((numero) => db.collection(DEMANDS_COLLECTION).doc(numero));
-      const demandaSnaps = await transaction.getAll(...demandaRefs);
+      const demandaSnaps = demandaRefs.length ? await transaction.getAll(...demandaRefs) : [];
       const demandas = demandaSnaps.map((snap, indice) => {
         if (!snap.exists) throw new HttpsError("not-found", `Demanda ${pedido.demandas[indice]} não encontrada.`);
         return demandaLida(snap.id, snap.data() ?? {});
       });
-      const cliente = demandas[0].customer_code;
-      if (!cliente) falha(`A demanda ${demandas[0].numero} não tem cliente.`);
+      const periodoRefs = pedido.armazenagem.map((periodo) => db.collection(BILLING_PERIODS_COLLECTION).doc(periodo));
+      const periodoSnaps = periodoRefs.length ? await transaction.getAll(...periodoRefs) : [];
+      const periodos = periodoSnaps.map((snap, indice) => {
+        if (!snap.exists) throw new HttpsError("not-found", `Competência de armazenagem ${pedido.armazenagem[indice]} não encontrada.`);
+        return periodoLido(snap.id, snap.data() ?? {});
+      });
+      for (const periodo of periodos) {
+        const motivo = problemaDaArmazenagem(periodo);
+        if (motivo) falha(motivo);
+      }
+      const cliente = demandas.length ? demandas[0].customer_code : periodos[0].customer_code;
+      if (demandas.length && !cliente) falha(`A demanda ${demandas[0].numero} não tem cliente.`);
       if (demandas.some((demanda) => demanda.customer_code !== cliente)) {
         throw new HttpsError("invalid-argument", "As demandas são de clientes diferentes: uma NF é de um cliente só.");
+      }
+      const deOutro = periodos.find((periodo) => periodo.customer_code !== cliente);
+      if (deOutro) {
+        throw new HttpsError("invalid-argument", `A armazenagem de ${rotuloDaCompetencia(deOutro.competencia)} é de outro cliente: uma NF é de um cliente só.`);
       }
       for (const demanda of demandas) {
         const motivo = problemaParaFaturar(demanda);
@@ -116,8 +141,9 @@ export async function registerNfFor(
       const documento = documentoDaFatura({
         id,
         customer_code: cliente,
-        customer_name: demandas[0].customer_name,
+        customer_name: demandas[0]?.customer_name ?? null,
         demandas: naFatura,
+        armazenagem: periodos.map(armazenagemNaFatura),
         nf: { numero: pedido.nf.numero, serie, emitida_em: pedido.nf.emitida_em },
         vencimento: pedido.vencimento,
         forma: pedido.forma,
@@ -131,7 +157,7 @@ export async function registerNfFor(
         projecaoDaFatura(documento, { demandas: new Map(demandaSnaps.map((snap) => [snap.id, demandaParaOCliente(snap.data() ?? {})])), atualizadaEm: iso }),
       );
       if (anterior) {
-        const resumo = { registrada_em: anterior.registrada_em ?? null, cancelada: anterior.cancelada ?? null, demanda_numeros: anterior.demanda_numeros ?? [], operation_id: anterior.operation_id ?? null };
+        const resumo = { registrada_em: anterior.registrada_em ?? null, cancelada: anterior.cancelada ?? null, demanda_numeros: anterior.demanda_numeros ?? [], periodo_ids: anterior.periodo_ids ?? [], operation_id: anterior.operation_id ?? null };
         const anteriores = Array.isArray(anterior.anteriores) ? anterior.anteriores : [];
         transaction.set(faturaRef, { ...documento, anteriores: [...anteriores, resumo], created_at: anterior.created_at ?? FieldValue.serverTimestamp(), updated_at: FieldValue.serverTimestamp() });
       } else {
@@ -149,6 +175,9 @@ export async function registerNfFor(
           updated_by: caller.uid,
         });
       }
+      for (const ref of periodoRefs) {
+        transaction.update(ref, { faturamento, updated_at: FieldValue.serverTimestamp() });
+      }
       const citadas = documento.autorizacao_ids as string[];
       for (const autorizacao of citadas) {
         transaction.update(db.collection(AUTHORIZATIONS_COLLECTION).doc(autorizacao), { nf_ids: FieldValue.arrayUnion(id) });
@@ -159,12 +188,20 @@ export async function registerNfFor(
         type: "nf.registered",
         entity_id: id,
         customer_code: cliente,
-        payload: { id, demandas: pedido.demandas, autorizacoes: citadas.length, emitida_em: pedido.nf.emitida_em, vencimento: pedido.vencimento, forma: pedido.forma },
+        payload: {
+          id,
+          demandas: pedido.demandas,
+          competencias: periodos.map((periodo) => periodo.competencia),
+          autorizacoes: citadas.length,
+          emitida_em: pedido.nf.emitida_em,
+          vencimento: pedido.vencimento,
+          forma: pedido.forma,
+        },
         actor: ator,
         occurred_at: iso,
       });
 
-      return { target_id: id, result: { id, valor_cents: documento.valor_cents as number, demandas: pedido.demandas } };
+      return { target_id: id, result: { id, valor_cents: documento.valor_cents as number, demandas: pedido.demandas, armazenagem: pedido.armazenagem } };
     },
   );
 }

@@ -14,8 +14,9 @@ import { digest } from "./operations.js";
  *   saldo; quitado, a fatura fica paga e as demandas dela também.
  * - Vencida não é status gravado: é a fatura com saldo e vencimento antes de
  *   hoje (a tela calcula).
- * - Cancelar devolve as demandas a A faturar e libera as autorizações (tira
- *   a NF de `nf_ids`). A mesma NF pode ser registrada de novo depois.
+ * - Cancelar devolve as demandas a A faturar, a armazenagem à fila (parte
+ *   7.2a) e libera as autorizações (tira a NF de `nf_ids`). A mesma NF pode
+ *   ser registrada de novo depois.
  */
 
 export const PAGAMENTOS_COLLECTION = "pagamentos";
@@ -118,6 +119,8 @@ export type FaturaLida = {
   emitida_em: string;
   vencimento: string;
   demanda_numeros: string[];
+  /** As competências de armazenagem da NF (o id de `billing_periods`, parte 7.2a). */
+  periodo_ids: string[];
   autorizacao_ids: string[];
   enviada: boolean;
 };
@@ -135,6 +138,7 @@ export function faturaLida(id: string, dados: Registro): FaturaLida {
     emitida_em: texto(nf.emitida_em),
     vencimento: texto(dados.vencimento),
     demanda_numeros: lista(dados.demanda_numeros),
+    periodo_ids: lista(dados.periodo_ids),
     autorizacao_ids: lista(dados.autorizacao_ids),
     enviada: Boolean(dados.enviada),
   };

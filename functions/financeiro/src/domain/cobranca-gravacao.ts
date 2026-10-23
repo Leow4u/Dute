@@ -17,6 +17,7 @@ import {
   type FaturaLida,
   type StatusDaFatura,
 } from "./cobranca.js";
+import { BILLING_PERIODS_COLLECTION, periodoLido, problemaDoPeriodoNaFatura } from "./armazenagem.js";
 import { createFinanceiroEvent } from "./events.js";
 import { AUTHORIZATIONS_COLLECTION, DEMANDS_COLLECTION, FATURAS_COLLECTION } from "./fatura.js";
 import { runIdempotent, type FinanceiroActor } from "./operations.js";
@@ -33,7 +34,8 @@ import type { FinanceiroProfile } from "./profile.js";
  * - reverse_payment: estorna um pagamento; a paga volta a enviada (ou
  *   emitida) e as demandas, a faturada.
  * - cancel: cancela o registro sem pagamento; as demandas voltam a A
- *   faturar e as autorizações perdem a NF.
+ *   faturar, a armazenagem volta à fila (parte 7.2a) e as autorizações
+ *   perdem a NF.
  *
  * Cada ação regrava a projeção do portal (`client_faturas`, parte 4.3a) a
  * partir da fatura como ela fica; o cancelamento a apaga.
@@ -67,6 +69,19 @@ async function demandasDaFatura({ db, transaction, fatura }: Contexto, etapa: "f
   const snaps = await transaction.getAll(...refs);
   snaps.forEach((snap, indice) => conferirDemandaDaFatura(fatura.demanda_numeros[indice], snap.exists ? (snap.data() ?? {}) : null, fatura.id, etapa));
   return refs;
+}
+
+/** Lê a armazenagem da fatura e confere que cada competência está nesta NF antes de qualquer escrita. */
+async function periodosDaFatura({ db, transaction, fatura }: Contexto) {
+  const refs = fatura.periodo_ids.map((id) => db.collection(BILLING_PERIODS_COLLECTION).doc(id));
+  if (!refs.length) return [];
+  const snaps = await transaction.getAll(...refs);
+  return snaps.map((snap, indice) => {
+    const dados = snap.exists ? (snap.data() ?? {}) : null;
+    const problema = problemaDoPeriodoNaFatura(fatura.periodo_ids[indice], dados, fatura.id);
+    if (problema) throw new HttpsError("failed-precondition", problema);
+    return { ref: refs[indice], competencia: periodoLido(snap.id, dados ?? {}).competencia };
+  });
 }
 
 function moverDemandas({ transaction, caller, iso }: Contexto, refs: DocumentReference[], etapa: string, extra: Record<string, unknown>) {
@@ -180,14 +195,22 @@ export async function advanceFaturaFor(
       // cancel
       conferirCancelamento(fatura);
       const demandas = await demandasDaFatura(contexto, "faturada");
+      const periodos = await periodosDaFatura(contexto);
       transaction.update(faturaRef, { status: "cancelada", cancelada: { em: iso, por_uid: caller.uid, motivo: pedido.motivo }, ...atualizado });
       moverDemandas(contexto, demandas, "a_faturar", { faturamento: FieldValue.delete() });
+      for (const periodo of periodos) {
+        transaction.update(periodo.ref, { faturamento: FieldValue.delete(), updated_at: FieldValue.serverTimestamp() });
+      }
       // O registro cancelado era um erro: some do portal.
       transaction.delete(projecaoRef);
       for (const autorizacao of fatura.autorizacao_ids) {
         transaction.update(db.collection(AUTHORIZATIONS_COLLECTION).doc(autorizacao), { nf_ids: FieldValue.arrayRemove(fatura.id) });
       }
-      createFinanceiroEvent(transaction, db, { ...evento, type: "nf.cancelled", payload: { id: fatura.id, demandas: fatura.demanda_numeros } });
+      createFinanceiroEvent(transaction, db, {
+        ...evento,
+        type: "nf.cancelled",
+        payload: { id: fatura.id, demandas: fatura.demanda_numeros, competencias: periodos.map((periodo) => periodo.competencia) },
+      });
       return { target_id: fatura.id, result: { id: fatura.id, acao: pedido.acao, status: "cancelada", recebido_cents: 0, saldo_cents: fatura.valor_cents } };
     },
   );

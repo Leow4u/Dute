@@ -55,6 +55,15 @@ describe("a entrada da NF", () => {
     assert.match(recusa(() => interpretarRegistro({ ...PEDIDO, nf: { ...PEDIDO.nf, numero: "12-34" } })).message, /só dígitos/);
   });
 
+  it("aceita a armazenagem sozinha ou com as demandas, e recusa a NF sem nada (parte 7.2a)", () => {
+    assert.deepEqual(interpretarRegistro({ ...PEDIDO, demandas: undefined, armazenagem: ["BTG_Pactual__2026-09"] }).demandas, []);
+    assert.deepEqual(interpretarRegistro({ ...PEDIDO, armazenagem: ["2026-08", "BTG_Pactual__2026-09"] }).armazenagem, ["2026-08", "BTG_Pactual__2026-09"]);
+    assert.deepEqual(interpretarRegistro(PEDIDO).armazenagem, []);
+    assert.equal(recusa(() => interpretarRegistro({ ...PEDIDO, demandas: [] })).message, "Informe ao menos uma demanda.");
+    assert.equal(recusa(() => interpretarRegistro({ ...PEDIDO, armazenagem: ["BTG Pactual__2026-09"] })).message, "Competência de armazenagem inválida.");
+    assert.match(recusa(() => interpretarRegistro({ ...PEDIDO, armazenagem: ["2026-08", "2026-08"] })).message, /duas vezes/);
+  });
+
   it("o id da fatura é o da NF: série e número, com ou sem zero à esquerda", () => {
     assert.equal(faturaIdDaNf("1", "1234"), faturaIdDaNf("1", "0001234"));
     assert.notEqual(faturaIdDaNf("1", "1234"), faturaIdDaNf("2", "1234"));
@@ -116,7 +125,7 @@ describe("o valor da demanda", () => {
     assert.equal(recusa(() => valorNaMedicao("10052", medicao)).message, "A medição aprovada não tem linha da demanda 10052.");
   });
 
-  it("o documento da fatura soma as demandas e junta as autorizações sem repetir", () => {
+  it("o documento da fatura soma as demandas e a armazenagem e junta as autorizações sem repetir", () => {
     const documento = documentoDaFatura({
       id: "fat_000000000000000000000001",
       customer_code: "ITAU",
@@ -125,6 +134,7 @@ describe("o valor da demanda", () => {
         { numero: "10045", rv: 2, medicao_id: null, autorizacao_ids: ["aut_1"], valor_cents: 100_000 },
         { numero: "10046", rv: 0, medicao_id: null, autorizacao_ids: ["aut_1", "aut_2"], valor_cents: 25_050 },
       ],
+      armazenagem: [{ periodo_id: "ITAU__2026-09", competencia: "2026-09", valor_cents: 7_508 }],
       nf: { numero: "1234", serie: "1", emitida_em: "2026-10-23" },
       vencimento: "2026-11-20",
       forma: "boleto",
@@ -133,7 +143,8 @@ describe("o valor da demanda", () => {
       registrada_em: "2026-10-23T15:00:00.000Z",
       operation_id: "op_x",
     });
-    assert.equal(documento.valor_cents, 125_050);
+    assert.equal(documento.valor_cents, 125_050 + 7_508);
+    assert.deepEqual(documento.periodo_ids, ["ITAU__2026-09"]);
     assert.deepEqual(documento.autorizacao_ids, ["aut_1", "aut_2"]);
     assert.deepEqual(documento.demanda_numeros, ["10045", "10046"]);
     assert.equal(documento.status, "emitida");

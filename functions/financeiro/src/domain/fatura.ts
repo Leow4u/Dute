@@ -1,6 +1,7 @@
 import { HttpsError } from "firebase-functions/https";
 import { z } from "zod";
 
+import { MAX_COMPETENCIAS_POR_NF, PERIODO_ID, type ArmazenagemNaFatura } from "./armazenagem.js";
 import { digest } from "./operations.js";
 
 /**
@@ -12,6 +13,9 @@ import { digest } from "./operations.js";
  * autorizações citam) ou, na medição mensal, a soma das linhas da demanda na
  * medição aprovada. A demanda que espera autorização (pedido e aceite,
  * portal ou medição aprovada) só fatura com a autorização registrada.
+ *
+ * Desde a parte 7.2a, a NF também fecha a armazenagem que o WMS emitiu
+ * (armazenagem.ts), sozinha ou com as demandas do mesmo cliente.
  */
 
 export const FATURAS_COLLECTION = "faturas";
@@ -53,9 +57,15 @@ const RegistrarNf = z
     idempotency_key: z.string().trim().min(1, "Informe a chave de idempotência.").max(200),
     demandas: z
       .array(z.string().trim().regex(/^\d{5,8}$/, "Número da demanda inválido."))
-      .min(1, "Informe ao menos uma demanda.")
       .max(MAX_DEMANDAS_POR_NF, `Uma NF fecha até ${MAX_DEMANDAS_POR_NF} demandas.`)
-      .refine((lista) => new Set(lista).size === lista.length, "A mesma demanda aparece duas vezes."),
+      .refine((lista) => new Set(lista).size === lista.length, "A mesma demanda aparece duas vezes.")
+      .default([]),
+    /** As competências emitidas no WMS (o id de `billing_periods`). */
+    armazenagem: z
+      .array(z.string().trim().regex(PERIODO_ID, "Competência de armazenagem inválida."))
+      .max(MAX_COMPETENCIAS_POR_NF, `Uma NF fecha até ${MAX_COMPETENCIAS_POR_NF} competências de armazenagem.`)
+      .refine((lista) => new Set(lista).size === lista.length, "A mesma competência aparece duas vezes.")
+      .default([]),
     nf: z
       .object({
         numero: z.string().trim().regex(/^\d{1,15}$/, "Número da NF: só dígitos, até 15."),
@@ -79,6 +89,7 @@ export function interpretarRegistro(dados: unknown): PedidoDeNf {
     invalid(issue?.message ?? "Pedido inválido.");
   }
   const pedido = lido.data;
+  if (!pedido.demandas.length && !pedido.armazenagem.length) invalid("Informe ao menos uma demanda.");
   if (pedido.vencimento < pedido.nf.emitida_em) invalid("O vencimento vem depois da emissão.");
   return { ...pedido, nf: { ...pedido.nf, numero: pedido.nf.numero.replace(/^0+(?=\d)/, ""), serie: (pedido.nf.serie ?? "1").toUpperCase() } };
 }
@@ -224,6 +235,7 @@ export type FaturaNova = {
   customer_code: string;
   customer_name: string | null;
   demandas: DemandaNaFatura[];
+  armazenagem: ArmazenagemNaFatura[];
   nf: { numero: string; serie: string; emitida_em: string };
   vencimento: string;
   forma: FormaDePagamento;
@@ -235,9 +247,10 @@ export type FaturaNova = {
 
 export const FATURA_SCHEMA_VERSION = 1;
 
-/** O documento de `faturas/{id}`: emitida, com o valor de cada demanda e o total. */
+/** O documento de `faturas/{id}`: emitida, com o valor de cada demanda, de cada competência e o total. */
 export function documentoDaFatura(entrada: FaturaNova): Record<string, unknown> {
   const autorizacoes = [...new Set(entrada.demandas.flatMap((demanda) => demanda.autorizacao_ids))];
+  const soma = (linhas: ReadonlyArray<{ valor_cents: number }>) => linhas.reduce((total, linha) => total + linha.valor_cents, 0);
   return {
     id: entrada.id,
     customer_code: entrada.customer_code,
@@ -245,8 +258,10 @@ export function documentoDaFatura(entrada: FaturaNova): Record<string, unknown> 
     status: "emitida",
     demandas: entrada.demandas,
     demanda_numeros: entrada.demandas.map((demanda) => demanda.numero),
+    armazenagem: entrada.armazenagem,
+    periodo_ids: entrada.armazenagem.map((linha) => linha.periodo_id),
     autorizacao_ids: autorizacoes,
-    valor_cents: entrada.demandas.reduce((soma, demanda) => soma + demanda.valor_cents, 0),
+    valor_cents: soma(entrada.demandas) + soma(entrada.armazenagem),
     nf: entrada.nf,
     nf_chave: `${entrada.nf.serie}:${entrada.nf.numero}`,
     vencimento: entrada.vencimento,

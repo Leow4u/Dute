@@ -5,9 +5,12 @@ import { deleteApp, initializeApp } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 
+import { BILLING_PERIODS_COLLECTION } from "./armazenagem.js";
+import { advanceFaturaFor } from "./cobranca-gravacao.js";
 import { EVENTS_COLLECTION, FINANCEIRO_EVENT_SOURCE } from "./events.js";
 import { registerNfFor } from "./fatura-gravacao.js";
 import { FATURAS_COLLECTION, faturaIdDaNf } from "./fatura.js";
+import { CLIENT_FATURAS_COLLECTION } from "./projecao.js";
 import type { FinanceiroProfile } from "./profile.js";
 
 /**
@@ -16,7 +19,8 @@ import type { FinanceiroProfile } from "./profile.js";
  * aprovada, pela soma das linhas dela; a fatura nasce emitida, as demandas
  * ficam Faturadas com o marco, as autorizações ganham a NF e o evento sai sem
  * valor; repetir não duplica. Sem autorização, fora de A faturar, de clientes
- * diferentes ou com a NF já registrada, nada se grava. Dados sintéticos.
+ * diferentes ou com a NF já registrada, nada se grava. A competência que o
+ * WMS emitiu entra pelo total congelado (parte 7.2a). Dados sintéticos.
  */
 
 const PROJECT_ID = "demo-dute-financeiro";
@@ -91,6 +95,19 @@ beforeEach(async () => {
     ],
   });
   set("client_authorizations/aut_ctr_safra_2026-10", { id: "aut_ctr_safra_2026-10", customer_code: "SAFRA", tipo: "medicao_aprovada", status: "registrada", demandas: [], demanda_numeros: ["10050"], nf_ids: [] });
+  // A armazenagem como o WMS emite: o total da NF é o da foto, não o do período.
+  const periodo = (customer: string | null, competencia: string, status: string, centavos: number) => ({
+    ...(customer ? { customer_code: customer } : {}),
+    competencia,
+    status,
+    total_cents: centavos + 1,
+    ...(status === "aberto" ? {} : { invoice_snapshot: { schema_version: 1, competencia, status: "emitido", total_cents: centavos, total: centavos / 100 } }),
+  });
+  set(`${BILLING_PERIODS_COLLECTION}/ITAU__2026-09`, periodo("ITAU", "2026-09", "emitido", 7_508));
+  set(`${BILLING_PERIODS_COLLECTION}/ITAU__2026-08`, periodo("ITAU", "2026-08", "pago", 6_000));
+  set(`${BILLING_PERIODS_COLLECTION}/ITAU__2026-10`, periodo("ITAU", "2026-10", "aberto", 0));
+  set(`${BILLING_PERIODS_COLLECTION}/SAFRA__2026-09`, periodo("SAFRA", "2026-09", "emitido", 3_000));
+  set(`${BILLING_PERIODS_COLLECTION}/2026-07`, periodo(null, "2026-07", "emitido", 1_234));
   await batch.commit();
 });
 
@@ -122,7 +139,7 @@ describe("registrar a NF", () => {
   it("fatura as demandas pela RV validada e autorizada; Faturadas, autorização com a NF e o evento sem valor; repetir não duplica", async () => {
     const resultado = await registerNfFor(db, financeiro, pedido(), AGORA);
     const id = faturaIdDaNf("1", "1234");
-    assert.deepEqual(resultado, { id, valor_cents: 1_484_500, demandas: ["10045", "10046"] });
+    assert.deepEqual(resultado, { id, valor_cents: 1_484_500, demandas: ["10045", "10046"], armazenagem: [] });
 
     const fatura = (await db.collection(FATURAS_COLLECTION).doc(id).get()).data() ?? {};
     assert.equal(fatura.status, "emitida");
@@ -141,7 +158,7 @@ describe("registrar a NF", () => {
     const eventos = (await db.collection(EVENTS_COLLECTION).get()).docs.map((doc) => doc.data());
     assert.equal(eventos.length, 1);
     assert.deepEqual([eventos[0].type, eventos[0].source, eventos[0].entity_type, eventos[0].customer_code], ["nf.registered", FINANCEIRO_EVENT_SOURCE, "fatura", "ITAU"]);
-    assert.deepEqual(eventos[0].payload, { id, demandas: ["10045", "10046"], autorizacoes: 1, emitida_em: "2026-10-23", vencimento: "2026-11-20", forma: "boleto" });
+    assert.deepEqual(eventos[0].payload, { id, demandas: ["10045", "10046"], competencias: [], autorizacoes: 1, emitida_em: "2026-10-23", vencimento: "2026-11-20", forma: "boleto" });
     // Sem o carimbo do servidor: os nanossegundos dele podem conter qualquer sequência de dígitos.
     const { created_at: _carimbo, ...semCarimbo } = eventos[0];
     assert.doesNotMatch(JSON.stringify(semCarimbo), /1234500|4500000009|1234"/);
@@ -184,5 +201,81 @@ describe("registrar a NF", () => {
       await recusa(registerNfFor(db, { uid: `${role}-1`, role }, pedido(), AGORA), "permission-denied", "Seu perfil não grava no Financeiro.");
     }
     await nadaGravado();
+  });
+});
+
+describe("a armazenagem na NF (parte 7.2a)", () => {
+  const periodoAgora = async (id: string) => (await db.collection(BILLING_PERIODS_COLLECTION).doc(id).get()).data() ?? {};
+
+  it("a competência emitida entra pelo total da foto, com as demandas do mesmo cliente; o WMS segue emitido", async () => {
+    const resultado = await registerNfFor(db, financeiro, pedido({ demandas: ["10045"], armazenagem: ["ITAU__2026-09"], nf: { numero: "500", emitida_em: "2026-10-23" } }), AGORA);
+    const id = faturaIdDaNf("1", "500");
+    assert.deepEqual(resultado, { id, valor_cents: 1_234_500 + 7_508, demandas: ["10045"], armazenagem: ["ITAU__2026-09"] });
+
+    const fatura = (await db.collection(FATURAS_COLLECTION).doc(id).get()).data() ?? {};
+    assert.deepEqual(fatura.armazenagem, [{ periodo_id: "ITAU__2026-09", competencia: "2026-09", valor_cents: 7_508 }]);
+    assert.deepEqual(fatura.periodo_ids, ["ITAU__2026-09"]);
+    assert.equal(fatura.valor_cents, 1_242_008);
+
+    const periodo = await periodoAgora("ITAU__2026-09");
+    assert.equal(periodo.status, "emitido");
+    assert.deepEqual(periodo.faturamento, (await db.doc("demands/10045").get()).get("faturamento"));
+    assert.equal(periodo.faturamento.fatura_id, id);
+
+    const evento = (await db.collection(EVENTS_COLLECTION).get()).docs.map((doc) => doc.data());
+    assert.deepEqual(evento.map((item) => [item.type, item.payload.demandas, item.payload.competencias]), [["nf.registered", ["10045"], ["2026-09"]]]);
+    const portal = (await db.collection(CLIENT_FATURAS_COLLECTION).doc(id).get()).data() ?? {};
+    assert.deepEqual(portal.armazenagem, [{ competencia: "2026-09", valor_cents: 7_508 }]);
+    assert.equal(portal.valor_cents, 1_242_008);
+
+    assert.equal((await registerNfFor(db, financeiro, pedido({ demandas: ["10045"], armazenagem: ["ITAU__2026-09"], nf: { numero: "500", emitida_em: "2026-10-23" } }), AGORA)).replayed, true);
+    await recusa(
+      registerNfFor(db, financeiro, pedido({ idempotency_key: "nf-7", demandas: [], armazenagem: ["ITAU__2026-09"], nf: { numero: "501", emitida_em: "2026-10-23" } }), AGORA),
+      "failed-precondition",
+      "A armazenagem de 09/2026 já está numa NF.",
+    );
+  });
+
+  it("a competência antiga da BTG fatura sozinha, pelo cliente do id antigo", async () => {
+    const resultado = await registerNfFor(db, financeiro, pedido({ demandas: [], armazenagem: ["2026-07"], nf: { numero: "600", emitida_em: "2026-10-23" } }), AGORA);
+    assert.deepEqual([resultado.valor_cents, resultado.demandas], [1_234, []]);
+    const fatura = (await db.collection(FATURAS_COLLECTION).doc(resultado.id).get()).data() ?? {};
+    assert.deepEqual([fatura.customer_code, fatura.customer_name, fatura.demandas, fatura.autorizacao_ids], ["BTG Pactual", null, [], []]);
+    assert.equal((await periodoAgora("2026-07")).faturamento.fatura_id, resultado.id);
+  });
+
+  it("a aberta, a paga, a de outro cliente e a que não existe não entram, e nada se grava", async () => {
+    const nf = (armazenagem: string[], chave: string, demandas: string[] = []) => registerNfFor(db, financeiro, pedido({ idempotency_key: chave, demandas, armazenagem }), AGORA);
+    await recusa(nf(["ITAU__2026-10"], "a-1"), "failed-precondition", "A armazenagem de 10/2026 ainda não foi emitida no WMS.");
+    await recusa(nf(["ITAU__2026-08"], "a-2"), "failed-precondition", "A armazenagem de 08/2026 já está paga no WMS.");
+    await recusa(nf(["SAFRA__2026-09"], "a-3", ["10045"]), "invalid-argument", "A armazenagem de 09/2026 é de outro cliente: uma NF é de um cliente só.");
+    await recusa(nf(["ITAU__2026-09", "SAFRA__2026-09"], "a-4"), "invalid-argument", "A armazenagem de 09/2026 é de outro cliente: uma NF é de um cliente só.");
+    await recusa(nf(["ITAU__2026-11"], "a-5"), "not-found", "Competência de armazenagem ITAU__2026-11 não encontrada.");
+    await nadaGravado();
+    for (const id of ["ITAU__2026-09", "SAFRA__2026-09", "2026-07"]) assert.equal((await periodoAgora(id)).faturamento, undefined, id);
+  });
+
+  it("cancelar o registro devolve a competência à fila, e ela entra em outra NF", async () => {
+    const registro = await registerNfFor(db, financeiro, pedido({ demandas: ["10045"], armazenagem: ["ITAU__2026-09"], nf: { numero: "700", emitida_em: "2026-10-23" } }), AGORA);
+    await advanceFaturaFor(db, financeiro, { acao: "cancel", idempotency_key: "c-1", fatura_id: registro.id, motivo: "NF errada" }, AGORA);
+    assert.equal((await periodoAgora("ITAU__2026-09")).faturamento, undefined);
+    assert.equal((await periodoAgora("ITAU__2026-09")).status, "emitido");
+    const cancelada = (await db.collection(EVENTS_COLLECTION).where("type", "==", "nf.cancelled").get()).docs[0]?.data();
+    assert.deepEqual(cancelada?.payload, { id: registro.id, demandas: ["10045"], competencias: ["2026-09"] });
+
+    const outra = await registerNfFor(db, financeiro, pedido({ idempotency_key: "nf-8", demandas: [], armazenagem: ["ITAU__2026-09"], nf: { numero: "701", emitida_em: "2026-10-23" } }), AGORA);
+    assert.equal(outra.valor_cents, 7_508);
+    assert.equal((await periodoAgora("ITAU__2026-09")).faturamento.fatura_id, outra.id);
+  });
+
+  it("o cancelamento recusa a competência que saiu desta NF, e nada muda", async () => {
+    const registro = await registerNfFor(db, financeiro, pedido({ demandas: [], armazenagem: ["ITAU__2026-09"], nf: { numero: "800", emitida_em: "2026-10-23" } }), AGORA);
+    await db.collection(BILLING_PERIODS_COLLECTION).doc("ITAU__2026-09").update({ "faturamento.fatura_id": "fat_outra" });
+    await recusa(
+      advanceFaturaFor(db, financeiro, { acao: "cancel", idempotency_key: "c-2", fatura_id: registro.id, motivo: "NF errada" }, AGORA),
+      "failed-precondition",
+      "A armazenagem de 09/2026 não está nesta NF.",
+    );
+    assert.equal((await db.collection(FATURAS_COLLECTION).doc(registro.id).get()).get("status"), "emitida");
   });
 });
