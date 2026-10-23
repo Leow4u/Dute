@@ -139,7 +139,7 @@ export const AGENTE_LIBERADO = agenteLiberado(import.meta.env.VITE_FIREBASE_PROJ
 export const RH_AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog"];
 
 /** A codebase `rh` está no firebase.json (parte 8.1b). */
-export const RH_PUBLICADO = false;
+export const RH_PUBLICADO = true;
 
 export function rhLiberado(projectId: string | null | undefined, publicado: boolean = RH_PUBLICADO): boolean {
   return publicado && RH_AMBIENTES_LIBERADOS.includes(String(projectId ?? "").trim());

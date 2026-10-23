@@ -505,3 +505,25 @@ competência.
     contêiner (a chave que se mantém na falha e troca no sucesso e na
     competência).
 
+### Parte 8.1b: o banco `dute-rh` e a codebase na publicação
+
+Entra só depois de o banco `dute-rh` existir na homologação e na produção,
+pelo workflow `Banco rh` (seção "Como o banco `dute-rh` nasce").
+
+- **O `firebase.json`** passa o `firestore` a uma lista: o banco padrão,
+  com as regras e os índices de sempre, e o `dute-rh`, com o
+  `firestore-rh.rules`. A codebase `rh` entra nas functions.
+- **A publicação** instala o `functions/rh` e publica a codebase com as
+  outras.
+  - O `tools/check_rules_deployed.sh` confere a release de cada banco do
+    `firebase.json`: `cloud.firestore` para o padrão e
+    `cloud.firestore/dute-rh` para o do RH.
+  - O `check_functions_invoker.ps1` já lê as codebases do `firebase.json`.
+- **O app** passa o `RH_PUBLICADO` a `true`, e as telas do RH ligam na
+  homologação, onde a liberação atende. A trava do `platform-lists.test.ts`
+  exige o `RH_PUBLICADO` igual à codebase no `firebase.json`.
+- **A trava** `tools/test_banco_rh.py` exige que o único banco nomeado do
+  `firebase.json` seja o `RH_DATABASE` da codebase, com o
+  `firestore-rh.rules`.
+- **Conferido no emulador:** com o `firestore` em lista, as regras do banco
+  padrão, as do `dute-rh` e as do Storage passam como antes.

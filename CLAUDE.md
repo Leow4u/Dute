@@ -175,28 +175,27 @@ documentação de produto e operação está em `docs/`.
     o outro. No app, o agente do núcleo entra em cada shell (`lib/agente`,
     rota `/<modulo>/agente`) só com a liberação dele; fora dela, segue o do
     WMS. Usa **npm**, como as outras codebases.
-  - `functions/rh`: Functions do RH (Fase 8), codebase `rh`, ainda fora do
-    `firebase.json` (entra na parte 8.1b, depois de o banco Firestore
-    `dute-rh` nascer nos dois ambientes pelo workflow manual `Banco rh`,
-    `.github/workflows/banco-rh.yml`; sem o banco, a publicação das regras
-    falha e nada sobe).
+  - `functions/rh`: Functions do RH (Fase 8), codebase `rh`, no
+    `firebase.json` desde a parte 8.1b, com o banco Firestore `dute-rh`
+    (criado nos dois ambientes pelo workflow manual `Banco rh`,
+    `.github/workflows/banco-rh.yml`; sem o banco num dos dois, a
+    publicação das regras falha e nada sobe). As telas do RH ligam com o
+    `RH_PUBLICADO` do app, travado contra o `firebase.json`.
     Toda callable entra por `requireRhCaller` (liberação
-    `RH_AMBIENTES_LIBERADOS`, só o `dute-homolog`; owner, admin e rh leem, só
-    rh grava). O banco `dute-rh` é fechado ao navegador
-    (`firestore-rh.rules`): as regras de um banco nomeado não leem o `users`
-    do banco padrão. Hoje a
-    ficha do colaborador (parte 8.2a): `saveRhRecord` e `archiveRhRecord`
-    gravam o registro, o recibo (`rh_operations`) e o evento `rh.*` numa
-    transação do banco `dute-rh`, nunca no padrão; `getRhPanel` e `getRhFicha`
-    leem; a rotina `runRhAlerts` avisa o vencimento uma vez por marco. O
-    arquivo do registro (parte 8.2b) sobe e abre só por URL assinada
-    (`requestRhUpload`, `attachRhFile`, `openRhFile`), e cada abertura vira
-    evento; `rh/**` fica fechado no `storage.rules`. A folha e o eSocial
-    ficam com a contabilidade (pergunta 24, parte 8.3): `exportRhMonth` gera
-    a exportação da competência (os exames com os códigos do S-2220 e os
-    colaboradores próprios, com o CPF), por versão e idempotente;
-    `listRhExports` e `downloadRhExport` listam e baixam, com o evento.
-    Desenho: `docs/plataforma/fase-8-rh.md`. Usa **npm**.
+    `RH_AMBIENTES_LIBERADOS`, só o `dute-homolog`; owner, admin e rh leem, só rh
+    grava). O banco `dute-rh` é fechado ao navegador (`firestore-rh.rules`): as
+    regras de um banco nomeado não leem o `users` do banco padrão. Hoje a ficha
+    do colaborador (parte 8.2a): `saveRhRecord` e `archiveRhRecord` gravam o
+    registro, o recibo (`rh_operations`) e o evento `rh.*` numa transação do
+    banco `dute-rh`, nunca no padrão; `getRhPanel` e `getRhFicha` leem; a rotina
+    `runRhAlerts` avisa o vencimento uma vez por marco. O arquivo do registro
+    (parte 8.2b) sobe e abre só por URL assinada (`requestRhUpload`,
+    `attachRhFile`, `openRhFile`), e cada abertura vira evento; `rh/**` fica
+    fechado no `storage.rules`. A folha e o eSocial ficam com a contabilidade
+    (pergunta 24, parte 8.3): `exportRhMonth` gera a exportação da competência
+    (os exames com os códigos do S-2220 e os colaboradores próprios, com o CPF),
+    por versão e idempotente; `listRhExports` e `downloadRhExport` listam e
+    baixam, com o evento. Desenho: `docs/plataforma/fase-8-rh.md`. Usa **npm**.
   - `lib/dominio`: tipos e regras que o app e as Functions precisam ter iguais.
 - **IA native.** Todo módulo novo grava desde o primeiro dia o que a IA precisa
   (eventos em `events`, tempos e medidas) e respeita o isolamento por cliente. A
