@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { ItemDoInicio } from "../inicio-do-modulo";
 import type { ProfileRole } from "../modules";
 import {
+  lerAditivosAFazer,
   lerAlertasDeMedicao,
   lerAlertasDosContratos,
   lerAutorizacoesDoInicio,
@@ -14,6 +15,7 @@ import {
 import { abreComercial } from "./navegacao";
 import {
   pendenciasDoComercial,
+  veAditivosNoInicio,
   veAprovacoesNoInicio,
   veAutorizacoesNoInicio,
   veContratosNoInicio,
@@ -49,6 +51,7 @@ export function useInicioDoComercial(
   const veAutorizacoes = ligado && veAutorizacoesNoInicio(role);
   const veMedicoes = ligado && veMedicoesNoInicio(role);
   const veResumo = ligado && abreComercial(role);
+  const veAditivos = ligado && veAditivosNoInicio(role);
 
   const aprovacoes = useQuery({
     queryKey: ["comercial", "orcamentos", "para-aprovar"],
@@ -99,6 +102,15 @@ export function useInicioDoComercial(
     staleTime: UM_MINUTO,
   });
 
+  const aditivos = useQuery({
+    queryKey: ["comercial", "aditivos-da-operacao", "inicio"],
+    queryFn: () => lerAditivosAFazer(),
+    enabled: veAditivos,
+    refetchInterval: CINCO_MINUTOS,
+    refetchOnWindowFocus: false,
+    staleTime: UM_MINUTO,
+  });
+
   const fontes = [
     { ve: veAprovacoes, consulta: aprovacoes, nome: "orçamentos para aprovar" },
     { ve: veDevolvidos, consulta: devolvidos, nome: "orçamentos devolvidos" },
@@ -106,6 +118,7 @@ export function useInicioDoComercial(
     { ve: veAutorizacoes, consulta: autorizacoes, nome: "autorizações" },
     { ve: veMedicoes, consulta: medicoes, nome: "medições" },
     { ve: veResumo, consulta: resumo, nome: "orçamentos por etapa" },
+    { ve: veAditivos, consulta: aditivos, nome: "aditivos da Operação" },
   ];
   return {
     itens: pendenciasDoComercial({
@@ -116,6 +129,7 @@ export function useInicioDoComercial(
       medicoes: medicoes.data,
       devolvidos: devolvidos.data,
       semResposta: resumo.data?.semResposta,
+      aditivos: aditivos.data,
     }),
     resumo: resumo.data,
     carregando: fontes.some((fonte) => fonte.ve && fonte.consulta.isLoading),

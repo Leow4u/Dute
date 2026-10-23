@@ -1,8 +1,9 @@
-import { CalendarRange, FileCheck, FileText, Hourglass, Send, Undo2 } from "lucide-react";
+import { CalendarRange, FileCheck, FilePlus2, FileText, Hourglass, Send, Undo2 } from "lucide-react";
 
 import type { ItemDoInicio, TomDoItem } from "../inicio-do-modulo";
 import { COMERCIAL_LIBERADO } from "../liberacao";
 import type { ProfileRole } from "../modules";
+import { itensDoAditivoEmTexto, type AditivoAFazer } from "./aditivos-da-operacao";
 import type { OrcamentoParaAprovarNoInicio } from "./aprovar";
 import type { PendenciasDoInicio } from "./autorizacoes";
 import { dataBr } from "./clientes";
@@ -42,6 +43,11 @@ export function veMedicoesNoInicio(role: ProfileRole | null | undefined, comerci
 
 /** Proposta sem resposta do cliente: owner, admin e comercial, com a liberação. */
 export function veSemRespostaNoInicio(role: ProfileRole | null | undefined, comercialLiberado: boolean = COMERCIAL_LIBERADO): boolean {
+  return abreComercial(role, comercialLiberado);
+}
+
+/** Os aditivos pedidos pela Operação: owner, admin e comercial, com a liberação (parte 3.10c). */
+export function veAditivosNoInicio(role: ProfileRole | null | undefined, comercialLiberado: boolean = COMERCIAL_LIBERADO): boolean {
   return abreComercial(role, comercialLiberado);
 }
 
@@ -176,6 +182,18 @@ function itemDeSemResposta(proposta: PropostaSemResposta): ItemDoInicio {
   };
 }
 
+function itemDeAditivo(aditivo: AditivoAFazer): ItemDoInicio {
+  return {
+    id: `aditivo:${aditivo.numero}`,
+    tone: "attention",
+    icon: FilePlus2,
+    title: `Aditivo a fazer · ${aditivo.numero}`,
+    detail: [aditivo.cliente, itensDoAditivoEmTexto(aditivo.itens), `pedido pela Operação ${dataBr(diaDoInstante(aditivo.pedidoEm) ?? aditivo.pedidoEm.slice(0, 10))}`].filter(Boolean).join(" · "),
+    href: hrefDoOrcamento(aditivo.numero),
+    actionLabel: "Abrir orçamento",
+  };
+}
+
 const PESO_DO_TOM: Record<TomDoItem, number> = { critical: 0, attention: 1, info: 2, agent: 3 };
 
 /**
@@ -192,6 +210,7 @@ export function pendenciasDoComercial({
   medicoes,
   devolvidos,
   semResposta,
+  aditivos,
   comercialLiberado = COMERCIAL_LIBERADO,
 }: {
   role: ProfileRole | null | undefined;
@@ -207,11 +226,14 @@ export function pendenciasDoComercial({
   devolvidos?: readonly OrcamentoDevolvido[];
   /** Propostas aguardando o cliente há mais de DIAS_SEM_RESPOSTA dias (o resumo). */
   semResposta?: readonly PropostaSemResposta[];
+  /** Os aditivos pedidos pela revisão da Operação (lerAditivosAFazer, parte 3.10c). */
+  aditivos?: readonly AditivoAFazer[];
   comercialLiberado?: boolean;
 }): ItemDoInicio[] {
   const itens: ItemDoInicio[] = [];
   if (paraAprovar?.length && veAprovacoesNoInicio(role, comercialLiberado)) itens.push(itemDeAprovacao(paraAprovar));
   if (devolvidos?.length && veDevolvidosNoInicio(role, comercialLiberado)) itens.push(...devolvidos.map(itemDeDevolvido));
+  if (aditivos?.length && veAditivosNoInicio(role, comercialLiberado)) itens.push(...aditivos.map(itemDeAditivo));
   if (contratos?.length && veContratosNoInicio(role, comercialLiberado)) itens.push(...itensDeContrato(contratos));
   if (autorizacoes && veAutorizacoesNoInicio(role, comercialLiberado)) itens.push(...itensDeAutorizacao(autorizacoes));
   if (medicoes?.length && veMedicoesNoInicio(role, comercialLiberado)) itens.push(...itensDeMedicao(medicoes));

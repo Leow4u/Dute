@@ -3,6 +3,7 @@ import { collection, getDocs, query, where } from "firebase/firestore";
 import { useLocation, useSearch } from "wouter";
 
 import { useToast } from "@/hooks/use-toast";
+import { execucaoDaOperacao } from "@/lib/comercial/aditivos-da-operacao";
 import { chamarComercial, novaChave, type CallableDoComercial } from "@/lib/comercial/api";
 import { acoesDepoisDoEnvio } from "@/lib/comercial/depois-do-envio";
 import {
@@ -492,6 +493,7 @@ function MontarOrcamento({ numero }: { numero: string }) {
           detalhe: [devolveu ? `Devolvido por ${devolveu}` : "Devolvido", dataHoraCurta(item.devolucao.em)].filter(Boolean).join(" · "),
         }
       : null,
+    operacao: execucaoDaOperacao(numero, demandaDoc ?? null, quoteDoc ?? null),
   };
   const posEnvio = acoesDepoisDoEnvio(item, { role, uid: user?.uid });
   const acoes = acoesDoOrcamento({

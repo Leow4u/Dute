@@ -172,7 +172,8 @@ registros guardados" é dado, não legenda.
 | 3.9d | Impressão da OS (`OSImpressao`, via operacional) | Sem valor; textos listados |
 | 3.10a | Revisão no backend: `reviewServiceOrder` (cada divergência com decisão: cobrar, aditivo, absorver, próxima OS, encerrar; correção do executado), o consumido no saldo, o resumo `operacao` na demanda, a direta em Execução a orçar; `reopenServiceOrder` (owner e admin) | Divergência sem decisão não conclui; o resumo só pela Operação |
 | 3.10b | Tela Revisão (`OpRevisao`): para revisar, a OS com fotos, assinatura, horas e itens, as decisões; reabrir na ficha | Textos listados; `axe`; o formulário manda o formato de `reviewServiceOrder` |
-| 3.10c | No Comercial: "Aditivos a fazer" na fila, a partir do resumo da Operação; orçar a execução da direta aberta pela Operação | O aditivo pedido aparece até a RV de aditivo; o orçamento da direta nasce com o executado |
+| 3.10c | No Comercial: "Aditivo a fazer" no Início e a execução da Operação no orçamento, a partir do resumo dela | O aditivo pedido aparece até a RV de aditivo (ou a recusa) |
+| 3.10d | Orçar a execução da direta aberta pela Operação: o orçamento nasce com o que ela executou e cobra | O orçamento da direta nasce com o executado a cobrar, pela tabela |
 | 3.11 | Vistoria como OS e "Enviar vistoria ao comercial" | Vistoria não passa pela revisão; orçamento nasce com os itens dela |
 | 3.12 | TV da sala (`/tv`, papel `painel`) | `painel` só lê o que a TV mostra; sem valor; sem ação |
 | 3.13 | Alertas no Início e rotina diária (CNH, revisão do veículo, OS sem equipe ou veículo perto do prazo) | O evento sai uma vez por dia por item |
@@ -964,3 +965,21 @@ Operação; "Revisar" na ficha da OS em revisão). Regras em
 - **Na ficha.** A OS revisada mostra o cartão Revisão (a decisão de cada
   divergência e a nota), o passo Revisar e o histórico. Owner e admin veem
   "Reabrir", com o motivo.
+
+### Parte 3.10c: o aditivo e a execução no Comercial
+
+Feita em 23/10/2026, no app do Comercial, só lendo o resumo `operacao` da
+demanda (parte 3.10a). Regras em `lib/comercial/aditivos-da-operacao.ts`.
+
+- **Aditivo a fazer.** O Início do Comercial ganha um item por demanda com o
+  aditivo pedido pela revisão da Operação ("Aditivo a fazer · 10045", o
+  cliente, os itens a mais e o dia do pedido), que abre o orçamento. Fica até
+  o Comercial abrir a RV de aditivo depois do pedido (pelo caminho que já
+  existe: Aditivo, motivo aditivo) ou registrar uma recusa de aditivo
+  depois dele, e só enquanto a demanda está em Para planejar ou Execução a
+  orçar. Owner, admin e comercial.
+- **No orçamento.** Com uma OS revisada, o orçamento mostra "Execução na
+  Operação": as OS revisadas e o período e, por linha, o executado, o que se
+  cobra, o absorvido e o que foi para aditivo, e o aditivo pedido em
+  destaque enquanto espera. É o que o Comercial usa na RV de execução
+  (executado a menos reduz o faturado) e na de aditivo. Sem valor.
