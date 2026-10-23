@@ -845,6 +845,15 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // O alerta do item parado (parte 5.4d): a proposta do dia de cada cliente,
+    // com os itens, e a decisão. Abre à coordenação, que decide (owner, admin
+    // e interno); o cliente fica sabendo pelo aviso do alerta aprovado. Só o
+    // núcleo grava.
+    match /ai_stock_alerts/{alertaId} {
+      allow read: if hasAnyRole(['owner', 'admin', 'interno']);
+      allow create, update, delete: if false;
+    }
+
     match /ai_agent_memory/{memoryId} {
       allow read: if hasAnyRole(['owner', 'admin', 'interno', 'suporte']);
       allow create, update, delete: if canCoordinateOperations();

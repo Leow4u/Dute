@@ -16,6 +16,8 @@ export const CALLABLES_DO_NUCLEO = [
   "answerSuggestion",
   // Os orçamentos parecidos do mesmo cliente, na montagem do orçamento (parte 5.3b): só lê.
   "findSimilarQuotes",
+  // A decisão da coordenação sobre o alerta do item parado (parte 5.4d): aprovar com os itens ou descartar.
+  "answerStockAlert",
 ] as const;
 export type CallableDoNucleo = (typeof CALLABLES_DO_NUCLEO)[number];
 
