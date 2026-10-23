@@ -614,3 +614,21 @@ Feita em 23/10/2026. A tela é `artifacts/app/src/pages/estoque.tsx`: os itens c
   - a lista (código, nome, endereço, saldos e selos), o código sem o vermelho e `axe`;
   - a busca com rótulo e o motivo sem exemplo;
   - só o Estoque na lista, sem o Mapa, as Posições e as Etiquetas.
+
+### Parte 4.7e: o Receber na v3
+
+Feita em 23/10/2026. A tela é `artifacts/app/src/pages/receber.tsx`, e a chegada avulsa fica em
+`features/warehouse-ops/receiving.tsx`.
+
+- **Na v3.** A fila e o cabeçalho recebem o visual pelas peças comuns (4.7c), e a ficha, os diálogos e o painel do celular pelo portal.
+- **Sem legenda.**
+  - Os grupos mostram só o título e a contagem.
+  - O vazio diz o dado ("Nenhuma chegada para conferir.", "Nada para guardar.", "Nenhuma chegada recebida.").
+  - O rótulo "Aviso de envio" deixou de ser vermelho.
+  - O diálogo da chegada avulsa não explica mais quando usar.
+- **Uma ação principal.** Só a primeira tarefa da fila (a primeira a conferir, senão a primeira a guardar) tem a ação em vermelho. "Chegada avulsa" passou a secundária.
+- **Acessível.** O fornecedor e a NF da chegada avulsa têm o rótulo ligado ao campo e perderam o exemplo.
+- **Na v3.** `/wms/receber` entra em `TELAS_DO_WMS_NA_V3`. Com isso, as quatro telas da pergunta 18 estão na v3. As demais do WMS entram depois, uma por PR, pela mesma lista.
+- **Testes.**
+  - `receber.test.tsx` cobre a falta de legenda, a ação principal, a chegada avulsa e o aviso de envio renderizado com `axe`.
+  - `receiving.test.ts` cobre a tarefa principal.

@@ -114,9 +114,11 @@ documentação de produto e operação está em `docs/`.
 - **IA native.** Todo módulo novo grava desde o primeiro dia o que a IA precisa
   (eventos em `events`, tempos e medidas) e respeita o isolamento por cliente. A
   IA recomenda e mostra de onde tirou; uma pessoa decide (invariante 3).
-- **Telas novas seguem a v3** (`docs/mockups/README.md`); as do WMS seguem
-  `docs/sistema-visual.md` até adotarem a v3 no lançamento da Operação. Nada de
-  legenda nas telas: só rótulos, dados e ações. Toda tela nova tem teste com a
+- **Telas novas seguem a v3** (`docs/mockups/README.md`). O WMS está no shell
+  v3 da Armazenagem desde a parte 4.7a; cada tela dele entra na v3 pela lista
+  `TELAS_DO_WMS_NA_V3` (`artifacts/app/src/lib/wms-v3.ts`): Início, Pedidos,
+  Estoque e Receber até aqui. As que não estão na lista seguem
+  `docs/sistema-visual.md`. Nada de legenda nas telas: só rótulos, dados e ações. Toda tela nova tem teste com a
   lista dos textos (`src/test/textos.ts`, a trava contra legenda) e com o
   `axe` (`src/test/acessibilidade.ts`, WCAG 2.1 A e AA). O "Precisa de você"
   de cada Início é a única regra de contagem: a entrada e o menu contam por

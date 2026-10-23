@@ -9,6 +9,7 @@ import {
   putawayRowMeta,
   receivingArrivalMeta,
   receivingRowMeta,
+  tarefaPrincipal,
   unlinkedShipmentNotices,
 } from "./receiving";
 
@@ -68,6 +69,12 @@ describe("quadro do Receber", () => {
 
   it("não quebra sem filas", () => {
     expect(buildReceivingBoard(normalizeQueues(undefined))).toEqual({ check: [], store: [], done: [] });
+  });
+
+  it("a ação principal da tela (v3) é a da primeira a conferir, senão a primeira a guardar", () => {
+    expect(tarefaPrincipal(board)).toBe("r4");
+    expect(tarefaPrincipal({ check: [], store: board.store })).toBe("p1");
+    expect(tarefaPrincipal({ check: [], store: [] })).toBeNull();
   });
 });
 
