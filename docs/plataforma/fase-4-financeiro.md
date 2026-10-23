@@ -93,9 +93,16 @@ financeiro (`FINANCE_ROLES`, a mesma lista das callables). O menu tem:
 
 - **Início** (`/financeiro`): o "Precisa de você" e a fila em números.
   - As prontas viram "N demandas a faturar", com os clientes e o total. Ficam críticas depois de 15 dias A faturar (`DIAS_PARA_FATURAR`).
+  - As NFs vencidas são o item crítico, com os clientes e o saldo. As NFs a vencer ainda não enviadas pedem o envio.
   - As que esperam a autorização e as sem valor viram itens de informação.
+  - Ao lado, a fila A faturar e o A receber em números: o total, a vencer, vencidas e para enviar.
   - O mesmo cálculo dá os contadores do menu e o card da entrada.
 - **A faturar** (`/financeiro/a-faturar`): as prontas por cliente, as que esperam e o painel de registrar a NF.
+- **A receber, Vencidos, Pagos e Faturas** (`/financeiro/a-receber`, `vencidos`, `pagos` e `faturas`): a mesma lista em quatro recortes e o painel da NF aberta (`?nf=`).
+  - A receber e Vencidos vêm pelo vencimento e somam o saldo. Pagos vêm pelo pagamento mais recente. Faturas mostra todas, inclusive as canceladas, pela emissão.
+  - O painel mostra o valor, o recebido e o saldo, as datas, as demandas, o envio e os pagamentos.
+  - Dali a pessoa marca a NF como enviada, registra o pagamento (começa pelo saldo), estorna um pagamento e cancela o registro sem pagamento.
+  - O estorno e o cancelamento pedem o motivo antes de confirmar.
 - **Armazenagem**: leva ao Faturamento do WMS (`/faturamento`), que continua no shell do WMS até a Fase 7.
 
 O financeiro tem um módulo só e por isso não tem seletor. No menu do WMS, logo
@@ -184,3 +191,17 @@ a gravação em `cobranca-gravacao.ts`.
 - **Comercial e app.** "paga" entra em `ETAPAS_DEMANDA`, com rótulo e cor no Comercial e na Operação. O teste trava que ela não se perde nem recebe autorização.
 - **Regras.** `pagamentos` só para quem lê preço, e nada se grava pelo navegador. O financeiro lê os `cobranca.*`.
 - **Zeragem.** `tools/full_reset_btg.py` preserva `pagamentos`.
+
+### Parte 4.2b: A receber, Vencidos, Pagos e Faturas
+
+Feita em 23/10/2026. As regras estão em `artifacts/app/src/lib/financeiro/faturas.ts`, as
+leituras em `use-faturas.ts` e a tela em `artifacts/app/src/pages/financeiro/faturas-view.tsx`.
+
+- **Vencida** é calculada: a NF com saldo e vencimento antes de hoje. No dia do vencimento ela ainda vence hoje.
+- **O pagamento parcial** deixa o saldo na lista ("de R$ 14.845,00") e no painel. O formulário começa pelo saldo, hoje e a forma da NF.
+- **Os pedidos** para `advanceFatura` levam a ação, a chave e o que a pessoa informou, nunca o saldo nem o status. A tela confere o mesmo que o servidor (saldo e datas) para avisar antes.
+- **O Início** ganha as NFs vencidas (crítico) e as NFs para enviar, e o card A receber. O mais urgente vem primeiro (`lib/financeiro/inicio.ts`).
+- **Testes.**
+  - `faturas.test.ts`: vencida pelo vencimento, pagamento parcial, listas, totais, formulários e pedidos.
+  - `faturas-view.test.tsx`: textos listados, sem legenda, uma ação principal (Registrar pagamento, só com saldo) e `axe`.
+  - `inicio-view.test.tsx`: a ordem e o card A receber.

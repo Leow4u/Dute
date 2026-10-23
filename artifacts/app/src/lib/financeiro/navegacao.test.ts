@@ -9,9 +9,15 @@ import { opcoesDoSeletor } from "../seletor-de-modulo";
 import {
   FINANCEIRO_ROLES,
   ROTA_A_FATURAR,
+  ROTA_A_RECEBER,
   ROTA_FATURAMENTO_WMS,
+  ROTA_FATURAS,
   ROTA_FINANCEIRO,
+  ROTA_PAGOS,
+  ROTA_VENCIDOS,
   abreFinanceiro,
+  hrefDaNf,
+  nfDaBusca,
   rotasDoFinanceiro,
   soComFinanceiroLiberado,
 } from "./navegacao";
@@ -53,15 +59,19 @@ describe("navegação do Financeiro", () => {
     expect(modulesForPerson("cliente", { modules: ["wms", "financeiro"] }, false, false, LIBERADO).map((item) => item.href)).toEqual(["/portal"]);
   });
 
-  it("o menu do módulo tem o Início, A faturar e a Armazenagem, que leva ao Faturamento do WMS", () => {
+  it("o menu do módulo tem o Início, A faturar, a cobrança e a Armazenagem, que leva ao Faturamento do WMS", () => {
     expect(menuDoFinanceiro("financeiro", LIBERADO).map((item) => [item.label, item.href])).toEqual([
       ["Início", ROTA_FINANCEIRO],
       ["A faturar", ROTA_A_FATURAR],
+      ["A receber", ROTA_A_RECEBER],
+      ["Vencidos", ROTA_VENCIDOS],
+      ["Pagos", ROTA_PAGOS],
+      ["Faturas", ROTA_FATURAS],
       ["Armazenagem", ROTA_FATURAMENTO_WMS],
     ]);
     // O Início é a casa: rota exata, para não acender nas outras telas.
     expect(menuDoFinanceiro("financeiro", LIBERADO)[0].routes[0].exact).toBe(true);
-    expect(menuDoFinanceiro("owner", LIBERADO)).toHaveLength(3);
+    expect(menuDoFinanceiro("owner", LIBERADO)).toHaveLength(7);
     for (const role of ["interno", "comercial", "campo", "cliente"] as const) expect(menuDoFinanceiro(role, LIBERADO), role).toEqual([]);
     expect(menuDoFinanceiro("financeiro", DESLIGADO)).toEqual([]);
     for (const item of menuDoFinanceiro("financeiro", LIBERADO)) expect(getRouteProfileRoles(item.href!), item.href).toEqual(["owner", "admin", "financeiro"]);
@@ -99,12 +109,20 @@ describe("navegação do Financeiro", () => {
     expect(caminhos(blocos[0])).toEqual(rotasDoFinanceiro(LIBERADO));
     const fora = APP_SOURCE.replace(/soComFinanceiroLiberado\(\[[\s\S]*?\]\)/g, "");
     expect(caminhos(fora).filter((path) => path.startsWith("/financeiro"))).toEqual([]);
-    expect(rotasDoFinanceiro(LIBERADO)).toEqual([ROTA_FINANCEIRO, ROTA_A_FATURAR]);
+    expect(rotasDoFinanceiro(LIBERADO)).toEqual([ROTA_FINANCEIRO, ROTA_A_FATURAR, ROTA_A_RECEBER, ROTA_VENCIDOS, ROTA_PAGOS, ROTA_FATURAS]);
     expect(rotasDoFinanceiro(DESLIGADO)).toEqual([]);
     expect(soComFinanceiroLiberado([{ path: ROTA_FINANCEIRO }, { path: "/financeiro/outra" }], LIBERADO).map((rota) => rota.path)).toEqual([ROTA_FINANCEIRO]);
     expect(soComFinanceiroLiberado([{ path: ROTA_FINANCEIRO }], DESLIGADO)).toEqual([]);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/financeiro", FinanceiroInicio\)/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/financeiro\/a-faturar", FinanceiroAFaturar\)/);
     expect(APP_SOURCE).toMatch(/financeiro: FinanceiroLayout/);
+  });
+
+  it("a NF aberta fica na URL da lista; id fora do formato não abre nada", () => {
+    const id = "fat_0123456789abcdef01234567";
+    expect(hrefDaNf(ROTA_VENCIDOS, id)).toBe(`/financeiro/vencidos?nf=${id}`);
+    expect(nfDaBusca(`?nf=${id}`)).toBe(id);
+    expect(nfDaBusca("?nf=fat_x")).toBeNull();
+    expect(nfDaBusca("")).toBeNull();
   });
 });

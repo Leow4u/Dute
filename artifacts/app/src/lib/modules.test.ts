@@ -126,6 +126,11 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   // Financeiro da demanda (parte 4.1b): só com a liberação (lib/financeiro/navegacao.ts).
   ["/financeiro", ["owner", "admin", "financeiro"]],
   ["/financeiro/a-faturar", ["owner", "admin", "financeiro"]],
+  // A cobrança (parte 4.2b).
+  ["/financeiro/a-receber", ["owner", "admin", "financeiro"]],
+  ["/financeiro/vencidos", ["owner", "admin", "financeiro"]],
+  ["/financeiro/pagos", ["owner", "admin", "financeiro"]],
+  ["/financeiro/faturas", ["owner", "admin", "financeiro"]],
 ];
 
 // Menu com o Comercial desligado, como na produção (o liberado: comercial/navegacao.test.ts).

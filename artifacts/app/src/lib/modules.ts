@@ -1,14 +1,17 @@
 import { CAMPO_ROLES, ROTA_CAMPO, ROTA_CAMPO_CONCLUIR, ROTA_CAMPO_OS } from "./campo/navegacao";
 import { ROTA_TV, TV_ROLES } from "./tv/navegacao";
 import {
+  AlarmClock,
   Banknote,
   BarChart3,
   Boxes,
   BrainCircuit,
   Briefcase,
   CalendarCheck,
+  CalendarClock,
   CalendarDays,
   CalendarRange,
+  CircleCheck,
   ClipboardCheck,
   ClipboardList,
   FileCheck,
@@ -43,7 +46,16 @@ import {
   abreComercial,
   APROVADOR_ROLES,
 } from "./comercial/navegacao";
-import { ROTA_A_FATURAR, ROTA_FATURAMENTO_WMS, ROTA_FINANCEIRO, abreFinanceiro } from "./financeiro/navegacao";
+import {
+  ROTA_A_FATURAR,
+  ROTA_A_RECEBER,
+  ROTA_FATURAMENTO_WMS,
+  ROTA_FATURAS,
+  ROTA_FINANCEIRO,
+  ROTA_PAGOS,
+  ROTA_VENCIDOS,
+  abreFinanceiro,
+} from "./financeiro/navegacao";
 import { COMERCIAL_LIBERADO, FINANCEIRO_LIBERADO, OPERACAO_LIBERADO } from "./liberacao";
 import {
   OPERACAO_CADASTRO_ROLES,
@@ -377,6 +389,34 @@ export const APP_MODULES: AppModule[] = [
         label: "A faturar",
         href: ROTA_A_FATURAR,
         icon: FileCheck,
+        roles: FINANCE_ROLES,
+      }),
+      navRoute({
+        id: "financeiro-a-receber",
+        label: "A receber",
+        href: ROTA_A_RECEBER,
+        icon: CalendarClock,
+        roles: FINANCE_ROLES,
+      }),
+      navRoute({
+        id: "financeiro-vencidos",
+        label: "Vencidos",
+        href: ROTA_VENCIDOS,
+        icon: AlarmClock,
+        roles: FINANCE_ROLES,
+      }),
+      navRoute({
+        id: "financeiro-pagos",
+        label: "Pagos",
+        href: ROTA_PAGOS,
+        icon: CircleCheck,
+        roles: FINANCE_ROLES,
+      }),
+      navRoute({
+        id: "financeiro-faturas",
+        label: "Faturas",
+        href: ROTA_FATURAS,
+        icon: FileText,
         roles: FINANCE_ROLES,
       }),
     ],
@@ -1005,8 +1045,9 @@ export function menuDoOperacao(
 }
 
 /**
- * Início e A faturar, uma tela por item, e o Faturamento da armazenagem, que
- * continua no shell do WMS até a Fase 7. Fora da liberação, a lista é vazia.
+ * Início, A faturar e a cobrança (A receber, Vencidos, Pagos e Faturas), uma
+ * tela por item, e o Faturamento da armazenagem, que continua no shell do WMS
+ * até a Fase 7. Fora da liberação, a lista é vazia.
  */
 export function menuDoFinanceiro(
   role: ProfileRole | null | undefined,

@@ -144,6 +144,10 @@ const ComercialClientes = lazy(() => import("./pages/comercial/clientes"));
 const ComercialInicio = lazy(() => import("./pages/comercial/inicio"));
 const FinanceiroInicio = lazy(() => import("./pages/financeiro/inicio"));
 const FinanceiroAFaturar = lazy(() => import("./pages/financeiro/a-faturar"));
+const FinanceiroAReceber = lazy(() => import("./pages/financeiro/faturas").then((tela) => ({ default: tela.FinanceiroAReceber })));
+const FinanceiroVencidos = lazy(() => import("./pages/financeiro/faturas").then((tela) => ({ default: tela.FinanceiroVencidos })));
+const FinanceiroPagos = lazy(() => import("./pages/financeiro/faturas").then((tela) => ({ default: tela.FinanceiroPagos })));
+const FinanceiroFaturas = lazy(() => import("./pages/financeiro/faturas").then((tela) => ({ default: tela.FinanceiroFaturas })));
 const ComercialOrcamentos = lazy(() => import("./pages/comercial/orcamentos"));
 const ComercialOrcamento = lazy(() => import("./pages/comercial/orcamento"));
 const ComercialDocumento = lazy(() => import("./pages/comercial/documento"));
@@ -1124,6 +1128,10 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   ...soComFinanceiroLiberado([
     protectedRoute("/financeiro", FinanceiroInicio),
     protectedRoute("/financeiro/a-faturar", FinanceiroAFaturar),
+    protectedRoute("/financeiro/a-receber", FinanceiroAReceber),
+    protectedRoute("/financeiro/vencidos", FinanceiroVencidos),
+    protectedRoute("/financeiro/pagos", FinanceiroPagos),
+    protectedRoute("/financeiro/faturas", FinanceiroFaturas),
   ]),
 ];
 
