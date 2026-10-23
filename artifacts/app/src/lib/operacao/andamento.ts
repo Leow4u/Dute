@@ -1,0 +1,205 @@
+import type { CallableDaOperacao } from "./api";
+import { instanteDeSaoPaulo, quantidadeDigitada } from "./demanda-direta";
+import { ETAPAS_DA_OS, ETAPA_ROTULO, type EtapaDaOs, type FichaDaOs, type MeioDoEscritorio } from "./ficha-da-os";
+import { hojeIso } from "./fila";
+import { milesimos } from "./hoje";
+
+/**
+ * "Registrar andamento" na ficha da OS (docs/plataforma/fase-3-operacao.md,
+ * parte 3.7e; docs/mockups/OpOS.dc.html): o escritório registra a etapa, o
+ * feito dos itens (e o que passou do planejado) e a ocorrência com fotos,
+ * no formato das callables da parte 3.7. A tela confere antes; a callable
+ * confere de novo. Sem valor.
+ */
+
+export const TIPOS_DE_ANDAMENTO = ["etapa", "itens", "ocorrencia"] as const;
+export type TipoDeAndamento = (typeof TIPOS_DE_ANDAMENTO)[number];
+export const TIPO_DE_ANDAMENTO_ROTULO: Record<TipoDeAndamento, string> = { etapa: "Etapa", itens: "Itens", ocorrencia: "Ocorrência" };
+
+/** O item que passou do planejado: uma linha da OS ou um item avulso. */
+export type InclusaoNoFormulario = { linha: string; item: string; unidade: string; quantidade: string; pedidoPor: string; motivo: string };
+
+export const AVULSO = "avulso";
+
+export type FormularioDeAndamento = {
+  tipo: TipoDeAndamento;
+  etapa: EtapaDaOs | "";
+  data: string;
+  hora: string;
+  informadoPor: string;
+  meio: MeioDoEscritorio | "";
+  /** O feito de cada linha, como digitado. */
+  feitos: Record<string, string>;
+  inclusao: InclusaoNoFormulario | null;
+  descricao: string;
+};
+
+/** Quanto o relógio pode estar adiantado (o mesmo da callable). */
+const TOLERANCIA_MS = 5 * 60_000;
+const QUANTIDADE = /^\d{1,9}(\.\d{1,3})?$/;
+
+function horaAgora(agora: Date): string {
+  return new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(agora);
+}
+
+/** As etapas que ainda se registram: as que vêm depois da última registrada. */
+export function etapasPossiveis(ficha: Pick<FichaDaOs, "etapas">): EtapaDaOs[] {
+  const ultima = ficha.etapas.at(-1);
+  const depois = ultima ? ETAPAS_DA_OS.indexOf(ultima.etapa) + 1 : 0;
+  return ETAPAS_DA_OS.slice(depois);
+}
+
+export function andamentoInicial(ficha: FichaDaOs, agora: Date): FormularioDeAndamento {
+  const lider = ficha.equipe.find((pessoa) => pessoa.papel === "lider");
+  return {
+    tipo: "etapa",
+    etapa: etapasPossiveis(ficha)[0] ?? "",
+    data: hojeIso(agora),
+    hora: horaAgora(agora),
+    informadoPor: lider?.id ?? "",
+    meio: "telefone",
+    feitos: Object.fromEntries(ficha.itens.map((item) => [item.id, item.executado ?? "0"])),
+    inclusao: null,
+    descricao: "",
+  };
+}
+
+export function inclusaoVazia(ficha: Pick<FichaDaOs, "itens">): InclusaoNoFormulario {
+  return { linha: ficha.itens[0]?.id ?? AVULSO, item: "", unidade: "", quantidade: "", pedidoPor: "", motivo: "" };
+}
+
+function previsto(item: FichaDaOs["itens"][number]): number {
+  return milesimos(item.planejado) + item.incluidos.reduce((soma, inclusao) => soma + milesimos(inclusao.quantidade), 0);
+}
+
+/** As linhas cujo feito mudou, com o feito digitado. */
+export function feitosAlterados(form: Pick<FormularioDeAndamento, "feitos">, ficha: Pick<FichaDaOs, "itens">): Array<{ linha: string; executado: string }> {
+  return ficha.itens.flatMap((item) => {
+    const digitado = quantidadeDigitada(form.feitos[item.id] ?? "");
+    if (!digitado || digitado === (item.executado ?? "0")) return [];
+    if (QUANTIDADE.test(digitado) && QUANTIDADE.test(item.executado ?? "0") && milesimos(digitado) === milesimos(item.executado ?? "0")) return [];
+    return [{ linha: item.id, executado: digitado }];
+  });
+}
+
+/** O que impede registrar; a lista vazia libera. */
+export function problemasDoAndamento(form: FormularioDeAndamento, ficha: FichaDaOs, agora: Date): string[] {
+  const problemas: string[] = [];
+  if (ficha.status !== "agendada" && ficha.status !== "em_execucao") return ["A OS não recebe andamento."];
+  if (form.tipo === "etapa") {
+    if (!form.etapa) problemas.push("Escolha a etapa.");
+    const instante = instanteDeSaoPaulo(form.data, form.hora);
+    if (!instante) problemas.push("Informe a data e a hora.");
+    else if (Date.parse(instante) > agora.getTime() + TOLERANCIA_MS) problemas.push("A hora informada ainda não chegou.");
+    else if (ficha.janela && form.data < ficha.janela.data) problemas.push("A data é de antes do dia da OS.");
+    if (ficha.status === "agendada" && ficha.equipe.length === 0) problemas.push("Escale a equipe antes de iniciar a OS.");
+    return problemas;
+  }
+  if (form.tipo === "itens") {
+    if (ficha.status !== "em_execucao") return ["Registre a primeira etapa antes dos itens."];
+    for (const item of ficha.itens) {
+      const digitado = quantidadeDigitada(form.feitos[item.id] ?? "");
+      if (!digitado) continue;
+      if (!QUANTIDADE.test(digitado)) problemas.push(`${item.item}: a quantidade está fora do formato.`);
+      else if (milesimos(digitado) > previsto(item)) problemas.push(`${item.item}: o feito passa do previsto. Inclua o que foi além do planejado.`);
+    }
+    const inclusao = form.inclusao;
+    if (inclusao) {
+      if (inclusao.linha === AVULSO && (inclusao.item.trim().length < 2 || !inclusao.unidade.trim())) problemas.push("Item avulso: informe o nome e a unidade.");
+      const quantidade = quantidadeDigitada(inclusao.quantidade);
+      if (!QUANTIDADE.test(quantidade) || milesimos(quantidade) <= 0) problemas.push("Informe a quantidade além do planejado.");
+      if (inclusao.pedidoPor.trim().length < 2) problemas.push("Informe quem pediu no local.");
+      if (inclusao.motivo.trim().length < 3) problemas.push("Informe o motivo.");
+    }
+    if (!problemas.length && !inclusao && !feitosAlterados(form, ficha).length) problemas.push("Nenhum feito mudou.");
+    return problemas;
+  }
+  if (form.descricao.trim().length < 3) problemas.push("Descreva a ocorrência.");
+  return problemas;
+}
+
+export type PedidoDeAndamento = { callable: CallableDaOperacao; dados: Record<string, unknown> };
+
+function origem(form: FormularioDeAndamento) {
+  return { informado_por: form.informadoPor || null, meio: form.meio || null };
+}
+
+/**
+ * As chamadas, na ordem: a etapa; ou o feito de cada linha que mudou e a
+ * inclusão; ou a ocorrência. Cada uma com a chave derivada da tentativa
+ * (repetir a tentativa não duplica).
+ */
+export function pedidosDoAndamento(form: FormularioDeAndamento, ficha: FichaDaOs, chave: string, agora: Date): PedidoDeAndamento[] {
+  const numero = ficha.numero;
+  if (form.tipo === "etapa") {
+    return [
+      {
+        callable: "registerStep",
+        dados: { idempotency_key: chave, numero, etapa: form.etapa, instante: instanteDeSaoPaulo(form.data, form.hora), ...origem(form) },
+      },
+    ];
+  }
+  const instante = agora.toISOString();
+  if (form.tipo === "itens") {
+    const pedidos: PedidoDeAndamento[] = feitosAlterados(form, ficha).map(({ linha, executado }) => ({
+      callable: "registerItem",
+      dados: { action: "executed", idempotency_key: `${chave}:${linha}`, numero, linha, executado, instante, ...origem(form) },
+    }));
+    const inclusao = form.inclusao;
+    if (inclusao) {
+      pedidos.push({
+        callable: "registerItem",
+        dados: {
+          action: "added",
+          idempotency_key: `${chave}:inclusao`,
+          numero,
+          ...(inclusao.linha === AVULSO ? { item: inclusao.item.trim(), unidade: inclusao.unidade.trim().toUpperCase() } : { linha: inclusao.linha }),
+          quantidade: quantidadeDigitada(inclusao.quantidade),
+          pedido_por: inclusao.pedidoPor.trim(),
+          motivo: inclusao.motivo.trim(),
+          instante,
+          ...origem(form),
+        },
+      });
+    }
+    return pedidos;
+  }
+  return [{ callable: "registerOccurrence", dados: { idempotency_key: chave, numero, descricao: form.descricao.trim(), instante, ...origem(form) } }];
+}
+
+/** "Saída do pátio" etc., para o select. */
+export function rotuloDaEtapa(etapa: EtapaDaOs): string {
+  return ETAPA_ROTULO[etapa];
+}
+
+// --- Fotos --------------------------------------------------------------------------------
+
+const EXTENSAO: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+export const MAX_FOTO_BYTES = 8 * 1024 * 1024;
+
+/** A extensão da foto pelo tipo, ou null quando o tipo não vale (o storage.rules só aceita estes). */
+export function extensaoDaFoto(tipo: string): string | null {
+  return EXTENSAO[tipo] ?? null;
+}
+
+/** O nome da foto no Storage: ft_ com 16 hex, como o storage.rules pede. */
+export function nomeDaFoto(tipo: string, aleatorio: () => Uint8Array = () => crypto.getRandomValues(new Uint8Array(8))): string | null {
+  const extensao = extensaoDaFoto(tipo);
+  if (!extensao) return null;
+  const hex = Array.from(aleatorio(), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `ft_${hex}.${extensao}`;
+}
+
+/** Quando a foto foi tirada: a data do arquivo, se é do dia da OS em diante e não está no futuro; senão, agora. */
+export function instanteDaFoto(ultimaModificacao: number, diaDaOs: string | null, agora: Date): string {
+  const quando = new Date(ultimaModificacao);
+  if (Number.isNaN(quando.getTime()) || quando.getTime() > agora.getTime()) return agora.toISOString();
+  if (diaDaOs && hojeIso(quando) < diaDaOs) return agora.toISOString();
+  return quando.toISOString();
+}
+
+export function problemaDaFoto(arquivo: { type: string; size: number }): string | null {
+  if (!extensaoDaFoto(arquivo.type)) return "Use foto JPG, PNG ou WebP.";
+  if (arquivo.size >= MAX_FOTO_BYTES) return "A foto passa de 8 MB.";
+  return null;
+}

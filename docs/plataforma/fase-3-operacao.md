@@ -681,3 +681,28 @@ revisão) levam a ela; no menu, acende o Hoje.
 - **Código.** A leitura e o que a tela mostra ficam em
   `lib/operacao/ficha-da-os.ts`; a lista das etapas é a do backend (o teste
   lê `functions/operacao/src/domain/execucao.ts`).
+
+### Parte 3.7e: Registrar andamento
+
+Feita em 23/10/2026, no desenho aprovado `OpOS`. Na ficha da OS agendada ou
+em execução, "Registrar andamento" abre o painel do escritório com três
+abas; a tela confere antes e a callable confere de novo. Regras em
+`lib/operacao/andamento.ts`.
+
+- **Etapa.** Só as que vêm depois da última registrada, com a data, a hora
+  (fuso de São Paulo), quem da equipe informou e o meio. Vai para
+  `registerStep`; a primeira põe a OS Em execução.
+- **Itens.** O feito de cada linha, com o previsto ao lado. Só as linhas que
+  mudaram vão para `registerItem`, uma chamada por linha. "Incluir além do
+  planejado" escolhe a linha da OS ou um item avulso, com a quantidade, quem
+  pediu no local e o motivo. Antes da primeira etapa, os itens não se
+  registram.
+- **Ocorrência.** A descrição, quem informou e as fotos, que sobem depois da
+  ocorrência e são anexadas a ela.
+- **Fotos.** O cartão das fotos ganha "Anexar": JPG, PNG ou WebP até 8 MB,
+  com o nome `ft_` e o instante do arquivo (se for do dia da OS). A foto sobe
+  ao Storage e `attachPhoto` a grava.
+- **Repetir.** Cada tentativa tem a própria chave, derivada por linha e por
+  foto: repetir depois de uma falha no meio não duplica nada.
+- **Trava.** Toda callable que o app chama existe em `functions/operacao`
+  (o teste lê o `index.ts`).
