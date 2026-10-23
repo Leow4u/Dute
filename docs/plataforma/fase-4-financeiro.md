@@ -330,3 +330,22 @@ Feita em 23/10/2026. As regras estão em `artifacts/app/src/lib/portal/solicitac
 - **Testes.**
   - `portal/solicitacao.test.ts` cobre as listas e os limites iguais aos de functions/operacao, o que falta, os anexos, o pedido e as solicitações em aberto.
   - `servicos-view.test.tsx` cobre a única ação principal em cada estado, os textos listados do formulário e das solicitações, o problema no campo, o erro da callable e o `axe`.
+
+### Parte 4.4c: a solicitação do portal na Operação
+
+Feita em 23/10/2026. As regras estão em `artifacts/app/src/lib/operacao/solicitacoes.ts`, o Hoje em
+`lib/operacao/hoje.ts` e `pages/operacao/hoje-view.tsx` e o atendimento em `pages/operacao/demanda-nova(-view).tsx`.
+
+- **Hoje.** As solicitações recebidas abrem Para planejar, antes das demandas, e contam na coluna e no resumo do dia ("1 solicitação do portal").
+  - O cartão mostra o tipo que a demanda terá (pela hora do pedido e pela hora pedida) e o selo Portal. Também o cliente, o tipo de serviço com o dia e o horário, os endereços e o texto do cliente, e "Atender".
+  - O tipo, o cliente e a busca filtram. Filtrar por entrada ou por pessoa as tira: a solicitação ainda não tem entrada nem equipe.
+- **Atender** abre a nova demanda direta (`/operacao/nova-demanda?solicitacao=`) preenchida pela solicitação, uma vez, quando ela chega.
+  - Vêm o cliente, o título pelo tipo de serviço, quem pediu e o canal portal. Também quando chegou, executar até a data e o horário pedidos e os endereços em "andar ou sala".
+  - O cliente, o canal e o "recebida em" não mudam, porque a callable usa os da solicitação. Os itens, quem coordena inclui do catálogo.
+  - Ao lado fica a solicitação do cliente com o contato, o pedido, os endereços, o que será feito e os anexos (links do Storage).
+  - "Recusar" pede o motivo (5 a 300 caracteres), que o cliente lê, e volta ao Hoje. A solicitação já atendida leva à demanda e não se recusa.
+- **Início.** "N solicitações do portal" entra no "Precisa de você", com "Atender". É crítico quando a data pedida chega em até 24 horas. Uma só leva direto ao formulário.
+- **Testes.**
+  - `operacao/solicitacoes.test.ts` cobre a leitura, o tipo, o formulário preenchido, o pedido com a solicitação, a resolvida, o motivo, o Hoje com os filtros e o resumo, e o Início.
+  - `hoje-view.test.tsx` e `demanda-nova-view.test.tsx` cobrem os textos listados, o contato fora do cartão, os campos travados, a única ação principal, a recusa e o `axe`.
+  - `entrada-leituras.test.tsx` cobre a leitura nova do Início.

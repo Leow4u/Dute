@@ -3,10 +3,12 @@ import { describe, expect, it } from "vitest";
 import { Router } from "wouter";
 
 import { formularioVazio, type FormularioDaDemanda } from "@/lib/operacao/demanda-direta";
+import { hrefDaDemanda } from "@/lib/operacao/navegacao";
+import { formularioDaSolicitacao, solicitacaoDaOperacao } from "@/lib/operacao/solicitacoes";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
-import { DemandaNovaView } from "./demanda-nova-view";
+import { DemandaNovaView, type PainelDaSolicitacao } from "./demanda-nova-view";
 
 /** Operação › Nova demanda direta (parte 3.5c, docs/mockups/OpDemandaNova.dc.html). */
 
@@ -125,5 +127,89 @@ describe("Nova demanda direta", () => {
 
   it("não tem problema de acessibilidade", async () => {
     expect(await violacoesDeAcessibilidade(render({ busca: "mesa", resultados: [{ id: "lpu_mesa", item: "Mesa", servico: null, unidade: null }], corrigindo: true }))).toEqual([]);
+  });
+});
+
+describe("atender a solicitação do portal (parte 4.4c)", () => {
+  const solicitacao = solicitacaoDaOperacao("sol_0123456789abcdef", {
+    status: "recebida",
+    customer_code: "ITAU",
+    customer_name: "Itaú Unibanco",
+    tipo_servico: "transporte",
+    data: "2026-10-24",
+    horario: "08:00",
+    desejada_em: "2026-10-24T11:00:00.000Z",
+    recebida_em: "2026-10-23T12:30:00.000Z",
+    origem: "Rua das Indústrias, 450",
+    destino: "Av. Paulista, 1000",
+    descricao: "Levar 12 paletes.\nCuidado com o vidro.",
+    anexos: [{ caminho: "portal/ITAU/solicitacoes/an_0123456789abcdef.pdf", nome: "NF 4498.pdf", tipo: "application/pdf" }],
+    contato: { nome: "Roberto Souza", email: "roberto@itau.example" },
+  })!;
+  const RECUSA = { aberta: false, motivo: "", problema: null, ocupado: false, erro: null };
+  function painel(extra: Partial<PainelDaSolicitacao> = {}): PainelDaSolicitacao {
+    return {
+      solicitacao,
+      urls: { "portal/ITAU/solicitacoes/an_0123456789abcdef.pdf": "https://storage.example/nf.pdf" },
+      resolvida: null,
+      recusa: RECUSA,
+      onRecusar: noop,
+      onMotivo: noop,
+      onConfirmarRecusa: noop,
+      onVoltar: noop,
+      ...extra,
+    };
+  }
+  const form = formularioDaSolicitacao(solicitacao, AGORA);
+  const PRINCIPAL = /<button[^>]*class="[^"]*bg-primary text-primary-foreground[^"]*"[^>]*>[\s\S]*?<\/button>/g;
+
+  it("o formulário vem preenchido, o canal é o portal, recebida em e o cliente não mudam; ao lado, a solicitação com os anexos", () => {
+    const html = render({ form, solicitacao: painel() });
+    const secao = html.slice(html.indexOf('<section aria-label="Solicitação do portal"'));
+    expect(textosDaTela(secao.slice(0, secao.indexOf("</section>")))).toEqual([
+      "Solicitação do portal",
+      "Cliente",
+      "Itaú Unibanco",
+      "Contato",
+      "Roberto Souza · roberto@itau.example",
+      "Pedido",
+      "Transporte / frete · Sáb 24/10 08:00",
+      "Origem",
+      "Rua das Indústrias, 450",
+      "Destino",
+      "Av. Paulista, 1000",
+      "O que será feito",
+      "Levar 12 paletes. Cuidado com o vidro.",
+      "Anexos",
+      "NF 4498.pdf",
+      "Recusar",
+    ]);
+    expect(html).toContain('href="https://storage.example/nf.pdf"');
+    expect(html).toMatch(/<input[^>]*id="demanda-recebida-data"[^>]*disabled=""|<input[^>]*disabled=""[^>]*id="demanda-recebida-data"/);
+    expect(html).toMatch(/<select[^>]*id="demanda-cliente"[^>]*disabled=""|<select[^>]*disabled=""[^>]*id="demanda-cliente"/);
+    expect(html).not.toContain('aria-label="Canal"');
+    expect(textosDaTela(html)).toContain("Portal");
+    expect((html.match(PRINCIPAL) ?? []).map((botao) => textosDaTela(botao).join(" "))).toEqual(["Abrir demanda"]);
+  });
+
+  it("recusar pede o motivo, que o cliente lê; o problema e o erro dizem o que é", () => {
+    const html = render({ form, solicitacao: painel({ recusa: { aberta: true, motivo: "não", problema: "Diga ao cliente o motivo.", ocupado: false, erro: "A solicitação foi recusada." } }) });
+    const textos = textosDaTela(html);
+    for (const texto of ["Motivo", "Diga ao cliente o motivo.", "A solicitação foi recusada.", "Recusar solicitação", "Voltar"]) expect(textos, texto).toContain(texto);
+    expect(html).toMatch(/<textarea[^>]*aria-invalid="true"[^>]*aria-describedby="recusa-motivo-problema"/);
+    expect((html.match(PRINCIPAL) ?? []).map((botao) => textosDaTela(botao).join(" "))).toEqual(["Abrir demanda"]);
+  });
+
+  it("a solicitação já atendida leva à demanda e não se recusa mais", () => {
+    const html = render({ solicitacao: painel({ resolvida: "Já virou a demanda 10050", solicitacao: { ...solicitacao, status: "aceita", demanda: "10050" } }) });
+    expect(html).toMatch(new RegExp(`<p role="status"[^>]*><a[^>]*href="${hrefDaDemanda("10050").replace(/[?]/g, "\\?")}"[^>]*>Já virou a demanda 10050</a></p>`));
+    expect(textosDaTela(html)).not.toContain("Recusar");
+    // Sem a solicitação ativa, o canal volta a ser escolhido.
+    expect(html).toContain('aria-label="Canal"');
+  });
+
+  it("não tem problema de acessibilidade", async () => {
+    expect(await violacoesDeAcessibilidade(render({ form, solicitacao: painel() }))).toEqual([]);
+    expect(await violacoesDeAcessibilidade(render({ form, solicitacao: painel({ recusa: { ...RECUSA, aberta: true, problema: "Diga ao cliente o motivo." } }) }))).toEqual([]);
   });
 });

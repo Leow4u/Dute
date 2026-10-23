@@ -14,19 +14,22 @@ import {
   equipeCurta,
   type CartaoDeDemanda,
   type CartaoDeOs,
+  type CartaoDeSolicitacao,
   type FiltrosDoHoje,
   type PrazoDoHoje,
   type QuadroDoHoje,
 } from "@/lib/operacao/hoje";
 import { PainelDaEscala, type EscalaAberta } from "@/components/operacao/escala";
-import { Avatar, Filtro, SeloDoTipo, Servicos, selo, seloAlerta, type OpcaoDeFiltro } from "@/components/operacao/partes";
+import { Avatar, Filtro, SeloDoTipo, Servicos, selo, seloAlerta, seloNeutro, type OpcaoDeFiltro } from "@/components/operacao/partes";
+import { hrefDeAtender, pedidoEmTexto, rotaDaSolicitacao } from "@/lib/operacao/solicitacoes";
 import { ROTA_NOVA_DEMANDA, hrefDaDemanda, hrefDaFichaDaOs, hrefDoPlano, hrefDoPlanoDaVistoria } from "@/lib/operacao/navegacao";
 import { cn } from "@/lib/utils";
 
 /**
  * Operação › Hoje (docs/plataforma/fase-3-operacao.md, parte 3.5a;
  * docs/mockups/ModOpHoje.dc.html): Para planejar, Para agendar, Agendadas
- * hoje, Em execução e Em revisão, com os filtros e a busca. Só apresentação:
+ * hoje, Em execução e Em revisão, com os filtros e a busca. As solicitações
+ * do portal (parte 4.4c) abrem Para planejar, com "Atender". Só apresentação:
  * os dados e as ações chegam por props (pages/operacao/hoje.tsx). Sem legenda
  * e sem valor.
  */
@@ -91,6 +94,31 @@ function CartaoDaDemanda({ cartao }: { cartao: CartaoDeDemanda }) {
       <div>
         <Button asChild size="sm">
           {cartao.vistoria ? <Link href={hrefDoPlanoDaVistoria(demanda.numero)}>Planejar vistoria</Link> : <Link href={hrefDoPlano(demanda.numero)}>Planejar OS</Link>}
+        </Button>
+      </div>
+    </li>
+  );
+}
+
+/** A solicitação do portal: o tipo que a demanda terá, o cliente, o que pediu e para quando, os endereços e o texto do cliente. */
+function CartaoDaSolicitacao({ cartao }: { cartao: CartaoDeSolicitacao }) {
+  const { solicitacao } = cartao;
+  return (
+    <li className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4">
+      <div className="flex items-start justify-between gap-2">
+        <SeloDoTipo tipo={cartao.tipo} />
+        <span className={cn(selo, seloNeutro)}>Portal</span>
+      </div>
+      <p className="text-base font-semibold leading-snug text-foreground">{cartao.cliente}</p>
+      <p className="text-sm font-medium text-foreground">{pedidoEmTexto(solicitacao)}</p>
+      <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
+        <MapPin aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+        <span className="min-w-0 break-words">{rotaDaSolicitacao(solicitacao)}</span>
+      </p>
+      <p className="line-clamp-2 text-sm text-muted-foreground">{solicitacao.descricao}</p>
+      <div>
+        <Button asChild size="sm">
+          <Link href={hrefDeAtender(solicitacao.id)}>Atender</Link>
         </Button>
       </div>
     </li>
@@ -309,7 +337,10 @@ export function HojeView({
 
       {estado === "pronto" ? (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-5 xl:gap-4">
-          <Coluna titulo="Para planejar" ponto="bg-muted-foreground" contagem={quadro.paraPlanejar.length} vazio="Nenhuma demanda">
+          <Coluna titulo="Para planejar" ponto="bg-muted-foreground" contagem={quadro.solicitacoes.length + quadro.paraPlanejar.length} vazio="Nenhuma demanda">
+            {quadro.solicitacoes.map((cartao) => (
+              <CartaoDaSolicitacao key={cartao.solicitacao.id} cartao={cartao} />
+            ))}
             {quadro.paraPlanejar.map((cartao) => (
               <CartaoDaDemanda key={cartao.demanda.numero} cartao={cartao} />
             ))}

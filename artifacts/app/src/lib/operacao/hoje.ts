@@ -1,11 +1,14 @@
 import type { OsDaFila } from "./fila";
+import { solicitacoesRecebidas, tipoDaSolicitacao, type SolicitacaoDaOperacao } from "./solicitacoes";
 import { vistoriaPedida } from "./vistoria";
 
 /**
  * O Hoje da Operação (docs/plataforma/fase-3-operacao.md, parte 3.5a;
  * docs/mockups/ModOpHoje.dc.html): Para planejar, Para agendar, Agendadas
  * hoje, Em execução e Em revisão, com filtros por tipo, entrada, cliente e
- * pessoa, e a busca. Só o que a OS e a demanda gravam; nunca valor.
+ * pessoa, e a busca. Em Para planejar entram também as solicitações de OS
+ * do portal (parte 4.4c), antes das demandas. Só o que a OS, a demanda e a
+ * solicitação gravam; nunca valor.
  */
 
 export const TIPOS_DA_DEMANDA = ["paraquedas", "emergencial", "planejada"] as const;
@@ -187,7 +190,12 @@ export type CartaoDeOs = {
   placas: string[];
 };
 
+/** A solicitação de OS do portal que espera a Operação (parte 4.4c), com o tipo que a demanda dela terá. */
+export type CartaoDeSolicitacao = { solicitacao: SolicitacaoDaOperacao; cliente: string; tipo: TipoDaDemanda };
+
 export type QuadroDoHoje = {
+  /** As solicitações do portal recebidas, a de data pedida mais perto primeiro. */
+  solicitacoes: CartaoDeSolicitacao[];
   paraPlanejar: CartaoDeDemanda[];
   paraAgendar: CartaoDeOs[];
   agendadasHoje: CartaoDeOs[];
@@ -201,6 +209,8 @@ export type EntradaDoQuadro = {
   agora: Date;
   demandas: readonly DemandaDoHoje[];
   ordens: readonly OsDaFila[];
+  /** As solicitações de OS do portal (service_requests). */
+  solicitacoes?: readonly SolicitacaoDaOperacao[];
   nomesClientes: Readonly<Record<string, string>>;
   nomesPessoas: Readonly<Record<string, string>>;
   placas: Readonly<Record<string, string>>;
@@ -302,7 +312,24 @@ export function quadroDoHoje(entrada: EntradaDoQuadro): QuadroDoHoje {
     )
     .sort((a, b) => porUrgencia({ ...a, numero: a.demanda.numero }, { ...b, numero: b.demanda.numero }));
 
+  // A solicitação ainda não tem entrada: vira direta ao ser atendida. Filtrar por entrada ou por pessoa a tira.
+  const solicitacoes = solicitacoesRecebidas(entrada.solicitacoes ?? [])
+    .map((solicitacao): CartaoDeSolicitacao => ({
+      solicitacao,
+      cliente: entrada.nomesClientes[solicitacao.customerCode] || solicitacao.cliente,
+      tipo: tipoDaSolicitacao(solicitacao),
+    }))
+    .filter(
+      (cartao) =>
+        !porEntrada &&
+        !pessoa &&
+        (!tipo || cartao.tipo === tipo) &&
+        (!cliente || cartao.solicitacao.customerCode === cliente) &&
+        busca(cartao.cliente, cartao.solicitacao.origem, cartao.solicitacao.destino, cartao.solicitacao.descricao),
+    );
+
   return {
+    solicitacoes,
     paraPlanejar,
     paraAgendar: com("aberta").sort((a, b) => porUrgencia({ ...a, numero: a.os.numero }, { ...b, numero: b.os.numero })),
     agendadasHoje: agendadas.filter((cartao) => cartao.os.agenda?.data === entrada.hoje).sort(porHora),
@@ -313,8 +340,12 @@ export function quadroDoHoje(entrada: EntradaDoQuadro): QuadroDoHoje {
 }
 
 /** Os clientes e as pessoas que aparecem no quadro, para os filtros. */
-export function opcoesDosFiltros(entrada: Pick<EntradaDoQuadro, "demandas" | "ordens" | "nomesClientes" | "nomesPessoas">) {
-  const codigos = new Set([...entrada.demandas.filter((demanda) => demanda.etapa === "para_planejar").map((demanda) => demanda.customerCode), ...entrada.ordens.map((os) => os.customer_code)]);
+export function opcoesDosFiltros(entrada: Pick<EntradaDoQuadro, "demandas" | "ordens" | "solicitacoes" | "nomesClientes" | "nomesPessoas">) {
+  const codigos = new Set([
+    ...entrada.demandas.filter((demanda) => demanda.etapa === "para_planejar").map((demanda) => demanda.customerCode),
+    ...entrada.ordens.map((os) => os.customer_code),
+    ...solicitacoesRecebidas(entrada.solicitacoes ?? []).map((solicitacao) => solicitacao.customerCode),
+  ]);
   const clientes = [...codigos]
     .map((code) => ({ valor: code, rotulo: nomeDoCliente(code, entrada.nomesClientes) }))
     .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));
@@ -331,13 +362,15 @@ export function opcoesDosFiltros(entrada: Pick<EntradaDoQuadro, "demandas" | "or
 
 const DIA_POR_EXTENSO = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", day: "numeric", month: "long" });
 
-/** "Sexta, 23 de outubro · 9 OS · 1 demanda para planejar". */
+/** "Sexta, 23 de outubro · 9 OS · 1 demanda para planejar · 1 solicitação do portal". */
 export function resumoDoHoje(agora: Date, quadro: QuadroDoHoje): string {
   const dia = DIA_POR_EXTENSO.format(agora).replace(/^(\p{L})/u, (letra) => letra.toLocaleUpperCase("pt-BR")).replace("-feira", "");
   const ordens = quadro.paraAgendar.length + quadro.agendadasHoje.length + quadro.emExecucao.length + quadro.emRevisao.length;
   const partes = [dia, `${ordens} OS`];
   const planejar = quadro.paraPlanejar.length;
   if (planejar) partes.push(`${planejar} ${planejar === 1 ? "demanda" : "demandas"} para planejar`);
+  const pedidas = quadro.solicitacoes.length;
+  if (pedidas) partes.push(`${pedidas} ${pedidas === 1 ? "solicitação" : "solicitações"} do portal`);
   return partes.join(" · ");
 }
 

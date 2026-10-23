@@ -107,13 +107,13 @@ function Comercial({ role }: { role: string }) {
 }
 
 describe("leituras dos Inícios por papel", () => {
-  it("o papel comercial não assina nada da Operação; o interno assina as cinco coleções", async () => {
+  it("o papel comercial não assina nada da Operação; o interno assina as seis coleções (com as solicitações do portal, parte 4.4c)", async () => {
     await montar(<Operacao role="comercial" />);
     expect(leituras.assinadas).toEqual([]);
     act(() => raiz!.unmount());
     raiz = createRoot(container!);
     await montar(<Operacao role="interno" />);
-    expect([...leituras.assinadas].sort()).toEqual(["collaborators", "customers", "demands", "service_orders", "vehicles"]);
+    expect([...leituras.assinadas].sort()).toEqual(["collaborators", "customers", "demands", "service_orders", "service_requests", "vehicles"]);
   });
 
   it("o interno não consulta nada do Comercial", async () => {
