@@ -96,6 +96,11 @@ export const TIPO_RV_ROTULO: Record<TipoRv, string> = {
   execucao: "Execução",
 };
 
+/** O tipo na fila: a RV em curso, ou "Sem orçamento" na direta que a Operação executou e o Comercial ainda vai orçar. */
+export function tipoDoItem(item: Pick<ItemDaFila, "tipoRv" | "semOrcamento">): string {
+  return item.semOrcamento ? "Sem orçamento" : TIPO_RV_ROTULO[item.tipoRv];
+}
+
 export const ORIGEM_ROTULO: Record<OrigemLinha, string> = {
   tabela: "Tabela",
   alterado: "Alterado",
@@ -242,6 +247,10 @@ export type ItemDaFila = {
   executada: boolean;
   /** O cliente já validou a execução (validacao). */
   validada: boolean;
+  /** A demanda ainda não tem orçamento (quotes/{numero}): a direta que a Operação abriu e executou. */
+  semOrcamento: boolean;
+  /** A demanda direta que a Operação abriu (aberta_pela), para o Comercial orçar o que ela executou. */
+  daOperacao: boolean;
 };
 
 function marcos(value: unknown): MarcoDaDemanda[] {
@@ -352,6 +361,8 @@ export function itemDaFila(numero: string, demanda: Registro | null, quote: Regi
     escopoRv: inteiro(demanda.escopo_rv),
     executada: texto(demanda.executado_de) !== "",
     validada: isRegistro(demanda.validacao) && inteiro(demanda.validacao.rv) !== null,
+    semOrcamento: quote === null,
+    daOperacao: demanda.entrada === "direta" && demanda.aberta_pela === "operacao",
   };
 }
 

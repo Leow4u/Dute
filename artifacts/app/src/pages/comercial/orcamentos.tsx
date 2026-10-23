@@ -123,7 +123,7 @@ export default function ComercialOrcamentosPage() {
       : [],
   );
 
-  const depois = useDepoisDoEnvio({ contatos: contatos.itens ?? [] });
+  const depois = useDepoisDoEnvio({ contatos: contatos.itens ?? [], contratos: contratos.itens ?? [] });
   // O aviso da recusa vale para o orçamento em que aconteceu: ao trocar de ficha, sai.
   const numeroSelecionado = selecionado?.numero ?? null;
   useEffect(() => {
@@ -247,7 +247,10 @@ export default function ComercialOrcamentosPage() {
         contexto={contexto}
         onNovo={() => abrirNovo("orcamento")}
         onOrcarExecucao={() => abrirNovo("execucao")}
-        onAbrir={(numero) => navegar(hrefDoOrcamento(numero))}
+        onAbrir={(numero) => {
+          // Sem orçamento ainda (a direta da Operação), não há montagem para abrir: a ficha oferece Orçar execução.
+          if (!itens.find((item) => item.numero === numero)?.semOrcamento) navegar(hrefDoOrcamento(numero));
+        }}
         envio={{
           acao: selecionado ? envioDaFicha(selecionado, role) : null,
           ocupado: enviando,

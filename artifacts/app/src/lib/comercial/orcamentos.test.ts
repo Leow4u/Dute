@@ -27,6 +27,7 @@ import {
   rotuloDoContratoDoOrcamento,
   segmentoInicial,
   tempoNaEtapa,
+  tipoDoItem,
   type ItemDaFila,
 } from "./orcamentos";
 
@@ -230,6 +231,15 @@ describe("item da fila", () => {
     expect(itemDaFila("10050", demanda("10050", { entrada: "direta", etapa: "para_planejar" }), null)).toBeNull();
     expect(itemDaFila("10050", demanda("10050", { entrada: "direta", etapa: "execucao_a_orcar" }), null)?.etapa).toBe("execucao_a_orcar");
     expect(itemDaFila("10045", demanda("10045", { entrada: "comercial", etapa: "para_planejar" }), orcamento("10045"))?.etapa).toBe("para_planejar");
+  });
+
+  it("a direta que a Operação abriu, executada e sem orçamento: Sem orçamento, para o Comercial orçar (parte 3.10d)", () => {
+    const daOperacao = itemDaFila("10301", demanda("10301", { entrada: "direta", aberta_pela: "operacao", etapa: "execucao_a_orcar" }), null)!;
+    expect([daOperacao.semOrcamento, daOperacao.daOperacao, tipoDoItem(daOperacao)]).toEqual([true, true, "Sem orçamento"]);
+    const orcada = itemDaFila("10301", demanda("10301", { entrada: "direta", aberta_pela: "operacao", etapa: "execucao_a_orcar" }), orcamento("10301", { tipo_rv: "execucao" }))!;
+    expect([orcada.semOrcamento, orcada.daOperacao, tipoDoItem(orcada)]).toEqual([false, true, "Execução"]);
+    // A direta do "Orçar execução" do Comercial já nasce com orçamento e não é da Operação.
+    expect(itemDaFila("10045", demanda("10045", { entrada: "direta", etapa: "execucao_a_orcar" }), orcamento("10045"))!.daOperacao).toBe(false);
   });
 });
 

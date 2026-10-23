@@ -69,6 +69,7 @@ import {
   type Precificado,
   type RvParaComparar,
 } from "./orcamento.js";
+import { linhasExecutadas, problemaParaOrcarAExecucao, separarPelaTabela } from "./execucao-da-operacao.js";
 import { canApproveQuote, comercialAccessProblem } from "./platform-roles.js";
 import type { ComercialProfile } from "./profile.js";
 import {
@@ -275,7 +276,23 @@ const CriarExecucao = z
   })
   .strict();
 
-export const SaveQuoteInput = z.discriminatedUnion("action", [CriarOrcamento, AtualizarOrcamento, DuplicarOrcamento, CriarExecucao]);
+/**
+ * "Orçar execução" da demanda direta aberta pela Operação (parte 3.10d): a
+ * demanda já existe e já foi executada e revisada; o orçamento nasce com o
+ * que a revisão manda cobrar, pela tabela.
+ */
+const OrcarExecucaoDaOperacao = z
+  .object({
+    action: z.literal("price_execution"),
+    request_id: requestId,
+    numero: numeroServico,
+    /** O contrato do cliente que vale para a demanda (a Operação abre sem contrato); sem ele, o da demanda. */
+    contrato_id: idDocumento.nullable().optional(),
+    variante: z.string().max(60).optional(),
+  })
+  .strict();
+
+export const SaveQuoteInput = z.discriminatedUnion("action", [CriarOrcamento, AtualizarOrcamento, DuplicarOrcamento, CriarExecucao, OrcarExecucaoDaOperacao]);
 export type SaveQuoteInput = z.infer<typeof SaveQuoteInput>;
 
 export const AdvanceQuoteInput = z
@@ -315,6 +332,8 @@ export type SaveQuoteResult = {
   etapa: EtapaDemanda;
   total_cents: number;
   events: string[];
+  /** price_execution: o que a Operação executou e a tabela não precifica, para lançar à mão. */
+  fora_da_tabela?: Array<{ item: string; unidade: string | null; quantidade: string }>;
 };
 
 export type AdvanceQuoteResult = {
@@ -1450,7 +1469,118 @@ export async function saveQuoteFor(
       return atualizar(db, caller, input, agora);
     case "duplicate":
       return duplicar(db, caller, input, agora);
+    case "price_execution":
+      return orcarExecucaoDaOperacao(db, caller, input, agora);
   }
+}
+
+/**
+ * Orça a execução da demanda direta aberta pela Operação (parte 3.10d): a RV
+ * 0 de execução, em rascunho, com as linhas que a revisão manda cobrar e a
+ * tabela precifica (domain/execucao-da-operacao.ts). A demanda continua em
+ * Execução a orçar; o orçamento segue o caminho de toda RV de execução.
+ */
+async function orcarExecucaoDaOperacao(db: Firestore, caller: ComercialProfile, input: z.infer<typeof OrcarExecucaoDaOperacao>, agora: () => Date) {
+  const actor = actorOf(caller);
+  const variante = varianteConferida(input.variante);
+  return runIdempotent<SaveQuoteResult>(
+    db,
+    { kind: "quote_price_execution", scope: { numero: input.numero }, idempotency_key: input.request_id, input: conteudo(input), actor },
+    async (transaction, { operationId }) => {
+      const instante = agora();
+      const iso = instante.toISOString();
+      const hoje = dataDeHoje(instante);
+      const numero = input.numero;
+
+      // Leituras.
+      const [demandaSnap, quoteSnap] = await transaction.getAll(demandRef(db, numero), quoteRef(db, numero));
+      if (!demandaSnap.exists) throw new HttpsError("not-found", `Demanda ${numero} não encontrada.`);
+      const demanda = demandaSnap.data() ?? {};
+      const problema = problemaParaOrcarAExecucao(numero, demanda, quoteSnap.exists);
+      if (problema) throw new HttpsError("failed-precondition", problema);
+      const code = texto(demanda.customer_code);
+      const cadastro = await cadastroPeloCodigo(transaction, db, code);
+      if (cadastroArquivado(cadastro.data)) throw new HttpsError("failed-precondition", `O cadastro ${code} está arquivado.`);
+      const contratoId = input.contrato_id !== undefined ? input.contrato_id : textoOuNull(demanda.contrato_id);
+      const contrato = await lerContrato(transaction, db, contratoId, code);
+      const tabelas = await lerTabelas(transaction, db, code);
+      const executadas = linhasExecutadas(demanda);
+      const itens = await lerItens(transaction, db, executadas);
+
+      // Conta.
+      const tabela = escolherTabela(tabelas, { customer_code: code, contrato_id: contrato?.id ?? null, variante, data_base: hoje });
+      const { entradas, fora } = separarPelaTabela(executadas, tabela?.precos ?? null, itens);
+      const precificado = precificar(entradas, tabela, itens, operationId);
+      const marcas = marcasDoOrcamento({ linhas: precificado.linhas, tabela, data_base: hoje, numero_legado: null });
+
+      // Escritas.
+      const quote = {
+        ...orcamentoNovo({
+          numero,
+          code,
+          hoje,
+          tipo_rv: "execucao",
+          tabela,
+          variante,
+          precificado,
+          marcas,
+          condicoes: tabela?.condicoes ?? null,
+          validade_dias: tabela?.validade_dias ?? null,
+          observacoes_internas: null,
+          duplicado_de: null,
+          iso,
+          uid: caller.uid,
+          autorNome: nomeDoAutor(caller),
+        }),
+        // Como na direta do "Orçar execução": sem RV fechada para comparar, passa pela aprovação.
+        dispensa: dispensaDaAprovacao({ linhas: precificado.linhas, total_cents: precificado.total_cents, tabela_id: tabela?.id ?? null, tipo_rv: "execucao" }, null),
+        request_id: input.request_id,
+        operation_id: operationId,
+      };
+      transaction.create(quoteRef(db, numero), quote);
+      // O contrato escolhido vale para a demanda (e o regime de cobrança dele).
+      transaction.update(demandRef(db, numero), {
+        contrato_id: contrato?.id ?? null,
+        cobranca: contrato?.regime ?? "por_demanda",
+        updated_at: FieldValue.serverTimestamp(),
+        updated_by: caller.uid,
+      });
+      const evento = createComercialEvent(transaction, db, {
+        operation_id: operationId,
+        entity_id: numero,
+        customer_code: code,
+        actor,
+        occurred_at: iso,
+        type: "quote.created",
+        payload: {
+          numero,
+          rv: 0,
+          tipo_rv: "execucao",
+          edicao: 1,
+          etapa: "execucao_a_orcar",
+          tabela_id: tabela?.id ?? null,
+          variante: normalizarVariante(tabela?.variante || variante),
+          linhas: precificado.por_origem,
+          marcas,
+        },
+      });
+      return {
+        target_id: numero,
+        result: {
+          ok: true,
+          numero,
+          rotulo: rotuloDoOrcamento(numero, 0),
+          rv: 0,
+          edicao: 1,
+          status: "rascunho",
+          etapa: "execucao_a_orcar",
+          total_cents: precificado.total_cents,
+          events: [evento.id],
+          fora_da_tabela: fora,
+        },
+      };
+    },
+  );
 }
 
 // --- advanceQuote ------------------------------------------------------------------------------

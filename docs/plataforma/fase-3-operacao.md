@@ -983,3 +983,32 @@ demanda (parte 3.10a). Regras em `lib/comercial/aditivos-da-operacao.ts`.
   cobra, o absorvido e o que foi para aditivo, e o aditivo pedido em
   destaque enquanto espera. É o que o Comercial usa na RV de execução
   (executado a menos reduz o faturado) e na de aditivo. Sem valor.
+
+### Parte 3.10d: orçar a execução da direta aberta pela Operação
+
+Feita em 23/10/2026. A direta que a Operação abriu (parte 3.4c) chega ao
+Comercial em Execução a orçar, sem orçamento, quando a última OS dela é
+revisada (parte 3.10a).
+
+- **No backend.** O `saveQuote` ganha a ação `price_execution` (número,
+  contrato e tabela Comercial ou Noturna). Ela cria a RV 0 de execução, em
+  rascunho, com as linhas que a revisão manda cobrar (`a_cobrar` do resumo
+  `operacao`, sem o absorvido), pelo preço da tabela do contrato escolhido.
+  - O que a tabela não precifica volta na resposta (`fora_da_tabela`) para o
+    Comercial lançar à mão: item avulso, fora da tabela, inativo ou que não
+    se orça (armazenagem).
+  - O cliente com tabela própria não cai na Padrão Dutelog: sem contrato,
+    tudo volta para lançar.
+  - O contrato escolhido passa a valer para a demanda, com o regime de
+    cobrança dele. A etapa, a execução e o resumo da Operação não mudam.
+  - Só a direta aberta pela Operação, em Execução a orçar, sem orçamento,
+    não perdida nem cancelada. Recibo em `comercial_operations` e o evento
+    `quote.created`, sem valor.
+  - Daí em diante é o caminho de toda RV de execução: o "Para" na montagem,
+    a aprovação (sem RV fechada para comparar), o envio e a validação.
+  - Regras puras em `functions/comercial/src/domain/execucao-da-operacao.ts`.
+- **No app.** Na fila, a demanda aparece como "Sem orçamento", sem linhas,
+  total nem PDF, com uma só ação: Orçar execução. O diálogo pede o contrato,
+  com o vigente do cliente já escolhido, e a tabela. Ao criar, abre a
+  montagem e o aviso lista o que fica para lançar. As outras ações pedem o
+  orçamento e não aparecem antes dele.

@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import type { ContatoResumo } from "@/lib/comercial/clientes";
+import { vigenciaDoContrato, type ContatoResumo, type ContratoResumo } from "@/lib/comercial/clientes";
 import {
   LINK_MAXIMO,
   MOTIVOS_DE_REVISAO,
@@ -21,8 +21,9 @@ import {
   type Motivo,
   type ValoresDaAcao,
 } from "@/lib/comercial/depois-do-envio";
-import { rotuloDoContato } from "@/lib/comercial/montar";
+import { VARIANTES, rotuloDoContato } from "@/lib/comercial/montar";
 import type { EtapaDemanda } from "@/lib/comercial/orcamentos";
+import { cn } from "@/lib/utils";
 
 /**
  * Os diálogos das ações depois do envio (parte 12b de
@@ -102,6 +103,75 @@ export function CamposDoPeriodo({
   );
 }
 
+/** O contrato do cliente e a tabela (Comercial ou Noturna): do Novo orçamento e do Orçar execução da direta da Operação. */
+export function CamposDoContrato({
+  prefixo,
+  contratoId,
+  variante,
+  contratos,
+  problemas = {},
+  desabilitado,
+  onContrato,
+  onVariante,
+}: {
+  prefixo: string;
+  contratoId: string;
+  variante: string;
+  /** Os contratos que o cliente pode usar no orçamento (contratosParaOrcamento). */
+  contratos: readonly ContratoResumo[];
+  problemas?: Problemas;
+  desabilitado: boolean;
+  onContrato: (contratoId: string) => void;
+  onVariante: (variante: string) => void;
+}) {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      <Campo id={`${prefixo}-contrato`} rotulo="Contrato" problema={problemas.contrato}>
+        <select
+          id={`${prefixo}-contrato`}
+          value={contratoId}
+          onChange={(evento) => onContrato(evento.target.value)}
+          disabled={desabilitado}
+          aria-invalid={Boolean(problemas.contrato)}
+          className={CAMPO_SELECT}
+        >
+          <option value="">Sem contrato</option>
+          {contratos.map((contrato) => (
+            <option key={contrato.id} value={contrato.id}>
+              {`${contrato.nome} · ${vigenciaDoContrato(contrato)}`}
+            </option>
+          ))}
+        </select>
+      </Campo>
+      <div className="min-w-0 space-y-1.5">
+        <span className="text-sm font-medium">Tabela</span>
+        <div role="group" aria-label="Tabela" className="flex gap-0.5 rounded-lg bg-muted p-1">
+          {VARIANTES.map((opcao) => (
+            <button
+              key={opcao}
+              type="button"
+              aria-pressed={variante === opcao}
+              onClick={() => onVariante(opcao)}
+              disabled={desabilitado}
+              className={cn(
+                "inline-flex h-8 flex-1 items-center justify-center rounded-md border px-3 text-sm font-bold transition-colors",
+                variante === opcao ? "border-border bg-card text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {opcao}
+            </button>
+          ))}
+        </div>
+        {problemas.variante ? (
+          <p role="alert" className="text-xs font-bold text-destructive-soft-foreground">
+            {problemas.variante}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 /** Os campos do diálogo, só a apresentação (o estado é do diálogo). */
 export function CorpoDoDialogo({
   campos,
@@ -109,6 +179,7 @@ export function CorpoDoDialogo({
   onForm,
   problemas,
   contatos,
+  contratos = [],
   motivosDePerda,
   hoje,
   desabilitado,
@@ -118,6 +189,8 @@ export function CorpoDoDialogo({
   onForm: (muda: (form: FormDoDialogo) => FormDoDialogo) => void;
   problemas: Problemas;
   contatos: ReadonlyArray<Pick<ContatoResumo, "id" | "nome" | "empresa">>;
+  /** Os contratos do cliente, para o Orçar execução da direta da Operação. */
+  contratos?: readonly ContratoResumo[];
   motivosDePerda: readonly Motivo[];
   hoje: string;
   desabilitado: boolean;
@@ -245,12 +318,37 @@ export function CorpoDoDialogo({
     );
   }
 
+  if (campos === "contrato") {
+    return (
+      <CamposDoContrato
+        prefixo="execucao-operacao"
+        contratoId={form.contratoId}
+        variante={form.variante}
+        contratos={contratos}
+        problemas={problemas}
+        desabilitado={desabilitado}
+        onContrato={(valor) => onForm((atual) => ({ ...atual, contratoId: valor }))}
+        onVariante={(valor) => onForm((atual) => ({ ...atual, variante: valor }))}
+      />
+    );
+  }
+
   return null;
 }
 
 /** Os valores que o pedido da ação usa, do formulário. */
 export function valoresDoDialogo(form: FormDoDialogo): ValoresDaAcao {
-  return { em: form.em, contatoId: form.contatoId, link: form.link, motivo: form.motivo, nota: form.nota, de: form.de, ate: form.ate };
+  return {
+    em: form.em,
+    contatoId: form.contatoId,
+    link: form.link,
+    motivo: form.motivo,
+    nota: form.nota,
+    de: form.de,
+    ate: form.ate,
+    contratoId: form.contratoId,
+    variante: form.variante,
+  };
 }
 
 export type DialogoDepoisDoEnvioProps = {
@@ -264,6 +362,10 @@ export type DialogoDepoisDoEnvioProps = {
   contatoId: string | null;
   /** Os contatos do cliente do orçamento. */
   contatos: ReadonlyArray<Pick<ContatoResumo, "id" | "nome" | "empresa">>;
+  /** Os contratos que o cliente pode usar (Orçar execução da direta da Operação). */
+  contratos?: readonly ContratoResumo[];
+  /** O contrato que abre escolhido: o vigente do cliente, ou o da demanda. */
+  contratoId?: string | null;
   /** Quando a RV foi enviada (a resposta não vem antes). */
   envioEm: string | null;
   agora: Date;
@@ -293,18 +395,19 @@ export function tituloDoDialogo(acao: AcaoDepoisDoEnvio, rotulo: string): string
  */
 export function DialogoDepoisDoEnvio(props: DialogoDepoisDoEnvioProps) {
   const { acao, rotulo, comprometida, contatoId, contatos, envioEm, agora, hoje, ocupado, erro, onCancelar, onConfirmar } = props;
+  const contratos = props.contratos ?? [];
   const [form, setForm] = useState<FormDoDialogo | null>(null);
   const [tentou, setTentou] = useState(false);
   useEffect(() => {
     setTentou(false);
-    setForm(acao ? formInicialDoDialogo(acao, { agora: new Date(), contatoId, contatos, comprometida }) : null);
+    setForm(acao ? formInicialDoDialogo(acao, { agora: new Date(), contatoId, contatos, comprometida, contratoId: props.contratoId, contratos }) : null);
     // O formulário recomeça a cada abertura, não a cada leitura nova dos contatos.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [acao]);
 
   if (!acao || !form) return <Dialog open={false}>{null}</Dialog>;
   const campos = camposDoDialogo(acao);
-  const problemas = problemasDoDialogo(acao, form, { agora, hoje, envioEm, contatos, comprometida });
+  const problemas = problemasDoDialogo(acao, form, { agora, hoje, envioEm, contatos, comprometida, contratos });
   const mostrados = tentou ? problemas : {};
   return (
     <Dialog open onOpenChange={(open) => (!open && !ocupado ? onCancelar() : undefined)}>
@@ -326,6 +429,7 @@ export function DialogoDepoisDoEnvio(props: DialogoDepoisDoEnvioProps) {
             onForm={(muda) => setForm((atual) => (atual ? muda(atual) : atual))}
             problemas={mostrados}
             contatos={contatos}
+            contratos={contratos}
             motivosDePerda={motivosDePerdaPermitidos(comprometida)}
             hoje={hoje}
             desabilitado={ocupado}
