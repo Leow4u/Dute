@@ -48,4 +48,10 @@ describe("callables da Operação", () => {
       assert.equal(block.includes("{ painel: true }"), DA_TV.includes(nome), nome);
     }
   });
+
+  it("a rotina diária (parte 3.13a) é a única function agendada e confere a liberação antes de tudo", () => {
+    const agendadas = [...index.matchAll(/^export const (\w+) = onSchedule\(/gm)].map((match) => match[1]);
+    assert.deepEqual(agendadas, ["runDailyAlerts"]);
+    assert.match(index, /export const runDailyAlerts = onSchedule\(\{[^}]*timeZone: "America\/Sao_Paulo"[^}]*\}, async \(\) => \{\s*if \(!operacaoLiberada\(PROJECT_ID\)\) return;/);
+  });
 });
