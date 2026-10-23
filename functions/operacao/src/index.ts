@@ -6,6 +6,7 @@ import { setGlobalOptions } from "firebase-functions/v2";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 
 import { completeServiceOrderFor } from "./domain/conclusao-gravacao.js";
+import { openStorageDemandFor } from "./domain/demanda-do-armazem-gravacao.js";
 import { openDirectDemandFor } from "./domain/demanda-direta-gravacao.js";
 import { registerItemFor, registerOccurrenceFor, registerPresenceFor, registerStepFor } from "./domain/execucao-gravacao.js";
 import { attachPhotoFor, type ConferirArquivo } from "./domain/fotos-gravacao.js";
@@ -71,6 +72,12 @@ export const saveServiceOrder = onCall(async (request) => {
 export const openDirectDemand = onCall(async (request) => {
   const caller = await requireOperacaoCaller(db, request, PROJECT_ID);
   return openDirectDemandFor(db, caller, request.data);
+});
+
+/** Abre a demanda e as OS da entrega pela Dutelog de um pedido de saída do WMS; a retirada pelo cliente não gera OS. */
+export const openStorageDemand = onCall(async (request) => {
+  const caller = await requireOperacaoCaller(db, request, PROJECT_ID, { wms: true });
+  return openStorageDemandFor(db, caller, request.data);
 });
 
 /** Registra a etapa da OS com o instante em que aconteceu; a primeira põe a OS Em execução. */

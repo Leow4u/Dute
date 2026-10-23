@@ -52,6 +52,7 @@ export const OPERACAO_EVENT_TYPES = [
   "os.survey_opened",
   "os.survey_sent",
   "demand.direct_opened",
+  "demand.storage_opened",
   "demand.execution_reviewed",
   "collaborator.cnh_expiring",
   "vehicle.maintenance_due",
@@ -249,6 +250,10 @@ const servicoPedido = z
   .object({ id: solicitacaoId, tipo_servico: z.enum(["transporte", "armazenagem", "servico_em_campo", "mudanca"]), data, anexos: z.number().int().min(0).max(3) })
   .strict();
 const servicoAceito = z.object({ id: solicitacaoId, demanda: demandaNumero }).strict();
+/** A entrega do pedido de saída do WMS (parte 4.5b): o tipo, quantas linhas e OS, e se tem o retorno ao armazém. */
+const demandaDoArmazem = z
+  .object({ id: demandaNumero, tipo: tipoDemanda, linhas: z.number().int().min(1).max(10), os: z.number().int().min(1).max(2), retorno: z.boolean() })
+  .strict();
 const servicoRecusado = z.object({ id: solicitacaoId }).strict();
 
 export const OPERACAO_EVENT_PAYLOADS = {
@@ -281,6 +286,7 @@ export const OPERACAO_EVENT_PAYLOADS = {
   "os.survey_opened": vistoriaAberta,
   "os.survey_sent": vistoriaEnviada,
   "demand.direct_opened": demandaDireta,
+  "demand.storage_opened": demandaDoArmazem,
   "demand.execution_reviewed": execucaoRevisada,
   "collaborator.cnh_expiring": alertaDoDia,
   "vehicle.maintenance_due": alertaDoDia,
@@ -325,6 +331,10 @@ const TEXTO: Record<OperacaoEventType, { title: string; description: string }> =
     description: "A vistoria levantou ambientes, itens e medidas no local e foi direto ao Comercial, sem revisão.",
   },
   "demand.direct_opened": { title: "Demanda direta aberta", description: "A demanda chegou direto na Operação e se orça depois da execução." },
+  "demand.storage_opened": {
+    title: "Entrega do armazém aberta",
+    description: "A entrega pela Dutelog de um pedido de saída do WMS virou demanda, com a OS de ida e, com o retorno, a de volta.",
+  },
   "demand.execution_reviewed": { title: "Execução revisada", description: "A última OS da demanda direta foi revisada: a execução vai ao Comercial para orçar." },
   "collaborator.cnh_expiring": { title: "CNH vencendo", description: "A CNH de um colaborador ativo vence em até 30 dias ou já venceu." },
   "vehicle.maintenance_due": { title: "Revisão do veículo", description: "A revisão preventiva de um veículo ativo é em até 15 dias ou a data já passou." },

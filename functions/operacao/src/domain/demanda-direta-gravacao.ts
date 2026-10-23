@@ -50,7 +50,7 @@ function texto(valor: unknown): string {
 }
 
 /** O cadastro pelo código, como o Comercial acha (customer_code e, sem ele, code). */
-async function cadastroPeloCodigo(transaction: Transaction, db: Firestore, code: string): Promise<DocumentData> {
+export async function cadastroPeloCodigo(transaction: Transaction, db: Firestore, code: string): Promise<DocumentData> {
   const customers = db.collection(CUSTOMERS);
   let docs = (await transaction.get(customers.where("customer_code", "==", code))).docs;
   if (!docs.length) docs = (await transaction.get(customers.where("code", "==", code))).docs;

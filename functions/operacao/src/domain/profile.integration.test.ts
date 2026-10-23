@@ -31,6 +31,7 @@ beforeEach(async () => {
     users.doc("painel-1").set({ role: "painel", nome: "TV da sala" }),
     users.doc("off-1").set({ role: "interno", nome: "Desligado", access_disabled: true }),
     users.doc("cli-itau").set({ role: "cliente", nome: "Roberto Souza", customer_code: "ITAU" }),
+    users.doc("wms-1").set({ role: "wms", nome: "Sandra Melo" }),
     users.doc("cli-btg").set({ role: "cliente", nome: "Cristiane", customer_code: "BTG" }),
     users.doc("cli-safra").set({ role: "cliente", nome: "Carla", customer_code: "SAFRA" }),
     users.doc("cli-sem-codigo").set({ role: "cliente", nome: "Convite antigo" }),
@@ -135,3 +136,19 @@ describe("o cliente no portal (parte 4.4a)", () => {
     }
   });
 });
+
+describe("a operação do armazém (parte 4.5b)", () => {
+  it("só a entrega do pedido de saída atende o wms, além de quem coordena; as outras callables, não", async () => {
+    assert.equal((await getProfile(db, request("wms-1"), { wms: true })).role, "wms");
+    assert.equal((await getProfile(db, request("interno-1"), { wms: true })).role, "interno");
+    for (const opcoes of [{}, { campo: true as const }, { painel: true as const }]) {
+      const error = await rejection(getProfile(db, request("wms-1"), opcoes));
+      assert.equal(error.code, "permission-denied");
+    }
+    for (const uid of ["campo-1", "comercial-1", "cli-itau"]) {
+      const error = await rejection(getProfile(db, request(uid), { wms: true }));
+      assert.equal(error.code, "permission-denied", uid);
+    }
+  });
+});
+

@@ -141,6 +141,7 @@ const EXEMPLOS: Record<OperacaoEventType, Record<string, unknown>> = {
   "demand.execution_reviewed": { id: "10045", de: "2026-10-22", ate: "2026-10-22", os: 1 },
   "os.occurrence_recorded": { id: "10045-01", demanda: "10045", ocorrencia: "oc_01", instante: "2026-10-22T11:00:00.000Z", canal: "celular" },
   "demand.direct_opened": { id: "10053", tipo: "paraquedas", tipo_calculado: "emergencial", linhas: 1 },
+  "demand.storage_opened": { id: "10050", tipo: "planejada", linhas: 3, os: 2, retorno: true },
   "collaborator.cnh_expiring": { id: "col_aaaaaaaaaaaaaaaa", dia: "2026-10-23", dias: 12 },
   "vehicle.maintenance_due": { id: "vei_aaaaaaaaaaaaaaaa", dia: "2026-10-23", dias: -2 },
   "portal.service_requested": { id: "sol_aaaaaaaaaaaaaaaa", tipo_servico: "transporte", data: "2026-10-24", anexos: 1 },
