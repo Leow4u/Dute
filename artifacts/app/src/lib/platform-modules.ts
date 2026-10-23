@@ -11,6 +11,7 @@ import { ROTA_CAMPO, abreCampo } from "./campo/navegacao";
 import { COMERCIAL_ROLES, ROTA_COMERCIAL, abreComercial } from "./comercial/navegacao";
 import { COMERCIAL_LIBERADO, OPERACAO_LIBERADO } from "./liberacao";
 import { OPERACAO_CADASTRO_ROLES, ROTA_OPERACAO, abreOperacao } from "./operacao/navegacao";
+import { ROTA_TV, abreTv } from "./tv/navegacao";
 import type { OperationProfile } from "./operations";
 
 /**
@@ -56,8 +57,8 @@ export const PLATFORM_MODULES: readonly PlatformModule[] = [
     key: "operacao",
     label: MODULO_ROTULO.operacao,
     icon: Truck,
-    // A coordenação entra no Início da Operação; o campo, no app dele (parte 3.8b).
-    home: { ...Object.fromEntries(OPERACAO_CADASTRO_ROLES.map((role) => [role, ROTA_OPERACAO])), campo: ROTA_CAMPO },
+    // A coordenação entra no Início da Operação; o campo, no app dele (parte 3.8b); o painel, na TV da sala (parte 3.12b).
+    home: { ...Object.fromEntries(OPERACAO_CADASTRO_ROLES.map((role) => [role, ROTA_OPERACAO])), campo: ROTA_CAMPO, painel: ROTA_TV },
     clientCard: true,
     liberacao: "operacao",
   },
@@ -99,7 +100,7 @@ export function modulesForPerson(
     if (!wanted.includes(module.key)) return [];
     if (role === "cliente" && !module.clientCard) return [];
     if (module.liberacao === "comercial" && !abreComercial(role, comercial)) return [];
-    if (module.liberacao === "operacao" && !abreOperacao(role, operacao) && !abreCampo(role, operacao)) return [];
+    if (module.liberacao === "operacao" && !abreOperacao(role, operacao) && !abreCampo(role, operacao) && !abreTv(role, operacao)) return [];
     const href = module.home[role];
     return href ? [{ module, href }] : [];
   });

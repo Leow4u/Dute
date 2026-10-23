@@ -2,6 +2,7 @@ import type { Papel } from "@workspace/dominio";
 
 import { TELAS_DO_CAMPO } from "../campo/navegacao";
 import { OPERACAO_LIBERADO } from "../liberacao";
+import { ROTA_TV } from "../tv/navegacao";
 
 /**
  * Navegação do cadastro da Operação (docs/plataforma/fase-3-operacao.md,
@@ -50,6 +51,8 @@ export const TELAS_DA_OPERACAO: readonly string[] = [
   ROTA_VEICULOS,
   // O app do campo é da Operação: só existe com a liberação dela (parte 3.8b).
   ...TELAS_DO_CAMPO,
+  // A TV da sala também (parte 3.12b).
+  ROTA_TV,
 ];
 
 function parametro(busca: string, nome: string): string | null {

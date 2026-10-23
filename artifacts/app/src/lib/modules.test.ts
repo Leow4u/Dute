@@ -119,6 +119,8 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/campo", ["campo", "owner", "admin"]],
   ["/campo/os", ["campo", "owner", "admin"]],
   ["/campo/concluir", ["campo", "owner", "admin"]],
+  // A TV da sala (parte 3.12b): o painel e quem coordena.
+  ["/tv", ["painel", "owner", "admin", "interno"]],
   ["/operacao/colaboradores", ["owner", "admin", "interno"]],
   ["/operacao/veiculos", ["owner", "admin", "interno"]],
 ];

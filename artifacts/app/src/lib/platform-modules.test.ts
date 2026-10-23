@@ -56,6 +56,17 @@ describe("tela de entrada por módulo (Fase 2, parte 2)", () => {
     expect(entrada("campo", null, false, false)).toEqual({ kind: "nenhum" });
   });
 
+  it("o painel, com a Operação liberada, vai direto para a TV da sala (parte 3.12b)", () => {
+    expect(entrada("painel", null, false, true)).toEqual({ kind: "redirect", to: "/tv" });
+    expect(entrada("painel", null, true, true)).toEqual({ kind: "redirect", to: "/tv" });
+    expect(entrada("painel", null, false, false)).toEqual({ kind: "nenhum" });
+    // Quem coordena continua no Início da Operação; a TV abre por /tv.
+    expect(entrada("interno", null, false, true)).toEqual({
+      kind: "cards",
+      modules: expect.arrayContaining([expect.objectContaining({ href: "/operacao" })]),
+    });
+  });
+
   it("sem papel, nenhum módulo", () => {
     expect(entrada(null, null)).toEqual({ kind: "nenhum" });
   });
