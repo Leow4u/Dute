@@ -157,6 +157,34 @@ describe("a rotina dos avisos", () => {
     assert.deepEqual(await emails(), []);
   });
 
+  it("o alerta de itens parados aprovado no núcleo vira aviso; o proposto e o do cliente sem armazenagem, não (parte 5.4f)", async () => {
+    await rodar(AS_10H);
+    const alerta = { customer_code: "ITAU", regra: { parado_dias: 90, sem_giro_dias: 180 }, itens_enviados: [{ sku_code: "ITAU-000001", client_item_code: "POLO-M", saldo: 30 }] };
+    await db.collection("ai_stock_alerts").doc("alerta_itau").set({ id: "alerta_itau", status: "aprovada", ...alerta });
+    await db.collection("ai_stock_alerts").doc("alerta_proposto").set({ id: "alerta_proposto", status: "proposta", ...alerta });
+    await db.collection("ai_stock_alerts").doc("alerta_obra").set({ id: "alerta_obra", status: "aprovada", ...alerta, customer_code: "OBRA" });
+    await db.collection("client_access").doc("OBRA").set({ customer_code: "OBRA", modules: ["operacao"] });
+    await db.collection("customer_contacts").doc("ct_gestora").update({ avisos: ["os_agendada", "nf_emitida", "estoque_parado"] });
+    const doNucleo = { source: "functions_core" };
+    await evento("evt_parado", "estoque_parado.aprovado", { id: "alerta_itau", itens: 1 }, minutos(AS_10H, 1), doNucleo);
+    await evento("evt_proposto", "estoque_parado.aprovado", { id: "alerta_proposto", itens: 1 }, minutos(AS_10H, 1), doNucleo);
+    await evento("evt_obra", "estoque_parado.aprovado", { id: "alerta_obra", itens: 1 }, minutos(AS_10H, 1), { ...doNucleo, customer_code: "OBRA" });
+    await evento("evt_descartado", "estoque_parado.descartado", { id: "alerta_itau", itens: 0 }, minutos(AS_10H, 1), doNucleo);
+    await evento("evt_outra_fonte", "estoque_parado.aprovado", { id: "alerta_itau", itens: 1 }, minutos(AS_10H, 1));
+    const resultado = await rodar(minutos(AS_10H, 5));
+    assert.equal(resultado.eventos, 4);
+    assert.equal(resultado.avisos, 1);
+    assert.equal(resultado.emails, 1);
+    const [aviso] = await avisos();
+    assert.equal(aviso.id, "ntf_evt_parado");
+    assert.equal(aviso.titulo, "1 item parado no estoque");
+    assert.equal(aviso.texto, "Sem movimento há 90 dias ou mais · POLO-M");
+    assert.equal(aviso.link, "/portal/estoque");
+    const [email] = await emails();
+    assert.deepEqual(email.to, ["gestora@itau.com"]);
+    assert.match(email.text, /https:\/\/app\.dutelog\.com\.br\/portal\/estoque/);
+  });
+
   it("sem contato com o modelo ligado, só o sino", async () => {
     await rodar(AS_10H);
     await evento("evt_concluida", "os.completed", { id: "10050-01", instante: minutos(AS_10H, 1).toISOString() }, minutos(AS_10H, 1));

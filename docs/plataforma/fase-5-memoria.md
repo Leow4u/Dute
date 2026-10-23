@@ -552,3 +552,43 @@ Feita em 23/10/2026. A tela está em `artifacts/app/src/pages/estoque-alertas-vi
     - a escolha do cliente;
     - vazio, carregando e erro;
     - `axe`.
+
+### Parte 5.4f: o aviso do alerta aprovado ao cliente
+
+Feita em 23/10/2026. O aviso sai pela rotina dos avisos da Operação
+(`runNotifications`, `functions/operacao/src/domain/avisos.ts`), como os da
+OS, da NF e da solicitação.
+
+- **O modelo novo.** "Itens parados" (`estoque_parado`) entra na lista dos
+  modelos de aviso, em `lib/dominio/src/avisos.ts` e nas cópias da
+  `functions/comercial` e da `functions/operacao`, travadas em
+  `platform-lists.test.ts`. O contato liga o modelo no cadastro, como os
+  outros.
+- **Qual evento vira aviso.** Só o `estoque_parado.aprovado` gravado pelo
+  núcleo (`source: functions_core`). O descartado e o mesmo tipo de outra
+  codebase ficam de fora.
+- **O texto.** A rotina lê o alerta em `ai_stock_alerts` e só segue com ele
+  aprovado e com item enviado.
+  - O título: "2 itens parados no estoque".
+  - O texto: "Sem movimento há 90 dias ou mais · POLO-M e ITAU-000002", com o
+    limite da regra do alerta e até três códigos (o do cliente, ou o SKU),
+    mais quantos sobram.
+  - O link leva ao estoque do portal.
+  - Nem o saldo nem o valor entram no aviso.
+- **Quem recebe.** O aviso vai só ao cliente do alerta, com a armazenagem
+  (`wms`) no contrato. O e-mail vai ao contato que ligou o modelo; ele não
+  leva valor, então vale para todo papel de contato.
+- **Fora do `dute-homolog`** o núcleo não grava o evento, então nada sai.
+- **Testes.**
+  - `avisos.test.ts`, na Operação:
+    - o modelo do evento e a fonte;
+    - o documento do alerta;
+    - o texto com um, dois e mais de três itens;
+    - o proposto, o descartado e o sem item, que não viram aviso;
+    - o módulo do contrato.
+  - A trava dos tipos confere o do núcleo na lista de eventos do núcleo.
+  - `avisos.integration.test.ts`, no emulador: o aprovado vira sino e
+    e-mail; o proposto, o do cliente sem armazenagem, o descartado e o de
+    outra codebase, não.
+  - `clientes.test.ts` e `clientes-dialogos.test.tsx`, no app: o modelo novo
+    no diálogo do contato.

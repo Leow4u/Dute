@@ -507,7 +507,7 @@ describe("chamadas das callables (functions/comercial, entrada .strict())", () =
   it("avisos por e-mail (parte 4.6b): nenhum sem e-mail; a NF só para o gestor e o financeiro do cliente", () => {
     const vazio = formDoContato(null);
     expect(avisosOferecidos(vazio)).toEqual([]);
-    expect(avisosOferecidos({ email: "r@itau.com", papel: "gestor_cliente" })).toEqual(["os_agendada", "os_iniciada", "os_concluida", "nf_emitida", "pedido_do_portal"]);
+    expect(avisosOferecidos({ email: "r@itau.com", papel: "gestor_cliente" })).toEqual(["os_agendada", "os_iniciada", "os_concluida", "nf_emitida", "pedido_do_portal", "estoque_parado"]);
     expect(avisosOferecidos({ email: "r@itau.com", papel: "financeiro" })).toContain("nf_emitida");
     for (const papel of ["gerenciadora", "outro", ""]) expect(avisosOferecidos({ email: "c@sl.com", papel })).not.toContain("nf_emitida");
 

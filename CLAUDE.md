@@ -131,7 +131,9 @@ documentação de produto e operação está em `docs/`.
     regra mora em `lib/dominio/src/parados.ts`, com cópia literal no núcleo)
     e, uma vez por dia, propõe em `ai_stock_alerts` o alerta do item parado
     de cada cliente; `answerStockAlert` é a decisão da coordenação, com o
-    evento `estoque_parado.*` (o primeiro evento do núcleo).
+    evento `estoque_parado.*` (o primeiro evento do núcleo); o aprovado vira
+    aviso ao cliente (modelo "Itens parados") pela `runNotifications` da
+    Operação.
     Toda callable entra por `requireCoreCaller`, no
     formato de uma linha do `src/index.ts` (trava em `src/callables.test.ts`).
     Liberação própria

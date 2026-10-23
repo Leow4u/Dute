@@ -1,15 +1,16 @@
 /**
  * Os avisos por modelo (docs/plataforma/fase-4-financeiro.md, parte 4.6): a
- * OS agendada, iniciada e concluída, a NF emitida e a solicitação do portal
- * recebida. O sino do portal mostra todos ao cliente; o e-mail vai ao
- * contato do cliente que ligou o modelo no cadastro (parte 4.6b).
+ * OS agendada, iniciada e concluída, a NF emitida, a solicitação do portal
+ * recebida e os itens parados do alerta aprovado (fase-5-memoria.md, parte
+ * 5.4f). O sino do portal mostra todos ao cliente; o e-mail vai ao contato
+ * do cliente que ligou o modelo no cadastro (parte 4.6b).
  *
  * As Functions guardam cópias literais: functions/comercial
  * (domain/cadastro.ts) e functions/operacao (domain/avisos.ts), travadas por
  * artifacts/app/src/lib/platform-lists.test.ts.
  */
 
-export const MODELOS_DE_AVISO = ["os_agendada", "os_iniciada", "os_concluida", "nf_emitida", "pedido_do_portal"] as const;
+export const MODELOS_DE_AVISO = ["os_agendada", "os_iniciada", "os_concluida", "nf_emitida", "pedido_do_portal", "estoque_parado"] as const;
 
 export type ModeloDeAviso = (typeof MODELOS_DE_AVISO)[number];
 
@@ -19,6 +20,7 @@ export const MODELO_DE_AVISO_ROTULO: Record<ModeloDeAviso, string> = {
   os_concluida: "OS concluída",
   nf_emitida: "NF emitida",
   pedido_do_portal: "Solicitação recebida",
+  estoque_parado: "Itens parados",
 };
 
 /** Os papéis do contato do cliente no cadastro comercial. */
