@@ -2,12 +2,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Router } from "wouter";
 
+import { EscalaDaOs } from "@/components/operacao/escala";
 import type { OsDaFila } from "@/lib/operacao/fila";
 import { SEM_FILTRO, quadroDoHoje, type DemandaDoHoje } from "@/lib/operacao/hoje";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
-import { EscalaDaOs, HojeView } from "./hoje-view";
+import { HojeView } from "./hoje-view";
 
 /** Operação › Hoje (parte 3.5a, docs/mockups/ModOpHoje.dc.html). */
 

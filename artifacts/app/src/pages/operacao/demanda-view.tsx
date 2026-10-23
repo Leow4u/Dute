@@ -3,6 +3,8 @@ import { Link } from "wouter";
 import { ArrowLeft, Flag, MapPin, Plus } from "lucide-react";
 
 import {
+  COR_DO_STATUS,
+  ROTULO_DO_STATUS,
   SeloDoTipo,
   Servicos,
   selo,
@@ -16,7 +18,7 @@ import {
   type EtapaNaOperacao,
   type LinhaDoSaldo,
 } from "@/lib/operacao/demandas";
-import type { OsDaFila, StatusDaOs } from "@/lib/operacao/fila";
+import type { OsDaFila } from "@/lib/operacao/fila";
 import {
   ENTRADA_ROTULO,
   equipeCurta,
@@ -44,27 +46,6 @@ export type LocalDaFicha = {
   nome: string | null;
   endereco: string | null;
   complemento: string | null;
-};
-
-const STATUS_ROTULO: Record<StatusDaOs, string> = {
-  aberta: "Para agendar",
-  agendada: "Agendada",
-  em_execucao: "Em execução",
-  em_revisao: "Em revisão",
-  revisada: "Revisada",
-  cancelada: "Cancelada",
-};
-
-const COR_DO_STATUS: Record<StatusDaOs, string> = {
-  aberta: "border-info-soft-border bg-info-soft text-info-soft-foreground",
-  agendada:
-    "border-violet-soft-border bg-violet-soft text-violet-soft-foreground",
-  em_execucao:
-    "border-amber-soft-border bg-amber-soft text-amber-soft-foreground",
-  em_revisao: "border-teal-soft-border bg-teal-soft text-teal-soft-foreground",
-  revisada:
-    "border-success-soft-border bg-success-soft text-success-soft-foreground",
-  cancelada: "border-transparent bg-muted text-muted-foreground",
 };
 
 function Cartao({
@@ -287,7 +268,7 @@ function OrdensDaDemanda({
               <span
                 className={cn(selo, COR_DO_STATUS[os.status], "self-start")}
               >
-                {STATUS_ROTULO[os.status]}
+                {ROTULO_DO_STATUS[os.status]}
               </span>
             </li>
           );
