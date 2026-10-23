@@ -4,7 +4,8 @@
  * Cópia literal de PAPEIS de lib/dominio: as Functions não importam o pacote.
  * O teste artifacts/app/src/lib/platform-lists.test.ts lê este arquivo e trava
  * as listas. PLANEJAMENTO_ROLES é quem planeja a OS, a mesma lista de
- * OPERACAO_CADASTRO_ROLES da Operação. As listas ficam como array literal
+ * OPERACAO_CADASTRO_ROLES da Operação; ORCAMENTO_ROLES é quem orça, a mesma
+ * de COMERCIAL_ROLES do Comercial. As listas ficam como array literal
  * `NOME = [...]`, que é o que o teste lê.
  */
 export const PLATFORM_ROLES = [
@@ -26,6 +27,9 @@ export type PlatformRole = (typeof PLATFORM_ROLES)[number];
 /** Quem planeja a OS e recebe a duração sugerida (parte 5.2). */
 export const PLANEJAMENTO_ROLES = ["owner", "admin", "interno"] as const satisfies readonly PlatformRole[];
 
+/** Quem orça e vê os orçamentos parecidos, com o preço (parte 5.3b): a mesma lista de COMERCIAL_ROLES do Comercial. */
+export const ORCAMENTO_ROLES = ["owner", "admin", "comercial"] as const satisfies readonly PlatformRole[];
+
 export function isPlatformRole(value: unknown): value is PlatformRole {
   return typeof value === "string" && (PLATFORM_ROLES as readonly string[]).includes(value);
 }
@@ -34,4 +38,10 @@ export function isPlatformRole(value: unknown): value is PlatformRole {
 export function planejamentoProblem(role: PlatformRole): string | null {
   if ((PLANEJAMENTO_ROLES as readonly string[]).includes(role)) return null;
   return "Seu perfil não planeja OS.";
+}
+
+/** Por que a pessoa não vê os orçamentos parecidos, ou null quando vê. Nega o resto. */
+export function orcamentoProblem(role: PlatformRole): string | null {
+  if ((ORCAMENTO_ROLES as readonly string[]).includes(role)) return null;
+  return "Seu perfil não orça.";
 }

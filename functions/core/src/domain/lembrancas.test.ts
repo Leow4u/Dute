@@ -161,13 +161,16 @@ describe("as leituras da lembrança", () => {
 });
 
 describe("a semelhança e os eventos", () => {
-  it("o cosseno dos vetores: o mesmo pedido é 1; sem item em comum, 0", () => {
+  it("o cosseno vezes a razão dos tamanhos: o mesmo pedido é 1; sem item em comum, 0; 12 mesas não são 30", () => {
     const vetor = { lpu_mesa: 2.708, lpu_cadeira: 3.714 };
-    assert.equal(semelhanca(vetor, vetor), 1);
+    const tresCasas = (valor: number) => Math.round(valor * 1000) / 1000;
+    assert.equal(tresCasas(semelhanca(vetor, vetor)), 1);
     assert.equal(semelhanca(vetor, { lpu_armario: 1 }), 0);
     assert.equal(semelhanca(vetor, {}), 0);
-    // Só a mesa em comum: 2,708 ÷ √(2,708² + 3,714²) = 0,589.
-    assert.equal(Math.round(semelhanca(vetor, { lpu_mesa: 1 }) * 1000) / 1000, 0.589);
+    // Só a mesa em comum: o cosseno 2,708 ÷ √(2,708² + 3,714²) = 0,589, vezes a razão 1 ÷ 4,596.
+    assert.equal(tresCasas(semelhanca(vetor, { lpu_mesa: 1 })), 0.128);
+    // O mesmo item: o cosseno é 1 e vale a escala, log(13) ÷ log(31) para 12 e 30 mesas.
+    assert.equal(tresCasas(semelhanca({ lpu_mesa: 2.565 }, { lpu_mesa: 3.434 })), 0.747);
   });
 
   it("a mudança de etapa só conta quando entra ou sai das fechadas; a OS revisada e a reaberta contam pela demanda", () => {
