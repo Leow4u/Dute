@@ -12,7 +12,8 @@ import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, updateDoc, 
  * cliente lê só os próprios avisos do sino; o aviso da NF leva o valor, então
  * a equipe interna não lê, só owner e admin. A fila de e-mail, com os
  * endereços dos contatos, é só de owner e admin, e o cursor da rotina não
- * abre pelo navegador. Ninguém grava pelo navegador.
+ * abre pelo navegador. Até quando cada login viu os avisos (parte 4.6c),
+ * cada um lê só o próprio. Ninguém grava pelo navegador.
  */
 
 const PROJECT_ID = "demo-dute-operations";
@@ -54,10 +55,11 @@ beforeEach(async () => {
   await testEnvironment.withSecurityRulesDisabled(async (context) => {
     const database = context.firestore();
     for (const [uid, perfil] of Object.entries(PAPEIS)) await setDoc(doc(database, "users", uid), { nome: uid, ...perfil });
-    await setDoc(doc(database, "client_notifications", AVISO_ITAU), { id: AVISO_ITAU, customer_code: "ITAU", modelo: "nf_emitida", titulo: "NF 1234 emitida", texto: "R$ 1.000,00", lida_por: [] });
-    await setDoc(doc(database, "client_notifications", AVISO_SAFRA), { id: AVISO_SAFRA, customer_code: "SAFRA", modelo: "os_agendada", titulo: "OS 10050-01 agendada", texto: "Transporte", lida_por: [] });
+    await setDoc(doc(database, "client_notifications", AVISO_ITAU), { id: AVISO_ITAU, customer_code: "ITAU", modelo: "nf_emitida", titulo: "NF 1234 emitida", texto: "R$ 1.000,00" });
+    await setDoc(doc(database, "client_notifications", AVISO_SAFRA), { id: AVISO_SAFRA, customer_code: "SAFRA", modelo: "os_agendada", titulo: "OS 10050-01 agendada", texto: "Transporte" });
     await setDoc(doc(database, "email_outbox", EMAIL_ITAU), { id: EMAIL_ITAU, customer_code: "ITAU", to: ["gestor@itau.com"], status: "pending" });
     await setDoc(doc(database, "notification_cursors", "avisos"), { evento_id: "evt_x" });
+    await setDoc(doc(database, "client_notification_reads", "client-itau"), { uid: "client-itau", customer_code: "ITAU" });
   });
 });
 
@@ -90,10 +92,10 @@ describe("client_notifications", () => {
     for (const uid of EQUIPE_SEM_LEITURA) await assertFails(getDoc(doc(firestore(uid), "client_notifications", AVISO_ITAU)));
   });
 
-  it("ninguém grava pelo navegador, nem o cliente marca como lido", async () => {
+  it("ninguém grava pelo navegador, nem o cliente no próprio aviso", async () => {
     for (const uid of ["owner-a", "client-itau"]) {
       await assertFails(setDoc(doc(firestore(uid), "client_notifications", "ntf_novo"), { customer_code: "ITAU", titulo: "x" }));
-      await assertFails(updateDoc(doc(firestore(uid), "client_notifications", AVISO_ITAU), { lida_por: [uid] }));
+      await assertFails(updateDoc(doc(firestore(uid), "client_notifications", AVISO_ITAU), { titulo: "outro" }));
       await assertFails(deleteDoc(doc(firestore(uid), "client_notifications", AVISO_ITAU)));
     }
   });
@@ -111,5 +113,15 @@ describe("email_outbox e notification_cursors", () => {
       await assertFails(getDoc(doc(firestore(uid), "notification_cursors", "avisos")));
       await assertFails(setDoc(doc(firestore(uid), "notification_cursors", "avisos"), { evento_id: "" }));
     }
+  });
+});
+
+describe("client_notification_reads (parte 4.6c)", () => {
+  it("cada login lê só até quando viu, e ninguém grava pelo navegador", async () => {
+    await assertSucceeds(getDoc(doc(firestore("client-itau"), "client_notification_reads", "client-itau")));
+    for (const uid of ["client-safra", "owner-a", "admin-a", "ops-a"]) await assertFails(getDoc(doc(firestore(uid), "client_notification_reads", "client-itau")));
+    await assertFails(getDoc(doc(testEnvironment.unauthenticatedContext().firestore(), "client_notification_reads", "client-itau")));
+    await assertFails(setDoc(doc(firestore("client-itau"), "client_notification_reads", "client-itau"), { uid: "client-itau", customer_code: "ITAU" }));
+    await assertFails(setDoc(doc(firestore("client-safra"), "client_notification_reads", "client-safra"), { uid: "client-safra" }));
   });
 });

@@ -27,6 +27,8 @@ export const CALLABLES_DA_OPERACAO = [
   // A solicitação de OS pelo portal (parte 4.4a): o cliente pede; quem coordena recusa (ou abre a demanda direta com ela).
   "requestService",
   "declineServiceRequest",
+  // O sino do portal (parte 4.6c): o cliente abriu, os avisos até agora ficam vistos.
+  "markNotificationsRead",
   // A leitura da TV da sala (parte 3.12): só lê.
   "getRoomBoard",
 ] as const;

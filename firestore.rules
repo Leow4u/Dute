@@ -914,7 +914,9 @@ service cloud.firestore {
 
     // Os avisos do sino do portal (parte 4.6a): o cliente lê só os próprios.
     // O aviso da NF leva o valor dela, então a equipe interna não lê; owner e
-    // admin leem para conferir. Só a rotina runNotifications grava.
+    // admin leem para conferir. Só a rotina runNotifications grava. Os
+    // operational_notifications do WMS são outra coisa: os rascunhos do Agent
+    // Dute, internos e com aprovação.
     match /client_notifications/{avisoId} {
       allow read: if isPrivileged() || isOwnProjection();
       allow create, update, delete: if false;
@@ -930,6 +932,13 @@ service cloud.firestore {
     // O cursor da rotina dos avisos: só as Functions leem e gravam.
     match /notification_cursors/{cursorId} {
       allow read, write: if false;
+    }
+
+    // Até quando cada login viu os avisos do sino (parte 4.6c): cada um lê só
+    // o próprio. Só a callable markNotificationsRead grava.
+    match /client_notification_reads/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow create, update, delete: if false;
     }
 
     match /customer_accounts/{accountId} {

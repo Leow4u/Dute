@@ -6,7 +6,7 @@ import { setGlobalOptions } from "firebase-functions/v2";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 
 import { REMETENTE_DOS_AVISOS, enderecoDoApp } from "./domain/avisos.js";
-import { enviarPeloResend, enviarSoAuditoria, runNotificationsFor } from "./domain/avisos-gravacao.js";
+import { enviarPeloResend, enviarSoAuditoria, markNotificationsReadFor, runNotificationsFor } from "./domain/avisos-gravacao.js";
 import { completeServiceOrderFor } from "./domain/conclusao-gravacao.js";
 import { openStorageDemandFor } from "./domain/demanda-do-armazem-gravacao.js";
 import { openDirectDemandFor } from "./domain/demanda-direta-gravacao.js";
@@ -146,6 +146,12 @@ export const requestService = onCall(async (request) => {
 export const declineServiceRequest = onCall(async (request) => {
   const caller = await requireOperacaoCaller(db, request, PROJECT_ID);
   return declineServiceRequestFor(db, caller, request.data);
+});
+
+/** O cliente abriu o sino do portal: os avisos até agora ficam vistos para este login. */
+export const markNotificationsRead = onCall(async (request) => {
+  const caller = await requireOperacaoCaller(db, request, PROJECT_ID, { sino: true });
+  return markNotificationsReadFor(db, caller, request.data);
 });
 
 /** O quadro do dia para a TV da sala: agendadas, em execução e concluídas, sem valor nem contato. Só lê; o painel não grava nada. */

@@ -5,6 +5,7 @@ import { deleteApp, initializeApp } from "firebase-admin/app";
 import { Timestamp, getFirestore, type Firestore } from "firebase-admin/firestore";
 
 import {
+  CLIENT_NOTIFICATION_READS_COLLECTION,
   CLIENT_NOTIFICATIONS_COLLECTION,
   CURSOR_ID,
   EMAIL_OUTBOX_COLLECTION,
@@ -12,6 +13,7 @@ import {
   TENTATIVAS_DO_EMAIL,
   enviarFila,
   enviarSoAuditoria,
+  markNotificationsReadFor,
   runNotificationsFor,
   type EnviarEmail,
 } from "./avisos-gravacao.js";
@@ -115,7 +117,6 @@ describe("a rotina dos avisos", () => {
     assert.equal(daOs.titulo, "OS 10050-01 agendada");
     assert.equal(daOs.texto, "Transporte · 29/10/2026 08:00–12:00");
     assert.equal(daOs.link, "/portal/servicos?os=10050-01");
-    assert.deepEqual(daOs.lida_por, []);
     assert.equal(daNf.texto, "R$ 500,00 · vence 27/11/2026");
 
     const [daNfPorEmail, daOsPorEmail] = await emails();
@@ -203,5 +204,26 @@ describe("a fila de e-mail", () => {
     lido = (await db.collection(EMAIL_OUTBOX_COLLECTION).doc("mail_b").get()).data()!;
     assert.equal(lido.status, "failed");
     assert.equal(lido.tentativas, TENTATIVAS_DO_EMAIL);
+  });
+});
+
+describe("o sino visto (parte 4.6c)", () => {
+  const roberto = { uid: "cli-itau", role: "cliente" as const, customer_code: "ITAU" };
+
+  it("grava até quando o login viu os avisos; repetir só avança o instante", async () => {
+    assert.deepEqual(await markNotificationsReadFor(db, roberto, {}, () => AS_10H), { lidos_ate: AS_10H.toISOString() });
+    let marca = (await db.collection(CLIENT_NOTIFICATION_READS_COLLECTION).doc("cli-itau").get()).data()!;
+    assert.equal(marca.customer_code, "ITAU");
+    assert.equal(marca.lidos_ate.toMillis(), AS_10H.getTime());
+    await markNotificationsReadFor(db, roberto, undefined, () => minutos(AS_10H, 3));
+    marca = (await db.collection(CLIENT_NOTIFICATION_READS_COLLECTION).doc("cli-itau").get()).data()!;
+    assert.equal(marca.lidos_ate.toMillis(), minutos(AS_10H, 3).getTime());
+    assert.equal((await db.collection(EVENTS_COLLECTION).get()).size, 0, "marcar como visto não é evento");
+  });
+
+  it("campo a mais ou quem não é cliente, recusa", async () => {
+    await assert.rejects(markNotificationsReadFor(db, roberto, { ate: "2026-10-28" }), /Campo não aceito/);
+    await assert.rejects(markNotificationsReadFor(db, { uid: "interno-1", role: "interno" }, {}), /Só o cliente/);
+    assert.equal((await db.collection(CLIENT_NOTIFICATION_READS_COLLECTION).get()).size, 0);
   });
 });
