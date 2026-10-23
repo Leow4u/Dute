@@ -65,6 +65,20 @@ export function billingPaidInFinanceiro(projectId: string | undefined): boolean 
   return !!projectId && FINANCEIRO_PROJECTS.includes(projectId);
 }
 
+/**
+ * O período de faturamento do cliente na competência, como a prévia lê: o
+ * documento novo e, só na BTG, o antigo. Sem documento, vazio (em aberto).
+ */
+export async function readBillingPeriod(
+  db: ResolverDb,
+  collectionName: string,
+  customerCode: string,
+  competencia: string,
+): Promise<Record<string, unknown>> {
+  const { ref } = await resolveBillingDocument(db, collectionName, customerCode, competencia);
+  return (await ref.get()).data() ?? {};
+}
+
 /** Mês fechado sem foto ainda: gravar uma vez. Foto, replace e baseline ficam. */
 export function shouldFreezeCompetencia(mode: string, closed: boolean): boolean {
   return closed && !["frozen", "replace", "baseline"].includes(mode);

@@ -91,6 +91,7 @@ import {
 } from "./domain/billing-price-tables.js";
 import {
   billingPaidInFinanceiro,
+  readBillingPeriod,
   resolveBillingDocument,
   shouldFreezeCompetencia,
 } from "./domain/billing-scope.js";
@@ -2326,7 +2327,8 @@ function saoPauloCompetencia(now: Date) {
 
 /** Mesma conta de getBillingPreview, resumida por serviço para o agente. */
 async function billingPreviewForAgent(competencia: string, customerCode: string) {
-  const period = (await db.collection(collectionNames.periods).doc(competencia).get()).data() ?? {};
+  // O documento do próprio cliente; o id do mês sozinho é só da BTG.
+  const period = await readBillingPeriod(db, collectionNames.periods, customerCode, competencia);
   const status = String(period.status ?? "aberto");
   const frozen = period.invoice_snapshot as { total?: unknown; grupos?: Array<{ grupo?: unknown; total?: unknown }> } | undefined;
   const calculation =

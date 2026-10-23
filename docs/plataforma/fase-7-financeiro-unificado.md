@@ -324,3 +324,17 @@ no `loadBillingCalculation`.
     - o preço que não muda no WMS.
   - A régua da 7.1 segue verde sem mudar um número: o item sem ligação
     calcula igual.
+
+### Correção: a prévia do agente lia o período de outro cliente
+
+Achada na parte 7.3a, em 23/10/2026.
+
+- **O defeito.** A ferramenta `previa_faturamento` do Agent Dute do WMS lia
+  `billing_periods/{AAAA-MM}`, o id antigo da BTG, para qualquer cliente.
+  - Para outro cliente, na competência em que a BTG tinha o documento antigo
+    emitido, o agente dava o status e o total congelado da BTG.
+  - A ferramenta é só da equipe (owner, admin, financeiro e suporte), que já
+    lê o faturamento de todos. Nenhum cliente viu número de outro.
+- **A correção.** A ferramenta lê como a prévia: o documento novo do cliente
+  e, só na BTG, o antigo (`readBillingPeriod`, em `domain/billing-scope.ts`).
+- **Teste:** `billing-scope.integration.test.ts`.
