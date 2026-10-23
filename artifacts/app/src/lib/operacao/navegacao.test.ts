@@ -6,12 +6,16 @@ import { getNavigationForProfileRole, getRouteProfileRoles, menuDoOperacao } fro
 import { entrada, modulesForPerson } from "../platform-modules";
 import {
   ROTA_COLABORADORES,
+  ROTA_DEMANDA,
+  ROTA_DEMANDAS,
   ROTA_HOJE,
   ROTA_OPERACAO,
   ROTA_VEICULOS,
   abreOperacao,
   colaboradorDaBusca,
+  demandaDaBusca,
   hrefDaOs,
+  hrefDaDemanda,
   hrefDoColaborador,
   osDaBusca,
   rotasDaOperacao,
@@ -56,10 +60,11 @@ describe("navegação do cadastro da Operação", () => {
     expect(getNavigationForProfileRole("owner", null, false).some((module) => module.ambiente === "operacao")).toBe(false);
   });
 
-  it("o menu do módulo tem o Início, o Hoje, Colaboradores e Veículos para quem grava", () => {
+  it("o menu do módulo tem o Início, o Hoje, Demandas, Colaboradores e Veículos para quem grava", () => {
     expect(menuDoOperacao("interno", true).map((item) => [item.label, item.href])).toEqual([
       ["Início", ROTA_OPERACAO],
       ["Hoje", ROTA_HOJE],
+      ["Demandas", ROTA_DEMANDAS],
       ["Colaboradores", ROTA_COLABORADORES],
       ["Veículos", ROTA_VEICULOS],
     ]);
@@ -84,9 +89,11 @@ describe("navegação do cadastro da Operação", () => {
   });
 
   it("/operacao é o Início (parte 2.6) e o Hoje (parte 3.5a) mora em /operacao/hoje", () => {
-    expect(rotasDaOperacao(LIBERADO)).toEqual([ROTA_OPERACAO, ROTA_HOJE, ROTA_COLABORADORES, ROTA_VEICULOS]);
+    expect(rotasDaOperacao(LIBERADO)).toEqual([ROTA_OPERACAO, ROTA_HOJE, ROTA_DEMANDAS, ROTA_DEMANDA, ROTA_COLABORADORES, ROTA_VEICULOS]);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao", OperacaoInicio\)/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/hoje", OperacaoHoje\)/);
+    expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/demandas", OperacaoDemandas\)/);
+    expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/demanda", OperacaoDemanda\)/);
   });
 
   it("links diretos: a OS na fila e o colaborador no cadastro, de ida e volta", () => {
@@ -98,5 +105,9 @@ describe("navegação do cadastro da Operação", () => {
     expect(href).toBe("/operacao/colaboradores?id=col_0123456789abcdef");
     expect(colaboradorDaBusca(href.slice(href.indexOf("?")))).toBe("col_0123456789abcdef");
     expect(colaboradorDaBusca("?outro=1")).toBeNull();
+    expect(hrefDaDemanda("10045")).toBe("/operacao/demanda?numero=10045");
+    expect(demandaDaBusca("?numero=10045")).toBe("10045");
+    expect(demandaDaBusca("?numero=10045-01")).toBeNull();
+    expect(demandaDaBusca("")).toBeNull();
   });
 });

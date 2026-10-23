@@ -25,7 +25,7 @@ export const SERVICO_ROTULO: Record<string, string> = {
 };
 
 /** A linha do escopo que a Operação lê sem preço: `escopo` (fechado) ou `itens_pedidos` (direta). */
-export type LinhaDoEscopo = { id: string; item: string; quantidade: string };
+export type LinhaDoEscopo = { id: string; item: string; quantidade: string; unidade?: string | null };
 
 export type DemandaDoHoje = {
   numero: string;
@@ -62,7 +62,7 @@ function linhasDoEscopo(valor: unknown, campoDoId: "linha_id" | "id"): LinhaDoEs
     const id = texto(linha[campoDoId]) || texto(linha.id);
     const quantidade = texto(linha.quantidade);
     if (!id || !quantidade) return [];
-    return [{ id, item: texto(linha.item) || texto(linha.descricao), quantidade }];
+    return [{ id, item: texto(linha.item) || texto(linha.descricao), quantidade, unidade: texto(linha.unidade) || null }];
   });
 }
 
@@ -86,7 +86,7 @@ export function demandaDoHoje(id: string, data: Record<string, unknown>): Demand
 }
 
 /** "12.5" → 12500 (milésimos), como a callable conta o saldo. */
-function milesimos(quantidade: string): number {
+export function milesimos(quantidade: string): number {
   const match = /^(\d{1,9})(?:\.(\d{1,3}))?$/.exec(quantidade.trim());
   return match ? Number(match[1]) * 1000 + Number((match[2] ?? "").padEnd(3, "0")) : 0;
 }

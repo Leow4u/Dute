@@ -17,8 +17,12 @@ export const ROTA_OPERACAO = "/operacao";
 export const ROTA_HOJE = "/operacao/hoje";
 export const ROTA_COLABORADORES = "/operacao/colaboradores";
 export const ROTA_VEICULOS = "/operacao/veiculos";
+/** As demandas (parte 3.5b, docs/mockups/OpDemandas.dc.html). */
+export const ROTA_DEMANDAS = "/operacao/demandas";
+/** A ficha da demanda, aberta pela lista: ?numero=10045 (docs/mockups/OpDemanda.dc.html). */
+export const ROTA_DEMANDA = "/operacao/demanda";
 
-export const TELAS_DA_OPERACAO: readonly string[] = [ROTA_OPERACAO, ROTA_HOJE, ROTA_COLABORADORES, ROTA_VEICULOS];
+export const TELAS_DA_OPERACAO: readonly string[] = [ROTA_OPERACAO, ROTA_HOJE, ROTA_DEMANDAS, ROTA_DEMANDA, ROTA_COLABORADORES, ROTA_VEICULOS];
 
 function parametro(busca: string, nome: string): string | null {
   const valor = new URLSearchParams(busca.startsWith("?") ? busca.slice(1) : busca).get(nome)?.trim();
@@ -33,6 +37,17 @@ export function hrefDaOs(numero: string): string {
 /** A OS pedida na busca da URL da fila (`?os=`), ou null. */
 export function osDaBusca(busca: string): string | null {
   return parametro(busca, "os");
+}
+
+/** A ficha da demanda: "/operacao/demanda?numero=10045". */
+export function hrefDaDemanda(numero: string): string {
+  return `${ROTA_DEMANDA}?numero=${encodeURIComponent(numero)}`;
+}
+
+/** A demanda pedida na busca da URL da ficha (`?numero=`), ou null. */
+export function demandaDaBusca(busca: string): string | null {
+  const numero = parametro(busca, "numero");
+  return numero && /^\d{5,8}$/.test(numero) ? numero : null;
 }
 
 /** A ficha do colaborador aberta direto no cadastro: "/operacao/colaboradores?id=col_...". */
