@@ -13,6 +13,8 @@ export const CALLABLES_DA_OPERACAO = [
   "saveVehicle",
   "saveServiceOrder",
   "openDirectDemand",
+  // A entrega pela Dutelog do pedido de saída do WMS (parte 4.5b): vira demanda e OS.
+  "openStorageDemand",
   "registerStep",
   "registerItem",
   "registerOccurrence",

@@ -47,6 +47,10 @@ Seguem a recomendação do plano até a resposta do Leonardo:
   - Quem coordena abre a demanda direta a partir dela, no mesmo formulário do pedido por telefone, com o escopo do catálogo. Ou recusa com o motivo, que o cliente lê.
   - A demanda nasce `entrada: direta`, `canal: portal`, com `solicitacao_id`. O plano dizia "demanda `portal`". O ciclo é o da direta (executa e o Comercial orça depois), então o Comercial e a Operação não mudam, e o pedido errado ou repetido não vira demanda para cancelar no Comercial.
   - O instante em que a demanda foi recebida é o da solicitação. Quem pediu é o login do cliente, quando a coordenação não diz outro.
+- **A entrega do pedido de saída pela Dutelog (parte 4.5).**
+  - O WMS define a entrega no pedido. A Operação abre a demanda direta dela, com o canal `wms` e o pedido (`pedido_wms`), e as OS: a ida, agendada para a entrega, e, com o retorno ao armazém, a volta. A retirada pelo cliente não gera demanda nem OS.
+  - O plano dizia `entrada: armazenagem`. Seguimos a direta com o canal `wms`, como na solicitação do portal: o ciclo é o mesmo (executa, a Operação revisa, o Comercial orça a execução).
+  - **Pergunta ao Leonardo.** A entrega do WMS fatura pela demanda (orçada depois da execução, como a direta), ou na fatura mensal do WMS (o grupo "Abastecimento / Transporte")? Seguimos a demanda até a resposta. A BTG hoje fatura o transporte na fatura do WMS, então cuidado para não cobrar duas vezes.
 - **A armazenagem** continua na fatura do WMS (`billing_periods` e `client_invoices`) até a Fase 7.
 - **Omie** continua fora.
 
@@ -98,6 +102,7 @@ A solicitação do portal (parte 4.4a) fica em `functions/operacao`:
 
 - `requestService`: a única callable que atende o cliente (`{ portal: true }`). Pede o papel cliente, o código no perfil e a Operação no contrato (`client_access`). Confere os anexos no Storage e grava a solicitação recebida.
 - `declineServiceRequest`: quem coordena recusa a solicitação recebida, com o motivo.
+- `openStorageDemand` (parte 4.5b): quem coordena e a operação do armazém (`{ wms: true }`, a única callable da Operação que atende o wms) abrem a demanda e as OS da entrega pela Dutelog de um pedido de saída. A entrega é lida do pedido, nunca do navegador. A retirada pelo cliente recusa: "A retirada pelo cliente não gera OS."
 - `openDirectDemand` ganha `solicitacao_id`. A mesma transação confere a solicitação recebida e do mesmo cliente e a marca como aceita com o número da demanda.
 
 ## Eventos
@@ -121,6 +126,7 @@ placa ficam só no pedido. O tipo não tem as palavras do roteador de avisos.
 A solicitação do portal grava eventos da Operação (`source: functions_operacao`,
 `entity_type: service_request`), com o `customer_code`:
 
+- `demand.storage_opened` (parte 4.5b): a demanda da entrega do WMS, o tipo, quantas linhas e OS e se tem o retorno. Cada OS grava o seu `os.planned`.
 - `portal.service_requested`: a solicitação, o tipo de serviço, o dia e quantos anexos. É o único evento da Operação gravado pelo cliente.
 - `portal.service_accepted`: a solicitação e a demanda aberta com ela.
 - `portal.service_declined`: a solicitação.
@@ -376,4 +382,22 @@ Feita em 23/10/2026. As regras e a gravação estão em `functions/wms/src/domai
   - A mesma escolha repetida não grava nem gera evento.
 - **Sem mudar o fluxo de hoje.** O pedido sem `entrega` segue como antes. A saída continua pedindo quem coleta, o motorista e a placa, e a entrega o comprovante.
 - **Testes.** `order-delivery.test.ts` cobre os dois modos, o que recusa, quando muda e a mesma escolha lida de volta. `order-delivery.integration.test.ts` cobre a gravação, a troca, a recusa depois da demanda e o pedido que saiu.
+
+### Parte 4.5b: a entrega pela Dutelog vira demanda e OS
+
+Feita em 23/10/2026. As regras estão em `functions/operacao/src/domain/demanda-do-armazem.ts` e a gravação em
+`demanda-do-armazem-gravacao.ts`.
+
+- **A demanda.** É uma direta com o canal `wms` e `pedido_wms`, o pedido de saída que ela entrega.
+  - O título é "Entrega do pedido PED-0118". Quem pediu é o contato da entrega, e recebida em é quando o WMS definiu a entrega.
+  - Executar até é a data e a hora da entrega. O tipo sai da hora, como na direta.
+  - Os itens são avulsos e sem preço: a viagem de ida, a montagem quando pedida e, com o retorno, a viagem de volta.
+- **As OS.** A ida leva o transporte e a montagem, sai do Armazém Dutelog para o destino, com o contato no destino, e é agendada para a entrega.
+  - Com o retorno, a volta faz o caminho contrário, agendada para o retorno, com `retorno_ao_armazem` (o pedido) para a parte 4.5d.
+  - Todo o saldo da demanda fica nas OS. A equipe e os veículos, quem coordena escala no Hoje.
+- **O pedido** recebe `entrega.demanda` e `entrega.os_numeros`. A partir daí a entrega muda na Operação.
+- **Testes.**
+  - `demanda-do-armazem.test.ts` cobre a leitura da entrega, a retirada que não gera OS, os itens e a entrada só pelo pedido.
+  - `demanda-do-armazem.integration.test.ts` cobre a demanda, as duas OS, o número no pedido, os eventos sem texto livre, o saldo, outra chave, a OS única sem retorno e a retirada sem demanda, OS nem contador.
+  - `profile.integration.test.ts` cobre o wms só nesta callable.
 

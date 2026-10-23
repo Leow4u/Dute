@@ -238,12 +238,17 @@ export function itensDoPedido(
 /** A solicitação do portal que a demanda atende: o instante em que chegou e quem pediu (o login do cliente). */
 export type SolicitacaoDaDemanda = { id: string; recebida_em: string; pedido_por: { nome: string; telefone: string | null } | null };
 
+/** O pedido de saída do WMS que a demanda entrega (parte 4.5b): o canal é o `wms`. */
+export type PedidoWmsDaDemanda = { order_id: string; order_number: string };
+
 export type DemandaDiretaNova = {
   numero: string;
   customer_code: string;
   customer_name: string;
-  pedido: PedidoDeDemandaDireta;
+  /** O pedido como a direta pede; na entrega do WMS, montado a partir da entrega gravada no pedido. */
+  pedido: Omit<PedidoDeDemandaDireta, "canal"> & { canal: PedidoDeDemandaDireta["canal"] | "wms" };
   solicitacao?: SolicitacaoDaDemanda | null;
+  pedidoWms?: PedidoWmsDaDemanda | null;
   tipo: TipoDemanda;
   tipo_calculado: TipoDemanda;
   itens: ItemPedidoGravado[];
@@ -310,6 +315,7 @@ export function documentoDaDemandaDireta(dados: DemandaDiretaNova): Record<strin
     cancelamento: null,
     aberta_pela: "operacao",
     solicitacao_id: dados.solicitacao?.id ?? null,
+    pedido_wms: dados.pedidoWms ?? null,
     schema_version: DEMAND_SCHEMA_VERSION,
   };
 }

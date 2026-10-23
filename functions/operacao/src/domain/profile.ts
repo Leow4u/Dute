@@ -68,15 +68,18 @@ async function conferirClienteDoPortal(db: Firestore, profile: OperacaoProfile):
  * em que está escalado, parte 3.8a). `painel`: a leitura da TV (parte 3.12)
  * atende o painel e quem coordena; nenhuma outra callable atende o painel.
  * `portal`: a callable do portal (parte 4.4a) atende só o cliente com a
- * Operação no contrato; nenhuma outra callable atende o cliente.
+ * Operação no contrato; nenhuma outra callable atende o cliente. `wms`: a
+ * entrega do pedido de saída (parte 4.5b) também atende a operação do
+ * armazém, que define a entrega no WMS.
  */
-export type OpcoesDoCaller = { campo?: true; painel?: true; portal?: true };
+export type OpcoesDoCaller = { campo?: true; painel?: true; portal?: true; wms?: true };
 
 export async function getProfile(db: Firestore, request: CallableRequest<unknown>, opcoes: OpcoesDoCaller = {}): Promise<OperacaoProfile> {
   const auth = assertAuth(request);
   const profile = await loadProfile(db, auth.uid, auth.token.email, auth.token.name);
   if (opcoes.portal) return conferirClienteDoPortal(db, profile);
   if (opcoes.campo && profile.role === "campo") return profile;
+  if (opcoes.wms && profile.role === "wms") return profile;
   const problem = opcoes.painel ? tvProblem(profile.role) : operacaoCadastroProblem(profile.role);
   if (problem) throw new HttpsError("permission-denied", problem);
   return profile;
