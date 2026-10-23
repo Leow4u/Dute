@@ -82,6 +82,7 @@ import {
 } from "./domain/customer-scope.js";
 import { assertManagedCatalogCreateAllowed } from "./domain/catalog-codes.js";
 import {
+  billingPaidInFinanceiro,
   resolveBillingDocument,
   shouldFreezeCompetencia,
 } from "./domain/billing-scope.js";
@@ -6719,11 +6720,14 @@ export const getBillingPreview = onCall(async (request) => {
     const period = periodSnapshot.data() ?? {};
     const status = String(period.status ?? "aberto");
     const frozen = period.invoice_snapshot as Record<string, unknown> | undefined;
+    const faturamento = period.faturamento as { fatura_id?: unknown } | undefined;
     const common = {
       competencia: input.competencia,
       status,
       emitido_em: period.emitido_em ?? null,
       pago_em: period.pago_em ?? null,
+      // A NF do Financeiro em que a competência está (parte 7.2a).
+      fatura_id: typeof faturamento?.fatura_id === "string" && faturamento.fatura_id ? faturamento.fatura_id : null,
       emission: {
         available_from: emissionAvailableFrom(input.competencia),
         can_emit:
@@ -7389,6 +7393,12 @@ export const payBillingInvoice = onCall(async (request) => {
   const paidAt = new Date();
 
   try {
+    if (billingPaidInFinanceiro(PROJECT_ID)) {
+      throw new BillingDomainError(
+        "PAID_IN_FINANCEIRO",
+        "Neste ambiente, a armazenagem se fatura e se recebe no Financeiro.",
+      );
+    }
     return await db.runTransaction(async (transaction) => {
       const periodResolved = await resolveBillingDocument(
         db,

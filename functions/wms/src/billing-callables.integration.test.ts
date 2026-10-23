@@ -33,6 +33,7 @@ type Linha = {
 type Previa = {
   competencia: string;
   status: string;
+  fatura_id: string | null;
   pago_em: string | null;
   emission: { can_emit: boolean; available_from: string };
   custo_estoque: number;
@@ -207,6 +208,7 @@ describe("a prévia do mês fechado", () => {
     const resultado = await previa({ competencia: SETEMBRO });
 
     assert.equal(resultado.status, "aberto");
+    assert.equal(resultado.fatura_id, null);
     assert.deepEqual(resultado.emission, { can_emit: true, available_from: "2026-10-01" });
     assert.equal(resultado.custo_estoque, 1325);
     assert.equal(resultado.ad_valorem_rate, 0.004);
@@ -456,6 +458,8 @@ describe("o pagamento", () => {
       faturamento: { fatura_id: "fat_0123456789abcdef01234567", vencimento: "2026-11-10" },
     });
     await recusa(pagar({ competencia: SETEMBRO }), "failed-precondition", "PERIOD_INVOICED");
+    // A prévia diz em que NF ela está (parte 7.2c).
+    assert.equal((await previa({ competencia: SETEMBRO })).fatura_id, "fat_0123456789abcdef01234567");
     assert.equal((await db.collection("billing_periods").doc(ID_BTG).get()).get("status"), "emitido");
     assert.equal((await db.collection("client_invoices").doc(ID_BTG).get()).get("payment_status"), "issued");
     assert.equal(await contar("events", "type", "billing.invoice_paid"), 0);

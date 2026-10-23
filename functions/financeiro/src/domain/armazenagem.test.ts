@@ -5,9 +5,12 @@ import { fileURLToPath } from "node:url";
 
 import {
   BILLING_PERIODS_COLLECTION,
+  CLIENT_INVOICES_COLLECTION,
   LEGACY_BILLING_CUSTOMER,
   PERIODO_ID,
   armazenagemNaFatura,
+  billingDocumentId,
+  idsDoPortal,
   periodoLido,
   problemaDaArmazenagem,
   problemaDoPeriodoNaFatura,
@@ -29,11 +32,19 @@ const EMITIDA = {
 };
 
 describe("a competência do WMS", () => {
-  it("as cópias do WMS são literais: a coleção, o cliente do id antigo e o formato do id", () => {
+  it("as cópias do WMS são literais: as coleções, o cliente do id antigo e o formato do id", () => {
     assert.match(wms("index.ts"), new RegExp(`\\n  periods: "${BILLING_PERIODS_COLLECTION}",\\n`));
+    assert.match(wms("index.ts"), new RegExp(`\\n  clientInvoices: "${CLIENT_INVOICES_COLLECTION}",\\n`));
     assert.match(wms("domain/billing-scope.ts"), new RegExp(`export const LEGACY_BILLING_CUSTOMER = "${LEGACY_BILLING_CUSTOMER}";`));
     assert.match(wms("domain/billing-scope.ts"), /return `\$\{customer\}__\$\{competencia\}`;/);
     assert.match(wms("domain/billing-scope.ts"), /replace\(\/\[\^\\w\.-\]\/g, "_"\)\.slice\(0, 200\)/);
+  });
+
+  it("o id do portal é o do WMS: o novo e, só na BTG, o antigo", () => {
+    assert.equal(billingDocumentId(" Banco Safra ", "2026-09"), "Banco_Safra__2026-09");
+    assert.equal(billingDocumentId("ITAÚ/SP", "2026-09"), "ITA__SP__2026-09");
+    assert.deepEqual(idsDoPortal("BTG Pactual", "2026-09"), ["BTG_Pactual__2026-09", "2026-09"]);
+    assert.deepEqual(idsDoPortal("Banco Safra", "2026-09"), ["Banco_Safra__2026-09"]);
   });
 
   it("aceita o id novo e o antigo, e nada mais", () => {
@@ -77,9 +88,13 @@ describe("a competência do WMS", () => {
     assert.equal(lido({ customer_code: "" }, "Banco_Safra__2026-09"), "A armazenagem de 09/2026 não tem cliente.");
   });
 
-  it("no cancelamento, a competência tem de estar nesta NF", () => {
-    assert.equal(problemaDoPeriodoNaFatura("BTG_Pactual__2026-09", { ...EMITIDA, faturamento: { fatura_id: "fat_1" } }, "fat_1"), null);
-    assert.equal(problemaDoPeriodoNaFatura("BTG_Pactual__2026-09", { ...EMITIDA, faturamento: { fatura_id: "fat_2" } }, "fat_1"), "A armazenagem de 09/2026 não está nesta NF.");
-    assert.equal(problemaDoPeriodoNaFatura("BTG_Pactual__2026-09", null, "fat_1"), "A competência de armazenagem BTG_Pactual__2026-09 não foi encontrada.");
+  it("na cobrança, a competência tem de estar nesta NF e no status que a ação pede", () => {
+    const naNf = { ...EMITIDA, faturamento: { fatura_id: "fat_1" } };
+    assert.equal(problemaDoPeriodoNaFatura("BTG_Pactual__2026-09", naNf, "fat_1", "emitido"), null);
+    assert.equal(problemaDoPeriodoNaFatura("BTG_Pactual__2026-09", { ...naNf, status: "pago" }, "fat_1", "pago"), null);
+    assert.equal(problemaDoPeriodoNaFatura("BTG_Pactual__2026-09", { ...naNf, status: "pago" }, "fat_1", "emitido"), "A armazenagem de 09/2026 não está emitida no WMS.");
+    assert.equal(problemaDoPeriodoNaFatura("BTG_Pactual__2026-09", naNf, "fat_1", "pago"), "A armazenagem de 09/2026 não está paga no WMS.");
+    assert.equal(problemaDoPeriodoNaFatura("BTG_Pactual__2026-09", { ...EMITIDA, faturamento: { fatura_id: "fat_2" } }, "fat_1", "emitido"), "A armazenagem de 09/2026 não está nesta NF.");
+    assert.equal(problemaDoPeriodoNaFatura("BTG_Pactual__2026-09", null, "fat_1", "emitido"), "A competência de armazenagem BTG_Pactual__2026-09 não foi encontrada.");
   });
 });

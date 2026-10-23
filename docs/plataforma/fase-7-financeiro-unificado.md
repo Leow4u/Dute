@@ -243,3 +243,39 @@ tela Financeiro › A faturar.
     confirmação e o Início;
   - `a-faturar-view.test.tsx`: a linha no grupo do cliente, no painel, os
     textos e o `axe`.
+
+### Parte 7.2c: a armazenagem recebida no Financeiro
+
+Feita em 23/10/2026.
+
+- **Receber.** O pagamento que quita a NF marca cada competência dela como
+  paga no WMS, na mesma transação, como o `payBillingInvoice` grava:
+  - o período fica `pago`, com o instante, quem registrou e o
+    `faturamento.paga_em` (o dia do pagamento);
+  - o portal (`client_invoices`) fica `pago` e `paid`. O documento é achado
+    como o WMS acha: o id novo e, na BTG, o antigo. Sem nenhum, o novo.
+- **Estornar.** O estorno que reabre a NF devolve cada competência a
+  `emitido`, sem o pagamento, e o portal a `issued`. É a única passagem de
+  `pago` para `emitido` no WMS, e só pelo Financeiro.
+- **O que confere.** A competência tem de estar nesta NF e no status que a
+  ação pede: `emitido` para quitar e cancelar, `pago` para estornar. Senão,
+  nada se grava.
+- **O evento.** `cobranca.payment_registered` e `cobranca.payment_reversed`
+  levam `competencias`, só o mês, sem valor.
+- **O WMS.**
+  - Onde o Financeiro está ligado (`FINANCEIRO_PROJECTS` em
+    `domain/billing-scope.ts`, cópia da liberação do Financeiro), o
+    `payBillingInvoice` recusa (`PAID_IN_FINANCEIRO`).
+  - A prévia devolve o `fatura_id`.
+  - A tela Faturamento troca "Marcar como paga" por "Faturar no Financeiro"
+    (o A faturar) ou "Ver a NF no Financeiro" (a via comercial). O suporte,
+    que não abre o Financeiro, não ganha o link.
+  - Ligar o Financeiro no `dute-prod` (parte 4.9b) põe o projeto nas três
+    listas (`docs/plataforma/lancamento-producao.md`, seção 6).
+- **Testes:**
+  - `fatura.integration.test.ts`: quitar e estornar com o portal, a BTG
+    antiga e a competência fora de `emitido`;
+  - `armazenagem.test.ts`: o id do portal e o status de cada ação;
+  - `billing-scope.test.ts` e `platform-lists.test.ts`: a lista do WMS;
+  - `billing-callables.integration.test.ts`: o `fatura_id` da prévia;
+  - `lib/financeiro/armazenagem.test.ts`: a ação da tela do WMS.

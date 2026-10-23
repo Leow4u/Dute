@@ -52,6 +52,19 @@ export async function resolveBillingDocument(
   return { ref: primary, legacy: false };
 }
 
+/**
+ * Onde o Financeiro está ligado (parte 7.2c,
+ * docs/plataforma/fase-7-financeiro-unificado.md), a competência emitida se
+ * fatura e se recebe lá, e o WMS não marca pagamento. Cópia literal de
+ * FINANCEIRO_AMBIENTES_LIBERADOS (functions/financeiro/src/domain/liberacao.ts);
+ * a trava é artifacts/app/src/lib/platform-lists.test.ts.
+ */
+export const FINANCEIRO_PROJECTS = ["dute-homolog"];
+
+export function billingPaidInFinanceiro(projectId: string | undefined): boolean {
+  return !!projectId && FINANCEIRO_PROJECTS.includes(projectId);
+}
+
 /** Mês fechado sem foto ainda: gravar uma vez. Foto, replace e baseline ficam. */
 export function shouldFreezeCompetencia(mode: string, closed: boolean): boolean {
   return closed && !["frozen", "replace", "baseline"].includes(mode);

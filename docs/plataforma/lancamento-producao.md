@@ -220,8 +220,11 @@ Um PR pequeno, depois da conferência da seção 5:
 
 1. Pôr `dute-prod` nas duas listas `FINANCEIRO_AMBIENTES_LIBERADOS`, em
    `artifacts/app/src/lib/liberacao.ts` e em
-   `functions/financeiro/src/domain/liberacao.ts`.
-   `platform-lists.test.ts` trava as duas iguais.
+   `functions/financeiro/src/domain/liberacao.ts`, e na cópia
+   `FINANCEIRO_PROJECTS` de `functions/wms/src/domain/billing-scope.ts`.
+   Com ela, o WMS deixa de marcar o pagamento da armazenagem: a competência
+   emitida se fatura e se recebe no Financeiro (Fase 7, parte 7.2c).
+   `platform-lists.test.ts` trava as três iguais.
 2. Atualizar os testes que esperam a recusa na produção:
    - `functions/financeiro/src/domain/liberacao.test.ts`;
    - `functions/financeiro/src/domain/profile.integration.test.ts`;
@@ -233,7 +236,7 @@ Um PR pequeno, depois da conferência da seção 5:
 
 ## 7. Como desligar
 
-- **O Financeiro.** Tirar `dute-prod` das duas listas e publicar de novo.
+- **O Financeiro.** Tirar `dute-prod` das três listas e publicar de novo.
   As telas somem, as callables recusam, e o que foi gravado continua no
   banco.
 - **Só os avisos:**

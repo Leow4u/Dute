@@ -153,7 +153,7 @@ describe("a cobrança da NF", () => {
       "O pagamento já foi estornado.",
     );
     const estornos = await doTipo("cobranca.payment_reversed");
-    assert.deepEqual(estornos.map((evento) => evento.payload), [{ id: faturaId, pagamento_id: quitou.pagamento_id, reaberta: true }]);
+    assert.deepEqual(estornos.map((evento) => evento.payload), [{ id: faturaId, pagamento_id: quitou.pagamento_id, reaberta: true, competencias: [] }]);
     assert.doesNotMatch(semCarimbo(estornos), /errada/);
   });
 

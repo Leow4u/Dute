@@ -6,17 +6,32 @@
  *   Financeiro não recalcula: o total é `invoice_snapshot.total_cents`.
  * - Registrar a NF grava no período o resumo `faturamento`, o mesmo da
  *   demanda. Cancelar o registro o tira.
- * - O status do WMS não muda aqui: `emitido` continua até o pagamento (parte
- *   7.2c).
+ * - O status do WMS não muda no registro: `emitido` continua até o
+ *   pagamento. O pagamento que quita a NF marca a competência como paga no
+ *   WMS, e o estorno que a reabre a devolve a emitida, com o portal
+ *   (`client_invoices`) junto (parte 7.2c).
  */
 
 /**
- * Cópias literais do WMS (functions/wms/src/index.ts, collectionNames.periods,
- * e domain/billing-scope.ts, LEGACY_BILLING_CUSTOMER); a trava é
- * armazenagem.test.ts.
+ * Cópias literais do WMS (functions/wms/src/index.ts, collectionNames.periods
+ * e clientInvoices, e domain/billing-scope.ts, LEGACY_BILLING_CUSTOMER e
+ * billingDocumentId); a trava é armazenagem.test.ts.
  */
 export const BILLING_PERIODS_COLLECTION = "billing_periods";
+export const CLIENT_INVOICES_COLLECTION = "client_invoices";
 export const LEGACY_BILLING_CUSTOMER = "BTG Pactual";
+
+/** O id novo do documento de faturamento do cliente na competência. */
+export function billingDocumentId(customerCode: string, competencia: string): string {
+  const customer = customerCode.trim().replace(/[^\w.-]/g, "_").slice(0, 200);
+  return `${customer}__${competencia}`;
+}
+
+/** Os ids que o WMS tenta para o portal da competência, na ordem: o novo e, só na BTG, o antigo. */
+export function idsDoPortal(customerCode: string, competencia: string): string[] {
+  const novo = billingDocumentId(customerCode, competencia);
+  return customerCode.trim() === LEGACY_BILLING_CUSTOMER ? [novo, competencia] : [novo];
+}
 
 /** Quantas competências uma NF fecha de uma vez: um ano. */
 export const MAX_COMPETENCIAS_POR_NF = 12;
@@ -89,10 +104,16 @@ export function armazenagemNaFatura(periodo: PeriodoParaFaturar): ArmazenagemNaF
   return { periodo_id: periodo.id, competencia: periodo.competencia, valor_cents: periodo.valor_cents ?? 0 };
 }
 
-/** No cancelamento: a competência que a cobrança espera encontrar nesta NF, ou o problema. */
-export function problemaDoPeriodoNaFatura(id: string, dados: Registro | null, faturaId: string): string | null {
+/**
+ * Na cobrança: a competência que ela espera encontrar nesta NF, no status do
+ * WMS que a ação pede (emitido para quitar e cancelar, pago para estornar), ou
+ * o problema.
+ */
+export function problemaDoPeriodoNaFatura(id: string, dados: Registro | null, faturaId: string, status: "emitido" | "pago"): string | null {
   if (!dados) return `A competência de armazenagem ${id} não foi encontrada.`;
   const periodo = periodoLido(id, dados);
-  if (periodo.fatura_id !== faturaId) return `A armazenagem de ${rotuloDaCompetencia(periodo.competencia)} não está nesta NF.`;
+  const rotulo = `A armazenagem de ${rotuloDaCompetencia(periodo.competencia)}`;
+  if (periodo.fatura_id !== faturaId) return `${rotulo} não está nesta NF.`;
+  if (periodo.status !== status) return status === "pago" ? `${rotulo} não está paga no WMS.` : `${rotulo} não está emitida no WMS.`;
   return null;
 }

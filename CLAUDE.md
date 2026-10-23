@@ -67,7 +67,10 @@ documentação de produto e operação está em `docs/`.
   competência emitida nele vira um "A faturar" do Financeiro. A régua das
   trilhas de dinheiro do WMS é `functions/wms/src/billing-callables.integration.test.ts`
   (as callables de verdade, pelo `.run`, no emulador): nenhuma parte mexe
-  no faturamento do WMS sem ela verde.
+  no faturamento do WMS sem ela verde. Onde o Financeiro está ligado
+  (`FINANCEIRO_PROJECTS` no WMS, cópia travada da liberação dele), a
+  armazenagem se fatura e se recebe no Financeiro, e o WMS não marca
+  pagamento (parte 7.2c).
 - **Alinhamento do Comercial e da Operação recuperado em 23/10/2026**:
   `docs/plataforma/alinhamento-comercial-operacao.md` compara o desenho
   aprovado (plano, Fase 2, Fase 6 e mockups) com o que entrou na `main` de 21
