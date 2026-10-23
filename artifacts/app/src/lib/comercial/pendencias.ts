@@ -1,4 +1,4 @@
-import { CalendarRange, FileCheck, FilePlus2, FileText, Hourglass, Send, Undo2 } from "lucide-react";
+import { CalendarRange, ClipboardList, FileCheck, FilePlus2, FileText, Hourglass, Send, Undo2 } from "lucide-react";
 
 import type { ItemDoInicio, TomDoItem } from "../inicio-do-modulo";
 import { COMERCIAL_LIBERADO } from "../liberacao";
@@ -10,6 +10,7 @@ import { dataBr } from "./clientes";
 import { quandoEmDias, type AlertaDoInicio } from "./contratos";
 import { rotuloDaCompetencia, type AlertaDeMedicaoDoInicio } from "./medicoes";
 import { ROTA_APROVAR, ROTA_AUTORIZACOES, abreComercial, aprovaOrcamento, hrefDaMedicao, hrefDoContrato } from "./navegacao";
+import type { VistoriaAUsar } from "./vistoria-da-operacao";
 import { dataHoraCurta, demandaDiretaNaOperacao, hrefDoOrcamento, rotuloDoOrcamento, type EtapaDemanda } from "./orcamentos";
 
 /**
@@ -48,6 +49,11 @@ export function veSemRespostaNoInicio(role: ProfileRole | null | undefined, come
 
 /** Os aditivos pedidos pela Operação: owner, admin e comercial, com a liberação (parte 3.10c). */
 export function veAditivosNoInicio(role: ProfileRole | null | undefined, comercialLiberado: boolean = COMERCIAL_LIBERADO): boolean {
+  return abreComercial(role, comercialLiberado);
+}
+
+/** As vistorias que a Operação enviou e o orçamento ainda não carregou: owner, admin e comercial, com a liberação (parte 3.11e). */
+export function veVistoriasNoInicio(role: ProfileRole | null | undefined, comercialLiberado: boolean = COMERCIAL_LIBERADO): boolean {
   return abreComercial(role, comercialLiberado);
 }
 
@@ -194,6 +200,22 @@ function itemDeAditivo(aditivo: AditivoAFazer): ItemDoInicio {
   };
 }
 
+function itemDeVistoria(vistoria: VistoriaAUsar): ItemDoInicio {
+  return {
+    id: `vistoria:${vistoria.numero}`,
+    tone: "attention",
+    icon: ClipboardList,
+    title: `Vistoria concluída · ${vistoria.numero}`,
+    detail: [
+      vistoria.cliente,
+      `${vistoria.itens} ${vistoria.itens === 1 ? "item levantado" : "itens levantados"}`,
+      `enviada pela Operação ${dataBr(diaDoInstante(vistoria.enviadaEm) ?? vistoria.enviadaEm.slice(0, 10))}`,
+    ].join(" · "),
+    href: hrefDoOrcamento(vistoria.numero),
+    actionLabel: "Abrir orçamento",
+  };
+}
+
 const PESO_DO_TOM: Record<TomDoItem, number> = { critical: 0, attention: 1, info: 2, agent: 3 };
 
 /**
@@ -211,6 +233,7 @@ export function pendenciasDoComercial({
   devolvidos,
   semResposta,
   aditivos,
+  vistorias,
   comercialLiberado = COMERCIAL_LIBERADO,
 }: {
   role: ProfileRole | null | undefined;
@@ -228,12 +251,15 @@ export function pendenciasDoComercial({
   semResposta?: readonly PropostaSemResposta[];
   /** Os aditivos pedidos pela revisão da Operação (lerAditivosAFazer, parte 3.10c). */
   aditivos?: readonly AditivoAFazer[];
+  /** As vistorias enviadas pela Operação que o orçamento ainda não carregou (lerVistoriasAUsar, parte 3.11e). */
+  vistorias?: readonly VistoriaAUsar[];
   comercialLiberado?: boolean;
 }): ItemDoInicio[] {
   const itens: ItemDoInicio[] = [];
   if (paraAprovar?.length && veAprovacoesNoInicio(role, comercialLiberado)) itens.push(itemDeAprovacao(paraAprovar));
   if (devolvidos?.length && veDevolvidosNoInicio(role, comercialLiberado)) itens.push(...devolvidos.map(itemDeDevolvido));
   if (aditivos?.length && veAditivosNoInicio(role, comercialLiberado)) itens.push(...aditivos.map(itemDeAditivo));
+  if (vistorias?.length && veVistoriasNoInicio(role, comercialLiberado)) itens.push(...vistorias.map(itemDeVistoria));
   if (contratos?.length && veContratosNoInicio(role, comercialLiberado)) itens.push(...itensDeContrato(contratos));
   if (autorizacoes && veAutorizacoesNoInicio(role, comercialLiberado)) itens.push(...itensDeAutorizacao(autorizacoes));
   if (medicoes?.length && veMedicoesNoInicio(role, comercialLiberado)) itens.push(...itensDeMedicao(medicoes));

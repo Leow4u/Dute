@@ -235,6 +235,8 @@ export const COMERCIAL_EVENT_PAYLOADS = {
       linhas: linhasPorOrigem.optional(),
       marcas: marcas.optional(),
       segundos_desde_anterior: segundos.optional(),
+      /** A vistoria da Operação cujos itens a montagem carregou (parte 3.11e). */
+      vistoria_os: z.string().regex(/^\d{5,8}-\d{2}$/).optional(),
     })
     .strict(),
   "quote.submitted": quoteStep,

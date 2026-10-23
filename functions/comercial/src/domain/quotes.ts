@@ -249,6 +249,12 @@ const AtualizarOrcamento = z
     request_id: requestId,
     numero: numeroServico,
     expected_edicao: z.number().int().min(1),
+    /**
+     * A vistoria da Operação cujos itens a montagem carregou (parte 3.11e): a
+     * enviada para esta demanda. Fica no orçamento, para saber de onde vieram
+     * as linhas e tirar a vistoria do Início.
+     */
+    vistoria_os: z.string().trim().regex(/^\d{5,8}-\d{2}$/, "OS da vistoria inválida.").optional(),
     ...camposDaDemanda,
     ...camposDoOrcamento,
   })
@@ -1111,6 +1117,13 @@ async function atualizar(db: Firestore, caller: ComercialProfile, input: Atualiz
           `O orçamento ${numero} está ${SITUACAO_ROTULO[status] ?? status}: só o rascunho se edita.`,
         );
       }
+      if (input.vistoria_os !== undefined) {
+        // O resumo da vistoria é da Operação (demands/{numero}, campo da vistoria): o Comercial só o lê.
+        const enviada = demanda.vistoria && typeof demanda.vistoria === "object" ? texto((demanda.vistoria as Record<string, unknown>).os) : "";
+        if (enviada !== input.vistoria_os) {
+          throw new HttpsError("failed-precondition", `A vistoria ${input.vistoria_os} não é a enviada pela Operação para a demanda ${numero}.`);
+        }
+      }
       const edicao = Number(quote.edicao);
       if (edicao !== input.expected_edicao) {
         throw new HttpsError(
@@ -1227,6 +1240,7 @@ async function atualizar(db: Firestore, caller: ComercialProfile, input: Atualiz
       if (input.condicoes !== undefined) quotePatch.condicoes = input.condicoes;
       if (input.validade_dias !== undefined) quotePatch.validade_dias = input.validade_dias;
       if (input.observacoes_internas !== undefined) quotePatch.observacoes_internas = input.observacoes_internas;
+      if (input.vistoria_os !== undefined) quotePatch.vistoria_os = input.vistoria_os;
       if (quote.tipo_rv === "execucao") {
         const fechada = fechadaSnap?.exists ? rvParaComparar(fechadaSnap.data() ?? {}) : null;
         quotePatch.dispensa = dispensaDaAprovacao(
@@ -1254,6 +1268,7 @@ async function atualizar(db: Firestore, caller: ComercialProfile, input: Atualiz
           linhas: precificado.por_origem,
           marcas,
           segundos_desde_anterior: segundosDesde(quote.passo_em, instante),
+          vistoria_os: input.vistoria_os,
         },
       });
       return {

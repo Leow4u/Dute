@@ -4,6 +4,7 @@ import type { ItemDoInicio } from "../inicio-do-modulo";
 import type { ProfileRole } from "../modules";
 import {
   lerAditivosAFazer,
+  lerVistoriasAUsar,
   lerAlertasDeMedicao,
   lerAlertasDosContratos,
   lerAutorizacoesDoInicio,
@@ -16,6 +17,7 @@ import { abreComercial } from "./navegacao";
 import {
   pendenciasDoComercial,
   veAditivosNoInicio,
+  veVistoriasNoInicio,
   veAprovacoesNoInicio,
   veAutorizacoesNoInicio,
   veContratosNoInicio,
@@ -52,6 +54,7 @@ export function useInicioDoComercial(
   const veMedicoes = ligado && veMedicoesNoInicio(role);
   const veResumo = ligado && abreComercial(role);
   const veAditivos = ligado && veAditivosNoInicio(role);
+  const veVistorias = ligado && veVistoriasNoInicio(role);
 
   const aprovacoes = useQuery({
     queryKey: ["comercial", "orcamentos", "para-aprovar"],
@@ -111,6 +114,15 @@ export function useInicioDoComercial(
     staleTime: UM_MINUTO,
   });
 
+  const vistorias = useQuery({
+    queryKey: ["comercial", "vistorias-da-operacao", "inicio"],
+    queryFn: () => lerVistoriasAUsar(),
+    enabled: veVistorias,
+    refetchInterval: CINCO_MINUTOS,
+    refetchOnWindowFocus: false,
+    staleTime: UM_MINUTO,
+  });
+
   const fontes = [
     { ve: veAprovacoes, consulta: aprovacoes, nome: "orçamentos para aprovar" },
     { ve: veDevolvidos, consulta: devolvidos, nome: "orçamentos devolvidos" },
@@ -119,6 +131,7 @@ export function useInicioDoComercial(
     { ve: veMedicoes, consulta: medicoes, nome: "medições" },
     { ve: veResumo, consulta: resumo, nome: "orçamentos por etapa" },
     { ve: veAditivos, consulta: aditivos, nome: "aditivos da Operação" },
+    { ve: veVistorias, consulta: vistorias, nome: "vistorias da Operação" },
   ];
   return {
     itens: pendenciasDoComercial({
@@ -130,6 +143,7 @@ export function useInicioDoComercial(
       devolvidos: devolvidos.data,
       semResposta: resumo.data?.semResposta,
       aditivos: aditivos.data,
+      vistorias: vistorias.data,
     }),
     resumo: resumo.data,
     carregando: fontes.some((fonte) => fonte.ve && fonte.consulta.isLoading),
