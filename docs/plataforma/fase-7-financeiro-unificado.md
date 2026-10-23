@@ -426,3 +426,40 @@ já levava o "Prazo de faturamento vencido" para lá.
   - `lib/comercial/autorizacoes.test.ts`: a lista e o pedido;
   - `pages/comercial/autorizacoes-view.test.tsx`: os textos da seção, o
     rótulo da ação, a seção ausente sem vencida e o `axe`.
+
+### Parte 7.5c: Contratos e Autorizações no Financeiro, só leitura
+
+Feita em 23/10/2026.
+
+- **As rotas** `/financeiro/contratos` e `/financeiro/autorizacoes`, no menu
+  do Financeiro entre Faturas e Relatórios, com a mesma liberação e os mesmos
+  papéis (owner, admin e financeiro).
+- **As telas são as do Comercial** com `somenteLeitura`.
+  - Em Contratos: sem Novo contrato, Editar nem Registrar aditivo. A ficha
+    inteira fica: vigência, condições, tabelas, aditivos e documentos.
+  - Em Autorizações: sem Nova autorização, o painel, as caixas de marcar,
+    Cancelar nem Perder por prazo. Ficam a fila, as autorizadas e o prazo
+    vencido.
+- **As regras** já abriam `contracts`, `client_authorizations`, `demands`
+  e as RVs a quem lê preço, o que inclui o financeiro.
+  - O financeiro não lê o cadastro (`customers`). Sem ele, o cliente
+    aparece pelo nome gravado na demanda ou pelo código.
+  - Nenhuma escrita: as callables do Comercial recusam o papel financeiro.
+- **Testes:**
+  - `contratos-view.test.tsx` e `autorizacoes-view.test.tsx`: a leitura sem
+    nenhuma ação, com o `axe`;
+  - `financeiro/navegacao.test.ts`, `modules.test.ts` e `ambientes.test.ts`:
+    o menu, as rotas, os papéis e o shell.
+
+## Onde a Fase 7 está
+
+- Feitas: 7.0 a 7.3c e 7.5a a 7.5c.
+- **7.4 espera a pergunta 21**: o fornecedor da NF-e, da NFS-e e da
+  contabilidade. Até lá, a NF segue registrada à mão no Financeiro, também a
+  da armazenagem.
+- **O "pronto quando" da fase:**
+  - a armazenagem e as OS já fecham a competência na mesma fatura;
+  - o a receber já é um só (`faturas`);
+  - falta a NF sair pela integração (7.4).
+- **Na produção,** tudo depende do lançamento da Fase 4 (parte 4.9b): ligar
+  o Financeiro no `dute-prod` põe o projeto nas três listas.

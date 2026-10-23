@@ -68,6 +68,9 @@ describe("ambiente da rota", () => {
       "/financeiro/pagos",
       "/financeiro/faturas",
       "/financeiro/nf",
+      // Os contratos e as autorizações do Comercial, só leitura (parte 7.5c).
+      "/financeiro/contratos",
+      "/financeiro/autorizacoes",
       "/financeiro/relatorios",
       // O Agent Dute do Financeiro (parte 5.5j), no shell dele.
       "/financeiro/agente",

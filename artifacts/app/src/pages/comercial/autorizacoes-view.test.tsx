@@ -520,5 +520,15 @@ describe("tela de autorizações", () => {
     // Sem prazo vencido, a seção não aparece.
     expect(render().includes("Prazo de faturamento vencido")).toBe(false);
   });
-});
 
+  it("no Financeiro, só leitura: sem Nova autorização, painel, caixas, Cancelar nem Perder por prazo (parte 7.5c)", async () => {
+    const vencidos = [{ numero: "10040", rv: 0, etapa: "a_faturar" as const, rotulo: "10040 – RV00", titulo: "", cliente: "BTG Pactual", limite: "2026-09-18" }];
+    const html = render({ somenteLeitura: true, vencidos });
+    const textos = texts(html);
+    for (const acao of ["Nova autorização", "Registrar autorização", "Cancelar", "Perder por prazo"]) expect(textos).not.toContain(acao);
+    expect(html).not.toContain('aria-label="Registrar autorização de faturamento"');
+    expect(html).not.toContain('role="checkbox"');
+    expect(textos).toEqual(expect.arrayContaining(["Prazo de faturamento vencido", "Venceu em 18/09/2026", "10040 – RV00"]));
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+});

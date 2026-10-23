@@ -7,6 +7,8 @@ import { aditivoDoRegistro, contratoDoRegistro, tabelaDoRegistro, type Contrato 
 import { ROTA_CONTRATOS, TELAS_DO_COMERCIAL } from "@/lib/comercial/navegacao";
 import { LEGACY_CUSTOMER_CODE } from "@/lib/operations";
 
+import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+
 import { ContratosView, type ContratosViewProps } from "./contratos-view";
 
 /**
@@ -333,5 +335,16 @@ describe("tela de contratos", () => {
   it("carregando e erro na lista", () => {
     expect(texts(render({ estado: "carregando", selecionado: null })).slice(4)).toEqual(["Carregando..."]);
     expect(texts(render({ estado: "erro", selecionado: null })).slice(4)).toEqual(["Não foi possível carregar os contratos."]);
+  });
+
+  it("no Financeiro, só leitura: a ficha inteira sem Novo contrato, Editar nem Registrar aditivo (parte 7.5c)", async () => {
+    const html = render({ somenteLeitura: true, selecionado: BTG });
+    const textos = texts(html);
+    for (const acao of ["Novo contrato", "Editar", "Registrar aditivo"]) expect(textos).not.toContain(acao);
+    expect(textos).toContain(BTG.dados.nome);
+    expect(html).toContain('aria-label="Ficha do contrato"');
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+    // No Comercial, as ações seguem.
+    expect(texts(render({ selecionado: BTG }))).toEqual(expect.arrayContaining(["Novo contrato", "Editar", "Registrar aditivo"]));
   });
 });

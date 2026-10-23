@@ -74,7 +74,8 @@ function useTotaisDasRvs(chaves: ReadonlyArray<{ numero: string; rv: number }>):
   return valores;
 }
 
-export default function ComercialAutorizacoesPage() {
+/** `somenteLeitura`: a mesma tela no shell do Financeiro (Fase 7, parte 7.5c), sem gravar nada. */
+export default function ComercialAutorizacoesPage({ somenteLeitura = false }: { somenteLeitura?: boolean } = {}) {
   const { toast } = useToast();
   const hoje = hojeLocal();
   const [filtro, setFiltro] = useState<FiltroDeIdade>("todas");
@@ -212,6 +213,7 @@ export default function ComercialAutorizacoesPage() {
   return (
     <>
       <AutorizacoesView
+        somenteLeitura={somenteLeitura}
         estado={estado}
         linhas={linhas}
         filtro={filtro}

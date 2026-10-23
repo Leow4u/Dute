@@ -84,6 +84,11 @@ export type AutorizacoesViewProps = {
   acoes: AcoesDasAutorizacoes;
   /** Telas do Comercial que já existem (barra de abas); o padrão é a do app. */
   telas?: readonly string[];
+  /**
+   * No shell do Financeiro (parte 7.5c): só leitura, sem Nova autorização, o
+   * painel, as caixas de marcar, Cancelar nem Perder por prazo.
+   */
+  somenteLeitura?: boolean;
 };
 
 const TOM_ATRASADA = "border-destructive-soft-border bg-destructive-soft text-destructive-soft-foreground";
@@ -386,7 +391,7 @@ function Painel({ linhas, painel, contratos, hoje, ocupado, acoes }: Autorizacoe
 
 // --- Autorizadas, a faturar ----------------------------------------------------------------
 
-function Autorizadas({ autorizadas, ocupado, acoes }: AutorizacoesViewProps) {
+function Autorizadas({ autorizadas, ocupado, acoes, somenteLeitura }: AutorizacoesViewProps) {
   const lista = Array.isArray(autorizadas) ? autorizadas : null;
   let conteudo: ReactNode;
   if (autorizadas === "carregando") conteudo = <Vazio>Carregando...</Vazio>;
@@ -421,9 +426,11 @@ function Autorizadas({ autorizadas, ocupado, acoes }: AutorizacoesViewProps) {
           <span className={cn("inline-flex h-6 items-center gap-1.5 whitespace-nowrap rounded-md border px-2 text-xs font-bold", TOM_OK)}>
             <FileText aria-hidden="true" className="size-3.5" />A faturar
           </span>
-          <Button type="button" variant="outline" size="sm" onClick={() => acoes.cancelarAutorizacao(linha.id)} disabled={ocupado}>
-            Cancelar
-          </Button>
+          {somenteLeitura ? null : (
+            <Button type="button" variant="outline" size="sm" onClick={() => acoes.cancelarAutorizacao(linha.id)} disabled={ocupado}>
+              Cancelar
+            </Button>
+          )}
         </div>
       </div>
     ));
@@ -442,7 +449,7 @@ function Autorizadas({ autorizadas, ocupado, acoes }: AutorizacoesViewProps) {
 
 // --- Prazo vencido (parte 7.5b) -----------------------------------------------------------
 
-function PrazoVencido({ vencidos, ocupado, acoes }: AutorizacoesViewProps) {
+function PrazoVencido({ vencidos, ocupado, acoes, somenteLeitura }: AutorizacoesViewProps) {
   if (!vencidos.length) return null;
   return (
     <section aria-label="Prazo de faturamento vencido" className="overflow-hidden rounded-lg border border-border bg-card">
@@ -463,16 +470,18 @@ function PrazoVencido({ vencidos, ocupado, acoes }: AutorizacoesViewProps) {
               <AlertTriangle aria-hidden="true" className="size-3.5" />
               Venceu em {dataBr(linha.limite)}
             </span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              aria-label={`Perder ${linha.rotulo} por prazo`}
-              onClick={() => acoes.perderPorPrazo(linha.numero)}
-              disabled={ocupado}
-            >
-              Perder por prazo
-            </Button>
+            {somenteLeitura ? null : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                aria-label={`Perder ${linha.rotulo} por prazo`}
+                onClick={() => acoes.perderPorPrazo(linha.numero)}
+                disabled={ocupado}
+              >
+                Perder por prazo
+              </Button>
+            )}
           </div>
         </div>
       ))}
@@ -483,9 +492,9 @@ function PrazoVencido({ vencidos, ocupado, acoes }: AutorizacoesViewProps) {
 // --- Tela ----------------------------------------------------------------------------------
 
 export function AutorizacoesView(props: AutorizacoesViewProps) {
-  const { estado, linhas, busca, painel, ocupado, acoes, telas } = props;
+  const { estado, linhas, busca, painel, ocupado, acoes, telas, somenteLeitura } = props;
   const temFila = estado === "pronto" && linhas.length > 0;
-  const painelAberto = painel.aberto && temFila;
+  const painelAberto = painel.aberto && temFila && !somenteLeitura;
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">
       <header className="flex flex-wrap items-center gap-4">
@@ -502,7 +511,7 @@ export function AutorizacoesView(props: AutorizacoesViewProps) {
               className="pl-9"
             />
           </label>
-          {temFila && !painel.aberto ? (
+          {temFila && !painel.aberto && !somenteLeitura ? (
             <Button type="button" variant="outline" onClick={acoes.abrirPainel} disabled={ocupado}>
               <Plus aria-hidden="true" />
               Nova autorização

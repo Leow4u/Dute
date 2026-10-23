@@ -34,11 +34,26 @@ export const ROTA_NF = "/financeiro/nf";
 /** Os relatórios do Financeiro (parte 4.8b): `?relatorio=`. */
 export const ROTA_RELATORIOS_DO_FINANCEIRO = "/financeiro/relatorios";
 
+/** Os contratos e as autorizações do Comercial, só leitura (Fase 7, parte 7.5c). */
+export const ROTA_CONTRATOS_DO_FINANCEIRO = "/financeiro/contratos";
+export const ROTA_AUTORIZACOES_DO_FINANCEIRO = "/financeiro/autorizacoes";
+
 /** O Faturamento da armazenagem, que continua no shell do WMS até a Fase 7. */
 export const ROTA_FATURAMENTO_WMS = "/faturamento";
 
 /** Telas do Financeiro que já existem no app. Cada parte nova acrescenta a dela. */
-export const TELAS_DO_FINANCEIRO: readonly string[] = [ROTA_FINANCEIRO, ROTA_A_FATURAR, ROTA_A_RECEBER, ROTA_VENCIDOS, ROTA_PAGOS, ROTA_FATURAS, ROTA_NF, ROTA_RELATORIOS_DO_FINANCEIRO];
+export const TELAS_DO_FINANCEIRO: readonly string[] = [
+  ROTA_FINANCEIRO,
+  ROTA_A_FATURAR,
+  ROTA_A_RECEBER,
+  ROTA_VENCIDOS,
+  ROTA_PAGOS,
+  ROTA_FATURAS,
+  ROTA_NF,
+  ROTA_CONTRATOS_DO_FINANCEIRO,
+  ROTA_AUTORIZACOES_DO_FINANCEIRO,
+  ROTA_RELATORIOS_DO_FINANCEIRO,
+];
 
 const ID_DA_NF = /^fat_[a-f0-9]{24}$/;
 

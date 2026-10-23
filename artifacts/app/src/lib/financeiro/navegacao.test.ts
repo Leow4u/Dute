@@ -8,8 +8,10 @@ import { entrada, modulesForPerson } from "../platform-modules";
 import { opcoesDoSeletor } from "../seletor-de-modulo";
 import {
   FINANCEIRO_ROLES,
+  ROTA_AUTORIZACOES_DO_FINANCEIRO,
   ROTA_A_FATURAR,
   ROTA_A_RECEBER,
+  ROTA_CONTRATOS_DO_FINANCEIRO,
   ROTA_FATURAMENTO_WMS,
   ROTA_FATURAS,
   ROTA_FINANCEIRO,
@@ -62,7 +64,7 @@ describe("navegação do Financeiro", () => {
     expect(modulesForPerson("cliente", { modules: ["wms", "financeiro"] }, false, false, LIBERADO).map((item) => item.href)).toEqual(["/portal"]);
   });
 
-  it("o menu do módulo tem o Início, A faturar, a cobrança, os Relatórios e a Armazenagem, que leva ao Faturamento do WMS", () => {
+  it("o menu do módulo tem o Início, A faturar, a cobrança, os contratos e as autorizações, os Relatórios e a Armazenagem, que leva ao Faturamento do WMS", () => {
     expect(menuDoFinanceiro("financeiro", LIBERADO).map((item) => [item.label, item.href])).toEqual([
       ["Início", ROTA_FINANCEIRO],
       ["A faturar", ROTA_A_FATURAR],
@@ -70,12 +72,14 @@ describe("navegação do Financeiro", () => {
       ["Vencidos", ROTA_VENCIDOS],
       ["Pagos", ROTA_PAGOS],
       ["Faturas", ROTA_FATURAS],
+      ["Contratos", ROTA_CONTRATOS_DO_FINANCEIRO],
+      ["Autorizações", ROTA_AUTORIZACOES_DO_FINANCEIRO],
       ["Relatórios", ROTA_RELATORIOS_DO_FINANCEIRO],
       ["Armazenagem", ROTA_FATURAMENTO_WMS],
     ]);
     // O Início é a casa: rota exata, para não acender nas outras telas.
     expect(menuDoFinanceiro("financeiro", LIBERADO)[0].routes[0].exact).toBe(true);
-    expect(menuDoFinanceiro("owner", LIBERADO)).toHaveLength(8);
+    expect(menuDoFinanceiro("owner", LIBERADO)).toHaveLength(10);
     // O Agent Dute (parte 5.5j): só com a liberação dele, por último, depois da Armazenagem.
     expect(menuDoFinanceiro("financeiro", LIBERADO, false).some((item) => item.label === "Agent Dute")).toBe(false);
     expect(menuDoFinanceiro("financeiro", LIBERADO, true).slice(-2).map((item) => [item.label, item.href])).toEqual([
@@ -119,7 +123,18 @@ describe("navegação do Financeiro", () => {
     expect(caminhos(blocos[0])).toEqual(rotasDoFinanceiro(LIBERADO, true));
     const fora = APP_SOURCE.replace(/soComFinanceiroLiberado\(\[[\s\S]*?\]\)/g, "");
     expect(caminhos(fora).filter((path) => path.startsWith("/financeiro"))).toEqual([]);
-    expect(rotasDoFinanceiro(LIBERADO, false)).toEqual([ROTA_FINANCEIRO, ROTA_A_FATURAR, ROTA_A_RECEBER, ROTA_VENCIDOS, ROTA_PAGOS, ROTA_FATURAS, ROTA_NF, ROTA_RELATORIOS_DO_FINANCEIRO]);
+    expect(rotasDoFinanceiro(LIBERADO, false)).toEqual([
+      ROTA_FINANCEIRO,
+      ROTA_A_FATURAR,
+      ROTA_A_RECEBER,
+      ROTA_VENCIDOS,
+      ROTA_PAGOS,
+      ROTA_FATURAS,
+      ROTA_NF,
+      ROTA_CONTRATOS_DO_FINANCEIRO,
+      ROTA_AUTORIZACOES_DO_FINANCEIRO,
+      ROTA_RELATORIOS_DO_FINANCEIRO,
+    ]);
     // O Agent Dute do Financeiro (parte 5.5j) só com a liberação dele.
     expect(rotasDoFinanceiro(LIBERADO, true).at(-1)).toBe("/financeiro/agente");
     expect(soComFinanceiroLiberado([{ path: "/financeiro/agente" }], LIBERADO, false)).toEqual([]);
