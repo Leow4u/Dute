@@ -215,3 +215,31 @@ as leituras e a gravação em `sugestao-gravacao.ts`.
   - `sugestao.test.ts` cobre a base, o tempo com a equipe, o arredondamento, a divisão, o aviso, o erro e o pedido.
   - `sugestao.integration.test.ts` cobre o cliente da demanda, a base geral do outro cliente, quem pede, a resposta gravada sem tocar na OS, a repetição, a OS de outra demanda e o valor real depois da revisão.
   - `memoria-medidas.rules.test.ts` cobre as regras; `callables.test.ts`, o formato das callables.
+
+### Parte 5.2b: a duração sugerida no Planejar OS
+
+Feita em 23/10/2026. Os textos e a decisão estão em `artifacts/app/src/lib/memoria/sugestao.ts`;
+os pedidos em `use-sugestoes.ts`; a tela em `pages/operacao/planejar-view.tsx`.
+
+- **O pedido.** Cada OS do plano pede a sua: a equipe que vai nela e as linhas com quantidade, com o item da tabela.
+  - A linha do escopo e o item pedido passam a levar o item da LPU (`lpuItemId`).
+  - Sem equipe ou sem nenhum item da tabela, não há o que sugerir.
+  - A tela pede só depois que o plano para de mudar e guarda a resposta de cada pedido. Fora da liberação da memória, não pede nada.
+- **No Quando**, embaixo da janela da OS:
+  - "Duração sugerida 2h30 com 2 pessoas", com "Usar" e "Ignorar";
+  - a base de cada item: o tempo por unidade com a equipe, quantas execuções, do cliente ou da média interna, e as três OS mais recentes;
+  - o item sem base;
+  - acima de 8 horas, em quantas OS dividir;
+  - o aviso de que os planos do cliente costumam passar da janela.
+  - Sem base em nenhum item, diz só isso.
+- **"Usar" só preenche.** Põe o fim a partir do início (sem início, a partir das 8h). A sugestão é o tempo de trabalho: quem planeja soma o trajeto. Quem salva é a pessoa, com Agendar, que continua a única ação principal.
+- **A decisão.** Salvo o plano, cada OS com sugestão manda ao `answerSuggestion` o que a pessoa fez:
+  - "Ignorar" é recusou;
+  - "Usar" sem mexer no fim é aceitou;
+  - o resto é mudou.
+  - A decisão vale para o pedido daquela hora: mudar a equipe ou os itens depois faz uma sugestão nova.
+  - Falhar não segura a volta à demanda.
+- **Testes.**
+  - `memoria/sugestao.test.ts` cobre o pedido, os textos, o "Usar", a decisão e a resposta.
+  - `planejar-view.test.tsx` cobre os textos do Quando, a ação principal, sem base, a divisão, o que não aparece e `axe`.
+  - `memoria/api.test.ts` trava a lista das callables contra as exportadas pelo núcleo.

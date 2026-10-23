@@ -207,6 +207,8 @@ export function linhasDeDemandas(entrada: {
 
 export type LinhaDoSaldo = {
   id: string;
+  /** O item da tabela (LPU), quando a linha tem. */
+  lpuItemId?: string | null;
   item: string;
   unidade: string | null;
   /** O que o escopo pede (contratado ou pedido). */
@@ -241,6 +243,7 @@ export function escopoComSaldo(demanda: Pick<DemandaDoHoje, "numero" | "escopo">
     const total = milesimos(linha.quantidade);
     return {
       id: linha.id,
+      lpuItemId: linha.lpuItemId ?? null,
       item: linha.item,
       unidade: linha.unidade ?? null,
       escopo: deMilesimos(total),

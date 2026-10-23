@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Router } from "wouter";
 
+import type { Sugestao, SugestaoNaTela } from "@/lib/memoria/sugestao";
 import type { ColaboradorDaLista, VeiculoDaLista } from "@/lib/operacao/cadastro";
 import type { DemandaDaOperacao, LinhaDoSaldo } from "@/lib/operacao/demandas";
 import { dividir, planoInicial, restantes, vistoriaInicial, type FormularioDoPlano } from "@/lib/operacao/planejar";
@@ -180,6 +181,54 @@ describe("Planejar OS", () => {
 
   it("não tem problema de acessibilidade", async () => {
     expect(await violacoesDeAcessibilidade(render(dividir(COM_EQUIPE), { alertas: ["OS 2 sem líder"] }))).toEqual([]);
+  });
+});
+
+describe("a duração sugerida (parte 5.2b)", () => {
+  const SUGESTAO: Sugestao = {
+    pessoas: 2,
+    itens: [
+      { lpu_item_id: "lpu_cadeira", item: "Cadeira Flexform", quantidade: "160", minutos: 120, base: { escopo: "cliente", execucoes: 6, homem_minuto_por_unidade: 1.5, os_recentes: ["10040-01", "10039-01"] } },
+      { lpu_item_id: "lpu_mesa", item: "Mesa de trabalho", quantidade: "60", minutos: null, base: null },
+    ],
+    minutos_total: 120,
+    completa: false,
+    divisao: null,
+    plano_otimista: { escopo: "cliente", execucoes: 6, erro_medio_pct: 22, acima_da_janela: 5 },
+  };
+  const pronta = (sugestao: Sugestao = SUGESTAO): SugestaoNaTela => ({ chave: "k", estado: "pronto", sugestao });
+  const comSugestao = (extra: Partial<Parameters<typeof PlanejarView>[0]> = {}) => render(COM_EQUIPE, { sugestoes: [pronta()], ignoradas: [false], onUsarSugestao: noop, onIgnorarSugestao: noop, ...extra });
+  const principais = (html: string) => (html.match(/<button[^>]*class="[^"]*bg-primary text-primary-foreground[^"]*"[^>]*>[\s\S]*?<\/button>/g) ?? []).map((botao) => textosDaTela(botao).join(" "));
+
+  it("no Quando, a duração com a equipe, a base de cada item com as OS, o item sem base e o aviso do plano otimista", () => {
+    const html = comSugestao();
+    const inicio = html.indexOf('aria-label="Duração sugerida · Nesta OS"');
+    const grupo = html.slice(html.indexOf(">", inicio) + 1);
+    expect(textosDaTela(grupo.slice(0, grupo.indexOf("</div></li>")))).toEqual([
+      "Duração sugerida 2h com 2 pessoas",
+      "Usar",
+      "Ignorar",
+      "Cadeira Flexform · 0,8 min por unidade com 2 pessoas · 6 execuções do cliente: 10040-01, 10039-01",
+      "Mesa de trabalho · sem base",
+      "Os planos deste cliente passam da janela em 22%, na média de 6 OS.",
+    ]);
+    // A sugestão não ganha ação principal: Agendar continua a única.
+    expect(principais(html)).toEqual(["Agendar"]);
+    expect(html).not.toMatch(/R\$|preço|valor/);
+  });
+
+  it("sem base em nenhum item, diz só isso; acima de 8h, a divisão; ignorada, carregando ou sem memória, nada aparece", () => {
+    const semBase = textosDaTela(comSugestao({ sugestoes: [pronta({ ...SUGESTAO, minutos_total: null, plano_otimista: null })] }));
+    expect(semBase).toContain("Sem base para sugerir a duração");
+    expect(semBase).not.toContain("Usar");
+    expect(textosDaTela(comSugestao({ sugestoes: [pronta({ ...SUGESTAO, minutos_total: 600, divisao: { os: 2, minutos_por_os: 300 } })] }))).toContain("Passa de 8h: 2 OS de 5h");
+    for (const extra of [{ ignoradas: [true] }, { sugestoes: [{ chave: "k", estado: "carregando" as const, sugestao: null }] }, { onUsarSugestao: undefined }]) {
+      expect(textosDaTela(comSugestao(extra)), JSON.stringify(extra)).not.toContain("Duração sugerida 2h com 2 pessoas");
+    }
+  });
+
+  it("não tem problema de acessibilidade", async () => {
+    expect(await violacoesDeAcessibilidade(comSugestao())).toEqual([]);
   });
 });
 
