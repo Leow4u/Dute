@@ -405,3 +405,24 @@ a pergunta 10 do desenho do Comercial).
   - `demandas.integration.test.ts`: antes e depois do prazo, o contrato
     sem prazo, o evento e a reabertura;
   - `depois-do-envio.test.ts`: a lista travada e o diálogo sem o motivo.
+
+### Parte 7.5b: a ação "Perder por prazo" em Autorizações
+
+Feita em 23/10/2026, na tela Comercial › Autorizações. O Início do Comercial
+já levava o "Prazo de faturamento vencido" para lá.
+
+- **A seção "Prazo de faturamento vencido"** aparece só quando há demanda
+  vencida. Ela lista as demandas aguardando a autorização ou a faturar com o
+  prazo de perda do contrato vencido, a que venceu antes primeiro
+  (`prazosVencidos`, com o mesmo `alertaDePrazoDePerda` do Início). Em cada
+  uma:
+  - a RV, o título, o cliente e a etapa;
+  - "Venceu em" no tom de alerta;
+  - a ação "Perder por prazo".
+- **O diálogo** pede só a nota, opcional. A perda vai pelo `advanceDemand`,
+  com o motivo `prazo_faturamento` fixo e com a etapa e a RV que a tela viu.
+  O servidor confere o prazo de novo (parte 7.5a).
+- **Testes:**
+  - `lib/comercial/autorizacoes.test.ts`: a lista e o pedido;
+  - `pages/comercial/autorizacoes-view.test.tsx`: os textos da seção, o
+    rótulo da ação, a seção ausente sem vencida e o `axe`.

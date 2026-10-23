@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   FILTROS_DE_IDADE,
+  ROTULO_DA_ETAPA_COM_PRAZO,
   ROTULO_DO_FILTRO,
   conferenciaDoValor,
   contarPorFaixa,
@@ -24,7 +25,9 @@ import {
   type FormAutorizacao,
   type LinhaAutorizada,
   type LinhaDaFila,
+  type LinhaDoPrazoVencido,
 } from "@/lib/comercial/autorizacoes";
+import { dataBr } from "@/lib/comercial/clientes";
 import type { Carga } from "@/lib/comercial/clientes";
 import type { Contrato } from "@/lib/comercial/contratos";
 import { cn } from "@/lib/utils";
@@ -47,6 +50,8 @@ export type AcoesDasAutorizacoes = {
   editar: <K extends keyof FormAutorizacao>(campo: K, valor: FormAutorizacao[K]) => void;
   registrar: () => void;
   cancelarAutorizacao: (id: string) => void;
+  /** Abre a perda por prazo de faturamento da demanda (parte 7.5b). */
+  perderPorPrazo: (numero: string) => void;
 };
 
 export type PainelDaAutorizacao = {
@@ -70,6 +75,8 @@ export type AutorizacoesViewProps = {
   contratos: Contrato[];
   /** As autorizadas a faturar (autorizadasAFaturar), já com a busca. */
   autorizadas: Carga<LinhaAutorizada>;
+  /** As demandas com o prazo de faturamento vencido (prazosVencidos, parte 7.5b). */
+  vencidos: LinhaDoPrazoVencido[];
   /** "AAAA-MM-DD" do dia: o limite do campo "Recebida em". */
   hoje: string;
   /** Uma gravação em andamento: as ações esperam. */
@@ -433,6 +440,46 @@ function Autorizadas({ autorizadas, ocupado, acoes }: AutorizacoesViewProps) {
   );
 }
 
+// --- Prazo vencido (parte 7.5b) -----------------------------------------------------------
+
+function PrazoVencido({ vencidos, ocupado, acoes }: AutorizacoesViewProps) {
+  if (!vencidos.length) return null;
+  return (
+    <section aria-label="Prazo de faturamento vencido" className="overflow-hidden rounded-lg border border-border bg-card">
+      <div className="flex flex-wrap items-center gap-2.5 border-b border-border bg-background px-5 py-2.5">
+        <h2 className="text-xs font-extrabold uppercase tracking-wider">Prazo de faturamento vencido</h2>
+        <Contador>{vencidos.length}</Contador>
+      </div>
+      {vencidos.map((linha, indice) => (
+        <div key={linha.numero} className={cn("flex flex-wrap items-center gap-x-4.5 gap-y-2.5 px-5 py-4", indice > 0 && "border-t border-muted")}>
+          <div className="flex min-w-0 flex-1 basis-72 flex-col gap-0.5">
+            <span className="text-base font-extrabold tabular-nums">{linha.rotulo}</span>
+            {linha.titulo ? <span className="text-sm font-bold">{linha.titulo}</span> : null}
+            <span className="text-xs font-semibold text-muted-foreground">{linha.cliente}</span>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Pill>{ROTULO_DA_ETAPA_COM_PRAZO[linha.etapa]}</Pill>
+            <span className={cn("inline-flex h-6 items-center gap-1.5 whitespace-nowrap rounded-md border px-2 text-xs font-bold", TOM_ATRASADA)}>
+              <AlertTriangle aria-hidden="true" className="size-3.5" />
+              Venceu em {dataBr(linha.limite)}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-label={`Perder ${linha.rotulo} por prazo`}
+              onClick={() => acoes.perderPorPrazo(linha.numero)}
+              disabled={ocupado}
+            >
+              Perder por prazo
+            </Button>
+          </div>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 // --- Tela ----------------------------------------------------------------------------------
 
 export function AutorizacoesView(props: AutorizacoesViewProps) {
@@ -468,6 +515,7 @@ export function AutorizacoesView(props: AutorizacoesViewProps) {
         {painelAberto ? <Painel {...props} /> : null}
       </div>
       {!painelAberto && painel.resultado ? <Caixa tom="ok">{painel.resultado}</Caixa> : null}
+      <PrazoVencido {...props} />
       <Autorizadas {...props} />
     </div>
   );

@@ -894,3 +894,67 @@ export function autorizacoesParaOInicio(
 
   return { esperandoMaisDe30, prazos };
 }
+
+// --- Perda por prazo de faturamento (Fase 7, parte 7.5b) ------------------------------------
+
+export type LinhaDoPrazoVencido = {
+  numero: string;
+  /** A RV validada: a ação confere a etapa e a RV que a tela viu. */
+  rv: number;
+  etapa: (typeof ETAPAS_COM_PRAZO_DE_PERDA)[number];
+  rotulo: string;
+  titulo: string;
+  cliente: string;
+  /** O último dia do prazo (AAAA-MM-DD). */
+  limite: string;
+};
+
+/**
+ * As demandas com o prazo de perda do contrato vencido, aguardando a
+ * autorização ou a faturar: a que venceu antes primeiro. Só elas se perdem
+ * por prazo de faturamento (problemaDaPerda em functions/comercial).
+ */
+export function prazosVencidos(
+  demandas: readonly DemandaDaFila[],
+  contratos: readonly Contrato[],
+  nomes: ReadonlyMap<string, string>,
+  hoje: string,
+): LinhaDoPrazoVencido[] {
+  return demandas
+    .flatMap((demanda) => {
+      const prazo = contratos.find((contrato) => contrato.id === demanda.contratoId)?.dados.autorizacao.prazo_perda_dias;
+      const alerta = alertaDePrazoDePerda(prazo, demanda, hoje);
+      if (!alerta?.vencido || !demanda.validacao) return [];
+      return [
+        {
+          numero: demanda.numero,
+          rv: demanda.validacao.rv,
+          etapa: demanda.etapa as LinhaDoPrazoVencido["etapa"],
+          rotulo: rotuloDaRv(demanda.numero, demanda.validacao.rv),
+          titulo: demanda.titulo,
+          cliente: nomeDaDemanda(demanda, nomes),
+          limite: alerta.limite,
+        },
+      ];
+    })
+    .sort((a, b) => a.limite.localeCompare(b.limite) || a.numero.localeCompare(b.numero));
+}
+
+/** O pedido para advanceDemand: perder pelo prazo de faturamento, com a etapa e a RV que a tela viu. */
+export function payloadPerderPorPrazo(linha: LinhaDoPrazoVencido, nota: string, chave: string): Registro {
+  const texto = nota.trim();
+  return {
+    action: "lose",
+    request_id: chave,
+    numero: linha.numero,
+    expected_etapa: linha.etapa,
+    expected_rv: linha.rv,
+    motivo: "prazo_faturamento",
+    ...(texto ? { nota: texto.slice(0, 1000) } : {}),
+  };
+}
+
+export const ROTULO_DA_ETAPA_COM_PRAZO: Record<LinhaDoPrazoVencido["etapa"], string> = {
+  aguardando_autorizacao: "Aguardando autorização",
+  a_faturar: "A faturar",
+};
