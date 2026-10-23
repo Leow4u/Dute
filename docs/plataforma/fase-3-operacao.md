@@ -108,6 +108,12 @@ transições não existem.
 - Agendar chama `schedule`: data (não pode ser anterior a hoje), hora
   opcional, equipe e veículo. Os dois precisam estar ativos. A OS guarda os
   ids; o nome e a placa vêm do cadastro na leitura.
+- A demanda perdida ou cancelada no Comercial (`perda` ou `cancelamento`
+  preenchidos) não agenda nem reagenda: `schedule` lê a demanda na transação
+  e recusa. A OS dela continua na coluna, marcada "Demanda perdida" ou
+  "Demanda cancelada", e a ficha só oferece o cancelamento. O Comercial não
+  cancela a OS sozinho. Reaberta a demanda, a OS volta a agendar. O aditivo
+  em negociação não trava: o escopo fechado continua valendo.
 - Cancelar, da OS aberta ou agendada, pede o motivo. O motivo fica na OS, não
   no evento (`os.cancelled`). Agendar grava `os.scheduled`.
 - Quem usa a tela é o mesmo do cadastro: owner, admin e interno. Campo ainda

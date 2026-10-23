@@ -9,6 +9,7 @@ import {
   nomeDe,
   placaDe,
   quando,
+  rotuloDaDemandaFora,
   type AgendaEmEdicao,
   type DemandaParaAbrir,
   type OsDaFila,
@@ -60,6 +61,7 @@ function Cartao({
         className="flex w-full flex-col items-start gap-1 rounded-md border border-border bg-card px-4 py-3 text-left hover:bg-surface-hover"
       >
         <span className="text-sm font-medium text-foreground">{os.numero}</span>
+        {os.demandaFora ? <span className="text-sm font-medium text-destructive">{rotuloDaDemandaFora(os.demandaFora)}</span> : null}
         <span className="text-sm text-foreground">{cliente}</span>
         <span className="text-sm text-muted-foreground">{servico}</span>
         {escala ? <span className="text-sm text-muted-foreground">{escala}</span> : null}
@@ -134,7 +136,8 @@ function Ficha({
   erro: string | null;
 }) {
   const item = os.itens[0]?.item;
-  const podeSalvar = Boolean(agenda.data && agenda.equipe.length > 0 && agenda.veiculoId);
+  const fora = os.demandaFora ?? null;
+  const podeSalvar = !fora && Boolean(agenda.data && agenda.equipe.length > 0 && agenda.veiculoId);
   function alternar(id: string, marcado: boolean) {
     const equipe = marcado ? [...agenda.equipe, id] : agenda.equipe.filter((atual) => atual !== id);
     onAgenda({ ...agenda, equipe });
@@ -150,57 +153,62 @@ function Ficha({
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-1">
           <h2 className="text-2xl font-semibold text-foreground">{os.numero}</h2>
+          {fora ? <p className="text-sm font-medium text-destructive">{rotuloDaDemandaFora(fora)}</p> : null}
           <p className="text-sm text-foreground">{cliente}</p>
           {item ? <p className="text-sm text-muted-foreground">{item}</p> : null}
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="ghost" onClick={onVoltar}>Voltar</Button>
-          <Button type="submit" disabled={ocupado || !podeSalvar}>Salvar</Button>
+          {fora ? null : <Button type="submit" disabled={ocupado || !podeSalvar}>Salvar</Button>}
         </div>
       </header>
       {erro ? <p role="alert" className="text-sm text-destructive">{erro}</p> : null}
-      <Campo id="os-data" rotulo="Data">
-        <Input id="os-data" type="date" value={agenda.data} onChange={(event) => onAgenda({ ...agenda, data: event.target.value })} />
-      </Campo>
-      <Campo id="os-hora" rotulo="Hora">
-        <Input id="os-hora" type="time" value={agenda.hora} onChange={(event) => onAgenda({ ...agenda, hora: event.target.value })} />
-      </Campo>
-      <div className="flex flex-col gap-2">
-        <p id="os-equipe" className="text-sm font-medium text-foreground">Equipe</p>
-        {pessoas.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum colaborador ativo.</p> : null}
-        <ul aria-labelledby="os-equipe" className="flex flex-col gap-2">
-          {pessoas.map((pessoa) => (
-            <li key={pessoa.id}>
-              <label className="flex items-center gap-3 text-sm text-foreground">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-primary"
-                  checked={agenda.equipe.includes(pessoa.id)}
-                  onChange={(event) => alternar(pessoa.id, event.target.checked)}
-                />
-                <span>{pessoa.nome}</span>
-                <span className="text-muted-foreground">{pessoa.funcao}</span>
-                {pessoa.ativo ? null : <span className="text-muted-foreground">Desativado</span>}
-              </label>
-            </li>
-          ))}
-        </ul>
-      </div>
-      <Campo id="os-veiculo" rotulo="Veículo">
-        <select
-          id="os-veiculo"
-          className={campoClasse}
-          value={agenda.veiculoId}
-          onChange={(event) => onAgenda({ ...agenda, veiculoId: event.target.value })}
-        >
-          <option value="">Escolha</option>
-          {veiculos.map((veiculo) => (
-            <option key={veiculo.id} value={veiculo.id}>
-              {veiculo.ativo ? `${veiculo.placa} · ${veiculo.tipo}` : `${veiculo.placa} · ${veiculo.tipo} · Desativado`}
-            </option>
-          ))}
-        </select>
-      </Campo>
+      {fora ? null : (
+        <>
+          <Campo id="os-data" rotulo="Data">
+            <Input id="os-data" type="date" value={agenda.data} onChange={(event) => onAgenda({ ...agenda, data: event.target.value })} />
+          </Campo>
+          <Campo id="os-hora" rotulo="Hora">
+            <Input id="os-hora" type="time" value={agenda.hora} onChange={(event) => onAgenda({ ...agenda, hora: event.target.value })} />
+          </Campo>
+          <div className="flex flex-col gap-2">
+            <p id="os-equipe" className="text-sm font-medium text-foreground">Equipe</p>
+            {pessoas.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum colaborador ativo.</p> : null}
+            <ul aria-labelledby="os-equipe" className="flex flex-col gap-2">
+              {pessoas.map((pessoa) => (
+                <li key={pessoa.id}>
+                  <label className="flex items-center gap-3 text-sm text-foreground">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-primary"
+                      checked={agenda.equipe.includes(pessoa.id)}
+                      onChange={(event) => alternar(pessoa.id, event.target.checked)}
+                    />
+                    <span>{pessoa.nome}</span>
+                    <span className="text-muted-foreground">{pessoa.funcao}</span>
+                    {pessoa.ativo ? null : <span className="text-muted-foreground">Desativado</span>}
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <Campo id="os-veiculo" rotulo="Veículo">
+            <select
+              id="os-veiculo"
+              className={campoClasse}
+              value={agenda.veiculoId}
+              onChange={(event) => onAgenda({ ...agenda, veiculoId: event.target.value })}
+            >
+              <option value="">Escolha</option>
+              {veiculos.map((veiculo) => (
+                <option key={veiculo.id} value={veiculo.id}>
+                  {veiculo.ativo ? `${veiculo.placa} · ${veiculo.tipo}` : `${veiculo.placa} · ${veiculo.tipo} · Desativado`}
+                </option>
+              ))}
+            </select>
+          </Campo>
+        </>
+      )}
       <Campo id="os-motivo" rotulo="Motivo">
         <Input id="os-motivo" value={agenda.motivo} onChange={(event) => onAgenda({ ...agenda, motivo: event.target.value })} />
       </Campo>

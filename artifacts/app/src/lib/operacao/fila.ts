@@ -11,6 +11,9 @@ export type AgendaDaFila = {
   veiculo_id: string;
 };
 
+/** A demanda perdida ou cancelada no Comercial: a OS dela não se agenda, só se cancela. */
+export type DemandaFora = "perdida" | "cancelada";
+
 export type OsDaFila = {
   numero: string;
   demanda: string;
@@ -19,6 +22,7 @@ export type OsDaFila = {
   edicao: number;
   itens: ItemDaFila[];
   agenda: AgendaDaFila | null;
+  demandaFora?: DemandaFora | null;
 };
 
 export type QuadroDoDia = {
@@ -116,6 +120,28 @@ export function demandaParaAbrir(id: string, data: Record<string, unknown>): Dem
     titulo: texto(data.titulo) || null,
     os_numeros: numeros(data.os_numeros),
   };
+}
+
+function preenchido(valor: unknown): boolean {
+  return valor !== undefined && valor !== null && valor !== false;
+}
+
+export type DemandaDaFila = { numero: string; fora: DemandaFora | null; paraAbrir: DemandaParaAbrir | null };
+
+/** A demanda como a fila usa: a que vira OS e a que saiu (a mesma regra de functions/operacao, problemaParaAgendarOs). */
+export function demandaDaFila(id: string, data: Record<string, unknown>): DemandaDaFila {
+  const fora: DemandaFora | null = preenchido(data.cancelamento) ? "cancelada" : preenchido(data.perda) ? "perdida" : null;
+  return { numero: id, fora, paraAbrir: demandaParaAbrir(id, data) };
+}
+
+/** Marca na OS a demanda perdida ou cancelada no Comercial. */
+export function comDemanda(ordens: readonly OsDaFila[], demandas: readonly DemandaDaFila[]): OsDaFila[] {
+  const fora = new Map(demandas.flatMap((demanda) => (demanda.fora ? [[demanda.numero, demanda.fora] as const] : [])));
+  return ordens.map((os) => ({ ...os, demandaFora: fora.get(os.demanda) ?? null }));
+}
+
+export function rotuloDaDemandaFora(fora: DemandaFora): string {
+  return fora === "perdida" ? "Demanda perdida" : "Demanda cancelada";
 }
 
 export function agendaDaOs(os: OsDaFila, hoje: string): AgendaEmEdicao {

@@ -6,7 +6,8 @@ import { chamarOperacao, mensagemDoErro, novaChave } from "@/lib/operacao/api";
 import {
   agendaDaOs,
   clienteDaLeitura,
-  demandaParaAbrir,
+  comDemanda,
+  demandaDaFila,
   hojeIso,
   nomesPorCodigo,
   osDaLeitura,
@@ -32,10 +33,10 @@ export default function PaginaFila() {
   const ordens = useLeitura("service_orders", (db) => collection(db, "service_orders"), osDaLeitura);
   const pessoas = useLeitura("collaborators", (db) => collection(db, "collaborators"), colaboradorDaLeitura);
   const veiculos = useLeitura("vehicles", (db) => collection(db, "vehicles"), veiculoDaLeitura);
-  const demandas = useLeitura("demands", (db) => collection(db, "demands"), demandaParaAbrir);
+  const demandas = useLeitura("demands", (db) => collection(db, "demands"), demandaDaFila);
   const clientes = useLeitura("customers", (db) => collection(db, "customers"), clienteDaLeitura);
   const hoje = hojeIso();
-  const lista = ordens.itens ?? [];
+  const lista = comDemanda(ordens.itens ?? [], demandas.itens ?? []);
   const [selecionada, setSelecionada] = useState<string | null>(null);
   const [agenda, setAgenda] = useState<AgendaEmEdicao | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -78,7 +79,7 @@ export default function PaginaFila() {
     <FilaView
       estado={estadoDe([ordens, pessoas, veiculos, demandas, clientes])}
       hoje={hoje}
-      demandas={porNumero(demandas.itens ?? [])}
+      demandas={porNumero((demandas.itens ?? []).flatMap((demanda) => (demanda.paraAbrir ? [demanda.paraAbrir] : [])))}
       quadro={quadroDoDia(lista, hoje)}
       nomesClientes={nomesPorCodigo(clientes.itens ?? [])}
       nomesPessoas={nomesPessoas}
@@ -114,7 +115,7 @@ export default function PaginaFila() {
         setAgenda(null);
       }}
       onSalvar={() => {
-        if (!os || !agenda) return;
+        if (!os || !agenda || os.demandaFora) return;
         const hora = agenda.hora.trim();
         void gravar(
           `schedule:${os.numero}:${os.edicao}:${agenda.data}:${hora}:${agenda.equipe.join(",")}:${agenda.veiculoId}`,

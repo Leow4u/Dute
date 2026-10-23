@@ -13,6 +13,7 @@ import {
   numeroDaOs,
   problemaDaData,
   problemaParaAbrirOs,
+  problemaParaAgendarOs,
   proximaSequencia,
   type AcaoOs,
   type AgendaDaOs,
@@ -166,9 +167,12 @@ async function agendar(transaction: Transaction, db: Firestore, acao: Extract<Ac
   const ref = db.collection(SERVICE_ORDERS_COLLECTION).doc(acao.numero);
   const snapshot = await transaction.get(ref);
   if (!snapshot.exists) throw new HttpsError("not-found", "OS não encontrada.");
+  const efeito = aplicarOs(osLida(acao.numero, snapshot.data() ?? {}), acao, null);
+  const demanda = dados(await transaction.get(db.collection(DEMANDS).doc(efeito.documento.demanda)), "Demanda não encontrada.");
+  const problema = problemaParaAgendarOs(demanda);
+  if (problema) throw new HttpsError("failed-precondition", problema);
   for (const id of acao.equipe) await exigirAtivo(transaction, db, "collaborators", id, "Há alguém na equipe que não está ativo.");
   await exigirAtivo(transaction, db, "vehicles", acao.veiculo_id, "O veículo não está ativo.");
-  const efeito = aplicarOs(osLida(acao.numero, snapshot.data() ?? {}), acao, null);
   transaction.update(ref, {
     status: efeito.documento.status,
     edicao: efeito.documento.edicao,

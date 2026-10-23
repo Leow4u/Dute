@@ -10,6 +10,7 @@ import {
   numeroDaOs,
   problemaDaData,
   problemaParaAbrirOs,
+  problemaParaAgendarOs,
   proximaSequencia,
   type OsGravada,
 } from "./os.js";
@@ -280,5 +281,24 @@ describe("agendar a OS", () => {
       ),
     );
     assert.equal(velha.code, "failed-precondition");
+  });
+});
+
+describe("agendar pela demanda", () => {
+  it("demanda perdida ou cancelada no Comercial não agenda: a OS só se cancela", () => {
+    assert.equal(problemaParaAgendarOs(DEMANDA), null);
+    assert.equal(
+      problemaParaAgendarOs({ ...DEMANDA, perda: { motivo: "cancelado_cliente", etapa_antes: "para_planejar", rv: 0 } }),
+      "A demanda foi perdida no Comercial. Cancele a OS.",
+    );
+    assert.equal(
+      problemaParaAgendarOs({ ...DEMANDA, cancelamento: { motivo: "cliente" } }),
+      "A demanda foi cancelada no Comercial. Cancele a OS.",
+    );
+  });
+
+  it("reaberta agenda de novo", () => {
+    assert.equal(problemaParaAgendarOs({ ...DEMANDA, perda: null }), null);
+    assert.equal(problemaParaAgendarOs({ ...DEMANDA, perda: undefined, cancelamento: undefined }), null);
   });
 });

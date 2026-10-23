@@ -115,4 +115,19 @@ describe("fila do dia", () => {
     expect(texto).toContain("Não foi possível carregar a fila.");
     expect(texto).not.toContain("Nenhuma OS aberta");
   });
+
+  it("OS de demanda perdida aparece marcada e só se cancela", () => {
+    const perdida: OsDaFila = { ...ABERTA, demandaFora: "perdida" };
+    const quadro = textos(render({ quadro: { paraAgendar: [perdida], agendadasHoje: [], outrosDias: [] } }));
+    expect(quadro).toContain("10045-01");
+    expect(quadro).toContain("Demanda perdida");
+
+    const html = render({ os: { ...HOJE, demandaFora: "perdida" }, agenda: { ...AGENDA, equipe: ["col_aaaaaaaaaaaaaaaa"], veiculoId: "vei_aaaaaaaaaaaaaaaa" } });
+    const ficha = textos(html);
+    expect(ficha).toContain("Demanda perdida");
+    expect(ficha).toContain("Cancelar OS");
+    expect(ficha).not.toContain("Salvar");
+    expect(html).not.toContain('id="os-data"');
+    expect(html).not.toContain('id="os-veiculo"');
+  });
 });
