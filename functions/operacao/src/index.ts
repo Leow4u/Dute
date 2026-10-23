@@ -12,6 +12,7 @@ import { saveCollaboratorFor, saveVehicleFor } from "./domain/gravacao.js";
 import { saveServiceOrderFor } from "./domain/os-gravacao.js";
 import { reopenServiceOrderFor, reviewServiceOrderFor } from "./domain/revisao-gravacao.js";
 import { requireOperacaoCaller } from "./domain/profile.js";
+import { sendSurveyToCommercialFor } from "./domain/vistoria-gravacao.js";
 import { PROJECT_ID } from "./project.js";
 
 /**
@@ -54,7 +55,7 @@ export const saveVehicle = onCall(async (request) => {
   return saveVehicleFor(db, caller, request.data);
 });
 
-/** Abre (todo o saldo), planeja (várias OS com fatias), agenda, muda os itens ou cancela a OS. */
+/** Abre (todo o saldo), planeja (várias OS com fatias), abre a vistoria, agenda, muda os itens ou cancela a OS. */
 export const saveServiceOrder = onCall(async (request) => {
   const caller = await requireOperacaoCaller(db, request, PROJECT_ID);
   return saveServiceOrderFor(db, caller, request.data);
@@ -112,4 +113,10 @@ export const reviewServiceOrder = onCall(async (request) => {
 export const reopenServiceOrder = onCall(async (request) => {
   const caller = await requireOperacaoCaller(db, request, PROJECT_ID);
   return reopenServiceOrderFor(db, caller, request.data);
+});
+
+/** Envia a vistoria em execução ao Comercial (ambientes, fotos, itens levantados e medidas): a OS vai para Revisada, sem revisão. */
+export const sendSurveyToCommercial = onCall(async (request) => {
+  const caller = await requireOperacaoCaller(db, request, PROJECT_ID, { campo: true });
+  return sendSurveyToCommercialFor(db, caller, request.data);
 });

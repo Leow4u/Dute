@@ -18,6 +18,9 @@ import type { OsGravada } from "./os.js";
 export const ETAPAS_DA_OS = ["saida_patio", "chegada_origem", "carregamento", "saida_origem", "chegada_destino", "montagem", "fim"] as const;
 export type EtapaDaOs = (typeof ETAPAS_DA_OS)[number];
 
+/** As etapas da vistoria (parte 3.11a): ir, chegar e terminar; não há carga, destino nem montagem. */
+export const ETAPAS_DA_VISTORIA = ["saida_patio", "chegada_origem", "fim"] as const satisfies readonly EtapaDaOs[];
+
 export const ETAPA_ROTULO: Record<EtapaDaOs, string> = {
   saida_patio: "Saída do pátio",
   chegada_origem: "Chegada na origem",
@@ -212,6 +215,9 @@ export type EtapaNaOs = { etapas: EtapaRegistrada[]; registro: EtapaRegistrada; 
 export function registrarEtapa(os: OsGravada, atuais: readonly EtapaRegistrada[], pedido: PedidoDeEtapa, contexto: ContextoDoRegistro): EtapaNaOs {
   const problema = problemaParaRegistrar(os);
   if (problema) falha(problema);
+  if (os.tipo === "vistoria" && !(ETAPAS_DA_VISTORIA as readonly string[]).includes(pedido.etapa)) {
+    invalid(`A vistoria não tem a etapa ${ETAPA_ROTULO[pedido.etapa]}.`);
+  }
   const iniciou = os.status === "agendada";
   if (iniciou && os.equipe.length === 0) falha("Escale a equipe antes de iniciar a OS.");
   if (atuais.some((etapa) => etapa.etapa === pedido.etapa)) falha(`${ETAPA_ROTULO[pedido.etapa]} já foi registrada.`);

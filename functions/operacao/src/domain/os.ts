@@ -17,6 +17,11 @@ import { PAPEIS_DE_CAMPO, type ColaboradorGravado, type DonoDeVeiculo, type Pape
  * Status: aberta (Para agendar), agendada, em_execucao, em_revisao, revisada e
  * cancelada. Esta parte (3.4b) grava aberta, agendada e cancelada; execução,
  * revisão e conclusão entram nas partes 3.7 a 3.10.
+ *
+ * A vistoria (parte 3.11a) também é uma OS (`tipo: "vistoria"`), sem itens:
+ * vai a campo antes do escopo fechado, levanta ambientes, itens e medidas e
+ * vai direto ao Comercial, de Em execução a Revisada, sem assinatura nem
+ * revisão (domain/vistoria.ts).
  */
 
 export const SERVICE_ORDERS_COLLECTION = "service_orders";
@@ -24,6 +29,10 @@ export const SERVICE_ORDER_COUNTERS_COLLECTION = "service_order_counters";
 
 export const STATUS_DA_OS = ["aberta", "agendada", "em_execucao", "em_revisao", "revisada", "cancelada"] as const;
 export type StatusDaOs = (typeof STATUS_DA_OS)[number];
+
+/** A OS de serviço (sai do escopo, com itens) ou a vistoria (antes do escopo, sem itens). */
+export const TIPOS_DE_OS = ["servico", "vistoria"] as const;
+export type TipoDaOs = (typeof TIPOS_DE_OS)[number];
 
 /** O que a OS faz, derivado dos itens (serviço, item e descrição), na ordem da execução. */
 export const SERVICOS_DA_OS = ["vistoria", "desmontagem", "embalagem", "transporte", "montagem", "armazenagem"] as const;
@@ -105,6 +114,8 @@ export type OsGravada = {
   customer_code: string;
   /** O nome do cliente copiado da demanda: o campo lê a OS, não o cadastro do cliente (parte 3.8a). */
   cliente_nome: string | null;
+  /** Serviço ou vistoria; a OS de antes da parte 3.11a é de serviço. */
+  tipo: TipoDaOs;
   status: StatusDaOs;
   /** A RV do escopo fechado de onde saiu a fatia; null na demanda direta (os itens pedidos são o escopo). */
   escopo_rv: number | null;
@@ -218,6 +229,20 @@ const contatos = z
 
 const Criar = z.object({ action: z.literal("create"), idempotency_key: chave, demanda }).strict();
 
+/** Abrir a vistoria da demanda (parte 3.11a): a OS sem itens, já agendada quando vem com a janela. */
+const AbrirVistoria = z
+  .object({
+    action: z.literal("survey"),
+    idempotency_key: chave,
+    demanda,
+    janela: janela.nullable().optional(),
+    equipe: equipePedida.optional(),
+    veiculos: veiculosPedidos.optional(),
+    instrucoes,
+    contatos,
+  })
+  .strict();
+
 const OrdemDoPlano = z
   .object({
     itens: itensPedidos,
@@ -267,6 +292,7 @@ export type OrdemPedida = z.infer<typeof OrdemDoPlano>;
 
 export type AcaoOs =
   | z.infer<typeof Criar>
+  | z.infer<typeof AbrirVistoria>
   | z.infer<typeof Planejar>
   | z.infer<typeof Agendar>
   | z.infer<typeof AlterarItens>
@@ -274,7 +300,7 @@ export type AcaoOs =
 
 export function interpretarOs(data: unknown): AcaoOs {
   const parsed = z
-    .discriminatedUnion("action", [Criar, Planejar, Agendar, AlterarItens, Cancelar])
+    .discriminatedUnion("action", [Criar, AbrirVistoria, Planejar, Agendar, AlterarItens, Cancelar])
     .safeParse(data ?? {}, { errorMap: mensagens });
   if (!parsed.success) invalid(parsed.error.issues[0]?.message ?? "Dados inválidos.");
   return parsed.data;
@@ -313,6 +339,7 @@ function textoOuNull(valor: unknown): string | null {
 
 export type DemandaParaOs = {
   entrada?: unknown;
+  etapa?: unknown;
   customer_code?: unknown;
   escopo_rv?: unknown;
   executado_de?: unknown;
@@ -358,6 +385,24 @@ export function problemaParaAbrirOs(demanda: DemandaParaOs, orcamento: Orcamento
   if (texto(demanda.executado_de) || validada || preenchido(demanda.perda) || preenchido(demanda.cancelamento)) {
     return "A OS nasce de uma demanda em Para planejar.";
   }
+  return null;
+}
+
+/**
+ * Por que a demanda não recebe vistoria, ou null (parte 3.11a). A vistoria
+ * vem antes do escopo fechado: é da demanda do Comercial ainda não fechada
+ * pelo cliente, nem executada, perdida ou cancelada, e uma por vez (a que
+ * está em aberto termina ou se cancela antes de outra).
+ */
+export function problemaParaAbrirVistoria(demanda: DemandaParaOs, ordens: readonly Pick<OsGravada, "numero" | "tipo" | "status">[]): string | null {
+  if (demanda.entrada === "direta") return "A demanda direta não tem vistoria: a Operação executa e o Comercial orça depois.";
+  if (preenchido(demanda.cancelamento)) return "A demanda foi cancelada no Comercial.";
+  if (preenchido(demanda.perda)) return "A demanda foi perdida no Comercial.";
+  if (typeof demanda.escopo_rv === "number" || texto(demanda.executado_de)) {
+    return "A vistoria vem antes do escopo fechado: a demanda já foi fechada pelo cliente.";
+  }
+  const emAberto = ordens.find((os) => os.tipo === "vistoria" && (os.status === "aberta" || os.status === "agendada" || os.status === "em_execucao"));
+  if (emAberto) return `A demanda já tem a vistoria ${emAberto.numero} em aberto.`;
   return null;
 }
 
@@ -659,10 +704,36 @@ export function novaOs(entrada: NovaOs): OsGravada {
     seq: entrada.seq,
     customer_code: entrada.customer_code,
     cliente_nome: entrada.cliente_nome,
+    tipo: "servico",
     status: entrada.janela ? "agendada" : "aberta",
     escopo_rv: entrada.escopo_rv,
     itens: entrada.itens,
     servicos: servicosDosItens(entrada.itens),
+    locais: entrada.locais,
+    janela: entrada.janela,
+    equipe: entrada.equipe,
+    equipe_uids: entrada.equipe_uids,
+    veiculos: entrada.veiculos,
+    instrucoes: entrada.instrucoes,
+    edicao: 1,
+    cancelamento: null,
+  };
+}
+
+/** A vistoria nova (parte 3.11a): sem itens nem escopo, o serviço é a vistoria. */
+export function novaVistoria(entrada: Omit<NovaOs, "itens" | "escopo_rv">): OsGravada {
+  if (entrada.numero !== numeroDaOs(entrada.demanda, entrada.seq)) throw new HttpsError("internal", "O número da OS não confere com a demanda.");
+  return {
+    numero: entrada.numero,
+    demanda: entrada.demanda,
+    seq: entrada.seq,
+    customer_code: entrada.customer_code,
+    cliente_nome: entrada.cliente_nome,
+    tipo: "vistoria",
+    status: entrada.janela ? "agendada" : "aberta",
+    escopo_rv: null,
+    itens: [],
+    servicos: ["vistoria"],
     locais: entrada.locais,
     janela: entrada.janela,
     equipe: entrada.equipe,
@@ -709,6 +780,7 @@ export function agendada(atual: OsGravada, agenda: AgendaResolvida): OsGravada {
 }
 
 export function comItens(atual: OsGravada, itens: ItemDaOs[], escopoRv: number | null): OsGravada {
+  if (atual.tipo === "vistoria") falha("A vistoria não tem itens do escopo: os itens levantados vão no envio ao Comercial.");
   return { ...atual, itens, servicos: servicosDosItens(itens), escopo_rv: escopoRv, edicao: atual.edicao + 1 };
 }
 
@@ -830,6 +902,7 @@ export function osLida(numeroDaLeitura: string, data: Record<string, unknown>): 
     seq: typeof data.seq === "number" ? data.seq : 1,
     customer_code: data.customer_code,
     cliente_nome: textoOuNull(data.cliente_nome),
+    tipo: data.tipo === "vistoria" ? "vistoria" : "servico",
     status: data.status as StatusDaOs,
     escopo_rv: typeof data.escopo_rv === "number" ? data.escopo_rv : null,
     itens,

@@ -35,6 +35,7 @@ const OS: OsGravada = {
   seq: 1,
   customer_code: "ITAU",
   cliente_nome: "Itaú Unibanco",
+  tipo: "servico",
   status: "agendada",
   escopo_rv: 0,
   itens: [],

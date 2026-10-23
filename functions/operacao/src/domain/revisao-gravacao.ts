@@ -42,8 +42,9 @@ function marcos(demanda: DocumentData): unknown[] {
   return Array.isArray(demanda.marcos) ? demanda.marcos : [];
 }
 
+/** As OS de serviço da demanda para o resumo: a vistoria (parte 3.11a) não executa o escopo e fica de fora. */
 function paraResumo(ordens: ReturnType<typeof osLida>[], brutos: Map<string, DocumentData>, numero: string, status: StatusDaOs, dados: DocumentData): OsParaResumo[] {
-  return ordens.map((os) =>
+  return ordens.filter((os) => os.tipo !== "vistoria").map((os) =>
     os.numero === numero ? { numero, status, janela: os.janela, data: dados } : { numero: os.numero, status: os.status, janela: os.janela, data: brutos.get(os.numero) ?? {} },
   );
 }
@@ -167,6 +168,9 @@ export async function reopenServiceOrderFor(
       const bruto = dataDe(await transaction.get(ref), "OS não encontrada.");
       const os = osLida(pedido.numero, bruto);
       if (os.status !== "revisada") throw new HttpsError("failed-precondition", "Só a OS revisada se reabre.");
+      if (os.tipo === "vistoria") {
+        throw new HttpsError("failed-precondition", "A vistoria enviada ao Comercial não se reabre: abra outra vistoria da demanda.");
+      }
       const demandaRef = db.collection(DEMANDS_COLLECTION).doc(os.demanda);
       const demanda = dataDe(await transaction.get(demandaRef), "Demanda da OS não encontrada.");
       if (demanda.validacao) throw new HttpsError("failed-precondition", "O cliente já validou a execução desta demanda: o Comercial reabre antes.");

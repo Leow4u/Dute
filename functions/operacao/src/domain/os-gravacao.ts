@@ -20,10 +20,12 @@ import {
   itensSemPreco,
   localDaOs,
   novaOs,
+  novaVistoria,
   numeroDaOs,
   osLida,
   problemaDaData,
   problemaParaAbrirOs,
+  problemaParaAbrirVistoria,
   problemaParaAgendarOs,
   proximaSequencia,
   referenciaDoLocal,
@@ -48,7 +50,8 @@ import type { OperacaoProfile } from "./profile.js";
  * locais e o cadastro da equipe e da frota. Quem muda o saldo (abrir,
  * planejar, mudar itens) grava no contador da demanda: duas transações
  * concorrentes na mesma demanda conflitam ali, e a segunda relê o saldo.
- * O preço da revisão não entra na OS nem no evento.
+ * O preço da revisão não entra na OS nem no evento. A vistoria (parte
+ * 3.11a) nasce aqui também, sem itens, e se agenda e cancela como as outras.
  */
 
 const DEMANDS = "demands";
@@ -83,6 +86,7 @@ function hojeEmSaoPaulo(agora = new Date()): string {
 
 const KIND: Record<AcaoOs["action"], string> = {
   create: "os_open",
+  survey: "os_survey_open",
   plan: "os_plan",
   schedule: "os_schedule",
   set_items: "os_items",
@@ -92,6 +96,7 @@ const KIND: Record<AcaoOs["action"], string> = {
 /** O que a transação fez: as OS gravadas e o evento de cada uma. */
 type Efeito =
   | { tipo: "os.created" | "os.planned"; ordens: OsGravada[] }
+  | { tipo: "os.survey_opened"; ordens: [OsGravada] }
   | { tipo: "os.scheduled" | "os.cancelled"; ordens: [OsGravada] }
   | { tipo: "os.items_changed"; ordens: [OsGravada]; edicaoAntes: number };
 
@@ -106,7 +111,7 @@ export async function saveServiceOrderFor(
     db,
     {
       kind: KIND[acao.action],
-      scope: acao.action === "create" || acao.action === "plan" ? { demanda: acao.demanda } : { numero: acao.numero },
+      scope: acao.action === "create" || acao.action === "plan" || acao.action === "survey" ? { demanda: acao.demanda } : { numero: acao.numero },
       idempotency_key: acao.idempotency_key,
       input: acao,
       actor: ator(caller),
@@ -141,6 +146,15 @@ function payloadDoEvento(efeito: Efeito, os: OsGravada) {
   switch (efeito.tipo) {
     case "os.created":
       return { id: os.numero, demanda: os.demanda, seq: os.seq, linhas: os.itens.length };
+    case "os.survey_opened":
+      return {
+        id: os.numero,
+        demanda: os.demanda,
+        seq: os.seq,
+        data: os.janela?.data ?? null,
+        equipe: composicao(os.equipe),
+        veiculos: os.veiculos.map((veiculo) => veiculo.veiculo_id),
+      };
     case "os.planned":
       return {
         id: os.numero,
@@ -173,6 +187,8 @@ async function executar(transaction: Transaction, db: Firestore, acao: AcaoOs, c
     case "create":
     case "plan":
       return abrir(transaction, db, acao, caller);
+    case "survey":
+      return abrirVistoria(transaction, db, acao, caller);
     case "schedule":
       return agendar(transaction, db, acao, caller);
     case "set_items":
@@ -338,6 +354,73 @@ async function abrir(
   return { tipo: acao.action === "plan" ? "os.planned" : "os.created", ordens: criadas };
 }
 
+// --- Vistoria ----------------------------------------------------------------------------
+
+/**
+ * Abre a vistoria da demanda (parte 3.11a): o número vem do mesmo contador
+ * das OS, o local da origem da demanda (com o contato no local, se pedido),
+ * e, com a janela, a OS já nasce agendada com a equipe e os veículos.
+ */
+async function abrirVistoria(
+  transaction: Transaction,
+  db: Firestore,
+  acao: Extract<AcaoOs, { action: "survey" }>,
+  caller: OperacaoProfile,
+): Promise<Efeito> {
+  const demandaRef = db.collection(DEMANDS).doc(acao.demanda);
+  const contadorRef = db.collection(SERVICE_ORDER_COUNTERS_COLLECTION).doc(acao.demanda);
+  const demanda = dados(await transaction.get(demandaRef), "Demanda não encontrada.");
+  const contadorSnap = await transaction.get(contadorRef);
+  const existentes = (await transaction.get(db.collection(SERVICE_ORDERS_COLLECTION).where("demanda", "==", acao.demanda))).docs.map((doc) =>
+    osLida(doc.id, doc.data()),
+  );
+  const problema = problemaParaAbrirVistoria(demanda, existentes);
+  if (problema) throw new HttpsError("failed-precondition", problema);
+  if (acao.janela) {
+    const problemaDaJanela = problemaDaData(acao.janela.data, hojeEmSaoPaulo());
+    if (problemaDaJanela) throw new HttpsError("invalid-argument", problemaDaJanela);
+  }
+  const locaisDoCadastro = await lerLocais(transaction, db, demanda);
+  const { pessoas, frota } = await lerCadastro(
+    transaction,
+    db,
+    (acao.equipe ?? []).map((pessoa) => pessoa.colaborador_id),
+    acao.veiculos ?? [],
+  );
+
+  const customerCode = String(demanda.customer_code).trim();
+  const origem = referenciaDoLocal(demanda.origem);
+  const seq = proximaSequencia(ultimaSequencia(contadorSnap.exists ? contadorSnap.data()?.ultimo : 0, existentes));
+  const { equipe, equipe_uids } = equipeDaOs(acao.equipe ?? [], pessoas);
+  const os = novaVistoria({
+    numero: numeroDaOs(acao.demanda, seq),
+    demanda: acao.demanda,
+    seq,
+    customer_code: customerCode,
+    cliente_nome: textoDoNome(demanda.customer_name),
+    // A vistoria é no local de origem da demanda (onde está o que se vai levantar).
+    locais: comContatos(
+      { origem: localDaOs(origem, origem?.local_id ? locaisDoCadastro.get(origem.local_id) ?? null : null, customerCode, null), destino: null },
+      acao.contatos ? { origem: acao.contatos.origem } : undefined,
+    ),
+    janela: acao.janela ?? null,
+    equipe,
+    equipe_uids,
+    veiculos: veiculosDaOs(acao.veiculos ?? [], frota),
+    instrucoes: acao.instrucoes ?? null,
+  });
+
+  transaction.set(contadorRef, { demanda: acao.demanda, ultimo: seq, updated_at: FieldValue.serverTimestamp() });
+  transaction.create(db.collection(SERVICE_ORDERS_COLLECTION).doc(os.numero), {
+    ...os,
+    id: os.numero,
+    ...autoria(caller),
+    created_at: FieldValue.serverTimestamp(),
+  });
+  transaction.update(demandaRef, { os_numeros: FieldValue.arrayUnion(os.numero) });
+  return { tipo: "os.survey_opened", ordens: [os] };
+}
+
 // --- Agendar ------------------------------------------------------------------------------
 
 async function agendar(
@@ -394,6 +477,8 @@ async function mudarItens(
   caller: OperacaoProfile,
 ): Promise<Efeito> {
   const atual = exigirPlanejavel(await lerOs(transaction, db, acao.numero), acao.numero, acao.expected_edicao, "alterada");
+  // A vistoria não tem escopo: recusa antes de procurar um.
+  if (atual.tipo === "vistoria") comItens(atual, [], null);
   const demanda = dados(await transaction.get(db.collection(DEMANDS).doc(atual.demanda)), "Demanda não encontrada.");
   const contadorRef = db.collection(SERVICE_ORDER_COUNTERS_COLLECTION).doc(atual.demanda);
   await transaction.get(contadorRef);

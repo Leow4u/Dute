@@ -79,12 +79,12 @@ que a usa.
 
 | Coleção | Dono | O que a Operação faz |
 |---|---|---|
-| `demands` | Comercial | Lê; escreve só `os_numeros` e `operacao` (o resumo da execução e da revisão: OS revisadas e em aberto, o período, por linha o executado, o que se cobra, o absorvido e o aditivo, e o aditivo pedido; parte 3.10a). O desenho dizia `execucao` e `revisao`, mas `execucao` já é do Comercial (as datas pedidas para a execução) e `revisao` se confundiria com a RV: o resumo fica num campo só, `operacao`. Na demanda direta que ela abriu, quando a última OS é revisada, também `executado_de`, `executado_ate`, `registro_execucao`, `etapa` e `marcos`, os mesmos campos que o Comercial lê (parte 3.4c). Cria a demanda direta pela callable dela (parte 3.4d), no mesmo esquema, sem RV, com `itens_pedidos` (o escopo das OS, sem preço), `pedido_por`, `executar_ate`, `tipo_calculado`, `tipo_corrigido_por` e `aberta_pela: "operacao"`. O Comercial só lê esses campos. |
+| `demands` | Comercial | Lê; escreve só `os_numeros`, `vistoria` (o resumo da vistoria enviada ao Comercial: a OS, quando, os ambientes com os itens e os caminhos das fotos, os itens somados, as medidas, o acesso e as observações; parte 3.11a) e `operacao` (o resumo da execução e da revisão: OS revisadas e em aberto, o período, por linha o executado, o que se cobra, o absorvido e o aditivo, e o aditivo pedido; parte 3.10a). O desenho dizia `execucao` e `revisao`, mas `execucao` já é do Comercial (as datas pedidas para a execução) e `revisao` se confundiria com a RV: o resumo fica num campo só, `operacao`. Na demanda direta que ela abriu, quando a última OS é revisada, também `executado_de`, `executado_ate`, `registro_execucao`, `etapa` e `marcos`, os mesmos campos que o Comercial lê (parte 3.4c). Cria a demanda direta pela callable dela (parte 3.4d), no mesmo esquema, sem RV, com `itens_pedidos` (o escopo das OS, sem preço), `pedido_por`, `executar_ate`, `tipo_calculado`, `tipo_corrigido_por` e `aberta_pela: "operacao"`. O Comercial só lê esses campos. |
 | `service_orders` | Operação | Tudo, pelas callables. Desde a parte 3.4b: `itens` com `planejado`, `servicos`, `locais` (endereço copiado e contato no local), `janela`, `equipe` com papel, vínculo e empresa por pessoa (nome copiado no agendamento; freelancer e terceiro entram aqui), `equipe_uids`, `veiculos`, `instrucoes`, `status` e `cancelamento`. Nas partes 3.7 a 3.10: `etapas`, `executado` e `incluido_em_campo` nos itens, `fotos`, `ocorrencias`, `presencas`, `conclusao` e `revisao`. Nenhum valor. |
 | `service_order_counters` | Operação | O sufixo da OS por demanda. |
 | `collaborators` | Operação | Ganha `vinculo`, `empresa` (terceiro) e `papeis` (líder, motorista, montador, ajudante). |
 | `vehicles` | Operação | Ganha `dono` (próprio ou terceiro) e `revisao_em`. |
-| Storage `os/{numero}/fotos/` e `os/{numero}/assinatura` | Operação | Com `storage.rules` por papel: campo escalado, coordenação e, na Fase 4, o cliente dono. |
+| Storage `os/{numero}/fotos/` e `os/{numero}/assinatura` | Operação | Com `storage.rules` por papel: campo escalado, coordenação e, na Fase 4, o cliente dono. O papel comercial lê as fotos da OS de vistoria, e só dela (parte 3.11a). |
 
 A fila sem sinal do celular fica no IndexedDB; nenhuma coleção nova.
 
@@ -121,8 +121,10 @@ palavras do roteador de avisos do WMS: `os.created`, `os.scheduled`,
 `os.occurrence_recorded`, `os.completed`, `os.signed`,
 `os.completed_without_acceptance`, `os.reviewed`, `os.addendum_requested`,
 `os.reopened`, `os.cancelled`, `demand.direct_opened`,
-`survey.sent_to_commercial`, `collaborator.cnh_expiring` e
-`vehicle.maintenance_due`.
+`os.survey_opened`, `os.survey_sent`, `collaborator.cnh_expiring` e
+`vehicle.maintenance_due`. O desenho dizia `survey.sent_to_commercial`; a
+parte 3.11a usa `os.survey_opened` e `os.survey_sent`, para o evento ser da
+OS (com o `customer_code` dela), como os outros.
 
 **O que a IA captura desde a primeira parte**: o instante de cada etapa; a
 quantidade e o instante de cada item executado; o tamanho e a composição da
@@ -174,7 +176,10 @@ registros guardados" é dado, não legenda.
 | 3.10b | Tela Revisão (`OpRevisao`): para revisar, a OS com fotos, assinatura, horas e itens, as decisões; reabrir na ficha | Textos listados; `axe`; o formulário manda o formato de `reviewServiceOrder` |
 | 3.10c | No Comercial: "Aditivo a fazer" no Início e a execução da Operação no orçamento, a partir do resumo dela | O aditivo pedido aparece até a RV de aditivo (ou a recusa) |
 | 3.10d | Orçar a execução da direta aberta pela Operação: o orçamento nasce com o que ela executou e cobra | O orçamento da direta nasce com o executado a cobrar, pela tabela |
-| 3.11 | Vistoria como OS e "Enviar vistoria ao comercial" | Vistoria não passa pela revisão; orçamento nasce com os itens dela |
+| 3.11a | Vistoria no backend: a OS de vistoria (`tipo`, sem itens) aberta pela coordenação antes do escopo fechado, só ir, chegar e terminar, e `sendSurveyToCommercial` (ambientes com fotos e itens do catálogo, medidas, acesso e observações; o resumo `vistoria` na demanda; as fotos para o Comercial) | Vistoria não passa pela revisão nem pede aceite; o resumo só pela Operação |
+| 3.11b | Vistoria no celular (`Campo2Vistoria`): ambientes, fotos, itens do catálogo, medidas, acesso e o envio pela fila sem sinal | Textos listados; `axe`; o formulário manda o formato de `sendSurveyToCommercial` |
+| 3.11c | Vistoria no escritório: abrir e agendar a vistoria da demanda com visita técnica, a vistoria na ficha da OS e na demanda | Textos listados; `axe`; o formulário manda o formato de `saveServiceOrder` survey |
+| 3.11d | No Comercial: "Vistoria concluída" no Início e na montagem, com os itens levantados carregados no orçamento | O orçamento nasce com os itens da vistoria, sem redigitar |
 | 3.12 | TV da sala (`/tv`, papel `painel`) | `painel` só lê o que a TV mostra; sem valor; sem ação |
 | 3.13 | Alertas no Início e rotina diária (CNH, revisão do veículo, OS sem equipe ou veículo perto do prazo) | O evento sai uma vez por dia por item |
 | 3.14 | Produção e registro | Conferência de produção |
@@ -1012,3 +1017,45 @@ revisada (parte 3.10a).
   com o vigente do cliente já escolhido, e a tabela. Ao criar, abre a
   montagem e o aviso lista o que fica para lançar. As outras ações pedem o
   orçamento e não aparecem antes dele.
+
+### Parte 3.11a: vistoria no backend
+
+Feita em 23/10/2026, em `functions/operacao`. A vistoria é uma OS
+(`tipo: "vistoria"`, sem itens, serviço vistoria) que vai ao local antes do
+escopo fechado. Regras em `domain/vistoria.ts`.
+
+- **Abrir.** `saveServiceOrder` ganha a ação `survey`, só para quem coordena.
+  - Vale para a demanda do Comercial ainda não fechada pelo cliente, nem
+    executada, perdida ou cancelada. A demanda direta não tem vistoria.
+  - Uma por vez: a que está em aberto termina ou se cancela antes de outra.
+  - O número vem do mesmo contador das OS da demanda. O local é a origem da
+    demanda, com o contato no local, se pedido.
+  - Com a janela, nasce agendada com a equipe e os veículos. Agendar e
+    cancelar são os de toda OS. A vistoria não muda itens.
+  - Evento `os.survey_opened`.
+- **Executar.** Só ir, chegar e terminar (saída do pátio, chegada e Fim).
+  Fotos, ocorrências e presença são as de toda OS; a legenda da foto diz o
+  ambiente. A vistoria não tem itens da OS nem conclusão com aceite.
+- **Enviar ao Comercial.** A callable `sendSurveyToCommercial` (campo
+  escalado ou coordenação) recebe os ambientes, as medidas, o acesso
+  (horário e vaga de carga) e as observações.
+  - Cada ambiente tem nome único, as fotos já anexadas à OS e os itens do
+    catálogo (ativos e orçáveis, uma vez por ambiente, quantidade maior que
+    zero). Ao menos uma foto e um item.
+  - Pelo celular, quando a OS tem líder, só ele envia. A hora não vem antes
+    da última etapa.
+  - A OS vai de Em execução a Revisada, com a vistoria e, quando faltava, o
+    Fim. Não pede assinatura nem passa pela revisão, e não se reabre: outra
+    vistoria se abre.
+  - A demanda recebe o resumo `vistoria`, o único campo dela que o envio
+    escreve: os ambientes com os itens e os caminhos das fotos, os itens
+    somados de todos os ambientes, as medidas, o acesso e as observações. A
+    etapa e o orçamento são do Comercial e não mudam.
+  - Eventos `os.step_recorded` (o Fim) e `os.survey_sent`, só com as
+    contagens. Nomes, medidas e observações ficam na OS e na demanda.
+- **Fotos para o Comercial.** O `storage.rules` deixa o papel comercial ler
+  as fotos da OS de vistoria, e só dela.
+- **Fora do resumo da Operação.** A vistoria não executa o escopo: o resumo
+  `operacao` (parte 3.10a) não a conta entre as OS revisadas nem em aberto.
+- **Trava.** O teste que impede o Comercial de escrever `operacao` na
+  demanda passa a impedir `vistoria` também.

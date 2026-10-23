@@ -13,7 +13,8 @@ import { doc, setDoc } from "firebase/firestore";
  * e só na OS agendada ou em execução; suporte só lê; nada se sobrescreve nem
  * apaga. O critério do escalado é o mesmo do firestore.rules (equipe_uids).
  * A assinatura do responsável (parte 3.9a) segue a mesma regra, só na OS em
- * execução.
+ * execução. As fotos da vistoria (parte 3.11a) vão ao Comercial: o papel
+ * comercial lê as da OS de vistoria, e só dela.
  */
 
 const PROJECT_ID = "demo-dute-operations";
@@ -53,13 +54,13 @@ const NAO_LEEM = ["wms-a", "comercial-a", "campo-b", "client-a"] as const;
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
 const ARQUIVO = "ft_0123456789abcdef.jpg";
 
-async function semente(status: string) {
+async function semente(status: string, extra: Record<string, unknown> = {}) {
   await testEnvironment.withSecurityRulesDisabled(async (context) => {
     const database = context.firestore();
     for (const [uid, role] of Object.entries(PAPEIS)) {
       await setDoc(doc(database, "users", uid), { nome: uid, role, ...(role === "cliente" ? { customer_code: "ITAU" } : {}) });
     }
-    await setDoc(doc(database, "service_orders", OS), { demanda: "10045", customer_code: "ITAU", status, equipe_uids: ["campo-a"], edicao: 1 });
+    await setDoc(doc(database, "service_orders", OS), { demanda: "10045", customer_code: "ITAU", status, equipe_uids: ["campo-a"], edicao: 1, ...extra });
   });
 }
 
@@ -106,6 +107,20 @@ describe("fotos da OS no Storage", () => {
     await assertSucceeds(subir("ops-a"));
     for (const uid of LEEM) await assertSucceeds(storage(uid).ref(`os/${OS}/fotos/${ARQUIVO}`).getMetadata());
     for (const uid of NAO_LEEM) await assertFails(storage(uid).ref(`os/${OS}/fotos/${ARQUIVO}`).getMetadata());
+  });
+
+  it("as fotos da vistoria vão ao Comercial: o comercial lê as da OS de vistoria, e só dela (parte 3.11a)", async () => {
+    const DA_VISTORIA = "ft_7777777777777777.jpg";
+    await semente("agendada", { tipo: "vistoria" });
+    await assertSucceeds(subir("campo-a", DA_VISTORIA));
+    await semente("revisada", { tipo: "vistoria" });
+    await assertSucceeds(storage("comercial-a").ref(`os/${OS}/fotos/${DA_VISTORIA}`).getMetadata());
+    for (const uid of ["wms-a", "campo-b", "client-a"]) await assertFails(storage(uid).ref(`os/${OS}/fotos/${DA_VISTORIA}`).getMetadata());
+    // O comercial não sobe foto da vistoria, e a OS de serviço continua fechada para ele.
+    await semente("em_execucao", { tipo: "vistoria" });
+    await assertFails(subir("comercial-a", "ft_7777777777777778.jpg"));
+    await semente("revisada");
+    await assertFails(storage("comercial-a").ref(`os/${OS}/fotos/${DA_VISTORIA}`).getMetadata());
   });
 
   it("só na OS agendada ou em execução", async () => {

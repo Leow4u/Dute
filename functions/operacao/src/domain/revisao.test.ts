@@ -180,7 +180,7 @@ describe("saldo, resumo e reabertura", () => {
     assert.doesNotThrow(() => exigirQuemReabre("admin"));
   });
 
-  it("o resumo da Operação na demanda (`operacao`) é escrito só pela Operação", () => {
+  it("o resumo da Operação na demanda (`operacao`) e a vistoria (`vistoria`, parte 3.11a) são escritos só pela Operação", () => {
     const raiz = fileURLToPath(new URL("../../../comercial/src", import.meta.url));
     const arquivos = (pasta: string): string[] =>
       readdirSync(pasta).flatMap((nome) => {
@@ -191,7 +191,7 @@ describe("saldo, resumo e reabertura", () => {
     const escritas = fontes.flatMap((arquivo) =>
       readFileSync(arquivo, "utf8")
         .split("\n")
-        .filter((linha) => /\boperacao\s*:|["'`]operacao\./.test(linha))
+        .filter((linha) => /\b(?:operacao|vistoria)\s*:|["'`](?:operacao|vistoria)\./.test(linha))
         .map((linha) => `${arquivo}: ${linha.trim()}`),
     );
     assert.deepEqual(escritas, []);

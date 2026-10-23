@@ -186,6 +186,11 @@ describe("revisar a OS da demanda do Comercial", () => {
     await db.collection("demands").doc("10045").set({ numero: "10045", customer_code: "ITAU", entrada: "comercial", etapa: "para_planejar", escopo_rv: 0, validacao: null });
     await db.collection("quotes").doc("10045").collection("revisoes").doc("0").set({ linhas: [{ ...MESA, quantidade: "60", preco: "88.50", total_cents: 531000 }] });
     await db.collection(SERVICE_ORDERS_COLLECTION).doc("10045-01").set(osEmRevisao("10045-01", "10045", [{ ...MESA, planejado: "60", executado: "64" }], { escopo_rv: 0 }));
+    // A vistoria da demanda (parte 3.11a), já enviada ao Comercial: não executa o escopo e fica fora do resumo.
+    await db
+      .collection(SERVICE_ORDERS_COLLECTION)
+      .doc("10045-02")
+      .set(osEmRevisao("10045-02", "10045", [], { tipo: "vistoria", servicos: ["vistoria"], status: "revisada", conclusao: null }));
     await recusa(
       reviewServiceOrderFor(db, interno, { idempotency_key: "c-1", numero: "10045-01", linhas: [{ linha: "ln_1", decisao: "cobrar" }] }, AGORA),
       "failed-precondition",
@@ -194,6 +199,7 @@ describe("revisar a OS da demanda do Comercial", () => {
     await reviewServiceOrderFor(db, interno, { idempotency_key: "c-2", numero: "10045-01", linhas: [{ linha: "ln_1", decisao: "aditivo" }] }, AGORA);
     const demanda = await lerDemanda("10045");
     assert.equal(demanda.etapa, "para_planejar");
+    assert.deepEqual([demanda.operacao.os_revisadas, demanda.operacao.os_em_aberto], [["10045-01"], []]);
     assert.deepEqual(demanda.operacao.aditivo, [
       { os: "10045-01", linha: "ln_1", lpu_item_id: "lpu_mesa", item: "Mesa", unidade: "UN", quantidade: "4", pedido_em: "2026-10-22T21:10:00.000Z" },
     ]);
