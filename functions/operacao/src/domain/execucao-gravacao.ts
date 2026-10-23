@@ -15,31 +15,51 @@ import {
 import { interpretarItem, itensEmExecucao, registrarFeito, registrarInclusao } from "./itens-executados.js";
 import { digest, runIdempotent } from "./operations.js";
 import { ator, autoria, exigirPapel } from "./os-gravacao.js";
+import { interpretarPresenca, presencasLidas, registrarPresenca } from "./presencas.js";
 import { SERVICE_ORDERS_COLLECTION, osLida, type StatusDaOs } from "./os.js";
 import type { OperacaoProfile } from "./profile.js";
 
 /**
- * Registra o andamento da OS pelo escritório (parte 3.7a): a etapa, com o
- * instante em que aconteceu, e a ocorrência. Lê a OS e grava na mesma
- * transação, com o evento; cada registro tem a própria chave de idempotência
- * (o celular da parte 3.8 reenvia sem duplicar). A descrição da ocorrência
- * fica só na OS: o evento leva o número dela.
+ * Registra o andamento da OS (partes 3.7 e 3.8a): a etapa, com o instante em
+ * que aconteceu, a ocorrência, os itens e a presença. Lê a OS e grava na
+ * mesma transação, com o evento; cada registro tem a própria chave de
+ * idempotência (o celular reenvia sem duplicar). Grava quem coordena (pelo
+ * escritório) e o campo escalado na OS (pelo celular, informando como o
+ * colaborador ligado ao login). A descrição da ocorrência fica só na OS: o
+ * evento leva o número dela.
  */
 
 export type ResultadoDoRegistro = { numero: string; edicao: number; status: StatusDaOs };
 
-/** No escritório, quem registra é a coordenação; o celular (parte 3.8) é do campo. */
-export function contexto(caller: OperacaoProfile, agora: Date): ContextoDoRegistro {
-  const canal: CanalDoRegistro = caller.role === "campo" ? "celular" : "escritorio";
-  return { agora, canal, registrado_por: { uid: caller.uid, role: caller.role } };
+const COLLABORATORS = "collaborators";
+
+/** Quem registra o andamento: quem coordena a Operação ou o campo (que ainda precisa estar escalado). */
+export function exigirQuemExecuta(caller: OperacaoProfile): void {
+  if (caller.role === "campo") return;
+  exigirPapel(caller);
 }
 
-export async function lerParaRegistrar(transaction: Transaction, db: Firestore, numero: string) {
+/**
+ * Lê a OS para registrar e monta o contexto: o campo só grava na OS em que
+ * está escalado (equipe_uids, o mesmo critério das regras) e informa como o
+ * colaborador ligado ao login; quem coordena grava pelo escritório.
+ */
+export async function lerParaRegistrar(transaction: Transaction, db: Firestore, numero: string, caller: OperacaoProfile, agora: Date) {
   const ref = db.collection(SERVICE_ORDERS_COLLECTION).doc(numero);
   const snapshot = await transaction.get(ref);
   if (!snapshot.exists) throw new HttpsError("not-found", "OS não encontrada.");
   const data = snapshot.data() ?? {};
-  return { ref, data, os: osLida(numero, data), execucao: execucaoLida(data), itens: itensEmExecucao(data) };
+  const os = osLida(numero, data);
+  let informante: string | null = null;
+  if (caller.role === "campo") {
+    if (!os.equipe_uids.includes(caller.uid)) throw new HttpsError("permission-denied", "Você não está escalado nesta OS.");
+    const vinculado = await transaction.get(db.collection(COLLABORATORS).where("usuario_uid", "==", caller.uid).limit(1));
+    const id = vinculado.docs[0]?.id ?? null;
+    informante = id && os.equipe.some((pessoa) => pessoa.colaborador_id === id) ? id : null;
+  }
+  const canal: CanalDoRegistro = caller.role === "campo" ? "celular" : "escritorio";
+  const contexto: ContextoDoRegistro = { agora, canal, registrado_por: { uid: caller.uid, role: caller.role }, informante };
+  return { ref, data, os, contexto, execucao: execucaoLida(data), itens: itensEmExecucao(data) };
 }
 
 export async function registerStepFor(
@@ -48,14 +68,14 @@ export async function registerStepFor(
   data: unknown,
   agora: () => Date = () => new Date(),
 ): Promise<ResultadoDoRegistro & { replayed?: true }> {
-  exigirPapel(caller);
+  exigirQuemExecuta(caller);
   const pedido = interpretarEtapa(data);
   return runIdempotent(
     db,
     { kind: "os_step", scope: { numero: pedido.numero }, idempotency_key: pedido.idempotency_key, input: pedido, actor: ator(caller) },
     async (transaction, { operationId }) => {
-      const { ref, os, execucao } = await lerParaRegistrar(transaction, db, pedido.numero);
-      const { etapas, registro, iniciou } = registrarEtapa(os, execucao.etapas, pedido, contexto(caller, agora()));
+      const { ref, os, execucao, contexto } = await lerParaRegistrar(transaction, db, pedido.numero, caller, agora());
+      const { etapas, registro, iniciou } = registrarEtapa(os, execucao.etapas, pedido, contexto);
       const status: StatusDaOs = "em_execucao";
       const edicao = os.edicao + 1;
       transaction.update(ref, { etapas, status, edicao, ...autoria(caller) });
@@ -98,14 +118,14 @@ export async function registerOccurrenceFor(
   data: unknown,
   agora: () => Date = () => new Date(),
 ): Promise<ResultadoDoRegistro & { ocorrencia: string; replayed?: true }> {
-  exigirPapel(caller);
+  exigirQuemExecuta(caller);
   const pedido = interpretarOcorrencia(data);
   return runIdempotent(
     db,
     { kind: "os_occurrence", scope: { numero: pedido.numero }, idempotency_key: pedido.idempotency_key, input: pedido, actor: ator(caller) },
     async (transaction, { operationId }) => {
-      const { ref, os, execucao } = await lerParaRegistrar(transaction, db, pedido.numero);
-      const { ocorrencias, registro } = registrarOcorrencia(os, execucao.ocorrencias, pedido, contexto(caller, agora()));
+      const { ref, os, execucao, contexto } = await lerParaRegistrar(transaction, db, pedido.numero, caller, agora());
+      const { ocorrencias, registro } = registrarOcorrencia(os, execucao.ocorrencias, pedido, contexto);
       const edicao = os.edicao + 1;
       transaction.update(ref, { ocorrencias, edicao, ...autoria(caller) });
       createOperacaoEvent(transaction, db, {
@@ -133,7 +153,7 @@ export async function registerItemFor(
   data: unknown,
   agora: () => Date = () => new Date(),
 ): Promise<ResultadoDoRegistro & { linha: string; replayed?: true }> {
-  exigirPapel(caller);
+  exigirQuemExecuta(caller);
   const pedido = interpretarItem(data);
   return runIdempotent(
     db,
@@ -147,11 +167,11 @@ export async function registerItemFor(
     async (transaction, { operationId }) => {
       const catalogo =
         pedido.action === "added" && pedido.lpu_item_id ? (await lerCatalogo(transaction, db, [pedido.lpu_item_id])).get(pedido.lpu_item_id) ?? null : null;
-      const { ref, os, itens } = await lerParaRegistrar(transaction, db, pedido.numero);
+      const { ref, os, itens, contexto } = await lerParaRegistrar(transaction, db, pedido.numero, caller, agora());
       const edicao = os.edicao + 1;
       const base = { id: os.numero, demanda: os.demanda };
       if (pedido.action === "executed") {
-        const feito = registrarFeito(os, itens, pedido, contexto(caller, agora()));
+        const feito = registrarFeito(os, itens, pedido, contexto);
         transaction.update(ref, { itens: feito.itens, edicao, ...autoria(caller) });
         createOperacaoEvent(transaction, db, {
           operation_id: operationId,
@@ -172,7 +192,7 @@ export async function registerItemFor(
         });
         return { target_id: os.numero, result: { numero: os.numero, edicao, status: os.status, linha: feito.item.id } };
       }
-      const incluido = registrarInclusao(os, itens, pedido, contexto(caller, agora()), {
+      const incluido = registrarInclusao(os, itens, pedido, contexto, {
         catalogo,
         idDaLinhaNova: `cp_${digest({ operationId }, 16)}`,
       });
@@ -196,6 +216,38 @@ export async function registerItemFor(
         occurred_at: incluido.inclusao.instante,
       });
       return { target_id: os.numero, result: { numero: os.numero, edicao, status: os.status, linha: incluido.item.id } };
+    },
+  );
+}
+
+/** Marca a entrada ou a saída de alguém da equipe; a marca que já existe fica (vale a primeira). */
+export async function registerPresenceFor(
+  db: Firestore,
+  caller: OperacaoProfile,
+  data: unknown,
+  agora: () => Date = () => new Date(),
+): Promise<ResultadoDoRegistro & { registrada: boolean; replayed?: true }> {
+  exigirQuemExecuta(caller);
+  const pedido = interpretarPresenca(data);
+  return runIdempotent<ResultadoDoRegistro & { registrada: boolean }>(
+    db,
+    { kind: "os_presence", scope: { numero: pedido.numero }, idempotency_key: pedido.idempotency_key, input: pedido, actor: ator(caller) },
+    async (transaction, { operationId }) => {
+      const { ref, os, data: bruto, contexto } = await lerParaRegistrar(transaction, db, pedido.numero, caller, agora());
+      const { presencas, marca, registrada } = registrarPresenca(os, presencasLidas(bruto), pedido, contexto);
+      if (!registrada) return { target_id: os.numero, result: { numero: os.numero, edicao: os.edicao, status: os.status, registrada } };
+      const edicao = os.edicao + 1;
+      transaction.update(ref, { presencas, edicao, ...autoria(caller) });
+      createOperacaoEvent(transaction, db, {
+        operation_id: operationId,
+        type: "os.presence_recorded",
+        entity_id: os.numero,
+        customer_code: os.customer_code,
+        payload: { id: os.numero, demanda: os.demanda, colaborador_id: pedido.colaborador_id, tipo: pedido.tipo, instante: marca.instante, canal: marca.canal },
+        actor: ator(caller),
+        occurred_at: marca.instante,
+      });
+      return { target_id: os.numero, result: { numero: os.numero, edicao, status: os.status, registrada } };
     },
   );
 }

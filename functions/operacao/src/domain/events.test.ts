@@ -92,6 +92,7 @@ const EXEMPLOS: Record<OperacaoEventType, Record<string, unknown>> = {
     instante: "2026-10-22T10:52:00.000Z",
     canal: "escritorio",
   },
+  "os.presence_recorded": { id: "10045-01", demanda: "10045", colaborador_id: "col_aaaaaaaaaaaaaaaa", tipo: "entrada", instante: "2026-10-22T10:30:00.000Z", canal: "celular" },
   "os.occurrence_recorded": { id: "10045-01", demanda: "10045", ocorrencia: "oc_01", instante: "2026-10-22T11:00:00.000Z", canal: "celular" },
   "demand.direct_opened": { id: "10053", tipo: "paraquedas", tipo_calculado: "emergencial", linhas: 1 },
 };

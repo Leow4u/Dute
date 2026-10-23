@@ -5,7 +5,7 @@ import { onCall } from "firebase-functions/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 
 import { openDirectDemandFor } from "./domain/demanda-direta-gravacao.js";
-import { registerItemFor, registerOccurrenceFor, registerStepFor } from "./domain/execucao-gravacao.js";
+import { registerItemFor, registerOccurrenceFor, registerPresenceFor, registerStepFor } from "./domain/execucao-gravacao.js";
 import { attachPhotoFor, type ConferirArquivo } from "./domain/fotos-gravacao.js";
 import { saveCollaboratorFor, saveVehicleFor } from "./domain/gravacao.js";
 import { saveServiceOrderFor } from "./domain/os-gravacao.js";
@@ -66,24 +66,30 @@ export const openDirectDemand = onCall(async (request) => {
 
 /** Registra a etapa da OS com o instante em que aconteceu; a primeira põe a OS Em execução. */
 export const registerStep = onCall(async (request) => {
-  const caller = await requireOperacaoCaller(db, request, PROJECT_ID);
+  const caller = await requireOperacaoCaller(db, request, PROJECT_ID, { campo: true });
   return registerStepFor(db, caller, request.data);
 });
 
 /** Registra uma ocorrência na OS agendada ou em execução. */
 export const registerOccurrence = onCall(async (request) => {
-  const caller = await requireOperacaoCaller(db, request, PROJECT_ID);
+  const caller = await requireOperacaoCaller(db, request, PROJECT_ID, { campo: true });
   return registerOccurrenceFor(db, caller, request.data);
 });
 
 /** Registra o feito de um item da OS ou o que foi executado além do planejado (incluído em campo). */
 export const registerItem = onCall(async (request) => {
-  const caller = await requireOperacaoCaller(db, request, PROJECT_ID);
+  const caller = await requireOperacaoCaller(db, request, PROJECT_ID, { campo: true });
   return registerItemFor(db, caller, request.data);
 });
 
 /** Anexa à OS a foto que já subiu ao Storage, depois de conferir o arquivo. */
 export const attachPhoto = onCall(async (request) => {
-  const caller = await requireOperacaoCaller(db, request, PROJECT_ID);
+  const caller = await requireOperacaoCaller(db, request, PROJECT_ID, { campo: true });
   return attachPhotoFor(db, caller, request.data, conferirArquivo);
+});
+
+/** Marca a entrada ou a saída de alguém da equipe na OS; o líder marca todos, quem tem o app marca a própria. */
+export const registerPresence = onCall(async (request) => {
+  const caller = await requireOperacaoCaller(db, request, PROJECT_ID, { campo: true });
+  return registerPresenceFor(db, caller, request.data);
 });

@@ -110,7 +110,7 @@ export function registrarFoto(
     legenda: pedido.legenda,
     instante: instanteDoRegistro(pedido.instante, os, contexto.agora),
     canal: contexto.canal,
-    ...origemDoRegistro(os, pedido, contexto.canal),
+    ...origemDoRegistro(os, pedido, contexto),
     registrado_por: contexto.registrado_por,
     registrado_em: contexto.agora.toISOString(),
   };

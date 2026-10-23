@@ -6,7 +6,7 @@ import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 
 import { EVENTS_COLLECTION } from "./events.js";
-import { registerItemFor, registerOccurrenceFor, registerStepFor } from "./execucao-gravacao.js";
+import { registerItemFor, registerOccurrenceFor, registerPresenceFor, registerStepFor } from "./execucao-gravacao.js";
 import { attachPhotoFor } from "./fotos-gravacao.js";
 import { SERVICE_ORDERS_COLLECTION } from "./os.js";
 import type { OperacaoProfile } from "./profile.js";
@@ -21,6 +21,7 @@ import type { OperacaoProfile } from "./profile.js";
 
 const PROJECT_ID = "demo-dute-operacao";
 const ANA = "col_aaaaaaaaaaaaaaaa";
+const DIEGO = "col_dddddddddddddddd";
 const AGORA = () => new Date("2026-10-22T15:00:00.000Z");
 
 let db: Firestore;
@@ -50,13 +51,18 @@ beforeEach(async () => {
     servicos: ["transporte"],
     locais: { origem: null, destino: null },
     janela: { data: "2026-10-22", inicio: "07:30", fim: "18:00" },
-    equipe: [{ colaborador_id: ANA, nome: "Ana Lima", papel: "lider", vinculo: "proprio", empresa: null, no_app: true }],
+    equipe: [
+      { colaborador_id: ANA, nome: "Ana Lima", papel: "lider", vinculo: "proprio", empresa: null, no_app: true },
+      { colaborador_id: DIEGO, nome: "Diego Alves", papel: "montador", vinculo: "freelancer", empresa: null, no_app: false },
+    ],
     equipe_uids: ["uid-ana"],
     veiculos: [{ veiculo_id: "vei_aaaaaaaaaaaaaaaa", placa: "DEF4G56", tipo: "Baú", modelo: null, dono: "proprio", empresa: null }],
     instrucoes: null,
     edicao: 2,
     cancelamento: null,
   });
+  // O login do campo ligado à Ana (parte 3.4a): é ela quem informa pelo celular.
+  await db.collection("collaborators").doc(ANA).set({ id: ANA, nome: "Ana Lima", cpf: "52998224725", ativo: true, edicao: 1, usuario_uid: "uid-ana" });
 });
 
 after(async () => {
@@ -143,8 +149,13 @@ describe("etapas pelo escritório", () => {
     assert.deepEqual(os.etapas.map((item: { etapa: string }) => item.etapa), ["saida_patio", "carregamento"]);
   });
 
-  it("campo ainda não registra pelo escritório; OS que não existe é recusada", async () => {
-    await recusa(registerStepFor(db, campo, passo("saida_patio", "2026-10-22T07:05-03:00"), AGORA), "permission-denied", "Seu perfil não grava o cadastro da Operação.");
+  it("pelo celular o meio não vale; outro papel não registra; OS que não existe é recusada", async () => {
+    await recusa(registerStepFor(db, campo, passo("saida_patio", "2026-10-22T07:05-03:00"), AGORA), "invalid-argument", "O registro do celular não leva o meio.");
+    await recusa(
+      registerStepFor(db, { uid: "u-com", role: "comercial", name: "Comercial" }, passo("saida_patio", "2026-10-22T07:05-03:00"), AGORA),
+      "permission-denied",
+      "Seu perfil não grava o cadastro da Operação.",
+    );
     await recusa(
       registerStepFor(db, interno, { ...passo("saida_patio", "2026-10-22T07:05-03:00"), numero: "10045-09" }, AGORA),
       "not-found",
@@ -280,5 +291,48 @@ describe("fotos pela execução", () => {
     await recusa(attachPhotoFor(db, interno, foto("ft_ffffffffffffffff.jpg"), conferir, AGORA), "failed-precondition", "A foto não chegou ao armazenamento. Envie de novo.");
     assert.equal((await lerOs()).fotos, undefined);
     assert.equal((await eventos("os.photo_attached")).length, 0);
+  });
+});
+
+describe("o campo escalado, pelo celular", () => {
+  const outroCampo: OperacaoProfile = { uid: "uid-outro", role: "campo", name: "Outro" };
+
+  it("registra a etapa como a colaboradora do login, sem meio; quem não está na OS é recusado", async () => {
+    await registerStepFor(db, campo, { idempotency_key: "c-1", numero: "10045-01", etapa: "saida_patio", instante: "2026-10-22T07:05-03:00" }, AGORA);
+    const [etapa] = (await lerOs()).etapas;
+    assert.deepEqual([etapa.canal, etapa.informado_por, etapa.meio, etapa.registrado_por], ["celular", ANA, null, { uid: "uid-ana", role: "campo" }]);
+    const [evento] = await eventos("os.step_recorded");
+    assert.deepEqual([evento.payload.canal, evento.payload.informado_por], ["celular", ANA]);
+    await recusa(
+      registerStepFor(db, outroCampo, { idempotency_key: "c-2", numero: "10045-01", etapa: "carregamento", instante: "2026-10-22T07:50-03:00" }, AGORA),
+      "permission-denied",
+      "Você não está escalado nesta OS.",
+    );
+    await recusa(
+      registerStepFor(db, campo, { idempotency_key: "c-3", numero: "10045-01", etapa: "carregamento", instante: "2026-10-22T07:50-03:00", informado_por: DIEGO }, AGORA),
+      "invalid-argument",
+      "No celular, quem informa é quem registra.",
+    );
+    assert.equal((await lerOs()).etapas.length, 1);
+  });
+
+  it("a líder marca a presença do freelancer; a segunda marca não muda nada nem gera evento", async () => {
+    const entrada = (chave: string, hora: string) => ({ idempotency_key: chave, numero: "10045-01", colaborador_id: DIEGO, tipo: "entrada", instante: `2026-10-22T${hora}-03:00` });
+    const primeira = await registerPresenceFor(db, campo, entrada("p-1", "07:45"), AGORA);
+    assert.deepEqual(primeira, { numero: "10045-01", edicao: 3, status: "agendada", registrada: true });
+    const segunda = await registerPresenceFor(db, interno, entrada("p-2", "07:50"), AGORA);
+    assert.equal(segunda.registrada, false);
+    const [presenca] = (await lerOs()).presencas;
+    assert.deepEqual([presenca.colaborador_id, presenca.entrada.instante, presenca.entrada.por_colaborador], [DIEGO, "2026-10-22T10:45:00.000Z", ANA]);
+    const marcas = await eventos("os.presence_recorded");
+    assert.equal(marcas.length, 1);
+    assert.deepEqual(marcas[0].payload, { id: "10045-01", demanda: "10045", colaborador_id: DIEGO, tipo: "entrada", instante: "2026-10-22T10:45:00.000Z", canal: "celular" });
+  });
+
+  it("anexa a foto pelo celular", async () => {
+    const conferir = async () => ({ contentType: "image/jpeg", size: 1000 });
+    await attachPhotoFor(db, campo, { idempotency_key: "f-c", numero: "10045-01", arquivo: "ft_aaaaaaaaaaaaaaaa.jpg", instante: "2026-10-22T08:00-03:00" }, conferir, AGORA);
+    const [foto] = (await lerOs()).fotos;
+    assert.deepEqual([foto.canal, foto.informado_por], ["celular", ANA]);
   });
 });

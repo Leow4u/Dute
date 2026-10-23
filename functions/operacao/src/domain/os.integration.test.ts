@@ -112,7 +112,7 @@ async function eventos(tipo?: string) {
 const JANELA = { data: "2099-01-27", inicio: "07:30", fim: "18:00" };
 
 describe("abrir a OS com todo o saldo", () => {
-  it("abre 10045-01 sem preço e sem o nome do cliente, com os locais copiados, e repetir devolve a mesma", async () => {
+  it("abre 10045-01 sem preço, com o nome do cliente e os locais copiados, e repetir devolve a mesma", async () => {
     const criada = await saveServiceOrderFor(db, interno, { action: "create", idempotency_key: "abre", demanda: NUMERO });
     assert.deepEqual([criada.numero, criada.edicao, criada.numeros], ["10045-01", 1, ["10045-01"]]);
     const deNovo = await saveServiceOrderFor(db, interno, { action: "create", idempotency_key: "abre", demanda: NUMERO });
@@ -133,7 +133,9 @@ describe("abrir a OS com todo o saldo", () => {
     assert.equal(os.locais.destino.nome, null, "local de outro cliente não entra");
     assert.equal(os.janela, null);
     assert.deepEqual(os.equipe, []);
-    for (const proibido of ["88.50", "17700", "negociado", "Ajuste", "Itaú", "preco"]) assert.equal(texto.includes(proibido), false, proibido);
+    // O campo lê a OS e não o cadastro do cliente: o nome vem copiado da demanda (parte 3.8a).
+    assert.equal(os.cliente_nome, "Itaú Unibanco");
+    for (const proibido of ["88.50", "17700", "negociado", "Ajuste", "preco"]) assert.equal(texto.includes(proibido), false, proibido);
 
     const [evento] = await eventos("os.created");
     assert.equal(evento.customer_code, "ITAU");
@@ -182,8 +184,8 @@ describe("planejar várias OS com fatias do saldo", () => {
     assert.equal(primeira.status, "agendada");
     assert.deepEqual(primeira.janela, JANELA);
     assert.deepEqual(primeira.equipe, [
-      { colaborador_id: ANA, nome: "Ana Souza", papel: "lider", vinculo: "proprio", empresa: null, no_app: true },
-      { colaborador_id: VALTER, nome: "Valter Moreira", papel: "motorista", vinculo: "terceiro", empresa: "Rota Sul", no_app: false },
+      { colaborador_id: ANA, nome: "Ana Souza", papel: "lider", vinculo: "proprio", empresa: null, no_app: true, usuario_uid: "uid-ana" },
+      { colaborador_id: VALTER, nome: "Valter Moreira", papel: "motorista", vinculo: "terceiro", empresa: "Rota Sul", no_app: false, usuario_uid: null },
     ]);
     assert.deepEqual(primeira.equipe_uids, ["uid-ana"]);
     assert.deepEqual(primeira.veiculos.map((item: { placa: string; dono: string }) => [item.placa, item.dono]), [["DEF4G56", "proprio"], ["FGH2B34", "terceiro"]]);

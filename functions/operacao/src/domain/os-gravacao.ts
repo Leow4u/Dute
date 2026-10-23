@@ -73,6 +73,10 @@ function dados(snapshot: { exists: boolean; data: () => DocumentData | undefined
   return snapshot.data() ?? {};
 }
 
+function textoDoNome(valor: unknown): string | null {
+  return typeof valor === "string" && valor.trim() ? valor.trim().slice(0, 160) : null;
+}
+
 function hojeEmSaoPaulo(agora = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(agora);
 }
@@ -307,6 +311,7 @@ async function abrir(
         demanda: acao.demanda,
         seq,
         customer_code: customerCode,
+        cliente_nome: textoDoNome(demanda.customer_name),
         escopo_rv: escopoRv,
         itens,
         locais: locaisDaDemanda(ordem.contatos),
@@ -364,6 +369,8 @@ async function agendar(
   transaction.update(db.collection(SERVICE_ORDERS_COLLECTION).doc(os.numero), {
     status: os.status,
     edicao: os.edicao,
+    // O nome do cliente vem da demanda a cada agendamento (a OS de antes da parte 3.8a ganha o dela).
+    cliente_nome: textoDoNome(demanda.customer_name) ?? os.cliente_nome,
     janela: os.janela,
     equipe: os.equipe,
     equipe_uids: os.equipe_uids,

@@ -42,6 +42,7 @@ export const OPERACAO_EVENT_TYPES = [
   "os.item_executed",
   "os.item_added_in_field",
   "os.photo_attached",
+  "os.presence_recorded",
   "demand.direct_opened",
 ] as const;
 export type OperacaoEventType = (typeof OPERACAO_EVENT_TYPES)[number];
@@ -146,6 +147,11 @@ const fotoAnexada = z
   })
   .strict();
 
+/** A entrada ou a saída de alguém da equipe, pelo id do cadastro (parte 3.8a): o que paga a diária. */
+const presencaRegistrada = z
+  .object({ id: osId, demanda: demandaNumero, colaborador_id: z.string().regex(/^col_[a-f0-9]{16}$/), tipo: z.enum(["entrada", "saida"]), instante, canal })
+  .strict();
+
 export const OPERACAO_EVENT_PAYLOADS = {
   "collaborator.created": criado,
   "collaborator.updated": alterado,
@@ -166,6 +172,7 @@ export const OPERACAO_EVENT_PAYLOADS = {
   "os.item_executed": itemExecutado,
   "os.item_added_in_field": itemIncluido,
   "os.photo_attached": fotoAnexada,
+  "os.presence_recorded": presencaRegistrada,
   "demand.direct_opened": demandaDireta,
 } as const;
 
@@ -189,6 +196,7 @@ const TEXTO: Record<OperacaoEventType, { title: string; description: string }> =
   "os.item_executed": { title: "Item da OS executado", description: "O feito de um item da OS foi informado." },
   "os.item_added_in_field": { title: "Item incluído em campo", description: "Um item foi executado além do planejado na OS." },
   "os.photo_attached": { title: "Foto anexada à OS", description: "Uma foto da execução foi anexada à OS." },
+  "os.presence_recorded": { title: "Presença na OS", description: "A entrada ou a saída de alguém da equipe foi registrada na OS." },
   "demand.direct_opened": { title: "Demanda direta aberta", description: "A demanda chegou direto na Operação e se orça depois da execução." },
 };
 

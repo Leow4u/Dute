@@ -129,7 +129,7 @@ export function registrarFeito(os: OsGravada, itens: readonly ItemEmExecucao[], 
     falha(`${nomeDa(atual)}: o feito (${pedido.executado}) passa do previsto (${deMilesimos(limite)}). Inclua o que foi além do planejado.`);
   }
   const quando = instanteDoRegistro(pedido.instante, os, contexto.agora);
-  const { informado_por } = origemDoRegistro(os, pedido, contexto.canal);
+  const { informado_por } = origemDoRegistro(os, pedido, contexto);
   const item: ItemEmExecucao = { ...atual, executado: deMilesimos(feito), executado_em: quando };
   return {
     itens: itens.map((existente) => (existente.id === item.id ? item : existente)),
@@ -163,7 +163,7 @@ export function registrarInclusao(
     motivo: pedido.motivo,
     instante: quando,
     canal: contexto.canal,
-    ...origemDoRegistro(os, pedido, contexto.canal),
+    ...origemDoRegistro(os, pedido, contexto),
     registrado_por: contexto.registrado_por,
     registrado_em: contexto.agora.toISOString(),
   };
