@@ -89,7 +89,7 @@ de fora.
 | `ai_measures/{id}` | `functions/core` | Uma medida: o tipo, o escopo (cliente ou geral), a chave (o item da LPU), os números, as execuções e as OS mais recentes |
 | `ai_suggestions/{id}` | `functions/core` | A sugestão mostrada: o tipo, o contexto (a demanda, a OS, quem pediu), o valor sugerido, a base, a decisão e o valor real |
 | `ai_case_memory/{demanda}` | `functions/core` | A demanda fechada: os itens e as quantidades, os serviços, o prazo, o orçado e o realizado, o resumo em texto e o vetor de semelhança |
-| `ai_stock_age/{item}` | `functions/core` | O item do estoque, um por cliente e SKU: o relógio (a primeira e a última entrada e a última saída que contam) e o saldo das posições |
+| `ai_stock_age/{item}` | `functions/core` | O item do estoque, um por cliente e SKU: o relógio (a primeira e a última entrada e a última saída que contam), a última saída em cada posição e o saldo das posições |
 | `ai_cursors/{rotina}` | `functions/core` | Até onde cada rotina leu os eventos ou o razão do estoque |
 | `core_operations/{id}` | `functions/core` | O recibo de idempotência das callables |
 
@@ -145,8 +145,14 @@ e os dias parado da peça entram com ele.
   - Regra própria de um cliente é PR, com teste, nunca configuração de tela.
 - **A caixa.** As caixas guardam o que foi contado na abertura. O
   recebimento e a expedição não mexem nelas, então o conteúdo só vale até a
-  primeira saída. A parte 5.4b conta a caixa desde a guarda dela ou desde a
-  última saída de um SKU dela pela posição dela.
+  primeira saída.
+  - A caixa conta desde a guarda dela ou desde a última saída de um SKU dela
+    pela posição dela. A entrada na mesma posição não conta: o recebimento
+    não põe nada na caixa.
+  - Duas caixas na mesma posição com o mesmo SKU contam a mesma saída: o
+    razão não diz de qual caixa saiu.
+  - O item guarda a última saída em cada posição, e a idade da caixa sai na
+    hora, como a do item. A caixa só tem o "Parado"; o giro é do item.
 - **O cliente.** Os dias parado não abrem ao cliente. O cliente fica sabendo
   pelo alerta, e o alerta só sai depois que uma pessoa aprova (parte 5.4d).
 
@@ -169,7 +175,7 @@ Leonardo.
 | 5.3b | `findSimilarQuotes`: os orçamentos parecidos do cliente da demanda, com os itens, as quantidades, o prazo e o preço, e o orçado e o realizado de cada caso | Caso de outro cliente nunca aparece; só quem orça pede; nada grava |
 | 5.3c | Os orçamentos parecidos na montagem do orçamento, com "Usar as quantidades" | Textos listados; usar só preenche o formulário; `axe` |
 | 5.4a | A regra dos dias parado por modelo de operação, em `lib/dominio`, com a cópia no núcleo; o relógio de cada item em `ai_stock_age`, pela rotina `runMeasures`, a partir do razão; as regras | A etiqueta sai da regra do modelo; o mesmo SKU em dois clientes são dois itens; o cliente não lê |
-| 5.4b | Os dias parado da caixa, desde a guarda ou a última saída de um SKU dela pela posição dela | A caixa conta da guarda; a saída pela posição dela zera |
+| 5.4b | Os dias parado da caixa: o item guarda a última saída em cada posição, e a idade da caixa sai da guarda dela e das saídas dos SKUs dela pela posição dela | A caixa conta da guarda; só a saída de um SKU dela pela posição dela zera |
 | 5.4c | Os dias parado e as etiquetas em Estoque, por item e por caixa | Textos listados; a etiqueta sai da regra do modelo do cliente; `axe` |
 | 5.4d | O alerta do item parado, no portal e por e-mail, só depois da aprovação | O alerta não sai sem aprovação |
 | 5.5 | O Agent Dute no núcleo, com as ferramentas de leitura dos módulos; o WMS passa a usar o do núcleo. Desenho próprio antes do código | Ferramenta nunca escreve; isolamento por cliente nas respostas |
@@ -408,3 +414,22 @@ cópia em `functions/core/src/domain/parados.ts`; a rotina em
     - o razão maior que um lote é lido na mesma vez;
     - nada grava fora da memória.
   - `memoria-medidas.rules.test.ts`: quem lê e quem não lê `ai_stock_age`.
+
+### Parte 5.4b: os dias parado da caixa
+
+Feita em 23/10/2026. A idade da caixa está em `lib/dominio/src/parados.ts`
+(`idadeDaCaixa`), com a cópia no núcleo; a rotina passou a guardar a última
+saída do item em cada posição (`saidas_por_posicao`).
+
+- **A conta.** A caixa guardada conta desde a guarda (`stored_at`) ou desde a
+  última saída de um SKU dela pela posição dela, a mais nova das duas.
+  - A saída do mesmo SKU por outra posição não conta, nem a de um SKU que não
+    está na caixa, nem a entrada na posição.
+  - A caixa vazia não tem idade. A posição vale em maiúsculas, como no mapa.
+- **A rotina.** A versão subiu para 2: na primeira vez depois da publicação,
+  ela relê o razão do começo e grava a saída por posição de cada item. A guarda
+  sai da doca e não conta.
+- **Testes.**
+  - Os casos de referência das saídas por posição e da caixa, no app e no
+    núcleo.
+  - No emulador, a saída por posição gravada no item e a idade de duas caixas.

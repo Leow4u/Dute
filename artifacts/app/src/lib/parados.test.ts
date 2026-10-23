@@ -9,16 +9,21 @@ import {
   REGRAS_DE_PARADO,
   diaEmSaoPaulo,
   diasCorridos,
+  idadeDaCaixa,
   idadeDoItem,
   marcarMovimento,
+  marcarSaidaNaPosicao,
   regraDoModelo,
   regraEmTexto,
   rotuloDaEtiqueta,
   sentidoDoMovimento,
+  type CaixaParaIdade,
   type EtiquetaDeParado,
+  type IdadeDaCaixa,
   type IdadeDoItem,
   type RegraDeParado,
   type RelogioDoItem,
+  type SaidasPorPosicao,
   type SentidoDoMovimento,
 } from "@workspace/dominio";
 
@@ -38,6 +43,8 @@ type Casos = {
   dias_corridos: { caso: string; de: string; ate: string; dias?: number; erro?: boolean }[];
   idades: { caso: string; relogio: RelogioDoItem; saldo: number; modelo: string; hoje?: string; idade?: IdadeDoItem; erro?: boolean }[];
   rotulos: { caso: string; etiqueta: EtiquetaDeParado; modelo: string; rotulo: string }[];
+  saidas_por_posicao: { caso: string; saidas: { posicao: string | null; em: string }[]; resultado: SaidasPorPosicao }[];
+  caixas: { caso: string; caixa: CaixaParaIdade; saidas: Record<string, SaidasPorPosicao>; hoje?: string; idade?: IdadeDaCaixa; erro?: boolean }[];
 };
 
 const HOJE = "2026-10-20";
@@ -87,6 +94,20 @@ describe("dias parado: casos de referência", () => {
 
   for (const caso of casos.rotulos) {
     it(`rótulo: ${caso.caso}`, () => expect(rotuloDaEtiqueta(caso.etiqueta, regraDoModelo(caso.modelo))).toBe(caso.rotulo));
+  }
+
+  for (const caso of casos.saidas_por_posicao) {
+    it(`saídas por posição: ${caso.caso}`, () => {
+      expect(caso.saidas.reduce<SaidasPorPosicao>((atual, saida) => marcarSaidaNaPosicao(atual, saida.posicao, saida.em), {})).toEqual(caso.resultado);
+    });
+  }
+
+  for (const caso of casos.caixas) {
+    it(`caixa: ${caso.caso}`, () => {
+      const calcular = () => idadeDaCaixa(caso.caixa, (sku) => caso.saidas[sku], regraDoModelo("uniformes"), caso.hoje ?? HOJE);
+      if (caso.erro) expect(calcular).toThrow();
+      else expect(calcular()).toEqual(caso.idade);
+    });
   }
 });
 

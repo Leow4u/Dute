@@ -159,6 +159,58 @@ export function idadeDoItem(relogio: RelogioDoItem, saldo: number, regra: RegraD
   return { dias_parado: diasParado, dias_sem_saida: diasSemSaida, etiquetas };
 }
 
+/** A posição como o mapa do armazém guarda: maiúsculas, sem espaço em volta. */
+export function posicaoNormalizada(valor: unknown): string {
+  return typeof valor === "string" ? valor.trim().toUpperCase() : "";
+}
+
+/** A última saída do item em cada posição, para a idade da caixa. */
+export type SaidasPorPosicao = Readonly<Record<string, string>>;
+
+/** As saídas depois da saída do movimento: fica a mais nova de cada posição, em qualquer ordem. */
+export function marcarSaidaNaPosicao(saidas: SaidasPorPosicao, posicao: unknown, instante: unknown): SaidasPorPosicao {
+  const chave = posicaoNormalizada(posicao);
+  const em = instanteValido(instante);
+  if (!chave || !em) return saidas;
+  const atual = saidas[chave] ?? null;
+  return atual !== null && atual >= em ? saidas : { ...saidas, [chave]: em };
+}
+
+export type CaixaParaIdade = {
+  /** Quando a caixa foi guardada na posição. */
+  guardada_em: string | null;
+  posicao: string | null;
+  skus: readonly string[];
+};
+
+export type IdadeDaCaixa = {
+  /** Os dias desde a guarda ou desde a última saída de um SKU dela pela posição dela; null sem SKU ou sem data. */
+  dias_parado: number | null;
+  etiquetas: Extract<EtiquetaDeParado, "parado">[];
+};
+
+/**
+ * A idade da caixa hoje. A caixa guarda o que foi contado na abertura, e o
+ * recebimento não põe nada nela: o que a mexe é a saída de um SKU dela pela
+ * posição dela. A entrada na mesma posição não conta. A caixa vazia não tem
+ * idade. A caixa só tem o "Parado": o giro é do item.
+ */
+export function idadeDaCaixa(
+  caixa: CaixaParaIdade,
+  saidasDoSku: (sku: string) => SaidasPorPosicao | null | undefined,
+  regra: RegraDeParado,
+  hoje: string,
+): IdadeDaCaixa {
+  if (!DIA.test(hoje)) throw new Error("Dia inválido: use AAAA-MM-DD.");
+  const posicao = posicaoNormalizada(caixa.posicao);
+  if (!caixa.skus.length) return { dias_parado: null, etiquetas: [] };
+  const ultimaSaida = caixa.skus.reduce<string | null>((achada, sku) => maior(achada, instanteValido(saidasDoSku(sku)?.[posicao])), null);
+  const dia = diaEmSaoPaulo(maior(instanteValido(caixa.guardada_em), ultimaSaida));
+  if (dia === null) return { dias_parado: null, etiquetas: [] };
+  const diasParado = Math.max(0, diasCorridos(dia, hoje));
+  return { dias_parado: diasParado, etiquetas: diasParado >= regra.parado_dias ? ["parado"] : [] };
+}
+
 /** "Parado 90+ dias" e "Sem giro". */
 export function rotuloDaEtiqueta(etiqueta: EtiquetaDeParado, regra: RegraDeParado): string {
   return etiqueta === "parado" ? `Parado ${regra.parado_dias}+ dias` : "Sem giro";

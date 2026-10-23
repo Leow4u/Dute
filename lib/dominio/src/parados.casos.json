@@ -1,5 +1,5 @@
 {
-  "_leia": "Casos de referência dos dias parado (lib/dominio/src/parados.ts). Rodam no vitest do app e no node --test de functions/core, contra a cópia de lá. Itens sintéticos: só datas e saldo. O dia de hoje é sempre 2026-10-20; o instante é ISO de UTC e o dia é o de São Paulo (UTC-3). Erro: true quando a função deve recusar.",
+  "_leia": "Casos de referência dos dias parado (lib/dominio/src/parados.ts). Rodam no vitest do app e no node --test de functions/core, contra a cópia de lá. Itens e caixas sintéticos: só datas, posições e saldo. O dia de hoje é sempre 2026-10-20; o instante é ISO de UTC e o dia é o de São Paulo (UTC-3). Erro: true quando a função deve recusar.",
   "regras": [
     { "caso": "uniformes", "modelo": "uniformes", "regra": { "parado_dias": 90, "sem_giro_dias": 180 } },
     { "caso": "mobiliário", "modelo": "mobiliario", "regra": { "parado_dias": 90, "sem_giro_dias": 180 } },
@@ -152,5 +152,38 @@
   "rotulos": [
     { "caso": "o Parado traz o limite da regra", "etiqueta": "parado", "modelo": "uniformes", "rotulo": "Parado 90+ dias" },
     { "caso": "o Sem giro", "etiqueta": "sem_giro", "modelo": "uniformes", "rotulo": "Sem giro" }
+  ],
+  "saidas_por_posicao": [
+    {
+      "caso": "fica a saída mais nova de cada posição, em qualquer ordem",
+      "saidas": [
+        { "posicao": "a-01", "em": "2026-09-10T12:00:00.000Z" },
+        { "posicao": "A-01", "em": "2026-09-01T12:00:00.000Z" },
+        { "posicao": " B-02 ", "em": "2026-08-01T12:00:00.000Z" }
+      ],
+      "resultado": { "A-01": "2026-09-10T12:00:00.000Z", "B-02": "2026-08-01T12:00:00.000Z" }
+    },
+    {
+      "caso": "sem posição ou sem data não muda nada",
+      "saidas": [
+        { "posicao": "", "em": "2026-09-10T12:00:00.000Z" },
+        { "posicao": null, "em": "2026-09-10T12:00:00.000Z" },
+        { "posicao": "A-01", "em": "ontem" }
+      ],
+      "resultado": {}
+    }
+  ],
+  "caixas": [
+    { "caso": "guardada há 90 dias, sem saída: Parado", "caixa": {"guardada_em": "2026-07-22T15:00:00.000Z", "posicao": "A-01", "skus": ["SKU-1"]}, "saidas": {}, "idade": {"dias_parado": 90, "etiquetas": ["parado"]} },
+    { "caso": "guardada há 89 dias: ainda não", "caixa": {"guardada_em": "2026-07-23T15:00:00.000Z", "posicao": "A-01", "skus": ["SKU-1"]}, "saidas": {}, "idade": {"dias_parado": 89, "etiquetas": []} },
+    { "caso": "a saída de um SKU dela pela posição dela há 10 dias tira o Parado", "caixa": {"guardada_em": "2026-07-22T15:00:00.000Z", "posicao": "A-01", "skus": ["SKU-1"]}, "saidas": {"SKU-1": {"A-01": "2026-10-10T15:00:00.000Z"}}, "idade": {"dias_parado": 10, "etiquetas": []} },
+    { "caso": "a saída do mesmo SKU por outra posição não conta", "caixa": {"guardada_em": "2026-07-22T15:00:00.000Z", "posicao": "A-01", "skus": ["SKU-1"]}, "saidas": {"SKU-1": {"B-02": "2026-10-10T15:00:00.000Z"}}, "idade": {"dias_parado": 90, "etiquetas": ["parado"]} },
+    { "caso": "a saída de um SKU que não está na caixa não conta", "caixa": {"guardada_em": "2026-07-22T15:00:00.000Z", "posicao": "A-01", "skus": ["SKU-1"]}, "saidas": {"SKU-9": {"A-01": "2026-10-10T15:00:00.000Z"}}, "idade": {"dias_parado": 90, "etiquetas": ["parado"]} },
+    { "caso": "a saída anterior à guarda não conta", "caixa": {"guardada_em": "2026-07-22T15:00:00.000Z", "posicao": "A-01", "skus": ["SKU-1"]}, "saidas": {"SKU-1": {"A-01": "2026-04-03T15:00:00.000Z"}}, "idade": {"dias_parado": 90, "etiquetas": ["parado"]} },
+    { "caso": "a posição da caixa em minúsculas é a mesma", "caixa": {"guardada_em": "2026-07-22T15:00:00.000Z", "posicao": " a-01 ", "skus": ["SKU-1"]}, "saidas": {"SKU-1": {"A-01": "2026-10-10T15:00:00.000Z"}}, "idade": {"dias_parado": 10, "etiquetas": []} },
+    { "caso": "a caixa vazia não tem idade", "caixa": {"guardada_em": "2026-07-22T15:00:00.000Z", "posicao": "A-01", "skus": []}, "saidas": {}, "idade": {"dias_parado": null, "etiquetas": []} },
+    { "caso": "sem a data da guarda, conta da última saída de um SKU dela", "caixa": {"guardada_em": null, "posicao": "A-01", "skus": ["SKU-1", "SKU-2"]}, "saidas": {"SKU-2": {"A-01": "2026-04-03T15:00:00.000Z"}}, "idade": {"dias_parado": 200, "etiquetas": ["parado"]} },
+    { "caso": "sem guarda e sem saída: sem base", "caixa": {"guardada_em": null, "posicao": "A-01", "skus": ["SKU-1"]}, "saidas": {}, "idade": {"dias_parado": null, "etiquetas": []} },
+    { "caso": "o dia de hoje inválido recusa", "caixa": {"guardada_em": "2026-07-22T15:00:00.000Z", "posicao": "A-01", "skus": ["SKU-1"]}, "saidas": {}, "hoje": "20/10/2026", "erro": true }
   ]
 }
