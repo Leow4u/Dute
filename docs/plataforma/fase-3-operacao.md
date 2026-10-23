@@ -161,7 +161,8 @@ registros guardados" é dado, não legenda.
 | 3.7a | Execução no backend: `registerStep` (etapas na ordem do serviço, com o instante, o canal, o meio e quem informou; a primeira põe a OS Em execução) e `registerOccurrence` | Etapa fora de ordem recusada; instante gravado; repetir não duplica |
 | 3.7b | Itens executados: `registerItem` (feito por linha e incluído em campo, com quem pediu e o motivo) | Feito acima do planejado sem inclusão recusado; incluído vira divergência |
 | 3.7c | Fotos: `attachPhoto` e `storage.rules` em `os/{numero}/fotos/` | Foto só de quem está na OS ou coordena |
-| 3.7d | Tela da OS (`OpOS`) em quatro passos, com "Registrar andamento" (etapa, itens e ocorrência) | Textos listados; `axe`; o formulário manda o formato das callables |
+| 3.7d | Ficha da OS (`OpOS`): os quatro passos, locais, etapas, itens com o feito, fotos, equipe, veículos e histórico | Textos listados; `axe`; etapas iguais às do backend |
+| 3.7e | "Registrar andamento" na ficha da OS: etapa, itens (feito e incluído) e ocorrência com fotos | O formulário manda o formato das callables |
 | 3.8 | Campo (PWA): Minhas OS, execução, incluir item, presença, fila sem sinal | Campo lê só a OS escalada; dois envios do mesmo registro gravam um; instante original guardado |
 | 3.9 | Concluir com assinatura ou "sem aceite no local", Em revisão; impressão da OS | Concluir sem motivo para item a menos recusado; assinatura no Storage com regra |
 | 3.10 | Revisão interna, Revisada, reabrir; aditivo na fila do Comercial; demanda direta em Execução a orçar | Divergência sem decisão não conclui; `demands.revisao` só pela Operação |
@@ -654,3 +655,29 @@ OS. Regras em `domain/fotos.ts`, gravação em `domain/fotos-gravacao.ts`.
 - **Rodar local.** O emulador do Storage lê o Firestore por HTTP e usa o
   proxy do ambiente quando há um: numa máquina com proxy, rode a integração
   com `HTTPS_PROXY` vazio.
+
+### Parte 3.7d: ficha da OS
+
+Feita em 23/10/2026, no desenho aprovado `OpOS`, em `/operacao/os?numero=`.
+A Agenda ("Abrir OS"), a ficha da demanda e o Hoje (a OS em execução e em
+revisão) levam a ela; no menu, acende o Hoje.
+
+- **Cabeçalho.** O número, o status, o tipo, a demanda, o cliente, o título,
+  os serviços e a janela.
+- **Passos.** Agendar, Executar, Concluir e Revisar, com o feito, o atual e
+  o pendente pelo status; Executar mostra o líder e a etapa em curso. A OS
+  cancelada mostra o motivo no lugar.
+- **Locais.** Origem e destino com a hora da saída e da chegada (das
+  etapas), o contato do cliente, as instruções e "Abrir no Maps".
+- **Etapas.** As sete, com a hora, quem informou e por onde; a última em
+  curso é "desde", a pulada fica com traço e o fim mostra "até" a janela.
+- **Itens.** O previsto (o planejado mais o incluído, "150 + 10"), a barra e
+  o feito, a hora do último feito e cada inclusão em campo com quem, quando,
+  quem pediu, o motivo e as fotos.
+- **Fotos, equipe e histórico.** As fotos mais novas com a legenda; a equipe
+  com o papel e o vínculo e os veículos; "Alterar" leva ao escalar do Hoje
+  enquanto a OS não começou. O histórico junta etapas, inclusões e
+  ocorrências, do mais novo para o mais antigo.
+- **Código.** A leitura e o que a tela mostra ficam em
+  `lib/operacao/ficha-da-os.ts`; a lista das etapas é a do backend (o teste
+  lê `functions/operacao/src/domain/execucao.ts`).

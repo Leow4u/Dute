@@ -183,7 +183,7 @@ describe("Demanda", () => {
     ]) {
       expect(textos, texto).toContain(texto);
     }
-    expect(html).toContain('href="/operacao/hoje?os=10053-01"');
+    expect(html).toContain('href="/operacao/os?numero=10053-01"');
     expect(html).toContain('href="/operacao/demandas"');
     expect(html).toContain('href="/operacao/planejar?demanda=10053"');
     expect(html).not.toContain("R$");

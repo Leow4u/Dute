@@ -13,11 +13,14 @@ import {
   ROTA_NOVA_DEMANDA,
   ROTA_PLANEJAR,
   ROTA_OPERACAO,
+  ROTA_OS,
   ROTA_VEICULOS,
   abreOperacao,
   colaboradorDaBusca,
   demandaDaBusca,
   demandaDoPlanoDaBusca,
+  fichaDaBusca,
+  hrefDaFichaDaOs,
   hrefDaOs,
   hrefDaSemana,
   hrefDaDemanda,
@@ -97,7 +100,7 @@ describe("navegação do cadastro da Operação", () => {
   });
 
   it("/operacao é o Início (parte 2.6) e o Hoje (parte 3.5a) mora em /operacao/hoje", () => {
-    expect(rotasDaOperacao(LIBERADO)).toEqual([ROTA_OPERACAO, ROTA_HOJE, ROTA_AGENDA, ROTA_DEMANDAS, ROTA_DEMANDA, ROTA_NOVA_DEMANDA, ROTA_PLANEJAR, ROTA_COLABORADORES, ROTA_VEICULOS]);
+    expect(rotasDaOperacao(LIBERADO)).toEqual([ROTA_OPERACAO, ROTA_HOJE, ROTA_AGENDA, ROTA_DEMANDAS, ROTA_DEMANDA, ROTA_NOVA_DEMANDA, ROTA_PLANEJAR, ROTA_OS, ROTA_COLABORADORES, ROTA_VEICULOS]);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao", OperacaoInicio\)/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/hoje", OperacaoHoje\)/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/agenda", OperacaoAgenda\)/);
@@ -105,6 +108,7 @@ describe("navegação do cadastro da Operação", () => {
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/demanda", OperacaoDemanda\)/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/nova-demanda", OperacaoDemandaNova\)/);
     expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/planejar", OperacaoPlanejar\)/);
+    expect(APP_SOURCE).toMatch(/protectedRoute\("\/operacao\/os", OperacaoOs\)/);
   });
 
   it("links diretos: a OS na fila e o colaborador no cadastro, de ida e volta", () => {
@@ -123,6 +127,9 @@ describe("navegação do cadastro da Operação", () => {
     expect(hrefDoPlano("10045")).toBe("/operacao/planejar?demanda=10045");
     expect(demandaDoPlanoDaBusca("?demanda=10045")).toBe("10045");
     expect(demandaDoPlanoDaBusca("?demanda=abc")).toBeNull();
+    expect(hrefDaFichaDaOs("10045-01")).toBe("/operacao/os?numero=10045-01");
+    expect(fichaDaBusca("?numero=10045-01")).toBe("10045-01");
+    expect(fichaDaBusca("?numero=10045")).toBeNull();
     expect(hrefDaSemana("2026-10-19")).toBe("/operacao/agenda?semana=2026-10-19");
     expect(semanaDaBusca("?semana=2026-10-19")).toBe("2026-10-19");
     expect(semanaDaBusca("?semana=19/10/2026")).toBeNull();

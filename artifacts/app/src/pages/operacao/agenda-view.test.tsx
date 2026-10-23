@@ -133,7 +133,8 @@ describe("Agenda", () => {
   it("a OS escolhida acende em todas as linhas e mostra o resumo, com Reagendar e a demanda", () => {
     const html = render({ selecionada: "10045-02" });
     const textos = textosDaTela(html);
-    for (const texto of ["Agendada", "OS 10045-02", "Qui 22/10 19:00–23:00", "Carlos Silva", "DEF-4G56", "Reagendar", "Demanda 10045"]) expect(textos, texto).toContain(texto);
+    for (const texto of ["Agendada", "OS 10045-02", "Qui 22/10 19:00–23:00", "Carlos Silva", "DEF-4G56", "Reagendar", "Abrir OS", "Demanda 10045"]) expect(textos, texto).toContain(texto);
+    expect(html).toContain('href="/operacao/os?numero=10045-02"');
     // A OS 10045-02 está na linha do Carlos e na do veículo.
     expect(html.match(/aria-pressed="true"/g)).toHaveLength(2);
     expect(html).toContain('aria-label="Fechar seleção"');
@@ -159,7 +160,7 @@ describe("Agenda", () => {
         /^(Equipe própria|Freelancers|Veículos|Carlos Silva|Ana Lima|Diego Alves|DEF-4G56|Líder|Montador|Baú|[A-Z]{2})$/,
         /^Itaú Unibanco · \d{2}:\d{2}(–\d{2}:\d{2})?$/,
         /^(· )?(Agendada|Em execução|Em revisão)$/,
-        /^(Qui 22\/10 19:00–23:00|Reagendar|Escalar|Demanda 100\d\d)$/,
+        /^(Qui 22\/10 19:00–23:00|Reagendar|Escalar|Abrir OS|Demanda 100\d\d)$/,
         /^(\d{2}:\d{2}(–\d{2}:\d{2})?|Carlos Silva, Diego Alves|Nenhuma OS na semana)$/,
       ]),
     ).toEqual([]);

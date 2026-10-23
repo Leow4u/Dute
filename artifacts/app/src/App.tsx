@@ -153,6 +153,7 @@ const OperacaoDemandas = lazy(() => import("./pages/operacao/demandas"));
 const OperacaoDemanda = lazy(() => import("./pages/operacao/demanda"));
 const OperacaoDemandaNova = lazy(() => import("./pages/operacao/demanda-nova"));
 const OperacaoPlanejar = lazy(() => import("./pages/operacao/planejar"));
+const OperacaoOs = lazy(() => import("./pages/operacao/os"));
 const OperacaoColaboradores = lazy(() => import("./pages/operacao/colaboradores"));
 const OperacaoVeiculos = lazy(() => import("./pages/operacao/veiculos"));
 import { useRole } from "./hooks/use-role";
@@ -1080,6 +1081,7 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
     protectedRoute("/operacao/demanda", OperacaoDemanda),
     protectedRoute("/operacao/nova-demanda", OperacaoDemandaNova),
     protectedRoute("/operacao/planejar", OperacaoPlanejar),
+    protectedRoute("/operacao/os", OperacaoOs),
     protectedRoute("/operacao/colaboradores", OperacaoColaboradores),
     protectedRoute("/operacao/veiculos", OperacaoVeiculos),
   ]),

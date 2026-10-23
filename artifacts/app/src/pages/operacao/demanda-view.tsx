@@ -25,7 +25,7 @@ import {
   milesimos,
   type PrazoDoHoje,
 } from "@/lib/operacao/hoje";
-import { ROTA_DEMANDAS, hrefDaOs, hrefDoPlano } from "@/lib/operacao/navegacao";
+import { ROTA_DEMANDAS, hrefDaFichaDaOs, hrefDoPlano } from "@/lib/operacao/navegacao";
 import { cn } from "@/lib/utils";
 
 import { Etapa } from "./demandas-view";
@@ -245,18 +245,12 @@ function OrdensDaDemanda({
               className="flex flex-col gap-2 rounded-lg border border-border px-4 py-3 sm:flex-row sm:items-start sm:justify-between"
             >
               <span className="flex min-w-0 flex-col gap-1">
-                {os.status === "aberta" || os.status === "agendada" ? (
-                  <Link
-                    href={hrefDaOs(os.numero)}
-                    className="text-sm font-semibold text-foreground underline-offset-4 hover:underline"
-                  >
-                    OS {os.numero}
-                  </Link>
-                ) : (
-                  <span className="text-sm font-semibold text-foreground">
-                    OS {os.numero}
-                  </span>
-                )}
+                <Link
+                  href={hrefDaFichaDaOs(os.numero)}
+                  className="self-start rounded text-sm font-semibold text-foreground underline-offset-4 hover:underline"
+                >
+                  OS {os.numero}
+                </Link>
                 {os.rota ? (
                   <span className="text-sm text-muted-foreground">
                     {os.rota}
