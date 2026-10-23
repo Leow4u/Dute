@@ -88,6 +88,14 @@ Seguem a recomendação até a resposta do Leonardo:
 - **A LPU de cobrança** passa para o catálogo e as tabelas do Comercial (parte
   7.3), com a vigência. A fatura do WMS calcula igual antes e depois: o teste
   da 7.1 é a régua.
+  - O item do WMS continua dizendo como a linha se calcula (a fonte
+    automática, o grupo e a ordem). O preço passa a ser do Comercial.
+  - Vale a tabela do cliente vigente no último dia da competência. Recomendação
+    até a resposta do Leonardo: o mês que muda de tabela no meio fatura pelo
+    preço do fim.
+  - Sem a tabela com o item, ou com duas do cliente no mesmo dia, a conta
+    recusa. O preço de dinheiro nunca se adivinha.
+  - O ad valorem segue com a taxa do `billing_config`.
 - **Antes de mexer nas trilhas de dinheiro do WMS, os testes** (parte 7.1,
   como o `CLAUDE.md` exige).
   - Eles chamam as callables de verdade no emulador, pelo `.run` do
@@ -104,7 +112,9 @@ Seguem a recomendação até a resposta do Leonardo:
 | 7.2a | `registerNf` registra a NF da armazenagem que o WMS emitiu, sozinha ou com as demandas do mesmo cliente, pelo total congelado; cancelar devolve a competência; o WMS não paga a competência que está numa NF | Só a emitida e fora de NF entra; o total é o da foto; outro cliente recusa; a faturada não fatura de novo |
 | 7.2b | A competência emitida no "A faturar" do Financeiro e na NF, no app | Só a emitida e sem NF aparece, no grupo do cliente dela, com o total da foto |
 | 7.2c | Receber e estornar a fatura da armazenagem marcam a competência do WMS, com o evento; o pagar do WMS sai onde o Financeiro está liberado | A competência fica paga uma vez; o estorno volta a emitida |
-| 7.3 | A LPU de cobrança do WMS no catálogo e nas tabelas do Comercial, com vigência | A fatura do WMS calcula igual antes e depois (a régua da 7.1) |
+| 7.3a | O item da LPU de cobrança ligado ao catálogo do Comercial tira o preço da tabela do cliente vigente no último dia da competência | O item sem ligação calcula igual (a régua da 7.1); sem tabela ou com duas, recusa; a foto guarda a tabela |
+| 7.3b | Levar a LPU de cobrança de um cliente ao Comercial: os itens no catálogo, a tabela "Armazenagem" com os preços de hoje e a ligação de cada item, numa transação | A fatura calcula igual antes e depois da passagem |
+| 7.3c | A Tabela de preços do WMS mostra de onde vem o preço e leva o cliente ao Comercial | O item ligado não edita o preço no WMS |
 | 7.4 | A integração da NF e a exportação contábil, com o fornecedor escolhido | Emissão idempotente; a falha não marca a fatura como emitida |
 | 7.5 | Contratos e Autorizações no shell do Financeiro, só leitura; a perda por prazo de faturamento | O Financeiro lê sem editar itens nem preço |
 
@@ -279,3 +289,38 @@ Feita em 23/10/2026.
   - `billing-scope.test.ts` e `platform-lists.test.ts`: a lista do WMS;
   - `billing-callables.integration.test.ts`: o `fatura_id` da prévia;
   - `lib/financeiro/armazenagem.test.ts`: a ação da tela do WMS.
+
+### Parte 7.3a: o preço da armazenagem pela tabela do Comercial
+
+Feita em 23/10/2026, em `functions/wms/src/domain/billing-price-tables.ts` e
+no `loadBillingCalculation`.
+
+- **A ligação.** O item de `billing_price_list` com `lpu_item_id` tira o
+  `valor_unit` da tabela do cliente (`price_tables`, `customer_code`) vigente
+  no último dia da competência.
+  - O preço é o texto decimal exato da tabela. A conta segue a do WMS
+    (`billing.ts`).
+  - A linha leva o `tabela_id`, e a foto da emissão o guarda.
+  - O item sem ligação, o inativo e o ad valorem não leem tabela nenhuma.
+- **As recusas.** Sem a tabela com o item, `PRICE_NOT_IN_TABLE`. Com duas do
+  cliente valendo no mesmo dia, `PRICE_TABLE_AMBIGUOUS`. A tabela de outro
+  cliente nunca vale.
+- **O uso congela sem o preço.** O `ensureFrozenBillingUsage` não resolve o
+  preço, então o mês fechado congela o uso mesmo quando a tabela falta.
+- **Achado e corrigido.** O `emitBillingInvoice` congelava o uso fora do
+  `try`. Um erro de faturamento nessa hora chegava ao app como "internal".
+  Agora chega com o código.
+- **O WMS não muda o preço do item ligado** (`mutateManagedEntity`).
+- **A cópia literal** da coleção do Comercial tem a trava no
+  `billing-price-tables.test.ts`.
+- **Testes:**
+  - `billing-price-tables.test.ts`: a data-base, a tabela vigente, as duas
+    no mesmo dia e o preço ilegível;
+  - `billing-callables.integration.test.ts`:
+    - o item ligado com o preço da tabela do fim do mês, e a foto com a
+      tabela;
+    - a tabela do outro cliente;
+    - as recusas, sem emitir;
+    - o preço que não muda no WMS.
+  - A régua da 7.1 segue verde sem mudar um número: o item sem ligação
+    calcula igual.

@@ -36,6 +36,8 @@ export type BillingErrorCode =
   | "PERIOD_NOT_OPEN"
   | "PERIOD_INVOICED"
   | "PAID_IN_FINANCEIRO"
+  | "PRICE_NOT_IN_TABLE"
+  | "PRICE_TABLE_AMBIGUOUS"
   | "PERIOD_COMPETENCIA_MISMATCH"
   | "SNAPSHOT_ALREADY_EXISTS"
   | "INVALID_SNAPSHOT";
@@ -59,6 +61,8 @@ export interface LpuItem {
   auto_source?: string | null;
   ordem?: number;
   ativo?: boolean;
+  /** A tabela do Comercial de onde saiu o `valor_unit` (parte 7.3a). */
+  tabela_id?: string | null;
 }
 
 export interface BillingManualQuantity {
@@ -109,6 +113,8 @@ export interface BillingLine {
   auto_source: string | null;
   observacao: string | null;
   ordem: number;
+  /** A tabela do Comercial de onde saiu o preço; ausente no preço do próprio WMS. */
+  tabela_id?: string;
 }
 
 export interface BillingGroup {
@@ -742,6 +748,7 @@ export function calculateLpuLines(
       auto_source: autoSource,
       observacao: autoSource ? null : (manual?.observacao ?? null),
       ordem: normalizedOrder(item.ordem),
+      ...(item.tabela_id ? { tabela_id: item.tabela_id } : {}),
     };
   });
 }
