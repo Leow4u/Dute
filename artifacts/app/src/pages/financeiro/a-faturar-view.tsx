@@ -27,16 +27,17 @@ import { cn } from "@/lib/utils";
 /**
  * Financeiro › A faturar (parte 4.1b, no molde de docs/mockups/Financeiro.dc.html
  * e ComAutorizacoes.dc.html), só a apresentação: os dados e as ações chegam
- * por props (pages/financeiro/a-faturar.tsx). As demandas prontas, por
- * cliente, as que esperam e o painel de registrar a NF. Sem legenda: rótulos,
- * dados e ações; uma ação principal, "Registrar NF".
+ * por props (pages/financeiro/a-faturar.tsx). As demandas prontas e a
+ * armazenagem emitida no WMS (parte 7.2b), por cliente, as que esperam e o
+ * painel de registrar a NF. Sem legenda: rótulos, dados e ações; uma ação
+ * principal, "Registrar NF".
  */
 
 export type AcoesDoAFaturar = {
   buscar: (texto: string) => void;
   abrirPainel: () => void;
   fecharPainel: () => void;
-  /** Marca ou desmarca a demanda na NF. */
+  /** Marca ou desmarca a linha na NF: o número da demanda ou o período da armazenagem. */
   marcar: (numero: string) => void;
   editar: <K extends keyof FormDaNf>(campo: K, valor: FormDaNf[K]) => void;
   registrar: () => void;
@@ -44,7 +45,7 @@ export type AcoesDoAFaturar = {
 
 export type PainelDaNf = {
   aberto: boolean;
-  /** Números das demandas marcadas. */
+  /** As linhas marcadas: o número da demanda ou o período da armazenagem. */
   marcadas: string[];
   form: FormDaNf;
   /** A confirmação do último registro. */
@@ -191,8 +192,8 @@ function Prontas({ estado, linhas, busca, painel, agora, acoes, marcando }: AFat
   let conteudo: ReactNode;
   if (estado === "carregando") conteudo = <Vazio>Carregando...</Vazio>;
   else if (estado === "erro") conteudo = <Vazio>Não foi possível carregar a fila.</Vazio>;
-  else if (!prontas.length) conteudo = <Vazio>Nenhuma demanda a faturar</Vazio>;
-  else if (!grupos.length) conteudo = <Vazio>Nenhuma demanda encontrada</Vazio>;
+  else if (!prontas.length) conteudo = <Vazio>Nada a faturar</Vazio>;
+  else if (!grupos.length) conteudo = <Vazio>Nada encontrado</Vazio>;
   else {
     conteudo = grupos.map((grupo, indice) => (
       <div key={grupo.customerCode} role="group" aria-label={grupo.cliente} className={cn(indice > 0 && "border-t border-border")}>
@@ -292,7 +293,7 @@ function Painel({ linhas, painel, hoje, ocupado, acoes }: AFaturarViewProps) {
 
       <div aria-hidden="true" className="h-px bg-muted" />
       <div className="flex items-center gap-2">
-        <h3 className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Demandas</h3>
+        <h3 className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Na NF</h3>
         <Pill>{marcadas.length}</Pill>
       </div>
       {marcadas.map((linha) => (

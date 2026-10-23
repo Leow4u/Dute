@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   DIAS_PARA_FATURAR,
   autorizacaoDoFinanceiro,
+  competenciaDoFinanceiro,
   demandaDoFinanceiro,
   diasNaEtapa,
   filtrarLinhas,
@@ -13,6 +14,7 @@ import {
   formInicial,
   gruposPorCliente,
   linhaAFaturar,
+  linhaDaArmazenagem,
   numerosDaFila,
   pagamentoDoContrato,
   pedidoDaNf,
@@ -26,6 +28,7 @@ import {
   type DemandaDoFinanceiro,
   type FormDaNf,
 } from "./a-faturar";
+import { LEGACY_CUSTOMER_CODE } from "../operations";
 import { CALLABLES_DO_FINANCEIRO } from "./api";
 
 /**
@@ -205,6 +208,67 @@ describe("o Início do Financeiro", () => {
     expect(diasNaEtapa(antiga, AGORA)).toBe(DIAS_PARA_FATURAR + 1);
     expect(pendenciasDoFinanceiro([], AGORA, "/x")).toEqual([]);
     expect(numerosDaFila(linhas)).toEqual({ prontas: 1, prontasCents: 100_000, aguardando: 1, semValor: 1 });
+  });
+});
+
+describe("a armazenagem do WMS na fila (parte 7.2b)", () => {
+  const EMITIDA = {
+    customer_code: "ITAU",
+    competencia: "2026-09",
+    status: "emitido",
+    emitido_em: "2026-10-02T12:00:00.000Z",
+    total_cents: 99,
+    invoice_snapshot: { competencia: "2026-09", status: "emitido", total_cents: 7_508 },
+  };
+  const armazenagem = linhaDaArmazenagem(competenciaDoFinanceiro("ITAU__2026-09", EMITIDA)!);
+  const demanda = linhaAFaturar(demandaDoFinanceiro("10060", { customer_code: "ITAU", customer_name: "Itaú Unibanco", etapa: "a_faturar", validacao: { rv: 0, autorizacao: "nenhuma" } })!, new Map(), 50_000);
+
+  it("só a emitida e fora de NF entra, pelo total da foto da emissão", () => {
+    expect(competenciaDoFinanceiro("ITAU__2026-09", EMITIDA)).toEqual({ periodoId: "ITAU__2026-09", customerCode: "ITAU", competencia: "2026-09", emitidaEm: "2026-10-02T12:00:00.000Z", valorCents: 7_508 });
+    expect(competenciaDoFinanceiro("ITAU__2026-09", { ...EMITIDA, status: "aberto" })).toBeNull();
+    expect(competenciaDoFinanceiro("ITAU__2026-09", { ...EMITIDA, status: "pago" })).toBeNull();
+    expect(competenciaDoFinanceiro("ITAU__2026-09", { ...EMITIDA, faturamento: { fatura_id: "fat_1" } })).toBeNull();
+    expect(competenciaDoFinanceiro("ITAU__2026-09", { ...EMITIDA, invoice_snapshot: null })?.valorCents).toBeNull();
+    // O id antigo é só da BTG.
+    expect(competenciaDoFinanceiro("2026-08", { status: "emitido", invoice_snapshot: { total_cents: 1_234 } })?.customerCode).toBe(LEGACY_CUSTOMER_CODE);
+    expect(competenciaDoFinanceiro("SAFRA__2026-09", { status: "emitido" })).toBeNull();
+    expect(competenciaDoFinanceiro("qualquer", EMITIDA)).toBeNull();
+  });
+
+  it("vira uma linha pronta, com o rótulo do mês e o dia da emissão; sem a foto, espera", () => {
+    expect([armazenagem.periodoId, armazenagem.situacao, armazenagem.valorCents, rotuloDaLinha(armazenagem)]).toEqual(["ITAU__2026-09", "pronta", 7_508, "Armazenagem 09/2026"]);
+    expect([armazenagem.origem, armazenagem.autorizacaoTexto, armazenagem.demanda.desde]).toEqual(["Fatura do WMS", "Emitida na Armazenagem", "2026-10-02T12:00:00.000Z"]);
+    expect(linhaDaArmazenagem(competenciaDoFinanceiro("ITAU__2026-09", { ...EMITIDA, invoice_snapshot: null })!).situacao).toBe("sem_valor");
+    expect(filtrarLinhas([armazenagem, demanda], "armazenagem")).toEqual([armazenagem]);
+  });
+
+  it("entra na NF com as demandas do mesmo cliente, no grupo dele e com o nome da demanda", () => {
+    expect(podeMarcarNaNf(armazenagem, [demanda])).toBe(true);
+    const safra = linhaDaArmazenagem(competenciaDoFinanceiro("SAFRA__2026-09", { ...EMITIDA, customer_code: "SAFRA" })!);
+    expect(podeMarcarNaNf(safra, [demanda])).toBe(false);
+    const [grupo] = gruposPorCliente([armazenagem, demanda]);
+    expect([grupo.cliente, grupo.totalCents, grupo.linhas.length]).toEqual(["Itaú Unibanco", 57_508, 2]);
+  });
+
+  it("o pedido leva a armazenagem à parte, e só quando há", () => {
+    const form: FormDaNf = { ...formInicial(HOJE, null), numero: "500", vencimento: "2026-11-20" };
+    expect(pedidoDaNf(form, [demanda, armazenagem], "k")).toMatchObject({ demandas: ["10060"], armazenagem: ["ITAU__2026-09"] });
+    expect(pedidoDaNf(form, [armazenagem], "k")).toMatchObject({ demandas: [], armazenagem: ["ITAU__2026-09"] });
+    expect(pedidoDaNf(form, [demanda], "k")).not.toHaveProperty("armazenagem");
+  });
+
+  it("a confirmação diz a armazenagem de cada mês", () => {
+    const form: FormDaNf = { ...formInicial(HOJE, null), numero: "500" };
+    expect(textoDoRegistro(form, { valor_cents: 7_508, demandas: [], armazenagem: ["ITAU__2026-09"] })).toBe(reais("NF 500 registrada: a armazenagem de 09/2026 faturada · R$ 75,08"));
+    expect(textoDoRegistro(form, { valor_cents: 57_508, demandas: ["10060"], armazenagem: ["2026-08", "ITAU__2026-09"] })).toBe(
+      reais("NF 500 registrada: 1 demanda e a armazenagem de 08/2026 e 09/2026 faturadas · R$ 575,08"),
+    );
+    expect(textoDoRegistro(form, { demandas: ["10060"] })).toBe("NF 500 registrada: 1 demanda faturada");
+  });
+
+  it("no Início, a armazenagem conta à parte da demanda", () => {
+    expect(pendenciasDoFinanceiro([demanda, armazenagem], AGORA, "/x")[0]?.title).toBe("1 demanda e 1 armazenagem a faturar");
+    expect(pendenciasDoFinanceiro([armazenagem], AGORA, "/x")[0]?.title).toBe("1 armazenagem a faturar");
   });
 });
 

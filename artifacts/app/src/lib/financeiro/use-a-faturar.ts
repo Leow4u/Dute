@@ -9,9 +9,11 @@ import { useLeitura } from "../operacao/leitura";
 import {
   ETAPAS_DA_FILA,
   autorizacaoDoFinanceiro,
+  competenciaDoFinanceiro,
   demandaDoFinanceiro,
   fonteDoValor,
   linhaAFaturar,
+  linhaDaArmazenagem,
   valorDaFonte,
   type AutorizacaoDoFinanceiro,
   type LinhaAFaturar,
@@ -33,6 +35,9 @@ import { useFaturas } from "./use-faturas";
  *   lê só as mais recentes; aqui cada demanda precisa da dela).
  * - O valor de cada demanda: a RV validada (congelada no envio) ou a medição
  *   aprovada, lidas uma vez por minuto no máximo.
+ * - A armazenagem emitida no WMS e fora de NF (parte 7.2b), ao vivo, com o
+ *   total da foto da emissão. As regras abrem `billing_periods` a quem lê o
+ *   faturamento, que inclui os papéis do Financeiro.
  */
 
 export type FilaDoFinanceiro = {
@@ -59,6 +64,11 @@ export function useFilaDoFinanceiro(role: ProfileRole | null | undefined, ligado
     abre ? "financeiro:demands" : null,
     (db) => query(collection(db, "demands"), where("etapa", "in", [...ETAPAS_DA_FILA])),
     demandaDoFinanceiro,
+  );
+  const periodos = useLeitura(
+    abre ? "financeiro:billing_periods" : null,
+    (db) => query(collection(db, "billing_periods"), where("status", "==", "emitido")),
+    competenciaDoFinanceiro,
   );
   const lidas = demandas.itens;
   const ids = useMemo(() => unicos((lidas ?? []).flatMap((demanda) => demanda.autorizacaoIds)), [lidas]);
@@ -92,11 +102,12 @@ export function useFilaDoFinanceiro(role: ProfileRole | null | undefined, ligado
 
   const falhas = [
     demandas.erro ? "demandas" : null,
+    periodos.erro ? "armazenagem" : null,
     autorizacoes.some((leitura) => leitura.isError) ? "autorizações" : null,
     documentos.some((leitura) => leitura.isError) ? "valores" : null,
   ].filter((falha): falha is string => falha !== null);
-  const pendente = lidas === null || autorizacoes.some((leitura) => leitura.isPending) || documentos.some((leitura) => leitura.isPending);
-  if (falhas.length || pendente || !lidas) return { linhas: undefined, carregando: !falhas.length && pendente, falhas };
+  const pendente = lidas === null || periodos.itens === null || autorizacoes.some((leitura) => leitura.isPending) || documentos.some((leitura) => leitura.isPending);
+  if (falhas.length || pendente || !lidas || !periodos.itens) return { linhas: undefined, carregando: !falhas.length && pendente, falhas };
 
   const porId = new Map<string, AutorizacaoDoFinanceiro>();
   ids.forEach((id, indice) => {
@@ -104,10 +115,13 @@ export function useFilaDoFinanceiro(role: ProfileRole | null | undefined, ligado
     if (dados) porId.set(id, autorizacaoDoFinanceiro(id, dados));
   });
   const porFonte = new Map(fontes.map((caminho, indice) => [caminho, documentos[indice]?.data ?? null]));
-  const linhas = lidas.map((demanda) => {
-    const fonte = fonteDoValor(demanda);
-    return linhaAFaturar(demanda, porId, fonte ? valorDaFonte(demanda, porFonte.get(fonte)) : null);
-  });
+  const linhas = [
+    ...lidas.map((demanda) => {
+      const fonte = fonteDoValor(demanda);
+      return linhaAFaturar(demanda, porId, fonte ? valorDaFonte(demanda, porFonte.get(fonte)) : null);
+    }),
+    ...periodos.itens.map(linhaDaArmazenagem),
+  ];
   return { linhas, carregando: false, falhas: [] };
 }
 

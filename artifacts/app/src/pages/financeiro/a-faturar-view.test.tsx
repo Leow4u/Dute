@@ -2,7 +2,15 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Router } from "wouter";
 
-import { autorizacaoDoFinanceiro, demandaDoFinanceiro, formInicial, linhaAFaturar, type LinhaAFaturar } from "@/lib/financeiro/a-faturar";
+import {
+  autorizacaoDoFinanceiro,
+  competenciaDoFinanceiro,
+  demandaDoFinanceiro,
+  formInicial,
+  linhaAFaturar,
+  linhaDaArmazenagem,
+  type LinhaAFaturar,
+} from "@/lib/financeiro/a-faturar";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
@@ -106,7 +114,7 @@ const PAINEL = [
   "Cartão",
   "Dinheiro",
   "Observação",
-  "Demandas",
+  "Na NF",
   "Total da NF",
   "Cancelar",
 ];
@@ -199,7 +207,7 @@ describe("A faturar", () => {
   it("carregando, erro e fila vazia dizem o que é, sem botão de registrar", () => {
     expect(textosDaTela(render({ estado: "carregando", linhas: [], painel: FECHADO }))).toEqual(["A faturar", "Prontas para faturar", "0", "Carregando..."]);
     expect(textosDaTela(render({ estado: "erro", linhas: [], painel: FECHADO }))).toEqual(["A faturar", "Prontas para faturar", "0", "Não foi possível carregar a fila."]);
-    expect(textosDaTela(render({ linhas: [], painel: FECHADO }))).toEqual(["A faturar", "Prontas para faturar", "0", "Nenhuma demanda a faturar"]);
+    expect(textosDaTela(render({ linhas: [], painel: FECHADO }))).toEqual(["A faturar", "Prontas para faturar", "0", "Nada a faturar"]);
   });
 
   it("a busca filtra as prontas e as que esperam", () => {
@@ -208,11 +216,25 @@ describe("A faturar", () => {
     expect(textos).toContain("10050");
     expect(textos).not.toContain("10046");
     expect(textos).not.toContain("10047 – RV02");
-    expect(textosDaTela(render({ busca: "nada assim", painel: FECHADO }))).toContain("Nenhuma demanda encontrada");
+    expect(textosDaTela(render({ busca: "nada assim", painel: FECHADO }))).toContain("Nada encontrado");
   });
 
   it("passa nas regras WCAG 2.1 A e AA do axe, com o painel aberto e fechado", async () => {
     expect(await violacoesDeAcessibilidade(render())).toEqual([]);
     expect(await violacoesDeAcessibilidade(render({ painel: FECHADO }))).toEqual([]);
+  });
+
+  it("a armazenagem emitida no WMS fica no grupo do cliente, entra na NF e passa no axe (parte 7.2b)", async () => {
+    const armazenagem = linhaDaArmazenagem(
+      competenciaDoFinanceiro("ITAU__2026-09", { customer_code: "ITAU", competencia: "2026-09", status: "emitido", emitido_em: "2026-10-02T12:00:00.000Z", invoice_snapshot: { total_cents: 750_800 } })!,
+    );
+    const html = render({ linhas: [...LINHAS, armazenagem], painel: { ...props().painel, marcadas: ["10045", "ITAU__2026-09"] } });
+    const prontas = textosDaTela(secao(html, "Prontas para faturar"));
+    expect(prontas.slice(0, 3)).toEqual(["Prontas para faturar", "4", "R$ 22.853,00"]);
+    expect(prontas).toEqual(expect.arrayContaining(["Itaú Unibanco", "3", "R$ 22.353,00", "Armazenagem 09/2026", "Fatura do WMS · Emitida na Armazenagem", "R$ 7.508,00", "21 dias"]));
+    const painel = textosDaTela(secao(html, "Registrar NF"));
+    expect(painel).toEqual(expect.arrayContaining(["Na NF", "2", "Armazenagem 09/2026", "R$ 7.508,00", "R$ 19.853,00"]));
+    expect(html).toContain('aria-label="Tirar Armazenagem 09/2026"');
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 });
