@@ -81,11 +81,33 @@ service firebase.storage {
         && ordemDeServico(numero).data.get('tipo', 'servico') == 'vistoria';
     }
 
+    // O comprovante da OS no portal (Fase 4, parte 4.3c): o cliente da OS
+    // concluída (em revisão ou revisada, como o portal a mostra) lê a
+    // assinatura e as fotos do final que a conclusão listou
+    // (conclusao.arquivos_do_final). As fotos das ocorrências e das outras
+    // etapas ficam internas, e a vistoria fica com a equipe e o Comercial.
+    // A fronteira é o customer_code da OS. O módulo da Operação no contrato
+    // não entra aqui porque o Storage lê no máximo dois documentos do
+    // Firestore por avaliação (o perfil e a OS): ele já vale na leitura da
+    // OS pelo firestore.rules, de onde o portal tira o nome dos arquivos.
+    function clienteDaOsConcluida(numero) {
+      return hasProfile()
+        && profileRole() == 'cliente'
+        && ordemDeServico(numero).data.get('customer_code', '') == firestore.get(userDoc()).data.get('customer_code', '-')
+        && ordemDeServico(numero).data.get('status', '') in ['em_revisao', 'revisada']
+        && ordemDeServico(numero).data.get('tipo', 'servico') != 'vistoria';
+    }
+
+    function conclusaoDaOs(numero) {
+      return ordemDeServico(numero).data.get('conclusao', {});
+    }
+
     match /os/{numero}/fotos/{arquivo} {
       allow read: if coordenaOperacao()
         || (hasProfile() && profileRole() == 'suporte')
         || escaladoNaOs(numero)
-        || fotoDeVistoria(numero);
+        || fotoDeVistoria(numero)
+        || (clienteDaOsConcluida(numero) && arquivo in conclusaoDaOs(numero).get('arquivos_do_final', []));
       allow create: if resource == null
         && (coordenaOperacao() || escaladoNaOs(numero))
         && numero.matches('^[0-9]{5,8}-[0-9]{2}$')
@@ -102,7 +124,8 @@ service firebase.storage {
     match /os/{numero}/assinatura/{arquivo} {
       allow read: if coordenaOperacao()
         || (hasProfile() && profileRole() == 'suporte')
-        || escaladoNaOs(numero);
+        || escaladoNaOs(numero)
+        || (clienteDaOsConcluida(numero) && conclusaoDaOs(numero).get('assinatura', '') == 'os/' + numero + '/assinatura/' + arquivo);
       allow create: if resource == null
         && (coordenaOperacao() || escaladoNaOs(numero))
         && numero.matches('^[0-9]{5,8}-[0-9]{2}$')

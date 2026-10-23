@@ -14,7 +14,9 @@ import { doc, setDoc } from "firebase/firestore";
  * apaga. O critério do escalado é o mesmo do firestore.rules (equipe_uids).
  * A assinatura do responsável (parte 3.9a) segue a mesma regra, só na OS em
  * execução. As fotos da vistoria (parte 3.11a) vão ao Comercial: o papel
- * comercial lê as da OS de vistoria, e só dela.
+ * comercial lê as da OS de vistoria, e só dela. O cliente da OS concluída
+ * lê a assinatura e as fotos do final, para o comprovante do portal
+ * (Fase 4, parte 4.3c).
  */
 
 const PROJECT_ID = "demo-dute-operations";
@@ -44,6 +46,7 @@ const PAPEIS = {
   "campo-a": "campo",
   "campo-b": "campo",
   "client-a": "cliente",
+  "client-b": "cliente",
 } as const;
 
 const SOBEM = ["owner-a", "admin-a", "ops-a", "campo-a"] as const;
@@ -58,7 +61,7 @@ async function semente(status: string, extra: Record<string, unknown> = {}) {
   await testEnvironment.withSecurityRulesDisabled(async (context) => {
     const database = context.firestore();
     for (const [uid, role] of Object.entries(PAPEIS)) {
-      await setDoc(doc(database, "users", uid), { nome: uid, role, ...(role === "cliente" ? { customer_code: "ITAU" } : {}) });
+      await setDoc(doc(database, "users", uid), { nome: uid, role, ...(role === "cliente" ? { customer_code: uid === "client-b" ? "SAFRA" : "ITAU" } : {}) });
     }
     await setDoc(doc(database, "service_orders", OS), { demanda: "10045", customer_code: "ITAU", status, equipe_uids: ["campo-a"], edicao: 1, ...extra });
   });
@@ -188,5 +191,49 @@ describe("assinatura da OS no Storage", () => {
     await assertSucceeds(assinar("ops-a", ARQ));
     await assertFails(assinar("ops-a", ARQ)).catch((error: unknown) => assert.fail(`sobrescrever: ${String(error)}`));
     await assertFails(storage("owner-a").ref(`os/${OS}/assinatura/${ARQ}`).delete()).catch((error: unknown) => assert.fail(`apagar: ${String(error)}`));
+  });
+});
+
+describe("o comprovante do cliente no Storage (parte 4.3c)", () => {
+  const DO_FINAL = "ft_9000000000000001.jpg";
+  const DA_CARGA = "ft_9000000000000002.jpg";
+  const ASSINATURA = "as_9000000000000001.png";
+  const foto = (arquivo: string) => `os/${OS}/fotos/${arquivo}`;
+  const assinatura = `os/${OS}/assinatura/${ASSINATURA}`;
+  const ler = (uid: string, caminho: string) => storage(uid).ref(caminho).getMetadata();
+  const concluida = (status: string, extra: Record<string, unknown> = {}) =>
+    semente(status, { conclusao: { aceite: "assinatura", assinatura, arquivos_do_final: [DO_FINAL] }, ...extra });
+
+  it("o cliente da OS concluída lê a assinatura e as fotos do final; as outras fotos, o outro cliente, a OS aberta e a vistoria, não", async () => {
+    await semente("em_execucao");
+    await assertSucceeds(subir("campo-a", DO_FINAL));
+    await assertSucceeds(subir("campo-a", DA_CARGA));
+    await assertSucceeds(assinar("campo-a", ASSINATURA));
+    // Em execução, ainda não.
+    await assertFails(ler("client-a", foto(DO_FINAL)));
+    await assertFails(ler("client-a", assinatura));
+
+    for (const status of ["em_revisao", "revisada"]) {
+      await concluida(status);
+      await assertSucceeds(ler("client-a", foto(DO_FINAL))).catch((error: unknown) => assert.fail(`${status}, foto do final: ${String(error)}`));
+      await assertSucceeds(ler("client-a", assinatura)).catch((error: unknown) => assert.fail(`${status}, assinatura: ${String(error)}`));
+      await assertFails(ler("client-a", foto(DA_CARGA)));
+      await assertFails(ler("client-b", foto(DO_FINAL)));
+      await assertFails(ler("client-b", assinatura));
+      for (const uid of ["wms-a", "comercial-a", "campo-b"]) await assertFails(ler(uid, foto(DO_FINAL)));
+    }
+
+    // Reaberta ou cancelada, fecha.
+    for (const status of ["em_execucao", "cancelada"]) {
+      await concluida(status);
+      await assertFails(ler("client-a", foto(DO_FINAL)));
+      await assertFails(ler("client-a", assinatura));
+    }
+    // A assinatura que não é a da conclusão, a OS antiga sem a lista e a vistoria ficam de fora.
+    await semente("revisada", { conclusao: { aceite: "sem_aceite", assinatura: null } });
+    await assertFails(ler("client-a", foto(DO_FINAL)));
+    await assertFails(ler("client-a", assinatura));
+    await concluida("revisada", { tipo: "vistoria" });
+    await assertFails(ler("client-a", foto(DO_FINAL)));
   });
 });

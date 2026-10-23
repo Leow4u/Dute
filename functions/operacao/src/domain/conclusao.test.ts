@@ -113,6 +113,8 @@ describe("conclusão da OS", () => {
       responsavel: { nome: "Renata Campos", cargo: "Facilities", documento: "12.345.678-9" },
       assinatura: "os/10045-01/assinatura/as_0123456789abcdef.png",
       diferencas: [{ linha: "ln_2", previsto: "60", executado: "58", motivo: "2 mesas com pé quebrado; ficam para o 5º andar" }],
+      // As fotos do final vão ao comprovante do cliente (parte 4.3c); a do carregamento, não.
+      arquivos_do_final: ["ft_f000000000000001.jpg"],
     });
     assert.deepEqual(fim, {
       etapa: "fim",
