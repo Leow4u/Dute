@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "wouter";
 
+import { MODELO_DE_AVISO_ROTULO, type ModeloDeAviso } from "@workspace/dominio";
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -11,6 +13,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -25,9 +28,11 @@ import {
   PAPEIS_DO_CONTATO,
   PAPEL_DO_CONTATO_ROTULO,
   UFS,
+  avisosOferecidos,
   formDaEdicao,
   formDoContato,
   formDoLocal,
+  marcarAviso,
   nomesParecidos,
   problemaDoCodigo,
   type AvisoDaIdentidade,
@@ -400,6 +405,37 @@ export function LocalDialog({
 
 // --- Contato --------------------------------------------------------------------------
 
+/**
+ * Os avisos por e-mail do contato (parte 4.6b): só aparecem com o e-mail
+ * preenchido; a NF, só para o gestor e o financeiro do cliente.
+ */
+export function AvisosDoContato({
+  form,
+  desabilitado,
+  onMarcar,
+}: {
+  form: FormContato;
+  desabilitado: boolean;
+  onMarcar: (modelo: ModeloDeAviso, marcado: boolean) => void;
+}) {
+  const oferecidos = avisosOferecidos(form);
+  if (!oferecidos.length) return null;
+  return (
+    <fieldset className="grid gap-2.5 sm:grid-cols-2">
+      <legend className="mb-1.5 text-sm font-medium leading-none">Avisos por e-mail</legend>
+      {oferecidos.map((modelo) => {
+        const id = `contato-aviso-${modelo}`;
+        return (
+          <div key={modelo} className="flex items-center gap-2.5">
+            <Checkbox id={id} checked={form.avisos.includes(modelo)} disabled={desabilitado} onCheckedChange={(checked) => onMarcar(modelo, checked === true)} />
+            <Label htmlFor={id}>{MODELO_DE_AVISO_ROTULO[modelo]}</Label>
+          </div>
+        );
+      })}
+    </fieldset>
+  );
+}
+
 export function ContatoDialog({
   aberto,
   ocupado,
@@ -414,7 +450,7 @@ export function ContatoDialog({
     if (aberto) setForm(formDoContato(contato));
   }, [aberto, contato]);
   const valido = form.nome.trim().length >= 2;
-  const muda = (campo: keyof FormContato) => (event: { target: { value: string } }) =>
+  const muda = (campo: Exclude<keyof FormContato, "avisos">) => (event: { target: { value: string } }) =>
     setForm((atual) => ({ ...atual, [campo]: event.target.value }));
 
   return (
@@ -465,6 +501,7 @@ export function ContatoDialog({
               <Input id="contato-telefone" type="tel" value={form.telefone} onChange={muda("telefone")} maxLength={20} autoComplete="off" />
             </Campo>
           </div>
+          <AvisosDoContato form={form} desabilitado={ocupado} onMarcar={(modelo, marcado) => setForm((atual) => marcarAviso(atual, modelo, marcado))} />
           <Erro erro={erro} />
           <Rodape ocupado={ocupado} rotulo="Salvar contato" onCancelar={onCancelar} desabilitado={!valido} />
         </form>

@@ -9,12 +9,14 @@ import {
   PAPEIS_DO_CONTATO,
   UFS,
   avisoDaIdentidade,
+  avisosDoFormulario,
+  avisosOferecidos,
   cadastroDoDocumento,
   contarSegmentos,
   contatoDoDocumento,
   contratoDoDocumento,
-  contratoVigente,
   contratosDoCliente,
+  contratoVigente,
   desdeQuando,
   empresasSugeridas,
   enderecoEmLinha,
@@ -27,6 +29,7 @@ import {
   gruposDeContatos,
   iniciais,
   localDoDocumento,
+  marcarAviso,
   nomesParecidos,
   payloadAtivoContato,
   payloadAtivoLocal,
@@ -473,7 +476,7 @@ describe("chamadas das callables (functions/comercial, entrada .strict())", () =
   });
 
   it("contato: vazio vira null e o papel padrão é outro", () => {
-    expect(payloadContato("ITAU-UNIBANCO", { nome: "Renata", empresa: "", papel: "", email: "", telefone: "" }, "k8")).toEqual({
+    expect(payloadContato("ITAU-UNIBANCO", { nome: "Renata", empresa: "", papel: "", email: "", telefone: "", avisos: [] }, "k8")).toEqual({
       idempotency_key: "k8",
       customer_code: "ITAU-UNIBANCO",
       nome: "Renata",
@@ -481,9 +484,14 @@ describe("chamadas das callables (functions/comercial, entrada .strict())", () =
       telefone: null,
       empresa: null,
       papel: "outro",
+      avisos: [],
     });
     expect(
-      payloadContato("ITAU-UNIBANCO", { nome: "Camila", empresa: "Souza & Lopes", papel: "gerenciadora", email: "c@sl.com", telefone: "11 99999-0000" }, "k9"),
+      payloadContato(
+        "ITAU-UNIBANCO",
+        { nome: "Camila", empresa: "Souza & Lopes", papel: "gerenciadora", email: "c@sl.com", telefone: "11 99999-0000", avisos: ["os_agendada"] },
+        "k9",
+      ),
     ).toEqual({
       idempotency_key: "k9",
       customer_code: "ITAU-UNIBANCO",
@@ -492,7 +500,37 @@ describe("chamadas das callables (functions/comercial, entrada .strict())", () =
       telefone: "11 99999-0000",
       empresa: "Souza & Lopes",
       papel: "gerenciadora",
+      avisos: ["os_agendada"],
     });
+  });
+
+  it("avisos por e-mail (parte 4.6b): nenhum sem e-mail; a NF só para o gestor e o financeiro do cliente", () => {
+    const vazio = formDoContato(null);
+    expect(avisosOferecidos(vazio)).toEqual([]);
+    expect(avisosOferecidos({ email: "r@itau.com", papel: "gestor_cliente" })).toEqual(["os_agendada", "os_iniciada", "os_concluida", "nf_emitida", "pedido_do_portal"]);
+    expect(avisosOferecidos({ email: "r@itau.com", papel: "financeiro" })).toContain("nf_emitida");
+    for (const papel of ["gerenciadora", "outro", ""]) expect(avisosOferecidos({ email: "c@sl.com", papel })).not.toContain("nf_emitida");
+
+    let form = marcarAviso({ ...vazio, nome: "Renata", email: "r@itau.com", papel: "gestor_cliente" }, "nf_emitida", true);
+    form = marcarAviso(form, "os_agendada", true);
+    expect(form.avisos).toEqual(["os_agendada", "nf_emitida"]);
+    expect(marcarAviso(form, "nf_emitida", false).avisos).toEqual(["os_agendada"]);
+    // O que deixou de valer sai ao salvar: sem e-mail, nenhum; como gerenciadora, sem a NF.
+    expect(avisosDoFormulario({ ...form, email: "" })).toEqual([]);
+    expect(avisosDoFormulario({ ...form, papel: "gerenciadora" })).toEqual(["os_agendada"]);
+    expect(payloadContato("ITAU-UNIBANCO", { ...form, papel: "gerenciadora" }, "k14").avisos).toEqual(["os_agendada"]);
+  });
+
+  it("alteração de contato manda os avisos só quando mudam", () => {
+    const renata = contatoDoDocumento("ct_2", { customer_code: "ITAU-UNIBANCO", nome: "Renata", email: "r@itau.com", papel: "gestor_cliente", avisos: ["nf_emitida", "os_agendada", "x"] })!;
+    expect(renata.avisos).toEqual(["os_agendada", "nf_emitida"]);
+    const aberto = formDoContato(renata);
+    const base = { idempotency_key: "k15", customer_code: "ITAU-UNIBANCO", contato_id: "ct_2", nome: "Renata" };
+    expect(payloadContato("ITAU-UNIBANCO", aberto, "k15", renata)).toEqual(base);
+    expect(payloadContato("ITAU-UNIBANCO", marcarAviso(aberto, "os_concluida", true), "k15", renata)).toEqual({ ...base, avisos: ["os_agendada", "os_concluida", "nf_emitida"] });
+    expect(payloadContato("ITAU-UNIBANCO", { ...aberto, papel: "gerenciadora" }, "k15", renata)).toEqual({ ...base, papel: "gerenciadora", avisos: ["os_agendada"] });
+    expect(payloadContato("ITAU-UNIBANCO", { ...aberto, email: "" }, "k15", renata)).toEqual({ ...base, email: null, avisos: [] });
+    expect(contatoDoDocumento("ct_3", { nome: "Sem avisos" })!.avisos).toEqual([]);
   });
 
   it("alteração de contato manda o id, o nome (obrigatório) e só o que mudou desde a abertura", () => {

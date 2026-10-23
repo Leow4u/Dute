@@ -56,6 +56,35 @@ export type OrigemCadastro = (typeof ORIGENS_CADASTRO)[number];
 export const PAPEIS_CONTATO = ["gestor_cliente", "gerenciadora", "financeiro", "outro"] as const;
 export type PapelContato = (typeof PAPEIS_CONTATO)[number];
 
+/**
+ * Os avisos que o contato recebe por e-mail (docs/plataforma/fase-4-financeiro.md,
+ * parte 4.6b), lidos pela rotina dos avisos da Operação. A mesma lista de
+ * lib/dominio e de functions/operacao (domain/avisos.ts), travada por
+ * artifacts/app/src/lib/platform-lists.test.ts.
+ */
+export const MODELOS_DE_AVISO = ["os_agendada", "os_iniciada", "os_concluida", "nf_emitida", "pedido_do_portal"] as const;
+export type ModeloDeAviso = (typeof MODELOS_DE_AVISO)[number];
+/** A NF leva o valor: só o gestor e o financeiro do cliente recebem, nunca a gerenciadora. */
+export const MODELOS_DE_AVISO_COM_VALOR = ["nf_emitida"] as const;
+export const PAPEIS_QUE_LEEM_VALOR = ["gestor_cliente", "financeiro"] as const;
+
+/** Os avisos gravados no contato, na ordem da lista; o que não é da lista sai. */
+export function avisosDoContato(valor: unknown): ModeloDeAviso[] {
+  const lista = Array.isArray(valor) ? valor : [];
+  return MODELOS_DE_AVISO.filter((modelo) => lista.includes(modelo));
+}
+
+/** Por que o contato não recebe esses avisos, ou null. */
+export function problemaDosAvisos(avisos: readonly ModeloDeAviso[], papel: unknown, email: unknown): string | null {
+  if (!avisos.length) return null;
+  if (typeof email !== "string" || !email) return "Informe o e-mail do contato para os avisos.";
+  const comValor = avisos.some((modelo) => (MODELOS_DE_AVISO_COM_VALOR as readonly string[]).includes(modelo));
+  if (comValor && !(PAPEIS_QUE_LEEM_VALOR as readonly unknown[]).includes(papel)) {
+    return "A NF emitida leva o valor: só o gestor e o financeiro do cliente recebem.";
+  }
+  return null;
+}
+
 export const UFS = [
   "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT", "PA",
   "PB", "PE", "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO",
@@ -252,6 +281,11 @@ export const SaveCustomerContactInput = z
     telefone,
     empresa: textoOpcional(120),
     papel: z.enum(PAPEIS_CONTATO).optional(),
+    avisos: z
+      .array(z.enum(MODELOS_DE_AVISO))
+      .max(MODELOS_DE_AVISO.length)
+      .optional()
+      .transform((value) => (value === undefined ? undefined : avisosDoContato(value))),
     ativo: z.boolean().optional(),
   })
   .strict();
@@ -902,6 +936,12 @@ export async function saveCustomerContactFor(
         throw new HttpsError("already-exists", `O cliente ${code} já tem um contato com esse e-mail.`);
       }
 
+      // Os avisos por e-mail (parte 4.6b): com o e-mail e, a NF, só para quem lê valor.
+      const papelFinal = escolher(input.papel, antes.papel, "outro" as PapelContato);
+      const avisosFinal = input.avisos ?? avisosDoContato(antes.avisos);
+      const problema = problemaDosAvisos(avisosFinal, papelFinal, emailFinal);
+      if (problema) throw new HttpsError("failed-precondition", problema);
+
       // Escritas.
       const contatoId = atual?.id ?? novoId("ct", operationId);
       transaction.set(contacts.doc(contatoId), {
@@ -912,7 +952,8 @@ export async function saveCustomerContactFor(
         email: emailFinal,
         telefone: escolher(input.telefone, antes.telefone, null as string | null),
         empresa: escolher(input.empresa, antes.empresa, null as string | null),
-        papel: escolher(input.papel, antes.papel, "outro" as PapelContato),
+        papel: papelFinal,
+        avisos: avisosFinal,
         ativo: escolher(input.ativo, antes.ativo, true),
         ...criacao(atual, caller.uid),
         updated_by: caller.uid,

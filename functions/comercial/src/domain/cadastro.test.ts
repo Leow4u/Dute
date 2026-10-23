@@ -8,7 +8,9 @@ import {
   SaveCommercialCustomerInput,
   SaveCustomerContactInput,
   SaveCustomerLocationInput,
+  avisosDoContato,
   parseEntrada,
+  problemaDosAvisos,
   prospectPayload,
   saveCommercialCustomerFor,
   saveCustomerContactFor,
@@ -246,6 +248,33 @@ describe("entrada de local e contato", () => {
         "invalid-argument",
       );
     }
+  });
+});
+
+describe("os avisos do contato por e-mail (parte 4.6b)", () => {
+  it("a lista vem na ordem dos modelos, sem repetir; modelo fora da lista recusa", async () => {
+    const contato = entrada(SaveCustomerContactInput, {
+      idempotency_key: "k",
+      customer_code: "ITAU",
+      nome: "Fulano de Tal",
+      avisos: ["nf_emitida", "os_agendada", "nf_emitida"],
+    });
+    assert.deepEqual(contato.avisos, ["os_agendada", "nf_emitida"]);
+    assert.equal(entrada(SaveCustomerContactInput, { idempotency_key: "k", customer_code: "ITAU", nome: "Fulano" }).avisos, undefined);
+    for (const avisos of [["os_cancelada"], "os_agendada", [1]]) {
+      await rejeita(saveCustomerContactFor(intocavel, comercial, { idempotency_key: "k", customer_code: "ITAU", nome: "Fulano", avisos }), "invalid-argument");
+    }
+    assert.deepEqual(avisosDoContato(["os_concluida", "x", "os_agendada"]), ["os_agendada", "os_concluida"]);
+    assert.deepEqual(avisosDoContato(undefined), []);
+  });
+
+  it("aviso pede o e-mail; a NF, que leva valor, só para o gestor e o financeiro do cliente", () => {
+    assert.equal(problemaDosAvisos([], "gerenciadora", null), null);
+    assert.match(problemaDosAvisos(["os_agendada"], "gestor_cliente", null) ?? "", /e-mail/);
+    assert.equal(problemaDosAvisos(["os_agendada", "os_concluida"], "gerenciadora", "a@b.com"), null);
+    assert.equal(problemaDosAvisos(["nf_emitida"], "gestor_cliente", "a@b.com"), null);
+    assert.equal(problemaDosAvisos(["nf_emitida"], "financeiro", "a@b.com"), null);
+    for (const papel of ["gerenciadora", "outro"]) assert.match(problemaDosAvisos(["nf_emitida"], papel, "a@b.com") ?? "", /leva o valor/, papel);
   });
 });
 
