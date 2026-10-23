@@ -2,7 +2,7 @@ import type { Firestore } from "firebase-admin/firestore";
 import { HttpsError, type CallableRequest } from "firebase-functions/https";
 
 import { assertLiberado } from "./liberacao.js";
-import { isPlatformRole, operacaoCadastroProblem, type PlatformRole } from "./platform-roles.js";
+import { isPlatformRole, operacaoCadastroProblem, tvProblem, type PlatformRole } from "./platform-roles.js";
 
 /**
  * Perfil de quem grava o cadastro da Operação. Cópia mínima do getProfile do
@@ -38,14 +38,18 @@ export async function loadProfile(db: Firestore, uid: string, email?: string, to
   return profile;
 }
 
-/** `campo`: a callable de execução também atende o campo (que só grava na OS em que está escalado, parte 3.8a). */
-export type OpcoesDoCaller = { campo?: true };
+/**
+ * `campo`: a callable de execução também atende o campo (que só grava na OS
+ * em que está escalado, parte 3.8a). `painel`: a leitura da TV (parte 3.12)
+ * atende o painel e quem coordena; nenhuma outra callable atende o painel.
+ */
+export type OpcoesDoCaller = { campo?: true; painel?: true };
 
 export async function getProfile(db: Firestore, request: CallableRequest<unknown>, opcoes: OpcoesDoCaller = {}): Promise<OperacaoProfile> {
   const auth = assertAuth(request);
   const profile = await loadProfile(db, auth.uid, auth.token.email, auth.token.name);
   if (opcoes.campo && profile.role === "campo") return profile;
-  const problem = operacaoCadastroProblem(profile.role);
+  const problem = opcoes.painel ? tvProblem(profile.role) : operacaoCadastroProblem(profile.role);
   if (problem) throw new HttpsError("permission-denied", problem);
   return profile;
 }

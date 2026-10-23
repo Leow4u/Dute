@@ -202,6 +202,24 @@ describe("OS: leitura", () => {
     await assertFails(getDoc(doc(signedAs("comercial-a"), "service_orders", "10045-04")));
   });
 
+  it("o painel da TV não lê nada pelo navegador: o quadro vem da callable (parte 3.12)", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      const database = context.firestore();
+      await setDoc(doc(database, "service_orders", "10045-01"), { numero: "10045-01", customer_code: "ITAU", status: "agendada", itens: [], equipe_uids: ["painel-a"] });
+      await setDoc(doc(database, "demands", "10045"), { numero: "10045", customer_code: "ITAU", etapa: "em_execucao" });
+      await setDoc(doc(database, "customers", "ITAU"), { customer_code: "ITAU", name: "Itaú Unibanco" });
+      await setDoc(doc(database, "events", "ev1"), { type: "os.started", customer_code: "ITAU" });
+    });
+    const tv = signedAs("painel-a");
+    await assertFails(getDoc(doc(tv, "service_orders", "10045-01")));
+    await assertFails(getDocs(query(collection(tv, "service_orders"), where("equipe_uids", "array-contains", "painel-a"))));
+    await assertFails(getDocs(query(collection(tv, "service_orders"), where("status", "==", "agendada"))));
+    for (const [colecao, id] of [["demands", "10045"], ["customers", "ITAU"], ["events", "ev1"], ["collaborators", "col_aaaaaaaaaaaaaaaa"], ["vehicles", "vei_aaaaaaaaaaaaaaaa"]] as const) {
+      await assertFails(getDoc(doc(tv, colecao, id)));
+    }
+    await assertFails(updateDoc(doc(tv, "service_orders", "10045-01"), { status: "em_execucao" }));
+  });
+
   it("ninguém grava a OS nem lê o contador pelo navegador", async () => {
     const database = signedAs("owner-a");
     await assertFails(setDoc(doc(database, "service_orders", "10045-02"), { numero: "10045-02" }));

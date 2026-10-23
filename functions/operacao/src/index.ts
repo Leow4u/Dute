@@ -12,6 +12,7 @@ import { saveCollaboratorFor, saveVehicleFor } from "./domain/gravacao.js";
 import { saveServiceOrderFor } from "./domain/os-gravacao.js";
 import { reopenServiceOrderFor, reviewServiceOrderFor } from "./domain/revisao-gravacao.js";
 import { requireOperacaoCaller } from "./domain/profile.js";
+import { getRoomBoardFor } from "./domain/tv-leitura.js";
 import { sendSurveyToCommercialFor } from "./domain/vistoria-gravacao.js";
 import { PROJECT_ID } from "./project.js";
 
@@ -119,4 +120,10 @@ export const reopenServiceOrder = onCall(async (request) => {
 export const sendSurveyToCommercial = onCall(async (request) => {
   const caller = await requireOperacaoCaller(db, request, PROJECT_ID, { campo: true });
   return sendSurveyToCommercialFor(db, caller, request.data);
+});
+
+/** O quadro do dia para a TV da sala: agendadas, em execução e concluídas, sem valor nem contato. Só lê; o painel não grava nada. */
+export const getRoomBoard = onCall(async (request) => {
+  const caller = await requireOperacaoCaller(db, request, PROJECT_ID, { painel: true });
+  return getRoomBoardFor(db, caller);
 });
