@@ -1,18 +1,19 @@
 name: Publicar
 
-# Publica um ambiente (homologação ou produção). Chamado pelo ci.yml depois
-# dos testes: homologação a cada push na main, produção só por disparo manual.
-# Em série: confere se o commit ainda é o da main, regras e índices, functions
-# e por último o frontend, para a tela nova nunca chegar antes da callable que
-# ela chama.
+# Publica um ambiente (homologação ou produção), sempre depois dos testes do
+# commit: a homologação pelo homologacao.yml a cada push na main, a produção
+# pelo ci.yml só por disparo manual. Em série: confere se o commit ainda é o da
+# main, regras e índices, functions e por último o frontend, para a tela nova
+# nunca chegar antes da callable que ela chama.
 #
-# Uma publicação por ambiente de cada vez: o ci.yml chama este workflow com
-# concurrency "publicar-<ambiente>" e cancel-in-progress: false. Até 20/10/2026
-# cada job tinha o próprio grupo com cancel-in-progress: true, e o push seguinte
-# cancelou duas vezes no mesmo dia o "firebase deploy --only functions" da
-# homologação no meio (merges do #106 e do #110), pulando a conferência do
-# invoker. Agora a publicação em andamento termina; quem chega depois espera, e
-# o GitHub mantém só a mais nova na espera.
+# Uma publicação por ambiente de cada vez, nos grupos "publicar-homologacao"
+# (do workflow homologacao.yml inteiro) e "publicar-producao" (do job do
+# ci.yml), com cancel-in-progress: false. Até 20/10/2026 cada job tinha o
+# próprio grupo com cancel-in-progress: true, e o push seguinte cancelou duas
+# vezes no mesmo dia o "firebase deploy --only functions" da homologação no
+# meio (merges do #106 e do #110), pulando a conferência do invoker. Agora a
+# publicação em andamento termina; quem chega depois espera, e o GitHub mantém
+# só a mais nova na espera.
 on:
   workflow_call:
     inputs:
@@ -49,13 +50,12 @@ env:
   REGION: southamerica-east1
 
 jobs:
-  # A fila de concorrência não garante que o commit mais novo publique por
-  # último: os testes de dois pushes seguidos podem terminar fora de ordem, e o
-  # pendente mais antigo entra depois do mais novo. Por isso a publicação só
-  # começa se este commit ainda for o HEAD da main. Na homologação, se a main
-  # já andou, nada sobe e o run fica verde com aviso: a execução do commit novo
-  # é que publica. Na produção, falha: o disparo foi para um commit que já não
-  # é o da main, e a conferência na homologação é a do commit novo.
+  # A publicação só começa se este commit ainda for o HEAD da main. Na
+  # homologação, se a main andou, nada sobe e o run fica verde com aviso: a fila
+  # do homologacao.yml anda em ordem de push, então o commit novo tem a própria
+  # execução na espera, e é ela que publica. Na produção, falha: o disparo foi
+  # para um commit que já não é o da main, e a conferência na homologação é a do
+  # commit novo.
   head-da-main:
     name: Commit ainda é o HEAD da main
     runs-on: ubuntu-latest

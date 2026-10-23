@@ -250,13 +250,13 @@ aparece como **NAO PUBLICADA** e sugere o `firebase deploy`.
 
 O job `Cloud Functions` em `.github/workflows/publicar.yml` publica
 `functions/wms/` e `functions/comercial/` antes do frontend, sempre depois de
-`frontend-typecheck`, `functions-unit`, `functions-integration`,
-`comercial-unit`, `comercial-integration` e `Testes das ferramentas Python
-(tools/)` passarem e de o job `Regras e índices` (abaixo) publicar as regras.
+os testes do `.github/workflows/ci.yml` passarem no mesmo commit e de o job
+`Regras e índices` (abaixo) publicar as regras.
 O frontend só sobe depois que este job termina verde, com a conferência do
 invoker; uma publicação por ambiente de cada vez, sem cancelar a que está
 rodando (ver "Ordem e fila" em `docs/deploy-manual.md`). Roda na homologação
-(`dute-homolog`) a cada push em `main`, e na produção (`dute-prod`) só por disparo
+(`dute-homolog`) a cada push em `main`, pelo `.github/workflows/homologacao.yml`,
+e na produção (`dute-prod`) só por disparo
 manual com `publicar_producao` marcado. Ele sempre publica o lote inteiro
 (`firebase deploy --only functions`, nunca `--only functions:nome`) e termina
 rodando `tools/check_functions_invoker.ps1 -ProjectId <projeto>` contra o projeto
