@@ -346,6 +346,33 @@ describe("agendar", () => {
     assert.deepEqual(evento.payload.veiculos, [VAN]);
   });
 
+  it("o veículo no dia da revisão preventiva não entra na OS; no dia seguinte, entra (parte 3.13a)", async () => {
+    await db.collection("vehicles").doc(VAN).update({ revisao_em: "2099-01-01" });
+    await saveServiceOrderFor(db, interno, { action: "create", idempotency_key: "abre", demanda: NUMERO });
+    const naOficina = await rejection(saveServiceOrderFor(db, interno, {
+      action: "schedule",
+      idempotency_key: "no-dia",
+      numero: "10045-01",
+      expected_edicao: 1,
+      janela: { data: "2099-01-01", inicio: "08:00" },
+      equipe: [{ colaborador_id: ANA }],
+      veiculos: [VAN],
+    }));
+    assert.equal(naOficina.code, "failed-precondition");
+    assert.equal(naOficina.message, "O veículo DEF-4G56 está em revisão preventiva em 01/01/2099.");
+    assert.equal((await lerOs("10045-01")).status, "aberta");
+    const depois = await saveServiceOrderFor(db, interno, {
+      action: "schedule",
+      idempotency_key: "dia-seguinte",
+      numero: "10045-01",
+      expected_edicao: 1,
+      janela: { data: "2099-01-02", inicio: "08:00" },
+      equipe: [{ colaborador_id: ANA }],
+      veiculos: [VAN],
+    });
+    assert.equal(depois.edicao, 2);
+  });
+
   it("sem equipe e sem veículo agenda: a falta é alerta no Início, não bloqueio", async () => {
     await saveServiceOrderFor(db, interno, { action: "create", idempotency_key: "abre", demanda: NUMERO });
     const agendada = await saveServiceOrderFor(db, interno, {

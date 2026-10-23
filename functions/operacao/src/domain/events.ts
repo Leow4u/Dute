@@ -53,6 +53,8 @@ export const OPERACAO_EVENT_TYPES = [
   "os.survey_sent",
   "demand.direct_opened",
   "demand.execution_reviewed",
+  "collaborator.cnh_expiring",
+  "vehicle.maintenance_due",
 ] as const;
 export type OperacaoEventType = (typeof OPERACAO_EVENT_TYPES)[number];
 
@@ -225,6 +227,11 @@ const vistoriaEnviada = z
     medidas: z.number().int().min(0).max(30),
   })
   .strict();
+/**
+ * O alerta da rotina diária (parte 3.13a): o dia da rotina e quantos dias
+ * faltam (negativo: já passou). Sem a validade, a categoria nem a placa.
+ */
+const alertaDoDia = z.object({ id, dia: data, dias: z.number().int().min(-3650).max(3650) }).strict();
 /** A demanda direta foi executada e revisada: vai ao Comercial orçar a execução. */
 const execucaoRevisada = z.object({ id: demandaNumero, de: data, ate: data, os: z.number().int().min(1).max(99) }).strict();
 
@@ -259,6 +266,8 @@ export const OPERACAO_EVENT_PAYLOADS = {
   "os.survey_sent": vistoriaEnviada,
   "demand.direct_opened": demandaDireta,
   "demand.execution_reviewed": execucaoRevisada,
+  "collaborator.cnh_expiring": alertaDoDia,
+  "vehicle.maintenance_due": alertaDoDia,
 } as const;
 
 const TEXTO: Record<OperacaoEventType, { title: string; description: string }> = {
@@ -298,6 +307,8 @@ const TEXTO: Record<OperacaoEventType, { title: string; description: string }> =
   },
   "demand.direct_opened": { title: "Demanda direta aberta", description: "A demanda chegou direto na Operação e se orça depois da execução." },
   "demand.execution_reviewed": { title: "Execução revisada", description: "A última OS da demanda direta foi revisada: a execução vai ao Comercial para orçar." },
+  "collaborator.cnh_expiring": { title: "CNH vencendo", description: "A CNH de um colaborador ativo vence em até 30 dias ou já venceu." },
+  "vehicle.maintenance_due": { title: "Revisão do veículo", description: "A revisão preventiva de um veículo ativo é em até 15 dias ou a data já passou." },
 };
 
 export function isOperacaoEventType(value: string): value is OperacaoEventType {

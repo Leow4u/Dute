@@ -113,6 +113,8 @@ Em `functions/operacao`, cada uma numa linha e começando por
 `registerPresence`, `registerOccurrence`, `completeServiceOrder`,
 `reviewServiceOrder`, `reopenServiceOrder`, `sendSurveyToCommercial` e
 `getRoomBoard` (a leitura da TV, a única que atende o painel; não grava).
+A rotina diária `runDailyAlerts` (Cloud Scheduler, 06:00 de São Paulo) não é
+callable: confere a liberação e grava os alertas do dia (parte 3.13a).
 
 ## Eventos
 
@@ -185,7 +187,8 @@ registros guardados" é dado, não legenda.
 | 3.11e | No Comercial: "Vistoria concluída" no Início e na montagem, com os itens levantados carregados no orçamento | O orçamento nasce com os itens da vistoria, sem redigitar |
 | 3.12a | Quadro da TV no backend: `getRoomBoard` (painel, owner, admin e interno) | `painel` só lê o que a TV mostra; sem valor; sem ação; as regras não abrem coleção ao painel |
 | 3.12b | TV da sala (`/tv`): o painel entra direto, modo escuro, colunas, indicadores, próxima saída, relógio e atualização sozinha | Textos listados; sem valor; nenhum botão nem link; `axe` |
-| 3.13 | Alertas no Início e rotina diária (CNH, revisão do veículo, OS sem equipe ou veículo perto do prazo) | O evento sai uma vez por dia por item |
+| 3.13a | Rotina diária no backend (CNH e revisão do veículo viram evento) e o veículo fora no dia da revisão preventiva | O evento sai uma vez por dia por item; o agendamento recusa o veículo no dia da revisão |
+| 3.13b | Alertas no Início (revisão do veículo, OS sem equipe ou veículo perto do prazo) e a revisão preventiva na escala e na Agenda | Textos listados; o veículo no dia da revisão não se escolhe; `axe` |
 | 3.14 | Produção e registro | Conferência de produção |
 
 **Pronto quando.** Uma demanda do Comercial e uma direta percorrem pedido →
@@ -1203,4 +1206,28 @@ Feita em 23/10/2026. Regras em `lib/tv/quadro.ts`; a tela em
 - **Sessão longa.** O login do Firebase fica guardado no navegador e se
   renova sozinho: a TV continua entrando até alguém sair ou desligar o
   acesso em Pessoas.
+
+### Parte 3.13a: a rotina diária no backend
+
+Feita em 23/10/2026. Regras em `functions/operacao/src/domain/rotina.ts`; a
+gravação em `rotina-gravacao.ts`.
+
+- **`runDailyAlerts`.** Todo dia às 06:00 de São Paulo (Cloud Scheduler,
+  como a rotina do Agent Dute no WMS). Fora da liberação da Operação, não
+  faz nada.
+- **Os alertas.** A CNH de quem está ativo que vence em até 30 dias, ou já
+  venceu, vira `collaborator.cnh_expiring`. A revisão preventiva do veículo
+  ativo em até 15 dias, ou com a data já passada, vira
+  `vehicle.maintenance_due`. As janelas são as do Início. Cadastro ilegível
+  fica de fora.
+- **Uma vez por dia por item.** O id do evento sai do dia e do item: rodar
+  de novo no mesmo dia não duplica; no dia seguinte, sai de novo enquanto o
+  alerta valer. O payload é o id, o dia e quantos dias faltam (negativo: já
+  passou), sem nome, CPF, categoria, validade nem placa. O ator é
+  `rotina-diaria`.
+- **O veículo no dia da revisão.** `revisao_em` é o dia da revisão
+  preventiva: o planejamento, o agendamento e a vistoria recusam o veículo
+  nesse dia ("O veículo DEF-4G56 está em revisão preventiva em 01/01/2099.").
+  No dia seguinte, ele volta. Para tirar o bloqueio, muda-se a data no
+  cadastro do veículo.
 

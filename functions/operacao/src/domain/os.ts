@@ -667,11 +667,22 @@ export function equipeDaOs(
   return { equipe, equipe_uids: [...new Set(uids)] };
 }
 
-/** Os veículos pedidos, com placa, tipo e dono copiados do cadastro. Só veículo ativo. */
-export function veiculosDaOs(pedido: readonly string[], cadastro: ReadonlyMap<string, VeiculoGravado>): VeiculoDaOs[] {
+function placaLegivel(placa: string): string {
+  return /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(placa) ? `${placa.slice(0, 3)}-${placa.slice(3)}` : placa;
+}
+
+/**
+ * Os veículos pedidos, com placa, tipo e dono copiados do cadastro. Só
+ * veículo ativo, e nunca no dia da revisão preventiva (`revisao_em`, parte
+ * 3.13a): nesse dia o veículo está na oficina.
+ */
+export function veiculosDaOs(pedido: readonly string[], cadastro: ReadonlyMap<string, VeiculoGravado>, dia: string | null = null): VeiculoDaOs[] {
   return pedido.map((id) => {
     const veiculo = cadastro.get(id);
     if (!veiculo || !veiculo.ativo) falha("Há um veículo que não está ativo.");
+    if (dia && veiculo.revisao_em === dia) {
+      falha(`O veículo ${placaLegivel(veiculo.placa)} está em revisão preventiva em ${dia.slice(8, 10)}/${dia.slice(5, 7)}/${dia.slice(0, 4)}.`);
+    }
     return { veiculo_id: veiculo.id, placa: veiculo.placa, tipo: veiculo.tipo, modelo: veiculo.modelo, dono: veiculo.dono, empresa: veiculo.empresa };
   });
 }
