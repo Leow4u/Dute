@@ -1,4 +1,12 @@
-import { estagioDoCadastro, type EstagioCadastro } from "@workspace/dominio";
+import {
+  MODELOS_DE_AVISO,
+  PAPEIS_DE_CONTATO,
+  contatoPodeReceberAviso,
+  estagioDoCadastro,
+  type EstagioCadastro,
+  type ModeloDeAviso,
+  type PapelDeContato,
+} from "@workspace/dominio";
 
 import { getRouteProfileRoles } from "../modules";
 import { LEGACY_CUSTOMER_CODE, canonicalSkuPrefix } from "../operations";
@@ -343,8 +351,8 @@ export function ordenarLocais(locais: readonly LocalResumo[]): LocalResumo[] {
   );
 }
 
-export const PAPEIS_DO_CONTATO = ["gestor_cliente", "gerenciadora", "financeiro", "outro"] as const;
-export type PapelDoContato = (typeof PAPEIS_DO_CONTATO)[number];
+export const PAPEIS_DO_CONTATO = PAPEIS_DE_CONTATO;
+export type PapelDoContato = PapelDeContato;
 
 export const PAPEL_DO_CONTATO_ROTULO: Record<PapelDoContato, string> = {
   gestor_cliente: "Gestor do cliente",
@@ -362,8 +370,16 @@ export type ContatoResumo = {
   empresa: string | null;
   papel: PapelDoContato;
   papelRotulo: string;
+  /** Os avisos que o contato recebe por e-mail (parte 4.6b). */
+  avisos: ModeloDeAviso[];
   ativo: boolean;
 };
+
+/** Os avisos gravados, na ordem dos modelos; o que não é modelo sai. */
+function avisosLidos(value: unknown): ModeloDeAviso[] {
+  const lista = Array.isArray(value) ? value : [];
+  return MODELOS_DE_AVISO.filter((modelo) => lista.includes(modelo));
+}
 
 function papelDoContato(value: unknown): PapelDoContato {
   const papel = texto(value);
@@ -383,6 +399,7 @@ export function contatoDoDocumento(id: string, data: Registro): ContatoResumo | 
     empresa: opcional(data.empresa),
     papel,
     papelRotulo: PAPEL_DO_CONTATO_ROTULO[papel],
+    avisos: avisosLidos(data.avisos),
     ativo: data.ativo !== false,
   };
 }
@@ -724,7 +741,7 @@ export function payloadAtivoLocal(
   return { idempotency_key: idempotencyKey, customer_code: customerCode, local_id: local.id, nome: local.nome, ativo };
 }
 
-export type FormContato = { nome: string; empresa: string; papel: string; email: string; telefone: string };
+export type FormContato = { nome: string; empresa: string; papel: string; email: string; telefone: string; avisos: ModeloDeAviso[] };
 
 /** Formulário do contato como abre: vazio para o novo, o contato para a alteração. */
 export function formDoContato(contato: ContatoResumo | null): FormContato {
@@ -734,7 +751,31 @@ export function formDoContato(contato: ContatoResumo | null): FormContato {
     papel: contato?.papel ?? "",
     email: contato?.email ?? "",
     telefone: contato?.telefone ?? "",
+    avisos: contato?.avisos ?? [],
   };
+}
+
+/**
+ * Os avisos que o formulário oferece (parte 4.6b): nenhum sem o e-mail; a NF,
+ * que leva o valor, só para o gestor e o financeiro do cliente. A mesma régua
+ * de saveCustomerContact.
+ */
+export function avisosOferecidos(form: Pick<FormContato, "email" | "papel">): ModeloDeAviso[] {
+  if (!texto(form.email)) return [];
+  const papel = papelDoContato(form.papel);
+  return MODELOS_DE_AVISO.filter((modelo) => contatoPodeReceberAviso(modelo, papel));
+}
+
+/** Os avisos marcados que o formulário ainda oferece: o que deixou de valer sai ao salvar. */
+export function avisosDoFormulario(form: FormContato): ModeloDeAviso[] {
+  const oferecidos = avisosOferecidos(form);
+  return MODELOS_DE_AVISO.filter((modelo) => oferecidos.includes(modelo) && form.avisos.includes(modelo));
+}
+
+/** Marca ou desmarca um aviso, na ordem dos modelos. */
+export function marcarAviso(form: FormContato, modelo: ModeloDeAviso, marcado: boolean): FormContato {
+  const avisos = marcado ? [...form.avisos, modelo] : form.avisos.filter((item) => item !== modelo);
+  return { ...form, avisos: MODELOS_DE_AVISO.filter((item) => avisos.includes(item)) };
 }
 
 /**
@@ -755,13 +796,17 @@ export function payloadContato(
     papel: papelDoContato(form.papel),
   };
   const base = { idempotency_key: idempotencyKey, customer_code: customerCode };
-  if (!original) return { ...base, nome: texto(form.nome), ...valores };
-  const campos = alterados(formDoContato(original), form, ["email", "telefone", "empresa", "papel"] as const);
+  const avisos = avisosDoFormulario(form);
+  if (!original) return { ...base, nome: texto(form.nome), ...valores, avisos };
+  const { avisos: _avisos, ...antes } = formDoContato(original);
+  const { avisos: _marcados, ...depois } = form;
+  const campos = alterados(antes, depois, ["email", "telefone", "empresa", "papel"] as const);
   return {
     ...base,
     contato_id: original.id,
     nome: texto(form.nome),
     ...Object.fromEntries(campos.map((campo) => [campo, valores[campo]])),
+    ...(avisos.join() === original.avisos.join() ? {} : { avisos }),
   };
 }
 

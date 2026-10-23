@@ -637,6 +637,59 @@ describe("contatos do cliente", () => {
     }
   });
 
+  it("os avisos por e-mail (parte 4.6b): gravados com o contato; a NF só para quem lê valor; sem e-mail, nenhum", async () => {
+    await criar(comercial, { name: "Construtora Ômega" });
+    const gestora = await saveCustomerContactFor(db, comercial, {
+      idempotency_key: key(),
+      customer_code: "CONSTRUTORA-OMEGA",
+      nome: "Gestora",
+      email: "gestora@omega.com.br",
+      papel: "gestor_cliente",
+      avisos: ["nf_emitida", "os_agendada"],
+    });
+    const ler = async (id: string) => (await db.collection("customer_contacts").doc(id).get()).data() ?? {};
+    assert.deepEqual((await ler(gestora.contato_id)).avisos, ["os_agendada", "nf_emitida"]);
+
+    // O que não veio continua: mudar só o telefone mantém os avisos.
+    await saveCustomerContactFor(db, comercial, { idempotency_key: key(), customer_code: "CONSTRUTORA-OMEGA", contato_id: gestora.contato_id, nome: "Gestora", telefone: "11987654321" });
+    assert.deepEqual((await ler(gestora.contato_id)).avisos, ["os_agendada", "nf_emitida"]);
+
+    // Virar gerenciadora com a NF ligada recusa; desligando a NF, passa.
+    await rejeita(
+      saveCustomerContactFor(db, comercial, { idempotency_key: key(), customer_code: "CONSTRUTORA-OMEGA", contato_id: gestora.contato_id, nome: "Gestora", papel: "gerenciadora" }),
+      "failed-precondition",
+      /leva o valor/,
+    );
+    await saveCustomerContactFor(db, comercial, {
+      idempotency_key: key(),
+      customer_code: "CONSTRUTORA-OMEGA",
+      contato_id: gestora.contato_id,
+      nome: "Gestora",
+      papel: "gerenciadora",
+      avisos: ["os_agendada"],
+    });
+    assert.deepEqual((await ler(gestora.contato_id)).avisos, ["os_agendada"]);
+
+    // Tirar o e-mail com aviso ligado recusa; o contato novo sem e-mail não liga aviso.
+    await rejeita(
+      saveCustomerContactFor(db, comercial, { idempotency_key: key(), customer_code: "CONSTRUTORA-OMEGA", contato_id: gestora.contato_id, nome: "Gestora", email: null }),
+      "failed-precondition",
+      /e-mail/,
+    );
+    await rejeita(
+      saveCustomerContactFor(db, comercial, { idempotency_key: key(), customer_code: "CONSTRUTORA-OMEGA", nome: "Sem e-mail", avisos: ["os_concluida"] }),
+      "failed-precondition",
+      /e-mail/,
+    );
+    const semAvisos = await saveCustomerContactFor(db, comercial, { idempotency_key: key(), customer_code: "CONSTRUTORA-OMEGA", nome: "Sem avisos" });
+    assert.deepEqual((await ler(semAvisos.contato_id)).avisos, []);
+
+    // O evento não leva os avisos nem o e-mail.
+    for (const evento of (await eventos()).filter((row) => row.type === "customer_contact.saved")) {
+      assert.doesNotMatch(JSON.stringify({ ...evento, actor: null }), /os_agendada|nf_emitida|omega\.com/);
+    }
+  });
+
   it("a mesma pessoa em dois clientes são dois contatos; no mesmo cliente, um só", async () => {
     await criar(comercial, { name: "Construtora Ômega" });
     await criar(comercial, { name: "Banco Safra" });

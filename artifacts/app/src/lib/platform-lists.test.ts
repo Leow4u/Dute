@@ -5,6 +5,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   ESTAGIOS_CADASTRO,
+  MODELOS_DE_AVISO,
+  MODELOS_DE_AVISO_COM_VALOR,
+  PAPEIS_DE_CONTATO,
+  PAPEIS_DE_CONTATO_QUE_LEEM_VALOR,
   MODULOS_CONTRATAVEIS,
   MODULOS_PADRAO_CLIENTE,
   MODULOS_POR_PAPEL,
@@ -166,3 +170,23 @@ describe("listas do Financeiro iguais em todo lugar (Fase 4)", () => {
   });
 });
 
+describe("os avisos por modelo iguais em todo lugar (parte 4.6)", () => {
+  const comercial = read("functions/comercial/src/domain/cadastro.ts");
+  const operacao = read("functions/operacao/src/domain/avisos.ts");
+
+  it("os modelos: lib/dominio, o cadastro do Comercial e a rotina da Operação", () => {
+    expect(tsList(comercial, "MODELOS_DE_AVISO")).toEqual([...MODELOS_DE_AVISO]);
+    expect(tsList(operacao, "MODELOS_DE_AVISO")).toEqual([...MODELOS_DE_AVISO]);
+  });
+
+  it("o que leva valor e quem lê valor: o mesmo no cadastro e na rotina", () => {
+    expect(tsList(comercial, "MODELOS_DE_AVISO_COM_VALOR")).toEqual([...MODELOS_DE_AVISO_COM_VALOR]);
+    expect(tsList(operacao, "MODELOS_DE_AVISO_COM_VALOR")).toEqual([...MODELOS_DE_AVISO_COM_VALOR]);
+    expect(tsList(comercial, "PAPEIS_QUE_LEEM_VALOR")).toEqual([...PAPEIS_DE_CONTATO_QUE_LEEM_VALOR]);
+    expect(tsList(operacao, "PAPEIS_QUE_LEEM_VALOR")).toEqual([...PAPEIS_DE_CONTATO_QUE_LEEM_VALOR]);
+  });
+
+  it("os papéis do contato: lib/dominio e o cadastro do Comercial", () => {
+    expect(tsList(comercial, "PAPEIS_CONTATO")).toEqual([...PAPEIS_DE_CONTATO]);
+  });
+});

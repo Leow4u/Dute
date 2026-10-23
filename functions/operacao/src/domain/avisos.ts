@@ -35,7 +35,7 @@ export const MODULO_DO_MODELO: Record<ModeloDeAviso, "operacao" | "financeiro"> 
 };
 
 /** Os modelos que levam valor: por e-mail, só aos papéis de contato que leem valor. */
-export const MODELOS_COM_VALOR: readonly ModeloDeAviso[] = ["nf_emitida"];
+export const MODELOS_DE_AVISO_COM_VALOR = ["nf_emitida"] as const;
 export const PAPEIS_QUE_LEEM_VALOR = ["gestor_cliente", "financeiro"] as const;
 
 /** Os tipos de evento que dão aviso, com a codebase que grava cada um. A OS planejada com a data já nasce agendada. */
@@ -237,7 +237,7 @@ export function clienteRecebeOModelo(modelo: ModeloDeAviso, modulos: readonly st
 
 /** O contato pode ligar o modelo? O que leva valor, só quem lê valor. */
 export function contatoPodeReceber(modelo: ModeloDeAviso, papel: unknown): boolean {
-  return !MODELOS_COM_VALOR.includes(modelo) || (PAPEIS_QUE_LEEM_VALOR as readonly unknown[]).includes(papel);
+  return !(MODELOS_DE_AVISO_COM_VALOR as readonly string[]).includes(modelo) || (PAPEIS_QUE_LEEM_VALOR as readonly unknown[]).includes(papel);
 }
 
 /** Os contatos do cliente que recebem o modelo por e-mail: ativos, com e-mail, com o modelo ligado e, no que leva valor, que leem valor. */

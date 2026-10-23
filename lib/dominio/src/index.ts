@@ -8,6 +8,7 @@
  * lista de papéis do firestore.rules. Desenho em docs/plataforma/fase-2-nucleo.md.
  */
 
+export * from "./avisos";
 export * from "./contratos-datas";
 export * from "./dinheiro";
 

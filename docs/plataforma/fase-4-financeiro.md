@@ -488,3 +488,23 @@ Feita em 23/10/2026. Os modelos estão em `functions/operacao/src/domain/avisos.
   - `avisos.integration.test.ts` cobre a primeira rodada, a repetição sem duplicar, o evento do último minuto, o cliente sem o módulo e a fila.
   - `operacao-avisos.rules.test.ts` cobre as regras.
   - `callables.test.ts` trava a function agendada.
+
+### Parte 4.6b: os avisos de cada contato no cadastro
+
+Feita em 23/10/2026. A régua está em `functions/comercial/src/domain/cadastro.ts` (`saveCustomerContact`). A lista
+dos modelos fica em `lib/dominio/src/avisos.ts`, e o diálogo em `artifacts/app/src/pages/comercial/clientes-dialogos.tsx`.
+
+- **No cadastro.** O contato ganha `avisos`: os modelos que ele recebe por e-mail, na ordem da lista e sem repetir.
+  - O aviso pede o e-mail. Tirar o e-mail com aviso ligado recusa.
+  - A NF emitida leva o valor: só o gestor e o financeiro do cliente a recebem. Virar gerenciadora com a NF ligada recusa.
+  - O que não veio continua: mudar só o telefone mantém os avisos.
+  - O evento `customer_contact.saved` não leva os avisos nem o e-mail.
+- **No diálogo do contato.** "Avisos por e-mail" aparece com o e-mail preenchido, com uma caixa por modelo.
+  - A NF só aparece para o gestor e o financeiro do cliente.
+  - O que deixou de valer (o e-mail apagado, o papel trocado) sai ao salvar.
+  - Na alteração, os avisos vão só quando mudam.
+- **Uma lista só.** `MODELOS_DE_AVISO`, o que leva valor e quem lê valor estão em `lib/dominio`. As cópias do Comercial e da Operação são travadas por `platform-lists.test.ts`, junto com os papéis do contato.
+- **Testes.**
+  - `cadastro.test.ts` e `cadastro.integration.test.ts` (Comercial) cobrem a lista, o e-mail, a NF para quem lê valor e o que continua.
+  - `clientes.test.ts` cobre o formulário e o pedido.
+  - `clientes-dialogos.test.tsx` cobre o grupo: os rótulos, a NF só para quem lê valor e `axe`.
