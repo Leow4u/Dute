@@ -98,7 +98,8 @@ export function previsto(item: Pick<ItemEmExecucao, "planejado" | "incluidos">):
 }
 
 /** Os itens só recebem o feito com a OS em execução (a primeira etapa já registrada). */
-function exigirEmExecucao(os: Pick<OsGravada, "status">): void {
+function exigirEmExecucao(os: Pick<OsGravada, "status" | "tipo">): void {
+  if (os.tipo === "vistoria") falha("A vistoria não tem itens da OS: os itens levantados vão no envio ao Comercial.");
   if (os.status === "em_execucao") return;
   if (os.status === "agendada") falha("Registre a primeira etapa antes dos itens.");
   if (os.status === "aberta") falha("Agende a OS antes de registrar o andamento.");

@@ -165,6 +165,7 @@ export function concluirOs(
   pedido: PedidoDeConclusao,
   contexto: ContextoDoRegistro,
 ): ConclusaoNaOs {
+  if (os.tipo === "vistoria") falha("A vistoria não se conclui com aceite: envie a vistoria ao Comercial.");
   const problema = problemaParaRegistrar(os);
   if (problema) falha(problema);
   if (os.status === "agendada") falha("Registre a primeira etapa antes de concluir.");

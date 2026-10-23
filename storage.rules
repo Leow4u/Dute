@@ -72,10 +72,20 @@ service firebase.storage {
         && request.auth.uid in ordemDeServico(numero).data.get('equipe_uids', []);
     }
 
+    // A vistoria (parte 3.11a) vai ao Comercial com as fotos: quem orça
+    // (comercial) lê as fotos da OS de vistoria, e só dela. Owner e admin já
+    // leem por coordenarem a Operação.
+    function fotoDeVistoria(numero) {
+      return hasProfile()
+        && profileRole() == 'comercial'
+        && ordemDeServico(numero).data.get('tipo', 'servico') == 'vistoria';
+    }
+
     match /os/{numero}/fotos/{arquivo} {
       allow read: if coordenaOperacao()
         || (hasProfile() && profileRole() == 'suporte')
-        || escaladoNaOs(numero);
+        || escaladoNaOs(numero)
+        || fotoDeVistoria(numero);
       allow create: if resource == null
         && (coordenaOperacao() || escaladoNaOs(numero))
         && numero.matches('^[0-9]{5,8}-[0-9]{2}$')

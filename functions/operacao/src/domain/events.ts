@@ -49,6 +49,8 @@ export const OPERACAO_EVENT_TYPES = [
   "os.reviewed",
   "os.addendum_requested",
   "os.reopened",
+  "os.survey_opened",
+  "os.survey_sent",
   "demand.direct_opened",
   "demand.execution_reviewed",
 ] as const;
@@ -201,6 +203,28 @@ const osRevisada = z
   .strict();
 const aditivoPedido = z.object({ id: osId, demanda: demandaNumero, linhas: z.number().int().min(1).max(300) }).strict();
 const osReaberta = z.object({ id: osId, demanda: demandaNumero, demanda_reaberta: z.boolean() }).strict();
+/** A vistoria aberta (parte 3.11a): a OS sem itens, com a janela e a equipe quando já vem agendada. */
+const vistoriaAberta = z
+  .object({ id: osId, demanda: demandaNumero, seq: z.number().int().min(1).max(99), data: data.nullable(), equipe: composicao, veiculos: frota })
+  .strict();
+/**
+ * A vistoria enviada ao Comercial: quando, por onde e quantos ambientes,
+ * itens levantados, fotos e medidas. Os nomes, as medidas e as observações
+ * ficam só na OS e na demanda.
+ */
+const vistoriaEnviada = z
+  .object({
+    id: osId,
+    demanda: demandaNumero,
+    instante,
+    canal,
+    informado_por: z.string().regex(/^col_[a-f0-9]{16}$/).nullable(),
+    ambientes: z.number().int().min(1).max(30),
+    itens: z.number().int().min(1).max(300),
+    fotos: z.number().int().min(1).max(200),
+    medidas: z.number().int().min(0).max(30),
+  })
+  .strict();
 /** A demanda direta foi executada e revisada: vai ao Comercial orçar a execução. */
 const execucaoRevisada = z.object({ id: demandaNumero, de: data, ate: data, os: z.number().int().min(1).max(99) }).strict();
 
@@ -231,6 +255,8 @@ export const OPERACAO_EVENT_PAYLOADS = {
   "os.reviewed": osRevisada,
   "os.addendum_requested": aditivoPedido,
   "os.reopened": osReaberta,
+  "os.survey_opened": vistoriaAberta,
+  "os.survey_sent": vistoriaEnviada,
   "demand.direct_opened": demandaDireta,
   "demand.execution_reviewed": execucaoRevisada,
 } as const;
@@ -265,6 +291,11 @@ const TEXTO: Record<OperacaoEventType, { title: string; description: string }> =
   "os.reviewed": { title: "OS revisada", description: "A coordenação revisou a OS e decidiu cada divergência entre o planejado e o executado." },
   "os.addendum_requested": { title: "Aditivo pedido ao Comercial", description: "A revisão da OS pediu ao Comercial o aditivo do que passou do orçado." },
   "os.reopened": { title: "OS reaberta", description: "A OS revisada voltou à execução." },
+  "os.survey_opened": { title: "Vistoria aberta", description: "A vistoria da demanda foi aberta como OS, antes do orçamento fechado." },
+  "os.survey_sent": {
+    title: "Vistoria enviada ao Comercial",
+    description: "A vistoria levantou ambientes, itens e medidas no local e foi direto ao Comercial, sem revisão.",
+  },
   "demand.direct_opened": { title: "Demanda direta aberta", description: "A demanda chegou direto na Operação e se orça depois da execução." },
   "demand.execution_reviewed": { title: "Execução revisada", description: "A última OS da demanda direta foi revisada: a execução vai ao Comercial para orçar." },
 };
