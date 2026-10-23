@@ -157,6 +157,7 @@ const OperacaoPlanejar = lazy(() => import("./pages/operacao/planejar"));
 const OperacaoOs = lazy(() => import("./pages/operacao/os"));
 const CampoHoje = lazy(() => import("./pages/campo/hoje"));
 const CampoOs = lazy(() => import("./pages/campo/os"));
+const CampoConcluir = lazy(() => import("./pages/campo/concluir"));
 const OperacaoColaboradores = lazy(() => import("./pages/operacao/colaboradores"));
 const OperacaoVeiculos = lazy(() => import("./pages/operacao/veiculos"));
 import { useRole } from "./hooks/use-role";
@@ -1091,6 +1092,7 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
     // O app do campo é da Operação (parte 3.8b).
     protectedRoute("/campo", CampoHoje),
     protectedRoute("/campo/os", CampoOs),
+    protectedRoute("/campo/concluir", CampoConcluir),
   ]),
   ...soComComercialLiberado([
     protectedRoute("/comercial", ComercialInicio),

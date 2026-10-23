@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { conclusaoGuardada, problemaParaConcluir } from "@/lib/campo/concluir";
 import type { NovoRegistro, RegistroNaFila } from "@/lib/campo/fila";
-import { ROTA_CAMPO } from "@/lib/campo/navegacao";
+import { ROTA_CAMPO, hrefDaConclusaoNoCampo } from "@/lib/campo/navegacao";
 import {
   acaoDaEtapa,
   duracaoDesde,
@@ -544,7 +545,10 @@ export function CampoOsView({
       </div>
     );
   }
-  const recebe = ficha.status === "agendada" || ficha.status === "em_execucao";
+  // A conclusão guardada na fila fecha a OS no celular: nada mais se registra nela.
+  const concluidaNaFila = Boolean(conclusaoGuardada(ficha, pendentes));
+  const recebe = (ficha.status === "agendada" || ficha.status === "em_execucao") && !concluidaNaFila;
+  const podeConcluir = problemaParaConcluir(ficha, pendentes, uid) === null;
   const etapas = etapasNoCampo(ficha, pendentes);
   const emExecucao = ficha.status === "em_execucao" || etapas.etapas.some((etapa) => etapa.estado === "guardada");
   const itens = itensNoCampo(ficha, pendentes);
@@ -581,7 +585,9 @@ export function CampoOsView({
           ) : null}
         </dl>
       ) : null}
-      {!recebe ? <p className={cn(selo, seloAlerta, "h-auto self-start py-1.5 text-sm")}>{ficha.status === "cancelada" ? "OS cancelada" : "OS concluída"}</p> : null}
+      {!recebe ? (
+        <p className={cn(selo, seloAlerta, "h-auto self-start py-1.5 text-sm")}>{ficha.status === "cancelada" ? "OS cancelada" : concluidaNaFila ? "OS concluída · guardada" : "OS concluída"}</p>
+      ) : null}
 
       <Etapas ficha={ficha} pendentes={pendentes} recebe={recebe} onRegistrar={onRegistrar} agora={agora} />
       <Itens ficha={ficha} itens={itens} emExecucao={recebe && emExecucao} onRegistrar={onRegistrar} onIncluir={(linha) => setIncluir({ linha })} agora={agora} />
@@ -595,6 +601,14 @@ export function CampoOsView({
       {recebe ? (
         <Button type="button" variant="outline" size="lg" onClick={() => setOcorrencia(true)}>
           Registrar ocorrência
+        </Button>
+      ) : null}
+      {podeConcluir ? (
+        <Button asChild size="lg" variant={etapas.proxima && etapas.proxima !== "fim" ? "outline" : "default"}>
+          <Link href={hrefDaConclusaoNoCampo(ficha.numero)}>
+            <Check aria-hidden="true" className="size-5" />
+            Concluir OS
+          </Link>
         </Button>
       ) : null}
 
