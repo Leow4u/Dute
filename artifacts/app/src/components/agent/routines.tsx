@@ -33,6 +33,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { chaveNoAlvo } from "@/lib/agente/cliente";
 import { useClienteDoAgente } from "@/lib/agente/contexto";
+import { modelosDoAgente } from "@/lib/agente/resumo-do-dia";
 import {
   describeSchedule,
   editingRoutine,
@@ -41,7 +42,6 @@ import {
   routineForm,
   showTemplatesInMine,
   templateForm,
-  templatesFor,
   routinePayload,
   routineProblem,
   routinesKey,
@@ -329,7 +329,7 @@ function TemplateCard({ template, disabled, onPick }: { template: RoutineTemplat
       <CalendarClock className="mb-1 h-4 w-4 text-agent" aria-hidden="true" />
       <span className="text-sm font-semibold">{template.name}</span>
       <span className="text-xs text-muted-foreground">
-        {template.hint} {describeSchedule({ ...template, day_of_month: template.day_of_month ?? null })}.
+        {[template.hint, `${describeSchedule({ ...template, day_of_month: template.day_of_month ?? null })}.`].filter(Boolean).join(" ")}
       </span>
     </button>
   );
@@ -344,11 +344,13 @@ type RoutinesTab = "mine" | "templates";
  */
 export function RoutinesPage({ role, onOpenConversation }: { role: string | undefined; onOpenConversation: (id: string) => void }) {
   const routines = useRoutines();
+  const agente = useClienteDoAgente();
   // "new", id da rotina ou "tpl:<id>"; a janela lê a versão atual da lista.
   const [editing, setEditing] = useState<string | null>(null);
   const [tab, setTab] = useState<RoutinesTab>("mine");
   const list = routines.data?.routines ?? [];
-  const templates = templatesFor(role);
+  // No agente do núcleo, o Resumo do dia do módulo vem primeiro (parte 5.5l).
+  const templates = modelosDoAgente(role, agente.alvo);
   const full = list.length >= MAX_ROUTINES;
   const open = editingRoutine(list, editing);
   const template = editing?.startsWith("tpl:") ? templates.find((item) => `tpl:${item.id}` === editing) : undefined;
