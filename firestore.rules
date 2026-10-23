@@ -161,6 +161,13 @@ service cloud.firestore {
       return hasAnyRole(['owner', 'admin', 'interno', 'wms', 'financeiro', 'suporte', 'cliente']);
     }
 
+    // Ler a própria conversa: quem tem o Agent Dute do núcleo (AGENTE_ROLES
+    // de functions/core, parte 5.5i, travada em platform-lists.test.ts), que
+    // inclui o comercial. Só o servidor grava a conversa do núcleo.
+    function canReadAgentChat() {
+      return hasAnyRole(['owner', 'admin', 'interno', 'wms', 'comercial', 'financeiro', 'suporte', 'cliente']);
+    }
+
     function hasCustomerScope() {
       return isCustomer()
         && get(userDoc()).data.keys().hasAll(['customer_code'])
@@ -443,7 +450,7 @@ service cloud.firestore {
     // Mesmo motivo de canReadOwnMessage(): checagem de formato na leitura
     // impede a consulta de lista. Mantida em safeConversationCreate().
     function canReadOwnConversation() {
-      return canUseAgentChat()
+      return canReadAgentChat()
         && resource.data.keys().hasAll(['user_id', 'customer_code'])
         && resource.data.user_id == request.auth.uid
         && hasOwnChatCustomerScope(resource.data);
@@ -515,7 +522,7 @@ service cloud.firestore {
     // apos recarregar). O formato continua imposto na escrita, que e onde
     // ele de fato protege.
     function canReadOwnMessage() {
-      return canUseAgentChat()
+      return canReadAgentChat()
         && resource.data.keys().hasAll(['user_id', 'customer_code'])
         && resource.data.user_id == request.auth.uid
         && hasOwnChatCustomerScope(resource.data);

@@ -45,6 +45,9 @@ export type ShipmentDraft = {
 /** Rotina proposta pelo agente (sugerir_rotina): a pessoa confirma no cartão. */
 export type RoutineDraft = { tipo: "rotina"; value: Record<string, unknown> };
 
+/** A anotação que o agente do núcleo sugeriu (parte 5.5i): a pessoa envia, e a coordenação aprova. */
+export type NoteDraft = { tipo: "anotacao"; texto: string; visibilidade: "todos" | "equipe" };
+
 export type AgentDraft = OrderDraft | ShipmentDraft;
 
 const STORAGE_KEY = "dute.agent-draft";
@@ -70,6 +73,13 @@ function list(value: unknown) {
 export function parseRoutineDraft(value: unknown): RoutineDraft | null {
   if (!value || typeof value !== "object" || (value as AnyRecord).tipo !== "rotina") return null;
   return { tipo: "rotina", value: value as AnyRecord };
+}
+
+export function parseNoteDraft(value: unknown): NoteDraft | null {
+  if (!value || typeof value !== "object" || (value as AnyRecord).tipo !== "anotacao") return null;
+  const raw = value as AnyRecord;
+  const texto = text(raw.texto);
+  return texto ? { tipo: "anotacao", texto, visibilidade: raw.visibilidade === "todos" ? "todos" : "equipe" } : null;
 }
 
 export function parseDraft(value: unknown): AgentDraft | null {

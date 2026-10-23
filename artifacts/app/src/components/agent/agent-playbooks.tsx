@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpenCheck, Check, Loader2, Pencil, Plus, X } from "lucide-react";
 
-import { fetchChatJson } from "@/components/agent/chat";
+import { chaveNoAlvo } from "@/lib/agente/cliente";
+import { useClienteDoAgente } from "@/lib/agente/contexto";
 import { buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -38,18 +39,19 @@ function AudiencePill({ audience }: { audience: Playbook["audience"] }) {
 function PlaybookDialog({ playbook, onClose }: { playbook: Playbook | null; onClose: () => void }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const agente = useClienteDoAgente();
   const [form, setForm] = useState<PlaybookForm>(() => playbookForm(playbook ?? undefined));
   const set = (patch: Partial<PlaybookForm>) => setForm((current) => ({ ...current, ...patch }));
   const pending = playbook?.status === "pending";
   const problem = playbookProblem(form);
   const save = useMutation({
     mutationFn: async (approve: boolean) => {
-      const saved = await fetchChatJson<{ id: string }>("/api/agent-dute/playbooks", { method: "POST", body: JSON.stringify(playbookPayload(form)) });
-      if (approve) await fetchChatJson(`/api/agent-dute/playbooks/${encodeURIComponent(saved.id)}/approve`, { method: "POST", body: "{}" });
+      const saved = await agente.playbooks.salvar(playbookPayload(form));
+      if (approve) await agente.playbooks.decidir(saved.id, "approve");
       return approve;
     },
     onSuccess: async (approved) => {
-      await queryClient.invalidateQueries({ queryKey: playbooksKey });
+      await queryClient.invalidateQueries({ queryKey: chaveNoAlvo(agente, playbooksKey) });
       toast({ title: !playbook ? "Playbook publicado: o Agent Dute passa a seguir" : approved ? "Playbook aprovado" : "Playbook salvo" });
       onClose();
     },
@@ -135,17 +137,18 @@ function PlaybookDialog({ playbook, onClose }: { playbook: Playbook | null; onCl
 export function AgentPlaybooks() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const agente = useClienteDoAgente();
   // "new", id do playbook aberto ou nada.
   const [editing, setEditing] = useState<string | null>(null);
   const playbooks = useQuery({
-    queryKey: playbooksKey,
-    queryFn: () => fetchChatJson<{ playbooks: Playbook[] }>("/api/agent-dute/playbooks"),
+    queryKey: chaveNoAlvo(agente, playbooksKey),
+    queryFn: () => agente.playbooks.listar(),
   });
-  const refresh = () => queryClient.invalidateQueries({ queryKey: playbooksKey });
+  const refresh = () => queryClient.invalidateQueries({ queryKey: chaveNoAlvo(agente, playbooksKey) });
   const failed = (error: unknown) => toast({ title: "Não foi possível salvar", description: error instanceof Error ? error.message : "", variant: "destructive" });
   const decide = useMutation({
     mutationFn: ({ id, action }: { id: string; action: "approve" | "reject" | "archive" }) =>
-      fetchChatJson(`/api/agent-dute/playbooks/${encodeURIComponent(id)}/${action}`, { method: "POST", body: "{}" }),
+      agente.playbooks.decidir(id, action),
     onSuccess: (_result, input) => {
       toast({ title: input.action === "approve" ? "Playbook aprovado: o Agent Dute passa a seguir" : input.action === "reject" ? "Playbook recusado" : "Playbook arquivado" });
       void refresh();
@@ -153,7 +156,7 @@ export function AgentPlaybooks() {
     onError: failed,
   });
   const seed = useMutation({
-    mutationFn: () => fetchChatJson<{ created: number }>("/api/agent-dute/playbooks/seed", { method: "POST", body: "{}" }),
+    mutationFn: () => agente.playbooks.carregar(),
     onSuccess: (result) => {
       toast({ title: result.created ? `${result.created} playbooks carregados para aprovar` : "Os playbooks iniciais já foram carregados antes" });
       void refresh();

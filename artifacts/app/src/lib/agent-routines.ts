@@ -20,6 +20,8 @@ export type Routine = {
   last_run_at: string | null;
   last_status: "ok" | "failed" | "no_access" | null;
   conversation_id: string;
+  /** O módulo da conversa da rotina, no agente do núcleo (parte 5.5i); a do WMS não tem. */
+  modulo?: string;
 };
 
 export const MAX_ROUTINES = 5;
@@ -78,6 +80,8 @@ export type RoutineForm = {
   day_of_month: number;
   time: string;
   active: boolean;
+  /** A rotina alterada fica no módulo em que nasceu. */
+  modulo?: string;
 };
 
 export const EMPTY_ROUTINE: RoutineForm = { name: "", prompt: "", frequency: "weekly", days: [1], day_of_month: 1, time: "08:00", active: true };
@@ -92,6 +96,7 @@ export function routineForm(routine: Routine): RoutineForm {
     day_of_month: routine.day_of_month ?? 1,
     time: routine.time,
     active: routine.active,
+    ...(routine.modulo ? { modulo: routine.modulo } : {}),
   };
 }
 
@@ -137,6 +142,7 @@ export function routinePayload(form: RoutineForm, agentMessageId?: string) {
     ...(form.frequency === "monthly" ? { day_of_month: form.day_of_month } : {}),
     time: form.time,
     active: form.active,
+    ...(form.modulo ? { modulo: form.modulo } : {}),
     ...(agentMessageId ? { agent_message_id: agentMessageId } : {}),
   };
 }
