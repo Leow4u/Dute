@@ -770,3 +770,17 @@ cliente ou 15 em qualquer cliente; 20, `functions/core`; desenho em
     modelo com os dele (o mobiliário fica guardado por mais tempo; o insumo
     deveria girar mais rápido)? Seguimos com o mesmo para os três desde a
     parte 5.4a.
+31. Agent Dute no núcleo (parte 5.5): a equipe passa a falar do cliente
+    ativo, e não mais só da BTG? Recomendo que sim.
+32. Quem tem o Agent Dute: owner, admin, interno, wms, comercial,
+    financeiro, suporte e o cliente; o campo (app sem sinal) e o painel (TV)
+    não; o RH na Fase 8? Recomendo assim.
+33. A prévia do faturamento sai do agente até a Fase 7, que unifica o
+    faturamento, e o agente lê as faturas emitidas? Recomendo; hoje ela lê o
+    período antigo da BTG para qualquer cliente.
+34. A anotação que o agente sugere entra só pelo cartão, quando a pessoa a
+    envia (hoje a ferramenta já grava a pendente)? Recomendo: ferramenta
+    nunca grava.
+35. O briefing do dia vira uma rotina pronta ("Resumo do dia", dias úteis
+    às 7h) que cada pessoa liga, e o radar do painel mostra as linhas do
+    "Precisa de você" dos módulos da pessoa, sem regra própria? Recomendo.

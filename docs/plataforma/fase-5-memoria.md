@@ -21,6 +21,11 @@ Seguem a recomendação do plano até a resposta do Leonardo:
 | 20 | A codebase nova `functions/core`, como no repositório do plano (`plano.md`). Ela recebe a memória agora e o Agent Dute na parte 5.5. |
 | 29 | A semelhança dos orçamentos compara os itens da LPU e as quantidades. O resumo em texto fica guardado para o Agent Dute. |
 | 30 | Os dias parado têm os mesmos limites nos três modelos: "Parado 90+ dias" sem entrada nem saída e "Sem giro" aos 180 dias sem saída. |
+| 31 | A equipe fala com o Agent Dute do cliente ativo, não mais só da BTG. |
+| 32 | Têm o Agent Dute owner, admin, interno, wms, comercial, financeiro, suporte e o cliente. O campo e o painel não; o RH entra na Fase 8. |
+| 33 | A prévia do faturamento sai do agente até a Fase 7. O agente lê as faturas emitidas. |
+| 34 | A anotação sugerida pelo agente só entra pelo cartão, quando a pessoa a envia. Quem revisa decide depois, como hoje. |
+| 35 | O briefing do dia vira a rotina pronta "Resumo do dia", que cada pessoa liga. O radar mostra as linhas do "Precisa de você", sem regra própria. |
 
 - **Três camadas**, como no plano:
   - os fatos são os eventos e os documentos que as callables gravam;
@@ -172,12 +177,181 @@ e os dias parado da peça entram com ele.
   - Só o aprovado vira aviso ao cliente, no sino do portal e por e-mail,
     pela rotina dos avisos da Operação (parte 5.4f).
 
+## O Agent Dute no núcleo (parte 5.5)
+
+Desenho da parte 5.5, escrito em 23/10/2026 antes de qualquer código, como o
+plano pede.
+
+### O que existe hoje
+
+O Agent Dute inteiro mora na codebase do WMS (`functions/wms/src/index.ts` e
+`domain/agent-*.ts`):
+
+- o chat `chatWithAgentDute`, com resposta em partes;
+- 18 ferramentas;
+- as anotações, os playbooks e as rotinas;
+- os rascunhos de pedido, envio e rotina;
+- o conhecimento dos documentos, com o OCR;
+- o uso em `agent_usage`, com o painel de custo.
+
+Seis problemas a resolver na mudança:
+
+1. **A equipe só fala da BTG.** O escopo interno é fixo em "BTG Pactual".
+   O seletor de cliente do app não chega ao agente.
+2. **Duas ferramentas gravam.**
+   - `sugerir_anotacao` cria a anotação pendente e o evento.
+   - `consultar_playbook` soma o uso no playbook.
+3. **Uma consulta não leva o cliente.** `movimentacoes` busca o razão do
+   período sem o cliente na consulta e só o filtra na memória.
+4. **A prévia do faturamento lê o período antigo da BTG.**
+   `previa_faturamento` lê `billing_periods/{competência}` para qualquer
+   cliente.
+5. **O agente só conhece a Armazenagem.** Não lê a Operação, o Comercial, o
+   Financeiro nem a memória, e só aparece no shell da Armazenagem.
+6. **Radar e briefing estão de fora.**
+   - O radar é calculado no navegador.
+   - O briefing e o `analyzeEvent` não chamam o modelo, e nenhuma tela os
+     chama.
+   - Também não há teste do prompt, da troca de modelo, da gravação da
+     conversa nem da rotina.
+
+### O desenho
+
+- **Onde.**
+  - Na `functions/core`, com callables de nomes novos. O nome de uma
+    function é único no projeto, mesmo entre codebases.
+  - Os nomes:
+    - a conversa: `chatWithDute`;
+    - as anotações: `listDuteNotes`, `decideDuteNote` e `suggestDuteNote`;
+    - os playbooks: `listDutePlaybooks`, `saveDutePlaybook`,
+      `decideDutePlaybook` e `seedDutePlaybooks`;
+    - as rotinas: `listDuteRoutines`, `saveDuteRoutine`,
+      `deleteDuteRoutine` e `runDuteRoutineNow`, com a rotina agendada
+      `runDuteRoutines`.
+  - Cada callable entra por `requireCoreCaller`, como as da memória.
+- **As mesmas coleções.** `agent_conversations`, `agent_messages`,
+  `agent_usage`, `ai_agent_notes`, `ai_agent_playbooks`, `agent_routines`
+  e o conhecimento (`ai_agent_knowledge` e os pedaços).
+  - A conversa, o histórico e as rotinas de cada pessoa continuam.
+  - O painel de custo do WMS segue lendo `agent_usage`.
+  - O rascunho de pedido e de envio segue saindo pela `createCustomerRequest`
+    do WMS, que confere a mensagem do agente na mesma coleção.
+- **O escopo vem do servidor, nunca do modelo.**
+  - **O cliente** usa o `customer_code` do perfil e os módulos que
+    contratou.
+  - **A equipe** usa o cliente ativo do app (o `customer_code` do pedido).
+    - O núcleo confere o cadastro em `customers`: precisa ser cliente, não
+      prospect, e não estar arquivado.
+    - Os módulos são os do papel (`MODULOS_POR_PAPEL`). Armazenagem,
+      Operação e Financeiro só valem quando o cliente os contratou. O
+      Comercial vale para todo cliente.
+  - **O módulo do shell** (`modulo`: `wms`, `operacao`, `comercial`,
+    `financeiro`) precisa ser um dos módulos da pessoa.
+    - Muda a abertura, as sugestões e o que o prompt põe primeiro.
+    - As ferramentas são as de todos os módulos da pessoa: o agente enxerga
+      a empresa toda, como o plano pede.
+  - **A conversa** é da pessoa, do cliente e do módulo, e fica gravada com
+    os três. A de outro cliente ou de outra pessoa recusa.
+- **As ferramentas só leem, por construção.**
+  - Cada ferramenta recebe o leitor do agente (`domain/agente/leitor.ts`),
+    não o banco:
+    - `doCliente(coleção)` sempre consulta com `customer_code` igual ao do
+      escopo;
+    - `documento(coleção, id)` devolve vazio quando o documento é de outro
+      cliente;
+    - `geral(coleção)` vale só para a lista fechada do que não tem cliente,
+      como o catálogo da LPU.
+  - O leitor não tem gravação, lote nem transação.
+  - O que hoje grava vira cartão:
+    - A anotação sugerida volta como rascunho (`tipo: "anotacao"`). A pessoa
+      a envia pelo cartão (`suggestDuteNote`), como a rotina, e quem revisa
+      decide depois, como hoje.
+    - O uso do playbook vai para o registro de uso da resposta
+      (`agent_usage.playbooks`), gravado pelo fluxo da conversa.
+  - Nenhuma ferramenta tem parâmetro de cliente.
+  - A trava é um teste que roda todas as ferramentas num banco que recusa
+    qualquer gravação, com dados de dois clientes. Nenhuma grava e nenhuma
+    devolve dado do outro.
+- **O valor só para quem lê valor.**
+  - O valor (preço, total, fatura) só aparece para owner, admin, comercial
+    e financeiro (`canReadPrices` das regras). O cliente vê o das próprias
+    faturas.
+  - A ferramenta com valor só entra para esses papéis.
+  - Hoje o suporte vê a prévia do faturamento. No núcleo, não.
+- **Quem tem o Agent Dute.** owner, admin, interno, wms, comercial,
+  financeiro e suporte, e o cliente.
+  - O campo não tem: usa o app de campo, que funciona sem sinal.
+  - O painel não tem: só lê o quadro da TV.
+  - O RH entra na Fase 8.
+### As ferramentas
+
+| Módulo | Ferramentas | Quem |
+|---|---|---|
+| Armazenagem | `resumo_estoque`, `buscar_itens`, `listar_pedidos`, `ver_pedido`, `movimentacoes`, `documentos`, `itens_parados` (parte 5.4) | o cliente com armazenagem e a equipe da Armazenagem |
+| Armazenagem | `fila_solicitacoes`, `recebimentos`, `tarefas_armazem`, `enderecos`, `eventos` | a equipe da Armazenagem |
+| Operação | `demandas`, `ver_demanda`, `agenda` (as OS por dia, com a equipe e o veículo, sem valor), `ver_os` | o cliente com Operação (só as dele) e a equipe da Operação |
+| Operação | `duracao_sugerida` (parte 5.2) | quem planeja (`PLANEJAMENTO_ROLES`) |
+| Comercial | `orcamentos`, `ver_orcamento`, `orcamentos_parecidos` (parte 5.3), `lpu` | quem orça (`ORCAMENTO_ROLES`), com o preço |
+| Financeiro | `faturas` (as da Armazenagem e as da Operação), `a_receber` | o cliente com o Financeiro (as dele) e a equipe do Financeiro |
+| Todos | `conversas_anteriores`, `consultar_playbook`, `sugerir_anotacao` e `sugerir_rotina` (cartões) | quem tem o agente |
+| Todos | `rascunho_pedido` e `rascunho_envio` (cartões) | o cliente com armazenagem |
+
+- A prévia do faturamento sai do agente até a Fase 7, que unifica o
+  faturamento. O agente lê as faturas emitidas.
+- A memória diz quando ainda não tem base, como a sugestão da duração.
+
+### A conversa, as rotinas e a troca
+
+- **O modelo.**
+  - Genkit com o Vertex AI, os mesmos modelos (`AGENT_DUTE_MODEL` e o
+    reserva) e as mesmas regras do prompt: só consulta, nunca inventa, usa
+    as ferramentas.
+  - O prompt ganha o módulo e o cliente ativo.
+  - A resposta em partes mantém os tipos de hoje (`tool`, `text`, `reset`),
+    para a tela seguir igual.
+- **As rotinas.**
+  - A rotina agendada do núcleo (`runDuteRoutines`, a cada 15 minutos)
+    roda as rotinas de todos. Antes de rodar, confere o perfil atual de quem
+    criou.
+  - Na troca, uma rotina roda por um só: a `runAgentRoutines` do WMS para
+    nos projetos em que o agente do núcleo está liberado. É uma guarda de
+    duas linhas, não um refatoramento.
+- **Radar e briefing.**
+  - O radar do painel do agente passa a mostrar as linhas do "Precisa de
+    você" dos módulos da pessoa, sem regra própria: a contagem continua uma
+    só (`lib/resumo-do-modulo.ts`).
+  - O briefing do dia vira uma rotina pronta por módulo ("Resumo do dia",
+    nos dias úteis às 7h), que cada pessoa liga pelo cartão.
+  - `generateDailyBriefing` e `analyzeEvent` não vêm para o núcleo.
+- **Ficam no WMS.**
+  - O conhecimento dos documentos e o OCR, que são do fluxo dos documentos.
+    O agente do núcleo só lê o conhecimento ativo, como hoje.
+  - Os avisos do Agent Dute (`operational_notifications`).
+  - O painel de custo.
+- **A liberação.**
+  - `AGENTE_AMBIENTES_LIBERADOS = ["dute-homolog"]`, no app e no núcleo,
+    travada por `platform-lists.test.ts`. É separada da memória para o
+    Leonardo ligar uma sem a outra.
+  - Com ela, o app fala com o agente do núcleo; sem ela, com o do WMS.
+  - O agente do WMS sai no lançamento da Fase 5 na produção, com o OK do
+    Leonardo, não antes.
+- **No app.**
+  - O Agent Dute entra em cada shell (Armazenagem, Operação, Comercial e
+    Financeiro), com o atalho "/" e o módulo do shell na conversa.
+  - A tela do agente passa para a v3, com o violeta do Agent Dute, a lista
+    dos textos e o `axe`.
+  - A equipe fala do cliente ativo.
+
 ## Liberação
 
 `MEMORIA_AMBIENTES_LIBERADOS = ["dute-homolog"]`, no app (`lib/liberacao.ts`)
 e na `functions/core`, travada por `platform-lists.test.ts`. A rotina e as
 callables recusam fora dela. O `dute-prod` entra no fim da fase, com o OK do
 Leonardo.
+
+O Agent Dute do núcleo tem a liberação dele, `AGENTE_AMBIENTES_LIBERADOS =
+["dute-homolog"]` (parte 5.5b), no mesmo molde. Fora dela, o app segue com o
+agente do WMS.
 
 ## Partes
 
@@ -196,7 +370,14 @@ Leonardo.
 | 5.4d | A proposta do dia do alerta do item parado e a decisão (`answerStockAlert`), com o evento; `ai_stock_alerts` e as regras | O alerta não sai sem aprovação; o item decidido não volta sem se mexer; só a coordenação decide |
 | 5.4e | Estoque › Alertas, com o alerta de cada cliente e os itens para escolher, e a linha no "Precisa de você" da Armazenagem | Textos listados; uma ação principal; aprovar pede os itens; só a coordenação vê; `axe` |
 | 5.4f | O aviso do alerta aprovado ao cliente, no sino do portal e por e-mail, pela rotina dos avisos | Só o aprovado vira aviso; só ao cliente dele, com a armazenagem no contrato |
-| 5.5 | O Agent Dute no núcleo, com as ferramentas de leitura dos módulos; o WMS passa a usar o do núcleo. Desenho próprio antes do código | Ferramenta nunca escreve; isolamento por cliente nas respostas |
+| 5.5a | O desenho do Agent Dute no núcleo (esta seção) | — |
+| 5.5b | O escopo e o leitor do agente no núcleo: o cliente do perfil, o cliente ativo da equipe e o módulo do shell; o leitor só de leitura e por cliente; a liberação `AGENTE_AMBIENTES_LIBERADOS`; o Genkit na codebase | O leitor não grava; o documento de outro cliente volta vazio; o cliente ativo inexistente, arquivado ou prospect recusa; o módulo fora do papel recusa |
+| 5.5c | As ferramentas da Armazenagem pelo leitor, sem a prévia do faturamento, e a dos itens parados | Nenhuma grava; nenhuma devolve dado de outro cliente; nenhuma tem parâmetro de cliente; o razão já consultado pelo cliente |
+| 5.5d | As ferramentas da Operação, do Comercial, do Financeiro e da memória | O valor só para quem lê valor; a Operação sem valor; a memória diz quando não tem base; isolamento por cliente |
+| 5.5e | A conversa no núcleo (`chatWithDute`): o prompt por papel e módulo, o histórico, o resumo, as anotações e os playbooks no prompt, a troca de modelo, o uso e os rascunhos | O prompt de cada papel e módulo; a conversa de outro cliente recusa; o modelo que falha passa ao reserva; só o fluxo grava a conversa, o uso e os playbooks usados |
+| 5.5f | Anotações, playbooks e rotinas no núcleo, com a rotina agendada; o WMS deixa de rodar as rotinas onde o núcleo roda | A rotina roda uma vez, por um só; a anotação só entra pelo cartão; só quem revisa decide |
+| 5.5g | O app com o agente do núcleo onde está liberado: o Agent Dute em cada shell, com o módulo e o cliente ativo; a tela na v3; o radar com as linhas do "Precisa de você" | Textos listados; `axe`; a equipe fala do cliente ativo; o módulo do shell vai à conversa |
+| 5.5h | O "Resumo do dia" como rotina pronta por módulo | A rotina pronta segue o papel e o módulo; só liga pela pessoa |
 | 5.6 | O painel de acerto: o erro médio da duração prevista e a taxa de aceite das sugestões | O painel sai de `ai_suggestions` |
 
 ## Perguntas abertas
@@ -218,6 +399,14 @@ Leonardo.
   mobiliário costuma ficar guardado por mais tempo, e o insumo deveria girar
   mais rápido. Vale o mesmo para os três, ou cada modelo tem os dele?
   Seguimos com o mesmo até a resposta.
+- **O Agent Dute no núcleo (parte 5.5).** Seguimos as recomendações abaixo
+  até a resposta:
+  - a equipe fala do cliente ativo, não mais só da BTG;
+  - campo e painel ficam sem o agente;
+  - a prévia do faturamento sai até a Fase 7;
+  - a anotação sugerida entra só pelo cartão;
+  - o briefing vira a rotina pronta "Resumo do dia", e o radar mostra as
+    linhas do "Precisa de você".
 
 ## Registro
 
