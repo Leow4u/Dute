@@ -25,6 +25,8 @@ export const ROTA_DEMANDAS = "/operacao/demandas";
 export const ROTA_DEMANDA = "/operacao/demanda";
 /** A nova demanda direta (parte 3.5c, docs/mockups/OpDemandaNova.dc.html). */
 export const ROTA_NOVA_DEMANDA = "/operacao/nova-demanda";
+/** A ficha da OS (parte 3.7d, docs/mockups/OpOS.dc.html): ?numero=10045-01. */
+export const ROTA_OS = "/operacao/os";
 /** Planejar as OS de uma demanda (parte 3.6a, docs/mockups/OpOSPlanejar.dc.html): ?demanda=10045. */
 export const ROTA_PLANEJAR = "/operacao/planejar";
 
@@ -36,6 +38,7 @@ export const TELAS_DA_OPERACAO: readonly string[] = [
   ROTA_DEMANDA,
   ROTA_NOVA_DEMANDA,
   ROTA_PLANEJAR,
+  ROTA_OS,
   ROTA_COLABORADORES,
   ROTA_VEICULOS,
 ];
@@ -53,6 +56,17 @@ export function hrefDaOs(numero: string): string {
 /** A OS pedida na busca da URL da fila (`?os=`), ou null. */
 export function osDaBusca(busca: string): string | null {
   return parametro(busca, "os");
+}
+
+/** A ficha da OS: "/operacao/os?numero=10045-01". */
+export function hrefDaFichaDaOs(numero: string): string {
+  return `${ROTA_OS}?numero=${encodeURIComponent(numero)}`;
+}
+
+/** A OS pedida na busca da URL da ficha (`?numero=`), ou null. */
+export function fichaDaBusca(busca: string): string | null {
+  const valor = parametro(busca, "numero");
+  return valor && /^\d{5,8}-\d{2}$/.test(valor) ? valor : null;
 }
 
 /** A semana da agenda pela segunda-feira: "/operacao/agenda?semana=2026-10-19". */

@@ -20,7 +20,7 @@ import {
 } from "@/lib/operacao/hoje";
 import { PainelDaEscala, type EscalaAberta } from "@/components/operacao/escala";
 import { Avatar, Filtro, SeloDoTipo, Servicos, selo, seloAlerta, type OpcaoDeFiltro } from "@/components/operacao/partes";
-import { ROTA_NOVA_DEMANDA, hrefDaDemanda, hrefDoPlano } from "@/lib/operacao/navegacao";
+import { ROTA_NOVA_DEMANDA, hrefDaDemanda, hrefDaFichaDaOs, hrefDoPlano } from "@/lib/operacao/navegacao";
 import { cn } from "@/lib/utils";
 
 /**
@@ -158,7 +158,12 @@ function CartaoDaOs({
             OS {os.numero}
           </button>
         ) : (
-          <span className="text-sm font-semibold tabular-nums text-muted-foreground">OS {os.numero}</span>
+          <Link
+            href={hrefDaFichaDaOs(os.numero)}
+            className="rounded text-sm font-semibold tabular-nums text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+          >
+            OS {os.numero}
+          </Link>
         )}
       </div>
       {os.demandaFora ? <p className="text-sm font-semibold text-destructive">{rotuloDaDemandaFora(os.demandaFora)}</p> : null}

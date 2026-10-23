@@ -113,6 +113,7 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/operacao/demanda", ["owner", "admin", "interno"]],
   ["/operacao/nova-demanda", ["owner", "admin", "interno"]],
   ["/operacao/planejar", ["owner", "admin", "interno"]],
+  ["/operacao/os", ["owner", "admin", "interno"]],
   ["/operacao/colaboradores", ["owner", "admin", "interno"]],
   ["/operacao/veiculos", ["owner", "admin", "interno"]],
 ];

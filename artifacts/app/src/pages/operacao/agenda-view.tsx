@@ -7,7 +7,7 @@ import { Avatar, COR_DO_STATUS, ROTULO_DO_STATUS, SeloDoTipo, selo, seloAlerta }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { resumoDoDiaEmPartes, type Agenda, type DiaDaAgenda, type GrupoDaAgenda, type OsNaAgenda, type ParteDoResumo } from "@/lib/operacao/agenda";
-import { ROTA_NOVA_DEMANDA, hrefDaDemanda } from "@/lib/operacao/navegacao";
+import { ROTA_NOVA_DEMANDA, hrefDaDemanda, hrefDaFichaDaOs } from "@/lib/operacao/navegacao";
 import { cn } from "@/lib/utils";
 
 /**
@@ -92,7 +92,9 @@ function ListaPorDia({ agenda, vazio, onEscalar }: { agenda: Agenda; vazio: stri
               <li key={os.numero} className="flex flex-col gap-1.5 rounded-md border border-border bg-card p-3 text-sm">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={cn(selo, COR_DO_STATUS[os.status])}>{ROTULO_DO_STATUS[os.status]}</span>
-                  <span className="font-bold tabular-nums text-foreground">OS {os.numero}</span>
+                  <Link href={hrefDaFichaDaOs(os.numero)} className="rounded font-bold tabular-nums text-foreground underline-offset-4 hover:underline">
+                    OS {os.numero}
+                  </Link>
                   {os.janela ? <span className="ml-auto font-semibold tabular-nums text-foreground">{os.janela}</span> : null}
                 </div>
                 <p className="font-semibold text-foreground">{os.cliente}</p>
@@ -146,6 +148,9 @@ function Selecao({ os, onEscalar, onFechar }: { os: OsNaAgenda; onEscalar: (nume
             Reagendar
           </Button>
         ) : null}
+        <Button asChild size="sm">
+          <Link href={hrefDaFichaDaOs(os.numero)}>Abrir OS</Link>
+        </Button>
         <Button asChild size="sm" variant="outline">
           <Link href={hrefDaDemanda(os.demanda)}>Demanda {os.demanda}</Link>
         </Button>
