@@ -4,6 +4,7 @@ import { useSearch } from "wouter";
 
 import {
   colaboradorDaLeitura,
+  emailDoAppNaAlteracao,
   porNome,
   veiculoDaLeitura,
   type ColaboradorDaLista,
@@ -95,6 +96,11 @@ export function PaginaColaboradores() {
           cnh_categoria: valores.cnhCategoria || null,
           cnh_validade: valores.cnhValidade || null,
         };
+        const vinculo = {
+          vinculo: valores.vinculo,
+          empresa: valores.vinculo === "terceiro" ? valores.empresa.trim() || null : null,
+          papeis: valores.papeis,
+        };
         if (!pessoa) {
           void gravar({
             action: "create",
@@ -104,6 +110,8 @@ export function PaginaColaboradores() {
             funcao: valores.funcao,
             telefone: valores.telefone || null,
             ...cnh,
+            ...vinculo,
+            usuario_email: valores.usuarioEmail.trim().toLowerCase() || null,
           });
           return;
         }
@@ -117,6 +125,8 @@ export function PaginaColaboradores() {
           funcao: valores.funcao,
           telefone: valores.telefone || null,
           ...cnh,
+          ...vinculo,
+          ...emailDoAppNaAlteracao(pessoa.usuarioEmail, valores.usuarioEmail),
         });
       }}
       onAtivo={(ativo) => {
@@ -185,6 +195,11 @@ export function PaginaVeiculos() {
           capacidade_kg: Number(valores.capacidadeKg),
           capacidade_m3: Number(valores.capacidadeM3.replace(",", ".")),
         };
+        const dono = {
+          dono: valores.dono,
+          empresa: valores.dono === "terceiro" ? valores.empresa.trim() || null : null,
+          revisao_em: valores.revisaoEm || null,
+        };
         if (!veiculo) {
           void gravar({
             action: "create",
@@ -193,6 +208,7 @@ export function PaginaVeiculos() {
             tipo: valores.tipo,
             modelo: valores.modelo || null,
             ...capacidade,
+            ...dono,
           });
           return;
         }
@@ -205,6 +221,7 @@ export function PaginaVeiculos() {
           tipo: valores.tipo,
           modelo: valores.modelo || null,
           ...capacidade,
+          ...dono,
         });
       }}
       onAtivo={(ativo) => {

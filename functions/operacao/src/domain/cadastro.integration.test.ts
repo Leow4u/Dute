@@ -157,3 +157,73 @@ describe("gravação do cadastro", () => {
     assert.equal(JSON.stringify(evento).includes("ABC1D23"), false);
   });
 });
+
+describe("login do app no colaborador (parte 3.4)", () => {
+  async function usuario(uid: string, email: string, role: string, extra: Record<string, unknown> = {}) {
+    await db.collection("users").doc(uid).set({ email, role, nome: uid, ...extra });
+  }
+
+  it("liga pelo e-mail a quem tem o papel campo; o mesmo login não liga a outra pessoa", async () => {
+    await usuario("u-paulo", "paulo@dutelog.com.br", "campo");
+    const ana = await saveCollaboratorFor(db, interno, { ...criar, usuario_email: "Paulo@Dutelog.com.br", papeis: ["lider", "motorista"] });
+    const doc = (await db.collection(COLLABORATORS_COLLECTION).doc(ana.id).get()).data() ?? {};
+    assert.equal(doc.usuario_uid, "u-paulo");
+    assert.equal(doc.usuario_email, "paulo@dutelog.com.br");
+    assert.deepEqual(doc.papeis, ["lider", "motorista"]);
+    assert.equal(doc.vinculo, "proprio");
+
+    const outra = await rejection(
+      saveCollaboratorFor(db, interno, { ...criar, idempotency_key: "criar-bia", nome: "Bia Rocha", cpf: "39053344705", usuario_email: "paulo@dutelog.com.br" }),
+    );
+    assert.equal(outra.code, "already-exists");
+
+    // Tirar o e-mail desliga o login.
+    const desligado = await saveCollaboratorFor(db, interno, {
+      action: "update",
+      idempotency_key: "desligar",
+      id: ana.id,
+      expected_edicao: 1,
+      usuario_email: null,
+    });
+    const depois = (await db.collection(COLLABORATORS_COLLECTION).doc(desligado.id).get()).data() ?? {};
+    assert.equal(depois.usuario_uid, null);
+    assert.equal(depois.usuario_email, null);
+  });
+
+  it("recusa e-mail sem usuário, papel sem app e acesso removido", async () => {
+    await usuario("u-wms", "wms@dutelog.com.br", "wms");
+    await usuario("u-off", "off@dutelog.com.br", "campo", { access_disabled: true });
+    for (const [email, trecho] of [
+      ["ninguem@dutelog.com.br", /Nenhum usuário/],
+      ["wms@dutelog.com.br", /papel campo ou interno/],
+      ["off@dutelog.com.br", /acesso deste usuário foi removido/],
+    ] as const) {
+      const erro = await rejection(saveCollaboratorFor(db, interno, { ...criar, idempotency_key: `k-${email}`, usuario_email: email }));
+      assert.equal(erro.code, "failed-precondition", email);
+      assert.match(erro.message, trecho);
+    }
+    assert.equal((await db.collection(COLLABORATORS_COLLECTION).get()).size, 0);
+  });
+
+  it("cadastro antigo, sem os campos novos, lê como próprio e sem papel; atualizar grava os padrões", async () => {
+    await db.collection(COLLABORATORS_COLLECTION).doc("col_aaaaaaaaaaaaaaaa").set({
+      nome: "Ana Souza",
+      cpf: CPF,
+      funcao: "Motorista",
+      telefone: null,
+      cnh: null,
+      ativo: true,
+      edicao: 1,
+    });
+    await saveCollaboratorFor(db, interno, {
+      action: "update",
+      idempotency_key: "papeis",
+      id: "col_aaaaaaaaaaaaaaaa",
+      expected_edicao: 1,
+      papeis: ["motorista"],
+    });
+    const doc = (await db.collection(COLLABORATORS_COLLECTION).doc("col_aaaaaaaaaaaaaaaa").get()).data() ?? {};
+    assert.deepEqual([doc.vinculo, doc.empresa, doc.papeis, doc.usuario_uid], ["proprio", null, ["motorista"], null]);
+  });
+});
+

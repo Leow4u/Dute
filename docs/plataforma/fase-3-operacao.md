@@ -149,7 +149,9 @@ registros guardados" é dado, não legenda.
 | Parte | Entrega | Teste que falha antes |
 |---|---|---|
 | 3.0 | Este runbook; `plano.md` aponta para ele | Documentação |
-| 3.4 | Modelo completo da OS e demanda direta no backend: campos novos, `openDirectDemand`, tipo calculado, `plan` com várias OS e fatia do saldo, equipe com papéis, freelancers e terceiros, `collaborators.vinculo`, regras e índices; `etapaDaDemanda` do Comercial aprende a demanda sem RV | Saldo nunca negativo; demanda direta nasce em Para planejar; campo sem `collaborators`; schema sem preço |
+| 3.4a | Cadastro da equipe e da frota: `collaborators` com vínculo, empresa do terceiro, papéis e o login do app; `vehicles` com dono, empresa e próxima revisão; as duas fichas e as linhas da lista | Terceiro sem empresa recusado; e-mail sem usuário do app recusado; um login para um colaborador só |
+| 3.4b | Modelo completo da OS no backend: campos novos, tipo calculado, `plan` com várias OS e fatia do saldo, equipe com papéis, freelancers e terceiros, regras e índices | Saldo nunca negativo; campo sem `collaborators`; schema sem preço |
+| 3.4c | Demanda direta: `openDirectDemand`; `etapaDaDemanda` do Comercial aprende a demanda sem RV | Demanda direta nasce em Para planejar e não aparece no Comercial antes da revisão |
 | 3.5 | Hoje completo, Demandas, Demanda e Nova demanda direta | Textos listados; `axe`; filtros por tipo, entrada e cliente |
 | 3.6 | Planejar OS a partir do saldo e Agenda da semana | Duas OS da mesma demanda somam no máximo o saldo; sem equipe e sem veículo são alertas |
 | 3.7 | Execução pelo escritório: `registerStep`, `registerItem`, `registerOccurrence`, fotos no Storage, Em execução, tela da OS | Etapa fora de ordem recusada; instante gravado; foto só de quem está na OS ou coordena |
@@ -300,3 +302,29 @@ Reescrito em 23/10/2026 no padrão da Fase 6, a partir da seção 6 do plano de
 implantação. As nove respostas da proposta ficam assumidas até o Leonardo
 dizer o contrário. A especificação da Operação de 19/10 em `plano.md` ficou
 marcada como substituída.
+
+### Parte 3.4a: cadastro da equipe e da frota
+
+Feita em 23/10/2026. A parte 3.4 ficou em três PRs (a, b e c): o cadastro
+primeiro, porque a equipe da OS copia o nome e o papel de cada pessoa.
+
+- **Colaborador.** Ganha `vinculo` (equipe própria, freelancer ou terceiro;
+  sem o campo, um documento antigo é lido como equipe própria), `empresa`
+  (obrigatória no terceiro e apagada nos outros dois) e `papeis` (líder,
+  motorista, montador, ajudante; sem repetir, na ordem da lista). A função
+  continua texto livre; na linha da lista, o papel com o mesmo nome da função
+  não se repete.
+- **Login do app.** A ficha leva o e-mail do app; a callable acha o usuário
+  em `users` por esse e-mail e grava `usuario_uid`. Recusa quando não há
+  usuário, quando há mais de um, quando o acesso foi removido, quando o papel
+  não é `campo` nem `interno`, e quando o login já está em outro colaborador.
+  Quem cadastra nunca digita nem vê o uid. Apagar o e-mail desliga o login.
+  É esse vínculo que, na parte 3.8, deixa o campo ver só as OS dele.
+- **Veículo.** Ganha `dono` (próprio ou terceiro; sem o campo, próprio),
+  `empresa` (obrigatória no terceiro) e `revisao_em` (a próxima revisão, que
+  alimenta o alerta da parte 3.13).
+- **Telas.** As duas fichas ganharam os campos; a empresa só aparece para o
+  terceiro. As linhas da lista dizem vínculo, papéis, "no app" e a revisão.
+  Sem legenda; `axe` sem violação nas duas fichas.
+- **Eventos.** Os mesmos de antes (`collaborator.*`, `vehicle.*`), sem nome,
+  CPF, placa nem e-mail.

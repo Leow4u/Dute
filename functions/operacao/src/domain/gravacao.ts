@@ -4,11 +4,16 @@ import { HttpsError } from "firebase-functions/https";
 import {
   CATEGORIAS_CNH,
   COLLABORATORS_COLLECTION,
+  DONOS_DE_VEICULO,
+  PAPEIS_COM_APP,
+  PAPEIS_DE_CAMPO,
   VEHICLES_COLLECTION,
+  VINCULOS,
   aplicarColaborador,
   aplicarVeiculo,
   conflitoDeCpf,
   conflitoDePlaca,
+  conflitoDeUsuario,
   interpretarColaborador,
   interpretarVeiculo,
   novoId,
@@ -17,7 +22,10 @@ import {
   type CategoriaCnh,
   type Cnh,
   type ColaboradorGravado,
+  type DonoDeVeiculo,
+  type PapelDeCampo,
   type VeiculoGravado,
+  type Vinculo,
 } from "./cadastro.js";
 import { createOperacaoEvent } from "./events.js";
 import { runIdempotent, type OperacaoActor } from "./operations.js";
@@ -60,6 +68,7 @@ function colaboradorLido(id: string, data: DocumentData): ColaboradorGravado {
   const telefone = data.telefone;
   if (telefone != null && typeof telefone !== "string") throw new HttpsError("failed-precondition", "Cadastro ilegível.");
   if (typeof data.ativo !== "boolean" || typeof data.edicao !== "number") throw new HttpsError("failed-precondition", "Cadastro ilegível.");
+  // Cadastro anterior à parte 3.4: própria, sem papel e sem login do app.
   return {
     id,
     nome: texto(data, "nome"),
@@ -67,9 +76,18 @@ function colaboradorLido(id: string, data: DocumentData): ColaboradorGravado {
     funcao: texto(data, "funcao"),
     telefone: telefone ?? null,
     cnh: lida,
+    vinculo: (VINCULOS as readonly string[]).includes(data.vinculo) ? (data.vinculo as Vinculo) : "proprio",
+    empresa: textoOuNull(data.empresa),
+    papeis: Array.isArray(data.papeis) ? PAPEIS_DE_CAMPO.filter((papel): papel is PapelDeCampo => data.papeis.includes(papel)) : [],
+    usuario_uid: textoOuNull(data.usuario_uid),
+    usuario_email: textoOuNull(data.usuario_email),
     ativo: data.ativo,
     edicao: data.edicao,
   };
+}
+
+function textoOuNull(valor: unknown): string | null {
+  return typeof valor === "string" && valor.trim() ? valor.trim() : null;
 }
 
 function veiculoLido(id: string, data: DocumentData): VeiculoGravado {
@@ -79,6 +97,7 @@ function veiculoLido(id: string, data: DocumentData): VeiculoGravado {
     throw new HttpsError("failed-precondition", "Cadastro ilegível.");
   }
   if (typeof data.ativo !== "boolean" || typeof data.edicao !== "number") throw new HttpsError("failed-precondition", "Cadastro ilegível.");
+  // Veículo anterior à parte 3.4: próprio, sem revisão marcada.
   return {
     id,
     placa: texto(data, "placa"),
@@ -86,6 +105,9 @@ function veiculoLido(id: string, data: DocumentData): VeiculoGravado {
     modelo: modelo ?? null,
     capacidade_kg: data.capacidade_kg,
     capacidade_m3: data.capacidade_m3,
+    dono: (DONOS_DE_VEICULO as readonly string[]).includes(data.dono) ? (data.dono as DonoDeVeiculo) : "proprio",
+    empresa: textoOuNull(data.empresa),
+    revisao_em: textoOuNull(data.revisao_em),
     ativo: data.ativo,
     edicao: data.edicao,
   };
@@ -139,7 +161,10 @@ export async function saveCollaboratorFor(
       const conflito = conflitoDeCpf(acao.action === "create" ? null : id, await idsOnde(transaction, db, COLLABORATORS_COLLECTION, "cpf", cpf));
       if (conflito) throw new HttpsError("already-exists", conflito);
     }
+    const email = acao.action === "set_active" ? undefined : acao.usuario_email;
+    const usuarioUid = email ? await usuarioDoApp(transaction, db, email, id) : null;
     const efeito = aplicarColaborador(atual, acao, id);
+    if (email !== undefined) efeito.documento = { ...efeito.documento, usuario_uid: usuarioUid };
     gravar(transaction, db, COLLABORATORS_COLLECTION, efeito.documento, efeito.documento, acao.action === "create", caller);
     const payload = efeito.evento === "collaborator.updated"
       ? { id: efeito.documento.id, edicao_antes: atual?.edicao ?? efeito.documento.edicao - 1, edicao_depois: efeito.documento.edicao }
@@ -153,6 +178,25 @@ export async function saveCollaboratorFor(
     });
     return { target_id: efeito.documento.id, result: { id: efeito.documento.id, edicao: efeito.documento.edicao } };
   });
+}
+
+/**
+ * O login do app pelo e-mail: um usuário ativo, de papel com o app do campo,
+ * ligado a um colaborador só. A pessoa nunca escolhe o uid.
+ */
+async function usuarioDoApp(transaction: Transaction, db: Firestore, email: string, colaboradorId: string): Promise<string> {
+  const usuarios = await transaction.get(db.collection("users").where("email", "==", email).limit(2));
+  if (usuarios.empty) throw new HttpsError("failed-precondition", "Nenhum usuário do app com este e-mail.");
+  if (usuarios.size > 1) throw new HttpsError("failed-precondition", "Há mais de um usuário com este e-mail.");
+  const usuario = usuarios.docs[0];
+  const dados = usuario.data();
+  if (dados.access_disabled === true) throw new HttpsError("failed-precondition", "O acesso deste usuário foi removido.");
+  if (!(PAPEIS_COM_APP as readonly string[]).includes(String(dados.role))) {
+    throw new HttpsError("failed-precondition", "O app do campo é de quem tem o papel campo ou interno.");
+  }
+  const conflito = conflitoDeUsuario(colaboradorId, await idsOnde(transaction, db, COLLABORATORS_COLLECTION, "usuario_uid", usuario.id));
+  if (conflito) throw new HttpsError("already-exists", conflito);
+  return usuario.id;
 }
 
 async function lerColaborador(transaction: Transaction, db: Firestore, acao: AcaoColaborador, id: string): Promise<ColaboradorGravado | null> {

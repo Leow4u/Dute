@@ -3,7 +3,22 @@ import type { FormEvent, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CATEGORIAS_CNH, type ColaboradorDaLista, type VeiculoDaLista } from "@/lib/operacao/cadastro";
+import {
+  CATEGORIAS_CNH,
+  DONOS_DE_VEICULO,
+  DONO_ROTULO,
+  PAPEIS_DE_CAMPO,
+  PAPEL_ROTULO,
+  VINCULOS,
+  VINCULO_ROTULO,
+  resumoDoColaborador,
+  resumoDoVeiculo,
+  type ColaboradorDaLista,
+  type DonoDeVeiculo,
+  type PapelDeCampo,
+  type VeiculoDaLista,
+  type Vinculo,
+} from "@/lib/operacao/cadastro";
 
 export type EstadoDaLista = "carregando" | "erro" | "pronto";
 
@@ -14,6 +29,10 @@ export type FichaColaborador = {
   telefone: string;
   cnhCategoria: string;
   cnhValidade: string;
+  vinculo: Vinculo;
+  empresa: string;
+  papeis: PapelDeCampo[];
+  usuarioEmail: string;
 };
 
 export type FichaVeiculo = {
@@ -22,6 +41,9 @@ export type FichaVeiculo = {
   modelo: string;
   capacidadeKg: string;
   capacidadeM3: string;
+  dono: DonoDeVeiculo;
+  empresa: string;
+  revisaoEm: string;
 };
 
 const FICHA_COLABORADOR: FichaColaborador = {
@@ -31,12 +53,25 @@ const FICHA_COLABORADOR: FichaColaborador = {
   telefone: "",
   cnhCategoria: "",
   cnhValidade: "",
+  vinculo: "proprio",
+  empresa: "",
+  papeis: [],
+  usuarioEmail: "",
 };
 
-const FICHA_VEICULO: FichaVeiculo = { placa: "", tipo: "", modelo: "", capacidadeKg: "", capacidadeM3: "" };
+const FICHA_VEICULO: FichaVeiculo = {
+  placa: "",
+  tipo: "",
+  modelo: "",
+  capacidadeKg: "",
+  capacidadeM3: "",
+  dono: "proprio",
+  empresa: "",
+  revisaoEm: "",
+};
 
 export function fichaVaziaColaborador(): FichaColaborador {
-  return { ...FICHA_COLABORADOR };
+  return { ...FICHA_COLABORADOR, papeis: [] };
 }
 
 export function fichaVaziaVeiculo(): FichaVeiculo {
@@ -51,6 +86,10 @@ export function fichaDoColaborador(item: ColaboradorDaLista): FichaColaborador {
     telefone: item.telefone,
     cnhCategoria: item.cnhCategoria,
     cnhValidade: item.cnhValidade,
+    vinculo: item.vinculo,
+    empresa: item.empresa,
+    papeis: [...item.papeis],
+    usuarioEmail: item.usuarioEmail,
   };
 }
 
@@ -61,7 +100,15 @@ export function fichaDoVeiculo(item: VeiculoDaLista): FichaVeiculo {
     modelo: item.modelo,
     capacidadeKg: item.capacidadeKg,
     capacidadeM3: item.capacidadeM3,
+    dono: item.dono,
+    empresa: item.empresa,
+    revisaoEm: item.revisaoEm,
   };
+}
+
+/** Marca ou desmarca um papel, mantendo a ordem da lista. */
+export function alternarPapel(papeis: readonly PapelDeCampo[], papel: PapelDeCampo, marcado: boolean): PapelDeCampo[] {
+  return PAPEIS_DE_CAMPO.filter((item) => (item === papel ? marcado : papeis.includes(item)));
 }
 
 function buscaInclui(texto: string, busca: string): boolean {
@@ -173,7 +220,7 @@ export function ColaboradoresView({
   ocupado: boolean;
   erro: string | null;
 }) {
-  const visiveis = itens.filter((item) => buscaInclui(`${item.nome} ${item.funcao} ${item.cpf} ${item.telefone}`, busca));
+  const visiveis = itens.filter((item) => buscaInclui(`${item.nome} ${item.funcao} ${item.cpf} ${item.telefone} ${item.empresa}`, busca));
   if (ficha) {
     return (
       <form
@@ -209,6 +256,40 @@ export function ColaboradoresView({
         <Campo id="colaborador-validade" rotulo="Validade da CNH">
           <Input id="colaborador-validade" type="date" value={ficha.cnhValidade} onChange={(event) => onFicha({ ...ficha, cnhValidade: event.target.value })} />
         </Campo>
+        <Campo id="colaborador-vinculo" rotulo="Vínculo">
+          <select
+            id="colaborador-vinculo"
+            className={campoClasse}
+            value={ficha.vinculo}
+            onChange={(event) => onFicha({ ...ficha, vinculo: event.target.value as Vinculo })}
+          >
+            {VINCULOS.map((vinculo) => <option key={vinculo} value={vinculo}>{VINCULO_ROTULO[vinculo]}</option>)}
+          </select>
+        </Campo>
+        {ficha.vinculo === "terceiro" ? (
+          <Campo id="colaborador-empresa" rotulo="Empresa">
+            <Input id="colaborador-empresa" value={ficha.empresa} onChange={(event) => onFicha({ ...ficha, empresa: event.target.value })} />
+          </Campo>
+        ) : null}
+        <fieldset className="flex flex-col gap-2">
+          <legend className="text-sm font-medium text-foreground">Papéis</legend>
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            {PAPEIS_DE_CAMPO.map((papel) => (
+              <label key={papel} className="flex items-center gap-2 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  className="size-4"
+                  checked={ficha.papeis.includes(papel)}
+                  onChange={(event) => onFicha({ ...ficha, papeis: alternarPapel(ficha.papeis, papel, event.target.checked) })}
+                />
+                {PAPEL_ROTULO[papel]}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <Campo id="colaborador-app" rotulo="E-mail do app">
+          <Input id="colaborador-app" type="email" value={ficha.usuarioEmail} onChange={(event) => onFicha({ ...ficha, usuarioEmail: event.target.value })} />
+        </Campo>
         <div className="flex flex-wrap gap-3">
           <Button type="button" variant="secondary" onClick={onFechar}>Voltar</Button>
           {editando ? (
@@ -225,7 +306,7 @@ export function ColaboradoresView({
       {visiveis.length ? (
         <ul className="overflow-hidden rounded-lg border border-border bg-card">
           {visiveis.map((item) => (
-            <Linha key={item.id} titulo={item.nome} detalhe={[item.funcao, item.cpf, item.cnh].filter(Boolean).join(" · ")} ativo={item.ativo} onAbrir={() => onAbrir(item)} />
+            <Linha key={item.id} titulo={item.nome} detalhe={resumoDoColaborador(item)} ativo={item.ativo} onAbrir={() => onAbrir(item)} />
           ))}
         </ul>
       ) : null}
@@ -264,7 +345,7 @@ export function VeiculosView({
   ocupado: boolean;
   erro: string | null;
 }) {
-  const visiveis = itens.filter((item) => buscaInclui(`${item.placa} ${item.tipo} ${item.modelo}`, busca));
+  const visiveis = itens.filter((item) => buscaInclui(`${item.placa} ${item.tipo} ${item.modelo} ${item.empresa}`, busca));
   if (ficha) {
     return (
       <form
@@ -294,6 +375,24 @@ export function VeiculosView({
         <Campo id="veiculo-m3" rotulo="Capacidade (m³)">
           <Input id="veiculo-m3" inputMode="decimal" value={ficha.capacidadeM3} onChange={(event) => onFicha({ ...ficha, capacidadeM3: event.target.value })} />
         </Campo>
+        <Campo id="veiculo-dono" rotulo="Dono">
+          <select
+            id="veiculo-dono"
+            className={campoClasse}
+            value={ficha.dono}
+            onChange={(event) => onFicha({ ...ficha, dono: event.target.value as DonoDeVeiculo })}
+          >
+            {DONOS_DE_VEICULO.map((dono) => <option key={dono} value={dono}>{DONO_ROTULO[dono]}</option>)}
+          </select>
+        </Campo>
+        {ficha.dono === "terceiro" ? (
+          <Campo id="veiculo-empresa" rotulo="Empresa">
+            <Input id="veiculo-empresa" value={ficha.empresa} onChange={(event) => onFicha({ ...ficha, empresa: event.target.value })} />
+          </Campo>
+        ) : null}
+        <Campo id="veiculo-revisao" rotulo="Próxima revisão">
+          <Input id="veiculo-revisao" type="date" value={ficha.revisaoEm} onChange={(event) => onFicha({ ...ficha, revisaoEm: event.target.value })} />
+        </Campo>
         <div className="flex flex-wrap gap-3">
           <Button type="button" variant="secondary" onClick={onFechar}>Voltar</Button>
           {editando ? (
@@ -310,7 +409,7 @@ export function VeiculosView({
       {visiveis.length ? (
         <ul className="overflow-hidden rounded-lg border border-border bg-card">
           {visiveis.map((item) => (
-            <Linha key={item.id} titulo={item.placa} detalhe={[item.tipo, item.resumo].filter(Boolean).join(" · ")} ativo={item.ativo} onAbrir={() => onAbrir(item)} />
+            <Linha key={item.id} titulo={item.placa} detalhe={[item.tipo, resumoDoVeiculo(item)].filter(Boolean).join(" · ")} ativo={item.ativo} onAbrir={() => onAbrir(item)} />
           ))}
         </ul>
       ) : null}

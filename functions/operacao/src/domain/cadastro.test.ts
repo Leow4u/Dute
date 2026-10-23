@@ -41,6 +41,11 @@ const colaborador: ColaboradorGravado = {
   funcao: "Motorista",
   telefone: "11987654321",
   cnh: { categoria: "C", validade: "2028-04-01" },
+  vinculo: "proprio",
+  empresa: null,
+  papeis: ["motorista"],
+  usuario_uid: null,
+  usuario_email: null,
   ativo: true,
   edicao: 2,
 };
@@ -52,6 +57,9 @@ const veiculo: VeiculoGravado = {
   modelo: "Daily",
   capacidade_kg: 3500,
   capacidade_m3: 12.5,
+  dono: "proprio",
+  empresa: null,
+  revisao_em: null,
   ativo: true,
   edicao: 1,
 };
@@ -174,9 +182,48 @@ describe("colaborador: documento", () => {
       funcao: "Motorista",
       telefone: "11987654321",
       cnh: { categoria: "C", validade: "2028-04-01" },
+      vinculo: "proprio",
+      empresa: null,
+      papeis: [],
+      usuario_uid: null,
+      usuario_email: null,
       ativo: true,
       edicao: 1,
     });
+  });
+
+  it("vínculo, empresa e papéis (parte 3.4): o terceiro exige a empresa; própria e freelancer não guardam empresa", () => {
+    const base = { action: "create", idempotency_key: "k1", nome: "Valter Moreira", cpf: CPF_DIGITS, funcao: "Motorista" };
+    const terceiro = interpretarColaborador({ ...base, vinculo: "terceiro", empresa: " Rota   Sul ", papeis: ["motorista"] });
+    assert.deepEqual(
+      (({ vinculo, empresa, papeis }) => ({ vinculo, empresa, papeis }))(aplicarColaborador(null, terceiro, "col_aaaaaaaaaaaaaaaa").documento),
+      { vinculo: "terceiro", empresa: "Rota Sul", papeis: ["motorista"] },
+    );
+    assert.match(rejeita(() => aplicarColaborador(null, interpretarColaborador({ ...base, vinculo: "terceiro" }), "col_aaaaaaaaaaaaaaaa")).message, /empresa/);
+    const freelancer = interpretarColaborador({ ...base, vinculo: "freelancer", empresa: "Qualquer", papeis: ["ajudante", "lider", "ajudante"] });
+    const doc = aplicarColaborador(null, freelancer, "col_aaaaaaaaaaaaaaaa").documento;
+    assert.equal(doc.empresa, null);
+    // Papéis sem repetição, na ordem da lista.
+    assert.deepEqual(doc.papeis, ["lider", "ajudante"]);
+    assert.equal(rejeita(() => interpretarColaborador({ ...base, papeis: ["gerente"] })).message, "papeis: use lider, motorista, montador, ajudante.");
+    assert.equal(rejeita(() => interpretarColaborador({ ...base, vinculo: "pj" })).message, "vinculo: use proprio, freelancer, terceiro.");
+  });
+
+  it("o e-mail do app vira o login na gravação; trocar o e-mail desliga o login anterior até a gravação resolver", () => {
+    const acao = interpretarColaborador({
+      action: "update",
+      idempotency_key: "k2",
+      id: colaborador.id,
+      expected_edicao: 2,
+      usuario_email: " Ana@Dutelog.com.br ",
+    });
+    assert.equal(acao.action === "update" && acao.usuario_email, "ana@dutelog.com.br");
+    const efeito = aplicarColaborador({ ...colaborador, usuario_uid: "u-velho", usuario_email: "velho@x.com" }, acao, colaborador.id);
+    assert.equal(efeito.documento.usuario_uid, null);
+    assert.equal(efeito.documento.usuario_email, "ana@dutelog.com.br");
+    assert.match(rejeita(() => interpretarColaborador({ action: "update", idempotency_key: "k3", id: colaborador.id, expected_edicao: 2, usuario_email: "sem-arroba" })).message, /E-mail do app/);
+    const semEmail = aplicarColaborador({ ...colaborador, usuario_uid: "u-1", usuario_email: "a@b.com" }, interpretarColaborador({ action: "update", idempotency_key: "k4", id: colaborador.id, expected_edicao: 2, nome: "Ana S." }), colaborador.id);
+    assert.equal(semEmail.documento.usuario_uid, "u-1");
   });
 
   it("atualizar só o que veio, sobe a edição e recusa a edição velha ou o desativado", () => {
@@ -276,6 +323,19 @@ describe("colaborador: documento", () => {
 });
 
 describe("veículo: placa, capacidade e edição", () => {
+  it("dono, empresa e revisão (parte 3.4): o de terceiro exige a empresa; a revisão é uma data válida", () => {
+    const base = { action: "create", idempotency_key: "k1", placa: "FGH2B34", tipo: "Baú truck", capacidade_kg: 8000, capacidade_m3: 45 };
+    const terceiro = aplicarVeiculo(null, interpretarVeiculo({ ...base, dono: "terceiro", empresa: "Rota Sul", revisao_em: "2026-12-01" }), veiculo.id).documento;
+    assert.deepEqual([terceiro.dono, terceiro.empresa, terceiro.revisao_em], ["terceiro", "Rota Sul", "2026-12-01"]);
+    assert.match(rejeita(() => aplicarVeiculo(null, interpretarVeiculo({ ...base, dono: "terceiro" }), veiculo.id)).message, /empresa/);
+    const proprio = aplicarVeiculo(null, interpretarVeiculo({ ...base, empresa: "Ignorada" }), veiculo.id).documento;
+    assert.deepEqual([proprio.dono, proprio.empresa, proprio.revisao_em], ["proprio", null, null]);
+    assert.match(rejeita(() => interpretarVeiculo({ ...base, revisao_em: "2026-02-30" })).message, /revisão/);
+    const revisado = aplicarVeiculo(veiculo, interpretarVeiculo({ action: "update", idempotency_key: "k2", id: veiculo.id, expected_edicao: 1, revisao_em: "2027-01-10" }), veiculo.id).documento;
+    assert.equal(revisado.revisao_em, "2027-01-10");
+    assert.equal(revisado.edicao, 2);
+  });
+
   it("aceita a placa antiga e a Mercosul, e recusa o resto", () => {
     for (const placa of ["abc-1234", "ABC1234", "abc1d23", "ABC-1D23"]) {
       const acao = interpretarVeiculo({

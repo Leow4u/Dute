@@ -30,9 +30,14 @@ const pessoa = (id: string, nome: string, extra: Partial<ColaboradorDaLista> = {
   cnhCategoria: "",
   cnhValidade: "",
   cnh: null,
+  vinculo: "proprio",
+  empresa: "",
+  papeis: [],
+  usuarioEmail: "",
+  noApp: false,
   ...extra,
 });
-const VAN: VeiculoDaLista = { id: "vei_van", edicao: 1, ativo: true, placa: "ABC1D23", tipo: "Van", modelo: "", capacidadeKg: "1500", capacidadeM3: "10", resumo: "" };
+const VAN: VeiculoDaLista = { id: "vei_van", edicao: 1, ativo: true, placa: "ABC1D23", tipo: "Van", modelo: "", capacidadeKg: "1500", capacidadeM3: "10", resumo: "", dono: "proprio", empresa: "", revisaoEm: "" };
 const VELHO: VeiculoDaLista = { ...VAN, id: "vei_velho", placa: "XYZ9876", ativo: false };
 const os = (numero: string, extra: Partial<OsDaFila>): OsDaFila => ({
   numero,
