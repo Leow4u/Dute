@@ -152,6 +152,7 @@ const FinanceiroVencidos = lazy(() => import("./pages/financeiro/faturas").then(
 const FinanceiroPagos = lazy(() => import("./pages/financeiro/faturas").then((tela) => ({ default: tela.FinanceiroPagos })));
 const FinanceiroFaturas = lazy(() => import("./pages/financeiro/faturas").then((tela) => ({ default: tela.FinanceiroFaturas })));
 const FinanceiroNf = lazy(() => import("./pages/financeiro/nf"));
+const FinanceiroRelatorios = lazy(() => import("./pages/financeiro/relatorios"));
 const ComercialOrcamentos = lazy(() => import("./pages/comercial/orcamentos"));
 const ComercialOrcamento = lazy(() => import("./pages/comercial/orcamento"));
 const ComercialDocumento = lazy(() => import("./pages/comercial/documento"));
@@ -1141,6 +1142,7 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
     protectedRoute("/financeiro/pagos", FinanceiroPagos),
     protectedRoute("/financeiro/faturas", FinanceiroFaturas),
     protectedRoute("/financeiro/nf", FinanceiroNf),
+    protectedRoute("/financeiro/relatorios", FinanceiroRelatorios),
   ]),
 ];
 

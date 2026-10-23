@@ -751,3 +751,6 @@ revisão")
 **Surgidas na implantação**
 25. Proposta sem resposta (parte 2.5): o Início do Comercial a mostra depois
     de 5 dias corridos aguardando o cliente. São 5 dias, ou outro prazo?
+26. Receita por serviço (parte 4.8b): a NF registrada guarda só o total. O
+    relatório vale o rateio da NF pelas linhas do orçamento de cada demanda?
+    Até a resposta, o Financeiro mostra as NFs emitidas por mês no lugar.

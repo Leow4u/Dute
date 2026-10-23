@@ -30,11 +30,14 @@ export const ROTA_FATURAS = "/financeiro/faturas";
 /** A via comercial da NF para imprimir (parte 4.2d): `?nf=`. Fora do menu; acende Faturas. */
 export const ROTA_NF = "/financeiro/nf";
 
+/** Os relatórios do Financeiro (parte 4.8b): `?relatorio=`. */
+export const ROTA_RELATORIOS_DO_FINANCEIRO = "/financeiro/relatorios";
+
 /** O Faturamento da armazenagem, que continua no shell do WMS até a Fase 7. */
 export const ROTA_FATURAMENTO_WMS = "/faturamento";
 
 /** Telas do Financeiro que já existem no app. Cada parte nova acrescenta a dela. */
-export const TELAS_DO_FINANCEIRO: readonly string[] = [ROTA_FINANCEIRO, ROTA_A_FATURAR, ROTA_A_RECEBER, ROTA_VENCIDOS, ROTA_PAGOS, ROTA_FATURAS, ROTA_NF];
+export const TELAS_DO_FINANCEIRO: readonly string[] = [ROTA_FINANCEIRO, ROTA_A_FATURAR, ROTA_A_RECEBER, ROTA_VENCIDOS, ROTA_PAGOS, ROTA_FATURAS, ROTA_NF, ROTA_RELATORIOS_DO_FINANCEIRO];
 
 const ID_DA_NF = /^fat_[a-f0-9]{24}$/;
 
