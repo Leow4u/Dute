@@ -51,9 +51,10 @@ export const COMERCIAL_LIBERADO = comercialLiberado(import.meta.env.VITE_FIREBAS
  * Liberação própria da Operação (docs/plataforma/fase-3-operacao.md). As
  * callables de functions/operacao recusam fora de OPERACAO_AMBIENTES_LIBERADOS
  * (functions/operacao/src/domain/liberacao.ts, travada igual a esta por
- * platform-lists.test.ts). Homologação atende; produção espera o OK.
+ * platform-lists.test.ts). Homologação e produção atendem: o dute-prod entrou
+ * na lista com o OK do Leonardo em 22/10/2026. O dute-btg continua de fora.
  */
-export const OPERACAO_AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog"];
+export const OPERACAO_AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog", "dute-prod"];
 
 export function operacaoLiberada(projectId: string | null | undefined): boolean {
   return OPERACAO_AMBIENTES_LIBERADOS.includes(String(projectId ?? "").trim());

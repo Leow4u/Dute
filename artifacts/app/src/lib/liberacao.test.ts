@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { COMERCIAL_AMBIENTES_LIBERADOS, comercialLiberado, plataformaLiberada } from "./liberacao";
+import {
+  COMERCIAL_AMBIENTES_LIBERADOS,
+  OPERACAO_AMBIENTES_LIBERADOS,
+  comercialLiberado,
+  operacaoLiberada,
+  plataformaLiberada,
+} from "./liberacao";
 
 describe("liberação da plataforma por ambiente", () => {
   it("ligada na homologação e na produção, em qualquer build", () => {
@@ -37,6 +43,20 @@ describe("liberação do Comercial por ambiente", () => {
   it("produção antiga e projeto de teste ficam desligados, porque as callables recusam", () => {
     for (const projectId of ["dute-btg", "demo-dute", "", null, undefined]) {
       expect(comercialLiberado(projectId)).toBe(false);
+    }
+  });
+});
+
+describe("liberação da Operação por ambiente", () => {
+  it("homologação e produção, a mesma lista das callables (platform-lists.test.ts)", () => {
+    expect(OPERACAO_AMBIENTES_LIBERADOS).toEqual(["dute-homolog", "dute-prod"]);
+    expect(operacaoLiberada("dute-homolog")).toBe(true);
+    expect(operacaoLiberada("dute-prod")).toBe(true);
+  });
+
+  it("produção antiga e projeto de teste ficam desligados, porque as callables recusam", () => {
+    for (const projectId of ["dute-btg", "demo-dute", "", null, undefined]) {
+      expect(operacaoLiberada(projectId)).toBe(false);
     }
   });
 });

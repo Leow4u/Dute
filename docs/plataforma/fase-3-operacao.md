@@ -47,9 +47,11 @@ de avisos do WMS.
 
 ### Liberação
 
-`OPERACAO_AMBIENTES_LIBERADOS = ["dute-homolog"]`, a mesma lista no app e nas
-callables, travada por `platform-lists.test.ts`. Produção e `dute-btg`
-recusam. Ligar na produção é um PR com o OK do Leonardo.
+`OPERACAO_AMBIENTES_LIBERADOS = ["dute-homolog", "dute-prod"]`, a mesma lista
+no app e nas callables, travada por `platform-lists.test.ts`. O `dute-prod`
+entrou com o OK do Leonardo em 22/10/2026, antes do lançamento previsto na
+Fase 4; a produção só atende depois da publicação manual. O `dute-btg`
+recusa. Desfazer é tirar `dute-prod` das duas listas e publicar de novo.
 
 ### Telas
 
@@ -102,4 +104,4 @@ transições não existem.
 - Cancelar, da OS aberta ou agendada, pede o motivo. O motivo fica na OS, não
   no evento (`os.cancelled`). Agendar grava `os.scheduled`.
 - Quem usa a tela é o mesmo do cadastro: owner, admin e interno. Campo ainda
-  não lê a OS. A Operação continua só no `dute-homolog`.
+  não lê a OS. A Operação atende no `dute-homolog` e no `dute-prod`.

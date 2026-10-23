@@ -16,14 +16,16 @@ function refusal(projectId: string | null | undefined): HttpsError {
 }
 
 describe("liberação da Operação por ambiente", () => {
-  it("só a homologação está na lista", () => {
-    assert.deepEqual(OPERACAO_AMBIENTES_LIBERADOS, ["dute-homolog"]);
-    assert.equal(operacaoLiberada("dute-homolog"), true);
-    assert.doesNotThrow(() => assertLiberado("dute-homolog"));
+  it("homologação e produção estão na lista", () => {
+    assert.deepEqual(OPERACAO_AMBIENTES_LIBERADOS, ["dute-homolog", "dute-prod"]);
+    for (const projectId of ["dute-homolog", "dute-prod"]) {
+      assert.equal(operacaoLiberada(projectId), true, projectId);
+      assert.doesNotThrow(() => assertLiberado(projectId));
+    }
   });
 
-  it("produção, produção antiga e projeto de teste recusam", () => {
-    for (const projectId of ["dute-prod", "dute-btg", "demo-dute-operacao", "", null, undefined]) {
+  it("produção antiga e projeto de teste recusam", () => {
+    for (const projectId of ["dute-btg", "demo-dute-operacao", "", null, undefined]) {
       assert.equal(operacaoLiberada(projectId), false, String(projectId));
       const error = refusal(projectId);
       assert.equal(error.code, "failed-precondition");
