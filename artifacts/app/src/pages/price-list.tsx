@@ -35,6 +35,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { MoreHorizontal, Plus } from "lucide-react";
 import { GRUPOS, AUTO_LABELS, fmtBRL } from "@/lib/billing-format";
+import { ROTULO_DO_COMERCIAL, fonteDoPreco, ligadoAoComercial, payloadDoItem } from "@/lib/preco-da-cobranca";
 
 type FormState = {
   grupo: string;
@@ -61,6 +62,8 @@ export default function PriceList() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
+  // O item ligado ao Comercial (parte 7.3c) não edita o preço aqui.
+  const [editLigado, setEditLigado] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY);
   const [removing, setRemoving] = useState<PriceListItem | null>(null);
 
@@ -78,9 +81,10 @@ export default function PriceList() {
 
   const refetch = () => qc.invalidateQueries({ queryKey: getListPriceListQueryKey() });
 
-  const openNew = () => { setEditId(null); setForm(EMPTY); setDialogOpen(true); };
+  const openNew = () => { setEditId(null); setEditLigado(false); setForm(EMPTY); setDialogOpen(true); };
   const openEdit = (it: PriceListItem) => {
     setEditId(it.id);
+    setEditLigado(ligadoAoComercial(it as PriceListItem & { lpu_item_id?: unknown }));
     setForm({
       grupo: it.grupo,
       item: it.item,
@@ -106,7 +110,7 @@ export default function PriceList() {
     if (!form.item.trim()) { toast({ title: "Informe o nome do serviço", variant: "destructive" }); return; }
     const onSuccess = () => { toast({ title: "Item salvo" }); setDialogOpen(false); refetch(); };
     const onError = () => toast({ title: "Erro ao salvar item", variant: "destructive" });
-    if (editId != null) update.mutate({ id: editId, data: payload }, { onSuccess, onError });
+    if (editId != null) update.mutate({ id: editId, data: payloadDoItem(payload, editLigado) as typeof payload }, { onSuccess, onError });
     else create.mutate({ data: payload }, { onSuccess, onError });
   };
 
@@ -169,7 +173,12 @@ export default function PriceList() {
                   </td>
                   <td className="whitespace-nowrap px-3 py-3">{GRUPOS[it.grupo]?.label ?? it.grupo}</td>
                   <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">{it.unidade}</td>
-                  <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">{fmtBRL(it.valor_unit)}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">
+                    {(() => {
+                      const fonte = fonteDoPreco(it as PriceListItem & { lpu_item_id?: unknown });
+                      return fonte.tipo === "comercial" ? <span className="text-muted-foreground">{ROTULO_DO_COMERCIAL}</span> : fmtBRL(fonte.valor);
+                    })()}
+                  </td>
                   <td className="whitespace-nowrap px-3 py-3">
                     {it.auto_source ? (
                       <Badge variant="default">{AUTO_LABELS[it.auto_source] || it.auto_source}</Badge>
@@ -246,8 +255,12 @@ export default function PriceList() {
               <Input value={form.unidade} onChange={(e) => setForm((s) => ({ ...s, unidade: e.target.value }))} placeholder="palete, caixa..." />
             </div>
             <div className="space-y-1.5">
-              <Label>Valor unitário (R$)</Label>
-              <Input type="number" step="0.0001" value={form.valor_unit} onChange={(e) => setForm((s) => ({ ...s, valor_unit: e.target.value }))} />
+              <Label htmlFor="price-list-valor">Valor unitário (R$)</Label>
+              {editLigado ? (
+                <Input id="price-list-valor" value={ROTULO_DO_COMERCIAL} readOnly disabled />
+              ) : (
+                <Input id="price-list-valor" type="number" step="0.0001" value={form.valor_unit} onChange={(e) => setForm((s) => ({ ...s, valor_unit: e.target.value }))} />
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>Origem da quantidade</Label>
