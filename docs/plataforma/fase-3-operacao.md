@@ -1,22 +1,197 @@
 # Fase 3: Operação
 
-A Fase 3 do `docs/plataforma/plano.md` é a ordem de serviço. O Comercial v1
-já está na `main` e para na etapa Para planejar: gerar OS ficou para cá. Três
-partes, um PR cada, nesta ordem. Cada uma roda numa sessão própria.
+Desenho da Operação (docs/plataforma/plano-de-implantacao.md, seção 6), no
+padrão da Fase 6: o pedido, as decisões, as coleções, as telas, as partes em
+ordem e as perguntas. A base é a proposta "Demanda: do pedido ao faturamento"
+(18 telas, `docs/mockups/Op*.dc.html`, `OS*.dc.html`, `Campo2*.dc.html` e
+`TVSala.dc.html`) com as decisões de 23/10/2026 por cima: um shell por
+módulo, Início por módulo e o Hoje com "Para planejar". Substitui a
+especificação da Operação de 19/10 em `plano.md`. O registro de cada parte
+fica no fim, como em `fase-2-nucleo.md`; as partes 1 a 3, anteriores a este
+desenho, estão lá.
 
-1. **Colaboradores e veículos.** O cadastro que a OS vai escalar. Sem ordem
-   de serviço.
-2. **Núcleo da OS.** A demanda em Para planejar vira OS 10045-01, com itens
-   da LPU sem preço, evento e regras. Sem tela.
-3. **Kanban e nova OS.** Telas v3 em cima dessa OS: fila do dia, abrir a OS
-   da demanda e agendar com a equipe e o veículo da parte 1.
+## O pedido
 
-A parte 3 espera a 2. Criar a OS não precisa de motorista; equipe e veículo
-entram no agendamento.
+1. Do pedido à OS revisada: a demanda chega do Comercial, direta na Operação
+   ou da Armazenagem, vira uma ou várias OS, é planejada com equipe, veículos
+   e terceiros, executada no campo com etapas, itens, fotos e assinatura e
+   revisada por dentro antes de faturar.
+2. A vistoria é uma OS que termina num orçamento, sem redigitar.
+3. A sala tem uma TV com o dia.
+4. Tudo grava o tempo de cada etapa e de cada item: é o que a IA aprende
+   (invariante "IA native" do `CLAUDE.md`).
+5. Operação, campo e armazém nunca veem valores.
 
-## Parte 1: colaboradores e veículos
+## Como é hoje
 
-### O que grava
+- Partes 1 a 3 na `main` e ligadas no `dute-homolog` e no `dute-prod`:
+  `collaborators` e `vehicles` com callables; OS `10045-01` aberta a partir
+  da demanda em Para planejar; agendar com equipe e veículo; cancelar com
+  motivo; eventos `os.created`, `os.scheduled` e `os.cancelled`.
+- Início da Operação em `/operacao` e a fila do dia em `/operacao/hoje`
+  (partes 2.6 e 2.4 da Fase 2), no shell v3.
+- Não existe ainda: executar, concluir, revisar, vistoria, demanda direta,
+  várias OS com fatia do saldo, freelancer e terceiro, o app do campo, a TV.
+
+## Decisões
+
+| Tema | Decisão |
+|---|---|
+| Demanda e OS | A demanda agrupa pedido, orçamento, aditivos e OS. A OS é uma ida a campo: uma equipe, um dia. A vistoria é uma OS. Uma demanda tem uma ou várias OS, cada uma com uma fatia do saldo dos itens orçados; a soma nunca passa do saldo. |
+| Entrada | Pelo Comercial (orçamento antes), direta na Operação (paraquedas e emergencial, orçamento depois da execução) ou pela Armazenagem (pedido de saída com entrega pela Dutelog, Fase 4). Retirada pelo cliente não gera OS. |
+| Tipo da demanda | Calculado pela hora do pedido e pela hora pedida para a execução: paraquedas no mesmo dia, emergencial até 48 horas corridas, planejada depois disso. O coordenador corrige, e a correção fica registrada. |
+| Status da OS | Para agendar → Agendada → Em execução → Em revisão → Revisada. Cancelada com motivo antes de Revisada. Revisada volta a Em execução só por owner ou admin. Atraso e falta de equipe são alertas, não status. |
+| Aceite | Fotos e assinatura no local são o aceite da execução. Sem responsável, a OS conclui "sem aceite no local" e o aceite vem pela validação do cliente no Comercial. |
+| Divergência | Item incluído em campo acima do saldo vira divergência; na revisão, vira pedido de aditivo ao Comercial, absorção sem cobrar (com motivo) ou correção de quantidade. A revisão interna não pede nova aprovação do cliente, salvo aditivo. |
+| Pessoas | Freelancers e motoristas terceiros não têm login: `collaborators` com `vinculo` (`proprio`, `freelancer`, `terceiro`) e a empresa no terceiro. O líder registra a presença deles na OS, com entrada e saída. |
+| Sem sinal | O celular guarda os registros sem sinal e envia quando volta. Cada registro leva a própria chave de idempotência e o instante em que foi feito, não o do envio. |
+| Faturamento | Fatura-se a demanda, não a OS (Fase 4). |
+| Valores | `service_orders` não tem campo de preço; o teste de schema trava. A diária de freelancer fica no RH e no Financeiro, nunca na OS. |
+
+## Respostas às perguntas da proposta
+
+Propostas no plano de implantação (pergunta 11 da seção 13) e assumidas aqui
+até o Leonardo dizer o contrário. Mudar uma resposta é um PR pequeno na parte
+que a usa.
+
+1. **Faturamento** no fim da demanda; medição parcial só para contrato que a
+   exige (o Safra já tem a medição mensal). O PO do Itaú entra pela
+   autorização de faturamento, que já existe; o aditivo recebe o próprio
+   aceite.
+2. **A assinatura no local** aceita as quantidades executadas; o preço do que
+   passou do orçado só se fatura com o aditivo aprovado pelo cliente.
+3. **A revisão decide**: absorver (não cobra, com motivo), corrigir a
+   quantidade ou pedir aditivo. Executado a menos reduz o faturado na RV de
+   execução, no Comercial.
+4. **Sem responsável para assinar**, o líder registra o nome de quem recebeu e
+   fotos do local; a OS conclui "sem aceite no local".
+5. **A vistoria** não pede assinatura nem passa pela revisão: vai direto ao
+   Comercial com fotos, itens levantados e medidas.
+6. **Paraquedas, noturno e sábado** não mudam a regra de preço: valem os itens
+   e a variante da tabela, escolhidos pelo Comercial.
+7. **Freelancer e terceiro** ficam no cadastro simples; a presença, com
+   entrada e saída, registrada pelo líder, é o que paga a diária.
+8. **Emergencial** é até 48 horas corridas; o coordenador corrige o tipo.
+9. **Presença**: o líder marca a de toda a equipe; quem tem o app também se
+   registra, e vale o primeiro registro.
+
+## Coleções
+
+| Coleção | Dono | O que a Operação faz |
+|---|---|---|
+| `demands` | Comercial | Lê; escreve só `os_numeros`, `execucao` (período, OS revisadas) e `revisao` (divergências com decisão). Cria a demanda direta pela callable dela, no mesmo esquema, sem RV. O Comercial só lê esses três campos. |
+| `service_orders` | Operação | Tudo, pelas callables. Campos novos na parte 3.4: `servicos`, `janela`, `locais` (endereço copiado e contato no local), `equipe` com papel por pessoa (nome e papel copiados no agendamento), `equipe_uids`, `freelancers`, `terceiros`, `veiculos`, `instrucoes`, `observacoes_internas`, `etapas`, `itens` com `planejado`, `executado` e `incluido_em_campo`, `fotos`, `ocorrencias`, `presencas`, `conclusao`, `revisao`, `status` e `cancelamento`. Nenhum valor. |
+| `service_order_counters` | Operação | O sufixo da OS por demanda. |
+| `collaborators` | Operação | Ganha `vinculo`, `empresa` (terceiro) e `papeis` (líder, motorista, montador, ajudante). |
+| `vehicles` | Operação | Ganha `dono` (próprio ou terceiro) e `revisao_em`. |
+| Storage `os/{numero}/fotos/` e `os/{numero}/assinatura` | Operação | Com `storage.rules` por papel: campo escalado, coordenação e, na Fase 4, o cliente dono. |
+
+A fila sem sinal do celular fica no IndexedDB; nenhuma coleção nova.
+
+**Demanda sem RV.** A demanda direta nasce em Para planejar e vai a
+Execução a orçar depois da revisão; o `etapaDaDemanda` do Comercial aprende
+esses dois casos (parte 3.4).
+
+## Papéis e regras
+
+- Coordenação (owner, admin, interno) grava tudo pelas callables e lê tudo da
+  Operação. Suporte lê a OS.
+- Campo lê só as OS em que está escalado (`equipe_uids`) e grava só pelas
+  callables de execução. Não lê `collaborators` (tem CPF): a OS leva o nome e
+  o papel de cada pessoa, copiados no agendamento.
+- Comercial lê `demands` e o resumo da execução, nunca `service_orders`.
+- Cliente lê as próprias OS, com a Operação contratada (regra da parte 2.7 da
+  Fase 2), e a tela dele é da Fase 4.
+- Painel lê só o que a TV mostra.
+
+## Callables
+
+Em `functions/operacao`, cada uma numa linha e começando por
+`requireOperacaoCaller`: `saveServiceOrder` (create, schedule, cancel; ganha
+`plan`), `openDirectDemand`, `registerStep`, `registerItem`, `attachPhoto`,
+`registerPresence`, `registerOccurrence`, `completeServiceOrder`,
+`reviewServiceOrder`, `reopenServiceOrder` e `sendSurveyToCommercial`.
+
+## Eventos
+
+`source: functions_operacao`, sem nome, valor, CPF ou placa, e sem as
+palavras do roteador de avisos do WMS: `os.created`, `os.scheduled`,
+`os.planned`, `os.started`, `os.step_recorded`, `os.item_executed`,
+`os.item_added_in_field`, `os.photo_attached`, `os.presence_recorded`,
+`os.occurrence_recorded`, `os.completed`, `os.signed`,
+`os.completed_without_acceptance`, `os.reviewed`, `os.addendum_requested`,
+`os.reopened`, `os.cancelled`, `demand.direct_opened`,
+`survey.sent_to_commercial`, `collaborator.cnh_expiring` e
+`vehicle.maintenance_due`.
+
+**O que a IA captura desde a primeira parte**: o instante de cada etapa; a
+quantidade e o instante de cada item executado; o tamanho e a composição da
+equipe; os veículos; o planejado e o executado por item; as horas planejadas
+e reais; as divergências e a decisão de cada uma. É a matéria-prima das
+medidas da Fase 5.
+
+## Telas
+
+No shell da Operação, v3, sem legenda: Início (feito); Hoje (`ModOpHoje`:
+Para planejar, Para agendar, Agendadas hoje, Em execução, Em revisão; busca;
+chips; "Nova demanda"); Agenda (`OpAgenda`); Demandas (`OpDemandas`); Demanda
+(`OpDemanda`); Nova demanda direta (`OpDemandaNova`); Planejar OS
+(`OpOSPlanejar`); OS (`OpOS`, com "Registrar andamento" pelo escritório);
+Revisão (`OpRevisao`); Colaboradores e Veículos na v3; Clientes
+(`ModOpClientes`); impressão da OS (`OSImpressao`); TV (`TVSala`). Campo
+(`/campo`, PWA, papel `campo`): Minhas OS (`Campo2Hoje`), OS em execução
+(`Campo2Execucao`), Incluir item (`Campo2IncluirItem`), Concluir com
+assinatura (`Campo2Concluir`) e Vistoria (`Campo2Vistoria`). "Sem sinal · 4
+registros guardados" é dado, não legenda.
+
+## Partes
+
+| Parte | Entrega | Teste que falha antes |
+|---|---|---|
+| 3.0 | Este runbook; `plano.md` aponta para ele | Documentação |
+| 3.4 | Modelo completo da OS e demanda direta no backend: campos novos, `openDirectDemand`, tipo calculado, `plan` com várias OS e fatia do saldo, equipe com papéis, freelancers e terceiros, `collaborators.vinculo`, regras e índices; `etapaDaDemanda` do Comercial aprende a demanda sem RV | Saldo nunca negativo; demanda direta nasce em Para planejar; campo sem `collaborators`; schema sem preço |
+| 3.5 | Hoje completo, Demandas, Demanda e Nova demanda direta | Textos listados; `axe`; filtros por tipo, entrada e cliente |
+| 3.6 | Planejar OS a partir do saldo e Agenda da semana | Duas OS da mesma demanda somam no máximo o saldo; sem equipe e sem veículo são alertas |
+| 3.7 | Execução pelo escritório: `registerStep`, `registerItem`, `registerOccurrence`, fotos no Storage, Em execução, tela da OS | Etapa fora de ordem recusada; instante gravado; foto só de quem está na OS ou coordena |
+| 3.8 | Campo (PWA): Minhas OS, execução, incluir item, presença, fila sem sinal | Campo lê só a OS escalada; dois envios do mesmo registro gravam um; instante original guardado |
+| 3.9 | Concluir com assinatura ou "sem aceite no local", Em revisão; impressão da OS | Concluir sem motivo para item a menos recusado; assinatura no Storage com regra |
+| 3.10 | Revisão interna, Revisada, reabrir; aditivo na fila do Comercial; demanda direta em Execução a orçar | Divergência sem decisão não conclui; `demands.revisao` só pela Operação |
+| 3.11 | Vistoria como OS e "Enviar vistoria ao comercial" | Vistoria não passa pela revisão; orçamento nasce com os itens dela |
+| 3.12 | TV da sala (`/tv`, papel `painel`) | `painel` só lê o que a TV mostra; sem valor; sem ação |
+| 3.13 | Alertas no Início e rotina diária (CNH, revisão do veículo, OS sem equipe ou veículo perto do prazo) | O evento sai uma vez por dia por item |
+| 3.14 | Produção e registro | Conferência de produção |
+
+**Pronto quando.** Uma demanda do Comercial e uma direta percorrem pedido →
+OS → planejamento com várias OS → execução → assinatura no celular, sem
+sinal → revisão com divergência → aditivo ou orçamento da execução no
+Comercial → a faturar. Cada OS revisada tem o tempo de cada etapa e de cada
+item. A vistoria vira orçamento sem redigitar. A TV atualiza sozinha. Nenhum
+valor em `service_orders`, nem para o owner.
+
+## Liberação
+
+`OPERACAO_AMBIENTES_LIBERADOS = ["dute-homolog", "dute-prod"]`, no app e nas
+callables, travada por `platform-lists.test.ts`. A Operação fica ligada na
+produção enquanto a fase anda (resposta do Leonardo em 23/10/2026: ninguém
+usa o sistema ainda). O `dute-btg` recusa. Desligar é tirar `dute-prod` das
+duas listas e publicar de novo; o que foi gravado continua no banco.
+
+## Perguntas abertas
+
+Do plano de implantação, seção 13, com a parte que espera a resposta:
+
+- Os tipos de serviço da OS derivados dos itens bastam, ou a OS tem um tipo
+  escolhido à mão? (pergunta 12; parte 3.4; até lá, derivados dos itens)
+- Vistoria e demanda direta nascem pelo celular do líder, ou só pela
+  coordenação? (pergunta 13; partes 3.8 e 3.11; até lá, só pela coordenação)
+- A TV fica em `/tv` com o papel `painel` e sessão longa? (pergunta 14; parte
+  3.12)
+
+## Registro
+
+### Parte 1: colaboradores e veículos
+
+#### O que grava
 
 Codebase `functions/operacao` (a primeira da Operação; o WMS continua
 `default`). Callables `saveCollaborator` e `saveVehicle`, cada uma numa linha
@@ -32,20 +207,20 @@ CPF com dígitos verificadores, único. Placa antiga (`ABC1234`) ou Mercosul
 (`ABC1D23`), única. Criar, atualizar (com a edição vista), desativar e
 reativar. Não apaga.
 
-### Quem
+#### Quem
 
 Grava e lê: owner, admin e interno. Campo não vê a lista (o documento tem
 CPF; a OS dele vem na parte 3). Suporte, comercial, wms, financeiro, cliente,
 rh e painel não leem. O navegador não grava: as regras recusam.
 
-### Evento
+#### Evento
 
 Na mesma transação, `source: functions_operacao`, severidade `info`. O
 payload é o id e, na atualização, a edição. Sem nome, CPF, telefone, CNH nem
 placa: wms e suporte leem `events`. Nenhum tipo usa as palavras do roteador
 de avisos do WMS.
 
-### Liberação
+#### Liberação
 
 `OPERACAO_AMBIENTES_LIBERADOS = ["dute-homolog", "dute-prod"]`, a mesma lista
 no app e nas callables, travada por `platform-lists.test.ts`. O `dute-prod`
@@ -60,19 +235,19 @@ demandas do Comercial e os eventos `functions_operacao`. Isso continua no
 banco, legível pelas regras, e só sai restaurando o banco para um banco novo
 (PITR ou backup), com o OK do Leonardo.
 
-### Telas
+#### Telas
 
 `/operacao/colaboradores` e `/operacao/veiculos`, no shell da Operação, fora
 do menu do WMS. Com a liberação, o interno vê Armazenagem e Operação na
 entrada. O cliente não vê este cadastro: a OS no portal é da Fase 4.
 
-### Zeragem
+#### Zeragem
 
 `collaborators`, `vehicles`, `operacao_operations`, `service_orders` e
 `service_order_counters` nunca são apagadas, nem com `--include-setup`.
 Eventos `functions_operacao` ficam, como os do Comercial.
 
-## Parte 2: núcleo da OS
+### Parte 2: núcleo da OS
 
 Sem tela. A callable `saveServiceOrder` abre a OS da demanda em Para planejar
 e cancela a OS aberta.
@@ -93,7 +268,7 @@ e cancela a OS aberta.
 - Agendar e a tela ficam na parte 3. Executar e concluir ficam para a
   próxima parte.
 
-## Parte 3: fila do dia
+### Parte 3: fila do dia
 
 A tela `/operacao/hoje` (até a parte 2.6 da Fase 2, `/operacao`), item Hoje do menu. Sem executar, concluir, foto ou
 assinatura: as colunas Em execução e Concluídas não entram enquanto essas
@@ -118,3 +293,10 @@ transições não existem.
   no evento (`os.cancelled`). Agendar grava `os.scheduled`.
 - Quem usa a tela é o mesmo do cadastro: owner, admin e interno. Campo ainda
   não lê a OS. A Operação atende no `dute-homolog` e no `dute-prod`.
+
+### Parte 3.0: este desenho
+
+Reescrito em 23/10/2026 no padrão da Fase 6, a partir da seção 6 do plano de
+implantação. As nove respostas da proposta ficam assumidas até o Leonardo
+dizer o contrário. A especificação da Operação de 19/10 em `plano.md` ficou
+marcada como substituída.
