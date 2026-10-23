@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useGetDashboard } from "@workspace/api-client-react";
 import {
   AlertTriangle,
@@ -17,29 +15,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAppUser } from "@/lib/auth";
-import {
-  buildHomeInbox,
-  type HomeInboxItem,
-  type HomeInboxTone,
-  type HomeRequest,
-} from "@/lib/home-inbox";
-import {
-  canAccessModule,
-  COORDINATION_NAV_ROLES,
-  WMS_ROLES,
-} from "@/lib/modules";
+import { type HomeInboxItem, type HomeInboxTone } from "@/lib/home-inbox";
+import { canAccessModule, WMS_ROLES } from "@/lib/modules";
 import { formatToday, greeting } from "@/lib/saudacao";
+import { useInicioDoWms } from "@/lib/use-inicio-do-wms";
 import { cn } from "@/lib/utils";
-import type { WarehouseOpsResponse } from "@/lib/warehouse-ops/model";
-
-async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url);
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({}));
-    throw new Error(payload.message ?? "Falha ao carregar dados.");
-  }
-  return response.json() as Promise<T>;
-}
 
 const TONE_STYLE: Record<HomeInboxTone, { icon: LucideIcon; box: string }> = {
   critical: { icon: AlertTriangle, box: "bg-destructive-soft text-destructive-soft-foreground" },
@@ -103,42 +83,12 @@ function SummaryRow({ label, value }: { label: string; value: number }) {
 export default function Home() {
   const { user } = useAppUser();
   const role = user?.publicMetadata.role;
+
   const seesWarehouse = canAccessModule(role, WMS_ROLES);
-  const seesRequests = canAccessModule(role, COORDINATION_NAV_ROLES);
-
   const dashboard = useGetDashboard();
-  const ops = useQuery({
-    queryKey: ["warehouse-ops"],
-    queryFn: () => fetchJson<WarehouseOpsResponse>("/api/warehouse/ops"),
-    enabled: seesWarehouse,
-    refetchInterval: 60_000,
-    refetchOnWindowFocus: false,
-  });
-  const requests = useQuery({
-    queryKey: ["customer-requests", "home"],
-    queryFn: () =>
-      fetchJson<{ items?: HomeRequest[] }>("/api/customer-requests?limit=200"),
-    enabled: seesRequests,
-    refetchInterval: 60_000,
-    refetchOnWindowFocus: false,
-  });
-  const inbox = useMemo(
-    () =>
-      buildHomeInbox({
-        role,
-        ops: ops.data,
-        requests: requests.data?.items,
-      }),
-    [ops.data, requests.data, role],
-  );
-
-  const loading =
-    (seesWarehouse && ops.isLoading) ||
-    (seesRequests && requests.isLoading);
-  const failedSources = [
-    seesWarehouse && ops.isError ? "armazém" : null,
-    seesRequests && requests.isError ? "solicitações" : null,
-  ].filter((source): source is string => Boolean(source));
+  const inbox = useInicioDoWms(role);
+  const loading = inbox.carregando;
+  const failedSources = inbox.falhas;
 
   const now = new Date();
   const firstName = user?.fullName?.split(" ")[0] ?? "";

@@ -29,10 +29,12 @@ export type InicioDaOperacao = {
 /**
  * As leituras do Início da Operação, ao vivo como o resto do módulo, e só para
  * quem abre a Operação (owner, admin e interno): para os outros papéis, nada
- * é assinado. As OS lidas são só as abertas e agendadas.
+ * é assinado. As OS lidas são só as abertas e agendadas. O SDK do Firestore
+ * junta as assinaturas iguais (o menu e o Início): a leitura sai uma vez.
+ * `ligado` falso não assina nada.
  */
-export function useInicioDaOperacao(role: ProfileRole | null | undefined, agora: Date = new Date()): InicioDaOperacao {
-  const abre = abreOperacao(role);
+export function useInicioDaOperacao(role: ProfileRole | null | undefined, agora: Date = new Date(), ligado = true): InicioDaOperacao {
+  const abre = ligado && abreOperacao(role);
   const chave = (nome: string) => (abre ? nome : null);
   const ordens = useLeitura(
     chave("service_orders:ativas"),

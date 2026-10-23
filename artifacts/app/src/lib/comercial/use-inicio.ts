@@ -30,19 +30,25 @@ export type InicioDoComercial = {
 };
 
 const CINCO_MINUTOS = 5 * 60_000;
+const UM_MINUTO = 60_000;
 
 /**
  * As consultas do Início do Comercial, cada uma só para quem a vê. A mesma
  * chave serve à entrada por cards e aos contadores do menu (parte 2.4): a
- * leitura sai uma vez.
+ * leitura sai uma vez, e o minuto de validade evita repetir a consulta quando
+ * o menu e o Início pedem juntos. `ligado` falso não consulta nada.
  */
-export function useInicioDoComercial(role: ProfileRole | null | undefined, uid: string | null | undefined): InicioDoComercial {
-  const veAprovacoes = veAprovacoesNoInicio(role);
-  const veDevolvidos = veDevolvidosNoInicio(role) && Boolean(uid);
-  const veContratos = veContratosNoInicio(role);
-  const veAutorizacoes = veAutorizacoesNoInicio(role);
-  const veMedicoes = veMedicoesNoInicio(role);
-  const veResumo = abreComercial(role);
+export function useInicioDoComercial(
+  role: ProfileRole | null | undefined,
+  uid: string | null | undefined,
+  ligado = true,
+): InicioDoComercial {
+  const veAprovacoes = ligado && veAprovacoesNoInicio(role);
+  const veDevolvidos = ligado && veDevolvidosNoInicio(role) && Boolean(uid);
+  const veContratos = ligado && veContratosNoInicio(role);
+  const veAutorizacoes = ligado && veAutorizacoesNoInicio(role);
+  const veMedicoes = ligado && veMedicoesNoInicio(role);
+  const veResumo = ligado && abreComercial(role);
 
   const aprovacoes = useQuery({
     queryKey: ["comercial", "orcamentos", "para-aprovar"],
@@ -50,6 +56,7 @@ export function useInicioDoComercial(role: ProfileRole | null | undefined, uid: 
     enabled: veAprovacoes,
     refetchInterval: 60_000,
     refetchOnWindowFocus: false,
+    staleTime: UM_MINUTO,
   });
   const devolvidos = useQuery({
     queryKey: ["comercial", "orcamentos", "devolvidos", uid],
@@ -57,6 +64,7 @@ export function useInicioDoComercial(role: ProfileRole | null | undefined, uid: 
     enabled: veDevolvidos,
     refetchInterval: 60_000,
     refetchOnWindowFocus: false,
+    staleTime: UM_MINUTO,
   });
   const contratos = useQuery({
     queryKey: ["comercial", "contratos", "inicio"],
@@ -64,6 +72,7 @@ export function useInicioDoComercial(role: ProfileRole | null | undefined, uid: 
     enabled: veContratos,
     refetchInterval: CINCO_MINUTOS,
     refetchOnWindowFocus: false,
+    staleTime: UM_MINUTO,
   });
   const autorizacoes = useQuery({
     queryKey: ["comercial", "autorizacoes", "inicio"],
@@ -71,6 +80,7 @@ export function useInicioDoComercial(role: ProfileRole | null | undefined, uid: 
     enabled: veAutorizacoes,
     refetchInterval: CINCO_MINUTOS,
     refetchOnWindowFocus: false,
+    staleTime: UM_MINUTO,
   });
   const medicoes = useQuery({
     queryKey: ["comercial", "medicoes", "inicio"],
@@ -78,6 +88,7 @@ export function useInicioDoComercial(role: ProfileRole | null | undefined, uid: 
     enabled: veMedicoes,
     refetchInterval: CINCO_MINUTOS,
     refetchOnWindowFocus: false,
+    staleTime: UM_MINUTO,
   });
   const resumo = useQuery({
     queryKey: ["comercial", "resumo", "inicio"],
@@ -85,6 +96,7 @@ export function useInicioDoComercial(role: ProfileRole | null | undefined, uid: 
     enabled: veResumo,
     refetchInterval: CINCO_MINUTOS,
     refetchOnWindowFocus: false,
+    staleTime: UM_MINUTO,
   });
 
   const fontes = [

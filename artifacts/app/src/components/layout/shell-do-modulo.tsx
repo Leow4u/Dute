@@ -5,6 +5,7 @@ import { WifiOff, type LucideIcon } from "lucide-react";
 import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { SeletorDeModulo } from "@/components/layout/seletor-de-modulo";
 import { isNavRouteActive, type AppModule } from "@/lib/modules";
+import type { ContadorDoItem } from "@/lib/resumo-do-modulo";
 import type { OpcaoDeModulo } from "@/lib/seletor-de-modulo";
 import { cn } from "@/lib/utils";
 
@@ -17,7 +18,7 @@ import { cn } from "@/lib/utils";
  * Sem legenda: só rótulos, dados e ações.
  */
 
-export type ContadorDoItem = { n: number; alerta?: boolean };
+export type { ContadorDoItem } from "@/lib/resumo-do-modulo";
 
 export type ShellDoModuloProps = {
   ambiente: "comercial" | "operacao";

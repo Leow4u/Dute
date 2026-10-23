@@ -5,9 +5,11 @@ import { useLocation } from "wouter";
 import { AccountMenu } from "@/components/layout/account-menu";
 import { ShellDoModulo } from "@/components/layout/shell-do-modulo";
 import { useAppAuth, useAppUser } from "@/lib/auth";
+import { useInicioDoComercial } from "@/lib/comercial/use-inicio";
 import { menuDoComercial } from "@/lib/modules";
 import { useOperationProfile } from "@/lib/operation-profile";
 import { usePwaInstall } from "@/lib/pwa-install";
+import { contadoresDoMenu } from "@/lib/resumo-do-modulo";
 import { moduloAberto, opcoesDoSeletor } from "@/lib/seletor-de-modulo";
 import { rememberReturnPath } from "@/lib/settings-nav";
 
@@ -20,6 +22,9 @@ export default function ComercialLayout({ children }: { children: ReactNode }) {
   const { isOnline } = usePwaInstall();
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const role = user?.publicMetadata.role;
+  const menu = menuDoComercial(role);
+  // Os contadores do menu saem da lista do Início do módulo (parte 2.4).
+  const inicio = useInicioDoComercial(role, user?.uid);
 
   useEffect(() => {
     rememberReturnPath(`${location}${window.location.search}`);
@@ -30,7 +35,8 @@ export default function ComercialLayout({ children }: { children: ReactNode }) {
       ambiente="comercial"
       atual={moduloAberto(location) ?? { label: "Comercial", icon: Briefcase }}
       opcoes={opcoesDoSeletor(role, profile, location)}
-      items={menuDoComercial(role)}
+      items={menu}
+      contadores={contadoresDoMenu(inicio.itens, menu, "comercial-inicio")}
       basePath={basePath}
       online={isOnline}
       conta={(compact) => (

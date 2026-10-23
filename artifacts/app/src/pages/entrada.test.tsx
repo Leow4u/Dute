@@ -3,16 +3,26 @@ import { describe, expect, it } from "vitest";
 import { Router } from "wouter";
 
 import { entrada } from "@/lib/platform-modules";
+import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { textosForaDaLista } from "@/test/textos";
 
-import { EntradaView, type EntradaTela } from "./entrada";
+import { EntradaView, type EntradaTela, type ResumosDaEntrada } from "./entrada";
 
 // Terça-feira, 20/10/2026, de manhã.
 const TODAY = new Date(2026, 9, 20, 9, 0);
 
-function render(decision: EntradaTela) {
+function render(decision: EntradaTela, resumos?: ResumosDaEntrada, resumosProntos = false) {
   return renderToStaticMarkup(
     <Router ssrPath="/">
-      <EntradaView decision={decision} name="Leonardo Silva" today={TODAY} basePath="" onSignOut={() => undefined} />
+      <EntradaView
+        decision={decision}
+        name="Leonardo Silva"
+        today={TODAY}
+        basePath=""
+        onSignOut={() => undefined}
+        resumos={resumos}
+        resumosProntos={resumosProntos}
+      />
     </Router>,
   );
 }
@@ -67,5 +77,76 @@ describe("tela de entrada", () => {
       "Nenhum módulo liberado",
       "Sair",
     ]);
+  });
+
+  describe("contadores (parte 2.4)", () => {
+    const cards = () => {
+      const decision = entrada("owner", null, true, true);
+      if (decision.kind !== "cards") throw new Error("owner deveria ver cards");
+      return decision;
+    };
+    const RESUMOS: ResumosDaEntrada = {
+      wms: { total: 2, alerta: false, primeira: "2 pedidos para separar" },
+      comercial: { total: 3, alerta: true, primeira: "Prazo de faturamento vencido em 29/09/2026 · BTG Pactual" },
+      operacao: { total: 0, alerta: false, primeira: null },
+    };
+
+    it("cada card mostra a primeira linha do Início do módulo e quantas são; a frase soma tudo", () => {
+      expect(texts(render(cards(), RESUMOS, true))).toEqual([
+        "Leonardo Silva",
+        "LS",
+        "Terça-feira, 20 de outubro",
+        "Bom dia, Leonardo",
+        "5 coisas",
+        "precisam de você hoje.",
+        "Armazenagem",
+        "2 pedidos para separar",
+        "2",
+        "Operação",
+        "Comercial",
+        "Prazo de faturamento vencido em 29/09/2026 · BTG Pactual",
+        "3",
+        "Financeiro",
+      ]);
+    });
+
+    it("vermelho só no módulo com item crítico; sem nada parado, sem número", () => {
+      const html = render(cards(), RESUMOS, true);
+      expect(html).toMatch(/<span class="[^"]*bg-v3-marca[^"]*">3<\/span>/);
+      expect(html).toMatch(/<span class="[^"]*bg-muted text-foreground[^"]*">2<\/span>/);
+      expect(html).not.toMatch(/>0<\/span>/);
+    });
+
+    it("enquanto algum módulo carrega, a frase não aparece; o card sem resumo fica só com o nome", () => {
+      const textos = texts(render(cards(), { wms: RESUMOS.wms }, false));
+      expect(textos).not.toContain("precisam de você hoje.");
+      expect(textos.slice(4)).toEqual(["Armazenagem", "2 pedidos para separar", "2", "Operação", "Comercial", "Financeiro"]);
+    });
+
+    it("nada parado: a frase diz", () => {
+      expect(texts(render(cards(), { wms: { total: 0, alerta: false, primeira: null } }, true))).toContain("Nada parado hoje.");
+    });
+
+    it("só rótulos, dados e ações, e sem violação do axe", async () => {
+      const html = render(cards(), RESUMOS, true);
+      const permitidos = [
+        "Leonardo Silva",
+        "Minha conta",
+        "LS",
+        "Terça-feira, 20 de outubro",
+        "Bom dia, Leonardo",
+        "5 coisas",
+        "precisam de você hoje.",
+        "Armazenagem",
+        "Operação",
+        "Comercial",
+        "Financeiro",
+        "2 pedidos para separar",
+        "Prazo de faturamento vencido em 29/09/2026 · BTG Pactual",
+        /^\d+$/,
+      ];
+      expect(textosForaDaLista(html, permitidos)).toEqual([]);
+      expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+    });
   });
 });
