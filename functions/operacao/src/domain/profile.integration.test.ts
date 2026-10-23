@@ -28,6 +28,7 @@ beforeEach(async () => {
     users.doc("campo-1").set({ role: "campo", nome: "Paulo" }),
     users.doc("suporte-1").set({ role: "suporte", nome: "Suporte" }),
     users.doc("comercial-1").set({ role: "comercial", nome: "Guilherme" }),
+    users.doc("painel-1").set({ role: "painel", nome: "TV da sala" }),
     users.doc("off-1").set({ role: "interno", nome: "Desligado", access_disabled: true }),
   ]);
 });
@@ -78,5 +79,25 @@ describe("perfil de quem grava o cadastro da Operação", () => {
     assert.equal((await requireOperacaoCaller(db, request("interno-1"), "dute-prod")).role, "interno");
     const antiga = await rejection(requireOperacaoCaller(db, request("owner-1"), "dute-btg"));
     assert.equal(antiga.code, "failed-precondition");
+  });
+});
+
+describe("o painel da TV (parte 3.12)", () => {
+  it("só entra na leitura da TV; nenhuma outra callable o atende, nem as do campo", async () => {
+    assert.equal((await getProfile(db, request("painel-1"), { painel: true })).role, "painel");
+    for (const opcoes of [{}, { campo: true as const }]) {
+      const error = await rejection(getProfile(db, request("painel-1"), opcoes));
+      assert.equal(error.code, "permission-denied");
+      assert.match(error.message, /não grava/);
+    }
+  });
+
+  it("a leitura da TV atende quem coordena e recusa o campo, o suporte e o comercial", async () => {
+    assert.equal((await getProfile(db, request("interno-1"), { painel: true })).role, "interno");
+    for (const uid of ["campo-1", "suporte-1", "comercial-1"]) {
+      const error = await rejection(getProfile(db, request(uid), { painel: true }));
+      assert.equal(error.code, "permission-denied", uid);
+      assert.equal(error.message, "Seu perfil não abre a TV da sala.", uid);
+    }
   });
 });

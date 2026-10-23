@@ -102,7 +102,8 @@ esses dois casos (parte 3.4).
 - Comercial lê `demands` e o resumo da execução, nunca `service_orders`.
 - Cliente lê as próprias OS, com a Operação contratada (regra da parte 2.7 da
   Fase 2), e a tela dele é da Fase 4.
-- Painel lê só o que a TV mostra.
+- Painel não lê nenhuma coleção pelo navegador: a TV recebe o quadro do
+  dia pela callable `getRoomBoard`, com só o que ela mostra (parte 3.12a).
 
 ## Callables
 
@@ -110,7 +111,8 @@ Em `functions/operacao`, cada uma numa linha e começando por
 `requireOperacaoCaller`: `saveServiceOrder` (create, schedule, cancel; ganha
 `plan`), `openDirectDemand`, `registerStep`, `registerItem`, `attachPhoto`,
 `registerPresence`, `registerOccurrence`, `completeServiceOrder`,
-`reviewServiceOrder`, `reopenServiceOrder` e `sendSurveyToCommercial`.
+`reviewServiceOrder`, `reopenServiceOrder`, `sendSurveyToCommercial` e
+`getRoomBoard` (a leitura da TV, a única que atende o painel; não grava).
 
 ## Eventos
 
@@ -181,7 +183,8 @@ registros guardados" é dado, não legenda.
 | 3.11c | Planejar a vistoria pelo escritório: a visita técnica pedida em Para planejar no Hoje, "Planejar vistoria" na ficha da demanda e a tela de Planejar numa OS só, sem itens | Textos listados; `axe`; o formulário manda o formato de `saveServiceOrder` survey |
 | 3.11d | A vistoria na ficha da OS e no Registrar andamento: "Enviada ao Comercial", os passos dela, a vistoria enviada, sem itens, conclusão nem reabertura | Textos listados; `axe`; só as etapas da vistoria no andamento |
 | 3.11e | No Comercial: "Vistoria concluída" no Início e na montagem, com os itens levantados carregados no orçamento | O orçamento nasce com os itens da vistoria, sem redigitar |
-| 3.12 | TV da sala (`/tv`, papel `painel`) | `painel` só lê o que a TV mostra; sem valor; sem ação |
+| 3.12a | Quadro da TV no backend: `getRoomBoard` (painel, owner, admin e interno) | `painel` só lê o que a TV mostra; sem valor; sem ação; as regras não abrem coleção ao painel |
+| 3.12b | TV da sala (`/tv`): o painel entra direto, modo escuro, colunas, indicadores, próxima saída, relógio e atualização sozinha | Textos listados; sem valor; nenhum botão nem link; `axe` |
 | 3.13 | Alertas no Início e rotina diária (CNH, revisão do veículo, OS sem equipe ou veículo perto do prazo) | O evento sai uma vez por dia por item |
 | 3.14 | Produção e registro | Conferência de produção |
 
@@ -1144,3 +1147,29 @@ Feita em 23/10/2026. Regras em `lib/comercial/vistoria-da-operacao.ts`.
 - **No Início.** "Vistoria concluída" (cliente, itens levantados e o dia do
   envio) espera, na montagem, até o orçamento carregar os itens dela. Uma
   vistoria nova, enviada depois, espera de novo. Owner, admin e comercial.
+
+### Parte 3.12a: o quadro da TV no backend
+
+Feita em 23/10/2026. Regras em `functions/operacao/src/domain/tv.ts`; a
+leitura em `tv-leitura.ts`.
+
+- **`getRoomBoard`.** Atende o papel `painel` e quem coordena (owner, admin e
+  interno, para conferir). É a única callable que atende o painel: as
+  outras o recusam ("Seu perfil não grava o cadastro da Operação"), inclusive
+  as do campo. Só lê: nenhum recibo, evento ou gravação.
+- **O quadro do dia.** Três colunas: a agendada para hoje (ou para um dia
+  que já passou, sem ter começado), a em execução e a concluída hoje (a
+  etapa Fim no dia de São Paulo). A aberta sem data, a cancelada, a agendada
+  para outro dia e a concluída antes de hoje ficam fora.
+- **Campo a campo.** Por OS: número, tipo, coluna, cliente, serviços, a rota
+  pelo nome dos locais, a hora marcada, o prazo (o da demanda direta ou o
+  fim da janela), a última etapa, as etapas feitas e previstas, a hora do
+  Fim e o aceite, os nomes da equipe e as placas. Nada de valor, contato,
+  telefone, endereço, instruções, ocorrência, foto, motivo de cancelamento,
+  CPF ou documento de quem assinou.
+- **Sem índice novo.** Duas consultas de um campo só: o status (agendada e
+  em execução) e `updated_at` desde o começo do dia (a conclusão grava).
+- **Regras.** O painel continua sem ler coleção nenhuma pelo navegador: OS,
+  demanda, cliente, evento, colaborador e veículo recusam (teste no
+  emulador).
+
