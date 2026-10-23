@@ -591,6 +591,21 @@ describe("fechar, perder e reabrir", () => {
     semDinheiroNemPessoa(await eventos());
   });
 
+  it("a demanda direta da Operação, sem orçamento, não anda pelo Comercial e diz por quê (parte 3.4c)", async () => {
+    await db.doc("demands/10090").set({ numero: "10090", customer_code: "ITAU", entrada: "direta", tipo: "paraquedas", etapa: "para_planejar" });
+    const recusa = await rejeita(
+      advanceDemandFor(db, comercial, { action: "lose", request_id: key(), numero: "10090", expected_etapa: "para_planejar", expected_rv: 0, motivo: "cancelado_cliente" }),
+      "failed-precondition",
+      /direta e ainda não tem orçamento/,
+    );
+    assert.match(recusa.message, /Operação/);
+    await rejeita(
+      advanceDemandFor(db, comercial, { action: "lose", request_id: key(), numero: "10091", expected_etapa: "para_planejar", expected_rv: 0, motivo: "preco" }),
+      "not-found",
+    );
+    assert.equal((await doc("demands/10090")).etapa, "para_planejar");
+  });
+
   it("reabrir: a proposta enviada e recusada volta numa RV nova; a perdida antes do envio e a fechada voltam com a mesma RV", async () => {
     // Enviada e sem resposta: RV01 em montagem; a RV00 enviada não muda.
     const enviada = await propostaEnviada();

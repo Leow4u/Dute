@@ -225,6 +225,12 @@ describe("item da fila", () => {
   it("etapa desconhecida não entra na fila", () => {
     expect(itemDaFila("10045", demanda("10045", { etapa: "xyz" }), orcamento("10045"))).toBeNull();
   });
+
+  it("a demanda direta ainda na Operação não entra; executada, entra para orçar a execução (parte 3.4c)", () => {
+    expect(itemDaFila("10050", demanda("10050", { entrada: "direta", etapa: "para_planejar" }), null)).toBeNull();
+    expect(itemDaFila("10050", demanda("10050", { entrada: "direta", etapa: "execucao_a_orcar" }), null)?.etapa).toBe("execucao_a_orcar");
+    expect(itemDaFila("10045", demanda("10045", { entrada: "comercial", etapa: "para_planejar" }), orcamento("10045"))?.etapa).toBe("para_planejar");
+  });
 });
 
 describe("segmentos e contagens", () => {

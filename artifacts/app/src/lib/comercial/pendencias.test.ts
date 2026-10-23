@@ -328,6 +328,9 @@ describe("resumo do Comercial: orçamentos por etapa e o mês", () => {
       perdaEm: "2026-10-09T15:00:00.000Z",
     });
     expect(demandaDoResumo("1", { etapa: "aguardando_cliente", customer_code: "SAFRA" }, ETAPAS_DO_RESUMO)).toMatchObject({ cliente: "SAFRA", etapaDesde: null });
+    // A demanda direta ainda na Operação (parte 3.4c) não conta para o Comercial.
+    expect(demandaDoResumo("2", { etapa: "para_planejar", entrada: "direta", customer_code: "ITAU" }, ETAPAS_DO_RESUMO)).toBeNull();
+    expect(demandaDoResumo("3", { etapa: "para_planejar", entrada: "comercial", customer_code: "ITAU" }, ETAPAS_DO_RESUMO)?.etapa).toBe("para_planejar");
     expect(demandaDoResumo("1", { etapa: "cancelada" }, ETAPAS_DO_RESUMO)).toBeNull();
     expect(demandaDoResumo("1", {}, ETAPAS_DO_RESUMO)).toBeNull();
   });

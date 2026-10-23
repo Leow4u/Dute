@@ -99,6 +99,11 @@ Em montagem → Para aprovar → Para enviar → Aguardando cliente → Para pla
 (fechado) → Execução a orçar → Aguardando autorização → A faturar. Perdida, com
 motivo, a qualquer momento antes de faturar. As cores são as dos mockups.
 
+A demanda direta aberta pela Operação (paraquedas e emergencial) nasce sem
+orçamento, em Para planejar, e fica fora da fila e do resumo do Comercial até
+a execução; executada, chega em Execução a orçar (parte 3.4c da Fase 3, em
+`fase-3-operacao.md`).
+
 ## Telas
 
 | Tela | Arquivo |

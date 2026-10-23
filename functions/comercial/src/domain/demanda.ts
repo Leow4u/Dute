@@ -93,6 +93,8 @@ export type OrigemDoEscopo = (typeof ORIGENS_DO_ESCOPO)[number];
 
 /** O que a demanda já registrou e muda a etapa (partes 9 e 10). */
 export type EstadoDaDemanda = {
+  /** Por onde a demanda entrou (ENTRADAS_DEMANDA); a direta pode estar sem orçamento. */
+  entrada?: unknown;
   perda?: unknown;
   cancelamento?: unknown;
   /** A RV fechada pelo cliente (o escopo); null antes do fechamento. */
@@ -143,6 +145,8 @@ export function validacaoDaDemanda(demanda: Pick<EstadoDaDemanda, "validacao">):
  * A etapa da demanda a partir da demanda e do orçamento (a RV em curso).
  *
  * - Perda e cancelamento valem sobre o orçamento.
+ * - Sem orçamento, a demanda está em montagem; a direta aberta pela Operação
+ *   está em Para planejar e, executada, em execução a orçar.
  * - Rascunho é "em montagem" ("execução a orçar" na RV de execução), para
  *   aprovar é "para aprovar", aprovado é "para enviar".
  * - Enviado espera o cliente ("aguardando cliente"): a proposta, o fechamento;
@@ -160,7 +164,13 @@ export function etapaDaDemanda(
 ): EtapaDemanda {
   if (preenchido(demanda.cancelamento)) return "cancelada";
   if (preenchido(demanda.perda)) return "perdida";
-  if (!orcamento) return "em_montagem";
+  if (!orcamento) {
+    // A demanda direta aberta pela Operação (paraquedas e emergencial) nasce
+    // sem orçamento: está em Para planejar até a execução e, executada, vai
+    // ao Comercial para orçar a execução (docs/plataforma/fase-3-operacao.md).
+    if (demanda.entrada === "direta") return demandaExecutada(demanda) ? "execucao_a_orcar" : "para_planejar";
+    return "em_montagem";
+  }
   if (!(STATUS_ORCAMENTO as readonly string[]).includes(orcamento.status)) {
     throw new Error(`Situação do orçamento desconhecida: ${orcamento.status}.`);
   }

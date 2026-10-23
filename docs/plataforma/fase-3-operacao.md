@@ -151,7 +151,8 @@ registros guardados" é dado, não legenda.
 | 3.0 | Este runbook; `plano.md` aponta para ele | Documentação |
 | 3.4a | Cadastro da equipe e da frota: `collaborators` com vínculo, empresa do terceiro, papéis e o login do app; `vehicles` com dono, empresa e próxima revisão; as duas fichas e as linhas da lista | Terceiro sem empresa recusado; e-mail sem usuário do app recusado; um login para um colaborador só |
 | 3.4b | Modelo completo da OS no backend: campos novos, tipo calculado, `plan` com várias OS e fatia do saldo, equipe com papéis, freelancers e terceiros, regras e índices | Saldo nunca negativo; campo sem `collaborators`; schema sem preço |
-| 3.4c | Demanda direta: `openDirectDemand`; `etapaDaDemanda` do Comercial aprende a demanda sem RV | Demanda direta nasce em Para planejar e não aparece no Comercial antes da revisão |
+| 3.4c | O Comercial reconhece a demanda direta da Operação: `etapaDaDemanda` sem orçamento, fila e resumo sem ela, recusa clara nas ações | Direta sem orçamento é Para planejar; executada, Execução a orçar; fora da fila do Comercial |
+| 3.4d | Demanda direta na Operação: `openDirectDemand` (número do contador do Comercial, tipo calculado e corrigido, itens sem preço) e a OS que nasce dela sem RV | Demanda direta nasce em Para planejar; tipo pela hora; OS com a fatia dos itens pedidos |
 | 3.5 | Hoje completo, Demandas, Demanda e Nova demanda direta | Textos listados; `axe`; filtros por tipo, entrada e cliente |
 | 3.6 | Planejar OS a partir do saldo e Agenda da semana | Duas OS da mesma demanda somam no máximo o saldo; sem equipe e sem veículo são alertas |
 | 3.7 | Execução pelo escritório: `registerStep`, `registerItem`, `registerOccurrence`, fotos no Storage, Em execução, tela da OS | Etapa fora de ordem recusada; instante gravado; foto só de quem está na OS ou coordena |
@@ -383,3 +384,21 @@ Feita em 23/10/2026, no backend e na leitura da fila. As telas novas
   contato ou instrução.
 - **OS de antes.** A leitura aceita a `agenda` antiga, a `quantidade` e os
   ids dos locais; agendar de novo grava o modelo novo e apaga a `agenda`.
+
+### Parte 3.4c: o Comercial reconhece a demanda direta
+
+Feita em 23/10/2026, na codebase e nas telas do Comercial, antes da callable
+que abre a demanda direta (parte 3.4d), para nenhuma tela do Comercial ver
+uma demanda sem orçamento sem saber o que fazer com ela.
+
+- `etapaDaDemanda` sem orçamento: a demanda com `entrada: "direta"` está em
+  Para planejar e, executada (`executado_de`), em Execução a orçar. A
+  comercial continua em montagem. Com o orçamento da execução aberto, a etapa
+  segue o orçamento, como na direta do "Orçar execução".
+- A fila de orçamentos e o resumo do Início do Comercial deixam de fora a
+  direta em Para planejar (`demandaDiretaNaOperacao`): ela é da Operação até
+  a execução. A direta do "Orçar execução" já nasce executada e não muda.
+- As ações do Comercial numa direta sem orçamento recusam com "está com a
+  Operação até a execução", em vez de "demanda não encontrada".
+- Quem marca a execução da direta (o `executado_de` ou um resumo próprio da
+  Operação) se decide na parte 3.10, com a revisão.

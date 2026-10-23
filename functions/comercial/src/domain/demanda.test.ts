@@ -115,6 +115,7 @@ describe("etapa da demanda", () => {
 
   it("demanda ainda sem orçamento está em montagem; situação desconhecida é recusada", () => {
     assert.equal(etapaDaDemanda(sem, null), "em_montagem");
+    assert.equal(etapaDaDemanda({ entrada: "comercial" }, null), "em_montagem");
     assert.throws(() => etapaDaDemanda(sem, { status: "fechado", tipo_rv: "proposta" }), /situação/i);
     assert.throws(() => etapaDaDemanda(sem, { status: "rascunho", tipo_rv: "medicao" }), /tipo/i);
   });
@@ -141,6 +142,17 @@ describe("etapa da demanda", () => {
     assert.equal(etapaDaDemanda({ escopo_rv: 0 }, { status: "rascunho", tipo_rv: "aditivo", rv: 1 }), "em_montagem");
     // Perda vale sobre tudo.
     assert.equal(etapaDaDemanda({ ...fechadaExecutada, perda: { motivo: "cancelado_cliente" } }, enviada), "perdida");
+  });
+
+  it("demanda direta da Operação, sem orçamento (parte 3.4c): para planejar; executada, execução a orçar", () => {
+    const direta = { entrada: "direta", escopo_rv: null, executado_de: null };
+    assert.equal(etapaDaDemanda(direta, null), "para_planejar");
+    assert.equal(etapaDaDemanda({ ...direta, executado_de: "2026-10-23" }, null), "execucao_a_orcar");
+    assert.equal(etapaDaDemanda({ ...direta, cancelamento: { motivo: "cliente" } }, null), "cancelada");
+    assert.equal(etapaDaDemanda({ ...direta, perda: { motivo: "cancelado_cliente" } }, null), "perdida");
+    // Com o orçamento da execução aberto, a etapa segue o orçamento, como na direta do "Orçar execução".
+    assert.equal(etapaDaDemanda({ ...direta, executado_de: "2026-10-23" }, { status: "rascunho", tipo_rv: "execucao", rv: 0 }), "execucao_a_orcar");
+    assert.equal(etapaDaDemanda({ ...direta, executado_de: "2026-10-23" }, { status: "aprovado", tipo_rv: "execucao", rv: 0 }), "para_enviar");
   });
 });
 

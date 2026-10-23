@@ -9,7 +9,7 @@ import { dataBr } from "./clientes";
 import { quandoEmDias, type AlertaDoInicio } from "./contratos";
 import { rotuloDaCompetencia, type AlertaDeMedicaoDoInicio } from "./medicoes";
 import { ROTA_APROVAR, ROTA_AUTORIZACOES, abreComercial, aprovaOrcamento, hrefDaMedicao, hrefDoContrato } from "./navegacao";
-import { dataHoraCurta, hrefDoOrcamento, rotuloDoOrcamento, type EtapaDemanda } from "./orcamentos";
+import { dataHoraCurta, demandaDiretaNaOperacao, hrefDoOrcamento, rotuloDoOrcamento, type EtapaDemanda } from "./orcamentos";
 
 /**
  * O "Precisa de você" do Início do Comercial (docs/plataforma/plano-de-implantacao.md,
@@ -269,10 +269,14 @@ function texto(valor: unknown): string {
   return typeof valor === "string" ? valor : "";
 }
 
-/** A demanda lida do Firestore, só com o que o resumo usa; sem etapa conhecida, nada. */
+/**
+ * A demanda lida do Firestore, só com o que o resumo usa; sem etapa conhecida,
+ * nada. A demanda direta ainda na Operação não conta para o Comercial.
+ */
 export function demandaDoResumo(numero: string, data: Record<string, unknown>, etapasConhecidas: readonly string[]): DemandaDoResumo | null {
   const etapa = texto(data.etapa);
   if (!etapasConhecidas.includes(etapa)) return null;
+  if (demandaDiretaNaOperacao(data)) return null;
   const marcos = Array.isArray(data.marcos)
     ? data.marcos.flatMap((marco) => {
         if (!marco || typeof marco !== "object") return [];
