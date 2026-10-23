@@ -163,7 +163,9 @@ registros guardados" é dado, não legenda.
 | 3.7c | Fotos: `attachPhoto` e `storage.rules` em `os/{numero}/fotos/` | Foto só de quem está na OS ou coordena |
 | 3.7d | Ficha da OS (`OpOS`): os quatro passos, locais, etapas, itens com o feito, fotos, equipe, veículos e histórico | Textos listados; `axe`; etapas iguais às do backend |
 | 3.7e | "Registrar andamento" na ficha da OS: etapa, itens (feito e incluído) e ocorrência com fotos | O formulário manda o formato das callables |
-| 3.8 | Campo (PWA): Minhas OS, execução, incluir item, presença, fila sem sinal | Campo lê só a OS escalada; dois envios do mesmo registro gravam um; instante original guardado |
+| 3.8a | Campo no backend: as callables da execução atendem o campo escalado (canal celular, informa o colaborador do login), `registerPresence`, o nome do cliente na OS e o catálogo sem preço para o campo | Campo grava só na OS escalada; quem não é líder marca só a própria presença; vale a primeira marca |
+| 3.8b | Campo no celular (`/campo`): Minhas OS e a OS em execução, com etapas, itens, incluir item, presença, fotos e ocorrência | Campo lê só a OS escalada; textos listados; `axe` |
+| 3.8c | Fila sem sinal: os registros guardados no aparelho (IndexedDB) e reenviados quando o sinal volta, "Sem sinal · N registros guardados" | Dois envios do mesmo registro gravam um; instante original guardado |
 | 3.9 | Concluir com assinatura ou "sem aceite no local", Em revisão; impressão da OS | Concluir sem motivo para item a menos recusado; assinatura no Storage com regra |
 | 3.10 | Revisão interna, Revisada, reabrir; aditivo na fila do Comercial; demanda direta em Execução a orçar | Divergência sem decisão não conclui; `demands.revisao` só pela Operação |
 | 3.11 | Vistoria como OS e "Enviar vistoria ao comercial" | Vistoria não passa pela revisão; orçamento nasce com os itens dela |
@@ -706,3 +708,28 @@ abas; a tela confere antes e a callable confere de novo. Regras em
   foto: repetir depois de uma falha no meio não duplica nada.
 - **Trava.** Toda callable que o app chama existe em `functions/operacao`
   (o teste lê o `index.ts`).
+
+### Parte 3.8a: campo no backend
+
+Feita em 23/10/2026.
+
+- **Quem grava.** `registerStep`, `registerItem`, `registerOccurrence`,
+  `attachPhoto` e a nova `registerPresence` atendem também o papel `campo`
+  (`requireOperacaoCaller(..., { campo: true })`; o teste das callables
+  trava quais). O campo só grava na OS em que está escalado
+  (`equipe_uids`, o mesmo critério das regras); o canal é celular, sem meio,
+  e quem informa é o colaborador ligado ao login (o pedido não escolhe
+  outro). O cadastro e o planejamento continuam só de owner, admin e
+  interno.
+- **`registerPresence`.** A entrada ou a saída de alguém da equipe, com o
+  instante. O líder marca todos; quem não é líder marca só a própria; o
+  escritório marca qualquer um. Vale a primeira marca: a segunda não muda
+  nada nem gera evento. A saída pede a entrada antes e não vem antes dela.
+  Evento `os.presence_recorded` com o id do cadastro, o tipo, o instante e o
+  canal. É o que paga a diária do freelancer e do terceiro, cujo valor fica
+  no RH e no Financeiro.
+- **Nome do cliente na OS.** `cliente_nome`, copiado da demanda ao abrir,
+  planejar e agendar: o campo lê a OS e não o cadastro do cliente (decisão
+  que a parte 3.4b deixou para esta). O evento continua sem nome.
+- **Catálogo.** O campo lê `lpu_items` (sem preço) para incluir o item
+  executado além do planejado; tabela de preço e autorização continuam fora.

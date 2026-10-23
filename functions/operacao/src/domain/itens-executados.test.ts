@@ -48,6 +48,7 @@ const OS: OsGravada = {
   demanda: "10045",
   seq: 1,
   customer_code: "ITAU",
+  cliente_nome: "Itaú Unibanco",
   status: "em_execucao",
   escopo_rv: 0,
   itens: [],

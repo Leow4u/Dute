@@ -136,7 +136,11 @@ export function interpretarOcorrencia(data: unknown): PedidoDeOcorrencia {
 
 // --- Regras -------------------------------------------------------------------------------
 
-export type ContextoDoRegistro = { agora: Date; canal: CanalDoRegistro; registrado_por: QuemRegistrou };
+/**
+ * Quem registra: o canal, quem gravou e, no celular, o colaborador ligado ao
+ * login (é ele quem informa; parte 3.8a).
+ */
+export type ContextoDoRegistro = { agora: Date; canal: CanalDoRegistro; registrado_por: QuemRegistrou; informante?: string | null };
 
 function dataEmSaoPaulo(instanteUtc: Date): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(instanteUtc);
@@ -176,13 +180,26 @@ export function instanteDoRegistro(pedido: string, os: Pick<OsGravada, "janela">
   return quando.toISOString();
 }
 
-/** Quem informou precisa estar na equipe da OS; o meio só vale no escritório. */
-export function origemDoRegistro(os: Pick<OsGravada, "equipe">, pedido: { informado_por: string | null; meio: MeioDoEscritorio | null }, canal: CanalDoRegistro) {
+/**
+ * Quem informou e o meio. No escritório, quem informou precisa estar na
+ * equipe da OS. No celular, quem informa é o colaborador do login (o pedido
+ * não escolhe outro) e não há meio.
+ */
+export function origemDoRegistro(
+  os: Pick<OsGravada, "equipe">,
+  pedido: { informado_por: string | null; meio: MeioDoEscritorio | null },
+  contexto: Pick<ContextoDoRegistro, "canal" | "informante">,
+) {
+  if (contexto.canal === "celular") {
+    if (pedido.meio) invalid("O registro do celular não leva o meio.");
+    const informante = contexto.informante ?? null;
+    if (pedido.informado_por && pedido.informado_por !== informante) invalid("No celular, quem informa é quem registra.");
+    return { informado_por: informante, meio: null };
+  }
   if (pedido.informado_por && !os.equipe.some((pessoa) => pessoa.colaborador_id === pedido.informado_por)) {
     invalid("Quem informou não está na equipe da OS.");
   }
-  if (canal === "celular" && pedido.meio) invalid("O registro do celular não leva o meio.");
-  return { informado_por: pedido.informado_por, meio: canal === "escritorio" ? pedido.meio : null };
+  return { informado_por: pedido.informado_por, meio: pedido.meio };
 }
 
 export type EtapaNaOs = { etapas: EtapaRegistrada[]; registro: EtapaRegistrada; iniciou: boolean };
@@ -210,7 +227,7 @@ export function registrarEtapa(os: OsGravada, atuais: readonly EtapaRegistrada[]
     etapa: pedido.etapa,
     instante: quando,
     canal: contexto.canal,
-    ...origemDoRegistro(os, pedido, contexto.canal),
+    ...origemDoRegistro(os, pedido, contexto),
     registrado_por: contexto.registrado_por,
     registrado_em: contexto.agora.toISOString(),
   };
@@ -234,7 +251,7 @@ export function registrarOcorrencia(
     descricao: pedido.descricao,
     instante: instanteDoRegistro(pedido.instante, os, contexto.agora),
     canal: contexto.canal,
-    ...origemDoRegistro(os, pedido, contexto.canal),
+    ...origemDoRegistro(os, pedido, contexto),
     registrado_por: contexto.registrado_por,
     registrado_em: contexto.agora.toISOString(),
   };

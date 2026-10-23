@@ -137,6 +137,7 @@ function os(parcial: Partial<OsGravada> = {}): OsGravada {
       demanda: "10045",
       seq: 1,
       customer_code: "ITAU",
+      cliente_nome: "Itaú Unibanco",
       escopo_rv: 0,
       itens: ESCOPO,
       locais: { origem: null, destino: null },

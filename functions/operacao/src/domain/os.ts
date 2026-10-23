@@ -95,6 +95,8 @@ export type OsGravada = {
   demanda: string;
   seq: number;
   customer_code: string;
+  /** O nome do cliente copiado da demanda: o campo lê a OS, não o cadastro do cliente (parte 3.8a). */
+  cliente_nome: string | null;
   status: StatusDaOs;
   /** A RV do escopo fechado de onde saiu a fatia; null na demanda direta (os itens pedidos são o escopo). */
   escopo_rv: number | null;
@@ -626,6 +628,7 @@ export type NovaOs = {
   demanda: string;
   seq: number;
   customer_code: string;
+  cliente_nome: string | null;
   escopo_rv: number | null;
   itens: ItemDaOs[];
   locais: LocaisDaOs;
@@ -645,6 +648,7 @@ export function novaOs(entrada: NovaOs): OsGravada {
     demanda: entrada.demanda,
     seq: entrada.seq,
     customer_code: entrada.customer_code,
+    cliente_nome: entrada.cliente_nome,
     status: entrada.janela ? "agendada" : "aberta",
     escopo_rv: entrada.escopo_rv,
     itens: entrada.itens,
@@ -813,6 +817,7 @@ export function osLida(numeroDaLeitura: string, data: Record<string, unknown>): 
     demanda: data.demanda,
     seq: typeof data.seq === "number" ? data.seq : 1,
     customer_code: data.customer_code,
+    cliente_nome: textoOuNull(data.cliente_nome),
     status: data.status as StatusDaOs,
     escopo_rv: typeof data.escopo_rv === "number" ? data.escopo_rv : null,
     itens,

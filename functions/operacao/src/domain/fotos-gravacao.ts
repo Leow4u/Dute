@@ -1,10 +1,10 @@
 import type { Firestore } from "firebase-admin/firestore";
 
 import { createOperacaoEvent } from "./events.js";
-import { contexto, lerParaRegistrar, type ResultadoDoRegistro } from "./execucao-gravacao.js";
+import { exigirQuemExecuta, lerParaRegistrar, type ResultadoDoRegistro } from "./execucao-gravacao.js";
 import { caminhoDaFoto, fotosLidas, interpretarFoto, registrarFoto, type ArquivoNoStorage } from "./fotos.js";
 import { runIdempotent } from "./operations.js";
-import { ator, autoria, exigirPapel } from "./os-gravacao.js";
+import { ator, autoria } from "./os-gravacao.js";
 import type { OperacaoProfile } from "./profile.js";
 
 /**
@@ -23,15 +23,15 @@ export async function attachPhotoFor(
   conferir: ConferirArquivo,
   agora: () => Date = () => new Date(),
 ): Promise<ResultadoDoRegistro & { foto: string; replayed?: true }> {
-  exigirPapel(caller);
+  exigirQuemExecuta(caller);
   const pedido = interpretarFoto(data);
   const arquivo = await conferir(caminhoDaFoto(pedido.numero, pedido.arquivo));
   return runIdempotent(
     db,
     { kind: "os_photo", scope: { numero: pedido.numero }, idempotency_key: pedido.idempotency_key, input: pedido, actor: ator(caller) },
     async (transaction, { operationId }) => {
-      const { ref, os, execucao, itens, data: bruto } = await lerParaRegistrar(transaction, db, pedido.numero);
-      const { fotos, registro } = registrarFoto(os, fotosLidas(bruto), pedido, contexto(caller, agora()), {
+      const { ref, os, execucao, itens, data: bruto, contexto } = await lerParaRegistrar(transaction, db, pedido.numero, caller, agora());
+      const { fotos, registro } = registrarFoto(os, fotosLidas(bruto), pedido, contexto, {
         arquivo,
         ocorrencias: execucao.ocorrencias.map((ocorrencia) => ocorrencia.id),
         linhas: itens.map((item) => item.id),

@@ -34,6 +34,7 @@ const OS: OsGravada = {
   demanda: "10045",
   seq: 1,
   customer_code: "ITAU",
+  cliente_nome: "Itaú Unibanco",
   status: "agendada",
   escopo_rv: 0,
   itens: [],
@@ -153,9 +154,16 @@ describe("etapas", () => {
       "invalid-argument",
       "Quem informou não está na equipe da OS.",
     );
-    const celular: ContextoDoRegistro = { ...ESCRITORIO, canal: "celular", registrado_por: { uid: "uid-ana", role: "campo" } };
+    const celular: ContextoDoRegistro = { ...ESCRITORIO, canal: "celular", registrado_por: { uid: "uid-ana", role: "campo" }, informante: ANA };
     recusa(() => registrarEtapa(OS, [], etapa("saida_patio", "2026-10-22T07:05-03:00", { meio: "whatsapp" }), celular), "invalid-argument", "O registro do celular não leva o meio.");
-    assert.equal(registrarEtapa(OS, [], etapa("saida_patio", "2026-10-22T07:05-03:00"), celular).registro.canal, "celular");
+    // No celular, quem informa é o colaborador do login; o pedido não escolhe outro.
+    const doCelular = registrarEtapa(OS, [], etapa("saida_patio", "2026-10-22T07:05-03:00"), celular).registro;
+    assert.deepEqual([doCelular.canal, doCelular.informado_por, doCelular.meio], ["celular", ANA, null]);
+    recusa(
+      () => registrarEtapa(OS, [], etapa("saida_patio", "2026-10-22T07:05-03:00", { informado_por: BRUNO }), celular),
+      "invalid-argument",
+      "No celular, quem informa é quem registra.",
+    );
   });
 
   it("OS aberta, cancelada ou concluída não recebe etapa", () => {

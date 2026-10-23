@@ -132,10 +132,11 @@ service cloud.firestore {
       return hasAnyRole(['owner', 'admin', 'comercial', 'financeiro']);
     }
 
-    // Catálogo sem preço (lpu_items). A operação lê na Fase 3; a tabela de
+    // Catálogo sem preço (lpu_items). A operação lê na Fase 3; o campo, para
+    // incluir o item executado além do planejado (parte 3.8a). A tabela de
     // preço continua em canReadPrices().
     function canReadCatalog() {
-      return canReadPrices() || hasRole('interno');
+      return canReadPrices() || hasRole('interno') || hasRole('campo');
     }
 
     // Polo e endereço do cliente. A operação lê na Fase 3; o contato
