@@ -66,6 +66,9 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   - O financeiro lê os eventos `nf.*` e `cobranca.*`, como os do faturamento
     do WMS. Nenhum leva valor.
   - Ninguém grava pelo navegador em nenhuma delas.
+  - Da Fase 5: quem tem o Agent Dute do núcleo, o comercial incluído, lê a
+    própria conversa com o agente (`canReadAgentChat`). Gravar pelo
+    navegador segue como antes.
 - **Regras do Storage.**
   - O anexo da solicitação do portal (`portal/{code}/solicitacoes/`).
   - O cliente da OS concluída lê a assinatura e as fotos do final (parte

@@ -12,7 +12,6 @@ import {
   Trash2,
 } from "lucide-react";
 
-import { fetchChatJson } from "@/components/agent/chat";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,6 +31,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+import { chaveNoAlvo } from "@/lib/agente/cliente";
+import { useClienteDoAgente } from "@/lib/agente/contexto";
 import {
   describeSchedule,
   editingRoutine,
@@ -65,14 +66,11 @@ import { cn } from "@/lib/utils";
 const field =
   "w-full min-w-0 rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/15";
 
-async function postJson<T>(url: string, body: unknown) {
-  return fetchChatJson<T>(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-}
-
 export function useRoutines() {
+  const agente = useClienteDoAgente();
   return useQuery<{ routines: Routine[] }, Error>({
-    queryKey: routinesKey,
-    queryFn: () => fetchChatJson<{ routines: Routine[] }>("/api/agent-dute/routines"),
+    queryKey: chaveNoAlvo(agente, routinesKey),
+    queryFn: () => agente.rotinas.listar(),
     staleTime: 30_000,
   });
 }
@@ -184,13 +182,14 @@ export function RoutineFields({ form, onChange, idPrefix, disabled }: { form: Ro
 /** Janela de criar ou editar rotina, no meio da tela. */
 function RoutineDialog({ routine, initial, open, onClose }: { routine: Routine | null; initial?: RoutineForm; open: boolean; onClose: () => void }) {
   const queryClient = useQueryClient();
+  const agente = useClienteDoAgente();
   const { toast } = useToast();
   const [form, setForm] = useState<RoutineForm>(() => (routine ? routineForm(routine) : { ...(initial ?? EMPTY_ROUTINE) }));
   const problem = routineProblem(form);
   const save = useMutation({
-    mutationFn: (next: RoutineForm) => postJson("/api/agent-dute/routines", routinePayload(next)),
+    mutationFn: (next: RoutineForm) => agente.rotinas.salvar(routinePayload(next)),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: routinesKey });
+      await queryClient.invalidateQueries({ queryKey: chaveNoAlvo(agente, routinesKey) });
       onClose();
     },
     onError: (error: Error) => toast({ title: "Não consegui salvar a rotina", description: error.message, variant: "destructive" }),
@@ -227,25 +226,26 @@ function RoutineDialog({ routine, initial, open, onClose }: { routine: Routine |
 /** Card da rotina: clique abre a janela de edição; "⋯" tem as ações rápidas. */
 function RoutineCard({ routine, onEdit, onOpenConversation }: { routine: Routine; onEdit: () => void; onOpenConversation: (id: string) => void }) {
   const queryClient = useQueryClient();
+  const agente = useClienteDoAgente();
   const { toast } = useToast();
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const refresh = () => queryClient.invalidateQueries({ queryKey: routinesKey });
+  const refresh = () => queryClient.invalidateQueries({ queryKey: chaveNoAlvo(agente, routinesKey) });
   const failed = (title: string) => (error: Error) => toast({ title, description: error.message, variant: "destructive" });
   const run = useMutation({
-    mutationFn: () => postJson<{ conversation_id: string }>(`/api/agent-dute/routines/${encodeURIComponent(routine.id)}/run`, {}),
+    mutationFn: () => agente.rotinas.rodar(routine.id),
     onSuccess: async (result) => {
-      await Promise.all([refresh(), queryClient.invalidateQueries({ queryKey: ["agent-dute-conversations"] })]);
+      await Promise.all([refresh(), queryClient.invalidateQueries({ queryKey: chaveNoAlvo(agente, ["agent-dute-conversations"]) })]);
       onOpenConversation(result.conversation_id);
     },
     onError: failed("A rotina não rodou"),
   });
   const toggle = useMutation({
-    mutationFn: () => postJson("/api/agent-dute/routines", routinePayload({ ...routineForm(routine), active: !routine.active })),
+    mutationFn: () => agente.rotinas.salvar(routinePayload({ ...routineForm(routine), active: !routine.active })),
     onSuccess: refresh,
     onError: failed(routine.active ? "Não consegui pausar a rotina" : "Não consegui retomar a rotina"),
   });
   const remove = useMutation({
-    mutationFn: () => postJson(`/api/agent-dute/routines/${encodeURIComponent(routine.id)}/delete`, {}),
+    mutationFn: () => agente.rotinas.excluir(routine.id),
     onSuccess: refresh,
     onError: failed("Não consegui apagar a rotina"),
   });

@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
 import { ArrowDown, ArrowUp, CalendarClock, Check, Copy, FileText, Loader2, MessageCircle, MessagesSquare, PanelLeftClose, PanelLeftOpen, Paperclip, Plus, Search, Sparkles, X } from "lucide-react";
 
-import { fetchChatJson, type ChatMessage, type ChatResponse } from "@/components/agent/chat";
+import type { ChatMessage, ChatResponse } from "@/components/agent/chat";
 import { DraftCard } from "@/components/agent/draft-card";
 import { RoutinesPage, useRoutines } from "@/components/agent/routines";
 import { AgentMarkdown } from "@/components/agent/markdown";
@@ -22,8 +22,10 @@ import {
   type ConversationSummary,
   type Suggestion,
 } from "@/lib/agent-chat";
+import { chaveNoAlvo } from "@/lib/agente/cliente";
+import { useClienteDoAgente } from "@/lib/agente/contexto";
 import { useAppUser } from "@/lib/auth";
-import { streamAgentDuteChat, type AgentDuteStreamChunk } from "@/lib/functions-api";
+import type { AgentDuteStreamChunk } from "@/lib/functions-api";
 import { isUnreadRoutine, markSeen, routineHistory, type RoutineHistoryItem } from "@/lib/agent-routines";
 import { ATTACHMENT_ACCEPT, ATTACHMENT_LIMIT_HINT, isAcceptedAttachment, prepareAttachment, uploadAttachment } from "@/lib/shipment-files";
 import type { ClientRequestAttachment } from "@/pages/client/shared";
@@ -124,7 +126,11 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
   const [files, setFiles] = useState<PendingFile[]>([]);
   const [railCollapsed, setRailCollapsed] = useRailCollapsed();
   const abortRef = useRef<AbortController | null>(null);
-  const canAttach = user?.publicMetadata.role === "cliente";
+  const agente = useClienteDoAgente();
+  // A nota anexada vai no aviso de envio: só o cliente, na conversa da Armazenagem.
+  const canAttach = user?.publicMetadata.role === "cliente" && (agente.alvo.tipo === "wms" || agente.alvo.modulo === "wms");
+  const conversationsQueryKey = chaveNoAlvo(agente, conversationsKey);
+  const chatQueryKey = (id: string) => chaveNoAlvo(agente, messagesKey(id));
 
   function attachFiles(list: FileList | null) {
     if (!list) return;
@@ -158,13 +164,12 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
     : undefined;
 
   const conversations = useQuery<ConversationsResponse, Error>({
-    queryKey: conversationsKey,
-    queryFn: () => fetchChatJson<ConversationsResponse>("/api/agent-dute/conversations"),
+    queryKey: conversationsQueryKey,
+    queryFn: () => agente.conversas(),
   });
   const chat = useQuery<ChatResponse, Error>({
-    queryKey: messagesKey(conversationId ?? ""),
-    queryFn: () =>
-      fetchChatJson<ChatResponse>(`/api/agent-dute/chat?conversation_id=${encodeURIComponent(conversationId ?? "")}`),
+    queryKey: chatQueryKey(conversationId ?? ""),
+    queryFn: () => agente.mensagens(conversationId ?? ""),
     enabled: Boolean(conversationId),
   });
 
@@ -220,16 +225,16 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
       });
     };
     try {
-      const result = await streamAgentDuteChat<ChatResponse>(
+      const result = await agente.conversar(
         { message: question, conversation_id: id, ...(attachments.length ? { attachments } : {}) },
         onChunk,
         controller.signal,
       );
-      queryClient.setQueryData<ChatResponse>(messagesKey(id), (previous) => ({
+      queryClient.setQueryData<ChatResponse>(chatQueryKey(id), (previous) => ({
         conversation: result.conversation ?? previous?.conversation,
         messages: [...(previous?.messages ?? []), ...(result.messages ?? [])],
       }));
-      await queryClient.invalidateQueries({ queryKey: conversationsKey });
+      await queryClient.invalidateQueries({ queryKey: conversationsQueryKey });
     } catch (error) {
       setDraft(content);
       setFiles(sentFiles);

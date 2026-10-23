@@ -737,6 +737,37 @@ describe("chat do Agent Dute em tempo real", () => {
     });
   }
 
+  it("o comercial lê a própria conversa com o agente do núcleo; o campo não, nem grava (parte 5.5i)", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      for (const uid of ["comercial-a", "campo-a"]) {
+        await setDoc(doc(context.firestore(), "agent_conversations", `dute-${uid}`), {
+          id: `dute-${uid}`,
+          customer_code: CUSTOMER_A,
+          user_id: uid,
+          modulo: "comercial",
+          status: "active",
+          last_message_at: new Date().toISOString(),
+        });
+      }
+    });
+    const conversasDo = (uid: string) =>
+      getDocs(query(collection(signedAs(uid), "agent_conversations"), where("customer_code", "==", CUSTOMER_A), where("user_id", "==", uid)));
+    assert.equal((await assertSucceeds(conversasDo("comercial-a"))).size, 1);
+    await assertFails(conversasDo("campo-a"));
+    await assertFails(getDoc(doc(signedAs("comercial-a"), "agent_conversations", "conv-a")));
+    await assertFails(
+      setDoc(doc(signedAs("comercial-a"), "agent_conversations", "conv-comercial-novo"), {
+        id: "conv-comercial-novo",
+        customer_code: CUSTOMER_A,
+        user_id: "comercial-a",
+        status: "active",
+        created_at_iso: new Date().toISOString(),
+        created_at: new Date(),
+        updated_at: new Date(),
+      }),
+    );
+  });
+
   it("outro usuário não lê a conversa alheia", async () => {
     const database = testEnvironment
       .authenticatedContext("client-b", { email: "client-b@example.com" })

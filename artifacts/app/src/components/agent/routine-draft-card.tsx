@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, CheckCircle2, Loader2 } from "lucide-react";
 
-import { fetchChatJson } from "@/components/agent/chat";
+import { chaveNoAlvo } from "@/lib/agente/cliente";
+import { useClienteDoAgente } from "@/lib/agente/contexto";
 import { parseDraftSent, type RoutineDraft } from "@/lib/agent-draft";
 import { describeSchedule, routineFormFromSuggestion, routinePayload, routineProblem, routinesKey, type RoutineForm } from "@/lib/agent-routines";
 
@@ -15,19 +16,15 @@ import { RoutineFields } from "./routines";
  */
 export function RoutineDraftCard({ draft, messageId, sent: sentValue }: { draft: RoutineDraft; messageId?: string; sent?: unknown }) {
   const queryClient = useQueryClient();
+  const agente = useClienteDoAgente();
   const initial = routineFormFromSuggestion(draft.value);
   const [form, setForm] = useState<RoutineForm | null>(initial);
   const [created, setCreated] = useState(() => Boolean(parseDraftSent(sentValue)));
   const create = useMutation({
-    mutationFn: (next: RoutineForm) =>
-      fetchChatJson("/api/agent-dute/routines", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(routinePayload(next, messageId)),
-      }),
+    mutationFn: (next: RoutineForm) => agente.rotinas.salvar(routinePayload(next, messageId)),
     onSuccess: async () => {
       setCreated(true);
-      await Promise.all([queryClient.invalidateQueries({ queryKey: routinesKey }), queryClient.invalidateQueries({ queryKey: ["agent-dute-chat"] })]);
+      await Promise.all([queryClient.invalidateQueries({ queryKey: chaveNoAlvo(agente, routinesKey) }), queryClient.invalidateQueries({ queryKey: chaveNoAlvo(agente, ["agent-dute-chat"]) })]);
     },
   });
   if (!form) return null;

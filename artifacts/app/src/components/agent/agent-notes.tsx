@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Loader2, NotebookPen, X } from "lucide-react";
 
-import { fetchChatJson } from "@/components/agent/chat";
+import { chaveNoAlvo, type NotaDoAgente } from "@/lib/agente/cliente";
+import { useClienteDoAgente } from "@/lib/agente/contexto";
 import { buttonVariants } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -13,16 +14,7 @@ import { cn } from "@/lib/utils";
  * recusa ou arquiva. Cada decisão grava evento no backend.
  */
 
-type Note = {
-  id: string;
-  text: string;
-  reason: string | null;
-  visibility: "todos" | "equipe";
-  status: "pending" | "active";
-  suggested_by_name: string | null;
-  suggested_by_role: string | null;
-  created_at: string | null;
-};
+type Note = NotaDoAgente;
 
 const notesKey = ["agent-dute-notes"] as const;
 const dateBr = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" });
@@ -40,19 +32,18 @@ function who(note: Note) {
 export function AgentNotes() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const agente = useClienteDoAgente();
+  const notesQueryKey = chaveNoAlvo(agente, notesKey);
   const notes = useQuery({
-    queryKey: notesKey,
-    queryFn: () => fetchChatJson<{ notes: Note[] }>("/api/agent-dute/notes"),
+    queryKey: notesQueryKey,
+    queryFn: () => agente.anotacoes.listar(),
   });
   const decide = useMutation({
     mutationFn: ({ id, action, text, visibility }: { id: string; action: "approve" | "reject" | "archive"; text?: string; visibility?: Note["visibility"] }) =>
-      fetchChatJson(`/api/agent-dute/notes/${encodeURIComponent(id)}/${action}`, {
-        method: "POST",
-        body: JSON.stringify({ text, visibility }),
-      }),
+      agente.anotacoes.decidir(id, action, { text, visibility }),
     onSuccess: (_result, input) => {
       toast({ title: input.action === "approve" ? "Anotação aprovada: o Agent Dute passa a considerar" : input.action === "reject" ? "Anotação recusada" : "Anotação arquivada" });
-      void queryClient.invalidateQueries({ queryKey: notesKey });
+      void queryClient.invalidateQueries({ queryKey: notesQueryKey });
     },
     onError: (error) => toast({ title: "Não foi possível salvar", description: error instanceof Error ? error.message : "", variant: "destructive" }),
   });

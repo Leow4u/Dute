@@ -378,8 +378,10 @@ agente do WMS.
 | 5.5f | As anotações e os playbooks no núcleo, do cliente ativo: a anotação enviada pelo cartão, a decisão da coordenação e os playbooks com os iniciais | A anotação só entra pelo cartão de quem conversou; só a coordenação decide, do cliente ativo; o evento só com o id |
 | 5.5g | As rotinas no núcleo, com a rotina agendada `runDuteRoutines`; o WMS deixa de rodar as rotinas onde o núcleo roda | A rotina roda uma vez, por um só; a rotina segue o perfil atual de quem criou; sem acesso, pausa |
 | 5.5h | A nota fiscal anexada pelo cliente na conversa, lida pelo Gemini | A nota de outro cliente recusa; só o cliente anexa; a leitura não grava pedido |
-| 5.5i | O app com o agente do núcleo onde está liberado: o Agent Dute em cada shell, com o módulo e o cliente ativo; a tela na v3; as anotações e os playbooks do cliente ativo; o radar com as linhas do "Precisa de você" | Textos listados; `axe`; a equipe fala do cliente ativo; o módulo do shell vai à conversa |
-| 5.5j | O "Resumo do dia" como rotina pronta por módulo | A rotina pronta segue o papel e o módulo; só liga pela pessoa |
+| 5.5i | O cliente do agente no app: a tela, as rotinas, as anotações, os playbooks e os cartões falam com o agente do WMS ou com o do núcleo pelo mesmo cliente; o cartão de anotação; a regra que deixa quem tem o agente ler a própria conversa | O núcleo recebe o cliente e o módulo; a rotina alterada fica no módulo dela; o WMS segue como antes; textos listados e `axe` no cartão; o comercial lê a própria conversa |
+| 5.5j | O Agent Dute em cada shell, onde está liberado (Armazenagem, Operação, Comercial, Financeiro e o portal), com o módulo e o cliente ativo; a tela na v3 | Textos listados; `axe`; a equipe fala do cliente ativo; o módulo do shell vai à conversa |
+| 5.5k | As anotações e os playbooks do cliente ativo pelo núcleo; o radar com as linhas do "Precisa de você" | Só a coordenação decide, do cliente ativo; o radar sem regra própria |
+| 5.5l | O "Resumo do dia" como rotina pronta por módulo | A rotina pronta segue o papel e o módulo; só liga pela pessoa |
 | 5.6 | O painel de acerto: o erro médio da duração prevista e a taxa de aceite das sugestões | O painel sai de `ai_suggestions` |
 
 ## Perguntas abertas
@@ -1053,7 +1055,7 @@ conta em `domain/agente-revisao.ts`. As coleções são as do WMS
   - A anotação sugerida é o único evento do núcleo que o cliente grava.
   - A edição do playbook e cada decisão têm o evento delas.
 - **O app** ainda fala com o WMS nas anotações e nos playbooks. Passa ao
-  núcleo na parte 5.5i.
+  núcleo nas partes 5.5i a 5.5k.
 - **Testes.**
   - `agente-revisao.test.ts`:
     - as cópias travadas contra o WMS (os playbooks iniciais e quem revisa);
@@ -1114,7 +1116,8 @@ no formato dele, mais o módulo.
     `functions/wms/src/domain/agent-routines.ts`, é a cópia literal de
     `AGENTE_AMBIENTES_LIBERADOS`, travada em `platform-lists.test.ts`.
   - No `dute-prod`, as rotinas seguem pelo WMS.
-- **O app** ainda fala com o WMS nas rotinas. Passa ao núcleo na parte 5.5i.
+- **O app** ainda fala com o WMS nas rotinas. Passa ao núcleo nas partes 5.5i
+  e 5.5j.
 - **Testes.**
   - `agente-rotinas.test.ts`:
     - a agenda, com os casos do teste do WMS;
@@ -1166,7 +1169,8 @@ e a leitura pelo Gemini em `agente-modelo.ts`.
 - **As cópias do WMS.** `invoice-reading.ts` e `agent-attachments.ts` são os
   arquivos do WMS, letra por letra. O esquema da extração e o tamanho máximo
   também são os do WMS. `agente-nota.test.ts` trava as quatro cópias.
-- **O app** ainda anexa pelo agente do WMS. Passa ao núcleo na parte 5.5i.
+- **O app** ainda anexa pelo agente do WMS. Passa ao núcleo nas partes 5.5i
+  e 5.5j.
 - **Testes.**
   - `agente-nota.test.ts`:
     - as cópias travadas;
@@ -1178,3 +1182,43 @@ e a leitura pelo Gemini em `agente-modelo.ts`.
     - a leitura na mensagem ao modelo e na pergunta;
     - o aviso com a nota, também na mensagem seguinte;
     - as recusas, sem gravar nada.
+
+### Parte 5.5i: o cliente do agente no app
+
+Feita em 23/10/2026. O cliente está em `artifacts/app/src/lib/agente/`
+(`cliente.ts` e `contexto.tsx`).
+
+- **Um cliente, dois alvos.** A tela do agente, as rotinas, as anotações, os
+  playbooks e os cartões falam só com o cliente do contexto.
+  - Sem provedor, é o agente do WMS, pelos caminhos de antes. Nada muda nas
+    telas de hoje.
+  - O do núcleo (`clienteDoNucleo(modulo, cliente)`) leva o cliente e o
+    módulo da conversa a cada callable. O servidor confere tudo de novo.
+  - Cada alvo tem o cache dele: um módulo não mostra a conversa de outro.
+- **No núcleo:**
+  - As conversas são lidas do Firestore, pela pessoa e pelo cliente, e
+    filtradas pelo módulo. A de antes do núcleo, sem módulo, é da
+    Armazenagem.
+  - As mensagens saem sem a leitura da nota, que só o modelo lê.
+  - A rotina alterada fica no módulo em que nasceu.
+  - A decisão da anotação só leva o que foi preenchido.
+  - O playbook salvo leva uma chave nova a cada envio.
+- **O anexo** só aparece para o cliente, na conversa da Armazenagem.
+- **O cartão de anotação** (`note-draft-card.tsx`) mostra o texto e a ação
+  "Sugerir anotação". Enviado, diz que foi. O agente do WMS não tem esse
+  cartão: lá a sugestão grava sozinha.
+- **A regra.** `canReadAgentChat` deixa quem tem o agente (`AGENTE_ROLES`, que
+  inclui o comercial) ler a própria conversa e as próprias mensagens. Gravar
+  pelo navegador segue como antes, sem o comercial.
+  `platform-lists.test.ts` trava a lista da regra e os módulos do agente no
+  app contra os do núcleo.
+- **Testes.**
+  - `lib/agente/cliente.test.ts`:
+    - as conversas do módulo;
+    - as mensagens em ordem e sem a leitura;
+    - o que cada callable do núcleo recebe;
+    - os caminhos do WMS.
+  - `note-draft-card.test.tsx`: os textos listados e o `axe` nos dois
+    estados; nada no agente do WMS.
+  - `firestore.rules.test.ts` do WMS: o comercial lê a própria conversa, e o
+    campo não. Nenhum dos dois grava.
