@@ -201,8 +201,9 @@ pesquisa nas páginas da Omie (`developer.omie.com.br`,
   - gerar as chaves no aplicativo da Omie (só o administrador vê);
   - usar um aplicativo de teste, ou a empresa em homologação, para o
     `dute-homolog`;
-  - guardar as chaves no Secret Manager, pelo comando que a parte 7.4d
-    registra;
+  - guardar as chaves no Secret Manager dos dois projetos, com a conta do
+    CI administrando cada segredo (`docs/deploy-functions-manual.md`,
+    "Function com segredo");
   - o contador cadastra os dois serviços na Omie com os códigos de
     integração `DUTE-OS` e `DUTE-ARMAZENAGEM`;
   - o contador passa a conta corrente e a categoria de receita das OS.
@@ -698,15 +699,12 @@ não chama a Omie sem as chaves.
   - gerar as chaves no aplicativo da Omie (Omie › Aplicativos, perfil
     administrador), num aplicativo de teste ou na empresa em homologação
     para o `dute-homolog`;
-  - guardar no Secret Manager:
-
-    ```powershell
-    cd C:\DEV\Dute
-    firebase functions:secrets:set OMIE_APP_KEY --project dute-homolog
-    firebase functions:secrets:set OMIE_APP_SECRET --project dute-homolog
-    ```
-
-  - Com os segredos criados, uma parte pequena declara
+  - guardar as duas chaves no Secret Manager dos dois projetos (na
+    produção, as de produção) e dar à conta do CI a administração só
+    desses dois segredos. O comando está em `docs/deploy-functions-manual.md`,
+    "Function com segredo": sem o papel no segredo, a publicação falha ao
+    dar acesso à conta de runtime.
+  - Com os segredos criados nos dois, uma parte pequena declara
     `secrets: ["OMIE_APP_KEY", "OMIE_APP_SECRET"]` no `runOmieSync`, como
     no Resend. Antes disso, a publicação não pode citar segredo que não
     existe.
@@ -1123,6 +1121,22 @@ Feita em 24/10/2026, a partir da mesma revisão.
 - **Teste:** `emissao.integration.test.ts`, com 50 emissões novas e três
   antigas. A rejeitada e a parada antigas aparecem, e a antiga que anda
   sozinha fica de fora. Falha com o código antigo.
+
+### Correção: as chaves da Omie precisam da conta do CI no segredo
+
+Feita em 24/10/2026, só no roteiro.
+
+- **O problema:** o roteiro guardava as chaves só no `dute-homolog`, e a
+  `github-actions-functions` não tem papel no Secret Manager.
+  - Na publicação de uma function com segredo, o `firebase deploy` confere a
+    versão e dá à conta de runtime o acesso ao segredo.
+  - Sem papel no segredo, a primeira publicação depois da parte que declara
+    as chaves falharia na homologação.
+  - Sem as chaves no `dute-prod`, a publicação da produção falharia também.
+- **A correção:** `docs/deploy-functions-manual.md`, "Function com segredo",
+  tem o comando que cria cada segredo nos dois projetos e dá à conta do CI a
+  administração só daquele segredo. A parte 7.4d, a 4.6a (o Resend) e o
+  roteiro do lançamento apontam para ele.
 
 ## Onde a Fase 7 está
 

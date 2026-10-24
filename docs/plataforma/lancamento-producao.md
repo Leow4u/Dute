@@ -282,7 +282,10 @@ Um PR pequeno, depois da conferência da seção 5:
 - A conta no Resend, o domínio verificado na Hostinger e a chave, para o
   e-mail sair (`fase-4-financeiro.md`, parte 4.6a).
 - As chaves da Omie (`OMIE_APP_KEY` e `OMIE_APP_SECRET`) no Secret Manager
-  do `dute-homolog`, os serviços `DUTE-OS` e `DUTE-ARMAZENAGEM` cadastrados
+  dos dois projetos, com a conta do CI administrando cada segredo
+  (`docs/deploy-functions-manual.md`, "Function com segredo"; depois da parte
+  que as declara, a publicação da produção também precisa delas), os
+  serviços `DUTE-OS` e `DUTE-ARMAZENAGEM` cadastrados
   pelo contador e a conta corrente e a categoria das OS, para a NFS-e sair
   pela Omie na homologação (`fase-7-financeiro-unificado.md`, parte 7.4d).
 - A entrega do WMS fatura pela demanda ou na fatura mensal do WMS?
