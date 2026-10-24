@@ -9,8 +9,8 @@ plano ordena as partes. Escrito em 23/10/2026.
 - Um só lugar para faturar a armazenagem e as OS.
 - Um só a receber, no Financeiro.
 - Uma fatura por cliente e competência, quando o contrato fatura por mês.
-- A NF e a contabilidade por integração (parte 7.4, com o fornecedor que o
-  Leonardo escolher).
+- A NFS-e pela Omie (parte 7.4; pergunta 21, decidida em 24/10/2026). O
+  contador acompanha pelo Painel do Contador da Omie.
 
 ## O que existe hoje
 
@@ -61,12 +61,10 @@ plano ordena as partes. Escrito em 23/10/2026.
 
 ## Decisões
 
-Seguem a recomendação até a resposta do Leonardo:
-
-| Pergunta | Recomendação seguida |
+| Pergunta | Decisão |
 |---|---|
-| 21 | O fornecedor da NF-e, da NFS-e e da contabilidade fica para a parte 7.4. Até lá, a NF segue registrada à mão no Financeiro, como na Fase 4, também a da armazenagem. |
-| 22 | A demanda que perdeu o prazo de faturamento ganha o motivo de perda "prazo de faturamento", aceito só quando o alerta de faturamento venceu. |
+| 21 | A NFS-e sai pela Omie (Leonardo, 24/10/2026), com a API paga dela. O CT-e, que a Omie não emite, segue emitido fora e registrado à mão. A baixa é da Dute, que lança na Omie. O contador cadastra na Omie os serviços, com a LC 116, o código municipal e o ISS; a Dute só aponta para eles e nunca decide imposto. A contabilidade usa o Painel do Contador da Omie: a Dute não tem exportação contábil própria. |
+| 22 | A demanda que perdeu o prazo de faturamento ganha o motivo de perda "prazo de faturamento", aceito só quando o alerta de faturamento venceu (a recomendação). |
 
 - **O a receber é um só: `faturas`.**
   - A competência emitida no WMS passa a ser um item "A faturar" do
@@ -115,13 +113,89 @@ Seguem a recomendação até a resposta do Leonardo:
 | 7.3a | O item da LPU de cobrança ligado ao catálogo do Comercial tira o preço da tabela do cliente vigente no último dia da competência | O item sem ligação calcula igual (a régua da 7.1); sem tabela ou com duas, recusa; a foto guarda a tabela |
 | 7.3b | Levar a LPU de cobrança de um cliente ao Comercial: os itens no catálogo, a tabela "Armazenagem" com os preços de hoje e a ligação de cada item, numa transação | A fatura calcula igual antes e depois da passagem |
 | 7.3c | A Tabela de preços do WMS mostra de onde vem o preço | O item ligado não edita o preço no WMS |
-| 7.4 | A integração da NF e a exportação contábil, com o fornecedor escolhido | Emissão idempotente; a falha não marca a fatura como emitida |
+| 7.4a | O cliente da API da Omie e a máquina da emissão, puros: o formato da chamada, as falhas (chave, limite, instabilidade, duplicado, recusa), a OS montada da fatura e o passo seguinte de cada etapa | Cada falha cai no tipo certo; a OS leva o código de integração e o serviço do contador; a etapa só anda com a resposta certa |
+| 7.4b | A reserva: a demanda e a competência numa emissão (`emissao_nf`) não se registram à mão nem se emitem de novo, e o Comercial não as tira de A faturar (perder, as outras ações e cancelar a autorização) | Cada caminho recusa a reservada; a sem reserva segue igual |
+| 7.4c | A emissão gravada: `emitNfOmie` confere como o `registerNf`, reserva e põe na fila; retomar e desistir; a leitura das emissões; os eventos | A emissão é idempotente; desistir libera a reserva; o evento não leva valor |
+| 7.4d | A rotina `runOmieSync`: acha o cliente pelo CNPJ, inclui a OS, confere o ambiente, fatura e acompanha a prefeitura; a autorizada vira a fatura pelo mesmo caminho do `registerNf` | A falha não marca a fatura como emitida; a homologação nunca fatura numa Omie em produção; a OS repetida não duplica |
+| 7.4e | A tela: "Emitir pela Omie" na NF, as emissões com a etapa e a mensagem da prefeitura, retomar e desistir; a rejeitada no "Precisa de você" | Os textos e o `axe`; uma só ação primária |
+| 7.4f | A baixa na Omie: receber na Dute lança o recebimento na conta a receber da OS; estornar cancela | A baixa sai uma vez; a falha fica na fila e não desfaz o recebimento na Dute |
 | 7.5a | O motivo de perda "prazo de faturamento" no servidor, aceito só com o prazo do contrato vencido, também a partir de A faturar | Sem o prazo vencido recusa; os outros motivos seguem só antes de faturar |
 | 7.5b | A ação "Perder por prazo" na tela Autorizações, na demanda com o prazo vencido | Só a linha vencida tem a ação; o motivo vem fixo |
 | 7.5c | Contratos e Autorizações no shell do Financeiro, só leitura | O Financeiro lê sem editar itens nem preço |
 
 **Pronto quando** uma competência fecha com a armazenagem e as OS na mesma
 fatura, a NF sai pela integração e o a receber é um só.
+
+## A NFS-e pela Omie (parte 7.4)
+
+Desenho de 24/10/2026, com as respostas do Leonardo à pergunta 21 e a
+pesquisa nas páginas da Omie (`developer.omie.com.br`,
+`app.omie.com.br/api/v1/...` e `ajuda.omie.com.br`).
+
+- **Como a Omie emite a NFS-e:** pela Ordem de Serviço (`servicos/os/`
+  `IncluirOS`, com a etapa 50, e `servicos/osp/` `FaturarOS`). A
+  prefeitura processa depois. O `StatusOS` dá a situação da RPS:
+  - 001: aguardando envio;
+  - 002: na prefeitura;
+  - 003: com erro;
+  - 004: autorizada, com o número;
+  - 005: cancelada.
+  - Junto vêm o código de verificação, os links da nota e as mensagens da
+    prefeitura.
+  - A conta a receber nasce sozinha na autorização.
+- **Uma OS por fatura**, com o `cCodIntOS` igual ao id da emissão na Dute.
+  Esse é o código de idempotência: a Omie recusa o segundo com o mesmo código,
+  e a Dute então consulta a OS que já existe.
+  - Um item por demanda e um por competência da armazenagem, com o valor do
+    servidor (o mesmo do `registerNf`).
+  - O serviço do item é o que o contador cadastrou na Omie, pelo código de
+    integração (`cCodIntServico`): um para as OS e um para a armazenagem.
+  - Uma parcela, com o vencimento escolhido.
+- **O cliente** é o que já existe na Omie, achado pelo CNPJ do cadastro (o
+  `document` do cliente no Comercial). A Dute nunca cria nem altera cliente
+  na Omie. Sem o cliente lá, a emissão para antes de incluir a OS.
+- **O ambiente:**
+  - a emissão na homologação da Dute só fatura numa Omie em homologação
+    (`cAmbiente` H);
+  - a da produção, só numa em produção (P);
+  - a Dute confere no `StatusOS`, depois de incluir a OS e antes de
+    faturar; ambiente errado para a emissão.
+- **As etapas da emissão** (`nf_emissoes`): na fila, OS incluída, na
+  prefeitura, autorizada, rejeitada e parada.
+  - **Parada** é o que precisa de uma pessoa: o cliente não achado, o
+    ambiente errado, a configuração que falta ou as falhas seguidas.
+  - **Rejeitada:** a prefeitura recusou. A pessoa corrige na Omie e tenta de
+    novo (`ReenviarOS`), ou desiste (`CancelarOS`), e as demandas voltam a A
+    faturar.
+  - **Autorizada:** a fatura nasce com o número da NFS-e, pela mesma
+    transação do `registerNf`, e a emissão guarda o código de verificação e
+    os links.
+- **A rotina `runOmieSync`**, a cada 5 minutos e uma instância por vez:
+  - faz uma chamada por vez, para respeitar os limites da Omie (240 por
+    minuto por método, 4 simultâneas, o bloqueio de 60 segundos do consumo
+    redundante e o de 30 minutos depois de 10 erros);
+  - espaça as tentativas de cada emissão;
+  - para depois de 6 falhas seguidas.
+- **As chaves da API** (`app_key` e `app_secret` do aplicativo da Omie) ficam
+  no Secret Manager, como a do Resend. Sem elas, a rotina não chama a Omie, e
+  a emissão fica na fila.
+- **A liberação** é `OMIE_AMBIENTES_LIBERADOS`, só o `dute-homolog` até o
+  lançamento, com o OK do Leonardo.
+- **O CT-e** segue à mão, pelo `registerNf`.
+- **A baixa (7.4f):**
+  - receber a fatura na Dute põe na fila o recebimento na conta a receber da
+    OS (`LancarRecebimento`);
+  - estornar cancela o recebimento;
+  - a falha fica na fila e não desfaz o recebimento na Dute.
+- **O que só o Leonardo e o contador fazem:**
+  - gerar as chaves no aplicativo da Omie (só o administrador vê);
+  - usar um aplicativo de teste, ou a empresa em homologação, para o
+    `dute-homolog`;
+  - guardar as chaves no Secret Manager, pelo comando que a parte 7.4d
+    registra;
+  - o contador cadastra os dois serviços na Omie com os códigos de
+    integração `DUTE-OS` e `DUTE-ARMAZENAGEM`;
+  - o contador passa a conta corrente e a categoria de receita das OS.
 
 **Liberação.** As partes de tela seguem `FINANCEIRO_AMBIENTES_LIBERADOS`
 (só o `dute-homolog`, até a parte 4.9b). O faturamento do WMS segue como está
@@ -451,12 +525,62 @@ Feita em 23/10/2026.
   - `financeiro/navegacao.test.ts`, `modules.test.ts` e `ambientes.test.ts`:
     o menu, as rotas, os papéis e o shell.
 
+### Parte 7.4a: o cliente da Omie e a máquina da emissão
+
+Feita em 24/10/2026. Puro, sem Firestore nem rede: a 7.4c grava, e a 7.4d chama.
+
+- **`domain/omie.ts`:**
+  - monta o corpo da chamada (`call`, as chaves e o `param` numa lista);
+  - chama pelo transporte, que no teste é de mentira e na rotina é o
+    `fetch`, com 30 segundos de limite;
+  - classifica a falha:
+    - a chave inválida para tudo;
+    - o limite (429, o consumo redundante, o bloqueio de 30 minutos) só
+      espera;
+    - a instabilidade e a recusa contam como falha;
+    - o duplicado é a idempotência funcionando.
+  - A Omie devolve 500 também na recusa de negócio; por isso a recusa tenta
+    algumas vezes antes de parar.
+  - As chaves nunca saem na mensagem.
+- **`domain/emissao-omie.ts`:**
+  - as etapas;
+  - o passo de cada etapa;
+  - a OS montada da emissão: o `cCodIntOS`, o cliente, a etapa 50, um item
+    por demanda e por competência com o serviço do contador (`DUTE-OS` e
+    `DUTE-ARMAZENAGEM`) e uma parcela;
+  - o pedido de cada passo;
+  - o que a resposta e a falha fazem com a emissão;
+  - as ações de retomar e desistir.
+- **As travas da máquina:**
+  - o ambiente errado para antes de faturar;
+  - a OS já faturada segue para a prefeitura;
+  - o StatusOS sem o código da OS conta como falha, sem laço;
+  - a prefeitura que não responde em 72 horas para a emissão;
+  - seis falhas seguidas param.
+- **A liberação** `OMIE_AMBIENTES_LIBERADOS` (só o `dute-homolog`) e o
+  ambiente da Omie de cada projeto (`dute-homolog` H, `dute-prod` P).
+- **A configurar quando o contador passar:** a categoria de receita e a
+  conta corrente (`CONFIGURACAO_DA_OMIE`). Sem elas, a Omie usa o padrão.
+- **A conferir no primeiro teste com a Omie de homologação:** se o
+  `IncluirOS` aceita a OS já na etapa 50 (senão, entra o `TrocarEtapaOS`
+  antes do `FaturarOS`) e o filtro de CNPJ do `ListarClientes`.
+- **Testes:**
+  - `omie.test.ts`: cada falha no tipo certo, o corpo e as chaves fora da
+    mensagem;
+  - `emissao-omie.test.ts`:
+    - o passo de cada etapa;
+    - a OS e o pedido de cada passo;
+    - a resposta de cada passo, com o cliente, o ambiente, a prefeitura e o
+      cancelamento;
+    - o intervalo que dobra e para na sexta falha;
+    - retomar e desistir.
+
 ## Onde a Fase 7 está
 
 - Feitas: 7.0 a 7.3c e 7.5a a 7.5c.
-- **7.4 espera a pergunta 21**: o fornecedor da NF-e, da NFS-e e da
-  contabilidade. Até lá, a NF segue registrada à mão no Financeiro, também a
-  da armazenagem.
+- **7.4 em andamento,** com a pergunta 21 respondida em 24/10/2026: a
+  NFS-e pela Omie (desenho em "A NFS-e pela Omie"). Até a 7.4d, a NF segue
+  registrada à mão no Financeiro, também a da armazenagem.
 - **O "pronto quando" da fase:**
   - a armazenagem e as OS já fecham a competência na mesma fatura;
   - o a receber já é um só (`faturas`);
