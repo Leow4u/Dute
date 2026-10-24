@@ -130,11 +130,42 @@ gcloud firestore databases delete --database=recuperacao-20261021 --project dute
 
 ## Teste de restauração
 
-Uma vez, para provar que o backup diário restaura. Roda depois que o primeiro
-backup existir (`gcloud firestore backups list` com um backup `READY`). O
-Google não deixa escolher a hora, e o primeiro deve aparecer até 21/10/2026. O
-`(default)` não é tocado em nenhum passo. Os passos 1 e 3 gravam, cada um com
-o OK do Leonardo.
+Prova que o backup diário restaura: antes da primeira carga do Comercial na
+produção e, depois, a cada trimestre (`plano-de-implantacao.md`, seção 11). Um
+teste por banco, o `(default)` e o `dute-rh`. O banco de origem não é gravado
+em nenhum passo.
+
+Quem roda é o workflow `Teste de restauração`
+(`.github/workflows/teste-restauracao.yml`), por disparo manual, com o OK do
+Leonardo: Actions > Teste de restauração > Run workflow, com o banco.
+
+- **Sem marcar "executar"**, ele só mostra o backup `READY` mais novo do banco
+  e o nome do banco de teste. Comece assim.
+- **Com "executar"**, ele (`tools/teste_restauracao.py`):
+  1. apaga o banco de teste que sobrou de um teste anterior, se houver;
+  2. restaura o backup num banco novo, `teste-restauracao-<banco>-<instante>`,
+     e espera a restauração terminar (até 45 minutos);
+  3. lê os caminhos dos documentos do banco restaurado e os do banco de
+     origem no minuto cheio do backup e no seguinte, pelo PITR;
+  4. apaga o banco de teste, mesmo quando a conferência falha.
+- **O esperado** é "OK: o backup restaurou os N documentos". A diferença só
+  vale para o documento criado ou apagado dentro do minuto do backup, que a
+  leitura em minutos cheios não alcança. Qualquer outra reprova o teste.
+- **Só caminhos.** A consulta pede só o caminho de cada documento, nunca os
+  campos. O log e o resumo do job mostram só as contagens por coleção.
+- **O registro:** o resumo do job traz a linha para a tabela abaixo.
+- **A conta** é a das functions, `github-actions-functions@dute-prod`, com
+  `roles/datastore.owner` (`fase-8-rh.md`). Sem o papel, o teste falha dizendo
+  qual falta, e nada é restaurado.
+- **O backup** precisa ter menos de 7 dias, o alcance do PITR. Com mais de 48
+  horas, o job avisa que a agenda parou.
+
+### Conferir também o conteúdo, à mão
+
+O workflow confere os caminhos. Para conferir também o conteúdo (o hash dos
+campos de cada documento), rode o teste da máquina do Leonardo. O manifesto tem
+dado de produção e fica em `tmp\backup\`. Os passos 1 e 3 gravam, cada um com o
+OK do Leonardo.
 
 ```powershell
 cd C:\DEV\Dute
@@ -178,9 +209,11 @@ Anote o ID do backup `READY` mais recente e o `snapshotTime` dele.
 
    Só o `(default)` e o `dute-rh` podem sobrar na lista.
 
-O `dute-rh` passa pelo mesmo teste depois que o primeiro backup dele existir:
-no passo 1, um backup do `dute-rh`; no passo 2, `--banco dute-rh` no
-inventário do minuto cheio, que lê o banco de origem.
+À mão, o `dute-rh` usa um backup dele no passo 1 e `--banco dute-rh` no
+inventário do minuto cheio do passo 2. Os manifestos dele têm CPF e exames:
+apague-os de `tmp\backup\` depois de comparar.
+
+### Registro dos testes
 
 | Data | Banco | Backup (`snapshotTime`) | Resultado |
 |---|---|---|---|

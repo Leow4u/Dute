@@ -106,9 +106,12 @@ documentação de produto e operação está em `docs/`.
     Run `dute-app` e `dutelog-site`, Load Balancer com IP `34.54.243.247`).
     Certificados do Certificate Manager; a renovação depende dos CNAMEs
     `_acme-challenge_drmxqhwlpiaruyad*` na Hostinger, que não podem sair.
-    Firestore com PITR de 7 dias e backup diário de 14 dias desde 20/10/2026;
-    restaurar é sempre para um banco novo, com o OK do Leonardo
-    (`docs/plataforma/backup-e-recuperacao.md`).
+    Firestore com PITR de 7 dias e backup diário de 14 dias desde 20/10/2026
+    (o `dute-rh`, desde 24/10/2026); restaurar é sempre para um banco novo,
+    com o OK do Leonardo (`docs/plataforma/backup-e-recuperacao.md`). O teste
+    de restauração é o workflow manual `Teste de restauração`
+    (`tools/teste_restauracao.py`): só ele cria e apaga o banco
+    `teste-restauracao-*`, e lê só os caminhos dos documentos.
   - `dute-homolog`: homologação. Recebe cada push em `main` (Cloud Run
     `dute-app`, endereço `run.app`).
   - `dute-btg`: produção anterior, congelada desde o corte da Fase 1

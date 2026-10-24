@@ -140,11 +140,14 @@ def scan_documents(
     database: str = DATABASE,
     read_time: str | None = None,
     page_size: int = PAGE_SIZE,
+    keys_only: bool = False,
 ) -> Iterator[tuple[dict[str, Any], str]]:
     """Todos os documentos do banco, em ordem de caminho, no mesmo readTime.
 
     Sem read_time, a primeira página fixa o instante e as outras o repetem:
     o inventário inteiro é um retrato só, mesmo com escrita acontecendo.
+    Com keys_only, a consulta pede só o caminho (`__name__`): os campos não
+    saem do Firestore.
     """
     url = f"{FIRESTORE_API}/{documents_root(project_id, database)}:runQuery"
     last_name: str | None = None
@@ -154,6 +157,8 @@ def scan_documents(
             "orderBy": [{"field": {"fieldPath": "__name__"}, "direction": "ASCENDING"}],
             "limit": page_size,
         }
+        if keys_only:
+            query["select"] = {"fields": [{"fieldPath": "__name__"}]}
         if last_name:
             query["startAt"] = {"values": [{"referenceValue": last_name}], "before": False}
         payload: dict[str, Any] = {"structuredQuery": query}
