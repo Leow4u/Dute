@@ -80,6 +80,19 @@ export function financeiroLiberado(projectId: string | null | undefined): boolea
 export const FINANCEIRO_LIBERADO = financeiroLiberado(import.meta.env.VITE_FIREBASE_PROJECT_ID);
 
 /**
+ * A NFS-e pela Omie (Fase 7, parte 7.4e): a mesma lista de
+ * OMIE_AMBIENTES_LIBERADOS (functions/financeiro/src/domain/emissao-omie.ts),
+ * travada pelo platform-lists.test.ts. Só vale onde o Financeiro está ligado.
+ */
+export const OMIE_AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog"];
+
+export function omieLiberada(projectId: string | null | undefined): boolean {
+  return financeiroLiberado(projectId) && OMIE_AMBIENTES_LIBERADOS.includes(String(projectId ?? "").trim());
+}
+
+export const OMIE_LIBERADA = omieLiberada(import.meta.env.VITE_FIREBASE_PROJECT_ID);
+
+/**
  * Liberação própria da memória da Dute (docs/plataforma/fase-5-memoria.md).
  * A rotina e as callables de functions/core recusam fora de
  * MEMORIA_AMBIENTES_LIBERADOS (functions/core/src/domain/liberacao.ts,

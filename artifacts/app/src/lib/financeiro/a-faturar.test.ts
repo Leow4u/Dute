@@ -17,11 +17,13 @@ import {
   linhaDaArmazenagem,
   numerosDaFila,
   pagamentoDoContrato,
+  pedidoDaEmissao,
   pedidoDaNf,
   pendenciasDoFinanceiro,
   podeMarcarNaNf,
   problemasDaNf,
   rotuloDaLinha,
+  textoDaEmissao,
   textoDoRegistro,
   valorDaFonte,
   type AutorizacaoDoFinanceiro,
@@ -224,7 +226,7 @@ describe("a armazenagem do WMS na fila (parte 7.2b)", () => {
   const demanda = linhaAFaturar(demandaDoFinanceiro("10060", { customer_code: "ITAU", customer_name: "Itaú Unibanco", etapa: "a_faturar", validacao: { rv: 0, autorizacao: "nenhuma" } })!, new Map(), 50_000);
 
   it("só a emitida e fora de NF entra, pelo total da foto da emissão", () => {
-    expect(competenciaDoFinanceiro("ITAU__2026-09", EMITIDA)).toEqual({ periodoId: "ITAU__2026-09", customerCode: "ITAU", competencia: "2026-09", emitidaEm: "2026-10-02T12:00:00.000Z", valorCents: 7_508 });
+    expect(competenciaDoFinanceiro("ITAU__2026-09", EMITIDA)).toEqual({ periodoId: "ITAU__2026-09", customerCode: "ITAU", competencia: "2026-09", emitidaEm: "2026-10-02T12:00:00.000Z", valorCents: 7_508, emissaoNf: null });
     expect(competenciaDoFinanceiro("ITAU__2026-09", { ...EMITIDA, status: "aberto" })).toBeNull();
     expect(competenciaDoFinanceiro("ITAU__2026-09", { ...EMITIDA, status: "pago" })).toBeNull();
     expect(competenciaDoFinanceiro("ITAU__2026-09", { ...EMITIDA, faturamento: { fatura_id: "fat_1" } })).toBeNull();
@@ -279,3 +281,45 @@ describe("as callables", () => {
     expect([...CALLABLES_DO_FINANCEIRO].sort()).toEqual([...exportadas].sort());
   });
 });
+
+describe("a NFS-e pela Omie na fila (parte 7.4e)", () => {
+  const RESERVA = { emissao_nf: { id: "nfe_0123456789abcdef0123", desde: "2026-10-23T14:00:00.000Z" } };
+  const pronta = linhaAFaturar(demandaDoFinanceiro("10060", { customer_code: "ITAU", customer_name: "Itaú Unibanco", etapa: "a_faturar", validacao: { rv: 0, autorizacao: "nenhuma" } })!, new Map(), 50_000);
+  const reservada = linhaAFaturar(demandaDoFinanceiro("10061", { customer_code: "ITAU", customer_name: "Itaú Unibanco", etapa: "a_faturar", validacao: { rv: 0, autorizacao: "nenhuma" }, ...RESERVA })!, new Map(), 70_000);
+  const armazenagem = linhaDaArmazenagem(competenciaDoFinanceiro("ITAU__2026-09", { customer_code: "ITAU", competencia: "2026-09", status: "emitido", invoice_snapshot: { total_cents: 7_508 } })!);
+  const armazenagemReservada = linhaDaArmazenagem(competenciaDoFinanceiro("ITAU__2026-08", { customer_code: "ITAU", competencia: "2026-08", status: "emitido", invoice_snapshot: { total_cents: 6_000 }, ...RESERVA })!);
+
+  it("a demanda e a competência reservadas ficam Na emissão: não entram na NF nem contam como a faturar", () => {
+    expect([reservada.situacao, armazenagemReservada.situacao]).toEqual(["na_emissao", "na_emissao"]);
+    expect(reservada.demanda.emissaoNf).toBe("nfe_0123456789abcdef0123");
+    expect(podeMarcarNaNf(reservada, [])).toBe(false);
+    expect(numerosDaFila([pronta, reservada]).prontas).toBe(1);
+    const pendencias = pendenciasDoFinanceiro([reservada, armazenagemReservada], new Date("2026-10-23T15:00:00.000Z"), "/financeiro/a-faturar");
+    expect(pendencias).toEqual([]);
+  });
+
+  it("pela Omie, o formulário pede só o vencimento de hoje em diante, a forma e a observação", () => {
+    const form = { ...formInicial("2026-10-23", null, true), vencimento: "2026-11-20" };
+    expect(form.via).toBe("omie");
+    expect(formInicial("2026-10-23", null).via).toBe("fora");
+    expect(problemasDaNf(form, [pronta], "2026-10-23")).toEqual([]);
+    expect(problemasDaNf({ ...form, vencimento: "2026-10-22" }, [pronta], "2026-10-23")).toEqual(["O vencimento vem de hoje em diante."]);
+    // Emitida fora, volta a pedir o número da NF.
+    expect(problemasDaNf({ ...form, via: "fora" }, [pronta], "2026-10-23")).toContain("Informe o número da NF, só dígitos.");
+  });
+
+  it("o pedido da emissão é o do registro sem a NF; a confirmação diz o que foi pedido à Omie", () => {
+    const form = { ...formInicial("2026-10-23", null, true), vencimento: "2026-11-20", observacao: " Pedido 42 " };
+    expect(pedidoDaEmissao(form, [pronta, armazenagem], "k-1")).toEqual({
+      idempotency_key: "k-1",
+      demandas: ["10060"],
+      armazenagem: ["ITAU__2026-09"],
+      vencimento: "2026-11-20",
+      forma: "boleto",
+      observacao: "Pedido 42",
+    });
+    expect(textoDaEmissao([pronta, armazenagem])).toBe("NFS-e pedida à Omie: 1 demanda e a armazenagem de 09/2026");
+    expect(textoDaEmissao([pronta])).toBe("NFS-e pedida à Omie: 1 demanda");
+  });
+});
+

@@ -238,3 +238,67 @@ describe("A faturar", () => {
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 });
+
+describe("A faturar com a NFS-e pela Omie (parte 7.4e)", () => {
+  const reservada = linha("10070", { titulo: "Mudança do 3º andar", emissao_nf: { id: "nfe_0123456789abcdef0123" } }, 80_000);
+  const pelaOmie = { ...formInicial(HOJE, null, true), vencimento: "2026-11-20" };
+  const omie = (form = pelaOmie, extra: Partial<AFaturarViewProps> = {}) =>
+    render({ omie: true, linhas: [...LINHAS, reservada], painel: { aberto: true, marcadas: ["10045"], form, resultado: null, erro: null }, ...extra });
+
+  it("o painel escolhe a via; pela Omie, só o vencimento, a forma e a observação, e a ação é Emitir pela Omie", () => {
+    const painel = secao(omie(), "Faturar");
+    const textos = textosDaTela(painel);
+    expect(textos.slice(0, 6)).toEqual(["Faturar", "Cliente", "Itaú Unibanco", "Como a NF sai", "Pela Omie", "Emitida fora"]);
+    for (const fora of ["Número da NF", "Série", "Emissão"]) expect(textos).not.toContain(fora);
+    expect(painel).toMatch(/id="nf-vencimento"[^>]*min="2026-10-23"|min="2026-10-23"[^>]*id="nf-vencimento"/);
+    const principais = omie().match(PRINCIPAL) ?? [];
+    expect(principais).toHaveLength(1);
+    expect(textosDaTela(principais[0] ?? "")).toEqual(["Emitir pela Omie"]);
+  });
+
+  it("emitida fora (o CT-e), o painel volta a pedir a NF e a ação é Registrar NF", () => {
+    const html = omie({ ...pelaOmie, via: "fora", numero: "77" });
+    const textos = textosDaTela(secao(html, "Faturar"));
+    for (const campo of ["Número da NF", "Série", "Emissão", "Vencimento"]) expect(textos).toContain(campo);
+    expect(textosDaTela((html.match(PRINCIPAL) ?? [])[0] ?? "")).toEqual(["Registrar NF"]);
+  });
+
+  it("a demanda reservada espera Na emissão da NFS-e, sem caixa; fechado, o cabeçalho abre Faturar", () => {
+    const esperando = secao(omie(), "Esperando");
+    expect(textosDaTela(esperando)).toContain("Na emissão da NFS-e");
+    expect(esperando).not.toContain("Incluir");
+    const fechado = render({ omie: true, painel: FECHADO });
+    expect(textosDaTela(fechado)).toContain("Faturar");
+    expect(fechado.match(PRINCIPAL) ?? []).toHaveLength(0);
+  });
+
+  it("sem legenda e no axe, pela Omie e emitida fora", async () => {
+    const permitidos = [
+      "A faturar",
+      "Prontas para faturar",
+      "Esperando",
+      "Faturar",
+      "Como a NF sai",
+      "Pela Omie",
+      "Emitida fora",
+      "Emitir pela Omie",
+      ...PAINEL,
+      /^\d+$/,
+      /^R\$ [\d.]+,\d{2}$/,
+      "—",
+      /^\d+( – RV\d{2})?$/,
+      /^(Serviço \d+|Desmontagem e transporte de mobiliário|Transporte de arquivo deslizante|Medição de outubro|Mudança do 3º andar)$/,
+      /^(Itaú Unibanco|Banco Safra)$/,
+      /^((Itaú Unibanco|Banco Safra) · )?(RV \d+|Medição \d{2}\/\d{4}) · (Pedido \d+ · aceite [\w-]+|Sem exigência de autorização|Sem autorização registrada)$/,
+      /^\d+ dias?$/,
+      "Medição pendente",
+      "Aguardando autorização",
+      "Na emissão da NFS-e",
+    ];
+    for (const html of [omie(), omie({ ...pelaOmie, via: "fora" })]) {
+      expect(textosForaDaLista(html, permitidos)).toEqual([]);
+      expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+    }
+  });
+});
+

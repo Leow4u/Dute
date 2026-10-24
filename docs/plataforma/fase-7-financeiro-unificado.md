@@ -117,8 +117,9 @@ plano ordena as partes. Escrito em 23/10/2026.
 | 7.4b | A reserva: a demanda e a competência numa emissão (`emissao_nf`) não se registram à mão nem se emitem de novo, e o Comercial não as tira de A faturar (perder, as outras ações e cancelar a autorização) | Cada caminho recusa a reservada; a sem reserva segue igual |
 | 7.4c | A emissão gravada: `emitNfOmie` confere como o `registerNf`, reserva e põe na fila; retomar e desistir; a leitura das emissões; os eventos | A emissão é idempotente; desistir libera a reserva; o evento não leva valor |
 | 7.4d | A rotina `runOmieSync`: acha o cliente pelo CNPJ, inclui a OS, confere o ambiente, fatura e acompanha a prefeitura; a autorizada vira a fatura pelo mesmo caminho do `registerNf` | A falha não marca a fatura como emitida; a homologação nunca fatura numa Omie em produção; a OS repetida não duplica |
-| 7.4e | A tela: "Emitir pela Omie" na NF, as emissões com a etapa e a mensagem da prefeitura, retomar e desistir; a rejeitada no "Precisa de você" | Os textos e o `axe`; uma só ação primária |
-| 7.4f | A baixa na Omie: receber na Dute lança o recebimento na conta a receber da OS; estornar cancela | A baixa sai uma vez; a falha fica na fila e não desfaz o recebimento na Dute |
+| 7.4e | A faturar: o painel escolhe "Pela Omie" ou "Emitida fora"; pela Omie, pede a emissão; a demanda e a competência reservadas esperam "Na emissão da NFS-e" | Os textos e o `axe`; uma só ação primária; a reservada não entra na NF |
+| 7.4f | A tela Emissões: a etapa, a mensagem da prefeitura, a NFS-e autorizada, retomar e desistir; a parada e a rejeitada no "Precisa de você" | Os textos e o `axe`; uma só ação primária |
+| 7.4g | A baixa na Omie: receber na Dute lança o recebimento na conta a receber da OS; estornar cancela | A baixa sai uma vez; a falha fica na fila e não desfaz o recebimento na Dute |
 | 7.5a | O motivo de perda "prazo de faturamento" no servidor, aceito só com o prazo do contrato vencido, também a partir de A faturar | Sem o prazo vencido recusa; os outros motivos seguem só antes de faturar |
 | 7.5b | A ação "Perder por prazo" na tela Autorizações, na demanda com o prazo vencido | Só a linha vencida tem a ação; o motivo vem fixo |
 | 7.5c | Contratos e Autorizações no shell do Financeiro, só leitura | O Financeiro lê sem editar itens nem preço |
@@ -184,7 +185,7 @@ pesquisa nas páginas da Omie (`developer.omie.com.br`,
 - **A liberação** é `OMIE_AMBIENTES_LIBERADOS`, só o `dute-homolog` até o
   lançamento, com o OK do Leonardo.
 - **O CT-e** segue à mão, pelo `registerNf`.
-- **A baixa (7.4f):**
+- **A baixa (7.4g):**
   - receber a fatura na Dute põe na fila o recebimento na conta a receber da
     OS (`LancarRecebimento`);
   - estornar cancela o recebimento;
@@ -718,6 +719,31 @@ não chama a Omie sem as chaves.
     anda (o caso falha com a rotina que só esperava).
 - **`emissao-omie.test.ts`:** a parada sem as chaves, a retomada e a
   desistência dela.
+
+### Parte 7.4e: A faturar pela Omie
+
+Feita em 24/10/2026. Só onde a emissão pela Omie está liberada
+(`OMIE_LIBERADA` no app, a mesma lista do servidor, dentro da do
+Financeiro).
+
+- **O painel** passa a "Faturar" e escolhe como a NF sai:
+  - "Pela Omie": só o vencimento (de hoje em diante), a forma e a
+    observação; a ação é "Emitir pela Omie" (`emitNfOmie`);
+  - "Emitida fora" (o CT-e, que a Omie não emite): o número, a série e a
+    emissão, como antes; a ação é "Registrar NF" (`registerNf`).
+  - Trocar a via troca a chave de idempotência: é outro pedido.
+- **A confirmação** diz o que foi pedido à Omie ("NFS-e pedida à Omie: 1
+  demanda e a armazenagem de 09/2026").
+- **A demanda e a competência reservadas** (`emissao_nf`) esperam com a
+  marca "Na emissão da NFS-e", sem caixa, e não contam no "Precisa de você"
+  como a faturar.
+- **Fora da liberação** nada muda: o painel é o "Registrar NF" de antes.
+- **As travas:** `platform-lists.test.ts` compara a liberação do app com a
+  do servidor e as callables do Financeiro com as do `index.ts`.
+- **Testes:** `a-faturar.test.ts` (a reserva, o formulário pela Omie, o
+  pedido e a confirmação) e `a-faturar-view.test.tsx` (a via, os campos de
+  cada uma, uma só ação primária, a reservada esperando, os textos e o
+  `axe`).
 
 ## Onde a Fase 7 está
 
