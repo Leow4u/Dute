@@ -45,10 +45,11 @@ before(() => {
       assinadas.push(`subir ${contentType} ${caminho}`);
       return `https://assinada.test/subir/${caminho}`;
     },
-    async urlParaAbrir(caminho) {
-      assinadas.push(`abrir ${caminho}`);
+    async urlParaAbrir(caminho, _expiraEm, geracao) {
+      assinadas.push(`abrir ${caminho}${geracao ? `#${geracao}` : ""}`);
       return `https://assinada.test/abrir/${caminho}`;
     },
+    apagar: doBucket.apagar,
   };
 });
 
@@ -89,6 +90,16 @@ async function subir(registroId: string, conteudo: Buffer = PDF, contentType = "
   return { envio, caminho };
 }
 
+async function geracaoNoBucket(caminho: string): Promise<string> {
+  const [metadados] = await getStorage(app).bucket().file(caminho).getMetadata();
+  return String(metadados.generation ?? "");
+}
+
+async function existe(caminho: string): Promise<boolean> {
+  const [sim] = await getStorage(app).bucket().file(caminho).exists();
+  return sim;
+}
+
 async function eventos(tipo: string) {
   const snapshot = await rh.collection("events").where("type", "==", tipo).get();
   return snapshot.docs.map((doc) => doc.data());
@@ -109,7 +120,9 @@ describe("os arquivos da ficha", () => {
     assert.deepEqual(anexado, { id: registro.id, edicao: 2, arquivo_id: envio.arquivo_id });
     assert.deepEqual((await attachRhFileFor(rh, RH, anexo, armazem)).replayed, true);
     const gravado = (await rh.doc(`registros/${registro.id}`).get()).data();
-    assert.deepEqual(gravado?.arquivo, { id: envio.arquivo_id, caminho, content_type: "application/pdf", tamanho: PDF.length });
+    const geracao = await geracaoNoBucket(caminho);
+    assert.match(geracao, /^\d+$/);
+    assert.deepEqual(gravado?.arquivo, { id: envio.arquivo_id, caminho, content_type: "application/pdf", tamanho: PDF.length, geracao });
     const [evento] = await eventos("rh.file_attached");
     assert.deepEqual(evento.payload, { id: registro.id, colaborador_id: ANA, categoria: "exame", tipo: "periodico", substituiu: false });
     assert.equal(JSON.stringify(evento).includes(envio.arquivo_id), false);
@@ -128,6 +141,8 @@ describe("os arquivos da ficha", () => {
     const { envio: outro, caminho } = await subir(registro.id);
     await getStorage(app).bucket().file(caminho).save(Buffer.from("<html>"), { contentType: "text/html" });
     await recusa(attachRhFileFor(rh, RH, { ...anexo, idempotency_key: "a-2", arquivo_id: outro.arquivo_id }, armazem), "failed-precondition", /não é do tipo informado/);
+    // O arquivo recusado sai do bucket.
+    assert.equal(await existe(caminho), false);
 
     const { envio: certo } = await subir(registro.id);
     await recusa(attachRhFileFor(rh, RH, { ...anexo, idempotency_key: "a-3", arquivo_id: certo.arquivo_id, expected_edicao: 2 }, armazem), "failed-precondition", /foi atualizado/);
@@ -161,10 +176,26 @@ describe("os arquivos da ficha", () => {
       const aberto = await openRhFileFor(rh, quem, { registro_id: registro.id }, armazem, AGORA);
       assert.deepEqual(aberto, { url: `https://assinada.test/abrir/${caminho}`, content_type: "application/pdf", expira_em: "2026-10-23T15:05:00.000Z" });
     }
+    // A abertura pede a geração que o anexo conferiu.
+    assert.deepEqual(assinadas.filter((linha) => linha.startsWith("abrir")), Array(3).fill(`abrir ${caminho}#${await geracaoNoBucket(caminho)}`));
     assert.deepEqual((await eventos("rh.file_opened")).map((evento) => evento.actor.role).sort(), ["admin", "owner", "rh"]);
 
     await archiveRhRecordFor(rh, RH, { idempotency_key: "o-2", id: registro.id, expected_edicao: 2 });
     assert.equal((await openRhFileFor(rh, OWNER, { registro_id: registro.id }, armazem, AGORA)).content_type, "application/pdf");
     await recusa(requestRhUploadFor(rh, RH, { registro_id: registro.id, content_type: "application/pdf", tamanho: 10 }, armazem, AGORA), "failed-precondition", /está arquivado/);
+  });
+
+  it("o arquivo regravado pela URL de envio depois do anexo não toma o lugar do conferido: a abertura segue pedindo a geração dele", async () => {
+    const registro = await exame();
+    const { envio, caminho } = await subir(registro.id);
+    await attachRhFileFor(rh, RH, { idempotency_key: "g-1", registro_id: registro.id, arquivo_id: envio.arquivo_id, content_type: "application/pdf", expected_edicao: 1 }, armazem);
+    const conferida = await geracaoNoBucket(caminho);
+    // A mesma URL de envio, ainda valendo, regrava o caminho com outro conteúdo.
+    await getStorage(app).bucket().file(caminho).save(Buffer.from("%PDF-1.4\noutro\n"), { contentType: "application/pdf" });
+    assert.notEqual(await geracaoNoBucket(caminho), conferida);
+    assert.equal((await rh.doc(`registros/${registro.id}`).get()).data()?.arquivo.geracao, conferida);
+    assinadas = [];
+    await openRhFileFor(rh, RH, { registro_id: registro.id }, armazem, AGORA);
+    assert.deepEqual(assinadas, [`abrir ${caminho}#${conferida}`]);
   });
 });
