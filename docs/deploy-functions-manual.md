@@ -335,6 +335,43 @@ precisa de `roles/firebaserules.firestoreServiceAgent`. O `dute-homolog` e o
 `dute-prod` já têm; num projeto novo, quem concede é uma pessoa com Owner, porque
 a conta do CI não pode mexer em IAM.
 
+### Function com segredo (Secret Manager)
+
+A function que declara um segredo (`secrets: [...]`) só publica se o segredo
+existe no projeto. Hoje são as chaves da Omie na `runOmieSync` (parte 7.4 da
+Fase 7) e a do Resend na `runNotifications` (parte 4.6a da Fase 4), as duas
+ainda sem segredo declarado. Na publicação, o `firebase deploy`:
+
+- confere a versão do segredo;
+- dá à conta de runtime das functions
+  (`<número do projeto>-compute@developer.gserviceaccount.com`) o papel
+  `roles/secretmanager.secretAccessor` naquele segredo.
+
+A `github-actions-functions` não tem papel no Secret Manager, e sem ele a
+publicação falha nesse passo. Por isso, antes do PR que declara o segredo,
+quem tem Owner faz, nos dois projetos e para cada segredo:
+
+- cria o segredo;
+- dá à conta do CI a administração só daquele segredo, não do projeto.
+
+```powershell
+cd C:\DEV\Dute
+foreach ($p in @("dute-homolog", "dute-prod")) {
+  foreach ($segredo in @("OMIE_APP_KEY", "OMIE_APP_SECRET")) {
+    firebase functions:secrets:set $segredo --project $p
+    gcloud secrets add-iam-policy-binding $segredo --project $p --member="serviceAccount:github-actions-functions@$p.iam.gserviceaccount.com" --role=roles/secretmanager.admin --condition=None
+  }
+}
+```
+
+- O `secrets:set` pede o valor de cada um.
+- Na produção vão as chaves de produção. A homologação nunca emite numa Omie
+  de produção: a emissão confere o ambiente antes de faturar.
+- Para o Resend, a lista é só `RESEND_API_KEY`.
+- Sem o segredo num dos projetos, a publicação daquele ambiente falha e nada
+  mais sobe. Por isso o segredo nasce nos dois antes do PR, também na
+  produção, que só publica com o OK do Leonardo.
+
 ### Pré-requisito: criar a identidade do job (manual, uma vez)
 
 O classificador do Claude Code bloqueia IaC apply (criar service account/IAM)
