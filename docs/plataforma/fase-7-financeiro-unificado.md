@@ -1033,6 +1033,24 @@ Feita em 24/10/2026, a partir da mesma revisão.
     fatura da NFS-e 815, e a NFS-e que já tem fatura para a emissão e não
     se desiste. Os dois casos falham com o código antigo.
 
+### Correção: a rotina da Omie roda uma passada por vez
+
+Feita em 24/10/2026, a partir da mesma revisão. A `runOmieSync` tinha
+`maxInstances: 1`, mas não a concorrência.
+
+- **O problema:** na segunda geração, uma função de 256 MiB recebe 1 CPU e
+  a concorrência padrão de 80. A mesma instância aceitava a passada seguinte
+  do Cloud Scheduler com a anterior ainda chamando a Omie, e uma passada leva
+  até 30 segundos por chamada. O Cloud Scheduler também pode entregar a mesma
+  chamada duas vezes.
+  - As duas passadas liam as mesmas emissões e baixas e mandavam a mesma
+    chamada que grava.
+  - A edição só guarda a gravação que chega primeiro.
+- **A correção:** `concurrency: 1`, com a instância única: a passada que
+  chega com outra rodando fica de fora, e a seguinte vem em 5 minutos.
+- **Teste:** `callables.test.ts` trava `maxInstances: 1` e `concurrency: 1`
+  na declaração da rotina. Falha com o código antigo.
+
 ## Onde a Fase 7 está
 
 - Feitas: 7.0 a 7.3c, 7.4a a 7.4i e 7.5a a 7.5c.
