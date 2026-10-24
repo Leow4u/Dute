@@ -49,4 +49,9 @@ describe("a rotina da Omie", () => {
     assert.match(declaracao, /\bmaxInstances: 1\b/);
     assert.match(declaracao, /\bconcurrency: 1\b/);
   });
+
+  it("recebe as chaves da API do Secret Manager, declaradas só onde a Omie está liberada", () => {
+    const declaracao = index.match(/^export const runOmieSync = onSchedule\(\{([^}]*)\}/m)?.[1] ?? "";
+    assert.match(declaracao, /\bsecrets: segredosDaOmie\(PROJECT_ID\)/);
+  });
 });

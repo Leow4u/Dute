@@ -699,12 +699,13 @@ não chama a Omie sem as chaves.
   - gerar as chaves no aplicativo da Omie (Omie › Aplicativos, perfil
     administrador), num aplicativo de teste ou na empresa em homologação
     para o `dute-homolog`;
-  - guardar as duas chaves no Secret Manager dos dois projetos (na
-    produção, as de produção) e dar à conta do CI a administração só
-    desses dois segredos. O comando está em `docs/deploy-functions-manual.md`,
-    "Function com segredo": sem o papel no segredo, a publicação falha ao
-    dar acesso à conta de runtime.
-  - Com os segredos criados nos dois, uma parte pequena declara
+  - guardar as duas chaves no Secret Manager de cada projeto onde a Omie
+    está liberada (hoje o `dute-homolog`, com as de um aplicativo de teste;
+    na produção, quando for liberada lá, as da empresa real) e dar à conta
+    do CI a administração só desses dois segredos. O passo a passo está em
+    `docs/deploy-functions-manual.md`, "Function com segredo": sem o papel
+    no segredo, a publicação falha ao dar acesso à conta de runtime.
+  - Com os segredos criados, uma parte pequena declara
     `secrets: ["OMIE_APP_KEY", "OMIE_APP_SECRET"]` no `runOmieSync`, como
     no Resend. Antes disso, a publicação não pode citar segredo que não
     existe.
@@ -1137,6 +1138,42 @@ Feita em 24/10/2026, só no roteiro.
   tem o comando que cria cada segredo nos dois projetos e dá à conta do CI a
   administração só daquele segredo. A parte 7.4d, a 4.6a (o Resend) e o
   roteiro do lançamento apontam para ele.
+
+### As chaves da Omie na rotina
+
+Só entra depois de as duas chaves existirem no Secret Manager do
+`dute-homolog`, com a conta do CI administrando cada segredo
+(`docs/deploy-functions-manual.md`, "Function com segredo"). Antes disso, a
+publicação da homologação falha ao conferir o segredo. As chaves do
+aplicativo de teste estão lá desde 24/10/2026: o Leonardo as guardou pelo
+`firebase functions:secrets:set`, com o papel da conta do CI em cada uma.
+
+- **A declaração só onde a Omie está liberada:** a `runOmieSync` declara
+  `segredosDaOmie(PROJECT_ID)`.
+  - Na publicação, o `firebase deploy` passa o projeto de destino ao código
+    (`GCLOUD_PROJECT`), e só o `dute-homolog` declara as duas chaves.
+  - O `dute-prod` não precisa delas até a Omie ser liberada lá: o PR que
+    põe o projeto na `OMIE_AMBIENTES_LIBERADOS` passa a declará-las, e as
+    chaves da empresa real nascem antes dele.
+  - A rotina lê as chaves como antes, e a chave vazia continua parando a
+    emissão e a baixa em `sem_chaves`.
+- **As chaves da homologação** são de um aplicativo de teste da Omie (Meus
+  Aplicativos › + Novo Aplicativo › Testar gratuitamente; a chave em Resumo
+  do App › Chave de Integração), com dados de demonstração e nota sem valor
+  fiscal.
+  - O aplicativo de teste vale 7 dias; a Omie estende por e-mail
+    (ajuda@omie.com.br).
+  - As chaves da empresa real ficam para a produção, porque a OS de teste
+    nasce na Omie antes de a emissão conferir o ambiente.
+- **Na homologação:** a primeira passada depois da publicação acha o
+  cliente pelo CNPJ. As emissões paradas em `sem_chaves` voltam com
+  "Tentar de novo".
+- **Testes:**
+  - `emissao-omie.test.ts`: as chaves só no projeto liberado.
+  - `callables.test.ts`: a rotina declara pelo `segredosDaOmie`.
+  - O manifesto da publicação, conferido com a function compilada: o
+    `dute-homolog` declara as duas chaves, e o `dute-prod` e o `dute-btg`
+    nenhuma.
 
 ## Onde a Fase 7 está
 

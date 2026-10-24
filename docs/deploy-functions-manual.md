@@ -338,9 +338,16 @@ a conta do CI não pode mexer em IAM.
 ### Function com segredo (Secret Manager)
 
 A function que declara um segredo (`secrets: [...]`) só publica se o segredo
-existe no projeto. Hoje são as chaves da Omie na `runOmieSync` (parte 7.4 da
-Fase 7) e a do Resend na `runNotifications` (parte 4.6a da Fase 4), as duas
-ainda sem segredo declarado. Na publicação, o `firebase deploy`:
+existe no projeto. São duas:
+
+- A `runOmieSync` (parte 7.4 da Fase 7) declara as chaves da Omie só onde a
+  Omie está liberada (`segredosDaOmie`, pela `OMIE_AMBIENTES_LIBERADOS`), hoje
+  só o `dute-homolog`. Na homologação vão as chaves de um aplicativo de teste
+  da Omie, e na produção, quando a Omie for liberada lá, as da empresa real.
+- A `runNotifications` (parte 4.6a da Fase 4), quando declarar a do Resend,
+  nos dois projetos.
+
+Na publicação, o `firebase deploy`:
 
 - confere a versão do segredo;
 - dá à conta de runtime das functions
@@ -349,27 +356,37 @@ ainda sem segredo declarado. Na publicação, o `firebase deploy`:
 
 A `github-actions-functions` não tem papel no Secret Manager, e sem ele a
 publicação falha nesse passo. Por isso, antes do PR que declara o segredo,
-quem tem Owner faz, nos dois projetos e para cada segredo:
+quem tem Owner faz, em cada projeto que o declara e para cada segredo:
 
 - cria o segredo;
 - dá à conta do CI a administração só daquele segredo, não do projeto.
 
+Pelo console, em `https://console.cloud.google.com/security/secret-manager?project=<projeto>`:
+
+1. **Criar secret**, com o nome (por exemplo `OMIE_APP_KEY`) e o valor.
+2. No secret criado, aba **Permissões** › **Conceder acesso**: o principal
+   `github-actions-functions@<projeto>.iam.gserviceaccount.com` com o papel
+   **Administrador do Secret Manager**.
+
+Ou pelo terminal, aqui com as chaves da Omie no `dute-homolog`:
+
 ```powershell
 cd C:\DEV\Dute
-foreach ($p in @("dute-homolog", "dute-prod")) {
-  foreach ($segredo in @("OMIE_APP_KEY", "OMIE_APP_SECRET")) {
-    firebase functions:secrets:set $segredo --project $p
-    gcloud secrets add-iam-policy-binding $segredo --project $p --member="serviceAccount:github-actions-functions@$p.iam.gserviceaccount.com" --role=roles/secretmanager.admin --condition=None
-  }
+$p = "dute-homolog"
+foreach ($segredo in @("OMIE_APP_KEY", "OMIE_APP_SECRET")) {
+  firebase functions:secrets:set $segredo --project $p
+  gcloud secrets add-iam-policy-binding $segredo --project $p --member="serviceAccount:github-actions-functions@$p.iam.gserviceaccount.com" --role=roles/secretmanager.admin --condition=None
 }
 ```
 
-- O `secrets:set` pede o valor de cada um.
-- Na produção vão as chaves de produção. A homologação nunca emite numa Omie
-  de produção: a emissão confere o ambiente antes de faturar.
-- Para o Resend, a lista é só `RESEND_API_KEY`.
-- Sem o segredo num dos projetos, a publicação daquele ambiente falha e nada
-  mais sobe. Por isso o segredo nasce nos dois antes do PR, também na
+- O `secrets:set` pede o valor de cada um. Os valores nunca vão para o
+  repositório nem para o chat.
+- A homologação nunca emite numa Omie de produção: a emissão confere o
+  ambiente antes de faturar. Mas a OS de teste nasce antes da conferência,
+  por isso a homologação usa um aplicativo de teste da Omie.
+- Para o Resend, a lista é só `RESEND_API_KEY`, nos dois projetos.
+- Sem o segredo num projeto que o declara, a publicação daquele ambiente
+  falha e nada mais sobe. Por isso o segredo nasce antes do PR, também na
   produção, que só publica com o OK do Leonardo.
 
 ### Pré-requisito: criar a identidade do job (manual, uma vez)

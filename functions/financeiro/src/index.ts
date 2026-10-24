@@ -7,7 +7,7 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { actOnNfSettlementFor, listNfSettlementsFor } from "./domain/baixa-gravacao.js";
 import { advanceFaturaFor } from "./domain/cobranca-gravacao.js";
 import { actOnNfEmissionFor, emitNfOmieFor, listNfEmissionsFor } from "./domain/emissao-gravacao.js";
-import { omieLiberada } from "./domain/emissao-omie.js";
+import { omieLiberada, segredosDaOmie } from "./domain/emissao-omie.js";
 import { transportePeloFetch } from "./domain/omie.js";
 import { runOmieBaixasFor, runOmieSyncFor } from "./domain/omie-rotina.js";
 import { registerNfFor } from "./domain/fatura-gravacao.js";
@@ -78,15 +78,16 @@ export const listNfSettlements = onCall(async (request) => {
 /**
  * A cada 5 minutos: cada emissão da NFS-e pela Omie que é hora de andar dá um
  * passo (parte 7.4d), e depois cada baixa de pagamento (parte 7.4g). As
- * chaves da API vêm do Secret Manager (OMIE_APP_KEY e
- * OMIE_APP_SECRET), declaradas na função só quando os segredos existirem;
- * sem elas, a rotina não chama a Omie, e a emissão e a baixa que é hora de
- * andar param com o motivo `sem_chaves`. Uma passada por vez: uma instância
- * e uma chamada por instância (a concorrência padrão, 80, deixaria a passada
- * seguinte começar com a anterior ainda chamando a Omie). Fora da liberação
- * da Omie, não faz nada.
+ * chaves da API vêm do Secret Manager (OMIE_APP_KEY e OMIE_APP_SECRET),
+ * declaradas só onde a Omie está liberada (segredosDaOmie): a publicação do
+ * projeto que as declara falha sem elas. Com a chave vazia, a rotina não
+ * chama a Omie, e a emissão e a baixa que é hora de andar param com o motivo
+ * `sem_chaves`. Uma passada por vez: uma instância e uma chamada por
+ * instância (a concorrência padrão, 80, deixaria a passada seguinte começar
+ * com a anterior ainda chamando a Omie). Fora da liberação da Omie, não faz
+ * nada.
  */
-export const runOmieSync = onSchedule({ schedule: "every 5 minutes", timeZone: "America/Sao_Paulo", timeoutSeconds: 300, maxInstances: 1, concurrency: 1 }, async () => {
+export const runOmieSync = onSchedule({ schedule: "every 5 minutes", timeZone: "America/Sao_Paulo", timeoutSeconds: 300, maxInstances: 1, concurrency: 1, secrets: segredosDaOmie(PROJECT_ID) }, async () => {
   if (!omieLiberada(PROJECT_ID)) return;
   const app_key = process.env.OMIE_APP_KEY?.trim() ?? "";
   const app_secret = process.env.OMIE_APP_SECRET?.trim() ?? "";

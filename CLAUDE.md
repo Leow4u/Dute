@@ -144,8 +144,10 @@ documentação de produto e operação está em `docs/`.
     põe a baixa na fila (`nf_baixas`, parte 7.4g), e a mesma rotina confere
     o título da OS antes de lançar o recebimento e, no estorno, de
     cancelá-lo. As chaves (`OMIE_APP_KEY`, `OMIE_APP_SECRET`) vêm do Secret
-    Manager; sem elas, nada é chamado, e a emissão e a baixa param com o
-    motivo `sem_chaves`.
+    Manager e a rotina as declara só onde a Omie está liberada
+    (`segredosDaOmie`): o projeto que as declara não publica sem elas
+    (`docs/deploy-functions-manual.md`, "Function com segredo"). Sem elas,
+    nada é chamado, e a emissão e a baixa param com o motivo `sem_chaves`.
   - `functions/core`: Functions do núcleo (Fase 5), codebase `core`. Hoje a
     memória da Dute: a rotina `runMeasures` (a cada 15 minutos) recalcula
     `ai_measures` a partir das OS revisadas e refaz `ai_case_memory`, uma

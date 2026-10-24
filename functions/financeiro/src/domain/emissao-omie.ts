@@ -91,6 +91,19 @@ export function omieLiberada(projectId: string | null | undefined): boolean {
   return (OMIE_AMBIENTES_LIBERADOS as readonly string[]).includes(String(projectId ?? "").trim());
 }
 
+/** As chaves da API da Omie no Secret Manager. */
+export const SEGREDOS_DA_OMIE = ["OMIE_APP_KEY", "OMIE_APP_SECRET"] as const;
+
+/**
+ * Os segredos que a rotina declara: só onde a Omie está liberada. Na
+ * publicação, o firebase deploy passa o projeto de destino ao código
+ * (GCLOUD_PROJECT), e o projeto que declara um segredo que não tem falha ao
+ * publicar; fora da liberação, a rotina não chama a Omie e não precisa deles.
+ */
+export function segredosDaOmie(projectId: string | null | undefined): string[] {
+  return omieLiberada(projectId) ? [...SEGREDOS_DA_OMIE] : [];
+}
+
 /**
  * O que a conta da empresa na Omie pede além do serviço: a categoria de
  * receita e a conta corrente da parcela. O contador passa; até lá, ficam
