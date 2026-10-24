@@ -38,6 +38,7 @@ import { FINANCE_ROLES, INTERNAL_ROLES } from "./modules";
 import { PLATFORM_MODULES } from "./platform-modules";
 import { CALLABLES_DO_RH } from "./rh/api";
 import * as FICHA_DO_RH from "./rh/ficha";
+import { TAMANHO_MAXIMO_DO_ARQUIVO as TAMANHO_DO_ARQUIVO_NO_APP, TIPOS_DE_ARQUIVO as TIPOS_DE_ARQUIVO_NO_APP } from "./rh/formulario";
 import { RH_ROLES as RH_ROLES_DO_APP, RH_WRITE_ROLES as RH_WRITE_ROLES_DO_APP } from "./rh/navegacao";
 import { TV_ROLES } from "./tv/navegacao";
 
@@ -214,6 +215,15 @@ describe("listas do RH iguais em todo lugar (Fase 8)", () => {
     for (const tipos of Object.values(FICHA_DO_RH.TIPOS_POR_CATEGORIA)) {
       for (const tipo of tipos) expect(FICHA_DO_RH.ROTULO_DO_TIPO[tipo], tipo).toBeTruthy();
     }
+  });
+
+  it("o arquivo da ficha: os tipos e o tamanho são os de functions/rh", () => {
+    const arquivos = read("functions/rh/src/domain/arquivos.ts");
+    const bloco = arquivos.match(/export const TIPOS_DE_ARQUIVO = \{([\s\S]*?)\} as const/);
+    if (!bloco) throw new Error("TIPOS_DE_ARQUIVO não encontrado");
+    expect([...bloco[1].matchAll(/"([^"]+)":/g)].map((match) => match[1])).toEqual([...TIPOS_DE_ARQUIVO_NO_APP]);
+    expect(arquivos).toContain("export const TAMANHO_MAXIMO_DO_ARQUIVO = 10 * 1024 * 1024;");
+    expect(TAMANHO_DO_ARQUIVO_NO_APP).toBe(10 * 1024 * 1024);
   });
 
   it("o app chama as callables que functions/rh declara", () => {

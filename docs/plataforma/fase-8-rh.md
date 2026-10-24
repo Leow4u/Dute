@@ -299,3 +299,31 @@ Feita em 23/10/2026. As telas ficam desligadas em todo ambiente até a parte
     de você";
   - as três telas, com a lista dos textos e o `axe`.
 
+### Parte 8.2d: as ações na ficha
+
+Feita em 23/10/2026. Desligada até a parte 8.1b, como a 8.2c.
+
+- **Só o rh grava.** Quem tem o papel rh vê "Novo registro", que é a única
+  ação principal da tela. Em cada registro que não está arquivado, vê
+  "Alterar", "Anexar arquivo" (ou "Trocar arquivo") e "Arquivar".
+- **Owner e admin** leem a ficha e abrem o arquivo.
+- **O formulário** fica ao lado da ficha. Leva a categoria, o tipo, o nome
+  (só no "outro"), a data, o vencimento e o resultado (só no exame). Ao
+  alterar, a categoria e o tipo não mudam.
+  - O pedido leva só o que o tipo pede (`lib/rh/formulario.ts`).
+  - A callable confere o resto, e a mensagem dela aparece como veio.
+- **Arquivar** pede a confirmação na própria linha.
+- **O arquivo** sobe pela URL assinada de `requestRhUpload` (PUT do
+  navegador, com o CORS do bucket de cada projeto em
+  `deploy/cloud-storage/`) e só vale na ficha depois de `attachRhFile`.
+  Abre numa aba nova pela URL de `openRhFile`, que registra a abertura. A
+  tela confere o tipo e o tamanho antes de pedir a URL, com a mesma regra
+  da callable, travada pelo `platform-lists.test.ts`.
+- **Depois de cada gravação**, a ficha e o painel do RH são lidos de novo.
+- **Testes:**
+  - `lib/rh/formulario.test.ts`: o pedido de cada tipo, alterar e o
+    arquivo;
+  - `pages/rh/ficha-view.test.tsx`: quem lê não vê as ações de gravar,
+    uma só ação principal, o formulário, a confirmação, a lista dos textos
+    e o `axe` em cada estado.
+
