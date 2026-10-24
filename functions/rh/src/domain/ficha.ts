@@ -60,6 +60,8 @@ export type RegistroGravado = {
   substituido_por: string | null;
   /** O arquivo escaneado (parte 8.2b), ou null. */
   arquivo: ArquivoDoRegistro | null;
+  /** O instante em que o registro foi lançado (UTC): desempata o vigente quando as datas são iguais. */
+  criado_em: string;
   edicao: number;
 };
 
@@ -198,7 +200,7 @@ function edicaoConfere(atual: RegistroGravado, esperada: number | null): void {
  * (situacoesDoGrupo decide). O tipo não muda: para trocar, arquive e
  * registre de novo.
  */
-export function registroSalvo(atual: RegistroGravado | null, entrada: EntradaDoRegistro, id: string): RegistroGravado {
+export function registroSalvo(atual: RegistroGravado | null, entrada: EntradaDoRegistro, id: string, agora: string): RegistroGravado {
   if (atual) {
     edicaoConfere(atual, entrada.expected_edicao);
     if (atual.situacao === "arquivado") throw new HttpsError("failed-precondition", "O registro está arquivado.");
@@ -219,6 +221,7 @@ export function registroSalvo(atual: RegistroGravado | null, entrada: EntradaDoR
     situacao: atual?.situacao ?? "vigente",
     substituido_por: atual?.substituido_por ?? null,
     arquivo: atual?.arquivo ?? null,
+    criado_em: atual?.criado_em ?? agora,
     edicao: (atual?.edicao ?? 0) + 1,
   };
 }
@@ -237,14 +240,20 @@ export function grupoDoRegistro(registro: Pick<RegistroGravado, "id" | "colabora
 }
 
 function maisRecentePrimeiro(a: RegistroGravado, b: RegistroGravado): number {
-  return b.emitido_em.localeCompare(a.emitido_em) || (b.vence_em ?? "").localeCompare(a.vence_em ?? "") || b.id.localeCompare(a.id);
+  return (
+    b.emitido_em.localeCompare(a.emitido_em) ||
+    (b.vence_em ?? "").localeCompare(a.vence_em ?? "") ||
+    b.criado_em.localeCompare(a.criado_em) ||
+    b.id.localeCompare(a.id)
+  );
 }
 
 export type SituacaoNoGrupo = { situacao: Situacao; substituido_por: string | null };
 
 /**
  * A situação de cada registro do mesmo grupo: o mais recente pela data (no
- * empate, o que vence depois) é o vigente; os outros, substituídos por ele.
+ * empate, o que vence depois e, depois, o lançado por último) é o vigente;
+ * os outros, substituídos por ele.
  * O arquivado fica de fora e continua arquivado. Lançar o exame antigo
  * depois do novo não tira o novo do lugar; arquivar o vigente devolve o
  * anterior.

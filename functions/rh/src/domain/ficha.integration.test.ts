@@ -136,6 +136,14 @@ describe("a ficha no banco rh", () => {
     await recusa(archiveRhRecordFor(rh, RH, { idempotency_key: "arquiva-2", id: novo.id, expected_edicao: 2 }), "failed-precondition", /já está arquivado/);
   });
 
+  it("o exame lançado de novo com as mesmas datas vale no lugar do anterior", async () => {
+    const primeiro = await saveRhRecordFor(padrao, rh, RH, exame(), new Date("2026-10-23T15:00:00Z"));
+    const corrigido = await saveRhRecordFor(padrao, rh, RH, exame(), new Date("2026-10-23T15:05:00Z"));
+    assert.equal(corrigido.situacao, "vigente");
+    const anterior = (await rh.doc(`registros/${primeiro.id}`).get()).data();
+    assert.deepEqual([anterior?.situacao, anterior?.substituido_por], ["substituido", corrigido.id]);
+  });
+
   it("alterar a data pode trocar o vigente; a edição velha e o colaborador errado recusam", async () => {
     const primeiro = await saveRhRecordFor(padrao, rh, RH, exame({ emitido_em: "2024-11-01", vence_em: "2025-11-01" }), AGORA);
     const segundo = await saveRhRecordFor(padrao, rh, RH, exame(), AGORA);
