@@ -138,8 +138,12 @@ documentação de produto e operação está em `docs/`.
     `emitNfOmie` põe a emissão na fila (`nf_emissoes`) e reserva, e a
     rotina `runOmieSync` (5 minutos, uma instância) chama a Omie um passo
     por vez; a autorizada vira fatura pela mesma `lerParaFaturar` e
-    `gravarFatura` do `registerNf`. As chaves (`OMIE_APP_KEY`,
-    `OMIE_APP_SECRET`) vêm do Secret Manager; sem elas, nada é chamado.
+    `gravarFatura` do `registerNf`. O pagamento da fatura que saiu pela Omie
+    põe a baixa na fila (`nf_baixas`, parte 7.4g), e a mesma rotina confere
+    o título da OS antes de lançar o recebimento e, no estorno, de
+    cancelá-lo. As chaves (`OMIE_APP_KEY`, `OMIE_APP_SECRET`) vêm do Secret
+    Manager; sem elas, nada é chamado, e a emissão e a baixa param com o
+    motivo `sem_chaves`.
   - `functions/core`: Functions do núcleo (Fase 5), codebase `core`. Hoje a
     memória da Dute: a rotina `runMeasures` (a cada 15 minutos) recalcula
     `ai_measures` a partir das OS revisadas e refaz `ai_case_memory`, uma

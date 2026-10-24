@@ -16,6 +16,18 @@ import {
   type Avanco,
   type Emissao,
 } from "./emissao-omie.js";
+import {
+  BAIXAS_COLLECTION,
+  ETAPAS_DA_ROTINA_DA_BAIXA,
+  baixaLida,
+  baixaSemChaves,
+  comFalhaDaBaixa,
+  comRespostaDaBaixa,
+  passoDaBaixa,
+  pedidoDaBaixa,
+  type Baixa,
+} from "./baixa-omie.js";
+import { gravarBaixa } from "./baixa-gravacao.js";
 import { gravarEmissao, lerReservas, soltarReservas } from "./emissao-gravacao.js";
 import { createFinanceiroEvent } from "./events.js";
 import { FATURAS_COLLECTION, faturaIdDaNf } from "./fatura.js";
@@ -134,6 +146,113 @@ export async function runOmieSyncFor(db: Firestore, opcoes: OpcoesDaRotina): Pro
     }
   }
   return resumo;
+}
+
+// --- A baixa do pagamento (parte 7.4g) ------------------------------------------------------
+
+/** Quantas baixas andam por passada, depois das emissões. */
+export const BAIXAS_POR_PASSADA = 20;
+
+export type ResumoDasBaixas = {
+  liberada: boolean;
+  sem_chaves: boolean;
+  passos: number;
+  lancadas: number;
+  canceladas: number;
+  paradas: number;
+  descartadas: number;
+  parou_pela_chave: boolean;
+};
+
+function resumoDasBaixasVazio(liberada: boolean, semChaves: boolean): ResumoDasBaixas {
+  return { liberada, sem_chaves: semChaves, passos: 0, lancadas: 0, canceladas: 0, paradas: 0, descartadas: 0, parou_pela_chave: false };
+}
+
+/**
+ * A passada das baixas: cada baixa que é hora de andar dá um passo
+ * (conferir o título, lançar ou cancelar o recebimento), uma chamada por
+ * vez. Sem as chaves, nada se chama e a baixa para com o motivo
+ * `sem_chaves`; a chave inválida para a passada.
+ */
+export async function runOmieBaixasFor(db: Firestore, opcoes: OpcoesDaRotina): Promise<ResumoDasBaixas> {
+  if (!omieLiberada(opcoes.projectId)) return resumoDasBaixasVazio(false, false);
+  const configuracao = CONFIGURACAO_DA_OMIE[opcoes.projectId];
+  if (!configuracao) return resumoDasBaixasVazio(false, false);
+  const chaves = opcoes.chaves?.app_key && opcoes.chaves.app_secret ? opcoes.chaves : null;
+  const agora = opcoes.agora ?? (() => new Date());
+  const resumo = resumoDasBaixasVazio(true, chaves === null);
+
+  const snapshot = await db.collection(BAIXAS_COLLECTION).where("etapa", "in", [...ETAPAS_DA_ROTINA_DA_BAIXA]).get();
+  const inicio = agora();
+  const prontas = snapshot.docs
+    .flatMap((doc) => {
+      try {
+        return [baixaLida(doc.id, doc.data())];
+      } catch {
+        console.error("runOmieSync: baixa ilegível", doc.id);
+        return [];
+      }
+    })
+    .filter((baixa) => passoDaBaixa(baixa, inicio) !== null)
+    .sort((a, b) => a.proxima_em.localeCompare(b.proxima_em) || a.id.localeCompare(b.id))
+    .slice(0, opcoes.limite ?? BAIXAS_POR_PASSADA);
+
+  for (const baixa of prontas) {
+    const instante = agora();
+    const passo = passoDaBaixa(baixa, instante);
+    if (!passo) continue;
+    let nova: Baixa;
+    let pelaChave = false;
+    if (!chaves) {
+      nova = baixaSemChaves(baixa, instante);
+    } else {
+      const pedido = pedidoDaBaixa(passo, baixa);
+      try {
+        const corpo = await chamarOmie(opcoes.transporte, chaves, pedido.servico, pedido.call, pedido.param);
+        nova = comRespostaDaBaixa(baixa, passo, corpo, instante, configuracao);
+      } catch (error) {
+        if (!(error instanceof ErroDaOmie)) throw error;
+        nova = comFalhaDaBaixa(baixa, error.falha, instante);
+        pelaChave = error.falha.tipo === "chave";
+      }
+      resumo.passos += 1;
+    }
+    const gravado = await gravarPassoDaBaixa(db, baixa, nova, instante);
+    if (gravado === "descartado") resumo.descartadas += 1;
+    if (gravado === "lancada") resumo.lancadas += 1;
+    if (gravado === "cancelada") resumo.canceladas += 1;
+    if (gravado === "parada") resumo.paradas += 1;
+    if (pelaChave) {
+      resumo.parou_pela_chave = true;
+      break;
+    }
+  }
+  return resumo;
+}
+
+/** A baixa nova, se ninguém mexeu nela durante a chamada, com o evento da etapa a que chegou. */
+async function gravarPassoDaBaixa(db: Firestore, lida: Baixa, nova: Baixa, instante: Date): Promise<"gravado" | "descartado" | "lancada" | "cancelada" | "parada"> {
+  return db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(db.collection(BAIXAS_COLLECTION).doc(lida.id));
+    if (!snap.exists || Number(snap.get("edicao")) !== lida.edicao) return "descartado";
+    const iso = instante.toISOString();
+    gravarBaixa(transaction, db, nova);
+    if (nova.etapa === lida.etapa) return "gravado";
+    const evento = { operation_id: `rotina-omie:${nova.id}:${nova.edicao}`, entity_id: nova.id, customer_code: nova.customer_code, actor: ATOR_DA_ROTINA, occurred_at: iso };
+    if (nova.etapa === "lancada") {
+      createFinanceiroEvent(transaction, db, { ...evento, type: "nf.settlement_posted", payload: { id: nova.id, pagamento_id: nova.pagamento_id } });
+      return "lancada";
+    }
+    if (nova.etapa === "cancelada") {
+      createFinanceiroEvent(transaction, db, { ...evento, type: "nf.settlement_cancelled", payload: { id: nova.id, pagamento_id: nova.pagamento_id } });
+      return "cancelada";
+    }
+    if (nova.etapa === "parada" && nova.motivo_da_parada) {
+      createFinanceiroEvent(transaction, db, { ...evento, type: "nf.settlement_stopped", payload: { id: nova.id, motivo: nova.motivo_da_parada } });
+      return "parada";
+    }
+    return "gravado";
+  });
 }
 
 type Gravado = "gravado" | "descartado" | "autorizada" | "parada";
