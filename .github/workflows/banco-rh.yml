@@ -1,0 +1,54 @@
+name: Banco rh
+
+# Cria ou confere o banco Firestore `rh` de um ambiente (Fase 8,
+# docs/plataforma/fase-8-rh.md), só por disparo manual: Actions > Banco rh >
+# Run workflow. O banco precisa existir nos dois ambientes antes da parte 8.1b,
+# que o põe no firebase.json: sem ele, a publicação das regras falha e nada
+# mais sobe.
+#
+# Pode rodar de novo: o que já existe só é conferido (tools/banco_rh.sh). Cria
+# com proteção contra exclusão e PITR e, na produção, o backup diário de 14
+# dias, como o banco padrão. Nunca apaga nem desliga nada.
+#
+# A conta é a do job de functions (github-actions-functions@<projeto>), com
+# roles/datastore.owner, concedido uma vez pelo Leonardo (o comando está no
+# fase-8-rh.md). Sem o papel, o script falha dizendo qual falta e nada é
+# criado.
+on:
+  workflow_dispatch:
+    inputs:
+      ambiente:
+        description: "Ambiente"
+        type: choice
+        options:
+          - homologacao
+          - producao
+        required: true
+
+concurrency:
+  group: banco-rh-${{ inputs.ambiente }}
+  cancel-in-progress: false
+
+jobs:
+  banco:
+    name: Banco rh (${{ inputs.ambiente }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PROJECT_ID: ${{ inputs.ambiente == 'producao' && 'dute-prod' || 'dute-homolog' }}
+      PROJECT_NUMBER: ${{ inputs.ambiente == 'producao' && '974421124970' || '368642218894' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${{ env.PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-actions-functions@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Criar ou conferir o banco rh
+        run: bash tools/banco_rh.sh "${PROJECT_ID}"

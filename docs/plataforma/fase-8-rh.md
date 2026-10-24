@@ -64,7 +64,7 @@ Seguem a recomendação até a resposta do Leonardo:
 - **Liberação própria:** `RH_AMBIENTES_LIBERADOS`, só o `dute-homolog` até o
   lançamento, com o OK do Leonardo.
 
-## O que só o Leonardo faz
+## Como o banco `rh` nasce
 
 O banco `rh` precisa existir antes de o `firebase.json` apontar para ele, e
 nos dois projetos que a publicação atende: a homologação e a produção. A
@@ -77,21 +77,36 @@ Criar o banco não abre nada. As regras dele negam tudo, e as callables do RH
 só atendem na homologação (`RH_AMBIENTES_LIBERADOS`) até o lançamento da
 fase.
 
-Uma vez, na homologação e na produção (a produção também com o backup diário,
-como o banco padrão, `docs/plataforma/backup-e-recuperacao.md`):
+Quem cria é o workflow `Banco rh` (`.github/workflows/banco-rh.yml`), por
+disparo manual, um ambiente por vez. Ele roda o `tools/banco_rh.sh`:
+
+- cria o banco em `southamerica-east1`, nativo, com proteção contra exclusão;
+- liga o PITR;
+- na produção, cria o backup diário de 14 dias, como o do banco padrão
+  (`docs/plataforma/backup-e-recuperacao.md`);
+- se o banco já existe, só confere, e liga o que faltar;
+- nunca apaga nem desliga nada.
+
+A conta do workflow é a das functions (`github-actions-functions@<projeto>`).
+Criar banco exige `roles/datastore.owner`, que ela não tinha (decisão do
+Leonardo em 24/10/2026: liberar a conta do CI). Quem concede é o Leonardo,
+uma vez, porque só o Owner do projeto mexe em papel:
 
 ```powershell
 cd C:\DEV\Dute
-gcloud firestore databases create --database=rh --location=southamerica-east1 --type=firestore-native --delete-protection --project=dute-homolog
-gcloud firestore databases update --database=rh --enable-pitr --project=dute-homolog
-gcloud firestore databases create --database=rh --location=southamerica-east1 --type=firestore-native --delete-protection --project=dute-prod
-gcloud firestore databases update --database=rh --enable-pitr --project=dute-prod
-gcloud firestore backups schedules create --database=rh --recurrence=daily --retention=14d --project=dute-prod
-gcloud firestore databases list --project=dute-homolog
-gcloud firestore databases list --project=dute-prod
+foreach ($p in @("dute-homolog", "dute-prod")) {
+  gcloud projects add-iam-policy-binding $p --member="serviceAccount:github-actions-functions@$p.iam.gserviceaccount.com" --role=roles/datastore.owner --condition=None
+}
 ```
 
-As duas últimas linhas mostram o `rh` em cada projeto.
+Depois, Actions > Banco rh > Run workflow, primeiro com `homologacao` e
+depois com `producao`. Sem o papel, o job falha dizendo qual falta, e nada é
+criado.
+
+Com o banco criado nos dois, o papel pode sair (o mesmo laço com
+`remove-iam-policy-binding`). Sem ele, o workflow volta a falhar, mas a
+publicação continua: ela só publica as regras do banco, e para isso bastam
+os papéis que a conta já tinha.
 
 ## Partes
 
@@ -99,7 +114,7 @@ As duas últimas linhas mostram o `rh` em cada projeto.
 |---|---|---|
 | 8.0 | O desenho (este documento) | — |
 | 8.1a | As regras do banco `rh`, fechadas ao navegador; a codebase `functions/rh` (o perfil, a liberação, o recibo e o evento no banco `rh`); os jobs do CI. Ainda fora da publicação | Nenhum papel lê nem grava o banco `rh` pelo navegador; só `rh`, `admin` e `owner` passam pela callable, e só `rh` grava |
-| 8.1b | Com o banco criado: o `firebase.json` com o banco `rh` e a codebase `rh`; a publicação confere as regras dele; o shell do RH com o Início | A publicação recusa sem o banco; o shell só abre para `rh`, `admin` e `owner` |
+| 8.1b | Com o banco criado pelo workflow `Banco rh` nos dois ambientes: o `firebase.json` com o banco `rh` e a codebase `rh`; a publicação confere as regras dele; o shell do RH com o Início | A publicação recusa sem o banco; o shell só abre para `rh`, `admin` e `owner` |
 | 8.2 | A ficha do colaborador: documentos, exames e treinamentos, com o vencimento; os alertas no Início do RH | O vencimento gera o alerta uma vez; o documento só abre no RH |
 | 8.3 | A integração da folha e do eSocial (pergunta 24) | A exportação é idempotente |
 
@@ -137,3 +152,24 @@ banco `rh` e a codebase na parte 8.1b, depois de o banco existir.
   - `functions/rh`: o formato das callables, os papéis, a liberação e o
     perfil no emulador;
   - `tools/test_full_reset_btg.py`: a zeragem recusa o banco do RH.
+
+### O workflow `Banco rh` (antes da parte 8.1b)
+
+Feito em 24/10/2026. O Leonardo pediu que o banco fosse criado sem ele rodar
+os comandos e escolheu liberar a conta do CI (`roles/datastore.owner`).
+
+- **`.github/workflows/banco-rh.yml`:** disparo manual, um ambiente por vez,
+  com a conta das functions pelo Workload Identity.
+- **`tools/banco_rh.sh`:**
+  - cria o banco `rh` com proteção contra exclusão;
+  - liga o PITR;
+  - na produção, cria o backup diário de 14 dias;
+  - se o banco existe, só confere e liga o que faltar;
+  - falha sem mexer quando o banco está em outra região ou é de outro tipo;
+  - sem o papel, falha dizendo qual falta.
+- **Testes:**
+  - `tools/test_banco_rh.py`: o script com um `gcloud` de mentira (criar,
+    rodar de novo, homologação sem backup, sem o papel, outra região, projeto
+    fora da lista);
+  - `tools/test_workflows.py`: o workflow só roda por disparo manual, com os
+    projetos e os números da publicação, a conta das functions e o script.
