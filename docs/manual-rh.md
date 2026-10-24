@@ -1,7 +1,7 @@
 # Manual do RH
 
 Para `owner` e `admin`, que leem, e `rh`, que lê e grava. Os dados do RH
-ficam num banco à parte (`rh`), que o navegador não abre: tudo passa pelas
+ficam num banco à parte (`dute-rh`), que o navegador não abre: tudo passa pelas
 Functions do RH, com o evento de cada gravação e de cada arquivo aberto. As
 telas mostram só rótulos, dados e ações; o que elas não explicam está aqui.
 O desenho e o registro das partes ficam em `docs/plataforma/fase-8-rh.md`.

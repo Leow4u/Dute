@@ -536,3 +536,8 @@ pelo workflow `Banco rh` (seção "Como o banco `dute-rh` nasce").
   `firestore-rh.rules`.
 - **Conferido no emulador:** com o `firestore` em lista, as regras do banco
   padrão, as do `dute-rh` e as do Storage passam como antes.
+- **Na homologação,** a publicação do merge (24/10/2026) conferiu as regras
+  servidas dos dois bancos, as 145 callables públicas, 10 delas do RH, e o
+  app servindo o build. A produção recebe o código com o lançamento
+  (`lancamento-producao.md`), e o RH continua desligado lá até outro OK
+  (`RH_AMBIENTES_LIBERADOS`).

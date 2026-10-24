@@ -1181,14 +1181,24 @@ aplicativo de teste estão lá desde 24/10/2026: o Leonardo as guardou pelo
 - **7.4 feita no código,** com a pergunta 21 respondida em 24/10/2026: a
   NFS-e pela Omie e a baixa (desenho em "A NFS-e pela Omie"). Falta o
   cancelamento da NFS-e autorizada, numa parte própria.
-- **Para a Omie emitir no `dute-homolog`,** faltam as chaves
-  (`OMIE_APP_KEY` e `OMIE_APP_SECRET`, pelo comando da parte 7.4d) e a
-  parte pequena que as declara no `runOmieSync`. Sem elas, a emissão e a
-  baixa param com o motivo `sem_chaves`, e a NF segue registrada à mão
-  ("Emitida fora").
+- **A Omie no `dute-homolog`:** as chaves do aplicativo de teste estão lá
+  desde 24/10/2026, e a `runOmieSync` as declara ("As chaves da Omie na
+  rotina"). A publicação daquele dia deu à conta da rotina o acesso aos dois
+  segredos.
+  - Para a primeira NFS-e sair, faltam os serviços `DUTE-OS` e
+    `DUTE-ARMAZENAGEM`, cadastrados no aplicativo de teste com esses
+    códigos de integração. Sem eles, o `IncluirOS` recusa, a rotina tenta
+    de novo e, na sexta falha, a emissão para (`falhas_seguidas`) com a
+    mensagem da Omie; com os serviços cadastrados, "Tentar de novo" volta
+    de onde parou.
+  - A categoria de receita e a conta corrente podem esperar o contador:
+    sem elas, a Omie usa o padrão (`CONFIGURACAO_DA_OMIE`).
+  - O primeiro teste confere o que a 7.4a deixou para ele: se o `IncluirOS`
+    aceita a OS já na etapa 50 e o filtro de CNPJ do `ListarClientes`.
 - **O "pronto quando" da fase:**
   - a armazenagem e as OS já fecham a competência na mesma fatura;
   - o a receber já é um só (`faturas`);
-  - a NF sai pela integração (7.4) assim que as chaves existirem.
+  - a NF sai pela integração (7.4) assim que os serviços existirem no
+    aplicativo de teste.
 - **Na produção,** tudo depende do lançamento da Fase 4 (parte 4.9b): ligar
   o Financeiro no `dute-prod` põe o projeto nas três listas.
