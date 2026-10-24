@@ -9,6 +9,7 @@ import {
   baixaNoEstorno,
   baixaSemChaves,
   codigoDaBaixa,
+  comAcaoNaBaixa,
   comFalhaDaBaixa,
   comRespostaDaBaixa,
   idDaBaixa,
@@ -207,5 +208,28 @@ describe("o estorno do pagamento", () => {
 
   it("a acabada ou dispensada não muda", () => {
     for (const etapa of ["cancelando", "cancelada", "dispensada"] as const) assert.equal(baixaNoEstorno(baixa({ etapa }), AGORA), null, etapa);
+  });
+});
+
+describe("as ações de uma pessoa (parte 7.4h)", () => {
+  it("retomar a parada volta à etapa de onde parou, do zero e conferindo; dispensar acaba a baixa", () => {
+    const parada = comFalhaDaBaixa(baixa({ etapa: "cancelando", conferida: true, tentativas: 5 }), RECUSA, AGORA);
+    assert.deepEqual([parada.etapa, parada.etapa_anterior], ["parada", "cancelando"]);
+    const retomada = comAcaoNaBaixa(parada, "retomar", AGORA);
+    assert.ok(!("problema" in retomada));
+    assert.deepEqual([retomada.etapa, retomada.tentativas, retomada.conferida, retomada.motivo_da_parada, passoDaBaixa(retomada, AGORA)], ["cancelando", 0, false, null, "conferir"]);
+    const semChaves = comAcaoNaBaixa(baixaSemChaves(baixa(), AGORA), "retomar", AGORA);
+    assert.ok(!("problema" in semChaves));
+    assert.equal(semChaves.etapa, "na_fila");
+    const dispensada = comAcaoNaBaixa(parada, "dispensar", AGORA);
+    assert.ok(!("problema" in dispensada));
+    assert.deepEqual([dispensada.etapa, passoDaBaixa(dispensada, AGORA)], ["dispensada", null]);
+  });
+
+  it("só a parada tem ação", () => {
+    for (const etapa of ["na_fila", "lancada", "cancelando", "cancelada", "dispensada"] as const) {
+      assert.deepEqual(comAcaoNaBaixa(baixa({ etapa }), "retomar", AGORA), { problema: "Só a baixa parada se retoma." }, etapa);
+      assert.deepEqual(comAcaoNaBaixa(baixa({ etapa }), "dispensar", AGORA), { problema: "Só a baixa parada se dispensa." }, etapa);
+    }
   });
 });

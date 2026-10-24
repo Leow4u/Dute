@@ -4,6 +4,7 @@ import { onCall } from "firebase-functions/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 
+import { actOnNfSettlementFor, listNfSettlementsFor } from "./domain/baixa-gravacao.js";
 import { advanceFaturaFor } from "./domain/cobranca-gravacao.js";
 import { actOnNfEmissionFor, emitNfOmieFor, listNfEmissionsFor } from "./domain/emissao-gravacao.js";
 import { omieLiberada } from "./domain/emissao-omie.js";
@@ -60,6 +61,18 @@ export const actOnNfEmission = onCall(async (request) => {
 export const listNfEmissions = onCall(async (request) => {
   const caller = await requireFinanceiroCaller(db, request, PROJECT_ID);
   return listNfEmissionsFor(db, caller);
+});
+
+/** Retoma ou dispensa a baixa parada na Omie (parte 7.4h). */
+export const actOnNfSettlement = onCall(async (request) => {
+  const caller = await requireFinanceiroCaller(db, request, PROJECT_ID);
+  return actOnNfSettlementFor(db, caller, request.data, { projectId: PROJECT_ID });
+});
+
+/** As baixas abertas na Omie, paradas e em andamento (parte 7.4h). */
+export const listNfSettlements = onCall(async (request) => {
+  const caller = await requireFinanceiroCaller(db, request, PROJECT_ID);
+  return listNfSettlementsFor(db, caller);
 });
 
 /**

@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { baixasLidas, type BaixaDoFinanceiro } from "@/lib/financeiro/baixas";
 import { emissoesLidas, type EmissaoDoFinanceiro } from "@/lib/financeiro/emissoes";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
@@ -76,17 +77,48 @@ const DESISTIDA = emissao(6, { customer_name: "Banco Inter", etapa: "desistida",
 
 const EMISSOES = [REJEITADA, PARADA, NA_PREFEITURA, AUTORIZADA, DESISTIDA];
 
+function baixa(numero: number, extra: Record<string, unknown>): BaixaDoFinanceiro {
+  const [lida] =
+    baixasLidas({
+      baixas: [
+        {
+          id: `bxa_${String(numero).padStart(24, "0")}`,
+          pagamento_id: `pag_${String(numero).padStart(24, "0")}`,
+          fatura_id: `fat_${String(numero).padStart(24, "0")}`,
+          customer_code: "ITAU",
+          customer_name: "Itaú Unibanco",
+          nf_numero: "815",
+          etapa: "na_fila",
+          motivo_da_parada: null,
+          mensagem: null,
+          valor_cents: 500_000,
+          recebido_em: "2026-10-22",
+          criada_em: "2026-10-22T15:00:00.000Z",
+          edicao: 3,
+          ...extra,
+        },
+      ],
+    }) ?? [];
+  if (!lida) throw new Error("baixa ilegível no teste");
+  return lida;
+}
+
+const BAIXA_PARADA = baixa(1, { etapa: "parada", motivo_da_parada: "titulo_liquidado", mensagem: "O título da OS já está recebido na Omie, sem o recebimento da Dute." });
+const BAIXA_NA_FILA = baixa(2, { customer_name: "Banco Safra", nf_numero: "816", valor_cents: 50_000, recebido_em: "2026-10-23" });
+
 const noop = () => undefined;
 
 function props(extra: Partial<EmissoesViewProps> = {}): EmissoesViewProps {
   return {
     estado: "pronto",
     emissoes: EMISSOES,
+    baixas: [],
     desistindo: null,
+    dispensando: null,
     ocupado: false,
     aviso: null,
     falha: null,
-    acoes: { pedir: noop, confirmarDesistencia: noop, desistirDeDesistir: noop },
+    acoes: { pedir: noop, confirmarDesistencia: noop, desistirDeDesistir: noop, pedirNaBaixa: noop, confirmarDispensa: noop, desistirDeDispensar: noop },
     ...extra,
   };
 }
@@ -218,7 +250,62 @@ describe("Financeiro › Emissões", () => {
     expect(textosDaTela(render({ emissoes: [] }))).toEqual(["Emissões", "Nenhuma emissão"]);
   });
 
+  it("as baixas abertas na Omie, a parada primeiro, com o motivo e a mensagem, logo depois das emissões que precisam de você", () => {
+    const html = render({ emissoes: [REJEITADA, NA_PREFEITURA], baixas: [BAIXA_NA_FILA, BAIXA_PARADA] });
+    const secaoDasBaixas = secao(html, "Baixas na Omie");
+    expect(textosDaTela(secaoDasBaixas)).toEqual([
+      "Baixas na Omie",
+      "2",
+      "Itaú Unibanco · NF 815",
+      "Recebido em 22/10/2026",
+      "Título já recebido na Omie",
+      "O título da OS já está recebido na Omie, sem o recebimento da Dute.",
+      "R$ 5.000,00",
+      "Parada",
+      "Tentar de novo",
+      "Dispensar",
+      "Banco Safra · NF 816",
+      "Recebido em 23/10/2026",
+      "R$ 500,00",
+      "Na fila",
+    ]);
+    // A ordem das seções: as emissões que precisam de você, as baixas, as em andamento.
+    const titulos = [...html.matchAll(/<h2 id="[^"]+"[^>]*>([^<]*)<\/h2>/g)].map((match) => match[1].trim());
+    expect(titulos).toEqual(["Precisam de você", "Baixas na Omie", "Em andamento"]);
+    expect(
+      textosForaDaLista(secaoDasBaixas, [
+        "Baixas na Omie",
+        /^\d+$/,
+        /^(Itaú Unibanco|Banco Safra) · NF \d+$/,
+        /^Recebido em \d{2}\/\d{2}\/\d{4}$/,
+        /^R\$ [\d.]+,\d{2}$/,
+        /^(Na fila|Lançada|Cancelando na Omie|Cancelada|Parada|Dispensada)$/,
+        // O motivo e o que a Omie disse: dado da baixa, não legenda.
+        "Título já recebido na Omie",
+        "O título da OS já está recebido na Omie, sem o recebimento da Dute.",
+        /^(Tentar de novo|Dispensar)$/,
+      ]),
+    ).toEqual([]);
+    expect(secaoDasBaixas).toContain('aria-label="Tentar de novo, Itaú Unibanco · NF 815"');
+    expect(secaoDasBaixas).toContain('aria-label="Dispensar, Itaú Unibanco · NF 815"');
+    expect(html.match(PRINCIPAL) ?? []).toHaveLength(0);
+    // Só as baixas, sem emissão: a tela não diz que está vazia.
+    const soBaixas = textosDaTela(render({ emissoes: [], baixas: [BAIXA_NA_FILA] }));
+    expect(soBaixas).toContain("Baixas na Omie");
+    expect(soBaixas).not.toContain("Nenhuma emissão");
+  });
+
+  it("dispensar a baixa pede a confirmação na linha", () => {
+    const html = render({ emissoes: [], baixas: [BAIXA_PARADA], dispensando: BAIXA_PARADA.id });
+    const textos = textosDaTela(html);
+    expect(textos).toEqual(expect.arrayContaining(["Confirmar dispensa", "Voltar"]));
+    expect(textos).not.toContain("Dispensar");
+    expect(html.match(/border-destructive\/40/g) ?? []).toHaveLength(1);
+  });
+
   it("sem violação de acessibilidade (WCAG 2.1 A e AA), com a lista, com a confirmação aberta e vazia", async () => {
+    expect(await violacoesDeAcessibilidade(render({ baixas: [BAIXA_PARADA, BAIXA_NA_FILA] }))).toEqual([]);
+    expect(await violacoesDeAcessibilidade(render({ baixas: [BAIXA_PARADA], dispensando: BAIXA_PARADA.id }))).toEqual([]);
     expect(await violacoesDeAcessibilidade(render())).toEqual([]);
     expect(await violacoesDeAcessibilidade(render({ desistindo: PARADA.id, aviso: "Itaú Unibanco: emissão retomada" }))).toEqual([]);
     expect(await violacoesDeAcessibilidade(render({ emissoes: [], falha: "Não foi possível mudar a emissão." }))).toEqual([]);

@@ -29,6 +29,8 @@ const EXEMPLOS: Record<FinanceiroEventType, Record<string, unknown>> = {
   "nf.settlement_posted": { id: "bxa_0123456789abcdef01234567", pagamento_id: "pag_0123456789abcdef01234567" },
   "nf.settlement_cancelled": { id: "bxa_0123456789abcdef01234567", pagamento_id: "pag_0123456789abcdef01234567" },
   "nf.settlement_stopped": { id: "bxa_0123456789abcdef01234567", motivo: "titulo_nao_achado" },
+  "nf.settlement_resumed": { id: "bxa_0123456789abcdef01234567", etapa_depois: "na_fila" },
+  "nf.settlement_dismissed": { id: "bxa_0123456789abcdef01234567", motivo: "titulo_liquidado" },
 };
 
 function wmsNoticeWords(): string[] {

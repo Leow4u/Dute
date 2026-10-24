@@ -355,3 +355,19 @@ export function baixaNoEstorno(baixa: Baixa, agora: Date): Baixa | null {
   const saiu = baixa.etapa === "lancada" || baixa.conferida || baixa.omie.titulo !== null;
   return andou(baixa, { etapa: saiu ? "cancelando" : "cancelada", etapa_anterior: null, motivo_da_parada: null, mensagem: null, conferida: false }, agora);
 }
+
+// --- As ações de uma pessoa (parte 7.4h) ----------------------------------------------------
+
+export type AcaoNaBaixa = "retomar" | "dispensar";
+
+/**
+ * Retomar: a parada volta à etapa de onde parou (lançar ou cancelar), do
+ * zero nas falhas, conferindo o título antes. Dispensar: a pessoa resolveu
+ * na Omie à mão, e a baixa acaba sem a rotina. Só a parada tem ação.
+ */
+export function comAcaoNaBaixa(baixa: Baixa, acao: AcaoNaBaixa, agora: Date): Baixa | { problema: string } {
+  if (baixa.etapa !== "parada") return { problema: acao === "retomar" ? "Só a baixa parada se retoma." : "Só a baixa parada se dispensa." };
+  if (acao === "dispensar") return andou(baixa, { etapa: "dispensada", etapa_anterior: null, motivo_da_parada: null, mensagem: null, conferida: false }, agora);
+  const volta = baixa.etapa_anterior && ETAPAS_DA_ROTINA_DA_BAIXA.includes(baixa.etapa_anterior) ? baixa.etapa_anterior : "na_fila";
+  return andou(baixa, { etapa: volta, etapa_anterior: null, motivo_da_parada: null, mensagem: null, conferida: false }, agora);
+}
