@@ -81,10 +81,12 @@ export const listNfSettlements = onCall(async (request) => {
  * chaves da API vêm do Secret Manager (OMIE_APP_KEY e
  * OMIE_APP_SECRET), declaradas na função só quando os segredos existirem;
  * sem elas, a rotina não chama a Omie, e a emissão e a baixa que é hora de
- * andar param com o motivo `sem_chaves`. Uma instância por vez: a Omie não
- * aceita escrita simultânea. Fora da liberação da Omie, não faz nada.
+ * andar param com o motivo `sem_chaves`. Uma passada por vez: uma instância
+ * e uma chamada por instância (a concorrência padrão, 80, deixaria a passada
+ * seguinte começar com a anterior ainda chamando a Omie). Fora da liberação
+ * da Omie, não faz nada.
  */
-export const runOmieSync = onSchedule({ schedule: "every 5 minutes", timeZone: "America/Sao_Paulo", timeoutSeconds: 300, maxInstances: 1 }, async () => {
+export const runOmieSync = onSchedule({ schedule: "every 5 minutes", timeZone: "America/Sao_Paulo", timeoutSeconds: 300, maxInstances: 1, concurrency: 1 }, async () => {
   if (!omieLiberada(PROJECT_ID)) return;
   const app_key = process.env.OMIE_APP_KEY?.trim() ?? "";
   const app_secret = process.env.OMIE_APP_SECRET?.trim() ?? "";

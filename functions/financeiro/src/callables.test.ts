@@ -40,3 +40,13 @@ describe("callables do Financeiro", () => {
     for (const block of blocks) assert.match(block, ENTRADA);
   });
 });
+
+describe("a rotina da Omie", () => {
+  it("roda uma passada por vez: uma instância, e uma chamada por instância", () => {
+    // Com a concorrência padrão da segunda geração (80 com 1 CPU), a mesma instância aceitaria a passada seguinte
+    // do Cloud Scheduler enquanto a anterior ainda chama a Omie, e as duas repetiriam a mesma chamada que grava.
+    const declaracao = index.match(/^export const runOmieSync = onSchedule\(\{([^}]*)\}/m)?.[1] ?? "";
+    assert.match(declaracao, /\bmaxInstances: 1\b/);
+    assert.match(declaracao, /\bconcurrency: 1\b/);
+  });
+});
