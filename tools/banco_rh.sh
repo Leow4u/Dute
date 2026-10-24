@@ -6,7 +6,7 @@
 #   bash tools/banco_rh.sh <dute-homolog|dute-prod>
 #
 # - Os dois projetos: o banco em southamerica-east1, nativo, com proteção
-#   contra exclusão e PITR.
+#   contra exclusão e PITR desde a criação.
 # - dute-prod: também o backup diário de 14 dias, como o banco padrão
 #   (docs/plataforma/backup-e-recuperacao.md).
 #
@@ -18,6 +18,9 @@ PROJECT_ID="${1:?Uso: bash tools/banco_rh.sh <dute-homolog|dute-prod>}"
 DATABASE=dute-rh
 LOCATION=southamerica-east1
 CONTA="github-actions-functions@${PROJECT_ID}.iam.gserviceaccount.com"
+# Segundos da primeira espera quando o Firestore aborta uma mudança; os testes
+# usam 0.
+ESPERA="${BANCO_RH_ESPERA:-5}"
 
 case "${PROJECT_ID}" in
   dute-homolog|dute-prod) ;;
@@ -40,6 +43,24 @@ falhou() {
   exit 1
 }
 
+# Logo depois de criar o banco, o Firestore recusa mudá-lo por alguns segundos
+# ("ABORTED: There are concurrent database changes", 24/10/2026, na
+# homologação). A mudança abortada se repete até 5 vezes, esperando cada vez
+# mais (5, 10, 15 e 20 segundos); qualquer outro erro falha na hora.
+mudar() {
+  local tentativa
+  for tentativa in 1 2 3 4 5; do
+    if "$@" 2>"${ERRO}"; then
+      return 0
+    fi
+    if [ "${tentativa}" -eq 5 ] || ! grep -q ABORTED "${ERRO}"; then
+      return 1
+    fi
+    echo "O Firestore ainda está mudando o banco; nova tentativa em $((tentativa * ESPERA))s."
+    sleep "$((tentativa * ESPERA))"
+  done
+}
+
 descrever() {
   gcloud firestore databases describe --database="${DATABASE}" --project="${PROJECT_ID}" \
     --format="value(locationId,type,deleteProtectionState,pointInTimeRecoveryEnablement)" 2>"${ERRO}"
@@ -50,7 +71,7 @@ if ESTADO="$(descrever)"; then
 elif grep -q NOT_FOUND "${ERRO}"; then
   echo "Criando o banco ${DATABASE} no ${PROJECT_ID} (${LOCATION})."
   gcloud firestore databases create --database="${DATABASE}" --location="${LOCATION}" \
-    --type=firestore-native --delete-protection --project="${PROJECT_ID}" 2>"${ERRO}" || falhou
+    --type=firestore-native --delete-protection --enable-pitr --project="${PROJECT_ID}" 2>"${ERRO}" || falhou
   ESTADO="$(descrever)" || falhou
 else
   falhou
@@ -64,12 +85,12 @@ fi
 
 if [ "${PROTECAO}" != "DELETE_PROTECTION_ENABLED" ]; then
   echo "Ligando a proteção contra exclusão."
-  gcloud firestore databases update --database="${DATABASE}" --delete-protection --project="${PROJECT_ID}" 2>"${ERRO}" || falhou
+  mudar gcloud firestore databases update --database="${DATABASE}" --delete-protection --project="${PROJECT_ID}" || falhou
 fi
 
 if [ "${PITR}" != "POINT_IN_TIME_RECOVERY_ENABLED" ]; then
   echo "Ligando o PITR (7 dias)."
-  gcloud firestore databases update --database="${DATABASE}" --enable-pitr --project="${PROJECT_ID}" 2>"${ERRO}" || falhou
+  mudar gcloud firestore databases update --database="${DATABASE}" --enable-pitr --project="${PROJECT_ID}" || falhou
 fi
 
 if [ "${PROJECT_ID}" = "dute-prod" ]; then
@@ -82,8 +103,8 @@ sys.exit(0 if any("dailyRecurrence" in a and a.get("retention") == "1209600s" fo
     echo "O backup diário de 14 dias já existe."
   else
     echo "Criando o backup diário de 14 dias."
-    gcloud firestore backups schedules create --database="${DATABASE}" --recurrence=daily --retention=14d \
-      --project="${PROJECT_ID}" 2>"${ERRO}" || falhou
+    mudar gcloud firestore backups schedules create --database="${DATABASE}" --recurrence=daily --retention=14d \
+      --project="${PROJECT_ID}" || falhou
   fi
 fi
 
