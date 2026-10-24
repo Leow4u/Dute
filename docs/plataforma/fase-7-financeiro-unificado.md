@@ -971,6 +971,43 @@ O que muda, como na baixa (7.4g):
     - o FaturarOS sem resposta autoriza e a fatura nasce;
     - a OS cancelada à mão solta as reservas.
 
+### Correção: desistir não cancela a NFS-e autorizada
+
+Feita em 24/10/2026, a partir da mesma revisão. "Desistir" com a OS na Omie
+mandava o `CancelarOS` com `cCancelarNfse: "S"` e, com a resposta 200, já
+soltava as reservas. Isso acontecia também na parada "Fatura não nasceu", em
+que a NFS-e está autorizada, e na "Prefeitura sem resposta", em que a nota
+pode ter saído. Se a prefeitura não cancelasse a nota, as demandas voltavam
+a A faturar com a NFS-e valendo, e a próxima emissão daria uma segunda nota.
+Isso contraria a decisão de que o cancelamento da NFS-e autorizada não sai
+pela Dute.
+
+- **Com a NFS-e autorizada conhecida**, "Desistir" se recusa: "A NFS-e N
+  foi autorizada e vale na prefeitura: cancele a nota na Omie e tente de
+  novo antes de desistir." A tela não mostra a ação.
+- **O cancelamento confere a OS sempre antes do `CancelarOS`:**
+  - a OS cancelada desiste e solta as reservas;
+  - a OS sem faturar, ou com a RPS recusada (003), cancela;
+  - a RPS autorizada (004) para a emissão com o motivo novo
+    `nfse_autorizada`, sem cancelar;
+  - a RPS que a prefeitura ainda processa espera, com o prazo de 72 horas.
+- **"Tentar de novo" na `nfse_autorizada`** volta à prefeitura: a nota
+  autorizada vira fatura; a cancelada na Omie para em "OS cancelada na
+  Omie", e aí "Desistir" solta as reservas.
+- **O motivo novo** está nas Functions, no evento `nf.emission_stopped`, no
+  app (travado em `platform-lists.test.ts`) e no manual do Financeiro.
+- **Testes:**
+  - `emissao-omie.test.ts`: a recusa, a conferência antes de cancelar e
+    cada resposta dela.
+  - `omie-rotina.integration.test.ts`: a prefeitura sem resposta com a nota
+    saindo no meio tempo para sem chamar o `CancelarOS`, e "Tentar de novo"
+    registra a fatura. A "Fatura não nasceu" recusa o "Desistir". O
+    `CancelarOS` recusado porque alguém cancelou no meio tempo solta as
+    reservas na conferência seguinte. Os casos falham com o código antigo.
+  - A Omie falsa deixa a RPS na última situação do roteiro: a recusada
+    continua recusada.
+  - `emissoes.test.ts`: a ação da tela.
+
 ## Onde a Fase 7 está
 
 - Feitas: 7.0 a 7.3c, 7.4a a 7.4i e 7.5a a 7.5c.

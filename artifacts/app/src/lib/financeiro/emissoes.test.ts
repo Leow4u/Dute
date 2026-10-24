@@ -71,6 +71,7 @@ describe("as emissões da NFS-e pela Omie", () => {
       "cancelada_na_omie",
       "prefeitura_demorou",
       "fatura_recusada",
+      "nfse_autorizada",
     ]);
     for (const etapa of ETAPAS_DA_EMISSAO) expect(ETAPA_ROTULO[etapa], etapa).toMatch(/^\S/);
     for (const motivo of MOTIVOS_DA_PARADA) expect(MOTIVO_ROTULO[motivo], motivo).toMatch(/^\S/);
@@ -142,13 +143,18 @@ describe("as emissões da NFS-e pela Omie", () => {
     expect(itensDaEmissao({ demandas: [], armazenagem: ["periodo-antigo"] })).toBe("Armazenagem periodo-antigo");
   });
 
-  it("só a rejeitada e a parada têm ação; a OS cancelada na Omie só se desiste", () => {
+  it("só a rejeitada e a parada têm ação; a OS cancelada na Omie só se desiste; a NFS-e autorizada não se desiste", () => {
     for (const etapa of ETAPAS_DA_EMISSAO) {
       const esperado = etapa === "rejeitada" || etapa === "parada" ? ["retomar", "desistir"] : [];
-      expect(acoesDaEmissao({ etapa, motivo: null }), etapa).toEqual(esperado);
+      expect(acoesDaEmissao({ etapa, motivo: null, nfse: null }), etapa).toEqual(esperado);
     }
-    expect(acoesDaEmissao({ etapa: "parada", motivo: "cancelada_na_omie" })).toEqual(["desistir"]);
-    expect(acoesDaEmissao({ etapa: "parada", motivo: "falhas_seguidas" })).toEqual(["retomar", "desistir"]);
+    expect(acoesDaEmissao({ etapa: "parada", motivo: "cancelada_na_omie", nfse: null })).toEqual(["desistir"]);
+    expect(acoesDaEmissao({ etapa: "parada", motivo: "falhas_seguidas", nfse: null })).toEqual(["retomar", "desistir"]);
+    // A nota vale na prefeitura: só tentar de novo (registra a fatura, ou acha a nota cancelada na Omie).
+    expect(acoesDaEmissao({ etapa: "parada", motivo: "nfse_autorizada", nfse: "815" })).toEqual(["retomar"]);
+    expect(acoesDaEmissao({ etapa: "parada", motivo: "fatura_recusada", nfse: "815" })).toEqual(["retomar"]);
+    // Cancelada na Omie depois de autorizada: desistir solta as reservas.
+    expect(acoesDaEmissao({ etapa: "parada", motivo: "cancelada_na_omie", nfse: "815" })).toEqual(["desistir"]);
   });
 
   it("os grupos da tela: as que precisam de você, as em andamento e as concluídas, na ordem em que vieram", () => {

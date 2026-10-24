@@ -47,6 +47,7 @@ export const MOTIVOS_DA_PARADA = [
   "cancelada_na_omie",
   "prefeitura_demorou",
   "fatura_recusada",
+  "nfse_autorizada",
 ] as const;
 export type MotivoDaParada = (typeof MOTIVOS_DA_PARADA)[number];
 
@@ -60,6 +61,7 @@ export const MOTIVO_ROTULO: Record<MotivoDaParada, string> = {
   cancelada_na_omie: "OS cancelada na Omie",
   prefeitura_demorou: "Prefeitura sem resposta",
   fatura_recusada: "Fatura não nasceu",
+  nfse_autorizada: "NFS-e autorizada na prefeitura",
 };
 
 /** As que esperam uma pessoa, as que andam sozinhas e as que acabaram. */
@@ -150,10 +152,15 @@ export function itensDaEmissao(emissao: Pick<EmissaoDoFinanceiro, "demandas" | "
 
 export type AcaoDaEmissao = "retomar" | "desistir";
 
-/** A parada e a rejeitada se retomam ou se desistem; a parada pela OS cancelada na Omie só se desiste. */
-export function acoesDaEmissao(emissao: Pick<EmissaoDoFinanceiro, "etapa" | "motivo">): AcaoDaEmissao[] {
+/**
+ * A parada e a rejeitada se retomam ou se desistem; a parada pela OS
+ * cancelada na Omie só se desiste; com a NFS-e autorizada, que vale na
+ * prefeitura e a Dute não cancela, só se retoma.
+ */
+export function acoesDaEmissao(emissao: Pick<EmissaoDoFinanceiro, "etapa" | "motivo" | "nfse">): AcaoDaEmissao[] {
   if (!ETAPAS_QUE_PRECISAM.includes(emissao.etapa)) return [];
-  return emissao.motivo === "cancelada_na_omie" ? ["desistir"] : ["retomar", "desistir"];
+  if (emissao.motivo === "cancelada_na_omie") return ["desistir"];
+  return emissao.nfse ? ["retomar"] : ["retomar", "desistir"];
 }
 
 export type GruposDasEmissoes = { precisam: EmissaoDoFinanceiro[]; andamento: EmissaoDoFinanceiro[]; concluidas: EmissaoDoFinanceiro[] };

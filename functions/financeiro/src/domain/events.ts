@@ -131,6 +131,7 @@ const emissaoParada = z
       "cancelada_na_omie",
       "prefeitura_demorou",
       "fatura_recusada",
+      "nfse_autorizada",
     ]),
   })
   .strict();
