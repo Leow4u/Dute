@@ -12,10 +12,19 @@ import { functionsDoApp } from "../firebase-functions";
 
 /**
  * registerNf (parte 4.1a), advanceFatura (parte 4.2a: enviar, pagar, estornar
- * e cancelar) e a NFS-e pela Omie (parte 7.4): emitNfOmie, actOnNfEmission e
- * listNfEmissions.
+ * e cancelar), a NFS-e pela Omie (parte 7.4): emitNfOmie, actOnNfEmission e
+ * listNfEmissions, e a baixa na Omie (parte 7.4h): actOnNfSettlement e
+ * listNfSettlements.
  */
-export const CALLABLES_DO_FINANCEIRO = ["registerNf", "advanceFatura", "emitNfOmie", "actOnNfEmission", "listNfEmissions"] as const;
+export const CALLABLES_DO_FINANCEIRO = [
+  "registerNf",
+  "advanceFatura",
+  "emitNfOmie",
+  "actOnNfEmission",
+  "listNfEmissions",
+  "actOnNfSettlement",
+  "listNfSettlements",
+] as const;
 export type CallableDoFinanceiro = (typeof CALLABLES_DO_FINANCEIRO)[number];
 
 /** Chave nova por intenção de gravar (um painel aberto). */

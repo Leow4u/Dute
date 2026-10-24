@@ -4,7 +4,10 @@ import { after, before, beforeEach, describe, it } from "node:test";
 import { deleteApp, initializeApp } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 
+import { HttpsError } from "firebase-functions/https";
+
 import { BAIXAS_COLLECTION, idDaBaixa } from "./baixa-omie.js";
+import { actOnNfSettlementFor, listNfSettlementsFor } from "./baixa-gravacao.js";
 import { advanceFaturaFor } from "./cobranca-gravacao.js";
 import { PAGAMENTOS_COLLECTION } from "./cobranca.js";
 import { EVENTS_COLLECTION } from "./events.js";
@@ -284,5 +287,77 @@ describe("a baixa na Omie", () => {
     await estornar("est-1", pagamentoId);
     assert.equal((await db.collection(BAIXAS_COLLECTION).get()).size, 0);
     assert.deepEqual(await eventos("nf.settlement_cancelled"), []);
+  });
+});
+
+async function recusa(promessa: Promise<unknown>, codigo: string, mensagem: string | RegExp) {
+  await assert.rejects(promessa, (error: unknown) => {
+    assert.ok(error instanceof HttpsError, String(error));
+    assert.equal(error.code, codigo);
+    if (typeof mensagem === "string") assert.equal(error.message, mensagem);
+    else assert.match(error.message, mensagem);
+    return true;
+  });
+}
+
+const agir = (id: string, acao: "retomar" | "dispensar", edicao: number, chave = `${acao}-${id}`, projectId = LIBERADO, quem: FinanceiroProfile = financeiro) =>
+  actOnNfSettlementFor(db, quem, { idempotency_key: chave, id, acao, expected_edicao: edicao }, { projectId, agora });
+
+describe("a baixa na tela (parte 7.4h)", () => {
+  it("a lista traz as abertas, paradas e em andamento, com o cliente e a NF; as que acabaram ficam de fora", async () => {
+    await daOmie();
+    const omie = omieDeMentira();
+    const { pagamento_id: primeiro } = await pagar("pag-1", "1000.00");
+    await rodar(omie.transporte);
+    await rodar(omie.transporte); // lançada
+    minutos += 1;
+    const { pagamento_id: segundo } = await pagar("pag-2", "2000.00");
+    const { baixas } = await listNfSettlementsFor(db, financeiro);
+    assert.deepEqual(
+      baixas.map((item) => [item.id, item.etapa, item.customer_name, item.nf_numero, item.valor_cents, item.recebido_em]),
+      [[idDaBaixa(segundo!), "na_fila", "Itaú Unibanco", "815", 200_000, "2026-10-22"]],
+    );
+    assert.ok(!baixas.some((item) => item.id === idDaBaixa(primeiro!)));
+    await recusa(listNfSettlementsFor(db, { uid: "op-1", role: "interno" }), "permission-denied", /.+/);
+  });
+
+  it("retomar a parada sem as chaves volta à fila, e com as chaves a rotina lança; o evento de quem retomou", async () => {
+    await daOmie();
+    const omie = omieDeMentira();
+    const { pagamento_id: pagamentoId } = await pagar("pag-1");
+    const id = idDaBaixa(pagamentoId!);
+    await rodar(omie.transporte, 0, LIBERADO, null);
+    const parada = await baixa(pagamentoId!);
+    assert.equal(parada.motivo_da_parada, "sem_chaves");
+    const retomada = await agir(id, "retomar", parada.edicao as number);
+    assert.deepEqual([retomada.etapa, (await baixa(pagamentoId!)).etapa], ["na_fila", "na_fila"]);
+    // Repetir a mesma ação devolve o mesmo resultado.
+    assert.equal((await agir(id, "retomar", parada.edicao as number)).replayed, true);
+    await rodar(omie.transporte);
+    await rodar(omie.transporte);
+    assert.equal((await baixa(pagamentoId!)).etapa, "lancada");
+    const [evento] = await eventos("nf.settlement_resumed");
+    assert.deepEqual([evento.payload, (evento.actor as Record<string, unknown>).uid], [{ id, etapa_depois: "na_fila" }, "fin-1"]);
+  });
+
+  it("dispensar a parada acaba a baixa, com o motivo no evento; a edição velha, a que não parou e fora da liberação recusam", async () => {
+    await daOmie();
+    const omie = omieDeMentira({ falhas: { PesquisarLancamentos: Array.from({ length: 6 }, () => ({ status: 500, corpo: { faultstring: "Erro de negócio qualquer." } })) } });
+    const { pagamento_id: pagamentoId } = await pagar("pag-1");
+    const id = idDaBaixa(pagamentoId!);
+    await recusa(agir(id, "dispensar", 1), "failed-precondition", "Só a baixa parada se dispensa.");
+    for (const espera of [0, 2, 4, 8, 16, 32]) await rodar(omie.transporte, espera);
+    const parada = await baixa(pagamentoId!);
+    assert.equal(parada.etapa, "parada");
+    await recusa(agir(id, "dispensar", (parada.edicao as number) - 1), "failed-precondition", "A baixa mudou. Abra de novo.");
+    await recusa(agir(id, "dispensar", parada.edicao as number, "fora", "dute-prod"), "failed-precondition", /não está liberada/);
+    await recusa(agir(id, "dispensar", parada.edicao as number, "sem-papel", LIBERADO, { uid: "com-1", role: "comercial" }), "permission-denied", /.+/);
+    const dispensada = await agir(id, "dispensar", parada.edicao as number);
+    assert.equal(dispensada.etapa, "dispensada");
+    const gravada = await baixa(pagamentoId!);
+    assert.deepEqual([gravada.etapa, (gravada.dispensada as Record<string, unknown>).motivo_da_parada], ["dispensada", "falhas_seguidas"]);
+    assert.deepEqual((await eventos("nf.settlement_dismissed")).map((evento) => evento.payload), [{ id, motivo: "falhas_seguidas" }]);
+    assert.equal((await rodar(omie.transporte, 60)).passos, 0);
+    assert.deepEqual((await listNfSettlementsFor(db, financeiro)).baixas, []);
   });
 });

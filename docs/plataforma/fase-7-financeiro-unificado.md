@@ -854,6 +854,43 @@ emissões, só onde a Omie está liberada.
     contra o valor recebido na Dute. Se a Omie recusar o recebimento maior
     que o saldo, a baixa para com a mensagem dela, e uma pessoa decide.
 
+### Parte 7.4h: a baixa na tela
+
+Feita em 24/10/2026. Só onde a Omie está liberada, como as emissões.
+
+- **As callables:**
+  - `listNfSettlements` dá as baixas abertas (paradas, na fila e
+    cancelando), as mais novas primeiro, com o cliente e o número da NF que
+    o pagamento grava na baixa só para a tela;
+  - `actOnNfSettlement` retoma a parada (volta a lançar ou a cancelar, do
+    zero nas falhas e conferindo antes) ou a dispensa (a pessoa resolveu na
+    Omie à mão), com a edição que a tela viu e o recibo de idempotência;
+  - os eventos `nf.settlement_resumed` (a etapa para onde voltou) e
+    `nf.settlement_dismissed` (o motivo da parada), sem valor.
+- **A tela Emissões** ganha a seção "Baixas na Omie", logo depois das
+  emissões que precisam de você:
+  - a parada primeiro, com o motivo e a mensagem da Omie, e as ações
+    "Tentar de novo" e "Dispensar" (a dispensa pede a confirmação na linha);
+  - depois as que a rotina anda (na fila e cancelando), sem ação;
+  - as que acabaram (lançadas, canceladas e dispensadas) não aparecem.
+- **O "Precisa de você"** conta as baixas paradas como críticas ("N baixas
+  paradas na Omie", com os clientes e o valor), depois das emissões. A
+  entrada, o menu e o radar contam pela mesma lista.
+- **A chave de idempotência** é da intenção (a baixa, a ação e a edição),
+  como nas emissões: a nova tentativa depois da falha leva a mesma chave.
+- **Testes:**
+  - `baixa-omie.test.ts`: retomar volta à etapa de onde parou, dispensar
+    acaba, e só a parada tem ação;
+  - `baixa.integration.test.ts`: a lista das abertas; retomar a parada sem
+    as chaves volta à fila e, com elas, a rotina lança; dispensar com o
+    evento; a edição velha, a que não parou, fora da liberação e sem o
+    papel recusam;
+  - `baixas.test.ts`, `emissoes-view.test.tsx` (os textos, a ordem das
+    seções, a confirmação e o `axe`) e `emissoes.test.tsx` (as callables e
+    a chave que fica depois da falha);
+  - `platform-lists.test.ts`: as etapas e os motivos da baixa são os do
+    servidor, e as callables do app são as do `index.ts`.
+
 ### Correção: o registro da NF que saiu pela Omie não se cancela
 
 Feita em 24/10/2026, da revisão da parte 7.4g.
@@ -875,15 +912,18 @@ Feita em 24/10/2026, da revisão da parte 7.4g.
 
 ## Onde a Fase 7 está
 
-- Feitas: 7.0 a 7.3c, 7.4a a 7.4g e 7.5a a 7.5c.
-- **7.4 em andamento,** com a pergunta 21 respondida em 24/10/2026: a
-  NFS-e pela Omie (desenho em "A NFS-e pela Omie"). Falta a 7.4h, a baixa
-  na tela. A emissão espera as chaves da Omie (`OMIE_APP_KEY` e
-  `OMIE_APP_SECRET`) no `dute-homolog`: sem elas, a rotina não chama a Omie
-  e a NF segue registrada à mão ("Emitida fora").
+- Feitas: 7.0 a 7.3c, 7.4a a 7.4h e 7.5a a 7.5c.
+- **7.4 feita no código,** com a pergunta 21 respondida em 24/10/2026: a
+  NFS-e pela Omie e a baixa (desenho em "A NFS-e pela Omie"). Falta o
+  cancelamento da NFS-e autorizada, numa parte própria.
+- **Para a Omie emitir no `dute-homolog`,** faltam as chaves
+  (`OMIE_APP_KEY` e `OMIE_APP_SECRET`, pelo comando da parte 7.4d) e a
+  parte pequena que as declara no `runOmieSync`. Sem elas, a emissão e a
+  baixa param com o motivo `sem_chaves`, e a NF segue registrada à mão
+  ("Emitida fora").
 - **O "pronto quando" da fase:**
   - a armazenagem e as OS já fecham a competência na mesma fatura;
   - o a receber já é um só (`faturas`);
-  - falta a NF sair pela integração (7.4).
+  - a NF sai pela integração (7.4) assim que as chaves existirem.
 - **Na produção,** tudo depende do lançamento da Fase 4 (parte 4.9b): ligar
   o Financeiro no `dute-prod` põe o projeto nas três listas.

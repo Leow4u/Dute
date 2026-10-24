@@ -21,6 +21,7 @@ import {
 import type { FaturaDoFinanceiro } from "./faturas";
 import { itensDoInicioDoFinanceiro } from "./inicio";
 import { abreFinanceiro } from "./navegacao";
+import { useBaixasDoFinanceiro } from "./use-baixas";
 import { useEmissoesDoFinanceiro } from "./use-emissoes";
 import { useFaturas } from "./use-faturas";
 
@@ -142,14 +143,16 @@ export function useInicioDoFinanceiro(role: ProfileRole | null | undefined, agor
   const fila = useFilaDoFinanceiro(role, ligado);
   const cobranca = useFaturas(role, ligado);
   const emissoes = useEmissoesDoFinanceiro(role, ligado);
-  const falhas = [...fila.falhas, ...cobranca.falhas, ...emissoes.falhas];
-  const itens = fila.linhas && cobranca.faturas && emissoes.emissoes ? itensDoInicioDoFinanceiro(fila.linhas, cobranca.faturas, agora, emissoes.emissoes) : [];
+  const baixas = useBaixasDoFinanceiro(role, ligado);
+  const falhas = [...fila.falhas, ...cobranca.falhas, ...emissoes.falhas, ...baixas.falhas];
+  const itens =
+    fila.linhas && cobranca.faturas && emissoes.emissoes && baixas.baixas ? itensDoInicioDoFinanceiro(fila.linhas, cobranca.faturas, agora, emissoes.emissoes, baixas.baixas) : [];
   return {
     // Sem todas as leituras, uma lista parcial diria "nada parado" sem saber.
     itens: falhas.length ? [] : itens,
     linhas: fila.linhas,
     faturas: cobranca.faturas,
-    carregando: !falhas.length && (fila.carregando || cobranca.carregando || emissoes.carregando),
+    carregando: !falhas.length && (fila.carregando || cobranca.carregando || emissoes.carregando || baixas.carregando),
     falhas,
   };
 }

@@ -41,6 +41,8 @@ export const FINANCEIRO_EVENT_TYPES = [
   "nf.settlement_posted",
   "nf.settlement_cancelled",
   "nf.settlement_stopped",
+  "nf.settlement_resumed",
+  "nf.settlement_dismissed",
 ] as const;
 export type FinanceiroEventType = (typeof FINANCEIRO_EVENT_TYPES)[number];
 
@@ -154,6 +156,12 @@ const baixaParada = z
   })
   .strict();
 
+/** Alguém do Financeiro retomou a baixa parada: ela volta a lançar ou a cancelar (parte 7.4h). */
+const baixaRetomada = z.object({ id: baixaId, etapa_depois: z.enum(["na_fila", "cancelando"]) }).strict();
+
+/** Alguém do Financeiro dispensou a baixa parada: resolveu na Omie à mão. O motivo é o da parada. */
+const baixaDispensada = z.object({ id: baixaId, motivo: baixaParada.shape.motivo }).strict();
+
 export const FINANCEIRO_EVENT_PAYLOADS = {
   "nf.registered": nfRegistrada,
   "nf.sent": nfEnviada,
@@ -170,6 +178,8 @@ export const FINANCEIRO_EVENT_PAYLOADS = {
   "nf.settlement_posted": baixaLancada,
   "nf.settlement_cancelled": baixaCancelada,
   "nf.settlement_stopped": baixaParada,
+  "nf.settlement_resumed": baixaRetomada,
+  "nf.settlement_dismissed": baixaDispensada,
 } as const;
 
 const TEXTO: Record<FinanceiroEventType, { title: string; description: string }> = {
@@ -188,6 +198,8 @@ const TEXTO: Record<FinanceiroEventType, { title: string; description: string }>
   "nf.settlement_posted": { title: "Baixa lançada na Omie", description: "O pagamento registrado na Dute foi lançado no título da OS na Omie." },
   "nf.settlement_cancelled": { title: "Baixa cancelada na Omie", description: "O pagamento estornado na Dute não está mais no título da OS na Omie." },
   "nf.settlement_stopped": { title: "Baixa na Omie parada", description: "A baixa do pagamento na Omie espera alguém do Financeiro." },
+  "nf.settlement_resumed": { title: "Baixa na Omie retomada", description: "Alguém do Financeiro retomou a baixa parada." },
+  "nf.settlement_dismissed": { title: "Baixa na Omie dispensada", description: "Alguém do Financeiro resolveu a baixa na Omie à mão." },
 };
 
 /** A entidade do evento: a fatura, a emissão da NFS-e pela Omie ou a baixa do pagamento na Omie. */
