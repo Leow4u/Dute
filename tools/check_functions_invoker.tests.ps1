@@ -309,9 +309,13 @@ Expect "onCall fora do padrao falha em vez de passar sem conferir" (
 ) $result.Output
 
 # Sem parametros, como no publicar.yml: le o firebase.json da raiz do repo.
-# Aqui toda callable do codigo esta publicada, ativa e com invoker.
+# Aqui toda callable das codebases do firebase.json esta publicada, ativa e
+# com invoker. Codebase que ainda nao entrou no firebase.json (functions/rh
+# ate a parte 8.1b) nao sobe, entao nao conta.
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$realNames = @(Get-ChildItem (Join-Path $repoRoot "functions/*/src/index.ts") |
+$realSources = @((Get-Content (Join-Path $repoRoot "firebase.json") -Raw | ConvertFrom-Json).functions |
+  ForEach-Object { Join-Path $repoRoot "$($_.source)/src/index.ts" })
+$realNames = @(Get-Item $realSources |
   Select-String -Pattern '^export const (\w+) = onCall(<.*>)?\(' |
   ForEach-Object { $_.Matches[0].Groups[1].Value })
 $result = Invoke-Check @{} -Fake {
