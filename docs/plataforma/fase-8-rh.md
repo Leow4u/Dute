@@ -135,10 +135,11 @@ os papéis que a conta já tinha.
 |---|---|---|
 | 8.0 | O desenho (este documento) | — |
 | 8.1a | As regras do banco `rh`, fechadas ao navegador; a codebase `functions/rh` (o perfil, a liberação, o recibo e o evento no banco `rh`); os jobs do CI. Ainda fora da publicação | Nenhum papel lê nem grava o banco `rh` pelo navegador; só `rh`, `admin` e `owner` passam pela callable, e só `rh` grava |
-| 8.1b | Com o banco criado pelo workflow `Banco rh` nos dois ambientes: o `firebase.json` com o banco `rh` e a codebase `rh`; a publicação confere as regras dele; o shell do RH com o Início | A publicação recusa sem o banco; o shell só abre para `rh`, `admin` e `owner` |
+| 8.1b | Com o banco criado pelo workflow `Banco rh` nos dois ambientes: o `firebase.json` com o banco `rh` e a codebase `rh`; a publicação confere as regras dele; o `RH_PUBLICADO` do app passa a `true` no mesmo PR, e as telas ligam na homologação | A trava do `platform-lists.test.ts` exige o `RH_PUBLICADO` igual à codebase no `firebase.json` |
 | 8.2a | A ficha no servidor: os registros no banco `rh`, o vigente de cada tipo, o recibo e o evento no banco `rh`, o painel e a rotina dos vencimentos | O vencimento gera o alerta uma vez por marco; nada do RH cai no banco padrão; só o rh grava |
 | 8.2b | Os arquivos da ficha: sobem e descem por URL assinada da callable, e cada abertura fica registrada | O documento só abre pelo RH |
-| 8.2c | As telas, depois da 8.1b: o Início do RH com os vencimentos, a lista de quem está ativo e a ficha | Os textos e o `axe` de cada tela; o owner e o admin não veem as ações de gravar |
+| 8.2c | As telas de leitura, desligadas até a 8.1b: o shell do RH, o Início com os vencimentos, Pessoas e a ficha | Os textos e o `axe` de cada tela; as rotas só existem com a liberação; só owner, admin e rh abrem |
+| 8.2d | As ações na ficha: incluir, alterar e arquivar o registro, subir e abrir o arquivo | Owner e admin não veem as ações de gravar; o arquivo abre pela callable |
 | 8.3 | A integração da folha e do eSocial (pergunta 24) | A exportação é idempotente |
 
 **Pronto quando** só `rh`, `admin` e `owner` leem o RH, pela callable, e o
@@ -159,7 +160,8 @@ banco `rh` e a codebase na parte 8.1b, depois de o banco existir.
     - a liberação (`RH_AMBIENTES_LIBERADOS`, só o `dute-homolog`);
     - o login e o perfil no `users` do banco padrão;
     - o papel: owner, admin e rh abrem; só o rh grava.
-  - A callable `rhStatus` diz ao shell quem abre e se grava.
+  - A callable `rhStatus` dizia ao shell quem abre e se grava; saiu na 8.2c,
+    porque o app decide pelo papel (`lib/rh/navegacao.ts`).
   - O recibo, o evento e o acesso ao banco `rh` entram na parte 8.2a, com a
     primeira gravação.
 - **O CI** ganha `rh-unit` e `rh-integration`, e a publicação da produção
@@ -259,4 +261,41 @@ Feita em 23/10/2026. Ainda fora da publicação.
     velha; owner e admin não sobem; cada abertura registrada;
   - `functions/wms/src/rh-arquivos.rules.test.ts`: nenhum papel lê, sobe,
     troca, apaga nem lista `rh/**` pelo navegador.
+
+### Parte 8.2c: as telas de leitura do RH
+
+Feita em 23/10/2026. As telas ficam desligadas em todo ambiente até a parte
+8.1b.
+
+- **O portão.** O app tem a liberação própria do RH
+  (`RH_AMBIENTES_LIBERADOS`, a mesma lista das callables) e o
+  `RH_PUBLICADO`, que diz se a codebase `rh` está no `firebase.json`. As
+  telas só existem com os dois. Hoje o `RH_PUBLICADO` é `false`, e a trava do
+  `platform-lists.test.ts` o compara com o `firebase.json`. Assim a parte
+  8.1b, que põe a codebase na publicação, liga as telas no mesmo PR.
+- **O shell** (`components/layout/rh-layout.tsx`) segue o molde dos outros
+  módulos: o seletor, o menu com o Início e Pessoas e os contadores do
+  "Precisa de você". O RH não tem Agent Dute nem cliente ativo.
+- **O Início** (`/rh`) tem uma linha por pessoa com registro vencido ou
+  vencendo. O vencido é crítico e vem primeiro, e a ação abre a ficha. Ao
+  lado, as pessoas ativas em números. O card da entrada conta pela mesma
+  lista.
+- **Pessoas** (`/rh/pessoas`) lista quem está ativo, com a função, o
+  vínculo, o próximo vencimento e as marcas de vencido, vencendo e sem
+  registro.
+- **A ficha** (`/rh/ficha?colaborador=`) mostra, por categoria, os vigentes
+  com o resultado do exame e o prazo dentro da janela. O histórico fica em
+  "Histórico · N".
+- **O papel rh** cai direto no Início do RH. Owner e admin trocam pelo
+  seletor.
+- **O catálogo** do app (`lib/rh/ficha.ts`) é cópia literal do de
+  `functions/rh`. A trava confere o catálogo, os papéis, a liberação e as
+  callables que o app chama.
+- **A callable `rhStatus`** da 8.1a saiu, porque o app decide pelo papel.
+- **Testes:**
+  - `lib/rh/navegacao.test.ts`: os papéis, o card, a aterrissagem, o
+    menu, o seletor e as rotas só com a liberação;
+  - `lib/rh/ficha.test.ts`: a leitura das callables, o prazo e o "Precisa
+    de você";
+  - as três telas, com a lista dos textos e o `axe`.
 

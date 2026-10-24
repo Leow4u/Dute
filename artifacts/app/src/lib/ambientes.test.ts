@@ -75,9 +75,13 @@ describe("ambiente da rota", () => {
       // O Agent Dute do Financeiro (parte 5.5j), no shell dele.
       "/financeiro/agente",
     ]);
+    // O RH (Fase 8, parte 8.2c): o Início, Pessoas e a ficha.
+    expect(caminhos.filter((path) => path === "/rh" || path.startsWith("/rh/"))).toEqual(["/rh", "/rh/pessoas", "/rh/ficha"]);
     for (const path of caminhos) {
       const esperado = path.startsWith("/financeiro")
         ? "financeiro"
+        : path === "/rh" || path.startsWith("/rh/")
+        ? "rh"
         : path.startsWith("/comercial")
         ? "comercial"
         : path.startsWith("/operacao")

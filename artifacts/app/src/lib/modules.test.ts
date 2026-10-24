@@ -147,6 +147,10 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/portal/servicos", ["cliente"]],
   // O comprovante da OS concluída (parte 4.3d).
   ["/portal/servicos/comprovante", ["cliente"]],
+  // O RH (parte 8.2c): owner e admin leem, o rh grava.
+  ["/rh", ["owner", "admin", "rh"]],
+  ["/rh/pessoas", ["owner", "admin", "rh"]],
+  ["/rh/ficha", ["owner", "admin", "rh"]],
 ];
 
 // Menu com o Comercial desligado, como na produção (o liberado: comercial/navegacao.test.ts).

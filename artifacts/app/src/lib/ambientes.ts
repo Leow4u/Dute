@@ -1,6 +1,6 @@
 import type { Modulo, Papel } from "@workspace/dominio";
 
-import { COMERCIAL_LIBERADO, FINANCEIRO_LIBERADO, OPERACAO_LIBERADO, PLATAFORMA_LIBERADA } from "./liberacao";
+import { COMERCIAL_LIBERADO, FINANCEIRO_LIBERADO, OPERACAO_LIBERADO, PLATAFORMA_LIBERADA, RH_LIBERADO } from "./liberacao";
 import { normalizePath } from "./modules";
 import type { OperationProfile } from "./operations";
 import { entrada } from "./platform-modules";
@@ -13,10 +13,10 @@ import { isSettingsPath } from "./settings-nav";
  * ganha um layout em App.tsx; sem tela, não entra.
  *
  * O Faturamento do WMS continua na Armazenagem até a Fase 7. O Financeiro da
- * demanda (Fase 4) tem shell próprio em /financeiro.
+ * demanda (Fase 4) tem shell próprio em /financeiro, e o RH (Fase 8), em /rh.
  */
 
-export type Ambiente = "wms" | "comercial" | "operacao" | "campo" | "tv" | "financeiro";
+export type Ambiente = "wms" | "comercial" | "operacao" | "campo" | "tv" | "financeiro" | "rh";
 
 const POR_PREFIXO: readonly { prefixo: string; ambiente: Ambiente }[] = [
   { prefixo: "/comercial", ambiente: "comercial" },
@@ -27,6 +27,8 @@ const POR_PREFIXO: readonly { prefixo: string; ambiente: Ambiente }[] = [
   { prefixo: "/tv", ambiente: "tv" },
   // O Financeiro da demanda (Fase 4), com shell próprio.
   { prefixo: "/financeiro", ambiente: "financeiro" },
+  // O RH (Fase 8), com shell próprio.
+  { prefixo: "/rh", ambiente: "rh" },
 ];
 
 /** Ambiente de navegação do caminho. Configuração não é módulo: use layoutDaRota. */
@@ -49,13 +51,14 @@ export function moduloDaRota(path: string): Modulo | null {
   if (ambiente === "comercial" || ambiente === "operacao") return ambiente;
   if (ambiente === "campo" || ambiente === "tv") return "operacao";
   if (ambiente === "financeiro") return "financeiro";
+  if (ambiente === "rh") return "rh";
   const normalized = normalizePath(path);
   if (normalized === "/faturamento" || normalized.startsWith("/faturamento/")) return "financeiro";
   return "wms";
 }
 
 /** Qual shell desenha a rota. "app" é o layout do WMS e do portal. */
-export type LayoutDaRota = "app" | "settings" | "comercial" | "operacao" | "campo" | "tv" | "financeiro";
+export type LayoutDaRota = "app" | "settings" | "comercial" | "operacao" | "campo" | "tv" | "financeiro" | "rh";
 
 export function layoutDaRota(path: string): LayoutDaRota {
   if (isSettingsPath(path)) return "settings";
@@ -76,7 +79,8 @@ export function podeTrocarDeModulo(
   plataforma: boolean = PLATAFORMA_LIBERADA,
   operacao: boolean = OPERACAO_LIBERADO,
   financeiro: boolean = FINANCEIRO_LIBERADO,
+  rh: boolean = RH_LIBERADO,
 ): boolean {
   if (!plataforma) return false;
-  return entrada(role, profile, comercial, operacao, financeiro).kind === "cards";
+  return entrada(role, profile, comercial, operacao, financeiro, rh).kind === "cards";
 }

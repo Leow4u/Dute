@@ -41,6 +41,7 @@ import OperacaoLayout from "./components/layout/operacao-layout";
 import CampoLayout from "./components/layout/campo-layout";
 import TvLayout from "./components/layout/tv-layout";
 import FinanceiroLayout from "./components/layout/financeiro-layout";
+import RhLayout from "./components/layout/rh-layout";
 import { AppThemeProvider } from "./components/theme/theme-provider";
 import SettingsLayout from "./components/layout/settings-layout";
 import type { WarehouseOpsModuleKey } from "./lib/warehouse-ops/model";
@@ -161,6 +162,9 @@ const FinanceiroPagos = lazy(() => import("./pages/financeiro/faturas").then((te
 const FinanceiroFaturas = lazy(() => import("./pages/financeiro/faturas").then((tela) => ({ default: tela.FinanceiroFaturas })));
 const FinanceiroNf = lazy(() => import("./pages/financeiro/nf"));
 const FinanceiroRelatorios = lazy(() => import("./pages/financeiro/relatorios"));
+const RhInicio = lazy(() => import("./pages/rh/inicio"));
+const RhPessoas = lazy(() => import("./pages/rh/pessoas"));
+const RhFicha = lazy(() => import("./pages/rh/ficha"));
 const FinanceiroContratos = lazy(() => import("./pages/financeiro/contratos"));
 const FinanceiroAutorizacoes = lazy(() => import("./pages/financeiro/autorizacoes"));
 const ComercialOrcamentos = lazy(() => import("./pages/comercial/orcamentos"));
@@ -195,6 +199,7 @@ import { PLATAFORMA_LIBERADA } from "./lib/liberacao";
 import { soComComercialLiberado } from "./lib/comercial/navegacao";
 import { soComOperacaoLiberada } from "./lib/operacao/navegacao";
 import { soComFinanceiroLiberado } from "./lib/financeiro/navegacao";
+import { soComRhLiberado } from "./lib/rh/navegacao";
 import { entrada } from "./lib/platform-modules";
 import { portalModulesFor } from "./lib/operations";
 import {
@@ -992,6 +997,7 @@ const LAYOUT_DA_ROTA = {
   campo: CampoLayout,
   tv: TvLayout,
   financeiro: FinanceiroLayout,
+  rh: RhLayout,
 } as const;
 
 function protectedRoute(
@@ -1162,6 +1168,13 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
     protectedRoute("/financeiro/autorizacoes", FinanceiroAutorizacoes),
     protectedRoute("/financeiro/relatorios", FinanceiroRelatorios),
     protectedRoute("/financeiro/agente", AgenteDoFinanceiro),
+  ]),
+  // RH (docs/plataforma/fase-8-rh.md): as rotas só existem onde a liberação
+  // do RH está ligada, depois da parte 8.1b (lib/rh/navegacao.ts).
+  ...soComRhLiberado([
+    protectedRoute("/rh", RhInicio),
+    protectedRoute("/rh/pessoas", RhPessoas),
+    protectedRoute("/rh/ficha", RhFicha),
   ]),
 ];
 

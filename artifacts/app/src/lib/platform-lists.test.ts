@@ -25,14 +25,20 @@ import {
   FINANCEIRO_AMBIENTES_LIBERADOS,
   MEMORIA_AMBIENTES_LIBERADOS,
   OPERACAO_AMBIENTES_LIBERADOS,
+  RH_AMBIENTES_LIBERADOS,
+  RH_PUBLICADO,
   agenteLiberado,
   memoriaLiberada,
+  rhLiberado,
 } from "./liberacao";
 import { MODULOS_DO_AGENTE } from "./agente/cliente";
 import { AGENTE_ROLES } from "./agente/navegacao";
 import { OPERACAO_CADASTRO_ROLES } from "./operacao/navegacao";
 import { FINANCE_ROLES, INTERNAL_ROLES } from "./modules";
 import { PLATFORM_MODULES } from "./platform-modules";
+import { CALLABLES_DO_RH } from "./rh/api";
+import * as FICHA_DO_RH from "./rh/ficha";
+import { RH_ROLES as RH_ROLES_DO_APP, RH_WRITE_ROLES as RH_WRITE_ROLES_DO_APP } from "./rh/navegacao";
 import { TV_ROLES } from "./tv/navegacao";
 
 /**
@@ -169,16 +175,50 @@ describe("listas da Operação iguais em todo lugar", () => {
 describe("listas do RH iguais em todo lugar (Fase 8)", () => {
   const roles = read("functions/rh/src/domain/platform-roles.ts");
   const liberacao = read("functions/rh/src/domain/liberacao.ts");
+  const ficha = read("functions/rh/src/domain/ficha.ts");
 
-  it("papéis: lib/dominio e functions/rh; abrem o RH os papéis que têm o módulo, e só o rh grava (pergunta 23)", () => {
+  it("papéis: lib/dominio, functions/rh e o app; abrem o RH os papéis que têm o módulo, e só o rh grava (pergunta 23)", () => {
     expect(tsList(roles, "PLATFORM_ROLES")).toEqual([...PAPEIS]);
     const comRh = PAPEIS.filter((papel) => papel !== "cliente" && MODULOS_POR_PAPEL[papel].includes("rh"));
     expect(tsList(roles, "RH_ROLES")).toEqual(comRh);
     expect(tsList(roles, "RH_WRITE_ROLES")).toEqual(["rh"]);
+    expect([...RH_ROLES_DO_APP]).toEqual(comRh);
+    expect([...RH_WRITE_ROLES_DO_APP]).toEqual(["rh"]);
   });
 
-  it("liberação por ambiente: só a homologação até o lançamento da fase", () => {
-    expect(tsList(liberacao, "RH_AMBIENTES_LIBERADOS")).toEqual(["dute-homolog"]);
+  it("liberação por ambiente: a lista das callables é a do app, só a homologação até o lançamento da fase", () => {
+    expect(tsList(liberacao, "RH_AMBIENTES_LIBERADOS")).toEqual([...RH_AMBIENTES_LIBERADOS]);
+    expect([...RH_AMBIENTES_LIBERADOS]).toEqual(["dute-homolog"]);
+  });
+
+  it("as telas do RH só ligam quando a codebase rh está na publicação (parte 8.1b)", () => {
+    const firebase = JSON.parse(read("firebase.json")) as { functions?: Array<{ codebase?: string }> };
+    const publicado = (firebase.functions ?? []).some((codebase) => codebase.codebase === "rh");
+    expect(RH_PUBLICADO).toBe(publicado);
+    expect(rhLiberado("dute-homolog")).toBe(publicado);
+    expect(rhLiberado("dute-homolog", true)).toBe(true);
+    expect(rhLiberado("dute-prod", true)).toBe(false);
+  });
+
+  it("o catálogo da ficha é cópia literal do de functions/rh", () => {
+    const bloco = (source: string) => {
+      const match = source.match(/export const TIPOS_POR_CATEGORIA = (\{[\s\S]*?\}) as const/);
+      if (!match) throw new Error("TIPOS_POR_CATEGORIA não encontrado");
+      return JSON.parse(match[1].replace(/(\w+):/g, '"$1":').replace(/,(\s*[}\]])/g, "$1"));
+    };
+    expect(bloco(ficha)).toEqual(FICHA_DO_RH.TIPOS_POR_CATEGORIA);
+    expect(tsList(ficha, "CATEGORIAS")).toEqual([...FICHA_DO_RH.CATEGORIAS]);
+    expect(tsList(ficha, "RESULTADOS_DO_EXAME")).toEqual([...FICHA_DO_RH.RESULTADOS_DO_EXAME]);
+    expect(tsList(ficha, "SITUACOES")).toEqual([...FICHA_DO_RH.SITUACOES]);
+    expect(ficha).toContain(`export const DIAS_PARA_O_VENCIMENTO = ${FICHA_DO_RH.DIAS_PARA_O_VENCIMENTO};`);
+    for (const tipos of Object.values(FICHA_DO_RH.TIPOS_POR_CATEGORIA)) {
+      for (const tipo of tipos) expect(FICHA_DO_RH.ROTULO_DO_TIPO[tipo], tipo).toBeTruthy();
+    }
+  });
+
+  it("o app chama as callables que functions/rh declara", () => {
+    const declaradas = [...read("functions/rh/src/index.ts").matchAll(/^export const (\w+) = onCall\(/gm)].map((match) => match[1]);
+    expect(declaradas).toEqual([...CALLABLES_DO_RH]);
   });
 });
 

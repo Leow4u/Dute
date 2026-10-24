@@ -2,7 +2,7 @@ import type { Modulo, Papel } from "@workspace/dominio";
 import type { LucideIcon } from "lucide-react";
 
 import { moduloDaRota, podeTrocarDeModulo } from "./ambientes";
-import { COMERCIAL_LIBERADO, FINANCEIRO_LIBERADO, OPERACAO_LIBERADO, PLATAFORMA_LIBERADA } from "./liberacao";
+import { COMERCIAL_LIBERADO, FINANCEIRO_LIBERADO, OPERACAO_LIBERADO, PLATAFORMA_LIBERADA, RH_LIBERADO } from "./liberacao";
 import type { OperationProfile } from "./operations";
 import { PLATFORM_MODULES, modulesForPerson } from "./platform-modules";
 
@@ -22,7 +22,7 @@ export type OpcaoDeModulo = {
   atual: boolean;
 };
 
-export type Liberacoes = { comercial: boolean; plataforma: boolean; operacao: boolean; financeiro?: boolean };
+export type Liberacoes = { comercial: boolean; plataforma: boolean; operacao: boolean; financeiro?: boolean; rh?: boolean };
 
 /** Liberações deste build. Testes passam as suas, explícitas. */
 export const LIBERACOES_DESTE_BUILD: Liberacoes = {
@@ -30,6 +30,7 @@ export const LIBERACOES_DESTE_BUILD: Liberacoes = {
   plataforma: PLATAFORMA_LIBERADA,
   operacao: OPERACAO_LIBERADO,
   financeiro: FINANCEIRO_LIBERADO,
+  rh: RH_LIBERADO,
 };
 
 /** Módulos da lista do seletor; vazia quando a pessoa tem um módulo só ou a plataforma está desligada. */
@@ -40,9 +41,10 @@ export function opcoesDoSeletor(
   liberacoes: Liberacoes = LIBERACOES_DESTE_BUILD,
 ): OpcaoDeModulo[] {
   const financeiro = liberacoes.financeiro ?? false;
-  if (!podeTrocarDeModulo(role, profile, liberacoes.comercial, liberacoes.plataforma, liberacoes.operacao, financeiro)) return [];
+  const rh = liberacoes.rh ?? false;
+  if (!podeTrocarDeModulo(role, profile, liberacoes.comercial, liberacoes.plataforma, liberacoes.operacao, financeiro, rh)) return [];
   const aberto = moduloDaRota(path);
-  return modulesForPerson(role, profile, liberacoes.comercial, liberacoes.operacao, financeiro).map((entry) => ({
+  return modulesForPerson(role, profile, liberacoes.comercial, liberacoes.operacao, financeiro, rh).map((entry) => ({
     key: entry.module.key,
     label: entry.module.label,
     href: entry.href,

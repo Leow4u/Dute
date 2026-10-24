@@ -10,8 +10,9 @@ import { Boxes, Handshake, Receipt, Truck, Users, type LucideIcon } from "lucide
 import { ROTA_CAMPO, abreCampo } from "./campo/navegacao";
 import { COMERCIAL_ROLES, ROTA_COMERCIAL, abreComercial } from "./comercial/navegacao";
 import { ROTA_FINANCEIRO, abreFinanceiro } from "./financeiro/navegacao";
-import { COMERCIAL_LIBERADO, FINANCEIRO_LIBERADO, OPERACAO_LIBERADO } from "./liberacao";
+import { COMERCIAL_LIBERADO, FINANCEIRO_LIBERADO, OPERACAO_LIBERADO, RH_LIBERADO } from "./liberacao";
 import { OPERACAO_CADASTRO_ROLES, ROTA_OPERACAO, abreOperacao } from "./operacao/navegacao";
+import { RH_ROLES, ROTA_RH, abreRh } from "./rh/navegacao";
 import { ROTA_TV, abreTv } from "./tv/navegacao";
 import type { OperationProfile } from "./operations";
 
@@ -36,7 +37,7 @@ export type PlatformModule = {
   /** Para o cliente o módulo é um card? As faturas fazem parte do portal, não são uma entrada. */
   clientCard: boolean;
   /** Liberação própria do módulo (lib/liberacao.ts): fora dela o módulo não tem casa. */
-  liberacao?: "comercial" | "operacao";
+  liberacao?: "comercial" | "operacao" | "rh";
 };
 
 export const PLATFORM_MODULES: readonly PlatformModule[] = [
@@ -78,7 +79,15 @@ export const PLATFORM_MODULES: readonly PlatformModule[] = [
     home: { owner: "/faturamento", admin: "/faturamento", financeiro: "/faturamento" },
     clientCard: false,
   },
-  { key: "rh", label: MODULO_ROTULO.rh, icon: Users, home: {}, clientCard: false },
+  {
+    key: "rh",
+    label: MODULO_ROTULO.rh,
+    icon: Users,
+    // O RH (Fase 8): owner, admin e rh entram no Início dele, só com a liberação própria.
+    home: Object.fromEntries(RH_ROLES.map((role) => [role, ROTA_RH])),
+    clientCard: false,
+    liberacao: "rh",
+  },
 ];
 
 export type ModuleEntry = { module: PlatformModule; href: string };
@@ -94,6 +103,7 @@ export function modulesForPerson(
   comercial: boolean = COMERCIAL_LIBERADO,
   operacao: boolean = OPERACAO_LIBERADO,
   financeiro: boolean = FINANCEIRO_LIBERADO,
+  rh: boolean = RH_LIBERADO,
 ): ModuleEntry[] {
   if (!role) return [];
   const wanted: readonly Modulo[] =
@@ -103,6 +113,7 @@ export function modulesForPerson(
     if (role === "cliente" && !module.clientCard) return [];
     if (module.liberacao === "comercial" && !abreComercial(role, comercial)) return [];
     if (module.liberacao === "operacao" && !abreOperacao(role, operacao) && !abreCampo(role, operacao) && !abreTv(role, operacao)) return [];
+    if (module.liberacao === "rh" && !abreRh(role, rh)) return [];
     // Com o Financeiro liberado, a casa dele é o shell próprio (Fase 4); fora, o Faturamento do WMS.
     const href = module.key === "financeiro" && abreFinanceiro(role, financeiro) ? ROTA_FINANCEIRO : module.home[role];
     return href ? [{ module, href }] : [];
@@ -121,8 +132,9 @@ export function entrada(
   comercial: boolean = COMERCIAL_LIBERADO,
   operacao: boolean = OPERACAO_LIBERADO,
   financeiro: boolean = FINANCEIRO_LIBERADO,
+  rh: boolean = RH_LIBERADO,
 ): Entrada {
-  const modules = modulesForPerson(role, profile, comercial, operacao, financeiro);
+  const modules = modulesForPerson(role, profile, comercial, operacao, financeiro, rh);
   if (modules.length === 1) return { kind: "redirect", to: modules[0].href };
   if (modules.length === 0) return { kind: "nenhum" };
   return { kind: "cards", modules };
