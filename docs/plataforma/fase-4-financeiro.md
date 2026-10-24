@@ -746,3 +746,35 @@ conferir na homologação, a publicação, a conferência de produção, a parte
   - O da conclusão leva ao comprovante, e a conclusão guarda a assinatura e a foto do final.
   - Nenhum aviso ou e-mail de OS leva valor, endereço ou o que o cliente escreveu. Rodar de novo não repete nada.
 - **Ficou registrado no teste.** A OS que nasce de item livre do portal não tem serviço da tabela, e o aviso diz só o dia e o horário (pergunta 12 do plano, o tipo da OS).
+
+### Correção: o cliente só com a Operação entra no portal
+
+Feita em 24/10/2026. O desenho da Fase 2 deixava o cliente só com a Operação
+em "Nenhum módulo liberado" até a Fase 4 ("quem cai onde", em
+`fase-2-nucleo.md`). A parte 4.3b deu a ele Minhas OS, mas a entrada
+continuava sem casa para o cliente na Operação, e o Início do portal, que é o
+do armazém, ficaria vazio para ele.
+
+- **A entrada** (`lib/platform-modules.ts`): a Operação tem casa para o
+  cliente, Minhas OS (`ROTA_MINHAS_OS`, em `lib/portal/navegacao.ts`), onde a
+  Operação está liberada. O cliente nunca vê os cards: entra pela primeira
+  casa, o Início com a armazenagem e Minhas OS sem ela.
+- **O menu do portal** (`portalModulesFor`): sem a armazenagem, o Início sai
+  do menu quando o contrato abre outra tela. O modelo sem portal continua
+  com o Início, para a conta de cliente criada por engano não abrir uma tela
+  em branco.
+- **A guarda das rotas do portal** (`App.tsx`) devolve a tela de fora do
+  contrato para o começo do portal (`inicioDoPortal`, em `lib/modules.ts`),
+  que está sempre no menu: o `/portal` do cliente sem armazenagem vai a
+  Minhas OS, sem laço.
+- **Nada muda no servidor.** Minhas OS lê `service_orders`, `client_faturas`
+  e `service_requests` com a régua do contrato, e o Solicitar OS chama a
+  `requestService` da Operação; nenhuma callable do WMS entra no caminho.
+- **Testes:** `platform-modules.test.ts` (a entrada do cliente só com a
+  Operação, com e sem a liberação, e o cliente nunca nos cards),
+  `operations.test.ts` (o Início fora do menu sem a armazenagem) e
+  `modules.test.ts` (o menu e o começo do portal de cada contrato, sempre
+  uma tela do menu). Os três falham com o código antigo.
+- **Fica como está** o cliente só com `financeiro`: "Nenhum módulo
+  liberado", porque sem armazenagem nem Operação não há serviço que gere
+  fatura.

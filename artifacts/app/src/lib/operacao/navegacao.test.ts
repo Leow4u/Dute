@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { ROTA_CAMPO, ROTA_CAMPO_CONCLUIR, ROTA_CAMPO_OS } from "../campo/navegacao";
 import { getNavigationForProfileRole, getRouteProfileRoles, menuDoOperacao } from "../modules";
 import { entrada, modulesForPerson } from "../platform-modules";
+import { ROTA_MINHAS_OS } from "../portal/navegacao";
 import {
   ROTA_AGENDA,
   ROTA_COLABORADORES,
@@ -53,7 +54,7 @@ describe("navegação do cadastro da Operação", () => {
     expect(abreOperacao("owner", DESLIGADO)).toBe(false);
   });
 
-  it("com a liberação, o interno vê Armazenagem e Operação; o cliente não vê o cadastro", () => {
+  it("com a liberação, o interno vê Armazenagem e Operação; o cliente não vê o cadastro, só as OS dele no portal", () => {
     expect(modulesForPerson("interno", null, false, true).map((entry) => entry.module.label)).toEqual([
       "Armazenagem",
       "Operação",
@@ -64,8 +65,9 @@ describe("navegação do cadastro da Operação", () => {
     });
     expect(modulesForPerson("cliente", { modules: ["wms", "operacao"] }, false, true).map((entry) => entry.href)).toEqual([
       "/portal",
+      ROTA_MINHAS_OS,
     ]);
-    expect(entrada("cliente", { modules: ["operacao"] }, false, true)).toEqual({ kind: "nenhum" });
+    expect(entrada("cliente", { modules: ["operacao"] }, false, true)).toEqual({ kind: "redirect", to: ROTA_MINHAS_OS });
   });
 
   it("sem a liberação, a Operação não entra na entrada nem no menu do WMS", () => {

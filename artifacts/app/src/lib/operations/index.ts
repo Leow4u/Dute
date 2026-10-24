@@ -156,10 +156,16 @@ export function leiturasDoPortal(modules: readonly ModuloContratavel[]) {
  * cabem nos módulos contratados. Sem perfil (ainda carregando, ou área
  * interna) não há filtro. Modelo sem portal mostra só o Início, para uma
  * conta de cliente criada por engano não abrir uma tela em branco.
+ *
+ * O Início é o do armazém (estoque, pedidos, envios): sem a armazenagem no
+ * contrato, ele sai do menu sempre que o contrato abre outra tela, e o
+ * portal começa nela (Minhas OS; `inicioDoPortal`, em lib/modules.ts).
  */
 export function portalModulesFor(profile: OperationProfile | null | undefined): readonly PortalModuleKey[] | null {
   if (!profile) return null;
-  return (profile.template.portal ?? ["home"]).filter((tela) => telaNoContrato(tela, profile.modules));
+  const telas = (profile.template.portal ?? ["home"]).filter((tela) => telaNoContrato(tela, profile.modules));
+  const semOInicio = telas.filter((tela) => tela !== "home");
+  return profile.modules.includes("wms") || !semOInicio.length ? telas : semOInicio;
 }
 
 /** Sigla do SKU: 2 a 6 letras ou números, começando por letra. Igual às Functions. */

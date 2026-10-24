@@ -216,6 +216,7 @@ import {
   getHomePathForProfile,
   getRouteAppRoles,
   getRouteProfileRoles,
+  inicioDoPortal,
   normalizeProfileRole,
   portalModuleForPath,
   type CurrentAppRole as AppRole,
@@ -969,14 +970,15 @@ function RoleGate({
     return <Redirect to="/" />;
   }
   // Portal: uma tela que o modelo de operação do cliente não tem (Eventos no
-  // Mobiliário) volta ao Início, mesmo por link direto. Espera a primeira
+  // Mobiliário) volta ao começo do portal, mesmo por link direto: o Início,
+  // ou Minhas OS para o contrato sem a armazenagem. Espera a primeira
   // leitura do perfil para não abrir a tela e tirar em seguida.
   if (role === "cliente" && path) {
     if (operation.isLoading) return null;
     const allowed = portalModulesFor(operation.profile);
     const portalModule = portalModuleForPath(path);
     if (allowed && portalModule && !allowed.includes(portalModule)) {
-      return <Redirect to="/portal" />;
+      return <Redirect to={inicioDoPortal(operation.profile)} />;
     }
   }
   return <>{children}</>;

@@ -12,6 +12,7 @@ import { COMERCIAL_ROLES, ROTA_COMERCIAL, abreComercial } from "./comercial/nave
 import { ROTA_FINANCEIRO, abreFinanceiro } from "./financeiro/navegacao";
 import { COMERCIAL_LIBERADO, FINANCEIRO_LIBERADO, OPERACAO_LIBERADO, RH_LIBERADO } from "./liberacao";
 import { OPERACAO_CADASTRO_ROLES, ROTA_OPERACAO, abreOperacao } from "./operacao/navegacao";
+import { ROTA_MINHAS_OS } from "./portal/navegacao";
 import { RH_ROLES, ROTA_RH, abreRh } from "./rh/navegacao";
 import { ROTA_TV, abreTv } from "./tv/navegacao";
 import type { OperationProfile } from "./operations";
@@ -59,8 +60,14 @@ export const PLATFORM_MODULES: readonly PlatformModule[] = [
     key: "operacao",
     label: MODULO_ROTULO.operacao,
     icon: Truck,
-    // A coordenação entra no Início da Operação; o campo, no app dele (parte 3.8b); o painel, na TV da sala (parte 3.12b).
-    home: { ...Object.fromEntries(OPERACAO_CADASTRO_ROLES.map((role) => [role, ROTA_OPERACAO])), campo: ROTA_CAMPO, painel: ROTA_TV },
+    // A coordenação entra no Início da Operação; o campo, no app dele (parte 3.8b); o painel, na TV da sala (parte 3.12b);
+    // o cliente, nas OS dele no portal (parte 4.3b).
+    home: {
+      ...Object.fromEntries(OPERACAO_CADASTRO_ROLES.map((role) => [role, ROTA_OPERACAO])),
+      campo: ROTA_CAMPO,
+      painel: ROTA_TV,
+      cliente: ROTA_MINHAS_OS,
+    },
     clientCard: true,
     liberacao: "operacao",
   },
@@ -112,7 +119,9 @@ export function modulesForPerson(
     if (!wanted.includes(module.key)) return [];
     if (role === "cliente" && !module.clientCard) return [];
     if (module.liberacao === "comercial" && !abreComercial(role, comercial)) return [];
-    if (module.liberacao === "operacao" && !abreOperacao(role, operacao) && !abreCampo(role, operacao) && !abreTv(role, operacao)) return [];
+    // A Operação, só com a liberação dela: quem coordena, o campo, o painel e o cliente, nas OS do portal.
+    const naOperacao = abreOperacao(role, operacao) || abreCampo(role, operacao) || abreTv(role, operacao) || (role === "cliente" && operacao);
+    if (module.liberacao === "operacao" && !naOperacao) return [];
     if (module.liberacao === "rh" && !abreRh(role, rh)) return [];
     // Com o Financeiro liberado, a casa dele é o shell próprio (Fase 4); fora, o Faturamento do WMS.
     const href = module.key === "financeiro" && abreFinanceiro(role, financeiro) ? ROTA_FINANCEIRO : module.home[role];
@@ -125,7 +134,11 @@ export type Entrada =
   | { kind: "cards"; modules: ModuleEntry[] }
   | { kind: "nenhum" };
 
-/** Um módulo: direto para a casa dele. Dois ou mais: os cards. Nenhum: a tela diz isso. */
+/**
+ * Um módulo: direto para a casa dele. Dois ou mais: os cards. Nenhum: a tela
+ * diz isso. O cliente nunca vê os cards: o portal é um lugar só, e ele entra
+ * pela primeira casa (o Início com a armazenagem; sem ela, Minhas OS).
+ */
 export function entrada(
   role: Papel | null | undefined,
   profile: Pick<OperationProfile, "modules"> | null | undefined,
@@ -135,7 +148,7 @@ export function entrada(
   rh: boolean = RH_LIBERADO,
 ): Entrada {
   const modules = modulesForPerson(role, profile, comercial, operacao, financeiro, rh);
-  if (modules.length === 1) return { kind: "redirect", to: modules[0].href };
   if (modules.length === 0) return { kind: "nenhum" };
+  if (modules.length === 1 || role === "cliente") return { kind: "redirect", to: modules[0].href };
   return { kind: "cards", modules };
 }

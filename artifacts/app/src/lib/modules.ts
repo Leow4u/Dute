@@ -87,6 +87,7 @@ import {
   type OperationProfile,
   type PortalModuleKey,
 } from "./operations";
+import { ROTA_MINHAS_OS } from "./portal/navegacao";
 import { RH_ROLES, ROTA_EXPORTACAO, ROTA_FICHA, ROTA_PESSOAS, ROTA_RH, abreRh } from "./rh/navegacao";
 
 /** Os 11 papéis da plataforma (lib/dominio, PAPEIS). */
@@ -822,7 +823,7 @@ export const APP_MODULES: AppModule[] = [
       navRoute({
         id: "client-services-list",
         label: "Minhas OS",
-        href: "/portal/servicos",
+        href: ROTA_MINHAS_OS,
         icon: ClipboardList,
         roles: CLIENT_ROLES,
       }),
@@ -1389,6 +1390,20 @@ export function portalModuleForPath(path: string): PortalModuleKey | null {
     }
   }
   return null;
+}
+
+/**
+ * Onde o portal começa para o contrato do cliente: o Início, quando ele está
+ * no menu; sem a armazenagem, a primeira tela do menu (Minhas OS). É para cá
+ * que a guarda das rotas devolve a tela que o contrato não abre.
+ */
+export function inicioDoPortal(operation: OperationProfile | null | undefined): string {
+  const telas = portalModulesFor(operation);
+  if (!telas || telas.includes("home")) return "/portal";
+  const primeira = APP_MODULES.find(
+    (module) => module.audience === "client" && module.portal && telas.includes(module.portal),
+  );
+  return primeira?.routes.find((route) => route.href)?.href ?? "/portal";
 }
 
 /** Telas da Configuração: não pertencem a nenhum item do menu. */
