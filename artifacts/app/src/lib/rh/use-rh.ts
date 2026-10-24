@@ -9,8 +9,9 @@ import { itensDoInicioDoRh } from "./inicio";
 import { abreRh } from "./navegacao";
 
 /**
- * As leituras do RH, pelas callables (o banco `rh` é fechado ao navegador):
- * o painel (Início, Pessoas, a entrada e o menu) e a ficha de uma pessoa.
+ * As leituras do RH, pelas callables (o banco `dute-rh` é fechado ao
+ * navegador): o painel (Início, Pessoas, a entrada e o menu) e a ficha de uma
+ * pessoa.
  * Só para quem abre o RH; para os outros papéis, nada é pedido. Depois de
  * cada gravação, a tela invalida a chave e lê de novo.
  */

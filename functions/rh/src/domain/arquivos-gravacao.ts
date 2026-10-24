@@ -22,13 +22,13 @@ import { actorPayload, runIdempotent } from "./operations.js";
 import type { RhProfile } from "./profile.js";
 
 /**
- * Os arquivos da ficha no Storage e no banco `rh` (parte 8.2b).
+ * Os arquivos da ficha no Storage e no banco `dute-rh` (parte 8.2b).
  *
  * - requestRhUpload (só o rh) dá a URL assinada para subir, válida por
  *   MINUTOS_PARA_SUBIR, no caminho do registro. Não grava nada.
  * - attachRhFile (só o rh) confere no bucket o arquivo que subiu e o liga
  *   ao registro, com a geração conferida, o recibo e o evento, numa
- *   transação do banco `rh`. O arquivo que o anexo recusa (outro tipo,
+ *   transação do banco `dute-rh`. O arquivo que o anexo recusa (outro tipo,
  *   vazio ou grande demais) sai do bucket.
  * - openRhFile (owner, admin e rh) dá a URL assinada para abrir só a
  *   geração conferida, válida por MINUTOS_PARA_ABRIR, e grava o evento da

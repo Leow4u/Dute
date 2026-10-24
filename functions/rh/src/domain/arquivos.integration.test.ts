@@ -14,7 +14,7 @@ import type { RhProfile } from "./profile.js";
 /**
  * Os arquivos da ficha no emulador (parte 8.2b): o rh pede a URL, sobe o
  * arquivo e o liga ao registro; o bucket confere o arquivo de verdade. Owner,
- * admin e rh abrem, e cada abertura fica registrada no banco `rh`. A URL
+ * admin e rh abrem, e cada abertura fica registrada no banco `dute-rh`. A URL
  * assinada vem de um armazém de mentira: o emulador não assina.
  */
 

@@ -176,17 +176,18 @@ documentação de produto e operação está em `docs/`.
     rota `/<modulo>/agente`) só com a liberação dele; fora dela, segue o do
     WMS. Usa **npm**, como as outras codebases.
   - `functions/rh`: Functions do RH (Fase 8), codebase `rh`, ainda fora do
-    `firebase.json` (entra na parte 8.1b, depois de o banco Firestore `rh`
-    nascer nos dois ambientes pelo workflow manual `Banco rh`,
+    `firebase.json` (entra na parte 8.1b, depois de o banco Firestore
+    `dute-rh` nascer nos dois ambientes pelo workflow manual `Banco rh`,
     `.github/workflows/banco-rh.yml`; sem o banco, a publicação das regras
     falha e nada sobe).
     Toda callable entra por `requireRhCaller` (liberação
     `RH_AMBIENTES_LIBERADOS`, só o `dute-homolog`; owner, admin e rh leem, só
-    rh grava). O banco `rh` é fechado ao navegador (`firestore-rh.rules`): as
-    regras de um banco nomeado não leem o `users` do banco padrão. Hoje a
+    rh grava). O banco `dute-rh` é fechado ao navegador
+    (`firestore-rh.rules`): as regras de um banco nomeado não leem o `users`
+    do banco padrão. Hoje a
     ficha do colaborador (parte 8.2a): `saveRhRecord` e `archiveRhRecord`
     gravam o registro, o recibo (`rh_operations`) e o evento `rh.*` numa
-    transação do banco `rh`, nunca no padrão; `getRhPanel` e `getRhFicha`
+    transação do banco `dute-rh`, nunca no padrão; `getRhPanel` e `getRhFicha`
     leem; a rotina `runRhAlerts` avisa o vencimento uma vez por marco. O
     arquivo do registro (parte 8.2b) sobe e abre só por URL assinada
     (`requestRhUpload`, `attachRhFile`, `openRhFile`), e cada abertura vira

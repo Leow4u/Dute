@@ -8,7 +8,7 @@ import { assertFails, initializeTestEnvironment, type RulesTestEnvironment } fro
 import { collection, deleteDoc, doc, getDoc, getDocs, setDoc, updateDoc } from "firebase/firestore";
 
 /**
- * O banco `rh` (docs/plataforma/fase-8-rh.md, parte 8.1a): fechado ao
+ * O banco `dute-rh` (docs/plataforma/fase-8-rh.md, parte 8.1a): fechado ao
  * navegador para todo papel, inclusive o rh, o owner e o admin. As regras de
  * um banco nomeado não leem o `users` do banco padrão; quem lê e grava é a
  * codebase functions/rh, pelas callables. As regras de firestore-rh.rules
@@ -42,7 +42,7 @@ beforeEach(async () => {
   await testEnvironment.clearFirestore();
   await testEnvironment.withSecurityRulesDisabled(async (context) => {
     const database = context.firestore();
-    // O papel no `users` não abre nada: as regras do banco `rh` nem o leem.
+    // O papel no `users` não abre nada: as regras do banco do RH nem o leem.
     for (const role of PAPEIS) await setDoc(doc(database, "users", `${role}-a`), { role, nome: role });
     for (const colecao of COLECOES) await setDoc(doc(database, colecao, "item-1"), { colaborador_id: "col-1" });
   });
@@ -52,7 +52,7 @@ after(async () => {
   await testEnvironment.cleanup();
 });
 
-describe("o banco rh no navegador", () => {
+describe("o banco do RH no navegador", () => {
   it("nenhum papel lê, lista, cria, muda nem apaga, nem o rh, o owner e o admin", async () => {
     for (const role of PAPEIS) {
       const database = testEnvironment.authenticatedContext(`${role}-a`, { email: `${role}@example.com` }).firestore();

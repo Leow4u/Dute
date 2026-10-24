@@ -31,22 +31,22 @@ plano ordena as partes. Escrito em 23/10/2026.
 | 23 | `owner` e `admin` leem o RH; só `rh` grava (a recomendação). |
 | 24 | A folha e o eSocial ficam com a contabilidade: a Dute exporta, por competência, os colaboradores e os exames, com os dados do S-2220, e quem faz a folha transmite (Leonardo, 24/10/2026). A Dute não assina XML nem guarda certificado digital. |
 
-- **O banco `rh` é um banco Firestore à parte**, no mesmo projeto, com as
+- **O banco `dute-rh` é um banco Firestore à parte**, no mesmo projeto, com as
   regras dele (`firestore-rh.rules`). Guarda os documentos, os exames e os
   treinamentos ligados ao id do colaborador e, na parte 8.3, as versões da
   exportação para a contabilidade.
-- **O navegador não lê nem grava o banco `rh`.**
+- **O navegador não lê nem grava o banco `dute-rh`.**
   - As regras de um banco nomeado não leem o `users` do banco padrão, então
     não sabem o papel de quem pede.
   - Abrir por outro caminho, como uma claim no token ou uma cópia dos papéis
-    no banco `rh`, criaria uma segunda lista de papéis, que pode divergir.
+    no banco `dute-rh`, criaria uma segunda lista de papéis, que pode divergir.
   - Quem lê e grava é a codebase `functions/rh`, pelas callables, que
     conferem o papel no `users` do banco padrão, como todas as outras.
   - O RH não tem tempo real: a tela lê pela callable e lê de novo depois de
     cada gravação.
   - Uma transação vale para um banco só: a gravação confere o colaborador
     no banco padrão antes e grava o registro, o recibo e o evento numa
-    transação do banco `rh`.
+    transação do banco `dute-rh`.
 - **A ficha do colaborador** é o conjunto dos registros dele em `registros`.
   - Cada registro é um documento, um exame ou um treinamento, com o tipo
     do catálogo (`functions/rh/src/domain/ficha.ts`).
@@ -60,7 +60,8 @@ plano ordena as partes. Escrito em 23/10/2026.
     lugar, e arquivar o vigente devolve o anterior.
   - O tipo não muda depois de gravado: para trocar, arquiva e registra de
     novo.
-- **Os eventos do RH ficam no `events` do próprio banco `rh`** (invariante 2).
+- **Os eventos do RH ficam no `events` do próprio banco `dute-rh`**
+  (invariante 2).
   - O `events` do banco padrão é lido por interno, wms e suporte, e um
     evento de exame já diz coisa de saúde.
   - O evento leva o id do colaborador, a categoria, o tipo e as datas.
@@ -78,19 +79,22 @@ plano ordena as partes. Escrito em 23/10/2026.
     vencimento e por marco: rodar de novo não duplica, e o vencimento
     corrigido avisa de novo. O evento é o que a IA mede.
   - A CNH segue avisada no Início da Operação, como hoje.
-- **A zeragem do WMS nunca toca o banco `rh`.** O `tools/full_reset_btg.py`
-  abre o banco padrão e recusa o `--database rh` (parte 8.1a).
+- **A zeragem do WMS nunca toca o banco `dute-rh`.** O `tools/full_reset_btg.py`
+  abre o banco padrão e recusa o `--database dute-rh` (parte 8.1a).
 - **Liberação própria:** `RH_AMBIENTES_LIBERADOS`, só o `dute-homolog` até o
   lançamento, com o OK do Leonardo.
 
-## Como o banco `rh` nasce
+## Como o banco `dute-rh` nasce
 
-O banco `rh` precisa existir antes de o `firebase.json` apontar para ele, e
-nos dois projetos que a publicação atende: a homologação e a produção. A
-publicação sobe as regras de todo banco do `firebase.json` em cada projeto.
-Sem o banco, ela falha, e com ela nada mais sobe. Por isso, as partes até a
-8.2 não ligam o banco nem a codebase na publicação, e a 8.1b só entra
-depois de o banco existir nos dois projetos.
+O banco `dute-rh` precisa existir antes de o `firebase.json` apontar para
+ele, e nos dois projetos que a publicação atende: a homologação e a
+produção. A publicação sobe as regras de todo banco do `firebase.json` em
+cada projeto. Sem o banco, ela falha, e com ela nada mais sobe. Por isso, as
+partes até a 8.2 não ligam o banco nem a codebase na publicação, e a 8.1b só
+entra depois de o banco existir nos dois projetos.
+
+O nome não pode ser `rh`: o Firestore exige de 4 a 63 caracteres no id do
+banco (a correção de 24/10/2026, no registro).
 
 Criar o banco não abre nada. As regras dele negam tudo, e as callables do RH
 só atendem na homologação (`RH_AMBIENTES_LIBERADOS`) até o lançamento da
@@ -132,9 +136,9 @@ os papéis que a conta já tinha.
 | Parte | Entrega | Teste que falha antes |
 |---|---|---|
 | 8.0 | O desenho (este documento) | — |
-| 8.1a | As regras do banco `rh`, fechadas ao navegador; a codebase `functions/rh` (o perfil, a liberação, o recibo e o evento no banco `rh`); os jobs do CI. Ainda fora da publicação | Nenhum papel lê nem grava o banco `rh` pelo navegador; só `rh`, `admin` e `owner` passam pela callable, e só `rh` grava |
-| 8.1b | Com o banco criado pelo workflow `Banco rh` nos dois ambientes: o `firebase.json` com o banco `rh` e a codebase `rh`; a publicação confere as regras dele; o `RH_PUBLICADO` do app passa a `true` no mesmo PR, e as telas ligam na homologação | A trava do `platform-lists.test.ts` exige o `RH_PUBLICADO` igual à codebase no `firebase.json` |
-| 8.2a | A ficha no servidor: os registros no banco `rh`, o vigente de cada tipo, o recibo e o evento no banco `rh`, o painel e a rotina dos vencimentos | O vencimento gera o alerta uma vez por marco; nada do RH cai no banco padrão; só o rh grava |
+| 8.1a | As regras do banco `dute-rh`, fechadas ao navegador; a codebase `functions/rh` (o perfil, a liberação, o recibo e o evento no banco `dute-rh`); os jobs do CI. Ainda fora da publicação | Nenhum papel lê nem grava o banco `dute-rh` pelo navegador; só `rh`, `admin` e `owner` passam pela callable, e só `rh` grava |
+| 8.1b | Com o banco criado pelo workflow `Banco rh` nos dois ambientes: o `firebase.json` com o banco `dute-rh` e a codebase `rh`; a publicação confere as regras dele; o `RH_PUBLICADO` do app passa a `true` no mesmo PR, e as telas ligam na homologação | A trava do `platform-lists.test.ts` exige o `RH_PUBLICADO` igual à codebase no `firebase.json` |
+| 8.2a | A ficha no servidor: os registros no banco `dute-rh`, o vigente de cada tipo, o recibo e o evento no banco `dute-rh`, o painel e a rotina dos vencimentos | O vencimento gera o alerta uma vez por marco; nada do RH cai no banco padrão; só o rh grava |
 | 8.2b | Os arquivos da ficha: sobem e descem por URL assinada da callable, e cada abertura fica registrada | O documento só abre pelo RH |
 | 8.2c | As telas de leitura, desligadas até a 8.1b: o shell do RH, o Início com os vencimentos, Pessoas e a ficha | Os textos e o `axe` de cada tela; as rotas só existem com a liberação; só owner, admin e rh abrem |
 | 8.2d | As ações na ficha: incluir, alterar e arquivar o registro, subir e abrir o arquivo | Owner e admin não veem as ações de gravar; o arquivo abre pela callable |
@@ -146,10 +150,10 @@ no da Operação).
 
 ## Registro
 
-### Parte 8.1a: as regras do banco `rh` e a codebase `functions/rh`
+### Parte 8.1a: as regras do banco `dute-rh` e a codebase `functions/rh`
 
 Feita em 23/10/2026. Nada entra na publicação: o `firebase.json` só ganha o
-banco `rh` e a codebase na parte 8.1b, depois de o banco existir.
+banco `dute-rh` e a codebase na parte 8.1b, depois de o banco existir.
 
 - **`firestore-rh.rules`** fecha o banco inteiro ao navegador, para todo
   papel, inclusive o rh, o owner e o admin.
@@ -160,11 +164,11 @@ banco `rh` e a codebase na parte 8.1b, depois de o banco existir.
     - o papel: owner, admin e rh abrem; só o rh grava.
   - A callable `rhStatus` dizia ao shell quem abre e se grava; saiu na 8.2c,
     porque o app decide pelo papel (`lib/rh/navegacao.ts`).
-  - O recibo, o evento e o acesso ao banco `rh` entram na parte 8.2a, com a
+  - O recibo, o evento e o acesso ao banco `dute-rh` entram na parte 8.2a, com a
     primeira gravação.
 - **O CI** ganha `rh-unit` e `rh-integration`, e a publicação da produção
   espera os dois.
-- **A zeragem** recusa o `--database rh`.
+- **A zeragem** recusa o `--database dute-rh`.
 - **As travas:**
   - `platform-lists.test.ts` trava os papéis do RH contra `lib/dominio`: os
     que têm o módulo `rh` abrem, e só o rh grava;
@@ -184,7 +188,7 @@ os comandos e escolheu liberar a conta do CI (`roles/datastore.owner`).
 - **`.github/workflows/banco-rh.yml`:** disparo manual, um ambiente por vez,
   com a conta das functions pelo Workload Identity.
 - **`tools/banco_rh.sh`:**
-  - cria o banco `rh` com proteção contra exclusão;
+  - cria o banco `dute-rh` com proteção contra exclusão;
   - liga o PITR;
   - na produção, cria o backup diário de 14 dias;
   - se o banco existe, só confere e liga o que faltar;
@@ -200,6 +204,28 @@ os comandos e escolheu liberar a conta do CI (`roles/datastore.owner`).
   `describe` achou o banco ausente e o `create` recusou com "does not have
   permission", sem a palavra `PERMISSION_DENIED`, e a dica do papel não
   saiu. O script passou a reconhecer as duas formas; nada foi criado.
+- **A execução com o papel**, na homologação em 24/10/2026: o `create`
+  recusou o nome, "database_id should be 4-63 characters". Nada foi criado.
+
+### Correção: o banco se chama `dute-rh`
+
+Feita em 24/10/2026, antes da parte 8.1b. O id de um banco do Firestore tem
+de 4 a 63 caracteres, só minúsculas, números e hífen, e começa por letra. O
+`rh` tem dois e foi recusado na execução com o papel. O emulador aceita
+qualquer nome e o `gcloud` de mentira não conferia, então nenhum teste
+pegou.
+
+- **O nome** passa a `dute-rh` no `RH_DATABASE`
+  (`functions/rh/src/domain/banco.ts`), no `tools/banco_rh.sh` e na zeragem
+  (`PROTECTED_DATABASES` do `tools/full_reset_btg.py`). O workflow continua
+  `Banco rh`, e a codebase, o papel e o módulo continuam `rh`.
+- **Testes:**
+  - `functions/rh/src/domain/banco.test.ts`: o id segue a regra do
+    Firestore;
+  - `tools/test_banco_rh.py`: com o papel, o `gcloud` de mentira recusa o id
+    como o Firestore, e o nome do script é o da codebase e o que a zeragem
+    recusa;
+  - `tools/test_full_reset_btg.py`: a zeragem recusa o `dute-rh`.
 
 ### Parte 8.2a: a ficha no servidor
 
@@ -220,9 +246,9 @@ Feita em 23/10/2026. Ainda fora da publicação, como a 8.1a.
 - **Testes:**
   - `ficha.test.ts` e `events.test.ts`: o catálogo, a entrada, o vigente de
     cada tipo, os vencimentos e o payload sem resultado nem nome;
-  - `ficha.integration.test.ts`: o registro no banco `rh` e nada no padrão,
-    owner e admin só leem, a troca do vigente, arquivar devolve o anterior
-    e o painel;
+  - `ficha.integration.test.ts`: o registro no banco `dute-rh` e nada no
+    padrão, owner e admin só leem, a troca do vigente, arquivar devolve o
+    anterior e o painel;
   - `rotina.integration.test.ts`: o alerta uma vez por marco, o vencimento
     corrigido e o renovado;
   - `rh.rules.test.ts` passa a conferir as coleções de verdade
@@ -422,7 +448,7 @@ competência.
 - **O CPF** entra porque a contabilidade identifica o empregado por ele. É a
   única leitura do CPF no RH; a ficha e o painel continuam sem ele.
 - **A versão** (`domain/exportacao-gravacao.ts`, coleção `exportacoes` do
-  banco `rh`):
+  banco `dute-rh`):
   - guarda as linhas que foram, o hash do conteúdo, quem gerou e quando;
   - a mesma competência sem mudança devolve a versão de antes (`nova:
     false`), sem evento novo;
@@ -435,8 +461,8 @@ competência.
 - **As callables:** `exportRhMonth` (só o rh), `listRhExports` e
   `downloadRhExport` (owner, admin e rh).
 - **Os eventos** `rh.export_created` e `rh.export_downloaded`, no `events` do
-  banco `rh`, com a competência, a versão e as contagens, nunca nome nem CPF.
-  Cada download fica registrado.
+  banco `dute-rh`, com a competência, a versão e as contagens, nunca nome nem
+  CPF. Cada download fica registrado.
 - **A tela** Exportação (`/rh/exportacao`, no menu do RH):
   - o rh escolhe a competência, que abre no mês anterior, e gera;
   - a lista mostra cada versão com as contagens, quem gerou e as duas

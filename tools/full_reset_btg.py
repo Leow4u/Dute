@@ -698,7 +698,7 @@ def parser() -> argparse.ArgumentParser:
 
 # O banco do RH (docs/plataforma/fase-8-rh.md) nunca é zerado: os documentos,
 # os exames e os treinamentos dos colaboradores não fazem parte do go-live.
-PROTECTED_DATABASES = ("rh",)
+PROTECTED_DATABASES = ("dute-rh",)
 
 
 def main(argv: list[str] | None = None) -> int:

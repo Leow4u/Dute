@@ -1,6 +1,6 @@
 name: Banco rh
 
-# Cria ou confere o banco Firestore `rh` de um ambiente (Fase 8,
+# Cria ou confere o banco Firestore `dute-rh` de um ambiente (Fase 8,
 # docs/plataforma/fase-8-rh.md), só por disparo manual: Actions > Banco rh >
 # Run workflow. O banco precisa existir nos dois ambientes antes da parte 8.1b,
 # que o põe no firebase.json: sem ele, a publicação das regras falha e nada
@@ -50,5 +50,5 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Criar ou conferir o banco rh
+      - name: Criar ou conferir o banco dute-rh
         run: bash tools/banco_rh.sh "${PROJECT_ID}"

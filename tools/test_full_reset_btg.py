@@ -551,7 +551,7 @@ class MainTests(unittest.TestCase):
 
     def test_rh_database_is_never_reset(self) -> None:
         before = copy.deepcopy(self.fake.docs)
-        for database in ("rh", " rh "):
+        for database in ("dute-rh", " dute-rh "):
             with fake_backend(self.fake), self.assertRaises(SystemExit) as raised:
                 run_main(["--database", database, *self.apply_args()])
             self.assertIn("banco do RH nunca é zerado", str(raised.exception))

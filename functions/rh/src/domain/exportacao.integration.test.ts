@@ -85,7 +85,7 @@ async function eventosDaExportacao(banco: Firestore) {
     .sort((a, b) => String(a[0]).localeCompare(String(b[0])) || String(a[1]).localeCompare(String(b[1])) || String(a[2]).localeCompare(String(b[2])));
 }
 
-describe("a exportação no banco rh", () => {
+describe("a exportação no banco do RH", () => {
   it("a primeira gera a versão 1 com o evento; o mesmo pedido repete o resultado; sem mudança, a mesma versão", async () => {
     await exame(ANA, "periodico", "2026-10-05");
     await exame(CARLA, "demissional", "2026-10-02");

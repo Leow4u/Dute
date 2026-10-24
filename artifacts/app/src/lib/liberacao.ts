@@ -131,7 +131,7 @@ export const AGENTE_LIBERADO = agenteLiberado(import.meta.env.VITE_FIREBASE_PROJ
  * (functions/rh/src/domain/liberacao.ts, travada igual a esta por
  * platform-lists.test.ts). Só a homologação atende até o lançamento da fase.
  *
- * O RH só existe no app quando a codebase `rh` e o banco `rh` estão na
+ * O RH só existe no app quando a codebase `rh` e o banco `dute-rh` estão na
  * publicação (parte 8.1b, depois de o Leonardo criar o banco): RH_PUBLICADO
  * acompanha o firebase.json, e o platform-lists.test.ts trava os dois juntos.
  * Antes disso, as telas não aparecem em ambiente nenhum.
