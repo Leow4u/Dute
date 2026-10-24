@@ -9,6 +9,7 @@ import {
   demandaLida,
   documentoDaFatura,
   faturaIdDaNf,
+  faturaIdDaNfse,
   interpretarRegistro,
   problemaParaFaturar,
   valorDaRv,
@@ -68,6 +69,13 @@ describe("a entrada da NF", () => {
     assert.equal(faturaIdDaNf("1", "1234"), faturaIdDaNf("1", "0001234"));
     assert.notEqual(faturaIdDaNf("1", "1234"), faturaIdDaNf("2", "1234"));
     assert.match(faturaIdDaNf("1", "1234"), /^fat_[a-f0-9]{24}$/);
+  });
+
+  it("a NFS-e da Omie tem o id dela: o CT-e e a NF registrados à mão com o mesmo número não colidem", () => {
+    assert.equal(faturaIdDaNfse("815"), faturaIdDaNfse("00000815"));
+    assert.match(faturaIdDaNfse("815"), /^fat_[a-f0-9]{24}$/);
+    for (const serie of ["1", "0", "NFSE"]) assert.notEqual(faturaIdDaNfse("815"), faturaIdDaNf(serie, "815"), serie);
+    assert.notEqual(faturaIdDaNfse("815"), faturaIdDaNfse("816"));
   });
 });
 

@@ -1008,6 +1008,31 @@ pela Dute.
     continua recusada.
   - `emissoes.test.ts`: a ação da tela.
 
+### Correção: a fatura da NFS-e da Omie tem o id dela
+
+Feita em 24/10/2026, a partir da mesma revisão.
+
+- **O problema:** o id da fatura sai da série e do número da NF
+  (`faturaIdDaNf`), e a NFS-e da Omie usava a série 1, a mesma do registro à
+  mão.
+  - O CT-e, que segue à mão, e a NFS-e têm numerações separadas, e as duas
+    começam do 1.
+  - Por isso o CT-e 815 registrado à mão parava a NFS-e 815 autorizada em
+    "Fatura não nasceu". A mensagem mandava cancelar um registro válido.
+- **A correção:** a fatura da NFS-e da Omie tem o id próprio, saído do
+  número da nota (`faturaIdDaNfse`), à parte do registro à mão.
+  - A série 1 e o número continuam na fatura, para a tela e a via
+    comercial.
+  - A NFS-e que já tem fatura na Dute continua parando a emissão, com "A
+    NFS-e N já tem fatura na Dute."
+- **Antes da produção:** as faturas da Omie da homologação, que ainda não
+  existem sem as chaves, não mudam de id.
+- **Testes:**
+  - `fatura.test.ts`: o id da NFS-e não colide com o da NF de nenhuma série.
+  - `omie-rotina.integration.test.ts`: o CT-e 815 à mão não impede a
+    fatura da NFS-e 815, e a NFS-e que já tem fatura para a emissão e não
+    se desiste. Os dois casos falham com o código antigo.
+
 ## Onde a Fase 7 está
 
 - Feitas: 7.0 a 7.3c, 7.4a a 7.4i e 7.5a a 7.5c.

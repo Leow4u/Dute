@@ -30,7 +30,7 @@ import {
 import { gravarBaixa } from "./baixa-gravacao.js";
 import { gravarEmissao, lerReservas, soltarReservas } from "./emissao-gravacao.js";
 import { createFinanceiroEvent } from "./events.js";
-import { FATURAS_COLLECTION, faturaIdDaNf } from "./fatura.js";
+import { FATURAS_COLLECTION, faturaIdDaNfse } from "./fatura.js";
 import { gravarFatura, lerParaFaturar } from "./fatura-gravacao.js";
 import { ErroDaOmie, chamarOmie, type ChavesDaOmie, type TransporteDaOmie } from "./omie.js";
 import type { FinanceiroActor } from "./operations.js";
@@ -48,9 +48,9 @@ import type { FinanceiroActor } from "./operations.js";
  *
  * Na NFS-e autorizada, a fatura nasce na mesma transação, pela
  * lerParaFaturar e pela gravarFatura do registerNf, com o número da nota e a
- * série 1. Se a fatura não puder nascer (a NF já registrada à mão, a demanda
- * que mudou), a emissão para com o motivo e a reserva continua: a nota
- * existe, e uma pessoa decide.
+ * série 1, e o id da NFS-e (faturaIdDaNfse), à parte do registro à mão. Se a
+ * fatura não puder nascer (a demanda que mudou), a emissão para com o motivo
+ * e a reserva continua: a nota existe, e uma pessoa decide.
  *
  * Se uma pessoa mexeu na emissão entre a leitura e a gravação (a edição
  * mudou), o resultado da Omie se descarta; a próxima passada lê de novo, e
@@ -337,16 +337,17 @@ type FaturaPreparada = { id: string; gravar: (operationId: string) => void } | {
 
 /**
  * As leituras da fatura da NFS-e autorizada, e a gravação para depois. O
- * número é o da NFS-e, a série é 1 (a mesma do registro à mão) e a emissão
- * é o dia da autorização em São Paulo.
+ * número é o da NFS-e, a série é 1 e a emissão é o dia da autorização em São
+ * Paulo. O id é o da NFS-e: o CT-e registrado à mão com o mesmo número não é
+ * a mesma nota.
  */
 async function prepararFatura(transaction: Transaction, db: Firestore, emissao: Emissao, iso: string): Promise<FaturaPreparada> {
   const numero = (emissao.omie.nfse ?? "").replace(/^0+(?=\d)/, "");
   if (!/^\d{1,15}$/.test(numero)) return { problema: `A Omie devolveu o número da NFS-e fora do formato (${emissao.omie.nfse ?? "vazio"}).` };
-  const id = faturaIdDaNf("1", numero);
+  const id = faturaIdDaNfse(numero);
   const existente = await transaction.get(db.collection(FATURAS_COLLECTION).doc(id));
   const anterior = existente.exists ? (existente.data() ?? {}) : null;
-  if (anterior && anterior.status !== "cancelada") return { problema: `A NF ${numero} da série 1 já está registrada: cancele o registro à mão e retome a emissão.` };
+  if (anterior && anterior.status !== "cancelada") return { problema: `A NFS-e ${numero} já tem fatura na Dute.` };
   const pedido = {
     demandas: emissao.itens.filter((item) => item.origem === "demanda").map((item) => item.referencia),
     armazenagem: emissao.itens.filter((item) => item.origem === "armazenagem").map((item) => item.referencia),

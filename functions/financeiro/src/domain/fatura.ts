@@ -122,6 +122,15 @@ export function faturaIdDaNf(serie: string, numero: string): string {
   return `fat_${digest({ serie: serie.toUpperCase(), numero: numero.replace(/^0+(?=\d)/, "") }, 24)}`;
 }
 
+/**
+ * O id da fatura da NFS-e autorizada pela Omie (parte 7.4): o número da nota,
+ * à parte do registro à mão. O CT-e e a NF de fora seguem a numeração deles,
+ * e o mesmo número com a série 1 não é a mesma nota.
+ */
+export function faturaIdDaNfse(numero: string): string {
+  return `fat_${digest({ nfse_omie: numero.replace(/^0+(?=\d)/, "") }, 24)}`;
+}
+
 // --- Leitura ------------------------------------------------------------------------------
 
 type Registro = Record<string, unknown>;
