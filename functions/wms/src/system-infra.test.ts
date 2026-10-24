@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   billingQuery,
   codeFunctions,
+  deployedFunction,
   errorsFilter,
   functionsStatus,
   groupErrors,
@@ -105,10 +106,10 @@ describe("painel do sistema: functions publicadas", () => {
     { name: "saveAgentRoutine", callable: true },
   ];
   const deployed = [
-    { name: "saveAgentCostSettings", state: "ACTIVE", updated_at: "2026-10-03T01:37:00Z", service: "saveagentcostsettings" },
-    { name: "listAgentRoutines", state: "ACTIVE", updated_at: "2026-10-02T12:00:00Z", service: "listagentroutines" },
-    { name: "runAgentRoutines", state: "ACTIVE", updated_at: "2026-10-02T12:00:00Z", service: "runagentroutines" },
-    { name: "saveAgentRoutine", state: "FAILED", updated_at: "2026-10-02T12:00:00Z", service: "saveagentroutine" },
+    { name: "saveAgentCostSettings", state: "ACTIVE", updated_at: "2026-10-03T01:37:00Z", service: "saveagentcostsettings", codebase: "default", callable: true },
+    { name: "listAgentRoutines", state: "ACTIVE", updated_at: "2026-10-02T12:00:00Z", service: "listagentroutines", codebase: "default", callable: true },
+    { name: "runAgentRoutines", state: "ACTIVE", updated_at: "2026-10-02T12:00:00Z", service: "runagentroutines", codebase: "default", callable: false },
+    { name: "saveAgentRoutine", state: "FAILED", updated_at: "2026-10-02T12:00:00Z", service: "saveagentroutine", codebase: "default", callable: true },
   ];
   const invoker = new Map([
     ["saveagentcostsettings", false],
@@ -136,6 +137,64 @@ describe("painel do sistema: functions publicadas", () => {
       "gcloud run services add-iam-policy-binding saveagentcostsettings --project dute-btg --region southamerica-east1 --member=allUsers --role=roles/run.invoker",
     );
     assert.equal(status.last_deploy_at, "2026-10-03T01:37:00Z");
+  });
+
+  it("as outras codebases entram pelo que está publicado: o estado, o acesso da callable e o deploy da codebase", () => {
+    // Antes, o painel só conhecia o index.ts do WMS: as callables das outras
+    // codebases (a maior parte das publicadas) ficavam sem conferência.
+    const publicadas = [
+      ...deployed,
+      { name: "advanceQuote", state: "ACTIVE", updated_at: "2026-10-24T20:00:00Z", service: "advancequote", codebase: "comercial", callable: true },
+      { name: "runNotifications", state: "ACTIVE", updated_at: "2026-10-24T20:00:00Z", service: "runnotifications", codebase: "operacao", callable: false },
+      { name: "saveRhRecord", state: "FAILED", updated_at: "2026-10-24T20:00:00Z", service: "saverhrecord", codebase: "rh", callable: true },
+      { name: "suggestDuration", state: "ACTIVE", updated_at: "2026-10-24T21:00:00Z", service: "suggestduration", codebase: "core", callable: true },
+      // Do WMS, mas fora do index.ts: o código é a lista do WMS.
+      { name: "removedFunction", state: "ACTIVE", updated_at: "2026-10-01T00:00:00Z", service: "removedfunction", codebase: "default", callable: true },
+    ];
+    const acesso = new Map([...invoker, ["advancequote", false], ["suggestduration", true]]);
+    const status = functionsStatus(code, publicadas, acesso, "dute-prod", "southamerica-east1");
+    assert.deepEqual(
+      status.list.map((row) => [row.codebase, row.name, row.status]),
+      [
+        ["default", "getSystemDashboard", "nao_publicada"],
+        ["default", "saveAgentRoutine", "nao_publicada"],
+        ["rh", "saveRhRecord", "nao_publicada"],
+        ["default", "saveAgentCostSettings", "sem_acesso"],
+        ["comercial", "advanceQuote", "sem_acesso"],
+        ["default", "listAgentRoutines", "ok"],
+        ["default", "runAgentRoutines", "ok"],
+        ["core", "suggestDuration", "ok"],
+        // agendada não precisa de invoker público, em qualquer codebase
+        ["operacao", "runNotifications", "ok"],
+      ],
+    );
+    assert.deepEqual(status.codebases, ["default", "comercial", "core", "operacao", "rh"]);
+    assert.deepEqual([status.total, status.ok, status.sem_acesso, status.nao_publicada], [9, 4, 2, 3]);
+    assert.equal(status.list.find((row) => row.name === "saveRhRecord")!.fix, "firebase deploy --only functions:rh:saveRhRecord --project dute-prod");
+    assert.equal(status.list.find((row) => row.name === "getSystemDashboard")!.fix, "firebase deploy --only functions:getSystemDashboard --project dute-prod");
+    assert.equal(
+      status.list.find((row) => row.name === "advanceQuote")!.fix,
+      "gcloud run services add-iam-policy-binding advancequote --project dute-prod --region southamerica-east1 --member=allUsers --role=roles/run.invoker",
+    );
+    assert.equal(status.last_deploy_at, "2026-10-24T21:00:00Z");
+  });
+
+  it("lê a codebase e a callable dos rótulos que o firebase deploy põe na function", () => {
+    assert.deepEqual(
+      deployedFunction({
+        name: "projects/p/locations/r/functions/advanceQuote",
+        state: "ACTIVE",
+        updateTime: "2026-10-24T20:00:00Z",
+        serviceConfig: { service: "projects/p/locations/r/services/advancequote" },
+        labels: { "firebase-functions-codebase": "comercial", "deployment-callable": "true", "deployment-tool": "cli-firebase" },
+      }),
+      { name: "advanceQuote", state: "ACTIVE", updated_at: "2026-10-24T20:00:00Z", service: "advancequote", codebase: "comercial", callable: true },
+    );
+    // Na codebase default o firebase deploy não põe o rótulo da codebase.
+    assert.deepEqual(
+      deployedFunction({ name: "projects/p/locations/r/functions/runAgentRoutines", labels: { "deployment-scheduled": "true" } }),
+      { name: "runAgentRoutines", state: "STATE_UNSPECIFIED", updated_at: null, service: "", codebase: "default", callable: false },
+    );
   });
 
   it("acha as functions do código pelo marcador do SDK e lê a política do Cloud Run", () => {

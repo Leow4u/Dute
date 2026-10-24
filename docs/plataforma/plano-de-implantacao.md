@@ -656,7 +656,12 @@ regras); CNH, exame e treinamento vencendo aparecem no Início certo.
   carga do Comercial em produção; depois, a cada trimestre. É o workflow
   `Teste de restauração`, um banco por vez (`backup-e-recuperacao.md`).
 - **Monitoramento e alertas**: erros das Functions por codebase, invoker,
-  latência das callables, falhas de envio de e-mail; um painel só.
+  latência das callables, falhas de envio de e-mail; um painel só. O painel
+  do sistema (Configuração › Sistema, `docs/painel-sistema.md`) mostra os
+  erros de todas as functions e, desde 24/10/2026, o estado e o acesso das
+  callables de todas as codebases. A latência e as falhas de e-mail (que a
+  `runNotifications` conta e guarda em cada e-mail, sem log de erro) ainda
+  não.
 - **LGPD**: retenção e exclusão de fotos, assinaturas e dados de campo;
   CPF só onde o papel precisa; registro de quem acessou o que.
 - **Manual do usuário** em `docs/manual-*.md`, por módulo: é para lá que vai
