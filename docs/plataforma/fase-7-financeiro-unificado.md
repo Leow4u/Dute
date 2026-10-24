@@ -1051,6 +1051,35 @@ Feita em 24/10/2026, a partir da mesma revisão. A `runOmieSync` tinha
 - **Teste:** `callables.test.ts` trava `maxInstances: 1` e `concurrency: 1`
   na declaração da rotina. Falha com o código antigo.
 
+### Correção: o relógio da prefeitura recomeça no reenvio e na retomada
+
+Feita em 24/10/2026, a partir da mesma revisão.
+
+- **O problema:** o prazo de 72 horas para a prefeitura contava do
+  faturamento da OS e não recomeçava.
+  - A RPS recusada, corrigida e reenviada dias depois parava em "Prefeitura
+    sem resposta" já na primeira consulta, com a prefeitura ainda
+    processando o reenvio.
+  - "Tentar de novo" na parada pela demora voltava à prefeitura e parava de
+    novo na primeira consulta sem resposta.
+  - A OS faturada à mão na Omie durante o cancelamento ficava sem relógio e
+    esperava a prefeitura para sempre.
+- **A correção:** o campo `faturada_em` virou `na_prefeitura_desde`, desde
+  quando a Dute espera a resposta da RPS.
+  - O faturamento e o reenvio recomeçam a conta, também quando a conferência
+    acha a chamada que se perdeu.
+  - "Tentar de novo" na parada pela demora dá outras 72 horas. As outras
+    paradas mantêm o relógio.
+  - A espera sem relógio começa a contar na primeira consulta.
+- **Antes da produção:** as emissões da homologação, que ainda param sem as
+  chaves antes de faturar, guardam um `faturada_em` vazio que nada lê.
+- **Testes:**
+  - `emissao-omie.test.ts`: o reenvio, a conferência do reenvio, a retomada
+    da parada pela demora e o cancelamento sem relógio.
+  - `omie-rotina.integration.test.ts`: o reenvio dias depois e a retomada
+    depois da demora esperam a prefeitura e autorizam. Os dois casos param
+    em "Prefeitura sem resposta" com o código antigo.
+
 ## Onde a Fase 7 está
 
 - Feitas: 7.0 a 7.3c, 7.4a a 7.4i e 7.5a a 7.5c.

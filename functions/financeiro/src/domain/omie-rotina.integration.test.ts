@@ -326,6 +326,39 @@ describe("a rotina da Omie", () => {
     assert.equal((await db.doc("demands/10045").get()).get("etapa"), "faturada");
   });
 
+  it("o reenvio recomeça o relógio da prefeitura: a RPS corrigida dias depois espera de novo, em vez de parar", async () => {
+    const omie = omieDeMentira({ rps: ["002", "003", "002", "004"] });
+    await emitir();
+    for (let passo = 0; passo < 4; passo += 1) await rodar(omie.transporte);
+    await rodar(omie.transporte, 2); // 002
+    await rodar(omie.transporte, 70 * 60); // 003, 70 horas depois do faturamento
+    const rejeitada = await emissao();
+    assert.equal(rejeitada.etapa, "rejeitada");
+    minutos += 5 * 60; // a pessoa corrige na Omie horas depois
+    await actOnNfEmissionFor(db, financeiro, { idempotency_key: "r-tarde", id: ID, acao: "retomar", expected_edicao: rejeitada.edicao as number }, { projectId: LIBERADO, agora });
+    await rodar(omie.transporte); // ReenviarOS
+    await rodar(omie.transporte, 2); // 002: a prefeitura processa a RPS reenviada
+    assert.deepEqual([(await emissao()).etapa, (await emissao()).motivo_da_parada], ["na_prefeitura", null]);
+    await rodar(omie.transporte, 5); // 004
+    assert.equal((await emissao()).etapa, "autorizada");
+    assert.equal((await db.doc("demands/10045").get()).get("etapa"), "faturada");
+  });
+
+  it("tentar de novo depois da demora da prefeitura dá outras 72 horas, em vez de parar na primeira consulta", async () => {
+    const omie = omieDeMentira({ rps: ["002", "002", "002", "004"] });
+    await emitir();
+    for (let passo = 0; passo < 4; passo += 1) await rodar(omie.transporte);
+    await rodar(omie.transporte, 2); // 002
+    await rodar(omie.transporte, 73 * 60); // 002 depois de 72 horas
+    const demorou = await emissao();
+    assert.equal(demorou.motivo_da_parada, "prefeitura_demorou");
+    await actOnNfEmissionFor(db, financeiro, { idempotency_key: "r-demorou-de-novo", id: ID, acao: "retomar", expected_edicao: demorou.edicao as number }, { projectId: LIBERADO, agora });
+    await rodar(omie.transporte); // 002: espera de novo
+    assert.deepEqual([(await emissao()).etapa, (await emissao()).motivo_da_parada], ["na_prefeitura", null]);
+    await rodar(omie.transporte, 2); // 004
+    assert.equal((await emissao()).etapa, "autorizada");
+  });
+
   it("a chave inválida para a emissão e a passada inteira", async () => {
     const omie = omieDeMentira({ falhas: { ListarClientes: [{ status: 403, corpo: { faultstring: "A chave de acesso não está preenchida ou não é válida.", faultcode: "SOAP-ENV:Server" } }] } });
     await emitir(ID);

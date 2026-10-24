@@ -45,7 +45,8 @@ minuto.
 
 **A rejeitada** é a NFS-e que a prefeitura recusou. Leia a mensagem e a
 correção que ela mandou, corrija na Omie (o cadastro do cliente, o serviço)
-e "Tentar de novo": a rotina reenvia. Se a nota não deve sair, "Desistir".
+e "Tentar de novo": a rotina reenvia, e a prefeitura tem outras 72 horas
+para responder. Se a nota não deve sair, "Desistir".
 
 **A parada** mostra o motivo:
 
@@ -58,7 +59,7 @@ e "Tentar de novo": a rotina reenvia. Se a nota não deve sair, "Desistir".
 | Sem as chaves da Omie | O ambiente ainda não tem as chaves. Até elas existirem, desista e registre a NF à mão ("Emitida fora"). |
 | Falhas seguidas na Omie | A Omie recusou seis vezes seguidas; a mensagem é o último erro. Corrija o que ela disse e "Tentar de novo". |
 | OS cancelada na Omie | Alguém cancelou a OS lá. Só "Desistir" e, se for o caso, emitir de novo. |
-| Prefeitura sem resposta | 72 horas sem resposta da prefeitura. Confira na Omie e "Tentar de novo". |
+| Prefeitura sem resposta | 72 horas sem resposta da prefeitura. Confira na Omie e "Tentar de novo": a Dute espera outras 72 horas. |
 | Fatura não nasceu | A NFS-e foi autorizada, mas a fatura não pôde nascer, e a mensagem diz por quê (por exemplo, uma demanda que mudou). A nota existe: resolva o que a mensagem diz e "Tentar de novo". O CT-e ou a NF registrados à mão com o mesmo número não atrapalham: a NFS-e da Omie tem o registro dela. |
 | NFS-e autorizada na prefeitura | A nota saiu antes de a OS ser cancelada, e a Dute não cancela nota autorizada. Para ficar com ela, "Tentar de novo" registra a fatura. Para desfazer, cancele a NFS-e na Omie e "Tentar de novo": a emissão para em "OS cancelada na Omie", e "Desistir" solta as reservas. |
 
