@@ -37,6 +37,7 @@ import { AGENTE_ROLES } from "./agente/navegacao";
 import { OPERACAO_CADASTRO_ROLES } from "./operacao/navegacao";
 import { FINANCE_ROLES, INTERNAL_ROLES } from "./modules";
 import { PLATFORM_MODULES } from "./platform-modules";
+import { ROTA_MINHAS_OS } from "./portal/navegacao";
 import { CALLABLES_DO_FINANCEIRO } from "./financeiro/api";
 import { ETAPAS_DA_EMISSAO, MOTIVOS_DA_PARADA } from "./financeiro/emissoes";
 import { ETAPAS_DA_BAIXA, MOTIVOS_DA_PARADA_DA_BAIXA } from "./financeiro/baixas";
@@ -150,10 +151,12 @@ describe("listas da Operação iguais em todo lugar", () => {
     expect(tsList(roles, "OPERACAO_CADASTRO_ROLES")).toEqual(["owner", "admin", "interno"]);
     expect([...OPERACAO_CADASTRO_ROLES]).toEqual(["owner", "admin", "interno"]);
     const card = PLATFORM_MODULES.find((module) => module.key === "operacao")!;
-    // O campo entra no app dele (parte 3.8b); o painel, na TV (parte 3.12b); a coordenação, no Início da Operação.
-    expect(Object.keys(card.home).sort()).toEqual(["admin", "campo", "interno", "owner", "painel"]);
+    // O campo entra no app dele (parte 3.8b); o painel, na TV (parte 3.12b); a coordenação, no Início da
+    // Operação; o cliente, nas OS dele no portal (parte 4.3b), nunca no cadastro.
+    expect(Object.keys(card.home).sort()).toEqual(["admin", "campo", "cliente", "interno", "owner", "painel"]);
     expect(card.home.campo).toBe("/campo");
     expect(card.home.painel).toBe("/tv");
+    expect(card.home.cliente).toBe(ROTA_MINHAS_OS);
   });
 
   it("quem abre a TV: o mesmo nas Functions e no app (parte 3.12)", () => {

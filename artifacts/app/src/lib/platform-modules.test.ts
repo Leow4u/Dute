@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { getHomePathForProfile, getRouteProfileRoles } from "./modules";
 import { PLATFORM_MODULES, entrada, modulesForPerson } from "./platform-modules";
+import { ROTA_MINHAS_OS } from "./portal/navegacao";
 
 // Comercial desligado, como na produção: o Comercial liberado está em comercial/navegacao.test.ts.
 const labels = (role: Papel, modules?: string[]) =>
@@ -40,12 +41,22 @@ describe("tela de entrada por módulo (Fase 2, parte 2)", () => {
     expect(labels("cliente", ["wms", "financeiro"])).toEqual(["Armazenagem"]);
   });
 
-  it("cliente com armazenagem e operação vai ao portal enquanto a Operação não tem tela", () => {
-    expect(entrada("cliente", { modules: ["wms", "operacao"] })).toEqual({ kind: "redirect", to: "/portal" });
+  it("cliente com armazenagem e operação vai ao Início do portal, sem cards: o portal é um lugar só", () => {
+    for (const operacao of [true, false]) {
+      expect(entrada("cliente", { modules: ["wms", "operacao"] }, false, operacao)).toEqual({ kind: "redirect", to: "/portal" });
+      expect(entrada("cliente", { modules: ["wms", "operacao", "financeiro"] }, false, operacao)).toEqual({ kind: "redirect", to: "/portal" });
+    }
   });
 
-  it("cliente sem armazenagem e papel sem tela ainda não têm módulo", () => {
-    expect(entrada("cliente", { modules: ["operacao"] })).toEqual({ kind: "nenhum" });
+  it("cliente só com a Operação vai a Minhas OS, onde a Operação está liberada (parte 4.3b)", () => {
+    expect(entrada("cliente", { modules: ["operacao"] }, false, true)).toEqual({ kind: "redirect", to: ROTA_MINHAS_OS });
+    expect(entrada("cliente", { modules: ["operacao", "financeiro"] }, false, true)).toEqual({ kind: "redirect", to: ROTA_MINHAS_OS });
+    expect(entrada("cliente", { modules: ["operacao"] }, false, false)).toEqual({ kind: "nenhum" });
+  });
+
+  it("cliente só com o financeiro e papel sem tela ainda não têm módulo", () => {
+    // Faturas fazem parte do portal: sem armazenagem nem Operação, não há serviço que gere fatura.
+    expect(entrada("cliente", { modules: ["financeiro"] }, false, true)).toEqual({ kind: "nenhum" });
     for (const role of ["campo", "comercial", "rh", "painel"] as const) {
       expect(entrada(role, null, false)).toEqual({ kind: "nenhum" });
     }

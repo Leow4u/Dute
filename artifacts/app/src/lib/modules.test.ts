@@ -10,12 +10,14 @@ import {
   getRouteAppRoles,
   getRouteProfileRoles,
   hasRouteRoles,
+  inicioDoPortal,
   INTERNAL_ROLES,
   isAccountPath,
   portalModuleForPath,
   type ProfileRole,
 } from "./modules";
-import { resolveOperationProfile } from "./operations";
+import { portalModulesFor, resolveOperationProfile } from "./operations";
+import { ROTA_MINHAS_OS } from "./portal/navegacao";
 
 // Caminhos de PROTECTED_ROUTES, lidos do App.tsx (importar o App puxaria o
 // Firebase para o teste).
@@ -342,11 +344,32 @@ describe("menu do portal por modelo de operação", () => {
         "cliente",
         resolveOperationProfile({ customer_code: "Cliente X", operation_template: "uniformes", modules }),
       ).map((module) => module.label);
-    expect(comModulos(["operacao"])).toEqual(["Início", "Minhas OS"]);
+    // O Início é o do armazém: sem a armazenagem, o menu começa em Minhas OS.
+    expect(comModulos(["operacao"])).toEqual(["Minhas OS"]);
+    expect(comModulos(["operacao", "financeiro"])).toEqual(["Minhas OS", "Faturas"]);
     expect(comModulos(["wms", "financeiro"])).not.toContain("Minhas OS");
     expect(comModulos(["wms", "operacao"])).not.toContain("Faturas");
-    expect(comModulos(["financeiro"])).toEqual(["Início", "Faturas"]);
+    expect(comModulos(["financeiro"])).toEqual(["Faturas"]);
     expect(comModulos(["wms", "financeiro"])).toEqual(labels("uniformes"));
+  });
+
+  it("o portal abre no Início com a armazenagem; sem ela, na primeira tela do contrato", () => {
+    const perfil = (modules: string[], template = "uniformes") =>
+      resolveOperationProfile({ customer_code: "Cliente X", operation_template: template, modules });
+    expect(inicioDoPortal(perfil(["wms", "financeiro"]))).toBe("/portal");
+    expect(inicioDoPortal(perfil(["wms", "operacao"]))).toBe("/portal");
+    expect(inicioDoPortal(perfil(["operacao"]))).toBe(ROTA_MINHAS_OS);
+    expect(inicioDoPortal(perfil(["operacao", "financeiro"]))).toBe(ROTA_MINHAS_OS);
+    expect(inicioDoPortal(perfil(["financeiro"]))).toBe("/portal/faturas");
+    // Modelo sem portal: o Início, a única tela.
+    expect(inicioDoPortal(perfil(["operacao"], "insumos"))).toBe("/portal");
+    // Sem perfil carregado, o Início de sempre.
+    expect(inicioDoPortal(null)).toBe("/portal");
+    // A tela de onde o portal começa está sempre no menu do cliente: a guarda das rotas nunca volta para uma tela barrada.
+    for (const modules of [["wms"], ["operacao"], ["financeiro"], ["operacao", "financeiro"], ["wms", "operacao", "financeiro"]]) {
+      const inicio = inicioDoPortal(perfil(modules));
+      expect(portalModulesFor(perfil(modules)), modules.join("+")).toContain(portalModuleForPath(inicio));
+    }
   });
 
   it("sem perfil carregado nada é escondido; o perfil não mexe no menu interno", () => {

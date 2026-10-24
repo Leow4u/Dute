@@ -131,8 +131,16 @@ describe("perfil de operação", () => {
 describe("telas do portal pelos módulos contratados (parte 2.7)", () => {
   const comModulos = (modules: string[]) => resolveOperationProfile({ customer_code: "ACME", operation_template: "uniformes", modules });
 
-  it("só com a Operação: o portal fica com o Início e as OS (parte 4.3b), sem nada do armazém nem faturas", () => {
-    expect(portalModulesFor(comModulos(["operacao"]))).toEqual(["home", "services"]);
+  it("só com a Operação: o portal fica com as OS (parte 4.3b), sem o Início do armazém, nada do armazém nem faturas", () => {
+    expect(portalModulesFor(comModulos(["operacao"]))).toEqual(["services"]);
+    expect(portalModulesFor(comModulos(["operacao", "financeiro"]))).toEqual(["services", "invoices"]);
+  });
+
+  it("o Início é o do armazém: sem a armazenagem, só fica quando o contrato não abre outra tela", () => {
+    expect(portalModulesFor(comModulos(["wms"]))).toContain("home");
+    // Modelo sem portal: uma conta de cliente por engano continua com o Início, e não com uma tela em branco.
+    const semPortal = resolveOperationProfile({ customer_code: "ACME", operation_template: "insumos", modules: ["operacao"] });
+    expect(portalModulesFor(semPortal)).toEqual(["home"]);
   });
 
   it("sem o financeiro, sem Faturas; sem a armazenagem, sem estoque, pedidos, documentos e Agent Dute", () => {
@@ -146,7 +154,7 @@ describe("telas do portal pelos módulos contratados (parte 2.7)", () => {
       "services",
       "documents",
     ]);
-    expect(portalModulesFor(comModulos(["financeiro"]))).toEqual(["home", "invoices"]);
+    expect(portalModulesFor(comModulos(["financeiro"]))).toEqual(["invoices"]);
     // Sem a Operação, sem as OS.
     expect(portalModulesFor(comModulos(["wms", "financeiro"]))).not.toContain("services");
   });

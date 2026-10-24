@@ -51,7 +51,8 @@ Um módulo só aparece se tiver tela no app. Desde as partes 2.5 e 2.6 são
 `wms`, `operacao`, `comercial` e `financeiro` (o Faturamento). Para o
 cliente, `financeiro` nunca vira card: as Faturas são parte do portal.
 
-A casa de cada módulo (atualizada na parte 2.8):
+A casa de cada módulo (atualizada na parte 2.8 e, com as Fases 3, 4 e 8,
+em 24/10/2026):
 
 | Módulo | Papel | Casa |
 |---|---|---|
@@ -59,26 +60,35 @@ A casa de cada módulo (atualizada na parte 2.8):
 | wms | wms | `/pedidos` |
 | wms | cliente | `/portal` |
 | operacao | owner, admin, interno | `/operacao` (Início da Operação) |
+| operacao | campo | `/campo` (o app do campo, parte 3.8b) |
+| operacao | painel | `/tv` (a TV da sala, parte 3.12b) |
+| operacao | cliente | `/portal/servicos` (Minhas OS, parte 4.3b) |
 | comercial | owner, admin, comercial | `/comercial` (Início do Comercial) |
-| financeiro | owner, admin, financeiro | `/faturamento` |
+| financeiro | owner, admin, financeiro | `/financeiro` onde o Financeiro está liberado; fora, `/faturamento` |
+| rh | owner, admin, rh | `/rh`, onde o RH está liberado (parte 8.1b) |
 
 Quem cai onde, na homologação e na produção (as liberações do Comercial, da
-Operação e da plataforma estão ligadas nas duas; o `dute-btg` fica de fora):
+Operação e da plataforma estão ligadas nas duas; as do Financeiro e do RH,
+só na homologação; o `dute-btg` fica de fora de todas):
 
 | Quem | Para onde vai |
 |---|---|
-| owner, admin | entrada com Armazenagem, Operação, Comercial e Financeiro, com os contadores |
+| owner, admin | entrada com Armazenagem, Operação, Comercial e Financeiro (e o RH, onde ele está liberado), com os contadores |
 | interno | entrada com Armazenagem e Operação |
 | suporte | `/dashboard` direto (a Operação do suporte é só leitura da OS, sem tela) |
 | wms | `/pedidos` direto |
 | comercial | `/comercial` direto, o Início do Comercial |
-| financeiro | `/faturamento` direto |
-| campo, rh, painel | "Nenhum módulo liberado" (o app do campo, o RH e a TV têm fase própria) |
+| financeiro | `/financeiro` direto onde o Financeiro está liberado; no `dute-prod`, até o lançamento da Fase 4, `/faturamento` |
+| campo | `/campo` direto, o app do campo |
+| painel | `/tv` direto, a TV da sala |
+| rh | `/rh` direto onde o RH está liberado; fora, "Nenhum módulo liberado" |
 | cliente BTG, sem o campo | `/portal` direto, com armazenagem e faturas |
-| cliente com wms e operacao | `/portal` direto, sem Faturas; a OS no portal entra na Fase 4 |
-| cliente só com operacao | "Nenhum módulo liberado" até a Fase 4 |
-| cliente só com financeiro | "Nenhum módulo liberado": o portal só abre com a armazenagem; muda se esse contrato existir |
+| cliente com wms e operacao | `/portal` direto, com Minhas OS e sem Faturas |
+| cliente só com operacao | Minhas OS (`/portal/servicos`) direto: o Início do portal é o do armazém e sai do menu dele |
+| cliente só com financeiro | "Nenhum módulo liberado": sem armazenagem nem Operação, não há serviço que gere fatura |
 | papel novo | "Nenhum módulo liberado" |
+
+O cliente nunca vê os cards: o portal é um lugar só.
 
 Dentro de cada módulo, o nome no topo da barra é o seletor (parte 2.3), e o
 logo leva aos cards.
@@ -422,6 +432,10 @@ segunda regra de contagem.
   `axe` e a contagem única pelo "Precisa de você").
 - Fica em aberto o cliente só com `financeiro`, que hoje cai em "Nenhum
   módulo liberado" porque o portal só abre com a armazenagem.
+  - Desde 24/10/2026 o cliente só com a Operação entra em Minhas OS
+    (correção da Fase 4, em `fase-4-financeiro.md`). O só com `financeiro`
+    continua sem módulo: sem armazenagem nem Operação, não há serviço que
+    gere fatura.
 
 **Pronto da Fase 2 na homologação** (plano, seção 4): o owner entra pelos
 cards com os contadores e troca de módulo pelo seletor; o Guilherme cai no
