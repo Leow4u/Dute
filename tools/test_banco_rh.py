@@ -59,6 +59,13 @@ FAKE_GCLOUD = textwrap.dedent(
     if comando == "firestore databases create" and not re.fullmatch(r"[a-z][a-z0-9-]{2,61}[a-z0-9]", flag("--database") or ""):
         print("ERROR: (gcloud.firestore.databases.create) INVALID_ARGUMENT: database_id should be 4-63 characters, and valid characters are /[a-z][0-9]-/", file=sys.stderr)
         sys.exit(1)
+    # Logo depois de criar, o Firestore recusa mudar o banco por um tempo
+    # (24/10/2026): as próximas N mudanças voltam ABORTED.
+    if comando in ("firestore databases update", "firestore backups schedules create") and estado.get("abortar", 0) > 0:
+        estado["abortar"] -= 1
+        salvar()
+        print("ERROR: (gcloud." + comando.replace(" ", ".") + ") ABORTED: There are concurrent database changes, please try again.", file=sys.stderr)
+        sys.exit(1)
     if comando == "firestore databases describe":
         if banco is None:
             print("ERROR: (gcloud.firestore.databases.describe) NOT_FOUND: Project or database does not exist.", file=sys.stderr)
@@ -69,7 +76,7 @@ FAKE_GCLOUD = textwrap.dedent(
             "locationId": flag("--location"),
             "type": "FIRESTORE_NATIVE" if flag("--type") == "firestore-native" else "DATASTORE_MODE",
             "deleteProtectionState": "DELETE_PROTECTION_ENABLED" if "--delete-protection" in args else "DELETE_PROTECTION_DISABLED",
-            "pointInTimeRecoveryEnablement": "POINT_IN_TIME_RECOVERY_DISABLED",
+            "pointInTimeRecoveryEnablement": "POINT_IN_TIME_RECOVERY_ENABLED" if "--enable-pitr" in args else "POINT_IN_TIME_RECOVERY_DISABLED",
         }
         salvar()
     elif comando == "firestore databases update":
@@ -114,6 +121,7 @@ class BancoRhTest(unittest.TestCase):
             "PATH": f"{self.dir}{os.pathsep}{os.environ['PATH']}",
             "FAKE_GCLOUD_STATE": str(self.estado),
             "FAKE_GCLOUD_LOG": str(self.log),
+            "BANCO_RH_ESPERA": "0",
         }
         return subprocess.run(["bash", str(SCRIPT), projeto], env=env, capture_output=True, text=True, check=False)
 
@@ -129,25 +137,50 @@ class BancoRhTest(unittest.TestCase):
     def test_sem_banco_na_producao_cria_com_protecao_pitr_e_backup(self) -> None:
         resultado = self.rodar("dute-prod", {"banco": None})
         self.assertEqual(resultado.returncode, 0, resultado.stderr)
+        # O PITR nasce com o banco: nenhuma mudança logo depois de criar.
         self.assertEqual(
             self.comandos(),
             [
                 "firestore databases describe",
                 "firestore databases create",
                 "firestore databases describe",
-                "firestore databases update",
                 "firestore backups schedules list",
                 "firestore backups schedules create",
                 "firestore databases describe",
             ],
         )
         criar = self.chamadas()[1]
-        for parte in ("--database=dute-rh", "--location=southamerica-east1", "--type=firestore-native", "--delete-protection", "--project=dute-prod"):
+        for parte in ("--database=dute-rh", "--location=southamerica-east1", "--type=firestore-native", "--delete-protection", "--enable-pitr", "--project=dute-prod"):
             self.assertIn(parte, criar)
-        self.assertIn("--enable-pitr", self.chamadas()[3])
-        self.assertIn("--recurrence=daily --retention=14d", self.chamadas()[5])
+        self.assertIn("--recurrence=daily --retention=14d", self.chamadas()[4])
         self.assertEqual(self.banco(), COMPLETO)
         self.assertIn("OK: o banco dute-rh do dute-prod", resultado.stdout)
+
+    def test_o_firestore_aborta_a_mudanca_e_o_script_repete(self) -> None:
+        # Como na homologação em 24/10/2026: o banco recém-criado, sem o PITR,
+        # recusou a mudança com ABORTED.
+        sem_pitr = {**COMPLETO, "pointInTimeRecoveryEnablement": "POINT_IN_TIME_RECOVERY_DISABLED"}
+        resultado = self.rodar("dute-homolog", {"banco": sem_pitr, "abortar": 2})
+        self.assertEqual(resultado.returncode, 0, resultado.stderr)
+        self.assertEqual(
+            self.comandos(),
+            ["firestore databases describe", "firestore databases update", "firestore databases update", "firestore databases update", "firestore databases describe"],
+        )
+        self.assertIn("nova tentativa", resultado.stdout)
+        self.assertEqual(self.banco(), COMPLETO)
+
+    def test_na_producao_a_agenda_do_backup_tambem_repete(self) -> None:
+        resultado = self.rodar("dute-prod", {"banco": None, "abortar": 1})
+        self.assertEqual(resultado.returncode, 0, resultado.stderr)
+        self.assertEqual(self.comandos().count("firestore backups schedules create"), 2)
+        self.assertEqual(json.loads(self.estado.read_text(encoding="utf-8"))["agendas"], [{"dailyRecurrence": {}, "retention": "1209600s"}])
+
+    def test_o_firestore_aborta_sempre_e_o_script_desiste(self) -> None:
+        sem_pitr = {**COMPLETO, "pointInTimeRecoveryEnablement": "POINT_IN_TIME_RECOVERY_DISABLED"}
+        resultado = self.rodar("dute-homolog", {"banco": sem_pitr, "abortar": 99})
+        self.assertEqual(resultado.returncode, 1)
+        self.assertIn("ABORTED", resultado.stderr)
+        self.assertEqual(self.comandos().count("firestore databases update"), 5)
 
     def test_rodar_de_novo_so_confere(self) -> None:
         agendas = [{"dailyRecurrence": {}, "retention": "1209600s"}]

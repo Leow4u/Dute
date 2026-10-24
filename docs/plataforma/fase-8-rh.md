@@ -103,8 +103,9 @@ fase.
 Quem cria é o workflow `Banco rh` (`.github/workflows/banco-rh.yml`), por
 disparo manual, um ambiente por vez. Ele roda o `tools/banco_rh.sh`:
 
-- cria o banco em `southamerica-east1`, nativo, com proteção contra exclusão;
-- liga o PITR;
+- cria o banco em `southamerica-east1`, nativo, com proteção contra exclusão
+  e PITR;
+- repete a mudança que o Firestore aborta logo depois de criar o banco;
 - na produção, cria o backup diário de 14 dias, como o do banco padrão
   (`docs/plataforma/backup-e-recuperacao.md`);
 - se o banco já existe, só confere, e liga o que faltar;
@@ -226,6 +227,28 @@ pegou.
     como o Firestore, e o nome do script é o da codebase e o que a zeragem
     recusa;
   - `tools/test_full_reset_btg.py`: a zeragem recusa o `dute-rh`.
+- **A execução com o nome novo**, na homologação em 24/10/2026: criou o
+  `dute-rh` com a proteção contra exclusão, mas ligar o PITR logo depois
+  voltou "ABORTED: There are concurrent database changes". A execução
+  seguinte, um minuto depois, só ligou o PITR e terminou OK.
+
+### Correção: o banco nasce com o PITR, e a mudança abortada se repete
+
+Feita em 24/10/2026, antes da produção. Logo depois de criar o banco, o
+Firestore recusa mudá-lo por alguns segundos.
+
+- **O `create`** leva o `--enable-pitr`: o banco nasce com a proteção e o
+  PITR, sem mudança logo em seguida.
+- **As mudanças** (ligar a proteção ou o PITR num banco que já existia e
+  criar a agenda do backup na produção) se repetem até 5 vezes quando voltam
+  `ABORTED`, esperando 5, 10, 15 e 20 segundos. Qualquer outro erro falha na
+  hora, como antes.
+- **Testes** (`tools/test_banco_rh.py`, com o `gcloud` de mentira que aborta
+  as próximas mudanças):
+  - a produção cria com o PITR e só depois agenda o backup;
+  - a mudança abortada se repete e termina;
+  - a agenda do backup abortada também se repete;
+  - abortada nas 5 tentativas, o script desiste com o erro.
 
 ### Parte 8.2a: a ficha no servidor
 
