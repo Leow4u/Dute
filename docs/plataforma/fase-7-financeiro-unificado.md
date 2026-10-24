@@ -854,6 +854,25 @@ emissões, só onde a Omie está liberada.
     contra o valor recebido na Dute. Se a Omie recusar o recebimento maior
     que o saldo, a baixa para com a mensagem dela, e uma pessoa decide.
 
+### Correção: o registro da NF que saiu pela Omie não se cancela
+
+Feita em 24/10/2026, da revisão da parte 7.4g.
+
+- **O defeito.** O "Cancelar registro" do Financeiro valia também para a
+  fatura que nasceu da NFS-e autorizada pela Omie. Cancelar devolvia as
+  demandas e a armazenagem a A faturar com a nota valendo na prefeitura, e
+  elas podiam sair numa segunda NFS-e.
+- **O servidor** recusa: "A NF saiu pela Omie: o registro só se desfaz com
+  a NFS-e cancelada na Omie." O registro à mão segue como antes.
+- **A tela** não mostra "Cancelar registro" na NF que saiu pela Omie. Ela
+  recebe pagamento e se envia como as outras.
+- **O cancelamento da NFS-e autorizada** (o `CancelarOS` com a nota, a
+  prefeitura confirmando e o registro desfeito com ela) fica para uma parte
+  própria, depois da 7.4h.
+- **Testes:** `cobranca.test.ts` e `cobranca.integration.test.ts` (a
+  recusa, com as demandas faturadas; o caso falha com o código antigo),
+  `faturas.test.ts` e `faturas-view.test.tsx` (sem a ação).
+
 ## Onde a Fase 7 está
 
 - Feitas: 7.0 a 7.3c, 7.4a a 7.4g e 7.5a a 7.5c.

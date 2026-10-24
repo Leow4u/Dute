@@ -60,6 +60,8 @@ export type FaturaDoFinanceiro = {
   enviada: { em: string; meio: MeioDeEnvio } | null;
   pagaEm: string | null;
   cancelada: { em: string; motivo: string } | null;
+  /** A NF que saiu pela Omie (Fase 7, parte 7.4d): só se desfaz com a NFS-e cancelada na Omie. */
+  pelaOmie: boolean;
 };
 
 export function faturaDoFinanceiro(id: string, dados: Registro): FaturaDoFinanceiro | null {
@@ -105,6 +107,7 @@ export function faturaDoFinanceiro(id: string, dados: Registro): FaturaDoFinance
     enviada: enviada && (MEIOS_DE_ENVIO as readonly string[]).includes(meio) ? { em: texto(enviada.em), meio: meio as MeioDeEnvio } : null,
     pagaEm: texto(dados.paga_em) || null,
     cancelada: cancelada ? { em: texto(cancelada.em), motivo: texto(cancelada.motivo) } : null,
+    pelaOmie: dados.origem_nf === "omie",
   };
 }
 
@@ -399,7 +402,8 @@ export function acoesDaNf(fatura: FaturaDoFinanceiro): { enviar: boolean; pagar:
   return {
     enviar: aberta && fatura.status === "emitida" && !fatura.enviada,
     pagar: aberta,
-    cancelar: fatura.status !== "cancelada" && fatura.recebidoCents === 0,
+    // O registro que nasceu da NFS-e autorizada pela Omie não se cancela aqui (o servidor recusa).
+    cancelar: fatura.status !== "cancelada" && fatura.recebidoCents === 0 && !fatura.pelaOmie,
   };
 }
 

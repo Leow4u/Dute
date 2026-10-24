@@ -164,6 +164,9 @@ describe("o painel da NF", () => {
     expect(acoesDaNf(fatura("1", { status: "enviada", enviada: { em: HOJE, meio: "email" } }))).toEqual({ enviar: false, pagar: true, cancelar: true });
     expect(acoesDaNf(fatura("1", { status: "paga", recebido_cents: 1_484_500 }))).toEqual({ enviar: false, pagar: false, cancelar: false });
     expect(acoesDaNf(fatura("1", { status: "cancelada" }))).toEqual({ enviar: false, pagar: false, cancelar: false });
+    // A NF que saiu pela Omie recebe e se envia, mas o registro não se cancela.
+    expect(fatura("1").pelaOmie).toBe(false);
+    expect(acoesDaNf(fatura("1", { origem_nf: "omie" }))).toEqual({ enviar: true, pagar: true, cancelar: false });
   });
 
   it("os pagamentos da NF, o mais antigo primeiro, com o estorno", () => {

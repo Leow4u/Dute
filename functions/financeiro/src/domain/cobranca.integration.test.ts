@@ -157,6 +157,18 @@ describe("a cobrança da NF", () => {
     assert.doesNotMatch(semCarimbo(estornos), /errada/);
   });
 
+  it("a NF que saiu pela Omie não se cancela pelo registro: as demandas seguem faturadas e nada se grava", async () => {
+    await db.collection(FATURAS_COLLECTION).doc(faturaId).update({ origem_nf: "omie", emissao_id: "nfe_0123456789abcdef0123", omie: { os: 9001 } });
+    await recusa(
+      advanceFaturaFor(db, financeiro, { acao: "cancel", idempotency_key: "can-1", fatura_id: faturaId, motivo: "Registro com a demanda errada" }, AGORA),
+      "failed-precondition",
+      "A NF saiu pela Omie: o registro só se desfaz com a NFS-e cancelada na Omie.",
+    );
+    assert.equal((await faturaAgora()).status, "emitida");
+    assert.deepEqual(await etapas(), ["faturada", "faturada"]);
+    assert.deepEqual(await doTipo("nf.cancelled"), []);
+  });
+
   it("com pagamento não cancela; sem, cancelar devolve as demandas, libera a autorização e a mesma NF se registra de novo", async () => {
     const parcial = await pagar("pag-1", "100");
     await recusa(
