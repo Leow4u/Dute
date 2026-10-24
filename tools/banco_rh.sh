@@ -32,7 +32,9 @@ trap 'rm -f "${ERRO}"' EXIT
 
 falhou() {
   cat "${ERRO}" >&2
-  if grep -q PERMISSION_DENIED "${ERRO}"; then
+  # O describe diz PERMISSION_DENIED; o create, em 24/10/2026, disse só "does
+  # not have permission to access projects instance".
+  if grep -qiE "PERMISSION_DENIED|does not have permission" "${ERRO}"; then
     echo "::error::A conta ${CONTA} não tem roles/datastore.owner no ${PROJECT_ID}. O comando que concede está em docs/plataforma/fase-8-rh.md." >&2
   fi
   exit 1
