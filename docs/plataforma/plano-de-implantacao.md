@@ -643,7 +643,7 @@ RH e, os de CNH, ao da Operação. Zeragem do WMS nunca toca o banco `dute-rh`.
 
 | Parte | Entrega | Teste que falha antes |
 |---|---|---|
-| 8.1 | Banco `rh`, `firestore-rh.rules`, codebase `functions/rh`, papel `rh` no shell | Só `rh`, `admin` e `owner` leem; ninguém grava pelo navegador |
+| 8.1 | Banco `dute-rh`, `firestore-rh.rules`, codebase `functions/rh`, papel `rh` no shell | Só `rh`, `admin` e `owner` leem; ninguém grava pelo navegador |
 | 8.2 | Ficha do colaborador: documentos (Storage com regra), exames, treinamentos, vencimentos; alertas no Início | Vencimento gera alerta uma vez; documento visível só no RH |
 | 8.3 | Exportação da competência para a contabilidade, que faz a folha e transmite o eSocial (pergunta 24, decidida em 24/10/2026) | Exportação idempotente |
 
