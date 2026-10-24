@@ -38,6 +38,7 @@ import { OPERACAO_CADASTRO_ROLES } from "./operacao/navegacao";
 import { FINANCE_ROLES, INTERNAL_ROLES } from "./modules";
 import { PLATFORM_MODULES } from "./platform-modules";
 import { CALLABLES_DO_FINANCEIRO } from "./financeiro/api";
+import { ETAPAS_DA_EMISSAO, MOTIVOS_DA_PARADA } from "./financeiro/emissoes";
 import { CALLABLES_DO_RH } from "./rh/api";
 import * as FICHA_DO_RH from "./rh/ficha";
 import { PRIMEIRO_DIA, TAMANHO_MAXIMO_DO_ARQUIVO as TAMANHO_DO_ARQUIVO_NO_APP, TIPOS_DE_ARQUIVO as TIPOS_DE_ARQUIVO_NO_APP, ULTIMO_DIA } from "./rh/formulario";
@@ -259,6 +260,16 @@ describe("listas do Financeiro iguais em todo lugar (Fase 4)", () => {
     for (const projeto of OMIE_AMBIENTES_LIBERADOS) expect(FINANCEIRO_AMBIENTES_LIBERADOS).toContain(projeto);
     const declaradas = [...read("functions/financeiro/src/index.ts").matchAll(/^export const (\w+) = onCall\(/gm)].map((match) => match[1]);
     expect(declaradas).toEqual([...CALLABLES_DO_FINANCEIRO]);
+  });
+
+  it("as etapas e os motivos da emissão na tela Emissões são os do servidor (parte 7.4f)", () => {
+    const emissao = read("functions/financeiro/src/domain/emissao-omie.ts");
+    expect(tsList(emissao, "ETAPAS_DA_EMISSAO")).toEqual([...ETAPAS_DA_EMISSAO]);
+    expect(tsList(emissao, "MOTIVOS_DA_PARADA")).toEqual([...MOTIVOS_DA_PARADA]);
+    // O evento da parada aceita os mesmos motivos.
+    const eventos = read("functions/financeiro/src/domain/events.ts");
+    const parada = eventos.match(/const emissaoParada = z[\s\S]*?motivo: z\.enum\(\[([^\]]*)\]\)/);
+    expect(parada && [...parada[1].matchAll(/"([^"]+)"/g)].map((item) => item[1])).toEqual([...MOTIVOS_DA_PARADA]);
   });
 });
 

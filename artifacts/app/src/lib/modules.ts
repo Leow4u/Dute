@@ -52,6 +52,7 @@ import {
 import {
   ROTA_A_FATURAR,
   ROTA_A_RECEBER,
+  ROTA_EMISSOES,
   ROTA_FATURAMENTO_WMS,
   ROTA_FATURAS,
   ROTA_FINANCEIRO,
@@ -63,7 +64,7 @@ import {
   ROTA_VENCIDOS,
   abreFinanceiro,
 } from "./financeiro/navegacao";
-import { AGENTE_LIBERADO, COMERCIAL_LIBERADO, FINANCEIRO_LIBERADO, OPERACAO_LIBERADO, RH_LIBERADO } from "./liberacao";
+import { AGENTE_LIBERADO, COMERCIAL_LIBERADO, FINANCEIRO_LIBERADO, OMIE_LIBERADA, OPERACAO_LIBERADO, RH_LIBERADO } from "./liberacao";
 import {
   OPERACAO_CADASTRO_ROLES,
   ROTA_COLABORADORES,
@@ -179,8 +180,11 @@ export type ModuleRoute = {
   exact?: boolean;
   /** Telas fora do menu que acendem este item (a montagem do orçamento acende Orçamentos). */
   tambem?: readonly string[];
-  /** Só com a liberação do Agent Dute do núcleo (parte 5.5j): fora dela, o item não existe no menu. */
-  liberacao?: "agente";
+  /**
+   * Só com a liberação do Agent Dute do núcleo (parte 5.5j) ou da NFS-e pela
+   * Omie (parte 7.4f): fora dela, o item não existe no menu.
+   */
+  liberacao?: "agente" | "omie";
 };
 
 export type AppModule = {
@@ -447,6 +451,15 @@ export const APP_MODULES: AppModule[] = [
         href: ROTA_AUTORIZACOES_DO_FINANCEIRO,
         icon: FileCheck,
         roles: FINANCE_ROLES,
+      }),
+      // As emissões da NFS-e pela Omie (Fase 7, parte 7.4f), só onde a Omie está liberada.
+      navRoute({
+        id: "financeiro-emissoes",
+        label: "Emissões",
+        href: ROTA_EMISSOES,
+        icon: Receipt,
+        roles: FINANCE_ROLES,
+        liberacao: "omie",
       }),
       // Os relatórios do Financeiro (parte 4.8b): a receita, as NFs emitidas e as contas a receber.
       navRoute({
@@ -1068,6 +1081,7 @@ function navigationForAmbiente(
   financeiro: boolean = FINANCEIRO_LIBERADO,
   agente: boolean = AGENTE_LIBERADO,
   rh: boolean = RH_LIBERADO,
+  omie: boolean = OMIE_LIBERADA,
 ): AppModule[] {
   const appRole = appRoleForProfile(role) ?? "interno";
   const portalModules = appRole === "cliente" ? portalModulesFor(operation) : null;
@@ -1085,7 +1099,7 @@ function navigationForAmbiente(
   )
     .map((module) => {
       const routes = module.routes.filter((route) =>
-        canAccessModule(role, route.roles) && (route.liberacao !== "agente" || agente),
+        canAccessModule(role, route.roles) && (route.liberacao !== "agente" || agente) && (route.liberacao !== "omie" || omie),
       );
       // Um grupo que o papel reduziu a uma tela só vira o link dessa tela:
       // o operador WMS vê "Documentos", não um "Mais" com um item dentro.
@@ -1193,8 +1207,9 @@ export function menuDoFinanceiro(
   role: ProfileRole | null | undefined,
   financeiro: boolean = FINANCEIRO_LIBERADO,
   agente: boolean = AGENTE_LIBERADO,
+  omie: boolean = OMIE_LIBERADA,
 ): AppModule[] {
-  const [grupo] = navigationForAmbiente("financeiro", role, null, false, false, financeiro, agente);
+  const [grupo] = navigationForAmbiente("financeiro", role, null, false, false, financeiro, agente, RH_LIBERADO, omie);
   if (!grupo) return [];
   const telas = grupo.routes.flatMap((route) => {
     if (!route.href) return [];

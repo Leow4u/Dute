@@ -1,7 +1,7 @@
 import type { Papel } from "@workspace/dominio";
 
 import { rotaDoAgenteNoModulo } from "../agente/navegacao";
-import { AGENTE_LIBERADO, FINANCEIRO_LIBERADO } from "../liberacao";
+import { AGENTE_LIBERADO, FINANCEIRO_LIBERADO, OMIE_LIBERADA } from "../liberacao";
 
 /**
  * Navegação do Financeiro no app (docs/plataforma/fase-4-financeiro.md): o
@@ -38,6 +38,9 @@ export const ROTA_RELATORIOS_DO_FINANCEIRO = "/financeiro/relatorios";
 export const ROTA_CONTRATOS_DO_FINANCEIRO = "/financeiro/contratos";
 export const ROTA_AUTORIZACOES_DO_FINANCEIRO = "/financeiro/autorizacoes";
 
+/** As emissões da NFS-e pela Omie (Fase 7, parte 7.4f). Só onde a Omie está liberada. */
+export const ROTA_EMISSOES = "/financeiro/emissoes";
+
 /** O Faturamento da armazenagem, que continua no shell do WMS até a Fase 7. */
 export const ROTA_FATURAMENTO_WMS = "/faturamento";
 
@@ -73,13 +76,18 @@ export function nfDaBusca(busca: string): string | null {
   return ID_DA_NF.test(id) ? id : null;
 }
 
-/** O Agent Dute do Financeiro entra só com a liberação dele (parte 5.5j). */
-export function rotasDoFinanceiro(liberado: boolean = FINANCEIRO_LIBERADO, agente: boolean = AGENTE_LIBERADO): string[] {
-  return liberado ? [...TELAS_DO_FINANCEIRO, ...rotaDoAgenteNoModulo("financeiro", agente)] : [];
+/** O Agent Dute do Financeiro entra só com a liberação dele (parte 5.5j); as emissões, só com a da Omie (parte 7.4f). */
+export function rotasDoFinanceiro(liberado: boolean = FINANCEIRO_LIBERADO, agente: boolean = AGENTE_LIBERADO, omie: boolean = OMIE_LIBERADA): string[] {
+  return liberado ? [...TELAS_DO_FINANCEIRO, ...(omie ? [ROTA_EMISSOES] : []), ...rotaDoAgenteNoModulo("financeiro", agente)] : [];
 }
 
-export function soComFinanceiroLiberado<T extends { path: string }>(rotas: readonly T[], liberado: boolean = FINANCEIRO_LIBERADO, agente: boolean = AGENTE_LIBERADO): T[] {
-  const permitidas = rotasDoFinanceiro(liberado, agente);
+export function soComFinanceiroLiberado<T extends { path: string }>(
+  rotas: readonly T[],
+  liberado: boolean = FINANCEIRO_LIBERADO,
+  agente: boolean = AGENTE_LIBERADO,
+  omie: boolean = OMIE_LIBERADA,
+): T[] {
+  const permitidas = rotasDoFinanceiro(liberado, agente, omie);
   return rotas.filter((rota) => permitidas.includes(rota.path));
 }
 

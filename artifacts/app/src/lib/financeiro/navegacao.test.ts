@@ -12,6 +12,7 @@ import {
   ROTA_A_FATURAR,
   ROTA_A_RECEBER,
   ROTA_CONTRATOS_DO_FINANCEIRO,
+  ROTA_EMISSOES,
   ROTA_FATURAMENTO_WMS,
   ROTA_FATURAS,
   ROTA_FINANCEIRO,
@@ -86,6 +87,10 @@ describe("navegação do Financeiro", () => {
       ["Armazenagem", "/faturamento"],
       ["Agent Dute", "/financeiro/agente"],
     ]);
+    // As emissões da NFS-e pela Omie (parte 7.4f): só com a liberação dela, logo antes dos Relatórios.
+    expect(menuDoFinanceiro("financeiro", LIBERADO, false, false).some((item) => item.href === ROTA_EMISSOES)).toBe(false);
+    expect(menuDoFinanceiro("financeiro", LIBERADO, false, true).map((item) => item.label).slice(-4)).toEqual(["Autorizações", "Emissões", "Relatórios", "Armazenagem"]);
+    expect(menuDoFinanceiro("comercial", LIBERADO, false, true)).toEqual([]);
     for (const role of ["interno", "comercial", "campo", "cliente"] as const) expect(menuDoFinanceiro(role, LIBERADO), role).toEqual([]);
     expect(menuDoFinanceiro("financeiro", DESLIGADO)).toEqual([]);
     for (const item of menuDoFinanceiro("financeiro", LIBERADO)) expect(getRouteProfileRoles(item.href!), item.href).toEqual(["owner", "admin", "financeiro"]);
@@ -120,7 +125,7 @@ describe("navegação do Financeiro", () => {
   it("toda rota do Financeiro no App passa pela liberação", () => {
     const blocos = Array.from(APP_SOURCE.matchAll(/soComFinanceiroLiberado\(\[([\s\S]*?)\]\)/g), ([, bloco]) => bloco);
     expect(blocos).toHaveLength(1);
-    expect(caminhos(blocos[0])).toEqual(rotasDoFinanceiro(LIBERADO, true));
+    expect(caminhos(blocos[0])).toEqual(rotasDoFinanceiro(LIBERADO, true, true));
     const fora = APP_SOURCE.replace(/soComFinanceiroLiberado\(\[[\s\S]*?\]\)/g, "");
     expect(caminhos(fora).filter((path) => path.startsWith("/financeiro"))).toEqual([]);
     expect(rotasDoFinanceiro(LIBERADO, false)).toEqual([
@@ -138,6 +143,13 @@ describe("navegação do Financeiro", () => {
     // O Agent Dute do Financeiro (parte 5.5j) só com a liberação dele.
     expect(rotasDoFinanceiro(LIBERADO, true).at(-1)).toBe("/financeiro/agente");
     expect(soComFinanceiroLiberado([{ path: "/financeiro/agente" }], LIBERADO, false)).toEqual([]);
+    // As emissões da NFS-e pela Omie (parte 7.4f) só com a liberação dela, antes do Agent Dute.
+    expect(rotasDoFinanceiro(LIBERADO, false, false)).not.toContain(ROTA_EMISSOES);
+    expect(rotasDoFinanceiro(LIBERADO, true, true).slice(-2)).toEqual([ROTA_EMISSOES, "/financeiro/agente"]);
+    expect(soComFinanceiroLiberado([{ path: ROTA_EMISSOES }], LIBERADO, false, false)).toEqual([]);
+    expect(soComFinanceiroLiberado([{ path: ROTA_EMISSOES }], DESLIGADO, false, true)).toEqual([]);
+    expect(getRouteProfileRoles(ROTA_EMISSOES)).toEqual(["owner", "admin", "financeiro"]);
+    expect(layoutDaRota(ROTA_EMISSOES)).toBe("financeiro");
     expect(rotasDoFinanceiro(DESLIGADO)).toEqual([]);
     expect(soComFinanceiroLiberado([{ path: ROTA_FINANCEIRO }, { path: "/financeiro/outra" }], LIBERADO).map((rota) => rota.path)).toEqual([ROTA_FINANCEIRO]);
     expect(soComFinanceiroLiberado([{ path: ROTA_FINANCEIRO }], DESLIGADO)).toEqual([]);

@@ -21,6 +21,7 @@ import {
 import type { FaturaDoFinanceiro } from "./faturas";
 import { itensDoInicioDoFinanceiro } from "./inicio";
 import { abreFinanceiro } from "./navegacao";
+import { useEmissoesDoFinanceiro } from "./use-emissoes";
 import { useFaturas } from "./use-faturas";
 
 /**
@@ -140,14 +141,15 @@ export type InicioDoFinanceiro = {
 export function useInicioDoFinanceiro(role: ProfileRole | null | undefined, agora: Date = new Date(), ligado = true): InicioDoFinanceiro {
   const fila = useFilaDoFinanceiro(role, ligado);
   const cobranca = useFaturas(role, ligado);
-  const falhas = [...fila.falhas, ...cobranca.falhas];
-  const itens = fila.linhas && cobranca.faturas ? itensDoInicioDoFinanceiro(fila.linhas, cobranca.faturas, agora) : [];
+  const emissoes = useEmissoesDoFinanceiro(role, ligado);
+  const falhas = [...fila.falhas, ...cobranca.falhas, ...emissoes.falhas];
+  const itens = fila.linhas && cobranca.faturas && emissoes.emissoes ? itensDoInicioDoFinanceiro(fila.linhas, cobranca.faturas, agora, emissoes.emissoes) : [];
   return {
     // Sem todas as leituras, uma lista parcial diria "nada parado" sem saber.
     itens: falhas.length ? [] : itens,
     linhas: fila.linhas,
     faturas: cobranca.faturas,
-    carregando: !falhas.length && (fila.carregando || cobranca.carregando),
+    carregando: !falhas.length && (fila.carregando || cobranca.carregando || emissoes.carregando),
     falhas,
   };
 }
