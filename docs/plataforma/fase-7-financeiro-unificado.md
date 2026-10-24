@@ -119,7 +119,8 @@ plano ordena as partes. Escrito em 23/10/2026.
 | 7.4d | A rotina `runOmieSync`: acha o cliente pelo CNPJ, inclui a OS, confere o ambiente, fatura e acompanha a prefeitura; a autorizada vira a fatura pelo mesmo caminho do `registerNf` | A falha não marca a fatura como emitida; a homologação nunca fatura numa Omie em produção; a OS repetida não duplica |
 | 7.4e | A faturar: o painel escolhe "Pela Omie" ou "Emitida fora"; pela Omie, pede a emissão; a demanda e a competência reservadas esperam "Na emissão da NFS-e" | Os textos e o `axe`; uma só ação primária; a reservada não entra na NF |
 | 7.4f | A tela Emissões: a etapa, a mensagem da prefeitura, a NFS-e autorizada, retomar e desistir; a parada e a rejeitada no "Precisa de você" | Os textos e o `axe`; nenhuma ação primária (as ações são da linha) |
-| 7.4g | A baixa na Omie: receber na Dute lança o recebimento na conta a receber da OS; estornar cancela | A baixa sai uma vez; a falha fica na fila e não desfaz o recebimento na Dute |
+| 7.4g | A baixa na Omie: receber na Dute lança o recebimento no título que a OS gerou; estornar cancela | A baixa sai uma vez, também com a resposta perdida; a falha fica na fila e não desfaz o recebimento na Dute |
+| 7.4h | A baixa na tela: o pagamento da NF que saiu pela Omie mostra a baixa; a parada no "Precisa de você", com retomar e dispensar | Os textos e o `axe`; dispensar pede a confirmação na linha |
 | 7.5a | O motivo de perda "prazo de faturamento" no servidor, aceito só com o prazo do contrato vencido, também a partir de A faturar | Sem o prazo vencido recusa; os outros motivos seguem só antes de faturar |
 | 7.5b | A ação "Perder por prazo" na tela Autorizações, na demanda com o prazo vencido | Só a linha vencida tem a ação; o motivo vem fixo |
 | 7.5c | Contratos e Autorizações no shell do Financeiro, só leitura | O Financeiro lê sem editar itens nem preço |
@@ -186,9 +187,14 @@ pesquisa nas páginas da Omie (`developer.omie.com.br`,
   lançamento, com o OK do Leonardo.
 - **O CT-e** segue à mão, pelo `registerNf`.
 - **A baixa (7.4g):**
-  - receber a fatura na Dute põe na fila o recebimento na conta a receber da
-    OS (`LancarRecebimento`);
-  - estornar cancela o recebimento;
+  - receber a fatura na Dute põe na fila, na mesma transação, o recebimento
+    no título que a OS gerou na Omie (`LancarRecebimento`), um por
+    pagamento (`nf_baixas`), com um código de integração que sai do
+    pagamento;
+  - estornar cancela o recebimento (`CancelarRecebimento`);
+  - antes de lançar e antes de cancelar, a rotina confere o título pela OS
+    (`PesquisarLancamentos`): o recebimento com o código já lá não se lança
+    de novo, e sem ele não há o que cancelar;
   - a falha fica na fila e não desfaz o recebimento na Dute.
 - **O que só o Leonardo e o contador fazem:**
   - gerar as chaves no aplicativo da Omie (só o administrador vê);
@@ -786,12 +792,74 @@ Financeiro.
   - `platform-lists.test.ts`: as etapas e os motivos da tela são os do
     servidor, e o evento da parada aceita os mesmos motivos.
 
+### Parte 7.4g: a baixa na Omie
+
+Feita em 24/10/2026. Anda na mesma rotina `runOmieSync`, depois das
+emissões, só onde a Omie está liberada.
+
+- **No pagamento** da fatura que saiu pela Omie (`origem_nf: omie`, com a
+  emissão e a OS), a mesma transação do `advanceFatura` põe a baixa na fila:
+  - `nf_baixas/{bxa_...}`, o id com o sufixo do pagamento: uma baixa por
+    pagamento;
+  - o código de integração do recebimento na Omie é `DUTE` e 16 dígitos do
+    pagamento (a Omie aceita até 20);
+  - a fatura registrada à mão não tem baixa.
+- **A rotina** dá um passo por baixa (até 20 por passada), uma chamada por
+  vez:
+  - confere o título a receber da OS (`PesquisarLancamentos` com `nCodOS`);
+  - lança o recebimento (`LancarRecebimento`) no título, com a conta
+    corrente da configuração ou, sem ela, a do título, o valor e o dia do
+    pagamento;
+  - no estorno, confere e cancela (`CancelarRecebimento`).
+- **Uma vez só:** a rotina só lança depois de conferir, e confere de novo
+  depois de qualquer falha. Se a Omie gravou e a resposta se perdeu, a
+  conferência acha o recebimento com o código, e a baixa fica lançada sem
+  lançar de novo.
+- **O estorno** do pagamento, na mesma transação:
+  - a baixa que nunca conferiu o título não saiu nem está saindo, e fica
+    cancelada ali, com o evento de quem estornou;
+  - a conferida, a lançada e a que tentou lançar vão a cancelar na Omie;
+  - se o estorno chega durante o lançamento, o resultado da Omie se
+    descarta (a edição mudou), e o cancelamento confere e desfaz o que ela
+    gravou.
+- **A falha** espera, dobra o intervalo e para na sexta seguida
+  (`falhas_seguidas`). O recebimento na Dute nunca se desfaz por ela.
+- **Para e espera uma pessoa:**
+  - `titulo_nao_achado`, depois de seis conferências sem o título;
+  - `titulo_repetido`, com mais de um título a receber na OS;
+  - `titulo_liquidado`, com o título já recebido na Omie sem a Dute;
+  - `sem_conta_corrente`, sem a conta no título nem na configuração;
+  - `chave`, com a chave recusada;
+  - `sem_chaves`, sem as chaves no ambiente.
+- **Os eventos** (`nf.settlement_posted`, `nf.settlement_cancelled` e
+  `nf.settlement_stopped`, entidade `nf_baixa`) não levam valor. Retomar e
+  dispensar a parada entram na 7.4h, com a tela.
+- **Testes:**
+  - `baixa-omie.test.ts`: o id e o código, o passo e o pedido, a
+    conferência, o lançamento, as falhas e o estorno;
+  - `baixa.integration.test.ts`, com uma Omie de mentira que guarda os
+    recebimentos do título:
+    - lança uma vez;
+    - a resposta perdida não duplica;
+    - o estorno da lançada cancela na Omie;
+    - o estorno antes de conferir cancela sem chamar a Omie;
+    - o estorno durante o lançamento desfaz o que a Omie gravou;
+    - a Omie fora do ar para na sexta falha sem mexer no pagamento;
+    - sem as chaves e fora da liberação;
+    - a fatura registrada à mão não tem baixa.
+- **Para conferir no primeiro teste na Omie de homologação:**
+  - o filtro `nCodOS` da `PesquisarLancamentos` e o `cCodIntLanc` que ela
+    devolve com o código de integração do recebimento;
+  - o título com retenção (o ISS retido pelo tomador): o valor dele na Omie
+    contra o valor recebido na Dute. Se a Omie recusar o recebimento maior
+    que o saldo, a baixa para com a mensagem dela, e uma pessoa decide.
+
 ## Onde a Fase 7 está
 
-- Feitas: 7.0 a 7.3c, 7.4a a 7.4f e 7.5a a 7.5c.
+- Feitas: 7.0 a 7.3c, 7.4a a 7.4g e 7.5a a 7.5c.
 - **7.4 em andamento,** com a pergunta 21 respondida em 24/10/2026: a
-  NFS-e pela Omie (desenho em "A NFS-e pela Omie"). Falta a 7.4g, a baixa
-  na Omie. A emissão espera as chaves da Omie (`OMIE_APP_KEY` e
+  NFS-e pela Omie (desenho em "A NFS-e pela Omie"). Falta a 7.4h, a baixa
+  na tela. A emissão espera as chaves da Omie (`OMIE_APP_KEY` e
   `OMIE_APP_SECRET`) no `dute-homolog`: sem elas, a rotina não chama a Omie
   e a NF segue registrada à mão ("Emitida fora").
 - **O "pronto quando" da fase:**

@@ -26,6 +26,9 @@ const EXEMPLOS: Record<FinanceiroEventType, Record<string, unknown>> = {
   "nf.emission_rejected": { id: "nfe_0123456789abcdef0123" },
   "nf.emission_stopped": { id: "nfe_0123456789abcdef0123", motivo: "ambiente_errado" },
   "nf.emission_released": { id: "nfe_0123456789abcdef0123", demandas: ["10045"], competencias: ["2026-09"] },
+  "nf.settlement_posted": { id: "bxa_0123456789abcdef01234567", pagamento_id: "pag_0123456789abcdef01234567" },
+  "nf.settlement_cancelled": { id: "bxa_0123456789abcdef01234567", pagamento_id: "pag_0123456789abcdef01234567" },
+  "nf.settlement_stopped": { id: "bxa_0123456789abcdef01234567", motivo: "titulo_nao_achado" },
 };
 
 function wmsNoticeWords(): string[] {
@@ -84,6 +87,21 @@ describe("eventos do Financeiro", () => {
     assert.deepEqual([event.entity_type, event.entity_id, event.customer_code], ["nf_emissao", "nfe_0123456789abcdef0123", "ITAU"]);
     assert.equal(FINANCEIRO_EVENT_PAYLOADS["nf.emission_requested"].safeParse({ ...EXEMPLOS["nf.emission_requested"], cnpj: "11222333000181" }).success, false);
     assert.equal(FINANCEIRO_EVENT_PAYLOADS["nf.emission_resumed"].safeParse({ ...EXEMPLOS["nf.emission_resumed"], etapa_antes: "autorizada" }).success, false);
+  });
+
+  it("o evento da baixa na Omie é da baixa, com o cliente, e a parada leva só os motivos da baixa (parte 7.4g)", () => {
+    const event = buildFinanceiroEvent({
+      operation_id: "op_teste",
+      type: "nf.settlement_posted",
+      entity_id: "bxa_0123456789abcdef01234567",
+      payload: EXEMPLOS["nf.settlement_posted"] as never,
+      actor: { uid: "rotina-omie", role: "sistema", name: "Rotina da Omie" },
+      customer_code: "ITAU",
+      occurred_at: "2026-10-24T15:00:00.000Z",
+    });
+    assert.deepEqual([event.entity_type, event.entity_id, event.customer_code], ["nf_baixa", "bxa_0123456789abcdef01234567", "ITAU"]);
+    assert.equal(FINANCEIRO_EVENT_PAYLOADS["nf.settlement_stopped"].safeParse({ ...EXEMPLOS["nf.settlement_stopped"], motivo: "cliente_nao_achado" }).success, false);
+    assert.equal(FINANCEIRO_EVENT_PAYLOADS["nf.settlement_posted"].safeParse({ ...EXEMPLOS["nf.settlement_posted"], pagamento_id: "pag_x" }).success, false);
   });
 
   it("nenhum tipo contém as palavras do roteador de avisos do WMS", () => {

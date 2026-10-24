@@ -18,6 +18,7 @@ import {
   type StatusDaFatura,
 } from "./cobranca.js";
 import { BILLING_PERIODS_COLLECTION, CLIENT_INVOICES_COLLECTION, idsDoPortal, periodoLido, problemaDoPeriodoNaFatura } from "./armazenagem.js";
+import { estornarBaixa, lerBaixaDoPagamento, porNaFila } from "./baixa-gravacao.js";
 import { createFinanceiroEvent } from "./events.js";
 import { AUTHORIZATIONS_COLLECTION, DEMANDS_COLLECTION, FATURAS_COLLECTION } from "./fatura.js";
 import { runIdempotent, type FinanceiroActor } from "./operations.js";
@@ -31,9 +32,11 @@ import type { FinanceiroProfile } from "./profile.js";
  *
  * - send: a NF enviada ao cliente (o dia e o meio).
  * - pay: um pagamento; quitada, a fatura fica paga e as demandas também, e a
- *   armazenagem dela fica paga no WMS (parte 7.2c).
+ *   armazenagem dela fica paga no WMS (parte 7.2c). Na fatura que saiu pela
+ *   Omie, a baixa do pagamento entra na fila da Omie (parte 7.4g).
  * - reverse_payment: estorna um pagamento; a paga volta a enviada (ou
- *   emitida), as demandas, a faturada, e a armazenagem, a emitida no WMS.
+ *   emitida), as demandas, a faturada, e a armazenagem, a emitida no WMS. A
+ *   baixa na Omie do pagamento vai a cancelar.
  * - cancel: cancela o registro sem pagamento; as demandas voltam a A
  *   faturar, a armazenagem volta à fila (parte 7.2a) e as autorizações
  *   perdem a NF.
@@ -177,6 +180,15 @@ export async function advanceFaturaFor(
         const demandas = resultado.quitada ? await demandasDaFatura(contexto, "faturada") : [];
         const periodos = resultado.quitada ? await periodosDaFatura(contexto, "emitido") : [];
         const pagamentoId = pagamentoIdDaOperacao(fatura.id, operationId);
+        porNaFila(transaction, db, dadosAtuais, {
+          pagamento_id: pagamentoId,
+          fatura_id: fatura.id,
+          customer_code: fatura.customer_code,
+          valor_cents: valorCents,
+          recebido_em: pedido.recebido_em,
+          iso,
+          instante,
+        });
         transaction.create(db.collection(PAGAMENTOS_COLLECTION).doc(pagamentoId), {
           id: pagamentoId,
           fatura_id: fatura.id,
@@ -222,6 +234,7 @@ export async function advanceFaturaFor(
         const resultado = aplicarEstorno(fatura, pagamentoSnap.exists ? pagamentoLido(pagamentoSnap.id, pagamentoSnap.data() ?? {}) : null);
         const demandas = resultado.reaberta ? await demandasDaFatura(contexto, "paga") : [];
         const periodos = resultado.reaberta ? await periodosDaFatura(contexto, "pago") : [];
+        const baixa = await lerBaixaDoPagamento(transaction, db, dadosAtuais, pedido.pagamento_id);
         transaction.update(pagamentoRef, { status: "estornado", estornado: { em: iso, por_uid: caller.uid, motivo: pedido.motivo }, updated_at: FieldValue.serverTimestamp() });
         transaction.update(faturaRef, {
           status: resultado.status,
@@ -232,6 +245,7 @@ export async function advanceFaturaFor(
         projetar({ status: resultado.status, recebido_cents: resultado.recebido_cents, ...(resultado.reaberta ? { paga_em: null } : {}) });
         if (resultado.reaberta) moverDemandas(contexto, demandas, "faturada", { "faturamento.paga_em": FieldValue.delete() });
         marcarArmazenagem(contexto, periodos, null);
+        estornarBaixa(transaction, db, baixa, { instante, iso, operationId, ator });
         createFinanceiroEvent(transaction, db, {
           ...evento,
           type: "cobranca.payment_reversed",
