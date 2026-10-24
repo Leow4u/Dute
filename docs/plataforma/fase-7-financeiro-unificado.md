@@ -923,7 +923,10 @@ Feita em 24/10/2026, da revisão da parte 7.4g.
   recebe pagamento e se envia como as outras.
 - **O cancelamento da NFS-e autorizada** (o `CancelarOS` com a nota, a
   prefeitura confirmando e o registro desfeito com ela) fica para uma parte
-  própria, depois da 7.4h.
+  própria. A documentação da Omie não diz como a `CancelarOS` com
+  `cCancelarNfse: "S"` responde numa OS já faturada, nem como o `StatusOS`
+  mostra a NFS-e cancelada; a parte espera essa resposta, no primeiro teste
+  na Omie de homologação ou no suporte da Omie.
 - **Testes:** `cobranca.test.ts` e `cobranca.integration.test.ts` (a
   recusa, com as demandas faturadas; o caso falha com o código antigo),
   `faturas.test.ts` e `faturas-view.test.tsx` (sem a ação).

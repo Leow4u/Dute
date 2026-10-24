@@ -79,13 +79,18 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   5.3b).
   - O de `events` se constrói sobre a coleção que já existe. Até ficar
     pronto, a rotina dos avisos falha e tenta de novo a cada 5 minutos.
-- **Functions.** São 130 callables: 82 do WMS, 12 do Comercial, 18 da
-  Operação, 2 do Financeiro e 16 do núcleo.
+- **Functions.** São 135 callables: 82 do WMS, 12 do Comercial, 18 da
+  Operação, 7 do Financeiro e 16 do núcleo.
   - Do WMS, entram `setOrderDelivery` e `receiveOrderReturn`.
   - Da Operação, entram as da Fase 3 e `requestService`,
     `declineServiceRequest`, `openStorageDemand` e `markNotificationsRead`.
   - Do Financeiro, entram `registerNf` e `advanceFatura`, numa codebase nova
     (`financeiro`). Recusam no `dute-prod` até a parte 4.9b.
+  - Também do Financeiro, as da NFS-e pela Omie e da baixa (Fase 7, parte
+    7.4): `emitNfOmie`, `actOnNfEmission`, `listNfEmissions`,
+    `actOnNfSettlement` e `listNfSettlements`. Recusam no `dute-prod` mesmo
+    com o Financeiro ligado: a Omie tem a liberação própria
+    (`OMIE_AMBIENTES_LIBERADOS`, só o `dute-homolog`).
   - Do núcleo, entram `suggestDuration`, `answerSuggestion`,
     `findSimilarQuotes` e `answerStockAlert`, na codebase nova `core`
     (Fase 5). Recusam no
@@ -94,8 +99,9 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     Dute do núcleo (`chatWithDute`, as anotações, os playbooks e as
     rotinas), que recusam fora de `AGENTE_AMBIENTES_LIBERADOS` (só o
     `dute-homolog`): na produção segue o agente do WMS.
-  - Quatro functions agendadas: `runDailyAlerts`, todo dia às 06:00,
-    `runNotifications`, a cada 5 minutos, `runMeasures`, a cada 15
+  - Cinco functions agendadas: `runDailyAlerts`, todo dia às 06:00,
+    `runNotifications`, a cada 5 minutos, `runOmieSync`, a cada 5 minutos,
+    que não faz nada fora da liberação da Omie, `runMeasures`, a cada 15
     minutos, que calcula as medidas, as lembranças e o relógio do estoque
     para os dias parado e, uma vez por dia, propõe o alerta do item parado,
     e `runDuteRoutines`, a cada 15 minutos, que roda as rotinas do Agent
@@ -125,7 +131,7 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.
-- **Conferência do invoker.** Passa a conferir 130 callables, das cinco
+- **Conferência do invoker.** Passa a conferir 135 callables, das cinco
   codebases.
 
 ## 3. Antes de publicar (conferir na homologação)
@@ -174,13 +180,13 @@ contato com os avisos ligados (Comercial › Clientes).
 4. **Disparo.** Actions > CI > Run workflow, com `publicar_producao`
    marcado, do HEAD. O job só vale verde com as conferências do fim:
    - `check_rules_deployed.sh`;
-   - o invoker das 130 callables;
+   - o invoker das 135 callables;
    - `check_frontend_deployed.sh`;
    - o smoke.
 
 ## 5. Depois de publicar (a conferência de produção)
 
-1. **As três rotinas existem:**
+1. **As cinco rotinas novas existem:**
 
    ```powershell
    cd C:\DEV\Dute
@@ -188,8 +194,12 @@ contato com os avisos ligados (Comercial › Clientes).
    ```
 
    Precisam aparecer `firebase-schedule-runDailyAlerts-southamerica-east1`,
-   `firebase-schedule-runNotifications-southamerica-east1` e
-   `firebase-schedule-runMeasures-southamerica-east1`.
+   `firebase-schedule-runNotifications-southamerica-east1`,
+   `firebase-schedule-runMeasures-southamerica-east1`,
+   `firebase-schedule-runDuteRoutines-southamerica-east1` e
+   `firebase-schedule-runOmieSync-southamerica-east1`. A `runDuteRoutines`
+   e a `runOmieSync` não fazem nada no `dute-prod`, fora das liberações
+   delas.
 2. **Os índices ficaram prontos.** Os três novos aparecem com `READY`:
 
    ```powershell
@@ -233,6 +243,12 @@ Um PR pequeno, depois da conferência da seção 5:
    - `/financeiro` abre para owner, admin e financeiro, e o card leva a ele;
    - `registerNf` e `advanceFatura` respondem;
    - o primeiro registro de NF dá o aviso "NF emitida" a quem lê valor.
+4. A NFS-e pela Omie fica de fora: `OMIE_AMBIENTES_LIBERADOS` continua só
+   com o `dute-homolog`, e a NF de produção segue registrada à mão
+   ("Emitida fora"). Ligá-la no `dute-prod` é outro PR, depois do teste na
+   Omie de homologação, com as chaves de produção no Secret Manager, os
+   serviços cadastrados pelo contador e o OK do Leonardo
+   (`fase-7-financeiro-unificado.md`, "A NFS-e pela Omie").
 
 ## 7. Como desligar
 
@@ -249,6 +265,10 @@ Um PR pequeno, depois da conferência da seção 5:
   Ao religar (`resume`), a rotina continua do cursor, sem repetir aviso.
 - **O envio de e-mail**, quando ligado: tirar o segredo da `runNotifications`
   num PR. Os e-mails voltam a ficar auditados.
+- **A NFS-e pela Omie**, quando ligada: tirar o projeto das duas listas
+  `OMIE_AMBIENTES_LIBERADOS` (app e `functions/financeiro`) e publicar. A
+  tela Emissões some, as callables recusam, e a rotina para; as emissões e
+  as baixas em andamento ficam como estão, e a NF volta a sair à mão.
 - **Uma tela do WMS na v3.** Tirar o caminho de `TELAS_DO_WMS_NA_V3`
   (`artifacts/app/src/lib/wms-v3.ts`) e publicar. A tela volta ao visual de
   antes; o shell continua o v3.
@@ -261,6 +281,10 @@ Um PR pequeno, depois da conferência da seção 5:
 - O OK para ligar o Financeiro no `dute-prod` (parte 4.9b).
 - A conta no Resend, o domínio verificado na Hostinger e a chave, para o
   e-mail sair (`fase-4-financeiro.md`, parte 4.6a).
+- As chaves da Omie (`OMIE_APP_KEY` e `OMIE_APP_SECRET`) no Secret Manager
+  do `dute-homolog`, os serviços `DUTE-OS` e `DUTE-ARMAZENAGEM` cadastrados
+  pelo contador e a conta corrente e a categoria das OS, para a NFS-e sair
+  pela Omie na homologação (`fase-7-financeiro-unificado.md`, parte 7.4d).
 - A entrega do WMS fatura pela demanda ou na fatura mensal do WMS?
   (`fase-4-financeiro.md`, decisões).
 - A receita por serviço (pergunta 26 do plano).
