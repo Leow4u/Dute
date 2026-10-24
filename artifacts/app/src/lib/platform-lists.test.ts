@@ -39,7 +39,7 @@ import { FINANCE_ROLES, INTERNAL_ROLES } from "./modules";
 import { PLATFORM_MODULES } from "./platform-modules";
 import { ROTA_MINHAS_OS } from "./portal/navegacao";
 import { CALLABLES_DO_FINANCEIRO } from "./financeiro/api";
-import { ETAPAS_DA_EMISSAO, MOTIVOS_DA_PARADA } from "./financeiro/emissoes";
+import { ETAPAS_DA_EMISSAO, ETAPAS_QUE_PRECISAM, MOTIVOS_DA_PARADA } from "./financeiro/emissoes";
 import { ETAPAS_DA_BAIXA, MOTIVOS_DA_PARADA_DA_BAIXA } from "./financeiro/baixas";
 import { CALLABLES_DO_RH } from "./rh/api";
 import * as FICHA_DO_RH from "./rh/ficha";
@@ -279,6 +279,8 @@ describe("listas do Financeiro iguais em todo lugar (Fase 4)", () => {
     const emissao = read("functions/financeiro/src/domain/emissao-omie.ts");
     expect(tsList(emissao, "ETAPAS_DA_EMISSAO")).toEqual([...ETAPAS_DA_EMISSAO]);
     expect(tsList(emissao, "MOTIVOS_DA_PARADA")).toEqual([...MOTIVOS_DA_PARADA]);
+    // As que esperam uma pessoa: a lista do servidor as traz sempre, e a tela as conta no "Precisa de você".
+    expect(tsList(emissao, "ETAPAS_QUE_PRECISAM")).toEqual([...ETAPAS_QUE_PRECISAM]);
     // O evento da parada aceita os mesmos motivos.
     const eventos = read("functions/financeiro/src/domain/events.ts");
     const parada = eventos.match(/const emissaoParada = z[\s\S]*?motivo: z\.enum\(\[([^\]]*)\]\)/);

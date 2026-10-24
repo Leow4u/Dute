@@ -6,7 +6,7 @@ import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 
 import { BILLING_PERIODS_COLLECTION } from "./armazenagem.js";
-import { actOnNfEmissionFor, emitNfOmieFor, listNfEmissionsFor } from "./emissao-gravacao.js";
+import { EMISSOES_NA_LISTA, actOnNfEmissionFor, emitNfOmieFor, listNfEmissionsFor } from "./emissao-gravacao.js";
 import { EMISSOES_COLLECTION } from "./emissao-omie.js";
 import { EVENTS_COLLECTION } from "./events.js";
 import { registerNfFor } from "./fatura-gravacao.js";
@@ -213,5 +213,39 @@ describe("a lista", () => {
     );
     assert.equal("cnpj" in emissoes[0], false);
     await recusa(listNfEmissionsFor(db, { uid: "int-1", role: "interno" }), "permission-denied", /./);
+  });
+  it("a que espera uma pessoa aparece mesmo fora das mais novas: a rejeitada e a parada antigas não somem", async () => {
+    // O formato que a emissão gravada tem, direto no banco: as mais novas já autorizadas e três antigas.
+    const gravada = (numero: number, criadaEm: string, extra: Record<string, unknown> = {}) => ({
+      customer_code: "ITAU",
+      customer_name: "Itaú Unibanco",
+      cnpj: "60701190000104",
+      itens: [{ origem: "demanda", referencia: String(10_000 + numero), descricao: `Demanda ${10_000 + numero}`, valor_cents: 100_000 }],
+      vencimento: "2026-11-20",
+      forma: "boleto",
+      etapa: "autorizada",
+      omie: {},
+      proxima_em: criadaEm,
+      edicao: 1,
+      criada_em: criadaEm,
+      ...extra,
+    });
+    const id = (numero: number) => `nfe_${String(numero).padStart(20, "0")}`;
+    const batch = db.batch();
+    for (let numero = 1; numero <= EMISSOES_NA_LISTA; numero += 1) {
+      const etapa = numero === 1 ? { etapa: "parada", motivo_da_parada: "falhas_seguidas" } : {};
+      batch.set(db.doc(`${EMISSOES_COLLECTION}/${id(numero)}`), gravada(numero, `2026-10-22T10:${String(numero).padStart(2, "0")}:00.000Z`, etapa));
+    }
+    batch.set(db.doc(`${EMISSOES_COLLECTION}/${id(101)}`), gravada(101, "2026-10-01T10:00:00.000Z", { etapa: "rejeitada", mensagem: "Inscrição municipal do tomador inválida." }));
+    batch.set(db.doc(`${EMISSOES_COLLECTION}/${id(102)}`), gravada(102, "2026-10-02T10:00:00.000Z", { etapa: "parada", motivo_da_parada: "cliente_nao_achado" }));
+    batch.set(db.doc(`${EMISSOES_COLLECTION}/${id(103)}`), gravada(103, "2026-10-03T10:00:00.000Z", { etapa: "na_prefeitura" }));
+    await batch.commit();
+
+    const { emissoes } = await listNfEmissionsFor(db, financeiro);
+    assert.equal(emissoes.length, EMISSOES_NA_LISTA + 2);
+    // Das mais novas para as mais antigas, uma vez cada; a antiga que anda sozinha fica de fora.
+    assert.deepEqual(emissoes.slice(-3).map((item) => [item.id, item.etapa]), [[id(1), "parada"], [id(102), "parada"], [id(101), "rejeitada"]]);
+    assert.equal(new Set(emissoes.map((item) => item.id)).size, emissoes.length);
+    assert.ok(!emissoes.some((item) => item.id === id(103)));
   });
 });

@@ -34,7 +34,8 @@ A rotina anda a cada 5 minutos, uma emissão por vez: acha o cliente na Omie
 pelo CNPJ do cadastro, inclui a OS, confere o ambiente, fatura a OS e
 acompanha a prefeitura. Autorizada a nota, a fatura nasce sozinha com o
 número da NFS-e, e as demandas ficam faturadas. A tela se atualiza a cada
-minuto.
+minuto e mostra as 50 emissões mais novas e, mesmo mais antigas, as
+rejeitadas e as paradas.
 
 | Etapa | O que quer dizer |
 |---|---|

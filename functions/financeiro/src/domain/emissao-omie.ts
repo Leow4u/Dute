@@ -32,6 +32,9 @@ export type EtapaDaEmissao = (typeof ETAPAS_DA_EMISSAO)[number];
 /** As etapas em que a rotina chama a Omie. As outras esperam uma pessoa ou acabaram. */
 export const ETAPAS_DA_ROTINA: readonly EtapaDaEmissao[] = ["na_fila", "os_incluida", "na_prefeitura", "reenviando", "cancelando"];
 
+/** As etapas que esperam uma pessoa: a lista da tela as traz sempre, também fora das mais novas. */
+export const ETAPAS_QUE_PRECISAM = ["parada", "rejeitada"] as const satisfies readonly EtapaDaEmissao[];
+
 /** As etapas em que as demandas e as competências continuam reservadas para a emissão. */
 export const ETAPAS_QUE_RESERVAM: readonly EtapaDaEmissao[] = ["na_fila", "os_incluida", "na_prefeitura", "rejeitada", "reenviando", "cancelando", "parada"];
 
