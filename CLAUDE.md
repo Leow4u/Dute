@@ -162,8 +162,10 @@ documentação de produto e operação está em `docs/`.
     rota `/<modulo>/agente`) só com a liberação dele; fora dela, segue o do
     WMS. Usa **npm**, como as outras codebases.
   - `functions/rh`: Functions do RH (Fase 8), codebase `rh`, ainda fora do
-    `firebase.json` (entra na parte 8.1b, depois de o Leonardo criar o banco
-    Firestore `rh`; sem o banco, a publicação das regras falha e nada sobe).
+    `firebase.json` (entra na parte 8.1b, depois de o banco Firestore `rh`
+    nascer nos dois ambientes pelo workflow manual `Banco rh`,
+    `.github/workflows/banco-rh.yml`; sem o banco, a publicação das regras
+    falha e nada sobe).
     Toda callable entra por `requireRhCaller` (liberação
     `RH_AMBIENTES_LIBERADOS`, só o `dute-homolog`; owner, admin e rh leem, só
     rh grava). O banco `rh` é fechado ao navegador (`firestore-rh.rules`): as
