@@ -57,6 +57,7 @@ function emissao(extra: Partial<Emissao> = {}): Emissao {
     consultas: 0,
     proxima_em: "2026-10-24T11:00:00.000Z",
     faturada_em: null,
+    conferir: false,
     edicao: 1,
     ...extra,
   };
@@ -85,6 +86,10 @@ describe("o passo de cada etapa", () => {
       [{ etapa: "na_prefeitura", omie: COM_OS }, "acompanhar"],
       [{ etapa: "reenviando", omie: COM_OS }, "reenviar_os"],
       [{ etapa: "cancelando", omie: COM_OS }, "cancelar_os"],
+      // Depois da falha de uma chamada que grava, a próxima confere antes na Omie.
+      [{ etapa: "os_incluida", omie: COM_OS, conferir: true }, "conferir_os"],
+      [{ etapa: "reenviando", omie: COM_OS, conferir: true }, "conferir_os"],
+      [{ etapa: "cancelando", omie: COM_OS, conferir: true }, "conferir_os"],
       [{ etapa: "rejeitada", omie: COM_OS }, null],
       [{ etapa: "parada" }, null],
       [{ etapa: "autorizada" }, null],
@@ -129,6 +134,7 @@ describe("a OS da fatura", () => {
       ["acompanhar", "servicos/os", "StatusOS"],
       ["reenviar_os", "servicos/osp", "ReenviarOS"],
       ["cancelar_os", "servicos/osp", "CancelarOS"],
+      ["conferir_os", "servicos/os", "StatusOS"],
     ];
     for (const [passo, servico, call] of casos) {
       const pedido = pedidoDoPasso(passo, comOs, "2026-10-24", SEM_CONFIGURACAO);
@@ -137,6 +143,7 @@ describe("a OS da fatura", () => {
     assert.deepEqual(pedidoDoPasso("achar_cliente", comOs, "2026-10-24", SEM_CONFIGURACAO).param.clientesFiltro, { cnpj_cpf: "11.222.333/0001-81" });
     assert.deepEqual(pedidoDoPasso("faturar_os", comOs, "2026-10-24", SEM_CONFIGURACAO).param, { cCodIntOS: comOs.id, nCodOS: 9001 });
     assert.equal(pedidoDoPasso("cancelar_os", comOs, "2026-10-24", SEM_CONFIGURACAO).param.cCancelarNfse, "S");
+    assert.deepEqual(pedidoDoPasso("conferir_os", comOs, "2026-10-24", SEM_CONFIGURACAO).param, { cCodIntOS: comOs.id, nCodOS: 9001, lMsg: true });
   });
 });
 
@@ -228,6 +235,71 @@ describe("a falha de cada passo", () => {
   });
 });
 
+describe("a conferência depois da falha de uma chamada que grava", () => {
+  const recusa = { tipo: "recusa" as const, mensagem: "ERROR: A OS já está faturada.", esperar_ms: 2 * 60_000 };
+  const perdida = { tipo: "instavel" as const, mensagem: "Sem resposta da Omie: This operation was aborted", esperar_ms: 2 * 60_000 };
+
+  it("a falha do FaturarOS, do ReenviarOS e do CancelarOS pede a conferência; a das leituras e a do limite não", () => {
+    for (const [etapa, passo] of [["os_incluida", "faturar_os"], ["reenviando", "reenviar_os"], ["cancelando", "cancelar_os"]] as const) {
+      const falhou = comFalha(emissao({ etapa, omie: COM_OS }), passo, perdida, AGORA);
+      assert.deepEqual([falhou.etapa, falhou.conferir, falhou.tentativas], [etapa, true, 1], passo);
+      assert.equal(passoDaEmissao(falhou, new Date(falhou.proxima_em)), "conferir_os", passo);
+    }
+    assert.equal(comFalha(emissao({ etapa: "na_prefeitura", omie: COM_OS }), "acompanhar", perdida, AGORA).conferir, false);
+    assert.equal(comFalha(emissao({ etapa: "os_incluida", omie: COM_OS }), "faturar_os", { tipo: "limite", mensagem: "Too Many Requests", esperar_ms: 60_000 }, AGORA).conferir, false);
+    // A parada pelas falhas guarda a conferência: retomar confere antes de faturar de novo.
+    const parada = comFalha(emissao({ etapa: "os_incluida", omie: COM_OS, tentativas: FALHAS_ATE_PARAR - 1 }), "faturar_os", perdida, AGORA);
+    assert.deepEqual([parada.etapa, parada.conferir], ["parada", true]);
+    const retomada = comAcao(parada, "retomar", AGORA);
+    assert.ok("emissao" in retomada);
+    assert.equal(passoDaEmissao(retomada.emissao, AGORA), "conferir_os");
+  });
+
+  it("o FaturarOS que deu certo com a resposta perdida: a OS faturada segue para a prefeitura, sem faturar de novo", () => {
+    const falhou = comFalha(emissao({ etapa: "os_incluida", omie: COM_OS }), "faturar_os", perdida, AGORA);
+    const conferida = comResposta(falhou, "conferir_os", { nCodOS: 9001, cAmbiente: "H", cFaturada: "S", cCancelada: "N", ListaRpsNfse: [{ cStatusRps: "002" }] }, CONTEXTO);
+    assert.deepEqual([conferida.efeito, conferida.emissao.etapa, conferida.emissao.conferir, conferida.emissao.faturada_em], ["nenhum", "na_prefeitura", false, AGORA.toISOString()]);
+    assert.equal(passoDaEmissao(conferida.emissao, AGORA), "acompanhar");
+  });
+
+  it("a OS ainda sem faturar fatura de novo, e as falhas seguem contando até parar na sexta", () => {
+    let atual = emissao({ etapa: "os_incluida", omie: COM_OS });
+    const passos: string[] = [];
+    for (let volta = 0; volta < 20 && atual.etapa !== "parada"; volta += 1) {
+      const passo = passoDaEmissao(atual, new Date(atual.proxima_em));
+      assert.ok(passo);
+      passos.push(passo);
+      atual = passo === "conferir_os" ? comResposta(atual, passo, { nCodOS: 9001, cAmbiente: "H", cFaturada: "N", cCancelada: "N" }, { ...CONTEXTO, agora: new Date(atual.proxima_em) }).emissao : comFalha(atual, passo, recusa, new Date(atual.proxima_em));
+    }
+    assert.deepEqual([atual.etapa, atual.motivo_da_parada, atual.etapa_anterior, atual.tentativas], ["parada", "falhas_seguidas", "os_incluida", FALHAS_ATE_PARAR]);
+    assert.deepEqual(passos, ["faturar_os", ...Array.from({ length: FALHAS_ATE_PARAR - 1 }, () => ["conferir_os", "faturar_os"]).flat()]);
+  });
+
+  it("o CancelarOS da OS já cancelada na Omie: a conferência desiste e solta as reservas", () => {
+    const falhou = comFalha(emissao({ etapa: "cancelando", omie: COM_OS }), "cancelar_os", { ...recusa, mensagem: "ERROR: A OS já está cancelada." }, AGORA);
+    const cancelada = comResposta(falhou, "conferir_os", { nCodOS: 9001, cFaturada: "S", cCancelada: "S", ListaRpsNfse: [{ cStatusRps: "003" }] }, CONTEXTO);
+    assert.deepEqual([cancelada.efeito, cancelada.emissao.etapa, cancelada.emissao.conferir], ["liberar_reservas", "desistida", false]);
+    const aindaNao = comResposta(falhou, "conferir_os", { nCodOS: 9001, cFaturada: "S", cCancelada: "N", ListaRpsNfse: [{ cStatusRps: "003" }] }, CONTEXTO).emissao;
+    assert.deepEqual([aindaNao.etapa, aindaNao.conferir, aindaNao.tentativas, passoDaEmissao(aindaNao, AGORA)], ["cancelando", false, 1, "cancelar_os"]);
+  });
+
+  it("o ReenviarOS que deu certo com a resposta perdida: a RPS que saiu da recusa segue para a prefeitura", () => {
+    const falhou = comFalha(emissao({ etapa: "reenviando", omie: COM_OS, mensagens_da_prefeitura: [{ codigo: "E160", descricao: "x", correcao: "y" }] }), "reenviar_os", perdida, AGORA);
+    const reenviada = comResposta(falhou, "conferir_os", { nCodOS: 9001, cFaturada: "S", cCancelada: "N", ListaRpsNfse: [{ cStatusRps: "003" }, { cStatusRps: "002" }] }, CONTEXTO).emissao;
+    assert.deepEqual([reenviada.etapa, reenviada.conferir, reenviada.mensagens_da_prefeitura], ["na_prefeitura", false, []]);
+    const aindaRecusada = comResposta(falhou, "conferir_os", { nCodOS: 9001, cFaturada: "S", cCancelada: "N", ListaRpsNfse: [{ cStatusRps: "003" }] }, CONTEXTO).emissao;
+    assert.deepEqual([aindaRecusada.etapa, passoDaEmissao(aindaRecusada, AGORA)], ["reenviando", "reenviar_os"]);
+  });
+
+  it("a OS cancelada na Omie, achada na conferência de faturar ou de reenviar, para a emissão", () => {
+    for (const [etapa, passo] of [["os_incluida", "faturar_os"], ["reenviando", "reenviar_os"]] as const) {
+      const falhou = comFalha(emissao({ etapa, omie: COM_OS }), passo, perdida, AGORA);
+      const parada = comResposta(falhou, "conferir_os", { nCodOS: 9001, cFaturada: "S", cCancelada: "S", ListaRpsNfse: [] }, CONTEXTO).emissao;
+      assert.deepEqual([parada.etapa, parada.motivo_da_parada, parada.conferir], ["parada", "cancelada_na_omie", false], etapa);
+    }
+  });
+});
+
 describe("as ações de uma pessoa", () => {
   it("retomar a parada volta à etapa de onde parou; a rejeitada reenvia", () => {
     const parada = comFalha(emissao({ etapa: "os_incluida", omie: COM_OS, tentativas: 5 }), "faturar_os", { tipo: "recusa", mensagem: "x", esperar_ms: 0 }, AGORA);
@@ -278,6 +350,10 @@ describe("a emissão gravada (parte 7.4c)", () => {
     const gravada = { ...emissao({ omie: COM_OS, etapa: "na_prefeitura" }), total_cents: 250_000, criada_em: "2026-10-24T11:00:00.000Z" };
     const lida = emissaoLida(gravada.id, gravada as unknown as Record<string, unknown>);
     assert.deepEqual([lida.etapa, lida.omie.os, lida.itens.length, lida.cnpj], ["na_prefeitura", 9001, 2, "11222333000181"]);
+    // A emissão gravada antes da conferência não confere; a marcada confere.
+    const { conferir: _semConferir, ...antiga } = gravada;
+    assert.equal(emissaoLida(gravada.id, antiga as unknown as Record<string, unknown>).conferir, false);
+    assert.equal(emissaoLida(gravada.id, { ...gravada, conferir: true } as unknown as Record<string, unknown>).conferir, true);
     for (const quebra of [{ etapa: "inventada" }, { cnpj: "123" }, { itens: [] }, { forma: "cheque" }, { edicao: 0 }, { itens: [{ origem: "demanda", referencia: "1", descricao: "x", valor_cents: -1 }] }]) {
       assert.throws(() => emissaoLida(gravada.id, { ...gravada, ...quebra } as unknown as Record<string, unknown>), /ilegível/, JSON.stringify(quebra));
     }

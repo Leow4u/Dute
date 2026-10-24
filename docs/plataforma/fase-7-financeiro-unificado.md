@@ -931,6 +931,46 @@ Feita em 24/10/2026, da revisão da parte 7.4g.
   recusa, com as demandas faturadas; o caso falha com o código antigo),
   `faturas.test.ts` e `faturas-view.test.tsx` (sem a ação).
 
+### Correção: a emissão confere na Omie antes de repetir o que grava
+
+Feita em 24/10/2026, a partir de uma revisão do código da 7.4. Depois da
+falha de uma chamada que grava, a emissão repetia a chamada sem conferir o
+que a Omie já tinha feito. O caso típico é a resposta perdida no tempo
+limite de 30 segundos:
+
+- **O FaturarOS que deu certo sem resposta:** a rotina faturava de novo, a
+  Omie recusava, e a emissão parava em "Falhas seguidas". "Tentar de novo"
+  repetia o FaturarOS, e a NFS-e autorizada nunca virava fatura. A
+  conferência do ambiente, que achava a OS faturada, só roda antes do
+  primeiro FaturarOS.
+- **O CancelarOS da OS já cancelada à mão na Omie:** a emissão ficava em
+  "Cancelando na Omie" para sempre, e nem "Tentar de novo" nem "Desistir"
+  soltavam as reservas.
+- **O ReenviarOS:** o mesmo laço.
+
+O que muda, como na baixa (7.4g):
+
+- **A falha de uma chamada que grava** (FaturarOS, ReenviarOS ou CancelarOS)
+  marca `conferir` na emissão. A tentativa seguinte é o `StatusOS` da OS
+  (`conferir_os`), e a marca fica na parada pelas falhas, para retomar
+  conferindo.
+- **O que a Omie já fez segue em frente:**
+  - a OS faturada vai à prefeitura;
+  - a RPS que saiu da recusa (003) também;
+  - a OS cancelada desiste e solta as reservas, no cancelamento, ou para a
+    emissão com "OS cancelada na Omie", nos outros casos.
+- **O que ainda não aconteceu volta a chamar,** com as falhas contando: a
+  emissão continua parando na sexta.
+- **Testes:**
+  - `emissao-omie.test.ts`: o passo, o pedido, a falha que pede a
+    conferência e cada resposta da conferência. O laço "conferir e repetir"
+    para na sexta falha.
+  - `omie-rotina.integration.test.ts`: a Omie falsa recusa faturar a OS já
+    faturada e cancelar a já cancelada, e perde a resposta depois de
+    gravar. Os dois casos novos falham com o código antigo:
+    - o FaturarOS sem resposta autoriza e a fatura nasce;
+    - a OS cancelada à mão solta as reservas.
+
 ## Onde a Fase 7 está
 
 - Feitas: 7.0 a 7.3c, 7.4a a 7.4i e 7.5a a 7.5c.

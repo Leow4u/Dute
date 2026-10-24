@@ -124,6 +124,7 @@ export async function emitNfOmieFor(
         consultas: 0,
         proxima_em: iso,
         faturada_em: null,
+        conferir: false,
         edicao: 1,
       };
       transaction.create(db.collection(EMISSOES_COLLECTION).doc(id), {
