@@ -179,10 +179,14 @@ contato com os avisos ligados (Comercial › Clientes).
 1. **Base.** HEAD da `main` com CI verde e a homologação publicada nele.
 2. **Backup.** PITR de 7 dias e backup diário ligados
    (`backup-e-recuperacao.md`). Anotar o instante de antes do deploy.
-3. **Janela.** Combinar com a contagem de abertura da BTG, que roda no
+3. **O banco do RH.** O `dute-rh` existe no `dute-prod`, com a proteção
+   contra exclusão, o PITR e o backup diário: a última execução do workflow
+   `Banco rh` com `producao` está verde (`fase-8-rh.md`). Sem o banco, a
+   publicação das regras falha e nada mais sobe.
+4. **Janela.** Combinar com a contagem de abertura da BTG, que roda no
    `dute-prod`. O deploy de functions leva de 11 a 15 minutos, agora com
    seis codebases.
-4. **Disparo.** Actions > CI > Run workflow, com `publicar_producao`
+5. **Disparo.** Actions > CI > Run workflow, com `publicar_producao`
    marcado, do HEAD. O job só vale verde com as conferências do fim:
    - `check_rules_deployed.sh`;
    - o invoker das 145 callables;

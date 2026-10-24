@@ -510,6 +510,12 @@ competência.
 Entra só depois de o banco `dute-rh` existir na homologação e na produção,
 pelo workflow `Banco rh` (seção "Como o banco `dute-rh` nasce").
 
+- **O banco na homologação** existe desde 24/10/2026, com a proteção contra
+  exclusão e o PITR.
+- **Na produção**, a execução de 24/10/2026 recusou o `create`: a conta
+  `github-actions-functions@dute-prod` não tinha o `roles/datastore.owner`
+  no `dute-prod`. Nada foi criado, e o merge espera o banco.
+
 - **O `firebase.json`** passa o `firestore` a uma lista: o banco padrão,
   com as regras e os índices de sempre, e o `dute-rh`, com o
   `firestore-rh.rules`. A codebase `rh` entra nas functions.
