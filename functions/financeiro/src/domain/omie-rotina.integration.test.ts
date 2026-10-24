@@ -9,7 +9,7 @@ import { actOnNfEmissionFor, emitNfOmieFor } from "./emissao-gravacao.js";
 import { EMISSOES_COLLECTION } from "./emissao-omie.js";
 import { EVENTS_COLLECTION } from "./events.js";
 import { registerNfFor } from "./fatura-gravacao.js";
-import { FATURAS_COLLECTION, faturaIdDaNf } from "./fatura.js";
+import { FATURAS_COLLECTION, faturaIdDaNf, faturaIdDaNfse } from "./fatura.js";
 import type { TransporteDaOmie } from "./omie.js";
 import { runOmieSyncFor } from "./omie-rotina.js";
 import type { FinanceiroProfile } from "./profile.js";
@@ -174,7 +174,7 @@ describe("a rotina da Omie", () => {
     assert.deepEqual(omie.chamadas, ["ListarClientes", "IncluirOS", "StatusOS", "FaturarOS", "StatusOS", "StatusOS"]);
 
     const gravada = await emissao();
-    const faturaId = faturaIdDaNf("1", "815");
+    const faturaId = faturaIdDaNfse("815");
     assert.deepEqual([gravada.etapa, gravada.fatura_id, (gravada.omie as Record<string, unknown>).nfse], ["autorizada", faturaId, "00000815"]);
     const fatura = (await db.doc(`${FATURAS_COLLECTION}/${faturaId}`).get()).data() ?? {};
     assert.deepEqual(
@@ -336,16 +336,31 @@ describe("a rotina da Omie", () => {
     assert.deepEqual(paradas, ["na_fila", "parada"]);
   });
 
-  it("a NF já registrada à mão com o mesmo número para a emissão, e a reserva continua", async () => {
+  it("o CT-e registrado à mão com o mesmo número não impede a fatura da NFS-e da Omie", async () => {
     const omie = omieDeMentira();
     await registerNfFor(db, financeiro, { idempotency_key: "nf-safra", demandas: ["10050"], nf: { numero: "815", emitida_em: "2026-10-23" }, vencimento: "2026-11-20", forma: "pix" }, agora);
     await emitir();
     for (let passo = 0; passo < 4; passo += 1) await rodar(omie.transporte);
     await rodar(omie.transporte, 2);
     await rodar(omie.transporte, 5);
+    assert.equal((await emissao()).etapa, "autorizada");
+    const daOmie = (await db.doc(`${FATURAS_COLLECTION}/${faturaIdDaNfse("815")}`).get()).data() ?? {};
+    const aMao = (await db.doc(`${FATURAS_COLLECTION}/${faturaIdDaNf("1", "815")}`).get()).data() ?? {};
+    assert.deepEqual([daOmie.customer_code, daOmie.origem_nf, aMao.customer_code, aMao.origem_nf], ["ITAU", "omie", "SAFRA", undefined]);
+    assert.equal((await db.doc("demands/10045").get()).get("etapa"), "faturada");
+  });
+
+  it("a fatura que não pode nascer para a emissão, a reserva continua e desistir não cancela a nota", async () => {
+    const omie = omieDeMentira();
+    // A mesma NFS-e já com fatura na Dute (o dado que não deveria existir).
+    await db.doc(`${FATURAS_COLLECTION}/${faturaIdDaNfse("815")}`).set({ id: faturaIdDaNfse("815"), customer_code: "ITAU", status: "emitida", origem_nf: "omie" });
+    await emitir();
+    for (let passo = 0; passo < 4; passo += 1) await rodar(omie.transporte);
+    await rodar(omie.transporte, 2);
+    await rodar(omie.transporte, 5);
     const gravada = await emissao();
     assert.deepEqual([gravada.etapa, gravada.motivo_da_parada], ["parada", "fatura_recusada"]);
-    assert.match(String(gravada.mensagem), /A NF 815 da série 1 já está registrada/);
+    assert.match(String(gravada.mensagem), /A NFS-e 815 já tem fatura na Dute/);
     assert.equal((await db.doc("demands/10045").get()).get("emissao_nf.id"), ID);
     assert.equal((await db.doc("demands/10045").get()).get("etapa"), "a_faturar");
     // A nota vale na prefeitura: desistir não a cancela.
