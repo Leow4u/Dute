@@ -161,6 +161,14 @@ documentação de produto e operação está em `docs/`.
     o outro. No app, o agente do núcleo entra em cada shell (`lib/agente`,
     rota `/<modulo>/agente`) só com a liberação dele; fora dela, segue o do
     WMS. Usa **npm**, como as outras codebases.
+  - `functions/rh`: Functions do RH (Fase 8), codebase `rh`, ainda fora do
+    `firebase.json` (entra na parte 8.1b, depois de o Leonardo criar o banco
+    Firestore `rh`; sem o banco, a publicação das regras falha e nada sobe).
+    Toda callable entra por `requireRhCaller` (liberação
+    `RH_AMBIENTES_LIBERADOS`, só o `dute-homolog`; owner, admin e rh leem, só
+    rh grava). O banco `rh` é fechado ao navegador (`firestore-rh.rules`): as
+    regras de um banco nomeado não leem o `users` do banco padrão. Desenho:
+    `docs/plataforma/fase-8-rh.md`. Usa **npm**.
   - `lib/dominio`: tipos e regras que o app e as Functions precisam ter iguais.
 - **IA native.** Todo módulo novo grava desde o primeiro dia o que a IA precisa
   (eventos em `events`, tempos e medidas) e respeita o isolamento por cliente. A
@@ -289,6 +297,10 @@ npm --prefix functions/comercial run test:critical     # os dois acima
 npm --prefix functions/core ci
 npm --prefix functions/core run test:unit              # node --test
 npm --prefix functions/core run test:integration       # emulador Firestore, exige Java 21
+
+npm --prefix functions/rh ci
+npm --prefix functions/rh run test:unit                # node --test
+npm --prefix functions/rh run test:integration         # emulador Firestore, exige Java 21
 ```
 
 Teste novo das Functions só roda se entrar na lista fixa do `test:unit` ou do
