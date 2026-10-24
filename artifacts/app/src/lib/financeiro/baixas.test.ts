@@ -92,7 +92,10 @@ describe("as baixas na Omie", () => {
   });
 
   it("só a parada tem ação; a ordem põe as paradas primeiro e deixa de fora as que acabaram", () => {
-    for (const etapa of ETAPAS_DA_BAIXA) expect(acoesDaBaixa({ etapa }), etapa).toEqual(etapa === "parada" ? ["retomar", "dispensar"] : []);
+    for (const etapa of ETAPAS_DA_BAIXA) expect(acoesDaBaixa({ etapa, motivo: null }), etapa).toEqual(etapa === "parada" ? ["retomar", "dispensar"] : []);
+    // A dispensada que o estorno parou só se dispensa: tentar de novo lançaria o pagamento estornado.
+    expect(acoesDaBaixa({ etapa: "parada", motivo: "dispensada_e_estornada" })).toEqual(["dispensar"]);
+    expect(acoesDaBaixa({ etapa: "parada", motivo: "titulo_liquidado" })).toEqual(["retomar", "dispensar"]);
     const lista = [baixa(1), baixa(2, { etapa: "parada" }), baixa(3, { etapa: "cancelando" }), baixa(4, { etapa: "lancada" }), baixa(5, { etapa: "parada" })];
     expect(baixasNaOrdem(lista).map((item) => item.id.slice(-1))).toEqual(["2", "5", "1", "3"]);
   });

@@ -68,8 +68,8 @@ export async function lerBaixaDoPagamento(transaction: Transaction, db: Firestor
 
 /**
  * No estorno: a baixa que pode ter saído vai a cancelar na Omie; a que nunca
- * saiu fica cancelada aqui, com o evento. Sem baixa (o pagamento de antes da
- * parte 7.4g), nada muda.
+ * saiu fica cancelada aqui, e a dispensada para e espera uma pessoa, cada uma
+ * com o evento. Sem baixa (o pagamento de antes da parte 7.4g), nada muda.
  */
 export function estornarBaixa(
   transaction: Transaction,
@@ -87,17 +87,12 @@ export function estornarBaixa(
   const nova = baixaNoEstorno(atual, contexto.instante);
   if (!nova) return null;
   gravarBaixa(transaction, db, nova, { estornada_em: contexto.iso });
+  const evento = { operation_id: contexto.operationId, entity_id: nova.id, customer_code: nova.customer_code, actor: contexto.ator, occurred_at: contexto.iso };
   if (nova.etapa === "cancelada") {
-    createFinanceiroEvent(transaction, db, {
-      operation_id: contexto.operationId,
-      suffix: "nf.settlement_cancelled",
-      type: "nf.settlement_cancelled",
-      entity_id: nova.id,
-      customer_code: nova.customer_code,
-      payload: { id: nova.id, pagamento_id: nova.pagamento_id },
-      actor: contexto.ator,
-      occurred_at: contexto.iso,
-    });
+    createFinanceiroEvent(transaction, db, { ...evento, suffix: "nf.settlement_cancelled", type: "nf.settlement_cancelled", payload: { id: nova.id, pagamento_id: nova.pagamento_id } });
+  }
+  if (nova.etapa === "parada" && nova.motivo_da_parada) {
+    createFinanceiroEvent(transaction, db, { ...evento, suffix: "nf.settlement_stopped", type: "nf.settlement_stopped", payload: { id: nova.id, motivo: nova.motivo_da_parada } });
   }
   return nova;
 }

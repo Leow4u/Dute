@@ -1080,6 +1080,31 @@ Feita em 24/10/2026, a partir da mesma revisão.
     depois da demora esperam a prefeitura e autorizam. Os dois casos param
     em "Prefeitura sem resposta" com o código antigo.
 
+### Correção: o estorno da baixa dispensada para e espera uma pessoa
+
+Feita em 24/10/2026, a partir da mesma revisão.
+
+- **O problema:** a baixa dispensada foi resolvida à mão na Omie, em geral
+  com o recebimento lançado lá. O estorno do pagamento não mudava a baixa
+  dispensada, e o recebimento continuava na Omie com o pagamento estornado
+  na Dute, sem ninguém saber.
+- **A correção:** o estorno para a baixa dispensada com o motivo
+  `dispensada_e_estornada`, com o evento `nf.settlement_stopped` de quem
+  estornou, na mesma transação.
+  - A rotina não chama a Omie por ela, porque não sabe o que a pessoa fez
+    lá.
+  - A baixa entra no "Precisa de você" e em "Baixas na Omie".
+  - Só se dispensa, depois de desfazer na Omie. "Tentar de novo" é
+    recusado e não aparece: lançaria o pagamento estornado.
+- **Testes:**
+  - `baixa-omie.test.ts`: o estorno da dispensada, a retomada recusada e a
+    dispensa de novo.
+  - `baixa.integration.test.ts`: o pagamento estornado depois da dispensa
+    para a baixa, aparece na lista com o evento e não chama a Omie. Falha
+    com o código antigo, em que a baixa ficava dispensada.
+  - No app, `baixas.test.ts` e `emissoes-view.test.tsx`: só "Dispensar"
+    nessa parada.
+
 ## Onde a Fase 7 está
 
 - Feitas: 7.0 a 7.3c, 7.4a a 7.4i e 7.5a a 7.5c.

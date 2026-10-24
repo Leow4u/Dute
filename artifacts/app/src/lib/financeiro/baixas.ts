@@ -33,6 +33,7 @@ export const MOTIVOS_DA_PARADA_DA_BAIXA = [
   "chave",
   "sem_chaves",
   "falhas_seguidas",
+  "dispensada_e_estornada",
 ] as const;
 export type MotivoDaParadaDaBaixa = (typeof MOTIVOS_DA_PARADA_DA_BAIXA)[number];
 
@@ -44,6 +45,7 @@ export const MOTIVO_DA_BAIXA_ROTULO: Record<MotivoDaParadaDaBaixa, string> = {
   chave: "Chave da Omie recusada",
   sem_chaves: "Sem as chaves da Omie",
   falhas_seguidas: "Falhas seguidas na Omie",
+  dispensada_e_estornada: "Estornada depois de dispensada",
 };
 
 /** A baixa no pagamento da NF (parte 7.4i): o que aconteceu com ele na Omie. */
@@ -115,9 +117,14 @@ export function tituloDaBaixa(baixa: Pick<BaixaDoFinanceiro, "cliente" | "nfNume
 
 export type AcaoNaBaixa = "retomar" | "dispensar";
 
-/** Só a parada tem ação: tentar de novo ou dispensar (resolvida na Omie à mão). */
-export function acoesDaBaixa(baixa: Pick<BaixaDoFinanceiro, "etapa">): AcaoNaBaixa[] {
-  return baixa.etapa === "parada" ? ["retomar", "dispensar"] : [];
+/**
+ * Só a parada tem ação: tentar de novo ou dispensar (resolvida na Omie à
+ * mão). A dispensada que o estorno parou só se dispensa, depois de desfazer
+ * na Omie o que foi lançado à mão.
+ */
+export function acoesDaBaixa(baixa: Pick<BaixaDoFinanceiro, "etapa" | "motivo">): AcaoNaBaixa[] {
+  if (baixa.etapa !== "parada") return [];
+  return baixa.motivo === "dispensada_e_estornada" ? ["dispensar"] : ["retomar", "dispensar"];
 }
 
 /** As paradas primeiro, depois as que a rotina anda; dentro de cada uma, a ordem em que vieram. */
@@ -131,7 +138,7 @@ function previa(valores: readonly string[], max = 2): string {
   return unicos.length > max ? `${mostrados} e mais ${unicos.length - max}` : mostrados;
 }
 
-/** O "Precisa de você" das baixas: a parada é crítica, porque o recebimento da Dute não chegou à Omie. */
+/** O "Precisa de você" das baixas: a parada é crítica, porque a Omie não bate com o recebimento da Dute até alguém resolver. */
 export function pendenciasDasBaixas(baixas: readonly BaixaDoFinanceiro[], rota: string): ItemDoInicio[] {
   const paradas = baixas.filter((baixa) => baixa.etapa === "parada");
   if (!paradas.length) return [];

@@ -153,7 +153,7 @@ const baixaCancelada = z.object({ id: baixaId, pagamento_id: pagamentoId }).stri
 const baixaParada = z
   .object({
     id: baixaId,
-    motivo: z.enum(["titulo_nao_achado", "titulo_repetido", "titulo_liquidado", "sem_conta_corrente", "chave", "sem_chaves", "falhas_seguidas"]),
+    motivo: z.enum(["titulo_nao_achado", "titulo_repetido", "titulo_liquidado", "sem_conta_corrente", "chave", "sem_chaves", "falhas_seguidas", "dispensada_e_estornada"]),
   })
   .strict();
 
