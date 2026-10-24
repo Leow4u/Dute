@@ -1,9 +1,11 @@
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 import { onCall } from "firebase-functions/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 
+import { armazemDoBucket, attachRhFileFor, openRhFileFor, requestRhUploadFor } from "./domain/arquivos-gravacao.js";
 import { RH_DATABASE } from "./domain/banco.js";
 import { archiveRhRecordFor, getRhFichaFor, getRhPanelFor, saveRhRecordFor } from "./domain/ficha-gravacao.js";
 import { rhLiberado } from "./domain/liberacao.js";
@@ -61,6 +63,24 @@ export const saveRhRecord = onCall(async (request) => {
 export const archiveRhRecord = onCall(async (request) => {
   const caller = await requireRhCaller(db, request, PROJECT_ID);
   return archiveRhRecordFor(rh, caller, request.data);
+});
+
+/** A URL para subir o arquivo escaneado do registro (parte 8.2b). Só o rh. */
+export const requestRhUpload = onCall(async (request) => {
+  const caller = await requireRhCaller(db, request, PROJECT_ID);
+  return requestRhUploadFor(rh, caller, request.data, armazemDoBucket(getStorage().bucket()));
+});
+
+/** Liga ao registro o arquivo que subiu, conferido no bucket. Só o rh. */
+export const attachRhFile = onCall(async (request) => {
+  const caller = await requireRhCaller(db, request, PROJECT_ID);
+  return attachRhFileFor(rh, caller, request.data, armazemDoBucket(getStorage().bucket()));
+});
+
+/** A URL para abrir o arquivo do registro; a abertura fica registrada. Owner, admin e rh. */
+export const openRhFile = onCall(async (request) => {
+  const caller = await requireRhCaller(db, request, PROJECT_ID);
+  return openRhFileFor(rh, caller, request.data, armazemDoBucket(getStorage().bucket()));
 });
 
 /**

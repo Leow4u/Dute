@@ -53,6 +53,7 @@ function registro(id: string, extra: Partial<RegistroGravado> = {}): RegistroGra
     resultado: "apto",
     situacao: "vigente",
     substituido_por: null,
+    arquivo: null,
     edicao: 1,
     ...extra,
   };

@@ -228,3 +228,35 @@ Feita em 23/10/2026. Ainda fora da publicação, como a 8.1a.
   - `rh.rules.test.ts` passa a conferir as coleções de verdade
     (`registros`, `events` e `rh_operations`).
 
+### Parte 8.2b: os arquivos da ficha
+
+Feita em 23/10/2026. Ainda fora da publicação.
+
+- **Os caminhos.** O arquivo fica em
+  `rh/{colaborador}/{registro}/{arquivo}`. Aceita PDF, JPG, PNG ou WebP,
+  até 10 MB. O `storage.rules` não abre `rh/**` a nenhum papel: cai na
+  regra que nega tudo.
+- **As callables** (`domain/arquivos.ts`, puro, e
+  `domain/arquivos-gravacao.ts`):
+  - `requestRhUpload` (só o rh) dá a URL assinada para subir, válida por
+    10 minutos, e não grava nada.
+  - `attachRhFile` (só o rh) confere no bucket se o arquivo chegou, se é
+    do tipo informado e se cabe. Depois o liga ao registro, com a edição,
+    o recibo e o evento `rh.file_attached`. O arquivo trocado continua no
+    bucket, em `arquivos_anteriores`.
+  - `openRhFile` (owner, admin e rh) dá a URL assinada para abrir, válida
+    por 5 minutos. Antes, grava o evento `rh.file_opened` com quem abriu.
+    O registro arquivado ainda abre: é o histórico.
+- **A ficha na tela** recebe o arquivo sem o caminho no bucket.
+- **A assinatura** usa a service account das Functions, como o upload de
+  documentos do WMS (role Service Account Token Creator). Sem ela, a
+  callable recusa com a mensagem que diz o que falta.
+- **Testes:**
+  - `arquivos.test.ts`: o caminho, a entrada, a conferência do bucket e
+    quem grava cada evento;
+  - `arquivos.integration.test.ts`, com o Storage do emulador: subir,
+    anexar e trocar; a recusa sem o arquivo, com outro tipo e com a edição
+    velha; owner e admin não sobem; cada abertura registrada;
+  - `functions/wms/src/rh-arquivos.rules.test.ts`: nenhum papel lê, sobe,
+    troca, apaga nem lista `rh/**` pelo navegador.
+
