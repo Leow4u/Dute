@@ -1,3 +1,5 @@
+import { randomBytes } from "node:crypto";
+
 import type { FormaDePagamento } from "./fatura.js";
 import type { FalhaDaOmie, ServicoDaOmie } from "./omie.js";
 
@@ -146,6 +148,91 @@ export function totalDaEmissao(emissao: Pick<Emissao, "itens">): number {
   return emissao.itens.reduce((soma, item) => soma + item.valor_cents, 0);
 }
 
+export function novoIdDeEmissao(aleatorio: () => string = () => randomBytes(10).toString("hex")): string {
+  const id = `nfe_${aleatorio()}`;
+  if (!ID_DA_EMISSAO.test(id)) throw new Error("Id de emissão inválido.");
+  return id;
+}
+
+export const DADOS_DA_OMIE_VAZIOS: DadosDaOmie = {
+  cliente: null,
+  os: null,
+  numero_os: null,
+  ambiente: null,
+  nfse: null,
+  codigo_verificacao: null,
+  url_nfse: null,
+  url_pdf: null,
+};
+
+const FORMAS = ["boleto", "pix", "transferencia", "cartao", "dinheiro"] as const;
+
+function lida(condicao: boolean): void {
+  if (!condicao) throw new Error("Emissão ilegível.");
+}
+
+function textoOuNull(valor: unknown): string | null {
+  return typeof valor === "string" && valor ? valor : null;
+}
+
+function numeroOuNull(valor: unknown): number | null {
+  return typeof valor === "number" && Number.isInteger(valor) && valor > 0 ? valor : null;
+}
+
+/** A emissão gravada, conferida campo a campo: a rotina e as ações só trabalham com a emissão inteira. */
+export function emissaoLida(id: string, dados: Record<string, unknown>): Emissao {
+  lida(ID_DA_EMISSAO.test(id));
+  lida((ETAPAS_DA_EMISSAO as readonly string[]).includes(String(dados.etapa)));
+  lida(typeof dados.customer_code === "string" && dados.customer_code.length > 0);
+  lida(typeof dados.cnpj === "string" && /^\d{11}(\d{3})?$/.test(dados.cnpj));
+  lida(Array.isArray(dados.itens) && dados.itens.length > 0);
+  const itens = (dados.itens as unknown[]).map((item) => {
+    const registro = (item ?? {}) as Record<string, unknown>;
+    lida(registro.origem === "demanda" || registro.origem === "armazenagem");
+    lida(typeof registro.referencia === "string" && typeof registro.descricao === "string");
+    lida(typeof registro.valor_cents === "number" && Number.isSafeInteger(registro.valor_cents) && registro.valor_cents >= 0);
+    return { origem: registro.origem as ItemDaEmissao["origem"], referencia: registro.referencia as string, descricao: registro.descricao as string, valor_cents: registro.valor_cents as number };
+  });
+  lida(typeof dados.vencimento === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dados.vencimento));
+  lida((FORMAS as readonly string[]).includes(String(dados.forma)));
+  lida(typeof dados.proxima_em === "string" && !Number.isNaN(Date.parse(dados.proxima_em)));
+  lida(Number.isInteger(dados.edicao) && (dados.edicao as number) >= 1);
+  const omie = (dados.omie ?? {}) as Record<string, unknown>;
+  const ambiente = omie.ambiente === "H" || omie.ambiente === "P" ? omie.ambiente : null;
+  const motivo = (MOTIVOS_DA_PARADA as readonly string[]).includes(String(dados.motivo_da_parada)) ? (dados.motivo_da_parada as MotivoDaParada) : null;
+  const anterior = (ETAPAS_DA_EMISSAO as readonly string[]).includes(String(dados.etapa_anterior)) ? (dados.etapa_anterior as EtapaDaEmissao) : null;
+  const mensagens = Array.isArray(dados.mensagens_da_prefeitura) ? (dados.mensagens_da_prefeitura as Record<string, unknown>[]) : [];
+  return {
+    id,
+    customer_code: dados.customer_code as string,
+    customer_name: textoOuNull(dados.customer_name),
+    cnpj: dados.cnpj as string,
+    itens,
+    vencimento: dados.vencimento as string,
+    forma: dados.forma as FormaDePagamento,
+    observacao: textoOuNull(dados.observacao),
+    etapa: dados.etapa as EtapaDaEmissao,
+    etapa_anterior: anterior,
+    motivo_da_parada: motivo,
+    mensagem: textoOuNull(dados.mensagem),
+    mensagens_da_prefeitura: mensagens.map((mensagem) => ({ codigo: String(mensagem?.codigo ?? ""), descricao: String(mensagem?.descricao ?? ""), correcao: String(mensagem?.correcao ?? "") })),
+    omie: {
+      cliente: numeroOuNull(omie.cliente),
+      os: numeroOuNull(omie.os),
+      numero_os: textoOuNull(omie.numero_os),
+      ambiente,
+      nfse: textoOuNull(omie.nfse),
+      codigo_verificacao: textoOuNull(omie.codigo_verificacao),
+      url_nfse: textoOuNull(omie.url_nfse),
+      url_pdf: textoOuNull(omie.url_pdf),
+    },
+    tentativas: Number.isInteger(dados.tentativas) ? (dados.tentativas as number) : 0,
+    proxima_em: dados.proxima_em as string,
+    faturada_em: textoOuNull(dados.faturada_em),
+    edicao: dados.edicao as number,
+  };
+}
+
 // --- O passo ------------------------------------------------------------------------------
 
 export type Passo = "achar_cliente" | "incluir_os" | "conferir_ambiente" | "faturar_os" | "acompanhar" | "reenviar_os" | "cancelar_os";
@@ -177,10 +264,11 @@ export function dataDaOmie(dia: string): string {
   return `${dia.slice(8, 10)}/${dia.slice(5, 7)}/${dia.slice(0, 4)}`;
 }
 
+/** O CNPJ (ou o CPF) no formato que a Omie guarda. */
 export function cnpjFormatado(digitos: string): string {
-  return /^\d{14}$/.test(digitos)
-    ? `${digitos.slice(0, 2)}.${digitos.slice(2, 5)}.${digitos.slice(5, 8)}/${digitos.slice(8, 12)}-${digitos.slice(12)}`
-    : digitos;
+  if (/^\d{14}$/.test(digitos)) return `${digitos.slice(0, 2)}.${digitos.slice(2, 5)}.${digitos.slice(5, 8)}/${digitos.slice(8, 12)}-${digitos.slice(12)}`;
+  if (/^\d{11}$/.test(digitos)) return `${digitos.slice(0, 3)}.${digitos.slice(3, 6)}.${digitos.slice(6, 9)}-${digitos.slice(9)}`;
+  return digitos;
 }
 
 function reais(cents: number): number {

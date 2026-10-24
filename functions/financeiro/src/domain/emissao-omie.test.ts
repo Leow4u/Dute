@@ -12,6 +12,8 @@ import {
   comAcao,
   comFalha,
   comResposta,
+  emissaoLida,
+  novoIdDeEmissao,
   omieLiberada,
   osDaEmissao,
   passoDaEmissao,
@@ -250,3 +252,23 @@ describe("as ações de uma pessoa", () => {
     assert.ok("problema" in comAcao(emissao({ etapa: "parada", motivo_da_parada: "cancelada_na_omie", omie: COM_OS }), "retomar", AGORA));
   });
 });
+
+describe("a emissão gravada (parte 7.4c)", () => {
+  it("lê a emissão inteira e recusa a que vem fora do formato", () => {
+    const gravada = { ...emissao({ omie: COM_OS, etapa: "na_prefeitura" }), total_cents: 250_000, criada_em: "2026-10-24T11:00:00.000Z" };
+    const lida = emissaoLida(gravada.id, gravada as unknown as Record<string, unknown>);
+    assert.deepEqual([lida.etapa, lida.omie.os, lida.itens.length, lida.cnpj], ["na_prefeitura", 9001, 2, "11222333000181"]);
+    for (const quebra of [{ etapa: "inventada" }, { cnpj: "123" }, { itens: [] }, { forma: "cheque" }, { edicao: 0 }, { itens: [{ origem: "demanda", referencia: "1", descricao: "x", valor_cents: -1 }] }]) {
+      assert.throws(() => emissaoLida(gravada.id, { ...gravada, ...quebra } as unknown as Record<string, unknown>), /ilegível/, JSON.stringify(quebra));
+    }
+    assert.throws(() => emissaoLida("nfe_curto", gravada as unknown as Record<string, unknown>), /ilegível/);
+  });
+
+  it("o id novo tem 20 dígitos hexadecimais e cabe no cCodIntOS da Omie (60)", () => {
+    const id = novoIdDeEmissao();
+    assert.match(id, /^nfe_[a-f0-9]{20}$/);
+    assert.ok(id.length <= 60);
+    assert.throws(() => novoIdDeEmissao(() => "x"));
+  });
+});
+

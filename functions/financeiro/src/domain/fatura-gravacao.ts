@@ -1,4 +1,4 @@
-import { FieldValue, type DocumentReference, type Firestore } from "firebase-admin/firestore";
+import { FieldValue, type DocumentReference, type DocumentSnapshot, type Firestore, type Transaction } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 
 import {
@@ -7,6 +7,7 @@ import {
   periodoLido,
   problemaDaArmazenagem,
   rotuloDaCompetencia,
+  type PeriodoParaFaturar,
 } from "./armazenagem.js";
 import { createFinanceiroEvent } from "./events.js";
 import {
@@ -78,70 +79,13 @@ export async function registerNfFor(
       const anterior = existente.exists ? (existente.data() ?? {}) : null;
       if (anterior && anterior.status !== "cancelada") falha(`A NF ${pedido.nf.numero} da série ${serie} já está registrada.`);
 
-      const demandaRefs = pedido.demandas.map((numero) => db.collection(DEMANDS_COLLECTION).doc(numero));
-      const demandaSnaps = demandaRefs.length ? await transaction.getAll(...demandaRefs) : [];
-      const demandas = demandaSnaps.map((snap, indice) => {
-        if (!snap.exists) throw new HttpsError("not-found", `Demanda ${pedido.demandas[indice]} não encontrada.`);
-        return demandaLida(snap.id, snap.data() ?? {});
-      });
-      const periodoRefs = pedido.armazenagem.map((periodo) => db.collection(BILLING_PERIODS_COLLECTION).doc(periodo));
-      const periodoSnaps = periodoRefs.length ? await transaction.getAll(...periodoRefs) : [];
-      const periodos = periodoSnaps.map((snap, indice) => {
-        if (!snap.exists) throw new HttpsError("not-found", `Competência de armazenagem ${pedido.armazenagem[indice]} não encontrada.`);
-        return periodoLido(snap.id, snap.data() ?? {});
-      });
-      for (const periodo of periodos) {
-        const motivo = problemaDaArmazenagem(periodo);
-        if (motivo) falha(motivo);
-      }
-      const cliente = demandas.length ? demandas[0].customer_code : periodos[0].customer_code;
-      if (demandas.length && !cliente) falha(`A demanda ${demandas[0].numero} não tem cliente.`);
-      if (demandas.some((demanda) => demanda.customer_code !== cliente)) {
-        throw new HttpsError("invalid-argument", "As demandas são de clientes diferentes: uma NF é de um cliente só.");
-      }
-      const deOutro = periodos.find((periodo) => periodo.customer_code !== cliente);
-      if (deOutro) {
-        throw new HttpsError("invalid-argument", `A armazenagem de ${rotuloDaCompetencia(deOutro.competencia)} é de outro cliente: uma NF é de um cliente só.`);
-      }
-      for (const demanda of demandas) {
-        const motivo = problemaParaFaturar(demanda);
-        if (motivo) falha(motivo);
-      }
-
-      // Todas as leituras antes de qualquer escrita: autorizações, RVs e medições.
-      const idsDasAutorizacoes = [...new Set(demandas.flatMap((demanda) => demanda.autorizacao_ids))];
-      const autorizacoes = new Map<string, AutorizacaoLida>();
-      if (idsDasAutorizacoes.length) {
-        const snaps = await transaction.getAll(...idsDasAutorizacoes.map((autorizacao) => db.collection(AUTHORIZATIONS_COLLECTION).doc(autorizacao)));
-        for (const snap of snaps) if (snap.exists) autorizacoes.set(snap.id, autorizacaoLida(snap.id, snap.data() ?? {}));
-      }
-      const fontes = new Map<string, DocumentReference>();
-      for (const demanda of demandas) {
-        if (demanda.medicao_id) fontes.set(`medicao:${demanda.medicao_id}`, db.collection(MEDICOES_COLLECTION).doc(demanda.medicao_id));
-        else if (demanda.rv !== null) fontes.set(`rv:${demanda.numero}`, db.doc(`quotes/${demanda.numero}/revisoes/${demanda.rv}`));
-      }
-      const lidas = new Map<string, Record<string, unknown> | null>();
-      if (fontes.size) {
-        const chaves = [...fontes.keys()];
-        const snaps = await transaction.getAll(...fontes.values());
-        snaps.forEach((snap, indice) => lidas.set(chaves[indice], snap.exists ? (snap.data() ?? {}) : null));
-      }
-
-      const naFatura: DemandaNaFatura[] = demandas.map((demanda) => ({
-        numero: demanda.numero,
-        rv: demanda.medicao_id ? null : demanda.rv,
-        medicao_id: demanda.medicao_id,
-        autorizacao_ids: autorizacoesDaFatura(demanda, autorizacoes),
-        valor_cents: demanda.medicao_id
-          ? valorNaMedicao(demanda.numero, lidas.get(`medicao:${demanda.medicao_id}`) ?? null)
-          : valorDaRv(demanda, lidas.get(`rv:${demanda.numero}`) ?? null),
-      }));
+      const { cliente, customer_name, demandaRefs, demandaSnaps, periodoRefs, periodos, naFatura } = await lerParaFaturar(transaction, db, pedido);
 
       const iso = instante.toISOString();
       const documento = documentoDaFatura({
         id,
         customer_code: cliente,
-        customer_name: demandas[0]?.customer_name ?? null,
+        customer_name,
         demandas: naFatura,
         armazenagem: periodos.map(armazenagemNaFatura),
         nf: { numero: pedido.nf.numero, serie, emitida_em: pedido.nf.emitida_em },
@@ -204,4 +148,91 @@ export async function registerNfFor(
       return { target_id: id, result: { id, valor_cents: documento.valor_cents as number, demandas: pedido.demandas, armazenagem: pedido.armazenagem } };
     },
   );
+}
+
+export type LidoParaFaturar = {
+  cliente: string;
+  customer_name: string | null;
+  demandaRefs: DocumentReference[];
+  demandaSnaps: DocumentSnapshot[];
+  periodoRefs: DocumentReference[];
+  periodos: PeriodoParaFaturar[];
+  naFatura: DemandaNaFatura[];
+};
+
+/**
+ * As leituras e as conferências do faturamento, antes de qualquer escrita,
+ * na transação de quem fatura: o `registerNf` e a emissão da NFS-e pela Omie
+ * (partes 7.4c e 7.4d), que assim conferem e valoram igual. Cada demanda A
+ * faturar, do mesmo cliente, com a autorização que o contrato pede; cada
+ * competência emitida no WMS e fora de NF; o valor de cada demanda pela RV
+ * validada ou pela medição aprovada. `emissao` é a emissão que está
+ * faturando: a reserva dela não conta contra ela mesma.
+ */
+export async function lerParaFaturar(
+  transaction: Transaction,
+  db: Firestore,
+  pedido: { demandas: readonly string[]; armazenagem: readonly string[] },
+  emissao: string | null = null,
+): Promise<LidoParaFaturar> {
+  const demandaRefs = pedido.demandas.map((numero) => db.collection(DEMANDS_COLLECTION).doc(numero));
+  const demandaSnaps = demandaRefs.length ? await transaction.getAll(...demandaRefs) : [];
+  const demandas = demandaSnaps.map((snap, indice) => {
+    if (!snap.exists) throw new HttpsError("not-found", `Demanda ${pedido.demandas[indice]} não encontrada.`);
+    return demandaLida(snap.id, snap.data() ?? {});
+  });
+  const periodoRefs = pedido.armazenagem.map((periodo) => db.collection(BILLING_PERIODS_COLLECTION).doc(periodo));
+  const periodoSnaps = periodoRefs.length ? await transaction.getAll(...periodoRefs) : [];
+  const periodos = periodoSnaps.map((snap, indice) => {
+    if (!snap.exists) throw new HttpsError("not-found", `Competência de armazenagem ${pedido.armazenagem[indice]} não encontrada.`);
+    return periodoLido(snap.id, snap.data() ?? {});
+  });
+  for (const periodo of periodos) {
+    const motivo = problemaDaArmazenagem(periodo, emissao);
+    if (motivo) falha(motivo);
+  }
+  const cliente = demandas.length ? demandas[0].customer_code : periodos[0].customer_code;
+  if (demandas.length && !cliente) falha(`A demanda ${demandas[0].numero} não tem cliente.`);
+  if (demandas.some((demanda) => demanda.customer_code !== cliente)) {
+    throw new HttpsError("invalid-argument", "As demandas são de clientes diferentes: uma NF é de um cliente só.");
+  }
+  const deOutro = periodos.find((periodo) => periodo.customer_code !== cliente);
+  if (deOutro) {
+    throw new HttpsError("invalid-argument", `A armazenagem de ${rotuloDaCompetencia(deOutro.competencia)} é de outro cliente: uma NF é de um cliente só.`);
+  }
+  for (const demanda of demandas) {
+    const motivo = problemaParaFaturar(demanda, emissao);
+    if (motivo) falha(motivo);
+  }
+
+  // Todas as leituras antes de qualquer escrita: autorizações, RVs e medições.
+  const idsDasAutorizacoes = [...new Set(demandas.flatMap((demanda) => demanda.autorizacao_ids))];
+  const autorizacoes = new Map<string, AutorizacaoLida>();
+  if (idsDasAutorizacoes.length) {
+    const snaps = await transaction.getAll(...idsDasAutorizacoes.map((autorizacao) => db.collection(AUTHORIZATIONS_COLLECTION).doc(autorizacao)));
+    for (const snap of snaps) if (snap.exists) autorizacoes.set(snap.id, autorizacaoLida(snap.id, snap.data() ?? {}));
+  }
+  const fontes = new Map<string, DocumentReference>();
+  for (const demanda of demandas) {
+    if (demanda.medicao_id) fontes.set(`medicao:${demanda.medicao_id}`, db.collection(MEDICOES_COLLECTION).doc(demanda.medicao_id));
+    else if (demanda.rv !== null) fontes.set(`rv:${demanda.numero}`, db.doc(`quotes/${demanda.numero}/revisoes/${demanda.rv}`));
+  }
+  const lidas = new Map<string, Record<string, unknown> | null>();
+  if (fontes.size) {
+    const chaves = [...fontes.keys()];
+    const snaps = await transaction.getAll(...fontes.values());
+    snaps.forEach((snap, indice) => lidas.set(chaves[indice], snap.exists ? (snap.data() ?? {}) : null));
+  }
+
+  const naFatura: DemandaNaFatura[] = demandas.map((demanda) => ({
+    numero: demanda.numero,
+    rv: demanda.medicao_id ? null : demanda.rv,
+    medicao_id: demanda.medicao_id,
+    autorizacao_ids: autorizacoesDaFatura(demanda, autorizacoes),
+    valor_cents: demanda.medicao_id
+      ? valorNaMedicao(demanda.numero, lidas.get(`medicao:${demanda.medicao_id}`) ?? null)
+      : valorDaRv(demanda, lidas.get(`rv:${demanda.numero}`) ?? null),
+  }));
+
+  return { cliente, customer_name: demandas[0]?.customer_name ?? null, demandaRefs, demandaSnaps, periodoRefs, periodos, naFatura };
 }

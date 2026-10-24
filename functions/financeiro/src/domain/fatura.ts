@@ -95,6 +95,28 @@ export function interpretarRegistro(dados: unknown): PedidoDeNf {
   return { ...pedido, nf: { ...pedido.nf, numero: pedido.nf.numero.replace(/^0+(?=\d)/, ""), serie: (pedido.nf.serie ?? "1").toUpperCase() } };
 }
 
+/**
+ * O pedido da emissão da NFS-e pela Omie (parte 7.4c): o do `registerNf` sem
+ * a NF, que é a Omie que numera. A emissão é hoje, então o vencimento é de
+ * hoje em diante.
+ */
+const EmitirPelaOmie = RegistrarNf.omit({ nf: true });
+
+export type PedidoDeEmissao = z.infer<typeof EmitirPelaOmie>;
+
+export function interpretarEmissao(dados: unknown, hoje: string): PedidoDeEmissao {
+  const lido = EmitirPelaOmie.safeParse(dados);
+  if (!lido.success) {
+    const issue = lido.error.issues[0];
+    if (issue?.code === z.ZodIssueCode.unrecognized_keys) invalid(`Campo não aceito: ${issue.keys.join(", ")}.`);
+    invalid(issue?.message ?? "Pedido inválido.");
+  }
+  const pedido = lido.data;
+  if (!pedido.demandas.length && !pedido.armazenagem.length) invalid("Informe ao menos uma demanda.");
+  if (pedido.vencimento < hoje) invalid("O vencimento vem de hoje em diante: a NFS-e sai hoje.");
+  return pedido;
+}
+
 /** O id da fatura sai da série e do número da NF: a mesma NF não se registra duas vezes. */
 export function faturaIdDaNf(serie: string, numero: string): string {
   return `fat_${digest({ serie: serie.toUpperCase(), numero: numero.replace(/^0+(?=\d)/, "") }, 24)}`;
