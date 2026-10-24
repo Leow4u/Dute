@@ -75,11 +75,16 @@ beforeEach(async () => {
 
 type Resposta = { status: number; corpo: unknown };
 
-/** A Omie de mentira: uma OS por código de integração, a RPS que anda pela lista de status e as falhas injetadas por método. */
-function omieDeMentira(roteiro: { ambiente?: "H" | "P"; rps?: string[]; falhas?: Record<string, Resposta[]>; aoChamar?: (call: string) => Promise<void> } = {}) {
+/**
+ * A Omie de mentira: uma OS por código de integração, a RPS que anda pela
+ * lista de status, as falhas injetadas por método e as respostas perdidas
+ * (a Omie grava e a resposta não chega, como no tempo limite).
+ */
+function omieDeMentira(roteiro: { ambiente?: "H" | "P"; rps?: string[]; falhas?: Record<string, Resposta[]>; perder?: Record<string, number>; aoChamar?: (call: string) => Promise<void> } = {}) {
   const chamadas: string[] = [];
   const oss = new Map<string, { nCodOS: number; faturada: boolean; cancelada: boolean }>();
   const rps = [...(roteiro.rps ?? ["002", "004"])];
+  const perder = { ...(roteiro.perder ?? {}) };
   let proximaOs = 9001;
   const transporte: TransporteDaOmie = async (url, corpo) => {
     const { call, param, app_key } = JSON.parse(corpo) as { call: string; param: Array<Record<string, unknown>>; app_key: string };
@@ -88,7 +93,14 @@ function omieDeMentira(roteiro: { ambiente?: "H" | "P"; rps?: string[]; falhas?:
     await roteiro.aoChamar?.(call);
     const injetada = roteiro.falhas?.[call]?.shift();
     if (injetada) return injetada;
-    const p = param[0] ?? {};
+    const resposta = responder(url, call, param[0] ?? {});
+    if ((perder[call] ?? 0) > 0) {
+      perder[call] -= 1;
+      throw new Error("This operation was aborted");
+    }
+    return resposta;
+  };
+  const responder = (url: string, call: string, p: Record<string, unknown>): Resposta => {
     const codigo = String(p.cCodIntOS ?? (p.Cabecalho as Record<string, unknown> | undefined)?.cCodIntOS ?? "");
     const os = oss.get(codigo);
     switch (call) {
@@ -108,11 +120,13 @@ function omieDeMentira(roteiro: { ambiente?: "H" | "P"; rps?: string[]; falhas?:
       }
       case "FaturarOS":
         assert.ok(url.endsWith("/servicos/osp/"));
+        if (os!.faturada) return { status: 500, corpo: { faultstring: "ERROR: A Ordem de Serviço já está faturada." } };
         os!.faturada = true;
         return { status: 200, corpo: { cCodIntOS: codigo, nCodOS: os!.nCodOS, cCodStatus: "0" } };
       case "ReenviarOS":
         return { status: 200, corpo: { cCodIntOS: codigo, cCodStatus: "0" } };
       case "CancelarOS":
+        if (os!.cancelada) return { status: 500, corpo: { faultstring: "ERROR: A Ordem de Serviço já está cancelada." } };
         os!.cancelada = true;
         return { status: 200, corpo: { cCodIntOS: codigo, cCodStatus: "0" } };
       default:
@@ -231,6 +245,37 @@ describe("a rotina da Omie", () => {
     assert.equal((await db.doc(`${BILLING_PERIODS_COLLECTION}/ITAU__2026-09`).get()).get("emissao_nf"), undefined);
     const solta = (await db.collection(EVENTS_COLLECTION).where("type", "==", "nf.emission_released").get()).docs[0]?.get("payload");
     assert.deepEqual(solta, { id: ID, demandas: ["10045"], competencias: ["2026-09"] });
+  });
+
+  it("a resposta perdida do FaturarOS não fatura de novo: a rotina confere, segue para a prefeitura e a fatura nasce", async () => {
+    const omie = omieDeMentira({ perder: { FaturarOS: 1 } });
+    await emitir();
+    for (let passo = 0; passo < 4; passo += 1) await rodar(omie.transporte); // o cliente, a OS, o ambiente e o FaturarOS sem resposta
+    const semResposta = await emissao();
+    assert.deepEqual([semResposta.etapa, semResposta.conferir, semResposta.tentativas], ["os_incluida", true, 1]);
+    await rodar(omie.transporte, 2); // StatusOS: já faturada
+    assert.equal((await emissao()).etapa, "na_prefeitura");
+    await rodar(omie.transporte, 2); // 004
+    assert.equal((await emissao()).etapa, "autorizada");
+    assert.deepEqual(omie.chamadas, ["ListarClientes", "IncluirOS", "StatusOS", "FaturarOS", "StatusOS", "StatusOS"]);
+    assert.equal((await db.doc("demands/10045").get()).get("etapa"), "faturada");
+  });
+
+  it("desistir da OS que a pessoa já cancelou na Omie: o CancelarOS recusado confere, e a reserva sai", async () => {
+    const omie = omieDeMentira({ rps: ["003"] });
+    await emitir();
+    for (let passo = 0; passo < 4; passo += 1) await rodar(omie.transporte);
+    await rodar(omie.transporte, 2);
+    const rejeitada = await emissao();
+    assert.equal(rejeitada.etapa, "rejeitada");
+    omie.oss.get(ID)!.cancelada = true; // cancelada à mão na Omie
+    await actOnNfEmissionFor(db, financeiro, { idempotency_key: "d-omie", id: ID, acao: "desistir", expected_edicao: rejeitada.edicao as number }, { projectId: LIBERADO, agora });
+    await rodar(omie.transporte); // CancelarOS: já cancelada
+    assert.deepEqual([(await emissao()).etapa, (await emissao()).conferir], ["cancelando", true]);
+    await rodar(omie.transporte, 2); // StatusOS: cancelada
+    assert.equal((await emissao()).etapa, "desistida");
+    assert.equal((await db.doc("demands/10045").get()).get("emissao_nf"), undefined);
+    assert.deepEqual(omie.chamadas.slice(-2), ["CancelarOS", "StatusOS"]);
   });
 
   it("a chave inválida para a emissão e a passada inteira", async () => {

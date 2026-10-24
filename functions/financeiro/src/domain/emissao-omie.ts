@@ -145,6 +145,12 @@ export type Emissao = {
   proxima_em: string;
   /** Quando a OS foi faturada: o relógio da prefeitura. */
   faturada_em: string | null;
+  /**
+   * A próxima chamada confere a OS na Omie antes (StatusOS): a chamada
+   * anterior que grava (FaturarOS, ReenviarOS ou CancelarOS) falhou, e a
+   * Omie pode ter gravado com a resposta perdida.
+   */
+  conferir: boolean;
   edicao: number;
 };
 
@@ -234,13 +240,17 @@ export function emissaoLida(id: string, dados: Record<string, unknown>): Emissao
     consultas: Number.isInteger(dados.consultas) ? (dados.consultas as number) : 0,
     proxima_em: dados.proxima_em as string,
     faturada_em: textoOuNull(dados.faturada_em),
+    conferir: dados.conferir === true,
     edicao: dados.edicao as number,
   };
 }
 
 // --- O passo ------------------------------------------------------------------------------
 
-export type Passo = "achar_cliente" | "incluir_os" | "conferir_ambiente" | "faturar_os" | "acompanhar" | "reenviar_os" | "cancelar_os";
+export type Passo = "achar_cliente" | "incluir_os" | "conferir_ambiente" | "faturar_os" | "acompanhar" | "reenviar_os" | "cancelar_os" | "conferir_os";
+
+/** As chamadas que gravam na Omie e que, repetidas às cegas, a Omie recusaria ou faria duas vezes. */
+const PASSOS_QUE_GRAVAM: readonly Passo[] = ["faturar_os", "reenviar_os", "cancelar_os"];
 
 /** O passo que a rotina dá agora, ou null quando a emissão espera uma pessoa, já acabou ou ainda não é hora. */
 export function passoDaEmissao(emissao: Emissao, agora: Date): Passo | null {
@@ -250,13 +260,14 @@ export function passoDaEmissao(emissao: Emissao, agora: Date): Passo | null {
     case "na_fila":
       return emissao.omie.cliente === null ? "achar_cliente" : "incluir_os";
     case "os_incluida":
-      return emissao.omie.ambiente === null || emissao.omie.os === null ? "conferir_ambiente" : "faturar_os";
+      if (emissao.omie.ambiente === null || emissao.omie.os === null) return "conferir_ambiente";
+      return emissao.conferir ? "conferir_os" : "faturar_os";
     case "na_prefeitura":
       return "acompanhar";
     case "reenviando":
-      return "reenviar_os";
+      return emissao.conferir ? "conferir_os" : "reenviar_os";
     case "cancelando":
-      return "cancelar_os";
+      return emissao.conferir ? "conferir_os" : "cancelar_os";
     default:
       return null;
   }
@@ -329,6 +340,8 @@ export function pedidoDoPasso(passo: Passo, emissao: Emissao, hoje: string, conf
       return { servico: "servicos/osp", call: "ReenviarOS", param: chave };
     case "cancelar_os":
       return { servico: "servicos/osp", call: "CancelarOS", param: { ...chave, cCancelarNfse: "S" } };
+    case "conferir_os":
+      return { servico: "servicos/os", call: "StatusOS", param: { ...chave, lMsg: true } };
   }
 }
 
@@ -443,7 +456,7 @@ export function comResposta(
       if (omie.os === null) {
         return { emissao: comFalha(emissao, passo, { tipo: "recusa", mensagem: "A Omie não devolveu o código da OS.", esperar_ms: 2 * MINUTO }, agora), efeito: "nenhum" };
       }
-      // A OS já faturada (a rotina caiu entre o FaturarOS e a gravação) segue para a prefeitura.
+      // A OS que alguém já faturou na Omie segue para a prefeitura.
       const faturada = texto(corpo.cFaturada).toUpperCase() === "S";
       return {
         emissao: andou(emissao, faturada ? { etapa: "na_prefeitura", faturada_em: emissao.faturada_em ?? agora.toISOString(), omie: { ...omie, ambiente } } : { omie: { ...omie, ambiente } }, agora),
@@ -498,14 +511,40 @@ export function comResposta(
     }
     case "cancelar_os":
       return { emissao: andou(emissao, { etapa: "desistida", mensagem: null }, agora), efeito: "liberar_reservas" };
+    case "conferir_os":
+      return conferida(emissao, corpo, agora);
   }
+}
+
+/**
+ * A OS conferida na Omie depois da falha de uma chamada que grava. O que a
+ * Omie já fez segue em frente: a OS faturada vai à prefeitura, a RPS que saiu
+ * da recusa (003) também, e a OS cancelada desiste e solta as reservas (ou,
+ * fora do cancelamento, para a emissão). O que ainda não aconteceu volta a
+ * chamar, com as falhas contando até a sexta.
+ */
+function conferida(emissao: Emissao, corpo: Record<string, unknown>, agora: Date): Avanco {
+  const rps = rpsMaisRecente(corpo);
+  const status = texto(rps?.cStatusRps) || texto(rps?.cStatusLote);
+  const cancelada = texto(corpo.cCancelada).toUpperCase() === "S" || status === "005";
+  const deNovo: Avanco = { emissao: { ...andou(emissao, { conferir: false }, agora), tentativas: emissao.tentativas }, efeito: "nenhum" };
+  if (emissao.etapa === "cancelando") {
+    return cancelada ? { emissao: andou(emissao, { etapa: "desistida", conferir: false, mensagem: null }, agora), efeito: "liberar_reservas" } : deNovo;
+  }
+  if (cancelada) return { emissao: parou({ ...emissao, conferir: false }, "cancelada_na_omie", "A OS foi cancelada na Omie.", agora), efeito: "nenhum" };
+  const naPrefeitura = (mudanca: Partial<Emissao>): Avanco => ({ emissao: andou(emissao, { etapa: "na_prefeitura", conferir: false, mensagem: null, ...mudanca }, agora), efeito: "nenhum" });
+  if (emissao.etapa === "os_incluida") {
+    return texto(corpo.cFaturada).toUpperCase() === "S" ? naPrefeitura({ faturada_em: emissao.faturada_em ?? agora.toISOString() }) : deNovo;
+  }
+  return status && status !== "003" ? naPrefeitura({ mensagens_da_prefeitura: [] }) : deNovo;
 }
 
 /**
  * A falha da Omie aplicada à emissão. A chave inválida para a emissão (e a
  * rotina para de chamar a Omie). O limite só espera. O duplicado na inclusão
  * é a OS que já existe: segue para conferir. O resto conta como falha
- * seguida, com o intervalo dobrando, e para na sexta.
+ * seguida, com o intervalo dobrando, e para na sexta; depois da chamada que
+ * grava, a próxima confere a OS antes.
  */
 export function comFalha(emissao: Emissao, passo: Passo, falha: FalhaDaOmie, agora: Date): Emissao {
   if (falha.tipo === "duplicado" && passo === "incluir_os") {
@@ -516,10 +555,11 @@ export function comFalha(emissao: Emissao, passo: Passo, falha: FalhaDaOmie, ago
     return { ...emissao, mensagem: falha.mensagem, proxima_em: depois(agora, falha.esperar_ms), edicao: emissao.edicao + 1 };
   }
   const tentativas = emissao.tentativas + 1;
+  const conferir = emissao.conferir || PASSOS_QUE_GRAVAM.includes(passo);
   if (tentativas >= FALHAS_ATE_PARAR) {
-    return { ...parou(emissao, "falhas_seguidas", falha.mensagem, agora), tentativas };
+    return { ...parou({ ...emissao, conferir }, "falhas_seguidas", falha.mensagem, agora), tentativas };
   }
-  return { ...emissao, tentativas, mensagem: falha.mensagem, proxima_em: depois(agora, Math.max(falha.esperar_ms, 2 ** tentativas * MINUTO)), edicao: emissao.edicao + 1 };
+  return { ...emissao, conferir, tentativas, mensagem: falha.mensagem, proxima_em: depois(agora, Math.max(falha.esperar_ms, 2 ** tentativas * MINUTO)), edicao: emissao.edicao + 1 };
 }
 
 // --- As ações de uma pessoa ---------------------------------------------------------------
