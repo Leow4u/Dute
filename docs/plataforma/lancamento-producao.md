@@ -79,8 +79,8 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   5.3b).
   - O de `events` se constrói sobre a coleção que já existe. Até ficar
     pronto, a rotina dos avisos falha e tenta de novo a cada 5 minutos.
-- **Functions.** São 135 callables: 82 do WMS, 12 do Comercial, 18 da
-  Operação, 7 do Financeiro e 16 do núcleo.
+- **Functions.** São 145 callables: 82 do WMS, 12 do Comercial, 18 da
+  Operação, 7 do Financeiro, 16 do núcleo e 10 do RH.
   - Do WMS, entram `setOrderDelivery` e `receiveOrderReturn`.
   - Da Operação, entram as da Fase 3 e `requestService`,
     `declineServiceRequest`, `openStorageDemand` e `markNotificationsRead`.
@@ -99,15 +99,20 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     Dute do núcleo (`chatWithDute`, as anotações, os playbooks e as
     rotinas), que recusam fora de `AGENTE_AMBIENTES_LIBERADOS` (só o
     `dute-homolog`): na produção segue o agente do WMS.
-  - Cinco functions agendadas: `runDailyAlerts`, todo dia às 06:00,
+  - Do RH, entram as dez da Fase 8 (a ficha, os arquivos e a exportação), na
+    codebase nova `rh`, com o banco `dute-rh` e as regras dele
+    (`firestore-rh.rules`). Recusam no `dute-prod`: o RH só vale no
+    `dute-homolog` (`RH_AMBIENTES_LIBERADOS`).
+  - Seis functions agendadas: `runDailyAlerts`, todo dia às 06:00,
     `runNotifications`, a cada 5 minutos, `runOmieSync`, a cada 5 minutos,
     que não faz nada fora da liberação da Omie, `runMeasures`, a cada 15
     minutos, que calcula as medidas, as lembranças e o relógio do estoque
     para os dias parado e, uma vez por dia, propõe o alerta do item parado,
-    e `runDuteRoutines`, a cada 15 minutos, que roda as rotinas do Agent
-    Dute. `runMeasures` confere a liberação da memória e `runDuteRoutines`
-    a do agente: as duas não fazem nada no `dute-prod`, onde as rotinas
-    seguem pela `runAgentRoutines` do WMS.
+    `runDuteRoutines`, a cada 15 minutos, que roda as rotinas do Agent
+    Dute, e `runRhAlerts`, a rotina diária dos vencimentos do RH.
+    `runMeasures` confere a liberação da memória, `runDuteRoutines` a do
+    agente e `runRhAlerts` a do RH: as três não fazem nada no `dute-prod`,
+    onde as rotinas do agente seguem pela `runAgentRoutines` do WMS.
 - **Frontend.**
   - O shell v3 por módulo, inclusive o da Armazenagem, e as quatro telas do
     WMS na v3. A BTG passa a ver o Início, Pedidos, Estoque e Receber novos.
@@ -131,7 +136,7 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.
-- **Conferência do invoker.** Passa a conferir 135 callables, das cinco
+- **Conferência do invoker.** Passa a conferir 145 callables, das seis
   codebases.
 
 ## 3. Antes de publicar (conferir na homologação)
@@ -174,19 +179,23 @@ contato com os avisos ligados (Comercial › Clientes).
 1. **Base.** HEAD da `main` com CI verde e a homologação publicada nele.
 2. **Backup.** PITR de 7 dias e backup diário ligados
    (`backup-e-recuperacao.md`). Anotar o instante de antes do deploy.
-3. **Janela.** Combinar com a contagem de abertura da BTG, que roda no
+3. **O banco do RH.** O `dute-rh` existe no `dute-prod`, com a proteção
+   contra exclusão, o PITR e o backup diário: a última execução do workflow
+   `Banco rh` com `producao` está verde (`fase-8-rh.md`). Sem o banco, a
+   publicação das regras falha e nada mais sobe.
+4. **Janela.** Combinar com a contagem de abertura da BTG, que roda no
    `dute-prod`. O deploy de functions leva de 11 a 15 minutos, agora com
-   cinco codebases.
-4. **Disparo.** Actions > CI > Run workflow, com `publicar_producao`
+   seis codebases.
+5. **Disparo.** Actions > CI > Run workflow, com `publicar_producao`
    marcado, do HEAD. O job só vale verde com as conferências do fim:
    - `check_rules_deployed.sh`;
-   - o invoker das 135 callables;
+   - o invoker das 145 callables;
    - `check_frontend_deployed.sh`;
    - o smoke.
 
 ## 5. Depois de publicar (a conferência de produção)
 
-1. **As cinco rotinas novas existem:**
+1. **As seis rotinas novas existem:**
 
    ```powershell
    cd C:\DEV\Dute
@@ -196,10 +205,11 @@ contato com os avisos ligados (Comercial › Clientes).
    Precisam aparecer `firebase-schedule-runDailyAlerts-southamerica-east1`,
    `firebase-schedule-runNotifications-southamerica-east1`,
    `firebase-schedule-runMeasures-southamerica-east1`,
-   `firebase-schedule-runDuteRoutines-southamerica-east1` e
-   `firebase-schedule-runOmieSync-southamerica-east1`. A `runDuteRoutines`
-   e a `runOmieSync` não fazem nada no `dute-prod`, fora das liberações
-   delas.
+   `firebase-schedule-runDuteRoutines-southamerica-east1`,
+   `firebase-schedule-runOmieSync-southamerica-east1` e
+   `firebase-schedule-runRhAlerts-southamerica-east1`. A `runDuteRoutines`,
+   a `runOmieSync` e a `runRhAlerts` não fazem nada no `dute-prod`, fora das
+   liberações delas.
 2. **Os índices ficaram prontos.** Os três novos aparecem com `READY`:
 
    ```powershell

@@ -96,6 +96,13 @@ FAKE_GCLOUD = textwrap.dedent(
     """
 )
 
+def banco_da_codebase() -> str:
+    """O RH_DATABASE de functions/rh/src/domain/banco.ts, o nome que vale."""
+    achado = re.search(r'^export const RH_DATABASE = "([^"]+)";$', (RAIZ / "functions/rh/src/domain/banco.ts").read_text(encoding="utf-8"), re.M)
+    assert achado, "RH_DATABASE não encontrado em functions/rh/src/domain/banco.ts"
+    return achado.group(1)
+
+
 COMPLETO = {
     "locationId": "southamerica-east1",
     "type": "FIRESTORE_NATIVE",
@@ -226,11 +233,14 @@ class BancoRhTest(unittest.TestCase):
 
     def test_o_banco_e_o_da_codebase_rh_e_o_que_a_zeragem_recusa(self) -> None:
         script = re.search(r"^DATABASE=(\S+)$", SCRIPT.read_text(encoding="utf-8"), re.M)
-        codebase = re.search(r'^export const RH_DATABASE = "([^"]+)";$', (RAIZ / "functions/rh/src/domain/banco.ts").read_text(encoding="utf-8"), re.M)
         self.assertIsNotNone(script)
-        self.assertIsNotNone(codebase)
-        self.assertEqual(script.group(1), codebase.group(1))
-        self.assertEqual(full_reset_btg.PROTECTED_DATABASES, (codebase.group(1),))
+        self.assertEqual(script.group(1), banco_da_codebase())
+        self.assertEqual(full_reset_btg.PROTECTED_DATABASES, (banco_da_codebase(),))
+
+    def test_o_firebase_json_publica_as_regras_do_rh_no_mesmo_banco(self) -> None:
+        firestore = json.loads((RAIZ / "firebase.json").read_text(encoding="utf-8"))["firestore"]
+        nomeados = [banco for banco in firestore if banco.get("database", "(default)") != "(default)"]
+        self.assertEqual(nomeados, [{"database": banco_da_codebase(), "rules": "firestore-rh.rules"}])
 
     def test_projeto_fora_da_lista_falha_sem_chamar_o_gcloud(self) -> None:
         resultado = self.rodar("dute-btg", {"banco": None})

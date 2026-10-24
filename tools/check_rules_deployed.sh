@@ -3,11 +3,13 @@
 #
 # Uso: tools/check_rules_deployed.sh <projeto>
 #
-# Lê pela API do Firebase Rules a release do Firestore (cloud.firestore) e a do
-# bucket padrão do Storage (firebase.storage/<projeto>.firebasestorage.app) e
-# compara o conteúdo publicado com o firestore.rules e o storage.rules da raiz do
-# repositório. O token vem de ACCESS_TOKEN (no CI, o do google-github-actions/auth)
-# ou, sem ele, do gcloud. Precisa de curl e node. Sai com 1 se alguma release
+# Lê pela API do Firebase Rules a release de cada banco do Firestore do
+# firebase.json (cloud.firestore para o padrão, cloud.firestore/<banco> para os
+# outros, como o dute-rh da Fase 8) e a do bucket padrão do Storage
+# (firebase.storage/<projeto>.firebasestorage.app) e compara o conteúdo
+# publicado com o arquivo de regras de cada um na raiz do repositório. O token
+# vem de ACCESS_TOKEN (no CI, o do google-github-actions/auth) ou, sem ele, do
+# gcloud. Precisa de curl e node. Sai com 1 se alguma release
 # servir outro conteúdo, com 2 se os argumentos estiverem errados; se a API
 # recusar a leitura, sai com o código do curl.
 set -euo pipefail
@@ -50,7 +52,16 @@ check() {
   fi
 }
 
-check cloud.firestore firestore.rules
+# Cada banco do firebase.json, como "release arquivo" por linha.
+while read -r release file; do
+  [ -n "${release}" ] && check "${release}" "${file}"
+done < <(node -e '
+  const config = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).firestore;
+  for (const banco of Array.isArray(config) ? config : [config]) {
+    const id = banco.database || "(default)";
+    console.log(`${id === "(default)" ? "cloud.firestore" : `cloud.firestore/${id}`} ${banco.rules}`);
+  }
+' "${root}/firebase.json")
 check "firebase.storage/${project}.firebasestorage.app" storage.rules
 
 exit "${status}"
