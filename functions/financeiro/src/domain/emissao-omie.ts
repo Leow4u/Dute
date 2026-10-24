@@ -40,9 +40,11 @@ export const MOTIVOS_DA_PARADA = [
   "cliente_repetido",
   "ambiente_errado",
   "chave",
+  "sem_chaves",
   "falhas_seguidas",
   "cancelada_na_omie",
   "prefeitura_demorou",
+  "fatura_recusada",
 ] as const;
 export type MotivoDaParada = (typeof MOTIVOS_DA_PARADA)[number];
 
@@ -137,6 +139,8 @@ export type Emissao = {
   omie: DadosDaOmie;
   /** Falhas seguidas no passo atual. */
   tentativas: number;
+  /** Idas à prefeitura nesta etapa, para o intervalo entre elas. */
+  consultas: number;
   /** A rotina só chama a Omie para esta emissão a partir daqui (ISO, UTC). */
   proxima_em: string;
   /** Quando a OS foi faturada: o relógio da prefeitura. */
@@ -227,6 +231,7 @@ export function emissaoLida(id: string, dados: Record<string, unknown>): Emissao
       url_pdf: textoOuNull(omie.url_pdf),
     },
     tentativas: Number.isInteger(dados.tentativas) ? (dados.tentativas as number) : 0,
+    consultas: Number.isInteger(dados.consultas) ? (dados.consultas as number) : 0,
     proxima_em: dados.proxima_em as string,
     faturada_em: textoOuNull(dados.faturada_em),
     edicao: dados.edicao as number,
@@ -354,11 +359,13 @@ function soDigitos(valor: unknown): string {
 }
 
 function andou(emissao: Emissao, mudanca: Partial<Emissao>, agora: Date): Emissao {
+  const mudouDeEtapa = mudanca.etapa !== undefined && mudanca.etapa !== emissao.etapa;
   return {
     ...emissao,
     ...mudanca,
     omie: { ...emissao.omie, ...(mudanca.omie ?? {}) },
     tentativas: 0,
+    consultas: mudouDeEtapa ? 0 : (mudanca.consultas ?? emissao.consultas),
     proxima_em: mudanca.proxima_em ?? agora.toISOString(),
     edicao: emissao.edicao + 1,
   };
@@ -366,6 +373,15 @@ function andou(emissao: Emissao, mudanca: Partial<Emissao>, agora: Date): Emissa
 
 function parou(emissao: Emissao, motivo: MotivoDaParada, mensagem: string, agora: Date): Emissao {
   return andou(emissao, { etapa: "parada", etapa_anterior: emissao.etapa, motivo_da_parada: motivo, mensagem }, agora);
+}
+
+/**
+ * Sem as chaves da API no ambiente, a emissão que é hora de andar para e
+ * espera uma pessoa, em vez de ficar na fila com as reservas presas:
+ * desistir solta as reservas; retomar, com as chaves, volta de onde parou.
+ */
+export function paradaSemChaves(emissao: Emissao, agora: Date): Avanco {
+  return { emissao: parou(emissao, "sem_chaves", "As chaves da API da Omie não estão neste ambiente.", agora), efeito: "nenhum" };
 }
 
 /** O intervalo entre as consultas à prefeitura: 2, 5, 10 e depois 15 minutos. */
@@ -390,14 +406,13 @@ function mensagensDaRps(rps: Record<string, unknown>): MensagemDaPrefeitura[] {
 
 /**
  * A resposta da Omie aplicada à emissão. `ambiente` é o que o projeto
- * espera (AMBIENTE_DA_OMIE); `consultas` conta as idas à prefeitura, para o
- * intervalo.
+ * espera (AMBIENTE_DA_OMIE).
  */
 export function comResposta(
   emissao: Emissao,
   passo: Passo,
   corpo: Record<string, unknown>,
-  contexto: { agora: Date; ambiente: AmbienteDaOmie; consultas: number },
+  contexto: { agora: Date; ambiente: AmbienteDaOmie },
 ): Avanco {
   const { agora } = contexto;
   switch (passo) {
@@ -479,7 +494,7 @@ export function comResposta(
       if (agora.getTime() - desde > HORAS_NA_PREFEITURA * 60 * MINUTO) {
         return { emissao: parou(emissao, "prefeitura_demorou", `A prefeitura não respondeu em ${HORAS_NA_PREFEITURA} horas.`, agora), efeito: "nenhum" };
       }
-      return { emissao: andou(emissao, { proxima_em: depois(agora, esperaNaPrefeitura(contexto.consultas) * MINUTO) }, agora), efeito: "nenhum" };
+      return { emissao: andou(emissao, { consultas: emissao.consultas + 1, proxima_em: depois(agora, esperaNaPrefeitura(emissao.consultas) * MINUTO) }, agora), efeito: "nenhum" };
     }
     case "cancelar_os":
       return { emissao: andou(emissao, { etapa: "desistida", mensagem: null }, agora), efeito: "liberar_reservas" };

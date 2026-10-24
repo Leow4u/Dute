@@ -121,6 +121,7 @@ export async function emitNfOmieFor(
         mensagens_da_prefeitura: [],
         omie: DADOS_DA_OMIE_VAZIOS,
         tentativas: 0,
+        consultas: 0,
         proxima_em: iso,
         faturada_em: null,
         edicao: 1,

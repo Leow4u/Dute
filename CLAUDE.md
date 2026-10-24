@@ -134,7 +134,12 @@ documentação de produto e operação está em `docs/`.
     `dute-homolog` até o lançamento da Fase 4; papéis owner, admin e
     financeiro) e grava por `runIdempotent` (recibo em
     `financeiro_operations`) com o evento `nf.*` sem valor. Desenho e registro:
-    `docs/plataforma/fase-4-financeiro.md`.
+    `docs/plataforma/fase-4-financeiro.md`. A NFS-e pela Omie (parte 7.4):
+    `emitNfOmie` põe a emissão na fila (`nf_emissoes`) e reserva, e a
+    rotina `runOmieSync` (5 minutos, uma instância) chama a Omie um passo
+    por vez; a autorizada vira fatura pela mesma `lerParaFaturar` e
+    `gravarFatura` do `registerNf`. As chaves (`OMIE_APP_KEY`,
+    `OMIE_APP_SECRET`) vêm do Secret Manager; sem elas, nada é chamado.
   - `functions/core`: Functions do núcleo (Fase 5), codebase `core`. Hoje a
     memória da Dute: a rotina `runMeasures` (a cada 15 minutos) recalcula
     `ai_measures` a partir das OS revisadas e refaz `ai_case_memory`, uma
