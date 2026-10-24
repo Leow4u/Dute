@@ -194,6 +194,11 @@ describe("A receber, Vencidos, Pagos e Faturas", () => {
     expect(textos).toContain("Nenhum pagamento");
     expect(textos).toContain("Cancelar registro");
     expect((html.match(PRINCIPAL) ?? []).length).toBe(1);
+    // A que saiu pela Omie (parte 7.4d) só se desfaz com a NFS-e cancelada lá: sem a ação.
+    const pelaOmie = fatura("1190", { vencimento: "2026-10-10", nf: { numero: "1190", serie: "2", emitida_em: "2026-09-10" }, origem_nf: "omie" });
+    const semCancelar = textosDaTela(render({ filtro: "vencidos", aberta: pelaOmie, faturas: [pelaOmie], pagamentos: [] }));
+    expect(semCancelar).toContain("Registrar pagamento");
+    expect(semCancelar).not.toContain("Cancelar registro");
   });
 
   it("Pagos: a NF paga não tem ação; o envio que não houve aparece como dado", () => {

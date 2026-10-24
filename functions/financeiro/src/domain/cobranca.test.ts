@@ -133,6 +133,12 @@ describe("o envio e o cancelamento", () => {
     recusa(() => conferirCancelamento(fatura({ status: "cancelada" })), "failed-precondition", "A NF já está cancelada.");
   });
 
+  it("a NF que saiu pela Omie não se cancela pelo registro: só com a NFS-e cancelada lá", () => {
+    assert.equal(fatura().origem_nf, null);
+    assert.equal(fatura({ origem_nf: "omie" }).origem_nf, "omie");
+    recusa(() => conferirCancelamento(fatura({ origem_nf: "omie" })), "failed-precondition", "A NF saiu pela Omie: o registro só se desfaz com a NFS-e cancelada na Omie.");
+  });
+
   it("a demanda precisa ser desta NF e estar na etapa esperada", () => {
     conferirDemandaDaFatura("10045", { etapa: "faturada", faturamento: { fatura_id: ID } }, ID, "faturada");
     recusa(() => conferirDemandaDaFatura("10045", { etapa: "faturada", faturamento: { fatura_id: "fat_outra" } }, ID, "faturada"), "failed-precondition", "A demanda 10045 não está nesta NF.");

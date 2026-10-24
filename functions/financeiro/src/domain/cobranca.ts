@@ -123,6 +123,8 @@ export type FaturaLida = {
   periodo_ids: string[];
   autorizacao_ids: string[];
   enviada: boolean;
+  /** A NF que saiu pela Omie (parte 7.4d): a fatura nasceu da NFS-e autorizada. */
+  origem_nf: "omie" | null;
 };
 
 export function faturaLida(id: string, dados: Registro): FaturaLida {
@@ -141,6 +143,7 @@ export function faturaLida(id: string, dados: Registro): FaturaLida {
     periodo_ids: lista(dados.periodo_ids),
     autorizacao_ids: lista(dados.autorizacao_ids),
     enviada: Boolean(dados.enviada),
+    origem_nf: dados.origem_nf === "omie" ? "omie" : null,
   };
 }
 
@@ -206,8 +209,15 @@ export function aplicarEstorno(fatura: FaturaLida, pagamento: PagamentoLido | nu
 }
 
 /** Cancelar o registro: só sem pagamento. */
+/**
+ * O cancelamento do registro é para o erro de quem registrou à mão. A NF que
+ * saiu pela Omie é a NFS-e autorizada: cancelar o registro devolveria as
+ * demandas a A faturar com a nota valendo, e elas sairiam numa segunda
+ * NFS-e. Ela só se desfaz com a NFS-e cancelada na Omie.
+ */
 export function conferirCancelamento(fatura: FaturaLida): void {
   if (fatura.status === "cancelada") falha("A NF já está cancelada.");
+  if (fatura.origem_nf === "omie") falha("A NF saiu pela Omie: o registro só se desfaz com a NFS-e cancelada na Omie.");
   if (fatura.recebido_cents > 0 || fatura.status === "paga") falha("A NF tem pagamento registrado: estorne os pagamentos antes de cancelar.");
 }
 
