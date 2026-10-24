@@ -1105,6 +1105,25 @@ Feita em 24/10/2026, a partir da mesma revisão.
   - No app, `baixas.test.ts` e `emissoes-view.test.tsx`: só "Dispensar"
     nessa parada.
 
+### Correção: a lista de emissões traz sempre as que esperam uma pessoa
+
+Feita em 24/10/2026, a partir da mesma revisão.
+
+- **O problema:** a `listNfEmissions` devolvia só as 50 emissões mais
+  novas, e o "Precisa de você" do Financeiro conta por essa lista.
+  - Com mais de 50 emissões depois dela, a rejeitada ou a parada antiga
+    sumia da tela e da contagem.
+  - As reservas dela continuavam presas, sem ninguém ver.
+- **A correção:** a lista junta as 50 mais novas e as que esperam uma
+  pessoa (`ETAPAS_QUE_PRECISAM`, a parada e a rejeitada, até 100), uma vez
+  cada, das mais novas para as mais antigas.
+  - A lista das etapas é a mesma do app, travada em
+    `platform-lists.test.ts`.
+  - O filtro pela etapa usa o índice simples, sem índice novo.
+- **Teste:** `emissao.integration.test.ts`, com 50 emissões novas e três
+  antigas. A rejeitada e a parada antigas aparecem, e a antiga que anda
+  sozinha fica de fora. Falha com o código antigo.
+
 ## Onde a Fase 7 está
 
 - Feitas: 7.0 a 7.3c, 7.4a a 7.4i e 7.5a a 7.5c.

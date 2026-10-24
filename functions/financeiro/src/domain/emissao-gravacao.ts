@@ -7,6 +7,7 @@ import {
   CAMPO_DA_RESERVA,
   DADOS_DA_OMIE_VAZIOS,
   EMISSOES_COLLECTION,
+  ETAPAS_QUE_PRECISAM,
   ETAPAS_QUE_RESERVAM,
   ID_DA_EMISSAO,
   comAcao,
@@ -290,11 +291,24 @@ export type EmissaoNaLista = {
 /** Quantas emissões a tela lista, das mais novas. */
 export const EMISSOES_NA_LISTA = 50;
 
-/** listNfEmissions: as emissões mais novas, para a tela do Financeiro. */
+/** Quantas das que esperam uma pessoa a tela lista, além das mais novas. */
+export const EMISSOES_QUE_PRECISAM_NA_LISTA = 100;
+
+/**
+ * listNfEmissions: as emissões mais novas e, mesmo mais antigas, as que
+ * esperam uma pessoa, das mais novas para as mais antigas. O "Precisa de
+ * você" conta por esta lista: a rejeitada ou a parada não some porque
+ * outras emissões vieram depois.
+ */
 export async function listNfEmissionsFor(db: Firestore, caller: FinanceiroProfile): Promise<{ emissoes: EmissaoNaLista[] }> {
   exigirFinanceiro(caller);
-  const snapshot = await db.collection(EMISSOES_COLLECTION).orderBy("criada_em", "desc").limit(EMISSOES_NA_LISTA).get();
-  const emissoes = snapshot.docs.flatMap((doc) => {
+  const colecao = db.collection(EMISSOES_COLLECTION);
+  const [novas, precisam] = await Promise.all([
+    colecao.orderBy("criada_em", "desc").limit(EMISSOES_NA_LISTA).get(),
+    colecao.where("etapa", "in", [...ETAPAS_QUE_PRECISAM]).limit(EMISSOES_QUE_PRECISAM_NA_LISTA).get(),
+  ]);
+  const docs = new Map([...novas.docs, ...precisam.docs].map((doc) => [doc.id, doc]));
+  const emissoes = [...docs.values()].flatMap((doc) => {
     let emissao: Emissao;
     try {
       emissao = emissaoLida(doc.id, doc.data());
@@ -323,5 +337,6 @@ export async function listNfEmissionsFor(db: Firestore, caller: FinanceiroProfil
       },
     ];
   });
+  emissoes.sort((a, b) => b.criada_em.localeCompare(a.criada_em) || a.id.localeCompare(b.id));
   return { emissoes };
 }
