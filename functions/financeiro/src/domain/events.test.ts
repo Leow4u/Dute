@@ -19,6 +19,9 @@ const EXEMPLOS: Record<FinanceiroEventType, Record<string, unknown>> = {
   "nf.cancelled": { id: "fat_0123456789abcdef01234567", demandas: ["10045"] },
   "cobranca.payment_registered": { id: "fat_0123456789abcdef01234567", pagamento_id: "pag_0123456789abcdef01234567", recebido_em: "2026-10-23", forma: "pix", quitada: false },
   "cobranca.payment_reversed": { id: "fat_0123456789abcdef01234567", pagamento_id: "pag_0123456789abcdef01234567", reaberta: true },
+  "nf.emission_requested": { id: "nfe_0123456789abcdef0123", demandas: ["10045"], competencias: ["2026-09"], vencimento: "2026-11-20", forma: "boleto" },
+  "nf.emission_resumed": { id: "nfe_0123456789abcdef0123", etapa_antes: "parada", etapa_depois: "na_fila" },
+  "nf.emission_abandoned": { id: "nfe_0123456789abcdef0123", demandas: ["10045"], competencias: [], cancela_na_omie: true },
 };
 
 function wmsNoticeWords(): string[] {
@@ -62,6 +65,21 @@ describe("eventos do Financeiro", () => {
     });
     assert.deepEqual([event.source, event.entity_type, event.customer_code, event.severity], [FINANCEIRO_EVENT_SOURCE, "fatura", "ITAU", "info"]);
     assert.doesNotMatch(`${event.title} ${event.description} ${JSON.stringify(event.payload)}`, /R\$|\d+,\d{2}|valor|cents/);
+  });
+
+  it("o evento da emissão pela Omie é da emissão, com o cliente (parte 7.4c)", () => {
+    const event = buildFinanceiroEvent({
+      operation_id: "op_teste",
+      type: "nf.emission_requested",
+      entity_id: "nfe_0123456789abcdef0123",
+      payload: EXEMPLOS["nf.emission_requested"] as never,
+      actor: { uid: "fin-1", role: "financeiro", name: "Carla" },
+      customer_code: "ITAU",
+      occurred_at: "2026-10-24T15:00:00.000Z",
+    });
+    assert.deepEqual([event.entity_type, event.entity_id, event.customer_code], ["nf_emissao", "nfe_0123456789abcdef0123", "ITAU"]);
+    assert.equal(FINANCEIRO_EVENT_PAYLOADS["nf.emission_requested"].safeParse({ ...EXEMPLOS["nf.emission_requested"], cnpj: "11222333000181" }).success, false);
+    assert.equal(FINANCEIRO_EVENT_PAYLOADS["nf.emission_resumed"].safeParse({ ...EXEMPLOS["nf.emission_resumed"], etapa_antes: "autorizada" }).success, false);
   });
 
   it("nenhum tipo contém as palavras do roteador de avisos do WMS", () => {

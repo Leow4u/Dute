@@ -25,7 +25,16 @@ const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 /** A competência da armazenagem (parte 7.2a), só o mês: o cliente já está no evento. */
 const competencia = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
 
-export const FINANCEIRO_EVENT_TYPES = ["nf.registered", "nf.sent", "nf.cancelled", "cobranca.payment_registered", "cobranca.payment_reversed"] as const;
+export const FINANCEIRO_EVENT_TYPES = [
+  "nf.registered",
+  "nf.sent",
+  "nf.cancelled",
+  "cobranca.payment_registered",
+  "cobranca.payment_reversed",
+  "nf.emission_requested",
+  "nf.emission_resumed",
+  "nf.emission_abandoned",
+] as const;
 export type FinanceiroEventType = (typeof FINANCEIRO_EVENT_TYPES)[number];
 
 /**
@@ -75,12 +84,33 @@ const pagamentoEstornado = z
   .object({ id: faturaId, pagamento_id: pagamentoId, reaberta: z.boolean(), competencias: z.array(competencia).max(12).default([]) })
   .strict();
 
+const emissaoId = z.string().regex(/^nfe_[a-f0-9]{20}$/, "Emissão inválida.");
+const forma = z.enum(["boleto", "pix", "transferencia", "cartao", "dinheiro"]);
+
+/** A emissão da NFS-e pela Omie pedida (parte 7.4c): o que ela reserva, o vencimento e a forma. Sem valor. */
+const emissaoPedida = z
+  .object({ id: emissaoId, demandas: z.array(demanda).max(50), competencias: z.array(competencia).max(12).default([]), vencimento: data, forma })
+  .strict();
+
+/** A emissão parada ou rejeitada que uma pessoa retomou, e a etapa em que ela volta. */
+const emissaoRetomada = z
+  .object({ id: emissaoId, etapa_antes: z.enum(["parada", "rejeitada"]), etapa_depois: z.enum(["na_fila", "os_incluida", "na_prefeitura", "reenviando", "cancelando"]) })
+  .strict();
+
+/** A desistência da emissão: as reservas que voltam a A faturar e se a OS ainda vai ser cancelada na Omie. */
+const emissaoDesistida = z
+  .object({ id: emissaoId, demandas: z.array(demanda).max(50), competencias: z.array(competencia).max(12).default([]), cancela_na_omie: z.boolean() })
+  .strict();
+
 export const FINANCEIRO_EVENT_PAYLOADS = {
   "nf.registered": nfRegistrada,
   "nf.sent": nfEnviada,
   "nf.cancelled": nfCancelada,
   "cobranca.payment_registered": pagamentoRegistrado,
   "cobranca.payment_reversed": pagamentoEstornado,
+  "nf.emission_requested": emissaoPedida,
+  "nf.emission_resumed": emissaoRetomada,
+  "nf.emission_abandoned": emissaoDesistida,
 } as const;
 
 const TEXTO: Record<FinanceiroEventType, { title: string; description: string }> = {
@@ -89,7 +119,15 @@ const TEXTO: Record<FinanceiroEventType, { title: string; description: string }>
   "nf.cancelled": { title: "Registro da NF cancelado", description: "O registro da NF foi cancelado e as demandas dela voltaram a A faturar." },
   "cobranca.payment_registered": { title: "Pagamento registrado", description: "Um pagamento da NF foi registrado." },
   "cobranca.payment_reversed": { title: "Pagamento estornado", description: "Um pagamento lançado na NF foi estornado." },
+  "nf.emission_requested": { title: "NFS-e pedida à Omie", description: "As demandas e a armazenagem ficaram reservadas para a NFS-e que a Omie vai emitir." },
+  "nf.emission_resumed": { title: "Emissão da NFS-e retomada", description: "Alguém do Financeiro retomou a emissão parada ou rejeitada." },
+  "nf.emission_abandoned": { title: "Emissão da NFS-e desistida", description: "Alguém do Financeiro desistiu da emissão; as reservas voltam a A faturar." },
 };
+
+/** A entidade do evento: a fatura ou a emissão da NFS-e pela Omie. */
+export function entidadeDoEvento(type: FinanceiroEventType): "fatura" | "nf_emissao" {
+  return type.startsWith("nf.emission_") ? "nf_emissao" : "fatura";
+}
 
 export function isFinanceiroEventType(value: string): value is FinanceiroEventType {
   return (FINANCEIRO_EVENT_TYPES as readonly string[]).includes(value);
@@ -112,7 +150,7 @@ export type FinanceiroEventRecord = {
   title: string;
   description: string;
   severity: "info";
-  entity_type: "fatura";
+  entity_type: "fatura" | "nf_emissao";
   entity_id: string;
   customer_code: string;
   payload: Record<string, unknown>;
@@ -147,7 +185,7 @@ export function buildFinanceiroEvent<T extends FinanceiroEventType>(input: Finan
     title: texto.title,
     description: texto.description,
     severity: "info",
-    entity_type: "fatura",
+    entity_type: entidadeDoEvento(input.type),
     entity_id: input.entity_id,
     customer_code: customerCode,
     payload: compactValue(payload.data) as Record<string, unknown>,

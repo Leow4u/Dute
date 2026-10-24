@@ -605,6 +605,50 @@ antes de quem reserva.
     sem a reserva, perde) e `autorizacoes.integration.test.ts` (a autorização
     dela não se cancela).
 
+### Parte 7.4c: a emissão gravada
+
+Feita em 24/10/2026. Nenhuma chamada à Omie: quem chama é a rotina (7.4d).
+Fica no `dute-homolog` (`OMIE_AMBIENTES_LIBERADOS`).
+
+- **`lerParaFaturar`** (`domain/fatura-gravacao.ts`) saiu do `registerNf`:
+  as leituras e as conferências do faturamento, antes de qualquer escrita.
+  O `registerNf` e a emissão conferem e valoram igual. O `registerNf` faz o
+  mesmo de antes (os testes da 4.1a e da 7.2a seguem verdes).
+- **`emitNfOmie`** (owner, admin e financeiro):
+  - o pedido é o do `registerNf` sem a NF (a Omie numera), com o vencimento
+    de hoje em diante;
+  - confere pela `lerParaFaturar`;
+  - acha o CNPJ no cadastro do cliente (`customers`) e recusa sem ele;
+  - grava `nf_emissoes/{nfe_...}` na fila, com os itens e os valores do
+    servidor;
+  - reserva as demandas e a competência (`emissao_nf`, parte 7.4b);
+  - grava o evento `nf.emission_requested`, sem valor;
+  - a mesma chave repete o resultado.
+- **`actOnNfEmission`:** retomar ou desistir da emissão parada ou
+  rejeitada, com a edição que a tela viu.
+  - Desistir sem a OS na Omie solta as reservas na hora.
+  - Com a OS lá, passa a "cancelando" e espera a rotina cancelar; a reserva
+    continua até lá.
+  - Eventos `nf.emission_resumed` e `nf.emission_abandoned`.
+- **`listNfEmissions`:** as 50 mais novas, com a etapa, a mensagem da
+  prefeitura, o total e a reserva, sem o CNPJ.
+- **O evento** da emissão é da entidade `nf_emissao`, com o cliente. O tipo
+  não tem as palavras do roteador de avisos do WMS (a trava do
+  `events.test.ts`).
+- **Testes:**
+  - `emissao.integration.test.ts`:
+    - a fila com os valores do servidor, as reservas e o evento;
+    - repetir não duplica;
+    - a reservada não se emite de novo nem se registra à mão;
+    - sem CNPJ, fora de A faturar, com o vencimento no passado, fora da
+      liberação e sem o papel, nada se grava;
+    - desistir sem a OS solta as reservas;
+    - desistir com a OS espera o cancelamento;
+    - retomar volta à etapa de onde parou;
+    - a lista;
+  - `events.test.ts`: os três tipos novos, estritos e da emissão;
+  - `emissao-omie.test.ts`: a emissão gravada lida campo a campo e o id.
+
 ## Onde a Fase 7 está
 
 - Feitas: 7.0 a 7.3c e 7.5a a 7.5c.
