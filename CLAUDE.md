@@ -176,7 +176,11 @@ documentação de produto e operação está em `docs/`.
     leem; a rotina `runRhAlerts` avisa o vencimento uma vez por marco. O
     arquivo do registro (parte 8.2b) sobe e abre só por URL assinada
     (`requestRhUpload`, `attachRhFile`, `openRhFile`), e cada abertura vira
-    evento; `rh/**` fica fechado no `storage.rules`.
+    evento; `rh/**` fica fechado no `storage.rules`. A folha e o eSocial
+    ficam com a contabilidade (pergunta 24, parte 8.3): `exportRhMonth` gera
+    a exportação da competência (os exames com os códigos do S-2220 e os
+    colaboradores próprios, com o CPF), por versão e idempotente;
+    `listRhExports` e `downloadRhExport` listam e baixam, com o evento.
     Desenho: `docs/plataforma/fase-8-rh.md`. Usa **npm**.
   - `lib/dominio`: tipos e regras que o app e as Functions precisam ter iguais.
 - **IA native.** Todo módulo novo grava desde o primeiro dia o que a IA precisa

@@ -55,4 +55,21 @@ describe("eventos do RH", () => {
     assert.equal(RH_EVENT_PAYLOADS["rh.record_expiring"].safeParse({ ...base, dias: -1 }).success, false);
     assert.equal(RH_EVENT_PAYLOADS["rh.record_expiring"].safeParse({ ...base, dias: 31 }).success, false);
   });
+
+  it("a exportação: só contagens no payload, o rh gera, quem lê o RH baixa, e a entidade é a exportação", () => {
+    const EXPORTACAO = { id: "exp_2026-10_v2", competencia: "2026-10", versao: 2 };
+    const gerada = { ...EXPORTACAO, exames: 3, colaboradores: 12 };
+    assert.equal(RH_EVENT_PAYLOADS["rh.export_created"].safeParse(gerada).success, true);
+    for (const extra of [{ cpf: "52998224725" }, { nome: "Ana" }, { exames: [] }]) {
+      assert.equal(RH_EVENT_PAYLOADS["rh.export_created"].safeParse({ ...gerada, ...extra }).success, false);
+    }
+    const criado = buildRhEvent({ operation_id: "op", type: "rh.export_created", entity_id: EXPORTACAO.id, payload: gerada, actor: RH });
+    assert.equal(criado.entity_type, "rh_export");
+    assert.throws(() => buildRhEvent({ operation_id: "op", type: "rh.export_created", entity_id: EXPORTACAO.id, payload: gerada, actor: { uid: "admin-1", role: "admin" } }), /quem grava no RH/);
+    const baixada = { ...EXPORTACAO, arquivo: "exames" as const };
+    for (const role of ["owner", "admin", "rh"]) {
+      assert.equal(buildRhEvent({ operation_id: "op", type: "rh.export_downloaded", entity_id: EXPORTACAO.id, payload: baixada, actor: { uid: `${role}-1`, role } }).entity_type, "rh_export");
+    }
+    assert.throws(() => buildRhEvent({ operation_id: "op", type: "rh.export_downloaded", entity_id: EXPORTACAO.id, payload: baixada, actor: { uid: "op-1", role: "operacao" } }), /quem grava no RH/);
+  });
 });

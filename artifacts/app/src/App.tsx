@@ -165,6 +165,7 @@ const FinanceiroRelatorios = lazy(() => import("./pages/financeiro/relatorios"))
 const RhInicio = lazy(() => import("./pages/rh/inicio"));
 const RhPessoas = lazy(() => import("./pages/rh/pessoas"));
 const RhFicha = lazy(() => import("./pages/rh/ficha"));
+const RhExportacao = lazy(() => import("./pages/rh/exportacao"));
 const FinanceiroContratos = lazy(() => import("./pages/financeiro/contratos"));
 const FinanceiroAutorizacoes = lazy(() => import("./pages/financeiro/autorizacoes"));
 const ComercialOrcamentos = lazy(() => import("./pages/comercial/orcamentos"));
@@ -1175,6 +1176,7 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
     protectedRoute("/rh", RhInicio),
     protectedRoute("/rh/pessoas", RhPessoas),
     protectedRoute("/rh/ficha", RhFicha),
+    protectedRoute("/rh/exportacao", RhExportacao),
   ]),
 ];
 

@@ -18,6 +18,9 @@ export const CALLABLES_DO_RH = [
   "requestRhUpload",
   "attachRhFile",
   "openRhFile",
+  "exportRhMonth",
+  "listRhExports",
+  "downloadRhExport",
 ] as const;
 export type CallableDoRh = (typeof CALLABLES_DO_RH)[number];
 

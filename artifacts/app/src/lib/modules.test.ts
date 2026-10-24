@@ -151,6 +151,7 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/rh", ["owner", "admin", "rh"]],
   ["/rh/pessoas", ["owner", "admin", "rh"]],
   ["/rh/ficha", ["owner", "admin", "rh"]],
+  ["/rh/exportacao", ["owner", "admin", "rh"]],
 ];
 
 // Menu com o Comercial desligado, como na produção (o liberado: comercial/navegacao.test.ts).

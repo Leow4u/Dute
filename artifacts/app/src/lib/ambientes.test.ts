@@ -76,7 +76,7 @@ describe("ambiente da rota", () => {
       "/financeiro/agente",
     ]);
     // O RH (Fase 8, parte 8.2c): o Início, Pessoas e a ficha.
-    expect(caminhos.filter((path) => path === "/rh" || path.startsWith("/rh/"))).toEqual(["/rh", "/rh/pessoas", "/rh/ficha"]);
+    expect(caminhos.filter((path) => path === "/rh" || path.startsWith("/rh/"))).toEqual(["/rh", "/rh/pessoas", "/rh/ficha", "/rh/exportacao"]);
     for (const path of caminhos) {
       const esperado = path.startsWith("/financeiro")
         ? "financeiro"
