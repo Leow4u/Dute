@@ -38,7 +38,7 @@ import { FINANCE_ROLES, INTERNAL_ROLES } from "./modules";
 import { PLATFORM_MODULES } from "./platform-modules";
 import { CALLABLES_DO_RH } from "./rh/api";
 import * as FICHA_DO_RH from "./rh/ficha";
-import { TAMANHO_MAXIMO_DO_ARQUIVO as TAMANHO_DO_ARQUIVO_NO_APP, TIPOS_DE_ARQUIVO as TIPOS_DE_ARQUIVO_NO_APP } from "./rh/formulario";
+import { PRIMEIRO_DIA, TAMANHO_MAXIMO_DO_ARQUIVO as TAMANHO_DO_ARQUIVO_NO_APP, TIPOS_DE_ARQUIVO as TIPOS_DE_ARQUIVO_NO_APP, ULTIMO_DIA } from "./rh/formulario";
 import { RH_ROLES as RH_ROLES_DO_APP, RH_WRITE_ROLES as RH_WRITE_ROLES_DO_APP } from "./rh/navegacao";
 import { TV_ROLES } from "./tv/navegacao";
 
@@ -212,6 +212,8 @@ describe("listas do RH iguais em todo lugar (Fase 8)", () => {
     expect(tsList(ficha, "RESULTADOS_DO_EXAME")).toEqual([...FICHA_DO_RH.RESULTADOS_DO_EXAME]);
     expect(tsList(ficha, "SITUACOES")).toEqual([...FICHA_DO_RH.SITUACOES]);
     expect(ficha).toContain(`export const DIAS_PARA_O_VENCIMENTO = ${FICHA_DO_RH.DIAS_PARA_O_VENCIMENTO};`);
+    expect(ficha).toContain(`export const PRIMEIRO_DIA = "${PRIMEIRO_DIA}";`);
+    expect(ficha).toContain(`export const ULTIMO_DIA = "${ULTIMO_DIA}";`);
     for (const tipos of Object.values(FICHA_DO_RH.TIPOS_POR_CATEGORIA)) {
       for (const tipo of tipos) expect(FICHA_DO_RH.ROTULO_DO_TIPO[tipo], tipo).toBeTruthy();
     }

@@ -38,13 +38,15 @@ export default function RhFicha() {
     try {
       await acao();
       depois();
+    } catch (error) {
+      setFalha(error instanceof Error ? error.message : "Falha ao gravar.");
+    } finally {
+      // Lê de novo também depois da falha: a edição que a recusou (outra pessoa,
+      // o anexo de agora) vale na próxima tentativa.
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: chaveDaFicha(colaboradorId ?? "") }),
         queryClient.invalidateQueries({ queryKey: CHAVE_DO_PAINEL }),
       ]);
-    } catch (error) {
-      setFalha(error instanceof Error ? error.message : "Falha ao gravar.");
-    } finally {
       setOcupado(false);
     }
   }

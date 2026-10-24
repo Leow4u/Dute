@@ -362,3 +362,36 @@ lançamento), e no empate vale o lançado por último. Testes: `ficha.test.ts`
 (o empate com o id ao contrário) e `ficha.integration.test.ts` (o exame
 lançado de novo com as mesmas datas).
 
+### Correção: a ficha com a edição velha
+
+Feita em 23/10/2026, da revisão do código do RH.
+
+- **O defeito.** A ficha só era lida de novo depois de uma gravação que
+  dava certo. Bastava outra pessoa mudar o registro, ou o anexo mudá-lo com
+  o formulário aberto, para cada nova tentativa levar a edição velha e ser
+  recusada até a página ser recarregada.
+- **A correção:**
+  - A ficha e o painel são lidos de novo depois de toda gravação, também
+    da que falha.
+  - Com o formulário aberto, Alterar, o arquivo e Arquivar ficam travados
+    nas linhas.
+  - Os campos de data têm o intervalo do servidor (1900 a 2100), travado
+    pelo `platform-lists.test.ts`.
+- **Teste:** `pages/rh/ficha.test.tsx`, com as callables de mentira. A
+  falha relê a ficha, a próxima tentativa leva a edição nova, e as linhas
+  travam com o formulário aberto.
+
+### Em aberto: o link de envio depois do anexo
+
+Achado da revisão, para o Leonardo decidir. A URL assinada de envio vale por
+10 minutos e não limita o tamanho. Quem a recebeu (só o papel rh) pode,
+nesse tempo, subir um arquivo grande, que o anexo recusa mas fica no bucket.
+Também pode sobrescrever o arquivo já conferido e anexado.
+
+- **O que fecha isso:**
+  - o cabeçalho `x-goog-content-length-range` na URL, o que pede uma mudança
+    no CORS dos buckets (`deploy/cloud-storage/`);
+  - ou guardar a geração do objeto no anexo e abrir só ela.
+- **Por que ficou como está:** quem pode fazer isso já pode trocar o arquivo
+  pela tela, com o evento.
+

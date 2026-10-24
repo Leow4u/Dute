@@ -20,7 +20,7 @@ import {
   type RegistroDoRh,
   type ResultadoDoExame,
 } from "@/lib/rh/ficha";
-import { TIPOS_DE_ARQUIVO, comCategoria, rotuloDaData, tiposDaCategoria, type FormularioDoRegistro } from "@/lib/rh/formulario";
+import { PRIMEIRO_DIA, TIPOS_DE_ARQUIVO, ULTIMO_DIA, comCategoria, rotuloDaData, tiposDaCategoria, type FormularioDoRegistro } from "@/lib/rh/formulario";
 import { cn } from "@/lib/utils";
 
 import { Contador, Pill, TOM_NEUTRO, TOM_OK, TOM_VENCENDO, TOM_VENCIDO, Vazio } from "./pecas";
@@ -95,8 +95,10 @@ function Campo({ id, rotulo, children }: { id: string; rotulo: string; children:
 }
 
 function AcoesDoRegistro({ registro, props }: { registro: RegistroDoRh; props: FichaViewProps }) {
-  const { grava, arquivando, ocupado, acoes } = props;
+  const { grava, arquivando, ocupado, formulario, acoes } = props;
   const editavel = grava && registro.situacao !== "arquivado";
+  // Com o formulário aberto, as gravações das linhas esperam: a edição que ele leva não muda por baixo dele.
+  const travado = ocupado || formulario !== null;
   if (arquivando === registro.id) {
     return (
       <div className="col-span-2 flex flex-wrap gap-2">
@@ -120,14 +122,14 @@ function AcoesDoRegistro({ registro, props }: { registro: RegistroDoRh; props: F
       ) : null}
       {editavel ? (
         <>
-          <Button type="button" variant="ghost" size="sm" onClick={() => acoes.alterar(registro)} disabled={ocupado}>
+          <Button type="button" variant="ghost" size="sm" onClick={() => acoes.alterar(registro)} disabled={travado}>
             Alterar
           </Button>
           <label
             htmlFor={entrada}
             className={cn(
               "inline-flex h-8 cursor-pointer items-center rounded-md px-3 text-sm font-medium hover:bg-surface-hover focus-within:ring-2 focus-within:ring-ring",
-              ocupado && "pointer-events-none opacity-50",
+              travado && "pointer-events-none opacity-50",
             )}
           >
             {registro.arquivo ? "Trocar arquivo" : "Anexar arquivo"}
@@ -136,7 +138,7 @@ function AcoesDoRegistro({ registro, props }: { registro: RegistroDoRh; props: F
               type="file"
               accept={TIPOS_DE_ARQUIVO.join(",")}
               className="sr-only"
-              disabled={ocupado}
+              disabled={travado}
               onChange={(evento) => {
                 const arquivo = evento.target.files?.[0];
                 evento.target.value = "";
@@ -144,7 +146,7 @@ function AcoesDoRegistro({ registro, props }: { registro: RegistroDoRh; props: F
               }}
             />
           </label>
-          <Button type="button" variant="ghost" size="sm" onClick={() => acoes.pedirArquivamento(registro.id)} disabled={ocupado}>
+          <Button type="button" variant="ghost" size="sm" onClick={() => acoes.pedirArquivamento(registro.id)} disabled={travado}>
             Arquivar
           </Button>
         </>
@@ -251,10 +253,10 @@ function Formulario({ formulario, ocupado, acoes }: { formulario: FormularioDoRe
         </Campo>
       ) : null}
       <Campo id="registro-data" rotulo={rotuloDaData(formulario.categoria)}>
-        <Input id="registro-data" type="date" value={formulario.emitido_em} disabled={ocupado} onChange={(evento) => editar({ emitido_em: evento.target.value })} />
+        <Input id="registro-data" type="date" min={PRIMEIRO_DIA} max={ULTIMO_DIA} value={formulario.emitido_em} disabled={ocupado} onChange={(evento) => editar({ emitido_em: evento.target.value })} />
       </Campo>
       <Campo id="registro-vencimento" rotulo="Vence em">
-        <Input id="registro-vencimento" type="date" value={formulario.vence_em} disabled={ocupado} onChange={(evento) => editar({ vence_em: evento.target.value })} />
+        <Input id="registro-vencimento" type="date" min={PRIMEIRO_DIA} max={ULTIMO_DIA} value={formulario.vence_em} disabled={ocupado} onChange={(evento) => editar({ vence_em: evento.target.value })} />
       </Campo>
       {formulario.categoria === "exame" ? (
         <Campo id="registro-resultado" rotulo="Resultado">
