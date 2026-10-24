@@ -84,6 +84,8 @@ function omieDeMentira(roteiro: { ambiente?: "H" | "P"; rps?: string[]; falhas?:
   const chamadas: string[] = [];
   const oss = new Map<string, { nCodOS: number; faturada: boolean; cancelada: boolean }>();
   const rps = [...(roteiro.rps ?? ["002", "004"])];
+  // Como na Omie, a RPS fica na última situação do roteiro (a recusada continua recusada).
+  let ultima = "002";
   const perder = { ...(roteiro.perder ?? {}) };
   let proximaOs = 9001;
   const transporte: TransporteDaOmie = async (url, corpo) => {
@@ -114,8 +116,9 @@ function omieDeMentira(roteiro: { ambiente?: "H" | "P"; rps?: string[]; falhas?:
         return { status: 200, corpo: { cCodIntOS: codigo, nCodOS: oss.get(codigo)!.nCodOS, cNumOS: "000123", cCodStatus: "0", cDescStatus: "Ordem de Serviço cadastrada com sucesso!" } };
       case "StatusOS": {
         if (!os) return { status: 500, corpo: { faultstring: "ERROR: OS não encontrada." } };
-        const lista = os.faturada ? [{ cStatusRps: rps[0] ?? "002", nNfse: rps[0] === "004" ? "00000815" : "", cCodVerif: "AB12", cUrlNfse: "https://nfse.exemplo/815", cUrlPdfDest: "https://omie.exemplo/815.pdf", mensagens: rps[0] === "003" ? [{ cCodigo: "E160", cDescricao: "Inscrição municipal do tomador inválida.", cCorrecao: "Corrija o cliente na Omie." }] : [] }] : [];
-        if (os.faturada && p.lMsg) rps.shift();
+        const status = rps[0] ?? ultima;
+        const lista = os.faturada ? [{ cStatusRps: status, nNfse: status === "004" ? "00000815" : "", cCodVerif: "AB12", cUrlNfse: "https://nfse.exemplo/815", cUrlPdfDest: "https://omie.exemplo/815.pdf", mensagens: status === "003" ? [{ cCodigo: "E160", cDescricao: "Inscrição municipal do tomador inválida.", cCorrecao: "Corrija o cliente na Omie." }] : [] }] : [];
+        if (os.faturada && p.lMsg) ultima = rps.shift() ?? ultima;
         return { status: 200, corpo: { cCodIntOS: codigo, nCodOS: os.nCodOS, cNumOS: "000123", cAmbiente: roteiro.ambiente ?? "H", cFaturada: os.faturada ? "S" : "N", cCancelada: os.cancelada ? "S" : "N", ListaRpsNfse: lista } };
       }
       case "FaturarOS":
@@ -238,8 +241,10 @@ describe("a rotina da Omie", () => {
     const rejeitada = await emissao();
     await actOnNfEmissionFor(db, financeiro, { idempotency_key: "d-1", id: ID, acao: "desistir", expected_edicao: rejeitada.edicao as number }, { projectId: LIBERADO, agora });
     assert.equal((await db.doc("demands/10045").get()).get("emissao_nf.id"), ID);
+    await rodar(omie.transporte); // StatusOS: a RPS recusada, sem nota a cancelar
+    assert.deepEqual([(await emissao()).etapa, (await db.doc("demands/10045").get()).get("emissao_nf.id")], ["cancelando", ID]);
     await rodar(omie.transporte);
-    assert.equal(omie.chamadas.at(-1), "CancelarOS");
+    assert.deepEqual(omie.chamadas.slice(-2), ["StatusOS", "CancelarOS"]);
     assert.equal((await emissao()).etapa, "desistida");
     assert.equal((await db.doc("demands/10045").get()).get("emissao_nf"), undefined);
     assert.equal((await db.doc(`${BILLING_PERIODS_COLLECTION}/ITAU__2026-09`).get()).get("emissao_nf"), undefined);
@@ -261,7 +266,7 @@ describe("a rotina da Omie", () => {
     assert.equal((await db.doc("demands/10045").get()).get("etapa"), "faturada");
   });
 
-  it("desistir da OS que a pessoa já cancelou na Omie: o CancelarOS recusado confere, e a reserva sai", async () => {
+  it("desistir da OS que a pessoa já cancelou na Omie: a conferência acha a OS cancelada, e a reserva sai", async () => {
     const omie = omieDeMentira({ rps: ["003"] });
     await emitir();
     for (let passo = 0; passo < 4; passo += 1) await rodar(omie.transporte);
@@ -270,12 +275,55 @@ describe("a rotina da Omie", () => {
     assert.equal(rejeitada.etapa, "rejeitada");
     omie.oss.get(ID)!.cancelada = true; // cancelada à mão na Omie
     await actOnNfEmissionFor(db, financeiro, { idempotency_key: "d-omie", id: ID, acao: "desistir", expected_edicao: rejeitada.edicao as number }, { projectId: LIBERADO, agora });
+    await rodar(omie.transporte); // StatusOS: cancelada
+    assert.equal((await emissao()).etapa, "desistida");
+    assert.equal((await db.doc("demands/10045").get()).get("emissao_nf"), undefined);
+    assert.equal(omie.chamadas.includes("CancelarOS"), false);
+  });
+
+  it("o CancelarOS recusado porque alguém cancelou na Omie no meio tempo: a conferência seguinte solta a reserva", async () => {
+    const omie = omieDeMentira({
+      rps: ["003"],
+      aoChamar: async (call) => {
+        if (call === "CancelarOS") omie.oss.get(ID)!.cancelada = true;
+      },
+    });
+    await emitir();
+    for (let passo = 0; passo < 4; passo += 1) await rodar(omie.transporte);
+    await rodar(omie.transporte, 2);
+    const rejeitada = await emissao();
+    await actOnNfEmissionFor(db, financeiro, { idempotency_key: "d-meio", id: ID, acao: "desistir", expected_edicao: rejeitada.edicao as number }, { projectId: LIBERADO, agora });
+    await rodar(omie.transporte); // StatusOS: recusada, cancela
     await rodar(omie.transporte); // CancelarOS: já cancelada
     assert.deepEqual([(await emissao()).etapa, (await emissao()).conferir], ["cancelando", true]);
     await rodar(omie.transporte, 2); // StatusOS: cancelada
     assert.equal((await emissao()).etapa, "desistida");
-    assert.equal((await db.doc("demands/10045").get()).get("emissao_nf"), undefined);
-    assert.deepEqual(omie.chamadas.slice(-2), ["CancelarOS", "StatusOS"]);
+    assert.deepEqual(omie.chamadas.slice(-3), ["StatusOS", "CancelarOS", "StatusOS"]);
+  });
+
+  it("desistir da prefeitura sem resposta não cancela a NFS-e que saiu no meio tempo: para, e tentar de novo registra a fatura", async () => {
+    const omie = omieDeMentira({ rps: ["002", "002", "004"] });
+    await emitir();
+    for (let passo = 0; passo < 4; passo += 1) await rodar(omie.transporte);
+    await rodar(omie.transporte, 2); // 002
+    await rodar(omie.transporte, 73 * 60); // 002 depois de 72 horas
+    const demorou = await emissao();
+    assert.deepEqual([demorou.etapa, demorou.motivo_da_parada], ["parada", "prefeitura_demorou"]);
+    await actOnNfEmissionFor(db, financeiro, { idempotency_key: "d-demorou", id: ID, acao: "desistir", expected_edicao: demorou.edicao as number }, { projectId: LIBERADO, agora });
+    await rodar(omie.transporte); // StatusOS: 004, a nota saiu
+    const autorizada = await emissao();
+    assert.deepEqual([autorizada.etapa, autorizada.motivo_da_parada, (autorizada.omie as Record<string, unknown>).nfse], ["parada", "nfse_autorizada", "00000815"]);
+    assert.equal(omie.chamadas.includes("CancelarOS"), false);
+    assert.equal((await db.doc("demands/10045").get()).get("emissao_nf.id"), ID);
+    // Desistir de novo espera o cancelamento na Omie.
+    await assert.rejects(
+      actOnNfEmissionFor(db, financeiro, { idempotency_key: "d-autorizada", id: ID, acao: "desistir", expected_edicao: autorizada.edicao as number }, { projectId: LIBERADO, agora }),
+      /A NFS-e 815 foi autorizada/,
+    );
+    await actOnNfEmissionFor(db, financeiro, { idempotency_key: "r-autorizada", id: ID, acao: "retomar", expected_edicao: autorizada.edicao as number }, { projectId: LIBERADO, agora });
+    await rodar(omie.transporte); // StatusOS: 004, a fatura nasce
+    assert.equal((await emissao()).etapa, "autorizada");
+    assert.equal((await db.doc("demands/10045").get()).get("etapa"), "faturada");
   });
 
   it("a chave inválida para a emissão e a passada inteira", async () => {
@@ -300,6 +348,12 @@ describe("a rotina da Omie", () => {
     assert.match(String(gravada.mensagem), /A NF 815 da série 1 já está registrada/);
     assert.equal((await db.doc("demands/10045").get()).get("emissao_nf.id"), ID);
     assert.equal((await db.doc("demands/10045").get()).get("etapa"), "a_faturar");
+    // A nota vale na prefeitura: desistir não a cancela.
+    await assert.rejects(
+      actOnNfEmissionFor(db, financeiro, { idempotency_key: "d-recusada", id: ID, acao: "desistir", expected_edicao: gravada.edicao as number }, { projectId: LIBERADO, agora }),
+      /A NFS-e 815 foi autorizada/,
+    );
+    assert.equal(omie.chamadas.includes("CancelarOS"), false);
   });
 
   it("se uma pessoa mexeu na emissão durante a chamada, o resultado da Omie se descarta", async () => {

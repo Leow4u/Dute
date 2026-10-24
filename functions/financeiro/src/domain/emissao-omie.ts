@@ -45,6 +45,7 @@ export const MOTIVOS_DA_PARADA = [
   "cancelada_na_omie",
   "prefeitura_demorou",
   "fatura_recusada",
+  "nfse_autorizada",
 ] as const;
 export type MotivoDaParada = (typeof MOTIVOS_DA_PARADA)[number];
 
@@ -408,6 +409,27 @@ function rpsMaisRecente(corpo: Record<string, unknown>): Record<string, unknown>
   return validas.length ? validas[validas.length - 1] : null;
 }
 
+/** O número, o código de verificação e os links da NFS-e autorizada (004). */
+function dadosDaNfse(emissao: Emissao, rps: Record<string, unknown>): DadosDaOmie {
+  return {
+    ...emissao.omie,
+    nfse: soDigitos(rps.nNfse) || texto(rps.nNfse),
+    codigo_verificacao: texto(rps.cCodVerif) || null,
+    url_nfse: texto(rps.cUrlNfse) || null,
+    url_pdf: texto(rps.cUrlPdfDest) || texto(rps.cUrlPdfDemo) || null,
+  };
+}
+
+/** A prefeitura passou do prazo de resposta desde que a OS foi faturada. */
+function prefeituraDemorou(emissao: Emissao, agora: Date): boolean {
+  return agora.getTime() - Date.parse(emissao.faturada_em ?? emissao.proxima_em) > HORAS_NA_PREFEITURA * 60 * MINUTO;
+}
+
+/** "00000815" → "815", como a nota aparece para a pessoa. */
+function numeroDaNfse(nfse: string): string {
+  return nfse.replace(/^0+(?=\d)/, "");
+}
+
 function mensagensDaRps(rps: Record<string, unknown>): MensagemDaPrefeitura[] {
   const lista = Array.isArray(rps.mensagens) ? (rps.mensagens as unknown[]) : [];
   return lista
@@ -476,25 +498,7 @@ export function comResposta(
         return { emissao: parou(emissao, "cancelada_na_omie", "A OS foi cancelada na Omie.", agora), efeito: "nenhum" };
       }
       if (status === "004" && rps && texto(rps.nNfse)) {
-        return {
-          emissao: andou(
-            emissao,
-            {
-              etapa: "autorizada",
-              mensagem: null,
-              mensagens_da_prefeitura: [],
-              omie: {
-                ...emissao.omie,
-                nfse: soDigitos(rps.nNfse) || texto(rps.nNfse),
-                codigo_verificacao: texto(rps.cCodVerif) || null,
-                url_nfse: texto(rps.cUrlNfse) || null,
-                url_pdf: texto(rps.cUrlPdfDest) || texto(rps.cUrlPdfDemo) || null,
-              },
-            },
-            agora,
-          ),
-          efeito: "registrar_fatura",
-        };
+        return { emissao: andou(emissao, { etapa: "autorizada", mensagem: null, mensagens_da_prefeitura: [], omie: dadosDaNfse(emissao, rps) }, agora), efeito: "registrar_fatura" };
       }
       if (status === "003" && rps) {
         const mensagens = mensagensDaRps(rps);
@@ -503,11 +507,7 @@ export function comResposta(
           efeito: "nenhum",
         };
       }
-      const desde = Date.parse(emissao.faturada_em ?? emissao.proxima_em);
-      if (agora.getTime() - desde > HORAS_NA_PREFEITURA * 60 * MINUTO) {
-        return { emissao: parou(emissao, "prefeitura_demorou", `A prefeitura não respondeu em ${HORAS_NA_PREFEITURA} horas.`, agora), efeito: "nenhum" };
-      }
-      return { emissao: andou(emissao, { consultas: emissao.consultas + 1, proxima_em: depois(agora, esperaNaPrefeitura(emissao.consultas) * MINUTO) }, agora), efeito: "nenhum" };
+      return esperarAPrefeitura(emissao, agora);
     }
     case "cancelar_os":
       return { emissao: andou(emissao, { etapa: "desistida", mensagem: null }, agora), efeito: "liberar_reservas" };
@@ -516,25 +516,46 @@ export function comResposta(
   }
 }
 
+/** A prefeitura ainda processa a RPS: a próxima consulta espera mais, até o prazo; depois dele, a emissão para. */
+function esperarAPrefeitura(emissao: Emissao, agora: Date): Avanco {
+  if (prefeituraDemorou(emissao, agora)) {
+    return { emissao: parou(emissao, "prefeitura_demorou", `A prefeitura não respondeu em ${HORAS_NA_PREFEITURA} horas.`, agora), efeito: "nenhum" };
+  }
+  return { emissao: andou(emissao, { consultas: emissao.consultas + 1, proxima_em: depois(agora, esperaNaPrefeitura(emissao.consultas) * MINUTO) }, agora), efeito: "nenhum" };
+}
+
 /**
- * A OS conferida na Omie depois da falha de uma chamada que grava. O que a
- * Omie já fez segue em frente: a OS faturada vai à prefeitura, a RPS que saiu
- * da recusa (003) também, e a OS cancelada desiste e solta as reservas (ou,
- * fora do cancelamento, para a emissão). O que ainda não aconteceu volta a
- * chamar, com as falhas contando até a sexta.
+ * A OS conferida na Omie: depois da falha de uma chamada que grava e, no
+ * cancelamento, sempre antes do CancelarOS. O que a Omie já fez segue em
+ * frente: a OS faturada vai à prefeitura, a RPS que saiu da recusa (003)
+ * também, e a OS cancelada desiste e solta as reservas (ou, fora do
+ * cancelamento, para a emissão). O que ainda não aconteceu volta a chamar,
+ * com as falhas contando até a sexta.
+ *
+ * A Dute não cancela NFS-e autorizada: no cancelamento, a OS só se cancela
+ * sem faturar ou com a RPS recusada. A nota autorizada para a emissão, e a
+ * RPS que a prefeitura ainda processa faz esperar.
  */
 function conferida(emissao: Emissao, corpo: Record<string, unknown>, agora: Date): Avanco {
   const rps = rpsMaisRecente(corpo);
   const status = texto(rps?.cStatusRps) || texto(rps?.cStatusLote);
   const cancelada = texto(corpo.cCancelada).toUpperCase() === "S" || status === "005";
+  const faturada = texto(corpo.cFaturada).toUpperCase() === "S";
   const deNovo: Avanco = { emissao: { ...andou(emissao, { conferir: false }, agora), tentativas: emissao.tentativas }, efeito: "nenhum" };
   if (emissao.etapa === "cancelando") {
-    return cancelada ? { emissao: andou(emissao, { etapa: "desistida", conferir: false, mensagem: null }, agora), efeito: "liberar_reservas" } : deNovo;
+    if (cancelada) return { emissao: andou(emissao, { etapa: "desistida", conferir: false, mensagem: null }, agora), efeito: "liberar_reservas" };
+    if (!faturada || status === "003") return deNovo;
+    if (status === "004" && rps && texto(rps.nNfse)) {
+      const omie = dadosDaNfse(emissao, rps);
+      const mensagem = `A NFS-e ${numeroDaNfse(omie.nfse ?? "")} foi autorizada na prefeitura, e a Dute não cancela nota autorizada.`;
+      return { emissao: andou(emissao, { etapa: "parada", etapa_anterior: "na_prefeitura", motivo_da_parada: "nfse_autorizada", mensagem, conferir: false, omie }, agora), efeito: "nenhum" };
+    }
+    return esperarAPrefeitura(emissao, agora);
   }
   if (cancelada) return { emissao: parou({ ...emissao, conferir: false }, "cancelada_na_omie", "A OS foi cancelada na Omie.", agora), efeito: "nenhum" };
   const naPrefeitura = (mudanca: Partial<Emissao>): Avanco => ({ emissao: andou(emissao, { etapa: "na_prefeitura", conferir: false, mensagem: null, ...mudanca }, agora), efeito: "nenhum" });
   if (emissao.etapa === "os_incluida") {
-    return texto(corpo.cFaturada).toUpperCase() === "S" ? naPrefeitura({ faturada_em: emissao.faturada_em ?? agora.toISOString() }) : deNovo;
+    return faturada ? naPrefeitura({ faturada_em: emissao.faturada_em ?? agora.toISOString() }) : deNovo;
   }
   return status && status !== "003" ? naPrefeitura({ mensagens_da_prefeitura: [] }) : deNovo;
 }
@@ -568,8 +589,10 @@ export type AcaoNaEmissao = "retomar" | "desistir";
 
 /**
  * Retomar: a parada volta à etapa de onde parou, do zero nas falhas; a
- * rejeitada reenvia a RPS (a pessoa corrigiu na Omie). Desistir: com a OS
- * na Omie, cancela lá antes de liberar; sem ela, libera na hora.
+ * rejeitada reenvia a RPS (a pessoa corrigiu na Omie). Desistir: sem a OS na
+ * Omie, ou com ela cancelada lá, libera na hora; com a NFS-e autorizada, a
+ * nota vale na prefeitura e se cancela na Omie antes; com a OS, a rotina
+ * confere a OS e só cancela a que não tem nota autorizada.
  */
 export function comAcao(emissao: Emissao, acao: AcaoNaEmissao, agora: Date): Avanco | { problema: string } {
   if (acao === "retomar") {
@@ -582,8 +605,11 @@ export function comAcao(emissao: Emissao, acao: AcaoNaEmissao, agora: Date): Ava
     return { problema: "Só a emissão parada ou rejeitada se retoma." };
   }
   if (!["parada", "rejeitada"].includes(emissao.etapa)) return { problema: "Só a emissão parada ou rejeitada se desiste." };
-  if (emissao.omie.os !== null && emissao.motivo_da_parada !== "cancelada_na_omie") {
-    return { emissao: andou(emissao, { etapa: "cancelando", etapa_anterior: null, motivo_da_parada: null, mensagem: null }, agora), efeito: "nenhum" };
+  if (emissao.omie.os === null || emissao.motivo_da_parada === "cancelada_na_omie") {
+    return { emissao: andou(emissao, { etapa: "desistida", etapa_anterior: null, motivo_da_parada: null, mensagem: null }, agora), efeito: "liberar_reservas" };
   }
-  return { emissao: andou(emissao, { etapa: "desistida", etapa_anterior: null, motivo_da_parada: null, mensagem: null }, agora), efeito: "liberar_reservas" };
+  if (emissao.omie.nfse) {
+    return { problema: `A NFS-e ${numeroDaNfse(emissao.omie.nfse)} foi autorizada e vale na prefeitura: cancele a nota na Omie e tente de novo antes de desistir.` };
+  }
+  return { emissao: andou(emissao, { etapa: "cancelando", etapa_anterior: null, motivo_da_parada: null, mensagem: null, conferir: true }, agora), efeito: "nenhum" };
 }

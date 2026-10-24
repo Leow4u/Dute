@@ -60,9 +60,12 @@ e "Tentar de novo": a rotina reenvia. Se a nota não deve sair, "Desistir".
 | OS cancelada na Omie | Alguém cancelou a OS lá. Só "Desistir" e, se for o caso, emitir de novo. |
 | Prefeitura sem resposta | 72 horas sem resposta da prefeitura. Confira na Omie e "Tentar de novo". |
 | Fatura não nasceu | A NFS-e foi autorizada, mas a fatura não pôde nascer (por exemplo, a mesma NF já registrada à mão). A nota existe: resolva o registro (cancele o registro duplicado à mão) e "Tentar de novo". |
+| NFS-e autorizada na prefeitura | A nota saiu antes de a OS ser cancelada, e a Dute não cancela nota autorizada. Para ficar com ela, "Tentar de novo" registra a fatura. Para desfazer, cancele a NFS-e na Omie e "Tentar de novo": a emissão para em "OS cancelada na Omie", e "Desistir" solta as reservas. |
 
 "Desistir" pede a confirmação na linha. Com a OS já na Omie, a rotina a
-cancela lá antes de soltar as reservas ("Cancelando na Omie").
+confere antes e só a cancela sem nota autorizada ("Cancelando na Omie");
+depois, solta as reservas. Com a NFS-e autorizada, "Desistir" não aparece: a
+nota vale na prefeitura e se cancela na Omie.
 
 ## A baixa na Omie
 
