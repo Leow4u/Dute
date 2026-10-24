@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
 
 import { useToast } from "@/hooks/use-toast";
@@ -26,7 +27,9 @@ import {
   type FaturaDoFinanceiro,
   type FiltroDeFaturas,
 } from "@/lib/financeiro/faturas";
+import { baixasPorPagamento } from "@/lib/financeiro/baixas";
 import { ROTA_A_RECEBER, ROTA_FATURAS, ROTA_PAGOS, ROTA_VENCIDOS, hrefDaNf, nfDaBusca } from "@/lib/financeiro/navegacao";
+import { CHAVE_DAS_BAIXAS, useBaixasDaNf } from "@/lib/financeiro/use-baixas";
 import { useFaturas, usePagamentosDaNf, usePagamentosDoMes } from "@/lib/financeiro/use-faturas";
 import { hojeIso } from "@/lib/operacao/fila";
 import { baixarPlanilha, planilhaXlsx } from "@/lib/planilha-xlsx";
@@ -71,6 +74,9 @@ function FaturasPage({ filtro }: { filtro: FiltroDeFaturas }) {
   const pedida = nfDaBusca(useSearch());
   const aberta = (pedida && faturas.find((fatura) => fatura.id === pedida)) || null;
   const pagamentos = usePagamentosDaNf(aberta?.id ?? null);
+  // Na NF que saiu pela Omie, a baixa de cada pagamento (parte 7.4i).
+  const baixasDaNf = useBaixasDaNf(user?.publicMetadata.role, aberta?.id ?? null, aberta?.pelaOmie ?? false);
+  const queryClient = useQueryClient();
   const [busca, setBusca] = useState("");
   const [painel, setPainel] = useState<PainelDaNfAberta>(() => painelNovo(null, hoje));
   const [chave, setChave] = useState(novaChave);
@@ -101,6 +107,8 @@ function FaturasPage({ filtro }: { filtro: FiltroDeFaturas }) {
     } catch (falha) {
       setPainel((atual) => ({ ...atual, erro: falha instanceof Error ? falha.message : "Não foi possível gravar." }));
     } finally {
+      // O pagamento e o estorno mexem na baixa da NF que saiu pela Omie: ela é lida de novo.
+      await queryClient.invalidateQueries({ queryKey: CHAVE_DAS_BAIXAS });
       setOcupado(false);
     }
   }
@@ -120,6 +128,7 @@ function FaturasPage({ filtro }: { filtro: FiltroDeFaturas }) {
       hoje={hoje}
       aberta={aberta}
       pagamentos={pagamentos.pagamentos && aberta ? pagamentosDaNf(pagamentos.pagamentos, aberta.id) : null}
+      baixas={baixasDaNf.baixas ? baixasPorPagamento(baixasDaNf.baixas) : null}
       painel={painel}
       resultado={resultado}
       ocupado={ocupado}

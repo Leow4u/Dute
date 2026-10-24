@@ -187,6 +187,21 @@ describe("A receber, Vencidos, Pagos e Faturas", () => {
     expect(secao(html, "NFs: A receber")).toMatch(/<button[^>]*aria-pressed="true"[^>]*>[\s\S]*?NF 1234/);
   });
 
+  it("na NF que saiu pela Omie, cada pagamento mostra a baixa dele na Omie (parte 7.4i)", () => {
+    const pelaOmie = fatura("815", { origem_nf: "omie", recebido_cents: 700_000 });
+    const lancado = pagamentoDaNf("pag_000000000000000000000001", { fatura_id: pelaOmie.id, valor_cents: 500_000, recebido_em: "2026-10-21", forma: "pix" })!;
+    const naFila = pagamentoDaNf("pag_000000000000000000000002", { fatura_id: pelaOmie.id, valor_cents: 200_000, recebido_em: "2026-10-22", forma: "boleto" })!;
+    const baixas = new Map([
+      [lancado.id, "lancada" as const],
+      [naFila.id, "na_fila" as const],
+    ]);
+    const html = render({ aberta: pelaOmie, faturas: [pelaOmie], pagamentos: [lancado, naFila], baixas });
+    const pagamentos = textosDaTela(html.slice(html.indexOf(">Pagamentos<") + 1));
+    expect(pagamentos.slice(0, 8)).toEqual(["Pagamentos", "R$ 5.000,00", "21/10/2026 · Pix", "Estornar", "Baixa lançada", "R$ 2.000,00", "22/10/2026 · Boleto", "Baixa na fila"]);
+    // A NF registrada à mão não tem baixa: nada muda.
+    expect(textosDaTela(render())).not.toContain("Baixa lançada");
+  });
+
   it("Vencidos: a NF vencida sem pagamento pode ser enviada, receber pagamento ou ter o registro cancelado", () => {
     const html = render({ filtro: "vencidos", aberta: FATURAS[2], pagamentos: [] });
     const textos = textosDaTela(html);

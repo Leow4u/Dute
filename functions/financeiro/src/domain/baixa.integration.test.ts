@@ -319,6 +319,12 @@ describe("a baixa na tela (parte 7.4h)", () => {
     );
     assert.ok(!baixas.some((item) => item.id === idDaBaixa(primeiro!)));
     await recusa(listNfSettlementsFor(db, { uid: "op-1", role: "interno" }), "permission-denied", /.+/);
+    // Da NF (parte 7.4i): todas, também a lançada, para cada pagamento mostrar a dele.
+    const daNf = await listNfSettlementsFor(db, financeiro, { fatura_id: faturaId });
+    assert.deepEqual(daNf.baixas.map((item) => [item.pagamento_id, item.etapa]).sort(), [[primeiro, "lancada"], [segundo, "na_fila"]].sort());
+    assert.deepEqual((await listNfSettlementsFor(db, financeiro, { fatura_id: "fat_ffffffffffffffffffffffff" })).baixas, []);
+    await recusa(listNfSettlementsFor(db, financeiro, { fatura_id: "x" }), "invalid-argument", "Fatura inválida.");
+    await recusa(listNfSettlementsFor(db, financeiro, { outra: 1 }), "invalid-argument", /.+/);
   });
 
   it("retomar a parada sem as chaves volta à fila, e com as chaves a rotina lança; o evento de quem retomou", async () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  BAIXA_NO_PAGAMENTO,
   ETAPAS_DA_BAIXA,
   ETAPA_DA_BAIXA_ROTULO,
   MOTIVOS_DA_PARADA_DA_BAIXA,
@@ -8,6 +9,7 @@ import {
   acoesDaBaixa,
   baixasLidas,
   baixasNaOrdem,
+  baixasPorPagamento,
   pendenciasDasBaixas,
   tituloDaBaixa,
   type BaixaDoFinanceiro,
@@ -50,8 +52,13 @@ function baixa(numero: number, extra: Record<string, unknown> = {}): BaixaDoFina
 }
 
 describe("as baixas na Omie", () => {
-  it("as etapas e os motivos têm rótulo", () => {
+  it("as etapas e os motivos têm rótulo, também no pagamento da NF", () => {
     for (const etapa of ETAPAS_DA_BAIXA) expect(ETAPA_DA_BAIXA_ROTULO[etapa], etapa).toMatch(/^\S/);
+    for (const etapa of ETAPAS_DA_BAIXA) expect(BAIXA_NO_PAGAMENTO[etapa], etapa).toMatch(/^Baixa /);
+    expect([...baixasPorPagamento([baixa(1), baixa(2, { etapa: "lancada" })]).entries()]).toEqual([
+      ["pag_000000000000000000000001", "na_fila"],
+      ["pag_000000000000000000000002", "lancada"],
+    ]);
     for (const motivo of MOTIVOS_DA_PARADA_DA_BAIXA) expect(MOTIVO_DA_BAIXA_ROTULO[motivo], motivo).toMatch(/^\S/);
   });
 

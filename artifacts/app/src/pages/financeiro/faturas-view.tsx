@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { dataBr } from "@/lib/comercial/clientes";
+import { BAIXA_NO_PAGAMENTO, type EtapaDaBaixa } from "@/lib/financeiro/baixas";
 import { FORMAS_DE_PAGAMENTO, FORMA_ROTULO, type FormaDePagamento } from "@/lib/financeiro/a-faturar";
 import {
   MEIOS_DE_ENVIO,
@@ -85,6 +86,8 @@ export type FaturasViewProps = {
   aberta: FaturaDoFinanceiro | null;
   /** Os pagamentos da NF aberta; null enquanto carregam. */
   pagamentos: PagamentoDaNf[] | null;
+  /** Na NF que saiu pela Omie, a baixa de cada pagamento, pelo id dele (parte 7.4i). */
+  baixas?: ReadonlyMap<string, EtapaDaBaixa> | null;
   painel: PainelDaNfAberta;
   /** A confirmação da última gravação. */
   resultado: string | null;
@@ -101,6 +104,15 @@ const TOM_DA_SITUACAO: Record<SituacaoDaCobranca, string> = {
 };
 const TOM_PARA_ENVIAR = "border-warning-soft-border bg-warning-soft text-warning-soft-foreground";
 const TOM_OK = "border-success-soft-border bg-success-soft text-success-soft-foreground";
+
+const TOM_DA_BAIXA: Record<EtapaDaBaixa, string> = {
+  na_fila: "border-border bg-muted text-foreground",
+  lancada: TOM_OK,
+  cancelando: "border-border bg-muted text-foreground",
+  cancelada: "border-border bg-muted text-muted-foreground",
+  parada: "border-destructive-soft-border bg-destructive-soft text-destructive-soft-foreground",
+  dispensada: "border-border bg-muted text-muted-foreground",
+};
 
 const ROTULO_DE_CAMPO = "block text-xs font-bold text-muted-foreground";
 const CAMPO_SELECT =
@@ -213,13 +225,28 @@ function Lista({ filtro, estado, faturas, busca, hoje, aberta, acoes }: FaturasV
 
 // --- Painel --------------------------------------------------------------------------------
 
-function Pagamentos({ pagamentos, painel, ocupado, acoes, podeEstornar }: { pagamentos: PagamentoDaNf[] | null; painel: PainelDaNfAberta; ocupado: boolean; acoes: AcoesDasFaturas; podeEstornar: boolean }) {
+function Pagamentos({
+  pagamentos,
+  baixas,
+  painel,
+  ocupado,
+  acoes,
+  podeEstornar,
+}: {
+  pagamentos: PagamentoDaNf[] | null;
+  baixas: ReadonlyMap<string, EtapaDaBaixa> | null;
+  painel: PainelDaNfAberta;
+  ocupado: boolean;
+  acoes: AcoesDasFaturas;
+  podeEstornar: boolean;
+}) {
   if (pagamentos === null) return <p className="text-sm font-bold text-muted-foreground">Carregando...</p>;
   if (!pagamentos.length) return <p className="text-sm font-bold text-muted-foreground">Nenhum pagamento</p>;
   return (
     <ul className="flex flex-col gap-2">
       {pagamentos.map((pagamento) => {
         const confirmando = painel.confirmando?.tipo === "estorno" && painel.confirmando.pagamentoId === pagamento.id;
+        const baixa = baixas?.get(pagamento.id) ?? null;
         return (
           <li key={pagamento.id} className="flex flex-col gap-2 rounded-md border border-border px-3 py-2">
             <div className="flex items-center gap-2.5">
@@ -235,6 +262,11 @@ function Pagamentos({ pagamentos, painel, ocupado, acoes, podeEstornar }: { paga
                 </Button>
               ) : null}
             </div>
+            {baixa ? (
+              <div className="flex">
+                <Pill className={TOM_DA_BAIXA[baixa]}>{BAIXA_NO_PAGAMENTO[baixa]}</Pill>
+              </div>
+            ) : null}
             {pagamento.observacao ? <span className="text-xs font-semibold">{pagamento.observacao}</span> : null}
             {pagamento.estornado?.motivo ? <span className="text-xs font-semibold text-muted-foreground">{pagamento.estornado.motivo}</span> : null}
             {confirmando ? <Confirmacao id={`estorno-${pagamento.id}`} rotulo="Motivo do estorno" botao="Confirmar estorno" painel={painel} ocupado={ocupado} acoes={acoes} onConfirmar={acoes.confirmarEstorno} /> : null}
@@ -263,7 +295,7 @@ function Confirmacao({ id, rotulo, botao, painel, ocupado, acoes, onConfirmar }:
   );
 }
 
-function Painel({ aberta: fatura, hoje, pagamentos, painel, ocupado, acoes }: FaturasViewProps & { aberta: FaturaDoFinanceiro }) {
+function Painel({ aberta: fatura, hoje, pagamentos, baixas, painel, ocupado, acoes }: FaturasViewProps & { aberta: FaturaDoFinanceiro }) {
   const pode = acoesDaNf(fatura);
   const situacao = situacaoDaCobranca(fatura, hoje);
   const formPagamento = painel.pagamento;
@@ -348,7 +380,7 @@ function Painel({ aberta: fatura, hoje, pagamentos, painel, ocupado, acoes }: Fa
       <div aria-hidden="true" className="h-px bg-muted" />
       <div className="flex flex-col gap-2.5">
         <Subtitulo>Pagamentos</Subtitulo>
-        <Pagamentos pagamentos={pagamentos} painel={painel} ocupado={ocupado} acoes={acoes} podeEstornar={fatura.status !== "cancelada"} />
+        <Pagamentos pagamentos={pagamentos} baixas={baixas ?? null} painel={painel} ocupado={ocupado} acoes={acoes} podeEstornar={fatura.status !== "cancelada"} />
       </div>
 
       {pode.pagar ? (

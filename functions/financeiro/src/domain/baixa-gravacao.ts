@@ -194,10 +194,20 @@ export type BaixaNaLista = {
   edicao: number;
 };
 
-/** listNfSettlements: as baixas abertas, as mais novas primeiro. As lançadas, canceladas e dispensadas acabaram. */
-export async function listNfSettlementsFor(db: Firestore, caller: FinanceiroProfile): Promise<{ baixas: BaixaNaLista[] }> {
+const PedidoDaLista = z.object({ fatura_id: z.string().regex(/^fat_[a-f0-9]{24}$/, "Fatura inválida.").optional() }).strict();
+
+/**
+ * listNfSettlements: as baixas abertas, as mais novas primeiro (as lançadas,
+ * canceladas e dispensadas acabaram); com `fatura_id`, todas as da NF, para
+ * cada pagamento mostrar a dele (parte 7.4i).
+ */
+export async function listNfSettlementsFor(db: Firestore, caller: FinanceiroProfile, dados: unknown = {}): Promise<{ baixas: BaixaNaLista[] }> {
   exigirFinanceiro(caller);
-  const snapshot = await db.collection(BAIXAS_COLLECTION).where("etapa", "in", [...ETAPAS_NA_LISTA]).limit(BAIXAS_NA_LISTA).get();
+  const lido = PedidoDaLista.safeParse(dados ?? {});
+  if (!lido.success) throw new HttpsError("invalid-argument", lido.error.issues[0]?.message ?? "Pedido inválido.");
+  const colecao = db.collection(BAIXAS_COLLECTION);
+  const consulta = lido.data.fatura_id ? colecao.where("fatura_id", "==", lido.data.fatura_id) : colecao.where("etapa", "in", [...ETAPAS_NA_LISTA]);
+  const snapshot = await consulta.limit(BAIXAS_NA_LISTA).get();
   const baixas = snapshot.docs.flatMap((doc) => {
     let baixa: Baixa;
     try {

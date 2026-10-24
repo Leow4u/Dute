@@ -278,7 +278,9 @@ aditivo; aprovação no celular; PDF A4; autorizações de faturamento; mediçã
 mensal; fila; conferência final. Ligado no `dute-prod` em 21/10.
 
 **Decisões de 23/10.** Sem carga de clientes da Omie, sem integração com a
-Omie e sem legado da planilha. Os clientes entram pela tela de Clientes
+Omie e sem legado da planilha. (A NFS-e pela Omie veio depois, em 24/10,
+na pergunta 21 da Fase 7: a Omie emite a nota; os clientes continuam
+entrando pela tela de Clientes.) Os clientes entram pela tela de Clientes
 (Itaú, Safra e BTG primeiro; prospect quando o pedido chegar). Tabelas e
 contratos continuam entrando pelas cargas.
 
@@ -512,7 +514,8 @@ todo o app.
 - A NF é emitida fora do sistema até a integração da Fase 7; o sistema
   registra número, série, data, valor, vencimento e forma de pagamento, e
   marca a autorização como usada (os campos `nf_ids`, `enviada_portal_em` já
-  estão reservados nas autorizações). Omie fora até nova decisão.
+  estão reservados nas autorizações). Omie fora até nova decisão (a
+  decisão veio em 24/10/2026, na Fase 7: a NFS-e pela Omie).
 - Módulo Financeiro ganha shell próprio (owner, admin, financeiro) com
   Início, A faturar, Faturas, A receber, Vencidos, Pagos e Relatórios. O
   Faturamento do WMS continua no shell da Armazenagem até a Fase 7.
@@ -601,7 +604,9 @@ integração. Desenho e registro das partes:
 nessas trilhas, como o `CLAUDE.md` exige. A LPU de cobrança do WMS
 (`billing_price_list`) unifica-se ao catálogo e às tabelas do Comercial. A
 integração de NF-e e NFS-e e a contabilidade escolhem fornecedor nesta fase
-(Omie fora até nova decisão; pergunta 21 da seção 13). Contratos e
+(pergunta 21 da seção 13, decidida em 24/10/2026: a NFS-e sai pela Omie, o
+CT-e segue à mão, a Dute lança a baixa na Omie e o contador cadastra os
+serviços lá). Contratos e
 Autorizações passam a ser lidos pelo Financeiro (pergunta 5 do desenho do
 Comercial);
 a demanda que perdeu o prazo de faturamento ganha o motivo de perda "prazo
@@ -614,7 +619,7 @@ de faturamento" (pergunta 10 do desenho do Comercial).
 | 7.1 | Testes nas trilhas de dinheiro do WMS: prévia, emissão, competência congelada, fatura por cliente | Cobertura das funções de cálculo com casos reais fictícios |
 | 7.2 | A receber único: faturas do WMS e da demanda na mesma fila do Financeiro | Total do a receber é a soma das duas origens |
 | 7.3 | LPU de cobrança do WMS no catálogo e nas tabelas do Comercial, com vigência | Fatura do WMS calcula igual antes e depois (teste de regressão) |
-| 7.4 | Integração de NF (fornecedor a definir) e exportação contábil | Emissão idempotente; falha não marca a fatura como emitida |
+| 7.4 | A NFS-e pela Omie e a baixa do pagamento lá (partes 7.4a a 7.4i no runbook da fase) | Emissão idempotente; falha não marca a fatura como emitida; a baixa sai uma vez |
 | 7.5 | Contratos e Autorizações no shell do Financeiro; perda por prazo de faturamento | Financeiro lê sem editar itens nem preço |
 
 **Pronto quando.** Uma competência fecha com armazenagem e OS na mesma
@@ -744,6 +749,7 @@ cliente ou 15 em qualquer cliente; 20, `functions/core`; desenho em
 
 **Fase 7**
 21. Fornecedor da NF-e e NFS-e e da contabilidade, com a Omie fora.
+    Decidida em 24/10/2026: a Omie (a NFS-e; o CT-e segue à mão).
 22. A perda por prazo de faturamento (pergunta 10 do Comercial): motivo
     próprio aceito só com o alerta vencido?
 
