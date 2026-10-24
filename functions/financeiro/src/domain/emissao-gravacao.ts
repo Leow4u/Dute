@@ -123,7 +123,7 @@ export async function emitNfOmieFor(
         tentativas: 0,
         consultas: 0,
         proxima_em: iso,
-        faturada_em: null,
+        na_prefeitura_desde: null,
         conferir: false,
         edicao: 1,
       };

@@ -144,8 +144,13 @@ export type Emissao = {
   consultas: number;
   /** A rotina só chama a Omie para esta emissão a partir daqui (ISO, UTC). */
   proxima_em: string;
-  /** Quando a OS foi faturada: o relógio da prefeitura. */
-  faturada_em: string | null;
+  /**
+   * O relógio da prefeitura: desde quando a Dute espera a resposta da RPS. O
+   * faturamento e o reenvio recomeçam a conta, e a pessoa que retoma a
+   * emissão parada pela demora dá outras 72 horas. Sem ele, a primeira
+   * espera começa a contar.
+   */
+  na_prefeitura_desde: string | null;
   /**
    * A próxima chamada confere a OS na Omie antes (StatusOS): a chamada
    * anterior que grava (FaturarOS, ReenviarOS ou CancelarOS) falhou, e a
@@ -240,7 +245,7 @@ export function emissaoLida(id: string, dados: Record<string, unknown>): Emissao
     tentativas: Number.isInteger(dados.tentativas) ? (dados.tentativas as number) : 0,
     consultas: Number.isInteger(dados.consultas) ? (dados.consultas as number) : 0,
     proxima_em: dados.proxima_em as string,
-    faturada_em: textoOuNull(dados.faturada_em),
+    na_prefeitura_desde: textoOuNull(dados.na_prefeitura_desde),
     conferir: dados.conferir === true,
     edicao: dados.edicao as number,
   };
@@ -420,9 +425,9 @@ function dadosDaNfse(emissao: Emissao, rps: Record<string, unknown>): DadosDaOmi
   };
 }
 
-/** A prefeitura passou do prazo de resposta desde que a OS foi faturada. */
+/** A prefeitura passou do prazo de resposta desde que a Dute começou a esperar. */
 function prefeituraDemorou(emissao: Emissao, agora: Date): boolean {
-  return agora.getTime() - Date.parse(emissao.faturada_em ?? emissao.proxima_em) > HORAS_NA_PREFEITURA * 60 * MINUTO;
+  return emissao.na_prefeitura_desde !== null && agora.getTime() - Date.parse(emissao.na_prefeitura_desde) > HORAS_NA_PREFEITURA * 60 * MINUTO;
 }
 
 /** "00000815" → "815", como a nota aparece para a pessoa. */
@@ -481,14 +486,15 @@ export function comResposta(
       // A OS que alguém já faturou na Omie segue para a prefeitura.
       const faturada = texto(corpo.cFaturada).toUpperCase() === "S";
       return {
-        emissao: andou(emissao, faturada ? { etapa: "na_prefeitura", faturada_em: emissao.faturada_em ?? agora.toISOString(), omie: { ...omie, ambiente } } : { omie: { ...omie, ambiente } }, agora),
+        emissao: andou(emissao, faturada ? { etapa: "na_prefeitura", na_prefeitura_desde: agora.toISOString(), omie: { ...omie, ambiente } } : { omie: { ...omie, ambiente } }, agora),
         efeito: "nenhum",
       };
     }
     case "faturar_os":
     case "reenviar_os":
+      // A RPS foi à prefeitura agora: o relógio recomeça, também no reenvio da corrigida.
       return {
-        emissao: andou(emissao, { etapa: "na_prefeitura", mensagem: null, mensagens_da_prefeitura: [], faturada_em: emissao.faturada_em ?? agora.toISOString(), proxima_em: depois(agora, esperaNaPrefeitura(0) * MINUTO) }, agora),
+        emissao: andou(emissao, { etapa: "na_prefeitura", mensagem: null, mensagens_da_prefeitura: [], na_prefeitura_desde: agora.toISOString(), proxima_em: depois(agora, esperaNaPrefeitura(0) * MINUTO) }, agora),
         efeito: "nenhum",
       };
     case "acompanhar": {
@@ -516,12 +522,19 @@ export function comResposta(
   }
 }
 
-/** A prefeitura ainda processa a RPS: a próxima consulta espera mais, até o prazo; depois dele, a emissão para. */
+/**
+ * A prefeitura ainda processa a RPS: a próxima consulta espera mais, até o
+ * prazo; depois dele, a emissão para. A espera sem relógio (a OS faturada à
+ * mão durante o cancelamento) começa a contar agora.
+ */
 function esperarAPrefeitura(emissao: Emissao, agora: Date): Avanco {
   if (prefeituraDemorou(emissao, agora)) {
     return { emissao: parou(emissao, "prefeitura_demorou", `A prefeitura não respondeu em ${HORAS_NA_PREFEITURA} horas.`, agora), efeito: "nenhum" };
   }
-  return { emissao: andou(emissao, { consultas: emissao.consultas + 1, proxima_em: depois(agora, esperaNaPrefeitura(emissao.consultas) * MINUTO) }, agora), efeito: "nenhum" };
+  return {
+    emissao: andou(emissao, { consultas: emissao.consultas + 1, proxima_em: depois(agora, esperaNaPrefeitura(emissao.consultas) * MINUTO), na_prefeitura_desde: emissao.na_prefeitura_desde ?? agora.toISOString() }, agora),
+    efeito: "nenhum",
+  };
 }
 
 /**
@@ -553,10 +566,12 @@ function conferida(emissao: Emissao, corpo: Record<string, unknown>, agora: Date
     return esperarAPrefeitura(emissao, agora);
   }
   if (cancelada) return { emissao: parou({ ...emissao, conferir: false }, "cancelada_na_omie", "A OS foi cancelada na Omie.", agora), efeito: "nenhum" };
-  const naPrefeitura = (mudanca: Partial<Emissao>): Avanco => ({ emissao: andou(emissao, { etapa: "na_prefeitura", conferir: false, mensagem: null, ...mudanca }, agora), efeito: "nenhum" });
-  if (emissao.etapa === "os_incluida") {
-    return faturada ? naPrefeitura({ faturada_em: emissao.faturada_em ?? agora.toISOString() }) : deNovo;
-  }
+  // A chamada perdida levou a RPS à prefeitura: o relógio recomeça, como quando a resposta chega.
+  const naPrefeitura = (mudanca: Partial<Emissao>): Avanco => ({
+    emissao: andou(emissao, { etapa: "na_prefeitura", conferir: false, mensagem: null, na_prefeitura_desde: agora.toISOString(), ...mudanca }, agora),
+    efeito: "nenhum",
+  });
+  if (emissao.etapa === "os_incluida") return faturada ? naPrefeitura({}) : deNovo;
   return status && status !== "003" ? naPrefeitura({ mensagens_da_prefeitura: [] }) : deNovo;
 }
 
@@ -588,8 +603,9 @@ export function comFalha(emissao: Emissao, passo: Passo, falha: FalhaDaOmie, ago
 export type AcaoNaEmissao = "retomar" | "desistir";
 
 /**
- * Retomar: a parada volta à etapa de onde parou, do zero nas falhas; a
- * rejeitada reenvia a RPS (a pessoa corrigiu na Omie). Desistir: sem a OS na
+ * Retomar: a parada volta à etapa de onde parou, do zero nas falhas (e a
+ * parada pela demora da prefeitura, com outras 72 horas); a rejeitada
+ * reenvia a RPS (a pessoa corrigiu na Omie). Desistir: sem a OS na
  * Omie, ou com ela cancelada lá, libera na hora; com a NFS-e autorizada, a
  * nota vale na prefeitura e se cancela na Omie antes; com a OS, a rotina
  * confere a OS e só cancela a que não tem nota autorizada.
@@ -600,7 +616,8 @@ export function comAcao(emissao: Emissao, acao: AcaoNaEmissao, agora: Date): Ava
     if (emissao.etapa === "parada") {
       if (emissao.motivo_da_parada === "cancelada_na_omie") return { problema: "A OS foi cancelada na Omie: desista e emita de novo." };
       const volta = emissao.etapa_anterior && ETAPAS_DA_ROTINA.includes(emissao.etapa_anterior) ? emissao.etapa_anterior : "na_fila";
-      return { emissao: andou(emissao, { etapa: volta, etapa_anterior: null, motivo_da_parada: null, mensagem: null }, agora), efeito: "nenhum" };
+      const relogio = emissao.motivo_da_parada === "prefeitura_demorou" ? { na_prefeitura_desde: agora.toISOString() } : {};
+      return { emissao: andou(emissao, { etapa: volta, etapa_anterior: null, motivo_da_parada: null, mensagem: null, ...relogio }, agora), efeito: "nenhum" };
     }
     return { problema: "Só a emissão parada ou rejeitada se retoma." };
   }

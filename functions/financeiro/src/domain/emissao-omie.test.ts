@@ -56,7 +56,7 @@ function emissao(extra: Partial<Emissao> = {}): Emissao {
     tentativas: 0,
     consultas: 0,
     proxima_em: "2026-10-24T11:00:00.000Z",
-    faturada_em: null,
+    na_prefeitura_desde: null,
     conferir: false,
     edicao: 1,
     ...extra,
@@ -180,7 +180,7 @@ describe("a resposta de cada passo", () => {
   });
 
   it("na prefeitura: 004 autoriza e registra a fatura; 003 rejeita com as mensagens; 001 e 002 esperam", () => {
-    const naPrefeitura = emissao({ etapa: "na_prefeitura", omie: COM_OS, faturada_em: "2026-10-24T11:50:00.000Z" });
+    const naPrefeitura = emissao({ etapa: "na_prefeitura", omie: COM_OS, na_prefeitura_desde: "2026-10-24T11:50:00.000Z" });
     const autorizada = comResposta(naPrefeitura, "acompanhar", { ListaRpsNfse: [{ cStatusRps: "004", nNfse: "00000815", cCodVerif: "AB12", cUrlNfse: "https://nfse.exemplo/815", cUrlPdfDest: "https://omie.exemplo/815.pdf" }] }, CONTEXTO);
     assert.equal(autorizada.efeito, "registrar_fatura");
     assert.deepEqual([autorizada.emissao.etapa, autorizada.emissao.omie.nfse, autorizada.emissao.omie.codigo_verificacao], ["autorizada", "00000815", "AB12"]);
@@ -195,15 +195,15 @@ describe("a resposta de cada passo", () => {
   });
 
   it("a prefeitura que não responde em 72 horas para a emissão; a OS cancelada na Omie também", () => {
-    const antiga = emissao({ etapa: "na_prefeitura", omie: COM_OS, faturada_em: "2026-10-21T11:00:00.000Z" });
+    const antiga = emissao({ etapa: "na_prefeitura", omie: COM_OS, na_prefeitura_desde: "2026-10-21T11:00:00.000Z" });
     assert.equal(comResposta(antiga, "acompanhar", { ListaRpsNfse: [{ cStatusRps: "002" }] }, CONTEXTO).emissao.motivo_da_parada, "prefeitura_demorou");
-    const cancelada = emissao({ etapa: "na_prefeitura", omie: COM_OS, faturada_em: "2026-10-24T11:50:00.000Z" });
+    const cancelada = emissao({ etapa: "na_prefeitura", omie: COM_OS, na_prefeitura_desde: "2026-10-24T11:50:00.000Z" });
     assert.equal(comResposta(cancelada, "acompanhar", { cCancelada: "S", ListaRpsNfse: [] }, CONTEXTO).emissao.motivo_da_parada, "cancelada_na_omie");
   });
 
   it("faturar e reenviar levam à prefeitura; cancelar desiste e libera as reservas", () => {
     const faturada = comResposta(emissao({ etapa: "os_incluida", omie: COM_OS }), "faturar_os", { cCodStatus: "0" }, CONTEXTO).emissao;
-    assert.deepEqual([faturada.etapa, faturada.faturada_em], ["na_prefeitura", AGORA.toISOString()]);
+    assert.deepEqual([faturada.etapa, faturada.na_prefeitura_desde], ["na_prefeitura", AGORA.toISOString()]);
     const cancelada = comResposta(emissao({ etapa: "cancelando", omie: COM_OS }), "cancelar_os", { cCodStatus: "0" }, CONTEXTO);
     assert.deepEqual([cancelada.emissao.etapa, cancelada.efeito], ["desistida", "liberar_reservas"]);
   });
@@ -258,7 +258,7 @@ describe("a conferência depois da falha de uma chamada que grava", () => {
   it("o FaturarOS que deu certo com a resposta perdida: a OS faturada segue para a prefeitura, sem faturar de novo", () => {
     const falhou = comFalha(emissao({ etapa: "os_incluida", omie: COM_OS }), "faturar_os", perdida, AGORA);
     const conferida = comResposta(falhou, "conferir_os", { nCodOS: 9001, cAmbiente: "H", cFaturada: "S", cCancelada: "N", ListaRpsNfse: [{ cStatusRps: "002" }] }, CONTEXTO);
-    assert.deepEqual([conferida.efeito, conferida.emissao.etapa, conferida.emissao.conferir, conferida.emissao.faturada_em], ["nenhum", "na_prefeitura", false, AGORA.toISOString()]);
+    assert.deepEqual([conferida.efeito, conferida.emissao.etapa, conferida.emissao.conferir, conferida.emissao.na_prefeitura_desde], ["nenhum", "na_prefeitura", false, AGORA.toISOString()]);
     assert.equal(passoDaEmissao(conferida.emissao, AGORA), "acompanhar");
   });
 
@@ -304,7 +304,7 @@ describe("desistir não cancela a NFS-e autorizada", () => {
   const NFSE = { ...COM_OS, nfse: "00000815", codigo_verificacao: "AB12", url_nfse: "https://nfse.exemplo/815", url_pdf: null };
 
   it("com a NFS-e autorizada, desistir pede antes o cancelamento na Omie; com a OS cancelada lá, solta as reservas", () => {
-    const recusada = emissao({ etapa: "parada", etapa_anterior: "na_prefeitura", motivo_da_parada: "fatura_recusada", omie: NFSE, faturada_em: "2026-10-24T11:00:00.000Z" });
+    const recusada = emissao({ etapa: "parada", etapa_anterior: "na_prefeitura", motivo_da_parada: "fatura_recusada", omie: NFSE, na_prefeitura_desde: "2026-10-24T11:00:00.000Z" });
     const tentativa = comAcao(recusada, "desistir", AGORA);
     assert.ok("problema" in tentativa);
     assert.match(tentativa.problema, /A NFS-e 815 foi autorizada/);
@@ -314,14 +314,14 @@ describe("desistir não cancela a NFS-e autorizada", () => {
   });
 
   it("desistir com a OS na Omie confere a OS antes de cancelar", () => {
-    const parada = emissao({ etapa: "parada", etapa_anterior: "na_prefeitura", motivo_da_parada: "prefeitura_demorou", omie: COM_OS, faturada_em: "2026-10-21T11:00:00.000Z" });
+    const parada = emissao({ etapa: "parada", etapa_anterior: "na_prefeitura", motivo_da_parada: "prefeitura_demorou", omie: COM_OS, na_prefeitura_desde: "2026-10-21T11:00:00.000Z" });
     const desistida = comAcao(parada, "desistir", AGORA);
     assert.ok("emissao" in desistida);
     assert.deepEqual([desistida.emissao.etapa, desistida.emissao.conferir, passoDaEmissao(desistida.emissao, AGORA)], ["cancelando", true, "conferir_os"]);
   });
 
   it("a conferência do cancelamento: a autorizada para sem cancelar; a que a prefeitura processa espera; a recusada e a OS sem faturar cancelam", () => {
-    const cancelando = emissao({ etapa: "cancelando", omie: COM_OS, conferir: true, faturada_em: "2026-10-24T11:00:00.000Z" });
+    const cancelando = emissao({ etapa: "cancelando", omie: COM_OS, conferir: true, na_prefeitura_desde: "2026-10-24T11:00:00.000Z" });
     const autorizada = comResposta(cancelando, "conferir_os", { nCodOS: 9001, cFaturada: "S", cCancelada: "N", ListaRpsNfse: [{ cStatusRps: "004", nNfse: "00000815", cCodVerif: "AB12", cUrlNfse: "https://nfse.exemplo/815" }] }, CONTEXTO);
     assert.deepEqual(
       [autorizada.efeito, autorizada.emissao.etapa, autorizada.emissao.motivo_da_parada, autorizada.emissao.etapa_anterior, autorizada.emissao.omie.nfse, autorizada.emissao.conferir],
@@ -348,8 +348,51 @@ describe("desistir não cancela a NFS-e autorizada", () => {
   });
 
   it("a prefeitura que não responde em 72 horas também para o cancelamento", () => {
-    const antiga = emissao({ etapa: "cancelando", omie: COM_OS, conferir: true, faturada_em: "2026-10-21T11:00:00.000Z" });
+    const antiga = emissao({ etapa: "cancelando", omie: COM_OS, conferir: true, na_prefeitura_desde: "2026-10-21T11:00:00.000Z" });
     const parada = comResposta(antiga, "conferir_os", { nCodOS: 9001, cFaturada: "S", cCancelada: "N", ListaRpsNfse: [{ cStatusRps: "002" }] }, CONTEXTO).emissao;
+    assert.deepEqual([parada.etapa, parada.motivo_da_parada, parada.etapa_anterior], ["parada", "prefeitura_demorou", "cancelando"]);
+  });
+});
+
+describe("o relógio da prefeitura", () => {
+  const QUATRO_DIAS_ANTES = "2026-10-20T12:00:00.000Z";
+  const processando = { ListaRpsNfse: [{ cStatusRps: "002" }] };
+  const depoisDe = (horas: number) => ({ ...CONTEXTO, agora: new Date(AGORA.getTime() + horas * 3_600_000) });
+
+  it("o reenvio recomeça o relógio: a RPS corrigida dias depois ganha outras 72 horas", () => {
+    const reenviando = emissao({ etapa: "reenviando", omie: COM_OS, na_prefeitura_desde: QUATRO_DIAS_ANTES });
+    const reenviada = comResposta(reenviando, "reenviar_os", { cCodStatus: "0" }, CONTEXTO).emissao;
+    assert.deepEqual([reenviada.etapa, reenviada.na_prefeitura_desde], ["na_prefeitura", AGORA.toISOString()]);
+    const esperando = comResposta(reenviada, "acompanhar", processando, depoisDe(1)).emissao;
+    assert.deepEqual([esperando.etapa, esperando.consultas], ["na_prefeitura", 1]);
+    assert.equal(comResposta(esperando, "acompanhar", processando, depoisDe(73)).emissao.motivo_da_parada, "prefeitura_demorou");
+    // O ReenviarOS que deu certo com a resposta perdida, achado na conferência, também recomeça.
+    const falhou = comFalha(reenviando, "reenviar_os", { tipo: "instavel", mensagem: "Sem resposta da Omie", esperar_ms: 2 * 60_000 }, AGORA);
+    const conferida = comResposta(falhou, "conferir_os", { nCodOS: 9001, cFaturada: "S", cCancelada: "N", ListaRpsNfse: [{ cStatusRps: "002" }] }, CONTEXTO).emissao;
+    assert.deepEqual([conferida.etapa, conferida.na_prefeitura_desde], ["na_prefeitura", AGORA.toISOString()]);
+  });
+
+  it("tentar de novo depois da demora da prefeitura dá outras 72 horas; depois das falhas seguidas, o relógio continua", () => {
+    const demorou = comResposta(emissao({ etapa: "na_prefeitura", omie: COM_OS, na_prefeitura_desde: QUATRO_DIAS_ANTES }), "acompanhar", processando, CONTEXTO).emissao;
+    assert.equal(demorou.motivo_da_parada, "prefeitura_demorou");
+    const retomada = comAcao(demorou, "retomar", AGORA);
+    assert.ok("emissao" in retomada);
+    assert.deepEqual([retomada.emissao.etapa, retomada.emissao.na_prefeitura_desde], ["na_prefeitura", AGORA.toISOString()]);
+    assert.equal(comResposta(retomada.emissao, "acompanhar", processando, CONTEXTO).emissao.etapa, "na_prefeitura");
+    // As falhas da consulta são da Omie, não demora da prefeitura.
+    const falhas = emissao({ etapa: "parada", etapa_anterior: "na_prefeitura", motivo_da_parada: "falhas_seguidas", omie: COM_OS, na_prefeitura_desde: QUATRO_DIAS_ANTES });
+    const outra = comAcao(falhas, "retomar", AGORA);
+    assert.ok("emissao" in outra);
+    assert.equal(outra.emissao.na_prefeitura_desde, QUATRO_DIAS_ANTES);
+  });
+
+  it("a espera sem relógio começa a contar: a OS faturada à mão durante o cancelamento também tem prazo", () => {
+    const cancelando = emissao({ etapa: "cancelando", omie: COM_OS, conferir: true });
+    const corpo = { nCodOS: 9001, cFaturada: "S", cCancelada: "N", ListaRpsNfse: [{ cStatusRps: "002" }] };
+    const esperando = comResposta(cancelando, "conferir_os", corpo, CONTEXTO).emissao;
+    assert.deepEqual([esperando.etapa, esperando.na_prefeitura_desde], ["cancelando", AGORA.toISOString()]);
+    assert.equal(comResposta(esperando, "conferir_os", corpo, depoisDe(1)).emissao.na_prefeitura_desde, AGORA.toISOString());
+    const parada = comResposta(esperando, "conferir_os", corpo, depoisDe(73)).emissao;
     assert.deepEqual([parada.etapa, parada.motivo_da_parada, parada.etapa_anterior], ["parada", "prefeitura_demorou", "cancelando"]);
   });
 });
