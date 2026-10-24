@@ -196,6 +196,10 @@ os comandos e escolheu liberar a conta do CI (`roles/datastore.owner`).
     fora da lista);
   - `tools/test_workflows.py`: o workflow só roda por disparo manual, com os
     projetos e os números da publicação, a conta das functions e o script.
+- **A primeira execução**, na homologação em 24/10/2026, antes do papel: o
+  `describe` achou o banco ausente e o `create` recusou com "does not have
+  permission", sem a palavra `PERMISSION_DENIED`, e a dica do papel não
+  saiu. O script passou a reconhecer as duas formas; nada foi criado.
 
 ### Parte 8.2a: a ficha no servidor
 

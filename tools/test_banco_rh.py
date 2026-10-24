@@ -46,6 +46,9 @@ FAKE_GCLOUD = textwrap.dedent(
         sys.exit(1)
     comando = " ".join(arg for arg in args if not arg.startswith("--"))
     banco = estado.get("banco")
+    if comando == "firestore databases create" and estado.get("sem_permissao_no_create"):
+        print("ERROR: (gcloud.firestore.databases.create) [conta] does not have permission to access projects instance [p] (or it may not exist): The caller does not have permission.", file=sys.stderr)
+        sys.exit(1)
     if comando == "firestore databases describe":
         if banco is None:
             print("ERROR: (gcloud.firestore.databases.describe) NOT_FOUND: Project or database does not exist.", file=sys.stderr)
@@ -162,6 +165,15 @@ class BancoRhTest(unittest.TestCase):
         self.assertIn("roles/datastore.owner", resultado.stderr)
         self.assertIn("github-actions-functions@dute-homolog.iam.gserviceaccount.com", resultado.stderr)
         self.assertEqual(self.comandos(), ["firestore databases describe"])
+
+    def test_sem_o_papel_no_create_tambem_cita_o_papel(self) -> None:
+        # Em 24/10/2026 o describe achou o banco ausente e o create recusou
+        # sem a palavra PERMISSION_DENIED.
+        resultado = self.rodar("dute-homolog", {"banco": None, "sem_permissao_no_create": True})
+        self.assertEqual(resultado.returncode, 1)
+        self.assertIn("does not have permission", resultado.stderr)
+        self.assertIn("roles/datastore.owner", resultado.stderr)
+        self.assertIsNone(self.banco())
 
     def test_banco_em_outra_regiao_falha_sem_mexer(self) -> None:
         resultado = self.rodar("dute-prod", {"banco": {**COMPLETO, "locationId": "us-east1", "pointInTimeRecoveryEnablement": "POINT_IN_TIME_RECOVERY_DISABLED"}})
