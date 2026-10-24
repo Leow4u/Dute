@@ -86,9 +86,12 @@ cancelando, cancelada, parada ou dispensada. A parada aparece também no
 | Título já recebido na Omie | Alguém deu a baixa lá sem a Dute. Confira os valores e "Dispensar". |
 | Sem a conta corrente | O título não tem conta corrente na Omie, e a configuração da Dute também não. Peça a conta ao contador e "Tentar de novo". |
 | Chave da Omie recusada, Sem as chaves da Omie, Falhas seguidas na Omie | Como na emissão. |
+| Estornada depois de dispensada | O pagamento foi estornado depois de a baixa ser resolvida à mão. Desfaça na Omie o recebimento lançado à mão, se houver, e "Dispensar". "Tentar de novo" não aparece: lançaria o pagamento estornado. |
 
 "Dispensar" quer dizer que a baixa foi resolvida na Omie à mão: a Dute para
-de tentar. Pede a confirmação na linha.
+de tentar. Pede a confirmação na linha. O que foi lançado à mão a Dute não
+desfaz: estornar depois o pagamento para a baixa de novo, com o motivo
+"Estornada depois de dispensada".
 
 ## Cancelar o registro
 

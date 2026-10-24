@@ -366,4 +366,28 @@ describe("a baixa na tela (parte 7.4h)", () => {
     assert.equal((await rodar(omie.transporte, 60)).passos, 0);
     assert.deepEqual((await listNfSettlementsFor(db, financeiro)).baixas, []);
   });
+  it("o estorno do pagamento cuja baixa foi dispensada para a baixa e espera uma pessoa: só se dispensa de novo", async () => {
+    await daOmie();
+    const omie = omieDeMentira({ falhas: { PesquisarLancamentos: Array.from({ length: 6 }, () => ({ status: 500, corpo: { faultstring: "Erro de negócio qualquer." } })) } });
+    const { pagamento_id: pagamentoId } = await pagar("pag-1");
+    const id = idDaBaixa(pagamentoId!);
+    for (const espera of [0, 2, 4, 8, 16, 32]) await rodar(omie.transporte, espera);
+    await agir(id, "dispensar", (await baixa(pagamentoId!)).edicao as number); // lançado à mão na Omie
+    await estornar("est-1", pagamentoId!);
+    assert.equal((await db.doc(`${PAGAMENTOS_COLLECTION}/${pagamentoId}`).get()).get("status"), "estornado");
+    const estornada = await baixa(pagamentoId!);
+    assert.deepEqual([estornada.etapa, estornada.motivo_da_parada, estornada.etapa_anterior], ["parada", "dispensada_e_estornada", "dispensada"]);
+    // Aparece na tela, com o evento de quem estornou, e a rotina não chama a Omie por ela.
+    assert.deepEqual((await listNfSettlementsFor(db, financeiro)).baixas.map((item) => [item.id, item.etapa, item.motivo_da_parada]), [[id, "parada", "dispensada_e_estornada"]]);
+    const parou = (await eventos("nf.settlement_stopped")).find((evento) => (evento.payload as Record<string, unknown>).motivo === "dispensada_e_estornada");
+    assert.deepEqual([parou?.entity_id, (parou?.actor as Record<string, unknown> | undefined)?.uid], [id, "fin-1"]);
+    const chamadas = omie.chamadas.length;
+    assert.equal((await rodar(omie.transporte, 60)).passos, 0);
+    assert.equal(omie.chamadas.length, chamadas);
+    // Retomar lançaria de novo o pagamento estornado: só dispensar, depois de desfazer na Omie.
+    await recusa(agir(id, "retomar", estornada.edicao as number), "failed-precondition", "O pagamento foi estornado: desfaça o recebimento na Omie e dispense.");
+    await agir(id, "dispensar", estornada.edicao as number, "dispensar-de-novo");
+    assert.equal((await baixa(pagamentoId!)).etapa, "dispensada");
+    assert.deepEqual((await eventos("nf.settlement_dismissed")).map((evento) => (evento.payload as Record<string, unknown>).motivo).sort(), ["dispensada_e_estornada", "falhas_seguidas"]);
+  });
 });

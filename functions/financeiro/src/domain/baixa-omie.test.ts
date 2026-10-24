@@ -206,8 +206,23 @@ describe("o estorno do pagamento", () => {
     assert.deepEqual([cancelando?.conferida, cancelando?.motivo_da_parada, passoDaBaixa(cancelando!, AGORA)], [false, null, "conferir"]);
   });
 
-  it("a acabada ou dispensada não muda", () => {
-    for (const etapa of ["cancelando", "cancelada", "dispensada"] as const) assert.equal(baixaNoEstorno(baixa({ etapa }), AGORA), null, etapa);
+  it("a que já está cancelando ou cancelada não muda", () => {
+    for (const etapa of ["cancelando", "cancelada"] as const) assert.equal(baixaNoEstorno(baixa({ etapa }), AGORA), null, etapa);
+  });
+
+  it("a dispensada para e espera uma pessoa: o recebimento lançado à mão na Omie não sai sozinho", () => {
+    const parada = baixaNoEstorno(baixa({ etapa: "dispensada", edicao: 4 }), AGORA);
+    assert.deepEqual(
+      [parada?.etapa, parada?.etapa_anterior, parada?.motivo_da_parada, parada?.conferida, parada?.edicao],
+      ["parada", "dispensada", "dispensada_e_estornada", false, 5],
+    );
+    assert.match(parada?.mensagem ?? "", /Desfaça lá o recebimento, se ele foi lançado, e dispense\./);
+    assert.equal(passoDaBaixa(parada!, AGORA), null);
+    // Só dispensar: retomar lançaria de novo o pagamento estornado.
+    assert.deepEqual(comAcaoNaBaixa(parada!, "retomar", AGORA), { problema: "O pagamento foi estornado: desfaça o recebimento na Omie e dispense." });
+    const dispensada = comAcaoNaBaixa(parada!, "dispensar", AGORA);
+    assert.ok(!("problema" in dispensada));
+    assert.deepEqual([dispensada.etapa, dispensada.motivo_da_parada, passoDaBaixa(dispensada, AGORA)], ["dispensada", null, null]);
   });
 });
 

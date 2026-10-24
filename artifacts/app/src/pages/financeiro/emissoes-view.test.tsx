@@ -303,6 +303,17 @@ describe("Financeiro › Emissões", () => {
     expect(html.match(/border-destructive\/40/g) ?? []).toHaveLength(1);
   });
 
+  it("a baixa estornada depois de dispensada só se dispensa: tentar de novo lançaria o pagamento estornado", () => {
+    const estornada = baixa(1, {
+      etapa: "parada",
+      motivo_da_parada: "dispensada_e_estornada",
+      mensagem: "O pagamento foi estornado na Dute depois de a baixa ser resolvida à mão na Omie. Desfaça lá o recebimento, se ele foi lançado, e dispense.",
+    });
+    const textos = textosDaTela(secao(render({ emissoes: [], baixas: [estornada] }), "Baixas na Omie"));
+    expect(textos).toEqual(expect.arrayContaining(["Estornada depois de dispensada", "Parada", "Dispensar"]));
+    expect(textos).not.toContain("Tentar de novo");
+  });
+
   it("sem violação de acessibilidade (WCAG 2.1 A e AA), com a lista, com a confirmação aberta e vazia", async () => {
     expect(await violacoesDeAcessibilidade(render({ baixas: [BAIXA_PARADA, BAIXA_NA_FILA] }))).toEqual([]);
     expect(await violacoesDeAcessibilidade(render({ baixas: [BAIXA_PARADA], dispensando: BAIXA_PARADA.id }))).toEqual([]);

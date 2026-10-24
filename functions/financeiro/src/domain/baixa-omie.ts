@@ -36,6 +36,7 @@ export const MOTIVOS_DA_PARADA_DA_BAIXA = [
   "chave",
   "sem_chaves",
   "falhas_seguidas",
+  "dispensada_e_estornada",
 ] as const;
 export type MotivoDaParadaDaBaixa = (typeof MOTIVOS_DA_PARADA_DA_BAIXA)[number];
 
@@ -343,14 +344,20 @@ export function baixaSemChaves(baixa: Baixa, agora: Date): Baixa {
   return parou(baixa, "sem_chaves", "As chaves da API da Omie não estão neste ambiente.", agora);
 }
 
+/** A dispensada que o estorno parou: a rotina não sabe o que a pessoa fez na Omie, e não cancela nada. */
+const DISPENSADA_E_ESTORNADA = "O pagamento foi estornado na Dute depois de a baixa ser resolvida à mão na Omie. Desfaça lá o recebimento, se ele foi lançado, e dispense.";
+
 /**
  * O estorno do pagamento na Dute, na mesma transação: a baixa que pode ter
  * saído (o título já conferido, o lançamento feito ou tentado) vai a
  * cancelar na Omie; a que nunca conferiu o título não saiu nem está saindo,
- * porque a rotina só lança depois de conferir, e fica cancelada aqui. A que
- * acabou ou foi dispensada não muda (null).
+ * porque a rotina só lança depois de conferir, e fica cancelada aqui. A
+ * dispensada foi resolvida à mão, e o que a pessoa lançou na Omie fica lá:
+ * ela para e espera alguém desfazer e dispensar de novo. A que já foi
+ * cancelada não muda (null).
  */
 export function baixaNoEstorno(baixa: Baixa, agora: Date): Baixa | null {
+  if (baixa.etapa === "dispensada") return parou(baixa, "dispensada_e_estornada", DISPENSADA_E_ESTORNADA, agora);
   if (baixa.etapa !== "na_fila" && baixa.etapa !== "lancada" && baixa.etapa !== "parada") return null;
   const saiu = baixa.etapa === "lancada" || baixa.conferida || baixa.omie.titulo !== null;
   return andou(baixa, { etapa: saiu ? "cancelando" : "cancelada", etapa_anterior: null, motivo_da_parada: null, mensagem: null, conferida: false }, agora);
@@ -363,11 +370,14 @@ export type AcaoNaBaixa = "retomar" | "dispensar";
 /**
  * Retomar: a parada volta à etapa de onde parou (lançar ou cancelar), do
  * zero nas falhas, conferindo o título antes. Dispensar: a pessoa resolveu
- * na Omie à mão, e a baixa acaba sem a rotina. Só a parada tem ação.
+ * na Omie à mão, e a baixa acaba sem a rotina. Só a parada tem ação, e a
+ * dispensada que o estorno parou só se dispensa: a rotina lançaria de novo o
+ * pagamento estornado.
  */
 export function comAcaoNaBaixa(baixa: Baixa, acao: AcaoNaBaixa, agora: Date): Baixa | { problema: string } {
   if (baixa.etapa !== "parada") return { problema: acao === "retomar" ? "Só a baixa parada se retoma." : "Só a baixa parada se dispensa." };
   if (acao === "dispensar") return andou(baixa, { etapa: "dispensada", etapa_anterior: null, motivo_da_parada: null, mensagem: null, conferida: false }, agora);
+  if (baixa.motivo_da_parada === "dispensada_e_estornada") return { problema: "O pagamento foi estornado: desfaça o recebimento na Omie e dispense." };
   const volta = baixa.etapa_anterior && ETAPAS_DA_ROTINA_DA_BAIXA.includes(baixa.etapa_anterior) ? baixa.etapa_anterior : "na_fila";
   return andou(baixa, { etapa: volta, etapa_anterior: null, motivo_da_parada: null, mensagem: null, conferida: false }, agora);
 }
