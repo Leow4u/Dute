@@ -69,10 +69,10 @@ export const actOnNfSettlement = onCall(async (request) => {
   return actOnNfSettlementFor(db, caller, request.data, { projectId: PROJECT_ID });
 });
 
-/** As baixas abertas na Omie, paradas e em andamento (parte 7.4h). */
+/** As baixas abertas na Omie, paradas e em andamento (parte 7.4h), ou todas as de uma NF (parte 7.4i). */
 export const listNfSettlements = onCall(async (request) => {
   const caller = await requireFinanceiroCaller(db, request, PROJECT_ID);
-  return listNfSettlementsFor(db, caller);
+  return listNfSettlementsFor(db, caller, request.data);
 });
 
 /**

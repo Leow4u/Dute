@@ -63,7 +63,9 @@ documentação de produto e operação está em `docs/`.
   OS revisadas e a sugestão nunca grava sem a pessoa.
 - **Fase 7 (financeiro unificado) na `main` até a 7.5c, só no
   `dute-homolog`**: `docs/plataforma/fase-7-financeiro-unificado.md`
-  (23/10/2026). A 7.4 (a NF pela integração) espera a pergunta 21. O a
+  (23/10/2026). A 7.4 (a NFS-e pela Omie e a baixa, pergunta 21 decidida em
+  24/10/2026) está no código, nas partes 7.4a a 7.4i; a emissão espera as
+  chaves da Omie no `dute-homolog`. O a
   receber é um só (`faturas`); o WMS continua calculando a armazenagem, e a
   competência emitida nele vira um "A faturar" do Financeiro. O item da
   cobrança ligado ao Comercial (`lpu_item_id`) tira o preço da tabela do

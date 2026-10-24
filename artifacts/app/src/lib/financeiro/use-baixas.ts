@@ -36,3 +36,27 @@ export function useBaixasDoFinanceiro(role: ProfileRole | null | undefined, liga
   if (!abre) return { baixas: [], carregando: false, falhas: [] };
   return { baixas: leitura.data, carregando: leitura.isPending, falhas: leitura.isError ? ["baixas"] : [] };
 }
+
+/**
+ * As baixas de uma NF que saiu pela Omie (parte 7.4i), todas as etapas, para
+ * cada pagamento mostrar a dele. A NF registrada à mão não tem baixa e não
+ * lê nada.
+ */
+export function useBaixasDaNf(role: ProfileRole | null | undefined, faturaId: string | null, pelaOmie: boolean, omie: boolean = OMIE_LIBERADA): LeituraDasBaixas {
+  const abre = Boolean(faturaId) && pelaOmie && omie && abreFinanceiro(role);
+  const leitura = useQuery({
+    queryKey: [...CHAVE_DAS_BAIXAS, faturaId],
+    queryFn: async () => {
+      const lidas = baixasLidas(await chamarFinanceiro("listNfSettlements", { fatura_id: faturaId }));
+      if (!lidas) throw new Error("Baixas ilegíveis.");
+      return lidas;
+    },
+    enabled: abre,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+  if (!abre) return { baixas: [], carregando: false, falhas: [] };
+  return { baixas: leitura.data, carregando: leitura.isPending, falhas: leitura.isError ? ["baixas"] : [] };
+}

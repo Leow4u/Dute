@@ -120,7 +120,8 @@ plano ordena as partes. Escrito em 23/10/2026.
 | 7.4e | A faturar: o painel escolhe "Pela Omie" ou "Emitida fora"; pela Omie, pede a emissão; a demanda e a competência reservadas esperam "Na emissão da NFS-e" | Os textos e o `axe`; uma só ação primária; a reservada não entra na NF |
 | 7.4f | A tela Emissões: a etapa, a mensagem da prefeitura, a NFS-e autorizada, retomar e desistir; a parada e a rejeitada no "Precisa de você" | Os textos e o `axe`; nenhuma ação primária (as ações são da linha) |
 | 7.4g | A baixa na Omie: receber na Dute lança o recebimento no título que a OS gerou; estornar cancela | A baixa sai uma vez, também com a resposta perdida; a falha fica na fila e não desfaz o recebimento na Dute |
-| 7.4h | A baixa na tela: o pagamento da NF que saiu pela Omie mostra a baixa; a parada no "Precisa de você", com retomar e dispensar | Os textos e o `axe`; dispensar pede a confirmação na linha |
+| 7.4h | A baixa na tela: as abertas em Emissões; a parada no "Precisa de você", com retomar e dispensar | Os textos e o `axe`; dispensar pede a confirmação na linha |
+| 7.4i | O pagamento da NF que saiu pela Omie mostra a baixa dele no painel da NF | A NF registrada à mão não muda nem lê nada |
 | 7.5a | O motivo de perda "prazo de faturamento" no servidor, aceito só com o prazo do contrato vencido, também a partir de A faturar | Sem o prazo vencido recusa; os outros motivos seguem só antes de faturar |
 | 7.5b | A ação "Perder por prazo" na tela Autorizações, na demanda com o prazo vencido | Só a linha vencida tem a ação; o motivo vem fixo |
 | 7.5c | Contratos e Autorizações no shell do Financeiro, só leitura | O Financeiro lê sem editar itens nem preço |
@@ -891,6 +892,23 @@ Feita em 24/10/2026. Só onde a Omie está liberada, como as emissões.
   - `platform-lists.test.ts`: as etapas e os motivos da baixa são os do
     servidor, e as callables do app são as do `index.ts`.
 
+### Parte 7.4i: a baixa em cada pagamento
+
+Feita em 24/10/2026.
+
+- **`listNfSettlements` com `fatura_id`** dá todas as baixas da NF, também
+  as que acabaram; sem ele, segue dando as abertas.
+- **O painel da NF que saiu pela Omie** mostra, em cada pagamento, a baixa
+  dele: "Baixa na fila", "Baixa lançada", "Baixa cancelando", "Baixa
+  cancelada", "Baixa parada" ou "Baixa dispensada". A lançada em verde e a
+  parada em vermelho.
+- **Depois de cada gravação** no painel (o pagamento e o estorno mexem na
+  baixa), as baixas da NF são lidas de novo.
+- **A NF registrada à mão** não tem baixa e não lê nada.
+- **Testes:** `baixa.integration.test.ts` (a lista da NF com a lançada, a
+  NF sem baixa e o pedido fora do formato), `baixas.test.ts` e
+  `faturas-view.test.tsx` (a baixa de cada pagamento, na ordem).
+
 ### Correção: o registro da NF que saiu pela Omie não se cancela
 
 Feita em 24/10/2026, da revisão da parte 7.4g.
@@ -912,7 +930,7 @@ Feita em 24/10/2026, da revisão da parte 7.4g.
 
 ## Onde a Fase 7 está
 
-- Feitas: 7.0 a 7.3c, 7.4a a 7.4h e 7.5a a 7.5c.
+- Feitas: 7.0 a 7.3c, 7.4a a 7.4i e 7.5a a 7.5c.
 - **7.4 feita no código,** com a pergunta 21 respondida em 24/10/2026: a
   NFS-e pela Omie e a baixa (desenho em "A NFS-e pela Omie"). Falta o
   cancelamento da NFS-e autorizada, numa parte própria.

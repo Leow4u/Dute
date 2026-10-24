@@ -46,6 +46,16 @@ export const MOTIVO_DA_BAIXA_ROTULO: Record<MotivoDaParadaDaBaixa, string> = {
   falhas_seguidas: "Falhas seguidas na Omie",
 };
 
+/** A baixa no pagamento da NF (parte 7.4i): o que aconteceu com ele na Omie. */
+export const BAIXA_NO_PAGAMENTO: Record<EtapaDaBaixa, string> = {
+  na_fila: "Baixa na fila",
+  lancada: "Baixa lançada",
+  cancelando: "Baixa cancelando",
+  cancelada: "Baixa cancelada",
+  parada: "Baixa parada",
+  dispensada: "Baixa dispensada",
+};
+
 export type BaixaDoFinanceiro = {
   id: string;
   pagamentoId: string;
@@ -136,4 +146,9 @@ export function pendenciasDasBaixas(baixas: readonly BaixaDoFinanceiro[], rota: 
       actionLabel: "Abrir",
     },
   ];
+}
+
+/** A etapa da baixa de cada pagamento da NF, pelo id do pagamento. */
+export function baixasPorPagamento(baixas: readonly BaixaDoFinanceiro[]): ReadonlyMap<string, EtapaDaBaixa> {
+  return new Map(baixas.map((baixa) => [baixa.pagamentoId, baixa.etapa]));
 }
