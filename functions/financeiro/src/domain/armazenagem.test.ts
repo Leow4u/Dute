@@ -60,6 +60,7 @@ describe("a competência do WMS", () => {
       status: "emitido",
       valor_cents: 7508,
       fatura_id: null,
+      emissao_nf_id: null,
     });
     // O id antigo é só da BTG, que nem sempre gravou o cliente.
     const antiga = periodoLido("2026-08", { status: "emitido", invoice_snapshot: { total_cents: 1234 } });
@@ -84,6 +85,12 @@ describe("a competência do WMS", () => {
     assert.equal(lido({ status: "aberto" }), "A armazenagem de 09/2026 ainda não foi emitida no WMS.");
     assert.equal(lido({ status: "pago" }), "A armazenagem de 09/2026 já está paga no WMS.");
     assert.equal(lido({ faturamento: { fatura_id: "fat_1" } }), "A armazenagem de 09/2026 já está numa NF.");
+    // A reservada por uma emissão da Omie (parte 7.4b) só entra na NF dessa emissão.
+    const reservada = periodoLido("BTG_Pactual__2026-09", { ...EMITIDA, emissao_nf: { id: "nfe_0123456789abcdef0123", desde: "2026-10-24T12:00:00.000Z" } });
+    assert.equal(reservada.emissao_nf_id, "nfe_0123456789abcdef0123");
+    assert.equal(problemaDaArmazenagem(reservada), "A armazenagem de 09/2026 está na emissão da NFS-e pela Omie.");
+    assert.equal(problemaDaArmazenagem(reservada, "nfe_ffffffffffffffffffff"), "A armazenagem de 09/2026 está na emissão da NFS-e pela Omie.");
+    assert.equal(problemaDaArmazenagem(reservada, "nfe_0123456789abcdef0123"), null);
     assert.equal(lido({ invoice_snapshot: null }), "A armazenagem de 09/2026 não tem o total congelado da emissão.");
     assert.equal(lido({ customer_code: "" }, "Banco_Safra__2026-09"), "A armazenagem de 09/2026 não tem cliente.");
   });

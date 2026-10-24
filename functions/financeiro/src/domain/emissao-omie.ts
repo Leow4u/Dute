@@ -46,6 +46,21 @@ export type MotivoDaParada = (typeof MOTIVOS_DA_PARADA)[number];
 
 export const ID_DA_EMISSAO = /^nfe_[a-f0-9]{20}$/;
 
+/** O campo da reserva na demanda e na competência da armazenagem (parte 7.4b). */
+export const CAMPO_DA_RESERVA = "emissao_nf";
+
+/**
+ * A emissão que reservou a demanda ou a competência: `emissao_nf.id`. O
+ * Comercial lê o mesmo campo (functions/comercial/src/domain/demanda.ts,
+ * emissaoNfDaDemanda) e não tira a demanda reservada de A faturar.
+ */
+export function emissaoReservada(dados: Record<string, unknown>): string | null {
+  const reserva = dados[CAMPO_DA_RESERVA];
+  if (!reserva || typeof reserva !== "object") return null;
+  const id = (reserva as Record<string, unknown>).id;
+  return typeof id === "string" && id.trim() ? id.trim() : null;
+}
+
 /** Os códigos de integração dos serviços que o contador cadastra na Omie. */
 export const SERVICO_DAS_OS = "DUTE-OS";
 export const SERVICO_DA_ARMAZENAGEM = "DUTE-ARMAZENAGEM";

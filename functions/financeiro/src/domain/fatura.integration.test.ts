@@ -199,6 +199,23 @@ describe("registrar a NF", () => {
     await nadaGravado();
   });
 
+  it("a demanda e a competência reservadas por uma emissão da Omie não se registram à mão (parte 7.4b)", async () => {
+    const reserva = { emissao_nf: { id: "nfe_0123456789abcdef0123", desde: "2026-10-23T14:00:00.000Z" } };
+    await db.doc("demands/10046").update(reserva);
+    await recusa(registerNfFor(db, financeiro, pedido({ idempotency_key: "r-1" }), AGORA), "failed-precondition", "A demanda 10046 está na emissão da NFS-e pela Omie.");
+    await db.doc("demands/10046").update({ emissao_nf: null });
+    await db.collection(BILLING_PERIODS_COLLECTION).doc("ITAU__2026-09").update(reserva);
+    await recusa(
+      registerNfFor(db, financeiro, pedido({ idempotency_key: "r-2", demandas: [], armazenagem: ["ITAU__2026-09"] }), AGORA),
+      "failed-precondition",
+      "A armazenagem de 09/2026 está na emissão da NFS-e pela Omie.",
+    );
+    await nadaGravado();
+    // Sem a reserva, a mesma demanda registra.
+    await registerNfFor(db, financeiro, pedido({ idempotency_key: "r-3" }), AGORA);
+    assert.equal((await db.doc("demands/10046").get()).get("etapa"), "faturada");
+  });
+
   it("a operação, o comercial, o campo e o cliente não registram", async () => {
     for (const role of ["interno", "comercial", "campo", "suporte", "cliente"] as const) {
       await recusa(registerNfFor(db, { uid: `${role}-1`, role }, pedido(), AGORA), "permission-denied", "Seu perfil não grava no Financeiro.");

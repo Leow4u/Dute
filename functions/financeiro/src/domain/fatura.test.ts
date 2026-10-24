@@ -77,6 +77,13 @@ describe("a demanda e a autorização", () => {
     assert.equal(problemaParaFaturar(demanda({ etapa: "aguardando_autorizacao" })), "A demanda 10045 não está A faturar.");
     assert.equal(problemaParaFaturar(demanda({ faturamento: { fatura_id: "fat_x" } })), "A demanda 10045 já está faturada.");
     assert.equal(problemaParaFaturar(demanda({ medicao_pendente: true })), "A demanda 10045 espera a medição aprovada.");
+    // A reservada por uma emissão da Omie (parte 7.4b) só fatura pela emissão dela.
+    const reservada = demanda({ emissao_nf: { id: "nfe_0123456789abcdef0123" } });
+    assert.equal(reservada.emissao_nf_id, "nfe_0123456789abcdef0123");
+    assert.equal(problemaParaFaturar(reservada), "A demanda 10045 está na emissão da NFS-e pela Omie.");
+    assert.equal(problemaParaFaturar(reservada, "nfe_ffffffffffffffffffff"), "A demanda 10045 está na emissão da NFS-e pela Omie.");
+    assert.equal(problemaParaFaturar(reservada, "nfe_0123456789abcdef0123"), null);
+    assert.equal(problemaParaFaturar(demanda({ emissao_nf: { id: "" } })), null);
   });
 
   it("a demanda que o contrato manda autorizar fatura só com a autorização registrada do mesmo cliente", () => {

@@ -73,7 +73,10 @@ documentação de produto e operação está em `docs/`.
   no faturamento do WMS sem ela verde. Onde o Financeiro está ligado
   (`FINANCEIRO_PROJECTS` no WMS, cópia travada da liberação dele), a
   armazenagem se fatura e se recebe no Financeiro, e o WMS não marca
-  pagamento (parte 7.2c).
+  pagamento (parte 7.2c). A NFS-e sai pela Omie (pergunta 21, parte 7.4; desenho no
+  runbook da fase): a demanda e a competência numa emissão levam
+  `emissao_nf`, e enquanto ela existe nem o `registerNf` nem o Comercial as
+  tiram de A faturar.
 - **Alinhamento do Comercial e da Operação recuperado em 23/10/2026**:
   `docs/plataforma/alinhamento-comercial-operacao.md` compara o desenho
   aprovado (plano, Fase 2, Fase 6 e mockups) com o que entrou na `main` de 21
