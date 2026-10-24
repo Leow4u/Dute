@@ -510,11 +510,14 @@ competência.
 Entra só depois de o banco `dute-rh` existir na homologação e na produção,
 pelo workflow `Banco rh` (seção "Como o banco `dute-rh` nasce").
 
-- **O banco na homologação** existe desde 24/10/2026, com a proteção contra
-  exclusão e o PITR.
-- **Na produção**, a execução de 24/10/2026 recusou o `create`: a conta
-  `github-actions-functions@dute-prod` não tinha o `roles/datastore.owner`
-  no `dute-prod`. Nada foi criado, e o merge espera o banco.
+- **O banco** existe nos dois ambientes desde 24/10/2026, em
+  `southamerica-east1`, com a proteção contra exclusão e o PITR de 7 dias. Na
+  produção, também com o backup diário de 14 dias.
+- **Na produção**, as duas primeiras execuções recusaram o `create`: o papel
+  tinha ido para outra conta. Com o `roles/datastore.owner` na
+  `github-actions-functions@dute-prod`, a execução das 22:34 UTC criou o
+  banco já com o PITR e agendou o backup logo em seguida, sem o `ABORTED`
+  (a correção do PITR na criação).
 
 - **O `firebase.json`** passa o `firestore` a uma lista: o banco padrão,
   com as regras e os índices de sempre, e o `dute-rh`, com o
