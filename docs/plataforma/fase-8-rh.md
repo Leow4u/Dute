@@ -327,3 +327,10 @@ Feita em 23/10/2026. Desligada até a parte 8.1b, como a 8.2c.
     uma só ação principal, o formulário, a confirmação, a lista dos textos
     e o `axe` em cada estado.
 
+### Correção: o próximo vencimento de Pessoas
+
+Feita em 23/10/2026. O `getRhPanel` dava como próximo vencimento a data
+mais antiga entre os vigentes, inclusive a que já tinha passado. Agora é a
+próxima que ainda não venceu. O vencido já conta na marca "N vencidos". O
+`ficha.integration.test.ts` falhava antes e passa depois.
+
