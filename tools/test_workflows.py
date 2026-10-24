@@ -61,5 +61,48 @@ class BancoRhTest(unittest.TestCase):
         self.assertIn('run: bash tools/banco_rh.sh "${PROJECT_ID}"', self.texto)
 
 
+class TesteRestauracaoTest(unittest.TestCase):
+    """O teste-restauracao.yml cria e apaga banco na produção: só por disparo manual."""
+
+    def setUp(self) -> None:
+        self.texto = (WORKFLOWS / "teste-restauracao.yml").read_text(encoding="utf-8")
+
+    def test_so_roda_por_disparo_manual(self) -> None:
+        gatilhos = re.search(r"^on:\n((?:  .*\n)+)", self.texto, re.MULTILINE)
+        assert gatilhos is not None
+        self.assertEqual(re.findall(r"^  (\w+):", gatilhos.group(1), re.MULTILINE), ["workflow_dispatch"])
+
+    def test_o_projeto_e_o_da_producao(self) -> None:
+        # O backup só existe na produção; o número vai no provedor do Workload Identity.
+        producao = re.search(r"project_id: (\S+)\n\s+project_number: \"(\d+)\"", (WORKFLOWS / "ci.yml").read_text(encoding="utf-8"))
+        assert producao is not None
+        self.assertIn(f"PROJECT_ID: {producao.group(1)}\n", self.texto)
+        self.assertIn(f'PROJECT_NUMBER: "{producao.group(2)}"\n', self.texto)
+
+    def test_os_bancos_sao_os_da_ferramenta(self) -> None:
+        import teste_restauracao
+
+        opcoes = re.search(r"      banco:\n(?:        .*\n)*?        options:\n((?:          - .*\n)+)", self.texto)
+        assert opcoes is not None
+        self.assertEqual(
+            [opcao.strip().removeprefix("- ").strip('"') for opcao in opcoes.group(1).splitlines()],
+            list(teste_restauracao.BANCOS),
+        )
+
+    def test_a_entrada_vai_por_variavel_e_nunca_no_comando(self) -> None:
+        self.assertIn("BANCO: ${{ inputs.banco }}", self.texto)
+        comandos = [linha for linha in self.texto.splitlines() if linha.strip().startswith("run:")]
+        self.assertEqual(
+            comandos,
+            [
+                '        run: python3 tools/teste_restauracao.py --projeto "${PROJECT_ID}" --banco "${BANCO}"'
+                ' ${EXECUTAR} --resumo "${GITHUB_STEP_SUMMARY}"'
+            ],
+        )
+
+    def test_usa_a_conta_das_functions(self) -> None:
+        self.assertIn("service_account: github-actions-functions@${{ env.PROJECT_ID }}.iam.gserviceaccount.com", self.texto)
+
+
 if __name__ == "__main__":
     unittest.main()

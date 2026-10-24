@@ -1,0 +1,61 @@
+name: Teste de restauração
+
+# Prova que o backup diário do Firestore da produção restaura
+# (docs/plataforma/backup-e-recuperacao.md, "Teste de restauração"), só por
+# disparo manual: Actions > Teste de restauração > Run workflow, com o banco.
+# Sem "executar", só mostra o backup que seria restaurado.
+#
+# Com "executar", restaura o backup READY mais novo do banco num banco novo de
+# teste (teste-restauracao-<banco>-<instante>), confere os caminhos dos
+# documentos contra a origem no minuto do backup e apaga o banco de teste
+# (tools/teste_restauracao.py). Lê só os caminhos, nunca os campos, e o log e o
+# resumo mostram só contagens por coleção. A origem só é lida.
+#
+# A conta é a do job de functions (github-actions-functions@dute-prod), com
+# roles/datastore.owner (o comando está no fase-8-rh.md). Sem o papel, o teste
+# falha dizendo qual falta, e nada é restaurado.
+on:
+  workflow_dispatch:
+    inputs:
+      banco:
+        description: "Banco"
+        type: choice
+        options:
+          - "(default)"
+          - dute-rh
+        required: true
+      executar:
+        description: "Restaurar, conferir e apagar o banco de teste"
+        type: boolean
+        default: false
+
+concurrency:
+  group: teste-restauracao
+  cancel-in-progress: false
+
+jobs:
+  teste:
+    name: Teste de restauração (${{ inputs.banco }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PROJECT_ID: dute-prod
+      PROJECT_NUMBER: "974421124970"
+      BANCO: ${{ inputs.banco }}
+      EXECUTAR: ${{ inputs.executar && '--executar' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${{ env.PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-actions-functions@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Restaurar, conferir e apagar o banco de teste
+        run: python3 tools/teste_restauracao.py --projeto "${PROJECT_ID}" --banco "${BANCO}" ${EXECUTAR} --resumo "${GITHUB_STEP_SUMMARY}"

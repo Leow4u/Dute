@@ -127,10 +127,12 @@ Depois, Actions > Banco rh > Run workflow, primeiro com `homologacao` e
 depois com `producao`. Sem o papel, o job falha dizendo qual falta, e nada é
 criado.
 
-Com o banco criado nos dois, o papel pode sair (o mesmo laço com
-`remove-iam-policy-binding`). Sem ele, o workflow volta a falhar, mas a
-publicação continua: ela só publica as regras do banco, e para isso bastam
-os papéis que a conta já tinha.
+Com o banco criado nos dois, o papel pode sair da homologação (o mesmo laço
+com `remove-iam-policy-binding`, só com o `dute-homolog`). Na produção ele
+fica: o workflow `Teste de restauração` restaura e apaga o banco de teste com
+essa conta (`backup-e-recuperacao.md`). Sem o papel, os dois workflows falham
+dizendo qual falta, mas a publicação continua: ela só publica as regras do
+banco, e para isso bastam os papéis que a conta já tinha.
 
 ## Partes
 
