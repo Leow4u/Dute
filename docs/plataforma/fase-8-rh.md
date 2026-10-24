@@ -34,9 +34,9 @@ Seguem a recomendação até a resposta do Leonardo:
 | 24 | O fornecedor da folha e do eSocial fica para a parte 8.3. |
 
 - **O banco `rh` é um banco Firestore à parte**, no mesmo projeto, com as
-  regras dele (`firestore-rh.rules`). Guarda os documentos, os exames, os
-  treinamentos, o contrato de trabalho e o salário, ligados ao id do
-  colaborador.
+  regras dele (`firestore-rh.rules`). Guarda os documentos, os exames e os
+  treinamentos ligados ao id do colaborador (e, na parte 8.3, o que a folha
+  pedir).
 - **O navegador não lê nem grava o banco `rh`.**
   - As regras de um banco nomeado não leem o `users` do banco padrão, então
     não sabem o papel de quem pede.
@@ -46,18 +46,39 @@ Seguem a recomendação até a resposta do Leonardo:
     conferem o papel no `users` do banco padrão, como todas as outras.
   - O RH não tem tempo real: a tela lê pela callable e lê de novo depois de
     cada gravação.
+  - Uma transação vale para um banco só: a gravação confere o colaborador
+    no banco padrão antes e grava o registro, o recibo e o evento numa
+    transação do banco `rh`.
+- **A ficha do colaborador** é o conjunto dos registros dele em `registros`.
+  - Cada registro é um documento, um exame ou um treinamento, com o tipo
+    do catálogo (`functions/rh/src/domain/ficha.ts`).
+  - Também traz o dia em que foi emitido ou feito e, quando vence, o dia do
+    vencimento.
+  - O exame guarda o resultado (apto, apto com restrição, inapto). O tipo
+    "outro" leva um nome.
+  - A CNH não entra: ela é do cadastro da Operação.
+  - Em cada tipo, o vigente é o mais recente. Os outros ficam substituídos,
+    com o histórico. Lançar o exame antigo depois do novo não tira o novo do
+    lugar, e arquivar o vigente devolve o anterior.
+  - O tipo não muda depois de gravado: para trocar, arquiva e registra de
+    novo.
 - **Os eventos do RH ficam no `events` do próprio banco `rh`** (invariante 2).
   - O `events` do banco padrão é lido por interno, wms e suporte, e um
     evento de exame já diz coisa de saúde.
-  - O evento leva o id do colaborador e o tipo, nunca o conteúdo do
-    documento, o resultado do exame nem o salário.
+  - O evento leva o id do colaborador, a categoria, o tipo e as datas.
+  - Nunca leva o nome do registro, o resultado do exame, o arquivo nem o
+    salário.
 - **Os arquivos do RH** ficam no Storage, em `rh/{colaborador}/`, fechados ao
   navegador pelas regras. Sobem e descem por URL assinada da callable, que
   confere o papel (parte 8.2).
 - **Os vencimentos.**
-  - Uma rotina diária da codebase `rh` (`runRhAlerts`) grava o alerta de
-    exame, treinamento e documento vencendo, uma vez por item e por marco.
-    Ele aparece no Início do RH.
+  - Entra no Início do RH o registro vigente de quem está ativo que vence
+    em até 30 dias, e o vencido também. A tela lê pela callable
+    `getRhPanel`, a mesma regra da rotina (`vencimentosDoDia`).
+  - A rotina diária da codebase `rh` (`runRhAlerts`, 06:10) grava o evento
+    `rh.record_expiring` ou `rh.record_expired`. É uma vez por registro, por
+    vencimento e por marco: rodar de novo não duplica, e o vencimento
+    corrigido avisa de novo. O evento é o que a IA mede.
   - A CNH segue avisada no Início da Operação, como hoje.
 - **A zeragem do WMS nunca toca o banco `rh`.** O `tools/full_reset_btg.py`
   abre o banco padrão e recusa o `--database rh` (parte 8.1a).
@@ -115,7 +136,9 @@ os papéis que a conta já tinha.
 | 8.0 | O desenho (este documento) | — |
 | 8.1a | As regras do banco `rh`, fechadas ao navegador; a codebase `functions/rh` (o perfil, a liberação, o recibo e o evento no banco `rh`); os jobs do CI. Ainda fora da publicação | Nenhum papel lê nem grava o banco `rh` pelo navegador; só `rh`, `admin` e `owner` passam pela callable, e só `rh` grava |
 | 8.1b | Com o banco criado pelo workflow `Banco rh` nos dois ambientes: o `firebase.json` com o banco `rh` e a codebase `rh`; a publicação confere as regras dele; o shell do RH com o Início | A publicação recusa sem o banco; o shell só abre para `rh`, `admin` e `owner` |
-| 8.2 | A ficha do colaborador: documentos, exames e treinamentos, com o vencimento; os alertas no Início do RH | O vencimento gera o alerta uma vez; o documento só abre no RH |
+| 8.2a | A ficha no servidor: os registros no banco `rh`, o vigente de cada tipo, o recibo e o evento no banco `rh`, o painel e a rotina dos vencimentos | O vencimento gera o alerta uma vez por marco; nada do RH cai no banco padrão; só o rh grava |
+| 8.2b | Os arquivos da ficha: sobem e descem por URL assinada da callable, e cada abertura fica registrada | O documento só abre pelo RH |
+| 8.2c | As telas, depois da 8.1b: o Início do RH com os vencimentos, a lista de quem está ativo e a ficha | Os textos e o `axe` de cada tela; o owner e o admin não veem as ações de gravar |
 | 8.3 | A integração da folha e do eSocial (pergunta 24) | A exportação é idempotente |
 
 **Pronto quando** só `rh`, `admin` e `owner` leem o RH, pela callable, e o
@@ -137,7 +160,7 @@ banco `rh` e a codebase na parte 8.1b, depois de o banco existir.
     - o login e o perfil no `users` do banco padrão;
     - o papel: owner, admin e rh abrem; só o rh grava.
   - A callable `rhStatus` diz ao shell quem abre e se grava.
-  - O recibo, o evento e o acesso ao banco `rh` entram na parte 8.2, com a
+  - O recibo, o evento e o acesso ao banco `rh` entram na parte 8.2a, com a
     primeira gravação.
 - **O CI** ganha `rh-unit` e `rh-integration`, e a publicação da produção
   espera os dois.
@@ -173,3 +196,31 @@ os comandos e escolheu liberar a conta do CI (`roles/datastore.owner`).
     fora da lista);
   - `tools/test_workflows.py`: o workflow só roda por disparo manual, com os
     projetos e os números da publicação, a conta das functions e o script.
+
+### Parte 8.2a: a ficha no servidor
+
+Feita em 23/10/2026. Ainda fora da publicação, como a 8.1a.
+
+- **Os registros** (`domain/ficha.ts`, puro, e `domain/ficha-gravacao.ts`):
+  - `saveRhRecord` inclui ou altera; `archiveRhRecord` arquiva. Só o rh
+    grava. A edição velha recusa, e o recibo fica em `rh_operations`.
+  - Cada gravação refaz a situação do grupo (o mesmo colaborador, a mesma
+    categoria e o mesmo tipo) e grava o evento de cada registro que passou
+    a substituído ou voltou a vigente.
+- **As leituras.** `getRhPanel` traz quem está ativo, com a ficha resumida,
+  e os vencimentos, que são o "Precisa de você" do RH. `getRhFicha` traz a
+  ficha de uma pessoa, ativa ou não, com o histórico. Do cadastro da
+  Operação, o RH lê só o nome, a função, o vínculo e se está ativo.
+- **A rotina** `runRhAlerts` (`domain/rotina-gravacao.ts`), todo dia às
+  06:10, fora da liberação não faz nada.
+- **Testes:**
+  - `ficha.test.ts` e `events.test.ts`: o catálogo, a entrada, o vigente de
+    cada tipo, os vencimentos e o payload sem resultado nem nome;
+  - `ficha.integration.test.ts`: o registro no banco `rh` e nada no padrão,
+    owner e admin só leem, a troca do vigente, arquivar devolve o anterior
+    e o painel;
+  - `rotina.integration.test.ts`: o alerta uma vez por marco, o vencimento
+    corrigido e o renovado;
+  - `rh.rules.test.ts` passa a conferir as coleções de verdade
+    (`registros`, `events` e `rh_operations`).
+

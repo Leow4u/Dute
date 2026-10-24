@@ -24,19 +24,19 @@ function invokerPattern(): RegExp {
   return new RegExp(literals[0]);
 }
 
-const ENTRADA = /^export const \w+ = onCall(?:<[^>]*>)?\(async \(request\) => \{\s*const caller = await requireRhCaller\(db, request, PROJECT_ID\);/;
+const ENTRADA = /^export const \w+ = onCall(?:<[^>]*>)?\(async \(request\) => \{\s*(?:const caller = )?await requireRhCaller\(db, request, PROJECT_ID\);/;
 
 describe("callables do RH", () => {
   it("toda linha com onCall está no formato que a conferência do invoker lê, inclusive comentário", () => {
     const pattern = invokerPattern();
     const used = rawIndex.split(/\r?\n/).filter((line) => ON_CALL_USE.test(line));
-    assert.deepEqual(used.map((line) => line.match(pattern)?.[1]), ["rhStatus"]);
+    assert.deepEqual(used.map((line) => line.match(pattern)?.[1]), ["rhStatus", "getRhPanel", "getRhFicha", "saveRhRecord", "archiveRhRecord"]);
   });
 
   it("as callables começam pela liberação e pelo perfil, e nada é reexportado", () => {
     assert.doesNotMatch(index, /^export\s*\{/m);
     const blocks = index.split(/^(?=export const )/m).filter((block) => /^export const \w+ = onCall/.test(block));
-    assert.equal(blocks.length, 1);
+    assert.equal(blocks.length, 5);
     for (const block of blocks) assert.match(block, ENTRADA);
   });
 });

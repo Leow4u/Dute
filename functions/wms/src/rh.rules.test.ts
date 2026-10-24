@@ -17,7 +17,7 @@ import { collection, deleteDoc, doc, getDoc, getDocs, setDoc, updateDoc } from "
 
 const PROJECT_ID = "demo-dute-operations";
 const PAPEIS = ["owner", "admin", "rh", "interno", "wms", "campo", "comercial", "financeiro", "suporte", "painel", "cliente"] as const;
-const COLECOES = ["fichas", "exames", "treinamentos", "documentos", "alertas", "events", "rh_operations"] as const;
+const COLECOES = ["registros", "events", "rh_operations"] as const;
 
 let testEnvironment: RulesTestEnvironment;
 

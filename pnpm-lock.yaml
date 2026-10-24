@@ -398,6 +398,9 @@ importers:
       firebase-functions:
         specifier: ^6.0.0
         version: 6.6.0(firebase-admin@13.10.0)
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: ^22.10.0
