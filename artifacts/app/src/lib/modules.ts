@@ -16,6 +16,7 @@ import {
   ClipboardCheck,
   ClipboardList,
   FileCheck,
+  FileSpreadsheet,
   FileText,
   Home,
   Inbox,
@@ -85,7 +86,7 @@ import {
   type OperationProfile,
   type PortalModuleKey,
 } from "./operations";
-import { RH_ROLES, ROTA_FICHA, ROTA_PESSOAS, ROTA_RH, abreRh } from "./rh/navegacao";
+import { RH_ROLES, ROTA_EXPORTACAO, ROTA_FICHA, ROTA_PESSOAS, ROTA_RH, abreRh } from "./rh/navegacao";
 
 /** Os 11 papéis da plataforma (lib/dominio, PAPEIS). */
 export type ProfileRole = Papel;
@@ -492,6 +493,13 @@ export const APP_MODULES: AppModule[] = [
         icon: Users,
         roles: HR_ROLES,
         tambem: [ROTA_FICHA],
+      }),
+      navRoute({
+        id: "rh-exportacao",
+        label: "Exportação",
+        href: ROTA_EXPORTACAO,
+        icon: FileSpreadsheet,
+        roles: HR_ROLES,
       }),
     ],
   }),
@@ -1224,7 +1232,7 @@ export function menuDoFinanceiro(
   ];
 }
 
-/** Início e Pessoas, uma tela por item. Fora da liberação do RH, a lista é vazia. */
+/** Início, Pessoas e Exportação, uma tela por item. Fora da liberação do RH, a lista é vazia. */
 export function menuDoRh(role: ProfileRole | null | undefined, rh: boolean = RH_LIBERADO): AppModule[] {
   const [grupo] = navigationForAmbiente("rh", role, null, false, false, false, false, rh);
   if (!grupo) return [];

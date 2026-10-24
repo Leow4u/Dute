@@ -4,7 +4,8 @@ import { RH_LIBERADO } from "../liberacao";
 
 /**
  * Navegação do RH no app (docs/plataforma/fase-8-rh.md): o shell v3 do
- * módulo, com o Início, a lista de quem está ativo e a ficha de cada pessoa.
+ * módulo, com o Início, a lista de quem está ativo, a ficha de cada pessoa e
+ * a exportação para a contabilidade.
  * Tudo aqui depende da liberação do RH (lib/liberacao.ts), que só liga depois
  * da parte 8.1b.
  */
@@ -24,8 +25,11 @@ export const ROTA_PESSOAS = "/rh/pessoas";
 /** A ficha de uma pessoa: `?colaborador=`. Fora do menu; acende Pessoas. */
 export const ROTA_FICHA = "/rh/ficha";
 
+/** A exportação da competência para a contabilidade (parte 8.3). */
+export const ROTA_EXPORTACAO = "/rh/exportacao";
+
 /** Telas do RH que já existem no app. Cada parte nova acrescenta a dela. */
-export const TELAS_DO_RH: readonly string[] = [ROTA_RH, ROTA_PESSOAS, ROTA_FICHA];
+export const TELAS_DO_RH: readonly string[] = [ROTA_RH, ROTA_PESSOAS, ROTA_FICHA, ROTA_EXPORTACAO];
 
 const ID_DO_COLABORADOR = /^col_[a-f0-9]{16}$/;
 

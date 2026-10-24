@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { ItemDoInicio } from "../inicio-do-modulo";
 import type { ProfileRole } from "../modules";
 import { chamarRh } from "./api";
+import { exportacoesLidas, type ExportacaoNaLista } from "./exportacao";
 import { fichaLida, painelLido, type FichaDoRh, type PainelDoRh } from "./ficha";
 import { itensDoInicioDoRh } from "./inicio";
 import { abreRh } from "./navegacao";
@@ -68,4 +69,27 @@ export function useFichaDoRh(role: ProfileRole | null | undefined, colaboradorId
   });
   if (!abre) return { ficha: undefined, carregando: false, erro: null };
   return { ficha: leitura.data, carregando: leitura.isPending, erro: leitura.isError ? (leitura.error as Error).message : null };
+}
+
+export const CHAVE_DAS_EXPORTACOES = ["rh", "exportacoes"] as const;
+
+export type ExportacoesNaTela = { exportacoes: ExportacaoNaLista[] | undefined; carregando: boolean; erro: string | null };
+
+/** As versões mais novas da exportação para a contabilidade (parte 8.3). */
+export function useExportacoesDoRh(role: ProfileRole | null | undefined): ExportacoesNaTela {
+  const abre = abreRh(role);
+  const leitura = useQuery({
+    queryKey: CHAVE_DAS_EXPORTACOES,
+    queryFn: async () => {
+      const lidas = exportacoesLidas(await chamarRh("listRhExports", {}));
+      if (!lidas) throw new Error("Exportações ilegíveis.");
+      return lidas;
+    },
+    enabled: abre,
+    staleTime: UM_MINUTO,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+  if (!abre) return { exportacoes: undefined, carregando: false, erro: null };
+  return { exportacoes: leitura.data, carregando: leitura.isPending, erro: leitura.isError ? (leitura.error as Error).message : null };
 }

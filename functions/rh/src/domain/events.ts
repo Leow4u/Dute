@@ -2,6 +2,7 @@ import { FieldValue, type Firestore, type Transaction } from "firebase-admin/fir
 import { HttpsError } from "firebase-functions/https";
 import { z } from "zod";
 
+import { ARQUIVOS, COMPETENCIA, ID_EXPORTACAO } from "./exportacao.js";
 import { CATEGORIAS, DIAS_PARA_O_VENCIMENTO, ID_COLABORADOR, ID_REGISTRO, SITUACOES } from "./ficha.js";
 import { actorPayload, compactValue, digest, type RhActor } from "./operations.js";
 import { RH_ROLES } from "./platform-roles.js";
@@ -13,10 +14,11 @@ import { RH_ROLES } from "./platform-roles.js";
  * mudança, com `source: functions_rh`.
  *
  * O payload leva o id do colaborador, a categoria, o tipo e as datas, nunca
- * o nome do registro "outro", o resultado do exame nem o arquivo. Os eventos
- * de vencimento são da rotina diária; a abertura do arquivo, de quem lê o RH
- * (owner, admin e rh: cada abertura fica registrada); os outros, de quem
- * grava no RH.
+ * o nome do registro "outro", o resultado do exame nem o arquivo; o da
+ * exportação (parte 8.3), a competência, a versão e as contagens, nunca nome
+ * nem CPF. Os eventos de vencimento são da rotina diária; a abertura do
+ * arquivo e o download da exportação, de quem lê o RH (owner, admin e rh:
+ * cada um fica registrado); os outros, de quem grava no RH.
  */
 
 export const EVENTS_COLLECTION = "events";
@@ -31,14 +33,16 @@ export const RH_EVENT_TYPES = [
   "rh.record_expired",
   "rh.file_attached",
   "rh.file_opened",
+  "rh.export_created",
+  "rh.export_downloaded",
 ] as const;
 export type RhEventType = (typeof RH_EVENT_TYPES)[number];
 
 /** Os eventos da rotina diária, gravados pelo ator `sistema`. */
 export const EVENTOS_DA_ROTINA: readonly RhEventType[] = ["rh.record_expiring", "rh.record_expired"];
 
-/** A abertura do arquivo, gravada por quem lê o RH (RH_ROLES). */
-export const EVENTOS_DE_LEITURA: readonly RhEventType[] = ["rh.file_opened"];
+/** A abertura do arquivo e o download da exportação, gravados por quem lê o RH (RH_ROLES). */
+export const EVENTOS_DE_LEITURA: readonly RhEventType[] = ["rh.file_opened", "rh.export_downloaded"];
 
 const id = z.string().regex(ID_REGISTRO);
 const colaboradorId = z.string().regex(ID_COLABORADOR);
@@ -49,6 +53,12 @@ const situacao = z.enum(SITUACOES);
 const edicao = z.number().int().min(1).max(100_000);
 
 const doRegistro = { id, colaborador_id: colaboradorId, categoria, tipo };
+const daExportacao = {
+  id: z.string().regex(ID_EXPORTACAO),
+  competencia: z.string().regex(COMPETENCIA),
+  versao: z.number().int().min(1).max(9999),
+};
+const contagem = z.number().int().min(0).max(100_000);
 
 export const RH_EVENT_PAYLOADS = {
   "rh.record_created": z.object({ ...doRegistro, emitido_em: dia, vence_em: dia.nullable(), situacao }).strict(),
@@ -66,6 +76,8 @@ export const RH_EVENT_PAYLOADS = {
   /** O arquivo ligado ao registro; `substituiu` quando havia outro, que continua no bucket. */
   "rh.file_attached": z.object({ ...doRegistro, substituiu: z.boolean() }).strict(),
   "rh.file_opened": z.object(doRegistro).strict(),
+  "rh.export_created": z.object({ ...daExportacao, exames: contagem, colaboradores: contagem }).strict(),
+  "rh.export_downloaded": z.object({ ...daExportacao, arquivo: z.enum(ARQUIVOS) }).strict(),
 } as const satisfies Record<RhEventType, z.ZodObject<z.ZodRawShape>>;
 
 const TEXTO: Record<RhEventType, { title: string; description: string }> = {
@@ -77,7 +89,14 @@ const TEXTO: Record<RhEventType, { title: string; description: string }> = {
   "rh.record_expired": { title: "Registro vencido", description: "O vencimento já passou." },
   "rh.file_attached": { title: "Arquivo anexado ao registro", description: "O arquivo escaneado do registro entrou na ficha." },
   "rh.file_opened": { title: "Arquivo do registro aberto", description: "Alguém do RH abriu o arquivo do registro." },
+  "rh.export_created": { title: "Exportação para a contabilidade gerada", description: "Uma versão nova da exportação da competência foi gerada." },
+  "rh.export_downloaded": { title: "Exportação para a contabilidade baixada", description: "Alguém do RH baixou uma planilha da exportação." },
 };
+
+/** A entidade do evento: o registro da ficha ou a exportação. */
+export function entidadeDoEvento(type: RhEventType): "rh_record" | "rh_export" {
+  return type.startsWith("rh.export_") ? "rh_export" : "rh_record";
+}
 
 export function isRhEventType(value: string): value is RhEventType {
   return (RH_EVENT_TYPES as readonly string[]).includes(value);
@@ -99,7 +118,7 @@ export type RhEventRecord = {
   title: string;
   description: string;
   severity: "info";
-  entity_type: "rh_record";
+  entity_type: "rh_record" | "rh_export";
   entity_id: string;
   payload: Record<string, unknown>;
   occurred_at: string;
@@ -135,7 +154,7 @@ export function buildRhEvent<T extends RhEventType>(input: RhEventInput<T>): RhE
     title: TEXTO[input.type].title,
     description: TEXTO[input.type].description,
     severity: "info",
-    entity_type: "rh_record",
+    entity_type: entidadeDoEvento(input.type),
     entity_id: input.entity_id,
     payload: compactValue(payload.data) as Record<string, unknown>,
     occurred_at: occurredAt,

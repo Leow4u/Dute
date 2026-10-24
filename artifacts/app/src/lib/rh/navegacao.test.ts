@@ -8,6 +8,7 @@ import { entrada, modulesForPerson } from "../platform-modules";
 import { opcoesDoSeletor } from "../seletor-de-modulo";
 import {
   RH_ROLES,
+  ROTA_EXPORTACAO,
   ROTA_FICHA,
   ROTA_PESSOAS,
   ROTA_RH,
@@ -57,16 +58,17 @@ describe("navegação do RH", () => {
     expect(modulesForPerson("interno", null, false, false, false, LIBERADO).some((item) => item.module.key === "rh")).toBe(false);
   });
 
-  it("o menu do módulo tem o Início e Pessoas; a ficha acende Pessoas e tem os papéis do RH", () => {
+  it("o menu do módulo tem o Início, Pessoas e Exportação; a ficha acende Pessoas e tem os papéis do RH", () => {
     expect(menuDoRh("rh", LIBERADO).map((item) => [item.label, item.href])).toEqual([
       ["Início", ROTA_RH],
       ["Pessoas", ROTA_PESSOAS],
+      ["Exportação", ROTA_EXPORTACAO],
     ]);
     expect(menuDoRh("rh", LIBERADO)[0].routes[0].exact).toBe(true);
-    expect(menuDoRh("owner", LIBERADO)).toHaveLength(2);
+    expect(menuDoRh("owner", LIBERADO)).toHaveLength(3);
     expect(menuDoRh("rh", DESLIGADO)).toEqual([]);
     for (const role of ["interno", "financeiro", "cliente"] as const) expect(menuDoRh(role, LIBERADO), role).toEqual([]);
-    for (const rota of [ROTA_RH, ROTA_PESSOAS, ROTA_FICHA]) expect(getRouteProfileRoles(rota), rota).toEqual(["owner", "admin", "rh"]);
+    for (const rota of [ROTA_RH, ROTA_PESSOAS, ROTA_FICHA, ROTA_EXPORTACAO]) expect(getRouteProfileRoles(rota), rota).toEqual(["owner", "admin", "rh"]);
     expect(menuDoRh("rh", LIBERADO)[1].routes[0].tambem).toEqual([ROTA_FICHA]);
   });
 
@@ -92,7 +94,7 @@ describe("navegação do RH", () => {
     expect(caminhos(blocos[0])).toEqual(rotasDoRh(LIBERADO));
     const fora = APP_SOURCE.replace(/soComRhLiberado\(\[[\s\S]*?\]\)/g, "");
     expect(caminhos(fora).filter((path) => path === ROTA_RH || path.startsWith(`${ROTA_RH}/`))).toEqual([]);
-    expect(rotasDoRh(LIBERADO)).toEqual([ROTA_RH, ROTA_PESSOAS, ROTA_FICHA]);
+    expect(rotasDoRh(LIBERADO)).toEqual([ROTA_RH, ROTA_PESSOAS, ROTA_FICHA, ROTA_EXPORTACAO]);
     expect(rotasDoRh(DESLIGADO)).toEqual([]);
     expect(soComRhLiberado([{ path: ROTA_RH }], DESLIGADO)).toEqual([]);
   });

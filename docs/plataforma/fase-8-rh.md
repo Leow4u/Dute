@@ -9,8 +9,8 @@ plano ordena as partes. Escrito em 23/10/2026.
 - Os documentos, a CNH, os exames e os treinamentos de cada colaborador, com
   o vencimento avisado.
 - Num banco à parte, que a operação não lê.
-- A folha e o eSocial por integração (parte 8.3, com o fornecedor que o
-  Leonardo escolher).
+- A exportação da competência para a contabilidade, que faz a folha e
+  transmite o eSocial (parte 8.3; pergunta 24).
 
 ## O que existe hoje
 
@@ -26,17 +26,15 @@ plano ordena as partes. Escrito em 23/10/2026.
 
 ## Decisões
 
-Seguem a recomendação até a resposta do Leonardo:
-
-| Pergunta | Recomendação seguida |
+| Pergunta | Decisão |
 |---|---|
-| 23 | `owner` e `admin` leem o RH; só `rh` grava. |
-| 24 | O fornecedor da folha e do eSocial fica para a parte 8.3. |
+| 23 | `owner` e `admin` leem o RH; só `rh` grava (a recomendação). |
+| 24 | A folha e o eSocial ficam com a contabilidade: a Dute exporta, por competência, os colaboradores e os exames, com os dados do S-2220, e quem faz a folha transmite (Leonardo, 24/10/2026). A Dute não assina XML nem guarda certificado digital. |
 
 - **O banco `rh` é um banco Firestore à parte**, no mesmo projeto, com as
   regras dele (`firestore-rh.rules`). Guarda os documentos, os exames e os
-  treinamentos ligados ao id do colaborador (e, na parte 8.3, o que a folha
-  pedir).
+  treinamentos ligados ao id do colaborador e, na parte 8.3, as versões da
+  exportação para a contabilidade.
 - **O navegador não lê nem grava o banco `rh`.**
   - As regras de um banco nomeado não leem o `users` do banco padrão, então
     não sabem o papel de quem pede.
@@ -140,7 +138,7 @@ os papéis que a conta já tinha.
 | 8.2b | Os arquivos da ficha: sobem e descem por URL assinada da callable, e cada abertura fica registrada | O documento só abre pelo RH |
 | 8.2c | As telas de leitura, desligadas até a 8.1b: o shell do RH, o Início com os vencimentos, Pessoas e a ficha | Os textos e o `axe` de cada tela; as rotas só existem com a liberação; só owner, admin e rh abrem |
 | 8.2d | As ações na ficha: incluir, alterar e arquivar o registro, subir e abrir o arquivo | Owner e admin não veem as ações de gravar; o arquivo abre pela callable |
-| 8.3 | A integração da folha e do eSocial (pergunta 24) | A exportação é idempotente |
+| 8.3 | A exportação da competência para a contabilidade: os exames do mês com os códigos do S-2220 e os colaboradores próprios, em CSV, por versão; a tela Exportação | A mesma competência sem mudança devolve a mesma versão, sem evento novo; só o rh gera; cada download fica registrado |
 
 **Pronto quando** só `rh`, `admin` e `owner` leem o RH, pela callable, e o
 exame, o treinamento e o documento vencendo aparecem no Início do RH (a CNH,
@@ -394,4 +392,56 @@ Também pode sobrescrever o arquivo já conferido e anexado.
   - ou guardar a geração do objeto no anexo e abrir só ela.
 - **Por que ficou como está:** quem pode fazer isso já pode trocar o arquivo
   pela tela, com o evento.
+
+### Parte 8.3: a exportação para a contabilidade
+
+Feita em 24/10/2026, com a decisão do Leonardo na pergunta 24: a folha e o
+eSocial ficam com a contabilidade, que recebe da Dute uma exportação por
+competência.
+
+- **O que vai** (`domain/exportacao.ts`, puro):
+  - os exames cujo ASO é da competência, com o tpExameOcup e o resAso do
+    S-2220 (o "outro" da ficha é a monitoração pontual; o apto com restrição
+    é apto);
+  - os colaboradores próprios ativos, e os inativos com exame no mês (o
+    demissional);
+  - o arquivado não entra; o substituído entra, porque o exame aconteceu;
+  - o terceiro e o freelancer não entram: o eSocial deles é de quem os
+    emprega.
+- **O CPF** entra porque a contabilidade identifica o empregado por ele. É a
+  única leitura do CPF no RH; a ficha e o painel continuam sem ele.
+- **A versão** (`domain/exportacao-gravacao.ts`, coleção `exportacoes` do
+  banco `rh`):
+  - guarda as linhas que foram, o hash do conteúdo, quem gerou e quando;
+  - a mesma competência sem mudança devolve a versão de antes (`nova:
+    false`), sem evento novo;
+  - com mudança, nasce a versão seguinte, e a anterior continua;
+  - o recibo fica em `rh_operations`, como as outras gravações.
+- **A planilha** é montada no servidor, da versão guardada: CSV com BOM,
+  ponto e vírgula e CRLF, que a planilha em português abre; datas em
+  dd/mm/aaaa e o CPF com a máscara. A célula que parece fórmula ganha
+  apóstrofo.
+- **As callables:** `exportRhMonth` (só o rh), `listRhExports` e
+  `downloadRhExport` (owner, admin e rh).
+- **Os eventos** `rh.export_created` e `rh.export_downloaded`, no `events` do
+  banco `rh`, com a competência, a versão e as contagens, nunca nome nem CPF.
+  Cada download fica registrado.
+- **A tela** Exportação (`/rh/exportacao`, no menu do RH):
+  - o rh escolhe a competência, que abre no mês anterior, e gera;
+  - a lista mostra cada versão com as contagens, quem gerou e as duas
+    planilhas para baixar;
+  - owner e admin só baixam.
+- **Testes:**
+  - `exportacao.test.ts`: a seleção, os códigos do S-2220, o hash que não
+    depende da ordem, a entrada e o CSV (aspas, separador, fórmula, datas e
+    CPF);
+  - `exportacao.integration.test.ts`, no emulador:
+    - a versão 1 com o evento, a repetição e a mesma versão sem mudança;
+    - a versão 2 com um exame novo;
+    - só o rh gera;
+    - os três papéis baixam a planilha guardada, cada um com o evento;
+    - nada no banco padrão;
+  - no app: a leitura, a tela (os textos, uma só ação primária e o `axe`) e o
+    contêiner (a chave que se mantém na falha e troca no sucesso e na
+    competência).
 

@@ -7,6 +7,7 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 
 import { armazemDoBucket, attachRhFileFor, openRhFileFor, requestRhUploadFor } from "./domain/arquivos-gravacao.js";
 import { RH_DATABASE } from "./domain/banco.js";
+import { downloadRhExportFor, exportRhMonthFor, listRhExportsFor } from "./domain/exportacao-gravacao.js";
 import { archiveRhRecordFor, getRhFichaFor, getRhPanelFor, saveRhRecordFor } from "./domain/ficha-gravacao.js";
 import { rhLiberado } from "./domain/liberacao.js";
 import { requireRhCaller } from "./domain/profile.js";
@@ -74,6 +75,24 @@ export const attachRhFile = onCall(async (request) => {
 export const openRhFile = onCall(async (request) => {
   const caller = await requireRhCaller(db, request, PROJECT_ID);
   return openRhFileFor(rh, caller, request.data, armazemDoBucket(getStorage().bucket()));
+});
+
+/** Gera a exportação da competência para a contabilidade (parte 8.3); sem mudança, devolve a última versão. Só o rh. */
+export const exportRhMonth = onCall(async (request) => {
+  const caller = await requireRhCaller(db, request, PROJECT_ID);
+  return exportRhMonthFor(db, rh, caller, request.data);
+});
+
+/** As exportações mais novas, sem as linhas. Owner, admin e rh. */
+export const listRhExports = onCall(async (request) => {
+  await requireRhCaller(db, request, PROJECT_ID);
+  return listRhExportsFor(rh);
+});
+
+/** A planilha de uma exportação guardada; o download fica registrado. Owner, admin e rh. */
+export const downloadRhExport = onCall(async (request) => {
+  const caller = await requireRhCaller(db, request, PROJECT_ID);
+  return downloadRhExportFor(rh, caller, request.data);
 });
 
 /**

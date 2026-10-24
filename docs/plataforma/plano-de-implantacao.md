@@ -640,7 +640,7 @@ os de CNH, ao da Operação. Zeragem do WMS nunca toca o banco `rh`.
 |---|---|---|
 | 8.1 | Banco `rh`, `firestore-rh.rules`, codebase `functions/rh`, papel `rh` no shell | Só `rh`, `admin` e `owner` leem; ninguém grava pelo navegador |
 | 8.2 | Ficha do colaborador: documentos (Storage com regra), exames, treinamentos, vencimentos; alertas no Início | Vencimento gera alerta uma vez; documento visível só no RH |
-| 8.3 | Integração de folha e eSocial (fornecedor a definir) | Exportação idempotente |
+| 8.3 | Exportação da competência para a contabilidade, que faz a folha e transmite o eSocial (pergunta 24, decidida em 24/10/2026) | Exportação idempotente |
 
 **Pronto quando.** Só `rh`, `admin` e `owner` leem o banco `rh` (teste de
 regras); CNH, exame e treinamento vencendo aparecem no Início certo.
