@@ -70,13 +70,13 @@ describe("a rotina diária do RH", () => {
   it("o vencimento gera o alerta uma vez por marco, no banco rh", async () => {
     const nr35 = await saveRhRecordFor(padrao, rh, RH, treinamento(), DIA_1);
 
-    assert.deepEqual(await runRhAlertsFor(padrao, rh, DIA_1), { dia: "2026-10-23", vencimentos: 1, criados: 1 });
-    assert.deepEqual(await runRhAlertsFor(padrao, rh, DIA_1), { dia: "2026-10-23", vencimentos: 1, criados: 0 });
-    assert.deepEqual(await runRhAlertsFor(padrao, rh, dia("2026-10-24")), { dia: "2026-10-24", vencimentos: 1, criados: 0 });
+    assert.deepEqual(await runRhAlertsFor(padrao, rh, DIA_1), { dia: "2026-10-23", vencimentos: 1, criados: 1, falhas: 0 });
+    assert.deepEqual(await runRhAlertsFor(padrao, rh, DIA_1), { dia: "2026-10-23", vencimentos: 1, criados: 0, falhas: 0 });
+    assert.deepEqual(await runRhAlertsFor(padrao, rh, dia("2026-10-24")), { dia: "2026-10-24", vencimentos: 1, criados: 0, falhas: 0 });
     assert.deepEqual(await alertas(), [["rh.record_expiring", nr35.id, "2026-11-01", 9, "sistema"]]);
 
-    assert.deepEqual(await runRhAlertsFor(padrao, rh, dia("2026-11-02")), { dia: "2026-11-02", vencimentos: 1, criados: 1 });
-    assert.deepEqual(await runRhAlertsFor(padrao, rh, dia("2026-11-20")), { dia: "2026-11-20", vencimentos: 1, criados: 0 });
+    assert.deepEqual(await runRhAlertsFor(padrao, rh, dia("2026-11-02")), { dia: "2026-11-02", vencimentos: 1, criados: 1, falhas: 0 });
+    assert.deepEqual(await runRhAlertsFor(padrao, rh, dia("2026-11-20")), { dia: "2026-11-20", vencimentos: 1, criados: 0, falhas: 0 });
     assert.deepEqual(await alertas(), [
       ["rh.record_expired", nr35.id, "2026-11-01", -1, "sistema"],
       ["rh.record_expiring", nr35.id, "2026-11-01", 9, "sistema"],
@@ -92,12 +92,32 @@ describe("a rotina diária do RH", () => {
     assert.deepEqual((await alertas()).map((alerta) => alerta[2]), ["2026-11-01", "2026-11-10"]);
 
     await saveRhRecordFor(padrao, rh, RH, treinamento({ emitido_em: "2026-10-20", vence_em: "2028-10-20" }), DIA_1);
-    assert.deepEqual(await runRhAlertsFor(padrao, rh, dia("2026-11-15")), { dia: "2026-11-15", vencimentos: 0, criados: 0 });
+    assert.deepEqual(await runRhAlertsFor(padrao, rh, dia("2026-11-15")), { dia: "2026-11-15", vencimentos: 0, criados: 0, falhas: 0 });
+  });
+
+  it("um registro que não vira evento não para os outros: a rotina conta a falha e segue", async () => {
+    const nr35 = await saveRhRecordFor(padrao, rh, RH, treinamento(), DIA_1);
+    // Gravado antes do limite das datas: o vencimento de 0026 não cabe no evento.
+    await rh.doc("registros/reg_0000000000000bad").set({
+      colaborador_id: ANA,
+      categoria: "treinamento",
+      tipo: "nr11",
+      descricao: null,
+      emitido_em: "0025-01-10",
+      vence_em: "0026-01-10",
+      resultado: null,
+      situacao: "vigente",
+      substituido_por: null,
+      arquivo: null,
+      edicao: 1,
+    });
+    assert.deepEqual(await runRhAlertsFor(padrao, rh, DIA_1), { dia: "2026-10-23", vencimentos: 2, criados: 1, falhas: 1 });
+    assert.deepEqual((await alertas()).map((alerta) => alerta[1]), [nr35.id]);
   });
 
   it("quem não está ativo e o registro sem vencimento ficam de fora", async () => {
     await saveRhRecordFor(padrao, rh, RH, treinamento({ colaborador_id: CARLA }), DIA_1);
     await saveRhRecordFor(padrao, rh, RH, treinamento({ categoria: "documento", tipo: "rg", vence_em: null }), DIA_1);
-    assert.deepEqual(await runRhAlertsFor(padrao, rh, DIA_1), { dia: "2026-10-23", vencimentos: 0, criados: 0 });
+    assert.deepEqual(await runRhAlertsFor(padrao, rh, DIA_1), { dia: "2026-10-23", vencimentos: 0, criados: 0, falhas: 0 });
   });
 });

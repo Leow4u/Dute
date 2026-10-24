@@ -18,7 +18,8 @@ import type { RhActor } from "./operations.js";
 
 export const ROTINA_ACTOR: RhActor = { uid: "rotina-rh", role: "sistema", name: "Rotina diária do RH" };
 
-export type ResultadoDaRotina = { dia: string; vencimentos: number; criados: number };
+/** `falhas`: os registros cujo evento não se gravou; a rotina segue com os outros e tenta de novo amanhã. */
+export type ResultadoDaRotina = { dia: string; vencimentos: number; criados: number; falhas: number };
 
 export async function runRhAlertsFor(padrao: Firestore, rh: Firestore, agora: Date = new Date()): Promise<ResultadoDaRotina> {
   const dia = diaEmSaoPaulo(agora);
@@ -36,31 +37,38 @@ export async function runRhAlertsFor(padrao: Firestore, rh: Firestore, agora: Da
   });
   const vencimentos = vencimentosDoDia(dia, lidos, new Set(cadastro.docs.map((doc) => doc.id)));
   let criados = 0;
+  let falhas = 0;
   for (const vencimento of vencimentos) {
     const marco = marcoDoVencimento(vencimento.dias);
     const operationId = `rotina-rh:${vencimento.registro_id}:${vencimento.vence_em}`;
-    const criou = await rh.runTransaction(async (transaction) => {
-      const ref = rh.collection(EVENTS_COLLECTION).doc(rhEventId(operationId, marco));
-      if ((await transaction.get(ref)).exists) return false;
-      createRhEvent(transaction, rh, {
-        operation_id: operationId,
-        suffix: marco,
-        type: marco === "vencido" ? "rh.record_expired" : "rh.record_expiring",
-        entity_id: vencimento.registro_id,
-        payload: {
-          id: vencimento.registro_id,
-          colaborador_id: vencimento.colaborador_id,
-          categoria: vencimento.categoria,
-          tipo: vencimento.tipo,
-          vence_em: vencimento.vence_em,
-          dias: vencimento.dias,
-        },
-        actor: ROTINA_ACTOR,
-        occurred_at: agora.toISOString(),
+    try {
+      const criou = await rh.runTransaction(async (transaction) => {
+        const ref = rh.collection(EVENTS_COLLECTION).doc(rhEventId(operationId, marco));
+        if ((await transaction.get(ref)).exists) return false;
+        createRhEvent(transaction, rh, {
+          operation_id: operationId,
+          suffix: marco,
+          type: marco === "vencido" ? "rh.record_expired" : "rh.record_expiring",
+          entity_id: vencimento.registro_id,
+          payload: {
+            id: vencimento.registro_id,
+            colaborador_id: vencimento.colaborador_id,
+            categoria: vencimento.categoria,
+            tipo: vencimento.tipo,
+            vence_em: vencimento.vence_em,
+            dias: vencimento.dias,
+          },
+          actor: ROTINA_ACTOR,
+          occurred_at: agora.toISOString(),
+        });
+        return true;
       });
-      return true;
-    });
-    if (criou) criados += 1;
+      if (criou) criados += 1;
+    } catch (error) {
+      // Um registro que não vira evento não para os outros.
+      falhas += 1;
+      console.error("runRhAlerts: registro sem evento", { registro_id: vencimento.registro_id, erro: error instanceof Error ? error.message : String(error) });
+    }
   }
-  return { dia, vencimentos: vencimentos.length, criados };
+  return { dia, vencimentos: vencimentos.length, criados, falhas };
 }
