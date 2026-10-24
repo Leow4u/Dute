@@ -159,8 +159,8 @@ Como se garante, em cada PR de tela:
 | 4 Financeiro da operação, portal e lançamento | Partes 4.1a a 4.9a na `main`; o Financeiro só no `dute-homolog`. O lançamento (marcos 2, 3 e 4 juntos, e a parte 4.9b, que liga o Financeiro) espera o OK do Leonardo (`lancamento-producao.md`) |
 | 5 Memória da Dute | Partes 5.1a a 5.6 na `main`, só no `dute-homolog` (`fase-5-memoria.md`) |
 | 6 Comercial | v1 (partes 1 a 19) na `main` e ligado no `dute-prod` desde 21/10, sem dado carregado; do fechamento, 6.20 a 6.22 e 6.25 feitas, e 6.23 e 6.24 (as cargas e o contador na produção, a semana em paralelo) com o Leonardo |
-| 7 Financeiro unificado | Partes 7.1 a 7.5c na `main`, só no `dute-homolog`. A NFS-e e a baixa pela Omie (7.4) emitem quando as chaves da API existirem; o cancelamento da NFS-e autorizada espera a resposta da Omie (`fase-7-financeiro-unificado.md`) |
-| 8 RH | Partes 8.1a, 8.2a a 8.2d e 8.3 na `main`, desligadas até a 8.1b, que espera o banco `dute-rh` nos dois ambientes (a conta do CI com `roles/datastore.owner`; `fase-8-rh.md`) |
+| 7 Financeiro unificado | Partes 7.1 a 7.5c na `main`, só no `dute-homolog`. A NFS-e e a baixa pela Omie (7.4) estão no código, e as chaves de um aplicativo de teste da Omie estão no `dute-homolog` desde 24/10; a primeira emissão espera os serviços `DUTE-OS` e `DUTE-ARMAZENAGEM` cadastrados nele. O cancelamento da NFS-e autorizada espera a resposta da Omie (`fase-7-financeiro-unificado.md`) |
+| 8 RH | Partes 8.1a a 8.3 na `main` e ligadas no `dute-homolog` desde 24/10: a 8.1b pôs no `firebase.json` o banco `dute-rh`, que existe nos dois ambientes (na produção, com PITR e backup diário). A produção recebe o código com o lançamento; a liberação do RH lá é outro OK (`fase-8-rh.md`) |
 | Contínuo | PITR e backup diário desde 20/10; teste de restauração pendente. Manuais em `docs/manual-financeiro.md` e `docs/manual-rh.md` |
 
 ## 3. Ordem de implantação

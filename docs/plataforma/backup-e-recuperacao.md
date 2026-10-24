@@ -1,8 +1,9 @@
 # Backup e recuperação do Firestore
 
-Proteção dos dados do Firestore `(default)` do `dute-prod` (produção) e como
-recuperar. **Quem decide uma restauração é o Leonardo**, passo a passo, como em
-toda mudança na produção.
+Proteção dos dados do Firestore do `dute-prod` (produção) e como recuperar:
+o banco `(default)` e, desde 24/10/2026, o `dute-rh`, o banco do RH. **Quem
+decide uma restauração é o Leonardo**, passo a passo, como em toda mudança na
+produção.
 
 ## O que está ligado
 
@@ -19,16 +20,26 @@ contagem de abertura do estoque da BTG.
 Antes de 13:28 UTC de 20/10/2026, a única cópia é o export do corte. Apagar o
 banco não apaga os backups: eles ficam até vencer.
 
-A homologação (`dute-homolog`) não tem PITR nem backup: os dados de lá são de
-teste.
+O `dute-rh` nasceu em 24/10/2026, 22:34 UTC, já com as três proteções: PITR
+de 7 dias, backup diário de 14 dias (agenda própria) e proteção contra
+exclusão (workflow `Banco rh`, `tools/banco_rh.sh`, `fase-8-rh.md`). É o banco
+com os dados mais sensíveis (CPF, exames e documentos dos colaboradores): as
+saídas das ferramentas ficam em `tmp\backup\`, como as do `(default)`, nunca no
+git nem em serviço externo.
+
+A homologação (`dute-homolog`) não tem backup, e só o `dute-rh` de lá tem PITR,
+porque o script que cria o banco é o mesmo nos dois ambientes: os dados da
+homologação são de teste.
 
 Para conferir (só leitura):
 
 ```powershell
 cd C:\DEV\Dute
 gcloud firestore databases describe --database="(default)" --project dute-prod --format="value(pointInTimeRecoveryEnablement,versionRetentionPeriod,earliestVersionTime,deleteProtectionState)"
+gcloud firestore databases describe --database=dute-rh --project dute-prod --format="value(pointInTimeRecoveryEnablement,versionRetentionPeriod,earliestVersionTime,deleteProtectionState)"
 gcloud firestore backups schedules list --database="(default)" --project dute-prod
-gcloud firestore backups list --project dute-prod --format="table(name.basename(),snapshotTime,expireTime,state)"
+gcloud firestore backups schedules list --database=dute-rh --project dute-prod
+gcloud firestore backups list --project dute-prod --format="table(name.basename(),database.basename(),snapshotTime,expireTime,state)"
 ```
 
 ## Como recuperar
@@ -36,6 +47,11 @@ gcloud firestore backups list --project dute-prod --format="table(name.basename(
 Nada restaura por cima do `(default)`. Primeiro olhe o passado, depois tire uma
 cópia num banco novo, e só então decida o que volta para o `(default)`. Saídas
 com dado de produção ficam em `tmp\backup\` (fora do git).
+
+O `dute-rh` se recupera pelos mesmos passos, trocando o banco de origem: no
+inventário, `--banco dute-rh`; no clone, `--source-database="projects/dute-prod/databases/dute-rh"`;
+no restore, um backup do `dute-rh` (a coluna do banco no `backups list`); no
+export e no import, `--database=dute-rh`. Nada restaura por cima dele também.
 
 ```powershell
 cd C:\DEV\Dute
@@ -160,14 +176,20 @@ Anote o ID do backup `READY` mais recente e o `snapshotTime` dele.
    gcloud firestore databases list --project dute-prod
    ```
 
-   Só o `(default)` pode sobrar na lista.
+   Só o `(default)` e o `dute-rh` podem sobrar na lista.
 
-| Data | Backup (`snapshotTime`) | Resultado |
-|---|---|---|
-| — | — | pendente: o primeiro backup ainda não existia em 20/10/2026 14:31 UTC |
+O `dute-rh` passa pelo mesmo teste depois que o primeiro backup dele existir:
+no passo 1, um backup do `dute-rh`; no passo 2, `--banco dute-rh` no
+inventário do minuto cheio, que lê o banco de origem.
+
+| Data | Banco | Backup (`snapshotTime`) | Resultado |
+|---|---|---|---|
+| — | `(default)` | — | pendente: o primeiro backup ainda não existia em 20/10/2026 14:31 UTC |
+| — | `dute-rh` | — | pendente: o banco nasceu em 24/10/2026 22:34 UTC |
 
 ## Histórico
 
 | Data | O quê |
 |---|---|
 | 20/10/2026 14:28 UTC | PITR de 7 dias e backup diário com retenção de 14 dias ligados no `dute-prod`, com o OK do Leonardo. Leitura no passado conferida: o inventário de 13:30:00 UTC deu 679 documentos, e as leituras fora do minuto cheio ou anteriores a 13:28 foram recusadas |
+| 24/10/2026 22:34 UTC | O banco `dute-rh` criado no `dute-prod` pelo workflow `Banco rh`, com o OK do Leonardo: proteção contra exclusão, PITR de 7 dias e backup diário de 14 dias desde a criação (`fase-8-rh.md`) |

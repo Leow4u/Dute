@@ -291,13 +291,13 @@ Um PR pequeno, depois da conferência da seção 5:
 - O OK para ligar o Financeiro no `dute-prod` (parte 4.9b).
 - A conta no Resend, o domínio verificado na Hostinger e a chave, para o
   e-mail sair (`fase-4-financeiro.md`, parte 4.6a).
-- As chaves da Omie (`OMIE_APP_KEY` e `OMIE_APP_SECRET`) no Secret Manager
-  do `dute-homolog`, as de um aplicativo de teste da Omie, com a conta do CI
-  administrando cada segredo (`docs/deploy-functions-manual.md`, "Function
-  com segredo"). As da empresa real vão para o `dute-prod` só antes de a
-  Omie ser liberada lá. Também os serviços `DUTE-OS` e `DUTE-ARMAZENAGEM` cadastrados
-  pelo contador e a conta corrente e a categoria das OS, para a NFS-e sair
-  pela Omie na homologação (`fase-7-financeiro-unificado.md`, parte 7.4d).
+- Os serviços `DUTE-OS` e `DUTE-ARMAZENAGEM` no aplicativo de teste da Omie,
+  para a NFS-e sair pela Omie na homologação: as chaves dele estão no
+  `dute-homolog` desde 24/10/2026 (`fase-7-financeiro-unificado.md`, "Onde
+  a Fase 7 está"). A conta corrente e a categoria das OS podem esperar o
+  contador. As chaves da empresa real vão para o `dute-prod` só antes de a
+  Omie ser liberada lá, com a conta do CI administrando cada segredo
+  (`docs/deploy-functions-manual.md`, "Function com segredo").
 - A entrega do WMS fatura pela demanda ou na fatura mensal do WMS?
   (`fase-4-financeiro.md`, decisões).
 - A receita por serviço (pergunta 26 do plano).
