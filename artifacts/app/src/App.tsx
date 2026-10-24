@@ -161,6 +161,7 @@ const FinanceiroVencidos = lazy(() => import("./pages/financeiro/faturas").then(
 const FinanceiroPagos = lazy(() => import("./pages/financeiro/faturas").then((tela) => ({ default: tela.FinanceiroPagos })));
 const FinanceiroFaturas = lazy(() => import("./pages/financeiro/faturas").then((tela) => ({ default: tela.FinanceiroFaturas })));
 const FinanceiroNf = lazy(() => import("./pages/financeiro/nf"));
+const FinanceiroEmissoes = lazy(() => import("./pages/financeiro/emissoes"));
 const FinanceiroRelatorios = lazy(() => import("./pages/financeiro/relatorios"));
 const RhInicio = lazy(() => import("./pages/rh/inicio"));
 const RhPessoas = lazy(() => import("./pages/rh/pessoas"));
@@ -1168,6 +1169,7 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
     protectedRoute("/financeiro/contratos", FinanceiroContratos),
     protectedRoute("/financeiro/autorizacoes", FinanceiroAutorizacoes),
     protectedRoute("/financeiro/relatorios", FinanceiroRelatorios),
+    protectedRoute("/financeiro/emissoes", FinanceiroEmissoes),
     protectedRoute("/financeiro/agente", AgenteDoFinanceiro),
   ]),
   // RH (docs/plataforma/fase-8-rh.md): as rotas só existem onde a liberação

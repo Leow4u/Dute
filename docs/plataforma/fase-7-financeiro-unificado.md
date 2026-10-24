@@ -118,7 +118,7 @@ plano ordena as partes. Escrito em 23/10/2026.
 | 7.4c | A emissão gravada: `emitNfOmie` confere como o `registerNf`, reserva e põe na fila; retomar e desistir; a leitura das emissões; os eventos | A emissão é idempotente; desistir libera a reserva; o evento não leva valor |
 | 7.4d | A rotina `runOmieSync`: acha o cliente pelo CNPJ, inclui a OS, confere o ambiente, fatura e acompanha a prefeitura; a autorizada vira a fatura pelo mesmo caminho do `registerNf` | A falha não marca a fatura como emitida; a homologação nunca fatura numa Omie em produção; a OS repetida não duplica |
 | 7.4e | A faturar: o painel escolhe "Pela Omie" ou "Emitida fora"; pela Omie, pede a emissão; a demanda e a competência reservadas esperam "Na emissão da NFS-e" | Os textos e o `axe`; uma só ação primária; a reservada não entra na NF |
-| 7.4f | A tela Emissões: a etapa, a mensagem da prefeitura, a NFS-e autorizada, retomar e desistir; a parada e a rejeitada no "Precisa de você" | Os textos e o `axe`; uma só ação primária |
+| 7.4f | A tela Emissões: a etapa, a mensagem da prefeitura, a NFS-e autorizada, retomar e desistir; a parada e a rejeitada no "Precisa de você" | Os textos e o `axe`; nenhuma ação primária (as ações são da linha) |
 | 7.4g | A baixa na Omie: receber na Dute lança o recebimento na conta a receber da OS; estornar cancela | A baixa sai uma vez; a falha fica na fila e não desfaz o recebimento na Dute |
 | 7.5a | O motivo de perda "prazo de faturamento" no servidor, aceito só com o prazo do contrato vencido, também a partir de A faturar | Sem o prazo vencido recusa; os outros motivos seguem só antes de faturar |
 | 7.5b | A ação "Perder por prazo" na tela Autorizações, na demanda com o prazo vencido | Só a linha vencida tem a ação; o motivo vem fixo |
@@ -745,12 +745,55 @@ Financeiro).
   cada uma, uma só ação primária, a reservada esperando, os textos e o
   `axe`).
 
+### Parte 7.4f: a tela Emissões
+
+Feita em 24/10/2026. Só onde a emissão pela Omie está liberada: a rota
+`/financeiro/emissoes` e o item "Emissões" do menu, logo antes dos
+Relatórios, existem só com `OMIE_LIBERADA`, dentro da liberação do
+Financeiro.
+
+- **A tela** lê `listNfEmissions` a cada minuto e mostra três grupos, cada
+  um com quantas:
+  - "Precisam de você": a rejeitada, com o que a prefeitura disse, e a
+    parada, com o motivo e a mensagem da Omie (também a parada "Sem as
+    chaves da Omie", do pedido feito antes de as chaves existirem);
+  - "Em andamento": na fila, OS incluída, na prefeitura, reenviando e
+    cancelando na Omie, que a rotina anda sozinha;
+  - "Concluídas": a autorizada, com o número da NFS-e e o link do PDF da
+    Omie (só `https`), e a desistida.
+- **As ações** são da linha, nenhuma é a principal da tela:
+  - "Tentar de novo" e "Desistir" na rejeitada e na parada;
+  - a parada pela OS cancelada na Omie só se desiste;
+  - "Desistir" pede a confirmação na linha ("Confirmar desistência" ou
+    "Voltar").
+- **A chave de idempotência** é da intenção (a emissão, a ação e a edição
+  que a tela viu). A nova tentativa depois da falha leva a mesma chave: se a
+  primeira gravou, o servidor repete o resultado. A lista é lida de novo
+  depois de cada ação, deu certo ou não.
+- **O "Precisa de você"** do Início conta as rejeitadas e as paradas, como
+  críticas, logo depois da cobrança vencida. A entrada, o menu e o radar
+  contam pela mesma lista. Fora da liberação da Omie nada é lido, e o Início
+  conta o resto como antes.
+- **Testes:**
+  - `emissoes.test.ts`: a leitura, os itens, as ações de cada etapa, os
+    grupos e o "Precisa de você";
+  - `emissoes-view.test.tsx`: os textos, nenhuma ação primária, a
+    confirmação na linha, os estados e o `axe`;
+  - `emissoes.test.tsx`: as callables, a chave que fica depois da falha e a
+    desistência que só chama depois de confirmada;
+  - `navegacao.test.ts`, `modules.test.ts` e `ambientes.test.ts`: a rota e
+    o item só com a liberação da Omie, com os papéis de quem fatura.
+  - `platform-lists.test.ts`: as etapas e os motivos da tela são os do
+    servidor, e o evento da parada aceita os mesmos motivos.
+
 ## Onde a Fase 7 está
 
-- Feitas: 7.0 a 7.3c e 7.5a a 7.5c.
+- Feitas: 7.0 a 7.3c, 7.4a a 7.4f e 7.5a a 7.5c.
 - **7.4 em andamento,** com a pergunta 21 respondida em 24/10/2026: a
-  NFS-e pela Omie (desenho em "A NFS-e pela Omie"). Até a 7.4d, a NF segue
-  registrada à mão no Financeiro, também a da armazenagem.
+  NFS-e pela Omie (desenho em "A NFS-e pela Omie"). Falta a 7.4g, a baixa
+  na Omie. A emissão espera as chaves da Omie (`OMIE_APP_KEY` e
+  `OMIE_APP_SECRET`) no `dute-homolog`: sem elas, a rotina não chama a Omie
+  e a NF segue registrada à mão ("Emitida fora").
 - **O "pronto quando" da fase:**
   - a armazenagem e as OS já fecham a competência na mesma fatura;
   - o a receber já é um só (`faturas`);

@@ -72,6 +72,8 @@ describe("ambiente da rota", () => {
       "/financeiro/contratos",
       "/financeiro/autorizacoes",
       "/financeiro/relatorios",
+      // As emissões da NFS-e pela Omie (parte 7.4f).
+      "/financeiro/emissoes",
       // O Agent Dute do Financeiro (parte 5.5j), no shell dele.
       "/financeiro/agente",
     ]);

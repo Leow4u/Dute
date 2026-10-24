@@ -140,6 +140,8 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/financeiro/contratos", ["owner", "admin", "financeiro"]],
   ["/financeiro/autorizacoes", ["owner", "admin", "financeiro"]],
   ["/financeiro/relatorios", ["owner", "admin", "financeiro"]],
+  // As emissões da NFS-e pela Omie (parte 7.4f): só onde a Omie está liberada.
+  ["/financeiro/emissoes", ["owner", "admin", "financeiro"]],
   ["/financeiro/agente", ["owner", "admin", "financeiro"]],
   // A via comercial da NF (parte 4.2d).
   ["/financeiro/nf", ["owner", "admin", "financeiro"]],
