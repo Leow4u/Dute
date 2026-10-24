@@ -148,20 +148,20 @@ Como se garante, em cada PR de tela:
 - **Multicliente**: módulos contratados em `client_access`; o portal mostra
   só o contratado; personalização por perfil, nunca por cópia de código.
 
-## 2. Estado em 23/10/2026
+## 2. Estado em 24/10/2026
 
 | Fase | Estado |
 |---|---|
 | 0 Projetos e repositório | Feita em 19/10 |
 | 1 Migração do WMS | Feita em 20/10; `dute-btg` congelado até 02/12 |
-| 2 Núcleo e app único | Partes 1 e 2 feitas (papéis, módulos contratados, entrada). O resto é redesenhado abaixo com o shell por módulo |
-| 3 Operação | Partes 3.0 a 3.14 na `main` (23/10): o ciclo completo, o campo, a vistoria, a TV e a rotina diária. A produção tem até `fde9ba0`; a publicação da fase espera o OK do Leonardo (`operacao-producao.md`) |
-| 4 Financeiro da operação, portal e lançamento | Não iniciada |
-| 5 Memória da Dute | Não iniciada |
-| 6 Comercial | v1 (partes 1 a 19) na `main` e ligado no `dute-prod` desde 21/10, sem dado carregado |
-| 7 Financeiro unificado | Não iniciada |
-| 8 RH | Não iniciada |
-| Contínuo | PITR e backup diário desde 20/10; teste de restauração pendente |
+| 2 Núcleo e app único | Partes 1 a 2.8 na `main`: o shell v3 por módulo, a entrada com os contadores, os Inícios do Comercial e da Operação e a barreira por módulo contratado (`fase-2-nucleo.md`) |
+| 3 Operação | Partes 3.0 a 3.14 na `main` (23/10), ligada no `dute-homolog` e no `dute-prod`. A produção serve até `fde9ba0`; o resto da fase sobe com o lançamento da Fase 4 |
+| 4 Financeiro da operação, portal e lançamento | Partes 4.1a a 4.9a na `main`; o Financeiro só no `dute-homolog`. O lançamento (marcos 2, 3 e 4 juntos, e a parte 4.9b, que liga o Financeiro) espera o OK do Leonardo (`lancamento-producao.md`) |
+| 5 Memória da Dute | Partes 5.1a a 5.6 na `main`, só no `dute-homolog` (`fase-5-memoria.md`) |
+| 6 Comercial | v1 (partes 1 a 19) na `main` e ligado no `dute-prod` desde 21/10, sem dado carregado; do fechamento, 6.20 a 6.22 e 6.25 feitas, e 6.23 e 6.24 (as cargas e o contador na produção, a semana em paralelo) com o Leonardo |
+| 7 Financeiro unificado | Partes 7.1 a 7.5c na `main`, só no `dute-homolog`. A NFS-e e a baixa pela Omie (7.4) emitem quando as chaves da API existirem; o cancelamento da NFS-e autorizada espera a resposta da Omie (`fase-7-financeiro-unificado.md`) |
+| 8 RH | Partes 8.1a, 8.2a a 8.2d e 8.3 na `main`, desligadas até a 8.1b, que espera o banco `rh` nos dois ambientes (a conta do CI com `roles/datastore.owner`; `fase-8-rh.md`) |
+| Contínuo | PITR e backup diário desde 20/10; teste de restauração pendente. Manuais em `docs/manual-financeiro.md` e `docs/manual-rh.md` |
 
 ## 3. Ordem de implantação
 
@@ -755,8 +755,11 @@ cliente ou 15 em qualquer cliente; 20, `functions/core`; desenho em
 
 **Fase 8**
 23. `owner` e `admin` leem o banco `rh`? O plano diz "tudo" para eles e "só
-    rh e admin" para o banco. Recomendo que leiam; só `rh` grava.
-24. Fornecedor da folha e do eSocial.
+    rh e admin" para o banco. Recomendo que leiam; só `rh` grava. Seguimos
+    a recomendação até a resposta (`fase-8-rh.md`).
+24. Fornecedor da folha e do eSocial. Decidida em 24/10/2026: a
+    contabilidade faz a folha e transmite o eSocial; a Dute exporta a
+    competência (parte 8.3).
 
 **Surgidas na implantação**
 25. Proposta sem resposta (parte 2.5): o Início do Comercial a mostra depois
