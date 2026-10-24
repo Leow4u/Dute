@@ -11,9 +11,9 @@ import type { RhProfile } from "./profile.js";
 
 /**
  * A ficha do colaborador no emulador (parte 8.2a), com os dois bancos: o
- * cadastro no banco padrão e o registro, o recibo e o evento no banco `rh`,
- * nunca no padrão. Owner e admin leem; só o rh grava. O mais recente de cada
- * tipo é o vigente, e arquivar devolve o anterior.
+ * cadastro no banco padrão e o registro, o recibo e o evento no banco
+ * `dute-rh`, nunca no padrão. Owner e admin leem; só o rh grava. O mais
+ * recente de cada tipo é o vigente, e arquivar devolve o anterior.
  */
 
 const PROJECT_ID = "demo-dute-rh";
@@ -73,8 +73,8 @@ async function eventos(banco: Firestore) {
   return snapshot.docs.map((doc) => doc.data()).sort((a, b) => String(a.type).localeCompare(String(b.type)) || String(a.entity_id).localeCompare(String(b.entity_id)));
 }
 
-describe("a ficha no banco rh", () => {
-  it("o rh inclui o registro no banco rh, com o recibo e o evento, e nada no banco padrão", async () => {
+describe("a ficha no banco do RH", () => {
+  it("o rh inclui o registro no banco do RH, com o recibo e o evento, e nada no banco padrão", async () => {
     const salvo = await saveRhRecordFor(padrao, rh, RH, exame({ idempotency_key: "inclui-1" }), AGORA);
     assert.match(salvo.id, /^reg_[a-f0-9]{16}$/);
     assert.deepEqual([salvo.edicao, salvo.situacao], [1, "vigente"]);

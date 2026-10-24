@@ -5,8 +5,8 @@ import { functionsDoApp } from "../firebase-functions";
 
 /**
  * O RH só pelas callables de functions/rh (docs/plataforma/fase-8-rh.md): o
- * banco `rh` é fechado ao navegador. A leitura volta de novo depois de cada
- * gravação; cada gravação leva a chave de idempotência (recibo em
+ * banco `dute-rh` é fechado ao navegador. A leitura volta de novo depois de
+ * cada gravação; cada gravação leva a chave de idempotência (recibo em
  * rh_operations) e o servidor confere o papel e a edição.
  */
 

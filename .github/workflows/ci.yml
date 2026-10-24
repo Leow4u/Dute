@@ -325,7 +325,8 @@ jobs:
         run: npm run test:integration
 
   # O RH (docs/plataforma/fase-8-rh.md): os testes rodam desde a parte 8.1a; a
-  # codebase entra na publicação só na 8.1b, depois de o banco rh existir.
+  # codebase entra na publicação só na 8.1b, depois de o banco dute-rh
+  # existir.
   rh-unit:
     runs-on: ubuntu-latest
     defaults:

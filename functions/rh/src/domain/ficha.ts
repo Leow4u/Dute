@@ -10,8 +10,8 @@ import { diaValido, diasAte } from "./dia.js";
  * A ficha do colaborador no RH (docs/plataforma/fase-8-rh.md, parte 8.2a).
  *
  * - Cada documento, exame ou treinamento é um registro em `registros`, no
- *   banco `rh`, ligado ao id do cadastro da Operação (`collaborators`, no
- *   banco padrão). A ficha é o conjunto dos registros de quem.
+ *   banco `dute-rh`, ligado ao id do cadastro da Operação (`collaborators`,
+ *   no banco padrão). A ficha é o conjunto dos registros de quem.
  * - O registro tem o tipo do catálogo, o dia em que foi emitido ou feito e,
  *   quando vence, o dia do vencimento. O exame guarda o resultado.
  * - Em cada tipo, o vigente é o mais recente; os outros ficam substituídos,

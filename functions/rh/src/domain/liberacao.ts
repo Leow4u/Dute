@@ -3,9 +3,9 @@ import { HttpsError } from "firebase-functions/https";
 /**
  * Liberação do RH por ambiente (docs/plataforma/fase-8-rh.md).
  *
- * Só a homologação atende, e só depois de o banco `rh` existir nela (parte
- * 8.1b). A produção entra no lançamento da fase, com o OK do Leonardo. O
- * dute-btg fica de fora.
+ * Só a homologação atende, e só depois de o banco `dute-rh` existir nela
+ * (parte 8.1b). A produção entra no lançamento da fase, com o OK do
+ * Leonardo. O dute-btg fica de fora.
  */
 export const RH_AMBIENTES_LIBERADOS = ["dute-homolog"] as const;
 

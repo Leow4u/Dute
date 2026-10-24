@@ -9,20 +9,24 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import tempfile
 import textwrap
 import unittest
 from pathlib import Path
 
+import full_reset_btg
+
 SCRIPT = Path(__file__).resolve().parent / "banco_rh.sh"
+RAIZ = SCRIPT.parent.parent
 
 # O gcloud de mentira guarda o banco e as agendas de backup num JSON e anota
 # cada chamada, uma por linha, em outro arquivo.
 FAKE_GCLOUD = textwrap.dedent(
     """\
     #!/usr/bin/env python3
-    import json, os, sys
+    import json, os, re, sys
 
     estado_path = os.environ["FAKE_GCLOUD_STATE"]
     with open(estado_path, encoding="utf-8") as arquivo:
@@ -48,6 +52,12 @@ FAKE_GCLOUD = textwrap.dedent(
     banco = estado.get("banco")
     if comando == "firestore databases create" and estado.get("sem_permissao_no_create"):
         print("ERROR: (gcloud.firestore.databases.create) [conta] does not have permission to access projects instance [p] (or it may not exist): The caller does not have permission.", file=sys.stderr)
+        sys.exit(1)
+    # Com o papel, o create confere o id como o Firestore: de 4 a 63
+    # caracteres, minúsculas, números e hífen, começando por letra
+    # (24/10/2026, com "rh").
+    if comando == "firestore databases create" and not re.fullmatch(r"[a-z][a-z0-9-]{2,61}[a-z0-9]", flag("--database") or ""):
+        print("ERROR: (gcloud.firestore.databases.create) INVALID_ARGUMENT: database_id should be 4-63 characters, and valid characters are /[a-z][0-9]-/", file=sys.stderr)
         sys.exit(1)
     if comando == "firestore databases describe":
         if banco is None:
@@ -132,12 +142,12 @@ class BancoRhTest(unittest.TestCase):
             ],
         )
         criar = self.chamadas()[1]
-        for parte in ("--database=rh", "--location=southamerica-east1", "--type=firestore-native", "--delete-protection", "--project=dute-prod"):
+        for parte in ("--database=dute-rh", "--location=southamerica-east1", "--type=firestore-native", "--delete-protection", "--project=dute-prod"):
             self.assertIn(parte, criar)
         self.assertIn("--enable-pitr", self.chamadas()[3])
         self.assertIn("--recurrence=daily --retention=14d", self.chamadas()[5])
         self.assertEqual(self.banco(), COMPLETO)
-        self.assertIn("OK: o banco rh do dute-prod", resultado.stdout)
+        self.assertIn("OK: o banco dute-rh do dute-prod", resultado.stdout)
 
     def test_rodar_de_novo_so_confere(self) -> None:
         agendas = [{"dailyRecurrence": {}, "retention": "1209600s"}]
@@ -180,6 +190,14 @@ class BancoRhTest(unittest.TestCase):
         self.assertEqual(resultado.returncode, 1)
         self.assertIn("us-east1", resultado.stderr)
         self.assertEqual(self.comandos(), ["firestore databases describe"])
+
+    def test_o_banco_e_o_da_codebase_rh_e_o_que_a_zeragem_recusa(self) -> None:
+        script = re.search(r"^DATABASE=(\S+)$", SCRIPT.read_text(encoding="utf-8"), re.M)
+        codebase = re.search(r'^export const RH_DATABASE = "([^"]+)";$', (RAIZ / "functions/rh/src/domain/banco.ts").read_text(encoding="utf-8"), re.M)
+        self.assertIsNotNone(script)
+        self.assertIsNotNone(codebase)
+        self.assertEqual(script.group(1), codebase.group(1))
+        self.assertEqual(full_reset_btg.PROTECTED_DATABASES, (codebase.group(1),))
 
     def test_projeto_fora_da_lista_falha_sem_chamar_o_gcloud(self) -> None:
         resultado = self.rodar("dute-btg", {"banco": None})

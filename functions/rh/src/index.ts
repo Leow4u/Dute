@@ -21,8 +21,8 @@ import { PROJECT_ID } from "./project.js";
  * conferência do invoker (tools/check_functions_invoker.ps1) lê; o teste
  * callables.test.ts trava o formato. Toda callable começa por
  * `await requireRhCaller(db, request, PROJECT_ID)`. O `db` é o banco padrão,
- * onde moram o `users` e o `collaborators`; o que é do RH fica no banco `rh`
- * (domain/banco.ts).
+ * onde moram o `users` e o `collaborators`; o que é do RH fica no banco
+ * `dute-rh` (domain/banco.ts).
  */
 
 initializeApp();

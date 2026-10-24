@@ -35,7 +35,7 @@ import type { RhProfile } from "./profile.js";
  * A ficha no Firestore (parte 8.2a). `padrao` é o banco padrão, onde moram o
  * `users` e o `collaborators`; `rh` é o banco do RH, onde ficam os
  * registros, o recibo e o evento. A gravação confere o colaborador no banco
- * padrão antes e grava tudo dela numa transação do banco `rh`.
+ * padrão antes e grava tudo dela numa transação do banco `dute-rh`.
  */
 
 export const VINCULOS = ["proprio", "freelancer", "terceiro"] as const;

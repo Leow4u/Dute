@@ -559,5 +559,5 @@ Ainda em aberto:
 | 5 Memória da Dute | `ai_measures`, `ai_case_memory`, `ai_suggestions`, duração sugerida, dias parado e alertas no WMS, Agent Dute no núcleo | Não iniciada; a captura de tempos depende da Fase 3 |
 | 6 Comercial | Orçamentos, envio, aprovação, conversão em OS, sugestão por orçamentos parecidos | v1 (partes 1 a 19) na `main` e ligado no `dute-prod` em 21/10, sem cargas. Gerar OS vai pela Fase 3; sugestão por IA pela Fase 5. Omie e legado fora desde 23/10 |
 | 7 Financeiro unificado | Faturamento de armazenagem e OS no mesmo lugar, a receber único, LPU de cobrança unificada, NF-e e contabilidade por integração | Não iniciada |
-| 8 RH | Colaboradores, documentos, CNH, exames e treinamentos no banco `rh`; folha e eSocial por integração | Não iniciada |
+| 8 RH | Colaboradores, documentos, CNH, exames e treinamentos no banco `dute-rh`; folha e eSocial por integração | Não iniciada |
 | Contínuo | Backups com teste de restauração, monitoramento e alertas, LGPD, manual e treinamento | PITR e backup diário ligados em 20/10; teste de restauração e o resto pendentes |

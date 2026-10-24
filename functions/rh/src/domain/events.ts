@@ -8,7 +8,7 @@ import { actorPayload, compactValue, digest, type RhActor } from "./operations.j
 import { RH_ROLES } from "./platform-roles.js";
 
 /**
- * Eventos do RH em `events` do banco `rh` (invariante 2), não no do banco
+ * Eventos do RH em `events` do banco `dute-rh` (invariante 2), não no do banco
  * padrão: lá leem interno, wms e suporte, e um evento de exame já diz coisa
  * de saúde (docs/plataforma/fase-8-rh.md). Gravados na mesma transação da
  * mudança, com `source: functions_rh`.
@@ -164,7 +164,7 @@ export function buildRhEvent<T extends RhEventType>(input: RhEventInput<T>): RhE
   };
 }
 
-/** Grava o evento na transação do banco `rh` (`rh` é esse banco). */
+/** Grava o evento na transação do banco `dute-rh` (`rh` é esse banco). */
 export function createRhEvent<T extends RhEventType>(transaction: Transaction, rh: Firestore, input: RhEventInput<T>): { id: string; type: RhEventType } {
   const event = buildRhEvent(input);
   transaction.create(rh.collection(EVENTS_COLLECTION).doc(event.id), {

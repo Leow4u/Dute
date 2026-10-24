@@ -26,10 +26,10 @@ import type { RhProfile } from "./profile.js";
 
 /**
  * A exportação no Firestore (parte 8.3). Do banco padrão, lê os colaboradores
- * de vínculo próprio, com o CPF; no banco `rh`, a versão da competência guarda
- * as linhas que foram para a contabilidade, o hash, quem gerou e o evento.
- * Baixar não muda nada: monta a planilha da versão guardada e registra o
- * evento de quem baixou.
+ * de vínculo próprio, com o CPF; no banco `dute-rh`, a versão da
+ * competência guarda as linhas que foram para a contabilidade, o hash, quem
+ * gerou e o evento. Baixar não muda nada: monta a planilha da versão
+ * guardada e registra o evento de quem baixou.
  */
 
 function texto(data: DocumentData, campo: string): string {

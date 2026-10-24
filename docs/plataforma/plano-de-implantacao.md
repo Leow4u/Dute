@@ -160,7 +160,7 @@ Como se garante, em cada PR de tela:
 | 5 Memória da Dute | Partes 5.1a a 5.6 na `main`, só no `dute-homolog` (`fase-5-memoria.md`) |
 | 6 Comercial | v1 (partes 1 a 19) na `main` e ligado no `dute-prod` desde 21/10, sem dado carregado; do fechamento, 6.20 a 6.22 e 6.25 feitas, e 6.23 e 6.24 (as cargas e o contador na produção, a semana em paralelo) com o Leonardo |
 | 7 Financeiro unificado | Partes 7.1 a 7.5c na `main`, só no `dute-homolog`. A NFS-e e a baixa pela Omie (7.4) emitem quando as chaves da API existirem; o cancelamento da NFS-e autorizada espera a resposta da Omie (`fase-7-financeiro-unificado.md`) |
-| 8 RH | Partes 8.1a, 8.2a a 8.2d e 8.3 na `main`, desligadas até a 8.1b, que espera o banco `rh` nos dois ambientes (a conta do CI com `roles/datastore.owner`; `fase-8-rh.md`) |
+| 8 RH | Partes 8.1a, 8.2a a 8.2d e 8.3 na `main`, desligadas até a 8.1b, que espera o banco `dute-rh` nos dois ambientes (a conta do CI com `roles/datastore.owner`; `fase-8-rh.md`) |
 | Contínuo | PITR e backup diário desde 20/10; teste de restauração pendente. Manuais em `docs/manual-financeiro.md` e `docs/manual-rh.md` |
 
 ## 3. Ordem de implantação
@@ -631,13 +631,13 @@ fatura; a NF sai pela integração; o a receber é um só.
 vencimentos avisados, num banco à parte; folha e eSocial por integração.
 Desenho e registro das partes: `docs/plataforma/fase-8-rh.md`.
 
-**Decisões.** Banco Firestore `rh`, separado, com regras próprias: lê e
+**Decisões.** Banco Firestore `dute-rh`, separado, com regras próprias: lê e
 grava `rh`; `admin` e `owner` leem (proposta, resolvendo a divergência do
 plano; pergunta 23 da seção 13). `collaborators` do núcleo continua operacional (nome,
-função, papéis, CNH com validade, telefone, vínculo); o banco `rh` guarda o
-sensível (documentos, exames, treinamentos, contrato de trabalho, salário)
-ligado ao id do colaborador. Alertas de vencimento vão ao Início do RH e,
-os de CNH, ao da Operação. Zeragem do WMS nunca toca o banco `rh`.
+função, papéis, CNH com validade, telefone, vínculo); o banco `dute-rh`
+guarda o sensível (documentos, exames, treinamentos, contrato de trabalho,
+salário) ligado ao id do colaborador. Alertas de vencimento vão ao Início do
+RH e, os de CNH, ao da Operação. Zeragem do WMS nunca toca o banco `dute-rh`.
 
 **Partes, em ordem.**
 
@@ -647,7 +647,7 @@ os de CNH, ao da Operação. Zeragem do WMS nunca toca o banco `rh`.
 | 8.2 | Ficha do colaborador: documentos (Storage com regra), exames, treinamentos, vencimentos; alertas no Início | Vencimento gera alerta uma vez; documento visível só no RH |
 | 8.3 | Exportação da competência para a contabilidade, que faz a folha e transmite o eSocial (pergunta 24, decidida em 24/10/2026) | Exportação idempotente |
 
-**Pronto quando.** Só `rh`, `admin` e `owner` leem o banco `rh` (teste de
+**Pronto quando.** Só `rh`, `admin` e `owner` leem o banco `dute-rh` (teste de
 regras); CNH, exame e treinamento vencendo aparecem no Início certo.
 
 ## 11. Contínuo
@@ -754,8 +754,8 @@ cliente ou 15 em qualquer cliente; 20, `functions/core`; desenho em
     próprio aceito só com o alerta vencido?
 
 **Fase 8**
-23. `owner` e `admin` leem o banco `rh`? O plano diz "tudo" para eles e "só
-    rh e admin" para o banco. Recomendo que leiam; só `rh` grava. Seguimos
+23. `owner` e `admin` leem o banco `dute-rh`? O plano diz "tudo" para eles e
+    "só rh e admin" para o banco. Recomendo que leiam; só `rh` grava. Seguimos
     a recomendação até a resposta (`fase-8-rh.md`).
 24. Fornecedor da folha e do eSocial. Decidida em 24/10/2026: a
     contabilidade faz a folha e transmite o eSocial; a Dute exporta a

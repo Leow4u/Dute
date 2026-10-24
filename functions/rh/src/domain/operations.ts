@@ -5,7 +5,7 @@ import { HttpsError } from "firebase-functions/https";
 
 /**
  * Recibo de idempotência das gravações do RH, no molde da Operação
- * (functions/operacao/src/domain/operations.ts), no banco `rh`. O id é
+ * (functions/operacao/src/domain/operations.ts), no banco `dute-rh`. O id é
  * determinístico (tipo, escopo e chave). Repetir a mesma chamada devolve o
  * resultado; a mesma chave com outro conteúdo é already-exists.
  */

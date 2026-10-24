@@ -40,7 +40,7 @@ app.dutelog.com.br  (um app; PWA no celular; /tv na sala de operações; /portal
 Load Balancer HTTPS ── Cloud Run "dute-app" (nginx + build React)
         │
 Firebase Auth   um login para equipe, motoristas, clientes e TV
-Firestore       banco da plataforma (núcleo + módulos) · banco "rh" à parte
+Firestore       banco da plataforma (núcleo + módulos) · banco "dute-rh" à parte
 Functions       uma codebase por módulo: core · wms · operacao · comercial · financeiro
 Storage         anexos, fotos, assinaturas, PDFs, documentos
 Vertex AI       Gemini (Agent Dute) + embeddings (memória)
@@ -174,7 +174,7 @@ Em 20/10/2026 o Leonardo adiantou o Comercial v1 para antes da Operação, com a
 Faturamento de armazenagem e de OS no mesmo lugar, a receber único, LPU de cobrança do WMS unificada ao catálogo do núcleo (com testes nas trilhas de dinheiro antes), integração de NF-e e contabilidade.
 
 ### Fase 8 — RH
-Colaboradores, documentos, CNH, exames e treinamentos no banco `rh`, com acesso só de `rh` e `admin`; folha e eSocial por integração.
+Colaboradores, documentos, CNH, exames e treinamentos no banco `dute-rh`, com acesso só de `rh` e `admin`; folha e eSocial por integração.
 
 ### Contínuo
 Backups do Firestore com teste de restauração (PITR e backup diário ligados no `dute-prod` em 20/10/2026; teste de restauração pendente, roteiro em `docs/plataforma/backup-e-recuperacao.md`), monitoramento e alertas, LGPD (retenção e exclusão), manual do usuário e treinamento.
@@ -208,7 +208,7 @@ Transporte/frete, armazenagem/movimentação, serviço em campo e mudança/trans
 | `campo` | Só as OS em que está escalado, pelo celular: iniciar, concluir, fotos, assinatura |
 | `comercial` | Orçamentos, clientes e preços de venda; não fatura |
 | `financeiro` | Precificar, faturar, receber, relatórios de receita |
-| `rh` | Módulo RH; só ele e `admin` leem o banco `rh` |
+| `rh` | Módulo RH; só ele e `admin` leem o banco `dute-rh` |
 | `suporte` | Leitura e diagnóstico |
 | `painel` | TV: leitura das OS do dia, sem valores e sem ações |
 | `cliente` | Só o próprio `customer_code` e só o que o perfil libera |
@@ -246,7 +246,7 @@ Região `southamerica-east1`; Vertex AI em `global`.
 | Projetos | `dute-prod` e `dute-homolog` com Firebase; `.firebaserc` com os dois aliases |
 | APIs | run, artifactregistry, cloudbuild, cloudfunctions, firestore, identitytoolkit, storage, secretmanager, aiplatform, bigquery, certificatemanager, compute, iam |
 | Firebase Auth | e-mail e senha; SMTP pelo Resend; link dos e-mails em `app.dutelog.com.br`; nome público "Dute" |
-| Firestore | banco da plataforma e banco `rh`; regras e índices versionados, inclusive índices vetoriais; na produção, PITR de 7 dias e backup diário de 14 dias (`docs/plataforma/backup-e-recuperacao.md`) |
+| Firestore | banco da plataforma e banco `dute-rh`; regras e índices versionados, inclusive índices vetoriais; na produção, PITR de 7 dias e backup diário de 14 dias (`docs/plataforma/backup-e-recuperacao.md`) |
 | Storage | bucket privado de anexos com `storage.rules` |
 | Functions | uma codebase por módulo; `tools/check_functions_invoker.ps1` após todo deploy |
 | BigQuery | eventos copiados pela extensão Stream Firestore to BigQuery, para medidas e relatórios |
@@ -282,7 +282,7 @@ NF-e e CT-e próprios (vêm por integração), WhatsApp, app nativo, GPS em temp
 ## Verificação
 
 - **Migração:** contagem de documentos por coleção igual entre `dute-btg` e `dute-prod`; amostra de usuários entrando com a senha antiga; anexos abrindo; rotinas agendadas rodando só no projeto novo.
-- **Testes:** `test:critical` de cada codebase de functions; testes de regras (cliente só vê o próprio, operação não lê preço, perfil sem o módulo não acessa, banco `rh` fechado); typecheck e testes do app.
+- **Testes:** `test:critical` de cada codebase de functions; testes de regras (cliente só vê o próprio, operação não lê preço, perfil sem o módulo não acessa, banco `dute-rh` fechado); typecheck e testes do app.
 - **Deploy:** homologação a cada push; produção manual com verificação da URL e do invoker; regras e índices num job próprio do CI, antes do frontend e das functions.
 - **IA:** sugestão de duração mostra a origem; alerta de item parado respeita o limite do perfil; dado do cliente A nunca aparece para o cliente B (teste); taxa de acerto aparece no painel.
 - **Celular e TV:** PWA instalado conclui OS com assinatura; TV atualiza sozinha com o usuário `painel`.

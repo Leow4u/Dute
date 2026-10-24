@@ -67,7 +67,7 @@ async function alertas() {
 }
 
 describe("a rotina diária do RH", () => {
-  it("o vencimento gera o alerta uma vez por marco, no banco rh", async () => {
+  it("o vencimento gera o alerta uma vez por marco, no banco do RH", async () => {
     const nr35 = await saveRhRecordFor(padrao, rh, RH, treinamento(), DIA_1);
 
     assert.deepEqual(await runRhAlertsFor(padrao, rh, DIA_1), { dia: "2026-10-23", vencimentos: 1, criados: 1, falhas: 0 });

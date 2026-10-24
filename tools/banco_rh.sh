@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cria ou confere o banco Firestore `rh` de um projeto (Fase 8,
+# Cria ou confere o banco Firestore do RH, `dute-rh`, de um projeto (Fase 8,
 # docs/plataforma/fase-8-rh.md). Roda pelo workflow .github/workflows/banco-rh.yml,
 # com a conta github-actions-functions@<projeto>:
 #
@@ -15,7 +15,7 @@
 set -euo pipefail
 
 PROJECT_ID="${1:?Uso: bash tools/banco_rh.sh <dute-homolog|dute-prod>}"
-DATABASE=rh
+DATABASE=dute-rh
 LOCATION=southamerica-east1
 CONTA="github-actions-functions@${PROJECT_ID}.iam.gserviceaccount.com"
 
