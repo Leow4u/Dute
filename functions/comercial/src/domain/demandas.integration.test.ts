@@ -1483,6 +1483,16 @@ describe("a perda por prazo de faturamento (Fase 7, parte 7.5a, pergunta 22)", (
     assert.equal((await doc(`demands/${numero}`)).etapa, "a_faturar");
   });
 
+  it("a demanda reservada por uma emissão da NFS-e pela Omie não se perde (Fase 7, parte 7.4b)", async () => {
+    const numero = await aFaturar();
+    await db.doc(`demands/${numero}`).update({ emissao_nf: { id: "nfe_0123456789abcdef0123", desde: "2026-10-15T14:00:00.000Z" } });
+    await rejeita(demanda(comercial, "lose", numero, { motivo: "prazo_faturamento" }, OUTUBRO), "failed-precondition", /na emissão da NFS-e pela Omie/);
+    assert.equal((await doc(`demands/${numero}`)).etapa, "a_faturar");
+    // Sem a reserva (a emissão desistida), perde como antes.
+    await db.doc(`demands/${numero}`).update({ emissao_nf: null });
+    assert.equal((await demanda(comercial, "lose", numero, { motivo: "prazo_faturamento" }, OUTUBRO)).etapa, "perdida");
+  });
+
   it("o contrato sem prazo de perda não deixa perder por prazo", async () => {
     const numero = await aFaturar();
     await db.doc("contracts/itau-2026").update({ "autorizacao.prazo_perda_dias": null });

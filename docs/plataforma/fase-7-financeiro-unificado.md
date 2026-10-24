@@ -575,6 +575,36 @@ Feita em 24/10/2026. Puro, sem Firestore nem rede: a 7.4c grava, e a 7.4d chama.
     - o intervalo que dobra e para na sexta falha;
     - retomar e desistir.
 
+### Parte 7.4b: a reserva da emissão
+
+Feita em 24/10/2026, antes de qualquer emissão existir, para a trava chegar
+antes de quem reserva.
+
+- **O campo** `emissao_nf: { id, desde }` na demanda e na competência da
+  armazenagem. Quem grava é a emissão (7.4c); quem libera é a desistência ou
+  a fatura que nasce da NFS-e autorizada (7.4d).
+- **No Financeiro:**
+  - `registerNf` recusa a demanda e a competência reservadas ("está na
+    emissão da NFS-e pela Omie");
+  - a fatura da própria emissão passa (o `problemaParaFaturar` e o
+    `problemaDaArmazenagem` recebem a emissão que está faturando).
+- **No Comercial:**
+  - `advanceDemand` recusa toda ação na demanda reservada: perder, fechar,
+    reabrir, registrar a execução, validar e recusar o aditivo;
+  - cancelar a autorização recusa quando uma das demandas dela está
+    reservada;
+  - a regra fica em `emissaoNfDaDemanda` (`domain/demanda.ts`), que lê o
+    mesmo campo do `emissaoReservada` do Financeiro.
+- **No WMS** nada muda: a competência emitida não volta a aberta, e onde o
+  Financeiro está ligado o WMS não registra pagamento (parte 7.2c).
+- **Testes:**
+  - Financeiro: `fatura.test.ts` e `armazenagem.test.ts` (a reservada recusa,
+    a da própria emissão passa) e `fatura.integration.test.ts` (o
+    `registerNf` recusa as duas e, sem a reserva, registra);
+  - Comercial: `demandas.integration.test.ts` (a reservada não se perde e,
+    sem a reserva, perde) e `autorizacoes.integration.test.ts` (a autorização
+    dela não se cancela).
+
 ## Onde a Fase 7 está
 
 - Feitas: 7.0 a 7.3c e 7.5a a 7.5c.

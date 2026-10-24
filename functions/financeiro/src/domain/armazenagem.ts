@@ -1,3 +1,5 @@
+import { emissaoReservada } from "./emissao-omie.js";
+
 /**
  * A armazenagem na NF (parte 7.2a, docs/plataforma/fase-7-financeiro-unificado.md).
  *
@@ -58,6 +60,8 @@ export type PeriodoParaFaturar = {
   valor_cents: number | null;
   /** A NF em que a competência já está; null fora de NF. */
   fatura_id: string | null;
+  /** A emissão da NFS-e pela Omie que reservou a competência (parte 7.4b); null sem reserva. */
+  emissao_nf_id: string | null;
 };
 
 export function periodoLido(id: string, dados: Registro): PeriodoParaFaturar {
@@ -73,6 +77,7 @@ export function periodoLido(id: string, dados: Registro): PeriodoParaFaturar {
     status: texto(dados.status) || "aberto",
     valor_cents: typeof total === "number" && Number.isSafeInteger(total) && total >= 0 ? total : null,
     fatura_id: texto(faturamento.fatura_id) || null,
+    emissao_nf_id: emissaoReservada(dados),
   };
 }
 
@@ -83,9 +88,10 @@ export function rotuloDaCompetencia(competencia: string): string {
 }
 
 /** Por que a competência não entra na NF agora, ou null. */
-export function problemaDaArmazenagem(periodo: PeriodoParaFaturar): string | null {
+export function problemaDaArmazenagem(periodo: PeriodoParaFaturar, emissao: string | null = null): string | null {
   const rotulo = `A armazenagem de ${rotuloDaCompetencia(periodo.competencia)}`;
   if (periodo.fatura_id) return `${rotulo} já está numa NF.`;
+  if (periodo.emissao_nf_id && periodo.emissao_nf_id !== emissao) return `${rotulo} está na emissão da NFS-e pela Omie.`;
   if (periodo.status === "pago") return `${rotulo} já está paga no WMS.`;
   if (periodo.status !== "emitido") return `${rotulo} ainda não foi emitida no WMS.`;
   if (periodo.valor_cents === null) return `${rotulo} não tem o total congelado da emissão.`;

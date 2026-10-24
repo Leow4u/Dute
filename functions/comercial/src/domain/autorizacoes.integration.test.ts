@@ -636,6 +636,15 @@ describe("cancelar a autorização", () => {
     assert.deepEqual(nova.demandas.map((d) => d.etapa), ["a_faturar", "a_faturar"]);
   });
 
+  it("a autorização de uma demanda reservada por uma emissão da NFS-e pela Omie não se cancela (Fase 7, parte 7.4b)", async () => {
+    const a = await aguardando();
+    const registrada = await registrar(comercial, registro([{ numero: a }], { valor: "1848.00" }));
+    await db.doc(`demands/${a}`).update({ emissao_nf: { id: "nfe_0123456789abcdef0123", desde: "2026-07-20T14:00:00.000Z" } });
+    await rejeita(cancelar(comercial, registrada.autorizacao_id), "failed-precondition", /na emissão da NFS-e pela Omie/);
+    assert.equal((await doc(`client_authorizations/${registrada.autorizacao_id}`)).status, "registrada");
+    assert.equal((await doc(`demands/${a}`)).etapa, "a_faturar");
+  });
+
   it("autorização já usada no faturamento não se cancela; a que não existe é not-found", async () => {
     const a = await aguardando();
     const registrada = await registrar(comercial, registro([{ numero: a }], { valor: "1848.00" }));

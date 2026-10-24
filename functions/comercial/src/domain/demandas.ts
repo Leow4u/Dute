@@ -12,6 +12,7 @@ import {
   dataDeHoje,
   destinoDaValidacao,
   demandaExecutada,
+  emissaoNfDaDemanda,
   escopoDasLinhas,
   etapaDaDemanda,
   problemaDaPerda,
@@ -759,6 +760,9 @@ export async function advanceDemandFor(
           "failed-precondition",
           `A demanda ${numero} mudou: está ${rotuloDaEtapa(etapa)}, na ${rotuloDoOrcamento(numero, rv)}. Abra de novo.`,
         );
+      }
+      if (emissaoNfDaDemanda(demanda)) {
+        throw new HttpsError("failed-precondition", `A demanda ${numero} está na emissão da NFS-e pela Omie: espere a nota ou desista da emissão no Financeiro.`);
       }
       switch (input.action) {
         case "close":

@@ -2,6 +2,7 @@ import { HttpsError } from "firebase-functions/https";
 import { z } from "zod";
 
 import { MAX_COMPETENCIAS_POR_NF, PERIODO_ID, type ArmazenagemNaFatura } from "./armazenagem.js";
+import { emissaoReservada } from "./emissao-omie.js";
 import { digest } from "./operations.js";
 
 /**
@@ -125,6 +126,8 @@ export type DemandaParaFaturar = {
   medicao_id: string | null;
   autorizacao_ids: string[];
   faturada: boolean;
+  /** A emissão da NFS-e pela Omie que reservou a demanda (parte 7.4b); null sem reserva. */
+  emissao_nf_id: string | null;
 };
 
 export function demandaLida(numero: string, dados: Registro): DemandaParaFaturar {
@@ -142,6 +145,7 @@ export function demandaLida(numero: string, dados: Registro): DemandaParaFaturar
     medicao_id: texto(validacao.medicao_id) || texto(dados.medicao_id) || null,
     autorizacao_ids: [...new Set([...ids, ...antigo].filter((id): id is string => typeof id === "string" && id.length > 0))],
     faturada: Boolean(dados.faturamento) || texto(dados.etapa) === "faturada" || texto(dados.etapa) === "paga",
+    emissao_nf_id: emissaoReservada(dados),
   };
 }
 
@@ -168,8 +172,13 @@ export function autorizacaoLida(id: string, dados: Registro): AutorizacaoLida {
 // --- Regras -------------------------------------------------------------------------------
 
 /** Por que a demanda não fatura agora, ou null. */
-export function problemaParaFaturar(demanda: DemandaParaFaturar): string | null {
+/**
+ * Por que a demanda não fatura agora, ou null. `emissao` é a emissão da Omie
+ * que está faturando (parte 7.4d): a reserva dela não conta contra ela mesma.
+ */
+export function problemaParaFaturar(demanda: DemandaParaFaturar, emissao: string | null = null): string | null {
   if (demanda.faturada) return `A demanda ${demanda.numero} já está faturada.`;
+  if (demanda.emissao_nf_id && demanda.emissao_nf_id !== emissao) return `A demanda ${demanda.numero} está na emissão da NFS-e pela Omie.`;
   if (demanda.etapa !== "a_faturar") return `A demanda ${demanda.numero} não está A faturar.`;
   if (demanda.medicao_pendente) return `A demanda ${demanda.numero} espera a medição aprovada.`;
   return null;

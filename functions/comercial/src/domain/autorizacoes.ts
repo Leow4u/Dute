@@ -29,6 +29,7 @@ import { CONTRACTS_COLLECTION } from "./contratos.js";
 import {
   autorizacoesDaDemanda,
   dataDeHoje,
+  emissaoNfDaDemanda,
   etapaDaDemanda,
   rotuloDaEtapa,
   rotuloDoOrcamento,
@@ -557,6 +558,9 @@ async function cancelar(mudanca: Mudanca, input: Cancelamento): Promise<Trabalho
     const etapa = lida.demanda.etapa as EtapaDemanda;
     if (etapa !== "a_faturar" && etapa !== "aguardando_autorizacao") {
       throw new HttpsError("failed-precondition", `A demanda ${lida.numero} está ${rotuloDaEtapa(etapa)}: a autorização dela não se cancela.`);
+    }
+    if (emissaoNfDaDemanda(lida.demanda)) {
+      throw new HttpsError("failed-precondition", `A demanda ${lida.numero} está na emissão da NFS-e pela Omie: a autorização dela não se cancela.`);
     }
   }
 

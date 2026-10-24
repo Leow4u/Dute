@@ -116,6 +116,20 @@ export type EstadoDaDemanda = {
  * `autorizacao_ids` e, nas demandas que a medição aprovada ligou antes da
  * unificação, o `autorizacao_id` antigo.
  */
+/**
+ * A emissão da NFS-e pela Omie que reservou a demanda (Fase 7, parte 7.4b):
+ * `emissao_nf.id`, gravado pelo Financeiro (functions/financeiro, domain/
+ * emissao-omie.ts, emissaoReservada). Enquanto a reserva existe, o Comercial
+ * não mexe na demanda: a nota pode sair a qualquer momento, e a fatura nasce
+ * dela.
+ */
+export function emissaoNfDaDemanda(demanda: Record<string, unknown>): string | null {
+  const reserva = demanda.emissao_nf;
+  if (!reserva || typeof reserva !== "object") return null;
+  const id = (reserva as Record<string, unknown>).id;
+  return typeof id === "string" && id.trim() ? id.trim() : null;
+}
+
 export function autorizacoesDaDemanda(demanda: Pick<EstadoDaDemanda, "autorizacao_ids" | "autorizacao_id">): string[] {
   const ids = Array.isArray(demanda.autorizacao_ids) ? demanda.autorizacao_ids : [];
   const antigo = demanda.autorizacao_id;
