@@ -105,8 +105,9 @@ Dute; avise o time técnico.
 ## O que o contador e o time técnico preparam
 
 - **As chaves da API da Omie** (`OMIE_APP_KEY` e `OMIE_APP_SECRET`), no
-  Secret Manager de cada ambiente: um aplicativo de teste (ou a empresa em
-  homologação) para a homologação e o de produção para a produção.
+  Secret Manager de cada ambiente: um aplicativo de teste da Omie para a
+  homologação (vale 7 dias; a Omie estende por e-mail) e o da empresa real
+  para a produção, quando a Omie for ligada lá.
 - **Os serviços** `DUTE-OS` e `DUTE-ARMAZENAGEM`, cadastrados pelo contador
   na Omie com esses códigos de integração e o código fiscal de cada um.
 - **A categoria de receita e a conta corrente** das OS.

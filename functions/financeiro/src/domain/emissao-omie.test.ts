@@ -16,6 +16,7 @@ import {
   novoIdDeEmissao,
   omieLiberada,
   osDaEmissao,
+  segredosDaOmie,
   paradaSemChaves,
   passoDaEmissao,
   pedidoDoPasso,
@@ -73,6 +74,11 @@ describe("liberação e ambiente", () => {
     assert.equal(omieLiberada("dute-prod"), false);
     assert.equal(omieLiberada("dute-btg"), false);
     assert.deepEqual(AMBIENTE_DA_OMIE, { "dute-homolog": "H", "dute-prod": "P" });
+  });
+
+  it("as chaves da API são declaradas só onde a Omie está liberada", () => {
+    assert.deepEqual(segredosDaOmie("dute-homolog"), ["OMIE_APP_KEY", "OMIE_APP_SECRET"]);
+    for (const projeto of ["dute-prod", "dute-btg", "demo-dute-financeiro", "", null, undefined]) assert.deepEqual(segredosDaOmie(projeto), [], String(projeto));
   });
 });
 
