@@ -9,6 +9,7 @@ import {
   rotuloDaCompetencia,
   type PeriodoParaFaturar,
 } from "./armazenagem.js";
+import { CAMPO_DA_RESERVA } from "./emissao-omie.js";
 import { createFinanceiroEvent } from "./events.js";
 import {
   AUTHORIZATIONS_COLLECTION,
@@ -27,8 +28,9 @@ import {
   valorNaMedicao,
   type AutorizacaoLida,
   type DemandaNaFatura,
+  type FormaDePagamento,
 } from "./fatura.js";
-import { runIdempotent } from "./operations.js";
+import { runIdempotent, type FinanceiroActor } from "./operations.js";
 import { CLIENT_FATURAS_COLLECTION, demandaParaOCliente, projecaoDaFatura } from "./projecao.js";
 import { financeiroProblem } from "./platform-roles.js";
 import type { FinanceiroProfile } from "./profile.js";
@@ -79,73 +81,23 @@ export async function registerNfFor(
       const anterior = existente.exists ? (existente.data() ?? {}) : null;
       if (anterior && anterior.status !== "cancelada") falha(`A NF ${pedido.nf.numero} da série ${serie} já está registrada.`);
 
-      const { cliente, customer_name, demandaRefs, demandaSnaps, periodoRefs, periodos, naFatura } = await lerParaFaturar(transaction, db, pedido);
+      const lido = await lerParaFaturar(transaction, db, pedido);
 
       const iso = instante.toISOString();
-      const documento = documentoDaFatura({
+      const gravada = gravarFatura(transaction, db, {
         id,
-        customer_code: cliente,
-        customer_name,
-        demandas: naFatura,
-        armazenagem: periodos.map(armazenagemNaFatura),
+        lido,
         nf: { numero: pedido.nf.numero, serie, emitida_em: pedido.nf.emitida_em },
         vencimento: pedido.vencimento,
         forma: pedido.forma,
         observacao: pedido.observacao || null,
-        registrada_por: { uid: caller.uid, role: caller.role },
-        registrada_em: iso,
-        operation_id: operationId,
-      });
-      transaction.set(
-        db.collection(CLIENT_FATURAS_COLLECTION).doc(id),
-        projecaoDaFatura(documento, { demandas: new Map(demandaSnaps.map((snap) => [snap.id, demandaParaOCliente(snap.data() ?? {})])), atualizadaEm: iso }),
-      );
-      if (anterior) {
-        const resumo = { registrada_em: anterior.registrada_em ?? null, cancelada: anterior.cancelada ?? null, demanda_numeros: anterior.demanda_numeros ?? [], periodo_ids: anterior.periodo_ids ?? [], operation_id: anterior.operation_id ?? null };
-        const anteriores = Array.isArray(anterior.anteriores) ? anterior.anteriores : [];
-        transaction.set(faturaRef, { ...documento, anteriores: [...anteriores, resumo], created_at: anterior.created_at ?? FieldValue.serverTimestamp(), updated_at: FieldValue.serverTimestamp() });
-      } else {
-        transaction.create(faturaRef, { ...documento, created_at: FieldValue.serverTimestamp() });
-      }
-
-      const faturamento = { fatura_id: id, nf: { numero: pedido.nf.numero, serie, emitida_em: pedido.nf.emitida_em }, vencimento: pedido.vencimento, registrada_em: iso };
-      for (const ref of demandaRefs) {
-        transaction.update(ref, {
-          etapa: "faturada",
-          etapa_desde: iso,
-          marcos: FieldValue.arrayUnion({ etapa: "faturada", em: iso, por_uid: caller.uid }),
-          faturamento,
-          updated_at: FieldValue.serverTimestamp(),
-          updated_by: caller.uid,
-        });
-      }
-      for (const ref of periodoRefs) {
-        transaction.update(ref, { faturamento, updated_at: FieldValue.serverTimestamp() });
-      }
-      const citadas = documento.autorizacao_ids as string[];
-      for (const autorizacao of citadas) {
-        transaction.update(db.collection(AUTHORIZATIONS_COLLECTION).doc(autorizacao), { nf_ids: FieldValue.arrayUnion(id) });
-      }
-
-      createFinanceiroEvent(transaction, db, {
-        operation_id: operationId,
-        type: "nf.registered",
-        entity_id: id,
-        customer_code: cliente,
-        payload: {
-          id,
-          demandas: pedido.demandas,
-          competencias: periodos.map((periodo) => periodo.competencia),
-          autorizacoes: citadas.length,
-          emitida_em: pedido.nf.emitida_em,
-          vencimento: pedido.vencimento,
-          forma: pedido.forma,
-        },
-        actor: ator,
-        occurred_at: iso,
+        anterior,
+        iso,
+        operationId,
+        ator,
       });
 
-      return { target_id: id, result: { id, valor_cents: documento.valor_cents as number, demandas: pedido.demandas, armazenagem: pedido.armazenagem } };
+      return { target_id: id, result: { id, valor_cents: gravada.valor_cents, demandas: pedido.demandas, armazenagem: pedido.armazenagem } };
     },
   );
 }
@@ -235,4 +187,98 @@ export async function lerParaFaturar(
   }));
 
   return { cliente, customer_name: demandas[0]?.customer_name ?? null, demandaRefs, demandaSnaps, periodoRefs, periodos, naFatura };
+}
+
+export type GravacaoDaFatura = {
+  id: string;
+  lido: LidoParaFaturar;
+  nf: { numero: string; serie: string; emitida_em: string };
+  vencimento: string;
+  forma: FormaDePagamento;
+  observacao: string | null;
+  /** O registro cancelado da mesma NF (parte 4.2a), ou null. */
+  anterior: Record<string, unknown> | null;
+  iso: string;
+  operationId: string;
+  ator: FinanceiroActor;
+  /** O que a origem acrescenta à fatura (a emissão da Omie, na parte 7.4d). */
+  extra?: Record<string, unknown>;
+};
+
+/**
+ * As escritas da fatura, depois da lerParaFaturar: a fatura e a projeção do
+ * portal, as demandas Faturadas, as competências com o faturamento, as
+ * autorizações com a NF e o evento `nf.registered`. A reserva da emissão
+ * (parte 7.4b) sai junto.
+ */
+export function gravarFatura(transaction: Transaction, db: Firestore, entrada: GravacaoDaFatura): { valor_cents: number } {
+  const { id, lido, nf, iso, operationId, ator, anterior } = entrada;
+  const faturaRef = db.collection(FATURAS_COLLECTION).doc(id);
+  const { cliente, customer_name, demandaSnaps, demandaRefs, periodoRefs, periodos, naFatura } = lido;
+  const documento = documentoDaFatura({
+    id,
+    customer_code: cliente,
+    customer_name,
+    demandas: naFatura,
+    armazenagem: periodos.map(armazenagemNaFatura),
+    nf,
+    vencimento: entrada.vencimento,
+    forma: entrada.forma,
+    observacao: entrada.observacao,
+    registrada_por: { uid: ator.uid, role: ator.role },
+    registrada_em: iso,
+    operation_id: operationId,
+  });
+  Object.assign(documento, entrada.extra ?? {});
+  transaction.set(
+    db.collection(CLIENT_FATURAS_COLLECTION).doc(id),
+    projecaoDaFatura(documento, { demandas: new Map(demandaSnaps.map((snap) => [snap.id, demandaParaOCliente(snap.data() ?? {})])), atualizadaEm: iso }),
+  );
+  if (anterior) {
+    const resumo = { registrada_em: anterior.registrada_em ?? null, cancelada: anterior.cancelada ?? null, demanda_numeros: anterior.demanda_numeros ?? [], periodo_ids: anterior.periodo_ids ?? [], operation_id: anterior.operation_id ?? null };
+    const anteriores = Array.isArray(anterior.anteriores) ? anterior.anteriores : [];
+    transaction.set(faturaRef, { ...documento, anteriores: [...anteriores, resumo], created_at: anterior.created_at ?? FieldValue.serverTimestamp(), updated_at: FieldValue.serverTimestamp() });
+  } else {
+    transaction.create(faturaRef, { ...documento, created_at: FieldValue.serverTimestamp() });
+  }
+
+  const faturamento = { fatura_id: id, nf, vencimento: entrada.vencimento, registrada_em: iso };
+  for (const ref of demandaRefs) {
+    transaction.update(ref, {
+      etapa: "faturada",
+      etapa_desde: iso,
+      marcos: FieldValue.arrayUnion({ etapa: "faturada", em: iso, por_uid: ator.uid }),
+      faturamento,
+      [CAMPO_DA_RESERVA]: FieldValue.delete(),
+      updated_at: FieldValue.serverTimestamp(),
+      updated_by: ator.uid,
+    });
+  }
+  for (const ref of periodoRefs) {
+    transaction.update(ref, { faturamento, [CAMPO_DA_RESERVA]: FieldValue.delete(), updated_at: FieldValue.serverTimestamp() });
+  }
+  const citadas = documento.autorizacao_ids as string[];
+  for (const autorizacao of citadas) {
+    transaction.update(db.collection(AUTHORIZATIONS_COLLECTION).doc(autorizacao), { nf_ids: FieldValue.arrayUnion(id) });
+  }
+
+  createFinanceiroEvent(transaction, db, {
+    operation_id: operationId,
+    type: "nf.registered",
+    entity_id: id,
+    customer_code: cliente,
+    payload: {
+      id,
+      demandas: naFatura.map((demanda) => demanda.numero),
+      competencias: periodos.map((periodo) => periodo.competencia),
+      autorizacoes: citadas.length,
+      emitida_em: nf.emitida_em,
+      vencimento: entrada.vencimento,
+      forma: entrada.forma,
+    },
+    actor: ator,
+    occurred_at: iso,
+  });
+
+  return { valor_cents: documento.valor_cents as number };
 }

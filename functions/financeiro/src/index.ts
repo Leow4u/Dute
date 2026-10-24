@@ -2,9 +2,13 @@ import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { onCall } from "firebase-functions/https";
 import { setGlobalOptions } from "firebase-functions/v2";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 
 import { advanceFaturaFor } from "./domain/cobranca-gravacao.js";
 import { actOnNfEmissionFor, emitNfOmieFor, listNfEmissionsFor } from "./domain/emissao-gravacao.js";
+import { omieLiberada } from "./domain/emissao-omie.js";
+import { transportePeloFetch } from "./domain/omie.js";
+import { runOmieSyncFor } from "./domain/omie-rotina.js";
 import { registerNfFor } from "./domain/fatura-gravacao.js";
 import { requireFinanceiroCaller } from "./domain/profile.js";
 import { PROJECT_ID } from "./project.js";
@@ -56,4 +60,20 @@ export const actOnNfEmission = onCall(async (request) => {
 export const listNfEmissions = onCall(async (request) => {
   const caller = await requireFinanceiroCaller(db, request, PROJECT_ID);
   return listNfEmissionsFor(db, caller);
+});
+
+/**
+ * A cada 5 minutos: cada emissão da NFS-e pela Omie que é hora de andar dá um
+ * passo (parte 7.4d). As chaves da API vêm do Secret Manager (OMIE_APP_KEY e
+ * OMIE_APP_SECRET), declaradas na função só quando os segredos existirem;
+ * sem elas, a rotina não chama a Omie, e a emissão que é hora de andar para
+ * com o motivo `sem_chaves`. Uma instância por vez: a Omie não aceita
+ * escrita simultânea. Fora da liberação da Omie, não faz nada.
+ */
+export const runOmieSync = onSchedule({ schedule: "every 5 minutes", timeZone: "America/Sao_Paulo", timeoutSeconds: 300, maxInstances: 1 }, async () => {
+  if (!omieLiberada(PROJECT_ID)) return;
+  const app_key = process.env.OMIE_APP_KEY?.trim() ?? "";
+  const app_secret = process.env.OMIE_APP_SECRET?.trim() ?? "";
+  const resultado = await runOmieSyncFor(db, { projectId: PROJECT_ID, chaves: app_key && app_secret ? { app_key, app_secret } : null, transporte: transportePeloFetch() });
+  console.info("runOmieSync", resultado);
 });

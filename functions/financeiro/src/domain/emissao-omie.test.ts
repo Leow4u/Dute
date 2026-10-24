@@ -16,6 +16,7 @@ import {
   novoIdDeEmissao,
   omieLiberada,
   osDaEmissao,
+  paradaSemChaves,
   passoDaEmissao,
   pedidoDoPasso,
   type Emissao,
@@ -30,7 +31,7 @@ import {
  */
 
 const AGORA = new Date("2026-10-24T12:00:00.000Z");
-const CONTEXTO = { agora: AGORA, ambiente: "H" as const, consultas: 0 };
+const CONTEXTO = { agora: AGORA, ambiente: "H" as const };
 const SEM_CONFIGURACAO = { categoria: null, conta_corrente: null };
 
 function emissao(extra: Partial<Emissao> = {}): Emissao {
@@ -53,6 +54,7 @@ function emissao(extra: Partial<Emissao> = {}): Emissao {
     mensagens_da_prefeitura: [],
     omie: { cliente: null, os: null, numero_os: null, ambiente: null, nfse: null, codigo_verificacao: null, url_nfse: null, url_pdf: null },
     tentativas: 0,
+    consultas: 0,
     proxima_em: "2026-10-24T11:00:00.000Z",
     faturada_em: null,
     edicao: 1,
@@ -179,8 +181,10 @@ describe("a resposta de cada passo", () => {
     assert.equal(rejeitada.efeito, "nenhum");
     assert.deepEqual([rejeitada.emissao.etapa, rejeitada.emissao.mensagem], ["rejeitada", "Inscrição municipal do tomador inválida."]);
     assert.equal(rejeitada.emissao.mensagens_da_prefeitura[0].correcao, "Corrija o cadastro do cliente.");
-    const esperando = comResposta(naPrefeitura, "acompanhar", { ListaRpsNfse: [{ cStatusRps: "002" }] }, { ...CONTEXTO, consultas: 1 });
-    assert.deepEqual([esperando.emissao.etapa, esperando.emissao.proxima_em], ["na_prefeitura", "2026-10-24T12:05:00.000Z"]);
+    const esperando = comResposta({ ...naPrefeitura, consultas: 1 }, "acompanhar", { ListaRpsNfse: [{ cStatusRps: "002" }] }, CONTEXTO);
+    assert.deepEqual([esperando.emissao.etapa, esperando.emissao.proxima_em, esperando.emissao.consultas], ["na_prefeitura", "2026-10-24T12:05:00.000Z", 2]);
+    // Mudou de etapa, a conta das consultas volta a zero.
+    assert.equal(autorizada.emissao.consultas, 0);
   });
 
   it("a prefeitura que não responde em 72 horas para a emissão; a OS cancelada na Omie também", () => {
@@ -242,6 +246,22 @@ describe("as ações de uma pessoa", () => {
     const semOs = comAcao(emissao({ etapa: "parada", motivo_da_parada: "cliente_nao_achado" }), "desistir", AGORA);
     assert.ok("emissao" in semOs);
     assert.deepEqual([semOs.emissao.etapa, semOs.efeito], ["desistida", "liberar_reservas"]);
+  });
+
+  it("sem as chaves, a emissão para e espera uma pessoa: desistir solta as reservas, retomar volta de onde parou", () => {
+    const parada = paradaSemChaves(emissao({ etapa: "os_incluida", omie: COM_OS }), AGORA);
+    assert.deepEqual(
+      [parada.efeito, parada.emissao.etapa, parada.emissao.etapa_anterior, parada.emissao.motivo_da_parada, parada.emissao.mensagem, parada.emissao.edicao],
+      ["nenhum", "parada", "os_incluida", "sem_chaves", "As chaves da API da Omie não estão neste ambiente.", 2],
+    );
+    assert.equal(passoDaEmissao(parada.emissao, AGORA), null);
+    const retomada = comAcao(parada.emissao, "retomar", AGORA);
+    assert.ok("emissao" in retomada);
+    assert.deepEqual([retomada.emissao.etapa, retomada.emissao.motivo_da_parada], ["os_incluida", null]);
+    // Sem a OS na Omie (a emissão nunca saiu), desistir libera na hora.
+    const desistida = comAcao(paradaSemChaves(emissao(), AGORA).emissao, "desistir", AGORA);
+    assert.ok("emissao" in desistida);
+    assert.deepEqual([desistida.emissao.etapa, desistida.efeito], ["desistida", "liberar_reservas"]);
   });
 
   it("não se retoma nem desiste da emissão que anda sozinha ou já acabou", () => {

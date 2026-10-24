@@ -178,7 +178,9 @@ pesquisa nas páginas da Omie (`developer.omie.com.br`,
   - para depois de 6 falhas seguidas.
 - **As chaves da API** (`app_key` e `app_secret` do aplicativo da Omie) ficam
   no Secret Manager, como a do Resend. Sem elas, a rotina não chama a Omie, e
-  a emissão fica na fila.
+  a emissão que é hora de andar para com o motivo `sem_chaves`, em vez de
+  prender as reservas na fila: desistir solta as reservas, e retomar, com as
+  chaves, volta de onde parou.
 - **A liberação** é `OMIE_AMBIENTES_LIBERADOS`, só o `dute-homolog` até o
   lançamento, com o OK do Leonardo.
 - **O CT-e** segue à mão, pelo `registerNf`.
@@ -648,6 +650,74 @@ Fica no `dute-homolog` (`OMIE_AMBIENTES_LIBERADOS`).
     - a lista;
   - `events.test.ts`: os três tipos novos, estritos e da emissão;
   - `emissao-omie.test.ts`: a emissão gravada lida campo a campo e o id.
+
+### Parte 7.4d: a rotina da Omie
+
+Feita em 24/10/2026. Fica no `dute-homolog` (`OMIE_AMBIENTES_LIBERADOS`) e
+não chama a Omie sem as chaves.
+
+- **`runOmieSync`**, a cada 5 minutos e uma instância por vez
+  (`domain/omie-rotina.ts`):
+  - cada emissão que é hora de andar dá um passo (até 20 por passada): uma
+    chamada à Omie e uma transação que grava o resultado;
+  - a chave inválida para a emissão e a passada inteira;
+  - se uma pessoa mexeu na emissão durante a chamada (a edição mudou), o
+    resultado se descarta; o `cCodIntOS` e o `StatusOS` reconciliam na
+    passada seguinte.
+- **A NFS-e autorizada vira a fatura na mesma transação**, pela
+  `lerParaFaturar` e pela `gravarFatura`. As duas saíram do `registerNf`,
+  que segue igual.
+  - O número é o da NFS-e, a série é 1 (a do registro à mão) e a emissão é
+    o dia da autorização.
+  - A fatura guarda `origem_nf: omie`, a emissão e o código de verificação.
+  - A reserva sai, e o evento é `nf.registered` com o
+    `nf.emission_authorized`.
+- **A fatura que não pode nascer** (a mesma NF já registrada à mão, a
+  demanda que mudou) para a emissão com o motivo `fatura_recusada`, e a
+  reserva continua: a nota existe, e uma pessoa decide.
+- **Sem as chaves no ambiente,** nada se chama, e a emissão que é hora de
+  andar para com o motivo `sem_chaves` ("As chaves da API da Omie não estão
+  neste ambiente."), com o `nf.emission_stopped`. Sem isso, o pedido feito
+  antes de as chaves existirem ficaria na fila com as reservas presas, sem
+  ação para uma pessoa. Desistir da que nunca saiu solta as reservas na hora;
+  retomar, com as chaves, volta de onde parou.
+- **Desistida com a OS na Omie:** a rotina cancela a OS lá (`CancelarOS`),
+  solta as reservas e grava `nf.emission_released`.
+- **Os eventos da rotina** (ator `sistema`): `nf.emission_authorized`,
+  `nf.emission_rejected`, `nf.emission_stopped` (com o motivo) e
+  `nf.emission_released`. Sem valor nem o número da nota.
+- **O que só o Leonardo faz para a rotina chamar a Omie:**
+  - gerar as chaves no aplicativo da Omie (Omie › Aplicativos, perfil
+    administrador), num aplicativo de teste ou na empresa em homologação
+    para o `dute-homolog`;
+  - guardar no Secret Manager:
+
+    ```powershell
+    cd C:\DEV\Dute
+    firebase functions:secrets:set OMIE_APP_KEY --project dute-homolog
+    firebase functions:secrets:set OMIE_APP_SECRET --project dute-homolog
+    ```
+
+  - Com os segredos criados, uma parte pequena declara
+    `secrets: ["OMIE_APP_KEY", "OMIE_APP_SECRET"]` no `runOmieSync`, como
+    no Resend. Antes disso, a publicação não pode citar segredo que não
+    existe.
+- **Testes** (`omie-rotina.integration.test.ts`, com uma Omie de mentira
+  que responde como as páginas da API descrevem):
+  - do pedido à fatura;
+  - a Omie em produção na homologação para antes de faturar;
+  - a OS que já existe não duplica;
+  - rejeitada não vira fatura; retomada reenvia e autoriza;
+  - desistir cancela na Omie e só então solta as reservas;
+  - a chave inválida para a passada;
+  - a NF já registrada à mão para a emissão;
+  - a edição que mudou descarta o resultado;
+  - fora da liberação, nada se faz;
+  - sem as chaves, nada se chama, a emissão para com o motivo
+    `sem_chaves`, desistir solta as reservas e, com as chaves, a retomada
+    anda (o caso falha com a rotina que só esperava).
+- **`emissao-omie.test.ts`:** a parada sem as chaves, a retomada e a
+  desistência dela.
 
 ## Onde a Fase 7 está
 

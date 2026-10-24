@@ -22,6 +22,10 @@ const EXEMPLOS: Record<FinanceiroEventType, Record<string, unknown>> = {
   "nf.emission_requested": { id: "nfe_0123456789abcdef0123", demandas: ["10045"], competencias: ["2026-09"], vencimento: "2026-11-20", forma: "boleto" },
   "nf.emission_resumed": { id: "nfe_0123456789abcdef0123", etapa_antes: "parada", etapa_depois: "na_fila" },
   "nf.emission_abandoned": { id: "nfe_0123456789abcdef0123", demandas: ["10045"], competencias: [], cancela_na_omie: true },
+  "nf.emission_authorized": { id: "nfe_0123456789abcdef0123", fatura_id: "fat_0123456789abcdef01234567" },
+  "nf.emission_rejected": { id: "nfe_0123456789abcdef0123" },
+  "nf.emission_stopped": { id: "nfe_0123456789abcdef0123", motivo: "ambiente_errado" },
+  "nf.emission_released": { id: "nfe_0123456789abcdef0123", demandas: ["10045"], competencias: ["2026-09"] },
 };
 
 function wmsNoticeWords(): string[] {

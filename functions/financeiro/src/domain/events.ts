@@ -34,6 +34,10 @@ export const FINANCEIRO_EVENT_TYPES = [
   "nf.emission_requested",
   "nf.emission_resumed",
   "nf.emission_abandoned",
+  "nf.emission_authorized",
+  "nf.emission_rejected",
+  "nf.emission_stopped",
+  "nf.emission_released",
 ] as const;
 export type FinanceiroEventType = (typeof FINANCEIRO_EVENT_TYPES)[number];
 
@@ -102,6 +106,35 @@ const emissaoDesistida = z
   .object({ id: emissaoId, demandas: z.array(demanda).max(50), competencias: z.array(competencia).max(12).default([]), cancela_na_omie: z.boolean() })
   .strict();
 
+/** A NFS-e autorizada pela prefeitura, e a fatura que nasceu dela (parte 7.4d). Sem o número da nota. */
+const emissaoAutorizada = z.object({ id: emissaoId, fatura_id: faturaId }).strict();
+
+/** A prefeitura recusou a RPS; a mensagem fica na emissão, não no evento. */
+const emissaoRejeitada = z.object({ id: emissaoId }).strict();
+
+/** A emissão parou e espera uma pessoa. */
+const emissaoParada = z
+  .object({
+    id: emissaoId,
+    motivo: z.enum([
+      "cliente_nao_achado",
+      "cliente_repetido",
+      "ambiente_errado",
+      "chave",
+      "sem_chaves",
+      "falhas_seguidas",
+      "cancelada_na_omie",
+      "prefeitura_demorou",
+      "fatura_recusada",
+    ]),
+  })
+  .strict();
+
+/** A OS cancelada na Omie depois da desistência: as reservas voltaram a A faturar. */
+const emissaoSolta = z
+  .object({ id: emissaoId, demandas: z.array(demanda).max(50), competencias: z.array(competencia).max(12).default([]) })
+  .strict();
+
 export const FINANCEIRO_EVENT_PAYLOADS = {
   "nf.registered": nfRegistrada,
   "nf.sent": nfEnviada,
@@ -111,6 +144,10 @@ export const FINANCEIRO_EVENT_PAYLOADS = {
   "nf.emission_requested": emissaoPedida,
   "nf.emission_resumed": emissaoRetomada,
   "nf.emission_abandoned": emissaoDesistida,
+  "nf.emission_authorized": emissaoAutorizada,
+  "nf.emission_rejected": emissaoRejeitada,
+  "nf.emission_stopped": emissaoParada,
+  "nf.emission_released": emissaoSolta,
 } as const;
 
 const TEXTO: Record<FinanceiroEventType, { title: string; description: string }> = {
@@ -122,6 +159,10 @@ const TEXTO: Record<FinanceiroEventType, { title: string; description: string }>
   "nf.emission_requested": { title: "NFS-e pedida à Omie", description: "As demandas e a armazenagem ficaram reservadas para a NFS-e que a Omie vai emitir." },
   "nf.emission_resumed": { title: "Emissão da NFS-e retomada", description: "Alguém do Financeiro retomou a emissão parada ou rejeitada." },
   "nf.emission_abandoned": { title: "Emissão da NFS-e desistida", description: "Alguém do Financeiro desistiu da emissão; as reservas voltam a A faturar." },
+  "nf.emission_authorized": { title: "NFS-e autorizada", description: "A prefeitura autorizou a NFS-e emitida pela Omie, e a fatura nasceu dela." },
+  "nf.emission_rejected": { title: "NFS-e rejeitada pela prefeitura", description: "A prefeitura recusou a NFS-e; corrija na Omie e tente de novo, ou desista." },
+  "nf.emission_stopped": { title: "Emissão da NFS-e parada", description: "A emissão espera alguém do Financeiro." },
+  "nf.emission_released": { title: "OS cancelada na Omie", description: "A OS da emissão desistida foi cancelada na Omie, e as reservas voltaram a A faturar." },
 };
 
 /** A entidade do evento: a fatura ou a emissão da NFS-e pela Omie. */
