@@ -8,6 +8,8 @@ import { formatMoney } from "@/lib/system-dashboard";
 import {
   errorsToShow,
   FUNCTION_STATUS_LABELS,
+  codebaseLabel,
+  functionsNote,
   functionsToShow,
   infraKey,
   infraTiles,
@@ -151,12 +153,15 @@ function FunctionsPanel({ infra }: { infra: SystemInfra }) {
   }
   const rows = functionsToShow(functions.list, showAll);
   return (
-    <Panel title="Functions publicadas" note={`${functions.total} no código`}>
+    <Panel title="Functions publicadas" note={functionsNote(functions.total, functions.codebases)}>
       <ul>
         {rows.map((row) => (
           <li key={row.name} className="border-b border-border/40 last:border-0">
             <div className="flex items-center justify-between gap-2 px-5 py-2.5 text-sm">
-              <code className="min-w-0 truncate font-mono text-xs">{row.name}</code>
+              <span className="flex min-w-0 items-center gap-2">
+                <code className="min-w-0 truncate font-mono text-xs">{row.name}</code>
+                <span className="shrink-0 text-xs text-muted-foreground">{codebaseLabel(row.codebase)}</span>
+              </span>
               <span
                 className={cn(
                   "shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold",

@@ -17,7 +17,7 @@ comando para rodar no terminal.
 | Quadro | Fonte | Detalhe |
 |---|---|---|
 | Erros do servidor | Cloud Logging, 24 h | `severity>=ERROR` dos serviços do Cloud Run (functions e site), agrupados por function e primeira linha da mensagem. Também conta as requisições recusadas com **403** antes de o código rodar (falta de `allUsers`/`roles/run.invoker`, o incidente de 03/09/2026). Logs de requisição com 5xx ficam de fora porque repetem o erro do código. |
-| Functions publicadas | Cloud Functions v2 + Cloud Run | Compara as functions exportadas no `index.ts` com as publicadas. Mesmo critério do `tools/check_functions_invoker.ps1`: não existe ou estado diferente de `ACTIVE` é **não publicada**; callable sem invoker público é **sem acesso**. |
+| Functions publicadas | Cloud Functions v2 + Cloud Run | As functions de todas as codebases, cada uma com a dela (`wms` é a `default`). No WMS, compara as functions exportadas no `index.ts` com as publicadas; nas outras, confere as publicadas, pelos rótulos que o `firebase deploy` põe em cada function (`firebase-functions-codebase` e `deployment-callable`). Mesmo critério do `tools/check_functions_invoker.ps1`: não existe ou estado diferente de `ACTIVE` é **não publicada**, com o `firebase deploy` da codebase; callable sem invoker público é **sem acesso**. Fora do WMS, a function que nunca subiu só aparece na conferência da publicação. |
 | Custo real | BigQuery (exportação do faturamento) | Soma de `cost` + créditos do mês da fatura, por serviço, só do projeto `dute-btg`. Compara o Vertex AI da fatura com a estimativa do Agent Dute. |
 
 As consultas levam alguns segundos. A tela guarda o resultado por 5 minutos

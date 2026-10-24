@@ -1,10 +1,21 @@
 import { describe, expect, it } from "vitest";
 
 import { functionRoute } from "./functions-api";
-import { errorsToShow, functionsToShow, infraTiles, serviceNames, vertexComparison, type FunctionRow, type SystemInfra } from "./system-infra";
+import {
+  codebaseLabel,
+  errorsToShow,
+  functionsNote,
+  functionsToShow,
+  infraTiles,
+  serviceNames,
+  vertexComparison,
+  type FunctionRow,
+  type SystemInfra,
+} from "./system-infra";
 
-const row = (name: string, status: FunctionRow["status"]): FunctionRow => ({
+const row = (name: string, status: FunctionRow["status"], codebase = "default"): FunctionRow => ({
   name,
+  codebase,
   service: name.toLowerCase(),
   status,
   state: status === "nao_publicada" ? null : "ACTIVE",
@@ -28,8 +39,9 @@ const infra: SystemInfra = {
     ok: 50,
     sem_acesso: 1,
     nao_publicada: 1,
+    codebases: ["default", "comercial"],
     last_deploy_at: null,
-    list: [row("getSystemDashboard", "nao_publicada"), row("saveAgentCostSettings", "sem_acesso"), row("readShipmentInvoice", "ok")],
+    list: [row("getSystemDashboard", "nao_publicada"), row("saveAgentCostSettings", "sem_acesso"), row("readShipmentInvoice", "ok"), row("advanceQuote", "ok", "comercial")],
   },
   billing: { status: "not_configured" },
 };
@@ -48,7 +60,11 @@ describe("painel do sistema: infraestrutura", () => {
     expect(tiles.functions).toEqual({ value: "50 de 52 ok", detail: "1 sem acesso · 1 não publicada", tone: "bad" });
 
     const clean = infraTiles(
-      { ...infra, errors: { status: "ok", total: 0, blocked: 0, services: 0, groups: [] }, functions: { status: "ok", total: 52, ok: 52, sem_acesso: 0, nao_publicada: 0, last_deploy_at: null, list: [] } },
+      {
+        ...infra,
+        errors: { status: "ok", total: 0, blocked: 0, services: 0, groups: [] },
+        functions: { status: "ok", total: 52, ok: 52, sem_acesso: 0, nao_publicada: 0, codebases: ["default"], last_deploy_at: null, list: [] },
+      },
       false,
     );
     expect(clean.errors).toEqual({ value: "Nenhum erro", detail: "Nenhuma chamada bloqueada", tone: "ok" });
@@ -61,12 +77,20 @@ describe("painel do sistema: infraestrutura", () => {
   it("lista só as functions com problema, a não ser que peça todas; nomes do código no lugar do serviço", () => {
     const list = infra.functions.status === "ok" ? infra.functions.list : [];
     expect(functionsToShow(list, false).map((fn) => fn.name)).toEqual(["getSystemDashboard", "saveAgentCostSettings"]);
-    expect(functionsToShow(list, true)).toHaveLength(3);
+    expect(functionsToShow(list, true)).toHaveLength(4);
     const name = serviceNames(infra);
     expect(name("readshipmentinvoice")).toBe("readShipmentInvoice");
     expect(name("dute-btg-app")).toBe("Site (dute-btg-app)");
     expect(name("dute-app")).toBe("Site (dute-app)");
     expect(name("outra")).toBe("outra");
+  });
+
+  it("as functions de todas as codebases: o WMS é a codebase default", () => {
+    expect(codebaseLabel("default")).toBe("wms");
+    expect(codebaseLabel("comercial")).toBe("comercial");
+    expect(functionsNote(52, ["default", "comercial", "operacao", "financeiro", "core", "rh"])).toBe("52 functions em 6 codebases");
+    expect(functionsNote(1, ["default"])).toBe("1 function em 1 codebase");
+    expect(serviceNames(infra)("advancequote")).toBe("advanceQuote");
   });
 
   it("erros: os 5 mais recentes, ou todos", () => {

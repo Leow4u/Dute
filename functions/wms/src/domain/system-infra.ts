@@ -7,7 +7,7 @@ import { assertOwner } from "./system-dashboard.js";
 /**
  * Painel do sistema, parte 2 (Configuração > Sistema, só owner): erros de
  * qualquer function (Cloud Logging), functions publicadas e com acesso
- * público (Cloud Functions + Cloud Run, o mesmo que o
+ * público, de todas as codebases (Cloud Functions + Cloud Run, o mesmo que o
  * tools/check_functions_invoker.ps1 confere) e o custo real do Google Cloud
  * (exportação do faturamento para o BigQuery). Só leitura: nada aqui corrige
  * permissão nem publica function; o painel mostra o comando.
@@ -126,9 +126,47 @@ export function groupErrors(entries: LogEntry[]) {
 // --------------------------------------------------------------- functions
 
 export type CodeFunction = { name: string; callable: boolean };
-export type DeployedFunction = { name: string; state: string; updated_at: string | null; service: string };
+export type DeployedFunction = { name: string; state: string; updated_at: string | null; service: string; codebase: string; callable: boolean };
 export type FunctionStatus = "ok" | "sem_acesso" | "nao_publicada";
-export type FunctionRow = { name: string; service: string; status: FunctionStatus; state: string | null; updated_at: string | null; fix: string | null };
+export type FunctionRow = {
+  name: string;
+  codebase: string;
+  service: string;
+  status: FunctionStatus;
+  state: string | null;
+  updated_at: string | null;
+  fix: string | null;
+};
+
+/** A codebase do WMS no firebase.json, a única cujo código esta function conhece. */
+export const DEFAULT_CODEBASE = "default";
+/**
+ * Os rótulos que o firebase deploy põe em cada function (firebase-tools,
+ * lib/gcp/cloudfunctionsv2.js, que os lê de volta no deploy seguinte): a
+ * codebase, fora da default, e a marca de callable.
+ */
+export const CODEBASE_LABEL = "firebase-functions-codebase";
+export const CALLABLE_LABEL = "deployment-callable";
+
+export type CloudFunctionResource = {
+  name?: string;
+  state?: string;
+  updateTime?: string;
+  serviceConfig?: { service?: string };
+  labels?: Record<string, string>;
+};
+
+/** A function da listagem do Cloud Functions v2, com a codebase e a callable dos rótulos. */
+export function deployedFunction(fn: CloudFunctionResource): DeployedFunction {
+  return {
+    name: (fn.name ?? "").split("/").at(-1) ?? "",
+    state: fn.state ?? "STATE_UNSPECIFIED",
+    updated_at: fn.updateTime ?? null,
+    service: (fn.serviceConfig?.service ?? "").split("/").at(-1) ?? "",
+    codebase: fn.labels?.[CODEBASE_LABEL] || DEFAULT_CODEBASE,
+    callable: fn.labels?.[CALLABLE_LABEL] === "true",
+  };
+}
 
 /** Exports do index.ts que são functions do Firebase (o SDK marca com __endpoint). */
 export function codeFunctions(exports: Record<string, unknown>): CodeFunction[] {
@@ -143,10 +181,30 @@ export function hasPublicInvoker(policy: unknown) {
   return bindings.some((binding) => binding.role === "roles/run.invoker" && (binding.members ?? []).includes("allUsers"));
 }
 
+/** A default primeiro, as outras em ordem alfabética. */
+function compareCodebases(left: string, right: string) {
+  return Number(right === DEFAULT_CODEBASE) - Number(left === DEFAULT_CODEBASE) || left.localeCompare(right);
+}
+
+/**
+ * As functions que o painel confere: as do index.ts do WMS, publicadas ou
+ * não, e as publicadas das outras codebases, que esta function não conhece
+ * pelo código (a que nunca subiu só aparece no check_functions_invoker.ps1
+ * da publicação).
+ */
+function functionsToCheck(code: CodeFunction[], deployed: DeployedFunction[]) {
+  const byName = new Map(deployed.map((fn) => [fn.name, fn]));
+  return [
+    ...code.map((fn) => ({ name: fn.name, codebase: DEFAULT_CODEBASE, callable: fn.callable, live: byName.get(fn.name) })),
+    ...deployed.filter((fn) => fn.codebase !== DEFAULT_CODEBASE).map((fn) => ({ name: fn.name, codebase: fn.codebase, callable: fn.callable, live: fn })),
+  ];
+}
+
 /**
  * Mesmo critério do check_functions_invoker.ps1: não publicada (não existe
- * ou o deploy não terminou ACTIVE) pede firebase deploy; callable publicada
- * sem allUsers/roles/run.invoker pede add-iam-policy-binding.
+ * ou o deploy não terminou ACTIVE) pede firebase deploy, com a codebase
+ * quando não é a default; callable publicada sem allUsers/roles/run.invoker
+ * pede add-iam-policy-binding.
  */
 export function functionsStatus(
   code: CodeFunction[],
@@ -155,23 +213,24 @@ export function functionsStatus(
   project: string,
   region: string,
 ) {
-  const byName = new Map(deployed.map((fn) => [fn.name, fn]));
-  const rows: FunctionRow[] = code.map((fn) => {
-    const live = byName.get(fn.name);
-    const service = live?.service || fn.name.toLowerCase();
+  const rows: FunctionRow[] = functionsToCheck(code, deployed).map(({ name, codebase, callable, live }) => {
+    const service = live?.service || name.toLowerCase();
     if (!live || live.state !== "ACTIVE") {
+      const target = codebase === DEFAULT_CODEBASE ? name : `${codebase}:${name}`;
       return {
-        name: fn.name,
+        name,
+        codebase,
         service,
         status: "nao_publicada",
         state: live?.state ?? null,
         updated_at: live?.updated_at ?? null,
-        fix: `firebase deploy --only functions:${fn.name} --project ${project}`,
+        fix: `firebase deploy --only functions:${target} --project ${project}`,
       };
     }
-    if (fn.callable && invoker.get(service) !== true) {
+    if (callable && invoker.get(service) !== true) {
       return {
-        name: fn.name,
+        name,
+        codebase,
         service,
         status: "sem_acesso",
         state: live.state,
@@ -179,16 +238,20 @@ export function functionsStatus(
         fix: `gcloud run services add-iam-policy-binding ${service} --project ${project} --region ${region} --member=allUsers --role=roles/run.invoker`,
       };
     }
-    return { name: fn.name, service, status: "ok", state: live.state, updated_at: live.updated_at, fix: null };
+    return { name, codebase, service, status: "ok", state: live.state, updated_at: live.updated_at, fix: null };
   });
   const order: Record<FunctionStatus, number> = { nao_publicada: 0, sem_acesso: 1, ok: 2 };
-  rows.sort((left, right) => order[left.status] - order[right.status] || left.name.localeCompare(right.name));
+  rows.sort(
+    (left, right) =>
+      order[left.status] - order[right.status] || compareCodebases(left.codebase, right.codebase) || left.name.localeCompare(right.name),
+  );
   const updates = deployed.map((fn) => fn.updated_at ?? "").filter(Boolean).sort();
   return {
     total: rows.length,
     ok: rows.filter((row) => row.status === "ok").length,
     sem_acesso: rows.filter((row) => row.status === "sem_acesso").length,
     nao_publicada: rows.filter((row) => row.status === "nao_publicada").length,
+    codebases: [...new Set(rows.map((row) => row.codebase))].sort(compareCodebases),
     last_deploy_at: updates.at(-1) ?? null,
     list: rows,
   };
@@ -340,27 +403,16 @@ async function readFunctions(
     const url = `https://cloudfunctions.googleapis.com/v2/projects/${project}/locations/${region}/functions?pageSize=200${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""}`;
     const response = await gcp(url);
     if (response.status !== 200) return { status: "error", message: apiError("listar as functions", response.status, response.json) };
-    const body = response.json as {
-      functions?: Array<{ name?: string; state?: string; updateTime?: string; serviceConfig?: { service?: string } }>;
-      nextPageToken?: string;
-    };
-    for (const fn of body.functions ?? []) {
-      deployed.push({
-        name: (fn.name ?? "").split("/").at(-1) ?? "",
-        state: fn.state ?? "STATE_UNSPECIFIED",
-        updated_at: fn.updateTime ?? null,
-        service: (fn.serviceConfig?.service ?? "").split("/").at(-1) ?? "",
-      });
-    }
+    const body = response.json as { functions?: CloudFunctionResource[]; nextPageToken?: string };
+    deployed.push(...(body.functions ?? []).map(deployedFunction));
     pageToken = body.nextPageToken ?? "";
     if (!pageToken) break;
   }
-  const byName = new Map(deployed.map((fn) => [fn.name, fn]));
-  const callables = code.filter((fn) => fn.callable && byName.get(fn.name)?.state === "ACTIVE");
+  const callables = functionsToCheck(code, deployed).filter(({ callable, live }) => callable && live?.state === "ACTIVE");
   const invoker = new Map<string, boolean>();
   let denied: string | null = null;
-  await mapLimit(callables, 8, async (fn) => {
-    const service = byName.get(fn.name)!.service || fn.name.toLowerCase();
+  await mapLimit(callables, 8, async ({ name, live }) => {
+    const service = live!.service || name.toLowerCase();
     const response = await gcp(`https://run.googleapis.com/v2/projects/${project}/locations/${region}/services/${service}:getIamPolicy`);
     if (response.status === 403) denied = apiError("ler o acesso do Cloud Run", response.status, response.json);
     invoker.set(service, response.status === 200 && hasPublicInvoker(response.json));

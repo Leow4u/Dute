@@ -112,6 +112,42 @@ describe("painel do sistema: infraestrutura", () => {
     );
   });
 
+  it("confere as callables das outras codebases pelos rótulos do firebase deploy", async () => {
+    const service = (name: string) => `projects/dute-prod/locations/southamerica-east1/services/${name}`;
+    const { gcp, calls } = fakeGcp({
+      functions: {
+        status: 200,
+        json: {
+          functions: [
+            { name: "projects/dute-prod/locations/southamerica-east1/functions/getSystemInfra", state: "ACTIVE", updateTime: "2026-10-24T20:00:00Z", serviceConfig: { service: service("getsysteminfra") }, labels: { "deployment-callable": "true" } },
+            { name: "projects/dute-prod/locations/southamerica-east1/functions/saveSystemInfraSettings", state: "ACTIVE", updateTime: "2026-10-24T20:00:00Z", serviceConfig: { service: service("savesysteminfrasettings") }, labels: { "deployment-callable": "true" } },
+            { name: "projects/dute-prod/locations/southamerica-east1/functions/runAgentRoutines", state: "ACTIVE", updateTime: "2026-10-24T20:00:00Z", serviceConfig: { service: service("runagentroutines") }, labels: { "deployment-scheduled": "true" } },
+            { name: "projects/dute-prod/locations/southamerica-east1/functions/advanceQuote", state: "ACTIVE", updateTime: "2026-10-24T20:00:00Z", serviceConfig: { service: service("advancequote") }, labels: { "firebase-functions-codebase": "comercial", "deployment-callable": "true" } },
+            { name: "projects/dute-prod/locations/southamerica-east1/functions/runRhAlerts", state: "ACTIVE", updateTime: "2026-10-24T20:00:00Z", serviceConfig: { service: service("runrhalerts") }, labels: { "firebase-functions-codebase": "rh", "deployment-scheduled": "true" } },
+          ],
+        },
+      },
+    });
+    const infra = await readSystemInfra(db, { role: "owner" }, { ...options(gcp), project: "dute-prod" });
+    assert.equal(infra.functions.status, "ok");
+    if (infra.functions.status === "ok") {
+      assert.deepEqual(
+        infra.functions.list.map((row) => [row.codebase, row.name, row.status]),
+        [
+          ["default", "saveSystemInfraSettings", "sem_acesso"],
+          ["comercial", "advanceQuote", "sem_acesso"],
+          ["default", "getSystemInfra", "ok"],
+          ["default", "runAgentRoutines", "ok"],
+          ["rh", "runRhAlerts", "ok"],
+        ],
+      );
+      assert.deepEqual(infra.functions.codebases, ["default", "comercial", "rh"]);
+    }
+    const policies = calls.filter((call) => call.url.startsWith("https://run.googleapis.com/")).map((call) => call.url.split("/services/")[1]).sort();
+    // A política só das callables: a agendada não precisa de invoker público.
+    assert.deepEqual(policies, ["advancequote:getIamPolicy", "getsysteminfra:getIamPolicy", "savesysteminfrasettings:getIamPolicy"]);
+  });
+
   it("uma API sem permissão não derruba as outras", async () => {
     await saveInfraSettings(db, { uid: "owner", role: "owner" }, { billing_table: TABLE });
     const { gcp } = fakeGcp({

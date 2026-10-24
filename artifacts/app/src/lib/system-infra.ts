@@ -7,13 +7,30 @@ export type Section<T> = ({ status: "ok" } & T) | { status: "error"; message: st
 
 export type ErrorGroup = { service: string; message: string; count: number; first_at: string; last_at: string; blocked: boolean; admin: boolean };
 export type FunctionStatus = "ok" | "sem_acesso" | "nao_publicada";
-export type FunctionRow = { name: string; service: string; status: FunctionStatus; state: string | null; updated_at: string | null; fix: string | null };
+export type FunctionRow = {
+  name: string;
+  /** A codebase do firebase.json; "default" é a do WMS. */
+  codebase: string;
+  service: string;
+  status: FunctionStatus;
+  state: string | null;
+  updated_at: string | null;
+  fix: string | null;
+};
 
 export type SystemInfra = {
   checked_at: string;
   settings: { billing_table: string | null };
   errors: Section<{ total: number; blocked: number; services: number; groups: ErrorGroup[] }>;
-  functions: Section<{ total: number; ok: number; sem_acesso: number; nao_publicada: number; last_deploy_at: string | null; list: FunctionRow[] }>;
+  functions: Section<{
+    total: number;
+    ok: number;
+    sem_acesso: number;
+    nao_publicada: number;
+    codebases: string[];
+    last_deploy_at: string | null;
+    list: FunctionRow[];
+  }>;
   billing: Section<{
     table: string;
     has_data: boolean;
@@ -73,6 +90,16 @@ export function serviceNames(infra: SystemInfra) {
   ]);
   if (infra.functions.status === "ok") for (const row of infra.functions.list) names.set(row.service, row.name);
   return (service: string) => names.get(service) ?? service;
+}
+
+/** O nome da codebase como a pasta: a "default" é a do WMS (functions/wms). */
+export function codebaseLabel(codebase: string) {
+  return codebase === "default" ? "wms" : codebase;
+}
+
+/** A nota do quadro Functions: quantas e em quantas codebases. */
+export function functionsNote(total: number, codebases: string[]) {
+  return `${plural(total, "function", "functions")} em ${plural(codebases.length, "codebase", "codebases")}`;
 }
 
 export const FUNCTION_STATUS_LABELS: Record<FunctionStatus, string> = {
