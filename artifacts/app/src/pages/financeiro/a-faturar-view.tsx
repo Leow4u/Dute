@@ -12,6 +12,8 @@ import {
   FORMAS_DE_PAGAMENTO,
   FORMA_ROTULO,
   SITUACAO_ROTULO,
+  VIAS_DA_NF,
+  VIA_ROTULO,
   diasNaEtapa,
   filtrarLinhas,
   gruposPorCliente,
@@ -21,6 +23,7 @@ import {
   type FormDaNf,
   type FormaDePagamento,
   type LinhaAFaturar,
+  type ViaDaNf,
 } from "@/lib/financeiro/a-faturar";
 import { cn } from "@/lib/utils";
 
@@ -29,8 +32,10 @@ import { cn } from "@/lib/utils";
  * e ComAutorizacoes.dc.html), só a apresentação: os dados e as ações chegam
  * por props (pages/financeiro/a-faturar.tsx). As demandas prontas e a
  * armazenagem emitida no WMS (parte 7.2b), por cliente, as que esperam e o
- * painel de registrar a NF. Sem legenda: rótulos, dados e ações; uma ação
- * principal, "Registrar NF".
+ * painel de registrar a NF. Onde a NFS-e sai pela Omie (parte 7.4e), o
+ * painel escolhe a via: pela Omie, que numera e emite, ou emitida fora (o
+ * CT-e), registrada como antes. Sem legenda: rótulos, dados e ações; uma
+ * ação principal, "Emitir pela Omie" ou "Registrar NF".
  */
 
 export type AcoesDoAFaturar = {
@@ -64,6 +69,8 @@ export type AFaturarViewProps = {
   agora: Date;
   /** Uma gravação em andamento: as ações esperam. */
   ocupado: boolean;
+  /** A emissão pela Omie está liberada neste ambiente (OMIE_LIBERADA). */
+  omie?: boolean;
   acoes: AcoesDoAFaturar;
 };
 
@@ -231,7 +238,7 @@ function Prontas({ estado, linhas, busca, painel, agora, acoes, marcando }: AFat
 
 // --- Painel --------------------------------------------------------------------------------
 
-function Painel({ linhas, painel, hoje, ocupado, acoes }: AFaturarViewProps) {
+function Painel({ linhas, painel, hoje, ocupado, omie = false, acoes }: AFaturarViewProps) {
   const marcadas = linhas.filter((linha) => linha.situacao === "pronta" && painel.marcadas.includes(linha.demanda.numero));
   const primeira = marcadas[0] ?? null;
   const form = painel.form;
@@ -240,10 +247,13 @@ function Painel({ linhas, painel, hoje, ocupado, acoes }: AFaturarViewProps) {
     (evento: { target: { value: string } }) =>
       acoes.editar(nome, evento.target.value as FormDaNf[K]);
 
+  const pelaOmie = omie && form.via === "omie";
+  const titulo = omie ? "Faturar" : "Registrar NF";
+
   return (
-    <section aria-label="Registrar NF" className="flex min-w-0 flex-col gap-3.5 rounded-lg border border-border bg-card p-5 xl:w-96 xl:shrink-0">
+    <section aria-label={titulo} className="flex min-w-0 flex-col gap-3.5 rounded-lg border border-border bg-card p-5 xl:w-96 xl:shrink-0">
       <div className="flex items-center gap-2.5">
-        <h2 className="text-base font-extrabold">Registrar NF</h2>
+        <h2 className="text-base font-extrabold">{titulo}</h2>
         <Button type="button" variant="ghost" size="icon" aria-label="Fechar" className="ml-auto size-8" onClick={acoes.fecharPainel} disabled={ocupado}>
           <X aria-hidden="true" />
         </Button>
@@ -256,22 +266,50 @@ function Painel({ linhas, painel, hoje, ocupado, acoes }: AFaturarViewProps) {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-3 gap-3.5">
-        <Campo id="nf-numero" rotulo="Número da NF" className="col-span-2">
-          <Input id="nf-numero" inputMode="numeric" autoComplete="off" value={form.numero} onChange={campo("numero")} disabled={ocupado} />
-        </Campo>
-        <Campo id="nf-serie" rotulo="Série">
-          <Input id="nf-serie" autoComplete="off" value={form.serie} onChange={campo("serie")} disabled={ocupado} />
-        </Campo>
-      </div>
-      <div className="grid grid-cols-2 gap-3.5">
-        <Campo id="nf-emissao" rotulo="Emissão">
-          <Input id="nf-emissao" type="date" max={hoje} value={form.emissao} onChange={campo("emissao")} disabled={ocupado} />
-        </Campo>
+      {omie ? (
+        <fieldset className="min-w-0 space-y-1.5">
+          <legend className={ROTULO_DE_CAMPO}>Como a NF sai</legend>
+          <div className="grid grid-cols-2 gap-2">
+            {VIAS_DA_NF.map((via) => (
+              <label
+                key={via}
+                className={cn(
+                  "inline-flex min-h-10 cursor-pointer items-center justify-center rounded-md border px-3 text-sm font-bold focus-within:ring-2 focus-within:ring-ring/40",
+                  form.via === via ? "border-foreground bg-muted text-foreground" : "border-border text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <input type="radio" name="nf-via" className="sr-only" checked={form.via === via} onChange={() => acoes.editar("via", via as ViaDaNf)} disabled={ocupado} />
+                {VIA_ROTULO[via]}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      ) : null}
+
+      {pelaOmie ? (
         <Campo id="nf-vencimento" rotulo="Vencimento">
-          <Input id="nf-vencimento" type="date" min={form.emissao || undefined} value={form.vencimento} onChange={campo("vencimento")} disabled={ocupado} />
+          <Input id="nf-vencimento" type="date" min={hoje} value={form.vencimento} onChange={campo("vencimento")} disabled={ocupado} />
         </Campo>
-      </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-3.5">
+            <Campo id="nf-numero" rotulo="Número da NF" className="col-span-2">
+              <Input id="nf-numero" inputMode="numeric" autoComplete="off" value={form.numero} onChange={campo("numero")} disabled={ocupado} />
+            </Campo>
+            <Campo id="nf-serie" rotulo="Série">
+              <Input id="nf-serie" autoComplete="off" value={form.serie} onChange={campo("serie")} disabled={ocupado} />
+            </Campo>
+          </div>
+          <div className="grid grid-cols-2 gap-3.5">
+            <Campo id="nf-emissao" rotulo="Emissão">
+              <Input id="nf-emissao" type="date" max={hoje} value={form.emissao} onChange={campo("emissao")} disabled={ocupado} />
+            </Campo>
+            <Campo id="nf-vencimento" rotulo="Vencimento">
+              <Input id="nf-vencimento" type="date" min={form.emissao || undefined} value={form.vencimento} onChange={campo("vencimento")} disabled={ocupado} />
+            </Campo>
+          </div>
+        </>
+      )}
       <Campo id="nf-forma" rotulo="Forma de pagamento">
         <select
           id="nf-forma"
@@ -328,7 +366,7 @@ function Painel({ linhas, painel, hoje, ocupado, acoes }: AFaturarViewProps) {
       <div className="flex flex-wrap gap-2.5">
         <Button type="button" onClick={acoes.registrar} disabled={ocupado || marcadas.length === 0}>
           <Check aria-hidden="true" />
-          Registrar NF
+          {pelaOmie ? "Emitir pela Omie" : "Registrar NF"}
         </Button>
         <Button type="button" variant="outline" onClick={acoes.fecharPainel} disabled={ocupado}>
           Cancelar
@@ -395,7 +433,7 @@ export function AFaturarView(props: AFaturarViewProps) {
           {temProntas && !painel.aberto ? (
             <Button type="button" variant="outline" onClick={acoes.abrirPainel} disabled={ocupado}>
               <FileText aria-hidden="true" />
-              Registrar NF
+              {props.omie ? "Faturar" : "Registrar NF"}
             </Button>
           ) : null}
         </div>

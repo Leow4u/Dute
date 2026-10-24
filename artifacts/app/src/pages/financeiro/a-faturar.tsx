@@ -8,15 +8,18 @@ import {
   formComVencimento,
   formInicial,
   pagamentoDoContrato,
+  pedidoDaEmissao,
   pedidoDaNf,
   podeMarcarNaNf,
   problemasDaNf,
+  textoDaEmissao,
   textoDoRegistro,
   type FormDaNf,
 } from "@/lib/financeiro/a-faturar";
 import { chamarFinanceiro, novaChave } from "@/lib/financeiro/api";
 import { useFilaDoFinanceiro } from "@/lib/financeiro/use-a-faturar";
 import { firestore } from "@/lib/firebase";
+import { OMIE_LIBERADA } from "@/lib/liberacao";
 import { hojeIso } from "@/lib/operacao/fila";
 
 import { AFaturarView } from "./a-faturar-view";
@@ -28,7 +31,9 @@ import { AFaturarView } from "./a-faturar-view";
  * cada uma (lib/financeiro/use-a-faturar.ts), e o contrato do cliente marcado
  * para sugerir o vencimento. Grava só pela callable registerNf, com chave de
  * idempotência; o servidor confere de novo cada demanda e calcula o valor.
- * A armazenagem emitida no WMS entra na mesma NF (parte 7.2b).
+ * A armazenagem emitida no WMS entra na mesma NF (parte 7.2b). Onde a
+ * NFS-e sai pela Omie (OMIE_LIBERADA, parte 7.4e), o painel pede a emissão
+ * pela callable emitNfOmie, e a NF emitida fora segue pelo registerNf.
  */
 
 type ResultadoDoRegistro = { valor_cents?: unknown; demandas?: unknown; armazenagem?: unknown };
@@ -42,7 +47,7 @@ export default function FinanceiroAFaturarPage() {
   const [busca, setBusca] = useState("");
   const [aberto, setAberto] = useState(false);
   const [marcadas, setMarcadas] = useState<string[]>([]);
-  const [form, setForm] = useState<FormDaNf>(() => formInicial(hoje, null));
+  const [form, setForm] = useState<FormDaNf>(() => formInicial(hoje, null, OMIE_LIBERADA));
   // O vencimento segue o contrato até a pessoa mexer nele.
   const [vencimentoEditado, setVencimentoEditado] = useState(false);
   // Uma chave por intenção de registrar: a mesma no clique repetido, nova depois do registro.
@@ -85,17 +90,23 @@ export default function FinanceiroAFaturarPage() {
     setOcupado(true);
     setErro(null);
     try {
-      const retorno = await chamarFinanceiro<ResultadoDoRegistro>("registerNf", pedidoDaNf(formDoPainel, linhasMarcadas, chave));
-      const texto = textoDoRegistro(formDoPainel, retorno);
+      let texto: string;
+      if (OMIE_LIBERADA && formDoPainel.via === "omie") {
+        await chamarFinanceiro("emitNfOmie", pedidoDaEmissao(formDoPainel, linhasMarcadas, chave));
+        texto = textoDaEmissao(linhasMarcadas);
+      } else {
+        const retorno = await chamarFinanceiro<ResultadoDoRegistro>("registerNf", pedidoDaNf(formDoPainel, linhasMarcadas, chave));
+        texto = textoDoRegistro(formDoPainel, retorno);
+      }
       setResultado(texto);
       toast({ title: texto });
       setMarcadas([]);
-      setForm(formInicial(hoje, null));
+      setForm(formInicial(hoje, null, OMIE_LIBERADA));
       setVencimentoEditado(false);
       setChave(novaChave());
       setAberto(false);
     } catch (falha) {
-      setErro(falha instanceof Error ? falha.message : "Não foi possível registrar a NF.");
+      setErro(falha instanceof Error ? falha.message : "Não foi possível faturar.");
     } finally {
       setOcupado(false);
     }
@@ -110,6 +121,7 @@ export default function FinanceiroAFaturarPage() {
       hoje={hoje}
       agora={agora}
       ocupado={ocupado}
+      omie={OMIE_LIBERADA}
       acoes={{
         buscar: setBusca,
         abrirPainel: () => {
@@ -129,6 +141,8 @@ export default function FinanceiroAFaturarPage() {
         editar: (campo, valor) => {
           setErro(null);
           if (campo === "vencimento") setVencimentoEditado(true);
+          // A chave é da intenção: trocar a via troca o pedido.
+          if (campo === "via") setChave(novaChave());
           setForm((atual) => ({ ...formComVencimento(atual, vencimentoEditado, pagamentoDoContrato(contrato.data)), [campo]: valor }));
         },
         registrar: () => void registrar(),

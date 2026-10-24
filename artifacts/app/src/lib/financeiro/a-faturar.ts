@@ -47,7 +47,15 @@ export type DemandaDoFinanceiro = {
   medicaoId: string | null;
   medicaoPendente: boolean;
   autorizacaoIds: string[];
+  /** A emissão da NFS-e pela Omie que reservou a demanda (parte 7.4b); null sem reserva. */
+  emissaoNf: string | null;
 };
+
+/** A reserva da emissão da NFS-e pela Omie: `emissao_nf.id`, como o servidor lê (functions/financeiro, emissaoReservada). */
+export function emissaoReservada(dados: Registro): string | null {
+  const reserva = dados.emissao_nf && typeof dados.emissao_nf === "object" ? (dados.emissao_nf as Registro) : {};
+  return texto(reserva.id) || null;
+}
 
 /** As etapas que a fila lê: A faturar e as que esperam a autorização. */
 export const ETAPAS_DA_FILA = ["a_faturar", "aguardando_autorizacao"] as const;
@@ -73,6 +81,7 @@ export function demandaDoFinanceiro(id: string, dados: Registro): DemandaDoFinan
     medicaoId: texto(validacao.medicao_id) || texto(dados.medicao_id) || null,
     medicaoPendente: dados.medicao_pendente === true,
     autorizacaoIds: [...new Set([...ids, ...antigo].filter((item): item is string => typeof item === "string" && item.length > 0))],
+    emissaoNf: emissaoReservada(dados),
   };
 }
 
@@ -139,9 +148,10 @@ export function valorDaRv(revisao: Registro | null | undefined): number | null {
 
 // --- A fila -------------------------------------------------------------------------------
 
-export type SituacaoNaFila = "pronta" | "aguardando_autorizacao" | "medicao_pendente" | "sem_autorizacao" | "rv_diferente" | "sem_valor";
+export type SituacaoNaFila = "pronta" | "na_emissao" | "aguardando_autorizacao" | "medicao_pendente" | "sem_autorizacao" | "rv_diferente" | "sem_valor";
 
 export const SITUACAO_ROTULO: Record<Exclude<SituacaoNaFila, "pronta">, string> = {
+  na_emissao: "Na emissão da NFS-e",
   aguardando_autorizacao: "Aguardando autorização",
   medicao_pendente: "Medição pendente",
   sem_autorizacao: "Sem autorização registrada",
@@ -202,7 +212,9 @@ export function linhaAFaturar(
 ): LinhaAFaturar {
   const validas = autorizacoesValidas(demanda, autorizacoes);
   const situacao: SituacaoNaFila =
-    demanda.etapa === "aguardando_autorizacao"
+    demanda.emissaoNf
+      ? "na_emissao"
+      : demanda.etapa === "aguardando_autorizacao"
       ? "aguardando_autorizacao"
       : demanda.medicaoPendente
         ? "medicao_pendente"
@@ -236,6 +248,8 @@ export type CompetenciaDoFinanceiro = {
   emitidaEm: string | null;
   /** O total congelado na emissão; null sem a foto. */
   valorCents: number | null;
+  /** A emissão da NFS-e pela Omie que reservou a competência (parte 7.4b); null sem reserva. */
+  emissaoNf: string | null;
 };
 
 /** "09/2026". */
@@ -265,6 +279,7 @@ export function competenciaDoFinanceiro(id: string, dados: Registro): Competenci
     competencia: texto(dados.competencia) || casado[2],
     emitidaEm: texto(dados.emitido_em) || null,
     valorCents: total !== null && total >= 0 ? total : null,
+    emissaoNf: emissaoReservada(dados),
   };
 }
 
@@ -284,9 +299,10 @@ export function linhaDaArmazenagem(competencia: CompetenciaDoFinanceiro): LinhaA
       medicaoId: null,
       medicaoPendente: false,
       autorizacaoIds: [],
+      emissaoNf: competencia.emissaoNf,
     },
     periodoId: competencia.periodoId,
-    situacao: competencia.valorCents === null ? "sem_valor" : "pronta",
+    situacao: competencia.emissaoNf ? "na_emissao" : competencia.valorCents === null ? "sem_valor" : "pronta",
     valorCents: competencia.valorCents,
     origem: "Fatura do WMS",
     autorizacaoTexto: "Emitida na Armazenagem",
@@ -374,7 +390,15 @@ export const FORMA_ROTULO: Record<FormaDePagamento, string> = {
   dinheiro: "Dinheiro",
 };
 
-export type FormDaNf = { numero: string; serie: string; emissao: string; vencimento: string; forma: FormaDePagamento; observacao: string };
+/**
+ * Como a NF sai (parte 7.4e): pela Omie, que emite a NFS-e e numera, ou
+ * emitida fora (o CT-e, que a Omie não emite) e registrada aqui.
+ */
+export const VIAS_DA_NF = ["omie", "fora"] as const;
+export type ViaDaNf = (typeof VIAS_DA_NF)[number];
+export const VIA_ROTULO: Record<ViaDaNf, string> = { omie: "Pela Omie", fora: "Emitida fora" };
+
+export type FormDaNf = { via: ViaDaNf; numero: string; serie: string; emissao: string; vencimento: string; forma: FormaDePagamento; observacao: string };
 
 /** A regra de pagamento do contrato como o Financeiro lê de `contracts`. */
 export type PagamentoDoContrato = ContratoParaPagamento["pagamento"];
@@ -403,8 +427,9 @@ export function vencimentoPeloContrato(pagamento: PagamentoDoContrato | null, em
   return pagamentoPrevisto({ pagamento }, emissao) ?? "";
 }
 
-export function formInicial(hoje: string, pagamento: PagamentoDoContrato | null): FormDaNf {
-  return { numero: "", serie: "1", emissao: hoje, vencimento: vencimentoPeloContrato(pagamento, hoje), forma: "boleto", observacao: "" };
+/** Onde a emissão pela Omie está liberada, a NF sai por ela; senão, só o registro da emitida fora. */
+export function formInicial(hoje: string, pagamento: PagamentoDoContrato | null, omie = false): FormDaNf {
+  return { via: omie ? "omie" : "fora", numero: "", serie: "1", emissao: hoje, vencimento: vencimentoPeloContrato(pagamento, hoje), forma: "boleto", observacao: "" };
 }
 
 /** O vencimento segue a regra do contrato até a pessoa mexer nele; sem regra calculável, fica o digitado. */
@@ -418,6 +443,13 @@ export function formComVencimento(form: FormDaNf, editado: boolean, pagamento: P
 export function problemasDaNf(form: FormDaNf, marcadas: readonly LinhaAFaturar[], hoje: string): string[] {
   const problemas: string[] = [];
   if (!marcadas.length) problemas.push("Marque ao menos uma demanda.");
+  if (form.via === "omie") {
+    // A Omie numera e emite hoje: só o vencimento, a forma e a observação.
+    if (!dataValida(form.vencimento)) problemas.push("Informe o vencimento.");
+    else if (form.vencimento < hoje) problemas.push("O vencimento vem de hoje em diante.");
+    if (form.observacao.trim().length > 300) problemas.push("Use até 300 caracteres na observação.");
+    return problemas;
+  }
   if (!/^\d{1,15}$/.test(form.numero.trim())) problemas.push("Informe o número da NF, só dígitos.");
   if (!/^[A-Za-z0-9]{1,5}$/.test(form.serie.trim())) problemas.push("Informe a série da NF.");
   if (!dataValida(form.emissao)) problemas.push("Informe a data de emissão.");
@@ -440,6 +472,23 @@ export function pedidoDaNf(form: FormDaNf, marcadas: readonly LinhaAFaturar[], c
     forma: form.forma,
     ...(form.observacao.trim() ? { observacao: form.observacao.trim() } : {}),
   };
+}
+
+/** O pedido para `emitNfOmie` (parte 7.4c): o do `registerNf` sem a NF. */
+export function pedidoDaEmissao(form: FormDaNf, marcadas: readonly LinhaAFaturar[], chave: string): Record<string, unknown> {
+  const { nf: _nf, ...pedido } = pedidoDaNf(form, marcadas, chave);
+  return pedido;
+}
+
+/** A confirmação depois de emitNfOmie: a NFS-e vai pela rotina, que a tela de emissões acompanha. */
+export function textoDaEmissao(marcadas: readonly LinhaAFaturar[]): string {
+  const meses = marcadas.flatMap((linha) => {
+    const competencia = competenciaDaLinha(linha);
+    return competencia ? [rotuloDaCompetencia(competencia)] : [];
+  });
+  const quantas = marcadas.filter((linha) => !linha.periodoId).length;
+  const partes = [quantas ? plural(quantas, "demanda", "demandas") : null, meses.length ? `a armazenagem de ${juntar(meses)}` : null].filter(Boolean);
+  return `NFS-e pedida à Omie: ${partes.join(" e ")}`;
 }
 
 /** A confirmação depois de registerNf: a NF, quantas demandas, as competências de armazenagem e o total que o servidor calculou. */

@@ -24,6 +24,7 @@ import {
   COMERCIAL_AMBIENTES_LIBERADOS,
   FINANCEIRO_AMBIENTES_LIBERADOS,
   MEMORIA_AMBIENTES_LIBERADOS,
+  OMIE_AMBIENTES_LIBERADOS,
   OPERACAO_AMBIENTES_LIBERADOS,
   RH_AMBIENTES_LIBERADOS,
   RH_PUBLICADO,
@@ -36,6 +37,7 @@ import { AGENTE_ROLES } from "./agente/navegacao";
 import { OPERACAO_CADASTRO_ROLES } from "./operacao/navegacao";
 import { FINANCE_ROLES, INTERNAL_ROLES } from "./modules";
 import { PLATFORM_MODULES } from "./platform-modules";
+import { CALLABLES_DO_FINANCEIRO } from "./financeiro/api";
 import { CALLABLES_DO_RH } from "./rh/api";
 import * as FICHA_DO_RH from "./rh/ficha";
 import { PRIMEIRO_DIA, TAMANHO_MAXIMO_DO_ARQUIVO as TAMANHO_DO_ARQUIVO_NO_APP, TIPOS_DE_ARQUIVO as TIPOS_DE_ARQUIVO_NO_APP, ULTIMO_DIA } from "./rh/formulario";
@@ -250,6 +252,13 @@ describe("listas do Financeiro iguais em todo lugar (Fase 4)", () => {
 
   it("onde o Financeiro está ligado, o WMS não marca o pagamento da armazenagem (parte 7.2c)", () => {
     expect(tsList(read("functions/wms/src/domain/billing-scope.ts"), "FINANCEIRO_PROJECTS")).toEqual([...FINANCEIRO_AMBIENTES_LIBERADOS]);
+  });
+
+  it("a NFS-e pela Omie: a liberação do app é a da emissão, dentro da do Financeiro, e as callables são as do index (parte 7.4e)", () => {
+    expect(tsList(read("functions/financeiro/src/domain/emissao-omie.ts"), "OMIE_AMBIENTES_LIBERADOS")).toEqual([...OMIE_AMBIENTES_LIBERADOS]);
+    for (const projeto of OMIE_AMBIENTES_LIBERADOS) expect(FINANCEIRO_AMBIENTES_LIBERADOS).toContain(projeto);
+    const declaradas = [...read("functions/financeiro/src/index.ts").matchAll(/^export const (\w+) = onCall\(/gm)].map((match) => match[1]);
+    expect(declaradas).toEqual([...CALLABLES_DO_FINANCEIRO]);
   });
 });
 
