@@ -379,19 +379,30 @@ Feita em 23/10/2026, da revisão do código do RH.
   falha relê a ficha, a próxima tentativa leva a edição nova, e as linhas
   travam com o formulário aberto.
 
-### Em aberto: o link de envio depois do anexo
+### Correção: o arquivo conferido é o que abre
 
-Achado da revisão, para o Leonardo decidir. A URL assinada de envio vale por
-10 minutos e não limita o tamanho. Quem a recebeu (só o papel rh) pode,
-nesse tempo, subir um arquivo grande, que o anexo recusa mas fica no bucket.
-Também pode sobrescrever o arquivo já conferido e anexado.
+Feita em 24/10/2026, do achado da revisão ("o link de envio depois do
+anexo"). A URL assinada de envio vale por 10 minutos e não limita o
+tamanho. Quem a recebeu (só o papel rh) podia, nesse tempo, sobrescrever o
+arquivo já conferido e anexado, sem o evento, ou subir um arquivo grande
+que o anexo recusava mas ficava no bucket.
 
-- **O que fecha isso:**
-  - o cabeçalho `x-goog-content-length-range` na URL, o que pede uma mudança
-    no CORS dos buckets (`deploy/cloud-storage/`);
-  - ou guardar a geração do objeto no anexo e abrir só ela.
-- **Por que ficou como está:** quem pode fazer isso já pode trocar o arquivo
-  pela tela, com o evento.
+- **O anexo guarda a geração** do objeto que conferiu (`arquivo.geracao`),
+  e a abertura assina a URL só dessa geração. O arquivo regravado depois
+  não toma o lugar do conferido: a abertura segue pedindo o que o anexo
+  conferiu, e o que mudou fica de fora (sem o versionamento do bucket, a
+  geração sobrescrita some, e a abertura dá erro em vez de mostrar outro
+  arquivo).
+- **O arquivo que o anexo recusa** (outro tipo, vazio ou grande demais) sai
+  do bucket. O que já está no registro nunca sai por aí.
+- **O arquivo anexado antes** fica sem a geração e abre como antes.
+- **Testes:** `arquivos.test.ts` (a geração conferida e o vazio) e
+  `arquivos.integration.test.ts` (a geração no registro e na abertura, o
+  recusado apagado e o regravado que não toma o lugar do conferido).
+- **Fica para o Leonardo decidir:** impedir o envio grande e a regravação
+  já na URL pede o cabeçalho `x-goog-content-length-range` (ou o
+  `x-goog-if-generation-match: 0`) na assinatura e a mudança no CORS dos
+  buckets (`deploy/cloud-storage/`), que se publica à mão.
 
 ### Parte 8.3: a exportação para a contabilidade
 

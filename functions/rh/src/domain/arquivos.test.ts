@@ -66,15 +66,18 @@ describe("o arquivo do registro", () => {
     recusa(() => entradaDaAbertura({ registro_id: REG, caminho: "rh/x" }), "Campo não aceito: caminho.");
   });
 
-  it("o bucket confere: o arquivo existe, é do tipo informado e cabe", () => {
-    assert.equal(conferirArquivoNoBucket({ contentType: "application/pdf", size: 2048 }, "application/pdf"), 2048);
+  it("o bucket confere: o arquivo existe, é do tipo informado e cabe; a geração conferida vai para o registro", () => {
+    assert.deepEqual(conferirArquivoNoBucket({ contentType: "application/pdf", size: 2048, generation: "1698765432123456" }, "application/pdf"), { tamanho: 2048, geracao: "1698765432123456" });
+    // Sem a geração do bucket, o registro fica sem ela, como os anexados antes.
+    assert.deepEqual(conferirArquivoNoBucket({ contentType: "application/pdf", size: 2048, generation: "" }, "application/pdf"), { tamanho: 2048, geracao: null });
     recusa(() => conferirArquivoNoBucket(null, "application/pdf"), "O arquivo não chegou. Envie de novo.", "failed-precondition");
-    recusa(() => conferirArquivoNoBucket({ contentType: "text/html", size: 10 }, "application/pdf"), "O arquivo enviado não é do tipo informado. Envie de novo.", "failed-precondition");
-    recusa(() => conferirArquivoNoBucket({ contentType: "application/pdf", size: TAMANHO_MAXIMO_DO_ARQUIVO + 1 }, "application/pdf"), "O arquivo passa de 10 MB.", "failed-precondition");
+    recusa(() => conferirArquivoNoBucket({ contentType: "text/html", size: 10, generation: "1" }, "application/pdf"), "O arquivo enviado não é do tipo informado. Envie de novo.", "failed-precondition");
+    recusa(() => conferirArquivoNoBucket({ contentType: "application/pdf", size: TAMANHO_MAXIMO_DO_ARQUIVO + 1, generation: "1" }, "application/pdf"), "O arquivo passa de 10 MB.", "failed-precondition");
+    recusa(() => conferirArquivoNoBucket({ contentType: "application/pdf", size: 0, generation: "1" }, "application/pdf"), "O arquivo está vazio.", "failed-precondition");
   });
 
   it("trocar o arquivo sobe a edição; a edição velha e o arquivado recusam", () => {
-    const arquivo = { id: ARQ, caminho: caminhoDoArquivo(registro, ARQ, "application/pdf"), content_type: "application/pdf" as const, tamanho: 2048 };
+    const arquivo = { id: ARQ, caminho: caminhoDoArquivo(registro, ARQ, "application/pdf"), content_type: "application/pdf" as const, tamanho: 2048, geracao: "1698765432123456" };
     const anexado = registroComArquivo(registro, 1, arquivo);
     assert.deepEqual([anexado.edicao, anexado.arquivo], [2, arquivo]);
     recusa(() => registroComArquivo(registro, 2, arquivo), "O registro foi atualizado. Recarregue e tente de novo.", "failed-precondition");

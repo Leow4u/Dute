@@ -77,7 +77,8 @@ function arquivoLido(valor: unknown): ArquivoDoRegistro | null {
   const arquivo = valor as Record<string, unknown>;
   if (typeof arquivo.id !== "string" || !ID_ARQUIVO.test(arquivo.id) || typeof arquivo.caminho !== "string") ilegivel();
   if (!tipoDeArquivo(arquivo.content_type) || typeof arquivo.tamanho !== "number") ilegivel();
-  return { id: arquivo.id, caminho: arquivo.caminho, content_type: arquivo.content_type, tamanho: arquivo.tamanho };
+  const geracao = typeof arquivo.geracao === "string" && /^\d+$/.test(arquivo.geracao) ? arquivo.geracao : null;
+  return { id: arquivo.id, caminho: arquivo.caminho, content_type: arquivo.content_type, tamanho: arquivo.tamanho, geracao };
 }
 
 /** O registro gravado, conferido campo a campo; o que não confere é ilegível. */
@@ -356,7 +357,7 @@ export async function getRhPanelFor(padrao: Firestore, rh: Firestore, agora: Dat
 }
 
 /** O registro na tela: o arquivo sem o caminho no bucket, que só a callable usa. */
-export type RegistroNaFicha = Omit<RegistroGravado, "arquivo"> & { arquivo: Omit<ArquivoDoRegistro, "caminho"> | null };
+export type RegistroNaFicha = Omit<RegistroGravado, "arquivo"> & { arquivo: Omit<ArquivoDoRegistro, "caminho" | "geracao"> | null };
 
 export type FichaDoColaborador = { hoje: string; colaborador: ColaboradorDoRh; registros: RegistroNaFicha[] };
 

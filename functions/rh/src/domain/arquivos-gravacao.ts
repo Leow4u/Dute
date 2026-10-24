@@ -11,6 +11,7 @@ import {
   entradaDoAnexo,
   entradaDoEnvio,
   novoIdDeArquivo,
+  problemaDoArquivoNoBucket,
   registroComArquivo,
   type ArquivoNoBucket,
 } from "./arquivos.js";
@@ -26,9 +27,12 @@ import type { RhProfile } from "./profile.js";
  * - requestRhUpload (só o rh) dá a URL assinada para subir, válida por
  *   MINUTOS_PARA_SUBIR, no caminho do registro. Não grava nada.
  * - attachRhFile (só o rh) confere no bucket o arquivo que subiu e o liga
- *   ao registro, com o recibo e o evento, numa transação do banco `rh`.
- * - openRhFile (owner, admin e rh) dá a URL assinada para abrir, válida por
- *   MINUTOS_PARA_ABRIR, e grava o evento da abertura antes de devolvê-la.
+ *   ao registro, com a geração conferida, o recibo e o evento, numa
+ *   transação do banco `rh`. O arquivo que o anexo recusa (outro tipo,
+ *   vazio ou grande demais) sai do bucket.
+ * - openRhFile (owner, admin e rh) dá a URL assinada para abrir só a
+ *   geração conferida, válida por MINUTOS_PARA_ABRIR, e grava o evento da
+ *   abertura antes de devolvê-la.
  *
  * O bucket entra por ArmazemDoRh: no ar, armazemDoBucket; nos testes, um
  * armazém de mentira, porque o emulador não assina URL.
@@ -38,12 +42,14 @@ export const MINUTOS_PARA_SUBIR = 10;
 export const MINUTOS_PARA_ABRIR = 5;
 
 export type ArmazemDoRh = {
-  /** O tipo e o tamanho do arquivo, ou null quando ele não existe. */
+  /** O tipo, o tamanho e a geração do arquivo, ou null quando ele não existe. */
   conferir(caminho: string): Promise<ArquivoNoBucket | null>;
   /** A URL assinada para subir (PUT) o arquivo com o tipo informado. */
   urlParaSubir(caminho: string, contentType: string, expiraEm: Date): Promise<string>;
-  /** A URL assinada para abrir o arquivo no navegador. */
-  urlParaAbrir(caminho: string, expiraEm: Date): Promise<string>;
+  /** A URL assinada para abrir o arquivo no navegador: só a geração dada, quando há. */
+  urlParaAbrir(caminho: string, expiraEm: Date, geracao: string | null): Promise<string>;
+  /** Apaga a geração dada do arquivo, se ela ainda existir. */
+  apagar(caminho: string, geracao: string): Promise<void>;
 };
 
 type Bucket = ReturnType<ReturnType<typeof getStorage>["bucket"]>;
@@ -76,13 +82,18 @@ export function armazemDoBucket(bucket: Bucket): ArmazemDoRh {
       const [existe] = await arquivo.exists();
       if (!existe) return null;
       const [metadados] = await arquivo.getMetadata();
-      return { contentType: String(metadados.contentType ?? ""), size: Number(metadados.size ?? 0) };
+      return { contentType: String(metadados.contentType ?? ""), size: Number(metadados.size ?? 0), generation: String(metadados.generation ?? "") };
     },
     urlParaSubir(caminho, contentType, expiraEm) {
       return assinada(() => bucket.file(caminho).getSignedUrl({ version: "v4", action: "write", expires: expiraEm, contentType }));
     },
-    urlParaAbrir(caminho, expiraEm) {
-      return assinada(() => bucket.file(caminho).getSignedUrl({ version: "v4", action: "read", expires: expiraEm, responseDisposition: "inline" }));
+    urlParaAbrir(caminho, expiraEm, geracao) {
+      // Com a geração, a URL assinada leva `generation`: abre o objeto conferido, não o que veio depois.
+      const arquivo = geracao ? bucket.file(caminho, { generation: geracao }) : bucket.file(caminho);
+      return assinada(() => arquivo.getSignedUrl({ version: "v4", action: "read", expires: expiraEm, responseDisposition: "inline" }));
+    },
+    async apagar(caminho, geracao) {
+      await bucket.file(caminho, { generation: geracao }).delete({ ignoreNotFound: true });
     },
   };
 }
@@ -119,7 +130,12 @@ export async function attachRhFileFor(rh: Firestore, caller: RhProfile, data: un
   const entrada = entradaDoAnexo(data);
   const registro = await lerRegistro(rh, entrada.registro_id);
   const caminho = caminhoDoArquivo(registro, entrada.arquivo_id, entrada.content_type);
-  const tamanho = conferirArquivoNoBucket(await armazem.conferir(caminho), entrada.content_type);
+  const noBucket = await armazem.conferir(caminho);
+  // O arquivo recusado não fica no bucket; o que já está no registro nunca sai por aqui.
+  if (noBucket && problemaDoArquivoNoBucket(noBucket, entrada.content_type) && registro.arquivo?.caminho !== caminho && noBucket.generation) {
+    await armazem.apagar(caminho, noBucket.generation);
+  }
+  const { tamanho, geracao } = conferirArquivoNoBucket(noBucket, entrada.content_type);
   const actor = atorDoRh(caller);
   const { idempotency_key, ...input } = entrada;
   return runIdempotent<ResultadoDoAnexo>(
@@ -130,7 +146,7 @@ export async function attachRhFileFor(rh: Firestore, caller: RhProfile, data: un
       const snapshot = await transaction.get(ref);
       if (!snapshot.exists) throw new HttpsError("not-found", "Registro não encontrado.");
       const atual = registroLido(snapshot.id, snapshot.data() ?? {});
-      const anexado = registroComArquivo(atual, entrada.expected_edicao, { id: entrada.arquivo_id, caminho, content_type: entrada.content_type, tamanho });
+      const anexado = registroComArquivo(atual, entrada.expected_edicao, { id: entrada.arquivo_id, caminho, content_type: entrada.content_type, tamanho, geracao });
       transaction.update(ref, {
         arquivo: anexado.arquivo,
         ...(atual.arquivo ? { arquivos_anteriores: FieldValue.arrayUnion(atual.arquivo) } : {}),
@@ -162,7 +178,7 @@ export async function openRhFileFor(rh: Firestore, caller: RhProfile, data: unkn
   const registro = await lerRegistro(rh, registro_id);
   if (!registro.arquivo) throw new HttpsError("not-found", "O registro não tem arquivo.");
   const expiraEm = depoisDe(agora, MINUTOS_PARA_ABRIR);
-  const url = await armazem.urlParaAbrir(registro.arquivo.caminho, expiraEm);
+  const url = await armazem.urlParaAbrir(registro.arquivo.caminho, expiraEm, registro.arquivo.geracao);
   await rh.runTransaction(async (transaction) => {
     createRhEvent(transaction, rh, {
       operation_id: `abertura:${randomUUID()}`,
