@@ -268,6 +268,9 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   O registro recusado por falta do token (renovação que falhou por rede)
   espera e tenta de novo, em vez de sair da fila (`fase-3-operacao.md`,
   "Correção: o registro sem o token saía da fila").
+  O toque em + ou − depois de uma inclusão guardada não apaga mais a
+  inclusão (`fase-3-operacao.md`, "Correção: o toque depois da inclusão
+  guardada apagava a inclusão").
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.

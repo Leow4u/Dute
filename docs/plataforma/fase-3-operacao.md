@@ -1484,3 +1484,26 @@ a parte 3.8b.
   (`lib/campo/fila.ts`): o registro espera e tenta de novo, como sem sinal.
 - **Teste:** `os-no-campo.test.ts`: `unauthenticated` tenta de novo, com e
   sem o prefixo `functions/`. Antes, desistia.
+
+### Correção: o toque depois da inclusão guardada apagava a inclusão
+
+Achada em 25/10/2026, numa revisão da fila do campo. Está na produção desde
+a parte 3.8b.
+
+- **O defeito.** O feito da linha é absoluto, e a inclusão soma ao feito. Com
+  um feito guardado, a tela mostrava só ele e ignorava a inclusão guardada
+  depois.
+  - Um exemplo: a cadeira tem 150 previstas e 96 gravadas, sem sinal. O "+"
+    guarda 97, e a inclusão de 10 vem depois. A tela mostrava 97 de 160, e
+    com sinal mostraria 107.
+  - O "+" seguinte mandava 98, que substituía o 97 e ia depois da inclusão.
+    O servidor gravava 106 com a inclusão e depois 98: a inclusão se
+    perdia.
+  - Os mesmos toques com sinal davam 108.
+- **A correção.** A tela soma ao feito guardado as inclusões guardadas
+  depois dele, na ordem da fila (`itensNoCampo`). O toque seguinte já leva a
+  inclusão no número: 108.
+- **Teste:** `os-no-campo.test.ts`: a inclusão depois do feito guardado
+  entra no número (107), o toque seguinte manda 108 e vai depois da
+  inclusão, e a inclusão antes do feito não conta duas vezes. Antes, a tela
+  mostrava 97.
