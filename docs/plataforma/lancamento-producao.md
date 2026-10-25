@@ -159,6 +159,18 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   quadro Latência lê o Cloud Monitoring (PR 363). Se a conta de runtime do
   `dute-prod` não for Editor, ele pede o `roles/monitoring.viewer`
   (`docs/painel-sistema.md`, seção 2).
+- **Os eventos e o Agent Dute do WMS (25/10/2026).** Entram com a `main`,
+  sem liberação própria:
+  - o registro manual de evento (`POST /api/ai/events`) aceita só a equipe
+    e só os quatro tipos que as telas mandam (o convite aceito, o
+    conhecimento anexado, a anotação operacional e o incidente do
+    suporte), com a hora do servidor (PR 373);
+  - os rascunhos de aviso do Agent Dute não citam a BTG nem cumprimentam
+    um contato dela; o interno diz o cliente no assunto (PR 374);
+  - o prompt da revisão de documento pela IA não diz que todo documento é
+    da BTG (PR 375).
+  A matriz de papéis do WMS (PR 372) é só teste: nenhuma callable muda
+  quem passa.
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.
@@ -206,6 +218,9 @@ contato com os avisos ligados (Comercial › Clientes).
 13. **Painel do sistema.** Com o owner, Configuração › Sistema mostra o
     quadro Latência com as functions. "Sem permissão" num quadro pede o papel
     da seção 2 de `docs/painel-sistema.md`, no projeto em que aparecer.
+14. **Eventos manuais.** Com o suporte, Configuração › Sistema registra um
+    incidente; com o interno, o Agent Dute › Painel grava a anotação
+    operacional. Os dois aparecem na timeline com a hora do registro.
 
 ## 4. Publicar
 
